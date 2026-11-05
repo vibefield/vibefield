@@ -3,7 +3,9 @@ import {
   chmodSync,
   closeSync,
   existsSync,
+  fstatSync,
   fsyncSync,
+  ftruncateSync,
   mkdirSync,
   openSync,
   readFileSync,
@@ -126,8 +128,8 @@ export class FlowRecords {
   readonly #logger: Logger;
   readonly #now: () => Date;
   readonly #guard: StoreGuard;
-  /** each run's journal's last line, as this store last wrote or read it */
-  readonly #tails = new Map<string, JournalTail>();
+  /** each run's journal's last line, as this store last wrote or read it, and where its whole lines end (bytes) */
+  readonly #tails = new Map<string, JournalTail & { readonly bytes: number }>();
 
   constructor(private readonly opts: FlowRecordsOptions) {
     this.#logger = opts.logger ?? createNoopLogger();
@@ -274,18 +276,18 @@ export class FlowRecords {
       at: this.#now().toISOString(),
     });
     const mac = this.#signer.sign(journalMacInput(run, "", head));
-    this.#write(
-      this.#dir(RUNS_DIR),
-      `${run}${JOURNAL_SUFFIX}`,
-      `${JSON.stringify({ ...head, mac })}\n`,
-    );
-    this.#tails.set(run, { seq: 1, mac });
+    const text = `${JSON.stringify({ ...head, mac })}\n`;
+    this.#write(this.#dir(RUNS_DIR), `${run}${JOURNAL_SUFFIX}`, text);
+    this.#tails.set(run, { seq: 1, mac, bytes: Buffer.byteLength(text, "utf8") });
     return head;
   }
 
   /** CP-4a2a — append a line to a run's journal, chained to the one before it, and fsynced before this returns: a
    * call is journaled before it is handed on, so a restart finds it. Throws the store's refusal while the journal
-   * cannot be read or a newer VibeField's holds it, and when the line is not one contracts' journal reads. */
+   * cannot be read or a newer VibeField's holds it, and when the line is not one contracts' journal reads.
+   * The line starts where the journal's whole lines end: a piece past them (a line the disk never finished, before a
+   * crash) is dropped first, never glued to; a journal shorter than this store left it is refused, and the next read
+   * sets it aside (bth's review P3). */
   appendRun(run: FlowRunId, entry: FlowJournalEntry): FlowJournalKnownLine {
     const tail = this.#tailOf(run);
     this.#guard.writable(this.#key(RUNS_DIR, run));
@@ -299,14 +301,30 @@ export class FlowRecords {
     if (known === undefined || known.kind === "head")
       throw new TypeError(`a ${entry.kind} line this journal cannot keep`);
     const mac = this.#signer.sign(journalMacInput(run, tail.mac, known));
+    const text = `${JSON.stringify({ ...known, mac })}\n`;
     const fd = openSync(this.#journalPath(run), "a", 0o600);
     try {
-      writeSync(fd, `${JSON.stringify({ ...known, mac })}\n`);
+      const size = fstatSync(fd).size;
+      if (size < tail.bytes)
+        throw new Error(`the journal under ${run} is shorter than fieldd left it`);
+      if (size > tail.bytes) {
+        ftruncateSync(fd, tail.bytes);
+        this.#logger.warn(
+          "fieldd.flows.journal_piece",
+          "A run's journal held a piece past its last line; dropped before the next",
+          { run, bytes: size - tail.bytes },
+        );
+      }
+      writeSync(fd, text);
       fsyncSync(fd);
     } finally {
       closeSync(fd);
     }
-    this.#tails.set(run, { seq: known.seq, mac });
+    this.#tails.set(run, {
+      seq: known.seq,
+      mac,
+      bytes: tail.bytes + Buffer.byteLength(text, "utf8"),
+    });
     return known;
   }
 
@@ -338,7 +356,13 @@ export class FlowRecords {
         (error as NodeJS.ErrnoException).code ?? "key-unreadable",
       );
     }
-    if (verdict.kind === "kept") this.#tails.set(run, verdict.tail);
+    // the tail this store wrote or read is an anchor while it lives: a journal shorter than it was cut, never crashed
+    const anchor = this.#tails.get(run);
+    if (verdict.kind === "kept" && anchor !== undefined && verdict.tail.seq < anchor.seq) {
+      this.#lost(run, path, "forged");
+      return { kind: "lost", why: "forged", line: verdict.tail.seq + 1 };
+    }
+    if (verdict.kind === "kept") this.#tails.set(run, { ...verdict.tail, bytes: verdict.bytes });
     else if (verdict.kind === "lost") this.#lost(run, path, verdict.why);
     else this.#guard.newer(this.#key(RUNS_DIR, run), path, { format: verdict.format });
     return verdict;
@@ -362,11 +386,11 @@ export class FlowRecords {
   }
 
   /** Where a run's journal stands, read from its file when this store has not written or read it yet. */
-  #tailOf(run: FlowRunId): JournalTail {
+  #tailOf(run: FlowRunId): JournalTail & { readonly bytes: number } {
     const known = this.#tails.get(run);
     if (known !== undefined) return known;
     const read = this.readRun(run);
-    if (read.kind === "kept") return read.tail;
+    if (read.kind === "kept") return { ...read.tail, bytes: read.bytes };
     // a newer VibeField's journal: its key is held now, and the store refuses the write
     this.#guard.writable(this.#key(RUNS_DIR, run));
     throw new Error(`no journal this VibeField keeps stands under ${run} (${read.kind})`);

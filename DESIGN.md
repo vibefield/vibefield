@@ -6491,7 +6491,10 @@ Vela's conversation:"), and its runs are read again at each ask.*
 *Amended 2026-11-05 (CP-4a2a; 4A2-Q10 (a), ruled by VF-PM 08:51Z): a run's journal is one of a flow's records, kept
 by these four ways line by line, and its door says the flows' sentence, "VibeField can't read the flows it keeps;
 nothing was changed". A line that is not VibeField's (forged, missing, or out of its order) sets its run aside as
-lost (CP4-S15), and a journal the disk did not answer leaves its run waiting, read again at the next ask.*
+lost (CP4-S15), and a journal the disk did not answer leaves its run waiting, read again at the next ask. A journal
+cut short at its end is the one change it cannot see on its own: to a fieldd started again it reads as a run that
+stopped mid-step, and the steps after the cut are asked again. The fieldd that wrote it reads the cut as lost, and
+keeping its tail in the run's own record, so a restart sees it too, is CP-4a2b's (bth's review P3, ruled 11:51Z).*
 
 **The simulator's honest faces** (track PT, PT-S1; the PT-S design §3, ruled 2026-10-18) — what the phone's
 screen says of its device, in the voice's words, quoted exactly by the plugin (`plugins/simulator`'s

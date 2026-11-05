@@ -48,6 +48,22 @@ export type FromFlowHost =
   | { t: "threw"; message: string }
   | { t: "fatal"; reason: string };
 
+/** Whether a value nests at most `max` arrays and objects deep (a scalar is 0, `[x]` is 1), read without recursion,
+ * so a value 64 KiB of JSON nests 32,000 deep is refused before anything recursive (canonical JSON, a key) reads it.
+ * The child holds a call's arguments to FLOW_LIMITS.ARGS_DEPTH_MAX before it sends, and fieldd again before it keys,
+ * journals or hands a call on (bth's review P1/P3, ruled 2026-11-05 11:46Z). */
+export function nestsWithin(value: unknown, max: number): boolean {
+  const stack: [unknown, number][] = [[value, 0]];
+  for (let next = stack.pop(); next !== undefined; next = stack.pop()) {
+    const [item, depth] = next;
+    if (typeof item !== "object" || item === null) continue;
+    if (depth >= max) return false;
+    for (const child of Array.isArray(item) ? item : Object.values(item))
+      stack.push([child, depth + 1]);
+  }
+  return true;
+}
+
 /** The words a child's text is cut to before fieldd keeps it (a `threw`'s message, a `fatal`'s reason). */
 export const FLOW_HOST_TEXT_MAX = 1_024;
 

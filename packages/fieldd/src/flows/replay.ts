@@ -2,10 +2,12 @@ import { createHash } from "node:crypto";
 import {
   canonicalJson,
   FLOW_LABEL_MAX,
+  FLOW_LIMITS,
   type FlowCallKey,
   type FlowJournalKnownLine,
 } from "@vibefield/contracts";
 import type { FlowJournalEntry } from "./journal";
+import { nestsWithin } from "./protocol";
 import {
   boundedAnswer,
   type FlowCallHandler,
@@ -21,9 +23,12 @@ import {
 //   order (a `Promise.all`) replay the same: each call finds its own answer by its key and n, never by its place.
 // - A call journaled and never answered (the host left mid-call) is handed on again under its own number: what its
 //   step then is (resumed, or lost to a Quit, CP4-Q11 (a)) is the runs' to say (CP-4a2b), by `call`.
-// - The answer journaled is the one the pipe carries (`boundedAnswer`): a text past RESULT_MAX_BYTES cut and marked.
+// - The answer journaled is the one the pipe carries: JSON's own value (an undefined in a list is null, as the pipe
+//   says it), then `boundedAnswer` (a text past RESULT_MAX_BYTES cut and marked). The script hears what is journaled.
 // - A log line the journal holds is not said again; the next is journaled, then heard.
 // - A journal that does not take a line (the disk refused it) hands nothing on: the call is refused to the script.
+// - `call` never throws at fieldd's pipe (bth's review P1/P3): arguments nested past FLOW_LIMITS.ARGS_DEPTH_MAX, or
+//   that no canonical JSON keys, are refused to the script, and so is a call or an answer its journal did not take.
 
 /** A call's replay key: SHA-256 over the canonical JSON of what it is and the arguments the script passed it. */
 export function flowCallKey(what: string, args: readonly unknown[]): FlowCallKey {
@@ -38,6 +43,16 @@ export interface FlowReplayOptions {
   /** what does a new call: the runs (CP-4a2b); a scripted one in the tests */
   readonly inner: FlowCallHandler;
 }
+
+/** The words a script hears when its run's journal did not take a call or its answer. */
+const JOURNAL_REFUSED = "VibeField could not keep this step in the run's journal.";
+
+/** A value as JSON carries it: undefined (and a function) is null, in a list and alone. Throws on what JSON cannot
+ * carry (a bigint, a cycle). */
+const asCarried = (value: unknown): unknown => {
+  const text = JSON.stringify(value);
+  return text === undefined ? null : (JSON.parse(text) as unknown);
+};
 
 /** The label, agent and phase a card shows, where the script's options name them plainly. */
 function cardOf(args: readonly unknown[]): { label?: string; agent?: string; phase?: string } {
@@ -90,14 +105,27 @@ export class FlowReplay implements FlowCallHandler {
     this.#nextCall = last + 1;
   }
 
-  call(call: FlowHostCall): Promise<FlowHostAnswer> {
-    const key = flowCallKey(call.what, call.args);
+  async call(call: FlowHostCall): Promise<FlowHostAnswer> {
+    if (!call.args.every((arg) => nestsWithin(arg, FLOW_LIMITS.ARGS_DEPTH_MAX)))
+      return {
+        ok: false,
+        refused: `VibeField can't send this ${call.what}: its arguments nest deeper than ${FLOW_LIMITS.ARGS_DEPTH_MAX}`,
+      };
+    let key: FlowCallKey;
+    try {
+      key = flowCallKey(call.what, call.args);
+    } catch {
+      return {
+        ok: false,
+        refused: `VibeField can't send this ${call.what}: its arguments are not plain JSON`,
+      };
+    }
     const n = (this.#seen.get(key) ?? 0) + 1;
     this.#seen.set(key, n);
     const journaled = this.#journaled.get(`${key}#${n}`);
     if (journaled !== undefined) {
       const answered = this.#answers.get(journaled);
-      if (answered !== undefined) return Promise.resolve(answered);
+      if (answered !== undefined) return answered;
       return this.#handOn({ what: call.what, args: call.args, call: journaled });
     }
     const number = this.#nextCall++;
@@ -110,8 +138,8 @@ export class FlowReplay implements FlowCallHandler {
         n,
         ...cardOf(call.args),
       });
-    } catch (error) {
-      return Promise.reject(error);
+    } catch {
+      return { ok: false, refused: JOURNAL_REFUSED };
     }
     return this.#handOn({ what: call.what, args: call.args, call: number });
   }
@@ -129,19 +157,32 @@ export class FlowReplay implements FlowCallHandler {
   }
 
   async #handOn(call: FlowHostCall & { readonly call: number }): Promise<FlowHostAnswer> {
-    const said = boundedAnswer(await this.#opts.inner.call(call));
-    // an answer of nothing is kept, and replayed, as null: the journal's answer is a value or a refusal
-    const answer = said.ok && said.value === undefined ? { ...said, value: null } : said;
-    this.#opts.append(
-      answer.ok
-        ? {
-            kind: "answer",
-            call: call.call,
-            value: answer.value,
-            ...(answer.cut === true ? { cut: true as const } : {}),
-          }
-        : { kind: "answer", call: call.call, refused: answer.refused },
-    );
+    const said = await this.#opts.inner.call(call);
+    let answer: ReturnType<typeof boundedAnswer>;
+    try {
+      // an answer of nothing is kept, and replayed, as null: the journal's answer is a value or a refusal
+      answer = boundedAnswer(said.ok ? { ok: true, value: asCarried(said.value) } : said);
+    } catch {
+      answer = {
+        ok: false,
+        refused: `VibeField can't hand this ${call.what}'s answer on: it is not plain JSON`,
+      };
+    }
+    try {
+      this.#opts.append(
+        answer.ok
+          ? {
+              kind: "answer",
+              call: call.call,
+              value: answer.value,
+              ...(answer.cut === true ? { cut: true as const } : {}),
+            }
+          : { kind: "answer", call: call.call, refused: answer.refused },
+      );
+    } catch {
+      // the step's answer is not kept, so the script does not hear it: a restart asks the step again
+      return { ok: false, refused: JOURNAL_REFUSED };
+    }
     return answer.ok ? { ok: true, value: answer.value } : answer;
   }
 }
