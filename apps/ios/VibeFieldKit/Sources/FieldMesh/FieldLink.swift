@@ -618,6 +618,10 @@ public final class FieldLink {
   /// Back. Discovery sweeps afresh, the home re-subscribes for a FRESH snapshot
   /// (P5), and a peer whose deadline passed while the phone was away is asked
   /// again on the first sweep.
+  /// *2026-11-05 (PG-9):* the re-subscribe names the copy's cursors, so a
+  /// desktop that moved nothing while the phone was away is answered `resumed`
+  /// and its board does not cross again; a home from before PG-9 answers the
+  /// fresh snapshot as before.
   public func resume() {
     guard started, isPaused else { return }
     isPaused = false
@@ -1621,6 +1625,13 @@ public final class FieldLink {
           "agent.subscribe",
           params: params.json,
           shape: SubscriptionShape(kind: .stream, minIntervalMs: params.minIntervalMs),
+          // PG-9 (PG-L4.4) — every ask (this one, a gap's, a re-dial's replay) names the cursors the copy holds THEN:
+          // the home answers a desktop the copy holds `resumed` or a delta, and nothing crosses again. A fresh copy
+          // names none, so the first ask is `phoneRemote` byte for byte.
+          paramsAtSend: { [weak self] in
+            guard let self else { return params.json }
+            return params.resuming(self.remote.cursors).json
+          },
           onSnapshot: { [weak self] payload in
             self?.applyMeshOpen(payload, from: deviceId, client: client)
           },

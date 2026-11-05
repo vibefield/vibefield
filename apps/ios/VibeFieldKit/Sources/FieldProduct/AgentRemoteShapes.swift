@@ -797,9 +797,21 @@ public struct AgentRemoteMeshDevice: Sendable, Equatable {
     state = AgentMeshDeviceState(wire: try object.text("state", 1...Int.max))
     asOf = try object.text("asOf", 1...Int.max)
     snapshot = try object.strictObject("snapshot", AgentRemoteMeshSnapshot.init(json:))
-    resumed = nil
-    delta = nil
+    resumed = try object.strictObject("resumed", Self.cursor(json:))
+    delta = try object.strictObject("delta", AgentRemoteMeshDelta.init(json:))
+    // PG-9 — a desktop is answered ONE way: two answers are refused, never guessed between (`rows.ts`)
+    guard [snapshot != nil, resumed != nil, delta != nil].filter({ $0 }).count <= 1 else {
+      throw object.mismatch("snapshot", "one answer of snapshot, resumed and delta")
+    }
     unknownFields = object.unknownFields
+  }
+
+  /// PG-9 — `RowsResumed`: the chain's epoch (1 to 128 UTF-16 units) and a revision at or above 0.
+  static func cursor(json: JSONValue) throws -> SubscriptionCursor {
+    var object = try WireObject(shape: "RowsResumed", value: json)
+    let epoch = try object.text("epoch", 1...128)
+    let revision = try object.integer("revision", atLeast: 0)
+    return SubscriptionCursor(epoch: epoch, revision: revision)
   }
 
   init(

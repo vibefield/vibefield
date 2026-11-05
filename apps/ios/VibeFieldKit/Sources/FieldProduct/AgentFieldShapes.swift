@@ -345,9 +345,12 @@ public struct AgentSubscribeParams: Sendable, Equatable {
     self.since = since
   }
 
-  /// PG-9 — the same ask naming `cursors`.
+  /// PG-9 — the same ask naming `cursors`: each desktop's whose chain it knows (a cursor with no epoch names nothing a
+  /// mesh can answer). With none, the ask is unchanged, byte for byte.
   public func resuming(_ cursors: [String: SubscriptionCursor]) -> AgentSubscribeParams {
-    self
+    let named = cursors.filter { $0.value.epoch != nil }
+    return AgentSubscribeParams(
+      projection: projection, scope: scope, minIntervalMs: minIntervalMs, since: named.isEmpty ? nil : named)
   }
 
   // RETIRED 2026-11-02 (PG-3e): `phoneField` (the field projection at 250 ms, the phone's first ask, which no
@@ -366,6 +369,7 @@ public struct AgentSubscribeParams: Sendable, Equatable {
     if let projection { fields["projection"] = .string(projection.rawValue) }
     if let scope { fields["scope"] = .string(scope.rawValue) }
     if let minIntervalMs { fields["minIntervalMs"] = .int(Int64(minIntervalMs)) }
+    if let since, !since.isEmpty { fields["since"] = .object(since.compactMapValues { $0.json }) }
     return .object(fields)
   }
 }

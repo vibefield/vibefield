@@ -349,6 +349,11 @@ public final class FieldProductClient {
   /// Snapshot-then-delta. The FIRST snapshot arrives through `onSnapshot` just
   /// as a reconnect's does, so a caller has ONE path for a board however many
   /// times the socket has dropped under it.
+  ///
+  /// PG-9 — `paramsAtSend`, when given, is read at EVERY send of this
+  /// subscription (the subscribe, a gap's re-subscribe, a re-dial's replay) in
+  /// place of `params`: a caller whose ask names what it holds now (the mesh's
+  /// cursors) never has a stale value replayed.
   @discardableResult
   public func subscribe(
     _ method: String,
@@ -361,7 +366,8 @@ public final class FieldProductClient {
     let key = nextSubKey
     nextSubKey += 1
     subs[key] = SubEntry(
-      method: method, params: params, shape: shape, onSnapshot: onSnapshot, onDelta: onDelta)
+      method: method, params: params, shape: shape, paramsAtSend: paramsAtSend, onSnapshot: onSnapshot,
+      onDelta: onDelta)
     do {
       try await ready()
       guard let entry = subs[key] else {
@@ -440,8 +446,10 @@ public final class FieldProductClient {
   /// (`minIntervalMs`) written in when the shape names one, and — for a rows
   /// table subscribing AGAIN — the last cursor it applied as `since`.
   private func subscribeParams(for entry: SubEntry, resuming: Bool) -> JSONValue? {
-    var fields = entry.params?.objectValue ?? [:]
-    guard entry.params == nil || entry.params?.objectValue != nil else { return entry.params }
+    // PG-9 — what the caller holds now, when it said so; the stored params otherwise
+    let params = entry.paramsAtSend?() ?? entry.params
+    var fields = params?.objectValue ?? [:]
+    guard params == nil || params?.objectValue != nil else { return params }
     var changed = false
     if let minIntervalMs = entry.shape.minIntervalMs {
       fields["minIntervalMs"] = .int(Int64(minIntervalMs))
@@ -451,7 +459,7 @@ public final class FieldProductClient {
       fields["since"] = since
       changed = true
     }
-    guard changed else { return entry.params }
+    guard changed else { return params }
     return .object(fields)
   }
 
@@ -847,6 +855,8 @@ public final class FieldProductClient {
     let method: String
     let params: JSONValue?
     let shape: SubscriptionShape
+    /// PG-9 — read at every send in place of `params`, when given
+    let paramsAtSend: (@MainActor () -> JSONValue?)?
     let onSnapshot: @MainActor (JSONValue) -> Void
     let onDelta: @MainActor (JSONValue) -> Void
     var subId: String?
@@ -868,12 +878,14 @@ public final class FieldProductClient {
 
     init(
       method: String, params: JSONValue?, shape: SubscriptionShape,
+      paramsAtSend: (@MainActor () -> JSONValue?)? = nil,
       onSnapshot: @escaping @MainActor (JSONValue) -> Void,
       onDelta: @escaping @MainActor (JSONValue) -> Void
     ) {
       self.method = method
       self.params = params
       self.shape = shape
+      self.paramsAtSend = paramsAtSend
       self.onSnapshot = onSnapshot
       self.onDelta = onDelta
     }

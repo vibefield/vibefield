@@ -46,6 +46,73 @@ public struct RemoteMeshCopy: Sendable {
     public var moved: Bool { changes != nil || rejoined != nil || standingMoved || rowsMoved }
   }
 
+  /// PG-9 (PG-L4.4) — one desktop's board as the WIRE last stood it, before the screen: its chain, its readable rows
+  /// in the board's order (a key set again keeps its place, a new key goes last, as the hub's own `Map` does), and the
+  /// rows this build could not read. What a cursor vouches for, and what an answer by cursor is expanded from.
+  struct WireBoard: Sendable, Equatable {
+    var epoch: String
+    var revision: Int64
+    var order: [String]
+    var rows: [String: AgentRemoteRow]
+    var refused: [AgentRemoteRowRefusal]
+
+    init(_ snapshot: AgentRemoteMeshSnapshot) {
+      epoch = snapshot.epoch
+      revision = snapshot.revision
+      order = []
+      rows = [:]
+      refused = []
+      for row in snapshot.rows { set(row) }
+      for refusal in snapshot.refused { refuse(refusal) }
+    }
+
+    /// The board whole, as the home would send it at this cursor.
+    var snapshot: AgentRemoteMeshSnapshot {
+      AgentRemoteMeshSnapshot(
+        epoch: epoch, revision: revision, rows: order.compactMap { rows[$0] }, refused: refused, more: nil,
+        unknownFields: [])
+    }
+
+    /// A delta on this chain, in the screen's order: a readable upsert clears its key's refusal, a refused one
+    /// holds it, a removal clears both. False, and nothing applied, when it does not continue this chain.
+    mutating func apply(_ delta: AgentRemoteMeshDelta) -> Bool {
+      guard delta.epoch == epoch, delta.since == revision else { return false }
+      for row in delta.upserts { set(row) }
+      for refusal in delta.refused { refuse(refusal) }
+      for key in delta.removed {
+        drop(key)
+        refused.removeAll { $0.key == key }
+      }
+      revision = delta.revision
+      return true
+    }
+
+    private mutating func set(_ row: AgentRemoteRow) {
+      let key = row.runtimeRunId
+      if rows.updateValue(row, forKey: key) == nil { order.append(key) }
+      refused.removeAll { $0.key == key }
+    }
+
+    private mutating func refuse(_ refusal: AgentRemoteRowRefusal) {
+      if let key = refusal.key { drop(key) }
+      if let at = refused.firstIndex(where: { $0.key == refusal.key }) {
+        refused[at] = refusal
+      } else {
+        refused.append(refusal)
+      }
+    }
+
+    private mutating func drop(_ key: String) {
+      guard rows.removeValue(forKey: key) != nil else { return }
+      order.removeAll { $0 == key }
+    }
+  }
+
+  /// PG-9 — each desktop's board as the wire last stood it. It follows every frame, before the screen and whether or
+  /// not the copy is ignoring (after a gap, the wire's image is still exact at its own cursor); a desktop whose frame
+  /// it cannot follow leaves it, so no cursor is named for it.
+  private var wire: [String: WireBoard] = [:]
+
   /// The pipeline's stages, internal so a `@testable` suite can read the screen's hold and the replica's gaps.
   var screen = RemoteBoardScreen()
   var fold = RemoteModelBoard()
@@ -68,11 +135,17 @@ public struct RemoteMeshCopy: Sendable {
     replica = RemoteModelReplica(gapBuffer: gapBuffer)
   }
 
-  /// PG-9 — the cursor the copy holds for each desktop: the last frame of its chain it applied.
-  public var cursors: [String: SubscriptionCursor] { [:] }
+  /// PG-9 — the cursor the copy holds for each desktop: the last frame of its chain the wire's image applied. What
+  /// the phone names (`since`) at each ask, read then, never stored.
+  public var cursors: [String: SubscriptionCursor] {
+    wire.mapValues { SubscriptionCursor(epoch: $0.epoch, revision: $0.revision) }
+  }
 
   /// PG-9 — the board keys the wire's image holds for `device`, readable and refused (a test's witness).
-  func wireKeys(_ device: String) -> [String] { [] }
+  func wireKeys(_ device: String) -> [String] {
+    guard let board = wire[device] else { return [] }
+    return board.order + board.refused.compactMap { $0.key }
+  }
 
   /// The answering desktop.
   public var here: String? { fold.here }
@@ -94,9 +167,24 @@ public struct RemoteMeshCopy: Sendable {
 
   /// The open, and every whole-mesh resync: replaces everything the copy follows (M23), then re-joins at once, as
   /// the window's `live` render does before the replica's frame.
+  ///
+  /// PG-9 — an open that answers a desktop by the phone's cursor (`resumed`, a `delta`) is first expanded into the
+  /// whole open it stands for, from the wire's image, so every stage after it sees an ordinary open. An answer the
+  /// image cannot vouch for (another cursor than the one it holds, a delta off its chain) is a GAP: nothing is
+  /// applied, that desktop's cursor goes, and the ask that follows is answered its board whole.
   @discardableResult
   public mutating func open(_ open: AgentRemoteMeshOpen, now: String) -> Outcome {
     handed = nil
+    let expanded = expand(open)
+    guard let open = expanded.open else {
+      for device in expanded.unanswerable { wire.removeValue(forKey: device) }
+      ignoring = true
+      return .gap(expanded.reason)
+    }
+    wire = [:]
+    for entry in open.devices {
+      if let snapshot = entry.snapshot, snapshot.more != true { wire[entry.device] = WireBoard(snapshot) }
+    }
     let screened = screen.open(open, now: now)
     let update = fold.open(screened)
     handed = update
@@ -117,6 +205,7 @@ public struct RemoteMeshCopy: Sendable {
   /// publish); a change waits for `publish`.
   public mutating func frame(_ frame: AgentRemoteMeshFrame, now: String) -> Outcome {
     handed = nil
+    follow(frame)
     if ignoring { return .ignored }
     for screened in screen.frame(frame, now: now) {
       switch fold.frame(screened, now: now) {
@@ -153,6 +242,60 @@ public struct RemoteMeshCopy: Sendable {
     defer { standingMoved = false }
     return Published(
       changes: changes, rejoined: rejoined, standingMoved: standingMoved, rowsMoved: windowRows != before)
+  }
+
+  /// PG-9 — the wire's image follows one frame: a desktop's reset replaces its board (a page of a paged reset vouches
+  /// for nothing), a delta applies on its chain or the desktop leaves the image, a state moves nothing.
+  private mutating func follow(_ frame: AgentRemoteMeshFrame) {
+    switch frame {
+    case .state:
+      break
+    case .snapshot(let device, let snapshot):
+      wire[device] = snapshot.more == true ? nil : WireBoard(snapshot)
+    case .delta(let device, let delta):
+      guard var board = wire[device], board.apply(delta) else {
+        wire.removeValue(forKey: device)
+        return
+      }
+      wire[device] = board
+    }
+  }
+
+  /// PG-9 — `open` as the whole open it stands for: each `resumed` desktop's board from the wire's image at that
+  /// cursor, each `delta` applied to a copy of it. Nil, with the desktops it could not answer, when any answer names
+  /// a cursor the image does not hold.
+  private func expand(_ open: AgentRemoteMeshOpen) -> (
+    open: AgentRemoteMeshOpen?, unanswerable: [String], reason: String
+  ) {
+    var unanswerable: [String] = []
+    var reasons: [String] = []
+    let devices = open.devices.map { entry -> AgentRemoteMeshDevice in
+      let board: WireBoard
+      if let resumed = entry.resumed {
+        guard let held = wire[entry.device], held.epoch == resumed.epoch, held.revision == resumed.revision else {
+          unanswerable.append(entry.device)
+          reasons.append("\(entry.device) resumed at \(resumed.epoch ?? "no chain")@\(resumed.revision), not held")
+          return entry
+        }
+        board = held
+      } else if let delta = entry.delta {
+        guard var held = wire[entry.device], held.apply(delta) else {
+          unanswerable.append(entry.device)
+          reasons.append("\(entry.device) answered a delta since \(delta.epoch)@\(delta.since), not held")
+          return entry
+        }
+        board = held
+      } else {
+        return entry
+      }
+      return AgentRemoteMeshDevice(
+        device: entry.device, state: entry.state, asOf: entry.asOf, snapshot: board.snapshot,
+        unknownFields: entry.unknownFields)
+    }
+    guard unanswerable.isEmpty else {
+      return (nil, unanswerable, "an answer by cursor this copy cannot vouch for: " + reasons.joined(separator: "; "))
+    }
+    return (AgentRemoteMeshOpen(devices: devices, unknownFields: open.unknownFields), [], "")
   }
 
   /// The window's visibility, handed anew when the home's joins moved. True when they did.
