@@ -88,7 +88,21 @@ export interface WireTally {
   removed: number;
   bytes: number;
   bytesPerSecond: number;
+  /** the same window by desktop (PG-9 S5a): a frame names one desktop; a whole-mesh frame is `(every desktop)` */
+  byDevice: Record<string, DeviceTally>;
 }
+
+/** One desktop's share of a window (PG-9 S5a): what a device run on that desktop alone would hear of it. */
+export interface DeviceTally {
+  frames: number;
+  upserts: number;
+  removed: number;
+  bytes: number;
+  bytesPerSecond: number;
+}
+
+/** A whole-mesh frame's key in `byDevice` (PG-1c's resync names every desktop at once). */
+export const EVERY_DESKTOP = "(every desktop)";
 
 /** How one open answered its desktops (S4b's `MeshOpenAnswers`, on the desk). */
 export interface OpenAnswers {
@@ -282,6 +296,7 @@ function emptyTally(): WireTally {
     removed: 0,
     bytes: 0,
     bytesPerSecond: 0,
+    byDevice: {},
   };
 }
 
