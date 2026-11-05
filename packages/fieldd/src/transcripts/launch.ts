@@ -1,3 +1,4 @@
+import { dirname, join } from "node:path";
 import { TRANSCRIPT_HOST_BUNDLE, TRANSCRIPT_HOST_ROLE_ARG } from "../roles";
 import { type FilesHostFacts, ownFilesHostFacts } from "../workspace/launch";
 
@@ -31,9 +32,32 @@ export function transcriptHostLaunchSpec(
 }
 
 /** The rule above, over facts a test can state. */
-// TH-1 (red): a skeleton; the green commit builds it.
 export function chooseTranscriptHostLaunch(
-  _facts: Pick<FilesHostFacts, "sea" | "execPath" | "bundleDir" | "exists">,
+  facts: Pick<FilesHostFacts, "sea" | "execPath" | "bundleDir" | "exists">,
 ): TranscriptHostLaunchChoice {
-  return { kind: "unconfigured", reason: "not built" };
+  if (facts.sea) {
+    const bundle = join(dirname(facts.execPath), TRANSCRIPT_HOST_BUNDLE);
+    if (!facts.exists(bundle))
+      return {
+        kind: "unconfigured",
+        reason: `the transcript worker's bundle is not beside the executable (${bundle})`,
+      };
+    return {
+      kind: "launch",
+      launch: { command: facts.execPath, args: [TRANSCRIPT_HOST_ROLE_ARG] },
+    };
+  }
+  if (facts.bundleDir === undefined)
+    return {
+      kind: "unconfigured",
+      reason:
+        "a source run has no transcript worker bundle beside it (FielddConfig.transcriptHost names one)",
+    };
+  const bundle = join(facts.bundleDir, TRANSCRIPT_HOST_BUNDLE);
+  if (!facts.exists(bundle))
+    return {
+      kind: "unconfigured",
+      reason: `the transcript worker's bundle is not beside fieldd's bundle (${bundle})`,
+    };
+  return { kind: "launch", launch: { command: facts.execPath, args: [bundle] } };
 }

@@ -80,6 +80,7 @@ export type FielddRole = "files-host" | "transcript-host" | "agent-shim";
 export function roleOf(argv: readonly string[]): FielddRole | "unknown" | undefined {
   const first = argv[2];
   if (first === FILES_HOST_ROLE_ARG) return "files-host";
+  if (first === TRANSCRIPT_HOST_ROLE_ARG) return "transcript-host";
   if (first === AGENT_SHIM_ROLE_ARG) return "agent-shim";
   if (first?.startsWith(ROLE_ARG_PREFIX) === true) return "unknown";
   return undefined;

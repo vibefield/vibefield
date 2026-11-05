@@ -383,6 +383,7 @@ import { SparkKeptStore } from "./tool-plane/spark-kept";
 import { SparkService, SparkStore } from "./tool-plane/sparks";
 import { type TranscriptHostLaunch, transcriptHostLaunchSpec } from "./transcripts/launch";
 import { TranscriptHostSupervisor, type TranscriptHostTimings } from "./transcripts/supervisor";
+import { SparkTranscriptTickets } from "./transcripts/tickets";
 import { userMe } from "./user-me";
 import type { BrowseFacts } from "./workspace/browse-exports";
 import type { FilesHostLaunch } from "./workspace/launch";
@@ -1194,6 +1195,12 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       ? { timings: config.transcriptHostTimings }
       : {}),
     logger: logger.child({ component: "transcript_host" }),
+  });
+  sparkTranscripts.onAppend((spark, run) => transcriptHost.appended(spark, run));
+  const transcriptTickets = new SparkTranscriptTickets({
+    store: sparkTranscripts,
+    supervisor: transcriptHost,
+    hasSpark: (id) => sparkStore.get(id) !== undefined,
   });
   const briefings: AgentBriefings = new AgentBriefings({
     spark: (id) => sparkStore.get(id),
@@ -4556,6 +4563,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         windowTokenParticipants.delete(tokenId);
         const revoked = tokens.revoke(tokenId);
         await workspace.tickets.revokeClient(tokenId);
+        await transcriptTickets.revokeClient(tokenId); // TH-1 — its transcript sockets close too
         const droppedConnections = api.dropTokenConnections(tokenId);
         if (participant !== undefined && pluginUpdatesForCleanup !== null) {
           lifecycleTask ??=
@@ -6493,6 +6501,12 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       saysInFlight.set(requestId, say);
       return await say;
     });
+    // TH-1 (TH-Q30 (a′), VF-PM's X2) — a ticket for the spark's transcript, read on the transcript worker's socket and
+    // never over this RPC (EL2); a renderer window of this desktop alone (transcripts/tickets.ts). A read: unaudited,
+    // as compose.sparks.list is
+    api.register("compose.sparks.transcript.openTicket", (ctx, params) =>
+      transcriptTickets.open(ctx, params),
+    );
     // CP-3 — the needs-you queue's doors (compose.ts), beside the sparks'. *Corrected 2026-11-04 (IOS-12a; PC-D4 A,
     // PC-D7 A): they were `agents.manage`, local, the window's alone. They are `sparks.use`, admitted as the spark doors
     // are: the home's needs.list merges every self desktop's queue; needs.subscribe is ONE desktop's queue (this one;
@@ -7422,6 +7436,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           // be gone first, and stop() resolves only after the real exit
           rosettad?.stop() ?? Promise.resolve(),
           workspace.stop(), // FS-1a — the files worker leaves with the daemon
+          transcriptHost.stop(), // TH-1 — and the transcript worker
         ]);
         await settleDocHolders(); // DS-5d — the holders ledger's last write, bounded (M176)
         indexTail.dispose(); // SP-6 — the session sockets close with the daemon they follow
@@ -7881,6 +7896,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // (FS-D11 (b), always on; readiness is a transition, never a boot gate),
     // and the places this user's runs already recorded are seeded once.
     workspace.start();
+    transcriptHost.start(); // TH-1 — the transcript worker likewise: always on, never a boot gate
     placeScanner.start(); // PJ-1 — scans once the catalog and the worker are both ready
     projectGroups.start(); // PJ-1 §4 — regroups as the places and sessions move
     try {
@@ -7928,6 +7944,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           projectGroups.dispose();
           offActed();
           await workspace.stop(); // FS-1a — the files worker stops with the daemon (FS-D11 (b))
+          await transcriptHost.stop(); // TH-1 — and the transcript worker
           detachHealthSources?.();
           endpoints.dispose();
           mcp.dispose();
@@ -8058,6 +8075,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     projectGroups.dispose();
     offActed();
     await workspace.stop(); // FS-1a — started only after ready; the guard is stated
+    await transcriptHost.stop(); // TH-1 — likewise
     // The earliest supersession window, which the `stopForSupersession` listener
     // is not yet in scope to see: a takeover that lands while the services are
     // still being built kills the mgmt socket under whatever request is in

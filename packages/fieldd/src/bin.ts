@@ -22,6 +22,7 @@ import {
   agentShimUnavailable,
   FILES_HOST_BUNDLE,
   roleOf,
+  TRANSCRIPT_HOST_BUNDLE,
   unknownRoleLine,
 } from "./roles";
 
@@ -277,6 +278,13 @@ if (role === "files-host") {
   // says so and leaves (host/main.ts).
   refuseInspectorSignal();
   const script = join(sealedDirectory(), FILES_HOST_BUNDLE);
+  createRequire(script)(script);
+} else if (role === "transcript-host") {
+  // TH-1 (TH0-Q5 (b)) — the transcript worker's ROLE, the files worker's pattern: fieldd starts it as ITSELF with this
+  // argument (transcripts/launch.ts), and the role loads its bundle staged beside the executable. It speaks only on
+  // its IPC pipe, and the folder's key reaches it there, never in its environment (EL7).
+  refuseInspectorSignal();
+  const script = join(sealedDirectory(), TRANSCRIPT_HOST_BUNDLE);
   createRequire(script)(script);
 } else if (role === "agent-shim") {
   // AR-7j — the agents' launcher runtime in a packaged build: every launcher

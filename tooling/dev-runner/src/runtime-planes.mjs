@@ -26,6 +26,8 @@ export function daemonPlaneInputs(paths, pluginProjects) {
     // FS-1a — the files worker runs with the daemon: a rebuilt worker bounces the pair
     paths.filesHostOutput,
     paths.milleNativeOutput,
+    // TH-1 — and the transcript worker, the same way
+    paths.transcriptHostOutput,
     paths.nativeOutput,
     // TC-S2 — the cell the floor spawns beside itself: a rebuilt cell bounces the pair
     paths.cellOutput,

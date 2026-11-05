@@ -68,6 +68,11 @@ export async function stageRuntimeSnapshot({
         paths.milleNativeOutput,
         join(temporary, "fieldd", basename(paths.milleNativeOutput)),
       ),
+      // TH-1 — the transcript worker's bundle, beside bin.cjs
+      copyFile(
+        paths.transcriptHostOutput,
+        join(temporary, "fieldd", basename(paths.transcriptHostOutput)),
+      ),
       copyFile(paths.nativeOutput, layout.nativeOutput),
       // TC-S2 — the floor spawns its cell as its own SIBLING, so the cell rides beside it
       copyFile(paths.cellOutput, layout.cellOutput),

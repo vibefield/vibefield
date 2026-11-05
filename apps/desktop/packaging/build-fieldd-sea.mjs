@@ -20,7 +20,7 @@
 // Node >=26 ESM. Depends only on builtins plus `postject`, resolved from apps/desktop's
 // node_modules — a build step that reaches the network (npx) is not reproducible.
 import { spawn, spawnSync } from "node:child_process";
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import {
   chmodSync,
   copyFileSync,
@@ -71,6 +71,7 @@ const MILLE_NATIVE = `mille.${milleTriple()}.node`;
 // The executable's closed roles (packages/fieldd/src/roles.ts, spelled again here: this
 // script imports no TypeScript). bin.ts dispatches on the FIRST argument alone.
 const FILES_HOST_ROLE_ARG = "--vibefield-role=files-host";
+const TRANSCRIPT_HOST_ROLE_ARG = "--vibefield-role=transcript-host";
 const AGENT_SHIM_ROLE_ARG = "--vibefield-role=agent-shim";
 const AGENT_SHIM_BUNDLE = "agent-shim.cjs";
 
@@ -89,6 +90,12 @@ const SIDECARS = [
   {
     name: "files-host.cjs",
     why: "the files worker's bundle — the executable's files-host role loads it from beside itself",
+  },
+  // TH-1 (TH0-Q5 (b)) — the transcript worker, mille-free. The executable re-runs ITSELF with
+  // `--vibefield-role=transcript-host` and that role loads this bundle from beside it (bin.ts).
+  {
+    name: "transcript-host.cjs",
+    why: "the transcript worker's bundle — the executable's transcript-host role loads it from beside itself",
   },
   // mille's native engine: `process.dlopen` needs a real path, and fieldd hands
   // the worker this one explicitly (workspace/launch.ts); never embeddable.
@@ -540,7 +547,14 @@ function agentShimProbe({ exe, root, deadlineMs = 30_000 }) {
   );
   const data = join(root, "data");
   // a typed agent's own arguments, a role's word among them: the agent's, never a role
-  const agentArgs = ["--model", "two words", "", FILES_HOST_ROLE_ARG, AGENT_SHIM_ROLE_ARG];
+  const agentArgs = [
+    "--model",
+    "two words",
+    "",
+    FILES_HOST_ROLE_ARG,
+    TRANSCRIPT_HOST_ROLE_ARG,
+    AGENT_SHIM_ROLE_ARG,
+  ];
   return new Promise((done) => {
     const started = Date.now();
     const child = spawn(exe, [AGENT_SHIM_ROLE_ARG, homeCopy, ...agentArgs], {
@@ -649,6 +663,82 @@ function agentShimMissingProbe({ exe, root, roleArg = AGENT_SHIM_ROLE_ARG, deadl
     child.once("error", (e) => report(null, null, e.message));
     // `close`, not `exit`: what the program said is all read only once its stdio has closed
     child.once("close", (code, signal) => report(code, signal));
+  });
+}
+
+/** TH-1 — run the executable as fieldd runs its transcript worker: the role argument, an IPC pipe, the folder and
+ * its key on the pipe (never the environment), then one ticket registered and a shutdown. */
+function transcriptHostProbe({ exe, folder, deadlineMs = 30_000 }) {
+  return new Promise((done) => {
+    const started = Date.now();
+    const child = spawn(exe, [TRANSCRIPT_HOST_ROLE_ARG], {
+      cwd: "/",
+      env: { PATH: "/usr/bin:/bin" },
+      stdio: ["ignore", "ignore", "pipe", "ipc"],
+    });
+    let stderr = "";
+    let settled = false;
+    const result = {};
+    const finish = (outcome) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      try {
+        child.send({ t: "shutdown" });
+      } catch {
+        // already gone
+      }
+      let reported = false;
+      const report = () => {
+        if (reported) return;
+        reported = true;
+        clearTimeout(hard);
+        done({ ...result, ...outcome, stderr });
+      };
+      const hard = setTimeout(() => child.kill("SIGKILL"), 5_000);
+      child.once("exit", report);
+      if (child.exitCode !== null || child.signalCode !== null) report();
+    };
+    const timer = setTimeout(
+      () => finish({ ok: false, reason: `no answer within ${deadlineMs} ms` }),
+      deadlineMs,
+    );
+    child.stderr.on("data", (chunk) => {
+      stderr += chunk;
+    });
+    child.on("message", (m) => {
+      if (m?.t === "ready") {
+        result.readyMs = Date.now() - started;
+        result.port = m.port;
+        child.send({
+          t: "req",
+          id: 1,
+          op: "registerTicket",
+          args: {
+            ticket: randomBytes(32).toString("base64url"),
+            spark: "sp-probe00",
+            clientId: "probe",
+            expiresAt: Date.now() + 60_000,
+          },
+        });
+      } else if (m?.t === "res" && m.id === 1) {
+        if (!m.ok) return finish({ ok: false, reason: `ticket refused: ${m.error?.message}` });
+        finish({ ok: m.value?.port === result.port, ticketPort: m.value?.port });
+      } else if (m?.t === "fatal") {
+        finish({ ok: false, reason: `fatal: ${m.reason}` });
+      }
+    });
+    child.once("error", (e) => finish({ ok: false, reason: `spawn failed: ${e.message}` }));
+    child.once("exit", (code, signal) => {
+      if (!settled) finish({ ok: false, reason: `exited early (${signal ?? code})` });
+    });
+    child.send({
+      t: "init",
+      key: randomBytes(32).toString("base64"),
+      dir: folder,
+      allowedOrigins: [],
+      generation: 1,
+    });
   });
 }
 
@@ -918,6 +1008,17 @@ async function verify({ exe, manifest }) {
       c.ok
         ? `files-host role: ready in ${c.readyMs} ms (mille ${c.mille}), listed ${c.listed} entries of the sandbox, rss ${(c.rss / 1e6).toFixed(1)} MB`
         : `files-host role: ${c.reason}${c.stderr ? ` — stderr: ${c.stderr.trim().split("\n").slice(-3).join(" / ")}` : ""}`,
+    );
+
+    // Probe C2 (TH-1) — the executable in its transcript-host ROLE: the mille-free worker loads
+    // its bundle staged beside it, takes the folder and its key on its IPC pipe, says ready with
+    // its loopback port and holds a ticket. The packaged half of the spark's transcript.
+    const c2 = await transcriptHostProbe({ exe: cleanExe, folder: sandbox });
+    say(
+      c2.ok === true,
+      c2.ok
+        ? `transcript-host role: ready in ${c2.readyMs} ms on 127.0.0.1:${c2.port}, a ticket held`
+        : `transcript-host role: ${c2.reason ?? `the ticket's port ${c2.ticketPort} is not the listener's ${c2.port}`}${c2.stderr ? ` — stderr: ${c2.stderr.trim().split("\n").slice(-3).join(" / ")}` : ""}`,
     );
 
     // Probe D (AR-7j, LP-D1) — the executable in its agent-shim ROLE, exactly as every

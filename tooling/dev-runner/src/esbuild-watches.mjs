@@ -9,6 +9,12 @@ async function filesHostBuild(paths) {
   return import(join(dirname(dirname(paths.fielddEntry)), "scripts", "files-host-build.mjs"));
 }
 
+/** TH-1 — fieldd's own definition of the transcript worker's bundle (the plugin that keeps mille out of it), loaded
+ * from the package that owns it, as the files worker's is. */
+async function transcriptHostBuild(paths) {
+  return import(join(dirname(dirname(paths.fielddEntry)), "scripts", "transcript-host-build.mjs"));
+}
+
 /** The watched bundles, as data: a test builds one exactly as the watch below does. */
 export function esbuildDefinitions(paths) {
   return [
@@ -106,6 +112,18 @@ export function esbuildDefinitions(paths) {
       afterBuild: async () => {
         (await filesHostBuild(paths)).stageMilleNative(dirname(paths.filesHostOutput));
       },
+    },
+    {
+      // TH-1 (TH0-Q5 (b)): fieldd's fifth bundle, the transcript worker, mille-free. Its options are fieldd's own
+      // (`scripts/transcript-host-build.mjs`), read at build time, as the files worker's are.
+      name: "fieldd-transcript-host",
+      outfile: paths.transcriptHostOutput,
+      cwd: dirname(dirname(paths.fielddEntry)),
+      options: async () =>
+        (await transcriptHostBuild(paths)).transcriptHostBuildOptions({
+          fielddRoot: dirname(dirname(paths.fielddEntry)),
+          outfile: paths.transcriptHostOutput,
+        }),
     },
   ];
 }
