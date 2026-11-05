@@ -6099,11 +6099,12 @@ Each is sent once for the reason it names, and a line its session did not take i
 hears nothing else from VibeField: a gate, the call cap, a changed flow and a Stop are the person's, and a run's
 Stop reaches a step only through §8's two acts ("A run a Stop has not stopped", its CP-4 note).
 
-**When a run's script cannot go on** (track CO, CP-4a2a; 4A2-Q7 (a), ruled by VF-PM 2026-11-05 08:51Z; the words are
-open until James reads them on a run). A flow's script runs in a host of its own, one per run, never in fieldd. fieldd
-ends a host that stops answering its ping or outgrows the memory a flow may use (`FLOW_LIMITS`, provisional until
-measured), and the run then ends as any run ends (CP4-Q10 (a)) and says why, once, in fieldd's voice. ‹flow› is the
-flow's name as its file's `meta` says it, on one line and cut at 64 characters with "…", as ‹label› is above:
+**When a run's script cannot go on** (track CO, CP-4a2a; 4A2-Q7 (a), ruled by VF-PM 2026-11-05 08:51Z, re-ruled (b)
+11:46Z on the review's evidence; the words are open until James reads them on a run). A flow's script runs in a host of
+its own, one per run, never in fieldd. fieldd ends a host that stops answering its ping or outgrows the memory a flow
+may use (`FLOW_LIMITS`, provisional until measured), and the run then ends as any run ends (CP4-Q10 (a)) and says why,
+once, in fieldd's voice. ‹flow› is the flow's name as its file's `meta` says it, on one line and cut at 64 characters
+with "…", as ‹label› is above:
 - **A host that stopped answering:** "VibeField ended ‹flow›: it stopped answering."
 - **A host past its memory:** "VibeField ended ‹flow›: it used more memory than a flow may."
 - **A host that broke its pipe's bounds** (a message past 64 KiB, or one that is not JSON; reachable only when the
@@ -6499,7 +6500,7 @@ nothing was changed". A line that is not VibeField's (forged, missing, or out of
 lost (CP4-S15), and a journal the disk did not answer leaves its run waiting, read again at the next ask. A journal
 cut short at its end is the one change it cannot see on its own: to a fieldd started again it reads as a run that
 stopped mid-step, and the steps after the cut are asked again. The fieldd that wrote it reads the cut as lost, and
-keeping its tail in the run's own record, so a restart sees it too, is CP-4a2b's (bth's review P3, ruled 11:51Z).*
+keeping its tail in the run's own record, so a restart sees it too, is CP-4a2b's (bth's review P3, ruled 11:46Z).*
 
 **The simulator's honest faces** (track PT, PT-S1; the PT-S design §3, ruled 2026-10-18) — what the phone's
 screen says of its device, in the voice's words, quoted exactly by the plugin (`plugins/simulator`'s

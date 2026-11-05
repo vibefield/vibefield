@@ -1878,7 +1878,9 @@
                         runs in a worker thread inside the child, under V8's own cap on its heap (the worker's
                         <code>resourceLimits</code>, which a packaged executable honours though it takes no heap flag),
                         so a script that spins never holds the child's own thread. The worker answers fieldd's ping:
-                        fieldd ends a child that misses it, V8 ends a worker past its cap, and either way the run says so
+                        fieldd ends a child that misses it, V8 ends a worker past its cap, the child's own thread ends
+                        the child past its resident cap (<code>HOST_RSS_MB</code>: what V8's cap cannot see, a typed
+                        array's backing store; bth's re-read N1), and in each case the run says so
                         in fieldd's words (4A2-Q7 (b), re-ruled 2026-11-05; <code>FLOW_LIMITS</code>, provisional). The
                         child leaves when its pipe closes or when every call it awaits is unanswered (CP-D9). Before any run,
                         fieldd reads a script's bytes without running them (<code>acorn</code>, the static read that a
