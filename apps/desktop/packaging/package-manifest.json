@@ -45,7 +45,7 @@
       "files": {
         "dist/main/index.cjs": {
           "count": 1,
-          "bytes": [2753933]
+          "bytes": [2775601]
         },
         "dist/main/sound-worker.cjs": {
           "count": 1,
@@ -53,7 +53,7 @@
         },
         "dist/preload/index.cjs": {
           "count": 1,
-          "bytes": [940905]
+          "bytes": [962522]
         },
         "dist/renderer/assets/AgentsWizardPane-[hash].css": {
           "count": 1,
@@ -201,7 +201,7 @@
         },
         "dist/renderer/assets/main-[hash].css": {
           "count": 1,
-          "bytes": [227769]
+          "bytes": [227833]
         },
         "dist/renderer/assets/main-[hash].js": {
           "count": 1,
@@ -241,7 +241,7 @@
         },
         "dist/renderer/assets/renderer-[hash].js": {
           "count": 1,
-          "bytes": [65671]
+          "bytes": [65246]
         },
         "dist/renderer/assets/rolldown-runtime-[hash].js": {
           "count": 1,
@@ -285,7 +285,7 @@
         },
         "dist/renderer/assets/singleton-vibefield-plugin-sdk-behavior.js": {
           "count": 1,
-          "bytes": [581]
+          "bytes": [582]
         },
         "dist/renderer/assets/singleton-vibefield-plugin-sdk-canvas.js": {
           "count": 1,
@@ -317,7 +317,7 @@
         },
         "dist/renderer/assets/src-[hash].js": {
           "count": 2,
-          "bytes": [298475, 1530]
+          "bytes": [305690, 1530]
         },
         "dist/renderer/assets/star-spark-[hash].js": {
           "count": 1,
@@ -349,15 +349,15 @@
         },
         "dist/renderer/assets/worker-[hash].js": {
           "count": 1,
-          "bytes": [304070]
+          "bytes": [310849]
         },
         "dist/renderer/assets/workspace-[hash].css": {
           "count": 1,
-          "bytes": [179960]
+          "bytes": [183040]
         },
         "dist/renderer/assets/workspace-[hash].js": {
           "count": 1,
-          "bytes": [1721847]
+          "bytes": [1736041]
         },
         "dist/renderer/index.html": {
           "count": 1,
@@ -365,12 +365,12 @@
         },
         "dist/testing/smoke.cjs": {
           "count": 1,
-          "bytes": [2905634],
+          "bytes": [2930791],
           "neverShip": ["testing-tree", "smoke-or-spike-entry"]
         }
       },
-      "bytes": 19201707,
-      "installedBytes": 19410944
+      "bytes": 19301057,
+      "installedBytes": 19501056
     },
     "packages/fieldd": {
       "name": "@vibefield/fieldd",
@@ -381,11 +381,11 @@
         },
         "dist/bin.cjs": {
           "count": 1,
-          "bytes": [8464146]
+          "bytes": [8560262]
         },
         "dist/files-host.cjs": {
           "count": 1,
-          "bytes": [1362534]
+          "bytes": [1387430]
         },
         "dist/loro_wasm_bg.wasm": {
           "count": 1,
@@ -397,11 +397,15 @@
         },
         "dist/service-harness.mjs": {
           "count": 1,
-          "bytes": [1085023]
+          "bytes": [1109919]
+        },
+        "dist/transcript-host.cjs": {
+          "count": 1,
+          "bytes": [1034883]
         }
       },
-      "bytes": 20416975,
-      "installedBytes": 20426752
+      "bytes": 21597766,
+      "installedBytes": 21606400
     },
     "plugins/browser": {
       "name": "@vibefield/plugin-browser",
@@ -412,11 +416,11 @@
         },
         "dist/renderer.js": {
           "count": 1,
-          "bytes": [794372]
+          "bytes": [814890]
         }
       },
-      "bytes": 820212,
-      "installedBytes": 823296
+      "bytes": 840730,
+      "installedBytes": 843776
     },
     "plugins/browser-pane": {
       "name": "@vibefield/plugin-browser-pane",
@@ -445,16 +449,16 @@
       "files": {
         "dist/renderer.js": {
           "count": 1,
-          "bytes": [1287549]
+          "bytes": [1308067]
         }
       },
-      "bytes": 1287549,
-      "installedBytes": 1290240
+      "bytes": 1308067,
+      "installedBytes": 1310720
     }
   },
   "totals": {
-    "files": 104,
-    "bytes": 42015788,
-    "installedBytes": 42246144
+    "files": 105,
+    "bytes": 43336965,
+    "installedBytes": 43556864
   }
 }
