@@ -39,7 +39,7 @@ struct AppReviewTests {
       SettingsModel.aboutFoot == [
         "Tailscale is a registered trademark of Tailscale Inc.",
         "VibeField names agents such as Claude Code and Codex to tell sessions apart. "
-          + "It isn't affiliated with or endorsed by Anthropic or OpenAI.",
+          + "It isn’t affiliated with or endorsed by Anthropic or OpenAI.",
       ])
   }
 }

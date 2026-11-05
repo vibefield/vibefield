@@ -6309,13 +6309,13 @@ not hold the door.
 reject"; where each word stands is §8 "The phone's Settings" and "The phone's way in").
 - **Privacy Policy** and **Support** open vibefield.dev's own pages. They are links, never claims, so no privacy
   sentence rides with them; item 160 and the bible's §11 keep those words.
-- With no acknowledgements in the build, the page says "Acknowledgements aren't in this build." above the short list
+- With no acknowledgements in the build, the page says "Acknowledgements aren’t in this build." above the short list
   it has always shown.
-- When the build's acknowledgements can't be read: "This build's acknowledgements can't be read: ‹the reason›." above
+- When the build's acknowledgements can't be read: "This build’s acknowledgements can’t be read: ‹the reason›." above
   the same short list. Never a blank page.
-- A text a part names that the file doesn't carry is named, never dropped: "This text isn't in the build: ‹its id›."
+- A text a part names that the file doesn't carry is named, never dropped: "This text isn’t in the build: ‹its id›."
 - Under Tailscale's trademark line in About: "VibeField names agents such as Claude Code and Codex to tell sessions
-  apart. It isn't affiliated with or endorsed by Anthropic or OpenAI."
+  apart. It isn’t affiliated with or endorsed by Anthropic or OpenAI."
 - The device is named as its platform names it, read when VibeField runs: "this iPhone", "this iPad", and "this
   device" where it is neither. This is the bible's §7 platform label, with LP-4's "this device" for iOS's own lock
   prompts as the fallback.
