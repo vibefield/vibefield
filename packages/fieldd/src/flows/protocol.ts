@@ -25,6 +25,8 @@ export interface FlowHostLimits {
   readonly callMaxBytes: number;
   /** a `log(…)` line, characters (FLOW_LOG_MAX); longer is cut with "…" */
   readonly logMaxChars: number;
+  /** the V8 old-generation cap the script's worker runs under, MB (FLOW_LIMITS.HOST_HEAP_MB; 4A2-Q7 (b)) */
+  readonly heapMb: number;
 }
 
 export type ToFlowHost =

@@ -260,7 +260,11 @@ class FlowHostChild {
           t: "run",
           script: this.#script,
           input: this.#opts.input,
-          limits: { callMaxBytes: FLOW_LIMITS.RESULT_MAX_BYTES, logMaxChars: FLOW_LOG_MAX },
+          limits: {
+            callMaxBytes: FLOW_LIMITS.RESULT_MAX_BYTES,
+            logMaxChars: FLOW_LOG_MAX,
+            heapMb: this.#heapBytes / (1024 * 1024),
+          },
         });
         this.#pingTimer = setInterval(() => this.#tick(), this.#t.pingMs);
         return;

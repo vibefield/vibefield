@@ -5,6 +5,7 @@ import { FLOW_LIMITS } from "@vibefield/contracts";
 import { afterEach, describe, expect, inject, it } from "vitest";
 import { chooseFlowsHostLaunch, type FlowsHostLaunch } from "../src/flows/launch";
 import { flowScriptOf } from "../src/flows/module-script";
+import type { ToFlowHost } from "../src/flows/protocol";
 import {
   type FlowCallHandler,
   type FlowHostAnswer,
@@ -127,6 +128,20 @@ function standIn({
     ].join("\n"),
   );
   return { command: process.execPath, args: [file] };
+}
+
+/** The first message of kind `t` the child sent, or "timeout" past `ms`. */
+async function heardOf(heard: readonly unknown[], t: string, ms = WAIT_MS): Promise<unknown> {
+  const deadline = Date.now() + ms;
+  while (Date.now() < deadline) {
+    const found = heard.find(
+      (message) =>
+        typeof message === "object" && message !== null && (message as { t?: unknown }).t === t,
+    );
+    if (found !== undefined) return found;
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+  return "timeout";
 }
 
 async function logged(logs: readonly string[], ms = WAIT_MS): Promise<string | "timeout"> {
@@ -324,47 +339,89 @@ describe("CP-4a2a — the flow host: its pipe (4A2-Q5 (a)) and its life", () => 
   );
 
   it(
-    "H8: a pong past HOST_HEAP_MB ends the host as `memory` (4A2-Q7 (a): a cap measured by pong, not enforced by V8)",
+    "H7b: a spinning script's host still leaves when its pipe closes, and on SIGTERM: the script never holds the host's own thread (4A2-Q7 (b))",
     async () => {
-      // the heap fact is the stand-in's to state; the cap is FLOW_LIMITS'
+      const read = flowScriptOf(flow('log("spinning");\nwhile (true) {}'));
+      expect(read.kind).toBe("script");
+      const run: ToFlowHost = {
+        t: "run",
+        script: (read as { script: string }).script,
+        input: {},
+        limits: {
+          callMaxBytes: FLOW_LIMITS.RESULT_MAX_BYTES,
+          logMaxChars: 200,
+          heapMb: FLOW_LIMITS.HOST_HEAP_MB,
+        },
+      };
+      for (const leave of ["disconnect", "SIGTERM"] as const) {
+        const child = spawn(process.execPath, [await flowsHostBundle()], {
+          stdio: ["ignore", "ignore", "ignore", "ipc"],
+          env: PATH_ONLY,
+        });
+        children.push(child);
+        const exited = new Promise<{ code: number | null; signal: string | null }>((resolve) =>
+          child.on("exit", (code, signal) => resolve({ code, signal })),
+        );
+        const heard: unknown[] = [];
+        child.on("message", (message) => heard.push(message));
+        expect(await heardOf(heard, "ready")).toEqual({ t: "ready", pid: child.pid });
+        child.send(run);
+        // the script said it is about to spin: from here it never yields
+        expect(await heardOf(heard, "log")).toEqual({ t: "log", text: "spinning" });
+        if (leave === "disconnect") child.disconnect();
+        else child.kill("SIGTERM");
+        expect(await within(exited), `a spinning host leaves on ${leave}`).toEqual({
+          code: 0,
+          signal: null,
+        });
+      }
+    },
+    ROW_MS,
+  );
+
+  it(
+    "H8: a script past HOST_HEAP_MB is ended as `memory` by V8's own cap on its worker, though it never yields (4A2-Q7 (b))",
+    async () => {
+      // it allocates without a pause, so no pong can say its heap: V8's cap on the worker (resourceLimits) ends it
+      const run = await host(
+        flow(
+          [
+            "const kept = [];",
+            "for (;;) {",
+            "  let s = 0.5;",
+            "  for (let i = 0; i < 1e6; i += 1) s += i;",
+            "  kept.push(new Array(1 << 14).fill(s));",
+            "}",
+          ].join("\n"),
+        ),
+        { heapMb: 32, timings: { pingMs: 500, pingMisses: 4 } },
+      );
+      const pid = await within(run.ready);
+      expect(typeof pid).toBe("number");
+      expect(await within(run.ended)).toEqual({ kind: "ended", why: "memory" });
+      expect(alive(pid as number)).toBe(false);
+    },
+    ROW_MS,
+  );
+
+  it(
+    "H8b: a pong's heap is telemetry: a host that says it uses more than HOST_HEAP_MB is never ended for saying so",
+    async () => {
+      // the stand-in states a heap past the cap in every pong; the cap is V8's on the worker, never the pong's word
       const over = (FLOW_LIMITS.HOST_HEAP_MB + 1) * 1024 * 1024;
       const run = await host(flow("return 1;"), {
         launch: standIn({ heap: over }),
         timings: { pingMs: 100 },
       });
-      const pid = await within(run.ready);
-      expect(typeof pid).toBe("number");
-      expect(await within(run.ended)).toEqual({ kind: "ended", why: "memory" });
-      expect(alive(pid as number)).toBe(false);
-      // a heap under the cap is a host at work: it answers, and is never ended for it
-      const under = await host(flow("return 1;"), {
-        launch: standIn({ heap: 1024 * 1024 }),
-        timings: { pingMs: 100 },
-      });
-      expect(typeof (await within(under.ready))).toBe("number");
-      expect(await within(under.ended, 600)).toBe("timeout");
+      expect(typeof (await within(run.ready))).toBe("number");
+      // ten pings answered: a host at work, never ended
+      expect(await within(run.ended, 1_000)).toBe("timeout");
     },
     ROW_MS,
   );
 
   it(
-    "H8b: the real host's pong carries the heap it uses: under a cap it has passed, it is ended as `memory`",
-    async () => {
-      // a cap of 1 MB, which any Node's heap passes: the real child's own used_heap_size, read from its pong
-      const run = await host(flow('await agent("wait");'), {
-        heapMb: 1,
-        timings: { pingMs: 100 },
-      });
-      const pid = await within(run.ready);
-      expect(typeof pid).toBe("number");
-      expect(await within(run.ended)).toEqual({ kind: "ended", why: "memory" });
-      expect(alive(pid as number)).toBe(false);
-    },
-    ROW_MS,
-  );
-
-  it(
-    "H8c: a host V8 aborts for its heap between pongs is read as `memory`: by SIGABRT, or by the heap line on stderr",
+    "H8c: a host V8 aborts for its own heap (the host's thread, not its worker's) is read as `memory`: by SIGABRT, or by the heap line on stderr",
     async () => {
       const aborted = await host(flow("return 1;"), {
         launch: standIn({ onRun: "process.kill(process.pid, 'SIGABRT');" }),
@@ -382,6 +439,24 @@ describe("CP-4a2a — the flow host: its pipe (4A2-Q5 (a)) and its life", () => 
         launch: standIn({ onRun: "process.exit(3);" }),
       });
       expect(await within(left.ended)).toEqual({ kind: "left", code: 3, signal: null });
+    },
+    ROW_MS,
+  );
+
+  it(
+    "H8d: V8's heap line split across writes is still read as `memory`: stderr is read as a bounded tail, never chunk by chunk",
+    async () => {
+      const split = await host(flow("return 1;"), {
+        launch: standIn({
+          onRun: [
+            "const later = (text, then) => process.stderr.write(text, () => setTimeout(then, 50));",
+            "later('FATAL ERROR: Reached heap li', () =>",
+            "  later('mit Allocation failed - JavaScript heap out of mem', () =>",
+            "    process.stderr.write('ory\\n', () => process.exit(134))));",
+          ].join(" "),
+        }),
+      });
+      expect(await within(split.ended)).toEqual({ kind: "ended", why: "memory" });
     },
     ROW_MS,
   );
