@@ -521,7 +521,14 @@ export function finalizeDmg({
     log(`notarize-dmg: stapled ${dmg}`);
     assessDmg(path, runner, log);
   }
-  // step 5 — after the last write to the DMG, and before anything downstream hashes it
+  // step 5 — after the last write to the DMG, and before anything downstream hashes it.
+  // The DMG's blockmap is DROPPED, not regenerated: stapling rewrites the DMG, so electron-builder's blockmap is stale,
+  // and no reader of it exists. Read 2026-11-05 at electron-updater 6.8.9 (the installed pin): MacUpdater.js:81 picks
+  // the update with `findFile(files, "zip", ["pkg", "dmg"])` and throws ERR_UPDATER_ZIP_FILE_NOT_FOUND without a zip
+  // (:82-84); the differential path is `differentialDownloadInstaller(zipFileInfo, …)` (:102); AppUpdater.js:649 asks
+  // `provider.getBlockMapFiles(fileInfo.url, …)` with the zip's url; providers/Provider.js:22-25 names
+  // `${baseUrl.pathname}.blockmap` — the zip's. VibeField's own updates code names no blockmap and no .dmg. Re-read
+  // this at an electron-updater bump.
   const blockmap = join(dir, `${dmg}.blockmap`);
   const hadBlockmap = existsSync(blockmap);
   rmSync(blockmap, { force: true });
