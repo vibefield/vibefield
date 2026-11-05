@@ -315,14 +315,16 @@ export function freewayHostOf(processes, hostPath, real = realPath) {
  * SD-2 — the packaged witness that main's sound worker starts from inside app.asar (`shell/main/sound-worker.cjs`):
  * once fieldd's preferences say Play sounds is on, main makes the likeliest sound ahead of need (Done), and a fresh
  * profile has none, so it is RENDERED, not found; its file lies under the run's `<userData>/sound/<score>/`; and NOT
- * ONE sound is played, because this row runs on attended hosts. `{ok, rendered, saw, problems}`; the player's own
- * state is said (`player`), never judged here: the dev-keyed zip is not the signed package.
+ * ONE sound is played, because this row runs on attended hosts: main holds every play in a marked run
+ * (`VF_SMOKE_RUN`), `played` is the check that the hold held, and `held` is said. `{ok, rendered, saw, problems}`; the
+ * player's own state is said (`player`), never judged here: the dev-keyed zip is not the signed package.
  */
 export function judgeSound({ events, userData }) {
   const named = (event) => events.filter((record) => record.event === event);
   const rendered = named("desktop.sound.rendered").find((record) => record.attrs?.cue === "done");
   const found = named("desktop.sound.found").find((record) => record.attrs?.cue === "done");
   const played = named("desktop.sound.played").length;
+  const held = named("desktop.sound.held").length;
   const unavailable = named("desktop.sound.unavailable")[0];
   const player = unavailable === undefined ? "no complaint" : "unavailable";
   const problems = [];
@@ -352,7 +354,7 @@ export function judgeSound({ events, userData }) {
   return {
     ok: problems.length === 0,
     rendered: true,
-    saw: `rendered ${key} in ${rendered.attrs?.ms} ms; ${played} played`,
+    saw: `rendered ${key} in ${rendered.attrs?.ms} ms; ${played} played, ${held} held`,
     player,
     problems,
   };

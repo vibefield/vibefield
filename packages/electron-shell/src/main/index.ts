@@ -1496,7 +1496,10 @@ async function main(
     }),
     theme: () => themeOwner?.current().resolved ?? "light",
     preferences: () => soundPreferences,
-    audible: !isSmokeLike(MODE),
+    // A harness never makes a sound: neither a harness mode nor a MARKED run (`VF_SMOKE_RUN`), which a packaged
+    // production-mode app runs under in smoke:update. The output device is the person's, as their clipboard is (HN-3,
+    // `keepHarnessClipboard` above); gate:landing runs on their Mac. A stray mark only quiets an app.
+    audible: !isSmokeLike(MODE) && process.env["VF_SMOKE_RUN"] === undefined,
     log: soundLogger,
   });
   desktopSound = sound;

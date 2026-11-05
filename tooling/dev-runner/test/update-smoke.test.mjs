@@ -309,7 +309,14 @@ test("SD-2: the sound worker's packaged witness — Done rendered, its file kept
 
   const green = judgeSound({ events: [rendered], userData });
   assert.equal(green.ok, true, JSON.stringify(green));
-  assert.equal(green.saw, `rendered ${key} in 180 ms; 0 played`);
+  assert.equal(green.saw, `rendered ${key} in 180 ms; 0 played, 0 held`);
+  // a play main held (a marked run is never audible) is said, and green
+  const heldPlay = judgeSound({
+    events: [rendered, { event: "desktop.sound.held", attrs: { cue: "done" } }],
+    userData,
+  });
+  assert.equal(heldPlay.ok, true);
+  assert.match(heldPlay.saw, /0 played, 1 held$/);
 
   // a play on an attended host is red, even with the render green
   const played = judgeSound({
