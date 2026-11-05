@@ -234,6 +234,22 @@ public enum SettingsModel {
     return primary["CFBundleIconName"] as? String
   }
 
+  /// IOS-13a — one of About's links: its words and where it goes (Safari, outside VibeField).
+  public struct AboutLink: Equatable, Sendable, Identifiable {
+    public let title: String
+    public let url: URL
+    public var id: String { title }
+  }
+
+  /// About's links (§8, amended 2026-11-05): the privacy policy and support, from the site's one pair.
+  public static let aboutLinks: [AboutLink] = [
+    AboutLink(title: SettingsWords.privacyPolicy, url: VibeFieldSite.privacy),
+    AboutLink(title: SettingsWords.support, url: VibeFieldSite.support),
+  ]
+
+  /// About's foot, one foot: Tailscale's trademark line, then the non-affiliation line under it.
+  public static let aboutFoot: [String] = [SettingsWords.trademark, SettingsWords.notAffiliated]
+
   /// One credit: what the phone is built with, what it is for, and its licence.
   public struct Credit: Equatable, Sendable, Identifiable {
     public let name: String

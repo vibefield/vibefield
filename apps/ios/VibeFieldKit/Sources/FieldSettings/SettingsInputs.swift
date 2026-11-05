@@ -187,4 +187,13 @@ public enum SettingsWords {
   /// TS-7 (DESIGN.md §13): the phone wears Tailscale's mark on its sign-in and
   /// in Settings › Account, so About says this.
   public static let trademark = "Tailscale is a registered trademark of Tailscale Inc."
+
+  /// IOS-13a (DESIGN.md §9 "The phone's legal words") — About's two links, in Apple's own words (App Store
+  /// Connect's "Privacy Policy" and "Support"), and the line under Tailscale's, word for word from the 0.9 launch's
+  /// plan (the store listing carries the same line).
+  public static let privacyPolicy = "Privacy Policy"
+  public static let support = "Support"
+  public static let notAffiliated =
+    "VibeField names agents such as Claude Code and Codex to tell sessions apart. "
+    + "It isn't affiliated with or endorsed by Anthropic or OpenAI."
 }

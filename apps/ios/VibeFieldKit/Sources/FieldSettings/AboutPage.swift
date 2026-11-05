@@ -6,6 +6,8 @@ import UIKit
 /// Settings › About (IOS-10a): this phone's VibeField, your desktops, what the
 /// phone is built with, and Tailscale's trademark line — which stood at the
 /// foot of the terminal sheet only because the phone had no About (TS-7).
+/// IOS-13a: the privacy policy and support, and the non-affiliation line under
+/// Tailscale's.
 ///
 /// The version is the bundle's own. Each desktop's VibeField, in the words its
 /// own Settings › Updates uses, comes once the phone reads the roster's
@@ -43,12 +45,31 @@ struct AboutPage: View {
         }
       }
       .chromeRows()
-      Text(SettingsWords.trademark)
-        .font(ChromeListType.detail)
-        .foregroundStyle(ChromePalette.inkFaint)
-        .frame(maxWidth: .infinity)
-        .multilineTextAlignment(.center)
-        .listRowBackground(Color.clear)
+      // IOS-13a — the privacy policy and support, outside VibeField (Safari), each trailed by §13's `outward`
+      Section {
+        ForEach(SettingsModel.aboutLinks) { link in
+          Link(destination: link.url) {
+            HStack {
+              ChromeRow(link.title)
+              FieldGlyph(.outward, size: 16)
+                .foregroundStyle(ChromePalette.placeholder)
+                .accessibilityHidden(true)
+            }
+          }
+        }
+      }
+      .chromeRows()
+      // One foot: Tailscale's trademark line, then the non-affiliation line (§8, amended 2026-11-05)
+      VStack(spacing: 6) {
+        ForEach(SettingsModel.aboutFoot, id: \.self) { line in
+          Text(line)
+        }
+      }
+      .font(ChromeListType.detail)
+      .foregroundStyle(ChromePalette.inkFaint)
+      .frame(maxWidth: .infinity)
+      .multilineTextAlignment(.center)
+      .listRowBackground(Color.clear)
     }
     .chromeList()
     .navigationTitle("About")
