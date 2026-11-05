@@ -5765,8 +5765,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     - The groups are the roles as the generator names them, said as sentences: the terminal, the private network,
       the terminal's fonts, the agents' marks and the desktops' OS marks first, then the rest by name.
     - A row is the part's name, its version under it in mono, and its licence as the value.
-    - A part's page holds each of its texts under the text's kind, its file names beside the kind, and the body in
-      mono 12, selectable.
+    - A part's page holds each of its texts under the text's kind: its file names in mono, then the body in mono 12,
+      selectable. The file names are not fact tags (§8 "Fact labels"), which say scope and timing.
   - About's foot carries the non-affiliation line under Tailscale's trademark line, as one foot.
   - Every **This phone** becomes the platform's own label, read at runtime: **This iPhone**, **This iPad**, or
     **This device** where it is neither (§9).

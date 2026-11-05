@@ -194,6 +194,10 @@ public struct SettingsView: View {
       AboutPage(desktops: account.desktops)
     case .acknowledgements:
       AcknowledgementsPage()
+    case .acknowledgement(let id):
+      if case .bundled(let doc) = Acknowledgements.main, let part = doc.parts.first(where: { $0.id == id }) {
+        AcknowledgementTextsPage(part: part, doc: doc)
+      }
     }
   }
 

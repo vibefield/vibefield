@@ -136,6 +136,8 @@ public enum SettingsRoute: Hashable, Sendable {
   case lock
   case about
   case acknowledgements
+  /// IOS-13a — one part's full licence texts, by the part's id (`AcknowledgementsDoc.Part.id`).
+  case acknowledgement(String)
 }
 
 /// Where the sheet opens: its root, a page, and — past Terminal — one of the
@@ -193,6 +195,13 @@ public enum SettingsWords {
   /// plan (the store listing carries the same line).
   public static let privacyPolicy = "Privacy Policy"
   public static let support = "Support"
+  /// IOS-13a — the acknowledgements' honest lines (§9 "The phone's legal words"): none in the build, one this build
+  /// cannot read, and a text a part names that the file does not carry.
+  public static let acknowledgementsAbsent = "Acknowledgements aren’t in this build."
+  public static func acknowledgementsUnreadable(_ reason: String) -> String {
+    "This build’s acknowledgements can’t be read: \(reason)."
+  }
+  public static func textMissing(_ id: String) -> String { "This text isn’t in the build: \(id)." }
   public static let notAffiliated =
     "VibeField names agents such as Claude Code and Codex to tell sessions apart. "
     + "It isn’t affiliated with or endorsed by Anthropic or OpenAI."

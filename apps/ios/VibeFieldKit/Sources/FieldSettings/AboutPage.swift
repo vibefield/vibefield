@@ -122,18 +122,33 @@ struct AboutPage: View {
 /// Settings › About › Acknowledgements: what the phone draws and runs that
 /// others made, each with what it is for and its licence.
 struct AcknowledgementsPage: View {
+  /// IOS-13a — L5's acknowledgements when the build carries them; else §9's line, then the short list (Q5).
+  var state: AcknowledgementsState = Acknowledgements.main
+
   var body: some View {
     List {
-      Section {
-        ForEach(SettingsModel.credits) { credit in
-          ChromeRow(credit.name, detail: credit.role, value: credit.licence)
+      switch state {
+      case .bundled(let doc):
+        ForEach(Acknowledgements.groups(doc)) { group in
+          Section {
+            ForEach(group.parts) { part in
+              NavigationLink(value: SettingsRoute.acknowledgement(part.id)) {
+                let row = Acknowledgements.row(part)
+                ChromeRow(row.title, detail: row.detail, detailIsMono: true, value: row.value)
+              }
+            }
+          } header: {
+            if !group.title.isEmpty {
+              ChromeListHead(group.title)
+            }
+          }
+          .chromeRows()
         }
-      } header: {
-        ChromeListHead("Built with")
-      } footer: {
-        ChromeListFoot("VibeField on this phone is built with these, among others, each under its own licence.")
+      case .absent:
+        notBundled(SettingsWords.acknowledgementsAbsent)
+      case .unreadable(let reason):
+        notBundled(SettingsWords.acknowledgementsUnreadable(reason))
       }
-      .chromeRows()
       Section {
         ForEach(TerminalCredits.effects) { effect in
           ChromeRow(effect.name, detail: effect.licence)
@@ -147,6 +162,71 @@ struct AcknowledgementsPage: View {
     }
     .chromeList()
     .navigationTitle("Acknowledgements")
+    .navigationBarTitleDisplayMode(.inline)
+  }
+
+  /// No acknowledgements to draw: the line that says so, then the short list the page has always shown, so the page
+  /// still credits and is never blank.
+  @ViewBuilder
+  private func notBundled(_ line: String) -> some View {
+    Text(line)
+      .font(ChromeListType.detail)
+      .foregroundStyle(ChromePalette.inkTertiary)
+      .listRowBackground(Color.clear)
+    Section {
+      ForEach(SettingsModel.credits) { credit in
+        ChromeRow(credit.name, detail: credit.role, value: credit.licence)
+      }
+    } header: {
+      ChromeListHead("Built with")
+    } footer: {
+      ChromeListFoot("VibeField on this phone is built with these, among others, each under its own licence.")
+    }
+    .chromeRows()
+  }
+}
+
+/// IOS-13a — one part's full licence texts: each under its kind, its file names in mono above the body, and the body in
+/// mono 12, selectable. A text the file does not carry is named (§9), never dropped.
+struct AcknowledgementTextsPage: View {
+  let part: AcknowledgementsDoc.Part
+  let doc: AcknowledgementsDoc
+
+  var body: some View {
+    List {
+      ForEach(Array(Acknowledgements.texts(of: part, in: doc).enumerated()), id: \.offset) { _, resolved in
+        switch resolved {
+        case .text(let text):
+          Section {
+            VStack(alignment: .leading, spacing: 8) {
+              if !text.files.isEmpty {
+                Text(text.files.joined(separator: " · "))
+                  .font(ChromeListType.detailMono)
+                  .foregroundStyle(ChromePalette.inkTertiary)
+              }
+              Text(text.body)
+                .font(ChromeType.mono(12))
+                .foregroundStyle(ChromePalette.ink)
+                .textSelection(.enabled)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.vertical, 8)
+          } header: {
+            ChromeListHead(text.kind)
+          }
+          .chromeRows()
+        case .missing(let id):
+          Section {
+            Text(SettingsWords.textMissing(id))
+              .font(ChromeListType.detail)
+              .foregroundStyle(ChromePalette.inkTertiary)
+          }
+          .chromeRows()
+        }
+      }
+    }
+    .chromeList()
+    .navigationTitle(part.name)
     .navigationBarTitleDisplayMode(.inline)
   }
 }
