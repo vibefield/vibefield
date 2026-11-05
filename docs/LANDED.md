@@ -32833,3 +32833,167 @@ fieldd sources and 9 fieldd tests):
   - M1: the n5/n20 rates with the Energy Log.
   - M2: the 256 KiB cap under the link conditioner (PG-D11's on-phone reading).
   - A recipe page comes first.
+
+## SD-2 — the desktop hears it: an agent's sound in VibeField through the system path, Settings → Sound, and Quiet in the status item (2026-11-05; `46535b83f` → `9e5b6eec8`, 13 commits on main `b4512ca40`, lane `sd/2-desktop-hears` in `/Volumes/SamsungRed/lanes/sd1/vibe-field`, stacked as M138 `9e5b6eec8`, run 138)
+
+**What it rests on.**
+- Chiefly SD-D11…D14, D19, D21 and D22, all at the leans (James, 2026-11-05 00:40–00:42Z, on the page *Hear What
+  Needs You*; DECISIONS SD), and his word at 00:43Z, "all ruled with your lean, now land this nicely".
+- SD-1 (LANDED "SD-1"): DESIGN.md §14 and `@vibefield/sound`, the zero-dependency root whose voice and renders SD-2
+  plays. SD-2 is its first consumer.
+- VF-PM's rulings of 03:47Z (ONE landing; its three pin-class hits named and accepted) and 03:49Z (the stage pass is
+  step 2 of a9's brief, on the mini, on the rebased tip). prod-builder's packaging reviews: GO at 02:44Z (C5, the
+  player) and at 03:06Z (C6 and C6a, the worker and the marked run), and GO on C11 (relayed at 06:21Z).
+
+**What** (85 files, +3,908 −33; tests are 1,794 of the added lines):
+- **DESIGN.md first** (`46535b83f`): §8 "Settings → Sound", every word of it; §13's `sound` glyph (65 glyphs); §14
+  "In VibeField" settled (a system sound at the alert volume, never an alert sound) and "Quiet" (an hour, or until
+  8:00 the next morning; the status item's row).
+- **Red** (`c041cafd5`, 16 files): every row below as an assertion, before any source.
+- **Contracts first** (`18d7c0458`): the preferences `desktop.sounds` and `desktop.soundsQuietUntil` (the set widened
+  for the Quiet key alone, `quietUntil` OPTIONAL), three IPC channels (`soundAttention`, `soundPreview`, `soundState`;
+  37 → 40), the sound shapes; fieldd reads and writes them, and the EL9 fixtures are parsed on both sides.
+- **The package** (`67c3bc13f`): `encodeWav` (24-bit), Quiet's clock (`quietEnd`, `isQuiet`), `nearestPlace`,
+  `renderKey`, `ENGINE_HASH` and `PREVIEW_CUES`.
+- **The player** (`862cfe6be`): `apps/desktop/native/macos/sound/player.mm`, an ObjC++ Node-API bundle that plays a
+  file as a system sound (`AudioServicesCreateSystemSoundID`, IsUISound 0, `PlaySystemSoundWithCompletion`) and
+  answers its OSStatus at the end; `build-sound-player.mjs` (build-haptics' shape: one clang++, an embedded identity,
+  minos 12.3); the stage row, `mac.binaries`, `resources.ts` and main's loader, which says honestly why it cannot
+  play (`unsupported`, `missing`, `failed`, once).
+- **Main** (`74ccab835`, `1933715ef`):
+  - the voice over fieldd's mesh board (`agent.subscribe {scope: "mesh", projection: "field"}`), every open and reset
+    heard as facts, never news; this desktop's agents placed by the window's panes, every other desktop's from across
+    the field;
+  - the gates at play time: Play sounds off, then Quiet, then no VibeField window in front (each counted);
+  - the renders in a worker thread (`dist/main/sound-worker.cjs`, inside app.asar), cached under
+    `userData/sound/<ENGINE_HASH>/`, with Done in the theme's space made once a launch ahead of need;
+  - the doors and the preload (`vibefield.sound.{attention, preview, state}`); the dev runner's worker entry; the
+    worker's packaging (its esbuild entry, the stage row, `files:`, bundle-report, verify-production-main);
+  - smoke:update's `judgeSound`, every run (Done rendered from inside app.asar; zero plays);
+  - a marked run (`VF_SMOKE_RUN`) and every harness mode are never audible (`1933715ef`, prod-builder's objection).
+- **The window** (`768848f1c`): Settings → Sound (the view, its live section and its page), the attention reporter
+  (which session has the keyboard, each shown session's place), the host door, the `sound` glyph and the catalog's
+  fixture adapter. **The status item** (`3420d0ad4`): Quiet Sounds ▸ For an Hour · Until Tomorrow, and "Quiet Until
+  8:00 AM", checked, which turns the sounds back on.
+- **Corrections and carries** (`7feb70ad1`, `63a162b4a`, `3a4cb15cd`, `9e5b6eec8`): desk-gates row 2 names the walls
+  R1–R31 (Found 5); the player settles its state in one place (Found 6); the third-party notices read the sound
+  worker (Found 7); CLAUDE.md's workspace taxonomy names `sound`, on James's typed word (below).
+
+**Validation.**
+- **Light, here** (nice 19, the guard clear, no kit slot; logs in `lanes/sd1/light/`). At T, 06:29–06:32Z, every tool
+  called directly and never through `pnpm` (VF-PM's 06:24Z rule: pnpm's deps pass runs outside the INSTALL mutex):
+  - contracts 1,569/1,569; sound 109/109; fieldd's app-preferences, mesh-board and agent-field units 99/99 (a
+    scratch config with no field-native setup);
+  - field-app's six readers 86/86; electron-shell's SD-2, tray and updates files 269/269; the whole dev runner
+    445/445;
+  - tsc 0 on seven projects; biome 0 errors; the walls clean; gen:check exit 0; glyphs fresh (65);
+  - the shell build: "production shell boundary OK — main 2,742,475 bytes, preload 940,219 bytes, sound worker
+    36,381 bytes"; LP-6b's `builderPathsIn` over the freshly built player: none.
+- **The silent witness** (`sound-player.test.ts`, darwin): a 0.2 s silent 24-bit WAV through the built addon
+  answered 0 at its end (462 ms at C8). Nothing was audible.
+- **The worker:** the real thread, bundled by esbuild in the test, renders a Question at night; the built
+  `dist/main/sound-worker.cjs` rendered Done (1,031,036 bytes) in 164 ms. A render takes 107–358 ms on this Mac,
+  which is why renders are off main's thread. In a scratch asar under Electron 43.1.1 (ELECTRON_RUN_AS_NODE),
+  `new Worker(<a path inside the asar>)` started and ran.
+- **Four cuts, each carried.** SD-2 was rebased onto `f514215f4` (05:30Z), `da1a3d695` (05:45Z), `96606efa9`
+  (05:57Z) and `b4512ca40` (06:29Z), as L2, A1, L5, item 172, L6, L3, L6b, L1 and PG-9 landed ahead of it. Every
+  commit kept its `git patch-id --stable` at every cut, and so did every file both sides changed (nine, six, two and
+  four). Each cut's light read green. Every earlier tip is kept on its own branch.
+- **The packet**: STACKED, T = `9e5b6eec8` on `b4512ca40` (tree `7e56f3652a8b`), sent at 06:33Z. a9 pre-checked it
+  at 06:34Z: 13 linear commits, 85 files, the ERE's three hits (the lock +6 −0: the two `@vibefield/sound` link
+  rows; electron-shell's and field-app's package.json), CLAUDE.md +2; the bundle requires `77e3add01`.
+- **Run 138** (`9e5b6eec8`, minted by a9 as `mint/sd2` on VF-PM's GO of 06:35Z, stacked on `b4512ca40`, the bundle's
+  prerequisite `77e3add01`; armed at 06:37:17Z after the frozen re-install for the two link rows): "== ts6-mini
+  verify done (verify 0) 06:42:46Z; HEAD 9e5b6eec8b0bdd47bd2f6254405fc77707156cad".
+  - `pnpm verify` exit 0: vitest 12,622 passed / 0 failed / 20 skipped over 902 files (+107, all SD-2's); node
+    445/0 (+2); cargo 545/0; the iOS fixtures 251/86; biome 3,190 files; 29 projects; gen:check and icons:check in
+    the chain, 0; R31 enforced, 0 ("packages/sound/src imports only its own files").
+  - SD-2's rows: sound 109/109 (its new files 11, design-md 23); fieldd's app-preferences integration 3 (+1,
+    "quiets the sounds until a moment…") and unit 11; contracts' fixtures 589 (+2) and sound-shell 10;
+    electron-shell's desktop-sound 13, preload-sound 4, sound-door 5, sound-renders 5, sound-voice 16, sound-worker
+    5, sound-player 9, resources 33 and tray-model 71 (from 67); field-app's sound-attention 6 and sound-settings 11.
+  - The silent witness on the mini: "the built addon on this Mac (a silent witness) > plays a silent file through
+    the system-sound path to its end", 542 ms.
+  - The dev runner's two new rows: "a rebuilt sound worker restarts the shell and never the pair (SD-2)" and "SD-2:
+    the sound worker's packaged witness — Done rendered, its file kept, and nothing played". The bundle report
+    sizes `main/sound-worker.cjs` at 35.5 kB (11.5 kB gzipped).
+- **The stage pass** (step 2, VF-PM's ruling (b) of 03:49Z; the same tip, right after the verify): "== sd2stage
+  done (stage 0, verify 0) 06:44:30Z". `package:stage` exit 0 in 73 s, then
+  `stage-package.mjs --verify --require-complete` exit 0: "stage verify OK — 150 files, 297,636,965 bytes
+  (283.85 MB); complete".
+  - Both of SD-2's files are listed: `app/shell/main/sound-worker.cjs` (36,381 bytes) and
+    `bin/desktop-sound-player.node` (71,568 bytes).
+  - `codesign -dv` on the staged player: Identifier=com.jamesyong.vibefield.desktop-sound-player, Signature=adhoc,
+    a thin arm64 Mach-O; `otool`: MH_BUNDLE, minos 12.3.
+  - DEV-KEYED as expected (no `--require-release-key`); no gap and nothing STALE; `legal/` holds its four; no host
+    path in the stage.
+- **Landed:** main fast-forwarded `b4512ca40` → `9e5b6eec8` on VF-PM's GO (2026-11-05T06:46:29Z, the fixer's stamp;
+  merge-tree = T's tree `7e56f3652a8b`), 85 files +3,908 −33.
+
+**Not witnessed (said).**
+- **No sound was heard.** No agent plays sound on the live Mac, and nothing in a build or a smoke is audible.
+- A real agent's change heard end to end, from the mesh board through the voice to the player: the voice is held on
+  a virtual clock and the observer on its own rows, never in a live run.
+- **The fused packaged main starting the worker from inside app.asar**, and smoke:update's SD-2 check
+  (`judgeSound`: Done rendered, zero plays): no gate:landing row runs in this train (VF-PM, 06:41Z). Run 138's
+  verify and its stage pass are SD-2's witnesses.
+- The Developer ID re-sign of the player and its load under the hardened runtime with library validation: first at
+  the next signed nightly.
+- The window's attention reporter in a live deck: its pure function is tested; the reporter (the DOM, focus and the
+  ResizeObserver) is not.
+
+**Found (said).**
+1. **`@vibefield/sound`'s `.ts` specifiers** (SD-1's plain-node property) are TS5097 in any program that typechecks
+   its source. Four noEmit tsconfigs gain `allowImportingTsExtensions` (electron-shell's two, field-app's,
+   plugin-playground's). prod-builder read it as tsc-only: it reaches no bundle.
+2. **electron-builder.yml's `files:` is a positive list**: the stage row alone would have left the worker out of
+   app.asar. It has its own line; prod-builder confirmed it was the only other door.
+3. **prod-builder's objection** (C6a): smoke:update's packaged app runs in production mode, so `audible` was true in
+   the very row that holds the witness. `audible` is now false in every harness mode and every marked run, on HN-3's
+   precedent.
+4. **The sound lead's red tray row was wrong for macOS.** It asked for `enabled: false` on a top-level tray item,
+   which the availability rule never sets there (Electron does not support it); corrected at C8 to the rule.
+5. **desk-gates row 2 said R1–R30** (VF-PM, 04:19Z): SD-1 added wall R31 and missed the row. Corrected at its source
+   with a dated note (C9). CP-4a1, which lands after SD-2, moves it to R32.
+6. **The packet's "biome clean" was wrong** (found at the first rebase). `sound-player.ts` returned `(state = "…")`
+   five times, which biome 2.5.4's noAssignInExpressions refuses as an error, so the mint's verify would have
+   stopped at biome. C10 splits the load from the settling (`state ??= loadState()`), behaviour unchanged. The
+   claim is corrected in the packet, dated.
+7. **The third-party notices read no row for the worker.** LP-5's `NODE_BUNDLES` named main, preload and fieldd's
+   four bundles, and `app/shell/main/sound-worker.cjs` is a fifth the app ships. It attributes nothing today (its
+   module comments are the repository's own source), but a package it imported later would have shipped
+   unattributed. C11 is the row (VF-PM's YES at 05:46Z; prod-builder GO). Item 178, vibe-field-42's: every staged
+   `.cjs` has a row, or the stage refuses.
+
+**Rulings during the build** (VF-PM):
+- 03:47Z: one landing; the three pin-class hits named. 03:49Z: the stage pass is a9's step 2, on the rebased tip.
+- 04:19Z: C9 before the mint. 05:36Z: SD-2 goes before A3, whose kit waits on James's simulator.
+- 05:46Z: Found 6 accepted with its dated note; Found 7 YES (C11), the structural check filed as item 178.
+- 06:00Z, 06:13Z and 06:31Z: one re-cut onto the main that stands, as L6b, L1 and PG-9 land first by arrival.
+- 06:24Z: the light's tools are called directly, never through `pnpm`; C12 stays in the code chain, named in the GO.
+
+**James's word.** CLAUDE.md's taxonomy line, owed since SD-1, is his typed word: at 05:46Z he asked whether the ask
+was the sound lead's; it quoted the line and offered a docs-only commit, and at 05:59Z he wrote "go ahead on that".
+C12 is that line, at the end of the "Wire truth" bullet, and its commit body quotes him. No peer authorized it.
+
+**Errata, corrected at their sources.**
+- `docs/desk-gates.md` row 2: R1–R30 → R1–R31, dated at the line (C9).
+- The SD-2 packet: its "biome clean" carries a dated correction (Found 6).
+- `draft/specs/electron-shell-refactor.md` §6.2: the three channels' rows were added at 06:20Z for draft slot 12,
+  the first marked "NOT LANDED at this writing".
+
+**Owed.**
+- **James's hand: the audible check**, on his Mac or a packaged nightly. An agent's Done, Question, Approval and
+  Failed play at the alert volume, through the sound-effects device, with no screen flash; "Play user interface
+  sound effects" off does not silence them; Settings → Sound's Play plays, and does so while Quiet holds; Quiet in
+  the status item quiets, and "Quiet Until 8:00 AM" brings the sounds back.
+- **The next signed nightly:** LP-6's read-back of the player's release signature (`bin/desktop-sound-player.node`,
+  signed with no entitlement); its load under the hardened runtime; `desktop.sound.rendered` in the production log.
+- **The next gate:landing on this Mac:** smoke:update's row, whose `judgeSound` judges SD-2 every run (Done rendered
+  from inside the fused app.asar, in the theme's space, with zero plays), and the first signed nightly's reads of
+  the same (prod-builder's W rows).
+- **draft:** ESR §6.2's "NOT LANDED at this writing" flipped to this landing, at the next draft slot.
+- **L6's census baseline** (`package-census --assert --strict`), drawn now that SD-2 is on main: its own slice.
+- **SD-3, away:** sounds with no VibeField window in front, through the notices (§8's foot says "For now they play
+  only while a VibeField window is in front"); then SD-4, the phone, and SD-5, the mark, a terminal's bell and the
+  bloom. The mark's clearance check before it ships (§14's limits).
