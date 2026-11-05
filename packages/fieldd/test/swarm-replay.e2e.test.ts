@@ -7,7 +7,10 @@
 //
 // What it witnesses:
 //   · the phone's open holds this desktop live with every run the corpus plays, each stamped as THIS
-//     desktop's (its device id, never the corpus's `desk-here`), and the board moves at the frames' times;
+//     desktop's (its device id, never the corpus's `desk-here`);
+//   · the corpus plays ONCE and its last frame is held (VF-PM 06:42Z): past the corpus's span the phone
+//     holds every run as the last frame left it — its status, its token count — and still does a span
+//     later (a looping swarm would have moved on: an idle row needs a quiet one);
 //   · the swarm stands BESIDE the agent runtime, never in it: the runtime's own fold stays empty;
 //   · this desktop's window reads the same swarm on its model board;
 //   · the replay keeps no picture: `agent.lastRun` answers none, and the last run's file a previous boot
@@ -19,6 +22,7 @@
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import { isDeepStrictEqual } from "node:util";
 import { gunzipSync } from "node:zlib";
 import {
   type AgentRemoteMeshFrame,
@@ -101,6 +105,32 @@ function corpusRuns(): string[] {
     if (value.kind === "fold") return (value.rows ?? []).map((row) => row.runtimeRunId).sort();
   }
   return [];
+}
+
+/** What the corpus's LAST fold frame leaves each run at, read off the file itself: its status and
+ * its cumulative token count (the model row's `tokens.total`; a working run's moves every frame). */
+function corpusLastFrame(): Map<string, { status: string; tokens: number }> {
+  const text = gunzipSync(readFileSync(CORPUS)).toString("utf8");
+  let last: { t: number; rows: Array<Record<string, unknown>> } | undefined;
+  for (const line of text.split("\n")) {
+    if (line.trim() === "") continue;
+    const value = JSON.parse(line) as {
+      kind?: string;
+      t?: number;
+      rows?: Array<Record<string, unknown>>;
+    };
+    if (value.kind !== "fold" || value.t === undefined || value.rows === undefined) continue;
+    if (last === undefined || value.t >= last.t) last = { t: value.t, rows: value.rows };
+  }
+  const runs = new Map<string, { status: string; tokens: number }>();
+  for (const row of last?.rows ?? []) {
+    const mirror = row["monitor"] as { status: string; usage: { cumulativeTokens: number } };
+    runs.set(row["runtimeRunId"] as string, {
+      status: mirror.status,
+      tokens: mirror.usage.cumulativeTokens,
+    });
+  }
+  return runs;
 }
 
 interface SwarmDesktop {
@@ -223,7 +253,7 @@ function heldBoard(
 }
 
 describe("PG-9 S4c — a dev desktop's fieldd plays a recorded swarm through the real door", () => {
-  it("serves the corpus's runs to a tailnet phone through {remote, mesh}: this desktop's, live, moving at the frames' times — and the agent runtime's own fold untouched", async () => {
+  it("serves the corpus's runs to a tailnet phone through {remote, mesh}: this desktop's, live, played once and then held at the last frame — and the agent runtime's own fold untouched", async () => {
     const { daemon, door } = await bootSwarmDesktop();
     const runs = corpusRuns();
     expect(runs, "the corpus's runs").toHaveLength(10);
@@ -245,17 +275,22 @@ describe("PG-9 S4c — a dev desktop's fieldd plays a recorded swarm through the
         device: { id: DEVICE },
       });
     }
-    // the board MOVES: the corpus's agents work every fold tick, so a delta of this desktop's rows
-    // reaches the phone at its own floor
-    const deltas = () =>
-      meshFrames(phone, subId).filter(
-        (frame) => frame.device === DEVICE && "delta" in frame && frame.delta.upserts.length > 0,
-      ).length;
-    const before = deltas();
-    await settle(() => deltas() > before, 4_000);
-    expect(deltas(), "a delta of this desktop's rows after the phone held them").toBeGreaterThan(
-      before,
-    );
+    // ONE pass, then the hold: past the corpus's span (2 s from the replay's start at boot) the phone
+    // holds every run as the corpus's last frame left it, and a span and a half later still does — a
+    // looping swarm's working runs would have reset their token counts and climbed again
+    const last = Object.fromEntries(corpusLastFrame());
+    const heldState = () =>
+      Object.fromEntries(
+        [...heldBoard(open, meshFrames(phone, subId), DEVICE)].map(([run, row]) => {
+          const model = (row as { monitorRow: { status?: string; tokens?: { total?: number } } })
+            .monitorRow;
+          return [run, { status: model.status, tokens: model.tokens?.total }];
+        }),
+      );
+    await settle(() => isDeepStrictEqual(heldState(), last), 8_000);
+    expect(heldState(), "the corpus's last frame, held").toEqual(last);
+    await new Promise((resolve) => setTimeout(resolve, 3_000));
+    expect(heldState(), "still the last frame, a span and a half later").toEqual(last);
     // beside the runtime, never in it
     expect(daemon.agents.list().sessions).toEqual([]);
   }, 60_000);

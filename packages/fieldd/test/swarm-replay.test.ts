@@ -1,5 +1,6 @@
 // PG-9 S4c — the debug swarm replay (`src/debug/swarm-replay.ts`), off the daemon: a corpus file
-// read tolerantly, its fold frames played at their own times and looped, and the two sources it
+// read tolerantly, its fold frames played ONCE at their own times and its last one then held (VF-PM,
+// 2026-11-05 06:42Z: no loop — an idle row needs a quiet swarm), and the two sources it
 // stands in for — the fold the boards read and the runtime the monitor reads — fed as a daemon's
 // are, so the backend assembles a model row for every run and the remote cut serves them. The
 // daemon's own seam is swarm-replay.e2e.test.ts; the packaged refusal, swarm-replay-packaged.test.ts.
@@ -16,7 +17,6 @@ import {
   FIELDD_DEBUG_SWARM_CORPUS_ENV,
 } from "@vibefield/contracts";
 import type { Logger } from "@vibefield/logging";
-import type { AgentMonitorState } from "@vibefield/puppeteer-core";
 import { createMemoryProjectIdentityStore } from "@vibefield/puppeteer-monitor";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createRemoteSubscription } from "../src/agent-model-board";
@@ -157,17 +157,16 @@ const revisionOf = (rows: AgentListResult): number | undefined =>
   rows.sessions[0]?.monitor?.revision;
 
 describe("PG-9 S4c — a corpus file, read tolerantly", () => {
-  it("reads the in-repo n10-2s-s1: 90 fold frames of ten runs, one 2016 ms pass, the peer half and the mark known and unused", () => {
+  it("reads the in-repo n10-2s-s1: 90 fold frames of ten runs over 2000 ms, the peer half and the mark known and unused", () => {
     expect(existsSync(CORPUS), `the in-repo corpus ${CORPUS}`).toBe(true);
     const replay = openSwarmReplay({ path: CORPUS, deviceId: () => "dev-swarm" });
     cleanup.push(() => replay.dispose());
     const corpus = replay.corpus;
     expect(corpus.folds).toHaveLength(90);
     expect(corpus.generator).toBe("vibefield-godview-corpus");
-    // the last fold frame is at 2000 ms; one fold tick (16 ms) closes the pass
-    expect(corpus.periodMs).toBe(2_016);
-    // one past the highest mirror revision the corpus holds (run-6's, 4705)
-    expect(corpus.revisionStride).toBe(4_706);
+    // the first fold frame at 0, the last at 2000 ms: the span the one pass plays
+    expect(corpus.folds[0]?.t).toBe(0);
+    expect(corpus.folds.at(-1)?.t).toBe(2_000);
     expect(corpus.unused).toEqual({ "mesh-open": 1, "mesh-frame": 20, mark: 1 });
     expect(corpus.unknown).toEqual({});
     expect(corpus.skipped).toBe(0);
@@ -222,7 +221,7 @@ describe("PG-9 S4c — a corpus file, read tolerantly", () => {
   });
 });
 
-describe("PG-9 S4c — the frames, played at their own times and looped", () => {
+describe("PG-9 S4c — the frames, played once at their own times, the last one held", () => {
   it("plays each fold frame at its own time: the runtime's state first, then the fold's publish", () => {
     vi.useFakeTimers({ now: NOW });
     const replay = createSwarmReplay(parseSwarmCorpus(THREE), { deviceId: () => "dev-1" });
@@ -247,7 +246,7 @@ describe("PG-9 S4c — the frames, played at their own times and looped", () => 
       ["state", 3],
       ["fold", 3],
     ]);
-    expect(replay.position()).toEqual({ pass: 0, frame: 2 });
+    expect(replay.position().frame).toBe(2);
   });
 
   it("is this desktop's board: every row stamped with its device, the corpus's clock rebased onto the replay's", () => {
@@ -269,27 +268,33 @@ describe("PG-9 S4c — the frames, played at their own times and looped", () => 
     expect(replay.list().sessions[0]?.monitor?.statusSince).toBe(iso(NOW + 16 - 5_000));
   });
 
-  it("loops: one fold tick after the last frame the first plays again, its revisions past every one the corpus holds, its clock one pass on", () => {
+  it("plays the corpus once, then holds: three spans past its last frame, no fold publish and no runtime change, and the last frame's rows still served at its revision", () => {
     vi.useFakeTimers({ now: NOW });
     const replay = createSwarmReplay(parseSwarmCorpus(THREE), { deviceId: () => "dev-1" });
     cleanup.push(() => replay.dispose());
-    const states: AgentMonitorState[] = [];
-    cleanup.push(replay.runtime.onMonitorState((state) => states.push(state)));
-    vi.advanceTimersByTime(63);
-    expect(replay.position()).toEqual({ pass: 0, frame: 2 });
-    vi.advanceTimersByTime(1);
-    expect(replay.position()).toEqual({ pass: 1, frame: 0 });
-    // the stride is 4 (the corpus's highest revision is 3): the monitor's store takes only a newer one
-    expect(revisionOf(replay.list())).toBe(5);
-    expect(states.at(-1)?.revision).toBe(5);
-    expect(states.at(-1)?.status).toBe("working");
-    expect(replay.list().sessions[0]?.monitor?.statusSince).toBe(iso(NOW + 64 - 5_000));
-    vi.advanceTimersByTime(64);
-    expect(replay.position()).toEqual({ pass: 2, frame: 0 });
-    expect(revisionOf(replay.list())).toBe(9);
+    const heard: string[] = [];
+    cleanup.push(replay.subscribe(() => heard.push("fold")));
+    cleanup.push(replay.runtime.onMonitorState(() => heard.push("state")));
+    cleanup.push(replay.runtime.onMonitorRemoved(() => heard.push("removed")));
+    vi.advanceTimersByTime(48);
+    expect(replay.position().frame).toBe(2);
+    const last = replay.list();
+    expect(revisionOf(last)).toBe(3);
+    expect(last.sessions[0]?.status).toBe("idle");
+    heard.length = 0;
+    // the corpus's span is 48 ms: three of them on, the rows are alive and quiet
+    vi.advanceTimersByTime(3 * 48);
+    expect(heard, "nothing from the replay past its last frame").toEqual([]);
+    expect(replay.position().frame).toBe(2);
+    expect(replay.list()).toEqual(last);
+    expect(revisionOf(replay.list())).toBe(3);
+    expect(replay.runtime.monitorStates().map((state) => [state.revision, state.status])).toEqual([
+      [3, "idle"],
+    ]);
+    expect(vi.getTimerCount(), "no frame left to schedule").toBe(0);
   });
 
-  it("drops a row that breaks the contract and passes an unknown field through, each said once however often it plays", () => {
+  it("drops a row that breaks the contract and passes an unknown field through, each said once across the frames that play it", () => {
     vi.useFakeTimers({ now: NOW });
     const logs: Logged[] = [];
     const frame = (t: number, revision: number) => {
@@ -303,8 +308,9 @@ describe("PG-9 S4c — the frames, played at their own times and looped", () => 
     });
     cleanup.push(() => replay.dispose());
     cleanup.push(replay.subscribe(() => undefined));
-    vi.advanceTimersByTime(3 * 32);
-    expect(replay.position().pass).toBeGreaterThanOrEqual(2);
+    vi.advanceTimersByTime(16);
+    // both frames played: each row was read twice
+    expect(replay.position().frame).toBe(1);
     const rows = replay.list().sessions;
     expect(rows.map((session) => session.runtimeRunId)).toEqual(["run-a"]);
     expect((rows[0] as Record<string, unknown>)["futureField"]).toBe("kept");
@@ -333,21 +339,30 @@ describe("PG-9 S4c — the frames, played at their own times and looped", () => 
     expect(replay.runtime.monitorStates().map((state) => state.runtimeRunId)).toEqual(["run-a"]);
   });
 
-  it("plays only while it is heard: no timer without a listener, and a late listener is caught up to the clock", () => {
+  it("plays only while it is heard: no timer without a listener, a late listener caught up to the clock in one frame — to the held last one once the span has passed", () => {
     vi.useFakeTimers({ now: NOW });
     const replay = createSwarmReplay(parseSwarmCorpus(THREE), { deviceId: () => "dev-1" });
     cleanup.push(() => replay.dispose());
     expect(vi.getTimerCount()).toBe(0);
-    vi.advanceTimersByTime(100);
-    expect(replay.position()).toEqual({ pass: 0, frame: 0 });
+    vi.advanceTimersByTime(20);
+    expect(replay.position().frame).toBe(0);
     const heard: Array<number | undefined> = [];
     const off = replay.subscribe((rows) => heard.push(revisionOf(rows)));
     vi.advanceTimersByTime(0);
-    // 100 ms in: the second pass (64 ms each), 36 ms into it — frame 1 (t = 16), played once, not four times
-    expect(replay.position()).toEqual({ pass: 1, frame: 1 });
-    expect(heard).toEqual([2 + 4]);
+    // 20 ms in: frame 1 (t = 16), played once
+    expect(replay.position().frame).toBe(1);
+    expect(heard).toEqual([2]);
+    expect(vi.getTimerCount(), "frame 2 is still to come").toBe(1);
     off();
     expect(vi.getTimerCount()).toBe(0);
+    // unheard past the span (48 ms): nothing plays; the next listener meets the held last frame
+    vi.advanceTimersByTime(100);
+    expect(replay.position().frame).toBe(1);
+    cleanup.push(replay.subscribe((rows) => heard.push(revisionOf(rows))));
+    vi.advanceTimersByTime(0);
+    expect(replay.position().frame).toBe(2);
+    expect(heard).toEqual([2, 3]);
+    expect(vi.getTimerCount(), "held: no frame left to schedule").toBe(0);
   });
 });
 
