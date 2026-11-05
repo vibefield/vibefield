@@ -11,6 +11,7 @@
 		100000000000000000000002 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000003 /* Assets.xcassets */; };
 		100000000000000000000003 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000004 /* PrivacyInfo.xcprivacy */; };
 		100000000000000000000004 /* FieldHome in Frameworks */ = {isa = PBXBuildFile; productRef = A00000000000000000000001 /* FieldHome */; };
+		100000000000000000000005 /* acknowledgements.json in Resources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000006 /* acknowledgements.json */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -19,6 +20,7 @@
 		200000000000000000000003 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		200000000000000000000004 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		200000000000000000000005 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		200000000000000000000006 /* acknowledgements.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = acknowledgements.json; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -64,6 +66,7 @@
 			isa = PBXGroup;
 			children = (
 				200000000000000000000004 /* PrivacyInfo.xcprivacy */,
+				200000000000000000000006 /* acknowledgements.json */,
 			);
 			path = Resources;
 			sourceTree = "<group>";
@@ -128,6 +131,7 @@
 			files = (
 				100000000000000000000002 /* Assets.xcassets in Resources */,
 				100000000000000000000003 /* PrivacyInfo.xcprivacy in Resources */,
+				100000000000000000000005 /* acknowledgements.json in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
