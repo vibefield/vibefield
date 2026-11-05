@@ -153,14 +153,32 @@ export function boundedAnswer(answer: FlowHostAnswer): FlowHostAnswer & { readon
       ok: false,
       refused: `VibeField can't hand this answer on: an answer is at most ${kib(max)}`,
     };
-  let text = answer.value.slice(0, max);
-  while (text.length > 0 && flowAnswerBytes(text) > max) {
-    const over = flowAnswerBytes(text) - max;
-    text = text.slice(0, text.length - Math.max(1, Math.ceil(over / 4)));
+  return { ok: true, value: longestWithin(answer.value, max), cut: true };
+}
+
+const isHigh = (code: number): boolean => code >= 0xd800 && code <= 0xdbff;
+const isLow = (code: number): boolean => code >= 0xdc00 && code <= 0xdfff;
+
+/** `n` code units of `text`, or one fewer where `n` would split a surrogate pair: a prefix of whole characters. */
+const wholeAt = (text: string, n: number): number =>
+  n > 0 && n < text.length && isHigh(text.charCodeAt(n - 1)) && isLow(text.charCodeAt(n))
+    ? n - 1
+    : n;
+
+/** The longest prefix of `text`, in whole characters, whose JSON is at most `max` bytes (bth's review finding 7): a
+ * binary search against flowAnswerBytes itself, so a character JSON spends 6 bytes on (a control character, an ANSI
+ * escape) is counted as it costs, and the prefix's end is held at 0 or above. Over whole-character prefixes the bytes
+ * only grow, so the search finds the longest. Each code unit costs at least one byte, so no prefix longer than `max`
+ * code units fits. */
+function longestWithin(text: string, max: number): string {
+  let fits = 0;
+  let over = Math.min(text.length, max) + 1;
+  while (over - fits > 1) {
+    const mid = Math.floor((fits + over) / 2);
+    if (flowAnswerBytes(text.slice(0, wholeAt(text, mid))) <= max) fits = mid;
+    else over = mid;
   }
-  // never half a surrogate pair
-  if (/[\uD800-\uDBFF]$/.test(text)) text = text.slice(0, -1);
-  return { ok: true, value: text, cut: true };
+  return text.slice(0, wholeAt(text, fits));
 }
 
 const cutText = (text: string, max: number): string =>
