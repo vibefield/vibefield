@@ -1,0 +1,395 @@
+import { createHmac } from "node:crypto";
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import {
+  canonicalJson,
+  SPARK_TRANSCRIPT_FORMAT,
+  sparkTranscriptLineOf,
+} from "@vibefield/contracts";
+import type { LogFields, Logger } from "@vibefield/logging";
+import { afterEach, describe, expect, it } from "vitest";
+import { RecordSigner } from "../src/signed-record";
+import {
+  SparkTranscriptRecorder,
+  SparkTranscripts,
+  type TranscriptAgent,
+} from "../src/spark-transcripts";
+
+// TH-1 (step0-th.md §4.1, §4.2; TH0-Q1 = O1) — the spark's transcript, kept: one JSONL file per run in the spark's own
+// folder (item 159's, LAYOUT.SPARK_FILES_DIR), 0600 in 0700, each line MAC'd by the folder's one key over
+// {spark, run, line}, so a line an edit touched, or one copied from another run or spark, is dropped and counted, never
+// served; a file the disk will not hand over is never written over (item 172's rule). The recorder writes it from a
+// spark's own run's events and from VibeField's own facts. The ticket and the worker that serves it are
+// spark-transcript-ticket.test.ts's; the say's line is compose-say's.
+
+const dirs: string[] = [];
+afterEach(() => {
+  for (const dir of dirs.splice(0)) {
+    try {
+      chmodSync(dir, 0o700);
+    } catch {
+      // gone already
+    }
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+type Logged = { event: string; attrs: LogFields | undefined };
+function capture(events: Logged[]): Logger {
+  const logger: Logger = {
+    child: () => logger,
+    trace: () => undefined,
+    debug: () => undefined,
+    info: (event, _m, attrs) => void events.push({ event, attrs }),
+    warn: (event, _m, attrs) => void events.push({ event, attrs }),
+    error: (event, _m, _e, attrs) => void events.push({ event, attrs }),
+    fatal: () => undefined,
+    isLevelEnabled: () => true,
+  };
+  return logger;
+}
+
+const VELA = "sp-vela00000000";
+const KIWI = "sp-kiwi00000000";
+const RUN = "run-vela-1";
+const AT = "2026-11-05T04:00:00.000Z";
+
+function harness() {
+  const root = mkdtempSync(join(tmpdir(), "vf-transcripts-"));
+  dirs.push(root);
+  const dir = join(root, "spark-files");
+  const keyPath = join(root, "spark-files.key");
+  const events: Logged[] = [];
+  let clock = Date.parse(AT);
+  const open = () =>
+    new SparkTranscripts({
+      dir,
+      keyPath,
+      logger: capture(events),
+      now: () => {
+        clock += 1000;
+        return new Date(clock);
+      },
+    });
+  const file = (spark: string, run: string) => join(dir, spark, `${run}.jsonl`);
+  const raw = (spark: string, run: string) =>
+    readFileSync(file(spark, run), "utf8")
+      .split("\n")
+      .filter((line) => line !== "")
+      .map((line) => JSON.parse(line) as Record<string, unknown>);
+  return { root, dir, keyPath, events, open, file, raw };
+}
+
+/** A run as puppeteer's Agent hands it to the recorder: its `.on` surface, and its monitor's evidence. */
+function fakeAgent(lastEvidenceAt?: string) {
+  const listeners = new Map<string, Set<(envelope: unknown) => void>>();
+  let sequence = 0;
+  const agent = {
+    on: (selector: string, listener: (envelope: unknown) => void) => {
+      const set = listeners.get(selector) ?? new Set();
+      set.add(listener);
+      listeners.set(selector, set);
+      return () => set.delete(listener);
+    },
+    monitor: { freshness: lastEvidenceAt === undefined ? {} : { lastEvidenceAt } },
+  } as unknown as TranscriptAgent;
+  const emit = (
+    type: string,
+    event: Record<string, unknown>,
+    envelope: Record<string, unknown> = {},
+  ) => {
+    const env = {
+      type,
+      category: type.split(":")[0],
+      sequence: ++sequence,
+      sessionId: "pty-vela",
+      timestamp: AT,
+      monotonicTime: sequence,
+      source: "hook",
+      confidence: "high",
+      event: { type, ...event },
+      ...envelope,
+    };
+    for (const selector of ["*", `${type.split(":")[0]}:*`, type])
+      for (const listener of listeners.get(selector) ?? []) listener(env);
+  };
+  return { agent, emit };
+}
+
+describe("the spark's transcript, kept (TH-1)", () => {
+  it("appends each line in the spark's own folder, 0600 in 0700, its seq the next, MAC'd over {spark, run, line}", () => {
+    const h = harness();
+    const store = h.open();
+    store.append(VELA, RUN, { kind: "run", runtimeRunId: RUN, fresh: true });
+    store.append(VELA, RUN, { kind: "you", via: "terminal", text: "run the tests" });
+    const lines = h.raw(VELA, RUN);
+    expect(lines.map((line) => [line["seq"], line["kind"], line["v"]])).toEqual([
+      [1, "run", SPARK_TRANSCRIPT_FORMAT],
+      [2, "you", SPARK_TRANSCRIPT_FORMAT],
+    ]);
+    // every line is one of the contract's, read as the window reads it
+    for (const line of lines) expect(sparkTranscriptLineOf(line)).toBeDefined();
+    // the MAC is the folder's one signer's, over the spark, the run and the line without its own mac
+    const signer = new RecordSigner({ keyPath: h.keyPath });
+    for (const { mac, ...line } of lines)
+      expect(signer.verifies({ spark: VELA, run: RUN, line }, String(mac))).toBe(true);
+    expect(statSync(h.file(VELA, RUN)).mode & 0o777).toBe(0o600);
+    expect(statSync(join(h.dir, VELA)).mode & 0o777).toBe(0o700);
+    // the key a worker of fieldd's own verifies with, handed on its pipe (EL7)
+    const [first] = lines;
+    if (first === undefined) throw new Error("no line");
+    const { mac, ...unsigned } = first;
+    expect(
+      createHmac("sha256", store.secret())
+        .update(canonicalJson({ spark: VELA, run: RUN, line: unsigned }))
+        .digest("hex"),
+    ).toBe(mac);
+  });
+
+  it("reads back the lines that verify, in order; one an edit touched, one copied from another run or spark, and a replayed seq are dropped and counted, never served", () => {
+    const h = harness();
+    const store = h.open();
+    store.append(VELA, RUN, { kind: "run", runtimeRunId: RUN, fresh: true });
+    store.append(VELA, RUN, { kind: "reply", messageId: "m-1", text: "On it." });
+    store.append(VELA, RUN, { kind: "turn", edge: "end" });
+    store.append(KIWI, "run-kiwi-1", { kind: "run", runtimeRunId: "run-kiwi-1", fresh: true });
+    store.append(KIWI, "run-kiwi-1", { kind: "reply", messageId: "m-9", text: "Kiwi's words" });
+    const text = readFileSync(h.file(VELA, RUN), "utf8").split("\n");
+    const kiwis = readFileSync(h.file(KIWI, "run-kiwi-1"), "utf8").split("\n");
+    // an edit: the reply's words changed, its MAC kept
+    const edited = text[1]?.replace("On it.", "Done, all green.");
+    // a line copied in from Kiwi's run, and the first line again
+    writeFileSync(h.file(VELA, RUN), [text[0], edited, text[2], kiwis[1], text[0], ""].join("\n"), {
+      mode: 0o600,
+    });
+    const read = store.read(VELA, RUN);
+    if (!("lines" in read)) throw new Error("not read");
+    expect(read.lines.map((line) => [line.seq, line.kind])).toEqual([
+      [1, "run"],
+      [3, "turn"],
+    ]);
+    expect(read.dropped).toBe(3);
+  });
+
+  it("continues a run's seq across a restart, reading the file first, and never skips a number", () => {
+    const h = harness();
+    h.open().append(VELA, RUN, { kind: "run", runtimeRunId: RUN, fresh: false });
+    h.open().append(VELA, RUN, { kind: "turn", edge: "start" });
+    h.open().append(VELA, RUN, { kind: "turn", edge: "end" });
+    expect(h.raw(VELA, RUN).map((line) => line["seq"])).toEqual([1, 2, 3]);
+  });
+
+  it("lists a spark's runs oldest first, each by its run line: its id, when it began, and whether it began a conversation", () => {
+    const h = harness();
+    const store = h.open();
+    store.append(VELA, "run-vela-2", { kind: "run", runtimeRunId: "run-vela-2", fresh: false });
+    store.append(VELA, RUN, { kind: "run", runtimeRunId: RUN, fresh: true });
+    // the first written began later: its run line says when
+    const runs = store.runs(VELA);
+    if (!("runs" in runs)) throw new Error("not read");
+    expect(runs.runs.map((run) => [run.runtimeRunId, run.fresh])).toEqual([
+      ["run-vela-2", false],
+      [RUN, true],
+    ]);
+    expect((runs.runs[0]?.startedAt ?? "") < (runs.runs[1]?.startedAt ?? "")).toBe(true);
+    // a spark with no folder has no runs, and that is no failure
+    expect(store.runs(KIWI)).toEqual({ runs: [] });
+  });
+
+  it("never writes over a file the disk will not hand over, and says the folder is unavailable, never empty (item 172's rule)", () => {
+    const h = harness();
+    const store = h.open();
+    store.append(VELA, RUN, { kind: "run", runtimeRunId: RUN, fresh: true });
+    // a run file that cannot be read: a fresh store must not start its seq again at 1 over it
+    mkdirSync(join(h.dir, VELA, "run-vela-dir.jsonl"), { mode: 0o700 });
+    expect(h.open().append(VELA, "run-vela-dir", { kind: "turn", edge: "start" })).toBeUndefined();
+    expect(h.events.some((event) => event.event === "fieldd.transcripts.unreadable")).toBe(true);
+    // a folder the disk refuses: its runs are unavailable in the errno's word, never an empty list
+    chmodSync(join(h.dir, VELA), 0o000);
+    expect(h.open().runs(VELA)).toEqual({ unavailable: "EACCES" });
+    chmodSync(join(h.dir, VELA), 0o700);
+    expect(h.raw(VELA, RUN)).toHaveLength(1);
+  });
+
+  it("keeps a run only under an id it can name a file by, and a spark only by its id (EL7)", () => {
+    const h = harness();
+    const store = h.open();
+    expect(store.append(VELA, "../escape", { kind: "turn", edge: "start" })).toBeUndefined();
+    expect(store.append("not-a-spark", RUN, { kind: "turn", edge: "start" })).toBeUndefined();
+    expect(() => statSync(join(h.root, "escape.jsonl"))).toThrow();
+  });
+});
+
+describe("the recorder (TH-1; a spark's own run's events, and VibeField's own facts)", () => {
+  it("writes a birth's run line as a new conversation and a resume's as its continuation; a re-attach writes a gap only on evidence the run moved", () => {
+    const h = harness();
+    const store = h.open();
+    const recorder = new SparkTranscriptRecorder(store);
+    recorder.entered({ agent: fakeAgent().agent, spark: VELA, runtimeRunId: RUN, begun: "spawn" });
+    recorder.entered({
+      agent: fakeAgent().agent,
+      spark: VELA,
+      runtimeRunId: "run-vela-2",
+      begun: "resume",
+    });
+    expect(h.raw(VELA, RUN).map((line) => [line["kind"], line["fresh"]])).toEqual([["run", true]]);
+    expect(h.raw(VELA, "run-vela-2").map((line) => [line["kind"], line["fresh"]])).toEqual([
+      ["run", false],
+    ]);
+    // fieldd restarted: the same run again, its evidence no newer than its last line, so no gap
+    const quiet = new SparkTranscriptRecorder(h.open());
+    quiet.entered({
+      agent: fakeAgent("2026-11-05T03:00:00.000Z").agent,
+      spark: VELA,
+      runtimeRunId: RUN,
+      begun: "reattach",
+    });
+    expect(h.raw(VELA, RUN).map((line) => line["kind"])).toEqual(["run"]);
+    // …and once more, the run having moved while fieldd was away: a gap from the last line it holds
+    const moved = new SparkTranscriptRecorder(h.open());
+    moved.entered({
+      agent: fakeAgent("2026-11-05T05:00:00.000Z").agent,
+      spark: VELA,
+      runtimeRunId: RUN,
+      begun: "reattach",
+    });
+    const lines = h.raw(VELA, RUN);
+    expect(lines.map((line) => line["kind"])).toEqual(["run", "gap"]);
+    expect(lines[1]?.["since"]).toBe(lines[0]?.["at"]);
+  });
+
+  it("writes the spark's replies whole, its turns' edges and each tool by its kind and detail — never a display-only or unfinished reply, a tool's name or title, a subagent's or a replay's", () => {
+    const h = harness();
+    const recorder = new SparkTranscriptRecorder(h.open());
+    const run = fakeAgent();
+    recorder.entered({ agent: run.agent, spark: VELA, runtimeRunId: RUN, begun: "spawn" });
+    run.emit("turn:started", { turnId: "t-1" });
+    run.emit("conversation:assistant-message", {
+      messageId: "m-0",
+      text: "thinking out loud",
+      displayOnly: true,
+    });
+    run.emit("conversation:assistant-message", { messageId: "m-1", text: "Half", final: false });
+    run.emit("tool:requested", {
+      toolCallId: "c-1",
+      tool: "Bash",
+      presentation: { kind: "command", title: "Using Bash", detail: "pnpm test" },
+    });
+    run.emit(
+      "tool:requested",
+      { toolCallId: "c-2", tool: "Read", presentation: { kind: "file-read", title: "Read" } },
+      { agentId: "sub-1" },
+    );
+    run.emit("conversation:assistant-message", { messageId: "m-x", text: "old" }, { replay: true });
+    run.emit("conversation:assistant-message", { messageId: "m-1", text: "Half done, all green." });
+    run.emit("turn:completed", { turnId: "t-1" });
+    const lines = h.raw(VELA, RUN).slice(1);
+    expect(lines.map((line) => line["kind"])).toEqual(["turn", "tool", "reply", "turn"]);
+    expect(lines[0]).toMatchObject({ edge: "start", turn: "t-1" });
+    expect(lines[1]).toMatchObject({ toolCallId: "c-1", toolKind: "command", detail: "pnpm test" });
+    expect(JSON.stringify(lines[1])).not.toContain("Bash");
+    expect(lines[2]).toMatchObject({ messageId: "m-1", text: "Half done, all green." });
+    expect(lines[3]).toMatchObject({ edge: "end", turn: "t-1" });
+  });
+
+  it("binds a prompt to the input fieldd pasted, and writes a prompt nothing of fieldd's pasted as yours via the terminal", () => {
+    const h = harness();
+    const recorder = new SparkTranscriptRecorder(h.open());
+    const run = fakeAgent();
+    recorder.entered({ agent: run.agent, spark: VELA, runtimeRunId: RUN, begun: "spawn" });
+    recorder.said(VELA, RUN, {
+      text: "carry on with the migration",
+      input: "in-1",
+      requestId: "say-000000000001",
+      state: "queued",
+    });
+    // the queue pastes it at Vela's next idle, and her turn starts on it: no second line for it
+    recorder.expectPrompt(RUN, "carry on with the migration");
+    run.emit("turn:started", { turnId: "t-1", prompt: "carry on with the migration" });
+    // a prompt typed into her pane in Godview: yours, via the terminal
+    run.emit("turn:started", { turnId: "t-2", prompt: "/compact" });
+    const lines = h.raw(VELA, RUN).slice(1);
+    expect(lines.map((line) => [line["kind"], line["via"] ?? line["edge"]])).toEqual([
+      ["you", "chat"],
+      ["turn", "start"],
+      ["you", "terminal"],
+      ["turn", "start"],
+    ]);
+    expect(lines[2]).toMatchObject({ text: "/compact" });
+  });
+
+  it("writes your words via chat with their input, request id, receipt and chips, then what became of them as the queue told it", () => {
+    const h = harness();
+    const recorder = new SparkTranscriptRecorder(h.open());
+    recorder.entered({ agent: fakeAgent().agent, spark: VELA, runtimeRunId: RUN, begun: "spawn" });
+    recorder.said(VELA, RUN, {
+      text: "ask Claude Code in vibe-field (session run-his) to rebase",
+      input: "in-1",
+      requestId: "say-000000000002",
+      state: "waking",
+      chips: [{ start: 4, length: 42, kind: "session" }],
+    });
+    recorder.outcome(RUN, "in-1", "delivered");
+    recorder.outcome(RUN, "in-2", "uncertain", "restarted");
+    const lines = h.raw(VELA, RUN).slice(1);
+    expect(lines[0]).toMatchObject({
+      kind: "you",
+      via: "chat",
+      input: "in-1",
+      requestId: "say-000000000002",
+      state: "waking",
+      chips: [{ start: 4, length: 42, kind: "session" }],
+    });
+    expect(lines.slice(1)).toMatchObject([
+      { kind: "outcome", of: "in-1", state: "delivered" },
+      { kind: "outcome", of: "in-2", state: "uncertain", reason: "restarted" },
+    ]);
+    // a run the recorder never entered names no spark: nothing is written for it
+    recorder.outcome("run-unknown", "in-3", "delivered");
+    expect(h.raw(VELA, RUN)).toHaveLength(4);
+  });
+
+  it("writes VibeField's own acts, and marks an MCP tool fieldd served in that turn as ours", () => {
+    const h = harness();
+    const recorder = new SparkTranscriptRecorder(h.open());
+    const run = fakeAgent();
+    recorder.entered({ agent: run.agent, spark: VELA, runtimeRunId: RUN, begun: "spawn" });
+    recorder.act(VELA, RUN, "notify", "the build is green");
+    run.emit("turn:started", { turnId: "t-1" });
+    run.emit("tool:requested", {
+      toolCallId: "c-1",
+      tool: "mcp__vibefield__agent_send",
+      presentation: { kind: "mcp", title: "mcp__vibefield__agent_send" },
+    });
+    recorder.served(RUN);
+    run.emit("tool:completed", { toolCallId: "c-1", tool: "mcp__vibefield__agent_send" });
+    run.emit("tool:requested", {
+      toolCallId: "c-2",
+      tool: "mcp__github__list_issues",
+      presentation: { kind: "mcp", title: "mcp__github__list_issues" },
+    });
+    run.emit("turn:completed", { turnId: "t-1" });
+    const lines = h.raw(VELA, RUN).slice(1);
+    expect(
+      lines.map((line) => [line["kind"], line["what"] ?? line["toolCallId"] ?? line["edge"]]),
+    ).toEqual([
+      ["act", "notify"],
+      ["turn", "start"],
+      ["tool", "c-1"],
+      ["tool", "c-2"],
+      ["turn", "end"],
+    ]);
+    expect(lines[2]?.["ours"]).toBe(true);
+    expect(lines[3]?.["ours"]).toBeUndefined();
+    expect(JSON.stringify(lines)).not.toContain("mcp__");
+  });
+});
