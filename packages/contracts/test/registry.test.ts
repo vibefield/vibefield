@@ -858,6 +858,7 @@ describe("item 172 — fieldd's signed stores when the disk does not answer (REC
   it("names its tries and its honest UNAVAILABLE, one state for every store", () => {
     expect(RECORD_STORES).toEqual({
       READ_TRIES: 3,
+      SERVICE_AGENTS: "agents",
       SERVICE_COMPOSE: "compose",
       SERVICE_NEEDS: "needs",
       SERVICE_FLOWS: "flows",
@@ -889,5 +890,23 @@ describe("item 172 — fieldd's signed stores when the disk does not answer (REC
         state: RECORD_STORES.STATE_UNREADABLE,
       });
     }
+  });
+});
+
+describe("item 177 — the sessions' records, the sixth signed store (RECORD_STORES.SERVICE_AGENTS)", () => {
+  it("its refusal parses as ErrorData: UNAVAILABLE {service: agents, state: records-unreadable}, retryable", () => {
+    const file = "error-data.agents-records-unreadable.json";
+    const data = ErrorData.parse(
+      JSON.parse(
+        readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures", file), "utf8"),
+      ),
+    );
+    expect(data.kind).toBe("UNAVAILABLE");
+    // read at each ask, as the sparks are: the person can ask again once the disk answers
+    expect(data.retryable).toBe(true);
+    expect(UnavailableDetails.parse(data.details)).toMatchObject({
+      service: RECORD_STORES.SERVICE_AGENTS,
+      state: RECORD_STORES.STATE_UNREADABLE,
+    });
   });
 });

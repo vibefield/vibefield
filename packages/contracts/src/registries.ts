@@ -927,6 +927,9 @@ export const USER_ME = {
  * native reader. */
 export const RECORD_STORES = {
   READ_TRIES: 3,
+  /** Item 177 — the sessions' records (LAYOUT.AGENT_SESSIONS_DIR, SessionRecordStore), read at each ask, so
+   * retryable. The doors that act on them (a sign-out, a set's delete) refuse before they change anything. */
+  SERVICE_AGENTS: "agents",
   SERVICE_COMPOSE: "compose",
   SERVICE_NEEDS: "needs",
   SERVICE_FLOWS: "flows",
