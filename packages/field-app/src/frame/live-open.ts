@@ -18,6 +18,9 @@ import { requestView } from "./view-state";
 // spark's pane is mounted in Chat's thread (`chat/SparkPane.tsx`), so Chat
 // opened nothing here. *CP-3 (2026-10-31):* a needs-you card's Show, on an
 // agent's own ask, opens that agent's pane by the same path (`ChatView`).
+// *TH-2 (2026-11-05; ER-C28):* the pane left Chat's thread, so Show returns
+// as the head's Jump to: the spark's own session, re-read at the press, by
+// the same path (`chat/reveal-run.ts`), and the card's Show through it too.
 
 /** How long a pick from History waits for Godview's deck (or its monitor) —
  * mounted on Godview's first open — to be able to show the run (Resume's). */

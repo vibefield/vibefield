@@ -1611,6 +1611,10 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       composer"), so the not-started line reads "Waking…" while a send wakes it, as the asleep line does under Wake. A
       wake's refusal is said once, in the same words, "Couldn't wake Vela: …": on this line when Wake started it, on
       the note when Send did. What the pane's place says while there is no pane to draw is §8 "Chat's thread".
+    - *Amended 2026-11-05 (TH-2; TH-Q28 (b); ER-C3):* the line's act moves into the head (§8 "Chat's thread", the
+      head's act). Awake, **Show** returns there as **Jump to**; asleep, **Wake** stands there, in one place. The line
+      keeps its words until the pane leaves Chat (TH-1): "Vela is asleep", "Vela hasn't started yet", "Waking…" and the
+      wake's refusal.
   - **Empty, opening, unavailable:** "No sparks yet"; "Opening Chat…" while the list is first read; "Chat can't read
     your sparks", with fieldd's words under it, when it cannot be read. Each is secondary, centred in the panel, and
     never a blank. *Amended 2026-11-01 (SP-1d):* "first read" is the window's feed's. A fieldd restart replaces the
@@ -1694,6 +1698,43 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     640, or the thread's width less 56 where that is narrower.
     - The head stays SP-1b's (72): the face at 40, framed and live, the name and the status word. It is the thread's
       one live face; every lead in the flow is a still (§2.10).
+    - **The head's act** (TH-2; TH-Q5 B, TH-Q6, TH-Q7 (b) and TH-Q28 (b), James's, at their leans 2026-11-04; TH-Q3
+      (b), his click 2026-11-04 04:20:58Z; TH0-Q12 (a), VF-PM). At the head's end, in its end slot, one place holds
+      the thread's act, and while Vela works, Pause stands before it. ⋯ will stand at the slot's end when RU-19 builds
+      it, and its second line is RU-19's too. Each act is a quiet pill: the kit's quiet button at the needs-you card's
+      act size (28 tall, corners 14, padded 0 12, 12.5/500), 8 apart. Jump to and Wake carry their glyph at 14, then
+      6, then the word, as History's head carries its act (§8 "History").
+      - **Awake: Jump to** (`jump`, §13), named "Jump to Vela's pane". It goes to Vela's terminal in Godview by
+        History's Jump to path (§8 "History"): the window moves to Godview, and the session shows in the focused pane,
+        placed as every door places one (GV-D4). Which session is read again at the press, from the board, so a pill
+        drawn a moment ago never shows a run that has ended; a session with no terminal on this desktop's floor is
+        never said to be shown. While it runs, the pill waits and a press does nothing. The note says "Jumped to its
+        pane", or "Could not jump — ‹why›" in the deck's words, as History's Jump to and the needs-you card's Show say
+        them.
+      - **Asleep: Wake** (`resume`, §13), the spark's one wake (`compose.sparks.open`; §8 "Chat's composer", a spark
+        wakes once). It holds the thread as a send does: while it runs it reads "Waking…", and Send and the starters
+        wait.
+      - **Not started:** no act. Send starts it (§8 "Chat's composer").
+      - Jump to and Wake cross-fade in their one place as Vela wakes or sleeps (200ms `ease`, as History's create does).
+      - **Pause current turn** stands before Jump to while Vela's own run works: its board row is at work and its
+        session runs. It sends the run's own turn cancellation once, through `agent.pause`, as Godview's pane does (§8
+        "Godview", a run a Stop has not stopped). It never ends the run, never escalates, and is never sent again for
+        the same turn. While it runs it reads "Pausing current turn…". It leaves once the run is no longer at work.
+        Its word stands alone: §13 draws no pause, and a meaning gets its drawing in §13 before an act wears it.
+      - **What the head says of an act:** the status word under the name gives way, in the attention ink, until the
+        next act:
+        - to a refusal in fieldd's words: "Couldn't wake Vela: ‹fieldd's words›" (Wake stays), or "Couldn't pause
+          Vela's turn: ‹fieldd's words›" (Pause stays while the run works);
+        - to the unconfirmed cancellation, "Still running · the cancellation was not confirmed", while fieldd has not
+          heard the turn stop (the row's `stop`, `unheardAt`; Pause and Jump to stay).
+        There is no **End run** in Chat's head. Ending Vela's run is Godview's, where its terminal is (VF-PM, held for
+        James).
+      - Until the pane leaves Chat (TH-1), the line under the head keeps its words: "Vela is asleep", "Vela hasn't
+        started yet", "Waking…" while a wake runs, and the wake's refusal, said there rather than under the name. The
+        line's Wake is the head's.
+      *Added 2026-11-05 (TH-2; ER-C3).* SP-1b put one line under the head with its act: Show awake, Wake asleep. SP-1d
+      retired Show when the pane was mounted in the thread. With the pane gone, Show returns as the head's Jump to, and
+      Wake moves into the same place (§8 "Chat's list", the thread's column).
     - The flow stands under the head's hairline and takes every height the head and the foot leave. It scrolls with no
       bar, as the list's rows do, padded 6 at its top and 26 at its foot, its items 14 apart. It opens at its foot and
       stays there while new lines land; scrolled up, it stays where you put it.
@@ -4554,7 +4595,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     let go first, so nothing is focused out of sight; landing in the fullscreen pane leaves it up.
     Every door that selects a session places it so — a body, a list row, a rain column, a
     timeline lane, a spend row, a search result, History's Resume and Jump to, the Peek's Open, a
-    peer's attach — and what it says follows: **"… in the active pane"** where it took the focused
+    peer's attach, Chat's head's Jump to and the needs-you card's Show (*added 2026-11-05, TH-2*:
+    both take History's Jump to path, and say what it says) — and what it says follows: **"… in
+    the active pane"** where it took the focused
     pane, **"… is in the active pane"** for one the focused pane already showed; each door's own
     entry in this section says it so (the line's New terminal, History's Resume and Jump to, the
     Peek's Open), corrected the same day. *This re-rules GV-D4's 10-02 answer* ("Beside the
@@ -5771,6 +5814,9 @@ The pane's **Stop agent** answers **Stopping agent…**. **Pause current turn** 
 **Stopping the turn…**; its escalation says **Ending the run**. When cancellation is unconfirmed:
 **Still running** · "the cancellation was not confirmed" · **End run**. A request that was only
 sent is never "interrupted", and a live pane is never "Stopped": Stopped is an exit's word.
+*Since TH-2 (2026-11-05):* Chat's head says **Pause current turn** and **Pausing current turn…** in these words, and
+its unconfirmed caption, "Still running · the cancellation was not confirmed", without **End run**: ending a spark's
+run is its terminal's, in Godview (§8 "Chat's thread", the head's act).
 
 **The person's queue's words** (track CO, CP-3; CP3-D1…D8 ruled A by James, 2026-10-31 06:31:34Z). An item's acts
 are words fieldd hands every window, so each is said once, here. A question's acts are the spark's own choices, one to
@@ -6165,6 +6211,10 @@ Inside History the room's own words stand as rosetta wrote them, and the Setup A
   folder, with @'s ordinal where two share it ("vibe-field·2", "Claude Code·2"). Its chip pastes "Claude Code in
   vibe-field (session ‹its run›)", or "Claude Code (session ‹its run›)" with no folder.
 - Where an outcome is the hand's, the words are the hand's (§8 "The hand"), so one outcome is never said two ways.
+- The head's act (TH-2; §8 "Chat's thread"): "Jump to" ("Jump to Vela's pane") · "Jumped to its pane" · "Could not
+  jump — …" · "Wake" · "Waking…" · "Couldn't wake Vela: …" · "Pause current turn" · "Pausing current turn…" ·
+  "Couldn't pause Vela's turn: …" · "Still running · the cancellation was not confirmed". There is no "End run" in
+  Chat (A Stop's words, above).
 - Each note is under 70 characters beside the spark's name, so it is read in the note's 2.4 s. A refusal from fieldd
   is said in its own words after the colon, as the line says it.
 - A session chip's id is sent for the spark's tools, which address a session by it, and is never in Chat's own
@@ -6581,6 +6631,8 @@ the arrow going in, since a box with an arrow leaving it is already `outward`; i
 the page's T4. Since 2026-10-08 (P3) it is also History's create while the chosen session runs here
 (§8, the line; §8 "History"), cross-fading with `resume` in the create's one place — until HN-7, since
 which it is the chosen session's act, cross-fading with `resume` in its row's place and on ④'s head.
+Since TH-2 (2026-11-05) it is also Chat's head's act while the spark is awake, **Jump to**, cross-fading with
+`resume` (**Wake**) in the head's one place (§8 "Chat's thread", the head's act).
 **The desk's seven** (2026-10-03, Chrome on the Mat §5; MC-D8 ruled 2026-10-02) are
 ICE's selection glyphs redrawn in the Instrument construction for the desk's chrome (§8):
 `duplicate` · `tape` · `lift` · `trash` on the selection bar — `tape` and `lift` are one padlock, shut
