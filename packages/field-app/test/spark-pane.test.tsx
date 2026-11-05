@@ -679,6 +679,10 @@ describe("Chat hands the pane's keyboard to the thread's hello (ChatView; DESIGN
       say: async () => {
         throw new Error("nothing is said here");
       },
+      // the head's Pause (TH-2) is not this test's
+      pause: async () => {
+        throw new Error("nothing is paused here");
+      },
       onReconnected: () => () => undefined,
       open: async () => VELA,
     });

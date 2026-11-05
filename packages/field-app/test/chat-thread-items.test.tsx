@@ -149,6 +149,10 @@ function feed(
     answer: async () => {
       throw new Error("nothing is answered here");
     },
+    // the head's Pause (TH-2) is not this test's
+    pause: async () => {
+      throw new Error("nothing is paused here");
+    },
     onReconnected: () => () => undefined,
     open,
     say: async (params) => {

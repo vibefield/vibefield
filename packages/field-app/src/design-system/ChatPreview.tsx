@@ -14,7 +14,9 @@ import {
   CHAT_CHOSEN,
   CHAT_COMPOSER,
   CHAT_FLOW,
+  CHAT_JUMPING,
   CHAT_PANE,
+  CHAT_PAUSE,
   CHAT_SENDING,
   CHAT_STATE_LABEL,
   CHAT_STATES,
@@ -39,7 +41,10 @@ import {
 // busy. Each row's mark is the product's own ledger and reading (`chatMarksOf`: `ThreadLedger`, `threadMarksOf`) over
 // what the plates' window read, the shown thread on screen. TH-1: the thread's plates (`CHAT_FLOW`) hand the panel the
 // shipping `ThreadFlowView` over the product's own projection (`transcriptItemsOf`) of fixture record lines, read as
-// the reader reads them (`transcriptReadingOf`), in the pane's place. The markup and the CSS are the product's.
+// the reader reads them (`transcriptReadingOf`), in the pane's place. TH-2: the head's act is the shipping head's on
+// the plate's reading — Jump to, Wake, and Pause current turn while Juno works — answering nothing here, as Wake and
+// Send answer nothing; a plate's Jump to under way (`CHAT_JUMPING`) and its own Pause (`CHAT_PAUSE`) are handed to the
+// panel as Chat's controller hands them. The markup and the CSS are the product's.
 
 /** One of Chat's states, in the cover's place, on the frame's ground. */
 export function ChatPreview({
@@ -98,6 +103,7 @@ export function ChatPreview({
     shown?.spark.id ?? null,
   );
   const act = CHAT_ACT[state];
+  const pause = CHAT_PAUSE[state];
   return (
     <ChatPanelView
       reading={reading}
@@ -106,6 +112,8 @@ export function ChatPreview({
       marks={marks}
       onChoose={setChosen}
       {...(act === undefined ? {} : { act })}
+      jumping={CHAT_JUMPING.has(state)}
+      {...(pause === undefined ? {} : { pause })}
       {...(pane === undefined ? {} : { pane })}
       {...(flow === undefined ? {} : { flow })}
       items={items}

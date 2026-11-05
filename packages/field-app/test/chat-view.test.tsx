@@ -436,8 +436,8 @@ describe('the panel (DESIGN.md §8 "Chat\'s list")', () => {
     );
     expect(kiwi?.querySelector(".vf-chat-row-status")?.getAttribute("data-tone")).toBe("attention");
     expect(kiwi?.querySelector(".vf-chat-row-dot")?.getAttribute("data-mark")).toBe("needs");
-    // the head says the item's word, in the attention ink; the face says the same status (S-3)
-    expect(words($(".vf-chat-thread-head"))).toBe("Kiwi Needs your OK");
+    // the head says the item's word, in the attention ink; the face says the same status (S-3); its act is Wake (TH-2)
+    expect(words($(".vf-chat-thread-head"))).toBe("Kiwi Needs your OK Wake");
     expect($(".vf-chat-thread-status")?.getAttribute("data-tone")).toBe("attention");
     // awake is read from its session, never its word: asleep, with Wake, and no pane mounted
     expect(words($(".vf-chat-thread-line"))).toBe("Kiwi is asleep");
@@ -626,6 +626,26 @@ describe('the panel (DESIGN.md §8 "Chat\'s list")', () => {
     expect($(".vf-chat-thread")?.getAttribute("aria-label")).toBe("Polaris's thread");
     expect(words(line())).toBe("Polaris hasn't started yet");
     expect(wake()).toBeNull();
+  });
+
+  it("draws the head's plates on the product's reading: Jump to under way, Juno's turn pausing, and a cancellation not confirmed (TH-2)", async () => {
+    // awake and Ready: Jump to alone, its pill waiting while it runs, and Send not held by it
+    await plate("jumping");
+    expect(headActs()).toEqual([["Jump to", "jump"]]);
+    expect(headAct("jump")?.getAttribute("aria-busy")).toBe("true");
+    expect($(".vf-chat-send")?.hasAttribute("aria-busy")).toBe(false);
+    // Juno at work: Pause before Jump to, pressed and waiting on fieldd
+    await plate("pausing");
+    expect(headActs()).toEqual([
+      ["Pausing current turn…", "pause"],
+      ["Jump to", "jump"],
+    ]);
+    // fieldd could not confirm it: said in the status's place, in the attention ink, and no End run
+    await plate("pause-unconfirmed");
+    expect(words($(".vf-chat-thread-status"))).toBe(STILL_RUNNING);
+    expect($(".vf-chat-thread-status")?.getAttribute("data-tone")).toBe("attention");
+    expect(headAct("pause")?.disabled).toBe(true);
+    expect(words($(".vf-chat-thread"))).not.toContain("End run");
   });
 
   it("keeps the thread a fixed box: the pane takes every height left, and the foot is where the thread's items stand over it", () => {

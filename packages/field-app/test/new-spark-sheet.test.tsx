@@ -327,6 +327,10 @@ describe("the New spark sheet", () => {
       say: async () => {
         throw new Error("nothing is said here");
       },
+      // the head's Pause (TH-2) is not this test's
+      pause: async () => {
+        throw new Error("nothing is paused here");
+      },
       onReconnected: () => () => undefined,
       open: async () => {
         throw new Error("nothing is woken here");

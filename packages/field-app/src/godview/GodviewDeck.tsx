@@ -45,6 +45,7 @@ import { askGodviewDeckUp } from "../frame/deck-door";
 import { type LinePane, publishGodviewLineDoor, sayOnLine } from "../frame/line-door";
 import { requestView } from "../frame/view-state";
 import { getHost } from "../host";
+import { interruptRefusal } from "../interrupt-refusal";
 import { getRendererLogger } from "../logging";
 import { readClipboardText } from "../terminal/clipboard";
 import { whenPaneInputOpen } from "../terminal/paste-road";
@@ -276,27 +277,6 @@ function deckShape(context: GhostteaWorkspaceContext): DeckShape {
     panes: context.panes.map((pane) => ({ id: pane.id, sessionId: pane.session.id })),
     focusedPaneId: context.activePaneId,
   };
-}
-
-/**
- * A refusal fieldd expressed by THROWING, told apart from a daemon that could
- * not be answered at all (GT-6 review).
- *
- * `agent.interrupt` refuses a run that has ended or one it does not know with
- * an `RpcCallError` rather than with `{accepted: false}` — the union's second
- * arm is reserved for the floor's own refusal — and the renderer sees that as a
- * rejected promise carrying `kind` and `details`. Read structurally rather than
- * with `instanceof`: the deck holds its client through a door, and a wrapper
- * that re-threw a plain object would still be telling the truth about a state.
- * Returns fieldd's own word for the state, so the log says `not-alive` rather
- * than a sentence this file invented.
- */
-function interruptRefusal(cause: unknown): string | undefined {
-  const error = cause as { kind?: unknown; details?: { state?: unknown } } | null;
-  const kind = error?.kind;
-  if (kind !== "PRECONDITION_FAILED" && kind !== "NOT_FOUND") return undefined;
-  const state = error?.details?.state;
-  return typeof state === "string" && state !== "" ? state : kind;
 }
 
 export interface GodviewDeckProps {

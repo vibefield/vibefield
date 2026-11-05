@@ -211,6 +211,45 @@
   gap: 4px;
 }
 
+/* The head's act (TH-2; DESIGN.md §8 "Chat's thread", the head's act): its end slot, after the words, Pause then the
+   one place, 8 apart. Each is the kit's quiet button at the needs-you card's act size (28 tall, corners 14, padded
+   0 12, 12.5/500); Jump to and Wake carry their glyph at 14, then 6, then the word, and cross-fade as the spark wakes
+   or sleeps (200ms ease, as History's create does; an opacity fade, so reduced motion keeps it). */
+.vf-chat-thread-acts {
+  flex: none;
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.vf-chat-thread-acts .vf-ui-button.vf-chat-thread-act {
+  height: 28px;
+  padding: 0 12px;
+  border-radius: 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.vf-chat-thread-act[data-act="jump"],
+.vf-chat-thread-act[data-act="wake"] {
+  animation: vf-chat-thread-act-in 200ms ease both;
+}
+
+.vf-chat-thread-act .vf-glyph {
+  flex: none;
+}
+
+@keyframes vf-chat-thread-act-in {
+  from {
+    opacity: 0;
+  }
+}
+
 .vf-chat-thread-name {
   font-size: 15px;
   font-weight: 600;

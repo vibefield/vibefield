@@ -11,26 +11,30 @@ import {
 import { useReducedMotion } from "../field/desk/bar/bar-motion";
 import type { FrameSurface } from "../frame/frame-surface";
 import { jumpNote, sayOnLine } from "../frame/line-door";
-import { openLiveRow } from "../frame/live-open";
 import { sayStatus } from "../frame/status-line";
 import { stillKept } from "../host";
 import { NO_HANDLES, sessionHandlesOf } from "./at-rows";
 import { ChatComposer, type ComposerPort } from "./ChatComposer";
 import { type ChatAct, ChatPanelView, paneSessionOf, shownOf, threadLineOf } from "./ChatPanelView";
 import { type DraftMessage, type DraftPart, draftBlank } from "./composer-draft";
+import { NO_PAUSE, type PauseAct, pauseTurn, type SparkPauser, turnOf } from "./head-act";
 import { useNeedsCard } from "./needs-card-stand";
 import { settlePendingSay, standPendingSay } from "./pending-says";
 import { useProfileSets } from "./profile-sets";
+import { revealRun } from "./reveal-run";
 import { SparkPane } from "./SparkPane";
 import type { SparkEntry } from "./spark-status";
 import {
+  boardRowNow,
   type SparkOpener,
   type SparkSayer,
   showThread,
+  sparkEntryNow,
   useBoardRows,
   useChooseRequest,
   useNeedsAnswerer,
   useSparkOpener,
+  useSparkPauser,
   useSparkSayer,
   useSparksReading,
   useThreadMarks,
@@ -43,8 +47,11 @@ import { sayRequestId, sendNote, sendToThread, type ThreadSendOutcome } from "./
 // spark that needs you from any view), holds the chosen spark (the newest when Chat first shows one, kept until
 // another is chosen), mounts the shown spark's own pane while it is awake (`SparkPane`) and its composer
 // (`ChatComposer`), keeps each thread's draft for the window's life, and runs the thread's two acts that wake a
-// spark — Wake on the line, and Send — through the feed's one wake (`SparkOpener`). Since TH-1 Send queues your words
-// through the feed's say (`compose.sparks.say`), and its bubble stands at once (`pending-says.ts`). It reads what
+// spark — Wake (in the head since TH-2), and Send — through the feed's one wake (`SparkOpener`). Since TH-1 Send queues
+// your words through the feed's say (`compose.sparks.say`), and its bubble stands at once (`pending-says.ts`). Since
+// TH-2 it runs the head's other acts: Jump to, the spark's own session in Godview by Jump to's path, its row read at
+// the press (`reveal-run.ts`, which the card's Show goes through too), and Pause current turn, `agent.pause` once
+// through the feed (`head-act.ts`), each Pause kept for the turn it was pressed in. It reads what
 // stands in the shown thread over its pane (`threadItemsOf`: a new spark's hello and its starters while the thread is
 // quiet), and sends a starter pressed as Send sends, one act at a time into a thread, a wake's or a send's. Since CP-3
 // the needs-you card
@@ -126,7 +133,8 @@ export function ChatView({
     setHeldThreads(new Set(heldNow.current));
   }, []);
 
-  // Wake, on the line: it holds the thread while it runs, and its refusal is said there, once, in fieldd's words
+  // Wake, in the head (TH-2; on the line before): it holds the thread while it runs, and its refusal is said once, in
+  // fieldd's words, on the line under the head while that line stands
   const open = useSparkOpener();
   const sayer = useSparkSayer();
   const wake = useCallback(
@@ -207,6 +215,51 @@ export function ChatView({
     [holdThread, leaveHello],
   );
 
+  // Jump to, in the head (TH-2): the spark's own session in Godview by Jump to's path, its row read at the press, never
+  // from what was drawn; the note says what came of it ("Jumped to its pane", or Jump to's refusal). It holds no
+  // thread, so Send goes on, and while it runs its pill waits: the ref is the guard, the state draws it.
+  const [jumping, setJumping] = useState<ReadonlySet<SparkId>>(() => new Set());
+  const jumpingNow = useRef(new Set<SparkId>());
+  const jump = useCallback(async (entry: SparkEntry): Promise<void> => {
+    const spark = entry.spark.id;
+    if (jumpingNow.current.has(spark)) return;
+    jumpingNow.current.add(spark);
+    setJumping(new Set(jumpingNow.current));
+    try {
+      sayOnLine(jumpNote(await revealRun(sparkEntryNow(spark)?.run ?? null)));
+    } finally {
+      jumpingNow.current.delete(spark);
+      setJumping(new Set(jumpingNow.current));
+    }
+  }, []);
+
+  // Pause current turn, in the head (TH-2; TH-Q3 (b)): `agent.pause` once for the spark's own run, for the turn at
+  // work at the press. Kept for that turn alone: pausing from the press until fieldd answers, then while its accepted
+  // send stands (the board's `stop` takes over as it lands), or its refusal said in the status's place. A turn already
+  // pressed is never sent again (the ref is the guard; fieldd coalesces a second press too).
+  const pauser = useSparkPauser();
+  const [pauses, setPauses] = useState<ReadonlyMap<SparkId, PauseAct>>(() => new Map());
+  const pausingNow = useRef(new Set<SparkId>());
+  const pause = useCallback(async (door: SparkPauser, entry: SparkEntry): Promise<void> => {
+    const spark = entry.spark.id;
+    const now = sparkEntryNow(spark) ?? entry;
+    const turn = turnOf(now);
+    if (turn === null || now.run === null || pausingNow.current.has(spark)) return;
+    pausingNow.current.add(spark);
+    const keep = (pressed: PauseAct) => setPauses((held) => new Map(held).set(spark, pressed));
+    keep({ state: "busy", turn });
+    try {
+      const outcome = await pauseTurn(door, now.run.runtimeRunId);
+      keep(
+        outcome.state === "sent"
+          ? { state: "sent", turn }
+          : { state: "refused", turn, reason: outcome.reason },
+      );
+    } finally {
+      pausingNow.current.delete(spark);
+    }
+  }, []);
+
   // A starter, pressed: sent as Send sends (no chips, no stills), its outcome said in Send's own words — never while an
   // act holds its thread (the send's own guard).
   const start = useCallback(
@@ -259,25 +312,16 @@ export function ChatView({
     },
     handles,
   );
-  // Show, on an agent's ask: its pane in Godview by Jump to's path, the floor session its board row names (none while
-  // the board is not read, or can't be); one it cannot show is said in Jump to's words
-  const showAsk = useCallback(
-    (item: NeedsItem) => {
-      const id = item.from.session;
-      if (id === undefined) return;
-      const row =
-        rows === null || rows === "failed"
-          ? undefined
-          : rows.find((each) => each.runtimeRunId === id);
-      void openLiveRow(
-        { id, floorSessionId: row?.terminal?.runtimeSessionId ?? null },
-        "assistant",
-      ).then((outcome) => {
-        if (outcome.state === "refused") sayOnLine(jumpNote(outcome));
-      });
-    },
-    [rows],
-  );
+  // Show, on an agent's ask: its pane in Godview by the head's one reveal (TH-2, `reveal-run.ts`), its board row read at
+  // the press. One it cannot show — not running, its terminal not on this desktop's floor, or a deck that could not —
+  // is said in Jump to's words; shown, it says nothing (CP-3)
+  const showAsk = useCallback((item: NeedsItem) => {
+    const id = item.from.session;
+    if (id === undefined) return;
+    void revealRun(boardRowNow(id)).then((outcome) => {
+      if (outcome.state !== "jumped") sayOnLine(jumpNote(outcome));
+    });
+  }, []);
 
   const pane =
     shown === undefined || threadLineOf(shown) !== null ? undefined : (
@@ -330,6 +374,10 @@ export function ChatView({
       act={act !== null && act.spark === shown?.spark.id ? act.act : { state: "idle" }}
       onChoose={setChosen}
       {...(open === null ? {} : { onWake: (entry: SparkEntry) => void wake(open, entry) })}
+      onJump={(entry) => void jump(entry)}
+      jumping={shown !== undefined && jumping.has(shown.spark.id)}
+      {...(pauser === null ? {} : { onPause: (entry: SparkEntry) => void pause(pauser, entry) })}
+      pause={shown === undefined ? NO_PAUSE : (pauses.get(shown.spark.id) ?? NO_PAUSE)}
       {...(pane === undefined ? {} : { pane })}
       items={items}
       onStarter={

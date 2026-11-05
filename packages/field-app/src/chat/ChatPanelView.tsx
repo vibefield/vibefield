@@ -1,4 +1,5 @@
 import type { NeedsItem, SparkId } from "@vibefield/contracts";
+import { FieldGlyph } from "@vibefield/design-kit/glyphs";
 import { EmptyState, UiButton, UnavailableState } from "@vibefield/design-kit/primitives";
 import {
   SparkFace,
@@ -9,6 +10,7 @@ import {
 import { ChromeBoundary } from "@vibefield/puppeteer-views";
 import type { CSSProperties, ReactElement, ReactNode, Ref } from "react";
 import { COVER_RESERVE_PX, HEAD_BAND_PX } from "../frame/frame-geometry";
+import { headActOf, NO_PAUSE, type PauseAct } from "./head-act";
 import { SparkPaneView } from "./SparkPaneView";
 import { activityWords, type SparkEntry } from "./spark-status";
 import { SPARKS_UNREADABLE, type SparksReading } from "./sparks-feed";
@@ -26,7 +28,9 @@ import "./chat.css";
 // line with its one act — then the thread's foot: its composer, handed in, and its items standing over the pane (a new
 // spark's hello, or since CP-3 the needs-you card). TH-1: handed a `flow` (`ThreadFlowView`), the column is the head,
 // the flow and the foot, and the items stand in the foot above the composer, covering nothing; the pane goes when
-// Chat's controller hands the flow.
+// Chat's controller hands the flow. TH-2: the head carries the thread's act in its end slot (`head-act.ts`): Jump to
+// awake, Wake asleep, and Pause current turn before Jump to while the spark's own run works; the status's place says a
+// refused Pause, or a cancellation fieldd could not confirm. The line under the head keeps its words, not its Wake.
 
 /** What the chosen spark's act is doing: at rest, under way, or refused in fieldd's words. */
 export type ChatAct =
@@ -47,6 +51,14 @@ export interface ChatPanelViewProps {
   onChoose?: (spark: SparkId) => void;
   /** its last session, resumed (`compose.sparks.open`) */
   onWake?: (entry: SparkEntry) => void;
+  /** TH-2 — Jump to, in the head: the spark's own session in Godview (`reveal-run.ts`) */
+  onJump?: ((entry: SparkEntry) => void) | undefined;
+  /** TH-2 — Jump to is under way for the shown spark: its pill waits */
+  jumping?: boolean | undefined;
+  /** TH-2 — Pause current turn, in the head, while the spark's own run works (`agent.pause`) */
+  onPause?: ((entry: SparkEntry) => void) | undefined;
+  /** TH-2 — the shown spark's own Pause: pressed, sent or refused, for the turn it was pressed in */
+  pause?: PauseAct | undefined;
   /** the shown spark's own pane, while it is awake (the product's `SparkPane`); absent, the pane's place says what a
    * window with no terminals says */
   pane?: ReactNode;
@@ -115,6 +127,10 @@ export function ChatPanelView({
   act = { state: "idle" },
   onChoose,
   onWake,
+  onJump,
+  jumping = false,
+  onPause,
+  pause = NO_PAUSE,
   pane,
   flow,
   items = [],
@@ -186,6 +202,10 @@ export function ChatPanelView({
             entry={shown}
             act={act}
             onWake={onWake}
+            onJump={onJump}
+            jumping={jumping}
+            onPause={onPause}
+            pause={pause}
             pane={pane}
             flow={flow}
             items={items}
@@ -250,6 +270,10 @@ function ThreadColumn({
   entry,
   act,
   onWake,
+  onJump,
+  jumping,
+  onPause,
+  pause,
   pane,
   flow,
   items,
@@ -263,6 +287,10 @@ function ThreadColumn({
   entry: SparkEntry;
   act: ChatAct;
   onWake: ((entry: SparkEntry) => void) | undefined;
+  onJump: ((entry: SparkEntry) => void) | undefined;
+  jumping: boolean;
+  onPause: ((entry: SparkEntry) => void) | undefined;
+  pause: PauseAct;
   pane: ReactNode;
   flow: ReactNode;
   items: readonly ThreadItem[];
@@ -275,6 +303,7 @@ function ThreadColumn({
 }): ReactElement {
   const { spark, status, needsYou } = entry;
   const line = threadLineOf(entry);
+  const head = headActOf(entry, pause);
   return (
     <section className="vf-chat-thread" aria-label={`${spark.name}'s thread`}>
       <header className="vf-chat-thread-head">
@@ -283,11 +312,52 @@ function ThreadColumn({
           <span className="vf-chat-thread-name">{spark.name}</span>
           <span
             className="vf-chat-thread-status"
-            {...(needsYou ? { "data-tone": "attention" } : {})}
+            {...(needsYou || head.says !== null ? { "data-tone": "attention" } : {})}
           >
-            {sparkStatusWord(status)}
+            {head.says ?? sparkStatusWord(status)}
           </span>
         </span>
+        {head.main === null ? null : (
+          // the head's end slot (TH-2): Pause while the run works, then the one place, Jump to or Wake
+          <span className="vf-chat-thread-acts">
+            {head.pause === null ? null : (
+              <UiButton
+                className="vf-chat-thread-act"
+                data-act="pause"
+                disabled={head.pause !== "ready"}
+                {...(head.pause === "pausing" ? { "aria-busy": true } : {})}
+                onClick={() => onPause?.(entry)}
+              >
+                {head.pause === "pausing" ? "Pausing current turn…" : "Pause current turn"}
+              </UiButton>
+            )}
+            {head.main === "jump" ? (
+              <UiButton
+                key="jump"
+                className="vf-chat-thread-act"
+                data-act="jump"
+                aria-label={`Jump to ${spark.name}'s pane`}
+                disabled={jumping}
+                {...(jumping ? { "aria-busy": true } : {})}
+                onClick={() => onJump?.(entry)}
+              >
+                <FieldGlyph name="jump" size={14} />
+                <span>Jump to</span>
+              </UiButton>
+            ) : (
+              <UiButton
+                key="wake"
+                className="vf-chat-thread-act"
+                data-act="wake"
+                disabled={act.state === "busy" || sending}
+                onClick={() => onWake?.(entry)}
+              >
+                <FieldGlyph name="resume" size={14} />
+                <span>{act.state === "busy" ? "Waking…" : "Wake"}</span>
+              </UiButton>
+            )}
+          </span>
+        )}
       </header>
       {line === null && flow === undefined ? (
         // the pane is a chrome piece of its own, tried again for the session it shows
@@ -295,13 +365,9 @@ function ThreadColumn({
           {pane ?? <SparkPaneView name={spark.name} state="no-terminals" />}
         </ChromeBoundary>
       ) : line === null ? null : (
+        // its words only: its Wake is the head's (TH-2)
         <p className="vf-chat-thread-line" data-line={line} role="status">
           <span>{lineWords(spark.name, line, act)}</span>
-          {line === "asleep" ? (
-            <UiButton disabled={act.state === "busy" || sending} onClick={() => onWake?.(entry)}>
-              {act.state === "busy" ? "Waking…" : "Wake"}
-            </UiButton>
-          ) : null}
         </p>
       )}
       {flow === undefined ? null : (

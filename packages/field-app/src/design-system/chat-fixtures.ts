@@ -23,6 +23,7 @@ import {
   draftSendable,
   type SessionChip,
 } from "../chat/composer-draft";
+import type { PauseAct } from "../chat/head-act";
 import { type NeedsAct, type NeedsCard, needsCardOf } from "../chat/needs-card";
 import { type ModelsReading, modelWords } from "../chat/new-spark";
 import { type SparkEntry, sparkEntriesOf } from "../chat/spark-status";
@@ -261,6 +262,9 @@ export const CHAT_STATES = [
   "asleep",
   "waking",
   "wake-refused",
+  "jumping",
+  "pausing",
+  "pause-unconfirmed",
   "not-started",
   "waiting",
   "thread",
@@ -304,6 +308,9 @@ export const CHAT_STATE_LABEL: Record<ChatState, string> = {
   asleep: "Asleep",
   waking: "Waking",
   "wake-refused": "Wake refused",
+  jumping: "Jumping to its pane",
+  pausing: "Pausing its turn",
+  "pause-unconfirmed": "Pause not confirmed",
   "not-started": "Not started",
   waiting: "Waiting on you",
   thread: "A thread, two runs joined",
@@ -355,6 +362,7 @@ export function chatReadingOf(state: ChatState): SparksReading {
     case "asleep":
     case "waking":
     case "wake-refused":
+    case "jumping":
     case "thread":
     case "thread-tools":
     case "thread-long":
@@ -373,6 +381,16 @@ export function chatReadingOf(state: ChatState): SparksReading {
           ROWS.map((each) =>
             each.runtimeRunId === "run-juno" ? { ...each, status: "working" as const } : each,
           ),
+        ),
+      };
+    case "pausing":
+      return { state: "ready", entries: sparkEntriesOf(SPARKS, junoAtWork()) };
+    case "pause-unconfirmed":
+      return {
+        state: "ready",
+        entries: sparkEntriesOf(
+          SPARKS,
+          junoAtWork({ sentAt: JUNO_TURN, stage: "sent", unheardAt: minutesAgo(0.95) }),
         ),
       };
     case "not-started":
@@ -401,6 +419,22 @@ export function chatReadingOf(state: ChatState): SparksReading {
     case "unavailable":
       return { state: "unavailable", reason: FIELDD_GONE };
   }
+}
+
+/** TH-2's head plates: Juno's own turn under way since a minute ago, and the stop fieldd holds for it, if any (the
+ * row's `stop`: held as sent until fieldd hears the turn stop, `unheardAt` when it never did). */
+const JUNO_TURN = minutesAgo(1);
+function junoAtWork(stop?: AgentFieldRow["stop"]): AgentFieldRow[] {
+  return ROWS.map((each) =>
+    each.runtimeRunId === "run-juno"
+      ? {
+          ...each,
+          status: "working" as const,
+          statusSince: JUNO_TURN,
+          ...(stop === undefined ? {} : { stop }),
+        }
+      : each,
+  );
 }
 
 const KIWI = SPARKS[3] as SparkSummary;
@@ -464,6 +498,9 @@ export const CHAT_CHOSEN: Record<ChatState, string | null> = {
   asleep: "sp-kiwi0001",
   waking: "sp-kiwi0001",
   "wake-refused": "sp-kiwi0001",
+  jumping: "sp-juno0001",
+  pausing: "sp-juno0001",
+  "pause-unconfirmed": "sp-juno0001",
   "not-started": UNSTARTED.id,
   waiting: "sp-kiwi0001",
   thread: "sp-juno0001",
@@ -494,6 +531,16 @@ export const CHAT_SENDING: ReadonlySet<ChatState> = new Set(["starting", "sendin
 export const CHAT_ACT: Partial<Record<ChatState, ChatAct>> = {
   waking: { state: "busy" },
   "wake-refused": { state: "refused", reason: FIELDD_GONE },
+};
+
+/** TH-2 — the plates whose head's Jump to is under way: Juno's pill waits (DESIGN.md §8 "Chat's thread", the head's
+ * act). Jump to holds no thread, so its Send does not wait. */
+export const CHAT_JUMPING: ReadonlySet<ChatState> = new Set(["jumping"]);
+
+/** TH-2 — the shown spark's own Pause on a plate: Juno's, pressed in its current turn and not answered yet. The
+ * unconfirmed plate's is fieldd's own (its row's `stop`), so it needs none. */
+export const CHAT_PAUSE: Partial<Record<ChatState, PauseAct>> = {
+  pausing: { state: "busy", turn: JUNO_TURN },
 };
 
 // ── the composer's plates (SP-1d; DESIGN.md §8 "Chat's composer") ──

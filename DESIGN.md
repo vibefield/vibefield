@@ -4596,8 +4596,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     Every door that selects a session places it so — a body, a list row, a rain column, a
     timeline lane, a spend row, a search result, History's Resume and Jump to, the Peek's Open, a
     peer's attach, Chat's head's Jump to and the needs-you card's Show (*added 2026-11-05, TH-2*:
-    both take History's Jump to path, and say what it says) — and what it says follows: **"… in
-    the active pane"** where it took the focused
+    both take History's Jump to path; the head's says what History's does, the card's only what it
+    could not show) — and what it says follows: **"… in the active pane"** where it took the focused
     pane, **"… is in the active pane"** for one the focused pane already showed; each door's own
     entry in this section says it so (the line's New terminal, History's Resume and Jump to, the
     Peek's Open), corrected the same day. *This re-rules GV-D4's 10-02 answer* ("Beside the

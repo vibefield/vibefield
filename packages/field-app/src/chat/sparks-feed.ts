@@ -1,5 +1,6 @@
 import {
   AgentFieldRow,
+  AgentInterruptResult,
   ComposeSparksListResult,
   ComposeSparksOpenResult,
   type ComposeSparksSayParams,
@@ -14,6 +15,7 @@ import {
 import type { FielddClient } from "@vibefield/fieldd-client";
 import { useSyncExternalStore } from "react";
 import { askAgain, onReconnectedOver } from "../reconnect";
+import type { SparkPauser } from "./head-act";
 import { type SparkEntry, sparkEntriesOf } from "./spark-status";
 import { cellMarkOf, ThreadLedger, type ThreadMark, threadMarksOf } from "./thread-marks";
 
@@ -61,6 +63,9 @@ export interface SparksPort {
   /** TH-1 — your words to a spark, queued as yours (`compose.sparks.say`, IOS-12a's door): its receipt, or fieldd's
    * refusal thrown, `retryable` when the connection closed under it. */
   say(params: ComposeSparksSayParams): Promise<ComposeSparksSayResult>;
+  /** TH-2 — pause a run's current turn (`agent.pause`, Godview's pane's door): fieldd's answer, accepted when the
+   * cancellation was delivered, never when the agent obeyed it; or its refusal thrown. */
+  pause(runtimeRunId: string): Promise<AgentInterruptResult>;
 }
 
 const FIELD_ASK = { projection: "field" } as const;
@@ -79,6 +84,8 @@ export function sparksPortOver(client: FielddClient): SparksPort {
       ComposeSparksOpenResult.parse(await client.request("compose.sparks.open", { spark })).spark,
     say: async (params) =>
       ComposeSparksSayResult.parse(await client.request("compose.sparks.say", params)),
+    pause: async (runtimeRunId) =>
+      AgentInterruptResult.parse(await client.request("agent.pause", { runtimeRunId })),
   };
 }
 
@@ -192,6 +199,8 @@ interface FeedState {
   readonly answer: NeedsAnswerer | null;
   /** TH-1 — Send, through the same feed; null while none runs, so nothing is sent */
   readonly say: SparkSayer | null;
+  /** TH-2 — the head's Pause, through the same feed; null while none runs, so nothing is paused */
+  readonly pause: SparkPauser | null;
   /** the needs that stood when the board or the queue was first read, while they stand (CP-3): what a first reading
    * finds is no news, even one that comes only after a refusal the feed asked past */
   readonly noNews: ReadonlySet<string>;
@@ -226,6 +235,7 @@ const OPENING: FeedState = {
   open: null,
   answer: null,
   say: null,
+  pause: null,
   noNews: NO_NEWS,
   marks: NO_MARKS,
   cell: null,
@@ -353,6 +363,9 @@ class RunningFeed {
   /** The feed's say (TH-1): the spark's record says what it did, for every window. */
   readonly say: SparkSayer = (params) => this.port.say(params);
 
+  /** The feed's pause (TH-2): the board's row says what came of it (its `stop`), for every window. */
+  readonly pause: SparkPauser = (runtimeRunId) => this.port.pause(runtimeRunId);
+
   /** The feed's wake: the list is asked again whether it woke or not, since the record says what the door did. */
   readonly open: SparkOpener = async (spark) => {
     try {
@@ -479,6 +492,7 @@ class RunningFeed {
         open: this.open,
         answer: this.answer,
         say: this.say,
+        pause: this.pause,
         noNews: this.#noNews,
         marks: NO_MARKS,
         cell: null,
@@ -504,6 +518,7 @@ class RunningFeed {
       open: this.open,
       answer: this.answer,
       say: this.say,
+      pause: this.pause,
       noNews: this.#noNews,
       ...this.#marked(),
     });
@@ -563,6 +578,12 @@ export function useSparkOpener(): SparkOpener | null {
 /** Send, through the feed that published the reading (TH-1): null while no feed runs, so no Send is drawn. */
 export function useSparkSayer(): SparkSayer | null {
   return useSyncExternalStore(subscribe, () => state.say);
+}
+
+/** The head's Pause, through the feed that published the reading (TH-2): null while no feed runs, so no Pause is
+ * pressed. */
+export function useSparkPauser(): SparkPauser | null {
+  return useSyncExternalStore(subscribe, () => state.pause);
 }
 
 /** Answer the queue's items through the feed that reads them (CP-3): null while no feed runs, when no reading is ready
@@ -629,6 +650,14 @@ export function useBoardRows(): BoardRows {
  * fence). Within one document the feed starts once, so today that only guards a feed restarted in place. */
 export function sparksReadingNow(): SparksReading["state"] {
   return state.reading.state;
+}
+
+/** The board's row for `runtimeRunId` as the feed reads it now, or null while the board does not hold it (or is not
+ * read): what Jump to and the card's Show read at the press (TH-2, `reveal-run.ts`). */
+export function boardRowNow(runtimeRunId: string): AgentFieldRow | null {
+  const rows = state.rows;
+  if (rows === null || rows === "failed") return null;
+  return rows.find((row) => row.runtimeRunId === runtimeRunId) ?? null;
 }
 
 /** `spark`'s entry as the feed reads it now, or null while the list does not hold it. */
