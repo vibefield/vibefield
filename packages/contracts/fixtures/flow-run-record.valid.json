@@ -1,0 +1,75 @@
+{
+  "format": 1,
+  "run": "fr-k3v9q2m7x1",
+  "flow": "release-check",
+  "name": "Release check",
+  "n": 14,
+  "hash": "735f97e48b845a8ef74faafc9871d7b34b4fa5911e3b8d94bd2d8ca5fb4faa8e",
+  "starter": {
+    "by": "spark",
+    "spark": "sp-7k2m9q4x"
+  },
+  "scope": ["work", "review"],
+  "head": "5384aa6c49516f653f1e40bda423dd4fb891e241ab8fa219738de7c1bf06eb49",
+  "state": "holding",
+  "tail": {
+    "seq": 88,
+    "mac": "aa829de05db4d9e970355cd60e543f06f2fb93e910ed42144f83bf1d51060445"
+  },
+  "calls": 41,
+  "allowed": 40,
+  "log": "review round 3 of 3",
+  "open": [
+    {
+      "call": 41,
+      "label": "ship",
+      "agent": "codex",
+      "phase": "Ship",
+      "state": "holding"
+    }
+  ],
+  "steps": [
+    {
+      "call": 39,
+      "label": "review · round 3 of 3",
+      "agent": "claude-code",
+      "phase": "Review",
+      "session": "run-7d1c0e5a",
+      "state": "answered",
+      "lines": [
+        {
+          "line": "prompt",
+          "n": 1,
+          "sent": "queued"
+        },
+        {
+          "line": "repair",
+          "n": 1,
+          "sent": "queued"
+        }
+      ]
+    },
+    {
+      "call": 40,
+      "label": "notes",
+      "agent": "codex",
+      "phase": "Review",
+      "session": "run-2b9f4c61",
+      "handed": true,
+      "state": "answered",
+      "lines": [
+        {
+          "line": "in",
+          "n": 1,
+          "sent": "uncertain"
+        }
+      ]
+    }
+  ],
+  "earlier": 37,
+  "held": {
+    "item": "ny-0f2e4d6c8b0a1928",
+    "kind": "flow-cap"
+  },
+  "startedAt": "2026-11-05T02:51:10.000Z"
+}

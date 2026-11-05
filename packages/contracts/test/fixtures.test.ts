@@ -180,6 +180,7 @@ import {
   FlowJournalKnownLine,
   FlowProposalRecord,
   FlowRead,
+  FlowRunRecord,
   FlowsListResult,
   FlowsRunParams,
   FlowsRunResult,
@@ -1017,6 +1018,9 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   // its MAC the original's: the contract reads the shape, fieldd's journal checks the MAC and the chain)
   "flow-journal-head": FlowJournalHead,
   "flow-journal-line": FlowJournalKnownLine,
+  // CP-4a2b — a run's record (13a's §13a.0b): the valid one, and one whose tail a same-uid agent forged (a shape still;
+  // the store finds the forgery by the journal's MACs)
+  "flow-run-record": FlowRunRecord,
 };
 
 // *.vector.json = cross-language crypto vectors, not wire shapes — pinned by their own tests.

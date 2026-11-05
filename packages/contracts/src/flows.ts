@@ -354,6 +354,9 @@ export const RunSummary = z
   .passthrough();
 export type RunSummary = z.infer<typeof RunSummary>;
 
+/** CP-4a2b (13b.3's C6) — RED STUB: 13b.4 builds the run's record, verbatim from §13a.0b. */
+export const FlowRunRecord: z.ZodType<unknown> = z.never();
+
 // ── the window's doors (methods.ts: agents.manage, local; VF-PM 2026-11-05 01:22Z) ──
 
 /** flows.list and flows.subscribe: this desktop's library and runs. */

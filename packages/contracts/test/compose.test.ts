@@ -24,6 +24,7 @@ import {
   composeDesktopStateOf,
   composeSayStateOf,
   crewSharedModelOf,
+  NEEDS_CHOICE_MAX,
   NEEDS_CHOICE_WORDS,
   NEEDS_JOINED_ITEMS_MAX,
   NEEDS_NAME_MAX,
@@ -48,6 +49,7 @@ import {
 } from "../src/compose";
 import { METHODS, reachableFromTailnet } from "../src/methods";
 import {
+  FLOW_LIMITS,
   LAYOUT,
   LAYOUT_ROOT_LEVEL,
   PEER_FIELDD_SCOPES,
@@ -752,5 +754,46 @@ describe("a session's name where no handle is said (SP-1e2, SR-Q4 (a): one rule 
     const long = sessionName({ title: "x".repeat(200), id: "run-1" });
     expect(long).toHaveLength(NEEDS_NAME_MAX);
     expect(long.endsWith("…")).toBe(true);
+  });
+});
+
+describe("CP-4a2b — a flow's seven acts, one authority (13b.3's C7; DESIGN.md §9 \"When a run can't go on, or waits\")", () => {
+  const ACTS = {
+    stopRun: "Stop the run",
+    allowMore: "Allow 20 more",
+    askOnceMore: "Ask once more",
+    resumeStep: "Resume the step",
+    seeChange: "See the change",
+    runThisVersion: "Run this version",
+    runApproved: "Run the one you approved",
+  } as const;
+  const words = NEEDS_CHOICE_WORDS as Record<string, string | undefined>;
+
+  it("C7: NEEDS_CHOICE_WORDS holds the seven acts, each one line within NEEDS_CHOICE_MAX", () => {
+    for (const [key, act] of Object.entries(ACTS)) {
+      expect(words[key], key).toBe(act);
+      expect(act.length, key).toBeLessThanOrEqual(NEEDS_CHOICE_MAX);
+      expect(act, key).not.toMatch(/[\r\n]/);
+    }
+    // the Allow's number is the cap's own (FLOW_LIMITS.CALLS_MORE), so the two never drift
+    expect(words["allowMore"]).toBe(`Allow ${FLOW_LIMITS.CALLS_MORE} more`);
+  });
+
+  it("C7: every VibeField act a flow's item fixture offers is one of the seven, or Not now", () => {
+    const own = new Set<string>(Object.values(NEEDS_CHOICE_WORDS));
+    const offered = [
+      ["needs-item.flow-cap", ["Allow 20 more", "Stop the run"]],
+      ["needs-item.flow-changed", ["Run this version", "Run the one you approved", "Not now"]],
+      ["needs-item.flow-gate", ["Stop the run"]],
+      ["needs-item.flow-lost", ["Resume the step", "Stop the run"]],
+      ["needs-item.flow-repair", ["Ask once more", "Stop the run"]],
+    ] as const;
+    for (const [name, acts] of offered) {
+      const choices = (fixture(name) as { choices: string[] }).choices;
+      for (const act of acts) {
+        expect(choices, name).toContain(act);
+        expect(own.has(act), act).toBe(true);
+      }
+    }
   });
 });

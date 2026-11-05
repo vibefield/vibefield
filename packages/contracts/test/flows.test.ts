@@ -32,6 +32,7 @@ import {
   FlowProposalRecord,
   FlowRead,
   FlowRunId,
+  FlowRunRecord,
   FlowSlug,
   FlowsListResult,
   FlowsRunParams,
@@ -136,6 +137,14 @@ describe("CP-4a1 — the library and fieldd's records on disk (CP4-Q18 (a))", ()
       // bth's review P1 (11:46Z): a run's calls waiting at once, and its log lines
       HOST_CALLS_WAITING_MAX: 256,
       HOST_LOG_LINES_MAX: 10_000,
+      // CP-4a2b (13b.3's C9; 13a's D3 and D12, Q-A7): the runs alive at once, a spark's own, the hosts alive at once,
+      // and a step's form (J4 (a) dropped FORM_NODES_MAX: the byte bound already holds the CPU)
+      RUNS_LIVE_MAX: 8,
+      RUNS_PER_SPARK_MAX: 2,
+      HOSTS_LIVE_MAX: 4,
+      FORM_BYTES_MAX: 4_096,
+      FORM_DEPTH_MAX: 8,
+      FORM_ENUM_MAX: 64,
     });
   });
 
@@ -451,5 +460,67 @@ describe("CP-4a2a — a run's journal (CP4-S15, CP-D9; the fixtures' MACs are re
       service: FLOW_HOST.SERVICE,
       state: FLOW_HOST.STATE_UNCONFIGURED,
     });
+  });
+});
+
+describe("CP-4a2b — a run's record, its states and its bounds (13b.3's C6, C9, C12; 13a's §13a.0b, D3, D4, D18)", () => {
+  const record = () =>
+    fixture("flow-run-record.valid") as Record<string, unknown> & {
+      open: unknown[];
+      steps: unknown[];
+    };
+
+  it("C6: a run's record parses: who started it, its scope, its head and tail, its open and answered steps, its hold", () => {
+    const read = FlowRunRecord.safeParse(fixture("flow-run-record.valid"));
+    expect(read.success).toBe(true);
+    expect(read.data).toMatchObject({
+      run: "fr-k3v9q2m7x1",
+      starter: { by: "spark", spark: "sp-7k2m9q4x" },
+      calls: 41,
+      allowed: 40,
+      open: [{ call: 41, state: "holding" }],
+      steps: [{ call: 39 }, { call: 40, handed: true }],
+      held: { kind: "flow-cap" },
+    });
+    // a forged tail is still a record's shape: a forgery is the store's to find, by the journal's MACs (13a's T-rows)
+    expect(FlowRunRecord.safeParse(fixture("flow-run-record.forged-tail")).success).toBe(true);
+  });
+
+  it("C6: `open` holds every step not yet answered, to the host's own ceiling; `steps` the latest answered, to 64", () => {
+    const step = (call: number) => ({ call, state: "working" });
+    const many = (n: number) => Array.from({ length: n }, (_, i) => step(i + 1));
+    const at = (open: number, steps: number) =>
+      FlowRunRecord.safeParse({ ...record(), open: many(open), steps: many(steps) }).success;
+    expect(at(FLOW_LIMITS.HOST_CALLS_WAITING_MAX, 64)).toBe(true);
+    expect(at(FLOW_LIMITS.HOST_CALLS_WAITING_MAX + 1, 64)).toBe(false);
+    expect(at(1, 65)).toBe(false);
+    // a line's fate is OPEN: sending, queued, uncertain, and a word a newer build says
+    const lines = [{ line: "prompt", n: 1, sent: "relayed" }];
+    expect(FlowRunRecord.safeParse({ ...record(), open: [{ ...step(41), lines }] }).success).toBe(
+      true,
+    );
+    // the record names its head and tail by their MACs, lowercase hex
+    expect(FlowRunRecord.safeParse({ ...record(), head: "x" }).success).toBe(false);
+  });
+
+  it("C9: the six bounds the runs add are positive whole numbers", () => {
+    const limits = FLOW_LIMITS as Record<string, unknown>;
+    for (const name of [
+      "RUNS_LIVE_MAX",
+      "RUNS_PER_SPARK_MAX",
+      "HOSTS_LIVE_MAX",
+      "FORM_BYTES_MAX",
+      "FORM_DEPTH_MAX",
+      "FORM_ENUM_MAX",
+    ]) {
+      expect(Number.isInteger(limits[name]), name).toBe(true);
+      expect(limits[name] as number, name).toBeGreaterThan(0);
+    }
+    expect(limits["FORM_NODES_MAX"]).toBeUndefined();
+  });
+
+  it("C12: `stopping` is a run's state: a Stop sent and not yet heard (D4)", () => {
+    expect(flowRunStateOf({ state: "stopping" })).toBe("stopping");
+    expect(FLOW_RUN_STATES).toContain("stopping");
   });
 });
