@@ -43,7 +43,14 @@ function jsonFiles(dir) {
 // such a copy was silently skipped and `checked` merely dropped by one; a gate
 // that stops gating without a red is the failure this script exists to catch,
 // so the copy half now has the pin half's posture below.
-const LANE_AUTHORED = new Set(["trf1-frames.lane.json", "spawn-bloom-geometry.lane.json"]);
+// IOS-13a: `acknowledgements-l5.lane.json` is a trimmed copy of L5's generated acknowledgements (lane `a76cc7aba`, 8 of
+// its parts and every text they name, one unknown field added), which FieldSettingsTests reads. Its origin is L5's
+// output, not a contracts golden. Once L5 lands, a row here holds its entries to the committed file.
+const LANE_AUTHORED = new Set([
+  "trf1-frames.lane.json",
+  "spawn-bloom-geometry.lane.json",
+  "acknowledgements-l5.lane.json",
+]);
 
 // PG-4s — the phone's Godview views (PG-5…8): the witness each view suite replays, the toolkit's golden, and one
 // golden per view, which its lane names here (ONE line; both uses below derive from it). FieldHomeTests reads them.

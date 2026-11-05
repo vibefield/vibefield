@@ -341,7 +341,10 @@ let package = Package(
     // product; FieldTerminal is here for its Terminal page.
     // WI-3 — and its Lock page, which reads and changes the lock (FieldLock).
     .target(name: "FieldSettings", dependencies: ["FieldDesign", "FieldTerminal", "FieldLock"]),
-    .testTarget(name: "FieldSettingsTests", dependencies: ["FieldSettings", "FieldDesign"]),
+    // IOS-13a — Fixtures holds a trimmed copy of L5's acknowledgements (`acknowledgements-l5.lane.json`), which the
+    // acknowledgements reader is tested against
+    .testTarget(
+      name: "FieldSettingsTests", dependencies: ["FieldSettings", "FieldDesign"], resources: [.copy("Fixtures")]),
     // WI-3 — the lock (DESIGN.md §9 "The lock"; WI-D3…D7, WI-L5…L7): its rules and its words, over
     // LocalAuthentication's `.deviceOwnerAuthentication`, so the passcode is iOS's own fallback. No UI and no mesh:
     // the curtain that draws it is FieldHome's, so every rule (the time away, the cover, the ask before a change,
