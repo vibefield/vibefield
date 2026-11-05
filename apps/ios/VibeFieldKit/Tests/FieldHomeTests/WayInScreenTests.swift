@@ -15,7 +15,7 @@ struct WayInScreenTests {
   private typealias Screen = FieldHomeModel.WayInScreen
 
   private func screen(_ page: FieldHomeModel.DoorPage) -> Screen {
-    FieldHomeModel.wayInScreen(.page(page))
+    FieldHomeModel.wayInScreen(.page(page), device: .iPhone)
   }
 
   private func line(_ screen: Screen) -> String? {
@@ -58,10 +58,50 @@ struct WayInScreenTests {
       .lockOffer(.faceID), .locked(.faceID),
     ]
     for step in steps {
-      let acts = FieldHomeModel.wayInScreen(step).acts
+      let acts = FieldHomeModel.wayInScreen(step, device: .iPhone).acts
       let legal = acts.contains { if case .legal = $0 { true } else { false } }
       #expect(!legal, "\(step)")
     }
+  }
+
+  /// An act's own words; approval's row carries Tailscale's machine name, which is not ours to say.
+  private func said(_ act: Screen.Act) -> String {
+    switch act {
+    case .primary(let words, _, _), .secondary(let words, _, _): return words
+    case .share(let words, _): return words
+    case .link(let words, _): return words
+    case .note(let words), .tailscale(let words): return words
+    case .legal(let links): return links.map { $0.title }.joined(separator: " · ")
+    case .thisPhone, .computerWaiting: return ""
+    }
+  }
+
+  @Test("IOS-13a: the way in names the device as its platform does (Q1); the lock's words are L4's to bring")
+  func deviceNamed() {
+    var steps: [FieldHomeModel.WayInStep] = (0...3).map { .tour($0) }
+    steps += [
+      .page(.welcome(failure: nil)), .page(.fromCode(desktop: "Studio", login: login)), .page(.signInAgain(note: nil)),
+      .page(.anotherAccount(current: "a@b", expected: "c@d", from: "Mini", byLink: true)),
+      .page(.anotherAccount(current: "a@b", expected: "c@d", from: "Mini", byLink: false)),
+      .page(.noDesktops(login: login)), .page(.joining(login: login, note: nil)), .page(.looking(login: login)),
+      .page(.approval(machine: "iphone-17-pro", adminConsole: nil)), .found(name: "James", desktop: "studio"),
+    ]
+    for device in [DeviceWord.iPad, .unknown] {
+      for step in steps {
+        let s = FieldHomeModel.wayInScreen(step, device: device)
+        let words = [s.words.title, line(s) ?? "", s.words.note ?? ""] + s.acts.map(said)
+        for word in words {
+          #expect(!word.localizedCaseInsensitiveContains("phone"), "\(device) \(step): \(word)")
+        }
+      }
+    }
+    let iPad = line(FieldHomeModel.wayInScreen(.page(.signInAgain(note: nil)), device: .iPad))
+    #expect(iPad == "This iPad can’t reach your desktops until you do. Nothing here is lost.")
+    let device = line(FieldHomeModel.wayInScreen(.tour(2), device: .unknown))
+    #expect(
+      device
+        == "This device reaches your computer over your own Tailscale network, encrypted end to end. "
+        + "VibeField runs no session relay.")
   }
 
   @Test("the welcome's note: the account a code named, or why a first sign-in failed")
@@ -85,7 +125,7 @@ struct WayInScreenTests {
     #expect(screen(.approval(machine: nil, adminConsole: nil)).steps == .step(1))
     #expect(screen(.looking(login: login)).steps == .step(2))
     #expect(screen(.noDesktops(login: login)).steps == .step(2))
-    #expect(FieldHomeModel.wayInScreen(.found(name: "James", desktop: "studio")).steps == .step(2))
+    #expect(FieldHomeModel.wayInScreen(.found(name: "James", desktop: "studio"), device: .iPhone).steps == .step(2))
     let two = ["Sign in", "Your computer"]
     #expect(FieldHomeModel.WayInWords.steps == two)
     #expect(screen(.looking(login: login)).stepNames == two, "no lock to offer: never a step that does not come")
@@ -96,10 +136,10 @@ struct WayInScreenTests {
     #expect(FieldHomeModel.wayInSteps(lock: LockMethod.none) == two, "a phone that cannot lock has two steps")
     for page: FieldHomeModel.DoorPage in [.joining(login: login, note: nil), .looking(login: login)] {
       #expect(
-        FieldHomeModel.wayInScreen(.page(page), lock: .faceID).stepNames == ["Sign in", "Your computer", "Face ID"])
+        FieldHomeModel.wayInScreen(.page(page), lock: .faceID, device: .iPhone).stepNames == ["Sign in", "Your computer", "Face ID"])
     }
     #expect(
-      FieldHomeModel.wayInScreen(.found(name: "James", desktop: "studio"), lock: .faceID).stepNames.count == 3)
+      FieldHomeModel.wayInScreen(.found(name: "James", desktop: "studio"), lock: .faceID, device: .iPhone).stepNames.count == 3)
     #expect(StepsCapsule.name(2, of: two) == "Your computer")
     #expect(StepsCapsule.name(3, of: two) == "Your computer")
     #expect(StepsCapsule.name(3, of: FieldHomeModel.wayInSteps(lock: .faceID)) == "Face ID")
@@ -107,7 +147,7 @@ struct WayInScreenTests {
 
   @Test("the lock's offer, the way in's last step: Lock with Face ID leading, Not now, and where to change it (WI-D3 A)")
   func lockOffer() {
-    let s = FieldHomeModel.wayInScreen(.lockOffer(.faceID), lock: .faceID)
+    let s = FieldHomeModel.wayInScreen(.lockOffer(.faceID), lock: .faceID, device: .iPhone)
     #expect(s.steps == .step(3))
     #expect(s.stepNames == ["Sign in", "Your computer", "Face ID"])
     #expect(s.picture == .mark)
@@ -120,7 +160,7 @@ struct WayInScreenTests {
         .primary("Lock with Face ID", .lockOn), .secondary("Not now", .notNow),
         .note("You can change this in Settings › Lock."),
       ])
-    let passcode = FieldHomeModel.wayInScreen(.lockOffer(.passcode), lock: .passcode)
+    let passcode = FieldHomeModel.wayInScreen(.lockOffer(.passcode), lock: .passcode, device: .iPhone)
     #expect(passcode.words.title == "Lock VibeField with your passcode.")
     #expect(passcode.stepNames.last == "Passcode")
     #expect(passcode.acts.first == .primary("Lock with passcode", .lockOn))
@@ -128,15 +168,15 @@ struct WayInScreenTests {
 
   @Test("the curtain after a miss: VibeField is locked., Unlock with Face ID, and the passcode's note (WI-D5 A)")
   func locked() {
-    let s = FieldHomeModel.wayInScreen(.locked(.faceID))
+    let s = FieldHomeModel.wayInScreen(.locked(.faceID), device: .iPhone)
     #expect(s.steps == nil, "the lock is not a step of the way in")
     #expect(s.picture == .mark)
     #expect(s.words.title == "VibeField is locked.")
     #expect(s.words.line == nil)
     #expect(s.acts == [.primary("Unlock with Face ID", .unlock), .note("Your iPhone passcode works too.")])
-    let touch = FieldHomeModel.wayInScreen(.locked(.touchID))
+    let touch = FieldHomeModel.wayInScreen(.locked(.touchID), device: .iPhone)
     #expect(touch.acts == [.primary("Unlock with Touch ID", .unlock), .note("Your iPhone passcode works too.")])
-    let passcode = FieldHomeModel.wayInScreen(.locked(.passcode))
+    let passcode = FieldHomeModel.wayInScreen(.locked(.passcode), device: .iPhone)
     #expect(passcode.acts == [.primary("Unlock with passcode", .unlock)], "the passcode is the method: no “too”")
   }
 
@@ -187,7 +227,7 @@ struct WayInScreenTests {
   func signInAgain() {
     let s = screen(.signInAgain(note: nil))
     #expect(s.words.title == "Sign in to Tailscale again.")
-    #expect(line(s) == "This phone can’t reach your desktops until you do. Nothing here is lost.")
+    #expect(line(s) == "This iPhone can’t reach your desktops until you do. Nothing here is lost.")
     #expect(s.picture == .face)
     #expect(s.acts == [.primary("Sign in again", .signInAgain), .link("Use another account", .useAnotherAccount)])
   }
@@ -198,37 +238,37 @@ struct WayInScreenTests {
     #expect(scanned.words.title == "Another account?")
     #expect(
       line(scanned)
-        == "This phone is signed in as james@acme.dev, but the code you scanned came from Studio, signed in as me@example.com.")
+        == "This iPhone is signed in as james@acme.dev, but the code you scanned came from Studio, signed in as me@example.com.")
     #expect(scanned.acts.first == .primary("Sign in again", .switchAccount))
     #expect(scanned.acts.last == .note("At Tailscale, pick me@example.com."))
     let byLink = screen(.anotherAccount(current: "a@b", expected: "c@d", from: "Mini", byLink: true))
-    #expect(line(byLink) == "This phone is signed in as a@b, but the link you opened came from Mini, signed in as c@d.")
+    #expect(line(byLink) == "This iPhone is signed in as a@b, but the link you opened came from Mini, signed in as c@d.")
     #expect(byLink.acts.first == .primary("Keep this account", .keepAccount))
   }
 
   @Test("the found beat: your face, Hi with your name when a desktop has said it, and the desktop reached")
   func found() {
-    let s = FieldHomeModel.wayInScreen(.found(name: "James", desktop: "studio"))
+    let s = FieldHomeModel.wayInScreen(.found(name: "James", desktop: "studio"), device: .iPhone)
     #expect(s.picture == .face)
     #expect(s.words.title == "Hi, James.")
     #expect(line(s) == "Connected to studio.")
     #expect(s.words.hold)
     #expect(s.acts.isEmpty)
-    let unnamed = FieldHomeModel.wayInScreen(.found(name: nil, desktop: nil))
+    let unnamed = FieldHomeModel.wayInScreen(.found(name: nil, desktop: nil), device: .iPhone)
     #expect(unnamed.words.title == "Hi.")
     #expect(unnamed.words.line == nil)
   }
 
   @Test("How it works: four pages, their dots, back to the welcome from the first, no Allow and no notification")
   func tour() {
-    let titles = (0...3).map { FieldHomeModel.wayInScreen(.tour($0)).words.title }
+    let titles = (0...3).map { FieldHomeModel.wayInScreen(.tour($0), device: .iPhone).words.title }
     #expect(
       titles == [
         "Your agents run on your computer.", "Keep up when you step away.", "No VibeField account.",
         "Start on your computer.",
       ])
     for page in 0...3 {
-      let s = FieldHomeModel.wayInScreen(.tour(page))
+      let s = FieldHomeModel.wayInScreen(.tour(page), device: .iPhone)
       let back: FieldHomeModel.WayInAct = page == 0 ? .welcome : .tour(page - 1)
       #expect(s.steps == .dots(page))
       #expect(s.back == back)
@@ -237,16 +277,16 @@ struct WayInScreenTests {
       #expect(!words.contains("Allow") && !words.contains("approve") && !words.contains("notif"), "\(page)")
     }
     #expect(
-      line(FieldHomeModel.wayInScreen(.tour(0)))
+      line(FieldHomeModel.wayInScreen(.tour(0), device: .iPhone))
         == "VibeField is a control room for coding agents: Claude Code, Codex and others, each in its own terminal.")
-    let three = FieldHomeModel.wayInScreen(.tour(2))
+    let three = FieldHomeModel.wayInScreen(.tour(2), device: .iPhone)
     #expect(
       line(three)
-        == "Your phone reaches your computer over your own Tailscale network, encrypted end to end. VibeField runs no session relay.")
+        == "This iPhone reaches your computer over your own Tailscale network, encrypted end to end. VibeField runs no session relay.")
     #expect(three.acts.last == .tailscale("Connecting your devices requires a Tailscale account."))
-    let four = FieldHomeModel.wayInScreen(.tour(3))
+    let four = FieldHomeModel.wayInScreen(.tour(3), device: .iPhone)
     #expect(
-      line(four) == "Get VibeField at vibefield.dev. When its setup connects your devices, it shows a code for this phone.")
+      line(four) == "Get VibeField at vibefield.dev. When its setup connects your devices, it shows a code for this iPhone.")
     #expect(four.words.note == "Your agents run there, so keep it awake and connected while you’re away.")
     #expect(four.acts == [.share("Send the link to my computer", primary: true), .secondary("I already have VibeField", .welcome)])
   }
@@ -260,7 +300,7 @@ struct WayInScreenTests {
       .lockOffer(.faceID), .lockOffer(.passcode), .locked(.faceID), .locked(.touchID),
     ]
     for step in steps {
-      let s = FieldHomeModel.wayInScreen(step)
+      let s = FieldHomeModel.wayInScreen(step, device: .iPhone)
       let words = [s.words.title, line(s) ?? "", s.words.note ?? ""].joined(separator: " ")
       for retired in ["never what they send", "no servers", "device to device", "your Mac", "free for personal use"] {
         #expect(!words.localizedCaseInsensitiveContains(retired), "\(step): \(retired)")

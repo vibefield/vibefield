@@ -58,30 +58,30 @@ struct SettingsModelTests {
 
   @Test("signed in and well: the head is the name and the login, and no note")
   func headWhenConnected() {
-    let lines = SettingsModel.headLines(account(.connected, face: fox))
+    let lines = SettingsModel.headLines(account(.connected, face: fox), device: .iPhone)
     #expect(lines.status == nil)
     #expect(lines.note == nil)
-    #expect(SettingsModel.headLines(account(.connecting)).status == nil)
-    #expect(SettingsModel.headLines(account(.couldNotConnect("the network went away"))).status == nil)
+    #expect(SettingsModel.headLines(account(.connecting), device: .iPhone).status == nil)
+    #expect(SettingsModel.headLines(account(.couldNotConnect("the network went away")), device: .iPhone).status == nil)
   }
 
   @Test("the network asks again: TS-7's words, orange, and nothing is lost")
   func headWhenSignInAgain() {
-    let lines = SettingsModel.headLines(account(.signInAgain, face: fox))
+    let lines = SettingsModel.headLines(account(.signInAgain, face: fox), device: .iPhone)
     #expect(lines.status == .init("Sign in to Tailscale again", wantsTheUser: true))
-    #expect(lines.note == "This phone can’t reach your desktops until you do. Nothing here is lost.")
+    #expect(lines.note == "This iPhone can’t reach your desktops until you do. Nothing here is lost.")
   }
 
   @Test("waiting for approval: who must act, in §9's words")
   func headWhenWaiting() {
-    let lines = SettingsModel.headLines(account(.waitingForApproval))
+    let lines = SettingsModel.headLines(account(.waitingForApproval), device: .iPhone)
     #expect(lines.status == .init("Waiting for approval", wantsTheUser: true))
     #expect(lines.note == "You’re signed in. An admin of your Tailscale network approves new devices.")
   }
 
   @Test("signed out: Settings has no head of its own, for it is never open signed out (WI-L1; item 163)")
   func headWhenSignedOut() {
-    let lines = SettingsModel.headLines(account(.signedOut))
+    let lines = SettingsModel.headLines(account(.signedOut), device: .iPhone)
     #expect(lines.status == nil)
     #expect(lines.note == nil, "a Sign out leaves Settings first, and the way in stands alone")
   }
@@ -118,21 +118,21 @@ struct SettingsModelTests {
 
   @Test("what the phone can do with a desktop: the same for every one; approving from the card not yet")
   func abilities() {
-    let all = SettingsModel.abilities(desktop(.connected))
+    let all = SettingsModel.abilities(desktop(.connected), device: .iPhone)
     #expect(all.map(\.title) == [
       "Watch its agents", "Start agents in its folders", "Open its agents’ terminals and type",
       "Read and search its History", "Approve from the card",
     ])
     #expect(all.map(\.can) == [true, true, true, true, false])
     // A desktop that said its terminals are not served: the row says so, in words.
-    let closed = SettingsModel.abilities(desktop(.connected, terminals: false))
+    let closed = SettingsModel.abilities(desktop(.connected, terminals: false), device: .iPhone)
     #expect(
       closed[2]
         == .init(
           title: "Open its agents’ terminals and type", detail: "studio doesn’t serve its terminals to your devices.",
           can: false))
     // Not said is not a refusal.
-    #expect(SettingsModel.abilities(desktop(.connected, terminals: nil))[2].can)
+    #expect(SettingsModel.abilities(desktop(.connected, terminals: nil), device: .iPhone)[2].can)
     // An agent's approval is answered by typing into its pane, which works,
     // so nothing here may say approvals cannot be answered at all.
     #expect(!all.contains { $0.title.localizedCaseInsensitiveContains("answer approvals") })
@@ -142,11 +142,11 @@ struct SettingsModelTests {
   /// said, and readable, both read available.
   @Test("watching a desktop: one the phone cannot read says so; not said is not a refusal")
   func aDesktopThatCannotBeWatchedSaysSo() {
-    let refused = SettingsModel.abilities(desktop(.connected, watchable: false)).first
+    let refused = SettingsModel.abilities(desktop(.connected, watchable: false), device: .iPhone).first
     #expect(
-      refused == .init(title: "Watch its agents", detail: "studio runs a VibeField this phone can’t read.", can: false))
+      refused == .init(title: "Watch its agents", detail: "studio runs a VibeField this iPhone can’t read.", can: false))
     for said in [nil, true] as [Bool?] {
-      let watch = SettingsModel.abilities(desktop(.connected, watchable: said)).first
+      let watch = SettingsModel.abilities(desktop(.connected, watchable: said), device: .iPhone).first
       #expect(watch == .init(title: "Watch its agents", detail: nil, can: true), "watchable \(String(describing: said))")
     }
   }
@@ -161,14 +161,14 @@ struct SettingsModelTests {
   @Test("an unreachable desktop says why, in words, and that what was read stays (DS-L8)")
   func asleepFoot() {
     let mini = desktop(.asleep(lastHeard: nil), name: "mini")
-    let asleep = SettingsModel.asleepFoot(mini, standing: .connected)
+    let asleep = SettingsModel.asleepFoot(mini, standing: .connected, device: .iPhone)
     #expect(
       asleep
         == "Tailscale doesn’t list mini right now: it’s asleep, or VibeField isn’t running on it. "
-        + "What you already opened from it stays on this phone; its terminals and search answer when it wakes.")
+        + "What you already opened from it stays on this iPhone; its terminals and search answer when it wakes.")
     #expect(
-      SettingsModel.asleepFoot(mini, standing: .signInAgain)
-        == "What you already opened from it stays on this phone. "
+      SettingsModel.asleepFoot(mini, standing: .signInAgain, device: .iPhone)
+        == "What you already opened from it stays on this iPhone. "
         + "Its terminals and search answer once you sign in to Tailscale again.")
     // A desktop is any OS: the words never assume a Mac.
     #expect(!asleep.contains("Mac"))
@@ -185,10 +185,10 @@ struct SettingsModelTests {
     #expect(
       SettingsModel.tailscaleState(.couldNotConnect("the network went away"))
         == .init("Couldn’t connect — the network went away.", wantsTheUser: true))
-    #expect(SettingsModel.tailscaleFoot(.connected) == .init("While you’re signed in, this phone stays connected by itself."))
-    #expect(SettingsModel.tailscaleFoot(.signInAgain).wantsTheUser)
+    #expect(SettingsModel.tailscaleFoot(.connected, device: .iPhone) == .init("While you’re signed in, this iPhone stays connected by itself."))
+    #expect(SettingsModel.tailscaleFoot(.signInAgain, device: .iPhone).wantsTheUser)
     for standing: SettingsAccount.Standing in [.connected, .connecting, .signInAgain, .waitingForApproval] {
-      let words = SettingsModel.tailscaleState(standing).text + SettingsModel.tailscaleFoot(standing).text
+      let words = SettingsModel.tailscaleState(standing).text + SettingsModel.tailscaleFoot(standing, device: .iPhone).text
       #expect(!words.contains("Disconnect"))
       #expect(!words.lowercased().contains("tailnet"))
     }
@@ -196,13 +196,13 @@ struct SettingsModelTests {
 
   @Test("your face: how it is framed; whose word it is rides on the tag, not the row")
   func faceWords() {
-    #expect(SettingsModel.faceWords(.none, face: nil).value == "None yet")
-    #expect(SettingsModel.faceWords(.dealt, face: fox).value == "Sticker")
-    #expect(SettingsModel.faceWords(.dealt, face: UserFace(emoji: "🦊", frame: .coin)).value == "Coin")
+    #expect(SettingsModel.faceWords(.none, face: nil, device: .iPhone).value == "None yet")
+    #expect(SettingsModel.faceWords(.dealt, face: fox, device: .iPhone).value == "Sticker")
+    #expect(SettingsModel.faceWords(.dealt, face: UserFace(emoji: "🦊", frame: .coin), device: .iPhone).value == "Coin")
     #expect(
-      SettingsModel.faceWords(.dealt, face: fox).foot
+      SettingsModel.faceWords(.dealt, face: fox, device: .iPhone).foot
         == "Dealt from your account, the way your computer deals it, until a desktop of yours says who you are.")
-    let home = SettingsModel.faceWords(.home("studio"), face: fox)
+    let home = SettingsModel.faceWords(.home("studio"), face: fox, device: .iPhone)
     #expect(home.value == "Sticker")
     #expect(home.foot.hasPrefix("studio says who you are"))
     #expect(home.foot.contains("Change them on studio, in Settings › Account"))
@@ -215,19 +215,80 @@ struct SettingsModelTests {
     ]
     var words: [String] = []
     for standing in standings {
-      let head = SettingsModel.headLines(account(standing))
+      let head = SettingsModel.headLines(account(standing), device: .iPhone)
       words += [head.status?.text, head.note].compactMap { $0 }
-      words += [SettingsModel.tailscaleState(standing).text, SettingsModel.tailscaleFoot(standing).text]
-      words.append(SettingsModel.asleepFoot(desktop(.asleep(lastHeard: nil), name: "mini"), standing: standing))
+      words += [SettingsModel.tailscaleState(standing).text, SettingsModel.tailscaleFoot(standing, device: .iPhone).text]
+      words.append(SettingsModel.asleepFoot(desktop(.asleep(lastHeard: nil), name: "mini"), standing: standing, device: .iPhone))
     }
     let faces: [(SettingsAccount.FaceSource, UserFace?)] = [(.none, nil), (.dealt, fox), (.home("studio"), fox)]
     for (source, face) in faces {
-      let said = SettingsModel.faceWords(source, face: face)
+      let said = SettingsModel.faceWords(source, face: face, device: .iPhone)
       words += [said.value, said.foot]
     }
     for word in words {
       #expect(!word.contains("Mac"), "\(word)")
     }
+  }
+
+  /// Every word Settings says, for one device: the model's lines, SettingsWords, and the views' words lifted into it.
+  private func everyWord(_ device: DeviceWord) -> [String] {
+    let standings: [SettingsAccount.Standing] = [
+      .signedOut, .connected, .connecting, .signInAgain, .waitingForApproval, .couldNotConnect("the network went away"),
+    ]
+    var words: [String] = [device.This, device.this]
+    for standing in standings {
+      let head = SettingsModel.headLines(account(standing), device: device)
+      words += [head.status?.text, head.note].compactMap { $0 }
+      words += [SettingsModel.tailscaleState(standing).text, SettingsModel.tailscaleFoot(standing, device: device).text]
+      let mini = desktop(.asleep(lastHeard: nil), name: "mini")
+      words.append(SettingsModel.asleepFoot(mini, standing: standing, device: device))
+    }
+    for watchable in [true, false, nil] as [Bool?] {
+      let abilities = SettingsModel.abilities(desktop(.connected, terminals: false, watchable: watchable), device: device)
+      for ability in abilities {
+        words += [ability.title, ability.detail].compactMap { $0 }
+      }
+    }
+    let faces: [(SettingsAccount.FaceSource, UserFace?)] = [(.none, nil), (.dealt, fox), (.home("studio"), fox)]
+    for (source, face) in faces {
+      let said = SettingsModel.faceWords(source, face: face, device: device)
+      words += [said.value, said.foot]
+    }
+    words += [
+      SettingsWords.signOutMessage(device), SettingsWords.lookFoot(device), SettingsWords.copyName(device),
+      SettingsWords.networkFoot(device), SettingsWords.builtWith(device), SettingsWords.fromThis(device),
+      SettingsWords.sameThings(device), SettingsWords.notOnThis(device),
+    ]
+    return words
+  }
+
+  @Test("IOS-13a: Settings names the device as its platform does, in every word it says (Q1), never a phone by hand")
+  func deviceNamed() {
+    for device in [DeviceWord.iPad, .unknown] {
+      for word in everyWord(device) {
+        #expect(!word.localizedCaseInsensitiveContains("phone"), "\(device): \(word)")
+      }
+    }
+    let iPad = everyWord(.iPad)
+    #expect(iPad.contains("This iPad can’t reach your desktops until you do. Nothing here is lost."))
+    #expect(iPad.contains("Copy this iPad’s name"))
+    let home = SettingsModel.faceWords(.home("studio"), face: fox, device: .iPad).foot
+    #expect(home.hasSuffix("; this iPad takes them the next time it connects."))
+    #expect(SettingsWords.fromThis(.unknown) == "From this device you can")
+    #expect(SettingsWords.notOnThis(.iPhone) == "Not on this iPhone now")
+    #expect(
+      SettingsWords.sameThings(.iPad)
+        == "Your desktops give this iPad the same things, because it is you. Another account’s "
+        + "desktop gives it nothing, and isn’t shown.")
+    #expect(
+      SettingsWords.lookFoot(.iPhone)
+        == "Settings, History, the field and every sheet follow it. It’s this iPhone’s own; your desktops keep theirs.")
+    #expect(
+      SettingsWords.networkFoot(.iPhone)
+        == "Named as Tailscale names them, so you can find this iPhone on Tailscale’s own page.")
+    #expect(
+      SettingsWords.builtWith(.iPhone)
+        == "VibeField on this iPhone is built with these, among others, each under its own licence.")
   }
 
   @Test("sign out is asked in one set of words, wherever it is asked")
@@ -238,8 +299,8 @@ struct SettingsModelTests {
     // the History read from your desktops go (item 130); this phone's look and
     // the terminal's look stay.
     #expect(
-      SettingsWords.signOutMessage
-        == "This phone forgets your Tailscale sign-in, your desktops and the History it read from them, your face "
+      SettingsWords.signOutMessage(.iPhone)
+        == "This iPhone forgets your Tailscale sign-in, your desktops and the History it read from them, your face "
         + "and your project colours. Appearance, the terminal’s look, snippets and clipboard history stay.")
   }
 

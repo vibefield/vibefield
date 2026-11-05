@@ -211,6 +211,6 @@ struct SettingsAccountTests {
   @Test("signing out keeps this phone's look, by Appearance's own key")
   func signOutKeepsTheLook() {
     #expect(SignOutSweep.kept.contains(PhoneAppearance.storageKey))
-    #expect(SettingsWords.signOutMessage.contains("Appearance"))
+    #expect(SettingsWords.signOutMessage(.iPhone).contains("Appearance"))
   }
 }

@@ -6318,7 +6318,9 @@ reject"; where each word stands is §8 "The phone's Settings" and "The phone's w
   apart. It isn’t affiliated with or endorsed by Anthropic or OpenAI."
 - The device is named as its platform names it, read when VibeField runs: "this iPhone", "this iPad", and "this
   device" where it is neither. This is the bible's §7 platform label, with LP-4's "this device" for iOS's own lock
-  prompts as the fallback.
+  prompts as the fallback. It is a substitution, never a rewording: wherever Settings or the way in said "this phone",
+  "your phone" or "the phone", it says "this iPhone" (or "this iPad", or "this device"), and "This phone" at a
+  sentence's start or as a head or tag says "This iPhone".
 - *Owed to L4 at its landing (the lock's own file):* "Your iPhone passcode works too." and "Anyone holding this
   phone unlocked…".
 

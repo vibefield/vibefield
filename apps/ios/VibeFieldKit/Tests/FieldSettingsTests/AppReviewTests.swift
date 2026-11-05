@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+import UIKit
 
 @testable import FieldSettings
 
@@ -151,5 +152,20 @@ struct AppReviewTests {
     let strays = Acknowledgements.texts(of: stray, in: doc).map(said)
     #expect(strays == ["MIT LICENSE, LICENSE, TRUFFLE-LICENSE", "missing 000000000000"])
     #expect(SettingsWords.textMissing("000000000000") == "This text isn’t in the build: 000000000000.")
+  }
+
+  // MARK: - S5: the device word (Q1)
+
+  @Test("the device word: the idiom in, the platform's own word out, and the device where it is neither")
+  func deviceWord() {
+    #expect(DeviceWord(.phone) == .iPhone)
+    #expect(DeviceWord(.pad) == .iPad)
+    #expect(DeviceWord(.mac) == .unknown)
+    #expect(DeviceWord(.unspecified) == .unknown)
+    let devices: [DeviceWord] = [.iPhone, .iPad, .unknown]
+    let this = devices.map { $0.this }
+    let capital = devices.map { $0.This }
+    #expect(this == ["this iPhone", "this iPad", "this device"])
+    #expect(capital == ["This iPhone", "This iPad", "This device"])
   }
 }

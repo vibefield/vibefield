@@ -34,7 +34,7 @@ struct MockAccountTests {
   @Test("the mock's studio can be watched: a board not listed is not a refusal")
   func theMocksStudioCanBeWatched() throws {
     let studio = try #require(MockAccount().settings.desktops.first { $0.name == "studio" })
-    let watch = SettingsModel.abilities(studio).first
+    let watch = SettingsModel.abilities(studio, device: .iPhone).first
     #expect(watch?.title == "Watch its agents")
     #expect(watch?.can == true)
   }
