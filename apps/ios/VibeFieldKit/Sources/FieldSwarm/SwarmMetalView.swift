@@ -95,20 +95,38 @@ public final class SwarmMetalView: MTKView {
   /// window: an off-screen view keeps what it had.
   private func followWindow() {
     guard let window else { return }
-    let screen = window.windowScene?.screen
-    let scale = traitCollection.displayScale > 0 ? traitCollection.displayScale : screen?.scale ?? 0
+    let scale = traitCollection.displayScale > 0 ? traitCollection.displayScale : Self.screen(of: window).scale
     if scale > 0, contentScaleFactor != scale {
       contentScaleFactor = scale
     }
-    if let rate = screen?.maximumFramesPerSecond, rate > 0 {
-      preferredFramesPerSecond = min(rate, frameRateCap ?? rate)
-    } else if let frameRateCap {
-      preferredFramesPerSecond = frameRateCap
-    }
+    followScreenRate()
     // Before its first layout the view has no size; layout says it then.
     if bounds.width > 0, bounds.height > 0 {
       renderer?.resize(width: bounds.width, height: bounds.height, scale: contentScaleFactor)
     }
+  }
+
+  /// The loop's rate: the highest of the screen this view's window stands on,
+  /// under a host's cap (the cap alone without a window).
+  ///
+  /// Read again at every frame (`draw(in:)`), not only when the window or the
+  /// scale changes: a scene can move to another screen keeping its window and
+  /// its scale (Stage Manager, a 60 Hz display at scale 2 beside a ProMotion
+  /// panel at scale 2), and the rate would otherwise stay the first screen's.
+  /// Two reads and a compare; it writes only on a change.
+  func followScreenRate() {
+    let rate = window.map { Self.screen(of: $0).maximumFramesPerSecond } ?? 0
+    let wanted = rate > 0 ? min(rate, frameRateCap ?? rate) : frameRateCap
+    if let wanted, wanted != preferredFramesPerSecond {
+      preferredFramesPerSecond = wanted
+    }
+  }
+
+  /// The screen a window stands on: its scene's, or `UIWindow.screen` (not
+  /// deprecated; the main screen for a window with no scene, as in the
+  /// package-hosted tests). Never `UIScreen.main`.
+  static func screen(of window: UIWindow) -> UIScreen {
+    window.windowScene?.screen ?? window.screen
   }
 }
 
@@ -118,6 +136,7 @@ extension SwarmMetalView: MTKViewDelegate {
   }
 
   public func draw(in view: MTKView) {
+    followScreenRate()
     guard let renderer, let source = frameSource, bounds.width > 0, bounds.height > 0 else { return }
     let time = CACurrentMediaTime()
     onTick?(time)

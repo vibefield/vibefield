@@ -21,11 +21,61 @@ extension RainViewTests {
       #expect(font?.fontName == RainAtlas.fontName)
     }
 
-    /// The surface mounts with a device: a renderer and an atlas, and no failure.
+    /// The surface mounts with a device and no failure. Its glyph atlas waits for a window (LP-4: it is drawn at the
+    /// scale of the screen that window stands on), so a view in none has no atlas yet.
     @Test func theSurfaceMountsWithADevice() {
       let view = RainMetalView(field: RainField(dice: .seeded(Mulberry32(seed: 1))))
       #expect(view.device != nil)
       #expect(view.failure == nil, "\(view.failure ?? "")")
+      #expect(view.atlasScale == 0, "no window, no atlas")
+    }
+
+    /// In a window, the atlas is drawn at that window's scale, the drawable follows the same scale and the loop asks
+    /// that screen's rate (LP-4). Without this the rain would stay blank: `draw(in:)` paints nothing until an atlas
+    /// exists, and only `followWindow` builds one.
+    @Test func aWindowGivesTheAtlasItsScaleAndTheLoopItsRate() {
+      let view = RainMetalView(field: RainField(dice: .seeded(Mulberry32(seed: 1))))
+      let window = Self.hostWindow()
+      defer {
+        view.removeFromSuperview()
+        window.isHidden = true
+      }
+      view.frame = CGRect(x: 0, y: 0, width: 402, height: 781)
+      window.addSubview(view)
+      window.layoutIfNeeded()
+      view.layoutIfNeeded()
+      let screen = RainMetalView.screen(of: window)
+      let scale = view.traitCollection.displayScale > 0 ? view.traitCollection.displayScale : screen.scale
+      #expect(scale > 0)
+      #expect(view.failure == nil, "\(view.failure ?? "")")
+      #expect(view.atlasScale == scale, "the atlas is drawn at the window's scale")
+      #expect(view.contentScaleFactor == scale)
+      #expect(view.preferredFramesPerSecond == screen.maximumFramesPerSecond)
+    }
+
+    /// The rate is read again at every frame, so a scene that moves to another screen keeping its window and its
+    /// scale (Stage Manager) takes that screen's rate at its next frame: a stale rate is put back to the screen's.
+    @Test func aStaleRateIsPutBackToTheScreens() {
+      let view = RainMetalView(field: RainField(dice: .seeded(Mulberry32(seed: 1))))
+      let window = Self.hostWindow()
+      defer {
+        view.removeFromSuperview()
+        window.isHidden = true
+      }
+      window.addSubview(view)
+      let rate = RainMetalView.screen(of: window).maximumFramesPerSecond
+      view.preferredFramesPerSecond = 1
+      view.followScreenRate()
+      #expect(view.preferredFramesPerSecond == rate)
+    }
+
+    /// A window for a surface: the app's scene when the run has one, a detached window otherwise (the package-hosted
+    /// kit has no scene; `TerminalSurfaceResizeTests` does the same).
+    private static func hostWindow() -> UIWindow {
+      if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene {
+        return UIWindow(windowScene: scene)
+      }
+      return UIWindow(frame: CGRect(x: 0, y: 0, width: 402, height: 781))
     }
 
     /// One element per row, in the window's order: the desktop's button line, "open" on the lit row only, each in

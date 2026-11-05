@@ -480,3 +480,39 @@ private func catalogGolden() throws -> [CatalogMarkRow] {
     #expect(first.atlas.scale == 2)
   }
 }
+
+/// LP-4 (review) — the surface's loop asks the rate of the screen its window
+/// stands on, under a host's cap, and reads it again at every frame: a scene
+/// that moves to another screen keeping its window and its scale (Stage
+/// Manager) takes that screen's rate at its next frame.
+@Suite @MainActor struct SwarmSurfaceRateTests {
+  /// A window for the surface: the app's scene when the run has one, a
+  /// detached window otherwise (the package-hosted kit has no scene).
+  private func hostWindow() -> UIWindow {
+    if let scene = UIApplication.shared.connectedScenes.first as? UIWindowScene {
+      return UIWindow(windowScene: scene)
+    }
+    return UIWindow(frame: CGRect(x: 0, y: 0, width: 402, height: 781))
+  }
+
+  @Test func aStaleRateIsPutBackToTheScreensUnderTheCap() {
+    let view = SwarmMetalView(theme: lightTheme)
+    let window = hostWindow()
+    defer {
+      view.removeFromSuperview()
+      window.isHidden = true
+    }
+    view.frame = CGRect(x: 0, y: 0, width: 402, height: 781)
+    window.addSubview(view)
+    let rate = SwarmMetalView.screen(of: window).maximumFramesPerSecond
+    #expect(view.preferredFramesPerSecond == rate, "in a window, the screen's own rate")
+    view.preferredFramesPerSecond = 1
+    view.followScreenRate()
+    #expect(view.preferredFramesPerSecond == rate, "a stale rate is put back")
+    view.frameRateCap = 10
+    #expect(view.preferredFramesPerSecond == min(rate, 10), "a host's cap holds")
+    view.preferredFramesPerSecond = 1
+    view.followScreenRate()
+    #expect(view.preferredFramesPerSecond == min(rate, 10), "and is put back under the cap")
+  }
+}

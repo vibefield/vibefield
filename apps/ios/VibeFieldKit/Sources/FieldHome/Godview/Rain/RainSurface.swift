@@ -26,7 +26,8 @@ final class RainMetalView: MTKView {
   private var renderer: RainRenderer?
   private var atlas: RainAtlas?
   /// The scale `atlas` was drawn at: its window's (LP-4), 0 before it has one.
-  private var atlasScale: CGFloat = 0
+  /// Read by the kit's tests: an atlas never built leaves the rain blank.
+  private(set) var atlasScale: CGFloat = 0
   private var meter = RainFrameMeter()
 
   init(field: RainField) {
@@ -93,9 +94,8 @@ final class RainMetalView: MTKView {
   /// for the drawable and the glyph atlas, which is redrawn only when that scale changes. Nothing without a window.
   private func followWindow() {
     guard let window else { return }
-    let screen = window.windowScene?.screen
-    if let rate = screen?.maximumFramesPerSecond, rate > 0 { preferredFramesPerSecond = rate }
-    let scale = traitCollection.displayScale > 0 ? traitCollection.displayScale : screen?.scale ?? 0
+    followScreenRate()
+    let scale = traitCollection.displayScale > 0 ? traitCollection.displayScale : Self.screen(of: window).scale
     guard scale > 0 else { return }
     if contentScaleFactor != scale { contentScaleFactor = scale }
     guard scale != atlasScale, let device, renderer != nil else { return }
@@ -108,6 +108,22 @@ final class RainMetalView: MTKView {
       failure = "\(error)"
     }
     if !field.running { setNeedsDisplay() }
+  }
+
+  /// The loop's rate: the highest of the screen this view's window stands on (the field's cap still steps the fall).
+  /// Read again at every frame (`draw(in:)`): a scene can move to another screen keeping its window and its scale
+  /// (Stage Manager, a 60 Hz display beside a ProMotion panel, both at scale 2), and the rate would otherwise stay the
+  /// first screen's. Two reads and a compare; it writes only on a change.
+  func followScreenRate() {
+    guard let window else { return }
+    let rate = Self.screen(of: window).maximumFramesPerSecond
+    if rate > 0, rate != preferredFramesPerSecond { preferredFramesPerSecond = rate }
+  }
+
+  /// The screen a window stands on: its scene's, or `UIWindow.screen` (not deprecated; the main screen for a window
+  /// with no scene, as in the package-hosted tests). Never `UIScreen.main`.
+  static func screen(of window: UIWindow) -> UIScreen {
+    window.windowScene?.screen ?? window.screen
   }
 
   @objc private func tapped(_ recognizer: UITapGestureRecognizer) {
@@ -143,6 +159,7 @@ extension RainMetalView: MTKViewDelegate {
   func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {}
 
   func draw(in view: MTKView) {
+    followScreenRate()
     guard let renderer, let atlas, bounds.width > 0, bounds.height > 0 else { return }
     let started = CACurrentMediaTime()
     let ops: [RainOp]
