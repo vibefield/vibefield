@@ -23,7 +23,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AT_WORDS } from "../src/chat/at-rows";
 import { ChatComposer, type ComposerPort } from "../src/chat/ChatComposer";
 import { ChatView } from "../src/chat/ChatView";
-import type { DraftPart } from "../src/chat/composer-draft";
+import type { DraftMessage, DraftPart } from "../src/chat/composer-draft";
 import { CANNOT_LIST_AGENTS } from "../src/chat/new-spark";
 import { useProfileSets } from "../src/chat/profile-sets";
 import { sparkEntriesOf } from "../src/chat/spark-status";
@@ -40,16 +40,24 @@ import type { FrameSurface } from "../src/frame/frame-surface";
 
 /** Send's road under Chat's own controller (`ChatView`), scripted: what each send was handed, and what it comes to.
  * The composer mounted alone is handed its `send`; the road itself is `thread-send.test.ts`'s. */
-const road = vi.hoisted(() => ({
-  sent: [] as string[],
-  outcome: (): Promise<ThreadSendOutcome> => Promise.resolve({ state: "pasted" }),
-}));
+const road = vi.hoisted(() => {
+  /** what fieldd answers a say queued at once (TH-1) */
+  const queued = {
+    state: "queued",
+    receipt: { spark: "sp-vela0001", requestId: "say-0000000001", queued: true, state: "queued" },
+  } as const;
+  return {
+    queued,
+    sent: [] as string[],
+    outcome: (): Promise<ThreadSendOutcome> => Promise.resolve(queued),
+  };
+});
 vi.mock("../src/chat/thread-send", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../src/chat/thread-send")>();
   return {
     ...actual,
-    sendToThread: (_deps: unknown, text: string) => {
-      road.sent.push(text);
+    sendToThread: (_deps: unknown, message: { readonly text: string }) => {
+      road.sent.push(message.text);
       return road.outcome();
     },
   };
@@ -185,6 +193,10 @@ function feed(sparks: SparkSummary[] = [VELA], rows: AgentFieldRow[] = ROWS): Sp
     },
     onReconnected: () => () => undefined,
     open: async () => VELA,
+    // Send's road is scripted above (`road`): nothing reaches the say here
+    say: async () => {
+      throw new Error("nothing is said here");
+    },
   };
 }
 
@@ -197,7 +209,7 @@ let setSurfaceNow: ((next: FrameSurface | null) => void) | null = null;
 beforeEach(() => {
   surfaceNow = null;
   road.sent = [];
-  road.outcome = () => Promise.resolve({ state: "pasted" });
+  road.outcome = () => Promise.resolve(road.queued);
 });
 
 afterEach(() => {
@@ -220,7 +232,7 @@ interface Mounted {
  * Chat keeps a thread's (one copy: what the composer parks, and a send's clearing), and its profiles read as Chat's
  * controller reads them (the product's own `useProfileSets`). */
 async function mountComposer(
-  outcome: () => Promise<ThreadSendOutcome | null> = async () => ({ state: "pasted" }),
+  outcome: () => Promise<ThreadSendOutcome | null> = async () => road.queued,
   parked: readonly DraftPart[] = [],
   asks: ComposerPort = port,
   board: SparksPort = feed(),
@@ -228,7 +240,7 @@ async function mountComposer(
   stopFeed = startSparksFeed(board);
   const said: string[] = [];
   const parks: (readonly DraftPart[])[] = [];
-  const send = vi.fn((_text: string, _stills: readonly string[]) => outcome());
+  const send = vi.fn((_message: DraftMessage, _stills: readonly string[]) => outcome());
   const entry = sparkEntriesOf([VELA], ROWS)[0];
   if (entry === undefined) throw new Error("no entry");
   function Owner(): ReactElement {
@@ -739,14 +751,14 @@ describe("the draft's paste (DESIGN.md §8: ⌘V pastes into it as plain text on
 });
 
 describe('Send (DESIGN.md §8 "Chat\'s composer")', () => {
-  it("Return pastes into Vela's pane and never presses Return: the message goes to Send, the note says so, the draft clears", async () => {
+  it("Return sends: the message is queued as yours, the note says nothing (its bubble does), the draft clears (TH-1)", async () => {
     const mounted = await mountComposer();
     typeText("run the tests");
     press(editor(), { key: "Enter" });
     await settle();
     expect(mounted.send).toHaveBeenCalledTimes(1);
-    expect(mounted.send.mock.calls[0]).toEqual(["run the tests", []]);
-    expect(mounted.said).toEqual(["Pasted into Vela's pane — Return sends it"]);
+    expect(mounted.send.mock.calls[0]).toEqual([{ text: "run the tests", chips: [] }, []]);
+    expect(mounted.said).toEqual([]);
     expect(editor().textContent).toBe("");
     expect(q(".vf-chat-ph").textContent).toBe("Message Vela…");
     // ⇧Return types nothing and sends nothing: the draft is one line
@@ -762,7 +774,10 @@ describe('Send (DESIGN.md §8 "Chat\'s composer")', () => {
       value: { writeText: write },
       configurable: true,
     });
-    const mounted = await mountComposer(async () => ({ state: "not-taking" }));
+    const mounted = await mountComposer(async () => ({
+      state: "failed",
+      reason: "the spark has no session to take your words yet",
+    }));
     typeText("ask @vib");
     await settle();
     press(editor(), { key: "Enter" });
@@ -770,10 +785,17 @@ describe('Send (DESIGN.md §8 "Chat\'s composer")', () => {
     typeOn("to rebase");
     act(() => send().click());
     await settle();
-    expect(mounted.send.mock.calls[0]?.[0]).toBe(
-      `ask ${A.label} in vibe-field (session run-his) to rebase`,
-    );
-    expect(mounted.said).toEqual(["Not pasted — Vela's pane is not taking input"]);
+    // the session chip goes as its words and as a span of them (TH-Q25 (a))
+    const words = `ask ${A.label} in vibe-field (session run-his) to rebase`;
+    expect(mounted.send.mock.calls[0]?.[0]).toEqual({
+      text: words,
+      chips: [
+        { start: 4, length: words.length - "ask ".length - " to rebase".length, kind: "session" },
+      ],
+    });
+    expect(mounted.said).toEqual([
+      "Couldn't send to Vela: the spark has no session to take your words yet",
+    ]);
     expect(chipLabels()).toEqual(["vibe-field"]);
     expect(editor().textContent).toContain("to rebase");
     expect(write).not.toHaveBeenCalled();
@@ -805,7 +827,7 @@ describe('Send (DESIGN.md §8 "Chat\'s composer")', () => {
     act(() => send().click());
     press(editor(), { key: "Enter" });
     expect(mounted.send).toHaveBeenCalledTimes(1);
-    await act(async () => finish({ state: "pasted" }));
+    await act(async () => finish(road.queued));
     expect(send().hasAttribute("aria-busy")).toBe(false);
   });
 
@@ -821,9 +843,9 @@ describe('Send (DESIGN.md §8 "Chat\'s composer")', () => {
     act(() => send().click());
     // the spark is still waking: the draft is a field meanwhile
     typeOn(" and then the docs");
-    await act(async () => finish({ state: "pasted" }));
-    expect(mounted.send.mock.calls[0]?.[0]).toBe("run the tests");
-    expect(mounted.said).toEqual(["Pasted into Vela's pane — Return sends it"]);
+    await act(async () => finish(road.queued));
+    expect(mounted.send.mock.calls[0]?.[0]).toEqual({ text: "run the tests", chips: [] });
+    expect(mounted.said).toEqual([]);
     expect(editor().textContent).toBe("and then the docs");
     expect(mounted.parked.at(-1)).toEqual([{ kind: "text", text: "and then the docs" }]);
   });
@@ -885,7 +907,7 @@ describe("the draft is the thread's (DESIGN.md §8 \"Chat's composer\")", () => 
     expect(editor().textContent).toBe("for Vela, and the docs");
   });
 
-  /** A send held open, as one into a spark being woken waits up to 20 s; `finish` says what it came to. */
+  /** A send held open, as one into a spark being woken waits for its wake; `finish` says what it came to. */
   function holdSends(): { finish: (outcome: ThreadSendOutcome) => void } {
     const held = { finish: (_outcome: ThreadSendOutcome): void => undefined };
     road.outcome = () =>
@@ -905,10 +927,10 @@ describe("the draft is the thread's (DESIGN.md §8 \"Chat's composer\")", () => 
     await choose("sp-juno0001");
     await choose("sp-vela0001");
     expect(editor().textContent).toBe("look at the failing test");
-    await act(async () => held.finish({ state: "pasted" }));
+    await act(async () => held.finish(road.queued));
     await settle();
     // DESIGN.md §8 "Chat's composer": "Sent, the words and chips it carried are cleared" — in the composer standing
-    // now, so a second Send never pastes them again
+    // now, so a second Send never sends them again
     expect(editor().textContent).toBe("");
     expect(q(".vf-chat-ph").textContent).toBe("Message Vela…");
   });
@@ -922,7 +944,7 @@ describe("the draft is the thread's (DESIGN.md §8 \"Chat's composer\")", () => 
     await choose("sp-vela0001");
     // the thread's draft as it stands now holds more than was sent
     typeOn(" and fix it");
-    await act(async () => held.finish({ state: "pasted" }));
+    await act(async () => held.finish(road.queued));
     await settle();
     expect(editor().textContent).toBe("and fix it");
     // and leaving and coming back finds the same

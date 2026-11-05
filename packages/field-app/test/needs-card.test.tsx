@@ -780,6 +780,10 @@ function feed(sparks: SparkSummary[] = [VELA], rows: readonly AgentFieldRow[] = 
       queue.asked.push({ item, choice });
       return new Promise((resolve, reject) => queue.answers.push({ resolve, reject }));
     },
+    // Send's say (TH-1) is not this test's
+    say: async () => {
+      throw new Error("nothing is said here");
+    },
     onReconnected: () => () => undefined,
     open: async (id) => sparks.find((spark) => spark.id === id) ?? VELA,
   };
@@ -906,6 +910,10 @@ describe("the card in Chat's thread, live (useNeedsCard under ChatView)", () => 
         queue.push = onItems;
         onItems(queue.items);
         return () => undefined;
+      },
+      // Send's say (TH-1) is not this test's
+      say: async () => {
+        throw new Error("nothing is said here");
       },
       onReconnected: (listener) => {
         reads.reconnected.add(listener);

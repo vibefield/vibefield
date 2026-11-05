@@ -14,6 +14,7 @@ import { fileURLToPath } from "node:url";
 import {
   AGENT_CATALOG,
   type AgentFieldRow,
+  type ComposeSparksSayParams,
   type NeedsItem,
   type SparkSummary,
 } from "@vibefield/contracts";
@@ -24,6 +25,7 @@ import { NO_HANDLES } from "../src/chat/at-rows";
 import type { ComposerPort } from "../src/chat/ChatComposer";
 import { ChatView } from "../src/chat/ChatView";
 import { NEEDS_IDLE, needsNamesOf } from "../src/chat/needs-card";
+import { pendingSaysNow, resetPendingSaysForTest } from "../src/chat/pending-says";
 import { type SparksPort, startSparksFeed } from "../src/chat/sparks-feed";
 import { ThreadItemsView } from "../src/chat/ThreadItemsView";
 import { helloWords, STARTERS, type ThreadItem } from "../src/chat/thread-items";
@@ -36,19 +38,34 @@ import { hearLineSays } from "../src/frame/line-door";
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 /** Send's road, scripted: what each send was handed (and the world Chat lent the last one), and what it comes to. */
-const road = vi.hoisted(() => ({
-  sent: [] as { readonly text: string; readonly stills: readonly string[] }[],
-  /** what Chat's controller lent the last send: the facts Send reads of the spark (CP-3) */
-  deps: null as ThreadSendDeps | null,
-  outcome: (): Promise<ThreadSendOutcome> => Promise.resolve({ state: "pasted" }),
-}));
+const road = vi.hoisted(() => {
+  /** what fieldd answers a say queued at once (TH-1) */
+  const queued = {
+    state: "queued",
+    receipt: { spark: "sp-vela0001", requestId: "say-0000000001", queued: true, state: "queued" },
+  } as const;
+  return {
+    queued,
+    sent: [] as { readonly text: string; readonly stills: readonly string[] }[],
+    /** what Chat's controller lent the last send, and the request id it minted for it */
+    deps: null as ThreadSendDeps | null,
+    requestId: null as string | null,
+    outcome: (): Promise<ThreadSendOutcome> => Promise.resolve(queued),
+  };
+});
 vi.mock("../src/chat/thread-send", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../src/chat/thread-send")>();
   return {
     ...actual,
-    sendToThread: (deps: ThreadSendDeps, text: string, stills: readonly string[]) => {
-      road.sent.push({ text, stills });
+    sendToThread: (
+      deps: ThreadSendDeps,
+      message: { readonly text: string },
+      stills: readonly string[],
+      requestId: string,
+    ) => {
+      road.sent.push({ text: message.text, stills });
       road.deps = deps;
+      road.requestId = requestId;
       return road.outcome();
     },
   };
@@ -134,8 +151,15 @@ function feed(
     },
     onReconnected: () => () => undefined,
     open,
+    say: async (params) => {
+      says.push(params);
+      return { spark: params.spark, requestId: params.requestId, queued: true, state: "waking" };
+    },
   };
 }
+
+/** What the feed's say was asked, in order (TH-1). */
+let says: ComposeSparksSayParams[] = [];
 
 /** Vela's question in the needs-you queue (CP-3): a card in her thread, never a menu in her pane. */
 const VELA_ASKS: NeedsItem = {
@@ -158,8 +182,11 @@ let said: string[] = [];
 beforeEach(() => {
   road.sent = [];
   road.deps = null;
+  road.requestId = null;
+  says = [];
+  resetPendingSaysForTest();
   queued = [];
-  road.outcome = () => Promise.resolve({ state: "pasted" });
+  road.outcome = () => Promise.resolve(road.queued);
   said = [];
   stopHearing = hearLineSays((text) => said.push(text));
 });
@@ -250,19 +277,19 @@ describe('the hello and its starters (DESIGN.md §8 "Chat\'s thread"; NS-D4)', (
     ).toEqual(["agents", "panes", "duplicate"]);
   });
 
-  it("sends a starter pressed as Send sends: pasted into the pane, Return left to you, and the hello leaves", async () => {
+  it("sends a starter pressed as Send sends: queued as yours, the note saying nothing, and the hello leaves", async () => {
     await mountChat();
     await act(async () => starters()[0]?.click());
     await settle();
     expect(road.sent).toEqual([
       { text: "Spawn 4 Grok agents to research a topic each", stills: [] },
     ]);
-    expect(said).toEqual(["Pasted into Vela's pane — Return sends it"]);
+    expect(said).toEqual([]);
     // the first send takes them away for the window's life
     expect(hello()).toBeNull();
   });
 
-  it("keeps the hello when a starter's paste is not taken, and says why in Send's own words", async () => {
+  it("keeps the hello when a starter's send is not taken, and says why in Send's own words", async () => {
     let finish: (outcome: ThreadSendOutcome) => void = () => undefined;
     road.outcome = () =>
       new Promise((resolve) => {
@@ -274,9 +301,9 @@ describe('the hello and its starters (DESIGN.md §8 "Chat\'s thread"; NS-D4)', (
     expect($(".vf-chat-starters")?.getAttribute("aria-busy")).toBe("true");
     await act(async () => starters()[2]?.click());
     expect(road.sent.map((send) => send.text)).toEqual(["Keep track of my agents in vibe-field"]);
-    await act(async () => finish({ state: "no-terminals" }));
+    await act(async () => finish({ state: "failed", reason: "fieldd isn't running" }));
     await settle();
-    expect(said).toEqual(["Not sent — this window has no terminals"]);
+    expect(said).toEqual(["Couldn't send to Vela: fieldd isn't running"]);
     expect(hello()).not.toBeNull();
     expect($(".vf-chat-starters")?.hasAttribute("aria-busy")).toBe(false);
   });
@@ -290,7 +317,7 @@ describe('the hello and its starters (DESIGN.md §8 "Chat\'s thread"; NS-D4)', (
     expect(hello()).not.toBeNull();
   });
 
-  it("leaves for the window's life once the composer's send is pasted", async () => {
+  it("leaves for the window's life once the composer's send is queued", async () => {
     await mountChat();
     typeText("look at the failing test");
     await act(async () => {
@@ -374,11 +401,11 @@ describe("one act at a time into a thread, a wake's, a starter's or Send's (DESI
     expect(road.sent.map((send) => send.text)).toEqual([
       "Spawn 4 Grok agents to research a topic each",
     ]);
-    await act(async () => finish({ state: "pasted" }));
+    await act(async () => finish(road.queued));
     await settle();
     expect($(".vf-chat-send")?.hasAttribute("aria-busy")).toBe(false);
     // the starter's send done, Send sends what was typed meanwhile
-    road.outcome = () => Promise.resolve({ state: "pasted" });
+    road.outcome = () => Promise.resolve(road.queued);
     await press("Enter");
     await settle();
     expect(road.sent.map((send) => send.text)).toEqual([
@@ -402,7 +429,7 @@ describe("one act at a time into a thread, a wake's, a starter's or Send's (DESI
     expect($(".vf-chat-starters")?.getAttribute("aria-busy")).toBe("true");
     await act(async () => starters()[1]?.click());
     expect(road.sent.map((send) => send.text)).toEqual(["look at the failing test"]);
-    await act(async () => finish({ state: "not-taking" }));
+    await act(async () => finish({ state: "failed", reason: "fieldd isn't running" }));
     await settle();
     expect($(".vf-chat-starters")?.hasAttribute("aria-busy")).toBe(false);
   });
@@ -436,7 +463,7 @@ describe("one act at a time into a thread, a wake's, a starter's or Send's (DESI
     expect(wake()?.disabled).toBe(true);
     await act(async () => wake()?.click());
     expect(opened).toEqual([]);
-    await act(async () => finish({ state: "pasted" }));
+    await act(async () => finish(road.queued));
     await settle();
     expect(wake()?.disabled).toBe(false);
   });
@@ -473,64 +500,7 @@ describe("one act at a time into a thread, a wake's, a starter's or Send's (DESI
   });
 });
 
-describe("what a send reads of Chat when no pane settled (DESIGN.md §8 \"Chat's composer\"; SP-1d's fix review)", () => {
-  it("lends Send the thread on screen and the spark asleep as Chat stands at the time it asks, never as it stood at the press", async () => {
-    let finish: (outcome: ThreadSendOutcome) => void = () => undefined;
-    road.outcome = () =>
-      new Promise((resolve) => {
-        finish = resolve;
-      });
-    await mountChat();
-    await act(async () => starters()[0]?.click());
-    const lent = road.deps;
-    if (lent === null) throw new Error("no send");
-    expect(lent.onScreen()).toBe(true);
-    expect(lent.asleep()).toBe(false);
-    // Vela's run ends while the send waits: she reads Asleep, her thread draws no pane, and it is still on screen
-    await act(async () => pushFrame?.({ revision: 2, rows: [own({ alive: false })] }, "snapshot"));
-    await settle();
-    expect($(".vf-chat-pane")).toBeNull();
-    expect(words($(".vf-chat-thread-line"))).toBe("Vela is asleep Wake");
-    expect(lent.asleep()).toBe(true);
-    expect(lent.onScreen()).toBe(true);
-    // Chat goes: no thread is on screen
-    act(() => root?.unmount());
-    root = null;
-    expect(lent.onScreen()).toBe(false);
-    await act(async () => finish({ state: "fell-asleep" }));
-  });
-
-  it("lends Send the pane its thread draws now, whether Chat reads its list, and a pane wait that ends once the spark reads asleep (final critique 7)", async () => {
-    let finish: (outcome: ThreadSendOutcome) => void = () => undefined;
-    road.outcome = () =>
-      new Promise((resolve) => {
-        finish = resolve;
-      });
-    await mountChat();
-    await act(async () => starters()[0]?.click());
-    const lent = road.deps;
-    if (lent === null) throw new Error("no send");
-    // this window has no terminals: the thread's pane says so, and that is the pane it draws now
-    expect(lent.paneNow()).toEqual({ state: "no-terminals", door: null });
-    expect(lent.sparksReading()).toBe("ready");
-    // asleep, its thread draws no pane: a wait for one answers at once, never at the 20 s
-    await act(async () => pushFrame?.({ revision: 2, rows: [own({ alive: false })] }, "snapshot"));
-    await settle();
-    expect(lent.paneNow()).toBeNull();
-    const waited = await Promise.race([
-      lent.pane(20_000),
-      new Promise<"waited">((resolve) => setTimeout(() => resolve("waited"), 50)),
-    ]);
-    expect(waited).toBeNull();
-    // the window's feed starts again under the send, and its list is not read until it answers
-    stopFeed?.();
-    stopFeed = null;
-    expect(lent.sparksReading()).toBe("opening");
-    await act(async () => finish({ state: "sparks-unread", reading: "opening" }));
-  });
-});
-
-describe('what Chat lends Send while the queue holds an item (CP-3; DESIGN.md §8 "Chat\'s composer", as amended)', () => {
+describe('what Chat lends Send (TH-1; DESIGN.md §8 "Chat\'s composer", Send)', () => {
   const sendNow = async (text: string): Promise<ThreadSendDeps> => {
     typeText(text);
     await act(async () => {
@@ -543,35 +513,93 @@ describe('what Chat lends Send while the queue holds an item (CP-3; DESIGN.md §
     return road.deps;
   };
 
-  it("lets a card in the thread stand without stopping Send; its own run's blocker, a menu in its pane, stops it", async () => {
-    queued = [VELA_ASKS];
-    await mountChat([own({ turnedAt: TURNED })], WORKED);
-    expect(words($(".vf-chat-thread-status"))).toBe("Asking you");
-    const deps = await sendNow("and the docs too");
-    expect(deps.blocked()).toBe(false);
-    // the same spark's own run then asks in its pane: Send would paste into its menu
+  it("lends the feed's say for the thread's spark, its chips only when it has some, and stands the bubble at once", async () => {
+    let finish: (outcome: ThreadSendOutcome) => void = () => undefined;
+    road.outcome = () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      });
+    await mountChat();
+    const deps = await sendNow("look at the failing test");
+    const requestId = road.requestId ?? "";
+    expect(deps.needsWake).toBe(false);
+    await deps.say({ text: "look at the failing test", chips: [], requestId });
+    await deps.say({ text: "x y", chips: [{ start: 2, length: 1, kind: "card" }], requestId });
+    expect(says).toEqual([
+      { spark: "sp-vela0001", text: "look at the failing test", requestId },
+      {
+        spark: "sp-vela0001",
+        text: "x y",
+        chips: [{ start: 2, length: 1, kind: "card" }],
+        requestId,
+      },
+    ]);
+    // its bubble stands once the window's own checks pass, with no receipt yet
+    act(() => deps.sending?.(requestId));
+    expect(pendingSaysNow("sp-vela0001")).toMatchObject([
+      { requestId, text: "look at the failing test", chips: [] },
+    ]);
+    expect(pendingSaysNow("sp-vela0001")[0]?.state).toBeUndefined();
+    // queued: the bubble takes the receipt's state
     await act(async () =>
-      pushFrame?.(
-        {
-          since: 1,
-          revision: 2,
-          upserts: [
-            own({
-              revision: 2,
-              status: "blocked",
-              blockers: [{ id: "p-1", kind: "permission", since: AT }],
-              turnedAt: TURNED,
-            }),
-          ],
-          removed: [],
-        },
-        "delta",
-      ),
+      finish({ ...road.queued, receipt: { ...road.queued.receipt, requestId, state: "waiting" } }),
     );
-    expect(deps.blocked()).toBe(true);
+    await settle();
+    expect(pendingSaysNow("sp-vela0001")[0]?.state).toBe("waiting");
   });
 
-  it("hears a sleeping spark with an item only once its woken run says so (R-4), though its word says Asking you throughout", async () => {
+  it("lets the bubble go when the send is not taken, and stands it waking for a spark asleep", async () => {
+    let finish: (outcome: ThreadSendOutcome) => void = () => undefined;
+    road.outcome = () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      });
+    const asleep: SparkSummary = { ...VELA, session: { runtimeRunId: "run-Vela", live: false } };
+    await mountChat([], asleep);
+    const deps = await sendNow("carry on");
+    expect(deps.needsWake).toBe(true);
+    act(() => deps.sending?.(road.requestId ?? ""));
+    expect(pendingSaysNow("sp-vela0001")[0]?.state).toBe("waking");
+    await act(async () => finish({ state: "wake-refused", reason: "its folder is gone" }));
+    await settle();
+    expect(pendingSaysNow("sp-vela0001")).toEqual([]);
+    expect(said).toEqual(["Couldn't wake Vela: its folder is gone"]);
+  });
+});
+
+describe('Send while the spark waits on you (TH-1; ER-C2; DESIGN.md §8 "Chat\'s composer", as amended)', () => {
+  const sendNow = async (text: string): Promise<ThreadSendDeps> => {
+    typeText(text);
+    await act(async () => {
+      $(".vf-chat-input")?.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }),
+      );
+    });
+    await settle();
+    if (road.deps === null) throw new Error("nothing was sent");
+    return road.deps;
+  };
+
+  it("queues while its own run asks in its terminal: nothing is pasted, and the queue waits for the answer", async () => {
+    queued = [VELA_ASKS];
+    await mountChat(
+      [
+        own({
+          status: "blocked",
+          blockers: [{ id: "p-1", kind: "permission", since: AT }],
+          turnedAt: TURNED,
+        }),
+      ],
+      WORKED,
+    );
+    expect(words($(".vf-chat-thread-status"))).toBe("Needs your OK");
+    const deps = await sendNow("and the docs too");
+    // Send reads no blocker and waits on no pane: it is handed its message and the say
+    expect(road.sent.map((send) => send.text)).toEqual(["and the docs too"]);
+    expect(Object.keys(deps).sort()).toEqual(["needsWake", "say", "sending", "stillKept", "wake"]);
+  });
+
+  it("wakes a sleeping spark with an item first, though its word says Asking you throughout", async () => {
     queued = [VELA_ASKS];
     const asleep = { ...WORKED, session: { runtimeRunId: "run-Vela", live: false } };
     await mountChat([own({ alive: false, turnedAt: TURNED })], asleep);
@@ -579,21 +607,6 @@ describe('what Chat lends Send while the queue holds an item (CP-3; DESIGN.md §
     expect(words($(".vf-chat-thread-line"))).toBe("Vela is asleep Wake");
     const deps = await sendNow("go on");
     expect(deps.needsWake).toBe(true);
-    expect(await deps.heard(0)).toBe(false);
-    // woken: its run is back on the board, idle, and heard
-    const heard = deps.heard(5_000);
-    await act(async () =>
-      pushFrame?.(
-        {
-          since: 1,
-          revision: 2,
-          upserts: [own({ revision: 2, turnedAt: TURNED })],
-          removed: [],
-        },
-        "delta",
-      ),
-    );
-    expect(await heard).toBe(true);
   });
 });
 

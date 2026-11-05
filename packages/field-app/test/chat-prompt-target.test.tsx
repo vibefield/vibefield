@@ -12,9 +12,10 @@ import { act, type ReactElement, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ChatComposer, type ComposerPort } from "../src/chat/ChatComposer";
-import type { DraftPart } from "../src/chat/composer-draft";
+import type { DraftMessage, DraftPart } from "../src/chat/composer-draft";
 import { useProfileSets } from "../src/chat/profile-sets";
 import { sparkEntriesOf } from "../src/chat/spark-status";
+import type { ThreadSendOutcome } from "../src/chat/thread-send";
 import {
   type CardLetGo,
   endCardDrag,
@@ -91,7 +92,12 @@ afterEach(() => {
 
 async function mount(
   targets: CardTargets,
-  send = vi.fn(async () => ({ state: "pasted" as const })),
+  send = vi.fn(
+    async (_message: DraftMessage, _stills: readonly string[]): Promise<ThreadSendOutcome> => ({
+      state: "queued",
+      receipt: { spark: VELA.id, requestId: "say-0000000001", queued: true, state: "queued" },
+    }),
+  ),
 ) {
   const entry = sparkEntriesOf([VELA], [])[0];
   if (entry === undefined) throw new Error("no entry");
@@ -224,7 +230,11 @@ describe('the composer as a place for cards (DESIGN.md §8 "Chat\'s composer", a
       );
     });
     await act(async () => undefined);
-    expect(send).toHaveBeenCalledWith("why does\npnpm test\nfails", []);
+    // its span is the card's words alone, on their lines (TH-Q25 (a))
+    expect(send).toHaveBeenCalledWith(
+      { text: "why does\npnpm test\nfails", chips: [{ start: 9, length: 15, kind: "card" }] },
+      [],
+    );
   });
 
   it("never takes an @ being typed as its place: the card lands at the caret, and the @ and its query stay", async () => {

@@ -1,4 +1,8 @@
-import type { AgentModelSelection } from "@vibefield/contracts";
+import {
+  type AgentModelSelection,
+  COMPOSE_SAY_CHIPS_MAX,
+  type ComposeSayChip,
+} from "@vibefield/contracts";
 import { stillOf } from "../frame/cards/card-text";
 import type { Card } from "../frame/cards/cards-model";
 import { cardName } from "../frame/cards/cards-words";
@@ -136,13 +140,21 @@ function chipText(chip: DraftChip): string {
   }
 }
 
-/** The message a send pastes (DESIGN.md §8 "Chat's composer", what a send carries), in the draft's order: the words
+/** A message as a send queues it: its words, and its chips as spans of them (TH-Q25 (a)). */
+export interface DraftMessage {
+  readonly text: string;
+  readonly chips: readonly ComposeSayChip[];
+}
+
+/** The message a send queues (DESIGN.md §8 "Chat's composer", what a send carries), in the draft's order: the words
  * as typed and each chip as its words; a chip that carries more than one line stands on lines of its own, its line
  * breaks kept, with no space left at either side of its breaks; the whole trimmed at both ends, so it never ends
- * with a line break. */
-export function draftText(parts: readonly DraftPart[]): string {
+ * with a line break. With it, each chip as the span of the words it carries (TH-1), each inside the words, in order,
+ * so the spark's record draws a chip from the record and never from words that look like one. */
+export function draftMessage(parts: readonly DraftPart[]): DraftMessage {
   let out = "";
   let afterBlock = false;
+  const spans: { start: number; length: number; kind: DraftChip["kind"] }[] = [];
   for (const part of parts) {
     if (part.kind === "text") {
       out += afterBlock ? part.text.replace(/^[ \t]+/u, "") : part.text;
@@ -151,18 +163,35 @@ export function draftText(parts: readonly DraftPart[]): string {
     }
     const text = chipText(part.chip);
     if (!text.includes("\n")) {
+      spans.push({ start: out.length, length: text.length, kind: part.chip.kind });
       out += text;
       afterBlock = false;
       continue;
     }
     out = out.replace(/[ \t]+$/u, "");
-    out += `${out === "" || out.endsWith("\n") ? "" : "\n"}${text}\n`;
+    out += out === "" || out.endsWith("\n") ? "" : "\n";
+    spans.push({ start: out.length, length: text.length, kind: part.chip.kind });
+    out += `${text}\n`;
     afterBlock = true;
   }
-  return out.trim();
+  const text = out.trim();
+  const lead = out.length - out.trimStart().length;
+  // the trim moves every span by what it took from the start, and clips a chip's own space at either end
+  const chips = spans.flatMap((span): ComposeSayChip[] => {
+    const start = Math.max(0, span.start - lead);
+    const end = Math.min(text.length, span.start - lead + span.length);
+    return end > start ? [{ start, length: end - start, kind: span.kind }] : [];
+  });
+  // past the door's bound the rest are words alone: a chip is drawn from its span, never needed to send
+  return { text, chips: chips.slice(0, COMPOSE_SAY_CHIPS_MAX) };
 }
 
-/** The snapshot stills a draft's cards name, which main must still keep before their paths are pasted. */
+/** The message's words alone (`draftMessage`). */
+export function draftText(parts: readonly DraftPart[]): string {
+  return draftMessage(parts).text;
+}
+
+/** The snapshot stills a draft's cards name, which main must still keep before their paths are sent. */
 export function draftStills(parts: readonly DraftPart[]): string[] {
   return parts.flatMap((part) => {
     if (part.kind !== "chip" || part.chip.kind !== "card") return [];
@@ -171,8 +200,8 @@ export function draftStills(parts: readonly DraftPart[]): string[] {
   });
 }
 
-/** What a draft keeps once `sent` was pasted from it (DESIGN.md §8 "Chat's composer", Send: what was typed or added
- * while it ran stays). A send runs for up to 20 s while its spark wakes, and the draft stays a field meanwhile, so
+/** What a draft keeps once `sent` was queued from it (DESIGN.md §8 "Chat's composer", Send: what was typed or added
+ * while it ran stays). A send runs while its spark wakes, and the draft stays a field meanwhile, so
  * `now` may hold more than was sent: when it still begins with every part sent, what follows them stays, its leading
  * space trimmed; a draft changed within what was sent stays whole, so no word is lost. */
 export function draftAfterSend(

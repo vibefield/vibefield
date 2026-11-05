@@ -2,6 +2,8 @@ import {
   AgentFieldRow,
   ComposeSparksListResult,
   ComposeSparksOpenResult,
+  type ComposeSparksSayParams,
+  ComposeSparksSayResult,
   NeedsAnswerResult,
   NeedsItem,
   type NeedsItemId,
@@ -56,6 +58,9 @@ export interface SparksPort {
   onReconnected(listener: () => void): () => void;
   /** Wake a spark: its last session resumes; a live one is answered as it is (CR-D11). */
   open(spark: SparkId): Promise<SparkSummary>;
+  /** TH-1 — your words to a spark, queued as yours (`compose.sparks.say`, IOS-12a's door): its receipt, or fieldd's
+   * refusal thrown, `retryable` when the connection closed under it. */
+  say(params: ComposeSparksSayParams): Promise<ComposeSparksSayResult>;
 }
 
 const FIELD_ASK = { projection: "field" } as const;
@@ -72,6 +77,8 @@ export function sparksPortOver(client: FielddClient): SparksPort {
     onReconnected: onReconnectedOver(client),
     open: async (spark) =>
       ComposeSparksOpenResult.parse(await client.request("compose.sparks.open", { spark })).spark,
+    say: async (params) =>
+      ComposeSparksSayResult.parse(await client.request("compose.sparks.say", params)),
   };
 }
 
@@ -183,6 +190,8 @@ interface FeedState {
   readonly open: SparkOpener | null;
   /** An answer, through the same feed (CP-3); null while none reads the queue, so nothing is answered */
   readonly answer: NeedsAnswerer | null;
+  /** TH-1 — Send, through the same feed; null while none runs, so nothing is sent */
+  readonly say: SparkSayer | null;
   /** the needs that stood when the board or the queue was first read, while they stand (CP-3): what a first reading
    * finds is no news, even one that comes only after a refusal the feed asked past */
   readonly noNews: ReadonlySet<string>;
@@ -203,6 +212,9 @@ export type SparkOpener = (spark: SparkId) => Promise<void>;
  * answer, or its refusal thrown in fieldd's words, for the card that asked to say. */
 export type NeedsAnswerer = (item: NeedsItemId, choice: number) => Promise<NeedsItem>;
 
+/** Queue your words to a spark (`compose.sparks.say`, TH-1): its receipt, or its refusal thrown in fieldd's words. */
+export type SparkSayer = (params: ComposeSparksSayParams) => Promise<ComposeSparksSayResult>;
+
 const NO_MARKS: ReadonlyMap<SparkId, ThreadMark> = new Map();
 const NO_NEWS: ReadonlySet<string> = new Set();
 
@@ -213,6 +225,7 @@ const OPENING: FeedState = {
   rows: null,
   open: null,
   answer: null,
+  say: null,
   noNews: NO_NEWS,
   marks: NO_MARKS,
   cell: null,
@@ -336,6 +349,9 @@ class RunningFeed {
 
   /** The feed's answer: the queue's next frame says what it did, for every window. */
   readonly answer: NeedsAnswerer = (item, choice) => this.port.answer(item, choice);
+
+  /** The feed's say (TH-1): the spark's record says what it did, for every window. */
+  readonly say: SparkSayer = (params) => this.port.say(params);
 
   /** The feed's wake: the list is asked again whether it woke or not, since the record says what the door did. */
   readonly open: SparkOpener = async (spark) => {
@@ -462,6 +478,7 @@ class RunningFeed {
         rows,
         open: this.open,
         answer: this.answer,
+        say: this.say,
         noNews: this.#noNews,
         marks: NO_MARKS,
         cell: null,
@@ -486,6 +503,7 @@ class RunningFeed {
       rows,
       open: this.open,
       answer: this.answer,
+      say: this.say,
       noNews: this.#noNews,
       ...this.#marked(),
     });
@@ -540,6 +558,11 @@ export function useSparksReading(): SparksReading {
  * that wakes is drawn. */
 export function useSparkOpener(): SparkOpener | null {
   return useSyncExternalStore(subscribe, () => state.open);
+}
+
+/** Send, through the feed that published the reading (TH-1): null while no feed runs, so no Send is drawn. */
+export function useSparkSayer(): SparkSayer | null {
+  return useSyncExternalStore(subscribe, () => state.say);
 }
 
 /** Answer the queue's items through the feed that reads them (CP-3): null while no feed runs, when no reading is ready

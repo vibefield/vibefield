@@ -323,6 +323,10 @@ describe("the New spark sheet", () => {
       answer: async () => {
         throw new Error("nothing is answered here");
       },
+      // Send's say (TH-1) is not this test's
+      say: async () => {
+        throw new Error("nothing is said here");
+      },
       onReconnected: () => () => undefined,
       open: async () => {
         throw new Error("nothing is woken here");

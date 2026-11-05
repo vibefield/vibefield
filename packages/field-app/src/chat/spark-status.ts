@@ -27,9 +27,9 @@ export interface SparkEntry {
   /** Its session runs: its own run alive on the board, else its record says so. Asleep or not, the thread's line,
    * its Wake and its pane key on this, never on the word (an item's word stands over Asleep: CP3-D7). */
   readonly awake: boolean;
-  /** Its own run waits on you in its pane: a blocker on its own row (or the row blocked) while its session runs. A
-   * menu there would read a paste as its answer, so this stops Send; a needs-you card does not (§8 "Chat's
-   * composer"). */
+  /** Its own run waits on you: a blocker on its own row (or the row blocked) while its session runs. *Amended at TH-1
+   * (ER-C2):* this stopped Send, since a menu in its pane would read a paste as its answer; Send now queues, and the
+   * queue delivers only at an idle with nothing blocking, so it says your receipt: "it lands after you answer". */
   readonly blocked: boolean;
   /** Heard: its own run's row is on the board, alive, watched (not waiting to resume, which says nothing yet), and says
    * how the run stands — at work, idle or waiting on you in its pane. Send's R-4 wait reads this, never the word. */

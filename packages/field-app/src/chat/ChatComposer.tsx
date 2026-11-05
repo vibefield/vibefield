@@ -26,12 +26,13 @@ import {
   type AgentChip,
   atQueryBefore,
   type DraftChip,
+  type DraftMessage,
   type DraftPart,
   draftAfterSend,
   draftBlank,
+  draftMessage,
   draftSendable,
   draftStills,
-  draftText,
   insertChipAt,
   normalizeDraft,
   spliceDraft,
@@ -64,7 +65,7 @@ import { sendNote, type ThreadSendOutcome } from "./thread-send";
 // to…'s landing and its clipboard road did not come back. The draft is the thread's, and Chat keeps it (`parked`, the
 // one copy): every change of it is parked there (`onPark`), and on unmount, so leaving the thread or Chat keeps it; a
 // send's clearing is made there, to the draft as the thread holds it then; and the editor follows a draft the thread
-// holds that this composer did not write — a send that was pasted after the thread was left and chosen again.
+// holds that this composer did not write — a send that was queued after the thread was left and chosen again.
 
 /** What @'s rows read: the Agent Profiles fieldd offers, which Chat's controller reads (`useProfileSets`), and an
  * agent's own picker, which the composer reads (the New spark sheet's doors). Its agents are said by the catalog's
@@ -89,9 +90,9 @@ export interface ChatComposerProps {
   profiles: ProfileSets;
   /** an agent's own picker, read as its menu opens */
   port: Pick<ComposerPort, "models">;
-  /** Send into the thread's pane (`thread-send.ts`, over Chat's world): null while another act holds the thread, which
-   * turns the press away (Chat's one guard), so nothing is said and the draft stays */
-  send: (text: string, stills: readonly string[]) => Promise<ThreadSendOutcome | null>;
+  /** Send, queued to the thread's spark as yours (`thread-send.ts`, over Chat's world; TH-1): null while another act
+   * holds the thread, which turns the press away (Chat's one guard), so nothing is said and the draft stays */
+  send: (message: DraftMessage, stills: readonly string[]) => Promise<ThreadSendOutcome | null>;
   /** another act holds this thread — a send into it, Send's or a starter's, or a wake (Chat's one at a time per
    * thread): Send waits, busy, as for its own */
   threadSending?: boolean | undefined;
@@ -265,7 +266,7 @@ export function ChatComposer({
     placeCaret(editor, caret);
   }, [revision]);
 
-  // The thread's draft changed from outside — a send pasted after this composer was drawn again in its place cleared
+  // The thread's draft changed from outside — a send queued after this composer was drawn again in its place cleared
   // what it carried: the editor follows it, the keyboard left where it is.
   useEffect(() => {
     if (known.current.has(parked)) return;
@@ -459,7 +460,7 @@ export function ChatComposer({
     onSurfaceChange(foldSurface(surface, "at"));
   }, [onSurfaceChange, surface]);
 
-  // ── SEND (DESIGN.md §8 "Chat's composer"): pasted into the thread's pane, Return left to the person ──
+  // ── SEND (DESIGN.md §8 "Chat's composer"; TH-1): queued to the spark as yours, Send its Return ──
   const sendNow = useCallback(async () => {
     const sent = parts;
     if (sending.current || threadSending || !draftSendable(sent, null)) return;
@@ -467,18 +468,19 @@ export function ChatComposer({
     setBusy(true);
     let outcome: ThreadSendOutcome | null;
     try {
-      outcome = await send(draftText(sent), draftStills(sent));
+      outcome = await send(draftMessage(sent), draftStills(sent));
     } finally {
       sending.current = false;
       if (live.current) setBusy(false);
     }
     if (outcome === null) return;
-    say(sendNote(outcome, name));
-    if (outcome.state !== "pasted") return;
+    // queued, the note says nothing: its bubble and its receipt say it
+    const note = sendNote(outcome, name);
+    if (note !== null) say(note);
+    if (outcome.state !== "queued") return;
     // Sent: what it carried leaves the thread's draft as the thread holds it now — this editor's, parked first, or,
     // if the thread was left and chosen again while it ran, the one drawn in its place — and what was typed or added
-    // meanwhile stays (changed within what was sent, it stays whole). The editor standing follows; the keyboard stays
-    // in the pane, where Return sends it.
+    // meanwhile stays (changed within what was sent, it stays whole). The editor standing follows.
     if (live.current) park(partsRef.current);
     onParkRef.current((now) => draftAfterSend(sent, now));
   }, [park, parts, name, say, send, threadSending]);

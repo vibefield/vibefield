@@ -11,7 +11,12 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { AgentFieldRow, NeedsItem, SparkSummary } from "@vibefield/contracts";
+import type {
+  AgentFieldRow,
+  ComposeSparksSayParams,
+  NeedsItem,
+  SparkSummary,
+} from "@vibefield/contracts";
 import type { FielddClient } from "@vibefield/fieldd-client";
 import { act, type ReactElement, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -609,6 +614,30 @@ describe("the needs-you queue, as one window reads it (CP-3; needs.subscribe)", 
     const garbled = { request: async () => ({ item: { id: 7 } }) } as unknown as FielddClient;
     await expect(sparksPortOver(garbled).answer(params.item, 0)).rejects.toThrow();
   });
+
+  it("says your words through compose.sparks.say, chips and all, and reads its receipt (TH-1; the window side of EL9)", async () => {
+    const fixture = (name: string): unknown =>
+      JSON.parse(
+        readFileSync(
+          join(dirname(fileURLToPath(import.meta.url)), `../../contracts/fixtures/${name}`),
+          "utf8",
+        ),
+      );
+    const params = fixture("compose-sparks-say-params.chips.json") as ComposeSparksSayParams;
+    const asked: unknown[] = [];
+    const saying = {
+      request: async (method: string, body: unknown) => {
+        asked.push([method, body]);
+        return fixture("compose-sparks-say.waking.json");
+      },
+    } as unknown as FielddClient;
+    const receipt = await sparksPortOver(saying).say(params);
+    expect(asked).toEqual([["compose.sparks.say", params]]);
+    expect(receipt.state).toBe("waking");
+    // a reply that is not a receipt is a refusal thrown, never a guess
+    const garbled = { request: async () => ({ state: 7 }) } as unknown as FielddClient;
+    await expect(sparksPortOver(garbled).say(params)).rejects.toThrow();
+  });
 });
 
 describe("whether a spark has worked, as one window reads it (TU-1, Q1; the window side of EL9)", () => {
@@ -683,6 +712,10 @@ function scripted(listed: SparkSummary[]) {
     // the card's answers are needs-card.test.tsx's
     answer: async () => {
       throw new Error("nothing is answered here");
+    },
+    // Send's say (TH-1) is not this test's
+    say: async () => {
+      throw new Error("nothing is said here");
     },
     onReconnected: () => () => undefined,
     open: async (id) => {

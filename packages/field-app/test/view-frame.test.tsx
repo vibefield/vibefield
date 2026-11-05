@@ -647,6 +647,10 @@ describe('a spark that needs you, and a thread unread, from another view (CH-D4,
       answer: async () => {
         throw new Error("nothing is answered here");
       },
+      // Send's say (TH-1) is not this test's
+      say: async () => {
+        throw new Error("nothing is said here");
+      },
       onReconnected: () => () => undefined,
       open: async () => vela,
     };
@@ -805,6 +809,10 @@ describe('a spark that needs you, and a thread unread, from another view (CH-D4,
       },
       answer: async () => {
         throw new Error("nothing is answered here");
+      },
+      // Send's say (TH-1) is not this test's
+      say: async () => {
+        throw new Error("nothing is said here");
       },
       onReconnected: (listener) => {
         reconnected.add(listener);

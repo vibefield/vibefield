@@ -256,7 +256,7 @@ describe("what a spark's session is doing, read from the session, never from its
     expect(entry?.awake).toBe(false);
   });
 
-  it("says it waits on you in its pane (what stops Send) only for its own run's blocker while it runs — never for an item", () => {
+  it("says its own run waits on you only for that run's blocker while it runs — never for an item (TH-1: the receipt reads it; Send no longer stops)", () => {
     const blocked = (rows: AgentFieldRow[], items: NeedsItem[] = []) =>
       sparkEntriesOf([spark()], rows, { items })[0]?.blocked;
     expect(blocked([row({ status: "blocked", blockers: [blocker("permission")] })])).toBe(true);

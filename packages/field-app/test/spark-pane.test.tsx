@@ -675,6 +675,10 @@ describe("Chat hands the pane's keyboard to the thread's hello (ChatView; DESIGN
       answer: async () => {
         throw new Error("nothing is answered here");
       },
+      // Send's say (TH-1) is not this test's
+      say: async () => {
+        throw new Error("nothing is said here");
+      },
       onReconnected: () => () => undefined,
       open: async () => VELA,
     });
