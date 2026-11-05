@@ -78,6 +78,8 @@
       // (`JSON.stringify(…, null, 2)`, its `--check` byte for byte), and the kit's copy must equal it byte for byte
       // (`pnpm check:ios-fixtures`): only the generator formats it.
       "!packages/design-kit/fixtures/spark-dna.golden.json",
+      // IOS-12b: the flat star's golden, written by the same generator, kept the same way.
+      "!packages/design-kit/fixtures/spark-flat-star.golden.json",
       // TD-0/TD-1: a trust-root is SIGNED over its exact bytes (trust-and-distribution.md §2) — the
       // canonical JSON `scripts/trust-keygen.mjs assemble` writes. Biome collapsing a one-key array
       // would break every signature on the embedded copy, so only the keygen formats it; the
