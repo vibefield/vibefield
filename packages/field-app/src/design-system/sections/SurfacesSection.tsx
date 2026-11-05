@@ -5,6 +5,11 @@ import {
   type ArtifactPanelPreviewState,
 } from "@vibefield/plugin-browser/design-system";
 import { type ReactElement, useState } from "react";
+import {
+  MADE_APPS_PREVIEW_STATES,
+  MadeAppsPreview,
+  type MadeAppsPreviewState,
+} from "../../frame/apps/design-system";
 import { LoadingVeilView } from "../../hud/LoadingVeil";
 import { AppearanceSectionView } from "../../panels/AppearanceSection";
 import { ProfileMark } from "../../panels/agents/ProfilesView";
@@ -218,6 +223,14 @@ export function SurfacesSection(): ReactElement {
           <ArtifactsSpecimen />
         </Specimen>
       </div>
+
+      <Specimen
+        title="From your agents — the made apps beside the Hub, at the shelf's width"
+        source="frame/apps/MadeApps.tsx · DESIGN.md §8, §2.9, §9"
+        darkStage
+      >
+        <MadeAppsSpecimen />
+      </Specimen>
 
       <div className="vf-ds-grid vf-ds-grid-3">
         <Specimen title="Loading veil" source="hud/LoadingVeil.tsx">
@@ -520,6 +533,30 @@ function ArtifactsSpecimen(): ReactElement {
       </div>
       <div className="vf-ds-shelf-stage">
         <ArtifactPanelPreview state={state} />
+      </div>
+    </div>
+  );
+}
+
+/** From your agents (MA-4a; DESIGN.md §8 "Artifacts — the Artifacts shelf's contents", as amended
+ * 2026-11-05) in every state its fixture adapter offers, on the same 504 stage as the Hub's plate:
+ * the shipping `MadeApps` over `frame/apps/design-system.tsx`'s client, never a copy. Its fieldd
+ * acts never settle; its "Open in ‹host›" is the shipping link, to the fixture's hosted address. */
+function MadeAppsSpecimen(): ReactElement {
+  const [state, setState] = useState<MadeAppsPreviewState>("populated");
+  return (
+    <div className="vf-ds-shelf-plate">
+      <div className="vf-ds-production-statebar">
+        <span>Production state</span>
+        <UiSegmentedControl
+          options={MADE_APPS_PREVIEW_STATES}
+          value={state}
+          onChange={setState}
+          label="From your agents state"
+        />
+      </div>
+      <div className="vf-ds-shelf-stage">
+        <MadeAppsPreview state={state} />
       </div>
     </div>
   );

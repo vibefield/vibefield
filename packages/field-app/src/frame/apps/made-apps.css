@@ -1,3 +1,457 @@
 /* MA-4a — FROM YOUR AGENTS (DESIGN.md §8 "Artifacts — the Artifacts shelf's contents", as amended
-   2026-11-05). RED SKELETON: the group's tile form, its fallback squircle by day and by night, and
-   its reduced motion land at the slice's green. */
+   2026-11-05; §2.9's one exception, "a made app's fallback icon"; §7 and M6 for the motion). The
+   shelf's second group, drawn by field-app beside the hosted Hub at the shelf's width: its head
+   (the heading and the "Search apps" field), its days, and each day's made tiles in the Hub's tile
+   form, kept (plugins/browser's artifact-panel.css, HN-8): three across, 16 between rows and 14
+   between columns; the 16:10 well at corners 10 with the hairline ring, the strong ring under the
+   pointer; the name, the fact line, and the desktop with its state; the overflow on a chip over the
+   well; the tiles move as the fields' do and hold still under reduced motion. A tile whose desktop
+   is not live is greyed, its image at 0.55.
+   Tokens only: no colour is named here. The fallback squircle's ink rides one custom property,
+   --vf-apps-ink, which the tile sets from the design kit's projectInk; the night's tile is the
+   kit's --vf-app-fallback-tile (DESIGN.md §2.9). */
+
+.vf-apps {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.vf-apps-head {
+  display: flex;
+  min-height: 32px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 0 0 2px;
+}
+
+.vf-apps-head h2 {
+  margin: 0;
+  color: var(--vf-text-primary);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+.vf-apps-search {
+  width: 12rem;
+  height: 30px;
+  flex: 0 1 auto;
+  font-size: 12px;
+}
+
+.vf-apps-reading {
+  margin: 0;
+  padding: 0 2px;
+  color: var(--vf-text-secondary);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.vf-apps .vf-apps-quiet {
+  padding: 24px 12px;
+}
+
+.vf-apps .vf-apps-quiet strong {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* Why a pressed tile did not open, with Open in ‹host› when the app is hosted. */
+.vf-apps-notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--vf-fill);
+}
+
+.vf-apps-notice > span:first-child {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.vf-apps-notice strong {
+  color: var(--vf-text-primary);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.vf-apps-notice small {
+  color: var(--vf-text-secondary);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.vf-apps-notice__acts {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 6px;
+}
+
+.vf-apps-notice__acts > * {
+  height: 28px;
+  text-decoration: none;
+}
+
+.vf-apps-days {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.vf-apps-day > h3 {
+  margin: 0 0 8px;
+  padding: 0 2px;
+  color: var(--vf-text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.vf-apps-tiles {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* The tiles move as the fields' do (§7; §8 "Artifacts", HN-8 ruling 12): 1.03 under the pointer,
+   0.95 pressed, over 200ms ease. The tile under the pointer stands above its neighbours, and the
+   one holding the focus (its menu open) above that, so its menu stays on top. */
+.vf-apps-tile {
+  position: relative;
+  min-width: 0;
+  transition: transform 200ms ease;
+}
+
+.vf-apps-tile:hover {
+  z-index: 1;
+  transform: scale(1.03);
+}
+
+.vf-apps-tile:focus-within {
+  z-index: 2;
+}
+
+/* Pressed is the tile's own face; its chip and its menu press as themselves. */
+.vf-apps-tile:has(> .vf-apps-tile__open:not(:disabled):active) {
+  transform: scale(0.95);
+}
+
+.vf-apps-tile__open {
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.vf-apps-tile__open:disabled {
+  cursor: default;
+}
+
+.vf-apps-tile__open:focus-visible {
+  outline: none;
+}
+
+.vf-apps-tile__open:focus-visible .vf-apps-well {
+  outline: 2px solid var(--vf-select);
+  outline-offset: 2px;
+}
+
+/* The well: the app's preview, the page's top at its capture's 640 by 400, which is the well's own
+   16:10, so it fills it whole; or the fallback squircle centred in it. */
+.vf-apps-well {
+  position: relative;
+  display: grid;
+  width: 100%;
+  overflow: hidden;
+  place-items: center;
+  aspect-ratio: 16 / 10;
+  border-radius: 10px;
+  background-color: var(--vf-canvas-bg);
+  box-shadow: 0 0 0 1px var(--vf-hairline);
+  transition: box-shadow 180ms ease;
+}
+
+.vf-apps-tile:hover .vf-apps-well {
+  box-shadow: 0 0 0 1px var(--vf-hairline-strong);
+}
+
+.vf-apps-well img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top;
+}
+
+.vf-apps-tile[data-muted="true"] .vf-apps-well img {
+  opacity: 0.55;
+}
+
+/* §2.9's one exception: the fallback squircle at 60, the system stack at 650 and 26 (the page's),
+   its corner 22.5% of its side (§8 "The phone's Apps"; CSS draws it round, not continuous). With
+   no project it is the theme's fill under the primary ink; by day the project's ink under the
+   initial in white; by night the dark tile under the initial in the ink. */
+.vf-apps-icon {
+  display: grid;
+  width: 60px;
+  height: 60px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 22.5%;
+  background: var(--vf-fill);
+  color: var(--vf-text-primary);
+  font: 650 26px/1 var(--vf-font-sans);
+  user-select: none;
+}
+
+.vf-apps-icon[data-ink="true"] {
+  background: var(--vf-apps-ink);
+  color: var(--vf-foreground-inverse);
+}
+
+.dark .vf-apps-icon[data-ink="true"] {
+  background: var(--vf-app-fallback-tile);
+  color: var(--vf-apps-ink);
+}
+
+/* A greyed tile dims its image alone (above, as the Hub's muted preview is), never the squircle:
+   its initial is held to §2.9's 3:1 floor for a mark, and the dot and the word say the state. */
+
+.vf-apps-tile__facts {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 0 2px;
+}
+
+.vf-apps-tile__facts strong {
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--vf-text-primary);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vf-apps-tile__facts small {
+  max-width: 100%;
+  overflow: hidden;
+  margin-top: 3px;
+  color: var(--vf-text-tertiary);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vf-apps-status {
+  display: flex;
+  max-width: 100%;
+  overflow: hidden;
+  align-items: center;
+  gap: 5px;
+  margin-top: 7px;
+  color: var(--vf-text-secondary);
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+/* §9's "Opening on ‹desktop›…", LATE as History's opening words are: the tile holds its desktop's
+   name for 120ms (MadeAppTile), so a quick open never flashes the line, then a 180ms plain `ease`
+   fade. */
+.vf-apps-status__late {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  animation: vf-apps-late 180ms ease both;
+}
+
+@keyframes vf-apps-late {
+  from {
+    opacity: 0;
+  }
+}
+
+/* The overflow on a chip over the well, its menu hanging from the tile's right, and from its left
+   in a day's first column, so it never leaves the shelf (§8 "Artifacts", HN-8 ruling 13). */
+.vf-apps-menu {
+  position: static;
+}
+
+.vf-apps-menu summary {
+  position: absolute;
+  z-index: 1;
+  top: 6px;
+  right: 6px;
+  display: grid;
+  width: 26px;
+  height: 26px;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--vf-chrome-solid);
+  box-shadow: 0 0 0 1px var(--vf-hairline);
+  color: var(--vf-text-secondary);
+  cursor: pointer;
+  font-size: 11px;
+  list-style: none;
+}
+
+.vf-apps-menu summary::-webkit-details-marker {
+  display: none;
+}
+
+.vf-apps-menu summary:hover {
+  color: var(--vf-text-primary);
+}
+
+.vf-apps-menu > div {
+  position: absolute;
+  z-index: 3;
+  top: 40px;
+  right: 6px;
+  display: flex;
+  width: 152px;
+  flex-direction: column;
+  padding: 5px;
+  border-radius: 12px;
+  background: var(--vf-chrome-solid);
+  box-shadow:
+    var(--vf-shadow-island),
+    0 0 0 1px var(--vf-hairline);
+}
+
+.vf-apps-tile:nth-child(3n + 1) .vf-apps-menu > div {
+  right: auto;
+  left: 6px;
+}
+
+.vf-apps-menu button,
+.vf-apps-menu a {
+  padding: 7px 9px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--vf-text-primary);
+  font: inherit;
+  font-size: 11px;
+  text-align: left;
+  text-decoration: none;
+}
+
+.vf-apps-menu button:hover:not(:disabled),
+.vf-apps-menu a:hover {
+  background: var(--vf-fill);
+}
+
+.vf-apps-menu button:disabled {
+  opacity: 0.35;
+}
+
+/* Versions, in place of the days (the Hub's Publish step's shape): Back, then the app's
+   presentations newest first, each opened by its own. */
+.vf-apps-step-head {
+  display: flex;
+  min-height: 32px;
+  align-items: center;
+  gap: 10px;
+}
+
+.vf-apps-step-head > span {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.vf-apps-step-head strong {
+  color: var(--vf-text-primary);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.vf-apps-step-head small {
+  overflow: hidden;
+  color: var(--vf-text-secondary);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vf-apps-version-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.vf-apps-version {
+  display: flex;
+  width: 100%;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 12px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--vf-fill);
+  color: var(--vf-text-primary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.vf-apps-version:hover:not(:disabled) {
+  background: var(--vf-fill-hover);
+}
+
+.vf-apps-version:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.vf-apps-version strong {
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.vf-apps-version small {
+  color: var(--vf-text-secondary);
+  font-size: 11px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vf-apps-well {
+    transition-duration: 90ms;
+  }
+
+  /* M6: the tiles hold still — no rise under the pointer, no press (§8 "Artifacts"). */
+  .vf-apps-tile:hover,
+  .vf-apps-tile:has(> .vf-apps-tile__open:not(:disabled):active) {
+    transform: none;
+  }
+
+  .vf-apps-tile {
+    transition: none;
+  }
+}

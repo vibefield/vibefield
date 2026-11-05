@@ -29,8 +29,10 @@ export const MADE_APPS_PREVIEW_STATES: readonly MadeAppsPreviewState[] = [
   "empty",
 ];
 
-/** The plates' clock: 2026-11-05 15:00Z. */
-export const MADE_APPS_FIXTURE_NOW = Date.UTC(2026, 10, 5, 15, 0);
+/** The plates' clock: 2026-11-05 at 15:00 on the viewer's own clock, since the days are local
+ * calendar days (Chat's `dayWords`): a UTC clock would read "Yesterday" for an hour ago east of
+ * UTC+9. */
+export const MADE_APPS_FIXTURE_NOW = new Date(2026, 10, 5, 15, 0).getTime();
 const hoursAgo = (h: number): number => MADE_APPS_FIXTURE_NOW - h * 3_600_000;
 
 /** The agent the plates name, picked by index as the other fixtures pick theirs (R23b: never a
@@ -189,8 +191,9 @@ function fixtureAnswer(state: MadeAppsPreviewState): IndexAppsResult {
   }
 }
 
-/** The plates' client: it answers the feed's two reads and its pings for one state, and every act
- * with nothing (an act on a plate opens nothing outside it). */
+/** The plates' client: it answers the feed's two reads and its pings for one state, and every fieldd
+ * act with nothing (an open or a mark on a plate never settles, so it reaches no daemon). The
+ * shipping "Open in ‹host›" stays what it is, a real link to its fixture's hosted address. */
 export function madeAppsPreviewClient(state: MadeAppsPreviewState): MadeAppsClient {
   const projects: ProjectListResult = {
     rows: PROJECTS.map(fixtureProject),
@@ -209,15 +212,36 @@ export function madeAppsPreviewClient(state: MadeAppsPreviewState): MadeAppsClie
   };
 }
 
-/** A still the catalog draws itself, in two of the project inks (no colour literal). */
+const SVG_NS = "http://www.w3.org/2000/svg";
+
+/** A still the catalog draws itself, in two of the project inks (no colour literal): a page's ground
+ * at the capture's 640 by 400 and a card on it. It is composed as a document and travels as an
+ * address, as the product's previews do, so the well shows it exactly as it shows a capture. */
 function fixtureStill(app: IndexApp): string {
   const ground = projectInkHex(app.ink ?? 0, "light");
   const paper = projectInkHex((app.ink ?? 0) + 5, "dark");
-  const svg =
-    `<svg xmlns='http://www.w3.org/2000/svg' width='640' height='400'>` +
-    `<rect width='640' height='400' fill='${ground}'/>` +
-    `<rect x='48' y='56' width='544' height='220' rx='18' fill='${paper}' fill-opacity='0.35'/></svg>`;
-  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+  const picture = document.createElementNS(SVG_NS, "svg");
+  picture.setAttribute("width", "640");
+  picture.setAttribute("height", "400");
+  const shapes: readonly Record<string, string>[] = [
+    { width: "640", height: "400", fill: ground },
+    {
+      x: "48",
+      y: "56",
+      width: "544",
+      height: "220",
+      rx: "18",
+      fill: paper,
+      "fill-opacity": "0.35",
+    },
+  ];
+  for (const attributes of shapes) {
+    const shape = document.createElementNS(SVG_NS, "rect");
+    for (const [name, value] of Object.entries(attributes)) shape.setAttribute(name, value);
+    picture.appendChild(shape);
+  }
+  const markup = new XMLSerializer().serializeToString(picture);
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(markup)}`;
 }
 
 /** Design-page adapter for the shipping group. Only the client, the clock and the image transport

@@ -42,14 +42,18 @@ import { MadeApps } from "../src/frame/apps/MadeApps";
 import {
   FROM_YOUR_AGENTS,
   MADE_APP_OPEN_RETRY_DELAYS_MS,
+  MADE_APP_OPENING_LATE_MS,
   MADE_APP_PREVIEW_RETRY_DELAYS_MS,
+  MADE_APP_SERVING_HELD_MS,
   MADE_APPS_MAX_PAGES,
   MADE_APPS_PAGE_LIMIT,
+  MADE_APPS_QUERY_MAX,
   MADE_APPS_SEARCH_DEBOUNCE_MS,
   MADE_APPS_VERSIONS_LIMIT,
   type MadeAppsClient,
   madeAppAgentLabel,
   madeAppAt,
+  madeAppAway,
   madeAppDays,
   madeAppDesktop,
   madeAppErrorWords,
@@ -60,7 +64,7 @@ import {
   madeAppProjectNames,
   madeAppRefusalOf,
   madeAppStateOf,
-  madeAppsReadingWords,
+  madeAppsReadingLines,
   madeAppVersions,
   markMadeApp,
   openMadeApp,
@@ -87,7 +91,9 @@ afterEach(() => {
 
 // ── fixtures ────────────────────────────────────────────────────────────────────────────────────
 
-const NOW = Date.UTC(2026, 10, 5, 15, 0);
+/** 15:00 on the host's own clock: the days are local calendar days (Chat's `dayWords`), so a UTC clock
+ * would fail these rows east of UTC+9. */
+const NOW = new Date(2026, 10, 5, 15, 0).getTime();
 const hoursAgo = (h: number): number => NOW - h * 3_600_000;
 /** The agent the rows name, by index (never a literal, as the product's fixtures pick theirs). */
 const AGENT = AGENT_CATALOG[0];
@@ -398,9 +404,41 @@ describe("the group's reading (pure)", () => {
   it("says each desktop whose library is still reading its history, and only those (libraryReady false)", () => {
     const { libraryReady: _unknown, ...unheard } = MINI_SOURCE;
     expect(
-      madeAppsReadingWords([{ ...STUDIO_SOURCE, libraryReady: false }, unheard], "This Mac"),
-    ).toEqual(["studio is still reading its history"]);
-    expect(madeAppsReadingWords([STUDIO_SOURCE, MINI_SOURCE], "This Mac")).toEqual([]);
+      madeAppsReadingLines([{ ...STUDIO_SOURCE, libraryReady: false }, unheard], "This Mac"),
+    ).toEqual([{ key: STUDIO, words: "studio is still reading its history" }]);
+    expect(madeAppsReadingLines([STUDIO_SOURCE, MINI_SOURCE], "This Mac")).toEqual([]);
+  });
+
+  it("says this desktop is still reading while its own source is stale — 3e's mark before its first walk — and never a peer's stale", () => {
+    const { libraryReady: _unheard, name: _name, ...bare } = STUDIO_SOURCE;
+    const unread = { ...bare, state: "stale" as const, rows: 0 };
+    expect(madeAppsReadingLines([unread], "This Mac")).toEqual([
+      { key: STUDIO, words: "This Mac is still reading its history" },
+    ]);
+    // one line for this desktop, whether or not its library also said false
+    expect(madeAppsReadingLines([{ ...unread, libraryReady: false }], "This Mac")).toHaveLength(1);
+    expect(madeAppsReadingLines([{ ...MINI_SOURCE, state: "stale" }], "This Mac")).toEqual([]);
+    expect(madeAppAway(unread)).toBe(false);
+    expect(madeAppAway({ ...MINI_SOURCE, state: "stale" })).toBe(true);
+    expect(madeAppAway({ ...MINI_SOURCE, state: "asleep" })).toBe(true);
+    expect(madeAppAway(STUDIO_SOURCE)).toBe(false);
+  });
+
+  it("keys each reading line by its desktop, so two the roster names none are two lines", () => {
+    const { name: _a, ...first } = MINI_SOURCE;
+    const second = { ...first, device: "01J9ZQ1A2B3C4D5E6F7G8H9J0K" };
+    const lines = madeAppsReadingLines(
+      [
+        { ...first, libraryReady: false },
+        { ...second, libraryReady: false },
+      ],
+      "This Mac",
+    );
+    expect(lines.map((line) => line.words)).toEqual([
+      "Another desktop is still reading its history",
+      "Another desktop is still reading its history",
+    ]);
+    expect(new Set(lines.map((line) => line.key)).size).toBe(2);
   });
 });
 
@@ -422,11 +460,13 @@ describe("a made tile's state (§8: serving green, failed red, the rest muted, e
       opens: true,
       why: null,
     });
+    // §9's "Opening on ‹desktop›…" is the tile's to draw, late: no word of its own
     expect(madeAppStateOf(release, STUDIO_SOURCE, { kind: "opening" }, "studio")).toEqual({
       tone: "muted",
-      word: "opening",
+      word: null,
       opens: false,
       why: null,
+      opening: true,
     });
     expect(madeAppStateOf(release, STUDIO_SOURCE, { kind: "starting" }, "studio")).toEqual({
       tone: "muted",
@@ -486,6 +526,33 @@ describe("a made tile's state (§8: serving green, failed red, the rest muted, e
     });
   });
 
+  it("lets this desktop's own apps open while its first walk lands — it is reading, not unreachable", () => {
+    const unread = { ...STUDIO_SOURCE, state: "stale" as const };
+    expect(madeAppStateOf(release, unread, undefined, "studio")).toEqual({
+      tone: "muted",
+      word: null,
+      opens: true,
+      why: null,
+    });
+  });
+
+  it("judges an older version by its OWN availability; the serving row says only whether its desktop can write it out", () => {
+    const tooLarge = { ...release, availability: "too_large" as const, openable: false };
+    expect(madeAppStateOf(tooLarge, STUDIO_SOURCE, undefined, "studio").opens).toBe(false);
+    expect(
+      madeAppStateOf(tooLarge, STUDIO_SOURCE, undefined, "studio", { availability: "captured" }),
+    ).toEqual({ tone: "muted", word: null, opens: true, why: null });
+    expect(
+      madeAppStateOf(release, STUDIO_SOURCE, undefined, "studio", { availability: "missing" }).why,
+    ).toEqual({ title: "This page wasn't kept", detail: null });
+    // a captured serving row that does not open: its desktop can't write any version out
+    expect(
+      madeAppStateOf({ ...release, openable: false }, STUDIO_SOURCE, undefined, "studio", {
+        availability: "captured",
+      }).why,
+    ).toEqual({ title: "studio can't write this app out yet", detail: null });
+  });
+
   it("says a page not kept, too large to keep, or one rosetta cannot keep (rosetta's availability)", () => {
     for (const availability of ["not_captured", "missing", "changed_during_read"] as const)
       expect(
@@ -527,6 +594,17 @@ describe("a made tile's state (§8: serving green, failed red, the rest muted, e
       word: "can't be kept",
       opens: false,
       why: { title: "This page can't be kept", detail: null },
+    });
+  });
+
+  it("says a word rosetta added that this build has not heard (availability unknown): muted, and it asks nothing", () => {
+    expect(
+      madeAppStateOf({ ...release, availability: "unknown" }, STUDIO_SOURCE, undefined, "studio"),
+    ).toEqual({
+      tone: "muted",
+      word: "unknown",
+      opens: false,
+      why: { title: "This app can't open here yet", detail: null },
     });
   });
 
@@ -605,6 +683,29 @@ describe("a made tile's state (§8: serving green, failed red, the rest muted, e
       "Couldn't open Release notes. Try again.",
     );
   });
+
+  it("says a mark that failed other than by 3h's wait in plain words, by its act", () => {
+    expect(madeAppErrorWords(rpcError("FORBIDDEN_SCOPE"), "hide", "Release notes", "studio")).toBe(
+      "This window can't keep or hide apps yet.",
+    );
+    expect(madeAppErrorWords(rpcError("UNAUTHORIZED"), "keep", "Release notes", "studio")).toBe(
+      "This window can't keep or hide apps yet.",
+    );
+    // another service's UNAVAILABLE is no wait for 3h
+    const elsewhere = rpcError("UNAVAILABLE", { service: "rosetta", state: "starting" });
+    expect(madeAppErrorWords(elsewhere, "keep", "Release notes", "studio")).toBe(
+      "Couldn't keep Release notes. Try again.",
+    );
+    expect(madeAppErrorWords(rpcError("INTERNAL"), "unkeep", "Release notes", "studio")).toBe(
+      "Couldn't stop keeping Release notes. Try again.",
+    );
+    expect(madeAppErrorWords(rpcError("TIMEOUT"), "hide", "Release notes", "studio")).toBe(
+      "Couldn't hide Release notes. Try again.",
+    );
+    expect(madeAppErrorWords(rpcError("NOT_FOUND"), "keep", "Release notes", "studio")).toBe(
+      "Release notes is no longer in Apps.",
+    );
+  });
 });
 
 // ── the feed and the acts over the door ─────────────────────────────────────────────────────────
@@ -626,14 +727,33 @@ describe("the doors the group asks (fakes: fieldd's handlers are MA-3e's)", () =
     expect(read.clipped).toBe(true);
   });
 
-  it("asks with the search's q, and stops at its page bound on a cursor that never ends", async () => {
+  it("asks with the search's q, and stops at its page bound on a cursor that never ends, saying so", async () => {
     const door = fakeClient({
       "index.apps.list": () => ({ rows: [], cursor: "again", sources: [STUDIO_SOURCE] }),
     });
-    await pageMadeApps(door.client, "chart");
+    const read = await pageMadeApps(door.client, "chart");
     const asks = door.callsOf("index.apps.list");
     expect(asks).toHaveLength(MADE_APPS_MAX_PAGES);
     expect(asks[0]?.params).toEqual({ scope: "mesh", limit: MADE_APPS_PAGE_LIMIT, q: "chart" });
+    expect(read.clipped, "a walk stopped with pages left is clipped").toBe(true);
+  });
+
+  it("bounds the walk by one desktop's rows FOR EACH desktop in the reading, since the mesh holds them all", async () => {
+    const door = fakeClient({
+      "index.apps.list": () => ({
+        rows: [],
+        cursor: "again",
+        sources: [STUDIO_SOURCE, MINI_SOURCE],
+      }),
+    });
+    const read = await pageMadeApps(door.client, "");
+    expect(door.callsOf("index.apps.list")).toHaveLength(MADE_APPS_MAX_PAGES * 2);
+    expect(read.clipped).toBe(true);
+    const whole = fakeClient({
+      "index.apps.list": () => ({ rows: [app(1)], sources: [STUDIO_SOURCE] }),
+    });
+    const ended = await pageMadeApps(whole.client, "");
+    expect(ended.clipped, "a walk that ended is whole").toBe(false);
   });
 
   it("names the projects from project.list, and none when it is refused", async () => {
@@ -675,7 +795,7 @@ describe("the doors the group asks (fakes: fieldd's handlers are MA-3e's)", () =
     expect(answer).toEqual({ foldKey: `hosted:${HOSTED}`, kept: true, hidden: false });
   });
 
-  it("reads Versions from index.artifacts {device, appId}, every page, newest first", async () => {
+  it("reads Versions from index.artifacts {device, appId}, every page, newest first, with whether the library is read", async () => {
     const pages = [
       { entries: [entry(11, hoursAgo(30))], nextCursor: "v1", canonicalReady: true },
       { entries: [entry(12, hoursAgo(2))], canonicalReady: true },
@@ -686,7 +806,12 @@ describe("the doors the group asks (fakes: fieldd's handlers are MA-3e's)", () =
       { device: MINI, appId: hex64(1), limit: MADE_APPS_VERSIONS_LIMIT },
       { device: MINI, appId: hex64(1), limit: MADE_APPS_VERSIONS_LIMIT, cursor: "v1" },
     ]);
-    expect(versions.map((one) => one.presentationId)).toEqual([hex64(12), hex64(11)]);
+    expect(versions.entries.map((one) => one.presentationId)).toEqual([hex64(12), hex64(11)]);
+    expect(versions.canonicalReady).toBe(true);
+    const reading = fakeClient({
+      "index.artifacts": () => ({ entries: [], canonicalReady: false }),
+    });
+    expect((await madeAppVersions(reading.client, app(1))).canonicalReady).toBe(false);
   });
 });
 
@@ -1034,13 +1159,16 @@ describe("<MadeApps> — the group over its client", () => {
     expect(plain?.hasAttribute("data-ink")).toBe(false);
   });
 
-  it("says a library still reading its history, never an empty group, and fills when a ping comes", async () => {
+  it("says this desktop is still reading before its first walk — as 3e answers a mesh ask — never an empty group, and fills when a ping comes", async () => {
+    // 3e's fold for `scope: "mesh"` never refuses: its own source is `stale` with no rows until the
+    // first walk completes, and `libraryReady` is absent until a page is heard
+    const { name: _name, libraryReady: _unheard, ...bare } = STUDIO_SOURCE;
     let ready = false;
     const door = fakeClient({
-      "index.apps.list": () => {
-        if (!ready) throw rpcError("UNAVAILABLE", { service: "apps", state: "library-reading" });
-        return { rows: [app(2, { title: "Release notes" })], sources: [STUDIO_SOURCE] };
-      },
+      "index.apps.list": () =>
+        ready
+          ? { rows: [app(2, { title: "Release notes" })], sources: [STUDIO_SOURCE] }
+          : { rows: [], sources: [{ ...bare, state: "stale", rows: 0 }] },
     });
     await mount(door.client);
     expect(text()).toContain("This Mac is still reading its history");
@@ -1048,6 +1176,19 @@ describe("<MadeApps> — the group over its client", () => {
     ready = true;
     await door.ping();
     expect(tileTitles()).toEqual(["Release notes"]);
+    expect(text()).not.toContain("is still reading its history");
+  });
+
+  it("says the door's library-reading refusal of a list the same way (its word for a local ask)", async () => {
+    const door = fakeClient({
+      "index.apps.list": () => {
+        throw rpcError("UNAVAILABLE", { service: "apps", state: "library-reading" });
+      },
+    });
+    await mount(door.client);
+    expect(text()).toContain("This Mac is still reading its history");
+    expect(text()).not.toContain("No apps from your agents yet");
+    expect(text()).not.toContain("can't be read right now");
   });
 
   it("says each desktop whose library is still reading, over the tiles it has or in place of an empty group", async () => {
@@ -1096,6 +1237,325 @@ describe("<MadeApps> — the group over its client", () => {
     expect(container?.querySelector(".vf-apps-quiet strong")?.textContent).toBe(
       "Your agents' apps can't be read right now",
     );
+  });
+
+  // ── the review's rows (fix pass, 2026-11-05) ──
+
+  const RELEASE_LIST = (): IndexAppsResult => ({
+    rows: [app(2, { title: "Release notes" })],
+    sources: [STUDIO_SOURCE],
+  });
+  const SERVING = { state: "serving", url: "https://studio.tail1234.ts.net:13001/" };
+  const versionRows = (): HTMLButtonElement[] => [
+    ...(container?.querySelectorAll<HTMLButtonElement>(".vf-apps-version") ?? []),
+  ];
+
+  it("asks a starting app at most three times — the press and its two re-asks — then leaves it starting", async () => {
+    vi.useFakeTimers();
+    const door = fakeClient({
+      "index.apps.list": RELEASE_LIST,
+      "artifact.open": () => ({ state: "starting" }),
+    });
+    await mount(door.client);
+    await press(openOf("Release notes"));
+    for (const delay of MADE_APP_OPEN_RETRY_DELAYS_MS) {
+      await act(async () => vi.advanceTimersByTime(delay));
+      await settle();
+    }
+    await act(async () => vi.advanceTimersByTime(10_000));
+    await settle();
+    expect(door.callsOf("artifact.open")).toHaveLength(1 + MADE_APP_OPEN_RETRY_DELAYS_MS.length);
+    expect(statusOf("Release notes")).toBe("studio · starting");
+    expect(openOf("Release notes")?.disabled, "a starting app may be pressed again").toBe(false);
+  });
+
+  it("says §9's Opening on ‹desktop›… LATE: the desktop's name for 120ms, then the line", async () => {
+    vi.useFakeTimers();
+    const door = fakeClient({
+      "index.apps.list": RELEASE_LIST,
+      "artifact.open": () => new Promise(() => undefined),
+    });
+    await mount(door.client);
+    await press(openOf("Release notes"));
+    expect(door.callsOf("artifact.open")).toHaveLength(1);
+    expect(statusOf("Release notes")).toBe("studio");
+    await act(async () => vi.advanceTimersByTime(MADE_APP_OPENING_LATE_MS - 1));
+    expect(statusOf("Release notes")).toBe("studio");
+    await act(async () => vi.advanceTimersByTime(1));
+    expect(statusOf("Release notes")).toBe("Opening on studio…");
+    expect(tileOf("Release notes")?.querySelector(".vf-apps-status__late")).not.toBeNull();
+  });
+
+  it("says an app no longer in Apps in an alert, and re-pages so its tile leaves", async () => {
+    let gone = false;
+    const door = fakeClient({
+      "index.apps.list": () => (gone ? { rows: [], sources: [STUDIO_SOURCE] } : RELEASE_LIST()),
+      "artifact.open": () => {
+        gone = true;
+        throw rpcError("NOT_FOUND");
+      },
+    });
+    await mount(door.client);
+    await press(openOf("Release notes"));
+    expect(container?.querySelector('.vf-apps-error[role="alert"]')?.textContent).toBe(
+      "Release notes is no longer in Apps.",
+    );
+    expect(door.callsOf("index.apps.list")).toHaveLength(2);
+    expect(tileTitles()).toEqual([]);
+  });
+
+  it("says a search that finds nothing in its own words, and never sends a search longer than the door admits", async () => {
+    vi.useFakeTimers();
+    const door = fakeClient({
+      "index.apps.list": (params) =>
+        params["q"] === undefined ? RELEASE_LIST() : { rows: [], sources: [STUDIO_SOURCE] },
+    });
+    await mount(door.client);
+    await act(async () => setSearch("zebra"));
+    await act(async () => vi.advanceTimersByTime(MADE_APPS_SEARCH_DEBOUNCE_MS));
+    await settle();
+    expect(container?.querySelector(".vf-apps-quiet strong")?.textContent).toBe(
+      "No apps match “zebra”",
+    );
+    expect(MADE_APPS_QUERY_MAX, "IndexAppsParams bounds q").toBe(512);
+    const search = container?.querySelector<HTMLInputElement>('input[type="search"]');
+    expect(search?.getAttribute("maxlength")).toBe(String(MADE_APPS_QUERY_MAX));
+    // a value set past the field's bound (a paste a script made) is still cut to the door's
+    await act(async () => setSearch("a".repeat(600)));
+    await act(async () => vi.advanceTimersByTime(MADE_APPS_SEARCH_DEBOUNCE_MS));
+    await settle();
+    const asked = door.callsOf("index.apps.list").at(-1)?.params["q"];
+    expect(typeof asked === "string" ? asked.length : 0).toBe(MADE_APPS_QUERY_MAX);
+    expect(text()).not.toContain("can't be read right now");
+  });
+
+  it("closes the notice with its Close", async () => {
+    const door = fakeClient({
+      "index.apps.list": () => ({
+        rows: [app(3, { title: "Bundle size", openable: false })],
+        sources: [STUDIO_SOURCE],
+      }),
+    });
+    await mount(door.client);
+    await press(openOf("Bundle size"));
+    expect(notice(), "the notice").toBeDefined();
+    await press(actIn(notice(), "Close"));
+    expect(notice()).toBeUndefined();
+  });
+
+  it("says a refused Versions read in the step's alert, with no empty words over it", async () => {
+    const door = fakeClient({
+      "index.apps.list": RELEASE_LIST,
+      "index.artifacts": () => {
+        throw rpcError("TIMEOUT");
+      },
+    });
+    await mount(door.client);
+    await press(actIn(tileOf("Release notes"), "Versions"));
+    const step = container?.querySelector(".vf-apps-versions");
+    expect(step, "the Versions step").not.toBeNull();
+    expect(step?.querySelector('.vf-apps-error[role="alert"]')?.textContent).toBe(
+      "The versions of Release notes can't be read right now.",
+    );
+    expect(text()).not.toContain("No versions found");
+  });
+
+  it("says Versions' library still reading, and an empty Versions, in words — never a blank step (MA-L10)", async () => {
+    let canonicalReady = false;
+    const door = fakeClient({
+      "index.apps.list": RELEASE_LIST,
+      "index.artifacts": () => ({ entries: [], canonicalReady }),
+    });
+    await mount(door.client);
+    await press(actIn(tileOf("Release notes"), "Versions"));
+    expect(text()).toContain("studio is still reading its history");
+    expect(text()).not.toContain("No versions found");
+    await press(actIn(container ?? undefined, "Back"));
+    canonicalReady = true;
+    await press(actIn(tileOf("Release notes"), "Versions"));
+    expect(container?.querySelector(".vf-apps-versions .vf-apps-quiet strong")?.textContent).toBe(
+      "No versions found",
+    );
+  });
+
+  it("holds a refused older version under its own presentation: Back, and the tile still asks artifact.open", async () => {
+    const door = fakeClient({
+      "index.apps.list": () => ({
+        rows: [app(2, { title: "Release notes", versions: 2 })],
+        sources: [STUDIO_SOURCE],
+      }),
+      "index.artifacts": () => ({
+        entries: [entry(11, hoursAgo(30)), entry(12, hoursAgo(2))],
+        canonicalReady: true,
+      }),
+      "artifact.open": (params) => {
+        if (params["presentationId"] !== undefined)
+          throw rpcError("UNAVAILABLE", { service: "apps", state: "not-kept" });
+        return SERVING;
+      },
+    });
+    await mount(door.client);
+    await press(actIn(tileOf("Release notes"), "Versions"));
+    await press(versionRows()[1]);
+    expect(notice()?.querySelector("strong")?.textContent).toBe("This page wasn't kept");
+    await press(versionRows()[1]);
+    expect(door.callsOf("artifact.open"), "not asked again over the same row").toHaveLength(1);
+    await press(actIn(container ?? undefined, "Back"));
+    expect(notice()).toBeUndefined();
+    expect(statusOf("Release notes")).toBe("studio");
+    await press(openOf("Release notes"));
+    expect(door.callsOf("artifact.open").map((call) => call.params)).toEqual([
+      { appId: hex64(2), device: STUDIO, presentationId: hex64(11), reveal: true },
+      { appId: hex64(2), device: STUDIO, reveal: true },
+    ]);
+    expect(toneOf("Release notes")).toBe("healthy");
+  });
+
+  it("opens a kept older version even when the newest page was not kept, and says the one that wasn't", async () => {
+    const door = fakeClient({
+      "index.apps.list": () => ({
+        rows: [
+          app(2, { title: "Release notes", availability: "too_large", openable: false }),
+        ],
+        sources: [STUDIO_SOURCE],
+      }),
+      "index.artifacts": () => ({
+        entries: [entry(11, hoursAgo(30)), entry(12, hoursAgo(2), { availability: "too_large" })],
+        canonicalReady: true,
+      }),
+    });
+    await mount(door.client);
+    expect(statusOf("Release notes")).toBe("studio · too large");
+    await press(actIn(tileOf("Release notes"), "Versions"));
+    await press(versionRows()[0]);
+    expect(door.callsOf("artifact.open")).toEqual([]);
+    expect(notice()?.querySelector("strong")?.textContent).toBe("Too large to keep");
+    await press(versionRows()[1]);
+    expect(door.callsOf("artifact.open").map((call) => call.params)).toEqual([
+      { appId: hex64(2), device: STUDIO, presentationId: hex64(11), reveal: true },
+    ]);
+  });
+
+  it("lets a refusal stand over its row, and lets the row's truth back in once a newer reading moves it", async () => {
+    let presentation = 2;
+    let refuse = true;
+    const door = fakeClient({
+      "index.apps.list": () => ({
+        rows: [app(2, { title: "Release notes", presentationId: hex64(presentation) })],
+        sources: [STUDIO_SOURCE],
+      }),
+      "artifact.open": () => {
+        if (refuse) throw rpcError("UNAVAILABLE", { service: "apps", state: "not-kept" });
+        return SERVING;
+      },
+    });
+    await mount(door.client);
+    await press(openOf("Release notes"));
+    expect(statusOf("Release notes")).toBe("studio · not kept");
+    await door.ping();
+    expect(statusOf("Release notes"), "the same row: the refusal stands").toBe("studio · not kept");
+    await press(openOf("Release notes"));
+    expect(door.callsOf("artifact.open")).toHaveLength(1);
+    refuse = false;
+    presentation = 3;
+    await door.ping();
+    expect(statusOf("Release notes"), "a new presentation: the row's truth").toBe("studio");
+    await press(openOf("Release notes"));
+    expect(door.callsOf("artifact.open")).toHaveLength(2);
+    expect(toneOf("Release notes")).toBe("healthy");
+  });
+
+  it("keeps a serving tile green over its row, and lets it go once its desktop goes away", async () => {
+    let mini: IndexAppsSource = MINI_SOURCE;
+    const door = fakeClient({
+      "index.apps.list": () => ({
+        rows: [app(2, { title: "Launch checklist", device: MINI })],
+        sources: [STUDIO_SOURCE, mini],
+      }),
+    });
+    await mount(door.client);
+    await press(openOf("Launch checklist"));
+    expect(toneOf("Launch checklist")).toBe("healthy");
+    await door.ping();
+    expect(toneOf("Launch checklist"), "the same row: still green").toBe("healthy");
+    mini = { ...MINI_SOURCE, state: "asleep" };
+    await door.ping();
+    expect(statusOf("Launch checklist")).toBe("mini · asleep");
+    mini = MINI_SOURCE;
+    await door.ping();
+    expect(statusOf("Launch checklist")).toBe("mini");
+    expect(toneOf("Launch checklist"), "a serve from before it slept is not claimed").toBe("muted");
+  });
+
+  it("lets a serving tile's green go once a serve nobody opened could have closed (the idle close)", async () => {
+    vi.useFakeTimers();
+    const door = fakeClient({ "index.apps.list": RELEASE_LIST });
+    await mount(door.client);
+    expect(MADE_APP_SERVING_HELD_MS, "the origin's idle close").toBe(24 * 60 * 60_000);
+    await press(openOf("Release notes"));
+    expect(toneOf("Release notes")).toBe("healthy");
+    await act(async () => vi.advanceTimersByTime(MADE_APP_SERVING_HELD_MS - 1));
+    expect(toneOf("Release notes"), "inside the idle close: still green").toBe("healthy");
+    await act(async () => vi.advanceTimersByTime(1));
+    expect(toneOf("Release notes"), "past it the window cannot know it serves").toBe("muted");
+    expect(statusOf("Release notes")).toBe("studio");
+    await press(openOf("Release notes"));
+    expect(door.callsOf("artifact.open"), "a rested tile asks again").toHaveLength(2);
+    expect(toneOf("Release notes")).toBe("healthy");
+  });
+
+  it("reads the project names again with every re-page, so the fact line follows PJ's grouping", async () => {
+    let name = "vibe-field";
+    const door = fakeClient({
+      "index.apps.list": RELEASE_LIST,
+      "project.list": () => ({
+        rows: [project({ ...VIBE_FIELD, name })],
+        sources: [],
+        groupingVersion: 1,
+      }),
+    });
+    await mount(door.client);
+    const facts = (): string | null | undefined =>
+      tileOf("Release notes")?.querySelector("small")?.textContent;
+    expect(facts()).toBe(`${AGENT?.label} · vibe-field`);
+    name = "field";
+    await door.ping();
+    expect(door.callsOf("project.list")).toHaveLength(2);
+    expect(facts()).toBe(`${AGENT?.label} · field`);
+  });
+
+  it("says a reading that holds fewer apps than the fold, never silently", async () => {
+    const door = fakeClient({
+      "index.apps.list": () => ({
+        rows: [app(2), app(3)],
+        sources: [STUDIO_SOURCE],
+        clipped: true,
+      }),
+    });
+    await mount(door.client);
+    expect(text()).toContain("Showing the newest 2 apps");
+  });
+
+  it("draws one reading line for each of two desktops the roster names none, without a key clash", async () => {
+    const errors = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    try {
+      const { name: _name, ...unnamed } = MINI_SOURCE;
+      const door = fakeClient({
+        "index.apps.list": () => ({
+          rows: [],
+          sources: [
+            STUDIO_SOURCE,
+            { ...unnamed, libraryReady: false },
+            { ...unnamed, device: "01J9ZQ1A2B3C4D5E6F7G8H9J0K", libraryReady: false },
+          ],
+        }),
+      });
+      await mount(door.client);
+      expect(container?.querySelectorAll(".vf-apps-reading")).toHaveLength(2);
+      expect(errors.mock.calls.flat().map(String).join(" ")).not.toContain("same key");
+    } finally {
+      errors.mockRestore();
+    }
   });
 });
 
@@ -1152,6 +1612,16 @@ describe("the made tile's form (made-apps.css; tokens only)", () => {
     expect(night).toContain("color: var(--vf-apps-ink);");
   });
 
+  it("dims a greyed tile's image alone, never the fallback squircle (§2.9's 3:1 floor for the mark)", () => {
+    expect(CSS).not.toMatch(/\[data-muted="true"\][^{]*\.vf-apps-icon[^{]*\{/u);
+  });
+
+  it("fades Opening on ‹desktop›… in over 180ms plain ease once the tile has held it 120ms (§9, late)", () => {
+    expect(MADE_APP_OPENING_LATE_MS).toBe(120);
+    expect(rule(".vf-apps-status__late")).toContain("animation: vf-apps-late 180ms ease both;");
+    expect(CSS).toMatch(/@keyframes vf-apps-late \{\s*from \{\s*opacity: 0;/u);
+  });
+
   it("takes the night tile from tokens.css, at DESIGN.md §2.9's value (the doc first, then the token)", () => {
     const dark = TOKENS.slice(TOKENS.indexOf("\n.dark {"));
     expect(dark).toMatch(/\s--vf-app-fallback-tile:\s*#232326;/u);
@@ -1184,9 +1654,9 @@ describe("the catalog's made-apps plate (docs/UI_SYSTEM.md: the shipping view on
     await settle();
   }
 
-  it("PIN: offers the five states the plan names, on the plates' fixed clock", () => {
+  it("PIN: offers the five states the plan names, on the plates' fixed clock (15:00 on the viewer's own)", () => {
     expect(MADE_APPS_PREVIEW_STATES).toEqual(["populated", "fallback", "reading", "unbuilt", "empty"]);
-    expect(MADE_APPS_FIXTURE_NOW).toBe(Date.UTC(2026, 10, 5, 15, 0));
+    expect(MADE_APPS_FIXTURE_NOW).toBe(new Date(2026, 10, 5, 15, 0).getTime());
   });
 
   it("mounts the shipping group in every state over its fixture client", async () => {
@@ -1216,7 +1686,7 @@ describe("the catalog's made-apps plate (docs/UI_SYSTEM.md: the shipping view on
     );
   });
 
-  it("PIN: its client answers an act with nothing, so a plate opens nothing outside it", async () => {
+  it("PIN: its client answers a fieldd act with nothing, so an open on a plate never settles", async () => {
     const client = madeAppsPreviewClient("populated");
     const answer = await Promise.race([
       client.request("artifact.open", { appId: hex64(1) }).then(() => "answered"),

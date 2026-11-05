@@ -375,6 +375,12 @@ async function mint(
     // off agents.manage so the phone can hold them; the window keeps every
     // door it had. agents.manage stays for the distribution record and
     // `needs.notices.subscribe`. Never plugin-eligible.
+    // MA-4a (the lead's ruling on L4, C1): apps.use — the made apps' open and
+    // mark (`artifact.open`, `artifact.mark`), the window's and the phone's,
+    // never plugin-eligible. The window's open asks `reveal: true`, so the
+    // answering home opens the URL it validated through its shell's
+    // `shell.openLink`, as `terminal.link.open` does (C2): the window still
+    // does NOT hold shell.open.
     scopes: [
       "doc.read",
       "doc.write",
@@ -399,6 +405,7 @@ async function mint(
       "terminal.link",
       "project.read",
       "sparks.use",
+      "apps.use",
     ],
     label: `window-${senderId}`,
     rendererParticipant,

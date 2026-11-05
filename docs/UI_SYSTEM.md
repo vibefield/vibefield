@@ -67,6 +67,17 @@ The catalog currently mounts these shipping views directly:
 - Artifact Hub and all empty/loading/populated/unavailable states — at the width the pill's sheet
   gives its Artifacts shelf since HN-8, a container its plugin's own tile form answers (PL-D3); the
   side panel's contents, which the right edge's drawer held from One Frame FR-4 until then
+- *added 2026-11-05 (MA-4a; the lead's C18):* From your agents, the shelf's second group (DESIGN.md
+  §8 "Artifacts — the Artifacts shelf's contents", as amended; MA-D13 (a): on screen the shelf is
+  Apps, and "artifact" stays the code's word) — the shipping `MadeApps` on its own fixture adapter,
+  `frame/apps/design-system.tsx` (the Hub's `/design-system` door's shape, beside the shipping
+  group), in the Hub's 504 stage: populated with its days and a desktop asleep, the fallback
+  squircles before a preview (§2.9's one exception), a library still reading, the apps a desktop
+  cannot write out yet with Open in ‹host› (rosetta 0.1.3, MA-4's witness), and empty. Only the
+  client's answers, the clock and the image transport are replaced (the catalog has no tailnet, so
+  its stills are its own); its fieldd acts (open, keep, hide, Versions' read) never settle, and its
+  "Open in ‹host›" is the shipping link, to the fixture's hosted address. The catalog's CSS may not
+  own a `.vf-apps-*` rule (`ui-system-boundaries.test.ts`)
 - Godview stage, monitor registry, tuning panel, unavailable terminal deck, and the complete
   swarm-circle state matrix — and, since GV-D1 (2026-10-11), Godview's head: the shipping
   `GodviewHeadView`, which the shipping monitor mounts, so every Godview specimen wears it and no

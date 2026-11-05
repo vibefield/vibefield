@@ -396,6 +396,8 @@
   --vf-tailscale-ink: #ffffff;
   /* §2.9 the project ink by night: lighter, the same chroma */
   --vf-project-ink-l: 0.74;
+  /* §2.9 a made app's fallback tile by night (MA-4a): the page's dark tile, the initial drawn on it in the ink */
+  --vf-app-fallback-tile: #232326;
 
   /* §2.1 Ground */
   --vf-canvas-bg: #171717;
