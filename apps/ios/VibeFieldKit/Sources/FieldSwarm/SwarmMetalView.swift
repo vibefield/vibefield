@@ -27,6 +27,11 @@ public final class SwarmMetalView: MTKView {
   public private(set) var renderer: SwarmRenderer?
   /// Why nothing is painting, when nothing is.
   public private(set) var failure: String?
+  /// A host's own ceiling on the rate (the lab's contact sheets ask 10); nil
+  /// draws at the rate of the screen this view's window stands on.
+  var frameRateCap: Int? {
+    didSet { followWindow() }
+  }
   private let started = CACurrentMediaTime()
 
   public struct SwarmParametersSnapshot: Sendable {
@@ -47,18 +52,26 @@ public final class SwarmMetalView: MTKView {
     backgroundColor = .clear
     layer.isOpaque = false
     clearColor = MTLClearColor(red: 0, green: 0, blue: 0, alpha: 0)
-    preferredFramesPerSecond = UIScreen.main.maximumFramesPerSecond
     enableSetNeedsDisplay = false
     isUserInteractionEnabled = false
     delegate = self
     if let device {
       do {
-        renderer = try SwarmRenderer(gpu: try SwarmGPU.shared(scale: UIScreen.main.scale))
+        // No scale is said here: a view has no window yet, so it cannot know its
+        // screen. The window's scale arrives with the window (`followWindow`)
+        // and at every layout (`SwarmRenderer.resize`).
+        renderer = try SwarmRenderer(gpu: try SwarmGPU.shared())
       } catch {
         failure = "\(error)"
       }
     } else {
       failure = SwarmGPUError.noDevice.description
+    }
+    // LP-4 — an iPad window can stand on a screen of its own (another scale, a
+    // 60 Hz display beside a ProMotion one), so the view follows its window's
+    // screen, never the main one (`UIScreen.main`, deprecated in iOS 26).
+    registerForTraitChanges([UITraitDisplayScale.self]) { (view: SwarmMetalView, _: UITraitCollection) in
+      view.followWindow()
     }
   }
 
@@ -70,6 +83,32 @@ public final class SwarmMetalView: MTKView {
   public override func layoutSubviews() {
     super.layoutSubviews()
     renderer?.resize(width: bounds.width, height: bounds.height, scale: contentScaleFactor)
+  }
+
+  public override func didMoveToWindow() {
+    super.didMoveToWindow()
+    followWindow()
+  }
+
+  /// The window's own screen: its scale for the drawable and the glyph atlas,
+  /// its highest rate for the loop (under a host's cap). Nothing without a
+  /// window: an off-screen view keeps what it had.
+  private func followWindow() {
+    guard let window else { return }
+    let screen = window.windowScene?.screen
+    let scale = traitCollection.displayScale > 0 ? traitCollection.displayScale : screen?.scale ?? 0
+    if scale > 0, contentScaleFactor != scale {
+      contentScaleFactor = scale
+    }
+    if let rate = screen?.maximumFramesPerSecond, rate > 0 {
+      preferredFramesPerSecond = min(rate, frameRateCap ?? rate)
+    } else if let frameRateCap {
+      preferredFramesPerSecond = frameRateCap
+    }
+    // Before its first layout the view has no size; layout says it then.
+    if bounds.width > 0, bounds.height > 0 {
+      renderer?.resize(width: bounds.width, height: bounds.height, scale: contentScaleFactor)
+    }
   }
 }
 

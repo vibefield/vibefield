@@ -48,14 +48,17 @@ public final class SwarmGPU {
   public static let pixelFormat: MTLPixelFormat = .bgra8Unorm
   private static var cached: SwarmGPU?
 
-  /// The one context for the process, or the reason there is none.
-  public static func shared(scale: CGFloat) throws -> SwarmGPU {
+  /// The one context for the process, or the reason there is none. `scale` is
+  /// the asking window's; nil (LP-4: a view not in a window yet, which cannot
+  /// know its screen) leaves a built atlas at the scale it has and builds a new
+  /// one at 1, until a window says its own at layout (`SwarmRenderer.resize`).
+  public static func shared(scale: CGFloat? = nil) throws -> SwarmGPU {
     if let cached {
-      cached.atlas.setScale(scale)
+      if let scale { cached.atlas.setScale(scale) }
       return cached
     }
     guard let device = MTLCreateSystemDefaultDevice() else { throw SwarmGPUError.noDevice }
-    let gpu = try SwarmGPU(device: device, scale: scale)
+    let gpu = try SwarmGPU(device: device, scale: scale ?? 1)
     cached = gpu
     return gpu
   }

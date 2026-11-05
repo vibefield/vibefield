@@ -464,4 +464,19 @@ private func catalogGolden() throws -> [CatalogMarkRow] {
     #expect(gpu.atlas.sprite("flame-hollow", size: flameSize, draw: SwarmSprites.flameHollow) != nil)
     #expect(SwarmSprites.icon("tool") == nil)
   }
+
+  /// LP-4 — a view not yet in a window cannot know its screen, so it asks for
+  /// the shared context without a scale, and that leaves the scale a window
+  /// already said (the field's) where it was: a second surface (the lab) must
+  /// not blur the first one's glyphs until its next layout.
+  @Test func askingWithoutAScaleLeavesTheWindowsScale() throws {
+    guard MTLCreateSystemDefaultDevice() != nil else { return }
+    let first = try SwarmGPU.shared(scale: 3)
+    #expect(first.atlas.scale == 3)
+    let second = try SwarmGPU.shared()
+    #expect(second === first)
+    #expect(second.atlas.scale == 3)
+    _ = try SwarmGPU.shared(scale: 2)
+    #expect(first.atlas.scale == 2)
+  }
 }

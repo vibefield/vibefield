@@ -273,7 +273,7 @@ private struct LabMarksSurface: UIViewRepresentable {
 
   func makeUIView(context: Context) -> SwarmMetalView {
     let view = SwarmMetalView(theme: SwarmTheme.resolve(colorScheme))
-    view.preferredFramesPerSecond = 10
+    view.frameRateCap = 10
     return view
   }
 

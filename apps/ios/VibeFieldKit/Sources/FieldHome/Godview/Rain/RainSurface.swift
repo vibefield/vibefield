@@ -25,6 +25,8 @@ final class RainMetalView: MTKView {
   private(set) var failure: String?
   private var renderer: RainRenderer?
   private var atlas: RainAtlas?
+  /// The scale `atlas` was drawn at: its window's (LP-4), 0 before it has one.
+  private var atlasScale: CGFloat = 0
   private var meter = RainFrameMeter()
 
   init(field: RainField) {
@@ -34,7 +36,6 @@ final class RainMetalView: MTKView {
     colorPixelFormat = RainRenderer.pixelFormat
     framebufferOnly = true
     isOpaque = true
-    preferredFramesPerSecond = UIScreen.main.maximumFramesPerSecond
     enableSetNeedsDisplay = true
     isPaused = true
     delegate = self
@@ -47,9 +48,15 @@ final class RainMetalView: MTKView {
     }
     do {
       renderer = try RainRenderer(device: device)
-      atlas = try RainAtlas(device: device, scale: UIScreen.main.scale, fontSize: field.parameters.fontSize)
     } catch {
       failure = "\(error)"
+    }
+    // LP-4 — the atlas is drawn at the scale of the screen this view's window
+    // stands on, and the loop runs at that screen's rate: an iPad window can
+    // stand on a display of its own. Never `UIScreen.main` (deprecated in iOS
+    // 26): the window says, when there is one (`followWindow`).
+    registerForTraitChanges([UITraitDisplayScale.self]) { (view: RainMetalView, _: UITraitCollection) in
+      view.followWindow()
     }
   }
 
@@ -74,6 +81,32 @@ final class RainMetalView: MTKView {
     super.layoutSubviews()
     field.resize(width: bounds.width, height: bounds.height)
     refreshAccessibility()
+    if !field.running { setNeedsDisplay() }
+  }
+
+  override func didMoveToWindow() {
+    super.didMoveToWindow()
+    followWindow()
+  }
+
+  /// The window's own screen: its highest rate (the field's cap still steps the fall, `RainMotion`), and its scale
+  /// for the drawable and the glyph atlas, which is redrawn only when that scale changes. Nothing without a window.
+  private func followWindow() {
+    guard let window else { return }
+    let screen = window.windowScene?.screen
+    if let rate = screen?.maximumFramesPerSecond, rate > 0 { preferredFramesPerSecond = rate }
+    let scale = traitCollection.displayScale > 0 ? traitCollection.displayScale : screen?.scale ?? 0
+    guard scale > 0 else { return }
+    if contentScaleFactor != scale { contentScaleFactor = scale }
+    guard scale != atlasScale, let device, renderer != nil else { return }
+    do {
+      atlas = try RainAtlas(device: device, scale: scale, fontSize: field.parameters.fontSize)
+      atlasScale = scale
+    } catch {
+      atlas = nil
+      atlasScale = 0
+      failure = "\(error)"
+    }
     if !field.running { setNeedsDisplay() }
   }
 
