@@ -344,6 +344,8 @@ export function transcriptItemsOf({
 function rowsOf(lines: readonly SparkTranscriptKnownLine[], name: string, key: string): Row[] {
   const rows: Row[] = [];
   const replies = new Map<string, number>();
+  // SP-1e2 (SPE-Q39 (a)) — a crew's act line, where it first stood: a later line of the crew says its latest words
+  const crews = new Map<string, number>();
   let toolsAt = 0;
   let toolsTurn: string | undefined;
   let toolsKey = "";
@@ -415,19 +417,26 @@ function rowsOf(lines: readonly SparkTranscriptKnownLine[], name: string, key: s
           },
         });
         break;
-      case "act":
+      case "act": {
         closeTools();
-        rows.push({
-          at,
-          item: {
-            kind: "act",
-            key: `act:${key}:${line.seq}`,
-            what: line.what,
-            words: actWords(line.what, line.text, name),
-            lead: false,
-          },
-        });
+        const crew = line.what === "crew" ? line.crew : undefined;
+        const item: FlowItem = {
+          kind: "act",
+          key: crew === undefined ? `act:${key}:${line.seq}` : `act:crew:${crew}`,
+          what: line.what,
+          words: actWords(line.what, line.text, name),
+          lead: false,
+          ...(crew === undefined ? {} : { crew }),
+        };
+        const held = crew === undefined ? undefined : crews.get(crew);
+        const was = held === undefined ? undefined : rows[held];
+        if (held !== undefined && was !== undefined) rows[held] = { at: was.at, item };
+        else {
+          if (crew !== undefined) crews.set(crew, rows.length);
+          rows.push({ at, item });
+        }
         break;
+      }
       case "gap":
         closeTools();
         rows.push({

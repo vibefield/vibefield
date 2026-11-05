@@ -9,7 +9,6 @@ import { onReconnectedOver } from "../reconnect";
 // closed under the ask, reads as unreadable, and is asked again when the window's client is connected again; a refusal
 // for good (a fieldd without the door) reads as none, and the card stands on the board's rows alone. Every effect comes
 // through the door, so a test drives it without a window.
-// (red: a skeleton — `readCrews` reads nothing)
 
 /** What the crew cards read of the spark's crews. */
 export type CrewsReading =
@@ -55,13 +54,63 @@ export function crewsDoorOver(client: FielddClient): CrewsDoor {
   };
 }
 
-/** Read `spark`'s crews through `door`, telling each reading; the answer stops it. (red: a skeleton) */
+/** Read `spark`'s crews through `door`, telling each reading; the answer stops it. Told "reading" at once; then each
+ * frame whole; a frame that does not parse keeps what it had. */
 export function readCrews(
-  _spark: SparkId,
-  _door: CrewsDoor,
-  _onReading: (reading: CrewsReading) => void,
+  spark: SparkId,
+  door: CrewsDoor,
+  onReading: (reading: CrewsReading) => void,
 ): () => void {
-  return () => undefined;
+  let stopped = false;
+  let unsubscribe: (() => void) | null = null;
+  let stopReconnects: (() => void) | null = null;
+  const tell = (reading: CrewsReading) => {
+    if (!stopped) onReading(reading);
+  };
+  const ask = () => {
+    stopReconnects?.();
+    stopReconnects = null;
+    door
+      .watch(spark, (payload) => {
+        const frame = crewsFrameOf(payload);
+        if (frame !== undefined) tell({ state: "ready", frame });
+      })
+      .then(
+        (stop) => {
+          if (stopped) stop();
+          else unsubscribe = stop;
+        },
+        (refusal: unknown) => {
+          if (stopped) return;
+          if (!askedAgain(refusal)) {
+            tell({ state: "none" });
+            return;
+          }
+          tell({ state: "unreadable" });
+          stopReconnects = door.onReconnected(() => {
+            if (!stopped) ask();
+          });
+        },
+      );
+  };
+  tell(CREWS_READING);
+  ask();
+  return () => {
+    stopped = true;
+    unsubscribe?.();
+    unsubscribe = null;
+    stopReconnects?.();
+    stopReconnects = null;
+  };
+}
+
+/** fieldd's honest refusal (UNAVAILABLE: its kept record cannot be read) or the connection's (retryable) is asked again
+ * once the client is connected again; any other (no such spark, a malformed ask, a fieldd without the door) is for
+ * good. */
+function askedAgain(refusal: unknown): boolean {
+  if (typeof refusal !== "object" || refusal === null) return false;
+  const { kind, retryable } = refusal as { readonly kind?: unknown; readonly retryable?: unknown };
+  return kind === "UNAVAILABLE" || retryable === true;
 }
 
 /** The shown spark's crews, read while Chat shows its thread (`spark` null: none is read). */

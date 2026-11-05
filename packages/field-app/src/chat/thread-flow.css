@@ -144,6 +144,11 @@
   align-items: center;
 }
 
+/* SP-1e2 — a crew's act line with its card under it: the line stands at the face's height, the card below it */
+.vf-chat-msg[data-crew] .vf-chat-quiet {
+  min-height: 28px;
+}
+
 .vf-chat-msg-gap {
   width: 28px;
   height: 1px;

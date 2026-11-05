@@ -27,6 +27,8 @@ function scripted() {
   const door: CrewsDoor = {
     watch: async (spark, onFrame) => {
       asks.push(spark);
+      // fieldd answers later, never within the ask
+      await Promise.resolve();
       if (answer === null) throw { kind: "INTERNAL", retryable: false };
       const snapshot = answer();
       if (

@@ -1,0 +1,226 @@
+/* ── CHAT'S CREW CARD (SP-1e2's renderer half; DESIGN.md §8 "Chat's crew card"; the Sparks page's `.k-card`) ──
+   Under its crew's act line in Vela's flow. The needs-you card's chrome as it is once it waits on no one: solid chrome,
+   corners 16, the island shadow, ringed by the strong hairline, never the orange ring. Three parts, a hairline between
+   each: the head (44 tall, padded 0 14 0 16), the rows (padded 4 8, each 38 tall), the foot (padded 6 8 8). It comes
+   with its act line, with no entrance of its own; its rows and its ring change in place. Tokens only. */
+
+.vf-crew-card {
+  display: grid;
+  min-width: 0;
+  border-radius: 16px;
+  background: var(--vf-chrome-solid);
+  box-shadow:
+    0 0 0 1px var(--vf-hairline-strong),
+    var(--vf-shadow-island);
+}
+
+.vf-crew-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  height: 44px;
+  padding: 0 14px 0 16px;
+  box-shadow: inset 0 -1px 0 var(--vf-hairline);
+}
+
+.vf-crew-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13.5px;
+  color: var(--vf-text-primary);
+}
+
+.vf-crew-title b {
+  font-weight: 600;
+}
+
+.vf-crew-dim {
+  font-weight: 400;
+  color: var(--vf-text-tertiary);
+}
+
+/* the count, then 6, then the ring; "All done" wears its check */
+.vf-crew-count {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--vf-text-tertiary);
+}
+
+.vf-crew-ring {
+  flex: none;
+  transform: rotate(-90deg);
+}
+
+.vf-crew-ring circle {
+  fill: none;
+  stroke-width: 2.5px;
+}
+
+.vf-crew-ring-track {
+  stroke: var(--vf-hairline-strong);
+}
+
+.vf-crew-ring-fill {
+  stroke: var(--vf-ink-healthy);
+  stroke-linecap: round;
+  transition: stroke-dashoffset 400ms var(--vf-ease-island);
+}
+
+.vf-crew-rows {
+  display: grid;
+  padding: 4px 8px;
+  box-shadow: inset 0 -1px 0 var(--vf-hairline);
+}
+
+/* a row: 38 tall, padded 0 8, corners 10, its parts 10 apart — the mark at 18, the name in mono, the model, and the
+   state at its end, at least 96 wide and set to the right */
+.vf-crew-row {
+  display: grid;
+  grid-template-columns: 18px auto minmax(0, 1fr) minmax(96px, auto);
+  align-items: center;
+  gap: 10px;
+  height: 38px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 10px;
+  background: none;
+  font: inherit;
+  text-align: start;
+  color: inherit;
+}
+
+button.vf-crew-row {
+  cursor: default;
+}
+
+button.vf-crew-row:hover {
+  background: var(--vf-fill);
+}
+
+button.vf-crew-row:focus {
+  outline: none;
+}
+
+button.vf-crew-row:focus-visible {
+  outline: 2px solid var(--vf-select);
+  outline-offset: 1px;
+}
+
+button.vf-crew-row[data-waiting] {
+  cursor: progress;
+}
+
+.vf-crew-mark {
+  display: grid;
+  width: 18px;
+  height: 18px;
+  place-items: center;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.vf-crew-name {
+  white-space: nowrap;
+  font-family: var(--vf-font-mono);
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--vf-text-primary);
+}
+
+.vf-crew-model {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  color: var(--vf-text-secondary);
+}
+
+.vf-crew-state {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--vf-text-secondary);
+}
+
+.vf-crew-row[data-state="working"] .vf-crew-state {
+  color: var(--vf-ink-healthy);
+}
+
+.vf-crew-row[data-state="needs"] .vf-crew-state {
+  color: var(--vf-ink-attention);
+}
+
+/* a Working row's mark: a whole ring 10 round of 1.5 in the word's ink, breathing its ink from 35% to all of it on the
+   breath's timing (§6: 1.1s, alternate, ease-in-out) */
+.vf-crew-breath {
+  box-sizing: border-box;
+  width: 10px;
+  height: 10px;
+  border: 1.5px solid currentColor;
+  border-radius: 50%;
+  animation: vf-crew-breath 1.1s ease-in-out infinite alternate;
+}
+
+@keyframes vf-crew-breath {
+  from {
+    opacity: 0.35;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+/* the foot: Open in Godview, the kit's quiet button at the needs-you card's act size, then its one line */
+.vf-crew-foot {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 6px 8px 8px;
+}
+
+.vf-crew-foot .vf-ui-button.vf-crew-open {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 12px;
+  border-radius: 14px;
+  font-size: 12.5px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.vf-crew-line {
+  min-width: 0;
+  margin: 0 0 0 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  color: var(--vf-text-tertiary);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vf-crew-breath {
+    animation: none;
+  }
+
+  .vf-crew-ring-fill {
+    transition: none;
+  }
+}

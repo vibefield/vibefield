@@ -10,6 +10,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { CrewCardView } from "./CrewCardView";
 import type { CrewCard } from "./crew-card";
 import { chipWordsOf, FLOW_WORDS, type Flow, type FlowItem } from "./transcript-items";
 import { type InlineRun, type MarkdownBlock, markdownBlocksOf } from "./transcript-markdown";
@@ -61,6 +62,10 @@ export function ThreadFlowView({
   sending = false,
   onEarlier,
   opened,
+  crews,
+  onCrewRow,
+  onOpenGodview,
+  revealing,
 }: ThreadFlowViewProps): ReactElement {
   const scroller = useRef<HTMLDivElement>(null);
   const atFoot = useRef(true);
@@ -207,13 +212,33 @@ export function ThreadFlowView({
       }
       case "act": {
         const glyph = ACT_GLYPHS[item.what];
+        const line = (
+          <p className="vf-chat-quiet" data-act={item.what}>
+            {glyph === undefined ? null : <FieldGlyph name={glyph} size={13} />}
+            <span>{item.words}</span>
+          </p>
+        );
+        // SP-1e2 — a crew's card hangs under its act line, by the crew's id; with none, the line stands alone
+        const card = item.crew === undefined ? undefined : crews?.get(item.crew);
+        if (card === undefined)
+          return (
+            <div key={item.key} className="vf-chat-msg" data-row="act" data-quiet="">
+              {lead(item.lead)}
+              {line}
+            </div>
+          );
         return (
-          <div key={item.key} className="vf-chat-msg" data-row="act" data-quiet="">
+          <div key={item.key} className="vf-chat-msg" data-row="act" data-crew="">
             {lead(item.lead)}
-            <p className="vf-chat-quiet" data-act={item.what}>
-              {glyph === undefined ? null : <FieldGlyph name={glyph} size={13} />}
-              <span>{item.words}</span>
-            </p>
+            <div className="vf-chat-msg-body">
+              {line}
+              <CrewCardView
+                card={card}
+                onRow={onCrewRow}
+                onOpenGodview={onOpenGodview}
+                revealing={revealing}
+              />
+            </div>
           </div>
         );
       }

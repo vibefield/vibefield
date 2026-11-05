@@ -140,8 +140,10 @@ describe('the crew card (SP-1e2; DESIGN.md §8 "Chat\'s crew card")', () => {
       pressable: false,
     });
     expect(card.count).toEqual({ words: "0 of 4 done · 1 ended", ring: 0.25, check: false });
-    // a member the board, read, no longer holds is Ended before fieldd's end reaches the record (SR-Q5 (i))
-    expect(cardOf({ rows: ROWS.slice(1) }).rows[0]?.state).toBe("ended");
+    // a member the board, read, no longer holds is Ended before fieldd's end reaches the record (SR-Q5 (i)); one it
+    // has not held yet is Starting, since its start can reach the record before its row reaches the board
+    expect(cardOf({ rows: ROWS.slice(1), seen: new Set(["run-21"]) }).rows[0]?.state).toBe("ended");
+    expect(cardOf({ rows: ROWS.slice(1) }).rows[0]?.state).toBe("starting");
   });
 
   it("K4 · All done wears its check and no ring; All ended stands alone, no ring and no glyph (J1 at its lean)", () => {
@@ -179,7 +181,13 @@ describe('the crew card (SP-1e2; DESIGN.md §8 "Chat\'s crew card")', () => {
 
   it("K6 · the head says the model they share, the model alone when none names an effort, and the count alone when they differ or one is not named yet (J2 at its lean)", () => {
     const differ = [member("run-21"), member("run-22", { model: "Sonnet 5.5" })];
-    expect(cardOf({ reading: ready([crewOf(differ)]) }).dim).toBe("");
+    const sonnet = { id: "claude-sonnet-5-5", displayName: "Sonnet 5.5" };
+    expect(
+      cardOf({
+        reading: ready([crewOf(differ)]),
+        rows: [row("run-21"), row("run-22", { model: sonnet })],
+      }).dim,
+    ).toBe("");
     const unnamed = [member("run-21"), member("run-22", { model: undefined, effort: undefined })];
     const card = cardOf({
       reading: ready([crewOf(unnamed)]),

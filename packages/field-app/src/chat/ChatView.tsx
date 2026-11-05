@@ -12,12 +12,14 @@ import { useReducedMotion } from "../field/desk/bar/bar-motion";
 import type { FrameSurface } from "../frame/frame-surface";
 import { jumpNote, sayOnLine } from "../frame/line-door";
 import { sayStatus } from "../frame/status-line";
+import { requestView } from "../frame/view-state";
 import { stillKept } from "../host";
 import { NO_HANDLES, sessionHandlesOf } from "./at-rows";
 import { ChatComposer, type ComposerPort } from "./ChatComposer";
 import { type ChatAct, ChatPanelView, shownOf } from "./ChatPanelView";
 import type { DraftMessage, DraftPart } from "./composer-draft";
-import type { CrewsDoor } from "./crews-port";
+import { crewCardsOf } from "./crew-card";
+import { CREWS_READING, type CrewsDoor, type CrewsReading, useSparkCrews } from "./crews-port";
 import { NO_PAUSE, type PauseAct, pauseTurn, type SparkPauser, turnOf } from "./head-act";
 import { useNeedsCard } from "./needs-card-stand";
 import {
@@ -89,6 +91,7 @@ export function ChatView({
   onSurfaceChange,
   port,
   transcripts,
+  crews,
 }: {
   /** Chat is the view showing: the rows' times are said again while it is, and the thread on screen is read */
   active: boolean;
@@ -100,8 +103,7 @@ export function ChatView({
   port: ComposerPort;
   /** the window's door to its sparks' transcripts (`transcriptDoorOver`): fieldd's ticket, the worker's socket */
   transcripts: TranscriptDoor;
-  /** SP-1e2 — the window's door to the shown spark's crews (`crewsDoorOver`); absent: no crew card is drawn
-   * (red: not read yet) */
+  /** SP-1e2 — the window's door to the shown spark's crews (`crewsDoorOver`); absent: no crew card is drawn */
   crews?: CrewsDoor | undefined;
 }): ReactElement {
   const reading = useSparksReading();
@@ -359,17 +361,80 @@ export function ChatView({
     const said = saidRequestsOf(record);
     if (said.size > 0) letGoPendingSays(onScreen, said);
   }, [onScreen, record]);
-  const flow =
-    shown === undefined ? undefined : (
-      <ThreadFlowView
-        key={shown.spark.id}
-        flow={transcriptItemsOf({
+  const threadFlow =
+    shown === undefined
+      ? undefined
+      : transcriptItemsOf({
           entry: shown,
           reading: drawn,
           pending,
           earlier: drawn.state === "ready" && drawn.whole,
           now,
-        })}
+        });
+
+  // SP-1e2 — each crew's card under its act line (DESIGN.md §8 "Chat's crew card"): the shown spark's crews, read on
+  // their own door while Chat is the view (in another view the thread keeps the cards it last drew, as it keeps its
+  // lines), with the board's rows and @'s handles. A member the board has held and no longer holds is Ended; one it
+  // has not held yet is Starting, since its start can reach the record before its row reaches the board. The runs
+  // seen are crew members only, so the set grows by the crews' members alone.
+  const crewsRead = useSparkCrews(onScreen, crews ?? null);
+  const lastCrews = useRef<{ readonly spark: SparkId; readonly reading: CrewsReading } | null>(
+    null,
+  );
+  if (crewsRead !== null && onScreen !== null)
+    lastCrews.current = { spark: onScreen, reading: crewsRead };
+  const crewsHeld = lastCrews.current;
+  const crewsDrawn =
+    crewsRead ??
+    (crewsHeld !== null && crewsHeld.spark === shownId ? crewsHeld.reading : CREWS_READING);
+  const seenRuns = useRef(new Set<string>());
+  if (Array.isArray(rows))
+    for (const row of rows)
+      if (row.origin?.crew !== undefined) seenRuns.current.add(row.runtimeRunId);
+  const crewIds = useMemo(
+    () =>
+      threadFlow?.state === "ready"
+        ? threadFlow.items.flatMap((item) =>
+            item.kind === "act" && item.crew !== undefined ? [item.crew] : [],
+          )
+        : [],
+    [threadFlow],
+  );
+  const cards = useMemo(
+    () =>
+      crewCardsOf({
+        crews: crewIds,
+        reading: crewsDrawn,
+        rows,
+        handles,
+        name: shown?.spark.name ?? "",
+        asleep: shown !== undefined && !shown.awake,
+        seen: seenRuns.current,
+      }),
+    [crewIds, crewsDrawn, rows, handles, shown],
+  );
+  // a row pressed: that member's pane in Godview by the one reveal (TH-2), its board row read at the press; the note
+  // says what came of it, as Jump to's does. While it runs the row waits: the ref is the guard, the state draws it.
+  const [revealing, setRevealing] = useState<ReadonlySet<string>>(() => new Set());
+  const revealingNow = useRef(new Set<string>());
+  const revealMember = useCallback(async (runtimeRunId: string): Promise<void> => {
+    if (revealingNow.current.has(runtimeRunId)) return;
+    revealingNow.current.add(runtimeRunId);
+    setRevealing(new Set(revealingNow.current));
+    try {
+      sayOnLine(jumpNote(await revealRun(boardRowNow(runtimeRunId))));
+    } finally {
+      revealingNow.current.delete(runtimeRunId);
+      setRevealing(new Set(revealingNow.current));
+    }
+  }, []);
+  const openGodview = useCallback(() => void requestView("godview"), []);
+
+  const flow =
+    shown === undefined || threadFlow === undefined ? undefined : (
+      <ThreadFlowView
+        key={shown.spark.id}
+        flow={threadFlow}
         name={shown.spark.name}
         face={{ seed: shown.spark.face.seed, status: shown.status }}
         {...(open === null || sayer === null
@@ -377,6 +442,10 @@ export function ChatView({
           : { onStarter: (words: string) => void start(shown, open, sayer, words) })}
         sending={heldThreads.has(shown.spark.id)}
         onEarlier={() => setWhole((asked) => new Set(asked).add(shown.spark.id))}
+        crews={cards}
+        onCrewRow={(runtimeRunId) => void revealMember(runtimeRunId)}
+        onOpenGodview={openGodview}
+        revealing={revealing}
       />
     );
   // the composer stands under every thread, awake or not: Send wakes the spark (no feed, no wake and no say: none is
@@ -398,7 +467,7 @@ export function ChatView({
         takeKeyboard={draftKeyboard}
       />
     );
-  const items = footItemsOf(needs.card);
+  const footItems = footItemsOf(needs.card);
   return (
     <ChatPanelView
       reading={reading}
@@ -413,7 +482,7 @@ export function ChatView({
       {...(pauser === null ? {} : { onPause: (entry: SparkEntry) => void pause(pauser, entry) })}
       pause={shown === undefined ? NO_PAUSE : (pauses.get(shown.spark.id) ?? NO_PAUSE)}
       {...(flow === undefined ? {} : { flow })}
-      items={items}
+      items={footItems}
       sending={shown !== undefined && heldThreads.has(shown.spark.id)}
       onAnswer={needs.answer}
       onShowAsk={showAsk}

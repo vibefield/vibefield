@@ -18,6 +18,7 @@ import { MeMenu } from "../account/MeMenu";
 import { useSyncQuestion } from "../account/sync-question";
 import { isSwitchCovering, useSwitchState } from "../boot/switch";
 import { ChatView } from "../chat/ChatView";
+import { crewsDoorOver } from "../chat/crews-port";
 import { NewSparkSheet } from "../chat/NewSparkSheet";
 import { newSparkPortOver } from "../chat/new-spark";
 import { sparksPortOver, startSparksFeed } from "../chat/sparks-feed";
@@ -161,6 +162,8 @@ export function ChromeLayer({
   // Chat's thread (TH-1): the shown spark's transcript, a ticket from fieldd through the same client and the
   // transcript worker's socket dialled by the window itself (EL2)
   const transcripts = useMemo(() => transcriptDoorOver(fieldd), [fieldd]);
+  // SP-1e2 — the shown spark's crews, for its crew cards (`compose.sparks.crews.subscribe`, the same client)
+  const crews = useMemo(() => crewsDoorOver(fieldd), [fieldd]);
   const chatView = useCallback(
     (active: boolean) => (
       <ChatView
@@ -169,9 +172,10 @@ export function ChromeLayer({
         onSurfaceChange={onSurfaceChange}
         port={newSparkPort}
         transcripts={transcripts}
+        crews={crews}
       />
     ),
-    [newSparkPort, onSurfaceChange, surface, transcripts],
+    [crews, newSparkPort, onSurfaceChange, surface, transcripts],
   );
   const closeNewSpark = useCallback(
     () => onSurfaceChange(foldSurface(surface, "new-spark")),
