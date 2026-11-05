@@ -1748,6 +1748,57 @@ describe("managed sessions over the REAL floor (field-native)", () => {
     await win.call("terminal.terminate", { sessionId: box.sessions[0]!.runtimeSessionId });
   }, 90_000);
 
+  // CO-1b (CO-Q4 (b)) — fieldd's name for a session, end to end: daemon.ts's runLabel reads the run's row, whose folder
+  // the runtime observes at its birth (its workspace's root), and a plain session's notify is told by that name: its
+  // agent's label in its folder, never its id. The words are DESIGN.md §9 "An agent's notify".
+  it("CO-1b — a plain session's notify is told by fieldd's name for it: its agent in its folder", async () => {
+    const briefing: AgentBriefingCapabilities = {
+      mcpServers: true,
+      allowTools: true,
+      instructions: true,
+      mcpServerProcess: "terminal",
+    };
+    const box = await setup({
+      floor: "real",
+      profiles: true,
+      briefing,
+      exerciseDoor: true,
+      doorCalls: [{ name: "notify", arguments: { text: "the build is green" } }],
+    });
+    const { daemon, root } = box;
+    const win = await window(daemon, [...DECK, "agents.manage"], "co1b");
+    await win.call("agents.profiles.verify", { profileId: "scripted:native-default" });
+    const notices = (await win.call("needs.notices.subscribe", {})) as { subId: string };
+    const cwd = join(root, "vibe-field");
+    mkdirSync(cwd);
+    const plain = (await born(win, "agent.spawn", {
+      provider: "scripted",
+      cwd,
+    })) as AgentSpawnResult;
+    const runId = plain.session.runtimeRunId;
+    const proof = await poll(async () => {
+      const path = join(box.envOut, "session-1.tools.json");
+      return existsSync(path) ? JSON.parse(readFileSync(path, "utf8")) : undefined;
+    }, 25_000);
+    expect(proof.error).toBeUndefined();
+    expect((proof.calls as { structuredContent: unknown }[])[0]?.structuredContent).toEqual({
+      sent: true,
+    });
+    const heard = await poll(async () => {
+      const frame = win.notifications.find(
+        (n) => n.method === "needs.notices.delta" && n.params.subId === notices.subId,
+      );
+      return frame?.params.payload as { notices: { from: unknown; words: string }[] } | undefined;
+    }, 10_000);
+    expect(heard.notices).toEqual([
+      expect.objectContaining({
+        from: { name: `${SCRIPTED_ROW.label} in vibe-field`, session: runId },
+        words: "the build is green",
+      }),
+    ]);
+    await win.call("terminal.terminate", { sessionId: plain.terminal.sessionId });
+  }, 90_000);
+
   // CP-3 — needs.answer is a second caller of the sparks' one wake (SparkService.open; SP-1d's join, per spark): an
   // answer to a sleeping spark's question wakes it to tell it, so a window's Wake (compose.sparks.open) under way at
   // that moment must be the same wake. The resume's birth is held until the answer has asked its own open (the queue

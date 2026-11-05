@@ -12,6 +12,7 @@ import {
   sendEndedFact,
   sendFailedFact,
   sendHeldBackFact,
+  sessionName,
   spawnAllowedFact,
   spawnFailedFact,
   spawnNotNowFact,
@@ -39,8 +40,9 @@ describe("the person's queue's words (DESIGN.md §9)", () => {
     expect(sendEndedFact("Vela", "Claude Code")).toBe(
       "Claude Code ended before you answered; Vela's words were not sent",
     );
-    expect(sendFailedFact("Vela", "Claude Code", "Claude Code is not running")).toBe(
-      "Vela's words to Claude Code were not sent: Claude Code is not running",
+    // CO-1b: a reason after the colon names no session its sentence already names
+    expect(sendFailedFact("Vela", "Claude Code in vibe-field", "it is not running")).toBe(
+      "Vela's words to Claude Code in vibe-field were not sent: it is not running",
     );
     expect(spawnAllowedFact("Vela", "Claude Code", "run-44")).toBe(
       "you allowed Vela one more agent: Claude Code started as run-44",
@@ -72,6 +74,7 @@ describe("the person's queue's words (DESIGN.md §9)", () => {
       sendAllowedFact("Vela", "Claude Code"),
       sendHeldBackFact("Vela", "Claude Code"),
       sendEndedFact("Vela", "Claude Code"),
+      sendFailedFact("Vela", "Claude Code in vibe-field", "it is not running"),
       actUncertainFact("Vela", "Claude Code"),
       spawnUncertainFact("Vela"),
     ])
@@ -93,6 +96,28 @@ describe("the person's queue's words (DESIGN.md §9)", () => {
     expect(fact).toBe(
       `you answered ${"x".repeat(NEEDS_NAME_MAX - 1)}…'s question "${"x".repeat(119)}…": Yes`,
     );
+  });
+});
+
+describe("fieldd's name for a session (CO-1b, CO-Q4 (b); DESIGN.md §9)", () => {
+  it("N1 · names a session by its title, else its agent in its folder, else its agent, else its id; one line, cut at 64", () => {
+    const run = { label: "Claude Code", folder: "vibe-field", id: "run-1" };
+    expect(sessionName({ ...run, title: "Fix the restore" })).toBe("Fix the restore");
+    expect(sessionName({ ...run, title: "  " })).toBe("Claude Code in vibe-field");
+    expect(sessionName(run)).toBe("Claude Code in vibe-field");
+    // no folder read for it: the agent's label alone, as the examples in DESIGN.md §8 and §9 name it
+    expect(sessionName({ label: "Claude Code", id: "run-1" })).toBe("Claude Code");
+    expect(sessionName({ label: "Claude Code", folder: " ", id: "run-1" })).toBe("Claude Code");
+    // a folder names no session on its own: with no agent's label, the id
+    expect(sessionName({ folder: "vibe-field", id: "run-9" })).toBe("run-9");
+    expect(sessionName({ label: "Claude\nCode", folder: "vibe\n field", id: "run-1" })).toBe(
+      "Claude Code in vibe field",
+    );
+    const long = sessionName({ label: "Claude Code", folder: "x".repeat(80), id: "run-1" });
+    expect(long).toBe(
+      `Claude Code in ${"x".repeat(NEEDS_NAME_MAX - "Claude Code in ".length - 1)}…`,
+    );
+    expect(long).toHaveLength(NEEDS_NAME_MAX);
   });
 });
 

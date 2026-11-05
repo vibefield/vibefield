@@ -483,7 +483,8 @@ describe("the held send (CP-D3, CP3-D3 B)", () => {
     const ended = h.queue.send(VELA_FROM, "run-his", "a");
     h.runs.delete("run-his");
     const one = await h.queue.answer(ended, 0, principal);
-    expect(one.item.answer).toMatchObject({ outcome: "failed", reason: "claude·2 ended" });
+    // CO-1b: the reason says "it" for the session its line names ("Couldn't send Vela's words to claude·2: it ended")
+    expect(one.item.answer).toMatchObject({ outcome: "failed", reason: "it ended" });
     h.runs.set("run-work", {
       runtimeRunId: "run-work",
       label: "w",
@@ -528,12 +529,29 @@ describe("the held send (CP-D3, CP3-D3 B)", () => {
     const orphan = await h.queue.answer(h.queue.send(VELA_FROM, "run-orphan", "b"), 0, principal);
     expect(orphan.item.answer).toMatchObject({
       outcome: "failed",
-      reason: "claude·4 is in none of Vela's Agent Profiles",
+      reason: "it is in none of Vela's Agent Profiles",
     });
     expect(h.queued).toEqual([]);
     expect(h.woken.map(([, fact]) => fact)).toEqual([
       words.sendFailedFact("Vela", "claude·3", "work is not one of Vela's Agent Profiles"),
-      words.sendFailedFact("Vela", "claude·4", "claude·4 is in none of Vela's Agent Profiles"),
+      words.sendFailedFact("Vela", "claude·4", "it is in none of Vela's Agent Profiles"),
+    ]);
+  });
+
+  it('CO-1b · re-checks an Allow: a session that is not running is said as "it", the line having named it', async () => {
+    const h = harness();
+    h.runs.set("run-asleep", {
+      runtimeRunId: "run-asleep",
+      label: "claude·5",
+      profileSet: "native",
+      live: false,
+    });
+    const { item } = await h.queue.answer(h.queue.send(VELA_FROM, "run-asleep", "a"), 0, principal);
+    expect(item.to?.name).toBe("claude·5");
+    expect(item.answer).toMatchObject({ outcome: "failed", reason: "it is not running" });
+    expect(h.queued).toEqual([]);
+    expect(h.woken.map(([, fact]) => fact)).toEqual([
+      words.sendFailedFact("Vela", "claude·5", "it is not running"),
     ]);
   });
 

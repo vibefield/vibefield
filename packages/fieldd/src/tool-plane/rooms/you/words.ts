@@ -34,6 +34,25 @@ export const oneLine = (s: string, n: number): string => clip(collapse(s), n);
 /** A name as an item or a fact says it: a session's title, an agent's label, a spark's name. */
 export const nameWords = (s: string): string => oneLine(s, NEEDS_NAME_MAX);
 
+/** What fieldd names a session by (daemon.ts's runLabel reads them from the run's row). */
+export interface SessionNaming {
+  /** the session's own title */
+  readonly title?: string | undefined;
+  /** its agent's label in the catalog (AC-D4) */
+  readonly label?: string | undefined;
+  /** the folder it works in, as @ and the board name it (agent-field.ts's folderNameOf) */
+  readonly folder?: string | undefined;
+  readonly id: string;
+}
+
+/** CO-1b (CO-Q4 (b)) — a session as fieldd names it in a wake, an item and a notice: its title, else its agent's label
+ * in its folder ("Claude Code in vibe-field"), else that label, else its id; one line, cut at NEEDS_NAME_MAX. CO-1b
+ * (red): the folder is not read yet. */
+export function sessionName(run: SessionNaming): string {
+  const named = [run.title, run.label].find((s) => s !== undefined && s.trim() !== "");
+  return nameWords(named ?? run.id);
+}
+
 /** fieldd's own words for why an act stopped, on one line. */
 export const reasonWords = (s: string): string => oneLine(s, NEEDS_REASON_MAX);
 
