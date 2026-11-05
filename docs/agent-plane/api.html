@@ -1561,9 +1561,9 @@
                     <td><p><code>—</code> → <code>AgentProvidersResult</code></p></td>
                     <td><p><code>agent.spawn</code></p></td>
                     <td><p>yes</p></td>
-                    <td><p>the catalog's visible rows (AC-3) · <code>inspectInstallations()</code>, <code>launchProviders()</code>, the enrollment record and the roll call · QL (2026-09-28): <code>lastLaunchedAt</code>, the newest <code>createdAt</code> among this device's session records for the agent (any <code>spawnedBy</code>), the order the empty pane launcher lists agents in</p></td>
+                    <td><p>the catalog's visible rows (AC-3) · <code>inspectInstallations()</code>, <code>launchProviders()</code>, the enrollment record and the roll call · QL (2026-09-28): <code>lastLaunchedAt</code>, the newest <code>createdAt</code> among this device's session records for the agent (any <code>spawnedBy</code>), the order the empty pane launcher lists agents in · CP-5a (2026-11-04; CP5-Q9 (a)): <code>offers.spark</code>, the hatch's own verdict for this device, as <code>invoke</code> is masked to this device's launchers. It is true only where the catalog offers the row and claims <code>spark</code>, and the composed provider's <code>descriptor.briefing</code> passes the facts the hatch reads (all three fields and <code>mcpServerProcess: "terminal"</code>). Both are one predicate in <code>agent-briefing.ts</code> (<code>sparkHatchRefusal</code>), never a second copy. The New spark sheet's menu reads it with <code>available</code> (CP5-Q1 (b)). A daemon older than the claim sends no <code>spark</code> key; the sheet then reads <code>briefing</code>, as that daemon's own hatch does</p></td>
                     <td><span class="badge tone-built">Built</span></td>
-                    <td><p><code>agent-runtime.test.ts</code></p></td>
+                    <td><p><code>agent-runtime.test.ts</code> (the spark claim: claimed and passing, claimed on a pin that lacks the facts, unclaimed)</p></td>
                   </tr>
                   <tr>
                     <td><span class="route">agent.catalog</span></td>

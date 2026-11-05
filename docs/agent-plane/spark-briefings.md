@@ -8,7 +8,7 @@ The runtime API is owned by Puppeteer's [per-run briefing guide](https://github.
 
 The signed session record keeps the spark identity. It does not keep MCP configuration or instructions; the next process receives freshly constructed values. The spark's signed record still bounds tool access through its Agent Profiles. The compose service and its verbs continue to import only fieldd services (R29); the runtime handoff lives outside `compose/`.
 
-`agent.providers[].briefing` projects Puppeteer's optional capability declaration. A reader must treat missing fields as unsupported, and an unknown process topology as unidentified. Hatch refuses unsupported agents before writing a spark folder or record, and each later birth checks support again. An installed executable can still refuse flags its adapter supports. *(Item 124, 2026-10-31: such a birth is made once more without the briefing, and says so; see "Plain runs" below.)*
+`agent.providers[].briefing` projects Puppeteer's optional capability declaration. A reader must treat missing fields as unsupported, and an unknown process topology as unidentified. Hatch refuses unsupported agents before writing a spark folder or record, and each later birth checks support again. Since CP-5a both read the catalog's spark claim before these facts (see "The catalog's spark claim" below). An installed executable can still refuse flags its adapter supports. *(Item 124, 2026-10-31: such a birth is made once more without the briefing, and says so; see "Plain runs" below.)*
 
 ## Plain runs (MT-0, the tool plane)
 
@@ -86,9 +86,44 @@ needs-you queue, fieldd's one list of what waits on the person, which the window
   `LAYOUT.NEEDS_KEY_FILE`, with the input queues' EL7 claim: it holds against an edit, not against an agent that reads
   the key. An agent's own ask is read from its run's blockers and never kept.
 
+## The catalog's spark claim (CP-5a)
+
+Which agents may be a spark is a decision, and the catalog makes it (CP5-Q9 (a), ruled 2026-11-04). `AgentOffers.spark`
+(`packages/contracts/src/agent-catalog.ts`) is claimed only on a `supported` row, once a live spark of that agent is
+witnessed here, and a `deprecated` row may keep it, because a deprecated agent's sparks still wake (AC-D3). Wall R23
+holds the claim to the pin: it needs the pin's `descriptor.briefing` to declare all three fields with
+`mcpServerProcess: "terminal"` (`pin-claim` otherwise), and a claim under any other status is red (`claim-status`). The
+claim is the decision and the facts are the proof, so a claim can never get ahead of the pin.
+
+fieldd's gate (`AgentBriefings`) reads the claim first, before any fact:
+
+- **Hatch** (`requireSupported`, before a folder or record is written) needs the catalog to offer the row and the row
+  to claim `spark` (`isOffered(id, "spark")`). Without that it refuses `PRECONDITION_FAILED {reason:
+  "spark-not-offered", provider}`, "VibeField does not offer this agent as a spark", and reads no fact.
+- **Every later birth** (`prepare`: a wake, a resume, a pending replacement) needs the row visible and claiming
+  (`isVisible(id)` and `offers.spark`). It answers the same refusal when either is missing, so a spark whose agent
+  loses the claim cannot wake, and its Wake says so in fieldd's words (ruled with CP5-Q9, 2026-11-04).
+- Then the facts, as CP-1d wrote them: `spark-briefing-unsupported`, then `spark-door-identity-unsupported`.
+  `sparkHatchRefusal` and `sparkFactsRefusal` are the one copy of the rule. `agent.providers` reads the same
+  predicate for `offers.spark` (true only where this device's hatch would pass it), and the New spark sheet reads that
+  key, never the facts (DESIGN.md §8). The facts stay as the sheet's fallback only for a row with no key: only a daemon
+  older than the claim sends one, and that daemon's own hatch is gated by those facts alone.
+- A plain run's `forRun` reads no claim (MT-D9): every run the door can name is briefed by the facts.
+
+From CP-5a every unclaimed row reads `spark-not-offered` at hatch: Codex, Grok, ACP and the rest. The two older reasons
+remain only for a row that claims `spark` on a pin lacking the facts, which R23 fails at preflight, and for `forRun`'s
+silent degrade. Claude Code is the one row that claims it. Its live witness, a spark by hand on Claude Code (hatch,
+Ready, the audit's `tools.agents_list` line naming its run, Stop), is owed by James before CP-5a's records.
+
 ## Process identity is a separate prerequisite
 
 The current native door authenticates a process by its terminal ancestry. CP-1d therefore requires all three briefing fields and `mcpServerProcess === "terminal"`. There are no vendor-id branches in this policy. Claude's adapter declares this topology. Codex's app-server and Grok's shared leader start MCP children under helpers, and ACP delegates their ownership externally. They remain refused until the door has a trusted process-to-run association for those topologies.
+
+*Corrected 2026-11-04 (CP-5a; ER-C32):* "they remain refused until the door has a trusted
+process-to-run association" was true of Codex alone. Grok's adapter at 0.3.3 declares ACP's capabilities on a helper
+(`mcpServers` only; no `allowTools` and no `instructions`), so it also waits on taking a spark's brief and allowance
+(PU-O). ACP declares the same fields on an external process, so it waits on both. From CP-5a every agent waits first on
+the catalog's claim (above), and an unclaimed row is refused `spark-not-offered` before either fact is read.
 
 This corrects the compose study's §17 assumption that receiving the briefing alone enables Codex sparks. Puppeteer delivers Codex's briefing; VibeField still needs to identify its MCP child. A role name, environment token or claimed run id does not supply that proof.
 
@@ -97,6 +132,7 @@ This corrects the compose study's §17 assumption that receiving the briefing al
 - `agent-briefing.test.ts` (`agent-spark-briefing.test.ts` until MT-0): fresh endpoints and edited instructions, verified records, capability and ancestry refusals, missing briefs, and no folder MCP configuration.
 - `compose-sparks.test.ts`: unsupported hatch has no durable side effects, and the existing hatch/list/open behavior.
 - `agent-session.test.ts`: real native terminals with a scripted provider; hatch and run-id resume receive the briefing, and a terminal child launches its native bridge, lists the tools and calls `agents_list` on both births. Ordinary launches receive no spark briefing (since MT-0 they receive the plain-run briefing below), a legacy spark resumes by native id with its identity, and a failed pending preparation leaves its old terminal alive.
-- `agent-providers.valid.json`: the optional capability declaration beside an older row that omits it; contracts fixtures remain tolerant of older daemons.
+- `agent-providers.valid.json`: the optional capability declaration beside an older row that omits it; contracts fixtures remain tolerant of older daemons. Since CP-5a the claimed row carries `offers.spark` and the older row has no key.
+- CP-5a: `agent-briefing.test.ts` refuses an unclaimed row `spark-not-offered` at hatch and at every birth before a fact is read, lets a deprecated row's claimed spark be born again, and leaves `forRun` unchanged; `compose-sparks.test.ts` shows that refusal writes no folder or record; `agent-runtime.test.ts` answers `offers.spark` on the real pin; R23's self-test holds the claim's four rotten shapes (no fields, a helper's process, unclaimed on a supported row, claimed on a preview row); `new-spark.test.ts` holds the sheet's order, its filter and its fallback.
 
 The daemon witness uses an isolated `CARGO_TARGET_DIR` and disposable user roots. Native vendor delivery is covered by the upstream Claude and Codex briefing proofs. These are separate from a live-user Chat smoke and from authorizing helper-process callers.
