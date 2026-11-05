@@ -781,3 +781,157 @@ it("the Files picker chooses an existing directory with the native provider's pa
   );
   provider.dispose();
 });
+
+// MA-3c (MA-D10 (b); L11 as ruled: an owed capture runs at the next open on this desktop, and there
+// is no window-show event). MA-1a's capture schema carries `allowHosts` in and `digest` out, and the
+// provider parses both ends with it, so every row here is a PIN: it passes on the red skeleton and
+// holds the provider's half of the slice — allowHosts reach the native capture exactly as fieldd
+// validated them, a digest only in its contract grammar, and the hidden-window refusal unchanged.
+describe("MA-3c — a made app's capture through the provider", () => {
+  const MADE_PARAMS = {
+    artifactId: "01ARZ3NDEKTSV4RRFFQ69G5FAV",
+    url: "https://host.tail1234.ts.net:14211/",
+    allowHosts: ["cdn.jsdelivr.net", "fonts.gstatic.com"],
+  };
+  const DIGEST = "9f2c4be1a07d3e5f6c8b1a2d4e6f8091a3b5c7d9e1f20314253647586970a1b2";
+
+  it("PIN: hands a made capture's allowHosts to the native capture exactly, and answers its digest", async () => {
+    const captureArtifactPreview = vi.fn<ShellProviderNative["captureArtifactPreview"]>(
+      async () => ({ captured: true as const, title: "Made app", digest: DIGEST }),
+    );
+    const { client, provider } = await fixture({ captureArtifactPreview });
+    const callId = "shell-madecaptureaaaaaa";
+    client.emit(
+      "shell.provider.call",
+      call(callId, "shell.webcontents.captureArtifactPreview", MADE_PARAMS),
+    );
+    await vi.waitFor(() =>
+      expect(client.requests, "the provider's answer").toContainEqual({
+        method: "shell.provider.resolve",
+        params: {
+          callId,
+          outcome: { result: { captured: true, title: "Made app", digest: DIGEST } },
+        },
+      }),
+    );
+    expect(captureArtifactPreview, "the native capture's params").toHaveBeenCalledExactlyOnceWith(
+      MADE_PARAMS,
+      expect.any(AbortSignal),
+    );
+    provider.dispose();
+  });
+
+  it("PIN: refuses allowHosts outside MadeAppReach before any capture work", async () => {
+    const captureArtifactPreview = vi.fn(async () => ({ captured: true as const }));
+    const { client, provider } = await fixture({ captureArtifactPreview });
+    const refused: unknown[] = [
+      ["https://cdn.jsdelivr.net"], // a scheme
+      ["cdn.jsdelivr.net:443"], // a port
+      ["cdn.jsdelivr.net/npm"], // a path
+      ["*.jsdelivr.net"], // a wildcard
+      ["CDN.jsdelivr.net"], // not canonical
+      ["104.16.85.20"], // an IP literal
+      ["other.tail1234.ts.net"], // a tailnet name
+      [""], // empty
+      Array.from({ length: 17 }, (_, index) => `h${index}.example.com`), // past REACH_HOSTS
+      "cdn.jsdelivr.net", // not a list
+    ];
+    const callIds = refused.map(
+      (_, index) => `shell-madehostsrefused${String(index).padStart(2, "0")}`,
+    );
+    refused.forEach((allowHosts, index) => {
+      client.emit(
+        "shell.provider.call",
+        call(callIds[index] ?? "", "shell.webcontents.captureArtifactPreview", {
+          ...MADE_PARAMS,
+          allowHosts,
+        }),
+      );
+    });
+    await vi.waitFor(() =>
+      expect(
+        callIds.map((callId) =>
+          client.requests.some(
+            (request) =>
+              request.method === "shell.provider.resolve" &&
+              (request.params as { callId?: string }).callId === callId,
+          ),
+        ),
+        "every refused call is answered",
+      ).toEqual(callIds.map(() => true)),
+    );
+    for (const callId of callIds) {
+      expect(client.requests, `the answer to ${callId}`).toContainEqual({
+        method: "shell.provider.resolve",
+        params: { callId, outcome: { error: expect.objectContaining({ retryable: false }) } },
+      });
+    }
+    expect(captureArtifactPreview, "the native capture").not.toHaveBeenCalled();
+    provider.dispose();
+  });
+
+  it("PIN: refuses a native digest that is not lowercase sha256 hex, and never forwards it", async () => {
+    const captureArtifactPreview = vi
+      .fn<ShellProviderNative["captureArtifactPreview"]>()
+      .mockResolvedValueOnce({ captured: true, digest: DIGEST.toUpperCase() })
+      .mockResolvedValueOnce({ captured: true, digest: DIGEST.slice(0, 40) });
+    const { client, provider } = await fixture({ captureArtifactPreview });
+    const callIds = ["shell-madedigestupperaaa", "shell-madedigestshortaaa"];
+    for (const callId of callIds) {
+      client.emit(
+        "shell.provider.call",
+        call(callId, "shell.webcontents.captureArtifactPreview", MADE_PARAMS),
+      );
+      await vi.waitFor(() =>
+        expect(client.requests, `the answer to ${callId}`).toContainEqual({
+          method: "shell.provider.resolve",
+          params: { callId, outcome: { error: expect.objectContaining({ retryable: false }) } },
+        }),
+      );
+    }
+    const sent = JSON.stringify(client.requests);
+    expect(sent.includes(DIGEST.toUpperCase()), "the upper-case digest reached fieldd").toBe(false);
+    expect(sent.includes(DIGEST.slice(0, 40)), "the short digest reached fieldd").toBe(false);
+    provider.dispose();
+  });
+
+  it("PIN: a made capture still refuses while the window is hidden, and a show tells fieldd nothing (L11)", async () => {
+    const captureArtifactPreview = vi.fn(async () => ({ captured: true as const }));
+    const hidden = fakeWindow(false);
+    const { client, provider } = await fixture({
+      parentWindow: () => hidden,
+      captureArtifactPreview,
+    });
+    const callId = "shell-madehiddenaaaaaaa";
+    client.emit(
+      "shell.provider.call",
+      call(callId, "shell.webcontents.captureArtifactPreview", MADE_PARAMS),
+    );
+    await vi.waitFor(() =>
+      expect(client.requests, "the hidden window's answer").toContainEqual({
+        method: "shell.provider.resolve",
+        params: {
+          callId,
+          outcome: {
+            error: {
+              kind: "UNAVAILABLE",
+              message: "preview capture is unavailable",
+              retryable: true,
+            },
+          },
+        },
+      }),
+    );
+    expect(captureArtifactPreview, "the native capture").not.toHaveBeenCalled();
+    const before = client.requests.length;
+    (hidden as unknown as EventEmitter).emit("show");
+    (hidden as unknown as EventEmitter).emit("restore");
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(client.requests.slice(before), "what a show sent fieldd").toEqual([]);
+    expect(
+      client.requests.map((request) => request.method),
+      "every request the provider made",
+    ).toEqual(["shell.provider.register", "shell.provider.resolve"]);
+    provider.dispose();
+  });
+});

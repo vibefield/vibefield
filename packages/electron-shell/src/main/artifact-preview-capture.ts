@@ -229,6 +229,7 @@ export class ArtifactPreviewCapture {
       verifyJpeg(this.#native.decodeImage(jpeg), jpeg);
       const title = sanitizePreviewTitle(window.webContents.getTitle());
       await atomicReplace(tempPath, targetPath, jpeg, signal);
+      // MA-3c RED: the answer carries no `digest` yet, and `params.allowHosts` does not reach the guard.
       return ShellWebContentsCaptureArtifactPreviewResult.parse({
         captured: true,
         ...(title !== undefined ? { title } : {}),
@@ -303,10 +304,17 @@ export function isAllowedTopLevelNavigation(targetOrigin: string, candidate: str
   }
 }
 
+/** The capture's request guard. HTTPS to the target's exact origin, and `data:` / same-origin `blob:` for a
+ * subresource. MA-3c (MA-D10 (b)): a made app's page also loads from the hosts its served shell names, so
+ * `allowHosts` (the capture params' `MadeAppReach`, bare canonical hosts) admits an HTTPS SUBRESOURCE whose host is
+ * exactly one of them, on the default port, with no credentials. Never a document (`mainFrame`, `subFrame`): those
+ * stay on the target's origin, as top-level navigation does. Absent or empty: the live artifact's guard, unchanged.
+ * MA-3c RED: the parameter is declared and not yet read. */
 export function isAllowedPreviewRequest(
   targetOrigin: string,
   candidate: string,
   resourceType?: string,
+  _allowHosts: readonly string[] = [],
 ): boolean {
   const topLevel = resourceType === "mainFrame";
   try {
