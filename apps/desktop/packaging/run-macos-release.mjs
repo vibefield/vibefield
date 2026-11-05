@@ -55,6 +55,14 @@ await run(process.execPath, [
   join("release", outputDirectory, "VibeField.app", "Contents", "Resources", "bin"),
   "--require-signed",
 ]);
+// AR-7j (LP-D1/LP-D2): an agent TYPED into a packaged pane is managed — the signed fieldd's agent-shim role over the
+// packaged floor; the role's added start cost and the publish after a relaunch said, never hidden (desk-gates row 34).
+await run(process.execPath, [
+  "packaging/verify-agents-package.mjs",
+  "--native-root",
+  join("release", outputDirectory, "VibeField.app", "Contents", "Resources", "bin"),
+  "--require-signed",
+]);
 // WP8d (W9): the app's own plugins as the built app carries them — the staged identity RELEASE-keyed, the trust-root and
 // the signed index verified offline, then the packaged fieldd listing every one enabled with its provenance. No
 // executable among them, so no `--require-signed`: the bundle's seal over Resources is codesign's deep check below.

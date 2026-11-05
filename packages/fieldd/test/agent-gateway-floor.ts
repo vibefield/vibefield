@@ -218,10 +218,21 @@ async function openRpc(port: number): Promise<WsRpc> {
 }
 
 /** A renderer window token holding exactly `scopes`. */
-export async function windowOf(daemon: FielddDaemon, scopes: string[]): Promise<WsRpc> {
+export function windowOf(daemon: FielddDaemon, scopes: string[]): Promise<WsRpc> {
+  return windowAt(daemon.controlPort, daemon.shellToken, scopes);
+}
+
+/** `windowOf` for a fieldd this process did not boot, by the port and the
+ * shell's token its run files name (AR-7j: the packaged executable's). Its
+ * sockets close at `teardownFloors`. */
+export async function windowAt(
+  controlPort: number,
+  shellToken: string,
+  scopes: string[],
+): Promise<WsRpc> {
   const suffix = Math.random().toString(36).slice(2, 8);
-  const shell = await openRpc(daemon.controlPort);
-  await helloAs(shell, daemon.shellToken, "shell-main");
+  const shell = await openRpc(controlPort);
+  await helloAs(shell, shellToken, "shell-main");
   const minted = (await shell.call("system.mintWindowToken", {
     scopes,
     label: `window-${suffix}`,
@@ -230,7 +241,7 @@ export async function windowOf(daemon: FielddDaemon, scopes: string[]): Promise<
       incarnation: `renderer:desktop-test:window-${suffix}:document-1`,
     },
   })) as { token: string };
-  const win = await openRpc(daemon.controlPort);
+  const win = await openRpc(controlPort);
   await helloAs(win, minted.token);
   return win;
 }
