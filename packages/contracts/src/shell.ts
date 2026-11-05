@@ -397,6 +397,15 @@ export const SHELL_CLIPBOARD_AUDIT_ACTIONS = {
 export const ShellPlatform = z.enum(["darwin", "win32", "linux", "other"]);
 export type ShellPlatform = z.infer<typeof ShellPlatform>;
 
+/** BP-1c (BP-D9 (a), `thinking-browser-profile.md` §3·8) — whether the desk browser keeps a person's sign-ins across a
+ * restart. Chromium writes a desk profile's cookie database only when the profile lies inside Electron's userData
+ * (measured, Electron 43.1.1), so main checks where this shell's profiles lie, once, at start
+ * (`live-surfaces/browser-profiles-placement.ts`): `kept` — inside (the packaged default, `pnpm dev`, every smoke home);
+ * `until-quit` — outside (a FIELDD_DATA_DIR or `--user-data-dir` set apart): the pages work, and their sites stay signed
+ * in only until VibeField quits. */
+export const DesktopBrowserSignIns = z.enum(["kept", "until-quit"]);
+export type DesktopBrowserSignIns = z.infer<typeof DesktopBrowserSignIns>;
+
 /** Main-owned desktop capability truth. Preferences describe user intent;
  * this state describes whether the native shell actually realized it. */
 export const DesktopShellState = z
@@ -426,6 +435,9 @@ export const DesktopShellState = z
     /** WP12d (L3c-i) — the desktop updater, as the tray and the Settings card render it (`UpdateController.view()`);
      * absent where no updater runs (a development or unpackaged build) */
     update: UpdateView.optional(),
+    /** BP-1c — the desk browser, as Settings › General's Browsing data card says it (`DesktopBrowserSignIns`); absent
+     * from a shell older than BP-1c, where the card says nothing of it. Never a path: the log names the folders. */
+    browser: z.object({ signIns: DesktopBrowserSignIns }).passthrough().optional(),
   })
   .passthrough();
 export type DesktopShellState = z.infer<typeof DesktopShellState>;

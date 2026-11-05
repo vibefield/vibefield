@@ -22,6 +22,7 @@ import {
   CloseReason,
   CloseRequest,
   CloseResult,
+  DesktopBrowserSignIns,
   DesktopShellState,
   FrameView,
   FrameViewSetRequest,
@@ -626,6 +627,28 @@ describe("tray shell commands and app preferences", () => {
         },
       }).success,
     ).toBe(false);
+  });
+
+  it("BP-1c — the desk browser's sign-ins ride the desktop state as one word, never a path", () => {
+    const tray = {
+      availability: "available",
+      placement: "visible",
+      backgroundShellEffective: false,
+      issue: null,
+    };
+    expect(DesktopShellState.parse({ tray, browser: { signIns: "kept" } }).browser).toEqual({
+      signIns: "kept",
+    });
+    expect(
+      DesktopShellState.parse({ tray, browser: { signIns: "until-quit" } }).browser?.signIns,
+    ).toBe("until-quit");
+    // a shell older than BP-1c says nothing of it
+    expect(DesktopShellState.parse({ tray }).browser).toBeUndefined();
+    // the two words alone: anything else is not the desktop's truth
+    expect(DesktopShellState.safeParse({ tray, browser: { signIns: "maybe" } }).success).toBe(
+      false,
+    );
+    expect(DesktopBrowserSignIns.options).toEqual(["kept", "until-quit"]);
   });
 
   it("AU-1 — every update-view fixture parses as the desktop state's update", () => {

@@ -101,6 +101,10 @@ import {
   createProductionLiveSurfaceSupport,
   type ProductionLiveSurfaceSupport,
 } from "./live-surfaces/authority-production";
+import {
+  browserProfilesPlacement,
+  sayBrowserProfilesPlacement,
+} from "./live-surfaces/browser-profiles-placement";
 import { isGuardedBrowserSurfaceSession } from "./live-surfaces/browser-security";
 import { createElectronLiveSurfaceTextureTransferApi } from "./live-surfaces/electron-texture-transfer";
 import type { LiveSurfaceRuntimeAuthority } from "./live-surfaces/runtime";
@@ -402,6 +406,18 @@ async function main(
   user: { userId: string; name: string; rootReal: string },
 ): Promise<void> {
   const logger = shellLogging.logger;
+  // BP-1c (BP-D9 (a)) — the desk browser keeps its sign-ins only where its profiles lie inside Electron's userData
+  // (live-surfaces/browser-profiles-placement.ts). Checked ONCE, at start, on the attached user's profiles root: every
+  // user's root is a sibling under the same data root, so the answer holds for a switch too. Said in the log here, and
+  // as the desktop's capability truth (`DesktopShellState.browser`, below) for Settings' Browsing data card.
+  const browserProfiles = browserProfilesPlacement(
+    join(root, ...LAYOUT.BROWSER_PROFILES_DIR),
+    app.getPath("userData"),
+  );
+  sayBrowserProfilesPlacement(
+    browserProfiles,
+    logger.child({ component: "live-surfaces.browser-profiles" }),
+  );
   let crashEvidenceAvailable = true;
   let supportEvidenceAvailable = true;
   const appendShellAudit = async (record: Record<string, unknown>): Promise<void> => {
@@ -2173,6 +2189,8 @@ async function main(
       ...raw,
       ...(screenshotShortcut === null ? {} : { screenshotHotkey: screenshotShortcut.current() }),
       ...(latestUpdateView === null ? {} : { update: latestUpdateView }),
+      // BP-1c — whether the desk browser keeps sign-ins here, as main found it at start (one word, never a path)
+      browser: { signIns: browserProfiles.signIns },
     });
     latestDesktopState = state;
     const window = registry.primary();

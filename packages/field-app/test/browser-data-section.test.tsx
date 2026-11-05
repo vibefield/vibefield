@@ -1,11 +1,15 @@
 // @vitest-environment happy-dom
 
-import type { BrowserDataClearResult } from "@vibefield/contracts";
+import type { BrowserDataClearResult, DesktopBrowserSignIns } from "@vibefield/contracts";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { type FieldBrowserDataHost, type FieldHost, setHost } from "../src/host";
-import { BrowserDataSection, clearedWords } from "../src/panels/BrowserDataSection";
+import {
+  BrowserDataSection,
+  clearedWords,
+  SIGN_INS_UNTIL_QUIT,
+} from "../src/panels/BrowserDataSection";
 
 // BP-D4 (thinking-browser-profile.md §3·3, 2026-10-26) — Settings › General's "Clear browsing data" on its real controller
 // over a fake host: DESIGN.md's two-step destructive confirm (only the second, red click asks main), main's counts said
@@ -44,12 +48,12 @@ function host(browserData: FieldBrowserDataHost | null): void {
   });
 }
 
-async function mount(): Promise<HTMLDivElement> {
+async function mount(props: { signIns?: DesktopBrowserSignIns } = {}): Promise<HTMLDivElement> {
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
   await act(async () => {
-    root?.render(createElement(BrowserDataSection));
+    root?.render(createElement(BrowserDataSection, props));
   });
   return container;
 }
@@ -113,6 +117,35 @@ describe("Settings › General › Browsing data (BP-D4)", () => {
     const el = await mount();
     expect(button(el, "Clear browsing data…").disabled).toBe(true);
     expect(el.textContent).toContain("Unavailable here: no desktop shell answers this window.");
+  });
+
+  it("BP-1c: a desktop whose browser keeps sign-ins only until quit says so, and the clear still clears", async () => {
+    const clear = vi.fn(async (): Promise<BrowserDataClearResult> => ({ profiles: 1, pages: 0 }));
+    host({ clear });
+    const el = await mount({ signIns: "until-quit" });
+    const state = el.querySelector(".vf-ui-unavailable-state");
+    expect(state?.querySelector("strong")?.textContent).toBe(
+      "The desk browser can't keep sign-ins here",
+    );
+    expect(state?.textContent).toContain(SIGN_INS_UNTIL_QUIT.description);
+    expect(SIGN_INS_UNTIL_QUIT.description).toContain("only until VibeField quits");
+    // nothing is refused: the act stands, and clears
+    await click(button(el, "Clear browsing data…"));
+    await click(button(el, "Clear and sign out"));
+    expect(clear).toHaveBeenCalledOnce();
+    expect(el.textContent).toContain("Cleared: every site on your desk is signed out.");
+  });
+
+  it("BP-1c: a desktop that keeps sign-ins, or one that said nothing of them, shows no honest state", async () => {
+    host({ clear: async () => ({ profiles: 0, pages: 0 }) });
+    const kept = await mount({ signIns: "kept" });
+    expect(kept.querySelector(".vf-ui-unavailable-state")).toBeNull();
+    expect(kept.textContent).not.toContain(SIGN_INS_UNTIL_QUIT.title);
+    act(() => root?.unmount());
+    root = null;
+    container?.remove();
+    const silent = await mount();
+    expect(silent.querySelector(".vf-ui-unavailable-state")).toBeNull();
   });
 
   it("says main's counts and never more than they say", () => {

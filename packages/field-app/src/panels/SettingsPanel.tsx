@@ -495,8 +495,8 @@ export function SettingsPanel({
           desktopState={desktopState}
           onSettingsChanged={markSettingsChanged}
         />
-        {/* BP-D4 — the desk browser's data: Clear browsing data */}
-        <BrowserDataSection />
+        {/* BP-D4 — the desk browser's data: Clear browsing data; BP-1c — and whether it keeps sign-ins here */}
+        <BrowserDataSection signIns={desktopState?.browser?.signIns} />
         <SettingsSection
           title="Settings history"
           description="User preferences are stored in the synced Loro settings document."
