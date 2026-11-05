@@ -16,5 +16,9 @@ yank for stable rides the next nightly without a stable re-cut (`docs` → `draf
   helper targets `arm64-apple-macos14.0` (`build-screenshot-helper.mjs`) and the Node 26 binaries need 13.5. Until then
   the floors were empty and the shipped Info.plist said 12.0, electron-builder's default. Raise the two together, with
   a version bump in all three files.
+  **One value binds every platform (item 173, open):** the client compares `floors.os` with the host's own OS version
+  (`process.getSystemVersion()`) on every platform, so `14.0` would read as unmet on a Windows host (10.x). No Windows or
+  Linux feed exists in 0.9. Before one ships, the floor needs a per-platform shape in the contract (with a version bump)
+  or a darwin-only read in the client.
 
 The shape is `UpdatePolicySource` in `packages/contracts/src/update-policy.ts`.
