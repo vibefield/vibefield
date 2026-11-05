@@ -893,7 +893,7 @@ describe("item 172 — fieldd's signed stores when the disk does not answer (REC
   });
 });
 
-describe("item 177 — the sessions' records, the sixth signed store (RECORD_STORES.SERVICE_AGENTS)", () => {
+describe("item 177 — the sessions' records, one of fieldd's signed stores (RECORD_STORES.SERVICE_AGENTS)", () => {
   it("its refusal parses as ErrorData: UNAVAILABLE {service: agents, state: records-unreadable}, retryable", () => {
     const file = "error-data.agents-records-unreadable.json";
     const data = ErrorData.parse(

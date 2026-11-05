@@ -270,7 +270,7 @@ const sessionRecord = (runtimeRunId: string): AgentSessionRecord => ({
 
 const NOW = () => new Date("2026-11-05T05:00:00.000Z");
 
-/** Item 177 — the sessions' records (SessionRecordStore), the sixth store: read at each ask, as the sparks are. */
+/** Item 177 — the sessions' records (SessionRecordStore), one of fieldd's signed stores: read at each ask, as the sparks are. */
 const sessionsCase: StoreCase = {
   name: "the sessions' records (SessionRecordStore, read at each ask)",
   service: RECORD_STORES.SERVICE_AGENTS,

@@ -47,8 +47,8 @@ import {
  * failure. The continuation inside is puppeteer's and opaque.
  *
  * ITEM 177 (DESIGN.md §9 "What VibeField keeps, when it cannot read it"):
- * the sixth of fieldd's signed stores, read through the one signer
- * (signed-record.ts) and its StoreGuard, as the other five are. A folder it
+ * one of fieldd's signed stores, read through the one signer
+ * (signed-record.ts) and its StoreGuard, as the others are. A folder it
  * cannot list, or a record (or the key) the disk does not answer, is left
  * where it is and refuses UNAVAILABLE {service: "agents", state:
  * "records-unreadable"}, retryable: the records are read at each ask. A

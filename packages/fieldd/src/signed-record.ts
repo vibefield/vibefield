@@ -56,7 +56,7 @@ export type SignedRead =
  * cannot read it"): never a path or an error's name. */
 export const UNREADABLE_WORDS = {
   sparks: "VibeField can't read the sparks it keeps; nothing was changed",
-  // item 177 — the sessions' records (SessionRecordStore), the sixth store: a sign-out and a set's delete refuse first
+  // item 177 — the sessions' records (SessionRecordStore), one of the signed stores: a sign-out and a set's delete refuse first
   sessions: "VibeField can't read the sessions it keeps; nothing was changed",
   needs: "VibeField can't read what waits on you; nothing was changed",
   inputs: "VibeField can't keep words for its sessions; nothing was sent",
