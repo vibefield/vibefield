@@ -6076,6 +6076,24 @@ build is green" (§8 "Chat's thread"); an agent's notify is still never kept, an
 A new item in the queue raises no OS notice: CP3-D5 rules
 notify alone. *Main decides, as for the link's notices (TS-5): a notice must reach someone with no window in front.*
 
+**What a flow's read refuses** (track CO, CP-4a2b; Q-B3 (a), ruled by VF-PM 2026-11-05 16:24Z; the words are open
+until James reads them on a card). A flow's card and its library row show what its file says, read and never run
+(CP-4a1's static read), and the read refuses what a run would refuse, each refusal in fieldd's own lowercase words
+with the line it is on. Since CP-4a2b it also refuses, as code anywhere in the file, the three shapes the run's sandbox
+refuses when it reads the script, so a card never offers a flow its run would refuse at once:
+- "it calls import(), which a flow may not"
+- "it calls eval(), which a flow may not"
+- "it has <!-- or --> in its code, which a flow may not"
+
+They are the sandbox's own shapes (ses 2.3.0's three source tests), read over the script the run evaluates, so the
+read refuses exactly what the run would. An `eval` the sandbox lets pass, `(eval)(x)`, `(0, eval)(x)` or `x.eval(x)`,
+is not refused: it runs inside the flow's sandbox, with no power of its own. A person's words that say these things,
+in a string, a template, a regex or a comment ("replace the dynamic import()", "A --> B"), are never refused: the
+run takes them out of the text and keeps their values. One tag is the exception, said here because the card cannot
+show it: String.raw by another name (`const raw = String.raw`, `(0, String.raw)`) is the script's own tag to the run,
+so what it receives holds the escapes (`impor\u0074(`), never the words as written; only a tag written `String.raw`
+gets the words.
+
 **A flow's lines** (track CO, CP-4; CP4-Q7 (a), CP4-Q11 (a) and CP4-S17 (a), ruled at the leans 2026-11-04; the words
 are open until James reads them on a run). A flow's step is an agent the run started, or a session it was handed, and
 VibeField speaks to it in three places only, each one marked line in its session's input queue (TH-Q12 (a)'s road,
