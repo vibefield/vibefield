@@ -17,7 +17,12 @@
 //    the bare program (median of 20 interleaved runs, against LP-D2's ~250 ms) and
 //    the packaged fieldd's publish after a relaunch (against the 8 s a launcher
 //    waits for it). FIELDD_TEST_AGENTS_REPORT, when set, is a directory the two
-//    measurements are written to as JSON, for the verifier's verdict lines.
+//    measurements are written to as JSON, for the verifier's verdict lines;
+//  - the signed executable's own hardening: the role ignores NODE_OPTIONS and
+//    hands the agent SIGUSR1 as a real Node does, and SIGUSR1 to the packaged
+//    daemon opens no inspector.
+// The pair and the person are spawned on an explicit environment (`personSource`),
+// never this process's: the release runner holds its credentials in its own.
 import { type ChildProcess, spawn } from "node:child_process";
 import {
   chmodSync,
@@ -29,7 +34,7 @@ import {
   rmSync,
   writeFileSync,
 } from "node:fs";
-import { tmpdir } from "node:os";
+import { constants as osConstants, tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { type AgentListResult, LAYOUT, type TerminalCreateResult } from "@vibefield/contracts";
@@ -97,7 +102,11 @@ interface StubCall {
 interface TypedAgentStaging {
   /** an argument the typed agent's adapter refuses for an interactive session */
   TYPED_AGENT_REFUSED_ARGUMENT: string;
-  stageTypedAgent(opts: { vibefieldRoot: string }): StagedPerson;
+  stageTypedAgent(opts: {
+    vibefieldRoot: string;
+    /** the environment the person's is made from */
+    source: Readonly<Record<string, string | undefined>>;
+  }): StagedPerson;
   readTypedAgentCalls(calls: string): StubCall[];
   /** the kit's and VibeField's private variables a run was handed */
   leakedVariables(call: Pick<StubCall, "envKeys">): string[];
@@ -120,6 +129,27 @@ async function staging(): Promise<TypedAgentStaging> {
   }
   return loaded as TypedAgentStaging;
 }
+
+/** The names the person's environment is made from — these alone, never this
+ * process's whole environment. The release runner that runs this witness holds
+ * its signing and notarizing credentials (CSC_*, APPLE_*, the bundled index's
+ * secret) in its environment, and whatever the pair is spawned with reaches the
+ * pane's shell and the stand-in agent (field-native strips only FIELD_/FIELDD_;
+ * EL7, EDP §12.2's step-scoped secrets). PATH is the stub's way to its Node
+ * (`#!/usr/bin/env node`). packaged-history spawns its fieldd on an explicit
+ * environment for the same reason. */
+const PERSON_NAMES = ["PATH", "LANG", "LC_ALL", "USER", "LOGNAME"] as const;
+function personSource(): Record<string, string> {
+  const source: Record<string, string> = { TMPDIR: tmpdir(), SHELL: "/bin/sh" };
+  for (const name of PERSON_NAMES) {
+    const value = process.env[name];
+    if (value !== undefined && value !== "") source[name] = value;
+  }
+  return source;
+}
+
+/** A name a credential goes by: none may reach the agent. */
+const CREDENTIAL = /^(CSC_|APPLE_)|SECRET|PASSWORD|PASSPHRASE|TOKEN|PRIVATE_KEY|API_KEY/iu;
 
 // ── the packaged pair ──
 
@@ -245,8 +275,8 @@ async function packagedPair(staging: TypedAgentStaging): Promise<Pair> {
   const logs = join(root, "logs");
   mkdirSync(join(dataDir, "native", "run"), { recursive: true });
   mkdirSync(logs, { recursive: true });
-  const staged = staging.stageTypedAgent({ vibefieldRoot: root });
-  // the person's environment, without this harness's own switches
+  const staged = staging.stageTypedAgent({ vibefieldRoot: root, source: personSource() });
+  // the person's environment (`personSource`, never this process's), without this harness's own switches
   const person = Object.fromEntries(
     Object.entries(staged.environment).filter(([name]) => !name.startsWith("FIELDD_TEST_")),
   );
@@ -441,8 +471,10 @@ describe.skipIf(PACKAGE === undefined || PACKAGE === "")(
         });
         // one pid from the prompt to the agent: the pane's shell is its parent
         if (created.session.pid !== null) expect(call.ppid).toBe(created.session.pid);
-        // EL7: nothing of the kit's or of VibeField's private classes reached the agent
+        // EL7: nothing of the kit's or of VibeField's private classes reached the agent, and no
+        // credential of the runner's (the pair is spawned on the person's environment alone)
         expect(typed.leakedVariables(call)).toEqual([]);
+        expect(call.envKeys.filter((name) => CREDENTIAL.test(name))).toEqual([]);
         expect(existsSync(homeCopyRan)).toBe(false);
         console.log(
           `PACKAGED_TYPED_RUN ${JSON.stringify({ run: row.runtimeRunId, pid: call.pid, flags: call.argv.filter((argument) => argument.startsWith("-")) })}`,
@@ -571,6 +603,108 @@ describe.skipIf(PACKAGE === undefined || PACKAGE === "")(
         expect(readFileSync(again.launcher, "utf8")).toContain(
           `exec ${sh(pair.sea)} ${sh(AGENT_SHIM_ROLE_ARG)}`,
         );
+      },
+      ROW_BUDGET_MS,
+    );
+
+    it(
+      "the signed executable's own hardening, on the artifact: the role takes no Node option from the environment and hands the agent SIGUSR1 as a real Node does; a SIGUSR1 to the packaged daemon opens no inspector and leaves it answering",
+      async () => {
+        const sea = realpathSync(join(PACKAGE as string, exe("fieldd")));
+        const sealed = sealedAgentShim(sea);
+        expect(existsSync(sealed)).toBe(true);
+
+        // ── the role, as a launcher runs it ──
+        // the home holds no rendezvous, so the sealed shim execs the program in place; the
+        // program asks what SIGUSR1 does to a shell it starts — one born with the signal
+        // unblocked dies by it (128 + SIGUSR1), one born with it blocked lives on (0) — and
+        // NODE_OPTIONS names a file that says so if it is ever loaded
+        const scratch = realpathSync(mkdtempSync(join(tmpdir(), "vf-pka-hard-")));
+        cleanup.push(() => rmSync(scratch, { recursive: true, force: true }));
+        const programs = join(scratch, "bin");
+        const home = join(scratch, "home");
+        mkdirSync(programs, { recursive: true });
+        mkdirSync(join(home, "lib"), { recursive: true });
+        const probeName = "vf-hardening-probe";
+        const usr1 = join(scratch, "usr1");
+        const program = join(programs, probeName);
+        writeFileSync(
+          program,
+          [
+            "#!/bin/sh",
+            `usr1=$( /bin/sh -c 'kill -USR1 $$' 2>/dev/null; echo $? ) 2>/dev/null`,
+            `echo "$usr1" > ${sh(usr1)}`,
+            "exit 0",
+            "",
+          ].join("\n"),
+        );
+        chmodSync(program, 0o755);
+        const homeCopyRan = join(scratch, "HOME-COPY-RAN");
+        writeFileSync(
+          spawnThroughLayout(home).script,
+          `require("node:fs").writeFileSync(${JSON.stringify(homeCopyRan)}, "ran");\nprocess.exit(99);\n`,
+        );
+        const injectedRan = join(scratch, "NODE-OPTIONS-RAN");
+        const injected = join(scratch, "node-options.cjs");
+        writeFileSync(
+          injected,
+          `require("node:fs").writeFileSync(${JSON.stringify(injectedRan)}, "ran");\n`,
+        );
+        const env = {
+          PATH: `${programs}:/usr/bin:/bin`,
+          HOME: home,
+          PUPPETEER_SHIM_NAME: probeName,
+          PUPPETEER_SHIM_HOME: home,
+          PUPPETEER_SHIM_STRICT: "0",
+          PUPPETEER_SHIM_STRIP: "",
+        };
+        const readUsr1 = (): string | undefined => {
+          if (!existsSync(usr1)) return undefined;
+          const said = readFileSync(usr1, "utf8").trim();
+          rmSync(usr1, { force: true });
+          return said;
+        };
+        const want = String(128 + osConstants.signals.SIGUSR1);
+        const role = await timed(sea, [AGENT_SHIM_ROLE_ARG, spawnThroughLayout(home).script], {
+          ...env,
+          NODE_OPTIONS: `--require ${injected}`,
+        });
+        const roleUsr1 = readUsr1();
+        // a real Node on the same sealed shim — what a development build's launcher runs
+        const node = await timed(process.execPath, [sealed], env);
+        const nodeUsr1 = readUsr1();
+        console.log(
+          `PACKAGED_ROLE_HARDENING ${JSON.stringify({ role: role.code, node: node.code, usr1: { role: roleUsr1, node: nodeUsr1, unblocked: want }, nodeOptionsRan: existsSync(injectedRan) })}`,
+        );
+        expect(role.code).toBe(0);
+        expect(node.code).toBe(0);
+        expect(existsSync(injectedRan)).toBe(false);
+        expect(existsSync(homeCopyRan)).toBe(false);
+        expect(nodeUsr1).toBe(want);
+        expect(roleUsr1).toBe(nodeUsr1);
+
+        // ── the packaged daemon ──
+        const typed = await staging();
+        const pair = await packagedPair(typed);
+        expect(pair.fieldd.stderr()).not.toMatch(/Debugger listening/u);
+        pair.fieldd.child.kill("SIGUSR1");
+        await sleep(1_500);
+        const said = pair.fieldd.stderr();
+        console.log(
+          `PACKAGED_DAEMON_SIGUSR1 ${JSON.stringify({ inspector: /Debugger listening/u.test(said), exit: pair.fieldd.child.exitCode, signal: pair.fieldd.child.signalCode })}`,
+        );
+        expect(said).not.toMatch(/Debugger listening/u);
+        expect(pair.fieldd.child.exitCode).toBeNull();
+        expect(pair.fieldd.child.signalCode).toBeNull();
+        // and it still answers
+        const win = await windowAt(pair.fieldd.port, pair.shellToken, [
+          "agent.spawn",
+          "agent.observe",
+          "agent.control",
+          "terminal.attach",
+        ]);
+        const listed = (await win.call("agent.list", {})) as AgentListResult;
+        expect(Array.isArray(listed.sessions)).toBe(true);
       },
       ROW_BUDGET_MS,
     );

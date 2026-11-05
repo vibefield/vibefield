@@ -18,7 +18,11 @@
 //    bare program (median of 20 interleaved runs; LP-D2's budget ~250 ms) and the
 //    packaged fieldd's publish after a relaunch against the 8 s a launcher waits.
 //    Over budget is REPORTED on its own line, never hidden and never a red: a loaded
-//    host's number is not the product's.
+//    host's number is not the product's;
+//  - the signed executable's own hardening, which nothing else runs on the artifact
+//    (`build-fieldd-sea.mjs --verify` is by hand): the role ignores NODE_OPTIONS and
+//    hands the agent SIGUSR1 as a real Node does, and SIGUSR1 to the packaged daemon
+//    opens no inspector.
 // Every row is opt-in, so a skip would read as a pass: the run writes a JSON report,
 // and every row in it must have PASSED. Modelled on verify-history-package.mjs.
 import { spawn } from "node:child_process";
@@ -65,8 +69,13 @@ if (signed) await assertReleaseSigned(desktopRoot, [fieldd, ...floor], "Agents")
 
 console.log(`Agents package under test: ${nativeRoot}`);
 const reports = mkdtempSync(join(tmpdir(), "vf-agents-package-"));
+// The release runner's credentials (Developer ID, notarization, the bundled index's secret) stay
+// out of the rows' process. The rows spawn the pair and the person on an explicit environment of
+// their own (packaged-typed-agent.test.ts `personSource`); this keeps the rows' own process from
+// holding them too. Matched by name, and nothing about them is printed.
+const CREDENTIAL = /^(CSC_|APPLE_)|SECRET|PASSWORD|PASSPHRASE|TOKEN|PRIVATE_KEY|API_KEY/iu;
 const environment = {
-  ...process.env,
+  ...Object.fromEntries(Object.entries(process.env).filter(([name]) => !CREDENTIAL.test(name))),
   FIELDD_TEST_AGENTS_PACKAGE: nativeRoot,
   FIELDD_TEST_AGENTS_REPORT: reports,
 };
