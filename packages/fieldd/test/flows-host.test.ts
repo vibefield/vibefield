@@ -1,12 +1,13 @@
 import type { ChildProcess } from "node:child_process";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { FLOW_LIMITS } from "@vibefield/contracts";
+import { FLOW_LIMITS, flowAnswerBytes } from "@vibefield/contracts";
 import { afterEach, describe, expect, inject, it } from "vitest";
 import { chooseFlowsHostLaunch, type FlowsHostLaunch } from "../src/flows/launch";
 import { flowScriptOf } from "../src/flows/module-script";
 import { FLOW_HOST_TEXT_MAX, type ToFlowHost } from "../src/flows/protocol";
 import {
+  boundedAnswer,
   type FlowCallHandler,
   type FlowHostAnswer,
   type FlowHostCall,
@@ -562,6 +563,31 @@ describe("CP-4a2a — the flow host: its pipe (4A2-Q5 (a)) and its life", () => 
     },
     ROW_MS,
   );
+
+  it("H14b: a cut never overshoots: escape-heavy text is cut to the longest whole prefix within RESULT_MAX_BYTES, never to nothing (finding 7)", () => {
+    const max = FLOW_LIMITS.RESULT_MAX_BYTES;
+    const high = (code: number): boolean => code >= 0xd800 && code <= 0xdbff;
+    // a control character and an ANSI escape cost 6 bytes a character in JSON, é two, a pair four, x one
+    for (const unit of ["\u0001", "\u001b[0m", "é", "😀", "x"]) {
+      const value = unit.repeat(Math.ceil((2 * max) / unit.length));
+      const said = boundedAnswer({ ok: true, value });
+      expect(said, JSON.stringify(unit)).toMatchObject({ ok: true, cut: true });
+      const text = (said as { value?: unknown }).value;
+      expect(typeof text).toBe("string");
+      const cut = text as string;
+      expect(cut.length, `${JSON.stringify(unit)}: never cut to nothing`).toBeGreaterThan(0);
+      expect(value.startsWith(cut)).toBe(true);
+      expect(flowAnswerBytes(cut)).toBeLessThanOrEqual(max);
+      // the longest that fits: the next whole character (a surrogate pair is one) is past the bound
+      const step = high(value.charCodeAt(cut.length)) ? 2 : 1;
+      expect(
+        flowAnswerBytes(value.slice(0, cut.length + step)),
+        JSON.stringify(unit),
+      ).toBeGreaterThan(max);
+      // and never half a pair
+      expect(high(cut.charCodeAt(cut.length - 1))).toBe(false);
+    }
+  });
 
   it(
     "H15: a call past RESULT_MAX_BYTES is refused in the child before it is sent: the handler never hears it",
