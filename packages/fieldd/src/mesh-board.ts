@@ -62,6 +62,20 @@ import { RpcCallError } from "./native-link";
 // at once past it: a floor is any integer a reader asks, and an unbounded
 // linger would stand up a hub per value (the PG-9a review [0], EL7).
 //
+// PG-9 (PG-L4.4's cursor half, VF-PM's P1 (b), 2026-11-05) — a reader back at a
+// hub names, per device, the last `{epoch, revision}` it applied (`since`), and
+// the open answers each device ONE way: `resumed` (its copy is the head), a
+// `delta` from its cursor to the head on the same chain, or a `snapshot`. The
+// hub keeps no frame journal: each held row carries the revision it arrived at
+// and the one it last changed at, and each board remembers its removals since
+// its last snapshot, at most `AGENT_FIELD.MESH_RESUME_TOMBSTONES`. A cursor the
+// hub cannot vouch for — another epoch, below the board's first revision or a
+// forgotten removal, past the head, or at a same-epoch re-present (PG-1d: the
+// same revision with other rows) — is answered a snapshot, never a guess. A
+// reader that names no cursor is answered today's open, and PG-1c's resync is
+// always whole. A cursor is the reader's and this hub's: the owners are asked
+// as before, and never see one.
+//
 // WHICH peers are desktops: the roster lists phones too (a phone is a self node
 // with no fieldd behind it) and cannot say so directly — a phone publishes no
 // device slice. The board takes DS-D7's own test, `capabilities.docHost`, which
@@ -116,7 +130,17 @@ export interface MeshBoardDevice {
   state: RowsDeviceState;
   asOf: string;
   snapshot?: BoardSnapshot | undefined;
+  /** PG-9 — only to a reader that named a cursor: one of `snapshot`, `resumed`, `delta` */
+  resumed?: MeshCursor | undefined;
+  delta?: (BoardDelta & { epoch: string }) | undefined;
 }
+/** PG-9 — a reader's cursor for one device: the last frame of that chain it applied. */
+export interface MeshCursor {
+  epoch: string;
+  revision: number;
+}
+/** PG-9 — a reader's cursors, by device (`AgentSubscribeParams.since`). */
+export type MeshCursors = Readonly<Record<string, MeshCursor>>;
 export interface MeshBoardOpen {
   devices: MeshBoardDevice[];
 }
@@ -198,11 +222,22 @@ interface Resolved {
   onUpstreamReady: (device: string) => void;
 }
 
-/** A board as the relay holds it: the owner's chain, the owner's rows. */
+/** A board as the relay holds it: the owner's chain, the owner's rows. PG-9 —
+ * and what a returning reader's cursor needs: when each row arrived and last
+ * changed, the removals since the board's last snapshot, and the least
+ * revision a cursor may name and still be answered from here. */
 interface HeldBoard {
   epoch: string;
   revision: number;
   rows: Map<string, BoardRow>;
+  /** per held row: the revision it arrived at on this chain, and the one it last changed at */
+  stamps: Map<string, { added: number; changed: number }>;
+  /** removals since the last snapshot, oldest first: the revision it left at and the one it had arrived at;
+   * at most `AGENT_FIELD.MESH_RESUME_TOMBSTONES` */
+  removals: Map<string, { at: number; added: number }>;
+  /** the least cursor revision answered `resumed` or a delta: the snapshot's own (one past it on a same-epoch
+   * re-present, whose rows a reader at that revision may not hold), raised past each forgotten removal */
+  answersFrom: number;
 }
 
 interface Peer {
@@ -239,11 +274,18 @@ const isDesktopPeer = (row: DeviceInfo, self: string): boolean =>
 
 const iso = (ms: number): string => new Date(ms).toISOString();
 
-function held(snapshot: BoardSnapshot): HeldBoard {
+/** A snapshot as the hub holds it. `previous` is the board it replaces: a snapshot on the SAME epoch (PG-1d's
+ * re-present, a repair) may carry other rows at a revision a reader already holds, so no cursor at its revision
+ * is answered from it (PG-9). */
+function held(snapshot: BoardSnapshot, previous: HeldBoard | null = null): HeldBoard {
+  const at = snapshot.revision;
   return {
     epoch: snapshot.epoch,
-    revision: snapshot.revision,
+    revision: at,
     rows: new Map(snapshot.rows.map((row) => [row.runtimeRunId, row])),
+    stamps: new Map(snapshot.rows.map((row) => [row.runtimeRunId, { added: at, changed: at }])),
+    removals: new Map(),
+    answersFrom: previous?.epoch === snapshot.epoch ? at + 1 : at,
   };
 }
 
@@ -252,11 +294,57 @@ function snapshotOf(board: HeldBoard): BoardSnapshot {
 }
 
 /** Upserts, then removals, then the owner's revision: the owner's delta
- * applied to the relay's copy, exactly as a reader applies it to its own. */
+ * applied to the relay's copy, exactly as a reader applies it to its own.
+ * PG-9 — each row stamped, each removal remembered, the oldest forgotten past
+ * the bound (and no cursor before it answered as a delta from then on). */
 function apply(board: HeldBoard, delta: BoardDelta): void {
-  for (const row of delta.upserts) board.rows.set(row.runtimeRunId, row);
-  for (const id of delta.removed) board.rows.delete(id);
-  board.revision = delta.revision;
+  const at = delta.revision;
+  for (const row of delta.upserts) {
+    const id = row.runtimeRunId;
+    board.rows.set(id, row);
+    board.stamps.set(id, { added: board.stamps.get(id)?.added ?? at, changed: at });
+    board.removals.delete(id);
+  }
+  for (const id of delta.removed) {
+    const stamp = board.stamps.get(id);
+    if (!board.rows.delete(id)) continue;
+    board.stamps.delete(id);
+    board.removals.set(id, { at, added: stamp?.added ?? board.answersFrom });
+  }
+  for (const [id, removal] of board.removals) {
+    if (board.removals.size <= AGENT_FIELD.MESH_RESUME_TOMBSTONES) break;
+    board.removals.delete(id);
+    board.answersFrom = Math.max(board.answersFrom, removal.at);
+  }
+  board.revision = at;
+}
+
+/** PG-9 — one device's answer in an open: by the reader's cursor when it named one and the hub can vouch for it,
+ * the board whole otherwise. A delta carries the rows that changed after the cursor, and the removals of rows the
+ * reader held; a row that arrived and left after the cursor is no business of the reader's. */
+function answerFor(
+  board: HeldBoard,
+  cursor: MeshCursor | undefined,
+): Pick<MeshBoardDevice, "snapshot" | "resumed" | "delta"> {
+  if (
+    cursor === undefined ||
+    cursor.epoch !== board.epoch ||
+    cursor.revision < board.answersFrom ||
+    cursor.revision > board.revision
+  )
+    return { snapshot: snapshotOf(board) };
+  if (cursor.revision === board.revision)
+    return { resumed: { epoch: board.epoch, revision: board.revision } };
+  const since = cursor.revision;
+  const upserts = [...board.rows.values()].filter(
+    (row) => (board.stamps.get(row.runtimeRunId)?.changed ?? Number.POSITIVE_INFINITY) > since,
+  );
+  const removed: string[] = [];
+  for (const [id, removal] of board.removals)
+    if (removal.at > since && removal.added <= since) removed.push(id);
+  return {
+    delta: { epoch: board.epoch, since, revision: board.revision, upserts, removed },
+  };
 }
 
 /** An empty delta whose `since` is its `revision`: the owner's heartbeat. */
@@ -292,6 +380,10 @@ const copyOf = (board: HeldBoard): HeldBoard => ({
   epoch: board.epoch,
   revision: board.revision,
   rows: new Map(board.rows),
+  // each stamp and removal is replaced on change, never mutated, so the maps' copies suffice
+  stamps: new Map(board.stamps),
+  removals: new Map(board.removals),
+  answersFrom: board.answersFrom,
 });
 
 /** What a hub tells its `MeshBoard` about its life: its linger began (its last
@@ -342,8 +434,8 @@ class BoardHub {
   }
 
   /** A reader joins: it is answered with every device as the hub holds it,
-   * and hears every later frame. */
-  join(member: Member): MeshBoardReader {
+   * and hears every later frame. PG-9 — by its cursors, where it named them. */
+  join(member: Member, since?: MeshCursors): MeshBoardReader {
     // PG-9a — a reader back inside the linger keeps the hub as it stands:
     // its upstreams, each peer's epoch and state, its own board
     if (this.#linger !== null) {
@@ -351,7 +443,7 @@ class BoardHub {
       this.#linger = null;
       this.life.rejoined();
     }
-    const open = this.#openAnswer();
+    const open = this.#openAnswer(since);
     this.#members.add(member);
     let left = false;
     return {
@@ -406,13 +498,17 @@ class BoardHub {
 
   // ---- the answer and the relay ----
 
-  #openAnswer(): MeshBoardOpen {
+  /** The open: every device as the hub holds it. PG-9 — a device the reader
+   * named a cursor for is answered by it (`answerFor`); without `since`, every
+   * board is whole, as before (and PG-1c's `current` never passes one). */
+  #openAnswer(since?: MeshCursors): MeshBoardOpen {
+    const self = this.opts.selfDevice();
     const devices: MeshBoardDevice[] = [
       {
-        device: this.opts.selfDevice(),
+        device: self,
         state: "live",
         asOf: iso(this.#self.asOf),
-        snapshot: snapshotOf(this.#self.board),
+        ...answerFor(this.#self.board, since?.[self]),
       },
     ];
     for (const peer of this.#peers.values()) {
@@ -421,7 +517,7 @@ class BoardHub {
         device: peer.device,
         state: peer.state,
         asOf: iso(peer.asOf),
-        ...(peer.board !== null ? { snapshot: snapshotOf(peer.board) } : {}),
+        ...(peer.board !== null ? answerFor(peer.board, since?.[peer.device]) : {}),
       });
     }
     return { devices };
@@ -451,7 +547,7 @@ class BoardHub {
         ...(frame as LocalBoardSnapshot),
         epoch: frame.epoch ?? this.#self.board.epoch,
       };
-      this.#self.board = held(snapshot);
+      this.#self.board = held(snapshot, this.#self.board);
       this.#broadcast({ device: this.opts.selfDevice(), snapshot });
       return;
     }
@@ -694,7 +790,7 @@ class BoardHub {
         return;
       }
       const snapshot = { ...parsed.data, epoch };
-      peer.board = held(snapshot);
+      peer.board = held(snapshot, peer.board);
       this.kept.set(peer.device, peer.board);
       peer.lastHeard = now;
       this.#broadcast({ device: peer.device, snapshot });
@@ -768,11 +864,13 @@ export class MeshBoard {
     };
   }
 
-  /** One reader of the mesh board at a projection and floor. */
+  /** One reader of the mesh board at a projection and floor. PG-9 — `since`,
+   * the reader's cursors by device; absent, today's whole open. */
   open(
     projection: BoardProjection,
     minIntervalMs: number,
     emit: (frame: MeshBoardFrame) => void,
+    since?: MeshCursors,
   ): MeshBoardReader {
     if (this.#disposed)
       throw new RpcCallError("UNAVAILABLE", "the mesh board is stopping", true, {
@@ -817,7 +915,7 @@ export class MeshBoard {
       hub = created;
       this.#hubs.set(key, hub);
     }
-    return hub.join(emit);
+    return hub.join(emit, since);
   }
 
   /** The door's install for `agent.subscribe {scope: "mesh"}`: the open as its
@@ -828,8 +926,9 @@ export class MeshBoard {
     projection: BoardProjection,
     minIntervalMs: number,
     emit: (payload: unknown, kind?: "delta" | "snapshot") => void,
+    since?: MeshCursors,
   ): { snapshot: MeshBoardOpen; resync: () => void; dispose: () => void } {
-    const reader = this.open(projection, minIntervalMs, (frame) => emit(frame, "delta"));
+    const reader = this.open(projection, minIntervalMs, (frame) => emit(frame, "delta"), since);
     return {
       snapshot: reader.open,
       resync: () => emit(reader.current(), "snapshot"),

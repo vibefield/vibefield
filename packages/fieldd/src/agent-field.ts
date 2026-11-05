@@ -43,6 +43,15 @@ export function malformedBoardAsk(): RpcCallError {
   );
 }
 
+/** PG-9 — a cursor asked of a board that answers none: one desktop's board opens whole, and a routed ask is one
+ * desktop's board at its owner, which would key its upstream by the reader's cursor (MF-1h: refused, not ignored). */
+const cursorOffTheMesh = (): RpcCallError =>
+  new RpcCallError(
+    "PRECONDITION_FAILED",
+    "since names cursors of the mesh board (scope: mesh); one desktop's board opens whole",
+    false,
+  );
+
 /**
  * WHO may ask WHICH board, in one place (the landing review, S2, 2026-10-01).
  *
@@ -64,7 +73,10 @@ export function malformedBoardAsk(): RpcCallError {
  *    (retired 2026-10-31), which an ask no longer parses as;
  *  · `scope: "mesh"` is this desktop's clients' aggregate: a peer reads a
  *    desktop's OWN board (DS-L4), and the mesh states each desktop's liveness
- *    itself, so `heartbeatMs` is refused there.
+ *    itself, so `heartbeatMs` is refused there;
+ *  · `since` (PG-9) names cursors of the mesh board, the only board that
+ *    answers them: on one desktop's board, or the full fold, it is refused, so
+ *    a routed ask never carries one to an owner either (`routedBoardAsk`).
  *
  * Pure: the caller's principal kind and the parsed ask in, the refusal (or
  * null) out. Availability (the mesh board not built yet) is not a refusal and
@@ -76,7 +88,7 @@ export function refuseBoardAsk(
 ): RpcCallError | null {
   const projection = ask.projection ?? "full";
   const scope = ask.scope ?? "local";
-  const { minIntervalMs, heartbeatMs } = ask;
+  const { minIntervalMs, heartbeatMs, since } = ask;
   if (projection === "full") {
     // DS-D4 — the whole fold row stays on its device. The door became `stream`
     // for the board's sake (a peer daemon asks it), so the wall that used to
@@ -112,6 +124,7 @@ export function refuseBoardAsk(
         `${minIntervalMs !== undefined ? "minIntervalMs" : "heartbeatMs"} applies to the board projections (field, model and remote)`,
         false,
       );
+    if (since !== undefined) return cursorOffTheMesh();
     return null;
   }
   // MV-3a (MV-D18, L8, M16) — the model board is THIS desktop's own windows':
@@ -137,6 +150,7 @@ export function refuseBoardAsk(
   // by its owner, so it is admitted to a phone as to a self peer daemon (the
   // mesh scope stays refused to the peer below, DS-L4). Every other
   // subscription a phone opens stays content-free.
+  if (since !== undefined && scope !== "mesh") return cursorOffTheMesh();
   if (scope === "mesh") {
     // DS-L4 — a peer asking for the mesh would be one daemon aggregating
     // another's aggregate, and two desktops asking each other would loop.

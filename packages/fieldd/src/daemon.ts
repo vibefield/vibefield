@@ -4233,8 +4233,10 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           // `.snapshot` carries the whole mesh (the open, the client's own
           // replay after a reconnect, and the door's resync of a phone behind
           // its cap, PG-1c); `.delta` carries every per-device frame — a
-          // device's delta, a device's reset, a device's state.
-          const install = meshBoard.subscribe(projection, floor, emit);
+          // device's delta, a device's reset, a device's state. PG-9 — the
+          // open answers each device by the reader's cursor where it named one
+          // (`since`, the mesh's alone: `refuseBoardAsk` refuses it elsewhere).
+          const install = meshBoard.subscribe(projection, floor, emit, parsed.data.since);
           return {
             ...install,
             dispose: () => {
