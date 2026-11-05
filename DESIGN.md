@@ -1608,6 +1608,10 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     again: the list reads "Opening Chat…" again, and the new feed asks for the board afresh. A connection drop while
     the same fieldd stays up starts no new feed: the window's client reconnects, the board's subscription comes back
     with a fresh snapshot, and the list stands as last read.
+    *Amended 2026-11-05 (item 172):* when fieldd cannot read the sparks it keeps (the disk did not answer, or their
+    folder is not one it can list), fieldd's words under it are "VibeField can't read the sparks it keeps; nothing was
+    changed", never a path or an error's name, and the list is asked again as before. §9 "What VibeField keeps, when
+    it cannot read it" holds the rule.
   - **No create yet.** Chat's line holds the views and the snapshot. Its create, **New spark** (⌘N, `sparkle`), comes
     with its sheet in SP-1c. *(Built at SP-1c, 2026-10-31: §8 "The New spark sheet", and the line's create above.)*
 - **The New spark sheet — a name, an agent, and the face it is dealt** (SP-1c; NS-D1 A, NS-D2 B, NS-D3 A and NS-D5,
@@ -5960,6 +5964,26 @@ Inside History the room's own words stand as rosetta wrote them, and the Setup A
   is said in its own words after the colon, as the line says it.
 - A session chip's id is pasted for the spark's tools, which address a session by it. It is the one runtime id Chat
   puts on screen, in the pane, as part of what you send, and never in Chat's own chrome.
+
+**What VibeField keeps, when it cannot read it** (track CO, item 172; 2026-11-05). VibeField keeps four kinds of
+record in signed files of its own: a spark's record, what waits on you (CP-3), the words that wait for a session, and
+each spark's kept record. Reading one comes out one of four ways, and only the first is served:
+- **It is a record VibeField wrote:** served.
+- **It is not one** (it does not parse, is unsigned or edited, names another spark, item or session than its file, is
+  open to other users, or is a folder): set aside beside itself for a person to look at, never served and never read
+  again, and said in fieldd's log.
+- **The disk did not answer** (three tries; a folder it cannot open, a file it may not read, too many files open): left
+  where it is, never served and never written over, and said in fieldd's log. The door that reads it refuses in
+  fieldd's words, never with an empty list: "VibeField can't read the sparks it keeps; nothing was changed" (Chat's
+  list, under "Chat can't read your sparks", and the phone's) · "VibeField can't read what waits on you; nothing was
+  changed" (the needs-you doors) · "VibeField can't keep words for its sessions; nothing was sent" (your words to a
+  spark, and a spark's send to a session).
+- **A newer VibeField wrote it** (its format is above this one's): kept where it is for that VibeField, never served
+  and never written over, and said in fieldd's log as kept for a newer VibeField.
+
+A store that cannot be read at boot never stops VibeField: fieldd starts, and that store says it cannot read. The
+sparks are read again at the next ask. What waits on you and the words that wait are read once, at boot, so they read
+again when fieldd restarts on a disk that answers.
 
 **The simulator's honest faces** (track PT, PT-S1; the PT-S design §3, ruled 2026-10-18) — what the phone's
 screen says of its device, in the voice's words, quoted exactly by the plugin (`plugins/simulator`'s
