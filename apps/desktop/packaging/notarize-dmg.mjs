@@ -23,8 +23,8 @@
 //   5. re-read the feed's DMG entry (sha512, size) from the stapled bytes and drop the DMG's blockmap
 //      (scripts/release-assets.mjs says why) — before anything downstream hashes the DMG.
 // A transient network failure (NSURLErrorDomain -1005 failed run 41726990250's staple on 2026-11-03) is retried a bounded
-// number of times (`RETRIES`); the release workflow also routes Apple's ticket traffic over TCP before this step
-// (862e2e5da, "Use TCP for Apple notarization tickets").
+// number of times (`RETRIES`); the release workflow also routes Apple's ticket traffic over TCP before this step, and
+// before converge's `--validate-only` (862e2e5da's rule, one copy: `.github/actions/apple-tickets-over-tcp`).
 //
 // usage: node packaging/notarize-dmg.mjs --dir <electron-builder output dir>       (the signed path: steps 1–5)
 //        node packaging/notarize-dmg.mjs --dir <dir> --unsigned        (no Apple credentials: says so, signs nothing,

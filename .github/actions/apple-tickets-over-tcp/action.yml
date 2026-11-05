@@ -1,0 +1,22 @@
+name: Use TCP for Apple notarization tickets
+description: >-
+  Route this ephemeral macOS runner's HTTPS over TCP, so Apple's ticket lookups (stapler staple and validate,
+  Gatekeeper's assessment) never ride HTTP/3, which GitHub's macOS network can drop with NSURLError -1005.
+# 862e2e5da's fix (run 41726990250, 2026-11-03), shared since LP-1's review (2026-11-05): every job that reaches Apple's
+# ticket service — build's signed package step, and converge's assessment of the published DMG — runs THIS one copy
+# before it. Apple's signing and notarization checks stay as they are; only QUIC on 443 is refused, so the client falls
+# back to TCP. https://github.com/actions/runner-images/issues/14924
+runs:
+  using: composite
+  steps:
+    - name: Refuse QUIC on 443 (an inactive packet filter only)
+      shell: bash
+      run: |
+        set -euo pipefail
+        # Do not overwrite an active firewall policy if the hosted runner's defaults change.
+        if ! sudo pfctl -s info | grep '^Status: Disabled' >/dev/null; then
+          echo "::error::Refusing to replace an active or unrecognized packet-filter ruleset."
+          exit 1
+        fi
+        printf '%s\n' 'block return out quick proto udp from any to any port 443' | sudo pfctl -f -
+        sudo pfctl -E

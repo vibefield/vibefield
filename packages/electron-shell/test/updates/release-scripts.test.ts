@@ -1671,9 +1671,45 @@ describe("release.yml's shape — the permissions table, as a test", () => {
     }
   });
 
-  it.each(["signed", "unsigned", "absent"])(
-    "LP-1: converge assesses the published DMG strictly whenever the app inside is signed (%s app)",
-    (app) => {
+  // LP-1's review (2026-11-05): an UNSIGNED build's app is still signed — ad hoc. after-pack.mjs flips the fuses with
+  // `resetAdHocDarwinSignature`, and @electron/fuses then runs `codesign --sign - --force --deep` on the whole .app;
+  // with `identity: null` electron-builder leaves that signature in place. So `codesign --display` exits 0 on both
+  // paths, and only a Developer ID Application authority on the app may make the DMG's assessment strict. The fake
+  // answers as Apple's codesign does: on stderr, the authority chain only at --verbose=2 and up, exit 1 for an app that
+  // carries no signature at all.
+  const CODESIGN_DISPLAY = String.raw`#!/bin/sh
+[ "$1" = "--display" ] || exit 99
+loud=no
+case "$2" in --verbose=[2-9]) loud=yes ;; esac
+case "$APP_SIGNATURE" in
+  developer-id)
+    printf 'Executable=%s/Contents/MacOS/VibeField\nIdentifier=dev.vibefield.app\n' "$3" >&2
+    if [ "$loud" = yes ]; then
+      printf 'Signature size=9045\nAuthority=Developer ID Application: VibeField (9F79X9D26S)\nAuthority=Developer ID Certification Authority\nAuthority=Apple Root CA\nTimestamp=5 Nov 2026 at 01:04:00\nNotarization Ticket=stapled\nTeamIdentifier=9F79X9D26S\n' >&2
+    fi
+    ;;
+  adhoc)
+    printf 'Executable=%s/Contents/MacOS/VibeField\nIdentifier=dev.vibefield.app\n' "$3" >&2
+    if [ "$loud" = yes ]; then
+      printf 'CodeDirectory v=20500 size=511 flags=0x20002(adhoc,linker-signed) hashes=5+7 location=embedded\nSignature=adhoc\nTeamIdentifier=not set\n' >&2
+    fi
+    ;;
+  *)
+    printf '%s: code object is not signed at all\n' "$3" >&2
+    exit 1
+    ;;
+esac
+exit 0
+`;
+
+  it.each([
+    ["developer-id", "strict"],
+    ["adhoc", "warn"], // what every unsigned build's app really carries
+    ["unsigned", "warn"],
+    ["absent", "none"],
+  ])(
+    "LP-1: converge assesses the published DMG strictly only when the app inside carries a Developer ID (%s app)",
+    (app, expected) => {
       const step = stepsOf("converge").find(
         (entry) => entry.name === "The published DMG is signed, notarized and stapled (LP-1)",
       );
@@ -1682,9 +1718,7 @@ describe("release.yml's shape — the permissions table, as a test", () => {
       mkdirSync(join(dir, "bin"));
       if (app !== "absent") mkdirSync(join(dir, "unzipped", "VibeField.app"), { recursive: true });
       // codesign answers for the app; `node` records what the step asks of the assessor
-      writeFileSync(join(dir, "bin", "codesign"), `#!/bin/sh\n[ "$APP_SIGNED" = "signed" ]\n`, {
-        mode: 0o755,
-      });
+      writeFileSync(join(dir, "bin", "codesign"), CODESIGN_DISPLAY, { mode: 0o755 });
       writeFileSync(
         join(dir, "bin", "node"),
         '#!/bin/sh\nprintf \'%s\\n\' "$*" >> "$NODE_CALLS"\n',
@@ -1699,7 +1733,7 @@ describe("release.yml's shape — the permissions table, as a test", () => {
         env: {
           ...process.env,
           PATH: `${join(dir, "bin")}:${process.env.PATH}`,
-          APP_SIGNED: app,
+          APP_SIGNATURE: app,
           NODE_CALLS: join(dir, "node-calls"),
         },
       });
@@ -1707,14 +1741,14 @@ describe("release.yml's shape — the permissions table, as a test", () => {
       const calls = readdirSync(dir).includes("node-calls")
         ? readFileSync(join(dir, "node-calls"), "utf8").trim().split("\n")
         : [];
-      if (app === "signed") {
+      if (expected === "strict") {
         expect(calls).toEqual([
           "apps/desktop/packaging/notarize-dmg.mjs --dir release-out --validate-only",
         ]);
       } else {
         expect(calls).toEqual([]);
         expect(result.stdout).toContain(
-          app === "unsigned" ? "::warning title=Unsigned macOS build::" : "no macOS app",
+          expected === "warn" ? "::warning title=Unsigned macOS build::" : "no macOS app",
         );
       }
     },
@@ -1780,23 +1814,47 @@ describe("release.yml's shape — the permissions table, as a test", () => {
     },
   );
 
+  // 862e2e5da's TCP rule has ONE copy since LP-1's review (2026-11-05), the composite: every job whose steps reach
+  // Apple's ticket service — build's signed package (notarytool, stapler staple) and converge's assessment of the
+  // published DMG (stapler validate, spctl) — runs it first, under the same guard.
+  const TCP_STEP = "Use TCP for Apple notarization tickets";
+  const TCP_ACTION = join(REPO, ".github", "actions", "apple-tickets-over-tcp", "action.yml");
+
+  it("routes Apple tickets over TCP before every step that reaches Apple's ticket service", () => {
+    const reachesApple = /pnpm run package:mac:release|notarize-dmg\.mjs --dir \S+ --validate-only/;
+    const first: Record<string, string> = {};
+    for (const job of jobs.keys()) {
+      const steps = stepsOf(job);
+      const at = steps.findIndex((step) => reachesApple.test(step.text));
+      if (at === -1) continue;
+      first[job] = steps[at]!.name;
+      const tcp = steps.findIndex((step) => step.name === TCP_STEP);
+      expect(tcp, job).toBeGreaterThan(-1);
+      expect(tcp, job).toBeLessThan(at);
+      expect(steps[tcp]!.text, job).toContain(
+        "if: runner.os == 'macOS' && vars.VIBEFIELD_MAC_SIGNING == 'true'",
+      );
+      expect(steps[tcp]!.text, job).toMatch(
+        /\n {8}uses: \.\/\.github\/actions\/apple-tickets-over-tcp\n/,
+      );
+    }
+    expect(first).toEqual({
+      build: "Package, signed (J4 — the Apple credentials exist)",
+      converge: "The published DMG is signed, notarized and stapled (LP-1)",
+    });
+    // the packet-filter rule lives in the composite alone
+    expect(yml).not.toMatch(/pfctl/);
+  });
+
   it.each(["Disabled", "Enabled", "unrecognized"])(
     "routes Apple tickets over TCP only with an inactive packet filter (%s)",
     (state) => {
-      const steps = stepsOf("build");
-      const step = steps.find((entry) => entry.name === "Use TCP for Apple notarization tickets");
-      expect(step).toBeDefined();
-      expect(step!.text).toContain(
-        "if: runner.os == 'macOS' && vars.VIBEFIELD_MAC_SIGNING == 'true'",
-      );
-      expect(steps.indexOf(step!)).toBeLessThan(
-        steps.findIndex(
-          (entry) => entry.name === "Package, signed (J4 — the Apple credentials exist)",
-        ),
-      );
+      const action = readFileSync(TCP_ACTION, "utf8");
+      expect(action).toMatch(/\nruns:\n {2}using: composite\n/);
+      expect(action).toMatch(/\n {6}shell: bash\n/);
       const dir = scratch();
       mkdirSync(join(dir, "bin"));
-      // Execute the workflow's real shell, with every privileged call intercepted by the fixture.
+      // Execute the composite's real shell, with every privileged call intercepted by the fixture.
       writeFileSync(
         join(dir, "bin", "sudo"),
         `#!/bin/sh
@@ -1810,7 +1868,7 @@ esac
 `,
         { mode: 0o755 },
       );
-      const shell = step!.text.split("        run: |\n")[1]!.replace(/^ {10}/gm, "");
+      const shell = action.split("      run: |\n")[1]!.replace(/^ {8}/gm, "");
       const result = spawnSync("bash", ["-euc", shell], {
         cwd: dir,
         encoding: "utf8",
