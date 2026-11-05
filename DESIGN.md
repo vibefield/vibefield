@@ -6099,6 +6099,21 @@ Each is sent once for the reason it names, and a line its session did not take i
 hears nothing else from VibeField: a gate, the call cap, a changed flow and a Stop are the person's, and a run's
 Stop reaches a step only through §8's two acts ("A run a Stop has not stopped", its CP-4 note).
 
+**When a run's script cannot go on** (track CO, CP-4a2a; 4A2-Q7 (a), ruled by VF-PM 2026-11-05 08:51Z; the words are
+open until James reads them on a run). A flow's script runs in a host of its own, one per run, never in fieldd. fieldd
+ends a host that stops answering its ping or outgrows the memory a flow may use (`FLOW_LIMITS`, provisional until
+measured), and the run then ends as any run ends (CP4-Q10 (a)) and says why, once, in fieldd's voice. ‹flow› is the
+flow's name as its file's `meta` says it, on one line and cut at 64 characters with "…", as ‹label› is above:
+- **A host that stopped answering:** "VibeField ended ‹flow›: it stopped answering."
+- **A host past its memory:** "VibeField ended ‹flow›: it used more memory than a flow may."
+- **A host this copy cannot start** (its file is not beside fieldd): "VibeField can't run flows: this copy of
+  VibeField is missing the file it runs them with. Reinstall VibeField." It is the agents' sentence for the same loss
+  (`roles.ts`, `agentShimUnavailable`), and a development run that has no host says so in fieldd's log alone.
+
+A host that fieldd ended is never started again for that run: its journal stands, and a new run starts from the top.
+A host that left for any other reason (its pipe closed under it, the child killed alone) leaves its run waiting, and
+the next wake starts a host again from the journal, which answers every call it already holds (CP-D9).
+
 **The link's words** (track TS, TS-D1 and TS-D2 ruled 2026-10-27). The act is **Continue with
 Tailscale** on every button that starts it — the Connect pane, Settings → Devices, the phone — and
 the place that holds it says **Connect your devices**; the state is **Connected**. A desktop that
@@ -6472,6 +6487,11 @@ boot, so they read again when fieldd restarts on a disk that answers.
 *Amended 2026-11-05 (TH-1): a spark's transcript is kept by these four ways line by line (§8 "Chat's thread"). Its
 door says "VibeField can't read this spark's conversation; nothing was changed" (Chat's thread, after "Couldn't read
 Vela's conversation:"), and its runs are read again at each ask.*
+
+*Amended 2026-11-05 (CP-4a2a; 4A2-Q10 (a), ruled by VF-PM 08:51Z): a run's journal is one of a flow's records, kept
+by these four ways line by line, and its door says the flows' sentence, "VibeField can't read the flows it keeps;
+nothing was changed". A line that is not VibeField's (forged, missing, or out of its order) sets its run aside as
+lost (CP4-S15), and a journal the disk did not answer leaves its run waiting, read again at the next ask.*
 
 **The simulator's honest faces** (track PT, PT-S1; the PT-S design §3, ruled 2026-10-18) — what the phone's
 screen says of its device, in the voice's words, quoted exactly by the plugin (`plugins/simulator`'s
