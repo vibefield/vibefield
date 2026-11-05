@@ -239,7 +239,7 @@ then revoke the key when the run ends (step 4). Any other value is refused.
    `-T ""` empties the item's trusted-application list (by default `security`
    itself, and so anything that runs it, would read it without asking). The key
    is stored as one base64 line because the keychain hands multi-line data back
-   as hex. The helper's first read checks that the item decodes to a `.p8` key.
+   as hex. The helper's first read checks that the item decodes to a whole `.p8` key, from its BEGIN line to its END line.
 3. Export `ASC_KEY_ID` and `ASC_ISSUER_ID` in the shell that runs the helper
    (nothing loads them from a file in the repository). At each run macOS asks to
    let `security` use the item: choose **Allow**, never **Always Allow**, which

@@ -270,8 +270,10 @@ elif [[ $ids_set -eq 2 ]]; then
   fi
   first_line=""
   IFS= read -r first_line <"$key_path" || true
-  if [[ "$first_line" != "-----BEGIN PRIVATE KEY-----" ]]; then
-    echo "The keychain item for ASC_KEY_ID is not a base64-encoded .p8 key. Store it again as apps/ios/TESTFLIGHT.md says." >&2
+  # the key's last non-empty line too: a key cut short (a 128-character prompt keeps no more) begins right and ends wrong
+  last_line="$(awk 'NF { line = $0 } END { sub(/\r$/, "", line); print line }' "$key_path")"
+  if [[ "${first_line%$'\r'}" != "-----BEGIN PRIVATE KEY-----" || "$last_line" != "-----END PRIVATE KEY-----" ]]; then
+    echo "The keychain item for ASC_KEY_ID is not a whole base64-encoded .p8 key. Store it again as apps/ios/TESTFLIGHT.md says." >&2
     exit 1
   fi
   key_mode="keychain"
