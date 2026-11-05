@@ -1,7 +1,12 @@
 import { type ChildProcess, spawn } from "node:child_process";
 import { mkdtempSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { FLOW_LIMITS, flowAnswerBytes } from "@vibefield/contracts";
+import {
+  FLOW_INPUT_VALUE_MAX,
+  FLOW_INPUTS_MAX,
+  FLOW_LIMITS,
+  flowAnswerBytes,
+} from "@vibefield/contracts";
 import { afterEach, describe, expect, inject, it } from "vitest";
 import { chooseFlowsHostLaunch, type FlowsHostLaunch } from "../src/flows/launch";
 import { flowScriptOf } from "../src/flows/module-script";
@@ -541,6 +546,33 @@ describe("CP-4a2a — the flow host: its pipe (4A2-Q5 (a)) and its life", () => 
       expect(calls[0]?.args).toEqual(["start"]);
       expect(calls.length).toBeLessThan(7);
       expect(alive(pid as number)).toBe(false);
+    },
+    ROW_MS,
+  );
+
+  it(
+    "H26: a run whose frame would pass the host's bound, its script's escapes and its input together, is refused before any host starts, in fieldd's words (bth's re-read N6)",
+    async () => {
+      // a flow within SCRIPT_MAX_BYTES, mostly raw control characters in a template (six bytes each as JSON), and the
+      // largest input a run takes: FLOW_INPUTS_MAX values of FLOW_INPUT_VALUE_MAX control characters. Each is within
+      // its own bound; the `run` frame carrying them is not within the host's (TO_FLOW_HOST_FRAME_MAX)
+      const script = flow(`const words = \`${"\u0001".repeat(60_000)}\`;\nreturn words.length;`);
+      expect(script.byteLength).toBeLessThanOrEqual(FLOW_LIMITS.SCRIPT_MAX_BYTES);
+      const input = Object.fromEntries(
+        Array.from({ length: FLOW_INPUTS_MAX }, (_, i) => [
+          `value${i}`,
+          "\u0001".repeat(FLOW_INPUT_VALUE_MAX),
+        ]),
+      );
+      const { handler, calls } = scripted();
+      const run = await host(script, { handler, input });
+      expect(await within(run.ended)).toEqual({
+        kind: "refused",
+        reason: expect.stringContaining("its script and its input together"),
+      });
+      // no host was started for it, so no call was made
+      expect(await within(run.ready)).toBeUndefined();
+      expect(calls).toEqual([]);
     },
     ROW_MS,
   );
