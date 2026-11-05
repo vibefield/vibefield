@@ -1,0 +1,62 @@
+{
+  "format": 1,
+  "spark": "sp-7k2m9q4x",
+  "updatedAt": "2026-11-05T02:41:18.220Z",
+  "crews": [
+    {
+      "id": "cr-3n8w5t1v",
+      "sparkRun": "run-12",
+      "at": "2026-11-05T02:10:01.003Z",
+      "members": [
+        {
+          "runtimeRunId": "run-21",
+          "at": "2026-11-05T02:10:01.003Z",
+          "agent": "claude",
+          "folder": "vibe-field",
+          "model": "Opus 5.5",
+          "effort": "high",
+          "endedAt": "2026-11-05T02:31:40.880Z",
+          "name": "Claude Code in vibe-field"
+        },
+        {
+          "runtimeRunId": "run-22",
+          "at": "2026-11-05T02:10:04.120Z",
+          "agent": "claude",
+          "folder": "vibe-field",
+          "model": "Opus 5.5",
+          "effort": "high"
+        },
+        {
+          "runtimeRunId": "run-23",
+          "at": "2026-11-05T02:10:06.540Z",
+          "agent": "claude",
+          "folder": "vibe-field",
+          "model": "Opus 5.5",
+          "effort": "high"
+        },
+        {
+          "runtimeRunId": "run-24",
+          "at": "2026-11-05T02:10:09.310Z",
+          "agent": "claude",
+          "folder": "vibe-field"
+        }
+      ]
+    },
+    {
+      "id": "cr-9x2q6p4m",
+      "sparkRun": "run-12",
+      "at": "2026-11-05T02:40:55.700Z",
+      "members": [
+        {
+          "runtimeRunId": "run-31",
+          "at": "2026-11-05T02:40:55.700Z",
+          "agent": "codex",
+          "folder": "vibe-field",
+          "model": "GPT-5.5",
+          "effort": "high"
+        }
+      ]
+    }
+  ],
+  "signature": "2a4c6e8f0b1d3f5a7c9e1b3d5f7a9c1e3b5d7f9a1c3e5b7d9f1a3c5e7b9d1f3a"
+}

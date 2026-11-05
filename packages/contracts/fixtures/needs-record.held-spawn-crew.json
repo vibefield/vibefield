@@ -1,0 +1,35 @@
+{
+  "format": 1,
+  "item": {
+    "id": "ny-8c4d1f6a2e9b7305",
+    "kind": "held-spawn",
+    "state": "open",
+    "from": {
+      "name": "Vela",
+      "session": "run-12",
+      "spark": "sp-7k2m9q4x"
+    },
+    "spark": "sp-7k2m9q4x",
+    "asked": "2026-11-05T02:10:30.410Z",
+    "words": "read the MCP stateless revision and say what changes for the door",
+    "choices": ["Allow one more", "Not now"],
+    "agent": "claude",
+    "folder": "vibe-field",
+    "live": 8
+  },
+  "launch": {
+    "agent": "claude",
+    "profileSet": "work",
+    "cwd": "/Users/you/Projects/vibe-field",
+    "model": {
+      "modelId": "claude-opus-5-5",
+      "controls": {
+        "effort": "high"
+      }
+    },
+    "tasks": ["read the MCP stateless revision and say what changes for the door"],
+    "crew": "cr-3n8w5t1v"
+  },
+  "sender": "Vela",
+  "signature": "5b3d1f9e7c5a3b1d9f7e5c3a1b9d7f5e3c1a9b7d5f3e1c9a7b5d3f1e9c7a5b3d"
+}

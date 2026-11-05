@@ -1,0 +1,139 @@
+{
+  "//": "SP-1e2 (track CO) — a spark's crew on the board: each agent Vela's run-12 started in one stretch of its work carries the crew's id on its origin (`origin.crew`, an id and never a word), static for the run's life. run-21, the crew's first member, has ended and left the board: the crew's kept record still names it (spark-kept-record.crews.json). run-24 has not turned yet, so its row names no model.",
+  "epoch": "fieldd-5d1e2a7c90b3f418.4",
+  "revision": 44,
+  "rows": [
+    {
+      "runtimeRunId": "run-12",
+      "revision": 14,
+      "kind": "claude",
+      "label": "Claude Code",
+      "tier": "managed",
+      "device": "dev-01HQ8ZK4M7",
+      "status": "working",
+      "statusSince": "2026-11-05T02:10:00.400Z",
+      "stateChangedAt": "2026-11-05T02:10:00.400Z",
+      "createdAt": "2026-11-05T01:58:20.000Z",
+      "lastActivityAt": "2026-11-05T02:10:00.400Z",
+      "alive": true,
+      "blockers": [],
+      "spark": "sp-7k2m9q4x",
+      "turnedAt": "2026-11-05T01:58:41.000Z",
+      "profileSet": "work",
+      "origin": {
+        "by": "you"
+      },
+      "terminal": {
+        "hosted": "local",
+        "runtimeSessionId": "pty-7a12",
+        "workloadClass": "agent"
+      }
+    },
+    {
+      "runtimeRunId": "run-22",
+      "revision": 5,
+      "kind": "claude",
+      "label": "Claude Code",
+      "tier": "managed",
+      "device": "dev-01HQ8ZK4M7",
+      "status": "working",
+      "statusSince": "2026-11-05T02:10:20.000Z",
+      "stateChangedAt": "2026-11-05T02:10:20.000Z",
+      "createdAt": "2026-11-05T02:10:04.120Z",
+      "lastActivityAt": "2026-11-05T02:10:20.000Z",
+      "alive": true,
+      "blockers": [],
+      "model": {
+        "id": "claude-opus-5-5",
+        "displayName": "Opus 5.5"
+      },
+      "effort": {
+        "value": "high",
+        "intent": "configured"
+      },
+      "project": {
+        "name": "vibe-field"
+      },
+      "turnedAt": "2026-11-05T02:10:20.000Z",
+      "profileSet": "work",
+      "origin": {
+        "by": "spark",
+        "spark": "sp-7k2m9q4x",
+        "crew": "cr-3n8w5t1v"
+      },
+      "terminal": {
+        "hosted": "local",
+        "runtimeSessionId": "pty-7a22",
+        "workloadClass": "agent"
+      }
+    },
+    {
+      "runtimeRunId": "run-23",
+      "revision": 7,
+      "kind": "claude",
+      "label": "Claude Code",
+      "tier": "managed",
+      "device": "dev-01HQ8ZK4M7",
+      "status": "idle",
+      "statusSince": "2026-11-05T02:22:51.000Z",
+      "stateChangedAt": "2026-11-05T02:22:51.000Z",
+      "createdAt": "2026-11-05T02:10:06.540Z",
+      "lastActivityAt": "2026-11-05T02:22:51.000Z",
+      "alive": true,
+      "blockers": [],
+      "model": {
+        "id": "claude-opus-5-5",
+        "displayName": "Opus 5.5"
+      },
+      "effort": {
+        "value": "high",
+        "intent": "configured"
+      },
+      "project": {
+        "name": "vibe-field"
+      },
+      "turnedAt": "2026-11-05T02:10:22.000Z",
+      "profileSet": "work",
+      "origin": {
+        "by": "spark",
+        "spark": "sp-7k2m9q4x",
+        "crew": "cr-3n8w5t1v"
+      },
+      "terminal": {
+        "hosted": "local",
+        "runtimeSessionId": "pty-7a23",
+        "workloadClass": "agent"
+      }
+    },
+    {
+      "runtimeRunId": "run-24",
+      "revision": 2,
+      "kind": "claude",
+      "label": "Claude Code",
+      "tier": "managed",
+      "device": "dev-01HQ8ZK4M7",
+      "status": "idle",
+      "statusSince": "2026-11-05T02:10:09.900Z",
+      "stateChangedAt": "2026-11-05T02:10:09.900Z",
+      "createdAt": "2026-11-05T02:10:09.310Z",
+      "lastActivityAt": "2026-11-05T02:10:09.900Z",
+      "alive": true,
+      "blockers": [],
+      "project": {
+        "name": "vibe-field"
+      },
+      "turnedAt": null,
+      "profileSet": "work",
+      "origin": {
+        "by": "spark",
+        "spark": "sp-7k2m9q4x",
+        "crew": "cr-3n8w5t1v"
+      },
+      "terminal": {
+        "hosted": "local",
+        "runtimeSessionId": "pty-7a24",
+        "workloadClass": "agent"
+      }
+    }
+  ]
+}

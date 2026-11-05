@@ -1691,6 +1691,14 @@ export const FILES = {
   RESTART_INTENT: "restart-intent.json",
 } as const;
 
+/** SP-1e2 (SPE-Q28 (b), James 2026-11-04 23:11Z) — the crews a spark's kept record holds (`SparkKeptRecord.crews`,
+ * compose.ts): the newest 256, provisional until measured. An older crew leaves the record, so its card leaves Chat's
+ * thread and its act line stands alone in the spark's transcript. TS-only: no native reader. */
+export const SPARK_CREWS_KEPT = 256;
+/** SP-1e2 — the members one crew holds in the record: far past a spark's eight live agents (CP-D7), a bound on the
+ * signed file, never a limit a spark meets in one stretch of its work. TS-only. */
+export const SPARK_CREW_MEMBERS_MAX = 64;
+
 /** UA-D10 — the on-disk layout under a data root, as REGISTRY DATA: relative
  * path segments, one authority, consumers join and never respell (the seven
  * hand-copied derivations the UA census found are the R4 drift class again).

@@ -122,6 +122,7 @@ import {
   ComposeAgentsListOutput,
   ComposeHistorySearchOutput,
   ComposeReadOutput,
+  ComposeSparksCrewsFrame,
   ComposeSparksHatchParams,
   ComposeSparksListResult,
   ComposeSparksSayParams,
@@ -926,6 +927,10 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "needs-answer-result": NeedsAnswerResult,
   "needs-notices": NeedsNotices,
   "needs-record": NeedsRecord,
+  // SP-1e2 — a spark's crews as compose.sparks.crews.subscribe frames them: four members at work, and one ended,
+  // one resumed (`continues`). The kept record's crews ride "spark-kept-record", a spawn's crew "agent-session-record",
+  // the board's "agent-field-snapshot", and a held spawn's "needs-record" (its launch's `crew`)
+  "compose-sparks-crews": ComposeSparksCrewsFrame,
   // IOS-8f — who this desktop's person is: a written face with a name, and the deal with none
   "user-me": UserMeResult,
   // SD-2 — the effective preferences fieldd answers, with Play sounds and a Quiet, and an older daemon's without them

@@ -91,15 +91,16 @@ describe("the spark's kept record (item 159)", () => {
     const watcher = h.open();
     const crews = h.open();
     watcher.update(VELA, (record) => ({ ...record, watches: ["run-ada"] }));
-    // a writer that read nothing before the first wrote keeps what that one wrote
-    crews.update(VELA, (record) => ({
-      ...record,
-      crews: [{ name: "review", sessions: ["run-31"] }],
-    }));
-    expect(h.open().get(VELA)).toMatchObject({
-      watches: ["run-ada"],
-      crews: [{ name: "review", sessions: ["run-31"] }],
-    });
+    // a writer that read nothing before the first wrote keeps what that one wrote. *SP-1e2 (2026-11-05):* `crews` is
+    // the record's own section now (SparkCrew), so this writer writes one
+    const crew = {
+      id: "cr-3n8w5t1v",
+      sparkRun: "run-12",
+      at: "2026-11-05T02:10:01.003Z",
+      members: [{ runtimeRunId: "run-31", at: "2026-11-05T02:10:01.003Z", agent: "claude" }],
+    };
+    crews.update(VELA, (record) => ({ ...record, crews: [crew] }));
+    expect(h.open().get(VELA)).toMatchObject({ watches: ["run-ada"], crews: [crew] });
   });
 
   it("P3 · a section this build does not know survives an update, and the store names the spark and the time itself", () => {

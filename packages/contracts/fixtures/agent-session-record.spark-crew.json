@@ -1,0 +1,37 @@
+{
+  "format": 1,
+  "runtimeRunId": "run-22",
+  "runtimeEpoch": 1,
+  "provider": "claude",
+  "cwd": "/Users/you/Projects/vibe-field",
+  "terminalSessionId": "sess-01JB7Q4C",
+  "continuation": {
+    "providerId": "claude",
+    "nativeSessionId": "native-22"
+  },
+  "workspace": {
+    "mode": "direct",
+    "root": "/Users/you/Projects/vibe-field"
+  },
+  "creationRequestId": "req-01JB7Q4C",
+  "ingress": {
+    "port": 53344,
+    "token": "typed-bearer"
+  },
+  "spawnedBy": "app",
+  "createdAt": "2026-11-05T02:10:04.120Z",
+  "updatedAt": "2026-11-05T02:10:09.000Z",
+  "signature": "0000000000000000000000000000000000000000000000000000000000000000",
+  "profileSet": "work",
+  "origin": {
+    "by": "spark",
+    "spark": "sp-7k2m9q4x",
+    "crew": "cr-3n8w5t1v"
+  },
+  "modelSelection": {
+    "modelId": "claude-opus-5-5",
+    "controls": {
+      "effort": "high"
+    }
+  }
+}

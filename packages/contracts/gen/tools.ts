@@ -292,6 +292,10 @@ export const SERVED_TOOLS = [
                   "call": {
                     "type": "integer",
                     "exclusiveMinimum": 0
+                  },
+                  "crew": {
+                    "type": "string",
+                    "pattern": "^cr-[0-9a-z]{6,32}$"
                   }
                 },
                 "required": [

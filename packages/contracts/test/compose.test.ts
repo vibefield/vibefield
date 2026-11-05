@@ -2,8 +2,8 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { AgentRemoteRow } from "../src/agent-field";
-import { AgentSessionRecord, AgentSessionSummary } from "../src/agent-session";
+import { AgentFieldSnapshot, AgentRemoteRow } from "../src/agent-field";
+import { AgentSessionRecord, AgentSessionSummary, CrewId } from "../src/agent-session";
 import {
   AgentInputQueueFile,
   COMPOSE_DESKTOP_STATES,
@@ -11,6 +11,8 @@ import {
   ComposeAgentSendOutput,
   ComposeAgentSpawnOutput,
   ComposeAskUserInput,
+  ComposeSparksCrewsFrame,
+  ComposeSparksCrewsSubscribeParams,
   ComposeSparksHatchParams,
   ComposeSparksListParams,
   ComposeSparksListResult,
@@ -46,6 +48,8 @@ import {
   LAYOUT_ROOT_LEVEL,
   PEER_FIELDD_SCOPES,
   PRODUCT_API_LIMITS,
+  SPARK_CREW_MEMBERS_MAX,
+  SPARK_CREWS_KEPT,
   TAILNET_SCOPES,
 } from "../src/registries";
 
@@ -511,8 +515,9 @@ describe("item 159 — the spark's kept record, in the spark's own folder (TH0-Q
     const record = SparkKeptRecord.parse(fixture("spark-kept-record.valid"));
     expect(record).toMatchObject({ format: 1, spark: "sp-7k2m9q4x" });
     expect((record as { signature?: string }).signature).toMatch(/^[0-9a-f]{64}$/);
+    // *SP-1e2 (2026-11-05):* this section was `crews`, unknown until SP-1e2 made it the record's own, so it is `later`
     const later = SparkKeptRecord.parse(fixture("spark-kept-record.unknown-section"));
-    expect((later as Record<string, unknown>).crews).toEqual([
+    expect((later as Record<string, unknown>).later).toEqual([
       { name: "review", sessions: ["run-31", "run-44"] },
     ]);
   });
@@ -527,5 +532,147 @@ describe("item 159 — the spark's kept record, in the spark's own folder (TH0-Q
       { format: 1, spark: "sp-7k2m9q4x" },
     ])
       expect(SparkKeptRecord.safeParse(bad).success, JSON.stringify(bad)).toBe(false);
+  });
+});
+
+describe("SP-1e2 — a spark's crews: the crew on the origin, the held spawn's crew, the kept record's crews and their door", () => {
+  const CREW = "cr-3n8w5t1v";
+
+  it("C1: a crew's id is fieldd's, an id and never a word", () => {
+    expect(CrewId.parse(CREW)).toBe(CREW);
+    for (const bad of [
+      "",
+      "cr-",
+      "cr-abc",
+      "crew-3n8w5t1v",
+      "cr-3N8W5T1V",
+      "Research",
+      "sp-3n8w5t1v",
+    ])
+      expect(CrewId.safeParse(bad).success, bad).toBe(false);
+  });
+
+  it("C2: a spark's spawn names its crew on its origin, the record and the board alike; a run from before SP-1e2 names none (SPE-Q4, SPE-Q15)", () => {
+    const record = AgentSessionRecord.parse(fixture("agent-session-record.spark-crew"));
+    expect(record.origin).toEqual({ by: "spark", spark: "sp-7k2m9q4x", crew: CREW });
+    expect(AgentSessionRecord.parse(fixture("agent-session-record.spark-started")).origin).toEqual({
+      by: "spark",
+      spark: "sp-7k2m9q4x",
+    });
+    const board = AgentFieldSnapshot.parse(fixture("agent-field-snapshot.crew"));
+    const crewOf = (run: string) =>
+      board.rows.find((row) => row.runtimeRunId === run)?.origin?.crew;
+    expect(["run-22", "run-23", "run-24"].map(crewOf)).toEqual([CREW, CREW, CREW]);
+    // the spark's own run is no member of its crews
+    expect(crewOf("run-12")).toBeUndefined();
+    // a crew that is not an id is refused, never read as a word
+    expect(
+      AgentSessionRecord.safeParse({ ...record, origin: { ...record.origin, crew: "research" } })
+        .success,
+    ).toBe(false);
+  });
+
+  it("C3: a held spawn keeps the crew it was asked in; a held spawn from before SP-1e2 keeps none", () => {
+    expect(NeedsRecord.parse(fixture("needs-record.held-spawn-crew")).launch?.crew).toBe(CREW);
+    expect(NeedsRecord.parse(fixture("needs-record.held-spawn")).launch?.crew).toBeUndefined();
+  });
+
+  it("C4: the kept record holds the newest SPARK_CREWS_KEPT crews, each its members by start, an ended one named at its end (SPE-Q14 (a), SPE-Q28 (b))", () => {
+    expect(SPARK_CREWS_KEPT).toBe(256);
+    const kept = SparkKeptRecord.parse(fixture("spark-kept-record.crews"));
+    const [first, second] = kept.crews ?? [];
+    expect(first).toMatchObject({ id: CREW, sparkRun: "run-12", at: "2026-11-05T02:10:01.003Z" });
+    expect(first?.members.map((m) => m.runtimeRunId)).toEqual([
+      "run-21",
+      "run-22",
+      "run-23",
+      "run-24",
+    ]);
+    expect(first?.members[0]).toMatchObject({
+      endedAt: "2026-11-05T02:31:40.880Z",
+      name: "Claude Code in vibe-field",
+    });
+    // a member whose row has not named its model yet
+    expect(first?.members[3]?.model).toBeUndefined();
+    expect(second?.members).toHaveLength(1);
+    // a record from before SP-1e2 holds no crews, and still reads
+    expect(SparkKeptRecord.parse(fixture("spark-kept-record.valid")).crews).toBeUndefined();
+    // the bounds: past them the signed file is refused whole, so fieldd never writes past them
+    const crew = first!;
+    const crews = (n: number) => Array.from({ length: n }, () => crew);
+    expect(SparkKeptRecord.safeParse({ ...kept, crews: crews(SPARK_CREWS_KEPT) }).success).toBe(
+      true,
+    );
+    expect(SparkKeptRecord.safeParse({ ...kept, crews: crews(SPARK_CREWS_KEPT + 1) }).success).toBe(
+      false,
+    );
+    const members = (n: number) => Array.from({ length: n }, () => crew.members[1]!);
+    expect(SPARK_CREW_MEMBERS_MAX).toBe(64);
+    expect(
+      SparkKeptRecord.safeParse({
+        ...kept,
+        crews: [{ ...crew, members: members(SPARK_CREW_MEMBERS_MAX + 1) }],
+      }).success,
+    ).toBe(false);
+    // a crew names the spark's run it was made in, and its id; a member its run, its start and its agent
+    for (const bad of [
+      { ...crew, sparkRun: undefined },
+      { ...crew, id: "research" },
+      { ...crew, members: [{ ...crew.members[0], agent: undefined }] },
+      { ...crew, members: [{ ...crew.members[0], runtimeRunId: "" }] },
+    ])
+      expect(
+        SparkKeptRecord.safeParse({ ...kept, crews: [bad] }).success,
+        JSON.stringify(bad),
+      ).toBe(false);
+  });
+
+  it("C5: compose.sparks.crews.subscribe is the person's, the sparks' family, whole lists at the stream floor (SPE-Q27 (a), SPE-Q40, X2-crews)", () => {
+    const row = METHODS.find((r) => r.method === "compose.sparks.crews.subscribe");
+    expect(row).toMatchObject({
+      surface: "product",
+      scope: "sparks.use",
+      idempotent: true,
+      locality: "federate",
+    });
+    expect(row && reachableFromTailnet(row)).toBe(true);
+    expect(row?.subscription).toEqual({
+      shape: "stream",
+      cadenceFloorMs: PRODUCT_API_LIMITS.STREAM_MIN_INTERVAL_MS,
+    });
+    expect(ComposeSparksCrewsSubscribeParams.parse({ spark: "sp-7k2m9q4x" })).toEqual({
+      spark: "sp-7k2m9q4x",
+    });
+    expect(
+      ComposeSparksCrewsSubscribeParams.parse({ spark: "sp-7k2m9q4x", device: "dev-01HQ9S7XZ2" })
+        .device,
+    ).toBe("dev-01HQ9S7XZ2");
+    for (const bad of [{}, { spark: "Vela" }, { spark: "sp-7k2m9q4x", device: "" }])
+      expect(ComposeSparksCrewsSubscribeParams.safeParse(bad).success, JSON.stringify(bad)).toBe(
+        false,
+      );
+  });
+
+  it("C6: a frame is the spark's crews whole, with how many tasks each live member still holds (SPE-Q32 (a)), and one resumed member is one member (SPE-Q30 (a))", () => {
+    const live = ComposeSparksCrewsFrame.parse(fixture("compose-sparks-crews.valid"));
+    expect(live.spark).toBe("sp-7k2m9q4x");
+    expect(live.crews[0]?.members).toHaveLength(4);
+    expect(live.waiting?.find((w) => w.runtimeRunId === "run-22")?.tasks).toBe(1);
+    const ended = ComposeSparksCrewsFrame.parse(fixture("compose-sparks-crews.ended-member"));
+    const members = ended.crews[0]?.members ?? [];
+    expect(members.filter((m) => m.endedAt !== undefined).map((m) => m.name)).toEqual([
+      "Claude Code in vibe-field",
+      "Claude Code in vibe-field",
+    ]);
+    expect(members.find((m) => m.continues === "run-22")?.runtimeRunId).toBe("run-41");
+    expect(members.some((m) => m.runtimeRunId === "run-22")).toBe(false);
+    // no live state is kept: a frame's `waiting` is the door's alone
+    expect(SparkKeptRecord.parse(fixture("spark-kept-record.crews"))).not.toHaveProperty("waiting");
+    for (const bad of [
+      { ...live, spark: undefined },
+      { ...live, waiting: [{ runtimeRunId: "run-22", tasks: -1 }] },
+      { ...live, waiting: [{ runtimeRunId: "run-22", tasks: 0.5 }] },
+    ])
+      expect(ComposeSparksCrewsFrame.safeParse(bad).success, JSON.stringify(bad)).toBe(false);
   });
 });

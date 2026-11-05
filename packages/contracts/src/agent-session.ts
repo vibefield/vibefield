@@ -162,6 +162,12 @@ export type AgentSpawnedBy = (typeof AGENT_SPAWNED_BY)[number];
 export const SparkId = z.string().regex(/^sp-[0-9a-z]{6,32}$/);
 export type SparkId = z.infer<typeof SparkId>;
 
+/** SP-1e2 (SPE-Q3 = RU-6, SPE-Q4; VF-PM 2026-11-04 04:31Z) — a crew's id: the agents a spark starts in one stretch of
+ * its own run's work share one, minted by fieldd's talk room at the stretch's first `agent_spawn` and never reused.
+ * An id, never a word. Defined here beside SparkId for the same reason: a run's record names it (`origin.crew`). */
+export const CrewId = z.string().regex(/^cr-[0-9a-z]{6,32}$/);
+export type CrewId = z.infer<typeof CrewId>;
+
 /** CP-D15 — who started a run fieldd launched: `you` (a door you pressed: the spawn button, a resume, a spark you
  * hatched or opened), `spark` (its `agent_spawn`; `spark` names it), `flow` (a run's step: `run` and its `call`).
  * OPEN on the wire, like `spawnedBy`: a word this build never heard of must not refuse a row. Absent reads `you`. */
@@ -176,6 +182,10 @@ export const AgentSessionOrigin = z
     run: z.string().min(1).max(64).optional(),
     /** the run's call that started it, counted from 1 in the run's journal */
     call: z.number().int().positive().optional(),
+    /** SP-1e2 (SPE-Q4, SPE-Q15) — a spark's spawn: the crew it joined, so the board row and `agents_list` say it.
+     * Static for the run's life, and a resume keeps it (SPE-Q30 (a)). Absent on every other run, and on a spark's
+     * spawn from before SP-1e2. */
+    crew: CrewId.optional(),
   })
   .passthrough();
 export type AgentSessionOrigin = z.infer<typeof AgentSessionOrigin>;

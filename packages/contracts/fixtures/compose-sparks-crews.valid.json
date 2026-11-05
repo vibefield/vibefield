@@ -1,0 +1,48 @@
+{
+  "spark": "sp-7k2m9q4x",
+  "crews": [
+    {
+      "id": "cr-3n8w5t1v",
+      "sparkRun": "run-12",
+      "at": "2026-11-05T02:10:01.003Z",
+      "members": [
+        {
+          "runtimeRunId": "run-21",
+          "at": "2026-11-05T02:10:01.003Z",
+          "agent": "claude",
+          "folder": "vibe-field",
+          "model": "Opus 5.5",
+          "effort": "high"
+        },
+        {
+          "runtimeRunId": "run-22",
+          "at": "2026-11-05T02:10:04.120Z",
+          "agent": "claude",
+          "folder": "vibe-field",
+          "model": "Opus 5.5",
+          "effort": "high"
+        },
+        {
+          "runtimeRunId": "run-23",
+          "at": "2026-11-05T02:10:06.540Z",
+          "agent": "claude",
+          "folder": "vibe-field",
+          "model": "Opus 5.5",
+          "effort": "high"
+        },
+        {
+          "runtimeRunId": "run-24",
+          "at": "2026-11-05T02:10:09.310Z",
+          "agent": "claude",
+          "folder": "vibe-field"
+        }
+      ]
+    }
+  ],
+  "waiting": [
+    { "runtimeRunId": "run-21", "tasks": 0 },
+    { "runtimeRunId": "run-22", "tasks": 1 },
+    { "runtimeRunId": "run-23", "tasks": 0 },
+    { "runtimeRunId": "run-24", "tasks": 0 }
+  ]
+}

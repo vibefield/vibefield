@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { AgentProfileSetId, AgentProviderId } from "./agent-index";
-import { AgentModelSelection, AgentSessionOrigin, SparkId } from "./agent-session";
+import { AgentModelSelection, AgentSessionOrigin, CrewId, SparkId } from "./agent-session";
+import { SPARK_CREW_MEMBERS_MAX, SPARK_CREWS_KEPT } from "./registries";
 
 // The compose plane, version 2 (track CO; `draft/compose-plane/v2/`, ruled by James on its page 2026-10-29
 // 09:42–09:57Z; the study's §15 and §16). A spark is an agent session VibeField starts in a folder of its own, under
@@ -101,6 +102,51 @@ export const SPARK_KEPT_FORMAT = 1;
  * (TH-1's run files). */
 export const SPARK_KEPT_FILE = "kept.json";
 
+/** SP-1e2 (SPE-Q6′ (b), SPE-Q14 (a), SPE-Q5 (a)) — one agent a spark started, as its crew keeps it after the agent
+ * has left the board. Ids, times, the catalog's agent id, a folder's name and model labels: never a task's words and
+ * never a path. */
+export const SparkCrewMember = z
+  .object({
+    /** the member's run: the one fieldd started for its `agent_spawn`, or, once it was resumed, the run that continues
+     * it (SPE-Q30 (a): one agent, one member) */
+    runtimeRunId: z.string().min(1),
+    /** when fieldd served its `agent_spawn` (ISO): its place in the crew, by start */
+    at: z.string().min(1),
+    /** the agent catalog's opaque id (R23): the window reads its mark and label from AGENT_CATALOG */
+    agent: AgentProviderId,
+    /** the folder's basename, as the board's `project.name`; never a path */
+    folder: z.string().min(1).max(255).optional(),
+    /** its model's label and its effort, as its board row first named them (`model.displayName`, else `model.id`;
+     * `effort.value`); absent until the row names them */
+    model: z.string().min(1).max(128).optional(),
+    effort: z.string().min(1).max(32).optional(),
+    /** when its run ended (ISO): an Ended row. Absent while it runs */
+    endedAt: z.string().min(1).optional(),
+    /** fieldd's name for the run at its end (CO-Q4 (b)), what an Ended row says. fieldd cuts a run's name at
+     * NEEDS_NAME_MAX; the record reads a longer one, so a newer fieldd's name never sets the record aside */
+    name: z.string().min(1).max(256).optional(),
+    /** the run this member's run resumed (SPE-Q30 (a)): the member follows a resume, and `runtimeRunId` is the newer
+     * run's */
+    continues: z.string().min(1).optional(),
+  })
+  .passthrough();
+export type SparkCrewMember = z.infer<typeof SparkCrewMember>;
+
+/** SP-1e2 (SPE-Q3 = RU-6, SPE-Q6′ (b); VF-PM 2026-11-04 04:31Z) — a crew: the agents a spark started in one stretch of
+ * its own run's work, one card in its thread. `sparkRun` is the spark's own run the crew was made in, so the card
+ * stands in that run's conversation (TH-Q14 (b)). It is named for whose run it is: a member's `runtimeRunId` is the
+ * member's own run, and `AgentSessionOrigin.run` is a flow run's id. `at` is its first member's start. A member stays
+ * after it ends (SPE-Q14 (a)), in the order they started. */
+export const SparkCrew = z
+  .object({
+    id: CrewId,
+    sparkRun: z.string().min(1),
+    at: z.string().min(1),
+    members: z.array(SparkCrewMember).max(SPARK_CREW_MEMBERS_MAX),
+  })
+  .passthrough();
+export type SparkCrew = z.infer<typeof SparkCrew>;
+
 /** Item 159 (TH0-Q11 (b)) — what fieldd keeps for one spark beyond its record, for the slices that keep something per
  * spark across a restart: one file, SPARK_KEPT_FILE, in the spark's folder, signed with SPARK_FILES_KEY_FILE's secret by
  * fieldd's one record signer. The schema is the unsigned body; the file adds its `signature`, and `spark` is inside it
@@ -113,6 +159,9 @@ export const SparkKeptRecord = z
     spark: SparkId,
     /** when it was last written (ISO) */
     updatedAt: z.string().min(1),
+    /** SP-1e2 — the spark's crews, oldest first, the newest SPARK_CREWS_KEPT kept (SPE-Q28 (b)), written by fieldd
+     * alone and served on `compose.sparks.crews.subscribe`. Absent: no crew yet, or a record from before SP-1e2. */
+    crews: z.array(SparkCrew).max(SPARK_CREWS_KEPT).optional(),
   })
   .passthrough();
 export type SparkKeptRecord = z.infer<typeof SparkKeptRecord>;
@@ -223,6 +272,33 @@ export type ComposeSparksOpenParams = z.infer<typeof ComposeSparksOpenParams>;
 
 export const ComposeSparksOpenResult = z.object({ spark: SparkSummary }).passthrough();
 export type ComposeSparksOpenResult = z.infer<typeof ComposeSparksOpenResult>;
+
+/** SP-1e2 (SPE-Q27 (a), SPE-Q40; VF-PM's X2-crews 2026-11-05 01:22Z) — compose.sparks.crews.subscribe: one spark's
+ * crews, a snapshot then the whole list at each change, never edges, as needs.subscribe is. From another screen it
+ * carries the spark's `device`, and the home forwards it there (IOS-12a, PC-L2). */
+export const ComposeSparksCrewsSubscribeParams = z
+  .object({ spark: SparkId, device: ComposeDevice.optional() })
+  .passthrough();
+export type ComposeSparksCrewsSubscribeParams = z.infer<typeof ComposeSparksCrewsSubscribeParams>;
+
+/** SPE-Q32 (a) — how many tasks still wait in a live member's input queue: its row says Done only at none, so an
+ * agent idle between two tasks it was given stays Working and the card's count never goes backwards. */
+export const SparkCrewWaiting = z
+  .object({ runtimeRunId: z.string().min(1), tasks: z.number().int().min(0) })
+  .passthrough();
+export type SparkCrewWaiting = z.infer<typeof SparkCrewWaiting>;
+
+/** compose.sparks.crews.subscribe's snapshot and every frame: the spark's kept crews, whole, oldest first, and
+ * `waiting` for its members still on the board (live state, never kept). A member a frame lacks may still be on the
+ * board under its crew's id (`origin.crew`): the card takes the record's members first, then those rows. */
+export const ComposeSparksCrewsFrame = z
+  .object({
+    spark: SparkId,
+    crews: z.array(SparkCrew).max(SPARK_CREWS_KEPT),
+    waiting: z.array(SparkCrewWaiting).max(SPARK_CREW_MEMBERS_MAX).optional(),
+  })
+  .passthrough();
+export type ComposeSparksCrewsFrame = z.infer<typeof ComposeSparksCrewsFrame>;
 
 // ── the verbs moved to tools.ts in MT-0 (2026-10-30), the tool plane's one catalog: every spark is served
 // every row that has landed, and a plain run the `agent` rows (TL-D1 A, narrowed by MT-D2). Their inputs and
@@ -937,6 +1013,9 @@ export const NeedsHeldLaunch = z
     cwd: z.string().min(1),
     model: AgentModelSelection.optional(),
     tasks: z.array(z.string().min(1).max(COMPOSE_TEXT_MAX)).max(16),
+    /** SP-1e2 — the crew its spawn was asked in: Allow one more joins it, even after that crew has closed. Absent on a
+     * record from before SP-1e2, whose start joins no crew. */
+    crew: CrewId.optional(),
   })
   .passthrough();
 export type NeedsHeldLaunch = z.infer<typeof NeedsHeldLaunch>;

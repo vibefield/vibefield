@@ -297,6 +297,8 @@ describe("SP-1 — the subscription descriptor (SP-L4)", () => {
       "index.catalog.subscribe": { shape: "rows", cadenceFloorMs: ROWS.MIN_INTERVAL_MS },
       // IOS-12a (PC-D4 A) — one desktop's needs-you queue, whole lists through the home
       "needs.subscribe": stream,
+      // SP-1e2 (X2-crews) — one spark's crews, whole lists through the home, as the queue is
+      "compose.sparks.crews.subscribe": stream,
       "index.changes.subscribe": {
         shape: "rows",
         cadenceFloorMs: INDEX_MESH.CHANGES_MIN_INTERVAL_MS,

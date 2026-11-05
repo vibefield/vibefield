@@ -1780,6 +1780,14 @@
                         speaks MCP over stdio is served the same way, and who it is comes from the walk. The lane link
                         redials after a floor restart or a dropped socket.
                       </p>
+                      <p>
+                        <em>SP-1e2 (2026-11-05, contracts first):</em> the talk room's <code>agent_spawn</code> groups a
+                        spark's starts into crews: each started run carries its crew's id on its origin
+                        (<code>origin.crew</code>), fieldd keeps each crew in the spark's kept record, and Chat reads
+                        them on <a href="api.html#cat-compose"><code>compose.sparks.crews.subscribe</code></a>, beside
+                        <code>compose.sparks.*</code> and <code>needs.*</code> (<code>sparks.use</code>,
+                        <code>federate</code>). Ids, times and labels, never words.
+                      </p>
                     </td>
                     <td>
                       <span class="badge tone-built">Built</span>

@@ -2969,6 +2969,19 @@ export const METHODS: MethodDef[] = [
     locality: "federate",
     subscription: { shape: "stream", cadenceFloorMs: PRODUCT_API_LIMITS.STREAM_MIN_INTERVAL_MS },
   }),
+  // SP-1e2 (SPE-Q27 (a), SPE-Q40; VF-PM's X2-crews, 2026-11-05 01:22Z) — a spark's crews, from its kept record, for
+  // Chat's crew card: the sparks' family and its shape, beside needs.subscribe. `sparks.use` and `federate`, a stream
+  // of whole lists at the product API's stream floor; one spark's, carrying its `device`, which the home forwards to.
+  // The plan's lean (its §4.3) said `agents.manage` and `local`; X2-crews ruled it the person's, as the needs-you
+  // queue's doors are since IOS-12a.
+  defineMethod({
+    surface: "product",
+    method: "compose.sparks.crews.subscribe",
+    scope: "sparks.use",
+    idempotent: true,
+    locality: "federate",
+    subscription: { shape: "stream", cadenceFloorMs: PRODUCT_API_LIMITS.STREAM_MIN_INTERVAL_MS },
+  }),
   // Declarative: answered once, an item is answered for every window; the same answer again answers it as it is.
   defineMethod({
     surface: "product",
