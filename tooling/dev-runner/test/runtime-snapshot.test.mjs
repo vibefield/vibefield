@@ -29,6 +29,7 @@ async function fixture(t) {
   const paths = {
     runtimeRoot,
     mainOutput: join(source, "main.cjs"),
+    soundWorkerOutput: join(source, "sound-worker.cjs"),
     preloadOutput: join(source, "preload.cjs"),
     studioPreloadOutput: join(source, "studio-preload.cjs"),
     fielddOutput: join(source, "fieldd.cjs"),
@@ -43,6 +44,7 @@ async function fixture(t) {
   };
   await Promise.all([
     writeFile(paths.mainOutput, "main-one"),
+    writeFile(paths.soundWorkerOutput, "sound-worker-one"),
     writeFile(paths.preloadOutput, "preload-one"),
     writeFile(paths.studioPreloadOutput, "studio-preload-one"),
     writeFile(paths.fielddOutput, "fieldd-one"),
@@ -73,6 +75,11 @@ test("publishes one immutable, executable runtime generation", async (t) => {
 
   assert.equal(runtime.daemonBuildId, DAEMON_ID);
   assert.equal(await readFile(join(runtime.appRoot, "main", "index.cjs"), "utf8"), "main-one");
+  // SD-2 — the sound worker beside main, where main starts it
+  assert.equal(
+    await readFile(join(runtime.appRoot, "main", "sound-worker.cjs"), "utf8"),
+    "sound-worker-one",
+  );
   assert.equal(
     await readFile(join(runtime.appRoot, "preload", "index.cjs"), "utf8"),
     "preload-one",

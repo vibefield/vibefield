@@ -15,6 +15,9 @@
 //   5 unresolved  nightly-only heads for the beta build → `channel-unresolved`; the nightly's feed never asked for
 //   every run     the floor's freeway host runs from the app's own `Contents/Resources/bin` (F1): the floor spawns it on
 //                 fieldd's first declaration, which every boot makes — staged, executable, found as the floor's sibling
+//   every run     SD-2: main's sound worker starts from inside app.asar — the likeliest sound (Done) RENDERED once
+//                 fieldd's preferences say Play sounds is on, its file under the run's userData/sound/<score>/, and not
+//                 one sound played from launch to exit (`judgeSound`; its problems name SD-2)
 //   AU-5, OPT-IN (`--runs quit`, LC-29; never in the default five)
 //   quit          staged as run 1 (no confirmation lever), then a PERSON's quit — a quit Apple Event to the run's pid
 //                 (`NSRunningApplication terminate`), never a signal — judged from outside (`judgeQuit`): the census gate
@@ -75,6 +78,8 @@ export const UPDATER_CACHE_DIR = "@vibefielddesktop-updater";
 export const FREEWAY_HOST_ARGS = "--listener-fd 3";
 /** How long after a run's verdict its freeway host may still be coming up. */
 const HOST_BOUND_MS = 10_000;
+/** SD-2 — how long after that its likeliest sound may still be rendering (it waits on fieldd's preferences). */
+const SOUND_BOUND_MS = 15_000;
 /** AU-5 — a person's quit to its exit: the durable close, the gate's stop, the 3 s policy read, the 30 s stage, the
  * teardown. */
 export const QUIT_INSTALL_BOUND_MS = 90_000;
@@ -304,6 +309,53 @@ export function freewayHostOf(processes, hostPath, real = realPath) {
       return command.endsWith(args) && real(command.slice(0, -args.length)) === want;
     }) ?? null
   );
+}
+
+/**
+ * SD-2 — the packaged witness that main's sound worker starts from inside app.asar (`shell/main/sound-worker.cjs`):
+ * once fieldd's preferences say Play sounds is on, main makes the likeliest sound ahead of need (Done), and a fresh
+ * profile has none, so it is RENDERED, not found; its file lies under the run's `<userData>/sound/<score>/`; and NOT
+ * ONE sound is played, because this row runs on attended hosts. `{ok, rendered, saw, problems}`; the player's own
+ * state is said (`player`), never judged here: the dev-keyed zip is not the signed package.
+ */
+export function judgeSound({ events, userData }) {
+  const named = (event) => events.filter((record) => record.event === event);
+  const rendered = named("desktop.sound.rendered").find((record) => record.attrs?.cue === "done");
+  const found = named("desktop.sound.found").find((record) => record.attrs?.cue === "done");
+  const played = named("desktop.sound.played").length;
+  const unavailable = named("desktop.sound.unavailable")[0];
+  const player = unavailable === undefined ? "no complaint" : "unavailable";
+  const problems = [];
+  if (played > 0)
+    problems.push(`SD-2: ${played} sound(s) played on an attended host; a smoke never makes one`);
+  if (rendered === undefined) {
+    problems.push(
+      found !== undefined
+        ? "SD-2: Done was found, not rendered: the run's profile was not fresh"
+        : "SD-2: no desktop.sound.rendered for Done: the sound worker did not render from inside app.asar",
+    );
+    return { ok: false, rendered: false, saw: "not rendered", player, problems };
+  }
+  const key = String(rendered.attrs?.key ?? "");
+  const dir = join(userData, "sound");
+  const scores = existsSync(dir)
+    ? readdirSync(dir).filter((name) => /^[0-9a-f]{8}$/.test(name))
+    : [];
+  const file = scores.length === 1 ? join(dir, scores[0], `${key}.wav`) : null;
+  if (file === null) {
+    problems.push(
+      `SD-2: ${scores.length} score folders under the run's userData/sound (one expected)`,
+    );
+  } else if (!existsSync(file) || statSync(file).size <= 44) {
+    problems.push(`SD-2: the rendered Done is not a WAV at userData/sound/${scores[0]}/${key}.wav`);
+  }
+  return {
+    ok: problems.length === 0,
+    rendered: true,
+    saw: `rendered ${key} in ${rendered.attrs?.ms} ms; ${played} played`,
+    player,
+    problems,
+  };
 }
 
 /** The app's environment: this process's, minus every secret and every override the smoke does not mean. */
@@ -546,6 +598,14 @@ async function oneRun(name, { root, keys, trustRoot, zip, current }) {
       "no field-freeway-host of this run ran from the app's Contents/Resources/bin (F1)",
     ];
   }
+  // SD-2 — the sound worker, from inside app.asar: the likeliest sound rendered while the app still runs (its plays
+  // are judged again once the run is over, below)
+  let sound = judgeSound({ events: readEvents(home), userData: profile });
+  const soundUntil = Date.now() + SOUND_BOUND_MS;
+  while (!sound.rendered && exited === null && Date.now() < soundUntil) {
+    await sleep(500);
+    sound = judgeSound({ events: readEvents(home), userData: profile });
+  }
   // AU-5 (LC-29) — the opt-in quit run: once staged, a PERSON's quit, then its verdict from outside (`judgeQuit`)
   let quit = null;
   if (run.next === "quit-install") {
@@ -599,6 +659,12 @@ async function oneRun(name, { root, keys, trustRoot, zip, current }) {
       `${still.length} process(es) outlived the reap`,
     ];
   }
+  // SD-2 — the whole run's word on sound: rendered, kept, and nothing played from launch to exit
+  sound = judgeSound({ events: readEvents(home), userData: profile });
+  if (!sound.ok) {
+    verdict.ok = false;
+    verdict.problems = [...(verdict.problems ?? []), ...sound.problems];
+  }
   const said = Buffer.concat(out).toString("utf8");
   const squirrelSays = said
     .split("\n")
@@ -612,6 +678,8 @@ async function oneRun(name, { root, keys, trustRoot, zip, current }) {
     ...verdict,
     freewayHost:
       host === null ? "absent" : `Contents/Resources/bin/field-freeway-host ${FREEWAY_HOST_ARGS}`,
+    sound: sound.saw,
+    soundPlayer: sound.player,
     ...(name === "staged" || quit !== null ? { squirrelSays } : {}),
     ...(quit !== null ? { quit: quit.saw } : {}),
   };

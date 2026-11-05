@@ -75,6 +75,8 @@ asar: true
 files:
   - package.json
   - shell/main/index.cjs
+  # SD-2: the sound renders' thread, which main starts from beside its own bundle
+  - shell/main/sound-worker.cjs
   - shell/preload/index.cjs
   - shell/renderer/index.html
   - shell/renderer/assets/**/*

@@ -13,6 +13,7 @@ import {
   freewayHostOf,
   judgeQuit,
   judgeRun,
+  judgeSound,
   readEvents,
   readLastApply,
 } from "../../../apps/desktop/packaging/run-update-smoke.mjs";
@@ -296,4 +297,52 @@ test("AU-5 · the run's lastApply is read from its own profile, and is null when
   assert.deepEqual(readLastApply(profile), { branch: "exited", trigger: "quit" });
   writeFileSync(join(profile, "updates", "state.json"), "not json");
   assert.equal(readLastApply(profile), null);
+});
+
+test("SD-2: the sound worker's packaged witness — Done rendered, its file kept, and nothing played", () => {
+  const userData = join(work, "sound-witness");
+  const score = join(userData, "sound", "1a2b3c4d");
+  mkdirSync(score, { recursive: true });
+  const key = "done.day.desktop.c1.p0.n.l0.v0.s1";
+  writeFileSync(join(score, `${key}.wav`), Buffer.alloc(4096));
+  const rendered = { event: "desktop.sound.rendered", attrs: { cue: "done", key, ms: 180 } };
+
+  const green = judgeSound({ events: [rendered], userData });
+  assert.equal(green.ok, true, JSON.stringify(green));
+  assert.equal(green.saw, `rendered ${key} in 180 ms; 0 played`);
+
+  // a play on an attended host is red, even with the render green
+  const played = judgeSound({
+    events: [rendered, { event: "desktop.sound.played", attrs: { cue: "done" } }],
+    userData,
+  });
+  assert.equal(played.ok, false);
+  assert.match(played.problems[0], /^SD-2: 1 sound\(s\) played/);
+
+  // nothing rendered: the worker never started from inside the archive
+  const none = judgeSound({ events: [], userData });
+  assert.deepEqual([none.ok, none.rendered], [false, false]);
+  assert.match(none.problems[0], /^SD-2: no desktop\.sound\.rendered for Done/);
+
+  // found, never rendered: the profile was not fresh, and that is not the witness
+  const found = judgeSound({
+    events: [{ event: "desktop.sound.found", attrs: { cue: "done", key } }],
+    userData,
+  });
+  assert.match(found.problems[0], /^SD-2: Done was found, not rendered/);
+
+  // rendered, but no file where main keeps it
+  const lost = judgeSound({
+    events: [{ ...rendered, attrs: { ...rendered.attrs, key: "done.night.desktop" } }],
+    userData,
+  });
+  assert.equal(lost.ok, false);
+  assert.match(lost.problems[0], /^SD-2: the rendered Done is not a WAV/);
+
+  // the player's own state is said, never judged here
+  const unavailable = judgeSound({
+    events: [rendered, { event: "desktop.sound.unavailable", attrs: {} }],
+    userData,
+  });
+  assert.deepEqual([unavailable.ok, unavailable.player], [true, "unavailable"]);
 });

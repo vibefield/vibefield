@@ -72,6 +72,7 @@ import { runAuditedSupportExport } from "./audited-support-export";
 import { installDurableClose } from "./close";
 import { ConnectAsks, workingAgents } from "./connect-asks";
 import { CrashArtifactManager, startLocalCrashReporter } from "./crash-artifacts";
+import { createDesktopSound, type DesktopSound } from "./desktop-sound";
 import { desktopDevelopmentExtension } from "./development-extension";
 import { installLocalDiagnosticsPort } from "./diagnostics-port";
 import { buildSupervisor, dataRoot, sayFatalSmokeHome } from "./fieldd";
@@ -86,6 +87,7 @@ import {
   registerScreenshotPreview,
   registerScreenshotStillBytes,
   registerScreenshotStillKept,
+  registerSoundDoors,
   registerThemeSet,
   registerUpdateDoors,
   registerUsersRoster,
@@ -157,6 +159,10 @@ import { shellExitNotice } from "./shell-exit-notice";
 import { RecoveringShellProvider } from "./shell-provider";
 import { installSignalQuit } from "./signal-quit";
 import { isolateSmokeProfile } from "./smoke-profile";
+import { createSoundPlayer } from "./sound-player";
+import { pruneStaleScores, SoundRenders } from "./sound-renders";
+import { SoundObserver, type SoundPreferences } from "./sound-voice";
+import { createSoundRenderer } from "./sound-worker";
 import { installStillProtocol, resolveStill, resolveStillFile } from "./still-protocol";
 import { SupportBundleError, SupportBundleService } from "./support-bundle";
 import { fileThemeStore, THEME_FILE, ThemeOwner } from "./theme";
@@ -292,6 +298,14 @@ let primaryWindowOpener: (() => Promise<Electron.BrowserWindow>) | null = null;
 const shellDisposers = new Set<() => void>();
 const getSupervisor = () => supervisor;
 const registry = new WindowRegistry();
+/** A window's own main frame has the keyboard: the zoom haptic and the sound attention are heard only from it. */
+function windowInFront(sender: Electron.WebContents): boolean {
+  return (
+    !sender.isDestroyed() &&
+    sender.isFocused() &&
+    BrowserWindow.fromWebContents(sender)?.isFocused() === true
+  );
+}
 const liveSurfaceTickets = new LiveSurfaceTicketTable<LiveSurfaceRuntimeAuthority>();
 const liveSurfaceWindowHosts = new Map<number, LiveSurfaceWindowHost>();
 const liveSurfaceTextureBudgets = new Map<string, LiveSurfaceTextureTransferBudget>();
@@ -884,6 +898,12 @@ async function main(
   let statusItemForced = BACKGROUND_RELAUNCH && MODE === "production";
   /** AL-6 — the effective `desktop.keepRunningOnQuit`, off until the preferences are read */
   let keepRunningOnQuit = false;
+  /** SD-2 — Play sounds and Quiet as fieldd last said them; null until the preferences are read, and nothing plays
+   * until then (an unread "off" is still the person's) */
+  let soundPreferences: SoundPreferences | null = null;
+  let desktopSound: DesktopSound | null = null;
+  /** SD-2 — the attached user's voice; the attention door speaks to whichever is current */
+  let soundObserver: SoundObserver | null = null;
   const applyPreferences = (raw: unknown): void => {
     observedSnapshots.preferences = raw;
     observedSnapshots.hasPreferences = true;
@@ -904,6 +924,13 @@ async function main(
     });
     screenshotShortcut?.setEnabled(parsed.data.screenshotHotkey);
     keepRunningOnQuit = parsed.data.keepRunningOnQuit;
+    soundPreferences = {
+      sounds: parsed.data.sounds,
+      ...(parsed.data.soundsQuietUntil === undefined
+        ? {}
+        : { quietUntil: parsed.data.soundsQuietUntil }),
+    };
+    desktopSound?.prepare();
     enforceBackgroundEscapeHatch();
   };
   const applyEvidenceHealth = (raw: unknown): void => {
@@ -1334,6 +1361,29 @@ async function main(
           error,
         ),
     );
+    // SD-2 (DESIGN.md §14 "When it speaks", "Where it plays") — every desktop's agents through fieldd's mesh board,
+    // heard by the field's voice and played while a VibeField window is in front, Play sounds is on and Quiet does
+    // not hold. Only where a player can play: no player, no listening.
+    const voice =
+      desktopSound?.state() === "ready"
+        ? new SoundObserver(
+            bundle.handles,
+            {
+              front: () => BrowserWindow.getFocusedWindow() !== null,
+              theme: () => themeOwner?.current().resolved ?? "light",
+              preferences: () => soundPreferences ?? { sounds: false },
+              now: () => Date.now(),
+              play: (cue, options) => desktopSound?.play(cue, options),
+            },
+            (error) =>
+              logger.error(
+                "desktop.sound.observe_failed",
+                "The field's sounds could not follow fieldd",
+                error,
+              ),
+          )
+        : null;
+    soundObserver = voice;
     const offerConnect = (): void => {
       trayController?.update({ connectDevices: connectAsks.offersConnect() });
     };
@@ -1376,6 +1426,8 @@ async function main(
         trayController?.update({ connectDevices: false });
         linkNotices.dispose();
         needsNotices.dispose();
+        voice?.dispose();
+        if (soundObserver === voice) soundObserver = null;
         shellProvider.dispose();
         stopDaemonBootFence();
         stopPluginModuleClient();
@@ -1415,6 +1467,52 @@ async function main(
   );
   supervisor = bootBundle.supervisor;
   fielddHandles = bootBundle.handles;
+  // SD-2 (DESIGN.md §14 "In VibeField") — the desktop's sound: the system-sound player, the renders made off main's
+  // thread (one worker, bundled beside main as sound-worker.cjs, unref'd so it never holds a quit) and kept under
+  // userData/sound/<score>, and the window's three doors. A harness renders and never plays (`audible`).
+  const soundLogger = logger.child({ component: "sound" });
+  const soundDir = join(app.getPath("userData"), "sound");
+  const soundRenderer = createSoundRenderer({ path: join(__dirname, "sound-worker.cjs") });
+  const sound = createDesktopSound({
+    player: createSoundPlayer({
+      platform: process.platform,
+      path: resources.desktopSoundPlayerPath ?? null,
+      onError: (error) =>
+        soundLogger.warn("desktop.sound.unavailable", "The sound player is unavailable", {
+          error,
+        }),
+    }),
+    renders: new SoundRenders({
+      dir: soundDir,
+      render: (cue, options) => soundRenderer.render(cue, options),
+      onFile: ({ cue, key, outcome, ms }) =>
+        soundLogger.info(
+          `desktop.sound.${outcome}`,
+          outcome === "rendered"
+            ? "A sound was rendered"
+            : "A sound an earlier launch rendered was found",
+          { cue, key, ms },
+        ),
+    }),
+    theme: () => themeOwner?.current().resolved ?? "light",
+    preferences: () => soundPreferences,
+    audible: !isSmokeLike(MODE),
+    log: soundLogger,
+  });
+  desktopSound = sound;
+  registerSoundDoors(registry, windowInFront, {
+    attention: (attention) => soundObserver?.attention(attention),
+    preview: (cue) => sound.preview(cue),
+    state: () => sound.state(),
+  });
+  void pruneStaleScores(soundDir).then((stale) => {
+    if (stale.length > 0) {
+      soundLogger.info("desktop.sound.pruned", "Older scores' renders were removed", {
+        count: stale.length,
+      });
+    }
+  });
+  sound.prepare();
   let attachmentWiring = wireAttachment(bootBundle, root);
   let attachmentDisposer = (): void => attachmentWiring.dispose();
   shellDisposers.add(attachmentDisposer);
@@ -1638,10 +1736,7 @@ async function main(
   registerViewSet(registry, viewStates, logger.child({ component: "ipc.view" }));
   registerZoomHaptic(
     registry,
-    (sender) =>
-      !sender.isDestroyed() &&
-      sender.isFocused() &&
-      BrowserWindow.fromWebContents(sender)?.isFocused() === true,
+    windowInFront,
     createDesktopHaptics({
       platform: process.platform,
       path: resources.desktopHapticsPath ?? null,

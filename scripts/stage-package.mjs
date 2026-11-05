@@ -200,6 +200,13 @@ const PLAN = [
     kind: "file",
   },
   {
+    // SD-2 — the sound renders' thread: main starts it from beside its own bundle (app.asar/shell/main/), so it rides
+    // the archive (ASAR mandatory, no unpack, ESP §10.2) and the stage's app/ census audit-asar allows
+    stage: "app/shell/main/sound-worker.cjs",
+    from: "packages/electron-shell/dist/main/sound-worker.cjs",
+    kind: "file",
+  },
+  {
     stage: "app/shell/preload/index.cjs",
     from: "packages/electron-shell/dist/preload/index.cjs",
     kind: "file",

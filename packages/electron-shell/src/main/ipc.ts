@@ -8,6 +8,10 @@ import {
   RendererReplaceResult,
   type ScreenshotCaptureResult,
   ScreenshotPreviewResult,
+  type SoundAttention,
+  type SoundPlayerState,
+  type SoundPreviewCue,
+  type SoundPreviewResult,
   ThemeSetRequest,
   ThemeState as ThemeStateSchema,
   type UpdateChannel,
@@ -47,6 +51,7 @@ import {
   createScreenshotStillKeptDoor,
   type StillOpened,
 } from "./screenshot-still-bytes";
+import { createSoundAttentionDoor, createSoundPreviewDoor } from "./sound-door";
 import type { StillResolution } from "./still-protocol";
 import type { ThemeOwner } from "./theme";
 import type { ViewRegistry } from "./view";
@@ -568,5 +573,37 @@ export function registerZoomHaptic(
   });
   ipcMain.on(IPC_CHANNELS.zoomHaptic, (event, ...args: unknown[]) => {
     door(event.sender, event.senderFrame === event.sender.mainFrame, args.length);
+  });
+}
+
+/** SD-2 — the window's three sound doors (sound-door.ts holds their rules): where its agents are, from the window
+ * in front; a Play in Settings → Sound; and the player's state for the page's switch line. */
+export function registerSoundDoors(
+  registry: WindowRegistry,
+  focused: (sender: WebContents) => boolean,
+  sound: {
+    attention: (attention: SoundAttention) => void;
+    preview: (cue: SoundPreviewCue) => Promise<SoundPreviewResult>;
+    state: () => SoundPlayerState;
+  },
+): void {
+  const attention = createSoundAttentionDoor<WebContents>({
+    owns: (sender) => registry.owns(sender),
+    focused,
+    accept: sound.attention,
+  });
+  const preview = createSoundPreviewDoor<WebContents>({
+    owns: (sender) => registry.owns(sender),
+    play: sound.preview,
+  });
+  ipcMain.on(IPC_CHANNELS.soundAttention, (event, raw: unknown) => {
+    attention(event.sender, event.senderFrame === event.sender.mainFrame, raw);
+  });
+  ipcMain.handle(IPC_CHANNELS.soundPreview, (event, raw: unknown) =>
+    preview(event.sender, event.senderFrame === event.sender.mainFrame, raw),
+  );
+  ipcMain.handle(IPC_CHANNELS.soundState, (event) => {
+    if (!registry.owns(event.sender)) throw new Error("sound state refused: unregistered sender");
+    return sound.state();
   });
 }

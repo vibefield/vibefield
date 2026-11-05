@@ -7,6 +7,8 @@ const packageRoot = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const distRoot = join(packageRoot, "dist");
 const mainBundle = join(packageRoot, "dist", "main", "index.cjs");
 const preloadBundle = join(packageRoot, "dist", "preload", "index.cjs");
+// SD-2 — the sound renders' thread, started by main from beside its own bundle (`join(__dirname, "sound-worker.cjs")`)
+const soundWorkerBundle = join(packageRoot, "dist", "main", "sound-worker.cjs");
 const CATALOG_MARKERS = [
   "vibefield-design-catalog-only",
   // Legacy tripwires stay guarded even after the standalone shell is removed.
@@ -27,7 +29,7 @@ const STUDIO_MARKERS = [
 // same way every smoke does — so its marker must never appear in main either.
 const LAB_MARKERS = ["vibefield-terminal-perf-lab-only", "vibefield-terminal-door-probe-only"];
 
-for (const bundle of [mainBundle, preloadBundle]) {
+for (const bundle of [mainBundle, preloadBundle, soundWorkerBundle]) {
   if (!existsSync(bundle)) {
     throw new Error(`production shell verification requires ${relative(packageRoot, bundle)}`);
   }
@@ -37,7 +39,7 @@ const shellFiles = [
   ...filesBelow(join(distRoot, "main")),
   ...filesBelow(join(distRoot, "preload")),
 ];
-const expectedShellFiles = new Set([mainBundle, preloadBundle]);
+const expectedShellFiles = new Set([mainBundle, preloadBundle, soundWorkerBundle]);
 const unexpected = shellFiles.filter((file) => !expectedShellFiles.has(file));
 if (unexpected.length > 0) {
   throw new Error(
@@ -56,7 +58,7 @@ if (leaked.length > 0) {
 }
 
 process.stdout.write(
-  `production shell boundary OK — main ${statSync(mainBundle).size.toLocaleString("en-US")} bytes, preload ${statSync(preloadBundle).size.toLocaleString("en-US")} bytes; exact artifact set, Studio, Design System catalog, and perf lab absent\n`,
+  `production shell boundary OK — main ${statSync(mainBundle).size.toLocaleString("en-US")} bytes, preload ${statSync(preloadBundle).size.toLocaleString("en-US")} bytes, sound worker ${statSync(soundWorkerBundle).size.toLocaleString("en-US")} bytes; exact artifact set, Studio, Design System catalog, and perf lab absent\n`,
 );
 
 function filesBelow(directory) {

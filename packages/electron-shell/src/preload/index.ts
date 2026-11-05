@@ -31,6 +31,14 @@ import {
   SHELL_CLIPBOARD,
   type ShellCommand,
   ShellPlatform,
+  type SoundAttention,
+  SoundAttention as SoundAttentionSchema,
+  type SoundPlayerState,
+  SoundPlayerState as SoundPlayerStateSchema,
+  type SoundPreviewCue,
+  SoundPreviewParams,
+  type SoundPreviewResult,
+  SoundPreviewResult as SoundPreviewResultSchema,
   type ThemePreference,
   ThemeSetRequest,
   type ThemeState,
@@ -504,6 +512,20 @@ contextBridge.exposeInMainWorld("vibefield", {
     /** The View menu's Actual Size, Zoom In and Zoom Out (FR-4, 3b), as the
      * act main sends for the head to answer on Canvas. */
     onZoom: (handler: (act: FrameZoomAct) => void): (() => void) => viewZoom.subscribe(handler),
+  },
+  /** SD-2 — the window's sound doors (DESIGN.md §14, §8 "Settings → Sound"): where its agents are, a Play, and the
+   * player's state for the page's switch line; every payload parsed both ways, as the theme's are. */
+  sound: {
+    attention: (attention: SoundAttention): void => {
+      const parsed = SoundAttentionSchema.safeParse(attention);
+      if (parsed.success) ipcRenderer.send(IPC_CHANNELS.soundAttention, parsed.data);
+    },
+    preview: async (cue: SoundPreviewCue): Promise<SoundPreviewResult> =>
+      SoundPreviewResultSchema.parse(
+        await ipcRenderer.invoke(IPC_CHANNELS.soundPreview, SoundPreviewParams.parse({ cue })),
+      ),
+    state: async (): Promise<SoundPlayerState> =>
+      SoundPlayerStateSchema.parse(await ipcRenderer.invoke(IPC_CHANNELS.soundState)),
   },
   theme: {
     /** Choose the app's one theme by name (FR-4, FC-D5); main owns it and the

@@ -12,6 +12,7 @@ async function fixture(t) {
   const paths = {
     repoRoot: root,
     mainOutput: join(root, "main.cjs"),
+    soundWorkerOutput: join(root, "sound-worker.cjs"),
     preloadOutput: join(root, "preload.cjs"),
     studioPreloadOutput: join(root, "studio.cjs"),
     fielddOutput: join(root, "bin.cjs"),
@@ -51,4 +52,19 @@ test("a rebuilt freeway host moves the daemon identity, as the cell does (F1)", 
   await writeFile(paths.freewayOutput, "freeway-two");
   assert.notEqual(await daemonIdentity(), before);
   assert.equal(shellPlaneInputs(paths).includes(paths.freewayOutput), false);
+});
+
+test("a rebuilt sound worker restarts the shell and never the pair (SD-2)", async (t) => {
+  // Main starts the sound renders' thread from beside its own bundle: it is the shell's, and a shell-only restart
+  // adopts the running pair.
+  const { paths, daemonIdentity } = await fixture(t);
+  const shellIdentity = () => computeBuildId(paths.repoRoot, shellPlaneInputs(paths));
+  for (const file of [paths.mainOutput, paths.preloadOutput, paths.studioPreloadOutput]) {
+    await writeFile(file, "shell");
+  }
+  await writeFile(paths.soundWorkerOutput, "worker-one");
+  const [shellBefore, daemonBefore] = [await shellIdentity(), await daemonIdentity()];
+  await writeFile(paths.soundWorkerOutput, "worker-two");
+  assert.notEqual(await shellIdentity(), shellBefore);
+  assert.equal(await daemonIdentity(), daemonBefore);
 });

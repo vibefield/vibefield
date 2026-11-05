@@ -54,6 +54,8 @@ export async function stageRuntimeSnapshot({
     ]);
     await Promise.all([
       copyFile(paths.mainOutput, join(layout.appRoot, "main", "index.cjs")),
+      // SD-2 — the sound renders' thread rides beside main, where main starts it
+      copyFile(paths.soundWorkerOutput, join(layout.appRoot, "main", "sound-worker.cjs")),
       copyFile(paths.preloadOutput, join(layout.appRoot, "preload", "index.cjs")),
       copyFile(paths.studioPreloadOutput, join(layout.appRoot, "preload", "studio.cjs")),
       copyFile(paths.fielddOutput, layout.fielddOutput),

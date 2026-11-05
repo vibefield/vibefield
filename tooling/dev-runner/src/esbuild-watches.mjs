@@ -21,6 +21,15 @@ export function esbuildDefinitions(paths) {
       external: ["electron", "../testing/smoke.cjs"],
     },
     {
+      // SD-2 — the sound renders' thread, beside main's bundle (main starts it from `join(__dirname, …)`)
+      name: "electron-sound-worker",
+      entry: paths.soundWorkerEntry,
+      outfile: paths.soundWorkerOutput,
+      cwd: dirname(dirname(dirname(paths.soundWorkerEntry))),
+      format: "cjs",
+      external: [],
+    },
+    {
       name: "electron-preload",
       entry: paths.studioProductPreloadEntry,
       outfile: paths.preloadOutput,

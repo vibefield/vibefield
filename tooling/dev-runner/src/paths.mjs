@@ -61,6 +61,16 @@ export const workspacePaths = Object.freeze({
   mainEntry: join(repoRoot, "packages", "electron-shell", "src", "main", "index.ts"),
   studioMainEntry: join(repoRoot, "packages", "electron-shell", "src", "studio", "main.ts"),
   mainOutput: join(devBuildRoot, "electron-shell", "main", "index.cjs"),
+  // SD-2 — the sound renders' thread, which main starts from beside its own bundle
+  soundWorkerEntry: join(
+    repoRoot,
+    "packages",
+    "electron-shell",
+    "src",
+    "main",
+    "sound-worker-thread.ts",
+  ),
+  soundWorkerOutput: join(devBuildRoot, "electron-shell", "main", "sound-worker.cjs"),
   preloadEntry: join(repoRoot, "packages", "electron-shell", "src", "preload", "index.ts"),
   studioProductPreloadEntry: join(
     repoRoot,

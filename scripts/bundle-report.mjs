@@ -95,7 +95,13 @@ for (const e of [...entries, ...preloads, ...styles]) walk(e);
 // The old flat main.cjs/preload.cjs paths silently printed an empty section
 // (2026-07-23 review finding); --assert now fails on a missing shell bundle.
 const shellFiles = {};
-for (const rel of ["main/index.cjs", "preload/index.cjs", "testing/smoke.cjs"]) {
+// SD-2: main/sound-worker.cjs, the sound renders' thread main starts from beside its own bundle
+for (const rel of [
+  "main/index.cjs",
+  "main/sound-worker.cjs",
+  "preload/index.cjs",
+  "testing/smoke.cjs",
+]) {
   try {
     const buf = readFileSync(join(distDir, rel));
     shellFiles[rel] = { raw: buf.length, gzip: gzipSync(buf).length };
@@ -204,7 +210,7 @@ if (args.includes("--assert")) {
       `no lazy ${HISTORY_CHUNK} sheet carries the room's rules — its sheet rides elsewhere`,
     );
   }
-  for (const rel of ["main/index.cjs", "preload/index.cjs"]) {
+  for (const rel of ["main/index.cjs", "main/sound-worker.cjs", "preload/index.cjs"]) {
     if (!shellFiles[rel]) {
       problems.push(`${rel}: shell bundle missing under ${distDir} (stale report path?)`);
     }

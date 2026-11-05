@@ -8,7 +8,13 @@ import { rendererArtifactsOf, serviceModulesOf } from "./critical-changes.mjs";
 // so a rebuild of it alone stages nothing new and restarts nothing.
 
 export function shellPlaneInputs(paths) {
-  return [paths.mainOutput, paths.preloadOutput, paths.studioPreloadOutput];
+  // SD-2 — the sound worker runs in Electron main's process: a rebuilt worker restarts the shell, never the pair
+  return [
+    paths.mainOutput,
+    paths.soundWorkerOutput,
+    paths.preloadOutput,
+    paths.studioPreloadOutput,
+  ];
 }
 
 export function daemonPlaneInputs(paths, pluginProjects) {
