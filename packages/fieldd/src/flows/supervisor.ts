@@ -19,6 +19,7 @@ import {
   frameOf,
   nestsWithin,
   readFromFlowHost,
+  TO_FLOW_HOST_FRAME_MAX,
   type ToFlowHost,
 } from "./protocol";
 
@@ -78,7 +79,8 @@ export interface FlowCallHandler {
  * - `stopped`: fieldd stopped it when asked (`stop()`: the run's Stop, fieldd's own stop);
  * - `left`: the child left on its own (its pipe closed under it, killed alone);
  * - `fatal`: the host could not run a script (it would not start, never said READY, or said why);
- * - `refused`: no host was started for these bytes (too big, or not a flow fieldd can rewrite);
+ * - `refused`: no host was started for these bytes (too big, or not a flow fieldd can rewrite), or for this run (its
+ *   frame, the script and its input together, past the host's bound TO_FLOW_HOST_FRAME_MAX; bth's re-read N6);
  * - `unconfigured`: this copy of VibeField cannot start a host (FLOW_HOST.STATE_UNCONFIGURED). */
 export type FlowHostEnd =
   | { readonly kind: "done"; readonly value?: unknown; readonly cut?: true }
@@ -211,7 +213,25 @@ function settled(end: FlowHostEnd): FlowHostRun {
   return { ready: Promise.resolve(undefined), ended, stop: () => ended };
 }
 
-/** Start a run's host. */
+/** The `run` a host is sent at READY: the rewritten script, the run's input, and the bounds the child holds. */
+function runFrameOf(script: string, opts: FlowHostOptions): Extract<ToFlowHost, { t: "run" }> {
+  return {
+    t: "run",
+    script,
+    input: opts.input,
+    limits: {
+      callMaxBytes: FLOW_LIMITS.RESULT_MAX_BYTES,
+      logMaxChars: FLOW_LOG_MAX,
+      heapMb: opts.heapMb ?? FLOW_LIMITS.HOST_HEAP_MB,
+      rssMb: opts.rssMb ?? FLOW_LIMITS.HOST_RSS_MB,
+      argsDepthMax: FLOW_LIMITS.ARGS_DEPTH_MAX,
+    },
+  };
+}
+
+/** Start a run's host. Its `run` is built and sized first: a frame past the host's bound (TO_FLOW_HOST_FRAME_MAX)
+ * would be refused by the host's own reader, so fieldd refuses it before any host starts, in its own words
+ * (bth's re-read N6). The script's bound and the input's each hold alone; together they can pass the host's. */
 export function startFlowHost(opts: FlowHostOptions): FlowHostRun {
   const size = opts.bytes.byteLength;
   if (size > FLOW_LIMITS.SCRIPT_MAX_BYTES)
@@ -223,22 +243,28 @@ export function startFlowHost(opts: FlowHostOptions): FlowHostRun {
     return settled({ kind: "unconfigured", reason: opts.launch.reason });
   const read = flowScriptOf(opts.bytes);
   if (read.kind === "refused") return settled({ kind: "refused", reason: read.reason });
-  return new FlowHostChild(opts.launch.launch, read.script, opts).run;
+  const run = runFrameOf(read.script, opts);
+  const frameBytes = Buffer.byteLength(frameOf(run), "utf8");
+  if (frameBytes > TO_FLOW_HOST_FRAME_MAX)
+    return settled({
+      kind: "refused",
+      reason: `a flow's run is at most ${kib(TO_FLOW_HOST_FRAME_MAX)} on its host's pipe, its script and its input together; this one is ${frameBytes} bytes`,
+    });
+  return new FlowHostChild(opts.launch.launch, run, opts).run;
 }
 
 /** One child, from its spawn to its exit. */
 class FlowHostChild {
   readonly run: FlowHostRun;
   readonly #opts: FlowHostOptions;
-  readonly #script: string;
+  /** the `run` sent at READY, sized before the child was started */
+  readonly #runFrame: Extract<ToFlowHost, { t: "run" }>;
   readonly #t: FlowHostTimings;
   readonly #logger: Logger;
   readonly #proc: ChildProcess;
   /** the child's fd 3 (protocol.ts) */
   readonly #pipe: Duplex;
   readonly #stderr: string[] = [];
-  readonly #heapMb: number;
-  readonly #rssMb: number;
   /** the last of the child's stderr, where V8's heap line is looked for */
   #stderrTail = "";
   /** the heap the worker last said it used (a pong's telemetry), bytes */
@@ -259,12 +285,14 @@ class FlowHostChild {
   #pingTimer: NodeJS.Timeout | undefined;
   #killTimer: NodeJS.Timeout | undefined;
 
-  constructor(launch: FlowsHostLaunch, script: string, opts: FlowHostOptions) {
+  constructor(
+    launch: FlowsHostLaunch,
+    runFrame: Extract<ToFlowHost, { t: "run" }>,
+    opts: FlowHostOptions,
+  ) {
     this.#opts = opts;
-    this.#script = script;
+    this.#runFrame = runFrame;
     this.#t = { ...DEFAULT_TIMINGS, ...opts.timings };
-    this.#heapMb = opts.heapMb ?? FLOW_LIMITS.HOST_HEAP_MB;
-    this.#rssMb = opts.rssMb ?? FLOW_LIMITS.HOST_RSS_MB;
     this.#logger = opts.logger ?? createNoopLogger();
     const ready = new Promise<number | undefined>((resolve) => {
       this.#ready = resolve;
@@ -374,18 +402,7 @@ class FlowHostChild {
         // a run fieldd already ended (a Stop before READY) is sent no script and is never pinged: its child is on its
         // way out under the shutdown's grace
         if (this.#chosen !== undefined) return;
-        this.#send({
-          t: "run",
-          script: this.#script,
-          input: this.#opts.input,
-          limits: {
-            callMaxBytes: FLOW_LIMITS.RESULT_MAX_BYTES,
-            logMaxChars: FLOW_LOG_MAX,
-            heapMb: this.#heapMb,
-            rssMb: this.#rssMb,
-            argsDepthMax: FLOW_LIMITS.ARGS_DEPTH_MAX,
-          },
-        });
+        this.#send(this.#runFrame);
         this.#pingTimer = setInterval(() => this.#tick(), this.#t.pingMs);
         return;
       case "call":
