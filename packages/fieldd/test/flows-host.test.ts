@@ -1,4 +1,4 @@
-import { type ChildProcess, spawn } from "node:child_process";
+import { type ChildProcess, execFileSync, spawn } from "node:child_process";
 import { mkdtempSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import {
@@ -150,6 +150,29 @@ async function heardOf(heard: readonly unknown[], t: string, ms = WAIT_MS): Prom
     await new Promise((resolve) => setTimeout(resolve, 25));
   }
   return "timeout";
+}
+
+/** A child's resident memory at its highest, MB: `ps` every 20 ms until `until` settles. */
+async function peakRssMb(pid: number, until: Promise<unknown>): Promise<number> {
+  let peak = 0;
+  let over = false;
+  void until.finally(() => {
+    over = true;
+  });
+  while (!over) {
+    try {
+      const kib = Number(
+        execFileSync("ps", ["-o", "rss=", "-p", String(pid)])
+          .toString()
+          .trim(),
+      );
+      if (Number.isFinite(kib) && kib > peak) peak = kib;
+    } catch {
+      // gone
+    }
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+  return peak / 1024;
 }
 
 /** How a child left, once it has. */
@@ -573,6 +596,42 @@ describe("CP-4a2a — the flow host: its pipe (4A2-Q5 (a)) and its life", () => 
       // no host was started for it, so no call was made
       expect(await within(run.ready)).toBeUndefined();
       expect(calls).toEqual([]);
+    },
+    ROW_MS,
+  );
+
+  it(
+    "H27: after its run has ended, a host never holds what its script goes on to allocate: its worker is ended at the end, and its cap holds until it leaves (bth's second re-read R1)",
+    async () => {
+      // fieldd is out of this row: the host is told `run` directly and never `shutdown`, so nothing but the host itself
+      // ends what its script does after `done`. The script resolves, so `done` is said first (its fill waits two more
+      // microtasks than the worker's own continuation), then fills ONE 1 GiB array: a single builtin no termination
+      // interrupts mid-call. A host that keeps its worker after the end, its cap stopped, holds the whole fill
+      // (measured 13:55Z: 1,097 MB). Held, it never holds most of it: the worker is ended before the fill starts, or,
+      // were the fill already running, the cap kills the host within one 50 ms read (at ~10 GB/s, under 600 MB)
+      const base = runOf(
+        flow(
+          [
+            "Promise.resolve()",
+            "  .then(() => 0)",
+            "  .then(() => 0)",
+            "  .then(() => new Uint8Array(2 ** 30).fill(1));",
+            "return 1;",
+          ].join("\n"),
+        ),
+      ) as Extract<ToFlowHost, { t: "run" }>;
+      const direct = await directHost(PATH_ONLY);
+      children.push(direct.child);
+      const exited = exitOf(direct.child);
+      expect(await heardOf(direct.heard, "ready")).toEqual({ t: "ready", pid: direct.child.pid });
+      direct.tell({ ...base, limits: { ...base.limits, rssMb: 160 } });
+      expect(await heardOf(direct.heard, "done")).toEqual({ t: "done", value: 1 });
+      // what the host held at its highest in the second and a half after its end
+      const window = new Promise((resolve) => setTimeout(resolve, 1_500));
+      expect(await peakRssMb(direct.child.pid as number, window)).toBeLessThan(768);
+      // and it still leaves when its pipe closes
+      direct.close();
+      expect(await within(exited)).not.toBe("timeout");
     },
     ROW_MS,
   );
