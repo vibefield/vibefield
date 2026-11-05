@@ -285,6 +285,10 @@ catalog stays the single composition root without ever owning foreign markup. (A
 ## Rules for new UI
 
 - Add or change visual constants in `DESIGN.md`, then project them into `tokens.css`.
+- Sound has the same rule with a different projection: its constants change in `DESIGN.md` §14 first, then in
+  `@vibefield/sound` (`packages/sound/src/score.ts` and the voice's `VOICE`), never in the kit or `tokens.css`, because
+  Electron main composes the voice and wall R2 keeps the kit out of main. `packages/sound/test/design-md.test.ts`
+  reads §14 and holds every number it states to the package. (Added 2026-11-05, SD-1.)
 - Main-process code can't read CSS. A colour Electron needs before the page paints (a window's
   `backgroundColor`) is a named projection of its token: the literal stands beside a comment naming
   the token and DESIGN.md's value, DESIGN.md's token row names the file that projects it, and a test
