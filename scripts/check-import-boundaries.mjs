@@ -1469,6 +1469,13 @@ function runSelfTest() {
       file: "packages/fieldd/src/flows/host/escapes-by-dots.ts",
       body: 'import { RecordSigner } from "./../../signed-record.ts";\nexport const s = RecordSigner;\n',
     },
+    // CP-4a2a (the review bth-1142Z, P4): the protocol the child may import is import-free itself, so nothing reaches
+    // the child through it: a daemon file of the flow folder (it passes the esbuild plugin, which names packages only)
+    {
+      id: "R32",
+      file: "packages/fieldd/src/flows/protocol.ts",
+      body: 'import { FlowRecords } from "./records";\nexport const r = FlowRecords;\n',
+    },
   ];
   const cleans = [
     // CP-4a1: the static read takes acorn in the flow folder, the host's child takes ses there, and both take
