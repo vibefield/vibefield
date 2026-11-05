@@ -6,19 +6,25 @@
 // profile (PT-4 ruling 3).
 //
 //   A  the harness, UNPACKAGED (`run-smoke.mjs --smoke-canvas --profile-seed=<url>`): one browser pane laid on the desk
-//      and pointed at this row's fixture (whose response sets the witness cookie), live, saved, LEFT on the board. Its data
-//      root is kept (`VF_SMOKE_KEEP_ROOT`). This run writes the UNPACKAGED profile directory with the fuse off: the
-//      plaintext control, by construction (BP-D6).
-//   B  the PACKAGED app on that data root, its HOME the run's own, holding a login keychain created for the run (never
-//      the person's; never `--use-mock-keychain`). The board it reopens is the only driver: no smoke trigger is in the asar
-//      (EDP §13.5), and no input reaches it. Its pane's page asks the fixture again, and the fixture sets the cookie in
-//      the PACKAGED profile directory, a fresh one (BP-D6's packaged name).
+//      and pointed at this row's fixture (whose response sets the witness cookie), live, saved, LEFT on the board. Its
+//      smoke HOME is kept whole (`VF_SMOKE_KEEP_ROOT`): BP-1c's one directory that is both its Electron userData and its
+//      data root, so the desk profile lies inside userData and its cookies reach the disk. This run writes the
+//      UNPACKAGED profile directory with the fuse off: the plaintext control, by construction (BP-D6), nested the same
+//      way as phase B.
+//   B  the PACKAGED app on that HOME as production runs (BP-1c, BP-D9 (a)): `--user-data-dir` and FIELDD_DATA_DIR are the
+//      one directory, as a packaged app's `appData/VibeField` is both, so its desk profile lies inside userData. Its HOME
+//      (the OS user's, `HOME`) is the run's own, holding a login keychain created for the run (never the person's; never
+//      `--use-mock-keychain`). The board it reopens is the only driver: no smoke trigger is in the asar (EDP §13.5), and
+//      no input reaches it. Its pane's page asks the fixture again, and the fixture sets the cookie in the PACKAGED
+//      profile directory, a fresh one (BP-D6's packaged name).
+//      *(Until BP-1c, 2026-11-05: phase B had a `--user-data-dir` of its own beside phase A's root, and phase A's profile
+//      was outside its userData too, so neither wrote a `Cookies` database; the row was RED, saying why (§3·8).)*
 //   judge  after the app's graceful quit:
 //      - in the packaged directory's `Cookies`, the witness has an empty `value` and an `encrypted_value` that begins
 //        `v10`, and the witness's bytes appear nowhere in the file;
 //      - the unpackaged directory holds the same witness in plaintext;
 //      - "VibeField Safe Storage" is in the RUN keychain;
-//      - the shell's own profile (`--user-data-dir`) holds no cookie of the fixture's.
+//      - the shell's own profile (the home's default session, both phases') holds no cookie of the fixture's.
 //
 // The four unknowns VF-PM ruled measured first, each said in the run's output:
 //   U1  the packaged app takes its pane live unaided (the fixture hears it). If it does not, that is a product finding,
@@ -43,12 +49,13 @@ import {
   mkdtempSync,
   readdirSync,
   readFileSync,
+  realpathSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { leftByRun, listRunProcesses, SMOKE_RUN_ENV } from "./smoke-daemons.mjs";
 
@@ -217,6 +224,56 @@ export function appEnv(base, { home, fieldd, mark }) {
   return { ...env, HOME: home, FIELDD_DATA_DIR: fieldd, [SMOKE_RUN_ENV]: mark };
 }
 
+/** A path as the filesystem names it (`/tmp` is `/private/tmp` on macOS), or resolved when it is not there. */
+function realOrResolved(path) {
+  try {
+    return realpathSync(path);
+  } catch {
+    return resolve(path);
+  }
+}
+
+/** Whether `child` lies inside `parent`, or is it (main's `liesWithin`, live-surfaces/browser-profiles-placement.ts). */
+export function liesWithin(parent, child) {
+  const rel = relative(parent, child);
+  return rel === "" || (rel !== ".." && !rel.startsWith(`..${sep}`) && !isAbsolute(rel));
+}
+
+/**
+ * BP-1c — phase A's smoke HOME, as its output names it: main kept the root (`SMOKE_ROOT_KEPT {root, home}`) and the
+ * launcher kept the home whole for it (`SMOKE_PROFILE_REMOVED`'s `kept: "asked"`), and the desk profiles under the user
+ * root lie inside it (BP-D9 (a): phase A's plaintext control writes its cookies only there). `{ home, userRoot }`, or
+ * `{ problem }` in words.
+ */
+export function phaseAHome(kept, settled, real = realOrResolved) {
+  if (kept === null || typeof kept.home !== "string" || typeof kept.root !== "string")
+    return { problem: "phase A named no kept root (SMOKE_ROOT_KEPT)" };
+  if (
+    settled === null ||
+    settled.kept !== "asked" ||
+    typeof settled.userData !== "string" ||
+    real(settled.userData) !== real(kept.home)
+  )
+    return {
+      problem: `phase A's launcher did not keep its home whole for the row (SMOKE_PROFILE_REMOVED ${JSON.stringify(settled)})`,
+    };
+  if (!liesWithin(kept.home, join(kept.root, "browser", "profiles")))
+    return {
+      problem: `phase A's desk profiles do not lie inside its userData (${kept.home}): BP-D9's law broken`,
+    };
+  return { home: kept.home, userRoot: kept.root };
+}
+
+/** BP-1c — phase B's launch on phase A's HOME, as production runs: the packaged app's userData IS its data root (a
+ * packaged app's `appData/VibeField` is both), so its desk profile lies inside userData. A dev-keyed package is
+ * launched with `--allow-dev-trust`, said by the row. */
+export function phaseBLaunch({ home, keyClass }) {
+  return {
+    args: [`--user-data-dir=${home}`, ...(keyClass === "release" ? [] : ["--allow-dev-trust"])],
+    fieldd: home,
+  };
+}
+
 /** The `security` CLI under the run HOME. The Security framework reads its user domain (the search list, the default
  * keychain) from HOME, so a keychain created and made default here never enters the person's list (measured 2026-10-26
  * on this Mac: under a fresh HOME the user list is empty and no default keychain exists; a create there leaves the
@@ -267,9 +324,8 @@ async function main(argv) {
   const keep = argv.includes("--keep");
   const run = mkdtempSync(join(tmpdir(), "vf-bp-"));
   const home = join(run, "home");
-  const userData = join(run, "userdata");
   const scratch = join(run, "scratch");
-  for (const dir of [home, userData, scratch]) mkdirSync(dir, { recursive: true });
+  for (const dir of [home, scratch]) mkdirSync(dir, { recursive: true });
   say("SMOKE_PROFILE_RUN", { run });
 
   // ── the app: unzipped into the run (ditto keeps the signature), or the given .app ──
@@ -328,12 +384,16 @@ async function main(argv) {
     writeFileSync(join(run, "phase-a.log"), seedOut);
     const seeded = line(seedOut, "PROFILE_SEED");
     const kept = line(seedOut, "SMOKE_ROOT_KEPT");
+    const settled = line(seedOut, "SMOKE_PROFILE_REMOVED");
+    const phaseA = phaseAHome(kept, settled);
     say("SMOKE_PROFILE_PHASE_A", {
       exit: seed.status,
       signal: seed.signal,
       ms: Date.now() - seedStart,
       seeded,
       kept,
+      settled,
+      nested: phaseA.problem === undefined,
     });
     // what the fixture heard in phase A: whether the unpackaged page ever asked (a pane that never loads is said apart from
     // one that loads and is not seen live)
@@ -344,23 +404,23 @@ async function main(argv) {
         withCookie: r.cookie !== "",
       })),
     });
-    if (seed.status !== 0 || seeded === null || kept === null || typeof kept.home !== "string")
+    if (seed.status !== 0 || seeded === null)
       throw new Error(
         `phase A did not seed (exit ${seed.status ?? seed.signal}; see ${join(run, "phase-a.log")})`,
       );
-    const dataRoot = kept.home;
-    const userRoot = kept.root;
+    if (phaseA.problem !== undefined)
+      throw new Error(`${phaseA.problem} (see ${join(run, "phase-a.log")})`);
+    // BP-1c — the HOME is phase B's userData and its data root, both
+    const dataRoot = phaseA.home;
+    const userRoot = phaseA.userRoot;
 
     // ── PHASE B: the packaged app on that root; the board it reopens is the only driver ──
     const mark = `vf-bp-${randomBytes(4).toString("hex")}`;
     const bStart = Date.now();
-    const args = [
-      `--user-data-dir=${userData}`,
-      ...(keyClass === "release" ? [] : ["--allow-dev-trust"]),
-    ];
+    const launch = phaseBLaunch({ home: dataRoot, keyClass });
     const out = [];
-    const child = spawn(exe, args, {
-      env: appEnv(process.env, { home, fieldd: dataRoot, mark }),
+    const child = spawn(exe, launch.args, {
+      env: appEnv(process.env, { home, fieldd: launch.fieldd, mark }),
       stdio: ["ignore", "pipe", "pipe"],
     });
     child.stdout.on("data", (c) => out.push(c));
@@ -411,7 +471,8 @@ async function main(argv) {
         env: { ...process.env, HOME: home },
         stdio: "ignore",
       }).status === 0;
-    const shellRows = readWitness(cookiesDbOf(userData), scratch).rows;
+    // the shell's own sessions: the HOME's default session, which both phases' shells used (BP-1c)
+    const shellRows = readWitness(cookiesDbOf(dataRoot), scratch).rows;
     say("SMOKE_PROFILE_READ", {
       packaged,
       unpackaged: {

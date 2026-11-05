@@ -13,6 +13,9 @@ import {
   cookiesDbOf,
   DESK_REF,
   judge,
+  liesWithin,
+  phaseAHome,
+  phaseBLaunch,
   profileDirName,
   serveFixture,
   WITNESS,
@@ -144,4 +147,57 @@ test("the judge reads the cookie database where Chromium wrote it: Network/Cooki
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+// BP-1c (BP-D9 (a)) — the row's two phases nest as production does: phase A's smoke HOME is both its userData and its data
+// root (so its plaintext control writes its cookies), and phase B is launched on that same home as both.
+const HOME = "/private/tmp/vf-smoke-hnUors";
+const KEPT = { root: `${HOME}/users/1`, home: HOME };
+const SETTLED = { userData: HOME, removed: false, kept: "asked" };
+const asGiven = (p) => p;
+
+test("BP-1c: phase A's home is taken only when main kept its root and the launcher kept the home whole for the row", () => {
+  assert.deepEqual(phaseAHome(KEPT, SETTLED, asGiven), { home: HOME, userRoot: `${HOME}/users/1` });
+  // the launcher's path and main's are read as the filesystem names them (`/tmp` is `/private/tmp`)
+  const real = (p) => p.replace(/^\/tmp\//, "/private/tmp/");
+  assert.deepEqual(phaseAHome(KEPT, { ...SETTLED, userData: "/tmp/vf-smoke-hnUors" }, real), {
+    home: HOME,
+    userRoot: `${HOME}/users/1`,
+  });
+});
+
+test("BP-1c: each way phase A's home fails is said in words", () => {
+  const cases = [
+    [null, SETTLED, /no kept root/],
+    [{ root: KEPT.root }, SETTLED, /no kept root/],
+    [KEPT, null, /did not keep its home whole/],
+    [KEPT, { userData: HOME, removed: true }, /did not keep its home whole/],
+    [KEPT, { ...SETTLED, kept: "red" }, /did not keep its home whole/],
+    [KEPT, { ...SETTLED, userData: "/private/tmp/vf-smoke-other1" }, /did not keep its home whole/],
+    // a root apart from the home (the shape before BP-1c): the desk profiles lie outside userData
+    [
+      { root: "/private/tmp/vf-smoke-zp6IXf/users/1", home: HOME },
+      SETTLED,
+      /do not lie inside its userData/,
+    ],
+  ];
+  for (const [kept, settled, said] of cases) {
+    const got = phaseAHome(kept, settled, asGiven);
+    assert.ok(got.problem !== undefined && said.test(got.problem), JSON.stringify({ kept, got }));
+  }
+});
+
+test("BP-1c: phase B runs as production does — its userData IS its data root — and a dev-keyed package says so", () => {
+  assert.deepEqual(phaseBLaunch({ home: HOME, keyClass: "release" }), {
+    args: [`--user-data-dir=${HOME}`],
+    fieldd: HOME,
+  });
+  assert.deepEqual(phaseBLaunch({ home: HOME, keyClass: "dev" }), {
+    args: [`--user-data-dir=${HOME}`, "--allow-dev-trust"],
+    fieldd: HOME,
+  });
+  // the desk profiles under the user root lie inside that userData
+  assert.equal(liesWithin(HOME, `${HOME}/users/1/browser/profiles`), true);
+  assert.equal(liesWithin(`${HOME}/userdata`, `${HOME}/users/1/browser/profiles`), false);
+  assert.equal(liesWithin("/a/b", "/a/bc"), false);
 });
