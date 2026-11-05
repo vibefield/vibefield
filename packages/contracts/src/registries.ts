@@ -1730,6 +1730,15 @@ export const LAYOUT = {
    * That holds against an edit; the key is 0600 to the same uid, as the sparks' is (EL7). */
   NEEDS_DIR: ["fieldd", "needs"],
   NEEDS_KEY_FILE: ["fieldd", "needs.key"],
+  /** Item 159 (TH0-Q11 (b), ruled 2026-11-04) — fieldd's own files for each spark: one 0700 folder per spark, named by
+   * its id (`spark-files/<sparkId>/`), holding its kept record (`SparkKeptRecord`, compose.ts's SPARK_KEPT_FILE, 0600)
+   * and, with TH-1, its runs' transcript files beside it. One key for the folder: SPARK_FILES_KEY_FILE's secret (0600,
+   * made once, never overwritten) signs the kept record, and TH-1's lines are MAC'd with it, so an agent that edits a
+   * file is refused: an unsigned or forged file is set aside, never served. Never in the spark's home
+   * (SPARK_HOMES_DIR), which is its agent's cwd. That holds against an edit; the key is 0600 to the same uid, as the
+   * sparks' is (EL7). */
+  SPARK_FILES_DIR: ["fieldd", "spark-files"],
+  SPARK_FILES_KEY_FILE: ["fieldd", "spark-files.key"],
   TERMINAL_CONFIG_FILE: ["native", FILES.TERMINAL_CONFIG],
   RESTART_INTENT_FILE: ["native", FILES.RESTART_INTENT],
   // RETIRED 2026-09-14 (TM-3, `thinking-terminal-mesh-cells.md` §7 / TM-D3):

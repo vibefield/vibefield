@@ -96,6 +96,27 @@ export const SparkRecord = z
   .superRefine(thinksUnderItsProfiles);
 export type SparkRecord = z.infer<typeof SparkRecord>;
 
+export const SPARK_KEPT_FORMAT = 1;
+/** The kept record's file in the spark's own folder under LAYOUT.SPARK_FILES_DIR, beside what later slices keep there
+ * (TH-1's run files). */
+export const SPARK_KEPT_FILE = "kept.json";
+
+/** Item 159 (TH0-Q11 (b)) — what fieldd keeps for one spark beyond its record, for the slices that keep something per
+ * spark across a restart: one file, SPARK_KEPT_FILE, in the spark's folder, signed with SPARK_FILES_KEY_FILE's secret by
+ * fieldd's one record signer. The schema is the unsigned body; the file adds its `signature`, and `spark` is inside it
+ * and names its folder, so a record copied into another spark's folder is refused there. OPEN: each slice adds its own
+ * optional section in its own contracts commit and bounds it there (watches and held wakes, 1′; crews, SP-1e2), and a
+ * section this build does not know is kept whole. It holds no transcript bytes, no credential and no vendor's words. */
+export const SparkKeptRecord = z
+  .object({
+    format: z.literal(SPARK_KEPT_FORMAT),
+    spark: SparkId,
+    /** when it was last written (ISO) */
+    updatedAt: z.string().min(1),
+  })
+  .passthrough();
+export type SparkKeptRecord = z.infer<typeof SparkKeptRecord>;
+
 /** IOS-12a (PC-L2) — a desktop, as the spark doors name it: the device id the field and the roster use. */
 export const ComposeDevice = z.string().min(1).max(128);
 export type ComposeDevice = z.infer<typeof ComposeDevice>;

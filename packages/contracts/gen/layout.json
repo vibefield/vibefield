@@ -125,6 +125,14 @@
     "fieldd",
     "needs.key"
   ],
+  "SPARK_FILES_DIR": [
+    "fieldd",
+    "spark-files"
+  ],
+  "SPARK_FILES_KEY_FILE": [
+    "fieldd",
+    "spark-files.key"
+  ],
   "TERMINAL_CONFIG_FILE": [
     "native",
     "config.ghostty"

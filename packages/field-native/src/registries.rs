@@ -283,6 +283,8 @@ pub mod layout {
     pub const AGENT_INPUTS_KEY_FILE: &[&str] = &["fieldd", "inputs.key"];
     pub const NEEDS_DIR: &[&str] = &["fieldd", "needs"];
     pub const NEEDS_KEY_FILE: &[&str] = &["fieldd", "needs.key"];
+    pub const SPARK_FILES_DIR: &[&str] = &["fieldd", "spark-files"];
+    pub const SPARK_FILES_KEY_FILE: &[&str] = &["fieldd", "spark-files.key"];
     pub const TERMINAL_CONFIG_FILE: &[&str] = &["native", "config.ghostty"];
     pub const RESTART_INTENT_FILE: &[&str] = &["native", "restart-intent.json"];
     pub const MGMT_SOCKET: &[&str] = &["native", "run", "mgmt.sock"];
@@ -359,6 +361,8 @@ pub mod layout {
         ("AGENT_INPUTS_KEY_FILE", AGENT_INPUTS_KEY_FILE),
         ("NEEDS_DIR", NEEDS_DIR),
         ("NEEDS_KEY_FILE", NEEDS_KEY_FILE),
+        ("SPARK_FILES_DIR", SPARK_FILES_DIR),
+        ("SPARK_FILES_KEY_FILE", SPARK_FILES_KEY_FILE),
         ("TERMINAL_CONFIG_FILE", TERMINAL_CONFIG_FILE),
         ("RESTART_INTENT_FILE", RESTART_INTENT_FILE),
         ("MGMT_SOCKET", MGMT_SOCKET),

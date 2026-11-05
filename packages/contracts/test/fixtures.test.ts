@@ -131,6 +131,7 @@ import {
   NeedsListResult,
   NeedsNotices,
   NeedsRecord,
+  SparkKeptRecord,
   SparkRecord,
 } from "../src/compose";
 import { DeviceInfo, DeviceNameFile, DeviceRenameParams, DeviceSlice } from "../src/devices";
@@ -885,6 +886,9 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "project-figures-day": ProjectFiguresDayResult,
   // CO — the compose plane, version 2 (compose.ts): a spark, its doors, and CP-1's verbs
   "compose-spark-record": SparkRecord,
+  // item 159 (TH0-Q11 (b)) — the spark's kept record in its own folder (the unsigned body; its signature rides the
+  // passthrough), and one carrying a section this build does not know
+  "spark-kept-record": SparkKeptRecord,
   "compose-sparks-list": ComposeSparksListResult,
   "compose-sparks-hatch-params": ComposeSparksHatchParams,
   // IOS-12a (PC-D3 A) — your words to a spark, and the send's receipt

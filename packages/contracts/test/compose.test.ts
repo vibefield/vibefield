@@ -34,6 +34,9 @@ import {
   needsNoticesOf,
   needsOutcomeOf,
   needsStateOf,
+  SPARK_KEPT_FILE,
+  SPARK_KEPT_FORMAT,
+  SparkKeptRecord,
   SparkRecord,
   SparkSummary,
 } from "../src/compose";
@@ -488,5 +491,41 @@ describe("item 158 — a kept input's delivery stamp and the items its line carr
     // owed until the spark's session confirms it, while `told` says it is in the spark's queue (§8 Q1 (b))
     expect(telling.owed).toBeDefined();
     expect(telling.item.answer).toMatchObject({ outcome: "done", told: true });
+  });
+});
+
+describe("item 159 — the spark's kept record, in the spark's own folder (TH0-Q11 (b))", () => {
+  it("K1: one folder per spark under this user's fieldd, its key beside it, never at the root or in the spark's home", () => {
+    expect(LAYOUT.SPARK_FILES_DIR).toEqual(["fieldd", "spark-files"]);
+    expect(LAYOUT.SPARK_FILES_KEY_FILE).toEqual(["fieldd", "spark-files.key"]);
+    expect(LAYOUT.SPARK_FILES_KEY_FILE.slice(0, -1)).toEqual(LAYOUT.SPARK_FILES_DIR.slice(0, -1));
+    expect(LAYOUT_ROOT_LEVEL).not.toContain("SPARK_FILES_DIR");
+    expect(LAYOUT_ROOT_LEVEL).not.toContain("SPARK_FILES_KEY_FILE");
+    // fieldd's records never live in the folder the spark's agent works in
+    expect(LAYOUT.SPARK_FILES_DIR[0]).not.toBe(LAYOUT.SPARK_HOMES_DIR[0]);
+  });
+
+  it("K2: a kept record is its spark's, one file in its folder, the format 1, and a section this build does not know is kept whole", () => {
+    expect(SPARK_KEPT_FORMAT).toBe(1);
+    expect(SPARK_KEPT_FILE).toBe("kept.json");
+    const record = SparkKeptRecord.parse(fixture("spark-kept-record.valid"));
+    expect(record).toMatchObject({ format: 1, spark: "sp-7k2m9q4x" });
+    expect((record as { signature?: string }).signature).toMatch(/^[0-9a-f]{64}$/);
+    const later = SparkKeptRecord.parse(fixture("spark-kept-record.unknown-section"));
+    expect((later as Record<string, unknown>).crews).toEqual([
+      { name: "review", sessions: ["run-31", "run-44"] },
+    ]);
+  });
+
+  it("K3: refuses a record that names no spark, another format, or no time it was written", () => {
+    expect(SparkKeptRecord, "the kept record's schema").toBeDefined();
+    const record = SparkKeptRecord.parse(fixture("spark-kept-record.valid"));
+    for (const bad of [
+      { ...record, spark: "Vela" },
+      { ...record, format: 2 },
+      { ...record, updatedAt: "" },
+      { format: 1, spark: "sp-7k2m9q4x" },
+    ])
+      expect(SparkKeptRecord.safeParse(bad).success, JSON.stringify(bad)).toBe(false);
   });
 });
