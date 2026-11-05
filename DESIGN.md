@@ -6032,25 +6032,29 @@ Inside History the room's own words stand as rosetta wrote them, and the Setup A
 - A session chip's id is pasted for the spark's tools, which address a session by it. It is the one runtime id Chat
   puts on screen, in the pane, as part of what you send, and never in Chat's own chrome.
 
-**What VibeField keeps, when it cannot read it** (track CO, item 172; 2026-11-05). VibeField keeps four kinds of
-record in signed files of its own: a spark's record, what waits on you (CP-3), the words that wait for a session, and
-each spark's kept record. Reading one comes out one of four ways, and only the first is served:
+**What VibeField keeps, when it cannot read it** (track CO, item 172; 2026-11-05). VibeField keeps five kinds of
+record in signed files of its own: a spark's record, what waits on you (CP-3), the words that wait for a session,
+each spark's kept record, and a flow's records (CP-4a1: the version of a flow you approved, and a spark's proposed
+flow). Reading one comes out one of four ways, and only the first is served:
 - **It is a record VibeField wrote:** served.
-- **It is not one** (it does not parse, is unsigned or edited, names another spark, item or session than its file, is
-  open to other users, or is a folder): set aside beside itself for a person to look at, never served and never read
-  again, and said in fieldd's log.
+- **It is not one** (it does not parse, is unsigned or edited, names another spark, item, session, flow or proposal
+  than its file, is open to other users, or is a folder): set aside beside itself for a person to look at, never
+  served and never read again, and said in fieldd's log.
 - **The disk did not answer** (three tries; a folder it cannot open, a file it may not read, too many files open): left
   where it is, never served and never written over, and said in fieldd's log. The door that reads it refuses in
   fieldd's words, never with an empty list: "VibeField can't read the sparks it keeps; nothing was changed" (Chat's
   list, under "Chat can't read your sparks", and the phone's) · "VibeField can't read what waits on you; nothing was
   changed" (the needs-you doors) · "VibeField can't keep words for its sessions; nothing was sent" (your words to a
-  spark, and a spark's send to a session).
+  spark, and a spark's send to a session) · "VibeField can't read the flows it keeps; nothing was changed" (what
+  reads a flow's approval or a spark's proposal: the flows doors, from CP-4a2).
 - **A newer VibeField wrote it** (its format is above this one's): kept where it is for that VibeField, never served
   and never written over, and said in fieldd's log as kept for a newer VibeField.
 
 A store that cannot be read at boot never stops VibeField: fieldd starts, and that store says it cannot read. The
-sparks are read again at the next ask. What waits on you and the words that wait are read once, at boot, so they read
-again when fieldd restarts on a disk that answers.
+sparks and the flows are read again at the next ask. What waits on you and the words that wait are read once, at
+boot, so they read again when fieldd restarts on a disk that answers.
+*Amended 2026-11-05 (CP-4a1): the flow records are the fifth kind, read at each ask (`FlowRecords`, fieldd's
+`flows/records.ts`); a record a newer VibeField wrote is kept for it there too.*
 
 **The simulator's honest faces** (track PT, PT-S1; the PT-S design §3, ruled 2026-10-18) — what the phone's
 screen says of its device, in the voice's words, quoted exactly by the plugin (`plugins/simulator`'s
