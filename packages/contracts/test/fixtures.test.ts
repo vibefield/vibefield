@@ -157,6 +157,17 @@ import {
 } from "../src/docs";
 import { Hello, HelloAck, RpcRequest, RpcResponse, TerminalRouteSnapshot } from "../src/envelope";
 import { ErrorData } from "../src/errors";
+import {
+  FlowApprovalRecord,
+  FlowProposalRecord,
+  FlowRead,
+  FlowsListResult,
+  FlowsRunParams,
+  FlowsRunResult,
+  FlowsScriptParams,
+  FlowsScriptResult,
+  FlowsStopResult,
+} from "../src/flows";
 import { ForwardEnvelope } from "../src/forwarding";
 import {
   FreewayApproval,
@@ -919,6 +930,17 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "user-me": UserMeResult,
   // SD-2 — the effective preferences fieldd answers, with Play sounds and a Quiet, and an older daemon's without them
   "app-preferences": AppPreferences,
+  // CP-4a1 — flows: the window's doors' params and answers, the static read, and the two records fieldd keeps (the
+  // unsigned body; the signature rides the passthrough). A flow's needs-you items are `needs-item.flow-*`, above.
+  "flows-list": FlowsListResult,
+  "flows-run-params": FlowsRunParams,
+  "flows-run": FlowsRunResult,
+  "flows-stop": FlowsStopResult,
+  "flows-script-params": FlowsScriptParams,
+  "flows-script": FlowsScriptResult,
+  "flow-read": FlowRead,
+  "flow-approval-record": FlowApprovalRecord,
+  "flow-proposal-record": FlowProposalRecord,
 };
 
 // *.vector.json = cross-language crypto vectors, not wire shapes — pinned by their own tests.

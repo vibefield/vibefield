@@ -133,6 +133,17 @@
     "fieldd",
     "spark-files.key"
   ],
+  "FLOWS_LIBRARY_DIR": [
+    "flows"
+  ],
+  "FLOWS_DIR": [
+    "fieldd",
+    "flows"
+  ],
+  "FLOWS_KEY_FILE": [
+    "fieldd",
+    "flows.key"
+  ],
   "TERMINAL_CONFIG_FILE": [
     "native",
     "config.ghostty"

@@ -1,0 +1,17 @@
+{
+  "id": "ny-0f2e4d6c8b0a1928",
+  "kind": "flow-cap",
+  "state": "open",
+  "from": {
+    "name": "Release check · run 14"
+  },
+  "spark": "sp-7k2m9q4x",
+  "asked": "2026-11-05T03:02:44.000Z",
+  "choices": ["Allow 20 more", "Stop the run"],
+  "count": 40,
+  "run": {
+    "run": "fr-k3v9q2m7x1",
+    "flow": "release-check",
+    "call": 41
+  }
+}

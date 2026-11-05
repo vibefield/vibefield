@@ -1,0 +1,18 @@
+{
+  "id": "ny-2a9c4e6b8d0f1357",
+  "kind": "flow-proposal",
+  "state": "open",
+  "from": {
+    "name": "Vela",
+    "session": "run-12",
+    "spark": "sp-7k2m9q4x"
+  },
+  "spark": "sp-7k2m9q4x",
+  "asked": "2026-11-05T01:50:12.801Z",
+  "words": "Review until clean",
+  "choices": ["Approve and save", "Not now"],
+  "script": {
+    "flow": "review-until-clean",
+    "hash": "735f97e48b845a8ef74faafc9871d7b34b4fa5911e3b8d94bd2d8ca5fb4faa8e"
+  }
+}

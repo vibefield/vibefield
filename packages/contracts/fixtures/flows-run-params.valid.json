@@ -1,0 +1,7 @@
+{
+  "flow": "release-check",
+  "input": {
+    "target": "run-12"
+  },
+  "spark": "sp-7k2m9q4x"
+}

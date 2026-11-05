@@ -1,0 +1,17 @@
+{
+  "calls": [],
+  "gates": [],
+  "unlisted": false,
+  "refusals": [
+    {
+      "reason": "meta",
+      "words": "its meta is not plain values: name is computed",
+      "line": 1
+    },
+    {
+      "reason": "choices",
+      "words": "an ask offers 5 choices; a gate takes at most 4",
+      "line": 7
+    }
+  ]
+}

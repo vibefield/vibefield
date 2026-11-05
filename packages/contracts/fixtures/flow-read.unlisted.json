@@ -1,0 +1,21 @@
+{
+  "meta": {
+    "name": "Computed names"
+  },
+  "calls": [
+    {
+      "line": 4,
+      "label": "review · round … of 3",
+      "computed": true,
+      "inLoop": true
+    }
+  ],
+  "gates": [
+    {
+      "line": 9,
+      "computed": true
+    }
+  ],
+  "unlisted": true,
+  "refusals": []
+}

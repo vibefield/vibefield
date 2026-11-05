@@ -285,6 +285,9 @@ pub mod layout {
     pub const NEEDS_KEY_FILE: &[&str] = &["fieldd", "needs.key"];
     pub const SPARK_FILES_DIR: &[&str] = &["fieldd", "spark-files"];
     pub const SPARK_FILES_KEY_FILE: &[&str] = &["fieldd", "spark-files.key"];
+    pub const FLOWS_LIBRARY_DIR: &[&str] = &["flows"];
+    pub const FLOWS_DIR: &[&str] = &["fieldd", "flows"];
+    pub const FLOWS_KEY_FILE: &[&str] = &["fieldd", "flows.key"];
     pub const TERMINAL_CONFIG_FILE: &[&str] = &["native", "config.ghostty"];
     pub const RESTART_INTENT_FILE: &[&str] = &["native", "restart-intent.json"];
     pub const MGMT_SOCKET: &[&str] = &["native", "run", "mgmt.sock"];
@@ -363,6 +366,9 @@ pub mod layout {
         ("NEEDS_KEY_FILE", NEEDS_KEY_FILE),
         ("SPARK_FILES_DIR", SPARK_FILES_DIR),
         ("SPARK_FILES_KEY_FILE", SPARK_FILES_KEY_FILE),
+        ("FLOWS_LIBRARY_DIR", FLOWS_LIBRARY_DIR),
+        ("FLOWS_DIR", FLOWS_DIR),
+        ("FLOWS_KEY_FILE", FLOWS_KEY_FILE),
         ("TERMINAL_CONFIG_FILE", TERMINAL_CONFIG_FILE),
         ("RESTART_INTENT_FILE", RESTART_INTENT_FILE),
         ("MGMT_SOCKET", MGMT_SOCKET),

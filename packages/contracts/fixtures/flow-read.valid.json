@@ -1,0 +1,33 @@
+{
+  "meta": {
+    "name": "Release check",
+    "phases": ["Review", "Ship"],
+    "input": {
+      "target": "session"
+    }
+  },
+  "calls": [
+    {
+      "line": 5,
+      "agent": "codex",
+      "model": "gpt-5.5",
+      "phase": "Review",
+      "label": "review"
+    },
+    {
+      "line": 13,
+      "phase": "Ship",
+      "label": "ship",
+      "in": true
+    }
+  ],
+  "gates": [
+    {
+      "line": 12,
+      "question": "Push the release?",
+      "choices": ["Push", "Hold"]
+    }
+  ],
+  "unlisted": false,
+  "refusals": []
+}

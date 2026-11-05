@@ -1,0 +1,90 @@
+{
+  "flows": [
+    {
+      "flow": "release-check",
+      "name": "Release check",
+      "hash": "eed73a71bc25b4356dea893a2d1ae9d6d96022c28fd2bbbbbf192607df01287c",
+      "approved": "eed73a71bc25b4356dea893a2d1ae9d6d96022c28fd2bbbbbf192607df01287c",
+      "state": "approved",
+      "bytes": 580
+    },
+    {
+      "flow": "nightly-sweep",
+      "name": "Nightly sweep",
+      "hash": "d71c93eea4c1d1628cb52731e6121ccb5a033bd887531571a0bb19b6d803e329",
+      "approved": "9e413602b57526f7956e04302406a4b586d8a6229f13cdb9a9036b884cfdca18",
+      "state": "changed",
+      "bytes": 912
+    },
+    {
+      "flow": "scratch",
+      "hash": "a27110a155b1dd079db5ea8fee149a2b80019f48b359a7852f281a7720fe15a8",
+      "state": "new",
+      "bytes": 140
+    },
+    {
+      "flow": "giant",
+      "state": "too-big",
+      "bytes": 70000
+    }
+  ],
+  "runs": [
+    {
+      "run": "fr-k3v9q2m7x1",
+      "flow": "release-check",
+      "name": "Release check",
+      "n": 14,
+      "hash": "eed73a71bc25b4356dea893a2d1ae9d6d96022c28fd2bbbbbf192607df01287c",
+      "state": "holding",
+      "calls": 2,
+      "steps": [
+        {
+          "call": 1,
+          "label": "review",
+          "agent": "codex",
+          "session": "run-51",
+          "phase": "Review",
+          "state": "answered"
+        }
+      ],
+      "log": "review: 1840 characters",
+      "starter": {
+        "by": "spark",
+        "spark": "sp-7k2m9q4x"
+      },
+      "startedAt": "2026-11-05T02:10:04.512Z"
+    },
+    {
+      "run": "fr-a8c2e4g6i0",
+      "flow": "release-check",
+      "name": "Release check",
+      "n": 13,
+      "hash": "9e413602b57526f7956e04302406a4b586d8a6229f13cdb9a9036b884cfdca18",
+      "state": "stopped",
+      "calls": 3,
+      "steps": [
+        {
+          "call": 1,
+          "label": "review",
+          "agent": "codex",
+          "session": "run-44",
+          "phase": "Review",
+          "state": "answered"
+        },
+        {
+          "call": 3,
+          "label": "ship",
+          "session": "run-12",
+          "phase": "Ship",
+          "state": "ended"
+        }
+      ],
+      "starter": {
+        "by": "you"
+      },
+      "startedAt": "2026-11-04T21:40:00.000Z",
+      "endedAt": "2026-11-04T21:52:13.020Z",
+      "ended": 1
+    }
+  ]
+}

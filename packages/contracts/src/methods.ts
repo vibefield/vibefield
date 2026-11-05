@@ -2986,4 +2986,49 @@ export const METHODS: MethodDef[] = [
     locality: "local",
     subscription: true,
   }),
+  // CP-4 (step0-cp4.md §5.1; flows.ts) — the window's doors to flows and their runs: the library against fieldd's
+  // signed approvals, a run started and stopped as the person, and a script's text (CP4-S10). `agents.manage` and
+  // `local` (VF-PM, 2026-11-05 01:22Z), as the window's agent doors are: no phone or peer reaches a run, and main reads
+  // the list for the quit box with its own client. A run's gates, a proposal, a changed flow, a repair miss, the cap
+  // and a lost step are needs-you items answered through needs.answer (CP-D12), never a door here. Declared in
+  // CP-4a1; fieldd registers them with the runs (CP-4a2).
+  defineMethod({
+    surface: "product",
+    method: "flows.list",
+    scope: "agents.manage",
+    idempotent: true,
+    locality: "local",
+  }),
+  // whole lists, at open and on every change, as needs.subscribe's are (CP4-Q21 (a))
+  defineMethod({
+    surface: "product",
+    method: "flows.subscribe",
+    scope: "agents.manage",
+    idempotent: true,
+    locality: "local",
+    subscription: { shape: "stream", cadenceFloorMs: PRODUCT_API_LIMITS.STREAM_MIN_INTERVAL_MS },
+  }),
+  // a run is a new act each time: Run again starts from the top
+  defineMethod({
+    surface: "product",
+    method: "flows.run",
+    scope: "agents.manage",
+    idempotent: false,
+    locality: "local",
+  }),
+  // Declarative: a run that has ended is answered as it is.
+  defineMethod({
+    surface: "product",
+    method: "flows.stop",
+    scope: "agents.manage",
+    idempotent: true,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "flows.script",
+    scope: "agents.manage",
+    idempotent: true,
+    locality: "local",
+  }),
 ];

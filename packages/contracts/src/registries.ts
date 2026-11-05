@@ -501,6 +501,26 @@ export const AGENT_STOP = {
   HEARD_WITHIN_MS: 3_000,
 } as const;
 
+/** CP-4 (step0-cp4.md §5.1; the round's CP-4 marks, ruled 2026-11-04 at the leans) — a flow run's bounds, each
+ * PROVISIONAL until measured on James's runs, as AGENT_STOP's is:
+ *  - SCRIPT_MAX_BYTES: a flow file's bytes, read, approved, proposed inline (`flow_propose`) or sent as text
+ *    (`flows.script`, CP4-S10). A library file past it is listed `too-big` and never read (CP4-Q18 (a));
+ *  - RESULT_MAX_BYTES: a step's answer, its agent's last final message, kept whole up to here and marked `cut` past it
+ *    (CP4-Q17 (a) as re-ruled, CP4-S2);
+ *  - CALLS_MAX: the calls a run makes before it holds and asks the person (CP4-Q8 (a), part 2): the 41st holds the run
+ *    (`flow-cap`), and each Allow lets CALLS_MORE more through. With no budget (James, 2026-11-02 13:08Z), this is a
+ *    looping script's one bound;
+ *  - LIVE_STEPS_MAX: a run's step agents alive at once; one more waits for a slot, visibly (CP4-S7). They do not count
+ *    against a spark's 8 (fieldd's `SPARK_LIVE_AGENTS_MAX`, `talk/verbs.ts`), and they bound how many PTYs one
+ *    `parallel` can take. */
+export const FLOW_LIMITS = {
+  SCRIPT_MAX_BYTES: 64 * 1024,
+  RESULT_MAX_BYTES: 64 * 1024,
+  CALLS_MAX: 40,
+  CALLS_MORE: 20,
+  LIVE_STEPS_MAX: 8,
+} as const;
+
 /** DS-L3 — the rows protocol's numbers (`rows.ts`; design-06 §8). A snapshot
  * above SNAPSHOT_PAGE_BYTES is paged with `more: true`; a source keeps a
  * journal of JOURNAL_DEPTH changed-key frames per table, below which a kept
@@ -1766,6 +1786,18 @@ export const LAYOUT = {
    * sparks' is (EL7). */
   SPARK_FILES_DIR: ["fieldd", "spark-files"],
   SPARK_FILES_KEY_FILE: ["fieldd", "spark-files.key"],
+  /** CP-4 (step0-cp4.md §5.1; CP4-Q18 (a)) — the person's flows: one library per user, `flows/<slug>.flow.js`, theirs to
+   * edit and to open in Finder, as a spark's home is (SPARK_HOMES_DIR). fieldd never runs a file here: it runs the
+   * bytes it kept when the person approved them (FLOWS_DIR). */
+  FLOWS_LIBRARY_DIR: ["flows"],
+  /** CP-4 — fieldd's own flow records, 0600 files in 0700 directories: each approved or proposed version's bytes, kept
+   * by their SHA-256 and read back only when that hash is their name; each flow's approval and each proposal, one
+   * record per file signed with FLOWS_KEY_FILE's secret (0600, made once, never overwritten), its own name inside,
+   * so an agent that edits one cannot approve a flow or forge a proposal: an unsigned or forged record is set aside,
+   * never served; and, from CP-4a2, each run's signed journal. That holds against an edit; the key is 0600 to the same
+   * uid, as the sparks' is (EL7). */
+  FLOWS_DIR: ["fieldd", "flows"],
+  FLOWS_KEY_FILE: ["fieldd", "flows.key"],
   TERMINAL_CONFIG_FILE: ["native", FILES.TERMINAL_CONFIG],
   RESTART_INTENT_FILE: ["native", FILES.RESTART_INTENT],
   // RETIRED 2026-09-14 (TM-3, `thinking-terminal-mesh-cells.md` §7 / TM-D3):

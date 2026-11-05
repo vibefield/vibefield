@@ -662,8 +662,24 @@ export const NEEDS_CHOICE_WORDS = {
 } as const;
 
 /** The kinds and states, OPEN on the wire like COMPOSE_SESSION_STATES: a word this build never heard of must not refuse
- * an item. `ended`: what it waited on ended before an answer (a held send's session), or an allowance's run ended. */
-export const NEEDS_ITEM_KINDS = ["question", "held-send", "held-spawn", "agent-ask"] as const;
+ * an item. `ended`: what it waited on ended before an answer (a held send's session), or an allowance's run ended.
+ * CP-4 (step0-cp4.md §5.1; CP-D12, one queue) adds a flow run's six, each naming its run (`run`): a spark's proposal
+ * (`flow-proposal`, CP4-Q3 (a)), a script's `ask` (`flow-gate`, CP4-Q6 (a)), a flow changed since its approval or never
+ * approved (`flow-changed`, CP4-Q5 (a)), a step's second answer out of its form (`flow-repair`, CP4-Q7 (a)), the call
+ * cap (`flow-cap`, CP4-Q8 (a)) and a step lost to a Quit (`flow-lost`, CP4-Q11 (a)). Their acts' words are DESIGN.md
+ * §9's when the window draws them (CP-4b). */
+export const NEEDS_ITEM_KINDS = [
+  "question",
+  "held-send",
+  "held-spawn",
+  "agent-ask",
+  "flow-proposal",
+  "flow-gate",
+  "flow-changed",
+  "flow-repair",
+  "flow-cap",
+  "flow-lost",
+] as const;
 export type NeedsItemKind = (typeof NEEDS_ITEM_KINDS)[number];
 export const NEEDS_ITEM_STATES = ["open", "answered", "ended"] as const;
 export type NeedsItemState = (typeof NEEDS_ITEM_STATES)[number];
@@ -726,6 +742,34 @@ export const NeedsAnswer = z
   .passthrough();
 export type NeedsAnswer = z.infer<typeof NeedsAnswer>;
 
+/** CP-4 — the run a flow's item holds, in AgentSessionOrigin's bounds (a run's id, its call counted from 1); flows.ts
+ * holds the strict forms (FlowRunId, FlowSlug), and its tests hold these to them. Defined here, not imported, because
+ * flows.ts reads this module. */
+export const NeedsRun = z
+  .object({
+    run: z.string().min(1).max(64),
+    /** the flow's slug: its file's name in the person's library */
+    flow: z.string().min(1).max(64),
+    call: z.number().int().positive().optional(),
+    label: z.string().min(1).max(NEEDS_NAME_MAX).optional(),
+  })
+  .passthrough();
+export type NeedsRun = z.infer<typeof NeedsRun>;
+
+/** CP-4 — a flow's bytes as an item names them: its slug and the SHA-256 of a version fieldd keeps (flows.ts's
+ * FlowHash), hex. */
+export const NeedsScript = z
+  .object({
+    flow: z.string().min(1).max(64),
+    hash: z.string().regex(/^[0-9a-f]{64}$/),
+    approved: z
+      .string()
+      .regex(/^[0-9a-f]{64}$/)
+      .optional(),
+  })
+  .passthrough();
+export type NeedsScript = z.infer<typeof NeedsScript>;
+
 export const NeedsItem = z
   .object({
     id: NeedsItemId,
@@ -765,6 +809,12 @@ export const NeedsItem = z
     /** an agent's own ask: its blocker's kind (permission | question, OPEN), and a permission's tool */
     ask: z.string().min(1).max(32).optional(),
     tool: z.string().min(1).max(128).optional(),
+    /** CP-4 — a flow's item: its run (absent while none has started: a proposal, a flow that changed before its run),
+     * and the step it holds at (`call`, counted from 1 in the run's journal, with the script's `label`) */
+    run: NeedsRun.optional(),
+    /** CP-4 — the bytes a proposal or a changed flow is about, for Read the script and See the change
+     * (`flows.script` by hash): `hash` is the version the item would approve or run, `approved` the one approved */
+    script: NeedsScript.optional(),
     answer: NeedsAnswer.optional(),
   })
   .passthrough();

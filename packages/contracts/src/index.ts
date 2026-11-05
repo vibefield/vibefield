@@ -17,6 +17,7 @@ export * from "./docsync";
 export * from "./endpoints";
 export * from "./envelope";
 export * from "./errors";
+export * from "./flows";
 export * from "./forwarding";
 export * from "./freeway";
 export * from "./live-surfaces";

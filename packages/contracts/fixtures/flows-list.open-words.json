@@ -1,0 +1,41 @@
+{
+  "flows": [
+    {
+      "flow": "audit",
+      "hash": "735f97e48b845a8ef74faafc9871d7b34b4fa5911e3b8d94bd2d8ca5fb4faa8e",
+      "state": "quarantined",
+      "bytes": 300,
+      "owner": "you"
+    }
+  ],
+  "runs": [
+    {
+      "run": "fr-k3v9q2m7x1",
+      "flow": "release-check",
+      "name": "Release check",
+      "n": 14,
+      "hash": "eed73a71bc25b4356dea893a2d1ae9d6d96022c28fd2bbbbbf192607df01287c",
+      "state": "migrating",
+      "calls": 2,
+      "steps": [
+        {
+          "call": 1,
+          "label": "review",
+          "agent": "codex",
+          "session": "run-51",
+          "phase": "Review",
+          "state": "sleeping"
+        }
+      ],
+      "log": "review: 1840 characters",
+      "starter": {
+        "by": "spark",
+        "spark": "sp-7k2m9q4x"
+      },
+      "startedAt": "2026-11-05T02:10:04.512Z",
+      "cost": {
+        "usd": 0
+      }
+    }
+  ]
+}

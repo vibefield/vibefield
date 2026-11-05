@@ -1,0 +1,17 @@
+{
+  "id": "ny-8b3d5f7a9c1e2468",
+  "kind": "flow-gate",
+  "state": "open",
+  "from": {
+    "name": "Release check · run 14"
+  },
+  "spark": "sp-7k2m9q4x",
+  "asked": "2026-11-05T02:14:40.010Z",
+  "words": "Push the release?",
+  "choices": ["Push", "Hold", "Stop the run"],
+  "run": {
+    "run": "fr-k3v9q2m7x1",
+    "flow": "release-check",
+    "call": 2
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "run": {
+    "run": "fr-a8c2e4g6i0",
+    "flow": "release-check",
+    "name": "Release check",
+    "n": 13,
+    "hash": "9e413602b57526f7956e04302406a4b586d8a6229f13cdb9a9036b884cfdca18",
+    "state": "stopped",
+    "calls": 3,
+    "steps": [
+      {
+        "call": 1,
+        "label": "review",
+        "agent": "codex",
+        "session": "run-44",
+        "phase": "Review",
+        "state": "answered"
+      },
+      {
+        "call": 3,
+        "label": "ship",
+        "session": "run-12",
+        "phase": "Ship",
+        "state": "ended"
+      }
+    ],
+    "starter": {
+      "by": "you"
+    },
+    "startedAt": "2026-11-04T21:40:00.000Z",
+    "endedAt": "2026-11-04T21:52:13.020Z",
+    "ended": 1
+  }
+}
