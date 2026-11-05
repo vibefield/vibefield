@@ -14,6 +14,7 @@ import {
   startFlowHost,
 } from "../src/flows/supervisor";
 import { flowsHostLaunch, standInSource } from "./flows-host-bundle";
+import { beganRun } from "./flows-run-records";
 
 // CP-4a2a (step0-cp4a2.md §12 commit 8; CP-D9) — replay: a run's calls answered from its journal by their key and
 // `#n`, never handed on twice; a new call journaled before it is handed on, then its answer. And J7: the journal's key
@@ -237,7 +238,7 @@ describe("CP-4a2a — replay by a call's key and #n (CP-D9)", () => {
         dir: join(root, "fieldd", "flows"),
         keyPath: join(root, "fieldd", "flows.key"),
       });
-      records.beginRun({
+      beganRun(records, {
         run: RUN,
         flow: "release-check",
         name: "Release check",
@@ -295,7 +296,7 @@ describe("CP-4a2a — the journal stays fieldd's (CP4-S15)", () => {
       keyPath: join(root, "fieldd", "flows.key"),
     });
     const run = "fr-p9cutmark1";
-    records.beginRun({
+    beganRun(records, {
       run,
       flow: "release-check",
       name: "Release check",
@@ -355,7 +356,7 @@ describe("CP-4a2a — the journal stays fieldd's (CP4-S15)", () => {
     const keyPath = join(root, "fieldd", "flows.key");
     const records = new FlowRecords({ dir: join(root, "fieldd", "flows"), keyPath });
     const run = "fr-j7pipe0001";
-    records.beginRun({
+    beganRun(records, {
       run,
       flow: "release-check",
       name: "Release check",

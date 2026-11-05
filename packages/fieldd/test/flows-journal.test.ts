@@ -17,6 +17,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { JOURNAL_SUFFIX, RUNS_DIR } from "../src/flows/journal";
 import { FlowRecords } from "../src/flows/records";
 import { RecordSigner, UNREADABLE_WORDS } from "../src/signed-record";
+import { beganRun } from "./flows-run-records";
 
 // CP-4a2a (step0-cp4a2.md §12 commit 8; CP4-S15, CP-D9; 4A2-Q10 (a), ruled by VF-PM 2026-11-05 08:51Z) — a run's
 // journal, kept by the flows store (FlowRecords) beside the approvals: lines that chain, a line that is not VibeField's
@@ -60,7 +61,7 @@ const HEAD = {
 /** A journal written by the store itself: the head, a call, its answer. */
 function written() {
   const s = store();
-  s.records.beginRun(HEAD);
+  beganRun(s.records, HEAD);
   s.records.appendRun(RUN, {
     kind: "call",
     call: 1,
@@ -192,7 +193,7 @@ describe("CP-4a2a — a run's journal, kept by the flows store (CP4-S15)", () =>
 
   it("J6: a journal a newer VibeField began is kept for it, never read as this one, and never written to", () => {
     const s = store();
-    s.records.beginRun(HEAD);
+    beganRun(s.records, HEAD);
     expect(existsSync(s.file), "the store wrote the run's head").toBe(true);
     // re-signed by the store's own key with a newer format: a newer VibeField's head, not an edit
     const signer = new RecordSigner({ keyPath: s.keyPath });

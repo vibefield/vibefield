@@ -37,6 +37,7 @@ import { NeedsQueue } from "../src/tool-plane/rooms/you/queue";
 import { NeedsStore } from "../src/tool-plane/rooms/you/store";
 import { SparkKeptStore } from "../src/tool-plane/spark-kept";
 import { SparkStore } from "../src/tool-plane/sparks";
+import { beganRun } from "./flows-run-records";
 
 // Item 172 (DESIGN.md §9 "What VibeField keeps, when it cannot read it"; co-plan's item-172 plan) — the one record
 // signer and its four stores tell a record from a disk that did not answer. What must hold, for every store alike:
@@ -482,7 +483,7 @@ const journalsCase: StoreCase = {
   keyPath: (root) => join(root, "fieldd", "flows.key"),
   seed(root, which) {
     const run = which === 0 ? "fr-journal0001" : "fr-journal0002";
-    new FlowRecords({ dir: this.dir(root), keyPath: this.keyPath(root) }).beginRun({
+    beganRun(new FlowRecords({ dir: this.dir(root), keyPath: this.keyPath(root) }), {
       run,
       flow: "release-check",
       name: "Release check",
