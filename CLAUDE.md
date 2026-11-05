@@ -51,6 +51,8 @@ in the split.
 
 - **Wire truth:** `contracts` — the zero-dep root of the graph, imported from every
   environment (renderer, workers, Node daemons; Rust side generated). Keep it dependency-free.
+  Beside it, `sound` (DESIGN.md §14 in code, track SD) is a second zero-dependency root that Electron main, the
+  renderer and plain-node tools all import; wall R31 keeps its source to its own files.
 - **Node-only spine libraries**, consumed by the Node hosts (fieldd, Electron main), never by
   browser-compatible code: `logging` + `audit` (LOG track), `users` (UA track), `screenshot`
   (SNAP track — the host side of the native screenshot helper; wall R19 keeps Electron out), `trust` (WP12 D2 — the
