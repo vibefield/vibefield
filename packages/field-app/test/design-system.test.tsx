@@ -758,8 +758,9 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
       expect(stage.closest(".dark")).toBe(document.documentElement);
       expect(stage.querySelectorAll(".vf-stories .vf-story").length).toBe(5);
     }
-    // System control is the palette's act in the product; the stage specimen
-    // stages the catalog's own button for the shipping panel.
+    // System control is the palette's act in a development build of the product
+    // (none in production, LP-6); the stage specimen stages the catalog's own
+    // button for the shipping panel.
     const control = container?.querySelector<HTMLButtonElement>(
       '.vf-ds-godview-controls button[aria-controls="vf-godview-tweak-panel"]',
     );

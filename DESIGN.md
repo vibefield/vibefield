@@ -59,7 +59,8 @@ floating pills — with the exceptions James named: the terminal deck's sheet ed
 and, since round 3 (2026-10-02), Godview's head (GV-D1) and the wrapper around its terminals
 (GV-D7, GV-D11, GV-D12). The scoped `--vf-godview-*` tokens are the exact reference palette. VibeField
 composites those status-body colors at 72% by default so they remain legible glass over the field;
-the temporary system-control panel exposes that alpha for live tuning.
+the temporary system-control panel exposes that alpha for live tuning. *(In development builds only since
+2026-11-05, LP-6: the panel is the surface lab, which HK Q3 (James, 2026-10-28, "B") made development's alone.)*
 **Since One Frame (FR-1, 2026-10-03) Godview is a view, not an overlay:** it is drawn inside the
 cover BELOW the frame (§10), reached by ⌘2 or its cell in the views track (§8). **Its head is the
 frame's, not the reference's instrument bar** (GV-D1, ruled 2026-10-02; §8 "Godview's head —
@@ -2509,7 +2510,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     this session**, waiting until a session is chosen — **Jump to this session** while it runs here,
     by the room's reading (the line's own until HN-7), on Canvas
     the four zoom acts, and in Godview **System control**, the one act with no key (GV-D1,
-    2026-10-11: it left the instrument bar for the palette — §8 "Godview's head — Stories");
+    2026-10-11: it left the instrument bar for the palette — §8 "Godview's head — Stories")
+    *(corrected 2026-11-05, LP-6: in a development build only — a production palette lists no
+    System control, as HK Q3, James 2026-10-28 "B", made the surface lab development's alone)*;
     **App** — Settings… ⌘,; then each enabled
     plugin's palette commands under the plugin's name, one no live handler answers drawn
     "unavailable" and never run. Eyebrows 10px mono capitals in tertiary ink; rows 36, a 16 glyph
@@ -2650,7 +2653,11 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     bridge notice's slot, empty since the bridge retired; and
     **System control**, now an act in the palette's "On this view" group while the view is
     Godview, with no key and no glyph — its panel is §1.1's temporary one, unchanged, and open to
-    whoever could open it before.
+    whoever could open it before. *Corrected 2026-11-05 (LP-6; HK Q3, James 2026-10-28 "B": the
+    surface lab is development's alone): this holds for development builds only. A production
+    build mounts no panel and lists no act, and draws every monitor tunable (each view's own and
+    the stage's CRT lines and vignette) at its default, because nothing in it could change or
+    reset one; a value an earlier build's panel saved stays in storage, unread.*
   - **The phone's Stories row** (PG-4t, 2026-11-04; James ruled J-S1 A, J-S2 (ii), J-S3 drop and J-S4 accept on
     the PG-4s page, 01:12–01:14Z; VF-PM's rulings 01:18Z–01:41Z — *corrected 2026-11-04: this said 01:46Z, the
     label on the relay, which ran ahead of the clock; it was sent at 01:40:59Z*): this head, carried to the phone's

@@ -707,7 +707,8 @@
 }
 
 /* The specimen's own staging row above the stage: the catalog's button for the
-   System control panel, which the product reaches from the palette (GV-D1). */
+   System control panel, which a development build of the product reaches from
+   the palette (GV-D1; a production build has none since LP-6). */
 .vf-ds-godview-controls {
   display: flex;
   padding: 10px 12px;

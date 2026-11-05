@@ -32,9 +32,11 @@ import type { MonitorPaneFacts } from "../godview/monitor/useMonitorAgents";
  * what the stage holds in its well — a fixture's panes (the Lip's specimen,
  * round 3) in place of the unavailable deck. The monitor's head (GV-D1) is the
  * monitor's own, so every stage here wears it. `systemControl` stages the one
- * thing the head does not hold: in the product System control is the palette's
- * act (it left with the instrument bar), and a catalog stage has no palette, so
- * the specimen offers the catalog's own button for the shipping panel.
+ * thing the head does not hold: in a development build of the product System
+ * control is the palette's act (it left with the instrument bar; a production
+ * build has none since LP-6, the surface lab being development's alone), and a
+ * catalog stage has no palette, so the specimen offers the catalog's own button
+ * for the shipping panel.
  * `deckState` is the terminals' state the stage opens in (the monitor alone,
  * away), and `deckControls` puts the Lip's buttons on it, owned here for the
  * page's life: a catalog has no session to call the terminals back with, so
