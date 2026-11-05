@@ -395,10 +395,13 @@ function buildZip(root, keys, trustRoot) {
   const plain = { ...process.env };
   for (const name of SECRET_ENVS) delete plain[name];
   const timing = {};
+  // LP-6: through THE release build's one entry, never a `cargo build --release` of its own — the entry remaps the
+  // builder's paths through rustflags, and two release builds with different rustflags in one target directory rebuild
+  // each other's whole graph (package:stage below runs the same entry, now a no-op)
   timing.native = step(
     "field-native (release)",
-    "cargo",
-    ["build", "--release", "--locked", "-p", "field-native"],
+    process.execPath,
+    [join(desktop, "packaging", "build-native-release.mjs")],
     {
       cwd: repo,
       env: plain,

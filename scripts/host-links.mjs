@@ -16,11 +16,21 @@
 // The launch check runs each named native binary with `--version`. dyld resolves every load command before `main`, so a
 // binary that cannot load fails there, and one that can says its name and exits 0.
 //
+// LP-6 (2026-11-05) — the build host's PATHS, too. A Rust binary carries the source path of every panic location and
+// `file!()`, and a dependency's is its cargo registry checkout under the builder's home: the field-native of a local
+// package built 2026-11-03 named `/Users/<name>/.cargo/registry/src/…` 634 times (its cell 377, its freeway host 197;
+// `grep -a -o`, read 2026-11-05), and a CI build names `/Users/runner/…` the same way. The release build now remaps
+// those prefixes (apps/desktop/packaging/build-native-release.mjs,
+// `--remap-path-prefix`), and the packaged app's gate (`--app`) scans `Contents/Resources/bin` for the markers: a hit in
+// the floor's set — the binaries that build remaps — fails; a hit in anything else there (rosettad, mille's .node,
+// truffle's sidecar: each built by its own project's build) is said and not failed, so the gap stays visible until
+// that build remaps too.
+//
 // Usage: node scripts/host-links.mjs (--app <VibeField.app> | --dir <dir>) [--launch <bin dir>]   (exit 1 on any; the
 // launch check needs macOS)
 import { spawnSync } from "node:child_process";
-import { closeSync, lstatSync, openSync, readdirSync, readSync } from "node:fs";
-import { join, relative, resolve } from "node:path";
+import { closeSync, existsSync, lstatSync, openSync, readdirSync, readSync } from "node:fs";
+import { basename, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { FLOOR_BINARIES } from "./native-floor.mjs";
 
@@ -166,6 +176,54 @@ export function auditHostLinks(root, commandsOf = dependencyCommandsOf) {
   return problems;
 }
 
+/** LP-6: the build host's own paths, as no shipped binary may carry them — a cargo registry checkout under a home
+ * directory (`~/.cargo/registry`), and GitHub's macOS runner's home. */
+export const BUILDER_PATH_MARKERS = ["/.cargo/registry", "/Users/runner"];
+
+/** The binaries whose release build remaps its paths (build-native-release.mjs): a builder path in one fails. */
+export const REMAPPED = FLOOR_BINARIES;
+
+/** The markers a file's bytes contain, read a MiB at a time with an overlap, so one across a read's edge is found. */
+export function builderPathsIn(file, markers = BUILDER_PATH_MARKERS, chunkSize = 1 << 20) {
+  const needles = markers.map((marker) => Buffer.from(marker, "utf8"));
+  const overlap = Math.max(...needles.map((needle) => needle.length)) - 1;
+  const found = new Set();
+  const fd = openSync(file, "r");
+  try {
+    const chunk = Buffer.alloc(chunkSize);
+    let carry = Buffer.alloc(0);
+    let position = 0;
+    while (found.size < markers.length) {
+      const read = readSync(fd, chunk, 0, chunk.length, position);
+      if (read === 0) break;
+      position += read;
+      const window = Buffer.concat([carry, chunk.subarray(0, read)]);
+      needles.forEach((needle, i) => {
+        if (window.includes(needle)) found.add(markers[i]);
+      });
+      carry = window.subarray(Math.max(0, window.length - overlap));
+    }
+  } finally {
+    closeSync(fd);
+  }
+  return markers.filter((marker) => found.has(marker));
+}
+
+/** The builder-path gate over a tree: `problems` for a Mach-O of REMAPPED's carrying a marker
+ * (`BUILDER PATH  <file>: <markers>`), `notes` for any other Mach-O that does — built elsewhere, said, not failed. */
+export function auditBuilderPaths(root, enforced = REMAPPED, markers = BUILDER_PATH_MARKERS) {
+  const problems = [];
+  const notes = [];
+  for (const file of machOFiles(root)) {
+    const found = builderPathsIn(file, markers);
+    if (found.length === 0) continue;
+    const line = `${relative(root, file)}: ${found.join(", ")}`;
+    if (enforced.includes(basename(file))) problems.push(`BUILDER PATH  ${line}`);
+    else notes.push(`builder path (built elsewhere; said, not failed)  ${line}`);
+  }
+  return { problems, notes };
+}
+
 /** The launch check: each of LAUNCHED in `binDir` runs `--version`, exits 0 and names itself; one line per failure. */
 export function launchCheck(binDir) {
   const problems = [];
@@ -202,10 +260,17 @@ function main(argv) {
   const problems = auditHostLinks(root);
   if (launchDir !== undefined && process.platform === "darwin")
     problems.push(...launchCheck(resolve(launchDir)).map((p) => `LAUNCH  ${p}`));
+  // LP-6: the builder-path scan, over the app's bin/ (Electron's own frameworks are upstream's) or the whole --dir
+  const appBin = app !== undefined ? join(root, "Contents", "Resources", "bin") : undefined;
+  const scanned = appBin !== undefined && existsSync(appBin) ? appBin : root;
+  const builder = auditBuilderPaths(scanned);
+  problems.push(...builder.problems);
+  for (const note of builder.notes) console.log(note);
   for (const p of problems) console.error(p);
   console.log(
-    `host-links: ${files.length} Mach-O file(s) under ${root}; ${problems.length === 0 ? "no host link" : `${problems.length} problem(s)`}` +
-      `${launchDir === undefined || process.platform !== "darwin" ? "" : `; launched ${LAUNCHED.join(", ")} --version`}`,
+    `host-links: ${files.length} Mach-O file(s) under ${root}; ${problems.length === 0 ? "no host link, no builder path" : `${problems.length} problem(s)`}` +
+      `${launchDir === undefined || process.platform !== "darwin" ? "" : `; launched ${LAUNCHED.join(", ")} --version`}` +
+      `; builder paths scanned under ${relative(root, scanned) || "."} (${REMAPPED.join(", ")} enforced)`,
   );
   return problems.length === 0 ? 0 : 1;
 }

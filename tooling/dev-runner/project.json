@@ -35,6 +35,8 @@
         "{workspaceRoot}/packages/electron-shell/src/testing/smoke-census.mjs",
         "{workspaceRoot}/apps/desktop/packaging/build-native-release.mjs",
         "{workspaceRoot}/scripts/host-links.mjs",
+        "{workspaceRoot}/scripts/native-floor.mjs",
+        "{workspaceRoot}/scripts/cargo-target.mjs",
         "{workspaceRoot}/apps/desktop/packaging/codesign-entitlements.mjs",
         "{workspaceRoot}/apps/desktop/packaging/entitlements.mac.plist",
         "{workspaceRoot}/apps/desktop/packaging/entitlements.mac.inherit.plist",

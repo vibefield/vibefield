@@ -2,21 +2,31 @@
 // a packaged Mach-O's dependency load commands are read from `otool -l` — never a dylib's own install name — and any path
 // outside /usr/lib, /System or the bundle is refused; the launch check runs each native binary's `--version`; the release
 // build is --locked (its HARFBUZZ_SYS_NO_PKG_CONFIG=1 retired with harfbuzz-sys at the EL8 to ghosttea 0.13.5).
+// LP-6: the release build remaps the builder's paths (`--remap-path-prefix` through CARGO_ENCODED_RUSTFLAGS, the caller's
+// own flags kept), and the gate fails a builder path in the floor's set while saying one in a binary built elsewhere.
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { chmodSync, copyFileSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { RELEASE_BUILD_ARGS } from "../../../apps/desktop/packaging/build-native-release.mjs";
 import {
+  RELEASE_BUILD_ARGS,
+  releaseBuildEnv,
+  remapFlags,
+} from "../../../apps/desktop/packaging/build-native-release.mjs";
+import {
+  auditBuilderPaths,
   auditHostLinks,
+  BUILDER_PATH_MARKERS,
+  builderPathsIn,
   dependencyCommandsOf,
   hostLinks,
   imageCommands,
   isMachO,
   LAUNCHED,
   launchCheck,
+  REMAPPED,
 } from "../../../scripts/host-links.mjs";
 
 const HOMEBREW = "/opt/homebrew/opt/harfbuzz/lib/libharfbuzz.0.dylib";
@@ -180,4 +190,107 @@ test("the launch check runs each native binary's --version: a name said and exit
 
 test("THE release build of field-native is --locked", () => {
   assert.deepEqual(RELEASE_BUILD_ARGS, ["build", "--release", "--locked", "-p", "field-native"]);
+});
+
+test("LP-6: a builder path is found anywhere in a file, across a read's edge too", () => {
+  const dir = mkdtempSync(join(tmpdir(), "vf-builder-paths-"));
+  try {
+    assert.deepEqual(BUILDER_PATH_MARKERS, ["/.cargo/registry", "/Users/runner"]);
+    const file = join(dir, "field-native");
+    // a 64-byte read with the registry path straddling the first edge, the runner's home far past it
+    const body = Buffer.alloc(300, 0x2e);
+    body.write("/Users/me/.cargo/registry/src/x", 50);
+    body.write("/Users/runner/work", 250);
+    writeFileSync(file, body);
+    assert.deepEqual(builderPathsIn(file, BUILDER_PATH_MARKERS, 64), BUILDER_PATH_MARKERS);
+    writeFileSync(
+      file,
+      Buffer.from("/cargo/registry/src/index.crates.io-0/tokio-1/src/lib.rs\0/rustup/x"),
+    );
+    assert.deepEqual(builderPathsIn(file), []);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("LP-6: the gate fails a builder path in the floor's set, and only says one in a binary built elsewhere", () => {
+  const dir = mkdtempSync(join(tmpdir(), "vf-builder-paths-"));
+  try {
+    assert.deepEqual(REMAPPED, ["field-native", "field-terminal-host", "field-freeway-host"]);
+    const machO = (name, tail) =>
+      writeFileSync(
+        join(dir, name),
+        Buffer.concat([Buffer.from([0xcf, 0xfa, 0xed, 0xfe, 0, 0, 0, 0]), Buffer.from(tail)]),
+      );
+    machO("field-native", "panicked at /Users/runner/.cargo/registry/src/q/quinn-proto/src/lib.rs");
+    machO("field-terminal-host", "panicked at /cargo/registry/src/q/tokio/src/lib.rs");
+    machO("rosettad", "panicked at /Users/me/.cargo/registry/src/q/tokio/src/lib.rs");
+    machO("sidecar-slim", "/Users/runner/hostedtoolcache/go/1.27.3/arm64");
+    writeFileSync(
+      join(dir, "notes.mjs"),
+      "// /Users/runner/.cargo/registry — not a Mach-O, never read",
+    );
+    assert.deepEqual(auditBuilderPaths(dir), {
+      problems: ["BUILDER PATH  field-native: /.cargo/registry, /Users/runner"],
+      notes: [
+        "builder path (built elsewhere; said, not failed)  rosettad: /.cargo/registry",
+        "builder path (built elsewhere; said, not failed)  sidecar-slim: /Users/runner",
+      ],
+    });
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("LP-6: the release build remaps the checkout, CARGO_HOME and RUSTUP_HOME, shortest prefix first", () => {
+  const real = new Map([["/Users/me/.cargo", "/Volumes/ssd/cargo-home"]]);
+  const flags = remapFlags({
+    repo: "/Users/me/src/vibe-field",
+    env: {},
+    home: "/Users/me",
+    realpath: (path) => real.get(path) ?? path,
+  });
+  assert.deepEqual(flags, [
+    "--remap-path-prefix=/Users/me/.cargo=/cargo",
+    "--remap-path-prefix=/Users/me/.rustup=/rustup",
+    "--remap-path-prefix=/Volumes/ssd/cargo-home=/cargo",
+    "--remap-path-prefix=/Users/me/src/vibe-field=/vibefield",
+  ]);
+  // CI's own homes, given in the environment; a checkout nested in CARGO_HOME is written by its own, later mapping
+  assert.deepEqual(
+    remapFlags({
+      repo: "/Users/runner/.cargo/git/checkouts/vibefield",
+      env: { CARGO_HOME: "/Users/runner/.cargo/", RUSTUP_HOME: "/Users/runner/.rustup" },
+      home: "/nowhere",
+      realpath: () => null,
+    }),
+    [
+      "--remap-path-prefix=/Users/runner/.cargo=/cargo",
+      "--remap-path-prefix=/Users/runner/.rustup=/rustup",
+      "--remap-path-prefix=/Users/runner/.cargo/git/checkouts/vibefield=/vibefield",
+    ],
+  );
+});
+
+test("LP-6: the remap rides CARGO_ENCODED_RUSTFLAGS after the caller's own flags, which it never drops", () => {
+  const flags = ["--remap-path-prefix=/Users/John Doe/.cargo=/cargo"];
+  assert.deepEqual(releaseBuildEnv({ PATH: "/bin" }, flags), {
+    PATH: "/bin",
+    CARGO_ENCODED_RUSTFLAGS: flags[0],
+  });
+  // RUSTFLAGS is folded in as cargo splits it (whitespace), then dropped: the encoded form wins in cargo anyway
+  assert.deepEqual(releaseBuildEnv({ RUSTFLAGS: "  -C target-cpu=native   -Dwarnings " }, flags), {
+    CARGO_ENCODED_RUSTFLAGS: ["-C", "target-cpu=native", "-Dwarnings", flags[0]].join("\x1f"),
+  });
+  // an encoded list is appended to as it stands
+  assert.deepEqual(
+    releaseBuildEnv(
+      { CARGO_ENCODED_RUSTFLAGS: "-C\x1fdebuginfo=1", RUSTFLAGS: "-Dwarnings" },
+      flags,
+    ),
+    { CARGO_ENCODED_RUSTFLAGS: ["-C", "debuginfo=1", flags[0]].join("\x1f") },
+  );
+  assert.deepEqual(releaseBuildEnv({ CARGO_ENCODED_RUSTFLAGS: "" }, flags), {
+    CARGO_ENCODED_RUSTFLAGS: flags[0],
+  });
 });
