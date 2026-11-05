@@ -125,7 +125,7 @@ export function BrowserDataSection({
   signIns,
 }: {
   signIns?: DesktopBrowserSignIns | undefined;
-} = {}): ReactElement {
+}): ReactElement {
   const door = getHost().browserData;
   const [flow, setFlow] = useState<BrowserDataFlow>(IDLE);
   const confirm = useCallback(async () => {
