@@ -211,7 +211,7 @@ export function createTalkVerbs(deps: TalkDeps): TalkVerbs {
     session: caller.runtimeRunId,
   });
 
-  return {
+  const verbs: TalkVerbs = {
     async agent_spawn(caller, input) {
       const profileSet = input.profile ?? caller.thinksUnder;
       if (!caller.profiles.includes(profileSet))
@@ -227,14 +227,20 @@ export function createTalkVerbs(deps: TalkDeps): TalkVerbs {
         ...(input.model !== undefined ? { model: input.model } : {}),
       };
       const tasks = input.tasks ?? [];
+      // SP-1e2 (SPE-Q3 = RU-6): every spawn of this stretch of the spark's own run joins one crew, a held one too
+      // (SPE-Q38 (a): it is no row until Allow one more starts it, into this crew even after the crew closed)
+      const crew = {
+        id: deps.crews.join(caller.sparkId, caller.runtimeRunId),
+        sparkRun: caller.runtimeRunId,
+      };
       // CP-D7 (CP3-D4 A): past the cap the spawn waits in the needs-you queue; Allow one more starts it, and Not now
       // tells the spark `limit`, as CP-2 refused it
       const alive = deps.sessions().filter((s) => s.live && startedBy(s, caller)).length;
       if (alive >= SPARK_LIVE_AGENTS_MAX) {
-        const held = deps.holds.spawn(senderOf(caller), { ...launch, tasks }, alive);
+        const held = deps.holds.spawn(senderOf(caller), { ...launch, tasks, crew: crew.id }, alive);
         return { held, queued: tasks.length };
       }
-      const { runtimeRunId } = await deps.spawn(launch, caller.sparkId);
+      const { runtimeRunId } = await deps.spawn(launch, caller.sparkId, crew);
       // fieldd's spawn takes no first prompt: each task waits in the agent's queue for its first idle moment
       for (const task of tasks)
         deps.enqueue(runtimeRunId, task, { spark: caller.sparkId, name: caller.name });
@@ -298,5 +304,25 @@ export function createTalkVerbs(deps: TalkDeps): TalkVerbs {
       await deps.end(session.runtimeRunId);
       return { session: session.runtimeRunId, ending: true };
     },
+  };
+  /** SP-1e2 (SPE-Q29 (a)) — a call of the spark's is in flight until it answers, refused or not: the spark's run
+   * reads idle a moment inside a call, and that idle must not close its crew. */
+  const kept =
+    <I, O>(verb: (caller: TalkCaller, input: I) => Promise<O>) =>
+    async (caller: TalkCaller, input: I): Promise<O> => {
+      const done = deps.crews.busy(caller.sparkId);
+      try {
+        return await verb(caller, input);
+      } finally {
+        done();
+      }
+    };
+  return {
+    agent_spawn: kept(verbs.agent_spawn),
+    agent_watch: kept(verbs.agent_watch),
+    agent_unwatch: kept(verbs.agent_unwatch),
+    agent_send: kept(verbs.agent_send),
+    agent_interrupt: kept(verbs.agent_interrupt),
+    agent_stop: kept(verbs.agent_stop),
   };
 }

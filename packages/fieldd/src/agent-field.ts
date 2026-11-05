@@ -495,13 +495,14 @@ export function projectFieldRow(summary: AgentSessionSummary): ProjectedFieldRow
   };
 }
 
-/** CP-D15's origin as the field row carries it: its named fields, and only those. */
+/** CP-D15's origin as the field row carries it: its named fields, and only those (SP-1e2: its crew among them). */
 function originOf(origin: AgentSessionOrigin): AgentSessionOrigin {
   return {
     by: origin.by,
     ...(origin.spark !== undefined ? { spark: origin.spark } : {}),
     ...(origin.run !== undefined ? { run: origin.run } : {}),
     ...(origin.call !== undefined ? { call: origin.call } : {}),
+    ...(origin.crew !== undefined ? { crew: origin.crew } : {}),
   };
 }
 

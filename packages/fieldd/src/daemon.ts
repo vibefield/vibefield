@@ -366,7 +366,7 @@ import {
 } from "./terminal-service";
 import { TokenService } from "./token-service";
 import { composeProjects, ToolPlaneService } from "./tool-plane";
-import { SparkCrews } from "./tool-plane/crews";
+import { crewFactsOf, SparkCrews } from "./tool-plane/crews";
 import type { TalkDeps, TalkSession } from "./tool-plane/rooms/talk/verbs";
 import { NeedsQueue, type NeedsRun } from "./tool-plane/rooms/you/queue";
 import { NeedsStore } from "./tool-plane/rooms/you/store";
@@ -2968,8 +2968,9 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     });
     const crewWaiting = (runtimeRunId: string): number | undefined =>
       agents.isLive(runtimeRunId) ? inputs.pending(runtimeRunId).length : undefined;
-    // the one spawn a spark's agents start by: the talk room's, and the needs-you queue's Allow one more
-    const talkSpawn: TalkDeps["spawn"] = async (launch, spark) => {
+    // the one spawn a spark's agents start by: the talk room's, and the needs-you queue's Allow one more; the crew it
+    // joins rides its origin (the card's rows find it there) and the crew's kept record takes the member (SP-1e2)
+    const talkSpawn: TalkDeps["spawn"] = async (launch, spark, crew) => {
       const result = await agents.spawn(
         {
           provider: launch.agent,
@@ -2980,9 +2981,18 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         // the spark's own door principal: a run's ticket rights follow it (read only), never the person's
         { kind: "mcp-agent" },
         undefined,
-        { origin: { by: "spark", spark } },
+        { origin: { by: "spark", spark, ...(crew !== undefined ? { crew: crew.id } : {}) } },
       );
-      return { runtimeRunId: result.session.runtimeRunId };
+      const runtimeRunId = result.session.runtimeRunId;
+      if (crew !== undefined) {
+        const folder = folderNameOf(launch.cwd);
+        crews.started(spark, crew, {
+          runtimeRunId,
+          agent: launch.agent,
+          ...(folder !== undefined ? { folder } : {}),
+        });
+      }
+      return { runtimeRunId };
     };
     // TU-1 (Q3) — the one placement rule's persona map, from the monitor's latest Agent Profiles frame (the one
     // Godview's rows are placed by), read at each use; null until the monitor holds a frame, so a persona's run filed
@@ -3031,14 +3041,38 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       waker.onMonitor(runtimeRunId, mirror);
       needs.onRunMonitor(runtimeRunId, mirror);
       // a spark whose own session is live again takes the wakes held for it, and the answers owed to it
-      const sparkOf = runRow(runtimeRunId)?.spark;
+      const row = runRow(runtimeRunId);
+      const sparkOf = row?.spark;
       if (sparkOf !== undefined) {
         waker.onSparkLive(sparkOf, runtimeRunId);
         needs.onSparkLive(sparkOf, runtimeRunId);
+        // SP-1e2 (SPE-Q29 (a)) — the spark's own run: its first idle with no talk call in flight closes its crew
+        crews.sparkRow(sparkOf, runtimeRunId, isIdleRow(mirror));
+      }
+      // SP-1e2 — a crew member's row: its model and effort as first named, a resumed member followed (SPE-Q30 (a))
+      const origin = row?.origin;
+      if (
+        row !== undefined &&
+        origin?.by === "spark" &&
+        origin.spark !== undefined &&
+        origin.crew !== undefined
+      ) {
+        const folder = folderNameOf(mirror?.environment?.cwd);
+        crews.seen({
+          spark: origin.spark,
+          crew: origin.crew,
+          runtimeRunId,
+          agent: row.kind,
+          ...(folder !== undefined ? { folder } : {}),
+          ...crewFactsOf(mirror),
+          ...(row.sessionId !== undefined ? { conversation: row.sessionId } : {}),
+        });
       }
       void inputs.poke(runtimeRunId);
     });
     agents.onRunEnded((runtimeRunId) => {
+      // SP-1e2 — named as fieldd names the run now, before the waker and the queues forget it (CO-Q4 (b))
+      crews.ended(runtimeRunId, runLabel(runtimeRunId));
       waker.onEnded(runtimeRunId);
       needs.onRunEnded(runtimeRunId);
       inputs.forget(runtimeRunId);
@@ -3072,6 +3106,11 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     needs.reconcileWhenSettled(() => agents.reattachSettled());
     needs.joinSettle("inputs", () =>
       inputs.reconcile((runtimeRunId) => needsRun(runtimeRunId) !== undefined),
+    );
+    // SP-1e2 — then the crews': a member whose run the fold no longer holds ended while fieldd was down, or did not
+    // come back, and is Ended now (SPE-Q14 (a)); a live one runs on
+    needs.joinSettle("crews", () =>
+      crews.reconcile((runtimeRunId) => needsRun(runtimeRunId) !== undefined),
     );
     const talkSession = (row: ReturnType<typeof runRow>): TalkSession | undefined =>
       row === undefined

@@ -404,6 +404,8 @@ export class NeedsQueue implements TalkHolds {
         cwd: launch.cwd,
         ...(launch.model !== undefined ? { model: launch.model } : {}),
         tasks: [...launch.tasks],
+        // SP-1e2 (SPE-Q38 (a)) — the crew it was asked in, which Allow one more joins
+        ...(launch.crew !== undefined ? { crew: launch.crew } : {}),
       },
       sender: from.name,
     });
@@ -649,6 +651,10 @@ export class NeedsQueue implements TalkHolds {
           ...(launch.model !== undefined ? { model: launch.model } : {}),
         },
         sparkId,
+        // SP-1e2 — into the crew it was asked in, made in the spark's run that asked, even after the crew closed
+        launch.crew !== undefined && item.from.session !== undefined
+          ? { id: launch.crew, sparkRun: item.from.session }
+          : undefined,
       ));
     } catch (err) {
       return failed((err as Error).message);
