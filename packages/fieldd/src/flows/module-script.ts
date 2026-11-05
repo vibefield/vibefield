@@ -12,7 +12,9 @@ import { type Comment, type Node, parse, type Token, tokTypes } from "acorn";
 // nothing (its API is the compartment's globals, `agent`, `ask`, `log` and `phase`), so an `import` or a re-export is
 // refused here, before any host starts; a real dynamic `import()` or direct `eval(…)` is left as written, for SES to
 // refuse when the host evaluates it, with its line (the lines are kept, so SES's line is the file's): one refuser,
-// SES's own censor (VF-PM 12:40Z, superseding 11:30Z's "acorn refuses"). So is a real call inside a template's
+// SES's own censor (VF-PM 12:40Z, superseding 11:30Z's "acorn refuses"). CP-4a2b (Q-B3 (a)): the static read refuses
+// the same shapes first, by SES's own tests over this same script (`sesShapesOf`), so a card never offers what the
+// sandbox would refuse, and the two stay one verdict (flows-sandbox.test.ts's S19). So is a real call inside a template's
 // substitution, `${import("x")}`: it is code, never a template's part. An indirect eval, `(0, eval)(…)`, is left too:
 // SES's censor lets it pass, and the compartment's own eval runs it in the compartment's scope (evalTaming
 // "safe-eval"), powerless.
@@ -107,6 +109,43 @@ const sesFinds = (text: string): boolean =>
 
 /** Every match of `test` in `text`, from the start. */
 const matchesOf = (test: RegExp, text: string) => text.matchAll(new RegExp(test.source, "g"));
+
+/** One of the three shapes SES refuses in a script's text (its HTML-comment, import and eval tests, above). */
+export type SesShape = "import" | "eval" | "html-comment";
+
+const SES_SHAPES: readonly (readonly [SesShape, RegExp])[] = [
+  ["html-comment", SES_HTML],
+  ["import", SES_IMPORT],
+  ["eval", SES_EVAL],
+];
+
+/** Where SES's three tests find their shapes in `script` (a script `flowScriptOf` gives, which the host evaluates as
+ * it is): each shape once a line, in the text's order, the line counted as SES counts it, by line feeds alone (ses
+ * 2.3.0's `getLineNumber`), so it is the line SES's own refusal names. The static read refuses each (static-read.ts;
+ * CP-4a2b, Q-B3 (a)). */
+export function sesShapesOf(script: string): { readonly shape: SesShape; readonly line: number }[] {
+  const found: { shape: SesShape; at: number }[] = [];
+  for (const [shape, test] of SES_SHAPES)
+    for (const match of matchesOf(test, script))
+      found.push({ shape, at: match.index + (match[1] ?? "").length });
+  const seen = new Set<string>();
+  const shapes: { shape: SesShape; line: number }[] = [];
+  // one walk of the line feeds, in the findings' order
+  let line = 1;
+  let from = 0;
+  for (const { shape, at } of found.sort((a, b) => a.at - b.at)) {
+    let feed = script.indexOf("\n", from);
+    while (feed !== -1 && feed < at) {
+      line += 1;
+      from = feed + 1;
+      feed = script.indexOf("\n", from);
+    }
+    if (seen.has(`${shape} ${line}`)) continue;
+    seen.add(`${shape} ${line}`);
+    shapes.push({ shape, line });
+  }
+  return shapes;
+}
 
 /** The places in `text` where one of SES's patterns would be broken by a cut: after an `import` or an `eval` that SES
  * reads as a call, after the `<!` of `<!--`, and after the first `-` of `-->`. */

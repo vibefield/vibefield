@@ -20,6 +20,7 @@ import {
   NEEDS_REASON_MAX,
 } from "@vibefield/contracts";
 import { type Node, parse } from "acorn";
+import { flowScriptOf, type SesShape, sesShapesOf } from "./module-script";
 
 // CP-4a1 (step0-cp4.md §5.1 commit 5; CP4-Q3 (a), ruled 2026-11-04 at the lean; CP4-S4) — the static read: what a
 // flow's bytes say, read with acorn and NEVER run. A proposal's card and a library row show this and nothing a spark
@@ -42,6 +43,13 @@ import { type Node, parse } from "acorn";
 // - Refused, never run: bytes past SCRIPT_MAX_BYTES (`size`), a file that does not parse as a module (`syntax`), a meta
 //   missing or not plain where it is read (`meta`), no default function to run (`default`), a gate as above
 //   (`choices`). Each refusal is in fieldd's own words, with the line it is on.
+// - CP-4a2b (Q-B3 (a)): and the three shapes the run's sandbox refuses in a script's code, a dynamic `import(`
+//   (`import`), a direct-looking `eval(` (`eval`), `<!--` or `-->` (`html-comment`). They are read by SES's own tests
+//   over the script the run evaluates (module-script.ts, `sesShapesOf`), so the read refuses exactly what the sandbox
+//   would, on the line its refusal names, and a person's words that say them (in a string, a template, a regex or a
+//   comment) are never refused, since the rewrite takes them out of the text. A file the rewrite itself refuses is
+//   not read for them: one that does not parse or has no default is refused here already (`syntax`, `default`); one
+//   that imports or re-exports a module, or is not UTF-8, is the run's to refuse, in the rewrite's words.
 // The run itself is CP-4a2's, in a child under `ses` (R32): this read evaluates nothing.
 
 type AnyNode = Node & Record<string, unknown>;
@@ -104,8 +112,16 @@ export function readFlow(source: Uint8Array | string): FlowRead {
       typeof loc?.line === "number" ? loc.line : undefined,
     );
   }
-  return new Reader(program).read();
+  const script = flowScriptOf(typeof source === "string" ? Buffer.from(source, "utf8") : source);
+  return new Reader(program, script.kind === "script" ? sesShapesOf(script.script) : []).read();
 }
+
+/** The sandbox's three shapes, in the read's own words (CP-4a2b, Q-B3 (a); DESIGN.md §9 "What a flow's read refuses"). */
+const SANDBOX_WORDS: Readonly<Record<SesShape, string>> = {
+  import: "it calls import(), which a flow may not",
+  eval: "it calls eval(), which a flow may not",
+  "html-comment": "it has <!-- or --> in its code, which a flow may not",
+};
 
 function refusedWhole(reason: FlowReadRefusalReason, words: string, line?: number): FlowRead {
   return FlowRead.parse({
@@ -236,12 +252,18 @@ class Reader {
   /** the CallExpressions whose callee is the flow API's own name, so the walk knows that identifier is called */
   readonly #called = new WeakSet<object>();
 
-  constructor(private readonly program: AnyNode) {}
+  constructor(
+    private readonly program: AnyNode,
+    /** where the rewritten script holds a shape the sandbox refuses (module-script.ts, `sesShapesOf`) */
+    private readonly sandboxShapes: readonly { readonly shape: SesShape; readonly line: number }[],
+  ) {}
 
   read(): FlowRead {
     const meta = this.#meta();
     this.#defaultExport();
     this.#walk(this.program, { phase: undefined, inLoop: false });
+    for (const { shape, line } of this.sandboxShapes)
+      this.#refuse(shape, SANDBOX_WORDS[shape], line);
     return FlowRead.parse({
       ...(meta !== undefined ? { meta } : {}),
       calls: this.#calls,
