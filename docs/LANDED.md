@@ -34635,3 +34635,96 @@ n20 the optional heavy pass).
 
 **Owed.**
 - James's device run, M1 and M2. Each reading names its corpus, tick included, as a synthetic swarm.
+
+## Item 181 — the Mac app says who asks: every usage string declared in our words, and the seven classes the hardened runtime gates walled (2026-11-05)
+
+(2026-11-05; one commit `ef31f162f` on lane `lp-181` over main `bcf2a58dd`, vibe-field-42's; M155 is `ef31f162f`,
+run 155, landed 12:54:23Z; cut as `7cc30ef53` on `b96e52d76`, then re-cut onto MA-0a and MA-1a's records and S5a's
+with its diff unchanged.) Filed by VF-PM at 11:33Z from phase 1's line "a usage string for every system prompt the
+clean-Mac row meets", and ruled with prod-builder from 11:33Z to 11:54Z. Item 181 closes in this entry.
+
+**What it rests on.**
+- VibeField's own config declared no usage string. The package inherited Electron 43.1.1's five generic ones ("This
+  app needs access to the camera"), because electron-builder 26.15.7 deep-assigns `mac.extendInfo` over Electron's
+  Info.plist and deletes only a key set to null (`app-builder-lib` `macPackager.js:404–411`). It had none for the
+  folders, the volumes, Apple Events or the local network.
+- Who asks: Electron main spawns fieldd, the native plane spawns every terminal, and nothing disclaims responsibility,
+  so a program running in a VibeField terminal, an agent included, asks AS VibeField (Apple TN3179). macOS shows the
+  app's words and records the answer for the whole app. iTerm2 and Ghostty, read on this Mac, declare a broad set.
+- The wall (prod-builder and vibe-field-42, apart, 11:41Z): the hardened runtime gates seven classes behind
+  resource-access entitlements this app does not hold (`entitlements.mac.plist`: `allow-jit` alone). They are the
+  camera, the microphone, Apple Events, Contacts, Calendars (Reminders ride it), Photos and location; speech records
+  through the microphone. On a signed package they are refused with no prompt, and one Allow would open a class to
+  every agent VibeField runs (EL7). The two terminals carry all seven entitlements; their precedent does not carry,
+  since VibeField runs autonomous agents.
+- VF-PM's FINAL (11:48Z): every usage string declared and reworded, the seven walled, zero entitlements, and opening a
+  class is James's call, per class, its entitlement landing with its string. The walled strings stay because an
+  unsigned package of ours opened by LaunchServices is not hardened: there a missing string is TCC's kill of the asking
+  program, and a present one prompts.
+- The rest, ruled: NSBonjourServices omitted, since nothing we ship browses a service type (VF-PM, 11:39Z); the
+  deprecated Bluetooth Peripheral key null; Bluetooth Always kept, since a website in the pane can reach CoreBluetooth
+  in main (prod-builder, 11:44Z); the pre-macOS 14 calendar and reminders names and location when-in-use kept (VF-PM,
+  11:54Z). Screen recording has no usage key. The audit: `lanes/lp-wave1/item181/audit.md` (vibe-field-42).
+
+**What landed.** 2 files, +283 −0; pin-class none; release-adjacent `apps/desktop/packaging/electron-builder.yml`
+47/0 (prod-builder's GO, 11:55Z, at the blob `408a4aed5` T carries).
+- `mac.extendInfo`, 25 keys, in the base config, so dev, preview and release packages carry the same words (the release
+  overlay sets none), in the test's three states. 12 "walled": camera, microphone, Apple Events, Contacts, Calendars
+  full access, Reminders full access, the legacy Calendars and Reminders names, Photos, location, location when in use,
+  speech. 12 "prompted": Bluetooth Always, system audio capture, the Desktop, Documents and Downloads folders, removable
+  and network volumes, file provider, local network, app data, app bundles, system administration. One "walled-by-kill":
+  NSBluetoothPeripheralUsageDescription, null, so the builder deletes Electron's.
+- The words say who asks: "A program running in a VibeField terminal, such as an agent you started, wants to …", the
+  camera, the microphone and Bluetooth adding "VibeField itself doesn't."; the folder and volume rows "VibeField and the
+  programs in its terminals need this to work with projects kept …". The block's comment holds who asks, the wall, and
+  why the walled strings stay.
+- `tooling/dev-runner/test/usage-strings.test.mjs` (new, 6 rows): ONE table in three states (prompted, walled,
+  walled-by-kill), held both ways. extendInfo's keys equal the table's, each one Apple documents; a string for every
+  row but walled-by-kill, none of Electron's text, each naming VibeField; a walled class's entitlement absent from the
+  app, a prompted gated class's present, and every resource entitlement the app holds with its prompted string; none on
+  the inherited or native profiles; the reader refuses a line it cannot read; the five files it reads are its Nx inputs.
+- `entitlements.mac*.plist`, `sign-mac.mjs` and `electron-builder.release.yml` are untouched.
+
+**Validation.**
+- This Mac at `7cc30ef53` (11:49–11:52Z, no pnpm): usage-strings 6/0, third-party-notices 21/0, biome `--staged`
+  clean, the pre-commit hook. Ten mutation probes on a scratch copy, each RED: a walled class's entitlement on the app,
+  one on the inherited profile, a key dropped, a key outside the table, Electron's text back, a string on the
+  Peripheral key, a walled key nulled, an unquoted value, words not naming VibeField, the overlay setting its own.
+- The mini, first try (a9, w181, 12:01Z, on `7cc30ef53`): it reused run 151's stage, whose files were W1's exactly,
+  and stopped at the stage verify, rc 1, "stage verify FAILED (33)": the verifier compares a stage with the worktree's
+  current outputs, and run 152 had rebuilt them from ma/1's tree. VF-PM ruled a fresh stage (12:05Z).
+- The mini, w181b (a9, 12:05:11–12:06:02Z, on `7cc30ef53`; the builder config's blob is the same at T): the moved
+  files exactly the six named; a fresh `package:stage` rc 0 in 43 s, 151 files equal to run 151's W1 and the notices
+  `5e6079b1…` equal; "stage verify OK — 151 files, 298,948,600 bytes (285.10 MB); complete"; the unsigned `--dir`
+  package rc 0 ("skipped macOS code signing reason=identity explicitly is set to null"); in its Info.plist "declared
+  strings: 24; in the plist with our text: 24", the Peripheral key ABSENT, no generic string, no usage key not ours;
+  `Signature=adhoc`, 0 entitlement keys. Info.plist sha256 `e109c287…`; logs
+  `lanes/ts6/logs/mini/w181/w181b-7cc30ef53/`.
+- Run 155 (a9's mint at T, the full verify; VF-PM 12:10Z: no Mac light, the Mac pinned): `pnpm verify` exit 0 at
+  12:51:55Z. node 466 passed, 0 failed (+6, every "item 181: …" row green); biome 3334 files; census "no drift";
+  cargo 34 ok; the tree clean after it; every other count equal to run 153's (VF-PM, 12:54Z). Logs
+  `lanes/ts6/logs/mini/run155/` (`verify.clean.log` `0a5ca4c4…`).
+- The land: main fast-forwarded `bcf2a58dd` → `ef31f162f` at 12:54:23Z (the fixer), 2 files +283 −0.
+
+**Found.**
+- The witness brief's "no fresh stage" held for the stage's files and not for its verifier: `stage-package --verify`
+  compares the stage with the worktree's current outputs, and the mini's shared verify worktree is rebuilt by every
+  run (run 152 had rebuilt it from ma/1's tree). Corrected at the brief's source, 12:05Z, and a fresh stage added.
+- The packaged executable reads `flags=0x2(adhoc)`, `hashes=3+3`, where stock Electron 43.1.1 reads
+  `0x20002(adhoc,linker-signed)`: the builder signs ad hoc at packaging while it logs that it skipped signing. Read,
+  not interpreted.
+- In JavaScript for Automation, `ObjC.import("AVFoundation")` leaves `$.AVCaptureDevice` undefined; the W row's camera
+  script loads AVFoundation's bundle and takes the class by name.
+
+**Owed.**
+- The first signed nightly: prod-builder's W row (`codesign -d --entitlements -` on VibeField.app reads none) and
+  James's hand by `lanes/lp-wave1/item181/w-row-pane-page.md`, VibeField opened with `open -a`, Finder or the Dock and
+  never from a terminal: the pane page, answered Don't Allow, and three wall rows (Apple Events, the camera, Contacts).
+  A prompt naming VibeField in a wall row, even once, reopens item 181: its walled marks are false, and the EL7 question
+  goes back to James with that fact.
+- The clean-Mac VM row (macOS 14, 15 and 26), for the audit's "(unverified until the clean-Mac row)" marks.
+- For James's eye (draft words; not a hold): the 25 strings.
+- James's call, per class, for the seven walled classes: keep the wall (the lean) or prompt. An opened class lands its
+  entitlement in `entitlements.mac.plist` alone with its string, and `sign-mac.mjs:81`'s line, in one commit.
+- James's reap of the 580M witness package on the mini
+  (`/Users/jasper/vf-lanes/verify/vibe-field/apps/desktop/release/`).

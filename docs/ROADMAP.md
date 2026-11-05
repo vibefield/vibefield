@@ -813,7 +813,8 @@ phone"; DECISIONS PC
        provenance: LANDED 2026-11-05 (M136 `650877282`, LANDED "LP-1"); owed: the first signed release's W rows;
      - the real macOS floor, 14 (LP-D4: `mac.minimumSystemVersion` and every policy's `floors.os`): LANDED (M136);
      - a clean-Mac install row on macOS 14, 15 and 26 VMs on the mini, quarantined as a browser downloads it (new);
-     - a usage string for every system prompt the clean-Mac row meets;
+     - a usage string for every system prompt the clean-Mac row meets: LANDED 2026-11-05 (M155 `ef31f162f`, LANDED
+       "Item 181"), 25 keys in our words, the hardened seven walled; owed: the signed W row and James's hand;
      - each shipped daemon its own entitlements, with no inherited `allow-jit`, and its release signature read
        back: LANDED 2026-11-05 (M133 `f514215f4`, LANDED "LP-6"); owed: the signed witnesses (W rows);
      - no build paths in shipped binaries: LANDED 2026-11-05 (M135 `96606efa9`, LANDED "LP-6b"); owed: the first
