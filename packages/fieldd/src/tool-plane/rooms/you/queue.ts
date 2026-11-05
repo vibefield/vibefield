@@ -81,7 +81,8 @@ const YES = 0;
  * re-attaching. A run the fold no longer holds, or holds as exited, is no run here. */
 export interface NeedsRun {
   readonly runtimeRunId: string;
-  /** as a wake names it: its title, else its agent's label, else its id; one line of at most NEEDS_NAME_MAX */
+  /** as a wake names it: its title, else its agent's label in its folder, else that label, else its id; one line of
+   * at most NEEDS_NAME_MAX (words.ts's sessionName) */
   readonly label: string;
   /** the spark whose own session it is */
   readonly spark?: SparkId | undefined;
@@ -581,7 +582,8 @@ export class NeedsQueue implements TalkHolds {
   /** Allow: re-checked first (the run is live, the spark's record and its profiles stand, CP-L4 and TL-D5), then each
    * held word queued as the spark's, in order (CP2-D1). A run the one rule can place only by its persona, before fieldd
    * has read the Agent Profiles, is refused retryably (`profiles-unread`): nothing is spent, the item stays open, and
-   * the spark is told nothing until an answer acts (TU-1, §12 Q1 (a′): fail closed until the frame). */
+   * the spark is told nothing until an answer acts (TU-1, §12 Q1 (a′): fail closed until the frame). A reason says "it"
+   * for the session: its line names it already ("Couldn't send Vela's words to vibe-field·2: it ended"; CO-1b). */
   #allowSend(record: NeedsRecord, choice: number, at: string): Act {
     const { item } = record;
     const spark = item.from.name;
@@ -594,8 +596,8 @@ export class NeedsQueue implements TalkHolds {
     });
     const run = this.opts.run(target);
     if (run === undefined)
-      return { outcome: "failed", reason: `${to} ended`, owed: words.sendEndedFact(spark, to) };
-    if (!run.live) return failed(`${to} is not running`);
+      return { outcome: "failed", reason: "it ended", owed: words.sendEndedFact(spark, to) };
+    if (!run.live) return failed("it is not running");
     const sparkId = item.from.spark;
     const sender = record.sender;
     if (sparkId === undefined || sender === undefined)
@@ -606,7 +608,7 @@ export class NeedsQueue implements TalkHolds {
       throw new RpcCallError("PRECONDITION_FAILED", PROFILES_UNREAD, true, {
         reason: "profiles-unread",
       });
-    const why = this.#sparkRefusal(sparkId, profile, to);
+    const why = this.#sparkRefusal(sparkId, profile);
     if (why !== undefined) return failed(why);
     this.#keep({ ...record, acting: { choice, at } });
     for (const text of record.texts ?? [])
@@ -649,12 +651,13 @@ export class NeedsQueue implements TalkHolds {
     return { outcome: "done", owed: words.spawnAllowedFact(spark, agent, runtimeRunId) };
   }
 
-  /** Why the spark may not act there now: its record is gone, or what it acts on (`name`) is in none of its profiles
-   * (TL-D5), whether the one rule places it in another or, with the profiles read, in none (TU-1). */
+  /** Why the spark may not act there now: its record is gone, or what it acts on is in none of its profiles (TL-D5),
+   * whether the one rule places it in another or, with the profiles read, in none (TU-1). What it acts on is `name`,
+   * the spawn's agent; a send's is "it", the session its line already names (CO-1b). */
   #sparkRefusal(
     sparkId: SparkId,
     profile: AgentProfileSetId | undefined,
-    name: string,
+    name = "it",
   ): string | undefined {
     const spark = this.opts.spark(sparkId);
     if (spark === undefined) return "the spark's record is unavailable";

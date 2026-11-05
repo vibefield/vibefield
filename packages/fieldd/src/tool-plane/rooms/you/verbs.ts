@@ -28,7 +28,8 @@ export type YouCaller =
 /** fieldd's own services, as the room needs them (daemon.ts adapts the real ones). */
 export interface YouDeps {
   readonly queue: Pick<NeedsQueue, "ask" | "notify">;
-  /** a plain run's name, as fieldd names it (daemon's runLabel: its title, else its agent's label, else its id) */
+  /** a plain run's name, as fieldd names it (daemon's runLabel: its title, else its agent's label in its folder, else
+   * that label, else its id) */
   label(runtimeRunId: string): string;
 }
 

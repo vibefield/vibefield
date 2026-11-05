@@ -1778,7 +1778,13 @@ describe("managed sessions over the REAL floor (field-native)", () => {
     const runId = plain.session.runtimeRunId;
     const proof = await poll(async () => {
       const path = join(box.envOut, "session-1.tools.json");
-      return existsSync(path) ? JSON.parse(readFileSync(path, "utf8")) : undefined;
+      if (!existsSync(path)) return undefined;
+      // the door's client writes it in one call, never beside and renamed: a half-written file is read again
+      try {
+        return JSON.parse(readFileSync(path, "utf8"));
+      } catch {
+        return undefined;
+      }
     }, 25_000);
     expect(proof.error).toBeUndefined();
     expect((proof.calls as { structuredContent: unknown }[])[0]?.structuredContent).toEqual({

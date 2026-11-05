@@ -36,7 +36,7 @@ export interface WakerOptions {
   spawnerOf(runtimeRunId: string): string | undefined;
   /** a spark's own live session, where its wakes land */
   sparkSession(spark: string): string | undefined;
-  /** how a run is named in a wake: its title, else its agent */
+  /** how a run is named in a wake: its title, else its agent in its folder, else its agent (daemon's runLabel) */
   label(runtimeRunId: string): string;
   readonly logger?: Logger;
 }

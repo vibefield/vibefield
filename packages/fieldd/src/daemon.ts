@@ -111,7 +111,6 @@ import {
   type NativeLinkHealth,
   type NativeLinkState,
   type NativeRestartReason,
-  NEEDS_NAME_MAX,
   NeedsAnswerParams,
   NeedsItem,
   NeedsListParams,
@@ -212,6 +211,7 @@ import {
   boardFloor,
   clipRecordedLanes,
   createFieldSubscription,
+  folderNameOf,
   malformedBoardAsk,
   projectFieldRow,
   refuseBoardAsk,
@@ -368,7 +368,7 @@ import { composeProjects, ToolPlaneService } from "./tool-plane";
 import type { TalkDeps, TalkSession } from "./tool-plane/rooms/talk/verbs";
 import { NeedsQueue, type NeedsRun } from "./tool-plane/rooms/you/queue";
 import { NeedsStore } from "./tool-plane/rooms/you/store";
-import { oneLine } from "./tool-plane/rooms/you/words";
+import { sessionName } from "./tool-plane/rooms/you/words";
 import {
   admitSparkActor,
   admitSparkReader,
@@ -2867,12 +2867,18 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     /** An agent's label in the catalog (R23b: a lookup, never a compare). */
     const agentLabelOf = (provider: string | undefined): string | undefined =>
       (config.agentCatalog ?? AGENT_CATALOG).find((entry) => entry.id === provider)?.label;
-    /** How a run is named in a wake, an item and a notice: its title, else its row's label (the catalog's, AC-D4), else
-     * its id; one line, cut at NEEDS_NAME_MAX (critique 8: the one place a run's name is bounded). */
+    /** How a run is named in a wake, an item and a notice (CO-1b, CO-Q4 (b)): its title, else its row's label (the
+     * catalog's, AC-D4) in its folder, the one @ and the board name (folderNameOf its observed cwd), else that label,
+     * else its id; one line, cut at NEEDS_NAME_MAX (critique 8: the one place a run's name is bounded, words.ts's
+     * sessionName). */
     const runLabel = (runtimeRunId: string): string => {
       const row = runRow(runtimeRunId);
-      const named = [row?.title, row?.label].find((s) => s !== undefined && s.trim() !== "");
-      return oneLine(named ?? runtimeRunId, NEEDS_NAME_MAX);
+      return sessionName({
+        title: row?.title,
+        label: row?.label,
+        folder: folderNameOf(row?.monitor?.environment?.cwd),
+        id: runtimeRunId,
+      });
     };
     const inputs = new AgentInputQueues({
       dir: join(config.dataDir, ...LAYOUT.AGENT_INPUTS_DIR),

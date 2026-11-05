@@ -46,11 +46,17 @@ export interface SessionNaming {
 }
 
 /** CO-1b (CO-Q4 (b)) — a session as fieldd names it in a wake, an item and a notice: its title, else its agent's label
- * in its folder ("Claude Code in vibe-field"), else that label, else its id; one line, cut at NEEDS_NAME_MAX. CO-1b
- * (red): the folder is not read yet. */
+ * in its folder ("Claude Code in vibe-field"), else that label, else its id; one line, cut at NEEDS_NAME_MAX. Two
+ * untitled sessions in one folder still read alike here (the handle tells them apart where @ offers one). */
 export function sessionName(run: SessionNaming): string {
-  const named = [run.title, run.label].find((s) => s !== undefined && s.trim() !== "");
-  return nameWords(named ?? run.id);
+  const said = (s: string | undefined): string | undefined =>
+    s === undefined || collapse(s) === "" ? undefined : collapse(s);
+  const title = said(run.title);
+  if (title !== undefined) return nameWords(title);
+  const label = said(run.label);
+  if (label === undefined) return nameWords(run.id);
+  const folder = said(run.folder);
+  return nameWords(folder === undefined ? label : `${label} in ${folder}`);
 }
 
 /** fieldd's own words for why an act stopped, on one line. */
