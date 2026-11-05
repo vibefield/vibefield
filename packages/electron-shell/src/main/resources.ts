@@ -289,11 +289,11 @@ export function resolvePackagedResources(opts: {
       platform === "darwin"
         ? null
         : join(opts.resourcesPath, "icons", platform === "win32" ? "app.ico" : "app-1024.png"),
-    // A REAL executable, not Electron wearing a hat (EDP-14). Its sidecars —
-    // service-harness.mjs and loro_wasm_bg.wasm, and since FS-1a the files
-    // worker's files-host.cjs and mille's native engine — are staged beside it
-    // because fieldd resolves them against its own __dirname, which probe P-A
-    // verified is the executable's directory inside a SEA, independent of cwd.
+    // A REAL executable, not Electron wearing a hat (EDP-14). Its sidecars (each `bin/` row of
+    // scripts/stage-package.mjs staged from packages/fieldd/dist: the service harness, loro's wasm,
+    // mille's native engine, the agent shim and each worker bundle) are staged beside it because
+    // fieldd resolves them against its own __dirname, which probe P-A verified is the executable's
+    // directory inside a SEA, independent of cwd.
     fielddCommand: join(bin, exe("fieldd", platform)),
     fielddArgs: [],
     fielddNeedsNodeMode: false,

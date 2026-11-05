@@ -253,6 +253,14 @@ const PLAN = [
     kind: "file",
   },
   {
+    // TH-1: the transcript worker's bundle. The packaged fieldd re-runs ITSELF with
+    // `--vibefield-role=transcript-host`, and that role loads this file from beside the executable
+    // (bin.ts, transcripts/launch.ts), as the files worker's role loads its own. It carries no mille.
+    stage: "bin/transcript-host.cjs",
+    from: "packages/fieldd/dist/transcript-host.cjs",
+    kind: "file",
+  },
+  {
     // AR-7: the spawn-through shim the agent gateway writes its launchers over. The
     // gateway looks for it beside the daemon (agent-gateway.ts `bundledShim`), so
     // beside the SEA it goes; fieldd's build bundles it from the kit the daemon was

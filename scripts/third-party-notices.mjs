@@ -1868,6 +1868,12 @@ export const NODE_BUNDLES = [
     base: "packages/fieldd",
     role: "fieldd's files worker",
   },
+  // TH-1: the transcript worker, a bundle of its own beside the executable (bin/transcript-host.cjs).
+  {
+    file: "packages/fieldd/dist/transcript-host.cjs",
+    base: "packages/fieldd",
+    role: "fieldd's transcript worker",
+  },
   {
     file: "packages/fieldd/dist/service-harness.mjs",
     base: "packages/fieldd",
