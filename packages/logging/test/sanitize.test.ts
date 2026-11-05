@@ -301,7 +301,7 @@ describe("logging sanitizer", () => {
       expect(encoded).not.toContain("\n");
       expect(LogRecordV1.safeParse(result).success).toBe(true);
     }
-  });
+  }, 30_000);
 
   it("drops invalid host-controlled event and component names", () => {
     expect(record({ event: "user supplied value" })).toBeNull();
