@@ -32245,3 +32245,154 @@ fieldd sources and 9 fieldd tests):
   DECISIONS TB as of this entry).
 - **James's hand:** the CLAUDE.md "Machine setup" paragraph, which should say the truffle EL8 now also refreshes the
   Go module record (VF-PM: CLAUDE.md is James's to edit).
+
+## Item 172 — a store fieldd cannot read is said, never set aside, written over or let stop its boot: the record signer tells a record from a disk that did not answer (track CO) (2026-11-05; `9dd1e42c0` → `caf52425c`, 4 commits on main `005d713c2`, lane `co/items172` in `/Volumes/SamsungRed/lanes/items172/vibe-field`, stacked as M132 `caf52425c`, run 132)
+
+**What it rests on.**
+- Item 172, filed 2026-11-05 02:13Z from item 159's review (wf_c6832dc1-c10, findings 4–6; LANDED "Items 158 and 159,
+  and CO-1b", Found 9). It is true of all four RecordSigner stores: the sparks (SparkStore), the needs-you queue
+  (NeedsStore), the sessions' input queues (AgentInputQueues) and each spark's kept record (SparkKeptStore, item 159).
+- VF-PM's honest-state shape (02:13Z, in the plan of record,
+  `lanes/co-plan/plans/item-172-record-signer-set-aside-and-boot-read.md`):
+  - a transient errno is retried, then said UNAVAILABLE {service, state}, never "unreadable";
+  - a newer format is kept, never written over;
+  - a boot read that fails degrades its store, never the daemon (EL7).
+- VF-PM's GO for the lane came at 04:00Z. cp-landing accepted the honest state's reading at 04:06Z: a store read once,
+  at boot, refuses until fieldd restarts.
+- The lane was cut on `9b3164ccf` (A1's M129). Its red and green were proven on the mini at the tip `03cfae79c`.
+  It was then rebased, with no conflict and its hunks unchanged, as main moved before the mint:
+  - onto `c4b8a6868` (A1's records) as `fafba905e`, at 04:42Z, cp-landing's order;
+  - onto `02b47ba2a` (L5) as `6c6bc97ad`, at 04:48Z, VF-PM's HOLD;
+  - onto `005d713c2` (L5's records) as `caf52425c`, at 04:50Z.
+  - The kept tips: `co/items172-pre-c4b8` → 03cfae79c, `co/items172-pre-l5` → fafba905e, and `co/items172-pre-l5r` →
+    6c6bc97ad.
+  - Each tree equals `merge-tree(<main>, 03cfae79c)`. At the mint that is `a44df0e5e9f9`, computed by cp-landing
+    and read the same on this Mac.
+  - `packages` is `8ad1e73c8389` at every tip, so the mini's red and green carry by hash.
+
+**What** (20 files, +1,180 −69 against main; no Rust, no pin-class file).
+- **DESIGN.md:**
+  - §9 gains "What VibeField keeps, when it cannot read it" (`:5968`). It names four outcomes and three refusal
+    lines in fieldd's words:
+    - "VibeField can't read the sparks it keeps; nothing was changed";
+    - "VibeField can't read what waits on you; nothing was changed";
+    - "VibeField can't keep words for its sessions; nothing was sent".
+    - A store unreadable at boot never stops VibeField.
+  - §8, Chat's list (`:1611-1614`), names the first of those lines.
+- **contracts:**
+  - `registries.ts` gains `RECORD_STORES` (`:864`): `READ_TRIES` 3, the services `compose` and `needs`, and the state
+    `records-unreadable`. It is TS-only, so `registries.rs` does not carry it, and `gen:check` holds that.
+  - Three error-data fixtures are parsed in registry.test.ts: compose-records-unreadable (retryable),
+    compose-inputs-unreadable and needs-records-unreadable (not retryable).
+  - `docs/agent-plane/api.html` carries item 172's notes in the sparks (`:1978`) and needs (`:2067`) sections.
+- **fieldd `signed-record.ts`:**
+  - `RecordSigner.read` answers four kinds:
+    - `{body}`;
+    - `{why}`: not a record, so it is set aside;
+    - `{unavailable: errno}`: the disk did not answer after `READ_TRIES` tries, so it is left where it is;
+    - `{absent: true}`: ENOENT, or ENOTDIR (a file where the record's folder would be).
+  - A folder at a record's path (EISDIR) is not a record, so it is set aside. A key the signer cannot read is
+    `unavailable`, never "unreadable".
+  - One `StoreGuard` for the four stores:
+    - a folder it cannot list is said (`fieldd.records.store_unavailable`) and refused;
+    - a record the disk did not answer is said (`fieldd.records.unavailable`) and refused;
+    - a record a newer VibeField wrote is held: kept, never served, said once (`fieldd.records.newer`), and its key's
+      write refused;
+    - a store whose boot read failed refuses every read and write until fieldd restarts.
+  - The refusal is `UNAVAILABLE {service, state: "records-unreadable"}` in the store's words. It is retryable for the
+    sparks, which are read at each ask. It is not retryable for the three stores read once at boot.
+- **The stores:**
+  - The needs store and its queue (`readable()`; `needs.list`, `needs.subscribe` and `needs.answer` ask it first).
+  - The input queues (a wake on a queue that cannot keep returns false: `fieldd.inputs.wake_unkept`).
+  - SparkStore. It now RENAMES what it sets aside (`setAsideFile`), as the other three always did.
+  - SparkKeptStore (its list keeps folders only).
+- **daemon.ts:** the three boot reads (`sparkKept.restore()`, `inputs.restore()` and `needs.restore()`, `:3040-3047`
+  at T) never throw. fieldd boots on, and that store refuses.
+- **The fault seam:** `RecordSignerOptions.readFile` is test-only. record-stores.test.ts R7 holds that no production
+  code passes one.
+
+**Validation.**
+- **The red, on the mini** (a9), at the pre-rebase `e78cd91a6`, 04:24:51–04:25:11Z, as uid 501 (the mode-000 rows
+  run):
+  - Test Files 4 failed | 6 passed (10); Tests 25 failed | 117 passed (142). Every failure is an assertion.
+  - The failures: record-stores 22 of 23, needs-doors' B172, signed-record's absent row, and compose-sparks' TU-1
+    forged-spark row.
+  - The guards were green: needs-queue 41, tool-plane-service 11, needs-store 4, agent-input-queue 17,
+    spark-kept-store 5, needs-words 7.
+  - Logs: `/Volumes/SamsungRed/lanes/ts6/logs/mini/co-items172/i172r-e78cd91a6/`.
+- **The green, on the mini,** at the pre-rebase `03cfae79c`, 04:31:46–04:33:56Z, as uid 501. field-native was a no-op
+  build. cp-landing read the log at 04:34Z.
+  - The ten files: 143 passed, 0 failed (record-stores 24, needs-doors 9, signed-record 8, compose-sparks 17,
+    needs-queue 41, tool-plane-service 11, needs-store 4, agent-input-queue 17, spark-kept-store 5, needs-words 7).
+  - The full fieldd suite: Test Files 235 passed | 4 skipped (239); Tests 3076 passed | 14 skipped; 0 failed.
+    packaged-typed-agent is 3 SKIPPED (`FIELDD_TEST_AGENTS_PACKAGE` unset): those are skips, not passes.
+  - The fieldd typecheck: 0.
+  - Logs: `/Volumes/SamsungRed/lanes/ts6/logs/mini/co-items172/i172g-03cfae79c/`.
+- **This Mac** (light only, under mac-pressure: no fieldd vitest, no cargo; nice 19, guard clear):
+  - At each commit: the DESIGN.md readers outside fieldd (field-app 2231, sound 96, electron-shell 191 with
+    `smoke-first-run.test.ts` 50/50 alone after a download race at load, ruled environmental 04:09Z); contracts 1546;
+    check:ios-fixtures 249 and 86 pins; gen:check; the typechecks.
+  - At `03cfae79c`: biome on the lane's 18 files, fieldd `tsc`, `pnpm preflight` and `pnpm gen:check`, each rc=0.
+  - At `fafba905e` (on c4b8a6868), 04:42:48–04:42:54Z: `pnpm preflight` (OK, 2 warnings: rosettad's mtime, acp's
+    candidate), `git diff --check` and `pairwise.sh`, each rc=0.
+  - At `6c6bc97ad` (on 02b47ba2a, L5's biome.jsonc), 04:48:33–04:48:40Z: biome on the lane's 18 files,
+    `pnpm check:walls`, `pnpm preflight`, `git diff --check` and `pairwise.sh`, each rc=0.
+  - At `caf52425c` (on 005d713c2; docs only from 6c6bc97ad), 04:50:47–04:50:52Z: `git diff --check`,
+    `pnpm preflight` and `pairwise.sh`, each rc=0.
+  - Lane logs: `lanes/co-plan/lanes/items172/logs/`.
+- **Run 132** (`caf52425c`, minted by a9 on VF-PM's GO, stacked on `005d713c2`; the run is T, tree
+  `a44df0e5e9f9`): "== ts6-mini verify done (verify 0) 04:59:45Z; HEAD caf52425c533f5ca9d35b186d2a840158066ae71"
+  (the Mac mini: Apple M4, macOS 26.7.2, node v26.5.0, rustc 1.99.1; armed 04:53:47Z; load 4.09 7.76 10.56).
+  `pnpm verify` exit 0:
+  - vitest 12,438 passed / 0 failed / 21 skipped over 890 files. That is run 131 +30, all this lane's:
+    record-stores 24 (a new file), needs-doors 8 → 9 (B172), registry.test 47 → 49, and fixtures.test 582 → 585
+    (the three new fixtures).
+  - node 386; cargo 545/0 in 34 suites; 29 projects typechecked and tested.
+  - biome 3,147 files (+4: the new test file and the three fixtures); the iOS fixtures 249, pins 86.
+  - The tree was clean after verify, with no re-run. Logs: `/Volumes/SamsungRed/lanes/ts6/logs/mini/run132/`
+    (`verify.clean.log`).
+- **Landed:** main fast-forwarded `005d713c2` → `caf52425c` on VF-PM's GO (2026-11-05T05:02:02Z, the fixer's).
+
+**What is real, what is stubbed.**
+- Real: the three legs, closed for all four RecordSigner stores. A store fieldd cannot read is said in fieldd's log
+  and refused in its words. Nothing in it is set aside, moved or written over, and fieldd boots on.
+- Owed, not stubbed: the screens that draw the new refusal (Owed, below). A store read at boot reads again only at
+  fieldd's next start, and its refusal says so (`retryable: false`).
+
+**Found.**
+1. **Item 177 (OPEN, cp-landing):** SessionRecordStore keeps its own copy of the signed-record rule outside
+   RecordSigner (agent-sessions.ts:59). Its list (:85-92) and each record's read (:222-229) rethrow an errno other
+   than ENOENT. So a same-uid file or a mode-000 folder where its folder is, or one record the disk does not answer,
+   throws every list(). The boot's re-attach reads are among them (agent-runtime.ts:1066, :2474, :2524, :2608; the
+   files service's seed :1029). Its plan is `lanes/co-plan/plans/item-177-session-record-store-own-hmac-rule.md`.
+2. **SparkStore never renamed what it set aside** (`tool-plane/sparks.ts:101-111` at `9b3164ccf`). Its `#setAside`
+   only logged, so the file stayed and every list said it again. It is renamed now, and U5 holds that. compose-sparks'
+   TU-1 forged row now expects the `.forged-…` file, with its bytes kept.
+3. **A key the signer could not read (EACCES) made every record "unreadable"**, and so set it aside
+   (`signed-record.ts:67-78` at `9b3164ccf`: `verifies()` read the key inside the catch-all). It is `unavailable` now
+   (R4).
+4. **ENOTDIR is "nothing there"** (`RecordSigner.#text`): a file where a spark's folder would be is absent, not a disk
+   that did not answer. This answers item 159's P5 (cp-landing 04:31Z).
+5. **A newer VibeField's record is named in fieldd's log** (`fieldd.records.newer`, once per key), not in a door's
+   state. The plan said "named in the store's state". A write to its key refuses with the store's own words. This
+   went to VF-PM with T (cp-landing 04:41Z).
+6. **The first writer's notes** (`lanes/co-plan/plans/notes-spark-kept-first-writer.md`):
+   - Items 4–6 are this item's legs (a)–(c), now closed.
+   - Item 2 (a folder at `kept.json`, never set aside) is closed too: EISDIR is now set aside.
+   - Item 1's harm (a fresh record written over one behind a folder that lost its x bit) no longer happens. That read
+     is EACCES, so it is unavailable and refused. This is by the code; no row of its own tests it.
+   - Items 3 and 7 are unchanged.
+
+**Owed.**
+- **The phone draws none of the new refusals** (the iOS lane;
+  `apps/ios/VibeFieldKit/Sources/FieldHome/Chat/ChatFeed.swift` at T):
+  - a `compose.sparks.list` refusal goes to `failure`, "logs and Diagnostics, never the page" (:53-54, :148-152);
+  - a `needs.list` refusal leaves the queue as last read (:165-170);
+  - a `needs.subscribe` refusal is dropped by `try?` (:194).
+- **field-app draws no needs refusal:** `packages/field-app/src/chat/sparks-feed.ts:424-447` (`#watchNeeds`) settles
+  the board with no items, so a needs store that cannot read looks like an empty queue.
+- Item 177 (OPEN, Found 1) · item 169 (OPEN).
+- James's draft words: the three refusal lines (DESIGN.md §9, `9dd1e42c0`), on his list since 04:09Z. They are
+  not a hold.
+- **Closed by this entry:** item 172 (FILED in "Items 158 and 159, and CO-1b", Found 9 and Owed), its three legs
+  for all four RecordSigner stores.

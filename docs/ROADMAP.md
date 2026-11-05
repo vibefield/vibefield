@@ -552,9 +552,11 @@ field, heard"; the page *Hear What Needs You* (Lq2MXZkT; sources `draft/sound/`)
     Nothing writes it yet: 1′, SP-1e2 and TH-1 each add theirs. Later slices join the settle with one `joinSettle`.
   - **CO-1b**: fieldd names an untitled session by its agent in its folder ("Claude Code in vibe-field"), and a reason
     after a colon says "it" for a session its sentence names.
-  - Owed: item 169 (a say delivered before a fieldd restart is forgotten) · item 172 (the record signer's set-aside and
-    boot read) · 1′'s held wakes (item 152) · CO-Q9's second half (fieldd's own wakes, unaudited) · CO-1b's trailing
-    words in field-app and electron-shell, at A2's rebase.
+  - Owed: item 169 (a say delivered before a fieldd restart is forgotten) · item 177 (SessionRecordStore's own copy of
+    the signed-record rule: a list that throws stops the boot's re-attach) · 1′'s held wakes (item 152) · CO-Q9's
+    second half (fieldd's own wakes, unaudited) · CO-1b's trailing words in field-app and electron-shell, at A2's
+    rebase · the screens that draw item 172's refusal (a store fieldd cannot read): the phone's Chat (sparks, needs,
+    needs.subscribe) and field-app's needs board.
   - For James's eye (draft words; not a hold): a dropped answer's "Vela's session ended before it took this", and
     CO-1b's names ("Claude Code in vibe-field"; "…: it ended"; "work is not one of Vela's Agent Profiles").
 - Next, in order (the CO waves matrix, `lanes/co-plan/plans/co-waves-matrix.md`):
