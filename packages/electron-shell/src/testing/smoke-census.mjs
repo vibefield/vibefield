@@ -23,6 +23,12 @@ export function processName(command) {
     /Helper(?: \([^)]*\))?\.app\/Contents\/MacOS\//u.test(command)
   )
     return "electron-helper";
+  // CP-4a2b (Q-B5 (a)) — a host fieldd starts, by its role before the executable that runs it: the packaged fieldd's
+  // role argument (`--vibefield-role=flows-host`) or the development bundle (`dist/flows-host.cjs`)
+  const role = /(?:^|[\s/\\=])(flows-host|transcript-host|files-host)(?:\.cjs)?(?:\s|$)/u.exec(
+    command,
+  );
+  if (role !== null) return role[1];
   // WP12 L4 — the packaged layout (`smoke:update`): the shell, and fieldd's SEA beside the floor in `Resources/bin`
   if (/\.app\/Contents\/MacOS\/VibeField(\s|$)/u.test(command)) return "vibefield";
   if (/\/Resources\/bin\/fieldd(\s|$)/u.test(command)) return "fieldd";
@@ -31,7 +37,6 @@ export function processName(command) {
   if (/\/field-native(\s|$)/u.test(command)) return "field-native";
   if (/[/\\]fieldd[/\\]dist[/\\]bin\.cjs/u.test(command)) return "fieldd";
   if (/service-harness/u.test(command)) return "fieldd-worker";
-  if (/files-host/u.test(command)) return "files-host";
   if (/rosettad/u.test(command)) return "rosettad";
   if (/Electron\.app\/Contents\/MacOS\/Electron(\s|$)/u.test(command)) return "electron";
   const first = command.trim().split(/\s+/u)[0] ?? "";

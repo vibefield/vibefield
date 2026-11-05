@@ -152,10 +152,18 @@ const kib = (bytes: number): string => `${Math.floor(bytes / 1024)} KiB (${bytes
 
 /** The child's environment: PATH alone (4A2-Q6 (b)), so no FIELD_* or FIELDD_* variable, and nothing else of
  * fieldd's, reaches a person's script or the runtime under it (EL7). On macOS the child also holds
- * __CF_USER_TEXT_ENCODING: the macOS loader's own key, which the system sets in every process it starts. */
+ * __CF_USER_TEXT_ENCODING: the macOS loader's own key, which the system sets in every process it starts.
+ * CP-4a2b (Q-B5 (a), amending 4A2-Q6 (b)): and VF_SMOKE_RUN when fieldd has it, a smoke's run mark (electron-shell's
+ * `SMOKE_RUN_ENV`, smoke-census.mjs), which a smoke's census finds its processes by, so a flow host a smoke leaves is
+ * seen and stopped. It is the run's profile name, no secret, and the script cannot read it: the compartment has no
+ * `process`. */
 function flowsHostEnvironment(source: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   const path = source["PATH"];
-  return path === undefined ? {} : { PATH: path };
+  const mark = source["VF_SMOKE_RUN"];
+  return {
+    ...(path !== undefined ? { PATH: path } : {}),
+    ...(mark !== undefined ? { VF_SMOKE_RUN: mark } : {}),
+  };
 }
 
 /** An answer as the pipe may carry it, and as a run's journal keeps it (replay.ts): whole up to
