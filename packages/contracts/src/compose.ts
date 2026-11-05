@@ -600,22 +600,58 @@ export type ComposeAgentStopOutput = z.infer<typeof ComposeAgentStopOutput>;
 
 // ── a session's input queue, as fieldd keeps it (CP2-D3; signed since CP-3, LEANS P3) ──
 
+/** CP-4a2b (Q9 (a)) — VibeField's own lines to a flow's step (DESIGN.md §9 "A flow's lines"), OPEN: the repair turn,
+ * a step resumed after a Quit, and an answer VibeField did not hear. */
+export const FIELDD_FLOW_LINES = ["repair", "resume", "unheard"] as const;
+export type FielddFlowLine = (typeof FIELDD_FLOW_LINES)[number];
+
+/** Which of those lines a `fieldd` input is, to which run's call, and `n`, its sends for that reason (Ask once more is
+ * the 2nd). The run and call are in AgentSessionOrigin's bounds; flows.ts holds the strict forms, and its tests hold
+ * these to them (C10, as F16 holds NeedsRun). Defined here, not imported, because flows.ts reads this module. */
+export const AgentInputFlowLine = z
+  .object({
+    run: z.string().min(1).max(64),
+    call: z.number().int().positive(),
+    /** FIELDD_FLOW_LINES, OPEN */
+    line: z.string().min(1).max(32),
+    n: z.number().int().positive(),
+  })
+  .passthrough();
+export type AgentInputFlowLine = z.infer<typeof AgentInputFlowLine>;
+
 /** Who a kept input is from: a spark, by id and by the name its words are marked with; or fieldd's own wake. CLOSED:
  * an input lands marked by its source (CP2-D1), so one from a source this build cannot mark is never delivered.
  * IOS-12a (PC-D3 A) — or `you`: the person's own words to a spark (`compose.sparks.say`), which land UNMARKED, since
  * they are yours. A queue file an older build reads with a `you` input in it does not parse, so that build sets the
  * file aside and delivers none of it, as it does any file it cannot read (the downgrade edge, said in IOS-12a's
- * record). */
+ * record).
+ * CP-4a2b (Q-B1 (a), Q-B2 (a); DESIGN.md §9 "When a run can't go on, or waits") — or `flow`: a run's own words, its
+ * steps' prompts and its `in:` lines, marked "‹flow› (a flow you ran) on your behalf:", or "(a flow ‹ran› ran)" for a
+ * spark's run. `name` is the mark's ‹flow›; `flow`, `run` and `call` are the run's, in the loose forms above. The same
+ * downgrade edge: an older build sets aside the whole file a `flow` input is in. VibeField's own three lines to a step
+ * stay `fieldd`, with `flow` naming which (an older build reads them as plain VibeField lines). */
 export const AgentInputSender = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("spark"), spark: SparkId, name: SparkName }).passthrough(),
-  z.object({ kind: z.literal("fieldd") }).passthrough(),
+  z.object({ kind: z.literal("fieldd"), flow: AgentInputFlowLine.optional() }).passthrough(),
   z.object({ kind: z.literal("you") }).passthrough(),
+  z
+    .object({
+      kind: z.literal("flow"),
+      flow: z.string().min(1).max(64),
+      // NEEDS_NAME_MAX is declared below with the needs bounds, so it is read when an input is parsed
+      name: z.lazy(() => z.string().min(1).max(NEEDS_NAME_MAX)),
+      run: z.string().min(1).max(64),
+      call: z.number().int().positive(),
+      /** the spark that started the run, by the name its mark says (Q-B2 (a)); none for yours */
+      ran: SparkName.optional(),
+    })
+    .passthrough(),
 ]);
 export type AgentInputSender = z.infer<typeof AgentInputSender>;
 
-/** CP-4a2b (13b.3's C1) — RED STUB: 13b.4 reads a VibeField line's reason to a flow's step. */
-export function flowLineOf(_sender: { readonly kind: string }): string | undefined {
-  return undefined;
+/** The reason of VibeField's line to a flow's step, as this build names it; undefined for any other input. */
+export function flowLineOf(sender: AgentInputSender): FielddFlowLine | undefined {
+  return sender.kind === "fieldd" ? knownWord(FIELDD_FLOW_LINES, sender.flow?.line) : undefined;
 }
 
 /** The needs-you items one joined wake may carry (item 158, CO-Q9 (b)): twice NEEDS_OPEN_PER_SPARK, for a spark's

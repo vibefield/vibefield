@@ -317,7 +317,9 @@ export function flowStepStateOf(step: { readonly state: string }): FlowStepState
 }
 
 /** One agent call of a run, a row of its card (CP4-Q1 (a)): its call, the script's label, its agent, the session it
- * runs in (the runtime's run id, when it has one) and its state. */
+ * runs in (the runtime's run id, when it has one) and its state. CP-4a2b (13b.3's C4): `cut` when its answer was
+ * longer than FLOW_LIMITS.RESULT_MAX_BYTES and the script got the first of it (CP4-Q17 (a); DESIGN.md §9's
+ * **Answered · cut short**). */
 export const FlowRunStep = z
   .object({
     call: FlowCallNumber,
@@ -327,9 +329,15 @@ export const FlowRunStep = z
     phase: z.string().min(1).max(FLOW_LABEL_MAX).optional(),
     /** FLOW_STEP_STATES, OPEN */
     state: z.string().min(1).max(32),
+    cut: z.literal(true).optional(),
   })
   .passthrough();
 export type FlowRunStep = z.infer<typeof FlowRunStep>;
+
+/** Whether a step's answer was cut. */
+export function flowStepCutOf(step: FlowRunStep): boolean {
+  return step.cut === true;
+}
 
 /** A run as `flows.list` and `flows.subscribe` carry it. `n` counts the flow's runs on this desktop, from 1; `hash` is
  * the version it runs; `calls` the calls it has made (the cap's count); `steps` the latest FLOW_RUN_STEPS_MAX agent
@@ -429,17 +437,6 @@ export const FlowRunRecord = z
   .passthrough();
 export type FlowRunRecord = z.infer<typeof FlowRunRecord>;
 
-/** CP-4a2b (13b.3's C4, C11) — RED STUBS: 13b.4 builds a step's `cut` and the bounded list. */
-export function flowStepCutOf(_step: FlowRunStep): boolean {
-  return false;
-}
-export function flowsListOf(
-  _live: readonly RunSummary[],
-  _ended: readonly RunSummary[],
-): { runs: RunSummary[]; earlier?: number } {
-  return { runs: [] };
-}
-
 // ── the window's doors (methods.ts: agents.manage, local; VF-PM 2026-11-05 01:22Z) ──
 
 /** flows.list and flows.subscribe: this desktop's library and runs. */
@@ -447,14 +444,34 @@ export const FlowsListParams = z.object({}).passthrough();
 export type FlowsListParams = z.infer<typeof FlowsListParams>;
 
 /** flows.list's answer and every flows.subscribe frame, whole (state transfer, as needs.subscribe's is): the library,
- * by slug, and the runs, latest first. */
+ * by slug, and the runs, latest first. CP-4a2b (13b.3's C11; CL-E2-2): every live run, then the latest ended, to
+ * FLOW_RUNS_LISTED_MAX in all (`flowsListOf`), and `earlier` the runs a whole list leaves out. */
 export const FlowsListResult = z
   .object({
     flows: z.array(FlowEntry).max(FLOW_LIBRARY_MAX),
     runs: z.array(RunSummary).max(FLOW_RUNS_LISTED_MAX),
+    earlier: z.number().int().min(0).optional(),
   })
   .passthrough();
 export type FlowsListResult = z.infer<typeof FlowsListResult>;
+
+/** The runs a list carries: every live run (at most FLOW_LIMITS.RUNS_LIVE_MAX), latest started first, then the latest
+ * ended, latest first, to FLOW_RUNS_LISTED_MAX in all; `earlier` counts the rest, and is absent when none is left. */
+export function flowsListOf(
+  live: readonly RunSummary[],
+  ended: readonly RunSummary[],
+): { runs: RunSummary[]; earlier?: number } {
+  const latestFirst =
+    (at: (run: RunSummary) => string) =>
+    (a: RunSummary, b: RunSummary): number =>
+      at(a) < at(b) ? 1 : at(a) > at(b) ? -1 : 0;
+  const alive = [...live].sort(latestFirst((run) => run.startedAt)).slice(0, FLOW_RUNS_LISTED_MAX);
+  const done = [...ended]
+    .sort(latestFirst((run) => run.endedAt ?? run.startedAt))
+    .slice(0, FLOW_RUNS_LISTED_MAX - alive.length);
+  const earlier = live.length + ended.length - alive.length - done.length;
+  return { runs: [...alive, ...done], ...(earlier > 0 ? { earlier } : {}) };
+}
 
 /** A run's input: each `meta.input` name's value. */
 export const FlowInput = z
@@ -512,13 +529,6 @@ export const FlowsScriptResult = z
   })
   .passthrough();
 export type FlowsScriptResult = z.infer<typeof FlowsScriptResult>;
-
-/** CP-4a2b (13b.3's C8) — RED STUBS: 13b.4 builds the verbs' shapes. */
-export const FlowRunInput: z.ZodType<unknown> = z.never();
-export const FlowReadInput: z.ZodType<unknown> = z.never();
-export const FlowReadOutput: z.ZodType<unknown> = z.never();
-export const FlowProposeInput: z.ZodType<unknown> = z.never();
-export const FlowProposeOutput: z.ZodType<unknown> = z.never();
 
 // ── a run's journal (CP-4a2a; CP4-S15, CP-D9; DESIGN.md §9 "What VibeField keeps, when it cannot read it", its
 // CP-4a2a note): one JSONL file per run beside the approvals, under LAYOUT.FLOWS_DIR (fieldd's `flows/journal.ts`
@@ -663,3 +673,43 @@ export function flowJournalLineOf(line: unknown): FlowJournalKnownLine | undefin
   }
   return known;
 }
+
+// ── a spark's verbs (CP-4a2b, 13b.3's C8; Q-B6 (a): their shapes only, unserved and unwired until CP-4b; tools.ts's
+// flow_run, flow_read, flow_stop and flow_propose rows). A spark reaches only its own runs and its thread's, read from
+// a run record's `starter` (CL-E7-12); `flow_run` answers as flows.run does (FlowsRunResult), and `flow_stop` takes the
+// window's pair (FlowsStopParams, FlowsStopResult). ──
+
+/** flow_run: a flow the person approved and its input. The starter is the caller, never the input's: an input that
+ * names a `spark` or a `starter` is refused (CL-E7-1). */
+export const FlowRunInput = z
+  .object({ flow: FlowSlug, input: FlowInput.optional() })
+  .passthrough()
+  .refine((input) => !Object.hasOwn(input, "spark") && !Object.hasOwn(input, "starter"), {
+    message: "a run's starter is its caller, never its input",
+  });
+export type FlowRunInput = z.infer<typeof FlowRunInput>;
+
+/** flow_read: one of the caller's runs. */
+export const FlowReadInput = z.object({ run: FlowRunId }).passthrough();
+export type FlowReadInput = z.infer<typeof FlowReadInput>;
+
+/** Its answer: the run as a card shows it, bounded whole as the window's is. */
+export const FlowReadOutput = z.object({ run: RunSummary }).passthrough();
+export type FlowReadOutput = z.infer<typeof FlowReadOutput>;
+
+/** flow_propose: a flow file the spark wrote, under the slug it would be saved as, at most SCRIPT_MAX_BYTES as UTF-8.
+ * It is kept and raises `flow-proposal`, and never runs before the person approves it (CL-E7-13). */
+export const FlowProposeInput = z
+  .object({ flow: FlowSlug, text: z.string().min(1).max(FLOW_LIMITS.SCRIPT_MAX_BYTES) })
+  .passthrough()
+  .refine(({ text }) => utf8.encode(text).byteLength <= FLOW_LIMITS.SCRIPT_MAX_BYTES, {
+    message: `a flow's script is at most ${FLOW_LIMITS.SCRIPT_MAX_BYTES} bytes`,
+  });
+export type FlowProposeInput = z.infer<typeof FlowProposeInput>;
+
+/** Its answer: the proposal, the hash its bytes are kept under, the item it waits in, and the static read the
+ * person's card shows. */
+export const FlowProposeOutput = z
+  .object({ proposal: FlowProposalId, hash: FlowHash, item: NeedsItemId, read: FlowRead })
+  .passthrough();
+export type FlowProposeOutput = z.infer<typeof FlowProposeOutput>;

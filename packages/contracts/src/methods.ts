@@ -3131,7 +3131,7 @@ export const METHODS: MethodDef[] = [
   // `local` (VF-PM, 2026-11-05 01:22Z), as the window's agent doors are: no phone or peer reaches a run, and main reads
   // the list for the quit box with its own client. A run's gates, a proposal, a changed flow, a repair miss, the cap
   // and a lost step are needs-you items answered through needs.answer (CP-D12), never a door here. Declared in
-  // CP-4a1; fieldd registers them with the runs (CP-4a2).
+  // CP-4a1; registered in CP-4a2b, in fieldd's `flows/doors.ts` (Q-B8 (a)).
   defineMethod({
     surface: "product",
     method: "flows.list",
@@ -3148,7 +3148,9 @@ export const METHODS: MethodDef[] = [
     locality: "local",
     subscription: { shape: "stream", cadenceFloorMs: PRODUCT_API_LIMITS.STREAM_MIN_INTERVAL_MS },
   }),
-  // a run is a new act each time: Run again starts from the top
+  // a run is a new act each time: Run again starts from the top. CP-4a2b (13a's D3, D9): refused past
+  // FLOW_LIMITS.RUNS_LIVE_MAX runs alive (a spark's past RUNS_PER_SPARK_MAX), and a run whose steps name no folder
+  // is refused at its start (CP4-Q20 (a)), in DESIGN.md §9's words
   defineMethod({
     surface: "product",
     method: "flows.run",
@@ -3156,7 +3158,8 @@ export const METHODS: MethodDef[] = [
     idempotent: false,
     locality: "local",
   }),
-  // Declarative: a run that has ended is answered as it is.
+  // Declarative: a run that has ended is answered as it is. CP-4a2b (13a's D19): a Stop ends the run's own step agents
+  // and pauses only a turn the run itself began; a turn of the person's own is never paused.
   defineMethod({
     surface: "product",
     method: "flows.stop",
