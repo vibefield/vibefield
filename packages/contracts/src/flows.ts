@@ -442,10 +442,12 @@ export type FlowCallKey = z.infer<typeof FlowCallKey>;
 export const FLOW_JOURNAL_KINDS = ["head", "call", "answer", "log", "end"] as const;
 export type FlowJournalKind = (typeof FLOW_JOURNAL_KINDS)[number];
 
-/** Why fieldd ended a run's host, OPEN (4A2-Q7 (a); DESIGN.md §9 "When a run's script cannot go on"): `unanswered`
- * (it missed FLOW_LIMITS.HOST_PING_MISSES pings: a script that spins) or `memory` (past FLOW_LIMITS.HOST_HEAP_MB). A
- * run whose host fieldd ended is never started again; a new run starts from the top. */
-export const FLOW_HOST_ENDINGS = ["unanswered", "memory"] as const;
+/** Why fieldd ended a run's host, OPEN (4A2-Q7; DESIGN.md §9 "When a run's script cannot go on"): `unanswered`
+ * (it missed FLOW_LIMITS.HOST_PING_MISSES pings: a script that spins), `memory` (V8 ended its worker past
+ * FLOW_LIMITS.HOST_HEAP_MB) or `protocol` (its pipe carried a frame past its bound, or one that is not JSON: the child
+ * no longer holds its own bounds; bth's review P2, ruled 2026-11-05 11:46Z). A run whose host fieldd ended is never
+ * started again; a new run starts from the top. */
+export const FLOW_HOST_ENDINGS = ["unanswered", "memory", "protocol"] as const;
 export type FlowHostEnding = (typeof FLOW_HOST_ENDINGS)[number];
 
 /** Every line's head. `format` is the line's (FLOW_RECORD_FORMAT); one above it was written by a newer VibeField and

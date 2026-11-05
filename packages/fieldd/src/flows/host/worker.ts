@@ -1,7 +1,12 @@
 import "ses";
 import { getHeapStatistics } from "node:v8";
 import { parentPort } from "node:worker_threads";
-import type { FlowHostLimits, FromFlowHost, ToFlowHost } from "../protocol";
+import {
+  FLOW_HOST_TEXT_MAX,
+  type FlowHostLimits,
+  type FromFlowHost,
+  type ToFlowHost,
+} from "../protocol";
 import { evaluateFlow, type FlowApi } from "./compartment";
 
 // CP-4a2a (CP-D8, CP-D9; 4A2-Q7 (b), re-ruled by VF-PM 2026-11-05 11:46Z) — a run's script's WORKER: a worker_threads
@@ -42,7 +47,19 @@ function post(message: FromFlowWorker): void {
   parentPort?.postMessage(message);
 }
 
-const textOf = (error: unknown): string => (error instanceof Error ? error.message : String(error));
+/** A thrown value's words, whatever was thrown, cut to FLOW_HOST_TEXT_MAX here, before they are sent (bth's review
+ * findings 1 and 4): never throws, so a value no text reads (`Object.create(null)`, a message getter that throws, a
+ * message that is no string) still ends its run. */
+function textOf(error: unknown): string {
+  let text: unknown;
+  try {
+    text = error instanceof Error ? error.message : String(error);
+  } catch {
+    return "the script threw something VibeField can't read";
+  }
+  if (typeof text !== "string") return "the script threw something that is not text";
+  return text.length <= FLOW_HOST_TEXT_MAX ? text : `${text.slice(0, FLOW_HOST_TEXT_MAX - 1)}…`;
+}
 
 const kib = (bytes: number): string => `${Math.floor(bytes / 1024)} KiB (${bytes} bytes)`;
 
@@ -151,5 +168,8 @@ export function runFlowWorker(data: FlowWorkerData): void {
   // a promise the script left behind is the script's own: the run's end is what its default export does
   process.on("unhandledRejection", () => {});
   parentPort?.on("message", hear);
-  void run(data);
+  // run() ends every way it can; were its own catch to fail, the run still ends, in fixed words
+  run(data).catch(() =>
+    post({ t: "threw", message: "the script threw something VibeField can't read" }),
+  );
 }

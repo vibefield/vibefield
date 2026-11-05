@@ -1,13 +1,22 @@
+import { fstatSync } from "node:fs";
+import { Socket } from "node:net";
 import { getHeapStatistics } from "node:v8";
 import { Worker } from "node:worker_threads";
-import type { FromFlowHost, ToFlowHost } from "../protocol";
+import {
+  FLOW_HOST_TEXT_MAX,
+  FrameReader,
+  type FromFlowHost,
+  frameOf,
+  TO_FLOW_HOST_FRAME_MAX,
+  type ToFlowHost,
+} from "../protocol";
 import type { FlowWorkerData, FromFlowWorker, ToFlowWorker } from "./worker";
 
 // CP-4a2a (CP-D8, CP-D9; 4A2-Q1 (a), 4A2-Q5 (a), 4A2-Q6 (b), 4A2-Q7 (b) as re-ruled by VF-PM 2026-11-05 11:46Z) — a
 // run's flow host, the child's ENTRY (`flows-host` role) and its own thread. fieldd starts one per run, as its OWN
 // executable re-run in this role: the development bundle `flows-host.cjs` under the runtime fieldd runs under, or the
 // packaged single executable with `--vibefield-role=flows-host` (bin.ts). Its environment is PATH alone and its one door
-// is its IPC pipe (protocol.ts).
+// is its fd 3, a plain pipe of one JSON message a line (protocol.ts).
 //
 // This thread runs no script. It holds the pipe, and starts the run's script in a worker_threads Worker from this same
 // bundle (worker.ts), under V8's cap on the worker's old generation (`heapMb`), so:
@@ -27,12 +36,13 @@ import type { FlowWorkerData, FromFlowWorker, ToFlowWorker } from "./worker";
 /** The worker's role in the bundle: entry.ts runs the worker when the bundle is loaded with this. */
 export const FLOW_WORKER_ROLE = "vibefield-flow-worker";
 
+let pipe: Socket | undefined;
 let worker: Worker | undefined;
 /** the run's end was said: `done`, `threw`, `fatal` or `memory` */
 let said = false;
 
 function send(message: FromFlowHost): void {
-  if (typeof process.send === "function" && process.connected) process.send(message);
+  if (pipe?.writable === true) pipe.write(frameOf(message));
 }
 
 const textOf = (error: unknown): string => (error instanceof Error ? error.message : String(error));
@@ -52,9 +62,14 @@ function fromWorker(message: FromFlowWorker): void {
       send(message);
       return;
     case "done":
-    case "threw":
-    case "fatal":
       end(message);
+      return;
+    // the worker cut its words; this thread holds them to the bound again (bth's review finding 1)
+    case "threw":
+      end({ t: "threw", message: String(message.message).slice(0, FLOW_HOST_TEXT_MAX) });
+      return;
+    case "fatal":
+      end({ t: "fatal", reason: String(message.reason).slice(0, FLOW_HOST_TEXT_MAX) });
       return;
   }
 }
@@ -78,7 +93,11 @@ function start(bundle: string, message: Extract<ToFlowHost, { t: "run" }>): void
   worker.on("message", (raw: FromFlowWorker) => fromWorker(raw));
   worker.on("error", (error: Error & { code?: string }) => {
     if (error.code === "ERR_WORKER_OUT_OF_MEMORY") end({ t: "memory" });
-    else end({ t: "fatal", reason: `the flow's worker failed: ${textOf(error)}` });
+    else
+      end({
+        t: "fatal",
+        reason: `the flow's worker failed: ${textOf(error)}`.slice(0, FLOW_HOST_TEXT_MAX),
+      });
   });
   worker.on("exit", (code) => end({ t: "fatal", reason: `the flow's worker left (code ${code})` }));
 }
@@ -107,16 +126,39 @@ function hear(bundle: string, raw: unknown): void {
   }
 }
 
+/** The pipe fieldd started this host with, on fd 3; undefined when there is none. */
+function openPipe(): Socket | undefined {
+  try {
+    fstatSync(3);
+    return new Socket({ fd: 3, readable: true, writable: true });
+  } catch {
+    return undefined;
+  }
+}
+
 /** Run the host: called by the bundle's own top level (entry.ts), in the development runtime and in the packaged
  * executable's `flows-host` role (bin.ts loads the bundle). `bundle` is the bundle's own file, the worker's too. */
 export function runFlowsHost(bundle: string): void {
-  if (typeof process.send !== "function") {
-    process.stderr.write("flows-host: started without an IPC pipe — fieldd starts this role\n");
+  pipe = openPipe();
+  if (pipe === undefined) {
+    process.stderr.write(
+      "flows-host: started without its pipe on fd 3 — fieldd starts this role\n",
+    );
     process.exit(2);
   }
-  process.on("message", (raw) => hear(bundle, raw));
+  const reader = new FrameReader(
+    TO_FLOW_HOST_FRAME_MAX,
+    (raw) => hear(bundle, raw),
+    () => {
+      send({ t: "fatal", reason: "fieldd's pipe carried a frame this host does not read" });
+      process.exit(1);
+    },
+  );
+  pipe.on("data", (chunk: Buffer) => reader.read(chunk));
   // fieldd died (or closed the pipe): the host leaves with it, and its worker with it
-  process.on("disconnect", () => process.exit(0));
+  pipe.on("end", () => process.exit(0));
+  pipe.on("close", () => process.exit(0));
+  pipe.on("error", () => process.exit(0));
   process.on("SIGTERM", () => process.exit(0));
   process.on("SIGINT", () => process.exit(0));
   send({ t: "ready", pid: process.pid });

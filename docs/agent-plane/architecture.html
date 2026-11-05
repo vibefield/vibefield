@@ -1865,7 +1865,8 @@
                         (<code>ses</code>) before anything else runs, and evaluates the approved bytes fieldd hands it
                         (the file's two exports rewritten by acorn into one script, CP4-S4 (a)) in one compartment whose
                         only globals are the flow API (CP-D8). Every call that touches the world (<code>agent</code>,
-                        <code>ask</code>, <code>log</code>) is a message on the child's IPC pipe, and the pipe carries
+                        <code>ask</code>, <code>log</code>) is a message on the child's pipe (its fd 3, one JSON message a
+                        line, read by fieldd's own reader, which ends a run whose child breaks its bounds), and the pipe carries
                         bounded control alone: the script once, at most 64 KiB, and each answer at most 64 KiB, marked
                         <code>cut</code> past it (EL2 as CP4-S10 reads it; 4A2-Q5 (a)). fieldd journals each call, every
                         line MAC'd under <code>fieldd/flows.key</code>, which never leaves fieldd (CP4-S15); it holds the

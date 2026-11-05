@@ -1,4 +1,5 @@
 import { type ChildProcess, spawn as nodeSpawn } from "node:child_process";
+import type { Duplex } from "node:stream";
 import {
   FLOW_LIMITS,
   FLOW_LOG_MAX,
@@ -8,7 +9,15 @@ import {
 import { createNoopLogger, type Logger } from "@vibefield/logging";
 import type { FlowsHostLaunch, FlowsHostLaunchChoice } from "./launch";
 import { flowScriptOf } from "./module-script";
-import { type FromFlowHost, readFromFlowHost, type ToFlowHost } from "./protocol";
+import {
+  FLOW_FRAME_ENVELOPE,
+  FrameReader,
+  type FrameRefusal,
+  type FromFlowHost,
+  frameOf,
+  readFromFlowHost,
+  type ToFlowHost,
+} from "./protocol";
 
 // CP-4a2a (CP-D8, CP-D9; 4A2-Q1 (a), 4A2-Q5 (a), 4A2-Q6 (b), 4A2-Q7 (a), ruled by VF-PM 2026-11-05 08:51Z) — ONE
 // run's flow host: fieldd starts a child for the run (launch.ts), hands it the approved bytes rewritten into one script
@@ -18,6 +27,9 @@ import { type FromFlowHost, readFromFlowHost, type ToFlowHost } from "./protocol
 //
 // - Before any child: bytes past FLOW_LIMITS.SCRIPT_MAX_BYTES, and bytes the rewrite refuses, are `refused`; a copy that
 //   cannot start a host is `unconfigured`. Nothing is spawned for either.
+// - The pipe is the child's fd 3, read by fieldd's own FrameReader (bth's review H1/P2): a frame past
+//   FLOW_LIMITS.RESULT_MAX_BYTES and FLOW_FRAME_ENVELOPE is refused before it is held whole, and it, or a frame that
+//   is not JSON, ends the run as `protocol` at once (SIGKILL), whatever its child still says.
 // - The pipe carries bounded control (4A2-Q5 (a)): the script once; a call whose arguments are past
 //   FLOW_LIMITS.RESULT_MAX_BYTES is refused (the child holds the same bound before it sends); an answer past it never
 //   crosses whole: text is cut to fit, anything else is refused, in the words the script's `await` throws with.
@@ -183,6 +195,8 @@ class FlowHostChild {
   readonly #t: FlowHostTimings;
   readonly #logger: Logger;
   readonly #proc: ChildProcess;
+  /** the child's fd 3 (protocol.ts) */
+  readonly #pipe: Duplex;
   readonly #stderr: string[] = [];
   readonly #heapMb: number;
   /** the last of the child's stderr, where V8's heap line is looked for */
@@ -215,14 +229,25 @@ class FlowHostChild {
     });
     this.run = { ready, ended, stop: () => this.#stop() };
     this.#proc = nodeSpawn(launch.command, [...launch.args], {
-      stdio: ["ignore", "ignore", "pipe", "ipc"],
+      stdio: ["ignore", "ignore", "pipe", "pipe"],
       env: flowsHostEnvironment(opts.environment ?? process.env),
-      serialization: "json",
     });
     this.#proc.on("error", (error) =>
       this.#finish({ kind: "fatal", reason: `the flow host did not start: ${error.message}` }),
     );
-    this.#proc.on("message", (raw) => this.#hear(raw));
+    this.#pipe = this.#proc.stdio[3] as Duplex;
+    const reader = new FrameReader(
+      FLOW_LIMITS.RESULT_MAX_BYTES + FLOW_FRAME_ENVELOPE,
+      (raw) => this.#hear(raw),
+      (why) => this.#unread(why),
+    );
+    this.#pipe.on("data", (chunk: Buffer) => reader.read(chunk));
+    this.#pipe.on("error", (error) => {
+      // a write to a child that has left (EPIPE): its exit says how it ended
+      this.#logger.debug("fieldd.flows.host.pipe", "The flow host's pipe failed", {
+        error: error.message,
+      });
+    });
     // `close`, not `exit`: the child has left AND its stderr is read to its end (V8's heap line is often its last)
     this.#proc.on("close", (code, signal) =>
       this.#finish(this.#chosen ?? this.#leftAs(code, signal)),
@@ -243,7 +268,15 @@ class FlowHostChild {
   }
 
   #send(message: ToFlowHost): void {
-    if (this.#proc.connected) this.#proc.send(message);
+    if (this.#pipe.writable && !this.#pipe.destroyed) this.#pipe.write(frameOf(message));
+  }
+
+  /** A frame fieldd does not read ends the run at once: the child no longer holds its own bounds. */
+  #unread(why: FrameRefusal): void {
+    this.#logger.warn("fieldd.flows.host.protocol", "The flow host broke its pipe's bounds", {
+      why,
+    });
+    this.#end({ kind: "ended", why: "protocol" }, "kill");
   }
 
   #hear(raw: unknown): void {
@@ -286,16 +319,22 @@ class FlowHostChild {
       case "memory":
         this.#end({ kind: "ended", why: "memory" }, "shutdown");
         return;
-      case "done":
+      case "done": {
+        // the value is bounded here again: a child's word that it is within RESULT_MAX_BYTES is not fieldd's (P2)
+        const whole =
+          "value" in message && flowAnswerBytes(message.value) <= FLOW_LIMITS.RESULT_MAX_BYTES;
         this.#end(
           {
             kind: "done",
-            ...("value" in message ? { value: message.value } : {}),
-            ...(message.cut === true ? { cut: true as const } : {}),
+            ...(whole ? { value: message.value } : {}),
+            ...(message.cut === true || ("value" in message && !whole)
+              ? { cut: true as const }
+              : {}),
           },
           "shutdown",
         );
         return;
+      }
       case "threw":
         this.#end({ kind: "threw", message: message.message }, "shutdown");
         return;

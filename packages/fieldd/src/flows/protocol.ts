@@ -1,8 +1,12 @@
 // CP-4a2a (CP-D8; 4A2-Q1 (a), 4A2-Q5 (a), ruled by VF-PM 2026-11-05 08:51Z) — fieldd ⇄ a run's flow host, on the
-// child's IPC pipe (Node's `process.send`, JSON serialization). The pipe carries bounded control and nothing else (EL2
-// as CP4-S10 reads it): the script once, at most FLOW_LIMITS.SCRIPT_MAX_BYTES, and each call and each answer at most
-// FLOW_LIMITS.RESULT_MAX_BYTES as JSON. No key, no MAC, no token and no path rides it: the journal is fieldd's alone
-// (flows/journal.ts), and the host never sees a line of it.
+// child's fd 3: a plain pipe, one JSON message a line (bth's review H1/P2, ruled 11:46Z), never Node's IPC channel,
+// whose reader buffers a frame of any size and throws on a malformed one inside fieldd. Each side reads its end with a
+// FrameReader, which refuses a line past its bound BEFORE it holds it whole: fieldd's bound is
+// FLOW_LIMITS.RESULT_MAX_BYTES and FLOW_FRAME_ENVELOPE, and a frame past it, or one that is not JSON, ends the run as
+// `protocol`. The pipe carries bounded control and nothing else (EL2 as CP4-S10 reads it): the script once, at most
+// FLOW_LIMITS.SCRIPT_MAX_BYTES, and each call and each answer at most FLOW_LIMITS.RESULT_MAX_BYTES as JSON. No key, no
+// MAC, no token and no path rides it: the journal is fieldd's alone (flows/journal.ts), and the host never sees a line
+// of it.
 //
 // IMPORT-FREE, as transcripts/protocol.ts is: the host's child imports this file and, by wall R32's host clause,
 // nothing of fieldd's but it, so the child's bundle holds `ses` and its own files alone. The numbers the child needs
@@ -69,8 +73,81 @@ export function nestsWithin(value: unknown, max: number): boolean {
   return true;
 }
 
-/** The words a child's text is cut to before fieldd keeps it (a `threw`'s message, a `fatal`'s reason). */
+/** The words a child's text is cut to, in the child before it is sent and in fieldd again (a `threw`'s message, a
+ * `fatal`'s reason). */
 export const FLOW_HOST_TEXT_MAX = 1_024;
+
+/** What a host's frame may hold past its largest value (FLOW_LIMITS.RESULT_MAX_BYTES as JSON): its `t`, `id` and
+ * `what`, bytes. A child that holds its own bounds never comes near it. */
+export const FLOW_FRAME_ENVELOPE = 1_024;
+
+/** The bound on a frame fieldd sends its host, bytes: the script (at most FLOW_LIMITS.SCRIPT_MAX_BYTES) as a JSON
+ * string can grow up to six times in its escapes. fieldd is the host's one writer; the bound keeps a reader bounded. */
+export const TO_FLOW_HOST_FRAME_MAX = 6 * 64 * 1024 + FLOW_FRAME_ENVELOPE;
+
+/** Why a FrameReader stopped reading: a line past its bound, or one that is not JSON. */
+export type FrameRefusal = "too-big" | "not-json";
+
+/** One JSON message a line, read from a byte stream. A line past `max` bytes is refused BEFORE it is held whole, and
+ * one that is not JSON is refused; after a refusal, nothing more is read. */
+export class FrameReader {
+  readonly #max: number;
+  readonly #hear: (raw: unknown) => void;
+  readonly #refuse: (why: FrameRefusal) => void;
+  #pieces: Uint8Array[] = [];
+  #bytes = 0;
+  #refused = false;
+
+  constructor(max: number, hear: (raw: unknown) => void, refuse: (why: FrameRefusal) => void) {
+    this.#max = max;
+    this.#hear = hear;
+    this.#refuse = refuse;
+  }
+
+  read(chunk: Uint8Array): void {
+    let start = 0;
+    while (!this.#refused) {
+      const end = chunk.indexOf(0x0a, start);
+      const piece = chunk.subarray(start, end === -1 ? chunk.length : end);
+      if (this.#bytes + piece.length > this.#max) {
+        this.#stop("too-big");
+        return;
+      }
+      if (end === -1) {
+        if (piece.length > 0) {
+          this.#pieces.push(piece);
+          this.#bytes += piece.length;
+        }
+        return;
+      }
+      const line = this.#bytes === 0 ? piece : Buffer.concat([...this.#pieces, piece]);
+      this.#pieces = [];
+      this.#bytes = 0;
+      start = end + 1;
+      let raw: unknown;
+      try {
+        raw = JSON.parse(
+          Buffer.from(line.buffer, line.byteOffset, line.byteLength).toString("utf8"),
+        );
+      } catch {
+        this.#stop("not-json");
+        return;
+      }
+      this.#hear(raw);
+    }
+  }
+
+  #stop(why: FrameRefusal): void {
+    this.#refused = true;
+    this.#pieces = [];
+    this.#bytes = 0;
+    this.#refuse(why);
+  }
+}
+
+/** A message as a frame: its JSON and the line's end. */
+export const frameOf = (message: ToFlowHost | FromFlowHost): string =>
+  `${JSON.stringify(message)}\n`;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);

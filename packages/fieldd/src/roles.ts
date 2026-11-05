@@ -35,7 +35,7 @@ export const TRANSCRIPT_HOST_ROLE_ARG = "--vibefield-role=transcript-host";
 export const TRANSCRIPT_HOST_BUNDLE = "transcript-host.cjs";
 
 /** The argument that makes the executable a run's flow host (CP-4a2a, 4A2-Q1 (a)): one child per run, its script in
- * a locked-down compartment, its one door its IPC pipe. */
+ * a locked-down compartment in a worker of its own, its one door its pipe on fd 3. */
 export const FLOWS_HOST_ROLE_ARG = "--vibefield-role=flows-host";
 /** The flow host's bundle, beside fieldd's. */
 export const FLOWS_HOST_BUNDLE = "flows-host.cjs";
