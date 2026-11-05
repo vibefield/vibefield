@@ -1510,6 +1510,56 @@ describe("LP-1: the DMG — signed, notarized, stapled; the feed re-read; the st
     expect(finalize).toBeGreaterThan(driver.indexOf('"packaging/verify-live-surface-release.mjs"'));
     expect(driver.slice(finalize)).not.toMatch(/--unsigned|--validate-only/);
   });
+
+  // LP-6b's guard for a LOCAL release (VF-PM, 2026-11-05 03:58Z): the remap happens only under the release switch, so
+  // package:mac:release refuses without it, before any signing preflight or build, on any host. Only refusals are run
+  // here: with the switch set, the driver would go on to this Mac's signing identities and a real stage.
+  it("package:mac:release refuses without VIBEFIELD_REMAP_BUILD_PATHS=1, before it builds or signs anything", () => {
+    const driver = join(REPO, "apps/desktop/packaging/run-macos-release.mjs");
+    const { VIBEFIELD_REMAP_BUILD_PATHS: _ignored, ...base } = process.env;
+    for (const [value, said] of [
+      [undefined, "unset"],
+      ["0", '"0"'],
+      ["", '""'],
+      ["true", '"true"'],
+    ] as const) {
+      const env = value === undefined ? base : { ...base, VIBEFIELD_REMAP_BUILD_PATHS: value };
+      const result = spawnSync(process.execPath, [driver], {
+        env,
+        encoding: "utf8",
+        timeout: 30_000,
+      });
+      expect(result.status, String(value)).toBe(1);
+      expect(result.stdout, String(value)).toBe("");
+      const refusal = JSON.parse(result.stderr.trim()) as {
+        ok: boolean;
+        gate: string;
+        error: string;
+      };
+      expect(refusal.ok).toBe(false);
+      expect(refusal.gate).toBe("macOS-release-preflight");
+      expect(refusal.error).toContain(`VIBEFIELD_REMAP_BUILD_PATHS is ${said}`);
+      expect(refusal.error).toContain("pnpm siblings:build");
+      expect(refusal.error).toContain("build-js mille");
+    }
+    const source = readFileSync(driver, "utf8");
+    const guard = source.indexOf('process.env.VIBEFIELD_REMAP_BUILD_PATHS !== "1"');
+    expect(guard).toBeGreaterThan(0);
+    expect(guard).toBeLessThan(source.indexOf("const signing = signingPreflight();"));
+    expect(guard).toBeLessThan(source.indexOf("await run("));
+  });
+
+  it("package:mac:release runs the packaged app's gate (host-links --app) after its checks, before the DMG is finalized", () => {
+    const driver = readFileSync(join(REPO, "apps/desktop/packaging/run-macos-release.mjs"), "utf8");
+    const gate = driver.indexOf('"../../scripts/host-links.mjs",\n  "--app",');
+    expect(gate).toBeGreaterThan(driver.indexOf('"packaging/verify-live-surface-release.mjs"'));
+    expect(gate).toBeLessThan(driver.indexOf('"packaging/notarize-dmg.mjs", "--dir", "release"'));
+    // the same gate release.yml runs after packaging, signed or not
+    const workflow = readFileSync(join(REPO, ".github/workflows/release.yml"), "utf8");
+    expect(workflow).toContain(
+      'node scripts/host-links.mjs --app "apps/desktop/release/$OUT/VibeField.app"',
+    );
+  });
 });
 
 // The WORKFLOW LINT that runs in every verify (actionlint is the second one, by hand: `actionlint

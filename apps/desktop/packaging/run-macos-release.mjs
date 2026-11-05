@@ -8,6 +8,19 @@ const desktopRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const expectedTeamId = "9F79X9D26S";
 
 if (process.argv.length !== 2) fail("package:mac:release accepts no arguments");
+// LP-6b (item 170; VF-PM's ruling, 2026-11-05 03:58Z): a release build remaps its builder paths only under THE release
+// switch (scripts/build-paths.mjs; release.yml sets it once, in the build job's env). A local release without it would
+// ship this Mac's paths in every native binary we build. So it refuses here, before anything is built or signed, and the
+// gate after packaging (host-links.mjs --app, below) says so if an earlier build ran without it.
+if (process.env.VIBEFIELD_REMAP_BUILD_PATHS !== "1") {
+  const value = process.env.VIBEFIELD_REMAP_BUILD_PATHS;
+  fail(
+    `VIBEFIELD_REMAP_BUILD_PATHS is ${value === undefined ? "unset" : JSON.stringify(value)}, and a release build remaps ` +
+      "its builder paths only under it: export VIBEFIELD_REMAP_BUILD_PATHS=1, run `pnpm siblings:build` and " +
+      "`node scripts/siblings.mjs build-js mille` again under it (the stage copies what they built), then run " +
+      "package:mac:release again",
+  );
+}
 if (process.platform !== "darwin") fail("macOS release packaging must run on darwin");
 if (process.arch !== "arm64" && process.arch !== "x64") {
   fail(`unsupported macOS release architecture: ${process.arch}`);
@@ -77,6 +90,14 @@ await run(process.execPath, [
   "--app",
   join("release", outputDirectory, "VibeField.app"),
   "--enumerate-only",
+]);
+// LP-6b (item 170): the packaged app's gate, as release.yml's "No host libraries" step runs it, so a local release is held
+// to CI's gate: no host library, the native plane starts, and no builder path in any shipped Mach-O or wasm (this Mac's
+// own cargo target directories among the markers). In CI the step after packaging runs it again; it is read-only.
+await run(process.execPath, [
+  "../../scripts/host-links.mjs",
+  "--app",
+  join("release", outputDirectory, "VibeField.app"),
 ]);
 
 // LP-1: the DMG a stranger downloads. electron-builder notarizes and staples the APP before it builds the DMG, and
