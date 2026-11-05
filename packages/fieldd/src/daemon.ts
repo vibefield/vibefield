@@ -1156,6 +1156,8 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
   });
   const briefings: AgentBriefings = new AgentBriefings({
     spark: (id) => sparkStore.get(id),
+    // CP-5a — the spark claim is the catalog's, read before the facts (the hatch and every spark birth)
+    catalog: createAgentCatalogReaders(config.agentCatalog ?? AGENT_CATALOG),
     capabilities: (provider) => agents.runtime.providers().find((p) => p.id === provider)?.briefing,
     door: async () => NativeDoorInfoResult.parse(await native.request("native.door.info", {})),
   });

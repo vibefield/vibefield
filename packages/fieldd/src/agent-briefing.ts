@@ -26,18 +26,19 @@ const RUN_ALLOWANCE: readonly string[] = SERVED_TOOLS.filter(
 /** CP-1d, widened by MT-0 (MT-D9) — fieldd's handoff to the agent runtime: the briefing of EVERY process birth,
  * resumes included, rebuilt each time from the current native door.
  * - A spark's (prepare): the door, the whole server's allowance and the spark's brief. It refuses, before anything is
- *   written or ended, when it cannot be delivered (CP-1d).
+ *   written or ended, when it cannot be delivered (CP-1d), and first when the catalog does not let the agent be a
+ *   spark (CP-5a: `spark-not-offered`, before any fact is read).
  * - A plain run's (forRun): the door and the allowance of its read-only `agent` rows, with no instructions; the
  *   server's own paragraph says the rest (the MT lead's ruling 7, provisional on the history room's sentinel eval). It
  *   DEGRADES: an agent that cannot take it, or a door that does not answer, means the run starts with no briefing,
  *   never a refused spawn. Its check comes first, because the runtime refuses the whole launch
- *   (UNSUPPORTED_LAUNCH_FIELD) when a field the agent does not declare is present. */
+ *   (UNSUPPORTED_LAUNCH_FIELD) when a field the agent does not declare is present. It reads no catalog claim. */
 export class AgentBriefings {
   constructor(
     private readonly opts: {
       spark(id: SparkId): SparkRecord | undefined;
-      /** CP-5a (skeleton): the catalog's readers, not read yet */
-      catalog?: AgentCatalogReaders;
+      /** CP-5a — the catalog's readers: its spark claim is read before any fact */
+      catalog: AgentCatalogReaders;
       capabilities(provider: string): AgentBriefingCapabilities | undefined;
       door(): Promise<NativeDoorInfoResult>;
     },
@@ -53,7 +54,14 @@ export class AgentBriefings {
       throw new RpcCallError("PRECONDITION_FAILED", "this run belongs to another agent", false, {
         reason: "spark-agent-mismatch",
       });
-    this.requireSupported(provider);
+    // A spark already hatched is born again while its row is visible and claims spark, so a deprecated agent's sparks
+    // still wake (AC-D3) where a hatch of one is refused; then the facts, as at hatch.
+    refuse(
+      sparkClaimed(this.opts.catalog, provider, "born")
+        ? sparkFactsRefusal(this.opts.capabilities(provider))
+        : "spark-not-offered",
+      provider,
+    );
     let instructions: string;
     try {
       // CP-1c's editable brief keeps its existing filename. The native adapter receives its contents through the
@@ -81,7 +89,7 @@ export class AgentBriefings {
 
   /** A plain run's briefing, or nothing. Never throws: a plain launch is never refused for the door's sake. */
   async forRun(provider: string): Promise<AgentRunBriefing> {
-    if (this.#unsupported(provider, false) !== undefined) return {};
+    if (sparkFactsRefusal(this.opts.capabilities(provider), false) !== undefined) return {};
     let door: NativeDoorInfoResult;
     try {
       door = await this.opts.door();
@@ -97,36 +105,10 @@ export class AgentBriefings {
 
   /** Hatch checks support before writing a folder or record; prepare checks it again for every later birth. */
   requireSupported(provider: string): void {
-    const reason = this.#unsupported(provider, true);
-    if (reason === "spark-briefing-unsupported")
-      throw new RpcCallError(
-        "PRECONDITION_FAILED",
-        "this agent cannot receive a spark's briefing yet",
-        false,
-        { reason, provider },
-      );
-    if (reason === "spark-door-identity-unsupported")
-      throw new RpcCallError(
-        "PRECONDITION_FAILED",
-        "VibeField cannot identify this agent's spark tools yet",
-        false,
-        { reason, provider },
-      );
-  }
-
-  /** The support gate both births share: the fields a briefing carries, and a process the door can name. */
-  #unsupported(provider: string, instructions: boolean): string | undefined {
-    const capability = this.opts.capabilities(provider);
-    if (
-      !capability?.mcpServers ||
-      !capability.allowTools ||
-      (instructions && !capability.instructions)
-    )
-      return "spark-briefing-unsupported";
-    // The door proves the caller by a pane's PID and birth time. A helper or external agent is outside that
-    // ancestry: declaring a server is not evidence that its process belongs to this run. No vendor branches.
-    if (capability.mcpServerProcess !== "terminal") return "spark-door-identity-unsupported";
-    return undefined;
+    refuse(
+      sparkHatchRefusal(this.opts.catalog, provider, () => this.opts.capabilities(provider)),
+      provider,
+    );
   }
 }
 
@@ -136,7 +118,34 @@ export type SparkRefusal =
   | "spark-briefing-unsupported"
   | "spark-door-identity-unsupported";
 
-/** CP-5a (skeleton): the facts alone, as CP-1d's gate reads them. */
+/** Each refusal's words: a hatch's is said at the New spark sheet's foot, a wake's where the wake was asked. */
+const REFUSED: Record<SparkRefusal, string> = {
+  "spark-not-offered": "VibeField does not offer this agent as a spark",
+  "spark-briefing-unsupported": "this agent cannot receive a spark's briefing yet",
+  "spark-door-identity-unsupported": "VibeField cannot identify this agent's spark tools yet",
+};
+
+function refuse(reason: SparkRefusal | undefined, provider: string): void {
+  if (reason !== undefined)
+    throw new RpcCallError("PRECONDITION_FAILED", REFUSED[reason], false, { reason, provider });
+}
+
+/** CP-5a (CP5-Q9 (a), ruled 2026-11-04) — whether the catalog lets the agent be a spark. A hatch needs the row offered
+ * (`supported` or `preview`) and claiming; a later birth of a spark already hatched needs it visible and claiming, so a
+ * deprecated row that keeps its claim still wakes its sparks (AC-D3). R23 lets a supported row claim it and a
+ * deprecated one keep it, no other. */
+function sparkClaimed(
+  catalog: AgentCatalogReaders,
+  provider: string,
+  birth: "hatch" | "born",
+): boolean {
+  if (birth === "hatch") return catalog.isOffered(provider, "spark");
+  return catalog.isVisible(provider) && catalog.entry(provider)?.offers.spark === true;
+}
+
+/** The facts a spark's briefing needs (CP-1d): the fields it carries, and a process the door can name. A plain run's
+ * (`instructions` false) needs no instructions. fieldd's one copy of the rule; R23 reads the same clauses from the pin
+ * (`portsOf`'s spark). */
 export function sparkFactsRefusal(
   capability: AgentBriefingCapabilities | undefined,
   instructions = true,
@@ -147,16 +156,22 @@ export function sparkFactsRefusal(
     (instructions && !capability.instructions)
   )
     return "spark-briefing-unsupported";
+  // The door proves the caller by a pane's PID and birth time. A helper or external agent is outside that
+  // ancestry: declaring a server is not evidence that its process belongs to this run. No vendor branches.
   if (capability.mcpServerProcess !== "terminal") return "spark-door-identity-unsupported";
   return undefined;
 }
 
-/** CP-5a (skeleton): the hatch's verdict — the claim is not read yet. */
+/** CP-5a — the hatch's verdict on an agent, a reason or none: the catalog's claim first (`spark-not-offered`, and then
+ * no fact is read), then the facts. The gate and `agent.providers`' `offers.spark` read this one predicate, so the New
+ * spark sheet's menu and the hatch never disagree. `capability` reads the agent's declaration, asked only once the
+ * claim stands. */
 export function sparkHatchRefusal(
-  _catalog: AgentCatalogReaders,
-  _provider: string,
+  catalog: AgentCatalogReaders,
+  provider: string,
   capability: () => AgentBriefingCapabilities | undefined,
 ): SparkRefusal | undefined {
+  if (!sparkClaimed(catalog, provider, "hatch")) return "spark-not-offered";
   return sparkFactsRefusal(capability());
 }
 

@@ -60,6 +60,7 @@ import type { BuiltinProviderOptions } from "@vibefield/puppeteer-builtin-provid
 import { createBuiltinProviders } from "@vibefield/puppeteer-builtin-providers";
 import type {
   AgentAttachRecord,
+  AgentBriefingCapabilities,
   AgentContinuation,
   AgentHost,
   AgentInstallation,
@@ -85,6 +86,7 @@ import {
   type SpawnAgentResult,
 } from "@vibefield/puppeteer-runtime";
 import type { ProcessTable } from "@vibefield/puppeteer-runtime/spawn-through";
+import { sparkHatchRefusal } from "./agent-briefing";
 import { requireOffered as offeredBy, requireVisible as visibleBy } from "./agent-catalog-gates";
 import {
   AgentDistributionService,
@@ -1012,7 +1014,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
         ...(briefing === undefined ? {} : { briefing: { ...briefing } }),
         personas,
         status: row.status,
-        offers: this.offersHere(row),
+        offers: this.offersHere(row, briefing),
         ...(state !== undefined ? { history: state } : {}),
         ...(lastLaunchedAt !== undefined ? { lastLaunchedAt } : {}),
       });
@@ -1111,12 +1113,23 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
    * with `invoke` withdrawn where no launcher stands for the agent (its
    * adapter does not classify, no install was found, or no program can run a
    * launcher here — the gateway service logs which). With no gateway composed
-   * the claim stands as the table makes it. */
-  private offersHere(row: AgentCatalogEntry): AgentCatalogEntry["offers"] {
-    if (!row.offers.invoke) return row.offers;
-    const launchers = this.opts.launchers?.() ?? null;
-    if (launchers === null || launchers.has(row.id)) return row.offers;
-    return { ...row.offers, invoke: false };
+   * the claim stands as the table makes it.
+   * CP-5a — and `spark` is the hatch's own verdict for the composed provider
+   * (`sparkHatchRefusal`, the gate's one predicate): withdrawn where the row is
+   * not offered, or where the pin's briefing declaration lacks the facts (a
+   * claim R23 fails at preflight). The New spark sheet reads it, never the facts. */
+  private offersHere(
+    row: AgentCatalogEntry,
+    briefing: AgentBriefingCapabilities | undefined,
+  ): AgentCatalogEntry["offers"] {
+    let offers = row.offers;
+    if (offers.invoke) {
+      const launchers = this.opts.launchers?.() ?? null;
+      if (launchers !== null && !launchers.has(row.id)) offers = { ...offers, invoke: false };
+    }
+    if (offers.spark && sparkHatchRefusal(this.catalog, row.id, () => briefing) !== undefined)
+      offers = { ...offers, spark: false };
+    return offers;
   }
 
   /** agent.catalog — the visible rows for the caller's surface (AC-3;
