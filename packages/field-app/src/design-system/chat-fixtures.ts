@@ -212,9 +212,10 @@ const HATCHED_RUN = row({
 
 /** The needs-you queue's open items, oldest first, as needs.subscribe would say them (CP-3): the ask of Vela's own run,
  * read once with her row's blocker, and since TH-1 her card (TH-Q29 (a)); and Kiwi's held send to the first
- * vibe-field — Kiwi asked, then slept, and an answer would wake it (CP3-D7). Names as fieldd's `runLabel` gives them (a
- * session's title, else its agent's label); the card names a session @ offers by its handle instead
- * (`chatHandlesOf`), and the spark's own run by the spark's name. */
+ * vibe-field — Kiwi asked, then slept, and an answer would wake it (CP3-D7). Names as fieldd's `runLabel` gives them
+ * (CO-1b: a session's title, else its agent in its folder, else its agent, else its id): Vela's own run names no
+ * folder, so its agent; Kiwi's send goes to "Claude Code in vibe-field". The card names a session @ offers by its
+ * handle instead (`chatHandlesOf`), and the spark's own run by the spark's name. */
 const ITEMS: readonly NeedsItem[] = [
   {
     id: "ny-velaown0001",
@@ -235,7 +236,7 @@ const ITEMS: readonly NeedsItem[] = [
     asked: minutesAgo(30),
     words: "run the tests in packages/fieldd and tell me what fails",
     choices: [NEEDS_CHOICE_WORDS.allow, NEEDS_CHOICE_WORDS.notNow],
-    to: { session: "run-his-1", name: AGENT.label },
+    to: { session: "run-his-1", name: `${AGENT.label} in vibe-field` },
   },
 ];
 
@@ -1073,10 +1074,16 @@ const HATCHED_ASKS: NeedsItem = {
 /** Vela, awake, with a transcript behind her: the spark whose thread every card plate stands in. */
 const VELA = SPARKS[0] as SparkSummary;
 
-/** A session's name as fieldd's `runLabel` gives it (its title, else its row's catalog label, else its id): an untitled
- * run of the catalog's first agent, so its label (DESIGN.md's "Claude Code"). The card says it only for a session
- * Vela's @ does not offer (the agent she started, off the board); fieldd's own reasons say it too. */
+/** A session's name as fieldd's `runLabel` gives it (CO-1b: its title, else its agent in its folder, else its agent,
+ * else its id). The agent Vela started is untitled and fieldd had not read its folder when it asked, so its agent alone
+ * (DESIGN.md's "Claude Code"; an item keeps the name it was asked with). The card says it only for a session Vela's @
+ * does not offer (that agent, off the board). fieldd's reasons never say it: a reason names the session its line
+ * already names as "it" ("it ended", CO-1b). */
 const SESSION_NAME = AGENT.label;
+
+/** The person's untitled sessions in vibe-field, as fieldd names them since CO-1b: their agent in their folder. Vela's
+ * thread names them by @'s handles instead ("vibe-field", "vibe-field·2"). */
+const IN_VIBE_FIELD = `${AGENT.label} in vibe-field`;
 
 /** How Vela's thread names the person's sessions: "vibe-field", "vibe-field·2" and "rosetta", as her @ does. */
 export const NEEDS_HANDLES = chatHandlesOf(VELA);
@@ -1104,7 +1111,7 @@ const HELD_SEND = velaItem({
   words: "run the tests in packages/fieldd and tell me what fails",
   count: 3,
   choices: [NEEDS_CHOICE_WORDS.allow, NEEDS_CHOICE_WORDS.notNow],
-  to: { session: "run-his-1", name: SESSION_NAME },
+  to: { session: "run-his-1", name: IN_VIBE_FIELD },
 });
 /** …and one to the second session in a folder of that name, started after the first: "vibe-field·2", as @ says. */
 const HELD_SEND_SECOND = velaItem({
@@ -1112,7 +1119,7 @@ const HELD_SEND_SECOND = velaItem({
   kind: "held-send",
   words: "review the input queue's restore and say what you'd change",
   choices: [NEEDS_CHOICE_WORDS.allow, NEEDS_CHOICE_WORDS.notNow],
-  to: { session: "run-his-2", name: SESSION_NAME },
+  to: { session: "run-his-2", name: IN_VIBE_FIELD },
 });
 const HELD_SPAWN = velaItem({
   id: "ny-plateheldspawn",
@@ -1251,7 +1258,8 @@ export const needsLiveEntryOf = (items: readonly NeedsItem[]): SparkEntry => vel
 export function needsLiveAnswerOf(item: NeedsItem, choice: number): NeedsItem {
   const kind = needsKindOf(item);
   if (kind === "held-send" && choice === 0)
-    return answeredOf(item, choice, { outcome: "failed", reason: `${SESSION_NAME} ended` });
+    // fieldd's reason names the session its line already names as "it" (CO-1b)
+    return answeredOf(item, choice, { outcome: "failed", reason: "it ended" });
   if (kind === "held-spawn" && choice === 0)
     return answeredOf(item, choice, { told: false, waits: "Vela's session is not running yet" });
   return answeredOf(item, choice);

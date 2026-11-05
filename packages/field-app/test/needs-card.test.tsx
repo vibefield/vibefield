@@ -456,12 +456,12 @@ describe('what the card says (DESIGN.md §8 "Chat\'s thread", the needs-you card
 
   it("says what you said once answered, and what the act came to when it did not go as asked", () => {
     expect(needsSaid(answered(QUESTION, 0), 0)).toEqual({ text: "You said Push", tone: "done" });
-    expect(
-      needsSaid(answered(HELD_SEND, 0, { outcome: "failed", reason: "claude·2 ended" }), 0),
-    ).toEqual({
-      text: "You said Allow · Couldn't send Vela's words to claude·2: claude·2 ended",
-      tone: "failed",
-    });
+    expect(needsSaid(answered(HELD_SEND, 0, { outcome: "failed", reason: "it ended" }), 0)).toEqual(
+      {
+        text: "You said Allow · Couldn't send Vela's words to claude·2: it ended",
+        tone: "failed",
+      },
+    );
     expect(
       needsSaid(answered(HELD_SPAWN, 0, { outcome: "failed", reason: "no sign-in" }), 0),
     ).toEqual({
@@ -566,13 +566,13 @@ describe('the card names a session as @ does (track CO, the handle; DESIGN.md §
   });
 
   it("T6: says what an answer came to under the card's names, and as fieldd names them with none handed", () => {
-    const failed = answered(HELD_SEND, 0, { outcome: "failed", reason: "claude·2 ended" });
+    const failed = answered(HELD_SEND, 0, { outcome: "failed", reason: "it ended" });
     expect(needsSaid(failed, 0, handledCard(HELD_SEND).names)).toEqual({
-      text: "You said Allow · Couldn't send Vela's words to vibe-field·2: claude·2 ended",
+      text: "You said Allow · Couldn't send Vela's words to vibe-field·2: it ended",
       tone: "failed",
     });
     expect(needsSaid(failed, 0).text).toBe(
-      "You said Allow · Couldn't send Vela's words to claude·2: claude·2 ended",
+      "You said Allow · Couldn't send Vela's words to claude·2: it ended",
     );
     const asleep = answered(QUESTION, 0, {
       told: false,
@@ -1086,11 +1086,11 @@ describe("the card in Chat's thread, live (useNeedsCard under ChatView)", () => 
     await act(async () => $(`.vf-chat-row[data-spark="${LYRA.id}"]`)?.click());
     expect(card()).toBeNull();
     await frame([]);
-    await settleAnswer(0, answered(HELD_SEND, 0, { outcome: "failed", reason: "claude·2 ended" }));
+    await settleAnswer(0, answered(HELD_SEND, 0, { outcome: "failed", reason: "it ended" }));
     expect(statusLineSaid()).toEqual([
       {
         id: `needs-answer:${HELD_SEND.id}`,
-        text: `You said Allow · Couldn't send Vela's words to ${AGENT.label}: claude·2 ended`,
+        text: `You said Allow · Couldn't send Vela's words to ${AGENT.label}: it ended`,
       },
     ]);
   });
@@ -1171,10 +1171,10 @@ describe("the card names a session as the thread's @ does, live (track CO, the h
     await mountHandled([HELD_SEND]);
     await press("Allow");
     expect(queue.asked).toEqual([{ item: HELD_SEND.id, choice: 0 }]);
-    await settleAnswer(0, answered(HELD_SEND, 0, { outcome: "failed", reason: "claude·2 ended" }));
+    await settleAnswer(0, answered(HELD_SEND, 0, { outcome: "failed", reason: "it ended" }));
     // the failed line names the session as the question above it did, never fieldd's "claude·2" beside it
     expect(words($(".vf-needs-said"))).toBe(
-      "You said Allow · Couldn't send Vela's words to vibe-field·2: claude·2 ended",
+      "You said Allow · Couldn't send Vela's words to vibe-field·2: it ended",
     );
     // said on the card, so not again on the status line
     expect(statusLineSaid()).toEqual([]);
@@ -1235,12 +1235,12 @@ describe("the card names a session as the thread's @ does, live (track CO, the h
     await act(async () => $(`.vf-chat-row[data-spark="${LYRA.id}"]`)?.click());
     expect(question()).toBe("Lyra wants to send to vibe-field");
     await frame([LYRA_SEND]);
-    await settleAnswer(0, answered(HELD_SEND, 0, { outcome: "failed", reason: "claude·2 ended" }));
+    await settleAnswer(0, answered(HELD_SEND, 0, { outcome: "failed", reason: "it ended" }));
     // Lyra's @ offers run-31 nothing, yet the line names it as Vela's card did at the press
     expect(statusLineSaid()).toEqual([
       {
         id: `needs-answer:${HELD_SEND.id}`,
-        text: "You said Allow · Couldn't send Vela's words to vibe-field·2: claude·2 ended",
+        text: "You said Allow · Couldn't send Vela's words to vibe-field·2: it ended",
       },
     ]);
   });
@@ -1294,7 +1294,8 @@ describe("the catalog's needs-you card (docs/UI_SYSTEM.md: the shipping view on 
     expect(live("said")).toBe("You said Push");
     tick(NEEDS_SAID_MS);
     tick(NEEDS_LEAVE_MS);
-    // the held send to run-his-1 rises in its place, named by the thread's handles, never fieldd's "Claude Code"
+    // the held send to run-his-1 rises in its place, named by the thread's handles, never fieldd's "Claude Code in
+    // vibe-field" (CO-1b)
     expect(live("question")).toBe("Vela wants to send to vibe-field");
     expect(live("sub")).toBe("Your yes lasts until vibe-field ends.");
   });
