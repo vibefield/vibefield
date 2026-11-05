@@ -1,9 +1,12 @@
 // LP-6b (item 170): THE release switch and the build-path remap every shipped native build takes under it
 // (scripts/build-paths.mjs) — field-native's release entry, rosettad's and mille's sibling builds, a go sibling's — each
 // through the door that APPENDS to the flags cargo would otherwise have used, never clobbering them. Unset, every build is
-// the plain one, so a development build in the shared target directory keeps its cache.
+// the plain one, so a development build in the shared target directory keeps its cache. And the stage's one rewrite on
+// macOS: mille's .node leaves with `@rpath/<file>` as its own install name, signed ad hoc, before electron-builder runs.
 import assert from "node:assert/strict";
-import { readdirSync, readFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
@@ -20,7 +23,9 @@ import {
   readConfigRustflags,
   remapFlags,
   remapRequested,
+  setInstallName,
 } from "../../../scripts/build-paths.mjs";
+import { builderPathCounts } from "../../../scripts/host-links.mjs";
 import { goBuildArgs, siblingCargoInvocation, siblingPnpmEnv } from "../../../scripts/siblings.mjs";
 
 const REPO_ROOT = fileURLToPath(new URL("../../../", import.meta.url));
@@ -432,4 +437,104 @@ test("release.yml's build job sets the switch, and nothing else in .github or th
     readFileSync(join(REPO_ROOT, "apps/desktop/packaging/build-native-release.mjs"), "utf8"),
     /if \(!remapRequested\(env\)\)/u,
   );
+});
+
+test("mille's install name: install_name_tool -id, THEN an ad hoc signature; a failed rewrite signs nothing", () => {
+  const calls = [];
+  const staged = "/stage/bin/mille.darwin-arm64.node";
+  setInstallName(staged, "@rpath/mille.darwin-arm64.node", {
+    run: (command, args) => calls.push([command, args]),
+  });
+  assert.deepEqual(calls, [
+    ["install_name_tool", ["-id", "@rpath/mille.darwin-arm64.node", staged]],
+    ["codesign", ["--force", "--sign", "-", staged]],
+  ]);
+  const ran = [];
+  assert.throws(
+    () =>
+      setInstallName("/x.node", "@rpath/x.node", {
+        run: (command) => {
+          ran.push(command);
+          if (command === "install_name_tool")
+            throw new Error("install_name_tool: larger updated load commands do not fit");
+        },
+      }),
+    /do not fit/,
+  );
+  assert.deepEqual(ran, ["install_name_tool"]);
+});
+
+test("on this Mac: a dylib named by its target path leaves with @rpath, a valid ad hoc signature and no builder path", (t) => {
+  if (process.platform !== "darwin") return t.skip("install_name_tool and codesign are macOS's");
+  if (spawnSync("cc", ["--version"]).status !== 0) return t.skip("no C compiler to make a dylib");
+  const dir = mkdtempSync(join(tmpdir(), "vf-install-name-"));
+  try {
+    writeFileSync(join(dir, "x.c"), "int mille_probe(void) { return 42; }\n");
+    const node = join(dir, "mille.darwin-arm64.node");
+    // the shape napi's build leaves: a cdylib whose own name is the target's deps path
+    const built = join(
+      dir,
+      "target",
+      "aarch64-apple-darwin",
+      "release",
+      "deps",
+      "libmille_binding.dylib",
+    );
+    const cc = spawnSync(
+      "cc",
+      ["-dynamiclib", "-o", node, join(dir, "x.c"), `-Wl,-install_name,${built}`],
+      {
+        encoding: "utf8",
+      },
+    );
+    assert.equal(cc.status, 0, cc.stderr);
+    const id = () =>
+      spawnSync("otool", ["-D", node], { encoding: "utf8" }).stdout.trim().split("\n").at(-1);
+    assert.equal(id(), built);
+    assert.equal(builderPathCounts(node, ["/release/deps/"])["/release/deps/"], 1);
+    setInstallName(node, "@rpath/mille.darwin-arm64.node");
+    assert.equal(id(), "@rpath/mille.darwin-arm64.node");
+    // the old name's bytes left with it: the gate's marker counts none
+    assert.equal(builderPathCounts(node, ["/release/deps/"])["/release/deps/"], 0);
+    const verify = spawnSync("codesign", ["--verify", "--strict", node], { encoding: "utf8" });
+    assert.equal(verify.status, 0, verify.stderr);
+    assert.match(
+      spawnSync("codesign", ["-dv", node], { encoding: "utf8" }).stderr,
+      /Signature=adhoc/u,
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("the stage rewrites mille's install name on macOS after the copy, and stages before electron-builder on every release path", () => {
+  const stage = readFileSync(join(REPO_ROOT, "scripts/stage-package.mjs"), "utf8");
+  assert.match(stage, /import \{ setInstallName \} from "\.\/build-paths\.mjs";/u);
+  const copy = stage.indexOf("copyFileSync(f.abs, dest);");
+  const rewrite = stage.search(/setInstallName\(mille, `@rpath\/\$\{milleNativeName\}`\)/u);
+  assert.ok(copy > -1 && rewrite > copy, "the rewrite follows the copy");
+  assert.match(stage.slice(copy, rewrite), /if \(process\.platform === "darwin"\) \{/u);
+  // package:mac:release (run-macos-release.mjs; release.yml's signed path): the stage, its verify, then electron-builder
+  const driver = readFileSync(
+    join(REPO_ROOT, "apps/desktop/packaging/run-macos-release.mjs"),
+    "utf8",
+  );
+  const staged = driver.indexOf('run("pnpm", ["run", "package:stage"])');
+  assert.ok(staged > -1, "the driver stages");
+  assert.ok(
+    staged < driver.indexOf('"packaging/run-electron-builder.mjs"'),
+    "before electron-builder",
+  );
+  // package:stage ends in the stager
+  const desktop = JSON.parse(readFileSync(join(REPO_ROOT, "apps/desktop/package.json"), "utf8"));
+  assert.match(
+    desktop.scripts["package:stage"],
+    /&& node \.\.\/\.\.\/scripts\/stage-package\.mjs$/u,
+  );
+  // release.yml's unsigned path: its stage step, then electron-builder
+  const release = readFileSync(join(REPO_ROOT, ".github", "workflows", "release.yml"), "utf8");
+  const build = release.slice(release.indexOf("\n  build:\n"), release.indexOf("\n  sign:\n"));
+  const unsignedStage = build.indexOf("pnpm run package:stage");
+  assert.ok(unsignedStage > -1);
+  assert.ok(unsignedStage < build.indexOf("node packaging/run-electron-builder.mjs --mac"));
 });

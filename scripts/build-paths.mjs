@@ -35,6 +35,12 @@
 //
 // The pinned checkouts (../rosetta-pin, ../mille-pin; W-D10, FS-1b) are never edited: their builds are reached only
 // through these flags in the environment and the arguments OUR scripts pass.
+//
+// MILLE'S INSTALL NAME (`setInstallName`, the stage's step on macOS): a cdylib's LC_ID_DYLIB is the path the linker wrote
+// it to (`…/target/aarch64-apple-darwin/release/deps/libmille_binding.dylib`), which no rustflag reaches, and napi copies
+// the file as it is. The stage rewrites it to `@rpath/<file>` and re-signs the file ad hoc, every stage and with or
+// without the switch: the name is never read (fieldd's worker dlopens the explicit path), so the rewrite costs nothing.
+import { execFileSync } from "node:child_process";
 import { readFileSync, realpathSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
@@ -219,4 +225,19 @@ export function napiRemapEnv({ env, flags, configs = [] }) {
     .split(/\s+/u)
     .filter((flag) => flag !== "");
   return { env: { ...env, RUSTFLAGS: [...existing, ...flags].join(" ") }, door: "RUSTFLAGS" };
+}
+
+function runTool(command, args) {
+  execFileSync(command, args, { stdio: ["ignore", "pipe", "pipe"] });
+}
+
+/** A staged dylib's OWN install name (LC_ID_DYLIB) rewritten to `id`, then the file re-signed ad hoc. The rewrite changes
+ * signed bytes, and arm64 refuses to load code whose signature is invalid. This Mac's install_name_tool (Command Line
+ * Tools) regenerates a linker-signed signature by itself (measured 2026-11-05 on a scratch dylib: `codesign --verify`
+ * passes straight after `-id`, flags still `adhoc,linker-signed`), but that is the tool's courtesy, not a contract: the
+ * explicit ad hoc signature makes the file loadable whichever cctools ran. `run(command, args)` throws on a failure
+ * (execFileSync's error carries the tool's stderr). On the signed path the Developer ID signing re-signs it again. */
+export function setInstallName(file, id, { run = runTool } = {}) {
+  run("install_name_tool", ["-id", id, file]);
+  run("codesign", ["--force", "--sign", "-", file]);
 }

@@ -37,6 +37,8 @@
         "{workspaceRoot}/scripts/host-links.mjs",
         "{workspaceRoot}/scripts/build-paths.mjs",
         "{workspaceRoot}/.github/workflows/release.yml",
+        "{workspaceRoot}/apps/desktop/packaging/run-macos-release.mjs",
+        "{workspaceRoot}/apps/desktop/package.json",
         "{workspaceRoot}/scripts/native-floor.mjs",
         "{workspaceRoot}/scripts/cargo-target.mjs",
         "{workspaceRoot}/scripts/package-census.mjs",

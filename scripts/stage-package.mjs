@@ -36,6 +36,8 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 // WP8-D6: the bundled list's one home, shared with smoke:bundled's stager.
 import { BUNDLED_PLUGINS } from "../apps/desktop/packaging/bundled-list.mjs";
+// LP-6b (item 170) — mille's .node leaves the stage with no build path as its own install name.
+import { setInstallName } from "./build-paths.mjs";
 // Tooling (a) — field-native's binaries are read where cargo builds them, never `<repo>/target` by guess.
 import { cargoBinaries } from "./cargo-target.mjs";
 import { auditHostLinks, launchCheck } from "./host-links.mjs";
@@ -705,6 +707,27 @@ const stage = ({ files, manifest }) => {
     mkdirSync(dirname(dest), { recursive: true });
     copyFileSync(f.abs, dest);
     chmodSync(dest, f.mode);
+  }
+  // LP-6b (item 170): mille's .node carries its build's own path as its install name (LC_ID_DYLIB:
+  // `/Users/runner/work/vibefield/mille-pin/target/…/release/deps/libmille_binding.dylib` on CI, the SSD's target here),
+  // which no rustflag reaches. Rewritten to `@rpath/<file>` (fieldd's worker dlopens the explicit path, so the name is
+  // never read) and re-signed ad hoc, because the rewrite changes signed bytes and arm64 refuses to load an invalid
+  // signature on the unsigned path (scripts/build-paths.mjs `setInstallName`). The stage runs before electron-builder in
+  // every release path (package:stage, then run-electron-builder.mjs: run-macos-release.mjs and release.yml's unsigned
+  // steps alike), and on the signed path @electron/osx-sign finds the .node as binary code and signs it again with the
+  // Developer ID (electron-builder.yml's `binaries` note).
+  if (process.platform === "darwin") {
+    const mille = join(outAbs, `bin/${milleNativeName}`);
+    if (existsSync(mille)) {
+      try {
+        setInstallName(mille, `@rpath/${milleNativeName}`);
+      } catch (error) {
+        fail(
+          `bin/${milleNativeName}: its install name could not be rewritten — ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+      chmodSync(mille, DATA_MODE);
+    }
   }
   const manifestPath = join(outAbs, "app/package.json");
   writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
