@@ -730,7 +730,8 @@ field, heard"; the page *Hear What Needs You* (Lq2MXZkT; sources `draft/sound/`)
      - a usage string for every system prompt the clean-Mac row meets;
      - each shipped daemon its own entitlements, with no inherited `allow-jit`, and its release signature read
        back: LANDED 2026-11-05 (M133 `f514215f4`, LANDED "LP-6"); owed: the signed witnesses (W rows);
-     - no build paths in shipped binaries (`lp/paths`, item 170);
+     - no build paths in shipped binaries: LANDED 2026-11-05 (M135 `96606efa9`, LANDED "LP-6b"); owed: the first
+       remapped release's witnesses, and truffle's sidecar (item 170, petition T14);
      - third-party notices on the Mac and on iOS: LANDED 2026-11-05 (M131 `02b47ba2a`, LANDED "LP-5"); the
        staged `Resources/legal` witness passed at run 133; owed: the packaged one on the first signed nightly;
      - the surface lab out of production builds (Q3): LANDED (M133, witnessed by run 133's build:renderer);

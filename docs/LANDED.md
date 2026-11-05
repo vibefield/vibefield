@@ -32549,3 +32549,73 @@ fieldd sources and 9 fieldd tests):
   Each such launcher is to be found and moved inside, or left saying so.
 - **James:** his next `pnpm dev` after the land carries his dev desk's state once. Quit any VibeField dev app first,
   or the runner refuses and says so. Deleting the old `.vibefield/dev/electron-user-data` afterwards is his hand.
+
+## LP-6b — no builder paths in the binaries we build (item 170): the gate reads every shipped Mach-O and wasm, every shipped cargo build remaps its paths under ONE release switch, and mille's .node leaves the stage with an @rpath install name (2026-11-05; `0b24e527f` → `96606efa9`, 6 commits on main `913838ff5`, lane `lp/paths` in `/Volumes/SamsungRed/lanes/lp-paths/vibe-field`, minted as M135 `96606efa9`, run 135)
+
+**What it rests on.**
+- Item 170, prod-builder's strings scan of the published nightly-20261104 (VF-PM 01:25Z and 01:29Z): field-native 790,
+  field-terminal-host 378, field-freeway-host 199 and rosettad 450 registry paths; mille.darwin-arm64.node 176 plus its
+  own install name (`/Users/runner/work/vibefield/mille-pin/target/…/release/deps/libmille_binding.dylib`);
+  sidecar-slim 924 under hostedtoolcache, 921 under go/pkg/mod and 4 under work/truffle.
+- The 0.9 launch plan's phase 1 row "no build paths in shipped binaries", ruled at the leans by James on 2026-11-05
+  (01:04Z). The lane was stacked on LP-6 (`lp/harden`), built code-only in wave 1 and reviewed through two lenses (one
+  shared finding plus the target-rustflags forms, both fixed in `ef9f9ebac`). prod-builder gave its GO at `8863c58d0`
+  (03:58Z) and, after VF-PM's 03:58Z/03:59Z addendum rulings, its RE-GO at `c720dfdeb` (04:02Z).
+- `.github/workflows/release.yml` is release-class, so the lane waited for James's eye: "L6b L1 L8 L7 ok" (05:40Z).
+- Re-cut onto LP-6's landed tip, then onto `913838ff5` (BP-1c's records). `diff 913838ff5..96606efa9` equals `diff
+  4bcec6070..c720dfdeb`, 11 files with `git patch-id --stable` equal for all 11.
+
+**What landed.**
+- The gate (`scripts/host-links.mjs`, LP-6's, widened): every Mach-O under the package, and every WebAssembly module (by
+  its `\0asm` magic), not `Contents/Resources/bin` alone.
+  - Markers counted per file: `/Users/runner`, `/.cargo/registry`, `/.cargo/git/checkouts`, `/.rustup/toolchains`,
+    `hostedtoolcache`, `/go/pkg/mod`, `/release/deps/` (a dylib's own install name), plus this host's checkout and
+    target. rustc's virtual prefix counts only in its shape, `/rustc/<40 hex>/`, and is said, never failed.
+  - A builder path in a binary we build FAILS the gate. Three named exception rows, each a binary we do not build:
+    truffle's `sidecar-slim` (Go; petition T14, `-trimpath`), `loro_wasm_bg.wasm` (loro-crdt's published wasm, item
+    176) and `fieldd` (Node's release executable, which the SEA injects into; its `/Users/admin/build/ws` is REPORTED by
+    a new `reported` field, and a path of ours in it still fails). A row with nothing left to say asks to be retired.
+- THE SWITCH: `VIBEFIELD_REMAP_BUILD_PATHS=1`, read in ONE helper (`scripts/build-paths.mjs` `remapRequested`: "1" on;
+  unset, "" or "0" off; anything else refused) and set in ONE place, release.yml's build job env.
+  - Unset, every build is byte for byte the command it was, so dev builds and the SHARED cargo target keep their cache.
+  - Set, `remapFlags` appends `--remap-path-prefix` for the checkout, its cargo target dir, CARGO_HOME and RUSTUP_HOME
+    (each as given and as its realpath) to the flags cargo would use, never clobbering a config's rustflags. Cargo's
+    `trim-paths` is unstable at every pinned toolchain and is not used.
+  - It reaches field-native, terminal-host and freeway-host (`build-native-release.mjs`), rosettad (`siblings:build`)
+    and mille's napi build (`siblings.mjs`, which reads the cargo configs from the directory napi runs cargo in).
+- mille's `.node` leaves the stage named `@rpath/mille.darwin-<arch>.node`: `stage-package.mjs` runs
+  `install_name_tool -id` then `codesign --force --sign -` on every darwin stage, before electron-builder sees it.
+- Errata at the source: LP-6's two claims in `host-links.mjs` and `run-update-smoke.mjs` this lane falsified, dated.
+- `tooling/dev-runner/test/build-paths.test.mjs` (new) and host-links' "THE EXPECTED RED" row, which builds today's
+  package from synthetic stand-ins at the scan's exact counts.
+
+**Validation.**
+- This Mac, from inside the lane (nice 19, guard clear), each rc=0:
+  - at `3ad3ad97c` on `42869dd3c` (05:41:42–05:43:06Z): preflight; electron-shell typecheck; release-scripts 48/48;
+    `node --test` 144/144; dev-runner:test with no Nx cache; biome; walls; actionlint. The gate on
+    `/Applications/VibeField.app` gave the expected red: exit 1, 5 BUILDER PATH lines and 3 EXCEPTION lines;
+  - at `96606efa9` (05:45:41–05:45:54Z), the docs-only move: preflight, biome, walls and actionlint.
+- The mini (a9), run 135: minted `mint/lp-paths` = `96606efa9` (tree `1d15db363353`, stacked on `913838ff5`), and
+  `pnpm verify` armed at 05:48:52Z, exit 0 at 05:54:05Z. The switch was unset on the mini, as on every dev host.
+  - vitest 12,473 passed, 0 failed, 20 skipped (as run 134). `node --test` 443/0: +23 and −4, the four LP-6 host-links
+    rows replaced by their LP-6b forms.
+  - Named rows green on the mini: "THE EXPECTED RED — today's artifacts at prod-builder's counts…", "release.yml's
+    build job sets the switch, and nothing else…" and "on this Mac: a dylib named by its target path leaves with
+    @rpath…".
+  - cargo 545/0, biome 3154 files, gen:check exit 0. Logs: `lanes/ts6/logs/mini/run135/`.
+  - Step 2 (the gate read-only on a packaged app) was skipped: the mini holds no packaged VibeField.app.
+
+**Found.**
+- No rustflag reaches a cdylib's own install name: the linker writes the path it built to, and napi copies the file as
+  it is. Hence the stage's rename.
+- loro-crdt's published wasm carries `/Users/runner` ×74 and `/.cargo/registry` ×74: item 176, FILED, upstream.
+- Item 178, FILED (VF-PM, 05:46Z): `third-party-notices.mjs`'s `NODE_BUNDLES` is a hand list, and SD-2's
+  `sound-worker.cjs` had no row (SD-2 adds it). The check "every staged `.cjs` has a row, or the stage refuses" is its
+  own small slice after LP-7.
+
+**Owed.**
+- The first REMAPPED release build: its "carry no builder path" line, the packaged gate at the next signed nightly (5
+  binaries at 0, "3 excepted") and `otool -D` = `@rpath/mille.darwin-arm64.node` (prod-builder's witnesses).
+- Item 170 NARROWS to truffle's sidecar: T14, the `-trimpath` petition (`draft/launch/truffle-trimpath-petition.md`), at
+  James's hand. Item 176 waits on loro's own release build, at an EL8 or by a loro petition.
+- LP-1's local-release guard, which requires this switch, lands next (`lp/rails`).
