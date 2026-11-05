@@ -786,6 +786,9 @@ phone"; DECISIONS PC
        release (PR #44) and an exact pin.
      - **E** the scope freeze (VF-PM, James; `draft/launch/scope-freeze-proposal.md`): what 0.9 holds, and item 152
        and 169 (a say forgotten across a fieldd restart, 152's class) fixed, or the feature they touch kept out.
+     - **F** testers report a problem in one place (LP-D18): LANDED 2026-11-05 (M142 `d48b6fe6d`, LANDED "LP-7"). Owed:
+       James's security contact before beta.1's cohort arrives (a SECURITY.md with a private contact, or private
+       vulnerability reporting turned on), and the first tester's report through the form.
    - **Phase 3, iPhone and iPad to external TestFlight** (5–19 Nov, the iOS lane and James):
      - the App Store export and uploads signed in with an App Store Connect API key (build 4's upload failed on 09-20,
        and build 5 was archived but never uploaded, so the next build is 6, carrying P0-H1 and everything since 09-13);

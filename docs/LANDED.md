@@ -33385,3 +33385,53 @@ kit's five fixture mirrors, three fieldd sources and five fieldd tests, five in 
 - S4c, the DEBUG replay seam: one pass of a corpus, then a hold (VF-PM 06:42Z), so a real phone has an idle row.
 - S5, James's device run, on `n5-120s-s1` and `n20-120s-s1`. This bench re-runs on exactly those corpora first (one
   pre-emptible mini slot after S4c), so the recipe page's expected numbers are the corpus he plays.
+
+## LP-7 — testers report a problem in one place: GitHub's issue forms, and Settings → Diagnostics' Report a problem with this Mac's version, macOS and chip filled in, with no telemetry (LP-D18; 2026-11-05; `669e6b39d` → `d48b6fe6d`, 4 commits on main `b8c013220`, lane `lp/feedback` in `/Volumes/SamsungRed/lanes/lp-feedback/vibe-field`, minted as M142 `d48b6fe6d`, run 142)
+
+**What it rests on.**
+- LP-D18, ruled at the lean by James on 2026-11-05 (01:04Z): testers report problems in one place, with the facts we
+  need, and nothing private leaves the Mac unless they send it. There is no telemetry.
+- The lane was built code-only in wave 1 off `f599761bc` and reviewed through two lenses. Its one finding, the issue
+  forms outside field-app's test inputs, was fixed in `5f06fc4a0`. VF-PM ruled the security contact James's to set
+  (02:01Z, `146871dc0`). The light pass found one TS2769 (fixed in `d48b6fe6d`).
+- RELEASE-CLASS (`.github/ISSUE_TEMPLATE/`), so the lane waited for James's eye: "L6b L1 L8 L7 ok" (05:40Z).
+- The landed range carries the GO'd tip `c32ae536e` (on `f599761bc`) by `git patch-id --stable`, all 9 files, through
+  its re-cuts onto each landed main (the last onto S4a's records `b8c013220`). Two of the 9 are shared with SD-2 and
+  merged clean (`packages/field-app/package.json`, `SettingsPanel.tsx`); none is shared with L8, A3, S4a or their
+  records.
+
+**What landed.**
+- `.github/ISSUE_TEMPLATE/bug_report.yml`, "Report a problem": what happened, the steps, what you expected, the
+  VibeField version (Settings → Updates shows it), the macOS version, the Mac's chip, the iPhone or iPad and its iOS
+  version when the phone is involved, and the support bundle (Settings → Diagnostics → Support bundle: Preview, then
+  Export preview…). It says to read the redacted bundle before attaching it, since the issue is public.
+- `feature_request.yml`, "Suggest a feature", and `config.yml`: blank issues off, and a "Report a security problem"
+  link to the repository's security-policy page, marked SET BY JAMES.
+- `packages/field-app/src/panels/report-problem.ts` (new): `reportProblemUrl` opens the bug form with the version,
+  macOS and chip filled in by the form's field ids, each trimmed, one line and at most 64 characters, else left out.
+  `reportProblemWords` says only the facts the link carries, and that issues there are public. The macOS version and
+  chip come from Chromium's client hints, never the frozen user-agent string.
+- Settings → Diagnostics gains a "Report a problem" row under the Support bundle box.
+- `packages/field-app/package.json`: field-app's Nx `test` target takes the issue forms as an input, so a renamed field
+  id fails the suite locally instead of replaying a cached pass. No dependency moved (PIN-CLASS by the ERE, named).
+
+**Validation.**
+- This Mac, from inside the lane (nice 19, guard clear), each rc=0:
+  - at `ff17aba7b` on TD-4's trial tip (05:52:28–05:53:17Z): preflight; field-app typecheck; diagnostics-section,
+    report-problem, browser-data-section and panels 33/33; biome; walls; actionlint;
+  - at T″ `d48b6fe6d` (07:41:01–07:41:47Z), on the lane's frozen install under co-plan/INSTALL: preflight;
+    field-app typecheck; the same four files 33/33; biome; walls; actionlint.
+- The mini, run 142: `pnpm verify` exit 0 at `d48b6fe6d` (07:49:04Z). vitest 12,668 passed, 0 failed, 20 skipped over
+  904 files (+15, all LP-7's: report-problem.test.ts 13 new, diagnostics-section 8, +2); node 445/0; cargo 545/0;
+  biome over 3,197 files; gen:check clean. No step 2: LP-7's witness is the first tester's report.
+
+**Found.**
+- The macOS version and chip are read from Chromium's client hints. Main's own host facts (`process.getSystemVersion`,
+  `process.arch`) on the shell's state would be more reliable: a contracts, preload and main follow-up slice.
+- field-app's tests that read DESIGN.md have the same gap the issue forms had: DESIGN.md is no input of the `test`
+  target, so a local run can replay a cached pass after a DESIGN.md edit.
+
+**Owed.**
+- **James:** the security contact, before beta.1's cohort arrives: a SECURITY.md with a private contact, or private
+  vulnerability reporting turned on. Until then the form's security link opens an empty page.
+- The first tester's report through the form, with the version, macOS and chip filled in (the first beta).
