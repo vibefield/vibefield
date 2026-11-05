@@ -33297,3 +33297,91 @@ kit's five fixture mirrors, three fieldd sources and five fieldd tests, five in 
   These are this commit's lines, read after E1's insert.
 
   Claude is still the only spark. CP-5c's and CP-5d's entries close these lines by name.
+
+## PG-9 S4a — the phone's mesh measured on the desk: busy and idle B/s at its floor, an app switch by cursor against a whole open, and every idle byte PU-I's 30 s cost step (2026-11-05; `6085d4eb2` → `10b98665a`, 2 commits on main `fc70097e3`, lane `pg/9-s4a` in `/Volumes/SamsungRed/lanes/pg9/s4a`, stacked as M141 `10b98665a`, run 141)
+
+**What it rests on.**
+- PG-9's S4a, the bench (the plan `lanes/ios/PG9-PLAN.md`), landed on its own after S1–S4b (VF-PM 03:26Z).
+- VF-PM's rulings:
+  - its run waits for a quiet host, with its host state said;
+  - at 06:31Z, the bar on the mini reads "no swap pressure", not a swap-free number (below);
+  - at 06:35Z, idle's upserts are ATTRIBUTED before it lands.
+- `packages/field-app/perf/` alone: bench code, with no product line, no contract and no daemon change. The two perf
+  files run under `vitest.perf.config.ts`, outside verify's suites; verify's typecheck covers them.
+
+**What landed** (4 files, +734 −3).
+- `perf/lib/mesh-bench.ts` (new): the phone's mesh on the wire, through a real `MeshBoard` hub over two desktops
+  replayed from a synthetic corpus, in virtual time. The bytes are each frame's JSON-RPC text, as the phone's own
+  traffic line counts them.
+  - STREAM: a warm first open, busy through the corpus plus one trailing floor, then 30 s of idle. Then two app
+    switches, 5 s away and 90 s away (past the hub's 60 s linger).
+  - BUSY SWITCH: the phone leaves halfway through the corpus for 2 s while the swarm works on.
+  - Each comeback names the cursors the phone held, as FieldLink does, and a whole open is taken beside it at the
+    same instant, so the saving is measured, never assumed. The first floor after each comeback is counted too.
+  - The idle window's attribution: each idle upsert is diffed, leaf by leaf, against the row the phone held, and
+    classed by the monitor row's field: cost (`cost`, `tokens`), recency and status (`status`, `statusSince`,
+    `stale`, `alive`, `activity`, `wait`, `observed`, `pending`), or other. The raw paths and each frame's offset are
+    kept beside the classes.
+- `perf/projection-bench.perf.ts`: a third test, "PG-9 S4a". It prints one line per window and switch, plus the idle
+  attribution, and writes `mesh-wire.json`.
+  - It asserts that every comeback answers every desktop one way, that the busy window heard frames, and that every
+    idle upsert is classed.
+  - `VF_GODVIEW_MESH_RECIPES` picks the corpora; `recipes.ts` adds `MESH_RECIPES` (n5 and n20, 8 s, seed 1).
+- `perf/lib/model-stream.ts` exports `floorOfRows`.
+
+**The numbers** (synthetic swarm, corpora `n5-8s-s1` and `n20-8s-s1`; two desktops; the phone's floor 1 s):
+
+| | n5 | n20 |
+|---|---|---|
+| the first open | 8 rows, 7,274 B | 27 rows, 26,207 B |
+| busy (9 s) | 5,070 B/s, 22 frames | 18,103 B/s, 25 frames |
+| idle (30 s) | 218 B/s, 2 frames, 6 upserts | 855 B/s, 2 frames, 25 upserts |
+| a switch after 5 s idle | 0 resumed, 2 delta: 3,505 B against 7,524 B (53.4% saved) | 1 resumed, 1 delta: 2,435 B against 26,649 B (90.9% saved) |
+| a switch after 90 s (past the linger) | 1 delta, 1 whole: −0.3% | 1 delta, 1 whole: −0.1% |
+| a switch after 2 s busy | 2 delta: 39.6% saved | 2 delta: 44.5% saved |
+
+**Validation.**
+- The mini (a9), quiet each time (memory pressure 1 before and after, swap growth 0 MB, no other job):
+  - 06:31Z at `47cdfe479`: PASS in 1,115 ms (load 1.50, swap used 1,788 of 3,072 MB, 6.5 GiB free RAM).
+  - 06:46Z at `f7cf895b8`, with the attribution: PASS in 1,162 ms (load 5.79 just after SD-2's stage pass, 3.2 GiB
+    free RAM). The bytes equal the first run's line for line.
+  - `mesh-wire.json` sha256 `32564972…` (`lanes/ts6/logs/mini/pg9s4a/s4a2-f7cf895b8/bench/`). Reports:
+    `lanes/pg9/a9-s4a-report-0631.md`, `a9-s4a2-report-0646.md`.
+- This Mac (direct binaries, nice 19, the guard clear): biome clean; field-app tsc with only the lane's known
+  mille `relay.ts(1,63)` error. A smoke of the attributed bench (not the witness) read the mini's bytes to the byte.
+- Run 141: a9, `pnpm verify` exit 0 at 07:34:03Z (armed 07:28:39Z): vitest 12,653 passed, 0 failed, 20
+  skipped, with no per-file change (the perf files run outside verify's suites; its typecheck over them is 0);
+  node 445/0; cargo 545/0; biome 3,195 files (+1, `mesh-bench.ts`); gen:check 0. Logs:
+  `lanes/ts6/logs/mini/run141/`.
+- Landed: main fast-forwarded `fc70097e3` → `10b98665a` at 07:35:37Z (the fixer).
+
+**Found.**
+1. **Idle on the phone's cut is PU-I's cost step, and nothing else at n5.**
+   - n5: 6 of 6 idle upserts changed only `monitorRow.cost.series.lastStepAt`.
+   - n20: 21 of 25 changed only that path, and 4 also flipped `stale`.
+   - At both sizes the idle window's two frames (one a desktop) land together at +22 s, at the backend's 30 s cost
+     step. This is LANDED "PG-1f"'s defect, measured on the phone's cut: the usage ledger stamps `lastStepAt` from the
+     clock on every read, so every priced row re-emits at each step.
+   - With PU-I fixed upstream, idle would be silent at n5, and four stale flips at n20. PU-I is James's to file; VF-PM
+     carries the number on his dashboard.
+2. **A 5 s switch after idle still meets changed rows** (n5: 3 rows, both desktops answered by delta). Those are the
+   same cost-step rows; a resumed answer needs a desktop whose rows did not move.
+3. **Past the linger, cursors save nothing, as designed.** The hub is gone, so a returning phone pays a whole open.
+   - The home's own desktop is answered by a delta that carries all its rows, 24 B more than a snapshot would be
+     (7,547 B against 7,523 B). `answerFor` could answer whole when a delta is no smaller. Noted, not built.
+   - In the first floor after it, a peer's board arrives again as a reset when the new hub's upstream re-attaches
+     (n5 1,345 B, n20 5,510 B). A whole open at the same instant would meet the same reset.
+
+**Errata, corrected at their sources (2026-11-05).**
+- **This closes PG-9's owed line.** PG-9's entry above (its Owed) says S4a's run "waits for a quiet host (load < 20,
+  swap free > 4 GiB)". The swap clause was fd's, written against the MacBook's pinned swap. The mini's swap is
+  3,072 MB in all, so it could never hold there.
+  - The bar as ruled (VF-PM, 06:31Z): load under 20, NO SWAP PRESSURE (pressure 1 and swap not growing across the
+    run), no verify or kit job, and the host state recorded beside the numbers.
+  - The numbers do not depend on the host (virtual time); the bar protects the neighbours.
+  - Corrected at its other source, `lanes/pg9/a9-brief-s4a.md`, at 06:32Z.
+
+**Owed.**
+- S4c, the DEBUG replay seam: one pass of a corpus, then a hold (VF-PM 06:42Z), so a real phone has an idle row.
+- S5, James's device run, on `n5-120s-s1` and `n20-120s-s1`. This bench re-runs on exactly those corpora first (one
+  pre-emptible mini slot after S4c), so the recipe page's expected numbers are the corpus he plays.
