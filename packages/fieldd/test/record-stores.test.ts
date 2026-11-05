@@ -10,11 +10,12 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import {
   AGENT_CATALOG,
   AGENT_SESSION_RECORD_FORMAT,
   type AgentSessionRecord,
+  canonicalJson,
   NEEDS_RECORD_FORMAT,
   type NeedsRecord,
   RECORD_STORES,
@@ -720,5 +721,77 @@ describe("item 177 — the sessions' records move onto the one signer, their key
     // a fresh fieldd's store serves it, and keeps the key as it was
     expect(sessionsCase.boot(root, []).served()).toEqual(["run-ada"]);
     expect(readFileSync(keyPath, "utf8")).toBe(keyText);
+  });
+
+  it("S4 · a session record a newer VibeField wrote is held as it is, never set aside or written over, and stampExit refuses it", () => {
+    const root = tmp();
+    const { file, key } = sessionsCase.seed(root, 0);
+    resign(file, sessionsCase.keyPath(root), (body) => ({ ...body, format: 2 }), "base64");
+    const bytes = readFileSync(file, "utf8");
+    const events: Events = [];
+    const store = new SessionRecordStore({
+      dir: sessionsCase.dir(root),
+      keyPath: sessionsCase.keyPath(root),
+      now: NOW,
+      logger: capture(events),
+    });
+    const stamped = store.stampExit(key, {
+      at: NOW().toISOString(),
+      exitCode: 0,
+      signal: null,
+      reason: "exited",
+    });
+    expect(readdirSync(sessionsCase.dir(root)), "the newer record is held where it is").toEqual([
+      basename(file),
+    ]);
+    expect(stamped, "stampExit refuses a record a newer VibeField wrote").toBe(false);
+    expect(readFileSync(file, "utf8"), "and never writes over it").toBe(bytes);
+    expect(store.list().map((record) => record.runtimeRunId)).toEqual([]);
+    expect(readdirSync(sessionsCase.dir(root)), "a list holds it too").toEqual([basename(file)]);
+    expect(events.find((e) => e.event === "fieldd.records.newer")?.attrs).toMatchObject({
+      store: "sessions",
+      format: 2,
+    });
+  });
+});
+
+/** Records SessionRecordStore signed before item 177 (AR-4b), written by the store itself on 2026-11-05 and kept
+ * byte for byte: a plain one, a nested one (its workspace, continuation and exit; quotes, a backslash, non-ASCII and
+ * an emoji in its strings), and one rewritten with its keys in reverse order. Their key is the base64 one. */
+const PRE177 = join(import.meta.dirname, "fixtures", "sessions-pre177");
+
+describe("item 177 — the canonical form the sessions' records were signed in", () => {
+  it("S5 · PIN — contracts' canonicalJson gives the bytes agent-sessions.ts' own copy signed: every pre-177 fixture verifies under it, and the store serves all three", () => {
+    const keyFile = join(PRE177, "sessions.key");
+    expect(existsSync(keyFile), "the pre-177 fixtures' key is kept").toBe(true);
+    const key = Buffer.from(readFileSync(keyFile, "utf8").trim(), "base64");
+    const names = readdirSync(join(PRE177, "sessions")).sort();
+    expect(names).toEqual(["run-nested.json", "run-ordered.json", "run-plain.json"]);
+    for (const name of names) {
+      const { signature, ...unsigned } = JSON.parse(
+        readFileSync(join(PRE177, "sessions", name), "utf8"),
+      ) as Record<string, unknown>;
+      expect(
+        createHmac("sha256", key).update(canonicalJson(unsigned)).digest("hex"),
+        `${name}: its signature is over contracts' canonical bytes`,
+      ).toBe(signature);
+    }
+    // the store reads them from a copy, so a set-aside could never touch the committed fixtures
+    const root = tmp();
+    mkdirSync(sessionsCase.dir(root), { recursive: true, mode: 0o700 });
+    writeFileSync(sessionsCase.keyPath(root), readFileSync(keyFile), { mode: 0o600 });
+    for (const name of names)
+      writeFileSync(
+        join(sessionsCase.dir(root), name),
+        readFileSync(join(PRE177, "sessions", name)),
+        { mode: 0o600 },
+      );
+    const served = sessionsCase.boot(root, []).served();
+    expect(Array.isArray(served) ? [...served].sort() : served).toEqual([
+      "run-nested",
+      "run-ordered",
+      "run-plain",
+    ]);
+    expect(asides(sessionsCase.dir(root))).toEqual([]);
   });
 });

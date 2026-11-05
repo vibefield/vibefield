@@ -1,0 +1,14 @@
+{
+  "format": 1,
+  "runtimeRunId": "run-plain",
+  "runtimeEpoch": 1,
+  "provider": "claude",
+  "cwd": "/Users/someone/repo",
+  "continuation": {
+    "providerId": "claude",
+    "nativeSessionId": "native-plain"
+  },
+  "createdAt": "2026-11-05T05:00:00.000Z",
+  "updatedAt": "2026-11-05T05:00:00.000Z",
+  "signature": "abf56cd85776e529528a273faf1a32f8a1483cee2d846418d69001c4733978cc"
+}

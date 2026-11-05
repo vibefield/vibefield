@@ -1,0 +1,14 @@
+{
+  "signature": "4212e349d2c78b46b69dab316e911f8f9efafc7d41b243cce250e940eade0272",
+  "updatedAt": "2026-11-05T05:00:00.000Z",
+  "createdAt": "2026-11-05T05:00:00.000Z",
+  "continuation": {
+    "providerId": "claude",
+    "nativeSessionId": "native-ordered"
+  },
+  "cwd": "/tmp/Ordered",
+  "provider": "claude",
+  "runtimeEpoch": 1,
+  "runtimeRunId": "run-ordered",
+  "format": 1
+}

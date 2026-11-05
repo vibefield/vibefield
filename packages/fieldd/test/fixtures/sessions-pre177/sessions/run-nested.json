@@ -1,0 +1,36 @@
+{
+  "format": 1,
+  "runtimeRunId": "run-nested",
+  "runtimeEpoch": 3,
+  "provider": "claude",
+  "cwd": "/Users/someone/café repo",
+  "title": "Fix the café menu — naïve ‘quotes’ \"and\" \\ slashes, 🎛️",
+  "terminalSessionId": "term-0042",
+  "continuation": {
+    "providerId": "claude",
+    "nativeSessionId": "native-nested",
+    "implementation": "cli",
+    "state": "idle",
+    "resumable": true
+  },
+  "workspace": {
+    "mode": "worktree",
+    "root": "/Users/someone/repo",
+    "sourcePath": "/Users/someone/repo/.wt/a",
+    "branch": "feat/Zeta-alpha"
+  },
+  "spawnedBy": "app",
+  "createdAt": "2026-11-05T05:01:00.000Z",
+  "updatedAt": "2026-11-05T05:02:00.000Z",
+  "exited": {
+    "at": "2026-11-05T05:02:00.000Z",
+    "exitCode": null,
+    "signal": "SIGTERM",
+    "reason": "stopped",
+    "stop": {
+      "sentAt": "2026-11-05T05:01:59.000Z",
+      "heardBy": "exit"
+    }
+  },
+  "signature": "5d34315b6fb445ae6a1ef9ec525b318aed35af55a5d0853ce24383cc4237c107"
+}
