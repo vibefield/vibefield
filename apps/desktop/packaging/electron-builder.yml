@@ -182,6 +182,8 @@ mac:
     - Contents/Resources/bin/live-surface-capture-helper
     - Contents/Resources/bin/live-surface-adapter.node
     - Contents/Resources/bin/desktop-haptics.node
+    # SD-2: the system-sound player, a Node-API bundle like the haptic adapter (its identity is embedded)
+    - Contents/Resources/bin/desktop-sound-player.node
     # FS: @electron/osx-sign discovers mille.darwin-<arch>.node as binary code.
     # verify-files-package.mjs --require-signed checks its actual nested signature.
     # Do not use ${arch} here: builder removes it on single-architecture builds.

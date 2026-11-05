@@ -107,6 +107,25 @@ describe("resolveDevelopmentResources", () => {
     ).toBe(join(RESOURCES, "bin", "desktop-haptics.node"));
   });
 
+  it("resolves the system-sound player only on macOS, where the build and the stager put it (SD-2)", () => {
+    expect(dev.desktopSoundPlayerPath).toBe(
+      join(REPO, "apps/desktop/build/native/macos/desktop-sound-player.node"),
+    );
+    for (const platform of ["win32", "linux"] as const) {
+      expect(
+        resolveDevelopmentResources({ repoRoot: REPO, electronExecPath: ELECTRON, platform })
+          .desktopSoundPlayerPath,
+      ).toBeNull();
+    }
+    expect(
+      resolvePackagedResources({
+        resourcesPath: RESOURCES,
+        electronExecPath: ELECTRON,
+        platform: "darwin",
+      }).desktopSoundPlayerPath,
+    ).toBe(join(RESOURCES, "bin", "desktop-sound-player.node"));
+  });
+
   it("uses the reviewed window icon from explicit development and packaged resource paths", () => {
     expect(dev.windowIconPath).toBeNull();
     for (const [platform, file] of [

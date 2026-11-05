@@ -314,6 +314,16 @@ const PLAN = [
           produce: "pnpm --filter @vibefield/electron-shell build",
         },
         {
+          // SD-2 (DESIGN.md §14 "In VibeField"): the system-sound player, a Node-API bundle built and signed as
+          // the haptic adapter is (apps/desktop/packaging/build-sound-player.mjs), re-signed by electron-builder
+          // through `mac.binaries`
+          stage: "bin/desktop-sound-player.node",
+          from: "apps/desktop/build/native/macos/desktop-sound-player.node",
+          kind: "file",
+          mode: DATA_MODE,
+          produce: "pnpm --filter @vibefield/electron-shell build",
+        },
+        {
           // SNAP-D5/D9: the screenshot helper is a nested BUNDLE — TCC keys Screen
           // Recording consent on it — staged whole so its Info.plist, PkgInfo and
           // signature seal travel with the executable. OPTIONAL like field-native: a

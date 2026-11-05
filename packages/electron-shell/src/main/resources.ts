@@ -76,6 +76,9 @@ export interface DesktopResources {
   readonly screenshotHelperPath: string | null;
   /** Optional macOS presentation feedback, loaded only for a focused user gesture. */
   readonly desktopHapticsPath?: string | null;
+  /** SD-2 — the system-sound player (DESIGN.md §14 "In VibeField"); null off macOS, where Settings → Sound says
+   * "Sounds play on macOS." */
+  readonly desktopSoundPlayerPath?: string | null;
   /** AR-8 (L3) — History's index daemon, handed to fieldd as FIELDD_ROSETTAD_BIN
    * when nothing in the environment names one. Packaged: beside fieldd, where
    * the stager puts it when `pnpm siblings:build` produced one. Development:
@@ -237,6 +240,10 @@ export function resolveDevelopmentResources(opts: {
       platform === "darwin"
         ? join(opts.repoRoot, "apps/desktop/build/native/macos/desktop-haptics.node")
         : null,
+    desktopSoundPlayerPath:
+      platform === "darwin"
+        ? join(opts.repoRoot, "apps/desktop/build/native/macos/desktop-sound-player.node")
+        : null,
     screenshotHelperPath: screenshotHelperPath(
       join(
         opts.repoRoot,
@@ -300,6 +307,7 @@ export function resolvePackagedResources(opts: {
         : null,
     screenshotHelperPath: screenshotHelperPath(bin, platform),
     desktopHapticsPath: platform === "darwin" ? join(bin, "desktop-haptics.node") : null,
+    desktopSoundPlayerPath: platform === "darwin" ? join(bin, "desktop-sound-player.node") : null,
     rosettadPath: join(bin, exe("rosettad", platform)),
     pluginRoots: {
       bundled: [join(opts.resourcesPath, "plugins", "bundled")],

@@ -8,7 +8,8 @@
         "{projectRoot}/dist/main",
         "{projectRoot}/dist/preload",
         "{projectRoot}/dist/testing",
-        "{workspaceRoot}/apps/desktop/build/native/macos/desktop-haptics.node"
+        "{workspaceRoot}/apps/desktop/build/native/macos/desktop-haptics.node",
+        "{workspaceRoot}/apps/desktop/build/native/macos/desktop-sound-player.node"
       ],
       "inputs": [
         "production",
@@ -21,6 +22,8 @@
         },
         "{workspaceRoot}/apps/desktop/native/macos/haptics/**/*",
         "{workspaceRoot}/apps/desktop/packaging/build-haptics.mjs",
+        "{workspaceRoot}/apps/desktop/native/macos/sound/**/*",
+        "{workspaceRoot}/apps/desktop/packaging/build-sound-player.mjs",
         {
           "runtime": "node -p \"process.platform + process.arch\""
         }
