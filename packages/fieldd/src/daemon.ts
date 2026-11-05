@@ -45,6 +45,9 @@ import {
   AgentsUpdateStopParams,
   AgentsUsageParams,
   AppPreferenceSetParams,
+  ArtifactMarkParams,
+  type ArtifactMarkResult,
+  type ArtifactOpenResult,
   ArtifactPublishParams,
   ArtifactPublishV2Params,
   ArtifactRefreshPreviewParams,
@@ -79,6 +82,8 @@ import {
   INDEX_STATUS_FEED,
   INDEX_TIMELINE,
   IndexActivityParams,
+  type IndexAppsResult,
+  type IndexArtifactsResult,
   IndexCatalogSubscribeParams,
   IndexChangesSubscribeParams,
   IndexEnrollParams,
@@ -102,6 +107,9 @@ import {
   LAYOUT,
   LegacyArtifactPublishParams,
   LOG_STREAMS,
+  MADE_APP_LIMITS,
+  MADE_APP_OPEN,
+  MadeAppAvailability,
   METHODS,
   type MeshSyncPosture,
   MONITOR_AUDIENCE,
@@ -242,7 +250,7 @@ import { ArtifactService, type ArtifactServiceHealth } from "./artifact-service"
 import { AuditService, type AuditWriterTestHooks } from "./audit-service";
 import { nativeAlive, nativeEndpoint, nativeMgmtEndpoint, splitPathList } from "./boot-env";
 import { openSwarmReplay } from "./debug/swarm-replay";
-import { DeviceService, localDeviceIdAt } from "./device-service";
+import { canonicalTailnetDnsName, DeviceService, localDeviceIdAt } from "./device-service";
 import { DiagnosticsService } from "./diagnostics-service";
 import { DocLane } from "./doc-lane";
 import { DocumentService } from "./doc-service";
@@ -260,6 +268,8 @@ import {
   freewayDeclaration,
 } from "./freeway";
 import { clipActivity, createActivityReader, monitorHistoryPort } from "./index-activity";
+import { IndexApps } from "./index-apps";
+import { AppsMesh } from "./index-apps-mesh";
 import { IndexCatalog } from "./index-catalog";
 import { IndexTicketForwarding } from "./index-forward";
 import { IndexMesh } from "./index-mesh";
@@ -277,6 +287,12 @@ import {
   systemDocId,
 } from "./library-doc";
 import { LinkService, otherUserLinks } from "./link-service";
+import {
+  type MadeAppExporter,
+  MadeAppService,
+  type MadeAppServiceHealth,
+  madeAppRefusal,
+} from "./made-app-service";
 import { McpService } from "./mcp-service";
 import {
   type BoardDelta,
@@ -531,6 +547,27 @@ export interface FielddConfig {
     pageBytes?: number;
     digestIntervalMs?: number;
   };
+  /** MA-3e test seams: the `apps` table's walk and re-read (index-apps.ts). Production takes
+   * INDEX_MESH.META_RESNAPSHOT_MS and MADE_APP_LIMITS. The replica of every peer's apps table
+   * (`AppsMesh`) takes `indexMesh`'s cadences above, the history's own, and its peer door's
+   * heartbeat is `indexCatalog.digestIntervalMs`, as the catalog door's is. */
+  indexApps?: {
+    resnapshotMs?: number;
+    walkPage?: number;
+    walkRestarts?: number;
+    rowCap?: number;
+    rereadPage?: number;
+    rereadDelayMs?: number;
+    rereadMinIntervalMs?: number;
+  };
+  /** MA-3e test seams: the made-app service (made-app-service.ts). `exporter` stands in for
+   * RO-A1's export (default: this rosetta's, which at 0.1.3 has no export door and answers
+   * `export-unbuilt`); `openWaitMs` is the open's bounded wait for its listener's URL
+   * (MADE_APP_LIMITS.OPEN_WAIT_MS). */
+  madeApps?: {
+    exporter?: MadeAppExporter;
+    openWaitMs?: number;
+  };
   /** AR-2 — the VibeField ROOT above this user's root: the machine scope
    * (`LAYOUT.MACHINE_DIR`, AR-D15) hangs off it. Absent = no machine scope
    * (embedded and unit daemons): the distribution doors that would write it
@@ -717,6 +754,10 @@ export interface FielddHealth {
   /** AH-1 — private-intent durability and source-probe truth are not mesh
    * health, so they have a first-class projection of their own. */
   artifacts: ArtifactServiceHealth;
+  /** MA-3e — the made apps, counts only: whether this desktop's `apps` table has spoken (its
+   * first walk landed, DS-L8) and how many rows it holds, and the made-app service's serves
+   * (records, open, retiring, storage). No title, no URL, no path. */
+  apps: { ready: boolean; rows: number; serves: MadeAppServiceHealth };
   /** C3: the declared serves with their fused reconcile+runtime state. `url`
    * is authoritative per serve: product carries its private capability path;
    * artifacts carry Truffle's exact root URL. The Settings mesh section is
@@ -780,6 +821,14 @@ export interface FielddDaemon {
   /** DS-6 — the aggregator: every self peer's catalog replicated (persisted
    * under `mesh/catalog`), the merged doors and search by asking. */
   indexMesh: IndexMesh;
+  /** MA-3e — this desktop's `apps` table: rosetta's library walked into rows the peers
+   * replicate through `index.apps.catalog.subscribe`. Tests read its readiness and rows. */
+  indexApps: IndexApps;
+  /** MA-3e — every self peer's apps table replicated (under `mesh/apps`) and folded for
+   * `index.apps.list`; tests read a peer's replica. */
+  appsMesh: AppsMesh;
+  /** MA-3e — the made-app service: the serves `artifact.open` puts up; tests read its health. */
+  madeApps: MadeAppService;
   /** PJ-1/PJ-3 — the projects this desktop groups (the `project.*` doors'
    * source); tests regroup it directly rather than wait out the settle. */
   projects: ProjectGroups;
@@ -1044,6 +1093,43 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     ...catalogCadences(config.indexCatalog),
     logger,
   });
+  // MA-3e (`draft/thinking-mini-apps.md` v0.2 §4, RULED 2026-11-05; the build
+  // plan's 3e as the lead's RULINGS amend it) — the made apps. This desktop's
+  // `apps` table (index-apps.ts, 3a) is the catalog's SIBLING: it walks
+  // rosetta's library through the index service's reader once the catalog's
+  // first snapshot has landed, on its own cadence (C10), and stamps each row
+  // with what the made-app service (3b, built with the serves further down)
+  // captured. Started with the catalog, after boot commits.
+  let madeAppsRef: MadeAppService | null = null;
+  const indexApps = new IndexApps({
+    catalog: indexCatalog,
+    artifacts: (ask) => index.artifacts(ask),
+    stamps: { of: (appId) => madeAppsRef?.of(appId) },
+    previewsBase: () => madeAppsRef?.previewsBase(),
+    ...(config.agentCatalog !== undefined ? { agentCatalog: config.agentCatalog } : {}),
+    ...(config.indexApps ?? {}),
+    logger,
+  });
+  // MA-3e — the made apps across desktops (index-apps-mesh.ts, 3d) need the
+  // roster and the peer link, built further down; the doors read it through
+  // this ref, as `requireMesh` below reads the history's.
+  let appsMesh: AppsMesh | null = null;
+  const requireApps = (): AppsMesh => {
+    if (appsMesh === null)
+      throw new RpcCallError("UNAVAILABLE", "the made apps are not up yet", true, {
+        service: MADE_APP_OPEN.SERVICE,
+        state: "starting",
+      });
+    return appsMesh;
+  };
+  const requireMadeApps = (): MadeAppService => {
+    if (madeAppsRef === null)
+      throw new RpcCallError("UNAVAILABLE", "the made apps are not up yet", true, {
+        service: MADE_APP_OPEN.SERVICE,
+        state: "starting",
+      });
+    return madeAppsRef;
+  };
   // TL (docket v9, T4/T5) — the record's sessions in a window (index-activity.ts):
   // `index.activity`'s reader and the monitor backend's history port —
   // rosettad's turns through its route, the catalog's bounds when the route
@@ -1877,6 +1963,11 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         storage: "ready",
         sources: { ready: 0, unavailable: 0, pending: 0 },
         retiring: 0,
+      },
+      apps: {
+        ready: indexApps.ready,
+        rows: indexApps.table.size,
+        serves: madeAppsRef?.health() ?? { apps: 0, open: 0, retiring: 0, storage: "ready" },
       },
       mesh: {
         // serves() is the FUSED view (reconcile ∘ runtime — mesh-client C3)
@@ -3480,6 +3571,31 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       });
       return { snapshot: pump.open, dispose: () => pump.dispose(), start: () => pump.start() };
     });
+    // MA-3e — the made apps' four `index.*` doors (methods.ts' MA-1a rows): the
+    // fold a window or the phone pages, its pings, the `apps` table's own peer
+    // replication door, and one desktop's library.
+    // *Red (MA-3e's skeleton): each door answers a typed EMPTY answer — no row,
+    // no ping, an empty snapshot for any caller, an empty page — so the rows
+    // that pin them fail on their assertions; the green writes the bodies.*
+    api.register("index.apps.list", (): IndexAppsResult => {
+      requireApps();
+      return { rows: [], sources: [] };
+    });
+    api.registerSubscription("index.apps.subscribe", () => {
+      requireApps();
+      return {
+        snapshot: { snapshot: { epoch: "apps-changes-skeleton", revision: 0, rows: [] } },
+        dispose: () => undefined,
+      };
+    });
+    api.registerSubscription("index.apps.catalog.subscribe", () => ({
+      snapshot: { snapshot: { epoch: "apps-skeleton", revision: 0, rows: [] } },
+      dispose: () => undefined,
+    }));
+    api.register(
+      "index.artifacts",
+      (): IndexArtifactsResult => ({ entries: [], canonicalReady: false }),
+    );
     api.register("index.enroll", async (ctx, params) => {
       const parsed = IndexEnrollParams.safeParse(params);
       if (!parsed.success)
@@ -7055,6 +7171,48 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       if (event.table === "projects") placeScanner.peersChanged();
       projectGroups.regroupSoon();
     });
+    // MA-3e — the made apps across desktops (index-apps-mesh.ts, 3d): every
+    // self peer's `apps` table replicated through its own door, persisted
+    // under `mesh/apps`, and folded for `index.apps.list` and its pings. It
+    // takes the history's cadences (`config.indexMesh`, search's aside). An
+    // app's project is joined at THIS door from its ROOT session's cwd on the
+    // app's own desktop — this desktop's catalog, or the peer's replicated
+    // sessions — through this desktop's grouping (PJ-4), never from a row, and
+    // its ink is that project's (the fallback icon, MA-D10 (b)). Its change
+    // pings are its own: an app's move regroups no project (fieldd Q13).
+    // `exportReady` is left out: at rosetta 0.1.3 no desktop exports (3f).
+    const { searchTimeoutMs: _searchOnly, ...historyCadences } = config.indexMesh ?? {};
+    const inkOf = (key: string): { ink?: number } => {
+      try {
+        return { ink: projectDoors.get({ key }, { paths: false, tailnet: false }).project.ink };
+      } catch {
+        return {}; // before this boot's first grouping, or a key that has left it
+      }
+    };
+    appsMesh = new AppsMesh({
+      local: indexApps,
+      roster: devices,
+      link: peers,
+      dir: join(config.dataDir, ...LAYOUT.MESH_APPS_DIR),
+      joinProject: (device, rootSessionId) => {
+        const cwd =
+          device === devices.currentDeviceId()
+            ? indexCatalog.sessions.get(rootSessionId)?.cwd
+            : indexMesh
+                ?.peerRows()
+                .find((peer) => peer.device === device)
+                ?.sessions.find((row) => row.sessionId === rootSessionId)?.cwd;
+        const [joined] = projectDoors.keyed([{ device, cwd }]);
+        if (joined?.projectKey === undefined) return undefined;
+        return {
+          projectKey: joined.projectKey,
+          ...(joined.place !== undefined ? { place: joined.place } : {}),
+          ...inkOf(joined.projectKey),
+        };
+      },
+      ...historyCadences,
+      logger,
+    });
 
     // AH-1 — the artifact serving foundation. Constructed HERE (before the supersession
     // closure below references it — a superseding takeover can fire before
@@ -7100,6 +7258,8 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       };
     };
     let lastArtifactServeSpecs: ServeSpec[] | null = null;
+    // MA-3e — the made apps' serves, held for the same reason as AH's
+    let lastMadeServeSpecs: ServeSpec[] | null = null;
     let lastServeAllowLogin: string | null = null;
     // TM-2 — the terminal-cell listener's spec, owned by the driver below and
     // held here because `setServes` replaces the DESIRED SET wholesale: every
@@ -7118,6 +7278,9 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         ...(lastIndexServeSpec === null ? [] : [lastIndexServeSpec]),
         ...(lastFreewayServeSpec === null ? [] : [lastFreewayServeSpec]),
         ...(lastArtifactServeSpecs ?? []),
+        // MA-3e — the made apps' serves and their one previews serve, as the
+        // made-app service last declared them (made-app-service.ts)
+        ...(lastMadeServeSpecs ?? []),
       ];
     };
     links.on("changed", () => {
@@ -7414,8 +7577,123 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           async () => await api.captureArtifactPreview(params),
           () => ({ outcome: "succeeded" }),
         ),
+      // MA-3e — ONE reservation set (the plan's L7): AH never allocates a port a
+      // made app holds for life, closed ones included, nor the previews serve's
+      otherReservedPorts: () => madeAppsRef?.reservedPorts() ?? new Set<number>(),
     });
     artifactsRef = artifacts;
+
+    // MA-3e — the made-app service (made-app-service.ts, 3b): a made app is
+    // served only when a person opens it, at its own origin for life, beside
+    // the one previews serve. Its serves ride the daemon's one desired set
+    // through a bridge of AH's shape. Built inside the boot below, once
+    // `devices.sync()` has adopted the mesh identity, because the service
+    // takes this desktop's device id as a value (its previews port's domain,
+    // the desktop each refusal names, a row-less app's fold key) — and before
+    // `artifacts.start()`, so AH's first reconcile already reads its ports.
+    //  - the export: RO-A1's door is rosetta 0.1.4's (EL8 #1, slice 3f). This
+    //    rosetta (0.1.3) has none, so every open answers `export-unbuilt`, its
+    //    honest state (C9); `config.madeApps.exporter` is the test seam.
+    //  - its own MagicDNS name: the host the floor reported for this desktop's
+    //    product serve, which exists exactly while the desktop is linked (and a
+    //    made serve needs a link). A listener's URL is answered only on it.
+    //  - AH's reservations: the ports of AH's DECLARED serves (made-app-service's
+    //    `otherReservedPorts` doc names the gap a committed-intents reader closes).
+    const unbuiltExporter: MadeAppExporter = {
+      export: async () => {
+        throw madeAppRefusal(MADE_APP_OPEN.STATE_EXPORT_UNBUILT);
+      },
+    };
+    const buildMadeApps = (): MadeAppService => {
+      const service = new MadeAppService({
+        dataDir: config.dataDir,
+        deviceId: devices.currentDeviceId(),
+        bridge: {
+          declare: async (specs) => {
+            lastMadeServeSpecs = specs;
+            await mesh.setServes(desiredServes());
+          },
+          remove: async (serveId) => await mesh.removeServe(serveId),
+          states: () => mesh.serves(),
+          observed: async () => await mesh.observedServes(),
+          on: (cb) => {
+            mesh.on("serves-changed", cb);
+            return () => mesh.off("serves-changed", cb);
+          },
+        },
+        rows: {
+          get: (appId) => indexApps.table.get(appId),
+          // made-app-service's `MadeAppRows.speaks` doc: the first walk landed
+          // AND rosetta's library has finished its first reading
+          speaks: () => indexApps.ready && indexApps.libraryReady === true,
+          presentation: async (appId, presentationId) => {
+            let cursor: string | undefined;
+            do {
+              const page = await index.artifacts({
+                artifactId: appId,
+                limit: MADE_APP_LIMITS.WALK_PAGE,
+                ...(cursor !== undefined ? { cursor } : {}),
+              });
+              const entry = page.entries.find((e) => e.publication.id === presentationId);
+              if (entry !== undefined) {
+                return {
+                  presentationId,
+                  sessionId: entry.publication.session_id,
+                  ...(entry.asset?.digest !== undefined ? { digest: entry.asset.digest } : {}),
+                  availability: MadeAppAvailability.parse(entry.availability),
+                };
+              }
+              cursor = page.next_cursor ?? undefined;
+            } while (cursor !== undefined);
+            return undefined;
+          },
+        },
+        exporter: config.madeApps?.exporter ?? unbuiltExporter,
+        linkedLogin,
+        selfDnsName: () => {
+          const url = mesh.serves().find((serve) => serve.name === "product")?.url;
+          if (url === undefined) return undefined;
+          try {
+            return canonicalTailnetDnsName(new URL(url).hostname);
+          } catch {
+            return undefined;
+          }
+        },
+        otherReservedPorts: () =>
+          new Set(
+            (lastArtifactServeSpecs ?? []).flatMap((spec) =>
+              spec.listenPort !== undefined ? [spec.listenPort] : [],
+            ),
+          ),
+        otherLiveObjects: () => artifacts.health().count,
+        capturePreviewAvailable: () => api.artifactPreviewCaptureAvailable(),
+        capturePreview: async (params) =>
+          await audit.requiredSystem(
+            {
+              action: "artifact.preview.capture",
+              target: { kind: "made-app", id: params.artifactId },
+            },
+            async () => await api.captureArtifactPreview(params),
+            () => ({ outcome: "succeeded" }),
+          ),
+        ...(config.madeApps?.openWaitMs !== undefined
+          ? { openWaitMs: config.madeApps.openWaitMs }
+          : {}),
+        logger,
+      });
+      // a capture stamps the app's own row again (3a), as one frame
+      service.on("previews-changed", (appIds) => indexApps.restampIntents(appIds));
+      return service;
+    };
+    // the table first speaks, or a row or the standing moved: an app's fold key
+    // (so its intent) is read from its row, so keep, hide and the idle close are
+    // applied again (made-app-service's `reconsider`, load-bearing for L8)
+    indexApps.on("changed", () => void madeAppsRef?.reconsider());
+    // a link, an unlink, another account: every made serve is re-gated
+    links.on("changed", () => void madeAppsRef?.relink());
+    // the previews serve's URL may have moved: every peer subscriber hears the
+    // standing at once (index-apps.ts' `standingChanged`)
+    mesh.on("serves-changed", () => indexApps.standingChanged());
 
     // SUPERSEDED = another fieldd owns the native plane now; this one is done.
     // The flag also closes the small gap where takeover happens before this
@@ -7463,6 +7741,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         await settleDocHolders(); // DS-5d — the holders ledger's last write, bounded (M176)
         indexTail.dispose(); // SP-6 — the session sockets close with the daemon they follow
         indexCatalog.dispose();
+        indexApps.dispose(); // MA-3e — no library read outlives the catalog it follows
         runtimeDiagnostics.dispose();
         detachHealthSources?.();
         links.stop();
@@ -7473,8 +7752,11 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         laneLink.close();
         docs.dispose();
         const artifactDrain = artifacts.dispose();
+        // MA-3e — the made serves stay up for the successor, which adopts them
+        const madeAppsDrain = madeAppsRef?.dispose();
         board.dispose(); // DS-3 — its hubs' upstreams close before the manager goes
         indexMesh?.dispose(); // DS-6 — the replicas are written before the links go
+        appsMesh?.dispose(); // MA-3e — and the made apps' replicas, the same way
         federatedSubs.dispose(); // before peers: a dying link must not trigger recovery
         peers.dispose();
         indexServe?.dispose(); // SP-3 — stop re-aiming rosettad's serve before the mesh goes
@@ -7493,6 +7775,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         diagnosticsService.dispose();
         native.close();
         await artifactDrain;
+        await madeAppsDrain;
         await audit.close().catch(() => undefined);
         await closeLogging();
       })().finally(() => config.onFatal?.(reason));
@@ -7510,7 +7793,11 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       // post-bind service initialization. A migration/storage failure may not
       // leave a zombie ProductAPI listener behind.
       await devices.sync();
+      // MA-3e — built now that the device id is the mesh's (see `buildMadeApps`),
+      // and before AH's start, whose first reconcile reads its reservations
+      madeAppsRef = buildMadeApps();
       await artifacts.start();
+      await madeAppsRef.start();
       if (fatalReason || native.superseded || native.closed)
         throw new Error(fatalReason ?? "native link closed during service initialization");
     } catch (e) {
@@ -7526,6 +7813,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       laneLink.close();
       docs.dispose();
       const artifactDrain = artifacts.dispose();
+      const madeAppsDrain = madeAppsRef?.dispose(); // MA-3e
       board.dispose();
       indexTail.dispose();
       placeScanner.dispose();
@@ -7533,7 +7821,9 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       projectGroups.dispose();
       offActed();
       indexCatalog.dispose();
+      indexApps.dispose(); // MA-3e
       indexMesh?.dispose();
+      appsMesh?.dispose(); // MA-3e
       federatedSubs.dispose();
       peers.dispose();
       indexServe?.dispose(); // SP-3 — stop re-aiming rosettad's serve before the mesh goes
@@ -7551,6 +7841,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       diagnosticsService.dispose();
       native.close();
       await artifactDrain;
+      await madeAppsDrain;
       throw e;
     }
 
@@ -7648,6 +7939,29 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         { onError: streamFrameFailed("artifact.subscribe") },
       ),
     );
+    // MA-3e — open a MADE app, and keep or hide one (methods.ts' MA-1a rows;
+    // `apps.use`). `artifact.open` is `federate`: a `device` carries it WHOLE to
+    // the app's desktop, which answers from its own rule and audits the act;
+    // the forward hook below is the home's say over what came back.
+    // `artifact.mark` is `local`: the person's intent, the home's (slice 3h).
+    // *Red (MA-3e's skeleton): open answers a typed `starting` with no URL,
+    // mark echoes an unset intent, and the hook hands the forwarded answer back
+    // as it came; the green writes the bodies.*
+    api.register("artifact.open", (): ArtifactOpenResult => {
+      requireMadeApps();
+      return { state: "starting" };
+    });
+    api.register("artifact.mark", (_ctx, params): ArtifactMarkResult => {
+      const parsed = ArtifactMarkParams.safeParse(params ?? {});
+      if (!parsed.success)
+        throw new RpcCallError(
+          "PRECONDITION_FAILED",
+          "expected { foldKey, kept?: boolean, hidden?: boolean }, naming at least one",
+          false,
+        );
+      return { foldKey: parsed.data.foldKey, kept: false, hidden: false };
+    });
+    api.wrapForward("artifact.open", async (_ctx, _device, _params, carry) => await carry());
     mesh.on("reconciled", emitHealth);
     mesh.on("serves-changed", emitHealth);
 
@@ -7912,7 +8226,9 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       }
     }
     indexCatalog.start(); // DS-6 — follows the daemon's transitions from its first
+    indexApps.start(); // MA-3e — its first walk waits for the catalog's first snapshot
     indexMesh?.start(); // DS-6 — the replicas load, then follow the roster
+    appsMesh?.start(); // MA-3e — the made apps' replicas, the same way
     void rosettad?.start();
     // FS-1a — boot has committed: the files worker starts with the daemon
     // (FS-D11 (b), always on; readiness is a transition, never a boot gate),
@@ -7960,6 +8276,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           indexTail.dispose(); // SP-6 — every session socket closes before its daemon stops
           index.dispose(); // AC-D8 — stop reacting to the daemon's transitions
           indexCatalog.dispose(); // DS-6 — the stream closes before its daemon stops
+          indexApps.dispose(); // MA-3e — and no library read outlives it
           await rosettad?.stop(); // AR-0 — the index daemon is fieldd-lifetime (AR-D6 v1)
           placeScanner.dispose(); // PJ-1 — no scan asks a worker that is stopping
           await projectRecords.dispose(); // PJ-2 — an act already running lands before the library closes
@@ -7983,8 +8300,11 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           laneLink.close();
           docs.dispose();
           const artifactDrain = artifacts.dispose();
+          // MA-3e — every made serve stays up (field-native outlives fieldd)
+          const madeAppsDrain = madeAppsRef?.dispose();
           board.dispose(); // DS-3 — its hubs' upstreams close before the manager goes
           indexMesh?.dispose(); // DS-6 — the replicas are written before the links go
+          appsMesh?.dispose(); // MA-3e — and the made apps' replicas, the same way
           federatedSubs.dispose(); // before peers: a dying link must not trigger recovery
           peers.dispose();
           indexServe?.dispose(); // SP-3 — stop re-aiming rosettad's serve before the mesh goes
@@ -8015,6 +8335,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           await native.detach(); // AL-8a — the floor records this stop planned, never as a crash
           native.close();
           await artifactDrain;
+          await madeAppsDrain;
           // a superseding fieldd rewrites these for the same dataDir — never
           // delete what is no longer ours
           if (!native.superseded) {
@@ -8065,6 +8386,9 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       indexCatalog,
       indexTail,
       indexMesh: indexMesh as IndexMesh,
+      indexApps,
+      appsMesh: appsMesh as AppsMesh,
+      madeApps: madeAppsRef as MadeAppService,
       projects: projectGroups,
       projectRecords,
       agents,

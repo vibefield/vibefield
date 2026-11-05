@@ -16,7 +16,15 @@
 // caller arrives: the phone through the sidecar's door (a WhoIs login and no
 // token), a window by a local token, and a peer daemon through the same door
 // from a node the roster vouches for as a desktop (D1).
+//
+// MA-3e (the build plan's 3e) — the made apps' two read doors join the rule:
+// `index.apps.list` (the fold, paged like `index.sessions`) and `index.artifacts`
+// (one desktop's library, rosetta's page of at most 100). The same daemon's
+// rosettad holds 510 made apps, one per session, so the phone's 100, the
+// window's 500 and the peer daemon's unbounded ask are measurements too; and
+// the `apps` table's own replication door is the peer daemon's alone.
 import { spawn } from "node:child_process";
+import { createHash } from "node:crypto";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -25,6 +33,9 @@ import {
   CONTRACTS_VERSION,
   INDEX_MESH,
   INDEX_TAILNET_LIMITS,
+  IndexAppsCatalogOpen,
+  IndexAppsResult,
+  IndexArtifactsResult,
   IndexProjectResult,
   IndexProjectsResult,
   IndexRecentResult,
@@ -37,6 +48,7 @@ import {
   TAILNET_SCOPES,
 } from "@vibefield/contracts";
 import type { WsCtor } from "@vibefield/fieldd-client";
+import type { ArtifactEntry } from "@vibefield/rosetta-protocol";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import WebSocket from "ws";
 import { DEFAULT_SEARCH_LIMIT } from "../src/agent-index";
@@ -128,6 +140,55 @@ const hit = (i: number, word: string) => ({
   score: -1,
 });
 const RARE = 3;
+
+/** 64 lowercase hex, as rosetta's identities and blake3 digests are (any stable digest here). */
+const hex = (seed: string): string => createHash("sha256").update(seed).digest("hex");
+/** the path rosetta records for a publication: on ITS desktop, never on a door's answer */
+const LIBRARY_PATH = "/Users/someone/work";
+
+/** MA-3e — app `i` as rosetta's library answers it (typed as rosetta's OWN `ArtifactEntry`):
+ * made in session `s{i}`, each published after the last (the library orders by `published_at`),
+ * its page kept. Its path and its asset's daemon-relative URL are rosetta's alone. */
+const libraryEntry = (i: number): ArtifactEntry => ({
+  publication: {
+    id: hex(`presentation:${i}`),
+    artifact_id: hex(`app:${i}`),
+    session_id: `s${i}`,
+    timeline_id: `t-app-${i}`,
+    title: `app ${i}`,
+    filename: `app-${i}.html`,
+    path: `${LIBRARY_PATH}/p${i}/app-${i}.html`,
+    url: null,
+    native_id: null,
+    version: null,
+    published_at: 5_000 + i,
+    source_offset: 4_096,
+  },
+  availability: "captured",
+  captured_at: 4_000 + i,
+  recovered_from: null,
+  asset: {
+    url: `/api/assets/${hex(`page:${i}`)}.html`,
+    digest: hex(`page:${i}`),
+    media_type: "text/html; charset=utf-8",
+    byte_len: 120,
+  },
+  agent: "claude-code",
+  session_title: null,
+  project_id: `p${i}`,
+  project_name: `p${i}`,
+  presentations: 1,
+});
+
+/** Wait, bounded, for a condition; the caller ASSERTS on the answer (a red row fails on it). */
+async function settle(predicate: () => boolean, ms: number): Promise<boolean> {
+  const deadline = Date.now() + ms;
+  while (!predicate()) {
+    if (Date.now() > deadline) return false;
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+  return true;
+}
 
 /** Item 60 — one project's contribution: more rows than one 4 MiB answer holds
  * (about 190 B each here; item 60 measured 350 on rosettad's own) */
@@ -236,8 +297,14 @@ beforeAll(async () => {
     search: join(dataDir, "search.json"),
     runtimes: join(dataDir, "runtimes.json"),
     aggregates: join(dataDir, "aggregates.json"),
+    artifacts: join(dataDir, "artifacts.json"),
     log: join(dataDir, "requests.log"),
   };
+  // MA-3e — the library: one made app per session, 510 in all
+  writeFileSync(
+    files.artifacts,
+    JSON.stringify({ entries: Array.from({ length: ROWS }, (_, i) => libraryEntry(i)) }),
+  );
   writeFileSync(
     files.aggregates,
     JSON.stringify({
@@ -281,6 +348,7 @@ beforeAll(async () => {
     FAKE_ROSETTAD_SEARCH: files.search,
     FAKE_ROSETTAD_RUNTIMES: files.runtimes,
     FAKE_ROSETTAD_AGGREGATES: files.aggregates,
+    FAKE_ROSETTAD_ARTIFACTS: files.artifacts,
     FAKE_ROSETTAD_REQUEST_LOG: files.log,
   };
   const fakeSpawner = ((_bin: string, args: readonly string[], options: object) =>
@@ -534,5 +602,139 @@ describe("item 60 — rows follow the asker, bytes follow the link: index.projec
     expect(order(phone)).toEqual(firstN(INDEX_TAILNET_LIMITS.MAX_ROWS));
     expect(phone.clipped).toBe(true);
     expect(phone.omitted).toBe(CONTRIBUTION - INDEX_TAILNET_LIMITS.MAX_ROWS);
+  }, 60_000);
+});
+
+// ── MA-3e — the made apps' doors ────────────────────────────────────────────
+
+/** This desktop's `apps` table has read the whole library: before it, the doors say so in words
+ * (DS-L8), and a walk still reading would put its own asks in the request log beside the door's. */
+async function appsRead(): Promise<void> {
+  const landed = await settle(() => world.daemon.indexApps.ready, 30_000);
+  expect(landed, "the apps table's first walk landed").toBe(true);
+  expect(world.daemon.indexApps.table.size, "the walk read the whole library").toBe(ROWS);
+}
+
+describe("MA-3e — the made apps' doors are bounded at the door, as the history's are (SP-D13)", () => {
+  it("index.apps.list: the phone's ask for 500 is a page of MAX_ROWS with its cursor, `clipped`; a window keeps 500; a peer daemon is not bounded, and is answered this desktop's own apps with no project column", async () => {
+    await appsRead();
+    const first = IndexAppsResult.parse(
+      await world.phone.call("index.apps.list", { limit: WINDOW_ASK }),
+    );
+    expect(first.rows, "the phone's first page").toHaveLength(MAX);
+    expect(first.cursor, "a page, never a cut: it pages on").toBeDefined();
+    expect(first.clipped, "the bound lowered the page below the ask, and more remain").toBe(true);
+    const second = IndexAppsResult.parse(
+      await world.phone.call("index.apps.list", { limit: WINDOW_ASK, cursor: first.cursor }),
+    );
+    expect(second.rows, "the phone's second page").toHaveLength(MAX);
+    // the order a window reads, picked up exactly where the first page stopped
+    const whole = IndexAppsResult.parse(
+      await world.window.call("index.apps.list", { limit: 2 * MAX }),
+    );
+    expect([...first.rows, ...second.rows].map((row) => row.appKey)).toEqual(
+      whole.rows.map((row) => row.appKey),
+    );
+    // the newest first: the last app published is the first row
+    expect(first.rows[0]?.title).toBe(`app ${ROWS - 1}`);
+
+    const window = IndexAppsResult.parse(
+      await world.window.call("index.apps.list", { limit: WINDOW_ASK }),
+    );
+    expect(window.rows, "a window keeps the door's own limit").toHaveLength(WINDOW_ASK);
+    expect(window.cursor).toBeDefined();
+    expect(window.clipped, "no bound cut a window's page").toBeUndefined();
+
+    // a self peer DAEMON asks for a window on another desktop: unbounded, answered this
+    // desktop's own apps whatever scope it names, and never the project column (DS-L4)
+    const peer = IndexAppsResult.parse(
+      await world.peer.call("index.apps.list", { limit: WINDOW_ASK, scope: "mesh" }),
+    );
+    expect(peer.rows, "a peer daemon is not bounded").toHaveLength(WINDOW_ASK);
+    expect(new Set(peer.rows.map((row) => row.device))).toEqual(new Set([world.mock.meshDeviceId]));
+    expect(
+      peer.rows.filter(
+        (row) => row.projectKey !== undefined || row.place !== undefined || row.ink !== undefined,
+      ),
+      "no project column for a peer daemon",
+    ).toEqual([]);
+    // rosetta's publication path reaches no caller
+    expect(JSON.stringify([first, second, window, peer])).not.toContain(LIBRARY_PATH);
+  }, 60_000);
+
+  it("index.artifacts: one desktop's library in rosetta's pages of at most MAX_ROWS — rosettad asked for no more — and no path or asset URL for any caller", async () => {
+    await appsRead();
+    let page: IndexArtifactsResult | undefined;
+    const asked = await askedDuring("/api/artifacts", async () => {
+      page = IndexArtifactsResult.parse(await world.phone.call("index.artifacts", { limit: MAX }));
+    });
+    expect(page?.entries, "the phone's page").toHaveLength(MAX);
+    expect(page?.nextCursor, "it pages on").toBeDefined();
+    expect(page?.canonicalReady, "the library has finished its first reading").toBe(true);
+    expect(
+      asked.map((url) => queryOf(url).get("limit")),
+      "rosettad was asked for no more than the page",
+    ).toEqual([String(MAX)]);
+    const next = IndexArtifactsResult.parse(
+      await world.phone.call("index.artifacts", { limit: MAX, cursor: page?.nextCursor }),
+    );
+    expect(next.entries, "the phone's next page").toHaveLength(MAX);
+    expect(
+      new Set([...(page?.entries ?? []), ...next.entries].map((entry) => entry.appId)).size,
+      "two pages, no app twice",
+    ).toBe(2 * MAX);
+    expect(page?.entries[0]).toMatchObject({
+      device: world.mock.meshDeviceId,
+      appId: hex(`app:${ROWS - 1}`),
+      presentationId: hex(`presentation:${ROWS - 1}`),
+      sessionId: `s${ROWS - 1}`,
+      filename: `app-${ROWS - 1}.html`,
+      availability: "captured",
+      recovered: false,
+      digest: hex(`page:${ROWS - 1}`),
+      kind: "claude-code",
+      versions: 1,
+    });
+
+    const window = IndexArtifactsResult.parse(
+      await world.window.call("index.artifacts", { limit: MAX }),
+    );
+    expect(window.entries, "a window's page").toHaveLength(MAX);
+    const peer = IndexArtifactsResult.parse(
+      await world.peer.call("index.artifacts", { limit: MAX }),
+    );
+    expect(peer.entries, "a peer daemon's page").toHaveLength(MAX);
+    expect(
+      peer.entries.filter((entry) => entry.projectKey !== undefined),
+      "no project column for a peer daemon",
+    ).toEqual([]);
+    // rosetta's publication path and its asset's daemon-relative URL reach no caller
+    for (const answer of [page, next, window, peer]) {
+      const text = JSON.stringify(answer);
+      expect(text).not.toContain(LIBRARY_PATH);
+      expect(text).not.toContain("/api/assets/");
+    }
+  }, 60_000);
+
+  it("the apps table's replication door is the peer daemon's alone: the phone and a window are refused by the handler's own gate, a self peer is admitted and told the owner's standing", async () => {
+    await appsRead();
+    for (const [who, rpc] of [
+      ["the phone", world.phone],
+      ["a window", world.window],
+    ] as const) {
+      const answer = await rpc.attempt("index.apps.catalog.subscribe", {});
+      expect(answer.ok, `${who} is refused the peer door`).toBe(false);
+      if (answer.ok) continue;
+      expect(answer.error.data?.kind).toBe("FORBIDDEN_SCOPE");
+      expect(answer.error.data?.details).toEqual({ method: "index.apps.catalog.subscribe" });
+    }
+    const opened = await world.peer.attempt("index.apps.catalog.subscribe", {});
+    expect(opened.ok, "a self peer daemon is admitted").toBe(true);
+    if (!opened.ok) return;
+    const { snapshot } = opened.result as { subId?: unknown; snapshot?: unknown };
+    const open = IndexAppsCatalogOpen.parse(snapshot);
+    expect(open, "the owner's standing rides the open answer").toMatchObject({
+      snapshot: { libraryReady: true },
+    });
   }, 60_000);
 });

@@ -54,6 +54,11 @@ const LAYOUT_CONSUMERS = [
   "packages/fieldd/src/device-service.ts",
   "packages/fieldd/src/settings-doc.ts",
   "packages/fieldd/src/artifact-service.ts",
+  // MA-3e (C3) — the made apps' two joiners: the service names the made folders,
+  // the made previews and its registry; the replica names its folder only through
+  // the daemon's join (`LAYOUT.MESH_APPS_DIR`), and spells none of them
+  "packages/fieldd/src/made-app-service.ts",
+  "packages/fieldd/src/index-apps-mesh.ts",
   "packages/fieldd-supervisor/src/paths.ts",
   "packages/audit/src/index.ts",
   "packages/electron-shell/src/main/support-bundle.ts",

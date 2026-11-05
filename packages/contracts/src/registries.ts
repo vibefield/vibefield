@@ -623,7 +623,10 @@ export const MADE_APP_LIMITS = {
  *   true: a link can come.
  * A hidden app, or one no row names, is NOT_FOUND: a hidden app never opens, raw URL or not (MA §4.4). When every live
  * serve under ARTIFACT_LIMITS.LOCAL_OBJECTS is kept, so none can be closed for a new one, the open is
- * RESOURCE_EXHAUSTED `{resource: RESOURCE}`. TS-only: no native reader. */
+ * RESOURCE_EXHAUSTED `{resource: RESOURCE}`. TS-only: no native reader.
+ * STATE_INTENT_UNBUILT (MA-3e, 2026-11-05): `artifact.mark`'s answer, not the open's, until slice 3h writes the
+ *   person's intent: the home has no intent document to write a keep or a hide to yet. Retryable false: nothing a retry
+ *   changes until 3h lands. It is never an open's refusal (`MADE_APP_OPEN_REFUSAL_STATES` does not name it). */
 export const MADE_APP_OPEN = {
   /** `UnavailableDetails.service` on every refusal */
   SERVICE: "apps",
@@ -634,6 +637,7 @@ export const MADE_APP_OPEN = {
   STATE_READING: "library-reading",
   STATE_EXPORT_FAILED: "export-failed",
   STATE_NOT_LINKED: "not-linked",
+  STATE_INTENT_UNBUILT: "intent-unbuilt",
   /** RESOURCE_EXHAUSTED's `resource` at the serve ceiling */
   RESOURCE: "apps",
 } as const;
