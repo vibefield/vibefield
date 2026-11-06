@@ -6204,6 +6204,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     - **The words follow the reach:** **Show all** over "8 sessions · every profile" on the hub, **Show Work** over
       Work's sessions on a bud, and **Cancel** over "let go here to leave the field as it is" on open ground, the
       verb at 40%. The reached profile's circle stands at 206 under them, or every plan's on the hub.
+      *Wave 1, until UM-5 (2026-11-06, U3's repair; ‹for James›):* the phone's rows carry no run's profile yet, so
+      the line under **Show all** and **Show ‹profile›** counts the plans' reads where sessions are ruled, "5 read · 2
+      need you · every profile" on the hub and "1 read · 2 need you" on Work's bud (§9 "The phone's hold").
     - **Let go** on a bud and the field shows that profile (the lens, §8 "The phone's profile token"); on the face,
       every profile; on open ground, the field as it was.
   - **Reduced motion** (M6), as the spawn bloom's: the buds stand at their size behind its 90ms fade, with no pop
@@ -7237,6 +7240,10 @@ here.
   it neither read nor needing you; a profile with a first read out beside a sign-in under way says "0 read · none
   need you". ‹for James›: the line of a profile whose every plan waits, a first read or a sign-in under way, said
   so as the rule counts it; and the word of a bud whose one plan is signing in, "NO METER" as built.)*
+  *Wave 1, until UM-5 (2026-11-06, U3's repair; ‹for James›):* with several profiles the line counts the plans'
+  reads where sessions are ruled, "5 read · 2 need you · every profile" under **Show all** and "1 read · 2 need
+  you" under **Show Work**, since the phone's rows carry no run's profile until UM-5 (§8 "The phone's corner", the
+  words follow the reach).
 - **The Me menu's row** is **Agent Profiles**, its word the tightest percent ("42%") or "reading…".
 - **The page** is **Agent Profiles**: "Read a minute ago, from ‹home›" or "Reading usage…"; **Profiles**, with **All
   profiles** ("3 profiles · 5 plans") and each profile's line ("default · the agents' own sign-ins · 2 plans");
