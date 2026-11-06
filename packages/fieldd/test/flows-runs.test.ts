@@ -4803,6 +4803,76 @@ describe("CP-4a2b — the host's life: parked and woken, D2's lookup at a wake, 
     expect((await settled(h.runs, run, "done")).log).toBe("clean true");
   });
 
+  it("R22i (Q8's repair rider, F-a's second half, F5; ruled 2026-11-06, from green v2's skeptic; slice 11a): a step held on you on a repair whose hold its run's record refused keeps its agent's words waiting for their act, as a step the record says holds: a turn that ends before Ask once more is never its answer, and Ask once more then sends the repair line again", async () => {
+    // the turn ends go through the step listener itself (R22g's precedent), so what the runs' listener throws is caught
+    // there, never thrown into the row
+    const events = new FlowStepEvents();
+    const h = await harness({ stepEvents: events });
+    h.approved("review", FORMED);
+    const run = startedRun(await h.start({ flow: "review" })).run;
+    await waitFor(() => expect(h.enqueued).toHaveLength(1));
+    const step = fakeAgent();
+    events.entered({
+      agent: step.agent,
+      runtimeRunId: "rt-step1",
+      begun: "spawn",
+      origin: { by: "flow", run, call: 1 },
+    });
+    /** the step's next turn, its answer `text` */
+    const turn = (text: string) => {
+      step.emit("turn:started", {});
+      step.emit("turn:completed", { lastAssistantMessage: text });
+    };
+    turn("no json here");
+    await waitFor(() => expect(h.enqueued).toHaveLength(2));
+    // T4's arm at the raise: the run's record write just after the needs port raised the repair's item throws once, as
+    // a full disk at that moment refuses it
+    const { needs } = h.runs.ports;
+    const raise = needs.flowItem.bind(needs);
+    const write = h.records.writeRunRecord.bind(h.records);
+    let armed = false;
+    let refused = false;
+    vi.spyOn(needs, "flowItem").mockImplementation((item) => {
+      const raised = raise(item);
+      armed = true;
+      return raised;
+    });
+    vi.spyOn(h.records, "writeRunRecord").mockImplementation((at, fields) => {
+      if (!armed) return write(at, fields);
+      armed = false;
+      refused = true;
+      throw new Error("ENOSPC: no space left on device, write");
+    });
+    turn("still none");
+    await waitFor(() => expect(h.items).toHaveLength(1));
+    // its item raised and its hold's write refused, the record still says the step repairs (its `holding` rode that
+    // write): green v1's Ask once more, reading `step.state !== "holding"`, acted on nothing, the agent left waiting
+    const before = h.records.runRecord(run);
+    expect({ refused, step: before?.open[0]?.state, held: before?.held }).toEqual({
+      refused: true,
+      step: "repairing",
+      held: undefined,
+    });
+    // the step's agent ends a turn before you act: held on you, its words wait for their act, never the step's answer
+    turn(fenced('{"verdict":"clean"}'));
+    const acted = await askOnceMore(h, run);
+    const repair = repairLine("the answer holds no JSON the form can read");
+    expect({
+      acted,
+      answered: answersOf(h, run).length,
+      sent: h.enqueued.slice(2).map(({ text, from }) => ({ text, from })),
+    }).toEqual({
+      acted: { outcome: "done" },
+      answered: 0,
+      sent: [
+        { text: repair, from: { kind: "fieldd", flow: { run, call: 1, line: "repair", n: 2 } } },
+      ],
+    });
+    // the agent answers the line sent again, and the run goes on to its end
+    turn(fenced('{"verdict":"clean"}'));
+    expect((await settled(h.runs, run, "done")).log).toBe("clean true");
+  });
+
   // slice 11a's red-b (Q6–Q8, Q13; the slice 11 rulings, ruled 2026-11-06; §9's Proposed words, bafdcd544): an ask
   // is held at its call to the gate's one rule, the read's rules and the needs queue's two (Q6). One the rule refuses,
   // or whose item the needs queue can't raise (Q8), is answered refused through the one writer, in §9's "An ask
