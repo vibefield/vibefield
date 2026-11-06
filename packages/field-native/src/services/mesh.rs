@@ -724,10 +724,13 @@ impl MeshHandle {
         if self.egress().reset().await > 0 {
             self.note_egress_changed();
         }
-        // DR-3a (W3) — the file transfer's roots were this node's, so the arm
-        // forgets them with it; a stop or an unlink also drops the held set,
-        // which no other teardown does (the critic's finding 0). BEFORE the
-        // node stops.
+        // DR-3a (W3) — the file transfer's roots and pulls were this node's, so
+        // the arm forgets the roots and ends the pulls `failed` NODE_DOWN on
+        // the stream it keeps across rebuilds, BEFORE the node stops; a stop or
+        // an unlink also drops the held set, which no other teardown does (the
+        // critic's finding 0). It takes its pulls out and drops its lock before
+        // it aborts and joins them, so a stalled pull cannot hold this teardown
+        // (finding 3).
         self.file_transfer().detach(reason).await;
         // Item 79 (2026-10-27) — STOP the node, then drop it. This line used to
         // read `drop(had); // node drop kills the sidecar (kill_on_drop)`, and

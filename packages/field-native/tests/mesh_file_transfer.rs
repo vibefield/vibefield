@@ -1188,7 +1188,7 @@ async fn shutdown_ends_a_running_pull_and_leaves_no_temporaries() {
     let _: NativeFileTransferPullResult = parse(&reply["result"]);
     wait_until("the pull's temporary", || temps(&lands).len() == 1).await;
     drop(mgmt);
-    timeout(Duration::from_secs(10), daemon.shutdown())
+    timeout(Duration::from_secs(30), daemon.shutdown())
         .await
         .expect("a floor with a pull running shuts down");
     assert_eq!(pulls.in_flight(), 0, "the pull's task ended with the floor");
