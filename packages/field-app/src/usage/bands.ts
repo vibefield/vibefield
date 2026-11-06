@@ -1,5 +1,5 @@
 import type { MeterProfile, MeterWindow, PlanMeter, ReadingMeter } from "./meters";
-import { resetForm } from "./rules";
+import { outranks, resetForm } from "./rules";
 
 // UM-1 (UM-D16 = E, "Bands", round 3, James) — THE BANDS CIRCLE'S GEOMETRY, PURE: every plan of one Agent Profile (or
 // of every profile, UM-D12's union) on one circle, an arc segment each, five hours on the inner band, the week on the
@@ -154,8 +154,8 @@ export interface BandsOptions {
 export const SHORT_WINDOW_MINUTES = 300;
 
 /** A plan's bands (UM-D16): the inner is its first window of five hours or less; the outer its most pressed longer
- * window that meters the whole plan; the hairline a window that meters part of it (a model's week); a budget fills
- * both. A plan with no reading has none. */
+ * window that meters the whole plan (`outranks`: one still running before one read before its reset); the hairline
+ * a window that meters part of it (a model's week); a budget fills both. A plan with no reading has none. */
 export interface PlanBands {
   short?: MeterWindow;
   long?: MeterWindow;
@@ -177,7 +177,7 @@ export function bandsOf(entry: PlanMeter): PlanBands {
     const minutes = length(window);
     if (window.budget || minutes === undefined || minutes <= SHORT_WINDOW_MINUTES) continue;
     if (window.line.group !== undefined) continue;
-    if (bands.long === undefined || window.pressure > bands.long.pressure) bands.long = window;
+    if (bands.long === undefined || outranks(window, bands.long)) bands.long = window;
   }
   const group = windows.find((window) => window.line.group !== undefined);
   if (group !== undefined) bands.group = group;
@@ -453,12 +453,13 @@ const planHot = (entry: PlanMeter): boolean => entry.kind === "reading" && entry
 const waiting = (entry: PlanMeter): boolean =>
   entry.kind === "first-read" || (entry.kind === "needs-you" && entry.need === "signing-in");
 
-/** The plan that decides the middle: the most pressed reading, else the first read, else what needs you. */
+/** The plan that decides the middle: the most pressed reading (its tightest by `outranks`, so a plan whose tightest was
+ * read before its reset gives way to one still running), else the first read, else what needs you. */
 function decidingPlan(onCircle: readonly PlanMeter[]): PlanMeter | undefined {
   let best: ReadingMeter | undefined;
   for (const entry of onCircle) {
     if (entry.kind !== "reading") continue;
-    if (best === undefined || entry.tightest.pressure > best.tightest.pressure) best = entry;
+    if (best === undefined || outranks(entry.tightest, best.tightest)) best = entry;
   }
   return (
     best ??

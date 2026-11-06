@@ -58,8 +58,8 @@ export function durationWords(minutes: number): string {
   return rest === 0 ? `${days}d` : `${days}d ${rest}h`;
 }
 
-/** What a window's pressure reads: its orange (Settings' pace rule), its used share, and whether its reset has come
- * since it was read (`passed`). */
+/** What a window's pressure reads: its orange (Settings' pace rule), its used share, and whether its `resetsAt` is at
+ * or before now, whether its reset came before or after its reading (`passed`). */
 export interface Pressed {
   hot: boolean;
   usedPercent: number;
@@ -73,7 +73,22 @@ export function pressureOf(window: Pressed): number {
   return (window.hot ? 1000 : 0) + (window.usedPercent >= 100 ? 500 : 0) + window.usedPercent;
 }
 
-/** UM-D13 — the window closest to its limit: the most pressed, the first of equals. */
+/** UM-D13's rank of a window: its pressure, and whether it was read before its reset. */
+export interface Rank {
+  pressure: number;
+  passed?: boolean | undefined;
+}
+
+/** UM-D13 — whether `a` ranks above `b`: the more pressed, and at equal pressure a window still running above one read
+ * before its reset. Both press 0 at that tie (a running window at 0%), so a passed window ranks below every running
+ * window, an empty one too (DESIGN.md §8 "A window read before its reset"); equals of one kind keep their order. */
+export function outranks(a: Rank, b: Rank): boolean {
+  if (a.pressure !== b.pressure) return a.pressure > b.pressure;
+  return a.passed !== true && b.passed === true;
+}
+
+/** UM-D13 — the window closest to its limit: the most pressed, one still running before one read before its reset
+ * (`outranks`), the first of equals. */
 export function tightestOf<T extends Pressed>(windows: readonly T[]): T | undefined;
 export function tightestOf<T>(
   windows: readonly T[],
@@ -84,12 +99,13 @@ export function tightestOf<T>(
   pressed: (window: T) => Pressed = (window) => window as Pressed,
 ): T | undefined {
   let tightest: T | undefined;
-  let most = Number.NEGATIVE_INFINITY;
+  let best: Rank | undefined;
   for (const window of windows) {
-    const pressure = pressureOf(pressed(window));
-    if (tightest === undefined || pressure > most) {
+    const read = pressed(window);
+    const rank: Rank = { pressure: pressureOf(read), passed: read.passed };
+    if (best === undefined || outranks(rank, best)) {
       tightest = window;
-      most = pressure;
+      best = rank;
     }
   }
   return tightest;

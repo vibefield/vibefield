@@ -72,11 +72,13 @@ export interface MeterWindow {
   /** minutes to the reset, unrounded (negative once it has passed); absent for a window that names no reset and for
    * a budget */
   resetIn?: number;
-  /** its reset has come since the reading was taken (`resetsAt` at or before now), so what it metered is gone: never
-   * hot, no forecast, pressure 0, its fill at the kept half (DESIGN.md §8 "The Bands circle", "A window read before
-   * its reset"; ‹for James›) */
+  /** its `resetsAt` is at or before now, whether its reset came before or after its reading (one already past when
+   * read says the read's age, ‹for James›), so what it metered is gone: never hot, no forecast, pressure 0 and below
+   * every running window (`outranks`), its fill at the kept half (DESIGN.md §8 "The Bands circle", "A window read
+   * before its reset"; ‹for James›) */
   passed: boolean;
-  /** UM-D13's rank (`pressureOf`): ahead of pace first, then spent, then the fuller; 0 once passed */
+  /** UM-D13's rank (`pressureOf`): ahead of pace first, then spent, then the fuller; 0 once passed, and a running
+   * window wins that tie (`outranks`) */
   pressure: number;
   forecast?: MeterForecast;
 }
@@ -212,8 +214,9 @@ export function meterWindows(
       paced.resets && metric.resetsAt !== undefined
         ? (Date.parse(metric.resetsAt) - now.getTime()) / 60_000
         : undefined;
-    // read before its reset (DESIGN.md §8 "The Bands circle"): the reset has come since, so what it metered is gone
-    // and it runs ahead of nothing. Only its orange leaves Settings' line; its words and its now line stand.
+    // read before its reset (DESIGN.md §8 "The Bands circle"): its reset is at or before now, whether it came before
+    // or after the reading, so what it metered is gone and it runs ahead of nothing. Only its orange leaves Settings'
+    // line; its words and its now line stand.
     const passed = resetIn !== undefined && resetIn <= 0;
     const line: UsageLine = passed ? { ...paced, hot: false } : paced;
     const window: MeterWindow = {

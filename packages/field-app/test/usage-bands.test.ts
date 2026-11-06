@@ -603,8 +603,10 @@ describe("UM-1 — the circle in words", () => {
 
   it("says a reset only as a length (§9's 'resets in 2h'), never by its day or once past; a kept reading, or one read before its reset, by its age", () => {
     const entries = meters([
-      // past its reset (read a minute ago: its age is said, DESIGN.md §8 "A window read before its reset"), and a
-      // week whose reset is days off: Settings' "now" and day and clock stay on the rows
+      // past its reset, which came half a minute before its reading a minute ago: the rule reads `resetsAt` against
+      // now alone, so its age is said (DESIGN.md §8 "A window read before its reset": a reset already past when read,
+      // the age the read's, ‹for James›); and a week whose reset is days off: Settings' "now" and day and clock stay
+      // on the rows
       ["claude", [paced("5h", 30, 100.5)]],
       ["grok", [paced("7d", 30, 50, 10_080)]],
       [
