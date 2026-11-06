@@ -1976,6 +1976,22 @@ describe("CP-4a2b — a changed flow's acts begin the asked-for run (§13a slice
       vi.spyOn(h.records, "runRecord").mockImplementationOnce(() => {
         throw new Error("EIO: i/o error, read");
       });
+      return head;
+    });
+    const run = ranOf(
+      await h.runs.acts.start({
+        id: waits,
+        flow: "hello",
+        hash: flowHashOf(edited),
+        version: "this",
+        start: askedOf(h, 0),
+      }),
+    );
+    expect(h.records.approval("hello")?.hash).toBe(flowHashOf(edited));
+    expect(h.runs.list().runs.map((summary) => summary.run)).toEqual([run]);
+    // its host never started: the record says it runs, and slice 14's boot wakes it
+    expect(h.records.runRecord(run)?.state).toBe("running");
+  });
 
   it("R6e (1a review W1, W2): a door's start whose run's record is kept answers that run, as #begin wrote it, though its read-back throws; the list its subscribers hear holds it", async () => {
     const h = await harness();
@@ -2063,21 +2079,5 @@ describe("CP-4a2b — a changed flow's acts begin the asked-for run (§13a slice
       details: { service: RECORD_STORES.SERVICE_FLOWS, state: RECORD_STORES.STATE_UNREADABLE },
     });
     expect(h.records.runRecords()).toEqual([]);
-  });
-      return head;
-    });
-    const run = ranOf(
-      await h.runs.acts.start({
-        id: waits,
-        flow: "hello",
-        hash: flowHashOf(edited),
-        version: "this",
-        start: askedOf(h, 0),
-      }),
-    );
-    expect(h.records.approval("hello")?.hash).toBe(flowHashOf(edited));
-    expect(h.runs.list().runs.map((summary) => summary.run)).toEqual([run]);
-    // its host never started: the record says it runs, and slice 14's boot wakes it
-    expect(h.records.runRecord(run)?.state).toBe("running");
   });
 });

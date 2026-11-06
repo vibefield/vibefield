@@ -1624,6 +1624,13 @@ describe("CP-4a2b — a flow run's items: the runs' acts, then Stop the run; an 
         throw new Error("EIO: i/o error, read '/Users/someone/.vibefield/flows'");
       },
     });
+    const id = h.queue.flowChanged(RAISED);
+    const { item } = await h.queue.answer(id, 0, principal);
+    expect(item.answer).toMatchObject({ outcome: "failed", reason: UNREADABLE_WORDS.flows });
+    expect(h.woken).toEqual([
+      ["run-vela", words.flowStartFailedFact("Vela", "Release check", UNREADABLE_WORDS.flows)],
+    ]);
+  });
 
   it("N5g (1b review V5): an act on a gone spark's item owes it nothing: no one can hear the fact, so nothing is kept for it", async () => {
     const h = harness();
@@ -1669,12 +1676,5 @@ describe("CP-4a2b — a flow run's items: the runs' acts, then Stop the run; an 
       ...next,
       avatar: "comet",
     });
-  });
-    const id = h.queue.flowChanged(RAISED);
-    const { item } = await h.queue.answer(id, 0, principal);
-    expect(item.answer).toMatchObject({ outcome: "failed", reason: UNREADABLE_WORDS.flows });
-    expect(h.woken).toEqual([
-      ["run-vela", words.flowStartFailedFact("Vela", "Release check", UNREADABLE_WORDS.flows)],
-    ]);
   });
 });
