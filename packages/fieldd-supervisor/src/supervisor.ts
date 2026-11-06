@@ -26,6 +26,9 @@ import {
 // IS our child's pid — anything else that became ready in the root is adopted,
 // and an adopted fieldd is never killed by any path here. A spawned one's stop
 // also ends the floor its record names, one that fieldd adopted included.
+// Item 212 (RV #30): a probe-timeout is a fieldd BUSY, not gone — it is waited on
+// for the spawn's own readiness bound before any takeover — and the record a
+// spawn supersedes, answering late, is never read as the race's winner.
 
 const READINESS_DEADLINE_MS = 20_000;
 const ADOPT_PROBE_MS = 1_500;
@@ -47,6 +50,15 @@ const TAKEOVER_FAILURES: ReadonlySet<ProbeFailure> = new Set([
   "user-mismatch",
   "foreign-listener",
 ]);
+
+/** Item 212 (RV #30) — what the busy wait hands run()'s one decision. */
+interface BusyWait {
+  /** the probe the decision dispatches: an answer, another result, or the last probe-timeout */
+  readonly probe: ProbeResult;
+  readonly waitedMs: number;
+  /** the recorded pid no longer exists: the spawn supersedes nothing live, so it is no takeover */
+  readonly gone: boolean;
+}
 
 export function createFielddSupervisor(opts: FielddSupervisorOptions): FielddSupervisor {
   const emit = (event: FielddSupervisorEvent): void => {
@@ -105,26 +117,37 @@ export function createFielddSupervisor(opts: FielddSupervisorOptions): FielddSup
     assertDataRootUsable(opts.dataRoot);
     throwIfAborted(signal);
 
-    const adopted = await tryAdopt(
-      opts.dataRoot,
-      opts.adoptProbeMs ?? ADOPT_PROBE_MS,
-      signal,
-      opts.expectedBuildId,
-      opts.userId,
-      { keepStaleClient: opts.buildMismatch === "replace" },
-    );
+    const first = await adoptProbe(opts.adoptProbeMs ?? ADOPT_PROBE_MS, signal);
     throwIfAborted(signal);
+    // item 212 (RV #30) — a probe-timeout is busy, not gone: the wait's final probe goes to the ONE decision below,
+    // exactly as a first probe would
+    const waited =
+      !first.ok && first.failure === "probe-timeout" && first.recorded !== undefined
+        ? await awaitBusyIncumbent(first, first.recorded, signal)
+        : null;
+    const adopted = waited?.probe ?? first;
     if (adopted.ok) {
       lifecycle("fieldd.supervisor.adopted", "Adopted a running fieldd", {
         port: adopted.info.port,
         pid: adopted.info.pid,
         bootId: adopted.info.bootId,
       });
+      if (waited !== null) {
+        lifecycle(
+          "fieldd.supervisor.adopted_after_wait",
+          "The busy fieldd answered inside the patience and was adopted, never superseded",
+          { waitedMs: waited.waitedMs },
+        );
+      }
       return makeHandle("adopted", adopted);
     }
     lifecycle("fieldd.supervisor.spawn_required", "No adoptable fieldd was available", {
       probeFailure: adopted.failure,
     });
+    // item 212 — a listener that took the dial and never the hello, past the patience, is a live one superseded
+    const takeover =
+      TAKEOVER_FAILURES.has(adopted.failure) ||
+      (adopted.failure === "probe-timeout" && waited?.gone !== true);
     if (adopted.failure === "incompatible-build") {
       if (opts.buildMismatch !== "replace" || adopted.stale === undefined) {
         adopted.stale?.client.close();
@@ -135,13 +158,18 @@ export function createFielddSupervisor(opts: FielddSupervisorOptions): FielddSup
         );
       }
       await replaceStaleBuild(adopted.stale, signal);
-    } else if (TAKEOVER_FAILURES.has(adopted.failure)) {
+    } else if (takeover) {
       lifecycle(
         "fieldd.supervisor.takeover",
         "A live listener on this root cannot be adopted; the new fieldd supersedes it at field-native",
-        { probeFailure: adopted.failure },
+        {
+          probeFailure: adopted.failure,
+          ...(waited !== null ? { waitedMs: waited.waitedMs } : {}),
+        },
       );
     }
+    // item 212 — the record this spawn supersedes, when one was read: its late answer is never the race's winner
+    const superseding = adopted.recorded?.bootId;
 
     const tail = createLogTail();
     const spawned = spawnFieldd(tail);
@@ -167,6 +195,7 @@ export function createFielddSupervisor(opts: FielddSupervisorOptions): FielddSup
     try {
       const deadline = Date.now() + (opts.readinessDeadlineMs ?? READINESS_DEADLINE_MS);
       let lastFailure: ProbeFailure = "no-run-files";
+      let answeredLate = false;
       while (Date.now() < deadline) {
         throwIfAborted(signal);
         const exited = exitState.info;
@@ -185,7 +214,22 @@ export function createFielddSupervisor(opts: FielddSupervisorOptions): FielddSup
           opts.expectedBuildId,
           opts.userId,
         );
-        if (probe.ok) {
+        if (!probe.ok) {
+          lastFailure = probe.failure;
+        } else if (probe.info.pid !== spawned.pid && probe.info.bootId === superseding) {
+          // item 212 (RV #30) — the incumbent this spawn supersedes, answering late: no race winner, and our child
+          // is never stopped for it. Its client is closed (an open probe client reconnects forever); the poll goes
+          // on for our child, whose record replaces this one.
+          probe.client.close();
+          if (!answeredLate) {
+            answeredLate = true;
+            lifecycle(
+              "fieldd.supervisor.incumbent_answered_late",
+              "The fieldd this spawn supersedes answered late; the poll waits for ours",
+              { pid: probe.info.pid, bootId: probe.info.bootId, spawnedPid: spawned.pid ?? null },
+            );
+          }
+        } else {
           const ownership = probe.info.pid === spawned.pid ? "spawned" : "adopted";
           if (ownership === "adopted") {
             // someone else's daemon owns the root — ours lost the race; stop it
@@ -207,7 +251,6 @@ export function createFielddSupervisor(opts: FielddSupervisorOptions): FielddSup
           }
           return makeHandle(ownership, probe);
         }
-        lastFailure = probe.failure;
         // sleep, but wake early on child exit or abort — never sit out the
         // interval while the child is already dead
         await new Promise<void>((resolve) => {
@@ -242,6 +285,70 @@ export function createFielddSupervisor(opts: FielddSupervisorOptions): FielddSup
       }
       if (child === spawned) child = null;
       throw error;
+    }
+  }
+
+  /** The adopt phase's probe: this build and this user only, and (`replace`) the other build's client kept open. */
+  function adoptProbe(probeMs: number, signal: AbortSignal): Promise<ProbeResult> {
+    return tryAdopt(opts.dataRoot, probeMs, signal, opts.expectedBuildId, opts.userId, {
+      keepStaleClient: opts.buildMismatch === "replace",
+    });
+  }
+
+  /** Item 212 (RV #30) — a probe-timeout is a listener that took the dial and not the hello inside the budget: a
+   * fieldd busy, not gone. It is waited on as long as a spawn is waited for (the readiness bound; no new constant).
+   * Each round first asks whether its recorded pid exists — `process.kill(pid, 0)` checks and delivers NO signal, so
+   * WP12 D10's "no signal is ever sent to a pid read from a file" holds — then probes again (re-reading product.json),
+   * the budget doubling from the first probe's and clipped to the patience left. It returns:
+   * - the first result that is not this boot's probe-timeout (an answer, another boot's record, no run files, a
+   *   refusal), for run()'s one decision;
+   * - at once, the last probe-timeout with `gone`, when the pid no longer exists;
+   * - past the patience, the last probe-timeout, which that decision spawns as a NAMED takeover (EL7, the reasoning
+   *   of TAKEOVER_FAILURES: a silent same-uid listener can delay the spawn by the bound, never block it).
+   * Abort-aware: dispose ends it. */
+  async function awaitBusyIncumbent(
+    first: ProbeResult,
+    recorded: ProductInfo,
+    signal: AbortSignal,
+  ): Promise<BusyWait> {
+    const started = Date.now();
+    const deadline = started + (opts.readinessDeadlineMs ?? READINESS_DEADLINE_MS);
+    lifecycle(
+      "fieldd.supervisor.adopt_waiting",
+      "A live fieldd took the dial but not the hello; waiting for it within the readiness bound",
+      { pid: recorded.pid, bootId: recorded.bootId },
+    );
+    let last = first;
+    let budgetMs = opts.adoptProbeMs ?? ADOPT_PROBE_MS;
+    for (;;) {
+      throwIfAborted(signal);
+      if (!pidExists(recorded.pid)) {
+        const waitedMs = Date.now() - started;
+        lifecycle(
+          "fieldd.supervisor.incumbent_gone",
+          "The busy fieldd's recorded pid is gone; the wait ends and the spawn goes ahead",
+          { pid: recorded.pid, bootId: recorded.bootId, waitedMs },
+        );
+        return { probe: last, waitedMs, gone: true };
+      }
+      const leftMs = deadline - Date.now();
+      if (leftMs <= 0) return { probe: last, waitedMs: Date.now() - started, gone: false };
+      budgetMs = Math.min(budgetMs * 2, leftMs);
+      const probe = await adoptProbe(budgetMs, signal);
+      if (signal.aborted) {
+        // an answer that lands with the abort is closed here: an open probe client reconnects forever
+        if (probe.ok) probe.client.close();
+        else probe.stale?.client.close();
+      }
+      throwIfAborted(signal);
+      if (
+        probe.ok ||
+        probe.failure !== "probe-timeout" ||
+        probe.recorded?.bootId !== recorded.bootId
+      ) {
+        return { probe, waitedMs: Date.now() - started, gone: false };
+      }
+      last = probe;
     }
   }
 
@@ -531,4 +638,16 @@ function parseReadySignal(line: string): FielddReadySignal | null {
 
 function throwIfAborted(signal: AbortSignal): void {
   if (signal.aborted) throw new SupervisorError("aborted", "supervisor operation aborted");
+}
+
+/** Item 212 (RV #30) — does `pid` name a process? `process.kill(pid, 0)` is the existence check and delivers no
+ * signal. ESRCH is gone; EPERM is a process we may not signal, so it lives (and so does anything else the check
+ * cannot read). On win32 the check is an OpenProcess. A reused pid only lengthens a bounded wait. */
+function pidExists(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code !== "ESRCH";
+  }
 }

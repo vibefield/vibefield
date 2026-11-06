@@ -1,5 +1,6 @@
 // @vibefield/fieldd-supervisor — Node-only fieldd ownership for the shell
 // (ESR spec §5.3). No Electron anywhere below this line (wall R3).
+export { afterIoTurn } from "./io-turn";
 export {
   assertDataRootUsable,
   nativeMgmtEndpoint,

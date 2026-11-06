@@ -81,7 +81,12 @@ export type SupervisorLifecycleEventName =
   | "fieldd.supervisor.replacing_build"
   | "fieldd.supervisor.replaced_build"
   | "fieldd.supervisor.replace_wait_expired"
-  | "fieldd.supervisor.takeover";
+  | "fieldd.supervisor.takeover"
+  // item 212 (RV #30) — a probe-timeout is a busy fieldd, not an absent one
+  | "fieldd.supervisor.adopt_waiting"
+  | "fieldd.supervisor.adopted_after_wait"
+  | "fieldd.supervisor.incumbent_gone"
+  | "fieldd.supervisor.incumbent_answered_late";
 
 export type FielddSupervisorEvent =
   | {
@@ -138,11 +143,15 @@ export interface FielddSupervisorOptions {
    * the field-native its record names, a floor that fieldd adopted included —
    * never an adopted fieldd. */
   shutdownPolicy: "leave-running" | "stop-owned";
+  /** How long a spawned fieldd has to become ready, and (item 212, RV #30) the patience a busy incumbent gets: a
+   * probe-timeout from a recorded pid that still exists is waited on this long before the spawn supersedes it as a
+   * named takeover. */
   readinessDeadlineMs?: number;
   /** TERM grace before a spawned fieldd is force-killed. Dev/smoke callers
    * must budget for the daemon's bounded plugin-deactivation deadline. */
   stopDeadlineMs?: number;
-  /** budget for the first adoption probe before deciding to spawn */
+  /** Budget for the first adoption probe. A probe-timeout is a busy fieldd, not an absent one (item 212): the wait's
+   * own probes double from this, clipped to the patience left. */
   adoptProbeMs?: number;
   /** Typed lifecycle/control/emergency boundary. Readiness stdout is never
    * collapsed into stderr or duplicated as a routine shell log. */

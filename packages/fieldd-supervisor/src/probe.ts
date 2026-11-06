@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { ProductInfo } from "@vibefield/contracts";
 import { FielddClient, FielddRpcError } from "@vibefield/fieldd-client";
+import { afterIoTurn } from "./io-turn";
 import { productPath, tokenPath } from "./paths";
 import type { ProbeFailure } from "./types";
 
@@ -18,7 +19,15 @@ export interface StaleDaemon {
 
 export type ProbeResult =
   | { ok: true; client: FielddClient; info: ProductInfo }
-  | { ok: false; failure: ProbeFailure; stale?: StaleDaemon };
+  | {
+      ok: false;
+      failure: ProbeFailure;
+      stale?: StaleDaemon;
+      /** Item 212 (RV #30) — the record the probe read, on every failure reached after product.json parsed: the
+       * supervisor waits on a busy fieldd by its pid and bootId, and never reads the one it supersedes as the race's
+       * winner. */
+      recorded?: ProductInfo;
+    };
 
 /** The run file's recorded daemon, or null when absent or unreadable (the replace path's "is it gone yet", and the
  * floor a stop reads fresh). */
@@ -85,7 +94,9 @@ export async function tryAdopt(
   let unsubscribe: (() => void) | undefined;
   const outcome = await new Promise<"ready" | "timeout" | "aborted" | "dial-failed" | unknown>(
     (resolve) => {
-      timer = setTimeout(() => resolve("timeout"), probeMs);
+      // WG-E1 — the timer fires in the timers phase, before the poll phase reads a hello ack already buffered in
+      // this same turn: the verdict waits one turn of I/O, so an ack that came in time wins (item 212, RV #30)
+      timer = setTimeout(() => afterIoTurn(() => resolve("timeout")), probeMs);
       if (signal) {
         onAbort = () => resolve("aborted");
         signal.addEventListener("abort", onAbort, { once: true });
@@ -115,25 +126,30 @@ export async function tryAdopt(
     // cross the wall. Exact match or nothing.
     if (expectedUserId !== undefined && info.userId !== expectedUserId) {
       client.close();
-      return { ok: false, failure: "user-mismatch" };
+      return { ok: false, failure: "user-mismatch", recorded: info };
     }
     if (expectedBuildId !== undefined && info.buildId !== expectedBuildId) {
       // our token answered: this is our user's daemon, of another build (or a pre-WP12 one, which records none)
       if (options.keepStaleClient === true) {
-        return { ok: false, failure: "incompatible-build", stale: { client, info } };
+        return {
+          ok: false,
+          failure: "incompatible-build",
+          stale: { client, info },
+          recorded: info,
+        };
       }
       client.close();
-      return { ok: false, failure: "incompatible-build" };
+      return { ok: false, failure: "incompatible-build", recorded: info };
     }
     return { ok: true, client, info };
   }
 
   client.close(); // kill the auto-reconnect — a probe never lingers
-  if (outcome === "dial-failed") return { ok: false, failure: "stale-files" };
+  if (outcome === "dial-failed") return { ok: false, failure: "stale-files", recorded: info };
   if (outcome === "timeout" || outcome === "aborted") {
-    return { ok: false, failure: "probe-timeout" };
+    return { ok: false, failure: "probe-timeout", recorded: info };
   }
-  return { ok: false, failure: classifyHelloError(outcome) };
+  return { ok: false, failure: classifyHelloError(outcome), recorded: info };
 }
 
 /** Map a terminal hello/dial error onto the diagnosis taxonomy. */
