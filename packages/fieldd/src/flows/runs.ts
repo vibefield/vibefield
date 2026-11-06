@@ -413,6 +413,9 @@ export class FlowRuns {
         ran: live.ran,
         scope: record.scope.filter((profile) => profiles.has(profile)),
         folder: this.#folderOf(live),
+        ...(record.starter.by === "spark" && record.starter.spark !== undefined
+          ? { spark: record.starter.spark }
+          : {}),
       },
       this.#stepWrite(run),
       number,

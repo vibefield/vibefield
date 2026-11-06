@@ -1,3 +1,4 @@
+import { basename, isAbsolute, relative, resolve } from "node:path";
 import {
   type AgentInputSender,
   type AgentModelSelection,
@@ -17,7 +18,10 @@ import {
 //   7. `sent: "queued"`, written in the tick the queue took it, with no await between.
 // A spawn the runtime refuses is the step's refusal, in DESIGN.md §9's words ("A step's call refused"). The spawn
 // shape has no approval or permission field (AgentSpawnParams), so a step never asks for one (CP-L4).
-// Built later in M-r2: D2's lookup and the slots (8b), D9's checks on each option (8c), the answer (9).
+// D9's checks are held here, before any spawn or send, each in §9's words: the keys, the agent (the catalog's door),
+// its Agent Profile (named, or the spark's own or your default, held to the run's scope), its folder (the run's, or a
+// project's, or inside one), its model (a name the runtime discovered), its prompt, and an `in:`.
+// Built later in M-r2: D2's lookup at a wake (10a), the answer and a freed slot (9).
 
 /** What a step's agent is started with: the runtime's spawn, by fieldd's own interface (R32). */
 export interface FlowStepLaunch {
@@ -129,8 +133,19 @@ const STEP_KEYS: ReadonlySet<string> = new Set([
   "in",
 ]);
 
-/** The keys whose value fieldd acts on, each a name or a path; another value is slice 8c-2's to refuse in words. */
-const NAMED_KEYS = ["agent", "profile", "cwd", "in"] as const;
+/** The keys whose value is a name or a path and that no other sentence covers: a value that is neither is refused in
+ * words not yet drafted (W-h, sent for a ruling), so until then such a call is not started at all. `agent` is W-a's
+ * and `model` W-f's. */
+const NAMED_KEYS = ["profile", "cwd", "in"] as const;
+
+/** The keys a spawn sets, which an `in:` beside them may not (A3). */
+const SPAWN_KEYS = ["agent", "model", "profile", "cwd"] as const;
+
+/** Whether `folder` is `root` or inside it, by the path alone (D9's `cwd`; a symlink is the runtime's to resolve). */
+const within = (folder: string, root: string): boolean => {
+  const rel = relative(resolve(root), resolve(folder));
+  return rel === "" || (!rel.startsWith("..") && !isAbsolute(rel));
+};
 
 /** DESIGN.md §9's folder sentence, at the start and at a call that names none (CP4-Q20 (a)). */
 export const NO_FOLDER =
@@ -170,13 +185,9 @@ export async function startStep(
   const options = optionsOf(args);
   const prompt = args[0];
   const label = said(options["label"]);
-  // the words for a prompt that is not words, and for a named key's value that is not a name, are slice 8c-2's: until
-  // then such a call is not started at all, and the host refuses it in fieldd's own words
-  if (
-    typeof prompt !== "string" ||
-    NAMED_KEYS.some((key) => options[key] !== undefined && said(options[key]) === undefined)
-  )
-    throw new Error("CP-4a2b: a step's prompt and names are checked in M-r2's slice 8c-2");
+  if (typeof prompt !== "string") return didntStart(label, "its prompt isn't words.");
+  if (NAMED_KEYS.some((key) => options[key] !== undefined && said(options[key]) === undefined))
+    throw new Error("CP-4a2b: a step's name that is not a name waits on its words (W-h)");
   const key = Object.keys(options).find((option) => !STEP_KEYS.has(option));
   if (key !== undefined)
     return didntStart(label, `it asks for ${nameWords(key)}, which a step may not set.`);
@@ -190,9 +201,10 @@ export async function startStep(
   };
   const handed = said(options["in"]);
   if (handed !== undefined) {
-    // an in: beside a spawn's keys is slice 8c-2's (ruling A3)
-    if (["agent", "model", "profile", "cwd"].some((option) => options[option] !== undefined))
-      throw new Error("CP-4a2b: an in: beside a spawn's keys is decided in M-r2's slice 8c-2");
+    // A3: a handed session is no spawn, so it sets none of a spawn's keys
+    const spawnKey = SPAWN_KEYS.find((option) => options[option] !== undefined);
+    if (spawnKey !== undefined)
+      return didntStart(label, `it asks for ${spawnKey}, which a step may not set.`);
     if (!mayHand(run, ports.sessions.of(handed)))
       return {
         ok: false,
@@ -200,24 +212,58 @@ export async function startStep(
       };
     return sent(ports, write, call, handed, "in", prompt, from);
   }
+  // D9's agent: named, and offered for a spawn by the catalog's door (R23b)
   const agent = said(options["agent"]);
-  // no agent named, and an agent or a model the catalog or the runtime does not offer, are slice 8c-2's (W-a…W-c)
-  if (agent === undefined)
-    throw new Error("CP-4a2b: a step's agent is checked in M-r2's slice 8c-2");
-  const profileSet = said(options["profile"]);
-  if (profileSet !== undefined && !run.scope.includes(profileSet))
+  if (agent === undefined) return didntStart(label, "it names no agent.");
+  const offered = ports.agents.offers(agent);
+  if (offered === undefined)
+    return didntStart(label, `it names an agent VibeField doesn't start (${nameWords(agent)}).`);
+  // A2: a step that names no Agent Profile takes the spark's own for a spark's run and your default for yours; none
+  // to give it is refused, never the runtime's own default (a silent fallback); any is held to the run's scope (D8)
+  const profileSet =
+    said(options["profile"]) ??
+    (run.spark !== undefined ? ports.sparkProfile(run.spark) : ports.defaultProfile());
+  if (profileSet === undefined)
+    return didntStart(label, "it names no Agent Profile, and this run has none to give it.");
+  if (!run.scope.includes(profileSet))
     return didntStart(
       label,
       `it names an Agent Profile this run can't use (${nameWords(profileSet)}).`,
     );
-  // CP4-Q20 (a): a step with no folder runs in the one its run's input names, and none is a default
-  const cwd = said(options["cwd"]) ?? run.folder;
+  // CP4-Q20 (a): a step with no folder runs in the one its run's input names, and none is a default; a folder it names
+  // is that one, or a project this desktop knows, or inside one (D9), checked here because it may be computed
+  const named = said(options["cwd"]);
+  const cwd = named ?? run.folder;
   if (cwd === undefined) return { ok: false, refused: NO_FOLDER };
+  const roots = [...(run.folder !== undefined ? [run.folder] : []), ...ports.projectFolders()];
+  if (named !== undefined && !(isAbsolute(named) && roots.some((root) => within(named, root))))
+    return didntStart(
+      label,
+      `its folder (${nameWords(basename(resolve(named)) || "/")}) is outside this run's folder and your projects.`,
+    );
+  // A1: a model is a model's name, one the runtime discovered for this agent here (puppeteer checks it again); a flow
+  // sets none of its controls
+  const written = options["model"];
+  let model: string | undefined;
+  if (written !== undefined) {
+    if (typeof written !== "string")
+      return didntStart(label, "its model isn't written as a model's name.");
+    model = written;
+  }
+  if (model !== undefined) {
+    const models = await ports.agents.models(agent, { cwd, profileSet });
+    if (models === undefined || !models.includes(model))
+      return didntStart(
+        label,
+        `it names a model ${offered.label} doesn't offer (${nameWords(model)}).`,
+      );
+  }
   const launch: FlowStepLaunch = {
     agent,
     cwd,
     title: label === undefined ? run.name : `${run.name} · ${labelWords(label)}`,
-    ...(profileSet !== undefined ? { profileSet } : {}),
+    profileSet,
+    ...(model !== undefined ? { model: { modelId: model } } : {}),
   };
   let runtimeRunId: string;
   try {
