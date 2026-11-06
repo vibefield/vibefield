@@ -2,7 +2,7 @@ import type { AgentFieldRow } from "@vibefield/contracts";
 import type { KeyedCallClient } from "../forwarded-call";
 import type { JumpOutcome } from "../frame/line-door";
 import { type LiveOpenDoors, openLiveRow } from "../frame/live-open";
-import { floorRunOf, readRunRows } from "../history/jump";
+import { floorRunOf, RUNS_UNREAD, readRunRows } from "../history/jump";
 
 // CHAT'S ONE REVEAL (TH-2; DESIGN.md §8 "Chat's thread", the head's act; §8 "Godview", GV-D4's doors). The head's Jump
 // to, the needs-you card's Show and a crew member's reveal go to a run's own terminal in Godview by History's Jump to
@@ -22,10 +22,9 @@ import { floorRunOf, readRunRows } from "../history/jump";
 
 /** Why Jump to shows nothing: the run has gone by the press (or the board never held it). */
 export const NOT_RUNNING = "it is not running";
-/** Why Jump to shows nothing: fieldd's `agent.list` puts the run's terminal on another desktop, or none. */
+/** Why Jump to shows nothing: fieldd's `agent.list` puts the run's terminal on another desktop, or none. When fieldd
+ * cannot answer, the words are `RUNS_UNREAD`, the one sentence both Jump tos say it in (`history/jump.ts`). */
 export const NOT_ON_THIS_FLOOR = "its terminal is not on this desktop's floor";
-/** Why Jump to shows nothing: fieldd could not say where the run's terminal is (`agent.list` unread, item 187). */
-export const RUNS_UNREAD = "VibeField could not tell where its terminal is";
 
 /** Show `row`'s run in Godview by Jump to's path, `row` read at the press and its floor session from `runs` (the
  * window's door to `agent.list`, read once): "jumped", or why not in words for Jump to's note (`jumpNote`). A deck

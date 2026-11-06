@@ -17,7 +17,7 @@ import {
 } from "../frame/line-door";
 import { requestView } from "../frame/view-state";
 import { refusalReason } from "../godview/launcher-doors";
-import { readLiveRun } from "./jump";
+import { RUNS_UNREAD, readLiveRun } from "./jump";
 import { type ResumeReading, readResume, resumeNative } from "./resume";
 
 // HISTORY'S ACTS (AR-8c's Resume, P3's Jump to, PJ-4's New agent and the
@@ -148,7 +148,8 @@ export async function resumeTarget(
 ): Promise<ResumeOutcome> {
   const elsewhere = elsewhereReason(target, deps.self(), deps.nameOf);
   if (elsewhere !== null) return { state: "refused", reason: elsewhere };
-  if ((await readLiveRun(deps.client, target.nativeSessionId)) !== null)
+  // an unread fold goes on to fieldd, whose one-run law refuses a second run (item 187)
+  if ((await readLiveRun(deps.client, target.nativeSessionId)).state === "here")
     return { state: "running" };
   const read = reading ?? (await readResume(deps.client, target));
   if (read.state === "waits") return { state: "refused", reason: read.why };
@@ -182,15 +183,19 @@ export async function resumeTarget(
   }
 }
 
-/** Show the pane `target` runs in (P3's Jump to; a row's or ④'s). */
+/** Show the pane `target` runs in (P3's Jump to; a row's or ④'s). A fold
+ * fieldd could not answer is said in `RUNS_UNREAD`'s words, as Chat's reveals
+ * say it, never as an ended session (item 187). */
 export async function jumpTarget(
   deps: HistoryActsDeps,
   target: SessionTarget,
 ): Promise<JumpOutcome> {
   const elsewhere = elsewhereReason(target, deps.self(), deps.nameOf);
   if (elsewhere !== null) return { state: "refused", reason: elsewhere };
-  const run = await readLiveRun(deps.client, target.nativeSessionId);
-  if (run === null) return { state: "ended" };
+  const live = await readLiveRun(deps.client, target.nativeSessionId);
+  if (live.state === "unread") return { state: "refused", reason: RUNS_UNREAD };
+  if (live.state === "not-here") return { state: "ended" };
+  const { run } = live;
   try {
     const deck = await deckOf(deps);
     if (deck === null) {

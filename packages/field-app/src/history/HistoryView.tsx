@@ -224,8 +224,9 @@ export function HistoryView({ active }: { active: boolean }): ReactElement {
     }
     if (!active) return;
     let cancelled = false;
-    void readLiveRun(fieldd, selection.nativeSessionId).then((run) => {
-      if (!cancelled) setLive(run !== null);
+    // an unread fold reads as not running here, as before (item 187: only Jump to's press says it)
+    void readLiveRun(fieldd, selection.nativeSessionId).then((reading) => {
+      if (!cancelled) setLive(reading.state === "here");
     });
     return () => {
       cancelled = true;
@@ -262,7 +263,7 @@ export function HistoryView({ active }: { active: boolean }): ReactElement {
   const noteRun = useCallback(
     async (target: SessionTarget) => {
       if (selectionRef.current?.sessionId !== target.sessionId) return;
-      setLive((await readLiveRun(fieldd, target.nativeSessionId)) !== null);
+      setLive((await readLiveRun(fieldd, target.nativeSessionId)).state === "here");
     },
     [fieldd],
   );

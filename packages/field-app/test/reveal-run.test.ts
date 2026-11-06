@@ -9,10 +9,11 @@
  */
 import type { AgentFieldRow } from "@vibefield/contracts";
 import { describe, expect, it, vi } from "vitest";
-import { NOT_ON_THIS_FLOOR, NOT_RUNNING, RUNS_UNREAD, revealRun } from "../src/chat/reveal-run";
+import { NOT_ON_THIS_FLOOR, NOT_RUNNING, revealRun } from "../src/chat/reveal-run";
 import type { GodviewFindDoor } from "../src/frame/find-door";
 import { jumpNote, type LineViewDoor } from "../src/frame/line-door";
 import { LIVE_OPEN_WAIT_MS, type LiveOpenDoors } from "../src/frame/live-open";
+import { RUNS_UNREAD } from "../src/history/jump";
 import { listedRun, runsDoor, runsOverBoard } from "./runs-door-fixture";
 
 const AT = "2026-11-05T03:00:00.000Z";

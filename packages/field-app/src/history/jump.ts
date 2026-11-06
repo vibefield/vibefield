@@ -16,6 +16,17 @@ import type { KeyedCallClient } from "../forwarded-call";
 // whole for this desktop's windows (`agentListFor`), and never the field
 // board's `terminal` join, which is the tailnet's attach promise and is
 // withheld while this desktop's terminal doors are not published (TM-2 F-M4).
+//
+// *2026-11-06 (item 187, the fold; VF-PM (a)):* `readLiveRun` folded an
+// `agent.list` fieldd could not answer into the null a fold with no run here
+// answers, so History's Jump to said "This session has ended" when fieldd had
+// said nothing. It now answers `unread`, its own state, and both Jump tos say
+// it in `RUNS_UNREAD`'s one sentence, which lives here beside the rule.
+
+/** Why a Jump to shows nothing: fieldd could not say where the run's terminal
+ * is (`agent.list` refused, or answered with no rows; item 187). Said by both
+ * Jump tos, Chat's reveals (`chat/reveal-run.ts`) and History's (`acts.ts`). */
+export const RUNS_UNREAD = "VibeField could not tell where its terminal is";
 
 /** A run continuing the chosen conversation on this desktop. */
 export interface LiveRun {
@@ -23,6 +34,14 @@ export interface LiveRun {
   readonly floorSessionId: string;
   readonly runtimeRunId: string;
 }
+
+/** Whether the chosen conversation runs here, as one `agent.list` says it:
+ * here, with its run; not here (no run continues it on this floor); or unread,
+ * fieldd not answering, which is never "not here" (item 187). */
+export type LiveRunReading =
+  | { readonly state: "here"; readonly run: LiveRun }
+  | { readonly state: "not-here" }
+  | { readonly state: "unread" };
 
 /** `row`'s run on this desktop's floor, with the floor session its pane shows,
  * or null: its record is not stamped with an exit (MF-1f: a run whose process ended keeps
@@ -81,12 +100,16 @@ export async function readRunRows(client: KeyedCallClient): Promise<readonly unk
 }
 
 /** Ask fieldd, once, whether `nativeSessionId` runs here. A fold that cannot
- * answer reads as not running: the create stays Resume, and fieldd's one-run
- * law still refuses a second run, in Jump to's words (`resume.ts`). */
+ * answer is `unread` (item 187): Jump to says so in `RUNS_UNREAD`'s words,
+ * never that the session ended. The act and Resume read it as not running, as
+ * before: the act stays Resume, and fieldd's one-run law still refuses a second
+ * run, in Jump to's words (`resume.ts`). */
 export async function readLiveRun(
   client: KeyedCallClient,
   nativeSessionId: string,
-): Promise<LiveRun | null> {
+): Promise<LiveRunReading> {
   const rows = await readRunRows(client);
-  return rows === null ? null : liveRunOf(rows, nativeSessionId);
+  if (rows === null) return { state: "unread" };
+  const run = liveRunOf(rows, nativeSessionId);
+  return run === null ? { state: "not-here" } : { state: "here", run };
 }
