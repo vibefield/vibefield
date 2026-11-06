@@ -2203,6 +2203,10 @@ export const METHODS: MethodDef[] = [
   // carried; the phone still hears `direct-plane-unbuilt` (SP-7). A ticket is
   // never journaled as a receipt (forward-receipts' CREDENTIAL_MINTS): a retry
   // mints a fresh grant rather than replaying one.*
+  // *SP-7b (2026-11-06; `SP-7b-plan.md` 7b-1): the phone is carried and minted
+  // too — at its home directly, and through its home to another desktop, whose
+  // tailnet set passes back untouched. No handler of this build answers
+  // `direct-plane-unbuilt`; it stays in INDEX_TICKET as an older owner's answer.*
   defineMethod({
     surface: "product",
     method: "index.openTicket",

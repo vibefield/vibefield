@@ -32,7 +32,7 @@ import {
   routeServeSpec,
   type ServedProcess,
 } from "./route-serve";
-import { clientIdFor } from "./terminal-grants";
+import { clientIdFor, isSelfTailnetPrincipal } from "./terminal-grants";
 
 // SP-3 (thinking-sync-planes.md §5.4, §6; thinking-desktop-sync-plane.md §6.4;
 // design-06 §6, §8) — ROSETTAD'S SERVE: the route-per-process driver's SECOND
@@ -99,6 +99,16 @@ import { clientIdFor } from "./terminal-grants";
 // (`index-forward.ts`), so the serve's port joined DS-L6's routable list. The
 // phone (a `tailnet` principal) still hears `direct-plane-unbuilt`: its
 // ticket is SP-7's.*
+//
+// *SP-7b (2026-11-06; `SP-7b-plan.md` 7b-1): the phone holds one too. This
+// person's phone asking this desktop directly (a self `tailnet` principal) is
+// minted as another desktop's forward is: a `read` grant, keyed by its own
+// login and node (`clientIdFor`), beside the TAILNET set of this serve, which
+// its node dials itself. Through its home it arrives as that home's forward
+// and is minted as above, keyed by the phone behind it. No answer says
+// `direct-plane-unbuilt` any more, and a `tailnet` caller who is not this
+// person is FORBIDDEN_SCOPE. The state stays in the contract as an older
+// owner's answer, which a reader can still be sent (D4 (B')).*
 
 /** The engine identity and display name of rosettad's listener. */
 export const INDEX_SERVE_ID = "index" as const;
@@ -270,6 +280,8 @@ function isDesktopWindow(ctx: CallerContext): boolean {
  * otherwise: the shell, a plain local token, and — refused a ticket today, but
  * the rule outlives the refusals — a plugin, an MCP agent, the phone, a guest,
  * another desktop's daemon.
+ * *SP-7b (2026-11-06): the phone and another desktop's daemon hold a ticket now,
+ * each with `read` alone.*
  */
 export function indexTicketScopes(ctx: CallerContext): readonly string[] {
   return isDesktopWindow(ctx) ? [SCOPE_READ, SCOPE_FILES] : [SCOPE_READ];
@@ -314,6 +326,8 @@ function auditSessionId(sessionId: string): string {
  *    *DS-7 (2026-10-31): the phone alone now (SP-7). Another desktop's daemon
  *    is minted the tailnet set of this serve — or, with no live serve,
  *    UNAVAILABLE `doors_not_published`, retryable, naming this desktop;*
+ *    *SP-7b (2026-11-06): the phone is minted too, by the same rule (the
+ *    header). A `tailnet` caller who is not this person is FORBIDDEN_SCOPE;*
  *  - the plane switched off: UNAVAILABLE `direct-plane-off`, retryable false;
  *  - no daemon ready: UNAVAILABLE `{service: "index", state: <phase>}`,
  *    retryable unless unconfigured — the other index doors' answer;
@@ -346,18 +360,20 @@ export class IndexTicketMinter {
     if (kind === "plugin" || kind === "mcp-agent" || kind === "tailnet-guest")
       throw new RpcCallError(
         "FORBIDDEN_SCOPE",
-        "a ticket opens a transcript; only a window or the shell on this desktop may hold one",
+        "a ticket opens a transcript; only a window, the shell or this person's phone may hold one",
         false,
         { method: "index.openTicket", principal: kind },
       );
     // DS-7 — `peer-fieldd` passes: another desktop's daemon forwarding for its
-    // window is minted below. The phone's ticket is SP-7's.
-    if (kind === "tailnet")
+    // window (or, SP-7b, for the phone whose home it is) is minted below. So
+    // does this person's phone asking here directly (SP-7b); a tailnet caller
+    // who is not this person never holds a ticket.
+    if (kind === "tailnet" && !isSelfTailnetPrincipal(ctx.principal))
       throw new RpcCallError(
-        "UNAVAILABLE",
-        "a ticket across the tailnet is not served to the phone yet: its set is the index serve's (SP-7)",
+        "FORBIDDEN_SCOPE",
+        "a ticket opens a transcript; only this person's own devices may hold one",
         false,
-        { service: INDEX_TICKET.SERVICE, state: INDEX_TICKET.STATE_UNBUILT },
+        { method: "index.openTicket", principal: kind },
       );
     if (!this.#opts.enabled)
       throw new RpcCallError("UNAVAILABLE", "the direct plane is off on this desktop", false, {
@@ -438,13 +454,14 @@ export class IndexTicketMinter {
    * desktop; for another desktop's daemon (DS-7), the tailnet set of the index
    * serve as it stands now — the only coordinate that daemon's egress route
    * can reach. No live serve is said, naming this desktop, never a set nothing
-   * answers. */
+   * answers. *SP-7b (2026-11-06): the phone asking here directly dials the same
+   * set, from its own node.* */
   #endpointsFor(
     ctx: CallerContext,
     state: RosettadState,
     sessionId: string,
   ): IndexTicketEndpointSet {
-    if (ctx.principal.kind === "peer-fieldd") {
+    if (ctx.principal.kind === "peer-fieldd" || isSelfTailnetPrincipal(ctx.principal)) {
       const remote = indexEndpointsFrom(this.#opts.serves?.() ?? [], state.origin, sessionId);
       if (remote === undefined)
         throw new RpcCallError(

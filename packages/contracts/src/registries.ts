@@ -363,7 +363,14 @@ export const INDEX_ACTIVITY = {
  * owner gone from the roster.
  * STATE_DOORS_NOT_PUBLISHED: the owner has no live index serve to hand out (no
  * linked login, or its rosettad restarted and the serve is being re-aimed), or
- * it answered a set only its own machine can dial. */
+ * it answered a set only its own machine can dial.
+ *
+ * *SP-7b (2026-11-06; `SP-7b-plan.md` D4 (B')): the phone's half is served —
+ * at its home directly, and through its home to another desktop — so no daemon
+ * of this build answers STATE_UNBUILT. It stays as an OLDER owner's answer:
+ * desktops run different builds, and a reader can still be sent it (the
+ * renderer's `ticketRefusalWords`; the kit's direct read, SP-7b's 7b-2), so it
+ * keeps its name, its fixture and its place in `IndexTicketUnavailableDetails`.* */
 export const INDEX_TICKET = {
   /** `UnavailableDetails.service` on every refusal */
   SERVICE: "index",

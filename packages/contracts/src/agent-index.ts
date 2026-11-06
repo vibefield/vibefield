@@ -2157,7 +2157,10 @@ export type IndexOpenTicketParams = z.infer<typeof IndexOpenTicketParams>;
  * (`INDEX_TICKET`, registries.ts — `UnavailableDetails`, retryable false): the
  * half of the plane this desktop does not serve yet, and the plane switched
  * off. A daemon that is merely not ready answers the index's phase instead
- * (`{service: "index", state: "starting" | …}`, retryable), which is not this. */
+ * (`{service: "index", state: "starting" | …}`, retryable), which is not this.
+ * *SP-7b (2026-11-06; `SP-7b-plan.md` D4 (B')): no daemon of this build answers
+ * `direct-plane-unbuilt` (the phone is served). It stays in this pair as an
+ * OLDER owner's answer, which a reader can still be sent across builds.* */
 export const IndexTicketUnavailableDetails = z
   .object({
     service: z.literal(INDEX_TICKET.SERVICE),

@@ -197,6 +197,8 @@ export function ticketRefusalWords(cause: unknown, name?: string | null): string
   if (refusal.kind === "UNAVAILABLE" && state === INDEX_TICKET.STATE_OFF) {
     return "This desktop has the direct plane switched off — its transcripts can't be read here";
   }
+  // SP-7b (2026-11-06): no owner of this build answers it; an OLDER owner still
+  // may (desktops update apart), so the room keeps its words for it
   if (refusal.kind === "UNAVAILABLE" && state === INDEX_TICKET.STATE_UNBUILT) {
     return "Transcripts on another desktop can't be read from here yet";
   }

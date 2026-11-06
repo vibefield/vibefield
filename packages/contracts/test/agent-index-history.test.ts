@@ -275,6 +275,8 @@ describe("the direct plane's LOOPBACK set — what a window on this desktop dial
       service: "index",
       state: INDEX_TICKET.STATE_OFF,
     });
+    // SP-7b (2026-11-06; D4 (B')): no daemon of this build answers this one; the
+    // fixture stays as an OLDER owner's answer, which a reader can still be sent
     const unbuilt = ErrorData.parse(fixture("error-data.index-direct-plane-unbuilt.json"));
     expect(IndexTicketUnavailableDetails.parse(unbuilt.details).state).toBe(
       INDEX_TICKET.STATE_UNBUILT,

@@ -12,6 +12,7 @@ import type { EgressRoutesPort } from "./egress";
 import { OwnerRoutes } from "./egress-owner-routes";
 import { RpcCallError } from "./native-link";
 import type { DeviceForwarder } from "./product-api";
+import { isSelfTailnetPrincipal } from "./terminal-grants";
 
 // DS-7 (2026-10-31; `thinking-desktop-sync-plane.md` §6.4, DS-D8 (a);
 // `thinking-sync-planes.md` SP-D5 (a)) — TRANSCRIPTS BY TICKET, the half on the
@@ -44,6 +45,17 @@ import type { DeviceForwarder } from "./product-api";
 //    route's listener (`indexEndpointsFor`, the one composer): the route
 //    forwards A's whole index listener, so its origin is the `rest` leg.
 //
+// *SP-7b (2026-11-06; `SP-7b-plan.md` 7b-1): this person's PHONE is carried
+// too — a self `tailnet` principal asking its home for another desktop's
+// session; the forward names it (F1b's `clientDeviceId`), and the owner mints
+// for it from its own rule. Its answer is NOT adopted: the owner's tailnet set
+// comes back as the owner answered it, because the phone's node dials the
+// owner's serve itself, so no route is asked for here. It is read first, as a
+// window's is: no ticket of the owner's is INCOMPATIBLE, and doors only the
+// owner can dial are `doors_not_published`, naming it. Nothing here says
+// `direct-plane-unbuilt` any more; a `tailnet` caller who is not this person
+// is FORBIDDEN_SCOPE.*
+//
 // THE ROUTE: one reference per owner desktop (`OwnerRoutes`, DS-1b's rule), its
 // target the ROSTER's tailnet name for the owner, never the URL the owner
 // answered. No road is `egress_unavailable`; an owner with no live serve, or
@@ -66,23 +78,18 @@ function roadRefusal(device: string, state: string, message: string): RpcCallErr
 }
 
 /** Whether this daemon carries `ctx`'s ask to another desktop: only a
- * principal it would mint an index ticket for itself, refused otherwise in the
- * minter's own words (`IndexTicketMinter.check`). */
+ * principal it would mint an index ticket for itself — a window, the shell,
+ * this person's phone (SP-7b) — refused otherwise in the minter's own words
+ * (`IndexTicketMinter.check`). */
 function refuseCarry(ctx: CallerContext, device: string): RpcCallError | null {
   const kind = ctx.principal.kind;
   if (kind === "local-token" || kind === "shell-main") return null;
-  if (kind === "tailnet")
-    return new RpcCallError(
-      "UNAVAILABLE",
-      "a ticket across the tailnet is not served to the phone yet: its set is the index serve's (SP-7)",
-      false,
-      { service: INDEX_TICKET.SERVICE, state: INDEX_TICKET.STATE_UNBUILT },
-    );
+  if (isSelfTailnetPrincipal(ctx.principal)) return null;
   return new RpcCallError(
     "FORBIDDEN_SCOPE",
     kind === "peer-fieldd"
-      ? "a ticket for another desktop's session is forwarded one hop, from the window's own desktop"
-      : "a ticket opens a transcript; only a window or the shell on this desktop may hold one",
+      ? "a ticket for another desktop's session is forwarded one hop, from the asker's own home"
+      : "a ticket opens a transcript; only a window, the shell or this person's phone may hold one",
     false,
     { method: METHOD, principal: kind, device },
   );
@@ -126,28 +133,19 @@ export class IndexTicketForwarding {
       const refusal = refuseCarry(ctx, device);
       if (refusal !== null) throw refusal;
       const answer = await inner(device, method, params, ctx, envelope);
+      // SP-7b — the phone's node dials the owner's serve itself: its ticket is
+      // read, and passes back as the owner answered it
+      if (isSelfTailnetPrincipal(ctx.principal)) {
+        this.ownersTicket(device, answer);
+        return answer;
+      }
       return await this.adopt(device, ask.data.sessionId, answer);
     };
   }
 
   /** The owner's ticket, made dialable for a window here (see the header). */
   async adopt(device: string, sessionId: string, answer: unknown): Promise<IndexOpenTicket> {
-    const parsed = IndexOpenTicket.safeParse(answer);
-    if (!parsed.success || parsed.data.device !== device)
-      throw new RpcCallError(
-        "INCOMPATIBLE",
-        `the index ticket ${device} answered does not parse as its own`,
-        false,
-        { service: INDEX_TICKET.SERVICE, device },
-      );
-    const ticket = parsed.data;
-    const remote = RemoteIndexEndpointSet.safeParse(ticket.endpoints);
-    if (!remote.success || new URL(remote.data.sessionUrl).port !== String(INDEX))
-      throw roadRefusal(
-        device,
-        INDEX_TICKET.STATE_DOORS_NOT_PUBLISHED,
-        `${device} answered history doors only its own machine can dial`,
-      );
+    const ticket = this.ownersTicket(device, answer);
     const route = await this.owners.hold(device);
     if ("refused" in route)
       throw roadRefusal(
@@ -165,6 +163,28 @@ export class IndexTicketForwarding {
         "the egress route answered a listener a window here cannot dial",
       );
     return { ...ticket, endpoints };
+  }
+
+  /** The owner's answer read as its own ticket over its index serve's tailnet
+   * set — else INCOMPATIBLE, or `doors_not_published` naming it. Read before
+   * anything is held, for a window and for the phone alike (SP-7b). */
+  private ownersTicket(device: string, answer: unknown): IndexOpenTicket {
+    const parsed = IndexOpenTicket.safeParse(answer);
+    if (!parsed.success || parsed.data.device !== device)
+      throw new RpcCallError(
+        "INCOMPATIBLE",
+        `the index ticket ${device} answered does not parse as its own`,
+        false,
+        { service: INDEX_TICKET.SERVICE, device },
+      );
+    const remote = RemoteIndexEndpointSet.safeParse(parsed.data.endpoints);
+    if (!remote.success || new URL(remote.data.sessionUrl).port !== String(INDEX))
+      throw roadRefusal(
+        device,
+        INDEX_TICKET.STATE_DOORS_NOT_PUBLISHED,
+        `${device} answered history doors only its own machine can dial`,
+      );
+    return parsed.data;
   }
 
   /** The owner devices holding a route through this forwarder (tests, health). */
