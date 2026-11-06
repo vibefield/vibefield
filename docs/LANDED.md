@@ -36764,3 +36764,95 @@ tos drifted on that one case.
   to's press says "unread".
 - **Closes items 186 and 187.** GT-3's "close still detaches" gains a dated correction at its paragraph's end
   ("GT-3"), and TH-2's reveal road one after item 185's notes ("TH-1 and TH-2").
+
+## AR-7j's SIGUSR1, asked of every process that stays — `build-fieldd-sea.mjs --verify` sends it to the files worker, the transcript worker and the flow host once each is ready, as it does to the daemon, and the texts name the four that take the guard (2026-11-06)
+(2026-11-06; three commits, `6da1124d5` (red), `f13955ca8` and `e3e9e21cb`, on lane `hk/sea-usr1-r1` over main
+`ce97aa630`, HK's, in `/Volumes/SamsungRed/lanes/hk`; first cut on `85b65c52a` as `a82e38a2a`, `088a48083` and
+`60feaa6f1`, the patch-ids equal; M171 is `e3e9e21cb` itself, a fast-forward of main `ce97aa630`, run 171, landed
+2026-11-06T06:16:37Z.) Given by VF-PM at 05:09Z from M-h's Owed; reviewed by prod-builder.
+
+**The gap.** bin.ts gives four packaged processes that stay their own SIGUSR1 listener (`refuseInspectorSignal`):
+the daemon (its last branch) and the files-host, transcript-host and flows-host roles. `--verify` asked only the
+daemon (probe A, `atReady: sigusr1Ask`). Probes C, C2 and C3 booted their roles and never sent the signal, so a role
+that lost its guard would pass `--verify` with an inspector one `kill -USR1` away. Three texts named two guarded
+processes where four take the guard. VF-PM ruled (a) at 05:11Z: ask at C as well as at C2 and C3.
+
+**The red.** `6da1124d5`, `tooling/dev-runner/test/worker-roles.test.mjs` +38: one row, "every process bin.ts guards
+from SIGUSR1 is asked SIGUSR1 by its --verify probe: the daemon at A, each role at its own".
+- It reads both files as TEXT. Each `role === "<role>"` branch of bin.ts's dispatch that calls
+  `refuseInspectorSignal();` must have one top-level SEA function that does `spawn(exe, [<NAME>_ROLE_ARG]` and
+  calls `sigusr1Ask(`. The last `else` (the daemon) must take the guard, and probe A must keep `atReady: sigusr1Ask,`.
+- At `85b65c52a`: 4 pass and 1 fail, the unasked list exactly files-host, transcript-host and flows-host.
+
+**The fix.** `f13955ca8`: `build-fieldd-sea.mjs` +78 −37, bin.ts +6 −5 (comment only), dev-runner's `project.json` +2.
+- Probes C, C2 and C3 call `sigusr1Ask` on their role's "ready" and keep the answer, then send what they sent
+  before (the list, the ticket, the run), so the request is asked of the host that heard the signal.
+- `sigusr1Row` (:457) gives `say` one row per probe whose role said ready (:1108, :1121, :1135): green only when no
+  inspector opened and the host still runs.
+- The texts name the four processes and the probe that asks each, at T: the AR-7j header (:81–87),
+  `sigusr1Ask`'s doc (:438), the manifest's `sigusr1Inspector` (:322–324: "refused by each staying process's own
+  listener: the daemon, the files worker, the transcript worker and the flow host, asked at --verify's probes A, C,
+  C2 and C3") and bin.ts's `refuseInspectorSignal` doc (:238–244).
+- dev-runner's test inputs gain `packages/fieldd/src/roles.ts` and `bin.ts`, which its rows read (a local cache
+  gap; verify runs with `--skip-nx-cache`).
+
+**The review.** prod-builder (05:48Z) passed seven of its eight points and raised one objection: the row's only
+guard was `guarded.length > 0`, so a guarded branch spelled another way (its mutation:
+`(role === "flows-host" && isSea())`, with C3's ask removed) passed 5 of 5. `e3e9e21cb`, +6, is its line: the
+guarded branches plus the daemon must equal bin.ts's count of `refuseInspectorSignal();`. On the mutation it read 4
+pass and 1 fail ("actual: 3, expected: 4"). It GOed at `60feaa6f1` (05:50Z), and the GO carried to the re-cut.
+
+**The lights** on this Mac ran before VF-PM's hold reached test rows (05:11–05:16Z) and stand as read:
+- worker-roles 5 of 5 at `088a48083`; notices-rows 10 of 10; biome clean.
+- An out-of-tree harness lifted `sigusr1Ask`, `sigusr1Row` and the three probes as TEXT and ran them on a fake
+  three-role executable. With the guard, three rows ✔ "opened no inspector, the host still running"; without it,
+  three ✘ "OPENED AN INSPECTOR".
+- The third commit was not run on the Mac.
+
+**The witness, P1–P3,** at `60feaa6f1` on vf-m1 (a9, 05:55:59–05:58:00Z; logs in
+`lanes/ts6/logs/m1/sea-p6-60feaa6f1/`). None of its files moved in `85b65c52a..ce97aa630`, so it carries to the land:
+- P1: `P1-stage.log` (sha256 `b354dbb33778b0c1…`) rc 0, "stage REFUSED lines 0"; `P1-verify.log`
+  (`056fd487201e48d9…`) rc 0, "stage verify OK — 152 files, 299,569,395 bytes (285.69 MB); complete"; the notices
+  653 components, 337 distinct licence texts, 11 left out.
+- P1b, the node light: `P1b-node.log` (`b4843448356dec89…`) "ℹ tests 474", "ℹ pass 474", "ℹ fail 0", the row ✔;
+  `P1b-biome.log` (`6f59f50b3e02d9b6…`) "Checked 2 files … No fixes applied."
+- P2: `P2-sea.log` (`ad9307a25411d78d…`) 29 "ok", 0 FAIL, "verify OK — boots standalone, resolves nothing from the
+  filesystem, and each role runs only its sealed bundle", with the three new rows verbatim: "files-host role:
+  SIGUSR1 opened no inspector, the host still running (its own listener, bin.ts refuseInspectorSignal)", and the
+  same for transcript-host and flows-host. `P2-manifest.txt` (`d1af0f25dd9962a1…`) holds the four-role string.
+- P3: `P3-clh1.txt` (`a02438ae9e81a3e1…`) reads `node_modules/ses/`, `@endo/` and `src/flows/host/` 0 in `bin.cjs`
+  each, with `flows-host.cjs` (56, 4 and 7) as the controls, and "staged fieldd: CL-H1 terms=0". Three sha256
+  values are one, `cf593ab7f443…0bd0`: `bin.cjs`, the stage manifest's source and the SEA's.
+- The stop and its erratum. P3 first stopped at 05:58:00Z: the brief's line required the stage manifest by a bare
+  relative path (MODULE_NOT_FOUND), so its third value was empty. `P3-clh1.txt.at-stop-0558` (`403360dca35ce4de…`)
+  keeps that run. prod-builder corrected the line to `./apps/…` with a dated erratum at its source
+  (`lanes/lp-wave1/a9-sea-p6-brief-DRAFT.md`, "Erratum (2026-11-06 06:00Z …)"), and the re-read, on VF-PM's word,
+  is the file above.
+- Closed with it:
+  - M-h's Owed "CL-H1's other half" (P3: no `ses`, `@endo` or `src/flows/host/` module comment in the staged
+    `bin.cjs`);
+  - M-h's P6, the flow host's own SIGUSR1 listener, now witnessed packaged, and with it all four guarded roles:
+    A, C, C2 and C3.
+- KEPT on vf-m1 for James's reap: `/Users/m1/vf-lanes/verify/sea-p6-tmp-60feaa6f1` (145 MB).
+
+**The mint, run 171** (a9's, `pnpm verify` whole at `e3e9e21cb`; expected run 170's counts with dev-runner's node
+suite 473 → 474):
+- `lanes/ts6/logs/m1/run171/run171.out` (sha256
+  `b0c1739fdd1fea8cb6cd62584e712c6f16b7e66458c2de421a3126a51d61400d`): "ts6-mini verify ARMED 06:07:00Z"; "verify
+  exit 0 06:12:10Z"; "test target:  NX   Successfully ran target test for 29 projects"; "cargo test results: ok
+  34, FAILED 0"; "tree clean after verify"; "stubs left: 0".
+- `verify.log` (sha256 `df90dcc67168a0f7f1f7cffd9d42bb6f282755eae0356cbd8d367ed48bf75deb`; its clean copy
+  `verify.clean.log`, `15489c00b94b8233b6fcb39f27cca69c97dcf9a1be2ffe40685925151fe489ae`):
+  - dev-runner's node suite "ℹ tests 474", "ℹ fail 0", run 170's 473 + 1, with "✔ every process bin.ts guards from
+    SIGUSR1 is asked SIGUSR1 by its --verify probe: the daemon at A, each role at its own";
+  - screenshot 39, field-app 4192, contracts 1775, fieldd "Tests  3488 passed | 14 skipped (3502)" and
+    plugin-browser 15, each as at run 170; biome "Checked 3400 files"; cargo 545 passed in 34 suites;
+  - the census "no drift" and "census assert OK — no §7.3 violation"; "bundle assert OK".
+  - electron-shell "Tests  2671 passed | 2 skipped (2673)" (run 170: 2670 | 3; so vitest 13,499 | 0 | 20), the
+    host's state and not the slice, as in L3's run after L6's stage: executable-arch's release row ran because
+    the SEA witness's stage had built `target/release/field-native` in the verify lane (05:56Z).
+- `run171-next.out` (`b28e03577d69f7b1…`): "the locks stand: no re-install"; "preflight exit 0 · 1 WARN/FAIL lines",
+  R23's `acp` candidate (the standing warning). `run171-hid.log` (`2f2e2840e39d1b5d…`): the console unlocked.
+- The land (the fixer's, 2026-11-06T06:16:37Z): main fast-forwarded from `ce97aa630`, 4 files +130 −42.
+
+No insert into an older entry.
