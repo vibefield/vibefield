@@ -281,11 +281,15 @@ public struct HistorySession: Identifiable, Equatable, Sendable, Codable {
   /// what Resume asks by (`agent.resume {provider, nativeSessionId}`).
   public let provider: String?
   public let nativeSessionId: String?
+  /// SE-P2 — when it last moved (epoch ms, the index's activity, else its source's freshness, else its start): search's
+  /// **Your latest sessions** merges every project's by it. nil for the mock's rows and a row the index stamped none
+  /// for; optional, so a session cached before SE-2 still reads.
+  public let lastAt: Int64?
 
   public init(
     id: String, projectId: String, day: String? = nil, title: String, agent: String, meta: String, branch: String,
     last: String, tone: Tone? = nil, device: String? = nil, deviceName: String? = nil, folder: String? = nil,
-    provider: String? = nil, nativeSessionId: String? = nil
+    provider: String? = nil, nativeSessionId: String? = nil, lastAt: Int64? = nil
   ) {
     self.id = id
     self.projectId = projectId
@@ -301,6 +305,7 @@ public struct HistorySession: Identifiable, Equatable, Sendable, Codable {
     self.folder = folder
     self.provider = provider
     self.nativeSessionId = nativeSessionId
+    self.lastAt = lastAt
   }
 
   public var isLive: Bool { last == "now" }
