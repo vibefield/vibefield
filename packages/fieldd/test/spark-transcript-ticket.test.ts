@@ -239,7 +239,10 @@ describe("compose.sparks.transcript.openTicket, fieldd's gate and answer (TH-1)"
     expect(window).toMatchObject({ endpoint: `ws://127.0.0.1:${WORKER_PORT}/transcripts` });
   });
 
-  it("SP-7a — mints the phone behind its home the same, keyed by the connection behind the forward", async () => {
+  // *Corrected 2026-11-06 (SP-7b's 7c-1, D-c1 (a)): this row said "keyed by the connection behind the forward" and
+  // read `peer-fieldd:dev-home#conn-7`. The phone behind its home is keyed by its roster device under its home now
+  // (`clientIdFor`), so its reconnects to its home are one holder here.*
+  it("SP-7a — mints the phone behind its home the same, keyed by its device under its home", async () => {
     const w = world();
     // the home forwards the ask whole, naming this desktop
     const ask = { spark: VELA, device: "dev-studio" };
@@ -248,7 +251,7 @@ describe("compose.sparks.transcript.openTicket, fieldd's gate and answer (TH-1)"
       spark: VELA,
       endpoint: "ws://desk.tail1234.ts.net:9426/transcripts",
     });
-    expect(w.registered.map((r) => r.clientId)).toEqual(["peer-fieldd:dev-home#conn-7"]);
+    expect(w.registered.map((r) => r.clientId)).toEqual(["peer-fieldd:dev-home#phone:dev-phone"]);
   });
 
   it("SP-7a — says doors_not_published, naming this desktop, while no live serve is aimed at the generation answering now", async () => {

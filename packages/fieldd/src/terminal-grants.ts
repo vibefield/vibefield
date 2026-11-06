@@ -173,29 +173,44 @@ export function clientIdFor(principal: GrantPrincipal, forwardedFor?: ForwardedF
   // home too (`#<home>/<window>`), since two homes may each have a "p-1". Both
   // restated ids are opaque, so they are percent-encoded: no separator inside
   // one can alias another key.
+  // *SP-7b's 7c-1 (D-c1 (a), VF-PM 2026-11-06 23:17Z): the phone behind its
+  // home is not a window. The window its home restates for it is its PRODUCT
+  // CONNECTION there (`forwardProvenance`), so each reconnect of the phone to
+  // its home was a new client here — a new connection set, a new attach ledger,
+  // and a renewal across it refused CONFLICT. A forward naming the phone's
+  // roster device (`clientDeviceId`, F1b) is keyed by that device under the
+  // carrier: `peer-fieldd:<home>#phone:<device>`. The `:` is never in an
+  // encoded window, so no window can alias it.*
   if (principal.kind === "peer-fieldd" && principal.deviceId !== undefined) {
     const daemon = `peer-fieldd:${encodeURIComponent(principal.deviceId)}`;
-    const window = forwardedWindowKey(principal.deviceId, forwardedFor);
-    return window === undefined ? daemon : `${daemon}#${window}`;
+    const client = forwardedClientKey(principal.deviceId, forwardedFor);
+    return client === undefined ? daemon : `${daemon}#${client}`;
   }
   if (principal.tokenId !== undefined) return `${principal.kind}:${principal.tokenId}`;
   return principal.kind;
 }
 
-/** DS-4c — the window a peer daemon's forward is FOR, as a key segment:
- * percent-encoded, and prefixed with the window's home device when that is not
- * the carrier itself (a relay restates the original provenance —
+/** DS-4c — the client a peer daemon's forward is FOR, as a key segment: the
+ * window, percent-encoded — or (7c-1) the phone behind its home, by its roster
+ * device, `phone:<device>` — prefixed with the client's home device when that
+ * is not the carrier itself (a relay restates the original provenance —
  * `forward-envelope.ts` `forwardProvenance`). Undefined when the forward names
- * no window. */
-function forwardedWindowKey(
+ * neither. */
+function forwardedClientKey(
   carrierDeviceId: string,
   forwardedFor: ForwardedFor | undefined,
 ): string | undefined {
-  if (forwardedFor?.windowId === undefined) return undefined;
-  const window = encodeURIComponent(forwardedFor.windowId);
+  if (forwardedFor === undefined) return undefined;
+  const client =
+    forwardedFor.clientDeviceId !== undefined
+      ? `phone:${encodeURIComponent(forwardedFor.clientDeviceId)}`
+      : forwardedFor.windowId !== undefined
+        ? encodeURIComponent(forwardedFor.windowId)
+        : undefined;
+  if (client === undefined) return undefined;
   return forwardedFor.deviceId === carrierDeviceId
-    ? window
-    : `${encodeURIComponent(forwardedFor.deviceId)}/${window}`;
+    ? client
+    : `${encodeURIComponent(forwardedFor.deviceId)}/${client}`;
 }
 
 /** Rights per principal (spec §5.1). Every SELF principal (`isSelfPrincipal`)
@@ -286,6 +301,11 @@ export interface HolderFaceRoster {
  * device now (`onBehalfOf.clientDeviceId`), so a face is derivable. None is
  * drawn: no phone ticket rides a peer — the phone asks the owner's own door
  * for one (`FieldLink.swift` `openTerminalTicket`).*
+ * *Corrected 2026-11-06 (SP-7b's 7c-1, D-c1 (a)): it is drawn. The phone's
+ * tickets ride its home (7c-2), so a self peer daemon's forward naming
+ * `clientDeviceId` is the phone: THIS roster's row for that device, `ios`,
+ * restrict-only as F1b ruled — a row that hosts documents, an unlisted device
+ * and a nameless row say nothing.*
  */
 export function holderFaceFor(
   principal: GrantPrincipal,
@@ -300,13 +320,20 @@ export function holderFaceFor(
       principal.tailscaleId === undefined
         ? undefined
         : roster.deviceIdByNodeId(principal.tailscaleId);
-    const row = deviceId === undefined ? undefined : roster.get(deviceId);
-    if (row?.capabilities?.docHost === true) return undefined;
-    return faceOf("phone", row, "ios");
+    return phoneFaceOf(deviceId === undefined ? undefined : roster.get(deviceId));
   }
+  if (isSelfPeerDaemon(principal) && forwardedFor?.clientDeviceId !== undefined)
+    return phoneFaceOf(roster.get(forwardedFor.clientDeviceId));
   if (isSelfPeerDaemon(principal) && forwardedFor?.clientKind === "renderer")
     return faceOf("peer-window", roster.get(forwardedFor.deviceId));
   return undefined;
+}
+
+/** The phone's face from the roster row its node or its home named: none for a
+ * row that hosts documents — a desktop's daemon, not the phone. */
+function phoneFaceOf(row: DeviceInfo | undefined): GeometryHolderFace | undefined {
+  if (row?.capabilities?.docHost === true) return undefined;
+  return faceOf("phone", row, "ios");
 }
 
 /** One roster row as a face, or none when the row cannot honestly name the

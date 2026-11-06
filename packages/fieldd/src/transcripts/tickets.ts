@@ -37,6 +37,8 @@ import {
 // now (`serve.ts`). No such serve is UNAVAILABLE `doors_not_published`, retryable, naming this desktop, and nothing is
 // minted. A window keeps its loopback listener. `clientId` is the window's token as before, and the phone's
 // `clientIdFor` (DS-4c's key), so a phone's tickets and sockets are its own in `revokeClient`.*
+// *SP-7b's 7c-1 (2026-11-06): behind its home that key is the phone's device under its home
+// (`peer-fieldd:<home>#phone:<device>`), no longer its connection there — its reconnects are one holder.*
 
 export interface SparkTranscriptTicketsOptions {
   readonly store: Pick<SparkTranscripts, "runs">;
