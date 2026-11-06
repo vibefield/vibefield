@@ -132,7 +132,7 @@ public func peerProductDoorURL(
   }
   // The composed host, held to the peer exactly as a published one is.
   guard vouched(host: host, addresses: addresses, magicDNSSuffix: magicDNSSuffix) else {
-    return .refused("the door this phone built points somewhere this desktop is not")
+    return .refused("the door built from the mesh's names points somewhere this desktop is not")
   }
   return .ok(url)
 }

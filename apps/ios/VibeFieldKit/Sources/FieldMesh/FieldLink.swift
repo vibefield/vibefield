@@ -1,4 +1,5 @@
 import FieldAgents
+import FieldDesign
 import FieldFreeway
 import FieldProduct
 import Foundation
@@ -1736,8 +1737,7 @@ public final class FieldLink {
   /// inside `subscribe`, before the link holds the handle), cancelled the moment it lands — frames are no longer taken,
   /// the home's row says why, the desktop goes on its ladder, and the copy stays, greyed.
   private func refuseOpen(_ deviceId: String, _ error: any Error) {
-    let reason =
-      "it answered a board this phone cannot read as the mesh: \(MeshModel.shortReason(error))"
+    let reason = Self.boardRefusal(error, here: DeviceWord.current)
     note("\(deviceId) \(reason)")
     if let homeSubscription {
       homeSubscription.cancel()
@@ -1751,6 +1751,12 @@ public final class FieldLink {
     recordRemoteRefusal(deviceId, reason: reason)
     refreshDesktops()
     refold()
+  }
+
+  /// PG-3e's refusal in the corner's words (`fieldRefusal`, drawn "connected · the field was refused: …"): a board
+  /// this device cannot read, the device named as its platform names it (`DeviceWord`; L4's word pass, 2026-11-06).
+  nonisolated static func boardRefusal(_ error: any Error, here: DeviceWord) -> String {
+    "it answered a board \(here.this) cannot read as the mesh: \(MeshModel.shortReason(error))"
   }
 
   /// Q-P2 (§3.7) — one more refusal of the remote cut by `deviceId`: its next ask waits out the stuck ladder.
