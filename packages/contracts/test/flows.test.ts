@@ -40,6 +40,7 @@ import {
   FlowRunId,
   FlowRunInput,
   FlowRunRecord,
+  FlowRunRecordStep,
   FlowSlug,
   FlowsListResult,
   FlowsRunParams,
@@ -512,6 +513,21 @@ describe("CP-4a2b — a run's record, its states and its bounds (13b.3's C6, C9,
     );
     // the record names its head and tail by their MACs, lowercase hex
     expect(FlowRunRecord.safeParse({ ...record(), head: "x" }).success).toBe(false);
+  });
+
+  it("C6b: an answered step keeps its answer's `cut`, so a run's summary projects it from the record alone (C4)", () => {
+    expect(Object.keys(FlowRunRecordStep.shape)).toContain("cut");
+    expect(FlowRunRecord.parse(fixture("flow-run-record.valid")).steps[0]).toMatchObject({
+      call: 39,
+      cut: true,
+    });
+    // the record's word is the summary's (FlowRunStep's `cut`): `true` or absent, never another
+    const cutAs = (cut: unknown) =>
+      FlowRunRecord.safeParse({ ...record(), steps: [{ call: 39, state: "answered", cut }] })
+        .success;
+    expect(cutAs(true)).toBe(true);
+    expect(cutAs(false)).toBe(false);
+    expect(cutAs("yes")).toBe(false);
   });
 
   it("C9: the six bounds the runs add are positive whole numbers", () => {

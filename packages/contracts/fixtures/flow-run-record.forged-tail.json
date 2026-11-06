@@ -36,6 +36,7 @@
       "phase": "Review",
       "session": "run-7d1c0e5a",
       "state": "answered",
+      "cut": true,
       "lines": [
         {
           "line": "prompt",
