@@ -789,7 +789,7 @@ export class FlowRuns {
   /** The one way a run's host starts: its journal replayed from the top (CP-D9) under the bytes kept for its hash
    * (D8). Bytes that no longer hash are lost, and so is the run. False for a journal that reads as none kept (W3).
    * D1, CL-K-d (R29): at most HOSTS_LIVE_MAX hosts run at once; a wake past them waits, in the order it asked, its run
-   * reading `waiting`, and starts when one leaves (`#nextHost`). */
+   * at rest (`waiting`, or `holding` while the person holds it: `#rest`), and starts when one leaves (`#nextHost`). */
   #wake(run: FlowRunId, record: FlowRunRecord): boolean {
     const { records } = this.ports;
     const live = this.#live.get(run);
@@ -803,7 +803,7 @@ export class FlowRuns {
     }
     if (this.#hostsLive() >= FLOW_LIMITS.HOSTS_LIVE_MAX) {
       if (!this.#hostQueue.includes(run)) this.#hostQueue.push(run);
-      if (record.state !== "waiting") this.#rewrite(run, { state: "waiting" });
+      this.#rest(run);
       return true;
     }
     // F6: the head's folder, held at the run's start; a head from before it derives one from its input here, at each
@@ -909,10 +909,8 @@ export class FlowRuns {
     live.parking = true;
     live.idle = undefined;
     try {
-      const { records } = this.ports;
-      records.syncRun(run);
-      const held = records.runRecord(run)?.held !== undefined;
-      this.#rewrite(run, { state: held ? "holding" : "waiting" });
+      this.ports.records.syncRun(run);
+      this.#rest(run);
     } catch (error) {
       this.#logger.warn(
         "fieldd.flows.run.park",
@@ -1496,8 +1494,17 @@ export class FlowRuns {
       return;
     }
     if (live !== undefined) live.leftAt = live.lines;
-    this.#rewrite(run, { state: "waiting" });
+    this.#rest(run);
     if ((calls?.out ?? 0) === 0) this.#rouse(run);
+  }
+
+  /** TT1 (the 10a review) — a run at rest, its host gone: it reads `holding` while the person holds it, else
+   * `waiting`, read from its hold in the one writer's own read. The one rule every road that rests a run writes by:
+   * #park, #wake's queue road and #left. */
+  #rest(run: FlowRunId): void {
+    this.#rewriteWith(run, (record) => ({
+      state: record.held !== undefined ? "holding" : "waiting",
+    }));
   }
 
   /** A run's end: its journal's `end` line, then its record (D18), and the run no longer driven. */
