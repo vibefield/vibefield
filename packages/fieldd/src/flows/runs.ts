@@ -98,8 +98,17 @@ import * as words from "./words";
 // - A step an `in:` hands a live session (slice 9b): the step listener is told of the hand by steps.ts, before the
 //   line, and let go at the step's answer (a failed turn among them), at the run's end and at fieldd's own stop; a
 //   repair turn keeps it. A later fieldd re-hands it at boot (14, D2's lookup).
-// Built later in M-r2: ask() (slice 11; until then it is refused in fieldd's words), the park and its wakes and D2's
-// lookup (10a), the one answer writer (10b), the cap (12), Stop (13) and boot (14).
+// - A run that waits has no process (slice 10a, D1): a host with a call out and no frame but pongs for HOST_IDLE_MS is
+//   parked, by a `stop()` the runs ask for, read as `waiting`, never an end, and the journal gains no line. A step's
+//   answer journaled wakes it, and so does a host that left on its own with no call out; a woken host replays the
+//   journal from the top on the bytes its record names (D8), once its old host has left, and at most
+//   FLOW_LIMITS.HOSTS_LIVE_MAX run at once, a wake past them waiting its turn in order. A host that leaves twice with
+//   no new journal line between is never started a third time. A call made again at a wake is looked up first (D2):
+//   its step's state on the record, then its session, so a step whose agent lives is bound to it, never started (or
+//   counted) again, and one whose agent exited fails.
+// Built later in M-r2: ask() (slice 11; until then it is refused in fieldd's words), the one answer writer (10b), the
+// cap (12), Stop (13) and boot (14): its wake, a session read by its origin once the runtime has re-attached, and a
+// step lost to a Quit (`flow-lost`, Resume the step).
 
 /** A spark as a run's start reads it at its act (G2): its name, and its Agent Profiles now. */
 export interface FlowRunSpark {
@@ -183,6 +192,8 @@ interface RunEnd {
   readonly state: FlowRunState;
   readonly threw?: string;
   readonly host?: string;
+  /** fieldd's own words for the end, on its record in place of the run's latest log line (a host that left twice) */
+  readonly log?: string;
 }
 
 /** A run this fieldd drives: its host while one runs, and its latest log line not yet in its record (D13). */
@@ -208,6 +219,39 @@ interface LiveRun {
   /** 1c review Y1 — each step's agent left running when its line was never queued, by its call: its session, for
    * slice 13's R42 to end in this fieldd's life (after a restart it is the person's to end) */
   readonly orphans: Map<number, string>;
+  /** D2 in one life: the steps whose start is in flight, by call. One made again while it starts is never started
+   * twice: its start answers the waiter it finds when it settles */
+  readonly starting: Set<number>;
+  /** D1: the host's calls out, made and not yet answered (each host its own count) */
+  calls?: HostCalls | undefined;
+  /** D1: the timer that parks a host with a call out and no frame for HOST_IDLE_MS; losing it loses nothing */
+  idle?: ReturnType<typeof setTimeout> | undefined;
+  /** D1: the host is being parked by the runs' own `stop()`, so its `stopped` is a wait, never an end */
+  parking?: boolean;
+  /** D1 (R27d): a wake asked while the parked host was still leaving: it starts once that host has left */
+  owed?: boolean;
+  /** CL-H13 (R30): the journal lines this life wrote, and how many it had at its host's last leave on its own */
+  lines: number;
+  leftAt?: number | undefined;
+  /** D1's wake window: the answers a host before this one journaled after this one's journal was read, by call. A call
+   * this host makes again is answered from here, and its answer never journaled twice (D22's one answer writer is
+   * slice 10b's) */
+  readonly answers: Map<number, FlowHostAnswer>;
+}
+
+/** A host's calls out (D1's wait is at least one, and no frame but pongs). */
+interface HostCalls {
+  out: number;
+}
+
+/** A journaled answer, as its host hears it. */
+function heardOf(answer: {
+  readonly value?: unknown;
+  readonly cut?: true;
+  readonly refused?: string;
+}): FlowHostAnswer {
+  if (answer.refused !== undefined) return { ok: false, refused: answer.refused };
+  return { ok: true, value: answer.value, ...(answer.cut === true ? { cut: true as const } : {}) };
 }
 
 /** A step's answer, while its host waits on it: given once (D22); a start that throws gives its refusal (F2). */
@@ -215,8 +259,16 @@ interface StepWaiter {
   readonly resolve: (answer: FlowHostAnswer) => void;
 }
 
+/** D1 — how long a host may wait with a call out and no frame but pongs before the runs park it: fieldd's own timing,
+ * as the supervisor's HOST_READY_MS is, never a FLOW_LIMITS row. */
+const HOST_IDLE_MS = 10_000;
+
 /** A step's states that hold one of its run's LIVE_STEPS_MAX slots: its agent is starting or alive (CP4-S7). */
 const SLOT_STATES: ReadonlySet<string> = new Set(["starting", "working", "repairing", "holding"]);
+
+/** The slots a run's open steps hold: each in a slot state, a step handed a session by `in:` none (F9). */
+const slotsTaken = (open: readonly FlowRunRecordStep[]): number =>
+  open.filter((step) => SLOT_STATES.has(step.state) && step.handed !== true).length;
 
 /** The states a run never leaves. */
 const ENDED_STATES: ReadonlySet<FlowRunState> = new Set(["done", "stopped", "failed", "lost"]);
@@ -327,6 +379,8 @@ export class FlowRuns {
    * either, each with when it was found never begun: passed by at the bounds, and read as failed (Z3), until D18's
    * reader settles them at the next boot */
   readonly #unbegun = new Map<FlowRunId, string>();
+  /** D1, CL-K-d (R29): the runs whose host waits for one of HOSTS_LIVE_MAX, in the order they asked */
+  readonly #hostQueue: FlowRunId[] = [];
 
   constructor(readonly ports: FlowRunPorts) {
     this.#logger = ports.logger ?? createNoopLogger();
@@ -408,7 +462,10 @@ export class FlowRuns {
     this.#closing = true;
     this.#offTurns();
     this.#listeners.clear();
-    for (const live of this.#live.values()) this.#letGo(live);
+    for (const live of this.#live.values()) {
+      this.#letGo(live);
+      clearTimeout(live.idle);
+    }
     await Promise.all([...this.#live.values()].map((live) => live.host?.stop()));
   }
 
@@ -579,6 +636,9 @@ export class FlowRuns {
       slotted: [],
       hands: new Map(),
       orphans: new Map(),
+      starting: new Set(),
+      lines: 0,
+      answers: new Map(),
       ...(params.from !== undefined && params.starter.by === "spark"
         ? { ran: nameWords(params.from.name) }
         : {}),
@@ -727,7 +787,9 @@ export class FlowRuns {
   }
 
   /** The one way a run's host starts: its journal replayed from the top (CP-D9) under the bytes kept for its hash
-   * (D8). Bytes that no longer hash are lost, and so is the run. False for a journal that reads as none kept (W3). */
+   * (D8). Bytes that no longer hash are lost, and so is the run. False for a journal that reads as none kept (W3).
+   * D1, CL-K-d (R29): at most HOSTS_LIVE_MAX hosts run at once; a wake past them waits, in the order it asked, its run
+   * reading `waiting`, and starts when one leaves (`#nextHost`). */
   #wake(run: FlowRunId, record: FlowRunRecord): boolean {
     const { records } = this.ports;
     const live = this.#live.get(run);
@@ -739,28 +801,64 @@ export class FlowRuns {
       this.#finish(run, { state: "lost" });
       return true;
     }
+    if (this.#hostsLive() >= FLOW_LIMITS.HOSTS_LIVE_MAX) {
+      if (!this.#hostQueue.includes(run)) this.#hostQueue.push(run);
+      if (record.state !== "waiting") this.#rewrite(run, { state: "waiting" });
+      return true;
+    }
     // F6: the head's folder, held at the run's start; a head from before it derives one from its input here, at each
     // wake, so a restart may derive another (GG2)
     live.folder =
       read.head.folder ?? this.#folderOf(read.head.input ?? {}, readFlow(bytes).meta?.input ?? {});
+    // D10, R13e: the record counts every call line its journal holds, one a kill kept from its record among them; a
+    // woken run reads `running` again
+    const counted = read.lines.filter((line) => line.kind === "call").length;
+    if (record.state !== "running" || record.calls !== counted)
+      this.#rewrite(run, { state: "running", calls: counted });
+    const calls: HostCalls = { out: 0 };
+    // the journal as read here holds every answer before it; one a host before this journals later is kept by call
+    live.answers.clear();
     const replay = new FlowReplay({
       prior: read.lines,
       append: (entry, args) => {
+        // an answer a host before this one already journaled: kept once, one answer line a call
+        if (entry.kind === "answer" && live.answers.has(entry.call)) return;
         records.appendRun(run, entry);
+        live.lines += 1;
+        if (entry.kind === "answer" && live.calls !== calls)
+          live.answers.set(entry.call, heardOf(entry));
         this.#journaled(run, entry, args);
       },
       inner: this.#inner(run, live),
     });
+    // D1: every frame the host sends but its pongs reaches the runs here, so its idle is read here, by its own count
+    const handler: FlowCallHandler = {
+      call: async (call) => {
+        calls.out += 1;
+        this.#heard(run, live, calls);
+        try {
+          return await replay.call(call);
+        } finally {
+          calls.out -= 1;
+          this.#heard(run, live, calls);
+        }
+      },
+      log: (text) => {
+        this.#heard(run, live, calls);
+        replay.log(text);
+      },
+    };
     const host = startFlowHost({
       ...this.ports.host,
       bytes,
       input: read.head.input ?? {},
-      handler: replay,
+      handler,
       logger: this.#logger,
     });
     live.host = host;
+    live.calls = calls;
     void host.ended
-      .then((end) => this.#ended(run, end))
+      .then((end) => this.#ended(run, end, calls))
       .catch((error: unknown) => {
         this.#logger.error("fieldd.flows.run.ended", "A flow run's host end was not kept", {
           run,
@@ -768,6 +866,90 @@ export class FlowRuns {
         });
       });
     return true;
+  }
+
+  /** The hosts running now, one leaving among them: a run never holds two, so HOSTS_LIVE_MAX counts true (R27d). */
+  #hostsLive(): number {
+    let hosts = 0;
+    for (const live of this.#live.values()) if (live.host !== undefined) hosts += 1;
+    return hosts;
+  }
+
+  /** CL-K-d (R29): a host left, so the runs waiting for one start, in the order they asked, while one is free. */
+  #nextHost(): void {
+    while (
+      !this.#closing &&
+      this.#hostQueue.length > 0 &&
+      this.#hostsLive() < FLOW_LIMITS.HOSTS_LIVE_MAX
+    ) {
+      const run = this.#hostQueue.shift();
+      if (run !== undefined) this.#rouse(run);
+    }
+  }
+
+  /** D1 — a frame heard from the host `calls` counts for, or an answer it was sent: its idle starts again. A host with
+   * a call out and no frame but pongs for HOST_IDLE_MS is parked; one with none out is never parked by its idle. */
+  #heard(run: FlowRunId, live: LiveRun, calls: HostCalls): void {
+    if (live.calls !== calls || live.parking === true) return;
+    clearTimeout(live.idle);
+    live.idle =
+      calls.out > 0
+        ? setTimeout(() => this.#park(run, live, calls), this.ports.hostIdleMs ?? HOST_IDLE_MS)
+        : undefined;
+  }
+
+  /** D1 — a waiting host parked: a `stop()` the runs ask for, its run read as `waiting` (`holding`, while the person
+   * holds it), never stopped or failed, and its journal given no line, though synced as it stands, its log lines with
+   * it (D13). Its step's answer, journaled, wakes it. */
+  #park(run: FlowRunId, live: LiveRun, calls: HostCalls): void {
+    const host = live.host;
+    if (this.#closing || host === undefined || live.calls !== calls || live.parking === true)
+      return;
+    if (calls.out === 0) return;
+    live.parking = true;
+    live.idle = undefined;
+    try {
+      const { records } = this.ports;
+      records.syncRun(run);
+      const held = records.runRecord(run)?.held !== undefined;
+      this.#rewrite(run, { state: held ? "holding" : "waiting" });
+    } catch (error) {
+      this.#logger.warn(
+        "fieldd.flows.run.park",
+        "A parked flow run's record could not say it waits",
+        { run, error: messageOf(error) },
+      );
+    }
+    void host.stop();
+  }
+
+  /** D1 — a run woken in this life: its step's answer journaled, or its host left with no call out. A parked host
+   * still leaving is waited for (R27d), and a wake past HOSTS_LIVE_MAX waits its turn (`#wake`). A wake that can't
+   * read its run is said in fieldd's log, never thrown into the journal's road: its next answer, or the next boot,
+   * wakes it. */
+  #rouse(run: FlowRunId): void {
+    const live = this.#live.get(run);
+    if (live === undefined || this.#closing || this.#hostQueue.includes(run)) return;
+    if (live.host !== undefined) {
+      if (live.parking === true) live.owed = true;
+      return;
+    }
+    try {
+      const record = this.ports.records.runRecord(run);
+      if (record === undefined || !this.#isLive(record)) return;
+      if (!this.#wake(run, record))
+        this.#logger.warn(
+          "fieldd.flows.run.wake",
+          "A flow run's journal reads as none kept; it was not woken",
+          { run },
+        );
+    } catch (error) {
+      this.#logger.warn(
+        "fieldd.flows.run.wake",
+        "A flow run could not be woken; its next answer, or the next boot, wakes it",
+        { run, error: messageOf(error) },
+      );
+    }
   }
 
   /** What a run's new calls and log lines reach, past its journal: an `agent()` by the one spawn road (D5), and a
@@ -791,6 +973,10 @@ export class FlowRuns {
   async #step(run: FlowRunId, live: LiveRun, call: FlowHostCall): Promise<FlowHostAnswer> {
     const number = call.call;
     if (number === undefined) throw new Error(`a step of ${run} with no call number`);
+    // D1's wake window: a call a host before this one had out, answered and journaled after this host's journal was
+    // read, is heard as it was journaled
+    const kept = live.answers.get(number);
+    if (kept !== undefined) return kept;
     // F2 review T5: a read that fails on the step's road, before its waiter, settles the step failed (its answer is
     // journaled as the refusal, and its entry's slot frees), never a rejection that leaves the entry holding one
     let record: FlowRunRecord | undefined;
@@ -801,12 +987,80 @@ export class FlowRuns {
       return { ok: false, refused: stepFailed(labelOf(call.args)) };
     }
     if (record === undefined) return { ok: false, refused: stepFailed(labelOf(call.args)) };
+    // the waiter this host's call is answered by, in place of one a parked host left (D22's detach is slice 10b's)
     const answer = new Promise<FlowHostAnswer>((resolve) => live.waiting.set(number, { resolve }));
-    // CP4-S7: a step its entry put past the run's slots waits, with no spawn, until one frees
-    if (record.open.find((step) => step.call === number)?.state === "waiting")
-      live.slotted.push({ call: number, args: call.args });
-    else void this.#launch(run, live, number, call.args);
+    // D2: a call is looked up first, by its step's state on the record. CP4-S7: one its entry put past the run's slots
+    // waits, with no spawn, until one frees, put in line once; a start in flight answers this waiter when it settles;
+    // a step that names its session is bound to it (or lost, its agent gone), never started again; a call the journal
+    // holds with no entry reads as starting (R13e); any other starts, by the one spawn road
+    const step = record.open.find((open) => open.call === number);
+    try {
+      if (step?.state === "waiting") {
+        if (!live.slotted.some((slotted) => slotted.call === number))
+          live.slotted.push({ call: number, args: call.args });
+      } else if (!live.starting.has(number)) {
+        if (step?.session !== undefined) this.#bind(run, live, step, call.args);
+        else if (step === undefined) this.#entered(run, live, record, number, call.args);
+        else void this.#launch(run, live, number, call.args);
+      }
+    } catch (error) {
+      // F2 review T5's road: a lookup the store refused settles the step failed
+      live.waiting.delete(number);
+      this.#startThrew(run, number, error);
+      return { ok: false, refused: stepFailed(labelOf(call.args)) };
+    }
     return answer;
+  }
+
+  /** D2 — a step made again at a wake whose record names its session: bound to it while its agent lives, so its turn
+   * end answers the waiter just set, and nothing is started or counted (MM3, the F4 logic review; ruled 2026-11-06). An
+   * agent that exited while the run waited fails the step in "‹label› failed.", as a start that throws does: nothing
+   * is spawned again and no item raised (ruled 2026-11-06; a step lost to a Quit, with its Resume, is slice 14's). */
+  #bind(run: FlowRunId, live: LiveRun, step: FlowRunRecordStep, args: readonly unknown[]): void {
+    if (step.session === undefined || this.ports.sessions.of(step.session)?.live === true) return;
+    this.#logger.warn(
+      "fieldd.flows.step.exited",
+      "A flow step's agent exited while its run waited; the step failed",
+      { run, call: step.call, session: step.session },
+    );
+    const waiter = live.waiting.get(step.call);
+    if (waiter !== undefined)
+      this.#answer(live, step.call, waiter, { ok: false, refused: stepFailed(labelOf(args)) });
+  }
+
+  /** R13e (D2's last row, [BR] MED) — a call the journal holds with no step entry: a kill between D5's first two
+   * steps. It reads as starting, its entry written now from its journal line as `#journaled` writes one (a slot wait
+   * past the run's slots), then it starts once by the one spawn road: no spawn can have happened, since D5 spawns
+   * after the entry. */
+  #entered(
+    run: FlowRunId,
+    live: LiveRun,
+    record: FlowRunRecord,
+    number: number,
+    args: readonly unknown[],
+  ): void {
+    const read = this.ports.records.readRun(run);
+    const line =
+      read.kind === "kept"
+        ? read.lines.find((kept) => kept.kind === "call" && kept.call === number)
+        : undefined;
+    const card = line?.kind === "call" ? line : undefined;
+    const waits =
+      handedOf(args) === undefined && slotsTaken(record.open) >= FLOW_LIMITS.LIVE_STEPS_MAX;
+    this.#rewriteWith(run, (kept) => ({
+      open: [
+        ...kept.open,
+        {
+          call: number,
+          ...(card?.label !== undefined ? { label: card.label } : {}),
+          ...(card?.agent !== undefined ? { agent: card.agent } : {}),
+          ...(card?.phase !== undefined ? { phase: card.phase } : {}),
+          state: waits ? "waiting" : "starting",
+        },
+      ],
+    }));
+    if (waits) live.slotted.push({ call: number, args });
+    else void this.#launch(run, live, number, args);
   }
 
   /** A step's agent started (or its session handed the line) by `startStep`; its refusal is its answer. */
@@ -816,12 +1070,15 @@ export class FlowRuns {
     number: number,
     args: readonly unknown[],
   ): Promise<void> {
-    const waiter = live.waiting.get(number);
+    // D2 in one life: a call made again while this start is in flight finds it here, and is answered by it: each
+    // answer below goes to the waiter as it stands when the start settles
+    live.starting.add(number);
     try {
       const record = this.ports.records.runRecord(run);
       if (record === undefined) throw new Error(`no record of ${run}`);
       const started = await this.#startStep(run, live, record, number, args);
       if ("refused" in started) {
+        const waiter = live.waiting.get(number);
         live.waiting.delete(number);
         waiter?.resolve(started);
         return;
@@ -843,9 +1100,12 @@ export class FlowRuns {
       // Y1: an agent its failed start leaves running is kept, in memory, before the answer settles the step, so the
       // settle's own write names its session even when the write that would have did not take
       if (error instanceof FlowStepOrphaned) live.orphans.set(number, error.runtimeRunId);
+      const waiter = live.waiting.get(number);
       live.waiting.delete(number);
       waiter?.resolve({ ok: false, refused: stepFailed(labelOf(args)) });
       this.#startThrew(run, number, error);
+    } finally {
+      live.starting.delete(number);
     }
   }
 
@@ -897,10 +1157,7 @@ export class FlowRuns {
   #unslot(run: FlowRunId, live: LiveRun): void {
     const record = this.ports.records.runRecord(run);
     if (record === undefined) return;
-    const used = record.open.filter(
-      (step) => SLOT_STATES.has(step.state) && step.handed !== true,
-    ).length;
-    if (used >= FLOW_LIMITS.LIVE_STEPS_MAX) return;
+    if (slotsTaken(record.open) >= FLOW_LIMITS.LIVE_STEPS_MAX) return;
     const next = live.slotted.shift();
     if (next === undefined) return;
     this.#stepWrite(run)(next.call, (step) => ({ ...step, state: "starting" }));
@@ -1119,10 +1376,7 @@ export class FlowRuns {
                   ...(entry.phase !== undefined ? { phase: entry.phase } : {}),
                   // CP4-S7: past the run's LIVE_STEPS_MAX live steps, a spawned step waits for a slot
                   state:
-                    !hands &&
-                    record.open.filter(
-                      (step) => SLOT_STATES.has(step.state) && step.handed !== true,
-                    ).length >= FLOW_LIMITS.LIVE_STEPS_MAX
+                    !hands && slotsTaken(record.open) >= FLOW_LIMITS.LIVE_STEPS_MAX
                       ? "waiting"
                       : "starting",
                 },
@@ -1156,19 +1410,51 @@ export class FlowRuns {
           ...(earlier > 0 ? { earlier } : {}),
         };
       });
-    // CP4-S7: an answer frees its step's slot
+    // CP4-S7: an answer frees its step's slot; D1: and wakes a run whose host is parked, or still leaving
     if (entry.kind === "answer") {
       const live = this.#live.get(run);
-      if (live !== undefined) this.#unslot(run, live);
+      if (live !== undefined) {
+        this.#unslot(run, live);
+        if (live.host === undefined || live.parking === true) this.#rouse(run);
+      }
     }
   }
 
   /** A host's end, as its run ends (or, for a host that left, waits for its next wake: DESIGN.md §9). fieldd's own stop
-   * leaves the run to its next boot. */
-  #ended(run: FlowRunId, end: FlowHostEnd): void {
+   * leaves the run to its next boot. A host gone frees its place for the next run waiting for one (R29). */
+  #ended(run: FlowRunId, end: FlowHostEnd, calls?: HostCalls): void {
     if (this.#closing) return;
     const live = this.#live.get(run);
-    if (live !== undefined) delete live.host;
+    if (live !== undefined) {
+      delete live.host;
+      live.calls = undefined;
+      clearTimeout(live.idle);
+      live.idle = undefined;
+    }
+    try {
+      this.#hostEnded(run, live, end, calls);
+    } finally {
+      this.#nextHost();
+    }
+  }
+
+  /** How a host's end leaves its run: D1's park is a wait, never an end, and a wake asked while it left starts now
+   * (R27d); any other end is the run's. */
+  #hostEnded(
+    run: FlowRunId,
+    live: LiveRun | undefined,
+    end: FlowHostEnd,
+    calls: HostCalls | undefined,
+  ): void {
+    if (live?.parking === true) {
+      const owed = live.owed === true;
+      live.parking = false;
+      live.owed = false;
+      if (end.kind === "stopped") {
+        if (owed) this.#rouse(run);
+        return;
+      }
+    }
     switch (end.kind) {
       case "done":
         this.#finish(run, { state: "done" });
@@ -1185,7 +1471,7 @@ export class FlowRuns {
         this.#finish(run, { state: "failed", host: end.why });
         return;
       case "left":
-        this.#rewrite(run, { state: "waiting" });
+        this.#left(run, live, calls);
         return;
       case "fatal":
       case "refused":
@@ -1200,11 +1486,31 @@ export class FlowRuns {
     }
   }
 
+  /** A host that left on its own (its pipe closed under it, killed alone): its run waits, woken at once when it had no
+   * call out (D1's 4th wake), else by its answer. One that leaves twice with no new journal line between is never
+   * started a third time, and its run fails in DESIGN.md §9's words (CL-H13). */
+  #left(run: FlowRunId, live: LiveRun | undefined, calls: HostCalls | undefined): void {
+    if (live !== undefined && live.leftAt === live.lines) {
+      const name = this.ports.records.runRecord(run)?.name ?? run;
+      this.#finish(run, { state: "failed", log: words.leftTwice(name) });
+      return;
+    }
+    if (live !== undefined) live.leftAt = live.lines;
+    this.#rewrite(run, { state: "waiting" });
+    if ((calls?.out ?? 0) === 0) this.#rouse(run);
+  }
+
   /** A run's end: its journal's `end` line, then its record (D18), and the run no longer driven. */
   #finish(run: FlowRunId, end: RunEnd): void {
     const live = this.#live.get(run);
     this.#live.delete(run);
-    if (live !== undefined) this.#letGo(live);
+    if (live !== undefined) {
+      this.#letGo(live);
+      clearTimeout(live.idle);
+    }
+    const queued = this.#hostQueue.indexOf(run);
+    if (queued >= 0) this.#hostQueue.splice(queued, 1);
+    const log = end.log ?? live?.log;
     try {
       this.ports.records.appendRun(run, {
         kind: "end",
@@ -1215,7 +1521,7 @@ export class FlowRuns {
       this.#rewrite(run, {
         state: end.state,
         endedAt: this.#now().toISOString(),
-        ...(live?.log !== undefined ? { log: live.log } : {}),
+        ...(log !== undefined ? { log } : {}),
         ...(end.host !== undefined ? { host: end.host } : {}),
       });
     } catch (error) {
