@@ -3101,6 +3101,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     and the correction before this one, counted a budget among what `isHot` judges at 80%. `isHot` knows no budget,
     and Settings still paces a budget its adapter gives a length and a reset; the meter drops a budget's pace before
     it asks (`paceless`). And the forecast chose its form before it rounded, so 57.5 to 60 minutes said "~60m".)*
+    *(Corrected 2026-11-06, the M-desk stack: since UM-3e Settings reads a budget without a pace itself
+    (`usageLines`), so the correction before this one no longer holds of Settings, and the meter's `paceless`,
+    which then changed nothing, left `usage/meters.ts`: the meters' lines are Settings' lines.)*
   - **The tightest** (UM-D13): a plan's tightest window is the one under the most pressure — a hot window first,
     then one at 100% or more, then the most used — and a profile's word is the tightest of its plans that read.
   - **A window read before its reset** (*added 2026-11-06, the assembled review; ‹for James›*). A window whose

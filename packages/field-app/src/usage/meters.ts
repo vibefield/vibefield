@@ -12,7 +12,6 @@ import {
 import { planTitle } from "@vibefield/puppeteer-views";
 import {
   accountWords,
-  isHot,
   signInState,
   type UsageLine,
   usageLines,
@@ -39,11 +38,13 @@ import {
 // reading of the sign-in that named its account (`namedBy` → `usageOf`), its windows are Settings' C1 lines
 // (`usageLines`), its sign-in is `signInState`'s, and its orange is `isHot`, the pace rule (UM-D3: Godview's flat 80%
 // retires). The meter's rules — the tightest window (UM-D13), the forecast (UM-D4), the words for a length (the limit
-// moment's too) — are the leaf `rules.ts`'s, which Settings may read too; nothing here reads setup/. What this file
-// adds is the drawing's (draft/profile-meters/round4/src/p3a-core.js): the budget's pace-less rule, the stable order
-// (UM-D15), and the union of every profile's plans (`subsOf`, `subGlyphs`); and the assembled review's window read
-// before its reset (`passed`, DESIGN.md §8 "The Bands circle"), the phone's common case under UM-D8. AR-L1: no agent
-// is named here — the order and the labels are the agent catalog's.
+// moment's too) — are the leaf `rules.ts`'s, which Settings may read too; nothing here reads setup/. The budget's
+// pace-less rule (the drawing's) is Settings' own since UM-3e: `usageLines` reads a budget with no now line, orange at
+// 80 or more, so the meters' lines ARE Settings' lines, a budget's too. What this file adds is the drawing's
+// (draft/profile-meters/round4/src/p3a-core.js): the stable order (UM-D15), and the union of every profile's plans
+// (`subsOf`, `subGlyphs`); and the assembled review's window read before its reset (`passed`, DESIGN.md §8 "The Bands
+// circle"), the phone's common case under UM-D8. AR-L1: no agent is named here — the order and the labels are the
+// agent catalog's.
 
 /** UM-D15's three groups, a first read standing with the readings it is waiting for. */
 export type MeterKind = "reading" | "first-read" | "needs-you" | "no-meter";
@@ -61,8 +62,8 @@ export type NoMeterReason = "unnamed" | "unreported" | "no-windows" | "unavailab
 export interface MeterWindow {
   /** the adapter's meter, as the reading carries it */
   metric: AgentAccountUsageMetric;
-  /** Settings' C1 line (`usageLines`). A budget's is pace-less: no now line, orange at 80 or more. One read before its
-   * reset (`passed`) is never orange. */
+  /** Settings' C1 line (`usageLines`). A budget's is pace-less there since UM-3e: no now line, orange at 80 or more.
+   * One read before its reset (`passed`) is never orange. */
   line: UsageLine;
   /** a credit budget, which fills both bands */
   budget: boolean;
@@ -183,20 +184,6 @@ export interface MetersOptions {
   usage?: "available" | "unavailable";
 }
 
-/** A budget's line without a pace: no now line, and Settings' rule for a window of no known pace (80 or more). */
-function paceless(line: UsageLine): UsageLine {
-  const kept: UsageLine = {
-    id: line.id,
-    label: line.label,
-    usedPercent: line.usedPercent,
-    resets: line.resets,
-    hot: isHot(line.usedPercent, undefined),
-  };
-  if (line.group !== undefined) kept.group = line.group;
-  if (line.reset !== undefined) kept.reset = line.reset;
-  return kept;
-}
-
 /** A reading's windows as the meters draw them: Settings' C1 lines (the windows in play, in the adapter's order),
  * each with its budget, its length in words, its reset, its pressure and its forecast. */
 export function meterWindows(
@@ -209,16 +196,15 @@ export function meterWindows(
     const metric = byId.get(settings.id);
     if (metric === undefined) return [];
     const budget = metric.kind === "budget";
-    const paced = budget ? paceless(settings) : settings;
     const resetIn =
-      paced.resets && metric.resetsAt !== undefined
+      settings.resets && metric.resetsAt !== undefined
         ? (Date.parse(metric.resetsAt) - now.getTime()) / 60_000
         : undefined;
     // read before its reset (DESIGN.md §8 "The Bands circle"): its reset is at or before now, whether it came before
     // or after the reading, so what it metered is gone and it runs ahead of nothing. Only its orange leaves Settings'
     // line; its words and its now line stand.
     const passed = resetIn !== undefined && resetIn <= 0;
-    const line: UsageLine = passed ? { ...paced, hot: false } : paced;
+    const line: UsageLine = passed ? { ...settings, hot: false } : settings;
     const window: MeterWindow = {
       metric,
       line,
