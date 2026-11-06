@@ -2581,6 +2581,41 @@ describe("the find door (P2): Live now's rows made only while the Peek listens, 
     expect(getGodviewFindDoor()?.rows()).toBeNull();
   });
 
+  it("counts no session for a closed Peek, so one that ends keeps the door; while Live now listens the filters count them (SE-1)", async () => {
+    const door = tabDoor();
+    await mountMonitor("list", door);
+    const find = getGodviewFindDoor();
+    if (find === null) throw new Error("the stage published no find door");
+    // nobody listens: Grok's session ends, and the door is the same object
+    await act(async () => door.push(TAB_ROWS.slice(0, 2)));
+    await settle();
+    expect(getGodviewFindDoor()).toBe(find);
+    // Live now listens: Work counts its two, and a session that starts is counted — a new run: the
+    // fold keeps a run that ended ended, so Grok's own does not come back
+    let stop: (() => void) | undefined;
+    await act(async () => {
+      stop = find.subscribeRows(() => undefined);
+    });
+    await settle();
+    const work = (): number | undefined =>
+      getGodviewFindDoor()?.filters.profiles.find((profile) => profile.id === "work")?.sessions;
+    expect(work()).toBe(2);
+    const counted = getGodviewFindDoor()?.filters.sessions ?? 0;
+    const started = managedSummary({
+      runtimeRunId: "run-grok-2",
+      kind: "grok",
+      label: "Grok",
+      status: "working",
+      cwd: "/project/jabali",
+    });
+    await act(async () => door.push([...TAB_ROWS.slice(0, 2), started]));
+    await settle();
+    expect(getGodviewFindDoor()?.filters.sessions).toBe(counted + 1);
+    expect(work()).toBe(2);
+    await act(async () => stop?.());
+    await settle();
+  });
+
   it("holds the keys for the Peek over the stage (QL-D2), and says when the mounted view holds them (SB-3)", async () => {
     const { holdKeys } = await mountReporting(tabDoor());
     const find = getGodviewFindDoor();

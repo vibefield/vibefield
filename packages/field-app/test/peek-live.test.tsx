@@ -236,14 +236,16 @@ describe("the rows and the words (`peek-live.ts`)", () => {
   it("says the profile a run of this desktop's runs under, a shell's too — never a peer's (SE-D1)", () => {
     const own = run("own", { provider: "claude", profileSet: "work" });
     const bare = run("bare", { provider: "claude" });
+    // a peer's run naming a profile anyway: a profile is its own desktop's
     const peer = run("peer", {
       provider: "codex",
       desk: { id: "studio", name: "studio", os: "linux", self: false },
+      profileSet: "work",
     });
     const shell = run("pty-2", { project: "scratch", profileSet: "native" });
     const rows = peekLiveRows([found(own), found(bare), found(peer)], [own, bare, peer, shell], "");
-    // a peer's run carries no profile (the find join drops it, `find-agents.ts`), and a run
-    // under none says none
+    // a peer's row says none whatever its run carries (the find join drops it too,
+    // `find-agents.ts`), and a run under none says none
     expect(rows.map((row) => [row.id, row.profile])).toEqual([
       ["own", "work"],
       ["bare", null],
