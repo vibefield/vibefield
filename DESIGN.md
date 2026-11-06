@@ -10343,12 +10343,13 @@ are open until James reads them on a board). A Run that VibeField refuses starts
 - "VibeField can't find that spark; nothing was started."
 - "VibeField has no run ‹run›."
 - "That version isn't one of ‹flow›'s."
-- *Proposed 2026-11-06 (CP-4a2b; ruled 2026-11-06, the 1b review V5; open until James reads them, as the
-  rest are):* a run whose Agent Profiles, narrowed as it starts, leave none:
-  - a spark's run, or one from its thread, whose asked profiles are no longer that spark's: "None of the Agent Profiles
-    it asked for is ‹spark›'s now; nothing was started."
-  - yours, whose asked profiles no longer exist: "None of the Agent Profiles it asked for exists now; nothing was
-    started."
+- *Proposed 2026-11-06 (CP-4a2b; ruled 2026-11-06, the 1b review V5; said by cause the same day, the 1e
+  review AA1; open until James reads them, as the rest are):* a run whose Agent Profiles, narrowed as it starts, leave
+  none, said by the narrowing that left none:
+  - a run whose asked profiles are none of that spark's now (the spark's narrowing, at the act): "None of the Agent
+    Profiles it asked for is ‹spark›'s now; nothing was started."
+  - a run whose asked profiles no longer exist (anyone's, as it begins): "None of the Agent Profiles it asked for exists
+    now; nothing was started."
 - At the bounds (FLOW_LIMITS' RUNS_LIVE_MAX and RUNS_PER_SPARK_MAX): "VibeField is running 8 flows, as many as it runs
   at once. Stop one, or run ‹flow› when one ends." For a spark's: "‹spark› is running 2 flows, as many as a spark may."
 - The store's sentence ("VibeField can't read the flows it keeps; nothing was changed") and the host's
