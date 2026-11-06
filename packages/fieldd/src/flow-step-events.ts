@@ -16,8 +16,10 @@ import { ownLive, type RunEntered, type RunEnteredAgent } from "./run-entry";
 // - else the turn's last `conversation:assistant-message` that is final (not `final: false`) and not `displayOnly`,
 //   as Codex sends it. Neither the monitor's `lastAssistantMessage` (cut at 400 characters) nor a transcript;
 // - the run's own conversation, live, alone (`ownLive`): never a subagent's words or end, never a replay;
-// - a turn's end is told once by its turn id (CL-H6). A later fieldd hears its runs afresh; the journal keeps one
-//   answer for one call whatever it is told (D22).
+// - a turn's end is told once by its turn id (CL-H6). An end with no turn id is told once while nothing of the run's
+//   own is heard after it (no turn:started, no assistant message): a back-to-back duplicate, never a turn heuristic
+//   (the slices 7–9 review's F3, layer 1). A later fieldd hears its runs afresh; the journal keeps one answer for one
+//   call whatever it is told (D22).
 
 /** A flow step's turn end, as the runs hear it. */
 export interface FlowStepTurnEnd {
@@ -82,7 +84,7 @@ export class FlowStepEvents {
     if (agent === undefined) {
       this.logger.warn(
         "fieldd.flows.step_hand_unheard",
-        "A flow step was handed a session this fieldd has not heard enter; the step is refused, its line never queued",
+        "A flow step was handed a session this fieldd cannot hear (never heard enter, or forgotten at its end); the step is refused, its line never queued",
         { runtimeRunId, run: step.run, call: step.call },
       );
       return undefined;
@@ -136,6 +138,9 @@ export class FlowStepEvents {
     const told = new Set<string>();
     /** for a hand: the turn that started since it, by its id when it said one; none while none has */
     let started: { readonly turn: string | undefined } | undefined;
+    /** F3 (slices 7–9 review): an end was told, and nothing of the run's own has been heard since (no turn:started, no
+     * assistant message), so an end with no turn id now is that end told again */
+    let quiet = false;
     // a listener that throws is said, never thrown into puppeteer's own emitter
     const tell = (end: FlowStepTurnEnd) => {
       for (const listener of this.#listeners) {
@@ -154,6 +159,8 @@ export class FlowStepEvents {
       }
     };
     const ended = (turn: string | undefined): boolean => {
+      // F3: a back-to-back duplicate with no turn id is no new end; an end with an id keeps the `told` road (CL-H6)
+      if (turn === undefined && quiet) return false;
       if (fromHand) {
         // a turn heard starting before the hand ends with none heard started since, or as another turn than that one
         if (started === undefined) return false;
@@ -162,16 +169,19 @@ export class FlowStepEvents {
       }
       if (turn !== undefined && told.has(turn)) return false;
       if (turn !== undefined) told.add(turn);
+      quiet = true;
       return true;
     };
     return [
       agent.on("turn:started", (envelope) => {
         if (!ownLive(envelope)) return;
+        quiet = false;
         last = undefined;
         if (fromHand) started = { turn: envelope.event.turnId ?? envelope.turnId };
       }),
       agent.on("conversation:assistant-message", (envelope) => {
         if (!ownLive(envelope)) return;
+        quiet = false;
         const message = envelope.event;
         if (message.displayOnly === true || message.final === false || !worded(message.text))
           return;
