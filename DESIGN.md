@@ -3510,7 +3510,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   and the room's own state while it imports, in the room's words. Changing a switch asks once more
   only when it turns reading off. Profiles' own folders are read by construction and are listed with
   their profile's name, not a switch.
-- **Settings → Sound** (track SD, SD-D19 and SD-D22 ruled 2026-11-05; built at SD-2; the law is §14): the field's
+- **Settings → Sound** (track SD, SD-D19 and SD-D22 ruled 2026-11-05; built at SD-2, its foot's second sentence at
+  SD-3; the law is §14): the field's
   sounds, one page in the Preferences group after Appearance, its rail glyph `sound` (§13), its line "How agents
   sound when they need you, and when they keep quiet." In order:
   - **Play sounds**, the page's switch, on from the first run (SD-D19). Its line: "A sound when an agent
@@ -3525,8 +3526,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   - **Quiet**: **For an hour** · **Until tomorrow**, two quiet buttons. While quiet the row reads "Quiet until
     8:00 AM." (the time in this Mac's own format) with **Turn sounds back on**.
   - The foot, in the muted ink: "Sounds follow your Mac's alert volume and the output chosen for sound effects
-    in System Settings → Sound." Until SD-3 lands, a second sentence: "For now they play only while a VibeField
-    window is in front."
+    in System Settings → Sound. While VibeField is in the background, a notice says what happened too, and System
+    Settings → Notifications decides whether it shows." *Settled 2026-11-06 (SD-3, §14 "Away"): until SD-3, the
+    second sentence was "For now they play only while a VibeField window is in front."*
   Where there is no system-sound player, the switch is off and disabled and its line says why: off macOS, "Sounds
   play on macOS."; in a build made without one, "This build has no sound player."; and where it would not start,
   "The sound player didn't start." Never a switch that silently does nothing.
@@ -6627,8 +6629,11 @@ its title is the teller, and its body the words. A click on it opens Chat, whoev
 notify is never kept, and nothing says the person read it. *Amended 2026-11-05 (TH-1; ER-C41; CO-Q1 (b), James):* a
 spark's notify is kept now, in its own transcript, and its thread draws it as VibeField's quiet line, "Vela told you: the
 build is green" (§8 "Chat's thread"); an agent's notify is still never kept, and nothing says the person read either.
-A new item in the queue raises no OS notice: CP3-D5 rules
-notify alone. *Main decides, as for the link's notices (TS-5): a notice must reach someone with no window in front.*
+The queue raises no OS notice of its own: while no VibeField window is in front, the field's voice raises one, silent,
+for each sound it says (§14 "Away"), beside an agent's notify. *Main decides, as for the link's notices (TS-5): a
+notice must reach someone with no window in front.* *Amended 2026-11-06 (SD-3; James, the Heard While Away page, Q1:
+"sound on/off and notification on/off are two separate things"): this line said "A new item in the queue raises no
+OS notice: CP3-D5 rules notify alone".*
 
 **What a flow's read refuses** (track CO, CP-4a2b; Q-B3 (a), ruled by VF-PM 2026-11-05 16:24Z; the words are open
 until James reads them on a card). A flow's card and its library row show what its file says, read and never run
@@ -7767,8 +7772,9 @@ remain in `drawings.mjs` and on the page, not in the product.
 
 **Ruled 2026-11-05 (James, the Hear What Needs You page: SD-D1…SD-D22, every lean; the record is
 `draft/sound/design-sound.md` §14).** Track SD. This section is the sound's art direction: what VibeField sounds
-like, when it speaks and where it plays. `@vibefield/sound` is this section in code (SD-1); until SD-2 lands,
-nothing in the product plays it. The ask (James, 2026-10-02): "more epic, space vibe … field theory in physics …
+like, when it speaks and where it plays. `@vibefield/sound` is this section in code (SD-1), and Electron main plays
+it (SD-2, SD-3). *Settled 2026-11-06 (SD-3): this line said "until SD-2 lands, nothing in the product plays it";
+SD-2 landed on 2026-11-05 and left it.* The ask (James, 2026-10-02): "more epic, space vibe … field theory in physics …
 deep space … the kind of SFX you would likely to hear in monument valley game".
 
 **The idea.** A field fills space, and every particle is an excitation of one of its modes. Every VibeField sound
@@ -7890,15 +7896,36 @@ sharper), +0.25 for a knock and −0.2 for a muted strike. Approval's knocks are
    chord each agent's note comes from its own side.
 
 **Where it plays.**
-- **In VibeField (SD-D12, SD-D21).** While a VibeField window is in front, through macOS's system-sound path, so
+- **In VibeField (SD-D12, SD-D21).** In front and away (SD-3), through macOS's system-sound path, so
   the sounds follow the alert volume and the "Play sound effects through" device like every other alert on the
   Mac. Each plays as a system sound, never as an alert sound, so it never flashes the screen, and it plays whether
   or not "Play user interface sound effects" is on, because an agent's state is not an interface sound (S1).
   *Settled 2026-11-05 (SD-2): this line said "whether that path also drives 'Flash the screen' is verified at
-  SD-2".* The place is baked into the sound at five positions: −60%, −30%, the centre, +30%, +60%. Until SD-3
-  lands, a sound that comes due while no VibeField window is in front is not played; Godview still shows it.
-- **Away (SD-D15).** While no VibeField window is in front, or none is open, an OS notice carries the sound, so
-  Focus and the notification settings decide whether it plays. *Lands with SD-3, when §9's notice line moves.*
+  SD-2".* The place is baked into the sound at five positions: −60%, −30%, the centre, +30%, +60%. *Settled
+  2026-11-06 (SD-3): this bullet said "While a VibeField window is in front", and "Until SD-3 lands, a sound that
+  comes due while no VibeField window is in front is not played; Godview still shows it."*
+- **Away (SD-D15, amended at SD-3).** While no VibeField window is in front, or none is open, VibeField plays the
+  sound itself, through the same path, and a silent OS notice says what happened. Sound and notice are two separate
+  things: Play sounds and Quiet decide the sound; macOS's notification settings for VibeField, and Focus, decide the
+  notice. VibeField has no notice switch of its own, and its notice never plays a sound of its own. So with the
+  sounds off, or while Quiet holds, the notice still comes, silent; with VibeField's notices off in macOS, the sound
+  still plays. Focus hides the notice and cannot hush the sound, since macOS does not tell an app your Focus: Quiet
+  hushes it. Where there is no system-sound player, the notices still come.
+  - **The sound.** The voice speaks as it does in front (the hold, the gather, the budget, the spacing), with three
+    differences. Every agent sounds, because you are typing into none. Each sound is centred in the theme's space,
+    never far: away, you are at none of your desktops. A reminder is not said, and is not saved for later: the
+    notice waits in Notification Center.
+  - **The notice.** One for each sound the voice says, whether or not it plays, and nothing else: a Done the budget
+    folds raises none. Its title is the agent, named as the window names it (`sessionName`: its agent's label in its
+    folder, "Claude Code in vibe-field", since the field row carries no title), and its body what happened:
+    **Done** · **Has a question** · **Needs your approval** · **Stopped: it failed**. A Done chord is titled by its
+    number, **3 agents**, its body **Done**; All quiet is **VibeField**, **All quiet**. A request that speaks for
+    two agents raises a notice for each.
+  - **A click** brings VibeField forward onto Godview, where the agents are. Main posts the notice, as it posts an
+    agent's notify and the link's notices, and never in a smoke.
+  - *Amended 2026-11-06 (SD-3; James, the Heard While Away page: Q1, "sound on/off and notification on/off are two
+    separate things", then "yes, go with lean"; Q2 and Q3 at the leans):* SD-D15 said "an OS notice carries the
+    sound, so Focus and the notification settings decide whether it plays".
 - **The phone (SD-D16, SD-D17).** Our sounds, the phone's masters, each with its touch. A question is
   time-sensitive, as an approval is (foundations §2.10); a completion is active. *Phone notifications are planned
   (§9).*
@@ -7909,12 +7936,13 @@ sharper), +0.25 for a knock and −0.2 for a muted strike. Approval's knocks are
 - **Out of the box (SD-D19).** On from the first run, at the level of the Mac's own alerts, with Settings → Sound
   one click away.
 - **Quiet (SD-D22).** macOS does not tell an app your Focus, so sounds played inside VibeField cannot follow it
-  (the away path's notices can). One click, in the menu bar and in Settings, quiets every sound for an hour or
+  (the notices can: Focus hides them). One click, in the menu bar and in Settings, quiets every sound for an hour or
   until tomorrow: 8:00 the next morning, by this Mac's clock. Quiet is the person's, so their desktops go quiet
   together, and it ends by itself. The status item's row sits above Settings…: **Quiet Sounds**, with **For an
   Hour** and **Until Tomorrow**; while quiet, **Quiet Until 8:00 AM**, checked (the time in this Mac's own
   format), and choosing it turns the sounds back on. With Play sounds off (§8 "Settings → Sound") the row is not
-  drawn. A sound or a reminder that comes due while quiet is not played, and is not saved for later.
+  drawn. A sound or a reminder that comes due while quiet is not played, and is not saved for later; away, its
+  notice still comes, silent ("Away").
 
 **Where it lives.** `@vibefield/sound` (`packages/sound`) is this section in code: the field, the voice, the
 spaces, the masters, the family, the touch and the voice policy, with no dependencies, so Electron main, the
