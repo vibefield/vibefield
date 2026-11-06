@@ -398,37 +398,40 @@ describe("what the last run left, over an old inventory (IL-D5 (a); the mock flo
 // own event handed to the runtime as daemon.ts wires it. Real time: the daemon's
 // sockets ride the same clock, and each gap below is generous against the
 // constants (EXIT_GRACE_MS 1.5 s, ASKED_EXIT_GRACE_MS 6.5 s), never equal.
+// The held run and the floor's words below are item 59's, and item 201's rows
+// after them read the same run.
+const RUN = "run-terminated";
+/** freshFloor() without CLAUDE's row: the floor has stopped listing the PTY */
+const withoutClaude = (): Record<string, unknown> => {
+  const floor = freshFloor();
+  const terminals = (floor["terminals"] as Array<{ sessionId: string }>).filter(
+    (row) => row.sessionId !== CLAUDE,
+  );
+  return { ...floor, generation: Number(floor["generation"]) + 1, terminals };
+};
+/** the run re-attached at boot over a fresh floor that lists its PTY, held pending */
+const heldRun = async () => {
+  const box = await agentDaemonOn(freshFloor(), (dataDir) => [runRecord(RUN, CLAUDE, dataDir)]);
+  await until(
+    () => box.records.read(RUN)?.reattach !== undefined,
+    10_000,
+    "the run held pending at boot",
+  );
+  expect(box.records.read(RUN)?.exited, "held, not stamped").toBeUndefined();
+  return box;
+};
+/** the floor's own `session-exited` for the PTY, as a terminate fieldd asked for ends it */
+const exited = (): SessionExitedEvent => ({
+  requestId: 0,
+  type: "session-exited",
+  sessionId: CLAUDE,
+  exitCode: null,
+  exitSignal: "SIGKILL",
+  requestedTermination: "application",
+  exitOutcome: "application-terminated",
+});
+
 describe("item 59 — a run's exit after a termination fieldd asked for (the mock floor)", () => {
-  const RUN = "run-terminated";
-  /** freshFloor() without CLAUDE's row: the floor has stopped listing the PTY */
-  const withoutClaude = (): Record<string, unknown> => {
-    const floor = freshFloor();
-    const terminals = (floor["terminals"] as Array<{ sessionId: string }>).filter(
-      (row) => row.sessionId !== CLAUDE,
-    );
-    return { ...floor, generation: Number(floor["generation"]) + 1, terminals };
-  };
-  /** the run re-attached at boot over a fresh floor that lists its PTY, held pending */
-  const heldRun = async () => {
-    const box = await agentDaemonOn(freshFloor(), (dataDir) => [runRecord(RUN, CLAUDE, dataDir)]);
-    await until(
-      () => box.records.read(RUN)?.reattach !== undefined,
-      10_000,
-      "the run held pending at boot",
-    );
-    expect(box.records.read(RUN)?.exited, "held, not stamped").toBeUndefined();
-    return box;
-  };
-  /** the floor's own `session-exited` for the PTY, as a terminate fieldd asked for ends it */
-  const exited = (): SessionExitedEvent => ({
-    requestId: 0,
-    type: "session-exited",
-    sessionId: CLAUDE,
-    exitCode: null,
-    exitSignal: "SIGKILL",
-    requestedTermination: "application",
-    exitOutcome: "application-terminated",
-  });
   const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
   it("asked: the floor drops the PTY first and its exit comes 3 s later — the record carries the terminal's word", async () => {
@@ -495,6 +498,72 @@ describe("item 59 — a run's exit after a termination fieldd asked for (the moc
     );
     expect(Date.now() - askedAt, "never before the asked bound").toBeGreaterThanOrEqual(6_000);
     expect(records.read(RUN)?.exited?.reason).toBe("unknown");
+  }, 30_000);
+});
+
+// Item 201 (RV #17, gap2-6) — a held run's end reaches the run-ended listeners (`onRunEnded`) as a managed run's
+// does. daemon.ts hangs the crews, the waker, the needs and the input queues there, and a pending run that ended
+// told none of them: its kept words, held sends, crew member and watch stood until the next restart's settle
+// reconcile. A held run ends through `closePending` (the floor's exit, the inventory's backstop, a typed run's
+// watch, a withdrawal, a supersession) or through its replacement, at the point of no return. Each end is heard
+// once, and a replacement's before its successor is born. The listener writes into the scripted agent's births, so
+// one list orders the two.
+describe("gap2-6 — a held run's end reaches its listeners (item 201; the mock floor)", () => {
+  it("the floor's exit: the run is stamped, and its end is heard once", async () => {
+    const { daemon, records, births: events } = await heldRun();
+    daemon.agents.onRunEnded((id) => events.push(`ended:${id}`));
+    await daemon.agents.handleTerminalExit(exited());
+    expect(records.read(RUN)?.exited?.reason).toBe("application-terminated");
+    expect(events, "heard once, and nothing born").toEqual([`ended:${RUN}`]);
+  });
+
+  it("its replacement: a person's resume ends the held run once, heard before its successor is born", async () => {
+    const { mock, daemon, rpc, records, births: events } = await heldRun();
+    daemon.agents.onRunEnded((id) => events.push(`ended:${id}`));
+    // the terminate the floor would take: the ask stands from its call (item 59), and the PTY leaves the inventory
+    let askedAt: number | undefined;
+    vi.spyOn(daemon.terminals, "terminationAskedAt").mockImplementation((id) =>
+      id === CLAUDE ? askedAt : undefined,
+    );
+    vi.spyOn(daemon.terminals, "terminate").mockImplementation(async () => {
+      askedAt = Date.now();
+      mock.pushObserved(withoutClaude());
+      return { terminated: true };
+    });
+    const asked = rpc.callErr("agent.resume", { runtimeRunId: RUN });
+    await until(
+      () => daemon.terminals.get(CLAUDE) === undefined,
+      5_000,
+      "the PTY left the inventory",
+    );
+    // and the floor's exit for it, which the replacement holds: it closes nothing on its own
+    await daemon.agents.handleTerminalExit(exited());
+    await asked;
+    expect(
+      records.read(RUN)?.exited?.reason,
+      "past the point of no return: the paper cell refused the successor's birth",
+    ).toBe("replace-failed");
+    expect(events, "the end, once, then the successor's birth").toEqual([
+      `ended:${RUN}`,
+      `native-${RUN}`,
+    ]);
+  }, 30_000);
+
+  it("the inventory's backstop: a PTY that left on its own ends the run once, and the floor's late exit tells no one again", async () => {
+    const { mock, daemon, records, births: events } = await heldRun();
+    daemon.agents.onRunEnded((id) => events.push(`ended:${id}`));
+    mock.pushObserved(withoutClaude());
+    await until(
+      () => records.read(RUN)?.exited !== undefined,
+      10_000,
+      "the backstop stamping the run",
+    );
+    expect(records.read(RUN)?.exited?.reason).toBe("unknown");
+    expect(events, "heard once, at the backstop").toEqual([`ended:${RUN}`]);
+    await daemon.agents.handleTerminalExit(exited());
+    await daemon.agents.handleTerminalExit(exited());
+    expect(records.read(RUN)?.exited?.reason, "the late exit changes nothing").toBe("unknown");
+    expect(events, "and nobody hears it").toEqual([`ended:${RUN}`]);
   }, 30_000);
 });
 
