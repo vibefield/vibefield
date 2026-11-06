@@ -1395,6 +1395,9 @@ export type MeshEgressUnavailableDetails = z.infer<typeof MeshEgressUnavailableD
 // `.snapshot` notifications to a subscription (the lane stream's finding, `spawn_lane_forwarder`).
 //
 // The floor refuses in ONE order, egress's (W3-1, VF-PM 2026-11-06):
+//  0. a name under `native.mesh.fileTransfer.` that this contract does not declare (`offer`, which stays reserved, or a
+//     typo) is no verb: it answers NOT_FOUND on every arm, before step 1, as any unknown method does (W3-14, VF-PM
+//     2026-11-06; field-native `tests/mgmt_server.rs`'s D36 row asserts it for `offer`);
 //  1. a floor whose truffle cannot pull by a named root answers MESH_FILE_TRANSFER.STATE_UNSUPPORTED to EVERY verb,
 //     first, node or no node: a capability fact for the floor's life, as `egress-unsupported` is;
 //  2. `subscribe` is answered with no node up (below);
@@ -1407,6 +1410,7 @@ export type MeshEgressUnavailableDetails = z.infer<typeof MeshEgressUnavailableD
 // pull a teardown ends is sent `failed` NODE_DOWN on it (W3-2, VF-PM 2026-11-06). fieldd's NativeLink keeps a refused
 // subscription's replay silent until its next reconnect, so a stream gated on the node would go dead while it is down.
 // *Rewritten 2026-11-06 (W3-1, W3-2): it said that with no node every verb answers the node gate.*
+// *Added 2026-11-06 (W3-14): step 0. Rider A named none; both lanes answered it so before it was ruled.*
 // The floor's facade is its own slice (the critic's wave 3, VF-FLOOR). Every verb is answered: at the truffle-core
 // `=0.7.24` pin the floor builds only the arm that cannot pull by a named root, so each answers
 // MESH_FILE_TRANSFER.STATE_UNSUPPORTED (step 1; field-native `mgmt/file_transfer.rs`). fieldd calls none of them.
