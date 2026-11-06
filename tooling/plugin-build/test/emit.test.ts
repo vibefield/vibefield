@@ -1,10 +1,10 @@
-import { existsSync, mkdtempSync, readFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { validatePluginManifest } from "@vibefield/contracts";
 import { describe, expect, it } from "vitest";
 import { canonicalJson } from "../src/canonical";
 import { emitManifest } from "../src/emit";
+import { tempDir } from "./temp-dir";
 
 // Shaped like packages/contracts/fixtures/plugin-manifest.valid.json — the
 // minimal real plugin (a renderer-only note KIND, spec §7.2-adjacent; a widget
@@ -42,8 +42,7 @@ const VALID_MANIFEST = {
 };
 
 function tempOutPath(): string {
-  const dir = mkdtempSync(join(tmpdir(), "plugin-build-test-"));
-  return join(dir, "vibefield.plugin.json");
+  return join(tempDir("plugin-build-test-"), "vibefield.plugin.json");
 }
 
 describe("emitManifest", () => {

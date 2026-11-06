@@ -1,5 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { describe, expect, it } from "vitest";
@@ -14,6 +13,7 @@ import {
   PluginBuildError,
 } from "../src/build";
 import { wgsl, wgslModule } from "../src/wgsl";
+import { tempDir } from "./temp-dir";
 
 // P8a — the build stages. Two levels, deliberately:
 //
@@ -35,7 +35,7 @@ import { wgsl, wgslModule } from "../src/wgsl";
 // real plugin: `pnpm test` must not wait on `pnpm build` (the P8a law).
 
 function fixture(files: Record<string, string>): string {
-  const root = mkdtempSync(join(tmpdir(), "plugin-build-"));
+  const root = tempDir("plugin-build-");
   for (const [rel, body] of Object.entries(files)) {
     const abs = join(root, rel);
     mkdirSync(join(abs, ".."), { recursive: true });

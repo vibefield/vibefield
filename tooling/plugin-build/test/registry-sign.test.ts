@@ -1,6 +1,5 @@
 import { createHash } from "node:crypto";
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { RegistryIndex } from "@vibefield/contracts";
 import { describe, expect, it } from "vitest";
@@ -10,6 +9,7 @@ import {
   signRegistryIndex,
   verifyRegistryIndex,
 } from "../src/registry-sign";
+import { tempDir } from "./temp-dir";
 
 // noUncheckedIndexedAccess: a record lookup is `T | undefined` — narrow it once
 // so the intent of a fixture that MUST contain the entry reads as an assertion.
@@ -17,10 +17,6 @@ function pluginEntry(index: RegistryIndex, id: string) {
   const entry = index.plugins[id];
   if (!entry) throw new Error(`fixture index is missing plugin ${id}`);
   return entry;
-}
-
-function tempDir(): string {
-  return mkdtempSync(join(tmpdir(), "registry-sign-test-"));
 }
 
 // A manifest (in its own temp dir) with just the fields the fixture builder
@@ -32,7 +28,7 @@ function writeManifest(facts: {
   contracts?: string;
   repository?: string;
 }): string {
-  const manifestDir = mkdtempSync(join(tmpdir(), "manifest-"));
+  const manifestDir = tempDir("manifest-");
   const manifest: Record<string, unknown> = {
     manifestVersion: 1,
     id: facts.id,
@@ -100,7 +96,7 @@ describe("signRegistryIndex / verifyRegistryIndex", () => {
 describe("buildFixtureRegistry", () => {
   it("writes a signature-verifiable index whose sha256 pins match the artifact bytes", () => {
     const { publicKey, secretKey } = generateRegistryKeypair();
-    const dir = tempDir();
+    const dir = tempDir("registry-sign-test-");
     const artifactBytes = Buffer.from("deterministic .vfplugin zip bytes", "utf8");
     const manifestDir = writeManifest({ id: "com.example.notes", version: "0.1.0" });
 
@@ -131,7 +127,7 @@ describe("buildFixtureRegistry", () => {
 
   it("makes a tampered artifact detectable by hash mismatch, as fieldd will detect it", () => {
     const { secretKey } = generateRegistryKeypair();
-    const dir = tempDir();
+    const dir = tempDir("registry-sign-test-");
     const artifactBytes = Buffer.from("original artifact bytes", "utf8");
     const manifestDir = writeManifest({ id: "com.example.notes", version: "0.1.0" });
 
@@ -154,7 +150,7 @@ describe("buildFixtureRegistry", () => {
 
   it("promotes the first release of an id to latest and files the rest as newest-first history", () => {
     const { secretKey } = generateRegistryKeypair();
-    const dir = tempDir();
+    const dir = tempDir("registry-sign-test-");
     const newer = writeManifest({ id: "com.example.notes", version: "0.2.0" });
     const older = writeManifest({ id: "com.example.notes", version: "0.1.0" });
 

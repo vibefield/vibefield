@@ -1,14 +1,14 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { packVfplugin, unpackVfplugin, VfpluginError } from "../src/pack";
+import { tempDir } from "./temp-dir";
 
 // A minimal §5.2 bundle written to a fresh temp dir. Content is fixed so
 // two trees built from it differ only in the directory they live in — the
 // across-machines variable §27.10 cares about.
 function writeBundle(files: Record<string, string | Buffer>): string {
-  const root = mkdtempSync(join(tmpdir(), "vfplugin-src-"));
+  const root = tempDir("vfplugin-src-");
   for (const [rel, body] of Object.entries(files)) {
     const abs = join(root, ...rel.split("/"));
     mkdirSync(join(abs, ".."), { recursive: true });
@@ -18,7 +18,7 @@ function writeBundle(files: Record<string, string | Buffer>): string {
 }
 
 function freshDir(): string {
-  return mkdtempSync(join(tmpdir(), "vfplugin-out-"));
+  return tempDir("vfplugin-out-");
 }
 
 const BUNDLE: Record<string, string | Buffer> = {
