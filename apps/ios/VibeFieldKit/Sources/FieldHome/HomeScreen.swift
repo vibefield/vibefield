@@ -162,6 +162,8 @@ public struct HomeScreen: View {
   /// search's profile token, and the desktop search keeps to; and whether the token's menu is open.
   @State private var lens = ProfileLens()
   @State private var lensMenuOpen = false
+  /// The profile token's glass as it measured itself: the swarm's obstacle in `chrome` stands at this width.
+  @State private var lensTokenWidth: CGFloat = 0
   /// The screen's full height, read beside `homeInset`: where the search field's top stands (`searchFieldTop`).
   @State private var screenHeight: CGFloat = 874
   #if DEBUG
@@ -381,6 +383,9 @@ public struct HomeScreen: View {
 
       // PG-4t — the Stories row: last, so it stands above the overlays and wears neither, outside the swarm.
       storiesRow
+      // SE-2 — the profile token, beside the row and outside the swarm: the lens recedes every view's rows, so the
+      // token that says so stands over every view (its frame is the swarm's obstacle in `chrome`).
+      lensToken
     }
     // The lab covers the stage (IOS-6c); presented here rather than on the
     // body's chain, which is already at the type-checker's limit.
@@ -522,23 +527,42 @@ public struct HomeScreen: View {
       .swarmObstacle()
       .allowsHitTesting(false)
       .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-    // SE-2 (UM-D27 A; DESIGN.md §8 "The phone's profile token") — the chosen profile above the search circle, on
-    // Field at rest only, growing out of the circle; the swarm keeps out of it while it stands (its own obstacle)
+    // SE-2 (PLAN §4 S2) — the profile token's frame while it stands, so the swarm keeps out of it: an obstacle at
+    // the width the token measured, where `lensToken` stands it. The token itself is the stage's, over every view;
+    // this slot is the swarm's alone.
+    Color.clear
+      .overlay(alignment: .bottomTrailing) {
+        if lensTokenShows {
+          Color.clear
+            .frame(width: lensTokenWidth, height: LensToken.height)
+            .swarmObstacle()
+        }
+      }
+      .allowsHitTesting(false)
+      .padding(.trailing, LensToken.right)
+      .padding(.bottom, LensToken.bottom(homeInset: homeInset))
+    // RETIRED 2026-09-23 (IOS-8g): the TERMINAL chip in the top-right. What it
+    // opened is the session card's `···` now; the field's corners are the
+    // account's and the tab bar's.
+  }
+
+  /// SE-2 (UM-D27 A; DESIGN.md §8 "The phone's profile token") — the chosen profile above the search circle, its right
+  /// edge on the circle's and its foot at the bar's band, growing out of the circle. It stands on Field at rest
+  /// (`lensTokenShows`) whichever view the stage stands on: the lens recedes the rows of the views that are not the
+  /// swarm (`GodviewStageInput.lens`), so a filtered field shows what filters it, and its ×, on every one.
+  private var lensToken: some View {
     Color.clear
       .overlay(alignment: .bottomTrailing) {
         if let profile = lens.chosen, lensTokenShows {
           ProfileLensToken(
             profile: profile, menuOpen: lensMenuOpen, onMenu: { lensMenuOpen.toggle() },
-            onClear: { lens.show(nil) }
+            onClear: { lens.show(nil) }, onWidth: { width in lensTokenWidth = width }
           )
           .transition(LensToken.grow(reduceMotion: reduceMotion))
         }
       }
       .padding(.trailing, LensToken.right)
       .padding(.bottom, LensToken.bottom(homeInset: homeInset))
-    // RETIRED 2026-09-23 (IOS-8g): the TERMINAL chip in the top-right. What it
-    // opened is the session card's `···` now; the field's corners are the
-    // account's and the tab bar's.
   }
 
   private var workspaceDesktops: [WorkspaceDesktop] {
@@ -883,6 +907,10 @@ public struct HomeScreen: View {
     .onChange(of: selectedTab) { history.barMinimized = false }
     // SE-2 — the lens keys on the home's profiles: read again whenever the home's answer moves
     .onChange(of: homeProfiles, initial: true) { _, sets in lens.adopt(sets) }
+    // SE-2 — the token's menu goes with the token: a lens let go, a page or the Me menu opened, the face held
+    .onChange(of: lensTokenShows) { _, shows in
+      if !shows { lensMenuOpen = false }
+    }
     // Every push and pop opens the bar again, the way the system's does.
     .onChange(of: history.path) { history.barMinimized = false }
   }
@@ -1280,8 +1308,9 @@ public struct HomeScreen: View {
         SearchScrim(onClose: closeSearch)
           .transition(SearchSheet.scrimTransition)
       }
-      // SE-2 — the profile token's menu, over a clear scrim that closes it, its foot 8 above the token
-      if lensMenuOpen {
+      // SE-2 — the profile token's menu, over a clear scrim that closes it, its foot 8 above the token; the scrim
+      // stands only while the menu does, so no scrim is left to eat a tap once the token has gone
+      if lensMenuOpen, lensTokenShows {
         Color.clear
           .contentShape(Rectangle())
           .ignoresSafeArea()

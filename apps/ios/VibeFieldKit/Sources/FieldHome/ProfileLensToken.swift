@@ -1,7 +1,6 @@
 import FieldDesign
 import FieldHistory
 import FieldProduct
-import FieldSwarm
 import SwiftUI
 
 /// SE-2 (UM-D27 A, ruled 2026-11-06 on the page *The Bands Meter*; DESIGN.md §8 "The phone's profile token"; the
@@ -151,12 +150,15 @@ enum LensToken {
 }
 
 /// The token: the chosen profile's name, which opens the menu, and its ×, which shows every profile — in the bar's
-/// glass, in a glass container of its own, and a body the swarm keeps out of while it stands.
+/// glass, in a glass container of its own. It says how wide its glass stands (`onWidth`): the stage draws it over
+/// every view, and the swarm's chrome keeps the bodies out of a frame that wide where it stands.
 struct ProfileLensToken: View {
   let profile: AgentProfileSet
   let menuOpen: Bool
   let onMenu: () -> Void
   let onClear: () -> Void
+  /// The glass's width, each time it changes (the name ellipsises inside `LensToken.maxWidth`).
+  let onWidth: (CGFloat) -> Void
 
   var body: some View {
     GlassGroup {
@@ -193,7 +195,11 @@ struct ProfileLensToken: View {
       .padding(.trailing, LensToken.trailing)
       .frame(height: LensToken.height)
       .liquidGlassCapsule()
-      .swarmObstacle()
+      .onGeometryChange(for: CGFloat.self) { proxy in
+        proxy.size.width
+      } action: { width in
+        onWidth(width)
+      }
     }
     .frame(maxWidth: LensToken.maxWidth, alignment: .trailing)
   }
@@ -235,15 +241,7 @@ struct ProfileLensMenu<ViewLead: View>: View {
     .padding(.horizontal, 6)
     .padding(.bottom, LensToken.menuFoot)
     .frame(width: LensToken.menuWidth, alignment: .leading)
-    .background {
-      RoundedRectangle(cornerRadius: LensToken.menuRadius, style: .continuous)
-        .fill(ChromePalette.menuSurface)
-        .overlay {
-          RoundedRectangle(cornerRadius: LensToken.menuRadius, style: .continuous)
-            .strokeBorder(ChromePalette.menuHairline, lineWidth: 0.5)
-        }
-        .shadow(color: ChromeShadow.menu.color, radius: ChromeShadow.menu.radius, y: ChromeShadow.menu.y)
-    }
+    .background { ChromeMaterial.floating(radius: LensToken.menuRadius) }
     .accessibilityElement(children: .contain)
     .accessibilityLabel(LensToken.eyebrow)
   }
@@ -287,20 +285,8 @@ private struct LensMenuRow: View {
       .frame(minHeight: 44)
       .contentShape(RoundedRectangle(cornerRadius: ChromeRadius.row, style: .continuous))
     }
-    .buttonStyle(LensRowStyle())
+    .buttonStyle(AccountRowStyle())
     .accessibilityElement(children: .combine)
     .accessibilityAddTraits(item.checked ? [.isSelected] : [])
-  }
-}
-
-/// The Me menu's pressed row: the selected row's wash at `ChromeRadius.row` (its own style is private to the corner).
-private struct LensRowStyle: ButtonStyle {
-  func makeBody(configuration: Configuration) -> some View {
-    configuration.label
-      .background {
-        RoundedRectangle(cornerRadius: ChromeRadius.row, style: .continuous)
-          .fill(ChromePalette.rowSelected)
-          .opacity(configuration.isPressed ? 1 : 0)
-      }
   }
 }

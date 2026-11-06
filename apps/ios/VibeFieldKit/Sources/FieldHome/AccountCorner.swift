@@ -468,7 +468,9 @@ struct AccountMenuGlyph: View {
   }
 }
 
-private struct AccountRowStyle: ButtonStyle {
+/// A Me-menu row pressed: the selected row's wash at `ChromeRadius.row`. The profile token's menu wears the same rows
+/// (§8 "The phone's profile token"), so it is the module's, not the corner's alone.
+struct AccountRowStyle: ButtonStyle {
   func makeBody(configuration: Configuration) -> some View {
     configuration.label
       .background {
