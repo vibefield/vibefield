@@ -53,8 +53,9 @@ import { RpcCallError } from "../native-link";
  * between NativeLink and `onEvent`, or between the subscribe's answer and `subscribe` resolving, would break that
  * rule; a microtask between them only delays the event within the same turn, and an await on `request` only sets
  * the fence later. `subscribe` is asked again while a subscription stands, for a snapshot built after a held pull's
- * answer (`DrivePulls.#hold`), and the old subscription's `dispose` is called once the new one is answered: the
- * floor has replaced its stream by then (W3-20, VF-PM 2026-11-06). */
+ * answer (`DrivePulls.#hold`). The floor replaces a connection's stream with the new one (W3-20, VF-PM 2026-11-06),
+ * so the old subscription's `dispose` is called once the new one is answered, or at once when a re-subscribe the
+ * floor may have run is refused, before one more subscribe (`DrivePulls.#doSubscribe`). */
 export interface DrivePullsFloor {
   request(method: string, params: unknown): Promise<unknown>;
   subscribe(
@@ -182,6 +183,24 @@ const NO_PULLS: ReadonlySet<OwnPull> = new Set();
  * and it moves with the floor's. */
 const HELD_PULL_BOUND_MS = 60_000;
 
+/** Whether a refused subscribe may still have RUN at the floor, and so replaced the stream this connection held
+ * (W3-20, VF-PM 2026-11-06). Not run, for certain:
+ *  - an UNAVAILABLE: NativeLink gives one unsent (its door gate, native-link.ts:1173-1183; no socket, :1210) or for a
+ *    connection that closed under it (`failPending`, :1059-1061), whose stream ends with it while NativeLink replays
+ *    the one this side holds (:1105-1111); the floor gives one before any subscribe runs
+ *    (`file-transfer-unsupported`, mgmt.ts's header; its mesh worker stopped, field-native `mgmt/mod.rs:139-151`);
+ *  - a RESOURCE_EXHAUSTED, the floor's mesh queue full as the request came (`mgmt/mod.rs`'s `mesh_queue_full`);
+ *  - a floor that cannot pull (`cannotPull`), which answers so before its stream.
+ * Any other may have run: fieldd's own TIMEOUT (native-link.ts:1247-1266), since the floor runs a request dequeued in
+ * its deadline's last instants and its answer is then a late reply (:1086-1103; mgmt.ts `NativeDeadlinePassedDetails`
+ * says the floor's own TIMEOUT reaches fieldd only so), or the floor's INTERNAL for a subscribe it ran and could not
+ * answer with a snapshot. */
+function mayHaveRun(error: unknown): boolean {
+  if (!(error instanceof RpcCallError)) return true;
+  if (cannotPull(error)) return false;
+  return error.kind !== "UNAVAILABLE" && error.kind !== "RESOURCE_EXHAUSTED";
+}
+
 /** JSON-RPC's method-not-found. A floor before VF-FLOOR's facade answers these verbs so with a node up (mgmt.ts's
  * header; `mgmt/mesh.rs`'s `_` arm), read as egress.ts:295-297 reads a floor before DS-1. */
 const METHOD_NOT_FOUND = -32601;
@@ -263,6 +282,17 @@ function issues(error: { issues: ReadonlyArray<unknown> }): number {
   return error.issues.length;
 }
 
+/** transferId → the index in `events` of the last terminal delta (`completed`, `failed`) that names it */
+function terminalDeltas(events: readonly StreamEvent[]): Map<string, number> {
+  const endsAt = new Map<string, number>();
+  for (const [at, event] of events.entries()) {
+    if (event.kind !== "delta") continue;
+    const delta = NativeFileTransferDelta.safeParse(event.payload);
+    if (delta.success && delta.data.kind !== "progress") endsAt.set(delta.data.transferId, at);
+  }
+  return endsAt;
+}
+
 export class DrivePulls {
   readonly #opts: DrivePullsOptions;
   readonly #log: Logger;
@@ -273,7 +303,8 @@ export class DrivePulls {
   readonly #heldBoundMs: number;
   /** transferId → a pull this fieldd minted */
   readonly #own = new Map<string, OwnPull>();
-  /** transferId → digest: a running row this fieldd did not mint (a previous fieldd's) */
+  /** transferId → digest: a running row this fieldd does not track: one it did not mint (a previous fieldd's), or one
+   * of its own that its held bound ended (`#hold`) */
   readonly #foreign = new Map<string, string>();
   /** digest → transferId: every pull running that this fieldd knows of, its own and the foreign ones */
   readonly #running = new Map<string, string>();
@@ -296,8 +327,8 @@ export class DrivePulls {
   /** fences run, in the order set (setImmediate runs in that order): a pull's fence has run once this reaches it */
   #fencesRun = 0;
   readonly #adoptListeners = new Set<(candidate: DriveAdoptCandidate) => void>();
-  /** Candidates no listener has taken yet. Bounded by the floor: only a previous fieldd's pulls become candidates,
-   * and the floor runs at most DRIVE_LIMITS.PULLS_IN_FLIGHT at once. */
+  /** Candidates no listener has taken yet. Only a row in `#foreign` becomes one (a previous fieldd's pull, or one
+   * this fieldd's held bound ended), and the floor runs at most DRIVE_LIMITS.PULLS_IN_FLIGHT at once. */
   readonly #unclaimed: DriveAdoptCandidate[] = [];
   #stopped = false;
 
@@ -443,9 +474,13 @@ export class DrivePulls {
     this.#unclaimed.length = 0;
   }
 
+  /** The stream, then the roots. A re-subscribe in flight over a standing stream is not waited for (it can take up
+   * to REQUEST_DEADLINE_MS): the roots are declared at every node-up whatever it answers. */
   async #arm(): Promise<void> {
     if (this.#stopped) return;
-    await this.#subscribe();
+    const standing = this.#subscription !== null;
+    const subscribing = this.#subscribe();
+    if (!standing) await subscribing;
     await this.declareRoots();
   }
 
@@ -466,7 +501,15 @@ export class DrivePulls {
    * pull's answer. The floor REPLACES a connection's file-transfer stream with the new one, and the old subId goes
    * quiet (W3-20, VF-PM 2026-11-06; mgmt.ts rider A's subscribe paragraph); NativeLink's dispose tells the floor
    * nothing (native-link.ts:1151-1157, `removeSubscription`), so the old subscription is disposed here as the new
-   * one is made, and a reconnect replays one stream, never two. */
+   * one is made, and a reconnect replays one stream, never two.
+   *  - A re-subscribe refused here may still have run at the floor (`mayHaveRun`: fieldd's TIMEOUT at its deadline,
+   *    the floor's INTERNAL), and the floor then ends the old stream whatever this side read. So the old one is set
+   *    aside and ONE plain subscribe follows at once; if that is refused too, the stream stands empty
+   *    (`#subscription` null) until the next node-up or reconnect re-arms it (`#arm`), never a stream held silent.
+   *  - A re-subscribe made while NativeLink replays its subscriptions after a redial is entered in the map that
+   *    replay is iterating (native-link.ts:1106, :1282), so it is replayed too: one subscription, two requests. The
+   *    later replaces the earlier at the floor (W3-20), both subIds route to its one entry (:883-896), and the
+   *    replay's snapshot, asked after the held pull's answer was read, judges the pull: it converges. */
   async #doSubscribe(): Promise<void> {
     // The held pulls this subscribe is asked for, marked before anything can return: a held pull is asked for once,
     // and one no fresh snapshot comes for (refused, never answered) ends FAILED_TIMEOUT at its bound (`#hold`).
@@ -481,6 +524,13 @@ export class DrivePulls {
       );
     } catch (error) {
       this.#refused(method, error);
+      // only a re-subscribe is made while a subscription stands (the return above)
+      const superseded = this.#subscription;
+      if (this.#stopped || superseded === null || !mayHaveRun(error)) return;
+      superseded.dispose();
+      this.#subscription = null;
+      // one plain subscribe: with `#subscription` null it is made, and its own refusal ends here
+      await this.#doSubscribe();
       return;
     }
     if (this.#stopped) {
@@ -602,7 +652,11 @@ export class DrivePulls {
    * NativeLink's replay at a reconnect (:1105-1128), or the re-subscribe's (`#hold`); the held bound, when that
    * snapshot never comes; the floor's idle bound, which ends a pull no byte reaches (W3-4); `failed` NODE_DOWN when
    * the node goes (W3-2); `#noteUnsupported`, when the floor of a new boot cannot pull; `stop`. A held pull has its
-   * own bound; any other waits on the floor's, whose end reaches it as a delta or in the snapshot a lost one owes. */
+   * own bound; any other waits on the floor's, whose end reaches it as a delta or in the snapshot a lost one owes,
+   * while this side holds a live stream. With none, it waits for the next re-arm, not for a bound: a subscribe
+   * refused (at `start`, at a node-up, or the plain one after a refused re-subscribe, `#doSubscribe`) leaves the
+   * stream empty until the next node-up or reconnect; and a replay NativeLink was refused stays silent until its
+   * next reconnect (native-link.ts:1112-1126), which this side is not told. */
   #accept(own: OwnPull): void {
     this.#fencesSet += 1;
     own.fence = this.#fencesSet;
@@ -623,10 +677,12 @@ export class DrivePulls {
 
   #applyEvents(): void {
     this.#drain = null;
-    for (const event of this.#events.splice(0)) {
+    const events = this.#events.splice(0);
+    const endsAt = terminalDeltas(events);
+    for (const [at, event] of events.entries()) {
       if (this.#stopped) return;
-      if (event.kind === "snapshot") this.#onSnapshot(event.payload, event.fencesRun, event.serves);
-      else this.#onDelta(event.payload);
+      if (event.kind === "delta") this.#onDelta(event.payload);
+      else this.#onSnapshot(event, (transferId) => (endsAt.get(transferId) ?? -1) > at);
     }
     // ONE re-subscribe for every pull these events held; one in flight is followed by the next (`#subscribe`)
     if (!this.#stopped && this.#owesFresh()) void this.#subscribe();
@@ -636,9 +692,14 @@ export class DrivePulls {
    * longer lists ended while the reader lagged. An accepted pull of this fieldd's is judged only by a snapshot built
    * after its answer: one that arrived once its fence had run (`#accept`), or the re-subscribe's it was held for
    * (`serves`). Listed, it runs, and a hold is released; omitted, it ended, and the lands rule settles it. One that
-   * arrived before the fence says nothing of a pull it lists, and holds one it omits (`#hold`). */
-  #onSnapshot(payload: unknown, fencesRun: number, serves: ReadonlySet<OwnPull>): void {
-    const snapshot = NativeFileTransferSnapshot.safeParse(payload);
+   * arrived before the fence says nothing of a pull it lists, and holds one it omits (`#hold`).
+   * An omitted pull whose terminal delta comes later in the same batch (`endsLater`) is left to that delta, which
+   * carries its word: the floor forwards after a snapshot an end its table already shows (a stream's subscribe is
+   * made before its snapshot is written, field-native `mgmt/file_transfer.rs`'s `subscribe`, "Subscribe BEFORE the
+   * snapshot"; an owed `.snapshot` is built while later events wait in the broadcast), and the lands rule would read
+   * that end as FAILED_IO. */
+  #onSnapshot(event: StreamEvent, endsLater: (transferId: string) => boolean): void {
+    const snapshot = NativeFileTransferSnapshot.safeParse(event.payload);
     if (!snapshot.success) {
       this.#dropped("snapshot", issues(snapshot.error));
       return;
@@ -647,11 +708,12 @@ export class DrivePulls {
     for (const row of snapshot.data.transfers) listed.set(row.transferId, row.digest);
     for (const own of [...this.#own.values()]) {
       if (own.fence === null) continue;
-      const afterAnswer = fencesRun >= own.fence || serves.has(own);
+      const afterAnswer = event.fencesRun >= own.fence || event.serves.has(own);
       if (listed.has(own.transferId)) {
         if (afterAnswer) this.#release(own);
         continue;
       }
+      if (endsLater(own.transferId)) continue;
       if (!afterAnswer) {
         this.#hold(own);
         continue;
@@ -679,7 +741,8 @@ export class DrivePulls {
     }
     const delta = parsed.data;
     // A progress ends nothing and releases no hold (`#hold`): a fresh stream forwards after its snapshot an event the
-    // floor sent before it (field-native `mgmt/file_transfer.rs:180-182`), so it does not say the pull still runs.
+    // floor sent before it (field-native `mgmt/file_transfer.rs`'s `subscribe`, "Subscribe BEFORE the snapshot"), so
+    // it does not say the pull still runs.
     if (delta.kind === "progress") return;
     const own = this.#own.get(delta.transferId);
     if (delta.kind === "failed") {
@@ -749,13 +812,21 @@ export class DrivePulls {
    * re-subscribe refused, or never answered), it ends FAILED_TIMEOUT at the held bound, counted from here, never a
    * silent wait. A hold ends with the pull's settle (`#untrack`: its terminal delta, NODE_DOWN's included, a snapshot
    * built after its answer, `#noteUnsupported`, `stop`) or a snapshot built after its answer that lists it
-   * (`#release`). A pull the bound ended that a later snapshot lists is read as any row this fieldd does not track:
-   * its digest is held, and what it lands is an adopt candidate, never an answer. */
+   * (`#release`). The bound fires when this side cannot tell whether the pull still runs, so from there it is read
+   * as a row this fieldd does not track (`#foreign`): its digest stays held (CONFLICT here, as the floor would answer
+   * while it runs), what it lands is an adopt candidate, never an answer, and a snapshot that omits it, or its
+   * `failed`, forgets it.
+   * A re-subscribe can cost a pull that ends while the floor replaces its stream its word, held or not: the events
+   * the old stream had not forwarded when it went quiet (W3-20) are lost with it, and the new snapshot omits the
+   * pull, which the lands rule reads FAILED_IO. An end the new stream forwards after its snapshot keeps its word
+   * (`#onSnapshot`'s `endsLater`). */
   #hold(own: OwnPull): void {
     if (own.held !== null) return;
     const timer = setTimeout(() => {
       if (this.#own.get(own.transferId) !== own) return;
       this.#untrack(own);
+      this.#foreign.set(own.transferId, own.digest);
+      this.#running.set(own.digest, own.transferId);
       const word = MESH_FILE_TRANSFER.FAILED_TIMEOUT;
       const message = "no snapshot built after the pull's answer came within the bound";
       own.reject(new DrivePullFailed(word, message, own.transferId));

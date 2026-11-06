@@ -1,7 +1,7 @@
 // DR-3b (W3, VF-RELAY) — the drive's test fakes: its two lane planes (doc-sync-service.test.ts's FakeControl and
 // FakeBytes, with `drive` admitted), its holders store (holders-store.ts's, with the store's own snapshot shape),
-// floors that refuse file-transfer verbs, the pin's unsupported golden and the exhausted one, and a logger that keeps
-// every event.
+// floors that refuse file-transfer verbs, the pin's unsupported golden, the exhausted and the conflict ones, and a
+// logger that keeps every event.
 // Test-local; never shipped.
 import { readFileSync } from "node:fs";
 import { ErrorData, RPC_ERROR_CODES, STORES } from "@vibefield/contracts";
@@ -36,6 +36,16 @@ const EXHAUSTED_FIXTURE = new URL(
 export const EXHAUSTED_GOLDEN = ErrorData.parse(
   JSON.parse(readFileSync(EXHAUSTED_FIXTURE, "utf8")),
 );
+
+const CONFLICT_FIXTURE = new URL(
+  "../../contracts/fixtures/error-data.file-transfer-conflict.json",
+  import.meta.url,
+);
+
+/** A second pull of a running digest (or of a running id), refused as the contract's golden holds it
+ * (`error-data.file-transfer-conflict.json`: CONFLICT, retryable false, no details; C1's nit 9), parsed through
+ * `ErrorData` (EL9). */
+export const CONFLICT_GOLDEN = ErrorData.parse(JSON.parse(readFileSync(CONFLICT_FIXTURE, "utf8")));
 
 /** The drive's lane lifecycle, in memory: every open and close it was asked, and a stream a test announces on. */
 export class FakeDriveLaneControl implements DriveLaneControl {

@@ -96,8 +96,14 @@ export interface MockFileTransfer {
   snapshotAfterAnswer: boolean;
   /** While set, the floor runs each pull (its row in; every refusal before it answered as ever) but holds its answer;
    * `MockMgmtServer.releaseFileTransferAnswers()` writes every held answer, then the `.snapshot` of the table as it
-   * is then, in ONE write, one chunk: a reader that fell behind reads them together. */
+   * is then, in ONE write, one chunk: a reader that fell behind reads them together. It takes precedence over the
+   * two one-shots above: a pull whose answer it holds leaves `snapshotBeforeAnswer`/`snapshotAfterAnswer` armed for
+   * the next pull. */
   holdAnswers: boolean;
+  /** ONE-SHOT: the next `subscribe` is RUN (it replaces the connection's stream, W3-20, VF-PM 2026-11-06) and its
+   * answer is never written, as a floor that ran it past fieldd's deadline: fieldd reads its own TIMEOUT, and a late
+   * answer would settle nothing (native-link.ts `noteLateReply`). Cleared once run. */
+  subscribeUnanswered: boolean;
   /** every subId the floor answered a `subscribe` with, in order */
   subscribed: string[];
   /** every subId a later `subscribe` on the same connection replaced, in order: the floor stopped its stream, and
@@ -115,20 +121,19 @@ export function mockFileTransfer(overrides: Partial<MockFileTransfer> = {}): Moc
     snapshotBeforeAnswer: false,
     snapshotAfterAnswer: false,
     holdAnswers: false,
+    subscribeUnanswered: false,
     subscribed: [],
     replaced: [],
     ...overrides,
   };
 }
 
-/** W3-15 (VF-PM 2026-11-06) — the floor's refusal of a pull past DRIVE_LIMITS.PULLS_IN_FLIGHT, as its golden holds it
- * (contracts `fixtures/error-data.file-transfer-exhausted.json`: RESOURCE_EXHAUSTED, retryable true, no details),
- * parsed through `ErrorData` (EL9). Read when answered, so the mock's other consumers never read it. */
-function fileTransferExhausted(): ErrorData {
-  const fixture = new URL(
-    "../../../contracts/fixtures/error-data.file-transfer-exhausted.json",
-    import.meta.url,
-  );
+/** A file-transfer refusal as its contract golden holds it (`packages/contracts/fixtures/error-data.<name>.json`),
+ * parsed through `ErrorData` (EL9): `file-transfer-conflict` (C1's nit 9: CONFLICT, retryable false, no details) and
+ * `file-transfer-exhausted` (W3-15, VF-PM 2026-11-06: RESOURCE_EXHAUSTED, retryable true, no details). Read when
+ * answered, so the mock's other consumers never read it. */
+function fileTransferGolden(name: "file-transfer-conflict" | "file-transfer-exhausted"): ErrorData {
+  const fixture = new URL(`../../../contracts/fixtures/error-data.${name}.json`, import.meta.url);
   return ErrorData.parse(JSON.parse(readFileSync(fixture, "utf8")));
 }
 
@@ -1106,8 +1111,9 @@ export class MockMgmtServer {
    *  4. in capture mode they are refused MESH_CAPTURING;
    *  5. params the floor cannot read are PRECONDITION_FAILED;
    *  6. `roots` registers each root or answers it ROOT_UNGATED, and `pull` is refused CONFLICT (by its id, then by
-   *     its digest), then RESOURCE_EXHAUSTED past DRIVE_LIMITS.PULLS_IN_FLIGHT, built from its golden
-   *     (`error-data.file-transfer-exhausted.json`, W3-15, VF-PM 2026-11-06: retryable true, no details). */
+   *     its digest), then RESOURCE_EXHAUSTED past DRIVE_LIMITS.PULLS_IN_FLIGHT, each built from its golden
+   *     (`error-data.file-transfer-conflict.json`, C1's nit 9; `error-data.file-transfer-exhausted.json`, W3-15,
+   *     VF-PM 2026-11-06). */
   private onFileTransfer(
     sock: Socket,
     msg: { id: number; method: string; params?: Record<string, unknown> },
@@ -1143,7 +1149,7 @@ export class MockMgmtServer {
       return;
     }
     if (subscribe) {
-      // W3-20: the stream this connection held, if any, is stopped, and its subId goes quiet
+      // the stream this connection held, if any, is stopped, and its subId goes quiet (W3-20, VF-PM 2026-11-06)
       for (const e of this.issued) {
         if (e.sock === sock && e.method === msg.method) transfer.replaced.push(e.subId);
       }
@@ -1151,6 +1157,10 @@ export class MockMgmtServer {
       const subId = `s${this.nextSub++}`;
       this.issued.push({ sock, subId, method: msg.method });
       transfer.subscribed.push(subId);
+      if (transfer.subscribeUnanswered) {
+        transfer.subscribeUnanswered = false;
+        return;
+      }
       reply({ result: { subId, snapshot: { transfers: [...transfer.running.values()] } } });
       return;
     }
@@ -1196,11 +1206,18 @@ export class MockMgmtServer {
     const { transferId, peer, root, digest } = asked.data;
     const running = [...transfer.running.values()];
     if (transfer.running.has(transferId) || running.some((row) => row.digest === digest)) {
-      refuse(-32004, "CONFLICT", "a pull of that id or that digest is running", false);
+      const golden = fileTransferGolden("file-transfer-conflict");
+      refuse(
+        RPC_ERROR_CODES[golden.kind],
+        golden.kind,
+        "a pull of that id or that digest is running",
+        golden.retryable,
+        golden.details,
+      );
       return;
     }
     if (running.length >= DRIVE_LIMITS.PULLS_IN_FLIGHT) {
-      const golden = fileTransferExhausted();
+      const golden = fileTransferGolden("file-transfer-exhausted");
       refuse(
         RPC_ERROR_CODES[golden.kind],
         golden.kind,
@@ -1260,6 +1277,27 @@ export class MockMgmtServer {
       this.fileTransfer.running.delete(transferId);
     }
     this.pushDelta("mesh.fileTransfer.subscribe", payload);
+  }
+
+  /** DR-3b — a pull's end that the floor's table shows before its stream forwards it (an owed `.snapshot` built
+   * while the event waits in the broadcast, or a fresh stream's, whose subscribe comes before its snapshot): its row
+   * ends in `running`, then the `.snapshot` of the table without it and the delta follow, in ONE write per
+   * file-transfer subscription, one chunk. The payload goes as given. */
+  pushFileTransferSnapshotThenDelta(payload: unknown): void {
+    const transfer = this.fileTransfer;
+    if (typeof transfer !== "object") return;
+    const transferId = (payload as { transferId?: unknown } | null)?.transferId;
+    if (typeof transferId === "string") transfer.running.delete(transferId);
+    const transfers = [...transfer.running.values()];
+    for (const e of this.issued) {
+      if (e.method !== "native.mesh.fileTransfer.subscribe" || e.sock.destroyed) continue;
+      const delta = `${JSON.stringify({
+        jsonrpc: "2.0",
+        method: "native.mesh.fileTransfer.delta",
+        params: { subId: e.subId, payload },
+      })}\n`;
+      e.sock.write(`${this.fileTransferSnapshots(e.sock, transfers)}${delta}`);
+    }
   }
 
   /** DR-3b — the node goes (a retire here; a stop or a rebuild at the floor): every pull it ran ends `failed`
