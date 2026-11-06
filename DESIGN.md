@@ -10348,6 +10348,12 @@ are open until James reads them on a board). A Run that VibeField refuses starts
 - "VibeField can't find that spark; nothing was started."
 - "VibeField has no run ‹run›."
 - "That version isn't one of ‹flow›'s."
+- *Proposed 2026-11-06 (CP-4a2b; the version review NN1, ruled 2026-11-06;
+  open until James reads it, as the rest are):* a version its static read refuses, by a rule newer than its
+  approval or on Run this version of one (Q-a), in the read's own words, unchanged ("What a flow's read refuses"), with
+  the line they name:
+  - "VibeField can't start ‹flow›: ‹the read's words› (line ‹n›)."
+  - and, when the read names no line (a whole-file refusal): "VibeField can't start ‹flow›: ‹the read's words›."
 - *Proposed 2026-11-06 (CP-4a2b; ruled 2026-11-06, the 1b review V5; said by cause the same day, the 1e
   review AA1; open until James reads them, as the rest are):* a run whose Agent Profiles, narrowed as it starts, leave
   none, said by the narrowing that left none:
