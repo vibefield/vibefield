@@ -43,6 +43,13 @@ import type { AgentMonitorFold } from "../agent-monitor";
 // would read as a dead swarm). The rows say they are synthetic in their own words (the generator's
 // content).
 //
+// *Corrected 2026-11-06 (item 190):* "stamped with its device id" held as of the frame's playing, and
+// the corpus plays within its span of boot. DeviceService adopts the mesh identity only at its first
+// sync, so a slow floor's identity came after the held frame and never reached it (run173, the old
+// mini under a full fieldd run: every held row read `local-<uuid>`). The daemon calls `restamp()`
+// whenever the roster moves (DeviceService's "changed"), which plays the standing frame again under
+// the id that stands.
+//
 // It plays only while it is heard: its first listener starts the frames and its last one leaving stops
 // them, so the daemon's own teardown (the monitor's dispose, every board's) is its stop too; a late
 // listener is caught up to the clock in one frame (the held last one, once the span has passed).
@@ -263,6 +270,8 @@ export function createSwarmReplay(corpus: SwarmCorpus, opts: SwarmReplayOptions)
   let played = 0;
   let timer: ReturnType<typeof setTimeout> | null = null;
   let disposed = false;
+  /** the device id the frame standing now was stamped with: `restamp` reads it (item 190) */
+  let stampedAs: string | undefined;
 
   const noteOnce = (key: string, say: () => void): void => {
     if (noted.has(key)) return;
@@ -276,6 +285,7 @@ export function createSwarmReplay(corpus: SwarmCorpus, opts: SwarmReplayOptions)
   /** A frame's rows as this desktop's: moved, stamped, validated. */
   const rowsOf = (frame: SwarmFoldFrame): AgentSessionSummary[] => {
     const device = opts.deviceId();
+    stampedAs = device;
     const rows: AgentSessionSummary[] = [];
     frame.rows.forEach((source, index) => {
       const moved = rebase(source, shift);
@@ -419,7 +429,10 @@ export function createSwarmReplay(corpus: SwarmCorpus, opts: SwarmReplayOptions)
     },
     position: () => ({ frame: played }),
     restamp() {
-      // item 190 (red): the skeleton plays nothing
+      // item 190 — a frame is stamped as it plays: an id that moved since, plays it again under the
+      // id that stands (its states hold their revision, so the runtime hears nothing new)
+      if (disposed || opts.deviceId() === stampedAs) return;
+      play(played);
     },
     dispose() {
       disposed = true;

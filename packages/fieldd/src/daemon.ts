@@ -5401,6 +5401,9 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     });
     devicesForAgents = devices;
     devicesRef = devices; // arms the tailnet door's node-id correlation (T1 §1)
+    // item 190 — the swarm replay stamps each frame as it plays, within 2 s of boot; a mesh identity a
+    // slow floor gives later reaches the frame it holds when the roster moves (debug/swarm-replay.ts)
+    if (swarm !== null) devices.on("changed", () => swarm.restamp());
     // MV-3a (MV-D22, MV-D18) — the monitor backend, hosted beside the runtime
     // (`agent-monitor.ts`): puppeteer's push bus and all-runs snapshot in, the
     // daemon's own facts beside them — the fold's rows, the floor's PTYs with
