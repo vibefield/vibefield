@@ -2,7 +2,7 @@ import type { AgentProfileSet } from "@vibefield/contracts";
 import { FieldGlyph } from "@vibefield/design-kit/glyphs";
 import type { ReactElement, ReactNode } from "react";
 import { PROFILES_WORDS } from "../../setup/profiles-words";
-import { bandsGeometry } from "../../usage/bands";
+import { bandsGeometry, bandsLabel } from "../../usage/bands";
 import type { ProfileMeters } from "../../usage/meters";
 import { BandsCircle } from "./BandsCircle";
 import { ProfilePopoverView } from "./ProfilePopoverView";
@@ -58,17 +58,27 @@ export interface ProfilesColumnViewProps {
 /** The column's circle size (§8: "a 40 round button holding the profile's Bands circle at 40"). */
 export const COLUMN_CIRCLE = 40;
 
-/** A circle in words (§9 "Said and not drawn"): "Work, tightest 42%", and with several profiles its lens. */
+/** What a circle holds, in words: "Work, tightest 42%"; with nothing on it, the Bands circle's own words for that
+ * (`bandsLabel`, §8 "Honest states"), "Work: usage unavailable" or "No meters" after its name; and its name alone while
+ * its plans are on their way or need you (unruled, ‹for James›). */
+function circleState({ set, meters }: ColumnCircle): string {
+  const tightest = meters.tightest;
+  if (tightest !== undefined) {
+    return `${set.label}, tightest ${Math.round(tightest.tightest.line.usedPercent)}%`;
+  }
+  if (meters.entries.some((entry) => entry.kind !== "no-meter")) return set.label;
+  const said = bandsLabel(meters.entries);
+  return said === "No meters" ? `${set.label}, no meters` : said;
+}
+
+/** A circle in words (§9 "Said and not drawn"): what it holds, and with several profiles its lens. */
 export function circleWords(circle: ColumnCircle, lens: boolean, chosen: boolean): string {
-  const tightest = circle.meters.tightest;
-  const read =
-    tightest === undefined ? "" : `, tightest ${Math.round(tightest.tightest.line.usedPercent)}%`;
   const toggle = !lens
     ? ""
     : chosen
       ? ", showing only its sessions"
       : ", click to show only its sessions";
-  return `${circle.set.label}${read}${toggle}`;
+  return `${circleState(circle)}${toggle}`;
 }
 
 export function ProfilesColumnView({

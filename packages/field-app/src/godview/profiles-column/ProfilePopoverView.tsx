@@ -3,7 +3,7 @@ import { AgentIcon, ProfileGlyph } from "@vibefield/puppeteer-view-sdk/react";
 import { MONITOR_STAGE_CLASS } from "@vibefield/puppeteer-views";
 import { type CSSProperties, type ReactElement, useLayoutEffect, useRef, useState } from "react";
 import { UsageTimeline } from "../../panels/agents/ProfilesView";
-import { bandsGeometry } from "../../usage/bands";
+import { bandsGeometry, bandsLabel } from "../../usage/bands";
 import type { PlanMeter, ProfileMeters } from "../../usage/meters";
 import { BandsCircle, BandsKey } from "./BandsCircle";
 import type { ColumnCircle } from "./ProfilesColumnView";
@@ -136,13 +136,6 @@ function PlanRow({
   );
 }
 
-/** The words a plan with no meter says, in a line of its own; a plan whose usage cannot be read says that. */
-function noneWords(entry: Extract<PlanMeter, { kind: "no-meter" }>): string {
-  return entry.why === "unavailable"
-    ? `${entry.agent}: usage unavailable`
-    : `${entry.agent} shows no meter`;
-}
-
 /** The lens's words at the popover's foot (§9 "The popover"), with several profiles; wave 1 says none with one. */
 function lensWords(label: string, chosen: boolean): string {
   return chosen
@@ -183,6 +176,10 @@ export function ProfilePopoverView({
   const none = meters.entries.filter(
     (entry): entry is Extract<PlanMeter, { kind: "no-meter" }> => entry.kind === "no-meter",
   );
+  // while the usage cannot be read the profile says so once, in the Bands circle's words (§9: "‹profile›: usage
+  // unavailable"), never a line per agent; an agent that meters nothing says so on a line of its own
+  const unread = none.filter((entry) => entry.why === "unavailable");
+  const quiet = none.filter((entry) => entry.why !== "unavailable");
   return (
     <div
       ref={ref}
@@ -222,12 +219,13 @@ export function ProfilePopoverView({
               onRetry={onRetry}
             />
           ))}
-          {none.map((entry) => (
+          {unread.length > 0 ? <p className="vf-profiles-pop-none">{bandsLabel(unread)}</p> : null}
+          {quiet.map((entry) => (
             <p key={entry.key} className="vf-profiles-pop-none">
               <span className="vf-profiles-pop-none-mark" aria-hidden="true">
                 <AgentIcon providerId={entry.provider} />
               </span>
-              {noneWords(entry)}
+              {`${entry.agent} shows no meter`}
             </p>
           ))}
         </div>
