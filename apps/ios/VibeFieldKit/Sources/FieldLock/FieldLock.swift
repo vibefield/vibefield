@@ -138,10 +138,10 @@ public final class FieldLock {
   public var words: LockWords { LockWords(method) }
 
   /// The switch's foot on the Lock page: its line while on, what off means while off, and why it cannot turn on
-  /// on a phone with no passcode.
-  public var switchFoot: String {
+  /// on a phone with no passcode. `device` is `DeviceWord.noun`, the UI layer's (`LockWords`).
+  public func switchFoot(device: String) -> String {
     if method == .none { return LockWords.noPasscodeFoot }
-    return isOn ? words.toggleLine : words.offFoot
+    return isOn ? words.toggleLine(device: device) : words.offFoot(device: device)
   }
 
   // MARK: The scene

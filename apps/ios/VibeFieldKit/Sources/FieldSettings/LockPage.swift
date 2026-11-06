@@ -27,7 +27,7 @@ struct LockPage: View {
       } header: {
         ChromeListHead(tags: [FactTag(DeviceWord.current.This)])
       } footer: {
-        ChromeListFoot(lock.switchFoot)
+        ChromeListFoot(lock.switchFoot(device: DeviceWord.current.noun))
       }
       .chromeRows()
       if lock.isOn {

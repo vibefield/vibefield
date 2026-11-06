@@ -1,6 +1,10 @@
 /// WI-3 — every word the lock says, held to DESIGN.md §9 "The lock". Every word names the method the phone has:
 /// Face ID, Touch ID, or the passcode where neither is set up. Face ID's words are ruled (WI-D3…D7 A); the Touch ID
 /// swap, the passcode-only set and the ask's reason are drafts pending James (§9's as-built note).
+///
+/// The four words that name the device take it as its platform names it (L4's word pass, 2026-11-06; DESIGN.md §9
+/// "The phone's legal words"): `device` is FieldDesign's `DeviceWord.noun` ("iPhone", "iPad", "device"), which
+/// the UI layer reads and passes, since FieldLock imports no UI (VF-PM 2026-11-06 04:27Z, ruled (b)).
 public struct LockWords: Equatable, Sendable {
   public let method: LockMethod
 
@@ -28,8 +32,8 @@ public struct LockWords: Equatable, Sendable {
   /// The steps capsule's third name.
   public var step: String { biometric ? name : "Passcode" }
   public var offerTitle: String { "Lock VibeField with \(name)." }
-  public var offerLine: String {
-    "This phone can type into your agents’ terminals. \(biometric ? name : "Your passcode") keeps that to you."
+  public func offerLine(device: String) -> String {
+    "This \(device) can type into your agents’ terminals. \(biometric ? name : "Your passcode") keeps that to you."
   }
   public var lockWith: String { "Lock with \(act)" }
   public static let notNow = "Not now"
@@ -40,7 +44,7 @@ public struct LockWords: Equatable, Sendable {
   public static let lockedTitle = "VibeField is locked."
   public var unlockWith: String { "Unlock with \(act)" }
   /// Said under Unlock only where the passcode is the fallback, not the method.
-  public var passcodeToo: String? { biometric ? "Your iPhone passcode works too." : nil }
+  public func passcodeToo(device: String) -> String? { biometric ? "Your \(device) passcode works too." : nil }
   /// What iOS shows with the ask where Face ID's own reason (the app's Info.plist) does not stand: Touch ID and the
   /// passcode. "This device", as the Info.plist's reason says since LP-4 (2026-11-05): the app runs on iPad too, and
   /// most iPads ask with Touch ID.
@@ -51,8 +55,10 @@ public struct LockWords: Equatable, Sendable {
   public static let row = "Lock"
   public static func rowValue(isOn: Bool) -> String { isOn ? "On" : "Off" }
   public static let toggle = "Lock VibeField"
-  public var toggleLine: String {
-    biometric ? "\(name) opens VibeField. When \(name) can’t, your iPhone passcode does." : "Your iPhone passcode opens VibeField."
+  public func toggleLine(device: String) -> String {
+    biometric
+      ? "\(name) opens VibeField. When \(name) can’t, your \(device) passcode does."
+      : "Your \(device) passcode opens VibeField."
   }
   public var requireHead: String { "Require \(act)" }
   public static func delay(_ delay: LockDelay) -> String {
@@ -66,8 +72,8 @@ public struct LockWords: Equatable, Sendable {
   public var requireFoot: String {
     "While VibeField is locked, the app switcher shows its mark. Changing these asks \(biometric ? name : "for your passcode") first."
   }
-  public var offFoot: String {
-    "VibeField opens without \(name). Anyone holding this phone unlocked can open your agents’ terminals."
+  public func offFoot(device: String) -> String {
+    "VibeField opens without \(name). Anyone holding this \(device) unlocked can open your agents’ terminals."
   }
   public static let noPasscodeFoot = "Set a passcode in iOS Settings to lock VibeField."
 }

@@ -244,7 +244,7 @@ extension FieldHomeModel {
       let lock = LockWords(method)
       return WayInScreen(
         steps: .step(3),
-        words: .init(title: lock.offerTitle, line: AttributedString(lock.offerLine)),
+        words: .init(title: lock.offerTitle, line: AttributedString(lock.offerLine(device: device.noun))),
         acts: [
           .primary(lock.lockWith, .lockOn), .secondary(LockWords.notNow, .notNow), .note(LockWords.offerNote),
         ])
@@ -253,7 +253,7 @@ extension FieldHomeModel {
       // WI-D5 A: the curtain after a miss or a Cancel, its one act, and the passcode's note where it is the fallback
       let lock = LockWords(method)
       var acts: [WayInScreen.Act] = [.primary(lock.unlockWith, .unlock)]
-      if let too = lock.passcodeToo { acts.append(.note(too)) }
+      if let too = lock.passcodeToo(device: device.noun) { acts.append(.note(too)) }
       return WayInScreen(words: .init(title: LockWords.lockedTitle), acts: acts)
     }
   }
