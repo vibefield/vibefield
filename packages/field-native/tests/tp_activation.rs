@@ -35,7 +35,7 @@ use ghosttea::{
     SessionLifecycleEvent, SessionProgramKind, TerminationSource, TextEngine,
 };
 use serde_json::{json, Value};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
 use tokio::net::TcpStream;
@@ -865,6 +865,83 @@ async fn an_overload_stop_recovers_when_the_credit_returns() {
     .await;
     assert_eq!(recovered["input"]["state"], "allowed");
     h.door.shutdown().await;
+}
+
+/// TP-R6 (RV #95, native-tp-2) — at most `maxConcurrentSeeds` seeds are open
+/// on one frames leg, and the rest resume in turn. The worker counts a seed
+/// open from its `transfer-begin` to its `transfer-end` in wire order and fails
+/// the whole connection `4003` past the negotiated cap. Six activations attach
+/// at once on a leg that negotiated 2 (`caps`), with the bulk run-ahead cut to
+/// one chunk, so the pumps take turns at the writer and their transfers would
+/// interleave on the wire. A witness, not the red (the interleaving rides
+/// socket pressure); the red is the pump's own row,
+/// `seeds_on_one_frames_connection_never_exceed_the_negotiated_slots`.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn six_attaches_at_once_never_open_more_seeds_than_the_leg_negotiated() {
+    let h = harness_cfg(|config| {
+        // 4 KiB chunks (the pump's floor), and room ahead of the writer for
+        // one chunk's envelope only
+        config.protocol_limits.max_presentation_chunk_bytes = 4_096;
+        config.protocol_limits.max_bulk_bytes_admitted_ahead = 8_192;
+    })
+    .await;
+    let sessions: Vec<Arc<Session>> = (0..6).map(|_| spawn_session(&h.source)).collect();
+    let (mut control, mut frames, _) =
+        connect(&h, "set-seeds", 1, caps(4_000_000, 2_000_000)).await;
+    let mut grants = Vec::new();
+    for (i, session) in sessions.iter().enumerate() {
+        let grant = h.attach_grant(&session.id(), 1, &["read"]);
+        send_json(
+            &mut control,
+            json!({
+                "type": "AttachControlLeg",
+                "activationId": format!("act-seed-{i}"),
+                "attachGrant": grant,
+                "initialDemand": { "mode": "live" },
+            }),
+        )
+        .await;
+        expect_text(next_reply(&mut control).await, "ControlLegAttached");
+        grants.push(grant);
+    }
+    // Every frames attach at once: six pumps start together on one leg.
+    for (i, grant) in grants.into_iter().enumerate() {
+        send_json(
+            &mut frames,
+            json!({
+                "type": "AttachFramesLeg",
+                "activationId": format!("act-seed-{i}"),
+                "attachGrant": grant,
+            }),
+        )
+        .await;
+    }
+    let mut open: HashSet<String> = HashSet::new();
+    let (mut most, mut seeded) = (0_usize, 0_usize);
+    while seeded < sessions.len() {
+        match next_reply(&mut frames).await {
+            Reply::Text(v) => assert_eq!(v["type"], "FramesLegAttached", "{v}"),
+            Reply::Unit(header, _) => {
+                let transfer = &header["transfer"];
+                let id = transfer["transferId"].as_str().unwrap_or_default();
+                if header["kind"] == "transfer-begin" && transfer["kind"] == "seed" {
+                    open.insert(id.to_owned());
+                    most = most.max(open.len());
+                } else if header["kind"] == "transfer-end" && open.remove(id) {
+                    seeded += 1;
+                }
+            }
+            other => panic!("expected six seeds, got {other:?}"),
+        }
+    }
+    for session in &sessions {
+        let _ = session.terminate(TerminationSource::User);
+    }
+    h.door.shutdown().await;
+    assert!(
+        most <= 2,
+        "{most} seeds were open at once on a leg that negotiated maxConcurrentSeeds = 2"
+    );
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]

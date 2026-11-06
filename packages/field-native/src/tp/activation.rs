@@ -48,7 +48,9 @@ use tokio::sync::Semaphore;
 ///
 /// A `Bulk` unit may carry a RELEASE, the `SelectionText` precedent: the writer
 /// drops it only once the unit is written, and a unit dropped unwritten (the
-/// writer's exit) drops its release with it.
+/// writer's exit) drops its release with it. A seed's `transfer-end` carries its
+/// connection's seed slot (`CreditLedger::seed_slots`), so the slot frees in wire
+/// order, when the worker's count of open seeds does (RV #95).
 #[derive(Debug)]
 pub enum Outbound {
     Text(String),
@@ -530,7 +532,9 @@ pub struct CreditLedger {
     /// The connection's seed slots, one per negotiated `maxConcurrentSeeds`
     /// (TP-R6): the worker counts a seed open from its `transfer-begin` to its
     /// `transfer-end` in wire order and fails the whole connection past the
-    /// cap. A new leg is a new ledger (law 4), and so a new set of slots.
+    /// cap. A seed's pump holds one from before its forced render until the
+    /// writer has written its `transfer-end` (RV #95). A new leg is a new ledger
+    /// (law 4), and so a new set of slots.
     pub seed_slots: Arc<Semaphore>,
 }
 

@@ -28,6 +28,14 @@
 //!   it, and the stop permanent).
 //! - An oversized catalog-reset frame is already self-contained: transfer it
 //!   directly. Refreshing in response would make two viewers refresh each other.
+//! - A SEED holds one of its frames connection's seed slots (the negotiated
+//!   `maxConcurrentSeeds`, TP-R6; RV #95) from before its forced render until
+//!   the writer has written its `transfer-end`. The worker counts a seed open
+//!   from its begin to its end in wire order and fails the whole connection past
+//!   the cap, and transfers interleave on the wire whenever a pump waits
+//!   mid-transfer. The wait is ONE acquire, polled again across wakes, so the
+//!   seeds waiting resume in the order they asked; no full frame is forced for a
+//!   seed that cannot be sent. A catch-up takes no slot: the worker counts seeds.
 //! - Frames are routed per session, once per cell (`frames.rs`, RV #93): the
 //!   pump holds a feed of its own session's frames and subscribes only while
 //!   live, so a neighbour's frame never wakes it and a parked pump wakes for
@@ -44,7 +52,7 @@ use serde_json::{json, Value};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::{Notify, Semaphore};
+use tokio::sync::{Notify, OwnedSemaphorePermit, Semaphore};
 
 /// The door, as the pump sees it.
 pub trait PumpHost: Send + Sync + 'static {
@@ -95,7 +103,9 @@ pub struct PumpStart {
     pub connection_id: u64,
     pub credit_epoch: u64,
     pub frames: LegRef,
-    /// This frames connection's seed slots (`CreditLedger::seed_slots`).
+    /// This frames connection's seed slots (`CreditLedger::seed_slots`): a seed
+    /// holds one from before its forced render until the writer has written its
+    /// `transfer-end` (TP-R6).
     pub seed_slots: Arc<Semaphore>,
     pub session: Arc<Session>,
     /// This session's frames only: least authority — the pump reaches its own
@@ -146,7 +156,8 @@ struct Pump<H: PumpHost> {
 
 enum Step {
     Continue,
-    /// The full frame did not come: the lineage still needs one — ask again.
+    /// The full frame did not come, or demand left while a seed waited for its
+    /// slot: the lineage still needs one — ask again.
     Retry,
     End,
 }
@@ -228,7 +239,7 @@ async fn run_pump<H: PumpHost>(
                     if packet.len() as u64 > pump.start.max_urgent_unit_bytes
                         && header.full_snapshot && header.glyph_catalog_reset
                     {
-                        if matches!(pump.transfer(&packet, &header).await, Step::End) {
+                        if matches!(pump.transfer(&packet, &header, None).await, Step::End) {
                             break;
                         }
                         continue;
@@ -309,8 +320,9 @@ impl<H: PumpHost> Pump<H> {
     }
 
     /// Force a FULL frame from the engine and send it as a transfer (seed the
-    /// first time, catch-up after). Waits for credit per chunk (overload said
-    /// past the bound, the wait kept).
+    /// first time, catch-up after). A seed first waits for its connection's
+    /// seed slot (TP-R6). Waits for credit per chunk (overload said past the
+    /// bound, the wait kept).
     async fn full_frame(&mut self, rx: &mut SessionFrames) -> Step {
         // Wait for admissible credit BEFORE forcing the engine: a refresh with
         // nowhere to send it would only churn the model.
@@ -318,6 +330,16 @@ impl<H: PumpHost> Pump<H> {
         if self.wait_for_credit(minimal).await.is_err() {
             return Step::End;
         }
+        // A seed takes its connection's seed slot BEFORE the engine renders it:
+        // no full frame is forced for a seed that cannot be sent yet.
+        let seed_slot = if self.first_seed {
+            match self.wait_for_seed_slot().await {
+                Ok(slot) => Some(slot),
+                Err(step) => return step,
+            }
+        } else {
+            None
+        };
         if self.start.session.refresh().is_err() {
             return Step::End;
         }
@@ -352,11 +374,43 @@ impl<H: PumpHost> Pump<H> {
             }
         };
         let header = Trf1Header::parse(&packet).expect("checked above");
-        self.transfer(&packet, &header).await
+        self.transfer(&packet, &header, seed_slot).await
+    }
+
+    /// Wait for one of the frames connection's seed slots (TP-R6). ONE acquire,
+    /// polled again on every wake: a fresh acquire per wake would leave the
+    /// semaphore's FIFO queue and could starve the seed, and the queue is what
+    /// resumes the waiting seeds in the order they asked. A stop ends the pump;
+    /// demand gone parks it with the lineage still owing a full frame (`Retry`).
+    /// Nothing closes the slots, so the acquire never fails; if it did, no seed
+    /// could be sent and the pump would end.
+    async fn wait_for_seed_slot(&self) -> Result<OwnedSemaphorePermit, Step> {
+        let acquire = self.start.seed_slots.clone().acquire_owned();
+        tokio::pin!(acquire);
+        loop {
+            tokio::select! {
+                slot = &mut acquire => return slot.map_err(|_| Step::End),
+                _ = self.notify.notified() => {
+                    if self.stop.load(Ordering::Acquire) {
+                        return Err(Step::End);
+                    }
+                    if self.host.scene_generation(&self.start.activation_id).is_none() {
+                        return Err(Step::Retry);
+                    }
+                }
+            }
+        }
     }
 
     /// Send a self-contained frame without asking the engine to shape it again.
-    async fn transfer(&mut self, packet: &[u8], header: &Trf1Header) -> Step {
+    /// A seed's slot rides its `transfer-end` to the writer, which drops it once
+    /// the end is written; an early return drops it here.
+    async fn transfer(
+        &mut self,
+        packet: &[u8],
+        header: &Trf1Header,
+        seed_slot: Option<OwnedSemaphorePermit>,
+    ) -> Step {
         let kind = if self.first_seed { "seed" } else { "catchup" };
         let bytes = packet;
         let total = bytes.len();
@@ -386,7 +440,7 @@ impl<H: PumpHost> Pump<H> {
             "checksum": { "alg": "crc32c", "value": crc32c(bytes) },
         });
         if self
-            .send_admitted(encode_envelope(&begin, &[]))
+            .send_admitted(encode_envelope(&begin, &[]), None)
             .await
             .is_err()
         {
@@ -401,7 +455,7 @@ impl<H: PumpHost> Pump<H> {
                 "byteOffset": index * chunk,
             });
             if self
-                .send_admitted(encode_envelope(&h, slice))
+                .send_admitted(encode_envelope(&h, slice), None)
                 .await
                 .is_err()
             {
@@ -412,11 +466,11 @@ impl<H: PumpHost> Pump<H> {
             // an empty frame cannot happen (64-byte header), but the wire
             // contract allows a zero-chunk transfer: begin + end
         }
-        // end
+        // end, carrying the seed's slot to the writer
         let mut end = self.header("transfer-end");
         end["transfer"] = json!({ "transferId": transfer_id });
         if self
-            .send_admitted(encode_envelope(&end, &[]))
+            .send_admitted(encode_envelope(&end, &[]), seed_slot)
             .await
             .is_err()
         {
@@ -479,8 +533,12 @@ impl<H: PumpHost> Pump<H> {
     /// the bound the pump says overload and waits on — `starved`), then behind
     /// the writer's bulk-ahead backpressure. Credit is charged first; only once
     /// admitted do we acquire the writer permits — so a credit-starved loop
-    /// never leaks bulk permits.
-    async fn send_admitted(&mut self, unit: Vec<u8>) -> Result<(), ()> {
+    /// never leaks bulk permits. `release` rides the unit to the writer.
+    async fn send_admitted(
+        &mut self,
+        unit: Vec<u8>,
+        release: Option<OwnedSemaphorePermit>,
+    ) -> Result<(), ()> {
         let mut deadline = Some(tokio::time::Instant::now() + self.start.catchup_bound);
         loop {
             match self.host.try_admit(
@@ -507,7 +565,7 @@ impl<H: PumpHost> Pump<H> {
         self.start
             .frames
             .out
-            .send(Outbound::Bulk(unit, self.activation.clone(), None))
+            .send(Outbound::Bulk(unit, self.activation.clone(), release))
             .map_err(|_| ())
     }
 }
@@ -1024,18 +1082,21 @@ mod tests {
         );
     }
 
-    /// One frames connection's door for two seeds: B's units are admitted
-    /// throughout; A's seed `transfer-begin` is admitted and every unit of A's
-    /// after it starves until the test opens A's credit. It records B's
-    /// `can_admit`, the pump's last step before it forces B's seed.
+    /// One frames connection's door for seeds: every unit of B's and C's is
+    /// admitted; A's seed `transfer-begin` is admitted and every unit of A's
+    /// after it starves until the test opens A's credit. It records B's and C's
+    /// `can_admit` (a pump's last step before its seed slot) and counts B's
+    /// `scene_generation` reads (each one a wake B handled).
     #[derive(Default)]
-    struct TwoSeeds {
+    struct SeedDoor {
         a_begun: AtomicBool,
         a_open: AtomicBool,
         b_asked: AtomicBool,
+        c_asked: AtomicBool,
+        b_reads: AtomicUsize,
     }
 
-    impl PumpHost for TwoSeeds {
+    impl PumpHost for SeedDoor {
         fn try_admit(&self, _: u64, activation_id: &str, _: u64, _: UnitClass) -> Admission {
             if activation_id != "seed-a"
                 || self.a_open.load(Ordering::SeqCst)
@@ -1047,8 +1108,10 @@ mod tests {
             }
         }
         fn can_admit(&self, _: u64, activation_id: &str, _: u64, _: UnitClass) -> Admission {
-            if activation_id == "seed-b" {
-                self.b_asked.store(true, Ordering::SeqCst);
+            match activation_id {
+                "seed-b" => self.b_asked.store(true, Ordering::SeqCst),
+                "seed-c" => self.c_asked.store(true, Ordering::SeqCst),
+                _ => {}
             }
             Admission::Admitted
         }
@@ -1056,7 +1119,10 @@ mod tests {
         fn presentation_stopped(&self, _: &str, reason: &'static str) {
             panic!("unexpected stop: {reason}");
         }
-        fn scene_generation(&self, _: &str) -> Option<(u64, u64)> {
+        fn scene_generation(&self, activation_id: &str) -> Option<(u64, u64)> {
+            if activation_id == "seed-b" {
+                self.b_reads.fetch_add(1, Ordering::SeqCst);
+            }
             Some((1, 0))
         }
     }
@@ -1080,7 +1146,7 @@ mod tests {
     async fn seeds_on_one_frames_connection_never_exceed_the_negotiated_slots() {
         let cell = SharedHub::new(2);
         let (a, b) = (&cell.sessions[0], &cell.sessions[1]);
-        let host = Arc::new(TwoSeeds::default());
+        let host = Arc::new(SeedDoor::default());
         let (out, mut received) = tokio::sync::mpsc::unbounded_channel();
         let slots = Arc::new(Semaphore::new(1));
         let start = |activation_id: &str, session: &Arc<Session>| PumpStart {
@@ -1093,6 +1159,7 @@ mod tests {
         let begin_a = until_kind(&mut received, "transfer-begin").await;
         assert_eq!(begin_a["activationId"], "seed-a");
 
+        let rendered = cell.hub.current_ordinal();
         let pump_b = spawn_pump(host.clone(), start("seed-b", b));
         while !host.b_asked.load(Ordering::SeqCst) {
             tokio::task::yield_now().await;
@@ -1101,6 +1168,11 @@ mod tests {
             queued(&mut received),
             None,
             "B's seed began while A's was open: two seeds where one was negotiated"
+        );
+        assert_eq!(
+            cell.hub.current_ordinal(),
+            rendered,
+            "B's seed was rendered before it could be sent"
         );
 
         // A's credit opens: its chunks and its end go out, and only A's.
@@ -1142,6 +1214,61 @@ mod tests {
         pump_a.task.await.unwrap();
         pump_b.stop();
         pump_b.task.await.unwrap();
+        cell.terminate();
+    }
+
+    /// TP-R6 (RV #95): the seeds waiting for a slot resume in the order they
+    /// asked, a wake between. B asked before C; a wake that is not B's turn (a
+    /// demand or credit move) polls B's ONE acquire again, so B keeps its place
+    /// in the slots' FIFO queue. A fresh acquire per wake would leave the queue
+    /// and come back behind C, and a seed woken often enough would never seed.
+    #[tokio::test]
+    async fn waiting_seeds_resume_in_the_order_they_asked_a_wake_between() {
+        let cell = SharedHub::new(3);
+        let (a, b, c) = (&cell.sessions[0], &cell.sessions[1], &cell.sessions[2]);
+        let host = Arc::new(SeedDoor::default());
+        let (out, mut received) = tokio::sync::mpsc::unbounded_channel();
+        let slots = Arc::new(Semaphore::new(1));
+        let start = |activation_id: &str, session: &Arc<Session>| PumpStart {
+            seed_slots: slots.clone(),
+            // the waits are the test's own: the bound must never fire inside them
+            catchup_bound: Duration::from_secs(60),
+            ..cell.start(activation_id, session, 1, out.clone())
+        };
+        let pump_a = spawn_pump(host.clone(), start("seed-a", a));
+        until_kind(&mut received, "transfer-begin").await;
+        let pump_b = spawn_pump(host.clone(), start("seed-b", b));
+        while !host.b_asked.load(Ordering::SeqCst) {
+            tokio::task::yield_now().await;
+        }
+        let pump_c = spawn_pump(host.clone(), start("seed-c", c));
+        while !host.c_asked.load(Ordering::SeqCst) {
+            tokio::task::yield_now().await;
+        }
+
+        // A wake that is not B's turn: B reads the scene, still live, and
+        // waits on.
+        let reads = host.b_reads.load(Ordering::SeqCst);
+        pump_b.notify.notify_one();
+        while host.b_reads.load(Ordering::SeqCst) == reads {
+            tokio::task::yield_now().await;
+        }
+        assert_eq!(queued(&mut received), None, "a wake is not a slot");
+
+        // A's seed ends, and its end is written: the slot goes to B, first in.
+        host.a_open.store(true, Ordering::SeqCst);
+        pump_a.notify.notify_one();
+        until_kind(&mut received, "transfer-end").await;
+        let next = next_unit(&mut received).await;
+        assert_eq!(next["kind"], "transfer-begin");
+        assert_eq!(
+            next["activationId"], "seed-b",
+            "the wake put B behind C, which asked after it"
+        );
+        for pump in [pump_a, pump_b, pump_c] {
+            pump.stop();
+            pump.task.await.unwrap();
+        }
         cell.terminate();
     }
 }
