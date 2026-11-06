@@ -19,10 +19,14 @@ import { WorkerFailure } from "./engine";
 // root, where rosetta's export places a page and nothing is served, and the
 // served made root (`artifacts/made`), which holds views alone. fieldd makes
 // both; the worker makes neither (a root that is not there is `root-missing`),
-// so nothing is made before the roots are proved apart. A view never writes
-// into the export's folder or over its link: the roots must not overlap
-// (lexically, then by real path), and the view replaces its file by rename,
-// never writing through it, so a hard link to an old view keeps the old bytes.
+// so nothing is made before the roots are proved apart. The roots must not
+// overlap (lexically, then by real path), and the view replaces its file by
+// rename, never writing through it, so a hard link to an old view keeps the old
+// bytes. The walk and the writes go by PATH (Node has no openat or renameat):
+// a folder on the way swapped for a link after the walk would carry the temp
+// with it, so the folder's real path is held inside the served root again just
+// before the rename, and a view whose folder left it is refused, its temp
+// removed. The residual race is the instant between that check and the rename.
 //
 // THE PAGE: an absolute path below the export-source root. Every entry on the
 // way is read with lstat and a symlink anywhere is refused, never followed; the
@@ -36,8 +40,9 @@ import { WorkerFailure } from "./engine";
 // THE FOLDER: an absolute path below the served root, made here one folder at
 // a time (0700) when it is not there, with no symlink on the way. The view is
 // streamed into a 0600 temp beside it (created exclusive and no-follow),
-// fsynced, renamed over MADE_APP_VIEW.FILE, and the folder fsynced. Anything
-// that fails before the rename leaves the previous view whole and no temp.
+// fsynced, the folder's real path checked again, renamed over
+// MADE_APP_VIEW.FILE, and the folder fsynced. Anything that fails before the
+// rename leaves the previous view whole and no temp.
 //
 // What is refused, and how: a theme `madeAppViewHead` cannot read is `invalid`
 // before anything is touched; a path outside its root, a root itself, or a
@@ -46,9 +51,10 @@ import { WorkerFailure } from "./engine";
 // a symlink, or a page gone, unreadable or not a regular file, is `not-found`
 // (one answer, never a map of what lies outside); a folder that is a file is
 // `not-a-directory`; a page past the bound is `too-large`; a worker started
-// without roots answers `internal`, as does anything else the disk says (a
-// full descriptor table, an I/O error): the worker's trouble, never a page
-// that is not there.
+// without roots, with roots that are not absolute or with roots that overlap
+// answers `internal` (its own configuration, never the ask), as does anything
+// else the disk says (a full descriptor table, an I/O error): the worker's
+// trouble, never a page that is not there.
 //
 // EL2 (DR-L4): the bytes stay in this process. The answer is the view's size.
 // DR-L3: the page is not re-hashed here. The worker holds no blake3 before
@@ -90,8 +96,10 @@ export async function buildMadeView(
   roots: MadeViewRoots | null,
   args: BuildMadeViewArgs,
 ): Promise<BuildMadeViewValue> {
-  if (roots === null || !isAbsolute(roots.sourceRoot) || !isAbsolute(roots.servedRoot))
+  if (roots === null)
     throw new WorkerFailure("internal", "this files worker was started with no made-view roots");
+  if (!isAbsolute(roots.sourceRoot) || !isAbsolute(roots.servedRoot))
+    throw new WorkerFailure("internal", "this files worker's made-view roots are not absolute");
   if (typeof args?.source !== "string" || typeof args.folder !== "string")
     throw new WorkerFailure("invalid", "a view names its page and its folder by their paths");
   // the theme first: a theme the view cannot carry touches nothing
@@ -107,7 +115,7 @@ export async function buildMadeView(
   const page = await openPage(sourceRoot, pageSegments);
   try {
     const folder = await viewFolder(servedRoot, folderSegments);
-    return { bytes: await writeView(folder, head.head, page) };
+    return { bytes: await writeView(servedRoot, folder, head.head, page) };
   } finally {
     await page.close();
   }
@@ -130,8 +138,9 @@ function overlap(a: string, b: string): boolean {
   return isWithin(a, b, process.platform) || isWithin(b, a, process.platform);
 }
 
+/** The roots are the worker's own configuration, never the ask: `internal`. */
 function overlapping(): WorkerFailure {
-  return new WorkerFailure("invalid", "the export-source and served roots overlap");
+  return new WorkerFailure("internal", "the export-source and served roots overlap");
 }
 
 /** A root's real path, or `root-missing` while it is not there: fieldd makes
@@ -202,10 +211,16 @@ async function viewFolder(root: string, segments: readonly string[]): Promise<st
   return at;
 }
 
-/** Stream the view into a 0600 temp beside it, fsync, rename it over the view
- * and fsync the folder; anything before the rename leaves the old view whole.
- * Answers the view's size. */
-async function writeView(folder: string, head: string, page: FileHandle): Promise<number> {
+/** Stream the view into a 0600 temp beside it, fsync, hold the folder's real
+ * path inside the served root again, rename the temp over the view and fsync
+ * the folder; anything before the rename leaves the old view whole. Answers
+ * the view's size. */
+async function writeView(
+  root: string,
+  folder: string,
+  head: string,
+  page: FileHandle,
+): Promise<number> {
   const temp = join(folder, `.${MADE_APP_VIEW.FILE}.${randomBytes(8).toString("hex")}.tmp`);
   const create = constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | NO_FOLLOW;
   let out: FileHandle | null = await open(temp, create, 0o600);
@@ -217,6 +232,10 @@ async function writeView(folder: string, head: string, page: FileHandle): Promis
     await out.sync();
     await out.close();
     out = null;
+    // the walk went by path: a folder on the way swapped for a link since then
+    // is caught here, before the view lands (the residual race, module header)
+    if (!isWithin(root, await realpath(folder), process.platform))
+      throw new WorkerFailure("not-found", FOLDER_UNREACHED);
     await rename(temp, join(folder, MADE_APP_VIEW.FILE));
   } catch (error) {
     await out?.close().catch(() => undefined);

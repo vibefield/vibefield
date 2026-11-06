@@ -12,9 +12,9 @@
 //     link — each refused, with nothing written and a previous view whole;
 //   · a page hard-linked to a file outside its root, as rosetta's link placement leaves it, read;
 //   · a rename refused after the temp is written: the temp removed, what was there kept;
-//   · a worker with no roots, or with roots that overlap, refuses every view; a root that is not
-//     there is root-missing (any other refusal of a root is internal), and the worker makes
-//     neither (fieldd makes both).
+//   · a worker with no roots, relative roots or roots that overlap refuses every view as internal
+//     (its own configuration); a root that is not there is root-missing (any other refusal of a
+//     root is internal), and the worker makes neither (fieldd makes both).
 import { execFileSync } from "node:child_process";
 import {
   existsSync,
@@ -378,7 +378,7 @@ describe("a made app's view (DR-1b), built by the real files worker", () => {
     expect(readdirSync(join(folder, VIEW))).toEqual([]);
   });
 
-  it("refuses every view on a worker with no roots, or with roots that overlap", async () => {
+  it("refuses every view as internal on a worker with no roots, relative roots or overlapping roots", async () => {
     const { base, roots, source, folder } = layout();
     const bare = await ready();
     const unconfigured = await refusal(build(bare, source, folder, VECTOR.embed.theme));
@@ -386,8 +386,16 @@ describe("a made app's view (DR-1b), built by the real files worker", () => {
       code: "internal",
       message: "this files worker was started with no made-view roots",
     });
+    // roots that are not absolute: the worker's own configuration, never the ask
+    const relative = await ready({ sourceRoot: "made-src", servedRoot: "made" });
+    const unrooted = await refusal(build(relative, source, folder, VECTOR.embed.theme));
+    expect(unrooted.error).toEqual({
+      code: "internal",
+      message: "this files worker's made-view roots are not absolute",
+    });
     // the served root inside the export-source root, then the same folder through a link: a view
-    // could land in an export's folder, so neither worker builds one
+    // could land in an export's folder, so neither worker builds one, and the trouble is the
+    // worker's configuration, never the ask
     const nested = join(roots.sourceRoot, APP);
     symlinkSync(nested, join(base, "made-alias"));
     for (const servedRoot of [nested, join(base, "made-alias")]) {
@@ -395,7 +403,7 @@ describe("a made app's view (DR-1b), built by the real files worker", () => {
       const target = join(servedRoot, "view");
       const error = await refusal(build(overlapping, source, target, VECTOR.embed.theme));
       expect(error.error, servedRoot).toEqual({
-        code: "invalid",
+        code: "internal",
         message: "the export-source and served roots overlap",
       });
     }
