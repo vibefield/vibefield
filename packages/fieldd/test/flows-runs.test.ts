@@ -1508,6 +1508,13 @@ function waitsOf(started: FlowRunStarted): NeedsItemId {
   return started.waits;
 }
 
+/** The start the n-th raise kept, as the queue hands it back with the act (Q4). */
+function askedOf(h: { readonly raised: readonly FlowChangedRaise[] }, n: number) {
+  const raised = h.raised[n];
+  if (raised === undefined) throw new Error(`no raise ${n}: ${h.raised.length} were raised`);
+  return raised.start;
+}
+
 /** The run an act began, or the row fails saying why it did not. */
 function ranOf(started: FlowItemStarted): string {
   if (started.outcome !== "done") throw new Error(`the act failed: ${started.reason}`);
@@ -1530,7 +1537,7 @@ describe("CP-4a2b — a changed flow's acts begin the asked-for run (§13a slice
         flow: "targets",
         hash: flowHashOf(edited),
         version: "this",
-        start: h.raised[0]?.start,
+        start: askedOf(h, 0),
       }),
     );
     expect(h.records.approval("targets")).toMatchObject({ hash: flowHashOf(edited), by: "you" });
@@ -1558,7 +1565,7 @@ describe("CP-4a2b — a changed flow's acts begin the asked-for run (§13a slice
         flow: "hello",
         hash: approval.hash,
         version: "approved",
-        start: h.raised[0]?.start,
+        start: askedOf(h, 0),
         from: VELA_FROM,
       }),
     );
@@ -1582,7 +1589,7 @@ describe("CP-4a2b — a changed flow's acts begin the asked-for run (§13a slice
         flow: "hello",
         hash: flowHashOf(edited),
         version: "this",
-        start: h.raised[0]?.start,
+        start: askedOf(h, 0),
       }),
     ).toEqual({ outcome: "failed", reason: words.notAVersion("hello") });
     expect(h.records.approval("hello")?.hash).toBe(approval.hash);
@@ -1599,7 +1606,7 @@ describe("CP-4a2b — a changed flow's acts begin the asked-for run (§13a slice
         flow: "targets",
         hash: flowHashOf(bare),
         version: "this",
-        start: h.raised[1]?.start,
+        start: askedOf(h, 1),
       }),
     ).toEqual({ outcome: "failed", reason: words.noSuchInput("Targets", "target") });
     expect(h.records.approval("targets")?.hash).toBe(targets.hash);

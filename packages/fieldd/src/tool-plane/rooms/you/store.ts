@@ -1,7 +1,13 @@
 import { randomBytes } from "node:crypto";
 import { chmodSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
-import { NEEDS_RECORD_FORMAT, NeedsItemId, NeedsRecord, RECORD_STORES } from "@vibefield/contracts";
+import {
+  NEEDS_RECORD_FORMAT,
+  NeedsItemId,
+  NeedsRecord,
+  needsKindOf,
+  RECORD_STORES,
+} from "@vibefield/contracts";
 import { createNoopLogger, durableRenameSync, type Logger } from "@vibefield/logging";
 import {
   RecordSigner,
@@ -125,6 +131,10 @@ export class NeedsStore {
     if (!parsed.success) return this.#setAside(path, "unreadable");
     // signed for another item: a record copied into this id's name
     if (parsed.data.item.id !== id) return this.#setAside(path, "forged");
+    // CP-4a2b (ruled 2026-11-06): a changed flow's act begins the start it was asked with (Q4), which VibeField's own
+    // raise always keeps; one without it is a record fieldd cannot use, set aside as one that does not parse is
+    if (needsKindOf(parsed.data.item) === "flow-changed" && parsed.data.start === undefined)
+      return this.#setAside(path, "unreadable");
     return parsed.data;
   }
 

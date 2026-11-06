@@ -356,9 +356,6 @@ export class FlowRuns {
    * is the act's `failed`, in the start's words, with nothing approved and nothing begun. */
   #acted(act: FlowItemStart): FlowItemStarted {
     const { start } = act;
-    // a record from before Q4 keeps no start: its act's words are asked (R4–R6), and none is guessed
-    if (start === undefined)
-      throw new Error("CP-4a2b: a changed flow's act with no start waits on its words (R4–R6)");
     const params: FlowRunStartParams = {
       flow: act.flow,
       input: start.input,

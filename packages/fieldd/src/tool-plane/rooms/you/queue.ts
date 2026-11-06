@@ -200,12 +200,13 @@ export interface FlowChangedRaise {
   /** the spark whose flow_run waits on it (13b's D5), told what you chose; absent for a run you start */
   readonly from?: HoldSender | undefined;
   /** Q4 (ruled 2026-11-06 (c)) — the start as it was asked, past `script` and `from`: kept on the item's record alone, and
-   * handed back to the runs with the act */
-  readonly start?: NeedsPendingStart | undefined;
+   * handed back to the runs with the act. Required (ruled 2026-11-06): an act begins the run it asked for, and a
+   * record without it is one the store sets aside */
+  readonly start: NeedsPendingStart;
 }
 
 /** A changed flow's start, as the runs are handed it: the item, the bytes you chose to run, and the start as it was
- * asked (Q4), absent on a record from before it. */
+ * asked (Q4). */
 export interface FlowItemStart {
   readonly id: NeedsItemId;
   readonly flow: string;
@@ -213,7 +214,7 @@ export interface FlowItemStart {
   /** R4–R6 (CP4-Q5 (a)): Run this version (`this`: its bytes approved as yours, then run) or Run the one you approved
    * (`approved`: the bytes fieldd kept, run as they are) */
   readonly version: "this" | "approved";
-  readonly start?: NeedsPendingStart | undefined;
+  readonly start: NeedsPendingStart;
   /** R4–R6: the spark whose flow_run the item tells (item.from, its session among it); absent for yours */
   readonly from?: HoldSender | undefined;
 }
@@ -610,11 +611,8 @@ export class NeedsQueue implements TalkHolds {
         item.from.spark === from?.spark
       ) {
         const { start } = raise;
-        if (start !== undefined) {
-          const kept = record.start;
-          if (kept === undefined || canonicalJson(kept) !== canonicalJson(start))
-            this.#keep({ ...record, start });
-        }
+        if (record.start === undefined || canonicalJson(record.start) !== canonicalJson(start))
+          this.#keep({ ...record, start });
         return item.id;
       }
     }
@@ -637,7 +635,7 @@ export class NeedsQueue implements TalkHolds {
         ],
         script,
       },
-      ...(raise.start !== undefined ? { start: raise.start } : {}),
+      start: raise.start,
     });
     this.#emit();
     return id;
@@ -870,6 +868,9 @@ export class NeedsQueue implements TalkHolds {
         outcome: "done",
         ...owed((spark, flow) => words.flowNotNowFact(spark, flow, script.approved !== undefined)),
       };
+    // the store sets aside a changed flow's record that keeps no start (ruled 2026-11-06), so none is answered here
+    const { start } = record;
+    if (start === undefined) throw refuseAnswer(`${item.id} keeps no start`, "unknown-kind");
     const approved = choice === 1 && script.approved !== undefined ? script.approved : undefined;
     const { spark, session, name } = item.from;
     this.#keep({ ...record, acting: { choice, at } });
@@ -880,8 +881,8 @@ export class NeedsQueue implements TalkHolds {
         flow: script.flow,
         hash: approved ?? script.hash,
         version: approved !== undefined ? "approved" : "this",
-        // Q4: the start as it was asked, absent on a record from before it
-        ...(record.start !== undefined ? { start: record.start } : {}),
+        // Q4: the start as it was asked
+        start,
         // a spark's: the flow_run that waits on it, as the spark bound it
         ...(spark !== undefined && session !== undefined ? { from: { spark, name, session } } : {}),
       });
