@@ -98,6 +98,33 @@ struct SparkStageTests {
     #expect(try #require(recorder.draws.last).faces == 1)
   }
 
+  /// The §4 gallery's first stills (vf-m1, 2026-11-06, at `98f3ccc3a`): the layer reached the screen's top while its
+  /// content stopped at the bars, and every live face and its clip drew 62 points high.
+  @Test("a layer whose corner is not the stage space's origin draws each face from that corner, its clip too")
+  func corner() throws {
+    let list = CGRect(x: 0, y: 120, width: 390, height: 400)
+    let plain = Recorder()
+    let unmoved = Self.stage(plain)
+    unmoved.show(Self.face("a", y: 200, clip: list))
+    unmoved.frame(at: 1.0 / 60)
+    let recorder = Recorder()
+    let stage = Self.stage(recorder)
+    // a layer over the whole screen, above a content (the faces' space) that starts 62 below its top, 4 from its left
+    stage.origin = CGPoint(x: -4, y: -62)
+    stage.show(Self.face("a", y: 200, clip: list))
+    stage.frame(at: 1.0 / 60)
+    let at = try #require(plain.draws.last)
+    let moved = try #require(recorder.draws.last)
+    #expect(moved.faces == 1)
+    // row 0 is (x, y, R, seedF): the same face, 4 right and 62 down in the layer
+    let before = Self.row(0, face: 0, of: at.rows)
+    let after = Self.row(0, face: 0, of: moved.rows)
+    #expect(abs(after[0] - before[0] - 4) < 1e-3 && abs(after[1] - before[1] - 62) < 1e-3)
+    #expect(after[2] == before[2] && after[3] == before[3])
+    // row 29, its scroll view's rect, moves with it: left, top, right, bottom
+    #expect(Self.row(29, face: 0, of: moved.rows) == [4, 182, 394, 582])
+  }
+
   @Test("with no live face on screen the stage draws no frame, after one clear")
   func noneOnScreen() {
     let recorder = Recorder()

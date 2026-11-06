@@ -151,16 +151,24 @@ public struct SparkStageHost<Content: View>: View {
   public var body: some View {
     content
       .environment(\.sparkStage, holder?.stage)
-      .coordinateSpace(.named(SparkStage.space))
       .overlay {
         if let layer = holder?.layer {
-          // the content's whole frame, the safe area it reaches into too: the faces report in that space
+          // over the content's whole frame and any safe area it stops short of, so a face under the bars can still be
+          // drawn. Its corner need not be the content's: it tells the stage where it sits in the faces' space, and the
+          // stage draws each face from there (a content that stops at the bars puts it at (0, −the top inset)).
           SparkStageLayerView(layer: layer)
             .ignoresSafeArea()
+            .onGeometryChange(for: CGPoint.self) { proxy in
+              SparkStageLayerView.corner(of: proxy)
+            } action: { corner in
+              holder?.stage?.origin = corner
+            }
             .allowsHitTesting(false)
             .accessibilityHidden(true)
         }
       }
+      // after the overlay, so the layer is in the space the faces report their boxes in
+      .coordinateSpace(.named(SparkStage.space))
       .onAppear {
         if holder == nil { holder = SparkStageHolder() }
         holder?.stage?.reducedMotion = reduceMotion
@@ -199,6 +207,11 @@ final class SparkStageHolder {
 
 struct SparkStageLayerView: UIViewRepresentable {
   let layer: SparkStageLayer
+
+  /// Where the layer's top-left corner sits in the stage's space (`SparkStage.origin`).
+  nonisolated static func corner(of proxy: GeometryProxy) -> CGPoint {
+    proxy.frame(in: .named(SparkStage.space)).origin
+  }
 
   func makeUIView(context: Context) -> SparkStageLayer { layer }
 

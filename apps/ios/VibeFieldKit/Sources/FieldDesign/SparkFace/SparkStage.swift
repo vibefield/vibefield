@@ -71,6 +71,10 @@ public final class SparkStage {
   public weak var drawer: (any SparkStageDrawer)?
   /// The stage's size in points (`uView`).
   public var view: CGSize = .zero
+  /// Where the layer's top-left corner sits in the stage's space. The faces report their boxes and clips in that space,
+  /// and the layer draws from its own corner, so each is moved by it when drawn. A layer over the whole screen, above a
+  /// content that stops at the bars, sits at (0, −the top inset).
+  public var origin: CGPoint = .zero
   /// The app is active: a stage draws only then.
   public var active = true {
     didSet { changed() }
@@ -182,8 +186,11 @@ public final class SparkStage {
     for (index, id) in order.enumerated() {
       guard var mover = movers[id], mover.face.onScreen else { continue }
       let face = mover.face
-      mover.buddy.place(centreX: face.frame.midX, centreY: face.frame.midY, size: face.size, framed: face.framed)
-      mover.buddy.clip = SIMD4<Double>(face.clip.minX, face.clip.minY, face.clip.maxX, face.clip.maxY)
+      // from the stage's space into the layer's, whose corner is `origin`
+      let box = face.frame.offsetBy(dx: -origin.x, dy: -origin.y)
+      let clip = face.clip.isInfinite ? face.clip : face.clip.offsetBy(dx: -origin.x, dy: -origin.y)
+      mover.buddy.place(centreX: box.midX, centreY: box.midY, size: face.size, framed: face.framed)
+      mover.buddy.clip = SIMD4<Double>(clip.minX, clip.minY, clip.maxX, clip.maxY)
       mover.buddy.cut = face.cut
       movers[id] = mover
       shown.append((index, mover.buddy))
