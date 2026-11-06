@@ -1,3 +1,4 @@
+import FieldDesign
 import FieldProduct
 import Foundation
 import Testing
@@ -182,7 +183,9 @@ struct HistoryReadsTests {
     #expect(offline.corpus.documents.isEmpty, "documents replay on open")
     offline.need(.session(device: "dev-1", id: "s1"))
     #expect(offline.corpus.document("s1")?.title == "Named")
-    #expect(FieldHistoryModel.scopeLine(offline.corpus, standing: offline.standing) == "mini is asleep · read \(offline.corpus.readAt)")
+    #expect(
+      FieldHistoryModel.scopeLine(offline.corpus, standing: offline.standing, device: .iPhone)
+        == "mini is asleep · read \(offline.corpus.readAt)")
     #expect(FieldHistoryModel.liveHeader(offline.corpus, standing: offline.standing).count == nil)
   }
 

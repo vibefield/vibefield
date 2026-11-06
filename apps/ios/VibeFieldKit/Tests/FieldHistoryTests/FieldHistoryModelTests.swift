@@ -1,3 +1,4 @@
+import FieldDesign
 import Testing
 
 @testable import FieldHistory
@@ -40,12 +41,54 @@ struct FieldHistoryModelTests {
 
   @Test("the scope line says the three states in the record's words")
   func scopeLine() {
-    #expect(FieldHistoryModel.scopeLine(corpus, standing: .connected) == "7 projects · 1,405 sessions across 9 agents")
-    #expect(FieldHistoryModel.scopeLine(corpus, standing: .asleep) == "studio is asleep · read 11:42")
+    #expect(
+      FieldHistoryModel.scopeLine(corpus, standing: .connected, device: .iPhone)
+        == "7 projects · 1,405 sessions across 9 agents")
+    #expect(FieldHistoryModel.scopeLine(corpus, standing: .asleep, device: .iPhone) == "studio is asleep · read 11:42")
     let indexing = FieldHistoryModel.DesktopStanding.indexing(percent: 61, done: "8,400", total: "13,700")
-    #expect(FieldHistoryModel.scopeLine(corpus, standing: indexing) == "studio is indexing · 61%")
+    #expect(FieldHistoryModel.scopeLine(corpus, standing: indexing, device: .iPhone) == "studio is indexing · 61%")
     #expect(FieldHistoryModel.indexingDenominator(standing: indexing) == "8,400 of 13,700 sessions")
     #expect(FieldHistoryModel.indexingDenominator(standing: .connected) == nil)
+  }
+
+  @Test("L4's word pass: History names the device as its platform does, in every word that names it, never a phone")
+  func deviceNamed() {
+    let incompatible = FieldHistoryModel.DesktopStanding.incompatible(theirs: "0.2.0", ours: "0.1.0")
+    let stopped = FieldHistoryModel.IndexStanding.failed(reason: "rosettad stopped")
+    for device in [DeviceWord.iPad, .unknown] {
+      let words = [
+        FieldHistoryModel.scopeLine(corpus, standing: incompatible, device: device),
+        FieldHistoryModel.emptyLedger(standing: .asleep, index: nil, desktop: "studio", device: device).text,
+        FieldHistoryModel.emptyLedger(standing: .connected, index: stopped, desktop: "studio", device: device).text,
+        FieldHistoryModel.projectNotRead(device: device).text, FieldHistoryModel.sessionNotRead(device: device).text,
+        FieldHistoryModel.noDesktopRead(device: device).text,
+      ]
+      for word in words {
+        #expect(!word.localizedCaseInsensitiveContains("phone"), "\(device): \(word)")
+      }
+    }
+    #expect(
+      FieldHistoryModel.scopeLine(corpus, standing: incompatible, device: .iPad)
+        == "studio speaks contracts 0.2.0 · this iPad 0.1.0")
+    #expect(
+      FieldHistoryModel.emptyLedger(standing: .asleep, index: nil, desktop: "studio", device: .iPad).text
+        == "Nothing of your history is on this iPad; the ledger arrives when a desktop's door answers.")
+    #expect(
+      FieldHistoryModel.emptyLedger(standing: .connected, index: stopped, desktop: "studio", device: .unknown).text
+        == "Rosettad stopped. History on this device reads nothing from it until it runs again; its restart is in "
+        + "History on studio.")
+    let project = FieldHistoryModel.projectNotRead(device: .iPad)
+    #expect(project.title == "This project is not in the ledger")
+    #expect(project.text == "Nothing was read for it on this iPad.")
+    let session = FieldHistoryModel.sessionNotRead(device: .iPad)
+    #expect(session.title == "This session has no document here")
+    #expect(session.text == "Its desktop does not answer, and this iPad has not read its turns before.")
+    let none = FieldHistoryModel.noDesktopRead(device: .iPad)
+    #expect(none.title == "History reads your desktops' index over their doors")
+    #expect(
+      none.text
+        == "No desktop of this account answers right now, and this iPad has read none before. The ledger, a project "
+        + "and a session's document arrive from the first desktop whose door answers.")
   }
 
   @Test("the live head counts while the desktop is awake and remembers the read while it sleeps")

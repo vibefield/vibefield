@@ -1,3 +1,4 @@
+import FieldDesign
 import FieldProduct
 import Foundation
 import Testing
@@ -277,11 +278,14 @@ struct HistoryProjectsTests {
     #expect(projects.index == .failed(reason: reason))
     #expect(projects.standing == .connected, "the door answers; its index does not")
     #expect(projects.sourceName == "studio")
-    let empty = FieldHistoryModel.emptyLedger(standing: projects.standing, index: projects.index, desktop: projects.sourceName)
+    let empty = FieldHistoryModel.emptyLedger(
+      standing: projects.standing, index: projects.index, desktop: projects.sourceName, device: .iPhone)
     #expect(empty.title == "studio's index has stopped")
     #expect(empty.text.hasPrefix("Restart intensity exceeded (5 in 60000ms)"))
     // the restart is the desktop's (P2: the phone reads), and the phone says where
-    #expect(empty.text.hasSuffix("History on this phone reads nothing from it until it runs again; its restart is in History on studio."))
+    #expect(
+      empty.text.hasSuffix(
+        "History on this iPhone reads nothing from it until it runs again; its restart is in History on studio."))
     #expect(!empty.title.contains("No project"))
     #expect(FieldHistoryModel.indexSentence(projects.index, desktop: projects.sourceName) == "studio's index has stopped")
     // the index is asked on the ledger's door, before the listing it explains
@@ -305,7 +309,8 @@ struct HistoryProjectsTests {
     projects.start()
     await settle("the index") { projects.index != nil }
     #expect(projects.index == .starting(detail: nil))
-    let early = FieldHistoryModel.emptyLedger(standing: .connected, index: projects.index, desktop: "studio")
+    let early = FieldHistoryModel.emptyLedger(
+      standing: .connected, index: projects.index, desktop: "studio", device: .iPhone)
     #expect(early.title == "studio's index is starting")
     #expect(early.text == "Its projects arrive when it is ready.")
     projects.close()
@@ -321,7 +326,8 @@ struct HistoryProjectsTests {
       return
     }
     #expect(detail?.contains("schema 24 where this rosettad reads 27") == true)
-    let empty = FieldHistoryModel.emptyLedger(standing: .connected, index: upgrading.index, desktop: "studio")
+    let empty = FieldHistoryModel.emptyLedger(
+      standing: .connected, index: upgrading.index, desktop: "studio", device: .iPhone)
     #expect(empty.title == "studio is rebuilding its index")
     #expect(empty.text.contains("The index's projection is schema 24 where this rosettad reads 27"))
     #expect(FieldHistoryModel.indexSentence(upgrading.index, desktop: "studio") == "studio is rebuilding its index")
@@ -339,7 +345,8 @@ struct HistoryProjectsTests {
     await settle("the index") { projects.index != nil && door.count("project.list") >= 1 }
     #expect(projects.index == .ready)
     #expect(FieldHistoryModel.indexSentence(projects.index, desktop: "studio") == nil)
-    let empty = FieldHistoryModel.emptyLedger(standing: projects.standing, index: projects.index, desktop: "studio")
+    let empty = FieldHistoryModel.emptyLedger(
+      standing: projects.standing, index: projects.index, desktop: "studio", device: .iPhone)
     #expect(empty.title == "No project in your desktops' index yet")
     projects.close()
     // an older desktop's door offers no index.status: the listing is believed
@@ -350,11 +357,12 @@ struct HistoryProjectsTests {
     await settle("the listing") { older.count("project.list") >= 1 }
     #expect(believed.index == nil)
     #expect(
-      FieldHistoryModel.emptyLedger(standing: believed.standing, index: believed.index, desktop: "studio").title
+      FieldHistoryModel.emptyLedger(
+        standing: believed.standing, index: believed.index, desktop: "studio", device: .iPhone).title
         == "No project in your desktops' index yet")
     // and a door that does not answer: not read yet, never "no project"
     #expect(
-      FieldHistoryModel.emptyLedger(standing: .asleep, index: nil, desktop: "studio").title
+      FieldHistoryModel.emptyLedger(standing: .asleep, index: nil, desktop: "studio", device: .iPhone).title
         == "Your projects have not been read yet")
     believed.close()
   }

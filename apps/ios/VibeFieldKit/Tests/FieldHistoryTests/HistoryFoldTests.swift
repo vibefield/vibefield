@@ -1,3 +1,4 @@
+import FieldDesign
 import FieldProduct
 import Foundation
 import Testing
@@ -254,7 +255,9 @@ struct HistoryFoldTests {
     #expect(FieldHistoryModel.standing(status: building) == .indexing(percent: 61, done: "8,400", total: "13,700"))
     #expect(FieldHistoryModel.standing(status: nil) == .asleep)
     let corpus = HistoryCorpus.mock
-    #expect(FieldHistoryModel.scopeLine(corpus, standing: .incompatible(theirs: "0.2.0", ours: "0.1.0")) == "studio speaks contracts 0.2.0 · this phone 0.1.0")
+    #expect(
+      FieldHistoryModel.scopeLine(corpus, standing: .incompatible(theirs: "0.2.0", ours: "0.1.0"), device: .iPhone)
+        == "studio speaks contracts 0.2.0 · this iPhone 0.1.0")
     #expect(FieldHistoryModel.liveHeader(corpus, standing: .incompatible(theirs: "0.2.0", ours: "0.1.0")).count == nil)
   }
 }
