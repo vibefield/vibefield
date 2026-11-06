@@ -153,13 +153,21 @@ export function usageBandsGolden(input: {
     });
     return meters;
   };
-  const circles = input.cases.map(({ name, where, size, options, ...of }) => ({
-    name,
-    where,
-    ...of,
-    options,
-    ...bandsGeometry(size, metersOf(of).entries, options),
-  }));
+  const circles = input.cases.map(({ name, where, size, options, ...of }) => {
+    // the circle says whose it is in its options (`every`), so the phone draws it from what the golden records
+    if ((options.every === true) !== (of.of === "every")) {
+      throw new Error(
+        `usage bands golden: "${name}" draws ${of.of}'s meters with every ${options.every}`,
+      );
+    }
+    return {
+      name,
+      where,
+      ...of,
+      options,
+      ...bandsGeometry(size, metersOf(of).entries, options),
+    };
+  });
   const golden = hundredths({
     "//": input.note,
     inputs: {

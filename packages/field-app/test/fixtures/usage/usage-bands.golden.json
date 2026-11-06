@@ -179,7 +179,7 @@
           "profiles": [{"setId":"work","kind":"managed","glyph":"briefcase","filled":true,"label":"Work"}],
           "kind": "needs-you",
           "need": "retry",
-          "right": {"kind":"need","words":"couldn’t read","hot":false,"icon":false}
+          "right": {"kind":"need","words":"couldn't read","hot":false,"icon":false}
         },
         {
           "key": "agent:e9b3c5a7-2d14-4f6e-8a0b-3c7f1e5d9a62",
@@ -305,7 +305,7 @@
           "profiles": [{"setId":"work","kind":"managed","glyph":"briefcase","filled":true,"label":"Work"}],
           "kind": "needs-you",
           "need": "retry",
-          "right": {"kind":"need","words":"couldn’t read","hot":false,"icon":false}
+          "right": {"kind":"need","words":"couldn't read","hot":false,"icon":false}
         },
         {
           "key": "side/agent:b2c7e4a9-6f3d-4e18-9c5a-0d4b8f2e6c91",
@@ -369,6 +369,91 @@
           "plan": {"id":"xai","service":{"id":"xai","label":"xAI"},"account":"kim@example.com"},
           "profileId": "grok:native-default",
           "profiles": [{"setId":"native","kind":"native","filled":false,"label":"This Mac"}],
+          "kind": "no-meter",
+          "why": "unavailable"
+        }
+      ],
+      "tightest": null,
+      "hot": false
+    },
+    {
+      "sets": "agents-profile-sets.meters.json",
+      "batch": "agent-usage.budget.json",
+      "of": "every",
+      "usage": "unavailable",
+      "entries": [
+        {
+          "key": "native/plan:anthropic",
+          "provider": "claude",
+          "agent": "Claude Code",
+          "title": "Anthropic",
+          "plan": {"id":"anthropic","service":{"id":"anthropic","label":"Anthropic"},"account":"kim@example.com"},
+          "profileId": "claude:native-default",
+          "profiles": [{"setId":"work","kind":"managed","glyph":"briefcase","filled":true,"label":"Work"}],
+          "kind": "no-meter",
+          "why": "unavailable"
+        },
+        {
+          "key": "side/plan:anthropic",
+          "provider": "claude",
+          "agent": "Claude Code",
+          "title": "Anthropic",
+          "plan": {"id":"anthropic","service":{"id":"anthropic","label":"Anthropic"},"account":"lee@example.com"},
+          "profileId": "5d8a2f6c-9e1b-4c37-a4d0-8b6e2f9c1a35",
+          "profiles": [{"setId":"side","kind":"managed","glyph":"flask","filled":false,"label":"Side"}],
+          "kind": "no-meter",
+          "why": "unavailable"
+        },
+        {
+          "key": "native/plan:openai",
+          "provider": "codex",
+          "agent": "Codex",
+          "title": "OpenAI",
+          "plan": {"id":"openai","service":{"id":"openai","label":"OpenAI"},"account":"kim@example.com"},
+          "profileId": "codex:native-default",
+          "profiles": [{"setId":"native","kind":"native","filled":false,"label":"This Mac"}],
+          "kind": "no-meter",
+          "why": "unavailable"
+        },
+        {
+          "key": "work/plan:openai",
+          "provider": "codex",
+          "agent": "Codex",
+          "title": "OpenAI",
+          "plan": {"id":"openai","service":{"id":"openai","label":"OpenAI"},"account":"kim@work.example"},
+          "profileId": "a4f1d6e2-8c3b-4a97-b5e0-6f2d9c1e8b04",
+          "profiles": [{"setId":"work","kind":"managed","glyph":"briefcase","filled":true,"label":"Work"}],
+          "kind": "no-meter",
+          "why": "unavailable"
+        },
+        {
+          "key": "side/agent:b2c7e4a9-6f3d-4e18-9c5a-0d4b8f2e6c91",
+          "provider": "codex",
+          "agent": "Codex",
+          "title": "Codex",
+          "profileId": "b2c7e4a9-6f3d-4e18-9c5a-0d4b8f2e6c91",
+          "profiles": [{"setId":"side","kind":"managed","glyph":"flask","filled":false,"label":"Side"}],
+          "kind": "no-meter",
+          "why": "unavailable"
+        },
+        {
+          "key": "native/plan:xai",
+          "provider": "grok",
+          "agent": "Grok",
+          "title": "xAI",
+          "plan": {"id":"xai","service":{"id":"xai","label":"xAI"},"account":"kim@example.com"},
+          "profileId": "grok:native-default",
+          "profiles": [{"setId":"native","kind":"native","filled":false,"label":"This Mac"}],
+          "kind": "no-meter",
+          "why": "unavailable"
+        },
+        {
+          "key": "work/agent:e9b3c5a7-2d14-4f6e-8a0b-3c7f1e5d9a62",
+          "provider": "kimi",
+          "agent": "Kimi Code",
+          "title": "Kimi Code",
+          "profileId": "e9b3c5a7-2d14-4f6e-8a0b-3c7f1e5d9a62",
+          "profiles": [{"setId":"work","kind":"managed","glyph":"briefcase","filled":true,"label":"Work"}],
           "kind": "no-meter",
           "why": "unavailable"
         }
@@ -1246,7 +1331,7 @@
             {"band":"both","part":"thread","r":62.65,"from":35.87,"to":144.13,"width":5.3,"cap":"round","paint":{"tone":"ink","percent":38},"opacity":1,"dash":[0.01,13.79]}
           ],
           "notches": [],
-          "words": "OpenAI: couldn’t read",
+          "words": "OpenAI: couldn't read",
           "mark": {"provider":"codex","x":106,"y":198.7,"size":16,"paint":{"tone":"ink","percent":46},"opacity":1,"badge":{"need":"retry","x":114.32,"y":191.34,"r":4.8}},
           "hit": {"r":77.59,"width":59.98,"from":33.44,"to":146.56}
         },
@@ -1264,7 +1349,7 @@
           "hit": {"r":77.59,"width":59.98,"from":153.44,"to":266.56}
         }
       ],
-      "label": "Usage: Anthropic: 64% of 5 hours, out in ~1h 30m; OpenAI: couldn’t read; Kimi Code: not signed in"
+      "label": "Usage: Anthropic: 64% of 5 hours, out in ~1h 30m; OpenAI: couldn't read; Kimi Code: not signed in"
     },
     {
       "name": "needs you at the column's size",
@@ -1310,7 +1395,7 @@
             {"band":"both","part":"thread","r":16.01,"from":38.41,"to":141.59,"width":1.53,"cap":"round","paint":{"tone":"ink","percent":38},"opacity":1,"dash":[0.01,3.98]}
           ],
           "notches": [],
-          "words": "OpenAI: couldn’t read"
+          "words": "OpenAI: couldn't read"
         },
         {
           "key": "agent:e9b3c5a7-2d14-4f6e-8a0b-3c7f1e5d9a62",
@@ -1324,7 +1409,7 @@
           "words": "Kimi Code: not signed in"
         }
       ],
-      "label": "Usage: Anthropic: 64% of 5 hours, out in ~1h 30m; OpenAI: couldn’t read; Kimi Code: not signed in",
+      "label": "Usage: Anthropic: 64% of 5 hours, out in ~1h 30m; OpenAI: couldn't read; Kimi Code: not signed in",
       "hotDot": {"x":32.02,"y":7.98,"r":3.6,"ring":1.6}
     },
     {
@@ -1386,7 +1471,7 @@
             {"band":"both","part":"thread","r":63.56,"from":35.83,"to":144.17,"width":5.35,"cap":"round","paint":{"tone":"ink","percent":38},"opacity":1,"dash":[0.01,13.91]}
           ],
           "notches": [],
-          "words": "OpenAI: couldn’t read",
+          "words": "OpenAI: couldn't read",
           "mark": {"provider":"codex","x":107,"y":200.7,"size":16,"paint":{"tone":"ink","percent":46},"opacity":1,"badge":{"need":"retry","x":115.32,"y":193.34,"r":4.8}},
           "hit": {"r":78.52,"width":60.21,"from":33.42,"to":146.58}
         },
@@ -1404,7 +1489,7 @@
           "hit": {"r":78.52,"width":60.21,"from":153.42,"to":266.58}
         }
       ],
-      "label": "Usage: Anthropic: 64% of 5 hours, out in ~1h 30m; OpenAI: couldn’t read; Kimi Code: not signed in"
+      "label": "Usage: Anthropic: 64% of 5 hours, out in ~1h 30m; OpenAI: couldn't read; Kimi Code: not signed in"
     },
     {
       "name": "a first read and a sign-in under way",
@@ -1501,7 +1586,7 @@
       "sets": "agents-profile-sets.meters.json",
       "batch": "agent-usage.budget.json",
       "of": "every",
-      "options": {"centre":"none"},
+      "options": {"centre":"none","every":true},
       "size": 26,
       "level": 0,
       "centre": {"x":13,"y":13,"r":3.7,"items":[]},
@@ -1566,7 +1651,7 @@
             {"band":"both","part":"thread","r":9.35,"from":131.04,"to":151.81,"width":1.51,"cap":"round","paint":{"tone":"ink","percent":38},"opacity":1,"dash":[0.01,3.93]}
           ],
           "notches": [],
-          "words": "OpenAI: couldn’t read"
+          "words": "OpenAI: couldn't read"
         },
         {
           "key": "side/agent:b2c7e4a9-6f3d-4e18-9c5a-0d4b8f2e6c91",
@@ -1591,7 +1676,7 @@
           "words": "Kimi Code: not signed in"
         }
       ],
-      "label": "Usage: Anthropic: 64% of 5 hours, out in ~1h 30m; Anthropic: reading; OpenAI: 30% of 5 hours, as of 32m ago; xAI: 46% of credits; OpenAI: couldn’t read; Codex: signing in; Kimi Code: not signed in"
+      "label": "Usage: Anthropic: 64% of 5 hours, out in ~1h 30m; Anthropic: reading; OpenAI: 30% of 5 hours, as of 32m ago; xAI: 46% of credits; OpenAI: couldn't read; Codex: signing in; Kimi Code: not signed in"
     },
     {
       "name": "every profile at the All profiles row",
@@ -1599,7 +1684,7 @@
       "sets": "agents-profile-sets.meters.json",
       "batch": "agent-usage.budget.json",
       "of": "every",
-      "options": {"centre":"none"},
+      "options": {"centre":"none","every":true},
       "size": 36,
       "level": 0,
       "centre": {"x":18,"y":18,"r":8.7,"items":[]},
@@ -1664,7 +1749,7 @@
             {"band":"both","part":"thread","r":14.35,"from":125.15,"to":157.71,"width":1.51,"cap":"round","paint":{"tone":"ink","percent":38},"opacity":1,"dash":[0.01,3.93]}
           ],
           "notches": [],
-          "words": "OpenAI: couldn’t read"
+          "words": "OpenAI: couldn't read"
         },
         {
           "key": "side/agent:b2c7e4a9-6f3d-4e18-9c5a-0d4b8f2e6c91",
@@ -1689,7 +1774,7 @@
           "words": "Kimi Code: not signed in"
         }
       ],
-      "label": "Usage: Anthropic: 64% of 5 hours, out in ~1h 30m; Anthropic: reading; OpenAI: 30% of 5 hours, as of 32m ago; xAI: 46% of credits; OpenAI: couldn’t read; Codex: signing in; Kimi Code: not signed in"
+      "label": "Usage: Anthropic: 64% of 5 hours, out in ~1h 30m; Anthropic: reading; OpenAI: 30% of 5 hours, as of 32m ago; xAI: 46% of credits; OpenAI: couldn't read; Codex: signing in; Kimi Code: not signed in"
     },
     {
       "name": "every profile around the face",
@@ -1697,7 +1782,7 @@
       "sets": "agents-profile-sets.meters.json",
       "batch": "agent-usage.budget.json",
       "of": "every",
-      "options": {"around":{"hole":34,"band":8}},
+      "options": {"around":{"hole":34,"band":8},"every":true},
       "size": 96,
       "level": 2,
       "centre": {"x":48,"y":48,"r":34,"items":[]},
@@ -1768,7 +1853,7 @@
             {"band":"both","part":"thread","r":38,"from":119.63,"to":163.23,"width":1.92,"cap":"round","paint":{"tone":"ink","percent":38},"opacity":1,"dash":[0.01,4.99]}
           ],
           "notches": [],
-          "words": "OpenAI: couldn’t read"
+          "words": "OpenAI: couldn't read"
         },
         {
           "key": "side/agent:b2c7e4a9-6f3d-4e18-9c5a-0d4b8f2e6c91",
@@ -1793,7 +1878,7 @@
           "words": "Kimi Code: not signed in"
         }
       ],
-      "label": "Usage: Anthropic: 64% of 5 hours, out in ~1h 30m; Anthropic: reading; OpenAI: 30% of 5 hours, as of 32m ago; xAI: 46% of credits; OpenAI: couldn’t read; Codex: signing in; Kimi Code: not signed in"
+      "label": "Usage: Anthropic: 64% of 5 hours, out in ~1h 30m; Anthropic: reading; OpenAI: 30% of 5 hours, as of 32m ago; xAI: 46% of credits; OpenAI: couldn't read; Codex: signing in; Kimi Code: not signed in"
     },
     {
       "name": "every profile opened: a shared plan once, the crowded agents in their profiles' glyphs",
@@ -1801,7 +1886,7 @@
       "sets": "agents-profile-sets.meters.json",
       "batch": "agent-usage.budget.json",
       "of": "every",
-      "options": {"hit":true,"crowd":true},
+      "options": {"hit":true,"crowd":true,"every":true},
       "size": 214,
       "level": 3,
       "centre": {
@@ -1944,7 +2029,7 @@
             {"band":"both","part":"thread","r":63.56,"from":121.55,"to":161.31,"width":5.35,"cap":"round","paint":{"tone":"ink","percent":38},"opacity":1,"dash":[0.01,13.91]}
           ],
           "notches": [],
-          "words": "OpenAI: couldn’t read",
+          "words": "OpenAI: couldn't read",
           "mark": {
             "provider": "codex",
             "x": 33.74,
@@ -1992,7 +2077,7 @@
           "hit": {"r":78.52,"width":60.21,"from":221.99,"to":266.58}
         }
       ],
-      "label": "Usage: Anthropic: 64% of 5 hours, out in ~1h 30m; Anthropic: reading; OpenAI: 30% of 5 hours, as of 32m ago; xAI: 46% of credits; OpenAI: couldn’t read; Codex: signing in; Kimi Code: not signed in"
+      "label": "Usage: Anthropic: 64% of 5 hours, out in ~1h 30m; Anthropic: reading; OpenAI: 30% of 5 hours, as of 32m ago; xAI: 46% of credits; OpenAI: couldn't read; Codex: signing in; Kimi Code: not signed in"
     },
     {
       "name": "usage unavailable: the dashed ring, the profile's glyph kept",
@@ -2030,6 +2115,21 @@
       "plans": [],
       "empty": {"r":103,"width":1.2,"paint":{"tone":"ink","percent":14},"dash":[2,3]},
       "label": "This Mac: usage unavailable"
+    },
+    {
+      "name": "usage unavailable, every profile: a shared plan once, named by no profile",
+      "where": "the phone's Me menu, its Agent Profiles row, with several profiles",
+      "sets": "agents-profile-sets.meters.json",
+      "batch": "agent-usage.budget.json",
+      "of": "every",
+      "usage": "unavailable",
+      "options": {"centre":"none","every":true},
+      "size": 26,
+      "level": 0,
+      "centre": {"x":13,"y":13,"r":3.7,"items":[]},
+      "plans": [],
+      "empty": {"r":10,"width":1.2,"paint":{"tone":"ink","percent":14},"dash":[2,3]},
+      "label": "Usage unavailable"
     }
   ],
   "calls": {

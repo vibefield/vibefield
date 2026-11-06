@@ -18,8 +18,14 @@ import {
   usageLines,
   usageOf,
 } from "../panels/agents/profiles-model";
-import { windowWords } from "../setup/limit-moment";
-import { durationWords, forecastOf, type MeterForecast, pressureOf, tightestOf } from "./rules";
+import {
+  durationWords,
+  forecastOf,
+  type MeterForecast,
+  pressureOf,
+  tightestOf,
+  windowWords,
+} from "./rules";
 
 // UM-1 (track UM; the round-4 page's marks ruled A, UM-D16 = E "Bands" in round 3, and the carried marks UM-D3, D4,
 // D12, D13 and D15 at their leans by James's word of 2026-11-06 03:11Z) — THE PROFILES' METERS, PURE: every plan an
@@ -31,10 +37,11 @@ import { durationWords, forecastOf, type MeterForecast, pressureOf, tightestOf }
 // The join is Settings' own (`panels/agents/profiles-model.ts`), reused and never copied: a plan's reading is the
 // reading of the sign-in that named its account (`namedBy` → `usageOf`), its windows are Settings' C1 lines
 // (`usageLines`), its sign-in is `signInState`'s, and its orange is `isHot`, the pace rule (UM-D3: Godview's flat 80%
-// retires). The meter's rules — the tightest window (UM-D13), the forecast (UM-D4), the words for a length — are the
-// leaf `rules.ts`'s, which Settings may read too. What this file adds is the drawing's (draft/profile-meters/round4/
-// src/p3a-core.js): the budget's pace-less rule, the stable order (UM-D15), and the union of every profile's plans
-// (`subsOf`, `subGlyphs`). AR-L1: no agent is named here — the order and the labels are the agent catalog's.
+// retires). The meter's rules — the tightest window (UM-D13), the forecast (UM-D4), the words for a length (the limit
+// moment's too) — are the leaf `rules.ts`'s, which Settings may read too; nothing here reads setup/. What this file
+// adds is the drawing's (draft/profile-meters/round4/src/p3a-core.js): the budget's pace-less rule, the stable order
+// (UM-D15), and the union of every profile's plans (`subsOf`, `subGlyphs`). AR-L1: no agent is named here — the order
+// and the labels are the agent catalog's.
 
 /** UM-D15's three groups, a first read standing with the readings it is waiting for. */
 export type MeterKind = "reading" | "first-read" | "needs-you" | "no-meter";
@@ -44,8 +51,8 @@ export type MeterKind = "reading" | "first-read" | "needs-you" | "no-meter";
 export type MeterNeed = "sign-in" | "signing-in" | "retry";
 
 /** Why a plan shows no meter: its account is named by no agent here, its agent reports no usage, its reading holds no
- * window, or the usage door itself could not answer (ruling 10: the circle says No meters, never a first read that
- * never ends). */
+ * window, or the usage door itself could not answer for a plan that would read (ruling 10: the circle is the dashed
+ * ring, said "‹profile›: usage unavailable", never a first read that never ends). */
 export type NoMeterReason = "unnamed" | "unreported" | "no-windows" | "unavailable";
 
 /** One window of a reading, as the meters draw it. */
@@ -56,7 +63,8 @@ export interface MeterWindow {
   line: UsageLine;
   /** a credit budget, which fills both bands */
   budget: boolean;
-  /** its length in words, as the limit moment says it ("7 days", "5 hours"), or its label when it names none */
+  /** its length in words (`windowWords`, as the limit moment says it: "7 days", "5 hours"), or its label when it names
+   * none */
   lengthWords: string;
   /** minutes to the reset, unrounded (negative once it has passed); absent for a window that names no reset and for
    * a budget */
@@ -160,7 +168,8 @@ export interface MetersOptions {
   title?: PlanTitle;
   /** the usage batch's own state: "unavailable" when the door refused or could not answer (ruling 10; ruling 17's
    * home that does not share usage), so `rows` holds no reading to wait for — every plan that would read shows no
-   * meter. Absent, the rows are the batch (empty before its first frame: every metered sign-in is a first read). */
+   * meter ("unavailable"), and one that never reads stays "unreported". Absent, the rows are the batch (empty before
+   * its first frame: every metered sign-in is a first read). */
   usage?: "available" | "unavailable";
 }
 
@@ -240,7 +249,7 @@ const GROUP: Readonly<Record<MeterKind, number>> = {
 const NEED_WORDS: Readonly<Record<MeterNeed, string>> = {
   "sign-in": "not signed in",
   "signing-in": "signing in…",
-  retry: "couldn’t read",
+  retry: "couldn't read",
 };
 
 function profileOf(set: AgentProfileSet): MeterProfile {
@@ -283,7 +292,11 @@ function readOf(
   now: Date,
   options: MetersOptions,
 ): PlanMeter {
-  if (options.usage === "unavailable") return { ...base, kind: "no-meter", why: "unavailable" };
+  if (options.usage === "unavailable") {
+    // what needs no batch is decided first: an agent the catalog meters no usage for has nothing it cannot read
+    const reads = isOffered(persona.provider, "usage");
+    return { ...base, kind: "no-meter", why: reads ? "unavailable" : "unreported" };
+  }
   const usage = usageOf(rows, persona);
   const state = signInState(persona, usage);
   const needs = (need: MeterNeed): NeedsYouMeter => ({

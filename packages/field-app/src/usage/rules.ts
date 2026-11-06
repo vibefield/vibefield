@@ -1,11 +1,13 @@
 // UM-1 (track UM; UM-D3, D4 and D13 at their leans, James 2026-11-06 03:11Z) — THE METER'S RULES, A LEAF: how a window
 // is pressed (UM-D13), which is the tightest, when it runs out at this pace (UM-D4), and how a length and a reset are
-// said. The ruled drawing's (draft/profile-meters/round4/src/p3a-core.js: `pressure`, `tightest`, `forecast`, `dur`).
+// said. The ruled drawing's (draft/profile-meters/round4/src/p3a-core.js: `pressure`, `tightest`, `forecast`, `dur`),
+// and a window's length in words (`windowWords`), which the limit moment says too (`setup/limit-moment.ts` reads it
+// here, so the meters need nothing of setup/).
 //
-// It imports nothing, so every reader may: the meter model (`meters.ts`), the Bands geometry (`bands.ts`) and Settings'
-// own page (`panels/agents/profiles-model.ts`, U2's 2e, so Settings says the same meter, UM-D3) — the last reads this
-// file while `meters.ts` reads Settings', and a leaf keeps that from being a cycle. What a window's orange is stays
-// Settings' (`isHot`): a reader hands its `hot` in, and nothing here decides it.
+// It imports nothing, so every reader may: the meter model (`meters.ts`), the Bands geometry (`bands.ts`), the limit
+// moment and Settings' own page (`panels/agents/profiles-model.ts`, U2's 2e, so Settings says the same meter, UM-D3) —
+// the last reads this file while `meters.ts` reads Settings', and a leaf keeps that from being a cycle. What a window's
+// orange is stays Settings' (`isHot`): a reader hands its `hot` in, and nothing here decides it.
 
 /** Settings' `resetWords` says a reset this many minutes off, or more, by its day and clock ("Thu 09:00", in the
  * reader's own zone and locale), a nearer one as a length ("2h 10m"), and one already past as "now". */
@@ -29,8 +31,16 @@ export interface WindowLength {
 /** A window's length as a person says it — "7 days", "5 hours", "30 minutes" — or its adapter's label when it names
  * none: a meter's window ("of 7 days") and the limit moment's ("92% · 7 days") alike. */
 export function windowWords(window: WindowLength): string {
-  // RED SKELETON: the limit moment keeps the words; the leaf has only the label
-  return window.label;
+  const minutes = window.durationMinutes;
+  if (minutes === undefined || !Number.isSafeInteger(minutes) || minutes <= 0) return window.label;
+  if (minutes % 1440 === 0) return counted(minutes / 1440, "day");
+  if (minutes % 60 === 0) return counted(minutes / 60, "hour");
+  return counted(minutes, "minute");
+}
+
+/** "1 day", "7 days": Settings' `plural`, which the leaf cannot import. */
+function counted(count: number, word: string): string {
+  return `${count} ${word}${count === 1 ? "" : "s"}`;
 }
 
 /** A length as the drawing says it: "45m", "2h 10m", "3d 4h" (its `dur`, the carry made exact). */

@@ -11,7 +11,8 @@ import {
   setupMomentState,
 } from "@vibefield/contracts/setup";
 import { planTitle } from "@vibefield/puppeteer-views";
-import { accountWords, plural, signInState, usageOf } from "../panels/agents/profiles-model";
+import { accountWords, signInState, usageOf } from "../panels/agents/profiles-model";
+import { windowWords } from "../usage/rules";
 
 // The limit moment (track AO, AO-6b; AO-D11 ruled A and AO-D15 ruled (a) by
 // James 2026-10-27, one row since AO-6b3 on his "go with your lean" the same
@@ -158,14 +159,4 @@ export function unplannedAtTheLine(input: LimitMomentInput): boolean {
     const reading = heldReading(usage, persona);
     return reading !== undefined && fullestWindow(reading.metrics, input.now) !== undefined;
   });
-}
-
-/** A window's length as a person says it: "7 days", "5 hours", "30 minutes";
- * the adapter's own label when it reports none. */
-export function windowWords(metric: AgentAccountUsageMetric): string {
-  const minutes = metric.durationMinutes;
-  if (minutes === undefined || !Number.isSafeInteger(minutes) || minutes <= 0) return metric.label;
-  if (minutes % 1440 === 0) return plural(minutes / 1440, "day");
-  if (minutes % 60 === 0) return plural(minutes / 60, "hour");
-  return plural(minutes, "minute");
 }

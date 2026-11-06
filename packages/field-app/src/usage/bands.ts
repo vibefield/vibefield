@@ -122,7 +122,8 @@ export interface BandsGeometry {
   empty?: { r: number; width: number; paint: BandsPaint; dash: readonly [number, number] };
   /** some plan runs hot (Settings' pace rule): a dot at -45°, ringed in the circle's ground */
   hotDot?: { x: number; y: number; r: number; ring: number };
-  /** "Usage: …", "‹profile›: usage unavailable" or "No meters" (`bandsLabel`) */
+  /** "Usage: …", "‹profile›: usage unavailable" (every profile's, "Usage unavailable") or "No meters"
+   * (`bandsLabel`) */
   label: string;
 }
 
@@ -209,7 +210,7 @@ export function bandsSay(entry: PlanMeter): { words: string; hot: boolean } {
             ? "sign in"
             : entry.need === "signing-in"
               ? "signing in…"
-              : "couldn’t read",
+              : "couldn't read",
         hot: false,
       };
     case "no-meter":
@@ -248,25 +249,20 @@ export function bandsPlanWords(entry: PlanMeter): string {
 }
 
 /** The circle in words: "Usage: " and each plan on it; while the usage cannot be read, "‹profile›: usage
- * unavailable" (every profile's at once, the claims strip's "Usage unavailable"); else "No meters" (§9). */
+ * unavailable", or "Usage unavailable" for every profile's circle at once (`every`), which names none; else "No
+ * meters" (§9). One profile's entries are all in that profile (`planMeters`), so it is named from them. */
 export function bandsLabel(
   entries: readonly PlanMeter[],
-  // RED SKELETON: whose circle it is is still inferred from the entries
-  _options: Pick<BandsOptions, "every"> = {},
+  options: Pick<BandsOptions, "every"> = {},
 ): string {
   const onCircle = entries.filter((entry) => entry.kind !== "no-meter");
   if (onCircle.length > 0) return `Usage: ${onCircle.map(bandsPlanWords).join("; ")}`;
-  const unread = entries.filter(
-    (entry) => entry.kind === "no-meter" && entry.why === "unavailable",
-  );
-  if (unread.length === 0) return "No meters";
-  const profiles = new Map(
-    unread.flatMap((entry) => entry.profiles).map((profile) => [profile.setId, profile.label]),
-  );
-  const [label] = [...profiles.values()];
-  return profiles.size === 1 && label !== undefined
-    ? `${label}: usage unavailable`
-    : "Usage unavailable";
+  const unread = entries.find((entry) => entry.kind === "no-meter" && entry.why === "unavailable");
+  if (unread === undefined) return "No meters";
+  const profile = unread.profiles[0];
+  return options.every === true || profile === undefined
+    ? "Usage unavailable"
+    : `${profile.label}: usage unavailable`;
 }
 
 // ── the geometry ──
@@ -737,7 +733,7 @@ export function bandsGeometry(
     options.around !== undefined ? (Math.min(2, sized) as BandsLevel) : sized;
   const c = size / 2;
   const onCircle = entries.filter((entry) => entry.kind !== "no-meter");
-  const label = bandsLabel(entries);
+  const label = bandsLabel(entries, options);
   const empty = onCircle.length === 0;
   const rings = ringsOf(size, level, empty ? 1 : onCircle.length, options);
   const { draw, markSize, markZone, band, gap, hairline, rim, rOuter, rInner, rBoth, gapDeg } =

@@ -28,9 +28,9 @@ import {
   limitCandidates,
   limitMoment,
   unplannedAtTheLine,
-  windowWords,
 } from "../src/setup/limit-moment";
 import { PROFILES_WORDS } from "../src/setup/profiles-words";
+import { windowWords } from "../src/usage/rules";
 
 // AO-6b (track AO; AO-D11 ruled A and AO-D15 ruled (a) by James 2026-10-27),
 // one row since AO-6b3 (his "go with your lean" the same day) — the limit
