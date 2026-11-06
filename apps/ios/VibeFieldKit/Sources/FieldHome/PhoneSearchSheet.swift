@@ -213,7 +213,8 @@ struct PhoneSearchSheet<AppsStrip: View, AppsGroup: View>: View {
               if chosen {
                 RoundedRectangle(cornerRadius: SearchSheet.switchItemRadius, style: .continuous)
                   .fill(ChromePalette.paper)
-                  .shadow(color: ChromeShadow.chosen.color, radius: ChromeShadow.chosen.radius, y: ChromeShadow.chosen.y)
+                  .shadow(
+                    color: ChromeShadow.chosen.color, radius: ChromeShadow.chosen.radius, y: ChromeShadow.chosen.y)
                   .matchedGeometryEffect(id: "chosen", in: thumb)
               }
             }

@@ -273,7 +273,7 @@ public enum PhoneSearch {
   }
 
   /// `count` and its noun, made plural past one ("1 session", "2 sessions").
-  static func plural(_ count: Int, _ noun: String) -> String { "\(count) \(noun)\(count == 1 ? "" : "s")" }
+  public static func plural(_ count: Int, _ noun: String) -> String { "\(count) \(noun)\(count == 1 ? "" : "s")" }
 
   /// The query with its last word dropped: an offer's filter takes the word it was typed as.
   public static func droppingLastWord(_ query: String) -> String {
