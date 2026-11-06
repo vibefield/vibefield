@@ -78,6 +78,15 @@ interface Enqueued {
   readonly from: AgentInputSender;
   readonly step: FlowRunRecordStep | undefined;
 }
+/** A session an `in:` handed a step, as the runs told the step listener (9b): how many lines were queued at the hand,
+ * and whether the runs let it go. */
+interface Handed {
+  readonly runtimeRunId: string;
+  readonly run: string;
+  readonly call: number;
+  readonly at: number;
+  gone: boolean;
+}
 
 async function harness(
   opts: {
@@ -115,6 +124,7 @@ async function harness(
   let profiles: readonly string[] = opts.profiles ?? ["work", "review"];
   const spawned: Spawned[] = [];
   const enqueued: Enqueued[] = [];
+  const hands: Handed[] = [];
   const items: FlowItemRaise[] = [];
   const turnListeners = new Set<(end: FlowStepTurnEnd) => void>();
   /** a step's turn ended, as flow-step-events.ts tells it */
@@ -139,6 +149,13 @@ async function harness(
       onTurnEnd: (listener) => {
         turnListeners.add(listener);
         return () => turnListeners.delete(listener);
+      },
+      hand: (runtimeRunId, step) => {
+        const handed: Handed = { runtimeRunId, ...step, at: enqueued.length, gone: false };
+        hands.push(handed);
+        return () => {
+          handed.gone = true;
+        };
       },
     },
     profiles: () => profiles,
@@ -201,6 +218,7 @@ async function harness(
     endTurn,
     spawned,
     enqueued,
+    hands,
     write,
     approved,
     start,
@@ -1329,5 +1347,100 @@ describe("CP-4a2b — a run's folder, held at its start (slice 7's R8b)", () => 
       expect(said).not.toBe("");
       expect(design, said).toContain(`"${said}"`);
     }
+  });
+});
+
+// CP-4a2b (§13a slice 9b; ruled 2026-11-06) — a step handed a live session by `in:` (D9). The runs tell the step listener
+// at the hand (`stepEnds.hand`, flow-step-events.ts), before the step's line is queued, so the session's turn ends are
+// heard as the step's; they let it go at the answer, at a failed turn and at the run's end, and keep it through a
+// miss's repair turn. The harness's endTurn stands for the listener; flow-step-events.test.ts's SH rows hold its side.
+
+const HANDED_YOURS: FlowStepSession = { live: true, profile: "work", onPermission: false };
+/** One step handed your session, its answer's text the run's log line; `more` adds to its options. */
+const handedTo = (more = "") =>
+  [
+    'export const meta = { name: "Handed" };',
+    "export default async function () {",
+    `  const said = await agent("Review this", { in: "run-yours", label: "Yours"${more} });`,
+    "  log(said.text);",
+    "}",
+    "",
+  ].join("\n");
+
+describe("CP-4a2b — a step handed a session: heard from the hand, let go at the answer (§13a slice 9b)", () => {
+  it("R19h (9b): the runs hand the step listener your session before the step's line is queued; its turn's end answers, and the hand is let go at the answer", async () => {
+    const h = await harness({ sessions: { "run-yours": HANDED_YOURS } });
+    h.approved("handed", handedTo());
+    const run = startedRun(await h.start({ flow: "handed" })).run;
+    await waitFor(() => expect(h.enqueued).toHaveLength(1));
+    expect(h.enqueued[0]).toMatchObject({ runtimeRunId: "run-yours", text: "Review this" });
+    expect(h.hands).toEqual([{ runtimeRunId: "run-yours", run, call: 1, at: 0, gone: false }]);
+    h.endTurn({
+      run,
+      call: 1,
+      runtimeRunId: "run-yours",
+      turn: "t1",
+      outcome: "completed",
+      text: "looks good",
+    });
+    expect(h.hands.map((hand) => hand.gone)).toEqual([true]);
+    expect((await settled(h.runs, run, "done")).log).toBe("looks good");
+    expect(h.kinds(run)).toEqual(["head", "call", "answer", "log", "end"]);
+  });
+
+  it("R19h-2 (9b, CP4-Q7 (a)): a handed step's miss keeps the hand through its repair turn, sent to the same session; the answer lets it go", async () => {
+    const h = await harness({ sessions: { "run-yours": HANDED_YOURS } });
+    h.approved("handed", handedTo(`, schema: ${FORM}`));
+    const run = startedRun(await h.start({ flow: "handed" })).run;
+    await waitFor(() => expect(h.enqueued).toHaveLength(1));
+    const at = { run, call: 1, runtimeRunId: "run-yours", outcome: "completed" } as const;
+    h.endTurn({ ...at, turn: "t1", text: "no fenced block here" });
+    await waitFor(() => expect(h.enqueued).toHaveLength(2));
+    expect(h.enqueued[1]).toMatchObject({
+      runtimeRunId: "run-yours",
+      text: repairLine("the answer holds no JSON the form can read"),
+    });
+    expect(h.hands.map((hand) => hand.gone)).toEqual([false]);
+    h.endTurn({ ...at, turn: "t2", text: fenced('{"verdict":"clean"}') });
+    expect(h.hands.map((hand) => hand.gone)).toEqual([true]);
+    await settled(h.runs, run, "done");
+  });
+
+  it("R19h-3 (9b): a failed turn lets the hand go, and so does the run's end with its handed step unanswered", async () => {
+    const h = await harness({ sessions: { "run-yours": HANDED_YOURS } });
+    h.approved(
+      "fails",
+      [
+        'export const meta = { name: "Fails" };',
+        "export default async function () {",
+        '  try { await agent("Review this", { in: "run-yours", label: "Yours" }); }',
+        "  catch (e) { log(e.message); }",
+        "}",
+        "",
+      ].join("\n"),
+    );
+    h.approved(
+      "leaves",
+      [
+        'export const meta = { name: "Leaves" };',
+        "export default async function () {",
+        '  agent("Look later", { in: "run-yours", label: "Later" });',
+        '  return "early";',
+        "}",
+        "",
+      ].join("\n"),
+    );
+    const fails = startedRun(await h.start({ flow: "fails" })).run;
+    await waitFor(() => expect(h.enqueued).toHaveLength(1));
+    h.endTurn({ run: fails, call: 1, runtimeRunId: "run-yours", turn: "t1", outcome: "failed" });
+    expect(h.hands).toEqual([
+      { runtimeRunId: "run-yours", run: fails, call: 1, at: 0, gone: true },
+    ]);
+    expect((await settled(h.runs, fails, "done")).log).toBe("Yours failed.");
+    const leaves = startedRun(await h.start({ flow: "leaves" })).run;
+    await settled(h.runs, leaves, "done");
+    expect(h.hands.filter((hand) => hand.run === leaves)).toEqual([
+      { runtimeRunId: "run-yours", run: leaves, call: 1, at: 1, gone: true },
+    ]);
   });
 });

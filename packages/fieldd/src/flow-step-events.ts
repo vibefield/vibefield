@@ -46,6 +46,12 @@ export class FlowStepEvents {
     return () => this.#listeners.delete(listener);
   }
 
+  /** CP-4a2b (§13a slice 9b): a session an `in:` hands a flow's step, listened to as that step's until the answer
+   * this returns is called. Not built yet. */
+  hand(_runtimeRunId: string, _step: { readonly run: string; readonly call: number }): () => void {
+    throw new Error("CP-4a2b: a handed session's listener is not built (§13a slice 9b)");
+  }
+
   /** A run entered the agent runtime: a flow's step is listened to from here, once in this fieldd's life. */
   entered(entered: RunEntered): void {
     const { agent, runtimeRunId, origin } = entered;

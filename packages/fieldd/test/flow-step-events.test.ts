@@ -1,3 +1,4 @@
+import type { Logger } from "@vibefield/logging";
 import { describe, expect, it } from "vitest";
 import { FlowStepEvents, type FlowStepTurnEnd } from "../src/flow-step-events";
 import type { RunEntered, RunEnteredAgent } from "../src/run-entry";
@@ -173,5 +174,145 @@ describe("CP-4a2b — a flow step's turn end (CP4-S2)", () => {
     emit("turn:completed", { turnId: "t1", lastAssistantMessage: "done" });
     emit("turn:completed", { turnId: "t1", lastAssistantMessage: "done, said late" });
     expect(heard.map((end) => [end.turn, end.text])).toEqual([["t1", "done"]]);
+  });
+});
+
+// CP-4a2b (§13a slice 9b; ruled 2026-11-06) — a step handed a live session by `in:` (D9). That session is no flow's run
+// (your own, here), so nothing listens to it until the runs hand it: from the hand, its turn ends are told as the
+// step's `{run, call}` by the same road, from a turn that STARTS after the hand (a turn in flight at the hand is never
+// the step's), each turn's end once (CL-H6), until the runs let it go or the session ends.
+
+/** A handed step: call 2 of a run. */
+const STEP = { run: "fr-h4nd3d00", call: 2 } as const;
+const YOURS = "run-yours-1";
+
+/** A listener, and your own session entered with no flow's origin, as an `in:` finds it. */
+function yours(logger?: Logger) {
+  const events = new FlowStepEvents(logger);
+  const heard: FlowStepTurnEnd[] = [];
+  events.onTurnEnd((end) => heard.push(end));
+  const run = fakeAgent();
+  events.entered({ agent: run.agent, runtimeRunId: YOURS, begun: "spawn", origin: { by: "you" } });
+  return { events, heard, ...run };
+}
+
+/** A logger that keeps each warning's event. */
+function warnings(events: string[]): Logger {
+  const logger: Logger = {
+    child: () => logger,
+    trace: () => undefined,
+    debug: () => undefined,
+    info: () => undefined,
+    warn: (event) => void events.push(event),
+    error: () => undefined,
+    fatal: () => undefined,
+    isLevelEnabled: () => true,
+  };
+  return logger;
+}
+
+describe("CP-4a2b — a session an `in:` hands a step (§13a slice 9b)", () => {
+  it("SH1: a session handed a step is listened to from the hand, and its next turn's end is told as that step's, by the same road", () => {
+    const { events, heard, emit, held } = yours();
+    expect(held()).toBe(0);
+    emit("turn:started", { turnId: "t0" });
+    emit("turn:completed", { turnId: "t0", lastAssistantMessage: "before the hand" });
+    events.hand(YOURS, STEP);
+    expect(held()).toBeGreaterThan(0);
+    emit("turn:started", { turnId: "t1" });
+    emit("conversation:assistant-message", said("Looked at it."));
+    emit("conversation:assistant-message", said("shown on screen", { displayOnly: true }));
+    emit("turn:completed", { turnId: "t1" });
+    expect(heard).toEqual([
+      {
+        run: STEP.run,
+        call: STEP.call,
+        runtimeRunId: YOURS,
+        turn: "t1",
+        outcome: "completed",
+        text: "Looked at it.",
+      },
+    ]);
+  });
+
+  it("SH2: a turn in flight at the hand is never the step's, with turn ids and with none; the next turn that starts is", () => {
+    const withIds = yours();
+    withIds.emit("turn:started", { turnId: "t0" });
+    withIds.emit("conversation:assistant-message", said("your own words", { turnId: "t0" }));
+    withIds.events.hand(YOURS, STEP);
+    withIds.emit("turn:completed", { turnId: "t0", lastAssistantMessage: "your own turn's end" });
+    expect(withIds.heard).toEqual([]);
+    withIds.emit("turn:started", { turnId: "t1" });
+    withIds.emit("turn:completed", { turnId: "t1", lastAssistantMessage: "the step's end" });
+    expect(withIds.heard.map((end) => [end.turn, end.text])).toEqual([["t1", "the step's end"]]);
+    // a provider that says no turn ids: the turn in flight fails at the hand's side, and is still not the step's
+    const bare = yours();
+    bare.emit("turn:started", {});
+    bare.emit("conversation:assistant-message", said("in flight", { turnId: undefined }));
+    bare.events.hand(YOURS, STEP);
+    bare.emit("turn:failed", {});
+    expect(bare.heard).toEqual([]);
+    bare.emit("turn:started", {});
+    bare.emit("conversation:assistant-message", said("the step's words", { turnId: undefined }));
+    bare.emit("turn:completed", {});
+    expect(bare.heard).toEqual([
+      {
+        run: STEP.run,
+        call: STEP.call,
+        runtimeRunId: YOURS,
+        outcome: "completed",
+        text: "the step's words",
+      },
+    ]);
+  });
+
+  it("SH3: let go, a handed session is told nothing more: at the runs' word (the answer, a failed turn, the run's end), and at the session's own end", () => {
+    const { events, heard, emit, held } = yours();
+    const off = events.hand(YOURS, STEP);
+    emit("turn:started", { turnId: "t1" });
+    emit("turn:failed", { turnId: "t1", error: "the provider stopped" });
+    off();
+    expect(held()).toBe(0);
+    emit("turn:started", { turnId: "t2" });
+    emit("turn:completed", { turnId: "t2", lastAssistantMessage: "your next turn" });
+    expect(heard.map((end) => [end.turn, end.outcome])).toEqual([["t1", "failed"]]);
+    // handed again, then the session ends: its hands go with it
+    events.hand(YOURS, { ...STEP, call: 3 });
+    expect(held()).toBeGreaterThan(0);
+    events.forget(YOURS);
+    expect(held()).toBe(0);
+    emit("turn:started", { turnId: "t3" });
+    emit("turn:completed", { turnId: "t3", lastAssistantMessage: "after its end" });
+    expect(heard).toHaveLength(1);
+  });
+
+  it("SH4: a handed turn's end heard twice is told once, a step handed twice is listened to once (CL-H6), and a session that is another step of the same run (A3) is told as each", () => {
+    const { events, heard, emit, held } = yours();
+    events.hand(YOURS, STEP);
+    const once = held();
+    events.hand(YOURS, STEP);
+    expect(held()).toBe(once);
+    emit("turn:started", { turnId: "t1" });
+    emit("turn:completed", { turnId: "t1", lastAssistantMessage: "done" });
+    emit("turn:completed", { turnId: "t1", lastAssistantMessage: "done, said late" });
+    expect(heard.map((end) => [end.call, end.turn, end.text])).toEqual([[STEP.call, "t1", "done"]]);
+    // A3: an in: naming a step of this run: the session is the run's call 1, and is handed call 2
+    const step = entered({ by: "flow", run: STEP.run, call: 1 });
+    step.events.hand(RUN, STEP);
+    step.emit("turn:started", { turnId: "t5" });
+    step.emit("turn:completed", { turnId: "t5", lastAssistantMessage: "the follow-up" });
+    expect(step.heard.map((end) => [end.call, end.turn])).toEqual([
+      [1, "t5"],
+      [STEP.call, "t5"],
+    ]);
+  });
+
+  it("SH5: a session this fieldd never heard enter holds nothing, and says so once", () => {
+    const logged: string[] = [];
+    const events = new FlowStepEvents(warnings(logged));
+    const off = events.hand("run-never", STEP);
+    expect(logged).toEqual(["fieldd.flows.step_hand_unheard"]);
+    off();
+    expect(logged).toHaveLength(1);
   });
 });

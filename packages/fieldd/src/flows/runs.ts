@@ -91,8 +91,11 @@ export interface FlowRunPorts {
     /** a run's own item (slice 6's `flowItem`): a repair miss, a gate, the cap, a lost step */
     flowItem(raise: FlowItemRaise): NeedsItemId;
   };
-  /** each step's turn end (flow-step-events.ts, CP4-S2's road): a step's answer reaches the runs here */
-  readonly stepEnds: { onTurnEnd(listener: (end: FlowStepTurnEnd) => void): () => void };
+  /** each step's turn end (flow-step-events.ts, CP4-S2's road): a step's answer reaches the runs here; a session an
+   * `in:` hands a step is told to it at the hand (9b) */
+  readonly stepEnds: FlowStepPorts["stepEnds"] & {
+    onTurnEnd(listener: (end: FlowStepTurnEnd) => void): () => void;
+  };
   /** the runtime's spawn, for a step's agent (slice 8; steps.ts `startStep` is its one road) */
   readonly agents: FlowStepPorts["agents"];
   /** each session's input queue, for a step's prompt (D5) */

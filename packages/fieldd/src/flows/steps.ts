@@ -51,6 +51,18 @@ export interface FlowStepSession {
   readonly onPermission: boolean;
 }
 
+/** A flow run's step, as the step listener tells its turn ends (FlowStepTurnEnd's `run` and `call`). */
+export interface FlowStepOf {
+  readonly run: string;
+  readonly call: number;
+}
+
+/** The step listener's side of an `in:` (flow-step-events.ts, §13a slice 9b): a session handed a step is no flow's
+ * run, so its turn ends are told as that step's only once the runs hand it. The answer is how to let it go. */
+export interface FlowStepHand {
+  hand(runtimeRunId: string, step: FlowStepOf): () => void;
+}
+
 /** fieldd's own interface to a run's steps (R32): the runtime's spawn, each session's input queue, the sessions an
  * `in:` may name, and the folder an input names (CP4-Q20 (a)). */
 export interface FlowStepPorts {
@@ -72,6 +84,8 @@ export interface FlowStepPorts {
     ): { id: string; position: number };
   };
   readonly sessions: { of(runtimeRunId: string): FlowStepSession | undefined };
+  /** the step listener, told of a session an `in:` hands a step (9b) */
+  readonly stepEnds: FlowStepHand;
   /** the folder an input of `kind` (`session`, `project`) names by `value`; none for another kind or one not found */
   folderOf(kind: string, value: string): string | undefined;
   /** the project folders this desktop knows: a step's `cwd` may be one, or inside one (D9) */
@@ -104,10 +118,15 @@ export type FlowStepWrite = (
   patch: (step: FlowRunRecordStep) => FlowRunRecordStep,
 ) => void;
 
-/** How a step's start went: refused, in the script's words, or working in its session. */
+/** How a step's start went: refused, in the script's words, or working in its session; a handed session's `unhand`
+ * lets the step listener go (9b). */
 export type FlowStepStarted =
   | { readonly ok: false; readonly refused: string }
-  | { readonly working: string; readonly form?: FlowForm | undefined };
+  | {
+      readonly working: string;
+      readonly form?: FlowForm | undefined;
+      readonly unhand?: (() => void) | undefined;
+    };
 
 /** A form the run can't check, in DESIGN.md §9's words ("A form the run can't check"; D12). */
 export function formWords(label: string | undefined, refusal: FormRefusal): string {
