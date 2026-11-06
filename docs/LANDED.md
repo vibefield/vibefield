@@ -33712,6 +33712,8 @@ fixtures), field-native's `registries.rs`, fieldd's package.json and 11 fieldd s
   VibeField and any `pnpm dev` quit for the upload. Nothing here touched a keychain or App Store Connect.
 - The iPad word pass ("this phone" → device-neutral) after IOS-13a's `FieldDesign.DeviceWord`
   (the list: `/Volumes/SamsungRed/lanes/lp-wave1/A2-device-words-list.md`), and a pass on 11- and 13-inch iPads.
+  > *Answered 2026-11-06:* the word pass landed as M172 `fad2d5433` (LANDED "LP-4's word pass"); the pass on 11-
+  > and 13-inch iPads stays owed.
 - About → Acknowledgements reading the bundled file (IOS-13a).
 
 ## LP-6c — the census is main's gate: verify runs the strict census after the builds it inventories, and the baseline is drawn from 0.9's tree (2026-11-05; `c46f0ecde` → `20eef65de`, 2 commits on main `fe9270152`, lane `lp/census` in `/Volumes/SamsungRed/lanes/lp-census/vibe-field`, minted as M145 `20eef65de`, run 145)
@@ -36132,6 +36134,8 @@ paths adapted, nothing else, as ruled 2026-11-05 22:12Z). The first mini went of
   - the freeway's refusals (FreewayApproval :52, :58, :61, :64, :66);
   - TerminalAttachment :1382, and the mesh's reasons that may surface.
   - §9's "Owed to L4's word pass" line names the lock's two.
+  > *Answered 2026-11-06:* M172 `fad2d5433` (LANDED "LP-4's word pass"), every line above, read again on main
+  > `e46fd6d6c`; §9's owed line is its as-built line now.
 - The Mac's About has no non-affiliation line: a Mac lane's row.
 - Item 184, James's eye.
 - The iPad pass on 11- and 13-inch iPads (Phase 3).
@@ -36856,3 +36860,76 @@ suite 473 → 474):
 - The land (the fixer's, 2026-11-06T06:16:37Z): main fast-forwarded from `ce97aa630`, 4 files +130 −42.
 
 No insert into an older entry.
+
+## LP-4's word pass — the phone names the device as its platform does beyond Settings and the way in: the lock, Chat, History, the freeway, a stopped attach and the corner's refused field (track LP)
+
+(2026-11-06; `157578ed4` → `fad2d5433`, 13 commits on main `a5e3473fd`, lane `lp/words` in
+`/Volumes/SamsungRed/lanes/lp-notices178/vibe-field`, vibe-field-42's (vibe-field-1d since the 05:40Z switch);
+M172 is `fad2d5433`, run 172, landed 2026-11-06T06:30:34Z; cut as `894094ff4` on `e46fd6d6c`, then re-cut onto
+`ce97aa630` (items 186 and 187's records), `e3e9e21cb` (the SEA slice, AR-7j) and `a5e3473fd` (its records), its
+diff unchanged each time.)
+Cut on VF-PM's word at 04:24Z and ruled (b) at 04:27Z. It answers LP-4's Owed "the iPad word pass" and IOS-13a's
+Owed "L4's word pass", each noted in its entry.
+
+**What it rests on.**
+- IOS-13a put the device's word in one home: FieldDesign's `DeviceWord` ("this iPhone", "this iPad", "this device"
+  where it is neither). It took Settings and the way in. The rest was listed by the IOS session at ~03:53Z
+  (`lanes/lp-wave1/A2-device-words-list.md`) and re-read here on main `e46fd6d6c`, every line where the list said.
+- DESIGN.md §9's rule is a substitution, never a rewording. "this phone" says "this iPhone" (or "this iPad", or
+  "this device"); "This phone" says "This iPhone"; "your iPhone passcode" says "your iPad passcode" on an iPad.
+- **Ruled (b), VF-PM 04:27Z.** FieldLock has no dependencies (Package.swift: "No UI and no mesh … every rule tests
+  without a simulator"), and FieldFreeway imports Foundation and CryptoKit alone. So their words take the device's
+  noun as a value ("iPhone", "iPad", "device"), which only the UI layer fills, from `DeviceWord`. No Package.swift
+  edit; one word in one home.
+
+**What is real.**
+- **The lock** (LockWords; FieldLock): `offerLine`, `passcodeToo`, `toggleLine`, `offFoot` and `switchFoot` take
+  `device:`. The way in's offer and curtain fill it from their `device` (FieldHomeModel+WayIn), and Settings › Lock
+  from `DeviceWord.current.noun` (LockPage). "This iPad can type into your agents’ terminals. …", "Your iPad passcode
+  works too.", "Anyone holding this iPad unlocked can open your agents’ terminals." iOS's own reason still says
+  "this device" (LP-4).
+- **Chat** (`ChatWords.away(…, device:)`): "‹desktop› runs a build this iPad can't read. …", both lines.
+- **History:** `scopeLine(…, device:)` ("· this iPad 0.1.0") and `emptyLedger(…, device:)` ("Nothing of your
+  history is on this iPad; …", "History on this iPad reads nothing from it …"). `projectNotRead`, `sessionNotRead`
+  and `noDesktopRead` are new beside `emptyLedger`: the three notes HistoryLedgerView said by hand.
+- **A stopped attach** (`stallWords(…, here:)`; `phase(for:…, here: = .unknown)`): "this iPad's last terminal never
+  let go of its connection — stopped after 20 s". The attachment's own `phase` passes `DeviceWord.current`.
+- **The freeway's refusals** (`FreewayApproval.said(…, device:)`): "‹desktop› won't approve a connection from this
+  iPad", "doesn't know this iPad yet", "isn't ready for this iPad's connection yet", "isn't taking connections from
+  iPads right now", "this iPad isn't connected to its home desktop". `Dialing.deviceNoun` (default "device") carries
+  the noun; MeshModel's `freewayDialing` fills it, so HomeScreen is untouched (vibe-field-88's M-phone holds it).
+- **The corner's refused field:** `FieldLink.boardRefusal(_:here:)`, "it answered a board this iPad cannot read as
+  the mesh: …", reaches `fieldRefusal` and the corner's "the field was refused: …".
+- **ProductEndpointCheck :135** drops the device: "the door built from the mesh's names points somewhere this
+  desktop is not". It is the composed door's invariant guard; VF-PM kept the rewording (05:51Z).
+- **DESIGN.md §9:** the "Owed to L4's word pass" bullet is a dated as-built line (VF-PM 05:49Z: it stays in the
+  mint, the slice's own words).
+
+**What is stubbed or left.**
+- FreewayLink :478's "this phone serves no kind" is a wire state the desktop reads, never on the phone's screen. It
+  stays (ruled).
+- MeshDisplay :138 ("no door this phone can dial") is in `linkLine`, which no view draws. FieldLink's five note
+  reasons (:1236, :1296, :1520, :1555, :1926) go to `notes`, which no view reads. They stay (VF-PM 05:51Z).
+- `phase(for:)`'s `here` and `Dialing.deviceNoun` default to "this device", never a phone.
+
+**Validation.**
+- Red by build first, per module (each red names a signature its green adds), as IOS-13a's were: the lock, Chat,
+  History, a stopped attach, the freeway and the refused field, six pairs. No Swift compiled on the MacBook (the
+  pressure HOLD).
+- This Mac at 04:44Z, before VF-PM's 05:18Z HOLD line: preflight rc 0 and `check-ios-fixtures` rc 0 (253 copies, 86
+  pins), from inside the lane. Pin-class: none.
+- The kit slot `words` on vf-m1 (a9, at `894094ff4`, tree `a1f21ec66d74`): GREEN at 06:03:30Z on Xcode 27.3 beta
+  27C5020n, iPhone 17 `67E36A30`. 6 runs, 179 tests, 0 red, 0 issues; 15 of 15 suites and 24 of 24 rows passed,
+  the five new rows among them. apps/ios `a37bdbf5b33a` is the same at every re-cut, so it carries (carry-check v3:
+  13 of 13 patch-ids equal each time). Logs `lanes/ts6/logs/m1/words-894094ff4/` (`slot.out` `8a9d3f7d…`).
+- Run 172 (a9's mint at T on vf-m1, the full verify; VF-PM 06:09Z: required, since field-app's DESIGN.md readers
+  cover §9's prose): `pnpm verify` exit 0 at 06:26:57Z, the tree clean after it. Every count equal to run 171's:
+  node 474/0, field-app 4192, contracts 1775, fieldd 3488|14, electron-shell 2671|2 (executable-arch's release row on
+  the lane's own field-native), vitest 13,499|0|20, cargo 545/0 over 34, biome 3400, typecheck 29; census "no
+  drift" and "census assert OK"; bundle assert OK. No kit ran there: the 06:03Z GREEN carries. Logs
+  `lanes/ts6/logs/m1/run172/` (`verify.log` `1e6e8e6e…`, `verify.clean.log` `9a8b57a7…`).
+
+**Owed.**
+- The pass on 11- and 13-inch iPads (Phase 3): this pass changes words, not layout.
+- **For James's eye** (draft words; not a hold): the lock's, Chat's, History's and the freeway's sentences on iPad,
+  and the composed door's guard said without the device.

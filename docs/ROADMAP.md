@@ -908,8 +908,8 @@ DESIGN.md §2.9, §8 "The phone's Apps" and §9 "Apps"; DECISIONS MA
        `7a7f22623`, LANDED "IOS-13a"). Owed: item 184, the font rows' version and names (James's eye);
      - Tailscale's log upload turned off on iOS (a truffle Swift option);
      - iPad: one window in v1: LANDED (M144). Its words in Settings and the way in ("this iPad", `DeviceWord`):
-       LANDED (M165, LANDED "IOS-13a"). Owed: the lock's and the other surfaces' words (L4's word pass; LANDED
-       "IOS-13a", Owed), and a pass on 11- and 13-inch iPads;
+       LANDED (M165, LANDED "IOS-13a"). The lock's and the other surfaces' words: LANDED 2026-11-06 (M172
+       `fad2d5433`, LANDED "LP-4's word pass"). Owed: a pass on 11- and 13-inch iPads;
      - build 6 internal, then the owed device checks;
      - the marks' permission emails (James);
      - the review Mac, the review identity and the filmed video (LP-D5, D6; `draft/launch/review-mac-runbook.md`);
