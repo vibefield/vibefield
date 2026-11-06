@@ -325,6 +325,11 @@ export class AgentInputQueues {
     }
   }
 
+  /** CP-4a2b (13a's D4 and D19; W2) — a flow run's Stop withdraws its lines that wait (not built). */
+  withdraw(run: string): { readonly runtimeRunId: string; readonly input: QueuedInput }[] {
+    throw new Error(`not built: withdraw(${run})`);
+  }
+
   /** Once this boot's re-attach has settled (item 158, D3): a kept queue whose run the fold no longer holds ended while
    * fieldd was down, and no exit event will say so. It is forgotten: a head a restart broke into is uncertain
    * (`restarted`), and the rest are dropped. */

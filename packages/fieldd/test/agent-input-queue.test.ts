@@ -235,6 +235,101 @@ describe("the input queue (CP-L5, CP-2)", () => {
   });
 });
 
+// CP-4a2b (13a's D4 and D19, slice 13's W2) — a flow run's Stop withdraws the lines it has waiting in any session's
+// queue: its `flow` lines (its steps' prompts, its `in:` lines) and VibeField's own lines to its steps (`fieldd` with
+// `flow` naming the run). Nothing is told, since the run is their sender; a head in flight is its receipt's (D2), and
+// a head a restart broke into is said uncertain at its run's first poke (item 158), so neither is withdrawn.
+const RUN = "fr-aaaaaa";
+const ours = (call: number) =>
+  ({ kind: "flow", flow: "triage", name: "Triage", run: RUN, call }) as const;
+const repairOf = (call: number) =>
+  ({ kind: "fieldd", flow: { run: RUN, call, line: "repair", n: 1 } }) as const;
+const theirs = { kind: "flow", flow: "triage", name: "Triage", run: "fr-bbbbbb", call: 1 } as const;
+
+describe("CP-4a2b — a flow run's Stop withdraws its waiting lines (13a's D4, D19; W2)", () => {
+  it("W2a · withdraws the run's lines from every session's queue, oldest first, telling no one; the rest stay, kept, and move on", async () => {
+    const h = harness();
+    h.queues.enqueue("run-s1", "Read the diff and say what changed.", ours(1));
+    h.queues.enqueue("run-s1", "a word", VELA);
+    h.queues.enqueue("run-s2", "also check the tests", ours(3));
+    h.queues.enqueue("run-s2", "Ask once more: the answer missed its form.", repairOf(2));
+    h.queues.enqueue("run-s3", "another run's prompt", theirs);
+    h.queues.wake("run-s3", "Ada finished");
+    h.idle.add("run-s1");
+    const withdrawn = h.queues.withdraw(RUN);
+    expect(withdrawn.map((w) => [w.runtimeRunId, w.input.text])).toEqual([
+      ["run-s1", "Read the diff and say what changed."],
+      ["run-s2", "also check the tests"],
+      ["run-s2", "Ask once more: the answer missed its form."],
+    ]);
+    expect(withdrawn.map((w) => w.input.from)).toEqual([ours(1), ours(3), repairOf(2)]);
+    // nothing is told: the run that withdraws them is their sender
+    expect(h.outcomes).toEqual([]);
+    // what is not the run's stays, in memory and on disk; a queue left empty keeps no file
+    expect(h.queues.pending("run-s2")).toEqual([]);
+    expect(existsSync(join(h.inputs, "run-s2.json"))).toBe(false);
+    expect(h.queues.pending("run-s3").map((i) => i.text)).toEqual([
+      "another run's prompt",
+      "Ada finished",
+    ]);
+    expect(h.kept("run-s3").map((i) => i.text)).toEqual(["another run's prompt", "Ada finished"]);
+    // the session that is idle moves on to what now leads its queue: the spark's word, never the withdrawn line
+    await h.flush();
+    expect(h.delivered).toEqual([
+      { run: "run-s1", text: "Vela (your spark) on your behalf:\na word" },
+    ]);
+    expect(h.queues.pending("run-s1")).toEqual([]);
+    expect(h.kept("run-s1")).toEqual([]);
+    // a second withdraw finds nothing
+    expect(h.queues.withdraw(RUN)).toEqual([]);
+  });
+
+  it("W2b · leaves a head in flight to its receipt, which settles it once", async () => {
+    let answer: ((receipt: DeliveryReceipt) => void) | undefined;
+    const h = harness(
+      [],
+      undefined,
+      () =>
+        new Promise<DeliveryReceipt>((resolve) => {
+          answer = resolve;
+        }),
+    );
+    h.queues.enqueue("run-s1", "Read the diff.", ours(1));
+    h.queues.enqueue("run-s1", "also check the tests", ours(4));
+    h.idle.add("run-s1");
+    const delivering = h.queues.poke("run-s1");
+    await h.flush();
+    expect(h.delivered.map((d) => d.text)).toHaveLength(1);
+    expect(h.queues.withdraw(RUN).map((w) => w.input.text)).toEqual(["also check the tests"]);
+    answer?.({ status: "confirmed" });
+    await delivering;
+    expect(h.outcomes).toEqual([{ run: "run-s1", text: "Read the diff.", outcome: "delivered" }]);
+    // the head its receipt settled leaves the queue once: nothing is delivered again
+    expect(h.queues.pending("run-s1")).toEqual([]);
+    expect(h.kept("run-s1")).toEqual([]);
+    await h.queues.poke("run-s1");
+    expect(h.delivered).toHaveLength(1);
+  });
+
+  it("W2c · leaves a head a restart broke into, said uncertain at its run's first poke; the line behind it is withdrawn", async () => {
+    const h = harness([], undefined, () => never());
+    h.queues.enqueue("run-s1", "Read the diff.", ours(1));
+    h.queues.enqueue("run-s1", "also check the tests", ours(4));
+    h.idle.add("run-s1");
+    void h.queues.poke("run-s1");
+    await h.flush();
+    const again = harness([], h.root);
+    again.queues.restore();
+    expect(again.queues.withdraw(RUN).map((w) => w.input.text)).toEqual(["also check the tests"]);
+    expect(again.kept("run-s1").map((i) => i.text)).toEqual(["Read the diff."]);
+    await again.queues.poke("run-s1");
+    expect(again.outcomes).toEqual([
+      { run: "run-s1", text: "Read the diff.", outcome: "uncertain", reason: "restarted" },
+    ]);
+    expect(again.delivered).toEqual([]);
+  });
+});
+
 describe("the kept queue is signed: a same-uid file can no longer speak as a spark or as VibeField (CP-3, LEANS P3; EL7)", () => {
   it("never delivers a queue fieldd did not sign: an agent's file in CP-2's form, speaking as VibeField, is set aside at restore", async () => {
     const h = harness();
