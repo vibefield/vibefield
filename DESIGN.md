@@ -6234,6 +6234,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   in that order. One Chat, two sizes (PC-L1): the Mac's sparks, words, statuses and rulings at touch pitch. Every
   read and act rides the phone's home, and a spark lives on the desktop that hatched it (PC-L2). Its words are §9
   "Chat on the phone".
+  *Corrected 2026-11-06 (IOS-12c, M-c2):* "Nothing is drawn yet" stopped being true at IOS-12b (the bar, the
+  list, the note), and "in that order" at IOS-12e, which lands before IOS-12c and IOS-12d. IOS-12c draws the thread.
   - **The bar, with three tabs** (PC-D1 A): **Field** · **History** · **Chat** in the same capsule. The row stays 62
     tall, 21 from the sides and the foot (IOS-9e). The capsule stays 188 wide: 8 inset and three tabs of 57⅓. The pill
     is the tab plus 8, the overhang today's 94 has on 86: 65⅓ × 54. The glyphs: Field's asset at 26, History's symbol
@@ -6255,22 +6257,68 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     with the first inverted. VibeField's own items are answered on the card, and the record says you did. An agent's
     own ask has one act, **Answer in its pane** (PC-L3). Answered, the card says what you said and leaves the group
     after 2.4s; in the thread it stays as said. An answer here is answered for every window and device.
-  - **The thread** (PC-D2): the spark's transcript drawn as Chat, read through the home.
-    - Your words sit right, on the fill, corners 20, at most 82% wide, 15 at 21 (History's).
-    - Its words sit left, its face at 28 framed leading each run of them.
-    - An act is one line per vibefield tool call, its glyph at 14, tertiary 13.
-    - A fact is a wake ("VibeField: …"), drawn centred at 12 and never as your words.
-    - The receipt sits under your last words at 11.5: Queued, Delivered, Waking ‹name›… (PC-D3 A; CP2-D2).
+  - **The thread** (PC-D2): the spark's transcript drawn as Chat, read through the home. Its rows are the Mac's (§8
+    "Chat's thread"), folded by a port of the Mac's own fold and held to goldens that fold writes (IOS-12c), at touch
+    pitch.
+    - **The head:** back, the face at 30 (§2.10; the thread's one live face), then the name 17 semibold over its
+      status word 13 tertiary, in the attention ink for Asking you, Needs your OK, Stuck and Rate limited (the row's
+      rule). While the spark sleeps, **Wake** (`resume` 14) stands at the head's end, the row menu's wake
+      (`compose.sparks.open`). It reads "Waking…" while it runs. Refused, the status's place says "Couldn't wake
+      ‹name›: ‹fieldd's words›" in the attention ink, as the Mac's head says it, and Wake stays.
+    - **⋯** ends the head, a menu: **Open its pane** while the spark's own run is on the board (its session card,
+      which is the attach, FW-D2), and **Wake** while it sleeps. **Put to sleep** and **Its profile**, the row
+      menu's, join it when the phone has their doors. There is no Pause: a turn is paused in its pane.
+    - Your words sit right, on the fill, corners 20, at most 82% wide, 15 at 21 (History's), their line breaks kept.
+      A chip you sent is a chip in them (padded 1 6, corners 6, 14/500 mono, on solid chrome ringed by the strong
+      hairline: the Mac's, TH-Q25 (a), §8 "Chat's thread"), read from the record's spans, never from words that
+      look like one.
+    - Its words sit left, its face at 28 framed leading each run of them, 17 regular at 1.35 in primary ink, in the
+      Mac's named subset: `code` 15/500 mono on the fill, fenced code scrolling within itself, and a link drawn as its
+      words, inert (EL7).
+    - What it did stands as quiet lines in the lead's place, 13 tertiary, the glyph at 14. Its tools are one line a
+      turn, "Used 3 tools" (`code`), whose rows open when it is pressed: each tool's kind in VibeField's words, then
+      what it touched in mono. VibeField's own acts are one line each: a wake that told it something (`resume`), an
+      answer you gave (`check`), a notify (`message`) and a crew's start (`agents`). VibeField's own tools leave the
+      count, since what they did stands as its own line.
+    - The receipt sits 6 under your bubble at its right, 11.5 tertiary: Queued, Delivered (under your last words
+      alone), Waking ‹name›… (PC-D3 A; CP2-D2), and "‹name› may not have it: look in its pane" in the attention ink.
+    - Day lines are centred, 12/500 tertiary, 14 above them. "Earlier conversations (3)" is a quiet line with
+      `chevron` turned up at 13. The honest lines are the quiet lines' look with no glyph, at the column's start.
+    - Thinking… is three dots of 6, 5 apart, in tertiary ink, then "Thinking…" at 13: a breath (§6).
+    - A new spark's hello is led by its face at 28, a still, its words at 17, then its three starters as capsules 48
+      tall (NS-D4 A).
+    - While the thread is first read, and when it can't be, the flow says so, 15 secondary, centred: "Reading
+      ‹name›'s conversation…", or "Couldn't read ‹name›'s conversation: ‹fieldd's words›". Never a blank.
     - New rows that arrive while you read up the page show History's arrival pill, "3 new ↓", 36.
     - Live cards (CH-D2 A: a crew, a review loop, a watch) wait on SP-1e's data; until then the
       thread shows words and acts. *Corrected 2026-11-05 (SP-1e2's renderer half):* this said "as the Mac's do". The
       Mac draws a crew's card since then (§8 "Chat's crew card"); the phone's waits on PC.
     - Its pane is one tap away in ⋯, never inside the thread.
+    *Corrected 2026-11-06 (IOS-12c, M-c2; PC-L1):* this said "An act is one line per vibefield tool call" and "A fact
+    is a wake ("VibeField: …"), drawn centred at 12 and never as your words". Neither is the Mac's thread since TH-1:
+    VibeField's own tools leave the tools' count, and a wake is one of VibeField's own acts, a quiet line in the
+    lead's place, "VibeField told ‹name›: …". One Chat, two sizes, so the phone draws them as the Mac does.
   - **The composer**: + at 48 and the field 48 tall, 16 from the sides and 21 from the foot; over the keys, 10 and 8.
     The draft is 17 regular on one line, "Message ‹name›…", with the mic inside it until there are words, then send
     (inverted). + opens the input card's own (Snippets, Clipboard, Scan text; a photo waits for a door). The mic is
     the phone's Dictation, 36. @'s list is a solid menu from the composer up, corners 26, rows 48 and 56, the nearest
     hot. Return sends: no pane stands in front of you, so nothing waits for a second Return (PC-D3 A).
+    *Amended 2026-11-06 (IOS-12c; VF-PM's rulings on its Q4, Q5 and Q7, and at 09:51:30Z on + and the field):*
+    - **Words alone until IOS-12f** (Q4). @'s list needs the spark's profiles and the board's sessions on the phone,
+      which IOS-12f reads (NS-D5), so @ comes with 12f or after it. Chips you sent from the Mac are still drawn.
+    - **No drawn mic yet** (Q5). The app's two usage strings scope the microphone and speech recognition to the
+      terminal's draft, so a mic here would make both untrue. The keyboard's own dictation key works in the field.
+      The drawn mic comes with the strings' amendment, a small slice for James's eye after the 0.9 build.
+    - **No + yet** (VF-PM 2026-11-06 09:51:30Z). The input card's own sheets (Snippets, Clipboard, Scan text) are the
+      terminal card's, and so is their state, the pasteboard's ring. + comes with the mic in that slice; until then
+      the composer is the field and Send.
+    - **The field is prose** (Found, IOS-12c). The terminal's composer turns autocorrection, smart punctuation and
+      capitals off, so nothing typed into a shell is "corrected". Chat's draft is words to a spark, as Messages is,
+      so it keeps the system's own: one line at 17, growing to five.
+    - **A draft waits while its desktop is away** (Q7; PC-L4). The draft stays in the field with its away state's
+      line under it (§9): "Waits here until ‹desktop› wakes", "… answers" or "… is updated". Send is not offered.
+      Nothing is queued on the phone and sent later on its own: a send nobody pressed is not yours. When the desktop
+      answers, the line goes and Send returns, with the draft as typed.
   - **New spark** (PC-D8 A): the sheet at touch pitch makes the spark on your home desktop, said and not asked; its
     sky is the hatch, free, at 120 (§2.10).
 - **The phone's Apps** (track MA, ruled 2026-11-05 from the design page *Apps in a Pocket*: MA-D7…D9 and MA-D11…D13
@@ -6997,7 +7045,9 @@ delivered: ‹name›’s session ended", or, when the send is uncertain and is 
 in its pane". Every state is in words (PC-L4). A spark asleep: "‹name› is asleep · a message wakes it", with
 **Wake**. Its desktop asleep: "‹desktop› is asleep. These are as it last said; your words wait here until it
 wakes.", on a card "‹desktop› is asleep · answer when it wakes", and under a draft "Waits here until ‹desktop›
-wakes". Its desktop not answering the home's merge (a timeout, or unreachable: one fact to the person): "‹desktop›
+wakes". Under a draft, "Waits here until ‹desktop› answers" while it isn't answering, and "Waits here until
+‹desktop› is updated" while it runs a build this phone can't read. *(IOS-12c 2026-11-06, Q7: for James's eye.)*
+Its desktop not answering the home's merge (a timeout, or unreachable: one fact to the person): "‹desktop›
 isn't answering. These are as it last said; your words wait here until it answers." Its desktop answering with a
 build the home can't merge (incompatible), never said as not answering: "‹desktop› runs a build this phone can't
 read. These are as it last said; your words wait here until it's updated." *(VF-PM 2026-11-05, at IOS-12b: the merge
