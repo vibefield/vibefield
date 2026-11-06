@@ -122,6 +122,11 @@ interface Handed {
   gone: boolean;
 }
 
+/** UU3 (the 1p review) — D1's idle for every row that passes none: long past any row, so no park enters a row that
+ * isn't about one. No row exercises fieldd's own HOST_IDLE_MS (10 s) by timing: a row that parks passes IDLE_MS or
+ * HOLD_IDLE_MS. */
+const NO_PARK_MS = 600_000;
+
 async function harness(
   opts: {
     readonly profiles?: readonly string[];
@@ -141,7 +146,7 @@ async function harness(
     readonly models?: Readonly<Record<string, readonly string[]>>;
     /** the runtime's models held until this settles, each ask counted (RA2: both starts parked at their await) */
     readonly modelsHeld?: Promise<unknown>;
-    /** D1's idle before a waiting host is parked, lowered (slice 10a); fieldd's own HOST_IDLE_MS by default */
+    /** D1's idle before a waiting host is parked: NO_PARK_MS, unless a row that parks lowers it (slice 10a) */
     readonly hostIdleMs?: number;
     /** the host's clock, a `shutdown`'s grace among it (R27d) */
     readonly timings?: Partial<FlowHostTimings>;
@@ -286,7 +291,7 @@ async function harness(
         return child;
       },
     },
-    ...(opts.hostIdleMs !== undefined ? { hostIdleMs: opts.hostIdleMs } : {}),
+    hostIdleMs: opts.hostIdleMs ?? NO_PARK_MS,
     logger,
   });
   opened.push(runs);
@@ -3353,9 +3358,9 @@ describe("CP-4a2b — the host's life: parked and woken, D2's lookup at a wake, 
 
   it("R29 (D1, CL-K-d): of the runs ready at once, HOSTS_LIVE_MAX hosts start; the runs past it read waiting, their records kept, and each starts its host when one leaves, in the order they began", async () => {
     const max = FLOW_LIMITS.HOSTS_LIVE_MAX;
-    // TT5 (the 10a review): no park in a row about the cap; at fieldd's 10 s idle, runs 2 and 3's steps, never
-    // answered here, would park on a loaded host and start run 5 early
-    const h = await harness({ hostIdleMs: 600_000 });
+    // TT5 (the 10a review): no park in a row about the cap, at the harness's NO_PARK_MS (UU3); at fieldd's 10 s
+    // idle, runs 2 and 3's steps, never answered here, would park on a loaded host and start run 5 early
+    const h = await harness();
     h.approved("review", ANSWERED);
     const started: RunSummary[] = [];
     for (let i = 0; i < max + 2; i += 1)
@@ -3438,7 +3443,7 @@ describe("CP-4a2b — the host's life: parked and woken, D2's lookup at a wake, 
   });
 
   it("TT1 (at the 10a review): a held run whose host left on its own reads holding, never waiting", async () => {
-    const h = await harness({ hostIdleMs: 600_000 });
+    const h = await harness();
     const run = await heldOnRepair(h);
     h.hosts[0]?.child.kill("SIGKILL");
     await within(PARK_MS, () => left(h, 0) && stateOf(h, run) !== "running");
