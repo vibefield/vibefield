@@ -2868,10 +2868,14 @@ describe("CP-4a2b — a run's agents, RUN_AGENTS_MAX started, counted until its 
     keeping(h, max - 1);
     const run = startedRun(await h.start({ flow: "agents" })).run;
     // the race, held (the F4b review MM1): both starts wait at their models() await, and neither has reserved, so
-    // the two reserve after it whatever the host's pipe makes of the two calls
-    await waitFor(() => expect(h.modelAsks()).toBe(2));
-    expect(h.records.runRecord(run)).toMatchObject({ agents: max - 1 });
-    free();
+    // the two reserve after it whatever the host's pipe makes of the two calls. The gate opens whatever the reads say
+    // (its fix review's nit), so a start that never asks fails on its count, never parked past the row
+    try {
+      await waitFor(() => expect(h.modelAsks()).toBe(2));
+      expect(h.records.runRecord(run)).toMatchObject({ agents: max - 1 });
+    } finally {
+      free();
+    }
     const outcomes = () => [outcomeOf(h, run, 1), outcomeOf(h, run, 2)];
     await waitFor(() => expect(outcomes()).not.toContain(undefined));
     const refused = [1, 2].filter((call) => outcomeOf(h, run, call) !== "spawned");
