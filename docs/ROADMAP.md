@@ -563,18 +563,22 @@ its rulings (`draft/rv/james-asks.md`, `draft/rv/lead-rulings.md`); the review `
 - Landed 11-06: **item 203's VF-W1, RV #1's pin-free half** (M196 `02aed7ec2`; LANDED "Item 203, VF-W1"): fieldd's
   executable is the daemon only with no argument; a script handed to it as if it were Node is refused in one line
   with 127, never a second daemon. Words at rv-forwarder-role's lean A.
+- Landed 11-06: **item 211, RV #97, #96, #93, #116, #95, #47** (M199 `c39e45518`; LANDED "Item 211"): field-native's
+  terminal plane holds its own: an upgrade has a deadline, a closed credit account closes, each pump wakes for its
+  own session's frames, seeds keep to their negotiated slots, and a cell whose serve plane fails exits.
 - In flight:
   - item 203's VF-W3a (the closed agent-forwarder role), built and reviewed, landing in EL8-1's chain;
-  - item 211 (RV #97, #96, #93, #116, #95, #47, field-native's tp plane and cell), building;
   - item 212 (RV #30, #29, #67, the shell's fieldd recovery and liveness), building;
-  - the sibling lanes (local branches, nothing filed): rv/pup-claude-a (#1, #61, #4, #3, #5a, #64, #62, #63),
-    rv/pup-codex (parked on rv-pr58-codex-observer), rv/pup-monitor (#84, #81, #9; its PR script ready for James),
-    rv/ghosttea (#115, #37 G-A, #92, #113, #94; its PR script ready for James), rv/pup-views-a (#38, #39, #106, #107,
-    #40, #105; building).
+  - the sibling lanes, filed by James on 11-06: puppeteer #64 rv/pup-monitor (#84, #81, #9) and #65
+    rv/pup-claude-a (#1, #61, #4, #3, #5a, #64, #62, #63) MERGED, #66 rv/pup-views-a (#38, #39, #106, #107, #40,
+    #105) open; ghosttea #102 rv/ghosttea (#115, #37 G-A, #92, #113, #94) MERGED. Their releases and the EL8 pins
+    follow. Building: rv/pup-claude-b (#14, #111, #66, #110, #13) and rv/pup-views-b (#103, #104, #41, #101,
+    #108). Parked: rv/pup-codex (on rv-pr58-codex-observer).
 - Next: puppeteer R1 (claude-a's PR and item 171's fix, James's hand) → EL8-1 with item 203 in one chain; ghosttea
   0.15.0 → EL8-g → rv/vf-ghosttea-tail; waves 3–8 by the plan.
 - Owed: James's 15 rulings; his hand on every sibling PR and release;
-  smoke:godview for item 201 (#50; the old mini's console was locked at the land).
+  smoke:godview for item 201 (#50; the old mini's console was locked at the land), and smoke:godview and
+  smoke:terminal-direct for item 211; item 215 (freeway's link door) and petition G36 (ghosttea's accept loops).
 
 **HN — Cards in Hand** · vibe-field-a1 (lane `lanes/hn`) · law `draft/thinking-cards-in-hand.md` §6 (page sources `draft/cards-in-hand/`), DESIGN.md §1/§5/§6/§8/§9/§10/§13
 - Ruled 10-29 10:40Z (James): all sixteen at their leans (LN-D1…D3, HN-D1…D10, PL-D1…D3); HN-D1 was his own pick on
@@ -1396,7 +1400,7 @@ Petition status lives in `draft/petitions/README.md`. Still open or owed there:
 | TP / TC — terminal pipeline and custody | PARKED; TC RATIFIED 10-28 (Q6) | `specs/terminal-pipeline-v3*.md`, `specs/terminal-custody.md`, `thinking-terminal-mesh-cells.md`, `thinking-floor-wedge.md`, `thinking-inventory-latency.md` | D6's cell half |
 | MA — Apps (was AH — Artifact Hub) | ACTIVE since 11-05 (MA-D1…D13 ruled; MA-4 in 0.9, James 11-06); MA-0a + MA-1a (M152), MA-3 (M157, M162) and MA-4 (M166) landed; AH-1…3 landed, AH-4 unledgered | `thinking-mini-apps.md`, `specs/artifact-hub.md`, design-06 §5; DESIGN.md §2.9/§8/§9/§13 | MA-3f serving, which is the Drive's DR-1 (DR-D1 ruled (b): rosetta 0.1.4's export), then MA-3h; MA-6 the phone's shelf (unblocked: UM's M-phone landed 11-06, its sheet naming the strip's slots) |
 | DR — the Drive | ACTIVE since 11-06 (DR-D1…D12 ruled; D13…D15 open); DR-1a, DR-2a and DR-1b landed (M183, M188, M190); wave 1's sibling lanes green, unfiled | `thinking-drive.md` v0.3 (page sources `draft/drive/page/`); `thinking-mini-apps.md` | D13…D15 and DR-L3 (James); W3 (VF-FLOOR, VF-RELAY); DR-1 (B); the sibling releases and their EL8s |
-| RV — the review fixes (Godview, terminal, puppeteer) | ACTIVE since 11-06; items 191 (RV #2 half A, M192), 192 (RV #6, M193), 201 (RV #17, #43, #49, #48, #50, M194) and 203's VF-W1 (RV #1's pin-free half, M196) landed; W1–W2 building, the sibling lanes local | `draft/rv/` (plan.md, james-asks.md, lead-rulings.md); `lanes/rv/review/` | James's 15 rulings; puppeteer R1 → EL8-1 with item 203; ghosttea 0.15.0 → EL8-g |
+| RV — the review fixes (Godview, terminal, puppeteer) | ACTIVE since 11-06; items 191 (RV #2 half A, M192), 192 (RV #6, M193), 201 (RV #17, #43, #49, #48, #50, M194), 203's VF-W1 (RV #1's pin-free half, M196) and 211 (RV #97, #96, #93, #116, #95, #47, M199) landed; W1–W2 building, the sibling lanes local | `draft/rv/` (plan.md, james-asks.md, lead-rulings.md); `lanes/rv/review/` | James's 15 rulings; puppeteer R1 → EL8-1 with item 203; ghosttea 0.15.0 → EL8-g |
 | UM + SE — profile meters and one search | ACTIVE since 11-06 (UM-D21…D28 and SE-D1…D5 ruled on the page; UM-D16 E, D19 A; D3, D4, D8, D12…D15 at the leans); UM-0…UM-2 landed 11-06 (M-U1 `c9493b957`, run180, M180); UM-3 and SE-1 landed 11-06 (M-desk `ed8099c1e`, run187, M187); UM-4 and SE-2 landed 11-06 (M-phone `d6d76d079`, run198, M198) | `thinking-profile-meters.md`; `lanes/um/PLAN.md` §4; DESIGN.md §2.7/§5/§8/§9/§13; `docs/agent-plane/usage-meters.md` | UM-5 (UM-D14, the plan filter) in wave 2 |
 | PLUG — shipped core | COMPLETE: P0–P7, P8b–d (P8c via WP8), PRC-4/5; later publishing/validation work is separate | `specs/plugin-architecture.md`, `thinking-p8-loadable-artifact.md` | existing product gates; no blanket 24-hour prerequisite |
 | PRC-6 — plugin runtime validation | OPEN; diagnostics in draft [PR #7](https://github.com/vibefield/vibefield/pull/7); Linux CI passed, full verification and calibration pending | `thinking-prc6c2-physical-soak.md` §9–10 | full verify → guarded 32-cycle current-desk calibration + listener control; historical failures stay open; literal 24h only for that claim |

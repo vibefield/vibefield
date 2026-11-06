@@ -40309,3 +40309,90 @@ witness's mirror (in `1a97eade5`). The "Re-cut" bullets cite `db181a008`, main b
 
 Two inserts into older entries: M-U1's Owed, "M-phone", answered; and M-desk's Owed, "M-phone", answered, with its
 "bodies' in-branch SHAs" answered in the same block.
+
+## Item 211 — field-native's terminal plane holds its own: a socket that never upgrades gives its slot back, a closed credit account closes, each pump wakes for its own session's frames, a connection's seeds keep to their negotiated slots, and a cell whose serve plane fails exits (RV #97, #96, #93, #116, #95, #47) (2026-11-06)
+(2026-11-06; ten commits on lane `rv/native-tp`, RV's (vibe-field-62), built in
+`/Volumes/SamsungRed/lanes/fg2/records-fu1` over main `db181a008` (`b51f89c55` … `44ef5128d`, the shas a9's rows
+proved); re-cut by `git replay` onto `0ebde14bf` as `576bd79b8` (red), `b57672ebd`, `d0203c167` (red), `08fa22792`,
+`97e547835` (red), `bb9cd2366`, `d4e4b8e08` (red), `7061cd422`, `a3398ebf4` (red) and `c39e45518`. Verified at
+`f51741423` on `d6d76d079` (run 199, a9's, on the old mini), M199; landed as `c39e45518`, a fast-forward of main
+`0ebde14bf` by the fixer, 2026-11-06T22:53:27Z. `c39e45518` differs from `f51741423` only by `0ebde14bf`'s own docs
+delta (M-phone's records; equal patch-ids), so the verified code is the landed code.)
+RV's fifth landing: the plan's lane rv/native-tp, wave 5, six findings of field-native's TPv3 plane (the T1 door, the
+credit ledger, the frame hub, the seed path) and of the terminal cell. No ruling of James's was needed; the lead's
+rv-hub-lag A (no production code for #116, one regression row) governs #116.
+
+**The findings.**
+- **#97** (`native-tp-5`, robustness, plausible): the T1 door counted a socket's pre-auth slot at its TCP arrival, but
+  awaited the WebSocket upgrade with no deadline, so 64 sockets that connect and never upgrade locked every new leg
+  out.
+- **#96** (`native-tp-6`, leak, confirmed): a closed credit account with bytes in flight was kept under a `limit != 0`
+  sentinel nothing cleared, so it admitted after its activation was invalidated and outlived its returns until the
+  frames socket closed; every connection credit move woke it with every other account.
+- **#93** (`native-tp-4`, perf, confirmed): every pump on the cell's one shared frame hub, parked ones too, woke for
+  every frame of every session (2–4% of a core at 20 agents).
+- **#116** (`native-tp-1`, perf, disputed): a lag on the shared 32-slot hub forced a full refresh for every viewer, so
+  one slow viewer of an idle agent could loop.
+- **#95** (`native-tp-2`, intent gap, plausible): a frames connection negotiated `maxConcurrentSeeds` and the cell
+  never scheduled it.
+- **#47** (`native-terminal-1`, bug, plausible): a cell whose serve plane failed on its own wrote its report and then
+  hung: a tokio stdin read blocked the runtime's drop with the leash held.
+- **#114** (`native-tp-9`, the 09-27 defect, already fixed): its guard,
+  `two_viewers_reuse_oversized_refreshes_without_feedback`, is now an event-synced ordinal check inside #93's one
+  shared-hub fixture.
+
+**What landed.**
+- `tp/door.rs` (#97): one pre-auth deadline from TCP arrival covers the upgrade and the hello; a socket with no
+  upgrade by then is closed (there is no WebSocket to carry a 1008), its slot comes back, and the silent class has its
+  own audit line (`refuse_pre_auth`, shared with the hello's refusal).
+- `tp/activation.rs` (#96): a credit account says its state, `Account {window, draining, starved}`. A draining account
+  admits nothing and closes once its bytes are back; a reused id revives it with its totals; a connection credit move
+  wakes only the pumps a refusal left waiting (#93's credit half). `credit_returned`'s doc says so.
+- `tp/frames.rs`, new (#93, #116): a `FrameRouter` reads the cell's one hub once and gives each pump a feed of its own
+  session's frames; a parked pump holds no subscription; a router lag is a `Gap` to every route; a route nobody holds
+  is pruned on its next packet and at every subscribe. #116 needs no further code: its row proves a neighbour's burst
+  never costs another session's pump a frame.
+- `tp/presentation.rs` (#95): a seed holds one of its frames connection's `maxConcurrentSeeds` slots from before it
+  renders until its transfer-end is written; waiting seeds resume in the order they asked.
+- `leash.rs`, new, `cell.rs` and both host binaries (#47): the leash is read on a std thread no runtime owns, so a
+  cell whose serve plane fails reports, then exits 1 with its leash still held.
+
+**The lights.**
+- Written unrun on the MacBook under the HOLD; reviewed (six issues, all folded: one rustfmt miss in #97's red,
+  `credit_returned`'s stale doc, a route kept for the cell's life by a session that ended unwatched, the one
+  deadline-shaped row's window raised to 1 s, two multi-filter rows put in libtest's form).
+- a9's rows on vf-m1 (`lanes/rv/a9/w5-native-tp/`; results `a9-results/`, SUMS-a9 `97cdc08e…`), part 1, all 36 as
+  briefed: every red at its named panic (#97 at its 10 s bound, timed rows started at 1-min load 2.8–6.1, no
+  precondition message); every green green; at the tip `tp::` 82, `tp_activation` 27, `tp_door` 13, `cell_lifecycle`
+  11, `leash::` 2, freeway 8 and 4; clippy and rustfmt clean, rustfmt also at #97's red. Births 0.
+- Part 2, 18 mutation probes as exact patches (`probes/`, each checked with `git apply --check` at its commit; results
+  `a9-results-part2/`, SUMS-a9 `0f827d84…`): every probe red at its named row and message, the porcelain empty after
+  each. P8 and P9 (the two prunes) also abort the test binary after their red: the rows assert while holding the route
+  table's lock, the unwind poisons it, and `FrameRouter`'s drop re-locks it in `close()`. Production holds no
+  panicking code under that lock (Owed).
+- The re-cut is proof-form: range-diff 10 `=`, the own range's `-U0 --stable` patch-id equal (`8de144c8…`), and the
+  tip's tree equal to git's merge-tree (`lanes/rv/mint/item211/`); `packages/field-native/src/lib.rs` is the one file
+  both sides touched (item 198's hunk; the lane adds `pub mod leash;`), merged clean.
+- Run 199, a9's, on the old mini: GREEN at `f51741423` on `d6d76d079`, every count as briefed, missing [] / extra []
+  (`lanes/ts6/logs/mini/run199/`, SUMS-a9 `40716a61…`; verify exit 0 at 22:47:45Z, tree clean, stubs 0). cargo 550 →
+  571 (+21, from syntax): field-native's lib 328 → 346, `cell_lifecycle` 11, `tp_activation` 27, `tp_door` 13; every
+  other binary equal. vitest 13,956 over 956 files, node 474, typecheck 29 and biome as run 198's. Births 0. Host:
+  load 1.95 at arm, df 15 GiB before and after.
+
+**Found.**
+- freeway's link door (`freeway/door.rs`) awaits its WebSocket upgrade with no deadline, the same shape as #97; it
+  counts no pre-auth slot, so the cost is descriptors only. Filed as item 215.
+- ghosttea 0.14.0's `serve_control` and `serve_frames` end on their first failed accept, so a descriptor squeeze ends
+  a cell's control plane: #47's row measures it on both sides (before, the cell hung with its leash held; after, it
+  exits 1). Drafted as petition G36 ("treat accept errors as transient"), unfiled; James's hand upstream.
+
+**Owed.**
+- smoke:godview and smoke:terminal-direct, named in the GO (the tp door, the frame router and the cell's leash
+  change). They need the old mini's console and queue with item 201's owed smoke; owed until they read green.
+- In item 215's lane: the two frames prune rows copy the keys out of the table's guard before they assert, and
+  `Routes::close()` takes its lock with `unwrap_or_else(PoisonError::into_inner)`, as `tp/door.rs` and `logging` do.
+- #95's writer-level row with a fake sink (a release dropped before `sink.send` is caught today only under socket
+  pressure), to a later lane.
+- The draft corrections, at item 211's slot (VF-PM's baton): `draft/specs/terminal-pipeline-v3.md`'s as-built notes
+  for #97 (:1287), #96 (:1369, law 3), #93 (:61), #116 (:133), #114 (§8, TP-S3d) and #95 (:1060, TP-R6 :1804); and
+  petition G36 into `draft/petitions/README.md`.
