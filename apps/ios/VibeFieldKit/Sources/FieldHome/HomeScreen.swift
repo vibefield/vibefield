@@ -1231,7 +1231,9 @@ public struct HomeScreen: View {
     )
     .padding(.horizontal, SearchSheet.side)
     .padding(.bottom, (barTyping ? AppBar.fieldHeightTyping : AppBar.height) + SearchSheet.gapAboveField)
-    .task(id: "\(searchQuery)|\(search.scope.rawValue)") { await askSearch() }
+    // SE-2j — the kind is part of the question: Prompts' answer is no answer for every kind, so a kind changed asks
+    // again (and cancels the ask it replaces, which then lands nothing)
+    .task(id: "\(searchQuery)|\(search.scope.rawValue)|\(search.kind.rawValue)") { await askSearch() }
   }
 
   /// The words, asked after a pause in typing (the record's own debounce for a question that crosses a radio): Live

@@ -175,18 +175,22 @@ public final class HistoryDesktops {
 
   /// One question to every desktop that answers — in turn (a phone has one
   /// to three desktops; a question per radio round trip is the cost either
-  /// way, and the readers are the main actor's).
+  /// way, and the readers are the main actor's). SE-2j — once the ask is
+  /// cancelled (newer words took over) no further desktop is asked.
   public func search(_ query: String, kind: FieldHistoryModel.SearchKind) async {
     for reader in readers where !reader.isReplaying {
+      guard !Task.isCancelled else { return }
       await reader.search(query, kind: kind)
     }
   }
 
   /// SE-P1 (SE-D4 A) — Live now's words, asked of each desktop over its OWN live runs (`runs`: a device id → the
   /// native ids of the runs it owns, as the field's rows name them): a run's transcript is on the desktop it runs on.
-  /// A desktop whose door does not answer is not asked, and its runs match on their facts alone. In turn, as `search`.
+  /// A desktop whose door does not answer is not asked, and its runs match on their facts alone. In turn, as `search`,
+  /// and, as it does, asking no further desktop once the ask is cancelled (SE-2j).
   public func searchLive(_ query: String, runs: [String: [String]]) async {
     for reader in readers where !reader.isReplaying {
+      guard !Task.isCancelled else { return }
       guard let owned = runs[reader.deviceId], !owned.isEmpty else { continue }
       await reader.searchLive(query, nativeSessionIds: owned)
     }

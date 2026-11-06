@@ -145,15 +145,15 @@ enum PhoneSearchWorld {
   }
 
   /// Every desktop as Everything's answer reads it: awake while its standing is, asked while it has a door that
-  /// answers (`isReplaying` is false), and the words its index last answered (`corpus.searchedQuery`). `kind`: STUB
-  /// (SE-2j red), read by nothing yet.
+  /// answers (`isReplaying` is false), and the words its index last answered for the kind asked
+  /// (`HistoryDesktopReader.answered(kind:)`, SE-2j: Prompts' answer never answers every kind).
   @MainActor static func pastAnswerers(
     _ readers: [HistoryDesktopReader], kind: FieldHistoryModel.SearchKind
   ) -> [Answerer] {
     readers.map { reader in
       Answerer(
         name: reader.name, awake: reader.standing.isAwake, asks: !reader.isReplaying,
-        answered: reader.corpus.searchedQuery)
+        answered: reader.answered(kind: kind))
     }
   }
 

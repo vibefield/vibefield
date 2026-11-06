@@ -130,13 +130,18 @@ public final class HistoryDesktopReader: Identifiable {
   /// SE-P1 (SE-D4 A) — Live now's last answer from this desktop's index: the words asked over its live runs' own
   /// conversations. Never cached (a live run's lines are the moment's) and never Everything's (`corpus.hits`).
   public private(set) var live: HistoryLiveAnswer?
+  /// SE-2j — the kind Everything's last answer was asked with (`corpus.searchedQuery`'s), this launch's only: a
+  /// corpus replayed from the cache answers no kind until it is asked again.
+  private var searchedKind: FieldHistoryModel.SearchKind?
   /// Whether this reader replays the cache (no door, or a door that stopped).
   public var isReplaying: Bool { door == nil || !standing.isAwake }
 
-  /// SE-2j — the words this desktop's index last answered for Everything with `kind`. STUB (SE-2j red): none.
+  /// SE-2j (the S2 review's finding 5) — the words this desktop's index last answered for Everything with `kind`: an
+  /// answer is its words' and its kind's (Prompts' answer holds prompts alone, so it never answers every kind).
   public func answered(kind: FieldHistoryModel.SearchKind) -> String? {
-    nil
+    searchedKind == kind ? corpus.searchedQuery : nil
   }
+
   /// PJ-7 — the door this reader asks, which the ledger may ask too (one door
   /// per desktop, the phone's budget): nil while it replays the cache.
   var openDoor: (any HistoryDoor)? { closed ? nil : door }
@@ -530,7 +535,9 @@ public final class HistoryDesktopReader: Identifiable {
   // MARK: Search
 
   /// One question to this desktop's index; the hits land in the corpus under
-  /// the query, and the local filter stands aside for them.
+  /// the query, and the local filter stands aside for them. SE-2j — the answer
+  /// is the words' and the kind's (`answered(kind:)`), and an ask whose task was
+  /// cancelled (newer words took over) lands nothing and refuses nothing.
   public func search(_ query: String, kind: FieldHistoryModel.SearchKind) async {
     let words = query.trimmingCharacters(in: .whitespaces)
     guard let door, !closed, !words.isEmpty else { return }
@@ -544,16 +551,18 @@ public final class HistoryDesktopReader: Identifiable {
     }
     do {
       let answer = try await door.call("index.search", params: .object(params)).decode(IndexSearchResult.self)
-      guard !closed else { return }
+      guard !closed, !Task.isCancelled else { return }
       if answer.answered {
         corpus.hits = FieldHistoryModel.hitGroups(answer, now: now())
         corpus.searchedQuery = words
+        searchedKind = kind
         remember(words)
       } else {
         // the index had no answer: what was last shown stands (H-D7)
         failure = answer.detail ?? "the index did not answer the search"
       }
     } catch {
+      guard !Task.isCancelled else { return }
       refused(error)
     }
   }
@@ -568,7 +577,9 @@ public final class HistoryDesktopReader: Identifiable {
   /// contract's scope for "the live runs a reader can jump to"), at the tailnet's page. The lines land in `live`, by
   /// the run's native id; Everything's hits, its query and the recent searches are not touched. An unanswered ask
   /// keeps what was last shown (H-D7); a refusal dims as every read's does. Lines are kept only for the runs asked
-  /// about: an answer is filed under the runs this desktop owns, never another's.
+  /// about: an answer is filed under the runs this desktop owns, never another's. SE-2j — an ask whose task was
+  /// cancelled (newer words took over) lands nothing and refuses nothing: an older answer arriving after a newer one
+  /// would put the older words' lines back.
   public func searchLive(_ query: String, nativeSessionIds: [String]) async {
     let words = query.trimmingCharacters(in: .whitespaces)
     let runs = Array(nativeSessionIds.prefix(HistoryReads.liveRuns))
@@ -579,7 +590,7 @@ public final class HistoryDesktopReader: Identifiable {
     ]
     do {
       let answer = try await door.call("index.search", params: .object(params)).decode(IndexSearchResult.self)
-      guard !closed else { return }
+      guard !closed, !Task.isCancelled else { return }
       guard answer.answered else {
         failure = answer.detail ?? "the index did not answer the search"
         return
@@ -592,6 +603,7 @@ public final class HistoryDesktopReader: Identifiable {
       }
       live = HistoryLiveAnswer(query: words, lines: lines)
     } catch {
+      guard !Task.isCancelled else { return }
       refused(error)
     }
   }
