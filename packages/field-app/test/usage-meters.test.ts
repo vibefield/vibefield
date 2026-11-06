@@ -12,6 +12,7 @@ import {
   type AgentPersona,
   type AgentPlan,
   type AgentProfileSet,
+  isOffered,
 } from "@vibefield/contracts";
 import { planTitle } from "@vibefield/puppeteer-views";
 import { describe, expect, it } from "vitest";
@@ -33,6 +34,7 @@ import {
   RESET_BY_DAY_MINUTES,
   resetForm,
   tightestOf,
+  windowWords,
 } from "../src/usage/rules";
 
 const NOW = new Date("2026-11-06T12:00:00.000Z");
@@ -282,7 +284,8 @@ describe("UM-1 — what a plan's meter says it is", () => {
       right: { kind: "need", words: "not signed in", hot: false, icon: false },
     });
     expect(entryOf(meters, "agent:antigravity:native-default")).toMatchObject({
-      right: { kind: "need", words: "couldn’t read" },
+      // §9's own apostrophe, as Settings writes it: straight
+      right: { kind: "need", words: "couldn't read" },
     });
   });
 
@@ -610,13 +613,18 @@ describe("UM-1 — the words' lengths and the reset's form", () => {
 });
 
 describe("UM-1 — the meter's rules are a leaf", () => {
-  it("imports nothing but the contracts, so Settings may read it while the meters read Settings (no cycle)", () => {
-    const source = readFileSync(join(import.meta.dirname, "../src/usage/rules.ts"), "utf8");
-    const specifiers = [
+  /** every module a file of the model names: static, dynamic and bare imports */
+  const specifiersOf = (file: string): string[] => {
+    const source = readFileSync(join(import.meta.dirname, "../src/usage", file), "utf8");
+    return [
       ...source.matchAll(/\bfrom\s+["']([^"']+)["']/gu),
       ...source.matchAll(/\bimport\s*\(\s*["']([^"']+)["']/gu),
       ...source.matchAll(/^\s*import\s+["']([^"']+)["']/gmu),
-    ].map((match) => match[1]);
+    ].flatMap((match) => (match[1] !== undefined ? [match[1]] : []));
+  };
+
+  it("imports nothing but the contracts, so Settings may read it while the meters read Settings (no cycle)", () => {
+    const specifiers = specifiersOf("rules.ts");
     expect(specifiers.filter((specifier) => specifier !== "@vibefield/contracts")).toEqual([]);
     // what it holds: the drawing's pressure, and the most pressed window, the first of equals
     expect(pressureOf({ hot: true, usedPercent: 45 })).toBe(1045);
@@ -645,6 +653,32 @@ describe("UM-1 — the meter's rules are a leaf", () => {
     expect(forecastOf({ ...ahead, hot: false })).toBeUndefined();
     // no time gone: no pace to run ahead of, whatever it is handed
     expect(forecastOf({ ...ahead, elapsedPercent: 0, hot: true })).toBeUndefined();
+  });
+
+  it("says a window's length as the limit moment says it, or the adapter's label when it names none", () => {
+    const metric: AgentAccountUsageMetric = {
+      id: "w",
+      label: "5H",
+      kind: "window",
+      usedPercent: 91,
+    };
+    expect(
+      [10_080, 1440, 300, 60, 90, 1].map((durationMinutes) =>
+        windowWords({ ...metric, durationMinutes }),
+      ),
+    ).toEqual(["7 days", "1 day", "5 hours", "1 hour", "90 minutes", "1 minute"]);
+    expect(windowWords(metric)).toBe("5H");
+    expect(windowWords({ ...metric, durationMinutes: 0 })).toBe("5H");
+    expect(windowWords({ ...metric, durationMinutes: 2.5 })).toBe("5H");
+  });
+
+  it("no file of the model reads setup/ (the limit moment's, U2 2d's): its words for a length are the leaf's", () => {
+    for (const file of ["rules.ts", "meters.ts", "bands.ts", "golden.ts"]) {
+      expect(
+        specifiersOf(file).filter((specifier) => /(?:^|\/)setup(?:\/|$)/u.test(specifier)),
+        file,
+      ).toEqual([]);
+    }
   });
 });
 
@@ -684,6 +718,20 @@ describe("UM-1 — a sign-in under way, a door that cannot answer, and a plan's 
     ]);
     expect(unavailable).toMatchObject({ hot: false });
     expect(unavailable.tightest).toBeUndefined();
+  });
+
+  it("usage unavailable decides what needs no batch first: an agent the catalog meters no usage for stays unreported", () => {
+    expect(isOffered("opencode", "usage")).toBe(false);
+    const set = profile([own("claude"), own("opencode")], [ownPlan("anthropic", "claude")]);
+    expect(kinds(planMeters(set, [], NOW, { usage: "unavailable" }))).toEqual([
+      "plan:anthropic no-meter unavailable",
+      "agent:opencode:native-default no-meter unreported",
+    ]);
+    // a profile holding only such an agent has no meter it cannot read
+    const unmetered = profile([own("opencode")], []);
+    expect(kinds(planMeters(unmetered, [], NOW, { usage: "unavailable" }))).toEqual([
+      "agent:opencode:native-default no-meter unreported",
+    ]);
   });
 
   it("titles a plan as Settings' card does, or by the title it is handed", () => {

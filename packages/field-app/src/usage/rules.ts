@@ -20,6 +20,19 @@ export function resetForm(window: {
   return Math.round(window.resetIn) >= RESET_BY_DAY_MINUTES ? "day" : "length";
 }
 
+/** What a window's length is said from: its length in minutes, or its adapter's label when it names none. */
+export interface WindowLength {
+  label: string;
+  durationMinutes?: number | undefined;
+}
+
+/** A window's length as a person says it — "7 days", "5 hours", "30 minutes" — or its adapter's label when it names
+ * none: a meter's window ("of 7 days") and the limit moment's ("92% · 7 days") alike. */
+export function windowWords(window: WindowLength): string {
+  // RED SKELETON: the limit moment keeps the words; the leaf has only the label
+  return window.label;
+}
+
 /** A length as the drawing says it: "45m", "2h 10m", "3d 4h" (its `dur`, the carry made exact). */
 export function durationWords(minutes: number): string {
   const whole = Math.round(minutes);

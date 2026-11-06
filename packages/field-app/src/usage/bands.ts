@@ -142,6 +142,11 @@ export interface BandsOptions {
    * bands are the hole's (each max(2.2, (band − 1.2) / 2) wide, 1.2 apart, the rim at hole + band), drawn at level 1,
    * with no marks and nothing in the middle; the level said is at most 2. */
   around?: { hole: number; band: number };
+  /** the circle stands for every profile at once (UM-D12's union, `everyPlan`: the Me menu's row with several
+   * profiles, the All profiles row, the face's ring, the page with none chosen). Said from here, never inferred from
+   * its entries, whose profiles are the managed ones that hold each plan: while the usage cannot be read it names no
+   * profile ("Usage unavailable"). */
+  every?: boolean;
 }
 
 /** The inner band's reach: a window of five hours or less. */
@@ -244,7 +249,11 @@ export function bandsPlanWords(entry: PlanMeter): string {
 
 /** The circle in words: "Usage: " and each plan on it; while the usage cannot be read, "‹profile›: usage
  * unavailable" (every profile's at once, the claims strip's "Usage unavailable"); else "No meters" (§9). */
-export function bandsLabel(entries: readonly PlanMeter[]): string {
+export function bandsLabel(
+  entries: readonly PlanMeter[],
+  // RED SKELETON: whose circle it is is still inferred from the entries
+  _options: Pick<BandsOptions, "every"> = {},
+): string {
   const onCircle = entries.filter((entry) => entry.kind !== "no-meter");
   if (onCircle.length > 0) return `Usage: ${onCircle.map(bandsPlanWords).join("; ")}`;
   const unread = entries.filter(

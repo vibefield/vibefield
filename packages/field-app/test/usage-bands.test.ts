@@ -540,7 +540,7 @@ describe("UM-1 — the circle in words", () => {
         "Codex: 82% of 5 hours, out in ~35m",
         "Grok: 30% of credits",
         "Kimi Code: not signed in",
-        "Antigravity: couldn’t read",
+        "Antigravity: couldn't read",
       ].join("; "),
     );
     expect(bandsGeometry(212, entries).label).toBe(bandsLabel(entries));
@@ -708,10 +708,87 @@ describe("UM-1 — No meters keeps the profile's glyph; usage unavailable is sai
       personas: [{ ...own("claude"), profileId: "work-claude", kind: "managed" }],
     };
     const union = everyPlan([set, work], rows, NOW, { usage: "unavailable" });
-    expect(bandsGeometry(26, union.entries, { centre: "none" }).label).toBe("Usage unavailable");
+    expect(bandsGeometry(26, union.entries, { centre: "none", every: true }).label).toBe(
+      "Usage unavailable",
+    );
     // a profile with no plans says No meters, whatever the usage
     const bare = planMeters({ ...set, personas: [] }, [], NOW, { usage: "unavailable" });
     expect(bandsLabel(bare.entries)).toBe("No meters");
+  });
+
+  it("every profile's circle says so from its options, never from its entries: a shared plan's union names no profile", () => {
+    const kim = { email: "kim@example.com", plan: "max" };
+    const anthropic = { id: "anthropic", label: "Anthropic" };
+    const native: AgentProfileSet = {
+      id: "native",
+      kind: "native",
+      label: "This Mac",
+      default: true,
+      createdAt: "1970-01-01T00:00:00.000Z",
+      personas: [own("claude")],
+      plans: [
+        {
+          id: "anthropic",
+          service: anthropic,
+          account: kim,
+          namedBy: "claude:native-default",
+          holders: ["claude:native-default"],
+          alsoIn: ["work"],
+        },
+      ],
+    };
+    const work: AgentProfileSet = {
+      id: "work",
+      kind: "managed",
+      label: "Work",
+      default: false,
+      createdAt: "1970-01-01T00:00:00.000Z",
+      personas: [{ ...own("claude"), profileId: "work-claude", kind: "managed" }],
+      plans: [
+        {
+          id: "anthropic",
+          service: anthropic,
+          account: kim,
+          namedBy: "work-claude",
+          holders: ["work-claude"],
+          alsoIn: ["native"],
+        },
+      ],
+    };
+    const union = everyPlan([native, work], [], NOW, { usage: "unavailable" });
+    // one entry, in Work alone (the managed profile that holds it): its entries name one profile
+    expect(union.entries.map((entry) => entry.profiles.map((each) => each.label))).toEqual([
+      ["Work"],
+    ]);
+    for (const size of [26, 36, 214]) {
+      expect(bandsGeometry(size, union.entries, { centre: "none", every: true }).label).toBe(
+        "Usage unavailable",
+      );
+    }
+    // Work's own circle names Work
+    const alone = planMeters(work, [], NOW, { usage: "unavailable" });
+    expect(bandsGeometry(40, alone.entries, { centre: "glyph" }).label).toBe(
+      "Work: usage unavailable",
+    );
+  });
+
+  it("a profile whose only agent reports no usage has no meter it cannot read: No meters, its glyph kept", () => {
+    const set: AgentProfileSet = {
+      id: "native",
+      kind: "native",
+      label: "This Mac",
+      default: true,
+      createdAt: "1970-01-01T00:00:00.000Z",
+      personas: [own("opencode")],
+      plans: [],
+    };
+    const unmetered = planMeters(set, [], NOW, { usage: "unavailable" });
+    const geometry = bandsGeometry(40, unmetered.entries, { centre: "glyph", hotDot: true });
+    expect(geometry.label).toBe("No meters");
+    expect(geometry.empty).toMatchObject({ dash: [2, 3] });
+    expect(geometry.centre.items).toEqual([
+      expect.objectContaining({ kind: "glyph", x: 20, y: 20 }),
+    ]);
   });
 });
 
@@ -814,7 +891,7 @@ describe("UM-1 — the usage bands golden", () => {
     }>;
     circles: Array<{
       size: number;
-      options: { around?: unknown; crowd?: boolean };
+      options: { around?: unknown; crowd?: boolean; every?: boolean };
       label: string;
       level: number;
       empty?: unknown;
@@ -915,6 +992,15 @@ describe("UM-1 — the usage bands golden", () => {
     );
     expect(crowded.length).toBeGreaterThan(0);
     expect(all.some((each) => each.of === "every")).toBe(true);
+    // every profile's circle says so in its options, and is said so while the usage cannot be read
+    for (const each of USAGE_BANDS_CASES) {
+      expect(each.options.every === true, each.name).toBe(each.of === "every");
+    }
+    expect(
+      circles.some(
+        (circle) => circle.options.every === true && circle.label === "Usage unavailable",
+      ),
+    ).toBe(true);
     expect(USAGE_BANDS_CASES.map((each) => each.size)).toEqual(
       expect.arrayContaining([26, 36, 40, 54, 96, 206, 212, 214, 232]),
     );

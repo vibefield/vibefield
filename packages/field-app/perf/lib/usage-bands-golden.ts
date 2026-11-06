@@ -188,7 +188,7 @@ export const USAGE_BANDS_CASES: readonly UsageBandsCase[] = [
     ...METERS,
     of: "every",
     size: 26,
-    options: { centre: "none" },
+    options: { centre: "none", every: true },
   },
   {
     name: "every profile at the All profiles row",
@@ -196,7 +196,7 @@ export const USAGE_BANDS_CASES: readonly UsageBandsCase[] = [
     ...METERS,
     of: "every",
     size: 36,
-    options: { centre: "none" },
+    options: { centre: "none", every: true },
   },
   {
     name: "every profile around the face",
@@ -204,7 +204,7 @@ export const USAGE_BANDS_CASES: readonly UsageBandsCase[] = [
     ...METERS,
     of: "every",
     size: 96,
-    options: { around: { hole: 34, band: 8 } },
+    options: { around: { hole: 34, band: 8 }, every: true },
   },
   {
     name: "every profile opened: a shared plan once, the crowded agents in their profiles' glyphs",
@@ -212,7 +212,7 @@ export const USAGE_BANDS_CASES: readonly UsageBandsCase[] = [
     ...METERS,
     of: "every",
     size: 214,
-    options: { hit: true, crowd: true },
+    options: { hit: true, crowd: true, every: true },
   },
   {
     name: "usage unavailable: the dashed ring, the profile's glyph kept",
@@ -230,6 +230,15 @@ export const USAGE_BANDS_CASES: readonly UsageBandsCase[] = [
     usage: "unavailable",
     size: 212,
     options: {},
+  },
+  {
+    name: "usage unavailable, every profile: a shared plan once, named by no profile",
+    where: "the phone's Me menu, its Agent Profiles row, with several profiles",
+    ...METERS,
+    of: "every",
+    usage: "unavailable",
+    size: 26,
+    options: { centre: "none", every: true },
   },
 ];
 
