@@ -33,6 +33,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { SessionSummary } from "@vibecook/ghosttea-protocol";
 import {
+  type AgentAccountUsageEntry,
   type AgentPersona,
   type AgentProfileSet,
   AgentRecordedLanesResult,
@@ -87,7 +88,11 @@ import {
 import { monitorHoldsKeys } from "../src/godview/monitor/launcher-keys";
 import type { RecordedLanesPort } from "../src/godview/monitor/monitor-history";
 import { PaneTransitions } from "../src/godview/monitor/pane-transitions";
-import type { MonitorDoor, ProfileSetsPort } from "../src/godview/monitor/remote-door";
+import type {
+  MonitorDoor,
+  MonitorUsagePort,
+  ProfileSetsPort,
+} from "../src/godview/monitor/remote-door";
 import { HERE_DEVICE_ID } from "../src/godview/monitor/spawn-menu";
 import type { MonitorPaneFacts } from "../src/godview/monitor/useMonitorAgents";
 import { advanceChromeClock, holdChromeClock, nextTask } from "./chrome-clock-fixture";
@@ -1615,7 +1620,7 @@ describe("the monitor stage", () => {
     expect(ackText(host)).toContain("terminal opened in the active pane");
   });
 
-  it("surfaces a failed usage subscription and retries through the same product port", async () => {
+  it("surfaces a failed usage subscription and retries through the same product port (UM-3: the stage's own rows reader)", async () => {
     const door = fakeDoor();
     const batch = { generatedAt: CHECKED_AT, entries: [] };
     const unsubscribe = vi.fn();
@@ -1625,16 +1630,20 @@ describe("the monitor stage", () => {
       .mockResolvedValue({ snapshot: batch, unsubscribe });
     door.usage = usagePortOver({ request: async () => batch, subscribe });
     const host = await mountMonitor("list", door);
-    const column = host.querySelector(".vf-usage-column");
+    // the profiles column opens nothing of its own: the stage's rows reader is the port's one subscription
+    expect(subscribe).toHaveBeenCalledOnce();
+    const column = host.querySelector(".vf-monitor-chrome .vf-profiles-column");
+    expect(column).not.toBeNull();
     const retry = [...host.querySelectorAll<HTMLButtonElement>("button")].find(
       (button) => button.textContent === "Usage unavailable · Retry",
     );
     expect(retry?.title).toBe("usage stream unavailable");
     await act(async () => retry?.click());
+    await settle();
     expect(subscribe).toHaveBeenCalledTimes(2);
     expect(host.textContent).not.toContain("Usage unavailable · Retry");
-    // Retry must preserve the column's existing readings and popup state.
-    expect(host.querySelector(".vf-usage-column")).toBe(column);
+    // Retry keeps the column standing: its circles and an open popover stay where they are.
+    expect(host.querySelector(".vf-monitor-chrome .vf-profiles-column")).toBe(column);
     act(() => root?.unmount());
     root = null;
     expect(unsubscribe).toHaveBeenCalledOnce();
@@ -1793,7 +1802,7 @@ describe("the monitor stage", () => {
     expect(statuses()).toEqual([]);
   });
 
-  it("lends the moment the stage's own account facts: the profile filter's sets and the usage column's rows, through their one subscription each (AO-6b3)", async () => {
+  it("lends the moment the stage's own account facts: the profile filter's sets and the usage rows, through their one subscription each (AO-6b3; UM-3)", async () => {
     const door = fakeDoor();
     const rows = [
       {
@@ -1845,8 +1854,74 @@ describe("the monitor stage", () => {
     );
     await settle();
     expect(container.querySelector("[data-moment]")?.textContent).toBe("This Mac · claude 92%");
-    // the column's subscription is the only one: the moment reads its rows
+    // the stage's rows reader is the only subscription: the moment and the profiles column read its rows
     expect(subscribe).toHaveBeenCalledTimes(1);
+  });
+
+  it("mounts the profiles column in the chrome slot: a circle per profile, This Mac first, the add at its foot, counted by the marker (UM-3)", async () => {
+    const door = tabDoor();
+    const host = await mountMonitor("list", door);
+    const column = host.querySelector(".vf-monitor-chrome .vf-profiles-column");
+    expect(column?.getAttribute("aria-label")).toBe("Agent profiles");
+    const circles = [...host.querySelectorAll<HTMLButtonElement>(".vf-profiles-circle")];
+    expect(
+      circles.map((circle) => circle.closest<HTMLElement>("[data-profile]")?.dataset.profile),
+    ).toEqual(TAB_SETS.map((set) => set.id));
+    expect(host.querySelector(".vf-profiles-column .vf-profiles-add")).not.toBeNull();
+    expect(host.querySelector(".vf-usage-column")).toBeNull();
+    expect(latest().profileCircles).toBe(TAB_SETS.length);
+  });
+
+  it("is the profile lens: a circle's click chooses its profile for the stage and search alike, and a second click shows them all (SE-D2, UM-D19)", async () => {
+    const door = tabDoor();
+    const host = await mountMonitor("list", door);
+    const circle = (id: string) =>
+      host.querySelector<HTMLButtonElement>(`[data-profile="${id}"] .vf-profiles-circle`);
+    expect(circle("work")?.getAttribute("aria-pressed")).toBe("false");
+    await act(async () => circle("work")?.click());
+    await settle();
+    expect(chosenTab()).toBe("work");
+    expect(latest().profileTab).toBe("work");
+    expect(circle("work")?.getAttribute("aria-pressed")).toBe("true");
+    // its popover is pinned open beside it
+    expect(host.querySelector('[data-profile="work"] .vf-profiles-pop')).not.toBeNull();
+    await act(async () => circle("work")?.click());
+    await settle();
+    expect(chosenTab()).toBe("all");
+    expect(circle("work")?.getAttribute("aria-pressed")).toBe("false");
+    expect(host.querySelector(".vf-profiles-pop")).toBeNull();
+    // chosen in search, the ring follows: one filter (SE-D2)
+    await chooseProfile("empty");
+    expect(circle("empty")?.getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("with no profiles door draws This Mac, dashed with its glyph, and the add", async () => {
+    const host = await mountMonitor("list", fakeDoor());
+    const circles = [...host.querySelectorAll<HTMLButtonElement>(".vf-profiles-circle")];
+    expect(circles.map((circle) => circle.getAttribute("aria-label"))).toEqual(["This Mac"]);
+    expect(circles[0]?.hasAttribute("aria-pressed")).toBe(false);
+    expect(circles[0]?.querySelector('circle[data-part="empty"]')).not.toBeNull();
+    expect(circles[0]?.querySelector(".vf-bands-glyph")).not.toBeNull();
+    expect(latest().profileCircles).toBe(1);
+  });
+
+  it("while the usage cannot be read, draws every circle dashed and keeps Usage unavailable · Retry on the strip", async () => {
+    const door = tabDoor();
+    door.usage = usagePortOver({
+      request: async () => {
+        throw new Error("usage refused");
+      },
+      subscribe: async () => {
+        throw new Error("usage refused");
+      },
+    });
+    const host = await mountMonitor("list", door);
+    expect(host.querySelectorAll(".vf-profiles-circle")).toHaveLength(TAB_SETS.length);
+    for (const circle of host.querySelectorAll(".vf-profiles-circle")) {
+      expect(circle.querySelector('circle[data-part="empty"]')).not.toBeNull();
+      expect(circle.querySelector('[data-part="hot-dot"]')).toBeNull();
+    }
+    expect(host.textContent).toContain("Usage unavailable · Retry");
   });
 
   it("chooses the view with the head's circles; there is no theme switch (FC-D7)", async () => {
@@ -2208,9 +2283,9 @@ describe("the profile filter (AR-S5; in search's Live now since P2, GV-D3)", () 
     const host = await mountMonitor("list", door);
     await chooseProfile("empty");
     const empty = host.querySelector(".vf-monitor-profile-empty");
-    expect(empty?.textContent).toContain("No sessions under Empty");
+    expect(empty?.textContent).toContain("No sessions on Empty");
     expect(empty?.textContent).toContain(
-      "Only this profile's sessions show — the search button's × shows them all again.",
+      "Only its sessions show. Click it again, or the × on search, to show them all.",
     );
     expect(empty?.querySelector('[data-profile-glyph="flask"]')).not.toBeNull();
     expect(host.querySelector(".vf-monitor-list")?.classList.contains("is-all-receded")).toBe(true);
@@ -3639,32 +3714,48 @@ describe("M59 — the body a row continues, and a create that answers", () => {
   });
 });
 
-// M49 / MV-8: the shipping chrome boundaries, with a real usage reader that
-// throws in render. The model feed and mounted SDK view must survive it. A piece
-// that heals waits for its boundary's window (the backoff): those rows hold the
-// clock (`chrome-clock-fixture.ts`).
+// M49 / MV-8: the shipping chrome boundaries, with a real rows reader whose rows
+// throw in the profiles column's render. The model feed and mounted SDK view must
+// survive it. A piece that heals waits for its boundary's window (the backoff):
+// those rows hold the clock (`chrome-clock-fixture.ts`).
 describe("a chrome read cannot take down the monitor", () => {
   afterEach(() => {
     vi.useRealTimers();
   });
 
+  /** A rows reader handing the column rows that throw when read, while `broken()` says so (UM-3: the column reads
+   * the port's rows, never a views batch). */
+  const throwingRows = (failure: Error, broken: () => boolean): readonly AgentAccountUsageEntry[] =>
+    new Proxy([] as AgentAccountUsageEntry[], {
+      get(target, key, receiver) {
+        if (broken()) throw failure;
+        return Reflect.get(target, key, receiver);
+      },
+    });
+  const rowsUsage = (rows: readonly AgentAccountUsageEntry[]): MonitorUsagePort => ({
+    ...emptyUsage(),
+    subscribeRows: (listener) => {
+      listener(rows);
+      return () => undefined;
+    },
+  });
+  /** a profile whose sign-in the column reads, so its meters read the rows */
+  const READS = tabSet("work", "Work", [tabPersona("w-claude", "claude")], { glyph: "briefcase" });
+  const withProfile = (door: FakeDoor): FakeDoor => ({
+    ...door,
+    profiles: {
+      subscribe: (listener) => {
+        listener([READS]);
+        return () => undefined;
+      },
+    },
+  });
+
   it("names the failed piece, keeps delivering the model, and heals on new facts", async () => {
     let broken = true;
     const failure = new Error("usage fixture lost its entries");
-    const base = fakeDoor();
-    const door: FakeDoor = {
-      ...base,
-      usage: {
-        ...emptyUsage(),
-        snapshot: async () => ({
-          refreshedAt: CHECKED_AT,
-          get entries() {
-            if (broken) throw failure;
-            return [];
-          },
-        }),
-      },
-    };
+    const rows = throwingRows(failure, () => broken);
+    const door: FakeDoor = withProfile({ ...fakeDoor(), usage: rowsUsage(rows) });
     const recording = createRecordingView("chrome-survivor");
     const entry: MonitorViewEntry = {
       id: recording.view.manifest.id,
@@ -3689,7 +3780,7 @@ describe("a chrome read cannot take down the monitor", () => {
     await settle();
     expect(caught.mock.calls.some(([error]) => error === failure)).toBe(true);
     expect(uncaught).not.toHaveBeenCalled();
-    expect(container.textContent).toContain("Usage unavailable");
+    expect(container.textContent).toContain("Profiles unavailable");
     expect(container.querySelector(".vf-stories")).not.toBeNull();
     expect(recording.mounts).toBe(1);
     expect(recording.unmounts).toBe(0);
@@ -3706,12 +3797,12 @@ describe("a chrome read cannot take down the monitor", () => {
     );
     expect(recording.roots[0]).toBe(stage);
     expect(recording.unmounts).toBe(0);
-    expect(container.textContent).toContain("Usage unavailable");
+    expect(container.textContent).toContain("Profiles unavailable");
     broken = false;
     // A model publish is not a fact the column reads: it stays down (M176)…
     await act(async () => door.push(ROWS));
     await settle();
-    expect(container.textContent).toContain("Usage unavailable");
+    expect(container.textContent).toContain("Profiles unavailable");
     // …until the door hands it a new port, which is one: tried at the end of the
     // boundary's first window at the latest.
     holdChromeClock();
@@ -3726,8 +3817,8 @@ describe("a chrome read cannot take down the monitor", () => {
     await settle();
     await advanceChromeClock();
     await settle();
-    expect(container.textContent).not.toContain("Usage unavailable");
-    expect(container.querySelector(".vf-usage-column")).not.toBeNull();
+    expect(container.textContent).not.toContain("Profiles unavailable");
+    expect(container.querySelector(".vf-profiles-column")).not.toBeNull();
     expect(recording.mounts).toBe(1);
     expect(recording.unmounts).toBe(0);
     expect(uncaught).not.toHaveBeenCalled();
@@ -3738,22 +3829,10 @@ describe("a chrome read cannot take down the monitor", () => {
     // port fall where the row puts them, never where the host's speed does.
     holdChromeClock();
     const failure = new Error("usage fixture lost its entries");
-    // Each mount of the column asks its port for one snapshot: the count of
-    // asks is the count of tries, and each try that reads the entries throws.
-    let asked = 0;
-    const brokenUsage = (): AccountUsagePort => ({
-      subscribe: () => () => undefined,
-      snapshot: async () => {
-        asked += 1;
-        return {
-          refreshedAt: CHECKED_AT,
-          get entries(): never {
-            throw failure;
-          },
-        };
-      },
-    });
-    const door: FakeDoor = { ...fakeDoor(), usage: brokenUsage() };
+    // Each try of the column reads the rows in its render and throws: the count
+    // of caught throws is the count of tries.
+    const brokenUsage = (): MonitorUsagePort => rowsUsage(throwingRows(failure, () => true));
+    const door: FakeDoor = withProfile({ ...fakeDoor(), usage: brokenUsage() });
     const recording = createRecordingView("usage-under-publishes");
     const entry: MonitorViewEntry = {
       id: recording.view.manifest.id,
@@ -3778,8 +3857,8 @@ describe("a chrome read cannot take down the monitor", () => {
       });
     await renderWith(door);
     await settle();
-    expect([throws(), asked]).toEqual([1, 1]);
-    expect(container.textContent).toContain("Usage unavailable");
+    expect(throws()).toBe(1);
+    expect(container.textContent).toContain("Profiles unavailable");
 
     // Fifty publishes, each moving a row the view is handed.
     const updates = recording.updates;
@@ -3800,38 +3879,37 @@ describe("a chrome read cannot take down the monitor", () => {
       await settle();
     }
     expect(recording.updates - updates).toBeGreaterThanOrEqual(50);
-    expect([throws(), asked]).toEqual([1, 1]);
-    expect(container.textContent).toContain("Usage unavailable");
+    expect(throws()).toBe(1);
+    expect(container.textContent).toContain("Profiles unavailable");
 
     // A new port is a new key, but inside the first window it waits…
     await renderWith({ ...door, usage: brokenUsage() });
     await settle();
-    expect([throws(), asked]).toEqual([1, 1]);
+    expect(throws()).toBe(1);
     // …and the window's end tries it once, which fails the same way.
     await advanceChromeClock(CHROME_RETRY_FIRST_MS);
     await settle();
-    expect([throws(), asked]).toEqual([2, 2]);
+    expect(throws()).toBe(2);
 
     // Three new ports inside the next window are one try, at its end, with the
-    // port standing then. The column fails only after its first render (its
-    // snapshot answers later), so each try renders, and a try that renders ends
-    // the boundary's episode: the next window starts again at the first, 1 s,
-    // where a piece that threw in the try's own render would double it.
+    // port standing then. The column reads the rows in the try's own render, so
+    // a try fails where it renders and the boundary's window doubles: the next
+    // try waits twice the first.
     for (let port = 0; port < 3; port += 1) {
       await renderWith({ ...door, usage: brokenUsage() });
       await settle();
     }
-    expect([throws(), asked]).toEqual([2, 2]);
-    await advanceChromeClock(CHROME_RETRY_FIRST_MS / 2);
+    expect(throws()).toBe(2);
+    await advanceChromeClock(CHROME_RETRY_FIRST_MS);
     await settle();
-    expect([throws(), asked]).toEqual([2, 2]);
-    await advanceChromeClock(CHROME_RETRY_FIRST_MS / 2);
+    expect(throws()).toBe(2);
+    await advanceChromeClock(CHROME_RETRY_FIRST_MS);
     await settle();
-    expect([throws(), asked]).toEqual([3, 3]);
+    expect(throws()).toBe(3);
 
     // One failure the whole time: one "unavailable", and the view never remounted.
     expect(container.querySelectorAll('.vf-monitor-chrome > span[role="status"]')).toHaveLength(1);
-    expect(container.textContent).toContain("Usage unavailable");
+    expect(container.textContent).toContain("Profiles unavailable");
     expect([recording.mounts, recording.unmounts]).toEqual([1, 0]);
   });
 

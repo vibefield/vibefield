@@ -548,8 +548,8 @@ export function GodviewMonitor({
   /** GT-3c: where its physics runs — `worker`, the honest `inline`, or `none` for a view with none. */
   const swarmPhysics = viewReport.physics ?? "none";
   const viewHoldsKeys = viewReport.keysHeld === true;
-  /** The usage column's tiles, counted off the chrome slot (AR-5); -1 unmounted. */
-  const [usageTiles, setUsageTiles] = useState(-1);
+  /** UM-3 2c red: the skeleton — the marker's new name, still counting the usage column's tiles. */
+  const [profileCircles, setProfileCircles] = useState(-1);
   // AR-7 — this desktop's runs for the marker, handed on as the SAME object
   // until a fact the marker states moves: a working agent's row moves several
   // times a second, and a token count is no news to this line (the identity
@@ -735,7 +735,7 @@ export function GodviewMonitor({
     if (!chrome || typeof MutationObserver === "undefined") return;
     const read = (): void => {
       const column = chrome.querySelector(".vf-usage-column");
-      setUsageTiles(column ? column.querySelectorAll(".vf-usage-tile").length : -1);
+      setProfileCircles(column ? column.querySelectorAll(".vf-usage-tile").length : -1);
     };
     const observer = new MutationObserver(read);
     observer.observe(chrome, { subtree: true, childList: true });
@@ -765,7 +765,7 @@ export function GodviewMonitor({
       ...(sources.remoteReason !== undefined ? { remoteReason: sources.remoteReason } : {}),
       swarmPhysics,
       swarmRenderer,
-      usageTiles,
+      profileCircles,
       profileTab: chosenId ?? "all",
       shownAgents: shown.length,
       history: history?.state ?? "absent",
@@ -778,7 +778,7 @@ export function GodviewMonitor({
     sources,
     swarmPhysics,
     swarmRenderer,
-    usageTiles,
+    profileCircles,
     chosenId,
     shown,
     history,

@@ -1301,16 +1301,25 @@ describe("UI system ownership boundaries", () => {
     }
   });
 
-  it("gives the chrome slot its rule — the usage column stands in the stage's left edge (AR-5b)", () => {
-    // The review's blocker: the slot's class had a comment and no rule, so the
-    // column laid out in flow — below the clipped swarm, across the list. The
-    // rule is the reference host's; the claims strip starts at 72px beside it.
+  it("gives the chrome slot its rule — the profiles column stands at the stage's top left (AR-5b; UM-3)", () => {
+    // The review's blocker (AR-5b): the slot's class had a comment and no rule, so the
+    // column laid out in flow — below the clipped swarm, across the list. UM-D21: the slot
+    // holds the profiles column, a 52-wide pill that hugs its circles at x 13, y 64 (the
+    // head's reserve plus 8), and the claims strip starts at 79 beside it (13 + 52 + 14).
     const godview = source("godview/godview.css");
     const rule = godview.match(/^\.vf-monitor-chrome \{([^}]*)\}/m)?.[1] ?? "";
     expect(rule).toContain("position: absolute");
+    expect(rule).toContain("top: calc(var(--vf-godview-head-reserve) + 8px)");
     expect(rule).toContain("left: 13px");
-    expect(rule).toContain("width: 46px");
-    expect(godview).toMatch(/^\.vf-monitor-claims \{[^}]*left: 72px/m);
+    expect(rule).toContain("width: 52px");
+    expect(rule).not.toMatch(/\bheight:/);
+    expect(godview).toMatch(/^\.vf-monitor-claims \{[^}]*left: 79px/m);
+    // the slot mounts VibeField's column, behind its own boundary; puppeteer-views' usage column left the path
+    const monitor = source("godview/GodviewMonitor.tsx");
+    expect(monitor).toMatch(
+      /<div ref=\{chromeRef\} className="vf-monitor-chrome">\s*<ChromeBoundary name="Profiles" retryKey=\{profilesRetryKey\}>\s*<ProfilesColumn\s/u,
+    );
+    expect(monitor).not.toContain("UsageColumn");
   });
 
   it("keeps the pane frame's own styling in the views package, never in a host's (GT-6)", () => {

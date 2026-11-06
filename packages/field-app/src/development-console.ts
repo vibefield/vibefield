@@ -313,10 +313,13 @@ export interface GodviewMonitorFacts {
    * honest line on the stage), or `starting` before the device answered; `none`
    * when the swarm is not the mounted view. The view's `report` since MV-5. */
   swarmRenderer: string;
-  /** AR-5: the tiles the usage column is showing (one per account the door
-   * reported, whatever its state); `-1` while no column is mounted. A count,
-   * not a judgement: an empty batch is the ordinary answer of a fresh daemon. */
-  usageTiles: number;
+  /** UM-3 (DESIGN.md §8 "Godview's profiles column"): the circles the profiles
+   * column is showing, one per Agent Profile with a circle (This Mac alone, dashed,
+   * with no profiles door); `-1` while no column is mounted. A count, not a
+   * judgement. *(Renamed 2026-11-06, UM-3, the lead's ruling 4: this was
+   * `usageTiles`, puppeteer-views' usage column's tiles — one per account the door
+   * reported — which left the stage with that column.)* */
+  profileCircles: number;
   /** AR-S5: the chosen profile's id — `all` while every profile is shown or
    * there is no choice to make — and how many rows it leaves on the stage
    * unreceded. (P2: the profiles are chosen in search's Live now, GV-D3; the
