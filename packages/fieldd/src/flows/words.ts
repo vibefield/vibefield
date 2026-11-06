@@ -64,7 +64,8 @@ export const runsLive = (flow: string): string =>
 export const runsPerSpark = (spark: string): string =>
   `${spark} is running ${FLOW_LIMITS.RUNS_PER_SPARK_MAX} flows, as many as a spark may.`;
 
-/** A step that would start an agent while its run keeps FLOW_LIMITS.RUN_AGENTS_MAX (the slices 7–9 review's F4; ruled
- * 2026-11-06): why it wasn't started, said after steps.ts's "VibeField didn't start ‹label›:" (DESIGN.md §9
- * "A step's call refused"). */
-export const agentsKept = (): string => "this run already keeps as many agents as a run may.";
+/** A step that would start an agent once its run has started FLOW_LIMITS.RUN_AGENTS_MAX, counted until its end
+ * whatever becomes of them (the slices 7–9 review's F4, ruled 2026-11-06; LL1, 2026-11-06): why it wasn't
+ * started, said after steps.ts's "VibeField didn't start ‹label›:" (DESIGN.md §9 "A step's call refused"). */
+export const agentsStarted = (): string =>
+  "this run has already started as many agents as a run may.";

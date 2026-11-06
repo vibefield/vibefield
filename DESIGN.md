@@ -10389,10 +10389,11 @@ a name that is, or starts with, "VibeField" shows the flow's slug instead, so a 
     it does; ‹model› is the model as written; both are said on one line and cut at 64 characters with "…". ‹folder›
     is the folder's last name, never its path. A step's model is a model's name alone: a flow sets none of its
     controls.
-  - *Proposed 2026-11-06 (CP-4a2b; the slices 7–9 review's F4, ruled 2026-11-06; open until James
-    reads it):* a step that would start an agent while its run already keeps RUN_AGENTS_MAX (FLOW_LIMITS), since a
-    run's agents live until its end or a Stop (CP4-Q10); a step handed a session by `in:` starts none:
-    - "VibeField didn't start ‹label›: this run already keeps as many agents as a run may."
+  - *Proposed 2026-11-06 (CP-4a2b; the slices 7–9 review's F4, ruled 2026-11-06;
+    open until James reads it, as the rest are):* a step that would start an agent once its run has started
+    RUN_AGENTS_MAX (FLOW_LIMITS); a run's agents count until its end, whatever becomes of them; a step handed a
+    session by `in:` starts none:
+    - "VibeField didn't start ‹label›: this run has already started as many agents as a run may."
   - "VibeField didn't send ‹label›: that session is outside this run's Agent Profiles, isn't running, is a spark's or
     another flow's, or is waiting on a permission."
   - "VibeField couldn't start ‹label›: ‹the runtime's words›"

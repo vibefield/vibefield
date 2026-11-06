@@ -628,12 +628,12 @@ export const AGENT_STOP = {
  *    F6), at Linux's PATH_MAX; macOS's is 1,024. The flows' domain bound, never a borrowed WORKSPACE_LIMITS.PATH_CHARS
  *    (each domain keeps its own: WORKSPACE_LIMITS.PATH_CHARS, ARTIFACT_LIMITS.PATH_CHARS, screenshot's MAX_PATH_CHARS;
  *    ruled 2026-11-06);
- *  - RUN_AGENTS_MAX: the agents a run's steps started that are still alive. An `in:` hand starts none, and nothing
- *    ends a step's agent before the run's end or a Stop (CP4-Q10; the slices 7–9 review's F4, Q1 (b), ruled
- *    2026-11-06), so it counts every agent the run's steps started. One past it (the 17th) is refused at its
- *    spawn, in DESIGN.md §9's words ("A step's call refused"), never made to wait: LIVE_STEPS_MAX's slots are another
- *    bound. The PTYs it holds: RUNS_LIVE_MAX 8 × 16 = 128 step PTYs, against macOS's 511 (`kern.tty.ptmx_max`), which
- *    the floor's own PTYs share (its terminals, the sparks' sessions). */
+ *  - RUN_AGENTS_MAX: the agents a run's steps started, counted until the run's end whatever becomes of them (LL1,
+ *    ruled 2026-11-06). An `in:` hand starts none, and nothing ends a step's agent before the run's end or a
+ *    Stop (CP4-Q10; the slices 7–9 review's F4, Q1 (b), ruled 2026-11-06). One past it (the 17th) is
+ *    refused at its spawn, in DESIGN.md §9's words ("A step's call refused"), never made to wait: LIVE_STEPS_MAX's
+ *    slots are another bound. The PTYs it allows at most: RUNS_LIVE_MAX 8 × 16 = 128 step PTYs, a ceiling against
+ *    macOS's 511 (`kern.tty.ptmx_max`), which the floor's own PTYs share (its terminals, the sparks' sessions). */
 export const FLOW_LIMITS = {
   SCRIPT_MAX_BYTES: 64 * 1024,
   RESULT_MAX_BYTES: 64 * 1024,

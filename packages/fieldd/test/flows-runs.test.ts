@@ -1115,7 +1115,7 @@ describe("CP-4a2b — a step's agent, model, folder, prompt and profile, held at
       W("‹label›", "its prompt isn't words."),
       W("‹label›", "it names an Agent Profile this run can't use (‹profile›)."),
       W("‹label›", "it asks for ‹key›, which a step may not set."),
-      W("‹label›", words.agentsKept()),
+      W("‹label›", words.agentsStarted()),
     ])
       expect(design, said).toContain(`"${said}"`);
   });
@@ -2595,10 +2595,10 @@ describe("CP-4a2b — a changed flow's acts begin the asked-for run (§13a slice
 });
 
 // CP-4a2b (the slices 7–9 review's F4; Q1 (b), ruled 2026-11-06; the record's count at the refined (A),
-// 2026-11-06) — a run's agents live until its end or a Stop (CP4-Q10), so a run keeps FLOW_LIMITS.RUN_AGENTS_MAX at
-// most: a step that would start one more is refused at its spawn, in DESIGN.md §9's PROPOSED words (1b1a8d7e4), never
-// made to wait. The count is the run's record's (`agents`), reserved in the one write that reads it, so two starts at
-// once never both pass, and a run woken on its record counts as it did. An `in:` starts none.
+// 2026-11-06; LL1's words, 2026-11-06) — a run starts FLOW_LIMITS.RUN_AGENTS_MAX agents at most, counted until its end
+// whatever becomes of them: a step that would start one more is refused at its spawn, in DESIGN.md §9's PROPOSED words,
+// never made to wait. The count is the run's record's (`agents`), reserved in the one write that reads it, so two
+// starts at once never both pass, and a run woken on its record counts as it did. An `in:` starts none.
 
 /** `n` spawned steps at once, each refusal caught and logged; `model` names one, so each start awaits the runtime's
  * models before its spawn; `hand` adds one handed your session by `in:` after them. */
@@ -2622,10 +2622,10 @@ const agentsAtOnce = (
   ].join("\n");
 };
 
-/** §9's PROPOSED reason (1b1a8d7e4), after "VibeField didn't start ‹label›:". */
-const AGENTS_KEPT = "this run already keeps as many agents as a run may.";
+/** §9's PROPOSED reason (LL1's words), after "VibeField didn't start ‹label›:". */
+const AGENTS_STARTED = "this run has already started as many agents as a run may.";
 
-describe("CP-4a2b — a run's agents, RUN_AGENTS_MAX kept until its end (the slices 7–9 review's F4)", () => {
+describe("CP-4a2b — a run's agents, RUN_AGENTS_MAX started, counted until its end (the slices 7–9 review's F4)", () => {
   /** The line step `call` of `run` was given, once its agent is working. */
   const lineOf = (h: Harness, run: string, call: number) =>
     h.enqueued.find(({ from }) => from.kind === "flow" && from.run === run && from.call === call);
@@ -2658,7 +2658,7 @@ describe("CP-4a2b — a run's agents, RUN_AGENTS_MAX kept until its end (the sli
     );
   };
 
-  it("RA1: a run's 17th agent is refused at its spawn in §9's words, never spawned and never made to wait; the 16 its steps started are kept on its record", async () => {
+  it("RA1: a run's 17th agent is refused at its spawn in §9's words, never spawned and never made to wait; the 16 its steps started are counted on its record", async () => {
     const h = await harness();
     const max = FLOW_LIMITS.RUN_AGENTS_MAX;
     const slots = FLOW_LIMITS.LIVE_STEPS_MAX;
@@ -2670,7 +2670,7 @@ describe("CP-4a2b — a run's agents, RUN_AGENTS_MAX kept until its end (the sli
       answer(h, run, call);
     }
     await waitFor(() => expect(outcomeOf(h, run, max + 1)).toBeDefined());
-    expect(outcomeOf(h, run, max + 1)).toBe(W(`Part ${max + 1}`, AGENTS_KEPT));
+    expect(outcomeOf(h, run, max + 1)).toBe(W(`Part ${max + 1}`, AGENTS_STARTED));
     expect(h.spawned).toHaveLength(max);
     // its record says so: the step failed, never waiting, and the run keeps its 16
     const record = h.records.runRecord(run);
@@ -2689,19 +2689,19 @@ describe("CP-4a2b — a run's agents, RUN_AGENTS_MAX kept until its end (the sli
     const refused = [1, 2].filter((call) => outcomeOf(h, run, call) !== "spawned");
     expect(refused).toHaveLength(1);
     const [call = 0] = refused;
-    expect(outcomeOf(h, run, call)).toBe(W(`Part ${call}`, AGENTS_KEPT));
+    expect(outcomeOf(h, run, call)).toBe(W(`Part ${call}`, AGENTS_STARTED));
     expect(h.spawned).toHaveLength(1);
     expect(h.records.runRecord(run)).toMatchObject({ agents: max });
   });
 
-  it("RA3: a run whose record keeps RUN_AGENTS_MAX at its wake, as a run woken on its record does, refuses its next spawn; a step it hands your session by in: starts none, and is handed", async () => {
+  it("RA3: a run whose record counts RUN_AGENTS_MAX at its wake, as a run woken on its record does, refuses its next spawn; a step it hands your session by in: starts none, and is handed", async () => {
     const h = await harness({ sessions: { "run-yours": HANDED_YOURS } });
     const max = FLOW_LIMITS.RUN_AGENTS_MAX;
     h.approved("agents", agentsAtOnce(1, { hand: true }));
     keeping(h, max);
     const run = startedRun(await h.start({ flow: "agents" })).run;
     await waitFor(() => expect(outcomeOf(h, run, 1)).toBeDefined());
-    expect(outcomeOf(h, run, 1)).toBe(W("Part 1", AGENTS_KEPT));
+    expect(outcomeOf(h, run, 1)).toBe(W("Part 1", AGENTS_STARTED));
     expect(h.spawned).toEqual([]);
     // the guard: the in: at RUN_AGENTS_MAX is handed, never refused, and the count stands
     await waitFor(() => expect(h.hands).toHaveLength(1));

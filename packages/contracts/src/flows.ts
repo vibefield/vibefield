@@ -411,10 +411,10 @@ export type FlowRunRecordStep = z.infer<typeof FlowRunRecordStep>;
  * steps before them. `calls` counts the journaled call lines toward the cap and `allowed` is where the cap holds next
  * (CALLS_MAX, and CALLS_MORE per Allow; D10, J7); `held` names the item a held run waits in; `host` is
  * FLOW_HOST_ENDINGS' word when fieldd ended its host. CP-4a2b (the slices 7–9 review's F4, ruled
- * 2026-11-06): `agents`, the agents its steps started, which live until the run's end or a Stop (CP4-Q10), counted
- * against FLOW_LIMITS.RUN_AGENTS_MAX. The record keeps it because `steps` folds the oldest into `earlier`, a bare
- * count, and a step's `session` is written only once its spawn answers. Optional, so a record kept before it parses,
- * as none started. */
+ * 2026-11-06; LL1's words, 2026-11-06): `agents`, the agents its steps started, counted until the run's end, whatever
+ * becomes of them, against FLOW_LIMITS.RUN_AGENTS_MAX. The record keeps it because `steps` folds the oldest into
+ * `earlier`, a bare count, and a step's `session` is written only once its spawn answers. Optional, so a record kept
+ * before it parses, as none started. */
 export const FlowRunRecord = z
   .object({
     format: z.literal(1),
@@ -444,7 +444,7 @@ export const FlowRunRecord = z
     startedAt: z.string().min(1),
     endedAt: z.string().min(1).optional(),
     ended: z.number().int().min(0).optional(), // "Ended its N agents"
-    agents: z.number().int().min(0).max(FLOW_LIMITS.RUN_AGENTS_MAX).optional(), // its steps' agents, alive (F4)
+    agents: z.number().int().min(0).max(FLOW_LIMITS.RUN_AGENTS_MAX).optional(), // its steps' agents, started (F4)
   })
   .passthrough();
 export type FlowRunRecord = z.infer<typeof FlowRunRecord>;

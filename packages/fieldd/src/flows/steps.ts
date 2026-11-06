@@ -359,10 +359,11 @@ export async function startStep(
         `it names a model ${offered.label} doesn't offer (${nameWords(model)}).`,
       );
   }
-  // F4 (the slices 7–9 review; ruled 2026-11-06): a run keeps RUN_AGENTS_MAX agents at most,
-  // alive until its end or a Stop (CP4-Q10), so one more is refused here, never made to wait. The count is the
-  // record's, reserved after the last await before the spawn, in the one write that reads it: two starts at once
-  // never both pass, and a run woken on its record counts as it did
+  // F4 (the slices 7–9 review; ruled 2026-11-06; LL1, 2026-11-06): a run starts RUN_AGENTS_MAX
+  // agents at most, counted until its end, whatever becomes of them, so one more is refused here, never made to wait.
+  // The count is the record's, reserved after every D9 refusal above (a step refused for its profile, folder or model
+  // takes none) and after the last await before the spawn, in the one write that reads it: two starts at once never
+  // both pass, and a run woken on its record counts as it did
   let agents = 0;
   write(
     call,
@@ -372,7 +373,7 @@ export async function startStep(
       return agents < FLOW_LIMITS.RUN_AGENTS_MAX ? { agents: agents + 1 } : {};
     },
   );
-  if (agents >= FLOW_LIMITS.RUN_AGENTS_MAX) return didntStart(label, words.agentsKept());
+  if (agents >= FLOW_LIMITS.RUN_AGENTS_MAX) return didntStart(label, words.agentsStarted());
   const launch: FlowStepLaunch = {
     agent,
     cwd,
