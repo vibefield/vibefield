@@ -1882,7 +1882,7 @@ describe("CP-4a2b — a changed flow's acts begin the asked-for run (§13a slice
     expect(h.records.runRecords().map((record) => record.run)).toEqual([run]);
   });
 
-  it("R4c (the 1b review V5): a start whose asked Agent Profiles, narrowed as it starts, leave none starts nothing, before any approval, in §9's words: a spark's in its own, yours that none exists", async () => {
+  it("R4c (the 1b review V5; 1e review AA1): a start whose asked Agent Profiles, narrowed as it starts, leave none starts nothing, before any approval, in §9's words by cause: the spark's narrowing at the act, or none that exists as it begins", async () => {
     const h = await harness();
     const approval = h.approved("hello", HELLO);
     const edited = h.write("hello", HELLO_EDITED);
@@ -1904,21 +1904,25 @@ describe("CP-4a2b — a changed flow's acts begin the asked-for run (§13a slice
       outcome: "failed",
       reason: words.noSparkProfiles("Vela"),
     });
-    // a Run in Vela's thread, under review: Vela's, and review exists no more, so it is Vela's words again
+    // a Run in Vela's thread, asked under work, is narrowed by Vela the same way (G2): Vela's words
+    const spun = waitsOf(await h.start({ starter: { by: "you", spark: VELA }, scope: ["work"] }));
+    expect(await act(spun, 1)).toEqual({
+      outcome: "failed",
+      reason: words.noSparkProfiles("Vela"),
+    });
+    // one asked under review, which Vela keeps, once review exists no more: that is the cause, whoever's run it is
+    // (AA1), so none it asked for exists now
     const thread = waitsOf(
       await h.start({ starter: { by: "you", spark: VELA }, scope: ["review"] }),
     );
     h.setProfiles(["work"]);
-    expect(await act(thread, 1)).toEqual({
-      outcome: "failed",
-      reason: words.noSparkProfiles("Vela"),
-    });
-    // yours, under review: none it asked for exists now
+    expect(await act(thread, 2)).toEqual({ outcome: "failed", reason: words.noProfiles() });
+    // yours, under review: the same
     const yours = waitsOf(await h.start({ scope: ["review"] }));
-    expect(await act(yours, 2)).toEqual({ outcome: "failed", reason: words.noProfiles() });
+    expect(await act(yours, 3)).toEqual({ outcome: "failed", reason: words.noProfiles() });
     expect(h.records.approval("hello")?.hash).toBe(approval.hash);
     expect(h.records.runRecords()).toEqual([]);
-    // the door, on the approved version: the same two refusals, before any run's record
+    // the door, on the approved version: none that exists, for yours and a spark's own alike (AA1), before any record
     h.approved("hello", HELLO);
     expect(await refusalOf(h.start({ scope: ["review"] }))).toEqual({
       reason: "no-profiles",
@@ -1928,7 +1932,7 @@ describe("CP-4a2b — a changed flow's acts begin the asked-for run (§13a slice
       await refusalOf(
         h.start({ starter: { by: "spark", spark: VELA }, from: VELA_FROM, scope: ["review"] }),
       ),
-    ).toEqual({ reason: "no-profiles", message: words.noSparkProfiles("Vela") });
+    ).toEqual({ reason: "no-profiles", message: words.noProfiles() });
     expect(h.records.runRecords()).toEqual([]);
     // a scope that keeps one it asked for starts, narrowed to it (D8)
     const run = startedRun(await h.start({ scope: ["review", "work"] }));
