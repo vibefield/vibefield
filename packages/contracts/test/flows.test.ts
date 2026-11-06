@@ -25,6 +25,7 @@ import {
   FLOW_RUNS_LISTED_MAX,
   FLOW_STEP_STATES,
   FlowApprovalRecord,
+  FlowCall,
   FlowCallKey,
   FlowGate,
   FlowHash,
@@ -196,6 +197,25 @@ describe("CP-4a1 — the library and fieldd's records on disk (CP4-Q18 (a))", ()
 });
 
 describe("CP-4a1 — the static read's shape (CP4-Q3 (a))", () => {
+  it("F7b (CP-4a2b, Q2 (a), ruled 2026-11-06): a call says `cwd` where its options name a folder plainly, as true alone; a computed one is `computed`; an older reader passes it through", () => {
+    const read = FlowRead.parse(fixture("flow-read.cwd"));
+    expect(read.calls.map((call) => [call.label, call.cwd, call.computed])).toEqual([
+      ["here", true, undefined],
+      ["there", undefined, true],
+      ["the input's", undefined, undefined],
+    ]);
+    expect(Object.keys(FlowCall.shape)).toContain("cwd");
+    // the folder itself never crosses: the read says only that one is named
+    for (const cwd of ["/work/app", false, 1])
+      expect(FlowCall.safeParse({ line: 3, cwd }).success, String(cwd)).toBe(false);
+    // a reader from before the field takes the read whole, and a later field passes through it
+    const [here] = read.calls;
+    if (here === undefined) throw new Error("the fixture's first call");
+    const { cwd: _cwd, ...older } = here;
+    expect(FlowCall.parse(older)).toEqual(older);
+    expect(FlowCall.parse({ ...here, later: "x" })).toMatchObject({ cwd: true, later: "x" });
+  });
+
   it("F7: what the bytes say: meta, each agent call and each gate, nothing about money", () => {
     const read = FlowRead.parse(fixture("flow-read.valid"));
     expect(read.meta).toEqual({

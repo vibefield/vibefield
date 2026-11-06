@@ -1,0 +1,30 @@
+{
+  "meta": {
+    "name": "Folders",
+    "input": {
+      "target": "session"
+    }
+  },
+  "calls": [
+    {
+      "line": 3,
+      "agent": "claude",
+      "label": "here",
+      "cwd": true
+    },
+    {
+      "line": 4,
+      "agent": "claude",
+      "label": "there",
+      "computed": true
+    },
+    {
+      "line": 5,
+      "agent": "claude",
+      "label": "the input's"
+    }
+  ],
+  "gates": [],
+  "unlisted": false,
+  "refusals": []
+}

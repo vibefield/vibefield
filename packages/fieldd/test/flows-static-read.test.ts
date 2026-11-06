@@ -394,3 +394,22 @@ describe("the sandbox's three shapes, refused before any run (CP-4a2b, Q-B3 (a);
     expect(readFlow(text)).toEqual(contracts("flow-read.refused-import"));
   });
 });
+
+describe("CP-4a2b — the folder a step names (Q2 (a), ruled 2026-11-06; CP4-Q20 (a))", () => {
+  it("S17 · a call whose options name `cwd` plainly says `cwd`, never the folder; a computed one is chosen as it runs; none names none, as the contracts fixture says (EL9)", () => {
+    const text = flow(
+      [
+        '  await agent("a", { agent: "claude", label: "here", cwd: "/work/app" });',
+        '  await agent("b", { agent: "claude", label: "there", cwd: input.folder });',
+        '  await agent("c", { agent: "claude", label: "the input\'s" });',
+      ].join("\n"),
+      '{ name: "Folders", input: { target: "session" } }',
+    );
+    expect(readFlow(text)).toEqual(contracts("flow-read.cwd"));
+    expect(JSON.stringify(readFlow(text))).not.toContain("/work/app");
+    // an empty folder names none
+    expect(readFlow(flow('  await agent("a", { agent: "claude", cwd: "" });')).calls).toEqual([
+      { line: 3, agent: "claude" },
+    ]);
+  });
+});
