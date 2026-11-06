@@ -3071,11 +3071,20 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   - **The tightest** (UM-D13): a plan's tightest window is the one under the most pressure — a hot window first,
     then one at 100% or more, then the most used — and a profile's word is the tightest of its plans that read.
   - **A window read before its reset** (*added 2026-11-06, the assembled review; ‹for James›*). A window whose
-    reset has come since its reading was taken (its `resetsAt` at or before now) no longer says what it meters. It
-    is never hot and has no forecast, it ranks last for the tightest (its pressure 0, UM-D13), and its fill draws at
-    50%, as a kept reading's does. Its plan's right words say the reading's age in place of a forecast or a reset,
-    "as of 3h ago" (§9 "The meters' words"). On the phone it is the common case: a phone takes no reading of its own
-    (UM-D8), so its batch is as old as a desktop window's last poll, hours once Godview and Settings are closed.
+    `resetsAt` is at or before now, whether its reset came before or after its reading, no longer says what it
+    meters. It is never hot and has no forecast, it ranks last for the tightest (its pressure 0, UM-D13: at a tie
+    of 0 the window still running wins, so it ranks below every running window, an empty one too, and a plan whose
+    tightest it is ranks below every plan whose tightest still runs), and its fill draws at 50%, as a kept
+    reading's does. Its plan's right words say the reading's age in place of a forecast or a reset, "as of 3h ago"
+    (§9 "The meters' words"). On the phone it is the common case: a phone takes no reading of its own (UM-D8), so
+    its batch is as old as a desktop window's last poll, hours once Godview and Settings are closed. A window whose
+    `resetsAt` is at or before its reading's `fetchedAt` (its reset had already come when it was read) takes the
+    same rule ‹for James›: the age said there is the read's, not its numbers'. Settings' C1 line adopts the rule
+    with the leaf at UM-3 (U2 2e; ‹for James›) — unlit, its row's reset words giving way to the age; until then the
+    desktop's Settings may still say "resets now" for a spent window. *(Corrected 2026-11-06, the re-review:
+    this said a window whose reset "has come since its reading was taken", where the rule as built reads
+    `resetsAt` against now alone; and it said such a window ranks last while a running window at 0% tied it at 0
+    and, the first of equals, could lose to it.)*
   - **Pointing** at an arc at the open size focuses that plan: the others dim to 28%, and the middle says it.
   - **Said** as an image, "Usage: ‹plan›: 42% of 5 hours, resets in 2h; ‹plan›: not signed in", or "No meters",
     or, while the usage cannot be read, "‹profile›: usage unavailable", and "Usage unavailable" for every profile's
@@ -6367,8 +6376,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     ruling 24, ‹for James›): recent searches retire from search; the sheet's one Recent is MA-D7's apps strip.*
     While no desktop's sessions are on the phone yet, the empty list's words are ‹for James›.
     *(Corrected 2026-11-06, PLAN §4 (g): this kept the recent searches "where the phone holds none", the hedge
-    of the lead's ruling 21; the corpus holds them.)* It takes no profile (UM-D28 A): its field shows no profile
-    token, and its foot says it looks through every profile.
+    of the lead's ruling 21; the corpus holds them.)* *(Superseded 2026-11-06 by ruling 24's amendment above.)*
+    It takes no profile (UM-D28 A): its field shows no profile token, and its foot says it looks through every
+    profile.
   - **Tokens in the field** (SE-D5 A). A chosen filter stands after the field's 17 magnifier as a token: 30 tall,
     corners 15, padded 0 4 0 9, on the ink at 9%, at 14/600; its glyph 13, 5 before its name; and its ×, a 20 round
     holding `xmark` at 8 in the tertiary ink (§13), that removes it. A second token stands 2 closer to the first. A
