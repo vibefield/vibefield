@@ -3357,7 +3357,7 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   **Restart to update… · Ends 3 terminal sessions** ("Ends 1 terminal session"; it asks, below) · **Restart to
   update… · Ends 2 agent runs** ("Ends 1 agent run": a release that keeps the floor's terminal sessions still
   restarts the field service, which ends the agent runs whose agents don't re-attach; it asks, below — item 192, RV
-  #6, the words at the lean until James rules rv-update-census) · **Restart to
+  #6, the words at the lean James ruled (rv-update-census, 11-06)) · **Restart to
   update… · Checks your sessions first** (the census unread: main reads it, then asks or says why not) · **Update
   downloaded · Installs with a later release** (where the apply isn't wired yet; it opens Settings → Updates) ·
   **Restarting… · VibeField opens again**. While a restart is prepared the line reads "Reading the running
@@ -3385,7 +3385,7 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   service, which ends:", what ends listed (five at most, then "and 2 more"), then its two acts: **Cancel** leading
   and focused, **End 3 sessions and update** trailing, in the danger text (§8's two-step destructive confirm;
   Settings → Updates orders its two the same way). A release that keeps the floor asks the same way for the agent
-  runs fieldd's own stop ends (item 192, RV #6; at the lean until James rules rv-update-census): "Updating ends 2
+  runs fieldd's own stop ends (item 192, RV #6; at the lean James ruled (rv-update-census, 11-06)): "Updating ends 2
   agent runs", "The Oct 28 nightly restarts the field service, which ends:", each run as its agent, its title and
   its folder ("Codex — fix the flaky test — ~/Projects/puppeteer"), then **End 2 agent runs and update**; its list
   is named "The agent runs it ends". Esc goes back to the rows, focus on the update row; a second Esc
@@ -3705,8 +3705,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   is said here too when it returns after its card has left the screen, as a plain notice in the
   card's own words ("You said Allow one more · Couldn't start the agent: …"; "Couldn't answer:
   …"; §8 "Chat's thread", the needs-you card).
-  *Amended 2026-11-06 (item 212, RV #29; the words at the lean until James rules
-  rv-service-recovery):* **the field service** is said here when it went away and did not come
+  *Amended 2026-11-06 (item 212, RV #29; the words at the lean James ruled
+  (rv-service-recovery, 11-06)):* **the field service** is said here when it went away and did not come
   back at once (`desktopState.fieldd`), in every window and over Godview's cover, as every notice
   is. While main starts it again it holds **"Reconnecting to the field service…"**, with no act.
   When three automatic tries in ten minutes have not kept it up, main stops trying, and the line
@@ -3719,8 +3719,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   sessions sentence is true by the two
   planes (the terminal service outlives the field service) and says nothing more; the tries are
   the status item's words too (§9 "The field service's words").
-  *Amended 2026-11-06 (item 212, RV #67; the words at the lean, open until James rules
-  rv-service-recovery):* the field service is said here too when it is **up and stops
+  *Amended 2026-11-06 (item 212, RV #67; the words at the lean James ruled
+  (rv-service-recovery, 11-06)):* the field service is said here too when it is **up and stops
   answering** (`desktopState.fieldd`, `unresponsive`). Main asks it how it is every five seconds,
   one ask at a time, and an ask still unanswered two of those beats later holds **"VibeField's
   field service isn't responding. Your terminal sessions keep running. If it lasts, quit
@@ -4615,8 +4615,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     - "The Oct 28 nightly is ready — restart to finish updating" (never "installed": macOS stages, EDP-34), led by
       a 6px `--vf-cyan` dot, its cost under it ("Your terminal sessions keep running." · "Restarting ends 3
       terminal sessions. You choose when." · "VibeField couldn't read which terminal sessions are running; it asks
-      again when you restart."; a release that keeps the floor — item 192, RV #6, at the lean until James rules
-      rv-update-census — "Restarting ends 2 agent runs. Your terminal sessions keep running. You choose when." ·
+      again when you restart."; a release that keeps the floor — item 192, RV #6, rv-update-census at the lean
+      James ruled — "Restarting ends 2 agent runs. Your terminal sessions keep running. You choose when." ·
       "VibeField couldn't read which agent runs are working; it asks again when you restart."), and from the 7th
       day "Ready since Oct 19." before the cost (AU-D3);
     - "The Oct 28 nightly is available" with **Download**; with automatic updates off, "Automatic updates are off,
@@ -6906,7 +6906,7 @@ a name that is, or starts with, "VibeField" shows the flow's slug instead, so a 
   is claimed.
 
 **When VibeField's own program starts nothing** (track RV, item 203; RV #1, pup-claude-1; built at the lean, A, of
-`rv-forwarder-role`; the words are open until James rules rv-forwarder-role). A packaged VibeField runs its daemon,
+`rv-forwarder-role`; the words ruled with it, James 11-06). A packaged VibeField runs its daemon,
 its workers and its agents' launchers as one program, told apart by the first argument alone (`roles.ts`,
 `roleOf`). The daemon takes no argument at all, and nothing that starts it hands it one. A first argument that is
 none of the program's roles and asks for none starts nothing. It is a script's path, handed over by a program that
@@ -7452,7 +7452,7 @@ The sessions' records (item 177) are read again at each ask, as the sparks are. 
 before it changes anything: signing out of an agent, and deleting a set, say "VibeField can't read the sessions it
 keeps; nothing was changed". Where VibeField only looks at them (re-attaching its sessions as it starts, Timeline's
 past runs, the order agents are offered in, a folder's places), it says so in fieldd's log and goes on with none.
-*Amended 2026-11-06 (item 201, RV #48; the words at the lean until James rules rv-s9-records): re-attaching its
+*Amended 2026-11-06 (item 201, RV #48; the words at the lean James ruled (rv-s9-records, 11-06)): re-attaching its
 sessions as it starts goes on with none, but it has not happened until it has read them, so nothing that takes the
 sessions as settled acts before then. No crew member is marked ended, no words kept for a session are dropped, the
 last run's curtain waits, and fieldd's own stop can't yet count the agent runs it ends ("VibeField couldn't read which
@@ -7526,7 +7526,7 @@ only when it asks first, or must read the sessions before it can (the census unk
 Me row because it opens Settings → Updates, and on the page because the quit gate may ask. The status item and the
 app menu say them in title case, as macOS menus do: Check for Updates… (it answers in a box), Download Update,
 Restart to Update, Update Ends 3 Sessions…, and for a release that keeps the floor Update Ends 2 Agent Runs… (item
-192, RV #6, at the lean until James rules rv-update-census; an unread count holds the verb for every release, which
+192, RV #6, at the lean James ruled (rv-update-census, 11-06); an unread count holds the verb for every release, which
 reads Update Downloaded). **"Installed" is said only once it is true** (macOS stages, EDP-34):
 before, an update is downloaded, ready, or ready since. **A refusal names the step that didn't happen**
 (`downloadNotice`, AU-1): a Download the publisher's policy refuses says "VibeField didn't download the update"
@@ -7589,7 +7589,7 @@ Every place that says what a terminal's life is says those two facts, and no pla
   a window brings the Dock icon back.
 
 **The field service's words** (item 212, RV #29; added 2026-11-06. The first four rows below lived only in the shell's
-code until then; the words item 212 adds stand at the lean until James rules rv-service-recovery.) The status item's
+code until then; the words item 212 adds stand at the lean James ruled (rv-service-recovery, 11-06).) The status item's
 service row says how the field service stands for the attached person, in title case as macOS menus are: **Field
 service: Starting…** · **Field service: Ready** (**Field service: Ready — diagnostics need attention** while the
 evidence needs it) · **Field service: Reconnecting…** · **Field service: Unavailable**. When it goes away and does not
@@ -7601,7 +7601,7 @@ once more and begins the count again; opening a window does the same, and so doe
 that cannot stay up is a fault to say, never one to spin on. The window says the same on its status line (§8 "The
 status line"): "Reconnecting to the field service…", then "VibeField's field service stopped after 3 tries. Your
 terminal sessions keep running." with **Try again**.
-*Added 2026-11-06 (item 212, RV #67; the words at the lean, open until James rules rv-service-recovery):* while the
+*Added 2026-11-06 (item 212, RV #67; the words at the lean James ruled (rv-service-recovery, 11-06)):* while the
 field service is up and has stopped answering main (an ask still unanswered ten seconds on; main asks every five), the
 row reads **Field service: Not responding**, with nothing under it, and goes back to **Field service: Ready** at its
 next answer. A field service VibeField started itself that stays silent for a minute is ended alone, never the

@@ -7,7 +7,7 @@ import { getRendererLogger } from "../logging";
 import { type StatusNotice, sayStatus, withdrawStatus } from "./status-line";
 
 // THE FIELD SERVICE, IN THE WINDOW (item 212, RV #29; DESIGN.md §8 "The status line", amended 2026-11-06, the words at
-// the lean until James rules rv-service-recovery). Main holds the field service for the attached person
+// the lean James ruled (rv-service-recovery, 11-06)). Main holds the field service for the attached person
 // (`desktopState.fieldd`, electron-shell main/fieldd-link.ts, the ONE detector); this window says it on its status line
 // and detects nothing itself. One held notice at a time: "Reconnecting to the field service…" while main starts it
 // again; once main stopped trying, "VibeField's field service stopped after 3 tries. Your terminal sessions keep
@@ -48,7 +48,7 @@ export function fieldServiceNotice(
         : { id, text, act: { label: "Try again", run: retry } };
     }
     case FIELDD_LINK.STATE_UNRESPONSIVE:
-      // RV #67 (DESIGN.md §8, amended 2026-11-06, at the lean until James rules rv-service-recovery): up, and silent.
+      // RV #67 (DESIGN.md §8, amended 2026-11-06, at the lean, ruled: rv-service-recovery): up, and silent.
       // Held with no act: there is nothing a person's ask would start while it is up
       return {
         id: "field-service:unresponsive",

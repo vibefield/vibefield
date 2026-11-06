@@ -9,7 +9,7 @@
 // Amended 2026-11-02 (James's Stop/Pause ruling): the pane's Stop uses terminal.terminate. This ladder remains for
 // legacy agent.interrupt callers. agent.pause passes keepOpen: one declared cancellation, then an unheard mark,
 // never a retry or termination; a second cancellation key can quit an agent whose observation is delayed.
-// Amended 2026-11-06 (item 191, RV #2; built at rv-typed-stop Q1's lean (a), awaiting James's ruling): a run typed
+// Amended 2026-11-06 (item 191, RV #2; built at rv-typed-stop Q1's lean (a), which James ruled 11-06): a run typed
 // in the person's own shell (AR-7) is never ended by this ladder. Its terminal is the person's shell, which the floor's
 // terminate would end, and fieldd ends nothing of a typed run by its own act (AR-7 R2): its Stop not heard after the
 // re-send is unheard, left to the person, whatever its status reads. Since 11-02 the ladder's caller is a spark's

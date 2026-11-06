@@ -278,7 +278,7 @@ describe("Connect Your Devices… (TS-4; TS-D7)", () => {
   });
 });
 
-// Item 212 (RV #29; DESIGN.md §9 "The field service's words", at the lean until James rules rv-service-recovery)
+// Item 212 (RV #29; DESIGN.md §9 "The field service's words", at the lean James ruled (rv-service-recovery, 11-06))
 describe("the field service's row and its Try Again (item 212, RV #29)", () => {
   const has = (menu: ReturnType<typeof buildTrayMenu>) =>
     menu.some((item) => item.id === "retry-field-service");
@@ -293,7 +293,7 @@ describe("the field service's row and its Try Again (item 212, RV #29)", () => {
     expect(has(menu)).toBe(false);
   });
 
-  // RV #67 (§9, the words at the lean until James rules rv-service-recovery): up, and its replies silent
+  // RV #67 (§9, the words at the lean James ruled (rv-service-recovery, 11-06)): up, and its replies silent
   it("says Not responding while the field service is up and silent, and offers nothing under it", () => {
     const menu = buildTrayMenu(
       snapshot({ link: "unresponsive" }),

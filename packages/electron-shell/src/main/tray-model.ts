@@ -140,14 +140,14 @@ function serviceStatus(snapshot: TraySnapshot): string {
       return "Field service: Reconnecting…";
     case "unavailable":
       return "Field service: Unavailable";
-    // Item 212 (RV #29; DESIGN.md §9 "The field service's words", at the lean until James rules rv-service-recovery)
+    // Item 212 (RV #29; DESIGN.md §9 "The field service's words", at the lean, ruled: rv-service-recovery, 11-06)
     case "recovering":
       return "Field service: Restarting…";
     case "crash-loop":
       return snapshot.serviceTries === undefined
         ? "Field service: Stopped"
         : `Field service: Stopped after ${triesWords(snapshot.serviceTries)}`;
-    // Item 212 (RV #67; DESIGN.md §9, at the lean until James rules rv-service-recovery): up, and silent
+    // Item 212 (RV #67; DESIGN.md §9, at the lean James ruled (rv-service-recovery, 11-06)): up, and silent
     case "unresponsive":
       return "Field service: Not responding";
   }

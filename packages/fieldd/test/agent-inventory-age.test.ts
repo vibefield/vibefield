@@ -907,7 +907,7 @@ describe("records the re-attach could not read (item 201, vf-runtime-5; the mock
     ).toBe(1);
   });
 
-  // At the lean of rv-s9-records (B, open until James rules): the re-attach asks the records again at the floor's
+  // At the lean of rv-s9-records (B, which James ruled 11-06): the re-attach asks the records again at the floor's
   // next inventory, its own next ask (DESIGN.md §9: the records are read again at each ask). No timer reads them, so a
   // quiet floor waits, unsettled.
   it("the floor's next inventory asks the records again: no timer reads them, and once read the run the last fieldd left is held and the re-attach settles", async () => {

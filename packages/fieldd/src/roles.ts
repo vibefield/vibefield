@@ -88,8 +88,8 @@ export function unknownRoleLine(name: string | undefined): string {
 /** The one line a person reads when the executable is handed an argument it
  * does not take — a script's path from a program that took it for a Node (the
  * header says whose). Nothing was started, the daemon least of all. DESIGN.md
- * §9's words ("When VibeField's own program starts nothing"; open until James
- * rules rv-forwarder-role): no path, no argument and no agent's name, so nothing
+ * §9's words ("When VibeField's own program starts nothing"; ruled with
+ * rv-forwarder-role, James 11-06): no path, no argument and no agent's name, so nothing
  * the program was handed is said back. */
 export function strayArgumentLine(): string {
   return "VibeField: this program takes no arguments; nothing was started.";

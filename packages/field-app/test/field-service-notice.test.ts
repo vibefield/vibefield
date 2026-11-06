@@ -1,6 +1,6 @@
 /**
  * Item 212 (RV #29) — the field service on the window's status line (DESIGN.md §8 "The status line", amended
- * 2026-11-06; the words at the lean until James rules rv-service-recovery): main's `desktopState.fieldd` said as ONE
+ * 2026-11-06; the words at the lean James ruled (rv-service-recovery, 11-06)): main's `desktopState.fieldd` said as ONE
  * held notice — "Reconnecting to the field service…" while main starts it again; "VibeField's field service stopped
  * after 3 tries. Your terminal sessions keep running." with Try again once main stopped trying — and withdrawn the
  * moment it is back. Try again asks main to replace the window through the existing door (`field-service`): the
@@ -124,9 +124,9 @@ describe("the field service on the status line (item 212, RV #29)", () => {
   });
 });
 
-// Item 212 (RV #67; DESIGN.md §8 "The status line", amended 2026-11-06, the words at the lean until James rules
-// rv-service-recovery) — the field service up and silent: main hears no reply to two asks in a row, and the window
-// holds it in plain words, with no act (there is nothing a person's ask would start while it is up).
+// Item 212 (RV #67; DESIGN.md §8 "The status line", amended 2026-11-06, the words at the lean James ruled
+// (rv-service-recovery, 11-06)) — the field service up and silent: main hears no reply to two asks in a row, and the
+// window holds it in plain words, with no act (there is nothing a person's ask would start while it is up).
 describe("the field service not responding, on the status line (item 212, RV #67)", () => {
   it("holds Not responding with no act, and withdraws it the moment the field service answers", () => {
     const teller = fieldServiceTeller({ replaceRenderer: vi.fn() });
