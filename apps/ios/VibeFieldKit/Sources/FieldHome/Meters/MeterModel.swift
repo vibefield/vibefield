@@ -30,6 +30,11 @@ struct MeterCatalog: Equatable, Sendable {
     rows.first { $0.id == provider }?.label ?? provider
   }
 
+  /// The agent's mark key (the catalog's `mark`), or its id: what `AgentGlyph` draws.
+  func mark(_ provider: String) -> String {
+    rows.first { $0.id == provider }?.mark ?? provider
+  }
+
   /// Whether a reading comes for an account this agent signs in to.
   func readsUsage(_ provider: String) -> Bool {
     guard let row = rows.first(where: { $0.id == provider }) else { return false }

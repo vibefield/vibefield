@@ -159,8 +159,19 @@ struct BandsGeometry: Equatable, Sendable {
   /// "Usage: …", "‹profile›: usage unavailable", "Usage unavailable" or "No meters"
   let label: String
 
-  /// RED STUB (UM-4d): no touch finds a plan.
-  func plan(at x: Double, _ y: Double) -> String? { nil }
+  /// The plan a touch at (x, y) is on: the one whose hit arc (`BandsOptions.hit`) holds it — within half its width of
+  /// its radius, and between its ends going clockwise from the top. The middle and the ground past the marks find
+  /// none.
+  func plan(at x: Double, _ y: Double) -> String? {
+    let c = size / 2
+    let distance = ((x - c) * (x - c) + (y - c) * (y - c)).squareRoot()
+    let angle = atan2(y - c, x - c) * 180 / Double.pi
+    return plans.first { plan in
+      guard let hit = plan.hit, abs(distance - hit.r) <= hit.width / 2 else { return false }
+      let turned = (angle - hit.from).truncatingRemainder(dividingBy: 360)
+      return (turned < 0 ? turned + 360 : turned) <= hit.to - hit.from
+    }?.key
+  }
 }
 
 struct BandsOptions: Equatable, Sendable {

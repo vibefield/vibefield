@@ -8,8 +8,9 @@ import SwiftUI
 /// ONE element changes role: the circle around the face IS the menu, grown on
 /// the island's curve into a 276 pt panel of solid chrome, corners concentric
 /// with the circle. The face never moves, so the second tap lands on the same
-/// face and folds it away. It reads bottom-up, nearest first: you · your
-/// desktops · Settings… · Lock now (only while the lock is on, WI-3) · Sign in
+/// face and folds it away. It reads bottom-up, nearest first: you · Agent
+/// Profiles (UM-4, while signed in) · your desktops · Settings… · Lock now
+/// (only while the lock is on, WI-3) · Sign in
 /// (only while the tailnet asks for it) · Sign out farthest from the thumb. There is no connect or disconnect: the phone
 /// stays on the mesh by itself while it is signed in (2026-10-18).
 ///
@@ -38,6 +39,9 @@ struct AccountCornerView: View {
   let onSignIn: () -> Void
   /// WI-3 — Lock now: the curtain at once, then Face ID. Nil while the lock is off, and the row is not drawn.
   let onLockNow: (() -> Void)?
+  /// UM-4 (UM-D25 A) — the Agent Profiles row: every plan's circle at 26, the tightest word, and the page. It stands
+  /// while you are signed in, after the desktops' closing hairline, nearest your name.
+  var agentProfiles: AgentProfilesMenuRow? = nil
 
   /// The circle's diameter — the bar's row, so the corner and the search
   /// circle are one size — and the menu's corner radius twice over.
@@ -261,6 +265,15 @@ struct AccountCornerView: View {
       // hairlines stood with nothing between them (filed 2026-10-31).
       if face.drawsDesktopSection {
         separator
+      }
+      // UM-4 — orange with the menu's dot while a plan runs hot; its circle adds no motion but a first read's breath
+      if face.canSignOut, let agentProfiles {
+        AccountMenuRow(
+          label: "Agent Profiles", word: agentProfiles.word, wantsTheUser: agentProfiles.hot,
+          action: agentProfiles.open
+        ) {
+          BandsDial(geometry: agentProfiles.geometry, mark: agentProfiles.mark)
+        }
       }
     }
     .padding(.top, 6)

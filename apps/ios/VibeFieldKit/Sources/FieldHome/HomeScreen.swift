@@ -124,6 +124,11 @@ public struct HomeScreen: View {
   /// IOS-12b — Chat's feed, through the home (its one door), and the threads'
   /// marks (SP-1d): both for the app's life, written nowhere.
   @State private var chat = ChatFeed()
+  /// UM-4 — the meters, through the home (its one door, UM-D8 A), the one lens on its profiles, and the Agent
+  /// Profiles page's sheet.
+  @State private var meters = MetersFeed()
+  @State private var lens = ProfileLens()
+  @State private var agentProfilesOpen = false
   @State private var chatLedger = ThreadLedger()
   /// IOS-12c — the spark whose thread stands on Chat (pushed in Chat's own stack), or none: the bar steps aside for
   /// it, and the ledger reads it while Chat is the page.
@@ -819,6 +824,7 @@ public struct HomeScreen: View {
       searchTab.page(visible: selectedTab == .search)
     }
     .background { chatHooks }
+    .background { metersHooks }
     .overlay { bar }
     .overlay(alignment: .bottom) { chatNoteOverlay }
     .background {
@@ -981,6 +987,58 @@ public struct HomeScreen: View {
       return
     }
     chat.attach(client, home: home)
+  }
+
+  // MARK: - UM-4: the meters
+
+  /// The meters' hooks, on an invisible view of their own as Chat's are: the door follows the home, the field, the
+  /// foreground and the mock's standing; the lens follows the home's profiles.
+  private var metersHooks: some View {
+    Color.clear
+      .onChange(of: linkHome, initial: true) { syncMetersDoor() }
+      .onChange(of: link?.fieldIsLive) { syncMetersDoor() }
+      .onChange(of: scenePhase) { syncMetersDoor() }
+      #if DEBUG
+        .onChange(of: mockActive) { syncMetersDoor() }
+        .onChange(of: mockDesktopIsUp) { syncMetersDoor() }
+      #endif
+      .onChange(of: meters.reading.profiles) { _, profiles in lens.adopt(profiles) }
+  }
+
+  /// The meters' door (UM-D8 A): the home's own client while the app is in the foreground and the home answers — the
+  /// phone runs no poll, and a phone in the background watches nothing; none otherwise, and the meters keep the
+  /// home's last word. Under `-vf-mock` it is the fixture door, read at the fixtures' own stamp.
+  private func syncMetersDoor() {
+    #if DEBUG
+      if let mock {
+        meters.clock = { MetersFixtureDoor.now }
+        meters.attach(scenePhase == .active ? mock.metersDoor : nil, home: mock.home)
+        return
+      }
+    #endif
+    guard scenePhase == .active, let link, let home = link.home, link.fieldIsLive, let client = link.client(for: home)
+    else {
+      meters.attach(nil, home: linkHome)
+      return
+    }
+    meters.attach(client, home: home)
+  }
+
+  /// The home's name in the meters' words (§9: "Read a minute ago, from studio").
+  private var metersHomeName: String {
+    #if DEBUG
+      if let mock { return mock.homeName }
+    #endif
+    return linkDesktops.first { $0.deviceId == linkHome }?.name ?? "your home"
+  }
+
+  /// The Agent Profiles page (UM-D26 A), in Settings' sheet: paper, corners 40, the system's rise.
+  private var agentProfilesSheet: some View {
+    AgentProfilesPage(feed: meters, lens: $lens, home: metersHomeName)
+      .presentationDetents([.large])
+      .presentationDragIndicator(.hidden)
+      .presentationCornerRadius(40)
+      .presentationBackground(ChromePalette.paper)
   }
 
   /// A desktop's name for Chat's words: the field's, else the demo's; the
@@ -1149,7 +1207,11 @@ public struct HomeScreen: View {
       face: accountFace,
       isOpen: accountMenuOpen,
       seed: accountSeed,
-      onToggle: { setAccountMenu(open: !accountMenuOpen) },
+      onToggle: {
+        // UM-4 — a meter view opening reads the home's profiles again
+        if !accountMenuOpen { meters.open() }
+        setAccountMenu(open: !accountMenuOpen)
+      },
       onAccount: {
         setAccountMenu(open: false)
         settingsOpening = .account
@@ -1168,7 +1230,11 @@ public struct HomeScreen: View {
         setAccountMenu(open: false)
         performSignIn()
       },
-      onLockNow: onLockNow
+      onLockNow: onLockNow,
+      agentProfiles: AgentProfilesMenuRow(reading: meters.reading, now: meters.clock()) {
+        setAccountMenu(open: false)
+        agentProfilesOpen = true
+      }
     )
   }
 
@@ -1506,6 +1572,8 @@ public struct HomeScreen: View {
             selectedTab = .history
           }
           if ProcessInfo.processInfo.arguments.contains("-vf-mock-open") { accountMenuOpen = true }
+          // UM-4 — the Agent Profiles page over the fixture door's home (`-vf-mock-usage=` picks its usage state)
+          if ProcessInfo.processInfo.arguments.contains("-vf-mock-agent-profiles") { agentProfilesOpen = true }
           if let open = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("-vf-mock-project=") }) {
             let id = String(open.dropFirst("-vf-mock-project=".count))
             if HistoryCorpus.mock.project(id) != nil {
@@ -2062,6 +2130,9 @@ public struct HomeScreen: View {
     }
     .sheet(isPresented: $settingsSheetOpen) {
       settingsSheet(at: settingsOpening)
+    }
+    .sheet(isPresented: $agentProfilesOpen) {
+      agentProfilesSheet
     }
     // RETIRED 2026-09-14 (TM-3): the write-key sheet, which took a pasted
     // capability or asked the desktop for one. Both doors are deleted.

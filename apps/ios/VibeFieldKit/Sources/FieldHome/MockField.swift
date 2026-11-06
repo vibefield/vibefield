@@ -137,9 +137,14 @@
 
     var login: String? { standing == .signedOut ? nil : Self.login }
 
-    /// RED STUB (UM-4d): the meters have no home and no door.
-    var home: String? { nil }
-    var metersDoor: MetersFixtureDoor? { nil }
+    /// UM-4 — the meters' home: studio, while the account is signed in to it (up, or re-dialling it).
+    var home: String? { standing == .up || standing == .reconnecting ? Self.studio.deviceId : nil }
+    /// The home's name in the meters' words.
+    var homeName: String { Self.studio.name }
+    /// UM-4 — the home's door for the meters: the fixture door over the contracts' goldens (`-vf-mock-usage=` picks
+    /// its usage state), only while studio answers. One door for the mock's life, so the feed is not re-attached.
+    var metersDoor: MetersFixtureDoor? { standing == .up ? metersFixture : nil }
+    private let metersFixture = MetersFixtureDoor.launched()
 
     func signIn() { standing = .up }
 
