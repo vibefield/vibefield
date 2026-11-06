@@ -2,7 +2,9 @@ import { createHash } from "node:crypto";
 import {
   type AgentProfileSetId,
   type ComposeAskUserInput,
+  NEEDS_CHOICE_MAX,
   NEEDS_CHOICE_WORDS,
+  NEEDS_CHOICES_MAX,
   NEEDS_HELD_SENDS_MAX,
   NEEDS_OPEN_PER_SPARK,
   NEEDS_RECORD_FORMAT,
@@ -69,6 +71,12 @@ import * as words from "./words";
 //   settled (critique 3).
 // - Bounds (PF4's watermark), each contracts' (compose.ts): NEEDS_OPEN_PER_SPARK open items per spark,
 //   NEEDS_HELD_SENDS_MAX sends per held item, NOTIFY_PER_MINUTE notices a minute per session.
+// - CP-4a2b (§13a slice 6; 13a's D2, D22) — a flow run's items (`flowItem`): the runs raise them, each holding its run
+//   and the call it waits at, with the runs' acts and then Stop the run. The person's answer is handed to the runs once
+//   (the FlowItemActs port), who write it, keyed by its call, at most once: their journal is the act's record, so a
+//   flow item carries no `acting` mark and is never uncertain. A run's end ends its items. Nothing is owed a spark
+//   here: the runs tell the run's spark by their own wakes. No spark's watermark counts a flow item (its teller is the
+//   flow); a run's calls are bounded by its cap (D10).
 
 const NOTIFY_WINDOW_MS = 60_000;
 /** The answered items remembered for an answer that comes again (the record of each is the audit line). */
@@ -179,7 +187,9 @@ export type FlowItemActed =
   | { readonly outcome: "done" }
   | { readonly outcome: "failed"; readonly reason: string };
 
-/** CP-4a2b (13a's D22) — the runs' side of their items: an answer, routed once. */
+/** CP-4a2b (13a's D22) — the runs' side of their items: an answer, handed on once. The runs write it, keyed by its
+ * call, at most once, so an answer handed on again (a restart found its item still open: the queue's record of the
+ * answer was not kept) is answered by what their journal holds. One that throws acted on nothing: the item waits on. */
 export interface FlowItemActs {
   answer(answer: FlowItemAnswer): Promise<FlowItemActed>;
 }
@@ -190,15 +200,18 @@ const refuse = (fact: string, message: string) =>
 /** A window's refused answer, with its reason (the compose doors' shape). */
 const refuseAnswer = (message: string, reason: string) =>
   new RpcCallError("PRECONDITION_FAILED", message, false, { reason });
+/** CP-4a2b — a flow item answered before the runs have handed the queue their acts (`bindFlowActs`): the item stays
+ * open, and the same answer is taken once they have. */
+const FLOWS_UNBOUND = "VibeField hasn't started its flows yet. Try again in a moment";
 /** TU-1 (§12 Q1 (a′)) — an Allow fieldd cannot place yet: the profiles are not read, so the item stays open and the
  * same answer is taken once the monitor's first frame lands. */
 const PROFILES_UNREAD = "VibeField hasn't read the Agent Profiles yet. Try again in a moment";
 
-/** What an act did, and what its spark is owed. */
+/** What an act did, and what its spark is owed (a flow run's item owes none: the runs tell its spark). */
 interface Act {
   readonly outcome: NeedsAnswerOutcome;
   readonly reason?: string;
-  readonly owed: string;
+  readonly owed?: string;
 }
 
 const isAllowance = (record: NeedsRecord): boolean =>
@@ -235,6 +248,8 @@ export class NeedsQueue implements TalkHolds {
   /** the settle's joiners, in the order they joined (item 159, X5); none is kept once the settle has run them */
   readonly #joiners: { readonly name: string; readonly fn: () => void }[] = [];
   #settled = false;
+  /** CP-4a2b — the runs' side of their items, handed over once the runs are built (after the queue) */
+  #flowActs: FlowItemActs | undefined;
   readonly #now: () => Date;
   readonly #logger: Logger;
 
@@ -467,16 +482,59 @@ export class NeedsQueue implements TalkHolds {
 
   // ── a flow run's items (CP-4a2b, §13a slice 6) ──
 
-  /** RED skeleton: keeps nothing. */
-  flowItem(_raise: FlowItemRaise): NeedsItemId {
-    return NeedsStore.mintId();
+  /** A flow run's item, raised by the runs: kept, signed, before it is shown, its acts the runs' then Stop the run. The
+   * same kind raised again for the same run and call while it is open (a restart restored it, or a wake asks again) is
+   * that item, never a second (D2's re-bind). Refused `bad-input`: more than NEEDS_CHOICES_MAX acts before Stop the
+   * run, an act that is empty or past NEEDS_CHOICE_MAX, or one said twice (Stop the run is never a gate's own). */
+  flowItem(raise: FlowItemRaise): NeedsItemId {
+    const open = this.#openFlowItem(raise.kind, raise.run);
+    if (open !== undefined) return open.item.id;
+    if (raise.acts.length > NEEDS_CHOICES_MAX)
+      throw refuse("bad-input", `acts: at most ${NEEDS_CHOICES_MAX} before Stop the run`);
+    const choices = [...raise.acts, NEEDS_CHOICE_WORDS.stopRun];
+    const seen = new Set<string>();
+    for (const act of choices) {
+      if (act.length === 0 || act.length > NEEDS_CHOICE_MAX)
+        throw refuse("bad-input", `acts: each is 1 to ${NEEDS_CHOICE_MAX} characters`);
+      if (seen.has(act.toLowerCase())) throw refuse("bad-input", `acts: "${act}" is there twice`);
+      seen.add(act.toLowerCase());
+    }
+    const id = NeedsStore.mintId();
+    this.#keep({
+      format: NEEDS_RECORD_FORMAT,
+      item: {
+        id,
+        kind: raise.kind satisfies NeedsItemKind,
+        state: "open" satisfies NeedsItemState,
+        from: { name: words.nameWords(raise.name) },
+        ...(raise.spark !== undefined ? { spark: raise.spark } : {}),
+        asked: this.#now().toISOString(),
+        ...(raise.words !== undefined && raise.words !== "" ? shown(raise.words) : {}),
+        choices,
+        run: raise.run,
+      },
+    });
+    this.#emit();
+    return id;
   }
 
-  /** RED skeleton: binds nothing. */
-  bindFlowActs(_acts: FlowItemActs): void {}
+  /** The runs hand over their side of their items once they are built (they are built after the queue, and raise
+   * through it). Until then a flow item's answer is refused, retryably, and nothing is spent. A later hand-over is the
+   * one answers go to. */
+  bindFlowActs(acts: FlowItemActs): void {
+    this.#flowActs = acts;
+  }
 
-  /** RED skeleton: ends nothing. */
-  onFlowRunEnded(_run: string): void {}
+  /** A flow run ended (done, stopped, failed or set aside): its open items end, and an answer after is refused
+   * `ended`. Nothing is owed: the runs say the end themselves. */
+  onFlowRunEnded(run: string): void {
+    for (const record of [...this.#records.values()]) {
+      const { item } = record;
+      if (item.run?.run !== run || needsStateOf(item) !== "open") continue;
+      this.#stand({ ...record, item: { ...item, state: "ended" satisfies NeedsItemState } });
+    }
+    this.#emit();
+  }
 
   // ── the window's answer ──
 
@@ -614,7 +672,7 @@ export class NeedsQueue implements TalkHolds {
     const answered: NeedsRecord = {
       format: NEEDS_RECORD_FORMAT,
       item: { ...item, state: "answered" satisfies NeedsItemState, answer },
-      owed: act.owed,
+      ...(act.owed !== undefined ? { owed: act.owed } : {}),
     };
     // an act that began (its mark kept) is done: what it did stands whatever the disk does now, so the item never
     // waits on with its act spent (CP2-D2); an answer that began none is written through, and its item waits on when
@@ -638,7 +696,8 @@ export class NeedsQueue implements TalkHolds {
     const acts = item.choices ?? [];
     const notNow = choice === acts.length - 1;
     const spark = item.from.name;
-    switch (needsKindOf(item)) {
+    const kind = needsKindOf(item);
+    switch (kind) {
       case "question":
         return {
           outcome: "done",
@@ -652,9 +711,32 @@ export class NeedsQueue implements TalkHolds {
         return notNow
           ? { outcome: "done", owed: words.spawnNotNowFact(spark, SPARK_LIVE_AGENTS_MAX) }
           : this.#allowSpawn(record, choice, at);
+      case "flow-gate":
+      case "flow-cap":
+      case "flow-repair":
+      case "flow-lost":
+        return this.#flowAct(record, kind, choice);
       default:
         throw refuseAnswer(`fieldd cannot answer a ${item.kind} here`, "unknown-kind");
     }
+  }
+
+  /** CP-4a2b (13a's D22) — a flow run's item: handed to the runs, Stop the run as `stop` (its last act). Their journal
+   * is the act's record, so it takes no `acting` mark and is never uncertain (CP2-D2). One handed on before the runs
+   * have bound their acts, or that throws, acted on nothing: the item waits on. */
+  async #flowAct(record: NeedsRecord, kind: FlowRunItemKind, choice: number): Promise<Act> {
+    const { item } = record;
+    const acts = this.#flowActs;
+    if (acts === undefined)
+      throw new RpcCallError("PRECONDITION_FAILED", FLOWS_UNBOUND, true, {
+        reason: "flows-unbound",
+      });
+    if (item.run === undefined) throw refuseAnswer(`${item.id} names no flow run`, "unknown-kind");
+    const stop = choice === (item.choices?.length ?? 0) - 1;
+    const acted = await acts.answer({ id: item.id, kind, run: item.run, choice, stop });
+    return acted.outcome === "done"
+      ? { outcome: "done" }
+      : { outcome: "failed", reason: acted.reason };
   }
 
   /** Allow: re-checked first (the run is live, the spark's record and its profiles stand, CP-L4 and TL-D5), then each
@@ -898,6 +980,21 @@ export class NeedsQueue implements TalkHolds {
       ...(tool !== undefined ? { tool: words.clip(tool, 128) } : {}),
       count: asks.length,
     };
+  }
+
+  /** The open item of a flow run's `kind` at its call (D2's re-bind), if one is held. */
+  #openFlowItem(kind: FlowRunItemKind, run: NeedsFlowRun): NeedsRecord | undefined {
+    for (const record of this.#records.values()) {
+      const { item } = record;
+      if (
+        needsKindOf(item) === kind &&
+        needsStateOf(item) === "open" &&
+        item.run?.run === run.run &&
+        item.run.call === run.call
+      )
+        return record;
+    }
+    return undefined;
   }
 
   /** PF4's watermark: a spark with eight open items waits for an answer before it asks again. */
