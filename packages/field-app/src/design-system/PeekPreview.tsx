@@ -4,14 +4,16 @@ import { type ReactElement, useCallback, useMemo, useState } from "react";
 import type { LiveFilters } from "../frame/find-door";
 import type { FrameSurface } from "../frame/frame-surface";
 import { Peek } from "../frame/Peek";
-import type { PeekRow, PeekTarget } from "../frame/peek-model";
+import type { PeekRow, PeekScope, PeekTarget } from "../frame/peek-model";
 import type { ViewKeys } from "../frame/views";
 import { HistoryRoomView, PeekReaderView } from "../history/HistoryRoomView";
 import { FIXTURE_SEARCH_QUERY, historyFixturePorts } from "./history-fixtures";
 import { peekFixturePort } from "./peek-fixtures";
 import {
   LIVE_FIXTURE_FILTERS,
+  LIVE_FIXTURE_FILTERS_FILTERED,
   LIVE_FIXTURE_FILTERS_UNCONNECTED,
+  LIVE_FIXTURE_FILTERS_WORK,
   LIVE_FIXTURE_NOW,
   peekLiveFixtureDoor,
 } from "./peek-live-fixtures";
@@ -34,8 +36,46 @@ import {
 // are the window tests' (`peek.test.tsx`).
 
 /** The states the catalog draws the Peek in: History's at rest and open, and
- * Godview's Live now (P2), connected and not (TS-4's ghost row). */
-export type PeekPlateState = "closed" | "open" | "live" | "unconnected";
+ * Godview's (P2) — Live now connected and not (TS-4's ghost row), filtered
+ * (SE-D1's tokens, the button wearing them: SE-D2), a typed name's offer, +
+ * Filter's menu open, and Everything under Godview's Work (UM-D28). */
+export type PeekPlateState =
+  | "closed"
+  | "open"
+  | "live"
+  | "unconnected"
+  | "filtered"
+  | "suggest"
+  | "filter-menu"
+  | "everything-lens";
+
+type PeekGodviewState = Exclude<PeekPlateState, "closed" | "open">;
+
+/** How a Godview plate opens: Godview's filters, the words held, the scope,
+ * and whether + Filter's menu is open. */
+interface PeekGodviewOpening {
+  readonly filters: LiveFilters;
+  readonly query: string;
+  readonly scope: PeekScope;
+  readonly filterOpen: boolean;
+}
+
+const LIVE_NOW: PeekGodviewOpening = {
+  filters: LIVE_FIXTURE_FILTERS,
+  query: "",
+  scope: "live",
+  filterOpen: false,
+};
+
+const GODVIEW_OPENINGS: Readonly<Record<PeekGodviewState, PeekGodviewOpening>> = {
+  live: LIVE_NOW,
+  unconnected: { ...LIVE_NOW, filters: LIVE_FIXTURE_FILTERS_UNCONNECTED },
+  filtered: { ...LIVE_NOW, filters: LIVE_FIXTURE_FILTERS_FILTERED },
+  // the first word of Work's name: its offer stands first
+  suggest: { ...LIVE_NOW, query: "wo" },
+  "filter-menu": { ...LIVE_NOW, filterOpen: true },
+  "everything-lens": { ...LIVE_NOW, filters: LIVE_FIXTURE_FILTERS_WORK, scope: "everything" },
+};
 
 export function PeekPlate({
   state,
@@ -44,30 +84,30 @@ export function PeekPlate({
   state: PeekPlateState;
   keys?: ViewKeys;
 }): ReactElement {
-  return state === "live" || state === "unconnected" ? (
-    <PeekLivePlate keys={keys} unconnected={state === "unconnected"} />
-  ) : (
+  return state === "closed" || state === "open" ? (
     <PeekHistoryPlate state={state} keys={keys} />
+  ) : (
+    <PeekLivePlate keys={keys} state={state} />
   );
 }
 
-/** Godview's Live now (P2): the SHIPPING controller in Godview, open over the
+/** Godview's search (P2): the SHIPPING controller in Godview, open over the
  * monitor's door as a fixture holds it (`peek-live-fixtures.ts`) — its live
- * runs waiting first, a peer's run saying where it runs, the scope row's two
- * filters live on the plate (a choice narrows the rows and the button wears
- * it). The live peek's pane needs a window's terminals, which no catalog has:
- * the plate draws the words a window without them says. */
+ * runs waiting first, a peer's run saying where it runs and this Mac's their
+ * profile, Godview's two filters live on the plate as tokens and + Filter's
+ * menu (a choice narrows the rows and the button wears it). Each plate opens
+ * as `GODVIEW_OPENINGS` says, then is the controller's. The live peek's pane
+ * needs a window's terminals, which no catalog has: the plate draws the words
+ * a window without them says. */
 function PeekLivePlate({
   keys,
-  unconnected,
+  state,
 }: {
   keys: ViewKeys;
-  /** TS-4 — this Mac not connected: its desktop filter ends on the ghost row */
-  unconnected: boolean;
+  state: PeekGodviewState;
 }): ReactElement {
-  const [filters, setFilters] = useState<LiveFilters>(
-    unconnected ? LIVE_FIXTURE_FILTERS_UNCONNECTED : LIVE_FIXTURE_FILTERS,
-  );
+  const opening = GODVIEW_OPENINGS[state];
+  const [filters, setFilters] = useState<LiveFilters>(opening.filters);
   const godview = useMemo(() => peekLiveFixtureDoor(filters, setFilters), [filters]);
   const [surface, setSurface] = useState<FrameSurface | null>("search");
   const [plate, setPlate] = useState<HTMLDivElement | null>(null);
@@ -78,7 +118,7 @@ function PeekLivePlate({
     <div
       ref={setPlate}
       className="vf-ds-history-plate vf-ds-peek-plate"
-      data-state={unconnected ? "peek-unconnected" : "peek-live"}
+      data-state={`peek-${state}`}
     >
       <Peek
         view="godview"
@@ -91,6 +131,9 @@ function PeekLivePlate({
         onOpenLive={noop}
         bindKeys={false}
         container={plate}
+        initialQuery={opening.query}
+        initialScope={opening.scope}
+        initialFilterOpen={opening.filterOpen}
         takeFocus={false}
         now={now}
       />

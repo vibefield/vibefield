@@ -67,7 +67,7 @@ export function HistorySection(): ReactElement {
         <PeekPlate state="closed" />
       </Specimen>
       <Specimen
-        title="The Peek — “plus” held: the list, and the peek beside it; a pick opens the room at the line"
+        title="The Peek — “plus” held: the list, and the peek beside it, + Filter and the small switch at the field's end (SE-D1); a pick opens the room at the line"
         source="frame/PeekView.tsx"
         bleed
       >

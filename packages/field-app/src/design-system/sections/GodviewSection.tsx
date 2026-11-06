@@ -107,18 +107,46 @@ export function GodviewSection({ dark = false }: { dark?: boolean } = {}): React
         </div>
       </Specimen>
       <Specimen
-        title="Search in Godview — Live now over the monitor's runs, waiting first; the desktops and profiles in its scope row (GV-D3, P2)"
+        title="Search in Godview — Live now over the monitor's runs, waiting first, this Mac's saying their profile; + Filter and the small switch at the field's end (GV-D3, P2, SE-D1)"
         source="frame/Peek.tsx"
         bleed
       >
         <PeekPlate state="live" />
       </Specimen>
       <Specimen
-        title="Search in Godview, this Mac not connected — This Mac alone, and the desktop filter ends on Your other devices · Connect… (TS-4)"
+        title="Search in Godview, this Mac not connected — This Mac alone draws no token, and + Filter's Desktops end on Your other devices · Connect… (TS-4)"
         source="frame/PeekView.tsx"
         bleed
       >
         <PeekPlate state="unconnected" />
+      </Specimen>
+      <Specimen
+        title="Search in Godview, filtered — the desktop's token, then the profile's, in the field and on the button alike; either × lets the stage go of it (SE-D1, SE-D2)"
+        source="frame/peek-filters.ts"
+        bleed
+      >
+        <PeekPlate state="filtered" />
+      </Specimen>
+      <Specimen
+        title="Search in Godview, a typed name — “wo” offers Show only Work's sessions, first in the list with ⇥ printed (SE-D1)"
+        source="frame/peek-filters.ts"
+        bleed
+      >
+        <PeekPlate state="suggest" />
+      </Specimen>
+      <Specimen
+        title="Search in Godview, + Filter open — Profiles before Desktops, each count every session's (SE-D1)"
+        source="frame/PeekView.tsx"
+        bleed
+      >
+        <PeekPlate state="filter-menu" />
+      </Specimen>
+      <Specimen
+        title="Search in Godview, Everything under Work — it looks through every profile, and its foot says where Work comes back (UM-D28)"
+        source="frame/Peek.tsx"
+        bleed
+      >
+        <PeekPlate state="everything-lens" />
       </Specimen>
       <Specimen
         title="Mesh board — every self desktop's agents on one stage, an asleep one greyed"

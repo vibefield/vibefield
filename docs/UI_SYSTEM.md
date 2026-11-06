@@ -231,7 +231,12 @@ The catalog currently mounts these shipping views directly:
   over History before anything is read, and the popup holding words over the shipping History view
   drawn from the same demo, so a pick lands that room on the line; the plate is the window, the
   scrim and the popup drawn in it and the view receding by the product's own rule. The search
-  interim's plate (the room's own sheet) retired with it
+  interim's plate (the room's own sheet) retired with it. In Godview (P2; SE-D1, 2026-11-06) the
+  same controller opens over Live now's fixture door (`peek-live-fixtures.ts`: this Mac's runs
+  under This Mac and Work, a peer's on studio, every count) as each plate's opening says — Live
+  now, this Mac not connected (TS-4's ghost row), filtered (the field's tokens and the button's,
+  one state: SE-D2), a typed name's offer, + Filter's menu open, and Everything under Work
+  (UM-D28) — never a copy of the Peek's markup
 - the desk's selection bar (DK-11): `SelectionBarView` over fixture selections, a plate per state —
   one object with its kind's own act (drawn by the bar's one path renderer), two ("Send 2 to…"),
   taped ("Lift the tape"), a missing face ("Clock · plugin off"), an act with no glyph and a name

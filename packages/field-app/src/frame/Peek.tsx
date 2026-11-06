@@ -238,6 +238,10 @@ export interface PeekProps {
   container?: HTMLElement | null;
   /** The words a catalog plate holds when it opens. */
   initialQuery?: string;
+  /** The scope a catalog plate opens on; absent, the view's own (GV-D9). */
+  initialScope?: PeekScope;
+  /** Whether a catalog plate opens with + Filter's menu open (SE-D1). */
+  initialFilterOpen?: boolean;
   /** Whether opening takes the keyboard (the field, the caret at its end). A
    * catalog plate drawn open must not take its page's focus. */
   takeFocus?: boolean;
@@ -261,6 +265,8 @@ export function Peek({
   bindKeys = true,
   container,
   initialQuery = "",
+  initialScope,
+  initialFilterOpen = false,
   takeFocus = true,
   now = Date.now,
   pastReader,
@@ -268,10 +274,10 @@ export function Peek({
   const open = surface === "search";
   const searches = viewSearchesWithPeek(view);
   const [query, setQuery] = useState(initialQuery);
-  const [scope, setScope] = useState<PeekScope>(() => ownScope(view));
+  const [scope, setScope] = useState<PeekScope>(() => initialScope ?? ownScope(view));
   const [filters, setFilters] = useState<PeekFilters>(NO_PEEK_FILTERS);
   /** + Filter's menu (SE-D1): the Peek's one menu */
-  const [filterOpen, setFilterOpen] = useState(false);
+  const [filterOpen, setFilterOpen] = useState(initialFilterOpen);
   const [hot, setHot] = useState(0);
   const [hits, setHits] = useState<readonly IndexSearchHit[]>([]);
   const [latest, setLatest] = useState<readonly IndexRecentSession[]>([]);
