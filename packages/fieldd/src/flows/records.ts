@@ -113,7 +113,9 @@ export type FlowRunStart = Pick<
   FlowRunRecord,
   "scope" | "state" | "calls" | "allowed" | "open" | "steps"
 > &
-  Partial<Pick<FlowRunRecord, "log" | "earlier" | "held" | "host" | "endedAt" | "ended">>;
+  Partial<
+    Pick<FlowRunRecord, "log" | "earlier" | "held" | "host" | "endedAt" | "ended" | "agents">
+  >;
 
 export interface FlowApproveOptions {
   /** the spark's proposal the approval came from */
