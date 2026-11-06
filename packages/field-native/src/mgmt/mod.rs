@@ -252,23 +252,13 @@ pub async fn serve(mut listener: local_ipc::Listener, state: Arc<DaemonState>) {
             .await;
         }
     });
+    // item 198: a failed accept never ends the management listener. It ended on its first, and a floor no fieldd can
+    // reach again keeps its sessions out of every client's hands. It has no unit to read Degraded, so it logs only.
     loop {
-        match listener.accept().await {
-            Ok(stream) => {
-                let state = state.clone();
-                let mesh_queue = mesh_queue.clone();
-                tokio::spawn(async move { handle_conn(stream, state, mesh_queue).await });
-            }
-            Err(e) => {
-                tracing::error!(
-                    event = "field_native.mgmt.accept_failed",
-                    component = "mgmt",
-                    error = %e,
-                    "The native management listener stopped accepting connections"
-                );
-                break;
-            }
-        }
+        let stream = local_ipc::accept(&mut listener, "mgmt", |_| {}).await;
+        let state = state.clone();
+        let mesh_queue = mesh_queue.clone();
+        tokio::spawn(async move { handle_conn(stream, state, mesh_queue).await });
     }
 }
 

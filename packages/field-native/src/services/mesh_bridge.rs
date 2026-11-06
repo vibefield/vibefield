@@ -665,23 +665,23 @@ impl NativeService for MeshBridge {
         let mut listener = local_ipc::bind(&endpoint)?;
         let shared = self.shared.clone();
         let secret = self.secret;
+        // item 198: a failed accept never ends the bridge, and the unit reads Degraded while its accepts are retried
         let handle = tokio::spawn(async move {
             loop {
-                match listener.accept().await {
-                    Ok(stream) => {
-                        let shared = shared.clone();
-                        tokio::spawn(async move { serve_client(stream, shared, secret).await });
+                let stream = local_ipc::accept(&mut listener, "mesh_bridge", |run| match run {
+                    local_ipc::AcceptRun::Failing(error) => shared.set(
+                        UnitState::Degraded,
+                        Some(format!(
+                            "the MeshData bridge's accepts are failing and are retried: {error}"
+                        )),
+                    ),
+                    local_ipc::AcceptRun::Recovered => {
+                        shared.set(UnitState::Up, Some("meshdata socket bound".into()))
                     }
-                    Err(e) => {
-                        tracing::error!(
-                            event = "field_native.mesh_bridge.accept_failed",
-                            component = "mesh_bridge",
-                            error = %e,
-                            "The MeshData bridge stopped accepting connections"
-                        );
-                        break;
-                    }
-                }
+                })
+                .await;
+                let shared = shared.clone();
+                tokio::spawn(async move { serve_client(stream, shared, secret).await });
             }
         });
         *self.task.lock().unwrap() = Some(handle);

@@ -650,6 +650,7 @@ impl NativeService for DoorUnit {
 
     #[cfg(unix)]
     async fn start(&self) -> anyhow::Result<()> {
+        use crate::local_ipc::AcceptRun;
         use std::os::unix::fs::PermissionsExt;
         let Some(endpoint) = self.shared.endpoint.clone() else {
             anyhow::bail!("data root is not valid UTF-8, which the endpoint contract requires");
@@ -659,22 +660,18 @@ impl NativeService for DoorUnit {
         let mut listener = crate::local_ipc::bind(&endpoint)?;
         std::fs::set_permissions(&endpoint, std::fs::Permissions::from_mode(0o600))?;
         let shared = self.shared.clone();
+        // item 198: a failed accept never ends the door, and the unit reads Degraded while its accepts are retried
         let accept = tokio::spawn(async move {
             loop {
-                match listener.accept().await {
-                    Ok(stream) => {
-                        tokio::spawn(shared.clone().admit(stream));
-                    }
-                    Err(e) => {
-                        tracing::error!(
-                            event = "field_native.door.accept_failed",
-                            component = "door",
-                            error = %e,
-                            "The door stopped accepting connections"
-                        );
-                        break;
-                    }
-                }
+                let stream = crate::local_ipc::accept(&mut listener, "door", |run| match run {
+                    AcceptRun::Failing(error) => shared.set(
+                        UnitState::Degraded,
+                        &format!("the door's accepts are failing and are retried: {error}"),
+                    ),
+                    AcceptRun::Recovered => shared.set(UnitState::Up, "door socket bound"),
+                })
+                .await;
+                tokio::spawn(shared.clone().admit(stream));
             }
         });
         // what doors held goes to fieldd as soon as it can take it: a byte-plane client authenticating, or a door
