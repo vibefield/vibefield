@@ -6,7 +6,9 @@
 //! session activations.
 //!
 //! Per socket, in order: the Origin allow-list at the HTTP upgrade → the
-//! pre-auth caps (a hello deadline, a byte cap, a connection cap) → the FIRST
+//! pre-auth caps (a deadline, a byte cap, a connection cap; the deadline runs
+//! from TCP arrival and covers the upgrade AND the hello, so a socket with no
+//! upgrade by then is closed, with no WebSocket to carry a `1008`) → the FIRST
 //! frame must be a tagged `ConnectionHello` whose channel matches the path →
 //! the transport grant verifies (the silent class closes `1008` with NO body;
 //! the reason is the audit line) → the ledger admits it (the structured class
@@ -92,6 +94,8 @@ pub struct DoorConfig {
     /// header (a non-browser client) is admitted — the grant is the authority,
     /// the allow-list is hygiene (mirrors fieldd's ProductAPI door).
     pub allowed_origins: Vec<String>,
+    /// `helloDeadlineMs`: the ONE pre-auth deadline, from TCP arrival, over the
+    /// HTTP upgrade and the hello together.
     pub hello_deadline: Duration,
     pub pre_auth_max_bytes: usize,
     pub pre_auth_connection_cap: usize,
@@ -913,6 +917,13 @@ async fn serve_connection(state: Arc<DoorState>, stream: TcpStream, peer: Socket
         reg.next_connection_id += 1;
         (id, counted)
     };
+    // The pre-auth DEADLINE starts at arrival too, the instant the slot is
+    // counted: one `helloDeadline` bounds the upgrade and the hello together,
+    // counted socket or not. tungstenite's server handshake has no deadline of
+    // its own, so a deadline that began after the upgrade let a socket that
+    // never sent one hold its slot, and a descriptor in the cell that owns the
+    // agent PTYs, until the peer itself left (RV #97).
+    let pre_auth_deadline = tokio::time::Instant::now() + state.config.hello_deadline;
     let mut pre_auth_guard = PreAuthGuard {
         state: state.clone(),
         armed: counted,
@@ -932,21 +943,36 @@ async fn serve_connection(state: Arc<DoorState>, stream: TcpStream, peer: Socket
         // un-negotiated, so both ends charge the same received length (§8).
         Ok(resp)
     };
-    let mut ws = match tokio_tungstenite::accept_hdr_async_with_config(
+    let upgrade = tokio_tungstenite::accept_hdr_async_with_config(
         stream,
         callback,
         Some(ws_config(&state.config.protocol_limits)),
-    )
-    .await
-    {
-        Ok(ws) => ws,
-        Err(error) => {
+    );
+    let mut ws = match tokio::time::timeout_at(pre_auth_deadline, upgrade).await {
+        Ok(Ok(ws)) => ws,
+        Ok(Err(error)) => {
             tracing::info!(
                 event = "field_native.tp.door.upgrade_failed",
                 component = "terminal",
                 peer = %peer,
                 error = %error,
                 "a T1 door upgrade did not complete"
+            );
+            return;
+        }
+        Err(_) => {
+            // No WebSocket exists to carry a 1008: the TCP close, the dropped
+            // upgrade's stream, is the answer. The audit line is the silent
+            // class's own, so a pre-auth refusal has one shape.
+            let origin = facts.lock().unwrap().origin.clone();
+            refuse_pre_auth(
+                &mut pre_auth_guard,
+                &PreAuthFailure::new(
+                    PreAuthFailureCode::PreAuthLimit,
+                    "helloDeadline: no upgrade",
+                ),
+                &origin,
+                None,
             );
             return;
         }
@@ -997,8 +1023,9 @@ async fn serve_connection(state: Arc<DoorState>, stream: TcpStream, peer: Socket
         return;
     }
 
-    // The FIRST frame: a tagged ConnectionHello, within the deadline and the byte cap.
-    let first = match tokio::time::timeout(state.config.hello_deadline, ws.next()).await {
+    // The FIRST frame: a tagged ConnectionHello, within what is left of the
+    // pre-auth deadline (one deadline, from arrival), and the byte cap.
+    let first = match tokio::time::timeout_at(pre_auth_deadline, ws.next()).await {
         Err(_) => {
             refuse_silently(
                 &mut ws,
@@ -2159,6 +2186,19 @@ async fn refuse_silently(
     origin: &Option<String>,
     channel: Option<Channel>,
 ) {
+    refuse_pre_auth(guard, failure, origin, channel);
+    let _ = close_with(ws, close::POLICY_PRE_AUTH, "").await;
+}
+
+/// Every pre-auth refusal's slot and audit line: the slot goes back the moment
+/// the refusal is decided, and the line is the same whether a WebSocket exists
+/// to carry the `1008` or not (an upgrade the deadline cut off has none).
+fn refuse_pre_auth(
+    guard: &mut PreAuthGuard,
+    failure: &PreAuthFailure,
+    origin: &Option<String>,
+    channel: Option<Channel>,
+) {
     guard.release();
     tracing::warn!(
         event = "field_native.tp.door.refused_pre_auth",
@@ -2169,7 +2209,6 @@ async fn refuse_silently(
         channel = channel.map(Channel::as_str).unwrap_or("-"),
         "a T1 door refused a socket before authentication"
     );
-    let _ = close_with(ws, close::POLICY_PRE_AUTH, "").await;
 }
 
 /// The structured class: the grant verified but the request cannot be
