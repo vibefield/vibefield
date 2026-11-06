@@ -31604,6 +31604,7 @@ design-kit, two in electron-shell, one each in field-app, DESIGN.md, DECISIONS, 
   > *Answered in part 2026-11-06:* IOS-12c's fold, M-c1, landed (`2b9b66c14`, LANDED "IOS-12c's M-c1"): the flow,
   > a spark's words and the say, held to the Mac fold's own goldens. Its thread, M-c2, is next: M-b2 landed
   > 11-06 (`3b8611ec4`).
+  > *Answered 2026-11-06:* M-b2 landed (`3b8611ec4`, run 182; LANDED "SP-7a's M-b2").
 - Item 169 (filed). cp3 §5's line at the draft queue, on VF-PM's word. The two-desktop run (James).
 
 ## SD-1 — the sound identity's law and its code: DESIGN.md §14 Sound, and `@vibefield/sound` beside contracts (2026-11-05; `8b22e7b01` → `1ebe7b461`, 3 commits on main `f599761bc`, lane `sd/1-sound-law` in `/Volumes/SamsungRed/lanes/sd1/vibe-field`, stacked as M126 `1ebe7b461`, run 126)
@@ -31943,6 +31944,7 @@ packet says so.
   > *Answered in part 2026-11-06:* IOS-12c's fold, M-c1, landed (`2b9b66c14`, LANDED "IOS-12c's M-c1"): the flow,
   > a spark's words and the say, held to the Mac fold's own goldens. Its thread, M-c2, is next: M-b2 landed
   > 11-06 (`3b8611ec4`).
+  > *Answered 2026-11-06:* M-b2 landed (`3b8611ec4`, run 182; LANDED "SP-7a's M-b2").
 
 ## AR-7j — agents typed into a pane are managed in the packaged app: fieldd's own executable runs every launcher in one closed role (2026-11-05; `66037db65` → `45c3680a3`, 5 commits on main `dbb8c76ad`, lane `lp/ar7j` in `/Volumes/SamsungRed/lanes/lp-ar7j/vibe-field`, minted as M128 `45c3680a3`, run 128)
 
@@ -37060,6 +37062,7 @@ SP-7"), each noted in its entry.
 **Owed.**
 - M-a (minting on vf-m1 at `fcb93a0fa`), then M-b2: the remote endpoint, `device`, two copies and the 9426 pin.
   > *Answered in part 2026-11-06:* M-a landed (`d6fe77980`, LANDED "SP-7a's M-a"); M-b2 stays owed.
+  > *Answered 2026-11-06:* M-b2 landed (`3b8611ec4`, run 182; LANDED "SP-7a's M-b2").
 - IOS-12c, the thread, on this reader (the IOS session; its fold cuts on `d14e46104`).
 - The phone's transcript on a real device, after M-b2 (James's hand).
 
@@ -37205,6 +37208,7 @@ and IOS-12b's, each noted in its entry.
 
 **Owed.**
 - M-b2: the kit's remote endpoint, `device`, the two copies and the 9426 pin. Then IOS-12c draws the thread.
+  > *Answered 2026-11-06:* M-b2 landed (`3b8611ec4`, run 182; LANDED "SP-7a's M-b2").
 - Item 190's mint, re-cut onto this main.
   > *Answered 2026-11-06:* item 190 landed (`7c123c19e`, run 176; LANDED "Item 190").
 - The phone reading another desktop's spark on a real device, after M-b2 (James's hand).
@@ -37816,3 +37820,69 @@ forever", at its source.
 - **draft:** `design-sound.md`'s Status, §14 and §15 for SD-3, at the next draft slot.
 - **Next:** SD-4, the phone; SD-5, the mark, a terminal's bell and the bloom. The mark's clearance check before it
   ships.
+
+## SP-7a's M-b2 — the phone reads the routed serve's ticket and names the desktop that keeps the spark: the wire's second endpoint, the reader's `device`, two copies and the 9426 pin (track SP)
+(2026-11-06; three commits, `6a35aba77` (red) → `3b8611ec4`, on lane `sp7a-mb2` over main `67034fe61`, fd's, in
+`/Volumes/SamsungRed/lanes/pg9/vibe-field`; first cut on `e1a416f96` as `03073baf5` → `d492243f2`, re-cut onto
+`69c0048cd` and then onto `67034fe61`, each tip kept as a branch. M182 is `3b8611ec4` itself, a fast-forward of
+main `67034fe61` by the fixer, run 182, landed 2026-11-06T09:25:56Z.)
+It answers M-a's and M-b's Owed, and IOS-12a's and IOS-12b's "12c waits on M-b2 alone".
+
+**Why.** M-a (LANDED "SP-7a's M-a") answers a phone a ticket naming the owner's routed serve,
+`ws(s)://<tailnet name>:9426/transcripts` (`RemoteSparkTranscriptSocket`). The home carries a phone's ask that
+names the desktop keeping the spark (`device`). M-b's kit reader (LANDED "SP-7a's M-b") read a loopback ticket alone
+and named no desktop. M-b2 joins the two halves, so the phone can read a spark another desktop keeps.
+
+**The red.** `6a35aba77`: the two goldens copied into `Tests/FieldProductTests/Fixtures`
+(`spark-transcript-ticket.remote.json`, `spark-transcript-ticket-params.device.json`), and two rows on a skeleton.
+- The skeleton: `SparkTranscriptLimits.servePort = 9426`, the reader's `device` (defaulting nil), and
+  `ticketParams(spark:device:)` naming none.
+- Wire, "the phone's ticket: the worker's routed serve on its tailnet port…": the remote golden reads, a `wss` one
+  too, and the contract's seven refusals plus a user in the host are refused. The device ask names `device`.
+- Reader, "asks its ticket naming the desktop that keeps the spark…": the reader built with a `device` asks with it.
+
+**The fix.** `e70ce3324`:
+- `SparkTranscriptTicket.remote(_:)` takes the contract's rule: `ws`/`wss`, a host that is not loopback, port 9426,
+  path `/transcripts`, and no user, password, query or fragment. The endpoint reads as the loopback socket or this,
+  or the ticket is refused by name.
+- The ask names `device` when the reader has one. Every caller compiles unchanged, M-b's live row included.
+
+**The tip.** `3b8611ec4`: `check:ios-fixtures` requires the two copies (290 → 292) and pins `servePort` to
+`PORTS.SPARK_TRANSCRIPT_SERVE` (92 → 93). Pin-class: none.
+
+**The lights.**
+- The re-cuts, each in recut-ma.sh's proof form plus the merge-tree check.
+  - Onto `69c0048cd` (item 190's records): 3 of 3 "=".
+  - Onto `67034fe61` (SD-3's mint, over M-c1's and M-U1's): 2 "=" and one "!", the tip's context alone (M-c1's
+    `sayFixtures` now follows `transcriptFixtures`' `];`). The patch-id is `80f4941e…` at every cut. The tip's tree
+    `7666cd57e82a` equals the merge-tree.
+- Run 182 on vf-m1, a9's, brief `fd5bd344…`, bundle `273e4fef…`: armed 09:09:41Z on main `67034fe61`, all three runs
+  as briefed, missing [] / extra [] throughout (`lanes/ts6/logs/m1/run182/`). Xcode 27.3 beta (27C5020n), the
+  iPhone 17 simulator `67E36A30-…`, booted by the runs and shut down after each.
+  - The red at `6a35aba77` (tree `cd98b612c11b`), Wire and Reader alone (`kit/red-tree-cd98b612c11b/kit-test.log`
+    `580c648a…`): built in 68 s, 0 errors; 28 tests, exactly 2 failed, the two new rows, by recorded issues
+    (`SparkTranscriptWireTests.swift:191`, `:192`, `:198`, `:210`; `SparkTranscriptReaderTests.swift:254`); Wire 12
+    of 13, Reader 14 of 15.
+  - The kit's full suite at `3b8611ec4` (tree `7666cd57e82a`; `kit/green-tree-7666cd57e82a/kit-test.log`
+    `c72283e8…`): 1,911 tests in 16 runs, 15 passed. The one issue is item 167's
+    (`TerminalSurfaceKeyboardTests.swift:31:27`, main's own). Wire 13 of 13, Reader 15 of 15, the live row
+    skipped. 1,911 is `69c0048cd`'s 1,895 `@Test` rows, M-c1's 14 and M-b2's 2.
+  - `pnpm verify` at `3b8611ec4`: exit 0 at 09:19:30Z, armed 09:14:18Z (`verify.log`
+    `9bef61e58064bf9281e0ef05e22c60af6367e5b00e9447d09436f3e2b13e5b6b`). "292 copies identical", "93 contract
+    values identical"; every other count SD-3's run181's (contracts 1784, fieldd 3513 | 15, vitest 13,632 | 0 | 21,
+    cargo 545); per file, no line moves. The fieldd stage began at a 1-min load of 10.48.
+  - a9's host kit script, written from IOS-12c's because the brief shipped none: its v1 counted the "✘ Test run
+    with…" summary as a third failure at the red, and died at the green on bash 3.2's empty array under `set -u`.
+    The verdict of record is v2's green (`85e3fe76`), run fresh, with v1's dirs set aside.
+- No test ran on the MacBook (the pressure HOLD).
+
+**Found.**
+- **A packet's checksum files name bare files** (a9, 09:04Z). A `.sha256` written with an absolute Mac path fails
+  `shasum -c` on any other host. A brief re-frozen in place leaves its old `.sha256` beside it, stale. Both were
+  parked aside and rewritten.
+- **A kit brief ships its own frozen kit script.** This one shipped prose, and a9 wrote the host copy from
+  IOS-12c's (the HOLD mutex, the idle gate, one xcodebuild, the simulator shut by the trap).
+
+**Owed.**
+- The phone reading another desktop's spark on a real device (James's hand).
+- IOS-12c's thread on the phone (the IOS lead's).
