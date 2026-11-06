@@ -906,4 +906,40 @@ describe("records the re-attach could not read (item 201, vf-runtime-5; the mock
       "a record no re-attach has read may be a live PTY: its run counts as running",
     ).toBe(1);
   });
+
+  // At the lean of rv-s9-records (B, open until James rules): the re-attach asks the records again at the floor's
+  // next inventory, its own next ask (DESIGN.md §9: the records are read again at each ask). No timer reads them, so a
+  // quiet floor waits, unsettled.
+  it("the floor's next inventory asks the records again: no timer reads them, and once read the run the last fieldd left is held and the re-attach settles", async () => {
+    const run = "run-left-by-the-last-fieldd";
+    const { mock, daemon, dataDir } = await agentDaemonOn(
+      freshFloor(),
+      // its PTY listed on the agent cell, the record from before the durable identity: a re-attach holds it pending
+      (dir) => [runRecord(run, CLAUDE, dir)],
+      { beforeBoot: unreadable },
+    );
+    await until(() => daemon.terminals.observation() !== undefined, 5_000, "the first inventory");
+    expect(daemon.agents.reattachSettled(), "nothing is settled on unread records").toBe(false);
+
+    readableAgain(dataDir);
+    expect(
+      daemon.agents.reattachSettled(),
+      "no timer reads them again: the next ask is the floor's next inventory",
+    ).toBe(false);
+    expect(daemon.agents.list().sessions.some((row) => row.runtimeRunId === run)).toBe(false);
+
+    const floor = freshFloor();
+    mock.pushObserved({ ...floor, generation: Number(floor["generation"]) + 1 });
+    await until(
+      () => daemon.agents.list().sessions.some((row) => row.runtimeRunId === run),
+      5_000,
+      "the run held by the re-attach's next ask",
+    );
+    await until(() => daemon.agents.reattachSettled(), 5_000, "the re-attach settled");
+    expect(daemon.agents.plainStopCensus(), "a held run is no run its stop ends").toEqual({
+      settled: true,
+      runs: [],
+      births: 0,
+    });
+  });
 });
