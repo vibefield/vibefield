@@ -13,6 +13,9 @@ import { DRIVE_SERVICE, MESH_CONTROL_LIMITS } from "./registries";
 //  - an object rides the floor's file transfer by a named root (mgmt.ts `NativeFileTransfer*`, FILE_TRANSFER_ROOTS);
 //  - who holds a drive is this file's `DriveHoldersSlice`, one slice per desktop in STORES.DRIVE.
 // Every refusal names `DriveUnavailableDetails` (DR-L8).
+// *Corrected 2026-11-06 (W3, the relay review's contract 3; w3-plan R6's erratum): every UNAVAILABLE refusal names
+// it (the floor's unsupported answer is DRIVE_SERVICE.STATE_UNBUILT, its node gate STATE_MESH_DOWN); CONFLICT,
+// RESOURCE_EXHAUSTED, PRECONDITION_FAILED and INTERNAL keep their own kinds (fieldd `drive/service.ts`).*
 //
 // TS-only (gen-jsonschema.ts's header): the floor carries the slice as opaque store JSON under its byte cap
 // (MESH_CONTROL_LIMITS.DRIVE_SLICE_BYTES) and reads none of it.

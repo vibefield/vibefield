@@ -309,6 +309,12 @@ describe("DR-2a — the file transfer's verbs are local mgmt methods", () => {
     expect(RPC_ERROR_CODES[refusal.kind]).toBe(-32004);
   });
 
+  it("refuses a pull past DRIVE_LIMITS.PULLS_IN_FLIGHT RESOURCE_EXHAUSTED, retryable, with no details (W3-15)", () => {
+    const refusal = ErrorData.parse(fixture("error-data.file-transfer-exhausted.json"));
+    expect(refusal).toEqual({ kind: "RESOURCE_EXHAUSTED", retryable: true });
+    expect(RPC_ERROR_CODES[refusal.kind]).toBe(-32010);
+  });
+
   it("declares roots, pull and subscribe, and leaves offer reserved", () => {
     const verbs = METHODS.filter((m) => m.method.startsWith("native.mesh.fileTransfer."));
     expect(verbs.map((m) => m.method).sort()).toEqual([

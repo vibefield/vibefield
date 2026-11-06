@@ -453,6 +453,14 @@ fn mesh_file_transfer_fixtures() {
         serde_json::from_value(load("error-data.file-transfer-conflict.json")).unwrap();
     assert_eq!(conflict.kind, ErrorKind::Conflict);
 
+    // W3-15 (VF-PM 2026-11-06) — a pull past DRIVE_LIMITS.PULLS_IN_FLIGHT is refused RESOURCE_EXHAUSTED: no details,
+    // retryable true (a pull may be asked again once a running one ends)
+    roundtrip::<ErrorData>("error-data.file-transfer-exhausted.json", true);
+    let exhausted: ErrorData =
+        serde_json::from_value(load("error-data.file-transfer-exhausted.json")).unwrap();
+    assert_eq!(exhausted.kind, ErrorKind::ResourceExhausted);
+    assert!(exhausted.retryable);
+
     // The words are the registry's, generated from the table the TS side reads.
     let refusal = load("error-data.file-transfer-unsupported.json");
     assert_eq!(refusal["details"]["service"], mesh_file_transfer::SERVICE);

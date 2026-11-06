@@ -1409,6 +1409,9 @@ export type MeshEgressUnavailableDetails = z.infer<typeof MeshEgressUnavailableD
 // `subscribe`'s stream is the floor's mesh unit's, held across node rebuilds: it is answered with no node up, and a
 // pull a teardown ends is sent `failed` NODE_DOWN on it (W3-2, VF-PM 2026-11-06). fieldd's NativeLink keeps a refused
 // subscription's replay silent until its next reconnect, so a stream gated on the node would go dead while it is down.
+// A `subscribe` on a connection that already holds a file-transfer stream REPLACES it: the floor stops that stream's
+// forwarder and its subId goes quiet (W3-20, VF-PM 2026-11-06). NativeLink's dispose tells the floor nothing, so a
+// reader that re-subscribes for a fresh snapshot (W3-16) leaves one stream behind it, never two.
 // *Rewritten 2026-11-06 (W3-1, W3-2): it said that with no node every verb answers the node gate.*
 // *Added 2026-11-06 (W3-14): step 0. Rider A named none; both lanes answered it so before it was ruled.*
 // The floor's facade is its own slice (the critic's wave 3, VF-FLOOR). Every verb is answered: at the truffle-core
@@ -1554,7 +1557,9 @@ export type NativeFileTransferRootsResult = z.infer<typeof NativeFileTransferRoo
  * transport asks none (`pull(from, digest, into)`): the two nodes' caps bound what can land (MESH_FILE_TRANSFER's
  * TOO_LARGE), and the blake3 check refuses a wrong file of any size.
  * The answer comes at once (`NativeFileTransferPullResult`), or a refusal in the header's order: PRECONDITION_FAILED
- * for a request the floor cannot read, CONFLICT as above, RESOURCE_EXHAUSTED past DRIVE_LIMITS.PULLS_IN_FLIGHT. */
+ * for a request the floor cannot read, CONFLICT as above, RESOURCE_EXHAUSTED past DRIVE_LIMITS.PULLS_IN_FLIGHT
+ * (`error-data.file-transfer-exhausted`): retryable true and no details, because a pull may be asked again once a
+ * running one ends (W3-15, VF-PM 2026-11-06). */
 export const NativeFileTransferPullParams = z
   .object({
     transferId: FileTransferId,
@@ -1593,7 +1598,15 @@ export type NativeFileTransferRow = z.infer<typeof NativeFileTransferRow>;
  * only once its end is final (a completed pull's file is in place first). So after a resync, a pull fieldd started
  * that the snapshot does not list ended while the reader lagged: completed when its `<digest>.<transferId>` is in the
  * `lands` folder, and failed otherwise, read as FAILED_IO (its own word was in the delta the lag lost). A fieldd that
- * restarts has no pull of its own left to settle: it adopts or sweeps the landed names it finds there. */
+ * restarts has no pull of its own left to settle: it adopts or sweeps the landed names it finds there.
+ * The write order (W3-16, VF-PM 2026-11-06): a snapshot never omits a RUNNING pull whose answer was written before
+ * it. The floor builds and queues a snapshot in one hold of its pull table, so a running pull it does not list was
+ * answered after it. A reader that cannot order a snapshot against a pull's answer (both in one read) re-subscribes
+ * once: that snapshot is built after the answer, so it judges the pull by the rule above; with no fresh snapshot the
+ * pull ends FAILED_TIMEOUT at the idle bound (W3-4), never a silent wait.
+ * Witnessed by field-native's `a_pull_started_while_a_snapshot_is_written_answers_after_it` (services/file_transfer.rs)
+ * and `a_snapshot_line_is_queued_before_the_arms_lock_is_free` (mgmt/file_transfer.rs), and by fieldd's drive-pulls
+ * row "leaves a pull running when a snapshot written before its answer comes in the same read". */
 export const NativeFileTransferSnapshot = z
   .object({
     transfers: z.array(NativeFileTransferRow),
