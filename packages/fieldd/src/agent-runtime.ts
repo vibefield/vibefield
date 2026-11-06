@@ -734,8 +734,11 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
    * starts it; `running` while it reads the records the last fieldd left and attaches, holds or keeps each; `done`
    * once it has. AR-S2 — until `done` an un-exited record may be a live PTY no map holds yet. Item 201 (RV #48,
    * vf-runtime-5) — `unread`: the records could not be listed, so it has not run, and nothing is settled on them
-   * (`reattachSettled`, `liveUnder`) */
+   * (`reattachSettled`, `liveUnder`); the floor's next inventory asks again (`handleInventory`) */
   private reattachState: "unstarted" | "running" | "unread" | "done" = "unstarted";
+  /** Item 201 (RV #48) — when the re-attach first could not list the records, while they stay unread: the warn is
+   * said once for the stretch, and the read that ends it says how long it was */
+  private reattachUnreadSince: number | undefined;
   /** AC-3 — pending runs whose idle resume was withheld, said once each */
   private readonly idleWithheld = new Set<string>();
   /** puppeteer's durable claims — the authority on a run's epoch (AR-4b) */
@@ -2515,8 +2518,10 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
   handleInventory(terminals: readonly TerminalInfo[]): void {
     const rows = new Map(terminals.map((row) => [row.sessionId, row]));
     // AR-4 — the FIRST inventory of a boot is the re-attach: the records left
-    // by the last fieldd, against the PTYs this floor still lists.
-    if (this.reattachState === "unstarted") {
+    // by the last fieldd, against the PTYs this floor still lists. Item 201 (RV #48, vf-runtime-5) — one that could
+    // not list them asks again at the floor's next inventory, its own next ask (DESIGN.md §9: the records are read
+    // again at each ask). No timer: on a quiet floor it waits, and nothing is settled while it does
+    if (this.reattachState === "unstarted" || this.reattachState === "unread") {
       this.reattachState = "running";
       void this.reattach(rows);
     } else if (this.awaitingBoot.size > 0) {
@@ -3602,21 +3607,36 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
    * listed → attached at the next epoch (or held pending); unlisted → held
    * for one grace (a cell may not have published yet), then stamped.
    * Item 201 (RV #48, vf-runtime-5) — records it could not list leave it `unread`, never `done`: it said so and went on
-   * with none (DESIGN.md §9, item 177), and it has not run. */
+   * with none (DESIGN.md §9, item 177), and it has not run. The floor's next inventory asks again, over that
+   * inventory's rows, and the runs this boot has entered or ended meanwhile keep what this boot gave them. */
   private async reattach(rows: ReadonlyMap<string, TerminalInfo>): Promise<void> {
     let records: AgentSessionRecord[];
     try {
       records = this.records.list();
     } catch (error) {
-      this.logger.warn(
-        "fieldd.agents.reattach_unreadable",
-        "The session records could not be listed",
-        {
-          error: error instanceof Error ? error.message : String(error),
-        },
-      );
+      // said once while the records stay unread, never again at each ask
+      if (this.reattachUnreadSince === undefined) {
+        this.reattachUnreadSince = Date.now();
+        this.logger.warn(
+          "fieldd.agents.reattach_unreadable",
+          "The session records could not be listed; the floor's next inventory asks again",
+          {
+            error: error instanceof Error ? error.message : String(error),
+          },
+        );
+      }
       this.reattachState = "unread";
       return;
+    }
+    // the unread stretch this read ends, when it is an ask after an unread one: the floor's inventory, not the start
+    const unreadSince = this.reattachUnreadSince;
+    if (unreadSince !== undefined) {
+      this.reattachUnreadSince = undefined;
+      this.logger.info(
+        "fieldd.agents.reattach_read",
+        "The session records could be listed again; the re-attach goes on",
+        { unreadMs: Date.now() - unreadSince },
+      );
     }
     for (const record of records) {
       if (this.disposed) return;
@@ -3626,6 +3646,11 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       // A record already continued into a successor is NOT re-listed — the
       // successor is the row, and its husk pane is nobody's session.
       if (record.exited !== undefined) {
+        // Item 201 (RV #48) — nor over a row this boot already keeps (an exit it watched, `holdExited`, or stamped,
+        // `keepExitedRow`): an ask after an unread one reads the records of runs this boot ended meanwhile, and the
+        // row from the record alone would lose the last state their mirror had. A run this boot entered is skipped
+        // below (`enter` writes its record and holds it in `managed` in one turn)
+        if (this.exited.has(record.runtimeRunId)) continue;
         const id = record.terminalSessionId;
         const row = id === undefined ? undefined : rows.get(id);
         // AR-7 — nor a typed run's: the terminal it names is a live shell, and
@@ -3673,8 +3698,11 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     // none does; after a restart this is the first moment that is known
     this.reattachState = "done";
     void this.profiles.sweep();
-    // AO-D14 — every start: a draft profile no sign-in kept is deleted
-    void this.profiles.sweepDrafts();
+    // AO-D14 — every start: a draft profile no sign-in kept is deleted. Item 201 (RV #48) — at the start's own read
+    // only: an ask after an unread one is not the start, and a draft this boot noted may be mid-sign-in (its login
+    // pane's birth is an inventory that asks again). The last fieldd's drafts wait for the next start, as they did
+    // when the start could not read the records
+    if (unreadSince === undefined) void this.profiles.sweepDrafts();
   }
 
   /** A record whose PTY the first inventory lacked (AR-4b): the same grace
@@ -3961,7 +3989,8 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
    * `attachesInFlight` until its act has returned: landed, it is a run of this boot, and it may land behind a consented
    * stop's re-check, so the census counts it a birth (`plainStopCensus`). By run with how many, never a set: an attach
    * its adapter calls transient arms G5's retry inside its act (`hold`), and the retry may start before that act's
-   * outcome is written. The boot's own attaches need no count: the census is unsettled until they have returned. */
+   * outcome is written. The boot's own attaches need no count: the census is unsettled until they have returned. Item
+   * 201 (RV #48) — nor do those of its ask after an unread one, the same pass asked again (`reattach`). */
   private attachCounted(
     record: AgentSessionRecord,
     row: TerminalInfo,
