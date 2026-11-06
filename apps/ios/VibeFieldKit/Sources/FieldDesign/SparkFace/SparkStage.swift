@@ -152,6 +152,21 @@ public final class SparkStage {
     if active { draw(at: time) }
   }
 
+  /// A face's box and clip in the layer's own space: from the stage's, by the layer's corner (`origin`).
+  func inLayer(_ face: SparkStageFace) -> (box: CGRect, clip: CGRect) {
+    let box = face.frame.offsetBy(dx: -origin.x, dy: -origin.y)
+    let clip = face.clip.isInfinite ? face.clip : face.clip.offsetBy(dx: -origin.x, dy: -origin.y)
+    return (box, clip)
+  }
+
+  /// Each face on screen, as the next frame draws it: the face, and its box in the layer.
+  func placements() -> [(face: SparkStageFace, box: CGRect)] {
+    order.compactMap { id in
+      guard let face = movers[id]?.face, face.onScreen else { return nil }
+      return (face, inLayer(face).box)
+    }
+  }
+
   /// At most 60 frames a second, and 30 in Low Power Mode: a face's motion and blink say nothing more at 120.
   public nonisolated static func frameRate(lowPower: Bool) -> Int { lowPower ? 30 : 60 }
 
@@ -186,9 +201,7 @@ public final class SparkStage {
     for (index, id) in order.enumerated() {
       guard var mover = movers[id], mover.face.onScreen else { continue }
       let face = mover.face
-      // from the stage's space into the layer's, whose corner is `origin`
-      let box = face.frame.offsetBy(dx: -origin.x, dy: -origin.y)
-      let clip = face.clip.isInfinite ? face.clip : face.clip.offsetBy(dx: -origin.x, dy: -origin.y)
+      let (box, clip) = inLayer(face)
       mover.buddy.place(centreX: box.midX, centreY: box.midY, size: face.size, framed: face.framed)
       mover.buddy.clip = SIMD4<Double>(clip.minX, clip.minY, clip.maxX, clip.maxY)
       mover.buddy.cut = face.cut
