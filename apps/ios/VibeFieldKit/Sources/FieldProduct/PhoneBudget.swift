@@ -22,7 +22,9 @@ public enum PhoneBudget {
   /// owner's door on demand for a ticket, a renewal or an act and lets it go
   /// after — so at most one door per desktop still bounds it, and a second ask
   /// to the same owner waits for the first's slot. The number stays per
-  /// desktop until SP-D12 rules.*
+  /// desktop until SP-D12 rules.* *Corrected 2026-11-06 (SP-7b's 7c-2): a
+  /// ticket, its renewal and Resume ride the home's door now; the owner's door
+  /// opened on demand is a Files ask's alone (FieldLink `ownerDoor`).*
   public static let doorsPerDesktop = 1
   /// Three lanes (FW-D2, 2026-10-16): a control leg and a frames leg to each of
   /// up to three terminal cells, each lane carrying every session the phone

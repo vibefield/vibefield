@@ -768,16 +768,24 @@ public final class FieldLink {
   /// this ask and let go after (`ownerDoor`). The home never mints for another
   /// desktop: its forwarded ticket would answer loopback endpoints a phone
   /// cannot dial, and the phone has its own node.
+  /// *Corrected 2026-11-06 (SP-7b's 7c-2, D-c2 (a), VF-PM 23:17Z): stale since
+  /// DS-4 (2026-09-30). The home carries the phone's ticket whole
+  /// (`TerminalService.forwardVia`), and the OWNER mints it: for a self peer
+  /// daemon it answers its cell's TAILNET doors, which the home hands the
+  /// phone untouched, for the phone's own node to dial. So the ask rides the
+  /// HOME's door, `{device}` added for another desktop's session (`homeAsk`),
+  /// as F1b's approval does, and no second door is opened for it. Since 7c-1
+  /// the owner keys the phone behind its home by its device, so the phone is
+  /// one client there across its reconnects to the home.*
   ///
   /// The answer comes back as the JSON the daemon sent, unread. FieldMesh knows
   /// how to ASK a door; what a ticket means belongs to the target that dials
   /// with it, and keeping that shape out of this signature is what keeps the
   /// field from learning what a terminal is.
   public func openTerminalTicket(on deviceId: String, sessionId: String) async throws -> JSONValue {
-    try await ownerDoor(deviceId, refusal: Self.noTerminalDoor) { client in
-      try await client.call(
-        "terminal.openTicket", params: .object(["sessionId": .string(sessionId)]))
-    }
+    try await homeAsk(
+      "terminal.openTicket", on: deviceId, params: ["sessionId": .string(sessionId)],
+      refusal: Self.noTerminalDoor)
   }
 
   /// PG-3f (design v2 §4.1) — what the open card shows, by the body it follows: its VISUAL id (`FieldBubble.id`). nil:
@@ -802,6 +810,8 @@ public final class FieldLink {
   ///
   /// (F1 asked the owner's own door here. That per-ask owner socket is FW-R6's, retired for the
   /// approval only: a ticket, its renewal and Resume stay over the owner's door above, SP-7's.)
+  /// *Corrected 2026-11-06 (SP-7b's 7c-2): retired for those three too — they ride the home's
+  /// door by the same rule (`homeAsk`). The owner's door is Files' alone (`ownerDoor`).*
   public func approveFreeway(on deviceId: String) async throws -> JSONValue {
     guard let home, let homeClient else { throw FreewayApproval.noHome }
     return try await homeClient.call(
@@ -814,21 +824,26 @@ public final class FieldLink {
   /// the mint (`terminal.attach`, local to that desktop's fieldd), and the same
   /// rule as `openTerminalTicket`: the OWNER's door, and the answer comes back
   /// unread.
+  /// *Corrected 2026-11-06 (SP-7b's 7c-2): the same rule, and so the HOME's
+  /// door, `{device}` added for another desktop's session. The owner still
+  /// CASes it, on the ledger of the phone as one client (7c-1).*
   public func renewTerminalGrant(
     on deviceId: String, sessionId: String, expectGeneration: Int64, requestId: String
   ) async throws -> JSONValue {
-    try await ownerDoor(deviceId, refusal: Self.noTerminalDoor) { client in
-      try await client.call(
-        "terminal.renewAttach",
-        params: .object([
-          "sessionId": .string(sessionId),
-          "expectGeneration": .int(expectGeneration),
-          "requestId": .string(requestId),
-        ]))
-    }
+    try await homeAsk(
+      "terminal.renewAttach", on: deviceId,
+      params: [
+        "sessionId": .string(sessionId),
+        "expectGeneration": .int(expectGeneration),
+        "requestId": .string(requestId),
+      ],
+      refusal: Self.noTerminalDoor)
   }
 
   /// IOS-4c — RESUME an ended run, over the desktop that owns it.
+  /// *Corrected 2026-11-06 (SP-7b's 7c-2): asked of the HOME's door, `{device}`
+  /// added for another desktop's run, which the home forwards whole (DS-4); the
+  /// owner still resumes it.*
   ///
   /// The answer carries the NEW run, and this deliberately does not put it on
   /// the field: the board is the fold's to publish, and a row invented here
@@ -836,14 +851,26 @@ public final class FieldLink {
   /// delta shows it, which is a beat later and true.
   @discardableResult
   public func resume(runtimeRunId: String, on deviceId: String) async throws -> JSONValue {
-    try await ownerDoor(
-      deviceId,
+    try await homeAsk(
+      "agent.resume", on: deviceId, params: ["runtimeRunId": .string(runtimeRunId)],
       refusal: FieldProductError(
-        kind: "UNAVAILABLE", message: "no door to \(deviceId)", retryable: false)
-    ) { client in
-      try await client.call(
-        "agent.resume", params: .object(["runtimeRunId": .string(runtimeRunId)]))
-    }
+        kind: "UNAVAILABLE", message: "no door to \(deviceId)", retryable: false))
+  }
+
+  /// SP-7b's 7c-2 (D-c2 (a), VF-PM 2026-11-06 23:17Z) — an ask about a session or a run, asked of
+  /// the HOME's door: `params` as they are for the home's own, `device` added for another desktop's,
+  /// which the home forwards whole to that desktop (DS-4's `forwardVia`), as F1b's approval rides it.
+  /// The owner still answers — it mints, CASes and resumes — and its answer or its honest refusal
+  /// comes back unread. No second door is opened, and there is no owner-door fallback: two roads for
+  /// one ask is what FW-R6 retires. With no home, `refusal`: the phone re-homes, and the next ask
+  /// goes there.
+  private func homeAsk(
+    _ method: String, on deviceId: String, params: [String: JSONValue], refusal: FieldProductError
+  ) async throws -> JSONValue {
+    guard let home, let homeClient else { throw refusal }
+    var params = params
+    if deviceId != home { params["device"] = .string(deviceId) }
+    return try await homeClient.call(method, params: .object(params))
   }
 
   private static let noTerminalDoor = FieldProductError(
@@ -863,7 +890,8 @@ public final class FieldLink {
 
   /// DS-8 (DS-L4) — a door to the desktop that OWNS something, for one ask: the
   /// home's own when the owner IS the home, else a second door opened on demand
-  /// and closed when the ask returns. It counts against the phone's budget like
+  /// and closed when the ask returns. (Since 7c-2, 2026-11-06, Files' alone: a
+  /// ticket, its renewal and Resume ride the home, `homeAsk`.) It counts against the phone's budget like
   /// every door (one per desktop, `PhoneConnectionBudget`): a second ask to the
   /// same owner waits for the first's slot.
   ///

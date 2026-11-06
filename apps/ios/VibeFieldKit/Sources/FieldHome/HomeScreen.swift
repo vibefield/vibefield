@@ -3571,7 +3571,8 @@ public struct HomeScreen: View {
             guard let link else { throw NoDesktopDoor() }
             return try await link.openTerminalTicket(on: deviceID, sessionId: session)
           },
-          // P0-C — the renewal rides the same desktop's door as the mint
+          // P0-C — the renewal rides the same door as the mint (7c-2, 2026-11-06: the home's,
+          // `{device}` added for another desktop's session)
           renewal: { [link] session, generation, requestId in
             guard let link else { throw NoDesktopDoor() }
             return try await link.renewTerminalGrant(
