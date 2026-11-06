@@ -3005,8 +3005,10 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   profile's usage is drawn: Godview's profiles column and its popover, and on the phone the held face, the Me menu's
   row, the Agent Profiles page and the token's menu (below). It is Settings → Agent Profiles' usage line (AR-D27's
   C1, `UsageLineView`) bent round, and it reads every plan as Settings reads it, so the two never say different
-  things (UM-D3). Nothing is drawn yet: UM-1 writes its model and geometry, and UM-3 (the desktop) and UM-4 (the
-  phone) draw it.
+  things (UM-D3). UM-1 wrote its model and geometry, UM-3 draws it on the desktop, and UM-4 draws it on the phone.
+  *(Corrected 2026-11-06, UM-3's review: this said "Nothing is drawn yet: UM-1 writes its model and geometry, and
+  UM-3 (the desktop) and UM-4 (the phone) draw it", true until UM-3 built the column and its popover; the phone's
+  half is still UM-4's.)*
   - **What it carries.** One arc per plan the profile holds that meters or needs you, every arc the same length,
     clockwise from the top, in a stable order (UM-D15): the plans with a reading, then those that need you, each
     group in the agent catalog's order (`AGENT_CATALOG`), then the profiles' own order. A plan with no meter is
@@ -3123,8 +3125,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   drawing is `draft/profile-meters/round4/src/p4f-frames.js` and `round4.css`). Your meters stand at the stage's top
   left, one Bands circle per Agent Profile, and the column is the profile lens. It is VibeField's chrome, drawn by
   field-app. It replaces puppeteer-views' usage column (`UsageColumn`: 46 wide, a 36 ring tile per account, orange at
-  a flat 80%), whose mount and rule retire with it (UM-D3). Nothing is drawn yet: UM-3 draws it, and until then the
-  usage column stands where it will stand.
+  a flat 80%), whose mount and rule retire with it (UM-D3). *Built 2026-11-06, UM-3 (UM-3c unmounted the usage
+  column).* *(Corrected the same day, UM-3's review: this said "Nothing is drawn yet: UM-3 draws it, and until then
+  the usage column stands where it will stand.")*
   - **The pill** is Chat's composer turned upright: **52** wide, padded **6**, corners **26**, so each 40 circle is
     concentric with its ends, with **4** between circles. It hugs its circles and is never the stage's height. It
     stands at x **13**, y **64** (the head's reserve, 56, plus 8). It wears the Line's glass WITH its 24 blur (§5),
@@ -3174,7 +3177,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     - A plan that needs you says so ("not signed in", "couldn't read") with its act. **Sign in** opens Settings →
       Agent Profiles on that profile's page; **Retry** reads that profile's usage again (`agents.usage` with
       `refresh: true` and its `profileIds`). No act is inert. An agent with no meter says so in a line of its own,
-      its mark at 12.
+      its mark at 12. *(Added 2026-11-06, UM-3's review, as ruling 6 draws the add: while Settings is open, Sign in
+      and the foot's Agent Profiles… draw disabled, their words in t4 (§2.4 "Off"); Retry is offered only where the
+      usage door can read again.)*
     - **A plan's row** shows only that plan's sessions when clicked (UM-D14, carried A). That is the next wave's,
       after the desktop's and the phone's slices land (UM-5); until then a row takes no click.
     - **The foot**, over a hairline, at 11/400 in the tertiary ink: the lens's words (§9 "The meters' words"), and
@@ -3618,8 +3623,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     filling to the window's use in the attention fill. The strip widened to its content and wrapped only while the
     row showed, and the row ended above the deck's fill line, moving the views in flow down by at most the row and
     a gap. The strip keeps its widening and wrapping, and the row's skin, for the approval line alone, which no
-    longer stands aside for the limit moment (§8 "Asking again", amended the same day). The code moves at UM-3;
-    until then it draws the row this amendment describes.
+    longer stands aside for the limit moment (§8 "Asking again", amended the same day). The code moved at UM-3d,
+    the same day. *(Corrected 2026-11-06, UM-3's review: this said "The code moves at UM-3; until then it draws the
+    row this amendment describes.")*
 - **The desk's chrome** (Chrome on the Mat MC-1…MC-6, 2026-09-28; MC-D1 ruled through One Frame's
   lock and MC-D10 with DK-D23, 2026-10-02; the orchestrator's Phase 4 rulings R1–R25, 2026-10-03,
   cited below as Rn; built on the desk by DK-11…DK-16): **the mat keeps its marks and the chrome
@@ -7096,7 +7102,10 @@ here.
   profiles: "Click it to show only ‹profile›'s sessions", or "Showing only ‹profile›'s sessions · click it again for
   all". Then **Agent Profiles…**. With one profile, until UM-5, the foot says only **Agent Profiles…** (§8
   "Godview's profiles column", wave 1; ‹for James›). *With UM-5* (UM-D14's plan filter) it says "Click a plan to
-  show only its sessions", and "Showing one plan's sessions · click it again for all".
+  show only its sessions", and "Showing one plan's sessions · click it again for all". *(Added 2026-11-06, UM-3's
+  review; ‹for James›: the head's other ages as built, "Read just now", "Read 5 minutes ago", "Read an hour ago",
+  "Read 3 hours ago"; and while the usage cannot be read the popover says the profile's one line, "‹profile›: usage
+  unavailable", in place of a line per agent, an agent with no meter keeping its own.)*
 - **The add.** **Add a profile…**; AO-5's offer and fact, "Keep work, personal, or client accounts separate. Use
   accounts side by side without signing each other out."; and "Opens Settings → Agent Profiles on New profile…".
 - **The limit moment** keeps AO-6b's words (§8 "The moments"): **Another subscription?**, "92% · 7 days", **Add a
@@ -7105,8 +7114,9 @@ here.
   says "Profiles unavailable".
 - **The profile notice** (amended 2026-11-06, UM-D21 and SE-D2: the column's circle now toggles the lens): **No
   sessions on ‹profile›**, over "Only its sessions show. Click it again, or the × on search, to show them all.", the
-  drawing's words. The code moves at UM-3. *(Until then, as built: **No sessions under ‹profile›**, over "Only this
-  profile's sessions show — the search button's × shows them all again.")*
+  drawing's words. *Built 2026-11-06, UM-3c.* *(Corrected the same day, UM-3's review: this said "The code moves at
+  UM-3", and until then it said **No sessions under ‹profile›**, over "Only this profile's sessions show — the search
+  button's × shows them all again.")*
 - **The phone's hold.** With one profile, **Usage** over "3 read · none need you" ("· 1 needs you", "· 2 need
   you"). With several, **Show all** over "8 sessions · every profile"; **Show ‹profile›** over its sessions ("3
   sessions · 1 working · 1 waiting for you", or "No sessions"); and **Cancel** over "let go here to leave the field
@@ -7128,7 +7138,11 @@ here.
   42%", with several profiles a toggle (`aria-pressed` on the chosen profile's) with ", click to show only its
   sessions" or ", showing only its sessions"; the bands key is "Inside, the next five hours; outside, the week; a
   hairline, a model's own week"; the limit card is a group, "Another subscription?". On the phone the face's
-  actions are **Show your agents' usage**, **Show ‹profile›** per profile and **Show every profile**.
+  actions are **Show your agents' usage**, **Show ‹profile›** per profile and **Show every profile**. *(Added
+  2026-11-06, UM-3's review: a column circle with nothing on it says the Bands circle's own words for it in its
+  tightest's place, "‹profile›: usage unavailable" or "‹profile›, no meters" — with no profiles door, "This Mac, no
+  meters" — then its lens words; ‹for James›: a circle whose plans are all first reads or need you says its name
+  alone.)*
 
 **Search's words** (track SE, ruled 2026-11-06 from the page *The Bands Meter*: SE-D1…D5 A and UM-D28 A; where each
 word stands is §8 "Search — the Peek" and "The phone's search"). ‹profile›, ‹desktop› and ‹folder› are the names the
