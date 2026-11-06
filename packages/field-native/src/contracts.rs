@@ -29,6 +29,76 @@ pub mod error {
         }
     }
 }
+#[doc = "`Blake3Hex`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"string\","]
+#[doc = "  \"pattern\": \"^[0-9a-f]{64}$\""]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct Blake3Hex(::std::string::String);
+impl ::std::ops::Deref for Blake3Hex {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<Blake3Hex> for ::std::string::String {
+    fn from(value: Blake3Hex) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for Blake3Hex {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        static PATTERN: ::std::sync::LazyLock<::regress::Regex> =
+            ::std::sync::LazyLock::new(|| ::regress::Regex::new("^[0-9a-f]{64}$").unwrap());
+        if PATTERN.find(value).is_none() {
+            return Err("doesn't match pattern \"^[0-9a-f]{64}$\"".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for Blake3Hex {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<&::std::string::String> for Blake3Hex {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: &::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for Blake3Hex {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for Blake3Hex {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
+}
 #[doc = "`CellEndpointSet`"]
 #[doc = r""]
 #[doc = r" <details><summary>JSON schema</summary>"]
@@ -955,6 +1025,296 @@ impl ::std::convert::TryFrom<&::std::string::String> for ErrorKind {
     }
 }
 impl ::std::convert::TryFrom<::std::string::String> for ErrorKind {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+#[doc = "`FileTransferId`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"string\","]
+#[doc = "  \"pattern\": \"^[0-9A-HJKMNP-TV-Z]{26}$\""]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct FileTransferId(::std::string::String);
+impl ::std::ops::Deref for FileTransferId {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<FileTransferId> for ::std::string::String {
+    fn from(value: FileTransferId) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for FileTransferId {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        static PATTERN: ::std::sync::LazyLock<::regress::Regex> =
+            ::std::sync::LazyLock::new(|| {
+                ::regress::Regex::new("^[0-9A-HJKMNP-TV-Z]{26}$").unwrap()
+            });
+        if PATTERN.find(value).is_none() {
+            return Err("doesn't match pattern \"^[0-9A-HJKMNP-TV-Z]{26}$\"".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for FileTransferId {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<&::std::string::String> for FileTransferId {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: &::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for FileTransferId {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for FileTransferId {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
+}
+#[doc = "`FileTransferLanded`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"string\","]
+#[doc = "  \"pattern\": \"^[0-9a-f]{64}\\\\.[0-9A-HJKMNP-TV-Z]{26}$\""]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct FileTransferLanded(::std::string::String);
+impl ::std::ops::Deref for FileTransferLanded {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<FileTransferLanded> for ::std::string::String {
+    fn from(value: FileTransferLanded) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for FileTransferLanded {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        static PATTERN: ::std::sync::LazyLock<::regress::Regex> =
+            ::std::sync::LazyLock::new(|| {
+                ::regress::Regex::new("^[0-9a-f]{64}\\.[0-9A-HJKMNP-TV-Z]{26}$").unwrap()
+            });
+        if PATTERN.find(value).is_none() {
+            return Err("doesn't match pattern \"^[0-9a-f]{64}\\.[0-9A-HJKMNP-TV-Z]{26}$\"".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for FileTransferLanded {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<&::std::string::String> for FileTransferLanded {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: &::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for FileTransferLanded {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for FileTransferLanded {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
+}
+#[doc = "`FileTransferPath`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"string\","]
+#[doc = "  \"maxLength\": 1024,"]
+#[doc = "  \"pattern\": \"^[A-Za-z0-9_-][A-Za-z0-9._-]*(?:\\\\/[A-Za-z0-9_-][A-Za-z0-9._-]*)*$\""]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct FileTransferPath(::std::string::String);
+impl ::std::ops::Deref for FileTransferPath {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<FileTransferPath> for ::std::string::String {
+    fn from(value: FileTransferPath) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for FileTransferPath {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() > 1024usize {
+            return Err("longer than 1024 characters".into());
+        }
+        static PATTERN: ::std::sync::LazyLock<::regress::Regex> =
+            ::std::sync::LazyLock::new(|| {
+                ::regress::Regex::new(
+                    "^[A-Za-z0-9_-][A-Za-z0-9._-]*(?:\\/[A-Za-z0-9_-][A-Za-z0-9._-]*)*$",
+                )
+                .unwrap()
+            });
+        if PATTERN.find(value).is_none() {
+            return Err ("doesn't match pattern \"^[A-Za-z0-9_-][A-Za-z0-9._-]*(?:\\/[A-Za-z0-9_-][A-Za-z0-9._-]*)*$\"" . into ()) ;
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for FileTransferPath {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<&::std::string::String> for FileTransferPath {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: &::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for FileTransferPath {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for FileTransferPath {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
+}
+#[doc = "`FileTransferRootName`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"string\","]
+#[doc = "  \"enum\": ["]
+#[doc = "    \"drive-objects\""]
+#[doc = "  ]"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(
+    :: serde :: Deserialize,
+    :: serde :: Serialize,
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
+pub enum FileTransferRootName {
+    #[serde(rename = "drive-objects")]
+    DriveObjects,
+}
+impl ::std::fmt::Display for FileTransferRootName {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        match *self {
+            Self::DriveObjects => f.write_str("drive-objects"),
+        }
+    }
+}
+impl ::std::str::FromStr for FileTransferRootName {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        match value {
+            "drive-objects" => Ok(Self::DriveObjects),
+            _ => Err("invalid value".into()),
+        }
+    }
+}
+impl ::std::convert::TryFrom<&str> for FileTransferRootName {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<&::std::string::String> for FileTransferRootName {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: &::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for FileTransferRootName {
     type Error = self::error::ConversionError;
     fn try_from(
         value: ::std::string::String,
@@ -6867,7 +7227,8 @@ impl MeshLanePeerOpened {
 #[doc = "  \"enum\": ["]
 #[doc = "    \"doc-sync\","]
 #[doc = "    \"presence\","]
-#[doc = "    \"mcp\""]
+#[doc = "    \"mcp\","]
+#[doc = "    \"drive\""]
 #[doc = "  ]"]
 #[doc = "}"]
 #[doc = r" ```"]
@@ -6891,6 +7252,8 @@ pub enum MeshLaneProtocol {
     Presence,
     #[serde(rename = "mcp")]
     Mcp,
+    #[serde(rename = "drive")]
+    Drive,
 }
 impl ::std::fmt::Display for MeshLaneProtocol {
     fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
@@ -6898,6 +7261,7 @@ impl ::std::fmt::Display for MeshLaneProtocol {
             Self::DocSync => f.write_str("doc-sync"),
             Self::Presence => f.write_str("presence"),
             Self::Mcp => f.write_str("mcp"),
+            Self::Drive => f.write_str("drive"),
         }
     }
 }
@@ -6908,6 +7272,7 @@ impl ::std::str::FromStr for MeshLaneProtocol {
             "doc-sync" => Ok(Self::DocSync),
             "presence" => Ok(Self::Presence),
             "mcp" => Ok(Self::Mcp),
+            "drive" => Ok(Self::Drive),
             _ => Err("invalid value".into()),
         }
     }
@@ -8360,6 +8725,466 @@ pub struct NativeDoorSubscribeResult {
 }
 impl NativeDoorSubscribeResult {
     pub fn builder() -> builder::NativeDoorSubscribeResult {
+        Default::default()
+    }
+}
+#[doc = "`NativeFileTransferDelta`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"anyOf\": ["]
+#[doc = "    {"]
+#[doc = "      \"type\": \"object\","]
+#[doc = "      \"required\": ["]
+#[doc = "        \"bytes\","]
+#[doc = "        \"kind\","]
+#[doc = "        \"total\","]
+#[doc = "        \"transferId\""]
+#[doc = "      ],"]
+#[doc = "      \"properties\": {"]
+#[doc = "        \"bytes\": {"]
+#[doc = "          \"type\": \"integer\","]
+#[doc = "          \"minimum\": 0.0"]
+#[doc = "        },"]
+#[doc = "        \"kind\": {"]
+#[doc = "          \"type\": \"string\","]
+#[doc = "          \"const\": \"progress\""]
+#[doc = "        },"]
+#[doc = "        \"total\": {"]
+#[doc = "          \"type\": \"integer\","]
+#[doc = "          \"minimum\": 0.0"]
+#[doc = "        },"]
+#[doc = "        \"transferId\": {"]
+#[doc = "          \"$ref\": \"#/definitions/FileTransferId\""]
+#[doc = "        }"]
+#[doc = "      },"]
+#[doc = "      \"additionalProperties\": true"]
+#[doc = "    },"]
+#[doc = "    {"]
+#[doc = "      \"type\": \"object\","]
+#[doc = "      \"required\": ["]
+#[doc = "        \"bytes\","]
+#[doc = "        \"digest\","]
+#[doc = "        \"incoming\","]
+#[doc = "        \"kind\","]
+#[doc = "        \"sha256\","]
+#[doc = "        \"transferId\""]
+#[doc = "      ],"]
+#[doc = "      \"properties\": {"]
+#[doc = "        \"bytes\": {"]
+#[doc = "          \"type\": \"integer\","]
+#[doc = "          \"minimum\": 0.0"]
+#[doc = "        },"]
+#[doc = "        \"digest\": {"]
+#[doc = "          \"$ref\": \"#/definitions/Blake3Hex\""]
+#[doc = "        },"]
+#[doc = "        \"incoming\": {"]
+#[doc = "          \"$ref\": \"#/definitions/FileTransferLanded\""]
+#[doc = "        },"]
+#[doc = "        \"kind\": {"]
+#[doc = "          \"type\": \"string\","]
+#[doc = "          \"const\": \"completed\""]
+#[doc = "        },"]
+#[doc = "        \"sha256\": {"]
+#[doc = "          \"type\": \"string\","]
+#[doc = "          \"pattern\": \"^[0-9a-f]{64}$\""]
+#[doc = "        },"]
+#[doc = "        \"transferId\": {"]
+#[doc = "          \"$ref\": \"#/definitions/FileTransferId\""]
+#[doc = "        }"]
+#[doc = "      },"]
+#[doc = "      \"additionalProperties\": true"]
+#[doc = "    },"]
+#[doc = "    {"]
+#[doc = "      \"type\": \"object\","]
+#[doc = "      \"required\": ["]
+#[doc = "        \"kind\","]
+#[doc = "        \"message\","]
+#[doc = "        \"reason\","]
+#[doc = "        \"transferId\""]
+#[doc = "      ],"]
+#[doc = "      \"properties\": {"]
+#[doc = "        \"kind\": {"]
+#[doc = "          \"type\": \"string\","]
+#[doc = "          \"const\": \"failed\""]
+#[doc = "        },"]
+#[doc = "        \"message\": {"]
+#[doc = "          \"type\": \"string\""]
+#[doc = "        },"]
+#[doc = "        \"reason\": {"]
+#[doc = "          \"type\": \"string\""]
+#[doc = "        },"]
+#[doc = "        \"transferId\": {"]
+#[doc = "          \"$ref\": \"#/definitions/FileTransferId\""]
+#[doc = "        }"]
+#[doc = "      },"]
+#[doc = "      \"additionalProperties\": true"]
+#[doc = "    }"]
+#[doc = "  ]"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+#[serde(untagged)]
+pub enum NativeFileTransferDelta {
+    Variant0 {
+        bytes: u64,
+        kind: ::std::string::String,
+        total: u64,
+        #[serde(rename = "transferId")]
+        transfer_id: FileTransferId,
+    },
+    Variant1 {
+        bytes: u64,
+        digest: Blake3Hex,
+        incoming: FileTransferLanded,
+        kind: ::std::string::String,
+        sha256: NativeFileTransferDeltaVariant1Sha256,
+        #[serde(rename = "transferId")]
+        transfer_id: FileTransferId,
+    },
+    Variant2 {
+        kind: ::std::string::String,
+        message: ::std::string::String,
+        reason: ::std::string::String,
+        #[serde(rename = "transferId")]
+        transfer_id: FileTransferId,
+    },
+}
+#[doc = "`NativeFileTransferDeltaVariant1Sha256`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"string\","]
+#[doc = "  \"pattern\": \"^[0-9a-f]{64}$\""]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct NativeFileTransferDeltaVariant1Sha256(::std::string::String);
+impl ::std::ops::Deref for NativeFileTransferDeltaVariant1Sha256 {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<NativeFileTransferDeltaVariant1Sha256> for ::std::string::String {
+    fn from(value: NativeFileTransferDeltaVariant1Sha256) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for NativeFileTransferDeltaVariant1Sha256 {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        static PATTERN: ::std::sync::LazyLock<::regress::Regex> =
+            ::std::sync::LazyLock::new(|| ::regress::Regex::new("^[0-9a-f]{64}$").unwrap());
+        if PATTERN.find(value).is_none() {
+            return Err("doesn't match pattern \"^[0-9a-f]{64}$\"".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for NativeFileTransferDeltaVariant1Sha256 {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<&::std::string::String> for NativeFileTransferDeltaVariant1Sha256 {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: &::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for NativeFileTransferDeltaVariant1Sha256 {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for NativeFileTransferDeltaVariant1Sha256 {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
+}
+#[doc = "`NativeFileTransferPullParams`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"required\": ["]
+#[doc = "    \"digest\","]
+#[doc = "    \"path\","]
+#[doc = "    \"peer\","]
+#[doc = "    \"root\","]
+#[doc = "    \"transferId\""]
+#[doc = "  ],"]
+#[doc = "  \"properties\": {"]
+#[doc = "    \"digest\": {"]
+#[doc = "      \"$ref\": \"#/definitions/Blake3Hex\""]
+#[doc = "    },"]
+#[doc = "    \"path\": {"]
+#[doc = "      \"$ref\": \"#/definitions/FileTransferPath\""]
+#[doc = "    },"]
+#[doc = "    \"peer\": {"]
+#[doc = "      \"type\": \"string\""]
+#[doc = "    },"]
+#[doc = "    \"root\": {"]
+#[doc = "      \"$ref\": \"#/definitions/FileTransferRootName\""]
+#[doc = "    },"]
+#[doc = "    \"transferId\": {"]
+#[doc = "      \"$ref\": \"#/definitions/FileTransferId\""]
+#[doc = "    }"]
+#[doc = "  },"]
+#[doc = "  \"additionalProperties\": true"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+pub struct NativeFileTransferPullParams {
+    pub digest: Blake3Hex,
+    pub path: FileTransferPath,
+    pub peer: ::std::string::String,
+    pub root: FileTransferRootName,
+    #[serde(rename = "transferId")]
+    pub transfer_id: FileTransferId,
+}
+impl NativeFileTransferPullParams {
+    pub fn builder() -> builder::NativeFileTransferPullParams {
+        Default::default()
+    }
+}
+#[doc = "`NativeFileTransferPullResult`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"required\": ["]
+#[doc = "    \"transferId\""]
+#[doc = "  ],"]
+#[doc = "  \"properties\": {"]
+#[doc = "    \"transferId\": {"]
+#[doc = "      \"$ref\": \"#/definitions/FileTransferId\""]
+#[doc = "    }"]
+#[doc = "  },"]
+#[doc = "  \"additionalProperties\": true"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+pub struct NativeFileTransferPullResult {
+    #[serde(rename = "transferId")]
+    pub transfer_id: FileTransferId,
+}
+impl NativeFileTransferPullResult {
+    pub fn builder() -> builder::NativeFileTransferPullResult {
+        Default::default()
+    }
+}
+#[doc = "`NativeFileTransferRoot`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"required\": ["]
+#[doc = "    \"name\","]
+#[doc = "    \"registered\""]
+#[doc = "  ],"]
+#[doc = "  \"properties\": {"]
+#[doc = "    \"name\": {"]
+#[doc = "      \"$ref\": \"#/definitions/FileTransferRootName\""]
+#[doc = "    },"]
+#[doc = "    \"reason\": {"]
+#[doc = "      \"type\": \"string\""]
+#[doc = "    },"]
+#[doc = "    \"registered\": {"]
+#[doc = "      \"type\": \"boolean\""]
+#[doc = "    }"]
+#[doc = "  },"]
+#[doc = "  \"additionalProperties\": true"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+pub struct NativeFileTransferRoot {
+    pub name: FileTransferRootName,
+    #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
+    pub reason: ::std::option::Option<::std::string::String>,
+    pub registered: bool,
+}
+impl NativeFileTransferRoot {
+    pub fn builder() -> builder::NativeFileTransferRoot {
+        Default::default()
+    }
+}
+#[doc = "`NativeFileTransferRootsParams`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"required\": ["]
+#[doc = "    \"roots\""]
+#[doc = "  ],"]
+#[doc = "  \"properties\": {"]
+#[doc = "    \"roots\": {"]
+#[doc = "      \"type\": \"array\","]
+#[doc = "      \"items\": {"]
+#[doc = "        \"$ref\": \"#/definitions/FileTransferRootName\""]
+#[doc = "      }"]
+#[doc = "    }"]
+#[doc = "  },"]
+#[doc = "  \"additionalProperties\": true"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+pub struct NativeFileTransferRootsParams {
+    pub roots: ::std::vec::Vec<FileTransferRootName>,
+}
+impl NativeFileTransferRootsParams {
+    pub fn builder() -> builder::NativeFileTransferRootsParams {
+        Default::default()
+    }
+}
+#[doc = "`NativeFileTransferRootsResult`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"required\": ["]
+#[doc = "    \"roots\""]
+#[doc = "  ],"]
+#[doc = "  \"properties\": {"]
+#[doc = "    \"roots\": {"]
+#[doc = "      \"type\": \"array\","]
+#[doc = "      \"items\": {"]
+#[doc = "        \"$ref\": \"#/definitions/NativeFileTransferRoot\""]
+#[doc = "      }"]
+#[doc = "    }"]
+#[doc = "  },"]
+#[doc = "  \"additionalProperties\": true"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+pub struct NativeFileTransferRootsResult {
+    pub roots: ::std::vec::Vec<NativeFileTransferRoot>,
+}
+impl NativeFileTransferRootsResult {
+    pub fn builder() -> builder::NativeFileTransferRootsResult {
+        Default::default()
+    }
+}
+#[doc = "`NativeFileTransferRow`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"required\": ["]
+#[doc = "    \"bytes\","]
+#[doc = "    \"digest\","]
+#[doc = "    \"peer\","]
+#[doc = "    \"root\","]
+#[doc = "    \"transferId\""]
+#[doc = "  ],"]
+#[doc = "  \"properties\": {"]
+#[doc = "    \"bytes\": {"]
+#[doc = "      \"type\": \"integer\","]
+#[doc = "      \"minimum\": 0.0"]
+#[doc = "    },"]
+#[doc = "    \"digest\": {"]
+#[doc = "      \"$ref\": \"#/definitions/Blake3Hex\""]
+#[doc = "    },"]
+#[doc = "    \"peer\": {"]
+#[doc = "      \"type\": \"string\""]
+#[doc = "    },"]
+#[doc = "    \"root\": {"]
+#[doc = "      \"$ref\": \"#/definitions/FileTransferRootName\""]
+#[doc = "    },"]
+#[doc = "    \"total\": {"]
+#[doc = "      \"type\": \"integer\","]
+#[doc = "      \"minimum\": 0.0"]
+#[doc = "    },"]
+#[doc = "    \"transferId\": {"]
+#[doc = "      \"$ref\": \"#/definitions/FileTransferId\""]
+#[doc = "    }"]
+#[doc = "  },"]
+#[doc = "  \"additionalProperties\": true"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+pub struct NativeFileTransferRow {
+    pub bytes: u64,
+    pub digest: Blake3Hex,
+    pub peer: ::std::string::String,
+    pub root: FileTransferRootName,
+    #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
+    pub total: ::std::option::Option<u64>,
+    #[serde(rename = "transferId")]
+    pub transfer_id: FileTransferId,
+}
+impl NativeFileTransferRow {
+    pub fn builder() -> builder::NativeFileTransferRow {
+        Default::default()
+    }
+}
+#[doc = "`NativeFileTransferSnapshot`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"required\": ["]
+#[doc = "    \"transfers\""]
+#[doc = "  ],"]
+#[doc = "  \"properties\": {"]
+#[doc = "    \"transfers\": {"]
+#[doc = "      \"type\": \"array\","]
+#[doc = "      \"items\": {"]
+#[doc = "        \"$ref\": \"#/definitions/NativeFileTransferRow\""]
+#[doc = "      }"]
+#[doc = "    }"]
+#[doc = "  },"]
+#[doc = "  \"additionalProperties\": true"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+pub struct NativeFileTransferSnapshot {
+    pub transfers: ::std::vec::Vec<NativeFileTransferRow>,
+}
+impl NativeFileTransferSnapshot {
+    pub fn builder() -> builder::NativeFileTransferSnapshot {
         Default::default()
     }
 }
@@ -17070,6 +17895,456 @@ pub mod builder {
             Self {
                 snapshot: Ok(value.snapshot),
                 sub_id: Ok(value.sub_id),
+            }
+        }
+    }
+    #[derive(Clone, Debug)]
+    pub struct NativeFileTransferPullParams {
+        digest: ::std::result::Result<super::Blake3Hex, ::std::string::String>,
+        path: ::std::result::Result<super::FileTransferPath, ::std::string::String>,
+        peer: ::std::result::Result<::std::string::String, ::std::string::String>,
+        root: ::std::result::Result<super::FileTransferRootName, ::std::string::String>,
+        transfer_id: ::std::result::Result<super::FileTransferId, ::std::string::String>,
+    }
+    impl ::std::default::Default for NativeFileTransferPullParams {
+        fn default() -> Self {
+            Self {
+                digest: Err("no value supplied for digest".to_string()),
+                path: Err("no value supplied for path".to_string()),
+                peer: Err("no value supplied for peer".to_string()),
+                root: Err("no value supplied for root".to_string()),
+                transfer_id: Err("no value supplied for transfer_id".to_string()),
+            }
+        }
+    }
+    impl NativeFileTransferPullParams {
+        pub fn digest<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::Blake3Hex>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.digest = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for digest: {e}"));
+            self
+        }
+        pub fn path<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::FileTransferPath>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.path = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for path: {e}"));
+            self
+        }
+        pub fn peer<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::string::String>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.peer = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for peer: {e}"));
+            self
+        }
+        pub fn root<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::FileTransferRootName>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.root = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for root: {e}"));
+            self
+        }
+        pub fn transfer_id<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::FileTransferId>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.transfer_id = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for transfer_id: {e}"));
+            self
+        }
+    }
+    impl ::std::convert::TryFrom<NativeFileTransferPullParams> for super::NativeFileTransferPullParams {
+        type Error = super::error::ConversionError;
+        fn try_from(
+            value: NativeFileTransferPullParams,
+        ) -> ::std::result::Result<Self, super::error::ConversionError> {
+            Ok(Self {
+                digest: value.digest?,
+                path: value.path?,
+                peer: value.peer?,
+                root: value.root?,
+                transfer_id: value.transfer_id?,
+            })
+        }
+    }
+    impl ::std::convert::From<super::NativeFileTransferPullParams> for NativeFileTransferPullParams {
+        fn from(value: super::NativeFileTransferPullParams) -> Self {
+            Self {
+                digest: Ok(value.digest),
+                path: Ok(value.path),
+                peer: Ok(value.peer),
+                root: Ok(value.root),
+                transfer_id: Ok(value.transfer_id),
+            }
+        }
+    }
+    #[derive(Clone, Debug)]
+    pub struct NativeFileTransferPullResult {
+        transfer_id: ::std::result::Result<super::FileTransferId, ::std::string::String>,
+    }
+    impl ::std::default::Default for NativeFileTransferPullResult {
+        fn default() -> Self {
+            Self {
+                transfer_id: Err("no value supplied for transfer_id".to_string()),
+            }
+        }
+    }
+    impl NativeFileTransferPullResult {
+        pub fn transfer_id<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::FileTransferId>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.transfer_id = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for transfer_id: {e}"));
+            self
+        }
+    }
+    impl ::std::convert::TryFrom<NativeFileTransferPullResult> for super::NativeFileTransferPullResult {
+        type Error = super::error::ConversionError;
+        fn try_from(
+            value: NativeFileTransferPullResult,
+        ) -> ::std::result::Result<Self, super::error::ConversionError> {
+            Ok(Self {
+                transfer_id: value.transfer_id?,
+            })
+        }
+    }
+    impl ::std::convert::From<super::NativeFileTransferPullResult> for NativeFileTransferPullResult {
+        fn from(value: super::NativeFileTransferPullResult) -> Self {
+            Self {
+                transfer_id: Ok(value.transfer_id),
+            }
+        }
+    }
+    #[derive(Clone, Debug)]
+    pub struct NativeFileTransferRoot {
+        name: ::std::result::Result<super::FileTransferRootName, ::std::string::String>,
+        reason: ::std::result::Result<
+            ::std::option::Option<::std::string::String>,
+            ::std::string::String,
+        >,
+        registered: ::std::result::Result<bool, ::std::string::String>,
+    }
+    impl ::std::default::Default for NativeFileTransferRoot {
+        fn default() -> Self {
+            Self {
+                name: Err("no value supplied for name".to_string()),
+                reason: Ok(Default::default()),
+                registered: Err("no value supplied for registered".to_string()),
+            }
+        }
+    }
+    impl NativeFileTransferRoot {
+        pub fn name<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::FileTransferRootName>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.name = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for name: {e}"));
+            self
+        }
+        pub fn reason<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<::std::string::String>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.reason = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for reason: {e}"));
+            self
+        }
+        pub fn registered<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<bool>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.registered = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for registered: {e}"));
+            self
+        }
+    }
+    impl ::std::convert::TryFrom<NativeFileTransferRoot> for super::NativeFileTransferRoot {
+        type Error = super::error::ConversionError;
+        fn try_from(
+            value: NativeFileTransferRoot,
+        ) -> ::std::result::Result<Self, super::error::ConversionError> {
+            Ok(Self {
+                name: value.name?,
+                reason: value.reason?,
+                registered: value.registered?,
+            })
+        }
+    }
+    impl ::std::convert::From<super::NativeFileTransferRoot> for NativeFileTransferRoot {
+        fn from(value: super::NativeFileTransferRoot) -> Self {
+            Self {
+                name: Ok(value.name),
+                reason: Ok(value.reason),
+                registered: Ok(value.registered),
+            }
+        }
+    }
+    #[derive(Clone, Debug)]
+    pub struct NativeFileTransferRootsParams {
+        roots: ::std::result::Result<
+            ::std::vec::Vec<super::FileTransferRootName>,
+            ::std::string::String,
+        >,
+    }
+    impl ::std::default::Default for NativeFileTransferRootsParams {
+        fn default() -> Self {
+            Self {
+                roots: Err("no value supplied for roots".to_string()),
+            }
+        }
+    }
+    impl NativeFileTransferRootsParams {
+        pub fn roots<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::vec::Vec<super::FileTransferRootName>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.roots = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for roots: {e}"));
+            self
+        }
+    }
+    impl ::std::convert::TryFrom<NativeFileTransferRootsParams>
+        for super::NativeFileTransferRootsParams
+    {
+        type Error = super::error::ConversionError;
+        fn try_from(
+            value: NativeFileTransferRootsParams,
+        ) -> ::std::result::Result<Self, super::error::ConversionError> {
+            Ok(Self {
+                roots: value.roots?,
+            })
+        }
+    }
+    impl ::std::convert::From<super::NativeFileTransferRootsParams> for NativeFileTransferRootsParams {
+        fn from(value: super::NativeFileTransferRootsParams) -> Self {
+            Self {
+                roots: Ok(value.roots),
+            }
+        }
+    }
+    #[derive(Clone, Debug)]
+    pub struct NativeFileTransferRootsResult {
+        roots: ::std::result::Result<
+            ::std::vec::Vec<super::NativeFileTransferRoot>,
+            ::std::string::String,
+        >,
+    }
+    impl ::std::default::Default for NativeFileTransferRootsResult {
+        fn default() -> Self {
+            Self {
+                roots: Err("no value supplied for roots".to_string()),
+            }
+        }
+    }
+    impl NativeFileTransferRootsResult {
+        pub fn roots<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::vec::Vec<super::NativeFileTransferRoot>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.roots = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for roots: {e}"));
+            self
+        }
+    }
+    impl ::std::convert::TryFrom<NativeFileTransferRootsResult>
+        for super::NativeFileTransferRootsResult
+    {
+        type Error = super::error::ConversionError;
+        fn try_from(
+            value: NativeFileTransferRootsResult,
+        ) -> ::std::result::Result<Self, super::error::ConversionError> {
+            Ok(Self {
+                roots: value.roots?,
+            })
+        }
+    }
+    impl ::std::convert::From<super::NativeFileTransferRootsResult> for NativeFileTransferRootsResult {
+        fn from(value: super::NativeFileTransferRootsResult) -> Self {
+            Self {
+                roots: Ok(value.roots),
+            }
+        }
+    }
+    #[derive(Clone, Debug)]
+    pub struct NativeFileTransferRow {
+        bytes: ::std::result::Result<u64, ::std::string::String>,
+        digest: ::std::result::Result<super::Blake3Hex, ::std::string::String>,
+        peer: ::std::result::Result<::std::string::String, ::std::string::String>,
+        root: ::std::result::Result<super::FileTransferRootName, ::std::string::String>,
+        total: ::std::result::Result<::std::option::Option<u64>, ::std::string::String>,
+        transfer_id: ::std::result::Result<super::FileTransferId, ::std::string::String>,
+    }
+    impl ::std::default::Default for NativeFileTransferRow {
+        fn default() -> Self {
+            Self {
+                bytes: Err("no value supplied for bytes".to_string()),
+                digest: Err("no value supplied for digest".to_string()),
+                peer: Err("no value supplied for peer".to_string()),
+                root: Err("no value supplied for root".to_string()),
+                total: Ok(Default::default()),
+                transfer_id: Err("no value supplied for transfer_id".to_string()),
+            }
+        }
+    }
+    impl NativeFileTransferRow {
+        pub fn bytes<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<u64>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.bytes = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for bytes: {e}"));
+            self
+        }
+        pub fn digest<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::Blake3Hex>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.digest = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for digest: {e}"));
+            self
+        }
+        pub fn peer<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::string::String>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.peer = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for peer: {e}"));
+            self
+        }
+        pub fn root<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::FileTransferRootName>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.root = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for root: {e}"));
+            self
+        }
+        pub fn total<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<u64>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.total = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for total: {e}"));
+            self
+        }
+        pub fn transfer_id<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::FileTransferId>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.transfer_id = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for transfer_id: {e}"));
+            self
+        }
+    }
+    impl ::std::convert::TryFrom<NativeFileTransferRow> for super::NativeFileTransferRow {
+        type Error = super::error::ConversionError;
+        fn try_from(
+            value: NativeFileTransferRow,
+        ) -> ::std::result::Result<Self, super::error::ConversionError> {
+            Ok(Self {
+                bytes: value.bytes?,
+                digest: value.digest?,
+                peer: value.peer?,
+                root: value.root?,
+                total: value.total?,
+                transfer_id: value.transfer_id?,
+            })
+        }
+    }
+    impl ::std::convert::From<super::NativeFileTransferRow> for NativeFileTransferRow {
+        fn from(value: super::NativeFileTransferRow) -> Self {
+            Self {
+                bytes: Ok(value.bytes),
+                digest: Ok(value.digest),
+                peer: Ok(value.peer),
+                root: Ok(value.root),
+                total: Ok(value.total),
+                transfer_id: Ok(value.transfer_id),
+            }
+        }
+    }
+    #[derive(Clone, Debug)]
+    pub struct NativeFileTransferSnapshot {
+        transfers: ::std::result::Result<
+            ::std::vec::Vec<super::NativeFileTransferRow>,
+            ::std::string::String,
+        >,
+    }
+    impl ::std::default::Default for NativeFileTransferSnapshot {
+        fn default() -> Self {
+            Self {
+                transfers: Err("no value supplied for transfers".to_string()),
+            }
+        }
+    }
+    impl NativeFileTransferSnapshot {
+        pub fn transfers<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::vec::Vec<super::NativeFileTransferRow>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.transfers = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for transfers: {e}"));
+            self
+        }
+    }
+    impl ::std::convert::TryFrom<NativeFileTransferSnapshot> for super::NativeFileTransferSnapshot {
+        type Error = super::error::ConversionError;
+        fn try_from(
+            value: NativeFileTransferSnapshot,
+        ) -> ::std::result::Result<Self, super::error::ConversionError> {
+            Ok(Self {
+                transfers: value.transfers?,
+            })
+        }
+    }
+    impl ::std::convert::From<super::NativeFileTransferSnapshot> for NativeFileTransferSnapshot {
+        fn from(value: super::NativeFileTransferSnapshot) -> Self {
+            Self {
+                transfers: Ok(value.transfers),
             }
         }
     }

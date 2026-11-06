@@ -958,7 +958,8 @@
       "enum": [
         "doc-sync",
         "presence",
-        "mcp"
+        "mcp",
+        "drive"
       ]
     },
     "MeshLaneOpenRequest": {

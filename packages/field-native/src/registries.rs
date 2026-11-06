@@ -40,6 +40,7 @@ pub mod stores {
     pub const PUSH: &str = "field.push.v1";
     pub const DEVICES: &str = "field.devices.v1";
     pub const AGENT_FIELD: &str = "field.agents.v1";
+    pub const DRIVE: &str = "field.drive.v1";
 }
 
 pub mod mesh_control_limits {
@@ -48,6 +49,7 @@ pub mod mesh_control_limits {
     pub const ARTIFACT_SLICE_BYTES: usize = 262144;
     pub const DEVICE_SLICE_BYTES: usize = 65536;
     pub const AGENT_FIELD_SLICE_BYTES: usize = 65536;
+    pub const DRIVE_SLICE_BYTES: usize = 65536;
     pub const MGMT_FRAME_BYTES: usize = 83886080;
     pub const MGMT_QUEUED_BYTES: usize = 100663296;
     pub const MGMT_OUTBOX_MESSAGES: usize = 64;
@@ -64,6 +66,34 @@ pub mod mesh_egress {
     pub const STATE_UNSUPPORTED: &str = "egress-unsupported";
     pub const STATE_MESH_DOWN: &str = "mesh-down";
     pub const ROUTABLE_PORTS: &[u16] = &[9422, 9424];
+}
+
+/// DR-2a — the file transfer's registry (contracts mgmt.ts `MESH_FILE_TRANSFER`): the
+/// floor's refusal, a root's ungated word, a pull's failure words, the path bound and
+/// the progress cadence, one vocabulary for the floor's writer and fieldd's reader.
+pub mod mesh_file_transfer {
+    pub const SERVICE: &str = "mesh";
+    pub const STATE_UNSUPPORTED: &str = "file-transfer-unsupported";
+    pub const ROOT_UNGATED: &str = "ungated";
+    pub const FAILED_REJECTED: &str = "rejected";
+    pub const FAILED_UNSUPPORTED: &str = "unsupported";
+    pub const FAILED_TIMEOUT: &str = "timeout";
+    pub const FAILED_INTEGRITY: &str = "integrity";
+    pub const FAILED_TOO_LARGE: &str = "too-large";
+    pub const FAILED_NO_SPACE: &str = "no-space";
+    pub const FAILED_IO: &str = "io";
+    pub const FAILED_NODE_DOWN: &str = "node-down";
+    pub const PATH_MAX_BYTES: u64 = 1024;
+    pub const PROGRESS_MIN_INTERVAL_MS: u64 = 500;
+}
+
+/// DR-2a — the drive's bounds (`DRIVE_LIMITS`): the object cap the floor hands its node's
+/// file transfer, the lane record and the pulls in flight. One authority with fieldd and
+/// mille-drive's open; see registries.ts.
+pub mod drive_limits {
+    pub const OBJECT_MAX_BYTES: u64 = 67108864;
+    pub const LANE_RECORD_BYTES: u64 = 1048576;
+    pub const PULLS_IN_FLIGHT: u64 = 4;
 }
 
 /// TC-D6(c) — per-class scrollback BYTE caps, enforced at the native create
@@ -334,6 +364,10 @@ pub mod layout {
     pub const WORKSPACE_ROOTS_FILE: &[&str] = &["workspace", "roots.json"];
     pub const PROJECTS_DIR: &[&str] = &["projects"];
     pub const PROJECT_KEYS_FILE: &[&str] = &["projects", "keys.json"];
+    pub const DRIVE_DIR: &[&str] = &["drive"];
+    pub const DRIVE_OBJECTS_DIR: &[&str] = &["drive", "objects"];
+    pub const DRIVE_INCOMING_DIR: &[&str] = &["drive", "incoming"];
+    pub const DRIVE_IMPORT_DIR: &[&str] = &["drive", "import"];
     /// Every entry, for the cross-language fixture test.
     pub const ALL: &[(&str, &[&str])] = &[
         ("FIELDD_RUN_DIR", FIELDD_RUN_DIR),
@@ -418,5 +452,18 @@ pub mod layout {
         ("WORKSPACE_ROOTS_FILE", WORKSPACE_ROOTS_FILE),
         ("PROJECTS_DIR", PROJECTS_DIR),
         ("PROJECT_KEYS_FILE", PROJECT_KEYS_FILE),
+        ("DRIVE_DIR", DRIVE_DIR),
+        ("DRIVE_OBJECTS_DIR", DRIVE_OBJECTS_DIR),
+        ("DRIVE_INCOMING_DIR", DRIVE_INCOMING_DIR),
+        ("DRIVE_IMPORT_DIR", DRIVE_IMPORT_DIR),
     ];
+}
+
+/// DR-2a — the named pull roots (`FILE_TRANSFER_ROOTS`), a CLOSED set the floor matches:
+/// each root's name on the wire, the LAYOUT row it serves and the one a pull from it lands
+/// in. Never a path (EL7). See registries.ts.
+pub mod file_transfer_roots {
+    pub const DRIVE_OBJECTS: &str = "drive-objects";
+    pub const DRIVE_OBJECTS_SERVES: &[&str] = super::layout::DRIVE_OBJECTS_DIR;
+    pub const DRIVE_OBJECTS_LANDS: &[&str] = super::layout::DRIVE_INCOMING_DIR;
 }

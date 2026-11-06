@@ -322,5 +322,20 @@
   "PROJECT_KEYS_FILE": [
     "projects",
     "keys.json"
+  ],
+  "DRIVE_DIR": [
+    "drive"
+  ],
+  "DRIVE_OBJECTS_DIR": [
+    "drive",
+    "objects"
+  ],
+  "DRIVE_INCOMING_DIR": [
+    "drive",
+    "incoming"
+  ],
+  "DRIVE_IMPORT_DIR": [
+    "drive",
+    "import"
   ]
 }

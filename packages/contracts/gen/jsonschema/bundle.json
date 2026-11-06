@@ -1016,7 +1016,8 @@
       "enum": [
         "doc-sync",
         "presence",
-        "mcp"
+        "mcp",
+        "drive"
       ]
     },
     "MeshLaneOpenRequest": {
@@ -2688,6 +2689,257 @@
         "seq"
       ],
       "additionalProperties": true
+    },
+    "FileTransferId": {
+      "type": "string",
+      "pattern": "^[0-9A-HJKMNP-TV-Z]{26}$"
+    },
+    "FileTransferRootName": {
+      "type": "string",
+      "enum": [
+        "drive-objects"
+      ]
+    },
+    "FileTransferPath": {
+      "type": "string",
+      "maxLength": 1024,
+      "pattern": "^[A-Za-z0-9_-][A-Za-z0-9._-]*(?:\\/[A-Za-z0-9_-][A-Za-z0-9._-]*)*$"
+    },
+    "FileTransferLanded": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}\\.[0-9A-HJKMNP-TV-Z]{26}$"
+    },
+    "Blake3Hex": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "NativeFileTransferRootsParams": {
+      "type": "object",
+      "properties": {
+        "roots": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FileTransferRootName"
+          }
+        }
+      },
+      "required": [
+        "roots"
+      ],
+      "additionalProperties": true
+    },
+    "NativeFileTransferRoot": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "$ref": "#/definitions/FileTransferRootName"
+        },
+        "registered": {
+          "type": "boolean"
+        },
+        "reason": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "registered"
+      ],
+      "additionalProperties": true
+    },
+    "NativeFileTransferRootsResult": {
+      "type": "object",
+      "properties": {
+        "roots": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/NativeFileTransferRoot"
+          }
+        }
+      },
+      "required": [
+        "roots"
+      ],
+      "additionalProperties": true
+    },
+    "NativeFileTransferPullParams": {
+      "type": "object",
+      "properties": {
+        "transferId": {
+          "$ref": "#/definitions/FileTransferId"
+        },
+        "peer": {
+          "type": "string"
+        },
+        "root": {
+          "$ref": "#/definitions/FileTransferRootName"
+        },
+        "path": {
+          "$ref": "#/definitions/FileTransferPath"
+        },
+        "digest": {
+          "$ref": "#/definitions/Blake3Hex"
+        }
+      },
+      "required": [
+        "transferId",
+        "peer",
+        "root",
+        "path",
+        "digest"
+      ],
+      "additionalProperties": true
+    },
+    "NativeFileTransferPullResult": {
+      "type": "object",
+      "properties": {
+        "transferId": {
+          "$ref": "#/definitions/FileTransferId"
+        }
+      },
+      "required": [
+        "transferId"
+      ],
+      "additionalProperties": true
+    },
+    "NativeFileTransferRow": {
+      "type": "object",
+      "properties": {
+        "transferId": {
+          "$ref": "#/definitions/FileTransferId"
+        },
+        "peer": {
+          "type": "string"
+        },
+        "root": {
+          "$ref": "#/definitions/FileTransferRootName"
+        },
+        "digest": {
+          "$ref": "#/definitions/Blake3Hex"
+        },
+        "bytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "total": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "transferId",
+        "peer",
+        "root",
+        "digest",
+        "bytes"
+      ],
+      "additionalProperties": true
+    },
+    "NativeFileTransferSnapshot": {
+      "type": "object",
+      "properties": {
+        "transfers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/NativeFileTransferRow"
+          }
+        }
+      },
+      "required": [
+        "transfers"
+      ],
+      "additionalProperties": true
+    },
+    "NativeFileTransferDelta": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "progress"
+            },
+            "transferId": {
+              "$ref": "#/definitions/FileTransferId"
+            },
+            "bytes": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "total": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "kind",
+            "transferId",
+            "bytes",
+            "total"
+          ],
+          "additionalProperties": true
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "completed"
+            },
+            "transferId": {
+              "$ref": "#/definitions/FileTransferId"
+            },
+            "digest": {
+              "$ref": "#/definitions/Blake3Hex"
+            },
+            "incoming": {
+              "$ref": "#/definitions/FileTransferLanded"
+            },
+            "bytes": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          },
+          "required": [
+            "kind",
+            "transferId",
+            "digest",
+            "incoming",
+            "bytes",
+            "sha256"
+          ],
+          "additionalProperties": true
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "failed"
+            },
+            "transferId": {
+              "$ref": "#/definitions/FileTransferId"
+            },
+            "reason": {
+              "type": "string"
+            },
+            "message": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "transferId",
+            "reason",
+            "message"
+          ],
+          "additionalProperties": true
+        }
+      ]
     },
     "Hello": {
       "type": "object",
