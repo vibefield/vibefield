@@ -1,0 +1,10 @@
+{
+  "v": 1,
+  "seq": 7,
+  "mac": "c2f6c2f6c2f6c2f6c2f6c2f6c2f6c2f6c2f6c2f6c2f6c2f6c2f6c2f6c2f6c2f6",
+  "kind": "reply",
+  "at": "2026-11-04T23:11:20.900Z",
+  "messageId": "msg_01JC4N3",
+  "turn": "turn-4",
+  "text": "The composer test fails on `main` because **the draft's caret** is read before the editor mounts.\n\n- `chat-composer.test.tsx:741` waits for one frame\n- the fix is in `ChatComposer.tsx`"
+}

@@ -1,0 +1,10 @@
+{
+  "v": 1,
+  "seq": 4,
+  "mac": "8e4b8e4b8e4b8e4b8e4b8e4b8e4b8e4b8e4b8e4b8e4b8e4b8e4b8e4b8e4b8e4b",
+  "kind": "outcome",
+  "at": "2026-11-04T23:10:56.310Z",
+  "of": "b27e5a90c4d1",
+  "state": "uncertain",
+  "reason": "no-receipt"
+}
