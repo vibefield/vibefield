@@ -6,6 +6,7 @@ import {
   NeedsItemId,
   NeedsRecord,
   needsKindOf,
+  needsStateOf,
   RECORD_STORES,
 } from "@vibefield/contracts";
 import { createNoopLogger, durableRenameSync, type Logger } from "@vibefield/logging";
@@ -131,10 +132,19 @@ export class NeedsStore {
     if (!parsed.success) return this.#setAside(path, "unreadable");
     // signed for another item: a record copied into this id's name
     if (parsed.data.item.id !== id) return this.#setAside(path, "forged");
-    // CP-4a2b (ruled 2026-11-06): a changed flow's act begins the start it was asked with (Q4), which VibeField's own
-    // raise always keeps; one without it is a record fieldd cannot use, set aside as one that does not parse is
-    if (needsKindOf(parsed.data.item) === "flow-changed" && parsed.data.start === undefined)
-      return this.#setAside(path, "unreadable");
+    // CP-4a2b (step 0's review S1, S2; ruled 2026-11-06): an OPEN changed flow's act begins the start
+    // it was asked with (Q4), which VibeField's own raise always keeps. An open one without it is held as a newer
+    // VibeField's record is (kept in place, never served or written over), since the contract leaves `start` optional
+    // and a newer build may write one so. An answered one keeps none by design (the queue's answered rebuild): served
+    const { item } = parsed.data;
+    if (
+      needsKindOf(item) === "flow-changed" &&
+      needsStateOf(item) === "open" &&
+      parsed.data.start === undefined
+    ) {
+      this.#guard.hold(id, path, { lacks: "start" });
+      return undefined;
+    }
     return parsed.data;
   }
 

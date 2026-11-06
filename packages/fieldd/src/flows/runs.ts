@@ -303,7 +303,7 @@ export class FlowRuns {
       });
       return { waits };
     }
-    return { run: this.#begin(params, approval.hash) };
+    return { run: this.#woken(this.#begin(params, approval.hash)) };
   }
 
   /** The runs, from their records: every live run, then the latest ended, to FLOW_RUNS_LISTED_MAX (CL-E2-2). */
@@ -356,9 +356,11 @@ export class FlowRuns {
 
   /** R4–R6 (CP4-Q5 (a), Q4) — a changed flow's act: the run its start asked for, begun on the version chosen. Its
    * scope is the start's, narrowed at the act to the profiles that exist, never widened (D8, at `#begin`). A refusal
-   * is the act's `failed`, in the start's words, with nothing approved and nothing begun. */
+   * is the act's `failed`, in the start's words, with nothing approved and nothing begun; once the run's record is
+   * kept, the act is done with that run. */
   #acted(act: FlowItemStart): FlowItemStarted {
     const { start } = act;
+    let run: FlowRunId;
     try {
       // G2 (CP-L4, TL-D5): a spark's start, its own or a Run in its thread (CP4-Q20 (a)), narrows again to the spark's
       // Agent Profiles now, as an Allow does; a spark that is gone starts nothing
@@ -374,24 +376,39 @@ export class FlowRuns {
         scope,
         ...(act.from !== undefined ? { from: act.from } : {}),
       };
-      if (act.version === "approved")
-        return { outcome: "done", run: this.#begin(params, act.hash).run };
-      // Run this version: the library's bytes, while they are still the version the item asked about
-      const file = this.ports.library.read(act.flow);
-      if (file === undefined) throw refused("not-found", words.notFound(act.flow));
-      if ("tooBig" in file) throw refused("too-big", words.tooBig());
-      if (file.hash !== act.hash) throw refused("version", words.notAVersion(act.flow));
-      return { outcome: "done", run: this.#begin(params, file.hash, file.bytes).run };
+      if (act.version === "approved") run = this.#begin(params, act.hash);
+      else {
+        // Run this version: the library's bytes, while they are still the version the item asked about
+        const file = this.ports.library.read(act.flow);
+        if (file === undefined) throw refused("not-found", words.notFound(act.flow));
+        if ("tooBig" in file) throw refused("too-big", words.tooBig());
+        if (file.hash !== act.hash) throw refused("version", words.notAVersion(act.flow));
+        run = this.#begin(params, file.hash, file.bytes);
+      }
     } catch (error) {
       if (error instanceof RpcCallError) return { outcome: "failed", reason: error.message };
       throw error;
     }
+    // window (c) (ruled 2026-11-06): once the run's record is kept the run has begun, so the act is done with it. A
+    // fault past it (the record's read-back, its host's start) is fieldd's log's: the record says the run runs, and
+    // the next boot wakes it (slice 14)
+    try {
+      this.#woken(run);
+    } catch (error) {
+      this.#logger.warn(
+        "fieldd.flows.run.wake",
+        "A flow run began, and its host did not start; the next boot wakes it",
+        { run, error: error instanceof Error ? error.message : String(error) },
+      );
+    }
+    return { outcome: "done", run };
   }
 
   /** Begin a run of the version `hash`: its refusals, then the run's begin checked (`checkBegin`), then (`approving`,
-   * Run this version's bytes) its approval as yours, then its record and its head (D18), then its host. Without
-   * `approving` the bytes are the ones fieldd kept under an approval's hash (D8). */
-  #begin(params: FlowRunStartParams, hash: string, approving?: Uint8Array): RunSummary {
+   * Run this version's bytes) its approval as yours, then its record and its head (D18). Answers the run, its record
+   * kept; `#woken` starts its host. Without `approving` the bytes are the ones fieldd kept under an approval's hash
+   * (D8). */
+  #begin(params: FlowRunStartParams, hash: string, approving?: Uint8Array): FlowRunId {
     const { records } = this.ports;
     const bytes = approving ?? records.bytes(hash);
     if (bytes === undefined) throw refused("version", words.notAVersion(params.flow));
@@ -463,7 +480,13 @@ export class FlowRuns {
         ? { ran: nameWords(params.from.name) }
         : {}),
     });
-    const begun = records.runRecord(run);
+    return run;
+  }
+
+  /** A run whose record `#begin` kept, its host started: the record read back, then woken (`#wake`), then the list
+   * told. */
+  #woken(run: FlowRunId): RunSummary {
+    const begun = this.ports.records.runRecord(run);
     if (begun === undefined) throw new Error(`the record of ${run} did not read back`);
     this.#wake(run, begun);
     this.#changed();

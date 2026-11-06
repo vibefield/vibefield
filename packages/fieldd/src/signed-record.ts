@@ -10,7 +10,7 @@ import {
 } from "node:fs";
 import { basename, dirname } from "node:path";
 import { canonicalJson, RECORD_STORES } from "@vibefield/contracts";
-import { createNoopLogger, type Logger } from "@vibefield/logging";
+import { createNoopLogger, type LogFields, type Logger } from "@vibefield/logging";
 import { RpcCallError } from "./native-link";
 
 // The one record signer (CP-3; LEANS P3). fieldd keeps records it later acts on in files a same-uid agent can write.
@@ -198,14 +198,21 @@ export class StoreGuard {
   newer(key: string, path: string, body: Record<string, unknown>): boolean {
     const format = newerFormat(body, this.opts.format);
     if (format === undefined) return false;
+    this.hold(key, path, { format });
+    return true;
+  }
+
+  /** A record this build cannot act on that a newer VibeField may have written in this build's own format (a field
+   * this build needs, which the contract leaves optional, left out: CP-4a2b step 0's review S2): held as `newer`'s
+   * is, kept where it is, never served or written over, said once. The store does not serve it. */
+  hold(key: string, path: string, fields: LogFields = {}): void {
     if (!this.#held.has(key))
       this.opts.logger.warn(
         "fieldd.records.newer",
         "A record a newer VibeField wrote is kept for it, never served or written over",
-        { store: this.opts.store, file: basename(path), format },
+        { store: this.opts.store, file: basename(path), ...fields },
       );
     this.#held.add(key);
-    return true;
   }
 }
 

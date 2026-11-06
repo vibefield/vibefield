@@ -35,6 +35,7 @@ import { createNoopLogger, type Logger } from "@vibefield/logging";
 import { folderNameOf, projectBlocker } from "../../../agent-field";
 import type { AgentInputQueues, DeliveryOutcome } from "../../../agent-input-queue";
 import { RpcCallError } from "../../../native-link";
+import { UNREADABLE_WORDS } from "../../../signed-record";
 import type { GrantPrincipal } from "../../../terminal-grants";
 import {
   type HeldLaunch,
@@ -597,9 +598,9 @@ export class NeedsQueue implements TalkHolds {
    * tells no one. Its acts: Run this version, Run the one you approved (only while one is), Not now last; See the
    * change is the card's, drawn from `script`. The same teller asking to run the same bytes while it is open is that
    * item, never a second. Q4: the start as it was asked is kept on the record, never on the item, and handed back to
-   * the runs with the act. Asked again with another start, the item's start and its teller's session are replaced by
-   * the latest ask's, so its act begins what was asked last and tells the session that asked it (RULED "replace",
-   * 2026-11-06; H4); the same start again writes nothing. */
+   * the runs with the act. Asked again with another start, or from another session, the item's start and its teller
+   * are the latest ask's, in one write, so its act begins what was asked last and tells the session that asked it
+   * (RULED "replace", 2026-11-06; H4; ruled 2026-11-06); the same ask again, start and teller, writes nothing. */
   flowChanged(raise: FlowChangedRaise): NeedsItemId {
     const { script, from } = raise;
     for (const record of this.#records.values()) {
@@ -612,9 +613,13 @@ export class NeedsQueue implements TalkHolds {
         item.from.spark === from?.spark
       ) {
         const { start } = raise;
-        if (record.start === undefined || canonicalJson(record.start) !== canonicalJson(start)) {
-          const asked = from !== undefined ? { ...item, from: this.#fromOf(from) } : item;
-          this.#keep({ ...record, item: asked, start });
+        const teller = from !== undefined ? this.#fromOf(from) : item.from;
+        if (
+          record.start === undefined ||
+          canonicalJson(record.start) !== canonicalJson(start) ||
+          canonicalJson(item.from) !== canonicalJson(teller)
+        ) {
+          this.#keep({ ...record, item: { ...item, from: teller }, start });
           this.#emit();
         }
         return item.id;
@@ -891,7 +896,14 @@ export class NeedsQueue implements TalkHolds {
         ...(spark !== undefined && session !== undefined ? { from: { spark, name, session } } : {}),
       });
     } catch (err) {
-      started = { outcome: "failed", reason: (err as Error).message };
+      // never a raw message to a person (ruled 2026-11-06): the runs answer a start whose run's record they kept as
+      // done, so one that throws kept none, and nothing was changed; its own words are fieldd's log's
+      this.#logger.warn(
+        "fieldd.needs.flow_start",
+        "A changed flow's start threw; nothing was started",
+        { item: item.id, error: err instanceof Error ? err.message : String(err) },
+      );
+      started = { outcome: "failed", reason: UNREADABLE_WORDS.flows };
     }
     if (started.outcome === "failed") {
       const { reason } = started;
