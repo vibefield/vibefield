@@ -10440,6 +10440,10 @@ a name that is, or starts with, "VibeField" shows the flow's slug instead, so a 
   - a run that never began: "VibeField couldn't begin ‹flow›: it couldn't keep the run's record. Nothing was started."
   - a script that, run again, asks what it never asked: "VibeField set ‹flow› aside: run again, its script asked for
     something it never asked before."
+  - *Proposed 2026-11-06 (CP-4a2b slice 10b, D7; ruled 2026-11-06 at the lean; on the board as
+    cp4a2b-flow-run-words; open until James reads it, as the rest are):* a script that, run again, goes quiet without
+    asking again what it asked before, and asks nothing new: "VibeField set ‹flow› aside: run again, its script didn't
+    ask what it asked before." A script that asks something new instead is said in the line above.
   - a run whose journal or record is forged or gone: its `flow-lost` item says "VibeField can't trust what ‹flow›
     kept, so it set the run aside." Its one act is Stop the run.
 - **The acts** (NEEDS_CHOICE_WORDS): Stop the run · Allow 20 more · Ask once more · Resume the step · See the change
