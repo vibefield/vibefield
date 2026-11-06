@@ -256,8 +256,12 @@ interface Answered {
   readonly cut: boolean;
 }
 
-/** A journal answer line's settle. */
-const answeredOf = (line: { readonly refused?: string; readonly cut?: true }): Answered => ({
+/** A journal answer line's settle: a line as the one writer appends it (FlowJournalEntry), or as a wake reads it back
+ * (contracts' FlowJournalAnswer, whose optional fields zod types `| undefined`, under exactOptionalPropertyTypes). */
+const answeredOf = (line: {
+  readonly refused?: string | undefined;
+  readonly cut?: true | undefined;
+}): Answered => ({
   failed: line.refused !== undefined,
   cut: line.cut === true,
 });
@@ -1284,6 +1288,10 @@ export class FlowRuns {
    *   to `live.replay`, read at the hand-on, never captured at the call; a parked or stopped generation's replay is no
    *   longer `live.replay`, so it hears nothing (its waiters are dropped, never resolved); with no host up, the answer
    *   is only journaled, and the woken host hears it from its journal, in journal order (D21, R28).
+   * - P13: the hand-on comes BEFORE the record follows the line (`#lagging`). A line that lands with no host up wakes
+   *   its run there (`#journaled`, `#rouse`, `#wake`), and the generation that wake starts read the line from its
+   *   journal, so it is never handed the line as well. An answer the record's follow-up journals in its turn (a
+   *   slot's start that throws, `#unslot`) is handed on after this one, in the journal's order (D21).
    * - T4: once the line has landed nothing refuses it: the record's settle that throws is the record lagging the
    *   journal (D18), said in fieldd's log, and the next record write settles it (XX4, `#replace`). A line the disk
    *   refuses is not kept, so the script hears JOURNAL_REFUSED and a restart asks the step again.
@@ -1311,8 +1319,8 @@ export class FlowRuns {
     }
     live.answered.set(call, answeredOf(line.entry));
     live.lines += 1;
-    this.#lagging(run, line.entry);
     live.replay?.answered(call, line.heard);
+    this.#lagging(run, line.entry);
   }
 
   /** T4 (the F2 review) — a line the journal took, followed by its record: a record write that throws there is the

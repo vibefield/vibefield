@@ -227,7 +227,14 @@ export class FlowReplay implements FlowCallHandler {
     this.#seen.set(key, n);
     const journaled = this.#journaled.get(`${key}#${n}`);
     return new Promise<FlowHostAnswer>((resolve, reject) => {
-      const waiter: Waiter = { resolve, reject };
+      // D21 (R28): a waiter settles a microtask after it is released, in the order released, so the script hears its
+      // answers in journal order. `#release` can run in this executor, before its caller holds the promise: settled
+      // there, this call's answer would be heard only once that caller attaches (the supervisor's `then`, the runs'
+      // `return await`, each as `call` returns), after a later answer the same release gave a call made earlier
+      const waiter: Waiter = {
+        resolve: (answer) => queueMicrotask(() => resolve(answer)),
+        reject: (error) => queueMicrotask(() => reject(error)),
+      };
       if (journaled === undefined)
         this.#held.push({ what: call.what, args: call.args, key, n, waiter });
       else {

@@ -3163,6 +3163,28 @@ describe("CP-4a2b — the host's life: parked and woken, D2's lookup at a wake, 
     return { state: stateOf(h, run), left: left(h, i) };
   };
   const PARKED = { state: "waiting", left: true };
+  /** R13e's and MM3's journal, in D21's causal order (R31's road): SEQ's host can't hear its shutdown, so it leaves
+   * only at its grace's SIGKILL (KILL_GRACE_MS, its harness's stopGraceMs); A's answer is journaled in that grace,
+   * then B's call line with no record entry, as a kill between D5's first two steps leaves it, and the run wakes on
+   * both once the host has left. B's call journaled BEFORE A's answer is no journal SEQ can write: D21 holds A's
+   * answer behind a call its script makes only once it hears A, and D7 sets that run aside (P12's journal). */
+  const KILL_GRACE_MS = 2_000;
+  const killedBeforeEntry = async (h: Harness, run: string) => {
+    h.hosts[0]?.child.kill("SIGSTOP");
+    await within(PARK_MS, () => stateOf(h, run) === "waiting");
+    expect(stateOf(h, run)).toBe("waiting");
+    answerStep(h, run, 1, "a");
+    await within(PARK_MS, () => answersOf(h, run).length === 1);
+    h.records.appendRun(run, seqB());
+    // one host still, so the wake to come reads B's line: a second here is a host that left on its shutdown before
+    // its SIGSTOP, so A's answer woke the run before B's line landed, and B, journaled again with its entry, would
+    // pass this row without ever meeting D2's last row
+    const journal = { kinds: h.kinds(run), hosts: h.hosts.length };
+    expect(journal).toEqual({ kinds: ["head", "call", "answer", "call"], hosts: 1 });
+    await within(PARK_MS + KILL_GRACE_MS, () => h.enqueued.length === 2);
+    // PARKED's `left`, read after the wake: the run woke only once its old host had left
+    expect({ hosts: h.hosts.length, left: left(h, 0) }).toEqual({ hosts: 2, left: true });
+  };
 
   it("R27 (D1): a run whose step waits past HOST_IDLE_MS with no frame is parked: its host has left, it reads waiting, never stopped, and its journal gains no line; the step's answer wakes it, and it ends done", async () => {
     const h = await harness({ hostIdleMs: IDLE_MS });
@@ -3316,15 +3338,12 @@ describe("CP-4a2b — the host's life: parked and woken, D2's lookup at a wake, 
   });
 
   it("R13e (D2, [BR] MED): a journal call line with no record entry, as a kill between D5's first two steps leaves it, reads starting at the wake: its agent spawns once, the record counts its call, and the run is never lost", async () => {
-    const h = await harness({ hostIdleMs: IDLE_MS });
+    const h = await harness({ hostIdleMs: IDLE_MS, timings: { stopGraceMs: KILL_GRACE_MS } });
     h.approved("seq", SEQ);
     const run = startedRun(await h.start({ flow: "seq" })).run;
     await waitFor(() => expect(h.enqueued).toHaveLength(1));
-    expect(await parkedAt(h, run)).toEqual(PARKED);
-    // B's call, journaled as the first life would have before its record entry, and no entry written
-    h.records.appendRun(run, seqB());
-    answerStep(h, run, 1, "a");
-    await within(PARK_MS, () => h.enqueued.length === 2);
+    // A's answer, then B's call, journaled as the first life would have before B's record entry, and no entry written
+    await killedBeforeEntry(h, run);
     const woken = h.records.runRecord(run);
     expect({
       spawned: h.spawned.map(({ origin }) => origin.call),
@@ -3353,14 +3372,11 @@ describe("CP-4a2b — the host's life: parked and woken, D2's lookup at a wake, 
       agents: bound.records.runRecord(two)?.agents,
     }).toEqual({ state: "done", hosts: 2, agents: 2 });
     // the first start: R13e's journaled call with no entry, never started, spawns once and counts one more
-    const again = await harness({ hostIdleMs: IDLE_MS });
+    const again = await harness({ hostIdleMs: IDLE_MS, timings: { stopGraceMs: KILL_GRACE_MS } });
     again.approved("seq", SEQ);
     const seq = startedRun(await again.start({ flow: "seq" })).run;
     await waitFor(() => expect(again.enqueued).toHaveLength(1));
-    expect(await parkedAt(again, seq)).toEqual(PARKED);
-    again.records.appendRun(seq, seqB());
-    answerStep(again, seq, 1, "a");
-    await within(PARK_MS, () => again.enqueued.length === 2);
+    await killedBeforeEntry(again, seq);
     const counted = { spawned: again.spawned.length, agents: again.records.runRecord(seq)?.agents };
     expect(counted).toEqual({ spawned: 2, agents: 2 });
   });
