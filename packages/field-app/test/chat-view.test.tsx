@@ -42,8 +42,10 @@ import { sparkIsNew } from "../src/chat/thread-items";
 import { THREAD_MARK_WORDS, type ThreadMark } from "../src/chat/thread-marks";
 import { ChatPreview } from "../src/design-system/ChatPreview";
 import type { ChatState } from "../src/design-system/chat-fixtures";
+import type { KeyedCallClient } from "../src/forwarded-call";
 import type { FrameSurface } from "../src/frame/frame-surface";
 import { hearLineSays } from "../src/frame/line-door";
+import { listedRun, runsDoor, runsOverBoard } from "./runs-door-fixture";
 import {
   NO_TRANSCRIPTS,
   type ScriptedTranscripts,
@@ -151,6 +153,11 @@ const PORT: ComposerPort = {
   },
 };
 
+/** Item 187 — the board rows `scripted`'s feed holds now, which fieldd's `agent.list` answers by default as a desktop
+ * whose terminal doors are published does: the list and the board say the same (`runs-door-fixture.ts`). */
+const boardNow = new Map<string, AgentFieldRow>();
+const BOARD_RUNS = runsOverBoard(() => boardNow.values()).door;
+
 /** Chat as the frame mounts it: FieldView's place, the one owner of the frame's open surface, stands around it. Chat
  * is the view showing unless the test says it is not (the frame keeps it mounted in another view). */
 function Chat({
@@ -158,11 +165,13 @@ function Chat({
   port = PORT,
   transcripts = NO_TRANSCRIPTS,
   crews,
+  runs = BOARD_RUNS,
 }: {
   active?: boolean;
   port?: ComposerPort;
   transcripts?: ScriptedTranscripts["door"];
   crews?: CrewsDoor;
+  runs?: KeyedCallClient;
 }): ReactElement {
   const [surface, setSurface] = useState<FrameSurface | null>(null);
   return (
@@ -173,6 +182,7 @@ function Chat({
       port={port}
       transcripts={transcripts}
       {...(crews === undefined ? {} : { crews })}
+      runs={runs}
     />
   );
 }
@@ -879,6 +889,7 @@ describe("whether a spark has worked, as one window reads it (TU-1, Q1; the wind
 
 /** A port the test drives: the list it answers, and the board it moves. */
 function scripted(listed: SparkSummary[]) {
+  boardNow.clear();
   const port = {
     lists: 0,
     listed,
@@ -938,6 +949,8 @@ function scripted(listed: SparkSummary[]) {
     },
   };
   const move = (upserts: AgentFieldRow[], removed: string[] = []) => {
+    for (const row of upserts) boardNow.set(row.runtimeRunId, row);
+    for (const id of removed) boardNow.delete(id);
     const since = port.revision;
     port.revision += 1;
     port.frame?.({ since, revision: port.revision, upserts, removed }, "delta");
@@ -1458,6 +1471,30 @@ describe("Chat, live (the feed and its acts)", () => {
     await settle();
     expect(shown.opened).toHaveLength(2);
     expect(noted.at(-1)).toBe("Could not jump — its terminal is not on this desktop's floor");
+  });
+
+  it("jumps to Vela's own session when the board's row carries no join, as fieldd's agent.list puts it on this floor (item 187)", async () => {
+    const { door, move } = scripted([VELA]);
+    stop = startSparksFeed(door);
+    const listed = runsDoor([
+      listedRun({
+        runtimeRunId: "run-Vela",
+        terminal: { hosted: "local", runtimeSessionId: "pty-Vela" },
+      }),
+    ]);
+    mount(<Chat runs={listed.door} />);
+    await settle();
+    // this desktop's terminal doors are not on the tailnet: fieldd's board withholds the join (TM-2 F-M4)
+    await act(async () =>
+      move([{ ...VELA_ASKS, status: "idle", blockers: [], terminal: undefined }]),
+    );
+    await act(async () => headAct("jump")?.click());
+    await settle();
+    expect(listed.asked).toEqual([["agent.list", {}]]);
+    expect(shown.opened).toEqual([
+      { row: { id: "run-Vela", floorSessionId: "pty-Vela" }, from: "assistant" },
+    ]);
+    expect(noted).toEqual(["Jumped to its pane"]);
   });
 
   it("pauses Vela's current turn through agent.pause once, and says what fieldd answered (TH-2; TH-Q3 (b))", async () => {

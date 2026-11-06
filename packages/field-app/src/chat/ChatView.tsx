@@ -9,6 +9,7 @@ import {
   useState,
 } from "react";
 import { useReducedMotion } from "../field/desk/bar/bar-motion";
+import type { KeyedCallClient } from "../forwarded-call";
 import type { FrameSurface } from "../frame/frame-surface";
 import { jumpNote, sayOnLine } from "../frame/line-door";
 import { sayStatus } from "../frame/status-line";
@@ -92,6 +93,7 @@ export function ChatView({
   port,
   transcripts,
   crews,
+  runs,
 }: {
   /** Chat is the view showing: the rows' times are said again while it is, and the thread on screen is read */
   active: boolean;
@@ -105,6 +107,9 @@ export function ChatView({
   transcripts: TranscriptDoor;
   /** SP-1e2 — the window's door to the shown spark's crews (`crewsDoorOver`); absent: no crew card is drawn */
   crews?: CrewsDoor | undefined;
+  /** item 187 — the window's door to fieldd's runs (`agent.list`, whole for this desktop's windows): where a run's
+   * terminal is, read once at the press by Jump to, the card's Show and a crew member's reveal (`reveal-run.ts`) */
+  runs: KeyedCallClient;
 }): ReactElement {
   const reading = useSparksReading();
   // the Agent Profiles, read once for every thread's @ (on Chat's first show, and again as @ opens)
@@ -235,18 +240,21 @@ export function ChatView({
   // thread, so Send goes on, and while it runs its pill waits: the ref is the guard, the state draws it.
   const [jumping, setJumping] = useState<ReadonlySet<SparkId>>(() => new Set());
   const jumpingNow = useRef(new Set<SparkId>());
-  const jump = useCallback(async (entry: SparkEntry): Promise<void> => {
-    const spark = entry.spark.id;
-    if (jumpingNow.current.has(spark)) return;
-    jumpingNow.current.add(spark);
-    setJumping(new Set(jumpingNow.current));
-    try {
-      sayOnLine(jumpNote(await revealRun(sparkEntryNow(spark)?.run ?? null)));
-    } finally {
-      jumpingNow.current.delete(spark);
+  const jump = useCallback(
+    async (entry: SparkEntry): Promise<void> => {
+      const spark = entry.spark.id;
+      if (jumpingNow.current.has(spark)) return;
+      jumpingNow.current.add(spark);
       setJumping(new Set(jumpingNow.current));
-    }
-  }, []);
+      try {
+        sayOnLine(jumpNote(await revealRun(sparkEntryNow(spark)?.run ?? null, runs)));
+      } finally {
+        jumpingNow.current.delete(spark);
+        setJumping(new Set(jumpingNow.current));
+      }
+    },
+    [runs],
+  );
 
   // Pause current turn, in the head (TH-2; TH-Q3 (b)): `agent.pause` once for the spark's own run, for the turn at
   // work at the press. Kept for that turn alone: pausing from the press until fieldd answers, then while its accepted
@@ -330,13 +338,16 @@ export function ChatView({
   // Show, on an agent's ask: its pane in Godview by the head's one reveal (TH-2, `reveal-run.ts`), its board row read at
   // the press. One it cannot show — not running, its terminal not on this desktop's floor, or a deck that could not —
   // is said in Jump to's words; shown, it says nothing (CP-3)
-  const showAsk = useCallback((item: NeedsItem) => {
-    const id = item.from.session;
-    if (id === undefined) return;
-    void revealRun(boardRowNow(id)).then((outcome) => {
-      if (outcome.state !== "jumped") sayOnLine(jumpNote(outcome));
-    });
-  }, []);
+  const showAsk = useCallback(
+    (item: NeedsItem) => {
+      const id = item.from.session;
+      if (id === undefined) return;
+      void revealRun(boardRowNow(id), runs).then((outcome) => {
+        if (outcome.state !== "jumped") sayOnLine(jumpNote(outcome));
+      });
+    },
+    [runs],
+  );
 
   // TH-1 — the shown spark's conversation: its transcript, read through the window's own ticket while Chat is the
   // view (the latest conversation, or every one once "Earlier conversations" is pressed, for the window's life), with
@@ -412,17 +423,20 @@ export function ChatView({
   // says what came of it, as Jump to's does. While it runs the row waits: the ref is the guard, the state draws it.
   const [revealing, setRevealing] = useState<ReadonlySet<string>>(() => new Set());
   const revealingNow = useRef(new Set<string>());
-  const revealMember = useCallback(async (runtimeRunId: string): Promise<void> => {
-    if (revealingNow.current.has(runtimeRunId)) return;
-    revealingNow.current.add(runtimeRunId);
-    setRevealing(new Set(revealingNow.current));
-    try {
-      sayOnLine(jumpNote(await revealRun(boardRowNow(runtimeRunId))));
-    } finally {
-      revealingNow.current.delete(runtimeRunId);
+  const revealMember = useCallback(
+    async (runtimeRunId: string): Promise<void> => {
+      if (revealingNow.current.has(runtimeRunId)) return;
+      revealingNow.current.add(runtimeRunId);
       setRevealing(new Set(revealingNow.current));
-    }
-  }, []);
+      try {
+        sayOnLine(jumpNote(await revealRun(boardRowNow(runtimeRunId), runs)));
+      } finally {
+        revealingNow.current.delete(runtimeRunId);
+        setRevealing(new Set(revealingNow.current));
+      }
+    },
+    [runs],
+  );
   const openGodview = useCallback(() => void requestView("godview"), []);
 
   const flow =

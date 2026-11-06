@@ -17,7 +17,7 @@ import {
   newTerminalNote,
   resumeNote,
 } from "../src/frame/line-door";
-import { liveRunOf, readLiveRun } from "../src/history/jump";
+import { floorRunOf, liveRunOf, readLiveRun, readRunRows } from "../src/history/jump";
 
 const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "contracts", "fixtures");
 const SUMMARY = JSON.parse(
@@ -91,6 +91,65 @@ describe("the run that continues the chosen conversation here (P3)", () => {
     };
     expect(await readLiveRun(refusing, NATIVE)).toBeNull();
     expect(await readLiveRun({ request: async () => ({ rows: [] }) }, NATIVE)).toBeNull();
+  });
+});
+
+describe("item 187 — the same rule joined on the run, for Chat's reveals (`floorRunOf`, `readRunRows`)", () => {
+  it("names the run's floor session by its run id, and another run's row never answers", () => {
+    const rows = [
+      row({
+        runtimeRunId: "run-other",
+        terminal: { hosted: "local", runtimeSessionId: "pty-other" },
+      }),
+      row(),
+    ];
+    expect(floorRunOf(rows, "run-agent")).toEqual({
+      floorSessionId: "pty-agent",
+      runtimeRunId: "run-agent",
+    });
+    expect(floorRunOf(rows, "a-run-nobody-runs")).toBeNull();
+  });
+
+  it("reads every row as History's Jump to does: both Jump tos say here, or not, together", () => {
+    for (const one of [
+      row(),
+      row({ terminal: { hosted: "remote", runtimeSessionId: "pty" } }),
+      row({ terminal: { hosted: "none" } }),
+      row({ terminal: { hosted: "local" } }),
+      row({ terminal: undefined }),
+      row({ continuation: { persisted: true, resumable: true, exited: true } }),
+      row({ continuation: { persisted: true, resumable: false } }),
+    ]) {
+      expect(floorRunOf([one], "run-agent")).toEqual(liveRunOf([one], NATIVE));
+    }
+    // a row this build cannot read is passed over, never a refusal of the rest
+    expect(
+      floorRunOf([{ runtimeRunId: "run-agent" }, "garbage", null, row()], "run-agent"),
+    ).toEqual({
+      floorSessionId: "pty-agent",
+      runtimeRunId: "run-agent",
+    });
+  });
+
+  it("reads agent.list once, and says when fieldd cannot answer (null), apart from an empty list", async () => {
+    const asked: Array<[string, Record<string, unknown>]> = [];
+    const answering = {
+      request: async (method: string, params: Record<string, unknown>) => {
+        asked.push([method, params]);
+        return { sessions: [row()] };
+      },
+    };
+    expect(await readRunRows(answering)).toEqual([row()]);
+    expect(asked).toEqual([["agent.list", {}]]);
+    expect(await readRunRows({ request: async () => ({ sessions: [] }) })).toEqual([]);
+    const refusing = {
+      request: async () => {
+        throw Object.assign(new Error("fieldd is restarting"), { kind: "UNAVAILABLE" });
+      },
+    };
+    expect(await readRunRows(refusing)).toBeNull();
+    expect(await readRunRows({ request: async () => ({ rows: [] }) })).toBeNull();
+    expect(await readRunRows({ request: async () => null })).toBeNull();
   });
 });
 

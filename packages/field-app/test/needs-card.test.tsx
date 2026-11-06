@@ -55,6 +55,7 @@ import {
 import type { FrameSurface } from "../src/frame/frame-surface";
 import { hearLineSays } from "../src/frame/line-door";
 import { resetStatusLineForTest, statusLineSaid } from "../src/frame/status-line";
+import { runsOverBoard } from "./runs-door-fixture";
 import { NO_TRANSCRIPTS } from "./transcript-door-fixture";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -756,8 +757,14 @@ const queue = {
   }[],
 };
 
-/** The board's next snapshot, as the test pushes it. */
-const board = { push: null as ((rows: readonly AgentFieldRow[]) => void) | null };
+/** The board's next snapshot, as the test pushes it, and the rows it holds now (fieldd's `agent.list` reads the same
+ * runs, item 187). */
+const board = {
+  push: null as ((rows: readonly AgentFieldRow[]) => void) | null,
+  now: [] as readonly AgentFieldRow[],
+};
+/** The window's door to fieldd's runs, answering from the rows the board holds now. */
+const RUNS = runsOverBoard(() => board.now).door;
 
 function feed(sparks: SparkSummary[] = [VELA], rows: readonly AgentFieldRow[] = ROWS): SparksPort {
   return {
@@ -766,8 +773,10 @@ function feed(sparks: SparkSummary[] = [VELA], rows: readonly AgentFieldRow[] = 
       let revision = 1;
       board.push = (next) => {
         revision += 1;
+        board.now = next;
         onFrame({ revision, rows: next }, "snapshot");
       };
+      board.now = rows;
       onFrame({ revision, rows }, "snapshot");
       return () => undefined;
     },
@@ -811,6 +820,7 @@ async function mountChat(
   queue.items = items;
   queue.asked = [];
   queue.answers = [];
+  board.now = [];
   stopFeed = startSparksFeed(port);
   function Owner(): ReactElement {
     const [surface, setSurface] = useState<FrameSurface | null>(null);
@@ -823,6 +833,7 @@ async function mountChat(
         onSurfaceChange={setSurface}
         port={composer}
         transcripts={NO_TRANSCRIPTS}
+        runs={RUNS}
       />
     );
   }

@@ -173,9 +173,10 @@ export function ChromeLayer({
         port={newSparkPort}
         transcripts={transcripts}
         crews={crews}
+        runs={fieldd}
       />
     ),
-    [crews, newSparkPort, onSurfaceChange, surface, transcripts],
+    [crews, fieldd, newSparkPort, onSurfaceChange, surface, transcripts],
   );
   const closeNewSpark = useCallback(
     () => onSurfaceChange(foldSurface(surface, "new-spark")),

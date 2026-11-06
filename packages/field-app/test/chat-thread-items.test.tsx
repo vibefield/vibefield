@@ -38,6 +38,7 @@ import { ChatPreview } from "../src/design-system/ChatPreview";
 import type { ChatState } from "../src/design-system/chat-fixtures";
 import type { FrameSurface } from "../src/frame/frame-surface";
 import { hearLineSays } from "../src/frame/line-door";
+import { NO_RUNS } from "./runs-door-fixture";
 import { NO_TRANSCRIPTS } from "./transcript-door-fixture";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -233,6 +234,7 @@ async function mountChat(
         onSurfaceChange={setSurface}
         port={PORT}
         transcripts={transcripts}
+        runs={NO_RUNS}
       />
     );
   }
