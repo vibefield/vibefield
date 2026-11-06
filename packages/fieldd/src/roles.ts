@@ -107,8 +107,12 @@ export function strayArgumentLine(): string {
 }
 
 /** DESIGN.md §9's reason ("When the file an agent is observed with is
- * missing"; open until James rules rv-forwarder-role): this copy of VibeField
- * lost its sealed forwarder (a damaged install, a half-finished update). */
+ * missing"; ruled with rv-forwarder-role, James 11-06): this copy of VibeField
+ * lost its sealed forwarder (a damaged install, a half-finished update). The
+ * door's refusal of a launch that would need it is this sentence BARE
+ * (agent-runtime.ts; the lead's ruling rv-forwarder-door-clause): the app says
+ * every door refusal as a clause after its own words, so "VibeField: " is the
+ * role's own line's (`forwarderUnavailable`) and, in a pane, the kit's label. */
 export const FORWARDER_MISSING_REASON =
   "this copy of VibeField is missing the file it observes agents with. Reinstall VibeField.";
 
@@ -118,6 +122,13 @@ export const FORWARDER_MISSING_REASON =
 export function forwarderUnavailable(): string {
   return `VibeField: ${FORWARDER_MISSING_REASON}`;
 }
+
+/** puppeteer's neutral refusal (core `AgentLaunchRefusedError`'s code) of a
+ * managed launch whose host lends no forwarder runtime and has no script
+ * runner: here, a single-executable fieldd whose sealed forwarder is gone, so
+ * agent-forwarder.ts lent nothing. Spelled here because this file imports
+ * nothing; the door and the gateway say it in DESIGN.md §9's words. */
+export const FORWARDER_RUNTIME_UNAVAILABLE = "FORWARDER_RUNTIME_UNAVAILABLE";
 
 export type FielddRole =
   | "files-host"

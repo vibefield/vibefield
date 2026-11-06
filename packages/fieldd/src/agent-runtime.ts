@@ -142,6 +142,7 @@ import { createDarwinSecretStore, type SecretStore } from "./plugin-settings";
 import type { ProfileDraftsStore } from "./profile-drafts";
 import type { OwnPlace } from "./projects/project-groups";
 import type { LaunchRecipe } from "./projects/project-records";
+import { FORWARDER_MISSING_REASON, FORWARDER_RUNTIME_UNAVAILABLE } from "./roles";
 import type { RosettadState, RosettadSupervisor } from "./rosettad-supervisor";
 import type { RunBegun, RunEntered } from "./run-entry";
 import type { GrantPrincipal } from "./terminal-grants";
@@ -5353,6 +5354,17 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     // meets are said in fieldd's words, around puppeteer's sentence
     const refusal = failure.error.refusal?.code;
     if (failure.error.code === "AGENT_LAUNCH_REFUSED" && refusal !== undefined) {
+      // RV #1 (item 203) — a launch that needs the forwarder this copy no longer has (a single executable whose
+      // sealed agent-forwarder.cjs is gone, so it lent no runtime): a damaged install, said in DESIGN.md §9's
+      // sentence, never puppeteer's sentence about hosts and forwarders
+      if (refusal === FORWARDER_RUNTIME_UNAVAILABLE) {
+        return new RpcCallError("UNAVAILABLE", FORWARDER_MISSING_REASON, false, {
+          service: "agents",
+          state: "forwarder-unavailable",
+          ...details,
+          refusal,
+        });
+      }
       const label = this.labelFor(provider, provider);
       const notAt =
         act === "launch"

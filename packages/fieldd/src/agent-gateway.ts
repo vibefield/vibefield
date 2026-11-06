@@ -42,7 +42,12 @@ import type { AgentAdoption, SystemAudit } from "./agent-runtime";
 import { SPAWNED_BY_SHELL } from "./agent-typed-run";
 import type { AuditMutation, AuditMutationOutcome } from "./audit-service";
 import { RpcCallError } from "./native-link";
-import { AGENT_SHIM_BUNDLE, AGENT_SHIM_ROLE_ARG } from "./roles";
+import {
+  AGENT_SHIM_BUNDLE,
+  AGENT_SHIM_ROLE_ARG,
+  FORWARDER_MISSING_REASON,
+  FORWARDER_RUNTIME_UNAVAILABLE,
+} from "./roles";
 
 // A TYPED AGENT IS A MANAGED AGENT (AR-7b; thinking-ar7-typed-agents.md §5.2,
 // design-04 §8.4/§8.5 as amended 2026-09-12): the agent's name typed at the
@@ -406,6 +411,8 @@ interface RefusalFacts {
   label: string;
   argument?: string | undefined;
   reason: string;
+  /** the adapter's own code for a launch it refused (`launch-refused`) */
+  providerCode?: string | undefined;
 }
 
 /** THE TABLE: one sentence per code the kit defines (DESIGN.md §9 — what
@@ -454,8 +461,12 @@ const REFUSAL_WORDS: Record<SpawnThroughDeclineCode, (facts: RefusalFacts) => st
     `${command} was not started: VibeField has no stand-in for ${label}. Run ${label} by its own name.`,
   // the agent's own adapter refused, for a reason the person can act on: its
   // sentence IS the reason (one plain line; the kit's bound is already on it)
-  "launch-refused": ({ command, reason }) =>
-    `${command} was not started: ${reason}. Change that, then run ${command} again.`,
+  // — except one refusal that is VibeField's to say (RV #1, item 203): a copy that lost its sealed forwarder, in
+  // DESIGN.md §9's pane line. The adapter's sentence is about hosts and forwarders, nothing a person can change
+  "launch-refused": ({ command, reason, providerCode }) =>
+    providerCode === FORWARDER_RUNTIME_UNAVAILABLE
+      ? `${command} was not started: ${FORWARDER_MISSING_REASON}`
+      : `${command} was not started: ${reason}. Change that, then run ${command} again.`,
   "prepare-failed": ({ command, label }) =>
     `${command} was not started: ${label} could not be prepared as a managed session. Run ${command} again.`,
   "terminal-conflict": ({ command }) =>
@@ -484,6 +495,7 @@ export function agentRefusal(refused: SpawnThroughRefusal, label: string): strin
     label: clip(label, ARGUMENT_BUDGET),
     ...(argument === undefined || argument === "" ? {} : { argument }),
     reason,
+    ...(refused.providerCode === undefined ? {} : { providerCode: refused.providerCode }),
   });
   return clip(words, REFUSAL_BUDGET);
 }
