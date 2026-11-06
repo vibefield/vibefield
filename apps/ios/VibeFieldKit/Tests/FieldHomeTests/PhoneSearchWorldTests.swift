@@ -123,7 +123,7 @@ struct PhoneSearchWorldTests {
     let world = try Self.world()
     let work = PhoneSearchWorld.content(
       SearchState(), query: "", lens: try Self.lens("work"), live: world, answers: [], latest: nil,
-      agentLabel: { $0 })
+      agentLabel: { $0 }, feed: .live, asked: .settled)
     #expect(work.scope == .live)
     #expect(work.rows == .live(PhoneSearch.liveRows(world, query: "", profile: "work", desk: nil)))
     let tokens = work.tokens.map { $0.label }
@@ -138,7 +138,8 @@ struct PhoneSearchWorldTests {
     var lens = try Self.lens("work")
     lens.keep(desk: "dev-loft")
     let none = PhoneSearchWorld.content(
-      SearchState(), query: "", lens: lens, live: world, answers: [], latest: nil, agentLabel: { $0 })
+      SearchState(), query: "", lens: lens, live: world, answers: [], latest: nil, agentLabel: { $0 }, feed: .live,
+      asked: .settled)
     // `PhoneSearch.Empty` has no public init (FieldHistory's own value): its two fields are read instead
     #expect(none.empty?.sentence == "No live session in Work runs on loft.")
     #expect(none.empty?.act == .clearFilters)
@@ -148,8 +149,108 @@ struct PhoneSearchWorldTests {
     // words: they mark the rows
     let typed = PhoneSearchWorld.content(
       SearchState(), query: "W1 ", lens: try Self.lens(nil), live: world, answers: [], latest: nil,
-      agentLabel: { $0 })
+      agentLabel: { $0 }, feed: .live, asked: .settled)
     #expect(typed.terms == ["w1"])
+  }
+
+  /// SE-2i (the S2 review's finding 4) — the content says what the world has answered: until the home's board answers
+  /// nothing says what runs, and words nobody answered never read as "no matches".
+  @Test("the content is honest: Asking what runs… before the board answers, and no empty words for unanswered words")
+  func honestContent() throws {
+    let empty = PhoneSearch.Live(sessions: [], desks: [], profiles: [])
+    let asking = PhoneSearchWorld.content(
+      SearchState(), query: "", lens: try Self.lens(nil), live: empty, answers: [], latest: nil, agentLabel: { $0 },
+      feed: .asking, asked: .settled)
+    #expect(asking.foot == "Asking what runs…")
+    #expect(asking.empty == nil)
+
+    let unanswered = PhoneSearch.Asked(asking: true, answered: false)
+    let past = PhoneSearchWorld.content(
+      SearchState(scope: .everything), query: "zebra", lens: try Self.lens(nil), live: empty, answers: [],
+      latest: nil, agentLabel: { $0 }, feed: .live, asked: unanswered)
+    #expect(past.foot == "0 sessions matched · searching")
+    #expect(past.empty == nil)
+  }
+
+  /// SE-2i — Live now's world as it stands: the home's live board; else its refusal in its own words, the home asleep
+  /// by its name, or asking.
+  @Test("the feed: live while the home's board answers, else refused in its words, asleep by name, or asking")
+  func feed() {
+    let ready = FieldDesktop(deviceId: "dev-1", name: "studio", platform: "darwin", state: .ready, feed: .door)
+    #expect(PhoneSearchWorld.feed(isLive: true, home: ready) == .live)
+    #expect(PhoneSearchWorld.feed(isLive: false, home: ready) == .asking)
+    #expect(PhoneSearchWorld.feed(isLive: false, home: nil) == .asking)
+    let refused = FieldDesktop(
+      deviceId: "dev-1", name: "studio", platform: "darwin", state: .ready, feed: .none,
+      fieldRefusal: "the board is not this account's")
+    #expect(PhoneSearchWorld.feed(isLive: false, home: refused) == .refused("the board is not this account's"))
+    let failed = FieldDesktop(
+      deviceId: "dev-1", name: "studio", platform: "darwin", state: .failed("the door said no"), feed: .none)
+    #expect(PhoneSearchWorld.feed(isLive: false, home: failed) == .refused("the door said no"))
+    let asleep = FieldDesktop(deviceId: "dev-1", name: "studio", platform: "darwin", state: .noDoor, feed: .none)
+    #expect(PhoneSearchWorld.feed(isLive: false, home: asleep) == .asleep("studio"))
+    let connecting = FieldDesktop(
+      deviceId: "dev-1", name: "studio", platform: "darwin", state: .connecting, feed: .none)
+    #expect(PhoneSearchWorld.feed(isLive: false, home: connecting) == .asking)
+  }
+
+  /// SE-2i — Everything has answered when every desktop that can be asked answered these words, and at least one
+  /// could; a desktop with no door (the mock's corpus) is matched on the phone; an asleep one waits, by name.
+  @Test("Everything's answer: every awake desktop answered these words, one with no door always has, asleep by name")
+  func pastAsked() {
+    typealias Answerer = PhoneSearchWorld.Answerer
+    let studio = Answerer(name: "studio", awake: true, asks: true, answered: "migration")
+    let mini = Answerer(name: "mini", awake: false, asks: false, answered: nil)
+    #expect(
+      PhoneSearchWorld.pastAsked([studio, mini], query: " migration ", asking: false)
+        == PhoneSearch.Asked(asking: false, answered: true, asleep: ["mini"]))
+    // the last answer was to other words: not answered, and the ask out says so
+    let behind = Answerer(name: "studio", awake: true, asks: true, answered: "migr")
+    #expect(
+      PhoneSearchWorld.pastAsked([behind], query: "migration", asking: true)
+        == PhoneSearch.Asked(asking: true, answered: false))
+    // nobody could be asked: nothing was answered
+    #expect(
+      PhoneSearchWorld.pastAsked([mini], query: "migration", asking: false)
+        == PhoneSearch.Asked(asking: false, answered: false, asleep: ["mini"]))
+    #expect(PhoneSearchWorld.pastAsked([], query: "migration", asking: false).answered == false)
+    // a corpus with no door is matched here, so it has answered whatever is typed
+    let mock = Answerer(name: "studio", awake: true, asks: false, answered: nil)
+    #expect(PhoneSearchWorld.pastAsked([mock], query: "migration", asking: false).answered)
+  }
+
+  /// SE-2i — Live now has answered when every desktop it asks (one that owns a run) answered these words; with none to
+  /// ask the runs match on their facts alone, which is the whole answer; an asleep desktop is not asked.
+  @Test("Live now's answer: every awake desktop it asks answered these words; none to ask is answered")
+  func liveAsked() {
+    typealias Answerer = PhoneSearchWorld.Answerer
+    #expect(PhoneSearchWorld.liveAsked([], query: "keep", asking: false) == .settled)
+    let studio = Answerer(name: "studio", awake: true, asks: true, answered: "kee")
+    #expect(
+      PhoneSearchWorld.liveAsked([studio], query: "keep", asking: false)
+        == PhoneSearch.Asked(asking: false, answered: false))
+    let caught = Answerer(name: "studio", awake: true, asks: true, answered: "keep")
+    let loft = Answerer(name: "loft", awake: false, asks: false, answered: nil)
+    #expect(PhoneSearchWorld.liveAsked([caught, loft], query: "keep", asking: false) == .settled)
+  }
+
+  /// SE-2i — the readers as the answer reads them: a corpus with no door is never asked; an asleep one is not awake;
+  /// Live now's are only the desktops that own a run.
+  @MainActor
+  @Test("the readers as the answer reads them: awake, asking, the words answered; Live now's only the runs' owners")
+  func answerersFromReaders() {
+    let up = HistoryDesktopReader.fixed(corpus: .mock, standing: .connected)
+    let down = HistoryDesktopReader.fixed(corpus: .mock, standing: .asleep)
+    let past = PhoneSearchWorld.pastAnswerers([up, down])
+    #expect(
+      past == [
+        PhoneSearchWorld.Answerer(name: "studio", awake: true, asks: false, answered: nil),
+        PhoneSearchWorld.Answerer(name: "studio", awake: false, asks: false, answered: nil),
+      ])
+    let owned = PhoneSearchWorld.liveAnswerers([up], runs: [up.deviceId: ["n-1"]])
+    #expect(owned == [PhoneSearchWorld.Answerer(name: "studio", awake: true, asks: false, answered: nil)])
+    let none = PhoneSearchWorld.liveAnswerers([up], runs: ["dev-elsewhere": ["n-1"]])
+    #expect(none.isEmpty)
   }
 
   @Test("Everything's content: your latest sessions before a word, no profile, and the foot says the lens comes back")
@@ -157,7 +258,8 @@ struct PhoneSearchWorldTests {
     let world = try Self.world()
     let state = SearchState(scope: .everything)
     let latest = PhoneSearchWorld.content(
-      state, query: "", lens: try Self.lens("work"), live: world, answers: [], latest: .mock, agentLabel: { $0 })
+      state, query: "", lens: try Self.lens("work"), live: world, answers: [], latest: .mock, agentLabel: { $0 },
+      feed: .live, asked: .settled)
     #expect(latest.scope == .everything)
     #expect(latest.rows == .past(PhoneSearch.latestRows(.mock, project: nil, agentLabel: { $0 })))
     #expect(latest.foot == "Your latest sessions · every profile; Work comes back on Field")
@@ -173,7 +275,7 @@ struct PhoneSearchWorldTests {
     let narrowed = SearchState(scope: .everything, kind: .prompts, project: project)
     let typed = PhoneSearchWorld.content(
       narrowed, query: "badge", lens: try Self.lens(nil), live: world, answers: [(corpus: .mock, groups: groups)],
-      latest: .mock, agentLabel: { $0 })
+      latest: .mock, agentLabel: { $0 }, feed: .live, asked: .settled)
     let expected = PhoneSearch.pastRows(
       [(corpus: .mock, groups: groups)], kind: .prompts, project: project.key, agentLabel: { $0 })
     #expect(typed.rows == .past(expected))

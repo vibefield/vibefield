@@ -187,28 +187,86 @@ struct PhoneSearchTests {
   func liveFoot() throws {
     let field = try Self.field()
     let all = PhoneSearch.liveRows(field, query: "", profile: nil, desk: nil)
-    #expect(PhoneSearch.liveFoot(all, total: 8, query: "", narrowed: false) == "8 live sessions, waiting first")
+    #expect(
+      PhoneSearch.liveFoot(all, total: 8, query: "", narrowed: false, feed: .live, asked: .settled)
+        == "8 live sessions, waiting first")
     let work = PhoneSearch.liveRows(field, query: "", profile: "work", desk: nil)
-    #expect(PhoneSearch.liveFoot(work, total: 8, query: "", narrowed: true) == "4 of 8 live sessions, waiting first")
+    #expect(
+      PhoneSearch.liveFoot(work, total: 8, query: "", narrowed: true, feed: .live, asked: .settled)
+        == "4 of 8 live sessions, waiting first")
     let lines: [String: [HistoryHit]] = ["n-a": [Self.hit("1", "keep it"), Self.hit("2", "keep")]]
     let found = PhoneSearch.liveRows(try Self.field(lines: lines), query: "keep", profile: nil, desk: nil)
-    #expect(PhoneSearch.liveFoot(found, total: 8, query: "keep", narrowed: false) == "2 sessions · 2 lines matched")
+    #expect(
+      PhoneSearch.liveFoot(found, total: 8, query: "keep", narrowed: false, feed: .live, asked: .settled)
+        == "2 sessions · 2 lines matched")
     let one = [PhoneSearch.LiveRow(session: Self.session("x", .idle), lines: [Self.hit("1", "x")])]
-    #expect(PhoneSearch.liveFoot(one, total: 8, query: "x", narrowed: false) == "1 session · 1 line matched")
+    #expect(
+      PhoneSearch.liveFoot(one, total: 8, query: "x", narrowed: false, feed: .live, asked: .settled)
+        == "1 session · 1 line matched")
+  }
+
+  /// SE-2i (the S2 review's finding 4; §8 "Search — the Peek"'s Live now foot) — the foot says what the world has
+  /// answered: "Asking what runs…" until the home's board answers, its refusal in its words, the home asleep by name;
+  /// with words, "searching" while the newest ask is out and "the words were not searched" when it came back
+  /// unanswered (the last answer's lines stand).
+  @Test("Live now's foot is honest: asking, refused, asleep; searching, or the words were not searched")
+  func liveFootHonest() throws {
+    let all = PhoneSearch.liveRows(try Self.field(), query: "", profile: nil, desk: nil)
+    #expect(
+      PhoneSearch.liveFoot(all, total: 8, query: "", narrowed: false, feed: .asking, asked: .settled)
+        == "Asking what runs…")
+    #expect(
+      PhoneSearch.liveFoot(all, total: 8, query: "keep", narrowed: false, feed: .refused("the board said no"),
+        asked: .settled) == "What runs could not be read — the board said no")
+    #expect(
+      PhoneSearch.liveFoot(all, total: 8, query: "", narrowed: false, feed: .asleep("studio"), asked: .settled)
+        == "studio is asleep")
+    let lines: [String: [HistoryHit]] = ["n-a": [Self.hit("1", "keep it"), Self.hit("2", "keep")]]
+    let found = PhoneSearch.liveRows(try Self.field(lines: lines), query: "keep", profile: nil, desk: nil)
+    let out = PhoneSearch.Asked(asking: true, answered: false)
+    #expect(
+      PhoneSearch.liveFoot(found, total: 8, query: "keep", narrowed: false, feed: .live, asked: out)
+        == "2 sessions · 2 lines matched · searching")
+    let back = PhoneSearch.Asked(asking: false, answered: false)
+    #expect(
+      PhoneSearch.liveFoot(found, total: 8, query: "keep", narrowed: false, feed: .live, asked: back)
+        == "2 sessions · 2 lines matched · the words were not searched")
+    // before a word nothing is asked, so what was answered says nothing
+    #expect(
+      PhoneSearch.liveFoot(all, total: 8, query: "", narrowed: false, feed: .live, asked: back)
+        == "8 live sessions, waiting first")
   }
 
   @Test("Live now's empty lists: a filter with Clear the filters, words with Search everything, else nothing runs")
   func liveEmpty() {
-    let both = PhoneSearch.liveEmpty(query: "", profile: "Work", desk: "studio")
+    let both = PhoneSearch.liveEmpty(query: "", profile: "Work", desk: "studio", feed: .live, asked: .settled)
     #expect(both == PhoneSearch.Empty(sentence: "No live session in Work runs on studio.", act: .clearFilters))
-    let profile = PhoneSearch.liveEmpty(query: " ", profile: "Work", desk: nil)
-    #expect(profile.sentence == "No live session in Work runs right now.")
-    let desk = PhoneSearch.liveEmpty(query: "", profile: nil, desk: "mini")
-    #expect(desk.sentence == "No live session runs on mini.")
-    let words = PhoneSearch.liveEmpty(query: " zebra ", profile: "Work", desk: nil)
+    let profile = PhoneSearch.liveEmpty(query: " ", profile: "Work", desk: nil, feed: .live, asked: .settled)
+    #expect(profile?.sentence == "No live session in Work runs right now.")
+    let desk = PhoneSearch.liveEmpty(query: "", profile: nil, desk: "mini", feed: .live, asked: .settled)
+    #expect(desk?.sentence == "No live session runs on mini.")
+    let words = PhoneSearch.liveEmpty(query: " zebra ", profile: "Work", desk: nil, feed: .live, asked: .settled)
     #expect(words == PhoneSearch.Empty(sentence: "No live session holds every word of “zebra”.", act: .searchEverything))
-    let none = PhoneSearch.liveEmpty(query: "", profile: nil, desk: nil)
+    let none = PhoneSearch.liveEmpty(query: "", profile: nil, desk: nil, feed: .live, asked: .settled)
     #expect(none == PhoneSearch.Empty(sentence: "Nothing runs right now.", act: nil))
+  }
+
+  /// SE-2i — an empty list never claims what nobody answered: nothing while what runs is asked or the home sleeps,
+  /// the refusal's own short sentence (`peek-live.ts` `liveNone`), and no "holds every word" for unanswered words.
+  @Test("Live now's empty lists are honest: none while asking or asleep, the refusal, none for unanswered words")
+  func liveEmptyHonest() {
+    #expect(PhoneSearch.liveEmpty(query: "", profile: nil, desk: nil, feed: .asking, asked: .settled) == nil)
+    #expect(PhoneSearch.liveEmpty(query: "", profile: nil, desk: nil, feed: .asleep("studio"), asked: .settled) == nil)
+    let refused = PhoneSearch.liveEmpty(
+      query: "keep", profile: nil, desk: nil, feed: .refused("the board said no"), asked: .settled)
+    #expect(refused == PhoneSearch.Empty(sentence: "What runs could not be read.", act: nil))
+    let out = PhoneSearch.Asked(asking: true, answered: false)
+    #expect(PhoneSearch.liveEmpty(query: "zebra", profile: nil, desk: nil, feed: .live, asked: out) == nil)
+    let back = PhoneSearch.Asked(asking: false, answered: false)
+    #expect(PhoneSearch.liveEmpty(query: "zebra", profile: nil, desk: nil, feed: .live, asked: back) == nil)
+    // a filter with no words asks nothing: its sentence stands whatever the last words' answer
+    let filtered = PhoneSearch.liveEmpty(query: "", profile: "Work", desk: nil, feed: .live, asked: back)
+    #expect(filtered?.act == .clearFilters)
   }
 
   // MARK: - Everything
@@ -354,25 +412,62 @@ struct PhoneSearchTests {
   @Test("Everything's foot: matched or your latest sessions, in the project, the kind, every profile while the lens stands")
   func pastFoot() {
     let billing = PhoneSearch.Project(key: "k1", name: "billing-api")
-    #expect(PhoneSearch.pastFoot(rows: 4, query: "migration", project: nil, kind: .any, lens: nil) == "4 sessions matched")
-    #expect(PhoneSearch.pastFoot(rows: 1, query: "migration", project: nil, kind: .any, lens: nil) == "1 session matched")
-    #expect(PhoneSearch.pastFoot(rows: 9, query: "", project: nil, kind: .prompts, lens: nil) == "Your latest sessions")
     #expect(
-      PhoneSearch.pastFoot(rows: 2, query: "migration", project: billing, kind: .prompts, lens: nil)
+      PhoneSearch.pastFoot(rows: 4, query: "migration", project: nil, kind: .any, lens: nil, asked: .settled)
+        == "4 sessions matched")
+    #expect(
+      PhoneSearch.pastFoot(rows: 1, query: "migration", project: nil, kind: .any, lens: nil, asked: .settled)
+        == "1 session matched")
+    #expect(
+      PhoneSearch.pastFoot(rows: 9, query: "", project: nil, kind: .prompts, lens: nil, asked: .settled)
+        == "Your latest sessions")
+    #expect(
+      PhoneSearch.pastFoot(rows: 2, query: "migration", project: billing, kind: .prompts, lens: nil, asked: .settled)
         == "2 sessions matched in billing-api, in your prompts")
     #expect(
-      PhoneSearch.pastFoot(rows: 2, query: "migration", project: nil, kind: .replies, lens: "Work")
+      PhoneSearch.pastFoot(rows: 2, query: "migration", project: nil, kind: .replies, lens: "Work", asked: .settled)
         == "2 sessions matched, in their replies · every profile; Work comes back on Field")
     #expect(
-      PhoneSearch.pastFoot(rows: 0, query: "", project: billing, kind: .any, lens: "Work")
+      PhoneSearch.pastFoot(rows: 0, query: "", project: billing, kind: .any, lens: "Work", asked: .settled)
         == "Your latest sessions in billing-api · every profile; Work comes back on Field")
+  }
+
+  /// SE-2i (the S2 review's finding 4) — with words, Everything's foot says what was answered as Live now's does:
+  /// "searching" while the newest ask is out, "the words were not searched" when it came back unanswered, and each
+  /// desktop that could not be asked, "‹desktop› is asleep" — before the lens's clause.
+  @Test("Everything's foot is honest: searching, the words were not searched, and each desktop asleep by name")
+  func pastFootHonest() {
+    let out = PhoneSearch.Asked(asking: true, answered: false)
+    #expect(
+      PhoneSearch.pastFoot(rows: 0, query: "zebra", project: nil, kind: .any, lens: nil, asked: out)
+        == "0 sessions matched · searching")
+    let back = PhoneSearch.Asked(asking: false, answered: false)
+    #expect(
+      PhoneSearch.pastFoot(rows: 2, query: "zebra", project: nil, kind: .prompts, lens: nil, asked: back)
+        == "2 sessions matched, in your prompts · the words were not searched")
+    let mini = PhoneSearch.Asked(asking: false, answered: true, asleep: ["mini"])
+    #expect(
+      PhoneSearch.pastFoot(rows: 4, query: "zebra", project: nil, kind: .any, lens: "Work", asked: mini)
+        == "4 sessions matched · mini is asleep · every profile; Work comes back on Field")
+    // before a word nothing is asked: your latest sessions, whatever the last words' answer
+    #expect(
+      PhoneSearch.pastFoot(rows: 9, query: "", project: nil, kind: .any, lens: nil, asked: back)
+        == "Your latest sessions")
   }
 
   @Test("Everything's empty list with words; before a word its words are James's, so none is said")
   func pastEmpty() {
-    let empty = PhoneSearch.pastEmpty(query: " zebra ")
+    let empty = PhoneSearch.pastEmpty(query: " zebra ", asked: .settled)
     #expect(empty == PhoneSearch.Empty(sentence: "Nothing in your past holds every word of “zebra”. Try fewer words.", act: nil))
-    #expect(PhoneSearch.pastEmpty(query: "") == nil)
+    #expect(PhoneSearch.pastEmpty(query: "", asked: .settled) == nil)
+  }
+
+  /// SE-2i — never "no matches" for a question nobody answered: no empty words while the words are out or came back
+  /// unanswered (the foot says which).
+  @Test("Everything's empty list is honest: none while the words are out or came back unanswered")
+  func pastEmptyHonest() {
+    #expect(PhoneSearch.pastEmpty(query: "zebra", asked: PhoneSearch.Asked(asking: true, answered: false)) == nil)
+    #expect(PhoneSearch.pastEmpty(query: "zebra", asked: PhoneSearch.Asked(asking: false, answered: false)) == nil)
   }
 
   // MARK: - Where a tap goes

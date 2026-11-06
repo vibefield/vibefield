@@ -1173,7 +1173,9 @@ public struct HomeScreen: View {
         let groups = FieldHistoryModel.visibleHits(query: searchQuery, kind: .any, in: reader.corpus)
         return (corpus: reader.corpus, groups: groups)
       },
-      latest: historyDesktops.projects.corpus, agentLabel: { $0 })
+      latest: historyDesktops.projects.corpus, agentLabel: { $0 },
+      // STUB (SE-2i red): the world as it stands and what was answered are wired at the green
+      feed: .live, asked: .settled)
   }
 
   /// Where the search field's top stands from the screen's top: at rest on the bar's row, typing above the keys.

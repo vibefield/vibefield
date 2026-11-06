@@ -251,6 +251,40 @@ public enum PhoneSearch {
     public let act: EmptyAct?
   }
 
+  /// SE-2i (the S2 review's finding 4) — where Live now's world stands: the home's board is what runs, so until it
+  /// answers nothing may say what runs (§8 "Search — the Peek": "Until it answers the foot says 'Asking what runs…';
+  /// refused, 'What runs could not be read — ‹fieldd's words›'").
+  public enum Feed: Equatable, Sendable {
+    /// the home's board answers: its rows are what runs
+    case live
+    /// no live board yet: what runs is being asked
+    case asking
+    /// the home's board refused, in its own words
+    case refused(String)
+    /// the home is asleep, by its name: what runs is read when it wakes
+    case asleep(String)
+  }
+
+  /// SE-2i — what the desktops have said of the words typed: never "no matches" for a question nobody answered (§8
+  /// "Search — the Peek"). Read only with words; before a word nothing is asked.
+  public struct Asked: Equatable, Sendable {
+    /// The newest words are out: the pause in typing, or the ask itself.
+    public var asking: Bool
+    /// Every desktop that could be asked has answered these words (for Everything, at least one could).
+    public var answered: Bool
+    /// The desktops that cannot be asked now, by name: their part of the answer waits for them.
+    public var asleep: [String]
+
+    public init(asking: Bool, answered: Bool, asleep: [String] = []) {
+      self.asking = asking
+      self.answered = answered
+      self.asleep = asleep
+    }
+
+    /// Nothing out, every desktop answered, none asleep: a world with nothing left to ask.
+    public static let settled = Asked(asking: false, answered: true)
+  }
+
   /// Where a tap (or Return, on the first row) goes.
   public enum OpenTarget: Equatable, Sendable {
     /// a live row: search closes and its body's card opens on Field (by visual id)
@@ -373,8 +407,10 @@ public enum PhoneSearch {
     return nil
   }
 
-  /// Live now's foot (§9 "The phone's feet").
-  public static func liveFoot(_ rows: [LiveRow], total: Int, query: String, narrowed: Bool) -> String {
+  /// Live now's foot (§9 "The phone's feet"). `feed` and `asked`: STUB (SE-2i red), read by nothing yet.
+  public static func liveFoot(
+    _ rows: [LiveRow], total: Int, query: String, narrowed: Bool, feed: Feed, asked: Asked
+  ) -> String {
     if !words(query).isEmpty {
       let lines = rows.reduce(0) { $0 + $1.lines.count }
       return "\(plural(rows.count, "session")) · \(plural(lines, "line")) matched"
@@ -384,8 +420,8 @@ public enum PhoneSearch {
   }
 
   /// Live now's empty list (§9 "The phone's empty lists"): a filter and no words, with Clear the filters; words, with
-  /// Search everything; else nothing runs.
-  public static func liveEmpty(query: String, profile: String?, desk: String?) -> Empty {
+  /// Search everything; else nothing runs. `feed` and `asked`: STUB (SE-2i red), read by nothing yet.
+  public static func liveEmpty(query: String, profile: String?, desk: String?, feed: Feed, asked: Asked) -> Empty? {
     let words = query.trimmingCharacters(in: .whitespaces)
     if words.isEmpty, profile != nil || desk != nil {
       let under = profile.map { " in \($0)" } ?? ""
@@ -501,9 +537,10 @@ public enum PhoneSearch {
 
   /// Everything's foot (§9 "The phone's feet"; UM-D28): the sessions matched, or **Your latest sessions**; " in
   /// ‹folder›" while a project is chosen; with words and a kind, ", in your prompts" or ", in their replies"; and
-  /// while the lens stands, " · every profile; ‹profile› comes back on Field".
+  /// while the lens stands, " · every profile; ‹profile› comes back on Field". `asked`: STUB (SE-2i red), read by
+  /// nothing yet.
   public static func pastFoot(
-    rows: Int, query: String, project: Project?, kind: FieldHistoryModel.SearchKind, lens: String?
+    rows: Int, query: String, project: Project?, kind: FieldHistoryModel.SearchKind, lens: String?, asked: Asked
   ) -> String {
     let typed = !words(query).isEmpty
     var foot = typed ? "\(plural(rows, "session")) matched" : "Your latest sessions"
@@ -519,8 +556,9 @@ public enum PhoneSearch {
     return foot
   }
 
-  /// Everything's empty list with words; before a word its words are James's (§9), so none is said here.
-  public static func pastEmpty(query: String) -> Empty? {
+  /// Everything's empty list with words; before a word its words are James's (§9), so none is said here. `asked`:
+  /// STUB (SE-2i red), read by nothing yet.
+  public static func pastEmpty(query: String, asked: Asked) -> Empty? {
     let words = query.trimmingCharacters(in: .whitespaces)
     guard !words.isEmpty else { return nil }
     return Empty(sentence: "Nothing in your past holds every word of “\(words)”. Try fewer words.", act: nil)

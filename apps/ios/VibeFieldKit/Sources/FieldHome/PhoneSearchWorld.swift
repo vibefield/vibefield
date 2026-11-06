@@ -99,13 +99,51 @@ enum PhoneSearchWorld {
     return runs
   }
 
+  // MARK: - SE-2i: what was answered (the S2 review's finding 4)
+
+  /// One desktop as search's answer state reads it: its name, whether it can be asked now (its door answers),
+  /// whether it has a door to ask at all (one with none, the mock's corpus, is matched on the phone, so it has always
+  /// answered), and the words its index last answered for the scope.
+  struct Answerer: Equatable {
+    var name: String
+    var awake: Bool
+    var asks: Bool
+    var answered: String?
+  }
+
+  /// Live now's world as it stands: the home's live board, or why there is none yet. STUB (SE-2i red): always live.
+  static func feed(isLive: Bool, home: FieldDesktop?) -> PhoneSearch.Feed {
+    .live
+  }
+
+  /// Everything's answer to `query`. STUB (SE-2i red): always settled.
+  static func pastAsked(_ answerers: [Answerer], query: String, asking: Bool) -> PhoneSearch.Asked {
+    .settled
+  }
+
+  /// Live now's answer to `query`. STUB (SE-2i red): always settled.
+  static func liveAsked(_ answerers: [Answerer], query: String, asking: Bool) -> PhoneSearch.Asked {
+    .settled
+  }
+
+  /// Every desktop as Everything's answer reads it. STUB (SE-2i red): none.
+  @MainActor static func pastAnswerers(_ readers: [HistoryDesktopReader]) -> [Answerer] {
+    []
+  }
+
+  /// The desktops Live now asks (those that own a run with a conversation). STUB (SE-2i red): none.
+  @MainActor static func liveAnswerers(_ readers: [HistoryDesktopReader], runs: [String: [String]]) -> [Answerer] {
+    []
+  }
+
   /// The sheet's content. Live now: the lens's profile and desktop narrow the rows and stand as tokens. Everything:
   /// no profile (UM-D28), the kind and the project as tokens, each desktop's answer with words and the ledger's
-  /// latest sessions before one.
+  /// latest sessions before one. `feed` is Live now's world as it stands, `asked` the scope's answer to the words:
+  /// together they keep every foot and empty list honest (SE-2i).
   static func content(
     _ state: SearchState, query: String, lens: ProfileLens, live: PhoneSearch.Live,
     answers: [(corpus: HistoryCorpus, groups: [HistoryHitGroup])], latest: HistoryCorpus?,
-    agentLabel: (String) -> String
+    agentLabel: (String) -> String, feed: PhoneSearch.Feed, asked: PhoneSearch.Asked
   ) -> SearchSheetContent {
     let terms = PhoneSearch.words(query)
     switch state.scope {
@@ -119,9 +157,11 @@ enum PhoneSearchWorld {
         chips: PhoneSearch.liveChips(live, profile: profile, desk: desk),
         offer: PhoneSearch.liveOffer(live, query: query, profile: profile, desk: desk), rows: .live(rows),
         empty: rows.isEmpty
-          ? PhoneSearch.liveEmpty(query: query, profile: lens.chosen?.label, desk: deskName ?? desk) : nil,
+          ? PhoneSearch.liveEmpty(
+            query: query, profile: lens.chosen?.label, desk: deskName ?? desk, feed: feed, asked: asked) : nil,
         foot: PhoneSearch.liveFoot(
-          rows, total: live.sessions.count, query: query, narrowed: profile != nil || desk != nil),
+          rows, total: live.sessions.count, query: query, narrowed: profile != nil || desk != nil, feed: feed,
+          asked: asked),
         profiles: live.profiles)
     case .everything:
       let key = state.project?.key
@@ -134,9 +174,10 @@ enum PhoneSearchWorld {
         scope: .everything, terms: terms, tokens: PhoneSearch.pastTokens(kind: state.kind, project: state.project),
         chips: PhoneSearch.pastChips(projects: projects, kind: state.kind, project: key),
         offer: PhoneSearch.pastOffer(query: query, projects: projects, project: key), rows: .past(rows),
-        empty: rows.isEmpty ? PhoneSearch.pastEmpty(query: query) : nil,
+        empty: rows.isEmpty ? PhoneSearch.pastEmpty(query: query, asked: asked) : nil,
         foot: PhoneSearch.pastFoot(
-          rows: rows.count, query: query, project: state.project, kind: state.kind, lens: lens.chosen?.label),
+          rows: rows.count, query: query, project: state.project, kind: state.kind, lens: lens.chosen?.label,
+          asked: asked),
         profiles: [])
     }
   }
