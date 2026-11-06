@@ -267,10 +267,7 @@ enum BandsLayout {
   /// "of 7 days", "of 5 hours", "of 7 days · Fable", "of credits".
   static func windowOf(_ window: MeterWindow) -> String {
     if window.budget { return "of credits" }
-    let part = window.line.group.map { group in
-      group.label.hasSuffix(" only") ? String(group.label.dropLast(" only".count)) : group.label
-    }
-    return "of \(window.lengthWords)\(part.map { " · \($0)" } ?? "")"
+    return "of \(window.lengthWords)\(window.line.group.map { " · \($0.word)" } ?? "")"
   }
 
   /// What the middle says under a plan at full size, and the end of its words.

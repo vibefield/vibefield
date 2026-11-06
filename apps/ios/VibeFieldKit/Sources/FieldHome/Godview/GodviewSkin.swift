@@ -5,8 +5,9 @@ import SwiftUI
 // `GodviewStageInput.skin`. No `#if`: Release compiles it, and it is SwiftUI alone, so the host loop builds it.
 //
 // The skin's other four names are not colours, and the kit names them already: `--vf-ease-island` is
-// `FieldMotion.island(_:)`, `--vf-ease-pop` is `FieldMotion.popCurve` (`--vf-ease-lift` is read by the swarm's bloom
-// alone, inline), and `--vf-font-sans` is `ChromeType.sans(_:_:)`, the system's face.
+// `FieldMotion.island(_:)`, `--vf-ease-pop` is `FieldMotion.popCurve`, `--vf-ease-lift` is `FieldMotion.lift(_:)`
+// (the swarm's bloom and the held face read it; until UM-4's review the bloom spelled it inline, and this said so),
+// and `--vf-font-sans` is `ChromeType.sans(_:_:)`, the system's face.
 
 /// The skin, resolved for one look. A view reads a colour by the SDK's own name (`--panel-bg` is `panelBg`), never
 /// a literal.

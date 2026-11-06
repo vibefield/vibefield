@@ -266,8 +266,9 @@ struct UsageLine: Equatable, Sendable {
     let id: String
     let label: String
 
-    /// How the group is said beside a figure. A STUB (the U3 review's red): its label as the adapter wrote it.
-    var word: String { label }
+    /// How the group is said beside a figure: its label without the adapter's " only" ("Fable only" is "Fable"), as
+    /// a circle's middle ("of 7 days · Fable") and a bud ("95% · OPUS") say it.
+    var word: String { label.hasSuffix(" only") ? String(label.dropLast(" only".count)) : label }
   }
 
   let id: String

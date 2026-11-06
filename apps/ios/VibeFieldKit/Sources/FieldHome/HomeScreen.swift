@@ -129,8 +129,9 @@ public struct HomeScreen: View {
   @State private var meters = MetersFeed()
   @State private var lens = ProfileLens()
   @State private var agentProfilesOpen = false
-  /// UM-4 (UM-D24 A) — the held face while a hold stands, and where the corner's face stands in the window.
-  @State private var held: FaceHold.Held?
+  /// UM-4 (UM-D24 A) — the held face's standing (a let-go or a hold taken away closes it), and where the corner's
+  /// face stands in the window.
+  @State private var faceHold = FaceHold.Stand()
   @State private var faceCentre: CGPoint = .zero
   @State private var chatLedger = ThreadLedger()
   /// IOS-12c — the spark whose thread stands on Chat (pushed in Chat's own stack), or none: the bar steps aside for
@@ -958,7 +959,7 @@ public struct HomeScreen: View {
   /// The note, 12 above the bar's row, while another page stands (search keeps the bar's place).
   @ViewBuilder
   private var chatNoteOverlay: some View {
-    if let spark = chatNote, selectedTab != .chat, selectedTab != .search, !accountMenuOpen {
+    if let spark = chatNote, selectedTab != .chat, selectedTab != .search, !accountMenuOpen, faceHold.held == nil {
       ChatNoteView(spark: spark) {
         chatNote = nil
         selectedTab = .chat
@@ -996,12 +997,16 @@ public struct HomeScreen: View {
   // MARK: - UM-4: the meters
 
   /// The meters' hooks, on an invisible view of their own as Chat's are: the door follows the home, the field, the
-  /// foreground and the mock's standing; the lens follows the home's profiles.
+  /// foreground and the mock's standing; the lens follows the home's profiles; and a hold standing as the app leaves
+  /// the foreground is taken away.
   private var metersHooks: some View {
     Color.clear
       .onChange(of: linkHome, initial: true) { syncMetersDoor() }
       .onChange(of: link?.fieldIsLive) { syncMetersDoor() }
-      .onChange(of: scenePhase) { syncMetersDoor() }
+      .onChange(of: scenePhase) { _, phase in
+        syncMetersDoor()
+        if phase != .active { cancelHold() }
+      }
       #if DEBUG
         .onChange(of: mockActive) { syncMetersDoor() }
         .onChange(of: mockDesktopIsUp) { syncMetersDoor() }
@@ -1248,6 +1253,7 @@ public struct HomeScreen: View {
         begin: { beginHold() },
         move: { moveHold(to: $0) },
         end: { endHold() },
+        cancel: { cancelHold() },
         actions: FaceHold.actions(meters.reading.profiles),
         perform: { performHoldAct($0) })
     )
@@ -1258,7 +1264,7 @@ public struct HomeScreen: View {
   /// The held face over the whole screen, above the tabs, while a hold stands.
   @ViewBuilder
   private var faceHoldOverlay: some View {
-    if let held {
+    if let held = faceHold.held {
       FaceHoldOverlay(
         held: held, reading: meters.reading, now: meters.clock(), home: metersHomeName, face: accountFace,
         seed: accountSeed)
@@ -1269,23 +1275,27 @@ public struct HomeScreen: View {
   /// The hold completed: the held face opens on the hub, and the home's profiles are read again.
   private func beginHold() {
     meters.open()
-    held = FaceHold.Held(face: faceCentre, reach: .hub)
+    faceHold.open(face: faceCentre)
   }
 
   /// The finger moved: what it reaches now, the buds standing in the home's order.
   private func moveHold(to finger: CGPoint) {
-    guard var next = held else { return }
-    let reach = FaceHold.reach(finger, face: next.face, profiles: meters.reading.profiles.map(\.id))
-    guard reach != next.reach else { return }
-    next.reach = reach
-    held = next
+    faceHold.move(finger, profiles: meters.reading.profiles.map(\.id))
   }
 
   /// Let go: the lens takes the reach (a bud, every profile, or as it was), and the held face fades.
   private func endHold() {
-    guard let last = held else { return }
-    lens.letGo(last.reach)
-    withAnimation(FieldMotion.plainEase(reduceMotion ? 0.09 : 0.18)) { held = nil }
+    var after = faceHold
+    guard let release = after.letGo() else { return }
+    lens.letGo(release)
+    withAnimation(FieldMotion.plainEase(reduceMotion ? 0.09 : 0.18)) { faceHold = after }
+  }
+
+  /// The hold was taken away (a call, Control Center, the face replaced, the app leaving): the held face fades, and
+  /// the field stays as it was.
+  private func cancelHold() {
+    guard faceHold.held != nil else { return }
+    withAnimation(FieldMotion.plainEase(reduceMotion ? 0.09 : 0.18)) { faceHold.cancel() }
   }
 
   /// VoiceOver's acts in place of the hold.
@@ -1637,7 +1647,7 @@ public struct HomeScreen: View {
           if let reach = FaceHold.mockReach(ProcessInfo.processInfo.arguments) {
             Task {
               try? await Task.sleep(for: .milliseconds(800))
-              held = FaceHold.Held(face: faceCentre, reach: reach)
+              faceHold.held = FaceHold.Held(face: faceCentre, reach: reach)
             }
           }
           if let open = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("-vf-mock-project=") }) {

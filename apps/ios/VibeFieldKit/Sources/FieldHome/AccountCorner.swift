@@ -59,6 +59,8 @@ struct AccountCornerView: View {
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   /// The hold has opened the held face and the finger is still down.
   @State private var holding = false
+  /// The hold's press, as its gesture says it: SwiftUI resets it when the gesture is over, let go or taken away.
+  @GestureState private var pressing = false
 
   var body: some View {
     if face.control == .signIn {
@@ -168,6 +170,8 @@ struct AccountCornerView: View {
 
   /// The face: a tap grows or folds the menu; UM-4 — a hold (while the menu is closed) opens the held face instead,
   /// which is why it is a tap gesture after the hold's rather than a Button, whose tap would fire on the hold's let-go.
+  /// Where no hold is offered (none handed in, or the menu open) the face takes the plain tap alone, so a long press
+  /// still folds or grows the menu.
   private var faceButton: some View {
     ZStack {
       switch face.control {
@@ -183,7 +187,16 @@ struct AccountCornerView: View {
     }
     .frame(width: Self.circle, height: Self.circle)
     .contentShape(Circle())
-    .gesture(holdGesture.exclusively(before: TapGesture().onEnded { onToggle() }))
+    .gesture(holdGesture.exclusively(before: tap), including: offersHold ? .all : .subviews)
+    .gesture(tap, including: offersHold ? .subviews : .all)
+    .onChange(of: pressing) { _, pressed in
+      guard !pressed else { return }
+      // the press is over: a let-go has had its `onEnded` by the next turn (the reset comes before or after it), so
+      // a hold still standing then was taken away, which SwiftUI ends with no `onEnded` at all
+      Task { @MainActor in loseHold() }
+    }
+    // the face replaced mid-hold (it turns into the Sign in circle)
+    .onDisappear { loseHold() }
     .onGeometryChange(for: CGPoint.self) { proxy in
       let frame = proxy.frame(in: .global)
       return CGPoint(x: frame.midX, y: frame.midY)
@@ -210,11 +223,22 @@ struct AccountCornerView: View {
     return face.name.isEmpty ? "Account" : "\(face.name): account"
   }
 
+  /// The menu's tap: grow it, or fold it.
+  private var tap: some Gesture {
+    TapGesture().onEnded { onToggle() }
+  }
+
+  /// A hold is offered while one is handed in and the menu is closed.
+  private var offersHold: Bool { hold != nil && !isOpen }
+
   /// UM-4 — the hold: 520 ms within 10 of slop opens the held face, the finger then reaches, and letting go releases
-  /// it. A shorter touch fails it, and the tap is the menu's. Not while the menu is open.
+  /// it. A shorter touch fails it, and the tap is the menu's. Not while the menu is open (`offersHold`).
   private var holdGesture: some Gesture {
     LongPressGesture(minimumDuration: FaceHold.hold, maximumDistance: FaceHold.slop)
       .sequenced(before: DragGesture(minimumDistance: 0, coordinateSpace: .global))
+      .updating($pressing) { value, state, _ in
+        if case .second(true, _) = value { state = true }
+      }
       .onChanged { value in
         guard let hold, !isOpen, case .second(true, let drag) = value else { return }
         if !holding {
@@ -228,6 +252,13 @@ struct AccountCornerView: View {
         holding = false
         hold?.end()
       }
+  }
+
+  /// A hold that opened and was never let go is taken away: the held face closes, and nothing is let go.
+  private func loseHold() {
+    guard holding else { return }
+    holding = false
+    hold?.cancel()
   }
 
   /// You, beside the face: the name, and the login line or the connection's

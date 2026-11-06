@@ -35,25 +35,32 @@ enum FaceHold {
     var reach: ProfileLens.Release
   }
 
-  /// The held face's standing on HomeScreen. A STUB (the U3 review's red): only a let-go closes it, as HomeScreen
-  /// held it.
+  /// The held face's standing on HomeScreen (the U3 review): it opens when the hold completes, follows the finger's
+  /// reach, and closes two ways — a let-go, whose reach the lens takes, once; or a hold the system takes away (an
+  /// incoming call, Control Center, the face replaced mid-hold, the app leaving), which lets nothing go. SwiftUI calls
+  /// a gesture's `onEnded` only when it succeeds, so the corner reports the second itself (`FaceHoldActs.cancel`).
   struct Stand: Equatable {
+    /// the held face on screen, while a hold stands
     var held: Held?
 
+    /// The hold completed: the held face opens on the hub.
     mutating func open(face: CGPoint) { held = Held(face: face, reach: .hub) }
 
+    /// The finger moved: what it reaches now, the buds standing in the home's order.
     mutating func move(_ finger: CGPoint, profiles: [String]) {
       guard let face = held?.face else { return }
       let reach = FaceHold.reach(finger, face: face, profiles: profiles)
       if reach != held?.reach { held?.reach = reach }
     }
 
+    /// Let go: the held face closes, and its reach is the lens's (nil when no hold stands).
     mutating func letGo() -> ProfileLens.Release? {
       defer { held = nil }
       return held?.reach
     }
 
-    mutating func cancel() {}
+    /// The hold was taken away: the held face closes, and the field stays as it was.
+    mutating func cancel() { held = nil }
   }
 
   /// Where a bud stands about the face: its spoke's angle and reach, and the point they make.
@@ -104,8 +111,10 @@ enum FaceHold {
     }
   }
 
-  /// What a finger at `finger` reaches, the profiles' buds standing in their order.
+  /// What a finger at `finger` reaches, the profiles' buds standing in their order. With one profile no bud is drawn
+  /// and letting go anywhere only closes, so the finger reaches the hub alone — no selection tick on nothing.
   static func reach(_ finger: CGPoint, face: CGPoint, profiles: [String]) -> ProfileLens.Release {
+    guard profiles.count > 1 else { return .hub }
     let fromFace = hypot(Double(finger.x - face.x), Double(finger.y - face.y))
     if fromFace < hubReach { return .hub }
     let near = zip(profiles, spots(profiles.count, face: face))
@@ -124,43 +133,58 @@ enum FaceHold {
   }
 
   /// The words over the held face (§9 "The meters' words"): with one profile "Usage" over its reads; with several,
-  /// the reach's — Show all, Show ‹profile›, or Cancel on open ground.
+  /// the reach's — Show all, Show ‹profile›, or Cancel on open ground. While the home's usage is not read, the line
+  /// says so in the page's words (§9 "The page": "‹home› doesn't share usage yet" on the page and the hold, "Usage
+  /// unavailable", "Reading usage…"), never "none need you" over nothing read; the big words stay, so the let-go reads.
   static func words(_ reading: MetersReading, reach: ProfileLens.Release, home: String, now: Date) -> Words {
     let profiles = reading.profiles
+    let unread = unreadLine(reading, home: home)
     guard profiles.count > 1 else {
-      return Words(verb: nil, rest: "Usage", line: reads(reading.meters(of: profiles.first?.id, now: now)))
+      return Words(
+        verb: nil, rest: "Usage", line: unread ?? reads(reading.meters(of: profiles.first?.id, now: now)))
     }
     switch reach {
     case .hub:
-      return Words(verb: "Show", rest: "all", line: "\(reads(reading.meters(of: nil, now: now))) · every profile")
+      return Words(
+        verb: "Show", rest: "all", line: unread ?? "\(reads(reading.meters(of: nil, now: now))) · every profile")
     case .bud(let id):
       guard let set = profiles.first(where: { $0.id == id }) else { return cancel }
-      return Words(verb: "Show", rest: set.label, line: reads(reading.meters(of: id, now: now)))
+      return Words(verb: "Show", rest: set.label, line: unread ?? reads(reading.meters(of: id, now: now)))
     case .open:
       return cancel
     }
   }
 
+  /// The line while the home's usage is not read: refused, unavailable, or its first read still out; nil once read.
+  private static func unreadLine(_ reading: MetersReading, home: String) -> String? {
+    switch reading.usage {
+    case .notShared: return "\(home) doesn't share usage yet"
+    case .unavailable: return "Usage unavailable"
+    case .waiting, .batch: return reading.firstRead ? "Reading usage…" : nil
+    }
+  }
+
   private static let cancel = Words(verb: nil, rest: "Cancel", line: "let go here to leave the field as it is")
 
-  /// "3 read · none need you", "1 read · 2 need you".
+  /// "3 read · none need you", "0 read · 1 needs you", "1 read · 2 need you" (§9 "The phone's hold").
   static func reads(_ meters: ProfileMeters) -> String {
     let read = meters.entries.filter { $0.kind == .reading }.count
     let needs = meters.entries.filter { $0.kind == .needsYou }.count
-    return "\(read) read · \(needs == 0 ? "none need you" : "\(needs) need you")"
+    let need = needs == 0 ? "none need you" : needs == 1 ? "1 needs you" : "\(needs) need you"
+    return "\(read) read · \(need)"
   }
 
-  /// A bud's label: the profile's name over its tightest percent and window, READING while a first read is out, or
-  /// NO METER; in the attention ink when it runs hot.
+  /// A bud's label: the profile's name over its tightest percent and window (a model's own week by its group's word,
+  /// "95% · OPUS"), READING while a first read is out, or NO METER; in the attention ink when it runs hot.
   static func budLabel(_ set: AgentProfileSet, reading: MetersReading, now: Date) -> BudLabel {
     let meters = reading.meters(of: set.id, now: now)
     if let tightest = meters.tightest, let read = tightest.reading {
       let line = read.tightest.line
       return BudLabel(
-        name: set.label, state: "\(wholeWords(line.usedPercent))% · \(line.group?.label ?? line.label)".uppercased(),
+        name: set.label, state: "\(wholeWords(line.usedPercent))% · \(line.group?.word ?? line.label)".uppercased(),
         hot: tightest.hot)
     }
-    let firstRead = reading.usage == .waiting || meters.entries.contains { $0.kind == .firstRead }
+    let firstRead = reading.firstRead || meters.entries.contains { $0.kind == .firstRead }
     return BudLabel(name: set.label, state: firstRead ? "READING" : "NO METER", hot: false)
   }
 

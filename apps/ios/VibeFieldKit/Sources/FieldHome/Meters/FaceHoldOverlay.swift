@@ -24,6 +24,9 @@ struct FaceHoldActs {
   let move: (CGPoint) -> Void
   /// let go
   let end: () -> Void
+  /// the hold was taken away before a let-go (a call, Control Center, the system taking the touch, the face
+  /// replaced): the held face closes and nothing is let go
+  let cancel: () -> Void
   /// what VoiceOver offers in place of the hold
   let actions: [FaceHold.Action]
   let perform: (FaceHold.Act) -> Void
@@ -39,7 +42,7 @@ struct FaceHoldOverlay: View {
   let seed: String
 
   /// §6's lift (`--vf-ease-lift`, 180 ms), as the spawn bloom's buds take it.
-  static let lift = Animation.timingCurve(0.2, 0.9, 0.3, 1.2, duration: 0.18)
+  static let lift = FieldMotion.lift(0.18)
   static let veil = 0.82
   static let wordsTop: CGFloat = 112
   static let circle: Double = 206

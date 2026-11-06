@@ -43,6 +43,16 @@ public enum FieldMotion {
   public static let popCurve = UnitCurve.bezier(
     startControlPoint: UnitPoint(x: 0.34, y: 1.45), endControlPoint: UnitPoint(x: 0.64, y: 1))
 
+  /// §6's lift, `--vf-ease-lift`, `cubic-bezier(0.2, 0.9, 0.3, 1.2)` (180ms): a
+  /// lift, its slight overshoot the "held" — the spawn bloom's hot bud, the held
+  /// face's reached bud (UM-4, the U3 review: it was spelled as a literal twice).
+  public static let liftCurve = UnitCurve.bezier(
+    startControlPoint: UnitPoint(x: 0.2, y: 0.9), endControlPoint: UnitPoint(x: 0.3, y: 1.2))
+
+  public static func lift(_ duration: Double) -> Animation {
+    .timingCurve(liftCurve, duration: duration)
+  }
+
   /// The working body's breath (the shadow and the mark, 3 s) — the swarm's
   /// shaders carry it; the dictation key borrows the period.
   public static let breathePeriod: Double = 3.0

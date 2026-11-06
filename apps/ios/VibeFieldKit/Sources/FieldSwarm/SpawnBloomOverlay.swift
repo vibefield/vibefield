@@ -146,7 +146,7 @@ struct SpawnBloomOverlay: View {
     .animation(
       reduceMotion ? .easeOut(duration: 0.09) : .timingCurve(0.34, 1.45, 0.64, 1, duration: BloomConstants.pop / 1000)
         .delay(rank * BloomConstants.stagger / 1000), value: appeared)
-    .animation(reduceMotion ? nil : .timingCurve(0.2, 0.9, 0.3, 1.2, duration: BloomConstants.lift / 1000), value: hot)
+    .animation(reduceMotion ? nil : FieldMotion.lift(BloomConstants.lift / 1000), value: hot)
     label(item: item, index: index, ring: ring, dimmed: dimmed)
       .opacity(appeared ? (dimmed ? 0.58 : 1) : 0)
       .animation(
