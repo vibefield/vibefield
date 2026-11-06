@@ -1,3 +1,4 @@
+import FieldDesign
 import Testing
 
 @testable import FieldMesh
@@ -18,6 +19,21 @@ import Testing
     FieldDesktop(
       deviceId: "dev-studio", name: "studio", platform: "darwin", state: .ready,
       feed: FieldFeedSource.none, fieldRefusal: reason)
+  }
+
+  /// L4's word pass (2026-11-06): the refusal of a board this device cannot read is the corner's sentence
+  /// (`fieldRefusal`), so it names the device as its platform does, never a phone.
+  @Test func anUnreadBoardNamesTheDevice() {
+    struct Unreadable: Error {}
+    for here in [DeviceWord.iPad, .unknown] {
+      let reason = FieldLink.boardRefusal(Unreadable(), here: here)
+      #expect(!reason.localizedCaseInsensitiveContains("phone"), "\(here): \(reason)")
+    }
+    #expect(
+      FieldLink.boardRefusal(Unreadable(), here: .iPad).hasPrefix("it answered a board this iPad cannot read as the mesh: "))
+    #expect(
+      FieldLink.boardRefusal(Unreadable(), here: .iPhone)
+        .hasPrefix("it answered a board this iPhone cannot read as the mesh: "))
   }
 
   /// ONE PREDICATE. The token, the chip's contrast and the corner's subject all
