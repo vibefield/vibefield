@@ -3087,6 +3087,16 @@ const STUCK = [
   "",
 ].join("\n");
 
+/** Two steps at once: A with a form, whose second miss holds the run on the person (CP4-Q7 (a)), and B. */
+const HELD_TWO = [
+  'export const meta = { name: "Held" };',
+  "export default async function () {",
+  `  const [a, b] = await Promise.all([agent("look at a", { ...${stepAt("A")}, schema: ${FORM} }), agent("look at b", ${stepAt("B")})]);`,
+  "  log(a.verdict + b.text);",
+  "}",
+  "",
+].join("\n");
+
 describe("CP-4a2b — the host's life: parked and woken, and D2's lookup at a wake (§13a slice 10a)", () => {
   /** Whether host `i` the runs started has left. */
   const left = (h: Harness, i: number): boolean => h.hosts[i]?.leftAt !== undefined;
@@ -3367,5 +3377,41 @@ describe("CP-4a2b — the host's life: parked and woken, and D2's lookup at a wa
       " ",
     );
     expect(design).toContain(`"${words.leftTwice("‹flow›")}"`);
+  });
+
+  // step 1p (the 10a review, TT1; ruled 2026-11-06): a run at rest, its host gone, reads `holding` while the person
+  // holds it, on every road that rests it, as #park's road reads it
+
+  it("TT1 (the 10a review): a held run woken while HOSTS_LIVE_MAX hosts run waits its turn reading holding, never waiting", async () => {
+    const max = FLOW_LIMITS.HOSTS_LIVE_MAX;
+    const h = await harness({ hostIdleMs: IDLE_MS });
+    h.approved("held", HELD_TWO);
+    const run = startedRun(await h.start({ flow: "held" })).run;
+    await waitFor(() => expect(h.enqueued).toHaveLength(2));
+    const a = sessionOf(h, run, 1);
+    const missed = { run, call: 1, runtimeRunId: a, outcome: "completed" } as const;
+    h.endTurn({ ...missed, turn: "t1", text: "no json here" });
+    await within(PARK_MS, () => h.enqueued.length === 3);
+    h.endTurn({ ...missed, turn: "t2", text: "still none" });
+    // held on the person and parked; then every host taken, by runs with no call out, which never park
+    await within(PARK_MS, () => h.items.length === 1 && left(h, 0));
+    h.approved("stuck", STUCK);
+    for (let i = 0; i < max; i += 1) await h.start({ flow: "stuck" });
+    await within(PARK_MS, () => h.hosts.length === max + 1);
+    answerStep(h, run, 2, "b");
+    await within(PARK_MS, () => answersOf(h, run).length === 1);
+    const held = h.records.runRecord(run)?.held?.kind;
+    const queued = { state: stateOf(h, run), hosts: h.hosts.length, held };
+    expect(queued).toEqual({ state: "holding", hosts: max + 1, held: "flow-repair" });
+  });
+
+  it("TT1 (at the 10a review): a held run whose host left on its own reads holding, never waiting", async () => {
+    const h = await harness({ hostIdleMs: 600_000 });
+    const run = await heldOnRepair(h);
+    h.hosts[0]?.child.kill("SIGKILL");
+    await within(PARK_MS, () => left(h, 0) && stateOf(h, run) !== "running");
+    const held = h.records.runRecord(run)?.held?.kind;
+    const rests = { state: stateOf(h, run), hosts: h.hosts.length, held };
+    expect(rests).toEqual({ state: "holding", hosts: 1, held: "flow-repair" });
   });
 });
