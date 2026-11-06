@@ -168,12 +168,12 @@ struct SpawnBloomOverlay: View {
     }
   }
 
-  /// A profile's glyph: its own when the system has it, the person otherwise.
+  /// A profile's glyph, through the phone's one table (UM-4, ruling 20: `ProfileGlyphSymbols`): This Mac's laptop, a
+  /// token's symbol, the star for a token this build does not draw. The default stays outlined here: the bud says it
+  /// by its weight. (Until UM-4 a token was drawn as an SF Symbol of the same name when there was one, and a person
+  /// otherwise.)
   static func symbol(_ profile: BloomProfile?) -> String {
-    guard let glyph = profile?.glyph, UIImage(systemName: glyph) != nil else {
-      return profile?.id == "native" ? "laptopcomputer" : "person.crop.circle"
-    }
-    return glyph
+    ProfileGlyphSymbols.symbol(glyph: profile?.glyph, native: profile?.id == "native", filled: false)
   }
 
   /// The words above a bud: the name over its state line, at the box the

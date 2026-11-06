@@ -556,8 +556,6 @@ enum BandsLayout {
   /// hot dot, and the words.
   static func geometry(_ size: Double, _ entries: [PlanMeter], _ options: BandsOptions = BandsOptions()) -> BandsGeometry
   {
-    // RED STUB (UM-4 PH-2): no plan, no centre, no words
-    return BandsGeometry(size: size, level: -1, centre: .init(x: 0, y: 0, r: 0, items: []), plans: [], label: "")
     let sized = levelOf(size)
     let level = options.around != nil ? min(2, sized) : sized
     let c = size / 2

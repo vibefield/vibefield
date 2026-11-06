@@ -21,13 +21,20 @@ struct MeterCatalog: Equatable, Sendable {
   let rows: [AgentCatalogRow]
 
   /// The catalog's place for an agent; one the catalog has no row for stands after every row.
-  func rank(_ provider: String) -> Int { -1 }
+  func rank(_ provider: String) -> Int {
+    rows.firstIndex { $0.id == provider } ?? rows.count
+  }
 
   /// The catalog's name for an agent, or its id: a newer desktop's agent is carried, never renamed.
-  func name(_ provider: String) -> String { "" }
+  func name(_ provider: String) -> String {
+    rows.first { $0.id == provider }?.label ?? provider
+  }
 
   /// Whether a reading comes for an account this agent signs in to.
-  func readsUsage(_ provider: String) -> Bool { true }
+  func readsUsage(_ provider: String) -> Bool {
+    guard let row = rows.first(where: { $0.id == provider }) else { return false }
+    return Self.offered.contains(row.status) && row.offersUsage
+  }
 
   /// `AGENT_OFFERED_STATUSES`: a deprecated row is shown and offers nothing new.
   static let offered: Set<String> = ["supported", "preview"]
@@ -51,7 +58,6 @@ enum MeterRules {
   enum ResetForm: String, Sendable { case length, day, now }
 
   static func resetForm(resetIn: Double?) -> ResetForm? {
-    return nil  // RED STUB (UM-4 PH-2): the green transcribes rules.ts
     guard let resetIn else { return nil }
     if resetIn <= 0 { return .now }
     return roundedAsJS(resetIn) >= resetByDayMinutes ? .day : .length
@@ -60,7 +66,6 @@ enum MeterRules {
   /// The record's rule (`isHot`): orange at 100 or more; with no pace to judge, at 80 or more; else when some time
   /// has gone and it is past 40 and running more than 1.05 times ahead of it.
   static func isHot(used: Double, elapsed: Double?) -> Bool {
-    return false  // RED STUB
     if used >= 100 { return true }
     guard let elapsed else { return used >= 80 }
     return elapsed > 0 && used > 40 && used / elapsed > 1.05
@@ -68,7 +73,6 @@ enum MeterRules {
 
   /// A window's length as a person says it ("7 days", "5 hours"), or its label when it names none.
   static func windowWords(label: String, durationMinutes: Int?) -> String {
-    return ""  // RED STUB
     guard let minutes = durationMinutes, minutes > 0 else { return label }
     if minutes % 1440 == 0 { return counted(minutes / 1440, "day") }
     if minutes % 60 == 0 { return counted(minutes / 60, "hour") }
@@ -81,7 +85,6 @@ enum MeterRules {
 
   /// A length as the drawing says it: "45m", "2h 10m", "3d 4h".
   static func durationWords(_ minutes: Double) -> String {
-    return ""  // RED STUB
     let whole = Int(roundedAsJS(minutes))
     if whole < 60 { return "\(max(1, whole))m" }
     if whole < 24 * 60 {
@@ -114,7 +117,6 @@ enum MeterRules {
   /// read before its reset. Both press 0 at that tie (a running window at 0%), so a passed window ranks below every
   /// running window, an empty one too; equals of one kind keep their order (rules.ts' `outranks`).
   static func outranks(_ a: MeterWindow, _ b: MeterWindow) -> Bool {
-    return false  // RED STUB
     if a.pressure != b.pressure { return a.pressure > b.pressure }
     return !a.passed && b.passed
   }
@@ -130,7 +132,6 @@ enum MeterRules {
   /// Settings' reset words: "2h 10m" under a day, its weekday and clock from a day on (the phone's own zone and
   /// locale, as Settings says it in the desktop's), "now" once it has passed.
   static func resetWords(at: Date, now: Date) -> String {
-    return ""  // RED STUB
     let ms = (at.timeIntervalSince1970 - now.timeIntervalSince1970) * 1000
     if ms <= 0 { return "now" }
     let minutes = Int(roundedAsJS(ms / 60_000))
@@ -150,7 +151,6 @@ enum MeterRules {
   /// UM-D4 — the forecast: at this pace the window is spent before it resets. Never for a budget, a window already
   /// spent, one whose length, time gone or reset is unknown, or one not ahead of pace.
   static func forecast(_ window: ForecastInput) -> MeterForecast? {
-    return nil  // RED STUB
     guard !window.budget, let length = window.durationMinutes, let elapsed = window.elapsedPercent,
       let resetIn = window.resetIn
     else { return nil }
@@ -209,7 +209,6 @@ enum PlanTitles {
   /// "Claude Max", "ChatGPT Pro", "SuperGrok" (a label that names the product stands alone), the product alone when
   /// no plan was reported ("Kimi").
   static func title(service: AgentSignInService, plan: String?) -> String {
-    return ""  // RED STUB
     let product = products[service.id] ?? service.label
     let words = plan.map(planWords) ?? ""
     if words.isEmpty { return product }
@@ -427,8 +426,7 @@ enum MeterModel {
 
   /// The reading that belongs to a sign-in: its own row, or — for an agent's own folder — the unkeyed row.
   static func usageOf(_ rows: [AgentAccountUsageEntry], _ persona: AgentPersona) -> AgentAccountUsageEntry? {
-    return nil  // RED STUB
-    return rows.first { entry in
+    rows.first { entry in
       entry.provider == persona.provider
         && (entry.profileId == persona.profileId || (persona.kind == "native-default" && entry.profileId == nil))
     }
@@ -658,7 +656,6 @@ enum MeterModel {
   static func planMeters(
     _ set: AgentProfileSet, rows: [AgentAccountUsageEntry], now: Date, options: MetersOptions
   ) -> ProfileMeters {
-    return ProfileMeters(entries: [], tightest: nil, hot: false)  // RED STUB
     let listed = set.personas.filter { persona in
       set.kind != "native" || options.installed == nil || options.installed?.contains(persona.provider) == true
         || persona.signingIn
@@ -683,8 +680,7 @@ enum MeterModel {
 
   /// Ruling 7 (AO-D14) — a profile stands on a circle unless it is a draft no agent has signed in to yet.
   static func hasCircle(_ set: AgentProfileSet) -> Bool {
-    return false  // RED STUB
-    return !set.draft || set.personas.contains { $0.identity?.loggedIn == true }
+    !set.draft || set.personas.contains { $0.identity?.loggedIn == true }
   }
 
   /// Which plan of another profile is this one: the same company and account, or the same borrowed sign-in.
@@ -703,7 +699,6 @@ enum MeterModel {
   static func everyPlan(
     _ sets: [AgentProfileSet], rows: [AgentAccountUsageEntry], now: Date, options: MetersOptions
   ) -> ProfileMeters {
-    return ProfileMeters(entries: [], tightest: nil, hot: false)  // RED STUB
     struct Held {
       var entry: PlanMeter
       let key: String

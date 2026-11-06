@@ -76,7 +76,7 @@ public struct AgentCatalogRow: Sendable, Equatable, Decodable, Identifiable {
     var offers = object.object("offers")
     canSpawn = offers.bool("spawn") == true
     canResume = offers.bool("resume") == true
-    offersUsage = false
+    offersUsage = offers.bool("usage") == true
     unknownFields = object.unknownFields
   }
 
