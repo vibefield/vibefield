@@ -35,6 +35,7 @@ import { createGodviewMonitorFeed } from "../../src/godview/monitor/model-replic
 import type { ModelBoardPort } from "../../src/godview/monitor/remote-door";
 import { boardJoins, boardJoinsKey } from "../../src/godview/monitor/window-local";
 import { createRowOrder, createWindowRows } from "../../src/godview/monitor/window-rows";
+import type { BandsOptions } from "../../src/usage/bands";
 
 /**
  * PG-3a (Q-J1 (a), James 2026-11-01 03:55Z) — THE PHONE'S GOLDENS, COMPUTED: what the home's
@@ -125,6 +126,31 @@ export const PHONE_VIEW_MIRROR = "apps/ios/VibeFieldKit/Tests/FieldHomeTests/Fix
 export const PHONE_TOOLKIT_GOLDEN = "phone-toolkit.golden.json";
 /** PG-4t (Q3 (a)) — the views' faces as the registry's manifests carry them: what the phone's Stories row draws */
 export const PHONE_MARKS_GOLDEN = "phone-marks.golden.json";
+/** UM-1 (UM-D16 E; UM-D3, D4, D13, D15) — the meters and the Bands circles over the contracts' profiles and usage:
+ * what the phone's meter model and Bands layout (FieldHome/Meters, UM's U3 lane) are held to */
+export const PHONE_BANDS_GOLDEN = "phone-bands.golden.json";
+export const PHONE_BANDS_INPUTS = [
+  "agents-profile-sets.valid.json",
+  "agent-usage.valid.json",
+] as const;
+/** The bands golden's fixed now: the last day of the fixtures' week, so every reset they name is said as a length or
+ * "now", never by its day and clock (`resetWords`' "Thu 09:00" is the reader's zone and locale). */
+export const PHONE_BANDS_NOW = "2026-09-16T12:00:00.000Z";
+/** The sizes the ruled drawing draws a profile's circle at (draft/profile-meters/round4/src/p4f-frames.js). */
+export const PHONE_BANDS_SIZES: ReadonlyArray<{
+  size: number;
+  where: string;
+  options: BandsOptions;
+}> = [
+  { size: 26, where: "the Me menu's Agent Profiles row", options: { centre: "none" } },
+  {
+    size: 54,
+    where: "a profile's bud in the held face's bloom",
+    options: { centre: "glyph", hotDot: true },
+  },
+  { size: 206, where: "the held face's own circle", options: {} },
+  { size: 212, where: "the desktop's popover and the Agent Profiles page", options: { hit: true } },
+];
 /** this folder: where a view lane's `phone-goldens-<view>.ts` lives */
 export const PHONE_GOLDENS_LIB_DIR = import.meta.dirname;
 
@@ -797,6 +823,11 @@ export function phoneMarksGolden(): Record<string, unknown> {
       mark: { viewBox: mark.viewBox, paths: [...mark.paths] },
     })),
   };
+}
+
+/** UM-1 (red): the bands golden is a stub until the green commit. */
+export function phoneBandsGolden(): Record<string, unknown> {
+  return {};
 }
 
 /** PG-4s — ONE WRITER OF EVERY PHONE GOLDEN: the fold and body goldens, the toolkit's, and one per registered view
