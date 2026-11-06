@@ -738,6 +738,11 @@ public final class FieldLink {
   /// while History already holds its door, and no forwarding through home.
   /// PJ-7: the launch sheet's profile and model reads, and History's Resume —
   /// each asked of the desktop it is about, never through the home.
+  /// *SP-7b's 7c-2 (2026-11-06; VF-PM ruled D-c2's fourth ask (b) at 23:43Z):
+  /// the card's ticket, its renewal and its Resume ride the home now
+  /// (`homeAsk`, D-c2's three). History's Resume, the `agent.resume` here,
+  /// stays on History's open reading door: it costs no extra socket. It moves
+  /// to the home when FW-R6's last half retires `openHistoryDoor`.*
   public static let workspaceMethods: Set<String> = [
     "workspace.roots", "workspace.list", "workspace.search", "agent.catalog", "agent.spawn",
     "agents.profileSets.list", "agent.models", "agent.resume",
