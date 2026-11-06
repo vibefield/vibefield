@@ -13,7 +13,9 @@ import Observation
 //
 // A home that refuses `agent.usage` (an older desktop: `FORBIDDEN_SCOPE`) is said, never drawn blank: the page and
 // the hold say "‹home› doesn't share usage yet" (§9). A door that cannot answer leaves "usage unavailable", the
-// dashed circles (ruling 10). Without a door the last word stands.
+// dashed circles (ruling 10), and is still watched — the stream's open snapshot repairs it when the home answers — and
+// asked again (cached, free) whenever a meter view opens. Without a door the last word stands; with no word yet it is
+// "usage unavailable" too, never a first read with no read in flight (the U3 review).
 
 /// What the meters know of the home.
 struct MetersReading: Equatable {
@@ -88,6 +90,9 @@ final class MetersFeed {
       next.connected = door != nil
       next.home = home
     }
+    // no door and no answer yet: nothing is being read, so it is unavailable — never a first read that never ends
+    // (ruling 10); the next door's read replaces it
+    if door == nil, next.usage == .waiting { next.usage = .unavailable }
     if next != reading { reading = next }
     guard door != nil else { return }
     readProfiles()
@@ -95,9 +100,12 @@ final class MetersFeed {
   }
 
   /// A meter view opened (the Me menu, the page, the hold): the home's profiles again, since a sign-in on the desktop
-  /// may have changed its plans.
+  /// may have changed its plans; and the cached usage again after a door that could not answer. Never after a refusal
+  /// (the home's answer), never while the first read is out (`waiting` with a door held is the attach's own ask), and
+  /// never fresh.
   func open() {
     readProfiles()
+    if reading.usage == .unavailable { readUsage() }
   }
 
   private func readProfiles() {
@@ -130,7 +138,9 @@ final class MetersFeed {
       }
       guard let self, asked == self.ask else { return }
       if self.reading.usage != usage { self.reading.usage = usage }
-      if case .batch = usage { self.watchUsage(door, asked: asked) }
+      // a batch is watched, and so is a door that could not answer: the stream opens on a snapshot, which repairs the
+      // batch when the home answers again. A refusal is the home's answer: nothing to watch.
+      if usage != .notShared, self.watch == nil { self.watchUsage(door, asked: asked) }
     }
   }
 
