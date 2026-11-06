@@ -160,8 +160,11 @@ struct SearchSheetContent: Equatable {
 
 /// SE-2 (SE-D3, SE-D4 and SE-D5 A; DESIGN.md §8 "The phone's search") — THE GLASS SHEET over the field: MA-D7's Apps
 /// strip before a word, the switch (Live now · Everything), the chips, the list (a typed name's offer, Everything's
-/// Apps group, the rows or the empty words) and the foot. Its glass is the bar's, one more shape in the bar's glass
-/// container (the caller's `GlassGroup`, `glass`); it stands as tall as what it holds, never past `maxHeight`.
+/// Apps group, the rows or the empty words) and the foot. Its glass is the bar's material, in a glass container of its
+/// own (the caller's `GlassGroup`): its foot stands 10 above the field, inside the bar's melt (12,
+/// `AppBar.meltSpacing`), so in the bar's container iOS 26 would melt it into the field — the profile token's reason
+/// (SE-2k, the S2 review's finding 6). Below iOS 26 it wears the page's recipe with its shadow (`ChromeShadow.sheet`).
+/// It stands as tall as what it holds, never past `maxHeight`.
 ///
 /// The two Apps slots are MA-6's seam (§8 "The phone's Apps", as amended by SE-D3): `appsStrip` stands above the
 /// switch in both scopes before any word and gives way once one is typed; `appsGroup` stands first among
@@ -170,7 +173,6 @@ struct PhoneSearchSheet<AppsStrip: View, AppsGroup: View>: View {
   let content: SearchSheetContent
   /// `SearchSheet.maxHeight(fieldTop:)`, from where the field stands.
   let maxHeight: CGFloat
-  let glass: Namespace.ID
   let onScope: (PhoneSearch.Scope) -> Void
   /// A chip tapped: its filter becomes a token.
   let onChip: (PhoneSearch.Filter) -> Void
@@ -194,8 +196,7 @@ struct PhoneSearchSheet<AppsStrip: View, AppsGroup: View>: View {
       foot
     }
     .clipShape(RoundedRectangle(cornerRadius: SearchSheet.radius, style: .continuous))
-    .liquidGlassPanel(radius: SearchSheet.radius)
-    .glassID("sheet", in: glass)
+    .liquidGlassPanel(radius: SearchSheet.radius, shadow: .sheet)
     .frame(maxHeight: maxHeight, alignment: .bottom)
   }
 

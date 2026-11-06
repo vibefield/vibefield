@@ -1212,11 +1212,11 @@ public struct HomeScreen: View {
       : screenHeight - AppBar.bottomGap(homeInset: homeInset) - AppBar.height
   }
 
-  /// The sheet, over the bar's row in the bar's glass container: 10 from the sides, its foot 10 above the field.
-  private var searchSheet: some View {
-    let content = searchContent
-    return PhoneSearchSheet(
-      content: content, maxHeight: SearchSheet.maxHeight(fieldTop: searchFieldTop), glass: barGlass,
+  /// The sheet over the bar's row, 10 from the sides, its foot 10 above the field: `content` is the render's one
+  /// composition (`barRow`'s), which the field's tokens and Return read too.
+  private func searchSheet(_ content: SearchSheetContent) -> some View {
+    PhoneSearchSheet(
+      content: content, maxHeight: SearchSheet.maxHeight(fieldTop: searchFieldTop),
       onScope: { scope in search.scope = scope },
       onChip: { filter in applySearchFilter(filter, in: content) },
       onOffer: { filter in
@@ -1307,9 +1307,9 @@ public struct HomeScreen: View {
     selectedTab = .history
   }
 
-  /// Return: the first row opens.
-  private func submitSearch() {
-    switch searchContent.rows {
+  /// Return: the first row of what the sheet shows opens.
+  private func submitSearch(_ content: SearchSheetContent) {
+    switch content.rows {
     case .live(let rows): if let first = rows.first { openLiveRow(first) }
     case .past(let rows): if let first = rows.first { openPastRow(first) }
     }
@@ -1385,12 +1385,22 @@ public struct HomeScreen: View {
 
   @ViewBuilder
   private var barRow: some View {
+    // SE-2 — search's content, composed once a render (it walks every session the phone holds): the sheet, the
+    // field's tokens and Return all read this one
+    let content = searchOpen ? searchContent : nil
     ZStack(alignment: .bottom) {
       if !searchOpen && !barFolded {
         accountCorner
           .padding(.leading, AppBar.margin)
           .frame(maxWidth: .infinity, alignment: .bottomLeading)
           .transition(.opacity)
+      }
+      // SE-2k — the sheet in a glass container of its own: its foot 10 above the field is inside the bar's melt (12),
+      // so in the bar's container iOS 26 would bridge it and the field into one shape (the profile token's reason).
+      // Its rise is its own transition, so it needs no morph.
+      if let content {
+        GlassGroup { searchSheet(content) }
+          .transition(SearchSheet.transition(reduceMotion: reduceMotion))
       }
       GlassGroup(spacing: AppBar.meltSpacing) {
         ZStack(alignment: .bottom) {
@@ -1401,15 +1411,12 @@ public struct HomeScreen: View {
           } else if let session = slotSession {
             sessionSlot(session)
           }
-          if searchOpen {
-            // SE-2 — the sheet is one more shape in the bar's glass container, over the field and its tokens
-            searchSheet
-              .transition(SearchSheet.transition(reduceMotion: reduceMotion))
+          if let content {
             SearchBarRow(
               query: $searchQuery, focus: $searchFocused, typing: barTyping, glass: barGlass,
-              tokens: searchContent.tokens,
+              tokens: content.tokens,
               onRemove: { filter in PhoneSearchWorld.remove(filter, state: &search, lens: &lens) },
-              onSubmit: submitSearch, onClose: closeSearch
+              onSubmit: { submitSearch(content) }, onClose: closeSearch
             )
             .padding(.horizontal, barTyping ? AppBar.marginTyping : AppBar.margin)
           } else if !accountMenuOpen {
