@@ -132,10 +132,10 @@ rules; they do not change the background polling intervals.
 *Corrected 2026-11-06 (UM-D8 A): `agent.usage` is not local-only now. The
 phone's tailnet preset holds it, so a self phone reads its home desktop's
 cached batch. A phone's `refresh: true` is answered from that cache and never
-takes a reading — with nothing cached yet, the one reading any cold read kicks
-(`AccountUsageService.snapshot`) — because Claude's endpoint is heavily rate
-limited (below) and the phone must not drive extra readings. The rows are in
-fieldd's `agent-usage-tailnet.test.ts`.*
+takes a reading — save, with nothing cached yet, the one reading any cold read
+kicks (`AccountUsageService.snapshot`) — because Claude's endpoint is heavily
+rate limited (below) and the phone must not drive extra readings. The rows are
+in fieldd's `agent-usage-tailnet.test.ts`.*
 
 ## Faster updates and external limits
 
