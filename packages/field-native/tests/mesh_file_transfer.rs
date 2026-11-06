@@ -1310,10 +1310,13 @@ async fn shutdown_ends_a_running_pull_and_leaves_no_temporaries() {
 /// on the second subId, and the first subId is quiet. The floor stops the
 /// first forwarder and waits for its end before it answers the second
 /// subscribe (`mgmt/file_transfer.rs`, `Stream::end`), so no line of the first
-/// can follow that answer; that order is argued at its source, and this row
-/// sees that one forwarder is left. It reads every line for QUIET past the
-/// pull's end: a second forwarder still alive would be woken by the same
-/// event and write within it.
+/// can follow that answer. That order, and the map's cleanup, are witnessed
+/// in the crate (`mgmt/file_transfer.rs`'s
+/// `a_replacing_subscribe_is_answered_once_the_old_forwarder_has_returned` and
+/// `a_stream_leaves_the_map_with_its_connection_or_its_refusal`); this row
+/// sees, through the facade, that one forwarder is left. It reads every line
+/// for QUIET past the pull's end: a second forwarder still alive would be
+/// woken by the same event and write within it.
 /// Probe: key `FileTransferStreams` by subId, so no subscribe replaces another
 /// (the floor before W3-20) → the pull's `completed` comes twice, once on the
 /// first subId, and the end's subId assert or the quiet assert reds.
@@ -1324,6 +1327,7 @@ async fn a_second_subscribe_on_one_connection_leaves_one_forwarder() {
     let first = mgmt.call(SUBSCRIBE, json!({})).await;
     let first_id = first["result"]["subId"].clone();
     let _: NativeFileTransferSnapshot = parse(&first["result"]["snapshot"]);
+    assert!(first_id.is_string(), "{first}");
     let second = mgmt.call(SUBSCRIBE, json!({})).await;
     let second_id = second["result"]["subId"].clone();
     let _: NativeFileTransferSnapshot = parse(&second["result"]["snapshot"]);

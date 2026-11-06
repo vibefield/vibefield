@@ -1113,9 +1113,11 @@ fn set_private(_: &Path) -> std::io::Result<()> {
     Ok(())
 }
 
-/// A poisoned lock still holds a consistent table here: every writer below
-/// finishes its change before it can panic.
-fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
+/// A poisoned lock still holds a consistent table for each caller: every
+/// writer finishes its change before it can panic (this file's tables, and
+/// the W3-20 stream map in `mgmt/file_transfer.rs`, whose lock guards one
+/// insert, or one lookup and remove).
+pub(crate) fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
     mutex.lock().unwrap_or_else(PoisonError::into_inner)
 }
 

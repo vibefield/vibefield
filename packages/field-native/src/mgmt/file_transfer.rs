@@ -50,8 +50,8 @@
 //!
 //! One stream per connection (W3-20, VF-PM 2026-11-06): a `subscribe` on a
 //! connection that already holds a file-transfer stream REPLACES it. The
-//! stream's forwarder is stopped, and its future is gone, BEFORE the new
-//! subscribe is answered (`FileTransferStreams::replace`, `Stream::end`): every
+//! stream's forwarder is stopped, and has returned, BEFORE the new subscribe
+//! is answered (`FileTransferStreams::replace`, `Stream::end`): every
 //! line it queued is queued ahead of that answer, none follows it, and its
 //! subId goes quiet. NativeLink's dispose tells the floor nothing, so without
 //! this every re-subscribe (W3-16's one re-subscribe for a fresh snapshot among
@@ -63,11 +63,11 @@ use crate::contracts::{
     MeshMode, NativeFileTransferPullParams, NativeFileTransferRootsParams, NativeFileTransferRow,
 };
 use crate::registries::mesh_file_transfer;
-use crate::services::file_transfer::{FileTransferBackend, FileTransferError, PullEvent};
+use crate::services::file_transfer::{lock, FileTransferBackend, FileTransferError, PullEvent};
 use crate::state::{DaemonState, MgmtOutbox, Offered};
 use serde_json::{json, Value};
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::sync::broadcast::{self, error::RecvError, error::TryRecvError};
 use tokio::sync::oneshot;
@@ -88,7 +88,8 @@ const SNAPSHOT: &str = "native.mesh.fileTransfer.snapshot";
 const SNAPSHOT_RETRY: Duration = Duration::from_millis(100);
 
 /// `conn_id` is the connection the request came on (`mgmt/mod.rs`,
-/// `handle_conn`), which a `subscribe` replaces the stream of (W3-20).
+/// `handle_conn`); a `subscribe` replaces the stream that connection holds
+/// (W3-20).
 pub async fn handle(
     state: &Arc<DaemonState>,
     conn_id: u64,
@@ -110,7 +111,15 @@ pub async fn handle(
         return;
     }
     if method == SUBSCRIBE {
-        subscribe(state, conn_id, tx, &arm, id).await;
+        subscribe(
+            &state.file_transfer_streams,
+            conn_id,
+            state.sub_id(),
+            tx,
+            &arm,
+            id,
+        )
+        .await;
         return;
     }
     if !state.mesh.node_present() {
@@ -185,25 +194,39 @@ fn pull(
     }
 }
 
-/// A stream for `conn_id`, replacing the one it holds (W3-20). The previous
-/// stream ends whole before this one is answered, so no line of its follows
-/// the answer. It ends whether or not this subscribe is answered with a
-/// snapshot: the reader asked for a stream in its place.
+/// A stream `sub_id` for `conn_id`, replacing the one `streams` holds for it
+/// (W3-20). The previous stream ends whole before this one is answered, so no
+/// line of its follows the answer. It ends whether or not this subscribe is
+/// answered with a snapshot: the reader asked for a stream in its place. So a
+/// subscribe answered INTERNAL (an arm that writes no snapshot) leaves its
+/// connection with no stream, and a reader that keeps its old subscription
+/// when a subscribe is refused hears nothing on it until it subscribes again.
+/// No production arm is answered so: `NamedRootsFileTransfer` always calls
+/// `write` (`services/file_transfer.rs`), and `UnsupportedFileTransfer` is
+/// answered at step 1, before this runs.
 async fn subscribe(
-    state: &Arc<DaemonState>,
+    streams: &FileTransferStreams,
     conn_id: u64,
+    sub_id: String,
     tx: &Tx,
     arm: &Arc<dyn FileTransferBackend>,
     id: Option<Value>,
 ) {
-    let sub_id = state.sub_id();
-    let (registration, previous) = state.file_transfer_streams.replace(conn_id, &sub_id);
+    let (registration, previous) = streams.replace(conn_id, &sub_id);
     if let Some(previous) = previous {
         previous.end().await;
     }
     // Subscribe BEFORE the snapshot, answer BEFORE forwarding (the door
     // stream's order): an end in between is a delta for a row the snapshot may
-    // still list, never a miss.
+    // still list, never a miss. On a replace, an event the old forwarder had
+    // not received when it stopped (it returns at its stop without draining
+    // its receiver), or one the arm sent between that return and the
+    // `arm.subscribe()` below, reaches neither stream. The answer's snapshot
+    // then settles that pull by the contract's resync rule (contracts mgmt.ts
+    // `NativeFileTransferSnapshot`: completed when its landed name is in
+    // `lands`, FAILED_IO otherwise), so a failed pull's own word can read
+    // FAILED_IO, as after a lag ("its own word was in the delta the lag
+    // lost").
     let events = arm.subscribe();
     if answer_subscribe(&**arm, tx, id, &sub_id) {
         // The arm the stream subscribed to, never a fresh read of the mesh
@@ -218,7 +241,11 @@ async fn subscribe(
 /// connection holds, by the server's connection id (`mgmt/mod.rs`,
 /// `handle_conn`'s `conn_id`, which the mesh worker hands `mesh::handle`).
 /// `DaemonState` keeps it. Only the one mesh worker (`mgmt/mod.rs`, `serve`)
-/// runs `subscribe`, so two subscribes never interleave.
+/// runs `subscribe`, so two subscribes never interleave. It is keyed by
+/// connection because W3-20 is a rule of one connection. With one current
+/// client at a time (that worker runs only the current client's requests,
+/// `DaemonState::is_current_client`), the keying is not visible from outside:
+/// a superseded connection's forwarder ends with that connection.
 ///
 /// An entry goes in BEFORE its forwarder is spawned, and leaves the map by a
 /// later subscribe's `replace` (whose caller then waits for that forwarder's
@@ -231,8 +258,9 @@ async fn subscribe(
 /// nothing else: no `.await` under it, no call into the arm (whose lock
 /// `write_snapshot` holds) or the outbox, and no channel end dropped under it.
 /// And no lock of the floor's is held when it is taken: `subscribe` holds
-/// none, and a `Registration` drops with its forwarder's future, which holds
-/// none between polls. So it orders against no other lock.
+/// none, and a `Registration` drops as its forwarder returns (or with its
+/// future, if the runtime drops it unfinished), and a forwarder holds no lock
+/// at a return or an await. So it orders against no other lock.
 #[derive(Default)]
 pub(crate) struct FileTransferStreams {
     by_conn: ByConn,
@@ -246,19 +274,23 @@ struct Stream {
     /// Dropped by `end`: the forwarder's `Registration::stop` resolves, and it
     /// returns at its next await.
     stop: oneshot::Sender<()>,
-    /// Resolves once the forwarder's future is dropped (its `Registration`
-    /// goes with it), so after every line the forwarder queued.
+    /// Resolves once the forwarder has returned (its `Registration`, a local
+    /// of its body, drops at the return), so after every line it queued.
     ended: oneshot::Receiver<()>,
 }
 
 impl Stream {
-    /// Stop the forwarder and wait until its future is gone: every line it
+    /// Stop the forwarder and wait until it has returned: every line it
     /// queued is queued by then, and it queues none after. A line it had in
     /// hand when `stop` came (a delta, or an owed snapshot) is queued before
-    /// the replacing subscribe's answer, on its old subId, which the reader
-    /// has disposed: NativeLink drops it. The forwarder waits on nothing the
-    /// mesh worker holds, and between two awaits it runs a `try_recv`, a
-    /// `try_send` or a `write_snapshot`, so the wait is bounded.
+    /// the replacing subscribe's answer, on its old subId. fieldd's reader
+    /// disposes its old subscription only once that answer is read (DR-3b,
+    /// `drive/pulls.ts`, `#doSubscribe`), so it still routes the line there;
+    /// the answer's snapshot, built after it in one hold of the arm's lock,
+    /// supersedes it, and the write order (W3-16) holds for both. The
+    /// forwarder waits on nothing the mesh worker holds, and between two
+    /// awaits it runs a `try_recv`, a `try_send` or a `write_snapshot`, so the
+    /// wait is bounded.
     async fn end(self) {
         let Stream { stop, ended, .. } = self;
         drop(stop);
@@ -266,8 +298,8 @@ impl Stream {
     }
 }
 
-/// What a forwarder holds of its entry: it moves into the forwarder's future
-/// and drops with it.
+/// What a forwarder holds of its entry: it moves into the forwarder's body (a
+/// local, `spawn_forwarder`) and drops when the forwarder returns.
 struct Registration {
     by_conn: ByConn,
     conn_id: u64,
@@ -322,12 +354,6 @@ impl Drop for Registration {
         // its channels' ends drop with the map's lock free
         drop(mine);
     }
-}
-
-/// The map, poisoned or not: its lock guards one insert, one lookup or one
-/// remove, each of which leaves it whole.
-fn lock(by_conn: &Mutex<HashMap<u64, Stream>>) -> MutexGuard<'_, HashMap<u64, Stream>> {
-    by_conn.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
 /// The subscribe answer. It carries a snapshot, so it is queued as the
@@ -520,8 +546,8 @@ fn offer_snapshot(
 /// (`services/mesh.rs`, `Shared.file_transfer`). It ends with its connection,
 /// with the arm's stream, or when a later subscribe on its connection
 /// replaces it (W3-20): each wait is a `biased` select that reads the stop
-/// first, so it returns at its next await, and its `Registration` drops with
-/// its future.
+/// first, so it returns at its next await, and its `Registration`, a local of
+/// its body, drops as it returns.
 fn spawn_forwarder(
     arm: Arc<dyn FileTransferBackend>,
     tx: Tx,
@@ -756,6 +782,111 @@ mod tests {
             Err(StreamEnded)
         );
         assert!(lines(&mut rx).is_empty());
+    }
+
+    /// The connections the W3-20 map holds a stream for, each with its subId.
+    fn held(streams: &FileTransferStreams) -> Vec<(u64, String)> {
+        let mut held: Vec<(u64, String)> = lock(&streams.by_conn)
+            .iter()
+            .map(|(conn_id, stream)| (*conn_id, stream.sub_id.clone()))
+            .collect();
+        held.sort();
+        held
+    }
+
+    /// W3-20 (VF-PM 2026-11-06), at `subscribe`: a subscribe on a connection
+    /// that holds a stream stops that stream's forwarder and is answered only
+    /// once the forwarder has returned. The test holds the first stream's
+    /// `Registration` as its forwarder's body would, so that forwarder's
+    /// return is the test's `drop`: until then the second subscribe waits with
+    /// nothing queued, and the map already holds the second stream, which the
+    /// first registration's drop leaves in place.
+    /// Probe: `drop(previous)` in place of `previous.end().await` → the first
+    /// poll answers; end the previous stream after `answer_subscribe` → a line
+    /// is queued while the first forwarder lives; a `Registration` that takes
+    /// out whatever its connection holds → the second stream is gone.
+    #[tokio::test]
+    async fn a_replacing_subscribe_is_answered_once_the_old_forwarder_has_returned() {
+        let (tx, mut rx, _close) = MgmtOutbox::channel();
+        let arm: Arc<dyn FileTransferBackend> = Arc::new(EdgesArm::new(true, &tx));
+        let streams = FileTransferStreams::default();
+        let (mut first, none) = streams.replace(1, "s1");
+        assert!(none.is_none(), "the connection held no stream");
+
+        let second = subscribe(&streams, 1, "s2".to_owned(), &tx, &arm, Some(json!(7)));
+        let mut second = std::pin::pin!(second);
+        assert!(
+            futures_util::FutureExt::now_or_never(second.as_mut()).is_none(),
+            "the second subscribe waits for the first forwarder"
+        );
+        assert!(lines(&mut rx).is_empty(), "nothing is queued yet");
+        assert_eq!(
+            first.stop.try_recv(),
+            Err(oneshot::error::TryRecvError::Closed),
+            "the first forwarder is told to stop"
+        );
+        assert_eq!(held(&streams), [(1, "s2".to_owned())]);
+
+        drop(first);
+        second.await;
+        let queued = lines(&mut rx);
+        let [subscribed, _pull_answer] = queued.as_slice() else {
+            panic!("the subscribe answer, then the arm's pull answer: {queued:?}");
+        };
+        assert_eq!(subscribed["id"], 7);
+        assert_eq!(subscribed["result"]["subId"], "s2");
+        assert_eq!(
+            held(&streams),
+            [(1, "s2".to_owned())],
+            "the first registration left the second stream in place"
+        );
+    }
+
+    /// W3-20's map holds no stream for a connection that is gone, or for a
+    /// subscribe that started none: a forwarder returns when its connection
+    /// closes (`MgmtOutbox::closed`) and its `Registration` takes its entry
+    /// out, and a subscribe answered INTERNAL takes its own out as it returns.
+    /// Each connection keeps its own entry until then.
+    /// Probe: a `Registration` whose drop takes nothing out → the refused
+    /// subscribe's entry stays, and the closed connection's; key the map by
+    /// one connection for all → the refused subscribe takes the first one's
+    /// out.
+    #[tokio::test]
+    async fn a_stream_leaves_the_map_with_its_connection_or_its_refusal() {
+        let streams = FileTransferStreams::default();
+        let (tx, mut rx, _close) = MgmtOutbox::channel();
+        let arm: Arc<dyn FileTransferBackend> = Arc::new(EdgesArm::new(true, &tx));
+        subscribe(&streams, 1, "s1".to_owned(), &tx, &arm, Some(json!(7))).await;
+        assert_eq!(lines(&mut rx)[0]["result"]["subId"], "s1");
+
+        let (tx2, mut rx2, _close2) = MgmtOutbox::channel();
+        let arm2: Arc<dyn FileTransferBackend> = Arc::new(EdgesArm::new(false, &tx2));
+        subscribe(&streams, 2, "s2".to_owned(), &tx2, &arm2, Some(json!(8))).await;
+        let queued = lines(&mut rx2);
+        let [refused] = queued.as_slice() else {
+            panic!("one refusal and nothing else: {queued:?}");
+        };
+        let data: ErrorData = serde_json::from_value(refused["error"]["data"].clone()).unwrap();
+        assert_eq!(data.kind, ErrorKind::Internal);
+        assert_eq!(
+            held(&streams),
+            [(1, "s1".to_owned())],
+            "the refused subscribe left no entry, and the first connection's stays"
+        );
+
+        tx.signal_closed();
+        // `#[tokio::test]` runs on one thread: the forwarder runs at the
+        // test's next yield, reads its connection closed and returns.
+        for _ in 0..100 {
+            if held(&streams).is_empty() {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+        assert!(
+            held(&streams).is_empty(),
+            "the closed connection's stream left the map"
+        );
     }
 
     fn golden(name: &str) -> Value {
