@@ -58,14 +58,18 @@ export function durationWords(minutes: number): string {
   return rest === 0 ? `${days}d` : `${days}d ${rest}h`;
 }
 
-/** What a window's pressure reads: its orange (Settings' pace rule) and its used share. */
+/** What a window's pressure reads: its orange (Settings' pace rule), its used share, and whether its reset has come
+ * since it was read (`passed`). */
 export interface Pressed {
   hot: boolean;
   usedPercent: number;
+  passed?: boolean | undefined;
 }
 
-/** UM-D13 — how close a window is to its limit: ahead of pace first (1000), then spent (500), then the fuller. */
+/** UM-D13 — how close a window is to its limit: ahead of pace first (1000), then spent (500), then the fuller. A window
+ * read before its reset presses nothing (0): what it metered is gone (DESIGN.md §8 "The Bands circle"). */
 export function pressureOf(window: Pressed): number {
+  if (window.passed === true) return 0;
   return (window.hot ? 1000 : 0) + (window.usedPercent >= 100 ? 500 : 0) + window.usedPercent;
 }
 
@@ -95,7 +99,8 @@ export function tightestOf<T>(
 export interface MeterForecast {
   /** minutes to the limit at this pace, unrounded */
   minutes: number;
-  /** "~35m": rounded as the drawing rounds (to the minute under 10, to 5 under the hour, to 15 from it) */
+  /** "~35m", "~1h", "~1h 15m": rounded as the drawing rounds (to the minute under 10, to 5 under the hour, to 15 from
+   * it), and only then said, so a time that rounds to the hour says it as one ("~1h", never "~60m") */
   words: string;
   /** "out in ~35m": a meter's right words */
   short: string;
@@ -126,12 +131,14 @@ export function forecastOf(window: ForecastInput): MeterForecast | undefined {
   const perMinute = used / ((elapsed / 100) * length);
   const minutes = (100 - used) / perMinute;
   if (minutes >= resetIn) return undefined;
-  const words = `~${
+  // round first, then choose the form: 57.5 to 60 minutes round to the hour, said "~1h" (DESIGN.md §8, "Hot, and
+  // the forecast")
+  const rounded =
     minutes < 10
-      ? `${Math.max(1, Math.round(minutes))}m`
+      ? Math.max(1, Math.round(minutes))
       : minutes < 60
-        ? `${Math.round(minutes / 5) * 5}m`
-        : durationWords(Math.round(minutes / 15) * 15)
-  }`;
+        ? Math.round(minutes / 5) * 5
+        : Math.round(minutes / 15) * 15;
+  const words = `~${rounded >= 60 ? durationWords(rounded) : `${rounded}m`}`;
   return { minutes, words, short: `out in ${words}`, long: `Runs out in ${words} at this pace` };
 }

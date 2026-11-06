@@ -195,10 +195,10 @@ export function windowOf(window: MeterWindow): string {
   return `of ${window.lengthWords}${part !== undefined ? ` · ${part}` : ""}`;
 }
 
-/** What the middle says under a plan at full size, and the end of its words: its forecast, its reset, a kept
- * reading's age, or what it needs. A reset is said only as a length ("resets in 2h", §9 "The meters' words"): one a
- * day or more off is Settings' day and clock, the reader's own zone and locale, which the rows show beside their
- * reset mark; one already past says nothing. */
+/** What the middle says under a plan at full size, and the end of its words: its forecast, its reset, the age of a
+ * kept reading or of one with a window read before its reset, or what it needs. A reset is said only as a length
+ * ("resets in 2h", §9 "The meters' words"): one a day or more off is Settings' day and clock, the reader's own zone
+ * and locale, which the rows show beside their reset mark; one already past says the reading's age instead. */
 export function bandsSay(entry: PlanMeter): { words: string; hot: boolean } {
   switch (entry.kind) {
     case "first-read":
@@ -217,7 +217,9 @@ export function bandsSay(entry: PlanMeter): { words: string; hot: boolean } {
       return { words: "", hot: false };
     case "reading": {
       const window = entry.tightest;
-      if (entry.stale) return { words: entry.right.words, hot: false };
+      if (entry.right.kind === "kept" || entry.right.kind === "passed") {
+        return { words: entry.right.words, hot: false };
+      }
       if (window.forecast !== undefined) return { words: window.forecast.short, hot: true };
       const reset = window.line.reset;
       if (reset === undefined || resetForm(window) !== "length") {
@@ -379,7 +381,8 @@ function meterOnArc(
   const used = clamp(window.line.usedPercent, 0, 100);
   const hot = window.line.hot;
   const fill = (length * used) / 100;
-  const fade = dim * (context.stale ? STALE : 1);
+  // a kept reading's fill, and a window's read before its reset (DESIGN.md §8 "The Bands circle"), at half
+  const fade = dim * (context.stale || window.passed ? STALE : 1);
   if (used > 0.4) {
     if (round) {
       pushArc(plan.arcs, {

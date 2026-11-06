@@ -22,6 +22,7 @@ import {
   durationWords,
   forecastOf,
   type MeterForecast,
+  type Pressed,
   pressureOf,
   tightestOf,
   windowWords,
@@ -40,8 +41,9 @@ import {
 // retires). The meter's rules — the tightest window (UM-D13), the forecast (UM-D4), the words for a length (the limit
 // moment's too) — are the leaf `rules.ts`'s, which Settings may read too; nothing here reads setup/. What this file
 // adds is the drawing's (draft/profile-meters/round4/src/p3a-core.js): the budget's pace-less rule, the stable order
-// (UM-D15), and the union of every profile's plans (`subsOf`, `subGlyphs`). AR-L1: no agent is named here — the order
-// and the labels are the agent catalog's.
+// (UM-D15), and the union of every profile's plans (`subsOf`, `subGlyphs`); and the assembled review's window read
+// before its reset (`passed`, DESIGN.md §8 "The Bands circle"), the phone's common case under UM-D8. AR-L1: no agent
+// is named here — the order and the labels are the agent catalog's.
 
 /** UM-D15's three groups, a first read standing with the readings it is waiting for. */
 export type MeterKind = "reading" | "first-read" | "needs-you" | "no-meter";
@@ -59,7 +61,8 @@ export type NoMeterReason = "unnamed" | "unreported" | "no-windows" | "unavailab
 export interface MeterWindow {
   /** the adapter's meter, as the reading carries it */
   metric: AgentAccountUsageMetric;
-  /** Settings' C1 line (`usageLines`). A budget's is pace-less: no now line, orange at 80 or more. */
+  /** Settings' C1 line (`usageLines`). A budget's is pace-less: no now line, orange at 80 or more. One read before its
+   * reset (`passed`) is never orange. */
   line: UsageLine;
   /** a credit budget, which fills both bands */
   budget: boolean;
@@ -204,19 +207,24 @@ export function meterWindows(
     const metric = byId.get(settings.id);
     if (metric === undefined) return [];
     const budget = metric.kind === "budget";
-    const line = budget ? paceless(settings) : settings;
+    const paced = budget ? paceless(settings) : settings;
+    const resetIn =
+      paced.resets && metric.resetsAt !== undefined
+        ? (Date.parse(metric.resetsAt) - now.getTime()) / 60_000
+        : undefined;
+    // read before its reset (DESIGN.md §8 "The Bands circle"): the reset has come since, so what it metered is gone
+    // and it runs ahead of nothing. Only its orange leaves Settings' line; its words and its now line stand.
+    const passed = resetIn !== undefined && resetIn <= 0;
+    const line: UsageLine = passed ? { ...paced, hot: false } : paced;
     const window: MeterWindow = {
       metric,
       line,
       budget,
       lengthWords: windowWords(metric),
-      // RED SKELETON (the assembled review): no window is ever read as passed yet
-      passed: false,
-      pressure: pressureOf(line),
+      passed,
+      pressure: pressureOf({ hot: line.hot, usedPercent: line.usedPercent, passed }),
     };
-    if (line.resets && metric.resetsAt !== undefined) {
-      window.resetIn = (Date.parse(metric.resetsAt) - now.getTime()) / 60_000;
-    }
+    if (resetIn !== undefined) window.resetIn = resetIn;
     const forecast = forecastOf({
       usedPercent: line.usedPercent,
       elapsedPercent: line.elapsedPercent,
@@ -230,9 +238,16 @@ export function meterWindows(
   });
 }
 
-/** UM-D13 — a reading's window closest to its limit (`tightestOf` on its lines). */
+/** What UM-D13 reads of a window: its line's orange and used share, and whether it was read before its reset. */
+const pressedOf = (window: MeterWindow): Pressed => ({
+  hot: window.line.hot,
+  usedPercent: window.line.usedPercent,
+  passed: window.passed,
+});
+
+/** UM-D13 — a reading's window closest to its limit (`tightestOf` on its lines; one read before its reset, last). */
 export function tightestWindow(windows: readonly MeterWindow[]): MeterWindow | undefined {
-  return tightestOf(windows, (window) => window.line);
+  return tightestOf(windows, pressedOf);
 }
 
 /** The catalog's name for an agent, or its id: a newer peer's agent is carried, never renamed. */
@@ -269,13 +284,22 @@ function profileOf(set: AgentProfileSet): MeterProfile {
   };
 }
 
-function rightOf(window: MeterWindow, stale: boolean, fetchedAt: string, now: Date): MeterRight {
-  if (stale) {
+function rightOf(
+  windows: readonly MeterWindow[],
+  window: MeterWindow,
+  stale: boolean,
+  fetchedAt: string,
+  now: Date,
+): MeterRight {
+  // a kept reading says its age, and so does one with a window read before its reset (DESIGN.md §8 "The Bands
+  // circle"): a forecast or a reset read from it would claim a reading it is not
+  const aged = stale ? "kept" : windows.some((each) => each.passed) ? "passed" : undefined;
+  if (aged !== undefined) {
     // §9's "as of 5m ago"; a reading whose time cannot be read is kept all the same (its fill at half), and says no
     // age rather than words §9 does not rule
     const age = (now.getTime() - Date.parse(fetchedAt)) / 60_000;
     return {
-      kind: "kept",
+      kind: aged,
       words: Number.isFinite(age) ? `as of ${durationWords(Math.max(0, age))} ago` : "",
       hot: false,
       icon: false,
@@ -330,7 +354,7 @@ function readOf(
       hot: tightest.line.hot,
       stale,
       fetchedAt: usage.fetchedAt,
-      right: rightOf(tightest, stale, usage.fetchedAt, now),
+      right: rightOf(windows, tightest, stale, usage.fetchedAt, now),
     };
   }
   // Settings says "Signing in…" and offers only its cancel: the meter says the same, and asks nothing
@@ -393,7 +417,7 @@ function metersOf(entries: PlanMeter[], rank: (entry: PlanMeter) => number): Pro
   );
   const tightest = tightestOf(
     entries.filter((entry): entry is ReadingMeter => entry.kind === "reading"),
-    (entry) => entry.tightest.line,
+    (entry) => pressedOf(entry.tightest),
   );
   return {
     entries,
