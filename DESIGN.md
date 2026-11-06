@@ -6237,8 +6237,10 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       back.
     - **Search opens on Apps as well.** Before you type, a strip headed **Apps** stands above History's search: the
       Recent row and **All apps**. The place is one tap from a control that is always on screen, and typed words
-      match apps' titles too. History keeps its own **Recent** for searches.
-      *Amended 2026-11-06 (SE-D3 A and SE-D4 A, ruled by James on the page The Bands Meter; MA's lead's placement):*
+      match apps' titles too. *Amended 2026-11-06 (the lead's ruling 24, ‹for James›): recent searches retire from
+      search; the sheet's one Recent is MA-D7's apps strip.*
+      *Amended 2026-11-06 (SE-D3 A and SE-D4 A, ruled by James on the page The Bands Meter; MA's lead's placement;
+      ‹for James: MA-D7's strip placement, agreed with MA's lead 2026-11-06›):*
       search is a glass sheet over the field now (§8 "The phone's search"), so the strip stands in the sheet. Before
       any word it stands above the sheet's **Live now · Everything** switch, in both scopes, and gives way once a
       word is typed. Typed words match apps' titles as an **Apps** group, first in Everything's results (MA-6's
@@ -6327,8 +6329,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     (paper at 90% over a blur of 30 and saturate 1.4, a 0.5 inner edge, a top light, and a shadow of 0 24 60 at
     18%). It rises from the middle of its foot, 24 up and from 0.94, over 420ms on the island curve.
   - **From the top:**
-    - **MA-D7's Apps strip** (§8 "The phone's Apps", as amended): before any word, the Recent row and **All apps**,
-      above the switch, in both scopes. It gives way once a word is typed.
+    - **MA-D7's Apps strip** (§8 "The phone's Apps", as amended; ‹for James: MA-D7's strip placement, agreed with
+      MA's lead 2026-11-06›): before any word, the Recent row and **All apps**, above the switch, in both scopes. It
+      gives way once a word is typed.
     - **The switch**, **Live now · Everything**, 14 in from the sheet's sides and top and 6 above the chips: on the
       ink at 8%, padding 2, corners 10; each half 30 tall, corners 8, at 13.5/500, the chosen one on paper with a
       shadow of 0 1 4 at 14%, at 600.
@@ -6360,8 +6363,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     - **A tap** closes search and opens that session's card on Field. Return takes the first row.
   - **Everything** is History's search, as it was: every desktop's index, its hits by session, a tap landing in
     History at the line. Before a word it lists **Your latest sessions**, as drawn: the sessions each desktop's
-    corpus holds on the phone (`HistoryCorpus`'s `sessions`), merged by recency. The recent searches stay on
-    History's own page. While no desktop's sessions are on the phone yet, the empty list's words are ‹for James›.
+    corpus holds on the phone (`HistoryCorpus`'s `sessions`), merged by recency. *Amended 2026-11-06 (the lead's
+    ruling 24, ‹for James›): recent searches retire from search; the sheet's one Recent is MA-D7's apps strip.*
+    While no desktop's sessions are on the phone yet, the empty list's words are ‹for James›.
     *(Corrected 2026-11-06, PLAN §4 (g): this kept the recent searches "where the phone holds none", the hedge
     of the lead's ruling 21; the corpus holds them.)* It takes no profile (UM-D28 A): its field shows no profile
     token, and its foot says it looks through every profile.
@@ -6954,7 +6958,8 @@ him and are not invented here.
   apps"›. VoiceOver says search's dot as "a new app".
 - **The groups.** The phone's are **Recent**, **Kept** and **Projects**. Search's strip is **Apps**, with **All
   apps**, and search's placeholder is **Search**: the bar's field said "Search sessions", a word no line here held.
-  History keeps its own **Recent** for searches. The shelf's field says "Search apps" (the page's). The desktop's
+  *Amended 2026-11-06 (the lead's ruling 24, ‹for James›): recent searches retire from search; the sheet's one
+  Recent is MA-D7's apps strip.* The shelf's field says "Search apps" (the page's). The desktop's
   groups are **Live**, the Hub's header, and **From your agents**.
 - **The foot** counts what is true: "142 apps on 2 desktops · mini is asleep — 23 of its apps wait for it".
 - **The acts.** An app's acts are **Open**, **Keep** (or **Stop keeping**), **Versions**, **About this app**, **Hide
