@@ -123,6 +123,9 @@ fn read_secret(daemon: &RunningDaemon) -> Vec<u8> {
     .unwrap()
 }
 
+/// Every row that boots a floor ends with `daemon.shutdown().await`. A floor still running when
+/// its `TempDir` drops leaves cells it is still starting, and they bind their sockets inside the
+/// removal and leave the root behind (item 196).
 async fn boot() -> (tempfile::TempDir, RunningDaemon) {
     let dir = tempfile::tempdir().unwrap();
     let daemon = bootstrap(NativeConfig::for_data_dir(dir.path().to_path_buf()))
@@ -203,6 +206,7 @@ async fn hello_pairs_and_acks() {
         build.starts_with(concat!("field-native/", env!("CARGO_PKG_VERSION"))),
         "build label lost its crate version: {build}"
     );
+    daemon.shutdown().await;
 }
 
 #[tokio::test]
@@ -236,6 +240,7 @@ async fn bad_mac_and_stale_ts_rejected() {
         resp["error"]["data"]["kind"], "UNAUTHORIZED",
         "outside ±300s window"
     );
+    daemon.shutdown().await;
 }
 
 #[tokio::test]
@@ -248,6 +253,7 @@ async fn hello_required_before_anything() {
     .await;
     let resp = c.recv().await;
     assert_eq!(resp["error"]["data"]["kind"], "UNAUTHORIZED");
+    daemon.shutdown().await;
 }
 
 #[tokio::test]
@@ -273,6 +279,7 @@ async fn new_hello_supersedes_old_client() {
     .await;
     let resp = c2.recv().await;
     assert!(resp["result"]["snapshot"]["units"].is_array());
+    daemon.shutdown().await;
 }
 
 #[tokio::test]
@@ -300,6 +307,7 @@ async fn health_snapshot_reports_every_unit() {
         state = delta["params"]["payload"]["state"].clone();
     }
     assert_eq!(state, "up");
+    daemon.shutdown().await;
 }
 
 #[tokio::test]
@@ -340,6 +348,7 @@ async fn desired_generation_guard_and_observed_delta() {
     .await;
     let resp = c.recv().await;
     assert_eq!(resp["error"]["data"]["kind"], "PRECONDITION_FAILED");
+    daemon.shutdown().await;
 }
 
 #[tokio::test]
@@ -355,6 +364,7 @@ async fn mesh_answers_honest_unavailable_with_real_unit_state() {
     // C1: the details carry the unit's REAL state, not a hardcoded "stub"
     assert_eq!(resp["error"]["data"]["details"]["state"], "disabled");
     assert_eq!(resp["error"]["data"]["retryable"], true);
+    daemon.shutdown().await;
 }
 
 /// UA-P-0a (D1) — the posture verbs answer BEFORE the node gate, which is the
@@ -459,6 +469,7 @@ async fn serve_subscribe_refused_honestly_when_mesh_down() {
     assert_eq!(resp["error"]["data"]["details"]["service"], "mesh-gateway");
     assert_eq!(resp["error"]["data"]["details"]["state"], "disabled");
     assert_eq!(resp["error"]["data"]["retryable"], true);
+    daemon.shutdown().await;
 }
 
 #[tokio::test]
@@ -481,6 +492,7 @@ async fn tolerant_reader_on_hello() {
         resp["result"].is_object(),
         "unknown fields must not break hello (P3)"
     );
+    daemon.shutdown().await;
 }
 
 // ---- MF-2i — the route-snapshot disclosure rule, on the WIRE (QA 2026-09-13
