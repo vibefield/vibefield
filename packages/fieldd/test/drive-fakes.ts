@@ -1,6 +1,7 @@
 // DR-3b (W3, VF-RELAY) — the drive's test fakes: its two lane planes (doc-sync-service.test.ts's FakeControl and
 // FakeBytes, with `drive` admitted), its holders store (holders-store.ts's, with the store's own snapshot shape),
-// floors that refuse file-transfer verbs, the pin's unsupported golden, and a logger that keeps every event.
+// floors that refuse file-transfer verbs, the pin's unsupported golden and the exhausted one, and a logger that keeps
+// every event.
 // Test-local; never shipped.
 import { readFileSync } from "node:fs";
 import { ErrorData, RPC_ERROR_CODES, STORES } from "@vibefield/contracts";
@@ -22,6 +23,18 @@ const UNSUPPORTED_FIXTURE = new URL(
  * (`error-data.file-transfer-unsupported.json`), parsed through `ErrorData` (EL9). */
 export const UNSUPPORTED_GOLDEN = ErrorData.parse(
   JSON.parse(readFileSync(UNSUPPORTED_FIXTURE, "utf8")),
+);
+
+const EXHAUSTED_FIXTURE = new URL(
+  "../../contracts/fixtures/error-data.file-transfer-exhausted.json",
+  import.meta.url,
+);
+
+/** A pull past DRIVE_LIMITS.PULLS_IN_FLIGHT, refused as the contract's golden holds it
+ * (`error-data.file-transfer-exhausted.json`: RESOURCE_EXHAUSTED, retryable true, no details; W3-15, VF-PM
+ * 2026-11-06), parsed through `ErrorData` (EL9). */
+export const EXHAUSTED_GOLDEN = ErrorData.parse(
+  JSON.parse(readFileSync(EXHAUSTED_FIXTURE, "utf8")),
 );
 
 /** The drive's lane lifecycle, in memory: every open and close it was asked, and a stream a test announces on. */

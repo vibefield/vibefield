@@ -36,9 +36,10 @@ import { RpcCallError } from "../native-link";
 //    adopt candidates (`onAdoptCandidate`), never as an answer to a pull of this boot.
 //  - A pull the stream's snapshot no longer lists ended while the reader lagged: completed when its landed name is in
 //    the folder, failed FAILED_IO otherwise (mgmt.ts `NativeFileTransferSnapshot`). Only a snapshot written AFTER the
-//    pull's answer says so (the snapshot write-order rule, W3-16, pending). One that may have been written before it
-//    says nothing of the pull, which runs on (`#accept`). Only names matching that rule are read; a `*.truffle-tmp`
-//    beside them is the floor's.
+//    pull's answer says so (the snapshot write order, W3-16, VF-PM 2026-11-06). One that may have been written before
+//    it and omits the pull HOLDS it (`#hold`, race#0 (b), VF-PM 2026-11-06): the stream is subscribed once more, and
+//    that snapshot, built after the answer, judges the pull; with none, it ends FAILED_TIMEOUT at W3-4's idle bound.
+//    Only names matching that rule are read; a `*.truffle-tmp` beside them is the floor's.
 //  - `file-transfer-unsupported` is a fact of the floor's boot (mgmt.ts `MESH_FILE_TRANSFER`): cached for that boot,
 //    asked again at a reconnect, as `FloorEgress` keeps `egress-unsupported` (egress.ts:143-158).
 //
@@ -51,7 +52,9 @@ import { RpcCallError } from "../native-link";
  * that subscribe's continuation sets (:1287-1290). A floor that put a macrotask (setImmediate, setTimeout, I/O)
  * between NativeLink and `onEvent`, or between the subscribe's answer and `subscribe` resolving, would break that
  * rule; a microtask between them only delays the event within the same turn, and an await on `request` only sets
- * the fence later. */
+ * the fence later. `subscribe` is asked again while a subscription stands, for a snapshot built after a held pull's
+ * answer (`DrivePulls.#hold`), and the old subscription's `dispose` is called once the new one is answered: the
+ * floor has replaced its stream by then (W3-20, VF-PM 2026-11-06). */
 export interface DrivePullsFloor {
   request(method: string, params: unknown): Promise<unknown>;
   subscribe(
@@ -127,6 +130,9 @@ export interface DrivePullsOptions {
   exists?: (path: string) => Promise<boolean>;
   /** A pull's id. Default: `ulid` (@vibefield/users). */
   mintId?: () => string;
+  /** How long a held pull waits for its fresh snapshot (`DrivePulls.#hold`), in ms. Default: HELD_PULL_BOUND_MS. A
+   * test shortens it. */
+  heldBoundMs?: number;
   logger?: Logger;
 }
 
@@ -135,8 +141,12 @@ interface OwnPull {
   readonly transferId: string;
   readonly digest: string;
   /** null until the floor answered it; then its fence (`DrivePulls.#accept`): a snapshot that does not list it says
-   * it ended only when that snapshot arrived once this fence had run */
+   * it ended only when that snapshot arrived once this fence had run, or is the re-subscribe's it was held for */
   fence: number | null;
+  /** while it is HELD (`DrivePulls.#hold`): the bound's timer, which ends it FAILED_TIMEOUT; null otherwise */
+  held: ReturnType<typeof setTimeout> | null;
+  /** a re-subscribe left for it (`DrivePulls.#serve`): at most one ever does */
+  asked: boolean;
   readonly landed: Promise<DriveLanded>;
   readonly resolve: (landed: DriveLanded) => void;
   readonly reject: (error: Error) => void;
@@ -151,8 +161,26 @@ function ownPull(transferId: string, digest: string): OwnPull {
   });
   // handled here, so an end that arrives before the caller awaits is never an unhandled rejection
   landed.catch(() => undefined);
-  return { transferId, digest, fence: null, landed, resolve, reject };
+  return { transferId, digest, fence: null, held: null, asked: false, landed, resolve, reject };
 }
+
+/** One event of the stream, as `DrivePulls.#onEvent` stamps it on arrival. */
+interface StreamEvent {
+  payload: unknown;
+  kind: "snapshot" | "delta";
+  /** the fences run when it arrived (`DrivePulls.#accept`) */
+  fencesRun: number;
+  /** a re-subscribe's snapshot: the held pulls it was asked for (`DrivePulls.#doSubscribe`); NO_PULLS otherwise */
+  serves: ReadonlySet<OwnPull>;
+}
+
+const NO_PULLS: ReadonlySet<OwnPull> = new Set();
+
+/** How long a held pull (`DrivePulls.#hold`) waits for a fresh snapshot before it ends FAILED_TIMEOUT: W3-4's idle
+ * bound (VF-PM 2026-11-06), the floor's `PULL_IDLE_BOUND`, 60 s (field-native `src/services/file_transfer.rs:309`).
+ * PROVISIONAL and RELAY-LOCAL, as the floor's is FLOOR-LOCAL: not in the registry, so moving it is no contract event,
+ * and it moves with the floor's. */
+const HELD_PULL_BOUND_MS = 60_000;
 
 /** JSON-RPC's method-not-found. A floor before VF-FLOOR's facade answers these verbs so with a node up (mgmt.ts's
  * header; `mgmt/mesh.rs`'s `_` arm), read as egress.ts:295-297 reads a floor before DS-1. */
@@ -242,6 +270,7 @@ export class DrivePulls {
   readonly #landsDir: string;
   readonly #exists: (path: string) => Promise<boolean>;
   readonly #mintId: () => string;
+  readonly #heldBoundMs: number;
   /** transferId → a pull this fieldd minted */
   readonly #own = new Map<string, OwnPull>();
   /** transferId → digest: a running row this fieldd did not mint (a previous fieldd's) */
@@ -258,8 +287,9 @@ export class DrivePulls {
   /** Stream events in arrival order, each stamped with the fences run when it arrived (`#accept`), applied in a later
    * macrotask. A pull's answer and a snapshot can arrive in one read, in either order, and the answer's continuation
    * (which accepts the pull) runs after every line of that read: applied after it, a snapshot sees the pull accepted
-   * whichever line came first, and its stamp says whether it may have been written before the answer. */
-  #events: Array<{ payload: unknown; kind: "snapshot" | "delta"; fencesRun: number }> = [];
+   * whichever line came first, and its stamp says whether it may have been written before the answer. A
+   * re-subscribe's snapshot also carries the held pulls it was asked for (`serves`, `#doSubscribe`). */
+  #events: StreamEvent[] = [];
   #drain: ReturnType<typeof setImmediate> | null = null;
   /** fences set; a pull's fence is this count just after its own is set (`#accept`) */
   #fencesSet = 0;
@@ -277,6 +307,7 @@ export class DrivePulls {
     this.#landsDir = join(opts.userRoot, ...LAYOUT[FILE_TRANSFER_ROOTS.DRIVE_OBJECTS.lands]);
     this.#exists = opts.exists ?? landedExists;
     this.#mintId = opts.mintId ?? (() => ulid());
+    this.#heldBoundMs = opts.heldBoundMs ?? HELD_PULL_BOUND_MS;
   }
 
   /** Subscribe the stream, then declare the roots. Never throws: a floor that cannot pull is cached for its boot,
@@ -351,8 +382,8 @@ export class DrivePulls {
       );
     }
     if (this.#running.size >= DRIVE_LIMITS.PULLS_IN_FLIGHT) {
-      // retryable true and no details, as the floor answers it (field-native `mgmt/file_transfer.rs`'s `refusal()`,
-      // read) and as VF-PM's W3-15 rules it; its golden (`error-data.file-transfer-exhausted.json`) is the lead's.
+      // its golden, `error-data.file-transfer-exhausted.json` (W3-15, VF-PM 2026-11-06): retryable true and no
+      // details, because a pull may be asked again once a running one ends; drive-pulls.test.ts holds this to it
       throw new RpcCallError(
         "RESOURCE_EXHAUSTED",
         `${DRIVE_LIMITS.PULLS_IN_FLIGHT} pulls are running`,
@@ -392,7 +423,8 @@ export class DrivePulls {
   }
 
   /** Close the stream. A pull still running goes on at the floor (it outlives fieldd), and the next boot adopts what
-   * it lands; its caller here is told so. */
+   * it lands; its caller here is told so. Every pull is untracked first, so no held pull's timer outlives this
+   * (`#untrack`). */
   stop(): void {
     if (this.#stopped) return;
     this.#stopped = true;
@@ -417,17 +449,30 @@ export class DrivePulls {
     await this.declareRoots();
   }
 
+  /** One subscribe at a time: a caller while one is in flight shares it. A pull held while it was in flight was not
+   * in its `serves` (it may have left before that pull's answer was read), so one more follows it for every such
+   * pull. Each held pull is asked for once (`#serve`), so the chain ends. */
   #subscribe(): Promise<void> {
     if (this.#subscribing === null) {
       this.#subscribing = this.#doSubscribe().finally(() => {
         this.#subscribing = null;
+        if (this.#owesFresh()) void this.#subscribe();
       });
     }
     return this.#subscribing;
   }
 
+  /** Subscribe the stream; or, while a pull is held (`#hold`), subscribe it again for a snapshot built after that
+   * pull's answer. The floor REPLACES a connection's file-transfer stream with the new one, and the old subId goes
+   * quiet (W3-20, VF-PM 2026-11-06; mgmt.ts rider A's subscribe paragraph); NativeLink's dispose tells the floor
+   * nothing (native-link.ts:1151-1157, `removeSubscription`), so the old subscription is disposed here as the new
+   * one is made, and a reconnect replays one stream, never two. */
   async #doSubscribe(): Promise<void> {
-    if (this.#stopped || this.#subscription !== null || this.unsupported()) return;
+    // The held pulls this subscribe is asked for, marked before anything can return: a held pull is asked for once,
+    // and one no fresh snapshot comes for (refused, never answered) ends FAILED_TIMEOUT at its bound (`#hold`).
+    const serves = this.#serve();
+    if (this.#stopped || this.unsupported()) return;
+    if (this.#subscription !== null && serves.size === 0) return;
     const method = "native.mesh.fileTransfer.subscribe";
     let subscribed: { snapshot: unknown; dispose: () => void };
     try {
@@ -442,10 +487,30 @@ export class DrivePulls {
       subscribed.dispose();
       return;
     }
+    this.#subscription?.dispose();
     this.#subscription = { dispose: subscribed.dispose };
-    this.#onEvent(subscribed.snapshot, "snapshot");
+    this.#onEvent(subscribed.snapshot, "snapshot", serves);
     // after the drain this snapshot scheduled, so `start` resolves with it applied
     await new Promise<void>((resolve) => setImmediate(resolve));
+  }
+
+  /** The held pulls no re-subscribe has left for yet, each marked asked: the subscribe being made serves them. Every
+   * one was held after its answer was read (`#hold` needs its fence), and the subscribe request leaves after this
+   * returns, so the floor's one FIFO mesh worker builds that snapshot after the pull's row went in. */
+  #serve(): ReadonlySet<OwnPull> {
+    const serves = new Set<OwnPull>();
+    for (const own of this.#own.values()) {
+      if (own.held === null || own.asked) continue;
+      own.asked = true;
+      serves.add(own);
+    }
+    return serves;
+  }
+
+  /** Whether a held pull still waits for its re-subscribe to leave. */
+  #owesFresh(): boolean {
+    for (const own of this.#own.values()) if (own.held !== null && !own.asked) return true;
+    return false;
   }
 
   async #declare(): Promise<readonly DriveRootState[]> {
@@ -508,9 +573,10 @@ export class DrivePulls {
   }
 
   /** The floor answered `own`: from here a snapshot that does not list it can say it ended, but only one written
-   * after the answer can (the snapshot write-order rule, W3-16, pending: a snapshot never omits a running pull whose
-   * answer was written before it), and lines are not read one at a time. So the pull gets a FENCE: a setImmediate
-   * set here, counted in `#fencesRun` when it runs, which `#onEvent` stamps on every event as it arrives.
+   * after the answer can (the snapshot write order, W3-16, VF-PM 2026-11-06: a snapshot never omits a RUNNING pull
+   * whose answer was written before it), and lines are not read one at a time. So the pull gets a FENCE: a
+   * setImmediate set here, counted in `#fencesRun` when it runs, which `#onEvent` stamps on every event as it
+   * arrives.
    *  - A snapshot written BEFORE the answer arrives before the fence runs. Its line was read before the answer's, and
    *    NativeLink hands it on as that line is read (native-link.ts:924), or in the continuation of the answer that
    *    carried it with the events queued behind it (:1110-1111; `#doSubscribe`), both before any macrotask, or at
@@ -519,24 +585,24 @@ export class DrivePulls {
    *    waits on (`request`'s, :1161, then `pull`'s). setImmediate runs in the order set.
    *  - So a snapshot that arrives once the fence has run was written after the answer: a pull it omits has ended, and
    *    the lands rule settles it (`#settleUnlisted`).
-   *  - One that arrived before the fence says nothing of the pull, not even by its landed name. It may predate the
-   *    pull's row; the floor places a pull's file and can still fail it and remove the file while the row stands
-   *    (field-native `services/file_transfer.rs`'s `finish`); and a snapshot written while the row stood can follow
-   *    it, and would hand a pull settled here back as a previous fieldd's.
-   * A pull left running ends as any running one does: its terminal delta, matched by its id whatever its fence
-   * (`#onDelta`); a snapshot that omits it and arrives after the fence, such as the `.snapshot` the floor owes when
-   * its stream loses a delta (field-native `mgmt/file_transfer.rs`'s `offer_snapshot`) or NativeLink's replay at a
-   * reconnect (:1105-1128); the floor's idle bound, which ends a pull no byte reaches (W3-4); `failed` NODE_DOWN
-   * when the node goes (W3-2); `#noteUnsupported`, when the floor of a new boot cannot pull; `stop`.
-   * RESIDUAL, an ask for VF-PM: a snapshot written AFTER the answer but read in the same poll phase arrives before
-   * the fence too. A pull whose end reached this fieldd only in such snapshots runs on here, holding its digest
-   * (CONFLICT here) and one of DRIVE_LIMITS.PULLS_IN_FLIGHT, until the next snapshot, a reconnect's replay or
-   * `stop`. Its end misses the stream when the floor skips its delta, which it does when its outbox lacks headroom
-   * (field-native `MgmtOutbox::offer_rebuildable`), that is, when this fieldd is behind, and a fieldd catching up
-   * reads the answer and the owed snapshot together; or when it ended before the stream existed on this connection:
-   * at `start`, at a re-subscribe after a refusal, or when it was answered on a redialed socket before NativeLink
-   * replayed the stream (native-link.ts:481, :493-494). Telling those snapshots apart takes the line order, which
-   * NativeLink does not hand on. */
+   *  - One that arrived before the fence cannot be ordered against the answer. It may predate the pull's row; or it
+   *    was written after the answer and read in the same poll phase, as a fieldd catching up reads the answer and
+   *    the `.snapshot` the floor owes once its outbox skipped the pull's end (field-native
+   *    `MgmtOutbox::offer_rebuildable`); or the pull ended before the stream existed on this connection (at `start`,
+   *    at a re-subscribe after a refusal, or answered on a redialed socket before NativeLink replayed the stream,
+   *    native-link.ts:481, :493-494). Telling those apart takes the line order, which NativeLink does not hand on.
+   *    So it is read for nothing of the pull, not even its landed name: the floor places a pull's file and can still
+   *    fail it and remove the file while the row stands (field-native `services/file_transfer.rs`'s `finish`), and a
+   *    snapshot written while the row stood can follow it and would hand a pull settled here back as a previous
+   *    fieldd's. Omitting the pull, it HOLDS it (`#hold`, race#0 (b), VF-PM 2026-11-06): one re-subscribe, whose
+   *    snapshot is built after the answer and judges the pull, or FAILED_TIMEOUT at the held bound.
+   * A pull ends as any running one does: its terminal delta, matched by its id whatever its fence (`#onDelta`); a
+   * snapshot built after its answer that omits it: one that arrives after the fence, such as the `.snapshot` the
+   * floor owes when its stream loses a delta (field-native `mgmt/file_transfer.rs`'s `offer_snapshot`) or
+   * NativeLink's replay at a reconnect (:1105-1128), or the re-subscribe's (`#hold`); the held bound, when that
+   * snapshot never comes; the floor's idle bound, which ends a pull no byte reaches (W3-4); `failed` NODE_DOWN when
+   * the node goes (W3-2); `#noteUnsupported`, when the floor of a new boot cannot pull; `stop`. A held pull has its
+   * own bound; any other waits on the floor's, whose end reaches it as a delta or in the snapshot a lost one owes. */
   #accept(own: OwnPull): void {
     this.#fencesSet += 1;
     own.fence = this.#fencesSet;
@@ -545,9 +611,13 @@ export class DrivePulls {
     });
   }
 
-  #onEvent(payload: unknown, kind: "snapshot" | "delta"): void {
+  #onEvent(
+    payload: unknown,
+    kind: "snapshot" | "delta",
+    serves: ReadonlySet<OwnPull> = NO_PULLS,
+  ): void {
     if (this.#stopped) return;
-    this.#events.push({ payload, kind, fencesRun: this.#fencesRun });
+    this.#events.push({ payload, kind, fencesRun: this.#fencesRun, serves });
     if (this.#drain === null) this.#drain = setImmediate(() => this.#applyEvents());
   }
 
@@ -555,15 +625,19 @@ export class DrivePulls {
     this.#drain = null;
     for (const event of this.#events.splice(0)) {
       if (this.#stopped) return;
-      if (event.kind === "snapshot") this.#onSnapshot(event.payload, event.fencesRun);
+      if (event.kind === "snapshot") this.#onSnapshot(event.payload, event.fencesRun, event.serves);
       else this.#onDelta(event.payload);
     }
+    // ONE re-subscribe for every pull these events held; one in flight is followed by the next (`#subscribe`)
+    if (!this.#stopped && this.#owesFresh()) void this.#subscribe();
   }
 
   /** P5: the snapshot is the truth. A row this fieldd did not mint is a previous fieldd's, and a foreign row it no
-   * longer lists ended while the reader lagged. So did an accepted pull of this fieldd's it no longer lists, when the
-   * snapshot arrived once that pull's fence had run (`#accept`); one that arrived before says nothing of the pull. */
-  #onSnapshot(payload: unknown, fencesRun: number): void {
+   * longer lists ended while the reader lagged. An accepted pull of this fieldd's is judged only by a snapshot built
+   * after its answer: one that arrived once its fence had run (`#accept`), or the re-subscribe's it was held for
+   * (`serves`). Listed, it runs, and a hold is released; omitted, it ended, and the lands rule settles it. One that
+   * arrived before the fence says nothing of a pull it lists, and holds one it omits (`#hold`). */
+  #onSnapshot(payload: unknown, fencesRun: number, serves: ReadonlySet<OwnPull>): void {
     const snapshot = NativeFileTransferSnapshot.safeParse(payload);
     if (!snapshot.success) {
       this.#dropped("snapshot", issues(snapshot.error));
@@ -572,7 +646,16 @@ export class DrivePulls {
     const listed = new Map<string, string>();
     for (const row of snapshot.data.transfers) listed.set(row.transferId, row.digest);
     for (const own of [...this.#own.values()]) {
-      if (own.fence === null || fencesRun < own.fence || listed.has(own.transferId)) continue;
+      if (own.fence === null) continue;
+      const afterAnswer = fencesRun >= own.fence || serves.has(own);
+      if (listed.has(own.transferId)) {
+        if (afterAnswer) this.#release(own);
+        continue;
+      }
+      if (!afterAnswer) {
+        this.#hold(own);
+        continue;
+      }
       this.#untrack(own);
       void this.#settleUnlisted(own);
     }
@@ -595,6 +678,8 @@ export class DrivePulls {
       return;
     }
     const delta = parsed.data;
+    // A progress ends nothing and releases no hold (`#hold`): a fresh stream forwards after its snapshot an event the
+    // floor sent before it (field-native `mgmt/file_transfer.rs:180-182`), so it does not say the pull still runs.
     if (delta.kind === "progress") return;
     const own = this.#own.get(delta.transferId);
     if (delta.kind === "failed") {
@@ -658,7 +743,39 @@ export class DrivePulls {
     for (const listener of [...this.#adoptListeners]) listener(candidate);
   }
 
+  /** race#0 (b) (VF-PM 2026-11-06; W3-16): a snapshot that may predate `own`'s answer omits it, so it may have ended
+   * or may not have begun. It is HELD: `#applyEvents` asks for ONE re-subscribe, whose snapshot the floor builds
+   * after the pull's row went in (`#serve`), and `#onSnapshot` judges it by that one. If no such snapshot comes (the
+   * re-subscribe refused, or never answered), it ends FAILED_TIMEOUT at the held bound, counted from here, never a
+   * silent wait. A hold ends with the pull's settle (`#untrack`: its terminal delta, NODE_DOWN's included, a snapshot
+   * built after its answer, `#noteUnsupported`, `stop`) or a snapshot built after its answer that lists it
+   * (`#release`). A pull the bound ended that a later snapshot lists is read as any row this fieldd does not track:
+   * its digest is held, and what it lands is an adopt candidate, never an answer. */
+  #hold(own: OwnPull): void {
+    if (own.held !== null) return;
+    const timer = setTimeout(() => {
+      if (this.#own.get(own.transferId) !== own) return;
+      this.#untrack(own);
+      const word = MESH_FILE_TRANSFER.FAILED_TIMEOUT;
+      const message = "no snapshot built after the pull's answer came within the bound";
+      own.reject(new DrivePullFailed(word, message, own.transferId));
+    }, this.#heldBoundMs);
+    timer.unref?.();
+    own.held = timer;
+  }
+
+  /** A snapshot built after `own`'s answer lists it: it runs, and its hold ends. */
+  #release(own: OwnPull): void {
+    if (own.held === null) return;
+    clearTimeout(own.held);
+    own.held = null;
+  }
+
+  /** Every settle, and `stop`, comes through here, before the pull is settled: it leaves the tables, and every path
+   * that settles a pull finds it in `#own` first, so none settles it twice; and its held bound's timer is cleared,
+   * so none leaves a timer behind (item 196). */
   #untrack(own: OwnPull): void {
+    this.#release(own);
     this.#own.delete(own.transferId);
     if (this.#running.get(own.digest) === own.transferId) this.#running.delete(own.digest);
   }

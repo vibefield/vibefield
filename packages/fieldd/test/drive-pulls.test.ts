@@ -14,6 +14,7 @@ import {
   isPipeEndpoint,
   LAYOUT,
   MESH_FILE_TRANSFER,
+  NATIVE_REFUSALS,
   NativeFileTransferPullParams,
   NativeFileTransferRootsResult,
   RPC_ERROR_CODES,
@@ -26,6 +27,7 @@ import {
   type DriveAdoptCandidate,
   DrivePullFailed,
   DrivePulls,
+  type DrivePullsFloor,
   type DrivePullsOptions,
 } from "../src/drive/pulls";
 import { DriveService } from "../src/drive/service";
@@ -35,6 +37,7 @@ import { type MockFileTransfer, MockMgmtServer, mockFileTransfer } from "../src/
 import {
   type CapturedLog,
   captureLogger,
+  EXHAUSTED_GOLDEN,
   FakeDriveLaneBytes,
   FakeDriveLaneControl,
   FakeDriveStore,
@@ -255,7 +258,7 @@ describe("DR-3b — the drive's pulls over the floor's file transfer", () => {
     expect(await refused(ROOTS, { roots: ["../up"] })).toMatchObject(unreadable);
     expect(await refused(PULL, { transferId: "lower" })).toMatchObject(unreadable);
     // 6. an ungated node holds the root; a pull is refused CONFLICT by its id, then by its digest, and one past
-    // DRIVE_LIMITS.PULLS_IN_FLIGHT RESOURCE_EXHAUSTED (retryable true: the floor's `refusal()`, read; VF-PM's W3-15)
+    // DRIVE_LIMITS.PULLS_IN_FLIGHT as its golden holds it (W3-15, VF-PM 2026-11-06)
     const held = await link.request(ROOTS, { roots: [ROOT] });
     expect(NativeFileTransferRootsResult.parse(held)).toEqual({
       roots: [{ name: ROOT, registered: false, reason: MESH_FILE_TRANSFER.ROOT_UNGATED }],
@@ -268,11 +271,9 @@ describe("DR-3b — the drive's pulls over the floor's file transfer", () => {
       await link.request(PULL, pullOf(n, n));
     }
     expect(transfer.running.size).toBe(DRIVE_LIMITS.PULLS_IN_FLIGHT);
-    expect(await refused(PULL, pullOf(9, 9))).toMatchObject({
-      kind: "RESOURCE_EXHAUSTED",
-      retryable: true,
-      code: RPC_ERROR_CODES.RESOURCE_EXHAUSTED,
-    });
+    const exhausted = await refused(PULL, pullOf(9, 9));
+    expect(exhausted.code).toBe(RPC_ERROR_CODES[EXHAUSTED_GOLDEN.kind]);
+    expect(errorData(exhausted)).toEqual(EXHAUSTED_GOLDEN);
   });
 
   it("leaves a pull running while the stream's replay still lists it, and settles it on its delta", async () => {
@@ -315,10 +316,13 @@ describe("DR-3b — the drive's pulls over the floor's file transfer", () => {
     const state = settled(landed);
     await until(() => !transfer.snapshotBeforeAnswer, "the snapshot and the answer, written");
     const id = idOf(transfer, digest);
-    // it may have been written before the answer, so it says nothing of the pull: no end, and no lands folder read
+    // it may have been written before the answer, so it reads nothing of the pull and holds it (race#0 (b)): ONE
+    // re-subscribe, whose snapshot, built after the answer, lists the pull, so it runs on, its lands folder unread
+    await until(() => asked(mock, SUBSCRIBE) === 2, "the one re-subscribe");
     await roundTrip(link);
     expect(state()).toBe("pending");
     expect(looked).toEqual([]);
+    expect(asked(mock, SUBSCRIBE)).toBe(2);
     mock.pushFileTransferDelta(completed(id, digest));
     await expect(landed).resolves.toEqual({ path: join(landsDir, `${digest}.${id}`) });
   });
@@ -336,6 +340,8 @@ describe("DR-3b — the drive's pulls over the floor's file transfer", () => {
     const landed = drive.pull(ask(digest));
     const state = settled(landed);
     await until(() => !transfer.snapshotBeforeAnswer, "the snapshot and the answer, written");
+    // the re-subscribe's snapshot lists the pull: a running pull it lists is never settled, landed file or none
+    await until(() => asked(mock, SUBSCRIBE) === 2, "the one re-subscribe");
     await roundTrip(link);
     expect(state()).toBe("pending");
     const reason = MESH_FILE_TRANSFER.FAILED_INTEGRITY;
@@ -343,24 +349,120 @@ describe("DR-3b — the drive's pulls over the floor's file transfer", () => {
     await expect(landed).rejects.toMatchObject({ reason, transferId: id });
   });
 
-  it("holds a pull whose end came only in a snapshot read with its answer, until the next snapshot (the residual)", async () => {
+  it("re-subscribes once for a pull held by a snapshot read with its answer, and that snapshot ends it failed io", async () => {
     const transfer = mockFileTransfer();
     const { mock, link, root } = await floor(transfer);
     const drive = pulls(link, root);
     await drive.start();
     // the floor answers the pull, the pull ends and its delta is lost, and the snapshot that loss is owed follows,
-    // in ONE write: read before the pull's fence ran, the snapshot may predate the answer, so it settles nothing
+    // in ONE write: read before the pull's fence ran, the snapshot may predate the answer, so it holds the pull
     transfer.snapshotAfterAnswer = true;
-    const landed = drive.pull(ask(digestOf(1)));
+    const ended = drive.pull(ask(digestOf(1))).catch((error: unknown) => error);
+    await until(() => !transfer.snapshotAfterAnswer, "the answer and the snapshot, written");
+    // race#0 (b), VF-PM 2026-11-06: ONE re-subscribe, whose snapshot, built after the answer, omits the pull, and
+    // the lands rule ends it at once, long before the held bound (60 s here)
+    const failure = await ended;
+    expect(failure).toBeInstanceOf(DrivePullFailed);
+    expect(failure).toMatchObject({ reason: MESH_FILE_TRANSFER.FAILED_IO });
+    expect(transfer.running.size).toBe(0);
+    expect(asked(mock, SUBSCRIBE)).toBe(2);
+  });
+
+  it("re-subscribes once for a pull held by a snapshot read with its answer, and resolves it when its file landed", async () => {
+    const transfer = mockFileTransfer();
+    const { mock, link, root, landsDir } = await floor(transfer);
+    const id = idFor(1);
+    const drive = pulls(link, root, { mintId: () => id });
+    await drive.start();
+    // it completed and its delta was lost: its file is in place before its answer and the owed snapshot are read
+    const digest = digestOf(1);
+    const path = join(landsDir, `${digest}.${id}`);
+    writeFileSync(path, "object bytes");
+    transfer.snapshotAfterAnswer = true;
+    const landed = drive.pull(ask(digest));
     const state = settled(landed);
     await until(() => !transfer.snapshotAfterAnswer, "the answer and the snapshot, written");
-    await roundTrip(link);
-    expect(transfer.running.size).toBe(0);
-    expect(state()).toBe("pending");
-    // pulls.ts `#accept`'s residual, an ask for VF-PM: the next snapshot comes after the fence, and the lands rule
-    // settles the pull
-    mock.pushFileTransferSnapshot();
-    await expect(landed).rejects.toMatchObject({ reason: MESH_FILE_TRANSFER.FAILED_IO });
+    await expect(landed).resolves.toEqual({ path });
+    expect(state()).toBe("resolved");
+    expect(asked(mock, SUBSCRIBE)).toBe(2);
+  });
+
+  it("ends a held pull FAILED_TIMEOUT at its bound when its re-subscribe is refused or never answered", async () => {
+    const transfer = mockFileTransfer();
+    const { mock, link, root } = await floor(transfer);
+    const events: CapturedLog[] = [];
+    const drive = pulls(link, root, { heldBoundMs: 1_000, logger: captureLogger(events) });
+    await drive.start();
+    const subscribes = () => mock.requestLog.filter((r) => r.method === SUBSCRIBE).length;
+    // 1. refused: the pull has left (its request is written as `pull` is called), and from here the floor is held
+    // unresponsive (WG-D4), so a door's subscribe is refused at once and never sent
+    transfer.snapshotAfterAnswer = true;
+    const first = drive.pull(ask(digestOf(1)));
+    const firstState = settled(first);
+    link.setDoorGate(() => ({
+      service: NATIVE_REFUSALS.SERVICE,
+      state: NATIVE_REFUSALS.STATE_UNRESPONSIVE,
+    }));
+    const subscribeRefused = (e: CapturedLog) =>
+      e.event === "fieldd.drive.file_transfer_refused" && e.attrs?.["method"] === SUBSCRIBE;
+    await until(() => events.some(subscribeRefused), "the re-subscribe, refused");
+    // the refusal ends nothing: the bound does
+    expect(firstState()).toBe("pending");
+    await expect(first).rejects.toMatchObject({ reason: MESH_FILE_TRANSFER.FAILED_TIMEOUT });
+    expect(subscribes()).toBe(1);
+    // 2. never answered: the floor reads the re-subscribe and says nothing
+    link.setDoorGate(null);
+    mock.silentMethods.add(SUBSCRIBE);
+    transfer.snapshotAfterAnswer = true;
+    const second = drive.pull(ask(digestOf(2)));
+    const secondState = settled(second);
+    await until(() => subscribes() === 2, "the re-subscribe, unanswered");
+    expect(secondState()).toBe("pending");
+    await expect(second).rejects.toMatchObject({ reason: MESH_FILE_TRANSFER.FAILED_TIMEOUT });
+  });
+
+  it("serves every pull one snapshot held with ONE re-subscribe, and disposes the stream the floor replaced", async () => {
+    const transfer = mockFileTransfer();
+    const { mock, link, root } = await floor(transfer);
+    // NativeLink's subscriptions, numbered as made, and every one disposed (its dispose tells the floor nothing)
+    const disposed: number[] = [];
+    let made = 0;
+    const counted: DrivePullsFloor = {
+      request: (method, params) => link.request(method, params),
+      subscribe: async (method, params, onEvent) => {
+        made += 1;
+        const n = made;
+        const subscription = await link.subscribe(method, params, onEvent);
+        return {
+          snapshot: subscription.snapshot,
+          dispose: () => {
+            disposed.push(n);
+            subscription.dispose();
+          },
+        };
+      },
+    };
+    const drive = pulls(link, root, { floor: counted });
+    await drive.start();
+    // two pulls run with their answers held (this reader is behind), both end and their deltas are lost, then both
+    // answers and the snapshot owed come in ONE read, before either pull's fence ran: it holds both
+    transfer.holdAnswers = true;
+    const first = drive.pull(ask(digestOf(1))).catch((error: unknown) => error);
+    const second = drive.pull(ask(digestOf(2))).catch((error: unknown) => error);
+    await until(() => transfer.running.size === 2, "both pulls run");
+    transfer.running.clear();
+    transfer.holdAnswers = false;
+    mock.releaseFileTransferAnswers();
+    // ONE re-subscribe serves both: its snapshot, built after both answers, omits both, and the lands rule ends them
+    for (const failure of [await first, await second]) {
+      expect(failure).toBeInstanceOf(DrivePullFailed);
+      expect(failure).toMatchObject({ reason: MESH_FILE_TRANSFER.FAILED_IO });
+    }
+    expect(asked(mock, SUBSCRIBE)).toBe(2);
+    expect(made).toBe(2);
+    // the floor replaced the first stream with it (W3-20, VF-PM 2026-11-06), and fieldd disposed the first
+    expect(transfer.replaced).toEqual([transfer.subscribed[0]]);
+    expect(disposed).toEqual([1]);
   });
 
   it("mints a ULID and asks with the contract's fields; a path outside the grammar is refused, unsent", async () => {
@@ -481,12 +583,11 @@ describe("DR-3b — the drive's pulls over the floor's file transfer", () => {
     }
     await until(() => transfer.running.size === DRIVE_LIMITS.PULLS_IN_FLIGHT, "four pulls run");
     const sent = mock.meshCalls.length;
-    // retryable true and no details, as the floor's `refusal()` answers it (read) and VF-PM's W3-15 rules
-    await expect(drive.pull(ask(digestOf(9)))).rejects.toMatchObject({
-      kind: "RESOURCE_EXHAUSTED",
-      retryable: true,
-      code: RPC_ERROR_CODES.RESOURCE_EXHAUSTED,
-    });
+    // as the floor's golden holds it: retryable true and no details (W3-15, VF-PM 2026-11-06)
+    const refusal = await drive.pull(ask(digestOf(9))).catch((error: unknown) => error);
+    expect(refusal).toBeInstanceOf(RpcCallError);
+    expect((refusal as RpcCallError).code).toBe(RPC_ERROR_CODES[EXHAUSTED_GOLDEN.kind]);
+    expect(errorData(refusal as RpcCallError)).toEqual(EXHAUSTED_GOLDEN);
     expect(mock.meshCalls.length).toBe(sent);
   });
 

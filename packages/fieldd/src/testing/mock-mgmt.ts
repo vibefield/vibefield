@@ -2,15 +2,17 @@
 // fieldd's own concurrency regressions AND fieldd-client integration tests run
 // the full product spine without a cargo build. Speaks just enough of the mgmt
 // protocol: hello, *.subscribe → {subId, snapshot}, everything else → {}.
-import { rmSync } from "node:fs";
+import { readFileSync, rmSync } from "node:fs";
 import { createServer, type Server, type Socket } from "node:net";
 import {
   DRIVE_LIMITS,
+  ErrorData,
   isPipeEndpoint,
   LOG_STREAMS,
   MESH_FILE_TRANSFER,
   NativeFileTransferPullParams,
   NativeFileTransferRootsParams,
+  RPC_ERROR_CODES,
   STORES,
 } from "@vibefield/contracts";
 import { computeAckMac } from "../pairing";
@@ -84,13 +86,23 @@ export interface MockFileTransfer {
   pulls: Array<Record<string, unknown>>;
   /** ONE-SHOT: the next pull the floor runs is answered behind a `.snapshot` of the table as it was before that pull
    * began, both in ONE write, one chunk, as `deltaInSameChunk` writes its race. A floor may write them in that order
-   * (the snapshot write-order rule, W3-16, pending, forbids only a snapshot written after the answer that omits the
-   * pull while it runs). Cleared once written. */
+   * (the snapshot write order, W3-16, VF-PM 2026-11-06, forbids only a snapshot written after the answer that omits
+   * the pull while it runs). Cleared once written. */
   snapshotBeforeAnswer: boolean;
   /** ONE-SHOT: the next pull the floor runs is answered, then ends with no delta (its row deleted, as an end the
    * stream lost), then the `.snapshot` that loss is owed follows, all in ONE write, one chunk: the pull's end reaches
-   * fieldd only in a snapshot read with its answer (pulls.ts `#accept`'s residual). Cleared once written. */
+   * fieldd only in a snapshot read with its answer, which holds the pull until a re-subscribe's snapshot (pulls.ts
+   * `#hold`, race#0 (b), VF-PM 2026-11-06). Cleared once written. */
   snapshotAfterAnswer: boolean;
+  /** While set, the floor runs each pull (its row in; every refusal before it answered as ever) but holds its answer;
+   * `MockMgmtServer.releaseFileTransferAnswers()` writes every held answer, then the `.snapshot` of the table as it
+   * is then, in ONE write, one chunk: a reader that fell behind reads them together. */
+  holdAnswers: boolean;
+  /** every subId the floor answered a `subscribe` with, in order */
+  subscribed: string[];
+  /** every subId a later `subscribe` on the same connection replaced, in order: the floor stopped its stream, and
+   * nothing more is sent on it (W3-20, VF-PM 2026-11-06) */
+  replaced: string[];
 }
 
 export function mockFileTransfer(overrides: Partial<MockFileTransfer> = {}): MockFileTransfer {
@@ -102,8 +114,22 @@ export function mockFileTransfer(overrides: Partial<MockFileTransfer> = {}): Moc
     pulls: [],
     snapshotBeforeAnswer: false,
     snapshotAfterAnswer: false,
+    holdAnswers: false,
+    subscribed: [],
+    replaced: [],
     ...overrides,
   };
+}
+
+/** W3-15 (VF-PM 2026-11-06) — the floor's refusal of a pull past DRIVE_LIMITS.PULLS_IN_FLIGHT, as its golden holds it
+ * (contracts `fixtures/error-data.file-transfer-exhausted.json`: RESOURCE_EXHAUSTED, retryable true, no details),
+ * parsed through `ErrorData` (EL9). Read when answered, so the mock's other consumers never read it. */
+function fileTransferExhausted(): ErrorData {
+  const fixture = new URL(
+    "../../../contracts/fixtures/error-data.file-transfer-exhausted.json",
+    import.meta.url,
+  );
+  return ErrorData.parse(JSON.parse(readFileSync(fixture, "utf8")));
 }
 
 export class MockMgmtServer {
@@ -320,6 +346,8 @@ export class MockMgmtServer {
   private storeVersion = 0;
   private nextSub = 1;
   private issued: Array<{ sock: Socket; subId: string; method: string; storeId?: string }> = [];
+  /** DR-3b — the pull answers `MockFileTransfer.holdAnswers` held, in order */
+  private heldFileTransferAnswers: Array<{ sock: Socket; answer: string }> = [];
   /** Historical subscribe requests, retained across scripted reconnects. */
   readonly subscriptionRequests: string[] = [];
   /** Every `native.mesh.*` method asked of this floor, in order — the facade's
@@ -1072,14 +1100,14 @@ export class MockMgmtServer {
    *  0. a name the contract does not declare (methods.ts declares `roots`, `pull` and `subscribe`; `offer` stays
    *     reserved) answers NOT_FOUND on either arm, ahead of step 1, as VF-FLOOR's facade reads the method first;
    *  1. `file-transfer-unsupported` first, for every declared verb, node or no node;
-   *  2. `subscribe` is answered with no node up: its stream outlives node rebuilds;
+   *  2. `subscribe` is answered with no node up: its stream outlives node rebuilds. One on a connection that already
+   *     holds a file-transfer stream REPLACES it, and the old subId goes quiet (W3-20, VF-PM 2026-11-06);
    *  3. `roots` and `pull` with no node answer the node gate (`meshPosture: null`, `meshUnavailable`);
    *  4. in capture mode they are refused MESH_CAPTURING;
    *  5. params the floor cannot read are PRECONDITION_FAILED;
    *  6. `roots` registers each root or answers it ROOT_UNGATED, and `pull` is refused CONFLICT (by its id, then by
-   *     its digest), then RESOURCE_EXHAUSTED past DRIVE_LIMITS.PULLS_IN_FLIGHT, retryable true with no details, as
-   *     the floor answers it (field-native `mgmt/file_transfer.rs`'s `refusal()`, read) and as VF-PM's W3-15 rules
-   *     it; its golden (`error-data.file-transfer-exhausted.json`) is the lead's. */
+   *     its digest), then RESOURCE_EXHAUSTED past DRIVE_LIMITS.PULLS_IN_FLIGHT, built from its golden
+   *     (`error-data.file-transfer-exhausted.json`, W3-15, VF-PM 2026-11-06: retryable true, no details). */
   private onFileTransfer(
     sock: Socket,
     msg: { id: number; method: string; params?: Record<string, unknown> },
@@ -1115,8 +1143,14 @@ export class MockMgmtServer {
       return;
     }
     if (subscribe) {
+      // W3-20: the stream this connection held, if any, is stopped, and its subId goes quiet
+      for (const e of this.issued) {
+        if (e.sock === sock && e.method === msg.method) transfer.replaced.push(e.subId);
+      }
+      this.issued = this.issued.filter((e) => e.sock !== sock || e.method !== msg.method);
       const subId = `s${this.nextSub++}`;
       this.issued.push({ sock, subId, method: msg.method });
+      transfer.subscribed.push(subId);
       reply({ result: { subId, snapshot: { transfers: [...transfer.running.values()] } } });
       return;
     }
@@ -1166,15 +1200,27 @@ export class MockMgmtServer {
       return;
     }
     if (running.length >= DRIVE_LIMITS.PULLS_IN_FLIGHT) {
-      refuse(-32010, "RESOURCE_EXHAUSTED", "the floor's pulls are all running", true);
+      const golden = fileTransferExhausted();
+      refuse(
+        RPC_ERROR_CODES[golden.kind],
+        golden.kind,
+        "the floor's pulls are all running",
+        golden.retryable,
+        golden.details,
+      );
       return;
     }
     transfer.running.set(transferId, { transferId, peer, root, digest, bytes: 0 });
+    const answer = `${JSON.stringify({ jsonrpc: "2.0", id: msg.id, result: { transferId } })}\n`;
+    if (transfer.holdAnswers) {
+      // written by `releaseFileTransferAnswers()`, with the snapshot of the table as it is then
+      this.heldFileTransferAnswers.push({ sock, answer });
+      return;
+    }
     if (!transfer.snapshotBeforeAnswer && !transfer.snapshotAfterAnswer) {
       reply({ result: { transferId } });
       return;
     }
-    const answer = `${JSON.stringify({ jsonrpc: "2.0", id: msg.id, result: { transferId } })}\n`;
     if (transfer.snapshotBeforeAnswer) {
       transfer.snapshotBeforeAnswer = false;
       // the table before this pull began (`running`), then its answer: ONE write, one chunk
@@ -1246,6 +1292,20 @@ export class MockMgmtServer {
           params: { subId: e.subId, payload: snapshot },
         })}\n`,
       );
+    }
+  }
+
+  /** DR-3b — write every pull answer `MockFileTransfer.holdAnswers` held, then one `.snapshot` of the table as it is
+   * now for each file-transfer subscription on that connection (`fileTransferSnapshots`): ONE write per connection,
+   * one chunk. */
+  releaseFileTransferAnswers(): void {
+    const held = this.heldFileTransferAnswers.splice(0);
+    const transfer = this.fileTransfer;
+    const transfers = typeof transfer === "object" ? [...transfer.running.values()] : [];
+    for (const sock of new Set(held.map((h) => h.sock))) {
+      if (sock.destroyed) continue;
+      const answers = held.filter((h) => h.sock === sock).map((h) => h.answer);
+      sock.write(`${answers.join("")}${this.fileTransferSnapshots(sock, transfers)}`);
     }
   }
 
