@@ -10,6 +10,10 @@
   /// IOS-12c — a thread under `-vf-mock` reads the Mac fold's own golden inputs (`chat-flow.<case>.golden.json`, copies
   /// under `Fixtures/chat-flow/` the gate keeps identical to field-app's), read as the reader reads a line frame. The
   /// case is `-vf-chat-case=<case>` (at-rest by default); `reading` and `unreadable` are said as themselves.
+  /// IOS-12d — the queue's cards under `-vf-needs-case=<cards|away>` (the merged list, with a held spawn and an agent's
+  /// ask of Vela's from the contracts' own items, on studio; or with the spawn on mini, asleep), an answer as
+  /// `-vf-needs-answer=<done|failed|unheard|refused|held>` says (done by default; held never returns), and the home's
+  /// catalog from the contracts' own copy. The stills press an act with `-vf-needs-press=<item>:<choice>`.
   @MainActor
   final class ChatFixtureDoor: ChatDoor {
     /// The goldens' desktops, by the names the mock account says.
@@ -44,7 +48,9 @@
     func call(_ method: String, params: JSONValue?) async throws -> JSONValue {
       switch method {
       case "compose.sparks.list": return try answer("compose-sparks-list.merged")
-      case "needs.list": return try answer("needs-list.merged")
+      case "needs.list": return try needsList()
+      case NeedsAnswerParams.method: return try await answerNeeds(params)
+      case "agent.catalog": return try answer("agent-catalog.valid")
       case "compose.sparks.open":
         let sparks = try answer("compose-sparks-list.merged")["sparks"]?.arrayValue ?? []
         let asked = params?["spark"]?.stringValue
@@ -62,6 +68,74 @@
         throw FieldProductError(
           kind: "NOT_FOUND", message: "the fixture door does not answer \(method)", code: -32601)
       }
+    }
+
+    /// The queue under `-vf-needs-case=`: the merged list, or with the contracts' held spawn and agent's ask of Vela's
+    /// on studio (`cards`), or with the spawn on mini, which the merge says is asleep (`away`).
+    private func needsList() throws -> JSONValue {
+      let merged = try answer("needs-list.merged")
+      guard let extra = Self.needsCase, case .object(var fields) = merged,
+        var items = fields["items"]?.arrayValue
+      else { return merged }
+      let spawnOn = extra == "away" ? "dev-01HQ9S7Y44" : Self.home
+      for (name, device) in [("needs-item.held-spawn", spawnOn), ("needs-item.agent-ask", Self.home)] {
+        guard case .object(var item)? = Self.fixture(name) else { continue }
+        item["device"] = .string(device)
+        items.append(.object(item))
+      }
+      fields["items"] = .array(items)
+      return .object(fields)
+    }
+
+    /// An answer, as `-vf-needs-answer=` says it came out: the item answered, or refused in fieldd's words, or held.
+    private func answerNeeds(_ params: JSONValue?) async throws -> JSONValue {
+      let id = params?["item"]?.stringValue
+      let choice = params?["choice"]?.intValue ?? 0
+      let items = try needsList()["items"]?.arrayValue ?? []
+      guard case .object(var item)? = items.first(where: { $0["id"]?.stringValue == id }) else {
+        throw FieldProductError(kind: "NOT_FOUND", message: "no such item")
+      }
+      var answer: [String: JSONValue] = ["choice": .int(choice), "at": .string("2026-10-31T16:12:30.940Z")]
+      switch Self.needsAnswer {
+      case "held":
+        try await Task.sleep(for: .seconds(86_400))
+        throw CancellationError()
+      case "refused":
+        let word = item["choices"]?.arrayValue?.first?.stringValue ?? "another act"
+        throw FieldProductError(kind: "PRECONDITION_FAILED", message: "already answered: \(word)")
+      case "failed":
+        answer["outcome"] = .string("failed")
+        answer["reason"] = .string("the agent's sign-in expired")
+        answer["told"] = .bool(true)
+      case "unheard":
+        answer["outcome"] = .string("done")
+        answer["told"] = .bool(false)
+        answer["waits"] = .string("Vela's session is starting; it hears your answer when it wakes")
+      default:
+        answer["outcome"] = .string("done")
+        answer["told"] = .bool(true)
+      }
+      item["state"] = .string("answered")
+      item["answer"] = .object(answer)
+      return .object(["item": .object(item)])
+    }
+
+    /// The queue's case: `-vf-needs-case=<cards|away>`, else the merged list alone.
+    static var needsCase: String? { flag("-vf-needs-case=") }
+
+    /// How an answer comes out: `-vf-needs-answer=<…>`, else done.
+    static var needsAnswer: String { flag("-vf-needs-answer=") ?? "done" }
+
+    /// The stills' press: `-vf-needs-press=<item>:<choice>` presses that act once the queue holds its item.
+    static var needsPress: (item: String, choice: Int)? {
+      guard let given = flag("-vf-needs-press="), let colon = given.lastIndex(of: ":"),
+        let choice = Int(given[given.index(after: colon)...])
+      else { return nil }
+      return (String(given[..<colon]), choice)
+    }
+
+    private static func flag(_ prefix: String) -> String? {
+      ProcessInfo.processInfo.arguments.first { $0.hasPrefix(prefix) }.map { String($0.dropFirst(prefix.count)) }
     }
 
     func reader(

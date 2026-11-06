@@ -6,6 +6,8 @@ import SwiftUI
 // the phone") — THE THREAD'S PAGE: the head on the bar's glass (back, the face at 30, the thread's ONE live face on a
 // stage of its own; the name over its status word; Wake while it sleeps; ⋯), the flow the Mac's fold draws, and the
 // composer in the bar's place. Every row of the flow is the Mac's at touch pitch; every face in it is a still.
+// IOS-12d (PC-D4 A; §8 the thread's card): what waits on you stands at the foot, between the flow and the composer, one
+// card at a time in the Mac's order (its own run's ask first, then the oldest), answered in place.
 
 struct ChatThreadView: View {
   let entry: SparkEntry
@@ -23,6 +25,7 @@ struct ChatThreadView: View {
   @State private var opened: Set<String> = []
   @State private var scroll = ScrollPosition(edge: .bottom)
   @State private var column: CGFloat = 0
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
   /// Nonisolated: the column's width is reckoned from it in `onGeometryChange`'s Sendable transform (the 11-06 rule).
   nonisolated static let side: CGFloat = 16
@@ -59,9 +62,27 @@ struct ChatThreadView: View {
     }
     .background(ChromePalette.paper.ignoresSafeArea())
     .safeAreaInset(edge: .bottom, spacing: 0) {
-      ChatComposer(
-        draft: $model.draft, name: name, away: away, busy: model.busy, note: model.sendNote,
-        onSend: { Task { await model.send(entry, away: away) } })
+      let card = ChatNeeds.thread(entry, answering: feed.answering, reduced: reduceMotion)
+      VStack(spacing: 12) {
+        if let card {
+          ChatNeedsCardView(
+            card: card, place: .thread,
+            away: away.map { ChatNeedsWords.away($0.name, $0.standing, device: DeviceWord.current) },
+            labels: feed.labels,
+            onAct: { choice in
+              feed.press(card.item, choice: choice, spark: entry.spark.id, names: card.names)
+            },
+            onPane: { openPane(of: card.item) },
+            onOpen: nil
+          )
+          .padding(.horizontal, Self.side)
+          .transition(reduceMotion ? .opacity : .opacity.combined(with: .offset(y: 8)))
+        }
+        ChatComposer(
+          draft: $model.draft, name: name, away: away, busy: model.busy, note: model.sendNote,
+          onSend: { Task { await model.send(entry, away: away) } })
+      }
+      .animation(reduceMotion ? .easeInOut(duration: 0.12) : .easeOut(duration: 0.24), value: card?.id)
     }
     .navigationBarTitleDisplayMode(.inline)
     .toolbar { head }
@@ -135,6 +156,13 @@ struct ChatThreadView: View {
         }
       }
     }
+  }
+
+  /// Answer in its pane (Q5): the asking run's session card on Field, found on the board at the press.
+  private func openPane(of item: NeedsItem) -> Bool {
+    guard let session = item.from.session, let run = feed.run(session) else { return false }
+    onOpenPane(run)
+    return true
   }
 
   /// The status's word, or "Waking…" while Wake runs, or the last act's refusal (§8: until the next act).

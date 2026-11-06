@@ -13,10 +13,13 @@ struct ChatNotes: Equatable {
   /// The needs standing on the last reading; nil before the first whole one.
   private var known: Set<String>?
 
-  /// A need's keys for one spark: its own run's wait while it runs, then its items.
+  /// A need's keys for one spark: its own run's wait while it runs, then its items. *Amended at IOS-12d (TH-1, the
+  /// Mac's `needsOf`):* a waiting run whose ask the queue holds is that item, read once: the item's key alone.
   static func keys(_ entry: SparkEntry) -> [String] {
-    let wait = entry.blocked ? entry.run.map { ["\($0.runtimeRunId):wait"] } ?? [] : []
-    return wait + entry.items.map { $0.id }
+    let items = entry.items.map { $0.id }
+    guard entry.blocked, let run = entry.run else { return items }
+    let queued = entry.items.contains { $0.knownKind == .agentAsk && $0.from.session == run.runtimeRunId }
+    return (queued ? [] : ["\(run.runtimeRunId):wait"]) + items
   }
 
   /// One reading: the first spark with a need that was not standing before, when another page stands; nil when

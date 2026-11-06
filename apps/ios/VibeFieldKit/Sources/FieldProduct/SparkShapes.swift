@@ -18,6 +18,11 @@ enum SparkWire {
   static func isSparkId(_ text: String) -> Bool { isId(text, prefix: "sp-") }
   /// `NeedsItemId`: `/^ny-[0-9a-z]{6,32}$/`.
   static func isNeedsId(_ text: String) -> Bool { isId(text, prefix: "ny-") }
+  /// `NeedsScript.hash`: `/^[0-9a-f]{64}$/`.
+  static func isSha256(_ text: String) -> Bool {
+    let bytes = Array(text.utf8)
+    return bytes.count == 64 && bytes.allSatisfy { (0x30...0x39).contains($0) || (0x61...0x66).contains($0) }
+  }
 
   private static func isId(_ text: String, prefix: String) -> Bool {
     let bytes = Array(text.utf8)
@@ -241,12 +246,19 @@ public struct ComposeSparksList: Sendable, Equatable {
 
 // MARK: - The needs-you queue
 
-/// An item's kind as this build names it (`NEEDS_ITEM_KINDS`, OPEN).
+/// An item's kind as this build names it (`NEEDS_ITEM_KINDS`, OPEN). IOS-12d: CP-4's six flow kinds too, which Chat
+/// draws as the Mac's card does until CP-4b (Q9).
 public enum NeedsItemKind: String, Sendable, Equatable, CaseIterable {
   case question
   case heldSend = "held-send"
   case heldSpawn = "held-spawn"
   case agentAsk = "agent-ask"
+  case flowProposal = "flow-proposal"
+  case flowGate = "flow-gate"
+  case flowChanged = "flow-changed"
+  case flowRepair = "flow-repair"
+  case flowCap = "flow-cap"
+  case flowLost = "flow-lost"
 }
 
 /// Who asks or tells (`NeedsFrom`): named as fieldd names it, its session, and the spark when the teller IS it.
@@ -301,9 +313,9 @@ public struct NeedsAnswer: Sendable, Equatable {
   }
 }
 
-/// One item of the needs-you queue (`NeedsItem`, CP-3): a question, a held send or spawn, or an agent's own ask. The
-/// phone reads what Chat's list and its thread say; the item's other facts (the held send's session, the spawn's
-/// folder, an answer) are held to the contract and passed over.
+/// One item of the needs-you queue (`NeedsItem`, CP-3): a question, a held send or spawn, an agent's own ask, or a
+/// flow's (CP-4). IOS-12d: the phone reads what the needs-you card says (the held send's session, the spawn's agent,
+/// folder and live count, an answer); a flow item's run and script are held to the contract and passed over.
 public struct NeedsItem: Sendable, Equatable, Identifiable {
   public let id: String
   /// The kind as it came (OPEN).
@@ -368,32 +380,36 @@ public struct NeedsItem: Sendable, Equatable, Identifiable {
       }
     }
     count = try object.typedInt("count", atLeast: 1)
-    _ = try object.strictObject("to") { raw in
-      var to = try WireObject(shape: "NeedsItem.to", value: raw)
-      return (try to.text("session", 1...Int.max), try to.text("name", SparkWire.needsName))
-    }
-    _ = try object.typedString("agent", 1...128)
-    _ = try object.typedString("folder", 1...255)
-    _ = try object.typedInt("live", atLeast: 0)
+    to = try object.strictObject("to", NeedsTo.init(json:))
+    agent = try object.typedString("agent", 1...128)
+    folder = try object.typedString("folder", 1...255)
+    live = try object.typedInt("live", atLeast: 0)
     ask = try object.typedString("ask", 1...32)
     tool = try object.typedString("tool", 1...128)
-    _ = try object.strictObject("answer") { raw in
-      var answer = try WireObject(shape: "NeedsAnswer", value: raw)
-      let choice = try answer.integer("choice", atLeast: 0)
-      guard choice <= 4 else { throw WireDecodeError(shape: "NeedsAnswer", reason: "`choice` is past 4") }
-      _ = try answer.text("at", 1...Int.max)
-      _ = try answer.text("outcome", 1...32)
-      _ = try answer.typedString("reason", SparkWire.needsReason)
-      _ = try answer.flag("told")
-      _ = try answer.typedString("waits", SparkWire.needsReason)
-      return choice
+    // CP-4 — a flow item's run and the bytes it is about, held to the contract (`NeedsRun`, `NeedsScript`)
+    _ = try object.strictObject("run") { raw in
+      var run = try WireObject(shape: "NeedsRun", value: raw)
+      _ = try run.text("run", 1...64)
+      _ = try run.text("flow", 1...64)
+      _ = try run.typedInt("call", atLeast: 1)
+      _ = try run.typedString("label", SparkWire.needsName)
+      return true
     }
-    // IOS-12d's d3 skeleton: d4 brings the body.
-    to = nil
-    agent = nil
-    folder = nil
-    live = nil
-    answer = nil
+    _ = try object.strictObject("script") { raw in
+      var script = try WireObject(shape: "NeedsScript", value: raw)
+      _ = try script.text("flow", 1...64)
+      for key in ["hash", "approved"] {
+        guard let hash = try script.typedString(key) else {
+          if key == "hash" { throw script.missing(key) }
+          continue
+        }
+        guard SparkWire.isSha256(hash) else {
+          throw WireDecodeError(shape: "NeedsScript", reason: "`\(key)` is not a SHA-256 in hex")
+        }
+      }
+      return true
+    }
+    answer = try object.strictObject("answer", NeedsAnswer.init(json:))
     unknownFields = object.unknownFields
   }
 }
@@ -441,8 +457,9 @@ public struct NeedsAnswerParams: Sendable, Equatable {
   }
 
   public var json: JSONValue {
-    // IOS-12d's d3 skeleton: d4 brings the body.
-    .object([:])
+    var fields: [String: JSONValue] = ["item": .string(item), "choice": .int(Int64(choice))]
+    if let device { fields["device"] = .string(device) }
+    return .object(fields)
   }
 }
 
@@ -452,8 +469,9 @@ public struct NeedsAnswerResult: Sendable, Equatable {
   public let unknownFields: [String]
 
   public init(json: JSONValue) throws {
-    // IOS-12d's d3 skeleton: d4 brings the body.
-    throw WireDecodeError(shape: "NeedsAnswerResult", reason: "not read yet")
+    var object = try WireObject(shape: "NeedsAnswerResult", value: json)
+    item = try object.requiredObject("item", NeedsItem.init(json:))
+    unknownFields = object.unknownFields
   }
 }
 

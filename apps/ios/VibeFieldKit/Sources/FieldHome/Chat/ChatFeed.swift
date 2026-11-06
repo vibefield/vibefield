@@ -13,6 +13,10 @@ import Observation
 // A desktop that did not answer the merge keeps its last word (PC-L4): its sparks and items are carried from the last
 // reading that had them, said as asleep, never dropped as if it had none. Without a door the whole list is the last
 // word.
+// IOS-12d — an item is answered through the same door (`needs.answer`, by the act's place, carried by the home to the
+// item's desktop), once for every window and device. What this phone answers is kept by item for the app's life, so
+// the group and the thread stand the same card. The catalog's labels are the home's (`agent.catalog`, asked once per
+// door when a card first names an agent; Q1, VF-PM 19:26Z).
 
 /// The door Chat reads through: the home's own client.
 @MainActor
@@ -103,6 +107,10 @@ final class ChatFeed {
   @ObservationIgnored private var needsAgain = false
   @ObservationIgnored private var needsInFlight = false
   @ObservationIgnored private var watches: [String: any ChatWatch] = [:]
+  /// The board's rows, as last handed over: Answer in its pane finds the asking run among them at the press.
+  @ObservationIgnored private var rows: [AgentRemoteRow] = []
+  @ObservationIgnored private var labelsAsked = false
+  @ObservationIgnored private var offScreenSaid = 0
 
   /// The home's door, handed over when it changes (nil: none, the last word stands).
   func attach(_ door: (any ChatDoor)?, home: String?) {
@@ -116,6 +124,7 @@ final class ChatFeed {
     needsAsk += 1
     needsInFlight = false
     needsAgain = false
+    labelsAsked = false
     if reading.connected != (door != nil) { reading.connected = door != nil }
     guard door != nil else { return }
     refresh()
@@ -124,6 +133,7 @@ final class ChatFeed {
 
   /// The board moved: ask the list again when a spark's live run appeared or left.
   func board(_ rows: [AgentRemoteRow]) {
+    self.rows = rows
     let key = Self.liveSparkKey(rows)
     guard key != sparkKey else { return }
     sparkKey = key
@@ -153,6 +163,123 @@ final class ChatFeed {
       throw FieldProductError(kind: "UNAVAILABLE", message: "no home answers for Chat", retryable: true)
     }
     return try SparkSayResult(json: try await door.call(SparkSay.method, params: params.json))
+  }
+
+  // MARK: IOS-12d — what waits on you
+
+  /// Answer an item by its act's place (`needs.answer`, carried to the item's desktop). One answer at a time to an
+  /// item; a refused one may be answered again while its item still waits. The card stands from the press until
+  /// fieldd's answer returns, whatever the queue says meanwhile, then says what it came to for a note's time.
+  func press(_ item: NeedsItem, choice: Int, spark: String, names: NeedsNames) {
+    guard let door else { return }
+    if let prior = answering[item.id] {
+      let waits = reading.items.contains { $0.id == item.id }
+      guard case .refused = prior.act, waits else { return }
+    }
+    answering[item.id] = ChatAnswering(
+      spark: spark, item: item, act: .busy(choice: choice), holds: true, names: names)
+    let params = NeedsAnswerParams(item: item.id, choice: choice, device: item.device)
+    Task { @MainActor [weak self] in
+      do {
+        let done = try NeedsAnswerResult(json: try await door.call(NeedsAnswerParams.method, params: params.json))
+        self?.answered(item.id, spark: spark, done: done.item, choice: choice, names: names)
+      } catch {
+        self?.refused(item, spark: spark, reason: Self.words(of: error), names: names)
+      }
+    }
+  }
+
+  /// The run an agent's ask names, on the board now: Answer in its pane opens its session card.
+  func run(_ runtimeRunId: String) -> AgentRemoteRow? {
+    rows.first { $0.runtimeRunId == runtimeRunId }
+  }
+
+  /// The catalog's label for an agent, else nil (the card says its id until the home answers).
+  func label(_ agent: String) -> String? { labels[agent] }
+
+  /// Where Chat's cards stand now. A card that leaves the screen takes what it said with it; an answer still
+  /// running stays, to stand again or to be said on the note.
+  func show(page: Bool, thread: String?) {
+    let next = ChatShown(page: page, thread: thread)
+    guard next != shown else { return }
+    shown = next
+    let gone = answering.filter { _, held in
+      if case .busy = held.act { return false }
+      return !next.shows(held.spark)
+    }
+    for id in gone.keys { answering[id] = nil }
+  }
+
+  /// The note has said it.
+  func heard(_ note: ChatOffScreen) {
+    offScreen.removeAll { $0.id == note.id }
+  }
+
+  private func answered(_ id: String, spark: String, done: NeedsItem, choice: Int, names: NeedsNames) {
+    askNeeds()
+    guard shown.shows(spark) else {
+      answering[id] = nil
+      let said = NeedsCards.said(done, choice: choice, names: names)
+      if said.tone != .done { tell(spark, said.text) }
+      return
+    }
+    answering[id] = ChatAnswering(spark: spark, item: done, act: .said(choice: choice), holds: true, names: names)
+    hold(id)
+  }
+
+  private func refused(_ item: NeedsItem, spark: String, reason: String, names: NeedsNames) {
+    guard shown.shows(spark) else {
+      answering[item.id] = nil
+      tell(spark, NeedsCards.refused(reason))
+      return
+    }
+    answering[item.id] = ChatAnswering(
+      spark: spark, item: item, act: .refused(reason: reason), holds: true, names: names)
+    hold(item.id)
+  }
+
+  /// A note's time over: what the card said stops holding it. It stays while its item still waits (a refused one, to
+  /// be answered again), and leaves once its item does not. An answer pressed again meanwhile is left as it is.
+  private func hold(_ id: String) {
+    let act = answering[id]?.act
+    Task { @MainActor [weak self] in
+      guard let self else { return }
+      await self.pause(.milliseconds(NeedsCards.saidMs))
+      guard var held = self.answering[id], held.act == act else { return }
+      held.holds = false
+      self.answering[id] = self.reading.items.contains { $0.id == id } ? held : nil
+    }
+  }
+
+  /// An answer whose note's time is over, and whose item has left the queue, is forgotten.
+  private func prune() {
+    let open = Set(reading.items.map(\.id))
+    let gone = answering.filter { id, held in !held.holds && !open.contains(id) }
+    for id in gone.keys { answering[id] = nil }
+  }
+
+  private func tell(_ spark: String, _ text: String) {
+    offScreenSaid += 1
+    offScreen.append(ChatOffScreen(id: offScreenSaid, spark: spark, text: text))
+    if offScreen.count > 4 { offScreen.removeFirst(offScreen.count - 4) }
+  }
+
+  /// fieldd's words for a refusal, as the card says them.
+  static func words(of error: Error) -> String {
+    (error as? FieldProductError)?.message ?? "\(error)"
+  }
+
+  /// The catalog's labels, asked once per door when a card first names an agent.
+  private func askLabels() {
+    guard let door, !labelsAsked, reading.items.contains(where: { $0.agent != nil }) else { return }
+    labelsAsked = true
+    Task { @MainActor [weak self] in
+      guard let answer = try? await door.call("agent.catalog", params: AgentCatalogParams.phone.json),
+        let catalog = try? AgentCatalogResult(json: answer), let self, self.door === door
+      else { return }
+      let next = Dictionary(catalog.catalog.map { ($0.id, $0.label) }, uniquingKeysWith: { first, _ in first })
+      if next != self.labels { self.labels = next }
+    }
   }
 
   /// IOS-12c — a reader of a spark's record through the home's door; none with no door.
@@ -231,6 +358,8 @@ final class ChatFeed {
           self.reading.items, into: list.items, desktops: list.desktops, device: { $0.device })
         next.needsHeard = true
         if next != self.reading { self.reading = next }
+        self.prune()
+        self.askLabels()
       }
       if self.needsAgain {
         self.needsAgain = false
@@ -260,16 +389,4 @@ final class ChatFeed {
       watchNeeds(device: desktop.device)
     }
   }
-
-  // MARK: IOS-12d — what waits on you (IOS-12d's d3 skeleton: d4 brings the body.)
-
-  func press(_ item: NeedsItem, choice: Int, spark: String, names: NeedsNames) {}
-
-  func run(_ runtimeRunId: String) -> AgentRemoteRow? { nil }
-
-  func label(_ agent: String) -> String? { nil }
-
-  func show(page: Bool, thread: String?) {}
-
-  func heard(_ note: ChatOffScreen) {}
 }

@@ -13,6 +13,9 @@ import Foundation
 // And one rule the Mac's single board never needed: a spark lives where it hatched, so its own run and the agents it
 // started are the rows of its desktop (`device`), and its items those its desktop's queue holds. A row or an item from
 // a daemon before IOS-12a names no desktop and is taken as the spark's, as the doors take it.
+// *Amended 2026-11-06 (IOS-12d, Found 1; TH-1's TH-Q29 (a), ER-C2):* the asks of a spark's own run were left out of its
+// items, since its row's wait said them and the thread was that run's pane. The Mac's pane left Chat at TH-1, so its
+// own run's ask is its item and draws its card; its row's wait and that item are one need, read once (`ChatNotes`).
 
 /// A spark's nineteen statuses and their words (DESIGN.md §2.10's table; design-kit's `statuses.ts`, in its order).
 public enum SparkStatus: String, Sendable, Equatable, CaseIterable {
@@ -65,7 +68,7 @@ public struct SparkEntry: Sendable, Equatable, Identifiable {
   /// Its own run's row is on the board, alive, not pending, and says how the run stands.
   public let heard: Bool
   /// The needs-you queue's open items for it, oldest first: its question, its held send or spawn, an ask from an
-  /// agent it started. Its own run's asks are its row's wait, read there once.
+  /// agent it started, and (TH-1) the ask of its own run.
   public let items: [NeedsItem]
   /// The runs that are its own session: the one its record names, and any the board says is its own. An agent's ask
   /// from one of them is its own run's (`NeedsCards.isOwnAsk`).
@@ -98,24 +101,24 @@ public enum SparkEntries {
     rows.filter { $0.origin?.by == "spark" && $0.origin?.spark == spark.id && onItsDesktop($0.device, spark) }
   }
 
-  /// The spark's items, oldest first as fieldd lists them: those whose `spark` is it, but for the agent-asks of its
-  /// own run (the run its record names, or any run the board says is its own session), which its row's wait says.
-  public static func items(of spark: SparkSummary, rows: [AgentRemoteRow], items: [NeedsItem]) -> [NeedsItem] {
-    var own = Set(rows.filter { $0.spark == spark.id && onItsDesktop($0.device, spark) }.map { $0.runtimeRunId })
-    if let session = spark.session { own.insert(session.runtimeRunId) }
-    return items.filter { item in
-      guard item.spark == spark.id, item.device.map({ onItsDesktop($0, spark) }) ?? true else { return false }
-      return !(item.knownKind == .agentAsk && item.from.session.map(own.contains) == true)
+  /// The spark's items, oldest first as fieldd lists them: those whose `spark` is it, of its desktop. *Amended at
+  /// IOS-12d (TH-1):* its own run's asks among them.
+  public static func items(of spark: SparkSummary, items: [NeedsItem]) -> [NeedsItem] {
+    items.filter { item in
+      item.spark == spark.id && (item.device.map { onItsDesktop($0, spark) } ?? true)
     }
   }
 
-  /// The spark's items, of its desktop. IOS-12d's d3 skeleton: d4 brings the body.
-  public static func items(of spark: SparkSummary, items: [NeedsItem]) -> [NeedsItem] {
-    Self.items(of: spark, rows: [], items: items)
+  /// The runs that are the spark's own session: those the board says are its own on its desktop, in the board's
+  /// order, then the run its record names.
+  public static func ownRuns(of spark: SparkSummary, in rows: [AgentRemoteRow]) -> [String] {
+    var runs: [String] = []
+    let named = rows.filter { $0.spark == spark.id && onItsDesktop($0.device, spark) }.map { $0.runtimeRunId }
+    for run in named + [spark.session?.runtimeRunId].compactMap({ $0 }) where !runs.contains(run) {
+      runs.append(run)
+    }
+    return runs
   }
-
-  /// The runs that are the spark's own session. IOS-12d's d3 skeleton: d4 brings the body.
-  public static func ownRuns(of spark: SparkSummary, in rows: [AgentRemoteRow]) -> [String] { [] }
 
   /// A row or an item of the spark's desktop; a spark from a daemon before IOS-12a names none and takes any.
   static func onItsDesktop(_ device: String, _ spark: SparkSummary) -> Bool {
@@ -131,7 +134,7 @@ public enum SparkEntries {
   }
 
   /// The first that holds is the word (DESIGN.md §8 "Chat's list", SP-1b as amended at CP-3). `items` are the
-  /// spark's own (`items(of:rows:items:)`), oldest first.
+  /// spark's own (`items(of:items:)`), oldest first.
   public static func status(
     of spark: SparkSummary, own: AgentRemoteRow?, agents: [AgentRemoteRow], items: [NeedsItem]
   ) -> SparkStatus {
@@ -187,13 +190,13 @@ public enum SparkEntries {
     sparks.map { spark -> SparkEntry in
       let run = ownRun(of: spark, in: rows)
       let agents = agentRuns(of: spark, in: rows)
-      let mine = Self.items(of: spark, rows: rows, items: items)
+      let mine = Self.items(of: spark, items: items)
       let status = Self.status(of: spark, own: run, agents: agents, items: mine)
       let awake = Self.awake(spark, run)
       let times = [time(spark.updatedAt)] + ([run].compactMap { $0 } + agents).map(Self.activity)
       return SparkEntry(
         spark: spark, run: run, status: status, needsYou: status.needsYou, awake: awake,
-        blocked: awake && waits(run), heard: heard(run), items: mine, ownRuns: [],
+        blocked: awake && waits(run), heard: heard(run), items: mine, ownRuns: ownRuns(of: spark, in: rows),
         activityAt: times.max() ?? 0)
     }
     .sorted { a, b in

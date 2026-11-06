@@ -4,9 +4,10 @@ import SwiftUI
 
 // IOS-12b (PC-D1 A, PC-L1, PC-L4, PC-L5; DESIGN.md §8 "The phone's Chat", §9 "Chat on the phone") — CHAT'S PAGE:
 // History's page (its large title, its paper, its group head), the list's subtitle counting what is true, a line for
-// each desktop whose sparks are its last word, and one row per spark, newest activity first (CH-D1). The Needs you
-// group is IOS-12d's. A row says its spark's status and its dot; pressed, it opens the spark's thread (IOS-12c), pushed
-// in this page's own stack; held, its menu offers Open its pane while its own run is live, and Wake while it sleeps.
+// each desktop whose sparks are its last word, and one row per spark, newest activity first (CH-D1). A row says its
+// spark's status and its dot; pressed, it opens the spark's thread (IOS-12c), pushed in this page's own stack; held,
+// its menu offers Open its pane while its own run is live, and Wake while it sleeps. IOS-12d (PC-D4 A, Q7): Needs you
+// heads the list while anything waits, one card per spark's item of the home's merged queue, answered in place.
 
 /// Chat's words (§9 "Chat on the phone"), pure.
 enum ChatWords {
@@ -135,9 +136,12 @@ struct ChatPage: View {
   @Binding var thread: String?
   /// Open its pane: the spark's own run's session card, which is the attach (FW-D2).
   let onOpenPane: (AgentRemoteRow) -> Void
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
   #if DEBUG
     /// The stills' thread has been opened once (`ChatFixtureDoor.openThread`); back then stays back.
     @State private var openedForStills = false
+    /// IOS-12d — the stills' act has been pressed once (`ChatFixtureDoor.needsPress`).
+    @State private var pressedForStills = false
   #endif
 
   /// The stack's path: the shown thread, or none.
@@ -174,6 +178,14 @@ struct ChatPage: View {
         openedForStills = true
         thread = spark
       }
+      // IOS-12d — the stills' press, once the queue holds its item (no OS input on the stills' host)
+      .onChange(of: feed.reading.items.map(\.id), initial: true) { _, ids in
+        guard !pressedForStills, let press = ChatFixtureDoor.needsPress, ids.contains(press.item),
+          let item = feed.reading.items.first(where: { $0.id == press.item })
+        else { return }
+        pressedForStills = true
+        feed.press(item, choice: press.choice, spark: item.spark ?? "", names: NeedsCards.names(of: item))
+      }
     #endif
   }
 
@@ -181,6 +193,7 @@ struct ChatPage: View {
     ScrollView {
       LazyVStack(alignment: .leading, spacing: 0) {
         head
+        group
         if entries.isEmpty {
           if heard, away.isEmpty {
             VStack(alignment: .leading, spacing: 6) {
@@ -220,6 +233,52 @@ struct ChatPage: View {
       }
       .padding(.bottom, 24)
     }
+  }
+
+  /// IOS-12d (PC-D4 A; Q7) — Needs you heads the list while anything waits: one card per spark's item, oldest asked
+  /// first, each answered in place; an agent's own ask goes to its pane (PC-L3).
+  @ViewBuilder
+  private var group: some View {
+    let cards = ChatNeeds.group(
+      items: feed.reading.items, entries: entries, answering: feed.answering, reduced: reduceMotion)
+    if !cards.isEmpty {
+      HStack(spacing: 4) {
+        Text(ChatNeedsWords.group)
+        Text("·")
+        Text("\(cards.count)")
+      }
+      .chromeGroupHead()
+      .frame(minHeight: 30)
+      .padding(.horizontal, 20)
+      .padding(.top, 22)
+      .padding(.bottom, 8)
+      VStack(spacing: 10) {
+        ForEach(cards) { card in
+          let opens = entries.contains { $0.spark.id == card.spark }
+          ChatNeedsCardView(
+            card: card, place: .group,
+            away: ChatNeeds.away(of: card.item, in: away, connected: feed.reading.connected).map {
+              ChatNeedsWords.away($0.name, $0.standing, device: DeviceWord.current)
+            },
+            labels: feed.labels,
+            onAct: { choice in feed.press(card.item, choice: choice, spark: card.spark, names: card.names) },
+            onPane: { openPane(of: card.item) },
+            onOpen: opens ? { thread = card.spark } : nil
+          )
+          .transition(reduceMotion ? .opacity : .opacity.combined(with: .offset(y: 8)))
+        }
+      }
+      .padding(.horizontal, 16)
+      .animation(
+        reduceMotion ? .easeInOut(duration: 0.12) : .easeOut(duration: 0.24), value: cards.map(\.id))
+    }
+  }
+
+  /// Answer in its pane (Q5): the asking run's session card on Field, found on the board at the press.
+  private func openPane(of item: NeedsItem) -> Bool {
+    guard let session = item.from.session, let run = feed.run(session) else { return false }
+    onOpenPane(run)
+    return true
   }
 
   private var head: some View {

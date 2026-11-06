@@ -125,39 +125,142 @@ public struct NeedsSaid: Sendable, Equatable {
 }
 
 public enum NeedsCards {
-  // IOS-12d's d3 skeleton: d4 brings the body.
-  public static let saidMs = 0
-  public static let leaveMs = 0
-  public static let fadeMs = 0
+  /// How long what an answer came to stands on the card, and a refusal of an item no longer waiting: a note's time.
+  public static let saidMs = 2_400
+  /// Its way out: 180ms on plain ease, 4 down to 0, inert while it goes.
+  public static let leaveMs = 180
+  /// With reduced motion each way is a fade in place (M6).
+  public static let fadeMs = 120
 
+  /// The names `item` is said by, under @'s `handles` in its thread (by run id; none: fieldd's names alone).
   public static func names(of item: NeedsItem, handles: [String: String] = [:]) -> NeedsNames {
-    NeedsNames(from: "", to: nil)
+    let run = item.from.spark == nil ? item.from.session : nil
+    return NeedsNames(
+      from: run.flatMap { handles[$0] } ?? item.from.name,
+      to: item.to.map { handles[$0.session] ?? $0.name })
   }
 
-  public static func isOwnAsk(_ item: NeedsItem, ownRuns: [String]) -> Bool { false }
+  /// An agent's ask from the spark's own run (TH-Q29 (a)).
+  public static func isOwnAsk(_ item: NeedsItem, ownRuns: [String]) -> Bool {
+    item.knownKind == .agentAsk && item.from.session.map(ownRuns.contains) == true
+  }
 
+  /// The card for `item` in a spark's thread: its first item waiting, or one this phone answers, which counts itself
+  /// among what waits though fieldd has dropped it from the queue meanwhile.
   public static func card(
     _ reading: NeedsReading, item: NeedsItem, act: NeedsAct = .idle, leaving: Bool = false, reduced: Bool = false,
     handles: [String: String] = [:]
   ) -> NeedsCard {
-    NeedsCard(
-      item: item, names: NeedsNames(from: "", to: nil), spark: reading.spark, sparkName: reading.name, own: false,
-      of: 0, waits: false, act: act, leaving: leaving, reduced: reduced)
+    let waits = reading.items.contains { $0.id == item.id }
+    let own = isOwnAsk(item, ownRuns: reading.ownRuns)
+    return NeedsCard(
+      item: item,
+      // its own run asks as the spark, never by its run's title
+      names: own ? NeedsNames(from: reading.name, to: nil) : names(of: item, handles: handles),
+      spark: reading.spark, sparkName: reading.name, own: own, of: reading.items.count + (waits ? 0 : 1),
+      waits: waits, act: act, leaving: leaving, reduced: reduced)
   }
 
+  /// The card a thread stands while the phone answers none of its items: its own run's ask first, then the oldest
+  /// waiting (CO-Q12 (b)); or none.
   public static func waiting(
     _ reading: NeedsReading, reduced: Bool = false, handles: [String: String] = [:]
-  ) -> NeedsCard? { nil }
+  ) -> NeedsCard? {
+    guard let first = reading.items.first(where: { isOwnAsk($0, ownRuns: reading.ownRuns) }) ?? reading.items.first
+    else { return nil }
+    return card(reading, item: first, reduced: reduced, handles: handles)
+  }
 
+  /// What the card says. `label`: the catalog's label for a held spawn's agent (a lookup, never a literal: R23b);
+  /// nil, its id, as the Mac's `agentLabelOf` falls back.
   public static func words(_ card: NeedsCard, label: (String) -> String? = { _ in nil }) -> NeedsCardWords {
-    NeedsCardWords(
-      eyebrow: "", question: "", words: nil, more: nil, sub: nil, acts: [], show: false, place: nil, asked: "",
-      label: "")
+    let item = card.item
+    let names = card.names
+    let asker = names.from
+    let word = SparkEntries.status(ofItem: item).word
+    // its own run's ask is the spark's: the word alone (TH-Q29 (a))
+    let other = !card.own && item.from.spark != card.spark
+    let question = question(item, names, label: label)
+    let kind = item.knownKind
+    // the asker's own words, for the kinds whose question is not them
+    let shown = kind == .question || kind == .agentAsk ? nil : item.words
+    let more = kind == .heldSend && (item.count ?? 1) > 1 ? (item.count ?? 1) - 1 : 0
+    // an agent's own ask is answered in its pane, never here (CP-L4, AR-6): Show alone, whatever it carries
+    let choices = kind == .agentAsk ? [] : (item.choices ?? [])
+    let acts = choices.enumerated().map { each in
+      NeedsCardAct(choice: each.offset, word: each.element, primary: each.offset == 0)
+    }
+    let place = card.of > 1 ? "1 of \(card.of)" : nil
+    let asked = "\(other ? "\(word), \(asker)" : word): \(question)"
+    return NeedsCardWords(
+      eyebrow: other ? "\(word) · \(asker)" : word, question: question, words: shown,
+      more: more > 0 ? "and \(more) more" : nil, sub: sub(item, names), acts: acts,
+      show: acts.isEmpty && item.from.session != nil, place: place, asked: asked,
+      label: place.map { "\(asked), \($0)" } ?? asked)
   }
 
+  /// What you are asked, by the item's kind.
+  static func question(_ item: NeedsItem, _ names: NeedsNames, label: (String) -> String?) -> String {
+    let asker = names.from
+    switch item.knownKind {
+    case .question:
+      return item.words ?? "\(asker) needs you"
+    case .heldSend:
+      return names.to.map { "\(asker) wants to send to \($0)" } ?? "\(asker) needs you"
+    case .heldSpawn:
+      guard let agent = item.agent else { return "\(asker) wants another agent" }
+      let folder = item.folder.map { " in \($0)" } ?? ""
+      return "\(asker) wants another agent: \(label(agent) ?? agent)\(folder)"
+    case .agentAsk:
+      if item.ask == "permission" {
+        return item.tool.map { "\(asker) asks to run \($0)" } ?? "\(asker) asks for your OK"
+      }
+      if item.ask == "question" { return "\(asker) has a question" }
+      return "\(asker) needs you"
+    default:
+      return "\(asker) needs you"
+    }
+  }
+
+  /// The sub, by the item's kind: how long a yes lasts, the cap, or where an agent's ask is answered.
+  static func sub(_ item: NeedsItem, _ names: NeedsNames) -> String? {
+    switch item.knownKind {
+    case .heldSend: names.to.map { "Your yes lasts until \($0) ends." }
+    case .heldSpawn: item.live.map { "\($0) of \(names.from)'s agents are running, the most a spark may run." }
+    case .agentAsk: "Answer it in its pane."
+    default: nil
+    }
+  }
+
+  /// The line an answered card gives its acts to, and the note's words for it off screen: "You said Allow", then what
+  /// the act came to where it did not go as asked, in fieldd's words. When both hold, the act's failure is said.
   public static func said(_ item: NeedsItem, choice: Int, names given: NeedsNames? = nil) -> NeedsSaid {
-    NeedsSaid(text: "", tone: .done)
+    let names = given ?? Self.names(of: item)
+    let answer = item.answer
+    let index = answer?.choice ?? choice
+    let chosen = item.choices.flatMap { index >= 0 && index < $0.count ? $0[index] : nil } ?? ""
+    var said = "You said \(chosen)"
+    while let last = said.last, last.isWhitespace { said.removeLast() }
+    let why = { (reason: String?) in reason.map { ": \($0)" } ?? "" }
+    if answer?.outcome == "failed" {
+      let failed =
+        if item.knownKind == .heldSend, let to = names.to {
+          "Couldn't send \(names.from)'s words to \(to)"
+        } else if item.knownKind == .heldSpawn {
+          "Couldn't start the agent"
+        } else {
+          "Couldn't finish it"
+        }
+      return NeedsSaid(text: "\(said) · \(failed)\(why(answer?.reason))", tone: .failed)
+    }
+    if answer?.told == false {
+      return NeedsSaid(text: "\(said) · \(names.from) hears it when it wakes\(why(answer?.waits))", tone: .unheard)
+    }
+    return NeedsSaid(text: said, tone: .done)
   }
 
-  public static func refused(_ reason: String) -> String { "" }
+  /// A refused answer, said under the card's words: fieldd's words after the colon.
+  public static func refused(_ reason: String) -> String {
+    "Couldn't answer: \(reason)"
+  }
 }

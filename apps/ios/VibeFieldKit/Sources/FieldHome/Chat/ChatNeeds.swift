@@ -42,25 +42,93 @@ struct ChatShown: Equatable {
 }
 
 enum ChatNeeds {
-  // IOS-12d's d3 skeleton: d4 brings the body.
+  /// The Needs you group (Q7): every open item with a spark, from every self desktop, and each this phone answers
+  /// that still holds, oldest asked first; each card read under its spark's entry, or, for a spark the list does not
+  /// hold, under the item's own asker. An item with no spark is a run you started: Field's, never Chat's.
   static func group(
     items: [NeedsItem], entries: [SparkEntry], answering: [String: ChatAnswering], reduced: Bool
-  ) -> [NeedsCard] { [] }
+  ) -> [NeedsCard] {
+    let readings = Dictionary(
+      entries.map { ($0.spark.id, NeedsReading($0)) }, uniquingKeysWith: { first, _ in first })
+    var shown = items.filter { $0.spark != nil }
+    let open = Set(shown.map(\.id))
+    for held in answering.values.sorted(by: { $0.item.id < $1.item.id })
+    where held.holds && !open.contains(held.item.id) {
+      shown.append(held.item)
+    }
+    let ordered = shown.enumerated().sorted { a, b in
+      a.element.asked != b.element.asked ? a.element.asked < b.element.asked : a.offset < b.offset
+    }
+    return ordered.map { each in
+      let item = each.element
+      let spark = item.spark ?? ""
+      let reading =
+        readings[spark]
+        ?? NeedsReading(
+          spark: spark, name: item.from.name, ownRuns: [], items: items.filter { $0.spark == spark })
+      return card(reading, item: item, waiting: items, held: answering[item.id], reduced: reduced)
+    }
+  }
 
-  static func thread(_ entry: SparkEntry, answering: [String: ChatAnswering], reduced: Bool) -> NeedsCard? { nil }
+  /// The card a thread stands (the Mac's `wantedOf`): the one this phone answers, while it holds or its item still
+  /// waits; else what waits first (its own run's ask, then the oldest).
+  static func thread(_ entry: SparkEntry, answering: [String: ChatAnswering], reduced: Bool) -> NeedsCard? {
+    let reading = NeedsReading(entry)
+    let mine = answering.values.filter { $0.spark == entry.spark.id }.sorted { $0.item.asked < $1.item.asked }
+    for held in mine {
+      let waits = entry.items.contains { $0.id == held.item.id }
+      if !waits && !held.holds { continue }
+      return card(reading, item: held.item, waiting: entry.items, held: held, reduced: reduced)
+    }
+    return NeedsCards.waiting(reading, reduced: reduced)
+  }
 
-  static func away(of item: NeedsItem, in lines: [ChatAway], connected: Bool) -> ChatAway? { nil }
+  /// One card: an answer said draws the item fieldd handed back; else the item as the queue says it now.
+  private static func card(
+    _ reading: NeedsReading, item: NeedsItem, waiting: [NeedsItem], held: ChatAnswering?, reduced: Bool
+  ) -> NeedsCard {
+    guard let held else { return NeedsCards.card(reading, item: item, reduced: reduced) }
+    let now = waiting.first { $0.id == item.id }
+    let drawn: NeedsItem
+    if case .said = held.act {
+      drawn = held.item
+    } else {
+      drawn = now ?? held.item
+    }
+    return NeedsCards.card(reading, item: drawn, act: held.act, reduced: reduced)
+  }
+
+  /// The desktop line a card stands under while its desktop is away (Q8; PC-L4), or nil while it answers. With no
+  /// door the home answers for every desktop, so its one line stands for every card.
+  static func away(of item: NeedsItem, in lines: [ChatAway], connected: Bool) -> ChatAway? {
+    guard connected else { return lines.first }
+    guard let device = item.device else { return nil }
+    return lines.first { $0.device == device }
+  }
 }
 
+/// The needs-you card's words on the phone (§9 "Chat on the phone"), where they are the phone's own: who asks, the
+/// pane's act and its miss, and a card's desktop away. The rest are the Mac's card's (`NeedsCards`).
 enum ChatNeedsWords {
-  // IOS-12d's d3 skeleton: d4 brings the body.
-  static let group = ""
-  static let answerInPane = ""
-  static let paneMissing = ""
+  static let group = "Needs you"
+  /// The pane's act (§9), where the Mac says Show.
+  static let answerInPane = "Answer in its pane"
+  /// Answer in its pane with no pane on the board (Q5; for James's eye).
+  static let paneMissing = "Couldn't open its pane: it isn't on your field"
 
-  static func asks(_ card: NeedsCard) -> String { "" }
+  /// The group's eyebrow (Q2): who asks.
+  static func asks(_ card: NeedsCard) -> String { "\(card.names.from) asks" }
 
-  static func away(_ desktop: String, _ standing: ChatAway.Standing, device: DeviceWord) -> String { "" }
+  /// A card whose desktop is away (Q8; the asleep line is §9's, the other two for James's eye). The device is named as
+  /// its platform names it (`DeviceWord`).
+  static func away(_ desktop: String, _ standing: ChatAway.Standing, device: DeviceWord) -> String {
+    switch standing {
+    case .asleep: "\(desktop) is asleep · answer when it wakes"
+    case .silent: "\(desktop) isn't answering · answer when it answers"
+    case .incompatible: "\(desktop) runs a build \(device.this) can't read · answer when it's updated"
+    }
+  }
 
-  static func pressed(_ word: String) -> String { word }
+  /// The pressed act's word while its answer runs: "Allow…".
+  static func pressed(_ word: String) -> String { "\(word)…" }
 }
