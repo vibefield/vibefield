@@ -1,3 +1,4 @@
+import FieldAgents
 import FieldHistory
 import FieldMesh
 import FieldProduct
@@ -97,6 +98,12 @@ enum PhoneSearchWorld {
       runs[session.device, default: []].append(id)
     }
     return runs
+  }
+
+  /// SE-2l (the S2 review's finding 7) — an agent as Everything's rows name it ("folder · agent", §8): the catalog's
+  /// label (AC-D4). STUB (SE-2l red): the id.
+  static func agentLabel(_ catalog: AgentCatalog) -> (String) -> String {
+    { provider in provider }
   }
 
   // MARK: - SE-2i: what was answered (the S2 review's finding 4)

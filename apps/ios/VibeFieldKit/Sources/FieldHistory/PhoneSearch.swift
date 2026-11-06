@@ -214,11 +214,19 @@ public enum PhoneSearch {
     public let filter: Filter
     public let lead: Lead
     public let label: String
-    /// its sessions ("4"), "asleep", or nothing (who said it, a project)
-    public let note: String?
+    /// its sessions; nil for who said it and a project, which count none
+    public let sessions: Int?
+    /// a desktop that cannot be asked: "asleep" stands in its count's place
+    public let asleep: Bool
     /// a session under it waits on you: the 6 orange dot before its count
     public let waiting: Bool
     public var id: Filter { filter }
+
+    /// What its count says: its sessions ("4"), "asleep", or nothing.
+    public var note: String? { asleep ? "asleep" : sessions.map { "\($0)" } }
+
+    /// What VoiceOver says for it (SE-2l, the S2 review's finding 11). STUB (SE-2l red): its name alone.
+    public var spoken: String { label }
   }
 
   /// A token in the field: a chosen filter, its × removes it.
@@ -367,13 +375,13 @@ public enum PhoneSearch {
     let profiles = live.profiles.filter { $0.id != profile }.map { set in
       let under = live.sessions(of: set.id)
       return Chip(
-        filter: .profile(set.id), lead: lead(set), label: set.label, note: "\(under.count)",
+        filter: .profile(set.id), lead: lead(set), label: set.label, sessions: under.count, asleep: false,
         waiting: under.contains { $0.state == .blocked })
     }
     let desks = live.desks.filter { $0.id != desk }.map { found in
       Chip(
         filter: .desk(found.id), lead: .desk(platform: found.platform), label: found.name,
-        note: found.asleep ? "asleep" : "\(live.sessions(on: found.id).count)", waiting: false)
+        sessions: found.asleep ? nil : live.sessions(on: found.id).count, asleep: found.asleep, waiting: false)
     }
     return [profiles, desks].filter { !$0.isEmpty }
   }
@@ -535,10 +543,10 @@ public enum PhoneSearch {
     let kinds: [Chip] =
       kind == .any
       ? [FieldHistoryModel.SearchKind.prompts, .replies].map {
-        Chip(filter: .kind($0), lead: .said, label: $0.label, note: nil, waiting: false)
+        Chip(filter: .kind($0), lead: .said, label: $0.label, sessions: nil, asleep: false, waiting: false)
       } : []
     let folders = projects.filter { $0.key != project }.map {
-      Chip(filter: .project($0.key), lead: .folder, label: $0.name, note: nil, waiting: false)
+      Chip(filter: .project($0.key), lead: .folder, label: $0.name, sessions: nil, asleep: false, waiting: false)
     }
     return [kinds, folders].filter { !$0.isEmpty }
   }

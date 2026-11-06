@@ -131,6 +131,21 @@ struct PhoneSearchTests {
     #expect(deskNames == ["loft", "mini"])
   }
 
+  /// SE-2l (the S2 review's finding 11; §9 "The phone's chips and offers": "A chip's count is its sessions, or
+  /// 'asleep'") — a chip is spoken with its count's noun, never a bare figure, and the waiting dot in words.
+  @Test("a chip is spoken with its sessions or asleep, and its waiting; who said it and a project by name")
+  func chipsSpeak() throws {
+    let groups = PhoneSearch.liveChips(try Self.field(), profile: nil, desk: nil)
+    let profiles = (groups.first ?? []).map { $0.spoken }
+    #expect(profiles == ["This Mac, 2 sessions", "Work, 4 sessions, waiting on you", "Side, 0 sessions"])
+    let desks = (groups.last ?? []).map { $0.spoken }
+    #expect(desks == ["studio, 6 sessions", "loft, 2 sessions", "mini, asleep"])
+    let billing = PhoneSearch.Project(key: "k1", name: "billing-api")
+    let past = PhoneSearch.pastChips(projects: [billing], kind: .any, project: nil)
+    let said = past.joined().map { $0.spoken }
+    #expect(said == ["Prompts", "Replies", "billing-api"])
+  }
+
   /// UM-D12 — with one profile nothing names a profile: the caller hands none (the lens's `offersProfiles`), so no
   /// chip, no token and no offer names one.
   @Test("with one profile, no profile chip, token or offer")

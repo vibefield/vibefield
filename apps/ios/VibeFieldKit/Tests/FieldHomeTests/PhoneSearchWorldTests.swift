@@ -1,3 +1,4 @@
+import FieldAgents
 import FieldHistory
 import FieldMesh
 import FieldProduct
@@ -151,6 +152,17 @@ struct PhoneSearchWorldTests {
       SearchState(), query: "W1 ", lens: try Self.lens(nil), live: world, answers: [], latest: nil,
       agentLabel: { $0 }, feed: .live, asked: .settled)
     #expect(typed.terms == ["w1"])
+  }
+
+  /// SE-2l (the S2 review's finding 7; §8 "folder · agent") — Everything's rows name an agent by the catalog's label,
+  /// and by its id while no desktop's catalog names it (the tolerant reader, R4). The ids are invented: no agent's.
+  @Test("an agent is named by the catalog's label, by its id while no catalog names it")
+  func agentLabels() {
+    let named = AgentCatalogEntry(id: AgentProvider(rawValue: "agent-a"), label: "Agent A", status: "supported")
+    let label = PhoneSearchWorld.agentLabel(AgentCatalog(entries: [named]))
+    #expect(label("agent-a") == "Agent A")
+    #expect(label("agent-z") == "agent-z")
+    #expect(PhoneSearchWorld.agentLabel(.empty)("agent-a") == "agent-a")
   }
 
   /// SE-2i (the S2 review's finding 4) — the content says what the world has answered: until the home's board answers
