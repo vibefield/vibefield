@@ -300,8 +300,9 @@ export class FlowRuns {
   #closing = false;
   readonly #offTurns: () => void;
   /** V2 (1b review): the runs whose record was kept, whose begin then failed, and whose ending the disk did not take
-   * either: passed by at the bounds until D18's reader settles them at the next boot */
-  readonly #unbegun = new Set<FlowRunId>();
+   * either, each with when it was found never begun: passed by at the bounds, and read as failed (Z3), until D18's
+   * reader settles them at the next boot */
+  readonly #unbegun = new Map<FlowRunId, string>();
 
   constructor(readonly ports: FlowRunPorts) {
     this.#logger = ports.logger ?? createNoopLogger();
@@ -344,8 +345,7 @@ export class FlowRuns {
     const live: RunSummary[] = [];
     const ended: RunSummary[] = [];
     for (const record of this.ports.records.runRecords()) {
-      const summary = summaryOf(record, this.#live.get(record.run));
-      (isLive(record) ? live : ended).push(summary);
+      (this.#isLive(record) ? live : ended).push(this.#summaryOf(record));
     }
     return flowsListOf(live, ended);
   }
@@ -366,7 +366,7 @@ export class FlowRuns {
     if (record === undefined) return undefined;
     const profiles = new Set(this.ports.profiles());
     return {
-      summary: summaryOf(record, this.#live.get(record.run)),
+      summary: this.#summaryOf(record),
       starter: record.starter,
       scope: record.scope.filter((profile) => profiles.has(profile)),
     };
@@ -475,7 +475,7 @@ export class FlowRuns {
     // D3: the bounds, from the records, read with no await before the run begins
     const kept = records.runRecords();
     // V2: a run that never began, its record's ending refused too, is passed by until the next boot settles it
-    const live = kept.filter((record) => isLive(record) && !this.#unbegun.has(record.run));
+    const live = kept.filter((record) => this.#isLive(record));
     if (live.length >= FLOW_LIMITS.RUNS_LIVE_MAX) throw refused("runs-live", words.runsLive(name));
     if (params.starter.by === "spark") {
       const spark = params.starter.spark;
@@ -545,7 +545,11 @@ export class FlowRuns {
    * told. Past the record nothing throws (W1). A read the disk refuses, or a host that does not start, leaves the run
    * running for the next boot to wake (slice 14): it is answered as its record, or `#begin`, says it, and the list is
    * told (W2). A record that reads back as nothing (set aside, held), or a journal that reads as none VibeField keeps,
-   * is no run this VibeField can wake (W3): it answers none, and its record is ended never begun. */
+   * is no run this VibeField can wake (W3): it answers none, and its record is ended never begun. A woken run is
+   * answered as `#wake` left its record (Z4): one whose bytes are gone was ended lost there.
+   * The split (Z5, 1d review): a disk that refuses a write is the store degraded, UNAVAILABLE {service: flows} in the
+   * store's sentence (V4, `#refusal`); the run's own files read as none VibeField keeps while the store answers is
+   * PRECONDITION_FAILED never-began, in §9's words (W3, here). */
   #woken(begun: Begun): RunSummary | undefined {
     const { run } = begun;
     let record: FlowRunRecord | undefined;
@@ -560,7 +564,7 @@ export class FlowRuns {
         { run, error: messageOf(error) },
       );
       this.#told();
-      return record !== undefined ? summaryOf(record, this.#live.get(run)) : begun.written;
+      return record !== undefined ? this.#summaryOf(record) : begun.written;
     }
     if (record === undefined || !woke) {
       this.#logger.warn(
@@ -574,29 +578,60 @@ export class FlowRuns {
       this.#unbegin(run, begun.name);
       return undefined;
     }
+    let woken = record;
+    try {
+      woken = this.ports.records.runRecord(run) ?? record;
+    } catch (error) {
+      this.#logger.warn(
+        "fieldd.flows.run.reread",
+        "A woken flow run's record could not be read again",
+        { run, error: messageOf(error) },
+      );
+    }
     this.#told();
-    return summaryOf(record, this.#live.get(run));
+    return this.#summaryOf(woken);
   }
 
   /** V2 (1b review) — a run whose record was kept and whose begin then failed (its head refused, or its record or
    * journal reading as none kept) reads as never begun in this life too: its record ended `failed`, in neverBegan's
    * words, where the disk takes it; where it does not, the bounds pass it by until D18's reader settles it at boot. */
   #unbegin(run: FlowRunId, name: string): void {
+    const { records } = this.ports;
+    const endedAt = this.#now().toISOString();
+    const ending = { state: "failed", endedAt, log: words.neverBegan(name) } as const;
     try {
-      if (this.ports.records.runRecord(run) === undefined) return;
-      this.#rewrite(run, {
-        state: "failed",
-        endedAt: this.#now().toISOString(),
-        log: words.neverBegan(name),
-      });
+      // Z2 (1d review): a record with no journal (its head refused) names no synced line, so it is ended by the store's
+      // never-began end; one whose journal stands is written as every record is
+      const read = records.readRun(run);
+      if (read.kind === "unbegun") {
+        records.endUnbegun(run, { ...startOf(read.record), ...ending });
+        this.#told();
+        return;
+      }
+      if (records.runRecord(run) === undefined) return;
+      this.#rewrite(run, ending);
     } catch (error) {
-      this.#unbegun.add(run);
+      this.#unbegun.set(run, endedAt);
       this.#logger.warn(
         "fieldd.flows.run.unbegun",
         "A flow run that never began could not be ended in its record; the bounds pass it by until fieldd restarts",
         { run, error: messageOf(error) },
       );
     }
+  }
+
+  /** Whether a record's run is live in this life: its record says so, and it is no run found never begun (V2). */
+  #isLive(record: FlowRunRecord): boolean {
+    return isLive(record) && !this.#unbegun.has(record.run);
+  }
+
+  /** A run's summary as this life reads it (Z3, 1d review): its record's, and a run found never begun whose ending
+   * the disk did not take failed, in §9's words, its record left as the disk keeps it. */
+  #summaryOf(record: FlowRunRecord): RunSummary {
+    const summary = summaryOf(record, this.#live.get(record.run));
+    const endedAt = this.#unbegun.get(record.run);
+    if (endedAt === undefined) return summary;
+    return { ...summary, state: "failed", log: words.neverBegan(record.name), endedAt };
   }
 
   /** The list told, as `#changed` tells it, past a run's record, where nothing throws (W2): a list that cannot be read

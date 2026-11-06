@@ -457,23 +457,8 @@ export class FlowRecords {
     const read = this.#readRecord(run);
     if (read.kind !== "kept")
       throw new Error(`no run record this VibeField keeps stands under ${run}`);
-    const kept = read.record;
     const tail = this.#synced.get(run) ?? this.#syncedOf(run);
-    this.#writeRecord(
-      FlowRunRecord.parse({
-        ...fields,
-        format: FLOW_RECORD_FORMAT,
-        run: kept.run,
-        flow: kept.flow,
-        name: kept.name,
-        n: kept.n,
-        hash: kept.hash,
-        starter: kept.starter,
-        head: kept.head,
-        tail: { seq: tail.seq, mac: tail.mac },
-        startedAt: kept.startedAt,
-      }),
-    );
+    this.#writeRecord(this.#rewritten(read.record, fields, tail));
   }
 
   /** CP-4a2b (1d review Z2) — end the record of a run that never began: one whose record is kept and whose journal is
@@ -483,7 +468,14 @@ export class FlowRecords {
    * VibeField's as that road refuses them. Durable when it returns; throws when the disk does not take it. Slice 14's
    * boot settles a running record that never began by this same write. */
   endUnbegun(run: FlowRunId, fields: FlowRunStart): void {
-    throw new Error(`CP-4a2b 1f: ${run}'s end (${fields.state}) is built in 1f's green`);
+    this.#guard.writable(this.#key(RUNS_DIR, run));
+    const read = this.readRun(run);
+    if (read.kind !== "unbegun") {
+      // a newer VibeField's record or journal: its key is held now, and the store refuses the write
+      this.#guard.writable(this.#key(RUNS_DIR, run));
+      throw new Error(`${run} is no run this VibeField keeps that never began (${read.kind})`);
+    }
+    this.#writeRecord(this.#rewritten(read.record, fields, read.record.tail));
   }
 
   /** CP-4a2b (D18) — a run's record alone, when it verifies: a run's summary is drawn from it, never from its journal.
@@ -598,6 +590,24 @@ export class FlowRecords {
       return { kind: "none" };
     }
     return { kind: "kept", record: parsed.data };
+  }
+
+  /** CP-4a2b (D18) — a run's record written again: the runs' `fields` over the run's own facts and its head's MAC as
+   * its begin kept them (`kept`), naming `tail` as the journal's line it follows. */
+  #rewritten(kept: FlowRunRecord, fields: FlowRunStart, tail: JournalTail): FlowRunRecord {
+    return FlowRunRecord.parse({
+      ...fields,
+      format: FLOW_RECORD_FORMAT,
+      run: kept.run,
+      flow: kept.flow,
+      name: kept.name,
+      n: kept.n,
+      hash: kept.hash,
+      starter: kept.starter,
+      head: kept.head,
+      tail: { seq: tail.seq, mac: tail.mac },
+      startedAt: kept.startedAt,
+    });
   }
 
   /** CP-4a2b (D18) — keep a run's record whole and signed under its run's id, durable when this returns. */
