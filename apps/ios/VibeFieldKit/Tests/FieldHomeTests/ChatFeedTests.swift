@@ -1,3 +1,4 @@
+import FieldDesign
 import FieldProduct
 import Foundation
 import Testing
@@ -220,26 +221,40 @@ struct ChatFeedTests {
   @Test("a desktop's last word is said in the fact that holds: asleep, not answering, or a build it can't read")
   func away() {
     #expect(
-      ChatWords.away("studio", .asleep, carried: true)
+      ChatWords.away("studio", .asleep, carried: true, device: .iPhone)
         == "studio is asleep. These are as it last said; your words wait here until it wakes.")
     #expect(
-      ChatWords.away("loft", .silent, carried: true)
+      ChatWords.away("loft", .silent, carried: true, device: .iPhone)
         == "loft isn't answering. These are as it last said; your words wait here until it answers.")
     #expect(
-      ChatWords.away("mini", .incompatible, carried: true)
-        == "mini runs a build this phone can't read. These are as it last said; "
+      ChatWords.away("mini", .incompatible, carried: true, device: .iPhone)
+        == "mini runs a build this iPhone can't read. These are as it last said; "
         + "your words wait here until it's updated.")
     // a desktop the phone never heard: the same fact, never a last word (VF-PM 02:06Z, §9)
     #expect(
-      ChatWords.away("studio", .asleep, carried: false) == "studio is asleep. Its sparks show here when it wakes.")
+      ChatWords.away("studio", .asleep, carried: false, device: .iPhone)
+        == "studio is asleep. Its sparks show here when it wakes.")
     #expect(
-      ChatWords.away("loft", .silent, carried: false) == "loft isn't answering. Its sparks show here when it answers.")
+      ChatWords.away("loft", .silent, carried: false, device: .iPhone)
+        == "loft isn't answering. Its sparks show here when it answers.")
     #expect(
-      ChatWords.away("mini", .incompatible, carried: false)
-        == "mini runs a build this phone can't read. Its sparks show here when it's updated.")
+      ChatWords.away("mini", .incompatible, carried: false, device: .iPhone)
+        == "mini runs a build this iPhone can't read. Its sparks show here when it's updated.")
     // the merge's words, as the person reads them: a timeout and unreachable are one fact; a newer word is no answer
     let standings = [ComposeDesktopState.asleep, .timeout, .unreachable, .incompatible, nil].map(ChatAway.Standing.init)
     #expect(standings == [.asleep, .silent, .silent, .incompatible, .silent])
+    // L4's word pass: the build the person's device can't read is said as its platform names it, never a phone
+    for device in [DeviceWord.iPad, .unknown] {
+      for standing in [ChatAway.Standing.asleep, .silent, .incompatible] {
+        for carried in [true, false] {
+          let said = ChatWords.away("mini", standing, carried: carried, device: device)
+          #expect(!said.localizedCaseInsensitiveContains("phone"), "\(device) \(standing) \(carried): \(said)")
+        }
+      }
+    }
+    #expect(
+      ChatWords.away("mini", .incompatible, carried: false, device: .iPad)
+        == "mini runs a build this iPad can't read. Its sparks show here when it's updated.")
     #expect(ChatWords.emptyTitle == "No sparks yet.")
     #expect(ChatWords.emptyText == "A spark is an agent VibeField starts to run your other agents.")
   }
@@ -268,7 +283,7 @@ struct ChatFeedTests {
     let mini = ChatAway(device: "dev-01HQ9S7Y44", name: "mini", standing: .asleep, carried: false)
     let calm = ChatAway.lines(reading, home: ChatFixtureDoor.home, homeListed: true, name: Self.name)
     #expect(calm == [mini])
-    let said = ChatWords.away(mini.name, mini.standing, carried: mini.carried)
+    let said = ChatWords.away(mini.name, mini.standing, carried: mini.carried, device: .iPhone)
     #expect(said == "mini is asleep. Its sparks show here when it wakes.")
 
     // the loft stops answering while Kiwi is carried from the last reading: its last word, as not answering
