@@ -2998,7 +2998,7 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       rule (UM-D3, below).
     - A notch marks the time gone (from 38; a budget has none). It is the ink at 84%, 1.25 wide (1.6 from 72, 2
       from 150), and stands 1.5 past each edge of the band (2.2 from 72, 3 from 150).
-    - A reading kept after a failed refresh draws at 50%.
+    - A reading kept after a failed refresh draws at 50%, and so does a window read before its reset (below).
   - **Its paints are tones, never literals** (*added 2026-11-06, the corrections pass*). Every line here is one of
     four tones, which the drawer maps to its own tokens:
     - **the ink** at a percent: the foreground the circle stands on, §2.7's `--vf-godview-‹mode›-chrome-ink` in
@@ -3033,14 +3033,18 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       level with nothing in its middle (§8 "The phone's corner").
   - **The middle.** Below 72, a circle that stands for one profile holds the profile's glyph (puppeteer's
     `ProfileGlyph`, filled for the default) at `min(r × 1.18, 20)` in the ink at 86%; one that stands for several
-    (the menu row's 26, "All profiles") holds nothing. From 72 it says the plan that decides, or the one you point
-    at: its agent's mark and its percent (800, the display stack); for a plan that needs you, **Sign in** or
-    **Retry** as a word, never an act; and "…" while its first reading is out. Only when the hole the bands leave
-    is 46 or more in radius, from about 216 (from 174 to 239, where the bands' width is not clamped, the hole is
-    `0.408 × S − 41.9`; the design page's opened circle is 232), does it add its window ("of 5 hours", "of 7
-    days", "of 7 days · Opus", "of credits") and its right words (§9 "The meters' words"), in the attention ink
-    when it runs hot. At every open size in use, 206, 212 and 214 (holes 42, 45 and 45), the middle is the mark and
-    the percent alone; the open views' rows and the hold's words say the window and the reset. *(Corrected
+    (the Me menu's row at 26, and the page's **All profiles** row at 36) holds nothing of its own. The page's All
+    profiles row lays the profiles glyph at 15 over its circle (§8 "The Agent Profiles page"): the row draws it,
+    never the circle, so it is drawn once. *(Clarified 2026-11-06, the assembled review: this named only the menu
+    row's 26, which read against the page's "with the profiles glyph at 15 in its middle".)* From 72 it says the
+    plan that decides, or the one you point at: its agent's mark and its percent (800, the display stack); for a
+    plan that needs you, **Sign in** or **Retry** as a word, never an act; and "…" while its first reading is out.
+    Only when the hole the bands leave is 46 or more in radius, from about 216 (from 174 to 239, where the bands'
+    width is not clamped, the hole is `0.408 × S − 41.9`; the design page's opened circle is 232), does it add its
+    window ("of 5 hours", "of 7 days", "of 7 days · Opus", "of credits") and its right words (§9 "The meters'
+    words"), in the attention ink when it runs hot. At every open size in use, 206, 212 and 214 (holes 42, 45 and
+    45), the middle is the mark and the percent alone; the open views' rows and the hold's words say the window and
+    the reset. *(Corrected
     2026-11-06, the model's finding and the review: this said the window and the right words showed from 150,
     which the drawing's `centreSvg` never does below a 46 hole, and the model follows the drawing.)*
   - **The hot dot.** A circle that stands for a profile at a small size (36, 40, 54) wears a dot while any of its
@@ -3049,17 +3053,29 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     words instead. The drawing's `#FF9F0A` is `--vf-orange`, never a literal.
   - **Hot, and the forecast** (UM-D3, UM-D4). A window is hot by Settings' own rule, `isHot`:
     - at 100% or more;
-    - with no pace to judge (no known length or reset, or a budget), at 80% or more;
+    - with no pace to judge (no known length or reset), at 80% or more;
     - otherwise when some time has gone and it is past 40% and running more than 1.05 times ahead of it; a window
       with no time gone yet is hot only at 100%.
-    Godview's flat 80% (puppeteer-views' `USAGE_HOT_PERCENT`) retires with the usage column. A hot window that would
-    run out before its reset says when, at its pace so far: under 10 minutes to the minute, under an hour to 5
-    minutes, and beyond that in 15-minute steps ("~1h 15m"). There is no forecast for a budget, for a window
-    already at 100%, or for one whose reset comes first. *(Corrected 2026-11-06, the model's review: the second rule
-    said a window with no time gone was judged at 80%. `isHot` judges at 80% only a window whose length or reset it
-    cannot read, or a budget; a window with no time gone yet runs ahead of nothing.)*
+    A budget is pace-less by the meter's own rule (the drawing's), which Settings adopts at UM-3: it has no now
+    line, and it is hot at 80% or more whatever length or reset its adapter gives it. Godview's flat 80%
+    (puppeteer-views' `USAGE_HOT_PERCENT`) retires with the usage column. A hot window that would run out before its
+    reset says when, at its pace so far: under 10 minutes to the minute, under an hour to 5 minutes, and beyond that
+    in 15-minute steps ("~1h 15m"). The time is rounded first and then said, so from 57.5 minutes it says the hour,
+    "~1h", never "~60m". There is no forecast for a budget, for a window already at 100%, or for one whose reset
+    comes first. *(Corrected 2026-11-06, the model's review: the second rule said a window with no time gone was
+    judged at 80%. `isHot` judges at 80% only a window whose length or reset it cannot read, or a budget; a window
+    with no time gone yet runs ahead of nothing.)* *(Corrected 2026-11-06, the assembled review: the second rule,
+    and the correction before this one, counted a budget among what `isHot` judges at 80%. `isHot` knows no budget,
+    and Settings still paces a budget its adapter gives a length and a reset; the meter drops a budget's pace before
+    it asks (`paceless`). And the forecast chose its form before it rounded, so 57.5 to 60 minutes said "~60m".)*
   - **The tightest** (UM-D13): a plan's tightest window is the one under the most pressure — a hot window first,
     then one at 100% or more, then the most used — and a profile's word is the tightest of its plans that read.
+  - **A window read before its reset** (*added 2026-11-06, the assembled review; ‹for James›*). A window whose
+    reset has come since its reading was taken (its `resetsAt` at or before now) no longer says what it meters. It
+    is never hot and has no forecast, it ranks last for the tightest (its pressure 0, UM-D13), and its fill draws at
+    50%, as a kept reading's does. Its plan's right words say the reading's age in place of a forecast or a reset,
+    "as of 3h ago" (§9 "The meters' words"). On the phone it is the common case: a phone takes no reading of its own
+    (UM-D8), so its batch is as old as a desktop window's last poll, hours once Godview and Settings are closed.
   - **Pointing** at an arc at the open size focuses that plan: the others dim to 28%, and the middle says it.
   - **Said** as an image, "Usage: ‹plan›: 42% of 5 hours, resets in 2h; ‹plan›: not signed in", or "No meters",
     or, while the usage cannot be read, "‹profile›: usage unavailable", and "Usage unavailable" for every profile's
@@ -6136,12 +6152,13 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       §13, and "3 profiles · 5 plans"), its rows are the lens with a check on the one shown, and the page follows the
       lens. With one profile its rows take no tap (UM-D12);
     - **Plans**, or **Every plan** with several profiles, or **Plans in Work** while the lens is on. Per plan: its
-      agent's mark (18), its title, the age of a kept reading ("as of 5m ago"), every window as Settings' C1 line,
-      and "Runs out in ~35m at this pace" while it would (UM-D4). A plan's sessions line ("3 sessions · 1 working ·
-      1 waiting for you") and its **Show** and **Showing** are UM-D14's, the next wave's (UM-5). A plan that needs
-      you says where it is fixed, "Not signed in · sign in on studio" or "Couldn't read · retry", and the phone draws
-      no act for either: it signs in on no desktop, and a phone's refresh spends no call (UM-D8). An agent with no
-      meter is a line of its own, "Codex shows no meter";
+      agent's mark (18), its title, the age of a kept reading ("as of 5m ago") or of one taken before a window's
+      reset that has since come (§8 "The Bands circle"; added 2026-11-06, ‹for James›), every window as Settings'
+      C1 line, and "Runs out in ~35m at this pace" while it would (UM-D4). A plan's sessions line ("3 sessions ·
+      1 working · 1 waiting for you") and its **Show** and **Showing** are UM-D14's, the next wave's (UM-5). A plan
+      that needs you says where it is fixed, "Not signed in · sign in on studio" or "Couldn't read · retry", and the
+      phone draws no act for either: it signs in on no desktop, and a phone's refresh spends no call (UM-D8). An
+      agent with no meter is a line of its own, "Codex shows no meter";
     - **the foot:** "Manage profiles in Settings → Agent Profiles. New profiles are made on a desktop."
     - *Wave 1, until UM-5 (2026-11-06, UM-D14's interim, the lead's ruling 23; ‹for James›):* the page draws no
       **Show** or **Showing** and no per-plan sessions line, and a plan's row takes no tap (it is not a button);
@@ -7016,9 +7033,10 @@ here.
 - **A reading.** A window says Settings' words: its label, its percent and its reset ("resets in 2h"). A window that
   runs out first says **"out in ~35m"** at a meter's end, and "Runs out in ~35m at this pace" under a plan's lines on
   the phone's page, in the attention ink, the time rounded as §8 "The Bands circle" says ("~4m", "~35m", "~1h 15m").
-  A reading kept after a failed refresh says its age, "as of 5m ago"; one on its way, "reading…". From about 216, a
-  size no view uses yet, the open circle's middle names its window: "of 5 hours", "of 7 days", "of 7 days · Opus",
-  "of credits" (§8 "The Bands circle", the middle).
+  A reading kept after a failed refresh says its age, "as of 5m ago", and so does one taken before a window's reset
+  that has since come, "as of 3h ago" (§8 "The Bands circle"; added 2026-11-06, the assembled review, ‹for James›);
+  one on its way, "reading…". From about 216, a size no view uses yet, the open circle's middle names its window:
+  "of 5 hours", "of 7 days", "of 7 days · Opus", "of credits" (§8 "The Bands circle", the middle).
 - **What needs you.** On the desktop, "not signed in" with **Sign in**, and "couldn't read" with **Retry**. On the
   phone, "Not signed in · sign in on ‹home›" and "Couldn't read · retry", with no act. A sign-in already under way
   says "signing in…" with no act, as Settings' row says "Signing in…" and offers only its cancel; it is said
