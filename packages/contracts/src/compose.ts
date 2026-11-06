@@ -1126,6 +1126,23 @@ export const NeedsHeldLaunch = z
   .passthrough();
 export type NeedsHeldLaunch = z.infer<typeof NeedsHeldLaunch>;
 
+/** CP-4a2b (13a slice 7's Q4; ruled 2026-11-06 (c)) — a changed flow's pending start, kept on its `flow-changed` record:
+ * what FlowRuns.start was asked past the item's `script` and `from`, so Run this version or Run the one you approved
+ * begins that same run. `input` is the run's input; `starter` who started it; `scope` the Agent Profiles its door
+ * chose, as asked (D8 freezes them when the run begins). The bounds are flows.ts's FlowInput, FlowStarter and
+ * FlowRunRecord `scope`, written here because flows.ts imports this module, as NeedsScript's are; compose.test.ts's
+ * Q4c holds them in lockstep. */
+export const NeedsPendingStart = z
+  .object({
+    input: z
+      .record(z.string().regex(/^[A-Za-z_$][A-Za-z0-9_$]{0,63}$/), z.string().max(4_000))
+      .refine((input) => Object.keys(input).length <= 8, { message: "at most 8 inputs" }),
+    starter: z.object({ by: z.string().min(1).max(32), spark: SparkId.optional() }).passthrough(),
+    scope: z.array(z.string().min(1).max(128)).max(64),
+  })
+  .passthrough();
+export type NeedsPendingStart = z.infer<typeof NeedsPendingStart>;
+
 /** The record fieldd keeps per item, one file per item under LAYOUT.NEEDS_DIR, signed with NEEDS_KEY_FILE's secret by
  * fieldd's one record signer. The schema is the unsigned body; the file adds its `signature`, and its name is the
  * item's id, inside the signature. What an Allow acts on (the held words, the launch) is kept here and never rides the
@@ -1142,6 +1159,9 @@ export const NeedsRecord = z
       .optional(),
     /** a held spawn: what Allow one more starts, until it does */
     launch: NeedsHeldLaunch.optional(),
+    /** CP-4a2b (Q4) — a changed flow's pending start: what its Run this version or Run the one you approved begins;
+     * absent on a record from before it */
+    start: NeedsPendingStart.optional(),
     /** the spark's name its words are marked with (CP2-D1) */
     sender: SparkName.optional(),
     /** the fact owed to its spark, until the spark's session confirms it (item 158, CO-Q9 (b)) */
