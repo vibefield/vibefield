@@ -437,16 +437,48 @@ DESIGN.md §2.9, §8 "The phone's Apps" and §9 "Apps"; DECISIONS MA
 - Landed 11-06: **MA-4, the desk** (`a16205d5c` → `2cccfb168`, stacked as M166, run 166; LANDED "MA-4"), in 0.9 by
   James's "MA-4 in" (00:30Z): From your agents under Live on the Apps shelf, History's `artifacts` port (dormant
   until RO-37), and the screen's word Apps. Every open is still `export-unbuilt`.
-- Next: **MA-3f, serving**: the copy in VibeField's files worker if James rules the Drive's DR-D1 (a)
-  (`draft/thinking-drive.md`, PROPOSED 11-06, page *The Drive*), else rosetta 0.1.4 (RO-32…RO-35, drafted in
-  `lanes/ma/rosetta`; James files and releases it) and its EL8 · MA-3h, Keep and Hide as intent · **MA-6, the phone's
-  shelf** (IOS-13a, ahead of it, landed 11-06; after UM's M-phone, whose SE-2 builds the search sheet that MA-D7's strip
-  now stands in, DESIGN.md §8 "The phone's Apps" as amended at UM-0) · **MA-5, the phone's host** after SP-4 and its
-  probes P1/P2 (cp-landing's queue).
-- Owed: the 10 words marked ‹for James› in DESIGN.md §8 and §9, and §9's interim words for Live (MA-4); the
-  Drive's nine marks; MA-4's witness by eye; smoke:godview on vf-m1 (items 185, 186); carried from AH: AH-4's
+- Next: **MA-3f, serving, is the Drive's DR-1** (the DR track, below). James ruled DR-D1 (b) on 11-06, so the copy
+  is rosetta 0.1.4's export by digest (R-1, amending RO-32; built in `lanes/ma/rosetta`; James files and releases it)
+  and its EL8, served under VibeField's headers (DR-1a, LANDED 11-06) · MA-3h, Keep and Hide, now intents in the
+  drive's document (DR-2) · **MA-6, the phone's shelf** (IOS-13a, ahead of it, landed 11-06; after UM's M-phone, whose
+  SE-2 builds the search sheet that MA-D7's strip now stands in, DESIGN.md §8 "The phone's Apps" as amended at UM-0) ·
+  **MA-5, the phone's host** after SP-4 and its probes P1/P2 (cp-landing's queue).
+- Owed: the 10 words marked ‹for James› in DESIGN.md §8 and §9, and §9's interim words for Live (MA-4);
+  MA-4's witness by eye; smoke:godview on vf-m1 (items 185, 186); carried from AH: AH-4's
   review, its LANDED entry and its physical witnesses (`cce684ce3`, on main since 08-03), AH-1's two-client
   witness, AH-3's physical closeout, and device-retirement GC with TS's "forget a device".
+
+**DR — the Drive (your apps and pages, held by every desktop, served by any)** · vibe-field-19 (lanes `lanes/ma-4`,
+`lanes/ma/rosetta`, `lanes/dr/{truffle,truffle-t3,mille}`) · law: `draft/thinking-drive.md` v0.3 (the page *The Drive*,
+KB33dCAP, where it moved 11-06 05:45Z from LB8rzJYV; sources `draft/drive/page/`); DECISIONS DR
+- Ruled 11-06 (James, on the page): DR-D1 (b), against the lean (rosetta's export door writes the copy); DR-D2, D4,
+  D5, D6 and D8 (a) at 01:43–01:56Z; DR-D3, D7, D9, D10, D11 and D12 (a) at 04:41–04:42Z. Then, typed: "Good, all
+  ruled with lean, now start the implementation, plan and work in parallel" (04:43Z).
+  - It is designed across the sibling repos (his 03:23Z rule): rosetta exports, mille holds, truffle moves and serves,
+    and VibeField decides.
+- Landed 11-06: **DR-1a, the serve policy as contracts** (`a1e722a82` → `86d274f10`, minted as M183, run 183; LANDED
+  "DR-1a"):
+  - `MADE_APP_SERVE_POLICY` (never a sandbox), `SERVE_HEADER_FORBIDDEN` and `SERVE_HEADER_LIMITS` (T-1's table as a
+    superset), and `MADE_APP_VIEW`;
+  - `made-app-network.ts`'s pure readers and composers.
+  - Nothing calls them yet, and every open is still `export-unbuilt`.
+- In flight, wave 1's sibling lanes (built and in their vf-m1 runs; nothing filed):
+  - R-1, rosetta: RO-32 by digest, with DR-D13's `environment` at its lean;
+  - T-1, truffle: headers per serve;
+  - T-3, truffle: named pull roots;
+  - M-D1 and M-D2, mille: `mille-drive` and its binding, with loro held by four exact pins.
+- Next:
+  - W2: VF-VIEW (the files worker builds a made app's view) and VF-DRC (the drive's contracts and gen), cut on DR-1a.
+  - Then W3 (VF-RELAY, VF-FLOOR), and DR-1 (B), the open wired at R-1's and T-1's EL8s.
+  - Then DR-2 (the drive in the files worker, at mille's release), DR-3 (the sync, over T-3), DR-4 (one address,
+    T-2) and DR-5 (a folder or a build published as a version).
+- Owed:
+  - James's marks DR-D13, D14 and D15. R-1's filing waits on D13, and T-2 on D15, which reopens D12.
+  - The filings and releases upstream (rosetta 0.1.4, truffle 0.7.27, mille's drive), James's hand.
+  - James's eye on the serve policy's `script-src 'unsafe-inline' 'unsafe-eval'` before DR-1 (B) lands. It is a lean:
+    no ruling chose it, and it copies rosetta's served shell (MA-D5 (a)).
+  - rosetta-main's seven stripped ts-rs outputs, a finding for James.
+  - The record's v0.3 errata and the four loro pins, which ride draft slot 19.
 
 **UM + SE — the profile meters and one search** · vibe-field-b7, the UM lead (vibe-field-88 until the 11-06
 account switch; lanes `lanes/um1` and its helpers `lanes/um1-model`, `lanes/um1-ud8`) · law
@@ -1294,7 +1326,8 @@ Petition status lives in `draft/petitions/README.md`. Still open or owed there:
 | DK — the desk migration | COMPLETE; landed 10-09 | `thinking-desk-migration.md`, `thinking-the-desk.md`, ICE design-015…018, `docs/desk-gates.md` | James's parked build rulings |
 | GT — Godview terminal | PARKED; the deck's ladder done (GT-0…GT-8) | `specs/godview-terminal.md` | G29; GT-D22; row 13b |
 | TP / TC — terminal pipeline and custody | PARKED; TC RATIFIED 10-28 (Q6) | `specs/terminal-pipeline-v3*.md`, `specs/terminal-custody.md`, `thinking-terminal-mesh-cells.md`, `thinking-floor-wedge.md`, `thinking-inventory-latency.md` | D6's cell half |
-| MA — Apps (was AH — Artifact Hub) | ACTIVE since 11-05 (MA-D1…D13 ruled; MA-4 in 0.9, James 11-06); MA-0a + MA-1a (M152), MA-3 (M157, M162) and MA-4 (M166) landed; AH-1…3 landed, AH-4 unledgered | `thinking-mini-apps.md`, `specs/artifact-hub.md`, design-06 §5; DESIGN.md §2.9/§8/§9/§13 | MA-3f serving (DR-1 if the Drive rules DR-D1 (a)), then MA-3h; MA-6 the phone's shelf (after UM's M-phone) |
+| MA — Apps (was AH — Artifact Hub) | ACTIVE since 11-05 (MA-D1…D13 ruled; MA-4 in 0.9, James 11-06); MA-0a + MA-1a (M152), MA-3 (M157, M162) and MA-4 (M166) landed; AH-1…3 landed, AH-4 unledgered | `thinking-mini-apps.md`, `specs/artifact-hub.md`, design-06 §5; DESIGN.md §2.9/§8/§9/§13 | MA-3f serving, which is the Drive's DR-1 (DR-D1 ruled (b): rosetta 0.1.4's export), then MA-3h; MA-6 the phone's shelf (after UM's M-phone) |
+| DR — the Drive | ACTIVE since 11-06 (DR-D1…D12 ruled; D13…D15 open); DR-1a landed (M183); wave 1's sibling lanes (R-1, T-1, T-3, M-D1/M-D2) built, unfiled | `thinking-drive.md` v0.3 (page sources `draft/drive/page/`); `thinking-mini-apps.md` | D13…D15 (James); W2 (VF-VIEW, VF-DRC); the sibling releases and their EL8s |
 | UM + SE — profile meters and one search | ACTIVE since 11-06 (UM-D21…D28 and SE-D1…D5 ruled on the page; UM-D16 E, D19 A; D3, D4, D8, D12…D15 at the leans); UM-0…UM-2 landed 11-06 (M-U1 `c9493b957`, run180, M180) | `thinking-profile-meters.md`; `lanes/um/PLAN.md` §4; DESIGN.md §2.7/§5/§8/§9/§13; `docs/agent-plane/usage-meters.md` | M-desk (UM-3 + SE-1, stacked), then M-phone (UM-4 + SE-2, stacked, before MA-6); UM-5 in wave 2 |
 | PLUG — shipped core | COMPLETE: P0–P7, P8b–d (P8c via WP8), PRC-4/5; later publishing/validation work is separate | `specs/plugin-architecture.md`, `thinking-p8-loadable-artifact.md` | existing product gates; no blanket 24-hour prerequisite |
 | PRC-6 — plugin runtime validation | OPEN; diagnostics in draft [PR #7](https://github.com/vibefield/vibefield/pull/7); Linux CI passed, full verification and calibration pending | `thinking-prc6c2-physical-soak.md` §9–10 | full verify → guarded 32-cycle current-desk calibration + listener control; historical failures stay open; literal 24h only for that claim |

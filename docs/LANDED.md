@@ -37886,3 +37886,111 @@ and named no desktop. M-b2 joins the two halves, so the phone can read a spark a
 **Owed.**
 - The phone reading another desktop's spark on a real device (James's hand).
 - IOS-12c's thread on the phone (the IOS lead's).
+
+## DR-1a — a made app's serve policy, in the contracts: the CSP and headers truffle's serve will set, the bounds T-1 will hold them to, and the view a desktop builds; pure, and called by nothing yet (track DR) (2026-11-06; `a1e722a82` → `86d274f10`, 5 commits on main `3b8611ec4`, lane `dr/a-contracts` in `/Volumes/SamsungRed/lanes/ma-4/vibe-field`, re-cut by `git rebase --onto` as `86d274f10`, minted as M183 `86d274f10`, run 183)
+
+- **The Drive's first landing.** James ruled `draft/thinking-drive.md`'s twelve marks on the page *The Drive*:
+  DR-D1 (b), DR-D2…D12 (a). His typed word was "Good, all ruled with lean, now start the implementation, plan and work
+  in parallel" (04:43Z).
+  - DR-1a is wave 1's VibeField lane. It holds the rows DR-1 (A) reads: DR-D2 (a), DR-D3 (a) and DR-D11 (a).
+  - Its four sibling lanes are built and in their vf-m1 runs: R-1 rosetta, T-1 and T-3 truffle, M-D1/M-D2 mille.
+    Nothing is filed upstream; filing is James's hand.
+- **The honest state:** every function here is real and pure, and nothing calls it.
+  - Every open still answers `UNAVAILABLE {service:"apps", state:"export-unbuilt"}`.
+  - The callers come later: the files worker's view (VF-VIEW, W2), fieldd's open with `ServeConfig.headers` at T-1's
+    EL8 (DR-1 (B)), and the export root at rosetta 0.1.4's EL8.
+
+**What landed.** 10 files, +2189 −0, all in `packages/contracts`. The rows are TS-only: no LAYOUT row, no gen
+event, no install. The pin-class ERE: no hit.
+- **`registries.ts` (+172), four rows:**
+  - **`MADE_APP_SERVE_POLICY`** is the CSP as data.
+    - `default-src 'self'`, then six fetch directives, each its own sources followed by the policy's hosts in each
+      scheme (`wss://` beside `https://` in connect-src).
+    - Then the fixed directives `worker-src 'self' blob:`, `object-src 'none'`, `base-uri 'self'`,
+      `form-action 'self'` and `frame-ancestors 'self'`, then `Referrer-Policy: no-referrer` and
+      `X-Content-Type-Options: nosniff`.
+    - It **never names `sandbox`**. Without allow-same-origin the origin goes opaque, and DR-D12's one address per app
+      rests on an origin's own storage. With allow-same-origin it confines nothing. The record's DR-D11 lean counted
+      sandbox among the headers' gains; its dated correction is at its source (v0.3, the plan's critic).
+    - It names no host. Hosts are each app's input (DR-D3 (a); AR-L1, MA-L9).
+  - **`SERVE_HEADER_FORBIDDEN`** is T-1's planned table as a belt and a superset of it, so a header the contract
+    admits is never refused at truffle's serve add. It holds the hop-by-hop names and every `proxy-*`, `set-cookie`,
+    `content-length`, `host`, T-1's three "may add" names, and `link`.
+  - **`SERVE_HEADER_LIMITS`**, in bytes: COUNT 32, NAME 64, VALUE 8192, LIST 16384.
+  - **`MADE_APP_VIEW`**: `index.html`, VERSION 1 (one scheme; DR-D14's both-in-one-view would be VERSION 2), a page
+    of at most 16 MiB, and 64 variables.
+- **The union bound, proved in bytes.** UNION_HOSTS 16 (= `MADE_APP_LIMITS.REACH_HOSTS`) and HOST_BYTES 60 bound the
+  worst policy to a CSP of 8,003 bytes: 307 + 16 × (61 + 7 × 60) ≤ VALUE_BYTES 8,192.
+  - The vector holds the cap and the refusal one past it.
+  - At MadeAppReachHost's 253 bytes only four hosts fit, and a captured page names five, so HOST_BYTES is a new
+    bound. It is PROVISIONAL, as MADE_APP_LIMITS' are.
+- **`made-app-network.ts` (new, +573; zod only, browser-safe):**
+  - `madeAppServeHeaders(policy)` gives `{ok, headers}` or a refusal (`policy-unreadable`, `hosts-over-cap`,
+    `headers-over-bounds`). Each list is sorted and named once, so equal policies compose equal bytes.
+  - `readVibefieldAppManifest(raw)` and `madeAppPolicyFromManifest` read a built app's `vibefield.app.json`.
+    Unreadable, private, long, repeated and over-cap hosts are stripped and said in `stripped`; a bad field costs the
+    field, never the manifest.
+  - `readMadeAppEnvironment(raw)` reads R-1's `environment`, whose hosts are keyed by CSP directive. Without it, that
+    map composed a CSP that admitted no CDN, with no word (the review's major). A policy keyed `*-src` is refused,
+    never composed empty.
+  - `madeAppViewHead(theme)` and `MADE_APP_VIEW_TAIL`. A theme value cannot leave its declaration: no `<`, `;`, `{`,
+    `}`, `:`, `\`, `*` or line break; never `url`, `src`, `image` or `image-set`; never `//`. Closed family names may
+    be double-quoted.
+  - `ServeHeader*`, T-1's rules as a superset: a name `[A-Za-z0-9-]` of 1–64 bytes and never forbidden; a value of
+    VCHAR, SP and HTAB with no edge whitespace.
+- **The fixtures:**
+  - `made-app-headers.vector.json`: 15 policy rows, the worst case at the cap with its sha256, the refusals, and the
+    `neverDirectives: ["sandbox"]` row.
+  - `made-app-view.vector.json`: the heads byte for byte, and a whole view where a page's own meta CSP lands inside
+    `<body>` and is ignored.
+  - `made-app-environment.vector.json`: 6 rows. The first is R-1's golden environment, transcribed byte for byte.
+  - `vibefield-app-manifest-hostile.vector.json`: 29 entries a reader strips.
+  - `vibefield-app-manifest.valid.json`: a wire fixture, so one more `fixtures.test.ts` row.
+  - The expected strings were built by hand in a shell (printf, wc, shasum), never by the code.
+
+**The proof.**
+- **The red**, `f3ba06b82`, is a red by IMPORT ("Cannot find module '../src/made-app-network'"), because its source
+  file is new. VF-PM accepted it as such (07:26Z). The old mini's `RED.log` sha256 is `2c6232b7…`.
+- **The old mini, a9's filler `fill-vfa` at `2184e8e16`** (07:25Z, `lanes/ts6/logs/oldmini/fill-vfa/`, `vfa.out`
+  `339adc2b…`): biome 0, tsc 0, `made-app-network.test.ts` 104/104, `fixtures.test.ts` 684/684, and the whole
+  contracts suite 61 files and 1880 = the base's 1775 + 105. Also no gen event, walls, retired and the catalog
+  clean, and shape exit 0.
+- **The re-cut onto `3b8611ec4`** used the ruled carry form:
+  - all five patch-ids `--stable` are equal, and the per-file +/- lines are equal;
+  - the nine files no other change touched are byte-identical;
+  - the tip's tree equals `git merge-tree --write-tree --merge-base 85b65c52a 3b8611ec4 2184e8e16`;
+  - the base's range carries no pin-class file, and the lock is unmoved.
+  - `registries.ts` is the one shared file. Main's hunks there are SP-7a's `SPARK_TRANSCRIPT_SERVE` and its notes,
+    and M-U1's SCOPES and tailnet presets; DR-1a's one block lands after `MADE_APP_OPEN`. They are disjoint.
+  - The same was rehearsed in memory at 08:46Z over main and the four mints ahead of it (M-c1, M-U1, SD-3, M-b2):
+    every step clean, tree `794ac76e277d`.
+- **Run 183, the green** (a9's mint of `86d274f10` on `3b8611ec4`, on vf-m1): `pnpm verify` exit 0 at 09:31:31Z.
+  - contracts 1889 (+105: `made-app-network.test.ts` 104 new, and `fixtures.test.ts` 687 → 688).
+  - vitest 13,737 | 0 | 21 over 949 files (+105, +1 file); biome "Checked 3430 files" (+7 new files).
+  - Every other count unchanged from run 182; census OK, bundle assert OK, gen clean.
+  - The log is `/Volumes/SamsungRed/lanes/ts6/logs/m1/run183/verify.log`, sha256
+    `3dc0f2efdfbdaceba59d346d8f629ec556ea4a52f39ad64d996c37f4a4b62d9d`.
+- On the MacBook (the pressure HOLD), only single light rows ran, each at nice 19 after a swap read: tsc, the new
+  file 104/104, `fixtures.test.ts` 684/684 and biome. They were for speed, not proof; no whole run was made there.
+
+**Disclosed.**
+- The builders committed with `SKIP_SHAPE=1`: the pre-commit hook runs node, which the HOLD forbids. The lead ran the
+  shape check (exit 0), and the old mini's `8-shape` ran it again.
+- The lane brief's builder-written "673 fixtures" was never measured. It was corrected at its source to 684.
+
+**Found.**
+- rosetta's main carries seven ts-rs outputs stripped of the generator's trailing spaces (R-1's run, step 5). It is a
+  finding for James; nothing in rosetta's CI regenerates them.
+- loro's Rust crate needs four exact pins to stay on its line (MD's run). It is written at `draft/thinking-drive.md`
+  §10 on the draft slot.
+
+**Owed.**
+- James's marks DR-D13, D14 and D15 on the page. R-1's filing waits on D13, T-2 on D15, and MADE_APP_VIEW's VERSION 2
+  on D14.
+- James's eye on `script-src 'self' 'unsafe-inline' 'unsafe-eval'`, before DR-1 (B), the first slice that serves it,
+  lands. No ruling chose it. DR-D2 (a) made the policy VibeField's, and its sources copy rosetta's served shell (MA-D5
+  (a), carried at the lean); VibeField's own app CSP bans plain `unsafe-eval`.
+- W2: VF-VIEW and VF-DRC, cut on this land.
+- The sibling filings and releases (rosetta 0.1.4, truffle 0.7.27, mille's drive) and their EL8s, James's hand.
+
+Land 2026-11-06T09:33:41Z by the fixer.
