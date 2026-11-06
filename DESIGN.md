@@ -10377,11 +10377,23 @@ a name that is, or starts with, "VibeField" shows the flow's slug instead, so a 
     another flow's, or is waiting on a permission."
   - "VibeField couldn't start ‹label›: ‹the runtime's words›"
   - "‹label› failed."
-- **A form the run can't check** (Q-A2 (a): a subset of JSON Schema, checked by fieldd):
+- **A form the run can't check** (Q-A2 (a): a subset of JSON Schema, checked by fieldd). The subset stays narrow
+  (ruled 2026-11-06): `type` is one word, `items` is one form, `enum` holds one or more JSON scalars, and a
+  field the form does not name passes.
   - "VibeField can't check ‹label›'s form: it uses ‹keyword›, which a flow's form may not. A form takes type,
-    properties, required, items and enum."
+    properties, required, items and enum." Every other keyword is refused, `description` among them. `description`
+    is the first candidate to widen the subset by: real agents' forms carry it, and a widening only adds.
   - "VibeField can't check ‹label›'s form: it is larger than a flow's form may be." This covers each of its three
     bounds: 4 KiB, 8 deep, and 64 values in one enum.
+  - *Proposed (ruled 2026-11-06, at the leans; the words are open until James reads them on a run,
+    as the rest are).* A keyword the subset takes, written as it does not take it (a `type` that is not one of its
+    seven words, `items` that is not one form, an `enum` with no values): "VibeField can't check ‹label›'s form: its
+    ‹keyword› isn't written as a form takes it."
+  - *Proposed (the same).* A form that is no object at all: "VibeField can't check ‹label›'s form: a form is an object
+    of type, properties, required, items and enum."
+  - *Proposed (the same).* A form whose top is not `type` object, a top with no `type` among them. A step's answer
+    is its fields beside its text (Q-A1 (a)), so its form's top is an object's: "VibeField can't check ‹label›'s
+    form: a form's top takes type object."
   - An answer that misses its form is said in fieldd's words, which name JSON types and places alone, never the
     agent's text: "the answer is missing a required field (the 2nd of 3)". An answer whose fields alone pass the
     bound: "the answer's fields are longer than a flow may keep".

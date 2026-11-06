@@ -616,7 +616,9 @@ export const AGENT_STOP = {
  *    whose script moves; one more run that would move waits for a host;
  *  - FORM_BYTES_MAX, FORM_DEPTH_MAX, FORM_ENUM_MAX: a step's form (its `schema`, Q-A2 (a)'s subset, checked by fieldd)
  *    as canonical JSON's bytes, its nesting, and one `enum`'s values. A form past any is refused before the step
- *    starts. No node count (J4 (a)): the byte bound already holds the check's work. */
+ *    starts. No node count (J4 (a)): the byte bound already holds the check's work. FORM_DEPTH_MAX counts a form's
+ *    levels, a scalar's form at 1 and each `properties` or `items` one more, so an object of strings is 2 deep
+ *    (ruled 2026-11-06). */
 export const FLOW_LIMITS = {
   SCRIPT_MAX_BYTES: 64 * 1024,
   RESULT_MAX_BYTES: 64 * 1024,
