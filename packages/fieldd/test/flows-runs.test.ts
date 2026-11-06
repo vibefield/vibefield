@@ -408,13 +408,11 @@ describe("CP-4a2b — a run starts from the bytes fieldd kept, or asks first; it
     await settled(h.runs, second.run, "done");
   });
 
-  it("R1b (Q-a, ruled 2026-11-06): a once-approved script the static read now refuses is refused at its start, before any journal line, in the read's own words; its approval stands, and Run this version of one approves nothing", async () => {
+  it("R1b (Q-a, ruled 2026-11-06; NN1, 2026-11-06): a once-approved script the static read now refuses is refused at its start, before any journal line, its read's own words in §9's frame with the line they name, none for a whole-file refusal; its approval stands, and Run this version of one approves nothing", async () => {
     const h = await harness();
     const approval = h.approved("evals", EVALS);
-    expect(await refusalOf(h.start({ flow: "evals" }))).toEqual({
-      reason: "read",
-      message: "it calls eval(), which a flow may not",
-    });
+    const evals = "VibeField can't start Evals: it calls eval(), which a flow may not (line 3).";
+    expect(await refusalOf(h.start({ flow: "evals" }))).toEqual({ reason: "read", message: evals });
     // one reader, one gate: Run this version of a version the read refuses is refused there too, before its approval
     const edited = h.write("evals", `${EVALS}// edited\n`);
     const waits = waitsOf(await h.start({ flow: "evals" }));
@@ -425,11 +423,24 @@ describe("CP-4a2b — a run starts from the bytes fieldd kept, or asks first; it
       version: "this",
       start: askedOf(h, 0),
     });
-    expect(await act).toEqual({
-      outcome: "failed",
-      reason: "it calls eval(), which a flow may not",
-    });
+    expect(await act).toEqual({ outcome: "failed", reason: evals });
     expect(h.records.approval("evals")?.hash).toBe(approval.hash);
+    // a whole-file refusal names no line, so its frame says none (NN1, ruled 2026-11-06): Run this version of one
+    const hello = h.approved("hello", HELLO);
+    const whole = h.write("hello", 'export const meta = { name: "Hello" };\n');
+    const asked = waitsOf(await h.start());
+    const wholeAct = h.runs.acts.start({
+      id: asked,
+      flow: "hello",
+      hash: flowHashOf(whole),
+      version: "this",
+      start: askedOf(h, 1),
+    });
+    expect(await wholeAct).toEqual({
+      outcome: "failed",
+      reason: "VibeField can't start Hello: it exports no default function to run.",
+    });
+    expect(h.records.approval("hello")?.hash).toBe(hello.hash);
     expect(h.records.runRecords()).toEqual([]);
     expect(h.records.runs()).toEqual([]);
   });
@@ -630,6 +641,9 @@ describe("CP-4a2b — a run starts from the bytes fieldd kept, or asks first; it
       words.noProfiles(),
       words.notAVersion("‹flow›"),
       words.hostUnconfigured(),
+      words.readRefused("‹flow›", "‹the read's words›"),
+      // ‹n› is the line the read names: said here at 7, and read back as §9 writes it
+      words.readRefused("‹flow›", "‹the read's words›", 7).replace("(line 7)", "(line ‹n›)"),
     ]) {
       expect(said).not.toBe("");
       expect(design, said).toContain(`"${said}"`);

@@ -53,6 +53,12 @@ export const noSuchRun = (run: string): string => `VibeField has no run ${run}.`
 /** The version asked for is not one fieldd keeps for the flow. */
 export const notAVersion = (flow: string): string => `That version isn't one of ${flow}'s.`;
 
+/** A version its static read refuses, at its start (Q-a; the version review NN1, PROPOSED in §9, ruled
+ * 2026-11-06): the read's own words (`read`, "What a flow's read refuses"), unchanged, with the line they name;
+ * a whole-file refusal names none, and is said without one. */
+export const readRefused = (flow: string, read: string, line?: number): string =>
+  `VibeField can't start ${flow}: ${read}${line !== undefined ? ` (line ${line})` : ""}.`;
+
 /** A run whose asked Agent Profiles are none of that spark's now: the spark's narrowing, at the act (the 1b review
  * V5, said by cause in the 1e review's AA1; PROPOSED in §9, ruled 2026-11-06). */
 export const noSparkProfiles = (spark: string): string =>
