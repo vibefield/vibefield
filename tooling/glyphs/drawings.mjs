@@ -147,7 +147,7 @@ export const DRAWINGS = {
   plus: {
     label: "Plus",
     group: "actions",
-    role: "Objects — the line's create on Canvas, the one bare plus on screen; New profile inside its sheet",
+    role: "Objects — the line's create on Canvas, and the add at the foot of Godview's profiles column: the bare pluses, one to a screen; New profile inside its sheet, + Filter in search",
     instrument: { s: P("M12 5v14M5 12h14") },
     hardware: { d: "M10.5 4h3v6.5H20v3h-6.5V20h-3v-6.5H4v-3h6.5Z" },
   },

@@ -24,7 +24,7 @@ export const GLYPH_NAMES = ["plus","close","check","search","pencil","undo","res
 export type GlyphName = (typeof GLYPH_NAMES)[number];
 
 export const GLYPH_META: Readonly<Record<GlyphName, GlyphMeta>> = {
-  plus: {"label":"Plus","group":"actions","role":"Objects — the line's create on Canvas, the one bare plus on screen; New profile inside its sheet"},
+  plus: {"label":"Plus","group":"actions","role":"Objects — the line's create on Canvas, and the add at the foot of Godview's profiles column: the bare pluses, one to a screen; New profile inside its sheet, + Filter in search"},
   close: {"label":"Close","group":"actions","role":"Close settings, stop loading; the line's plus turned 135°"},
   check: {"label":"Check","group":"actions","role":"An agent row's done mark; the row paints it green (§2.5); the needs-you card's answered line"},
   search: {"label":"Search","group":"actions","role":"The command palette's field"},

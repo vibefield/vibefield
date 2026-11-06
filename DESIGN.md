@@ -1551,7 +1551,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   - **create** — **40 round** in the ready fill, its corners concentric with the line's (26 − 6), 6
     after the snapshot, the line's right end; its glyph 16 in secondary ink (primary while open or
     hovered), growing 1.06 under the pointer on the pop curve (14% fill). It is the view's own act
-    (FC-D3), and only Canvas's is a bare plus (FR-3): **Canvas — Objects** (`plus`, B): the objects
+    (FC-D3), and only Canvas's is a bare plus (FR-3; *noted 2026-11-06, the M-desk stack:* the one other bare plus
+    is not a create, the profiles column's add in Godview, §8): **Canvas — Objects** (`plus`, B): the objects
     rise behind the line and the plus turns 135° into ✕ over 600ms on the island curve; **Godview —
     New terminal** (`start`, ⌘T): a fresh shell, which shows its launcher, placed as a session with
     no pane is (the deck, below; GV-D4) — in the focused pane, whose session runs on (*corrected
@@ -2651,10 +2652,14 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   flickers with routine traffic. The title carries the words, numbers, and the
   last-exchange time. Explorer tiles append the honest sync word to their time caption
   ("· syncing", "· waiting on 3", "· peer offline") only when there is one.
-  **New field** (One Frame FR-3, 2026-10-03: one plus — the line's create on Canvas is the only
-  bare plus on screen) is the explorer's first tile, in words — a doc tile's footprint whose face
+  **New field** (One Frame FR-3, 2026-10-03: one plus — the line's create is Canvas's one bare plus, and the add
+  at the foot of Godview's profiles column is Godview's, so a screen holds one at most) is the explorer's first
+  tile, in words — a doc tile's footprint whose face
   is the fill inside a dashed strong hairline, the words 12/500 in secondary ink at its centre,
-  hover 1.03 / active 0.95 like its neighbours. The empty explorer says "No fields yet" in words
+  hover 1.03 / active 0.95 like its neighbours. *(Corrected 2026-11-06, the M-desk stack: FR-3's parenthesis said
+  "the line's create on Canvas is the only bare plus on screen". UM-3 drew a second, the profiles column's add (a 40
+  round holding `plus` 17 alone, §8 "Godview's profiles column"), on Godview, where the line's create is `start`;
+  `plus`'s role in the glyph set names both.)* The empty explorer says "No fields yet" in words
   beside it, never "⊕ creates one". *(The pill became the head's name pill the same day: its place,
   `top-4` and 280 wide, its single-click rename, the separate breadcrumbs beside it and its own
   560ms curve, F14, retired.)* *TS-6 (2026-10-29):* while a link owes the sync question, New field
