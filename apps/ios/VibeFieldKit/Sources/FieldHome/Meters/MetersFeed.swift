@@ -40,8 +40,15 @@ struct MetersReading: Equatable {
   var catalog: [AgentCatalogRow] = []
   var usage: Usage = .waiting
 
-  /// No reading has come yet. A STUB (the U3 review's red): no answer yet only.
-  var firstRead: Bool { usage == .waiting }
+  /// No reading has come yet: no answer, or the home's honest empty — its answer before its first refresh is
+  /// `entries: []`, stamped now (agent-usage.ts) — so the words say "Reading usage…", never a reading's age.
+  var firstRead: Bool {
+    switch usage {
+    case .waiting: return true
+    case .batch(let batch): return batch.entries.isEmpty
+    case .notShared, .unavailable: return false
+    }
+  }
 
   /// The profiles that stand on a circle (ruling 7), in the home's order: the lens's (`ProfileLens.adopt`).
   var profiles: [AgentProfileSet] { sets.filter(MeterModel.hasCircle) }

@@ -1235,10 +1235,14 @@ public struct HomeScreen: View {
         performSignIn()
       },
       onLockNow: onLockNow,
-      agentProfiles: AgentProfilesMenuRow(reading: meters.reading, now: meters.clock()) {
-        setAccountMenu(open: false)
-        agentProfilesOpen = true
-      },
+      // the row's meters are read only while the menu stands: its rows leave with their last drawing as it folds
+      agentProfiles: accountMenuOpen
+        ? AgentProfilesMenuRow(
+          reading: meters.reading, now: meters.clock(),
+          open: {
+            setAccountMenu(open: false)
+            agentProfilesOpen = true
+          }) : nil,
       hold: FaceHoldActs(
         place: { faceCentre = $0 },
         begin: { beginHold() },

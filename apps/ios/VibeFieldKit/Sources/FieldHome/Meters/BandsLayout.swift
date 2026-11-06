@@ -200,24 +200,30 @@ struct BandsOptions: Equatable, Sendable {
 
 // MARK: - The phone's placements
 
-/// Every place the phone draws a Bands circle, each with the usage bands golden's options for that place, so the
-/// circle the parity holds is the circle drawn (the U3 review). A STUB (its red): the options as the views drew them.
+/// Every place the phone draws a Bands circle, each with the usage bands golden's options for that place (its case
+/// named beside it), so the circle the parity holds is the circle drawn (the U3 review; BandsParityTests.placements).
 extension BandsOptions {
-  /// The Me menu's Agent Profiles row at 26.
+  /// The Me menu's Agent Profiles row at 26: nothing in its middle; every profile's with several ("one profile,
+  /// nothing in the middle", "every profile, nothing in the middle").
   static func menuRow(every: Bool) -> BandsOptions { BandsOptions(centre: .none, every: every) }
-  /// The Agent Profiles page's circle at 214.
+  /// The Agent Profiles page's circle at 214: each plan answers a touch and the one touched speaks; with several
+  /// profiles the crowded agents wear their profile's glyph whatever the lens, as the drawing's `crowdFn` marks them
+  /// ("every profile opened: …", "one profile chosen, a need pointed at: …").
   static func page(every: Bool, several: Bool, focus: String?) -> BandsOptions {
-    BandsOptions(focus: focus, hit: true, crowd: every && several, every: every)
+    BandsOptions(focus: focus, hit: true, crowd: several, every: every)
   }
-  /// A profile's row on the page at 36.
+  /// A profile's row on the page at 36: its glyph in the middle and the hot dot ("several plans on a profile's row").
   static let profileRow = BandsOptions(centre: .glyph, hotDot: true)
-  /// The page's All profiles row at 36.
-  static let allProfilesRow = BandsOptions(centre: .glyph, hotDot: true, every: true)
-  /// A profile's bud in the held face's bloom at 54.
+  /// The page's All profiles row at 36: every plan with nothing in its middle — the profiles glyph at 15 stands over
+  /// it, the row's own ("every profile at the All profiles row").
+  static let allProfilesRow = BandsOptions(centre: .none, every: true)
+  /// A profile's bud in the held face's bloom at 54 ("several plans as a bud").
   static let bud = BandsOptions(centre: .glyph, hotDot: true)
-  /// The held face's open circle at 206.
+  /// The held face's open circle at 206: a reached profile's ("several plans held"), or every plan's on the hub with
+  /// the crowded agents marked (no case of its own: the page's every-profile options, without the touch).
   static func held(every: Bool) -> BandsOptions { BandsOptions(crowd: every, every: every) }
-  /// The ring the held face wears, 96 across.
+  /// The ring the held face wears, 96 across about its 62 glass: the hole 34, the band 8 ("every profile around the
+  /// face").
   static func faceRing(every: Bool) -> BandsOptions { BandsOptions(around: (34, 8), every: every) }
 }
 

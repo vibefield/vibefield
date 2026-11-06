@@ -42,7 +42,6 @@ struct FaceHoldOverlay: View {
   static let wordsTop: CGFloat = 112
   static let circle: Double = 206
   static let ring: Double = 96
-  static let ringAround: (hole: Double, band: Double) = (34, 8)
 
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @State private var shown = false
@@ -118,7 +117,7 @@ struct FaceHoldOverlay: View {
 
   private func circleView(_ meters: ProfileMeters, every: Bool, mark: @escaping (String) -> String) -> some View {
     BandsDial(
-      geometry: BandsLayout.geometry(Self.circle, meters.entries, BandsOptions(crowd: every, every: every)),
+      geometry: BandsLayout.geometry(Self.circle, meters.entries, .held(every: every)),
       ground: FieldPalette.panelBackground, mark: mark
     )
     .padding(12)
@@ -134,8 +133,7 @@ struct FaceHoldOverlay: View {
       return several ? nil : reading.profiles.first?.id
     }()
     let ring = BandsLayout.geometry(
-      Self.ring, reading.meters(of: reached, now: now).entries,
-      BandsOptions(around: Self.ringAround, every: reached == nil))
+      Self.ring, reading.meters(of: reached, now: now).entries, .faceRing(every: reached == nil))
     return ZStack {
       BandsDial(geometry: ring, ground: FieldPalette.panelBackground, mark: mark)
       Color.clear
@@ -175,7 +173,7 @@ struct FaceHoldOverlay: View {
     return ZStack(alignment: .topLeading) {
       BandsDial(
         geometry: BandsLayout.geometry(
-          FaceHold.bud, reading.meters(of: set.id, now: now).entries, BandsOptions(centre: .glyph, hotDot: true)),
+          FaceHold.bud, reading.meters(of: set.id, now: now).entries, .bud),
         profile: MeterModel.profileOf(set), ground: ChromePalette.menuSurface, mark: mark
       )
       .background {

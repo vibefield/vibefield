@@ -23,7 +23,7 @@ struct UsageLinesView: View {
             .lineLimit(1)
             .accessibilityHidden(true)
         }
-        UsageLineView(line: window.line)
+        UsageLineView(line: window.line, form: window.resetForm)
       }
     }
     .opacity(stale ? 0.5 : 1)
@@ -52,6 +52,8 @@ struct UsageLinesView: View {
 /// One window's line: its label (26), the track, and the reset (58).
 struct UsageLineView: View {
   let line: UsageLine
+  /// how its reset is said: by its length, by its day, or now
+  let form: MeterRules.ResetForm?
 
   static let height: CGFloat = 12
   /// The fill's lit head (the desktop's `USAGE_GLOW`); the figure inside the fill stops 2 short of it.
@@ -87,14 +89,14 @@ struct UsageLineView: View {
       .frame(width: 58, alignment: .leading)
     }
     .accessibilityElement()
-    .accessibilityLabel(Self.words(line, form: nil))
+    .accessibilityLabel(Self.words(line, form: form))
   }
 
-  /// The line in words, as the desktop says it. A STUB for its reset's form (the U3 review's red): every reset is
-  /// said by its length.
+  /// The line in words, as the desktop says it; a reset is said "resets in 2h" by its length, and "resets Thu 09:00"
+  /// or "resets now" by its day or once it has come (the U3 review: never "resets in Thu 09:00").
   static func words(_ line: UsageLine, form: MeterRules.ResetForm?) -> String {
     let group = line.group.map { "\($0.label), " } ?? ""
-    let reset = line.reset.map { ", resets in \($0)" } ?? ""
+    let reset = line.reset.map { form == .length ? ", resets in \($0)" : ", resets \($0)" } ?? ""
     return "\(group)\(line.label): \(wholeWords(line.usedPercent))% used\(reset)\(line.hot ? ", ahead of pace" : "")"
   }
 

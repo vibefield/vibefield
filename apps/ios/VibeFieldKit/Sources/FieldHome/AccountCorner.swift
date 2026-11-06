@@ -318,7 +318,9 @@ struct AccountCornerView: View {
           label: "Agent Profiles", word: agentProfiles.word, wantsTheUser: agentProfiles.hot,
           action: agentProfiles.open
         ) {
+          // the row says its name and word; the page says every plan, so the circle is not read before the name
           BandsDial(geometry: agentProfiles.geometry, mark: agentProfiles.mark)
+            .accessibilityHidden(true)
         }
       }
     }

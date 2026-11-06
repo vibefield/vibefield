@@ -40,7 +40,9 @@ struct AgentProfilesWords: Equatable {
       case firstRead
       /// what it needs, said with no act
       case needs(String)
-      /// "Codex shows no meter", or a plan whose usage cannot be read
+      /// "Codex shows no meter" (an agent that reports no usage), "Claude Max: usage unavailable", or — a plan no
+      /// agent named, or whose reading holds no window — its title alone: its own words are ‹for James›, and "shows
+      /// no meter" would be false of an agent that meters (the U3 review)
       case none(String)
     }
 
@@ -69,7 +71,7 @@ struct AgentProfilesWords: Equatable {
   init(reading: MetersReading, lens: ProfileLens, home: String, now: Date) {
     let every = reading.meters(of: nil, now: now)
     let several = reading.profiles.count > 1
-    let firstRead = reading.usage == .waiting
+    let firstRead = reading.firstRead
     let menu = Self.word(every, firstRead: firstRead, notShared: reading.usage == .notShared)
     menuWord = menu.word
     menuHot = menu.hot
@@ -124,13 +126,14 @@ struct AgentProfilesWords: Equatable {
     return (nil, false)
   }
 
-  /// Where the reading comes from (§9): its age and the home, or why there is none.
+  /// Where the reading comes from (§9): its age and the home, or why there is none. The home's honest empty is a
+  /// first read, never "Read a minute ago" over nothing read.
   static func readWords(_ reading: MetersReading, home: String, now: Date) -> String {
     switch reading.usage {
-    case .waiting: return "Reading usage…"
     case .notShared: return "\(home) doesn't share usage yet"
     case .unavailable: return "Usage unavailable"
-    case .batch(let batch):
+    case .waiting, .batch:
+      guard !reading.firstRead, case .batch(let batch) = reading.usage else { return "Reading usage…" }
       guard let at = parseWireDate(batch.generatedAt) else { return "Read from \(home)" }
       let minutes = max(0, now.timeIntervalSince(at) / 60)
       let age = minutes < 1.5 ? "a minute" : MeterRules.durationWords(minutes)
@@ -154,7 +157,11 @@ struct AgentProfilesWords: Equatable {
       case .retry: return .needs("Couldn't read · retry")
       }
     case .noMeter(let why):
-      return why == .unavailable ? .none("\(entry.title): usage unavailable") : .none("\(entry.agent) shows no meter")
+      switch why {
+      case .unavailable: return .none("\(entry.title): usage unavailable")
+      case .unreported: return .none("\(entry.agent) shows no meter")
+      case .unnamed, .noWindows: return .none(entry.title)
+      }
     }
   }
 
@@ -184,10 +191,8 @@ struct AgentProfilesMenuRow {
 
   init(reading: MetersReading, now: Date, open: @escaping () -> Void) {
     let every = reading.meters(of: nil, now: now)
-    geometry = BandsLayout.geometry(
-      Self.size, every.entries, BandsOptions(centre: .none, every: reading.profiles.count > 1))
-    let said = AgentProfilesWords.word(
-      every, firstRead: reading.usage == .waiting, notShared: reading.usage == .notShared)
+    geometry = BandsLayout.geometry(Self.size, every.entries, .menuRow(every: reading.profiles.count > 1))
+    let said = AgentProfilesWords.word(every, firstRead: reading.firstRead, notShared: reading.usage == .notShared)
     word = said.word
     hot = said.hot
     mark = MeterCatalog(rows: reading.catalog).mark
@@ -261,10 +266,9 @@ struct AgentProfilesPage: View {
   private func head(_ reading: MetersReading, read: String, now: Date, mark: @escaping (String) -> String)
     -> some View
   {
-    let every = lens.profile == nil
     let geometry = BandsLayout.geometry(
       Self.circle, reading.meters(of: lens.profile, now: now).entries,
-      BandsOptions(focus: focus, hit: true, crowd: every && reading.profiles.count > 1, every: every))
+      .page(every: lens.profile == nil, several: reading.profiles.count > 1, focus: focus))
     return VStack(spacing: 6) {
       BandsDial(geometry: geometry, ground: ChromePalette.paper, mark: mark)
         .contentShape(Circle())
@@ -290,7 +294,7 @@ struct AgentProfilesPage: View {
       row: row,
       geometry: BandsLayout.geometry(
         Self.rowCircle, reading.meters(of: row.profileId, now: now).entries,
-        BandsOptions(centre: .glyph, hotDot: true, every: row.profileId == nil)),
+        row.profileId == nil ? .allProfilesRow : .profileRow),
       several: several, mark: mark)
     if several {
       Button { lens.show(row.profileId) } label: { label }
@@ -314,16 +318,29 @@ struct AgentProfilesPage: View {
 }
 
 /// A Profiles row: 60 tall, the circle at 36, the name at 17, its line at 13 in the tertiary ink, the word at 15 (the
-/// attention ink at 600 when hot), and the check column when the rows are the lens.
+/// attention ink at 600 when hot), and the check column when the rows are the lens. All profiles' circle has nothing
+/// in its middle (`BandsOptions.allProfilesRow`, the golden's), and the profiles glyph at 15 stands over it in the
+/// secondary ink, the row's own (§8; the drawing's `ap-allg`, `round4/src/p4f-frames.js`).
 private struct AgentProfileRowLabel: View {
   let row: AgentProfilesWords.ProfileRow
   let geometry: BandsGeometry
   let several: Bool
   let mark: (String) -> String
 
+  static let everyGlyph: CGFloat = 15
+
   var body: some View {
     HStack(spacing: 12) {
       BandsDial(geometry: geometry, profile: row.profile, ground: ChromePalette.fill, mark: mark)
+        .overlay {
+          if row.profileId == nil {
+            Image(systemName: ProfileGlyphSymbols.everyProfile)
+              .font(.system(size: Self.everyGlyph * 0.8))
+              .foregroundStyle(ChromePalette.inkSecondary)
+              .frame(width: Self.everyGlyph, height: Self.everyGlyph)
+              .accessibilityHidden(true)
+          }
+        }
       VStack(alignment: .leading, spacing: 1) {
         Text(row.name)
           .font(ChromeListType.row)

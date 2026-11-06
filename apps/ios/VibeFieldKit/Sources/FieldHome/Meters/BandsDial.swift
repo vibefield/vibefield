@@ -34,6 +34,9 @@ struct BandsDial: View {
             guard !reduceMotion else { return }
             withAnimation(.easeInOut(duration: 1.1).repeatForever(autoreverses: true)) { breathing = true }
           }
+          // a breath that leaves and comes back (a reading, then another home's first read) starts again from 35%,
+          // never frozen at full ink
+          .onDisappear { breathing = false }
       }
       ForEach(Array(marks.enumerated()), id: \.offset) { _, mark in markView(mark) }
       ForEach(Array(geometry.centre.items.enumerated()), id: \.offset) { _, item in centreView(item) }

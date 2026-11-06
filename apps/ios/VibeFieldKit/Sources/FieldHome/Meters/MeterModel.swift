@@ -1,6 +1,7 @@
 import FieldMesh
 import FieldProduct
 import Foundation
+import os
 
 // UM-4 (track UM; UM-D16 = E "Bands", UM-D3, D4, D12, D13 and D15 at their leans, James 2026-11-06 03:11Z) — THE
 // PROFILES' METERS ON THE PHONE, PURE: the desktop's meter model (`packages/field-app/src/usage/meters.ts` and its
@@ -147,10 +148,25 @@ enum MeterRules {
       return rest == 0 ? "\(hours)h" : "\(hours)h \(rest)m"
     }
     // the weekday and a 24-hour clock, as Settings' `hour12: false` says it
-    let formatter = DateFormatter()
-    formatter.locale = .current
-    formatter.setLocalizedDateFormatFromTemplate("EEEHHmm")
-    return formatter.string(from: at)
+    return dayFormatter(locale: .current, zone: .current).string(from: at)
+  }
+
+  /// The day form's formatters, one per locale and zone, each made once (the U3 review): a weekly window is said by
+  /// its day on every pass that draws it, and a formatter is costly to make. A DateFormatter formats from any thread;
+  /// the lock keeps the table.
+  private static let dayFormatters = OSAllocatedUnfairLock<[String: DateFormatter]>(uncheckedState: [:])
+
+  private static func dayFormatter(locale: Locale, zone: TimeZone) -> DateFormatter {
+    dayFormatters.withLockUnchecked { made in
+      let key = "\(locale.identifier) \(zone.identifier)"
+      if let formatter = made[key] { return formatter }
+      let formatter = DateFormatter()
+      formatter.locale = locale
+      formatter.timeZone = zone
+      formatter.setLocalizedDateFormatFromTemplate("EEEHHmm")
+      made[key] = formatter
+      return formatter
+    }
   }
 
   /// UM-D4 — the forecast: at this pace the window is spent before it resets. Never for a budget, a window already
