@@ -3722,8 +3722,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   *Amended 2026-11-06 (item 212, RV #67; the words at the lean, open until James rules
   rv-service-recovery):* the field service is said here too when it is **up and stops
   answering** (`desktopState.fieldd`, `unresponsive`). Main asks it how it is every five seconds,
-  and two asks in a row with no answer hold **"VibeField's field service isn't responding. Your
-  terminal sessions keep running. If it lasts, quit VibeField and open it again."**, with no act.
+  one ask at a time, and an ask still unanswered two of those beats later holds **"VibeField's
+  field service isn't responding. Your terminal sessions keep running. If it lasts, quit
+  VibeField and open it again."**, with no act.
   It goes the moment the field service answers. Only an answer counts, and a late answer is
   one; an ask main itself made late (a Mac too busy to ask on time) says nothing of the field
   service. At the lean, a field service VibeField started itself that stays silent for a minute
@@ -7601,12 +7602,12 @@ that cannot stay up is a fault to say, never one to spin on. The window says the
 status line"): "Reconnecting to the field service…", then "VibeField's field service stopped after 3 tries. Your
 terminal sessions keep running." with **Try again**.
 *Added 2026-11-06 (item 212, RV #67; the words at the lean, open until James rules rv-service-recovery):* while the
-field service is up and has stopped answering main (two asks in a row, five seconds apart, with no answer), the row
-reads **Field service: Not responding**, with nothing under it, and goes back to **Field service: Ready** at its next
-answer. A field service VibeField started itself that stays silent for a minute is ended alone, never the terminal
-service, and started again under the tries above; one VibeField found already running is only said. The window says
-"VibeField's field service isn't responding. Your terminal sessions keep running. If it lasts, quit VibeField and open
-it again." (§8 "The status line").
+field service is up and has stopped answering main (an ask still unanswered ten seconds on; main asks every five), the
+row reads **Field service: Not responding**, with nothing under it, and goes back to **Field service: Ready** at its
+next answer. A field service VibeField started itself that stays silent for a minute is ended alone, never the
+terminal service, and started again under the tries above; one VibeField found already running is only said. The
+window says "VibeField's field service isn't responding. Your terminal sessions keep running. If it lasts, quit
+VibeField and open it again." (§8 "The status line").
 
 ---
 
