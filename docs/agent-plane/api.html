@@ -1738,6 +1738,15 @@
                     <td><span class="badge tone-built">Built</span></td>
                     <td><p><code>agent-field-daemon.test.ts</code>, <code>agent-remote-cut.test.ts</code>, <code>agent-field.test.ts</code>, <code>agent-session.test.ts</code></p></td>
                   </tr>
+                  <tr>
+                    <td><span class="route">system.shutdown.census</span></td>
+                    <td><p><code>{}</code> → <code>SystemShutdownCensusResult {runs: [{runId, sessionId?, title?, cwd?, agent}]}</code> (item 192, RV #6, 2026-11-06: what fieldd's OWN stop ends. That is every live managed run of this boot whose catalog row claims no <code>reattach</code>, because a run whose agent's helper lives in fieldd's process tree ends with fieldd. <code>agent</code> is the catalog row's label, never its id (AR-L1). The shell lists the runs and the person consents; <code>system.shutdown {agents: {runs}}</code> re-checks the set at the stop with the launches closed and refuses <code>PRECONDITION_FAILED {live, births}</code> on any difference or a birth in flight. Until the boot's re-attach has settled the door refuses <code>UNAVAILABLE {service: "agents", state: "reattaching"}</code>, retryable. While a consented stop holds the launches closed, <code>agent.spawn</code>, <code>agent.resume</code> (at its door, and again right before its birth) and an adoption refuse <code>UNAVAILABLE {service: "agents", state: "stopping"}</code>, retryable; every refusal of the stop reopens them. Why the stop ends these runs is system.html's lifetime rule.)</p></td>
+                    <td><p><code>native.admin</code> · <code>local</code>, and the local shell's alone (<code>shell-main</code> over loopback, the shell lease's check): a window holding <code>native.admin</code> is refused</p></td>
+                    <td><p>yes</p></td>
+                    <td><p>no upstream call: <code>AgentRuntimeService.plainStopCensus()</code> over the fold and the catalog's claim, each run joined with its pane's title and cwd from the floor's rows while the inventory is observed</p></td>
+                    <td><span class="badge tone-built">Built</span></td>
+                    <td><p><code>system-shutdown-census.test.ts</code>, <code>agent-runtime.test.ts</code> (before the re-attach settles), electron-shell's <code>pair-stop.test.ts</code> (the shell's reader)</p></td>
+                  </tr>
                 </tbody>
               </table>
             </div>

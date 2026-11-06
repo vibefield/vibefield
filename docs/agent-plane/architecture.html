@@ -2454,7 +2454,7 @@
                   </tr>
                   <tr>
                     <td><strong>Managed observation and control</strong></td>
-                    <td><p>A fieldd restart, survived by re-attaching. The resting state is the re-attach; resume-when-idle is the fallback where an adapter cannot rebind.</p></td>
+                    <td><p>A fieldd restart, survived by re-attaching. The resting state is the re-attach; resume-when-idle is the fallback where an adapter cannot rebind.</p><p><em>Corrected 2026-11-06 (item 192, RV #6):</em> survived where the agent re-attaches (the catalog row's <code>reattach</code> claim). A run whose agent's helper lives in fieldd's own process tree ends with fieldd, so an update's fieldd-only stop counts those runs, names them and asks, and fieldd re-checks them at the stop (system.html, the lifetime rule).</p></td>
                     <td><span class="badge tone-puppeteer">puppeteer</span> in <span class="badge tone-vibefield">fieldd</span></td>
                   </tr>
                 </tbody>

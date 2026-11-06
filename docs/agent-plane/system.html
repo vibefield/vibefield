@@ -1305,6 +1305,23 @@
               disk — the next boot re-attaches at the run's next runtime epoch. It does not survive a
               field-native restart, so the session-persistence ceiling is daemon lifetime and the
               product says so rather than promising more.
+              <em>Corrected 2026-11-06 (item 192, RV #6, gap3-1):</em> the PTY survives a fieldd restart;
+              the run survives it only where its agent re-attaches, which is what the catalog row's
+              <code>offers.reattach</code> claims (Claude Code alone at the pin). An agent whose helper
+              lives in fieldd's own process tree (the Codex app-server, the Grok leader, the OpenCode
+              serve, the Hermes host) dies with fieldd: fieldd's stop disposes the runtime with
+              <code>detach</code>, those adapters cannot release, and the pane is left a viewer of a
+              dead agent. So fieldd counts what its own stop ends: every live managed run of this boot
+              whose row claims no re-attach (<code>AgentRuntimeService.plainStopCensus</code>, read
+              from the catalog, no vendor named). An update that leaves field-native's bytes alone
+              reads that census (<code>system.shutdown.census</code>, the shell's alone), names the
+              runs and asks, and fieldd re-checks the consented set at the point of effect
+              (<code>system.shutdown {agents: {runs}}</code>, with launches closed: any difference or a
+              birth in flight refuses <code>PRECONDITION_FAILED {live, births}</code>), as the floor's
+              stop re-checks its sessions. A file-tailed agent is counted too while its row claims no
+              re-attach, conservatively: its agent keeps working through the stop, and the count
+              narrows to puppeteer's own release fact in that release's EL8. The supervisor's bare stop
+              (a stale build, the dev runner) still asks no one.
             </div>
           </section>
 
