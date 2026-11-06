@@ -2556,7 +2556,11 @@ describe("the find door (P2): Live now's rows made only while the Peek listens, 
       });
     });
     await settle();
-    const first = getGodviewFindDoor()?.rows() ?? null;
+    // listening, the filters count the sessions (SE-1: only while Live now listens), so the door is
+    // new once; from here it is the same object while its filters are
+    const listening = getGodviewFindDoor();
+    expect(listening?.filters.sessions).toBeGreaterThan(0);
+    const first = listening?.rows() ?? null;
     expect(first?.filter((row) => row.agent !== undefined).map((row) => row.project)).toEqual(
       expect.arrayContaining(["vibe-field", "voyager", "jabali"]),
     );
@@ -2567,14 +2571,14 @@ describe("the find door (P2): Live now's rows made only while the Peek listens, 
     await settle();
     expect(getGodviewFindDoor()?.rows()).toBe(first);
     expect(heard).toBe(told);
-    // a status moves: new rows, told — and the door is the same object throughout
+    // a status moves: new rows, told — and the door is the same object throughout, as no count moved
     await act(async () => door.push([blockedClaude(), ...TAB_ROWS.slice(1)]));
     await settle();
     const next = getGodviewFindDoor()?.rows() ?? null;
     expect(next).not.toBe(first);
     expect(next?.find((row) => row.project === "vibe-field")?.status).toBe("blocked");
     expect(heard).toBeGreaterThan(told);
-    expect(getGodviewFindDoor()).toBe(find);
+    expect(getGodviewFindDoor()).toBe(listening);
     // the last listener gone: no rows again
     await act(async () => stop?.());
     await settle();

@@ -24,11 +24,18 @@ export interface LiveFiltersInput {
   readonly profile: string | null;
   /** TS-4 (TS-D7) — this Mac is not connected: This Mac alone is offered, for its ghost row */
   readonly connect: boolean;
-  /** every row the window holds, no filter applied: what each choice counts */
+  /** every row the window holds, no filter applied: what each choice counts —
+   * or `NO_COUNTED_ROWS` while nobody reads the counts */
   readonly agents: readonly MonitorAgent[];
   /** which desktop is here: where this desktop's rows count */
   readonly here: string | undefined;
 }
+
+/** The rows the monitor hands while the Peek's Live now is not listening:
+ * only its menu and a typed name's offer read the counts, so nothing is
+ * counted and a session that starts or ends republishes no filter (the find
+ * door stays the same object for a closed Peek). */
+export const NO_COUNTED_ROWS: readonly MonitorAgent[] = Object.freeze([]);
 
 /** Search's Live now filters: a desktop offered only when there is a choice to
  * make — two or more, or This Mac alone while it is not connected (TS-4) — and

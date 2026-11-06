@@ -51,7 +51,7 @@ import { type ChromeRun, NO_RUNS, useChromeKey } from "./monitor/chrome-facts";
 import type { DeviceChoice } from "./monitor/device-filter";
 import { useMonitorFeed } from "./monitor/GodviewAgentsProvider";
 import { setMonitorHoldsKeys } from "./monitor/launcher-keys";
-import { liveFiltersOf } from "./monitor/live-filters";
+import { liveFiltersOf, NO_COUNTED_ROWS } from "./monitor/live-filters";
 import { MonitorMomentRowsContext } from "./monitor/moment-rows";
 import { useMonitorHistory } from "./monitor/monitor-history";
 import { openEndedLane } from "./monitor/open-ended-lane";
@@ -856,14 +856,16 @@ export function GodviewMonitor({
   const readViewHoldsKeys = useCallback(() => viewHoldsKeysRef.current, []);
   // TS-4 (TS-D7) — not connected: the filter is offered on This Mac alone, so
   // its ghost row, Your other devices · Connect…, has somewhere to be; SE-D1 —
-  // each choice counts what it holds, every row's (`live-filters.ts`)
+  // each choice counts what it holds, every row's (`live-filters.ts`), but only
+  // while Live now listens: its menu and its offer are all that read a count,
+  // so for a closed Peek a session that starts or ends moves no filter
   const liveFiltersNow = liveFiltersOf({
     devices,
     desk: deviceChosen,
     tabs: showTabs ? tabs : null,
     profile: chosenId ?? null,
     connect: offersConnect,
-    agents,
+    agents: findWanted ? agents : NO_COUNTED_ROWS,
     here,
   });
   const liveFilters = useHeldWhileSame<LiveFilters>(

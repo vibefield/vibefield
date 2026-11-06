@@ -80,7 +80,10 @@ export interface LiveFilters {
    * ghost row, Your other devices · Connect…; absent or false, no row */
   readonly connect?: boolean;
   /** every live session the view holds, whatever the filters keep: what Every
-   * profile counts (SE-D1) */
+   * profile counts (SE-D1). This and each choice's `sessions` are counted only
+   * while Live now listens (`subscribeRows`) — the menu and a typed name's offer
+   * read them, nothing else — and are 0 while nobody does, so a session that
+   * starts or ends republishes nothing for a closed Peek. */
   readonly sessions: number;
 }
 

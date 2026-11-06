@@ -79,7 +79,8 @@ function liveRowOf(row: FindRow<LiveFindAgent>): PeekLiveRow {
     folder,
     agent: run.agent?.provider.label || (state === "shell" ? "shell" : null),
     remote: run.desk.self ? null : { name: run.desk.name, os: run.desk.os },
-    profile: run.profileSet ?? null,
+    // a profile is its own desktop's: a peer's row says none, whatever its run carries
+    profile: run.desk.self ? (run.profileSet ?? null) : null,
     lines: linesOf(row.hits),
     floorSessionId: run.floorSessionId ?? null,
     run,
