@@ -206,6 +206,36 @@ describe("PG-2 — the remote cut, as its owner cuts it", () => {
     board.dispose();
     monitor.service.dispose();
   });
+
+  it("vf-feed-2 — an app run the runtime removed leaves its pane listed exited, and the cut carries no row for it: no keyboard on a dead PTY", async () => {
+    const live = summary({ runtimeRunId: "run-ended", status: "idle" });
+    const pane = floorTerminal({ sessionId: "run-ended-pty", cwd: "/repo" });
+    const monitor = await testMonitor({ summaries: [live], terminals: [pane, floorTerminal()] });
+    monitor.rows();
+    // the agent quits: MF-1g keeps its pane and the floor lists it exited (item 97), the
+    // fold keeps the exited row (MF-1f), and puppeteer removes the run (`removeRunMonitor`)
+    monitor.terminals.observe([{ ...pane, exited: true }, floorTerminal()]);
+    monitor.fold.publish([summary({ runtimeRunId: "run-ended", status: "idle", exited: true })]);
+    monitor.runtime.remove("run-ended", stateOf(live).runtimeEpoch);
+    monitor.rows();
+    const board = createRemoteSubscription({
+      fold: monitor.fold,
+      monitor: monitor.service,
+      emit: () => undefined,
+      epoch: "boot.husk",
+    });
+    const snapshot = AgentRemoteSnapshot.parse(board.snapshot);
+    // the husk is no row a peer or the phone could attach to and type into; the live
+    // shell beside it still rides the cut, attachable and writable
+    expect(snapshot.rows.map((row) => row.runtimeRunId)).toEqual(["pty-bare"]);
+    expect(snapshot.rows[0]?.monitorRow).toMatchObject({
+      kind: "terminal",
+      attachable: true,
+      writable: true,
+    });
+    board.dispose();
+    monitor.service.dispose();
+  });
 });
 
 describe("PG-2 — the remote board's floors and its urgent edge (PG-D8 (a))", () => {

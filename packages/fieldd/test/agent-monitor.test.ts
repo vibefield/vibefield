@@ -7,7 +7,12 @@ import {
 import type { AgentMonitorState } from "@vibefield/puppeteer-core";
 import type { MonitorAgentRow } from "@vibefield/puppeteer-view-sdk/model";
 import { describe, expect, it } from "vitest";
-import { hostProfileSetFrom, hostRunFromSummary, isUrgentChange } from "../src/agent-monitor";
+import {
+  hostProfileSetFrom,
+  hostRunFromSummary,
+  hostTerminalFrom,
+  isUrgentChange,
+} from "../src/agent-monitor";
 import { managedSummary as summary } from "./agent-field-summary";
 import {
   floorTerminal,
@@ -126,6 +131,32 @@ describe("hostRunFromSummary — the fold's row as the backend's host record", (
     );
     expect(run.terminalSessionId).toBe("pty-new");
     expect(run.replacedTerminalSessionId).toBe("pty-old");
+  });
+});
+
+describe("hostTerminalFrom — the floor's PTY as the backend's host record", () => {
+  it("a husk the floor lists exited says so (item 97), the backend's word for no live shell; a live PTY carries no `exited` at all (vf-feed-2)", () => {
+    // MF-1g keeps an app run's pane once its process ends; the floor lists it `exited`
+    const husk = hostTerminalFrom(floorTerminal({ exited: true, inputUsed: true }), undefined);
+    expect(husk).toEqual({
+      sessionId: "pty-bare",
+      createdAt: T0 - 30_000,
+      cwd: "/Users/me/notes",
+      title: "zsh",
+      workloadClass: "interactive",
+      exited: true,
+    });
+    const live = hostTerminalFrom(floorTerminal({ inputUsed: true }), "work");
+    expect(live).toEqual({
+      sessionId: "pty-bare",
+      inputUsed: true,
+      createdAt: T0 - 30_000,
+      cwd: "/Users/me/notes",
+      title: "zsh",
+      profileSet: "work",
+      workloadClass: "interactive",
+    });
+    expect(live).not.toHaveProperty("exited");
   });
 });
 
@@ -684,6 +715,30 @@ describe("the hosted backend — a shell promoted to an agent keeps its body (M2
     },
   );
 
+  it("a launched run that exits cleanly leaves no live terminal behind: once the runtime removes the run, its kept pane, listed exited, is no row (vf-feed-2)", async () => {
+    const live = summary({ runtimeRunId: "run-launched", status: "idle" });
+    const pty = floorTerminal({ sessionId: "run-launched-pty", cwd: "/repo" });
+    const monitor = await testMonitor({ summaries: [live], terminals: [pty] });
+    expect(monitor.row("run-launched").id).toBe("run-launched-pty");
+    // the agent quits: MF-1g keeps its pane and the floor lists it exited (item 97);
+    // the fold stamps the exit and keeps its row (MF-1f)
+    monitor.terminals.observe([{ ...pty, exited: true }]);
+    const dead = summary({ runtimeRunId: "run-launched", status: "idle", exited: true });
+    monitor.fold.publish([dead]);
+    // a clean exit leaves no failure to keep: puppeteer removes the run (`removeRunMonitor`)
+    monitor.runtime.remove("run-launched", stateOf(live).runtimeEpoch);
+    const rows = monitor.rows();
+    // the dead PTY is no live, attachable, writable shell beside the ended run
+    expect(monitor.service.terminalRows()).toEqual([]);
+    // the removed run is no row (M25), and its husk is none either
+    expect(rows.map((row) => `${row.kind}:${row.id}`)).toEqual([]);
+    expect(monitor.service.rowForRun("run-launched")).toBeUndefined();
+    // the fold's own row is untouched: the dead pane keeps its resume verb (MF-1f)
+    expect(monitor.fold.list().sessions.map((row) => row.runtimeRunId)).toEqual(["run-launched"]);
+    expect(monitor.fold.list().sessions[0]?.continuation?.exited).toBe(true);
+    monitor.service.dispose();
+  });
+
   it("the bare terminal's row id becomes the agent's; the terminal row leaves; the run is found through idOf", async () => {
     const monitor = await testMonitor({
       summaries: [],
@@ -764,10 +819,13 @@ describe("the hosted backend — a crashed run stays until its pane is seen (Q06
     monitor.service.openScreen("win-1", WINDOW);
     // the person works in another pane
     expect(monitor.service.reportShown("win-1", ["pty-bare"])).toBe(true);
-    // the agent is killed: the fold stamps the exit, the runtime its failure
+    // the agent is killed: the fold stamps the exit, the runtime its failure, and
+    // the floor lists its kept pane exited (MF-1g, item 97)
     const dead = crashed(live);
     monitor.fold.publish([dead]);
     monitor.runtime.push(stateOf(dead));
+    const husk = floorTerminal({ sessionId: "run-crashed-pty", cwd: "/repo", exited: true });
+    monitor.terminals.observe([husk, floorTerminal()]);
     expect(monitor.row("run-crashed")).toMatchObject({
       id: "run-crashed-pty",
       alive: false,
@@ -782,7 +840,8 @@ describe("the hosted backend — a crashed run stays until its pane is seen (Q06
     monitor.service.reportShown("win-1", ["run-crashed-pty"]);
     await Promise.resolve();
     expect(monitor.runtime.acknowledged).toEqual([["run-crashed", "run:runtime"]]);
-    expect(kinds(monitor.rows())).toEqual(["terminal:pty-bare", "terminal:run-crashed-pty"]);
+    // its dead pane is no row: no bare shell stands where the run ended (vf-feed-2)
+    expect(kinds(monitor.rows())).toEqual(["terminal:pty-bare"]);
     expect(monitor.service.rowForRun("run-crashed")).toBeUndefined();
     // the fold's own row is untouched: the dead pane keeps its resume verb (MF-1f)
     expect(monitor.fold.list().sessions.map((row) => row.runtimeRunId)).toEqual(["run-crashed"]);
@@ -792,10 +851,11 @@ describe("the hosted backend — a crashed run stays until its pane is seen (Q06
     monitor.service.dispose();
   });
 
-  it("a run that fails in the pane already shown is seen at once (A23's non-zero quit), and the pane's own session counts when the dead PTY is a row of its own", async () => {
+  it("a run that fails in the pane already shown is seen at once (A23's non-zero quit), by the pane's own session when the run's row is not its pane's (the fold's join)", async () => {
     const focused = summary({ runtimeRunId: "run-focused", status: "working" });
-    // its PTY not yet listed at its birth: the run carries its own id, and its
-    // dead PTY comes back as a bare terminal row once the run claims it no more
+    // its PTY not yet listed at its birth: the run carries its own id, never its
+    // pane's, so the failure is seen by the fold's join (the pane's session the
+    // screen shows); its dead PTY, listed exited (item 97), is no row of its own
     const monitor = await testMonitor({ summaries: [focused] });
     expect(monitor.row("run-focused").id).toBe("run-focused");
     monitor.terminals.observe([floorTerminal({ sessionId: "run-focused-pty", cwd: "/repo" })]);
@@ -807,6 +867,8 @@ describe("the hosted backend — a crashed run stays until its pane is seen (Q06
     const dead = crashed(focused, "crash");
     monitor.fold.publish([dead]);
     monitor.runtime.push(stateOf(dead));
+    const husk = floorTerminal({ sessionId: "run-focused-pty", cwd: "/repo", exited: true });
+    monitor.terminals.observe([husk]);
     monitor.rows();
     // the pane the screen shows is the run's: its failure was seen as it came
     expect(monitor.runtime.acknowledged).toEqual([["run-focused", "run:runtime"]]);
