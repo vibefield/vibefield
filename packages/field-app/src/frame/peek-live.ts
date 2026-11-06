@@ -145,7 +145,9 @@ export function liveIndexWords(status: HistorySearchStatus | undefined): string 
   }
 }
 
-const plural = (count: number, one: string, many = `${one}s`): string =>
+/** A count in the Peek's words ("1 session", "3 lines"): the foot's, and the
+ * filters' (`peek-filters.ts`). */
+export const plural = (count: number, one: string, many = `${one}s`): string =>
   `${count} ${count === 1 ? one : many}`;
 
 export interface LiveFootInput {

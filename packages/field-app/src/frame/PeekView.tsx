@@ -14,11 +14,11 @@ import {
 import { GHOST_ROW_ACT, GHOST_ROW_LABEL } from "../account/link";
 import { OS_LABEL, OsMark } from "../godview/os-marks";
 import type { LiveDeskChoice, LiveFilters, LiveProfileChoice } from "./find-door";
+import { KIND_WORDS } from "./peek-filters";
 import { isLiveRow, type PeekListRow, type PeekLiveRow } from "./peek-live";
 import {
   PEEK_ROW_LINES,
   type PeekFilters,
-  type PeekKind,
   type PeekLayout,
   type PeekLine,
   type PeekRow,
@@ -277,12 +277,6 @@ function RowLine({ line }: { line: PeekLine }): ReactElement {
 
 /** Which dropdown's menu is open: Everything's three, Live now's two. */
 export type PeekMenu = "project" | "kind" | "agent" | "desk" | "profile";
-
-const KIND_WORDS: Readonly<Record<PeekKind, string>> = {
-  any: "Prompts and replies",
-  user: "Prompts only",
-  agent: "Replies only",
-};
 
 interface MenuChoice {
   readonly key: string;
