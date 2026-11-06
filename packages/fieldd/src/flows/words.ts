@@ -28,6 +28,11 @@ export const noSuchInput = (flow: string, name: string): string =>
 export const inputNotFound = (kind: "session" | "project"): string =>
   `VibeField can't find the ${kind} its input names.`;
 
+/** An input naming a session or a project VibeField finds, whose folder it can't run in: an empty one, or one past
+ * FLOW_LIMITS.FOLDER_CHARS (the F6 review GG1; ruled 2026-11-06). */
+export const folderUnusable = (kind: "session" | "project"): string =>
+  `VibeField can't run in the folder of the ${kind} its input names.`;
+
 /** The spark a start was asked by, or in whose thread, is gone (G2; CP-L4). */
 export const noSpark = (): string => "VibeField can't find that spark; nothing was started.";
 

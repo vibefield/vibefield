@@ -89,11 +89,16 @@ function readFixtureChain(answer: string) {
 }
 
 /** Contracts' fixtures `names`, in order, as one run's journal beside its signed record, read back under the fixture
- * key they were MAC'd with: a head alone is a run just begun (J1d). */
-function readFixtureLines(names: readonly string[]) {
+ * key they were MAC'd with: a head alone is a run just begun (J1d). `forge` edits the head after it was MAC'd, its
+ * MAC kept, as an agent would (J1e). */
+function readFixtureLines(
+  names: readonly string[],
+  forge?: (head: Record<string, unknown>) => Record<string, unknown>,
+) {
   const s = store({ key: FIXTURE_KEY });
   mkdirSync(join(s.dir, RUNS_DIR), { recursive: true, mode: 0o700 });
   const lines = names.map((name) => JSON.parse(fixtureText(name)) as Record<string, unknown>);
+  if (forge !== undefined) lines[0] = forge(lines[0] as Record<string, unknown>);
   const text = lines.map((line) => JSON.stringify(line)).join("\n");
   writeFileSync(s.file, `${text}\n`, { mode: 0o600 });
   // CP-4a2b (D18): a journal is kept only beside its run's record, signed under the same key, naming the head's MAC
@@ -168,6 +173,14 @@ describe("CP-4a2a — a run's journal, kept by the flows store (CP4-S15)", () =>
       expect(read.kind, name).toBe("kept");
       expect(read.kind === "kept" ? read.head.folder : read.kind, name).toBe(folder);
     }
+  });
+
+  it("J1e (the F6 review GG3): contracts' head with its folder edited after it was MAC'd, its MAC kept, reads as lost: the folder decides a step's working folder (EL7), and the whole line's MAC holds it", () => {
+    const read = readFixtureLines(["flow-journal-head.folder"], (head) => ({
+      ...head,
+      folder: "/Users/someone/elsewhere",
+    }));
+    expect(read).toEqual({ kind: "lost", why: "forged", line: 1 });
   });
 
   it("J1c (13a's D11): a step's answer cut short, journaled with `cut`, reads back as its answer, never passed over", () => {

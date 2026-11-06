@@ -1864,9 +1864,15 @@ describe("CP-4a2b — a run's folder, held at its start (slice 7's R8b)", () => 
     expect(cwdOf(old)).toBe("/work/moved");
   });
 
-  it("R8b: a step that names no folder, in a run whose input names none, is refused at the start in §9's words, nothing journaled; a session or project its input names that VibeField can't find is refused too", async () => {
+  it("R8b: a step that names no folder, in a run whose input names none, is refused at the start in §9's words, nothing journaled; a session or project its input names that VibeField can't find is refused too, and one whose folder it can't run in (GG1), before any approval", async () => {
     const h = await harness({
-      folders: { "session:run-yours": "/work/yours", "project:pj-1": "/work/pj1" },
+      folders: {
+        "session:run-yours": "/work/yours",
+        "project:pj-1": "/work/pj1",
+        // GG1: folders VibeField finds and can't run in, one past the head's bound and an empty one
+        "session:run-long": `/${"a".repeat(FLOW_LIMITS.FOLDER_CHARS)}`,
+        "project:pj-0": "",
+      },
     });
     h.approved("bare", stepWith(""));
     expect(await refusalOf(h.start({ flow: "bare" }))).toEqual({
@@ -1885,6 +1891,37 @@ describe("CP-4a2b — a run's folder, held at its start (slice 7's R8b)", () => 
       reason: "input-project",
       message: "VibeField can't find the project its input names.",
     });
+    // GG1 (the F6 review; ruled 2026-11-06): one whose folder is past FLOW_LIMITS.FOLDER_CHARS, or empty, is the
+    // input's refusal at the start, in §9's PROPOSED words, never the store's degraded words from inside its begin
+    const long = h.start({ flow: "in-session", input: { target: "run-long" } });
+    expect(await refusalOf(long)).toEqual({
+      reason: "input-session",
+      message: "VibeField can't run in the folder of the session its input names.",
+    });
+    const empty = h.start({ flow: "in-project", input: { where: "pj-0" } });
+    expect(await refusalOf(empty)).toEqual({
+      reason: "input-project",
+      message: "VibeField can't run in the folder of the project its input names.",
+    });
+    // on Run this version too, which approves the bytes it runs: it is refused before the approval, so none is kept
+    const asked = stepWith("", '{ target: "session" }');
+    const approval = h.approved("in-long", asked);
+    const edited = h.write("in-long", `${asked}// edited\n`);
+    const waits = waitsOf(await h.start({ flow: "in-long", input: { target: "run-long" } }));
+    const act = h.runs.acts.start({
+      id: waits,
+      flow: "in-long",
+      hash: flowHashOf(edited),
+      version: "this",
+      start: askedOf(h, 0),
+    });
+    expect(await act).toEqual({
+      outcome: "failed",
+      reason: "VibeField can't run in the folder of the session its input names.",
+    });
+    expect(h.records.approval("in-long")?.hash).toBe(approval.hash);
+    expect(h.warned.map((said) => said.event)).not.toContain("fieldd.flows.run.write");
+    expect(h.records.runRecords()).toEqual([]);
     expect(h.records.runs()).toEqual([]);
     expect(h.spawned).toEqual([]);
     // what the start lets through: the input's folder, one written plainly, one computed (held at its call)
@@ -1910,6 +1947,8 @@ describe("CP-4a2b — a run's folder, held at its start (slice 7's R8b)", () => 
     for (const said of [
       words.inputNotFound("session"),
       words.inputNotFound("project"),
+      words.folderUnusable("session"),
+      words.folderUnusable("project"),
       NO_FOLDER,
     ]) {
       expect(said).not.toBe("");
