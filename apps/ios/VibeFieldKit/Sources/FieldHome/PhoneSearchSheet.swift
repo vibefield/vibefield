@@ -419,7 +419,7 @@ private struct SearchChip: View {
       .contentShape(Capsule())
     }
     .buttonStyle(SearchChipStyle())
-    .accessibilityLabel(chip.note.map { "\(chip.label), \($0)\(chip.waiting ? ", waiting on you" : "")" } ?? chip.label)
+    .accessibilityLabel(chip.spoken)
     .accessibilityHint("Adds a filter")
   }
 }

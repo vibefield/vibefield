@@ -244,6 +244,8 @@ struct ProfileLensMenu<ViewLead: View>: View {
     .background { ChromeMaterial.floating(radius: LensToken.menuRadius) }
     .accessibilityElement(children: .contain)
     .accessibilityLabel(LensToken.eyebrow)
+    // SE-2l — over its clear scrim the menu is all VoiceOver reaches, as it is all a touch reaches
+    .accessibilityAddTraits(.isModal)
   }
 }
 

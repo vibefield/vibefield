@@ -1168,7 +1168,7 @@ public struct HomeScreen: View {
   }
 
   /// What the sheet draws, from the lens, search's state, Live now's world, each desktop's answer and the ledger, and
-  /// how far each is answered (SE-2i).
+  /// how far each is answered (SE-2i). Everything's rows name each agent by the link's catalog (SE-2l).
   private var searchContent: SearchSheetContent {
     let live = searchLive
     return PhoneSearchWorld.content(
@@ -1177,7 +1177,8 @@ public struct HomeScreen: View {
         let groups = FieldHistoryModel.visibleHits(query: searchQuery, kind: .any, in: reader.corpus)
         return (corpus: reader.corpus, groups: groups)
       },
-      latest: historyDesktops.projects.corpus, agentLabel: { $0 }, feed: searchFeed, asked: searchAsked(live))
+      latest: historyDesktops.projects.corpus, agentLabel: PhoneSearchWorld.agentLabel(link?.catalog ?? .empty),
+      feed: searchFeed, asked: searchAsked(live))
   }
 
   /// SE-2i — Live now's world as it stands: the home's live board, or why none answers yet. The mock's rows are its
@@ -1437,6 +1438,10 @@ public struct HomeScreen: View {
         }
       }
     }
+    // SE-2l — while search stands, its sheet and its field are all VoiceOver reaches: the page under the scrim is
+    // out of reach, as it is out of touch (the field's close circle leaves)
+    .accessibilityElement(children: .contain)
+    .accessibilityAddTraits(searchOpen ? .isModal : [])
   }
 
   /// What the bar's animation follows. The account menu is NOT in it: that

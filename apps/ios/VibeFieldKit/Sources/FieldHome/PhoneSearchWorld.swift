@@ -101,9 +101,10 @@ enum PhoneSearchWorld {
   }
 
   /// SE-2l (the S2 review's finding 7) — an agent as Everything's rows name it ("folder · agent", §8): the catalog's
-  /// label (AC-D4). STUB (SE-2l red): the id.
+  /// label (AC-D4; `FieldLink.catalog`, every desktop's answer merged), and its id while no catalog names it (the
+  /// tolerant reader, R4: an older desktop, a newer peer's agent).
   static func agentLabel(_ catalog: AgentCatalog) -> (String) -> String {
-    { provider in provider }
+    { provider in catalog.entry(for: AgentProvider(rawValue: provider))?.label ?? provider }
   }
 
   // MARK: - SE-2i: what was answered (the S2 review's finding 4)

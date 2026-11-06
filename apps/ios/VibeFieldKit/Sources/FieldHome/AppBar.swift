@@ -390,7 +390,8 @@ struct FieldToken: View {
     .background(Capsule().fill(ChromePalette.searchToken))
     .fixedSize()
     .accessibilityElement(children: .contain)
-    .accessibilityLabel("Filter: \(token.label)")
+    // §9 "The Peek's filters": "A token says its filter's name"; its × is "Remove ‹name›"
+    .accessibilityLabel(token.label)
   }
 }
 

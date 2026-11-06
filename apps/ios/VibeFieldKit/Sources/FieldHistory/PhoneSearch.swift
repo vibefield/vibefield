@@ -225,8 +225,19 @@ public enum PhoneSearch {
     /// What its count says: its sessions ("4"), "asleep", or nothing.
     public var note: String? { asleep ? "asleep" : sessions.map { "\($0)" } }
 
-    /// What VoiceOver says for it (SE-2l, the S2 review's finding 11). STUB (SE-2l red): its name alone.
-    public var spoken: String { label }
+    /// What VoiceOver says for it (SE-2l; §9: "A chip's count is its sessions, or 'asleep'"): its name, then its
+    /// sessions with their noun or "asleep", then whether a session under it waits on you; who said it and a project
+    /// by name alone.
+    public var spoken: String {
+      var words = label
+      if asleep {
+        words += ", asleep"
+      } else if let sessions {
+        words += ", \(PhoneSearch.plural(sessions, "session"))"
+      }
+      if waiting { words += ", waiting on you" }
+      return words
+    }
   }
 
   /// A token in the field: a chosen filter, its × removes it.
