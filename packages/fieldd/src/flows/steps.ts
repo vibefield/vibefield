@@ -21,8 +21,9 @@ import { checkForm, type FlowForm, type FormRefusal } from "./form-check";
 // A spawn the runtime refuses is the step's refusal, in DESIGN.md §9's words ("A step's call refused"). The spawn
 // shape has no approval or permission field (AgentSpawnParams), so a step never asks for one (CP-L4).
 // D9's checks are held here, before any spawn or send, each in §9's words: the keys, the agent (the catalog's door),
-// its Agent Profile (named, or the spark's own or your default, held to the run's scope), its folder (the run's, or a
-// project's, or inside one), its model (a name the runtime discovered), its prompt, and an `in:`.
+// its Agent Profile (named, or the spark's thinksUnder in its own run or one from its thread, or your default; held to
+// the run's scope, a default outside it none to give), its folder (the run's, or a project's, or inside one), its
+// model (a name the runtime discovered), its prompt, and an `in:`.
 // An `in:` hands a live session the step's line instead of a spawn (D5 4–7 the same), and the step listener is told of
 // the hand first (slice 9b), since that session is no flow's run.
 // Built later in M-r2: D2's lookup at a wake (10a), the answer and a freed slot (9).
@@ -94,7 +95,8 @@ export interface FlowStepPorts {
   folderOf(kind: string, value: string): string | undefined;
   /** the project folders this desktop knows: a step's `cwd` may be one, or inside one (D9) */
   projectFolders(): readonly string[];
-  /** the Agent Profile a spark thinks under (`thinksUnder`): a step of its run that names none takes it (A2) */
+  /** the Agent Profile a spark thinks under (`thinksUnder`): a step that names none takes it, in a run of the spark's
+   * own start or one from its thread (A2; F8) */
   sparkProfile(spark: string): string | undefined;
   /** the person's default Agent Profile: a step of your run that names none takes it (A2); none, it is refused */
   defaultProfile(): string | undefined;
@@ -127,7 +129,8 @@ export interface FlowStepRun {
   readonly scope: readonly string[];
   /** the folder its input names, a session's or a project's, where a step that names none runs (CP4-Q20 (a)) */
   readonly folder?: string | undefined;
-  /** the spark whose own start the run is, whose profile a step that names none takes (A2); none for yours */
+  /** the spark whose thinksUnder a step that names no Agent Profile takes (A2): the one whose own start the run is, or
+   * whose thread it was started from (F8, Q3); none for yours. That default is its one reader: `ran` names a starter */
   readonly spark?: string | undefined;
 }
 
@@ -312,18 +315,16 @@ export async function startStep(
   const offered = ports.agents.offers(agent);
   if (offered === undefined)
     return didntStart(label, `it names an agent VibeField doesn't start (${nameWords(agent)}).`);
-  // A2: a step that names no Agent Profile takes the spark's own for a spark's run and your default for yours; none
-  // to give it is refused, never the runtime's own default (a silent fallback); any is held to the run's scope (D8)
+  // A2: one a step names is held to the run's scope (D8). A step that names none takes the spark's thinksUnder for a
+  // run of a spark's, its own or a Run from its thread (F8, Q3), and your default for yours; none to give it, or one
+  // outside the run's scope, is refused as none to give (the step named none), never the runtime's own default
+  const asked = said(options["profile"]);
+  if (asked !== undefined && !run.scope.includes(asked))
+    return didntStart(label, `it names an Agent Profile this run can't use (${nameWords(asked)}).`);
   const profileSet =
-    said(options["profile"]) ??
-    (run.spark !== undefined ? ports.sparkProfile(run.spark) : ports.defaultProfile());
-  if (profileSet === undefined)
+    asked ?? (run.spark !== undefined ? ports.sparkProfile(run.spark) : ports.defaultProfile());
+  if (profileSet === undefined || !run.scope.includes(profileSet))
     return didntStart(label, "it names no Agent Profile, and this run has none to give it.");
-  if (!run.scope.includes(profileSet))
-    return didntStart(
-      label,
-      `it names an Agent Profile this run can't use (${nameWords(profileSet)}).`,
-    );
   // CP4-Q20 (a): a step with no folder runs in the one its run's input names, and none is a default; a folder it names
   // is that one, or a project this desktop knows, or inside one (D9), checked here because it may be computed
   const named = said(options["cwd"]);

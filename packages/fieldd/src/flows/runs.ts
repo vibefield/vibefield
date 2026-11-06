@@ -129,7 +129,8 @@ export interface FlowRunPorts {
   folderOf: FlowStepPorts["folderOf"];
   /** the project folders this desktop knows (D9's `cwd`) */
   projectFolders: FlowStepPorts["projectFolders"];
-  /** a spark's own Agent Profile, and the person's default: a step that names none takes one (A2) */
+  /** a spark's thinksUnder, and the person's default: a step that names none takes one (A2), the spark's in its own
+   * run or a Run from its thread (F8) */
   sparkProfile: FlowStepPorts["sparkProfile"];
   defaultProfile: FlowStepPorts["defaultProfile"];
   /** the Agent Profiles that exist now, by id: a run's frozen scope narrows to them (D8) */
@@ -837,9 +838,8 @@ export class FlowRuns {
         ran: live.ran,
         scope: record.scope.filter((profile) => profiles.has(profile)),
         folder: live.folder,
-        ...(record.starter.by === "spark" && record.starter.spark !== undefined
-          ? { spark: record.starter.spark }
-          : {}),
+        // F8 (Q3): a spark's own run, or a Run from its thread, gives a step that names no profile its thinksUnder
+        ...(record.starter.spark !== undefined ? { spark: record.starter.spark } : {}),
       },
       this.#stepWrite(run),
       number,
