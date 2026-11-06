@@ -11,6 +11,8 @@ import os
 // `ready` not heard in time asks a fresh ticket after a backoff, and the lines held stay drawn meanwhile. A ticket
 // fieldd refuses is said in fieldd's words, and asked again only when the home's client is connected again
 // (`reconnected()`). Every effect comes through the door and the transport, so a test drives it with neither.
+// SP-7a M-b2: a spark another desktop keeps is asked for by its `device`, and the home carries the ask there (D3).
+// The owner answers its worker's routed serve on its tailnet name, which the phone's node dials (D1, D4).
 //
 // Two departures from the Mac, both deliberate:
 // - the Mac batches a catch-up's burst of lines into one reading per microtask; the phone publishes per frame, and
@@ -136,8 +138,9 @@ public final class SparkTranscriptReader {
 
   /// The ticket's ask, as the door reads it: the spark, and the desktop that keeps it when there is one to name.
   public nonisolated static func ticketParams(spark: String, device: String? = nil) -> JSONValue {
-    // SP-7a M-b2 (red): the skeleton names no desktop
-    .object(["spark": .string(spark)])
+    var params: [String: JSONValue] = ["spark": .string(spark)]
+    if let device { params["device"] = .string(device) }
+    return .object(params)
   }
 
   /// Begins reading. Once; a cancelled reader stays cancelled.
@@ -205,7 +208,7 @@ public final class SparkTranscriptReader {
     let ticket: SparkTranscriptTicket
     do {
       let answer = try await door.call(
-        SparkTranscriptLimits.openTicketMethod, params: Self.ticketParams(spark: spark))
+        SparkTranscriptLimits.openTicketMethod, params: Self.ticketParams(spark: spark, device: device))
       ticket = try SparkTranscriptTicket(json: answer)
     } catch {
       guard current(id) else { return .done }

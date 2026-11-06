@@ -395,7 +395,8 @@ public struct SparkTranscriptOpen: Sendable, Equatable {
 
 /// `compose.sparks.transcript.openTicket`'s answer (`SparkTranscriptOpenTicketResult`): a fresh, single-use
 /// credential for the spark's record on the worker's listener, the worker's generation, and the spark's runs, oldest
-/// first. Every answer is a new one; `expiresAt` bounds its redemption alone.
+/// first. Every answer is a new one; `expiresAt` bounds its redemption alone. Its endpoint is the window's loopback
+/// socket, or the phone's: the worker's routed serve on the owner's tailnet name (SP-7a D4).
 public struct SparkTranscriptTicket: Sendable, Equatable {
   public let spark: String
   public let endpoint: URL
@@ -412,8 +413,9 @@ public struct SparkTranscriptTicket: Sendable, Equatable {
       throw object.missing("spark")
     }
     self.spark = spark
-    guard let endpoint = Self.loopback(try object.text("endpoint")) else {
-      throw WireDecodeError(shape: shape, reason: "`endpoint` is not a credential-free loopback WebSocket endpoint")
+    let text = try object.text("endpoint")
+    guard let endpoint = Self.loopback(text) ?? Self.remote(text) else {
+      throw WireDecodeError(shape: shape, reason: "`endpoint` is neither a loopback socket nor the routed serve's")
     }
     self.endpoint = endpoint
     let ticket = try object.text("ticket")
@@ -435,6 +437,18 @@ public struct SparkTranscriptTicket: Sendable, Equatable {
   static func loopback(_ text: String) -> URL? {
     guard let parts = URLComponents(string: text), parts.scheme == "ws", parts.host == "127.0.0.1",
       parts.port != nil, parts.user == nil, parts.password == nil, parts.query == nil, parts.fragment == nil
+    else { return nil }
+    return parts.url
+  }
+
+  /// `RemoteSparkTranscriptSocket`: `ws:` or `wss:` on a host that is not loopback (`127.0.0.1`, `[::1]` and
+  /// `localhost`, as `remote-endpoints.ts` excludes them), at the routed serve's port and the worker's path, and no
+  /// user, password, query or fragment.
+  static func remote(_ text: String) -> URL? {
+    guard let parts = URLComponents(string: text), parts.scheme == "ws" || parts.scheme == "wss",
+      let host = parts.host, !host.isEmpty, !["127.0.0.1", "::1", "[::1]", "localhost"].contains(host.lowercased()),
+      parts.port == SparkTranscriptLimits.servePort, parts.path == "/transcripts", parts.user == nil,
+      parts.password == nil, parts.query == nil, parts.fragment == nil
     else { return nil }
     return parts.url
   }
