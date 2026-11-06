@@ -1621,6 +1621,92 @@ describe("the deck's pane frames", () => {
     expect(localStorage.getItem("vf-terminal-release-v1:born-1:unused")).not.toBeNull();
   });
 
+  // GT-D5 (item 186): closing a pane detaches its session. The unused-shell reaper may release
+  // only a shell the deck BIRTHED — its own birth receipt (LANDED "records that shell's birth for
+  // the launcher and unused-shell reaper. There is no second birth authority"; puppeteer-views'
+  // `UnusedPaneSessions`: "never grants ownership to a restored or previously used session").
+  // A pane this deck never birthed — a claimed stranger, a pane restored after a reload — closes
+  // to a detach even when the floor's lifetime fact says its shell was never used: vf-m1's
+  // control run 166c killed exactly that pane (item186/diagnosis.md).
+  describe("a pane closes to a detach unless the deck birthed its shell (GT-D5, item 186)", () => {
+    /** The floor's own word on a shell this deck never birthed: interactive, never typed into. */
+    const unusedOnTheFloor = (id: string): void => {
+      nativeSummaries.set(id, bornSummary(id) as unknown as SessionSummary);
+    };
+    const releases = () => requests.filter((request) => request.method === "terminal.release");
+    /** The releases naming this row's own sessions. The module's release outbox keeps a prior
+     * row's unacknowledged intent in memory across `disposeTerminalPool` and replays it on the next
+     * connect ("retains a cleanup intent…" leaves `born-1`'s), so a row reads its own ids. */
+    const releasesOf = (...ids: string[]) =>
+      releases().filter((request) =>
+        ids.includes((request.params as { sessionId?: string } | undefined)?.sessionId ?? ""),
+      );
+    const closePane = async (paneId: string): Promise<void> => {
+      await act(async () => {
+        workspace.panes = workspace.panes.filter((pane) => pane.id !== paneId);
+        workspace.refresh();
+      });
+      await settle();
+    };
+
+    it("never releases a claimed stranger — never typed, never born here — when its pane closes", async () => {
+      workspace.panes = [
+        { id: "pane-1", session: stubSession("pty-1") },
+        { id: "pane-2", session: stubSession("stranger") },
+      ];
+      unusedOnTheFloor("stranger");
+      await mountDeck();
+      await closePane("pane-2");
+      const closed = releasesOf("pty-1", "stranger");
+      expect(closed, "the claimed stranger's close released it").toEqual([]);
+      expect(requests.filter((request) => request.method === "terminal.terminate")).toEqual([]);
+    });
+
+    it("releases nothing when ⌘W closes a restored never-typed split that is the lowest-id, active pane (run 166c)", async () => {
+      // After a reload the deck holds panes it never birthed, claimed in id order, the first active:
+      // the restored split (never typed), the typed first pane, and the adopted stranger.
+      workspace.panes = [
+        { id: "pane-a", session: stubSession("3bd34cb1-split") },
+        { id: "pane-b", session: stubSession("7360dd56-first") },
+        { id: "pane-c", session: stubSession("9e0f1a2b-stranger") },
+      ];
+      workspace.activePaneId = "pane-a";
+      unusedOnTheFloor("3bd34cb1-split");
+      nativeSummaries.set("7360dd56-first", {
+        ...(bornSummary("7360dd56-first") as unknown as SessionSummary),
+        inputUsed: true,
+      });
+      unusedOnTheFloor("9e0f1a2b-stranger");
+      await mountDeck();
+      await closePane("pane-a");
+      const ids = ["3bd34cb1-split", "7360dd56-first", "9e0f1a2b-stranger"];
+      expect(releasesOf(...ids), "the restored split's close released a session").toEqual([]);
+      // and the two that remain are as untouched by it
+      await closePane("pane-c");
+      expect(releasesOf(...ids), "the adopted stranger's close released a session").toEqual([]);
+    });
+
+    it("PIN: releases a shell the deck birthed, never typed, as unused when its pane closes", async () => {
+      workspace.panes = [
+        { id: "pane-1", session: stubSession("pty-1") },
+        { id: "pane-2", session: stubSession("pty-2") },
+      ];
+      await mountDeck();
+      await act(async () => {
+        await deckDoor?.createTerminal();
+      });
+      await settle();
+      expect(
+        workspace.panes.find((pane) => pane.id === "pane-1")?.session.id,
+        "the deck's birth lands in the focused pane (GV-D4)",
+      ).toBe("born-1");
+      await closePane("pane-1");
+      expect(releases()).toEqual([
+        { method: "terminal.release", params: { sessionId: "born-1", condition: "unused" } },
+      ]);
+    });
+  });
+
   it("names a fresh split by the folder the deck opened it in, not 'terminal' (PU-14b)", async () => {
     workspace.panes = [
       { id: "pane-1", session: stubSession("pty-1", { cwd: "/home/tester/rosetta" }) },
