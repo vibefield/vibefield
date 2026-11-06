@@ -83,6 +83,11 @@ const FORBIDDEN_RESPELLINGS = [
   '"artifacts", "made"',
   '"artifacts", "made-previews"',
   '"mesh", "apps"',
+  // DR-2a — the drive's folders under the user's root. DR-2/DR-3 name the files that join them
+  // (`LAYOUT_CONSUMERS`), when those files exist.
+  '"drive", "objects"',
+  '"drive", "incoming"',
+  '"drive", "import"',
   '"plugins", "installed"',
   '"fieldd", "device-id"',
   '"fieldd", "settings"',

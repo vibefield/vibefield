@@ -1,0 +1,10 @@
+{
+  "deviceId": "01J9ZK3M5Q8XR2V7N4B6C1D0EF",
+  "protocol": 1,
+  "state": "ready",
+  "held": {
+    "objects": 42,
+    "bytes": 8912345
+  },
+  "publishedAt": 1793955600000
+}
