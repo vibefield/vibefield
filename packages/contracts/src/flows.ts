@@ -619,8 +619,9 @@ export const FlowJournalCall = FlowJournalLine.extend({
 export type FlowJournalCall = z.infer<typeof FlowJournalCall>;
 
 /** A call's answer, as the script receives it: `value` (any JSON, at most FLOW_LIMITS.RESULT_MAX_BYTES as UTF-8 JSON;
- * `cut` when the step's message was longer and `value` is its text, cut there, CP4-Q17 (a)), or `refused`, the words
- * the script's `await` throws with. One of the two. */
+ * `cut` when the step's message was longer and `value` is its text, cut there, CP4-Q17 (a), or a step's answer
+ * `{text, …fields}` whose `text` was cut, its fields whole, CP-4a2b's D11), or `refused`, the words the script's
+ * `await` throws with. One of the two. */
 export const FlowJournalAnswer = FlowJournalLine.extend({
   kind: z.literal("answer"),
   call: FlowCallNumber,
@@ -665,6 +666,14 @@ export function flowAnswerBytes(value: unknown): number {
   return utf8.encode(JSON.stringify(value ?? null)).byteLength;
 }
 
+/** A value `cut` may mark: a text cut short, or a step's answer whose `text` was (13a's D11). */
+const isCutValue = (value: unknown): boolean =>
+  typeof value === "string" ||
+  (typeof value === "object" &&
+    value !== null &&
+    !Array.isArray(value) &&
+    typeof (value as { readonly text?: unknown }).text === "string");
+
 /** A line as one of this build's kinds, else undefined: a format or a kind it does not know, a body that does not
  * parse, an answer with both a value and a refusal or neither, or a value past FLOW_LIMITS.RESULT_MAX_BYTES. The MAC
  * is not this function's: fieldd verifies it, and the chain, before it reads a line as known. */
@@ -676,7 +685,7 @@ export function flowJournalLineOf(line: unknown): FlowJournalKnownLine | undefin
     const hasValue = "value" in known && known.value !== undefined;
     if (hasValue === (known.refused !== undefined)) return undefined;
     if (hasValue && flowAnswerBytes(known.value) > FLOW_LIMITS.RESULT_MAX_BYTES) return undefined;
-    if (known.cut === true && typeof known.value !== "string") return undefined;
+    if (known.cut === true && !isCutValue(known.value)) return undefined;
   }
   return known;
 }
