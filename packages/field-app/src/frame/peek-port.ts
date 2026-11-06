@@ -9,15 +9,15 @@ import { PEEK_LATEST_LIMIT, PEEK_SEARCH_LIMIT } from "./peek-model";
 // THE PEEK'S PORT (DESIGN.md §8 "Search — the Peek"): the three questions the
 // popup asks, answered over this window's fieldd client — the words
 // (`index.search`, unscoped: Everything), your latest sessions before a word
-// is typed (`index.recent {scope: "all"}`) and the projects its dropdown names
-// — since PJ-4 fieldd's projects (`project.list`), the ones with a folder on
-// this desktop, as History lists them; a hit and a latest row carry their
-// project's key (the join column) and the dropdown narrows by it. This
+// is typed (`index.recent {scope: "all"}`) and the projects + Filter's menu
+// names — since PJ-4 fieldd's projects (`project.list`), the ones with a folder
+// on this desktop, as History lists them; a hit and a latest row carry their
+// project's key (the join column) and the menu's pick narrows by it. This
 // desktop's index only (K5: `scope: "local"` — the room cannot open a peer's
 // session until DS-7). The catalog hands the controller a fixture port
 // instead; every answer is parsed, never cast.
 
-/** A project the Everything dropdown can narrow to. */
+/** A project + Filter's menu can narrow Everything to. */
 export interface PeekProject {
   readonly id: string;
   readonly name: string;
@@ -58,8 +58,8 @@ export function peekPortOver(client: PeekDoorClient): PeekPort {
       );
     },
     async projects() {
-      // one page, newest activity first: a dropdown names the projects you
-      // are likely after, never a directory listing — and only those with a
+      // one page, newest activity first: the menu names the projects you are
+      // likely after, never a directory listing — and only those with a
       // folder here, whose sessions this desktop's index can answer (K5)
       const answer = ProjectListResult.parse(
         await client.request("project.list", { limit: PROJECT_DOORS.PAGE_MAX_LIMIT }),

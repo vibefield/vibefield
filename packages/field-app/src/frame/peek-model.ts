@@ -27,7 +27,7 @@ export type PeekScope = "live" | "everything";
 /** Which side of the conversation a search reads (`IndexSearchParams.kind`). */
 export type PeekKind = "any" | "user" | "agent";
 
-/** What the scope row's dropdowns narrow Everything to; null is "every". */
+/** What + Filter's menu narrows Everything to (SE-D1); null is "every". */
 export interface PeekFilters {
   readonly project: string | null;
   readonly kind: PeekKind;

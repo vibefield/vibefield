@@ -15,7 +15,7 @@ import type { PeekPort } from "../frame/peek-port";
 // same demo the plate's room is drawn over — so a pick lands that room on the
 // line: the demo's search (its own words, one phrase as typed) with each hit's
 // ROOT facts folded in as fieldd folds them, the demo's sessions newest first
-// for "your latest sessions", and its projects for the dropdown. Every answer
+// for "your latest sessions", and its projects for + Filter's menu. Every answer
 // is parsed by the contract's own schema, as the product's port parses
 // fieldd's.
 
