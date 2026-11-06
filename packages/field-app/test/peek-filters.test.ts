@@ -178,15 +178,15 @@ describe("the field's tokens (SE-D1)", () => {
     );
     const filters = { project: "p-field", kind: "user" as const, agent: AGENT_ID };
     const [project, kind, agent] = peekFieldTokens(state({ scope: "everything", filters }));
-    expect(
-      [desk, profile, project, kind, agent].map((token) => token && clearPick(token)),
-    ).toEqual([
-      { filter: "desk", value: null },
-      { filter: "profile", value: null },
-      { filter: "project", value: null },
-      { filter: "kind", value: "any" },
-      { filter: "agent", value: null },
-    ]);
+    expect([desk, profile, project, kind, agent].map((token) => token && clearPick(token))).toEqual(
+      [
+        { filter: "desk", value: null },
+        { filter: "profile", value: null },
+        { filter: "project", value: null },
+        { filter: "kind", value: "any" },
+        { filter: "agent", value: null },
+      ],
+    );
   });
 });
 

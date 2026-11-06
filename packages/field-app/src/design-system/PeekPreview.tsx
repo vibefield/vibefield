@@ -99,13 +99,7 @@ export function PeekPlate({
  * as `GODVIEW_OPENINGS` says, then is the controller's. The live peek's pane
  * needs a window's terminals, which no catalog has: the plate draws the words
  * a window without them says. */
-function PeekLivePlate({
-  keys,
-  state,
-}: {
-  keys: ViewKeys;
-  state: PeekGodviewState;
-}): ReactElement {
+function PeekLivePlate({ keys, state }: { keys: ViewKeys; state: PeekGodviewState }): ReactElement {
   const opening = GODVIEW_OPENINGS[state];
   const [filters, setFilters] = useState<LiveFilters>(opening.filters);
   const godview = useMemo(() => peekLiveFixtureDoor(filters, setFilters), [filters]);

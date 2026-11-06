@@ -868,10 +868,7 @@ export function GodviewMonitor({
     agents: findWanted ? agents : NO_COUNTED_ROWS,
     here,
   });
-  const liveFilters = useHeldWhileSame<LiveFilters>(
-    liveFiltersNow,
-    JSON.stringify(liveFiltersNow),
-  );
+  const liveFilters = useHeldWhileSame<LiveFilters>(liveFiltersNow, JSON.stringify(liveFiltersNow));
   const transcripts = door?.transcripts ?? NO_TRANSCRIPTS;
   const findDoor = useMemo<GodviewFindDoor>(
     () => ({

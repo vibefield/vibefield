@@ -193,7 +193,10 @@ export function peekOffer(
   if (last.word.includes('"') || hasOpenQuote(query.slice(0, last.at))) return null;
   const typed = last.word.toLocaleLowerCase();
   const begins = (name: string): boolean =>
-    name.toLocaleLowerCase().split(/\s+/u).some((word) => word.startsWith(typed));
+    name
+      .toLocaleLowerCase()
+      .split(/\s+/u)
+      .some((word) => word.startsWith(typed));
   if (live.profile === null) {
     const profile = live.profiles.find((entry) => begins(entry.label));
     if (profile !== undefined) {

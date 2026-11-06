@@ -383,6 +383,19 @@
   outline-offset: 2px;
 }
 
+/* an agent's mark — a token's, a menu row's, an offer's — draws at its text's
+   size: its box's font size is its size (before the token's rules, which give
+   it the token's ink) */
+.vf-peek-agent-mark {
+  display: inline-grid;
+  width: 12px;
+  height: 12px;
+  flex: none;
+  place-items: center;
+  font-size: 12px;
+  line-height: 1;
+}
+
 /* ── a token: a filter that is on (SE-D1) — 28 tall, padded 0 4 0 8, corners
    8, on the ready fill, 13.5/500 in primary ink; its mark 12 in secondary ink,
    its name, and its ×. The tokens stand in the field's own row. ── */
@@ -439,17 +452,6 @@
 .vf-peek-field-token-clear:hover {
   color: var(--vf-text-primary);
   background: color-mix(in srgb, var(--vf-foreground) 10%, transparent);
-}
-
-/* an agent's mark draws at its text's size: its box's font size is its size */
-.vf-peek-agent-mark {
-  display: inline-grid;
-  width: 12px;
-  height: 12px;
-  flex: none;
-  place-items: center;
-  font-size: 12px;
-  line-height: 1;
 }
 
 /* ── the field's end (SE-D1): + Filter, then the small switch, 8 apart ── */
