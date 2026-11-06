@@ -294,6 +294,28 @@ struct ChatNeedsTests {
     #expect(ChatNeedsWords.paneMissing == "Couldn't open its pane: it isn't on your field")
   }
 
+  @Test("Answer in its pane opens only a run the field has a pane for: one on the board without one says so (Q5)")
+  func paneOpens() throws {
+    let feed = ChatFeed()
+    let row = try ChatFeedTests.row(spark: nil)
+    feed.board([row])
+    let from: JSONValue = .object(["name": .string("claude·2"), "session": .string(row.runtimeRunId)])
+    let asks = try Self.ask(["from": from])
+    let opened = feed.pane(of: asks, opens: { $0 == row.runtimeRunId })?.runtimeRunId
+    #expect(opened == row.runtimeRunId)
+    // on the board, with no session card on the field (Found 5): nothing opens, so the card says it cannot
+    let noPane = feed.pane(of: asks, opens: { _ in false })
+    #expect(noPane == nil)
+    // off the board, whatever the field says
+    let gone = try Self.ask(["from": .object(["name": .string("claude·2"), "session": .string("run-gone")])])
+    let off = feed.pane(of: gone, opens: { _ in true })
+    #expect(off == nil)
+    // no session named: nothing to open
+    let none = try Self.ask(["from": .object(["name": .string("claude·2")])])
+    let unnamed = feed.pane(of: none, opens: { _ in true })
+    #expect(unnamed == nil)
+  }
+
   @Test("a card whose desktop is away says so in the fact that holds, its acts withheld (Q8)")
   func away() throws {
     let list = try NeedsList(json: try #require(ChatFixtureDoor.fixture("needs-list.merged")))
