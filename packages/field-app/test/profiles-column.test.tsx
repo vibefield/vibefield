@@ -21,9 +21,16 @@ import {
   ProfilesColumnView,
   type ProfilesColumnViewProps,
 } from "../src/godview/profiles-column/ProfilesColumnView";
+import { resetWords } from "../src/panels/agents/profiles-model";
 import { PROFILES_WORDS } from "../src/setup/profiles-words";
 import { bandsGeometry } from "../src/usage/bands";
-import { type MetersOptions, type ProfileMeters, planMeters } from "../src/usage/meters";
+import {
+  type MetersOptions,
+  type NoMeterReason,
+  type PlanMeter,
+  type ProfileMeters,
+  planMeters,
+} from "../src/usage/meters";
 
 // UM-3 (2b; DESIGN.md §8 "The Bands circle" and "Godview's profiles column", §9 "The meters' words"): the column's
 // three views, controller-free, so the catalog mounts the shipping faces. Every number is the model's
@@ -509,8 +516,81 @@ describe("the popover (DESIGN.md §8 'Godview's profiles column')", () => {
     const page = mount(<ProfilePopoverView {...popover(circle)} />);
     expect(
       [...page.querySelectorAll(".vf-profiles-pop-none")].map((line) => line.textContent),
-    ).toEqual(none.map((entry) => `${entry.agent} shows no meter`));
+    ).toEqual(
+      none.map((entry) =>
+        entry.kind === "no-meter" && entry.why === "unreported"
+          ? `${entry.agent} shows no meter`
+          : entry.title,
+      ),
+    );
   });
+
+  it("says a plan no agent named, or whose reading holds no window, by its title alone, as the phone does (§9 ‹for James›)", () => {
+    // "shows no meter" is an agent that reports no usage; said of the other two it would be false of an agent
+    // that meters (UM-D3, one meter everywhere; the phone since UM-4d)
+    const circle = thisMac();
+    const first = circle.meters.entries[0];
+    expect(first).toBeDefined();
+    if (first === undefined) return;
+    const none = (why: NoMeterReason, key: string, title: string): PlanMeter => ({
+      key,
+      provider: first.provider,
+      agent: first.agent,
+      title,
+      profiles: first.profiles,
+      kind: "no-meter",
+      why,
+    });
+    const meters: ProfileMeters = {
+      ...circle.meters,
+      entries: [
+        none("unreported", "agent:quiet", first.agent),
+        none("unnamed", "plan:unnamed", "Team plan"),
+        none("no-windows", "agent:empty", "Empty reading"),
+      ],
+    };
+    const page = mount(<ProfilePopoverView {...popover({ set: circle.set, meters })} />);
+    expect(
+      [...page.querySelectorAll(".vf-profiles-pop-none")].map((line) => line.textContent),
+    ).toEqual([`${first.agent} shows no meter`, "Team plan", "Empty reading"]);
+    // each keeps its agent's mark
+    expect(
+      page.querySelectorAll(".vf-profiles-pop-none > .vf-profiles-pop-none-mark"),
+    ).toHaveLength(3);
+  });
+
+  it.each([
+    ["three days off, by its day and clock", 3 * 24 * 60],
+    ["ten minutes past, now", -10],
+  ])(
+    "says its tightest window's reset as Settings' line does: %s (§9 ‹for James›)",
+    (_, minutes) => {
+      const at = new Date(NOW.getTime() + minutes * 60_000);
+      // every window of the plan Work's first namer reads, its reset moved
+      const rows = withNamer(FIXTURE_WORK, (row) => ({
+        ...row,
+        metrics: row.metrics.map((metric) => ({ ...metric, resetsAt: at.toISOString() })),
+      }));
+      const meters = metersOf(FIXTURE_WORK, rows);
+      const entry = meters.entries.find(
+        (each) => each.kind === "reading" && each.plan?.id === FIXTURE_WORK.plans?.[0]?.id,
+      );
+      expect(entry?.kind).toBe("reading");
+      if (entry?.kind !== "reading") return;
+      const line = entry.tightest.line;
+      expect(line.reset).toBe(resetWords(at, NOW));
+      const page = mount(<ProfilePopoverView {...popover({ set: FIXTURE_WORK, meters })} />);
+      expect(
+        page
+          .querySelector(`.vf-profiles-pop-row[data-plan="${entry.key}"] [role="listitem"]`)
+          ?.getAttribute("aria-label"),
+      ).toBe(
+        `${line.group !== undefined ? `${line.group.label}, ` : ""}${line.label}: ${Math.round(
+          line.usedPercent,
+        )}% used, resets ${line.reset}${line.hot ? ", ahead of pace" : ""}`,
+      );
+    },
+  );
 
   it("while the usage cannot be read, says the profile's one line, never a line per agent (§9)", () => {
     // the review: each agent said "‹agent›: usage unavailable", words §9 does not rule; the profile's are ruled

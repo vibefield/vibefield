@@ -275,6 +275,8 @@ export function UsageTimeline({
   /** UM-D4 — the words of each window that runs out before its reset, by its
    * line's id (`meterLines`), said at the line's end */
   forecasts?: Readonly<Record<string, string>> | undefined;
+  /** UM-3 red: the skeleton — each line's reset form, by its line's id, not yet said */
+  resetForms?: Readonly<Record<string, "length" | "day" | "now">> | undefined;
   /** what these windows belong to, for a screen reader */
   label: string;
   /** on a plan card the lines take the card's width (pass 19: 34 · track · 66) */

@@ -42,6 +42,7 @@ import {
 } from "../src/panels/agents/profiles-model";
 import { SettingsDialog } from "../src/panels/SettingsDialog";
 import { meterWindows } from "../src/usage/meters";
+import { resetForm } from "../src/usage/rules";
 
 vi.mock("../src/panels/agents/SignInTerminal", () => ({
   SignInTerminal: ({ terminal }: { terminal: { sessionId: string } }) =>
@@ -306,6 +307,49 @@ describe("the profiles model", () => {
     expect(line?.querySelector(".vf-profiles-usage-reset")?.textContent).toBe("out in ~35m");
   });
 
+  it("says a reset by its length, by its day and clock, or now, as the phone does (UM-D3; §9 'A reading', ‹for James›)", async () => {
+    // the ruled "resets in 2h" is a length's; a reset a day or more off, or one that has come, drops the "in"
+    const at = (minutes: number) => new Date(NOW.getTime() + minutes * 60_000);
+    const metric = (id: string, used: number, length: number, minutes: number) => ({
+      id,
+      label: id.toUpperCase(),
+      kind: "window" as const,
+      usedPercent: used,
+      durationMinutes: length,
+      resetsAt: at(minutes).toISOString(),
+    });
+    const windows = meterWindows(
+      [
+        metric("5h", 20, 300, 150),
+        metric("7d", 10, 7 * 24 * 60, 3 * 24 * 60),
+        metric("1d", 30, 1440, -10),
+      ],
+      NOW,
+    );
+    const forms: Record<string, "length" | "day" | "now"> = {};
+    for (const window of windows) {
+      const form = resetForm(window);
+      if (form !== undefined) forms[window.line.id] = form;
+    }
+    expect(forms).toEqual({ "5h": "length", "7d": "day", "1d": "now" });
+    await mount(
+      createElement(UsageTimeline, {
+        lines: windows.map((window) => window.line),
+        resetForms: forms,
+        label: "Claude Max",
+      }),
+    );
+    expect(
+      [...(container?.querySelectorAll("[role=listitem]") ?? [])].map((line) =>
+        line.getAttribute("aria-label"),
+      ),
+    ).toEqual([
+      "5H: 20% used, resets in 2h 30m",
+      `7D: 10% used, resets ${resetWords(at(3 * 24 * 60), NOW)}`,
+      "1D: 30% used, resets now",
+    ]);
+  });
+
   it("keeps the % at the head, in pixels: inside short of the light, else after the head", () => {
     // James's cards: a 218 px track, a 21 px figure
     const at = (used: number, elapsed?: number) =>
@@ -443,6 +487,8 @@ describe("the profiles model", () => {
             group: { id: "claude-and-gpt-models", label: "Claude and GPT models" },
           },
         ],
+        // the week's reset is a day or more off: said by its day and clock (§9 'A reading', ‹for James›)
+        resetForms: { g5: "length", g7: "day", c5: "length" },
       }),
     );
     const headings = [...(container?.querySelectorAll(".vf-profiles-usage-group") ?? [])];
@@ -455,7 +501,7 @@ describe("the profiles model", () => {
     const lines = [...(container?.querySelectorAll("[role=listitem]") ?? [])];
     expect(lines.map((line) => line.getAttribute("aria-label"))).toEqual([
       "Gemini models, 5H: 0% used, resets in 5h",
-      "Gemini models, 7D: 0% used, resets in Thu 10:49",
+      "Gemini models, 7D: 0% used, resets Thu 10:49",
       "Claude and GPT models, 5H: 61% used, resets in 2h 34m, ahead of pace",
     ]);
     // the line: 2 px, its four corners opened into 2 px quarter circles, 6 px where it meets the edges
@@ -1031,7 +1077,8 @@ describe("a profile's page", () => {
     expect(lines).toEqual([
       // UM-D4: a window that runs out before its reset says when, as the meters say it
       "5H: 91% used, resets in 1h, ahead of pace, out in ~25m",
-      expect.stringMatching(/^7D: 12% used, resets in /),
+      // a reset three days off is said by its day and clock, as the phone says it (§9 'A reading', ‹for James›)
+      `7D: 12% used, resets ${resetWords(new Date(NOW.getTime() + 3 * 24 * 60 * 60_000), NOW)}`,
     ]);
     // not the default: the switch offers it, the delete is open
     const toggle = container?.querySelector<HTMLButtonElement>('[role="switch"]');
@@ -2012,7 +2059,7 @@ describe("the plans a profile runs on (pass 19)", () => {
       ),
     ).toEqual([
       "5H: 91% used, resets in 1h, ahead of pace, out in ~25m",
-      expect.stringMatching(/^7D: 12% used/),
+      `7D: 12% used, resets ${resetWords(new Date(NOW.getTime() + 3 * 24 * 60 * 60_000), NOW)}`,
     ]);
     expect(claudeCard.textContent).toContain("Claude Code, Pi");
 
