@@ -463,6 +463,11 @@
   display: none;
 }
 
+/* 12 tall in the row, where Settings' track is 14: the line measures its track, so its now line follows */
+.vf-profiles-pop-row-meter .vf-profiles-usage-track {
+  height: 12px;
+}
+
 /* a reading kept after a failed refresh draws at half */
 .vf-profiles-pop-row[data-stale] .vf-profiles-pop-row-meter {
   opacity: 0.5;
@@ -591,6 +596,12 @@
 .vf-godview[data-godview-animations="off"] .vf-bands-breath {
   animation: none;
   opacity: 0.6;
+}
+
+/* …and the ring and the hover change at once, as under Reduce Motion */
+.vf-godview[data-godview-animations="off"] .vf-profiles-circle,
+.vf-godview[data-godview-animations="off"] .vf-profiles-add {
+  transition: none;
 }
 
 /* M6, Reduce Motion: the breath stands still at 60%; the ring and the hover change at once */
