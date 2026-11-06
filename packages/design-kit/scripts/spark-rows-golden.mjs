@@ -20,6 +20,9 @@
 // first frame), then `update(t, dt)` and `write`. A still is `render(0, { frozen: true })`: no update, `write` right
 // after the face is placed (`stills.ts`).
 //
+// Beside the rows, each status's recipe as the engine resolves it for a mouthless face (`recipe(e, false)`: the
+// status's `r`, then its `b`, then no mouth), so a slip in the phone's recipes is named field by field.
+//
 // A change to the engine changes every spark's face, so this file moves only on purpose:
 //   node packages/design-kit/scripts/spark-rows-golden.mjs           writes the golden
 //   node packages/design-kit/scripts/spark-rows-golden.mjs --check   exits 1 when the golden is not the engine's
@@ -242,6 +245,12 @@ export function dealSparkRows(sparklings, adapter, statuses) {
   // the stills: placed and written, never updated (render(0, { frozen: true }))
   const stills = stillCases(statuses).map((still) => ({ ...still, rows: written(face(still)) }));
 
+  // each status's recipe as a face holds it (`rec`): the engine's own `recipe(e, mouthSet)`, mouthless, which the
+  // phone's SparkRecipes must equal field by field. The engine keeps `recipe` to itself, so a face is asked.
+  const recipes = Object.fromEntries(
+    statuses.map((status) => [status, face({ seed: 4211, status, size, framed, cut }).rec]),
+  );
+
   return {
     "//": "IOS-12e (PC-D6 A). The vendored spark engine's rows: what Buddy.write lays out for the GPU (32 vec4s, 128 float32s a face), live, under reduced motion, across a status change, and as stills. Regenerate on purpose: node packages/design-kit/scripts/spark-rows-golden.mjs (then the kit's copy: pnpm check:ios-fixtures names it).",
     engine: {
@@ -254,6 +263,7 @@ export function dealSparkRows(sparklings, adapter, statuses) {
     seeds: SPARK_ROWS_SEEDS,
     times: SPARK_ROWS_TIMES,
     statuses,
+    recipes,
     live,
     reduced,
     change,
