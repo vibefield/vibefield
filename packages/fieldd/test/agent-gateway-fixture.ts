@@ -22,14 +22,16 @@
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { AgentCatalogEntry } from "@vibefield/contracts";
-import type {
-  AgentAdapterBinding,
-  AgentEvent,
-  AgentHost,
-  AgentNativeInvocationResolution,
-  BoundIngress,
-  PromptReceipt,
-  PromptSubmission,
+import {
+  type AgentAdapterBinding,
+  type AgentAttachNext,
+  AgentAttachRefusedError,
+  type AgentEvent,
+  type AgentHost,
+  type AgentNativeInvocationResolution,
+  type BoundIngress,
+  type PromptReceipt,
+  type PromptSubmission,
 } from "@vibefield/puppeteer-core";
 import type {
   AgentProvider,
@@ -205,6 +207,10 @@ export function normalizeTyped(argv: readonly string[]): AgentNativeInvocationRe
 export interface TypedProviderOptions {
   /** give the adapter an `attachSession` (AR-4) */
   attach?: boolean;
+  /** G5 — what each attach answers, asked once the adapter has recorded it: a next step is the adapter's refusal
+   * with it (`AgentAttachRefusedError`, which puppeteer carries to the attach's failure), nothing is the attach. A
+   * row holds an attach in flight by answering later (default: every attach binds at once) */
+  attachAnswer?: () => Promise<AgentAttachNext | undefined>;
   /** the adapter tells a version query from a session (default true) */
   classifies?: boolean;
   /** the executable the launch provider names (default: the script's real one) */
@@ -316,6 +322,8 @@ export function typedProvider(
               sessionId: attach.sessionId,
               ingress: attach.ingress,
             });
+            const next = await options.attachAnswer?.();
+            if (next !== undefined) throw new AgentAttachRefusedError(next, `scripted: ${next}`);
             return binding(attach.host, attach.runtimeSessionId, attach.sessionId, observed);
           },
         }

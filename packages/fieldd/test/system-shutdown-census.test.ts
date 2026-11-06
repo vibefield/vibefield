@@ -13,6 +13,11 @@
 // The launch gate sits at the doors (spawn, resume, adopt) and at the head of an automatic replacement, NEVER inside
 // a birth: a replacement whose old PTY is already gone must still birth its successor (AR-4b's hazard).
 //
+// A record of the boot before becomes a run of this boot past the boot's own re-attach two more ways: G5's retry of an
+// attach its adapter called transient, and the sweep's attach of a record whose PTY the boot's first inventory lacked
+// (AR-4b's grace). An attach in flight may land behind the stop's re-check, so it is a birth; and while the launches
+// are closed G5's next one is not asked (the sweep's needs no gate: while a record waits for it, nothing is settled).
+//
 // The scripted row of THE table claims re-attach (`SCRIPTED_ROW`, `TYPED_CATALOG`): the counted runs here run under
 // a catalog whose scripted row does not (`ENDS_WITH_FIELDD`), and the default catalog is the row that claims it.
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
@@ -22,13 +27,14 @@ import {
   type AgentCatalogEntry,
   type AgentSessionSummary,
   SystemShutdownCensusResult,
+  type TerminalInfo,
 } from "@vibefield/contracts";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import WebSocket from "ws";
-import type { AgentAdoptionInput } from "../src/agent-runtime";
+import { type AgentAdoptionInput, AgentRuntimeService } from "../src/agent-runtime";
 import { born as birth } from "./agent-birth";
 import { catalogWith } from "./agent-catalog-fixture";
-import { TYPED_PROVIDER } from "./agent-gateway-fixture";
+import { TYPED_PROVIDER, type TypedProviderOptions } from "./agent-gateway-fixture";
 import {
   auditActs,
   END_OF_INPUT,
@@ -41,6 +47,7 @@ import {
   key,
   listedRow,
   poll,
+  quiet,
   rowOf,
   teardownFloors,
 } from "./agent-gateway-floor";
@@ -66,7 +73,12 @@ afterAll(() => {
 });
 
 let sockets: WebSocket[] = [];
+/** The answers a row still holds back (an attach it keeps in flight), given before the floors are torn down. */
+let heldAnswers: Array<() => void> = [];
 afterEach(async () => {
+  vi.restoreAllMocks();
+  for (const answer of heldAnswers) answer();
+  heldAnswers = [];
   for (const socket of sockets) socket.close();
   sockets = [];
   await teardownFloors();
@@ -135,11 +147,27 @@ const STOPPING = {
   details: { service: "agents", state: "stopping" },
 };
 
-/** A pending run: born on one fieldd, released by its stop, held by the next (the scripted adapter cannot attach). */
-async function pendingRun(index?: { afterMs: number; pollMs: number }): Promise<{
-  box: Floor;
-  kept: Run;
-}> {
+/** The run from the boot before held pending, and the boot's re-attach settled: the pending row is published inside
+ * the attach's audited act, and the re-attach settles only once that act has returned (its outcome written), so a
+ * census read on the row alone could still be `{settled: false}`. */
+async function heldPending(box: Floor, runId: string, what: string): Promise<void> {
+  await poll(
+    () =>
+      rowOf(box, runId)?.continuation?.reason !== undefined &&
+      box.daemon.agents.plainStopCensus().settled
+        ? true
+        : undefined,
+    FLOOR_WAIT_MS,
+    what,
+  );
+}
+
+/** A pending run: born on one fieldd, released by its stop, held by the next (the scripted adapter cannot attach, or
+ * — `attachAnswer` — it can, and each of its attaches answers what the row says). */
+async function pendingRun(
+  index?: { afterMs: number; pollMs: number },
+  attachAnswer?: TypedProviderOptions["attachAnswer"],
+): Promise<{ box: Floor; kept: Run }> {
   const first = await floor({
     bundle: shimScript,
     catalog: ENDS_WITH_FIELDD,
@@ -152,13 +180,30 @@ async function pendingRun(index?: { afterMs: number; pollMs: number }): Promise<
     restartOf: first,
     catalog: ENDS_WITH_FIELDD,
     ...(index ? { index } : {}),
+    ...(attachAnswer ? { attach: true, provider: { attachAnswer } } : {}),
   });
-  await poll(
-    () => (rowOf(box, kept.runId)?.continuation?.reason === undefined ? undefined : true),
-    FLOOR_WAIT_MS,
-    "the run from the boot before held pending",
-  );
+  await heldPending(box, kept.runId, "the run from the boot before held pending");
   return { box, kept };
+}
+
+/** A step of the scripted adapter's that the row holds: `asked` settles once the adapter reaches it (`reach`), and the
+ * step goes on at `release` — which `afterEach` gives, if the row never did. */
+function holdStep(): {
+  asked: Promise<void>;
+  reach: () => void;
+  released: Promise<void>;
+  release: () => void;
+} {
+  let reach!: () => void;
+  const asked = new Promise<void>((resolve) => {
+    reach = resolve;
+  });
+  let release!: () => void;
+  const released = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  heldAnswers.push(release);
+  return { asked, reach, released, release };
 }
 
 /** Wait, turn by turn of the event loop, for fieldd's census to count a birth in flight: a creation or a replacement
@@ -485,6 +530,209 @@ describe("plainStopCensus — this boot's live runs, and the births in flight (R
       // and the doors stay closed until a refusal reopens them
       const closed = await box.win.callErr("agent.spawn", spawnOf(box));
       expect(closed.data).toMatchObject(STOPPING);
+    },
+    FLOOR_BUDGET_MS,
+  );
+
+  it(
+    "a re-attach in flight is a birth: while a pending run's transient attach is asked again, the consented stop refuses; once it lands the census names the run, and the stop that names it goes",
+    async () => {
+      const retry = holdStep();
+      let attaches = 0;
+      // the boot's own attach is called transient (G5), so it is asked again; the retry waits for the row's answer
+      const { box, kept } = await pendingRun(undefined, async () => {
+        attaches += 1;
+        if (attaches === 1) return "retry";
+        retry.reach();
+        await retry.released;
+        return undefined;
+      });
+      let asked = 0;
+      box.daemon.onShutdownRequest(() => {
+        asked += 1;
+      });
+      const shell = await shellOf(box);
+      await retry.asked;
+
+      // the run is not this boot's yet, so the census names nothing; but its attach may land behind the stop's
+      // re-check, a run of this boot that no consent named — so it is a birth, and the stop refuses
+      expect(box.daemon.agents.plainStopCensus()).toEqual({ settled: true, runs: [], births: 1 });
+      expect((await censusOf(shell)).runs).toEqual([]);
+      const refused = await shell.callErr("system.shutdown", {
+        reason: "update",
+        agents: { runs: [] },
+      });
+      expect(refused.data).toMatchObject({
+        kind: "PRECONDITION_FAILED",
+        details: { live: [], births: 1 },
+      });
+      expect(asked).toBe(0);
+
+      // answered, the attach takes the run back on its pane: a run of this boot, named now, and its consent goes
+      retry.release();
+      const named = await poll(
+        () => {
+          const now = box.daemon.agents.plainStopCensus();
+          return now.settled && now.births === 0 && now.runs.length === 1 ? now : undefined;
+        },
+        FLOOR_WAIT_MS,
+        "the re-attached run counted",
+      );
+      expect(named.runs).toEqual([
+        { runtimeRunId: kept.runId, terminalSessionId: kept.sessionId, agent: "Scripted" },
+      ]);
+      expect(rowOf(box, kept.runId)?.continuation?.reattached).toBe(true);
+      expect(attaches).toBe(2);
+      const stopped = await shell.call("system.shutdown", {
+        reason: "update",
+        agents: { runs: [kept.runId] },
+      });
+      expect(stopped).toMatchObject({ stopping: true });
+      await poll(() => (asked === 1 ? true : undefined), FLOOR_WAIT_MS, "the stop's owner asked");
+    },
+    FLOOR_BUDGET_MS,
+  );
+
+  it(
+    "a record whose PTY the boot's first inventory lacked is a birth while the sweep attaches it: the consented stop refuses until the attach lands, and then the census names the run",
+    async () => {
+      const first = await floor({ bundle: shimScript, catalog: ENDS_WITH_FIELDD });
+      const kept = await spawnRun(first);
+      await first.daemon.stop();
+      // the next boot's FIRST inventory, as its agent runtime reads it, lacks the run's PTY (a cell that had not
+      // published yet, AR-4b), so the boot holds the record for its grace; the floor itself lists the PTY throughout,
+      // so the sweep finds it and attaches, and the row holds that attach in flight
+      const real = AgentRuntimeService.prototype.handleInventory;
+      let firstInventory = true;
+      vi.spyOn(AgentRuntimeService.prototype, "handleInventory").mockImplementation(function (
+        this: AgentRuntimeService,
+        rows: readonly TerminalInfo[],
+      ) {
+        // the restarted runtime's first reading only (the stopped one hears none; it would pass through)
+        const lacks = firstInventory && this !== first.daemon.agents;
+        if (lacks) firstInventory = false;
+        real.call(this, lacks ? rows.filter((row) => row.sessionId !== kept.sessionId) : rows);
+      });
+      const sweep = holdStep();
+      let attaches = 0;
+      const box = await floor({
+        bundle: shimScript,
+        restartOf: first,
+        catalog: ENDS_WITH_FIELDD,
+        attach: true,
+        provider: {
+          attachAnswer: async () => {
+            attaches += 1;
+            sweep.reach();
+            await sweep.released;
+            return undefined;
+          },
+        },
+      });
+      let asked = 0;
+      box.daemon.onShutdownRequest(() => {
+        asked += 1;
+      });
+      const shell = await shellOf(box);
+      await sweep.asked;
+      expect(attaches).toBe(1);
+
+      // no record waits for the sweep now, so the census is settled; the run is not this boot's yet, so it names
+      // nothing — but the attach may land behind the stop's re-check, so it is a birth, and the stop refuses
+      expect(box.daemon.agents.plainStopCensus()).toEqual({ settled: true, runs: [], births: 1 });
+      expect((await censusOf(shell)).runs).toEqual([]);
+      const refused = await shell.callErr("system.shutdown", {
+        reason: "update",
+        agents: { runs: [] },
+      });
+      expect(refused.data).toMatchObject({
+        kind: "PRECONDITION_FAILED",
+        details: { live: [], births: 1 },
+      });
+      expect(asked).toBe(0);
+
+      // answered, the attach takes the run back on its pane: counted once, as a run of this boot, and its consent goes
+      sweep.release();
+      const named = await poll(
+        () => {
+          const now = box.daemon.agents.plainStopCensus();
+          return now.settled && now.births === 0 && now.runs.length === 1 ? now : undefined;
+        },
+        FLOOR_WAIT_MS,
+        "the swept run counted",
+      );
+      expect(named.runs).toEqual([
+        { runtimeRunId: kept.runId, terminalSessionId: kept.sessionId, agent: "Scripted" },
+      ]);
+      expect(rowOf(box, kept.runId)?.continuation?.reattached).toBe(true);
+      expect(attaches).toBe(1);
+      const stopped = await shell.call("system.shutdown", {
+        reason: "update",
+        agents: { runs: [kept.runId] },
+      });
+      expect(stopped).toMatchObject({ stopping: true });
+      await poll(() => (asked === 1 ? true : undefined), FLOOR_WAIT_MS, "the stop's owner asked");
+    },
+    FLOOR_BUDGET_MS,
+  );
+
+  it(
+    "while a stop holds the launches closed, a transient attach is not asked again: no run is taken back behind the stop, and the reopening lets the retry take it back",
+    async () => {
+      const first = await floor({ bundle: shimScript, catalog: ENDS_WITH_FIELDD });
+      const kept = await spawnRun(first);
+      await first.daemon.stop();
+      // the boot's own attach waits for the row, which closes the launches before its answer (transient) arms the
+      // retry: the order is the row's, not the host's
+      const boot = holdStep();
+      let attaches = 0;
+      const box = await floor({
+        bundle: shimScript,
+        restartOf: first,
+        catalog: ENDS_WITH_FIELDD,
+        attach: true,
+        provider: {
+          attachAnswer: async () => {
+            attaches += 1;
+            if (attaches > 1) return undefined;
+            boot.reach();
+            await boot.released;
+            return "retry";
+          },
+        },
+      });
+      await boot.asked;
+      box.daemon.agents.closeLaunchesForStop();
+      boot.release();
+      await heldPending(
+        box,
+        kept.runId,
+        "the run from the boot before held pending, its attach to be asked again",
+      );
+      // the stop that closed them counts nothing it ends and nothing being born, so it would go
+      expect(box.daemon.agents.plainStopCensus()).toEqual({ settled: true, runs: [], births: 0 });
+
+      // the retry is armed for a second after the hold (`ATTACH_RETRY_MS`), and three pass with the launches closed:
+      // it is never asked, so no run of this boot appears behind the stop
+      await quiet(3_000);
+      expect(attaches).toBe(1);
+      expect(rowOf(box, kept.runId)?.continuation?.reattached).not.toBe(true);
+      expect(box.daemon.agents.plainStopCensus()).toEqual({ settled: true, runs: [], births: 0 });
+
+      // reopened (a refused stop's way out), the retry is asked again and takes the run back on its own pane
+      box.daemon.agents.reopenLaunches();
+      await poll(
+        () => (rowOf(box, kept.runId)?.continuation?.reattached === true ? true : undefined),
+        FLOOR_WAIT_MS,
+        "the retry taking the run back once the launches reopened",
+      );
+      expect(attaches).toBe(2);
+      // a run of this boot now: the census names it, and nothing is in flight
+      expect(box.daemon.agents.plainStopCensus()).toMatchObject({
+        settled: true,
+        runs: [expect.objectContaining({ runtimeRunId: kept.runId })],
+        births: 0,
+      });
     },
     FLOOR_BUDGET_MS,
   );
