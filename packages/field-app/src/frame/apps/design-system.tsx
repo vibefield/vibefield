@@ -145,7 +145,12 @@ function fixtureAnswer(state: MadeAppsPreviewState): IndexAppsResult {
     case "populated":
       return {
         rows: [
-          fixtureApp(1, { title: "Release notes, 0.9", at: hoursAgo(2), project: 0, preview: true }),
+          fixtureApp(1, {
+            title: "Release notes, 0.9",
+            at: hoursAgo(2),
+            project: 0,
+            preview: true,
+          }),
           fixtureApp(2, { title: "Bundle size", at: hoursAgo(5), project: 0, preview: true }),
           fixtureApp(3, { title: "Palette study", at: hoursAgo(6), preview: true }),
           fixtureApp(4, {

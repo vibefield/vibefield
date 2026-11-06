@@ -219,7 +219,7 @@
   border-radius: 22.5%;
   background: var(--vf-fill);
   color: var(--vf-text-primary);
-  font: 650 26px/1 var(--vf-font-sans);
+  font: 650 26px / 1 var(--vf-font-sans);
   user-select: none;
 }
 

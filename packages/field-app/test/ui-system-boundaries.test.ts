@@ -810,7 +810,9 @@ describe("UI system ownership boundaries", () => {
     // …and its plate MOUNTED on the page, in the shelf's stage, not merely defined
     const page = source("design-system/sections/SurfacesSection.tsx");
     expect(page).toContain('from "../../frame/apps/design-system"');
-    expect(page).toMatch(/<div className="vf-ds-shelf-stage">\s*<MadeAppsPreview state=\{state\} \/>/u);
+    expect(page).toMatch(
+      /<div className="vf-ds-shelf-stage">\s*<MadeAppsPreview state=\{state\} \/>/u,
+    );
     expect(page).not.toMatch(/className="vf-apps/u);
     expect(page).not.toMatch(/<MadeApps\s/u);
   });

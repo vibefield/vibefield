@@ -104,8 +104,7 @@ const HOSTED = "https://claude.ai/public/artifacts/7d0c2f3a-1b4e-4f6a-9c8d-2e5b7
 const VIBE_FIELD = { key: "p1:k7m2q9x4c3v8b6n1z5r0t2w4y6a8", name: "vibe-field", ink: 412 };
 const PREVIEW_ID = "01JBD3ZJ4KX8Q9R2S6T7V0W1Y5";
 
-const hex64 = (seed: number): string =>
-  seed.toString(16).padStart(2, "0").repeat(32).slice(0, 64);
+const hex64 = (seed: number): string => seed.toString(16).padStart(2, "0").repeat(32).slice(0, 64);
 
 function app(seed: number, over: Partial<IndexApp> = {}): IndexApp {
   const device = over.device ?? STUDIO;
@@ -178,7 +177,11 @@ function project(summary: { key: string; name: string; ink: number }): ProjectSu
   };
 }
 
-function entry(seed: number, at: number, over: Partial<IndexArtifactEntry> = {}): IndexArtifactEntry {
+function entry(
+  seed: number,
+  at: number,
+  over: Partial<IndexArtifactEntry> = {},
+): IndexArtifactEntry {
   return {
     device: STUDIO,
     presentationId: hex64(seed),
@@ -230,7 +233,11 @@ function fakeClient(routes: Partial<Record<string, Route>> = {}) {
     return await route(params);
   });
   const subscribe = vi.fn(
-    async (method: string, params: Record<string, unknown>, onEvent: (payload: unknown) => void) => {
+    async (
+      method: string,
+      params: Record<string, unknown>,
+      onEvent: (payload: unknown) => void,
+    ) => {
       calls.push({ method, params });
       pings.push(onEvent);
       return { snapshot: null, unsubscribe: () => undefined };
@@ -288,8 +295,7 @@ const actIn = (scope: Element | undefined, label: string): HTMLElement | undefin
   [...(scope?.querySelectorAll<HTMLElement>("button, a") ?? [])].find(
     (element) => element.textContent?.trim() === label,
   );
-const notice = (): Element | undefined =>
-  container?.querySelector(".vf-apps-notice") ?? undefined;
+const notice = (): Element | undefined => container?.querySelector(".vf-apps-notice") ?? undefined;
 const dayHeadings = (): string[] =>
   [...(container?.querySelectorAll(".vf-apps-day > h3") ?? [])].map(
     (heading) => heading.textContent ?? "",
@@ -497,17 +503,18 @@ describe("a made tile's state (§8: serving green, failed red, the rest muted, e
   });
 
   it("says a desktop asleep, not answering, or on another build before anything of the app (DS-L8)", () => {
-    expect(
-      madeAppStateOf(release, { ...MINI_SOURCE, state: "asleep" }, undefined, "mini"),
-    ).toEqual({
-      tone: "muted",
-      word: "asleep",
-      opens: false,
-      why: { title: "mini is asleep", detail: "This app runs on mini. It opens when mini wakes." },
-    });
-    expect(
-      madeAppStateOf(release, { ...MINI_SOURCE, state: "stale" }, undefined, "mini"),
-    ).toEqual({
+    expect(madeAppStateOf(release, { ...MINI_SOURCE, state: "asleep" }, undefined, "mini")).toEqual(
+      {
+        tone: "muted",
+        word: "asleep",
+        opens: false,
+        why: {
+          title: "mini is asleep",
+          detail: "This app runs on mini. It opens when mini wakes.",
+        },
+      },
+    );
+    expect(madeAppStateOf(release, { ...MINI_SOURCE, state: "stale" }, undefined, "mini")).toEqual({
       tone: "muted",
       word: "not answering",
       opens: false,
@@ -640,15 +647,19 @@ describe("a made tile's state (§8: serving green, failed red, the rest muted, e
     });
   });
 
-  it("reads a refusal state only from UNAVAILABLE {service: \"apps\"} with a word this build knows", () => {
+  it('reads a refusal state only from UNAVAILABLE {service: "apps"} with a word this build knows', () => {
     expect(
       madeAppRefusalOf(rpcError("UNAVAILABLE", { service: "apps", state: "export-unbuilt" })),
     ).toBe("export-unbuilt");
     expect(
-      madeAppRefusalOf(rpcError("UNAVAILABLE", { service: "apps", state: "too-large", device: MINI })),
+      madeAppRefusalOf(
+        rpcError("UNAVAILABLE", { service: "apps", state: "too-large", device: MINI }),
+      ),
     ).toBe("too-large");
     expect(madeAppRefusalOf(rpcError("UNAVAILABLE", { service: "index", state: "x" }))).toBeNull();
-    expect(madeAppRefusalOf(rpcError("UNAVAILABLE", { service: "apps", state: "new-word" }))).toBeNull();
+    expect(
+      madeAppRefusalOf(rpcError("UNAVAILABLE", { service: "apps", state: "new-word" })),
+    ).toBeNull();
     expect(madeAppRefusalOf(rpcError("NOT_FOUND"))).toBeNull();
   });
 
@@ -893,7 +904,10 @@ describe("<MadeApps> — the group over its client", () => {
 
   it("opens a tile ONCE through artifact.open with reveal, never shell.openExternal, and wears green once it serves", async () => {
     const door = fakeClient({
-      "index.apps.list": () => ({ rows: [app(2, { title: "Release notes" })], sources: [STUDIO_SOURCE] }),
+      "index.apps.list": () => ({
+        rows: [app(2, { title: "Release notes" })],
+        sources: [STUDIO_SOURCE],
+      }),
     });
     await mount(door.client);
     expect(openOf("Release notes"), "the tile's face").toBeDefined();
@@ -912,9 +926,15 @@ describe("<MadeApps> — the group over its client", () => {
 
   it("asks a starting app again, still revealing, until it serves", async () => {
     vi.useFakeTimers();
-    const answers = [{ state: "starting" }, { state: "serving", url: "https://studio.tail1234.ts.net:13001/" }];
+    const answers = [
+      { state: "starting" },
+      { state: "serving", url: "https://studio.tail1234.ts.net:13001/" },
+    ];
     const door = fakeClient({
-      "index.apps.list": () => ({ rows: [app(2, { title: "Release notes" })], sources: [STUDIO_SOURCE] }),
+      "index.apps.list": () => ({
+        rows: [app(2, { title: "Release notes" })],
+        sources: [STUDIO_SOURCE],
+      }),
       "artifact.open": () => answers.shift(),
     });
     await mount(door.client);
@@ -1044,7 +1064,9 @@ describe("<MadeApps> — the group over its client", () => {
     const release = app(2, { title: "Release notes" });
     const door = fakeClient({
       "index.apps.list": () => ({
-        rows: hidden ? [app(3, { title: "Bundle size" })] : [release, app(3, { title: "Bundle size" })],
+        rows: hidden
+          ? [app(3, { title: "Bundle size" })]
+          : [release, app(3, { title: "Bundle size" })],
         sources: [STUDIO_SOURCE],
       }),
       "artifact.mark": () => {
@@ -1064,7 +1086,10 @@ describe("<MadeApps> — the group over its client", () => {
 
   it("says honestly that Keep and Hide wait, while the home has no intent to write (until 3h)", async () => {
     const door = fakeClient({
-      "index.apps.list": () => ({ rows: [app(2, { title: "Release notes" })], sources: [STUDIO_SOURCE] }),
+      "index.apps.list": () => ({
+        rows: [app(2, { title: "Release notes" })],
+        sources: [STUDIO_SOURCE],
+      }),
       "artifact.mark": () => {
         throw rpcError("UNAVAILABLE", { service: "apps", state: "intent-unbuilt" });
       },
@@ -1123,7 +1148,9 @@ describe("<MadeApps> — the group over its client", () => {
       tileOf("Release notes")?.querySelector<HTMLImageElement>(".vf-apps-well img") ?? null;
     const attempt = (): string | null => {
       const src = image()?.getAttribute("src");
-      return src === null || src === undefined ? null : new URL(src).searchParams.get("vf-preview-attempt");
+      return src === null || src === undefined
+        ? null
+        : new URL(src).searchParams.get("vf-preview-attempt");
     };
     expect(image()?.getAttribute("src")).toBe(address);
     expect(image()?.referrerPolicy).toBe("no-referrer");
@@ -1149,12 +1176,16 @@ describe("<MadeApps> — the group over its client", () => {
       }),
     });
     await mount(door.client);
-    const inked = tileOf("Release notes")?.querySelector<HTMLElement>(".vf-apps-well .vf-apps-icon");
+    const inked = tileOf("Release notes")?.querySelector<HTMLElement>(
+      ".vf-apps-well .vf-apps-icon",
+    );
     expect(inked?.textContent).toBe("R");
     expect(inked?.getAttribute("data-ink")).toBe("true");
     expect(inked?.style.getPropertyValue("--vf-apps-ink")).toBe(projectInk(VIBE_FIELD.ink));
     expect(inked?.getAttribute("aria-hidden")).toBe("true");
-    const plain = tileOf("Onboarding copy")?.querySelector<HTMLElement>(".vf-apps-well .vf-apps-icon");
+    const plain = tileOf("Onboarding copy")?.querySelector<HTMLElement>(
+      ".vf-apps-well .vf-apps-icon",
+    );
     expect(plain?.textContent).toBe("O");
     expect(plain?.hasAttribute("data-ink")).toBe(false);
   });
@@ -1414,9 +1445,7 @@ describe("<MadeApps> — the group over its client", () => {
   it("opens a kept older version even when the newest page was not kept, and says the one that wasn't", async () => {
     const door = fakeClient({
       "index.apps.list": () => ({
-        rows: [
-          app(2, { title: "Release notes", availability: "too_large", openable: false }),
-        ],
+        rows: [app(2, { title: "Release notes", availability: "too_large", openable: false })],
         sources: [STUDIO_SOURCE],
       }),
       "index.artifacts": () => ({
@@ -1591,7 +1620,9 @@ describe("the made tile's form (made-apps.css; tokens only)", () => {
   it("moves as the fields' tiles do — 1.03 under the pointer, 0.95 pressed, 200ms ease — and holds still under reduced motion (§7, M6)", () => {
     expect(rule(".vf-apps-tile")).toContain("transition: transform 200ms ease;");
     expect(rule(".vf-apps-tile:hover")).toContain("transform: scale(1.03);");
-    expect(CSS).toMatch(/\.vf-apps-tile:has\(> \.vf-apps-tile__open:not\(:disabled\):active\) \{\s*transform: scale\(0\.95\);/u);
+    expect(CSS).toMatch(
+      /\.vf-apps-tile:has\(> \.vf-apps-tile__open:not\(:disabled\):active\) \{\s*transform: scale\(0\.95\);/u,
+    );
     const reduced = CSS.slice(CSS.indexOf("@media (prefers-reduced-motion: reduce)"));
     expect(CSS).toContain("@media (prefers-reduced-motion: reduce)");
     expect(reduced).toMatch(/\.vf-apps-tile:hover,[^{]*\{\s*transform: none;/u);
@@ -1601,7 +1632,7 @@ describe("the made tile's form (made-apps.css; tokens only)", () => {
     const icon = rule(".vf-apps-icon");
     expect(icon).toContain("width: 60px;");
     expect(icon).toContain("height: 60px;");
-    expect(icon).toContain("font: 650 26px/1 var(--vf-font-sans);");
+    expect(icon).toContain("font: 650 26px / 1 var(--vf-font-sans);");
     expect(icon).toContain("background: var(--vf-fill);");
     expect(icon).toContain("color: var(--vf-text-primary);");
     const day = rule('.vf-apps-icon[data-ink="true"]');
@@ -1629,11 +1660,16 @@ describe("the made tile's form (made-apps.css; tokens only)", () => {
 
   it("names no colour and owns only its own selectors (.vf-apps-*, never the Hub's .vf-artifact-*)", () => {
     const offending = CSS.split("\n").filter(
-      (line) => !line.trimStart().startsWith("/*") && !line.trimStart().startsWith("*") && COLOUR_LITERAL.test(line),
+      (line) =>
+        !line.trimStart().startsWith("/*") &&
+        !line.trimStart().startsWith("*") &&
+        COLOUR_LITERAL.test(line),
     );
     expect(offending).toEqual([]);
     expect(CSS).not.toContain(".vf-artifact");
-    const selectors = [...CSS.matchAll(/^([^\s@/*}][^{]*)\{/gmu)].map((match) => match[1]?.trim() ?? "");
+    const selectors = [...CSS.matchAll(/^([^\s@/*}][^{]*)\{/gmu)].map(
+      (match) => match[1]?.trim() ?? "",
+    );
     expect(selectors.length, "the stylesheet has rules").toBeGreaterThan(0);
     for (const selector of selectors) expect(selector, selector).toMatch(/\.vf-apps/u);
   });
@@ -1655,7 +1691,13 @@ describe("the catalog's made-apps plate (docs/UI_SYSTEM.md: the shipping view on
   }
 
   it("PIN: offers the five states the plan names, on the plates' fixed clock (15:00 on the viewer's own)", () => {
-    expect(MADE_APPS_PREVIEW_STATES).toEqual(["populated", "fallback", "reading", "unbuilt", "empty"]);
+    expect(MADE_APPS_PREVIEW_STATES).toEqual([
+      "populated",
+      "fallback",
+      "reading",
+      "unbuilt",
+      "empty",
+    ]);
     expect(MADE_APPS_FIXTURE_NOW).toBe(new Date(2026, 10, 5, 15, 0).getTime());
   });
 
@@ -1678,7 +1720,10 @@ describe("the catalog's made-apps plate (docs/UI_SYSTEM.md: the shipping view on
     await plate("unbuilt");
     expect(statusOf("Release notes, 0.9")).toBe("studio · not written out yet");
     expect(statusOf("Bundle size")).toBe("studio · not written out yet");
-    expect(actIn(tileOf("Release notes, 0.9"), "Open in claude.ai"), "the menu's hosted link").toBeDefined();
+    expect(
+      actIn(tileOf("Release notes, 0.9"), "Open in claude.ai"),
+      "the menu's hosted link",
+    ).toBeDefined();
 
     await plate("empty");
     expect(container?.querySelector(".vf-apps-quiet strong")?.textContent).toBe(

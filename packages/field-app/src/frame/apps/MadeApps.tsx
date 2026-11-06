@@ -21,8 +21,8 @@ import {
   madeAppActBasis,
   madeAppAt,
   madeAppAway,
-  madeAppDayWords,
   madeAppDays,
+  madeAppDayWords,
   madeAppDesktop,
   madeAppErrorKind,
   madeAppErrorWords,
@@ -203,13 +203,7 @@ export function MadeApps({
       presentationId === undefined || read === null || read === "failed" || read === undefined
         ? undefined
         : read.entries.find((one) => one.presentationId === presentationId);
-    return madeAppStateOf(
-      app,
-      sourceOf(app),
-      actOf(app, presentationId),
-      desktopOf(app),
-      entry,
-    );
+    return madeAppStateOf(app, sourceOf(app), actOf(app, presentationId), desktopOf(app), entry);
   };
 
   const begin = (key: string): boolean => {
