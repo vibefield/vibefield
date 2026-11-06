@@ -38787,6 +38787,13 @@ new cell and field-native pids at 0, +5 and +30 s.
 **Owed.**
 - **`smoke:terminal-door` and `smoke:terminal-direct` at this tip** (the landing gates above), a9's on a mini.
   Their verdicts go in this entry when they land.
+  > *Answered 2026-11-06 (a9, the old mini, 17:49Z):* both GREEN at `0d1d66f05` (this tip's code under item 191's).
+  > `smoke:terminal-door` exit 0 in 13 s: the probe's ticket accepted in the document and worker contexts
+  > (ConnectionAccepted, refusal null), daemons `left: [], unreaped: []`. `smoke:terminal-direct` exit 0 in 14 s:
+  > presenting, input allowed, the typed shell's side effect seen, a cold open of 821.5 ms; that console has no
+  > WebGPU adapter, so the desk drew on canvas2d. Each row ran with the console unlocked and HID idle ≥ 600 s
+  > re-read before it. Logs: `smk-terminal-door-0d1d66f05/` (c4b67b4b) and `smk-terminal-direct-0d1d66f05/`
+  > (3ded8afe) under the old mini's `~/vf-lanes/verify/logs/`.
 - **Item 200** (filed by VF-PM 11:30Z): the cells' EPIPE panic on a stderr whose floor is gone. Its site is
   unproven: the crumb's location is inside std's `print_to`. tracing-subscriber 0.3.23 drops a failed write, and
   every `eprintln!` ghosttea 0.14.0 runs is on a session path. The first step is the crumb carrying a backtrace
