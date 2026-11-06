@@ -114,7 +114,7 @@ struct WayInScreenTests {
     }
   }
 
-  @Test("IOS-13a: the way in names the device as its platform does (Q1); the lock's words are L4's to bring")
+  @Test("IOS-13a: the way in names the device as its platform does (Q1), and the lock's words too (L4's word pass)")
   func deviceNamed() {
     var steps: [FieldHomeModel.WayInStep] = (0...3).map { .tour($0) }
     steps += [
@@ -124,6 +124,10 @@ struct WayInScreenTests {
       .page(.noDesktops(login: login)), .page(.joining(login: login, note: nil)), .page(.looking(login: login)),
       .page(.approval(machine: "iphone-17-pro", adminConsole: nil)), .found(name: "James", desktop: "studio"),
     ]
+    // L4's word pass: the lock's offer and its curtain take the word from DeviceWord, as every way-in word does
+    for method in [LockMethod.faceID, .touchID, .passcode] {
+      steps += [.lockOffer(method), .locked(method)]
+    }
     for device in [DeviceWord.iPad, .unknown] {
       for step in steps {
         let s = FieldHomeModel.wayInScreen(step, device: device)
@@ -133,6 +137,10 @@ struct WayInScreenTests {
         }
       }
     }
+    let offer = FieldHomeModel.wayInScreen(.lockOffer(.faceID), lock: .faceID, device: .iPad)
+    #expect(line(offer) == "This iPad can type into your agents’ terminals. Face ID keeps that to you.")
+    let curtain = FieldHomeModel.wayInScreen(.locked(.touchID), device: .iPad)
+    #expect(curtain.acts == [.primary("Unlock with Touch ID", .unlock), .note("Your iPad passcode works too.")])
     let iPad = line(FieldHomeModel.wayInScreen(.page(.signInAgain(note: nil)), device: .iPad))
     #expect(iPad == "This iPad can’t reach your desktops until you do. Nothing here is lost.")
     let device = line(FieldHomeModel.wayInScreen(.tour(2), device: .unknown))
@@ -190,7 +198,7 @@ struct WayInScreenTests {
     #expect(s.stepNames == ["Sign in", "Your computer", "Face ID"])
     #expect(s.picture == .mark)
     #expect(s.words.title == "Lock VibeField with Face ID.")
-    #expect(line(s) == "This phone can type into your agents’ terminals. Face ID keeps that to you.")
+    #expect(line(s) == "This iPhone can type into your agents’ terminals. Face ID keeps that to you.")
     #expect(s.words.note == nil)
     #expect(!s.words.hold)
     #expect(

@@ -250,14 +250,14 @@ struct FieldLockTests {
     let lock = make()
     await lock.phase(.active)?.value
     #expect(lock.isOn)
-    #expect(lock.switchFoot == "Face ID opens VibeField. When Face ID can’t, your iPhone passcode does.")
+    #expect(lock.switchFoot(device: "iPhone") == "Face ID opens VibeField. When Face ID can’t, your iPhone passcode does.")
     ask.method = .none
     await away(lock, for: .seconds(3600))
     #expect(lock.state == .open, "a lock that cannot ask must not hold the door")
     #expect(!lock.covers)
     #expect(!lock.isOn)
     #expect(!keeping.lockOn)
-    #expect(lock.switchFoot == "Set a passcode in iOS Settings to lock VibeField.")
+    #expect(lock.switchFoot(device: "iPhone") == "Set a passcode in iOS Settings to lock VibeField.")
     #expect(ask.asks == 1, "nothing was asked of a phone that cannot answer")
     #expect(await lock.setOn(true) == false, "and it cannot be turned on again until a passcode is set")
     #expect(!lock.isOn)
@@ -278,10 +278,10 @@ struct FieldLockTests {
   func switchFoot() async {
     let lock = make(on: false)
     #expect(
-      lock.switchFoot
-        == "VibeField opens without Face ID. Anyone holding this phone unlocked can open your agents’ terminals.")
+      lock.switchFoot(device: "iPad")
+        == "VibeField opens without Face ID. Anyone holding this iPad unlocked can open your agents’ terminals.")
     #expect(await lock.setOn(true))
-    #expect(lock.switchFoot == "Face ID opens VibeField. When Face ID can’t, your iPhone passcode does.")
+    #expect(lock.switchFoot(device: "iPhone") == "Face ID opens VibeField. When Face ID can’t, your iPhone passcode does.")
   }
 
   @Test("one ask at a time: a second tap while iOS's ask is up asks nothing, and the first's answer stands")
