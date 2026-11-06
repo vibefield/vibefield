@@ -701,6 +701,35 @@ describe("UI system ownership boundaries", () => {
     }
   });
 
+  it("stands the profiles column's plates on the shipping view and the controller's own reading — never its markup or CSS (UM-3)", () => {
+    // The catalog stands in for what the stage's controller keeps (what is open, pinned, pointed
+    // at) and mounts the shipping column view over the Agent Profiles fixtures, its circles read
+    // by the controller's own reading. Never a column class, never a column rule; every stage's
+    // column reads the profile tabs' door's usage from the same fixture's rows (R23b's count holds).
+    const preview = source("design-system/ProfilesColumnPreview.tsx");
+    expect(preview).toMatch(/<ProfilesColumnView\s/u);
+    expect(preview).toContain('from "../godview/profiles-column/ProfilesColumn"');
+    expect(preview).toContain("columnCircles(");
+    expect(preview).toContain("FIXTURE_PROFILES_CONTEXT");
+    expect(preview).not.toMatch(/vf-(?:profiles|bands)(?:\b|-)/u);
+    expect(source("godview/profiles-column/ProfilesColumn.tsx")).toMatch(
+      /useMemo<ColumnCircle\[\]>\(\s*\(\) => columnCircles\(/u,
+    );
+    expect(source("design-system/sections/GodviewSection.tsx")).toMatch(
+      /<ProfilesColumnPreview theme=\{theme\} \/>/u,
+    );
+    expect(source("design-system/godview-profiles-fixtures.ts")).toContain(
+      "FIXTURE_PROFILES_CONTEXT.usage",
+    );
+    const catalogCss = [
+      source("design-system/styles/catalog-shell.css"),
+      source("design-system/styles/foundations.css"),
+      source("design-system/styles/scenes.css"),
+      source("design-system/styles/tweaks.css"),
+    ].join("\n");
+    expect(catalogCss).not.toMatch(/^\.vf-(?:profiles|bands)(?:\b|-)/mu);
+  });
+
   it("keeps the package circle's fixture an ADAPTER — fixture titles in the head's own words, never the circle's markup (HN-8, PL-D2)", () => {
     // The catalog stands in for what a host supplies — the window's view, the deck's state and
     // the head's reading of the catalog (the titles whose source is unavailable) — and mounts the

@@ -12,6 +12,7 @@ import { FIXTURE_LIMIT_MOMENT } from "../limit-moment-fixtures";
 import { PaneFrameDeck, PaneFramePreview } from "../PaneFramePreview";
 import { PaneLauncherPreview } from "../PaneLauncherPreview";
 import { PeekPlate } from "../PeekPreview";
+import { ProfilesColumnPreview } from "../ProfilesColumnPreview";
 import { SpawnBloomPreview } from "../SpawnBloomPreview";
 import { SwarmBodiesPreview } from "../SwarmBodiesPreview";
 
@@ -77,6 +78,13 @@ export function GodviewSection({ dark = false }: { dark?: boolean } = {}): React
         <div data-godview-profiles-catalog="">
           <GodviewPreview door={profilesDoor} theme={theme} initialProfile="work" />
         </div>
+      </Specimen>
+      <Specimen
+        title="Profiles column — your meters at the stage's top left: one profile and three, each typical, near the limit and at its first read; a popover pinned; the add's card, and the limit moment in its place; usage unavailable; no profiles door; a first read held still (UM-3)"
+        source="godview/profiles-column/ProfilesColumnView.tsx"
+        bleed
+      >
+        <ProfilesColumnPreview theme={theme} />
       </Specimen>
       <Specimen
         title="The limit moment — once, beside the profiles column's add: a plan at 90% or more of a window while This Mac is the only profile (AO-6b, UM-D23)"

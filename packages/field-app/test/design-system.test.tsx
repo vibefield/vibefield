@@ -192,10 +192,83 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
     // MV-7: spend's specimen, on the shipping view through GodviewPreview and its fixture door
     expect(container?.textContent).toContain("Spend — where the money went");
     expect(container?.querySelector("[data-godview-spend-catalog] .vf-godview")).not.toBeNull();
-    // AO-6b, UM-D23 — the limit moment: the shipping card beside the shipping stage's
-    // profiles column's add, over the shipping rule's fixture
-    const limit = container?.querySelector(
-      "[data-godview-limit-catalog] .vf-godview .vf-profiles-add-item > .vf-profiles-moment > .vf-profiles-limit",
+    // UM-3 (DESIGN.md §8 "Godview's profiles column") — the column's plates: the shipping view on the
+    // Agent Profiles fixtures at their own clock, each state a Godview root of its own in the page's theme
+    const plates = [...(container?.querySelectorAll<HTMLElement>("[data-profiles-plate]") ?? [])];
+    expect(plates.map((plate) => plate.dataset.profilesPlate)).toEqual([
+      "one-typical",
+      "one-near",
+      "one-first",
+      "several-typical",
+      "several-near",
+      "several-first",
+      "popover",
+      "add",
+      "limit",
+      "unavailable",
+      "no-door",
+      "still",
+    ]);
+    for (const plate of plates) {
+      expect(plate.classList.contains("vf-godview")).toBe(true);
+      expect(plate.classList.contains("theme-light")).toBe(true);
+      expect(plate.querySelector(".vf-profiles-column")).not.toBeNull();
+    }
+    const columnPlate = (id: string): Element | null | undefined =>
+      container?.querySelector(`[data-profiles-plate="${id}"]`);
+    const circles = (id: string): Element[] => [
+      ...(columnPlate(id)?.querySelectorAll(".vf-profiles-circle") ?? []),
+    ];
+    const said = (id: string): (string | null)[] =>
+      circles(id).map((circle) => circle.getAttribute("aria-label"));
+    // one profile: This Mac, a plain button; its tightest plan ahead of pace, then its week at 92%
+    expect(said("one-typical")).toEqual(["This Mac, tightest 64%"]);
+    expect(circles("one-typical")[0]?.hasAttribute("aria-pressed")).toBe(false);
+    expect(said("one-near")).toEqual(["This Mac, tightest 92%"]);
+    expect(columnPlate("one-near")?.querySelector('[data-part="hot-dot"]')).not.toBeNull();
+    // a first read breathes, and says no tightest yet
+    expect(said("one-first")).toEqual(["This Mac"]);
+    expect(columnPlate("one-first")?.querySelector(".vf-bands-breath")).not.toBeNull();
+    // several profiles: each circle the lens, none chosen
+    expect(said("several-typical")).toEqual([
+      "This Mac, tightest 64%, click to show only its sessions",
+      "Work, tightest 91%, click to show only its sessions",
+      "Client demo, click to show only its sessions",
+    ]);
+    expect(circles("several-typical").map((c) => c.getAttribute("aria-pressed"))).toEqual([
+      "false",
+      "false",
+      "false",
+    ]);
+    expect(said("several-near")[0]).toBe("This Mac, tightest 92%, click to show only its sessions");
+    expect(
+      columnPlate("several-first")?.querySelectorAll(".vf-bands-breath").length,
+    ).toBeGreaterThan(0);
+    // the popover, pinned by a click on the lens: This Mac's sessions only, its plans in rows
+    const pinned = columnPlate("popover")?.querySelector('.vf-profiles-item[data-pinned=""]');
+    expect(pinned?.getAttribute("data-profile")).toBe("native");
+    expect(pinned?.querySelector(".vf-profiles-circle")?.getAttribute("aria-pressed")).toBe("true");
+    const pop = pinned?.querySelector('.vf-profiles-pop[role="dialog"]');
+    expect(pop?.getAttribute("aria-label")).toBe("This Mac");
+    expect(pop?.querySelector(".vf-profiles-pop-tag")?.textContent).toBe("default");
+    expect(pop?.querySelector(".vf-profiles-pop-age")?.textContent).toBe("Read 40 minutes ago");
+    expect(
+      [...(pop?.querySelectorAll<HTMLElement>(".vf-profiles-pop-row") ?? [])].map(
+        (row) => row.dataset.kind,
+      ),
+    ).toEqual(["reading", "reading", "needs-you"]);
+    expect(pop?.querySelector(".vf-profiles-pop-row-act")?.textContent).toBe("Sign in");
+    expect(pop?.querySelector(".vf-profiles-pop-none")?.textContent).toMatch(/ shows no meter$/u);
+    expect(pop?.querySelector(".vf-profiles-pop-lens")?.textContent).toBe(
+      "Showing only This Mac's sessions · click it again for all",
+    );
+    // the add's card, and the limit moment in the card's place (AO-6b, UM-D23): the shipping card
+    // over the shipping rule's fixture, beside the add
+    expect(
+      columnPlate("add")?.querySelector('.vf-profiles-addcard[role="tooltip"] b')?.textContent,
+    ).toBe("Add a profile…");
+    const limit = columnPlate("limit")?.querySelector(
+      ".vf-profiles-add-item > .vf-profiles-moment > .vf-profiles-limit",
     );
     expect(limit?.querySelector(".vf-profiles-limit-use")?.textContent).toBe("92% · 7 days");
     expect(limit?.querySelector(".vf-profiles-limit-title")?.textContent).toBe(
@@ -205,6 +278,22 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
       "Add a profile…",
       "Not now",
     ]);
+    // usage that cannot be read, and no profiles door: every circle dashed (ruling 10, §8 "Honest states")
+    expect(circles("unavailable")).toHaveLength(3);
+    for (const circle of [...circles("unavailable"), ...circles("no-door")]) {
+      expect(circle.querySelector('circle[data-part="empty"]')).not.toBeNull();
+    }
+    expect(said("no-door")).toEqual(["This Mac"]);
+    // the first read held still: Godview's animations off, as under Reduce Motion (M6)
+    expect(columnPlate("still")?.getAttribute("data-godview-animations")).toBe("off");
+    expect(columnPlate("still")?.querySelector(".vf-bands-breath")).not.toBeNull();
+    // every stage wears the column; the profile filter's is the lens on Work, reading the profile
+    // tabs' fixture door's usage
+    const lens = container?.querySelector("[data-godview-profiles-catalog] .vf-profiles-column");
+    expect(lens?.querySelectorAll(".vf-profiles-circle")).toHaveLength(4);
+    expect(
+      lens?.querySelector('.vf-profiles-circle[aria-pressed="true"]')?.getAttribute("aria-label"),
+    ).toBe("Work, tightest 91%, showing only its sessions");
     expect(container?.textContent).toContain("The interface, accounted for");
     // Round 3 (GV-D7, GV-D12): the Lip's specimen is the shipping stage — its groove
     // in its pill, its well — holding panes that wear the shipping frame.
@@ -783,6 +872,10 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
       expect(stage.closest(".dark")).toBe(document.documentElement);
       expect(stage.querySelectorAll(".vf-stories .vf-story").length).toBe(5);
     }
+    // UM-3: the profiles column's plates follow the page into Godview's dark, every one
+    const darkPlates = [...(container?.querySelectorAll("[data-profiles-plate]") ?? [])];
+    expect(darkPlates).toHaveLength(12);
+    for (const plate of darkPlates) expect(plate.classList.contains("theme-dark")).toBe(true);
     // System control is the palette's act in a development build of the product
     // (none in production, LP-6); the stage specimen stages the catalog's own
     // button for the shipping panel.
