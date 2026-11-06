@@ -31589,6 +31589,8 @@ design-kit, two in electron-shell, one each in field-app, DESIGN.md, DECISIONS, 
 - IOS-12b…f, per `lanes/ios12/IOS-12b-f-briefs.md`: 12b the tab and the list; 12c the thread, which waits on SP-7
   (NOT landed) and builds nothing of it; 12d needs you, which waits on 12a §D and 12c; 12e the star in Metal; 12f New
   spark on the phone.
+  > *Answered in part 2026-11-06:* the phone's transcript reader, SP-7a's M-b, landed (`432784612`, LANDED
+  > "SP-7a's M-b"). 12c still waits on M-a, the home's carry and the owner's routed serve, which mints next.
 - Item 169 (filed). cp3 §5's line at the draft queue, on VF-PM's word. The two-desktop run (James).
 
 ## SD-1 — the sound identity's law and its code: DESIGN.md §14 Sound, and `@vibefield/sound` beside contracts (2026-11-05; `8b22e7b01` → `1ebe7b461`, 3 commits on main `f599761bc`, lane `sd/1-sound-law` in `/Volumes/SamsungRed/lanes/sd1/vibe-field`, stacked as M126 `1ebe7b461`, run 126)
@@ -31922,6 +31924,8 @@ packet says so.
 - For James's eye: §9's away lines, Found 3 and Found 9.
 - Next for the IOS session: IOS-13a (Settings for App Review, the 0.9 launch; ruled 02:29Z).
 - On IOS-12: 12e and 12f. 12c waits on SP-7 (NOT landed), and 12d on 12c.
+  > *Answered in part 2026-11-06:* the phone's transcript reader, SP-7a's M-b, landed (`432784612`, LANDED
+  > "SP-7a's M-b"). 12c still waits on M-a, the home's carry and the owner's routed serve, which mints next.
 
 ## AR-7j — agents typed into a pane are managed in the packaged app: fieldd's own executable runs every launcher in one closed role (2026-11-05; `66037db65` → `45c3680a3`, 5 commits on main `dbb8c76ad`, lane `lp/ar7j` in `/Volumes/SamsungRed/lanes/lp-ar7j/vibe-field`, minted as M128 `45c3680a3`, run 128)
 
@@ -36933,3 +36937,112 @@ Owed "L4's word pass", each noted in its entry.
 - The pass on 11- and 13-inch iPads (Phase 3): this pass changes words, not layout.
 - **For James's eye** (draft words; not a hold): the lock's, Chat's, History's and the freeway's sentences on iPad,
   and the composed door's guard said without the device.
+
+## SP-7a's M-b — the phone reads a spark's transcript as the Mac does: the wire, a reader on the Mac's own rows, held to the real worker by W1 and to the contracts by 22 copies and six pins (track SP)
+
+(2026-11-06; `207f0d021` → `432784612`, 5 commits on main `b639fa044`, lane `sp7a-mb-r4` in
+`/Volumes/SamsungRed/lanes/pg9/vibe-field`, fd's (vibe-field-d7 since the 05:40Z switch); landed 2026-11-06T07:15:34Z
+by the fixer, a fast-forward of main `b639fa044` to `432784612` itself. Cut first on `85b65c52a` (r0–r3), then re-cut
+onto `b639fa044` at 06:37Z because L4's word pass moved `apps/ios` (the kit rule): range-diff 5 "=", the own range's
+patch-id `36a7251b2679a01338601d79ac06a9bd07773bf1` equal before and after, 0 markers, 0 conflicts.)
+SP-7 opened on James's word (VF-PM's relay, 04:46Z), and VF-PM picked road 7a first (04:56Z). The plan is
+`/Volumes/SamsungRed/lanes/sp7/SP-7a-plan.md`: M-a carries the phone's ask through its home to the owner's routed
+serve, M-b is the kit's reader, and M-b2 joins them. M-b answers in part IOS-12a's and IOS-12b's Owed ("12c waits on
+SP-7"), each noted in its entry.
+
+**What it rests on.**
+- TH-1's transcript worker and its ticket door, `compose.sparks.transcript.openTicket`. Its socket speaks `open
+  {ticket, runs}`, then `ready`, the lines, `caught-up`, the tail, or `refused`.
+- The Mac's reader, field-app's `readTranscript`, which the kit's reader ports row for row.
+- The contracts' wire (`spark-transcript.ts`) and `SPARK_TRANSCRIPT`'s limits (`registries.ts`).
+
+**What is real.**
+- **The wire,** `apps/ios/VibeFieldKit/Sources/FieldProduct/SparkTranscriptWire.swift` (+439):
+  - `SparkTranscriptLimits`: the ticket's 60 s, 256 runs, the 10 s open deadline, the 500 ms to 10 s backoff and line
+    format 1, as literals with their sources named.
+  - A line's head and body, every kind this build knows, and a kind it does not know kept as `unknown`.
+  - The four server frames, the `open` frame and the ticket. The ticket's endpoint must be a loopback socket.
+- **The reader,** `SparkTranscriptReader.swift` (+321), a `@MainActor @Observable` port of `readTranscript`:
+  - It asks the ticket through `SparkTranscriptDoor`, which `FieldProductClient` is.
+  - It opens the latest conversation (the runs from the last fresh start), and the whole one on `readWhole()`.
+  - It merges runs by time with an offset tiebreak. The open has a 10 s deadline. A dropped socket asks a fresh
+    ticket, after 500 ms doubling to 10 s, and a `ready` resets the backoff.
+  - It says fieldd's refusal in fieldd's words, `unreadable(reason, device)`. It logs under `chat.transcript`.
+  - **Two departures from the Mac's reader, named in its header:** it publishes per frame, and `unreadable` carries
+    the desktop it names.
+- **The copies and the pins,** `scripts/check-ios-fixtures.mjs`:
+  - The 22 transcript goldens are required in `Tests/FieldProductTests/Fixtures`, byte-equal to the contracts'.
+  - `SparkTranscriptLimits`' six literals are pinned to their origins: five read from `SPARK_TRANSCRIPT`'s block, the
+    format from `SPARK_TRANSCRIPT_FORMAT`. Pins: 86 → 92.
+- **W1, the real worker,** opt-in by `SP7A_W1_DIR`:
+  - fieldd's `test/sp7a-w1-harness.test.ts` starts the worker, writes a ticket every 15 s and a tail line every 1 s,
+    and stops at the kit's `kit-done`.
+  - The kit's `SparkTranscriptLiveTests` reads it over a socket with no Origin.
+
+**What is stubbed or left.**
+- The ticket's remote endpoint (`RemoteSparkTranscriptSocket`), `device` in the reader's ask, the copies of the two
+  goldens that come with it, and the 9426 pin are **M-b2's**, after M-a lands. Until then the reader reads a
+  loopback ticket and refuses any other, in fieldd's words.
+- The home's carry, the owner's routed serve and the phone's ticket rule are **M-a's**, which mints next.
+- Nothing draws the thread: that is IOS-12c, which stacks its fold on this (green `d14e46104`).
+
+**Validation.**
+- **r1 on vf-m1 (06:18–06:22Z), red twice:**
+  - The kit's compile: the @MainActor reader's `ticketParams(spark:)` was isolated, and the nonisolated wire suite
+    called it inside `#expect`. Now `public nonisolated static`, folded into every commit.
+  - Biome's format of the W1 harness: `it(title, fn, HOLD_MS + 120_000)` is no test-call hug. a9's patch (`9cd24a79…`)
+    is applied.
+- **r2 (06:43Z):** all four runs as briefed, and verify green at `0c538ee0e`.
+- **r4 at the re-cut, the land's evidence** (a9, vf-m1, Xcode 27.3 beta 27C5020n, the iPhone 17 simulator
+  `67E36A30-7FA2-4942-BD50-84786D2A57ED`; logs `lanes/ts6/logs/m1/sp7a-mb-r4/`, `slot.out` sha256
+  `f831df4cade0172266734fd9e7e94d4a314c965590fbc35449229f1394492f48`):
+  - **RED at `207f0d021`** (`red-test.log`, `534cb9766cbaaab27b6d38ea4909868f6981672cdcb8c6f7a4793dc30996c1e6`): "Test
+    run with 26 tests in 2 suites failed after 65.299 seconds with 57 issues", exit 65. 25 rows failed by assertion
+    or a recorded issue, and the one control passed (noOrigin). missing [] / extra [].
+  - **GREEN, the kit's full suite at `02712ec85`** (`green-test.log`,
+    `fc7c4982f4c7d68b100d4dd17524afc6d1619c327e1798d4b602e3ae7d275bfc`): 16 runs, 1,895 tests. That is r2's 1,890
+    plus main's 5, by syntax: L4 added six `@Test` rows and removed one.
+    - All 26 transcript rows pass, Wire 12 of 12 and Reader 14 of 14, read name by name. The live row is skipped.
+    - The test exited 65 (the slot says "GREEN NOT green: test exit 65"). Its one red is **item 167's row**,
+      `TerminalSurfaceKeyboardTests.scrollingKeepsTheKeyboardDownAndExplicitFocusStillWorks()` at
+      `TerminalSurfaceKeyboardTests.swift:31:27` ("UIApplication.shared.connectedScenes.first as? UIWindowScene").
+      It is main's own.
+    - **The control, at `b639fa044` on vf-m1** (FieldTerminal has moved since item 109's control at `f445b3b80`):
+      that suite alone on main's `apps/ios` (`a37bdbf5b33a`), test-without-building on L4's kept build,
+      `-only-testing:FieldTerminalTests/TerminalSurfaceKeyboardTests`. Exit 65 in 20 s, the same row at the same
+      `:31:27`, "Suite TerminalSurfaceKeyboardTests failed after 0.034 seconds with 1 issue" (a9, 06:58Z; vf-m1's
+      `~/vf-lanes/ios/tsk/logs/`). The kit counts green for the land on that control (VF-PM's rule of 11-05 23:58Z).
+  - **W1, at `02712ec85` on run 2's build:** 1 of 1. The kit row exited 0 ("passed after 0.635 seconds"), and the
+    simulator read the dir. The harness exited 0 ("Tests 1 passed (1)"; "SP7A_W1 tickets minted 1, tail lines 4").
+    - `kit-saw.json` (`66ea2705377b2e34a641657b3d2109662d5e56d0875be481070fc675a349c9e5`): seqs 1–7 in order, each
+      once, `caughtUp` 6 (a tail line after the catch-up), the kinds run, you and five replies, 1 ask, 0 dropped,
+      0 skipped.
+    - `w1-harness.log` `a1f6943af01354ee7a6eae51f53969a75d81420179d0938a0556bc4df8be43ed`, `w1-test.log`
+      `3a57aadbd6ada7f57382034d58e3933b84541c467c158c0864e932423ad9f252`.
+  - **`pnpm verify` at `432784612`:** exit 0, armed 06:52:12Z and done 06:57:21Z, the tree clean after
+    (`lanes/ts6/logs/m1/sp7a-mb-r4-v/`, `sp7a-mb-r4-v.out`
+    `216b2e10fa3311ae5f9d969a689dc977139a46d818da9516ac8e27b0236bf4ac`; `verify.log`
+    `a8d6e73c8abdf2035c8ca9bb0ff1d548bcfe1ca644d3cbeed1f61057730dc67c`).
+    - "ios fixtures: 275 copies identical"; "ios pins: 92 contract values identical".
+    - fieldd 3488 passed with one more skipped (the W1 harness's `describe.skipIf`). vitest 13,499 | 0 | 21: run
+      172's list plus that row.
+    - biome "Checked 3401 files", typecheck 29 projects, cargo 34 results with none failed; census "no drift" and
+      "census assert OK"; the bundle assert OK.
+  - The simulator was booted by the run and shut down at 06:51:58Z.
+- No Swift and no test ran on the MacBook (the pressure HOLD). Pin-class: none (Package.swift is unchanged; the copies
+  are under `Tests/`).
+
+**Found.**
+- The plan's "check:ios-fixtures gains the copies" was missed at r0: the copies were byte-checked, never required.
+  r1 added the `requiredMirrors` row (`02712ec85` at the land), and r3 the six pins (`432784612`).
+- A `static` on a `@MainActor` class is isolated, so a pure helper a nonisolated suite calls must say `nonisolated`.
+  Biome hugs `it(title, fn, N)` only for a numeric-literal N.
+- A brief that says "nothing here has compiled" owes a hand pass with biome's rules before it is frozen (VF-PM
+  06:45Z). M-b r1 and M-a's pre-light each paid a remote cycle for it.
+
+**Owed.**
+- M-a (minting on vf-m1 at `fcb93a0fa`), then M-b2: the remote endpoint, `device`, two copies and the 9426 pin.
+- IOS-12c, the thread, on this reader (the IOS session; its fold cuts on `d14e46104`).
+- The phone's transcript on a real device, after M-b2 (James's hand).
+
+Two inserts into older entries: IOS-12a's and IOS-12b's Owed.
