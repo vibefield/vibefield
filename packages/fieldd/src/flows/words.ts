@@ -42,6 +42,15 @@ export const noSuchRun = (run: string): string => `VibeField has no run ${run}.`
 /** The version asked for is not one fieldd keeps for the flow. */
 export const notAVersion = (flow: string): string => `That version isn't one of ${flow}'s.`;
 
+/** A spark's run, or one from its thread, whose asked Agent Profiles are none of that spark's now (the 1b review
+ * V5; PROPOSED in §9, ruled 2026-11-06). */
+export const noSparkProfiles = (spark: string): string =>
+  `None of the Agent Profiles it asked for is ${spark}'s now; nothing was started.`;
+
+/** Yours, whose asked Agent Profiles no longer exist (V5; PROPOSED in §9, the same). */
+export const noProfiles = (): string =>
+  "None of the Agent Profiles it asked for exists now; nothing was started.";
+
 /** RUNS_LIVE_MAX runs are live on this desktop (D3). */
 export const runsLive = (flow: string): string =>
   `VibeField is running ${FLOW_LIMITS.RUNS_LIVE_MAX} flows, as many as it runs at once. Stop one, or run ${flow} when one ends.`;

@@ -94,6 +94,12 @@ import * as words from "./words";
 // Built later in M-r2: ask() (slice 11; until then it is refused in fieldd's words), the park and its wakes and D2's
 // lookup (10a), the one answer writer (10b), the cap (12), Stop (13) and boot (14).
 
+/** A spark as a run's start reads it at its act (G2): its name, and its Agent Profiles now. */
+export interface FlowRunSpark {
+  readonly name: string;
+  readonly profiles: readonly string[];
+}
+
 /** fieldd's own interface to the runs (R32): what daemon.ts builds them from. Slice 7's part. */
 export interface FlowRunPorts {
   /** the person's library: a run's flow is read here against its approval */
@@ -126,9 +132,9 @@ export interface FlowRunPorts {
   defaultProfile: FlowStepPorts["defaultProfile"];
   /** the Agent Profiles that exist now, by id: a run's frozen scope narrows to them (D8) */
   profiles(): readonly string[];
-  /** G2 (CP-L4, TL-D5): a spark's Agent Profiles now, or none for a spark that is gone: a spark's kept start is
-   * narrowed again to them at its act, as an Allow is */
-  sparkScope(spark: string): readonly string[] | undefined;
+  /** G2 (CP-L4, TL-D5): a spark as it is now, or none for a spark that is gone: a spark's kept start is narrowed
+   * again to its Agent Profiles at its act, as an Allow is, and a start left with none is said in its name (V5) */
+  sparkOf(spark: string): FlowRunSpark | undefined;
   /** how a run's host is started */
   readonly host: Pick<FlowHostOptions, "launch" | "environment" | "timings" | "heapMb" | "rssMb">;
   readonly logger?: Logger | undefined;
@@ -392,8 +398,9 @@ export class FlowRuns {
       // G2 (CP-L4, TL-D5): a spark's start, its own or a Run in its thread (CP4-Q20 (a)), narrows again to the spark's
       // Agent Profiles now, as an Allow does; a spark that is gone starts nothing
       const spark = start.starter.spark;
-      const now = spark !== undefined ? this.ports.sparkScope(spark) : undefined;
-      if (spark !== undefined && now === undefined) throw refused("no-spark", words.noSpark());
+      const known = spark !== undefined ? this.ports.sparkOf(spark) : undefined;
+      if (spark !== undefined && known === undefined) throw refused("no-spark", words.noSpark());
+      const now = known?.profiles;
       const scope =
         now !== undefined ? start.scope.filter((profile) => now.includes(profile)) : start.scope;
       const params: FlowRunStartParams = {

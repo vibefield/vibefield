@@ -19,6 +19,7 @@ import type { FlowsHostLaunch } from "../src/flows/launch";
 import { FlowLibrary } from "../src/flows/library";
 import { FlowRecords, flowHashOf } from "../src/flows/records";
 import {
+  type FlowRunSpark,
   type FlowRunStarted,
   type FlowRunStartParams,
   FlowRuns,
@@ -137,8 +138,10 @@ async function harness(
   const library = new FlowLibrary({ dir: libraryDir, records });
   const raised: FlowChangedRaise[] = [];
   let profiles: readonly string[] = opts.profiles ?? ["work", "review"];
-  /** each spark's Agent Profiles now (CP-L4): a spark not here is gone */
-  const sparkScopes = new Map<string, readonly string[]>([[VELA, ["work", "review"]]]);
+  /** each spark by its name and its Agent Profiles now (CP-L4): a spark not here is gone */
+  const sparks = new Map<string, FlowRunSpark>([
+    [VELA, { name: "Vela", profiles: ["work", "review"] }],
+  ]);
   const spawned: Spawned[] = [];
   const enqueued: Enqueued[] = [];
   const hands: Handed[] = [];
@@ -189,7 +192,7 @@ async function harness(
       },
     },
     profiles: () => profiles,
-    sparkScope: (spark) => sparkScopes.get(spark),
+    sparkOf: (spark) => sparks.get(spark),
     agents: {
       spawn: async (launch, origin) => {
         spawned.push({ launch, origin, open: openOf(origin.run) });
@@ -237,8 +240,9 @@ async function harness(
   };
   /** a spark's Agent Profiles from now on, or (undefined) the spark gone */
   const setSparkScope = (spark: string, scope: readonly string[] | undefined) => {
-    if (scope === undefined) sparkScopes.delete(spark);
-    else sparkScopes.set(spark, scope);
+    const known = sparks.get(spark);
+    if (scope === undefined) sparks.delete(spark);
+    else sparks.set(spark, { name: known?.name ?? spark, profiles: scope });
   };
   /** the run's journal's lines' kinds, as the store reads it now */
   const kinds = (run: string): string[] => {
@@ -519,6 +523,8 @@ describe("CP-4a2b — a run starts from the bytes fieldd kept, or asks first; it
       words.noSuchInput("‹flow›", "‹name›"),
       words.runsLive("‹flow›"),
       words.runsPerSpark("‹spark›"),
+      words.noSparkProfiles("‹spark›"),
+      words.noProfiles(),
     ]) {
       expect(said).not.toBe("");
       expect(design, said).toContain(`"${said}"`);
@@ -1874,6 +1880,60 @@ describe("CP-4a2b — a changed flow's acts begin the asked-for run (§13a slice
     ).toEqual({ outcome: "failed", reason: words.noSpark() });
     expect(h.records.approval("hello")?.hash).toBe(approval.hash);
     expect(h.records.runRecords().map((record) => record.run)).toEqual([run]);
+  });
+
+  it("R4c (the 1b review V5): a start whose asked Agent Profiles, narrowed as it starts, leave none starts nothing, before any approval, in §9's words: a spark's in its own, yours that none exists", async () => {
+    const h = await harness();
+    const approval = h.approved("hello", HELLO);
+    const edited = h.write("hello", HELLO_EDITED);
+    const act = (id: string, n: number, from?: typeof VELA_FROM) =>
+      h.runs.acts.start({
+        id,
+        flow: "hello",
+        hash: flowHashOf(edited),
+        version: "this",
+        start: askedOf(h, n),
+        ...(from !== undefined ? { from } : {}),
+      });
+    // Vela's own, asked under work: Vela is under review alone since, so none it asked for is Vela's now
+    const own = waitsOf(
+      await h.start({ starter: { by: "spark", spark: VELA }, from: VELA_FROM, scope: ["work"] }),
+    );
+    h.setSparkScope(VELA, ["review"]);
+    expect(await act(own, 0, VELA_FROM)).toEqual({
+      outcome: "failed",
+      reason: words.noSparkProfiles("Vela"),
+    });
+    // a Run in Vela's thread, under review: Vela's, and review exists no more, so it is Vela's words again
+    const thread = waitsOf(
+      await h.start({ starter: { by: "you", spark: VELA }, scope: ["review"] }),
+    );
+    h.setProfiles(["work"]);
+    expect(await act(thread, 1)).toEqual({
+      outcome: "failed",
+      reason: words.noSparkProfiles("Vela"),
+    });
+    // yours, under review: none it asked for exists now
+    const yours = waitsOf(await h.start({ scope: ["review"] }));
+    expect(await act(yours, 2)).toEqual({ outcome: "failed", reason: words.noProfiles() });
+    expect(h.records.approval("hello")?.hash).toBe(approval.hash);
+    expect(h.records.runRecords()).toEqual([]);
+    // the door, on the approved version: the same two refusals, before any run's record
+    h.approved("hello", HELLO);
+    expect(await refusalOf(h.start({ scope: ["review"] }))).toEqual({
+      reason: "no-profiles",
+      message: words.noProfiles(),
+    });
+    expect(
+      await refusalOf(
+        h.start({ starter: { by: "spark", spark: VELA }, from: VELA_FROM, scope: ["review"] }),
+      ),
+    ).toEqual({ reason: "no-profiles", message: words.noSparkProfiles("Vela") });
+    expect(h.records.runRecords()).toEqual([]);
+    // a scope that keeps one it asked for starts, narrowed to it (D8)
+    const run = startedRun(await h.start({ scope: ["review", "work"] }));
+    expect(h.records.runRecord(run.run)?.scope).toEqual(["work"]);
+    await settled(h.runs, run.run, "done");
   });
 
   it("R6 (CP4-Q5 (a); R4–R6 review H5): an act that can't begin is failed in §9's start words, nothing approved and nothing begun: a version changed again since it asked, an input the version no longer takes, and a bound reached since", async () => {
