@@ -11,6 +11,9 @@
 // cjs) leaves a module reached only by `import()` unevaluated until it is
 // called. A role pays for builtins and its own bundle, and an agent typed in a
 // pane waits for nothing of the daemon's.
+//
+// The daemon is the executable started with NO argument; any other first
+// argument is a role or is refused in one line (roles.ts `roleOf`; item 203).
 import { spawn } from "node:child_process";
 import { createRequire } from "node:module";
 import { homedir } from "node:os";
@@ -23,6 +26,7 @@ import {
   FILES_HOST_BUNDLE,
   FLOWS_HOST_BUNDLE,
   roleOf,
+  strayArgumentLine,
   TRANSCRIPT_HOST_BUNDLE,
   unknownRoleLine,
 } from "./roles";
@@ -333,7 +337,17 @@ if (role === "files-host") {
   // terminal. This build's fieldd rewrites the launchers at its next start.
   process.stderr.write(`${unknownRoleLine(process.env["PUPPETEER_SHIM_NAME"])}\n`);
   process.exit(AGENT_SHIM_EXIT_UNAVAILABLE);
+} else if (role === "stray") {
+  // RV #1 (item 203) — an argument the executable does not take: the daemon
+  // takes none (roles.ts says who hands one, and why). One line and the kit's
+  // cannot-run status, never the daemon, whose boot in an agent's process tree
+  // would take the person's real root and could supersede the live fieldd. The
+  // argument is never read, so a script it names never runs; nothing of the
+  // daemon's loads, and the process takes no inspector guard: it leaves here.
+  process.stderr.write(`${strayArgumentLine()}\n`);
+  process.exit(AGENT_SHIM_EXIT_UNAVAILABLE);
 } else {
+  // the daemon, started with no argument at all (`roleOf`)
   refuseInspectorSignal();
   main().catch(async (e: unknown) => {
     process.stderr.write(`fieldd failed to start: ${await startFailure(e)}\n`);

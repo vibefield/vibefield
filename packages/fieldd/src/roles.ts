@@ -16,6 +16,15 @@
 // is refused in one line, never taken for the daemon: a launcher runs in a pane,
 // where the daemon would boot on the person's real root.
 //
+// The daemon takes NO argument (RV #1, item 203): every spawn of it hands it
+// none — the shell's `fielddArgs` is empty for the executable and the bundle's
+// path alone in development. So a first argument that is no role and asks for
+// none is `"stray"`, refused in one line too, never the daemon. It comes from a
+// program that took the executable for a Node and handed it a script, as
+// Claude Code's hook and status-line commands did while puppeteer named its own
+// `process.execPath` as their Node: from an agent's process tree, where the
+// daemon would boot on the person's real root and could supersede the live one.
+//
 // No imports: bin.ts dispatches on this before any module of the daemon's is
 // evaluated, so a role pays for builtins and its own bundle and nothing more.
 
@@ -48,10 +57,10 @@ export const AGENT_SHIM_ROLE_ARG = "--vibefield-role=agent-shim";
 export const AGENT_SHIM_BUNDLE = "agent-shim.cjs";
 
 /** How the agent-shim role leaves when the sealed shim cannot be loaded, and how
- * the executable leaves when asked for a role it does not have: the kit's own
- * status for a launcher that cannot run anything
- * (`SPAWN_THROUGH_EXIT_UNAVAILABLE`, the shell's "not found"), spelled here
- * because this file imports nothing; a row holds the two equal. */
+ * the executable leaves when asked for a role it does not have or handed an
+ * argument it does not take: the kit's own status for a launcher that cannot
+ * run anything (`SPAWN_THROUGH_EXIT_UNAVAILABLE`, the shell's "not found"),
+ * spelled here because this file imports nothing; a row holds the two equal. */
 export const AGENT_SHIM_EXIT_UNAVAILABLE = 127;
 
 /** A command name as the kit writes launchers for (its `COMMAND_NAME`). */
@@ -76,21 +85,33 @@ export function unknownRoleLine(name: string | undefined): string {
   return `VibeField: ${agent} was not started: it was set up by another version of VibeField. Open VibeField, then try again.`;
 }
 
+/** The one line a person reads when the executable is handed an argument it
+ * does not take — a script's path from a program that took it for a Node (the
+ * header says whose). Nothing was started, the daemon least of all. DESIGN.md
+ * §9's words ("When VibeField's own program starts nothing"; open until James
+ * rules rv-forwarder-role): no path, no argument and no agent's name, so nothing
+ * the program was handed is said back. */
+export function strayArgumentLine(): string {
+  return "VibeField: this program takes no arguments; nothing was started.";
+}
+
 export type FielddRole = "files-host" | "transcript-host" | "flows-host" | "agent-shim";
 
 /** The role the process's FIRST argument names; `"unknown"` when that argument
- * asks for a role (`ROLE_ARG_PREFIX`) this build does not have; none otherwise
- * (the daemon). Positional, so an argument further along — an agent's own,
- * typed by a person — is never read. `argv` is `process.argv`: the runtime, the
- * script (a SEA repeats the executable there), then the user's arguments. */
-export function roleOf(argv: readonly string[]): FielddRole | "unknown" | undefined {
+ * asks for a role (`ROLE_ARG_PREFIX`) this build does not have; `"stray"` when
+ * it is any other argument; none (the daemon) only when there is no argument at
+ * all. Positional, so an argument further along — an agent's own, typed by a
+ * person — is never read. `argv` is `process.argv`: the runtime, the script (a
+ * SEA repeats the executable there), then the user's arguments. */
+export function roleOf(argv: readonly string[]): FielddRole | "unknown" | "stray" | undefined {
+  if (argv.length <= 2) return undefined;
   const first = argv[2];
   if (first === FILES_HOST_ROLE_ARG) return "files-host";
   if (first === TRANSCRIPT_HOST_ROLE_ARG) return "transcript-host";
   if (first === FLOWS_HOST_ROLE_ARG) return "flows-host";
   if (first === AGENT_SHIM_ROLE_ARG) return "agent-shim";
   if (first?.startsWith(ROLE_ARG_PREFIX) === true) return "unknown";
-  return undefined;
+  return "stray";
 }
 
 /** The argv the sealed shim runs with: as if `node <sealed> <the agent's
