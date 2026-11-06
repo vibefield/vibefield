@@ -1171,7 +1171,8 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "flow-journal-head": FlowJournalHead,
   "flow-journal-line": FlowJournalKnownLine,
   // CP-4a2b — a run's record (13a's §13a.0b): the valid one, and one whose tail a same-uid agent forged (a shape still;
-  // the store finds the forgery by the journal's MACs)
+  // the store finds the forgery by the journal's MACs); and one that counts its steps' agents (the slices 7–9 review's
+  // F4), the valid one being a record kept before that count
   "flow-run-record": FlowRunRecord,
   // CP-4a2b (13b.3's C8; Q-B6 (a): the verbs' shapes, unserved until CP-4b) — flow_run, flow_read and flow_propose;
   // flow_stop is the window's own pair ("flows-stop")

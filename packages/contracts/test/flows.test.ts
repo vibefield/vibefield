@@ -589,6 +589,17 @@ describe("CP-4a2b — a run's record, its states and its bounds (13b.3's C6, C9,
     expect(cutAs("yes")).toBe(false);
   });
 
+  it("C6c (the slices 7–9 review's F4): a record counts the agents its steps started, a whole number from 0 to RUN_AGENTS_MAX; one kept before it parses, as none", () => {
+    expect(FlowRunRecord.parse(fixture("flow-run-record.agents")).agents).toBe(9);
+    expect(FlowRunRecord.parse(fixture("flow-run-record.valid")).agents).toBeUndefined();
+    const counts = (agents: unknown) => FlowRunRecord.safeParse({ ...record(), agents }).success;
+    expect(counts(0)).toBe(true);
+    expect(counts(FLOW_LIMITS.RUN_AGENTS_MAX)).toBe(true);
+    expect(counts(FLOW_LIMITS.RUN_AGENTS_MAX + 1)).toBe(false);
+    expect(counts(-1)).toBe(false);
+    expect(counts(1.5)).toBe(false);
+  });
+
   it("C9: the six bounds the runs add are positive whole numbers", () => {
     const limits = FLOW_LIMITS as Record<string, unknown>;
     for (const name of [
