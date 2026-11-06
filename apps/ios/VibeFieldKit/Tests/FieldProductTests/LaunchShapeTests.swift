@@ -75,6 +75,63 @@ import Testing
     #expect(answer.droppedRows.isEmpty)
   }
 
+  // UM-4 (UM-D8 A) — the meters read each profile's sign-ins and the plans they run on: whose reading a plan's is
+  // (`namedBy`), the sign-ins on it, the other profiles with the same account, and a draft no agent signed in to.
+  @Test func theProfileSetsCarryTheirSignInsAndPlansForTheMeters() throws {
+    let answer = try AgentProfileSetsResult(json: try Fixture.json("agents-profile-sets.meters"))
+    let ids = answer.sets.map(\.id)
+    #expect(ids == ["native", "work", "side", "new-profile"])
+    let drafts = answer.sets.map(\.draft)
+    #expect(drafts == [false, false, false, true])
+    let native = try #require(answer.sets.first)
+    let nativeKinds = native.personas.map(\.kind)
+    #expect(nativeKinds == ["native-default", "native-default", "native-default"])
+    let nativeIds = native.personas.map(\.profileId)
+    #expect(nativeIds == ["claude:native-default", "codex:native-default", "grok:native-default"])
+    let first = try #require(native.personas.first)
+    #expect(first.provider == "claude")
+    #expect(first.identity?.loggedIn == true)
+    #expect(first.identity?.email == "kim@example.com")
+    let plans = try #require(native.plans)
+    let planIds = plans.map(\.id)
+    #expect(planIds == ["anthropic", "openai", "xai"])
+    let anthropic = try #require(plans.first)
+    #expect(anthropic.service == AgentSignInService(id: "anthropic", label: "Anthropic"))
+    #expect(anthropic.account?.email == "kim@example.com")
+    #expect(anthropic.account?.plan == "max")
+    #expect(anthropic.namedBy == "claude:native-default")
+    #expect(anthropic.holders == ["claude:native-default"])
+    #expect(anthropic.alsoIn == ["work"])
+    let kimi = try #require(answer.sets.dropFirst().first?.personas.last)
+    #expect(kimi.kind == "managed")
+    #expect(kimi.identity?.loggedIn == false)
+    let side = answer.sets[2]
+    let signingIn = side.personas.map(\.signingIn)
+    #expect(signingIn == [false, true])
+    #expect(side.personas.last?.identity == nil)
+    #expect(answer.droppedRows.isEmpty)
+  }
+
+  @Test func aProfileFromAnOlderFielddNamesNoPlansAndItsSignInsStillRead() throws {
+    let older = JSONValue.object([
+      "id": .string("work"), "kind": .string("managed"), "label": .string("Work"), "default": .bool(true),
+      "createdAt": .string("2026-09-01T00:00:00.000Z"),
+      "personas": .array([
+        .object([
+          "profileId": .string("0b7e2c4d-9a1f-4e58-8c1d-3f2a6b9e7d10"), "provider": .string("codex"),
+          "label": .string("Work"), "kind": .string("managed"), "createdAt": .string("2026-09-01T00:00:00.000Z"),
+        ])
+      ]),
+    ])
+    let set = try AgentProfileSet(json: older)
+    #expect(set.plans == nil)
+    #expect(!set.draft)
+    let ids = set.personas.map(\.profileId)
+    #expect(ids == ["0b7e2c4d-9a1f-4e58-8c1d-3f2a6b9e7d10"])
+    #expect(set.personas.first?.identity == nil)
+    #expect(set.personas.first?.signingIn == false)
+  }
+
   @Test func aSpawnCarriesTheProfileAndTheSelectionOpaqueAndRoundTrips() throws {
     let golden = try Fixture.json("agent-spawn-params.model-selection")
     let selection = try AgentModelSelection(json: try #require(golden["modelSelection"]))

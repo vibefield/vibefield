@@ -308,6 +308,15 @@ const sayFixtures = [
   "compose-sparks-say.waking.json",
   "compose-sparks-say.delivered.json",
 ];
+// UM-4 (UM-D8 A) — the phone's meters: the home's usage batch (one with readings, needs and a model's week; the empty
+// one before the first refresh; one with a budget, a kept reading and a shared plan) and its profile sets with
+// personas and plans, which the kit's `AgentAccountUsageBatch` / `AgentProfileSet` readers (FieldProductTests) parse.
+const usageFixtures = [
+  "agent-usage.valid.json",
+  "agent-usage.empty.json",
+  "agent-usage.budget.json",
+  "agents-profile-sets.meters.json",
+];
 const requiredMirrors = [
   ["freeway", freewayFixtures, ["Tests/FieldFreewayTests"]],
   ["tp", tpFixtures, ["Tests/FieldRoutedTerminalTests"]],
@@ -355,6 +364,15 @@ const requiredMirrors = [
   ],
   // SP-7a — the spark's transcript, read on the phone as the Mac reads it
   ["spark-transcript", transcriptFixtures, ["Tests/FieldProductTests"]],
+  // UM-4 — the home's usage batch and its profile sets, read by the kit's readers
+  ["usage", usageFixtures, ["Tests/FieldProductTests"]],
+  // and what the meters' demo door answers under `-vf-mock` (MetersFixtureDoor, DEBUG): the batch with a budget, the
+  // empty one (a first read), and the profile sets with plans
+  [
+    "usage",
+    ["agent-usage.budget.json", "agent-usage.empty.json", "agents-profile-sets.meters.json"],
+    ["Sources/FieldHome"],
+  ],
   // the fold's parity golden and its inputs; the field cut's project-key collapse beside the remote cut's;
   // PG-3e — the body golden, which the drawn rows' bubbles are held to (PhoneBodyParityTests)
   [

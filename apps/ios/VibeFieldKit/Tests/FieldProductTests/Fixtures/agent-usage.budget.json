@@ -1,0 +1,151 @@
+{
+  "entries": [
+    {
+      "provider": "claude",
+      "label": "Claude",
+      "profileId": "claude:native-default",
+      "profileLabel": "Default",
+      "state": "available",
+      "metrics": [
+        {
+          "id": "five-hour",
+          "label": "5H",
+          "kind": "window",
+          "usedPercent": 64,
+          "durationMinutes": 300,
+          "startsAt": "2026-09-16T09:30:00.000Z",
+          "resetsAt": "2026-09-16T14:30:00.000Z"
+        },
+        {
+          "id": "seven-day",
+          "label": "7D",
+          "kind": "window",
+          "usedPercent": 47,
+          "durationMinutes": 10080,
+          "resetsAt": "2026-09-17T00:00:00.000Z"
+        },
+        {
+          "id": "fable",
+          "label": "FABLE",
+          "description": "Current week (Fable) usage",
+          "kind": "window",
+          "usedPercent": 12,
+          "durationMinutes": 10080,
+          "resetsAt": "2026-09-17T00:00:00.000Z",
+          "group": {
+            "id": "scope:fable",
+            "label": "Fable only"
+          }
+        }
+      ],
+      "fetchedAt": "2026-09-16T11:59:00.000Z",
+      "scope": "subscription",
+      "source": {
+        "kind": "native-protocol",
+        "stability": "experimental"
+      }
+    },
+    {
+      "provider": "claude",
+      "label": "Claude",
+      "profileId": "7c2e9a41-3b5d-4f08-9e6a-1d4c8b2f5a73",
+      "profileLabel": "Work",
+      "state": "available",
+      "metrics": [
+        {
+          "id": "five-hour",
+          "label": "5H",
+          "kind": "window",
+          "usedPercent": 64,
+          "durationMinutes": 300,
+          "startsAt": "2026-09-16T09:30:00.000Z",
+          "resetsAt": "2026-09-16T14:30:00.000Z"
+        },
+        {
+          "id": "seven-day",
+          "label": "7D",
+          "kind": "window",
+          "usedPercent": 47,
+          "durationMinutes": 10080,
+          "resetsAt": "2026-09-17T00:00:00.000Z"
+        }
+      ],
+      "fetchedAt": "2026-09-16T11:58:30.000Z",
+      "scope": "subscription",
+      "source": {
+        "kind": "native-protocol",
+        "stability": "experimental"
+      }
+    },
+    {
+      "provider": "codex",
+      "label": "Codex",
+      "profileId": "codex:native-default",
+      "profileLabel": "Default",
+      "state": "unavailable",
+      "metrics": [
+        {
+          "id": "primary",
+          "label": "5H",
+          "kind": "window",
+          "usedPercent": 30,
+          "durationMinutes": 300,
+          "resetsAt": "2026-09-16T13:30:00.000Z"
+        },
+        {
+          "id": "secondary",
+          "label": "7D",
+          "kind": "window",
+          "usedPercent": 22,
+          "durationMinutes": 10080,
+          "resetsAt": "2026-09-16T20:00:00.000Z"
+        }
+      ],
+      "message": "Codex usage could not be read: the request timed out",
+      "retryable": true,
+      "stale": true,
+      "fetchedAt": "2026-09-16T11:28:00.000Z",
+      "scope": "subscription"
+    },
+    {
+      "provider": "grok",
+      "label": "Grok",
+      "profileId": "grok:native-default",
+      "profileLabel": "Default",
+      "state": "available",
+      "metrics": [
+        {
+          "id": "credits",
+          "label": "Credits",
+          "description": "Monthly credit budget",
+          "kind": "budget",
+          "usedPercent": 46
+        }
+      ],
+      "credits": {
+        "balance": "$27.00",
+        "hasCredits": true,
+        "unlimited": false
+      },
+      "fetchedAt": "2026-09-16T11:59:10.000Z",
+      "scope": "subscription",
+      "source": {
+        "kind": "native-protocol",
+        "stability": "experimental"
+      }
+    },
+    {
+      "provider": "codex",
+      "label": "Codex",
+      "profileId": "a4f1d6e2-8c3b-4a97-b5e0-6f2d9c1e8b04",
+      "profileLabel": "Work",
+      "state": "rate-limited",
+      "metrics": [],
+      "message": "Codex account usage is rate limited; retry after the window resets",
+      "retryable": true,
+      "retryAt": "2026-09-16T12:20:00.000Z",
+      "fetchedAt": "2026-09-16T11:59:30.000Z"
+    }
+  ],
+  "generatedAt": "2026-09-16T11:59:30.000Z"
+}

@@ -187,10 +187,13 @@ public struct AgentModelsParams: Sendable, Equatable {
   }
 }
 
-/// One Agent Profile (`AgentProfileSet`), narrowed to what a launch reads: its
-/// id, kind (`native` is the agents' own folders), label, glyph, whether it is
-/// the default, and which agents it holds a sign-in for. The personas' folders,
-/// emails and plans are a Settings page's, not the sheet's.
+/// One Agent Profile (`AgentProfileSet`), narrowed to what a launch and the
+/// meters read: its id, kind (`native` is the agents' own folders), label,
+/// glyph, whether it is the default, and which agents it holds a sign-in for;
+/// and, for the meters (UM-4, UM-D8 A), its sign-ins (`personas`), the plans
+/// they run on (`plans`, absent from an older fieldd) and whether it is a draft
+/// no agent has signed in to yet (AO-D14). The personas' folders and holdings
+/// are a Settings page's, not the phone's.
 public struct AgentProfileSet: Sendable, Equatable, Identifiable {
   public let id: String
   public let kind: String
@@ -199,6 +202,12 @@ public struct AgentProfileSet: Sendable, Equatable, Identifiable {
   public let isDefault: Bool
   /// the agents (catalog ids) this profile holds a persona for, in its order
   public let providers: [String]
+  /// its sign-ins, each as the meters read it
+  public let personas: [AgentPersona]
+  /// the plans it runs on, in the order its agents first hold them; nil from a fieldd that names none
+  public let plans: [AgentPlan]?
+  /// AO-D14 — made by Add a profile… and not kept yet
+  public let draft: Bool
 
   public init(json: JSONValue) throws {
     var object = try WireObject(shape: "AgentProfileSet", value: json)
@@ -212,6 +221,77 @@ public struct AgentProfileSet: Sendable, Equatable, Identifiable {
       if let provider = persona["provider"]?.stringValue, !providers.contains(provider) { providers.append(provider) }
     }
     self.providers = providers
+    personas = []
+    plans = nil
+    draft = false
+  }
+}
+
+/// One sign-in of an Agent Profile (`AgentPersona`), as the meters read it: whose reading is its, and whether it is
+/// signed in or signing in.
+public struct AgentPersona: Sendable, Equatable {
+  public let profileId: String
+  public let provider: String
+  public let label: String
+  /// `native-default` (an agent's own folder) or `managed`
+  public let kind: String
+  /// what the agent's own status said at the last verify; nil before it was read
+  public let identity: AgentPersonaIdentity?
+  /// its login pane is open
+  public let signingIn: Bool
+
+  public init(json: JSONValue) throws {
+    profileId = ""
+    provider = ""
+    label = ""
+    kind = ""
+    identity = nil
+    signingIn = false
+  }
+}
+
+/// Who signed in to a persona, as its agent said it.
+public struct AgentPersonaIdentity: Sendable, Equatable {
+  public let loggedIn: Bool
+  public let email: String?
+  public let account: String?
+  public let organization: String?
+  public let plan: String?
+}
+
+/// The company a sign-in is billed through (`AgentSignInService`).
+public struct AgentSignInService: Sendable, Equatable {
+  public let id: String
+  public let label: String
+}
+
+/// Whose a plan is, when an agent in the profile named it.
+public struct AgentPlanAccount: Sendable, Equatable {
+  public let email: String?
+  public let account: String?
+  public let organization: String?
+  public let plan: String?
+}
+
+/// One plan an Agent Profile runs on (`AgentPlan`): its company, whose it is, the sign-in that named it (whose reading
+/// is the plan's), the sign-ins on it, and the other profiles with the same account.
+public struct AgentPlan: Sendable, Equatable {
+  public let id: String
+  public let service: AgentSignInService
+  public let account: AgentPlanAccount?
+  public let namedBy: String?
+  public let borrowedFrom: String?
+  public let holders: [String]
+  public let alsoIn: [String]
+
+  public init(json: JSONValue) throws {
+    id = ""
+    service = AgentSignInService(id: "", label: "")
+    account = nil
+    namedBy = nil
+    borrowedFrom = nil
+    holders = []
+    alsoIn = []
   }
 }
 
