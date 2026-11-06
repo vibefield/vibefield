@@ -85,9 +85,14 @@ const asides = (dir: string): string[] =>
 /** Contracts' fixtures as one run's journal, head, call and `answer`, beside its signed record, read back under the
  * fixture key they were MAC'd with (J1b, J1c). */
 function readFixtureChain(answer: string) {
+  return readFixtureLines(["flow-journal-head.valid", "flow-journal-line.call", answer]);
+}
+
+/** Contracts' fixtures `names`, in order, as one run's journal beside its signed record, read back under the fixture
+ * key they were MAC'd with: a head alone is a run just begun (J1d). */
+function readFixtureLines(names: readonly string[]) {
   const s = store({ key: FIXTURE_KEY });
   mkdirSync(join(s.dir, RUNS_DIR), { recursive: true, mode: 0o700 });
-  const names = ["flow-journal-head.valid", "flow-journal-line.call", answer];
   const lines = names.map((name) => JSON.parse(fixtureText(name)) as Record<string, unknown>);
   const text = lines.map((line) => JSON.stringify(line)).join("\n");
   writeFileSync(s.file, `${text}\n`, { mode: 0o600 });
@@ -104,7 +109,7 @@ function readFixtureChain(answer: string) {
     hash: head["hash"],
     starter: head["starter"],
     head: head["mac"],
-    tail: { seq: 3, mac: lines[2]?.["mac"] },
+    tail: { seq: lines.length, mac: lines.at(-1)?.["mac"] },
     startedAt: head["at"],
   };
   mkdirSync(join(s.dir, RUN_RECORDS_DIR), { recursive: true, mode: 0o700 });
@@ -152,6 +157,17 @@ describe("CP-4a2a — a run's journal, kept by the flows store (CP4-S15)", () =>
       "call",
       "answer",
     ]);
+  });
+
+  it("J1d (slices 7–9 review F6): contracts' head that holds its run's folder reads back under the fixture key with it; the valid head, from before it, reads with none", () => {
+    for (const [name, folder] of [
+      ["flow-journal-head.folder", "/Users/someone/work/release"],
+      ["flow-journal-head.valid", undefined],
+    ] as const) {
+      const read = readFixtureLines([name]);
+      expect(read.kind, name).toBe("kept");
+      expect(read.kind === "kept" ? read.head.folder : read.kind, name).toBe(folder);
+    }
   });
 
   it("J1c (13a's D11): a step's answer cut short, journaled with `cut`, reads back as its answer, never passed over", () => {

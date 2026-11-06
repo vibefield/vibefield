@@ -1768,6 +1768,48 @@ describe("CP-4a2b — a run's folder, held at its start (slice 7's R8b)", () => 
       "",
     ].join("\n");
 
+  it("R8c (slices 7–9 review F6): a run's folder is held at its start, on its journal's head: a step after its input's folder moved runs in the begin's; a head that holds one is read at the wake, and one from before it falls back to the input", async () => {
+    const folders: Record<string, string> = { "session:run-yours": "/work/yours" };
+    const h = await harness({ folders });
+    h.approved(
+      "held",
+      [
+        'export const meta = { name: "Held", input: { target: "session" } };',
+        "export default async function () {",
+        "  const none = {};",
+        '  await agent("go", { agent: "claude", profile: "work", label: "Here", cwd: none.cwd });',
+        "}",
+        "",
+      ].join("\n"),
+    );
+    const cwdOf = (run: string) => h.spawned.find((spawn) => spawn.origin.run === run)?.launch.cwd;
+    const folderOf = (run: string) => {
+      const read = h.records.readRun(run);
+      return read.kind === "kept" ? read.head.folder : read.kind;
+    };
+    const start = async () =>
+      startedRun(await h.start({ flow: "held", input: { target: "run-yours" } })).run;
+    // the input's folder moves after the begin: the step runs in the begin's, as the head keeps it
+    const moved = await start();
+    folders["session:run-yours"] = "/work/moved";
+    await waitFor(() => expect(cwdOf(moved)).toBeDefined());
+    expect(cwdOf(moved)).toBe("/work/yours");
+    expect(folderOf(moved)).toBe("/work/yours");
+    // a head that holds a folder is read at the wake, whatever its input names now
+    const begin = h.records.beginRun.bind(h.records);
+    const beginning = vi.spyOn(h.records, "beginRun");
+    beginning.mockImplementationOnce((entry, at) => begin({ ...entry, folder: "/work/held" }, at));
+    const held = await start();
+    await waitFor(() => expect(cwdOf(held)).toBeDefined());
+    expect(cwdOf(held)).toBe("/work/held");
+    // a head from before F6 holds none: its wake falls back to the folder its input names then
+    beginning.mockImplementationOnce(({ folder: _folder, ...entry }, at) => begin(entry, at));
+    const old = await start();
+    expect(folderOf(old)).toBeUndefined();
+    await waitFor(() => expect(cwdOf(old)).toBeDefined());
+    expect(cwdOf(old)).toBe("/work/moved");
+  });
+
   it("R8b: a step that names no folder, in a run whose input names none, is refused at the start in §9's words, nothing journaled; a session or project its input names that VibeField can't find is refused too", async () => {
     const h = await harness({
       folders: { "session:run-yours": "/work/yours", "project:pj-1": "/work/pj1" },

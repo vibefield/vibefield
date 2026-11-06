@@ -64,10 +64,11 @@ export type FlowJournalEntry =
       readonly ended?: number;
     };
 
-/** The head as a run begins it: what contracts' FlowJournalHead names, without what fieldd adds. */
+/** The head as a run begins it: what contracts' FlowJournalHead names, without what fieldd adds. `folder` (F6) is the
+ * folder its input named at its begin. */
 export type FlowJournalHeadEntry = Pick<
   FlowJournalHead,
-  "run" | "flow" | "name" | "n" | "hash" | "starter" | "input"
+  "run" | "flow" | "name" | "n" | "hash" | "starter" | "input" | "folder"
 >;
 
 /** Where a journal stands: its last line's seq and mac (the next line's `prev`). */
