@@ -31624,6 +31624,8 @@ design-kit, two in electron-shell, one each in field-app, DESIGN.md, DECISIONS, 
   > *Answered 2026-11-06:* M-b2 landed (`3b8611ec4`, run 182; LANDED "SP-7a's M-b2").
   > *Answered in part 2026-11-06:* IOS-12e, the star in Metal, landed (`09378c9ec`, M186, run 186; LANDED
   > "IOS-12e"). The note's live face and 12f wait on M-phone.
+  > *Answered in part 2026-11-06:* IOS-12c's thread, M-c2, landed (`eda440d58`, M191, run 191; LANDED
+  > "IOS-12c's M-c2"): 12c is whole. 12d (needs you) and 12f remain.
 - Item 169 (filed). cp3 §5's line at the draft queue, on VF-PM's word. The two-desktop run (James).
 
 ## SD-1 — the sound identity's law and its code: DESIGN.md §14 Sound, and `@vibefield/sound` beside contracts (2026-11-05; `8b22e7b01` → `1ebe7b461`, 3 commits on main `f599761bc`, lane `sd/1-sound-law` in `/Volumes/SamsungRed/lanes/sd1/vibe-field`, stacked as M126 `1ebe7b461`, run 126)
@@ -31970,6 +31972,8 @@ packet says so.
   > (SparkFlatStarTests :116, :117 and :119; `SparkFlatFace.viewBox(framed:)` and `palette(of:)` called from a
   > nonisolated suite) went in `8e1eaf009`: both, and the two lets `viewBox` reads, are `nonisolated` (the 11-06
   > rule). The Xcode 27.3 beta printed them. The fix rode IOS-12e's mint, whose kit build covers it.
+  > *Answered in part 2026-11-06:* IOS-12c's thread, M-c2, landed (`eda440d58`, M191, run 191; LANDED
+  > "IOS-12c's M-c2"): 12c is whole. 12d (needs you) and 12f remain.
 
 ## AR-7j — agents typed into a pane are managed in the packaged app: fieldd's own executable runs every launcher in one closed role (2026-11-05; `66037db65` → `45c3680a3`, 5 commits on main `dbb8c76ad`, lane `lp/ar7j` in `/Volumes/SamsungRed/lanes/lp-ar7j/vibe-field`, minted as M128 `45c3680a3`, run 128)
 
@@ -37383,6 +37387,8 @@ It answers in part IOS-12a's and IOS-12b's Owed ("12c the thread"), each noted i
   commit, M-phone's lead (vibe-field-b7) is sent its exact lines before it, and whichever lands second re-cuts it.
   > *Answered in part 2026-11-06:* IOS-12e's mint landed (`09378c9ec`, M186; LANDED "IOS-12e"), and M-c2 was cut
   > on it, its HomeScreen.swift hunk last (vibe-field-b7, 10:37Z: no hold).
+  > *Answered 2026-11-06:* M-c2 landed (`eda440d58`, M191, run 191; LANDED "IOS-12c's M-c2"), re-cut once
+  > in the proof form onto VF-VIEW's mint (`dd74abc85`). M-phone folds onto it at its own mint (UM).
 - 12d (needs you) on 12c; 12f after 12e and M-phone.
 
 Two inserts into older entries: IOS-12a's and IOS-12b's Owed.
@@ -38269,6 +38275,8 @@ IOS-12b's Owed ("12e the star in Metal"), each noted in its entry.
 **Owed.**
 - Item 197 (design-kit): the stills generator's canvas and a re-bless.
 - **M-c2, the thread** (the IOS session): cut on this land, its head's one live face on this stage.
+  > *Answered 2026-11-06:* M-c2 landed (`eda440d58`, M191, run 191; LANDED "IOS-12c's M-c2"), its head's one live face
+  > on a one-face stage of its own (every face in the flow a still).
 - The note's live face after M-phone; 12f (New spark, the hatch) after M-phone.
 
 Three inserts into older entries: IOS-12a's Owed; IOS-12b's Owed, with a dated line on its face slot; and M-c1's
@@ -39051,3 +39059,144 @@ install.
 - ENOSPC and EDQUOT get their own code once DR-2a's `DRIVE_SERVICE` out-of-room state has a reader.
 
 Land 2026-11-06T12:30:45Z by the fixer.
+
+## IOS-12c's M-c2 — the phone draws a spark's thread as the Mac's, at touch pitch: read through the home, answered by your words, its draft held while its desktop is away (track IOS)
+
+(2026-11-06; `e197648da` → `eda440d58`, 4 commits on main `dd74abc85` (VF-VIEW's mint), lane `ios/12c-c2` in
+`/Volumes/SamsungRed/lanes/ios12b/vibe-field` (12b's landed worktree), the IOS session's; minted as M191 `eda440d58`,
+run 191, and landed 17:24:01Z by the fixer, a fast-forward of `dd74abc85`. Cut on IOS-12e's land `09378c9ec` (kept as
+`ios/12c-c2-r0` and `-r1`), then on M-desk's records `6095a9bb8` (`-r2`, the third packet's), and T `78e06e2f6` on it,
+the fourth packet's. The mint's one re-cut onto `dd74abc85`, in the proof form: range-diff four `=`, the range's
+patch-id `4d55828cb1f9c4423cb17642a3514a8ee8bbdf97` before and after, the tree the merge-tree's (`0fe04133631d`), and
+apps/ios `b0b7e291c9ec` unmoved.)
+T's shas, which the dated lines and the packets name, are main's as follows: s0 `ad52edc95` = `e197648da`; r1
+`235382a3b` = `fa5a8dd8e`; g1 `99862ea04` = `dba0d6fbd`; g1b `78e06e2f6` = `eda440d58`. The commit messages name the
+earlier cuts' shas, kept as local branches, never pushed. The 12c plan
+(`/Volumes/SamsungRed/lanes/ios12/IOS-12c-plan.md`, ruled by VF-PM at every lean 05:17Z) splits the thread in two
+mints: M-c1, the fold (LANDED "IOS-12c's M-c1"), and this one, the thread's view. It answers IOS-12a's and IOS-12b's
+Owed ("12c the thread"), M-c1's and IOS-12e's ("M-c2, the thread"), each noted in its entry.
+
+**What it rests on.**
+- PC-D2 A (the thread is the spark's transcript drawn as Chat, its pane one tap away in ⋯), PC-D3 A (your words
+  through CP-2's input queue as yours, unmarked, with receipts), PC-L1 (one Chat, two sizes), PC-L4 (the away lines)
+  and PC-L5 (the ledger reads the thread on screen).
+- The plan's Q4 (chips drawn, @'s list later), Q5 (a): no drawn mic, Q6 (the head and ⋯) and Q7 (a draft held while
+  its desktop is away, never sent behind you).
+- M-c1's fold (`ChatFlow`, `ChatMarkdown`, `SparkSay`); SP-7a's reader (M-b `432784612`, M-a `d6fe77980`, M-b2
+  `3b8611ec4`); IOS-12a's `compose.sparks.say` and `compose.sparks.open`; IOS-12b's list and its row menu; IOS-12e's
+  stage and `SparkFaceView`.
+
+**What is real.**
+- **DESIGN.md first** (s0, `e197648da`, 57/7; VF-PM ruled its five leans 09:35:20Z, B's chip and `code` 10:16Z):
+  - §8's thread replaced whole by the Mac's rows at touch pitch: the head (back, the face at 30 as the thread's one
+    live face, the name over its status word, Wake), ⋯ (Open its pane, Wake; no Pause), your words 15 at 21 and at
+    most 82% wide, a chip you sent at 14/500 mono on solid chrome, its words 17 at 1.35 with `code` at 15/500, the
+    quiet lines, the receipt, the day lines, Earlier conversations, the honest lines, Thinking…, the hello, the reading
+    lines and the arrival pill;
+  - the composer's dated note: words alone until IOS-12f (Q4), no drawn mic yet (Q5), no + yet (09:51:30Z), the
+    system's prose defaults, a draft held while its desktop is away (Q7);
+  - §9's draft lines for the two other away states, beside the asleep one, for James's eye;
+  - two dated corrections at their source: the opening's "Nothing is drawn yet … in that order", and PC-L1's act and
+    fact lines, which are not the Mac's thread since TH-1.
+- **The thread** (`FieldHome/Chat/ChatThread.swift`, `ChatFeed.swift`):
+  - one reader per open thread, SP-7a's, asked of the home's door with the spark's desktop; the reading held while
+    the door changes (PC-L4), and an open thread asks again on a new door (`doorTurn`);
+  - a Send as the Mac's `sendToThread`: checked against the door's bound in UTF-16, its bubble stood at the press, a
+    spark asleep woken first, and a lost answer asked once more by the SAME request id;
+  - your sends held per spark (32 kept) until the record shows them; ⋯ and the head's acts; the arrival pill; the
+    ledger's thread on screen (PC-L5).
+- **The page** (`ChatThreadView.swift`): the head on the bar's glass, its face at 30 on a one-face stage of its own;
+  every `ChatFlowItem` kind drawn, each face in the flow a still at 28; the reading and away lines; the composer as a
+  safe-area inset in the bar's place.
+  - **Each row its own identity:** `ChatThreads.drawn` keys a row by its key, or `key#n` for the nth repeat, and a
+    tools line's open state is keyed by it (item 199, Found 1).
+  - **The flow follows its foot:** while it follows, a growth of the content scrolls to the foot; a scroll that rests
+    off the foot stops it, and one at the foot resumes it (Found 2).
+- **The composer** (`ChatComposer.swift`): one line at 17 growing to five; Send once there are words; Return sends,
+  the one line break it types taken as the press, a paste's breaks kept. While the desktop is away the draft waits
+  under its line and Send is not offered (Q7).
+- **The ink** (`ChatInk.swift`): a chip you sent and a spark's `code` drawn as boxes behind their runs by a
+  TextRenderer. **The words** (`ChatMarkdownView.swift`): ChatMarkdown's blocks, never markup (EL7).
+- **The wiring** (g1b, the last commit, VF-PM 09:28Z): ChatPage pushes the thread and draws the row's menu from
+  `ChatThreadActs`; HomeScreen.swift +32 −5 hands Chat the feed and the thread, steps the bar aside while a thread
+  stands (380 ms), and opens a bubble's pane by its run's card (`runtimeRunId`; FW-D2).
+- **The plumbing:** FieldProduct's `transcriptReader(spark:device:whole:held:)`; FieldProductClient's `transport`
+  goes from private to internal (documented, never public).
+- **The six glyphs** (VF-PM 09:51:30Z): picks.json's `ios` list gains code, message, agents, chevron, panes and
+  duplicate, their imagesets written by `tooling/glyphs/build.mjs`.
+- **The demo door (DEBUG):** FieldHome carries four of the Mac fold's goldens (at-rest, earlier, hello, receipts),
+  required mirrors in `check-ios-fixtures` (352 copies → 356). Under `-vf-chat-case=` the door hands the thread the
+  golden's own facts (Found 3); `-vf-open-chat-thread=`, `-vf-chat-at-top`, `-vf-chat-open-tools` and
+  `-vf-chat-draft=` stage the stills with no OS input.
+- **The rows:** ChatThreadTests (new, 17) and ChatFeedTests (+2). The kit holds 7 suites and 69 rows.
+
+**What is stubbed or left.**
+- @ and its list ride IOS-12f (Q4): the composer sends words alone. The drawn mic (Q5) and + come after the 0.9
+  build; the keyboard's own dictation key works.
+- ⋯ has no Put to sleep or Its profile (no phone door yet) and no Pause (Q6). Live cards wait on SP-1e's data.
+- Not stilled (no OS input): ⋯ open and the keyboard up. ChatThreadTests' rows hold both.
+- No device has drawn it: the kit and the stills are the simulator's. The thread on the road is M-a's and James's run.
+
+**Validation.**
+- **Where:** a9's runs, the kit's and the stills' on Xcode 27.3 beta 27C5020n and the iPhone 17 simulator
+  `67E36A30` (vf-m1) or on the old mini (the third packet).
+- **The first packet** (`run-12c-kit-stills-3b9f3f9bc.sh`, `445440bd…`) was held at a9 before it ran (10:42Z): a read
+  caught a compile error in r1 and a key path into a tuple element (Found 4).
+- **The second** (`dd7c20e72`, `7f538d6f…`, vf-m1): both kit builds RED on one `error:` line,
+  ChatThreadTests.swift:369:32 "type 'ChatFlowWords' has no member 'receipt'"; the 20 stills RED by eye (11:14Z),
+  Found 1–3. VF-PM ruled the three fixes 11:13Z.
+- **The third** (`68a63aab1`, `19a2953d…`, the old mini, 11:35:34 → 11:45:32Z): kit-red RED AS EXPECTED; kit GREEN,
+  7 suites and 69 rows, with ONE warning in M-c2's files (Found 5); the 20 stills GREEN by eye (11:53Z). VF-PM ruled
+  (a) 11:53Z: fixed, and every stage re-run.
+- **The fourth, of record** (`run-12c-kit-stills-78e06e2f6.sh`, `65a1a24c…`, vf-m1; logs
+  `lanes/ts6/logs/m1/ios12c-c2-78e06e2f6/`):
+  - **kit-red** at `235382a3b` (12:02:52 → 12:04:45Z): "RED AS EXPECTED — all 19 new rows red on their own assertions, 5
+    suites and 50 rows pass, no crash";
+  - **kit** at `78e06e2f6` (12:04:45 → 12:06:27Z): "GREEN — 7 suites, 69 rows, no issue, no failure, no crash, 0
+    warnings in M-c2's files", a warning there gated RED; the build 66 s, 69 tests;
+  - **the stills** (12:06:27 → 12:12:30Z): 20 of 20, receipts-foot ≠ receipts in both looks, stills.sha256
+    `cb7cdf214c8558dc…`; **GREEN by eye** (12:18Z): every row in its own place, the foot at the composer, the hello
+    with its three starters, Earlier conversations (1), the away line and its held draft, in both looks. Against
+    the third packet's (the old mini), only the status bar differs.
+  - The verdicts carry to the land by apps/ios `b0b7e291c9ec`, equal at `78e06e2f6` and `eda440d58`.
+- **The lights on the MacBook**, one row at a time under the swap floor: `check-ios-fixtures` 356 copies and 93
+  pins at T (1554.69 MB free) and at the re-cut previewed on `dd74abc85` (1570.69 MB, 12:21:55Z);
+  `check-import-boundaries --enforce` clean and biome over the range's biome-read files, 2 checked, no fixes (1530.69
+  MB). The six imagesets fresh at `6095a9bb8` ("glyphs already fresh", 1522.69 MB).
+- **Run 191** at `eda440d58` (the old mini, armed 12:34:13Z): `pnpm verify` exit 0 at 12:40:11Z, tree clean, no stub
+  left; vitest 13,881 | 0 | 21 over run 190's 954 files; fieldd 3,528 | 15; field-app 4,364 over 311 files; node
+  474; cargo 548/0 in 35 results; 29 projects typechecked; biome 3,464 files, no fixes; the walls clean; the iOS
+  fixtures 356 copies (+4) and 93 pins; glyphs.test.tsx 10; census OK; the bundle 951.1 / 251.4 KB; gen fresh; no
+  temp root born. verify.log sha256 `2fb146e41efd83f0…` (`lanes/ts6/logs/mini/run191/`).
+- **Landed:** main fast-forwarded `dd74abc85` → `eda440d58` on VF-PM's GO (17:24:01Z, the fixer's stamp).
+
+**Found.**
+1. **Rows of a repeated key drawn in each other's places** (thread, thread-top and tools, the second packet): the
+   at-rest golden's flow repeats three keys (`day:you:run-01JC2Z9X0A:2`, `you:run-01JC2Z9X0A:2`,
+   `tools:run-01JC2Z9X0A:5`). The lazy stack, keyed by `key`, drew rows 8 and 9 in rows 1 and 2's places, left a band
+   blank, and never drew tools' "Used 1 tool". The root is **item 199** (FILED by VF-PM): the Mac fold's `rowsOf`
+   keys a row by its conversation's OPENING run and the line's seq, which each run numbers from 1, and the Mac's
+   React keys and its tools' open state collide the same way. M-c2's `drawn` stays after 199 lands.
+2. **The foot never followed** (receipts-foot was receipts byte for byte): the first offset is reckoned on the lazy
+   stack's estimate, and the bottom anchor did not follow as the real rows laid out.
+3. **hello was blank:** the fold says hello only while the spark is new, and the demo door drew the golden's reading
+   on the mock Vela's facts (it has worked).
+4. **Compile errors a read must catch:** `.number(1)` (JSONValue's cases are `.int` and `.double`) and `.map(\.method)`
+   over a tuple were caught by reading before any run; `ChatFlowWords.receipt` (it is `ChatFlows`'s) was not, and
+   stopped the second packet's builds. After it, the whole test diff was re-read against the sources, every symbol.
+5. **A View's static read in a Sendable closure warns** in the kit's Swift 6 mode: `onGeometryChange`'s transform
+   read `side`, now `nonisolated static let side` (the 11-06 rule, 12b's `8e1eaf009`).
+6. AgentRemoteRow has no `key`: a bubble's `runKey` is `board.runtimeRunId` (RemoteWindowRows.swift:37), so Open its
+   pane matches `run.runtimeRunId`.
+7. A vertical TextField types a line break and fires no `onSubmit`, so the one typed break is the press.
+8. Noted, no item (VF-PM 11:13Z): a non-new spark whose latest conversation is empty draws no rows, on either plane.
+
+**Owed.**
+- Item 199 (field-app's TH-1 fold and M-c1's port; no lane yet).
+- M-phone folds onto this land at its mint (UM, 17:27Z): HomeScreen.swift's bar lines unioned with SE-2's search,
+  read as holding (IOS, 17:30Z); its mint's kit builds them.
+- 12d (needs you) on 12c; 12f (New spark, the hatch, @'s list) after M-phone; the drawn mic with its usage strings'
+  amendment after the 0.9 build (Q5).
+- For James's eye: §9's draft lines for a desktop that does not answer and one that needs an update.
+
+Four inserts into older entries: IOS-12a's, IOS-12b's, M-c1's and IOS-12e's Owed.
