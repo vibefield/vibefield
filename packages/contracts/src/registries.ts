@@ -667,6 +667,165 @@ export const MADE_APP_OPEN = {
   RESOURCE: "apps",
 } as const;
 
+/** DR-1a (`draft/thinking-drive.md` v0.2, RULED 2026-11-06: DR-D2 (a), DR-D3 (a), DR-D11 (a); the wave-0 plan's DR-1 (A)
+ * and its critic) — a made app's serve policy, as DATA: the response headers truffle's serve sets on every response of
+ * the app's origin (T-1), which `madeAppServeHeaders` (made-app-network.ts) composes from one app's network policy. The
+ * stored page keeps its bytes and its digest, and a policy change is a serve change (DR-L7). The hosts are never here:
+ * they are each app's (DR-D3 (a)), an INPUT from where its page was captured or from its own manifest, so VibeField
+ * names no platform's list (AR-L1, MA-L9).
+ *  - CSP_HEADER, DEFAULT_SRC: the policy's header, and its first directive: whatever no directive below names (a
+ *    worker, a frame, a manifest) loads from the app's own origin and nowhere else.
+ *  - FETCH: the six fetch directives a policy widens, in the header's order. Each is its own sources, then each of the
+ *    policy's hosts for it, sorted and once, in each of its schemes. connect-src names `wss://` beside `https://`,
+ *    because a host source that names https matches no wss URL.
+ *  - FIXED_DIRECTIVES: the directives no policy widens.
+ *  - FIXED_HEADERS: the headers every made app's serve sets after its CSP, the same for every policy.
+ *  - It never names `sandbox`. Without allow-same-origin, sandbox makes the origin opaque: no `localStorage`, no
+ *    cookies, no 'self', and DR-D12's one address per app rests on an origin's own storage. With allow-same-origin
+ *    and allow-scripts it confines nothing. made-app-headers.vector.json holds a row to it. *This corrects the
+ *    record's DR-D11 lean, which counts sandbox among the headers' gains (the wave-0 critic, 2026-11-06); the dated
+ *    correction at the record is the lead's.*
+ *  - UNION_HOSTS, HOST_BYTES: one policy names at most UNION_HOSTS distinct hosts across all its directives (=
+ *    MADE_APP_LIMITS.REACH_HOSTS, so the union is always an open answer's `reach`), each at most HOST_BYTES. Together
+ *    they bound the WORST policy, every host HOST_BYTES long in all six directives, to a CSP of 7,978 bytes:
+ *    282 + 16 × (61 + 7 × 60), inside SERVE_HEADER_LIMITS.VALUE_BYTES (8,192). The vector holds a row at the cap and
+ *    the refusal one past it. A longer host would cost the union: at MadeAppReachHost's 253 bytes, four hosts fill the
+ *    value, and a captured page names five. PROVISIONAL, as MADE_APP_LIMITS' are.
+ *  - HOST_PRIVATE_SUFFIXES: names a policy never admits, each with every name below it, because they resolve to this
+ *    device or its own network (`localhost`, mDNS's `local`, `internal`, `home.arpa`). MadeAppReachHost already keeps
+ *    out IP literals and every `*.ts.net` name (MA-L7).
+ *  - MANIFEST_ENTRIES: the most `network` entries a manifest's reader reads. A longer list costs the field, never the
+ *    manifest (`VibefieldAppManifest`).
+ *  - REFUSED_*: `madeAppServeHeaders`' refusals. POLICY: a host or a directive it cannot read. HOSTS_OVER_CAP: past
+ *    UNION_HOSTS. HEADERS: a composed list SERVE_HEADER_LIMITS or SERVE_HEADER_FORBIDDEN refuses, which the two bounds
+ *    above keep from happening; it is the belt, so truffle is never handed a list it refuses.
+ * TS-only: no native reader. field-native carries the composed headers to truffle (DR-1 (B), at T-1's EL8) and reads
+ * none of this. */
+export const MADE_APP_SERVE_POLICY = {
+  CSP_HEADER: "Content-Security-Policy",
+  DEFAULT_SRC: "'self'",
+  FETCH: [
+    {
+      key: "script",
+      directive: "script-src",
+      sources: "'self' 'unsafe-inline' 'unsafe-eval'",
+      schemes: ["https"],
+    },
+    {
+      key: "style",
+      directive: "style-src",
+      sources: "'self' 'unsafe-inline'",
+      schemes: ["https"],
+    },
+    {
+      key: "img",
+      directive: "img-src",
+      sources: "'self' data: blob:",
+      schemes: ["https"],
+    },
+    {
+      key: "font",
+      directive: "font-src",
+      sources: "'self' data:",
+      schemes: ["https"],
+    },
+    {
+      key: "media",
+      directive: "media-src",
+      sources: "'self' data: blob:",
+      schemes: ["https"],
+    },
+    {
+      key: "connect",
+      directive: "connect-src",
+      sources: "'self'",
+      schemes: ["https", "wss"],
+    },
+  ],
+  FIXED_DIRECTIVES: [
+    "object-src 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "frame-ancestors 'none'",
+  ],
+  FIXED_HEADERS: [
+    { name: "Referrer-Policy", value: "no-referrer" },
+    { name: "X-Content-Type-Options", value: "nosniff" },
+  ],
+  UNION_HOSTS: 16,
+  HOST_BYTES: 60,
+  HOST_PRIVATE_SUFFIXES: ["localhost", "local", "internal", "home.arpa"],
+  MANIFEST_ENTRIES: 256,
+  REFUSED_POLICY: "policy-unreadable",
+  REFUSED_HOSTS_OVER_CAP: "hosts-over-cap",
+  REFUSED_HEADERS: "headers-over-bounds",
+} as const;
+
+/** DR-1a — the response header names a serve's headers never carry, compared ASCII case-insensitively (`ServeHeader`,
+ * made-app-network.ts). It is truffle T-1's table as a BELT, and a SUPERSET of it, so a header the contract admits is
+ * never one truffle refuses at the serve's add (the wave-0 critic, 2026-11-06: a looser contract would fail a legal
+ * policy at runtime). Re-read against T-1's final table at the truffle EL8 that adopts it.
+ *  - NAMES: the connection's own (hop-by-hop: Connection, Keep-Alive, TE, Trailer, and `trailers` beside it,
+ *    Transfer-Encoding, Upgrade), a cookie's (Set-Cookie: AH-D12 keeps an app's cookies its own), the body's and the
+ *    request's (Content-Length, Host), the three T-1 may add (Content-Type, Content-Encoding, Content-Range), and
+ *    Link, VibeField's own: Firefox applies a stylesheet a `Link` header names, so a serve never sends one (the
+ *    critic's erratum on the record's §10.6).
+ *  - PREFIXES: every `Proxy-*` name (Proxy-Connection, Proxy-Authenticate, Proxy-Authorization, …).
+ * The value grammar is code beside it: VCHAR, SP and HTAB, no space or tab at either edge, never empty. TS-only. */
+export const SERVE_HEADER_FORBIDDEN = {
+  NAMES: [
+    "connection",
+    "keep-alive",
+    "te",
+    "trailer",
+    "trailers",
+    "transfer-encoding",
+    "upgrade",
+    "set-cookie",
+    "content-length",
+    "host",
+    "content-type",
+    "content-encoding",
+    "content-range",
+    "link",
+  ],
+  PREFIXES: ["proxy-"],
+} as const;
+
+/** DR-1a — the bounds on one serve's response headers, as truffle T-1 proposes them, and every one counted in BYTES
+ * (a header's grammar is ASCII, so its length is its bytes): COUNT headers in one list, a name of at most NAME_BYTES, a
+ * value of at most VALUE_BYTES, and LIST_BYTES for the list's names and values together. Re-read against T-1's RFC at
+ * its EL8; a T-1 bound tighter than one of these makes this row tighter with it. TS-only. */
+export const SERVE_HEADER_LIMITS = {
+  COUNT: 32,
+  NAME_BYTES: 64,
+  VALUE_BYTES: 8192,
+  LIST_BYTES: 16 * 1024,
+} as const;
+
+/** DR-1a (DR-D11 (a): "the theme's variables join in the view each desktop builds from the stored page") — a made
+ * app's VIEW: the file its serve serves at `/`, built on each desktop from the stored page and never synced, so a theme
+ * change rebuilds views and makes no new object. The view is `madeAppViewHead(theme)`, then the page's bytes, then
+ * MADE_APP_VIEW_TAIL (made-app-network.ts); the files worker writes it (VF-VIEW), never fieldd's control process
+ * (DR-L4).
+ *  - FILE: the view's name in the served folder. The stored page itself lives elsewhere (the wave-0 critic: an export
+ *    folder apart from the served one, so a rebuild never writes through rosetta's link).
+ *  - VERSION: the view's shape; a new one rebuilds every view, as a new theme does (DR-1 (B)'s `viewKey`).
+ *  - PAGE_MAX_BYTES: the largest page a view embeds, rosetta's own bound on a captured page.
+ *  - VARIABLES, VARIABLE_NAME_BYTES, VALUE_BYTES: one theme's variables, a name (with its `--`) and a value.
+ *  - REFUSED_THEME: `madeAppViewHead`'s refusal of a theme it cannot read.
+ * The theme's values are an INPUT, never VibeField's for any platform (AR-L1, MA-L9). Whose values a view carries is
+ * still James's call (the critic's second gap). TS-only. */
+export const MADE_APP_VIEW = {
+  FILE: "index.html",
+  VERSION: 1,
+  PAGE_MAX_BYTES: 16 * 1024 * 1024,
+  VARIABLES: 64,
+  VARIABLE_NAME_BYTES: 64,
+  VALUE_BYTES: 256,
+  REFUSED_THEME: "theme-unreadable",
+} as const;
+
 /** DS-L3 — the rows protocol's numbers (`rows.ts`; design-06 §8). A snapshot
  * above SNAPSHOT_PAGE_BYTES is paged with `more: true`; a source keeps a
  * journal of JOURNAL_DEPTH changed-key frames per table, below which a kept
