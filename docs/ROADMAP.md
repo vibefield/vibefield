@@ -564,8 +564,9 @@ DESIGN.md §2.9, §8 "The phone's Apps" and §9 "Apps"; DECISIONS MA
     the profiles once there is more than This Mac; Create's refusals are said where the sheet asked.
   - Hatched, a star falls and bursts in the sheet's sky, and the face is born there and flies to its row in Chat.
 - **SP-1d, Chat's thread and composer**: LANDED 11-01 (`7871ce1f1`, the mini's run 83; LANDED "SP-1d").
-  - An awake spark's thread is its own terminal pane in Chat, with Chat's composer under it: @'s agents and sessions,
-    and Send, which pastes into the pane and leaves Return to you.
+  - An awake spark's thread is its own conversation in Chat, with Chat's composer under it: @'s agents and sessions,
+    and Send, which goes through `compose.sparks.say` and the input queue: its bubble says Delivered when puppeteer
+    confirms the agent has it (LANDED "TH-1 and TH-2" and "Item 185").
   - A new spark says hello with three starters. A thread's unread dot lasts until you open it. A thread takes one act
     at a time, and fieldd wakes a spark once.
   - Its smoke:godview rung 11m is on main since M97 `f0e7bb465` (2026-11-02), row 23 green as run97b, with items 149

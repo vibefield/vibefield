@@ -34086,6 +34086,13 @@ contracts (7 of them fixtures), 5 fieldd sources and 8 fieldd tests.
 - The 11m smoke (`smoke:godview`, rung 11m on the send road and its Jump to) and probe C2 at a SEA build
   (`build-fieldd-sea.mjs --verify`), both under the mac-pressure HOLD; the simulator's 19 DESIGN.md readers (the kit
   slot); the playground still.
+  > *Corrected 2026-11-06 (item 185):* the 11m smoke stayed owed until item 185, and not for the HOLD alone. Rung
+  > 11m on the send road was red by construction: its Send is puppeteer 0.3.3's paste-and-submit, confirmed only by
+  > the agent's own UserPromptSubmit within 5000 ms, and the typed-agent stub fired no hook. Run 166 on vf-m1 was the
+  > rung's first run anywhere (LANDED "Item 185").
+  > *Noted 2026-11-06 (item 185):* rung 11m's Jump to (`872abf1ae`) first ran in run 167 (vf-m1, 11-06), after
+  > its send read Delivered, and is red there: "Could not jump — its terminal is not on this desktop's floor".
+  > It is item 187's.
 - Item 178: the three-table check and SIDECARS' data module, closed by 178's own entry.
 - CO-1b's trailing words in field-app and electron-shell, owed by "Items 158 and 159, and CO-1b": built here
   (`1e78cc107`), so that line closes in this entry.
@@ -36221,3 +36228,91 @@ IOS-13a closes in this entry.
   after 3f or DR-1.
 - RO-37's `recovered_from` (4b), then 4d. 3h, Keep and Hide as intent.
 - smoke:godview on vf-m1: items 185 and 186.
+
+## Item 185 — rung 11m's Send is confirmed: the typed-agent stub posts the agent's own UserPromptSubmit before it records a line, so puppeteer's paste-and-submit reads Delivered on every host (2026-11-06; `6c187ad53` → `b286a617c`, 2 commits on main `1c0f7b748`, bth's, stacked as M167 `b286a617c`, run 167)
+
+**The finding** (bth's diagnosis, `lanes/co-plan/lanes/item185/diagnosis.md`, sha256 `9a4529cc…`, read-only at main
+`434a1f849`; ACCEPTED by VF-PM at 03:29Z):
+- Run 166's red at rung 11m's send was a stub gap. It was not the host, the timing, puppeteer or fieldd.
+- puppeteer 0.3.3 (`@vibefield/puppeteer-adapter-claude`, `dist/services/prompt.js`) confirms a paste-and-submit
+  only on the agent's own UserPromptSubmit whose prompt matches the pasted text, within 5000 ms. fieldd passes no
+  `confirmationTimeoutMs` (`agent-runtime.ts:2130`), so the window is 5000 ms. The rule is byte-identical in 0.3.2.
+- The typed-agent stub (`packages/electron-shell/src/testing/typed-agent.ts`) records each line it is given and
+  fires no hook, so every send through the input queue read `uncertain` about 5 s after the paste.
+- Run 166's `SMOKE_CHAT_SEND`: `waitedMs {ready: 0, given: 150, delivered: null}`, and the receipt "Polaris may not
+  have it: look in its pane" at the rung's 15,000 ms deadline. The control at plain main (run166c2) and MA-4's run
+  (run166r) red at the same line, 3 of 3.
+- It was red by construction since TH-1's `af97f8d0c` (11-04), which moved rung 11m onto the send road and whose
+  body says "The smoke itself is OWED (the HOLD)". Run 166 was the rung's first run anywhere.
+- The grep witness for the reason string ("no matching UserPromptSubmit within 5000ms") is NOT KEPT: the smoke homes
+  keep no puppeteer reason. It is recorded as not kept, never as absent.
+
+**The fix** (bth; red `6c187ad53`, green `b286a617c`; test-only, riding `dist/testing/smoke.cjs`; by numstat,
+`packages/electron-shell/src/testing/typed-agent.ts` 101/11 and `packages/electron-shell/test/typed-agent.test.ts`
++124 into the existing test file, two pure inserts into its 507 lines):
+- The stub, as a managed session, does what the agent does when it takes a prompt: it reads the `--settings` file it
+  is handed and POSTs the UserPromptSubmit hook to the handler configured there, before it records the line.
+- The row (`test/typed-agent.test.ts`, "the stub" describe) runs the stub as a managed session, with a `--settings`
+  file in the shape puppeteer writes and a local bridge that answers 250 ms late:
+  - one POST to `/hooks` with `{session_id, cwd, hook_event_name: "UserPromptSubmit", prompt}`, the session id the
+    `--session-id` and the prompt the line verbatim;
+  - the line recorded neither when the hook is heard nor when it is answered, its record then carrying
+    `hooks: [200]`; `exit` posted to no hook;
+  - EL7: the bearer is a `$PUPPETEER_HOOK_TOKEN` reference resolved through `allowedEnvVars`, never a value on disk,
+    and no record or word of the stub holds the token, the URL's host or "Bearer".
+- The red: "AssertionError: expected [] to deeply equal [ { …(4) } ]" at the row's first assertion; the bridge heard
+  nothing (`vitest run test/typed-agent.test.ts -t "item 185"`: 1 failed, 19 skipped).
+- The green (`typedAgentStubSource`, its managed-session branch): the stub reads `--settings` as the agent does (a
+  path, or the JSON itself), picks the UserPromptSubmit handlers of type http, resolves a header's `$VAR` only for a
+  variable the handler's `allowedEnvVars` lists, and POSTs and awaits each prompt before it records the line, the
+  lines in order through one chain.
+  - The record's `hooks` is each hook's status or the code it failed on, never the URL, a header or a token.
+  - Not modeled: no other hook fires; no live transcript; `allowedHttpHookUrls` and `httpHookAllowedEnvVars`; the
+    answer's body is drained, so a `decision: "block"` blocks nothing; a multi-line paste is told line by line.
+- The rung is unchanged, the window is no longer, and there is no fallback: the confirm lands inside the 5 s
+  puppeteer allows, so the rung's 15 s needs no change.
+- bth's lights (this Mac; it runs no smoke and no Electron): typed-agent 20/20; smoke-first-run and smoke-shell-marker
+  63/63; electron-shell tsc 0 with both its configs; biome clean; one named mutation (recording without awaiting the
+  hook) turned the row red at its first assertion, undone and never committed.
+
+**Validation.**
+- **The mint, run 167, and the full light**, at `b286a617c` on `1c0f7b748`:
+  - `lanes/ts6/logs/m1/run167/run167.out` (sha256
+    `06754ef6b1e24bc75c34a17c17f35ae1c68fb8039bc7efe80af78184fe96fdfb`): "ts6-mini verify ARMED 03:54:12Z";
+    "verify exit 0 03:59:22Z"; "test target:  NX   Successfully ran target test for 29 projects"; "cargo test
+    results: ok 34, FAILED 0"; "tree clean after verify"; "stubs left: 0".
+  - `verify.log` (sha256 `fe815cea44551b05bc1ef39b7aa128d69f2d33af6af531fe7a02578f4ac17c99`; its clean copy
+    `verify.clean.log`, `56779adafdf3785291b2118069213df23d5b3b457ad91391a2e73c3c48148563`):
+    - electron-shell "Tests  2670 passed | 3 skipped (2673)", and in it "✓ test/typed-agent.test.ts (20 tests)";
+      field-app "Tests  4181 passed (4181)"; contracts "Tests  1751 passed (1751)"; fieldd "Tests  3457 passed |
+      14 skipped (3471)"; plugins/browser "Tests  15 passed (15)";
+    - vitest 13,431 | 0 | 21 over 939 files run (4 skipped whole); node "ℹ tests 473", "ℹ fail 0"; biome "Checked
+      3385 files"; cargo 545 passed in 34 suites ("test result: ok" each), clippy at `-D warnings` clean;
+    - "bundle assert OK"; the census "TOTAL 106 files across 9 packages: 44,050,783 bytes", "no drift", "census
+      assert OK — no §7.3 violation"; `gen:check` last, its `git diff --exit-code` clean;
+    - every count as expected (a9's report, relayed by cp-landing 04:06Z).
+  - `run167-next.out` (`31cdde70b8b32a443fb31c6c7d71dc8972f41ce99c1d71935a5aff6d1a9f2ab6`): "the locks stand: no
+    re-install"; "preflight exit 0 · 1 WARN/FAIL lines", R23's `acp` candidate (the standing warning).
+  - `run167-hid.log` (`7b65e29e4bb9d7b54ab5e9bbf06a753029ae115419e389948afd128fff0ccc39`): "locked No", HID idle,
+    from 03:54:12Z to 03:59:22Z.
+  - The host: vf-m1 (Mac-mini, Apple M4, 16 GiB, macOS 27.2 (26B123), node v26.5.0, pnpm 11.13.1, rustc 1.99.1).
+- **The witness** (`smoke:godview` on vf-m1, by VF-PM's 03:31Z rule: up to two more tries if it reds first at item
+  186's GT-D5 step; if both red there, the fix lands on its unit row with the 11m witness OWED):
+  - The red at its own sha (`q10.log`, sha256 `c246266213864111fe2449976874f8323b2e9c3a432e7f8540c784a60f6933b9`):
+    `6c187ad53` (tree `badb57d78b56`, clean), `vitest run test/typed-agent.test.ts -t "item 185"`: "Tests  1
+    failed | 19 skipped (20)", at `test/typed-agent.test.ts:517:46`, "expected [] to deeply equal [ { …(4) } ]"
+    (`run167-red.log`, `1aaff9a0…`); then HEAD `b286a617c` again (tree `0832c1a324fd`, clean).
+  - `smoke:godview` at T, one try (`run167-row.out`, `9d26589e…`; `smoke-godview.log`, `4e4f40f5…`; its clean
+    copy, `8ceee1c9…`): ARMED 03:59:29Z with the console gate open (HID idle 9213 s), exit 2 at 04:00:57Z.
+    - Rung 11m's send is confirmed: `SMOKE_CHAT_SEND` reads `hello: true`, `receipts: [null, "Delivered"]` and
+      `waitedMs {ready: 0, given: 151, delivered: 151}`.
+  - The fix's witness is rung 11m's send DELIVERED in run 167. The row stays red at 11m's NEXT step, the head's
+    Jump to (TH-2), "Could not jump — its terminal is not on this desktop's floor" (`SMOKE_CHAT_SEND`'s `failed`).
+    No run before reached that step; it is item 187's, not 185's.
+- **Landed:** The fixer's ff `1c0f7b748` → `b286a617c` at 2026-11-06T04:07:21Z
+
+**Owed.**
+- Item 186 (GT-D5, the pane's close), filed with item 185 from vf-m1's `smoke:godview` reds, is its own item.
+- Item 187: rung 11m's Jump to, red on vf-m1 in run 167; the 11m row is green only after it.
+- **Closes item 185.** TH-1's Owed 11m smoke gains a dated correction at its line, TH-2's Jump to rung a dated note
+  at its line ("TH-1 and TH-2"), and ROADMAP's SP-1d bullet says Send as it is since TH-1.
