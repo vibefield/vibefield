@@ -240,6 +240,8 @@ export function UsageTimeline({
   variant = "row",
 }: {
   lines: readonly UsageLine[];
+  /** UM-3 2e red: the skeleton — the windows' forecasts, not yet said */
+  forecasts?: Readonly<Record<string, string>>;
   /** what these windows belong to, for a screen reader */
   label: string;
   /** on a plan card the lines take the card's width (pass 19: 34 · track · 66) */

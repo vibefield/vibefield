@@ -41,6 +41,7 @@ import {
   usageWindowLabel,
 } from "../src/panels/agents/profiles-model";
 import { SettingsDialog } from "../src/panels/SettingsDialog";
+import { meterWindows } from "../src/usage/meters";
 
 vi.mock("../src/panels/agents/SignInTerminal", () => ({
   SignInTerminal: ({ terminal }: { terminal: { sessionId: string } }) =>
@@ -251,6 +252,58 @@ describe("the profiles model", () => {
     const bare = usageLines([{ id: "x", label: "7D", kind: "window", usedPercent: 85 }], NOW);
     expect(bare[0]!.elapsedPercent).toBeUndefined();
     expect(bare[0]!.hot).toBe(true);
+  });
+
+  it("reads a budget without a pace, as the meters do: no now line, orange at 80 or more (UM-D3)", () => {
+    const budget = (used: number) =>
+      usageLines(
+        [
+          {
+            id: "credits",
+            label: "CR",
+            kind: "budget",
+            usedPercent: used,
+            durationMinutes: 30 * 24 * 60,
+            resetsAt: new Date(NOW.getTime() + 10 * 24 * 60 * 60_000).toISOString(),
+          },
+        ],
+        NOW,
+      )[0];
+    expect(budget(85)?.elapsedPercent).toBeUndefined();
+    expect(budget(85)?.hot).toBe(true);
+    // two-thirds of the month gone would have made 79% ahead of pace; a budget has none
+    expect(budget(79)?.hot).toBe(false);
+  });
+
+  it("says when a window runs out before its reset at the line's end, the meters' forecast (UM-D3, UM-D4)", async () => {
+    // 5 hours, half of them gone, 82% used: out in ~35m, before the reset in 2h 30m
+    const metric = {
+      id: "5h",
+      label: "5H",
+      kind: "window" as const,
+      usedPercent: 82,
+      durationMinutes: 300,
+      resetsAt: new Date(NOW.getTime() + 150 * 60_000).toISOString(),
+    };
+    const windows = meterWindows([metric], NOW);
+    expect(windows[0]?.forecast?.short).toBe("out in ~35m");
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+    await act(async () =>
+      root?.render(
+        createElement(UsageTimeline, {
+          lines: windows.map((window) => window.line),
+          forecasts: { "5h": "out in ~35m" },
+          label: "Claude Max",
+        }),
+      ),
+    );
+    const line = container.querySelector("[role=listitem]");
+    expect(line?.getAttribute("aria-label")).toBe(
+      "5H: 82% used, resets in 2h 30m, ahead of pace, out in ~35m",
+    );
+    expect(line?.querySelector(".vf-profiles-usage-reset")?.textContent).toBe("out in ~35m");
   });
 
   it("keeps the % at the head, in pixels: inside short of the light, else after the head", () => {
@@ -976,7 +1029,8 @@ describe("a profile's page", () => {
       line.getAttribute("aria-label"),
     );
     expect(lines).toEqual([
-      "5H: 91% used, resets in 1h, ahead of pace",
+      // UM-D4: a window that runs out before its reset says when, as the meters say it
+      "5H: 91% used, resets in 1h, ahead of pace, out in ~25m",
       expect.stringMatching(/^7D: 12% used, resets in /),
     ]);
     // not the default: the switch offers it, the delete is open
@@ -1957,7 +2011,7 @@ describe("the plans a profile runs on (pass 19)", () => {
         line.getAttribute("aria-label"),
       ),
     ).toEqual([
-      "5H: 91% used, resets in 1h, ahead of pace",
+      "5H: 91% used, resets in 1h, ahead of pace, out in ~25m",
       expect.stringMatching(/^7D: 12% used/),
     ]);
     expect(claudeCard.textContent).toContain("Claude Code, Pi");
