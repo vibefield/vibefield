@@ -1259,7 +1259,9 @@ public struct HomeScreen: View {
   @ViewBuilder
   private var faceHoldOverlay: some View {
     if let held {
-      FaceHoldOverlay(held: held, reading: meters.reading, now: meters.clock(), face: accountFace, seed: accountSeed)
+      FaceHoldOverlay(
+        held: held, reading: meters.reading, now: meters.clock(), home: metersHomeName, face: accountFace,
+        seed: accountSeed)
         .transition(.opacity)
     }
   }

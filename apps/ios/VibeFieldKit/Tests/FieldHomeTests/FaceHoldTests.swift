@@ -8,7 +8,9 @@ import Testing
 /// reach", "VoiceOver") — the held face, pure: where the profiles bloom about the face, what a finger reaches, what
 /// the huge words and the mono line say, each bud's label and where it stands, what VoiceOver offers in place of the
 /// hold, and the `-vf-mock-hold` door. The home is the meters fixture's over the budget batch, read at its stamp
-/// (`AgentProfilesPageTests.reading`). Letting go is the lens's (`ProfileLensTests`).
+/// (`AgentProfilesPageTests.reading`). Letting go is the lens's (`ProfileLensTests`). Since the U3 review: how the
+/// held face stands and closes (a let-go, or a hold the system takes away), and the words for a home whose usage is
+/// not read.
 ///
 /// No key path and no `try` inside an #expect/#require argument: hoisted into a `let` first (T10f's kit trap).
 @Suite("the held face: where the profiles bloom, what a finger reaches, and what is said")
@@ -46,17 +48,44 @@ struct FaceHoldTests {
   func words() throws {
     var one = try AgentProfilesPageTests.reading()
     one.sets = one.sets.filter { $0.kind == "native" }
-    let usage = FaceHold.words(one, reach: .hub, now: Self.now)
+    let usage = FaceHold.words(one, reach: .hub, home: "studio", now: Self.now)
     #expect(usage == FaceHold.Words(verb: nil, rest: "Usage", line: "3 read · none need you"))
     let several = try AgentProfilesPageTests.reading()
-    let all = FaceHold.words(several, reach: .hub, now: Self.now)
+    let all = FaceHold.words(several, reach: .hub, home: "studio", now: Self.now)
     #expect(all.verb == "Show")
     #expect(all.rest == "all")
     #expect(all.line.hasSuffix(" · every profile"))
-    let work = FaceHold.words(several, reach: .bud("work"), now: Self.now)
+    let work = FaceHold.words(several, reach: .bud("work"), home: "studio", now: Self.now)
     #expect(work == FaceHold.Words(verb: "Show", rest: "Work", line: "1 read · 2 need you"))
-    let open = FaceHold.words(several, reach: .open, now: Self.now)
+    let open = FaceHold.words(several, reach: .open, home: "studio", now: Self.now)
     #expect(open == FaceHold.Words(verb: nil, rest: "Cancel", line: "let go here to leave the field as it is"))
+  }
+
+  @Test("one need is said as one: Show Side over \"0 read · 1 needs you\" (§9 \"The phone's hold\")")
+  func oneNeed() throws {
+    let reading = try AgentProfilesPageTests.reading()
+    let side = FaceHold.words(reading, reach: .bud("side"), home: "studio", now: Self.now)
+    #expect(side == FaceHold.Words(verb: "Show", rest: "Side", line: "0 read · 1 needs you"))
+  }
+
+  @Test("the hold says the home's usage as it stands — not shared, unavailable, a first read — never none need you")
+  func wordsSayTheHome() throws {
+    let refused = try AgentProfilesPageTests.reading(.notShared)
+    let all = FaceHold.words(refused, reach: .hub, home: "studio", now: Self.now)
+    #expect(all == FaceHold.Words(verb: "Show", rest: "all", line: "studio doesn't share usage yet"))
+    let work = FaceHold.words(refused, reach: .bud("work"), home: "studio", now: Self.now)
+    #expect(work == FaceHold.Words(verb: "Show", rest: "Work", line: "studio doesn't share usage yet"))
+    let cancel = FaceHold.words(refused, reach: .open, home: "studio", now: Self.now)
+    #expect(cancel == FaceHold.Words(verb: nil, rest: "Cancel", line: "let go here to leave the field as it is"))
+    var alone = try AgentProfilesPageTests.reading(.unavailable)
+    alone.sets = alone.sets.filter { $0.kind == "native" }
+    let down = FaceHold.words(alone, reach: .hub, home: "studio", now: Self.now)
+    #expect(down == FaceHold.Words(verb: nil, rest: "Usage", line: "Usage unavailable"))
+    let raw = try #require(MetersFixtureDoor.fixture("agent-usage.empty"))
+    let empty = try AgentAccountUsageBatch(json: raw)
+    let first = try AgentProfilesPageTests.reading(.batch(empty))
+    let reading = FaceHold.words(first, reach: .hub, home: "studio", now: Self.now)
+    #expect(reading == FaceHold.Words(verb: "Show", rest: "all", line: "Reading usage…"))
   }
 
   @Test("a bud's label: its name over its tightest percent and window, READING, or NO METER — hot when it runs hot")
@@ -82,6 +111,70 @@ struct FaceHoldTests {
     #expect(abs(FaceHold.labelRadius(spot, letters: 4, reached: true) - (expected + 5)) < 1e-9)
     let long = FaceHold.labelRadius(spot, letters: 12, reached: false)
     #expect(abs(long - (160 + 33 + 34.2 * abs(cos(a)) + 12 * abs(sin(a)))) < 1e-9)
+  }
+
+  @Test("a bud says a model's own week by its group's word, \"104% · FABLE\", never the raw \"FABLE ONLY\"")
+  func budGroupWord() throws {
+    #expect(UsageLine.Group(id: "scope:fable", label: "Fable only").word == "Fable")
+    #expect(UsageLine.Group(id: "scope:opus", label: "Opus").word == "Opus")
+    var reading = MetersReading()
+    reading.sets = try AgentProfileSetsResult(json: try HomeFixture.json("agents-profile-sets.valid")).sets
+    reading.catalog = try AgentCatalogResult(json: try HomeFixture.json("agent-catalog.valid")).catalog
+    let raw = Self.used(try HomeFixture.json("agent-usage.valid"), metric: "fable", 104)
+    reading.usage = .batch(try AgentAccountUsageBatch(json: raw))
+    let now = try #require(ISO8601DateFormatter().date(from: "2026-09-13T12:05:00Z"))
+    let native = try #require(reading.profiles.first { $0.kind == "native" })
+    let label = FaceHold.budLabel(native, reading: reading, now: now)
+    #expect(label.state == "104% · FABLE")
+    #expect(label.hot)
+  }
+
+  /// `json` with every metric `id`'s `usedPercent` set to `used`: a model's own week past its limit, so it is the
+  /// tightest.
+  static func used(_ json: JSONValue, metric id: String, _ used: Double) -> JSONValue {
+    switch json {
+    case .object(var fields):
+      if fields["id"] == .string(id), fields["usedPercent"] != nil { fields["usedPercent"] = .double(used) }
+      return .object(fields.mapValues { Self.used($0, metric: id, used) })
+    case .array(let items):
+      return .array(items.map { Self.used($0, metric: id, used) })
+    default:
+      return json
+    }
+  }
+
+  @Test("with one profile no bud is drawn, so the finger reaches only the hub: no tick on nothing")
+  func oneProfileReachesTheHub() throws {
+    let face = Self.face
+    let spot = try #require(FaceHold.spots(1, face: face).first)
+    let onTheBud = FaceHold.reach(CGPoint(x: spot.x, y: spot.y), face: face, profiles: ["native"])
+    #expect(onTheBud == .hub)
+    let away = FaceHold.reach(CGPoint(x: face.x, y: face.y + 100), face: face, profiles: ["native"])
+    #expect(away == .hub)
+  }
+
+  @Test("a hold the system takes away closes the held face and lets nothing go; a let-go releases its reach once")
+  func cancelled() throws {
+    let face = Self.face
+    let ids = ["native", "work", "side"]
+    let work = try #require(FaceHold.spots(3, face: face).dropFirst().first)
+    let onWork = CGPoint(x: work.x, y: work.y)
+    var stand = FaceHold.Stand()
+    stand.open(face: face)
+    #expect(stand.held == FaceHold.Held(face: face, reach: .hub))
+    stand.move(onWork, profiles: ids)
+    #expect(stand.held?.reach == .bud("work"))
+    stand.cancel()
+    #expect(stand.held == nil)
+    let afterCancel = stand.letGo()
+    #expect(afterCancel == nil)
+    stand.open(face: face)
+    stand.move(onWork, profiles: ids)
+    let released = stand.letGo()
+    #expect(released == .bud("work"))
+    #expect(stand.held == nil)
+    let again = stand.letGo()
+    #expect(again == nil)
   }
 
   @Test("VoiceOver: the face says the hold, and offers the page, each profile and every profile — the first alone")

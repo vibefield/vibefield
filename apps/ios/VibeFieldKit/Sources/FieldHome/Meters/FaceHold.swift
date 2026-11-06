@@ -35,6 +35,27 @@ enum FaceHold {
     var reach: ProfileLens.Release
   }
 
+  /// The held face's standing on HomeScreen. A STUB (the U3 review's red): only a let-go closes it, as HomeScreen
+  /// held it.
+  struct Stand: Equatable {
+    var held: Held?
+
+    mutating func open(face: CGPoint) { held = Held(face: face, reach: .hub) }
+
+    mutating func move(_ finger: CGPoint, profiles: [String]) {
+      guard let face = held?.face else { return }
+      let reach = FaceHold.reach(finger, face: face, profiles: profiles)
+      if reach != held?.reach { held?.reach = reach }
+    }
+
+    mutating func letGo() -> ProfileLens.Release? {
+      defer { held = nil }
+      return held?.reach
+    }
+
+    mutating func cancel() {}
+  }
+
   /// Where a bud stands about the face: its spoke's angle and reach, and the point they make.
   struct Spot: Equatable {
     let angle: Double
@@ -104,7 +125,7 @@ enum FaceHold {
 
   /// The words over the held face (§9 "The meters' words"): with one profile "Usage" over its reads; with several,
   /// the reach's — Show all, Show ‹profile›, or Cancel on open ground.
-  static func words(_ reading: MetersReading, reach: ProfileLens.Release, now: Date) -> Words {
+  static func words(_ reading: MetersReading, reach: ProfileLens.Release, home: String, now: Date) -> Words {
     let profiles = reading.profiles
     guard profiles.count > 1 else {
       return Words(verb: nil, rest: "Usage", line: reads(reading.meters(of: profiles.first?.id, now: now)))

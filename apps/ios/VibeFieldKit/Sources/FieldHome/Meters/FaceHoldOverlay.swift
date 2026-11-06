@@ -33,6 +33,8 @@ struct FaceHoldOverlay: View {
   let held: FaceHold.Held
   let reading: MetersReading
   let now: Date
+  /// the home's name in the words ("studio doesn't share usage yet")
+  let home: String
   let face: FieldHomeModel.AccountFace
   let seed: String
 
@@ -53,7 +55,7 @@ struct FaceHoldOverlay: View {
     ZStack(alignment: .topLeading) {
       FieldPalette.panelBackground.opacity(Self.veil)
       VStack(spacing: 18) {
-        wordsView(FaceHold.words(reading, reach: held.reach, now: now))
+        wordsView(FaceHold.words(reading, reach: held.reach, home: home, now: now))
         if let whose = circleMeters(several) {
           circleView(whose.meters, every: whose.every, mark: mark)
         }

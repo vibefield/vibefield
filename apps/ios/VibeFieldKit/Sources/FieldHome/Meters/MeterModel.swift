@@ -265,6 +265,9 @@ struct UsageLine: Equatable, Sendable {
   struct Group: Equatable, Sendable {
     let id: String
     let label: String
+
+    /// How the group is said beside a figure. A STUB (the U3 review's red): its label as the adapter wrote it.
+    var word: String { label }
   }
 
   let id: String
