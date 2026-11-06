@@ -15,6 +15,7 @@ import {
 } from "@vibefield/contracts";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { RpcCallError } from "../src/native-link";
+import { UNREADABLE_WORDS } from "../src/signed-record";
 import type { GrantPrincipal } from "../src/terminal-grants";
 import { SPARK_LIVE_AGENTS_MAX } from "../src/tool-plane/rooms/talk/verbs";
 import {
@@ -1546,7 +1547,7 @@ describe("CP-4a2b — a flow run's items: the runs' acts, then Stop the run; an 
     ]);
   });
 
-  it("N5d (Q4's dedup, RULED replace, 2026-11-06; R4–R6 review H4, H5): the same teller asking the same bytes again with another start replaces the open item's start and its session, so its act begins the latest and tells who asked it; the same start writes nothing", async () => {
+  it("N5d (Q4's dedup, RULED replace, 2026-11-06; R4–R6 review H4, H5; ruled 2026-11-06): the same teller asking the same bytes again with another start, or from another session, replaces the open item's start and its session in one write, so its act begins the latest and tells who asked it; the same ask writes nothing", async () => {
     const h = harness();
     const first = {
       input: { target: "run-40" },
@@ -1563,10 +1564,16 @@ describe("CP-4a2b — a flow run's items: the runs' acts, then Stop the run; an 
     const kept = () => h.kept().find((record) => record.item.id === id);
     expect(kept()?.start).toEqual(latest);
     expect(kept()?.item.from).toEqual(again);
-    // the same start again: the same item, and nothing is written
+    // the same start from Vela's next session: its session alone is refreshed, in one write
     const store = (h.queue as unknown as { opts: { store: NeedsStore } }).opts.store;
     const writes = vi.spyOn(store, "write");
-    expect(h.queue.flowChanged({ ...raise, from: again, start: { ...latest } })).toBe(id);
+    const third = { ...VELA_FROM, session: "run-vela-3" };
+    expect(h.queue.flowChanged({ ...raise, from: third, start: { ...latest } })).toBe(id);
+    expect(writes).toHaveBeenCalledTimes(1);
+    expect(kept()?.item.from).toEqual(third);
+    // the same ask again, its start and its teller: the same item, and nothing is written
+    writes.mockClear();
+    expect(h.queue.flowChanged({ ...raise, from: { ...third }, start: { ...latest } })).toBe(id);
     expect(writes).not.toHaveBeenCalled();
     writes.mockRestore();
     const started: FlowItemStart[] = [];
@@ -1578,9 +1585,50 @@ describe("CP-4a2b — a flow run's items: the runs' acts, then Stop the run; an 
         flow: "release-check",
         hash: CHANGED.hash,
         version: "this",
-        from: again,
+        from: third,
         start: latest,
       },
+    ]);
+  });
+
+  it("N5e (step 0's review S1): a spark's changed-flow item answered while the spark sleeps keeps the fact it owes past a restart, its answered record served though it keeps no start, and the spark hears it once it wakes", async () => {
+    const h = harness();
+    const started: FlowItemStart[] = [];
+    h.queue.bindFlowActs(startsInto(started));
+    const id = h.queue.flowChanged(RAISED);
+    h.sleep();
+    h.ctl.open = "refuse";
+    const { item } = await h.queue.answer(id, 0, principal);
+    expect(item.answer).toMatchObject({ outcome: "done", told: false });
+    // the answered rebuild keeps only the answer and the fact owed: no start, by design
+    expect(h.kept().find((record) => record.item.id === id)).not.toHaveProperty("start");
+    const again = h.make();
+    expect(again.restore()).toBe(1);
+    h.runs.set("run-vela-3", {
+      runtimeRunId: "run-vela-3",
+      label: "Vela",
+      spark: VELA,
+      live: true,
+    });
+    again.onSparkLive(VELA, "run-vela-3");
+    expect(h.woken).toEqual([
+      ["run-vela-3", "you ran Release check for Vela as it is now: it started as fr-started1x"],
+    ]);
+  });
+
+  it("N5f (ruled 2026-11-06, window (c)): a start the runs throw on is never said in its own words: it kept no run's record, so nothing was changed, in the store's sentence", async () => {
+    const h = harness();
+    h.queue.bindFlowActs({
+      answer: noAnswer,
+      start: async () => {
+        throw new Error("EIO: i/o error, read '/Users/someone/.vibefield/flows'");
+      },
+    });
+    const id = h.queue.flowChanged(RAISED);
+    const { item } = await h.queue.answer(id, 0, principal);
+    expect(item.answer).toMatchObject({ outcome: "failed", reason: UNREADABLE_WORDS.flows });
+    expect(h.woken).toEqual([
+      ["run-vela", words.flowStartFailedFact("Vela", "Release check", UNREADABLE_WORDS.flows)],
     ]);
   });
 });

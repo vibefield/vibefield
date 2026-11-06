@@ -1737,4 +1737,33 @@ describe("CP-4a2b — a changed flow's acts begin the asked-for run (§13a slice
     expect(h.records.approval("hello")?.hash).toBe(flowHashOf(edited));
     expect(h.records.runRecords()).toEqual([]);
   });
+
+  it("R6d (ruled 2026-11-06, window (c)): once the run's record is kept the run has begun, so the act is done with it; a read-back that throws past it is logged, and the run is listed as its record says", async () => {
+    const h = await harness();
+    h.approved("hello", HELLO);
+    const edited = h.write("hello", HELLO_EDITED);
+    const waits = waitsOf(await h.start());
+    // the record is kept, and the read that follows it is the disk's to refuse
+    const begin = h.records.beginRun.bind(h.records);
+    vi.spyOn(h.records, "beginRun").mockImplementationOnce((entry, start) => {
+      const head = begin(entry, start);
+      vi.spyOn(h.records, "runRecord").mockImplementationOnce(() => {
+        throw new Error("EIO: i/o error, read");
+      });
+      return head;
+    });
+    const run = ranOf(
+      await h.runs.acts.start({
+        id: waits,
+        flow: "hello",
+        hash: flowHashOf(edited),
+        version: "this",
+        start: askedOf(h, 0),
+      }),
+    );
+    expect(h.records.approval("hello")?.hash).toBe(flowHashOf(edited));
+    expect(h.runs.list().runs.map((summary) => summary.run)).toEqual([run]);
+    // its host never started: the record says it runs, and slice 14's boot wakes it
+    expect(h.records.runRecord(run)?.state).toBe("running");
+  });
 });

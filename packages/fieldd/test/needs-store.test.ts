@@ -154,39 +154,55 @@ describe("the needs-you store", () => {
     ).toEqual([good]);
   });
 
-  it("sets aside as unreadable, and never serves, a changed flow's record that keeps no start: no act of it can begin the run it asked for (ruled 2026-11-06)", () => {
+  it("holds an OPEN changed flow's record that keeps no start where it is, never served or written over, as a newer VibeField's record is held; an answered one, which keeps none by design, is served (step 0's review S1, S2)", () => {
     const h = store();
     const kept = NeedsStore.mintId();
     const startless = NeedsStore.mintId();
-    const changed = (id: string): NeedsRecord => ({
+    const answered = NeedsStore.mintId();
+    const spark = "sp-vela00000000";
+    const changed = (id: string, asked: string): NeedsRecord => ({
       format: NEEDS_RECORD_FORMAT,
       item: {
         id,
         kind: "flow-changed",
         state: "open",
-        from: { name: "Nightly sweep" },
-        asked: "2026-11-06T07:00:00.000Z",
+        from: { name: "Vela", session: "run-vela", spark },
+        spark,
+        words: "Release check",
+        asked,
         choices: ["Run this version", "Not now"],
-        script: { flow: "nightly-sweep", hash: "1".repeat(64) },
+        script: { flow: "release-check", hash: "1".repeat(64) },
       },
     });
-    const start = { input: {}, starter: { by: "you" }, scope: ["work"] };
-    h.store.write({ ...changed(kept), start });
-    // contracts' tolerant reader takes a record with no start, so it is signed as any record is; VibeField's own
-    // raise always hands one (Q4), so a record without it is one VibeField did not write that way
-    h.store.write(changed(startless));
+    const start = { input: {}, starter: { by: "spark", spark }, scope: ["work"] };
+    h.store.write({ ...changed(kept, "2026-11-06T07:00:00.000Z"), start });
+    // contracts' tolerant reader takes an open record with no start (a newer VibeField may write one, its format
+    // unchanged), so it is signed as any record is; VibeField's own raise always hands one (Q4)
+    h.store.write(changed(startless, "2026-11-06T07:01:00.000Z"));
+    // an answered item's record keeps only its answer and the fact its spark is owed (queue.ts's answered rebuild)
+    const asked = changed(answered, "2026-11-06T07:02:00.000Z");
+    h.store.write({
+      ...asked,
+      item: {
+        ...asked.item,
+        state: "answered",
+        answer: { choice: 0, at: "2026-11-06T07:03:00.000Z", outcome: "done", told: false },
+      },
+      owed: "you ran Release check for Vela as it is now: it started as fr-started1x",
+    });
+    const again = h.open();
+    expect(again.list().map((r) => r.item.id)).toEqual([kept, answered]);
+    // kept in place, said once, never set aside, and a write to it is refused, never made over it
+    expect(existsSync(join(h.dir, `${startless}.json`))).toBe(true);
+    expect(readdirSync(h.dir).filter((f) => f.startsWith(`${startless}.json.`))).toEqual([]);
+    expect(h.events.filter((e) => e.event === "fieldd.needs.set_aside")).toEqual([]);
     expect(
-      h
-        .open()
-        .list()
-        .map((r) => r.item.id),
-    ).toEqual([kept]);
-    expect(
-      h.events.filter((e) => e.event === "fieldd.needs.set_aside").map((e) => e.attrs?.why),
-    ).toEqual(["unreadable"]);
-    expect(existsSync(join(h.dir, `${startless}.json`))).toBe(false);
-    const aside = readdirSync(h.dir).filter((f) => f.startsWith(`${startless}.json.unreadable-`));
-    expect(aside).toHaveLength(1);
+      h.events.filter((e) => e.event === "fieldd.records.newer").map((e) => e.attrs?.file),
+    ).toEqual([`${startless}.json`]);
+    expect(again.list().map((r) => r.item.id)).toEqual([kept, answered]);
+    expect(h.events.filter((e) => e.event === "fieldd.records.newer")).toHaveLength(1);
+    const over = { ...changed(startless, "2026-11-06T07:01:00.000Z"), start };
+    expect(() => again.write(over)).toThrow();
   });
 
   it("refuses to keep a record its contract does not take", () => {
