@@ -6307,7 +6307,40 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     CP-3's queue that is a spark's, on a pale fill with a 1.5 orange ring while it waits, its choices as 36 capsules
     with the first inverted. VibeField's own items are answered on the card, and the record says you did. An agent's
     own ask has one act, **Answer in its pane** (PC-L3). Answered, the card says what you said and leaves the group
-    after 2.4s; in the thread it stays as said. An answer here is answered for every window and device.
+    after 2.4s; in the thread it leaves as the Mac's does, and the flow's line says the answer. An answer here is
+    answered for every window and device.
+    *Corrected 2026-11-06 (IOS-12d, its Q3; TH-1's ER-C8):* this said "in the thread it stays as said". Since TH-1
+    the Mac's card says what you said for 2.4 s and leaves, and the flow's own line ("You answered Vela: Yes") takes
+    its place. One Chat, two sizes (PC-L1), so the phone's thread does the same.
+    *Amended 2026-11-06 (IOS-12d; VF-PM's rulings on its Q1–Q10, 19:12Z; its words are §9's, for James's eye):*
+    - **What the group holds** (Q7): every open item with a spark, from every self desktop, oldest asked first as the
+      home's merge sorts it. An item whose spark the list does not hold still stands, named as fieldd names its
+      asker, because the need is real. An item with no spark is a run you started, counted on Field's badge and never
+      here (PC-D5: one need, one count). A flow's item stands as the Mac's card draws it until CP-4b (Q9).
+    - **Its head** is "Needs you" with its count, in the group head's look, as "Sparks · 4" stands.
+    - **A card** is as wide as the rows, 16 from the sides, the cards 10 apart: the pale fill, corners 20, padded
+      14 16. While it waits on you (its item waits, or your answer runs) its ring is 1.5 in `--vf-orange` at 75%;
+      once it says what you said, or waits on no one, it is the separator's hairline. Its rows stand 5 apart:
+      - "‹who› asks" (Q2), 13/600 in the attention ink, and tertiary once it waits on no one. ‹who› is the spark for
+        its own items (its question, its held send or spawn, its own run's ask), else the asking run;
+      - the question, 17 regular at 1.35 in primary ink, six lines at most, then it scrolls within itself;
+      - a held send's or spawn's words, 15 regular in secondary ink, then "and 2 more" in tertiary ink;
+      - the sub, 13 regular in tertiary ink;
+      - the acts, 13 under the row above them: capsules 36 tall and 8 apart, the first inverted, wrapping to a
+        second row and never shrinking. While the answer runs, the pressed one says its word with "…" and the rest
+        dim.
+    - **Answered,** the acts give way to one line: `check` 14, then "You said Allow" at 13/500 in tertiary ink. An
+      act that did not go as asked says so after it, with `exclaim` in the attention ink, in the Mac's words (§8
+      "Chat's thread"). Refused, "Couldn't answer: ‹fieldd's words›" stands under its words, and its acts stay
+      while its item waits. It rises in over 240ms and leaves in 180ms; with reduced motion each way is a 120ms fade
+      in place (M6).
+    - **Pressed outside its acts,** a card opens its spark's thread.
+    - **Answer in its pane** opens the asking run's session card on Field, as ⋯'s Open its pane does. With no pane
+      on the board, it says why where the act stood (Q5; §9).
+    - **Its desktop away** (Q8; PC-L4): the card stays, its acts withheld, with its line under its words (§9).
+    - **An answer that returns off screen** and did not go as asked is said on the note over the bar for 2.4 s, in
+      the card's words and the attention ink (Q4), where the Mac says it on its status line. One that went as asked
+      says nothing there: the flow says it.
   - **The thread** (PC-D2): the spark's transcript drawn as Chat, read through the home. Its rows are the Mac's (§8
     "Chat's thread"), folded by a port of the Mac's own fold and held to goldens that fold writes (IOS-12c), at touch
     pitch.
@@ -6345,6 +6378,12 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       thread shows words and acts. *Corrected 2026-11-05 (SP-1e2's renderer half):* this said "as the Mac's do". The
       Mac draws a crew's card since then (§8 "Chat's crew card"); the phone's waits on PC.
     - Its pane is one tap away in ⋯, never inside the thread.
+    - **What waits on you** (IOS-12d, 2026-11-06): the Mac's needs-you card (§8 "Chat's thread") at touch pitch,
+      held at the foot between the flow and the composer, as wide as the composer and 12 above it. The flow gives
+      way to it. One card at a time: its own run's ask first, then the oldest (CO-Q12 (b)), with "1 of 3" at its
+      right. Its rows are the group's card's, but its eyebrow is the Mac's: the word Chat's row says for the item,
+      then " · " and the asker when it is not the thread's spark. Answered, it says what you said for 2.4 s and
+      leaves, and the flow's line says the answer.
     *Corrected 2026-11-06 (IOS-12c, M-c2; PC-L1):* this said "An act is one line per vibefield tool call" and "A fact
     is a wake ("VibeField: …"), drawn centred at 12 and never as your words". Neither is the Mac's thread since TH-1:
     VibeField's own tools leave the tools' count, and a wake is one of VibeField's own acts, a quiet line in the
@@ -7134,6 +7173,16 @@ is a false claim; for James's eye.)* Needs you says who asks ("‹name› asks",
 asks"), an agent's own ask says **Answer in its pane**,
 and an answer says "You said ‹choice›". The note says "‹name› needs you". New spark says "Runs on ‹desktop›, your
 home" and **Create ‹name›**, and refuses with "‹name› is taken" or "‹profile› has no ‹agent› sign-in".
+*Amended 2026-11-06 (IOS-12d; VF-PM's rulings 19:12Z; every line here for James's eye, filed as one board ask):*
+- **Who asks** (Q2) is the spark for its own items, else the asking run as fieldd names it, until the phone has @'s
+  handles (IOS-12f): "Vela asks", "Claude Code in research asks". "research·3 asks" is the handle's form.
+- **Answer in its pane** (Q5) with no pane on the board says where the act stood: "Couldn't open its pane: it isn't
+  on your field".
+- **A card whose desktop is away** (Q8): "‹desktop› is asleep · answer when it wakes", "‹desktop› isn't answering ·
+  answer when it answers", and "‹desktop› runs a build this phone can't read · answer when it's updated".
+- **The note, for an answer that returns off screen** (Q4), in the card's words: "You said Allow one more ·
+  Couldn't start the agent: ‹reason›", "You said Yes · Vela hears it when it wakes: ‹fieldd's words›", and
+  "Couldn't answer: ‹fieldd's words›".
 
 **Apps** (track MA, ruled 2026-11-05 from the page *Apps in a Pocket*: MA-D13 (a), Apps everywhere; the words are
 `draft/thinking-mini-apps.md` §5.8 and §5.9; where each word stands is §8 "The phone's Apps" and "Artifacts — the
