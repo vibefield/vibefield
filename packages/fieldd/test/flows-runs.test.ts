@@ -600,3 +600,50 @@ describe("CP-4a2b — a step's agent, by the one spawn road: entry first, then t
     expect(h.enqueued[0]?.from).toMatchObject({ kind: "flow", name: "release-check" });
   });
 });
+
+// CP-4a2b (§13a slice 8b; CP4-S7) — a run's step agents alive at once: LIVE_STEPS_MAX, a run's own. One more waits for
+// a slot, visibly, and is never spawned past the bound. (Its start when a slot frees is slice 9's: an answer frees it.)
+
+/** A fan-out of `n` steps at once, each its own label. */
+const fanOut = (n: number): string =>
+  [
+    'export const meta = { name: "Fan" };',
+    "export default async function () {",
+    "  const steps = [];",
+    `  for (let i = 1; i <= ${n}; i += 1)`,
+    '    steps.push(agent("look at part " + i, { agent: "claude", label: "Part " + i, profile: "work", cwd: "/work/app" }));',
+    "  return await Promise.all(steps);",
+    "}",
+    "",
+  ].join("\n");
+
+describe("CP-4a2b — a run's live steps, LIVE_STEPS_MAX at once (§13a slice 8b)", () => {
+  it("R14 (CP4-S7): of 9 steps at once, 8 are spawned and the 9th waits for a slot on the record, never spawned; another run's steps are its own", async () => {
+    const h = await harness();
+    h.approved("fan", fanOut(FLOW_LIMITS.LIVE_STEPS_MAX + 1));
+    const run = startedRun(await h.start({ flow: "fan" })).run;
+    await waitFor(() => expect(h.records.runRecord(run)?.open).toHaveLength(9));
+    await waitFor(() => expect(h.enqueued).toHaveLength(FLOW_LIMITS.LIVE_STEPS_MAX));
+    expect(h.spawned).toHaveLength(FLOW_LIMITS.LIVE_STEPS_MAX);
+    const open = h.records.runRecord(run)?.open ?? [];
+    expect(open.filter((step) => step.state === "working")).toHaveLength(
+      FLOW_LIMITS.LIVE_STEPS_MAX,
+    );
+    expect(open.find((step) => step.call === 9)).toEqual({
+      call: 9,
+      label: "Part 9",
+      agent: "claude",
+      state: "waiting",
+    });
+    expect(h.spawned.map((spawn) => spawn.origin.call)).not.toContain(9);
+    expect(h.runs.read(run)?.summary.steps.at(-1)).toMatchObject({ call: 9, state: "waiting" });
+    expect(h.records.runRecord(run)?.calls).toBe(9);
+    // a second run's steps are counted against its own bound, never the first's
+    h.approved("review", REVIEW);
+    const other = startedRun(await h.start({ flow: "review" })).run;
+    await waitFor(() =>
+      expect(h.spawned.filter((spawn) => spawn.origin.run === other)).toHaveLength(1),
+    );
+    expect(h.spawned).toHaveLength(FLOW_LIMITS.LIVE_STEPS_MAX + 1);
+  });
+});
