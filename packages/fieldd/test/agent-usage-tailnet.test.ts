@@ -183,14 +183,17 @@ async function answered(rpc: WsRpc, method: string, params: unknown): Promise<un
 
 /** The batch this desktop holds once its first reading has landed — asked by
  * the window, whose one-shot read with nothing cached takes the one reading
- * `snapshot` kicks — then a beat, so no reading is still in flight. */
+ * `snapshot` kicks — then a beat, so no reading is still in flight, and the
+ * batch as it stands after that beat: each cold ask before the first landed
+ * kicked a reading of its own, and a later one may land inside the beat. A
+ * read with a batch cached kicks nothing. */
 async function heldBatch(world: World): Promise<AgentAccountUsageBatch> {
   const deadline = Date.now() + 8_000;
   for (;;) {
     const batch = AgentAccountUsageBatch.parse(await world.window.call("agents.usage", {}));
     if (batch.entries.length > 0) {
       await settle(REFRESH_MS * 3);
-      return batch;
+      return AgentAccountUsageBatch.parse(await world.window.call("agents.usage", {}));
     }
     if (Date.now() > deadline) throw new Error("no reading landed within 8 s");
     await settle(25);
