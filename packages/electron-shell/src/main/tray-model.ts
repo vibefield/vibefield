@@ -2,15 +2,16 @@ import type { SoundPlayerState, UpdateView } from "@vibefield/contracts";
 import { stagedTrayLabel } from "./updates/apply";
 
 /** The status item's service row (DESIGN.md §9 "The field service's words"). Item 212 (RV #29): `recovering`
- * while main starts fieldd again after it went away, `crash-loop` once the house intensity stopped it
- * (`main/fieldd-link.ts`). */
+ * while main starts fieldd again after it went away, `crash-loop` once the house intensity stopped it; (RV #67)
+ * `unresponsive` while it is up and its replies are silent (`main/fieldd-link.ts`). */
 export type TrayLinkState =
   | "starting"
   | "ready"
   | "reconnecting"
   | "unavailable"
   | "recovering"
-  | "crash-loop";
+  | "crash-loop"
+  | "unresponsive";
 export type TrayEvidenceState = "healthy" | "degraded";
 export type TrayUpdateState =
   | { readonly kind: "idle" }
@@ -146,6 +147,9 @@ function serviceStatus(snapshot: TraySnapshot): string {
       return snapshot.serviceTries === undefined
         ? "Field service: Stopped"
         : `Field service: Stopped after ${triesWords(snapshot.serviceTries)}`;
+    // Item 212 (RV #67; DESIGN.md §9, at the lean until James rules rv-service-recovery): up, and silent
+    case "unresponsive":
+      return "Field service: Not responding";
   }
 }
 

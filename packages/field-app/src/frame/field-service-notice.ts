@@ -13,7 +13,8 @@ import { type StatusNotice, sayStatus, withdrawStatus } from "./status-line";
 // again; once main stopped trying, "VibeField's field service stopped after 3 tries. Your terminal sessions keep
 // running." with Try again, which asks main to replace this window through the existing door (`field-service`): the
 // reloaded window's bootstrap is the person's ask. Withdrawn the moment the field service is back. The status line
-// stands over every view's cover, Godview's included, so no view says it twice.
+// stands over every view's cover, Godview's included, so no view says it twice. RV #67: while it is up and its
+// replies are silent, "VibeField's field service isn't responding. …" is held, with no act, until it answers.
 
 const log = () => getRendererLogger().child({ component: "frame.field-service" });
 
@@ -47,8 +48,13 @@ export function fieldServiceNotice(
         : { id, text, act: { label: "Try again", run: retry } };
     }
     case FIELDD_LINK.STATE_UNRESPONSIVE:
-      // RV #67 says it, in words of its own (this lane's next rank)
-      return null;
+      // RV #67 (DESIGN.md §8, amended 2026-11-06, at the lean until James rules rv-service-recovery): up, and silent.
+      // Held with no act: there is nothing a person's ask would start while it is up
+      return {
+        id: "field-service:unresponsive",
+        text: "VibeField's field service isn't responding. Your terminal sessions keep running. If it lasts, quit VibeField and open it again.",
+        hold: true,
+      };
   }
 }
 

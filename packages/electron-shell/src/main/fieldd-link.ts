@@ -8,7 +8,9 @@ import type { TrayLinkState } from "./tray-model";
 // status line says (field-app frame/field-service-notice.ts). The worse and truer story wins: a crash loop, then a
 // recovery, then the client's own word. Background pairs keep their own coordinator and intensity and move none of it;
 // a user switch re-binds it. It is the ONE detector: a window, Godview's doors (rv/monitor-doors) and the status item
-// read it, and none builds a second. RV #67 adds the handle's liveness to the same projection.
+// read it, and none builds a second. RV #67 adds the handle's liveness, which the coordinator forwards through the same
+// state (`unresponsive`): the field service up and its replies silent, said over a READY client only (a client that
+// left ready says its own word, the truer one once the socket is gone).
 
 /** What the link is made of. */
 export interface FielddLinkInputs {
@@ -51,6 +53,15 @@ export function projectFielddLink(inputs: FielddLinkInputs): FielddLinkView {
           attempt: recovery.attempt,
           of: recovery.of,
         },
+      };
+    case "unresponsive":
+      if (inputs.client !== "ready") {
+        return { link: clientLink(inputs.client), serviceTries: undefined, fieldd: null };
+      }
+      return {
+        link: "unresponsive",
+        serviceTries: undefined,
+        fieldd: { service: FIELDD_LINK.SERVICE, state: FIELDD_LINK.STATE_UNRESPONSIVE },
       };
     case "ready":
       return { link: clientLink(inputs.client), serviceTries: undefined, fieldd: null };

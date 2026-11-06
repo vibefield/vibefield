@@ -2,6 +2,13 @@
 // (ESR spec §5.3). No Electron anywhere below this line (wall R3).
 export { afterIoTurn } from "./io-turn";
 export {
+  FIELDD_LIVENESS,
+  type LivenessClient,
+  type LivenessClock,
+  type LivenessWatch,
+  watchLiveness,
+} from "./liveness";
+export {
   assertDataRootUsable,
   nativeMgmtEndpoint,
   nativeSocketPath,
@@ -26,6 +33,8 @@ export {
 export { createFielddSupervisor } from "./supervisor";
 export {
   type FielddHandle,
+  type FielddLiveness,
+  type FielddLivenessOptions,
   type FielddReadySignal,
   type FielddSpawnCommand,
   type FielddSupervisor,

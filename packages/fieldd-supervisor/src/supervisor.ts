@@ -1,6 +1,7 @@
 import { type ChildProcess, spawn } from "node:child_process";
 import type { ProductInfo, ShellLeaveReason } from "@vibefield/contracts";
 import type { FielddClient } from "@vibefield/fieldd-client";
+import { FIELDD_LIVENESS, type LivenessWatch, watchLiveness } from "./liveness";
 import { assertDataRootUsable } from "./paths";
 import {
   awaitDeparture,
@@ -12,6 +13,7 @@ import {
 import { createLineBuffer, createLogTail, redactLine } from "./process-log";
 import {
   type FielddHandle,
+  type FielddLiveness,
   type FielddReadySignal,
   type FielddSupervisor,
   type FielddSupervisorEvent,
@@ -29,6 +31,10 @@ import {
 // Item 212 (RV #30): a probe-timeout is a fieldd BUSY, not gone — it is waited on
 // for the spawn's own readiness bound before any takeover — and the record a
 // spawn supersedes, answering late, is never read as the race's winner.
+// Item 212 (RV #67): every handle's link is watched for the silence of its
+// replies (liveness.ts); a SPAWNED fieldd silent past the wedge bound is ended
+// alone, by the same child-only ladder a failed start uses, and an adopted one
+// is only said.
 
 const READINESS_DEADLINE_MS = 20_000;
 const ADOPT_PROBE_MS = 1_500;
@@ -425,24 +431,78 @@ export function createFielddSupervisor(opts: FielddSupervisorOptions): FielddSup
   ): FielddHandle {
     const ownedChild = ownership === "spawned" ? child : null;
     let stopping: Promise<void> | null = null;
+    /** item 212 (RV #67) — the child-only ladder a wedge started. It ends no floor, so it is never the handle's stop:
+     * a stop-owned stop after it still ends the floor the record names. */
+    let wedgeStop: Promise<void> | null = null;
+    // item 212 (RV #67) — the link's liveness, by the silence of its replies (liveness.ts), on every handle
+    let liveness: FielddLiveness = { kind: "responsive" };
+    const livenessListeners = new Set<(liveness: FielddLiveness) => void>();
+    let watch: LivenessWatch | null = null;
+    /** At the wedge bound, an OWNED fieldd is ended alone by the child-only ladder: `stopChild` with no record has no
+     * floor pid to signal and, with no client, asks no verb a stalled loop could not answer (as run()'s failure path
+     * uses it). Its exit invalidates this handle, and the shell's recovery starts the next. An ADOPTED fieldd is never
+     * signalled (ESR §5.3): it stays said, and a relaunch takes it over (RV #30's named takeover). */
+    const endWedged = (silentMs: number): void => {
+      if (ownedChild === null || stopping !== null || wedgeStop !== null || disposed) return;
+      lifecycle(
+        "fieldd.supervisor.wedge_killed",
+        "The fieldd this shell spawned stopped answering past the wedge bound; it is ended alone",
+        { silentMs, ...(ownedChild.pid !== undefined ? { pid: ownedChild.pid } : {}) },
+      );
+      watch?.stop();
+      wedgeStop = stopChild(ownedChild, null);
+    };
     const result: FielddHandle = {
       ownership,
       info: probe.info,
       client: probe.client,
       ...(ownedChild?.pid !== undefined ? { childPid: ownedChild.pid } : {}),
+      get liveness(): FielddLiveness {
+        return liveness;
+      },
+      onLiveness(listener: (liveness: FielddLiveness) => void): () => void {
+        livenessListeners.add(listener);
+        return () => {
+          livenessListeners.delete(listener);
+        };
+      },
       stopOwned(): Promise<void> {
         if (ownership !== "spawned" || !ownedChild) return Promise.resolve(); // never kill adopted
-        stopping ??= stopChild(ownedChild, probe.info, probe.client);
+        // item 212 (RV #67): the stop begins, and a stopping fieldd's silence is no wedge
+        watch?.stop();
+        // after a wedge kill the stop is still stop-owned's whole teardown: the child-only ladder first, then the
+        // floor the record names, with no verb (the child, and with it the link, went with that ladder)
+        stopping ??=
+          wedgeStop === null
+            ? stopChild(ownedChild, probe.info, probe.client)
+            : wedgeStop.then(() => stopChild(ownedChild, probe.info));
         return stopping;
       },
     };
+    const livenessOptions = opts.liveness ?? FIELDD_LIVENESS;
+    if (livenessOptions !== false) {
+      watch = watchLiveness(probe.client, {
+        ...livenessOptions,
+        onChange: (next) => {
+          liveness = next;
+          for (const listener of [...livenessListeners]) {
+            try {
+              listener(next);
+            } catch {
+              // Observation must never control daemon ownership or lifecycle.
+            }
+          }
+          if (next.kind === "wedged") endWedged(next.silentMs);
+        },
+      });
+    }
     if (ownedChild !== null) {
       const invalidate = (code: number | null, signal: NodeJS.Signals | null): void => {
         // A reconnecting client does not prove that its server process still
         // exists. Positive child exit retires this exact handle so the next
         // ensure() may probe/spawn a fresh boot instead of returning it forever.
         probe.client.close();
-        if (stopping === null && !disposed) {
+        if (stopping === null && wedgeStop === null && !disposed) {
           lifecycle("fieldd.supervisor.owned_child_exited", "Owned fieldd exited after readiness", {
             ...(ownedChild.pid !== undefined ? { pid: ownedChild.pid } : {}),
             code,
@@ -450,7 +510,7 @@ export function createFielddSupervisor(opts: FielddSupervisorOptions): FielddSup
           });
         }
       };
-      if (ownedChild.exitCode !== null || ownedChild.signalCode !== null) {
+      if (hasExited(ownedChild)) {
         invalidate(ownedChild.exitCode, ownedChild.signalCode);
       } else {
         ownedChild.once("exit", invalidate);
@@ -527,7 +587,7 @@ export function createFielddSupervisor(opts: FielddSupervisorOptions): FielddSup
     // SIGTERM is a hard TerminateProcess and fieldd's graceful path (child
     // sweep, run-file cleanup, audit close) never ran. Refusal, timeout, or a
     // dead socket all fall through to the ladder below, which is unchanged.
-    if (client && proc.exitCode === null) {
+    if (client && !hasExited(proc)) {
       const asked = await Promise.race([
         client.request("system.shutdown", {}).then(
           () => true,
@@ -541,9 +601,11 @@ export function createFielddSupervisor(opts: FielddSupervisorOptions): FielddSup
         });
       }
     }
-    if (proc.exitCode === null && !proc.killed) proc.kill("SIGTERM");
+    if (!hasExited(proc) && !proc.killed) proc.kill("SIGTERM");
     await new Promise<void>((resolve) => {
-      if (proc.exitCode !== null) return resolve();
+      // a child a signal ended keeps a null exitCode: read as live, its stop would wait out the deadline for an exit
+      // that already came and force-kill a corpse (item 212, RV #67: the stop after a wedge kill)
+      if (hasExited(proc)) return resolve();
       const t = setTimeout(() => {
         proc.kill("SIGKILL");
         lifecycle("fieldd.supervisor.force_killed", "fieldd exceeded its shutdown deadline", {
@@ -613,6 +675,11 @@ export function createFielddSupervisor(opts: FielddSupervisorOptions): FielddSup
   }
 
   return { ensure, dispose };
+}
+
+/** A child that has exited, by its own code or by a signal (its `exitCode` stays null then). */
+function hasExited(proc: ChildProcess): boolean {
+  return proc.exitCode !== null || proc.signalCode !== null;
 }
 
 function parseReadySignal(line: string): FielddReadySignal | null {

@@ -1104,8 +1104,16 @@ async function main(
           { userId, failures: state.failures, windowMs: recoveryIntensity.windowMs },
         );
         return;
+      // RV #67 — up, and its replies silent (the supervisor logs the wedge kill of one it spawned, with silentMs)
+      case "unresponsive":
+        logger.warn(
+          "desktop.fieldd.unresponsive",
+          "fieldd stopped answering main; its terminal sessions keep running",
+          { userId },
+        );
+        return;
       case "ready":
-        logger.info("desktop.fieldd.recovered", "fieldd is back after a recovery", { userId });
+        logger.info("desktop.fieldd.recovered", "fieldd is up and answering again", { userId });
         return;
     }
   };

@@ -1,4 +1,4 @@
-import type { FielddHandle, FielddSupervisor } from "@vibefield/fieldd-supervisor";
+import type { FielddHandle, FielddLiveness, FielddSupervisor } from "@vibefield/fieldd-supervisor";
 
 type HandleListener = (handle: FielddHandle) => void;
 export const FIELDD_REPROBE_AFTER_MS = 3_000;
@@ -23,11 +23,17 @@ export const FIELDD_RECOVERY_INTENSITY: FielddRecoveryIntensity = Object.freeze(
  *  · `ready` — nothing to recover, or the one attempt a death starts at once is in flight;
  *  · `recovering` — an attempt failed and the next waits its spacing; `attempt` of `of` made inside the window;
  *  · `crash-loop` — `failures` automatic attempts inside the window did not keep fieldd up (since `since`, unix
- *    ms): nothing starts it again until a person asks. */
+ *    ms): nothing starts it again until a person asks;
+ *  · `unresponsive` (RV #67) — the current handle lives and its replies have gone silent (its liveness watch says
+ *    `unresponsive` or `wedged`). Nothing to start: fieldd is up. A spawned one silent past the wedge bound is ended by
+ *    the supervisor, and its exit is a death like any other: the state stands through the attempt the death starts at
+ *    once, which ends it (`ready`, `recovering` or `crash-loop`). Heard only from a live handle, so a recovery or a
+ *    crash loop, which come after a death, always outrank it. */
 export type FielddRecoveryState =
   | { readonly kind: "ready" }
   | { readonly kind: "recovering"; readonly attempt: number; readonly of: number }
-  | { readonly kind: "crash-loop"; readonly failures: number; readonly since: number };
+  | { readonly kind: "crash-loop"; readonly failures: number; readonly since: number }
+  | { readonly kind: "unresponsive" };
 
 export interface FielddEnsureOptions {
   readonly signal?: AbortSignal;
@@ -95,6 +101,7 @@ export class FielddDaemonBootFence {
 }
 
 const READY: FielddRecoveryState = { kind: "ready" };
+const UNRESPONSIVE: FielddRecoveryState = { kind: "unresponsive" };
 const HELD = "fieldd is held for a stop: nothing may start it until the app exits";
 
 /** The automatic attempt the spacing will start, and the incidental callers waiting on it. */
@@ -115,10 +122,14 @@ interface Spacing {
  * arms the next after the spacing; every automatic attempt counts in the intensity window, and past its `max` the
  * recovery stops in `crash-loop`. Incidental callers join a recovery and never start or count their own; in the
  * crash loop they are refused typed. A person's ask begins a recovery's count again. Background pairs each have their
- * own coordinator, so their own intensity. */
+ * own coordinator, so their own intensity.
+ *
+ * Item 212 (RV #67) — and it forwards its current handle's liveness into the same state (`unresponsive`, then `ready`
+ * at the next reply), unheard while held for a stop. */
 export class FielddHandleCoordinator {
   private current: FielddHandle | null = null;
-  private stopCurrentStatus: (() => void) | null = null;
+  /** stops observing the current handle: its client's status, and (RV #67) its liveness */
+  private unwatchCurrent: (() => void) | null = null;
   private reprobeTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly listeners = new Set<HandleListener>();
   private disposed = false;
@@ -211,6 +222,9 @@ export class FielddHandleCoordinator {
     this.held = false;
     const paused = this.lost && this.current === null && this.inFlight === null;
     if (paused && this.spacing === null && this.state.kind !== "crash-loop") this.afterFailure();
+    // RV #67: a silence (or an answer) the hold did not hear is said now
+    const current = this.current;
+    if (current !== null) this.heard(current, current.liveness);
   }
 
   get isHeld(): boolean {
@@ -231,8 +245,8 @@ export class FielddHandleCoordinator {
       const refusal = new Error("fieldd handle coordinator is disposed");
       for (const waiter of spacing.waiters) waiter.reject(refusal);
     }
-    this.stopCurrentStatus?.();
-    this.stopCurrentStatus = null;
+    this.unwatchCurrent?.();
+    this.unwatchCurrent = null;
     this.listeners.clear();
     this.current = null;
   }
@@ -255,10 +269,15 @@ export class FielddHandleCoordinator {
   private adopt(handle: FielddHandle): void {
     if (this.current === handle) return;
     this.clearReprobeTimer();
-    this.stopCurrentStatus?.();
+    this.unwatchCurrent?.();
     this.current = handle;
     this.lost = false;
-    this.stopCurrentStatus = handle.client.onStatusChange(() => this.observe(handle));
+    const unwatchStatus = handle.client.onStatusChange(() => this.observe(handle));
+    const unwatchLiveness = handle.onLiveness((liveness) => this.heard(handle, liveness));
+    this.unwatchCurrent = () => {
+      unwatchStatus();
+      unwatchLiveness();
+    };
     for (const listener of [...this.listeners]) this.notify(listener, handle);
     // RV #29: any new handle ends a recovery (its spacing cleared, its waiters handed the handle) and is ready
     const spacing = this.takeSpacing();
@@ -294,8 +313,8 @@ export class FielddHandleCoordinator {
     }
     if (handle.client.status !== "closed" && handle.client.status !== "failed") return;
     this.clearReprobeTimer();
-    this.stopCurrentStatus?.();
-    this.stopCurrentStatus = null;
+    this.unwatchCurrent?.();
+    this.unwatchCurrent = null;
     this.current = null;
     // Positive owned-child exit closes its supervisor client; terminal
     // adopted-client failure does the same. Recovery starts here so a
@@ -303,6 +322,15 @@ export class FielddHandleCoordinator {
     // one automatic attempt at once, counted under the intensity (RV #29).
     this.lost = true;
     this.recover();
+  }
+
+  /** Item 212 (RV #67) — the current handle's liveness, said in the recovery's state: `unresponsive` for a silence
+   * (`wedged` is the same word to a person), `ready` at its next reply. Only the live handle's is heard, never while
+   * held for a stop (a stopping fieldd goes quiet), and only between those two states: fieldd is up. */
+  private heard(handle: FielddHandle, liveness: FielddLiveness): void {
+    if (this.disposed || this.held || this.current !== handle) return;
+    if (this.state.kind !== "ready" && this.state.kind !== "unresponsive") return;
+    this.setState(liveness.kind === "responsive" ? READY : UNRESPONSIVE);
   }
 
   /** Item 212 (RV #29) — one automatic attempt now, counted in the window; or, with the window already holding `max`,
@@ -370,7 +398,8 @@ export class FielddHandleCoordinator {
    * a fieldd that keeps dying with a window open respawn forever. Outside a recovery (a boot), a failure is said to
    * the asker alone, as ESR §7.1's boot failure with its Retry. */
   private ask(options: FielddEnsureOptions): Promise<FielddHandle> {
-    const underWay = this.state.kind !== "ready";
+    // RV #67: a silent fieldd is up, so an ask then is no recovery and begins nothing again
+    const underWay = this.state.kind === "recovering" || this.state.kind === "crash-loop";
     if (underWay) this.automaticAt = [];
     if (this.inFlight !== null) return this.inFlight;
     const spacing = this.takeSpacing();

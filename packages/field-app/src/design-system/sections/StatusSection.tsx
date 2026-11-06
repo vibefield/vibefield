@@ -42,6 +42,8 @@ const FIELD_SERVICE_STOPPED: FielddLinkUnavailable = {
   state: "crash-loop",
   failures: 3,
 };
+// RV #67 — up, and its replies silent
+const FIELD_SERVICE_SILENT: FielddLinkUnavailable = { service: "fieldd", state: "unresponsive" };
 const retryFixture = (): void => undefined;
 
 export function StatusSection(): ReactElement {
@@ -186,6 +188,14 @@ export function StatusSection(): ReactElement {
         >
           <div className="vf-ds-status-line-stage">
             <StatusLineView notice={fieldServiceNotice(FIELD_SERVICE_STOPPED, retryFixture)} />
+          </div>
+        </Specimen>
+        <Specimen
+          title="The status line — the field service is up and not responding"
+          source="frame/field-service-notice.ts"
+        >
+          <div className="vf-ds-status-line-stage">
+            <StatusLineView notice={fieldServiceNotice(FIELD_SERVICE_SILENT, retryFixture)} />
           </div>
         </Specimen>
       </div>

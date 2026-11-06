@@ -55,6 +55,24 @@ export function sayFatalSmokeHome(mode: ShellMode, root: string): void {
   );
 }
 
+/** Node's inspector flags: `--inspect`, `--inspect-brk` and `--inspect-wait`, with or without their `=host:port`
+ * (`--inspect-port` alone opens nothing). */
+const INSPECTOR_FLAG = /^--inspect(?:-brk|-wait)?(?:=.*)?$/u;
+
+/** Item 212 (RV #67) — whether fieldd is spawned under the inspector: a debugger paused at a breakpoint is a loop that
+ * does not turn, which the shell's liveness watch would read as a wedge and end. Node takes the flag from its
+ * arguments and from NODE_OPTIONS. A packaged app is never under one: its fuses refuse both in node mode, and its
+ * fieldd executable reads no NODE_OPTIONS (apps/desktop/packaging/fuse-matrix.mjs, build-fieldd-sea.mjs). */
+export function spawnsUnderInspector(
+  packaged: boolean,
+  args: readonly (string | undefined)[],
+  environment: Readonly<Record<string, string | undefined>>,
+): boolean {
+  if (packaged) return false;
+  const nodeOptions = (environment["NODE_OPTIONS"] ?? "").split(/\s+/u);
+  return [...args, ...nodeOptions].some((flag) => flag !== undefined && INSPECTOR_FLAG.test(flag));
+}
+
 export function buildSupervisor(opts: {
   mode: ShellMode;
   rendererPolicyMode: ShellMode;
@@ -126,6 +144,7 @@ export function buildSupervisor(opts: {
   // a staged bundled root that way). PG-9 S4c: likewise a package plays no debug swarm — FIELDD_DEBUG_SWARM_CORPUS
   // is blanked for it (and a packaged fieldd handed one anyway refuses to boot); development passes it through.
   const packaged = opts.resources.packaged;
+  const baseEnvironment = opts.environment ?? process.env;
   const trust = readBundledTrust(opts.resources);
   if (packaged && trust === null) {
     throw new Error("a packaged app has no staged identity to verify its own plugins with");
@@ -163,7 +182,7 @@ export function buildSupervisor(opts: {
     dataRoot: opts.root,
     spawn: { command, args: args.filter((a): a is string => a !== undefined) },
     environment: {
-      ...(opts.environment ?? process.env),
+      ...baseEnvironment,
       // Set ONLY when the command is genuinely Electron. A packaged build execs
       // a real fieldd, where the RunAsNode fuse is off and the variable is
       // ignored — asking for node mode there would be a claim the artifact
@@ -200,6 +219,9 @@ export function buildSupervisor(opts: {
     ...(policy === "stop-owned"
       ? { stopDeadlineMs: PLUGIN_LIMITS.DEACTIVATE_DEADLINE_MS + 2_000 }
       : {}),
+    // item 212 (RV #67) — the supervisor watches every handle's link at the house numbers (FIELDD_LIVENESS), and ends
+    // a wedged fieldd it spawned; never one under the inspector, whose paused debugger is no wedge
+    ...(spawnsUnderInspector(packaged, args, baseEnvironment) ? { liveness: false as const } : {}),
     onEvent: (event) => {
       if (event.kind === "lifecycle") {
         logger.info(event.event, event.message, event.attrs);

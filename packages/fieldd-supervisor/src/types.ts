@@ -86,7 +86,24 @@ export type SupervisorLifecycleEventName =
   | "fieldd.supervisor.adopt_waiting"
   | "fieldd.supervisor.adopted_after_wait"
   | "fieldd.supervisor.incumbent_gone"
-  | "fieldd.supervisor.incumbent_answered_late";
+  | "fieldd.supervisor.incumbent_answered_late"
+  // item 212 (RV #67) — an OWNED fieldd silent past the wedge bound, ended by the child-only ladder
+  | "fieldd.supervisor.wedge_killed";
+
+/** Item 212 (RV #67) — the liveness watch's numbers (liveness.ts; FIELDD_LIVENESS are the house's): an ask every
+ * `intervalMs`, `missThreshold` misses in a row to `unresponsive`, and `confirmMs` of reply silence to `wedged`. */
+export interface FielddLivenessOptions {
+  readonly intervalMs: number;
+  readonly missThreshold: number;
+  readonly confirmMs: number;
+}
+
+/** Item 212 (RV #67) — the link's liveness as the shell measures it, by the silence of fieldd's REPLIES (never its
+ * socket's state: a stalled fieldd's stays open). `silentMs`: how long replies had been silent when it was said. */
+export type FielddLiveness =
+  | { readonly kind: "responsive" }
+  | { readonly kind: "unresponsive"; readonly silentMs: number }
+  | { readonly kind: "wedged"; readonly silentMs: number };
 
 export type FielddSupervisorEvent =
   | {
@@ -153,6 +170,11 @@ export interface FielddSupervisorOptions {
   /** Budget for the first adoption probe. A probe-timeout is a busy fieldd, not an absent one (item 212): the wait's
    * own probes double from this, clipped to the patience left. */
   adoptProbeMs?: number;
+  /** Item 212 (RV #67) — the liveness watch every handle's link gets (liveness.ts): FIELDD_LIVENESS unless set. An
+   * OWNED fieldd it finds `wedged` is ended by the child-only ladder (SIGTERM, then SIGKILL; no floor, no verb); an
+   * adopted one is only said (ESR §5.3). `false` arms none: a fieldd under the inspector, whose paused debugger is no
+   * wedge. */
+  liveness?: FielddLivenessOptions | false;
   /** Typed lifecycle/control/emergency boundary. Readiness stdout is never
    * collapsed into stderr or duplicated as a routine shell log. */
   onEvent?: (event: FielddSupervisorEvent) => void;
@@ -163,9 +185,14 @@ export interface FielddHandle {
   readonly info: ProductInfo;
   readonly client: FielddClient;
   readonly childPid?: number;
+  /** Item 212 (RV #67) — the link's liveness as the watch measures it; `responsive` while the watch is off. */
+  readonly liveness: FielddLiveness;
+  /** Each change of `liveness` from now on (no replay of the current one); returns the unsubscribe. */
+  onLiveness(listener: (liveness: FielddLiveness) => void): () => void;
   /** SIGTERM the spawned fieldd (+ the field-native its record names, a floor
    * it adopted included) and wait bounded; a NO-OP for an adopted fieldd — the
-   * shell never stops a fieldd it didn't start. */
+   * shell never stops a fieldd it didn't start. Its liveness watch stops first:
+   * a stopping fieldd's silence is no wedge. */
   stopOwned(): Promise<void>;
 }
 
