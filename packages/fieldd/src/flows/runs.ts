@@ -26,6 +26,7 @@ import type { FlowLibrary } from "./library";
 import type { FlowRecords, FlowRunStart } from "./records";
 import { FlowReplay } from "./replay";
 import { readFlow } from "./static-read";
+import type { FlowStepPorts } from "./steps";
 import {
   type FlowCallHandler,
   type FlowHostEnd,
@@ -61,6 +62,10 @@ export interface FlowRunPorts {
   readonly records: FlowRecords;
   /** the needs queue's changed-flow item (N5) */
   readonly needs: { flowChanged(raise: FlowChangedRaise): NeedsItemId };
+  /** the runtime's spawn, for a step's agent (slice 8; steps.ts `startStep` is its one road) */
+  readonly agents: FlowStepPorts["agents"];
+  /** each session's input queue, for a step's prompt (D5) */
+  readonly inputs: FlowStepPorts["inputs"];
   /** the Agent Profiles that exist now, by id: a run's frozen scope narrows to them (D8) */
   profiles(): readonly string[];
   /** how a run's host is started */

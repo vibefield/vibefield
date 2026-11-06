@@ -2,13 +2,16 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  type AgentInputSender,
   FLOW_LIMITS,
   FLOW_RUNS_LISTED_MAX,
+  type FlowRunRecordStep,
   type FlowStarter,
   type NeedsItemId,
   RunSummary,
 } from "@vibefield/contracts";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import type { FlowsHostLaunch } from "../src/flows/launch";
 import { FlowLibrary } from "../src/flows/library";
 import { FlowRecords, flowHashOf } from "../src/flows/records";
 import {
@@ -17,10 +20,11 @@ import {
   FlowRuns,
   type FlowRunsList,
 } from "../src/flows/runs";
+import type { FlowStepLaunch, FlowStepOrigin } from "../src/flows/steps";
 import * as words from "../src/flows/words";
 import type { RpcCallError } from "../src/native-link";
 import type { FlowChangedRaise } from "../src/tool-plane/rooms/you/queue";
-import { flowsHostLaunch } from "./flows-host-bundle";
+import { flowsHostLaunch, standInSource } from "./flows-host-bundle";
 import { beganRun } from "./flows-run-records";
 
 // CP-4a2b (§13a slice 7; 13a v2.7, RULED 2026-11-05; D3, D8, D18, CP4-Q5 (a), CP4-Q20 (a)) — the runs: a start, its
@@ -60,7 +64,29 @@ afterEach(async () => {
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
 });
 
-async function harness(opts: { readonly profiles?: readonly string[] } = {}) {
+/** A step's spawn as the runtime was asked for it, and the run's open steps when it was asked (D5: entry first). */
+interface Spawned {
+  readonly launch: FlowStepLaunch;
+  readonly origin: FlowStepOrigin;
+  readonly open: readonly FlowRunRecordStep[];
+}
+/** A line queued for a session, and its step's record when it was queued (D5: the intent first). */
+interface Enqueued {
+  readonly runtimeRunId: string;
+  readonly text: string;
+  readonly from: AgentInputSender;
+  readonly step: FlowRunRecordStep | undefined;
+}
+
+async function harness(
+  opts: {
+    readonly profiles?: readonly string[];
+    /** the host a run starts: fieldd's own build, or a stand-in's */
+    readonly launch?: FlowsHostLaunch;
+    /** the runtime's refusal of every spawn, in its words */
+    readonly spawnRefuses?: string;
+  } = {},
+) {
   const root = mkdtempSync(join(tmpdir(), "vf-flow-runs-"));
   roots.push(root);
   const libraryDir = join(root, "flows");
@@ -72,6 +98,9 @@ async function harness(opts: { readonly profiles?: readonly string[] } = {}) {
   const library = new FlowLibrary({ dir: libraryDir, records });
   const raised: FlowChangedRaise[] = [];
   let profiles: readonly string[] = opts.profiles ?? ["work", "review"];
+  const spawned: Spawned[] = [];
+  const enqueued: Enqueued[] = [];
+  const openOf = (run: string): readonly FlowRunRecordStep[] => records.runRecord(run)?.open ?? [];
   const runs = new FlowRuns({
     library,
     records,
@@ -82,7 +111,25 @@ async function harness(opts: { readonly profiles?: readonly string[] } = {}) {
       },
     },
     profiles: () => profiles,
-    host: { launch: { kind: "launch", launch: await flowsHostLaunch() }, environment: PATH_ONLY },
+    agents: {
+      spawn: async (launch, origin) => {
+        spawned.push({ launch, origin, open: openOf(origin.run) });
+        if (opts.spawnRefuses !== undefined) throw new Error(opts.spawnRefuses);
+        return { runtimeRunId: `rt-step${spawned.length}` };
+      },
+    },
+    inputs: {
+      enqueue: (runtimeRunId, text, from) => {
+        const step =
+          from.kind === "flow" ? openOf(from.run).find((s) => s.call === from.call) : undefined;
+        enqueued.push({ runtimeRunId, text, from, step });
+        return { id: `in-${enqueued.length}`, position: 1 };
+      },
+    },
+    host: {
+      launch: { kind: "launch", launch: opts.launch ?? (await flowsHostLaunch()) },
+      environment: PATH_ONLY,
+    },
   });
   opened.push(runs);
   /** a flow's file in the person's library, as they saved it */
@@ -97,7 +144,25 @@ async function harness(opts: { readonly profiles?: readonly string[] } = {}) {
   const setProfiles = (next: readonly string[]) => {
     profiles = next;
   };
-  return { root, records, library, runs, raised, write, approved, start, setProfiles };
+  /** the run's journal's lines' kinds, as the store reads it now */
+  const kinds = (run: string): string[] => {
+    const read = records.readRun(run);
+    return read.kind === "kept" ? read.lines.map((line) => line.kind) : [read.kind];
+  };
+  return {
+    root,
+    records,
+    library,
+    runs,
+    raised,
+    spawned,
+    enqueued,
+    write,
+    approved,
+    start,
+    setProfiles,
+    kinds,
+  };
 }
 
 type Harness = Awaited<ReturnType<typeof harness>>;
@@ -357,5 +422,181 @@ describe("CP-4a2b — a run starts from the bytes fieldd kept, or asks first; it
     expect(words.markName("Release check", "release-check")).toBe("Release check");
     expect(words.markName("  vibefield release", "release-check")).toBe("release-check");
     expect(words.markName(undefined, "release-check")).toBe("release-check");
+  });
+});
+
+// CP-4a2b (§13a slice 8a; D5, D9) — a step's agent, by the ONE spawn road (steps.ts `startStep`): the record's step
+// entry before the spawn, the session on the record and the prompt's `sending` intent before it is queued, and
+// `queued` in the tick the queue takes it; the prompt is the run's own words, marked as the flow's (Q-B1 (a)).
+
+/** A flow with one step, its every option a step's card shows. */
+const REVIEW = [
+  'export const meta = { name: "Review" };',
+  "export default async function () {",
+  '  return await agent("Review the diff", {',
+  '    agent: "claude",',
+  '    label: "Diff",',
+  '    phase: "check",',
+  '    profile: "work",',
+  '    cwd: "/work/app",',
+  "  });",
+  "}",
+  "",
+].join("\n");
+/** The same step, its refusal caught and said as the run's log line. */
+const REVIEW_CATCHES = REVIEW.replace(
+  '  return await agent("Review the diff", {',
+  '  try { await agent("Review the diff", {',
+).replace("  });\n}", "  }); } catch (e) { log(e.message); }\n}");
+/** A flow whose meta name would speak as VibeField: its mark is its slug (R18). */
+const SPEAKS_AS_VIBEFIELD = REVIEW.replace('name: "Review"', 'name: "VibeField release"').replace(
+  'label: "Diff"',
+  'label: "Notes"',
+);
+
+/** A stand-in host that calls a `what` no flow has, and says the answer it got as its one log line. */
+function unknownCallHost(root: string): FlowsHostLaunch {
+  const file = join(root, "unknown-call.cjs");
+  writeFileSync(
+    file,
+    standInSource([
+      "say({ t: 'ready', pid: process.pid });",
+      "on((m) => {",
+      "  if (m && m.t === 'run') say({ t: 'call', id: 1, what: 'spawn', args: ['rm -rf /'] });",
+      "  if (m && m.t === 'answer') say({ t: 'log', text: String(m.refused) });",
+      "  if (m && m.t === 'ping') say({ t: 'pong', n: m.n });",
+      "  if (m && m.t === 'shutdown') process.exit(0);",
+      "});",
+    ]),
+  );
+  return { command: process.execPath, args: [file] };
+}
+
+const waitFor = (check: () => void): Promise<void> =>
+  vi.waitFor(check, { timeout: WAIT_MS, interval: 20 });
+
+describe("CP-4a2b — a step's agent, by the one spawn road: entry first, then the spawn, then the prompt queued (§13a slice 8a)", () => {
+  it("R12 (D5): one spawn, origin {by: flow, run, call: 1}, after the step's entry; the prompt queued as the flow's words after its sending intent, and queued in the same tick", async () => {
+    const h = await harness();
+    h.approved("review", REVIEW);
+    const run = startedRun(await h.start({ flow: "review" })).run;
+    await waitFor(() => expect(h.enqueued).toHaveLength(1));
+    expect(h.spawned).toHaveLength(1);
+    const [spawn] = h.spawned;
+    expect(spawn?.launch).toEqual({
+      agent: "claude",
+      profileSet: "work",
+      cwd: "/work/app",
+      title: "Review · Diff",
+    });
+    expect(spawn?.origin).toEqual({ by: "flow", run, call: 1 });
+    // D5 step 2: the step's entry is on the record before the spawn
+    expect(spawn?.open).toEqual([
+      { call: 1, label: "Diff", agent: "claude", phase: "check", state: "starting" },
+    ]);
+    // D5 steps 4–6: the session and the prompt's intent are on the record before the queue takes it
+    const [line] = h.enqueued;
+    expect(line).toEqual({
+      runtimeRunId: "rt-step1",
+      text: "Review the diff",
+      from: { kind: "flow", flow: "review", name: "Review", run, call: 1 },
+      step: {
+        call: 1,
+        label: "Diff",
+        agent: "claude",
+        phase: "check",
+        session: "rt-step1",
+        state: "working",
+        lines: [{ line: "prompt", n: 1, sent: "sending" }],
+      },
+    });
+    // D5 step 7: `queued`, in the tick the queue took it; the call counted (D10)
+    expect(h.records.runRecord(run)).toMatchObject({
+      calls: 1,
+      open: [
+        {
+          call: 1,
+          session: "rt-step1",
+          state: "working",
+          lines: [{ line: "prompt", n: 1, sent: "queued" }],
+        },
+      ],
+    });
+    expect(h.runs.read(run)?.summary.steps).toEqual([
+      {
+        call: 1,
+        label: "Diff",
+        agent: "claude",
+        session: "rt-step1",
+        phase: "check",
+        state: "working",
+      },
+    ]);
+    expect(h.kinds(run)).toEqual(["head", "call"]);
+
+    // a run a spark started: its step's words are marked as that spark's flow (Q-B2 (a))
+    const s = await harness();
+    s.approved("review", REVIEW);
+    const sparks = startedRun(
+      await s.start({ flow: "review", starter: { by: "spark", spark: VELA }, from: VELA_FROM }),
+    ).run;
+    await waitFor(() => expect(s.enqueued).toHaveLength(1));
+    expect(s.enqueued[0]?.from).toEqual({
+      kind: "flow",
+      flow: "review",
+      name: "Review",
+      run: sparks,
+      call: 1,
+      ran: "Vela",
+    });
+  });
+
+  it("R12b: a spawn the runtime refuses is the step's refusal, in §9's words: journaled, the step failed, nothing queued", async () => {
+    const h = await harness({ spawnRefuses: "the floor is not answering" });
+    h.approved("review", REVIEW_CATCHES);
+    const run = startedRun(await h.start({ flow: "review" })).run;
+    const done = await settled(h.runs, run, "done");
+    expect(done.log).toBe("VibeField couldn't start Diff: the floor is not answering");
+    expect(h.spawned).toHaveLength(1);
+    expect(h.enqueued).toEqual([]);
+    expect(h.kinds(run)).toEqual(["head", "call", "answer", "log", "end"]);
+    expect(h.records.runRecord(run)).toMatchObject({
+      calls: 1,
+      open: [],
+      steps: [{ call: 1, label: "Diff", state: "failed" }],
+    });
+  });
+
+  it("R17 (D9): a call no flow makes is refused at fieldd's side and journaled as the refusal; nothing is spawned", async () => {
+    const root = mkdtempSync(join(tmpdir(), "vf-flow-standin-"));
+    roots.push(root);
+    const h = await harness({ launch: unknownCallHost(root) });
+    h.approved("hello", HELLO);
+    const run = startedRun(await h.start()).run;
+    await waitFor(() => expect(h.kinds(run)).toEqual(["head", "call", "answer", "log"]));
+    const read = h.records.readRun(run);
+    const lines = read.kind === "kept" ? read.lines : [];
+    expect(lines[1]).toMatchObject({ kind: "call", call: 1, what: "spawn" });
+    expect(lines[2]).toMatchObject({
+      kind: "answer",
+      call: 1,
+      refused: "VibeField can't send this spawn: a flow's calls are agent() and ask()",
+    });
+    expect(lines[3]).toMatchObject({
+      kind: "log",
+      text: "VibeField can't send this spawn: a flow's calls are agent() and ask()",
+    });
+    expect(h.spawned).toEqual([]);
+    expect(h.records.runRecord(run)).toMatchObject({ calls: 1, open: [], steps: [] });
+  });
+
+  it("R18 (D9; CL-E7-14): a flow whose meta name reads as VibeField is marked by its slug, in its steps' title and its words' mark", async () => {
+    const h = await harness();
+    h.approved("release-check", SPEAKS_AS_VIBEFIELD);
+    const run = startedRun(await h.start({ flow: "release-check" }));
+    expect(run.name).toBe("release-check");
+    await waitFor(() => expect(h.enqueued).toHaveLength(1));
+    expect(h.spawned[0]?.launch.title).toBe("release-check · Notes");
+    expect(h.enqueued[0]?.from).toMatchObject({ kind: "flow", name: "release-check" });
   });
 });

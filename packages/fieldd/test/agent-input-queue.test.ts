@@ -527,3 +527,51 @@ describe("item 158 — the in-flight head (TH-Q32 (a)) and the items a line carr
     expect(again.kept("run-2").map((i) => i.text)).toEqual(["C"]);
   });
 });
+
+// CP-4a2b (§13a slice 8a; Q-B1 (a), Q-B2 (a), MT-L6) — a flow's lines in a session's queue. The run's own words (a
+// step's prompt, its `in:` lines) are marked as the flow's, never as VibeField's; VibeField's own lines to a step
+// (`fieldd` with a `flow`) keep "VibeField:"; and a wake never joins onto either, so a fact never rides into a line a
+// step answers.
+describe("CP-4a2b — a flow's lines in the queue (§13a slice 8a)", () => {
+  const FLOW_YOURS = {
+    kind: "flow",
+    flow: "review",
+    name: "Review",
+    run: "fr-0123456789abcdef",
+    call: 1,
+  } as const;
+  const FLOW_VELAS = { ...FLOW_YOURS, ran: "Vela" } as const;
+  const REPAIR = {
+    kind: "fieldd",
+    flow: { run: "fr-0123456789abcdef", call: 1, line: "repair", n: 1 },
+  } as const;
+
+  it("W3 (MT-L6): a flow's words carry the flow's mark, yours or a spark's, never VibeField's; VibeField's own line to a step keeps its own", () => {
+    expect(markedText({ id: "a", text: "Review the diff", from: FLOW_YOURS, at: "t" })).toBe(
+      "Review (a flow you ran) on your behalf:\nReview the diff",
+    );
+    expect(markedText({ id: "b", text: "Review the diff", from: FLOW_VELAS, at: "t" })).toBe(
+      "Review (a flow Vela ran) on your behalf:\nReview the diff",
+    );
+    expect(markedText({ id: "c", text: "answer once more", from: REPAIR, at: "t" })).toBe(
+      "VibeField: answer once more",
+    );
+  });
+
+  it("W1: a wake never joins onto a flow's line, the run's own words or VibeField's own line to a step", () => {
+    const h = harness();
+    h.queues.enqueue("run-step", "Review the diff", FLOW_YOURS);
+    h.queues.wake("run-step", "Ada finished");
+    h.queues.enqueue("run-repair", "your last message did not match this step's form", REPAIR);
+    h.queues.wake("run-repair", "Ben is asking you");
+    h.queues.wake("run-repair", "Cy failed");
+    expect(h.queues.pending("run-step").map((i) => i.text)).toEqual([
+      "Review the diff",
+      "Ada finished",
+    ]);
+    expect(h.queues.pending("run-repair").map((i) => i.text)).toEqual([
+      "your last message did not match this step's form",
+      "Ben is asking you · Cy failed",
+    ]);
+  });
+});
