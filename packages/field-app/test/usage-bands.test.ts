@@ -549,17 +549,23 @@ describe("UM-1 — the circle in words", () => {
     );
   });
 
-  it("says a reset past as 'resets now', a kept reading by its age, and a first read as reading", () => {
+  it("says a reset only as a length (§9's 'resets in 2h'), never by its day or once past; a kept reading by its age", () => {
     const entries = meters([
+      // past its reset, and a week whose reset is days off: Settings' "now" and day and clock stay on the rows
       ["claude", [paced("5h", 30, 100.5)]],
+      ["grok", [paced("7d", 30, 50, 10_080)]],
       [
         "codex",
         { metrics: [paced("5h", 30, 50)], state: "unavailable", stale: true, fetchedAt: from(-32) },
       ],
     ]);
     expect(bandsLabel(entries)).toBe(
-      "Usage: Claude Code: 30% of 5 hours, resets now; Codex: 30% of 5 hours, as of 32m ago",
+      "Usage: Claude Code: 30% of 5 hours; Codex: 30% of 5 hours, as of 32m ago; Grok: 30% of 7 days",
     );
+    // the full middle says the window and no reset words for a reset days off
+    const opened = bandsGeometry(232, entries, { focus: "agent:grok:native-default" });
+    const said = opened.centre.items.map((item) => (item.kind === "text" ? item.role : item.kind));
+    expect(said).toEqual(["mark", "figure", "sub"]);
   });
 });
 
@@ -585,7 +591,6 @@ describe("UM-1 — arcs as paths", () => {
     expect(arcsOf(whole, "outer", "track")[0]?.to).toBeCloseTo(-90 + 359.9, 6);
   });
 });
-
 
 describe("UM-1 — around the phone's face (the hole mode)", () => {
   const entries = () =>
@@ -638,7 +643,7 @@ describe("UM-1 — around the phone's face (the hole mode)", () => {
   });
 });
 
-describe("UM-1 — No meters keeps the profile's glyph; usage unavailable says No meters", () => {
+describe("UM-1 — No meters keeps the profile's glyph; usage unavailable is said so", () => {
   it("draws the glyph where one plan's circle puts it, so it does not jump as the meters come and go", () => {
     const none = (size: number) =>
       bandsGeometry(size, meters([["opencode", { state: "unsupported" }]]), { centre: "glyph" });
@@ -664,7 +669,7 @@ describe("UM-1 — No meters keeps the profile's glyph; usage unavailable says N
     expect(plain.centre.items).toEqual([]);
   });
 
-  it("with usage unavailable, every profile's circle is the dashed ring with its glyph, no hot dot, No meters", () => {
+  it("with usage unavailable, every profile's circle is the dashed ring with its glyph, no hot dot, said '‹profile›: usage unavailable'", () => {
     const set: AgentProfileSet = {
       id: "native",
       kind: "native",
@@ -691,7 +696,22 @@ describe("UM-1 — No meters keeps the profile's glyph; usage unavailable says N
       expect.objectContaining({ kind: "glyph", x: 20, y: 20 }),
     ]);
     expect(geometry.hotDot).toBeUndefined();
-    expect(geometry.label).toBe("No meters");
+    // the profile has meters it cannot read (§8 "Godview's profiles column", §9): never "No meters"
+    expect(geometry.label).toBe("This Mac: usage unavailable");
+    // every profile's at once names none: the claims strip's own "Usage unavailable"
+    const work: AgentProfileSet = {
+      ...set,
+      id: "work",
+      kind: "managed",
+      label: "Work",
+      default: false,
+      personas: [{ ...own("claude"), profileId: "work-claude", kind: "managed" }],
+    };
+    const union = everyPlan([set, work], rows, NOW, { usage: "unavailable" });
+    expect(bandsGeometry(26, union.entries, { centre: "none" }).label).toBe("Usage unavailable");
+    // a profile with no plans says No meters, whatever the usage
+    const bare = planMeters({ ...set, personas: [] }, [], NOW, { usage: "unavailable" });
+    expect(bandsLabel(bare.entries)).toBe("No meters");
   });
 });
 
@@ -752,10 +772,7 @@ describe("UM-D12 — a crowded agent wears its profile's glyph", () => {
   it("counts a plan with no meter: two Claudes, one unmetered, crowd the one on the circle", () => {
     const entries = planMeters(
       set("work", "briefcase", ["claude-a", "claude-b"]),
-      [
-        reading("claude-a", 20),
-        { ...reading("claude-b", 0), state: "unsupported", metrics: [] },
-      ],
+      [reading("claude-a", 20), { ...reading("claude-b", 0), state: "unsupported", metrics: [] }],
       NOW,
     ).entries;
     const crowded = bandsGeometry(212, entries, { crowd: true });

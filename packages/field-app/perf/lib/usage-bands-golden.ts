@@ -34,21 +34,27 @@ export const USAGE_BANDS_SETS = [
 ] as const;
 export const USAGE_BANDS_BATCHES = ["agent-usage.valid.json", "agent-usage.budget.json"] as const;
 
-/** One now for every case: the last day of the fixtures' week, so every reset they name is said as a length or
- * "now", never by its day and clock (the compute refuses one). */
-export const USAGE_BANDS_NOW = "2026-09-16T12:00:00.000Z";
+/** Each batch's now, as a live view reads it: the AR-5 golden five minutes after its reading, UM-1's budget batch
+ * half a minute after its last row (so its kept Codex reading is 32 minutes old). A reset a day or more off is
+ * written by its form, never by its day and clock (`src/usage/golden.ts`). */
+export const USAGE_BANDS_NOWS: Readonly<Record<(typeof USAGE_BANDS_BATCHES)[number], string>> = {
+  "agent-usage.valid.json": "2026-09-13T12:05:00.000Z",
+  "agent-usage.budget.json": "2026-09-16T12:00:00.000Z",
+};
 
 const VALID = { sets: USAGE_BANDS_SETS[0], batch: USAGE_BANDS_BATCHES[0] } as const;
 const METERS = { sets: USAGE_BANDS_SETS[1], batch: USAGE_BANDS_BATCHES[1] } as const;
-/** the sizes the ruled drawing draws a circle at, with its options there (draft/profile-meters/round4/src) */
+/** the sizes the ruled drawing draws a circle at, with its options there (draft/profile-meters/round4/src
+ * p4f-frames.js, p3f-frames.js) */
 const COLUMN = { size: 40, options: { centre: "glyph", hotDot: true } } as const;
 const BUD = { size: 54, options: { centre: "glyph", hotDot: true } } as const;
+const PAGE_ROW = { size: 36, options: { centre: "glyph", hotDot: true } } as const;
 
 /** The circles: every state the meters draw, at the sizes the product draws them. */
 export const USAGE_BANDS_CASES: readonly UsageBandsCase[] = [
   {
     name: "one plan, past its week's limit, a model's week as the hairline",
-    where: "the desktop's popover and the Agent Profiles page",
+    where: "the desktop's popover, beside Godview's profiles column",
     ...VALID,
     of: "native",
     size: 212,
@@ -60,6 +66,14 @@ export const USAGE_BANDS_CASES: readonly UsageBandsCase[] = [
     ...VALID,
     of: "native",
     ...COLUMN,
+  },
+  {
+    name: "one profile, nothing in the middle",
+    where: "the phone's Me menu, its Agent Profiles row, with one profile",
+    ...VALID,
+    of: "native",
+    size: 26,
+    options: { centre: "none" },
   },
   {
     name: "a sign-in under way beside plans with no meter",
@@ -78,7 +92,7 @@ export const USAGE_BANDS_CASES: readonly UsageBandsCase[] = [
   },
   {
     name: "several plans: their gaps, a budget on both bands, a kept reading, the hairline",
-    where: "the desktop's popover and the Agent Profiles page",
+    where: "the desktop's popover",
     ...METERS,
     of: "native",
     size: 212,
@@ -86,7 +100,8 @@ export const USAGE_BANDS_CASES: readonly UsageBandsCase[] = [
   },
   {
     name: "several plans opened: the full middle, the forecast said",
-    where: "the Agent Profiles page, opened",
+    where:
+      "the drawing's opened circle (round4 p4d-page.js), no view's yet: the one size here past a hole of 46, the middle's window and say line",
     ...METERS,
     of: "native",
     size: 232,
@@ -115,8 +130,15 @@ export const USAGE_BANDS_CASES: readonly UsageBandsCase[] = [
     ...BUD,
   },
   {
+    name: "several plans on a profile's row",
+    where: "the phone's Agent Profiles page, a profile's row",
+    ...METERS,
+    of: "native",
+    ...PAGE_ROW,
+  },
+  {
     name: "several plans held",
-    where: "the held face's own circle",
+    where: "the held face's open circle, a profile reached",
     ...METERS,
     of: "native",
     size: 206,
@@ -124,7 +146,7 @@ export const USAGE_BANDS_CASES: readonly UsageBandsCase[] = [
   },
   {
     name: "needs you: a sign-in and a retry beside a shared plan's reading",
-    where: "the desktop's popover and the Agent Profiles page",
+    where: "the desktop's popover",
     ...METERS,
     of: "work",
     size: 212,
@@ -136,6 +158,14 @@ export const USAGE_BANDS_CASES: readonly UsageBandsCase[] = [
     ...METERS,
     of: "work",
     ...COLUMN,
+  },
+  {
+    name: "one profile chosen, a need pointed at: the others dim and the middle asks for it",
+    where: "the phone's Agent Profiles page, Work chosen (several profiles: crowd marked)",
+    ...METERS,
+    of: "work",
+    size: 214,
+    options: { hit: true, crowd: true, focus: "plan:openai" },
   },
   {
     name: "a first read and a sign-in under way",
@@ -154,7 +184,7 @@ export const USAGE_BANDS_CASES: readonly UsageBandsCase[] = [
   },
   {
     name: "every profile, nothing in the middle",
-    where: "the Me menu's Agent Profiles row",
+    where: "the phone's Me menu, its Agent Profiles row, with several profiles",
     ...METERS,
     of: "every",
     size: 26,
@@ -162,7 +192,7 @@ export const USAGE_BANDS_CASES: readonly UsageBandsCase[] = [
   },
   {
     name: "every profile at the All profiles row",
-    where: "the profile menu's All profiles row",
+    where: "the phone's Agent Profiles page, its All profiles row",
     ...METERS,
     of: "every",
     size: 36,
@@ -178,7 +208,7 @@ export const USAGE_BANDS_CASES: readonly UsageBandsCase[] = [
   },
   {
     name: "every profile opened: a shared plan once, the crowded agents in their profiles' glyphs",
-    where: "the Agent Profiles page with no profile chosen",
+    where: "the phone's Agent Profiles page with no profile chosen",
     ...METERS,
     of: "every",
     size: 214,
@@ -240,7 +270,7 @@ export const USAGE_BANDS_FORECASTS: readonly ForecastInput[] = [
 ];
 
 const NOTE =
-  "UM-1 (UM-D16 E, Bands; UM-D3, D4, D12, D13, D15; PLAN §4 v0.2) — the usage bands golden: the desktop's meter model (packages/field-app/src/usage/meters.ts: planMeters for one profile, everyPlan for every profile at once — a plan two profiles share is one entry with both profiles; each plan read through Settings' join, namedBy, usageOf, usageLines, signInState; UM-D15's order by the agent catalog; UM-D13's tightest window by pressure, src/usage/rules.ts; the pace rule isHot, a budget pace-less) and its Bands geometry (src/usage/bands.ts bandsGeometry, the ruled drawing's drawBands) over contracts fixtures (inputs) at one now. meters: each profile (or every) the circles draw, its entries in order (a reading's windows as Settings' C1 lines with budget, lengthWords, durationMinutes, resetIn, pressure and forecast; tightest by window id; profiles, the glyphs a crowded agent wears), its tightest plan and its hot rule. circles: per case, where the product draws it, whose meters, the size and options, the level, the centre and its items, each plan's arcs (band, part, r, from, to, width, cap, paint as a tone, opacity, dash), notches, mark (its badge, its profile glyph), hit arc and words, the empty ring or the hot dot, and the label. calls.forecast: UM-D4's forecast over a fixed vector, each {in, out}. A plan is titled by its company's label in the fixture (title), never a product name, and nothing here is puppeteer's: no release moves it. Angles in degrees from three o'clock, clockwise; every number to 0.01. GENERATED by packages/field-app/perf/usage-bands.generate.perf.ts (src/usage/golden.ts computes it), pinned byte for byte by test/usage-bands.test.ts; the phone's copy (UM's U3 lane) by pnpm check:ios-fixtures. Never edit by hand; a regeneration is a re-bless, said in its commit, and never over a defect.";
+  "UM-1 (UM-D16 E, Bands; UM-D3, D4, D12, D13, D15; PLAN §4 v0.2) — the usage bands golden: the desktop's meter model (packages/field-app/src/usage/meters.ts: planMeters for one profile, everyPlan for every profile at once — a plan two profiles share is one entry with both profiles; each plan read through Settings' join, namedBy, usageOf, usageLines, signInState; UM-D15's order by the agent catalog; UM-D13's tightest window by pressure, src/usage/rules.ts; the pace rule isHot, a budget pace-less) and its Bands geometry (src/usage/bands.ts bandsGeometry, the ruled drawing's drawBands) over contracts fixtures (inputs), each batch read at its own now (nows), minutes after its reading. meters: each profile (or every) the circles draw, its entries in order (a reading's windows as Settings' C1 lines with resetForm, budget, lengthWords, durationMinutes, resetIn, pressure and forecast — a reset a day or more off is recorded by its form, resetForm day, and its minutes, its words left out, because Settings says it by its day and clock in the reader's own zone and locale; tightest by window id; profiles, the glyphs a crowded agent wears), its tightest plan and its hot rule. circles: per case, where the product draws it, whose meters, the size and options, the level, the centre and its items, each plan's arcs (band, part, r, from, to, width, cap, paint as a tone, opacity, dash), notches, mark (its badge, its profile glyph), hit arc and words, the empty ring or the hot dot, and the label. calls.forecast: UM-D4's forecast over a fixed vector, each {in, out}. A plan is titled by its company's label in the fixture (title), never a product name, and nothing here is puppeteer's: no release moves it. Angles in degrees from three o'clock, clockwise; every number to 0.01. GENERATED by packages/field-app/perf/usage-bands.generate.perf.ts (src/usage/golden.ts computes it), pinned byte for byte by test/usage-bands.test.ts; the phone's copy (UM's U3 lane) by pnpm check:ios-fixtures. Never edit by hand; a regeneration is a re-bless, said in its commit, and never over a defect.";
 
 const contractsFixture = (name: string): unknown =>
   JSON.parse(readFileSync(join(FIELD_APP, "..", "contracts", "fixtures", name), "utf8"));
@@ -267,7 +297,7 @@ export function readUsageBandsInputs(): UsageBandsInputs {
 export function usageBandsValue(inputs: UsageBandsInputs = readUsageBandsInputs()) {
   return usageBandsGolden({
     note: NOTE,
-    now: USAGE_BANDS_NOW,
+    nows: USAGE_BANDS_NOWS,
     inputs,
     cases: USAGE_BANDS_CASES,
     forecasts: USAGE_BANDS_FORECASTS,

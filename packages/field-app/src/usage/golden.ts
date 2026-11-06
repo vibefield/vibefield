@@ -56,10 +56,16 @@ function hundredths(value: unknown): unknown {
   return value;
 }
 
-/** A reading's window as the golden records it: Settings' C1 line, and what the meters add to it. */
+/** A reading's window as the golden records it: Settings' C1 line, and what the meters add to it. A reset a day or
+ * more off is recorded by its form (`resetForm`: "day") and its minutes, its words left out: Settings says it by its
+ * day and clock, in the reader's own zone and locale, so the phone says it in its own. */
 function windowRecord(window: MeterWindow): Record<string, unknown> {
+  const form = resetForm(window);
+  const { reset, ...line } = window.line;
   return {
-    ...window.line,
+    ...line,
+    ...(reset !== undefined && form !== "day" ? { reset } : {}),
+    resetForm: form,
     budget: window.budget,
     lengthWords: window.lengthWords,
     durationMinutes: window.metric.durationMinutes,
@@ -69,14 +75,30 @@ function windowRecord(window: MeterWindow): Record<string, unknown> {
   };
 }
 
-/** An entry as the golden records it: a reading's windows as above, its tightest by id. */
+/** An entry as the golden records it: a reading's windows as above, its tightest by id, and a right that says a
+ * reset by its day recorded by its form, as its window is. */
 function entryRecord(entry: PlanMeter): Record<string, unknown> {
   const record: Record<string, unknown> = { ...entry };
   if (entry.kind === "reading") {
     record.windows = entry.windows.map(windowRecord);
     record.tightest = entry.tightest.line.id;
+    if (entry.right.kind === "reset" && resetForm(entry.tightest) === "day") {
+      const { kind, hot, icon } = entry.right;
+      record.right = { kind, resetForm: "day", hot, icon };
+    }
   }
   return record;
+}
+
+/** Settings' words for every reset a day or more off in these meters: what the golden must never write. */
+function dayWords(meters: ProfileMeters): string[] {
+  return meters.entries.flatMap((entry) =>
+    entry.kind !== "reading"
+      ? []
+      : entry.windows.flatMap((window) =>
+          resetForm(window) === "day" && window.line.reset !== undefined ? [window.line.reset] : [],
+        ),
+  );
 }
 
 const metersKey = (meters: UsageBandsMeters): string =>
@@ -84,22 +106,17 @@ const metersKey = (meters: UsageBandsMeters): string =>
 
 /**
  * The golden: every distinct meters the cases draw (each profile's entries in UM-D15's order, its tightest plan, its
- * hot rule), each case's circle, and UM-D4's forecast over a fixed vector. `now` is one instant for every case; a
- * reset it would say by its day and clock is refused, never written, because "Thu 09:00" is the reader's own zone
- * and locale.
+ * hot rule), each case's circle, and UM-D4's forecast over a fixed vector. Each batch is read at its own now
+ * (`nows`, by the batch's name), minutes after its reading, as a live view reads it. A reset a day or more off is
+ * written by its form, never its words (`windowRecord`); one that would reach the file anyway is refused.
  */
 export function usageBandsGolden(input: {
   note: string;
-  now: string;
+  nows: Readonly<Record<string, string>>;
   inputs: UsageBandsInputs;
   cases: readonly UsageBandsCase[];
   forecasts: readonly ForecastInput[];
 }): Record<string, unknown> {
-  // RED SKELETON: nothing is computed yet
-  if (input.cases.length >= 0) {
-    return { "//": input.note, now: input.now, meters: [], circles: [], calls: { forecast: [] } };
-  }
-  const now = new Date(input.now);
   const computed = new Map<string, { of: UsageBandsMeters; meters: ProfileMeters }>();
   const metersOf = (of: UsageBandsMeters): ProfileMeters => {
     const key = metersKey(of);
@@ -107,9 +124,11 @@ export function usageBandsGolden(input: {
     if (known !== undefined) return known.meters;
     const sets = input.inputs.sets[of.sets];
     const rows = input.inputs.batches[of.batch];
-    if (sets === undefined || rows === undefined) {
-      throw new Error(`usage bands golden: no input named ${of.sets} or ${of.batch}`);
+    const at = input.nows[of.batch];
+    if (sets === undefined || rows === undefined || at === undefined) {
+      throw new Error(`usage bands golden: no input or now named ${of.sets} or ${of.batch}`);
     }
+    const now = new Date(at);
     const options: MetersOptions = {
       title: GOLDEN_PLAN_TITLE,
       ...(of.usage !== undefined ? { usage: of.usage } : {}),
@@ -122,16 +141,6 @@ export function usageBandsGolden(input: {
         throw new Error(`usage bands golden: ${of.sets} has no profile ${of.of}`);
       }
       meters = planMeters(set, rows, now, options);
-    }
-    for (const entry of meters.entries) {
-      if (entry.kind !== "reading") continue;
-      for (const window of entry.windows) {
-        if (resetForm(window) === "day") {
-          throw new Error(
-            `usage bands golden: ${of.of} ${entry.key} ${window.line.id} would say its reset by its day, the reader's zone; move the golden's now within a day of it`,
-          );
-        }
-      }
     }
     computed.set(key, {
       of: {
@@ -151,13 +160,13 @@ export function usageBandsGolden(input: {
     options,
     ...bandsGeometry(size, metersOf(of).entries, options),
   }));
-  return hundredths({
+  const golden = hundredths({
     "//": input.note,
     inputs: {
       sets: Object.keys(input.inputs.sets),
       batches: Object.keys(input.inputs.batches),
     },
-    now: input.now,
+    nows: input.nows,
     title: "a plan is titled by its company's label in the fixture (service.label)",
     meters: [...computed.values()].map(({ of, meters }) => ({
       ...of,
@@ -170,4 +179,15 @@ export function usageBandsGolden(input: {
       forecast: input.forecasts.map((each) => ({ in: each, out: forecastOf(each) ?? null })),
     },
   }) as Record<string, unknown>;
+  const written = JSON.stringify(golden);
+  for (const { meters } of computed.values()) {
+    for (const words of dayWords(meters)) {
+      if (written.includes(JSON.stringify(words).slice(1, -1))) {
+        throw new Error(
+          `usage bands golden: a reset said by its day ("${words}", the reader's zone) reached the file`,
+        );
+      }
+    }
+  }
+  return golden;
 }

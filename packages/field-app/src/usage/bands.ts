@@ -118,11 +118,11 @@ export interface BandsGeometry {
   centre: { x: number; y: number; r: number; items: BandsCentreItem[] };
   /** the plans on the circle, in the profile's order (a plan with no meter is left off) */
   plans: BandsPlan[];
-  /** nothing meters and nothing needs you: one dashed ring */
+  /** nothing meters and nothing needs you, or the usage cannot be read: one dashed ring */
   empty?: { r: number; width: number; paint: BandsPaint; dash: readonly [number, number] };
   /** some plan runs hot (Settings' pace rule): a dot at -45°, ringed in the circle's ground */
   hotDot?: { x: number; y: number; r: number; ring: number };
-  /** "Usage: …" or "No meters" */
+  /** "Usage: …", "‹profile›: usage unavailable" or "No meters" (`bandsLabel`) */
   label: string;
 }
 
@@ -190,7 +190,9 @@ export function windowOf(window: MeterWindow): string {
 }
 
 /** What the middle says under a plan at full size, and the end of its words: its forecast, its reset, a kept
- * reading's age, or what it needs. */
+ * reading's age, or what it needs. A reset is said only as a length ("resets in 2h", §9 "The meters' words"): one a
+ * day or more off is Settings' day and clock, the reader's own zone and locale, which the rows show beside their
+ * reset mark; one already past says nothing. */
 export function bandsSay(entry: PlanMeter): { words: string; hot: boolean } {
   switch (entry.kind) {
     case "first-read":
@@ -212,12 +214,10 @@ export function bandsSay(entry: PlanMeter): { words: string; hot: boolean } {
       if (entry.stale) return { words: entry.right.words, hot: false };
       if (window.forecast !== undefined) return { words: window.forecast.short, hot: true };
       const reset = window.line.reset;
-      const form = resetForm(window);
-      if (reset === undefined || form === undefined) return { words: "", hot: window.line.hot };
-      return {
-        words: form === "length" ? `resets in ${reset}` : `resets ${reset}`,
-        hot: window.line.hot,
-      };
+      if (reset === undefined || resetForm(window) !== "length") {
+        return { words: "", hot: window.line.hot };
+      }
+      return { words: `resets in ${reset}`, hot: window.line.hot };
     }
   }
 }
@@ -242,10 +242,22 @@ export function bandsPlanWords(entry: PlanMeter): string {
   }
 }
 
-/** The circle in words: "Usage: " and each plan on it, or "No meters". */
+/** The circle in words: "Usage: " and each plan on it; while the usage cannot be read, "‹profile›: usage
+ * unavailable" (every profile's at once, the claims strip's "Usage unavailable"); else "No meters" (§9). */
 export function bandsLabel(entries: readonly PlanMeter[]): string {
   const onCircle = entries.filter((entry) => entry.kind !== "no-meter");
-  return onCircle.length === 0 ? "No meters" : `Usage: ${onCircle.map(bandsPlanWords).join("; ")}`;
+  if (onCircle.length > 0) return `Usage: ${onCircle.map(bandsPlanWords).join("; ")}`;
+  const unread = entries.filter(
+    (entry) => entry.kind === "no-meter" && entry.why === "unavailable",
+  );
+  if (unread.length === 0) return "No meters";
+  const profiles = new Map(
+    unread.flatMap((entry) => entry.profiles).map((profile) => [profile.setId, profile.label]),
+  );
+  const [label] = [...profiles.values()];
+  return profiles.size === 1 && label !== undefined
+    ? `${label}: usage unavailable`
+    : "Usage unavailable";
 }
 
 // ── the geometry ──
@@ -430,8 +442,8 @@ type NeedsYou = Extract<PlanMeter, { kind: "needs-you" }>;
 
 const planHot = (entry: PlanMeter): boolean => entry.kind === "reading" && entry.hot;
 /** a first read, or a sign-in under way: nothing to read yet, and nothing to ask — the middle says "…" */
-// RED SKELETON: only a first read waits
-const waiting = (entry: PlanMeter): boolean => entry.kind === "first-read";
+const waiting = (entry: PlanMeter): boolean =>
+  entry.kind === "first-read" || (entry.kind === "needs-you" && entry.need === "signing-in");
 
 /** The plan that decides the middle: the most pressed reading, else the first read, else what needs you. */
 function decidingPlan(onCircle: readonly PlanMeter[]): PlanMeter | undefined {
@@ -628,6 +640,7 @@ function centreOf(
   }
   return items;
 }
+
 /** A circle's rings at a size (the drawing's `drawBands` measures): the detail it draws at, the band, the gap
  * between the bands, a model's week's hairline, the rim, each band's middle, both bands at once, the plans' gap and
  * the hole. */
@@ -717,15 +730,15 @@ export function bandsGeometry(
   const onCircle = entries.filter((entry) => entry.kind !== "no-meter");
   const label = bandsLabel(entries);
   const empty = onCircle.length === 0;
-  // RED SKELETON: drawn around nothing yet (the hole's measure is not taken)
-  const { around: _around, ...unringed } = options;
-  const rings = ringsOf(size, level, empty ? 1 : onCircle.length, unringed);
+  const rings = ringsOf(size, level, empty ? 1 : onCircle.length, options);
   const { draw, markSize, markZone, band, gap, hairline, rim, rOuter, rInner, rBoth, gapDeg } =
     rings;
   if (empty) {
     // the glyph stays where one plan's circle puts it, so it does not jump as the meters come and go
-    // RED SKELETON: the dashed ring drops the glyph
-    const items: BandsCentreItem[] = [];
+    const items: BandsCentreItem[] =
+      options.centre === "glyph" && options.around === undefined && rings.hole >= 6.5
+        ? [{ kind: "glyph", x: c, y: c, size: Math.min(rings.hole * 1.18, 20), paint: ink(86) }]
+        : [];
     return {
       size,
       level,
@@ -737,8 +750,7 @@ export function bandsGeometry(
   }
   const count = onCircle.length;
   const span = (360 - count * gapDeg) / count;
-  // RED SKELETON: only the plans on the circle are counted
-  const crowded = options.crowd === true ? crowdedOf(onCircle) : new Set<string>();
+  const crowded = options.crowd === true ? crowdedOf(entries) : new Set<string>();
   const plans = onCircle.map((entry, index): BandsPlan => {
     const from = -90 + gapDeg / 2 + index * (span + gapDeg);
     const dim = options.focus !== undefined && options.focus !== entry.key;

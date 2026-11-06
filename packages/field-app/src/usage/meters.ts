@@ -255,12 +255,12 @@ function profileOf(set: AgentProfileSet): MeterProfile {
 
 function rightOf(window: MeterWindow, stale: boolean, fetchedAt: string, now: Date): MeterRight {
   if (stale) {
+    // §9's "as of 5m ago"; a reading whose time cannot be read is kept all the same (its fill at half), and says no
+    // age rather than words §9 does not rule
     const age = (now.getTime() - Date.parse(fetchedAt)) / 60_000;
     return {
       kind: "kept",
-      words: Number.isFinite(age)
-        ? `as of ${durationWords(Math.max(0, age))} ago`
-        : "as of an earlier reading",
+      words: Number.isFinite(age) ? `as of ${durationWords(Math.max(0, age))} ago` : "",
       hot: false,
       icon: false,
     };
@@ -283,8 +283,8 @@ function readOf(
   now: Date,
   options: MetersOptions,
 ): PlanMeter {
-  // RED SKELETON: an unavailable batch reads as one not read yet (the first read that never ends)
-  const usage = options.usage === "unavailable" ? undefined : usageOf(rows, persona);
+  if (options.usage === "unavailable") return { ...base, kind: "no-meter", why: "unavailable" };
+  const usage = usageOf(rows, persona);
   const state = signInState(persona, usage);
   const needs = (need: MeterNeed): NeedsYouMeter => ({
     ...base,
@@ -314,10 +314,8 @@ function readOf(
     };
   }
   // Settings says "Signing in…" and offers only its cancel: the meter says the same, and asks nothing
-  // RED SKELETON: a sign-in under way still asks to sign in
-  if (state === "signing-in" || state === "signed-out" || usage?.state === "unauthenticated") {
-    return needs("sign-in");
-  }
+  if (state === "signing-in") return needs("signing-in");
+  if (state === "signed-out" || usage?.state === "unauthenticated") return needs("sign-in");
   if (usage === undefined) {
     // no reading yet: one comes for every account an agent the catalog meters signs in to (the first read breathes)
     return isOffered(persona.provider, "usage")
@@ -350,16 +348,14 @@ function planEntry(
     key: `plan:${plan.id}`,
     provider,
     agent: agentName(provider),
-    // RED SKELETON: the title handed in is ignored
-    title: settingsPlanTitle(plan, account !== undefined),
+    title: (options.title ?? settingsPlanTitle)(plan, account !== undefined),
     plan: {
       id: plan.id,
       service: plan.service,
       ...(account !== undefined ? { account } : {}),
     },
     ...(namer !== undefined ? { profileId: namer.profileId } : {}),
-    // RED SKELETON: no profile is carried yet
-    profiles: [],
+    profiles: [profileOf(set)],
   };
   if (account === undefined || namer === undefined) {
     return { ...base, kind: "no-meter", why: "unnamed" };
@@ -426,8 +422,7 @@ export function planMeters(
           agent,
           title: agent,
           profileId: persona.profileId,
-          // RED SKELETON: no profile is carried yet
-          profiles: [],
+          profiles: [profileOf(set)],
         },
         persona,
         rows,
@@ -437,6 +432,13 @@ export function planMeters(
     );
   }
   return metersOf(found, () => 0);
+}
+
+/** Ruling 7 (AO-D14) — a profile stands on a circle (Godview's column, the phone's hold, its page and its menus) unless
+ * it is a draft no agent has signed in to yet. The one rule every view reads, never `draft` alone; `everyPlan` leaves
+ * the others out. */
+export function hasCircle(set: AgentProfileSet): boolean {
+  return set.draft !== true || set.personas.some((persona) => persona.identity?.loggedIn === true);
 }
 
 /** Which plan of another profile is this one: the same company and the same account (its handle before its email,
@@ -463,8 +465,8 @@ const SHOWN: Readonly<Record<MeterKind, number>> = {
  * ring, the page with no profile chosen, the All profiles row): each profile's plans, a plan two profiles share being
  * ONE entry that is in both (the plan's `alsoIn` names the other profile and both name one account, puppeteer's own
  * match). Its meter is the better of the two readings (a reading, then a first read, then a need; equals, the earlier
- * profile's). A draft profile (AO-D14) is left out until an agent signs in (ruling 7). Ordered as UM-D15 orders one
- * profile, then by the first profile holding it, then each profile's own order.
+ * profile's). A profile with no circle (`hasCircle`: a draft no agent has signed in to, ruling 7) is left out. Ordered
+ * as UM-D15 orders one profile, then by the first profile holding it, then each profile's own order.
  */
 export function everyPlan(
   sets: readonly AgentProfileSet[],
@@ -472,8 +474,6 @@ export function everyPlan(
   now: Date,
   options: MetersOptions = {},
 ): ProfileMeters {
-  // RED SKELETON: the union holds nothing yet
-  if (sets.length >= 0) return { entries: [], hot: false };
   interface Held {
     entry: PlanMeter;
     key: string;
@@ -482,7 +482,7 @@ export function everyPlan(
     first: number;
   }
   const held: Held[] = [];
-  const kept = sets.filter((set) => set.draft !== true);
+  const kept = sets.filter(hasCircle);
   for (const [index, set] of kept.entries()) {
     for (const entry of planMeters(set, rows, now, options).entries) {
       const plan =

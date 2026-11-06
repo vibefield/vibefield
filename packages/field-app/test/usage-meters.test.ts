@@ -18,6 +18,7 @@ import { describe, expect, it } from "vitest";
 import { isHot, resetWords, usageLines } from "../src/panels/agents/profiles-model";
 import {
   everyPlan,
+  hasCircle,
   meterWindows,
   type PlanMeter,
   type ProfileMeters,
@@ -333,7 +334,7 @@ describe("UM-1 — what a plan's meter says it is", () => {
     });
   });
 
-  it("a kept reading draws its numbers and says its age", () => {
+  it("a kept reading draws its numbers and says its age; with no time to read, no age", () => {
     const meters = planMeters(
       profile([own("claude")], [ownPlan("anthropic", "claude")]),
       [
@@ -354,9 +355,13 @@ describe("UM-1 — what a plan's meter says it is", () => {
       [row("claude", [paced("5h", 20, 50)], { stale: true, fetchedAt: "not a time" })],
       NOW,
     );
-    expect(reading(entryOf(unparsed, "plan:anthropic")).right.words).toBe(
-      "as of an earlier reading",
-    );
+    // kept all the same, saying only §9's words: none for an age it cannot tell
+    expect(reading(entryOf(unparsed, "plan:anthropic")).right).toEqual({
+      kind: "kept",
+      words: "",
+      hot: false,
+      icon: false,
+    });
   });
 });
 
@@ -792,6 +797,26 @@ describe("UM-D12 — every profile's meters at once", () => {
     expect(union.entries.some((entry) => entry.key.startsWith("draft/"))).toBe(false);
     const holders = union.entries.flatMap((entry) => entry.profiles.map((each) => each.setId));
     expect(holders).not.toContain("draft");
+  });
+
+  it("ruling 7: a draft profile has no circle until an agent signs in to it, and the union follows the one rule", () => {
+    const [native, , , draft] = sets();
+    const unkept = only(draft, "the draft");
+    expect(hasCircle(only(native, "This Mac"))).toBe(true);
+    expect(hasCircle(unkept)).toBe(false);
+    // an agent has said who signed in: the feed may still mark it a draft for a moment, and it has its circle
+    const signed: AgentProfileSet = {
+      ...unkept,
+      personas: [persona("claude", "draft-claude")],
+      plans: [
+        plan("anthropic", "draft-claude", ["draft-claude"], {
+          account: { email: "pat@example.com" },
+        }),
+      ],
+    };
+    expect(hasCircle(signed)).toBe(true);
+    expect(everyPlan([unkept], rows, NOW).entries).toEqual([]);
+    expect(kinds(everyPlan([signed], rows, NOW))).toEqual(["draft/plan:anthropic first-read"]);
   });
 
   it("orders the union as UM-D15 orders a profile, then by the first profile holding each", () => {

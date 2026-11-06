@@ -1,5 +1,3 @@
-import { isHot } from "../panels/agents/profiles-model";
-
 // UM-1 (track UM; UM-D3, D4 and D13 at their leans, James 2026-11-06 03:11Z) — THE METER'S RULES, A LEAF: how a window
 // is pressed (UM-D13), which is the tightest, when it runs out at this pace (UM-D4), and how a length and a reset are
 // said. The ruled drawing's (draft/profile-meters/round4/src/p3a-core.js: `pressure`, `tightest`, `forecast`, `dur`).
@@ -101,8 +99,7 @@ export function forecastOf(window: ForecastInput): MeterForecast | undefined {
     return undefined;
   }
   // ahead of pace means some time has gone, so the pace is a positive share per minute
-  // RED SKELETON: the forecast still decides the orange itself, ignoring the one it is handed
-  if (used >= 100 || !isHot(used, elapsed) || elapsed <= 0) return undefined;
+  if (used >= 100 || !window.hot || elapsed <= 0) return undefined;
   const perMinute = used / ((elapsed / 100) * length);
   const minutes = (100 - used) / perMinute;
   if (minutes >= resetIn) return undefined;
