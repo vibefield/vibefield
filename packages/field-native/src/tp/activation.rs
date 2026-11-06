@@ -2314,7 +2314,7 @@ mod tests {
     const NOW: u64 = 1_000;
 
     use super::*;
-    use crate::tp::wire::{InputOp, SourceDemand};
+    use crate::tp::wire::{CreditAccountReturn, InputOp, SourceDemand};
     use tokio::sync::mpsc::unbounded_channel;
 
     fn leg(connection_id: u64) -> (LegRef, tokio::sync::mpsc::UnboundedReceiver<Outbound>) {
@@ -3271,6 +3271,168 @@ mod tests {
             "yet another activation still admits — the connection had room, its account is fresh"
         );
         assert_eq!(l.connection.admitted, 60);
+    }
+
+    /// A frames connection's windows for the ledger rows below: only the two
+    /// credit windows reach `CreditLedger`.
+    fn credit_windows(connection: u64, per_activation: u64) -> ReceiverCapacities {
+        ReceiverCapacities {
+            connection_credit_bytes: connection,
+            per_activation_credit_bytes: per_activation,
+            staging_bytes_per_session: 0,
+            staging_bytes_total: 0,
+            max_concurrent_activations: 4,
+            max_concurrent_seeds: 1,
+        }
+    }
+
+    /// The worker's `TransportCredit`: cumulative totals, and the named accounts'.
+    fn credit_return(
+        credit_epoch: u64,
+        credit_sequence: u64,
+        connection_bytes_returned: u64,
+        accounts: &[(&str, u64)],
+    ) -> TransportCredit {
+        TransportCredit {
+            credit_epoch,
+            credit_sequence,
+            connection_bytes_returned,
+            accounts: accounts
+                .iter()
+                .map(|&(activation_id, bytes_returned)| CreditAccountReturn {
+                    activation_id: activation_id.into(),
+                    bytes_returned,
+                })
+                .collect(),
+        }
+    }
+
+    /// RV #96 (native-tp-6) — the CREDIT_ACCOUNT machine's `draining` state as
+    /// the cell holds it. An account closed with bytes in flight is DRAINING
+    /// (law 3): it admits nothing (law 2; the machine refuses `unit-admitted`
+    /// while draining), so its pump reads `Gone`; it still takes its returns
+    /// (law 1); and it closes cell-side once `admitted == returned`. No pump of
+    /// it waits on credit, so no return wakes it.
+    #[test]
+    fn a_closed_account_drains_refuses_admission_and_closes_once_returned() {
+        let mut l = CreditLedger::new(1, credit_windows(1_000, 500), 0);
+        l.open_account("a");
+        assert!(l.try_admit("a", 100, UnitClass::Urgent));
+        l.close_account("a");
+        assert_eq!(
+            l.can_admit("a", 1, UnitClass::Urgent),
+            None,
+            "a draining account admits nothing: its pump reads Gone"
+        );
+        assert!(
+            !l.try_admit("a", 1, UnitClass::Urgent),
+            "invalidation stops new admission (law 2)"
+        );
+        assert_eq!(l.connection.admitted, 100, "nothing more was charged");
+
+        // law (1): a draining account takes its returns; 40 bytes are still in
+        // flight, so it stays draining
+        let woke = l.returned(&credit_return(1, 1, 60, &[("a", 60)]));
+        assert!(woke.is_empty(), "nothing of a draining account waits");
+        assert!(l.accounts.contains_key("a"), "40 bytes still in flight");
+
+        // law (3): every admitted byte is back, so the account closes cell-side
+        let woke = l.returned(&credit_return(1, 2, 100, &[("a", 100)]));
+        assert!(woke.is_empty(), "a closing account wakes nothing");
+        assert!(
+            !l.accounts.contains_key("a"),
+            "admitted == returned: a drained account closes, never living on to the leg's end"
+        );
+    }
+
+    /// RV #96 (native-tp-6), carrying RV #93's credit half: a credit move wakes
+    /// only the pumps that wait on credit. A pump waits only after a refusal,
+    /// `try_admit`'s or `can_admit`'s (`wait_for_credit` asks the latter), so
+    /// a refusal marks its account STARVED, an admission clears the mark, and
+    /// the wake takes it. An account never refused has no waiter; a DRAINING
+    /// one admits nothing, so nothing of it waits.
+    #[test]
+    fn connection_credit_wakes_only_starved_accounts() {
+        let mut l = CreditLedger::new(1, credit_windows(1_000, 30), 0);
+        l.open_account("a");
+        l.open_account("b");
+        l.open_account("c");
+        assert!(l.try_admit("a", 30, UnitClass::Urgent));
+        assert!(
+            !l.try_admit("a", 1, UnitClass::Urgent),
+            "a's account is full: a is starved"
+        );
+        assert!(
+            l.try_admit("b", 10, UnitClass::Urgent),
+            "b is never refused"
+        );
+        assert!(l.try_admit("c", 10, UnitClass::Urgent));
+        l.close_account("c");
+
+        // the connection's credit moves, and no account is named
+        let woke = l.returned(&credit_return(1, 1, 5, &[]));
+        assert!(
+            !woke.contains(&"b".to_string()),
+            "b was never refused: nothing of it waits"
+        );
+        assert!(
+            !woke.contains(&"c".to_string()),
+            "c is draining: it admits nothing, so nothing of it waits"
+        );
+        assert_eq!(woke, vec!["a".to_string()], "the starved account wakes");
+
+        // the wake took a's mark: the next move wakes nobody...
+        assert!(
+            l.returned(&credit_return(1, 2, 10, &[])).is_empty(),
+            "a woken account is not starved until it is refused again"
+        );
+        // ...until a refusal marks it again, `can_admit`'s as much as `try_admit`'s
+        assert_eq!(l.can_admit("a", 1, UnitClass::Bulk), Some(false));
+        assert_eq!(l.can_admit("b", 25, UnitClass::Bulk), Some(false));
+        let mut woke = l.returned(&credit_return(1, 3, 15, &[]));
+        woke.sort();
+        assert_eq!(woke, vec!["a".to_string(), "b".to_string()]);
+
+        // a's own return moves, but a was not refused since its wake. Then a
+        // delta refused on its urgent path and admitted as bulk leaves no
+        // stale mark: the admission cleared it.
+        let woke = l.returned(&credit_return(1, 4, 20, &[("a", 30)]));
+        assert!(woke.is_empty(), "a was not refused since its wake");
+        assert_eq!(l.can_admit("a", 31, UnitClass::Urgent), Some(false));
+        assert!(l.try_admit("a", 10, UnitClass::Bulk));
+        assert!(
+            l.returned(&credit_return(1, 5, 25, &[])).is_empty(),
+            "an admission clears the starved mark"
+        );
+    }
+
+    /// RV #96 (native-tp-6) through the table: an activation invalidated by its
+    /// CONTROL leg's death while its frames leg lives, with units in flight,
+    /// leaves a draining account on the frames connection's ledger, and that
+    /// account closes once the worker returns every admitted byte. Before, it
+    /// lived on until the frames socket closed.
+    #[test]
+    fn an_invalidated_activations_account_closes_once_its_bytes_return() {
+        let mut t = ActivationTable::new("cb");
+        let (control, _crx, frames, _frx) = attached_activation(&mut t, "a1", "s1");
+        let frames_id = frames.connection_id;
+        assert!(t.try_admit(frames_id, "a1", 100, UnitClass::Urgent));
+        perform(t.leg_closed(control.connection_id));
+        assert!(
+            t.get("a1").is_none(),
+            "the control leg's death invalidated a1"
+        );
+
+        let woke = t.credit_returned(frames_id, &credit_return(1, 1, 100, &[("a1", 100)]));
+        let ledger = t.credit_ledger(frames_id).expect("the frames leg lives");
+        assert!(
+            !ledger.accounts.contains_key("a1"),
+            "admitted == returned: the invalidated activation's account closed"
+        );
+        assert!(
+            woke.is_empty(),
+            "no pump of an invalidated activation waits"
+        );
     }
 
     // --- Geometry lease (S3c) --------------------------------------------
