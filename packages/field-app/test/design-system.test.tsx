@@ -656,21 +656,72 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
       [...(container?.querySelectorAll(".vf-ds-peek-plate") ?? [])].map((plate) =>
         plate.getAttribute("data-state"),
       ),
-    ).toEqual(["peek-live", "peek-unconnected", "peek-closed", "peek-open"]);
+    ).toEqual([
+      "peek-live",
+      "peek-unconnected",
+      "peek-filtered",
+      "peek-suggest",
+      "peek-filter-menu",
+      "peek-everything-lens",
+      "peek-closed",
+      "peek-open",
+    ]);
     expect(history("peek-closed")?.querySelector(".vf-peek-button kbd")?.textContent).toBe("⌘F");
     expect(history("peek-closed")?.querySelector(".vf-peek-pop")).toBeNull();
     // P2 — Godview's Live now, the same controller over the monitor's door as a
     // fixture holds it: waiting first, a shell last; SE-D1 — no filter on, so no
-    // token, and + Filter at the field's end
+    // token, and + Filter at the field's end; this Mac's runs say their profile,
+    // the peer's its desktop alone
     const live = history("peek-live");
+    const words = (plate: Element | null, selector: string): string[] =>
+      [...(plate?.querySelectorAll(selector) ?? [])].map((each) => each.textContent ?? "");
     expect(
       [...(live?.querySelectorAll('.vf-peek-row[data-kind="live"] .vf-peek-dot') ?? [])].map(
         (dot) => dot.getAttribute("data-state"),
       ),
-    ).toEqual(["blocked", "working", "shell"]);
-    expect(live?.querySelector(".vf-peek-row .vf-peek-os")?.textContent).toBe("studio");
+    ).toEqual(["blocked", "blocked", "working", "shell"]);
+    expect(words(live, ".vf-peek-row .vf-peek-os")).toEqual(["studio"]);
+    expect(words(live, ".vf-peek-row .vf-peek-prof")).toEqual(["Work", "This Mac", "This Mac"]);
     expect(live?.querySelector(".vf-peek-field-token")).toBeNull();
     expect(live?.querySelector('[data-peek-dd="filter"] .vf-peek-filter')).not.toBeNull();
+    // SE-D1/SE-D2 — filtered: the desktop's token, then the profile's, in the
+    // field and on the button alike, and the fixture door's runs narrowed by both
+    const filtered = history("peek-filtered");
+    expect(words(filtered, ".vf-peek-field-token-label")).toEqual(["MacBook Pro", "Work"]);
+    expect(words(filtered, ".vf-peek-token-part")).toEqual(["MacBook Pro", "Work"]);
+    expect(words(filtered, '.vf-peek-row[data-kind="live"] .vf-peek-title')).toEqual([
+      "billing-api",
+    ]);
+    // a typed name offers its filter, first in the list and hot, ⇥ printed
+    const suggest = history("peek-suggest");
+    const offer = suggest?.querySelector('.vf-peek-row[role="option"]');
+    expect(offer?.getAttribute("data-kind")).toBe("offer");
+    expect(offer?.getAttribute("aria-selected")).toBe("true");
+    expect(offer?.querySelector(".vf-peek-title")?.textContent).toBe("Show only Work's sessions");
+    expect(offer?.querySelector(".vf-peek-when")?.textContent).toBe("1 session");
+    expect(suggest?.querySelector(".vf-peek-open")?.textContent).toBe("Add the filter⇥");
+    // + Filter open: Profiles before Desktops, each count every session's
+    const menu = history("peek-filter-menu");
+    expect(menu?.querySelector(".vf-peek-filter")?.getAttribute("aria-expanded")).toBe("true");
+    expect(words(menu, ".vf-peek-menu .vf-menu-eye")).toEqual(["Profiles", "Desktops"]);
+    expect(words(menu, ".vf-peek-menu .vf-menu-row")).toEqual([
+      "Every profile4 sessions",
+      "This Mac2 sessions",
+      "Workwaiting",
+      "All desktops3 agents",
+      "MacBook Pro · here2 agents",
+      "studio1 agent",
+    ]);
+    // UM-D28 — Everything under Godview's Work: no profile token, and the foot
+    // says it looks through every profile and where Work comes back
+    const everythingLens = history("peek-everything-lens");
+    expect(everythingLens?.querySelector('[role="radio"][aria-checked="true"]')?.textContent).toBe(
+      "Everything",
+    );
+    expect(everythingLens?.querySelector(".vf-peek-field-token")).toBeNull();
+    expect(everythingLens?.querySelector(".vf-peek-said")?.textContent).toBe(
+      "Your latest sessions · every word you type must match · every profile; Work comes back on Live now",
+    );
     // TS-4 — this Mac not connected: its runs alone, This Mac alone draws no
     // token, and + Filter's Desktops end on the ghost row
     const unconnected = history("peek-unconnected");
