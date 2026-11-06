@@ -1,0 +1,312 @@
+{
+  "//": "DR-1a (thinking-drive.md v0.2, RULED: DR-D2 (a), DR-D3 (a), DR-D11 (a)) — a made app's serve headers from its network policy (`madeAppServeHeaders`, made-app-network.ts; the policy as data in MADE_APP_SERVE_POLICY, registries.ts), and the header rules truffle's serve holds a list to (T-1; ServeHeaderName, ServeHeaderValue, ServeHeaders, SERVE_HEADER_FORBIDDEN, SERVE_HEADER_LIMITS). Each accepted policy composes exactly `csp` (or, at the cap, a CSP of `cspBytes` bytes whose sha256 is `cspSha256`), then `fixedHeaders`, in that order, and its `reach` is `madeAppReachOf`. Every CSP's directives are `directives`, in order, and never one of `neverDirectives`: a sandbox makes the origin opaque. A host is the policy's INPUT, never VibeField's: these are example names. A `manifest` row reads `manifest` with VibefieldAppManifest, then `madeAppPolicyFromManifest`, and that policy is `policy`. The expected strings were built by hand from the policy's text in a shell (printf, wc, shasum), not by the code. Header list entries: `value`, or `fill` repeated to `bytes`; a `count` row is that many headers `X-H00`, `X-H01`, … with value `1`.",
+  "directives": [
+    "default-src",
+    "script-src",
+    "style-src",
+    "img-src",
+    "font-src",
+    "media-src",
+    "connect-src",
+    "object-src",
+    "base-uri",
+    "form-action",
+    "frame-ancestors"
+  ],
+  "neverDirectives": ["sandbox"],
+  "fixedHeaders": [
+    { "name": "Referrer-Policy", "value": "no-referrer" },
+    { "name": "X-Content-Type-Options", "value": "nosniff" }
+  ],
+  "policies": [
+    {
+      "case": "an empty policy admits only its own origin, and data and blob where named",
+      "policy": { "source": "captured", "hosts": {} },
+      "csp": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; media-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'",
+      "reach": []
+    },
+    {
+      "case": "a captured page's hosts, per directive",
+      "policy": {
+        "source": "captured",
+        "hosts": {
+          "script": ["cdn.example.com", "js.example.net"],
+          "style": ["cdn.example.com", "fonts.example.org"],
+          "font": ["static.example.org"]
+        }
+      },
+      "csp": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.example.com https://js.example.net; style-src 'self' 'unsafe-inline' https://cdn.example.com https://fonts.example.org; img-src 'self' data: blob:; font-src 'self' data: https://static.example.org; media-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'",
+      "reach": ["cdn.example.com", "fonts.example.org", "js.example.net", "static.example.org"]
+    },
+    {
+      "case": "order and repeats are not meaning: the same hosts, shuffled and repeated, compose the same header",
+      "policy": {
+        "source": "captured",
+        "hosts": {
+          "font": ["static.example.org", "static.example.org"],
+          "style": ["fonts.example.org", "cdn.example.com", "cdn.example.com"],
+          "script": ["js.example.net", "cdn.example.com", "js.example.net"]
+        }
+      },
+      "csp": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.example.com https://js.example.net; style-src 'self' 'unsafe-inline' https://cdn.example.com https://fonts.example.org; img-src 'self' data: blob:; font-src 'self' data: https://static.example.org; media-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'",
+      "reach": ["cdn.example.com", "fonts.example.org", "js.example.net", "static.example.org"]
+    },
+    {
+      "case": "a built app's manifest: its one list in every directive, wss beside https in connect-src",
+      "manifest": { "name": "Ledger", "network": ["cdn.example.com", "api.example.com"] },
+      "policy": {
+        "source": "manifest",
+        "hosts": {
+          "script": ["cdn.example.com", "api.example.com"],
+          "style": ["cdn.example.com", "api.example.com"],
+          "img": ["cdn.example.com", "api.example.com"],
+          "font": ["cdn.example.com", "api.example.com"],
+          "media": ["cdn.example.com", "api.example.com"],
+          "connect": ["cdn.example.com", "api.example.com"]
+        }
+      },
+      "csp": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://api.example.com https://cdn.example.com; style-src 'self' 'unsafe-inline' https://api.example.com https://cdn.example.com; img-src 'self' data: blob: https://api.example.com https://cdn.example.com; font-src 'self' data: https://api.example.com https://cdn.example.com; media-src 'self' data: blob: https://api.example.com https://cdn.example.com; connect-src 'self' https://api.example.com wss://api.example.com https://cdn.example.com wss://cdn.example.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'",
+      "reach": ["api.example.com", "cdn.example.com"]
+    },
+    {
+      "case": "a manifest with no network admits no outside host",
+      "manifest": { "name": "Ledger" },
+      "policy": { "source": "manifest", "hosts": {} },
+      "csp": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; media-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'",
+      "reach": []
+    },
+    {
+      "case": "a directive this build does not know passes through and admits nothing",
+      "policy": {
+        "source": "captured",
+        "hosts": { "script": ["cdn.example.com"], "frame": ["frames.example.com"] }
+      },
+      "csp": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.example.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; media-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'",
+      "reach": ["cdn.example.com"]
+    },
+    {
+      "case": "never a sandbox directive: a host named sandbox is a host",
+      "policy": {
+        "source": "captured",
+        "hosts": { "script": ["sandbox.example.com"], "connect": ["sandbox.example.com"] }
+      },
+      "csp": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://sandbox.example.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; media-src 'self' data: blob:; connect-src 'self' https://sandbox.example.com wss://sandbox.example.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'",
+      "reach": ["sandbox.example.com"]
+    },
+    {
+      "case": "UNION_HOSTS across two directives serve: the bound is the union",
+      "policy": {
+        "source": "captured",
+        "hosts": {
+          "script": [
+            "u00.example.com",
+            "u01.example.com",
+            "u02.example.com",
+            "u03.example.com",
+            "u04.example.com",
+            "u05.example.com",
+            "u06.example.com",
+            "u07.example.com"
+          ],
+          "connect": [
+            "u08.example.com",
+            "u09.example.com",
+            "u10.example.com",
+            "u11.example.com",
+            "u12.example.com",
+            "u13.example.com",
+            "u14.example.com",
+            "u15.example.com"
+          ]
+        }
+      },
+      "csp": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://u00.example.com https://u01.example.com https://u02.example.com https://u03.example.com https://u04.example.com https://u05.example.com https://u06.example.com https://u07.example.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; media-src 'self' data: blob:; connect-src 'self' https://u08.example.com wss://u08.example.com https://u09.example.com wss://u09.example.com https://u10.example.com wss://u10.example.com https://u11.example.com wss://u11.example.com https://u12.example.com wss://u12.example.com https://u13.example.com wss://u13.example.com https://u14.example.com wss://u14.example.com https://u15.example.com wss://u15.example.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'",
+      "reach": [
+        "u00.example.com",
+        "u01.example.com",
+        "u02.example.com",
+        "u03.example.com",
+        "u04.example.com",
+        "u05.example.com",
+        "u06.example.com",
+        "u07.example.com",
+        "u08.example.com",
+        "u09.example.com",
+        "u10.example.com",
+        "u11.example.com",
+        "u12.example.com",
+        "u13.example.com",
+        "u14.example.com",
+        "u15.example.com"
+      ]
+    },
+    {
+      "case": "the worst policy at the cap: UNION_HOSTS hosts of HOST_BYTES each, in all six directives, fit one header value",
+      "manifest": {
+        "network": [
+          "h00xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.example.com",
+          "h01xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.example.com",
+          "h02xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.example.com",
+          "h03xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.example.com",
+          "h04xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.example.com",
+          "h05xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.example.com",
+          "h06xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.example.com",
+          "h07xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.example.com",
+          "h08xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.example.com",
+          "h09xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.example.com",
+          "h10xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.example.com",
+          "h11xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.example.com",
+          "h12xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.example.com",
+          "h13xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.example.com",
+          "h14xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.example.com",
+          "h15xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.example.com"
+        ]
+      },
+      "cspBytes": 7978,
+      "cspSha256": "0ad5827a406d4f60fdfad5c47162b3b44631bd082113c0eabacfd3977abccf74",
+      "listBytes": 8056
+    },
+    {
+      "case": "one host past UNION_HOSTS across two directives is refused, honestly and whole",
+      "policy": {
+        "source": "captured",
+        "hosts": {
+          "script": [
+            "u00.example.com",
+            "u01.example.com",
+            "u02.example.com",
+            "u03.example.com",
+            "u04.example.com",
+            "u05.example.com",
+            "u06.example.com",
+            "u07.example.com",
+            "u16.example.com"
+          ],
+          "connect": [
+            "u08.example.com",
+            "u09.example.com",
+            "u10.example.com",
+            "u11.example.com",
+            "u12.example.com",
+            "u13.example.com",
+            "u14.example.com",
+            "u15.example.com"
+          ]
+        }
+      },
+      "refused": "hosts-over-cap"
+    },
+    {
+      "case": "a host with a scheme is not a policy's",
+      "policy": { "source": "captured", "hosts": { "script": ["https://cdn.example.com"] } },
+      "refused": "policy-unreadable"
+    },
+    {
+      "case": "a host one byte past HOST_BYTES is not a policy's",
+      "policy": {
+        "source": "captured",
+        "hosts": { "script": ["h00xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.example.com"] }
+      },
+      "refused": "policy-unreadable"
+    },
+    {
+      "case": "a name that resolves to this device or its network is not a policy's",
+      "policy": { "source": "captured", "hosts": { "connect": ["printer.local"] } },
+      "refused": "policy-unreadable"
+    },
+    {
+      "case": "a tailnet name is not a policy's",
+      "policy": { "source": "captured", "hosts": { "connect": ["studio.tail1234.ts.net"] } },
+      "refused": "policy-unreadable"
+    },
+    {
+      "case": "the person's own source joins at DR-2, not before",
+      "policy": { "source": "person", "hosts": {} },
+      "refused": "policy-unreadable"
+    }
+  ],
+  "headers": {
+    "acceptedNames": [
+      "X-Upgrade-Note",
+      "Hostname",
+      "Linker",
+      "Proxied",
+      "Cross-Origin-Opener-Policy",
+      "X-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "forbiddenNames": [
+      "Connection",
+      "keep-alive",
+      "TE",
+      "Trailer",
+      "trailers",
+      "Transfer-Encoding",
+      "Upgrade",
+      "Set-Cookie",
+      "Content-Length",
+      "HOST",
+      "Content-Type",
+      "Content-Encoding",
+      "Content-Range",
+      "Link",
+      "Proxy-Connection",
+      "proxy-authenticate",
+      "Proxy-Authorization",
+      "Proxy-"
+    ],
+    "refusedNames": [
+      "",
+      "X Header",
+      "X:Header",
+      "X_Header",
+      "X-Header\r\nX-Injected",
+      "Ünicode",
+      "X-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    ],
+    "acceptedValues": ["1", "a\tb c", "!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~"],
+    "refusedValues": [
+      "",
+      " lead",
+      "trail ",
+      "\tlead",
+      "trail\t",
+      "a\r\nX-Injected: 1",
+      "a\nb",
+      "a\u0000b",
+      "a\u007fb",
+      "café"
+    ],
+    "acceptedLists": [
+      {
+        "case": "a value at VALUE_BYTES",
+        "headers": [{ "name": "X-Long", "fill": "a", "bytes": 8192 }]
+      },
+      { "case": "COUNT headers", "count": 32 },
+      {
+        "case": "names and values at LIST_BYTES exactly",
+        "headers": [
+          { "name": "X-A", "fill": "a", "bytes": 8189 },
+          { "name": "X-B", "fill": "b", "bytes": 8189 }
+        ]
+      }
+    ],
+    "refusedLists": [
+      {
+        "case": "a value one byte past VALUE_BYTES",
+        "headers": [{ "name": "X-Long", "fill": "a", "bytes": 8193 }]
+      },
+      { "case": "one header past COUNT", "count": 33 },
+      {
+        "case": "names and values one byte past LIST_BYTES",
+        "headers": [
+          { "name": "X-A", "fill": "a", "bytes": 8189 },
+          { "name": "X-B", "fill": "b", "bytes": 8190 }
+        ]
+      },
+      {
+        "case": "a name twice, ASCII case-insensitively",
+        "headers": [{ "name": "X-A", "value": "1" }, { "name": "x-a", "value": "2" }]
+      }
+    ]
+  }
+}

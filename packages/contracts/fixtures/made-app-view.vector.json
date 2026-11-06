@@ -1,0 +1,173 @@
+{
+  "//": "DR-1a (thinking-drive.md v0.2, RULED: DR-D11 (a)) — a made app's VIEW, built on each desktop from the stored page and never synced: `madeAppViewHead(theme)`, then the page's bytes, then `tail` (MADE_APP_VIEW_TAIL, made-app-network.ts). Each `views` row's theme composes exactly `head`. `embed` is one whole view, byte for byte, the bytes the files worker writes (VF-VIEW). Its page carries its own `<meta http-equiv=\"Content-Security-Policy\">`, and in the view that meta sits inside `<body>`, where the browser ignores it: the serve's header is the page's one policy (the wave-0 critic). Every `refusedVariables` row is a theme of `light` with that one variable, and it and every `refusedThemes` row is refused `theme-unreadable`, so no value reaches the bytes unless it cannot leave its declaration. The theme is the view's INPUT, never VibeField's for any platform: these values are examples. The expected strings were written by hand from the head's text, not by the code.",
+  "tail": "</body></html>",
+  "views": [
+    {
+      "case": "a light theme's variables, in order",
+      "theme": {
+        "colorScheme": "light",
+        "variables": [
+          ["--surface", "#fff"],
+          ["--ink", "#1d1d1b"],
+          ["--radius", "8px"],
+          ["--font-sans", "system-ui,sans-serif"]
+        ]
+      },
+      "head": "<!doctype html><html><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><style>:root{color-scheme:light;--surface:#fff;--ink:#1d1d1b;--radius:8px;--font-sans:system-ui,sans-serif}</style></head><body>"
+    },
+    {
+      "case": "both schemes, and no variables",
+      "theme": { "colorScheme": "light dark", "variables": [] },
+      "head": "<!doctype html><html><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><style>:root{color-scheme:light dark}</style></head><body>"
+    },
+    {
+      "case": "functions of colors and lengths",
+      "theme": {
+        "colorScheme": "dark",
+        "variables": [
+          ["--shade", "rgb(0 0 0 / 50%)"],
+          ["--gap", "calc(100% - 8px)"],
+          ["--mix", "color-mix(in srgb, #fff 20%, #000)"]
+        ]
+      },
+      "head": "<!doctype html><html><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><style>:root{color-scheme:dark;--shade:rgb(0 0 0 / 50%);--gap:calc(100% - 8px);--mix:color-mix(in srgb, #fff 20%, #000)}</style></head><body>"
+    }
+  ],
+  "embed": {
+    "theme": { "colorScheme": "light dark", "variables": [] },
+    "page": "<!doctype html><html><head><meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'\"><title>Ledger</title></head><body><p>hi</p></body></html>",
+    "view": "<!doctype html><html><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><style>:root{color-scheme:light dark}</style></head><body><!doctype html><html><head><meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'none'\"><title>Ledger</title></head><body><p>hi</p></body></html></body></html>"
+  },
+  "refusedVariables": [
+    {
+      "case": "a value that closes the style",
+      "variable": ["--x", "</style><script>alert(1)</script>"]
+    },
+    {
+      "case": "a value that ends its declaration",
+      "variable": ["--x", "red;--y:blue"]
+    },
+    {
+      "case": "a value that closes the rule",
+      "variable": ["--x", "red}body{color:red"]
+    },
+    {
+      "case": "a backslash escape",
+      "variable": ["--x", "\\3c"]
+    },
+    {
+      "case": "a double quote",
+      "variable": ["--x", "\"Inter\""]
+    },
+    {
+      "case": "a single quote",
+      "variable": ["--x", "'Inter'"]
+    },
+    {
+      "case": "a colon, so never a url()",
+      "variable": ["--x", "url(https://example.com/x.png)"]
+    },
+    {
+      "case": "a comment's opening",
+      "variable": ["--x", "red/*"]
+    },
+    {
+      "case": "a line break",
+      "variable": ["--x", "red\nblue"]
+    },
+    {
+      "case": "a tab",
+      "variable": ["--x", "red\tblue"]
+    },
+    {
+      "case": "a space at the start",
+      "variable": ["--x", " red"]
+    },
+    {
+      "case": "a space at the end",
+      "variable": ["--x", "red "]
+    },
+    {
+      "case": "a parenthesis left open",
+      "variable": ["--x", "rgb(0 0 0"]
+    },
+    {
+      "case": "a parenthesis closed before it opens",
+      "variable": ["--x", ")("]
+    },
+    {
+      "case": "an empty value",
+      "variable": ["--x", ""]
+    },
+    {
+      "case": "an !important",
+      "variable": ["--x", "red !important"]
+    },
+    {
+      "case": "a less-than",
+      "variable": ["--x", "a<b"]
+    },
+    {
+      "case": "a value past ASCII",
+      "variable": ["--x", "café"]
+    },
+    {
+      "case": "a name in capitals",
+      "variable": ["--Surface", "#fff"]
+    },
+    {
+      "case": "a name without its dashes",
+      "variable": ["surface", "#fff"]
+    },
+    {
+      "case": "a name with one dash",
+      "variable": ["-surface", "#fff"]
+    },
+    {
+      "case": "a name that is its dashes alone",
+      "variable": ["--", "#fff"]
+    },
+    {
+      "case": "a brace in a name",
+      "variable": ["--a{", "#fff"]
+    },
+    {
+      "case": "a space in a name",
+      "variable": ["--a b", "#fff"]
+    },
+    {
+      "case": "a semicolon in a name",
+      "variable": ["--x;", "#fff"]
+    }
+  ],
+  "refusedThemes": [
+    {
+      "case": "a name twice",
+      "theme": { "colorScheme": "light", "variables": [["--a", "#fff"], ["--a", "#000"]] }
+    },
+    {
+      "case": "a scheme it does not know",
+      "theme": { "colorScheme": "normal", "variables": [] }
+    },
+    {
+      "case": "a scheme in words of its own",
+      "theme": { "colorScheme": "only light", "variables": [] }
+    },
+    {
+      "case": "no scheme",
+      "theme": { "variables": [] }
+    },
+    {
+      "case": "a variable that is not a pair",
+      "theme": { "colorScheme": "light", "variables": [["--a"]] }
+    },
+    {
+      "case": "a variable with a third part",
+      "theme": { "colorScheme": "light", "variables": [["--a", "#fff", "#000"]] }
+    },
+    {
+      "case": "variables as a map",
+      "theme": { "colorScheme": "light", "variables": { "--a": "#fff" } }
+    }
+  ]
+}

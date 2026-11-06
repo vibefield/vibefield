@@ -1,0 +1,5 @@
+{
+  "//": "DR-1a (thinking-drive.md v0.2, RULED: DR-D3 (a)) — a built app's own `vibefield.app.json` (VibefieldAppManifest, made-app-network.ts): `network` names the outside hosts the app loads from or calls, one flat list that every fetch directive admits. Every other field is the app's and passes through; `name` is read by nothing yet. The hosts are examples, an INPUT: VibeField names no platform's list.",
+  "name": "Ledger",
+  "network": ["cdn.example.com", "api.example.com", "fonts.example.org"]
+}

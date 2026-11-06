@@ -217,6 +217,7 @@ import {
 } from "../src/freeway";
 import { LiveSurfaceIosSimulatorBindingV1 } from "../src/live-surfaces";
 import { LoggingHealthV1, LogRecordV1 } from "../src/logging";
+import { VibefieldAppManifest } from "../src/made-app-network";
 import { NativeTickNotification, SystemTickNotification } from "../src/methods";
 import {
   DesiredState,
@@ -457,6 +458,9 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "artifact-mark": ArtifactMarkResult,
   "made-app-registry": MadeAppRegistry,
   "made-app-intent": MadeAppIntentRow,
+  // DR-1a — a built app's own `vibefield.app.json` (DR-D3 (a)); its hostile reads, the serve's
+  // headers and the view are vectors, pinned by made-app-network.test.ts.
+  "vibefield-app-manifest": VibefieldAppManifest,
   "shell-capture-preview-params": ShellWebContentsCaptureArtifactPreviewParams,
   "shell-capture-preview-result": ShellWebContentsCaptureArtifactPreviewResult,
   "native-health": NativeHealth,

@@ -1,0 +1,128 @@
+{
+  "//": "DR-1a (thinking-drive.md v0.2, RULED: DR-D3 (a)) — what VibefieldAppManifest (made-app-network.ts) makes of a hostile `vibefield.app.json`. A reader STRIPS a `network` entry it cannot read as a policy host (MadeAppNetworkHost: a scheme, a port, a wildcard, an IP literal, a tailnet name, a name that resolves to this device or its network, a host past MADE_APP_SERVE_POLICY.HOST_BYTES, a name not in canonical form, anything not a string), drops a repeat, keeps the first UNION_HOSTS readable hosts in the manifest's order, and costs the whole field only when `network` is not a list or is longer than MANIFEST_ENTRIES. It never refuses the manifest, and every other field passes through. Each row's `manifest` reads as `network` (null: the field is gone). A `repeat` row's manifest gains a `network` of `host` repeated `count` times.",
+  "rows": [
+    {
+      "case": "strips what it cannot read and keeps what it can, once each, in order",
+      "manifest": {
+        "name": "Ledger",
+        "network": [
+          "https://cdn.example.com",
+          "cdn.example.com",
+          "cdn.example.com:443",
+          "*.example.com",
+          "192.168.1.10",
+          "10.0.0.1",
+          "[::1]",
+          "studio.tail1234.ts.net",
+          "ts.net",
+          "localhost",
+          "app.localhost",
+          "printer.local",
+          "svc.internal",
+          "nas.home.arpa",
+          "home.arpa",
+          "CDN.Example.com",
+          "cdn.example.com.",
+          "",
+          " cdn.example.com",
+          "cdn.example.com/x",
+          "-bad.example.com",
+          "bad-.example.com",
+          "a..example.com",
+          "bücher.example",
+          "h00xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.example.com",
+          "xn--bcher-kva.example",
+          42,
+          null,
+          true,
+          { "host": "cdn.example.com" },
+          ["cdn.example.com"],
+          "fonts.example.org",
+          "cdn.example.com",
+          "api.example.com"
+        ]
+      },
+      "network": [
+        "cdn.example.com",
+        "xn--bcher-kva.example",
+        "fonts.example.org",
+        "api.example.com"
+      ]
+    },
+    {
+      "case": "keeps the first UNION_HOSTS readable hosts, in the manifest's order",
+      "manifest": {
+        "network": [
+          "n00.example.com",
+          "n01.example.com",
+          "n02.example.com",
+          "n03.example.com",
+          "n04.example.com",
+          "n05.example.com",
+          "n06.example.com",
+          "n07.example.com",
+          "n08.example.com",
+          "n09.example.com",
+          "n10.example.com",
+          "n11.example.com",
+          "n12.example.com",
+          "n13.example.com",
+          "n14.example.com",
+          "n15.example.com",
+          "n16.example.com",
+          "n17.example.com"
+        ]
+      },
+      "network": [
+        "n00.example.com",
+        "n01.example.com",
+        "n02.example.com",
+        "n03.example.com",
+        "n04.example.com",
+        "n05.example.com",
+        "n06.example.com",
+        "n07.example.com",
+        "n08.example.com",
+        "n09.example.com",
+        "n10.example.com",
+        "n11.example.com",
+        "n12.example.com",
+        "n13.example.com",
+        "n14.example.com",
+        "n15.example.com"
+      ]
+    },
+    {
+      "case": "nothing readable is an empty list, and the manifest stands",
+      "manifest": { "name": "Ledger", "network": ["https://cdn.example.com", 7] },
+      "network": []
+    },
+    {
+      "case": "a network that is not a list costs the field",
+      "manifest": { "name": "Ledger", "network": "cdn.example.com" },
+      "network": null
+    },
+    {
+      "case": "a network of another shape costs the field",
+      "manifest": { "name": "Ledger", "network": { "script": ["cdn.example.com"] } },
+      "network": null
+    },
+    {
+      "case": "MANIFEST_ENTRIES entries are read",
+      "manifest": { "name": "Ledger" },
+      "repeat": { "host": "cdn.example.com", "count": 256 },
+      "network": ["cdn.example.com"]
+    },
+    {
+      "case": "one entry past MANIFEST_ENTRIES costs the field",
+      "manifest": { "name": "Ledger" },
+      "repeat": { "host": "cdn.example.com", "count": 257 },
+      "network": null
+    },
+    {
+      "case": "no network",
+      "manifest": { "name": "Ledger", "entry": "index.html" },
+      "network": null
+    }
+  ]
+}
