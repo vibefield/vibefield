@@ -96,8 +96,10 @@ pub async fn handle(
     // DR-3a (W3) — the file transfer answers BEFORE the node gate too, in
     // egress's refusal order (`file_transfer.rs`): `file-transfer-unsupported`
     // is a fact about this floor's truffle that holds with or without a node.
+    // A name under the prefix that the contract does not declare answers
+    // NOT_FOUND there, as this facade's own unknown names do.
     if method.starts_with("native.mesh.fileTransfer.") {
-        super::file_transfer::handle(state, tx, id);
+        super::file_transfer::handle(state, tx, method, id);
         return;
     }
     if method == "native.mesh.retire" {
@@ -771,7 +773,11 @@ async fn retire_identity(state: &Arc<DaemonState>, id: Option<Value>) -> Value {
 /// tell a forgotten posture from a lagging read), the approval it waits on and
 /// the console that grants it, the name Tailscale will show, a key's expiry the
 /// last node reported, and why a bring-up ended.
-fn unavailable(state: &Arc<DaemonState>, id: Option<Value>) -> Value {
+///
+/// DR-3a (W3) — `pub(super)`: the file transfer's refusal order answers its
+/// step 3 (`roots` and `pull` with no node) with this same answer (contracts
+/// mgmt.ts, the file transfer's header), from `mgmt/file_transfer.rs`.
+pub(super) fn unavailable(state: &Arc<DaemonState>, id: Option<Value>) -> Value {
     let (mesh_state, auth_url) = {
         let h = state.health_tx.borrow();
         h.units

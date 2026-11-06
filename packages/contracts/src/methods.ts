@@ -867,11 +867,11 @@ export const METHODS: MethodDef[] = [
   // mgmt.ts `NativeFileTransfer*`): the named roots this desktop serves, a pull from a peer's root, and the stream of
   // pulls. CONTROL only, like lanes: the bytes go Rust to Rust through the node (EL2). `offer` (a push) stays reserved
   // and undeclared. Declared ahead of the floor's facade (the critic's VF-FLOOR, wave 3), an exception to declared ==
-  // shipped (D36) as AR-1's `agents.*` rows were until AR-2's handlers (below), which the facade closes: every verb is
-  // answered, and at the truffle-core `=0.7.24` pin each answers `file-transfer-unsupported`
-  // (MESH_FILE_TRANSFER.STATE_UNSUPPORTED). fieldd calls none of them.
-  // Corrected 2026-11-06 (W3 rider C, DR-3a): it said "until it lands a node answers these NOT_FOUND", and that the
-  // exception "closes when VF-FLOOR lands".
+  // shipped (D36), as AR-1's `agents.*` rows were until AR-2's handlers (below). The facade closes it with its first
+  // landing (VF-FLOOR's stack A): every verb is answered, and at the truffle-core `=0.7.24` pin each answers
+  // `file-transfer-unsupported` (MESH_FILE_TRANSFER.STATE_UNSUPPORTED). fieldd calls none of them.
+  // Corrected 2026-11-06 (W3 rider C, DR-3a): it said "until it lands a node answers these NOT_FOUND". It also said
+  // the exception "closes when VF-FLOOR lands"; VF-FLOOR is two landings, and the first (stack A) closes it.
   defineMethod({
     surface: "mgmt",
     method: "native.mesh.fileTransfer.roots",

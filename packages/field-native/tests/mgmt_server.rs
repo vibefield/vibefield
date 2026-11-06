@@ -488,17 +488,20 @@ async fn serve_subscribe_refused_honestly_when_mesh_down() {
 /// refusal order, step 1). The answer IS the golden, key for key, and parses as
 /// the generated `ErrorData` (EL9). Each call carries its golden params, so the
 /// answer is not a params refusal; no node is up, so the node gate's
-/// `MeshNotUpDetails` is what every verb answered before the facade.
+/// `MeshNotUpDetails` is what every verb answered before the facade. The arm
+/// that answers is production's default, by its word; and `offer`, reserved and
+/// undeclared, is no verb, so it answers NOT_FOUND.
 #[tokio::test]
 async fn the_file_transfer_verbs_answer_unsupported_ahead_of_the_node_gate() {
     use field_native::contracts::{ErrorData, ErrorKind};
     let (_dir, daemon) = boot().await;
     let mut c = TestClient::connect(&daemon).await;
-    c.hello(&daemon, 1).await;
+    assert!(c.hello(&daemon, 1).await["result"].is_object());
     assert!(
         !daemon.state.mesh.node_present(),
         "the default floor has no node"
     );
+    assert_eq!(daemon.state.mesh.file_transfer().arm(), "unsupported");
     let unsupported = load("error-data.file-transfer-unsupported.json");
     let calls = [
         (
@@ -523,6 +526,16 @@ async fn the_file_transfer_verbs_answer_unsupported_ahead_of_the_node_gate() {
         assert_eq!(data.kind, ErrorKind::Unavailable, "{method}");
         assert!(!data.retryable, "{method}");
     }
+    // `offer` (a push) stays reserved and undeclared (contracts methods.ts): no
+    // verb, so NOT_FOUND on every arm, never the capability refusal.
+    c.send(json!({"jsonrpc":"2.0","id":5,"method":"native.mesh.fileTransfer.offer","params":{}}))
+        .await;
+    let resp = c.recv().await;
+    assert_eq!(resp["id"], 5, "{resp}");
+    assert_eq!(resp["error"]["code"], -32601, "{resp}");
+    let data: ErrorData = serde_json::from_value(resp["error"]["data"].clone())
+        .unwrap_or_else(|e| panic!("offer: {e}"));
+    assert_eq!(data.kind, ErrorKind::NotFound, "{resp}");
     daemon.shutdown().await;
 }
 

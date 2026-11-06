@@ -145,8 +145,10 @@ struct Shared {
     /// DR-3a (W3) — the file transfer's substrate
     /// (`services/file_transfer.rs`): `UnsupportedFileTransfer` in production
     /// at the `=0.7.24` pin, whose truffle cannot pull by a named root. Behind
-    /// a mutex, as egress's is, only so a test can install another arm;
-    /// production never swaps it.
+    /// a mutex, as egress's is, for one writer: the test seam that installs
+    /// another arm, which W3's stack B adds (`install_file_transfer_for_tests`,
+    /// egress's `install_egress_for_tests` shape). Nothing in this build writes
+    /// it after construction, and production never swaps it.
     file_transfer: Mutex<Arc<dyn FileTransferBackend>>,
     /// TS-1 (track TS) — the sign-in facts of the current bring-up and its
     /// node ([`LinkFacts`]): what a person needs to act on a link that waits on
