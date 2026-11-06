@@ -7077,6 +7077,12 @@ The lane was cut at `69c1385c`; main moved eight commits under it (SNAP-3/3a, AR
 **Found.** "GPT RESERVE 7D" was OpenAI's Luna Reserve (the Codex limit `gpt-reserve`: GPT-5.6 Luna only, for some personal Plus and Pro accounts, drawn on only after the regular limits run out); "3P" was Antigravity's "Claude and GPT models". The concurrent session's glyph rule (its uncommitted `glyphs.test.tsx`: product code draws no inline `<svg>`) decided the line's form. Its `FieldGlyph` swap in `ProfilesView.tsx` and `profiles-settings.css` stays uncommitted in the working tree, as theirs.
 
 **Owed.** AR-D27 as worded awaits ratification. Godview's compact usage column still labels by `label` (it could head its rings by group). Luna Reserve's name is known only for the `gpt-reserve` id when the backend names none.
+  > *Answered in part 2026-11-06 (UM-3, LANDED "UM-3 and SE-1"):* Godview's compact usage column is gone. UM-3c
+  > unmounted puppeteer-views' `UsageColumn` (`4a9927064`), and the profiles column draws each profile's Bands
+  > circle in its place. A model's own week is that circle's hairline (UM-D16 E), and where the circle says a part,
+  > in its label or its middle, it says it by its group, "of 7 days · Fable" (`windowOf`, field-app
+  > `src/usage/bands.ts`); the popover's rows draw Settings' own C1 line for each plan's tightest window. AR-D27's
+  > ratification stays owed, now with UM-D3's and UM-D4's extension (DECISIONS AR-D27).
 
 ## SNAP-1a — macOS screenshot startup and rendering (2026-09-24)
 
@@ -7134,6 +7140,11 @@ candidates, not changes in this slice. Full review and phase table:
 **Found.** GT-D15.1's audit caught a keyframe in the empty tab's first fade (the overlay carries none; it is an entry transition now). A concurrent session is building usage freshness (`agents.usage {refresh}`, the Agents panels, puppeteer's usage monitor); its hunks in `daemon.ts` stay uncommitted, as theirs.
 
 **Owed.** AR-D28 as worded awaits ratification. The usage column does not follow the chosen tab. puppeteer's own Godview draws no tabs yet (the views ship them; its drawer's per-provider profiles predate sets). While Godview is open, ⌥ and a digit that has a tab choose it rather than type its character into a pane.
+  > *Answered in part 2026-11-06 (UM-3, LANDED "UM-3 and SE-1"):* the usage column is gone (UM-3c, `4a9927064`),
+  > and the chosen tab has been search's profile filter since P2 (PK4 (a)). Each profile now has its own Bands
+  > circle over its own plans, and with several each circle is the lens: a click chooses that profile for the stage
+  > and search alike, a second click shows them all, and a profile chosen in search rings its circle (UM-D19,
+  > UM-D21, SE-D2). The Owed's other items are not read here.
 
 ## P0 — the pre-Phase-0 fixes: the posture a restarted floor forgot, the door a restarted fieldd left behind, a client new after every fieldd boot, and a phone that renews its grant (2026-09-24; main `499504cd`…`c6a8a39a`, rebased onto `c6f7d0cb`)
 
@@ -37678,6 +37689,11 @@ ancestor of `2b9b66c14`; `355dffd82` is SP-D13's, on main.
     and UI_SYSTEM.md's column plates and boundary;
   - then SE-1 (`se/1-peek`): the Peek as Tokens, one filter, this Mac's live rows naming their profile, and the Tokens
     plates.
+  > *Answered 2026-11-06:* M-desk landed (`ed8099c1e`, run187, M187; LANDED "UM-3 and SE-1"). With it the Found's
+  > "Settings and the meter differ until UM-3 adopts the leaf" is answered in part: Settings reads a budget without
+  > a pace in its own `usageLines` (`719d055ce`), so `paceless()` left the meter (`25a8add66`), and it says a window
+  > read before its reset by the reading's age, "as of 3h ago", unlit (`ed8099c1e`); "resets now" stands only where
+  > no age can be said. The 1800 ms loading dot and shimmer are AR's, and stand.
 - **M-phone**, one stacked mint (the kit, stills and verify), landing before MA-6 opens HomeScreen.swift:
   - UM-4 (`um/3-phone`): the usage shapes, Bands in Swift with the golden's FieldHomeTests copy and its required
     mirror, the feed, the Me menu's row, the Agent Profiles page and the held face;
@@ -38248,3 +38264,407 @@ IOS-12b's Owed ("12e the star in Metal"), each noted in its entry.
 
 Three inserts into older entries: IOS-12a's Owed; IOS-12b's Owed, with a dated line on its face slot; and M-c1's
 Owed.
+
+## UM-3 and SE-1 — the profile meters reach the desk: Godview's profiles column with its Bands circles, popover and add, the limit moment beside the add, Settings saying the same meter, and the Peek as Tokens with one filter (tracks UM and SE)
+
+(2026-11-06; `aeb8177ec` → `ed8099c1e`, 51 commits on main `09378c9ec` (IOS-12e's mint), the stack `um/m-desk-mint`
+assembled by the UM lead (vibe-field-b7) in `/Volumes/SamsungRed/lanes/um1-ud8/vibe-field`: U2's 29 (UM-3), S1's 16
+(SE-1, built in `/Volumes/SamsungRed/lanes/ts4/vibe-field`) and the lead's six; landed 2026-11-06T10:59:36Z (M187)
+by the fixer, a fast-forward of main `09378c9ec` to `ed8099c1e` itself.
+U2 was built on `5963aab04` as `um/2-column` (tip `15b06e0b5`, 25 commits, kept) and restacked onto `um/1-mint` as
+`um/2-desk` (`59fd5b592`, 29, kept), with the catalog's fold and the restack's rulings a and c. S1 was built on
+`5963aab04` as `se/1-peek` (tip `daf5179e1`, 16, kept) and cherry-picked onto U2: range-diff 12 of 16 "=" and four
+"!", #7 and #9–#11, two subjects reworded and three rows folded where they were born
+(`lanes/um/logs/range-diff-m-desk-c3eca081a.txt`). The stack, `um/m-desk` (`c3eca081a` on `c9493b957`), is the
+pre-light's tip. It was replayed onto `856c47aac` as `um/m-desk-856` (`48a30767d`, 51 of 51 "=", M-phone's base) and
+by `git replay --onto 09378c9ec` as `um/m-desk-mint`: 51 of 51 "=", no "!" (`lanes/um/logs/range-diff-m-desk-mint.txt`).
+The one file both sides touched, DESIGN.md, keeps its +74 −26.)
+Everything M-U1 held back on the desk is drawn at this land; DESIGN.md §8 had moved first, at UM-0. Godview's stage no
+longer mounts puppeteer-views' usage column, and its flat 80% retires with it (UM-D3). VibeField's profiles column
+stands in the chrome slot: one Bands circle per profile, each the lens (UM-D19, UM-D21), with its popover, its add
+and the limit moment beside the add (UM-D23). Settings → Agent Profiles says the same meter through the leaf. The Peek
+is Tokens: the filters that are on stand in its field, + Filter and a small switch at its end, and one filter holds
+everywhere (SE-D1, SE-D2). The phone still draws nothing: M-phone (UM-4, then SE-2) is next, before MA-6.
+
+**What it rests on.**
+- **James's picks** (DECISIONS UM): UM-D16 E (Bands) and UM-D19 A, his chat words of 2026-11-05 21:36Z; UM-D21,
+  D22, D23 and D28 and SE-D1 and SE-D2 A on the page *The Bands Meter* (round 4); UM-D3, D4, D12, D13 and D15 at the
+  leans under his 03:11Z word.
+- **M-U1** (LANDED "UM-0…UM-2", `c9493b957`): DESIGN.md first for every surface drawn here, tokens.css's chrome
+  tokens, and the pure model this stack mounts (field-app `src/usage/`: `rules.ts`, `meters.ts`, `bands.ts`).
+- **The lead's rulings in PLAN.md §2**, cited in the bodies as "ruling N": 3 (the column's top at 64), 4 (the marker
+  renamed `profileCircles`), 5 (the approval line and the limit moment independent, ‹for James›), 6 (the add drawn
+  disabled while Settings is open, and its press retiring the limit card), 7 (a draft profile has no circle), 8
+  (This Mac lists the installed agents), 9 (Retry reads again; Agent Profiles… opens that profile's page), 10 (usage
+  that cannot be read draws dashed), 11 (a pinned popover holds Godview's keys), 13 (round 4's card), 14 (the strip
+  at x 79), 15 (the Peek's ⌫, + Filter and counts) and 16 (a live row says its profile on this Mac alone).
+- **The lead's rulings on the stacks**, named in the bodies by letter. At U2's restack: a (Settings imports each rule
+  from the module that owns it), b (every green commit stays green: the folds) and c (one meter everywhere: the
+  desktop says the phone's words, marked ‹for James›). On the M-desk stack, the fix rulings: a (two S1 subjects
+  reworded), b (DESIGN.md says what SE-1 drew), c (the retired scope row's words leave the monitor), d (FR-3's
+  `plus`), e (`paceless()` removed) and f (Settings says a window read before its reset by its age). The stack's own
+  "ruling 3" and "ruling 4", two folds at the pre-light, are not PLAN's (Found).
+- **AO-6b's limit moment** (AO-D11, `setup/limit-moment.ts`), its rule and words unchanged at the new anchor, and
+  **TS-4b** (`257af5f6f`), the approval line on the claims strip, which now holds it alone.
+- **P2's Peek in Godview** (Live now over the monitor's find door; GV-D3; PK4 (a)) and the scope row's dropdowns,
+  which + Filter replaces.
+
+**What is real.** 69 files, +6880 −1276.
+- **Pin-class: none** (the ERE over `git diff --name-only 09378c9ec um/m-desk-mint`: 0 hits). No contracts source, no
+  manifest or lock, and `biome.jsonc` is untouched. The one generated file, design-kit's `src/glyphs/data.ts` (+1
+  −1, `GLYPH_META.plus`), was written by `node tooling/glyphs/build.mjs` at 09:07:39Z, the one light row VF-PM allowed
+  for it, after the swap gate's "SWAP-OK 1386.69". Files: field-app `src/` 41 (+3977 −926, 8 new), field-app `test/`
+  19 (+2764 −288, 3 new), electron-shell `src/testing/` 3 (+34 −29), DESIGN.md +74 −26, `docs/UI_SYSTEM.md` +24 −3,
+  `docs/agent-plane/api.html` +1 −1 and `architecture.html` +4 −1, `tooling/glyphs/drawings.mjs` +1 −1.
+- **UM-3a, the rows port owns its subscription** (`aeb8177ec` red, `bbad6fa87`; `godview/monitor/doors.ts`,
+  `remote-door.ts`): the column reads fieldd's rows, never puppeteer-views' batch, so `usagePortOver` opens
+  `agents.usage.subscribe` itself, once for every reader: opened by the first, closed by the last, and a refused one
+  opened again by the next. Two optional verbs ride the port the deck already builds: `refresh(profileIds)`, a
+  popover's Retry (`agents.usage {refresh: true, profileIds}`, ruling 9), and `installs()`, This Mac's installed
+  agents (ruling 8). Its signature is unchanged, so `GodviewDeck.tsx` is untouched.
+- **UM-3b, the column's three views, controller-free** (`f2ac01fcb` red, `9e464a7c5`; `godview/profiles-column/`,
+  new): `BandsCircle.tsx` draws `bandsGeometry` exactly on one drawing surface (the glyph wall's one allowed `<svg>`),
+  its tones mapped to tokens (the hot dot `--vf-orange`, ringed in `--vf-bands-ground`), and `BandsKey` says "5 hours
+  · 7 days · a model's week". `ProfilesColumnView.tsx` is the pill of 40 circles ("‹profile›, tightest N%"; with
+  several, a toggle that says its lens), the add (`plus` 17, disabled while Settings is open) and the moment's slot in
+  the add card's place. `ProfilePopoverView.tsx` is the head (the name, "default" only among several, the read age, ×
+  Close), the 212 circle with its hit arcs and key, one row per plan in UM-D15's order with Settings' own C1 line for
+  its tightest window (the shipping `UsageTimeline`), and the foot. Wave 1 (UM-D14's interim): a row is not a button.
+  `profiles-column.css` re-points the app's ramp to Godview's chrome tokens and breathes a first read on §6's 1.1 s.
+  - Its reviews: the popover's rows take their own names, `.vf-profiles-pop-*`, since Settings' agent row is
+    `.vf-profiles-row` and both sheets load globally (`226a9b08d`, `3825a4f47`); a circle with nothing on it says
+    the model's own label, "Work: usage unavailable" or "Client demo, no meters", and the popover says the profile's
+    one line while its usage cannot be read (`33622d624`, `1da6d871c`); no act is inert, so Sign in and Agent
+    Profiles… draw off while Settings is open, and Retry stands only where a door reads again (`2b219fc1b`,
+    `429d96870`); with Godview's animations off the ring and the hover change at once, and the popover's C1 line
+    stands 12 tall (`1adc0ceed`, `1c09356ef`).
+- **UM-3c, the column mounts** (`69bd983c5` red, `4a9927064`; `ProfilesColumn.tsx`, new, and `GodviewMonitor.tsx`):
+  puppeteer-views' `UsageColumn` and its flat 80% leave the stage (UM-D3), and the chrome slot mounts the column
+  behind a `ChromeBoundary` named `Profiles` ("Profiles unavailable" where it fails). The controller is memoised. Its
+  circles are the profile filter's sets that have one (ruling 7), or This Mac alone, dashed with its glyph, before
+  the feed answers or with no profiles door (ruling 10). With several circles each is the lens (UM-D19): a click
+  chooses its profile through the stage's own `setProfileTab`, so search's token and the head's button read the same
+  state (SE-D2), and pins its popover; a second click clears. A pinned popover holds Godview's keys, and Esc or a
+  click outside closes it (ruling 11). The slot stands at 64 (ruling 3), 13 in and 52 wide, and the claims strip
+  moves to x 79 (ruling 14). The marker's `usageTiles` is `profileCircles` (ruling 4), and smoke.ts's AR-5 row waits
+  for a circle and for the column (`profilesColumnMounted`). The profile notice says "No sessions on ‹profile›".
+  - Its review (`8ebf0f831`, `f4da32a3e`): the chrome stands at z-index 8, over the strip's 7; a port with no rows
+    feed draws its circles as usage that cannot be read; a pin leaves with its circle, and the keys with it; This
+    Mac's placeholder carries the contract's `createdAt`.
+  - The pages: `api.html`'s upstream row and `architecture.html`'s "host chrome ports" row, each "Updated 2026-11-06
+    (UM-3)"; UI_SYSTEM.md's boundary list names `Profiles`. DESIGN.md's four "until UM-3" sentences are corrected at
+    their source, and the column's words as built are named, the unruled ones ‹for James› (`f8327bac0`).
+- **UM-3d, the limit moment beside the add** (`cbda37a04` red, `48e54f49b`): `LimitMomentCard` is round 4's card
+  (ruling 13: 284 wide, corners 16, a pointer): "Another subscription?", the plan's line with "92% · 7 days", then Add
+  a profile… and Not now. AO-6b's rule and words are unchanged (UM-D23). A press of the column's add while the card
+  shows retires it (ruling 6). The add opens Settings on New profile…, and a popover's Sign in and Agent Profiles…
+  open that profile's page, a new shell target (ruling 9). `ClaimsStripMoment` holds the approval line alone
+  (TS-D20b amended by ruling 5, ‹for James›): TS-4b's two "one moment at a time" rows retire, and
+  `ApprovalWaitMoment`'s `held` prop goes with its one caller. The catalog's limit plate moved with the card in the
+  same commit, so the range bisects.
+  - Its review (`185aedb98`, `a6ccfd63d`): the card's acts hover with their ink, as the strip's have since AO-6b3.
+- **UM-3e, Settings says the same meter** (`1ed3bcd48` red, `719d055ce`): Settings' own `usageLines` reads a budget
+  without a pace (UM-D3), and every C1 line in Settings → Agent Profiles reads through the meters' `meterWindows`:
+  "out in ~35m" at its end while its window runs out before its reset (UM-D4), and a window read before its reset
+  unlit and with no forecast.
+  - One meter everywhere (the restack's ruling c; `263e2c53d`, `208559ad5` red, `30c5c4b12`): the desktop says what
+    the phone has said since UM-4d. A reset a day or more off says its day and clock ("resets Sat 12:00"), one that
+    has come "resets now", never "resets in …"; a plan no agent named, or whose reading holds no window, is said by
+    its title alone. DESIGN.md §9 marks both ‹for James›. `b26488112` corrects `rules.ts`' header: Settings and the
+    popover read `resetForm` from the leaf, and Settings reads `meterWindows` from `meters.ts`, which owns it
+    (ruling a).
+  - The lead's two (`25a8add66`; `953d86ff2` red, `ed8099c1e`): `paceless()` leaves `usage/meters.ts`, since
+    Settings' own line is already pace-less for a budget, and the golden is byte-identical (fix ruling e). Settings
+    says a window read before its reset by the reading's age where its reset stood, "as of 3h ago", unlit and with
+    no reset mark, on the plan's card, its badges, the agent's page and its row (fix ruling f). `ageWords` moved into
+    the leaf from `meters.ts`' `rightOf`, so the popover and Settings say an age one way.
+- **UM-3f, the column's plates** (`5de5f397a` red, `93ebad7b8`): `ProfilesColumnPreview.tsx` mounts the shipping
+  `ProfilesColumnView` on twelve plates, its circles from the controller's own `columnCircles` over the Agent
+  Profiles fixtures at their clock: one profile and three, each typical, near the limit and at its first read; a
+  popover pinned by the lens; the add's card, and the limit moment in its place; usage unavailable; no profiles door;
+  a first read held still. The AO-6b Specimen leaves for them, every stage's column reads the profile tabs' fixture
+  door's usage, and the catalog's CSS owns no `.vf-profiles-*` or `.vf-bands-*` rule. UI_SYSTEM.md names the plates.
+- **SE-1a, a live run names its profile, and the filters count** (`ddc0547ec` red, `00b571957`):
+  `godview/monitor/live-filters.ts` (new) is the filters the monitor publishes on the find door, moved out of
+  GodviewMonitor's literal. A desktop counts its sessions beside its agents, a profile its sessions, Every profile
+  every row, and a count never narrows by the other filter (ruling 15). A find row of this desktop's carries its
+  `profileSet`, never a peer's, and a live row says it.
+  - Its review (`2c127ccc7`, `bc628e036`): `liveRowOf` guards the profile at the row, so a peer's says none whatever
+    its run carries; the filters count only while Live now listens (`NO_COUNTED_ROWS`), so a closed Peek keeps the
+    find door, as the P2 block's invariant says.
+- **SE-1b, the Peek's filters, pure** (`8c1e6b11e` red, `da5d08808`; `frame/peek-filters.ts`, new): the field's
+  tokens in A's order, ⌫'s take (`backspaceTakes`) and a token's × (`clearPick`), a typed name's offer (`peekOffer`:
+  two letters or more, outside quotes, a profile first), + Filter's groups (`filterMenu`: Profiles before Desktops;
+  Projects, Said by and Agents in Everything), a row's profile while one besides This Mac is offered (UM-D12), the
+  live peek's head (`liveHeadWords`) and Everything's foot under the lens (`everythingLensWords`, UM-D28).
+  `KIND_WORDS` moved here from PeekView.
+  - Its review (`337a7cf20`, `4fb39d6b0`): `account/link.ts`' `onThisDeviceWords` says "on this Mac" from the same
+    noun as "This Mac", so the head re-cases nothing.
+- **SE-1c, the Peek as Tokens** (`9d71213a9` red, `72cb5c28f`; `Peek.tsx`, `PeekView.tsx`, `peek.css`): the scope row
+  and its dropdowns are retired, and its 48 went back to the list. The field holds the tokens that are on (each its
+  mark, its name and its ×), then the words (at least 120), then + Filter and the small switch, Live now ·
+  Everything. + Filter's one menu, a typed name's offer row with ⇥ on a key cap, a live row of this Mac's saying its
+  profile, and the live peek's head are drawn. A pick in Live now goes through Godview's `setDesk` and `setProfile`,
+  so the stage, the button and the column hold one state (SE-D2). No transition is added. smoke.ts's bloom witness
+  opens + Filter.
+  - Its review (`c34e3e9b9`, `b0d1af3ae`): ⌫ leaves the caret at the field's start, each menu group is a radio set of
+    its own (`role="group"`), the menu stays inside a short popup (`min(430px, calc(var(--vf-peek-h) - 80px))`), it
+    folds with its choices, and a pick hands the keyboard back to the field. The retired scope row's words leave the
+    Peek's own files (`aa59113be`), and `863a0efc5` lays out four files as biome prints them.
+- **SE-1d, the catalog's Peek** (`51f7561c1` red, `5a51e590e`): four Godview plates over the shipping controller and
+  Live now's fixture door: filtered, a typed name's offer, + Filter open, and Everything under the Work lens. The
+  fixture's runs carry their profile (a peer's none) and their counts. UI_SYSTEM.md's Peek entry says so.
+- **The lead's corrections at their source** (the M-desk stack's fix rulings b, c and d):
+  - DESIGN.md says what SE-1 drew (`86630ebfa`): §8's "Nothing is drawn yet: SE-1 draws it" becomes a dated *Drawn*
+    note; + Filter's menu never passes the popup's foot; §13's "Every profile keeps `person`" is corrected (it wears
+    no mark); the live head's words are `onThisDeviceWords`'; and §8 "Top to foot" states the words' 120.
+  - The retired scope row's and the profile tabs' words leave GodviewMonitor, `monitor-history.ts` and the console,
+    with three tests' titles and comments (`b65d19b28`).
+  - FR-3's `plus` is the bare plus of two views, one to a screen: the line's create on Canvas and the column's add in
+    Godview, its role naming + Filter too (`9e8c61c42`: `tooling/glyphs/drawings.mjs`, and `data.ts` from the
+    generator). DESIGN.md §8 dates both sentences.
+- **The rows**, by syntax over main: field-app +89. New: profiles-column 34, peek-filters 14, live-filters 4. Moved:
+  godview-monitor 96 → 107, godview-monitor-doors 34 → 40, limit-moment 22 → 28, peek 25 → 32, profiles-settings 53
+  → 57, account-link, godview-find-join, peek-live and ui-system-boundaries one each, and approval-wait-moment 6 → 5
+  (TS-4b's two rows retire, one is added). No contracts, fieldd, electron-shell test, Rust or iOS row moves. The new
+  imports are field-app's own, and no agent-id literal is added (R23b).
+
+**What is stubbed or left.**
+- **The phone draws nothing yet:** UM-4 and SE-2 are M-phone's.
+- **Wave 1 of the lens:** a plan's row in the popover takes no click (UM-D14 is UM-5's).
+- **The popover's C1 line hands no age** (held as built at the pre-light): a plan whose tightest window was read
+  before its reset says "resets now" on its line, under its row's right words, which say the age.
+- **Settings names no tightest window:** every window is its own line there, so UM-D13's rank has no reader in
+  Settings; the column and the popover read it (`719d055ce`).
+- **Settings' own loading dot and shimmer** stay 1800 ms (AR's; M-U1's Found). No file of theirs moved here.
+- **No catalog plate** shows Settings' window read before its reset (Owed).
+
+**Validation.**
+- **The MacBook, under VF-PM's HOLD** (one light row at a time, nice 19, each after the swap gate; speed, not proof):
+  - U2's first cut on `5963aab04`: the files each body names, one at a time, as it quotes them; the rows a body says
+    it did not run waited for the pre-light.
+  - U2's restack (`lanes/um/logs/u2-restack/`, 28 logs, 08:26–08:53Z) read again what it moved: UM-3e's green
+    (usage-meters 39, usage-bands 33, profiles-settings 55), the catalog's fold (design-system "1 failed | 7" before
+    it, 8/8 after; ui-system-boundaries 48), UM-3f's red ("2 failed | 6"), ruling c's red ("4 failed | 52" and
+    "3 failed | 31") and green (56, 34), and at `59fd5b592` on `c9493b957` profiles-settings 56, profiles-column 34
+    and design-system 8.
+  - The M-desk stack (`lanes/um/logs/m-desk/`, 45 logs, 09:06–09:33Z): the glyph generator's run (02); the lead's
+    rows (usage-meters 39 and usage-bands 33 with the golden byte-identical; fix f's red "1 failed | 56" and green 57);
+    the stack's files at the tip's content (13–29); the two the replay broke (21, 22, Found) and their folds, green
+    (32: 8; 35, 43 and 44: 107); and biome over the stack's 65 code files, "Checked 64 files … No fixes applied" (38).
+  - S1's lane had no node_modules: no S1 row ran at any S1 SHA, on any host, before the pre-light.
+  - No tsc, verify or smoke ran on the MacBook.
+- **The pre-light** (a9, at `c3eca081a` on `c9493b957`). Brief `lanes/um/briefs/a9-brief-m-desk-prelight-c3eca081a.md`
+  (sha256 `58a7e5b1f147…` after the call 74 erratum, `6f288b84…` before it), bundle
+  `m-desk-prelight-c3eca081a-on-c9493b957.bundle` (224,022 bytes, sha256 `d61e3ffd35dd…`; both in
+  `lanes/um/SHA256SUMS-m-desk-c3eca081a`):
+  - **Run 1, every red then its green** (the old mini `jaspers-Mac-mini`, 10:18:36–10:27:11Z; 96 calls over 42
+    commits, one field-app vitest file each; `lanes/ts6/logs/mini/mdesk-c3eca081a/`, `calls.tsv` `310988e219f2…`,
+    `mdesk.out` `f791d1dae17f…`): 38 calls red and 58 green; 95 of 96 as briefed, each of their reds on
+    AssertionErrors alone; `git status` empty at every SHA; no birth under `/private/tmp`. Call 74 is the erratum
+    below.
+  - **Run 2 = run185, `pnpm verify` at `c3eca081a`** (the old mini, armed 10:27:25Z, exit 0 at 10:33:09Z, the tree
+    clean after, no stub left; `lanes/ts6/logs/mini/run185/`, `verify.log` `5d9db6a60480…`): contracts 1784 · fieldd
+    3513 | 15 · field-app 4364 (+89 over run180's 4275) · vitest 13,705 | 0 | 21 over 950 files (+3) · copies 290,
+    pins 92 · biome "Checked 3432 files … No fixes applied" · typecheck clean over 29 projects, the first tsc of
+    field-app and electron-shell over UM-3 and SE-1 · walls, gen and census clean · bundle assert "initial 944.4 KB
+    raw / 249.0 KB gz" · cargo 34 results, none failed. Preflight's one WARN, R23's `acp` candidate, is not the
+    stack's.
+  - **Run 3, `pnpm smoke:godview`** (vf-m1, under the console gate: unlocked, HID idle 16,744 s at the arm and
+    16,876 s at the end; armed 10:30:03Z, exit 0 at 10:32:15Z, one try; `lanes/ts6/logs/m1/mdesk-row/`,
+    `smoke:godview.log` `bd81a414cab4…`): `SMOKE_GODVIEW {"ok":true,…}`; `profileCircles` 1 and
+    `profilesColumnMounted` true; the bloom's profile witness offered "Every profile", "This Mac", "Smoke Work" and
+    "Mac-mini · here" through + Filter; `peekLiveNow`'s foot "1 live session, waiting first". VF-PM moved the row to
+    vf-m1, the old mini's console being locked.
+- **The mint, run187 (M187)** (a9, vf-m1, armed on main exactly `09378c9ec`; verify only, the pre-light's red and
+  green reads carried by the replay's 51 of 51 "="). Brief
+  `lanes/um/briefs/a9-brief-m-desk-mint-ed8099c1e.md` (sha256 `5fc3337ca7fa…`), bundle
+  `m-desk-mint-ed8099c1e-on-09378c9ec.bundle` (224,929 bytes, sha256 `f7099006186d…`; both in
+  `lanes/um/SHA256SUMS-m-desk-mint-ed8099c1e`), logs `lanes/ts6/logs/m1/run187/` (`verify.log` `b8f2582762a4…`,
+  `run187.out` `4bfaaa6c6c28…`):
+  - Briefed: `pnpm verify` at `ed8099c1e`, exit 0, the tree clean after, no stub. Against run186's own counts (main
+    `09378c9ec`): field-app +89 (three new files and ten moved, as above); vitest +89 over +3 files, no new skip;
+    contracts, fieldd, electron-shell, node `--test` and cargo +0; copies and pins run186's own; biome "Checked" +11;
+    tsc over every project; walls, gen and census clean; the initial chunk within 0.1 KB of run186's.
+  - As printed (started 10:43:02Z on main = `09378c9ec`, verify armed 10:43:13Z, exit 0 at 10:48:22Z, the tree clean
+    after, no stub left): every count as briefed. vitest 13,826 | 0 | 21 over 952 files, against run186's
+    13,737 | 0 | 21 over 949 (+89, +3 files, no new skip). Only field-app's total moved, 4275 → 4364, and by exactly
+    the brief's thirteen files. contracts 1889 · fieldd 3513 | 15 · electron-shell · node `--test` 474/474 · cargo 34
+    results, 545/0: each +0. `check:ios-fixtures` 352 copies and 93 pins (run186's own) · biome "Checked 3446 files
+    … No fixes applied", 74 warnings and 21 infos (run186's 3435, 74 and 21: +11) · typecheck 29 projects · census
+    assert OK · bundle assert "initial 948.7 KB raw / 250.7 KB gz" against run186's 948.8 / 250.8. The host: load
+    {2.88 7.11 12.28} at the arm and {5.43 10.70 12.71} at the end, df 29 GiB, the console unlocked throughout.
+- **The smoke at the landed tip** (a9, vf-m1, `pnpm smoke:godview`, row 23, at main's code `ed8099c1e`; under the
+  console gate: unlocked, HID idle 18,814 s at the launch; armed 11:04:47Z, exit 0 at 11:06:59Z, the row 132 s, one
+  try; `lanes/ts6/logs/m1/gv-ed8099c1e/`, `smoke:godview.log` `62e968c7dbf0…`). Run 3 sat on `c9493b957`, which
+  lacks SD-3's main-process code (`away-notices.ts`, `index.ts`, `sound-voice.ts` and `SoundSettings.tsx`), so a
+  smoke at the landed tip was on gate:landing's owed list; this run closes it, green: `profileCircles` 1 and
+  `profilesColumnMounted` true; the bloom's profile witness offered "Every profile", "This Mac", "Smoke Work" and
+  "Mac-mini · here"; Live now open on the shell row; `SMOKE_HOME` removed.
+
+**Disclosed: temp dirs (item 195).** No test of the stack makes a temp root or writes to the file system (the
+pre-light brief, by its files). Run 1's window left no birth under `/private/tmp`. Run187 is the first verify to run
+item 195's wall (`check:walls`, M184) over this code, and it is clean. Its window left two `.tmp` births, cargo's
+shape (the kind item 195 still owes), kept; neither is the stack's.
+
+**The SHA map.** The pre-light's commits were replayed one for one (`lanes/um/logs/sha-map-m-desk-ed8099c1e.tsv`,
+sha256 `7f0a272c62d1…`, columns pre-light, mint, tree, subject; `range-diff-m-desk-mint.txt` `09caa325c048…`).
+`um/m-desk-856`'s `48a30767d` is the same 51 on `856c47aac`, also 51 of 51 "=".
+
+| # | pre-light (`um/m-desk`) | mint (`um/m-desk-mint`) | slice |
+|---|---|---|---|
+| 1 | `d29ac0353` | `aeb8177ec` | UM-3a (red): the rows port owns its subscription |
+| 2 | `620b6b406` | `bbad6fa87` | UM-3a: the rows port owns its subscription |
+| 3 | `f27010718` | `f2ac01fcb` | UM-3b (red): the column's three views |
+| 4 | `dd27cfeb8` | `9e464a7c5` | UM-3b: the column's three views |
+| 5 | `e63ab8f68` | `69bd983c5` | UM-3c (red): the column mounts in the chrome slot |
+| 6 | `9bf13d2f5` | `4a9927064` | UM-3c: the column mounts; UsageColumn and its flat 80% leave |
+| 7 | `f893839bd` | `cbda37a04` | UM-3d (red): the limit moment beside the add |
+| 8 | `ff547cd40` | `48e54f49b` | UM-3d: the limit moment beside the add; the strip holds the approval line |
+| 9 | `0d4f73868` | `1ed3bcd48` | UM-3e (red): Settings says the same meter |
+| 10 | `c0a0985d0` | `719d055ce` | UM-3e: Settings says the same meter |
+| 11 | `bd6afc64c` | `226a9b08d` | UM-3b (red): review, the popover rows' names |
+| 12 | `2af7f9f1b` | `3825a4f47` | UM-3b: review, the popover rows' names |
+| 13 | `bfb6a4969` | `5de5f397a` | UM-3f (red): the column's plates |
+| 14 | `990964458` | `93ebad7b8` | UM-3f: the column's plates |
+| 15 | `3776d6029` | `33622d624` | UM-3b (red): review, a circle with nothing on it |
+| 16 | `d14127e09` | `1da6d871c` | UM-3b: review, a circle with nothing on it |
+| 17 | `ee760231a` | `2b219fc1b` | UM-3b (red): review, no act is inert |
+| 18 | `11ca98b09` | `429d96870` | UM-3b: review, no act is inert |
+| 19 | `d9d567fbf` | `1adc0ceed` | UM-3b (red): review, animations off and the 12-tall line |
+| 20 | `454c9f5c7` | `1c09356ef` | UM-3b: review, animations off and the 12-tall line |
+| 21 | `79ea18cd1` | `185aedb98` | UM-3d (red): review, the card's hover ink |
+| 22 | `bce241bbe` | `a6ccfd63d` | UM-3d: review, the card's hover ink |
+| 23 | `3d3a04b41` | `8ebf0f831` | UM-3c (red): review, the strip, the port with no feed, the pin |
+| 24 | `1c628bc0c` | `f4da32a3e` | UM-3c: review, the strip, the port with no feed, the pin |
+| 25 | `b86adf8c5` | `f8327bac0` | UM-3c (docs): DESIGN.md says what UM-3 drew |
+| 26 | `6ca5cca45` | `263e2c53d` | UM-3 (docs): one meter everywhere, §9's two marks |
+| 27 | `7c9f697a4` | `208559ad5` | UM-3b, UM-3e (red): one meter everywhere |
+| 28 | `713ad2f06` | `30c5c4b12` | UM-3b, UM-3e: one meter everywhere |
+| 29 | `59fd5b592` | `b26488112` | UM-3e (docs): the leaf says who reads it |
+| 30 | `59529d0bc` | `ddc0547ec` | SE-1a (red): a live run names its profile, and the filters count |
+| 31 | `81a68a8b7` | `00b571957` | SE-1a: a live run names its profile, and the filters count |
+| 32 | `d1bb0c098` | `8c1e6b11e` | SE-1b (red): the Peek's filters, pure |
+| 33 | `2bf86eb81` | `da5d08808` | SE-1b: the Peek's filters, pure |
+| 34 | `4f37d9c00` | `9d71213a9` | SE-1c (red): the Peek as Tokens |
+| 35 | `2a58b43f8` | `72cb5c28f` | SE-1c: the Peek as Tokens |
+| 36 | `ce8787304` | `51f7561c1` | SE-1d (red): the catalog's Peek plates |
+| 37 | `7c437136f` | `5a51e590e` | SE-1d: the catalog's Peek plates |
+| 38 | `e55bea4fb` | `2c127ccc7` | SE-1a (red): review, a peer's row and a closed Peek |
+| 39 | `c6f2ed967` | `bc628e036` | SE-1a: review, a peer's row and a closed Peek |
+| 40 | `f40d0fee3` | `337a7cf20` | SE-1b (red): review, "on this Mac" |
+| 41 | `9c3ea3505` | `4fb39d6b0` | SE-1b: review, `onThisDeviceWords` |
+| 42 | `6f28cfbd9` | `c34e3e9b9` | SE-1c (red): review, ⌫, the menu's groups and its bound |
+| 43 | `e48f6f4b9` | `b0d1af3ae` | SE-1c: review, ⌫, the menu's groups and its bound |
+| 44 | `66ef6281b` | `aa59113be` | SE-1c: review, the scope row's words (comments) |
+| 45 | `88070a287` | `863a0efc5` | SE-1: biome's format, by hand |
+| 46 | `a07bcdaf5` | `86630ebfa` | SE-1 (docs): DESIGN.md says what SE-1 drew |
+| 47 | `c70224186` | `b65d19b28` | SE-1: the scope row's and the profile tabs' words (comments) |
+| 48 | `dfc282244` | `9e8c61c42` | UM-3, SE-1 (docs): FR-3's `plus` |
+| 49 | `e31e0f052` | `25a8add66` | UM-3e (refactor): `paceless()` leaves |
+| 50 | `e44ca0d60` | `953d86ff2` | UM-3e (red): a window read before its reset, by its age |
+| 51 | `c3eca081a` | `ed8099c1e` | UM-3e: a window read before its reset, by its age |
+
+S1 was built as `se/1-peek` and cherry-picked onto U2 (`range-diff-m-desk-c3eca081a.txt`, sha256 `c4fc76b4e9b5…`).
+Each of its lane SHAs resolves through the pre-light to the mint:
+
+| S1 (`se/1-peek`) | range-diff | pre-light | mint | cited in |
+|---|---|---|---|---|
+| `209829db2` | = | `59529d0bc` | `ddc0547ec` | `00b571957` |
+| `b152ef9d7` | = | `81a68a8b7` | `00b571957` | — |
+| `990e61c8d` | = | `d1bb0c098` | `8c1e6b11e` | `da5d08808` |
+| `398bb55e0` | = | `2bf86eb81` | `da5d08808` | — |
+| `0ca6c284d` | = | `4f37d9c00` | `9d71213a9` | — |
+| `82e329efe` | = | `2a58b43f8` | `72cb5c28f` | `86630ebfa`, `9e8c61c42` |
+| `5d9eacefb` | ! | `ce8787304` | `51f7561c1` | — |
+| `fb8ae80ea` | = | `7c437136f` | `5a51e590e` | — |
+| `bf0f396c8` | ! | `e55bea4fb` | `2c127ccc7` | `bc628e036` |
+| `ec09fccfd` | ! | `c6f2ed967` | `bc628e036` | — |
+| `fb16d4a14` | ! | `f40d0fee3` | `337a7cf20` | `4fb39d6b0` |
+| `b1c8f84f4` | = | `9c3ea3505` | `4fb39d6b0` | — |
+| `84eda52be` | = | `6f28cfbd9` | `c34e3e9b9` | `b0d1af3ae` |
+| `98b22bc9f` | = | `e48f6f4b9` | `b0d1af3ae` | `86630ebfa` |
+| `804919b5e` | = | `66ef6281b` | `aa59113be` | `b65d19b28` |
+| `daf5179e1` | = | `88070a287` | `863a0efc5` | — |
+
+The bodies cite six more. `c0a0985d0` is pre-light #10, mint `719d055ce` (in `25a8add66`). `5963aab04`, the base U2
+and S1 were cut on, is M-U1's pre-light #16, main `2d202ec2b` (in `48e54f49b`, `719d055ce`, `ddc0547ec`,
+`2c127ccc7`). `92c990691` is M-U1's superseded tip (in `719d055ce`), and `ffbb388f6` stands on no branch (in
+`93ebad7b8`); both are in Errata. `6d6ed17c1` is `um/3-phone`'s UM-4d, M-phone's (in `263e2c53d`, `208559ad5`), and
+`257af5f6f` is TS-4b, on main (in `cbda37a04`, `48e54f49b`). U2's first cut, `um/2-column` (`15b06e0b5`), is cited by
+no body: its 25 are pre-light #1–#25 before the restack, and `um/2-desk` (`59fd5b592`) is pre-light #1–#29 itself.
+
+**Errata.**
+- **The SE-1c red's count (call 74; VF-PM 10:29Z and 10:32Z).** The pre-light brief expected `9d71213a9`'s
+  peek.test.tsx (pre-light `4f37d9c00`) at "10 failed | 20 passed (30)": the rows its body names, counted, never a
+  read. The old mini read "17 failed | 13 passed (30)" (`c74-4f37d9c00.log`, sha256 `bed185d883b8…`): 8
+  AssertionErrors, 8 timeouts at 5000 ms and one `until: the room's rows`. The red holds by name: all ten named rows
+  fail, five on their assertions and five on a timeout. Its named list is 13: the body's ten and three GV-D11 rows
+  that fail on assertions ("stands in the terminals' title bar while they are maximized …", "steps out of the bar
+  before it returns to the head …", "changes place at once under reduced motion …"), so the body was short by those.
+  Four more waited out their 5000 ms or their `until` (the QL-D2 and SB-3 listen row, PF6's "asks nothing of a feed of
+  its own", AR-8 (D2)'s room row, off the Mac's Ctrl+F row): undecidable from one read. All seventeen are green at the
+  green (pre-light `2a58b43f8`, mint `72cb5c28f`, 30/30), and run187 read the file whole, green. The body is not
+  amended: the erratum is the brief's and this entry's.
+- **Two bodies cite a superseded base.** `719d055ce` says "Restacked onto um/1-mint (92c990691)": the restack stood
+  first on `92c990691`, M-U1's superseded tip (run178), and the stack stands on `c9493b957`, M-U1's mint of record.
+  `93ebad7b8` names `ffbb388f6` as "its restack onto um/1-mint": that is UM-3f's green on `92c990691`, on no branch,
+  and its diff to `990964458` (mint `93ebad7b8`) is exactly the base's move, `92c990691` → `c9493b957`.
+- **The bodies cite lane and pre-light SHAs** that are not on main. The tables above resolve each one.
+- **The bodies' "NOT RUN, owed to vf-m1" and "owed to the minis"** (field-app's and electron-shell's tsc, the TS2741
+  proof `f4da32a3e` names, every S1 row, biome over S1's files, and smoke:godview's column fact and + Filter witness)
+  were paid by the pre-light: run 1 read every red and green, run185's tsc and biome are clean, and run 3 is green
+  at `c3eca081a`, as is the smoke at `ed8099c1e`. The catalog stills stay owed.
+
+**Found.**
+- **No commit of the lanes was type-checked before run185.** vitest strips types, so This Mac's placeholder without
+  the contract's `createdAt` (TS2741, `AgentProfileSet`) passed every row; `f4da32a3e` found it by reading. Run185's
+  tsc, the first over UM-3 and SE-1, is clean.
+- **Two stylesheets loaded globally shared a class** (`3825a4f47`): the popover's plan row was `.vf-profiles-row`,
+  Settings' agent row's name, so each sheet re-laid the other's rows.
+- **The claims strip painted over the column's popover and cards** (`f4da32a3e`): both stood at z-index 7 in the
+  stage's one stacking context. The chrome is 8 now; the deck, its veil and its readout still cover the whole stage.
+- **A usage port with no rows feed drew a first read that never ends** (`f4da32a3e`): the catalog's spawn bloom door
+  and any older port now draw their circles as usage that cannot be read.
+- **The limit card's primary lost its label under the pointer** (`a6ccfd63d`): the strip's AO-6b3 hover rule had not
+  followed the card to its new anchor.
+- **FR-3's "the one bare plus on screen" was falsified by the column's add** (`9e8c61c42`): `plus` is now the bare
+  plus of two views, one to a screen.
+- **Replaying S1 onto U2 broke two rows that no conflict showed** (`lanes/um/logs/m-desk/21`, `22`). SE-1d's red
+  declared `const lens` where U2's row already did, so design-system.test.tsx did not transform: a red on a transform
+  error. And the model board's fold keeps an ended run ended, so the SE-1a review row's tail (a session that comes
+  back) and the P2 row (a door held from before Live now listened) went red at their greens. Each fix was folded by
+  `amend!` and `rebase --autosquash` into the commit that made its row (`51f7561c1`, `2c127ccc7`, `bc628e036`), so
+  every green commit stays green; the tip-only fix, `7958e1f77`, was dropped.
+- **The stack's "ruling 3" and "ruling 4" are not PLAN's.** `b65d19b28` and `86630ebfa` cite "the UM lead's ruling
+  3" (the profile tabs' comments) and "ruling 4" (the words' 120), the lead's numbering for the pre-light's folds.
+  PLAN.md §2's 3 is the column's top and its 4 the marker's name, as `4a9927064` and `69bd983c5` cite them.
+- **A red's expected count comes from a read, or the red is expected by name** (call 74; VF-PM 10:32Z).
+- **Disclosed: rows written green as guards**, each named so in its body: `f27010718`'s ui-system-boundaries rows,
+  `cbda37a04`'s "draws the add disabled while there is no route", and `ddc0547ec`'s peek.test.tsx.
+- **Left standing, being true:** PeekView.tsx's and peek.css's "the scope row's segment made small" (the switch's
+  lineage) and smoke.ts's "the scope row's dropdown retired with the row" (`b65d19b28`).
+
+**Owed.**
+- **M-phone**, next: `um/m-phone` stands on `um/m-desk-856` (`48a30767d`) and is re-cut onto this land's main at its
+  mint (VF-PM, 10:08Z), before MA-6 opens HomeScreen.swift: UM-4, then SE-2.
+- **UM-5**, UM-D14's plan filter, in wave 2: a popover's rows take no click until then.
+- **The Settings catalog plate for a window read before its reset** (UI_SYSTEM.md's meaningful states): Settings says
+  it since `ed8099c1e`, and no plate shows it.
+- **The catalog stills** the bodies owe to the catalog walk: the popover's 12-tall C1 line, the limit card's hover,
+  Settings' rows the stray `.vf-profiles-row` rule had re-laid, and the strip under the column.
+- **To James:**
+  - the board ask `um-stack-words`, the words the stacks say where §9 rules none: four sent 08:27Z (the popover's
+    ages, the no-meters form, the name-alone circle, the phone's `.unnamed` and `.noWindows`) and four more at 10:14Z.
+    The words stand as built in the interim;
+  - DESIGN.md §9's four new marks: a reset by its day and clock, or "resets now"; a plan no agent named, or with no
+    window, by its title; the popover head's other ages and its one profile line; a circle whose plans all read
+    first or need you, by its name alone;
+  - the popover's C1 line as built (held at the pre-light): it hands no age, so it may say "resets now" under its
+    row's age;
+  - the lead's ruling 5 at the code: TS-D20b amended, and TS-4b's two "one moment at a time" rows retired.
+- **The bodies' in-branch SHAs:** the tables resolve them, and `6d6ed17c1` (UM-4d) resolves at M-phone's land.
+- M-U1's Owed stands otherwise: PU-R and PU-S upstream, SLOT 18's riders, and the ‹for James› marks it names.
+
+Three inserts into older entries: AR-S2d's and AR-S5's Owed, answered in part, and M-U1's Owed, answered, with its
+Found's "Settings and the meter differ until UM-3 adopts the leaf" answered in part in the same block.
