@@ -19,9 +19,14 @@ import {
   type RunSummary,
 } from "@vibefield/contracts";
 import { createNoopLogger, type Logger } from "@vibefield/logging";
+import type { FlowStepTurnEnd } from "../flow-step-events";
 import { RpcCallError } from "../native-link";
 import type { HoldSender } from "../tool-plane/rooms/talk/verbs";
-import type { FlowChangedRaise } from "../tool-plane/rooms/you/queue";
+import type {
+  FlowChangedRaise,
+  FlowItemActs,
+  FlowItemRaise,
+} from "../tool-plane/rooms/you/queue";
 import type { FlowJournalEntry } from "./journal";
 import type { FlowLibrary } from "./library";
 import type { FlowRecords, FlowRunStart } from "./records";
@@ -64,7 +69,13 @@ export interface FlowRunPorts {
   /** fieldd's flow records: approvals, kept bytes, each run's journal and record */
   readonly records: FlowRecords;
   /** the needs queue's changed-flow item (N5) */
-  readonly needs: { flowChanged(raise: FlowChangedRaise): NeedsItemId };
+  readonly needs: {
+    flowChanged(raise: FlowChangedRaise): NeedsItemId;
+    /** a run's own item (slice 6's `flowItem`): a repair miss, a gate, the cap, a lost step */
+    flowItem(raise: FlowItemRaise): NeedsItemId;
+  };
+  /** each step's turn end (flow-step-events.ts, CP4-S2's road): a step's answer reaches the runs here */
+  readonly stepEnds: { onTurnEnd(listener: (end: FlowStepTurnEnd) => void): () => void };
   /** the runtime's spawn, for a step's agent (slice 8; steps.ts `startStep` is its one road) */
   readonly agents: FlowStepPorts["agents"];
   /** each session's input queue, for a step's prompt (D5) */
@@ -278,6 +289,12 @@ export class FlowRuns {
       scope: record.scope.filter((profile) => profiles.has(profile)),
     };
   }
+
+  /** RED skeleton (slice 9): the runs' side of their items, which the needs queue hands an answer to once. */
+  readonly acts: FlowItemActs = {
+    answer: () => Promise.reject(new Error("CP-4a2b slice 9: a run's item's answer is not built")),
+    start: () => Promise.reject(new Error("CP-4a2b: a changed flow's start is R4–R6's")),
+  };
 
   /** fieldd's own stop: every host stopped, each run left as its journal and record say, for the next boot. */
   async close(): Promise<void> {
