@@ -1,0 +1,28 @@
+{
+  "format": 1,
+  "item": {
+    "id": "ny-6c1d8e2f9a3b7d05",
+    "kind": "flow-changed",
+    "state": "open",
+    "from": {
+      "name": "Nightly sweep"
+    },
+    "asked": "2026-11-05T02:20:00.000Z",
+    "choices": ["Run this version", "Run the one you approved", "Not now"],
+    "script": {
+      "flow": "nightly-sweep",
+      "hash": "d71c93eea4c1d1628cb52731e6121ccb5a033bd887531571a0bb19b6d803e329",
+      "approved": "9e413602b57526f7956e04302406a4b586d8a6229f13cdb9a9036b884cfdca18"
+    }
+  },
+  "start": {
+    "input": {
+      "target": "run-40"
+    },
+    "starter": {
+      "by": "you"
+    },
+    "scope": ["work", "review"]
+  },
+  "signature": "7d5f3e1c9a7b5d3f1e9c7a5b3d1f9e7c5a3b1d9f7e5c3a1b9d7f5e3c1a9b7d5f"
+}

@@ -51,6 +51,7 @@ import {
   SparkRecord,
   SparkSummary,
 } from "../src/compose";
+import { FLOW_INPUT_VALUE_MAX, FLOW_INPUTS_MAX, FlowInput, FlowStarter } from "../src/flows";
 import { METHODS, reachableFromTailnet } from "../src/methods";
 import {
   FLOW_LIMITS,
@@ -869,5 +870,78 @@ describe("CP-4a2b — a flow's words in a session's queue (13b.3's C1–C3; Q9 (
     // the whole file, the person's own queued words in it included, is set aside and none of it delivered
     expect(older.safeParse(fixture("agent-input-queue.flow-in")).success).toBe(false);
     expect(older.safeParse(fixture("agent-input-queue.flow-line")).success).toBe(true);
+  });
+});
+
+// CP-4a2b (13a slice 7's Q4; ruled 2026-11-06 (c)) — a changed flow's PENDING START, kept on its `flow-changed` record:
+// what FlowRuns.start was asked past the item's `script` and `from` (the run's input, who started it, and the Agent
+// Profiles its door chose), so Run this version or Run the one you approved begins that same run. It is the record's
+// alone, never on the item the window reads, and optional: a record from before it still reads.
+
+describe("CP-4a2b — a changed flow's pending start, on its needs record (13a slice 7's Q4)", () => {
+  const kept = () => NeedsRecord.parse(fixture("needs-record.flow-changed-start"));
+  const start = { input: { target: "run-40" }, starter: { by: "you" }, scope: ["work"] };
+  /** whether the fixture's record reads with its pending start's fields over `over` */
+  const reads = (over: Record<string, unknown>) =>
+    NeedsRecord.safeParse({ ...kept(), start: { ...start, ...over } }).success;
+
+  it("Q4a: the record keeps its pending start whole, its item carries none, and a record from before it reads", () => {
+    const record = kept();
+    expect(record).toMatchObject({
+      item: { kind: "flow-changed", script: { flow: "nightly-sweep" } },
+      start: {
+        input: { target: "run-40" },
+        starter: { by: "you" },
+        scope: ["work", "review"],
+      },
+    });
+    expect(NeedsItem.parse(record.item)).not.toHaveProperty("start");
+    const { start: _start, ...before } = record as typeof record & { start?: unknown };
+    expect(NeedsRecord.safeParse(before).success).toBe(true);
+  });
+
+  it("Q4b: a pending start that is no start is refused: an input that is no input, a starter that names no `by`, a scope past 64 profiles", () => {
+    expect(reads({})).toBe(true);
+    expect(reads({ starter: { by: "spark", spark: "sp-7k2m9q4x" } })).toBe(true);
+    for (const bad of [
+      { input: undefined },
+      { input: { target: 40 } },
+      { starter: {} },
+      { starter: { by: "spark", spark: "vela" } },
+      { scope: ["work", ""] },
+      { scope: Array.from({ length: 65 }, (_, i) => `profile-${i}`) },
+    ])
+      expect(reads(bad), JSON.stringify(bad)).toBe(false);
+    expect(NeedsRecord.safeParse({ ...kept(), start: "run it" }).success).toBe(false);
+  });
+
+  it("Q4c: its input and its starter read as flows.ts's FlowInput and FlowStarter do, at each of their bounds", () => {
+    const named = (n: number) =>
+      Object.fromEntries(Array.from({ length: n }, (_, i) => [`input${i}`, "x"]));
+    for (const input of [
+      {},
+      named(FLOW_INPUTS_MAX),
+      named(FLOW_INPUTS_MAX + 1),
+      { target: "x".repeat(FLOW_INPUT_VALUE_MAX) },
+      { target: "x".repeat(FLOW_INPUT_VALUE_MAX + 1) },
+      { $target: "x", _target: "x" },
+      { "has-dash": "x" },
+      { "9th": "x" },
+      { ["a".repeat(64)]: "x" },
+      { ["a".repeat(65)]: "x" },
+    ])
+      expect(reads({ input }), Object.keys(input).join(",")).toBe(
+        FlowInput.safeParse(input).success,
+      );
+    for (const starter of [
+      { by: "you" },
+      { by: "spark", spark: "sp-7k2m9q4x" },
+      { by: "" },
+      { by: "x".repeat(33) },
+      { spark: "sp-7k2m9q4x" },
+    ])
+      expect(reads({ starter }), JSON.stringify(starter)).toBe(
+        FlowStarter.safeParse(starter).success,
+      );
   });
 });
