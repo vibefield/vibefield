@@ -27,12 +27,13 @@ import { ADD_TARGET, type ColumnCircle, ProfilesColumnView } from "./ProfilesCol
 // model's (`usage/meters.ts`); the face is `ProfilesColumnView`.
 
 /** This Mac before the profiles feed has answered, or with no profiles door (the catalog's default): its circle,
- * dashed with its glyph (§8 "Honest states"). */
+ * dashed with its glyph (§8 "Honest states"). Its `createdAt` is the contract's required field, never shown. */
 const THIS_MAC: AgentProfileSet = {
   id: NATIVE_PROFILE_SET_ID,
   kind: "native",
   label: "This Mac",
   default: true,
+  createdAt: new Date(0).toISOString(),
   personas: [],
 };
 
@@ -138,6 +139,10 @@ function ProfilesColumnController({
   useEffect(() => {
     if (open === null) setFocus(null);
   }, [open]);
+  // a pinned profile that leaves the column (deleted, or drawn on no circle) takes its pin along, and the keys it held
+  useEffect(() => {
+    if (pinned !== null && !circles.some((circle) => circle.set.id === pinned)) setPinned(null);
+  }, [circles, pinned]);
   // ruling 11: a pinned popover holds Godview's keys, so Esc closes it before a pane hears it; a click outside too
   useEffect(() => {
     if (pinned === null) return;

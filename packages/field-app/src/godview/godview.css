@@ -504,10 +504,16 @@
    52-wide pill that hugs its circles — never the stage's height — standing 8
    under the reserve, at 64, so the stage's left inset and the swarm's obstacle
    are the pill's own rectangle; the strip moves to 79 (13 + 52 + 14). It was
-   puppeteer-views' 46-wide usage column at the reserve, the stage's height. */
+   puppeteer-views' 46-wide usage column at the reserve, the stage's height.
+   The review (2026-11-06): it stands at 8, one over the strip's 7. At one
+   z-index the strip, later in the DOM, painted its chips over the popover's
+   head and the cards beside the add, and its Retry and approval row took their
+   clicks; the drawing raises the rail over the strip (round4.css `.prail`).
+   Both stay inside the stage's own stacking context (its head mask,
+   `godview-head.css`), so the deck, its veil and its readout still cover them. */
 .vf-monitor-chrome {
   position: absolute;
-  z-index: 7;
+  z-index: 8;
   top: calc(var(--vf-godview-head-reserve) + 8px);
   left: 13px;
   width: 52px;

@@ -985,7 +985,11 @@ export function GodviewMonitor({
             <ProfilesColumn
               sets={profilesPort !== undefined && profileSetsRead ? profileSets : null}
               rows={usageRows}
-              usageUnavailable={usageState.state === "unavailable"}
+              // a port with no rows feed never answers: its circles say the usage cannot be read, never a first
+              // read that never ends (the review; meters.ts NoMeterReason)
+              usageUnavailable={
+                usageState.state === "unavailable" || usagePort?.subscribeRows === undefined
+              }
               port={usagePort}
               chosen={chosenId ?? null}
               onChoose={setProfileTab}
