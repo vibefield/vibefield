@@ -152,7 +152,14 @@ export type FlowGate = z.infer<typeof FlowGate>;
  * values (`meta`); it has no default export to run (`default`); an `ask` offers more than NEEDS_CHOICES_MAX choices, or
  * none (`choices`); its bytes are past SCRIPT_MAX_BYTES (`size`). CP-4a2b (Q-B3 (a)): its code holds one of the three
  * shapes the run's sandbox refuses, a dynamic `import(` (`import`), a direct-looking `eval(` (`eval`), or `<!--` or
- * `-->` (`html-comment`), as ses 2.3.0 reads them over the script the run evaluates. A refused script never runs. */
+ * `-->` (`html-comment`), as ses 2.3.0 reads them over the script the run evaluates. A refused script never runs.
+ * *Corrected 2026-11-06 (CP-4a2b slice 11, 13a's R34; Q6, ruled 2026-11-06):* this said less of `choices` than the read
+ * already refused under it: also a choice not one line of words, one longer than NEEDS_CHOICE_MAX characters, and the
+ * same choice twice. An `ask` is held to one rule, by the read where the script writes it plainly and by the run at its
+ * call, and the read refuses by it under two reasons: its question is not words (`question`, new in slice 11); its
+ * choices are missing or not a list, or offer none, more than NEEDS_CHOICES_MAX (Stop the run takes the item's last
+ * place), a choice not one line of words or past NEEDS_CHOICE_MAX characters, Stop the run itself, or the same choice
+ * twice, whatever its case or the spaces around it (`choices`). */
 export const FLOW_READ_REFUSALS = [
   "syntax",
   "meta",
@@ -162,6 +169,7 @@ export const FLOW_READ_REFUSALS = [
   "import",
   "eval",
   "html-comment",
+  "question",
 ] as const;
 export type FlowReadRefusalReason = (typeof FLOW_READ_REFUSALS)[number];
 
@@ -284,7 +292,11 @@ export type FlowStarter = z.infer<typeof FlowStarter>;
 /** A run's state, OPEN: `running` (its script moves), `waiting` (on a step's agent), `holding` (on the person: a gate,
  * the cap, a repair miss, a changed flow, a lost step), `stopping` (CP-4a2b, 13a's D4: a Stop sent, its step agents not
  * yet heard ending), then `done`, `stopped` (by a Stop), `failed` (the script threw) or `lost` (its journal or its
- * record did not verify, set aside and never replayed; CP4-S15, 13a's D18). */
+ * record did not verify, set aside and never replayed; CP4-S15, 13a's D18).
+ * *Corrected 2026-11-06 (CP-4a2b slice 11, UU2; `waiting` read so since step 1p, TT1):* `waiting` and `holding` are a
+ * run at rest, its host gone (parked at D1's idle, left on its own, or waiting for a host's place): `holding` while the
+ * person holds it (`held`), else `waiting`. While its host is up a run reads `running`, though a call out waits on an
+ * agent or on the person. */
 export const FLOW_RUN_STATES = [
   "running",
   "waiting",
@@ -436,6 +448,7 @@ export const FlowRunRecord = z
     open: z.array(FlowRunRecordStep).max(FLOW_LIMITS.HOST_CALLS_WAITING_MAX), // every step not yet answered
     steps: z.array(FlowRunRecordStep).max(FLOW_RUN_STEPS_MAX), // the latest answered or ended steps
     earlier: z.number().int().min(0).optional(), // answered steps before `steps`
+    // the first of its open holds, of any kind (VV1); released only by its own item's act or its call's answer (EE3)
     held: z
       .object({ item: NeedsItemId, kind: z.string().min(1).max(32) })
       .passthrough()

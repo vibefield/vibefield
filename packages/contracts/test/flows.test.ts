@@ -256,6 +256,7 @@ describe("CP-4a1 — the static read's shape (CP4-Q3 (a))", () => {
       "import",
       "eval",
       "html-comment",
+      "question",
     ]);
   });
 
@@ -276,6 +277,19 @@ describe("CP-4a1 — the static read's shape (CP4-Q3 (a))", () => {
     expect(FlowGate.safeParse({ line: 1, choices: [...four, "e"] }).success).toBe(false);
     expect(FlowGate.safeParse({ line: 1, choices: [] }).success).toBe(false);
     expect(NEEDS_CHOICES_MAX).toBe(4);
+  });
+
+  it("F9b (CP-4a2b slice 11, 13a's R34; Q6, ruled 2026-11-06): a gate is held to one rule, and the read refuses a gate that breaks it in known words, `question` and `choices`, on the gate's own line", () => {
+    // the same read fieldd gives its Gates script (flows-static-read.test.ts, slice 11's S9; EL9)
+    const refused = FlowRead.parse(fixture("flow-read.refused-gate"));
+    expect(refused.refusals.map((r) => flowRefusalOf(r))).toEqual([
+      "question",
+      "choices",
+      "choices",
+      "choices",
+      "choices",
+    ]);
+    expect(refused.refusals.map((r) => r.line)).toEqual([3, 4, 5, 6, 7]);
   });
 });
 

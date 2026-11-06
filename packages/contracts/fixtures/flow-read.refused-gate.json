@@ -1,0 +1,56 @@
+{
+  "meta": {
+    "name": "Gates"
+  },
+  "calls": [],
+  "gates": [
+    {
+      "line": 3,
+      "choices": ["Ship"]
+    },
+    {
+      "line": 4,
+      "question": "Ship it?"
+    },
+    {
+      "line": 5,
+      "question": "Ship it?"
+    },
+    {
+      "line": 6,
+      "question": "Ship it?"
+    },
+    {
+      "line": 7,
+      "question": "Ship it?"
+    }
+  ],
+  "unlisted": false,
+  "refusals": [
+    {
+      "reason": "question",
+      "words": "an ask's question is not words",
+      "line": 3
+    },
+    {
+      "reason": "choices",
+      "words": "an ask offers no choice",
+      "line": 4
+    },
+    {
+      "reason": "choices",
+      "words": "an ask's choices are not a list",
+      "line": 5
+    },
+    {
+      "reason": "choices",
+      "words": "an ask offers Stop the run, which is VibeField's own",
+      "line": 6
+    },
+    {
+      "reason": "choices",
+      "words": "an ask offers the same choice twice",
+      "line": 7
+    }
+  ]
+}
