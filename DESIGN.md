@@ -3009,7 +3009,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       mark's percent or a word that runs hot.
     The hot dot is `--vf-orange` itself.
   - **A plan that needs you** (a sign-in, or a reading that failed) is a dashed thread across both bands: dots of
-    the ink at 46% (38% for a retry), never a fill. **A first read breathes** on §6's breath (1.1s, alternate,
+    the ink at 46% (38% for a retry), never a fill. A sign-in already under way draws the same thread at 46% and
+    asks nothing: its mark wears no badge, and the middle says "…" for it, as for a first read (added 2026-11-06,
+    the model's review; ‹for James›). **A first read breathes** on §6's breath (1.1s, alternate,
     `ease-in-out`), its ink from 35% to all of it, as Chat's Thinking… dots breathe, the track at 16%, only while
     its first reading is out. Under Reduce Motion, or with Godview's animations off, it stands still at 60%. It is
     the circle's one loop. *(Corrected 2026-11-06, PLAN §4 (a): this said it breathed "as Settings' loading dot
@@ -3047,17 +3049,22 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     words instead. The drawing's `#FF9F0A` is `--vf-orange`, never a literal.
   - **Hot, and the forecast** (UM-D3, UM-D4). A window is hot by Settings' own rule, `isHot`:
     - at 100% or more;
-    - with no pace to judge (no time gone, or a budget), at 80% or more;
-    - otherwise when it is past 40% and running more than 1.05 times ahead of the time gone.
+    - with no pace to judge (no known length or reset, or a budget), at 80% or more;
+    - otherwise when some time has gone and it is past 40% and running more than 1.05 times ahead of it; a window
+      with no time gone yet is hot only at 100%.
     Godview's flat 80% (puppeteer-views' `USAGE_HOT_PERCENT`) retires with the usage column. A hot window that would
     run out before its reset says when, at its pace so far: under 10 minutes to the minute, under an hour to 5
     minutes, and beyond that in 15-minute steps ("~1h 15m"). There is no forecast for a budget, for a window
-    already at 100%, or for one whose reset comes first.
+    already at 100%, or for one whose reset comes first. *(Corrected 2026-11-06, the model's review: the second rule
+    said a window with no time gone was judged at 80%. `isHot` judges at 80% only a window whose length or reset it
+    cannot read, or a budget; a window with no time gone yet runs ahead of nothing.)*
   - **The tightest** (UM-D13): a plan's tightest window is the one under the most pressure — a hot window first,
     then one at 100% or more, then the most used — and a profile's word is the tightest of its plans that read.
   - **Pointing** at an arc at the open size focuses that plan: the others dim to 28%, and the middle says it.
   - **Said** as an image, "Usage: ‹plan›: 42% of 5 hours, resets in 2h; ‹plan›: not signed in", or "No meters",
-    or, while the usage cannot be read, "‹profile›: usage unavailable". Its numbers are a geometry module's, never
+    or, while the usage cannot be read, "‹profile›: usage unavailable", and "Usage unavailable" for every profile's
+    circle at once, which names none. A plan whose sign-in is under way is "‹plan›: signing in". (Both added
+    2026-11-06, the model's review; ‹for James›.) Its numbers are a geometry module's, never
     read from the DOM (`packages/field-app/src/usage/bands.ts`, UM-1; its Swift twin is held to the same golden),
     and it is drawn as geometry, never as a glyph (§13).
 - **Godview's profiles column** (track UM, ruled 2026-11-06 from the page *The Bands Meter*: UM-D21, UM-D22 and
@@ -7013,9 +7020,12 @@ here.
   size no view uses yet, the open circle's middle names its window: "of 5 hours", "of 7 days", "of 7 days · Opus",
   "of credits" (§8 "The Bands circle", the middle).
 - **What needs you.** On the desktop, "not signed in" with **Sign in**, and "couldn't read" with **Retry**. On the
-  phone, "Not signed in · sign in on ‹home›" and "Couldn't read · retry", with no act. An agent with no meter says
-  "‹agent› shows no meter"; a profile with no plans, "No meters"; a profile whose usage cannot be read, "‹profile›:
-  usage unavailable".
+  phone, "Not signed in · sign in on ‹home›" and "Couldn't read · retry", with no act. A sign-in already under way
+  says "signing in…" with no act, as Settings' row says "Signing in…" and offers only its cancel; it is said
+  "‹plan›: signing in". An agent with no meter says "‹agent› shows no meter"; a profile with no plans, "No meters";
+  a profile whose usage cannot be read, "‹profile›: usage unavailable", and every profile's circle at once "Usage
+  unavailable". *(Added 2026-11-06, the model's review; ‹for James›: the sign-in under way and its words, its
+  phone words still open, and the circle of every profile.)*
 - **The popover.** Its head says the reading's age, "Read a minute ago", or "Reading usage…", and **default** beside
   the default profile's name while there are several. The bands key says "5 hours · 7 days · a model's week" (said
   "Inside, the next five hours; outside, the week; a hairline, a model's own week"). Its foot, with several
@@ -7049,7 +7059,8 @@ here.
 - **The token** is said "Showing only ‹profile›", its × "Show every profile". Its menu says **Agent Profiles…**,
   **Show**, each profile with its sessions ("1 session", "4 sessions"), and **Every profile**.
 - **Said and not drawn:** a circle is "Usage: ‹plan›: 42% of 5 hours, resets in 2h; ‹plan›: not signed in", "No
-  meters" or "‹profile›: usage unavailable"; the column is "Agent profiles", and its circle "‹profile›, tightest
+  meters" or "‹profile›: usage unavailable" (every profile's circle at once, "Usage unavailable"; ‹for James›);
+  the column is "Agent profiles", and its circle "‹profile›, tightest
   42%", with several profiles a toggle (`aria-pressed` on the chosen profile's) with ", click to show only its
   sessions" or ", showing only its sessions"; the bands key is "Inside, the next five hours; outside, the week; a
   hairline, a model's own week"; the limit card is a group, "Another subscription?". On the phone the face's
