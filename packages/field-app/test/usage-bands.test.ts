@@ -283,6 +283,35 @@ describe("UM-1 — each plan's segment", () => {
     expect(arcsOf(kept, "outer", "track")[0]?.opacity).toBe(1);
   });
 
+  it("a window read before its reset fills at the kept half and never orange, lights no hot dot, and the plan says its age", () => {
+    // the five hours spent and reset half an hour ago, read three hours back; the week still running
+    const entries = meters([
+      [
+        "claude",
+        {
+          metrics: [paced("5h", 100, 110), paced("7d", 30, 40, 10_080)],
+          fetchedAt: from(-181),
+        },
+      ],
+    ]);
+    const plan = planAt(bandsGeometry(212, entries), 0);
+    expect(arcsOf(plan, "inner", "fill")[0]).toMatchObject({
+      paint: { tone: "ink", percent: 28 },
+      opacity: 0.5,
+    });
+    expect(arcsOf(plan, "inner", "head").map((arc) => [arc.paint.tone, arc.opacity])).toEqual(
+      Array.from({ length: 6 }, () => ["ink", 0.5]),
+    );
+    // the week is current: its fill keeps its whole ink
+    expect(arcsOf(plan, "outer", "fill")[0]?.opacity).toBe(1);
+    expect(bandsGeometry(40, entries, { centre: "glyph", hotDot: true }).hotDot).toBeUndefined();
+    expect(bandsLabel(entries)).toBe("Usage: Claude Code: 30% of 7 days, as of 3h 1m ago");
+    const say = bandsGeometry(232, entries).centre.items.find(
+      (item) => item.kind === "text" && item.role === "say",
+    );
+    expect(say).toMatchObject({ text: "as of 3h 1m ago", paint: { tone: "ink", percent: 62 } });
+  });
+
   it("a budget fills both bands, with no notch", () => {
     const plan = planAt(bandsGeometry(212, meters([["grok", [budget(30)]]])), 0);
     const { both, band, gap } = radii(212);
@@ -549,9 +578,10 @@ describe("UM-1 — the circle in words", () => {
     );
   });
 
-  it("says a reset only as a length (§9's 'resets in 2h'), never by its day or once past; a kept reading by its age", () => {
+  it("says a reset only as a length (§9's 'resets in 2h'), never by its day or once past; a kept reading, or one read before its reset, by its age", () => {
     const entries = meters([
-      // past its reset, and a week whose reset is days off: Settings' "now" and day and clock stay on the rows
+      // past its reset (read a minute ago: its age is said, DESIGN.md §8 "A window read before its reset"), and a
+      // week whose reset is days off: Settings' "now" and day and clock stay on the rows
       ["claude", [paced("5h", 30, 100.5)]],
       ["grok", [paced("7d", 30, 50, 10_080)]],
       [
@@ -560,7 +590,7 @@ describe("UM-1 — the circle in words", () => {
       ],
     ]);
     expect(bandsLabel(entries)).toBe(
-      "Usage: Claude Code: 30% of 5 hours; Codex: 30% of 5 hours, as of 32m ago; Grok: 30% of 7 days",
+      "Usage: Claude Code: 30% of 5 hours, as of 1m ago; Codex: 30% of 5 hours, as of 32m ago; Grok: 30% of 7 days",
     );
     // the full middle says the window and no reset words for a reset days off
     const opened = bandsGeometry(232, entries, { focus: "agent:grok:native-default" });
@@ -885,8 +915,8 @@ describe("UM-1 — the usage bands golden", () => {
         need?: string;
         why?: string;
         stale?: boolean;
-        right?: { words: string };
-        windows?: Array<{ budget: boolean }>;
+        right?: { kind: string; words: string };
+        windows?: Array<{ budget: boolean; passed: boolean }>;
       }>;
     }>;
     circles: Array<{
@@ -952,7 +982,7 @@ describe("UM-1 — the usage bands golden", () => {
     }
   });
 
-  it("holds every state the meters draw: one plan and several, each need, a first read, a budget, the hairline, a kept reading, usage unavailable, every profile", () => {
+  it("holds every state the meters draw: one plan and several, each need, a first read, a budget, the hairline, a kept reading, a window read before its reset, usage unavailable, every profile", () => {
     const { meters: all, circles } = golden();
     const entries = all.flatMap((each) => each.entries);
     const said = (entry: Golden["meters"][number]["entries"][number]) =>
@@ -971,6 +1001,12 @@ describe("UM-1 — the usage bands golden", () => {
     );
     const kept = entries.filter((entry) => entry.stale === true);
     expect(kept.map((entry) => entry.right?.words)).toContain("as of 32m ago");
+    // a batch read after a reset (the phone's case under UM-D8): a plan with a window read before it says its age
+    const passed = entries.filter((entry) => entry.windows?.some((window) => window.passed));
+    expect(passed.map((entry) => [entry.right?.kind, entry.right?.words])).toContainEqual([
+      "passed",
+      "as of 3h 1m ago",
+    ]);
     const budgets = entries.filter((entry) => entry.windows?.some((window) => window.budget));
     expect(budgets.length).toBeGreaterThan(0);
     const arcs = circles.flatMap((circle) => circle.plans.flatMap((plan) => plan.arcs));

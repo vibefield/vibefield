@@ -69,14 +69,19 @@ export interface MeterWindow {
   /** minutes to the reset, unrounded (negative once it has passed); absent for a window that names no reset and for
    * a budget */
   resetIn?: number;
-  /** UM-D13's rank (`pressureOf`): ahead of pace first, then spent, then the fuller */
+  /** its reset has come since the reading was taken (`resetsAt` at or before now), so what it metered is gone: never
+   * hot, no forecast, pressure 0, its fill at the kept half (DESIGN.md §8 "The Bands circle", "A window read before
+   * its reset"; ‹for James›) */
+  passed: boolean;
+  /** UM-D13's rank (`pressureOf`): ahead of pace first, then spent, then the fuller; 0 once passed */
   pressure: number;
   forecast?: MeterForecast;
 }
 
-/** The words at a meter's right: the forecast while it runs ahead, else the reset; a kept reading says its age. */
+/** The words at a meter's right: the forecast while it runs ahead, else the reset; a kept reading says its age, and
+ * so does one with a window read before its reset (`passed`). */
 export interface MeterRight {
-  kind: "forecast" | "reset" | "kept" | "reading" | "need" | "none";
+  kind: "forecast" | "reset" | "kept" | "passed" | "reading" | "need" | "none";
   words: string;
   /** said in the attention ink */
   hot: boolean;
@@ -205,6 +210,8 @@ export function meterWindows(
       line,
       budget,
       lengthWords: windowWords(metric),
+      // RED SKELETON (the assembled review): no window is ever read as passed yet
+      passed: false,
       pressure: pressureOf(line),
     };
     if (line.resets && metric.resetsAt !== undefined) {

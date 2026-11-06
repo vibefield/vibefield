@@ -30,12 +30,14 @@ export interface UsageBandsInputs {
 }
 
 /** Whose meters: one profile of a list, or every profile of it (UM-D12's union), over one batch; "unavailable" when
- * the batch could not be read at all (ruling 10). */
+ * the batch could not be read at all (ruling 10); `at`, a now of its own in place of the batch's (`nows`): the batch
+ * read later, after a window's reset has come (the phone's common case, UM-D8). */
 export interface UsageBandsMeters {
   sets: string;
   batch: string;
   of: string;
   usage?: "unavailable";
+  at?: string;
 }
 
 /** One circle the golden draws: whose meters, at what size, with what options, and where the product draws it. */
@@ -70,6 +72,7 @@ function windowRecord(window: MeterWindow): Record<string, unknown> {
     lengthWords: window.lengthWords,
     durationMinutes: window.metric.durationMinutes,
     resetIn: window.resetIn,
+    passed: window.passed,
     pressure: window.pressure,
     forecast: window.forecast,
   };
@@ -102,13 +105,14 @@ function dayWords(meters: ProfileMeters): string[] {
 }
 
 const metersKey = (meters: UsageBandsMeters): string =>
-  [meters.sets, meters.batch, meters.of, meters.usage ?? ""].join("\u0000");
+  [meters.sets, meters.batch, meters.of, meters.usage ?? "", meters.at ?? ""].join("\u0000");
 
 /**
  * The golden: every distinct meters the cases draw (each profile's entries in UM-D15's order, its tightest plan, its
  * hot rule), each case's circle, and UM-D4's forecast over a fixed vector. Each batch is read at its own now
- * (`nows`, by the batch's name), minutes after its reading, as a live view reads it. A reset a day or more off is
- * written by its form, never its words (`windowRecord`); one that would reach the file anyway is refused.
+ * (`nows`, by the batch's name), minutes after its reading, as a live view reads it, unless the case names a now of
+ * its own (`at`: hours later, after a reset). A reset a day or more off is written by its form, never its words
+ * (`windowRecord`); one that would reach the file anyway is refused.
  */
 export function usageBandsGolden(input: {
   note: string;
@@ -124,7 +128,7 @@ export function usageBandsGolden(input: {
     if (known !== undefined) return known.meters;
     const sets = input.inputs.sets[of.sets];
     const rows = input.inputs.batches[of.batch];
-    const at = input.nows[of.batch];
+    const at = of.at ?? input.nows[of.batch];
     if (sets === undefined || rows === undefined || at === undefined) {
       throw new Error(`usage bands golden: no input or now named ${of.sets} or ${of.batch}`);
     }
@@ -148,6 +152,7 @@ export function usageBandsGolden(input: {
         batch: of.batch,
         of: of.of,
         ...(of.usage !== undefined ? { usage: of.usage } : {}),
+        ...(of.at !== undefined ? { at: of.at } : {}),
       },
       meters,
     });

@@ -559,11 +559,35 @@ describe("UM-D4 — the forecast, only while ahead of pace and before the reset"
     expect(say(97, 58)).toBe("~5m");
     expect(say(99.9, 90)).toBe("~1m");
     expect(say(82, 55)).toBe("~35m");
-    // 58 minutes rounds to five as 60
-    expect(say(70, 45.1)).toBe("~60m");
+    // 58 minutes rounds to five as 60, which is the hour: said as one
+    expect(say(70, 45.1)).toBe("~1h");
     expect(say(64, 50)).toBe("~1h 30m");
     expect(say(86, 70, 10_080)).toBe("~19h 15m");
     expect(say(50, 10, 43_200)).toBe("~3d");
+  });
+
+  it("rounds first, then chooses the form: from 57.5 minutes it says the hour, never '~60m'", () => {
+    // half of five hours used with `minutes / 3` of it gone runs out in exactly `minutes`, before the reset
+    const inMinutes = (minutes: number) =>
+      forecastOf({
+        usedPercent: 50,
+        elapsedPercent: minutes / 3,
+        durationMinutes: 300,
+        resetIn: 300 - minutes,
+        budget: false,
+        hot: isHot(50, minutes / 3),
+      });
+    expect(inMinutes(57.4)?.words).toBe("~55m");
+    for (const minutes of [57.6, 58, 59.9, 60, 67]) {
+      expect(inMinutes(minutes)?.words, `${minutes} minutes`).toBe("~1h");
+    }
+    expect(inMinutes(59.9)).toMatchObject({
+      short: "out in ~1h",
+      long: "Runs out in ~1h at this pace",
+    });
+    expect(inMinutes(68)?.words).toBe("~1h 15m");
+    // the same order at the minute's end: 9.6 minutes rounds to 10, said in minutes
+    expect(inMinutes(9.6)?.words).toBe("~10m");
   });
 
   it("never forecasts a budget, a spent window, one not ahead, one of no length, or past its reset", () => {
@@ -583,6 +607,89 @@ describe("UM-D4 — the forecast, only while ahead of pace and before the reset"
     expect(forecastOf({ ...base, elapsedPercent: undefined })).toBeUndefined();
     // the limit comes after the reset (100 minutes at this pace, 30 to the reset)
     expect(forecastOf({ ...base, resetIn: 30 })).toBeUndefined();
+  });
+});
+
+describe('the assembled review — a window read before its reset (DESIGN.md §8 "The Bands circle")', () => {
+  it("is never hot, has no forecast and ranks by pressure 0, so the tightest is a window still running", () => {
+    const metrics = [
+      // spent, its reset half an hour ago; another at 95% whose reset is this minute
+      window("5h", 100, 300, -30),
+      paced("7d", 40, 50, 10_080),
+      window("now", 95, 300, 0),
+    ];
+    // Settings' C1 line still judges the spent five hours hot: its time gone is clamped at 100
+    const settings = usageLines(metrics, NOW);
+    expect(settings.map((line) => [line.id, line.hot])).toEqual([
+      ["5h", true],
+      ["7d", false],
+      ["now", false],
+    ]);
+    const windows = meterWindows(metrics, NOW);
+    expect(
+      windows.map((each) => [
+        each.line.id,
+        each.passed,
+        each.line.hot,
+        each.pressure,
+        each.forecast,
+      ]),
+    ).toEqual([
+      ["5h", true, false, 0, undefined],
+      ["7d", false, false, 40, undefined],
+      ["now", true, false, 0, undefined],
+    ]);
+    expect(tightestWindow(windows)?.line.id).toBe("7d");
+    // only its orange is the meter's: Settings' words and now line stand
+    expect(windows[0]?.line).toEqual({ ...settings[0], hot: false });
+    expect(windows[1]?.line).toEqual(settings[1]);
+  });
+
+  it("leaves its plan unlit, the profile's tightest plan one still running, and says the reading's age at its right", () => {
+    const meters = planMeters(
+      profile(
+        [own("claude"), own("codex")],
+        [ownPlan("anthropic", "claude"), ownPlan("openai", "codex")],
+      ),
+      [
+        row("claude", [window("5h", 100, 300, -1), window("7d", 20, 10_080, 540)], {
+          fetchedAt: from(-181),
+        }),
+        row("codex", [paced("5h", 30, 50)]),
+      ],
+      NOW,
+    );
+    const claude = reading(entryOf(meters, "plan:anthropic"));
+    expect(claude.stale).toBe(false);
+    expect(claude.hot).toBe(false);
+    expect(claude.tightest.line.id).toBe("7d");
+    expect(claude.right).toEqual({
+      kind: "passed",
+      words: "as of 3h 1m ago",
+      hot: false,
+      icon: false,
+    });
+    expect(meters.hot).toBe(false);
+    expect(meters.tightest?.key).toBe("plan:openai");
+    // a plan whose windows all still run says its forecast or its reset, as before
+    expect(reading(entryOf(meters, "plan:openai")).right.kind).toBe("reset");
+  });
+
+  it("a kept reading stays kept: its age is said once, as §9's kept words", () => {
+    const meters = planMeters(
+      profile([own("codex")], [ownPlan("openai", "codex")]),
+      [
+        row("codex", [window("5h", 30, 300, -10)], {
+          state: "unavailable",
+          stale: true,
+          fetchedAt: from(-32),
+        }),
+      ],
+      NOW,
+    );
+    const codex = reading(entryOf(meters, "plan:openai"));
+    expect(codex.tightest.passed).toBe(true);
+    expect(codex.right).toEqual({ kind: "kept", words: "as of 32m ago", hot: false, icon: false });
   });
 });
 
