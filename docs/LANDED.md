@@ -39554,3 +39554,91 @@ and leaves the connection queued. So the claim is about the NEXT connection, and
   boot half.
 
 Item 198 closes in this entry.
+
+## Item 203, VF-W1 — fieldd's executable is the daemon only with no argument: a script handed to it as if it were Node is refused in one line with 127, never a second daemon (RV #1's pin-free half) (2026-11-06)
+(2026-11-06; three commits, `23976e129` (words), `bc72cc0d6` (red) and `13edb776b`, on lane `rv/vf-forwarder` over
+main `0d1d66f05`, RV's (vibe-field-62), in `/Volumes/SamsungRed/lanes/au/vibe-field`; re-cut by `git replay` onto
+`285fad957` as `877e7fbf2`, `5bdecd8d3` and `02aed7ec2`. M196 is `02aed7ec2` itself, a fast-forward of main
+`285fad957` by the fixer, run 196, landed 2026-11-06T19:52:29Z.)
+RV's fourth landing, and the first half of RV #1, the review's one critical finding. Item 203's other half, VF-W3a
+(fieldd lends puppeteer its forwarder runtime in a fifth closed role), lands in EL8-1's chain with puppeteer R1. The
+words are rv-forwarder-role's option A, which James has not ruled.
+
+**The finding.** RV #1 (`pup-claude-1`, critical, confirmed twice): in a packaged build, puppeteer 0.3 names
+`process.execPath` as the Node that runs Claude Code's staged hook and status-line forwarders, and that executable is
+fieldd's single executable. So every SessionStart hook and status-line refresh ran `<fieldd> <tmp>/<id>.hooks.mjs …`,
+and fieldd's `roleOf` read any first argument that is no role as the daemon: the daemon booted inside the agent's
+process tree, on the person's default root, where it could reach `native.connect()` and supersede the live fieldd.
+Resumed and cleared Claude sessions stayed dark, with no context, model or rate-limit data.
+
+**What landed.**
+- DESIGN.md §9, first: "When VibeField's own program starts nothing". The daemon takes no argument and nothing that
+  starts it hands it one; a first argument that is none of the program's roles and asks for none starts nothing, and
+  the program says one line with the shell's cannot-run status (127): "VibeField: this program takes no arguments;
+  nothing was started." Marked open until James rules rv-forwarder-role.
+- fieldd `roles.ts`: `roleOf` answers the daemon only when there is no argument; any other first argument is a role,
+  `unknown` (it asks for one this build does not have) or the new `stray`. The rule "any non-role first argument is
+  the daemon" retires. `strayArgumentLine()` joins the file's word functions, and the file still imports nothing.
+- fieldd `bin.ts`: a `stray` branch before the daemon's writes that line to stderr and exits 127. It never calls
+  `main()`, so nothing of the daemon's module graph loads, and the script's path is never read.
+- `build-fieldd-sea.mjs --verify`: probe F2 runs the single executable as Claude Code's hook command runs it, on a
+  poisoned script, and holds it to 127, empty stdout, DESIGN.md's line, the script never run and the data directory
+  untouched. desk-gates row 34 names it. **This file is release-adjacent** (the packaged build's own verifier):
+  James's eye on it, not a stop.
+- Every spawn of the daemon was confirmed to hand it no argument (`resources.ts` `fielddArgs`, the dev runner through
+  the shell, every packaged test and probe A/B).
+
+**The lights.**
+- Written unrun on the MacBook under the HOLD; reviewed (six issues, all answered: the biome join, the red's failure
+  path, the status-line row's own timeout input, the §9 paragraph's place clear of CO's open lanes, the door's frame
+  for W3a, and a follow-up `isSingleExecutable()` after rv/invoke-federation).
+- a9's rows on vf-m1 (`lanes/rv/a9/w3-i203w1/`, SUMS `3b836718…`; results `a9-results/`, SUMS-a9 `1617c16a…`): W1–W3
+  red at the red, W4–W8 green at the green. W4: `agent-shim-role.test.ts` 12 of 12, H12 and the transcript host's row;
+  W5 dev-runner's `worker-roles.test.mjs` 5 of 5 (the SIGUSR1 call sites unchanged); W6 tsc 0; W7 biome clean and
+  check:walls 0; W8 `build-fieldd-sea.mjs --verify` on a release field-native built at `13edb776b`: every probe ok,
+  the new no-arguments line among them.
+- *Corrected 2026-11-06 19:40Z (at its source, `w3-i203w1/r2/`):* W1's new process row fails at the red on the missing
+  `strayArgumentLine` export (`TypeError` at :427), before the assertion the brief and the red's body named ("no
+  daemon made its data directory"). The red's three pure rows witness the cause at their own assertions. The row's own
+  assertion is witnessed by W9, a mutation probe at the green (`roleOf`'s last line back to `return undefined`, the
+  helper still exported): RED, the mutant caught, at :424 (a9, vf-m1, 19:42Z; `w3-i203w1/r2/a9-results/`, `W9.log`
+  `f9d028e5…`): exit 1 and "fieldd failed to start: ENOENT … loro_wasm_bg.wasm" where 127 and DESIGN.md's line are
+  due. Its :421 data-directory assertion PASSED under the mutant: the row's directory holds only `bin.cjs`, so a
+  daemon that would start dies before it makes its directory, and that assertion cannot fail in the unit harness. The
+  row discriminates by its exit and its line; probe F2 (W8) carries the data-directory witness.
+- The re-cut is proof-form: range-diff 3 `=`, the own range's `-U0 --stable` patch-id equal (`99c85b00…`), and the
+  tip's tree equal to git's merge-tree (`lanes/rv/mint/item203w1/`); DESIGN.md is the one file both sides touched,
+  merged clean.
+- Run 196, a9's, on vf-m1: GREEN, every count as briefed, missing [] / extra [] (`lanes/ts6/logs/m1/run196/`,
+  `verify.log` `0d73bffa…`; verify exit 0 at 19:49:25Z, tree clean, stubs 0). Nested rows 0 over the lane's three test
+  files. fieldd 3563 passed and 15 skipped (+2: `agent-shim-role.test.ts` 10 → 12; `flows-host.test.ts` 41 and
+  `spark-transcript-host.test.ts` 8 unchanged); vitest 13,952 passed, 0 failed and 21 skipped over 956 files; node
+  474, cargo 36 / 550 and typecheck 29 as run 195's. Births: one root, `/private/tmp/.tmpDWr38Z`, holding two
+  field-native crumbs of item 196's known EPIPE class ("failed printing to stderr: Broken pipe"), not this lane's; the
+  process rows left none. Host: load 1.44 at arm, about 9.5 at its peak; df 39 GiB; swap 0.
+
+**Found.**
+- Read from the code, not measured: puppeteer's other `process.execPath` sites run inside the packaged fieldd
+  (adapter-claude `detection.ts` and `services/profiles.ts` for a Claude installed as a script, native-observation's
+  `native-probe`). At 0.3.2 `detection.ts`'s `execFile` passes no environment, so the child inherited fieldd's own
+  `FIELDD_*` variables, and a script exec through it booted a second daemon on the SAME user root. From this landing
+  every such exec fails at once (127, the stray line); puppeteer R1's `resolveScriptRunner` (PU-A, rv/pup-claude-a)
+  refuses it before it is made.
+- Claude sessions launched under puppeteer 0.3 keep `<exe> <tmp>.hooks.mjs …` in their settings until relaunched. In a
+  packaged build their hooks and status lines now fail in one line on stderr instead of booting a daemon; their
+  sessions are still not observed until VF-W3a lends the forwarder runtime. That is the honest state until EL8-1.
+
+**Owed.**
+- VF-W3a (item 203's second half, `1b12194b3` … `0e0cd0ec3` on the lane): in EL8-1's chain with puppeteer R1, with the
+  package-manifest census fold (VF-PM's ruling); `census:assert --strict` stays red at W3a's tip until the forwarder
+  dist exists.
+- The process row's data-directory assertion (W9's finding): in the unit harness the row's directory holds only
+  `bin.cjs`, so a daemon that would start dies on its missing loro wasm before it makes its directory, and the
+  assertion cannot fail there. A follow-up in W3a's chain gives the row the daemon's sidecars or retires the claim in
+  its comment; until then the row's witness is its exit and its line, and probe F2 (W8) is where the data directory's
+  witness holds.
+- James's rv-forwarder-role: the words, built at lean A and marked open. A different ruling changes DESIGN.md first,
+  then `roles.ts`.
+- The draft corrections, at item 203's slot: `draft/launch/esp-9-3-residuals-ar7j.md` (probe F2 beside probe F),
+  `draft/specs/electron-security-packaging.md` §9.3's dispatch rule, and `draft/rv/james-asks.md`'s rv-forwarder-role
+  note.
