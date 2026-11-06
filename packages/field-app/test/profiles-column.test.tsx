@@ -381,14 +381,14 @@ describe("the popover (DESIGN.md §8 'Godview's profiles column')", () => {
     const circle = thisMac();
     const page = mount(<ProfilePopoverView {...popover(circle)} />);
     const shown = circle.meters.entries.filter((entry) => entry.kind !== "no-meter");
-    const rows = [...page.querySelectorAll<HTMLElement>(".vf-profiles-row")];
+    const rows = [...page.querySelectorAll<HTMLElement>(".vf-profiles-pop-row")];
     expect(rows.map((row) => row.dataset.plan)).toEqual(shown.map((entry) => entry.key));
-    expect(rows.map((row) => row.querySelector(".vf-profiles-row-title")?.textContent)).toEqual(
+    expect(rows.map((row) => row.querySelector(".vf-profiles-pop-row-title")?.textContent)).toEqual(
       shown.map((entry) => entry.title),
     );
     const reading = shown.find((entry) => entry.kind === "reading");
     const row = rows.find((each) => each.dataset.plan === reading?.key);
-    expect(row?.querySelector(".vf-profiles-row-right")?.textContent).toBe(
+    expect(row?.querySelector(".vf-profiles-pop-row-right")?.textContent).toBe(
       reading?.kind === "reading" ? reading.right.words : "",
     );
     // the shipping C1 line (UsageTimeline), its tightest window alone
@@ -397,8 +397,8 @@ describe("the popover (DESIGN.md §8 'Godview's profiles column')", () => {
 
   it("wave 1: a plan's row takes no click — not a button, never pressed", () => {
     const page = mount(<ProfilePopoverView {...popover(thisMac())} />);
-    expect(page.querySelectorAll(".vf-profiles-row").length).toBeGreaterThan(0);
-    for (const row of page.querySelectorAll(".vf-profiles-row")) {
+    expect(page.querySelectorAll(".vf-profiles-pop-row").length).toBeGreaterThan(0);
+    for (const row of page.querySelectorAll(".vf-profiles-pop-row")) {
       expect(row.tagName).not.toBe("BUTTON");
       expect(row.hasAttribute("aria-pressed")).toBe(false);
     }
@@ -413,10 +413,10 @@ describe("the popover (DESIGN.md §8 'Godview's profiles column')", () => {
     expect(retry?.kind === "needs-you" && retry.need).toBe("retry");
     const props = popover({ set: FIXTURE_WORK, meters: retrying });
     const page = mount(<ProfilePopoverView {...props} />);
-    const row = page.querySelector<HTMLElement>(`.vf-profiles-row[data-plan="${retry?.key}"]`);
-    expect(row?.querySelector(".vf-profiles-row-right")?.textContent).toBe("couldn't read");
+    const row = page.querySelector<HTMLElement>(`.vf-profiles-pop-row[data-plan="${retry?.key}"]`);
+    expect(row?.querySelector(".vf-profiles-pop-row-right")?.textContent).toBe("couldn't read");
     act(() => {
-      row?.querySelector<HTMLButtonElement>(".vf-profiles-row-act")?.click();
+      row?.querySelector<HTMLButtonElement>(".vf-profiles-pop-row-act")?.click();
     });
     expect(props.onRetry).toHaveBeenCalledWith([retry?.profileId]);
 
@@ -427,11 +427,13 @@ describe("the popover (DESIGN.md §8 'Godview's profiles column')", () => {
     const signIn = signing.entries.find((entry) => entry.kind === "needs-you");
     const asks = popover({ set: FIXTURE_WORK, meters: signing });
     const page2 = mount(<ProfilePopoverView {...asks} />);
-    const row2 = page2.querySelector<HTMLElement>(`.vf-profiles-row[data-plan="${signIn?.key}"]`);
-    expect(row2?.querySelector(".vf-profiles-row-right")?.textContent).toBe("not signed in");
-    expect(row2?.querySelector(".vf-profiles-row-act")?.textContent).toBe("Sign in");
+    const row2 = page2.querySelector<HTMLElement>(
+      `.vf-profiles-pop-row[data-plan="${signIn?.key}"]`,
+    );
+    expect(row2?.querySelector(".vf-profiles-pop-row-right")?.textContent).toBe("not signed in");
+    expect(row2?.querySelector(".vf-profiles-pop-row-act")?.textContent).toBe("Sign in");
     act(() => {
-      row2?.querySelector<HTMLButtonElement>(".vf-profiles-row-act")?.click();
+      row2?.querySelector<HTMLButtonElement>(".vf-profiles-pop-row-act")?.click();
     });
     expect(asks.onOpenProfile).toHaveBeenCalledWith("work");
   });
@@ -442,9 +444,9 @@ describe("the popover (DESIGN.md §8 'Godview's profiles column')", () => {
       (entry) => entry.kind === "no-meter" && entry.why !== "unavailable",
     );
     const page = mount(<ProfilePopoverView {...popover(circle)} />);
-    expect([...page.querySelectorAll(".vf-profiles-none")].map((line) => line.textContent)).toEqual(
-      none.map((entry) => `${entry.agent} shows no meter`),
-    );
+    expect(
+      [...page.querySelectorAll(".vf-profiles-pop-none")].map((line) => line.textContent),
+    ).toEqual(none.map((entry) => `${entry.agent} shows no meter`));
   });
 
   it("dims every other plan to 28% while the pointer is on one, on the circle and in the rows", () => {
@@ -457,7 +459,9 @@ describe("the popover (DESIGN.md §8 'Godview's profiles column')", () => {
     expect(others.length).toBeGreaterThan(0);
     for (const arc of others) expect(arc.style.opacity).toBe("0.28");
     expect(
-      page.querySelector(`.vf-profiles-row[data-plan="${first?.key}"]`)?.hasAttribute("data-focus"),
+      page
+        .querySelector(`.vf-profiles-pop-row[data-plan="${first?.key}"]`)
+        ?.hasAttribute("data-focus"),
     ).toBe(true);
   });
 

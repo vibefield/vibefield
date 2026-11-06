@@ -71,7 +71,7 @@ function NeedAct({
   return (
     <button
       type="button"
-      className="vf-profiles-row-act"
+      className="vf-profiles-pop-row-act"
       onClick={() => {
         if (!retry) onOpenProfile(setId);
         else if (entry.profileId !== undefined) onRetry([entry.profileId]);
@@ -102,7 +102,7 @@ function PlanRow({
   return (
     // pointing at a row only lights its arc, as pointing at the arc does; nothing is chosen (wave 1)
     <div
-      className="vf-profiles-row"
+      className="vf-profiles-pop-row"
       data-plan={entry.key}
       data-kind={entry.kind}
       {...(focused ? { "data-focus": "" } : {})}
@@ -110,22 +110,25 @@ function PlanRow({
       onPointerEnter={() => onFocusPlan(entry.key)}
       onPointerLeave={() => onFocusPlan(null)}
     >
-      <span className="vf-profiles-row-mark" aria-hidden="true">
+      <span className="vf-profiles-pop-row-mark" aria-hidden="true">
         <AgentIcon providerId={entry.provider} />
       </span>
-      <span className="vf-profiles-row-head">
-        <b className="vf-profiles-row-title">{entry.title}</b>
-        <span className="vf-profiles-row-right" {...(right.hot ? { "data-hot": "" } : {})}>
+      <span className="vf-profiles-pop-row-head">
+        <b className="vf-profiles-pop-row-title">{entry.title}</b>
+        <span className="vf-profiles-pop-row-right" {...(right.hot ? { "data-hot": "" } : {})}>
           {right.icon ? <FieldGlyph name="reset" size={9} /> : null}
           {right.words}
         </span>
       </span>
       {entry.kind === "reading" ? (
-        <span className="vf-profiles-row-meter">
+        <span className="vf-profiles-pop-row-meter">
           <UsageTimeline lines={[entry.tightest.line]} label={entry.title} />
         </span>
       ) : entry.kind === "first-read" ? (
-        <span className="vf-profiles-row-meter vf-profiles-row-waiting" aria-hidden="true" />
+        <span
+          className="vf-profiles-pop-row-meter vf-profiles-pop-row-waiting"
+          aria-hidden="true"
+        />
       ) : (
         <NeedAct entry={entry} setId={setId} onOpenProfile={onOpenProfile} onRetry={onRetry} />
       )}
@@ -207,7 +210,7 @@ export function ProfilePopoverView({
           <BandsCircle geometry={geometry} labelled onFocusPlan={onFocusPlan} />
           <BandsKey />
         </div>
-        <div className="vf-profiles-rows">
+        <div className="vf-profiles-pop-rows">
           {rows.map((entry) => (
             <PlanRow
               key={entry.key}
@@ -220,8 +223,8 @@ export function ProfilePopoverView({
             />
           ))}
           {none.map((entry) => (
-            <p key={entry.key} className="vf-profiles-none">
-              <span className="vf-profiles-none-mark" aria-hidden="true">
+            <p key={entry.key} className="vf-profiles-pop-none">
+              <span className="vf-profiles-pop-none-mark" aria-hidden="true">
                 <AgentIcon providerId={entry.provider} />
               </span>
               {noneWords(entry)}
