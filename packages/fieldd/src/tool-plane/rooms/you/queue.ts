@@ -536,6 +536,11 @@ export class NeedsQueue implements TalkHolds {
     this.#emit();
   }
 
+  /** RED skeleton: ends nothing. */
+  endFlowItem(_id: NeedsItemId): boolean {
+    return false;
+  }
+
   // ── the window's answer ──
 
   /** needs.answer: the act at `choice` among the item's acts. Answered once, for every window. */

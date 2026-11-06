@@ -1246,6 +1246,25 @@ describe("CP-4a2b — a flow run's items: the runs' acts, then Stop the run; an 
     expect(h.queue.list().map((open) => open.id)).toEqual([other]);
   });
 
+  it("N3b: the runs end one item alone (a gate whose call their journal already answered, found at boot): it is answered `ended` after, and an id that is no open flow item ends nothing", async () => {
+    const h = harness();
+    const { routed, acts } = runsActs();
+    h.queue.bindFlowActs(acts);
+    const gate = h.queue.flowItem(GATE);
+    const later = h.queue.flowItem({ ...GATE, run: { ...RUN, call: 4 } });
+    const question = ask(h);
+    expect(h.queue.endFlowItem(gate)).toBe(true);
+    expect(listed(h.queue).map((open) => open.id)).toEqual([later, question]);
+    expect(files(h)).toEqual([later, question].sort());
+    expect(await refusal(h.queue.answer(gate, 0, principal))).toBe("ended");
+    // ended again, a spark's own question, or an id the queue never held: nothing changes
+    expect(h.queue.endFlowItem(gate)).toBe(false);
+    expect(h.queue.endFlowItem(question)).toBe(false);
+    expect(h.queue.endFlowItem("ny-0000000000000000")).toBe(false);
+    expect(h.queue.list().map((open) => open.id)).toEqual([later, question]);
+    expect(routed).toEqual([]);
+  });
+
   it("N4: a restart restores a run's items; the runs re-raising the same call's gate get that item, and its answer is still handed on once", async () => {
     const h = harness();
     const id = h.queue.flowItem(GATE);
