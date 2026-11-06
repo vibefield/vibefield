@@ -44,13 +44,13 @@ enum LensToken {
   static let menuPopFrom: CGFloat = 0.55
   static let menuPop: Double = 0.38
   static let menuOrigin = CGSize(width: -50, height: 20)
-  /// A row's 34 check column (a check at 14 on the one shown); Every profile's glyph at 19, a profile's at 18, and
-  /// Agent Profiles…'s view lead at 26: the Me menu's own row's circle of every plan (`AgentProfilesMenuRow`, SE-P5b).
+  /// A row's 34 check column (a check at 14 on the one shown); Every profile's glyph at 19 and a profile's at 18.
+  /// Agent Profiles…'s view lead is the Me menu's own row's circle of every plan at 26 (`AgentProfilesMenuRow.size`,
+  /// SE-P5b), drawn from that row's own geometry.
   static let checkColumn: CGFloat = 34
   static let checkGlyph: CGFloat = 14
   static let everyGlyph: CGFloat = 19
   static let profileGlyph: CGFloat = 18
-  static let viewLead = CGFloat(AgentProfilesMenuRow.size)
   /// Reduce Motion (M6): the token and its menu fade in over 120ms at full size, with no growth and no pop.
   static let reducedFade: Double = SearchSheet.reducedFade
 

@@ -183,7 +183,8 @@ struct MetersFeedTests {
     let words = AgentProfilesWords(
       reading: feed.reading, lens: ProfileLens(), home: "studio", now: MetersFixtureDoor.now)
     #expect(words.read == "Usage unavailable")
-    #expect(words.menuWord == nil)
+    let row = AgentProfilesMenuRow(reading: feed.reading, now: MetersFixtureDoor.now, open: {})
+    #expect(row.word == nil)
     let door = Door()
     feed.attach(door, home: "dev-home")
     await settle { feed.reading.usage != .unavailable }

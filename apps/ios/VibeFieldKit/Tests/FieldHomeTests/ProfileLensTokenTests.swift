@@ -82,7 +82,9 @@ struct ProfileLensTokenTests {
     #expect(LensToken.menuPopFrom == 0.55 && LensToken.menuPop == 0.38)
     #expect(LensToken.menuOrigin == CGSize(width: -50, height: 20))
     #expect(LensToken.checkColumn == 34 && LensToken.checkGlyph == 14)
-    #expect(LensToken.everyGlyph == 19 && LensToken.profileGlyph == 18 && LensToken.viewLead == 26)
+    #expect(LensToken.everyGlyph == 19 && LensToken.profileGlyph == 18)
+    // Agent Profiles…'s view lead is the Me menu's own row's circle (`AgentProfilesMenuRow`), at 26
+    #expect(AgentProfilesMenuRow.size == 26)
     // Reduce Motion (M6): the token and its menu fade in over 120ms at full size
     #expect(LensToken.reducedFade == 0.12)
     #expect(LensToken.reducedFade == SearchSheet.reducedFade)
@@ -159,7 +161,7 @@ struct ProfileLensTokenTests {
     let now = AgentProfilesPageTests.now
     let row = AgentProfilesMenuRow(reading: reading, now: now, open: {})
     let size = row.geometry.size
-    #expect(size == Double(LensToken.viewLead))
+    #expect(size == AgentProfilesMenuRow.size)
     let middle = row.geometry.centre.items
     #expect(middle.isEmpty)
     let every = reading.meters(of: nil, now: now)

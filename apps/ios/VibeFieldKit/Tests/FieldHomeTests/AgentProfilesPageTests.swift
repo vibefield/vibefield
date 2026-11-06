@@ -46,16 +46,21 @@ struct AgentProfilesPageTests {
     AgentProfilesWords(reading: reading, lens: lens(reading, profile), home: "studio", now: now)
   }
 
+  /// The Me menu's row as the corner draws it (`AgentProfilesMenuRow`, the one value both menus hold).
+  static func menu(_ reading: MetersReading) -> AgentProfilesMenuRow {
+    AgentProfilesMenuRow(reading: reading, now: now, open: {})
+  }
+
   @Test("the Me menu's row: the tightest percent, orange with its dot while a plan runs hot; reading…; nothing unshared")
   func menuRow() throws {
-    let readings = Self.words(try Self.reading())
-    #expect(readings.menuWord == "64%")
-    #expect(readings.menuHot)
-    let first = Self.words(try Self.reading(.waiting))
-    #expect(first.menuWord == "reading…")
-    #expect(!first.menuHot)
-    let refused = Self.words(try Self.reading(.notShared))
-    #expect(refused.menuWord == nil)
+    let readings = Self.menu(try Self.reading())
+    #expect(readings.word == "64%")
+    #expect(readings.hot)
+    let first = Self.menu(try Self.reading(.waiting))
+    #expect(first.word == "reading…")
+    #expect(!first.hot)
+    let refused = Self.menu(try Self.reading(.notShared))
+    #expect(refused.word == nil)
   }
 
   @Test("where the reading comes from: its age and the home, reading, not shared, or unavailable — never a blank")
@@ -213,7 +218,8 @@ struct AgentProfilesPageTests {
     #expect(empty.firstRead)
     let words = Self.words(empty)
     #expect(words.read == "Reading usage…")
-    #expect(words.menuWord == "reading…")
+    let menu = Self.menu(empty)
+    #expect(menu.word == "reading…")
     let waiting = try Self.reading(.waiting)
     #expect(waiting.firstRead)
     let read = try Self.reading()

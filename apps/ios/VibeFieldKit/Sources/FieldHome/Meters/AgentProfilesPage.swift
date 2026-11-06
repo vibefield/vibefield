@@ -5,9 +5,10 @@ import Foundation
 import SwiftUI
 
 // UM-4 (UM-D25 and UM-D26 A; DESIGN.md §8 "The phone's corner", §9 "The meters' words") — THE ME MENU'S ROW AND THE
-// AGENT PROFILES PAGE. `AgentProfilesWords` is every word and choice (pure): what the row says, and every line of the
-// page, from the home's meters (`MetersReading`), the lens (`ProfileLens`), the home's name and the clock. The views
-// below draw what it says, in Settings' materials (`chromeList`, `chromeRows`, History's group heads).
+// AGENT PROFILES PAGE. `AgentProfilesWords` is every word and choice (pure): a circle's word (`word`, which the Me
+// menu's row, `AgentProfilesMenuRow`, says), and every line of the page, from the home's meters (`MetersReading`), the
+// lens (`ProfileLens`), the home's name and the clock. The views below draw what it says, in Settings' materials
+// (`chromeList`, `chromeRows`, History's group heads).
 //
 // Wave 1 (UM-D14's interim, the lead's ruling 23, ‹for James›): a plan's row carries no Show or Showing and no sessions
 // line, and takes no tap. A plan that needs you says where it is fixed, with no act (a phone signs in on no desktop,
@@ -57,9 +58,6 @@ struct AgentProfilesWords: Equatable {
     var id: String { key }
   }
 
-  /// The Me menu's row: its word and whether it runs hot.
-  let menuWord: String?
-  let menuHot: Bool
   /// "Read a minute ago, from studio", "Reading usage…", "studio doesn't share usage yet", "Usage unavailable"
   let read: String
   let profiles: [ProfileRow]
@@ -74,9 +72,6 @@ struct AgentProfilesWords: Equatable {
     let every = reading.meters(of: nil, now: now)
     let several = reading.profiles.count > 1
     let firstRead = reading.firstRead
-    let menu = Self.word(every, firstRead: firstRead, notShared: reading.usage == .notShared)
-    menuWord = menu.word
-    menuHot = menu.hot
     read = Self.readWords(reading, home: home, now: now)
     var rows: [ProfileRow] = []
     if several {
