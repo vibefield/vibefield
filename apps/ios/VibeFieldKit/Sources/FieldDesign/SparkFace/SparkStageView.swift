@@ -23,7 +23,8 @@ public final class SparkStageLayer: MTKView, MTKViewDelegate, SparkStageDrawer {
   let renderer: SparkStarRenderer
   private(set) var stage: SparkStage?
   private var textures: [any MTLTexture] = []
-  private var next = 0
+  /// The rows texture the next frame writes: the three are taken in turn (UIResponder already names `next`).
+  private var turn = 0
   /// Three frames in flight at most: a rows texture is never rewritten while the GPU reads it.
   private let inFlight = DispatchSemaphore(value: 3)
   private let start = CACurrentMediaTime()
@@ -101,8 +102,8 @@ public final class SparkStageLayer: MTKView, MTKViewDelegate, SparkStageDrawer {
   // MARK: - SparkStageDrawer
 
   public func draw(rows: [Float], faces: Int, view: CGSize, time: Double) {
-    let texture = textures[next]
-    next = (next + 1) % textures.count
+    let texture = textures[turn]
+    turn = (turn + 1) % textures.count
     inFlight.wait()
     SparkStarRenderer.upload(rows, faces: faces, to: texture)
     render { encoder in
