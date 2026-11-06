@@ -208,6 +208,45 @@ describe("what the read refuses, and what it never does", () => {
       { line: 3, question: "Go?", computed: true },
     ]);
   });
+
+  it("S9 (slice 11a, Q6; 13a's R34): a gate is held to one rule, the read refusing in its words a question that is not words, choices missing or not a list, Stop the run offered, and the same choice twice by its case or its spaces", () => {
+    const refused: [string, string, string][] = [
+      ['await ask("", ["a"]);', "question", "an ask's question is not words"],
+      ['await ask("Go?");', "choices", "an ask offers no choice"],
+      ['await ask("Go?", "Yes");', "choices", "an ask's choices are not a list"],
+      [
+        'await ask("Go?", ["Ship", "stop the run"]);',
+        "choices",
+        "an ask offers Stop the run, which is VibeField's own",
+      ],
+      ['await ask("Go?", ["Yes", "yes"]);', "choices", "an ask offers the same choice twice"],
+      ['await ask("Go?", ["Yes", "Yes "]);', "choices", "an ask offers the same choice twice"],
+    ];
+    for (const [body, reason, words] of refused)
+      expect(refusalsOf(readFlow(flow(body))), body).toEqual([[reason, words, 3]]);
+  });
+
+  it("S9 (slice 11a, Q6; EL9): gates that break the rule read as the contracts fixture says, each refused on its own line in its words, and a refused gate keeps what it says plainly", () => {
+    const text = flow(
+      [
+        '  await ask("", ["Ship"]);',
+        '  await ask("Ship it?");',
+        '  await ask("Ship it?", "Ship");',
+        '  await ask("Ship it?", ["Ship", "Stop the run"]);',
+        '  await ask("Ship it?", ["Ship", " ship "]);',
+      ].join("\n"),
+      '{ name: "Gates" }',
+    );
+    expect(readFlow(text)).toEqual(contracts("flow-read.refused-gate"));
+  });
+
+  it("S9 (slice 11a, Q6's skeptic; a pin): a list the read can't see into is still counted, so five choices named by identifiers are refused as five", () => {
+    // its mutation: the count held only for a list of plain words (the rule's count moved behind the read's sight of
+    // each choice), so this list reads as chosen as it runs and nothing is refused
+    expect(refusalsOf(readFlow(flow('await ask("Go?", [a, b, c, d, e]);')))).toEqual([
+      ["choices", "an ask offers 5 choices; a gate takes at most 4", 3],
+    ]);
+  });
 });
 
 describe("unlisted, computed, loops and phases", () => {

@@ -29,6 +29,7 @@ import {
   FlowRuns,
   type FlowRunsList,
 } from "../src/flows/runs";
+import { readFlow } from "../src/flows/static-read";
 import {
   type FlowStepLaunch,
   type FlowStepOrigin,
@@ -37,7 +38,7 @@ import {
 } from "../src/flows/steps";
 import type { FlowHostTimings } from "../src/flows/supervisor";
 import * as words from "../src/flows/words";
-import type { RpcCallError } from "../src/native-link";
+import { RpcCallError } from "../src/native-link";
 import { recordsUnreadable, UNREADABLE_WORDS } from "../src/signed-record";
 import type { GrantPrincipal } from "../src/terminal-grants";
 import {
@@ -4648,6 +4649,243 @@ describe("CP-4a2b — the host's life: parked and woken, D2's lookup at a wake, 
       log: stepFailed("Diff"),
       raises: [["flow-repair", 1]],
       queued: 2,
+    });
+  });
+
+  // slice 11a's red-b (Q6–Q8, Q13; the slice 11 rulings, ruled 2026-11-06; §9's Proposed words, bafdcd544): an ask
+  // is held at its call to the gate's one rule, the read's rules and the needs queue's two (Q6). One the rule refuses,
+  // or whose item the needs queue can't raise (Q8), is answered refused through the one writer, in §9's "An ask
+  // refused": the script's `await` throws the words, the run's journal keeps them and the call counts, as a step's
+  // refused call does, and the runs' starter never throws for an ask. At this red the starter still throws
+  // (NO_ASK_YET), so the script hears the supervisor's "VibeField could not answer this call." and nothing is
+  // journaled: every row reads red on its values.
+
+  /** The gate's rule's words, as §9 says them ("What a flow's read refuses", PROPOSED): the read's, which the run's
+   * refusal frames (Q7) */
+  const GATE_RULE = {
+    question: "an ask's question is not words",
+    none: "an ask offers no choice",
+    notAList: "an ask's choices are not a list",
+    many: (n: number) => `an ask offers ${n} choices; a gate takes at most 4`,
+    notOneLine: "an ask's choice is not one line of words",
+    long: "an ask's choice is longer than 40 characters",
+    stop: "an ask offers Stop the run, which is VibeField's own",
+    twice: "an ask offers the same choice twice",
+  };
+  /** R34's asks, each as its script calls ask() and with the words the rule refuses it in: Q6's rows and the rule's
+   * others, in its order (Q6 §2), then three that break two of its rules and take the first's words. Each, written
+   * plainly, is refused by the read in the same words: one rule, one refusal per gate, in the rule's order */
+  const REFUSED_ASKS: readonly { readonly args: readonly unknown[]; readonly read: string }[] = [
+    { args: ["", ["a"]], read: GATE_RULE.question },
+    { args: [42, ["a"]], read: GATE_RULE.question },
+    { args: ["Go?"], read: GATE_RULE.none },
+    { args: ["Go?", "Yes"], read: GATE_RULE.notAList },
+    { args: ["Go?", []], read: GATE_RULE.none },
+    { args: ["Go?", ["a", "b", "c", "d", "e"]], read: GATE_RULE.many(5) },
+    { args: ["Go?", ["a\nb"]], read: GATE_RULE.notOneLine },
+    { args: ["Go?", ["a", 7]], read: GATE_RULE.notOneLine },
+    { args: ["Go?", ["c".repeat(41)]], read: GATE_RULE.long },
+    { args: ["Go?", ["Ship", "stop the run"]], read: GATE_RULE.stop },
+    { args: ["Go?", ["Yes", "yes"]], read: GATE_RULE.twice },
+    { args: ["Go?", ["Yes", "Yes "]], read: GATE_RULE.twice },
+    { args: ["", "Yes"], read: GATE_RULE.question },
+    { args: ["Go?", ["c".repeat(41), " "]], read: GATE_RULE.notOneLine },
+    { args: ["Go?", ["Yes", "yes", "Stop the run"]], read: GATE_RULE.stop },
+  ];
+  /** A flow that asks with each of `asks` in turn, its arguments made as it runs (a spread the read can't see into),
+   * saying what each `await` heard */
+  const asksEach = (asks: readonly (readonly unknown[])[]): string =>
+    [
+      'export const meta = { name: "Asks" };',
+      "export default async function () {",
+      `  for (const args of ${JSON.stringify(asks)}) {`,
+      '    try { log("asked: " + (await ask(...args))); } catch (e) { log(e.message); }',
+      "  }",
+      "}",
+      "",
+    ].join("\n");
+  /** What the read refuses, in its words, of the ask `args` makes written plainly: its plain twin */
+  const plainRefusals = (args: readonly unknown[]): string[] => {
+    const plain = [
+      'export const meta = { name: "Asks" };',
+      "export default async function () {",
+      `  await ask(${args.map((arg) => JSON.stringify(arg)).join(", ")});`,
+      "}",
+      "",
+    ].join("\n");
+    return readFlow(plain).refusals.map((refusal) => refusal.words);
+  };
+  /** What the run's script said, in order: its journal's log lines */
+  const logsOf = (h: Harness, run: string): string[] => {
+    const read = h.records.readRun(run);
+    return read.kind === "kept"
+      ? read.lines.flatMap((line) => (line.kind === "log" ? [line.text] : []))
+      : [];
+  };
+  /** How often fieldd's log said a call's handler threw, for which the supervisor answers "VibeField could not answer
+   * this call.": the runs' starter never throws for an ask (Q8) */
+  const handlerThrew = (h: Harness): number =>
+    h.warned.filter(({ event }) => event === "fieldd.flows.host.handler").length;
+  /** fieldd's log of a raise that threw (Q8's `fieldd.flows.gate.raise`), counted at each level */
+  const gateRaiseLogged = (h: Harness) => ({
+    warn: h.warned.filter(({ event }) => event === "fieldd.flows.gate.raise").length,
+    error: h.errored.filter(({ event }) => event === "fieldd.flows.gate.raise").length,
+  });
+  /** A gate at the rule's bounds, 4 choices of 40 characters each, made as it runs so the read can't see them; what
+   * it heard said */
+  const AT_BOUNDS = [
+    'export const meta = { name: "Bounds" };',
+    "export default async function () {",
+    '  const forty = ["a", "b", "c", "d"].map((x) => x.repeat(40));',
+    '  try { log(await ask("Which one?", forty)); } catch (e) { log(e.message); }',
+    "}",
+    "",
+  ].join("\n");
+  /** A gate (call 1) whose refusal its script catches and says, then a step A (call 2): once A answers, the run's last
+   * log line says what the ask heard beside A's text, in whichever life it ends */
+  const UNKEPT = [
+    'export const meta = { name: "Unkept" };',
+    "export default async function () {",
+    '  let heard = "";',
+    `  try { heard = "asked: " + (await ask(${SHIP})); } catch (e) { heard = e.message; }`,
+    "  log(heard);",
+    `  const a = await agent("look at a", ${stepAt("A")});`,
+    '  log(heard + " / " + a.text);',
+    "}",
+    "",
+  ].join("\n");
+
+  it("R34 (Q6, Q7, D22; slice 11a): an ask the gate's rule refuses at its call, its values unseen by the read, is refused in the read's own words in §9's frame: its `await` throws them, the journal keeps them as its answer and the call counts, no item is raised and the runs' starter never throws; the same ask written plainly is refused by the read in the same words; a gate at the rule's bounds is raised", async () => {
+    const h = await harness();
+    h.approved("asks", asksEach(REFUSED_ASKS.map(({ args }) => args)));
+    const run = startedRun(await h.start({ flow: "asks" })).run;
+    // the run ends once every ask is refused; a gate raised instead holds it, and the wait stops there
+    await within(WAIT_MS, () => over(h, run) || h.items.length > 0);
+    const refused = REFUSED_ASKS.map(({ read }) => words.askRefused(read));
+    expect({
+      state: stateOf(h, run),
+      heard: logsOf(h, run),
+      journaled: refusalsOf(h, run),
+      calls: h.records.runRecord(run)?.calls,
+      raises: h.items.length,
+      threw: handlerThrew(h),
+      plain: REFUSED_ASKS.map(({ args }) => plainRefusals(args)),
+    }).toEqual({
+      state: "done",
+      heard: refused,
+      journaled: refused,
+      calls: REFUSED_ASKS.length,
+      raises: 0,
+      threw: 0,
+      plain: REFUSED_ASKS.map(({ read }) => [read]),
+    });
+    // the rule's bounds refuse nothing: the gate's item is raised with its question and its choices as written (Q1)
+    const b = await harness();
+    b.approved("bounds", AT_BOUNDS);
+    const bounds = startedRun(await b.start({ flow: "bounds" })).run;
+    await within(PARK_MS, () => b.items.length > 0 || over(b, bounds));
+    const forty = ["a", "b", "c", "d"].map((x) => x.repeat(40));
+    const raised = b.items.map((item) => [item.kind, item.run.call, item.words, item.acts]);
+    expect({ raised, journaled: refusalsOf(b, bounds) }).toEqual({
+      raised: [["flow-gate", 1, "Which one?", forty]],
+      journaled: [],
+    });
+  });
+
+  it("R34b (Q8, D22; slice 11a): an ask whose item the needs queue can't raise, its store refusing the item or the item refused as bad input, is refused in §9's words: its `await` throws them, the journal keeps them as its answer and the call counts, nothing holds the run and its spark is told nothing; woken, the ask made again hears the same from the journal, never raised again", async () => {
+    /** Vela's run of UNKEPT, the needs port throwing `error` at every raise: read once parked, and once A's answer has
+     * woken it to its end */
+    const unkeptBy = async (error: Error) => {
+      const h = await harness({ hostIdleMs: IDLE_MS, flowItemThrows: error });
+      h.approved("unkept", UNKEPT);
+      const run = startedRun(await h.start({ flow: "unkept", ...VELAS })).run;
+      const parked = await parkedAt(h, run);
+      const record = h.records.runRecord(run);
+      const atPark = {
+        parked,
+        held: record?.held,
+        calls: record?.calls,
+        heard: logsOf(h, run),
+        journaled: refusalsOf(h, run),
+        told: toldOf(h),
+      };
+      answerStep(h, run, 2, "a");
+      await within(PARK_MS, () => over(h, run));
+      return {
+        ...atPark,
+        raises: h.items.length,
+        state: stateOf(h, run),
+        log: h.runs.read(run)?.summary.log,
+        hosts: h.hosts.length,
+        threw: handlerThrew(h),
+        logged: gateRaiseLogged(h),
+      };
+    };
+    const said = words.askUnkept();
+    const unkept = {
+      parked: PARKED,
+      held: undefined,
+      calls: 2,
+      heard: [said],
+      journaled: [said],
+      told: [],
+      raises: 1,
+      state: "done",
+      log: `${said} / a`,
+      hosts: 2,
+      threw: 0,
+    };
+    // the needs store's refusal (item 172's UNAVAILABLE), logged at warn; and a raise refused as bad input, as the
+    // needs queue refuses acts the gate's rule refuses first (Q6 §2), an invariant broken, logged at error (Q8)
+    const store = recordsUnreadable(RECORD_STORES.SERVICE_NEEDS, UNREADABLE_WORDS.needs, false);
+    const badInput = new RpcCallError(
+      "PRECONDITION_FAILED",
+      "acts: each is 1 to 40 characters",
+      false,
+      { fact: "bad-input" },
+    );
+    expect({ store: await unkeptBy(store), badInput: await unkeptBy(badInput) }).toEqual({
+      store: { ...unkept, logged: { warn: 1, error: 0 } },
+      badInput: { ...unkept, logged: { warn: 0, error: 1 } },
+    });
+  });
+
+  it("R34b (Q8's second leg, VV1, T4; slice 11a): a gate whose hold its run's record can't keep after its raise is the record lagging, never the ask refused: its item stays open and its call waits, nothing journaled, and the run's next write rests it holding on that item", async () => {
+    const h = await harness({ hostIdleMs: IDLE_MS, needsQueue: true });
+    const needs = needsOf(h);
+    h.approved("gate", GATE);
+    // T4's arm at the raise: the run's record write just after the needs queue raised its item throws once, as a full
+    // disk at that moment refuses it
+    const raise = needs.flowItem.bind(needs);
+    const write = h.records.writeRunRecord.bind(h.records);
+    let armed = false;
+    vi.spyOn(needs, "flowItem").mockImplementation((item) => {
+      const raised = raise(item);
+      armed = true;
+      return raised;
+    });
+    vi.spyOn(h.records, "writeRunRecord").mockImplementation((at, fields) => {
+      if (!armed) return write(at, fields);
+      armed = false;
+      throw new Error("ENOSPC: no space left on device, write");
+    });
+    const run = startedRun(await h.start({ flow: "gate" })).run;
+    // parked by D1's idle, whose rest is the run's next record write
+    await within(PARK_MS, () => left(h, 0) || over(h, run));
+    const id = h.raisedAs[0]?.id ?? "";
+    expect({
+      ...heldOf(h, run),
+      left: left(h, 0),
+      open: openOf(h),
+      kinds: h.kinds(run),
+      raised: h.raisedAs.map(({ minted }) => minted),
+    }).toEqual({
+      state: "holding",
+      held: { item: id, kind: "flow-gate" },
+      left: true,
+      open: [id],
+      kinds: ["head", "call"],
+      raised: [true],
     });
   });
 

@@ -82,6 +82,15 @@ export const notAVersion = (flow: string): string => `That version isn't one of 
 export const readRefused = (flow: string, read: string, line?: number): string =>
   `VibeField can't start ${flow}: ${read}${line !== undefined ? ` (line ${line})` : ""}.`;
 
+/** An `ask()` its gate's rule refuses at its call (slice 11, Q6/Q7, R34; §9 "An ask refused", PROPOSED, ruled
+ * 2026-11-06): the read's own words (`read`, gate-check.ts's, "What a flow's read refuses"), unchanged, in the
+ * frame the script's `await` throws with and the run's journal keeps. */
+export const askRefused = (read: string): string => `VibeField didn't ask you: ${read}.`;
+
+/** An `ask()` VibeField could not put in what waits on you: its raise threw, the store's refusal or any other (slice 11,
+ * Q8, R34b; §9 "An ask refused", PROPOSED, the same). */
+export const askUnkept = (): string => "VibeField couldn't ask you: it couldn't keep the question.";
+
 /** A run whose asked Agent Profiles are none of that spark's now: the spark's narrowing, at the act (the 1b review
  * V5, said by cause in the 1e review's AA1; PROPOSED in §9, ruled 2026-11-06). */
 export const noSparkProfiles = (spark: string): string =>
