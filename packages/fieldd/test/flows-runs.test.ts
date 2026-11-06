@@ -804,8 +804,9 @@ describe("CP-4a2b — a step's agent, by the one spawn road: entry first, then t
   });
 });
 
-// CP-4a2b (§13a slice 8b; CP4-S7) — a run's step agents alive at once: LIVE_STEPS_MAX, a run's own. One more waits for
-// a slot, visibly, and is never spawned past the bound. (Its start when a slot frees is slice 9's: an answer frees it.)
+// CP-4a2b (§13a slice 8b; CP4-S7) — a run's steps that hold a slot at once: LIVE_STEPS_MAX, a run's own. One more
+// waits for a slot, visibly, and is never spawned past the bound. (Its start when a slot frees is slice 9's: an answer
+// frees it.)
 
 /** A fan-out of `n` steps at once, each its own label. */
 const fanOut = (n: number): string =>

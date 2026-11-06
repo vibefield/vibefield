@@ -577,8 +577,9 @@ export const AGENT_STOP = {
  *  - LIVE_STEPS_MAX: a run's step agents alive at once; one more waits for a slot, visibly (CP4-S7). They do not count
  *    against a spark's 8 (fieldd's `SPARK_LIVE_AGENTS_MAX`, `talk/verbs.ts`), and they bound how many PTYs one
  *    `parallel` can take. *Corrected 2026-11-06 (the slices 7–9 review's F4; ruled 2026-11-06): it counts a run's steps
- *    that hold a slot (starting, working, repairing, holding), never its agents alive. An answered step's agent lives
- *    on until the run's end or a Stop (CP4-Q10), so this bounds no PTYs: a run's are bounded by RUN_AGENTS_MAX.*
+ *    that hold a slot (starting, working, repairing, holding), never its agents alive; a step handed a session by
+ *    `in:` holds none (F9). An answered step's agent lives on until the run's end or a Stop (CP4-Q10), so this bounds
+ *    no PTYs: a run's are bounded by RUN_AGENTS_MAX.*
  * CP-4a2a (4A2-Q7, ruled by VF-PM 2026-11-05 08:51Z, re-ruled (b) 11:46Z) — a run's host, its bounds, each as
  * provisional:
  *  - HOST_HEAP_MB: the V8 old-generation cap on the worker_threads Worker a run's script runs in, inside its host
@@ -634,8 +635,10 @@ export const AGENT_STOP = {
  *    refused at its spawn, in DESIGN.md §9's words ("A step's call refused"), never made to wait: LIVE_STEPS_MAX's
  *    slots are another bound. The PTYs it allows at most: RUNS_LIVE_MAX 8 × 16 = 128 step PTYs, a ceiling against
  *    macOS's 511 (`kern.tty.ptmx_max`), which the floor's own PTYs share (its terminals, the sparks' sessions).
- * Over the whole block (ruled 2026-11-06): A bound a stored field is held to (STEP_LINES_MAX, FOLDER_CHARS,
- * RUN_AGENTS_MAX) is only ever raised; lowering one is a migration, never an edit. */
+ * Over the whole block (ruled 2026-11-06): A bound a stored field is held to (RESULT_MAX_BYTES, a journal
+ * answer's `value`, by flowJournalLineOf; HOST_CALLS_WAITING_MAX, a run record's `open`; STEP_LINES_MAX, a record
+ * step's `lines`; FOLDER_CHARS, the journal head's `folder`; RUN_AGENTS_MAX, the record's `agents`) is only ever
+ * raised; lowering one is a migration, never an edit. */
 export const FLOW_LIMITS = {
   SCRIPT_MAX_BYTES: 64 * 1024,
   RESULT_MAX_BYTES: 64 * 1024,
