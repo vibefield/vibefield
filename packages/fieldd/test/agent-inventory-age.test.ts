@@ -33,7 +33,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import WebSocket from "ws";
 import { LAST_RUN_SETTLE_MS } from "../src/agent-last-run";
 import { ASKED_EXIT_GRACE_MS, EXIT_GRACE_MS } from "../src/agent-runtime";
-import { bootstrap, type FielddDaemon, SessionRecordStore } from "../src/index";
+import { bootstrap, type FielddConfig, type FielddDaemon, SessionRecordStore } from "../src/index";
 import { RpcCallError } from "../src/native-link";
 import type { SecretStore } from "../src/plugin-settings";
 import { MockMgmtServer } from "../src/testing/mock-mgmt";
@@ -137,16 +137,25 @@ interface AgentFloor {
   births: string[];
 }
 
+/** What a row may hand the daemon beside its floor and its records. */
+interface AgentDaemonSeams {
+  /** the last run's picture of the board */
+  lastBoard?: Array<Record<string, unknown>>;
+  /** the process table a typed run is proven against (default: the kit's one `ps` read) */
+  processTable?: NonNullable<FielddConfig["agentGateway"]>["processTable"];
+}
+
 /** A daemon over the mock floor answering `observedState` on the fixtures'
  * routes, its agent runtime composing the scripted agent, `staged(dataDir)`
- * written as signed records before it boots, and `lastBoard`, when given, as
- * the last run's picture of the board; and a connection that may resume
- * (`agent.spawn`) and read the fold. */
+ * written as signed records before it boots, and the seams it is handed (the
+ * last run's picture of the board, the process table); and a connection that
+ * may resume (`agent.spawn`) and read the fold. */
 async function agentDaemonOn(
   observedState: unknown,
   staged: (dataDir: string) => AgentSessionRecord[],
-  lastBoard?: Array<Record<string, unknown>>,
+  seams: AgentDaemonSeams = {},
 ): Promise<AgentFloor> {
+  const { lastBoard, processTable } = seams;
   const dataDir = mkdtempSync(join(tmpdir(), "vf-agent-age-"));
   cleanup.push(() => rmSync(dataDir, { recursive: true, force: true }));
   mkdirSync(join(dataDir, "native", "run"), { recursive: true });
@@ -181,7 +190,8 @@ async function agentDaemonOn(
     agentCatalog: SCRIPTED_CATALOG,
     // the scripted agent alone: no built-in agent's readers run on this machine
     agentProviders: () => [countingAgent(births)],
-    agentGateway: { enabled: false },
+    // no gateway; a typed run's record is proven against the row's process table, when it hands one
+    agentGateway: { enabled: false, ...(processTable !== undefined ? { processTable } : {}) },
     // a pending run's idle poll never fires inside a row: the door is the subject
     agentResumeWhenIdle: { afterMs: 600_000, pollMs: 600_000 },
   });
@@ -353,7 +363,7 @@ describe("what the last run left, over an old inventory (IL-D5 (a); the mock flo
     const { mock, daemon, rpc } = await agentDaemonOn(
       fixture("observed-state.stale-cell.json"),
       () => [],
-      [shellRow(late), shellRow(gone)],
+      { lastBoard: [shellRow(late), shellRow(gone)] },
     );
     await until(() => daemon.agents.reattachSettled(), 5_000, "the re-attach ran");
     // past the picture's settle, so only the inventory's age can hold the answer
@@ -783,5 +793,68 @@ describe("a husk the floor lists exited (item 97; the mock floor)", () => {
     // MF-1f — on THIS boot, the row is back over the kept pane, exited (never a blank until the next)
     const row = daemon.agents.list().sessions.find((r) => r.runtimeRunId === run);
     expect(row?.continuation?.exited).toBe(true);
+  });
+});
+
+// Item 201 (RV #49, vf-runtime-8) — a record whose PTY the first inventory lacked waits the boot's grace, then is
+// stamped as a PTY that did not survive (AR-4b). The re-attach holds such records one at a time, and between two of
+// them it awaits a listed record's attach (a claim, the audit, puppeteer's attach, a typed run's read of the process
+// table), so one batch's records are held at different moments, each with its own deadline. field-native publishes
+// only on a change: on a quiet floor no inventory comes to sweep a record the boot's own timer does not, and one left
+// unswept keeps the re-attach unsettled, its persona counted as running and a husk without its exited row. The await
+// here is a typed run's proof, slowed by the row's process table, which then says its process is gone.
+describe("the boot's grace, per record (item 201, vf-runtime-8; the mock floor)", () => {
+  /** B is held this long after A: past the moment A's grace began, and well before A's sweep fires (EXIT_GRACE_MS
+   * after A, and 100 ms more before item 201), some 700 ms from either edge. */
+  const SLOW_PROOF_MS = (EXIT_GRACE_MS + 100) / 2;
+  /** The grace, and the 5 s every row here gives an observation to land. */
+  const STAMPED_WITHIN_MS = EXIT_GRACE_MS + 5_000;
+
+  it("two records no inventory lists, held either side of a slow typed proof, are each stamped at their own grace, with no inventory after the first", async () => {
+    const ago = (ms: number) => new Date(Date.now() - ms).toISOString();
+    const { daemon, records } = await agentDaemonOn(
+      freshFloor(),
+      // newest first (`SessionRecordStore.list`): A, the typed run on the listed shell, then B
+      (dataDir) => [
+        runRecord("run-a", "pty-not-listed-a", dataDir, { updatedAt: ago(1_000) }),
+        runRecord("run-t", ZSH, dataDir, {
+          spawnedBy: "user-shell",
+          process: { pid: 999_999, startedAt: ago(60_000) },
+          updatedAt: ago(2_000),
+        }),
+        runRecord("run-b", "pty-not-listed-b", dataDir, {
+          profileId: "persona-b",
+          updatedAt: ago(3_000),
+        }),
+      ],
+      {
+        // the typed run's proof reads the table late and finds its process gone (read, so not retried)
+        processTable: async () => {
+          await new Promise((resolve) => setTimeout(resolve, SLOW_PROOF_MS));
+          return new Map();
+        },
+      },
+    );
+    await until(
+      () => records.read("run-a")?.exited !== undefined,
+      STAMPED_WITHIN_MS,
+      "A stamped by its sweep",
+    );
+    expect(
+      records.read("run-t")?.exited?.reason,
+      "the typed run's slow proof ran, so B was held after it",
+    ).toBe("unknown");
+    // no inventory is pushed: B's own grace is the only thing that can end its wait
+    await until(
+      () => records.read("run-b")?.exited !== undefined,
+      STAMPED_WITHIN_MS,
+      "B stamped by its own grace",
+    );
+    expect(records.read("run-b")?.exited?.reason).toBe("unknown");
+    expect(daemon.agents.reattachSettled(), "no record is held past its grace").toBe(true);
+    expect(
+      daemon.agents.liveUnder(new Set(["persona-b"])),
+      "and no phantom counts under B's persona",
+    ).toBe(0);
   });
 });
