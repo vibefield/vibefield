@@ -456,36 +456,46 @@ DESIGN.md §2.9, §8 "The phone's Apps" and §9 "Apps"; DECISIONS MA
   witness, AH-3's physical closeout, and device-retirement GC with TS's "forget a device".
 
 **DR — the Drive (your apps and pages, held by every desktop, served by any)** · vibe-field-19 (lanes `lanes/ma-4`,
-`lanes/ma/rosetta`, `lanes/dr/{truffle,truffle-t3,mille}`) · law: `draft/thinking-drive.md` v0.3 (the page *The Drive*,
-KB33dCAP, where it moved 11-06 05:45Z from LB8rzJYV; sources `draft/drive/page/`); DECISIONS DR
+`lanes/ma/1`, `lanes/ma/rosetta`, `lanes/dr/{truffle,truffle-t3,mille}`) · law: `draft/thinking-drive.md` v0.3 (the
+page *The Drive*, KB33dCAP, where it moved 11-06 05:45Z from LB8rzJYV; sources `draft/drive/page/`); DECISIONS DR
 - Ruled 11-06 (James, on the page): DR-D1 (b), against the lean (rosetta's export door writes the copy); DR-D2, D4,
   D5, D6 and D8 (a) at 01:43–01:56Z; DR-D3, D7, D9, D10, D11 and D12 (a) at 04:41–04:42Z. Then, typed: "Good, all
   ruled with lean, now start the implementation, plan and work in parallel" (04:43Z).
   - It is designed across the sibling repos (his 03:23Z rule): rosetta exports, mille holds, truffle moves and serves,
     and VibeField decides.
-- Landed 11-06: **DR-1a, the serve policy as contracts** (`a1e722a82` → `86d274f10`, minted as M183, run 183; LANDED
-  "DR-1a"):
-  - `MADE_APP_SERVE_POLICY` (never a sandbox), `SERVE_HEADER_FORBIDDEN` and `SERVE_HEADER_LIMITS` (T-1's table as a
-    superset), and `MADE_APP_VIEW`;
-  - `made-app-network.ts`'s pure readers and composers.
-  - Nothing calls them yet, and every open is still `export-unbuilt`.
-- In flight, wave 1's sibling lanes (built and in their vf-m1 runs; nothing filed):
-  - R-1, rosetta: RO-32 by digest, with DR-D13's `environment` at its lean;
-  - T-1, truffle: headers per serve;
-  - T-3, truffle: named pull roots;
-  - M-D1 and M-D2, mille: `mille-drive` and its binding, with loro held by four exact pins.
+- Landed 11-06, each real and called by nothing yet:
+  - **DR-1a, the serve policy as contracts** (`a1e722a82` → `86d274f10`, M183, run 183; LANDED "DR-1a").
+  - **DR-2a, the drive's contracts** (`2decf299d` → `1fcbf0963`, M188, run 188; LANDED "DR-2a"):
+    - the drive's folders and holders' store, and a `drive` lane;
+    - `native.mesh.fileTransfer.{roots,pull,subscribe}` over T-3's named roots, a root served only from a node built
+      gated (ROOT_UNGATED, ratified 11:01Z);
+    - the drive's honest states, generated into Rust.
+    - The three mgmt rows are declared ahead of VF-FLOOR (the D36 exception).
+  - **DR-1b, a made app's view in the files worker** (`e1283cb59` → `dd74abc85`, M190, run 190;
+    LANDED "DR-1b"): written by rename into the served folder, never through the export's link.
+- Wave 1's sibling lanes are GREEN on vf-m1 and wait for James's hand, the filings and releases. Their
+  `open-*-pr.sh` scripts are on the PM dashboard:
+  - R-1, rosetta: RO-32 by digest, after DR-D13;
+  - T-1 and T-3, truffle;
+  - M-D1 and M-D2, mille;
+  - RDST, rosetta's transcript day key across daylight saving.
 - Next:
-  - W2: VF-VIEW (the files worker builds a made app's view) and VF-DRC (the drive's contracts and gen), cut on DR-1a.
-  - Then W3 (VF-RELAY, VF-FLOOR), and DR-1 (B), the open wired at R-1's and T-1's EL8s.
+  - W3: VF-FLOOR (the facade and the file transfer's floor half; its brief opens with the CONFLICT rule for a second
+    running pull of one digest) and VF-RELAY (the relay, the holders and the pulls).
+  - DR-1 (B), the open wired at R-1's and T-1's EL8s: the two roots made and named, the view's caller, and
+    `ServeConfig.headers`.
   - Then DR-2 (the drive in the files worker, at mille's release), DR-3 (the sync, over T-3), DR-4 (one address,
     T-2) and DR-5 (a folder or a build published as a version).
 - Owed:
   - James's marks DR-D13, D14 and D15. R-1's filing waits on D13, and T-2 on D15, which reopens D12.
-  - The filings and releases upstream (rosetta 0.1.4, truffle 0.7.27, mille's drive), James's hand.
-  - James's eye on the serve policy's `script-src 'unsafe-inline' 'unsafe-eval'` before DR-1 (B) lands. It is a lean:
-    no ruling chose it, and it copies rosetta's served shell (MA-D5 (a)).
-  - rosetta-main's seven stripped ts-rs outputs, a finding for James.
-  - The record's v0.3 errata and the four loro pins, which ride draft slot 19.
+  - James's rulings before DR-1 (B) wires a caller: DR-L3's re-check at the view (`dr-l3-blake3-recheck`, lean (a):
+    R-1's verified placement until DR-2), and the serve policy's `'unsafe-eval'` (`dr-serve-csp-unsafe-eval`).
+  - The reviews' nits: DR-2a's 8–11 ride VF-FLOOR; DR-1b's 5, 7 and 9 ride DR-1 (B).
+  - The drive's disk budget (the record's §10, risk 5).
+  - Findings for James: rosetta-main's seven stripped ts-rs outputs, and the heatmap's daylight saving (a protocol
+    change).
+  - The draft slot: the record's v0.3 errata and the four loro pins; design-01 §5.2's opened verbs and DR-L1's note on
+    pulls, each with DR-2a's sha.
 
 **UM + SE — the profile meters and one search** · vibe-field-b7, the UM lead (vibe-field-88 until the 11-06
 account switch; lanes `lanes/um1` (M-U1), `lanes/um1-ud8` (M-desk's stack), `lanes/ts4` (S1) and `lanes/um1-model`
@@ -1341,7 +1351,7 @@ Petition status lives in `draft/petitions/README.md`. Still open or owed there:
 | GT — Godview terminal | PARKED; the deck's ladder done (GT-0…GT-8) | `specs/godview-terminal.md` | G29; GT-D22; row 13b |
 | TP / TC — terminal pipeline and custody | PARKED; TC RATIFIED 10-28 (Q6) | `specs/terminal-pipeline-v3*.md`, `specs/terminal-custody.md`, `thinking-terminal-mesh-cells.md`, `thinking-floor-wedge.md`, `thinking-inventory-latency.md` | D6's cell half |
 | MA — Apps (was AH — Artifact Hub) | ACTIVE since 11-05 (MA-D1…D13 ruled; MA-4 in 0.9, James 11-06); MA-0a + MA-1a (M152), MA-3 (M157, M162) and MA-4 (M166) landed; AH-1…3 landed, AH-4 unledgered | `thinking-mini-apps.md`, `specs/artifact-hub.md`, design-06 §5; DESIGN.md §2.9/§8/§9/§13 | MA-3f serving, which is the Drive's DR-1 (DR-D1 ruled (b): rosetta 0.1.4's export), then MA-3h; MA-6 the phone's shelf (after UM's M-phone) |
-| DR — the Drive | ACTIVE since 11-06 (DR-D1…D12 ruled; D13…D15 open); DR-1a landed (M183); wave 1's sibling lanes (R-1, T-1, T-3, M-D1/M-D2) built, unfiled | `thinking-drive.md` v0.3 (page sources `draft/drive/page/`); `thinking-mini-apps.md` | D13…D15 (James); W2 (VF-VIEW, VF-DRC); the sibling releases and their EL8s |
+| DR — the Drive | ACTIVE since 11-06 (DR-D1…D12 ruled; D13…D15 open); DR-1a, DR-2a and DR-1b landed (M183, M188, M190); wave 1's sibling lanes green, unfiled | `thinking-drive.md` v0.3 (page sources `draft/drive/page/`); `thinking-mini-apps.md` | D13…D15 and DR-L3 (James); W3 (VF-FLOOR, VF-RELAY); DR-1 (B); the sibling releases and their EL8s |
 | UM + SE — profile meters and one search | ACTIVE since 11-06 (UM-D21…D28 and SE-D1…D5 ruled on the page; UM-D16 E, D19 A; D3, D4, D8, D12…D15 at the leans); UM-0…UM-2 landed 11-06 (M-U1 `c9493b957`, run180, M180); UM-3 and SE-1 landed 11-06 (M-desk `ed8099c1e`, run187, M187) | `thinking-profile-meters.md`; `lanes/um/PLAN.md` §4; DESIGN.md §2.7/§5/§8/§9/§13; `docs/agent-plane/usage-meters.md` | M-phone (UM-4 + SE-2, stacked on M-desk, before MA-6); UM-5 in wave 2 |
 | PLUG — shipped core | COMPLETE: P0–P7, P8b–d (P8c via WP8), PRC-4/5; later publishing/validation work is separate | `specs/plugin-architecture.md`, `thinking-p8-loadable-artifact.md` | existing product gates; no blanket 24-hour prerequisite |
 | PRC-6 — plugin runtime validation | OPEN; diagnostics in draft [PR #7](https://github.com/vibefield/vibefield/pull/7); Linux CI passed, full verification and calibration pending | `thinking-prc6c2-physical-soak.md` §9–10 | full verify → guarded 32-cycle current-desk calibration + listener control; historical failures stay open; literal 24h only for that claim |

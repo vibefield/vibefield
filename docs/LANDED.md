@@ -38794,3 +38794,260 @@ new cell and field-native pids at 0, +5 and +30 s.
     `field_native::rlimit::raise_file_limit()`.
 
 Item 196 closes in this entry.
+
+## DR-2a — the drive's contracts: its folders and holders' store, a `drive` lane, a pull by named root and its outcomes, and the drive's honest states, generated into Rust and called by nothing yet (track DR) (2026-11-06; `2decf299d` → `1fcbf0963`, 6 commits on main `6095a9bb8`, lane `dr/w2-drc` in `/Volumes/SamsungRed/lanes/ma-4/vibe-field`, re-cut by `git rebase --onto` as `1fcbf0963`, minted as M188 `1fcbf0963`, run 188)
+
+- **The Drive's second landing, and wave 2's contracts lane** (the wave-0 critic's VF-DRC). It writes the shapes
+  that DR-2 and DR-3 read, under `draft/thinking-drive.md` v0.3:
+  - DR-D7 (a) as corrected: a `drive` meshdata lane, never a namespace;
+  - pulls by truffle T-3's named roots;
+  - DR-L8's honest states.
+- **The honest state:** every row and shape is real, and nothing reads them yet.
+  - The floor's facade for the three `native.mesh.fileTransfer.*` verbs is VF-FLOOR's (W3). Until it lands, a node
+    answers them NOT_FOUND and fieldd calls none of them.
+  - The relay, the holders and the pulls are VF-RELAY's (W3).
+
+**What landed.** 76 files, +7142 −4371: 26 sources (+1143 −7; 25 in `packages/contracts`, and
+`packages/field-native/tests/fixture_parity.rs`) and 50 generated files (+5999 −4364). 16 files are new: 14 wire
+fixtures, `src/drive.ts` and `test/drive.test.ts`. No install.
+- **`registries.ts`:**
+  - `STORES.DRIVE` (`field.drive.v1`) and `MESH_CONTROL_LIMITS.DRIVE_SLICE_BYTES` (64 KiB).
+  - LAYOUT `DRIVE_DIR`, `DRIVE_OBJECTS_DIR`, `DRIVE_INCOMING_DIR` and `DRIVE_IMPORT_DIR`, under the user's root
+    (DR-L1). Objects are read-only and named by their blake3. A pull lands in `incoming` UNVERIFIED as
+    `<digest>.<transferId>`. `import` is R-1's `--export-root`, on the drive's volume.
+  - `FILE_TRANSFER_ROOTS`: a CLOSED map from a name to `{serves, lands}`, as LAYOUT keys and never a path (EL7). One
+    root, `drive-objects`. It serves `DRIVE_OBJECTS_DIR`, lands in `DRIVE_INCOMING_DIR`, and never lands where a root
+    serves.
+  - `DRIVE_SERVICE`, the drive's `UNAVAILABLE` states: unbuilt, starting, not-linked, mesh-down, copying, not-held and
+    out-of-room.
+  - `DRIVE_LIMITS`: OBJECT_MAX_BYTES 64 MiB, LANE_RECORD_BYTES 1 MiB (≤ DOC_SYNC_MAX_RECORD_BYTES) and
+    PULLS_IN_FLIGHT 4. No disk budget: it is owed to the record's §10, risk 5.
+- **`mgmt.ts`:**
+  - MeshLaneProtocol gains `drive`.
+  - `MESH_FILE_TRANSFER`: the floor's refusal (`file-transfer-unsupported`), `ROOT_UNGATED`, and eight failure words.
+    A reader treats a word it does not know as `io`.
+  - The `native.mesh.fileTransfer.{roots,pull,subscribe}` shapes:
+    - A pull names `{root, path, digest}`, the path relative to the root and of at most 1,024 bytes. It names no size,
+      because T-3's pull takes none.
+    - One `.delta` method carries `progress`, `completed` or `failed`.
+    - A resync settles a pull whose end the lag lost.
+    - The FLOOR sweeps truffle's `*.truffle-tmp` temporaries, never fieldd, because field-native outlives it.
+- **`drive.ts`** (new, TS-only): DriveHoldersSlice, which is discovery only, and DriveUnavailableDetails.
+- **`methods.ts`:** the three mgmt rows (local, scope null), declared ahead of the floor's facade. This is the D36
+  exception, with its exit named: AR-1's `agents.*` precedent, closed when VF-FLOOR lands.
+- **The two generators and their output.**
+  - gen-jsonschema and gen-registries-rs carry the shapes and rows to Rust.
+  - `pnpm gen` ran on vf-m1 (a9, row 3). Its patch was committed as the lane's sixth commit, and the blobs are a9's.
+  - The 47 jsonschema files each gain `"drive"`, because BASE_SHARED carries MeshLaneProtocol. contracts.rs's ±9,909
+    is typify REORDERING: 116 type names move and 4,316 of the 4,317 removed lines come back verbatim. The 1,276 net
+    new lines are 14 types.
+- **`fixture_parity.rs`** (EL9's Rust half): `mesh_file_transfer_fixtures` strictly round-trips 12 fixtures. It ties
+  four registry words to the goldens and refuses four pulls the way zod does. `mesh_lane_fixtures` gains `.drive`.
+  The untagged `NativeFileTransferDelta` parses each golden as its own variant.
+
+**Who may pull: RATIFIED (VF-PM, 11:01Z; the review's major finding).**
+- truffle T-3 serves a named pull to any peer that names a path below the root. It checks the root and the path,
+  never who asks.
+- So the account's gate is the NODE's. A linked node is built `.login_allow([login])` (UA-P-4), so its peers are the
+  account's own desktops and phone, and a capability by digest sits inside that gate.
+- The floor serves a root ONLY from a node built gated: `MeshSelfIdentity.loginAllow` non-empty, the per-request
+  `gated` in field-native's mgmt/mesh.rs.
+- On an ungated node, each root answers `{registered: false, reason: "ungated"}` (`MESH_FILE_TRANSFER.ROOT_UNGATED`),
+  and it is served from the next gated build. Ungated means a promotion's capture node until its rebuild, or the
+  development override.
+- There is no per-pull requester gate: it would re-check the same login.
+- Where it is written: FILE_TRANSFER_ROOTS' doc, mgmt.ts's code and params, the golden
+  `native-file-transfer-roots-result.ungated.json`, a drive.test.ts row, and fixture_parity's tie.
+
+**The proof.**
+- **The red**, `2decf299d`: drive.test.ts fails by IMPORT (its source module is new, as DR-1a's was). The rest fail
+  by assertion: the layout vector, the seven unmapped fixture prefixes, and the `drive` lane the enum refused.
+- **The adversarial review** gave 12 findings. Its fix commit (`d90cc47f7`) took seven, two of them in part:
+  - the major, as above, with its route (a) declined;
+  - TOO_LARGE and the pull's `bytes`;
+  - truffle's temporaries;
+  - a resync's lost ends;
+  - EL9's Rust half;
+  - D36, in part;
+  - the red's miscount.
+
+  design-01 :139's note is owed to the draft. The four nits, 8–11, were NOT taken; see Owed.
+- **The lead's light rows on the MacBook**, one at a time at nice 19 after a swap read (free = 1514.69M,
+  10:57–10:58Z):
+  - biome over the 25 files found one format-only error (drive.test.ts:86), fixed in `07e28f3b9`; then exit 0;
+  - contracts tsc: exit 0;
+  - drive.test.ts: 26/26;
+  - fixtures.test.ts and registry.test.ts: 702 + 62.
+- **The lane on vf-m1, rows 0–16 at `88223f4de`** (a9, 11:34–11:39Z; `lanes/ts6/logs/m1/w2-drc/`, `w2drc.out`
+  `88ed3582…`, `r16.log` `593bc9d5…`):
+  - gen exit 0;
+  - biome 25 files; contracts tsc 0;
+  - drive 26, fixtures 702, layout 18, registry 62;
+  - the contracts suite 1929 over 62 files (= 1889 + 40);
+  - `pnpm typecheck` over 29 projects; users 42 | 1;
+  - walls and the audits; cargo fmt 0; clippy `--all-targets` 0;
+  - layout_vector 1, fixture_parity 20 (the base's 19 + 1), `--lib` 327 | 1 ignored;
+  - row 16 on the sixth commit: the stat empty, then `gen:check` exit 0.
+- **The re-cut onto `6095a9bb8`**, in the ruled carry form:
+  - range-diff 6 of 6 `=`; the six patch-ids `--stable` and the per-commit +/- lines are equal;
+  - the 76 files are byte-identical; no file is shared with `86d274f10..6095a9bb8`;
+  - the tip's tree `8f8742d94551` equals `git merge-tree --write-tree --merge-base 86d274f10 6095a9bb8 88223f4de`;
+  - conflict markers 0; nested rows 0 (`co-plan/bin/nested-rows.cjs`).
+  - The base range's one pin-class hit is disclosed: root `package.json`, item 195's `check:walls` line. The lock and
+    `pnpm-workspace.yaml` are 0/0, and VF-PM ruled it "the lock unmoved" (11:39Z).
+- **Run 188, the green** (a9's mint of `1fcbf0963` on `6095a9bb8`, on the OLD MINI, because vf-m1 sat under its ship
+  floor): `pnpm verify` exit 0 at 11:54:07Z, the tree clean after, 0 stubs.
+  - contracts 1929 over 62 files (+40: drive.test.ts 26 and `fixtures.test.ts` 688 → 702).
+  - vitest 13,866 | 0 | 21 over 953 files (+40, +1 file).
+  - cargo 34 results, 546/0 (+1). biome "Checked 3462 files" (+16 births).
+  - Unchanged from run 187: fieldd 3513 | 15, field-app 4364, node `--test` 474/474, typecheck 29 projects, and
+    "352 copies", "93 contract values".
+  - "check-test-temp-roots: clean — 261 of 1099 test files make a temp root; all remove". This is item 195's rule
+    inside check:walls, and this run is its verdict for the lane.
+  - census assert OK. The bundle assert is OK at "initial 951.1 KB raw / 251.4 KB gz" (+2.4 / +0.7 KB): the contracts
+    root's new exports.
+  - The log is `/Volumes/SamsungRed/lanes/ts6/logs/mini/run188/verify.log`, sha256
+    `11826ddb77289fba0b7c38cce0210b38064a965fc37f5f0bc39a553207fe155f`.
+
+**Disclosed.**
+- Every lane commit used `SKIP_SHAPE=1`, because the pre-commit hook runs node and the HOLD forbids it. The lane
+  touches no sibling row.
+- `2decf299d`'s body counts "11" unmapped `parses` rows. It is 10: 9 `native-file-transfer-*` and
+  `drive-holders-slice.valid`. It is corrected in `29b9bed4b`'s body (`d90cc47f7` on main) and in the brief.
+- Run 188 left five `/private/tmp/.tmpXXXXXX` roots holding `native/run`. They are KEPT, and they are item 196's
+  known class, not this lane's.
+
+**Owed.**
+- The draft notes, through `pnpm commit-draft` on the PM's word, each with this landing's sha:
+  - `design-01-contracts.md` §5.2, the `fileTransfer` verbs opened (`offer` stays reserved);
+  - `thinking-drive.md` DR-L1, how the law holds for a pull.
+- W3: VF-FLOOR (the facade and the file transfer's floor half) and VF-RELAY (the relay, the holders and the pulls).
+- The review's four nits, not taken in the lane and landed as they stand. They ride VF-FLOOR's contracts edits:
+  - **8:** `NativeFileTransferRootsParams`' doc says the floor re-applies roots "because a capture's promotion
+    rebuilds the node", but its header refuses `roots` with MESH_CAPTURING while capturing. Say instead that the floor
+    re-applies the held set at every gated rebuild, and that fieldd declares again at a linked node-up.
+  - **9:** truffle's progress names its own token and the holder's basename, the digest, so the floor can tie
+    progress to a `transferId` only by digest. Nothing stops two running pulls of one digest. VF-PM ruled at 12:00Z
+    that "a second running pull of one digest is refused with CONFLICT" goes into VF-FLOOR's brief as a CONTRACT line
+    BEFORE its build starts, never as a later fix.
+  - **10:** `DriveUnavailableDetails` re-declares UnavailableDetails' `progress` and `device` by hand. Extend it, as
+    MeshEgressUnavailableDetails does.
+  - **11:** drive.test.ts's lane row is titled "on a reliable lane with no docId", but it only reads the golden.
+    Retitle it, or refine MeshLaneOpenRequest so that a `drive` lane requires both.
+- The drive's disk budget, the record's §10, risk 5.
+- truffle T-3's release and its EL8, before a floor can pull. Its filing is James's hand.
+
+Land 2026-11-06T11:58:56Z by the fixer.
+
+## DR-1b — a made app's view, built by the files worker: the stored page between DR-1a's head and tail, written into the served folder by rename and never through the export's link; real, tested through the real worker, and called by nothing yet (track DR) (2026-11-06; `e1283cb59` → `dd74abc85`, 5 commits on main `8c900366c`, lane `dr/w2-view` in `/Volumes/SamsungRed/lanes/ma/1/vibe-field`, re-cut by `git rebase --onto` as `dd74abc85`, minted as M190 `dd74abc85`, run 190)
+
+- **The Drive's third landing, and wave 2's view lane** (the wave-0 critic's VF-VIEW). It is DR-1 (A)'s files-worker
+  op under `draft/thinking-drive.md` v0.3, DR-D11 (a) as its correction rules it. The export lands in a NON-served
+  export-source folder, and the served folder holds only the view.
+- **The honest state:** the op is real and proved through the real worker, and nothing calls it.
+  - There is no daemon.ts or `workspace/service.ts` wiring and no MadeAppService change. Those are DR-1 (B)'s, at
+    R-1's and T-1's EL8s.
+  - Every open still answers `export-unbuilt`.
+
+**What landed.** 5 files, +836 −8, all under `packages/fieldd`. No contracts change, fixture, gen event, Rust or
+install.
+- **`workspace/host/made-view.ts`** (new): `buildMadeView(roots, {source, folder, theme}) → {bytes}`.
+  - The view is `madeAppViewHead(theme)`, then the page's bytes, then `MADE_APP_VIEW_TAIL`. These are DR-1a's,
+    imported and never copied, and the view is written as `MADE_APP_VIEW.FILE`. The bytes stay in the worker (EL2,
+    DR-L4): the answer is the size.
+  - **The page:** an absolute path strictly below the export-source root.
+    - Every entry on the way gets an lstat, and a symlink anywhere is refused; only a regular file is admitted. A hard
+      link is one, as R-1's `method: "link"` leaves it.
+    - It is opened O_NOFOLLOW|O_NONBLOCK and held to the walk after the open: its real path is inside the root,
+      and the dev and inode are the open's.
+    - It is at most `MADE_APP_VIEW.PAGE_MAX_BYTES` (16 MiB), by its stat and again while it is copied.
+  - **The folder:** below the served root, made one level at a time (0700) with no symlink on the way.
+    - The view streams into a 0600 temp (O_CREAT|O_EXCL|O_NOFOLLOW), which is fsynced. Then the folder's real path is
+      held inside the served root again, the temp is renamed over the view, and the folder is fsynced.
+    - A failure before the rename leaves the previous view whole and no temp.
+  - **The answers:**
+    - a theme it cannot read: `invalid`, before anything is touched;
+    - a path outside its root, the root itself, or a NUL: `invalid`;
+    - a root that is not there (ENOENT, ENOTDIR): `root-missing`. The worker makes neither root; fieldd makes both.
+    - a page or folder behind a link, or a page gone or not a file: `not-found`, one answer;
+    - a folder that is a file: `not-a-directory`;
+    - a page past the bound: `too-large`, a new WorkerErrorCode;
+    - no, relative or overlapping roots: `internal`, because they are the worker's own configuration;
+    - anything else the disk says: `internal`, with its errno.
+- **`protocol.ts`:** `WorkerOps.buildMadeView`, `MadeViewRoots {sourceRoot, servedRoot}`, an optional `made` on the
+  init message, read tolerantly (both roots or none), and `too-large`.
+- **`host/main.ts`, `supervisor.ts`:** the op is dispatched behind the engine guard, and every generation's `init`
+  carries `FilesHostSupervisorOptions.made`.
+- **The residual race, said in the header:** the walk and the writes go by PATH (Node has no openat or renameat). The
+  re-check before the rename narrows a folder swapped for a link mid-build to the instant between that check and the
+  rename.
+- **`test/workspace-made-view.test.ts`** (new): 14 rows through `FilesHostSupervisor` and the real files-host bundle.
+  - Row 1 holds the output to the contracts vector's `embed` byte for byte.
+  - The rest cover: the four heads; a rebuild by rename that keeps a hard link's old bytes; two concurrent builds,
+    each whole; R-1's hard-linked page; the refused themes, pages, FIFO, paths, bounds and folders; a rename refused
+    after the write; no, relative and overlapping roots; and `root-missing` only for a root that is not there (a link
+    loop is `internal`).
+
+**The proof.**
+- **The red**, `e1283cb59`, is a red by ASSERTION: the worker answered `unknown op buildMadeView`.
+- **The review** gave 10 findings. Its fix commit (`a4038f72f`) took 1–3, 2 and 3 in part: ENOSPC's own code and a
+  row for the mid-copy bound were declined, the bound because no row can race it. It named 4 as a gate. The lead's
+  `9d40c4681` made root-missing answer only for absence. The lead's `0547d5aaf` took nits 6 and 8 (VF-PM 12:00Z). Nits
+  5, 7 and 9 are owed below, and nit 10 was about a brief command.
+- **The lane on vf-m1, rows 1–6 at `9d40c4681`** (a9, 11:37–11:39Z; `lanes/ts6/logs/m1/w2-view/`, `w2view.out`
+  `18f0d1c0…`):
+  - biome 5 files; fieldd tsc 0;
+  - made-view 14/14; the six workspace neighbours 79/79;
+  - walls and retired clean;
+  - the red at `e1283cb59`: 11/11 by assertion;
+  - the review's rows against `2938fb5d5`'s worker: 3 | 11.
+- **The nits filler at `0547d5aaf`** (a9, vf-m1, 12:12:50–12:13:34Z; `lanes/ts6/logs/m1/w2-view-nit/`,
+  `w2view-nit.out` `52ad6943…`):
+  - biome 5 files; fieldd tsc 0;
+  - made-view 14/14; the six neighbours 79/79;
+  - the red read, the new test against `9d40c4681`'s worker: `1 failed | 13 passed (14)`, row 13 alone, on the
+    relative-roots message.
+- **The re-cut onto `8c900366c`**, in the ruled carry form:
+  - range-diff 5 of 5 `=`; the patch-ids `--stable` and the +/- lines are equal;
+  - the 5 files are byte-identical; no file is shared with the onto range, which includes DR-2a's 76 files and item
+    196's;
+  - the tip's tree equals the merge-tree computed before the rebase; conflict markers 0;
+  - the one disclosed pin-class hit in the range is root `package.json`, item 195's `check:walls` line, with the lock
+    unmoved (VF-PM 11:39Z).
+- **Run 190, the green** (a9's mint of `dd74abc85` on `8c900366c`, on the old mini): `pnpm verify` exit 0 at
+  12:26:02Z, the tree clean after, 0 stubs.
+  - fieldd 3528 | 15 over 262 files (+14, +1: `workspace-made-view.test.ts`).
+  - vitest 13,881 | 0 | 21 (+14, no new skip). biome "Checked 3464 files" (+2 births).
+  - "check-test-temp-roots: clean — 262 of 1100 test files make a temp root; all remove".
+  - Unchanged from run 189: contracts 1929, field-app 4364, node `--test` 474/474, cargo 35 results 548/0,
+    typecheck 29 projects, "352 copies" and "93 contract values", census OK, and the bundle assert "initial
+    951.1 KB raw / 251.4 KB gz".
+  - The logs are in `/Volumes/SamsungRed/lanes/ts6/logs/mini/run190/`: `verify.log`, sha256
+    `f20e54553d2101b18d64a1c3b416a574bf0e5bc1798d1b0df8b821447de8bddd`, and `verify.clean.log`, `8bd575ef158d39a1…`.
+
+**Disclosed.**
+- Every lane commit used `SKIP_SHAPE=1`, because the pre-commit hook runs node and the HOLD forbids it. The lane
+  touches no sibling row.
+- On Windows the rename is plain, because `durableRename` lives in @vibefield/logging, whose index would bring pino
+  into the worker bundle. Windows also has no O_NOFOLLOW or O_NONBLOCK, so there the walk and the post-open check
+  stand alone.
+- A worker killed mid-build can leave `.index.html.<hex>.tmp` in the SERVED folder. It is not swept. This is nit 5,
+  owed below.
+
+**Owed (DR-1 (B), by name; VF-PM 12:00Z).**
+- **The gate, DR-L3** (`dr-l3-blake3-recheck`, the wave-0 critic's missing_work 16): James rules BEFORE DR-1 (B)
+  wires a caller. (a) R-1's verified placement suffices until DR-2 (the lean), or (b) `@noble/hashes` in fieldd and
+  R-1's `page.blake3` checked while copying.
+- **Nit 5:** temps staged in a non-served sibling on the same volume (the lean), over a sweep at init.
+- **Nit 7:** the ask's paths are read lexically against the configured root. Compare against `realpath(root)` too,
+  or document on `BuildMadeViewArgs` that both are spelled under the root exactly as fieldd names it.
+- **Nit 9:** two checks that cannot fail on their own: row 1's CSP position, and row 7's NO_BLOCK.
+- **DR-1 (B) makes BOTH roots (0700) before the first view**, and wires `made: {sourceRoot, servedRoot}` where
+  `workspace/service.ts` builds the supervisor. The served root is `LAYOUT.ARTIFACT_MADE_DIR`. Since DR-2a,
+  `LAYOUT.DRIVE_IMPORT_DIR` names R-1's `--export-root`. Whether the view reads its page there, or from the drive's
+  object at DR-2, is DR-1 (B)'s to settle.
+- The dated correction to `LAYOUT.ARTIFACT_MADE_DIR`'s "fieldd … never opens a file in it", when DR-1 (B) first writes
+  a view there.
+- ENOSPC and EDQUOT get their own code once DR-2a's `DRIVE_SERVICE` out-of-room state has a reader.
+
+Land 2026-11-06T12:30:45Z by the fixer.
