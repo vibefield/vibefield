@@ -7233,6 +7233,10 @@ here.
   sessions · 1 working · 1 waiting for you", or "No sessions"); and **Cancel** over "let go here to leave the field
   as it is". A bud says its tightest, "42% · 5H" (a model's own week by its group, "95% · OPUS"), or "READING", or
   "NO METER". The face says "‹name›: account. Hold for your agents' usage."
+  *(Added 2026-11-06, U3's repair: a sign-in under way asks nothing ("What needs you", above), so the line counts
+  it neither read nor needing you; a profile with a first read out beside a sign-in under way says "0 read · none
+  need you". ‹for James›: the line of a profile whose every plan waits, a first read or a sign-in under way, said
+  so as the rule counts it; and the word of a bud whose one plan is signing in, "NO METER" as built.)*
 - **The Me menu's row** is **Agent Profiles**, its word the tightest percent ("42%") or "reading…".
 - **The page** is **Agent Profiles**: "Read a minute ago, from ‹home›" or "Reading usage…"; **Profiles**, with **All
   profiles** ("3 profiles · 5 plans") and each profile's line ("default · the agents' own sign-ins · 2 plans");

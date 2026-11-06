@@ -166,10 +166,12 @@ enum FaceHold {
 
   private static let cancel = Words(verb: nil, rest: "Cancel", line: "let go here to leave the field as it is")
 
-  /// "3 read · none need you", "0 read · 1 needs you", "1 read · 2 need you" (§9 "The phone's hold").
+  /// "3 read · none need you", "0 read · 1 needs you", "1 read · 2 need you" (§9 "The phone's hold"). A plan that is
+  /// waiting (`PlanMeter.waiting`) is counted neither read nor needing you: its first read is out, or its sign-in is
+  /// under way, which says "signing in…" with no act and asks nothing (§9 "What needs you").
   static func reads(_ meters: ProfileMeters) -> String {
     let read = meters.entries.filter { $0.kind == .reading }.count
-    let needs = meters.entries.filter { $0.kind == .needsYou }.count
+    let needs = meters.entries.filter { $0.kind == .needsYou && !$0.waiting }.count
     let need = needs == 0 ? "none need you" : needs == 1 ? "1 needs you" : "\(needs) need you"
     return "\(read) read · \(need)"
   }
