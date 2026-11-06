@@ -121,8 +121,10 @@ struct ListModel: Equatable {
 
   // MARK: - The join: the phone's AgentView
 
-  /// The window's drawn rows, joined as the phone's host joins them.
-  static func inputs(rows: [RemoteFieldRow], activeId: String?, fieldIsLive: Bool) -> [ListRowInput] {
+  /// The window's drawn rows, joined as the phone's host joins them. SE-2f (red): `lens` is not read yet.
+  static func inputs(
+    rows: [RemoteFieldRow], activeId: String?, fieldIsLive: Bool, lens: String? = nil
+  ) -> [ListRowInput] {
     rows.map { row in
       ListRowInput(
         monitor: row.row.monitor, isSelf: row.isSelf, stale: row.stale || !fieldIsLive,

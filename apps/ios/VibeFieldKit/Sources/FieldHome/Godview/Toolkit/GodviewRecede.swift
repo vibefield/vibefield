@@ -8,6 +8,9 @@ import Foundation
 enum GodviewRecede {
   /// `RECEDED_OPACITY`: a receded row's weight while the shown ones are on the stage.
   static let receded = 0.22
+
+  /// SE-2 (SE-P6) — a row receded by the phone's lens. SE-2f (red): nothing recedes.
+  static func byLens(isSelf: Bool, profileSet: String?, lens: String?) -> Bool { false }
   /// `RECEDED_EMPTY_OPACITY`: every row receded.
   static let recededEmpty = 0.07
   /// `RECEDE_MS`: how long a row takes to recede, or to come back.
