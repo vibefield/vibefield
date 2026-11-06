@@ -27,7 +27,8 @@ struct ListRowInput: Equatable {
   var stale: Bool
   /// The open card's row, while `ListModel.lightsOpenCard` (J-S4).
   var active: Bool
-  /// The host shows another group: never on the phone (no profile tabs), carried so the order is whole.
+  /// The host shows another group: on the phone, its lens (SE-2, `GodviewRecede.byLens` in `inputs`). *Corrected
+  /// 2026-11-06 (SE-2h):* this said never on the phone (no profile tabs).
   var receded: Bool = false
   /// A pane shows it: never on the phone (no panes).
   var linked: Bool = false

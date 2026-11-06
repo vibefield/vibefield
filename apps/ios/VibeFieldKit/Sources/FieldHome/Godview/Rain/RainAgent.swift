@@ -9,8 +9,9 @@ import Foundation
 //
 // What the rain does NOT read, named: cost, `unread` and `stale` (rain draws none of them, as the desktop's: §10;
 // fd's Q9) and the home's `fieldIsLive`; a pane's `attachment` (the phone mounts no panes, PG:429 — the pane wash
-// `RainView.js:130-146` is not transcribed, fd's Q4); and `receded` (the phone joins none, PG:428-433: every row's is
-// false, kept as a field so the recede steps stand transcribed).
+// `RainView.js:130-146` is not transcribed, fd's Q4). `receded` is the phone's lens (SE-2, `GodviewRecede.byLens`):
+// PG:428-433 joined it false while the phone had no profile filter; the recede steps stood transcribed for it.
+// *Corrected 2026-11-06 (SE-2h, the S2 review's finding 2):* this said the phone joins none.
 
 struct RainAgent: Equatable, Sendable {
   /// The model id (`AgentView.id`): the drops key on it.
@@ -33,7 +34,7 @@ struct RainAgent: Equatable, Sendable {
   let detail: String
   /// The open card's row, lit (J-S4): `RainAgent.lightsOpenCard` and the card's subject. The desktop's `active`.
   var lit = false
-  /// The host's join; the phone's is always false.
+  /// The host's join: under the phone's lens, every column but the home's under the chosen profile (SE-2).
   var receded = false
 
   /// J-S4 — ACCEPTED by James (2026-11-04 01:12–01:14Z): a view lights the open card's row. The ONE switch: false
@@ -55,7 +56,8 @@ struct RainAgent: Equatable, Sendable {
 extension RainAgent {
   /// The rain's reading of one drawn row; `activeId` is the open card's row, by model id (`GodviewStageInput
   /// .activeId`). `lightsOpenCard` is J-S4's switch, a parameter only so the hand rows can throw it. `lens` is the
-  /// phone's (SE-2, `GodviewStageInput.lens`) — STUB (SE-2h red): read by nothing yet.
+  /// phone's (SE-2, `GodviewStageInput.lens`): under it the column recedes unless it is the home's under the chosen
+  /// profile; with none, nothing recedes.
   init(
     row: RemoteFieldRow, activeId: String? = nil, lens: String? = nil,
     lightsOpenCard: Bool = RainAgent.lightsOpenCard
@@ -72,5 +74,6 @@ extension RainAgent {
     usedPercent = monitor.kind == .agent ? monitor.context?.usedPercent : nil
     detail = MonitorWords.detailLine(monitor, isSelf: row.isSelf)
     lit = lightsOpenCard && activeId == monitor.id
+    receded = GodviewRecede.byLens(isSelf: row.isSelf, profileSet: monitor.profileSet, lens: lens)
   }
 }

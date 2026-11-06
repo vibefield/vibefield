@@ -453,7 +453,7 @@ struct GodviewTimelineView: View {
     let rows = input.rows.map { row in
       TimelineRow(
         row, unread: input.unreadIds.contains(row.id), colour: input.colour(row),
-        active: TimelineActive.lights(row: row, activeId: input.activeId))
+        active: TimelineActive.lights(row: row, activeId: input.activeId), lens: input.lens)
     }
     return TimelineLanes.lanes(rows, nowMs: nowMs)
   }

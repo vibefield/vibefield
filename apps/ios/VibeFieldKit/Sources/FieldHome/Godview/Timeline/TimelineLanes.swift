@@ -23,7 +23,9 @@ import Foundation
 /// host's joins, each where the phone holds it — `isSelf` the window's (`RemoteFieldRow.isSelf`), `unread` the swarm's
 /// own (`GodviewStageInput.unreadIds`, S2; never `monitor.unread`), `colour` the ledger's deal
 /// (`GodviewStageInput.colour`: nil for a terminal, which the timeline never colours, and for an undealt project),
-/// `active` the open card's row (J-S4), `receded` false (the phone shows no groups).
+/// `active` the open card's row (J-S4), `receded` the phone's lens (SE-2, `GodviewRecede.byLens`: every lane but the
+/// home's under the chosen profile). *Corrected 2026-11-06 (SE-2h):* this said `receded` was false, the phone showing
+/// no groups.
 struct TimelineRow: Equatable, Sendable {
   let monitor: MonitorAgentRow
   let isSelf: Bool
@@ -45,10 +47,13 @@ struct TimelineRow: Equatable, Sendable {
     self.receded = receded
   }
 
-  /// A drawn row with the host's joins. `lens` is the phone's (SE-2, `GodviewStageInput.lens`) — STUB (SE-2h red):
-  /// read by nothing yet.
+  /// A drawn row with the host's joins; under the phone's lens (SE-2, `GodviewStageInput.lens`) it recedes unless it
+  /// is the home's under the chosen profile.
   init(_ row: RemoteFieldRow, unread: Bool, colour: SwarmColor?, active: Bool, lens: String? = nil) {
-    self.init(monitor: row.row.monitor, isSelf: row.isSelf, unread: unread, colour: colour, active: active)
+    let monitor = row.row.monitor
+    self.init(
+      monitor: monitor, isSelf: row.isSelf, unread: unread, colour: colour, active: active,
+      receded: GodviewRecede.byLens(isSelf: row.isSelf, profileSet: monitor.profileSet, lens: lens))
   }
 }
 

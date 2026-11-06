@@ -66,10 +66,10 @@ final class RainMetalView: MTKView {
     fatalError("init(coder:) is not supported")
   }
 
-  /// The rows, the lit one and whether the loop runs: the loop runs only while the field is on screen and neither
-  /// Reduce Motion nor a still holds it; stopped, a change paints one still; off screen, nothing draws.
-  func apply(rows: [RemoteFieldRow], activeId: String?, isActive: Bool, moving: Bool) {
-    field.show(rows: rows, activeId: activeId)
+  /// The rows, the lit one, the lens (SE-2) and whether the loop runs: the loop runs only while the field is on screen
+  /// and neither Reduce Motion nor a still holds it; stopped, a change paints one still; off screen, nothing draws.
+  func apply(rows: [RemoteFieldRow], activeId: String?, lens: String? = nil, isActive: Bool, moving: Bool) {
+    field.show(rows: rows, activeId: activeId, lens: lens)
     refreshAccessibility()
     let running = isActive && moving
     field.run(running, now: CACurrentMediaTime() * 1000)
@@ -247,6 +247,8 @@ struct RainFrameMeter {
 struct RainSurface: UIViewRepresentable {
   let rows: [RemoteFieldRow]
   let activeId: String?
+  /// The phone's lens (SE-2): the chosen profile's id, or nil.
+  let lens: String?
   let isActive: Bool
   let moving: Bool
   let onOpen: @MainActor (RemoteFieldRow) -> Void
@@ -262,6 +264,6 @@ struct RainSurface: UIViewRepresentable {
 
   func updateUIView(_ view: RainMetalView, context: Context) {
     view.onOpen = onOpen
-    view.apply(rows: rows, activeId: activeId, isActive: isActive, moving: moving)
+    view.apply(rows: rows, activeId: activeId, lens: lens, isActive: isActive, moving: moving)
   }
 }

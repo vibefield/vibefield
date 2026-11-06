@@ -93,17 +93,7 @@ struct LensRecedeTests {
     #expect(standing > 0)
   }
 
-  @Test("a body carries the home's profile on the home's rows, none on a peer's")
-  func bubbleCarriesTheProfile() throws {
-    let rows = try HomeFixture.witnessRows()
-    let catalog = AgentCatalog(entries: [])
-    var homeProfiles = 0
-    for row in rows {
-      let bubble = fieldBubble(from: row, fieldIsLive: true, catalog: catalog, suppressUnread: false)
-      let expected = row.isSelf ? row.row.monitor.profileSet : nil
-      #expect(bubble.profileSet == expected)
-      if bubble.profileSet != nil { homeProfiles += 1 }
-    }
-    #expect(homeProfiles > 0)
-  }
+  // RETIRED 2026-11-06 (SE-2h): `bubbleCarriesTheProfile`. `FieldBubble.profileSet` was written and never read — the
+  // swarm does not recede yet (owed: a recede weight in FieldSwarm's renderer, which brings the body's profile back
+  // with its reader).
 }

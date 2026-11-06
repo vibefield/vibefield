@@ -15,7 +15,7 @@ struct RainView: View {
   var body: some View {
     ZStack {
       RainSurface(
-        rows: input.rows, activeId: input.activeId, isActive: input.isActive,
+        rows: input.rows, activeId: input.activeId, lens: input.lens, isActive: input.isActive,
         moving: !input.isStill && !reduceMotion, onOpen: input.onOpen)
       if input.rows.isEmpty {
         RainEmpty(skin: input.skin)

@@ -62,10 +62,11 @@ final class RainField {
   /// The loop runs (`loop.running`): a display frame steps it. Stopped, a change paints one still.
   var running: Bool { motion != nil }
 
-  /// The agents effect (:79-83): the window's drawn rows, the open card's row lit (J-S4), then a reconcile.
-  func show(rows: [RemoteFieldRow], activeId: String?) {
+  /// The agents effect (:79-83): the window's drawn rows, the open card's row lit (J-S4), the rest receded under the
+  /// phone's lens (SE-2), then a reconcile.
+  func show(rows: [RemoteFieldRow], activeId: String?, lens: String? = nil) {
     self.rows = rows
-    agents = rows.map { RainAgent(row: $0, activeId: activeId) }
+    agents = rows.map { RainAgent(row: $0, activeId: activeId, lens: lens) }
     sync()
   }
 
