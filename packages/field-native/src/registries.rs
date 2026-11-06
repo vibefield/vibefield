@@ -16,6 +16,7 @@ pub mod ports {
     pub const FIELDD_PRODUCT_SERVE: u16 = 9423;
     pub const INDEX_SERVE: u16 = 9424;
     pub const FREEWAY_SERVE: u16 = 9425;
+    pub const SPARK_TRANSCRIPT_SERVE: u16 = 9426;
     pub const WORKSPACE_SERVE: u16 = 0;
     pub const DOC_SYNC_QUIC: u16 = 9440;
     pub const PRESENCE_UDP: u16 = 9441;

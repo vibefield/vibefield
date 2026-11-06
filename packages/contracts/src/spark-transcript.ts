@@ -1,7 +1,8 @@
 import { z } from "zod";
 import { CrewId, SparkId } from "./agent-session";
-import { ComposeSayChip, ComposeSayRequestId, composeChipsFit } from "./compose";
-import { SPARK_TRANSCRIPT } from "./registries";
+import { ComposeDevice, ComposeSayChip, ComposeSayRequestId, composeChipsFit } from "./compose";
+import { PORTS, SPARK_TRANSCRIPT } from "./registries";
+import { remoteDoorUrl } from "./remote-endpoints";
 import { WorkspaceCredential, WorkspaceLoopbackSocket } from "./workspace";
 
 // ── TH-1: THE SPARK'S TRANSCRIPT (TH0-Q1 = O1, VF-PM 2026-11-04 05:01Z; DESIGN.md §8 "Chat's thread"). VibeField keeps
@@ -164,6 +165,10 @@ export function sparkTranscriptLineOf(line: unknown): SparkTranscriptKnownLine |
 
 // ── the ticket: `compose.sparks.transcript.openTicket` (TH-Q30 (a′); local, a renderer window of this desktop alone,
 // under the family's `sparks.use`) ──
+// *Corrected 2026-11-06 (SP-7a D2–D4): the door federates. fieldd answers a window of this desktop with the worker's
+// loopback listener, as before, and a phone with its routed serve, asked of the phone's home and carried to the
+// desktop that keeps the spark (`device`). Its holders are the window, a self `tailnet` principal and a peer daemon
+// with a phone behind it (`tickets.ts`).*
 
 /** One run of the spark, as its record names it, oldest first. */
 export const SparkTranscriptRun = z
@@ -177,17 +182,37 @@ export const SparkTranscriptRun = z
   .passthrough();
 export type SparkTranscriptRun = z.infer<typeof SparkTranscriptRun>;
 
-export const SparkTranscriptOpenTicketParams = z.object({ spark: SparkId }).passthrough();
+/** The ask: the spark, and the desktop that keeps it when the home is to carry the ask there (SP-7a D3, the spark
+ * doors' `device?`, IOS-12a PC-L2). A window of this desktop names none. */
+export const SparkTranscriptOpenTicketParams = z
+  .object({ spark: SparkId, device: ComposeDevice.optional() })
+  .passthrough();
 export type SparkTranscriptOpenTicketParams = z.infer<typeof SparkTranscriptOpenTicketParams>;
 
-/** A fresh, single-use credential for the spark's record on the transcript worker's loopback listener (the files
- * worker's shape, `WorkspaceCredential`): every answer is a new one, so the door is not idempotent. `expiresAt` bounds
- * its redemption alone. `generation` is the worker's: a worker restart closes every socket, and the window asks
- * again. `runs` are the spark's, oldest first, the newest SPARK_TRANSCRIPT.RUNS_MAX of them. */
+/** SP-7a (D1 (B), D4) — the transcript worker's routed serve on the tailnet, as a phone dials it:
+ * `ws(s)://<a non-loopback host>:<PORTS.SPARK_TRANSCRIPT_SERVE>/transcripts`, with no query and no fragment
+ * (`remoteDoorUrl`, D36's host rule: a remote door never names loopback, so the two members of the answer's
+ * `endpoint` are disjoint without a discriminator). The serve routes the fixed tailnet port to the worker's ephemeral
+ * loopback one, re-declared at each generation. The ticket in the first frame is the authority (DS-L6), never the
+ * address. */
+export const RemoteSparkTranscriptSocket = z
+  .string()
+  .regex(
+    remoteDoorUrl("wss?", String.raw`:${PORTS.SPARK_TRANSCRIPT_SERVE}\/transcripts`),
+    "expected the transcript worker's tailnet endpoint at its routed serve, without query/fragment",
+  );
+export type RemoteSparkTranscriptSocket = z.infer<typeof RemoteSparkTranscriptSocket>;
+
+/** A fresh, single-use credential for the spark's record on the transcript worker's listener (the files worker's
+ * shape, `WorkspaceCredential`): every answer is a new one, so the door is not idempotent. `expiresAt` bounds its
+ * redemption alone. `generation` is the worker's: a worker restart closes every socket, and the reader asks again.
+ * `runs` are the spark's, oldest first, the newest SPARK_TRANSCRIPT.RUNS_MAX of them. `endpoint` is the worker's
+ * loopback listener for a window of this desktop, and its routed serve for a phone (SP-7a D4: a union, no field
+ * added). */
 export const SparkTranscriptOpenTicketResult = z
   .object({
     spark: SparkId,
-    endpoint: WorkspaceLoopbackSocket,
+    endpoint: z.union([WorkspaceLoopbackSocket, RemoteSparkTranscriptSocket]),
     ticket: WorkspaceCredential,
     expiresAt: z.number().int().positive(),
     generation: z.number().int().positive(),

@@ -121,6 +121,14 @@ export const PORTS = {
    * assigned at landing, in landing order (the PM, 2026-10-17 02:39Z): `BLOB_SERVE` takes the
    * next free one at its own landing. */
   FREEWAY_SERVE: 9425,
+  /** SP-7a (D1 (B), D5) — the transcript worker's routed serve: its OWN tailnet listener, one route to the worker's
+   * ephemeral loopback port, re-declared at each worker generation (the index serve's precedent, 9424). The phone's
+   * node dials it with a ticket its owner minted; the ticket in the first frame is the authority (DS-L6), so the
+   * address grants nothing. NOT in `MESH_EGRESS.ROUTABLE_PORTS`: no desktop's window dials another's worker (a window
+   * asking for another desktop's spark is refused at its own door). Its number is the next free one at its landing
+   * (FREEWAY_SERVE's rule). Once FW-R5, FW-R7 and FW-R8 land it folds under the freeway host with the index serve
+   * (FW-L12). */
+  SPARK_TRANSCRIPT_SERVE: 9426,
   /** FS-1b: the files worker binds an ephemeral loopback listener per generation. */
   WORKSPACE_SERVE: 0,
   /** doc-sync lanes over the mesh (QUIC, snapshot-per-stream). */
@@ -897,7 +905,9 @@ export const WORKSPACE_LIMITS = {
 /** TH-1 (TH0-Q5 (b)) — the spark's transcript, read through its own worker. A ticket bounds its redemption only
  * (TICKET_TTL_MS, the files erratum of 2026-10-07): an open socket has no timer. A ticket names at most RUNS_MAX runs,
  * the newest kept. A window that has not heard `ready` within OPEN_TIMEOUT_MS asks again, as one whose socket closed
- * does, after RETRY_MIN_MS doubling to RETRY_MAX_MS. TS-only: no native reader. */
+ * does, after RETRY_MIN_MS doubling to RETRY_MAX_MS. TS-only: no native reader. *Corrected 2026-11-06 (SP-7a): the
+ * phone reads it too. The kit's `SparkTranscriptLimits` (`SparkTranscriptWire.swift`) mirrors these as literals, its
+ * source named (`PhoneBudget.swift`'s rule); Rust has no reader.* */
 export const SPARK_TRANSCRIPT = {
   TICKET_TTL_MS: 60_000,
   RUNS_MAX: 256,
@@ -914,7 +924,11 @@ export const SPARK_TRANSCRIPT = {
  * stopping. A spark's folder, a run's file or the key its lines are checked by that the disk would not hand over is
  * item 172's word under this service (RECORD_STORES.STATE_UNREADABLE, the store's own refusal). A window asks again
  * after SPARK_TRANSCRIPT's retry bounds. TS-only: no native reader. *TH-1, 2026-11-05:* this held its own
- * STATE_UNREADABLE until item 172 landed under the lane; it folded into RECORD_STORES' word. */
+ * STATE_UNREADABLE until item 172 landed under the lane; it folded into RECORD_STORES' word.
+ * *Corrected 2026-11-06 (SP-7a D2): a phone reads these too, as fieldd's words (the kit's reader says them, never a
+ * vocabulary of its own). STATE_DOORS_NOT_PUBLISHED joins: the owner has no live routed serve to hand a phone
+ * (`PORTS.SPARK_TRANSCRIPT_SERVE`: no linked login, or a worker generation whose serve is being re-aimed), retryable
+ * and naming the desktop, the index ticket's word for the same fact (`INDEX_TICKET`). A window here never hears it.* */
 export const SPARK_TRANSCRIPT_SERVICE = {
   SERVICE: "spark-transcripts",
   STATE_STARTING: "starting",
@@ -923,6 +937,7 @@ export const SPARK_TRANSCRIPT_SERVICE = {
   STATE_UNCONFIGURED: "unconfigured",
   STATE_FAILED: "failed",
   STATE_STOPPED: "stopped",
+  STATE_DOORS_NOT_PUBLISHED: "doors_not_published",
 } as const;
 
 /** FS-1a — the files service's honest refusal vocabulary

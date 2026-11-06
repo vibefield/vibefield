@@ -3065,12 +3065,18 @@ export const METHODS: MethodDef[] = [
   // serves a renderer window of this desktop alone (VF-PM's X2, 2026-11-05; EL7), and refuses shell-main, a plugin, an
   // MCP agent, a plain local token, a phone and a peer daemon, as the files doors gate by principal. The phone reads its
   // thread later, by a road of its own (IOS-12c). Every answer is a fresh credential, so it is not idempotent.
+  // *Corrected 2026-11-06 (SP-7a D2, D3): the road is this door, `federate`. The phone asks its home, naming the
+  // desktop that keeps the spark (`device`); the home carries a `tailnet` principal's ask alone, and the owner mints
+  // for the phone (a self `tailnet` principal, or a peer daemon whose `onBehalfOf.clientDeviceId` names it) a ticket
+  // beside its worker's routed serve (`RemoteSparkTranscriptSocket`). The answer passes back untouched. A window is
+  // still answered loopback, and every other principal is still refused, a window asking for another desktop's spark
+  // among them.*
   defineMethod({
     surface: "product",
     method: "compose.sparks.transcript.openTicket",
     scope: "sparks.use",
     idempotent: false,
-    locality: "local",
+    locality: "federate",
   }),
   // CP-3 (`draft/compose-plane/cp3-the-person.md`, CP3-D6 A) — the needs-you queue's doors, beside the sparks'.
   // `approval.respond` stays reserved for AR-6's answers to an agent's own asks. *Corrected 2026-11-04 (IOS-12a;
