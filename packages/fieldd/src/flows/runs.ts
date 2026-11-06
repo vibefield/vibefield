@@ -911,7 +911,7 @@ export class FlowRuns {
   ): void {
     live.misses.set(step.call, check);
     if (step.state !== "repairing") {
-      sendRepair(this.ports, this.#stepWrite(run), run, step.call, session, 1, check);
+      this.#repair(run, live, step, session, 1, check, this.#stepWrite(run));
       return;
     }
     const item = this.ports.needs.flowItem({
@@ -954,13 +954,42 @@ export class FlowRuns {
     const check = live.misses.get(step.call);
     if (check === undefined || step.session === undefined)
       throw new Error(`the miss of ${run}'s call ${step.call} is not kept`);
-    // the hold is answered: the record holds no item
-    this.#replace(run, (kept) => {
-      const { held: _held, ...rest } = kept;
-      return rest;
-    });
-    sendRepair(this.ports, this.#stepWrite(run), run, step.call, step.session, n, check);
+    // F5 (slices 7–9 review): the hold is answered in the write that sends its repair, never before it; a repair that
+    // can't be sent fails the step, and its settle takes the hold with it
+    if (!this.#repair(run, live, step, step.session, n, check, this.#releasing(run)))
+      return { outcome: "failed", reason: stepFailed(step.label) };
     return { outcome: "done" };
+  }
+
+  /** A step's repair line, sent by `sendRepair` through `write`; or, where it can't be, the step failed in §9's words
+   * ("‹label› failed."), as F2's catch fails a start that throws, never a silent wait (F5): a step whose record keeps
+   * FLOW_LIMITS.STEP_LINES_MAX lines already (Q2), or a line its record or its session's queue refuses. Its answer is
+   * journaled as the refusal, and the settle takes the run's hold with it (`#journaled`). False when it failed. */
+  #repair(
+    run: FlowRunId,
+    live: LiveRun,
+    step: FlowRunRecordStep,
+    session: string,
+    n: number,
+    check: string,
+    write: FlowStepWrite,
+  ): boolean {
+    if ((step.lines?.length ?? 0) < FLOW_LIMITS.STEP_LINES_MAX) {
+      try {
+        sendRepair(this.ports, write, run, step.call, session, n, check);
+        return true;
+      } catch (error) {
+        this.#logger.warn(
+          "fieldd.flows.step.repair",
+          "A flow step's repair line could not be kept or queued; the step failed",
+          { run, call: step.call, n, error: messageOf(error) },
+        );
+      }
+    }
+    const waiter = live.waiting.get(step.call);
+    if (waiter !== undefined)
+      this.#answer(live, step.call, waiter, { ok: false, refused: stepFailed(step.label) });
+    return false;
   }
 
   /** The folder a run's input names, the first of its inputs in its meta's order whose kind names one (CP4-Q20 (a));
@@ -980,6 +1009,19 @@ export class FlowRuns {
       this.#rewriteWith(run, (record) => ({
         open: record.open.map((step) => (step.call === call ? patch(step) : step)),
       }));
+  }
+
+  /** The record's open step, written as `#stepWrite` writes it, with the run's hold dropped in the same write: the
+   * person's answer to a hold is acted on in the write that acts on it (F5). */
+  #releasing(run: FlowRunId): FlowStepWrite {
+    return (call, patch) =>
+      this.#replace(run, (start, record) => {
+        const { held: _held, ...rest } = start;
+        return {
+          ...rest,
+          open: record.open.map((step) => (step.call === call ? patch(step) : step)),
+        };
+      });
   }
 
   /** A line the run's journal took, as its record follows it (D18's cadence): a call counts (D10), and an agent's
@@ -1015,9 +1057,9 @@ export class FlowRuns {
           : {}),
       }));
     else if (entry.kind === "answer")
-      this.#rewriteWith(run, (record) => {
+      this.#replace(run, (start, record) => {
         const step = record.open.find((open) => open.call === entry.call);
-        if (step === undefined) return {};
+        if (step === undefined) return start;
         // Y1: a step whose agent was left running names its session, in this same write, though its own did not take
         const orphan = this.#live.get(run)?.orphans.get(entry.call);
         const settled: FlowRunRecordStep = {
@@ -1029,7 +1071,12 @@ export class FlowRuns {
         const steps = [...record.steps, settled];
         const shown = steps.slice(-FLOW_RUN_STEPS_MAX);
         const earlier = (record.earlier ?? 0) + steps.length - shown.length;
+        // F5: a step that settles while the run holds on its repair takes the hold with it, so no item is held for
+        // a step that is gone
+        const { held: _held, ...rest } = start;
+        const releases = step.state === "holding" && start.held?.kind === "flow-repair";
         return {
+          ...(releases ? rest : start),
           open: record.open.filter((open) => open.call !== entry.call),
           steps: shown,
           ...(earlier > 0 ? { earlier } : {}),
