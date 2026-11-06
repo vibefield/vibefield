@@ -34,6 +34,7 @@ const STORE_REMOTE_ORIGINS: usize = mesh_control_limits::REMOTE_ORIGINS;
 const ARTIFACT_SLICE_BYTES: usize = mesh_control_limits::ARTIFACT_SLICE_BYTES;
 const DEVICE_SLICE_BYTES: usize = mesh_control_limits::DEVICE_SLICE_BYTES;
 const AGENT_FIELD_SLICE_BYTES: usize = mesh_control_limits::AGENT_FIELD_SLICE_BYTES;
+const DRIVE_SLICE_BYTES: usize = mesh_control_limits::DRIVE_SLICE_BYTES;
 
 fn store_slice_limit(store_id: &str) -> Option<usize> {
     match store_id {
@@ -43,6 +44,13 @@ fn store_slice_limit(store_id: &str) -> Option<usize> {
         // list-sized budget is already generous; the cap is what stops one
         // peer amplifying every reader's board.
         stores::AGENT_FIELD => Some(AGENT_FIELD_SLICE_BYTES),
+        // DR-2a (W3, DR-3a) — the drive's holders slice: a protocol, a state
+        // and two counts (contracts drive.ts `DriveHoldersSlice`), so a
+        // device-sized budget is generous; the cap is what stops one peer
+        // amplifying every reader's holder table. A capped store's readers
+        // also bound its remote owners at REMOTE_ORIGINS (`store_snapshot`,
+        // `spawn_store_forwarder`).
+        stores::DRIVE => Some(DRIVE_SLICE_BYTES),
         _ => None,
     }
 }
@@ -83,6 +91,13 @@ pub async fn handle(
     // the node gate's generic UNAVAILABLE would hide it.
     if method.starts_with("native.mesh.egress.") {
         super::mesh_egress::handle(state, tx, method, params, id).await;
+        return;
+    }
+    // DR-3a (W3) — the file transfer answers BEFORE the node gate too, in
+    // egress's refusal order (`file_transfer.rs`): `file-transfer-unsupported`
+    // is a fact about this floor's truffle that holds with or without a node.
+    if method.starts_with("native.mesh.fileTransfer.") {
+        super::file_transfer::handle(state, tx, id);
         return;
     }
     if method == "native.mesh.retire" {

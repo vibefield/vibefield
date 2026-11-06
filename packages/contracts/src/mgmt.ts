@@ -1407,8 +1407,10 @@ export type MeshEgressUnavailableDetails = z.infer<typeof MeshEgressUnavailableD
 // pull a teardown ends is sent `failed` NODE_DOWN on it (W3-2, VF-PM 2026-11-06). fieldd's NativeLink keeps a refused
 // subscription's replay silent until its next reconnect, so a stream gated on the node would go dead while it is down.
 // *Rewritten 2026-11-06 (W3-1, W3-2): it said that with no node every verb answers the node gate.*
-// The floor's facade is its own slice (the critic's wave 3, VF-FLOOR); until it lands, a node answers these verbs
-// NOT_FOUND, and fieldd calls none of them.
+// The floor's facade is its own slice (the critic's wave 3, VF-FLOOR). Every verb is answered: at the truffle-core
+// `=0.7.24` pin the floor builds only the arm that cannot pull by a named root, so each answers
+// MESH_FILE_TRANSFER.STATE_UNSUPPORTED (step 1; field-native `mgmt/file_transfer.rs`). fieldd calls none of them.
+// *Corrected 2026-11-06 (W3 rider C, DR-3a): it said that until the facade lands a node answers these verbs NOT_FOUND.*
 
 /** The file transfer's registry. Generated into Rust (`registries::mesh_file_transfer`), so the floor's writer and
  * fieldd's reader share one vocabulary.

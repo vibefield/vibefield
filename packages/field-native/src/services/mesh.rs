@@ -53,6 +53,7 @@
 use crate::config::{MeshProbeIdentity, NativeConfig};
 use crate::contracts::{MeshMode, UnitHealth, UnitState};
 use crate::manager::NativeService;
+use crate::services::file_transfer::{self, FileTransferBackend};
 use crate::services::mesh_egress::{self, EgressBackend};
 use serde_json::Value;
 use std::collections::HashMap;
@@ -127,15 +128,26 @@ struct Shared {
     /// constructed headlessly; it is OR'd with the real one and NOTHING in the
     /// product ever writes it.
     node_presence_forced: watch::Sender<bool>,
-    /// DS-1 — the egress substrate (`services/mesh_egress.rs`): the
-    /// unsupported arm in production today, a fake in tests. Behind a mutex
-    /// only so a test can install its fake; production never swaps it.
+    /// DS-1 — the egress substrate (`services/mesh_egress.rs`): the truffle
+    /// arm in production since TB-E (2026-10-17; `default_backend`,
+    /// `services/mesh_egress.rs:144-156`, under the DEFAULT `truffle-egress`
+    /// feature, field-native `Cargo.toml:70-71`), the unsupported arm in a
+    /// build without that feature, a fake in tests. Behind a mutex only so a
+    /// test can install its fake; production never swaps it.
+    /// *Corrected 2026-11-06 (the W3 critic's finding 12): it said "the
+    /// unsupported arm in production today", false since TB-E.*
     egress: Mutex<Arc<dyn EgressBackend>>,
     /// DS-1 — bumped whenever the egress route table moves (an add, a remove,
     /// a teardown's reset). A WATCH, so `route.subscribe` forwarders coalesce
     /// bursts and re-read the whole table: the table is the payload, never an
     /// edge, so a skipped intermediate state loses nothing.
     egress_changes: watch::Sender<u64>,
+    /// DR-3a (W3) — the file transfer's substrate
+    /// (`services/file_transfer.rs`): `UnsupportedFileTransfer` in production
+    /// at the `=0.7.24` pin, whose truffle cannot pull by a named root. Behind
+    /// a mutex, as egress's is, only so a test can install another arm;
+    /// production never swaps it.
+    file_transfer: Mutex<Arc<dyn FileTransferBackend>>,
     /// TS-1 (track TS) — the sign-in facts of the current bring-up and its
     /// node ([`LinkFacts`]): what a person needs to act on a link that waits on
     /// someone, lapses, or is asked for again. Reset by every bring-up.
@@ -359,6 +371,12 @@ impl MeshHandle {
     /// DS-1 — the egress substrate the facade answers from.
     pub fn egress(&self) -> Arc<dyn EgressBackend> {
         self.shared.egress.lock().unwrap().clone()
+    }
+
+    /// DR-3a (W3) — the file transfer's substrate the facade answers from
+    /// (`mgmt/file_transfer.rs`).
+    pub fn file_transfer(&self) -> Arc<dyn FileTransferBackend> {
+        self.shared.file_transfer.lock().unwrap().clone()
     }
 
     /// DS-1 — a receiver woken whenever the egress route table moves.
@@ -794,6 +812,7 @@ impl MeshUnit {
                 node_presence_forced: watch::channel(false).0,
                 egress: Mutex::new(mesh_egress::default_backend()),
                 egress_changes: watch::channel(0).0,
+                file_transfer: Mutex::new(file_transfer::default_backend()),
                 ping,
                 stores: tokio::sync::Mutex::new(HashMap::new()),
                 serves: tokio::sync::Mutex::new(HashMap::new()),
@@ -840,6 +859,13 @@ impl NativeService for MeshUnit {
             component = "mesh",
             arm = self.handle().egress().arm(),
             "egress backend selected"
+        );
+        // DR-3a (W3) — and which file-transfer substrate, for the same reader.
+        tracing::info!(
+            event = "field_native.mesh.file_transfer.backend",
+            component = "mesh",
+            arm = self.handle().file_transfer().arm(),
+            "file transfer backend selected"
         );
         // UA-P-0a (D1) — boot no longer brings a node up. The posture derives
         // from fieldd's link, and fieldd asks for it over the mgmt channel; the

@@ -26,6 +26,8 @@
 mod diagnostics;
 /// CP-1a — `native.door.*`, the floor's door.
 mod door;
+/// DR-3a (W3) — the file transfer verbs, dispatched from `mesh::handle` ahead of its node gate.
+mod file_transfer;
 /// T-M4 — PUBLIC so an integration test can build a serve config through the
 /// PRODUCTION mapping rather than a copy of it (`build_serve_config`; the
 /// `terminal_cell_route_probe` row that dials a cell route). Nothing else in

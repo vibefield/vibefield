@@ -1,5 +1,7 @@
 /// CP-1a — the floor's door.
 pub mod door;
+/// DR-3a (W3) — the file transfer's backend, held on the mesh unit beside egress's.
+pub mod file_transfer;
 pub mod freeway;
 pub mod lane_transport;
 mod lossy_lane;
