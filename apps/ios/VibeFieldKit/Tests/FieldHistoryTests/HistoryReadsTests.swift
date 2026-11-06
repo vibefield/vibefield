@@ -327,6 +327,49 @@ struct HistoryReadsTests {
     #expect(FieldHistoryModel.liveHeader(offline.corpus, standing: offline.standing).count == nil)
   }
 
+  /// SE-2o (the lead's ruling 24; DESIGN.md §8 "The phone's search", as amended) — recent searches retired from
+  /// search, and nothing read them since search's page retired, so the cache keeps none: a ledger holds only what the
+  /// phone reads again.
+  @Test("a kept ledger holds no recent searches")
+  func aLedgerKeepsNoRecentSearches() throws {
+    let directory = scratch()
+    let cache = HistoryCache(directory: directory)
+    cache.keepLedger(.mock, device: "dev-1")
+    let file = try #require(Self.ledgerFile(in: directory))
+    let raw = try JSONSerialization.jsonObject(with: Data(contentsOf: file))
+    let kept = try #require(raw as? [String: Any])
+    let corpus = try #require(kept["corpus"] as? [String: Any])
+    let keepsRecent = corpus["recentSearches"] != nil
+    #expect(!keepsRecent)
+  }
+
+  /// SE-2o — a ledger a phone kept before the retire carries `recentSearches`. The corpus's decoding is the synthesized
+  /// one, which passes over a key it does not know, so the old file reads whole: never a crash, and never a cache
+  /// dropped for it (an undecodable file is removed and read again from the desktop).
+  @Test("a ledger kept with recent searches, before they retired, still reads whole")
+  func aLedgerKeptWithRecentSearchesStillReads() throws {
+    let directory = scratch()
+    let cache = HistoryCache(directory: directory)
+    cache.keepLedger(.mock, device: "dev-1")
+    let file = try #require(Self.ledgerFile(in: directory))
+    let raw = try JSONSerialization.jsonObject(with: Data(contentsOf: file))
+    var kept = try #require(raw as? [String: Any])
+    var corpus = try #require(kept["corpus"] as? [String: Any])
+    corpus["recentSearches"] = ["needle", "badge"]
+    kept["corpus"] = corpus
+    try JSONSerialization.data(withJSONObject: kept).write(to: file)
+    let read = cache.ledger(device: "dev-1")
+    let projects = read?.corpus.projects.map { $0.id }
+    let expected = HistoryCorpus.mock.projects.map { $0.id }
+    #expect(projects == expected)
+  }
+
+  /// The one ledger a scratch cache holds (`<device's hash>/ledger.json`).
+  static func ledgerFile(in directory: URL) -> URL? {
+    let names = FileManager.default.enumerator(atPath: directory.path)?.allObjects as? [String] ?? []
+    return names.first { $0.hasSuffix("ledger.json") }.map { directory.appendingPathComponent($0) }
+  }
+
   @Test("the desktops: the home first, a door replaced by the cache when it goes, the mock as one group")
   @MainActor
   func desktops() async throws {
