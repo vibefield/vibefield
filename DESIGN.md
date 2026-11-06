@@ -10340,6 +10340,11 @@ are open until James reads them on a board). A Run that VibeField refuses starts
   or a project VibeField can't find (CP4-Q20 (a): the folder a step with none runs in):
   - "VibeField can't find the session its input names."
   - "VibeField can't find the project its input names."
+- *Proposed 2026-11-06 (CP-4a2b; the F6 review GG1, ruled 2026-11-06; open until
+  James reads it, as the rest are):* an input that names a session or a project VibeField finds, whose folder it can't
+  run in (an empty one, or one past FLOW_LIMITS.FOLDER_CHARS), said for each kind as the pair above is:
+  - "VibeField can't run in the folder of the session its input names."
+  - "VibeField can't run in the folder of the project its input names."
 - "VibeField can't find that spark; nothing was started."
 - "VibeField has no run ‹run›."
 - "That version isn't one of ‹flow›'s."
