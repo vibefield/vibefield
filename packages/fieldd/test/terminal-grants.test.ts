@@ -49,6 +49,13 @@ const GUEST = { kind: "tailnet-guest", login: "me@example.com" };
 const SELF = { kind: "tailnet", login: "me@example.com", self: true };
 // D2 — who a forwarded call is FOR, as the owner reads it (`ctx.onBehalfOf`)
 const FOR_A_WINDOW = { clientKind: "renderer", deviceId: "dev-b", windowId: "p-77" };
+/** 7c-1 — the phone behind its home `dev-b`, on its first connection there (`forwardProvenance`). */
+const FOR_THE_PHONE = {
+  clientKind: "ios",
+  deviceId: "dev-b",
+  windowId: "conn-1",
+  clientDeviceId: "dev-phone",
+};
 const ROUTE = { cellBootId: KEY.cellBootId, routeRevision: 12 };
 const DOORS = {
   controlUrl: "ws://127.0.0.1:49152/control",
@@ -288,6 +295,57 @@ describe("clientId and rights derive from the principal, never from the caller's
     // peer keep their own, whatever a call restates
     expect(clientIdFor(WINDOW, first)).toBe("win:p-3c4d#doc-2");
     expect(clientIdFor(SELF, first)).toBe(clientIdFor(SELF));
+  });
+
+  // SP-7b's 7c-1 (D-c1 (a), VF-PM 2026-11-06 23:17Z) — the phone behind its home is not a window. The window a
+  // forward restates for it is the phone's PRODUCT CONNECTION at its home (`forwardProvenance`), so every reconnect
+  // of the phone to its home was a new client here: a new connection set on the cell and a new attach ledger, and a
+  // renewal across it met an empty one. The home names the phone's roster device (`clientDeviceId`, F1b), and that is
+  // the key — under the carrier, as DS-4c's law asks.
+  it("7c-1: keys the phone behind its home by its roster device — every connection of it to its home is one client", () => {
+    const daemon = { kind: "peer-fieldd", deviceId: "dev-b" };
+    const phone = FOR_THE_PHONE;
+    expect(clientIdFor(daemon, phone)).toBe("peer-fieldd:dev-b#phone:dev-phone");
+    expect(clientIdFor(daemon, { ...phone, windowId: "conn-2" })).toBe(
+      "peer-fieldd:dev-b#phone:dev-phone",
+    );
+    // relayed from another desktop: that desktop is named, as a relayed window's home is
+    expect(clientIdFor({ kind: "peer-fieldd", deviceId: "dev-c" }, phone)).toBe(
+      "peer-fieldd:dev-c#dev-b/phone:dev-phone",
+    );
+    // the device is opaque like every restated id, and a window NAMED "phone:…" never aliases it: its
+    // colon is encoded
+    expect(clientIdFor(daemon, { ...phone, clientDeviceId: "dev/p#1" })).toBe(
+      "peer-fieldd:dev-b#phone:dev%2Fp%231",
+    );
+    const named = { clientKind: "renderer", deviceId: "dev-b", windowId: "phone:dev-phone" };
+    expect(clientIdFor(daemon, named)).toBe("peer-fieldd:dev-b#phone%3Adev-phone");
+  });
+
+  it("7c-1: the phone's renewal through a NEW connection to its home CASes on the generation it holds", () => {
+    const minter = new TerminalGrantMinter(() => 1_000_000, "epochA");
+    const daemon = { kind: "peer-fieldd", deviceId: "dev-b" };
+    const phone = FOR_THE_PHONE;
+    const base = { key: KEY, principal: daemon, sessionId: "s-1", route: ROUTE };
+    const opened = minter.mintTicket({ ...base, doors: DOORS, forwardedFor: phone }).attachGrant;
+    const renewal = (() => {
+      try {
+        const { claims } = minter.renewAttach({
+          ...base,
+          expectGeneration: opened.claims.grantGeneration,
+          requestId: "r-1",
+          forwardedFor: { ...phone, windowId: "conn-2" },
+        });
+        return {
+          generation: claims.grantGeneration,
+          sameClient: claims.clientId === opened.claims.clientId,
+        };
+      } catch (error) {
+        return { refused: String(error) };
+      }
+    })();
+    expect(renewal).toEqual({ generation: 2, sameClient: true });
+    expect(opened.claims.clientId).toBe("peer-fieldd:dev-b#phone:dev-phone~epochA");
   });
 });
 
@@ -768,6 +826,8 @@ describe("the holder's face — the principal, named by the roster (item 42)", (
     ).toBeUndefined();
     // the phone THROUGH one of its desktops: the provenance names the desktop,
     // never the phone — so there is no name of the phone's to say
+    // (7c-1, 2026-11-06: a home since F1b names the phone's device too, and that
+    // face is drawn — the row above; a provenance naming none still says nothing)
     expect(
       holderFaceFor(PEER_DAEMON, { clientKind: "ios", deviceId: "dev-b" }, ROSTER),
     ).toBeUndefined();
@@ -779,6 +839,28 @@ describe("the holder's face — the principal, named by the roster (item 42)", (
     // and with no roster yet (a mint before the DeviceService is bound), nobody has one
     expect(holderFaceFor(WINDOW, undefined, null)).toBeUndefined();
     expect(holderFaceFor(PHONE, undefined, undefined)).toBeUndefined();
+  });
+
+  it("7c-1: names the phone behind its home by THIS roster's row for the device its home named — `ios`, as the phone's own", () => {
+    const viaB = FOR_THE_PHONE;
+    expect(holderFaceFor(PEER_DAEMON, viaB, ROSTER)).toEqual({
+      kind: "phone",
+      name: "James's iPhone",
+      os: "ios",
+    });
+    // restrict-only (F1b): the name is a phone row of THIS roster's — a desktop's row (it hosts documents), a device
+    // this roster does not list, and a row with no name of its own say nothing
+    expect(
+      holderFaceFor(PEER_DAEMON, { ...viaB, clientDeviceId: "dev-b" }, ROSTER),
+    ).toBeUndefined();
+    expect(
+      holderFaceFor(PEER_DAEMON, { ...viaB, clientDeviceId: "dev-gone" }, ROSTER),
+    ).toBeUndefined();
+    expect(
+      holderFaceFor(PEER_DAEMON, { ...viaB, clientDeviceId: "dev-nameless" }, ROSTER),
+    ).toBeUndefined();
+    // and only a self peer daemon's forward names one
+    expect(holderFaceFor(GUEST, viaB, ROSTER)).toBeUndefined();
   });
 
   it("says no OS a row does not: a platform outside the three is left out, the name kept", () => {

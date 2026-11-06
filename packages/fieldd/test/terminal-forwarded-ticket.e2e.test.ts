@@ -14,7 +14,13 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { CONTRACTS_VERSION, PORTS, SOCKETS, TerminalOpenTicketResult } from "@vibefield/contracts";
+import {
+  CONTRACTS_VERSION,
+  PORTS,
+  SOCKETS,
+  TerminalOpenTicketResult,
+  TerminalRenewAttachResult,
+} from "@vibefield/contracts";
 import type { WsCtor } from "@vibefield/fieldd-client";
 import { afterEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
@@ -22,13 +28,20 @@ import { bootstrap, type FielddDaemon } from "../src/index";
 import { egressRouteRewriter } from "../src/remote-cell-rewriter";
 import { TERMINAL_SERVE_ID } from "../src/terminal-serve";
 import { MockMgmtServer } from "../src/testing/mock-mgmt";
-import { productPathSecret, writeLinkFixture } from "./link-fixture";
+import { productDoorPath, productPathSecret, writeLinkFixture } from "./link-fixture";
 import { nativeEndpoint } from "./native-harness";
 import { desktopSlice, registryPeer } from "./peer-roster";
 import { helloAs, until, WsRpc } from "./ws-rpc";
 
 const LOGIN = "me@jamesyong42.com";
 const LISTEN = "127.0.0.1:61234";
+/** 7c-1 — the phone, in both rosters: a registry row with no device slice (a phone publishes none). */
+const PHONE = registryPeer({
+  nodeId: "node-phone",
+  deviceId: "dev-phone",
+  name: "phone",
+  login: LOGIN,
+});
 
 let cleanup: Array<() => void | Promise<void>> = [];
 afterEach(async () => {
@@ -134,11 +147,13 @@ async function openRpc(port: number): Promise<WsRpc> {
   return new WsRpc(ws);
 }
 
-async function bootPair(): Promise<{
+async function bootPair(opts: { phone?: boolean } = {}): Promise<{
   A: FielddDaemon;
   B: FielddDaemon;
+  mockA: MockMgmtServer;
   routes: Array<{ deviceId: string; target: string }>;
 }> {
+  const phone = opts.phone === true ? [PHONE] : [];
   const dirB = makeDataDir();
   const mockB = await startMock(dirB);
   floorB(mockB);
@@ -146,6 +161,7 @@ async function bootPair(): Promise<{
   // node, its store holds A's slice
   mockB.meshPeers = [
     registryPeer({ nodeId: "node-a", deviceId: "dev-a", name: "device-a", login: LOGIN }),
+    ...phone,
   ];
   mockB.storeSlices = new Map<string, unknown>([["dev-a", desktopSlice("dev-a", "device-a")]]);
   const B = await bootstrap({ dataDir: dirB, controlPort: 0, dataPort: 0 });
@@ -173,6 +189,7 @@ async function bootPair(): Promise<{
       online: true,
       whois: { login: LOGIN, deviceName: "device-b.tailnet.ts.net" },
     },
+    ...phone,
   ];
   const routes: Array<{ deviceId: string; target: string }> = [];
   const A = await bootstrap({
@@ -189,7 +206,36 @@ async function bootPair(): Promise<{
   cleanup.push(() => A.stop());
   await until(() => A.devices.get("dev-b") !== undefined, 4_000);
   await until(() => B.devices.isDocHost("dev-a"), 4_000);
-  return { A, B, routes };
+  if (opts.phone === true) {
+    await until(() => A.devices.get("dev-phone") !== undefined, 4_000, "the phone in A's roster");
+    await until(() => B.devices.get("dev-phone") !== undefined, 4_000, "the phone in B's roster");
+  }
+  return { A, B, mockA, routes };
+}
+
+/** 7c-1 — the phone on its home's product door, the way the home's sidecar delivers it: the login
+ * and its node (F1b's harness, `freeway-forwarded-approval.e2e.test.ts`). */
+async function phoneOn(home: FielddDaemon, mock: MockMgmtServer): Promise<WsRpc> {
+  await until(
+    () => mock.meshServes.get("product") !== undefined,
+    8_000,
+    "the home's product serve",
+  );
+  const ws = new WebSocket(`ws://127.0.0.1:${home.controlPort}${productDoorPath(mock)}`, {
+    headers: { "Tailscale-User-Login": LOGIN, "Tailscale-Node-Id": "node-phone" },
+  });
+  cleanup.push(() => ws.close());
+  await new Promise<void>((resolve, reject) => {
+    ws.once("open", () => resolve());
+    ws.once("error", reject);
+  });
+  const rpc = new WsRpc(ws);
+  await rpc.call("system.hello", {
+    contractsVersion: CONTRACTS_VERSION,
+    minCompatible: CONTRACTS_VERSION,
+    clientKind: "ios",
+  });
+  return rpc;
 }
 
 describe("DS-4 — a window's ticket to a session on another desktop", () => {
@@ -274,5 +320,45 @@ describe("DS-4 — a window's ticket to a session on another desktop", () => {
     expect(refused.data?.kind).toBe("FORBIDDEN_SCOPE");
     expect(refused.data?.details).toEqual({ method: "terminal.openTicket", device: "dev-b" });
     expect(routes).toEqual([]);
+  }, 30_000);
+});
+
+// SP-7b's 7c-1 (D-c1 (a), VF-PM 2026-11-06 23:17Z): the phone asks its HOME for a terminal on another desktop
+// (7c-2 moves the kit there; DS-4 carries it already). The owner keyed that forward by the phone's product
+// connection at its home, so a reconnect of the phone to its home made it a new client: the renewal it sent next
+// met an empty attach ledger and was refused CONFLICT, though it held the grant it was renewing.
+describe("7c-1 — the phone's terminal on another desktop, through its home, across a reconnect", () => {
+  it("is one client to the owner whichever connection carries it: a renewal after the phone reconnects to its home CASes on the generation it holds, and its grant names the phone", async () => {
+    const { A, mockA, routes } = await bootPair({ phone: true });
+    const first = await phoneOn(A, mockA);
+    const ticket = TerminalOpenTicketResult.parse(
+      await first.call("terminal.openTicket", { device: "dev-b", sessionId: "pane-b" }),
+    );
+    expect(ticket.attachGrant.claims.rights).toEqual(["geometry", "input", "read"]);
+    expect(ticket.attachGrant.claims.grantGeneration).toBe(1);
+    // the phone's own node dials the owner's tailnet pair: the home opens no egress route for it
+    expect(routes).toEqual([]);
+
+    const second = await phoneOn(A, mockA);
+    const renewal = await second
+      .call("terminal.renewAttach", {
+        device: "dev-b",
+        sessionId: "pane-b",
+        expectGeneration: 1,
+        requestId: "r-7c1",
+      })
+      .then(
+        (result) => {
+          const { claims } = TerminalRenewAttachResult.parse(result).attachGrant;
+          return {
+            generation: claims.grantGeneration,
+            sameClient: claims.clientId === ticket.attachGrant.claims.clientId,
+          };
+        },
+        (error: unknown) => ({ refused: String(error) }),
+      );
+    expect(renewal).toEqual({ generation: 2, sameClient: true });
+    expect(ticket.attachGrant.claims.clientId).toMatch(/^peer-fieldd:dev-a#phone:dev-phone~/);
+    expect(ticket.attachGrant.claims.face).toEqual({ kind: "phone", name: "phone", os: "ios" });
   }, 30_000);
 });
