@@ -68,7 +68,7 @@
     "siblings:build": "node scripts/siblings.mjs build",
     "check:deps": "node scripts/check-single-copy.mjs",
     "check:retired": "node scripts/check-retired-names.mjs",
-    "check:walls": "node scripts/check-import-boundaries.mjs --self-test && node scripts/check-import-boundaries.mjs --enforce",
+    "check:walls": "node scripts/check-import-boundaries.mjs --self-test && node scripts/check-import-boundaries.mjs --enforce && node scripts/check-test-temp-roots.mjs --self-test && node scripts/check-test-temp-roots.mjs",
     "check:ios-fixtures": "node scripts/check-ios-fixtures.mjs",
     "catalog:check": "node scripts/check-agent-catalog.mjs --enforce --literals",
     "gate:landing": "node scripts/gate-landing.mjs",
