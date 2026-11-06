@@ -1,4 +1,12 @@
-import type { FromWorker, ToWorker, WorkerError, WorkerOp } from "../protocol";
+import {
+  type BuildMadeViewArgs,
+  type FromWorker,
+  type MadeViewRoots,
+  readMadeViewRoots,
+  type ToWorker,
+  type WorkerError,
+  type WorkerOp,
+} from "../protocol";
 import { setMilleNativePath } from "./native-path";
 
 // FS-1a — the files worker's ENTRY (`files-host` role; L1). fieldd starts it
@@ -21,10 +29,14 @@ import { setMilleNativePath } from "./native-path";
 type EngineModule = typeof import("./engine");
 type GitModule = typeof import("./git");
 type PlacesModule = typeof import("./places");
+type MadeViewModule = typeof import("./made-view");
 
 let engines: InstanceType<EngineModule["Engines"]> | null = null;
 let gitModule: GitModule | null = null;
 let placesModule: PlacesModule | null = null;
+let madeViewModule: MadeViewModule | null = null;
+/** DR-1b — the made view's roots, as this generation's `init` named them */
+let madeRoots: MadeViewRoots | null = null;
 let failureClass: EngineModule["WorkerFailure"] | null = null;
 let stopping = false;
 let listener: import("./listener").WorkspaceListener | null = null;
@@ -56,7 +68,7 @@ async function assertRootOf(ask: Record<string, unknown>): Promise<void> {
 }
 
 async function answer(op: WorkerOp, args: unknown): Promise<unknown> {
-  if (engines === null || gitModule === null || placesModule === null)
+  if (engines === null || gitModule === null || placesModule === null || madeViewModule === null)
     throw new Error("the engine is not loaded");
   const ask = (args ?? {}) as Record<string, unknown>;
   switch (op) {
@@ -90,6 +102,10 @@ async function answer(op: WorkerOp, args: unknown): Promise<unknown> {
       // PJ-1 — the index's folders, not the exports: fieldd names them (one
       // trust domain, FS-D7), and the reads are git's hardened read-only ones
       return await placesModule.readPlaces(args as import("../protocol").PlaceFactsArgs);
+    case "buildMadeView":
+      // DR-1b — a made app's view: the stored page read and the view written
+      // here, between the roots fieldd named at init (bytes never ride the pipe)
+      return await madeViewModule.buildMadeView(madeRoots, args as BuildMadeViewArgs);
     case "stats": {
       const memory = process.memoryUsage();
       const cpu = process.cpuUsage();
@@ -120,12 +136,14 @@ async function shutdown(code: number): Promise<never> {
   process.exit(code);
 }
 
-async function init(milleNative: string): Promise<void> {
+async function init(milleNative: string, made: MadeViewRoots | null): Promise<void> {
   try {
     setMilleNativePath(milleNative);
+    madeRoots = made;
     const engine: EngineModule = await import("./engine");
     gitModule = await import("./git");
     placesModule = await import("./places");
+    madeViewModule = await import("./made-view");
     failureClass = engine.WorkerFailure;
     assertRoot = engine.assertRoot;
     // fix7 — an engine retired for holding a list is fieldd's to log
@@ -167,7 +185,7 @@ export function runFilesHost(): void {
     if (message.t === "init") {
       if (initialized || typeof message.milleNative !== "string") return;
       initialized = true;
-      void init(message.milleNative);
+      void init(message.milleNative, readMadeViewRoots(message.made));
       return;
     }
     if (message.t === "shutdown") {

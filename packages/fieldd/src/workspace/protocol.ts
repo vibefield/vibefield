@@ -1,4 +1,5 @@
 import type {
+  MadeAppViewTheme,
   PlaceKind,
   WorkspaceEntry,
   WorkspaceEntryKind,
@@ -16,7 +17,7 @@ import type {
 // worker's own listener. This pipe is fieldd's and the worker's only: one
 // trust domain (FS-D7). FS-1b registers secret attach credentials on this pipe.
 //
-//   fieldd → worker  {t: "init", milleNative}            first, once
+//   fieldd → worker  {t: "init", milleNative, made?}     first, once
 //                    {t: "req", id, op, args}              a door's question
 //                    {t: "shutdown"}                       dispose the engines, exit 0
 //   worker → fieldd  {t: "ready", pid, port, mille}             the READY line of a generation
@@ -52,6 +53,9 @@ export type WorkerErrorCode =
    * contents are not on this machine, and the service does not download a
    * folder to list it (`WORKSPACE_LIMITS.MATERIALIZE_DATALESS`) */
   | "dataless"
+  /** a file is larger than the op admits (DR-1b: a made app's page over
+   * `MADE_APP_VIEW.PAGE_MAX_BYTES`) */
+  | "too-large"
   | "internal";
 
 export interface WorkerError {
@@ -290,6 +294,51 @@ export type AttachEvent =
   | ({ event: "established" } & AttachSession)
   | ({ event: "ended"; reason: AttachEndReason } & AttachSession);
 
+// DR-1b (`draft/thinking-drive.md` v0.3, DR-D11 (a) as its correction rules
+// it) — a made app's VIEW: the stored page wrapped by `madeAppViewHead(theme)`
+// and MADE_APP_VIEW_TAIL, written as MADE_APP_VIEW.FILE in the app's served
+// folder (host/made-view.ts). The export lands in a NON-served export-source
+// folder; the served folder holds only the view, so a view never writes into
+// the export's folder or over its link. The worker reads the page and writes
+// the view, so the bytes never enter fieldd's control process (EL2, DR-L4).
+
+/** The two roots a view is built between, absolute paths on this desktop,
+ * named by fieldd in every generation's `init`. A worker started without
+ * them refuses every view. */
+export interface MadeViewRoots {
+  /** where rosetta's export places a page (rosettad's `--export-root`); never
+   * served */
+  sourceRoot: string;
+  /** the served made root (`LAYOUT.ARTIFACT_MADE_DIR` under the user root);
+   * a view's folder lies below it */
+  servedRoot: string;
+}
+
+export interface BuildMadeViewArgs {
+  /** the stored page: an absolute path below `MadeViewRoots.sourceRoot`
+   * (`<appId>/<digest>/index.html`, where rosetta places it) */
+  source: string;
+  /** the view's folder: an absolute path below `MadeViewRoots.servedRoot`
+   * (`<appId>/<digest>`); the worker makes it when it is not there */
+  folder: string;
+  theme: MadeAppViewTheme;
+}
+
+export interface BuildMadeViewValue {
+  /** the view's size: its head, the page and its tail */
+  bytes: number;
+}
+
+/** The made view's roots as fieldd's `init` names them, read tolerantly: both,
+ * or none (the worker then refuses every view). */
+export function readMadeViewRoots(raw: unknown): MadeViewRoots | null {
+  if (typeof raw !== "object" || raw === null) return null;
+  const { sourceRoot, servedRoot } = raw as { sourceRoot?: unknown; servedRoot?: unknown };
+  return typeof sourceRoot === "string" && typeof servedRoot === "string"
+    ? { sourceRoot, servedRoot }
+    : null;
+}
+
 export interface WorkerOps {
   resolve: { args: { rootPath: string; segments: string[]; file?: boolean }; value: string };
   registerTicket: { args: AttachRegistration; value: { port: number } };
@@ -301,6 +350,7 @@ export interface WorkerOps {
   gitFacts: { args: GitFactsArgs; value: GitFactsValue };
   placeFacts: { args: PlaceFactsArgs; value: PlaceFactsValue };
   stats: { args: Record<string, never>; value: StatsValue };
+  buildMadeView: { args: BuildMadeViewArgs; value: BuildMadeViewValue };
 }
 
 export type WorkerOp = keyof WorkerOps;
@@ -316,10 +366,11 @@ export const WORKER_OPS: readonly WorkerOp[] = [
   "closeTicket",
   "revokeClient",
   "retainRoots",
+  "buildMadeView",
 ];
 
 export type ToWorker =
-  | { t: "init"; milleNative: string }
+  | { t: "init"; milleNative: string; made?: MadeViewRoots }
   | { t: "req"; id: number; op: WorkerOp; args: unknown }
   | { t: "shutdown" };
 

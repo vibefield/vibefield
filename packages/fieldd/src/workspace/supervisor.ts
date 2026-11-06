@@ -7,6 +7,7 @@ import {
   type AttachEvent,
   type AttachSession,
   type FromWorker,
+  type MadeViewRoots,
   readFromWorker,
   type ToWorker,
   type WorkerError,
@@ -109,6 +110,10 @@ export type FilesHostLaunchSpec =
 
 export interface FilesHostSupervisorOptions {
   launch: FilesHostLaunchSpec;
+  /** DR-1b — the two roots a made app's view is built between (the
+   * `buildMadeView` op), handed to every generation in its `init`; absent,
+   * the worker refuses every view */
+  made?: MadeViewRoots;
   /** test seam */
   spawnProcess?: typeof nodeSpawn;
   /** test seam; production uses FILES_HOST_SUPERVISION */
@@ -521,8 +526,13 @@ export class FilesHostSupervisor extends EventEmitter {
       this.#t.STARTUP_TIMEOUT_MS,
     );
     generation.startupTimer.unref?.();
-    // the first word: the addon's explicit path (L1)
-    this.#send(generation, { t: "init", milleNative: launch.milleNative });
+    // the first word: the addon's explicit path (L1), and the made view's roots (DR-1b)
+    const made = this.#opts.made;
+    this.#send(generation, {
+      t: "init",
+      milleNative: launch.milleNative,
+      ...(made !== undefined ? { made } : {}),
+    });
   }
 
   #onMessage(
