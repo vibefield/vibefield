@@ -40,6 +40,7 @@ import {
   type FlowStepPorts,
   type FlowStepWrite,
   labelWords,
+  NO_FOLDER,
   sendRepair,
   startStep,
 } from "./steps";
@@ -62,8 +63,10 @@ import * as words from "./words";
 //   the bytes fieldd KEPT under the approval's hash (D8), never the library's file.
 // - Its refusals (DESIGN.md §9 "When a run can't start", words.ts) are PRECONDITION_FAILED with a `reason`, before
 //   anything is written: no flow, a file past SCRIPT_MAX_BYTES, an input the flow does not name, a version not kept,
-//   and the bounds (D3): RUNS_LIVE_MAX live runs, or RUNS_PER_SPARK_MAX of a spark's own. Nothing between the bounds'
-//   read and the run's begin awaits, so two starts never pass one bound together.
+//   an input naming a session or a project VibeField can't find, a step that names no folder in a run whose input
+//   names none (CP4-Q20 (a), from the static read's `cwd`), and the bounds (D3): RUNS_LIVE_MAX live runs, or
+//   RUNS_PER_SPARK_MAX of a spark's own. Nothing between the bounds' read and the run's begin awaits, so two starts
+//   never pass one bound together.
 // - The run's record is written first (D18, `FlowRecords.beginRun`), its scope frozen there: the start's profiles
 //   that exist then. A read narrows it to the profiles that exist now; it never widens (D8).
 // - A host is started only through `#wake`, which replays the run's journal from the top (CP-D9) under the kept
@@ -335,11 +338,27 @@ export class FlowRuns {
     const { records } = this.ports;
     const bytes = records.bytes(hash);
     if (bytes === undefined) throw refused("version", words.notAVersion(params.flow));
-    const meta = readFlow(bytes).meta;
+    const read = readFlow(bytes);
+    const meta = read.meta;
     const name = words.markName(meta?.name, params.flow);
     const takes = new Set(Object.keys(meta?.input ?? {}));
     const unknown = Object.keys(params.input).find((input) => !takes.has(input));
     if (unknown !== undefined) throw refused("input", words.noSuchInput(name, unknown));
+    // CP4-Q20 (a), R8b: the folder its input names, a session's or a project's, found; and a step the static read
+    // says names no folder (none plainly, none computed, no `in:`) needs one, since none is a default
+    let folder: string | undefined;
+    for (const [input, kind] of Object.entries(meta?.input ?? {})) {
+      const value = params.input[input];
+      if (value === undefined || value === "" || (kind !== "session" && kind !== "project")) continue;
+      const found = this.ports.folderOf(kind, value);
+      if (found === undefined) throw refused(`input-${kind}`, words.inputNotFound(kind));
+      folder ??= found;
+    }
+    if (
+      folder === undefined &&
+      read.calls.some((call) => call.in !== true && call.computed !== true && call.cwd !== true)
+    )
+      throw refused("folder", NO_FOLDER);
     // D3: the bounds, from the records, read with no await before the run begins
     const kept = records.runRecords();
     const live = kept.filter(isLive);

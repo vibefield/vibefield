@@ -24,8 +24,9 @@ export const tooBig = (): string =>
 export const noSuchInput = (flow: string, name: string): string =>
   `${flow} takes no input named ${name}; nothing was started.`;
 
-/** RED skeleton (R8b): an input naming a session or a project VibeField can't find. */
-export const inputNotFound = (_kind: "session" | "project"): string => "";
+/** An input naming a session or a project VibeField can't find (CP4-Q20 (a), R8b). */
+export const inputNotFound = (kind: "session" | "project"): string =>
+  `VibeField can't find the ${kind} its input names.`;
 
 /** No run fieldd keeps under that id. */
 export const noSuchRun = (run: string): string => `VibeField has no run ${run}.`;
