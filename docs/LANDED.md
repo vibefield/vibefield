@@ -20975,6 +20975,7 @@ ruled PG-D11 A on the PM board at 16:22:36Z. VF-PM sliced PG-1 at the leans (13:
 - 1c's first cut held a board past the cap in a loop with its own snapshots (the review, from two lenses).
 - The phone's History tail and `project.subscribe` stay on the shed, each its own item, both reachable today: 109 (a
   tail reset's hole below the newest 100 rows) and 110 (the phone's no-op snapshot).
+  > **Landed 2026-11-06:** item 109 closed in M164 `562f402bd` (LANDED "Item 109"); 110 stays on the shed.
 - The first kit try (10-29 14:35Z) named the test FILE in `-only-testing`, matched nothing, and exited 0 with
   "Executed 0 tests": a false green, caught because the script grepped for the row. `pg1c-kit.sh` now names the
   `@Suite` and requires the named row to run and pass.
@@ -35807,3 +35808,96 @@ pnpm-workspace, package.json or field-native path):
   drawn on the page `BgAp9CF2i7wYuJ4BzXbi6P` with the sitting's rows 1, 2, 4, 8 and 14.
 - The records beyond LANDED, ROADMAP and DECISIONS: architecture.html's flow host row names the run mark beside PATH,
   and its R32 row quotes the wall's description at T, with a dated correction.
+
+## Item 109 — the phone's History tail closes the hole a reset left: a snapshot past the rows held is filled from the head, six pages at most, and past them the copy is cut contiguous and the drop is said
+(2026-11-06; two commits `6f34c4b9e` → `562f402bd` on lane `item109-r1` over main `f445b3b80`, in
+`/Volumes/SamsungRed/lanes/pg9/vibe-field`; M164 is `562f402bd` itself, a fast-forward of main `f445b3b80`, run 164,
+landed 2026-11-06T00:03:51Z.) Left on the shed by PG-1c (LANDED "PG-1a…1c"); RULED (a), N = 6, by VF-PM at
+2026-11-05 12:50Z.
+
+**The hole.** A tailnet caller's `index.session.subscribe` snapshot carries the session's newest
+`INDEX_TAILNET_LIMITS.MAX_ROWS` (100) rows, and a `.snapshot` resets the copy.
+- The kit's `HistoryDesktopReader` kept every held row below the reset's oldest ordinal, and its older cursor pointed
+  below the first page it read.
+- So when more than 100 rows arrived after the newest row held (a pause and a resume through a busy session), the
+  rows between were in no page a cursor reached: a silent hole in the middle of the transcript.
+
+**The fix.** `apps/ios/VibeFieldKit/Sources/FieldHistory/HistoryReads.swift`, +120 −7:
+- `tailSnapshot`: a snapshot whose oldest ordinal is above the newest row held starts `fillHole`.
+- `fillHole` reads `index.timeline` from the head, following `nextCursor`, until a page holds a row at or below the
+  newest held ordinal, or the session's top. It reads at most `HistoryReads.fillPages` (6) pages of `pageRows` (40).
+  Overlap is read by ordinal alone.
+- A fill that meets no held row drops the held rows below its last page and re-seats the cursor there, so the copy is
+  contiguous and the older pages read on. It says so in ONE line through the reader's `log` (the unified log,
+  `com.jamesyong.vibefield.kit` / `history`): the count and the from–to ordinals. No silent drop.
+- A reset during a fill supersedes it (a fill number). A cursor expired under the fill takes the re-open path,
+  `reopen`, now one path shared with `readOlder`.
+- The reach: six pages are 240 rows from the head, so a reset's 100 and a hole of up to 140 rows close.
+- Out: the History tail under PG-1c's backpressure (item 182, reserved), and (c), a door-side `since` (the door
+  keeps no journal by design).
+
+**The rows.** `Tests/FieldHistoryTests/HistoryTailHoleTests.swift` (new, +180), a scripted session door paged
+backward from the head as rosetta pages, whose tail answers the newest 100:
+- `holeFills`: a 120-row hole (60 → 280 rows) closes on exactly the sixth page; nothing is dropped, nothing said,
+  and the older cursor stays `before:20`.
+- `holeTruncates`: a 1,000-row hole (60 → 1,160 rows); 0…59 are dropped and said in one line ("dropped 60 rows",
+  "ordinals 0–59"), the copy is 920…1159, and the older page reads on from 880.
+- `overlapReadsNothing`, the control: a reset that meets the rows held reads no page.
+
+**The witness,** on vf-m1 (a9; Xcode 27.3 beta 27C5020n, the iPhone 17 simulator
+`67E36A30-7FA2-4942-BD50-84786D2A57ED`, `-only-testing:FieldHistoryTests`, 2026-11-05 23:33–23:37Z; logs
+`lanes/ts6/logs/m1/item109/`), on the first cut over `bcf2a58dd`:
+- RED at `46c47792e` (`red-test.log`, sha256 `f741e3c6095140ab0b5f7b8c0d483ea0c940461c2182df8f1e97b1feb3d04cea`):
+  "Test run with 50 tests in 8 suites failed after 21.467 seconds with 11 issues", exit 65. The two red rows were
+  `holeFills` and `holeTruncates`, by assertion (the second stops at its `#require` on the line). The control
+  passed, and so did "the reads fill the values" (HistoryReadsTests, 6 of 6) and the other six suites.
+- GREEN at `bafc8a62e` (`green-test.log`, `840188076009e8adbfa9935999933c61c6a3cb269c3dbb1e9c18cb294a3e1539`): "Test
+  run with 50 tests in 8 suites passed after 1.230 seconds", exit 0, fifty of fifty.
+- Both builds had 0 errors and the same 46 warning lines, none naming FieldHistory. The run booted the simulator at
+  23:34:58Z and shut it down at 23:37:01Z.
+- The re-cut onto `f445b3b80` is byte-identical: the two files' blobs and the patch-ids are equal, and nothing under
+  `apps/ios` moved between the bases, so the `apps/ios` subtree is `966203018dc8` at both tips. VF-PM accepted at
+  23:43Z that the red's witness carries.
+
+**The mint,** run 164 on vf-m1 (a9's `mint/item109-r1`, tree `ef38bb1b0d3d`, from
+`item109-r1-562f402bd-on-f445b3b80.bundle`, 8,784 B, sha256 `3b70e1d72f58…`, requiring only `f445b3b80`):
+- The kit's full suite at `562f402bd`, no `-only-testing` (`lanes/ts6/logs/m1/run164-kit/green-test.log`, sha256
+  `cff11ddeb34f25d8036c1b9166f3b26d69852ac0736e631a5a5fefad0e10b14c`): 16 runs, 1,846 tests, exit 65.
+  - 15 runs green, FieldHistoryTests among them ("Test run with 50 tests in 8 suites passed after 1.167 seconds").
+  - The one red run, "Test run with 175 tests in 34 suites failed after 24.395 seconds with 1 issue", is item 167's
+    row, open since 11-02: `TerminalSurfaceKeyboardTests.scrollingKeepsTheKeyboardDownAndExplicitFocusStillWorks()`
+    at `TerminalSurfaceKeyboardTests.swift:31:27`, `UIApplication.shared.connectedScenes.first` nil.
+  - The simulator `67E36A30` was booted by the run at 23:50:18Z and shut down at 23:52:06Z.
+- The control for item 167: that suite alone at main `f445b3b80`
+  (`lanes/ts6/logs/m1/item167-control-f445b3b80/main-test.log`, sha256
+  `41ce1102fe8eca745369c871e769474a84cf591358a7d91aa541e6b18b334ee7`): "Test run with 1 test in 1 suite failed after
+  0.042 seconds with 1 issue", the same row at the same `:31:27`. The red is main's own, not item 109's. VF-PM ruled
+  at 23:58Z that the kit counts green for the land on that control and on a verify equal to run 163's.
+- `pnpm verify` at `562f402bd`: `lanes/ts6/logs/m1/run164/run164.out` (sha256
+  `61ddd212ac07258cb9586ce28a33cea189fe1ff3f3356f627ce9c501e23065d8`): "ts6-mini verify ARMED 23:54:12Z"; "verify
+  exit 0 23:59:19Z"; "tree clean after verify"; "stubs left: 0".
+  - `verify.log` (sha256 `c37b08f896eedcc453fb03c93f11325384d1bb2ddfc284675283bb741344215a`; its clean copy
+    `1571823ca6dab853ba2bb0e15f12be22dcc826ed437c6a72f344718d3b7b500b`): fieldd "Tests  3457 passed | 14 skipped
+    (3471)", contracts "Tests  1751 passed (1751)", field-app "Tests  4069 passed (4069)" and electron-shell "Tests
+    2668 passed | 3 skipped (2671)", each as at run 163; node "ℹ tests 473", "ℹ fail 0"; biome "Checked 3379
+    files"; cargo 545 passed in 34 results; Nx typecheck and test "for 29 projects"; the census "no drift" and
+    "census assert OK — no §7.3 violation".
+  - `run164.files` equals run 163's (937 lines). `run164-next.out`
+    (`3d716a0d69a8040d65a82f48d8f6e419efe6491e2a15e9135f07d87885818e84`): "the locks stand: no re-install";
+    "preflight exit 0 · 1 WARN/FAIL lines". `run164-hid.log`
+    (`04151a691919154dd9bcccc0b0513c1245b845172a8d5d3f1ae51a03928d7895`): the console unlocked, HID idle throughout.
+- The land (the fixer's, 2026-11-06T00:03:51Z): main fast-forwarded from `f445b3b80`, 2 files +300 −7, pin-class
+  none.
+
+**Found:**
+- The witness brief said the kit's build dir goes "on the SSD as for every kit job". That was the mini's rule. The
+  SSD is the MacBook's and vf-m1 has none, so a vf-m1 kit job builds on its internal disk under `~/vf-lanes`, as
+  a9's did. The rule is corrected at the brief's source (`lanes/pg9/a9-brief-item109.md`, 2026-11-05 23:41Z).
+- The commits' bodies say the simulator witness waits on the mini. The mini went offline, and it ran on vf-m1. The
+  commits stay as minted.
+- Step 0 promised "a 150-row hole fills", past six pages' reach (140 rows); the row is a 120-row hole.
+- a9's kit script misread both runs' exits. Item 109's green exited 1 on an empty list under bash 3.2's `set -u`.
+  Run 164's tally said "failed rows: 0 / rc 0" over an exit of 65: it caught only quoted test names and did not
+  turn a non-zero exit red. Each record is a hand tally from the test log; the script's next copy fixes both.
+
+Item 109 closes in this entry. Item 110 stays on the shed.

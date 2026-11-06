@@ -327,7 +327,7 @@
 - Next: S5, James's device run on `n5-300s-s1-f250` (and, optionally, `n20-300s-s1-f250`), by his recipe page
   (published 11-05 12:10Z). M1 the n5/n20 rates with the Energy Log, M2 the cap under the link conditioner. PU-I
   is filed by James; on the phone's cut, idle is its cost step alone (PG-9 S4a).
-- Owed: items 109 (the History tail's reset hole) and 110 (`project.subscribe`'s no-op snapshot on the phone), both
+- Owed: item 110 (`project.subscribe`'s no-op snapshot on the phone; item 109 landed as M164, 2026-11-06), kept
   on the shed; the cap read on the phone under the link conditioner (PG-9, S5); from PG-1d, the F-H2 rider (the board's
   gate and the ticket mint read different things) and an old owner's run-id fallback (a design question); from PG-2,
   the draft queue's amendments (design-06's SP-L4, DS-D4 and limits "not built" clauses, design-mv §1, build-mv L8
