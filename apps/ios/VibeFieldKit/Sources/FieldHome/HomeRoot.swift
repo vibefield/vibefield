@@ -18,6 +18,26 @@ public struct HomeRoot: View {
   public init() {}
 
   public var body: some View {
+    #if DEBUG
+      // IOS-12e: `-vf-spark-gallery` is the spark gallery instead of the app, and `-vf-reduce-motion` puts the whole
+      // app under reduced motion, which simctl cannot turn on. SwiftUI's `accessibilityReduceMotion` is get-only; its
+      // setter is `_accessibilityReduceMotion` (SwiftUICore's interface).
+      let arguments = ProcessInfo.processInfo.arguments
+      let reduceMotion = SparkGalleryRequest.reducesMotion(arguments)
+      Group {
+        if let gallery = SparkGalleryRequest(arguments: arguments) {
+          SparkGallery(request: gallery)
+        } else {
+          root
+        }
+      }
+      .transformEnvironment(\._accessibilityReduceMotion) { if reduceMotion { $0 = true } }
+    #else
+      root
+    #endif
+  }
+
+  private var root: some View {
     SplashGate { HomeScreen(lock: lock) }
       .phoneAppearance(phoneLook)
       .background {
