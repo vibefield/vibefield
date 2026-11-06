@@ -1,6 +1,6 @@
 import type { FrameView } from "@vibefield/contracts";
 import { FieldGlyph } from "@vibefield/design-kit/glyphs";
-import { ProfileGlyph } from "@vibefield/puppeteer-view-sdk/react";
+import { AgentIcon, ProfileGlyph } from "@vibefield/puppeteer-view-sdk/react";
 import { keyLegend } from "@vibefield/puppeteer-view-sdk/toolkit";
 import { ChromeBoundary, type SnippetSegment } from "@vibefield/puppeteer-views";
 import {
@@ -15,10 +15,16 @@ import { OS_LABEL, OsMark } from "../godview/os-marks";
 import type { LiveDeskChoice, LiveFilters, LiveProfileChoice } from "./find-door";
 import {
   isOffer,
+  liveHeadWords,
+  offerWords,
   type PeekFieldToken,
   type PeekListItem,
+  type PeekMark,
   type PeekMenuGroup,
+  type PeekMenuRow,
+  type PeekOffer,
   type PeekPick,
+  rowProfile,
 } from "./peek-filters";
 import { isLiveRow, type PeekListRow, type PeekLiveRow } from "./peek-live";
 import {
@@ -174,6 +180,29 @@ export function whereWords(row: Pick<PeekRow, "folder" | "agent">): string | nul
   return parts.length === 0 ? null : parts.join(" · ");
 }
 
+/** A token's, a menu row's or an offer's mark (§8): the desktop's OS mark, the
+ * profile's glyph (filled for the default), a FieldGlyph, or the agent's mark —
+ * which draws at its text's size, so its box is 12, the one size the Peek
+ * draws it (a token's and a menu row's). */
+function Mark({ mark, size }: { mark: PeekMark; size: number }): ReactElement {
+  switch (mark.kind) {
+    case "os":
+      return <OsMark os={mark.os} size={size} />;
+    case "profile":
+      return (
+        <ProfileGlyph glyph={mark.glyph} kind={mark.profileKind} filled={mark.filled} size={size} />
+      );
+    case "glyph":
+      return <FieldGlyph name={mark.name} size={size} />;
+    case "agent":
+      return (
+        <span className="vf-peek-agent-mark" aria-hidden="true">
+          <AgentIcon providerId={mark.id} />
+        </span>
+      );
+  }
+}
+
 /** THE PEEK (K8): what opening the row would show, under its title, folder ·
  * agent and time. PK3 (James's docket v9; built 2026-10-09): the room's own
  * read-only reader, landed at the matched line — handed in as `reader` by
@@ -197,13 +226,16 @@ export function PeekPast({ row, reader }: { row: PeekRow; reader?: ReactNode }):
 /** THE LIVE PEEK (GV-D8): what opening a live row would show — the run's own
  * pane, resting, which the controller draws (`renderLive`, the watch-only
  * pane); a run on another desktop says where it runs, as nothing here can
- * watch another desktop's terminal yet (K10, until DS-4's mirror). SKELETON
- * (SE-1c red): no head yet. */
+ * watch another desktop's terminal yet (K10, until DS-4's mirror). It wears a
+ * head, the past peek's recipe (SE-D1): its title, and `head` under it — its
+ * folder, agent, profile, where it runs and its state (`liveHeadWords`). */
 export function PeekLive({
   row,
+  head,
   renderLive,
 }: {
   row: PeekLiveRow;
+  head: string;
   renderLive?: ((row: PeekLiveRow) => ReactNode) | undefined;
 }): ReactElement {
   let picture: ReactNode;
@@ -235,6 +267,10 @@ export function PeekLive({
   }
   return (
     <section className="vf-peek-live" aria-label="What opening it shows">
+      <header className="vf-peek-past-head">
+        <b>{row.title}</b>
+        <small>{head}</small>
+      </header>
       {picture}
     </section>
   );
@@ -352,16 +388,204 @@ function liveBoundary(
   );
 }
 
-/** A session's row, live or past: its head, then folder · agent — a peer's
- * saying where it runs (K10) — and its matched lines. SKELETON (SE-1c red): no
- * profile yet. */
+/** MV-8b: Live now's filters, Godview's own, are chrome pieces of their own
+ * where they stand — the field's tokens and + Filter — each tried again for the
+ * filters they draw (held by content by the monitor); Everything's are the
+ * popup's, drawn as they are. */
+function filtersBoundary(
+  name: string,
+  liveFilters: LiveFilters | null,
+  items: ReactNode,
+): ReactNode {
+  return liveFilters === null ? (
+    items
+  ) : (
+    <ChromeBoundary name={name} retryKey={liveFilters}>
+      {items}
+    </ChromeBoundary>
+  );
+}
+
+/** A menu row's mark size (§8 "The Filter menu"): a desktop's OS mark and the
+ * ghost row's plus at 11; a profile's glyph, `folder` and an agent's mark at 12. */
+const menuMarkSize = (mark: PeekMark): number =>
+  mark.kind === "os" || (mark.kind === "glyph" && mark.name === "plus") ? 11 : 12;
+
+/** SE-D1: the filters that are on, as tokens in the field — each its mark (12,
+ * in secondary ink), its name and its ×, said "Remove ‹name›". */
+function FieldTokens({
+  tokens,
+  onRemove,
+}: {
+  tokens: readonly PeekFieldToken[];
+  onRemove: (token: PeekFieldToken) => void;
+}): ReactElement {
+  return (
+    <span className="vf-peek-tokens">
+      {tokens.map((token) => (
+        <span key={token.filter} className="vf-peek-field-token" data-filter={token.filter}>
+          <Mark mark={token.mark} size={12} />
+          <span className="vf-peek-field-token-label">{token.label}</span>
+          <button
+            type="button"
+            className="vf-peek-field-token-clear"
+            aria-label={`Remove ${token.label}`}
+            onClick={() => onRemove(token)}
+          >
+            <FieldGlyph name="close" size={8} />
+          </button>
+        </span>
+      ))}
+    </span>
+  );
+}
+
+/** One row of + Filter's menu: a radio — the chosen one in the ready fill — or
+ * TS-4's ghost row, an offer and not a choice, under a hairline. */
+function FilterMenuRow({
+  row,
+  onPick,
+}: {
+  row: PeekMenuRow;
+  onPick: (pick: PeekPick | "connect") => void;
+}): ReactElement {
+  const { mark, note, pick } = row;
+  const lead =
+    mark === null ? null : (
+      <span className="vf-peek-menu-lead">
+        <Mark mark={mark} size={menuMarkSize(mark)} />
+      </span>
+    );
+  const said = note === null ? null : <em className="vf-peek-menu-note">{note}</em>;
+  if (pick === "connect") {
+    return (
+      <>
+        <hr className="vf-peek-menu-rule" />
+        <button
+          type="button"
+          role="menuitem"
+          className="vf-menu-row"
+          data-ghost=""
+          onClick={() => onPick(pick)}
+        >
+          {lead}
+          <span className="vf-menu-label">{row.label}</span>
+          {said}
+        </button>
+      </>
+    );
+  }
+  return (
+    <button
+      type="button"
+      role="menuitemradio"
+      aria-checked={row.on}
+      className="vf-menu-row"
+      data-hot={row.on ? "" : undefined}
+      data-quiet={row.quiet ? "" : undefined}
+      onClick={() => onPick(pick)}
+    >
+      {lead}
+      <span className="vf-menu-label">{row.label}</span>
+      {said}
+    </button>
+  );
+}
+
+/** SE-D1: + Filter and its one menu — a solid menu, right-aligned 4 under it,
+ * every choice under the menus' eyebrow. */
+function FilterButton({
+  groups,
+  open,
+  onOpen,
+  onPick,
+}: {
+  groups: readonly PeekMenuGroup[];
+  open: boolean;
+  onOpen: (open: boolean) => void;
+  onPick: (pick: PeekPick | "connect") => void;
+}): ReactElement {
+  const menuId = useId();
+  return (
+    <span className="vf-peek-filter-place" data-peek-dd="filter">
+      <button
+        type="button"
+        className="vf-peek-filter"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-controls={open ? menuId : undefined}
+        onClick={() => onOpen(!open)}
+      >
+        <FieldGlyph name="plus" size={11} />
+        Filter
+      </button>
+      {open && (
+        <div id={menuId} className="vf-menu vf-peek-menu" role="menu" aria-label="Filter">
+          {groups.map((group) => (
+            <Fragment key={group.eyebrow}>
+              <div className="vf-menu-eye" aria-hidden>
+                {group.eyebrow}
+              </div>
+              {group.rows.map((row) => (
+                <FilterMenuRow key={row.key} row={row} onPick={onPick} />
+              ))}
+            </Fragment>
+          ))}
+        </div>
+      )}
+    </span>
+  );
+}
+
+/** SE-D1: a typed name's offer, first in the list — its mark at 15 in a 17
+ * column, its words, its sessions, and ⇥ printed on a key cap. */
+function OfferRow({
+  offer,
+  id,
+  hot,
+  onOpen,
+}: {
+  offer: PeekOffer;
+  id: string;
+  hot: boolean;
+  onOpen: () => void;
+}): ReactElement {
+  return (
+    // biome-ignore lint/a11y/useKeyWithClickEvents: the field holds the keys (⇥ ↵), as a combobox's listbox does
+    <div
+      id={id}
+      role="option"
+      tabIndex={-1}
+      aria-selected={hot}
+      className="vf-peek-row"
+      data-hot={hot ? "true" : undefined}
+      data-kind="offer"
+      onClick={onOpen}
+    >
+      <span className="vf-peek-row-head">
+        <span className="vf-peek-offer-mark">
+          <Mark mark={offer.mark} size={15} />
+        </span>
+        <b className="vf-peek-title">{offer.title}</b>
+        <span className="vf-peek-when">{offer.note}</span>
+        <kbd className="vf-peek-tab">⇥</kbd>
+      </span>
+    </div>
+  );
+}
+
+/** A session's row, live or past: its head, then folder · agent — a run of
+ * this desktop's saying its profile (SE-D1), a peer's where it runs (K10) — and
+ * its matched lines. */
 function SessionRow({
   row,
+  profile,
   id,
   hot,
   onOpen,
 }: {
   row: PeekListRow;
+  profile: LiveProfileChoice | null;
   id: string;
   hot: boolean;
   onOpen: () => void;
@@ -387,9 +611,20 @@ function SessionRow({
         <b className="vf-peek-title">{row.title}</b>
         <span className="vf-peek-when">{row.when}</span>
       </span>
-      {(where !== null || remote !== null) && (
+      {(where !== null || profile !== null || remote !== null) && (
         <span className="vf-peek-sub">
           {where}
+          {profile !== null && (
+            <span className="vf-peek-prof">
+              <ProfileGlyph
+                glyph={profile.glyph}
+                kind={profile.kind}
+                filled={profile.isDefault === true}
+                size={11}
+              />
+              {profile.label}
+            </span>
+          )}
           {remote !== null && (
             <span className="vf-peek-os" title={OS_LABEL[remote.os]}>
               <OsMark os={remote.os} size={11} />
@@ -414,6 +649,11 @@ export function PeekView(props: PeekViewProps): ReactElement {
     layout,
     query,
     scope,
+    liveFilters = null,
+    tokens,
+    filterMenu,
+    filterOpen,
+    here,
     rows,
     hot,
     foot,
@@ -423,6 +663,9 @@ export function PeekView(props: PeekViewProps): ReactElement {
     listRef,
     onQuery,
     onScope,
+    onFilterOpen,
+    onPick,
+    onRemoveToken,
     onOpen,
     onClose,
     onKeyDown,
@@ -432,6 +675,8 @@ export function PeekView(props: PeekViewProps): ReactElement {
   const optionId = (index: number): string => `${listId}-row-${index}`;
   const hotRow = hot >= 0 ? rows[hot] : undefined;
   const words = query.trim();
+  // Live now's filters are Godview's (GV-D3); Everything draws none of them (UM-D28)
+  const live = scope === "live" ? liveFilters : null;
   let body: ReactNode;
   if (rows.length === 0) {
     body = (
@@ -451,13 +696,28 @@ export function PeekView(props: PeekViewProps): ReactElement {
     );
   } else {
     let peek: ReactNode = null;
-    // SKELETON (SE-1c red): an offer's peek is not drawn yet
-    if (!layout.folded && hotRow !== undefined && !isOffer(hotRow)) {
-      if (isLiveRow(hotRow)) {
+    if (!layout.folded && hotRow !== undefined) {
+      if (isOffer(hotRow)) {
+        // SE-D1: what taking the offer does — a 56 circle holding its mark, and the words
+        peek = (
+          <section className="vf-peek-live" aria-label="What taking it does">
+            <div className="vf-peek-live-words">
+              <span className="vf-peek-offer-circle">
+                <Mark mark={hotRow.mark} size={24} />
+              </span>
+              <p>{offerWords(hotRow)}</p>
+            </div>
+          </section>
+        );
+      } else if (isLiveRow(hotRow)) {
         // MV-8b: the live peek is a chrome piece of its own, tried again for the run it shows
         peek = (
           <ChromeBoundary name="Live peek" retryKey={hotRow.floorSessionId ?? hotRow.id}>
-            <PeekLive row={hotRow} renderLive={renderLive} />
+            <PeekLive
+              row={hotRow}
+              head={liveHeadWords(hotRow, rowProfile(hotRow, live), here)}
+              renderLive={renderLive}
+            />
           </ChromeBoundary>
         );
       } else {
@@ -476,12 +736,20 @@ export function PeekView(props: PeekViewProps): ReactElement {
           {liveBoundary(
             scope,
             rows,
-            // SKELETON (SE-1c red): an offer's row is not drawn yet
             rows.map((row, index) =>
-              isOffer(row) ? null : (
+              isOffer(row) ? (
+                <OfferRow
+                  key={row.id}
+                  offer={row}
+                  id={optionId(index)}
+                  hot={index === hot}
+                  onOpen={() => onOpen(index)}
+                />
+              ) : (
                 <SessionRow
                   key={row.id}
                   row={row}
+                  profile={isLiveRow(row) ? rowProfile(row, live) : null}
                   id={optionId(index)}
                   hot={index === hot}
                   onOpen={() => onOpen(index)}
@@ -511,7 +779,12 @@ export function PeekView(props: PeekViewProps): ReactElement {
         >
           <div className="vf-peek-field">
             <FieldGlyph name="search" size={18} />
-            {/* SKELETON (SE-1c red): the tokens are not drawn yet */}
+            {tokens.length > 0 &&
+              filtersBoundary(
+                "Live filters",
+                live,
+                <FieldTokens tokens={tokens} onRemove={onRemoveToken} />,
+              )}
             <input
               ref={inputRef}
               type="text"
@@ -531,9 +804,20 @@ export function PeekView(props: PeekViewProps): ReactElement {
               value={query}
               onChange={(event) => onQuery(event.target.value)}
             />
-            {/* SE-D1: the field's end — SKELETON (SE-1c red): the small switch
-                alone, + Filter not drawn yet */}
+            {/* SE-D1: the field's end — + Filter (not drawn with nothing to
+                filter), then the small switch, the scope row's segment made small */}
             <div className="vf-peek-fend">
+              {filterMenu.length > 0 &&
+                filtersBoundary(
+                  "Filter",
+                  live,
+                  <FilterButton
+                    groups={filterMenu}
+                    open={filterOpen}
+                    onOpen={onFilterOpen}
+                    onPick={onPick}
+                  />,
+                )}
               <div className="vf-peek-seg" role="radiogroup" aria-label="What to search">
                 {(["live", "everything"] as const).map((which) => (
                   // biome-ignore lint/a11y/useSemanticElements: a segment, as the kit's primitives draw it

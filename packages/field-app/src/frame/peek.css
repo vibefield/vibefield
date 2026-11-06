@@ -1,8 +1,11 @@
 /* Search — the Peek (DESIGN.md §8 "Search — the Peek"; §5 the search scrim,
    the search popup's shadow, the line's glass, the solid menu; §6 its motion;
-   §10 its place; One Frame §23 — the round-3 kit `gv3.css` is the drawing).
+   §10 its place; One Frame §23 — the round-3 kit `gv3.css` is the drawing;
+   SE-D1 A "Tokens", 2026-11-06 — round 4's `search.css`, variant `tokens`).
    Tokens only; the ready fill is the foreground at 8% (14% under the pointer),
-   as the line mixes it. The dropdowns' menus are menu.css's. */
+   as the line mixes it. + Filter's menu is menu.css's. Nothing here moves but
+   what moved before SE-D1: a token, + Filter, its menu and an offer draw at
+   once (M6 needs no form of them). */
 
 /* ── THE BUTTON — the frame's, at the head's right end ─────────────────────
    A 40 glass circle (the line's glass), 16 in at `top-2`, on the lights'
@@ -300,21 +303,30 @@
   }
 }
 
-/* ── the field: 64 tall, the words at 20, close at its end ── */
+/* ── the field: 64 tall — `search`, the tokens, the words at 20, the field's
+   end (+ Filter and the small switch), and close; its parts 8 apart (SE-D1) ── */
 .vf-peek-field {
   display: flex;
   height: 64px;
   flex: none;
   align-items: center;
-  gap: 14px;
+  gap: 8px;
   padding: 0 14px 0 22px;
   color: var(--vf-text-tertiary);
 }
 
+/* `search` keeps 4 more after it, and the words 4 more before them */
+.vf-peek-field > .vf-glyph {
+  margin-right: 4px;
+}
+
+/* the words keep 120 of the field whatever the tokens hold: in a narrow popup
+   the tokens ellipsize, and a long query scrolls under them */
 .vf-peek-field input {
-  min-width: 0;
+  min-width: 120px;
   height: 100%;
   flex: 1;
+  margin-left: 4px;
   padding: 0;
   border: 0;
   outline: none;
@@ -362,46 +374,148 @@
 }
 
 .vf-peek-esc:focus-visible,
+.vf-peek-field-token-clear:focus-visible,
+.vf-peek-filter:focus-visible,
 .vf-peek-seg button:focus-visible,
-.vf-peek-dd:focus-visible,
 .vf-peek-open:focus-visible,
 .vf-peek-widen:focus-visible {
   outline: 2px solid var(--vf-select);
   outline-offset: 2px;
 }
 
-/* ── the scope row: Live now · Everything, then that scope's dropdowns ── */
-.vf-peek-scope {
-  display: flex;
-  height: 48px;
-  flex: none;
-  align-items: center;
-  gap: 12px;
-  padding: 0 14px 0 16px;
-  border-top: 1px solid var(--vf-hairline);
-  border-bottom: 1px solid var(--vf-hairline);
+/* ── a token: a filter that is on (SE-D1) — 28 tall, padded 0 4 0 8, corners
+   8, on the ready fill, 13.5/500 in primary ink; its mark 12 in secondary ink,
+   its name, and its ×. The tokens stand in the field's own row. ── */
+.vf-peek-tokens {
+  display: contents;
 }
 
-.vf-peek-seg {
+.vf-peek-field-token {
   display: inline-flex;
-  flex: none;
-  gap: 2px;
-  padding: 3px;
-  border-radius: 12px;
+  min-width: 0;
+  height: 28px;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: 5px;
+  padding: 0 4px 0 8px;
+  border-radius: 8px;
+  color: var(--vf-text-primary);
   background: color-mix(in srgb, var(--vf-foreground) 8%, transparent);
+  font-size: 13.5px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
 }
 
-.vf-peek-seg button {
-  height: 28px;
-  padding: 0 12px;
+.vf-peek-field-token > svg,
+.vf-peek-field-token > .vf-peek-agent-mark {
+  flex: none;
+  color: var(--vf-text-secondary);
+}
+
+/* in a narrow popup a token's name ellipsizes; its mark and its × stay */
+.vf-peek-field-token-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* its × — an 18 round, `close` 8 in tertiary ink; primary on a 10% fill under
+   the pointer, the step the bar's controls take */
+.vf-peek-field-token-clear {
+  display: grid;
+  width: 18px;
+  height: 18px;
+  flex: none;
+  place-items: center;
+  padding: 0;
   border: 0;
   border-radius: 9px;
+  color: var(--vf-text-tertiary);
+  background: none;
+  cursor: pointer;
+}
+
+.vf-peek-field-token-clear:hover {
+  color: var(--vf-text-primary);
+  background: color-mix(in srgb, var(--vf-foreground) 10%, transparent);
+}
+
+/* an agent's mark draws at its text's size: its box's font size is its size */
+.vf-peek-agent-mark {
+  display: inline-grid;
+  width: 12px;
+  height: 12px;
+  flex: none;
+  place-items: center;
+  font-size: 12px;
+  line-height: 1;
+}
+
+/* ── the field's end (SE-D1): + Filter, then the small switch, 8 apart ── */
+.vf-peek-fend {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+}
+
+.vf-peek-filter-place {
+  position: relative;
+}
+
+/* + Filter — 28 tall, padded 0 10 0 8, corners 14, `plus` 11 and "Filter" 5
+   apart at 12.5/500 in secondary ink; primary on the ready fill under the
+   pointer and while its menu is open */
+.vf-peek-filter {
+  display: inline-flex;
+  height: 28px;
+  align-items: center;
+  gap: 5px;
+  padding: 0 10px 0 8px;
+  border: 0;
+  border-radius: 14px;
   color: var(--vf-text-secondary);
   background: none;
   font-family: inherit;
   font-size: 12.5px;
   font-weight: 500;
   line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.vf-peek-filter:hover,
+.vf-peek-filter[aria-expanded="true"] {
+  color: var(--vf-text-primary);
+  background: color-mix(in srgb, var(--vf-foreground) 8%, transparent);
+}
+
+/* the small switch, Live now · Everything — the scope row's segment made
+   small: the ready fill as its track, padding 2, corners 10; each half 26
+   tall, padded 0 10, corners 8, at 12/500 in secondary ink, the chosen one
+   solid in primary ink with the hairline and a 1px shadow */
+.vf-peek-seg {
+  display: inline-flex;
+  flex: none;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--vf-foreground) 8%, transparent);
+}
+
+.vf-peek-seg button {
+  height: 26px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 8px;
+  color: var(--vf-text-secondary);
+  background: none;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
   cursor: pointer;
 }
 
@@ -413,54 +527,7 @@
     0 1px 3px rgb(0 0 0 / 8%);
 }
 
-.vf-peek-dds {
-  display: flex;
-  min-width: 0;
-  gap: 6px;
-}
-
-.vf-peek-dd-place {
-  position: relative;
-  min-width: 0;
-}
-
-.vf-peek-dd {
-  display: inline-flex;
-  max-width: 100%;
-  height: 30px;
-  align-items: center;
-  gap: 7px;
-  padding: 0 10px;
-  border: 0;
-  border-radius: 15px;
-  color: var(--vf-text-primary);
-  background: none;
-  font-family: inherit;
-  font-size: 12.5px;
-  font-weight: 500;
-  line-height: 1;
-  white-space: nowrap;
-  cursor: pointer;
-}
-
-.vf-peek-dd:hover,
-.vf-peek-dd[aria-expanded="true"] {
-  background: color-mix(in srgb, var(--vf-foreground) 8%, transparent);
-}
-
-.vf-peek-dd-lead {
-  display: inline-flex;
-  flex: none;
-  color: var(--vf-text-secondary);
-}
-
-/* "All desktops" wears every desktop's mark */
-.vf-peek-marks {
-  display: inline-flex;
-  gap: 3px;
-}
-
-/* a menu row's mark and its word (a desktop's agents, a profile that waits) */
+/* a menu row's mark and its word (its sessions or agents, a profile that waits) */
 .vf-peek-menu-lead {
   display: inline-flex;
   flex: none;
@@ -500,24 +567,16 @@
   color: var(--vf-text-secondary);
 }
 
-.vf-peek-dd-label {
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.vf-peek-dd-turn {
-  flex: none;
-  color: var(--vf-text-tertiary);
-}
-
-/* a dropdown's menu: solid (§5), 4 under it */
+/* + Filter's menu: solid (§5), right-aligned 4 under the button, at least 240
+   wide and at most 430 tall, scrolling past that; its groups under the menus'
+   eyebrow (menu.css) */
 .vf-peek-menu {
   position: absolute;
   z-index: 2;
   top: calc(100% + 4px);
-  left: 0;
-  min-width: 200px;
-  max-height: 280px;
+  right: 0;
+  min-width: 240px;
+  max-height: 430px;
   overflow: auto;
   scrollbar-width: thin;
 }
@@ -639,8 +698,11 @@
   white-space: nowrap;
 }
 
-/* where a run on another desktop runs (K10): its OS mark and its name */
-.vf-peek-os {
+/* where a run on another desktop runs (K10): its OS mark and its name; and the
+   profile a run of this desktop's runs under (SE-D1): its glyph 11 and its name —
+   each 8 after folder · agent, at 11.5/500 in secondary ink */
+.vf-peek-os,
+.vf-peek-prof {
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -649,6 +711,33 @@
   font-size: 11.5px;
   font-weight: 500;
   vertical-align: middle;
+}
+
+/* a typed name's offer (SE-D1): its mark at 15 in a 17 column, 4 into the
+   row's padding; its sessions at the end, and ⇥ printed on a key cap — 20
+   tall, padded 0 6, corners 6, on the ink at 7%, 11/600 in tertiary ink */
+.vf-peek-offer-mark {
+  display: inline-grid;
+  width: 17px;
+  flex: none;
+  margin-left: -4px;
+  place-items: center;
+  color: var(--vf-text-secondary);
+}
+
+.vf-peek-tab {
+  display: grid;
+  height: 20px;
+  flex: none;
+  place-items: center;
+  padding: 0 6px;
+  border-radius: 6px;
+  color: var(--vf-text-tertiary);
+  background: color-mix(in srgb, var(--vf-foreground) 7%, transparent);
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
 }
 
 .vf-peek-ev {
@@ -755,12 +844,14 @@
   color: var(--vf-text-secondary);
 }
 
-/* ── the live peek (GV-D8): the run's own pane, resting ── */
+/* ── the live peek (GV-D8): the run's own pane, resting, under a head — the
+   past peek's recipe, 12 above the pane (SE-D1) ── */
 .vf-peek-live {
   display: flex;
   min-width: 0;
   min-height: 0;
   flex-direction: column;
+  gap: 12px;
   padding: 14px;
 }
 
@@ -811,6 +902,18 @@
 .vf-peek-live-words .vf-peek-os {
   margin-left: 0;
   font-size: 13px;
+}
+
+/* the offer's peek (SE-D1): a 56 circle on the ready fill holding its mark at
+   24, over its words */
+.vf-peek-offer-circle {
+  display: grid;
+  width: 56px;
+  height: 56px;
+  place-items: center;
+  border-radius: 28px;
+  color: var(--vf-text-primary);
+  background: color-mix(in srgb, var(--vf-foreground) 8%, transparent);
 }
 
 /* ── empty, honestly ── */
