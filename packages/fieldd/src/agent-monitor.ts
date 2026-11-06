@@ -48,8 +48,9 @@ import { isTypedRun } from "./agent-typed-run";
 //   · the per-run facts, read off the fold's own rows (`AgentSessionSummary`):
 //     the PTY join, the project's root, the profile, the continuation's
 //     pending and exit, liveness as fieldd knows it;
-//   · the bare terminals, from the floor's inventory (every live PTY, with the
-//     Agent Profile its shell was born under — the terminal bindings record);
+//   · the bare terminals, from the floor's inventory (every PTY it lists, a
+//     husk marked `exited`, with the Agent Profile its shell was born under —
+//     the terminal bindings record);
 //   · this device (the roster's name and platform) and the Agent Profiles with
 //     their sign-ins (the spawn menu's devices and profiles);
 //   · the project identity store (`project-identity.ts`, L4).
@@ -265,7 +266,13 @@ export function hostRunFromSummary(
 }
 
 /** A floor PTY as the backend's host record. `createdAt` 0 is the floor's
- * "unknown" (a roster row with no birth time), the backend's own convention. */
+ * "unknown" (a roster row with no birth time), the backend's own convention.
+ * A husk says so (vf-feed-2): a pane whose process has ended and whose cell
+ * still lists it (item 97's `exited`; MF-1g keeps an app run's) carries
+ * `exited`, the backend's own word for a terminal it draws no live row for.
+ * Without it, once puppeteer removed the run that claimed the pane, the dead
+ * PTY stood as a live, attachable, writable shell — the bare shell beside the
+ * ended run that `hostRunFromSummary`'s PTY join rules out. */
 export function hostTerminalFrom(
   info: TerminalInfo,
   profileSet: string | undefined,
@@ -282,6 +289,7 @@ export function hostTerminalFrom(
     ...(info.title !== undefined && info.title !== "" ? { title: info.title } : {}),
     ...(profileSet !== undefined ? { profileSet } : {}),
     ...(workloadClass !== undefined ? { workloadClass } : {}),
+    ...(info.exited === true ? { exited: true } : {}),
   };
 }
 
@@ -501,8 +509,10 @@ export function createAgentMonitorService(opts: AgentMonitorServiceOptions): Age
   // Q06 (James, 2026-10-27, "B · Keep a failed body until you look") — a
   // crashed run keeps its row, the failure on it, until the person has SEEN
   // its pane: until an open screen reports shown its row, or the floor session
-  // its pane is (the fold's join; a dead PTY is a bare terminal row again, and
-  // this host keys a terminal row by its session). What a window reports
+  // its pane is (the fold's join, `terminal.runtimeSessionId` against the ids
+  // shown, never the husk as a row: a run born before its PTY was listed
+  // carries its own id, and its dead PTY is no row at all — the floor lists
+  // it `exited` and `hostTerminalFrom` says so). What a window reports
   // shown is its focused pane while the terminals are up and the row the
   // person pointed at, unless that row has failed (Q04; field-app's
   // `windowShown`), so that is the seeing. Only a screen that looks for the
