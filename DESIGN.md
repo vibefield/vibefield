@@ -6074,9 +6074,10 @@ below), and the spark's next session hears it; a line VibeField cannot confirm i
   words to Claude Code (read the session to see); Vela's later words to Claude Code are held again", and for a spawn,
   "VibeField: VibeField restarted, and cannot tell whether the agent you allowed Vela started; list Vela's agents to
   see", and for a changed flow's run (CP-4a2b, the amendment above), "VibeField: VibeField restarted, and cannot tell
-  whether the run of ‹flow› you allowed Vela started; list Vela's flows to see". Each is true whether or not the spark
-  heard what the act did before the restart: the held send's yes is gone either way, and a spawn's yes, or a run's, was
-  for that one agent or run. An act is never done twice (CP2-D2).
+  whether the run of ‹flow› you allowed Vela started; it is not started again" (no act lists a spark's flows until
+  CP-4b serves the flow verbs, so the fact names none). Each is true whether or not the spark heard what the act did
+  before the restart: the held send's yes is gone either way, and a spawn's yes, or a run's, was for that one agent or
+  run. An act is never done twice (CP2-D2).
 
 "Claude Code" is the catalog's label (R23b): the agent a spawn starts, and a session fieldd names by its title, else by
 its agent's label in its folder ("Claude Code in vibe-field"), else by that label, else by its id (§8 "Chat's thread",
