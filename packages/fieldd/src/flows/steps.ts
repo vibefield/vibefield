@@ -7,6 +7,7 @@ import {
   nameWords,
   oneLineWords,
 } from "@vibefield/contracts";
+import { checkForm, type FlowForm, type FormRefusal } from "./form-check";
 
 // CP-4a2b (§13a slice 8; D5, D9) — a flow's steps: `startStep` is the ONE road a step's agent is started by
 // (CL-H5), in D5's order, each fact on the run's record before the next act:
@@ -106,7 +107,30 @@ export type FlowStepWrite = (
 /** How a step's start went: refused, in the script's words, or working in its session. */
 export type FlowStepStarted =
   | { readonly ok: false; readonly refused: string }
-  | { readonly working: string };
+  | { readonly working: string; readonly form?: FlowForm | undefined };
+
+/** A form the run can't check, in DESIGN.md §9's words ("A form the run can't check"; D12). */
+export function formWords(label: string | undefined, refusal: FormRefusal): string {
+  const head = `VibeField can't check ${labelWords(label)}'s form:`;
+  switch (refusal.kind) {
+    case "keyword":
+      return `${head} it uses ${nameWords(refusal.keyword)}, which a flow's form may not. A form takes type, properties, required, items and enum.`;
+    case "too-large":
+      return `${head} it is larger than a flow's form may be.`;
+    case "malformed":
+      return refusal.keyword !== undefined
+        ? `${head} its ${refusal.keyword} isn't written as a form takes it.`
+        : `${head} a form is an object of type, properties, required, items and enum.`;
+    case "top":
+      return `${head} a form's top takes type object.`;
+  }
+}
+
+/** VibeField's repair line to a step whose answer missed its form (DESIGN.md §9, "The repair turn"; CP4-Q7 (a)):
+ * ‹fieldd's check› is the form check's or the bounder's words for the first place it missed, never the agent's. The
+ * input queue's mark puts "VibeField: " before it. */
+export const repairLine = (check: string): string =>
+  `your last message did not match this step's form (${check}). Answer once more in that form.`;
 
 /** The options an `agent()` call passed, plain. */
 type StepOptions = Readonly<Record<string, unknown>>;
@@ -191,6 +215,13 @@ export async function startStep(
   const key = Object.keys(options).find((option) => !STEP_KEYS.has(option));
   if (key !== undefined)
     return didntStart(label, `it asks for ${nameWords(key)}, which a step may not set.`);
+  // D12: a step's form is checked at its call, before anything starts; its answer is checked against it
+  let form: FlowForm | undefined;
+  if (options["schema"] !== undefined) {
+    const checked = checkForm(options["schema"]);
+    if (!checked.ok) return { ok: false, refused: formWords(label, checked.refusal) };
+    form = checked.form;
+  }
   const from: AgentInputSender = {
     kind: "flow",
     flow: run.flow,
@@ -210,7 +241,7 @@ export async function startStep(
         ok: false,
         refused: `VibeField didn't send ${labelWords(label)}: that session is outside this run's Agent Profiles, isn't running, is a spark's or another flow's, or is waiting on a permission.`,
       };
-    return sent(ports, write, call, handed, "in", prompt, from);
+    return { ...sent(ports, write, call, handed, "in", prompt, from), form };
   }
   // D9's agent: named, and offered for a spawn by the catalog's door (R23b)
   const agent = said(options["agent"]);
@@ -272,21 +303,21 @@ export async function startStep(
     const why = oneLineWords(error instanceof Error ? error.message : String(error), FLOW_LOG_MAX);
     return { ok: false, refused: `VibeField couldn't start ${labelWords(label)}: ${why}` };
   }
-  return sent(ports, write, call, runtimeRunId, "prompt", prompt, from);
+  return { ...sent(ports, write, call, runtimeRunId, "prompt", prompt, from), form };
 }
 
 /** D5 4–7 for a step's first line, `prompt` to the session it started or `in` to the one it was handed: the session
  * (`handed` for an `in:`, never ended, CP4-Q10), `working` and the line's intent on the record before the queue takes
  * it, then `queued` in the same tick. */
 function sent(
-  ports: FlowStepPorts,
+  ports: Pick<FlowStepPorts, "inputs">,
   write: FlowStepWrite,
   call: number,
   session: string,
   line: "prompt" | "in",
   text: string,
   from: AgentInputSender,
-): FlowStepStarted {
+): { readonly working: string } {
   write(call, (step) => ({
     ...step,
     session,
@@ -302,4 +333,33 @@ function sent(
     ),
   }));
   return { working: session };
+}
+
+/** VibeField's repair line (D5's way, as a step's first line): its intent on the record, `repairing`, the queue as
+ * VibeField's own line to the step (`fieldd` with its `flow`, never joined by a wake, W1), then `queued` in the tick
+ * the queue took it. `n` counts the step's repair lines: Ask once more's is the 2nd. */
+export function sendRepair(
+  ports: Pick<FlowStepPorts, "inputs">,
+  write: FlowStepWrite,
+  run: string,
+  call: number,
+  session: string,
+  n: number,
+  check: string,
+): void {
+  write(call, (step) => ({
+    ...step,
+    state: "repairing",
+    lines: [...(step.lines ?? []), { line: "repair", n, sent: "sending" }],
+  }));
+  ports.inputs.enqueue(session, repairLine(check), {
+    kind: "fieldd",
+    flow: { run, call, line: "repair", n },
+  });
+  write(call, (step) => ({
+    ...step,
+    lines: (step.lines ?? []).map((kept) =>
+      kept.line === "repair" && kept.n === n ? { ...kept, sent: "queued" } : kept,
+    ),
+  }));
 }

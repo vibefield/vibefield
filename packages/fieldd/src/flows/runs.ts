@@ -12,6 +12,7 @@ import {
   type FlowStarter,
   type FlowsListResult,
   flowRunStateOf,
+  NEEDS_CHOICE_WORDS,
   flowsListOf,
   type NeedsItemId,
   nameWords,
@@ -24,7 +25,9 @@ import { RpcCallError } from "../native-link";
 import type { HoldSender } from "../tool-plane/rooms/talk/verbs";
 import type {
   FlowChangedRaise,
+  FlowItemActed,
   FlowItemActs,
+  FlowItemAnswer,
   FlowItemRaise,
 } from "../tool-plane/rooms/you/queue";
 import type { FlowJournalEntry } from "./journal";
@@ -32,8 +35,16 @@ import type { FlowLibrary } from "./library";
 import type { FlowRecords, FlowRunStart } from "./records";
 import { FlowReplay } from "./replay";
 import { readFlow } from "./static-read";
-import { type FlowStepPorts, type FlowStepWrite, startStep } from "./steps";
+import { type FlowForm, matchAnswer } from "./form-check";
 import {
+  type FlowStepPorts,
+  type FlowStepWrite,
+  labelWords,
+  sendRepair,
+  startStep,
+} from "./steps";
+import {
+  boundedAnswer,
   type FlowCallHandler,
   type FlowHostAnswer,
   type FlowHostCall,
@@ -59,8 +70,11 @@ import * as words from "./words";
 //   bytes. A run's end is journaled, then its record written (D18's cadence).
 // - The list and every change (`onChange`) are drawn from the run records (D18; CL-E2-2), never a journal; a live
 //   run's latest log line rides with it until its next anchor writes it into the record (D13).
-// Built later in M-r2: agent() and ask() (slices 8 and 11; until then a call is refused in fieldd's words), the
-// park and its wakes (10a), the cap (12), Stop (13) and boot (14).
+// - A step (slices 8–9): its agent by steps.ts's one spawn road, its slot (CP4-S7), its answer by its turn's end
+//   (CP4-S2), checked against its form (D12) and bounded whole (D11); a miss is the repair turn, and a second holds
+//   the run on the person (`flow-repair`), whose act the needs queue hands the runs once (`acts`).
+// Built later in M-r2: ask() (slice 11; until then it is refused in fieldd's words), the park and its wakes and D2's
+// lookup (10a), the one answer writer (10b), the cap (12), Stop (13) and boot (14).
 
 /** fieldd's own interface to the runs (R32): what daemon.ts builds them from. Slice 7's part. */
 export interface FlowRunPorts {
@@ -135,12 +149,22 @@ interface LiveRun {
   /** the spark that started it, by the name its steps' words are marked with (Q-B2 (a)); none for yours */
   readonly ran?: string | undefined;
   /** each step's answer, by its call, while its host waits on it (the step's result is slice 9's) */
-  readonly waiting: Map<number, (answer: FlowHostAnswer) => void>;
+  readonly waiting: Map<number, StepWaiter>;
+  /** each open step's form (D12), checked at its call: its answer is matched against it */
+  readonly forms: Map<number, FlowForm>;
+  /** each open step's latest miss, in fieldd's words: what Ask once more's repair line says again */
+  readonly misses: Map<number, string>;
   /** the run's input and the kinds its meta names them by, read at its wake: the folder a step names none of
    * (CP4-Q20 (a)) */
   inputs?: { readonly values: FlowInput; readonly kinds: Readonly<Record<string, string>> };
   /** the steps waiting for a slot (CP4-S7), in their calls' order: started when one frees (slice 9) */
   readonly slotted: { readonly call: number; readonly args: readonly unknown[] }[];
+}
+
+/** A step's answer, while its host waits on it: given once (D22), or the call's handler failing. */
+interface StepWaiter {
+  readonly resolve: (answer: FlowHostAnswer) => void;
+  readonly reject: (error: unknown) => void;
 }
 
 /** A step's states that hold one of its run's LIVE_STEPS_MAX slots: its agent is starting or alive (CP4-S7). */
@@ -228,10 +252,12 @@ export class FlowRuns {
   readonly #live = new Map<FlowRunId, LiveRun>();
   readonly #listeners = new Set<(list: FlowRunsList) => void>();
   #closing = false;
+  readonly #offTurns: () => void;
 
   constructor(readonly ports: FlowRunPorts) {
     this.#logger = ports.logger ?? createNoopLogger();
     this.#now = ports.now ?? (() => new Date());
+    this.#offTurns = ports.stepEnds.onTurnEnd((end) => this.#turnEnded(end));
   }
 
   /** Start a run of `flow` (CP4-Q5 (a)): `{run}`, or `{waits}` in the changed-flow item when the library's file is not
@@ -290,15 +316,16 @@ export class FlowRuns {
     };
   }
 
-  /** RED skeleton (slice 9): the runs' side of their items, which the needs queue hands an answer to once. */
+  /** The runs' side of their items (the needs queue's FlowItemActs, bound in slice 15), an answer handed on once. */
   readonly acts: FlowItemActs = {
-    answer: () => Promise.reject(new Error("CP-4a2b slice 9: a run's item's answer is not built")),
+    answer: (answer) => this.#answered(answer),
     start: () => Promise.reject(new Error("CP-4a2b: a changed flow's start is R4–R6's")),
   };
 
   /** fieldd's own stop: every host stopped, each run left as its journal and record say, for the next boot. */
   async close(): Promise<void> {
     this.#closing = true;
+    this.#offTurns();
     this.#listeners.clear();
     await Promise.all([...this.#live.values()].map((live) => live.host?.stop()));
   }
@@ -340,6 +367,8 @@ export class FlowRuns {
     );
     this.#live.set(run, {
       waiting: new Map(),
+      forms: new Map(),
+      misses: new Map(),
       slotted: [],
       ...(params.from !== undefined && params.starter.by === "spark"
         ? { ran: nameWords(params.from.name) }
@@ -408,20 +437,55 @@ export class FlowRuns {
     };
   }
 
-  /** A step: its agent started by `startStep`, then its answer awaited (slice 9's). */
+  /** A step: its agent started by `startStep`, or kept for a slot, and its answer awaited: the step's turn end
+   * (`#turnEnded`), or its refusal. */
   async #step(run: FlowRunId, live: LiveRun, call: FlowHostCall): Promise<FlowHostAnswer> {
     const number = call.call;
     const record = this.ports.records.runRecord(run);
     if (number === undefined || record === undefined)
       throw new Error(`a step of ${run} with no call number or no record`);
-    const answer = new Promise<FlowHostAnswer>((resolve) => live.waiting.set(number, resolve));
+    const answer = new Promise<FlowHostAnswer>((resolve, reject) =>
+      live.waiting.set(number, { resolve, reject }),
+    );
     // CP4-S7: a step its entry put past the run's slots waits, with no spawn, until one frees
-    if (record.open.find((step) => step.call === number)?.state === "waiting") {
+    if (record.open.find((step) => step.call === number)?.state === "waiting")
       live.slotted.push({ call: number, args: call.args });
-      return answer;
+    else void this.#launch(run, live, number, call.args);
+    return answer;
+  }
+
+  /** A step's agent started (or its session handed the line) by `startStep`; its refusal is its answer. */
+  async #launch(
+    run: FlowRunId,
+    live: LiveRun,
+    number: number,
+    args: readonly unknown[],
+  ): Promise<void> {
+    const waiter = live.waiting.get(number);
+    try {
+      const record = this.ports.records.runRecord(run);
+      if (record === undefined) throw new Error(`no record of ${run}`);
+      const started = await this.#startStep(run, live, record, number, args);
+      if ("refused" in started) {
+        live.waiting.delete(number);
+        waiter?.resolve(started);
+      } else if (started.form !== undefined) live.forms.set(number, started.form);
+    } catch (error) {
+      // a handler that fails: the host refuses the call in fieldd's own words
+      live.waiting.delete(number);
+      waiter?.reject(error);
     }
+  }
+
+  #startStep(
+    run: FlowRunId,
+    live: LiveRun,
+    record: FlowRunRecord,
+    number: number,
+    args: readonly unknown[],
+  ) {
     const profiles = new Set(this.ports.profiles());
-    const started = await startStep(
+    return startStep(
       this.ports,
       {
         run,
@@ -436,13 +500,131 @@ export class FlowRuns {
       },
       this.#stepWrite(run),
       number,
-      call.args,
+      args,
     );
-    if ("refused" in started) {
-      live.waiting.delete(number);
-      return started;
+  }
+
+  /** A slot freed (CP4-S7): the first step waiting for one, in call order, starts. */
+  #unslot(run: FlowRunId, live: LiveRun): void {
+    const record = this.ports.records.runRecord(run);
+    if (record === undefined) return;
+    const used = record.open.filter(
+      (step) => SLOT_STATES.has(step.state) && step.handed !== true,
+    ).length;
+    if (used >= FLOW_LIMITS.LIVE_STEPS_MAX) return;
+    const next = live.slotted.shift();
+    if (next === undefined) return;
+    this.#stepWrite(run)(next.call, (step) => ({ ...step, state: "starting" }));
+    void this.#launch(run, live, next.call, next.args);
+  }
+
+  /** A step's turn ended (CP4-S2's road): its answer, once (D22), to the call its host waits on. A failed turn is
+   * "‹label› failed."; a completed one is `{text}`, a form's fields beside it (Q-A1 (a)), bounded whole (D11). A miss,
+   * of its form or of the bound, is the repair turn, and nothing is journaled. A turn end for a step answered, or of a
+   * run this fieldd does not drive, is nothing (R24). */
+  #turnEnded(end: FlowStepTurnEnd): void {
+    const run = end.run as FlowRunId;
+    const live = this.#live.get(run);
+    const waiter = live?.waiting.get(end.call);
+    if (live === undefined || waiter === undefined) return;
+    const record = this.ports.records.runRecord(run);
+    const step = record?.open.find((open) => open.call === end.call);
+    if (record === undefined || step?.session !== end.runtimeRunId) return;
+    // held on the person: the step's words wait for their act
+    if (step.state === "holding") return;
+    if (end.outcome === "failed") {
+      this.#answer(live, end.call, waiter, { ok: false, refused: `${labelWords(step.label)} failed.` });
+      return;
     }
-    return answer;
+    const text = end.text ?? "";
+    const form = live.forms.get(end.call);
+    let value: unknown = { text };
+    if (form !== undefined) {
+      const match = matchAnswer(form, text);
+      if (!match.ok) {
+        this.#missed(run, live, record, step, end.runtimeRunId, match.miss);
+        return;
+      }
+      value = { ...(match.value as Readonly<Record<string, unknown>>), text };
+    }
+    // D11: fields that alone pass the bound are a miss, never a truncation; anything else the one cutter bounds as the
+    // replay hands it on (replay.ts), which marks it `cut` for the journal and the script's worker
+    const bounded = boundedAnswer({ ok: true, value });
+    if (!bounded.ok && bounded.miss === true) {
+      this.#missed(run, live, record, step, end.runtimeRunId, bounded.refused);
+      return;
+    }
+    this.#answer(live, end.call, waiter, { ok: true, value });
+  }
+
+  /** A step's answer given to its host, once: the replay journals it, then the record settles the step. */
+  #answer(live: LiveRun, call: number, waiter: StepWaiter, answer: FlowHostAnswer): void {
+    live.waiting.delete(call);
+    live.forms.delete(call);
+    live.misses.delete(call);
+    waiter.resolve(answer);
+  }
+
+  /** A step's answer missed its form (CP4-Q7 (a)): the repair line once; a miss after it holds the run on the person
+   * (`flow-repair`), whose Ask once more sends the line again. Nothing is journaled. */
+  #missed(
+    run: FlowRunId,
+    live: LiveRun,
+    record: FlowRunRecord,
+    step: FlowRunRecordStep,
+    session: string,
+    check: string,
+  ): void {
+    live.misses.set(step.call, check);
+    if (step.state !== "repairing") {
+      sendRepair(this.ports, this.#stepWrite(run), run, step.call, session, 1, check);
+      return;
+    }
+    const item = this.ports.needs.flowItem({
+      kind: "flow-repair",
+      run: {
+        run,
+        flow: record.flow,
+        call: step.call,
+        ...(step.label !== undefined ? { label: labelWords(step.label) } : {}),
+      },
+      name: record.name,
+      ...(record.starter.by === "spark" && record.starter.spark !== undefined
+        ? { spark: record.starter.spark }
+        : {}),
+      acts: [NEEDS_CHOICE_WORDS.askOnceMore],
+    });
+    this.#rewriteWith(run, (kept) => ({
+      open: kept.open.map((open) => (open.call === step.call ? { ...open, state: "holding" } : open)),
+      held: { item, kind: "flow-repair" },
+    }));
+  }
+
+  /** The person's answer to a run's item, handed on once by the needs queue (D22). Slice 9 answers `flow-repair`'s Ask
+   * once more: the repair line again, its next `n`. An answer handed on again, its step no longer holding, was acted
+   * on, and is answered as done. The gate, the cap and a lost step are slices 11, 12 and 14's; Stop the run is 13's. */
+  async #answered(answer: FlowItemAnswer): Promise<FlowItemActed> {
+    if (answer.kind !== "flow-repair" || answer.stop)
+      throw new Error(`CP-4a2b: a run's ${answer.stop ? "Stop" : answer.kind} is a later slice's`);
+    const run = answer.run.run as FlowRunId;
+    const live = this.#live.get(run);
+    const record = this.ports.records.runRecord(run);
+    const step = record?.open.find((open) => open.call === answer.run.call);
+    if (live === undefined || record === undefined || step === undefined)
+      return { outcome: "failed", reason: words.noSuchRun(run) };
+    if (step.state !== "holding") return { outcome: "done" };
+    const n =
+      Math.max(0, ...(step.lines ?? []).filter((l) => l.line === "repair").map((l) => l.n)) + 1;
+    const check = live.misses.get(step.call);
+    if (check === undefined || step.session === undefined)
+      throw new Error(`the miss of ${run}'s call ${step.call} is not kept`);
+    // the hold is answered: the record holds no item
+    this.#replace(run, (kept) => {
+      const { held: _held, ...rest } = kept;
+      return rest;
+    });
+    sendRepair(this.ports, this.#stepWrite(run), run, step.call, step.session, n, check);
+    return { outcome: "done" };
   }
 
   /** The folder a run's input names, the first of its inputs in its meta's order whose kind names one (CP4-Q20 (a));
@@ -509,6 +691,11 @@ export class FlowRuns {
           ...(earlier > 0 ? { earlier } : {}),
         };
       });
+    // CP4-S7: an answer frees its step's slot
+    if (entry.kind === "answer") {
+      const live = this.#live.get(run);
+      if (live !== undefined) this.#unslot(run, live);
+    }
   }
 
   /** A host's end, as its run ends (or, for a host that left, waits for its next wake: DESIGN.md §9). fieldd's own stop
@@ -582,10 +769,18 @@ export class FlowRuns {
 
   /** A run's record written again with what `fields` makes of it over what it holds, then told: the one writer. */
   #rewriteWith(run: FlowRunId, fields: (record: FlowRunRecord) => Partial<FlowRunStart>): void {
+    this.#replace(run, (start, record) => ({ ...start, ...fields(record) }));
+  }
+
+  /** A run's record written again as `whole` makes it from what it holds (a field it leaves out is gone), then told. */
+  #replace(
+    run: FlowRunId,
+    whole: (start: FlowRunStart, record: FlowRunRecord) => FlowRunStart,
+  ): void {
     const { records } = this.ports;
     const record = records.runRecord(run);
     if (record === undefined) throw new Error(`no record of ${run} to write`);
-    records.writeRunRecord(run, { ...startOf(record), ...fields(record) });
+    records.writeRunRecord(run, whole(startOf(record), record));
     this.#changed();
   }
 

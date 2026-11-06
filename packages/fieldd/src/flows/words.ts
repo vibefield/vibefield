@@ -24,6 +24,9 @@ export const tooBig = (): string =>
 export const noSuchInput = (flow: string, name: string): string =>
   `${flow} takes no input named ${name}; nothing was started.`;
 
+/** No run fieldd keeps under that id. */
+export const noSuchRun = (run: string): string => `VibeField has no run ${run}.`;
+
 /** The version asked for is not one fieldd keeps for the flow. */
 export const notAVersion = (flow: string): string => `That version isn't one of ${flow}'s.`;
 
