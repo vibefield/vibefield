@@ -126,6 +126,7 @@ import {
   stopReadable,
 } from "./agent-stop";
 import {
+  endTypedRun,
   isTypedRun,
   processIsGone,
   readProcesses,
@@ -1983,6 +1984,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       readable: stopReadable(observationLevel),
       known: entry.status !== "unknown",
       working: entry.status === "working",
+      typed: entry.typed !== undefined,
     };
   }
 
@@ -2076,12 +2078,14 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
         );
         outcome = "answered";
       } else {
+        // item 191 — the ladder never ends a typed run (the rule says `unheard` first): its terminal is the
+        // person's shell. Held here too, whatever the rule says, so the floor's terminate cannot reach that shell.
         const placed = await this.audited(
           mutation,
           async () =>
-            terminals === null
+            terminals === null || entry.typed !== undefined
               ? false
-              : await this.terminateLive(terminals, entry.info.terminalSessionId),
+              : (await this.endLive(entry, terminals)).placed,
           (terminated) =>
             terminated
               ? { outcome: "succeeded" }
@@ -2174,11 +2178,43 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     return () => this.sparkTurnedListeners.delete(listener);
   }
 
-  /** CP-2 — agent_stop: end a live run through the floor's own terminate, as the person's Stop does. */
+  /** CP-2 — agent_stop: end a live run, the one way fieldd ends one (`endLive`): a run in its own PTY by that PTY,
+   * a run typed in the person's shell by its process, never the shell (item 191). */
   async endRun(runtimeRunId: string): Promise<void> {
     const entry = this.managed.get(runtimeRunId);
     if (entry === undefined || entry.exiting) return;
-    await this.terminateLive(this.requireTerminals(), entry.info.terminalSessionId);
+    await this.endLive(entry, this.requireTerminals());
+  }
+
+  /** Item 191 (RV #2) — THE ONE WAY fieldd ends a live run, by its provenance. A run one of our doors started ends
+   * by its own PTY, through the floor's terminate ladder. A run typed in the person's shell (AR-7) ends by its
+   * PROCESS (`endTypedRun`: SIGTERM on the pid its record proves, then the subtree that outlives the grace), never
+   * the terminal, which is the person's shell and outlives it (R1, B1). `placed`: the end was placed, and the run's
+   * own exit closes it — the floor's exit for a PTY, the pid's watch for a typed run (`watchTyped`); a held Stop is
+   * heard there. A typed run whose pid the table cannot read, or does not prove, has no end placed (`not-it`,
+   * `unknown`), and the log says so at warn: nothing there was ended that fieldd can stand behind. */
+  private async endLive(
+    entry: ManagedEntry,
+    terminals: TerminalService,
+  ): Promise<{ ended: "terminal" | "process"; placed: boolean }> {
+    const sessionId = entry.info.terminalSessionId;
+    const typed = entry.typed;
+    if (typed === undefined) {
+      return { ended: "terminal", placed: await this.terminateLive(terminals, sessionId) };
+    }
+    const end = await endTypedRun(typed, {
+      shellPid: this.listed(terminals, sessionId) ? terminals.get(sessionId)?.pid : undefined,
+      readTable: this.opts.processTable ?? readProcesses,
+      watch: (pid, onExit) => watchTypedProcess(pid, onExit, this.opts.typedWatch),
+    });
+    const placed = end === "signalled" || end === "gone";
+    const attrs = { runtimeRunId: entry.info.runtimeRunId, sessionId, end };
+    if (placed) {
+      this.logger.info("fieldd.agents.typed_run_end", "A typed run's end was placed", attrs);
+    } else {
+      this.logger.warn("fieldd.agents.typed_run_end", "A typed run's end was not placed", attrs);
+    }
+    return { ended: "process", placed };
   }
 
   /** The persona login pane: the vendor's own interactive login in a PTY
@@ -2532,10 +2568,13 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     // B4 — a TYPED run is never a target: its terminal is the person's own
     // shell, which a persona's stop must never end (a typed launch carries
     // no persona today; the day one does, this is what keeps the shell).
-    // Its process is the deck's to stop (`agent.interrupt`, which signals
-    // the recorded pid once the table proves it); while it runs it counts
-    // under the persona (`liveUnder`), so the stop reports it remaining and
-    // the sign-out is refused with the count — never with the shell ended.
+    // Nor is its process: it is ended only through `endLive` (`endTypedRun`,
+    // the proved process and its subtree), never by a persona's stop — and
+    // `agent.interrupt` signals no pid: it types the pane's own interrupt
+    // (corrected 2026-11-06, item 191: this said the interrupt signalled the
+    // recorded pid). While it runs it counts under the persona (`liveUnder`),
+    // so the stop reports it remaining and the sign-out is refused with the
+    // count — never with the shell ended.
     const typed = new Set<string>();
     for (const entry of this.managed.values()) {
       if (!under(entry.info.profileId)) continue;

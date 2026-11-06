@@ -9,6 +9,11 @@
 // Amended 2026-11-02 (James's Stop/Pause ruling): the pane's Stop uses terminal.terminate. This ladder remains for
 // legacy agent.interrupt callers. agent.pause passes keepOpen: one declared cancellation, then an unheard mark,
 // never a retry or termination; a second cancellation key can quit an agent whose observation is delayed.
+// Amended 2026-11-06 (item 191, RV #2; built at rv-typed-stop Q1's lean (a), awaiting James's ruling): a run typed
+// in the person's own shell (AR-7) is never ended by this ladder. Its terminal is the person's shell, which the floor's
+// terminate would end, and fieldd ends nothing of a typed run by its own act (AR-7 R2): its Stop not heard after the
+// re-send is unheard, left to the person, whatever its status reads. Since 11-02 the ladder's caller is a spark's
+// agent_interrupt, whose contract says the session stays.
 
 import type { AgentStopState } from "@vibefield/contracts";
 
@@ -27,26 +32,32 @@ export function stopReadable(observationLevel: string): boolean {
 }
 
 /** What a run's status says to a Stop: whether it can be read, whether it says anything (`unknown` is no word:
- * the mirror is gone or not yet heard), and whether it reads `working`. */
+ * the mirror is gone or not yet heard), and whether it reads `working` — and whether the run was typed in the
+ * person's own shell (AR-7), whose terminal is never the run's to end. */
 export interface StopFacts {
   readable: boolean;
   known: boolean;
   working: boolean;
+  typed: boolean;
 }
 
 /** What a Stop does when its bound passes and nothing has been heard. */
 export type StopStep = "resend" | "terminate" | "unheard" | "none";
 
 /** ST-D2/D3 — the one step a Stop takes at its bound. A `sent` Stop is sent once more. A `resent` one on a run that
- * reads `working` is ended through the floor's ladder; one whose status cannot be read is marked unheard and left to
- * the person. A `terminating` or `heard` Stop, or one already unheard, takes no step. */
+ * reads `working` is ended through the floor's ladder; one whose status cannot be read, or one typed in the
+ * person's shell (item 191), is marked unheard and left to the person. A `terminating` or `heard` Stop, or one
+ * already unheard, takes no step. */
 export function nextStopStep(stop: AgentStopState, facts: StopFacts, keepOpen = false): StopStep {
   if (stop.stage === "heard" || stop.unheardAt !== undefined) return "none";
   // Observation may lag cancellation. A second key could quit an already-idle CLI.
   if (keepOpen) return "unheard";
   if (stop.stage === "sent") return "resend";
-  if (stop.stage === "resent")
-    return !keepOpen && facts.readable && facts.working ? "terminate" : "unheard";
+  if (stop.stage === "resent") {
+    // item 191 — the ladder's terminate would end the typed run's terminal: the person's shell
+    if (facts.typed) return "unheard";
+    return facts.readable && facts.working ? "terminate" : "unheard";
+  }
   return "none";
 }
 
