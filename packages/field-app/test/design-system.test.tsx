@@ -233,7 +233,7 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
     expect(said("several-typical")).toEqual([
       "This Mac, tightest 64%, click to show only its sessions",
       "Work, tightest 91%, click to show only its sessions",
-      "Client demo, click to show only its sessions",
+      "Client demo, no meters, click to show only its sessions",
     ]);
     expect(circles("several-typical").map((c) => c.getAttribute("aria-pressed"))).toEqual([
       "false",
@@ -278,12 +278,18 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
       "Add a profile…",
       "Not now",
     ]);
-    // usage that cannot be read, and no profiles door: every circle dashed (ruling 10, §8 "Honest states")
+    // usage that cannot be read, and no profiles door: every circle dashed (ruling 10, §8 "Honest states"),
+    // and said so — in the Bands circle's own words (the review)
     expect(circles("unavailable")).toHaveLength(3);
     for (const circle of [...circles("unavailable"), ...circles("no-door")]) {
       expect(circle.querySelector('circle[data-part="empty"]')).not.toBeNull();
     }
-    expect(said("no-door")).toEqual(["This Mac"]);
+    expect(said("unavailable")).toEqual([
+      "This Mac: usage unavailable, click to show only its sessions",
+      "Work: usage unavailable, click to show only its sessions",
+      "Client demo, no meters, click to show only its sessions",
+    ]);
+    expect(said("no-door")).toEqual(["This Mac, no meters"]);
     // the first read held still: Godview's animations off, as under Reduce Motion (M6)
     expect(columnPlate("still")?.getAttribute("data-godview-animations")).toBe("off");
     expect(columnPlate("still")?.querySelector(".vf-bands-breath")).not.toBeNull();

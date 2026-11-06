@@ -8,6 +8,7 @@ import { act, type ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  FIXTURE_DEMO,
   FIXTURE_NATIVE,
   FIXTURE_PROFILES_CONTEXT,
   FIXTURE_PROFILES_NOW,
@@ -253,13 +254,24 @@ describe("the profiles column (UM-D21, UM-D19, UM-D22): said as DESIGN.md §9 sa
     );
   });
 
-  it("names no tightest for a profile that reads nothing", () => {
-    const circle = {
-      set: FIXTURE_WORK,
-      meters: metersOf(FIXTURE_WORK, [], { usage: "unavailable" }),
-    };
-    const page = mount(<ProfilesColumnView {...column({ circles: [circle] })} />);
-    expect(page.querySelector(".vf-profiles-circle")?.getAttribute("aria-label")).toBe("Work");
+  it("says a circle with nothing on it in the Bands circle's own words: its usage unavailable, or no meters (§8 'Honest states')", () => {
+    // the review: the dashed circle was said by its name alone ("Work"), its honest state unsaid
+    const unread = (set: AgentProfileSet): ColumnCircle => ({
+      set,
+      meters: metersOf(set, [], { usage: "unavailable" }),
+    });
+    const said = (props: ProfilesColumnViewProps): (string | null)[] =>
+      [...mount(<ProfilesColumnView {...props} />).querySelectorAll(".vf-profiles-circle")].map(
+        (circle) => circle.getAttribute("aria-label"),
+      );
+    expect(said(column({ circles: [unread(FIXTURE_WORK)] }))).toEqual(["Work: usage unavailable"]);
+    // a profile with no plans has no meters whether or not the usage can be read
+    expect(
+      said(column({ circles: [unread(FIXTURE_WORK), unread(FIXTURE_DEMO)], lens: true })),
+    ).toEqual([
+      "Work: usage unavailable, click to show only its sessions",
+      "Client demo, no meters, click to show only its sessions",
+    ]);
   });
 
   it("hands its acts back: a circle's click, the pointer on a circle and off it, the add", () => {
@@ -447,6 +459,22 @@ describe("the popover (DESIGN.md §8 'Godview's profiles column')", () => {
     expect(
       [...page.querySelectorAll(".vf-profiles-pop-none")].map((line) => line.textContent),
     ).toEqual(none.map((entry) => `${entry.agent} shows no meter`));
+  });
+
+  it("while the usage cannot be read, says the profile's one line, never a line per agent (§9)", () => {
+    // the review: each agent said "‹agent›: usage unavailable", words §9 does not rule; the profile's are ruled
+    const meters = metersOf(FIXTURE_WORK, [], { usage: "unavailable" });
+    expect(
+      meters.entries.filter((entry) => entry.kind === "no-meter" && entry.why === "unavailable")
+        .length,
+    ).toBeGreaterThan(1);
+    const page = mount(<ProfilePopoverView {...popover({ set: FIXTURE_WORK, meters })} />);
+    const lines = [...page.querySelectorAll(".vf-profiles-pop-none")].map(
+      (line) => line.textContent ?? "",
+    );
+    expect(lines.filter((line) => line.endsWith(": usage unavailable"))).toEqual([
+      "Work: usage unavailable",
+    ]);
   });
 
   it("dims every other plan to 28% while the pointer is on one, on the circle and in the rows", () => {

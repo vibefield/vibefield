@@ -1898,7 +1898,10 @@ describe("the monitor stage", () => {
   it("with no profiles door draws This Mac, dashed with its glyph, and the add", async () => {
     const host = await mountMonitor("list", fakeDoor());
     const circles = [...host.querySelectorAll<HTMLButtonElement>(".vf-profiles-circle")];
-    expect(circles.map((circle) => circle.getAttribute("aria-label"))).toEqual(["This Mac"]);
+    // said as the Bands circle says a profile with no plans (the review: its name alone said nothing of its state)
+    expect(circles.map((circle) => circle.getAttribute("aria-label"))).toEqual([
+      "This Mac, no meters",
+    ]);
     expect(circles[0]?.hasAttribute("aria-pressed")).toBe(false);
     expect(circles[0]?.querySelector('circle[data-part="empty"]')).not.toBeNull();
     expect(circles[0]?.querySelector(".vf-bands-glyph")).not.toBeNull();
