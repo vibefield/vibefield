@@ -102,6 +102,7 @@ export const flowNotNowFact = (spark: string, flow: string, approved: boolean): 
 export const flowStartFailedFact = (spark: string, flow: string, reason: string): string =>
   `the run of ${n(flow)} you allowed ${n(spark)} could not start: ${reasonWords(reason)}`;
 
-/** A start a restart found begun (CP2-D2): never made again. */
+/** A start a restart found begun (CP2-D2): never made again. It names no act to look with: none lists a spark's flows
+ * until CP-4b serves the flow verbs. */
 export const flowStartUncertainFact = (spark: string, flow: string): string =>
-  `VibeField restarted, and cannot tell whether the run of ${n(flow)} you allowed ${n(spark)} started; list ${n(spark)}'s flows to see`;
+  `VibeField restarted, and cannot tell whether the run of ${n(flow)} you allowed ${n(spark)} started; it is not started again`;
