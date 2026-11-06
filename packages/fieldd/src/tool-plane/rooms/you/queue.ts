@@ -9,6 +9,7 @@ import {
   NEEDS_WORDS_MAX,
   type NeedsAnswer,
   type NeedsAnswerOutcome,
+  type NeedsRun as NeedsFlowRun,
   type NeedsFrom,
   type NeedsItem,
   type NeedsItemId,
@@ -138,6 +139,49 @@ export interface NeedsQueueOptions {
 export interface NeedsAnswered {
   readonly item: NeedsItem;
   readonly woke?: string;
+}
+
+/** CP-4a2b (§13a slice 6) — a flow run's items, each holding its run: a script's `ask` (`flow-gate`), the call cap
+ * (`flow-cap`), a step's second miss (`flow-repair`) and a step lost to a Quit, or a run set aside (`flow-lost`). */
+export type FlowRunItemKind = Extract<
+  NeedsItemKind,
+  "flow-gate" | "flow-cap" | "flow-repair" | "flow-lost"
+>;
+
+/** A flow run's item as the runs raise it (13a's D2, D22). */
+export interface FlowItemRaise {
+  readonly kind: FlowRunItemKind;
+  /** the run, and the call it holds at (counted from 1 in the run's journal) with the script's label */
+  readonly run: NeedsFlowRun;
+  /** the flow as its mark names it (‹flow›: the runs choose the words, DESIGN.md §9, R18) */
+  readonly name: string;
+  /** the spark that started the run, whose thread shows the item; absent for a run you started */
+  readonly spark?: SparkId | undefined;
+  /** what it asks, in the runs' words: a gate's question, a lost run's sentence */
+  readonly words?: string | undefined;
+  /** the acts before Stop the run, in order: a gate's own choices, or its kind's (NEEDS_CHOICE_WORDS); none for a run
+   * whose one act is Stop the run */
+  readonly acts: readonly string[];
+}
+
+/** The person's answer to a flow run's item, as the runs are handed it: `stop` when it is Stop the run (every such
+ * item's last act), else `choice` is the act's place among the acts the runs raised it with. */
+export interface FlowItemAnswer {
+  readonly id: NeedsItemId;
+  readonly kind: FlowRunItemKind;
+  readonly run: NeedsFlowRun;
+  readonly choice: number;
+  readonly stop: boolean;
+}
+
+/** What the runs did with an answer: done, or failed in fieldd's words. */
+export type FlowItemActed =
+  | { readonly outcome: "done" }
+  | { readonly outcome: "failed"; readonly reason: string };
+
+/** CP-4a2b (13a's D22) — the runs' side of their items: an answer, routed once. */
+export interface FlowItemActs {
+  answer(answer: FlowItemAnswer): Promise<FlowItemActed>;
 }
 
 /** A tool call's refusal, with the fact the model reads (index.ts). */
@@ -420,6 +464,19 @@ export class NeedsQueue implements TalkHolds {
     this.#emit();
     return id;
   }
+
+  // ── a flow run's items (CP-4a2b, §13a slice 6) ──
+
+  /** RED skeleton: keeps nothing. */
+  flowItem(_raise: FlowItemRaise): NeedsItemId {
+    return NeedsStore.mintId();
+  }
+
+  /** RED skeleton: binds nothing. */
+  bindFlowActs(_acts: FlowItemActs): void {}
+
+  /** RED skeleton: ends nothing. */
+  onFlowRunEnded(_run: string): void {}
 
   // ── the window's answer ──
 

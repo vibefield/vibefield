@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   AGENT_CATALOG,
+  NEEDS_CHOICE_WORDS,
   NEEDS_RECORD_FORMAT,
   NEEDS_WORDS_MAX,
   NeedsItem,
@@ -16,7 +17,13 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { RpcCallError } from "../src/native-link";
 import type { GrantPrincipal } from "../src/terminal-grants";
 import { SPARK_LIVE_AGENTS_MAX } from "../src/tool-plane/rooms/talk/verbs";
-import { NeedsQueue, type NeedsRun } from "../src/tool-plane/rooms/you/queue";
+import {
+  type FlowItemActed,
+  type FlowItemAnswer,
+  type FlowItemRaise,
+  NeedsQueue,
+  type NeedsRun,
+} from "../src/tool-plane/rooms/you/queue";
 import { NeedsStore } from "../src/tool-plane/rooms/you/store";
 import * as words from "../src/tool-plane/rooms/you/words";
 
@@ -1066,5 +1073,208 @@ describe("TH-1 — an answer you gave a spark is kept in its transcript (TH-Q27 
     const id = ask(h);
     expect(await refusal(() => h.queue.answer(id, 9, principal))).toBe("no-such-act");
     expect(h.acts).toEqual([]);
+  });
+});
+
+// CP-4a2b (§13a slice 6; 13a's D2, D22) — the needs queue takes a flow run's items, as CP-D12's one queue: the runs raise
+// them, each holding its run and the call it waits at, with the runs' acts and then Stop the run; the person's answer
+// is handed to the runs once (they write it, keyed by its call, at most once: D22), and a run's end ends its items.
+describe("CP-4a2b — a flow run's items: the runs' acts, then Stop the run; an answer handed to the runs once (§13a slice 6)", () => {
+  const RUN = { run: "fr-k3v9q2m7x1", flow: "release-check", call: 3, label: "ship" };
+  const GATE: FlowItemRaise = {
+    kind: "flow-gate",
+    run: RUN,
+    name: "Release check",
+    spark: VELA,
+    words: "Ship the release?",
+    acts: ["Ship", "Hold"],
+  };
+  /** the runs' side, faked: every answer as it was handed on, and what the runs say */
+  const runsActs = (acted: FlowItemActed = { outcome: "done" }) => {
+    const routed: FlowItemAnswer[] = [];
+    const answer = async (handed: FlowItemAnswer): Promise<FlowItemActed> => {
+      routed.push(handed);
+      return acted;
+    };
+    return { routed, acts: { answer } };
+  };
+  const files = (h: ReturnType<typeof harness>) =>
+    h
+      .kept()
+      .map((record) => record.item.id)
+      .sort();
+
+  it("N1: a gate waits with the script's choices, then Stop the run, and Stop is handed to the runs as the run's Stop", async () => {
+    const h = harness();
+    const { routed, acts } = runsActs();
+    h.queue.bindFlowActs(acts);
+    const id = h.queue.flowItem(GATE);
+    expect(listed(h.queue)).toEqual([
+      expect.objectContaining({
+        id,
+        kind: "flow-gate",
+        state: "open",
+        from: { name: "Release check" },
+        spark: VELA,
+        words: "Ship the release?",
+        choices: ["Ship", "Hold", NEEDS_CHOICE_WORDS.stopRun],
+        run: RUN,
+      }),
+    ]);
+    // kept, signed, before it is shown
+    expect(files(h)).toEqual([id]);
+    const { item } = await h.queue.answer(id, 2, principal);
+    expect(routed).toEqual([{ id, kind: "flow-gate", run: RUN, choice: 2, stop: true }]);
+    expect(NeedsItem.parse(item)).toMatchObject({
+      state: "answered",
+      answer: { choice: 2, outcome: "done", told: false },
+    });
+    expect(h.queue.list()).toEqual([]);
+    // nothing is owed here: the runs tell the run's spark by their own wakes (slice 11), so nothing more is kept
+    expect(files(h)).toEqual([]);
+    expect(h.woken).toEqual([]);
+    expect(h.acts).toEqual([]);
+    // each kind's acts come first, and a run whose one act is Stop the run has that alone
+    const cap = h.queue.flowItem({
+      kind: "flow-cap",
+      run: { ...RUN, call: 41 },
+      name: "Release check",
+      acts: [NEEDS_CHOICE_WORDS.allowMore],
+    });
+    const lost = h.queue.flowItem({
+      kind: "flow-lost",
+      run: { run: "fr-l0st0000aa", flow: "nightly" },
+      name: "Nightly",
+      words: "VibeField can't trust what Nightly kept, so it set the run aside.",
+      acts: [],
+    });
+    const choices = new Map(h.queue.list().map((open) => [open.id, open.choices]));
+    expect(choices.get(cap)).toEqual(["Allow 20 more", "Stop the run"]);
+    expect(choices.get(lost)).toEqual(["Stop the run"]);
+    // Stop the run is never a gate's own, and an item holds at most NEEDS_CHOICES_MAX acts before it
+    expect(await refusal(() => h.queue.flowItem({ ...GATE, acts: ["Ship", "stop the run"] }))).toBe(
+      "bad-input",
+    );
+    expect(
+      await refusal(() => h.queue.flowItem({ ...GATE, acts: ["a", "b", "c", "d", "e"] })),
+    ).toBe("bad-input");
+    expect(await refusal(() => h.queue.flowItem({ ...GATE, acts: ["Ship", "Ship"] }))).toBe(
+      "bad-input",
+    );
+    expect(h.queue.list()).toHaveLength(2);
+  });
+
+  it("N2: an answer is handed to the runs once: a second at once waits and is the same answer, another act is refused, and the runs' failure is its outcome", async () => {
+    const h = harness();
+    const routed: FlowItemAnswer[] = [];
+    let finish: ((acted: FlowItemActed) => void) | undefined;
+    h.queue.bindFlowActs({
+      answer: (answer) => {
+        routed.push(answer);
+        return new Promise((resolve) => {
+          finish = resolve;
+        });
+      },
+    });
+    const id = h.queue.flowItem(GATE);
+    expect(listed(h.queue).map((open) => open.id)).toEqual([id]);
+    const first = h.queue.answer(id, 0, principal);
+    const second = h.queue.answer(id, 0, principal);
+    const other = refusal(h.queue.answer(id, 1, principal));
+    expect(routed).toEqual([{ id, kind: "flow-gate", run: RUN, choice: 0, stop: false }]);
+    finish?.({ outcome: "done" });
+    expect((await first).item.answer).toMatchObject({ choice: 0, outcome: "done" });
+    expect((await second).item.answer).toMatchObject({ choice: 0, outcome: "done" });
+    expect(await other).toBe("answered");
+    // answered again later, the same act is the answer as it was, handed on no more
+    expect((await h.queue.answer(id, 0, principal)).item.answer?.choice).toBe(0);
+    expect(routed).toHaveLength(1);
+    // an act the runs could not do is the item's answer, failed with their words, and never handed on again
+    const refused = runsActs({ outcome: "failed", reason: "the run had ended" });
+    h.queue.bindFlowActs(refused.acts);
+    const next = h.queue.flowItem({ ...GATE, run: { ...RUN, call: 4 } });
+    expect((await h.queue.answer(next, 1, principal)).item.answer).toMatchObject({
+      choice: 1,
+      outcome: "failed",
+      reason: "the run had ended",
+    });
+    await h.queue.answer(next, 1, principal);
+    expect(refused.routed).toHaveLength(1);
+    // a hand-on that throws acted on nothing: the item waits on, and the next answer is handed on again
+    let throws = true;
+    const thrown: FlowItemAnswer[] = [];
+    h.queue.bindFlowActs({
+      answer: async (answer) => {
+        thrown.push(answer);
+        if (throws) throw new Error("the flows store could not be read");
+        return { outcome: "done" };
+      },
+    });
+    const third = h.queue.flowItem({ ...GATE, run: { ...RUN, call: 5 } });
+    expect(await refusal(h.queue.answer(third, 0, principal))).toBe("Error");
+    expect(h.queue.list().map((open) => open.id)).toEqual([third]);
+    throws = false;
+    expect((await h.queue.answer(third, 0, principal)).item.answer?.outcome).toBe("done");
+    expect(thrown).toHaveLength(2);
+  });
+
+  it("N3: a run's end ends its items, and only its: each is answered as ended after, never handed on, and none is kept", async () => {
+    const h = harness();
+    const { routed, acts } = runsActs();
+    h.queue.bindFlowActs(acts);
+    const gate = h.queue.flowItem(GATE);
+    const repair = h.queue.flowItem({
+      kind: "flow-repair",
+      run: { ...RUN, call: 5, label: "notes" },
+      name: "Release check",
+      spark: VELA,
+      acts: [NEEDS_CHOICE_WORDS.askOnceMore],
+    });
+    const other = h.queue.flowItem({
+      ...GATE,
+      run: { run: "fr-b0b0b0b0b0", flow: "nightly", call: 1 },
+    });
+    expect(listed(h.queue).map((open) => open.id)).toEqual([gate, repair, other]);
+    h.queue.onFlowRunEnded(RUN.run);
+    expect(listed(h.queue).map((open) => open.id)).toEqual([other]);
+    expect(files(h)).toEqual([other]);
+    expect(await refusal(h.queue.answer(gate, 0, principal))).toBe("ended");
+    expect(await refusal(h.queue.answer(repair, 1, principal))).toBe("ended");
+    expect(routed).toEqual([]);
+    // an agent run's end is no flow run's, even by the same id
+    h.queue.onRunEnded("fr-b0b0b0b0b0");
+    expect(h.queue.list().map((open) => open.id)).toEqual([other]);
+  });
+
+  it("N4: a restart restores a run's items; the runs re-raising the same call's gate get that item, and its answer is still handed on once", async () => {
+    const h = harness();
+    const id = h.queue.flowItem(GATE);
+    const again = h.make();
+    expect(again.restore()).toBe(1);
+    expect(listed(again)).toEqual([
+      expect.objectContaining({
+        id,
+        kind: "flow-gate",
+        state: "open",
+        run: RUN,
+        choices: ["Ship", "Hold", "Stop the run"],
+      }),
+    ]);
+    // D2's re-bind: the same call's gate is the item the queue restored, never a second
+    expect(again.flowItem(GATE)).toBe(id);
+    expect(again.list()).toHaveLength(1);
+    // before the runs hand over their acts, an answer is refused, retryably, and nothing is spent
+    const unbound = await again.answer(id, 0, principal).then(
+      () => undefined,
+      (err: unknown) => err as RpcCallError,
+    );
+    expect(unbound).toMatchObject({ retryable: true, details: { reason: "flows-unbound" } });
+    expect(again.list().map((open) => open.id)).toEqual([id]);
+    const { routed, acts } = runsActs();
+    again.bindFlowActs(acts);
+    expect((await again.answer(id, 0, principal)).item.answer).toMatchObject({ outcome: "done" });
+    expect(routed).toEqual([{ id, kind: "flow-gate", run: RUN, choice: 0, stop: false }]);
+    expect(again.list()).toEqual([]);
+    expect(h.make().restore()).toBe(0);
   });
 });
