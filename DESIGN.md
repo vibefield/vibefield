@@ -6174,8 +6174,10 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   Account), **Your desktops** (each its OS mark and its word, orange with a dot when one needs you), Settings…, Lock
   now (only while the lock is on), Sign in (only while the tailnet asks) and Sign out, farthest. UM adds the meters,
   read from your home desktop: the phone reads the home's cached batch (`agents.usage` and `agents.usage.subscribe`;
-  UM-D8 A) and runs no poll of its own, and the home's profiles (`agents.profileSets.list`) name them. Nothing is
-  drawn yet: UM-4 draws it.
+  UM-D8 A) and runs no poll of its own, and the home's profiles (`agents.profileSets.list`) name them. *Drawn
+  2026-11-06, UM-4 (the M-phone stack): the meters' feed (`MetersFeed`), the Me menu's Agent Profiles row, the Agent
+  Profiles page and the held face.* *(Corrected the same day, the M-phone stack: this said "Nothing is drawn yet: UM-4
+  draws it.")*
   - **At rest the face is plain** (UM-D24 A): no ring, no meter's dot and no lens glyph. A tap is still the menu.
   - **Hold it** for **520ms**, the spawn bloom's own hold (`FieldMotion.longPressDuration`, puppeteer-views'
     `holdMs`), with 10 of slop before it opens; a short tap stays the menu's. ‹for James: the page said 450 "as the
@@ -6450,7 +6452,10 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   Meter*: SE-D3, SE-D4 and SE-D5 A, and UM-D28 A; the drawing is `draft/profile-meters/round4/src/p6-psearch.js` and
   `search.css`, its sheet with chips). The phone's one search, the Peek's phone shape (§8 "Search — the Peek"): what
   runs now first, and your past under it. Search stops being a page (the bar's `search` tab retires), so the page
-  you were on stays under it. Nothing is drawn yet: SE-2 draws the sheet, and MA-6 its Apps strip.
+  you were on stays under it. *Drawn 2026-11-06, SE-2 (the M-phone stack): the sheet in its own glass, Live now and
+  Everything, the chips, the field's tokens, a typed name's offer, the feet and the honest words, and the dim; the
+  bar's `search` tab is no page any more. MA-6's Apps strip is still owed.* *(Corrected the same day, the M-phone
+  stack: this said "Nothing is drawn yet: SE-2 draws the sheet, and MA-6 its Apps strip.")*
   - **Opening is unchanged.** The search circle morphs into the bar's search field and its close circle, as built
     (`SearchBarRow`): 62 at rest, 21 from the sides and the foot; with the keyboard up, 48, 10 from the sides and 8
     above it. **It opens on Live now, every time.** The page under it stays, under the search scrim (§5: the dim
@@ -6535,7 +6540,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
 - **The phone's profile token** (track UM, ruled 2026-11-06 from the page *The Bands Meter*: UM-D27 A, after James's
   note that the face's small glyph was not intuitive; the drawing is `round4.css` `.ltok` and `p4f-frames.js`
   `lensMark` and `lensMenu`). A chosen profile stands beside search, as the desktop's token does, and never touches
-  the search circle's glass. Nothing is drawn yet: UM-4 and SE-2 draw it.
+  the search circle's glass. *Drawn 2026-11-06, UM-4 and SE-2 (the M-phone stack): the token and its ×, its menu
+  led by Agent Profiles… with the Me menu's own circle, and the lens it sets reaching Field's list, rain, timeline and
+  swarm.* *(Corrected the same day, the M-phone stack: this said "Nothing is drawn yet: UM-4 and SE-2 draw it.")*
   - **Where:** its right edge on the search circle's (21 in), its foot 10 above the circle, at the bar's band
     (`AppBar.band`: 93 on a phone with a 34 home inset).
   - **The shape:** 40 tall, corners 20, at most 250 wide, padded 0 7 0 4, its parts 2 apart, in the bar's glass,
