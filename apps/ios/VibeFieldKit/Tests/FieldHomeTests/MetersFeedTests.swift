@@ -174,6 +174,8 @@ struct MetersFeedTests {
     #expect(refusing.count("agents.usage") == 1)
   }
 
+  // Correction (2026-11-06, M-phone's pre-light stills): this row attaches a home, so it never read a feed's first
+  // attach with none. A phone signed in to no home said "reading…" for ever; `noHomeYetIsUnavailable` reads it.
   @Test("no door and no answer yet is usage unavailable — never a first read that never ends (ruling 10)")
   func noDoorIsUnavailable() async throws {
     let feed = MetersFeed()
@@ -192,6 +194,20 @@ struct MetersFeedTests {
       Issue.record("a door handed over did not read the home's batch: \(feed.reading.usage)")
       return
     }
+  }
+
+  @Test("a phone with no home yet is usage unavailable too — the first attach is never skipped (ruling 10)")
+  func noHomeYetIsUnavailable() {
+    let feed = MetersFeed()
+    feed.attach(nil, home: nil)
+    #expect(feed.reading.usage == .unavailable)
+    #expect(!feed.reading.connected)
+    #expect(feed.reading.home == nil)
+    let row = AgentProfilesMenuRow(reading: feed.reading, now: MetersFixtureDoor.now, open: {})
+    #expect(row.word == nil)
+    // a true repeat changes nothing: the word stands
+    feed.attach(nil, home: nil)
+    #expect(feed.reading.usage == .unavailable)
   }
 
   @Test("opening a meter view reads the home's profiles again; the usage is never asked fresh")
