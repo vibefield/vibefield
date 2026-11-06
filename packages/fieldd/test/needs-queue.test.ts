@@ -1624,6 +1624,52 @@ describe("CP-4a2b — a flow run's items: the runs' acts, then Stop the run; an 
         throw new Error("EIO: i/o error, read '/Users/someone/.vibefield/flows'");
       },
     });
+
+  it("N5g (1b review V5): an act on a gone spark's item owes it nothing: no one can hear the fact, so nothing is kept for it", async () => {
+    const h = harness();
+    const started: FlowItemStart[] = [];
+    h.queue.bindFlowActs(
+      startsInto(started, () => ({
+        outcome: "failed",
+        reason: "VibeField can't find that spark; nothing was started.",
+      })),
+    );
+    const id = h.queue.flowChanged(RAISED);
+    h.sleep();
+    h.sparks.delete(VELA);
+    const { item } = await h.queue.answer(id, 0, principal);
+    expect(item.answer).toMatchObject({ outcome: "failed", told: false });
+    expect(h.kept().some((record) => record.item.id === id)).toBe(false);
+    expect(h.woken).toEqual([]);
+    expect(h.opened).toEqual([]);
+  });
+
+  it("N5h (1a review W4): a re-ask's teller is compared by its name, session and spark alone, and a field a newer build keeps on it stands across a refresh", async () => {
+    const h = harness();
+    const id = h.queue.flowChanged(RAISED);
+    // a newer build's field on the item's teller, as the store keeps it
+    const record = h.kept().find((kept) => kept.item.id === id);
+    if (record === undefined) throw new Error("the item was not kept");
+    const from = { ...record.item.from, avatar: "comet" };
+    new NeedsStore({ dir: join(h.root, "needs"), keyPath: join(h.root, "needs.key") }).write({
+      ...record,
+      item: { ...record.item, from },
+    });
+    const again = h.make();
+    expect(again.restore()).toBe(1);
+    const store = (again as unknown as { opts: { store: NeedsStore } }).opts.store;
+    const writes = vi.spyOn(store, "write");
+    expect(again.flowChanged(RAISED)).toBe(id);
+    expect(writes).not.toHaveBeenCalled();
+    // Vela's next session: its session refreshed in one write, the newer build's field kept
+    const next = { ...VELA_FROM, session: "run-vela-2" };
+    expect(again.flowChanged({ ...RAISED, from: next })).toBe(id);
+    expect(writes).toHaveBeenCalledTimes(1);
+    expect(h.kept().find((kept) => kept.item.id === id)?.item.from).toEqual({
+      ...next,
+      avatar: "comet",
+    });
+  });
     const id = h.queue.flowChanged(RAISED);
     const { item } = await h.queue.answer(id, 0, principal);
     expect(item.answer).toMatchObject({ outcome: "failed", reason: UNREADABLE_WORDS.flows });

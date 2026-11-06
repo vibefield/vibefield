@@ -14,6 +14,7 @@ import {
 import type { LogFields, Logger } from "@vibefield/logging";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { FlowStepTurnEnd } from "../src/flow-step-events";
+import { RUNS_DIR } from "../src/flows/journal";
 import type { FlowsHostLaunch } from "../src/flows/launch";
 import { FlowLibrary } from "../src/flows/library";
 import { FlowRecords, flowHashOf } from "../src/flows/records";
@@ -1875,15 +1876,15 @@ describe("CP-4a2b — a changed flow's acts begin the asked-for run (§13a slice
     expect(await act()).toEqual({ outcome: "failed", reason: UNREADABLE_WORDS.flows });
     approving.mockRestore();
     expect(h.records.approval("hello")?.hash).toBe(approval.hash);
-    // the one window past the checks: a disk that takes the approval and refuses the run's record. The run never
-    // began, in §9's words; the approval, the person's own, stands
-    const beginning = vi.spyOn(h.records, "beginRun").mockImplementation(() => {
-      throw new Error("ENOSPC: no space left on device, write");
-    });
+    // the one window past the checks, at its REAL write (1b review V2): a disk that takes the approval and the run's
+    // record and refuses its head (the journals' folder is a file). The run never began, in §9's words, in this life
+    // too: its record is ended `failed` in them. The approval, the person's own, stands
+    writeFileSync(join(h.root, "fieldd", "flows", RUNS_DIR), "not a folder");
     expect(await act()).toEqual({ outcome: "failed", reason: words.neverBegan("Hello") });
-    beginning.mockRestore();
     expect(h.records.approval("hello")?.hash).toBe(flowHashOf(edited));
-    expect(h.records.runRecords()).toEqual([]);
+    expect(h.records.runRecords()).toMatchObject([
+      { state: "failed", log: words.neverBegan("Hello") },
+    ]);
   });
 
   it("R6d (ruled 2026-11-06, window (c)): once the run's record is kept the run has begun, so the act is done with it; a read-back that throws past it is logged, and the run is listed as its record says", async () => {
@@ -1898,6 +1899,94 @@ describe("CP-4a2b — a changed flow's acts begin the asked-for run (§13a slice
       vi.spyOn(h.records, "runRecord").mockImplementationOnce(() => {
         throw new Error("EIO: i/o error, read");
       });
+
+  it("R6e (1a review W1, W2): a door's start whose run's record is kept answers that run, as #begin wrote it, though its read-back throws; the list its subscribers hear holds it", async () => {
+    const h = await harness();
+    h.approved("hello", HELLO);
+    const told: FlowRunsList[] = [];
+    h.runs.onChange((list) => void told.push(list));
+    const begin = h.records.beginRun.bind(h.records);
+    vi.spyOn(h.records, "beginRun").mockImplementationOnce((entry, start) => {
+      const head = begin(entry, start);
+      vi.spyOn(h.records, "runRecord").mockImplementationOnce(() => {
+        throw new Error("EIO: i/o error, read");
+      });
+      return head;
+    });
+    const summary = startedRun(await h.start());
+    expect(summary).toMatchObject({
+      flow: "hello",
+      name: "Hello",
+      n: 1,
+      state: "running",
+      calls: 0,
+      steps: [],
+      starter: { by: "you" },
+    });
+    expect(told.at(-1)?.runs.map((run) => run.run)).toEqual([summary.run]);
+    // its host never started: the record says it runs, and slice 14's boot wakes it
+    expect(h.records.runRecord(summary.run)?.state).toBe("running");
+  });
+
+  it("R6f (1a review W3): a run whose record reads back as nothing, or whose journal reads as none VibeField keeps, is no run it can wake: the door and the act answer that it never began, and its record ends so", async () => {
+    const h = await harness();
+    h.approved("hello", HELLO);
+    // the door's start: the record is kept, and reads back as nothing (set aside, or held)
+    const begin = h.records.beginRun.bind(h.records);
+    vi.spyOn(h.records, "beginRun").mockImplementationOnce((entry, start) => {
+      const head = begin(entry, start);
+      vi.spyOn(h.records, "runRecord").mockReturnValueOnce(undefined);
+      return head;
+    });
+    await expect(h.start()).rejects.toMatchObject({ message: words.neverBegan("Hello") });
+    expect(h.records.runRecords()).toMatchObject([
+      { state: "failed", log: words.neverBegan("Hello") },
+    ]);
+    // the act: the record reads back, and its journal reads as no journal
+    const edited = h.write("hello", HELLO_EDITED);
+    const waits = waitsOf(await h.start());
+    vi.spyOn(h.records, "readRun").mockReturnValueOnce({ kind: "absent" });
+    expect(
+      await h.runs.acts.start({
+        id: waits,
+        flow: "hello",
+        hash: flowHashOf(edited),
+        version: "this",
+        start: askedOf(h, 0),
+      }),
+    ).toEqual({ outcome: "failed", reason: words.neverBegan("Hello") });
+    expect(h.records.runRecords().map((record) => record.state)).toEqual(["failed", "failed"]);
+  });
+
+  it("R6g (1b review V2): a run that never began, its record kept and its ending refused too, is passed by at the bounds until a restart settles it", async () => {
+    const h = await harness();
+    h.approved("hello", HELLO);
+    const journals = join(h.root, "fieldd", "flows", RUNS_DIR);
+    writeFileSync(journals, "not a folder");
+    vi.spyOn(h.records, "writeRunRecord").mockImplementationOnce(() => {
+      throw new Error("ENOSPC: no space left on device, write");
+    });
+    await expect(h.start()).rejects.toMatchObject({ message: words.neverBegan("Hello") });
+    expect(h.records.runRecords()).toMatchObject([{ state: "running" }]);
+    // the journals' folder answers again: RUNS_LIVE_MAX running records, the one that never began among them
+    rmSync(journals);
+    for (let i = 0; i < FLOW_LIMITS.RUNS_LIVE_MAX - 1; i += 1) seeded(h, i, "running");
+    expect(startedRun(await h.start()).state).toBe("running");
+  });
+
+  it("R6h (1b review V4): a records write the disk refuses at a run's begin is said in the store's own shape, UNAVAILABLE for the flows, in its sentence", async () => {
+    const h = await harness();
+    h.approved("hello", HELLO);
+    vi.spyOn(h.records, "checkBegin").mockImplementationOnce(() => {
+      throw new Error("EIO: i/o error, stat");
+    });
+    await expect(h.start()).rejects.toMatchObject({
+      kind: "UNAVAILABLE",
+      message: UNREADABLE_WORDS.flows,
+      details: { service: RECORD_STORES.SERVICE_FLOWS, state: RECORD_STORES.STATE_UNREADABLE },
+    });
+    expect(h.records.runRecords()).toEqual([]);
+  });
       return head;
     });
     const run = ranOf(
