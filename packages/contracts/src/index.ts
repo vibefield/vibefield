@@ -21,6 +21,7 @@ export * from "./flows";
 export * from "./forwarding";
 export * from "./freeway";
 export * from "./live-surfaces";
+export * from "./made-app-network";
 export * from "./meshdata";
 export * from "./methods";
 export * from "./mgmt";
