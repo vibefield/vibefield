@@ -1226,7 +1226,10 @@ export class FlowRuns {
     this.#replace(run, (start, record) => ({ ...start, ...fields(record) }));
   }
 
-  /** A run's record written again as `whole` makes it from what it holds (a field it leaves out is gone), then told. */
+  /** A run's record written again as `whole` makes it from what it holds (a field it leaves out is gone), then told.
+   * MM2 (the F4b review): it is told as `#told` tells it, past the write, so the one writer throws only when its
+   * write did NOT land; a list that can't be read then is said in fieldd's log, never read by a caller as its write's
+   * failure (a reservation kept for an agent never started, a step failed whose record says it works). */
   #replace(
     run: FlowRunId,
     whole: (start: FlowRunStart, record: FlowRunRecord) => FlowRunStart,
@@ -1235,7 +1238,7 @@ export class FlowRuns {
     const record = records.runRecord(run);
     if (record === undefined) throw new Error(`no record of ${run} to write`);
     records.writeRunRecord(run, whole(startOf(record), record));
-    this.#changed();
+    this.#told();
   }
 
   #changed(): void {
