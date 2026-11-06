@@ -19,6 +19,7 @@ import {
   type NeedsItemState,
   type NeedsNotice,
   type NeedsRecord,
+  type NeedsScript,
   NOTIFY_PER_MINUTE,
   needsKindOf,
   needsOutcomeOf,
@@ -187,11 +188,36 @@ export type FlowItemActed =
   | { readonly outcome: "done" }
   | { readonly outcome: "failed"; readonly reason: string };
 
+/** CP-4a2b (§13a slice 6's N5; CP4-Q5 (a)) — a flow that changed since you approved it, or that you never approved,
+ * asked before its run starts: it holds no run yet, only the bytes it would run. */
+export interface FlowChangedRaise {
+  /** the flow, the version it would run (`hash`) and the one approved (`approved`), when one is */
+  readonly script: NeedsScript;
+  /** the flow as its mark names it (‹flow›) */
+  readonly name: string;
+  /** the spark whose flow_run waits on it (13b's D5), told what you chose; absent for a run you start */
+  readonly from?: HoldSender | undefined;
+}
+
+/** A changed flow's start, as the runs are handed it: the item, and the bytes you chose to run. */
+export interface FlowItemStart {
+  readonly id: NeedsItemId;
+  readonly flow: string;
+  readonly hash: string;
+}
+
+/** What the runs did with a start: the run it started, or why it could not start, in fieldd's words. */
+export type FlowItemStarted =
+  | { readonly outcome: "done"; readonly run: string }
+  | { readonly outcome: "failed"; readonly reason: string };
+
 /** CP-4a2b (13a's D22) — the runs' side of their items: an answer, handed on once. The runs write it, keyed by its
  * call, at most once, so an answer handed on again (a restart found its item still open: the queue's record of the
  * answer was not kept) is answered by what their journal holds. One that throws acted on nothing: the item waits on. */
 export interface FlowItemActs {
   answer(answer: FlowItemAnswer): Promise<FlowItemActed>;
+  /** N5 — a changed flow's Run this version or Run the one you approved: its run starts on those bytes */
+  start(start: FlowItemStart): Promise<FlowItemStarted>;
 }
 
 /** A tool call's refusal, with the fact the model reads (index.ts). */
@@ -549,6 +575,11 @@ export class NeedsQueue implements TalkHolds {
    * nothing more (no answer, nothing owed): its file goes, and it is remembered for an answer that comes after. */
   #endFlow(record: NeedsRecord): void {
     this.#stand({ ...record, item: { ...record.item, state: "ended" satisfies NeedsItemState } });
+  }
+
+  /** RED skeleton: keeps nothing. */
+  flowChanged(_raise: FlowChangedRaise): NeedsItemId {
+    return NeedsStore.mintId();
   }
 
   // ── the window's answer ──

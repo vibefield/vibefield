@@ -6,6 +6,11 @@ import {
   actUncertainFact,
   answeredFact,
   clip,
+  flowNotNowFact,
+  flowRanApprovedFact,
+  flowRanFact,
+  flowStartFailedFact,
+  flowStartUncertainFact,
   noticeWords,
   oneLine,
   sendAllowedFact,
@@ -63,6 +68,25 @@ describe("the person's queue's words (DESIGN.md §9)", () => {
       "VibeField restarted, and cannot tell whether the agent you allowed Vela started; list Vela's agents to see",
     );
     expect(UNCERTAIN_REASON).toBe("VibeField restarted, and cannot tell how the act ended");
+    // CP-4a2b (N5) — a changed flow a spark ran, as you answered it, in the held spawn's voice
+    expect(flowRanFact("Vela", "Release check", "fr-k3v9q2m7x1")).toBe(
+      "you ran Release check for Vela as it is now: it started as fr-k3v9q2m7x1",
+    );
+    expect(flowRanApprovedFact("Vela", "Release check", "fr-k3v9q2m7x1")).toBe(
+      "you ran Release check as you approved it, for Vela: it started as fr-k3v9q2m7x1",
+    );
+    expect(flowNotNowFact("Vela", "Release check", true)).toBe(
+      "you said Not now to Vela's run of Release check: it changed since you approved it, so it did not run",
+    );
+    expect(flowNotNowFact("Vela", "Nightly", false)).toBe(
+      "you said Not now to Vela's run of Nightly: you haven't approved it, so it did not run",
+    );
+    expect(flowStartFailedFact("Vela", "Release check", "the folder\nis gone")).toBe(
+      "the run of Release check you allowed Vela could not start: the folder is gone",
+    );
+    expect(flowStartUncertainFact("Vela", "Release check")).toBe(
+      "VibeField restarted, and cannot tell whether the run of Release check you allowed Vela started; list Vela's flows to see",
+    );
   });
 
   it("says each fact in DESIGN.md's own words (§9 \"The person's queue's words\")", () => {
@@ -77,6 +101,13 @@ describe("the person's queue's words (DESIGN.md §9)", () => {
       sendFailedFact("Vela", "Claude Code in vibe-field", "it is not running"),
       actUncertainFact("Vela", "Claude Code"),
       spawnUncertainFact("Vela"),
+      // CP-4a2b (N5) — DESIGN.md says these with their placeholders, so the facts are asked with them
+      flowRanFact("Vela", "‹flow›", "‹run›"),
+      flowRanApprovedFact("Vela", "‹flow›", "‹run›"),
+      flowNotNowFact("Vela", "‹flow›", true),
+      flowNotNowFact("Vela", "‹flow›", false),
+      flowStartFailedFact("Vela", "‹flow›", "‹reason›"),
+      flowStartUncertainFact("Vela", "‹flow›"),
     ])
       expect(design, fact).toContain(`"VibeField: ${fact}"`);
   });

@@ -82,3 +82,10 @@ export const spawnUncertainFact = (spark: string): string =>
 
 /** The answer's own reason for such an act (`outcome: "failed"`, as an act not recorded done). */
 export const UNCERTAIN_REASON = "VibeField restarted, and cannot tell how the act ended";
+
+// RED skeletons — CP-4a2b (§13a slice 6's N5): what a spark that ran a changed flow is told.
+export const flowRanFact = (_spark: string, _flow: string, _run: string): string => "";
+export const flowRanApprovedFact = (_spark: string, _flow: string, _run: string): string => "";
+export const flowNotNowFact = (_spark: string, _flow: string, _approved: boolean): string => "";
+export const flowStartFailedFact = (_spark: string, _flow: string, _reason: string): string => "";
+export const flowStartUncertainFact = (_spark: string, _flow: string): string => "";
