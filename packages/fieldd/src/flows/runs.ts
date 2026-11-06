@@ -448,9 +448,13 @@ export class FlowRuns {
         if ("tooBig" in file) throw refused("too-big", words.tooBig());
         if (file.hash !== act.hash) throw refused("version", words.notAVersion(act.flow));
         // H3: a version that already stands runs as it stands, never approved again, so its approval keeps its
-        // approvedAt and the proposal it came from
-        const approving = standing?.hash === file.hash ? undefined : file.bytes;
-        begun = this.#begin(params, file.hash, approving);
+        // approvedAt and the proposal it came from. NN3 (the version review; ruled 2026-11-06): its bytes are
+        // kept again first, from the library's file, whose hash IS the standing one, so kept bytes edited in place
+        // (set aside as forged) never refuse the version the library holds, as approve's keep did before H3. The keep
+        // approves nothing and writes only bytes not kept
+        const stands = standing?.hash === file.hash;
+        if (stands) this.ports.records.keep(file.bytes);
+        begun = this.#begin(params, file.hash, stands ? undefined : file.bytes);
       }
     } catch (error) {
       if (error instanceof RpcCallError) return { outcome: "failed", reason: error.message };
