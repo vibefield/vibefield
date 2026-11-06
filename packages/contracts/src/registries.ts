@@ -1505,6 +1505,13 @@ export const SCOPES = [
   // searches and lists its own history, every answer bounded for a tailnet
   // caller (INDEX_TAILNET_LIMITS). It is still in no plugin eligibility
   // table, and `agent.usage` stays local-only.*
+  // *Corrected 2026-11-06 (UM-D8 A, the Profile Meters page, round 4):
+  // `agent.usage` is not local-only either. It joins the tailnet preset, so a
+  // self phone reads the usage batch its home desktop holds, and fieldd's
+  // door runs no poll for it: a phone's subscription watches the batch
+  // without starting the poll, and its refresh is answered from the cache
+  // (`daemon.ts`). Both doors stay `local` (D36 refuses them to a peer
+  // daemon), and it is still in no plugin eligibility table.*
   "index.search",
   "agent.usage",
   // PJ-3 (PJ-D15 (a) RULED 2026-10-07; `build-pj23.md` D8, D10) — the
@@ -1575,7 +1582,19 @@ export type Scope = (typeof SCOPES)[number];
  * at every hello (`product-api.ts` copies it into the connection's scopes), so
  * a phone that paired before this line holds the scope at its next connect;
  * nothing freezes it at pairing. It reaches the peer preset by derivation, and
- * a peer daemon is admitted only as the carrier of a forwarded open. */
+ * a peer daemon is admitted only as the carrier of a forwarded open.
+ * UM-D8 (A, the Profile Meters page, round 4; ruled 2026-11-06) — `agent.usage`
+ * joins, after `index.search` as SP-D13's admission stands: the phone reads the
+ * usage batch its home desktop holds (`agents.usage` and its subscription, whole
+ * batches at the stream floor) and runs no poll of its own. fieldd's door
+ * keeps that rule (`daemon.ts`): a phone's subscription watches the batch and
+ * never begins the poll, and its `refresh: true` is answered from the cache.
+ * The one credentialed call a phone can cause is the reading any read kicks
+ * while nothing is cached yet (`AccountUsageService.snapshot`). No row bound
+ * like INDEX_TAILNET_LIMITS: a batch is one row per account. Both doors are
+ * `local`, so it reaches the peer preset by derivation and the D36 wall
+ * refuses it to a peer daemon outright; it is in no plugin eligibility table
+ * (AR-5b). */
 export const TAILNET_SCOPES: readonly Scope[] = [
   "canvas.read",
   "canvas.write",
@@ -1585,6 +1604,7 @@ export const TAILNET_SCOPES: readonly Scope[] = [
   "terminal.attach",
   "index.read",
   "index.search",
+  "agent.usage",
   "approval.respond",
   "workspace.read",
   "mcp.consume",
@@ -1616,7 +1636,12 @@ export const TAILNET_GUEST_SCOPES: readonly Scope[] = [] as const;
  * peer's must not go with it. What tells the two callers apart now is the
  * principal KIND, minted from the transport (D1): a `tailnet` caller's history
  * answers are bounded (INDEX_TAILNET_LIMITS) and a peer daemon's are not, and
- * only a peer is served `index.catalog.subscribe`. */
+ * only a peer is served `index.catalog.subscribe`.
+ * *Updated 2026-11-06 (UM-D8 A): the preset now carries `agent.usage`, and so
+ * does this one by derivation. That grants a peer daemon no quota: both usage
+ * doors are `local`, so the D36 wall (`product-api.ts`) refuses them to a
+ * `peer-fieldd` principal before any handler, and a desktop's usage never
+ * leaves it except to that person's own phone.* */
 export const PEER_FIELDD_SCOPES: readonly Scope[] = [
   ...new Set<Scope>([...TAILNET_SCOPES, "index.search"]),
 ] as const;

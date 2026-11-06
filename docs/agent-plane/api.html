@@ -1284,7 +1284,10 @@
                 <p>
                   16 ms for the fold and the usage feed, deliberately shared so a subscriber to both sees
                   one frame of each per tick rather than two cadences. A change is never dropped, only
-                  delayed to the next window.
+                  delayed to the next window. <em>Corrected 2026-11-06 (UM-D8):</em> the usage feed's frames
+                  leave at the stream floor now, 250 ms, a window's as well as a phone's
+                  (<code>agents.usage.subscribe</code> declares it); the 16 ms tick only gathers a burst of
+                  readings inside fieldd.
                 </p>
               </div>
               <div class="card">
@@ -1829,8 +1832,8 @@
                   <tr><td><span class="route">agents.extensions.check</span></td><td><p><code>AgentsExtensionsCheckParams</code> → <code>AgentsExtensionsCheckResult</code></p></td><td><p><code>agents.manage</code></p></td><td><p>no</p></td><td><p>AR-S4e2: "Check for updates" — the agent's own fetch of each of its catalogs it fetches itself (each marketplace's <code>update</code> it offered in the last read), one run on the profile's frames, then the profile and the catalog read again; answers the run, one receipt, and how many held plugins its catalogs now list newer. Nothing else is changed by VibeField; an agent whose fetch also updates what it installed (its act reaches <code>plugins</code>) does that itself, and the page asks first. One at a time per profile; audited as <code>agents.extensions.check</code></p></td><td><p>—</p></td><td><span class="badge tone-built">Built</span></td></tr>
                   <tr><td><span class="route">agents.extensions.planSource</span></td><td><p><code>AgentsExtensionsPlanSourceParams</code> → <code>AgentsExtensionsPlanSourceResult</code></p></td><td><p><code>agents.manage</code></p></td><td><p>yes</p></td><td><p>AR-S4e2: what the agent would run for a source a person is typing — an install from it (<code>kind: "plugin"</code>) or a marketplace's add (<code>kind: "marketplace"</code>) — planned by the adapter against what the last read found it holding (a pure plan; no read of its own, since reading some agents starts one): the form's Runs, or why not in the agent's words (a source it does not take, one it already holds). A read</p></td><td><p>—</p></td><td><span class="badge tone-built">Built</span></td></tr>
                   <tr><td><span class="route">agents.extensions.terminal</span></td><td><p><code>AgentsExtensionsTerminalParams</code> → <code>AgentsExtensionsTerminalResult</code></p></td><td><p><code>agent.spawn</code></p></td><td><p>no</p></td><td><p>AR-S4e2: an act whose plan runs in a terminal the person answers — an install that asks for values or consent, or a command its source runs to accept; an update that asks again; a switch that asks consent — in a pane on the floor, as a server's sign-in is: <code>runtime.startExtensionAct()</code>, the caller's ticket for the pane, the run on the profile's frames while it lives, then the receipt (<code>runtime.settleExtensionAct()</code>, the agent read again), the profile and its catalog read again. Only an act offered as a terminal one in the last read (or the catalog's); one at a time per profile; audited as <code>agents.extensions.terminal</code>, a typed source not recorded</p></td><td><p>—</p></td><td><span class="badge tone-built">Built</span></td></tr>
-                  <tr><td><span class="route">agents.usage</span></td><td><p><code>—</code> → <code>AgentAccountUsageBatch</code></p></td><td><p><code>agent.usage</code></p></td><td><p>yes</p></td><td><p><code>createAccountUsageMonitor()</code>, projected field by field</p></td><td><p>—</p></td><td><span class="badge tone-built">Built</span></td></tr>
-                  <tr><td><span class="route">agents.usage.subscribe</span></td><td><p><code>—</code> → full batches</p></td><td><p><code>agent.usage</code></p></td><td><p>yes</p></td><td><p>the monitor's pushes, on the adapter's cadence</p></td><td><p>—</p></td><td><span class="badge tone-built">Built</span></td></tr>
+                  <tr><td><span class="route">agents.usage</span></td><td><p><code>AgentsUsageParams {refresh?, profileIds? (≤ 256)}</code> → <code>AgentAccountUsageBatch</code></p></td><td><p><code>agent.usage</code> — <em>in the tailnet preset since UM-D8 (2026-11-06): the phone reads its home's batch</em></p></td><td><p>yes</p></td><td><p><code>createAccountUsageMonitor()</code>, projected field by field; <code>refresh: true</code> is a reading (bypassing the poll interval, never the backoff), and a tailnet caller's is answered from the cache (UM-D8)</p></td><td><p>—</p></td><td><span class="badge tone-built">Built</span></td></tr>
+                  <tr><td><span class="route">agents.usage.subscribe</span></td><td><p><code>—</code> → full batches, whole at the stream floor (250 ms; UM-D8)</p></td><td><p><code>agent.usage</code></p></td><td><p>yes</p></td><td><p>the monitor's pushes, on the adapter's cadence; a window's subscription runs the poll, a phone's watches and never begins it (UM-D8)</p></td><td><p>—</p></td><td><span class="badge tone-built">Built</span></td></tr>
                 </tbody>
               </table>
             </div>
@@ -1843,6 +1846,10 @@
               its sign-ins run in panes on this device, and its folder never roams. <code>agent.usage</code> is separate from <code>agent.observe</code>
               because a reading is the account's billing state and costs a credentialed vendor call — a
               plugin that asked to watch the fold must not thereby make fieldd spend the user's token.
+              <em>Since UM-D8 (2026-11-06)</em> that scope is the person's phone's too, and for the same
+              reason the phone spends no reading: its Retry is answered from the cache and its subscription
+              never starts the poll (the update beside SP-D13's, in index.* below). It is still in no plugin
+              table.
             </p>
             <p class="contract-caption">
               <code>agents.usage</code> answers an honest empty batch before the first reading lands, never
@@ -1915,6 +1922,22 @@
               (<code>peer-fieldd</code>), which asks on behalf of a window on another desktop.
               <code>index.catalog.subscribe</code> rides the same scope and stays the peer daemon's alone;
               a guest still holds no scope at all.
+            </p>
+            <p class="contract-caption">
+              <em>Update 2026-11-06 (UM-D8, ruled A on the Profile Meters page, round 4):</em>
+              <code>agent.usage</code> is in the tailnet preset too, after <code>index.search</code>, so a self
+              phone reads the usage batch its home desktop holds: <code>agents.usage</code> and
+              <code>agents.usage.subscribe</code> (the agents.* table above). Both stay <code>local</code> and are
+              asked of the home itself: a foreign <code>device</code> is refused, and a self peer daemon, which
+              holds the scope by derivation, meets the D36 wall. The phone runs no poll of its own, and the door
+              keeps that rule by the caller's kind (<code>daemon.ts</code>), as SP-D13's bound does: a tailnet
+              caller's <code>refresh: true</code> is answered from the cache, never a reading (the batch's stamps
+              say how old it is), and its subscription is a passive watcher that never begins the poll. Its frames
+              move when a window's poll or Retry, or a provider's push, moves the batch; the one reading a phone
+              can cause is the one any read kicks while nothing is cached yet. Every subscriber's frames, a
+              window's too, are whole batches at the stream floor (<code>STREAM_MIN_INTERVAL_MS</code>, 250 ms,
+              through <code>wholeValueDoor</code>). There is no row bound: a batch is one row per account. A guest
+              still holds no scope, and no plugin table names it.
             </p>
             <p class="contract-caption">
               <em>Update 2026-10-04 (SP-6, James's "go ahead" on the lead's leans; SP-D5 (a)):</em> the phone's

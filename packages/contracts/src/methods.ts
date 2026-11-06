@@ -2606,6 +2606,14 @@ export const METHODS: MethodDef[] = [
   // like every other agents.* row (D36): a quota belongs to THIS device's
   // accounts and its credentials never roam, so the column of a peer's usage
   // would be a different door, not this one federated.
+  // *UM-D8 (A, the Profile Meters page, round 4; 2026-11-06): the scope is
+  // local-only no longer. `agent.usage` is in the phone's preset, so a self
+  // phone reads its HOME's batch through these two doors, still `local` and
+  // asked of the home itself (no `device`; a peer daemon meets D36). The
+  // subscription declares its frames (SP-1): whole batches at the stream
+  // floor, for a window as for a phone. fieldd keeps "no poll of its own":
+  // a phone's subscription watches without starting the poll, and its
+  // `refresh: true` is answered from the cache (`daemon.ts`).*
   // AR-S4b — Extensions (agent-extensions.ts): what each agent in an Agent
   // Profile holds — MCP servers, skills, plugins, marketplaces — read from the
   // agent's own stores and grouped into the profile page's lens. A read of the
@@ -2726,13 +2734,15 @@ export const METHODS: MethodDef[] = [
     idempotent: true,
     locality: "local",
   }),
+  // UM-D8 — reachable from the tailnet (agent.usage is in the phone's preset):
+  // whole `AgentAccountUsageBatch` frames, the newest standing, at the stream floor
   defineMethod({
     surface: "product",
     method: "agents.usage.subscribe",
     scope: "agent.usage",
     idempotent: true,
     locality: "local",
-    subscription: true,
+    subscription: WHOLE_VALUE_STREAM,
   }),
   // ── agent.* (AR-3 — managed sessions: spawn, resume, the fold) ──
   // A managed session is born in a PTY on this device's floor with a clean

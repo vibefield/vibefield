@@ -53,6 +53,12 @@ Settings and Godview share that work; opening another window does not create a
 second schedule in the same daemon. Rows are still separate per registered
 profile, even when two profiles happen to hold the same vendor account.
 
+*Corrected 2026-11-06 (UM-D8 A): the subscriber that starts the poll is a
+caller on this desktop. A phone's `agents.usage.subscribe` is a passive watcher
+(`AccountUsageService.watch`): it hears every batch a window's poll brings and
+never starts or keeps the poll, so a phone left open costs no reading. Every
+subscriber's frames now leave at the stream floor (250 ms).*
+
 The scheduler checks due rows on a timer whose default interval is the fastest
 provider interval (currently one minute). A read schedules its next attempt
 from completion, so timer alignment and transport time can make actual reads
@@ -122,6 +128,13 @@ own policy, not a vendor promise. Cached reads remain available through
 `agents.usage {}`. Both modes require the existing local `agent.usage` scope.
 Opening the page and returning to the window use the same cooldown/backoff
 rules; they do not change the background polling intervals.
+
+*Corrected 2026-11-06 (UM-D8 A): `agent.usage` is not local-only now. The
+phone's tailnet preset holds it, so a self phone reads its home desktop's
+cached batch. A phone's `refresh: true` is answered from that cache and never
+takes a reading, because Claude's endpoint is heavily rate limited (below) and
+the phone must not drive extra readings. The rows are in fieldd's
+`agent-usage-tailnet.test.ts`.*
 
 ## Faster updates and external limits
 

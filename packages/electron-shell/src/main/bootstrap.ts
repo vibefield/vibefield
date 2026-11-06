@@ -355,7 +355,12 @@ async function mint(
     // sheet's CONTENT reads onto index.search (the sessions the live runs
     // join to, and the search itself) and the usage column's readings onto
     // agent.usage — both local-only and plugin-ineligible, held by the
-    // window because the monitor is spine code. index.manage (consent — the
+    // window because the monitor is spine code. *Corrected 2026-11-06: neither
+    // is local-only now. SP-D13 put index.search in the phone's preset
+    // (2026-10-03), and UM-D8 (A) put agent.usage there: the phone reads its
+    // home's usage batch, and only a window's subscription runs the poll
+    // (fieldd's door). Both stay plugin-ineligible; the window's set is
+    // unchanged.* index.manage (consent — the
     // roll call's checkboxes) stayed out until a surface asked for consent; one
     // does now (track AO, AO-3): the History pane — in the Setup Assistant, in
     // History's consent slot, in Finish setting up and on Settings → History —

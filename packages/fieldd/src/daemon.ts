@@ -4997,20 +4997,48 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // PROJECTION and nothing else: percentages, labels, the provider's own
     // sentence for a refusal (EL7). Before the first reading lands the answer
     // is an honest empty batch, never a wait and never a throw.
-    api.register("agents.usage", (_ctx, params) => {
+    // UM-D8 (A), 2026-11-06 — the phone reads its home's batch and runs no poll
+    // of its own. A caller that crossed the tailnet (the phone's `tailnet`
+    // principal; a guest by SP-D13's habit, though its empty preset admits it
+    // to neither door) never makes this desktop spend a reading for it: its
+    // `refresh: true` is answered from the cache, as a door clamps a tailnet
+    // ask rather than refusing it (the batch's stamps say how old it is, so the
+    // answer claims no fresh reading), and its subscription watches. The one
+    // reading a phone can still cause is the one any read kicks while nothing
+    // is cached yet (`snapshot`).
+    const spendsReadings = (ctx: CallerContext): boolean =>
+      ctx.principal.kind !== "tailnet" && ctx.principal.kind !== "tailnet-guest";
+    api.register("agents.usage", (ctx, params) => {
       const parsed = AgentsUsageParams.safeParse(params ?? {});
       if (!parsed.success)
         throw new RpcCallError("PRECONDITION_FAILED", "expected { refresh?, profileIds? }", false);
-      return parsed.data.refresh === true
+      return parsed.data.refresh === true && spendsReadings(ctx)
         ? agentUsage.refresh({
             force: true,
             ...(parsed.data.profileIds !== undefined ? { profileIds: parsed.data.profileIds } : {}),
           })
         : agentUsage.snapshot();
     });
-    api.registerSubscription("agents.usage.subscribe", (_ctx, _params, emit) => {
-      const dispose = agentUsage.subscribe((batch) => emit(batch));
-      return { snapshot: agentUsage.snapshot(), dispose };
+    // Whole batches at the stream floor for every subscriber (`wholeValueDoor`).
+    // The service's own subscription comes FIRST, so a window's poll is running
+    // before the open reads the batch: a cold read with no poll running kicks a
+    // reading of its own (`snapshot`), which would race the poll's first. A
+    // phone's is a passive watcher (`watch`), which never begins the poll.
+    api.registerSubscription("agents.usage.subscribe", (ctx, _params, emit) => {
+      let moved = (): void => undefined;
+      const notice = (): void => moved();
+      const leave = spendsReadings(ctx) ? agentUsage.subscribe(notice) : agentUsage.watch(notice);
+      return wholeValueDoor(
+        {
+          read: () => agentUsage.snapshot(),
+          onChange: (listener) => {
+            moved = listener;
+            return leave;
+          },
+        },
+        emit,
+        { onError: streamFrameFailed("agents.usage.subscribe") },
+      );
     });
     api.register("agents.profiles.login", async (ctx, params) => {
       const parsed = AgentsProfilesLoginParams.safeParse(params);

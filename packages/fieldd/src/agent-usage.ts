@@ -33,7 +33,11 @@ import {
 // and dropped, never forwarded blind.
 
 /** The fold's tick, shared deliberately: a subscriber to both doors sees one
- * frame of each per tick, not two cadences (agent-runtime.ts PUBLISH_TICK_MS). */
+ * frame of each per tick, not two cadences (agent-runtime.ts PUBLISH_TICK_MS).
+ * *Corrected 2026-11-06 (UM-D8 A): the door's frames leave at the stream floor
+ * now (`wholeValueDoor` in daemon.ts, STREAM_MIN_INTERVAL_MS), so this tick is
+ * the service's own: it gathers a burst of readings into one notice to the
+ * door's subscribers, and the door paces what reaches the wire.* */
 const PUBLISH_TICK_MS = 16;
 
 // The monitor is puppeteer's (`@vibefield/puppeteer-runtime`
@@ -219,13 +223,17 @@ export interface AccountUsageServiceOptions {
 
 /** The service behind `agents.usage` and `agents.usage.subscribe`: it owns
  * the monitor, projects every batch it publishes, keeps the latest, and fans
- * frames out on the fold's own trailing-edge tick. */
+ * frames out on the fold's own trailing-edge tick — to its subscribers, who
+ * drive the poll, and its passive watchers, who never do (UM-D8). */
 export class AccountUsageService {
   private readonly monitor: AccountUsageMonitor;
   private readonly logger: Logger;
   private readonly now: () => Date;
   private readonly unsubscribe: Array<() => void> = [];
+  /** the callers whose subscription keeps the poll running (a window's) */
   private readonly subscribers = new Set<(batch: AgentAccountUsageBatch) => void>();
+  /** UM-D8 — the callers who hear every batch and run no poll (the phone's) */
+  private readonly watchers = new Set<(batch: AgentAccountUsageBatch) => void>();
   /** unknown upstream keys already reported, so drift is said once, not per poll */
   private readonly noted = new Set<string>();
   private latest: AgentAccountUsageBatch | null = null;
@@ -298,7 +306,10 @@ export class AccountUsageService {
    * for a column no one has open, and every daemon boot in the test graph
    * would reach the network with their real token. So the poll is DEMAND
    * driven: it runs while `agents.usage.subscribe` has a subscriber, and a
-   * one-shot `agents.usage` takes exactly the one reading it was asked for. */
+   * one-shot `agents.usage` takes exactly the one reading it was asked for.
+   * *Since UM-D8 (2026-11-06) a subscriber is a caller on this desktop: a
+   * phone's subscription is a passive watcher (`watch`), which never runs the
+   * poll.* */
   start(): void {
     if (this.disposed) return;
     this.armed = true;
@@ -324,8 +335,9 @@ export class AccountUsageService {
     return { entries: [], generatedAt: this.now().toISOString() };
   }
 
-  /** `agents.usage.subscribe`: full batches, at most one per tick. The first
-   * subscriber starts the poll; the last one to leave stops it. */
+  /** `agents.usage.subscribe` for a caller on this desktop (a window): full
+   * batches, at most one per tick. The first subscriber starts the poll; the
+   * last one to leave stops it, however many watchers stay (`watch`). */
   subscribe(emit: (batch: AgentAccountUsageBatch) => void): () => void {
     this.subscribers.add(emit);
     this.beginPolling();
@@ -335,9 +347,17 @@ export class AccountUsageService {
     };
   }
 
-  /** UM-D8 red stub: a watcher that hears nothing (its rule lands with the door). */
-  watch(_emit: (batch: AgentAccountUsageBatch) => void): () => void {
-    return () => undefined;
+  /** UM-D8 (A), 2026-11-06 — `agents.usage.subscribe` for a caller that runs
+   * no poll of its own (the phone): the same batches a subscriber hears, at
+   * the same tick, and never the poll. Watching does not begin it and leaving
+   * ends nothing, so the batches a watcher hears move only when something else
+   * moves the latest: a subscriber's poll, a one-shot reading (a window's
+   * Retry, or the one a cold `snapshot` kicks), or a provider's push. */
+  watch(emit: (batch: AgentAccountUsageBatch) => void): () => void {
+    this.watchers.add(emit);
+    return () => {
+      this.watchers.delete(emit);
+    };
   }
 
   /** Poll while somebody is watching (see `start`). The first act is a
@@ -419,6 +439,7 @@ export class AccountUsageService {
       this.publishTimer = null;
     }
     this.subscribers.clear();
+    this.watchers.clear();
   }
 
   /** The monitor published: project, validate against the contract, keep. */
@@ -470,14 +491,17 @@ export class AccountUsageService {
     }
   }
 
+  /** Every batch reaches both: the subscribers and the passive watchers (a
+   * phone hears a window's reading though it drives none). */
   private publish(): void {
-    if (this.disposed || this.publishTimer !== null || this.subscribers.size === 0) return;
+    if (this.disposed || this.publishTimer !== null) return;
+    if (this.subscribers.size === 0 && this.watchers.size === 0) return;
     this.publishTimer = setTimeout(() => {
       this.publishTimer = null;
       if (this.disposed) return;
       const batch = this.latest;
       if (batch === null) return;
-      for (const emit of [...this.subscribers]) {
+      for (const emit of [...this.subscribers, ...this.watchers]) {
         try {
           emit(batch);
         } catch (error) {
