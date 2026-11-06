@@ -1348,7 +1348,9 @@ describe("CP-4a2b — a flow run's items: the runs' acts, then Stop the run; an 
 
     // Run this version: the bytes it would run start, and the spark hears the run it started
     const { item } = await h.queue.answer(id, 0, principal);
-    expect(started).toEqual([{ id, flow: "release-check", hash: CHANGED.hash }]);
+    expect(started).toEqual([
+      { id, flow: "release-check", hash: CHANGED.hash, version: "this", from: VELA_FROM },
+    ]);
     expect(item.answer).toMatchObject({ choice: 0, outcome: "done", told: true });
     expect(h.woken).toEqual([
       ["run-vela", "you ran Release check for Vela as it is now: it started as fr-started1x"],
@@ -1362,7 +1364,13 @@ describe("CP-4a2b — a flow run's items: the runs' acts, then Stop the run; an 
       from: VELA_FROM,
     });
     await h.queue.answer(two, 1, principal);
-    expect(started.at(-1)).toEqual({ id: two, flow: "release-check", hash: CHANGED.approved });
+    expect(started.at(-1)).toEqual({
+      id: two,
+      flow: "release-check",
+      hash: CHANGED.approved,
+      version: "approved",
+      from: VELA_FROM,
+    });
     expect(h.woken.at(-1)?.[1]).toBe(
       "you ran Release check as you approved it, for Vela: it started as fr-started2x",
     );
@@ -1425,7 +1433,12 @@ describe("CP-4a2b — a flow run's items: the runs' acts, then Stop the run; an 
       outcome: "done",
       told: false,
     });
-    expect(started.at(-1)).toEqual({ id: yours, flow: "nightly-sweep", hash: "1".repeat(64) });
+    expect(started.at(-1)).toEqual({
+      id: yours,
+      flow: "nightly-sweep",
+      hash: "1".repeat(64),
+      version: "this",
+    });
     expect(h.woken).toHaveLength(heard);
     expect(h.kept().some((record) => record.item.id === yours)).toBe(false);
   });
@@ -1498,12 +1511,51 @@ describe("CP-4a2b — a flow run's items: the runs' acts, then Stop the run; an 
     await again.answer(id, 1, principal);
     await again.answer(yours.item.id, 0, principal);
     expect(started).toEqual([
-      { id, flow: "release-check", hash: CHANGED.approved, start },
+      {
+        id,
+        flow: "release-check",
+        hash: CHANGED.approved,
+        version: "approved",
+        from: VELA_FROM,
+        start,
+      },
       {
         id: yours.item.id,
         flow: "nightly-sweep",
         hash: yours.item.script?.hash,
+        version: "this",
         start: yours.start,
+      },
+    ]);
+  });
+
+  it("N5d (Q4's dedup, RULED replace, 2026-11-06): the same teller asking the same bytes again with another start replaces the open item's start, so its act begins the latest; the same start changes nothing", async () => {
+    const h = harness();
+    const first = {
+      input: { target: "run-40" },
+      starter: { by: "spark", spark: VELA },
+      scope: ["work"],
+    };
+    const latest = { ...first, input: { target: "run-41" }, scope: ["work", "review"] };
+    const raise = { script: CHANGED, name: "Release check", from: VELA_FROM };
+    const id = h.queue.flowChanged({ ...raise, start: first });
+    expect(h.queue.flowChanged({ ...raise, start: latest })).toBe(id);
+    expect(h.queue.list()).toHaveLength(1);
+    expect(h.kept().find((record) => record.item.id === id)?.start).toEqual(latest);
+    // the same start again: the same item, its start as it was
+    expect(h.queue.flowChanged({ ...raise, start: { ...latest } })).toBe(id);
+    expect(h.kept().find((record) => record.item.id === id)?.start).toEqual(latest);
+    const started: FlowItemStart[] = [];
+    h.queue.bindFlowActs(startsInto(started));
+    await h.queue.answer(id, 0, principal);
+    expect(started).toEqual([
+      {
+        id,
+        flow: "release-check",
+        hash: CHANGED.hash,
+        version: "this",
+        from: VELA_FROM,
+        start: latest,
       },
     ]);
   });

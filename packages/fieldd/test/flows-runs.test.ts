@@ -24,7 +24,11 @@ import {
 import type { FlowStepLaunch, FlowStepOrigin, FlowStepSession } from "../src/flows/steps";
 import * as words from "../src/flows/words";
 import type { RpcCallError } from "../src/native-link";
-import type { FlowChangedRaise, FlowItemRaise } from "../src/tool-plane/rooms/you/queue";
+import type {
+  FlowChangedRaise,
+  FlowItemRaise,
+  FlowItemStarted,
+} from "../src/tool-plane/rooms/you/queue";
 import { flowsHostLaunch, standInSource } from "./flows-host-bundle";
 import { beganRun } from "./flows-run-records";
 
@@ -1484,5 +1488,121 @@ describe("CP-4a2b — a step handed a session: heard from the hand, let go at th
     await h.runs.close();
     expect(h.hands.map((hand) => hand.gone)).toEqual([true]);
     expect(h.records.runRecord(run)?.state).toBe("running");
+  });
+});
+
+// CP-4a2b (§13a slice 7's R4–R6; CP4-Q5 (a), Q4, D8) — a changed flow's acts, as the needs queue hands the runs the
+// person's choice (`acts.start`): the version chosen, the start as it was asked (the item record's, Q4) and a spark's
+// `from`. Run this version approves the bytes the item asked about, as yours ("Run this version (approves it)",
+// round-flows CP4-Q5 (a)), then begins the asked-for run on them; Run the one you approved begins it on the approved
+// bytes fieldd kept. The start's scope is narrowed to the profiles that exist at the act, never widened (D8). An act
+// that can't begin is failed in §9's start words, with nothing approved and nothing begun. Not now is the queue's
+// alone (needs-queue N5): no act reaches the runs.
+
+/** A flow with an input whose version changed since its approval. */
+const TARGETS_EDITED = TAKES_TARGET.replace('log("target: " + target)', 'log("aim: " + target)');
+
+/** The item a start waits in, or the row fails saying what it got instead. */
+function waitsOf(started: FlowRunStarted): NeedsItemId {
+  if (!("waits" in started)) throw new Error(`the start began ${started.run.run}`);
+  return started.waits;
+}
+
+/** The run an act began, or the row fails saying why it did not. */
+function ranOf(started: FlowItemStarted): string {
+  if (started.outcome !== "done") throw new Error(`the act failed: ${started.reason}`);
+  return started.run;
+}
+
+describe("CP-4a2b — a changed flow's acts begin the asked-for run (§13a slice 7's R4–R6)", () => {
+  it("R4 (CP4-Q5 (a), Q4, D8): Run this version approves the asked-about bytes as yours and begins the asked-for run on them, its input carried and its scope narrowed to the profiles that exist", async () => {
+    const h = await harness({ folders: { "session:run-yours": "/work/yours" } });
+    h.approved("targets", TAKES_TARGET);
+    const edited = h.write("targets", TARGETS_EDITED);
+    const waits = waitsOf(
+      await h.start({ flow: "targets", input: { target: "run-yours" }, scope: ["work", "review"] }),
+    );
+    // D8: the scope is the start's, narrowed at the act to the profiles that exist, never widened by a new one
+    h.setProfiles(["work", "home"]);
+    const run = ranOf(
+      await h.runs.acts.start({
+        id: waits,
+        flow: "targets",
+        hash: flowHashOf(edited),
+        version: "this",
+        start: h.raised[0]?.start,
+      }),
+    );
+    expect(h.records.approval("targets")).toMatchObject({ hash: flowHashOf(edited), by: "you" });
+    expect(h.records.runRecord(run)).toMatchObject({
+      flow: "targets",
+      hash: flowHashOf(edited),
+      starter: { by: "you" },
+      scope: ["work"],
+    });
+    const read = h.records.readRun(run);
+    expect(read.kind === "kept" ? read.head.input : read.kind).toEqual({ target: "run-yours" });
+    expect((await settled(h.runs, run, "done")).log).toBe("aim: run-yours");
+  });
+
+  it("R5 (CP4-Q5 (a), Q4): Run the one you approved begins a spark's asked-for run on the approved bytes fieldd kept, its approval unchanged", async () => {
+    const h = await harness();
+    const approval = h.approved("hello", HELLO);
+    h.write("hello", HELLO_EDITED);
+    const waits = waitsOf(
+      await h.start({ starter: { by: "spark", spark: VELA }, from: VELA_FROM }),
+    );
+    const run = ranOf(
+      await h.runs.acts.start({
+        id: waits,
+        flow: "hello",
+        hash: approval.hash,
+        version: "approved",
+        start: h.raised[0]?.start,
+        from: VELA_FROM,
+      }),
+    );
+    expect(h.records.approval("hello")?.hash).toBe(approval.hash);
+    expect(h.records.runRecord(run)).toMatchObject({
+      hash: approval.hash,
+      starter: { by: "spark", spark: VELA },
+    });
+    expect((await settled(h.runs, run, "done")).log).toBe("hi");
+  });
+
+  it("R6 (CP4-Q5 (a)): an act that can't begin is failed in §9's start words, nothing approved and nothing begun: a version changed again since it asked, and an input the version no longer takes", async () => {
+    const h = await harness();
+    const approval = h.approved("hello", HELLO);
+    const edited = h.write("hello", HELLO_EDITED);
+    const waits = waitsOf(await h.start());
+    h.write("hello", `${HELLO_EDITED}// and again\n`);
+    expect(
+      await h.runs.acts.start({
+        id: waits,
+        flow: "hello",
+        hash: flowHashOf(edited),
+        version: "this",
+        start: h.raised[0]?.start,
+      }),
+    ).toEqual({ outcome: "failed", reason: words.notAVersion("hello") });
+    expect(h.records.approval("hello")?.hash).toBe(approval.hash);
+    // a version that takes no input, asked to run with one: refused before its approval is written
+    const targets = h.approved("targets", TAKES_TARGET);
+    const bare = h.write(
+      "targets",
+      'export const meta = { name: "Targets" };\nexport default async function () {}\n',
+    );
+    const asked = waitsOf(await h.start({ flow: "targets", input: { target: "run-yours" } }));
+    expect(
+      await h.runs.acts.start({
+        id: asked,
+        flow: "targets",
+        hash: flowHashOf(bare),
+        version: "this",
+        start: h.raised[1]?.start,
+      }),
+    ).toEqual({ outcome: "failed", reason: words.noSuchInput("Targets", "target") });
+    expect(h.records.approval("targets")?.hash).toBe(targets.hash);
+    expect(h.records.runRecords()).toEqual([]);
   });
 });

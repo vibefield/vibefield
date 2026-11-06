@@ -209,7 +209,12 @@ export interface FlowItemStart {
   readonly id: NeedsItemId;
   readonly flow: string;
   readonly hash: string;
+  /** R4–R6: Run this version (`this`: its bytes approved, then run) or Run the one you approved (`approved`). Not
+   * built yet: the queue says none */
+  readonly version?: "this" | "approved" | undefined;
   readonly start?: NeedsPendingStart | undefined;
+  /** R4–R6: the spark whose flow_run the item tells (item.from, its session among it). Not built yet */
+  readonly from?: HoldSender | undefined;
 }
 
 /** What the runs did with a start: the run it started, or why it could not start, in fieldd's words. */
