@@ -1,4 +1,5 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { connect, createServer, type Server, type Socket } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { CONTRACTS_VERSION, type Scope } from "@vibefield/contracts";
@@ -35,6 +36,10 @@ export interface Harness {
     scopes?: readonly Scope[];
     verify?: (t: string) => { tokenId: string; scopes: Scope[]; label: string } | null;
   }): Promise<{ api: ProductApi; port: number; token: string }>;
+  /** Item 212 (RV #30) — a busy fieldd: ONE port under ONE bootId whose kernel completes every dial while nothing
+   * is read (`pauseOnConnect`), until `open()` pipes each held socket, and every later one, to the live ProductApi
+   * on `targetPort`. A swap to another port would change the port under one bootId, which a busy fieldd never does. */
+  startGatedProxy(targetPort: number): Promise<{ port: number; open(): void }>;
   /** Write the shell bootstrap run files (product.json + shell.token) that
    * fieldd would write — the adoption contract from daemon.ts:361. */
   writeRunFiles(
@@ -63,6 +68,8 @@ export function createHarness(): Harness {
   const apis: ProductApi[] = [];
   const supervisors: FielddSupervisor[] = [];
   const pids = new Set<number>();
+  const servers: Server[] = [];
+  const sockets = new Set<Socket>();
 
   return {
     mkRoot() {
@@ -94,6 +101,48 @@ export function createHarness(): Harness {
       const port = await api.listen();
       apis.push(api);
       return { api, port, token };
+    },
+
+    async startGatedProxy(targetPort) {
+      const held: Socket[] = [];
+      let opened = false;
+      const pipeThrough = (socket: Socket): void => {
+        const upstream = connect(targetPort, "127.0.0.1");
+        sockets.add(upstream);
+        const end = (): void => {
+          socket.destroy();
+          upstream.destroy();
+        };
+        upstream.on("error", end);
+        socket.on("close", end);
+        upstream.on("close", end);
+        socket.pipe(upstream);
+        upstream.pipe(socket);
+      };
+      const server = createServer({ pauseOnConnect: true }, (socket) => {
+        sockets.add(socket);
+        // a probe that gave up closes its end; a held socket must never throw that at the suite
+        socket.on("error", () => socket.destroy());
+        if (opened) pipeThrough(socket);
+        else held.push(socket);
+      });
+      servers.push(server);
+      await new Promise<void>((resolve, reject) => {
+        server.once("error", reject);
+        server.listen(0, "127.0.0.1", () => resolve());
+      });
+      const address = server.address();
+      if (address === null || typeof address === "string") {
+        throw new Error("the gated proxy has no TCP port");
+      }
+      return {
+        port: address.port,
+        open() {
+          if (opened) return;
+          opened = true;
+          for (const socket of held.splice(0)) pipeThrough(socket);
+        },
+      };
     },
 
     writeRunFiles(root, o) {
@@ -146,6 +195,8 @@ export function createHarness(): Harness {
           /* already gone */
         }
       }
+      for (const socket of sockets) socket.destroy();
+      for (const server of servers) server.close();
       for (const a of apis) {
         try {
           a.close();
@@ -214,30 +265,42 @@ export async function waitDead(pid: number, ms = 2000): Promise<boolean> {
  * is written to stdout before the files (redaction-through-spawn). NATIVE_PID,
  * if set, is the floor the record names (`nativePid`; null otherwise).
  * REMOVE_RECORD_ON_TERM, if set, removes product.json at SIGTERM and exits, as
- * fieldd's stop does: a read after the stop finds no record. */
+ * fieldd's stop does: a read after the stop finds no record. GATE_FILE, if set,
+ * holds the run files and the readiness line until that file exists (item 212:
+ * a spawn whose record lands after the superseded incumbent answered late). */
 export const FIXTURE_READY = `
-import { appendFileSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 const root = process.env.FIELDD_DATA_DIR;
 const port = Number(process.env.TEST_PRODUCT_PORT);
 const token = process.env.SHELL_TOKEN ?? "shell-token";
 const pid = process.env.PID_OVERRIDE ? Number(process.env.PID_OVERRIDE) : process.pid;
 const nativePid = process.env.NATIVE_PID ? Number(process.env.NATIVE_PID) : null;
+const gate = process.env.GATE_FILE;
 if (process.env.SPAWN_MARKER) appendFileSync(process.env.SPAWN_MARKER, process.pid + "\\n");
 if (process.env.PRINT_SECRET) process.stdout.write(process.env.PRINT_SECRET + "\\n");
 const dir = join(root, "fieldd", "run");
-mkdirSync(dir, { recursive: true });
-writeFileSync(join(dir, "shell.token"), token);
-writeFileSync(join(dir, "product.json"), JSON.stringify({
-  port, pid, bootId: "boot-fixture",
-  contractsVersion: process.env.CV, startedAt: Date.now(), nativePid,
-  buildId: process.env.FIELDD_BUILD_ID ?? null,
-}));
-if (process.env.REMOVE_RECORD_ON_TERM) process.on("SIGTERM", () => {
-  rmSync(join(dir, "product.json"), { force: true });
-  process.exit(0);
-});
-process.stdout.write(JSON.stringify({ ready: true, port, bootId: "boot-fixture" }) + "\\n");
+function start() {
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, "shell.token"), token);
+  writeFileSync(join(dir, "product.json"), JSON.stringify({
+    port, pid, bootId: "boot-fixture",
+    contractsVersion: process.env.CV, startedAt: Date.now(), nativePid,
+    buildId: process.env.FIELDD_BUILD_ID ?? null,
+  }));
+  if (process.env.REMOVE_RECORD_ON_TERM) process.on("SIGTERM", () => {
+    rmSync(join(dir, "product.json"), { force: true });
+    process.exit(0);
+  });
+  process.stdout.write(JSON.stringify({ ready: true, port, bootId: "boot-fixture" }) + "\\n");
+}
+if (gate) {
+  const waiting = setInterval(() => {
+    if (!existsSync(gate)) return;
+    clearInterval(waiting);
+    start();
+  }, 20);
+} else start();
 setInterval(() => {}, 1e6);
 `;
 

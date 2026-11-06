@@ -1,15 +1,20 @@
-import { mkdirSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { CONTRACTS_VERSION } from "@vibefield/contracts";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   createFielddSupervisor,
+  type FielddSupervisorEvent,
   type FielddSupervisorOptions,
   productPath,
   runDir,
   SupervisorError,
+  type SupervisorLifecycleEventName,
   tokenPath,
   tryAdopt,
 } from "../src/index";
-import { createHarness, type Harness } from "./helpers";
+import { createHarness, FIXTURE_READY, type Harness } from "./helpers";
 
 // §12.2 "valid adopt" + the tryAdopt failure taxonomy + "actual dynamic
 // endpoint use" + re-attempt after the handle's client closes. Adoption needs
@@ -38,6 +43,59 @@ function adoptSup(root: string, extra?: Partial<FielddSupervisorOptions>) {
       ...extra,
     }),
   );
+}
+
+/** Item 212 (RV #30) — a supervisor over a busy incumbent. Its spawn is a real FIXTURE_READY child that records its
+ * start in SPAWN_MARKER, so a row can tell an adoption from a takeover; `react` sees each event as it is emitted. */
+function busySup(
+  root: string,
+  product: { readonly port: number; readonly token: string },
+  events: FielddSupervisorEvent[],
+  react: (event: FielddSupervisorEvent) => void = () => undefined,
+  extra?: Partial<FielddSupervisorOptions>,
+) {
+  const script = h.writeFixture(join(root, "fx"), "fieldd.mjs", FIXTURE_READY);
+  return h.track(
+    createFielddSupervisor({
+      dataRoot: root,
+      spawn: { command: process.execPath, args: [script] },
+      environment: {
+        CV: CONTRACTS_VERSION,
+        TEST_PRODUCT_PORT: String(product.port),
+        SHELL_TOKEN: product.token,
+        SPAWN_MARKER: join(root, "spawns.log"),
+      },
+      shutdownPolicy: "leave-running",
+      adoptProbeMs: 300,
+      readinessDeadlineMs: 3000,
+      onEvent: (event) => {
+        events.push(event);
+        react(event);
+      },
+      ...extra,
+    }),
+  );
+}
+
+function isLifecycle(event: FielddSupervisorEvent, name: SupervisorLifecycleEventName): boolean {
+  return event.kind === "lifecycle" && event.event === name;
+}
+
+const lifecycleNames = (events: readonly FielddSupervisorEvent[]) =>
+  events.flatMap((event) => (event.kind === "lifecycle" ? [event.event] : []));
+
+function lifecycleAttrs(
+  events: readonly FielddSupervisorEvent[],
+  name: SupervisorLifecycleEventName,
+) {
+  const event = events.find((candidate) => isLifecycle(candidate, name));
+  return event?.kind === "lifecycle" ? event.attrs : undefined;
+}
+
+/** The spawned child's pid from the supervisor's own line, so a row's spawn is reaped even when it was not owned. */
+function spawnedPid(events: readonly FielddSupervisorEvent[]): number | undefined {
+  const pid = lifecycleAttrs(events, "fieldd.supervisor.spawned")?.["pid"];
+  return typeof pid === "number" ? pid : undefined;
 }
 
 describe("adopt: a live fieldd is discovered, not respawned", () => {
@@ -210,4 +268,106 @@ describe("tryAdopt: the non-adoption taxonomy (§12.2)", () => {
     // and FAST — the verdict lands on the failed dial, well before probeMs
     expect(Date.now() - started).toBeLessThan(700);
   });
+});
+
+// Item 212 (RV #30, gap3-2) — the busy incumbent's kill matrix. A probe-timeout is a listener that took the dial and
+// not the hello inside the budget: a fieldd BUSY, not gone. Its recorded pid is asked whether it exists (`kill(pid,
+// 0)`, which delivers no signal) and it is waited on as long as a spawn is waited for (the readiness bound); then a
+// named takeover. Each row is driven by the supervisor's own events and the gate, never a sleep: the incumbent answers
+// when the test opens the gate, and not before.
+describe("the busy incumbent's kill matrix (item 212, RV #30): a probe-timeout is busy, not gone", () => {
+  const PATIENCE_MS = 2_500;
+
+  it("row 1 — a LIVE incumbent busy past the first probe is waited for and adopted when it answers, never superseded", async () => {
+    const product = await h.startProduct();
+    const gate = await h.startGatedProxy(product.port);
+    const root = h.mkRoot();
+    h.writeRunFiles(root, {
+      port: gate.port,
+      pid: process.pid,
+      token: product.token,
+      bootId: "incumbent",
+    });
+    const events: FielddSupervisorEvent[] = [];
+    // the incumbent answers once the supervisor says it waits: after the first probe gave up, never before
+    const sup = busySup(root, product, events, (event) => {
+      if (isLifecycle(event, "fieldd.supervisor.adopt_waiting")) gate.open();
+    });
+
+    const handle = await sup.ensure();
+    h.trackPid(handle.childPid);
+    h.trackPid(spawnedPid(events));
+
+    expect(handle.ownership).toBe("adopted");
+    expect(handle.info.bootId).toBe("incumbent");
+    expect(lifecycleNames(events)).toEqual(
+      expect.arrayContaining([
+        "fieldd.supervisor.adopt_waiting",
+        "fieldd.supervisor.adopted",
+        "fieldd.supervisor.adopted_after_wait",
+      ]),
+    );
+    expect(lifecycleNames(events)).not.toContain("fieldd.supervisor.spawned");
+    expect(existsSync(join(root, "spawns.log"))).toBe(false);
+    // the adopted client is the incumbent's, through its one port
+    await expect(handle.client.request("system.health")).resolves.toMatchObject({ ok: true });
+  });
+
+  it("row 2 — a DEAD incumbent (its recorded pid an exited child's) ends the wait at once, and the spawn is plain", async () => {
+    const product = await h.startProduct();
+    // never opened: the dial is taken, the hello never answered
+    const gate = await h.startGatedProxy(product.port);
+    const root = h.mkRoot();
+    // a pid that WAS a process: spawnSync returns once its child has exited and been reaped
+    const dead = spawnSync(process.execPath, ["--eval", ""]).pid;
+    h.writeRunFiles(root, {
+      port: gate.port,
+      pid: dead,
+      token: product.token,
+      bootId: "incumbent",
+    });
+    const events: FielddSupervisorEvent[] = [];
+    const sup = busySup(root, product, events, undefined, { readinessDeadlineMs: PATIENCE_MS });
+
+    const handle = await sup.ensure();
+    h.trackPid(handle.childPid);
+    h.trackPid(spawnedPid(events));
+
+    expect(lifecycleNames(events)).toContain("fieldd.supervisor.incumbent_gone");
+    const gone = lifecycleAttrs(events, "fieldd.supervisor.incumbent_gone");
+    expect(gone).toMatchObject({ pid: dead });
+    // at once: the existence check comes before any second probe, far inside the patience
+    expect(gone?.["waitedMs"]).toBeLessThan(PATIENCE_MS / 2);
+    // nothing live was superseded, so nothing is named a takeover
+    expect(lifecycleNames(events)).not.toContain("fieldd.supervisor.takeover");
+    expect(handle.ownership).toBe("spawned");
+  }, 15_000);
+
+  it("row 3 — a SILENT listener past the patience is a named takeover: the bound delays the spawn, never blocks it (EL7)", async () => {
+    const product = await h.startProduct();
+    const gate = await h.startGatedProxy(product.port); // never opened: silent past the patience
+    const root = h.mkRoot();
+    // the recorded pid is THIS test process: alive, and a signal sent to it would end the test
+    h.writeRunFiles(root, {
+      port: gate.port,
+      pid: process.pid,
+      token: product.token,
+      bootId: "incumbent",
+    });
+    const events: FielddSupervisorEvent[] = [];
+    const sup = busySup(root, product, events, undefined, { readinessDeadlineMs: PATIENCE_MS });
+
+    const handle = await sup.ensure();
+    h.trackPid(handle.childPid);
+    h.trackPid(spawnedPid(events));
+
+    expect(lifecycleNames(events)).toContain("fieldd.supervisor.takeover");
+    const takeover = lifecycleAttrs(events, "fieldd.supervisor.takeover");
+    expect(takeover).toMatchObject({ probeFailure: "probe-timeout" });
+    // waited the whole patience, the bound a spawn is given — no new constant
+    expect(takeover?.["waitedMs"]).toBeGreaterThanOrEqual(PATIENCE_MS - 50);
+    expect(lifecycleNames(events)).toContain("fieldd.supervisor.adopt_waiting");
+    expect(lifecycleNames(events)).not.toContain("fieldd.supervisor.incumbent_gone");
+    expect(handle.ownership).toBe("spawned");
+  }, 15_000);
 });

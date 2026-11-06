@@ -35,7 +35,12 @@ describe("UA-2 — probe user gate", () => {
     const root = h.mkRoot();
     h.writeRunFiles(root, { port, pid: process.pid, extra: { userId: USER_B } });
     const result = await tryAdopt(root, 2_000, undefined, undefined, USER_A);
-    expect(result).toEqual({ ok: false, failure: "user-mismatch" });
+    // item 212 (RV #30): the refusal carries the record it read, as any failure after the parse
+    expect(result).toEqual({
+      ok: false,
+      failure: "user-mismatch",
+      recorded: expect.objectContaining({ pid: process.pid, userId: USER_B }),
+    });
   });
 
   it("refuses a pre-UA-2 daemon when identity is expected — absent is not a match", async () => {
@@ -43,7 +48,11 @@ describe("UA-2 — probe user gate", () => {
     const root = h.mkRoot();
     h.writeRunFiles(root, { port, pid: process.pid });
     const result = await tryAdopt(root, 2_000, undefined, undefined, USER_A);
-    expect(result).toEqual({ ok: false, failure: "user-mismatch" });
+    expect(result).toEqual({
+      ok: false,
+      failure: "user-mismatch",
+      recorded: expect.objectContaining({ pid: process.pid }),
+    });
   });
 
   it("no expectation keeps pre-UA-2 adoption working (compat)", async () => {

@@ -3,6 +3,7 @@ import { CONTRACTS_VERSION } from "@vibefield/contracts";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   createFielddSupervisor,
+  type FielddSupervisor,
   type FielddSupervisorEvent,
   type FielddSupervisorOptions,
   SupervisorError,
@@ -115,6 +116,45 @@ describe("cancellation", () => {
       childAlive = false;
     }
     expect(childAlive).toBe(false);
+  });
+
+  it("dispose() during the busy wait (item 212, RV #30) rejects aborted promptly, and nothing is spawned", async () => {
+    const product = await h.startProduct();
+    const gate = await h.startGatedProxy(product.port); // never opened: the incumbent stays busy
+    const root = h.mkRoot();
+    h.writeRunFiles(root, {
+      port: gate.port,
+      pid: process.pid,
+      token: product.token,
+      bootId: "incumbent",
+    });
+    const logs: FielddSupervisorEvent[] = [];
+    let disposing: Promise<void> | undefined;
+    const sup: FielddSupervisor = idleSup(root, logs, {
+      onEvent: (event) => {
+        logs.push(event);
+        const name = event.kind === "lifecycle" ? event.event : null;
+        // the busy wait is where the dispose must bite; a spawn (the path before item 212) ends the row the same
+        // way, so its red is an assertion and never the test's time budget
+        if (name === "fieldd.supervisor.adopt_waiting" || name === "fieldd.supervisor.spawned") {
+          disposing ??= sup.dispose();
+        }
+      },
+    });
+
+    const started = Date.now();
+    const err = await sup.ensure().then(
+      () => null,
+      (e: unknown) => e,
+    );
+    await disposing;
+    h.trackPid(spawnedPid(logs));
+
+    expect(spawnedPid(logs)).toBeUndefined(); // nothing was spawned
+    expect(err).toBeInstanceOf(SupervisorError);
+    expect((err as SupervisorError).kind).toBe("aborted");
+    // promptly: on the dispose, nowhere near the 10 s patience the busy incumbent was given
+    expect(Date.now() - started).toBeLessThan(3000);
   });
 
   it("a signal already aborted BEFORE ensure() rejects immediately with aborted", async () => {

@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { CONTRACTS_VERSION } from "@vibefield/contracts";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -356,6 +356,46 @@ describe("spawn: no adoptable fieldd exists", () => {
     // and the adopted server still answers through the returned handle
     await expect(handle.client.request("system.health")).resolves.toMatchObject({ ok: true });
   });
+
+  it("the incumbent this spawn supersedes, answering late, is no race winner: our child is kept (item 212, RV #30)", async () => {
+    // The run files name a busy incumbent (bootId "incumbent") behind a gate that stays shut past the patience, so
+    // the supervisor supersedes it. The gate opens as our child is spawned, and our child writes its own record only
+    // once the poll has met the incumbent's late answer — the order a busy incumbent and a fresh spawn can take.
+    const { port, token } = await h.startProduct();
+    const gate = await h.startGatedProxy(port);
+    const root = h.mkRoot();
+    const childGate = join(root, "child.gate");
+    h.writeRunFiles(root, { port: gate.port, pid: process.pid, token, bootId: "incumbent" });
+    const logs: FielddSupervisorEvent[] = [];
+    const sup = spawnSup(
+      root,
+      FIXTURE_READY,
+      { TEST_PRODUCT_PORT: String(port), SHELL_TOKEN: token, GATE_FILE: childGate },
+      logs,
+      {
+        readinessDeadlineMs: 2_500,
+        onEvent: (event) => {
+          logs.push(event);
+          const name = event.kind === "lifecycle" ? event.event : null;
+          if (name === "fieldd.supervisor.spawned") gate.open();
+          if (name === "fieldd.supervisor.incumbent_answered_late") writeFileSync(childGate, "");
+        },
+      },
+    );
+
+    const handle = await sup.ensure();
+    trackSpawnedPid(logs);
+    h.trackPid(handle.childPid);
+
+    expect(handle.ownership).toBe("spawned");
+    expect(hasLifecycle(logs, "fieldd.supervisor.spawn_race_lost")).toBe(false);
+    expect(hasLifecycle(logs, "fieldd.supervisor.incumbent_answered_late")).toBe(true);
+    expect(handle.info.bootId).toBe("boot-fixture");
+    expect(handle.info.pid).toBe(handle.childPid);
+    // nothing stopped our child for a winner that was never in the race
+    expect(() => process.kill(handle.childPid as number, 0)).not.toThrow();
+    await expect(handle.client.request("system.health")).resolves.toMatchObject({ ok: true });
+  }, 15_000);
 });
 
 describe("the sun_path guard (slice-0 finding 4)", () => {
