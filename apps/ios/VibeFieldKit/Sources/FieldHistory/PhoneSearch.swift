@@ -17,8 +17,6 @@ import Foundation
 // profile id is the home's, so only the home's runs carry one, and a peer's run leaves Live now under a profile.
 
 public enum PhoneSearch {
-  // SE-P2 (red): the values are whole; every decision below is a STUB that lists, offers and says nothing.
-
   // MARK: - Numbers (each with its reason)
 
   /// A row's matched lines: the desktop Peek's own (`PEEK_ROW_LINES`).
@@ -146,10 +144,12 @@ public enum PhoneSearch {
     }
 
     /// The sessions a profile's chip and the lens's menu count: the home's runs under it.
-    public func sessions(of profile: String) -> [LiveSession] { [] }
+    public func sessions(of profile: String) -> [LiveSession] {
+      sessions.filter { $0.isHome && $0.profileSet == profile }
+    }
 
     /// The sessions a desktop's chip counts: the runs it owns.
-    public func sessions(on desk: String) -> [LiveSession] { [] }
+    public func sessions(on desk: String) -> [LiveSession] { sessions.filter { $0.device == desk } }
   }
 
   /// A live row: the session, and its matched lines (newest first, at most `rowLines`).
@@ -276,7 +276,11 @@ public enum PhoneSearch {
   static func plural(_ count: Int, _ noun: String) -> String { "\(count) \(noun)\(count == 1 ? "" : "s")" }
 
   /// The query with its last word dropped: an offer's filter takes the word it was typed as.
-  public static func droppingLastWord(_ query: String) -> String { query }
+  public static func droppingLastWord(_ query: String) -> String {
+    var words = query.split(whereSeparator: \.isWhitespace).map(String.init)
+    if !words.isEmpty { words.removeLast() }
+    return words.joined(separator: " ")
+  }
 
   /// A word starts one of `label`'s words (split on spaces and hyphens), as the drawing's `starts` reads.
   static func starts(_ label: String, with word: String) -> Bool {
@@ -284,14 +288,34 @@ public enum PhoneSearch {
   }
 
   /// The field's placeholder: **Search** (MA-D7's word) with fewer than two tokens, none with two (§8).
-  public static func placeholder(tokens: Int) -> String? { nil }
+  public static func placeholder(tokens: Int) -> String? { tokens >= 2 ? nil : "Search" }
 
   // MARK: - Live now
 
   /// The rows, filtered by the lens's profile and desktop: without words every session, waiting first; with words
   /// the sessions whose facts (title, folder, agent) or matched lines hold every word, the most lines first, then
   /// waiting → working → idle → a shell, the field's order breaking the rest (`peekLiveRows`, a stable sort).
-  public static func liveRows(_ live: Live, query: String, profile: String?, desk: String?) -> [LiveRow] { [] }
+  public static func liveRows(_ live: Live, query: String, profile: String?, desk: String?) -> [LiveRow] {
+    let terms = words(query)
+    var rows: [(row: LiveRow, index: Int)] = []
+    for (index, session) in live.sessions.enumerated() {
+      if let profile, !(session.isHome && session.profileSet == profile) { continue }
+      if let desk, session.device != desk { continue }
+      let lines: [HistoryHit] = terms.isEmpty ? [] : session.nativeSessionId.flatMap { live.lines[$0] } ?? []
+      if !terms.isEmpty {
+        let facts = [session.title, session.folder ?? "", session.agent ?? ""].joined(separator: " ")
+        guard !lines.isEmpty || holds(facts, terms) else { continue }
+      }
+      rows.append((LiveRow(session: session, lines: Array(lines.prefix(rowLines))), index))
+    }
+    return rows.sorted { left, right in
+      if left.row.lines.count != right.row.lines.count { return left.row.lines.count > right.row.lines.count }
+      if left.row.session.state.rank != right.row.session.state.rank {
+        return left.row.session.state.rank < right.row.session.state.rank
+      }
+      return left.index < right.index
+    }.map { $0.row }
+  }
 
   /// A profile as search names it: the lens's chosen one, from the profiles search may name.
   static func profile(_ id: String?, in live: Live) -> AgentProfileSet? {
@@ -302,21 +326,74 @@ public enum PhoneSearch {
 
   /// Live now's chips (SE-D5): the profiles, less the one chosen, each with its sessions and the waiting dot; then
   /// the desktops, less the one chosen, each with its sessions or "asleep". Counts are every session's, unfiltered.
-  public static func liveChips(_ live: Live, profile: String?, desk: String?) -> [[Chip]] { [] }
+  public static func liveChips(_ live: Live, profile: String?, desk: String?) -> [[Chip]] {
+    let profiles = live.profiles.filter { $0.id != profile }.map { set in
+      let under = live.sessions(of: set.id)
+      return Chip(
+        filter: .profile(set.id), lead: lead(set), label: set.label, note: "\(under.count)",
+        waiting: under.contains { $0.state == .blocked })
+    }
+    let desks = live.desks.filter { $0.id != desk }.map { found in
+      Chip(
+        filter: .desk(found.id), lead: .desk(platform: found.platform), label: found.name,
+        note: found.asleep ? "asleep" : "\(live.sessions(on: found.id).count)", waiting: false)
+    }
+    return [profiles, desks].filter { !$0.isEmpty }
+  }
 
   /// Live now's tokens: the profile, then the desktop.
-  public static func liveTokens(_ live: Live, profile: String?, desk: String?) -> [Token] { [] }
+  public static func liveTokens(_ live: Live, profile: String?, desk: String?) -> [Token] {
+    var tokens: [Token] = []
+    if let set = Self.profile(profile, in: live) {
+      tokens.append(Token(filter: .profile(set.id), lead: lead(set), label: set.label))
+    }
+    if let found = live.desks.first(where: { $0.id == desk }) {
+      tokens.append(Token(filter: .desk(found.id), lead: .desk(platform: found.platform), label: found.name))
+    }
+    return tokens
+  }
 
   /// A typed name's offer in Live now: the first profile with a word starting so, while there are several and none is
   /// chosen; else the first desktop, while none is chosen. From `offerLetters` letters.
-  public static func liveOffer(_ live: Live, query: String, profile: String?, desk: String?) -> Offer? { nil }
+  public static func liveOffer(_ live: Live, query: String, profile: String?, desk: String?) -> Offer? {
+    guard let last = words(query).last, last.count >= offerLetters else { return nil }
+    if profile == nil, let set = live.profiles.first(where: { starts($0.label, with: last) }) {
+      return Offer(
+        filter: .profile(set.id), lead: lead(set), title: "Show only \(set.label)'s sessions",
+        note: "a filter · \(plural(live.sessions(of: set.id).count, "session"))")
+    }
+    if desk == nil, let found = live.desks.first(where: { starts($0.name, with: last) }) {
+      return Offer(
+        filter: .desk(found.id), lead: .desk(platform: found.platform), title: "Show only what runs on \(found.name)",
+        note: found.asleep ? "a filter · asleep" : "a filter · \(plural(live.sessions(on: found.id).count, "session"))")
+    }
+    return nil
+  }
 
   /// Live now's foot (§9 "The phone's feet").
-  public static func liveFoot(_ rows: [LiveRow], total: Int, query: String, narrowed: Bool) -> String { "" }
+  public static func liveFoot(_ rows: [LiveRow], total: Int, query: String, narrowed: Bool) -> String {
+    if !words(query).isEmpty {
+      let lines = rows.reduce(0) { $0 + $1.lines.count }
+      return "\(plural(rows.count, "session")) · \(plural(lines, "line")) matched"
+    }
+    if narrowed { return "\(rows.count) of \(plural(total, "live session")), waiting first" }
+    return "\(plural(rows.count, "live session")), waiting first"
+  }
 
   /// Live now's empty list (§9 "The phone's empty lists"): a filter and no words, with Clear the filters; words, with
   /// Search everything; else nothing runs.
-  public static func liveEmpty(query: String, profile: String?, desk: String?) -> Empty { Empty(sentence: "", act: nil) }
+  public static func liveEmpty(query: String, profile: String?, desk: String?) -> Empty {
+    let words = query.trimmingCharacters(in: .whitespaces)
+    if words.isEmpty, profile != nil || desk != nil {
+      let under = profile.map { " in \($0)" } ?? ""
+      let on = desk.map { "on \($0)" } ?? "right now"
+      return Empty(sentence: "No live session\(under) runs \(on).", act: .clearFilters)
+    }
+    if !words.isEmpty {
+      return Empty(sentence: "No live session holds every word of “\(words)”.", act: .searchEverything)
+    }
+    return Empty(sentence: "Nothing runs right now.", act: nil)
+  }
 
   // MARK: - Everything
 
@@ -333,43 +410,132 @@ public enum PhoneSearch {
   public static func pastRows(
     _ answers: [(corpus: HistoryCorpus, groups: [HistoryHitGroup])], kind: FieldHistoryModel.SearchKind,
     project: String?, agentLabel: (String) -> String
-  ) -> [PastRow] { [] }
+  ) -> [PastRow] {
+    var rows: [PastRow] = []
+    for (corpus, groups) in answers {
+      for group in groups {
+        let lines = group.rows.filter { kind.admitsHit($0.who) }
+        guard !lines.isEmpty else { continue }
+        let key = group.projectKey ?? (group.projectId.isEmpty ? nil : group.projectId)
+        let found = Self.project(key: key, folder: group.folder, in: corpus)
+        if let project, found?.key != project { continue }
+        rows.append(
+          PastRow(
+            device: corpus.deviceId, sessionId: group.sessionId, title: group.sessionTitle, folder: group.folder,
+            agent: group.provider.map(agentLabel), project: found, when: group.day,
+            lines: Array(lines.prefix(rowLines)), group: group.keeping(lines)))
+      }
+    }
+    return rows
+  }
 
   /// Everything before a word: **Your latest sessions** (DESIGN.md §8, PLAN §4 (g)) — the sessions the phone holds
   /// (`HistoryCorpus.sessions`, the ledger's across every desktop), merged by recency: newest first by when each last
   /// moved, a session the index stamped none for after them in the ledger's order; the project's alone while one is
   /// chosen; at most `latestLimit`.
-  public static func latestRows(_ corpus: HistoryCorpus, project: String?, agentLabel: (String) -> String) -> [PastRow] { [] }
+  public static func latestRows(_ corpus: HistoryCorpus, project: String?, agentLabel: (String) -> String) -> [PastRow] {
+    var held: [(row: PastRow, lastAt: Int64?, index: Int)] = []
+    for found in corpus.projects {
+      if let project, found.id != project { continue }
+      for session in corpus.sessions(of: found.id) {
+        let agent = session.provider ?? session.agent
+        let row = PastRow(
+          device: session.device ?? corpus.deviceId, sessionId: session.id, title: session.title,
+          folder: session.folder ?? found.name, agent: agentLabel(agent),
+          project: Project(key: found.id, name: found.name), when: session.last, lines: [], group: nil)
+        held.append((row, session.lastAt, held.count))
+      }
+    }
+    let ordered = held.sorted { left, right in
+      switch (left.lastAt, right.lastAt) {
+      case let (a?, b?) where a != b: return a > b
+      case (.some, nil): return true
+      case (nil, .some): return false
+      default: return left.index < right.index
+      }
+    }
+    return ordered.prefix(latestLimit).map { $0.row }
+  }
 
   /// The projects Everything's rows name, in their order: the chips', and a typed name's offer's.
-  public static func projects(_ rows: [PastRow]) -> [Project] { [] }
+  public static func projects(_ rows: [PastRow]) -> [Project] {
+    var seen: [Project] = []
+    for row in rows {
+      if let project = row.project, !seen.contains(project) { seen.append(project) }
+    }
+    return seen
+  }
 
   /// Everything's chips: **Prompts** and **Replies** while every kind is asked for, then the projects, less the one
   /// chosen.
-  public static func pastChips(projects: [Project], kind: FieldHistoryModel.SearchKind, project: String?) -> [[Chip]] { [] }
+  public static func pastChips(projects: [Project], kind: FieldHistoryModel.SearchKind, project: String?) -> [[Chip]] {
+    let kinds: [Chip] =
+      kind == .any
+      ? [FieldHistoryModel.SearchKind.prompts, .replies].map {
+        Chip(filter: .kind($0), lead: .said, label: $0.label, note: nil, waiting: false)
+      } : []
+    let folders = projects.filter { $0.key != project }.map {
+      Chip(filter: .project($0.key), lead: .folder, label: $0.name, note: nil, waiting: false)
+    }
+    return [kinds, folders].filter { !$0.isEmpty }
+  }
 
   /// Everything's tokens: who said it, then the project. No profile: Everything looks through every one (UM-D28).
-  public static func pastTokens(kind: FieldHistoryModel.SearchKind, project: Project?) -> [Token] { [] }
+  public static func pastTokens(kind: FieldHistoryModel.SearchKind, project: Project?) -> [Token] {
+    var tokens: [Token] = []
+    if kind != .any { tokens.append(Token(filter: .kind(kind), lead: .said, label: kind.label)) }
+    if let project { tokens.append(Token(filter: .project(project.key), lead: .folder, label: project.name)) }
+    return tokens
+  }
 
   /// A typed name's offer in Everything: the first project with a word starting so, while none is chosen.
-  public static func pastOffer(query: String, projects: [Project], project: String?) -> Offer? { nil }
+  public static func pastOffer(query: String, projects: [Project], project: String?) -> Offer? {
+    guard project == nil, let last = words(query).last, last.count >= offerLetters,
+      let found = projects.first(where: { starts($0.name, with: last) })
+    else { return nil }
+    return Offer(filter: .project(found.key), lead: .folder, title: "Only in \(found.name)", note: "a filter")
+  }
 
   /// Everything's foot (§9 "The phone's feet"; UM-D28): the sessions matched, or **Your latest sessions**; " in
   /// ‹folder›" while a project is chosen; with words and a kind, ", in your prompts" or ", in their replies"; and
   /// while the lens stands, " · every profile; ‹profile› comes back on Field".
   public static func pastFoot(
     rows: Int, query: String, project: Project?, kind: FieldHistoryModel.SearchKind, lens: String?
-  ) -> String { "" }
+  ) -> String {
+    let typed = !words(query).isEmpty
+    var foot = typed ? "\(plural(rows, "session")) matched" : "Your latest sessions"
+    if let project { foot += " in \(project.name)" }
+    if typed {
+      switch kind {
+      case .prompts: foot += ", in your prompts"
+      case .replies: foot += ", in their replies"
+      case .any: break
+      }
+    }
+    if let lens { foot += " · every profile; \(lens) comes back on Field" }
+    return foot
+  }
 
   /// Everything's empty list with words; before a word its words are James's (§9), so none is said here.
-  public static func pastEmpty(query: String) -> Empty? { nil }
+  public static func pastEmpty(query: String) -> Empty? {
+    let words = query.trimmingCharacters(in: .whitespaces)
+    guard !words.isEmpty else { return nil }
+    return Empty(sentence: "Nothing in your past holds every word of “\(words)”. Try fewer words.", act: nil)
+  }
 
   // MARK: - Where a tap goes
 
   /// A live row: its body's card on Field.
-  public static func target(_ row: LiveRow) -> OpenTarget { .card("") }
+  public static func target(_ row: LiveRow) -> OpenTarget { .card(row.session.id) }
 
   /// A past row: History at its first matched line (the corpus that holds it decides the landing, as History's own
   /// search's did), or, for a latest session, the session itself.
-  public static func target(_ row: PastRow, corpus: HistoryCorpus, query: String) -> OpenTarget { .session(device: "", projectId: nil, id: "") }
+  public static func target(_ row: PastRow, corpus: HistoryCorpus, query: String) -> OpenTarget {
+    guard let group = row.group, let line = group.rows.first else {
+      return .session(device: row.device, projectId: row.project?.key, id: row.sessionId)
+    }
+    return .landing(
+      FieldHistoryModel.landing(for: line, in: group, corpus: corpus),
+      query: query.trimmingCharacters(in: .whitespaces))
+  }
 }

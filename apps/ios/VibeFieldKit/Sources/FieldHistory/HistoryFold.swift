@@ -258,7 +258,7 @@ extension FieldHistoryModel {
       id: row.sessionId, projectId: projectId, day: day,
       title: row.title ?? row.summary ?? "untitled session", agent: row.provider ?? "agent",
       meta: meta, branch: "", last: lastWord(lastAt(row), now: now),
-      tone: row.streamState == "pending" ? .orange : nil)
+      tone: row.streamState == "pending" ? .orange : nil, lastAt: lastAt(row))
   }
 
   /// The sessions that moved within `liveWithinMinutes`: a tap opens the

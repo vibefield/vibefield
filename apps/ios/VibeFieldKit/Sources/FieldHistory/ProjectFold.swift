@@ -261,7 +261,8 @@ extension FieldHistoryModel {
         id: plain.id, projectId: key, day: plain.day, title: plain.title, agent: plain.agent, meta: plain.meta,
         branch: "", last: plain.last, tone: plain.tone, device: row.device,
         deviceName: row.device.flatMap { device in desktops.first { $0.id == device }?.name },
-        folder: folder, provider: row.provider, nativeSessionId: row.nativeSessionId.isEmpty ? nil : row.nativeSessionId)
+        folder: folder, provider: row.provider, nativeSessionId: row.nativeSessionId.isEmpty ? nil : row.nativeSessionId,
+        lastAt: plain.lastAt)
     }
   }
 
