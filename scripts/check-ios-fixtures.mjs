@@ -242,6 +242,33 @@ const sparkFixtures = [
   "needs-item.agent-ask.json",
   "needs-item.unknown-kind.json",
 ];
+// SP-7a — the spark's transcript on the phone: every line kind, the worker's five frames, the window's one open, and
+// the ticket's answer and ask, which the kit's own `SparkTranscriptWire` and `SparkTranscriptReader` read
+// (FieldProductTests, the contracts' and the Mac reader's rows).
+const transcriptFixtures = [
+  "spark-transcript-frame.caught-up.json",
+  "spark-transcript-frame.line.json",
+  "spark-transcript-frame.ready.json",
+  "spark-transcript-frame.refused.json",
+  "spark-transcript-frame.run.json",
+  "spark-transcript-line.act-crew.json",
+  "spark-transcript-line.act.json",
+  "spark-transcript-line.forged.json",
+  "spark-transcript-line.gap.json",
+  "spark-transcript-line.outcome-uncertain.json",
+  "spark-transcript-line.outcome.json",
+  "spark-transcript-line.reply.json",
+  "spark-transcript-line.run.json",
+  "spark-transcript-line.tool-ours.json",
+  "spark-transcript-line.tool.json",
+  "spark-transcript-line.turn.json",
+  "spark-transcript-line.unknown-kind.json",
+  "spark-transcript-line.you-terminal.json",
+  "spark-transcript-line.you.json",
+  "spark-transcript-open.valid.json",
+  "spark-transcript-ticket-params.valid.json",
+  "spark-transcript-ticket.valid.json",
+];
 const requiredMirrors = [
   ["freeway", freewayFixtures, ["Tests/FieldFreewayTests"]],
   ["tp", tpFixtures, ["Tests/FieldRoutedTerminalTests"]],
@@ -273,6 +300,8 @@ const requiredMirrors = [
   ["sparks", sparkFixtures, ["Tests/FieldProductTests"]],
   // and the two merged lists Chat's demo door answers under `-vf-mock` (ChatFixtureDoor, DEBUG)
   ["sparks", ["compose-sparks-list.merged.json", "needs-list.merged.json"], ["Sources/FieldHome"]],
+  // SP-7a — the spark's transcript, read on the phone as the Mac reads it
+  ["spark-transcript", transcriptFixtures, ["Tests/FieldProductTests"]],
   // the fold's parity golden and its inputs; the field cut's project-key collapse beside the remote cut's;
   // PG-3e — the body golden, which the drawn rows' bubbles are held to (PhoneBodyParityTests)
   [
