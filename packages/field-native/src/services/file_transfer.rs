@@ -75,9 +75,21 @@ pub trait FileTransferBackend: Send + Sync {
         login: Option<String>,
     ) -> Result<Vec<NativeFileTransferRoot>, FileTransferError>;
     /// `pull`: start one pull. Answered at once; its end rides the stream.
+    /// Its row is in the table before this returns, so before the facade
+    /// writes its answer.
     fn pull(&self, params: NativeFileTransferPullParams) -> Result<(), FileTransferError>;
-    /// The pulls running now, ordered by transferId: the stream's snapshot.
-    fn snapshot(&self) -> Vec<NativeFileTransferRow>;
+    /// The stream's snapshot: the pulls running now, ordered by transferId,
+    /// handed to `write` ONCE while the table that `pull` inserts into is
+    /// held. `write` is where the facade queues the snapshot's line
+    /// (`mgmt/file_transfer.rs`), so a pull enters the table either before
+    /// the rows are built (and they list it) or after the line is queued
+    /// (and its answer, written once `pull` returns, follows it): the
+    /// snapshot write-order rule (W3-16, pending), "a snapshot never omits a
+    /// pull whose answer was written before it", for every pull still
+    /// running. `write` must not block, await, or call back into the arm.
+    /// There is no other way to read the rows, so no caller can build a
+    /// snapshot in one step and queue it in another.
+    fn write_snapshot(&self, write: &mut dyn FnMut(Vec<NativeFileTransferRow>));
     /// The stream of the pulls' progress and ends. It is the arm's, so it is
     /// the mesh unit's, held across node rebuilds (W3-2).
     fn subscribe(&self) -> broadcast::Receiver<PullEvent>;
@@ -156,8 +168,8 @@ impl FileTransferBackend for UnsupportedFileTransfer {
     fn pull(&self, _: NativeFileTransferPullParams) -> Result<(), FileTransferError> {
         Err(FileTransferError::Unsupported)
     }
-    fn snapshot(&self) -> Vec<NativeFileTransferRow> {
-        Vec::new()
+    fn write_snapshot(&self, write: &mut dyn FnMut(Vec<NativeFileTransferRow>)) {
+        write(Vec::new());
     }
     /// A stream that never carries anything: its sender is gone at once.
     fn subscribe(&self) -> broadcast::Receiver<PullEvent> {
@@ -324,7 +336,10 @@ const PROGRESS_MIN_INTERVAL: Duration =
 /// never follows its pull's end, and a row leaves the table only once its
 /// end is final: a reader resynced from a snapshot reads a pull the snapshot
 /// does not list as completed when its landed file is there (contracts mgmt.ts
-/// `NativeFileTransferSnapshot`). A teardown ends every pull `failed`
+/// `NativeFileTransferSnapshot`). A snapshot is built and queued under the
+/// same lock a pull's row enters under (`write_snapshot`), so it never omits
+/// a running pull whose answer was written before it (the snapshot
+/// write-order rule (W3-16, pending)). A teardown ends every pull `failed`
 /// NODE_DOWN (`detach`, the critic's finding 3).
 pub struct NamedRootsFileTransfer {
     core: Arc<Core>,
@@ -670,14 +685,18 @@ impl FileTransferBackend for NamedRootsFileTransfer {
         Ok(())
     }
 
-    fn snapshot(&self) -> Vec<NativeFileTransferRow> {
-        let mut rows: Vec<NativeFileTransferRow> = lock(&self.core.inner)
-            .pulls
-            .values()
-            .map(|run| run.row.clone())
-            .collect();
+    /// The rows are built and handed to `write` under ONE hold of the table's
+    /// lock, the lock `pull` inserts under (the trait's word). `write` queues
+    /// without blocking (`MgmtOutbox::send` and `offer_rebuildable` end in a
+    /// `try_send`, `state.rs:58-92, 119-161`), so the hold stays short.
+    fn write_snapshot(&self, write: &mut dyn FnMut(Vec<NativeFileTransferRow>)) {
+        let inner = lock(&self.core.inner);
+        let mut rows: Vec<NativeFileTransferRow> =
+            inner.pulls.values().map(|run| run.row.clone()).collect();
         rows.sort_by(|a, b| a.transfer_id.cmp(&b.transfer_id));
-        rows
+        write(rows);
+        // only now may a pull enter the table
+        drop(inner);
     }
 
     fn subscribe(&self) -> broadcast::Receiver<PullEvent> {
@@ -1369,7 +1388,20 @@ impl PullSubstrate for ScriptedPulls {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::contracts::FileTransferLanded;
+    use crate::contracts::{
+        FileTransferLanded, NativeFileTransferPullResult, NativeFileTransferSnapshot,
+    };
+    use crate::state::{MgmtOutbox, Offered, OutMsg};
+    use std::sync::TryLockError;
+
+    impl NamedRootsFileTransfer {
+        /// The rows a snapshot written now lists, for rows that queue nothing.
+        fn snapshot(&self) -> Vec<NativeFileTransferRow> {
+            let mut rows = Vec::new();
+            self.write_snapshot(&mut |listed| rows = listed);
+            rows
+        }
+    }
 
     /// Every failure says its own registry word on the wire, and the
     /// substrate's words ride beside it.
@@ -1743,5 +1775,78 @@ mod tests {
             };
             assert_eq!(*reason, mesh_file_transfer::FAILED_NODE_DOWN, "pull {n}");
         }
+    }
+
+    /// The snapshot write-order rule (W3-16, pending), on a real outbox: a
+    /// pull started while a snapshot is being written, from another thread
+    /// (the serial mesh worker beside a stream's forwarder), cannot enter the
+    /// table or answer until the snapshot's line is queued. So the outbox
+    /// reads [the snapshot, without the pull; the pull's answer], never the
+    /// answer first, and the next snapshot lists the pull.
+    /// Probe: build the rows under the lock and hand them to `write` after
+    /// dropping it (two steps) → the table is free inside `write`, and the pull
+    /// answers inside the 200 ms.
+    #[tokio::test]
+    async fn a_pull_started_while_a_snapshot_is_written_answers_after_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let arm = Arc::new(arm_in(dir.path()));
+        let pulls = Arc::new(ScriptedPulls::new());
+        let params = pull_of(1);
+        pulls.script(&params.path, Scripted::Stall);
+        arm.attach(pulls, true, Some(LOGIN.to_owned())).await;
+        let (tx, mut rx, _close) = MgmtOutbox::channel();
+        let (answered, answer) = std::sync::mpsc::channel();
+        let mut started = None;
+        arm.write_snapshot(&mut |rows| {
+            assert!(
+                matches!(arm.core.inner.try_lock(), Err(TryLockError::WouldBlock)),
+                "the rows are written while the table is held"
+            );
+            let worker = (arm.clone(), tx.clone(), params.clone(), answered.clone());
+            started = Some(tokio::task::spawn_blocking(move || {
+                let (arm, tx, params, answered) = worker;
+                let transfer_id = params.transfer_id.clone();
+                arm.pull(params).unwrap();
+                let result = serde_json::json!({ "transferId": transfer_id });
+                tx.send(OutMsg::Line(result.to_string())).unwrap();
+                answered.send(()).unwrap();
+            }));
+            assert!(
+                answer.recv_timeout(Duration::from_millis(200)).is_err(),
+                "no pull answers while a snapshot is written"
+            );
+            let line = serde_json::json!({ "transfers": rows }).to_string();
+            assert_eq!(tx.offer_rebuildable(line), Ok(Offered::Queued));
+        });
+        started
+            .expect("`write` is called once")
+            .await
+            .expect("the pull was answered");
+        let mut lines = Vec::new();
+        while let Ok(OutMsg::Line(line)) = rx.try_recv() {
+            lines.push(line);
+        }
+        let [snapshot, result] = lines.as_slice() else {
+            panic!("the snapshot, then the answer, and nothing else: {lines:?}");
+        };
+        let snapshot: NativeFileTransferSnapshot = serde_json::from_str(snapshot).unwrap();
+        assert!(
+            snapshot.transfers.is_empty(),
+            "the snapshot ahead of the answer does not list the pull"
+        );
+        let result: NativeFileTransferPullResult = serde_json::from_str(result).unwrap();
+        assert_eq!(result.transfer_id, params.transfer_id);
+        let listed: Vec<FileTransferId> = arm
+            .snapshot()
+            .into_iter()
+            .map(|row| row.transfer_id)
+            .collect();
+        assert_eq!(
+            listed,
+            [params.transfer_id.clone()],
+            "the next snapshot lists it"
+        );
+        arm.detach(TEARDOWN_STOPPED).await;
+        assert!(arm.snapshot().is_empty());
     }
 }

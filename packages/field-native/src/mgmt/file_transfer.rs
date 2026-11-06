@@ -39,6 +39,12 @@
 //! (`mgmt/door.rs`): every line goes through `MgmtOutbox::offer_rebuildable`,
 //! so the stream never costs fieldd its connection.
 //!
+//! A snapshot, the subscribe answer's included, is built and queued in one
+//! hold of the arm's lock (`FileTransferBackend::write_snapshot`), the lock a
+//! pull's row enters under, and a pull is answered only once its row is in:
+//! so a snapshot never omits a running pull whose answer was written before
+//! it (the snapshot write-order rule (W3-16, pending)).
+//!
 //! CONTROL ONLY (EL2): no byte of an object crosses this channel.
 
 use crate::contracts::{
@@ -166,15 +172,25 @@ fn subscribe(
     state: &Arc<DaemonState>,
     tx: &Tx,
     arm: &Arc<dyn FileTransferBackend>,
-    id: Option<Value>,
+    mut id: Option<Value>,
 ) {
     // Subscribe BEFORE the snapshot, answer BEFORE forwarding (the door
     // stream's order): an end in between is a delta for a row the snapshot may
     // still list, never a miss.
     let events = arm.subscribe();
     let sub_id = state.sub_id();
-    let snapshot = snapshot_json(&arm.snapshot());
-    send(tx, ok(id, json!({ "subId": sub_id, "snapshot": snapshot })));
+    // The answer carries a snapshot, so it is written as the forwarder's are,
+    // inside `write_snapshot` (the snapshot write-order rule (W3-16,
+    // pending)). The one mesh worker (`mgmt/mod.rs:224-256`) already runs this
+    // and every pull one at a time; the arm's lock keeps the rule true
+    // without leaning on that.
+    arm.write_snapshot(&mut |rows| {
+        let snapshot = snapshot_json(&rows);
+        send(
+            tx,
+            ok(id.take(), json!({ "subId": sub_id, "snapshot": snapshot })),
+        );
+    });
     spawn_forwarder(state.clone(), tx.clone(), events, sub_id);
 }
 
@@ -297,8 +313,11 @@ fn spawn_forwarder(
         let mut owed = false;
         loop {
             if owed {
-                // what the snapshot covers is drained first, so it is not then
-                // sent again as deltas
+                // What the snapshot covers is drained first, so it is not then
+                // sent again as deltas. An event the arm sends between the
+                // drain and the build is sent after the snapshot as well, and
+                // reports a state no newer than the snapshot's: the arm sends
+                // each event under the lock its row changes under.
                 loop {
                     match events.try_recv() {
                         Ok(_) | Err(TryRecvError::Lagged(_)) => {}
@@ -306,8 +325,16 @@ fn spawn_forwarder(
                         Err(TryRecvError::Closed) => return,
                     }
                 }
-                let snapshot = snapshot_json(&state.mesh.file_transfer().snapshot());
-                match tx.offer_rebuildable(note(SNAPSHOT, &sub_id, snapshot)) {
+                // Built and queued in ONE hold of the arm's lock, never in two
+                // steps: the serial mesh worker's pull enters the table before
+                // the rows are built (they list it) or after this line is
+                // queued (its answer follows it). The snapshot write-order
+                // rule (W3-16, pending).
+                let mut offered = Ok(Offered::Skipped);
+                state.mesh.file_transfer().write_snapshot(&mut |rows| {
+                    offered = tx.offer_rebuildable(note(SNAPSHOT, &sub_id, snapshot_json(&rows)));
+                });
+                match offered {
                     Ok(Offered::Queued) => owed = false,
                     Ok(Offered::Skipped) => {
                         tokio::select! {
