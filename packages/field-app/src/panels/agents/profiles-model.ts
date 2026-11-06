@@ -75,6 +75,9 @@ export interface ProfileAgentRow {
   fact: string;
   /** the account's windows (usage the provider reported), in the adapter's order */
   usage: AgentAccountUsageMetric[];
+  /** when the reading those windows are was taken (the entry's `fetchedAt`), while there are any: a window read
+   * before its reset says its age (DESIGN.md §8 "A window read before its reset") */
+  usageFetchedAt?: string | undefined;
   /** the provider does not report usage at all */
   usageUnsupported: boolean;
   /** the usage reading's state, when there is a reading */
@@ -115,6 +118,8 @@ export interface PlanCard {
   named: boolean;
   /** every window of the account's usage, in the adapter's order */
   metrics: AgentAccountUsageMetric[];
+  /** when the reading those windows are was taken, while there are any (the namer's `usageFetchedAt`) */
+  fetchedAt?: string | undefined;
   /** in place of the windows: one sentence, its lead in orange when it needs attention */
   sentence?: { attention?: string; text: string } | undefined;
   /** a borrowed sign-in, said above the body */
@@ -235,6 +240,8 @@ export function whoWords(persona: AgentPersona): string | undefined {
 
 export function agentRow(context: ProfilesContext, persona: AgentPersona): ProfileAgentRow {
   const usage = usageOf(context.usage, persona);
+  // the reading the row shows: a good one, or the last good one kept after a refresh failed
+  const reading = usage?.state === "available" || usage?.stale === true ? usage : undefined;
   const state = signInState(persona, usage, context.identity.includes(persona.provider));
   const who = whoWords(persona);
   const email = persona.identity?.email ?? persona.identity?.organization;
@@ -268,7 +275,8 @@ export function agentRow(context: ProfilesContext, persona: AgentPersona): Profi
     persona,
     state,
     fact,
-    usage: usage?.state === "available" || usage?.stale === true ? usage.metrics : [],
+    usage: reading?.metrics ?? [],
+    usageFetchedAt: reading?.fetchedAt,
     usageUnsupported: usage?.state === "unsupported",
     usageState: usage?.state,
     several,
@@ -330,6 +338,7 @@ function planCards(
     let sentence: PlanCard["sentence"];
     let act: PlanCard["act"];
     let metrics: AgentAccountUsageMetric[] = [];
+    let fetchedAt: string | undefined;
     if (account === undefined || namer === undefined) {
       sentence = {
         text: `${listWords(labels)} ${labels.length === 1 ? "doesn't" : "don't"} say which ${product} account, and no agent here names one.`,
@@ -347,6 +356,7 @@ function planCards(
       };
     } else if (namer.usage.length > 0) {
       metrics = namer.usage;
+      fetchedAt = namer.usageFetchedAt;
     } else {
       sentence = {
         text:
@@ -382,6 +392,7 @@ function planCards(
       account: account ?? "Account not named",
       named: account !== undefined,
       metrics,
+      fetchedAt,
       sentence,
       note,
       act,
@@ -420,6 +431,8 @@ export interface SignInLine {
   fact: string;
   /** its plan's windows, when this sign-in is the one that named the account */
   metrics: AgentAccountUsageMetric[];
+  /** when the reading those windows are was taken, while there are any (its card's `fetchedAt`) */
+  fetchedAt?: string | undefined;
   planId?: string | undefined;
 }
 
@@ -428,6 +441,11 @@ export function signInLines(row: ProfileAgentRow, plans: readonly PlanCard[]): S
   return row.holds.map((held, index) => {
     const card = held.planId === undefined ? undefined : cards.get(held.planId);
     const own = accountWords(held);
+    // its plan's windows are its own only when it named the account
+    const named =
+      card !== undefined && card.namedBy === row.persona.profileId && own !== undefined
+        ? card
+        : undefined;
     const parts: string[] = [];
     if (held.key) parts.push("API key · pay as you go");
     else {
@@ -443,10 +461,8 @@ export function signInLines(row: ProfileAgentRow, plans: readonly PlanCard[]): S
         : (card?.title ?? planTitle(held.service, held.plan)),
       inUse: held.inUse === true,
       fact: parts.join(" · "),
-      metrics:
-        card !== undefined && card.namedBy === row.persona.profileId && own !== undefined
-          ? card.metrics
-          : [],
+      metrics: named?.metrics ?? [],
+      fetchedAt: named?.fetchedAt,
       planId: held.key ? undefined : held.planId,
     };
   });

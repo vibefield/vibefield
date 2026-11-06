@@ -18,7 +18,7 @@ import {
   usageOf,
 } from "../panels/agents/profiles-model";
 import {
-  durationWords,
+  ageWords,
   forecastOf,
   type MeterForecast,
   type Pressed,
@@ -284,15 +284,9 @@ function rightOf(
   // circle"): a forecast or a reset read from it would claim a reading it is not
   const aged = stale ? "kept" : windows.some((each) => each.passed) ? "passed" : undefined;
   if (aged !== undefined) {
-    // §9's "as of 5m ago"; a reading whose time cannot be read is kept all the same (its fill at half), and says no
-    // age rather than words §9 does not rule
-    const age = (now.getTime() - Date.parse(fetchedAt)) / 60_000;
-    return {
-      kind: aged,
-      words: Number.isFinite(age) ? `as of ${durationWords(Math.max(0, age))} ago` : "",
-      hot: false,
-      icon: false,
-    };
+    // §9's "as of 5m ago" (the leaf's `ageWords`); a reading whose time cannot be read is kept all the same (its fill
+    // at half), and says no age rather than words §9 does not rule
+    return { kind: aged, words: ageWords(fetchedAt, now), hot: false, icon: false };
   }
   if (window.forecast !== undefined) {
     return { kind: "forecast", words: window.forecast.short, hot: true, icon: false };

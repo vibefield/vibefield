@@ -7111,7 +7111,11 @@ here.
   "of 5 hours", "of 7 days", "of 7 days · Opus", "of credits" (§8 "The Bands circle", the middle).
   *(Added 2026-11-06, UM-3's restack, as the phone has said it since UM-4d; ‹for James›: a reset a day or more off
   is said by its day and clock, "resets Thu 09:00", and one that has come "resets now", never "resets in Thu 09:00"
-  or "resets in now": Settings' line, the popover's and the phone's alike.)*
+  or "resets in now": Settings' line, the popover's and the phone's alike.)* *(Corrected 2026-11-06, the M-desk
+  stack: a window whose reset has come was read before it, so Settings' line says the reading's age in its reset's
+  place, "as of 3h ago", unlit and with no reset mark (§8 "A window read before its reset"); on the desktop "resets
+  now" stands only where no age can be said — a reading whose time cannot be read — and on the popover's line, whose
+  row's right words say the age above it.)*
 - **What needs you.** On the desktop, "not signed in" with **Sign in**, and "couldn't read" with **Retry**. On the
   phone, "Not signed in · sign in on ‹home›" and "Couldn't read · retry", with no act. A sign-in already under way
   says "signing in…" with no act, as Settings' row says "Signing in…" and offers only its cancel; it is said

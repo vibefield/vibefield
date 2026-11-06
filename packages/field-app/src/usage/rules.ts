@@ -6,7 +6,8 @@
 //
 // It imports nothing, so every reader may: the meter model (`meters.ts`), the Bands geometry (`bands.ts`), the limit
 // moment, and Settings' own page and the column's popover (`panels/agents/ProfilesView.tsx` and
-// `godview/profiles-column/ProfilePopoverView.tsx` read `resetForm`, UM-3, so Settings says the same meter, UM-D3).
+// `godview/profiles-column/ProfilePopoverView.tsx` read `resetForm`, UM-3, so Settings says the same meter, UM-D3;
+// and Settings says a reading's age by the meters' `ageWords`, DESIGN.md §8 "A window read before its reset").
 // Settings reads the meters' windows from `meters.ts` (`meterWindows`, that file's own), which reads Settings' lines
 // (`panels/agents/profiles-model.ts`, which reads nothing here): ProfilesView → meters → profiles-model, no module
 // cycle. A reader imports each rule from the module that owns it; none moves to spare an import. What a window's
@@ -59,6 +60,14 @@ export function durationWords(minutes: number): string {
   const days = Math.floor(hours / 24);
   const rest = hours % 24;
   return rest === 0 ? `${days}d` : `${days}d ${rest}h`;
+}
+
+/** A reading's age as the meters say it (§9 "A reading": "as of 5m ago", "as of 3h ago"), in place of a forecast or a
+ * reset: a kept reading's, and one with a window read before its reset. Nothing when its time cannot be read, rather
+ * than words §9 does not rule. The meters' right words and Settings' C1 line both say it from here. */
+export function ageWords(fetchedAt: string, now: Date): string {
+  const age = (now.getTime() - Date.parse(fetchedAt)) / 60_000;
+  return Number.isFinite(age) ? `as of ${durationWords(Math.max(0, age))} ago` : "";
 }
 
 /** What a window's pressure reads: its orange (Settings' pace rule), its used share, and whether its `resetsAt` is at
