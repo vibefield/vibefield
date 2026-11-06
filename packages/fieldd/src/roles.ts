@@ -1,5 +1,6 @@
 // THE ROLES of fieldd's own executable (FS-1a's files worker; TH-1's transcript
-// worker; CP-4a2a's flow host; AR-7j's agent shim). A packaged fieldd is a Node single-executable application (EDP-14): it
+// worker; CP-4a2a's flow host; AR-7j's agent shim; RV #1's agent forwarder).
+// A packaged fieldd is a Node single-executable application (EDP-14): it
 // runs nothing but its own blob, its RunAsNode fuse is closed, and it carries no
 // Node a second program could be handed. So whatever else must run as Node runs
 // as fieldd ITSELF, in a role, and each role loads ONE bundle sealed beside the
@@ -56,10 +57,20 @@ export const AGENT_SHIM_ROLE_ARG = "--vibefield-role=agent-shim";
  * the executable — the copy the role runs, never the shim home's. */
 export const AGENT_SHIM_BUNDLE = "agent-shim.cjs";
 
-/** How the agent-shim role leaves when the sealed shim cannot be loaded, and how
- * the executable leaves when asked for a role it does not have or handed an
- * argument it does not take: the kit's own status for a launcher that cannot
- * run anything (`SPAWN_THROUGH_EXIT_UNAVAILABLE`, the shell's "not found"),
+/** The argument that makes the executable the agents' forwarder (RV #1, item
+ * 203; rv-forwarder-role at its lean A): the program a managed agent's command
+ * hooks and status lines run in a packaged build (agent-forwarder.ts lends it
+ * to puppeteer as `AgentHost.forwarderRuntime`), followed by puppeteer's word
+ * and the word's arguments. */
+export const AGENT_FORWARDER_ROLE_ARG = "--vibefield-role=agent-forwarder";
+/** puppeteer's builtin forwarder entry, bundled by fieldd's build and SEALED
+ * beside the executable — the one program the role runs. */
+export const AGENT_FORWARDER_BUNDLE = "agent-forwarder.cjs";
+
+/** How the agent-shim and agent-forwarder roles leave when their sealed bundle
+ * cannot be loaded, and how the executable leaves when asked for a role it does
+ * not have or handed an argument it does not take: the kit's own status for a
+ * launcher that cannot run anything (`SPAWN_THROUGH_EXIT_UNAVAILABLE`, the shell's "not found"),
  * spelled here because this file imports nothing; a row holds the two equal. */
 export const AGENT_SHIM_EXIT_UNAVAILABLE = 127;
 
@@ -95,7 +106,25 @@ export function strayArgumentLine(): string {
   return "VibeField: this program takes no arguments; nothing was started.";
 }
 
-export type FielddRole = "files-host" | "transcript-host" | "flows-host" | "agent-shim";
+/** DESIGN.md §9's reason ("When the file an agent is observed with is
+ * missing"; open until James rules rv-forwarder-role): this copy of VibeField
+ * lost its sealed forwarder (a damaged install, a half-finished update). */
+export const FORWARDER_MISSING_REASON =
+  "this copy of VibeField is missing the file it observes agents with. Reinstall VibeField.";
+
+/** The one line the agent-forwarder role says when it cannot load its sealed
+ * forwarder — in the agent's hook or status-line output, since the agent ran
+ * it. DESIGN.md §9's words: no path, no argument and no agent's name. */
+export function forwarderUnavailable(): string {
+  return `VibeField: ${FORWARDER_MISSING_REASON}`;
+}
+
+export type FielddRole =
+  | "files-host"
+  | "transcript-host"
+  | "flows-host"
+  | "agent-shim"
+  | "agent-forwarder";
 
 /** The role the process's FIRST argument names; `"unknown"` when that argument
  * asks for a role (`ROLE_ARG_PREFIX`) this build does not have; `"stray"` when
@@ -110,6 +139,7 @@ export function roleOf(argv: readonly string[]): FielddRole | "unknown" | "stray
   if (first === TRANSCRIPT_HOST_ROLE_ARG) return "transcript-host";
   if (first === FLOWS_HOST_ROLE_ARG) return "flows-host";
   if (first === AGENT_SHIM_ROLE_ARG) return "agent-shim";
+  if (first === AGENT_FORWARDER_ROLE_ARG) return "agent-forwarder";
   if (first?.startsWith(ROLE_ARG_PREFIX) === true) return "unknown";
   return "stray";
 }
@@ -134,4 +164,22 @@ export function roleOf(argv: readonly string[]): FielddRole | "unknown" | "stray
  * sealing the shim inside the blob or checking its hash would not change that. */
 export function agentShimArgv(argv: readonly string[], execPath: string, sealed: string): string[] {
   return [execPath, sealed, ...argv.slice(4)];
+}
+
+/** The argv the sealed forwarder runs with: as if `node <sealed> <word> <the
+ * word's arguments…>` had started it — puppeteer's entry reads its word from
+ * `process.argv.slice(2)`.
+ *
+ * A packaged agent's hook or status line runs `<this executable>
+ * --vibefield-role=agent-forwarder <word> <the word's arguments…>` (the
+ * `forwarderRuntime` agent-forwarder.ts lends), so the role stands at argv[2]
+ * and is DROPPED; everything after it is passed on exactly and never read
+ * here. A script's path among them is a word the entry does not know: the role
+ * runs only the sealed bundle, never a program its caller names. */
+export function agentForwarderArgv(
+  argv: readonly string[],
+  execPath: string,
+  sealed: string,
+): string[] {
+  return [execPath, sealed, ...argv.slice(3)];
 }

@@ -443,6 +443,9 @@
     "packages/fieldd": {
       "name": "@vibefield/fieldd",
       "files": {
+        "dist/agent-forwarder.cjs": {
+          "count": 1
+        },
         "dist/agent-shim.cjs": {
           "count": 1,
           "bytes": [887090]

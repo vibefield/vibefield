@@ -6,12 +6,14 @@ import {
 } from "@vibefield/contracts";
 import { createNoopLogger, type Logger } from "@vibefield/logging";
 import type {
+  AgentForwarderRuntime,
   AgentHost,
   TerminalAutomationOperation,
   TerminalAutomationResult,
   TerminalSpec,
 } from "@vibefield/puppeteer-core";
 import { buildAgentEnvironment } from "@vibefield/puppeteer-runtime";
+import { chooseForwarderRuntime, ownForwarderRuntimeFacts } from "./agent-forwarder";
 import { RpcCallError } from "./native-link";
 import type { TerminalService } from "./terminal-service";
 
@@ -38,6 +40,11 @@ import type { TerminalService } from "./terminal-service";
 // helper runs the agent's turns and tools, so it is the agent as much as the
 // PTY is; before it asked the host, it inherited the daemon's whole
 // environment (item 50's class; the re-attach study's Step 0).
+//
+// And the host lends the program a managed agent's command hooks and status
+// lines run (`forwarderRuntime`, RV #1, item 203): a packaged fieldd's own
+// executable in its forwarder role, chosen once when the host is made
+// (agent-forwarder.ts says when, and why nothing else is lent).
 
 /** The keys VibeField passes through from the daemon's own environment when
  * present. Everything else the daemon inherited stays with the daemon. */
@@ -151,6 +158,9 @@ export interface TerminalAgentHostOptions {
   environment?: NodeJS.ProcessEnv | undefined;
   home?: string | undefined;
   logger?: Logger | undefined;
+  /** RV #1 — the forwarder runtime to lend, in place of this process's own
+   * choice (`chooseForwarderRuntime` over its own facts): a test's */
+  forwarderRuntime?: AgentForwarderRuntime | undefined;
 }
 
 export interface TerminalAgentHost extends AgentHost {
@@ -167,12 +177,22 @@ export interface TerminalAgentHost extends AgentHost {
    * of a helper an adapter spawns itself — this host's agent policy over the
    * adapter's own variables, exactly as an agent PTY's is composed. */
   helperEnvironment(env: Record<string, string>): Record<string, string>;
+  /** puppeteer's `AgentHost.forwarderRuntime` (RV #1, item 203), declared here
+   * as well so this host always answers it; unlike `helperEnvironment`'s, its
+   * type is core's own, which needs puppeteer 0.4.0 (#65): the program a managed agent's
+   * command hooks and status lines run — a single-executable fieldd's own
+   * executable in its forwarder role, else none, and puppeteer's own script
+   * runner decides. Chosen once, when the host is made. */
+  forwarderRuntime: AgentForwarderRuntime | undefined;
 }
 
 /** puppeteer's `AgentHost` over the floor's agent cell. */
 export function createTerminalAgentHost(options: TerminalAgentHostOptions): TerminalAgentHost {
   const logger = options.logger ?? createNoopLogger();
   const births = new Map<string, BornTerminal>();
+  // RV #1 — the forwarder runtime, chosen once: a test's, or this process's own
+  const forwarderRuntime =
+    options.forwarderRuntime ?? chooseForwarderRuntime(ownForwarderRuntimeFacts());
   let lastRefusal: RpcCallError | undefined;
   const noHost = (): RpcCallError =>
     new RpcCallError(
@@ -234,6 +254,7 @@ export function createTerminalAgentHost(options: TerminalAgentHostOptions): Term
     // EL7 — no floor is involved: the adapter spawns the helper itself, under
     // exactly what this answers
     helperEnvironment: (env) => composed(env),
+    forwarderRuntime,
     born: (sessionId) => births.get(sessionId),
     forget: (sessionId) => {
       births.delete(sessionId);

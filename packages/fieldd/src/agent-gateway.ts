@@ -1854,7 +1854,10 @@ export class AgentGatewayService {
   }
 }
 
-function isReadableFile(path: string): boolean {
+/** Whether a readable FILE stands at a path (never a directory of its name): what
+ * a single executable's sealed shim is looked for with, and its sealed forwarder
+ * (agent-forwarder.ts, RV #1). */
+export function isReadableFile(path: string): boolean {
   try {
     accessSync(path, constants.R_OK);
     return statSync(path).isFile();

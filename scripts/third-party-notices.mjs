@@ -1931,6 +1931,12 @@ export const NODE_BUNDLES = [
     base: "packages/fieldd",
     role: "fieldd's agent shim",
   },
+  // RV #1 (item 203): puppeteer's builtin forwarder, a bundle of its own beside the executable (bin/agent-forwarder.cjs).
+  {
+    file: "packages/fieldd/dist/agent-forwarder.cjs",
+    base: "packages/fieldd",
+    role: "fieldd's agent forwarder",
+  },
 ];
 
 /** Attributions a notices file must carry, whatever the graph: the guard against a silent drop. */

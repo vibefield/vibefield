@@ -3,14 +3,14 @@
 //   FIELDD_DATA_DIR=… FIELDD_NATIVE_BIN=…/field-native node dist/bin.cjs
 //
 // THE SAME ENTRY RUNS EVERY ROLE (roles.ts): a packaged fieldd is a single
-// executable, so its files worker and its agents' launcher runtime are this
-// executable again with a role as its first argument. So NOTHING but builtins
-// and roles.ts is imported at this file's top: the daemon's whole module graph —
-// the contracts, logging, the users root, the boot environment and the daemon —
-// is imported inside `main()`, and esbuild's bundle (package.json's first step,
-// cjs) leaves a module reached only by `import()` unevaluated until it is
-// called. A role pays for builtins and its own bundle, and an agent typed in a
-// pane waits for nothing of the daemon's.
+// executable, so its files worker, its agents' launcher runtime and its agents'
+// forwarder are this executable again with a role as its first argument. So
+// NOTHING but builtins and roles.ts is imported at this file's top: the
+// daemon's whole module graph — the contracts, logging, the users root, the
+// boot environment and the daemon — is imported inside `main()`, and esbuild's
+// bundle (package.json's first step, cjs) leaves a module reached only by
+// `import()` unevaluated until it is called. A role pays for builtins and its
+// own bundle, and an agent typed in a pane waits for nothing of the daemon's.
 //
 // The daemon is the executable started with NO argument; any other first
 // argument is a role or is refused in one line (roles.ts `roleOf`; item 203).
@@ -19,12 +19,15 @@ import { createRequire } from "node:module";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import {
+  AGENT_FORWARDER_BUNDLE,
   AGENT_SHIM_BUNDLE,
   AGENT_SHIM_EXIT_UNAVAILABLE,
+  agentForwarderArgv,
   agentShimArgv,
   agentShimUnavailable,
   FILES_HOST_BUNDLE,
   FLOWS_HOST_BUNDLE,
+  forwarderUnavailable,
   roleOf,
   strayArgumentLine,
   TRANSCRIPT_HOST_BUNDLE,
@@ -326,6 +329,29 @@ if (role === "files-host") {
     // the sealed file is gone or broken (a damaged install): one line in the
     // person's terminal and the kit's "cannot run" status — never a stack trace
     process.stderr.write(`${agentShimUnavailable(process.env["PUPPETEER_SHIM_NAME"])}\n`);
+    process.exit(AGENT_SHIM_EXIT_UNAVAILABLE);
+  }
+} else if (role === "agent-forwarder") {
+  // RV #1 (item 203; rv-forwarder-role at its lean A) — what a managed agent's
+  // command hooks and status lines run in a packaged build: `<this executable>
+  // --vibefield-role=agent-forwarder <word> <the word's arguments…>`, the
+  // runtime fieldd lends puppeteer (agent-forwarder.ts `chooseForwarderRuntime`).
+  // The role runs puppeteer's forwarder entry SEALED beside the executable, as
+  // if `node <sealed> <word> …` had started it, and nothing else: a script's
+  // path among the words is a word the entry does not know. It relays what the
+  // agent wrote to the session's bridge and leaves with the entry's exit code.
+  // It runs no daemon, reads no FIELDD_* variable, writes no readiness line and
+  // takes no inspector guard: it lives for one hook or one status-line refresh,
+  // and the bearer it relays is the agent's, by name, already in the agent's
+  // environment (EL7: a process of the same uid gains nothing from it).
+  const sealed = join(sealedDirectory(), AGENT_FORWARDER_BUNDLE);
+  process.argv = agentForwarderArgv(process.argv, process.execPath, sealed);
+  try {
+    createRequire(sealed)(sealed);
+  } catch {
+    // the sealed file is gone or broken (a damaged install): DESIGN.md §9's one
+    // line, in the agent's own hook output, and the cannot-run status
+    process.stderr.write(`${forwarderUnavailable()}\n`);
     process.exit(AGENT_SHIM_EXIT_UNAVAILABLE);
   }
 } else if (role === "unknown") {

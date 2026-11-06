@@ -111,4 +111,14 @@ export const SIDECARS = [
     why: "puppeteer's spawn-through shim — the executable's agent-shim role runs this sealed copy, never the shim home's",
     notices: { bundle: true },
   }),
+  // RV #1 (item 203; rv-forwarder-role at its lean A) — puppeteer's builtin forwarder entry, SEALED beside the
+  // executable. A managed agent's command hooks and status lines run the executable in its agent-forwarder role
+  // (fieldd agent-forwarder.ts lends it to puppeteer), and the role runs THIS file and nothing else (bin.ts). fieldd's
+  // build bundles it from the pinned kit (package.json's step after the shim's). Without it, fieldd lends nothing and
+  // puppeteer refuses a managed Claude launch rather than start it unobserved.
+  sidecar({
+    name: "agent-forwarder.cjs",
+    why: "puppeteer's builtin forwarder — the executable's agent-forwarder role runs this sealed copy for an agent's hooks and status lines",
+    notices: { bundle: true },
+  }),
 ];
