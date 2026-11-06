@@ -45,12 +45,12 @@ enum LensToken {
   static let menuPop: Double = 0.38
   static let menuOrigin = CGSize(width: -50, height: 20)
   /// A row's 34 check column (a check at 14 on the one shown); Every profile's glyph at 19, a profile's at 18, and
-  /// Agent Profiles…'s view lead at 26 (a Bands circle of every plan, SE-P5b).
+  /// Agent Profiles…'s view lead at 26: the Me menu's own row's circle of every plan (`AgentProfilesMenuRow`, SE-P5b).
   static let checkColumn: CGFloat = 34
   static let checkGlyph: CGFloat = 14
   static let everyGlyph: CGFloat = 19
   static let profileGlyph: CGFloat = 18
-  static let viewLead: CGFloat = 26
+  static let viewLead = CGFloat(AgentProfilesMenuRow.size)
   /// Reduce Motion (M6): the token and its menu fade in over 120ms at full size, with no growth and no pop.
   static let reducedFade: Double = SearchSheet.reducedFade
 
@@ -61,9 +61,6 @@ enum LensToken {
   static let everyWord = "Every profile"
   /// The row that opens the Agent Profiles page.
   static let pageWord = "Agent Profiles…"
-  /// Every profile's glyph: the one UM-4's PH-2 names (`ProfileGlyphSymbols.everyProfile`), drawn through that table
-  /// on the restack (SE-P5b).
-  static let everySymbol = "person"
 
   /// The token's foot above the screen's bottom edge: the bar's band.
   static func bottom(homeInset: CGFloat) -> CGFloat { AppBar.band(homeInset: homeInset) }
@@ -206,28 +203,30 @@ struct ProfileLensToken: View {
 }
 
 /// The token's menu, in the Me menu's solid chrome and rows (§8 "The phone's corner"), top to bottom as it stands:
-/// **Agent Profiles…** (its lead the view slot UM-4's seam gives a Me-menu row; SE-P5b puts the Bands circle at 26
-/// there, and until then the column stands empty) and a hairline, the eyebrow **Show**, and the picking rows
-/// (`LensToken.items`), each a radio. The caller lays a clear scrim under it that closes it.
-struct ProfileLensMenu<ViewLead: View>: View {
+/// **Agent Profiles…**, led by the Me menu's own circle of every plan at 26 with nothing in its middle (SE-P5b: the
+/// Me menu's row, `AgentProfilesMenuRow`, one value for both menus; it says no word here, as drawn), and a hairline;
+/// the eyebrow **Show**; and the picking rows (`LensToken.items`), each a radio. The caller lays a clear scrim under it
+/// that closes it.
+struct ProfileLensMenu: View {
   let items: [LensToken.Item]
   /// A pick: the lens shows that profile (nil: every profile), and the menu closes.
   let onPick: (String?) -> Void
-  /// Opens the Agent Profiles page (UM-4's PH-4). nil while this build has no page to open: the row and its
-  /// hairline do not stand, rather than a row that opens nothing (SE-P5b hands it on the restack).
-  let onAgentProfiles: (() -> Void)?
-  @ViewBuilder let viewLead: () -> ViewLead
+  /// Agent Profiles…: its circle, and its act — the menu folds and the Agent Profiles page opens (UM-4's PH-4). It
+  /// always stands: there is always a page to open.
+  let page: AgentProfilesMenuRow
 
   var body: some View {
     VStack(alignment: .leading, spacing: 1) {
-      if let onAgentProfiles {
-        AccountMenuRow(label: LensToken.pageWord, action: onAgentProfiles) { viewLead() }
-        Rectangle()
-          .fill(ChromePalette.separator)
-          .frame(height: 1)
-          .padding(.horizontal, 6)
-          .padding(.vertical, 4)
+      AccountMenuRow(label: LensToken.pageWord, action: page.open) {
+        // the row says its name; the page says every plan, so the circle is not read before the name (the Me menu's)
+        BandsDial(geometry: page.geometry, mark: page.mark)
+          .accessibilityHidden(true)
       }
+      Rectangle()
+        .fill(ChromePalette.separator)
+        .frame(height: 1)
+        .padding(.horizontal, 6)
+        .padding(.vertical, 4)
       ChromeEyebrow(LensToken.eyebrow)
         .padding(.horizontal, 14)
         .padding(.top, 8)
@@ -262,7 +261,8 @@ private struct LensMenuRow: View {
           if let lead = item.lead {
             SearchLeadGlyph(lead: lead, size: LensToken.profileGlyph)
           } else {
-            Image(systemName: LensToken.everySymbol)
+            // Every profile's mark, from the phone's one table (`ProfileGlyphSymbols`, §13)
+            Image(systemName: ProfileGlyphSymbols.everyProfile)
               .font(.system(size: LensToken.everyGlyph, weight: .regular))
           }
         }

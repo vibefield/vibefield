@@ -560,7 +560,12 @@ public struct HomeScreen: View {
       .overlay(alignment: .bottomTrailing) {
         if let profile = lens.chosen, lensTokenShows {
           ProfileLensToken(
-            profile: profile, menuOpen: lensMenuOpen, onMenu: { lensMenuOpen.toggle() },
+            profile: profile, menuOpen: lensMenuOpen,
+            onMenu: {
+              // SE-P5b — the menu's Agent Profiles… circle is a meter view: opening it reads the home's profiles again
+              if !lensMenuOpen { meters.open() }
+              lensMenuOpen.toggle()
+            },
             onClear: { lens.show(nil) }, onWidth: { width in lensTokenWidth = width }
           )
           .transition(LensToken.grow(reduceMotion: reduceMotion))
@@ -1063,8 +1068,8 @@ public struct HomeScreen: View {
   // MARK: - UM-4: the meters
 
   /// The meters' hooks, on an invisible view of their own as Chat's are: the door follows the home, the field, the
-  /// foreground and the mock's standing; the lens follows the home's profiles; and a hold standing as the app leaves
-  /// the foreground is taken away.
+  /// foreground and the mock's standing; and a hold standing as the app leaves the foreground is taken away. The lens
+  /// follows the meters' profiles through `homeProfiles`, its one list (SE-P5b).
   private var metersHooks: some View {
     Color.clear
       .onChange(of: linkHome, initial: true) { syncMetersDoor() }
@@ -1077,7 +1082,6 @@ public struct HomeScreen: View {
         .onChange(of: mockActive) { syncMetersDoor() }
         .onChange(of: mockDesktopIsUp) { syncMetersDoor() }
       #endif
-      .onChange(of: meters.reading.profiles) { _, profiles in lens.adopt(profiles) }
   }
 
   /// The meters' door (UM-D8 A): the home's own client while the app is in the foreground and the home answers — the
@@ -1147,12 +1151,17 @@ public struct HomeScreen: View {
 
   // MARK: - SE-2: search, a glass sheet over the page that stands
 
-  /// The home's profiles, the lens's (UM-4's seam keys on the home's): the home's own answer, or the mock's.
+  /// The home's profiles that stand on a circle — the lens's ONE list (UM-4's seam keys on the home's; ruling 7: a
+  /// draft no agent signed in to has no circle, so it is never a lens): the meters' read of the home
+  /// (`MetersReading.profiles`, through `MeterModel.hasCircle`), which the hold's buds, the page's rows and the token's
+  /// menu read too; under `-vf-mock`, the same read of the meters' fixture, taken at launch so the lens door stands
+  /// before the feed answers. *(Until SE-P5b, 2026-11-06, this was the bloom's read of the home, a draft included,
+  /// adopted beside the meters'.)*
   private var homeProfiles: [AgentProfileSet] {
     #if DEBUG
       if mock != nil { return mockProfiles }
     #endif
-    return linkHome.flatMap { bloomProfiles[$0] } ?? []
+    return meters.reading.profiles
   }
 
   /// Live now's world: the window's drawn rows (the mock's witness under `-vf-mock`), the desktops, the lens's
@@ -1319,12 +1328,12 @@ public struct HomeScreen: View {
     }
   }
 
-  /// SE-2 — the profile token stands on Field at rest only (`LensToken.shows`). No face is held on this build (UM-4's
-  /// PH-5 brings the hold; SE-P5b passes it).
+  /// SE-2 — the profile token stands on Field at rest only (`LensToken.shows`): never while the face is held (UM-4's
+  /// PH-5), the Me menu is open, or a page stands — a card, Settings, or the Agent Profiles page (SE-P5b).
   private var lensTokenShows: Bool {
     LensToken.shows(
-      lens, onField: selectedTab == .field, searchOpen: searchOpen, faceHeld: false, menuOpen: accountMenuOpen,
-      pageOpen: selection != nil || settingsSheetOpen)
+      lens, onField: selectedTab == .field, searchOpen: searchOpen, faceHeld: faceHold.held != nil,
+      menuOpen: accountMenuOpen, pageOpen: selection != nil || settingsSheetOpen || agentProfilesOpen)
   }
 
   /// The bar (IOS-9e): the account at the left, the tabs at the centre,
@@ -1366,8 +1375,14 @@ public struct HomeScreen: View {
                 lens.show(id)
                 lensMenuOpen = false
               },
-              // UM-4's Agent Profiles page is not on this build: SE-P5b hands the row its page and its Bands circle
-              onAgentProfiles: nil, viewLead: { EmptyView() }
+              // SE-P5b — Agent Profiles…: the Me menu's own row (its circle of every plan at 26); its act folds this
+              // menu and opens the page. Read only while the menu stands, as the Me menu's is.
+              page: AgentProfilesMenuRow(
+                reading: meters.reading, now: meters.clock(),
+                open: {
+                  lensMenuOpen = false
+                  agentProfilesOpen = true
+                })
             )
             .transition(LensToken.pop(reduceMotion: reduceMotion))
           }
@@ -1889,8 +1904,9 @@ public struct HomeScreen: View {
           mockActive = true
           if account.fieldIsLive { feed.start() }
           syncMockHistory()
-          // SE-2 — Live now's rows (the witness's), the home's profiles (the golden's) and search's doors:
-          // `-vf-mock-lens=<profile>`, `-vf-mock-search-scope=everything`, `-vf-mock-search-filter=desk:<device>`
+          // SE-2 — Live now's rows (the witness's), the home's profiles (the meters' fixture's, on a circle: SE-P5b)
+          // and search's doors: `-vf-mock-lens=<profile>`, `-vf-mock-search-scope=everything`,
+          // `-vf-mock-search-filter=desk:<device>`
           mockSearchRows = MockAccount.searchRows()
           mockProfiles = MockAccount.searchProfiles()
           lens.adopt(mockProfiles)

@@ -2,7 +2,6 @@ import FieldDesign
 import FieldHistory
 import FieldProduct
 import SwiftUI
-import UIKit
 
 /// SE-2 (SE-D3 A; DESIGN.md §8 "The phone's search") — the sheet's measure, the drawing's (`search.css`'s `.ps-sheet`,
 /// `.ps-seg`, `.ps-fchips`, `.ps-row`, `.ps-sug`, `.ps-none` and `.ps-foot`). `AppBarTests` pins the ruled numbers.
@@ -373,14 +372,12 @@ struct SearchLeadGlyph: View {
     }
   }
 
-  /// A profile's glyph, by the spawn bloom's rule on this base (`SpawnBloomOverlay.symbol`): its own when the system
-  /// has it, the laptop for the agents' own folders, the person otherwise. The restack onto UM-4's PH-2 (SE-P5b)
-  /// draws it through the phone's one table, `ProfileGlyphSymbols`, instead.
+  /// A profile's glyph, through the phone's one table (UM-4, ruling 20: `ProfileGlyphSymbols`), as the spawn bloom's
+  /// buds draw it (`SpawnBloomOverlay.symbol`): This Mac's laptop, a token's symbol outlined, the star for a token this
+  /// build does not draw. *(Until SE-P5b, 2026-11-06, a lead kept a rule of its own: the token's name when the system
+  /// had a symbol of it, else the laptop for This Mac and `person.crop.circle` otherwise.)*
   static func profileSymbol(glyph: String?, native: Bool) -> String {
-    guard let glyph, UIImage(systemName: glyph) != nil else {
-      return native ? "laptopcomputer" : "person.crop.circle"
-    }
-    return glyph
+    ProfileGlyphSymbols.symbol(glyph: glyph, native: native, filled: false)
   }
 }
 
