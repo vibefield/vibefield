@@ -396,6 +396,12 @@ describe("CP-4a2a — a run's journal (CP4-S15, CP-D9; the fixtures' MACs are re
     });
     expect(FlowHash.safeParse(head.hash).success).toBe(true);
     expect((head as { mac?: unknown }).mac).toMatch(HEX_64);
+    // F6: a head holds the folder its input named at its begin; the valid head, written before it, holds none
+    expect(head.folder).toBeUndefined();
+    const held = FlowJournalHead.parse(fixture("flow-journal-head.folder"));
+    expect(held).toMatchObject({ run: "fr-k3v9q2m7x1", folder: "/Users/someone/work/release" });
+    expect((held as { mac?: unknown }).mac).toMatch(HEX_64);
+    expect(FlowJournalHead.safeParse({ ...held, folder: "" }).success).toBe(false);
     expect(flowJournalLineOf(head)?.kind).toBe("head");
     for (const bad of [
       { ...head, seq: 2 },

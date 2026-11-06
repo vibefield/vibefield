@@ -590,7 +590,10 @@ export type FlowJournalLine = z.infer<typeof FlowJournalLine>;
 
 /** The file's first line: the run, its flow, the version it runs (the approval's hash; the bytes fieldd kept, never
  * the library's file, CP-D10), its name and number as a card says them (RunSummary's `name` and `n`), who started it
- * and its input. */
+ * and its input. CP-4a2b (the slices 7–9 review's F6; R8b's "held at its start"): `folder`, the folder its input named
+ * at its begin, which its steps run in when they name none, frozen as its scope is. Optional, so a head from before
+ * it reads as it was, its run's folder derived from its input at the wake. At most 4,096 characters (Linux's
+ * PATH_MAX; macOS's is 1,024). */
 export const FlowJournalHead = FlowJournalLine.extend({
   kind: z.literal("head"),
   seq: z.literal(1),
@@ -601,6 +604,7 @@ export const FlowJournalHead = FlowJournalLine.extend({
   hash: FlowHash,
   starter: FlowStarter,
   input: FlowInput.optional(),
+  folder: z.string().min(1).max(4096).optional(),
 });
 export type FlowJournalHead = z.infer<typeof FlowJournalHead>;
 
