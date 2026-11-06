@@ -16,6 +16,8 @@ import Testing
 @MainActor
 private final class ScriptedDoor: HistoryDoor {
   var asked: [String] = []
+  /// SE-P1 — what each `index.search` asked, in order
+  var searched: [JSONValue] = []
   var refuse: FieldProductError?
   var tailSnapshot: JSONValue?
   var tailDeltas: [JSONValue] = []
@@ -24,6 +26,7 @@ private final class ScriptedDoor: HistoryDoor {
 
   func call(_ method: String, params: JSONValue?) async throws -> JSONValue {
     asked.append(method)
+    if method == "index.search" { searched.append(params ?? .null) }
     if let refuse { throw refuse }
     switch method {
     case "index.status": return try Fixture.json("index-status.valid")
@@ -161,6 +164,74 @@ struct HistoryReadsTests {
     #expect(reader.standing == .incompatible(theirs: "0.9.0", ours: FieldProductContract.contractsVersion))
     reader.close()
     #expect(door.closed, "a door the reader owns is closed with it")
+  }
+
+  /// SE-P1 (SE-D4 A) — Live now's ask: the words over this desktop's live runs alone (`nativeSessionIds`), at the
+  /// tailnet's page; the lines land by the run's native id, and Everything's hits, query and recent searches stand.
+  @Test("live: the words are asked over the live runs, and the lines land by the run's native id")
+  @MainActor
+  func searchLive() async throws {
+    let door = ScriptedDoor()
+    let reader = HistoryDesktopReader(deviceId: "dev-1", name: "studio", door: door)
+    reader.start()
+    await settle("the standing") { door.asked.contains("index.status") }
+    await reader.searchLive(" needle ", nativeSessionIds: ["native-s0", "native-s9"])
+    let asked = try #require(door.searched.last)
+    #expect(asked["q"]?.stringValue == "needle")
+    let ids = (asked["nativeSessionIds"]?.arrayValue ?? []).compactMap { $0.stringValue }
+    #expect(ids == ["native-s0", "native-s9"])
+    #expect(asked["limit"]?.intValue == Int64(HistoryReads.listRows))
+    #expect(asked["kind"] == nil, "Live now asks both sides of the conversation")
+    let live = try #require(reader.live)
+    #expect(live.query == "needle")
+    let lines = live.lines["native-s0"] ?? []
+    #expect(lines.map { $0.text } == ["needle in a haystack"])
+    #expect(reader.corpus.hits.isEmpty, "Everything's hits are not Live now's")
+    #expect(reader.corpus.searchedQuery == nil)
+    #expect(reader.corpus.recentSearches.isEmpty)
+    reader.close()
+  }
+
+  /// SE-P1 — no words, or no live run, asks nothing; an unanswered ask keeps the last lines (H-D7).
+  @Test("live: nothing to ask asks nothing, and an unanswered ask keeps what was shown")
+  @MainActor
+  func searchLiveAsksOnlyWhatItCan() async throws {
+    let door = ScriptedDoor()
+    let reader = HistoryDesktopReader(deviceId: "dev-1", name: "studio", door: door)
+    reader.start()
+    await settle("the standing") { door.asked.contains("index.status") }
+    await reader.searchLive("  ", nativeSessionIds: ["native-s0"])
+    await reader.searchLive("needle", nativeSessionIds: [])
+    #expect(door.searched.isEmpty)
+    await reader.searchLive("needle", nativeSessionIds: ["native-s0"])
+    #expect(door.searched.count == 1)
+    door.refuse = FieldProductError(kind: "UNAVAILABLE", message: "the door is gone", retryable: true)
+    await reader.searchLive("other", nativeSessionIds: ["native-s0"])
+    let live = try #require(reader.live)
+    #expect(live.query == "needle", "what was last shown stands")
+    #expect(reader.standing == .asleep)
+    reader.close()
+  }
+
+  /// SE-P1 — the desktops route each run's words to the desktop it runs on, skip a desktop that does not answer, and
+  /// join every answer's lines for the words asked.
+  @Test("live: each desktop is asked over its own runs, and the lines join across desktops")
+  @MainActor
+  func desktopsRouteTheLiveAsk() async throws {
+    let studio = ScriptedDoor()
+    let loft = ScriptedDoor()
+    let desktops = HistoryDesktops(cache: nil)
+    desktops.attach(deviceId: "dev-1", name: "studio", isHome: true, door: studio, ownsDoor: false)
+    desktops.attach(deviceId: "dev-2", name: "loft", isHome: false, door: loft, ownsDoor: false)
+    await settle("both standings") { studio.asked.contains("index.status") && loft.asked.contains("index.status") }
+    await desktops.searchLive("needle", runs: ["dev-1": ["native-s0"], "dev-2": ["native-l1"], "dev-3": ["x"]])
+    let toStudio = (studio.searched.last?["nativeSessionIds"]?.arrayValue ?? []).compactMap { $0.stringValue }
+    let toLoft = (loft.searched.last?["nativeSessionIds"]?.arrayValue ?? []).compactMap { $0.stringValue }
+    #expect(toStudio == ["native-s0"])
+    #expect(toLoft == ["native-l1"])
+    let lines = desktops.liveLines("needle")
+    #expect(lines["native-s0"]?.count == 1)
+    #expect(desktops.liveLines("other").isEmpty, "lines are the words' they answered")
   }
 
   @Test("the cache replays a document for a reader with no door, under the desktop's name and its read stamp")

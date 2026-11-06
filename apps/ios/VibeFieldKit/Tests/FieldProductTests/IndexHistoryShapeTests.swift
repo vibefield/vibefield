@@ -87,6 +87,45 @@ import Testing
     #expect(hit.snippet == "[needle] in a haystack")
   }
 
+  /// SE-P1 (SE-D3/SE-D4 A on the phone) — Everything's golden: each hit carries its ROOT's facts beside the
+  /// attribution (the folder, rosetta's project id, the catalog agent), read tolerantly; the hit whose root the walk
+  /// could not reach carries none of them, never its own session's. The agent is the golden's own word (R23b: no id is
+  /// written here).
+  @Test func theEverythingAnswerReadsEachRootsFacts() throws {
+    let json = try Fixture.json("index-search-result.everything")
+    let search = try IndexSearchResult(json: json)
+    #expect(search.hits.count == 4)
+    let first = try #require(search.hits.first)
+    let provider = json["hits"]?.arrayValue?.first?["provider"]?.stringValue
+    #expect(first.cwd == "/Users/james/Projects/rosetta")
+    #expect(first.projectId == "p-4f1c2a9e")
+    #expect(provider != nil, "the golden names an agent")
+    #expect(first.provider == provider)
+    #expect(first.projectKey == nil, "the golden's hit names no PJ key")
+    #expect(first.unknownFields.isEmpty, "the facts are read, never named unknown")
+    // outside any project: a folder and an agent, no project id
+    let scratch = search.hits[2]
+    #expect(scratch.cwd == "/Users/james/scratch")
+    #expect(scratch.projectId == nil)
+    // the root the walk could not reach: no root, and none of the root's facts
+    let lost = search.hits[3]
+    #expect(lost.rootSessionId == nil)
+    #expect(lost.cwd == nil && lost.projectId == nil && lost.provider == nil && lost.projectKey == nil)
+  }
+
+  /// A PJ key rides a hit as the listing's join column does, and a key the reader cannot use is kept as said.
+  @Test func aHitCarriesItsProjectKey() throws {
+    let hit = try IndexSearchHit(
+      json: .object([
+        "sessionId": .string("s1"), "rootSessionId": .string("s0"), "timelineId": .string("t1"),
+        "kind": .string("user"), "snippet": .string("x"), "projectKey": .string("pk-rosetta"),
+        "cwd": .string("/Users/kim/rosetta"),
+      ]))
+    #expect(hit.projectKey == "pk-rosetta")
+    #expect(hit.cwd == "/Users/kim/rosetta")
+    #expect(hit.unknownFields.isEmpty)
+  }
+
   @Test func theTimelinePageReadsEveryKindAndNeverAnAddress() throws {
     let page = try IndexTimelineResult(json: try Fixture.json("index-timeline.valid"))
     #expect(page.sessionId == "s1")

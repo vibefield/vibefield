@@ -182,6 +182,16 @@ public final class HistoryDesktops {
     }
   }
 
+  /// SE-P1 (SE-D4 A) — Live now's words, asked of each desktop over its OWN live runs (`runs`: a device id → the
+  /// native ids of the runs it owns, as the field's rows name them): a run's transcript is on the desktop it runs on.
+  /// A desktop whose door does not answer is not asked, and its runs match on their facts alone.
+  /// SE-P1 (red): the stub routes nothing.
+  public func searchLive(_ query: String, runs: [String: [String]]) async {}
+
+  /// SE-P1 — every answering desktop's lines for `query`, by the run's native id: what Live now joins to its rows.
+  /// SE-P1 (red): the stub joins nothing.
+  public func liveLines(_ query: String) -> [String: [HistoryHit]] { [:] }
+
   private func replace(_ reader: HistoryDesktopReader) {
     readers.removeAll { $0.deviceId == reader.deviceId }
     readers.append(reader)

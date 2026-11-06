@@ -319,6 +319,15 @@ public struct IndexSearchHit: Sendable, Equatable, Identifiable, Decodable {
   /// matches marked with `[` and `]`, the way rosetta marks them
   public let snippet: String
   public let device: String?
+  /// SE-2 (GV-D8's facts, read on the phone since SE-D3) — the ROOT's folder as the index recorded it, a path: a row
+  /// says its last name ("folder · agent"). Absent whenever the root is, never the hit's own session's.
+  public let cwd: String?
+  /// rosetta's opaque project id for the root
+  public let projectId: String?
+  /// the catalog agent the root's runtime maps to (`AgentProviderId`); absent when no catalog row maps it
+  public let provider: String?
+  /// PJ-4 — the root's PJ project key: what Everything's project filter narrows by
+  public let projectKey: String?
   public let unknownFields: [String]
 
   public var id: String { "\(sessionId)/\(timelineId)" }
@@ -334,6 +343,11 @@ public struct IndexSearchHit: Sendable, Equatable, Identifiable, Decodable {
     at = object.int("at")
     snippet = object.string("snippet") ?? ""
     device = object.string("device")
+    // SE-P1 (red): the root's facts are declared, and read nothing yet
+    cwd = nil
+    projectId = nil
+    provider = nil
+    projectKey = nil
     unknownFields = object.unknownFields
   }
 

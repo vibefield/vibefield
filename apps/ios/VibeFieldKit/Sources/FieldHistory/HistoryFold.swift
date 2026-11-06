@@ -607,7 +607,7 @@ extension FieldHistoryModel {
     if let searched = corpus.searchedQuery, searched == query.trimmingCharacters(in: .whitespaces) {
       return corpus.hits.compactMap { group in
         let rows = group.rows.filter { kind.admitsHit($0.who) }
-        return rows.isEmpty ? nil : HistoryHitGroup(id: group.id, projectId: group.projectId, sessionId: group.sessionId, sessionTitle: group.sessionTitle, agent: group.agent, day: group.day, rows: rows)
+        return rows.isEmpty ? nil : group.keeping(rows)
       }
     }
     return hits(for: query, kind: kind, in: corpus)

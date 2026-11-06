@@ -203,6 +203,10 @@ const historyFixtures = [
   "project-figures.valid.json",
   "project-changes-open.snapshot.json",
 ];
+// SE-2 (SE-D3/D4 A) — the phone's search reads `index.search`'s answers: the valid golden (Live now's ask, and the
+// DEBUG fixture door's answer) and Everything's, whose hits carry their root's facts. Named so a copy deleted with its
+// golden kept is red here, not unseen.
+const searchFixtures = ["index-search-result.valid.json", "index-search-result.everything.json"];
 // fix7 — the ledger reads its door's index beside it: ready, failed, rebuilding.
 const indexFixtures = [
   "index-status.valid.json",
@@ -326,6 +330,9 @@ const requiredMirrors = [
   ["project", projectFixtures, ["Tests/FieldProductTests"]],
   ["project", historyFixtures, ["Tests/FieldHistoryTests", "Sources/FieldHistory"]],
   ["index", indexFixtures, ["Tests/FieldHistoryTests"]],
+  // SE-2 — search's answers: both readers' suites, and the DEBUG fixture door's answer (`HistoryFixtureDoor`)
+  ["search", searchFixtures, ["Tests/FieldHistoryTests", "Tests/FieldProductTests"]],
+  ["search", searchFixtures.slice(0, 1), ["Sources/FieldHistory"]],
   ["launch", launchFixtures, ["Tests/FieldProductTests"]],
   ["launch", sheetFixtures, ["Tests/FieldWorkspaceTests"]],
   ["launch", sheetFixtures.slice(0, 2), ["Sources/FieldWorkspace"]],

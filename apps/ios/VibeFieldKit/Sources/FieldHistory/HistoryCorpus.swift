@@ -316,8 +316,20 @@ public struct HistoryHitGroup: Identifiable, Equatable, Sendable, Codable {
   public let agent: String
   public let day: String
   public let rows: [HistoryHit]
+  /// SE-P1 (SE-D4 A) — the root's facts, as the index said them (`IndexSearchHit`'s), each optional so a group this
+  /// phone cached before SE-2 still reads (`HistoryCache`): the agent's own id for the conversation, which joins a
+  /// live row to its lines (Live now's ask); the folder's last name ("folder · agent"); the catalog agent; and the PJ
+  /// project key Everything's project filter narrows by. nil wherever the index carried none.
+  public let nativeSessionId: String?
+  public let folder: String?
+  public let provider: String?
+  public let projectKey: String?
 
-  public init(id: String, projectId: String, sessionId: String, sessionTitle: String, agent: String, day: String, rows: [HistoryHit]) {
+  public init(
+    id: String, projectId: String, sessionId: String, sessionTitle: String, agent: String, day: String,
+    rows: [HistoryHit], nativeSessionId: String? = nil, folder: String? = nil, provider: String? = nil,
+    projectKey: String? = nil
+  ) {
     self.id = id
     self.projectId = projectId
     self.sessionId = sessionId
@@ -325,6 +337,18 @@ public struct HistoryHitGroup: Identifiable, Equatable, Sendable, Codable {
     self.agent = agent
     self.day = day
     self.rows = rows
+    self.nativeSessionId = nativeSessionId
+    self.folder = folder
+    self.provider = provider
+    self.projectKey = projectKey
+  }
+
+  /// The same group holding only `rows` — a filter's narrowing (the kind, the local match).
+  /// SE-P1 (red): the stub keeps the session's words and drops the root's facts, as the filters' copies did.
+  public func keeping(_ rows: [HistoryHit]) -> HistoryHitGroup {
+    HistoryHitGroup(
+      id: id, projectId: projectId, sessionId: sessionId, sessionTitle: sessionTitle, agent: agent, day: day,
+      rows: rows)
   }
 }
 

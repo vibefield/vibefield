@@ -127,9 +127,7 @@ public enum FieldHistoryModel {
         kind.admits(row.who) && terms.allSatisfy { row.text.lowercased().contains($0) }
       }
       guard !rows.isEmpty else { return nil }
-      return HistoryHitGroup(
-        id: group.id, projectId: group.projectId, sessionId: group.sessionId, sessionTitle: group.sessionTitle,
-        agent: group.agent, day: group.day, rows: rows)
+      return group.keeping(rows)
     }
   }
 

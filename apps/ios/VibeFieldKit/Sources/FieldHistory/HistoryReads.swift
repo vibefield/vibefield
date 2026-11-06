@@ -49,6 +49,9 @@ public enum HistoryReads {
   /// the head: 240 rows, so a reset's newest `INDEX_TAILNET_LIMITS.MAX_ROWS` (100) and a hole of up to 140
   /// rows below them close. Past them the rows below the last page read are dropped, and the log says so.
   public static let fillPages = 6
+  /// SE-P1 — the most live runs one Live now ask names: the contract's own bound on `nativeSessionIds`
+  /// (`IndexSearchParams`, `.max(256)`); a field past it is asked for its first runs, in the field's order.
+  public static let liveRuns = 256
 
   static let logger = Logger(subsystem: "com.jamesyong.vibefield.kit", category: "history")
 
@@ -56,6 +59,19 @@ public enum HistoryReads {
   /// ordinals, never a row's text), so Console shows it without Include Info.
   public static func log(_ line: String) {
     logger.notice("\(line, privacy: .public)")
+  }
+}
+
+/// SE-P1 (SE-D4 A) — one desktop's answer to Live now's words: the lines its index matched in its live runs'
+/// conversations, filed under each run's native id (`AgentRemoteRow.nativeSessionId`, the join to the field's row),
+/// newest first as the index answered them.
+public struct HistoryLiveAnswer: Equatable, Sendable {
+  public let query: String
+  public let lines: [String: [HistoryHit]]
+
+  public init(query: String, lines: [String: [HistoryHit]]) {
+    self.query = query
+    self.lines = lines
   }
 }
 
@@ -111,6 +127,9 @@ public final class HistoryDesktopReader: Identifiable {
   public private(set) var reading: Set<String> = []
   /// The door's last refusal, in its own words, for the record.
   public private(set) var failure: String?
+  /// SE-P1 (SE-D4 A) — Live now's last answer from this desktop's index: the words asked over its live runs' own
+  /// conversations. Never cached (a live run's lines are the moment's) and never Everything's (`corpus.hits`).
+  public private(set) var live: HistoryLiveAnswer?
   /// Whether this reader replays the cache (no door, or a door that stopped).
   public var isReplaying: Bool { door == nil || !standing.isAwake }
   /// PJ-7 — the door this reader asks, which the ledger may ask too (one door
@@ -539,6 +558,13 @@ public final class HistoryDesktopReader: Identifiable {
     recent.insert(words, at: 0)
     corpus.recentSearches = Array(recent.prefix(HistoryReads.recentSearches))
   }
+
+  /// SE-P1 (SE-D4 A) — Live now's ask: the words over THIS desktop's live runs alone (`nativeSessionIds`, the
+  /// contract's scope for "the live runs a reader can jump to"), at the tailnet's page. The lines land in `live`, by
+  /// the run's native id; Everything's hits, its query and the recent searches are not touched. An unanswered ask
+  /// keeps what was last shown (H-D7); a refusal dims as every read's does.
+  /// SE-P1 (red): the stub asks nothing.
+  public func searchLive(_ query: String, nativeSessionIds: [String]) async {}
 
   // MARK: Refusals
 

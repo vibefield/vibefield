@@ -243,6 +243,64 @@ struct HistoryFoldTests {
     #expect(FieldHistoryModel.visibleHits(query: "other", kind: .any, in: corpus).isEmpty)
   }
 
+  /// SE-P1 (SE-D3/SE-D4 A) — a group carries its ROOT's facts from the index's hits: the native id Live now joins a
+  /// run's lines by, the folder's last name, the catalog agent and the PJ key; the unattributed hit's group carries
+  /// none. The agent is the golden's own word (R23b: no id is written here).
+  @Test("a hit group carries its root's facts: the native id, the folder, the agent; the unattributed one none")
+  func hitGroupsCarryTheRootsFacts() throws {
+    let json = try Fixture.json("index-search-result.everything")
+    let hits = json["hits"]?.arrayValue ?? []
+    let provider = hits.first?["provider"]?.stringValue
+    let native = hits.first?["nativeSessionId"]?.stringValue
+    let groups = FieldHistoryModel.hitGroups(try IndexSearchResult(json: json), now: now)
+    // two hits share a root: three groups
+    #expect(groups.count == 3)
+    let first = groups[0]
+    #expect(first.rows.count == 2)
+    #expect(native != nil && provider != nil, "the golden names both")
+    #expect(first.nativeSessionId == native)
+    #expect(first.folder == "rosetta")
+    #expect(first.provider == provider)
+    #expect(first.agent == provider, "the agent's mark is the catalog's agent, not the word `agent`")
+    #expect(first.projectKey == nil)
+    #expect(groups[1].folder == "scratch")
+    let lost = groups[2]
+    #expect(lost.nativeSessionId == nil && lost.folder == nil && lost.provider == nil && lost.projectKey == nil)
+  }
+
+  /// SE-P1 — a filter's narrowing keeps the group's facts: the kind (the index's answer) and the local match (the
+  /// mock's) both hand back the root's native id and folder.
+  @Test("a narrowed group keeps its root's facts")
+  func narrowingKeepsTheFacts() throws {
+    let json = try Fixture.json("index-search-result.everything")
+    var corpus = HistoryCorpus.empty(desktop: "studio", deviceId: "dev-1")
+    corpus.hits = FieldHistoryModel.hitGroups(try IndexSearchResult(json: json), now: now)
+    corpus.searchedQuery = "migration"
+    let replies = FieldHistoryModel.visibleHits(query: "migration", kind: .replies, in: corpus)
+    let first = try #require(replies.first)
+    #expect(first.rows.count == 1)
+    #expect(first.folder == "rosetta")
+    #expect(first.nativeSessionId != nil)
+    corpus.searchedQuery = nil
+    let local = FieldHistoryModel.hits(for: "reversible", kind: .any, in: corpus)
+    let only = try #require(local.first)
+    #expect(only.folder == "rosetta")
+  }
+
+  /// SE-P1 — a group this phone cached before SE-2 carries none of the new keys: it still reads, with no facts.
+  @Test("a cached group from before SE-2 still reads")
+  func anOldCachedGroupReads() throws {
+    let old = Data(
+      """
+      {"id":"g-s0","projectId":"","sessionId":"s0","sessionTitle":"Named","agent":"agent","day":"Today",
+       "rows":[{"id":"s1/t1","anchor":"t1","who":{"you":{}},"text":"needle","at":"10:30"}]}
+      """.utf8)
+    let group = try JSONDecoder().decode(HistoryHitGroup.self, from: old)
+    #expect(group.sessionId == "s0")
+    #expect(group.rows.count == 1)
+    #expect(group.nativeSessionId == nil && group.folder == nil && group.provider == nil && group.projectKey == nil)
+  }
+
   @Test("the standing: live is connected, a reading phase is indexing with the build's counters, no answer is asleep, another version names both numbers")
   func standing() throws {
     let live = try IndexStatusResult(json: try Fixture.json("index-status.valid"))
