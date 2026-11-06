@@ -358,7 +358,8 @@ export class FlowRuns {
     let folder: string | undefined;
     for (const [input, kind] of Object.entries(meta?.input ?? {})) {
       const value = params.input[input];
-      if (value === undefined || value === "" || (kind !== "session" && kind !== "project")) continue;
+      if (value === undefined || value === "" || (kind !== "session" && kind !== "project"))
+        continue;
       const found = this.ports.folderOf(kind, value);
       if (found === undefined) throw refused(`input-${kind}`, words.inputNotFound(kind));
       folder ??= found;

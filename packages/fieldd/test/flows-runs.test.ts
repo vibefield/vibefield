@@ -1310,12 +1310,12 @@ describe("CP-4a2b — a run's folder, held at its start (slice 7's R8b)", () => 
       message: NO_FOLDER,
     });
     h.approved("in-session", stepWith("", '{ target: "session" }'));
-    expect(
-      await refusalOf(h.start({ flow: "in-session", input: { target: "run-gone" } })),
-    ).toEqual({
-      reason: "input-session",
-      message: "VibeField can't find the session its input names.",
-    });
+    expect(await refusalOf(h.start({ flow: "in-session", input: { target: "run-gone" } }))).toEqual(
+      {
+        reason: "input-session",
+        message: "VibeField can't find the session its input names.",
+      },
+    );
     h.approved("in-project", stepWith("", '{ where: "project" }'));
     expect(await refusalOf(h.start({ flow: "in-project", input: { where: "pj-9" } }))).toEqual({
       reason: "input-project",
@@ -1343,7 +1343,11 @@ describe("CP-4a2b — a run's folder, held at its start (slice 7's R8b)", () => 
       /\s+/g,
       " ",
     );
-    for (const said of [words.inputNotFound("session"), words.inputNotFound("project"), NO_FOLDER]) {
+    for (const said of [
+      words.inputNotFound("session"),
+      words.inputNotFound("project"),
+      NO_FOLDER,
+    ]) {
       expect(said).not.toBe("");
       expect(design, said).toContain(`"${said}"`);
     }
