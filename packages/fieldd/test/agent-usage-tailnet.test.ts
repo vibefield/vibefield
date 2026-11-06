@@ -181,21 +181,27 @@ async function answered(rpc: WsRpc, method: string, params: unknown): Promise<un
   return answer.ok ? answer.result : undefined;
 }
 
-/** The batch this desktop holds once its first reading has landed — asked by
- * the window, whose one-shot read with nothing cached takes the one reading
- * `snapshot` kicks — then a beat, so no reading is still in flight, and the
- * batch as it stands after that beat: each cold ask before the first landed
- * kicked a reading of its own, and a later one may land inside the beat. A
- * read with a batch cached kicks nothing. */
+/** The batch this desktop holds once its one cold reading has landed. The
+ * window's first one-shot read, with nothing cached, kicks the one reading
+ * `AccountUsageService.snapshot` takes (the registry reconcile, then the
+ * monitor's refresh). Until that reading lands, the batch standing is the
+ * registry reconcile's placeholder, every account `unavailable`
+ * (account-usage-monitor's `materializeBatch`), and a later cold read is
+ * answered that placeholder and kicks nothing. So this waits for the reading
+ * itself: every entry available and stamped `READ_AT`, within 8 s. A read with
+ * a batch cached kicks nothing. *(Corrected 2026-11-06, the assembled review:
+ * this said each cold ask before the first landed kicked a reading of its own,
+ * and waited a fixed beat after the first non-empty batch. The monitor shares
+ * a reading in flight; the first non-empty batch was the placeholder.)* */
 async function heldBatch(world: World): Promise<AgentAccountUsageBatch> {
   const deadline = Date.now() + 8_000;
   for (;;) {
     const batch = AgentAccountUsageBatch.parse(await world.window.call("agents.usage", {}));
-    if (batch.entries.length > 0) {
-      await settle(REFRESH_MS * 3);
-      return AgentAccountUsageBatch.parse(await world.window.call("agents.usage", {}));
-    }
-    if (Date.now() > deadline) throw new Error("no reading landed within 8 s");
+    const read =
+      batch.entries.length > 0 &&
+      batch.entries.every((entry) => entry.state === "available" && entry.fetchedAt === READ_AT);
+    if (read) return batch;
+    if (Date.now() > deadline) throw new Error("the one cold reading did not land within 8 s");
     await settle(25);
   }
 }

@@ -8779,10 +8779,11 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     logger.info("fieldd.lifecycle.ready", "fieldd is ready", { controlPort, dataPort });
     // AR-5d — boot has committed: account usage may be read from here. The
     // POLL itself is demand-driven (it runs while `agents.usage.subscribe` has
-    // a subscriber) because a reading spends an authenticated call on the
-    // person's own quota — see the note on `AccountUsageService.start`. A
-    // provider that cannot be read degrades its own row (an honest state with
-    // the adapter's sentence), never the daemon.
+    // a subscriber *(since UM-D8, 2026-11-06: a window's subscription runs it;
+    // a phone's only watches, `AccountUsageService.watch`)*) because a reading
+    // spends an authenticated call on the person's own quota — see the note on
+    // `AccountUsageService.start`. A provider that cannot be read degrades its
+    // own row (an honest state with the adapter's sentence), never the daemon.
     agentUsage.start();
     // AR-S1c — boot has committed: the agents' installs are read now, in the
     // background (every agent's version command, seconds), so Settings →
