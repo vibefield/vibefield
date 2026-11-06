@@ -13,8 +13,15 @@ import Testing
 // replica answers for them (DS-L8); on the home's loss the phone re-homes by
 // sweeping the roster; and a terminal ticket still goes to the desktop that
 // OWNS the session, over a door opened for that ask and let go after (DS-L4).
+// *Corrected 2026-11-06 (SP-7b's 7c-2, D-c2 (a)): a ticket, its renewal and
+// Resume ride the HOME's door now, `{device}` added for another desktop's, as
+// F1b's approval does; the owner still mints. The per-ask owner door stays for
+// Files (FS-2) alone.*
 
 private let alice = "alice@corp.com"
+
+/// 7c-2 — the asks about a session or run that ride the home's door.
+private let carriedAsks: Set<String> = ["terminal.openTicket", "terminal.renewAttach", "agent.resume"]
 
 /// A peer under this phone's login — what a gated node reports.
 private func mine(_ base: FieldStorePeer) -> FieldStorePeer { peer(base, login: alice) }
@@ -491,58 +498,67 @@ private func desktopLive(_ key: String, in link: FieldLink) -> Bool? {
     #expect(ledger.waiting(for: .door(desktop: "dev-laptop")) == 0)
   }
 
-  /// A terminal ticket for a session on ANOTHER desktop dials THAT desktop's
-  /// door, on demand — hello, the ticket, nothing else — and lets it go when
-  /// the answer is in. A ticket for the home's own session rides the home's
-  /// door. The home never mints for a desktop it is not.
-  @Test func aTicketDialsTheOwnersDoorNotTheHomes() async throws {
+  /// SP-7b's 7c-2 (D-c2 (a), VF-PM 2026-11-06 23:17Z) — a terminal ticket, its renewal and Resume
+  /// for a session on ANOTHER desktop are asked of the HOME, `{device}` added, which forwards each
+  /// whole to that desktop (DS-4) — as F1b's approval is. The owner still mints: its grants, and the
+  /// TAILNET doors this phone's own node dials. The other desktop's door is never dialled for them,
+  /// and the answers come back unread. The home's own session is asked with nothing more.
+  @Test func aTicketItsRenewalAndResumeForAnotherDesktopRideTheHomesDoor() async throws {
     let ledger = PhoneConnectionBudget()
     let door = LinkDoor(script: selfDoor)
     await door.route(studioDoorHost) { method, id, params in
-      if method == "terminal.openTicket" { return [frame(id: id, .object(["from": .string("studio")]))] }
+      if carriedAsks.contains(method) { return [frame(id: id, .object(["from": .string("studio")]))] }
       return homeDoor(studioBoard)(method, id, params)
     }
+    // the owner answers too, so the old road reads as an answer from the wrong door, never a timeout
     await door.route(laptopDoorHost) { method, id, _ in
-      switch method {
-      case "system.hello": return [frame(id: id, ack)]
-      case "terminal.openTicket": return [frame(id: id, .object(["from": .string("laptop")]))]
-      default: return []
-      }
+      if method == "system.hello" { return [frame(id: id, ack)] }
+      return [frame(id: id, .object(["from": .string("laptop")]))]
     }
     let (link, _) = try await homedLink(door: door, budget: ledger)
     defer { link.stop() }
     try await waitUntil("the field through the studio") { link.rows.count == 2 }
 
     let ticket = try await link.openTerminalTicket(on: "dev-laptop", sessionId: "pty-l")
-    #expect(ticket["from"]?.stringValue == "laptop")
-    #expect(await door.dials(to: laptopDoorHost) == 1)
-    let owner = try #require(await door.latest(to: laptopDoorHost))
-    #expect(await owner.methods == ["system.hello", "terminal.openTicket"])
-    let asked = await owner.requests.first { $0.method == "terminal.openTicket" }
-    #expect(asked?.params == .object(["sessionId": .string("pty-l")]))
-    try await waitUntil("the owner's door let go") {
-      ledger.inUse(.door(desktop: "dev-laptop")) == 0
-    }
-    #expect(await owner.closed)
-    #expect(ledger.inUse(.door(desktop: "dev-studio")) == 1, "the home keeps its door")
-    #expect(await door.latest(to: studioDoorHost)?.methods.contains("terminal.openTicket") == false)
+    let renewed = try await link.renewTerminalGrant(
+      on: "dev-laptop", sessionId: "pty-l", expectGeneration: 1, requestId: "r-1")
+    let resumed = try await link.resume(runtimeRunId: "run-l", on: "dev-laptop")
+    #expect([ticket, renewed, resumed].map { $0["from"]?.stringValue } == ["studio", "studio", "studio"])
+    let home = try #require(await door.latest(to: studioDoorHost))
+    let asked = await home.requests.filter { carriedAsks.contains($0.method) }
+    #expect(asked.map { $0.method } == ["terminal.openTicket", "terminal.renewAttach", "agent.resume"])
+    #expect(
+      asked.map { $0.params } == [
+        .object(["sessionId": .string("pty-l"), "device": .string("dev-laptop")]),
+        .object([
+          "sessionId": .string("pty-l"), "expectGeneration": .int(1), "requestId": .string("r-1"),
+          "device": .string("dev-laptop"),
+        ]),
+        .object(["runtimeRunId": .string("run-l"), "device": .string("dev-laptop")]),
+      ])
+    #expect(await door.dials(to: laptopDoorHost) == 0, "the owner's door is not dialled for them")
+    #expect(ledger.inUse(.door(desktop: "dev-laptop")) == 0)
 
     let own = try await link.openTerminalTicket(on: "dev-studio", sessionId: "pty-s")
     #expect(own["from"]?.stringValue == "studio")
+    let ownAsk = await home.requests.last { $0.method == "terminal.openTicket" }
+    #expect(ownAsk?.params == .object(["sessionId": .string("pty-s")]))
     #expect(await door.dials(to: studioDoorHost) == 1, "the home's own door: no second dial")
   }
 
   /// The owner's door counts against the phone's budget — one door per desktop
   /// (`PHONE_BUDGET`, SP-D12): a second ask to the same owner WAITS for the
-  /// first's slot, and is dialled the moment it frees.
+  /// first's slot, and is dialled the moment it frees. (7c-2, 2026-11-06: a
+  /// Files ask, the one the owner's door still carries; this row drove two
+  /// terminal tickets until they moved to the home.)
   @Test func aSecondAskToTheSameOwnerWaitsForTheFirstsSlot() async throws {
     let ledger = PhoneConnectionBudget()
     let door = LinkDoor(script: selfDoor)
     await door.route(studioDoorHost, homeDoor(studioBoard))
     await door.route(laptopDoorHost) { method, id, _ in
-      method == "system.hello" ? [frame(id: id, ack)] : []  // tickets answered by hand
+      method == "system.hello" ? [frame(id: id, ack)] : []  // the asks answered by hand
     }
-    // A call deadline long enough that the ticket this row holds open by hand
+    // A call deadline long enough that the ask this row holds open by hand
     // is not raced by a TIMEOUT on a loaded host (the catalog rows' reason).
     let (link, _) = try await homedLink(
       door: door,
@@ -551,11 +567,17 @@ private func desktopLive(_ key: String, in link: FieldLink) -> Bool? {
     defer { link.stop() }
     try await waitUntil("the field through the studio") { link.rows.count == 2 }
 
-    let first = Task { try await link.openTerminalTicket(on: "dev-laptop", sessionId: "pty-1") }
-    let firstAsk = try await settledRequest(door, "terminal.openTicket", host: laptopDoorHost)
+    let first = Task {
+      try await link.workspaceCall(
+        on: "dev-laptop", method: "workspace.list", params: .object(["path": .string("p-1")]))
+    }
+    let firstAsk = try await settledRequest(door, "workspace.list", host: laptopDoorHost)
     #expect(ledger.inUse(.door(desktop: "dev-laptop")) == 1)
 
-    let second = Task { try await link.openTerminalTicket(on: "dev-laptop", sessionId: "pty-2") }
+    let second = Task {
+      try await link.workspaceCall(
+        on: "dev-laptop", method: "workspace.list", params: .object(["path": .string("p-2")]))
+    }
     try await waitUntil("the second waiting for the slot") {
       ledger.waiting(for: .door(desktop: "dev-laptop")) == 1
     }
@@ -564,31 +586,55 @@ private func desktopLive(_ key: String, in link: FieldLink) -> Bool? {
     await door.latest(to: laptopDoorHost)?.deliver(frame(id: firstAsk.id, .object(["n": .int(1)])))
     #expect(try await first.value["n"] == .int(1))
     try await waitUntil("the second dialled") { await door.dials(to: laptopDoorHost) == 2 }
-    let secondAsk = try await settledRequest(door, "terminal.openTicket", host: laptopDoorHost)
-    #expect(secondAsk.params == .object(["sessionId": .string("pty-2")]))
+    let secondAsk = try await settledRequest(door, "workspace.list", host: laptopDoorHost)
+    #expect(secondAsk.params == .object(["path": .string("p-2")]))
     await door.latest(to: laptopDoorHost)?.deliver(frame(id: secondAsk.id, .object(["n": .int(2)])))
     #expect(try await second.value["n"] == .int(2))
     try await waitUntil("both let go") { ledger.inUse(.door(desktop: "dev-laptop")) == 0 }
   }
 
-  /// An owner whose door did not answer its probe is refused at once, in the
-  /// honest shape, and nothing is dialled — there is no door to ask.
-  @Test func anOwnerWithNoAnsweringDoorIsRefusedWithoutADial() async throws {
+  /// 7c-2 — an owner whose door never answered THIS phone is still asked through its home: the
+  /// home's own link to it decides, and its honest state comes back as the home said it (FW-R6).
+  /// Nothing is dialled toward the owner. (This row said the ask was refused at once, `no_door`,
+  /// while each ticket dialled its owner.)
+  @Test func anOwnerThisPhoneNeverHeardIsStillAskedThroughItsHome() async throws {
     let probe = LinkProbe(answers: [laptopDoorHost: .unreachable("asleep")])
     let door = LinkDoor(script: selfDoor)
-    await door.route(studioDoorHost, homeDoor(studioBoard))
+    await door.route(studioDoorHost) { method, id, params in
+      if method == "terminal.openTicket" { return [frame(id: id, .object(["from": .string("studio")]))] }
+      return homeDoor(studioBoard)(method, id, params)
+    }
     let (link, _) = try await homedLink(probe: probe, door: door)
     defer { link.stop() }
     try await waitUntil("the field through the studio") { link.rows.count == 2 }
 
+    let outcome: String
     do {
-      _ = try await link.openTerminalTicket(on: "dev-laptop", sessionId: "pty")
-      Issue.record("a ticket was minted for a desktop with no door")
-    } catch let error as FieldProductError {
-      #expect(error.unavailable?.state == "no_door")
-      #expect(error.unavailable?.service == "terminal")
+      let ticket = try await link.openTerminalTicket(on: "dev-laptop", sessionId: "pty")
+      outcome = ticket["from"]?.stringValue ?? "?"
+    } catch {
+      outcome = "refused: \(error)"
     }
+    #expect(outcome == "studio")
     #expect(await door.dials(to: laptopDoorHost) == 0)
+  }
+
+  /// 7c-2 — with no home there is no door to ask through: the ticket is refused at once as the
+  /// terminal's `no_door`, retryable (the phone re-homes, and the next ask goes there).
+  @Test func withNoHomeATicketIsRefusedAsTheTerminalsNoDoor() async throws {
+    let probe = LinkProbe(fallback: .unreachable("asleep"))
+    let (link, _, _, _) = try await standingLink(probe: probe)
+    defer { link.stop() }
+    try await waitUntil("the desktop") { !link.desktops.isEmpty }
+
+    do {
+      _ = try await link.openTerminalTicket(on: "dev-studio", sessionId: "pty")
+      Issue.record("a ticket was asked with no home to ask through")
+    } catch let error as FieldProductError {
+      #expect(error.unavailable?.service == "terminal")
+      #expect(error.unavailable?.state == "no_door")
+      #expect(error.retryable)
+    }
   }
 
   /// R6 (2026-10-07) — a Files ask refused for want of a door says so as
