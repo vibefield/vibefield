@@ -71,7 +71,7 @@ describe("the run that continues the chosen conversation here (P3)", () => {
     );
   });
 
-  it("asks one plain agent.list, and a fold that cannot answer reads as not running", async () => {
+  it("asks one plain agent.list; a fold that cannot answer is unread, never not here (item 187)", async () => {
     const asked: Array<[string, Record<string, unknown>]> = [];
     const answering = {
       request: async (method: string, params: Record<string, unknown>) => {
@@ -80,17 +80,25 @@ describe("the run that continues the chosen conversation here (P3)", () => {
       },
     };
     expect(await readLiveRun(answering, NATIVE)).toEqual({
-      floorSessionId: "pty-agent",
-      runtimeRunId: "run-agent",
+      state: "here",
+      run: { floorSessionId: "pty-agent", runtimeRunId: "run-agent" },
     });
     expect(asked).toEqual([["agent.list", {}]]);
+    expect(await readLiveRun({ request: async () => ({ sessions: [] }) }, NATIVE)).toEqual({
+      state: "not-here",
+    });
+    // *Corrected 2026-11-06 (item 187, VF-PM (a)):* this row said a fold that cannot answer reads as not running, the
+    // null a fold with no run here answers too, so History's Jump to said "This session has ended" when fieldd had
+    // not answered. It is its own state, said in the words Chat's reveals say it in
     const refusing = {
       request: async () => {
         throw Object.assign(new Error("fieldd is restarting"), { kind: "UNAVAILABLE" });
       },
     };
-    expect(await readLiveRun(refusing, NATIVE)).toBeNull();
-    expect(await readLiveRun({ request: async () => ({ rows: [] }) }, NATIVE)).toBeNull();
+    expect(await readLiveRun(refusing, NATIVE)).toEqual({ state: "unread" });
+    expect(await readLiveRun({ request: async () => ({ rows: [] }) }, NATIVE)).toEqual({
+      state: "unread",
+    });
   });
 });
 

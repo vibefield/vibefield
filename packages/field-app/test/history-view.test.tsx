@@ -947,6 +947,42 @@ describe("Jump to, while the chosen session runs here (P3)", () => {
     await until(says("Resume this session"), "the act to become Resume");
   });
 
+  // item 187 (VF-PM (a), 2026-11-06) — fieldd not answering agent.list is never "the run ended": Jump to says so in
+  // the words Chat's reveals say it in, and shows nothing. The act, as before, reads it as not running and offers
+  // Resume, whose press fieldd's one-run law guards
+  for (const [unread, answer] of [
+    [
+      "refuses agent.list",
+      () => {
+        throw Object.assign(new Error("fieldd is restarting"), { kind: "UNAVAILABLE" });
+      },
+    ],
+    ["answers agent.list with no rows", () => ({ rows: [] })],
+  ] as const) {
+    it(`Jump to says it cannot tell where the run's terminal is, and shows nothing, when fieldd ${unread} (item 187)`, async () => {
+      let fold: () => unknown = () => running();
+      const reveal = vi.fn<LineViewDoor["reveal"]>(async () => ({ state: "opened" }));
+      publishGodviewLineDoor(deck({ reveal }));
+      const client = fieldd(
+        () => SPAWNED,
+        () => fold(),
+      );
+      mount(client);
+      to("history");
+      await choose();
+      await until(says("Jump to this session"), "the act to say Jump to");
+      fold = answer;
+      await pressSessionRow();
+      expect(await until(noteNow, "the line's note")).toBe(
+        "Could not jump — VibeField could not tell where its terminal is",
+      );
+      expect(reveal).not.toHaveBeenCalled();
+      expect(asked).not.toContain("godview");
+      expect(client.calls.some((call) => call.method === "agent.resume")).toBe(false);
+      await until(says("Resume this session"), "the act to offer Resume");
+    });
+  }
+
   it("keeps saying Jump to while a new answer is on its way — no flicker through Resume", async () => {
     let answer: () => Promise<unknown> = async () => running();
     const client = fieldd(
