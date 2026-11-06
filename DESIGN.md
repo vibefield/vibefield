@@ -7371,6 +7371,12 @@ The sessions' records (item 177) are read again at each ask, as the sparks are. 
 before it changes anything: signing out of an agent, and deleting a set, say "VibeField can't read the sessions it
 keeps; nothing was changed". Where VibeField only looks at them (re-attaching its sessions as it starts, Timeline's
 past runs, the order agents are offered in, a folder's places), it says so in fieldd's log and goes on with none.
+*Amended 2026-11-06 (item 201, RV #48; the words at the lean until James rules rv-s9-records): re-attaching its
+sessions as it starts goes on with none, but it has not happened until it has read them, so nothing that takes the
+sessions as settled acts before then. No crew member is marked ended, no words kept for a session are dropped, the
+last run's curtain waits, and fieldd's own stop can't yet count the agent runs it ends ("VibeField couldn't read which
+agent runs are working"). It reads them again the next time the floor lists its terminals, with no timer of its own,
+and goes on from there.*
 
 A store that cannot be read at boot never stops VibeField: fieldd starts, and that store says it cannot read. The
 sparks and the flows are read again at the next ask. What waits on you and the words that wait are read once, at
