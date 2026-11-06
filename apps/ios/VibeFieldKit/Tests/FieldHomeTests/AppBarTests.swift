@@ -1,7 +1,10 @@
 import CoreGraphics
 import FieldAgents
+import FieldDesign
 import Foundation
+import SwiftUI
 import Testing
+import UIKit
 
 @testable import FieldHome
 
@@ -147,6 +150,25 @@ struct AppBarTests {
     #expect(SearchSheet.maxHeight(fieldTop: 40) == 0)
     // the sheet stands where the keyboard's typing row's margin would: inside the bar's own side margin
     #expect(SearchSheet.side == AppBar.marginTyping)
+  }
+
+  /// SE-2k (the S2 review's finding 8) — below iOS 26 the sheet wears the page's recipe, "a shadow of 0 24 60 at 18%"
+  /// (DESIGN.md §8 "The phone's search"), not the card's: CSS blur is about twice SwiftUI's radius (as the chrome
+  /// family's other shadows are converted), so radius 30, 24 down, black at 18% by day and by night.
+  @Test("below iOS 26 the sheet's shadow is 0 24 60 at 18%: radius 30, 24 down, black at 18%")
+  func searchSheetShadow() {
+    let sheet = ChromeShadow.sheet
+    #expect(sheet.radius == 30)
+    #expect(sheet.y == 24)
+    for style in [UIUserInterfaceStyle.light, .dark] {
+      let resolved = UIColor(sheet.color).resolvedColor(with: UITraitCollection(userInterfaceStyle: style))
+      var white: CGFloat = -1
+      var alpha: CGFloat = -1
+      let read = resolved.getWhite(&white, alpha: &alpha)
+      #expect(read, "\(style.rawValue): a grey")
+      #expect(white == 0, "\(style.rawValue): black")
+      #expect(abs(alpha - 0.18) < 0.001, "\(style.rawValue): \(alpha)")
+    }
   }
 
   /// SE-D3 A — its motion: it rises from the middle of its foot, 24 up and from 0.94, over 420ms on the island curve;

@@ -82,6 +82,9 @@ public struct ChromeShadow: Sendable {
   public static let chosen = ChromeShadow(
     color: Color.black.opacity(0.14), radius: 2, y: 1)
 
+  /// SE-2k — search's glass sheet below iOS 26 (the page's recipe). STUB (SE-2k red): no shadow yet.
+  public static let sheet = ChromeShadow(color: .clear, radius: 0, y: 0)
+
   public init(color: Color, radius: CGFloat, y: CGFloat) {
     self.color = color
     self.radius = radius
