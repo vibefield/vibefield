@@ -176,6 +176,15 @@ export interface FlowItemRaise {
   readonly acts: readonly string[];
 }
 
+/** CP-4a2b (§13a slice 11a, Q5) — what a raise answers the runs: the item, and whether this raise minted it. A raise of
+ * a {kind, run, call} already open is that item (D2's re-bind), never minted again, in one life or after a restart: the
+ * runs wake a run's spark for a hold only when its item was minted (Q9). Slice 11a's seam: until its green, `minted`
+ * is true on both roads. */
+export interface FlowItemRaised {
+  readonly id: NeedsItemId;
+  readonly minted: boolean;
+}
+
 /** The person's answer to a flow run's item, as the runs are handed it: `stop` when it is Stop the run (every such
  * item's last act), else `choice` is the act's place among the acts the runs raised it with. */
 export interface FlowItemAnswer {
@@ -184,6 +193,9 @@ export interface FlowItemAnswer {
   readonly run: NeedsFlowRun;
   readonly choice: number;
   readonly stop: boolean;
+  /** CP-4a2b (§13a slice 11a, Q2) — the act's words, as the item keeps them (item.choices[choice]): what the person
+   * chose, byte for byte (Q1). Slice 11a's seam: its green hands it on, and makes it required */
+  readonly act?: string;
 }
 
 /** What the runs did with an answer: done, or failed in fieldd's words. */
@@ -526,10 +538,11 @@ export class NeedsQueue implements TalkHolds {
   /** A flow run's item, raised by the runs: kept, signed, before it is shown, its acts the runs' then Stop the run. The
    * same kind raised again for the same run and call while it is open (a restart restored it, or a wake asks again) is
    * that item, never a second (D2's re-bind). Refused `bad-input`: more than NEEDS_CHOICES_MAX acts before Stop the
-   * run, an act that is empty or past NEEDS_CHOICE_MAX, or one said twice (Stop the run is never a gate's own). */
-  flowItem(raise: FlowItemRaise): NeedsItemId {
+   * run, an act that is empty or past NEEDS_CHOICE_MAX, or one said twice (Stop the run is never a gate's own).
+   * Answers the item, and whether this raise minted it (`FlowItemRaised`, slice 11a's seam). */
+  flowItem(raise: FlowItemRaise): FlowItemRaised {
     const open = this.#openFlowItem(raise.kind, raise.run);
-    if (open !== undefined) return open.item.id;
+    if (open !== undefined) return { id: open.item.id, minted: true };
     if (raise.acts.length > NEEDS_CHOICES_MAX)
       throw refuse("bad-input", `acts: at most ${NEEDS_CHOICES_MAX} before Stop the run`);
     const choices = [...raise.acts, NEEDS_CHOICE_WORDS.stopRun];
@@ -556,7 +569,7 @@ export class NeedsQueue implements TalkHolds {
       },
     });
     this.#emit();
-    return id;
+    return { id, minted: true };
   }
 
   /** The runs hand over their side of their items once they are built (they are built after the queue, and raise

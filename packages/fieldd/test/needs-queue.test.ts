@@ -1118,7 +1118,7 @@ describe("CP-4a2b — a flow run's items: the runs' acts, then Stop the run; an 
     const h = harness();
     const { routed, acts } = runsActs();
     h.queue.bindFlowActs(acts);
-    const id = h.queue.flowItem(GATE);
+    const { id } = h.queue.flowItem(GATE);
     expect(listed(h.queue)).toEqual([
       expect.objectContaining({
         id,
@@ -1134,7 +1134,10 @@ describe("CP-4a2b — a flow run's items: the runs' acts, then Stop the run; an 
     // kept, signed, before it is shown
     expect(files(h)).toEqual([id]);
     const { item } = await h.queue.answer(id, 2, principal);
-    expect(routed).toEqual([{ id, kind: "flow-gate", run: RUN, choice: 2, stop: true }]);
+    // slice 11a (Q2): the act's own words beside its place, Stop the run's among them
+    expect(routed).toEqual([
+      { id, kind: "flow-gate", run: RUN, choice: 2, stop: true, act: NEEDS_CHOICE_WORDS.stopRun },
+    ]);
     expect(NeedsItem.parse(item)).toMatchObject({
       state: "answered",
       answer: { choice: 2, outcome: "done", told: false },
@@ -1145,13 +1148,13 @@ describe("CP-4a2b — a flow run's items: the runs' acts, then Stop the run; an 
     expect(h.woken).toEqual([]);
     expect(h.acts).toEqual([]);
     // each kind's acts come first, and a run whose one act is Stop the run has that alone
-    const cap = h.queue.flowItem({
+    const { id: cap } = h.queue.flowItem({
       kind: "flow-cap",
       run: { ...RUN, call: 41 },
       name: "Release check",
       acts: [NEEDS_CHOICE_WORDS.allowMore],
     });
-    const lost = h.queue.flowItem({
+    const { id: lost } = h.queue.flowItem({
       kind: "flow-lost",
       run: { run: "fr-l0st0000aa", flow: "nightly" },
       name: "Nightly",
@@ -1187,12 +1190,14 @@ describe("CP-4a2b — a flow run's items: the runs' acts, then Stop the run; an 
       },
       start: noStart,
     });
-    const id = h.queue.flowItem(GATE);
+    const { id } = h.queue.flowItem(GATE);
     expect(listed(h.queue).map((open) => open.id)).toEqual([id]);
     const first = h.queue.answer(id, 0, principal);
     const second = h.queue.answer(id, 0, principal);
     const other = refusal(h.queue.answer(id, 1, principal));
-    expect(routed).toEqual([{ id, kind: "flow-gate", run: RUN, choice: 0, stop: false }]);
+    expect(routed).toEqual([
+      { id, kind: "flow-gate", run: RUN, choice: 0, stop: false, act: "Ship" },
+    ]);
     finish?.({ outcome: "done" });
     expect((await first).item.answer).toMatchObject({ choice: 0, outcome: "done" });
     expect((await second).item.answer).toMatchObject({ choice: 0, outcome: "done" });
@@ -1203,7 +1208,7 @@ describe("CP-4a2b — a flow run's items: the runs' acts, then Stop the run; an 
     // an act the runs could not do is the item's answer, failed with their words, and never handed on again
     const refused = runsActs({ outcome: "failed", reason: "the run had ended" });
     h.queue.bindFlowActs(refused.acts);
-    const next = h.queue.flowItem({ ...GATE, run: { ...RUN, call: 4 } });
+    const { id: next } = h.queue.flowItem({ ...GATE, run: { ...RUN, call: 4 } });
     expect((await h.queue.answer(next, 1, principal)).item.answer).toMatchObject({
       choice: 1,
       outcome: "failed",
@@ -1222,7 +1227,7 @@ describe("CP-4a2b — a flow run's items: the runs' acts, then Stop the run; an 
       },
       start: noStart,
     });
-    const third = h.queue.flowItem({ ...GATE, run: { ...RUN, call: 5 } });
+    const { id: third } = h.queue.flowItem({ ...GATE, run: { ...RUN, call: 5 } });
     expect(await refusal(h.queue.answer(third, 0, principal))).toBe("Error");
     expect(h.queue.list().map((open) => open.id)).toEqual([third]);
     throws = false;
@@ -1234,15 +1239,15 @@ describe("CP-4a2b — a flow run's items: the runs' acts, then Stop the run; an 
     const h = harness();
     const { routed, acts } = runsActs();
     h.queue.bindFlowActs(acts);
-    const gate = h.queue.flowItem(GATE);
-    const repair = h.queue.flowItem({
+    const { id: gate } = h.queue.flowItem(GATE);
+    const { id: repair } = h.queue.flowItem({
       kind: "flow-repair",
       run: { ...RUN, call: 5, label: "notes" },
       name: "Release check",
       spark: VELA,
       acts: [NEEDS_CHOICE_WORDS.askOnceMore],
     });
-    const other = h.queue.flowItem({
+    const { id: other } = h.queue.flowItem({
       ...GATE,
       run: { run: "fr-b0b0b0b0b0", flow: "nightly", call: 1 },
     });
@@ -1262,8 +1267,8 @@ describe("CP-4a2b — a flow run's items: the runs' acts, then Stop the run; an 
     const h = harness();
     const { routed, acts } = runsActs();
     h.queue.bindFlowActs(acts);
-    const gate = h.queue.flowItem(GATE);
-    const later = h.queue.flowItem({ ...GATE, run: { ...RUN, call: 4 } });
+    const { id: gate } = h.queue.flowItem(GATE);
+    const { id: later } = h.queue.flowItem({ ...GATE, run: { ...RUN, call: 4 } });
     const question = ask(h);
     expect(h.queue.endFlowItem(gate)).toBe(true);
     expect(listed(h.queue).map((open) => open.id)).toEqual([later, question]);
@@ -1279,7 +1284,7 @@ describe("CP-4a2b — a flow run's items: the runs' acts, then Stop the run; an 
 
   it("N4: a restart restores a run's items; the runs re-raising the same call's gate get that item, and its answer is still handed on once", async () => {
     const h = harness();
-    const id = h.queue.flowItem(GATE);
+    const { id } = h.queue.flowItem(GATE);
     const again = h.make();
     expect(again.restore()).toBe(1);
     expect(listed(again)).toEqual([
@@ -1292,7 +1297,7 @@ describe("CP-4a2b — a flow run's items: the runs' acts, then Stop the run; an 
       }),
     ]);
     // D2's re-bind: the same call's gate is the item the queue restored, never a second
-    expect(again.flowItem(GATE)).toBe(id);
+    expect(again.flowItem(GATE).id).toBe(id);
     expect(again.list()).toHaveLength(1);
     // before the runs hand over their acts, an answer is refused, retryably, and nothing is spent
     const unbound = await again.answer(id, 0, principal).then(
@@ -1304,7 +1309,9 @@ describe("CP-4a2b — a flow run's items: the runs' acts, then Stop the run; an 
     const { routed, acts } = runsActs();
     again.bindFlowActs(acts);
     expect((await again.answer(id, 0, principal)).item.answer).toMatchObject({ outcome: "done" });
-    expect(routed).toEqual([{ id, kind: "flow-gate", run: RUN, choice: 0, stop: false }]);
+    expect(routed).toEqual([
+      { id, kind: "flow-gate", run: RUN, choice: 0, stop: false, act: "Ship" },
+    ]);
     expect(again.list()).toEqual([]);
     expect(h.make().restore()).toBe(0);
   });
@@ -1676,5 +1683,61 @@ describe("CP-4a2b — a flow run's items: the runs' acts, then Stop the run; an 
       ...next,
       avatar: "comet",
     });
+  });
+
+  // slice 11a (Q5, Q2's rider; the slice 11 rulings, ruled 2026-11-06 (a): slice 6's seam moved) — a raise says
+  // whether it minted its item, which the runs' hold-wake reads (Q9), and a flow item's answer, once the runs acted on
+  // it, stands whatever the disk does: their journal is the act's record (F-b)
+
+  it("N4b (Q5, D2's re-bind; slice 11a): a raise answers whether it minted its item: a run's call is minted once, and raised again while its item is open, in this life or after a restart, is that item, never minted again", () => {
+    const h = harness();
+    const call4 = { ...GATE, run: { ...RUN, call: 4 } };
+    const first = h.queue.flowItem(GATE);
+    const again = h.queue.flowItem(GATE);
+    const other = h.queue.flowItem(call4);
+    const restarted = h.make();
+    expect(restarted.restore()).toBe(2);
+    const restored = [restarted.flowItem(GATE), restarted.flowItem(call4)];
+    expect({ first: first.minted, again, other: other.minted, restored }).toEqual({
+      first: true,
+      again: { id: first.id, minted: false },
+      other: true,
+      restored: [
+        { id: first.id, minted: false },
+        { id: other.id, minted: false },
+      ],
+    });
+    expect(restarted.list().map((open) => open.id)).toEqual([first.id, other.id]);
+  });
+
+  it("N2b (Q2's rider, F-b; slice 11a): a flow item's answer the runs acted on stands though the disk refuses its record: the item reads answered, and another act after it is refused as answered, never handed on", async () => {
+    const h = harness();
+    const { routed, acts } = runsActs();
+    h.queue.bindFlowActs(acts);
+    const { id } = h.queue.flowItem(GATE);
+    // the answered record holds nothing more (the runs tell their spark: no fact is owed), so its file goes, and the
+    // disk refuses that once
+    const removes = vi.spyOn(NeedsStore.prototype, "remove").mockImplementationOnce(() => {
+      throw new Error("EACCES: permission denied, unlink");
+    });
+    try {
+      const first = await refusal(h.queue.answer(id, 0, principal));
+      const open = h.queue.list().map((item) => item.id);
+      const other = await refusal(h.queue.answer(id, 1, principal));
+      expect({
+        first,
+        open,
+        other,
+        handed: routed.map(({ choice }) => choice),
+        refused: removes.mock.calls.length,
+      }).toEqual({ first: "ok", open: [], other: "answered", handed: [0], refused: 1 });
+      // the item reads answered, by the act the runs acted on: that act again is the answer the queue kept
+      expect(NeedsItem.parse((await h.queue.answer(id, 0, principal)).item)).toMatchObject({
+        state: "answered",
+        answer: { choice: 0, outcome: "done" },
+      });
+    } finally {
+      removes.mockRestore();
+    }
   });
 });

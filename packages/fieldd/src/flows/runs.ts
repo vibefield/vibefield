@@ -33,6 +33,7 @@ import type {
   FlowItemActs,
   FlowItemAnswer,
   FlowItemRaise,
+  FlowItemRaised,
   FlowItemStart,
   FlowItemStarted,
 } from "../tool-plane/rooms/you/queue";
@@ -131,8 +132,9 @@ export interface FlowRunPorts {
   /** the needs queue's changed-flow item (N5) */
   readonly needs: {
     flowChanged(raise: FlowChangedRaise): NeedsItemId;
-    /** a run's own item (slice 6's `flowItem`): a repair miss, a gate, the cap, a lost step */
-    flowItem(raise: FlowItemRaise): NeedsItemId;
+    /** a run's own item (slice 6's `flowItem`): a repair miss, a gate, the cap, a lost step; its id, and whether the
+     * raise minted it (slice 11a's seam, Q5: a hold wakes the run's spark only for an item minted) */
+    flowItem(raise: FlowItemRaise): FlowItemRaised;
   };
   /** each step's turn end (flow-step-events.ts, CP4-S2's road): a step's answer reaches the runs here; a session an
    * `in:` hands a step is told to it at the hand (9b) */
@@ -1391,7 +1393,7 @@ export class FlowRuns {
       this.#repair(run, live, step, session, 1, check, this.#stepWrite(run));
       return;
     }
-    const item = this.ports.needs.flowItem({
+    const { id: item } = this.ports.needs.flowItem({
       kind: "flow-repair",
       run: {
         run,

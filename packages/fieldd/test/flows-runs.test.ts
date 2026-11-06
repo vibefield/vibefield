@@ -9,6 +9,7 @@ import {
   FLOW_RUNS_LISTED_MAX,
   type FlowRunRecordStep,
   type FlowStarter,
+  NEEDS_CHOICE_WORDS,
   type NeedsItemId,
   RECORD_STORES,
   RunSummary,
@@ -16,7 +17,7 @@ import {
 import type { LogFields, Logger } from "@vibefield/logging";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { FlowStepEvents, type FlowStepTurnEnd } from "../src/flow-step-events";
-import { RUNS_DIR } from "../src/flows/journal";
+import { type FlowJournalEntry, RUNS_DIR } from "../src/flows/journal";
 import type { FlowsHostLaunch } from "../src/flows/launch";
 import { FlowLibrary } from "../src/flows/library";
 import { FlowRecords, flowHashOf } from "../src/flows/records";
@@ -38,11 +39,15 @@ import type { FlowHostTimings } from "../src/flows/supervisor";
 import * as words from "../src/flows/words";
 import type { RpcCallError } from "../src/native-link";
 import { recordsUnreadable, UNREADABLE_WORDS } from "../src/signed-record";
-import type {
-  FlowChangedRaise,
-  FlowItemRaise,
-  FlowItemStarted,
+import type { GrantPrincipal } from "../src/terminal-grants";
+import {
+  type FlowChangedRaise,
+  type FlowItemRaise,
+  type FlowItemRaised,
+  type FlowItemStarted,
+  NeedsQueue,
 } from "../src/tool-plane/rooms/you/queue";
+import { NeedsStore } from "../src/tool-plane/rooms/you/store";
 import { fakeAgent } from "./flow-step-agent";
 import { flowsHostLaunch, standInSource } from "./flows-host-bundle";
 import { beganRun } from "./flows-run-records";
@@ -127,6 +132,25 @@ interface Handed {
  * HOLD_IDLE_MS. */
 const NO_PARK_MS = 600_000;
 
+/** Slice 11a (Q5 §4) — a REAL needs queue in `root`, as fieldd keeps one: its signed store in the row's root, and every
+ * option a flow run's item never reads throwing, so a row that reaches one fails saying which. */
+function needsQueueIn(root: string): NeedsQueue {
+  const unread = (what: string) => (): never => {
+    throw new Error(`a flow run's item never reads the needs queue's ${what}`);
+  };
+  return new NeedsQueue({
+    store: new NeedsStore({ dir: join(root, "needs"), keyPath: join(root, "needs.key") }),
+    inputs: { wake: unread("inputs"), enqueue: unread("inputs") },
+    run: unread("runs"),
+    personaSets: unread("persona map"),
+    sparkSession: unread("spark sessions"),
+    spark: unread("sparks"),
+    open: unread("spark wake"),
+    spawn: unread("spawn"),
+    agentLabel: unread("catalog"),
+  });
+}
+
 async function harness(
   opts: {
     readonly profiles?: readonly string[];
@@ -161,6 +185,13 @@ async function harness(
     /** the step listener itself (flow-step-events.ts), for a row whose turn ends go through it (slices 7–9 review F3):
      * the harness's endTurn then reaches nothing */
     readonly stepEvents?: FlowStepEvents;
+    /** slice 11a (Q5 §4, on F3's precedent): the needs port a REAL NeedsQueue (`needsQueueIn`), bound to the runs'
+     * acts as slice 15 binds them and answered as a window answers it, so a gate's re-bind (D2) and `minted` are the
+     * queue's own. The fake stays the default: it mints every raise, and is never taught the re-bind */
+    readonly needsQueue?: boolean;
+    /** slice 11a (Q8's repair rider): what the needs port's flowItem throws at every raise, once `items` counts it, as
+     * a needs queue whose store refuses the item throws its refusal; nothing is minted */
+    readonly flowItemThrows?: Error;
   } = {},
 ) {
   const root = mkdtempSync(join(tmpdir(), "vf-flow-runs-"));
@@ -182,6 +213,10 @@ async function harness(
   const enqueued: Enqueued[] = [];
   const hands: Handed[] = [];
   const items: FlowItemRaise[] = [];
+  /** slice 11a — what the needs port answered each raise in `items`, in order: its item, and whether the raise minted
+   * it (Q5: the hold-wake's witness) */
+  const raisedAs: FlowItemRaised[] = [];
+  const needs = opts.needsQueue === true ? needsQueueIn(root) : undefined;
   const turnListeners = new Set<(end: FlowStepTurnEnd) => void>();
   /** how many times a step asked the runtime for its models */
   let modelAsks = 0;
@@ -218,7 +253,13 @@ async function harness(
       },
       flowItem: (raise) => {
         items.push(raise);
-        return `ny-item${items.length}aaaaaa` as NeedsItemId;
+        if (opts.flowItemThrows !== undefined) throw opts.flowItemThrows;
+        const answered = needs?.flowItem(raise) ?? {
+          id: `ny-item${items.length}aaaaaa` as NeedsItemId,
+          minted: true,
+        };
+        raisedAs.push(answered);
+        return answered;
       },
     },
     stepEnds: opts.stepEvents ?? {
@@ -295,6 +336,7 @@ async function harness(
     logger,
   });
   opened.push(runs);
+  needs?.bindFlowActs(runs.acts);
   /** a flow's file in the person's library, as they saved it */
   const write = (flow: string, text: string): Uint8Array => {
     writeFileSync(join(libraryDir, `${flow}.flow.js`), text);
@@ -325,6 +367,9 @@ async function harness(
     runs,
     raised,
     items,
+    raisedAs,
+    /** slice 11a: the row's real needs queue, when it asked for one (`needsQueue`) */
+    needs,
     endTurn,
     spawned,
     enqueued,
@@ -351,6 +396,15 @@ function startedRun(started: FlowRunStarted): RunSummary {
   if (!("run" in started)) throw new Error(`the start waits in ${started.waits}`);
   return started.run;
 }
+
+/** Slice 11a — the row's real needs queue (`needsQueue`), or the row fails saying it has none. */
+function needsOf(h: Harness): NeedsQueue {
+  if (h.needs === undefined) throw new Error("this row's harness has no needs queue");
+  return h.needs;
+}
+
+/** Slice 11a — the person, as a window's answer to an item names them. */
+const PRINCIPAL: GrantPrincipal = { kind: "local-token" };
 
 /** The summary `run` reads once it reads `state`, as onChange says it. */
 function settled(runs: FlowRuns, run: string, state: string): Promise<RunSummary> {
@@ -1342,6 +1396,7 @@ const askOnceMore = (h: Harness, run: string) =>
     run: { run, flow: "review", call: 1, label: "Diff" },
     choice: 0,
     stop: false,
+    act: NEEDS_CHOICE_WORDS.askOnceMore,
   });
 
 /** The run's journal's answer lines, in order. */
@@ -1533,6 +1588,7 @@ describe("CP-4a2b — a step's answer: heard once, bounded whole, checked agains
         run: { run, flow: "review", call: 1, label: "Diff" },
         choice: 0,
         stop: false,
+        act: NEEDS_CHOICE_WORDS.askOnceMore,
       }),
     ).toEqual({ outcome: "done" });
     expect(h.enqueued[2]).toMatchObject({
@@ -1575,6 +1631,7 @@ describe("CP-4a2b — a step's answer: heard once, bounded whole, checked agains
         run: { run, flow: "review", call: 1, label: "Diff" },
         choice: 0,
         stop: false,
+        act: NEEDS_CHOICE_WORDS.askOnceMore,
       }),
     ).toEqual({ outcome: "done" });
     expect(h.enqueued).toHaveLength(3);
@@ -3149,7 +3206,126 @@ const unmade = (call: number) => ({
   agent: "claude",
 });
 
-describe("CP-4a2b — the host's life: parked and woken, D2's lookup at a wake, and replay's order (§13a slices 10a, 10b)", () => {
+// slice 11a's flows (Q1, Q3, Q4, Q5, Q13): ask() as `flow-gate`, alone, beside a step either side, twice at once,
+// after a step and before one; and steps held on their repairs beside one another, or beside a gate (EE3)
+
+/** One gate: the act the person chose, said between brackets as the run's one log line, so a space it holds shows
+ * (Q1: an ask resolves to the act's own words, byte for byte). */
+const GATE = [
+  'export const meta = { name: "Gate" };',
+  "export default async function () {",
+  '  const said = await ask("Push the fix?", [" Push", "Hold"]);',
+  '  log("[" + said + "]");',
+  "}",
+  "",
+].join("\n");
+
+/** The question, and the choices, every other gate here asks. */
+const SHIP = '"Ship it?", ["Ship", "Hold"]';
+
+/** A gate (call 1) and a step A (call 2) at once. */
+const GATE_AND_STEP = [
+  'export const meta = { name: "Gate and step" };',
+  "export default async function () {",
+  `  const [go, a] = await Promise.all([ask(${SHIP}), agent("look at a", ${stepAt("A")})]);`,
+  '  log(go + " " + a.text);',
+  "}",
+  "",
+].join("\n");
+
+/** The same the other way about: a step A (call 1) and a gate (call 2) at once. */
+const STEP_AND_GATE = [
+  'export const meta = { name: "Step and gate" };',
+  "export default async function () {",
+  `  const [a, go] = await Promise.all([agent("look at a", ${stepAt("A")}), ask(${SHIP})]);`,
+  '  log(a.text + " " + go);',
+  "}",
+  "",
+].join("\n");
+
+/** Two gates at once, A's (call 1) and B's (call 2). */
+const TWO_GATES = [
+  'export const meta = { name: "Gates" };',
+  "export default async function () {",
+  '  const [a, b] = await Promise.all([ask("Ship A?", ["Ship", "Hold"]), ask("Ship B?", ["Go", "Wait"])]);',
+  '  log(a + " " + b);',
+  "}",
+  "",
+].join("\n");
+
+/** TWO_GATES with a step C beside them (call 3), whose answer wakes the run while both gates are open. */
+const TWO_GATES_AND_STEP = [
+  'export const meta = { name: "Gates and step" };',
+  "export default async function () {",
+  `  const [a, b, c] = await Promise.all([ask("Ship A?", ["Ship", "Hold"]), ask("Ship B?", ["Go", "Wait"]), agent("look at c", ${stepAt("C")})]);`,
+  '  log(a + " " + b + " " + c.text);',
+  "}",
+  "",
+].join("\n");
+
+/** SEQ with its second call a gate: a step A (call 1), then a gate (call 2) once A has answered. */
+const SEQ_ASK = [
+  'export const meta = { name: "Seq ask" };',
+  "export default async function () {",
+  `  const a = await agent("look at a", ${stepAt("A")});`,
+  `  const go = await ask(${SHIP});`,
+  '  log(a.text + " " + go);',
+  "}",
+  "",
+].join("\n");
+
+/** SEQ_ASK's gate, as its host journals it: what a kill between D5's gate steps leaves (R13e's ask leg, Q5 §5). */
+const seqAsk = () => ({
+  kind: "call" as const,
+  call: 2,
+  what: "ask",
+  key: flowCallKey("ask", ["Ship it?", ["Ship", "Hold"]]),
+  n: 1,
+});
+
+/** A gate (call 1), then a step A (call 2) once it is answered. */
+const GATE_THEN_STEP = [
+  'export const meta = { name: "Gate then step" };',
+  "export default async function () {",
+  `  const go = await ask(${SHIP});`,
+  `  const a = await agent("look at a", ${stepAt("A")});`,
+  '  log(go + " " + a.text);',
+  "}",
+  "",
+].join("\n");
+
+/** Two steps at once, A (call 1) and B (call 2), each with a form whose second miss holds the run (HELD_TWO forms only
+ * A). */
+const TWO_FORMED = [
+  'export const meta = { name: "Held two" };',
+  "export default async function () {",
+  `  const [a, b] = await Promise.all([agent("look at a", { ...${stepAt("A")}, schema: ${FORM} }), agent("look at b", { ...${stepAt("B")}, schema: ${FORM} })]);`,
+  "  log(a.verdict + b.verdict);",
+  "}",
+  "",
+].join("\n");
+
+/** A gate (call 1) beside a step A with a form (call 2). */
+const GATE_BESIDE_FORM = [
+  'export const meta = { name: "Gate beside" };',
+  "export default async function () {",
+  `  const [go, a] = await Promise.all([ask(${SHIP}), agent("look at a", { ...${stepAt("A")}, schema: ${FORM} })]);`,
+  '  log(go + " " + a.verdict);',
+  "}",
+  "",
+].join("\n");
+
+/** A step A with a form (call 1) beside a step B (call 2), and a gate (call 3) asked once B has answered. */
+const FORM_THEN_GATE = [
+  'export const meta = { name: "Form then gate" };',
+  "export default async function () {",
+  `  const [a, go] = await Promise.all([agent("look at a", { ...${stepAt("A")}, schema: ${FORM} }), agent("look at b", ${stepAt("B")}).then(() => ask(${SHIP}))]);`,
+  '  log(a.verdict + " " + go);',
+  "}",
+  "",
+].join("\n");
+
+describe("CP-4a2b — the host's life: parked and woken, D2's lookup at a wake, replay's order, and a gate's hold (§13a slices 10a, 10b, 11a)", () => {
   /** Whether host `i` the runs started has left. */
   const left = (h: Harness, i: number): boolean => h.hosts[i]?.leftAt !== undefined;
   /** The run's state, as its summary reads it now. */
@@ -3195,20 +3371,27 @@ describe("CP-4a2b — the host's life: parked and woken, D2's lookup at a wake, 
       throw new Error("ENOSPC: no space left on device, write");
     });
   };
-  const killedBeforeEntry = async (h: Harness, run: string) => {
+  /** Slice 11a (Q5 §5): `line` is the call line the kill left with no record entry (SEQ's B, or an ask's: R13e's ask
+   * leg), and `woken` the wake's witness: B's prompt queued, or the ask's item raised. */
+  const killedBeforeEntry = async (
+    h: Harness,
+    run: string,
+    line: FlowJournalEntry = seqB(),
+    woken: () => boolean = () => h.enqueued.length === 2,
+  ) => {
     h.hosts[0]?.child.kill("SIGSTOP");
     await within(PARK_MS, () => stateOf(h, run) === "waiting");
     expect(stateOf(h, run)).toBe("waiting");
     answerStep(h, run, 1, "a");
     await within(PARK_MS, () => answersOf(h, run).length === 1);
-    h.records.appendRun(run, seqB());
+    h.records.appendRun(run, line);
     // one host still, so the wake to come reads B's line. A second here is a wake A's answer fired inside host 0's
     // grace (#rouse's parking wait broken, R27d's rule): B, journaled again with its entry, would pass this row
     // without ever meeting D2's last row. (The idle can't park host 0 before its SIGSTOP: the enqueue's poll runs
     // first; the 10b fix's delta review, #4 and #9.)
     const journal = { kinds: h.kinds(run), hosts: h.hosts.length };
     expect(journal).toEqual({ kinds: ["head", "call", "answer", "call"], hosts: 1 });
-    await within(PARK_MS + KILL_GRACE_MS, () => h.enqueued.length === 2);
+    await within(PARK_MS + KILL_GRACE_MS, woken);
     // PARKED's `left`, and R27d's order: the run woke only once its old host had left
     const [old, next] = h.hosts;
     expect({
@@ -3801,6 +3984,468 @@ describe("CP-4a2b — the host's life: parked and woken, D2's lookup at a wake, 
     expect({ kept: read.kind, answers: answersOf(h, run) }).toMatchObject({
       kept: "kept",
       answers: [{ kind: "answer", call: 1, refused: said }],
+    });
+  });
+
+  // slice 11a (Q1–Q5, Q13; the slice 11 rulings, ruled 2026-11-06): ask() as `flow-gate`. Its item is raised on
+  // the one raise road and held at its call; a held run reads running while its host is up and holding once D1's idle
+  // parks it (UU2); `held` names the first of its holds still open, of any kind, released only by its own item's act or
+  // its call's answer (EE3); a gate made again at a wake is re-bound by the needs queue, never minted again (D2, Q5).
+  // Each row reads its state at a tell or once parked, never by `settled(…, "holding")` (M1). At this red an ask is
+  // still refused (NO_ASK_YET): every gate row reads red on its values.
+
+  /** Whether `run` has ended, or reads as no run: what a hold row's wait stops on when no hold comes. */
+  const over = (h: Harness, run: string): boolean => {
+    const state = stateOf(h, run);
+    return state === undefined || ["done", "stopped", "failed", "lost"].includes(state);
+  };
+  /** The run's state and its hold, as its summary and its record read them now (VV1: `held` beside the state). */
+  const heldOf = (h: Harness, run: string) => ({
+    state: stateOf(h, run),
+    held: h.records.runRecord(run)?.held,
+  });
+  /** The items the row's real needs queue (`needsQueue`) holds open now, by id, in its order. */
+  const openOf = (h: Harness) =>
+    needsOf(h)
+      .list()
+      .map((item) => item.id);
+
+  it("R33 (D1, D22, Q1, Q4's UU2; slice 11a): a gate holds its run at its raise, running while its host is up and holding once parked by the idle; the person's answer is journaled by the runs as the act's own words, byte for byte, and wakes the run, whose ask resolves to them", async () => {
+    const h = await harness({ hostIdleMs: IDLE_MS, needsQueue: true });
+    const needs = needsOf(h);
+    h.approved("gate", GATE);
+    // every tell, as the run's record and the needs queue read at it: the raise is read at its own tell (UU2), never
+    // by a poll, so no idle can come between
+    const tells: { state: string; held: unknown; open: string[] }[] = [];
+    h.runs.onChange((list) => {
+      const told = list.runs.find((summary) => summary.flow === "gate");
+      if (told === undefined) return;
+      const held = h.records.runRecord(told.run)?.held;
+      tells.push({ state: told.state, held, open: needs.list().map((item) => item.id) });
+    });
+    const run = startedRun(await h.start({ flow: "gate" })).run;
+    await within(PARK_MS, () => h.items.length > 0 || over(h, run));
+    const id = h.raisedAs[0]?.id ?? "";
+    // at its raise: the call line, the item and the hold in one turn of the host's frame, its host up
+    expect(tells.find(({ open }) => open.length > 0)).toEqual({
+      state: "running",
+      held: { item: id, kind: "flow-gate" },
+      open: [id],
+    });
+    // parked by D1's idle, it rests holding on the same item
+    await within(PARK_MS, () => left(h, 0) || over(h, run));
+    expect({ ...heldOf(h, run), left: left(h, 0) }).toEqual({
+      state: "holding",
+      held: { item: id, kind: "flow-gate" },
+      left: true,
+    });
+    // the person's answer: its settle rests the run waiting, the hold released in that write; the wake runs it, and the
+    // script hears " Push", as the journal keeps it
+    const from = tells.length;
+    await needs.answer(id, 0, PRINCIPAL);
+    await within(PARK_MS, () => over(h, run));
+    // each change once: the tells in a row that say the same are one
+    const after = tells.slice(from).map(({ state, held }) => JSON.stringify({ state, held }));
+    const said = after.filter((tell, i) => tell !== after[i - 1]);
+    const changes = said.map((tell): unknown => JSON.parse(tell));
+    expect({
+      changes,
+      log: h.runs.read(run)?.summary.log,
+      answers: answersOf(h, run).map(({ call, value }) => [call, value]),
+    }).toEqual({
+      changes: [
+        { state: "waiting", held: undefined },
+        { state: "running", held: undefined },
+        { state: "done", held: undefined },
+      ],
+      log: "[ Push]",
+      answers: [[1, " Push"]],
+    });
+  });
+
+  it("R27b (D1, Q4's UU2, its fourth leg; slice 11a): a gate beside a step parks by D1's idle, whichever the script made first: the run rests holding on the gate while the step's agent works on", async () => {
+    /** A run of `text`, its gate and its step at once, read once parked */
+    const parked = async (flow: string, text: string) => {
+      const h = await harness({ hostIdleMs: IDLE_MS });
+      h.approved(flow, text);
+      const run = startedRun(await h.start({ flow })).run;
+      const ready = () => h.items.length > 0 && h.enqueued.length > 0 && left(h, 0);
+      await within(PARK_MS, () => ready() || over(h, run));
+      return {
+        ...heldOf(h, run),
+        items: h.items.map((item) => [item.kind, item.run.call]),
+        steps: h.records.runRecord(run)?.open.map((step) => [step.call, step.state]),
+        spawned: h.spawned.length,
+      };
+    };
+    const held = { item: "ny-item1aaaaaa", kind: "flow-gate" };
+    expect(await parked("gate", GATE_AND_STEP)).toEqual({
+      state: "holding",
+      held,
+      items: [["flow-gate", 1]],
+      steps: [[2, "working"]],
+      spawned: 1,
+    });
+    expect(await parked("step", STEP_AND_GATE)).toEqual({
+      state: "holding",
+      held,
+      items: [["flow-gate", 2]],
+      steps: [[1, "working"]],
+      spawned: 1,
+    });
+  });
+
+  it("R13d (D2, Q5; slice 11a): a gate open across a wake keeps its one item: the woken script's ask, made again, is re-bound to it by the needs queue, never minted again, and the run rests holding on it; two gates are each minted once", async () => {
+    // one gate beside a step: the step's answer wakes the run, and its gate, made again, is the item it was
+    const h = await harness({ hostIdleMs: IDLE_MS, needsQueue: true });
+    h.approved("gate", GATE_AND_STEP);
+    const run = startedRun(await h.start({ flow: "gate" })).run;
+    const parked = () => h.items.length > 0 && h.enqueued.length > 0 && left(h, 0);
+    await within(PARK_MS, () => parked() || over(h, run));
+    answerStep(h, run, 2, "a");
+    await within(PARK_MS, () => (h.items.length > 1 && left(h, 1)) || over(h, run));
+    const gate = h.raisedAs[0]?.id ?? "";
+    expect({
+      ...heldOf(h, run),
+      raised: h.raisedAs.map(({ id, minted }) => [id, minted]),
+      open: openOf(h),
+      hosts: h.hosts.length,
+    }).toEqual({
+      state: "holding",
+      held: { item: gate, kind: "flow-gate" },
+      raised: [
+        [gate, true],
+        [gate, false],
+      ],
+      open: [gate],
+      hosts: 2,
+    });
+    // two gates beside a step: each minted in the first life, each re-bound at the wake, so two minted in all
+    const two = await harness({ hostIdleMs: IDLE_MS, needsQueue: true });
+    two.approved("gates", TWO_GATES_AND_STEP);
+    const both = startedRun(await two.start({ flow: "gates" })).run;
+    const ready = () => two.items.length > 1 && two.enqueued.length > 0 && left(two, 0);
+    await within(PARK_MS, () => ready() || over(two, both));
+    answerStep(two, both, 3, "c");
+    await within(PARK_MS, () => (two.items.length > 3 && left(two, 1)) || over(two, both));
+    const [a, b] = two.raisedAs.map(({ id }) => id);
+    expect({
+      ...heldOf(two, both),
+      raised: two.raisedAs.map(({ id, minted }) => [id, minted]),
+      open: openOf(two),
+    }).toEqual({
+      state: "holding",
+      held: { item: a, kind: "flow-gate" },
+      raised: [
+        [a, true],
+        [b, true],
+        [a, false],
+        [b, false],
+      ],
+      open: [a, b],
+    });
+  });
+
+  it("R13e-ask (i) (D2's last row, [BR] MED, Q5 §5; slice 11a): an ask() journaled with no item, as a kill between D5's gate steps leaves it, raises its item once at the wake, minted, and the run rests holding on it", async () => {
+    const h = await harness({
+      hostIdleMs: IDLE_MS,
+      timings: { stopGraceMs: KILL_GRACE_MS },
+      needsQueue: true,
+    });
+    h.approved("seq-ask", SEQ_ASK);
+    const run = startedRun(await h.start({ flow: "seq-ask" })).run;
+    await waitFor(() => expect(h.enqueued).toHaveLength(1));
+    // A's answer, then the ask's call line, as the first life would have journaled it before its item
+    await killedBeforeEntry(h, run, seqAsk(), () => h.items.length > 0 || over(h, run));
+    await within(PARK_MS, () => left(h, 1) || over(h, run));
+    const id = h.raisedAs[0]?.id ?? "";
+    const woken = h.records.runRecord(run);
+    expect({
+      ...heldOf(h, run),
+      raised: h.raisedAs.map(({ minted }) => minted),
+      open: openOf(h),
+      calls: woken?.calls,
+    }).toEqual({
+      state: "holding",
+      held: { item: id, kind: "flow-gate" },
+      raised: [true],
+      open: [id],
+      calls: 2,
+    });
+  });
+
+  it("R13e-ask (ii) (D2's last row, [BR] MED, Q5 §5; slice 11a): an ask() journaled whose item the needs queue kept, as a kill between D5's gate steps 2 and 3 leaves it, is re-bound to that item at the wake, never a second and never minted, and the run rests holding on it", async () => {
+    const h = await harness({
+      hostIdleMs: IDLE_MS,
+      timings: { stopGraceMs: KILL_GRACE_MS },
+      needsQueue: true,
+    });
+    const needs = needsOf(h);
+    h.approved("seq-ask", SEQ_ASK);
+    const run = startedRun(await h.start({ flow: "seq-ask" })).run;
+    await waitFor(() => expect(h.enqueued).toHaveLength(1));
+    // the item the first life raised for the ask before its kill, which the needs queue keeps
+    const kept = needs.flowItem({
+      kind: "flow-gate",
+      run: { run, flow: "seq-ask", call: 2 },
+      name: "Seq ask",
+      words: "Ship it?",
+      acts: ["Ship", "Hold"],
+    }).id;
+    await killedBeforeEntry(h, run, seqAsk(), () => h.items.length > 0 || over(h, run));
+    await within(PARK_MS, () => left(h, 1) || over(h, run));
+    expect({
+      ...heldOf(h, run),
+      raised: h.raisedAs.map(({ id, minted }) => [id, minted]),
+      open: needs.list().map((item) => item.id),
+      calls: h.records.runRecord(run)?.calls,
+    }).toEqual({
+      state: "holding",
+      held: { item: kept, kind: "flow-gate" },
+      raised: [[kept, false]],
+      open: [kept],
+      calls: 2,
+    });
+  });
+
+  it("R36 (D21, D22; slice 11a): a gate journaled through its own raise and answer is answered from the journal at every later wake, never raised again: its ask hears the same act in each life", async () => {
+    const h = await harness({ hostIdleMs: IDLE_MS, needsQueue: true });
+    const needs = needsOf(h);
+    h.approved("ship", GATE_THEN_STEP);
+    const run = startedRun(await h.start({ flow: "ship" })).run;
+    await within(PARK_MS, () => (needs.list().length > 0 && left(h, 0)) || over(h, run));
+    const id = h.raisedAs[0]?.id ?? "";
+    expect({ ...heldOf(h, run), open: needs.list().map((item) => item.id) }).toEqual({
+      state: "holding",
+      held: { item: id, kind: "flow-gate" },
+      open: [id],
+    });
+    // the gate's answer wakes the run, whose script then makes its step; the step's answer wakes it again
+    await needs.answer(id, 0, PRINCIPAL);
+    await within(PARK_MS, () => (h.enqueued.length > 0 && left(h, 1)) || over(h, run));
+    answerStep(h, run, 2, "a");
+    await within(PARK_MS, () => over(h, run));
+    expect({
+      ...heldOf(h, run),
+      log: h.runs.read(run)?.summary.log,
+      raised: h.raisedAs.map(({ id: item, minted }) => [item, minted]),
+      answers: answersOf(h, run).map(({ call, value }) => [call, value]),
+      open: needs.list().length,
+      hosts: h.hosts.length,
+    }).toEqual({
+      state: "done",
+      held: undefined,
+      log: "Ship a",
+      raised: [[id, true]],
+      answers: [
+        [1, "Ship"],
+        [2, { text: "a" }],
+      ],
+      open: 0,
+      hosts: 3,
+    });
+  });
+
+  it("EE3-a (Q3, VV1; slice 11a): two steps held on their repairs at once each hold their own item: the second's raise leaves the run's hold on the first, and Ask once more on the first moves it to the second, the run still holding, in either order", async () => {
+    /** TWO_FORMED's steps each missing their form twice, in `order`; then Ask once more on the first held */
+    const twoHeld = async (order: readonly [number, number]) => {
+      const h = await harness({ hostIdleMs: IDLE_MS });
+      h.approved("held", TWO_FORMED);
+      const run = startedRun(await h.start({ flow: "held" })).run;
+      await waitFor(() => expect(h.enqueued).toHaveLength(2));
+      for (const [i, call] of order.entries()) {
+        const at = {
+          run,
+          call,
+          runtimeRunId: sessionOf(h, run, call),
+          outcome: "completed",
+        } as const;
+        h.endTurn({ ...at, turn: "t1", text: "no json here" });
+        await within(PARK_MS, () => h.enqueued.length === 3 + i);
+        h.endTurn({ ...at, turn: "t2", text: "still none" });
+        await within(PARK_MS, () => h.items.length === i + 1);
+      }
+      await within(PARK_MS, () => left(h, 0));
+      const [first, second] = h.raisedAs.map(({ id }) => id);
+      const both = heldOf(h, run);
+      const acted = await h.runs.acts.answer({
+        id: first ?? "",
+        kind: "flow-repair",
+        run: { run, flow: "held", call: order[0], label: order[0] === 1 ? "A" : "B" },
+        choice: 0,
+        stop: false,
+        act: NEEDS_CHOICE_WORDS.askOnceMore,
+      });
+      return { first, second, read: { both, acted, again: heldOf(h, run) } };
+    };
+    for (const order of [
+      [1, 2],
+      [2, 1],
+    ] as const) {
+      const { first, second, read } = await twoHeld(order);
+      expect(read).toEqual({
+        both: { state: "holding", held: { item: first, kind: "flow-repair" } },
+        acted: { outcome: "done" },
+        again: { state: "holding", held: { item: second, kind: "flow-repair" } },
+      });
+    }
+  });
+
+  it("EE3-b (Q3, Q5, VV1; slice 11a): of two gates at once, the second answered first leaves the run held on the first: its wake runs holding that item, the woken ask is re-bound to it, and the run rests holding it until its answer ends the run", async () => {
+    const h = await harness({ hostIdleMs: IDLE_MS, needsQueue: true });
+    const needs = needsOf(h);
+    h.approved("gates", TWO_GATES);
+    const run = startedRun(await h.start({ flow: "gates" })).run;
+    await within(PARK_MS, () => (h.items.length > 1 && left(h, 0)) || over(h, run));
+    const [first, second] = h.raisedAs.map(({ id }) => id);
+    expect({ ...heldOf(h, run), open: needs.list().map((item) => item.id) }).toEqual({
+      state: "holding",
+      held: { item: first, kind: "flow-gate" },
+      open: [first, second],
+    });
+    // B's answer first: its settle, and the wake it starts, leave the hold on A's gate
+    const tells: { state: string; held: unknown }[] = [];
+    h.runs.onChange((list) => {
+      const told = list.runs.find((summary) => summary.run === run);
+      if (told === undefined) return;
+      tells.push({ state: told.state, held: h.records.runRecord(run)?.held });
+    });
+    await needs.answer(second ?? "", 0, PRINCIPAL);
+    await within(PARK_MS, () => left(h, 1) || over(h, run));
+    expect({
+      woke: tells.find(({ state }) => state === "running"),
+      ...heldOf(h, run),
+      raised: h.raisedAs.map(({ id, minted }) => [id, minted]),
+      open: needs.list().map((item) => item.id),
+    }).toEqual({
+      woke: { state: "running", held: { item: first, kind: "flow-gate" } },
+      state: "holding",
+      held: { item: first, kind: "flow-gate" },
+      raised: [
+        [first, true],
+        [second, true],
+        [first, false],
+      ],
+      open: [first],
+    });
+    // A's answer: its settle releases the last hold, and the run ends
+    await needs.answer(first ?? "", 1, PRINCIPAL);
+    await within(PARK_MS, () => over(h, run));
+    expect({ ...heldOf(h, run), log: h.runs.read(run)?.summary.log }).toEqual({
+      state: "done",
+      held: undefined,
+      log: "Hold Go",
+    });
+  });
+
+  it("EE3-c (Q3, VV1; slice 11a): a gate and a step's repair held at once: the first held keeps the run's hold through the other's raise and its Ask once more; Ask once more on a repair held first moves the hold to the gate; each read once parked", async () => {
+    // the gate first: the step's second miss, and its Ask once more, leave the hold on the gate
+    const h = await harness({ hostIdleMs: IDLE_MS });
+    h.approved("beside", GATE_BESIDE_FORM);
+    const run = startedRun(await h.start({ flow: "beside" })).run;
+    await within(PARK_MS, () => (h.items.length > 0 && h.enqueued.length > 0) || over(h, run));
+    const a = { run, call: 2, runtimeRunId: sessionOf(h, run, 2), outcome: "completed" } as const;
+    h.endTurn({ ...a, turn: "t1", text: "no json here" });
+    await within(PARK_MS, () => h.enqueued.length > 1 || over(h, run));
+    h.endTurn({ ...a, turn: "t2", text: "still none" });
+    await within(PARK_MS, () => (h.items.length > 1 && left(h, 0)) || over(h, run));
+    const [gate, repair] = h.raisedAs.map(({ id }) => id);
+    const raised = heldOf(h, run);
+    const acted = await h.runs.acts.answer({
+      id: repair ?? "",
+      kind: "flow-repair",
+      run: { run, flow: "beside", call: 2, label: "A" },
+      choice: 0,
+      stop: false,
+      act: NEEDS_CHOICE_WORDS.askOnceMore,
+    });
+    expect({ raised, acted, again: heldOf(h, run) }).toEqual({
+      raised: { state: "holding", held: { item: gate, kind: "flow-gate" } },
+      acted: { outcome: "done" },
+      again: { state: "holding", held: { item: gate, kind: "flow-gate" } },
+    });
+    // the repair first, the gate asked once another step has answered: Ask once more moves the hold to the gate
+    const later = await harness({ hostIdleMs: IDLE_MS });
+    later.approved("later", FORM_THEN_GATE);
+    const asks = startedRun(await later.start({ flow: "later" })).run;
+    await waitFor(() => expect(later.enqueued).toHaveLength(2));
+    const stepA = {
+      run: asks,
+      call: 1,
+      runtimeRunId: sessionOf(later, asks, 1),
+      outcome: "completed",
+    } as const;
+    later.endTurn({ ...stepA, turn: "t1", text: "no json here" });
+    await within(PARK_MS, () => later.enqueued.length > 2);
+    later.endTurn({ ...stepA, turn: "t2", text: "still none" });
+    await within(PARK_MS, () => later.items.length > 0);
+    answerStep(later, asks, 2, "b");
+    const lastLeft = () => left(later, later.hosts.length - 1);
+    await within(PARK_MS, () => (later.items.length > 1 && lastLeft()) || over(later, asks));
+    const [held, asked] = later.raisedAs.map(({ id }) => id);
+    const both = heldOf(later, asks);
+    const moved = await later.runs.acts.answer({
+      id: held ?? "",
+      kind: "flow-repair",
+      run: { run: asks, flow: "later", call: 1, label: "A" },
+      choice: 0,
+      stop: false,
+      act: NEEDS_CHOICE_WORDS.askOnceMore,
+    });
+    expect({ both, moved, again: heldOf(later, asks) }).toEqual({
+      both: { state: "holding", held: { item: held, kind: "flow-repair" } },
+      moved: { outcome: "done" },
+      again: { state: "holding", held: { item: asked, kind: "flow-gate" } },
+    });
+  });
+
+  // Q8's repair rider (F-a; the slice 11 rulings): a step's second miss raises its item on the one raise road,
+  // so an item the needs queue can't raise fails the step in F5's words. Until the green, the raise's throw leaves the
+  // runs' listener, the step listener catches and says it (flow-step-events.ts), and the step waits on, repairing with
+  // no item: a silent wait.
+
+  it("R22g (Q8's repair rider, F-a, F5; slice 11a): a step's second miss whose item the needs queue can't raise fails the step in §9's words, never a silent wait: its answer journaled as the refusal, no hold, and the script hears it", async () => {
+    // the turn ends go through the step listener itself (F3's precedent), so what the runs' listener throws is caught
+    // there, never thrown into the row
+    const events = new FlowStepEvents();
+    const h = await harness({
+      stepEvents: events,
+      flowItemThrows: new Error("ENOSPC: no space left on device, write"),
+    });
+    h.approved("review", FORMED_CATCHES);
+    const run = startedRun(await h.start({ flow: "review" })).run;
+    await waitFor(() => expect(h.enqueued).toHaveLength(1));
+    const step = fakeAgent();
+    events.entered({
+      agent: step.agent,
+      runtimeRunId: "rt-step1",
+      begun: "spawn",
+      origin: { by: "flow", run, call: 1 },
+    });
+    step.emit("turn:started", {});
+    step.emit("turn:completed", { lastAssistantMessage: "no json here" });
+    await waitFor(() => expect(h.enqueued).toHaveLength(2));
+    step.emit("turn:started", {});
+    step.emit("turn:completed", { lastAssistantMessage: "still none" });
+    await within(PARK_MS, () => over(h, run));
+    const record = h.records.runRecord(run);
+    // the step as the record keeps it: open while it works, among the settled steps once answered
+    const kept = [...(record?.open ?? []), ...(record?.steps ?? [])].find((s) => s.call === 1);
+    expect({
+      step: { label: kept?.label, state: kept?.state },
+      ...heldOf(h, run),
+      refused: refusalsOf(h, run),
+      log: h.runs.read(run)?.summary.log,
+      raises: h.items.map(({ kind, run: { call } }) => [kind, call]),
+      queued: h.enqueued.length,
+    }).toEqual({
+      step: { label: "Diff", state: "failed" },
+      state: "done",
+      held: undefined,
+      refused: [stepFailed("Diff")],
+      log: stepFailed("Diff"),
+      raises: [["flow-repair", 1]],
+      queued: 2,
     });
   });
 });
