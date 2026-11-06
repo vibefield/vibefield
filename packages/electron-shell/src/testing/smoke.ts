@@ -4843,8 +4843,9 @@ interface MonitorFacts {
   swarmPhysics: string;
   /** AR-5: `webgpu` · `unavailable` · `starting`; `none` off the swarm view. */
   swarmRenderer: string;
-  /** AR-5: the usage column's tiles; -1 while no column is mounted. */
-  usageTiles: number;
+  /** UM-3: the profiles column's circles; -1 while no column is mounted. (`usageTiles`, the
+   * usage column's tiles, until the profiles column replaced it, 2026-11-06.) */
+  profileCircles: number;
   /** TL: the past the stage lends its view — `absent` · `complete` · `partial`
    * · `unavailable` — and the ended runs in it. Optional, as `runs` is. */
   history?: string;
@@ -7770,26 +7771,28 @@ export async function runSmokeGodview(opts: {
         throw new Error("the swarm has no WebGPU here and the stage does not say so");
       }
     }
-    // AR-5: the usage column is MOUNTED in the stage's chrome slot and the
-    // marker counts its tiles. The count is reported, not judged: a fresh
-    // daemon's batch is whatever accounts its providers know, and zero of
-    // them is an honest answer. What is asserted is that the column exists —
-    // a slot that rendered nothing would leave the marker at -1.
-    const usageFacts = await monitorWatch
+    // AR-5, UM-3: the profiles column is MOUNTED in the stage's chrome slot and
+    // the marker counts its circles. The count is reported, not judged beyond
+    // the column's own floor: one circle at least (This Mac stands before the
+    // profiles feed answers, dashed). What is asserted is that the column
+    // exists — a slot that rendered nothing would leave the marker at -1.
+    // (Until 2026-11-06 this was puppeteer-views' usage column and its tiles,
+    // `usageTiles` / `usageColumnMounted`.)
+    const profilesFacts = await monitorWatch
       .until(
-        (facts) => facts.usageTiles >= 0,
-        "the usage column to mount in the chrome slot",
+        (facts) => facts.profileCircles >= 1,
+        "the profiles column to mount in the chrome slot",
         10_000,
       )
       .catch(() => monitorWatch.current() ?? painted);
-    verdict["usageTiles"] = usageFacts.usageTiles;
-    const usageColumnMounted = (await win.webContents.executeJavaScript(
-      `document.querySelector(".vf-godview-monitor-stage .vf-usage-column") !== null`,
+    verdict["profileCircles"] = profilesFacts.profileCircles;
+    const profilesColumnMounted = (await win.webContents.executeJavaScript(
+      `document.querySelector(".vf-godview-monitor-stage .vf-profiles-column") !== null`,
     )) as boolean;
-    verdict["usageColumnMounted"] = usageColumnMounted;
-    if (!usageColumnMounted || usageFacts.usageTiles < 0) {
+    verdict["profilesColumnMounted"] = profilesColumnMounted;
+    if (!profilesColumnMounted || profilesFacts.profileCircles < 1) {
       throw new Error(
-        `the usage column is not on the stage (marker: ${usageFacts.usageTiles} tiles, DOM: ${usageColumnMounted})`,
+        `the profiles column is not on the stage (marker: ${profilesFacts.profileCircles} circles, DOM: ${profilesColumnMounted})`,
       );
     }
     // 1c. THE PANE FRAME (GT-6, record §07). The frame is the views package's

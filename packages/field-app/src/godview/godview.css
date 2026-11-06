@@ -485,8 +485,9 @@
 
 /* The claims (AR-3, GT-D17): what the fold and the mesh report, in the
    instrument's type, on a strip across the stage's top. Its own element since
-   AR-5 — `.vf-monitor-chrome` is the package's usage column down the left
-   edge — and both carry the chrome attribute the swarm steers around. */
+   AR-5 — `.vf-monitor-chrome` is the profiles column's slot at the top left
+   (UM-3; the package's usage column down the left edge until then) — and both
+   carry the chrome attribute the swarm steers around. */
 /* The chrome slot (the package's usage column) down the stage's left edge —
    the reference host's own rule, and the reason the claims strip starts at
    72px: a 46px column at 13px, then the chips. AR-5b: the rename that made
@@ -497,14 +498,19 @@
    GV-D1: the stage begins at the window's top, under the head, so the column
    and the strip beside it begin at the head's reserve (56: the head's foot at
    48, plus 8) — clear of the head's row, the window's lights and the app's
-   drag strip — where they began 11 under the bar. */
+   drag strip — where they began 11 under the bar.
+   UM-3 (UM-D21; DESIGN.md §8 "Godview's profiles column", the lead's rulings 3
+   and 14; amended 2026-11-06): the slot holds VibeField's profiles column, a
+   52-wide pill that hugs its circles — never the stage's height — standing 8
+   under the reserve, at 64, so the stage's left inset and the swarm's obstacle
+   are the pill's own rectangle; the strip moves to 79 (13 + 52 + 14). It was
+   puppeteer-views' 46-wide usage column at the reserve, the stage's height. */
 .vf-monitor-chrome {
   position: absolute;
   z-index: 7;
-  top: var(--vf-godview-head-reserve);
+  top: calc(var(--vf-godview-head-reserve) + 8px);
   left: 13px;
-  width: 46px;
-  height: calc(100% - var(--vf-godview-head-reserve) - 6px);
+  width: 52px;
   color: var(--text-main);
 }
 
@@ -536,8 +542,8 @@
   position: absolute;
   z-index: 7;
   top: var(--vf-godview-head-reserve);
-  left: 72px;
-  width: min(300px, calc(100% - 96px));
+  left: 79px;
+  width: min(300px, calc(100% - 103px));
   display: flex;
   align-items: baseline;
   gap: 8px;

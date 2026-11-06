@@ -1249,6 +1249,7 @@ describe("UI system ownership boundaries", () => {
       "chat/NewSparkSheetView.tsx",
       // UM-3 — Godview's profiles column
       "godview/profiles-column/BandsCircle.tsx",
+      "godview/profiles-column/ProfilesColumn.tsx",
       "godview/profiles-column/ProfilesColumnView.tsx",
       "godview/profiles-column/ProfilePopoverView.tsx",
     ]) {

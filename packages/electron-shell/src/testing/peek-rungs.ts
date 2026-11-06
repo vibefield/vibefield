@@ -121,7 +121,7 @@ interface HeadNow {
   circles: (HeadBox | null)[];
   stage: HeadBox | null;
   claims: HeadBox | null;
-  usage: HeadBox | null;
+  profiles: HeadBox | null;
   label: HeadBox | null;
   bar: boolean;
   canvasHead: CanvasHeadNow;
@@ -158,12 +158,12 @@ const HEAD_NOW = `(() => {
   const chevrons = [...document.querySelectorAll(".vf-godview .vf-stories-chev:not(:disabled)")].map(rect);
   const stage = rect(document.querySelector(".vf-godview .vf-godview-monitor-stage"));
   const claims = rect(document.querySelector(".vf-godview .vf-monitor-claims"));
-  const usage = rect(document.querySelector(".vf-godview .vf-monitor-chrome"));
+  const profiles = rect(document.querySelector(".vf-godview .vf-monitor-chrome"));
   const label = rect(document.querySelector(".vf-godview .vf-stories-label"));
   const right = Math.max(...[views, ...chevrons].filter((box) => box !== null).map((box) => box.x + box.width), -Infinity);
   return JSON.stringify({
     window: { width: window.innerWidth, height: window.innerHeight },
-    search, views, circles, stage, claims, usage, label,
+    search, views, circles, stage, claims, profiles, label,
     bar: document.querySelector(".vf-godview .vf-godview-header") !== null,
     canvasHead: ${CANVAS_HEAD_NOW_EXPR},
     gap: search && Number.isFinite(right) ? search.x - right : null,
@@ -210,7 +210,7 @@ function headProblems(head: HeadNow): string[] {
   }
   for (const [name, box] of [
     ["claims strip", head.claims],
-    ["usage column", head.usage],
+    ["profiles column", head.profiles],
   ] as const) {
     if (box !== null && box.height > 0 && box.y < 56 - 0.5) {
       problems.push(`the ${name} begins at y ${box.y}, inside the head's reserve (56)`);

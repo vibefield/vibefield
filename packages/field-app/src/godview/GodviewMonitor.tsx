@@ -15,13 +15,11 @@ import {
 import type { MonitorEndedRow } from "@vibefield/puppeteer-view-sdk/model";
 import { ProfileGlyph } from "@vibefield/puppeteer-view-sdk/react";
 import {
-  type AccountUsagePort,
   ChromeBoundary,
   type HistoryPort,
   MONITOR_STAGE_CLASS,
   MONITOR_VIEWS,
   type MonitorParameters,
-  UsageColumn,
   useMonitorPalette,
 } from "@vibefield/puppeteer-views";
 import {
@@ -65,6 +63,7 @@ import {
   useMonitorAgents,
 } from "./monitor/useMonitorAgents";
 import { OsMark } from "./os-marks";
+import { ProfilesColumn } from "./profiles-column/ProfilesColumn";
 
 const ACKNOWLEDGEMENT_MS = 2_600;
 
@@ -237,10 +236,6 @@ const NO_TRANSCRIPTS: HistoryPort = {
     hits: [],
     clipped: false,
   }),
-};
-const NO_USAGE: AccountUsagePort = {
-  snapshot: async () => ({ refreshedAt: new Date().toISOString(), entries: [] }),
-  subscribe: () => () => undefined,
 };
 
 /** M195 — the head renders only when one of its own inputs moves. The monitor
@@ -454,33 +449,27 @@ export function GodviewMonitor({
   const usagePort = door?.usage;
   const [usageState, setUsageState] = useState<MonitorFeedState>({ state: "no-door" });
   const [usageAttempt, setUsageAttempt] = useState(0);
-  // Rebind the subscription on retry without remounting the column: it keeps
-  // the last good reading and the viewer's open usage popup while reconnecting.
-  const columnUsagePort = useMemo<AccountUsagePort>(() => {
-    const source = usagePort ?? NO_USAGE;
-    return {
-      snapshot: () => source.snapshot(),
-      subscribe: (listener) => source.subscribe(listener),
-    };
-  }, [usagePort, usageAttempt]);
-  // A failed column is tried again only for a fact that can fix it. The column
-  // reads its port and nothing else, so the facts are a new port: a new door,
-  // or the viewer's Retry. Never the model's rows (keyed on them, a persistent
-  // failure remounted on every publish, M176), and never the host update that
-  // follows the failure itself (the tile count it observes changes with it).
-  // A new port inside the boundary's window waits for its end (the backoff).
-  const usageRetryKey = columnUsagePort;
+  // A failed profiles column is tried again only for a fact that can fix it: a
+  // new port (a new door) or the viewer's Retry. Never the model's rows (keyed
+  // on them, a persistent failure remounted on every publish, M176), and never
+  // the host update that follows the failure itself (the circle count it
+  // observes changes with it). A new key inside the boundary's window waits for
+  // its end (the backoff).
+  const profilesRetryKey = useMemo(() => ({ usagePort, usageAttempt }), [usagePort, usageAttempt]);
   useEffect(() => {
     setUsageState({ state: usagePort === undefined ? "no-door" : "loading" });
     return usagePort?.subscribeState?.(setUsageState);
   }, [usagePort]);
-  // AO-6b3 — fieldd's usage rows, as the column's own feed reads them, and the
-  // profile filter's sets: what the claims strip's moment speaks from
+  // AO-6b3, UM-3 — fieldd's usage rows through the port's ONE subscription,
+  // which this reader holds while the stage stands (UM-3a: the port opens it
+  // for its first reader): the profiles column and the moment speak from them.
+  // The viewer's Retry is this reader leaving and coming back, which opens a
+  // refused subscription again; the rows it held stay until new ones answer.
   const [usageRows, setUsageRows] = useState<readonly AgentAccountUsageEntry[] | null>(null);
   useEffect(() => {
     setUsageRows(null);
-    return usagePort?.subscribeRows?.(setUsageRows);
   }, [usagePort]);
+  useEffect(() => profilesRetryKey.usagePort?.subscribeRows?.(setUsageRows), [profilesRetryKey]);
   const accountFacts = useMemo<MonitorAccountFacts>(
     () => ({ sets: profileSetsRead ? profileSets : null, usage: usageRows }),
     [profileSets, profileSetsRead, usageRows],
@@ -548,7 +537,7 @@ export function GodviewMonitor({
   /** GT-3c: where its physics runs — `worker`, the honest `inline`, or `none` for a view with none. */
   const swarmPhysics = viewReport.physics ?? "none";
   const viewHoldsKeys = viewReport.keysHeld === true;
-  /** UM-3 2c red: the skeleton — the marker's new name, still counting the usage column's tiles. */
+  /** UM-3: the profiles column's circles, counted off the chrome slot (AR-5's way); -1 unmounted. */
   const [profileCircles, setProfileCircles] = useState(-1);
   // AR-7 — this desktop's runs for the marker, handed on as the SAME object
   // until a fact the marker states moves: a working agent's row moves several
@@ -727,15 +716,15 @@ export function GodviewMonitor({
     return () => setMonitorHoldsKeys(false);
   }, [viewHoldsKeys]);
 
-  // The usage column's tiles, counted off the chrome slot the same way: the
-  // column is the package's, its batch arrives on the door's schedule, and a
-  // harness wants the count as a fact rather than a screenshot.
+  // The profiles column's circles, counted off the chrome slot the same way:
+  // its sets arrive on the feed's schedule, and a harness wants the count as a
+  // fact rather than a screenshot (the marker's `profileCircles`).
   useEffect(() => {
     const chrome = chromeRef.current;
     if (!chrome || typeof MutationObserver === "undefined") return;
     const read = (): void => {
-      const column = chrome.querySelector(".vf-usage-column");
-      setProfileCircles(column ? column.querySelectorAll(".vf-usage-tile").length : -1);
+      const column = chrome.querySelector(".vf-profiles-column");
+      setProfileCircles(column ? column.querySelectorAll(".vf-profiles-circle").length : -1);
     };
     const observer = new MutationObserver(read);
     observer.observe(chrome, { subtree: true, childList: true });
@@ -958,18 +947,26 @@ export function GodviewMonitor({
                   size={16}
                 />
               </span>
-              <b>No sessions under {emptyUnder.label}</b>
+              <b>No sessions on {emptyUnder.label}</b>
               <span>
-                Only this profile's sessions show — the search button's × shows them all again.
+                Only its sessions show. Click it again, or the × on search, to show them all.
               </span>
             </div>
           </ChromeBoundary>
         ) : null}
-        {/* The chrome slot: the usage column down the stage's left edge (record
-            §05), the package's own; the swarm steers around it. */}
+        {/* The chrome slot: the profiles column at the stage's top left (UM-D21,
+            DESIGN.md §8 "Godview's profiles column"), VibeField's own since UM-3;
+            the swarm steers around it. */}
         <div ref={chromeRef} className="vf-monitor-chrome">
-          <ChromeBoundary name="Usage" retryKey={usageRetryKey}>
-            <UsageColumn port={columnUsagePort} />
+          <ChromeBoundary name="Profiles" retryKey={profilesRetryKey}>
+            <ProfilesColumn
+              sets={profilesPort !== undefined && profileSetsRead ? profileSets : null}
+              rows={usageRows}
+              usageUnavailable={usageState.state === "unavailable"}
+              port={usagePort}
+              chosen={chosenId ?? null}
+              onChoose={setProfileTab}
+            />
           </ChromeBoundary>
         </div>
         {/* The claims: VibeField's, on their own strip — also solid to the swarm. */}

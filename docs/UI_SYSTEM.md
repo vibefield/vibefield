@@ -285,8 +285,9 @@ canvas, accessibility and lifecycle; field-app no longer supplies a physics cont
 Each view's sheet is scoped to `.mv-<id>` and reads only its own custom properties and the finite
 SDK `MONITOR_SKIN` (DESIGN §8). Host CSS names no view class. The head reads marks and focus keys
 from manifests (`godview/GodviewHeadView.tsx`, its sheet beside it; DESIGN §8 "Godview's head —
-Stories"). Every host chrome piece has its own `ChromeBoundary` — the head, usage, the
-profile notice and the claims in `GodviewMonitor`; System control and the deck in `GodviewOverlay`;
+Stories"). Every host chrome piece has its own `ChromeBoundary` — the head, the profiles column
+(`Profiles`; `Usage`, puppeteer-views' column, until UM-3, 2026-11-06), the profile notice and the
+claims in `GodviewMonitor`; System control and the deck in `GodviewOverlay`;
 the deck's edge in `GodviewStage`; each pane's frame, the frames and the launchers in `GodviewDeck` —
 so a throw names that piece unavailable where it stood without unmounting the monitor or its view,
 and each is tried again only for a fact it reads (its `retryKey`), at most once per window: 1 s,

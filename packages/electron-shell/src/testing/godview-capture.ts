@@ -102,7 +102,8 @@ export interface GodviewHeadFacts {
   stage: HeadRect | null;
   /** the stage's own chrome, which begins at the head's reserve (56) */
   claims: HeadRect | null;
-  usage: HeadRect | null;
+  /** the profiles column's slot (UM-3; the usage column's until 2026-11-06) */
+  profiles: HeadRect | null;
   /** a circle's name, while the pointer or the focus is on one */
   label: HeadRect | null;
   /** from the row's right end — its chevron's, while it pages — to the button's left edge */
@@ -125,12 +126,12 @@ const HEAD_FACTS = `(() => {
   const chevrons = [...document.querySelectorAll(".vf-godview .vf-stories-chev:not(:disabled)")].map(rect);
   const stage = rect(document.querySelector(".vf-godview .vf-godview-monitor-stage"));
   const claims = rect(document.querySelector(".vf-godview .vf-monitor-claims"));
-  const usage = rect(document.querySelector(".vf-godview .vf-monitor-chrome"));
+  const profiles = rect(document.querySelector(".vf-godview .vf-monitor-chrome"));
   const label = rect(document.querySelector(".vf-godview .vf-stories-label"));
   const right = Math.max(...[views, ...chevrons].filter((box) => box !== null).map((box) => box.x + box.width), -Infinity);
   return {
     window: { width: window.innerWidth, height: window.innerHeight },
-    search, views, circles, stage, claims, usage, label,
+    search, views, circles, stage, claims, profiles, label,
     gap: search && Number.isFinite(right) ? search.x - right : null,
     offCentre: views ? views.x + views.width / 2 - window.innerWidth / 2 : null,
     offAxis: search && views ? views.y + views.height / 2 - (search.y + search.height / 2) : null,
