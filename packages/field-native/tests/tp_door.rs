@@ -308,6 +308,73 @@ async fn the_hello_deadline_and_the_pre_auth_cap_close_1008() {
     door.shutdown().await;
 }
 
+/// RV #97 (native-tp-5) — the pre-auth slot is counted at TCP ARRIVAL, so the
+/// pre-auth deadline runs from there too and covers the HTTP upgrade, not only
+/// the hello. tungstenite's server handshake has no deadline of its own: a
+/// socket that connected and never sent its upgrade request held a counted
+/// slot, and a descriptor in the cell that owns the agent PTYs, until the peer
+/// itself left — and `preAuthConnectionCap` of them silenced every new leg
+/// with `1008`.
+///
+/// No WebSocket exists on such a socket to carry a `1008`, so the answer is the
+/// TCP close: the raw read sees EOF, nothing written before it.
+#[tokio::test]
+async fn a_socket_that_never_upgrades_gives_its_pre_auth_slot_back_at_the_deadline() {
+    use tokio::io::AsyncReadExt;
+
+    let m = minter();
+    let mut cfg = config(&m);
+    // The precondition below must read the counted slot before the deadline
+    // gives it back: 1 s keeps a loaded host's stall inside that window.
+    cfg.hello_deadline = Duration::from_secs(1);
+    cfg.pre_auth_connection_cap = 1;
+    let door = Door::serve(cfg).await.expect("serve");
+
+    // A raw TCP socket that never writes a byte: no upgrade request, no hello.
+    let started = std::time::Instant::now();
+    let mut raw = TcpStream::connect(("127.0.0.1", door.port()))
+        .await
+        .expect("connect the control door");
+
+    // PIN THE PRECONDITION: the door counted it at arrival and it holds the
+    // only slot — otherwise a slot "given back" would be the trivial truth
+    // about a socket that was never counted.
+    tokio::time::timeout(Duration::from_secs(5), async {
+        while door.snapshot().pre_auth_connections != 1 {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .expect("the door counts a socket's pre-auth slot at its TCP arrival");
+
+    // THE CLAIM: the door closes it at the deadline, having written nothing.
+    let mut byte = [0_u8; 1];
+    match tokio::time::timeout(Duration::from_secs(10), raw.read(&mut byte)).await {
+        Ok(Ok(0)) => {}
+        Ok(Ok(_)) => panic!("the door wrote to a socket that never sent its upgrade"),
+        Ok(Err(e)) => panic!("read: {e}"),
+        Err(_) => panic!(
+            "a socket that never sent its upgrade was still open 10 s later — the pre-auth \
+             deadline must run from TCP arrival and cover the upgrade"
+        ),
+    }
+    assert!(
+        started.elapsed() >= Duration::from_secs(1),
+        "closed AT the deadline, not before it"
+    );
+    assert_eq!(
+        door.snapshot().pre_auth_connections,
+        0,
+        "the slot came back with the close"
+    );
+
+    // And the only slot serves the next leg.
+    let (mut ws, _) = dial(&door.control_url(), None).await;
+    let grant = m.transport(TransportSpec::basic("set-raw", 1, "n-raw"));
+    expect_accepted(say_hello(&mut ws, "control", &grant, None).await);
+    door.shutdown().await;
+}
+
 #[tokio::test]
 async fn the_structured_class_answers_connection_refused_with_the_named_code() {
     let m = minter();
