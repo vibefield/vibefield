@@ -83,6 +83,7 @@ import {
   type AgentBriefingCapabilities,
   type AgentEvent,
   type AgentHost,
+  AgentLaunchRefusedError,
   type AgentModelService,
   type AgentProfile,
   type AgentRunBriefing,
@@ -105,6 +106,7 @@ import { EXIT_GRACE_MS } from "../src/agent-runtime";
 import { bootstrap, type FielddDaemon, SessionRecordStore } from "../src/index";
 import { RpcCallError } from "../src/native-link";
 import type { SecretStore } from "../src/plugin-settings";
+import { FORWARDER_MISSING_REASON } from "../src/roles";
 import type { RunEntered } from "../src/run-entry";
 import { UNREADABLE_WORDS } from "../src/signed-record";
 import { MockMgmtServer } from "../src/testing/mock-mgmt";
@@ -476,6 +478,8 @@ function scriptedProvider(
     exerciseDoor?: boolean;
     /** CP-3 — the calls the door's client makes, in order (absent: one agents_list) */
     doorCalls?: readonly DoorCall[];
+    /** RV #1 (item 203) — every launch is refused, as the adapter refuses it (its code and its sentence) */
+    launchRefusal?: { code: string; message: string };
   } = {},
 ): AgentProvider {
   let counter = 0;
@@ -501,6 +505,8 @@ function scriptedProvider(
     ...(extra.signInMark !== undefined ? { extensions: scriptedExtensions(extra.signInMark) } : {}),
     ...(extra.models !== undefined ? { models: scriptedModels(extra.models) } : {}),
     async createSession(options: AgentProviderSessionOptions): Promise<AgentAdapterBinding> {
+      if (extra.launchRefusal !== undefined)
+        throw new AgentLaunchRefusedError(extra.launchRefusal.code, extra.launchRefusal.message);
       extra.beforeBirth?.();
       const n = ++counter;
       // AR-S2 — the account a spawn was bound to, as the runtime resolved it
@@ -703,6 +709,8 @@ interface SetupConfig {
   stopHeardWithinMs?: number;
   /** item 121 — the route snapshot THIS boot's class placement reads (default: the snapshot itself) */
   classRoutes?: (routes: TerminalRouteSnapshot) => TerminalRouteSnapshot;
+  /** RV #1 (item 203) — the scripted adapter refuses every launch with this code and sentence */
+  launchRefusal?: { code: string; message: string };
 }
 
 /** Boot fieldd: over the mock mgmt server (no floor) or the REAL field-native. */
@@ -835,6 +843,7 @@ async function setup(config: SetupConfig): Promise<Box> {
             ...(config.turnStop === true ? { turnStops } : {}),
             ...(config.observed === true ? { observed } : {}),
             ...(config.facts === true ? { facts: true } : {}),
+            ...(config.launchRefusal !== undefined ? { launchRefusal: config.launchRefusal } : {}),
           },
         ),
       ];
@@ -2900,6 +2909,49 @@ async function placeOf(box: Box, placeId: string, path: string, over: Partial<Pl
   );
   return { device: box.daemon.devices.currentDeviceId(), placeId };
 }
+
+// RV #1 (item 203) — puppeteer refuses a managed launch whose host lends no forwarder runtime and has no script runner
+// (`FORWARDER_RUNTIME_UNAVAILABLE`, neutral: no vendor's word): a single-executable fieldd whose sealed forwarder is
+// gone, a damaged install. The person reads DESIGN.md §9's sentence for it, as PJ-6's refusals are said in fieldd's
+// words, never the adapter's sentence about hosts and forwarders; its codes ride the details. The door answers it bare
+// (the lead's ruling rv-forwarder-door-clause): the app says every door refusal as a clause after its own words
+// ("Could not start — …", "didn't launch: …"), so "VibeField: " is the forwarder role's own line's, never the door's.
+describe("RV #1 — a launch refused for want of the file it observes agents with (FORWARDER_RUNTIME_UNAVAILABLE)", () => {
+  it("is refused in DESIGN.md §9's sentence, bare, UNAVAILABLE and not retryable, keeping puppeteer's codes, and nothing starts", async () => {
+    const { daemon, dataDir } = await setup({
+      floor: "mock",
+      launchRefusal: {
+        code: "FORWARDER_RUNTIME_UNAVAILABLE",
+        message: "this host cannot run the forwarder a managed session is observed through",
+      },
+    });
+    const win = await window(daemon, DECK, "rv203");
+    const refused = await win.callErr("agent.spawn", { provider: "scripted" });
+    expect(refused.message).toBe(FORWARDER_MISSING_REASON);
+    expect(refused.message).not.toMatch(/^VibeField:/u);
+    expect(refused.message).not.toContain("forwarder");
+    expect(refused.data?.kind).toBe("UNAVAILABLE");
+    expect(refused.data?.retryable).toBe(false);
+    expect(refused.data?.details).toMatchObject({
+      service: "agents",
+      state: "forwarder-unavailable",
+      provider: "scripted",
+      code: "AGENT_LAUNCH_REFUSED",
+      refusal: "FORWARDER_RUNTIME_UNAVAILABLE",
+    });
+    // nothing was born: no record, no session
+    expect(existsSync(join(dataDir, ...LAYOUT.AGENT_SESSIONS_DIR))).toBe(false);
+    // another refusal of the adapter's keeps its own sentence (PJ-6's rule for a refusal fieldd has no words for)
+    const other = await setup({
+      floor: "mock",
+      launchRefusal: { code: "SOME_OTHER_REFUSAL", message: "the adapter's own sentence" },
+    });
+    const otherWin = await window(other.daemon, DECK, "rv203b");
+    const again = await otherWin.callErr("agent.spawn", { provider: "scripted" });
+    expect(again.message).toBe("the adapter's own sentence");
+    expect(again.data?.details).toMatchObject({ refusal: "SOME_OTHER_REFUSAL" });
+  });
+});
 
 describe("PJ-7 — a launch names a place (agent.spawn {place})", () => {
   it("runs in the place's own folder, resolved from this desktop's place facts; the ledger names the ref, never the path; the birth hands the place to its project", async () => {

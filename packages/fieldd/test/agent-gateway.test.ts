@@ -99,7 +99,7 @@ import {
 } from "../src/agent-runtime";
 import { endTypedRun, TYPED_END, typedRunProof } from "../src/agent-typed-run";
 import type { AuditMutation, AuditMutationOutcome } from "../src/audit-service";
-import { AGENT_SHIM_ROLE_ARG } from "../src/roles";
+import { AGENT_SHIM_ROLE_ARG, FORWARDER_MISSING_REASON } from "../src/roles";
 // `born` names a terminal's birth in this file's rows; the agent's is `birth`
 import { born as birth } from "./agent-birth";
 import {
@@ -531,6 +531,30 @@ describe("the refusal table — VibeField's sentences (AR-7b)", () => {
     expect(Array.from(words).length).toBeLessThanOrEqual(320);
     expect(words.startsWith(`${TYPED_COMMAND} was not started`)).toBe(true);
     expect(words.endsWith(`Run ${TYPED_COMMAND} without it.`)).toBe(true);
+  });
+
+  // RV #1 (item 203): a managed launch puppeteer refuses because this copy lends no forwarder runtime (a
+  // single-executable fieldd whose sealed forwarder is gone) is a damaged install, VibeField's to say. Its adapter's
+  // sentence is about hosts and forwarders, and "Change that" is no step a person can take.
+  it("says a launch refused for want of the file VibeField observes agents with in DESIGN.md §9's pane line, never the adapter's reason; any other refusal of the adapter's keeps its reason (RV #1, item 203)", () => {
+    const launchRefused = (providerCode: string) => ({
+      code: "launch-refused" as const,
+      reason: "the adapter's own sentence",
+      providerCode,
+      providerId: TYPED_PROVIDER,
+      command: TYPED_COMMAND,
+    });
+    const words = agentRefusal(launchRefused("FORWARDER_RUNTIME_UNAVAILABLE"), "Scripted");
+    expect(words).toBe(`${TYPED_COMMAND} was not started: ${FORWARDER_MISSING_REASON}`);
+    expect(words).not.toContain("the adapter's own sentence");
+    // as a pane prints it, the kit's label first: DESIGN.md §9's line, with the command as typed
+    const design = readFileSync(join(PACKAGE_ROOT, "..", "..", "DESIGN.md"), "utf8");
+    const paneLine = `${AGENT_GATEWAY_HOST_LABEL}: ${words.replace(TYPED_COMMAND, "‹command›")}`;
+    expect(design.replace(/\s+/gu, " ")).toContain(`"${paneLine}"`);
+    expect(boundSpawnThroughText(words)).toBe(words);
+    expect(agentRefusal(launchRefused("SOME_OTHER_REFUSAL"), "Scripted")).toBe(
+      `${TYPED_COMMAND} was not started: the adapter's own sentence. Change that, then run ${TYPED_COMMAND} again.`,
+    );
   });
 });
 
