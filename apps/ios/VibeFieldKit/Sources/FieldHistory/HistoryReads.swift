@@ -38,8 +38,6 @@ public enum HistoryReads {
   /// How many of the most recent projects get their figures read as the ledger
   /// opens (three rosetta GETs each on the desktop): the rest read when opened.
   public static let prefetchFigures = 6
-  /// Recent searches kept per desktop.
-  public static let recentSearches = 8
   /// fix7 — while the ledger's index is not ready (starting, rebuilding,
   /// failed), how often the ledger and its index are read again: nothing pings
   /// when it becomes ready, and two cheap reads every few seconds is a
@@ -556,7 +554,6 @@ public final class HistoryDesktopReader: Identifiable {
         corpus.hits = FieldHistoryModel.hitGroups(answer, now: now())
         corpus.searchedQuery = words
         searchedKind = kind
-        remember(words)
       } else {
         // the index had no answer: what was last shown stands (H-D7)
         failure = answer.detail ?? "the index did not answer the search"
@@ -567,15 +564,9 @@ public final class HistoryDesktopReader: Identifiable {
     }
   }
 
-  private func remember(_ words: String) {
-    var recent = corpus.recentSearches.filter { $0 != words }
-    recent.insert(words, at: 0)
-    corpus.recentSearches = Array(recent.prefix(HistoryReads.recentSearches))
-  }
-
   /// SE-P1 (SE-D4 A) — Live now's ask: the words over THIS desktop's live runs alone (`nativeSessionIds`, the
   /// contract's scope for "the live runs a reader can jump to"), at the tailnet's page. The lines land in `live`, by
-  /// the run's native id; Everything's hits, its query and the recent searches are not touched. An unanswered ask
+  /// the run's native id; Everything's hits and its query are not touched. An unanswered ask
   /// keeps what was last shown (H-D7); a refusal dims as every read's does. Lines are kept only for the runs asked
   /// about: an answer is filed under the runs this desktop owns, never another's. SE-2j — an ask whose task was
   /// cancelled (newer words took over) lands nothing and refuses nothing: an older answer arriving after a newer one

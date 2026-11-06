@@ -32,7 +32,9 @@ public struct HistoryCorpus: Equatable, Sendable, Codable {
   /// term filter then stands aside: the index widened word fragments, and a
   /// hit it found is a hit). nil: `hits` is the whole corpus's, filtered here.
   public var searchedQuery: String?
-  public var recentSearches: [String]
+  // RETIRED 2026-11-06 (SE-2o; the lead's ruling 24): `recentSearches`, the last eight searches per desktop. Search's
+  // page, its one reader, retired at SE-2e, and search keeps no recent searches. A ledger cached with the field still
+  // reads: the synthesized decoding passes over a key it does not know.
   public var documents: [String: HistoryDocument]
   /// PJ-7 — the desktops the ledger was read across, the home first then the
   /// roster's order: the scope line's marks and each sleeping desktop's honest
@@ -42,8 +44,8 @@ public struct HistoryCorpus: Equatable, Sendable, Codable {
   public init(
     desktop: String, deviceId: String = "dev-1", sessionCount: Int, agentCount: Int, readAt: String,
     projects: [HistoryProject], live: [HistoryLive], sessions: [String: [HistorySession]],
-    hits: [HistoryHitGroup], searchedQuery: String? = nil, recentSearches: [String],
-    documents: [String: HistoryDocument], desktops: [HistoryDevice] = []
+    hits: [HistoryHitGroup], searchedQuery: String? = nil, documents: [String: HistoryDocument],
+    desktops: [HistoryDevice] = []
   ) {
     self.desktop = desktop
     self.deviceId = deviceId
@@ -55,7 +57,6 @@ public struct HistoryCorpus: Equatable, Sendable, Codable {
     self.sessions = sessions
     self.hits = hits
     self.searchedQuery = searchedQuery
-    self.recentSearches = recentSearches
     self.documents = documents
     self.desktops = desktops
   }
@@ -65,7 +66,7 @@ public struct HistoryCorpus: Equatable, Sendable, Codable {
   public static func empty(desktop: String, deviceId: String) -> HistoryCorpus {
     HistoryCorpus(
       desktop: desktop, deviceId: deviceId, sessionCount: 0, agentCount: 0, readAt: "", projects: [],
-      live: [], sessions: [:], hits: [], recentSearches: [], documents: [:])
+      live: [], sessions: [:], hits: [], documents: [:])
   }
 
   public func project(_ id: String) -> HistoryProject? { projects.first { $0.id == id } }
@@ -652,7 +653,6 @@ extension HistoryCorpus {
             at: "14:26"),
         ]),
     ],
-    recentSearches: ["badge", "debounce", "claimControl", "specimen rows", "write key"],
     documents: [
       "mt-2": HistoryDocument(
         id: "mt-2", projectId: "vf", title: "MT-2 — the tree's eleven glyphs", agentName: "Claude Code", agent: "claude",

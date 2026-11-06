@@ -150,7 +150,6 @@ struct HistoryReadsTests {
     await reader.search("needle", kind: .prompts)
     #expect(reader.corpus.searchedQuery == "needle")
     #expect(reader.corpus.hits.count == 1)
-    #expect(reader.corpus.recentSearches == ["needle"])
     #expect(FieldHistoryModel.visibleHits(query: "needle", kind: .prompts, in: reader.corpus).count == 1)
     door.refuse = FieldProductError(kind: "UNAVAILABLE", message: "the door is gone", retryable: true)
     await reader.search("other", kind: .any)
@@ -234,7 +233,7 @@ struct HistoryReadsTests {
   }
 
   /// SE-P1 (SE-D4 A) — Live now's ask: the words over this desktop's live runs alone (`nativeSessionIds`), at the
-  /// tailnet's page; the lines land by the run's native id, and Everything's hits, query and recent searches stand.
+  /// tailnet's page; the lines land by the run's native id, and Everything's hits and query stand.
   @Test("live: the words are asked over the live runs, and the lines land by the run's native id")
   @MainActor
   func searchLive() async throws {
@@ -255,7 +254,6 @@ struct HistoryReadsTests {
     #expect(lines.map { $0.text } == ["needle in a haystack"])
     #expect(reader.corpus.hits.isEmpty, "Everything's hits are not Live now's")
     #expect(reader.corpus.searchedQuery == nil)
-    #expect(reader.corpus.recentSearches.isEmpty)
     reader.close()
   }
 
