@@ -7,7 +7,8 @@ import Testing
 /// UM-4 (UM-D8 A; rulings 17 and 18) — the meters' feed reads the HOME's cached batch and the home's profiles through
 /// the home's one door: `agents.usage` asked with no `refresh`, `agents.usage.subscribe` watched while the door is
 /// held, the profiles and catalog read on attach and on every open; a home that refuses `agent.usage` is said, a door
-/// that cannot answer is "usage unavailable", and without a door the last word stands.
+/// that cannot answer is "usage unavailable" — still watched, and asked again when a meter view opens — and without a
+/// door the last word stands, or "usage unavailable" when there is none (the U3 review).
 ///
 /// No key path and no `try` inside an #expect/#require argument: hoisted into a `let` first (T10f's kit trap).
 @Suite("the meters' feed reads the home's cached usage and its profiles, and says what is true")
@@ -125,6 +126,71 @@ struct MetersFeedTests {
     let meters = feed.reading.meters(of: nil, now: MetersFixtureDoor.now)
     let kinds = Set(meters.entries.map(\.kind))
     #expect(kinds == [.noMeter])
+  }
+
+  @Test("a door that could not answer is still watched: the stream's open snapshot repairs it when the home answers")
+  func unavailableIsWatched() async throws {
+    let door = Door()
+    door.usage = .failure(FieldProductError(kind: "UNAVAILABLE", message: "down", retryable: true))
+    let feed = MetersFeed()
+    feed.attach(door, home: "dev-home")
+    await settle { feed.reading.usage != .waiting }
+    #expect(feed.reading.usage == .unavailable)
+    await settle { !door.frames.isEmpty }
+    let watched = door.watched.map(\.method)
+    #expect(watched == ["agents.usage.subscribe"])
+    let frame = try #require(door.frames.first)
+    let budget = try #require(MetersFixtureDoor.fixture("agent-usage.budget"))
+    frame(budget)
+    let batch = try AgentAccountUsageBatch(json: budget)
+    #expect(feed.reading.usage == .batch(batch))
+  }
+
+  @Test("opening a meter view asks the cached usage again after a door could not answer — never after a refusal")
+  func openAsksAgainWhenUnavailable() async throws {
+    let door = Door()
+    door.usage = .failure(FieldProductError(kind: "UNAVAILABLE", message: "down", retryable: true))
+    let feed = MetersFeed()
+    feed.attach(door, home: "dev-home")
+    await settle { feed.reading.usage != .waiting }
+    door.usage = .success(MetersFixtureDoor.fixture("agent-usage.budget") ?? .null)
+    feed.open()
+    await settle { door.count("agents.usage") == 2 && feed.reading.usage != .unavailable }
+    #expect(door.count("agents.usage") == 2)
+    guard case .batch(let batch) = feed.reading.usage else {
+      Issue.record("the usage is not the home's batch after the open: \(feed.reading.usage)")
+      return
+    }
+    #expect(batch.entries.count == 5)
+    let refreshes = door.calls.filter { $0.params?["refresh"] != nil }
+    #expect(refreshes.isEmpty)
+    let refusing = Door()
+    refusing.usage = .failure(FieldProductError(kind: "FORBIDDEN_SCOPE", message: "agent.usage"))
+    let refused = MetersFeed()
+    refused.attach(refusing, home: "dev-home")
+    await settle { refused.reading.usage != .waiting }
+    refused.open()
+    await settle { refusing.count("agents.profileSets.list") == 2 }
+    #expect(refusing.count("agents.usage") == 1)
+  }
+
+  @Test("no door and no answer yet is usage unavailable — never a first read that never ends (ruling 10)")
+  func noDoorIsUnavailable() async throws {
+    let feed = MetersFeed()
+    feed.attach(nil, home: "dev-home")
+    #expect(feed.reading.usage == .unavailable)
+    #expect(!feed.reading.connected)
+    let words = AgentProfilesWords(
+      reading: feed.reading, lens: ProfileLens(), home: "studio", now: MetersFixtureDoor.now)
+    #expect(words.read == "Usage unavailable")
+    #expect(words.menuWord == nil)
+    let door = Door()
+    feed.attach(door, home: "dev-home")
+    await settle { feed.reading.usage != .unavailable }
+    guard case .batch = feed.reading.usage else {
+      Issue.record("a door handed over did not read the home's batch: \(feed.reading.usage)")
+      return
+    }
   }
 
   @Test("opening a meter view reads the home's profiles again; the usage is never asked fresh")
