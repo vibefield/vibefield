@@ -476,12 +476,15 @@ export class FlowRuns {
     const bytes = approving ?? records.bytes(hash);
     if (bytes === undefined) throw refused("version", words.notAVersion(params.flow));
     const read = readFlow(bytes);
-    // Q-a (ruled 2026-11-06): a script its static read refuses, by a rule newer than its approval, starts nothing,
-    // in the read's own words (the sentence flows.read gives it): one reader, one gate. Its approval stands
-    const unread = read.refusals[0];
-    if (unread !== undefined) throw refused("read", unread.words);
     const meta = read.meta;
     const name = words.markName(meta?.name, params.flow);
+    // Q-a (ruled 2026-11-06): a script its static read refuses, by a rule newer than its approval, starts nothing,
+    // in the read's own words (the sentence flows.read gives it): one reader, one gate. Its approval stands. NN1
+    // (the version review; ruled 2026-11-06): those words are said in §9's frame, the flow named as the
+    // start's other refusals name it, with the line the read names, or none for a whole-file refusal
+    const unread = read.refusals[0];
+    if (unread !== undefined)
+      throw refused("read", words.readRefused(name, unread.words, unread.line));
     const takes = new Set(Object.keys(meta?.input ?? {}));
     const unknown = Object.keys(params.input).find((input) => !takes.has(input));
     if (unknown !== undefined) throw refused("input", words.noSuchInput(name, unknown));

@@ -635,10 +635,11 @@ export const AGENT_STOP = {
  *    refused at its spawn, in DESIGN.md §9's words ("A step's call refused"), never made to wait: LIVE_STEPS_MAX's
  *    slots are another bound. The PTYs it allows at most: RUNS_LIVE_MAX 8 × 16 = 128 step PTYs, a ceiling against
  *    macOS's 511 (`kern.tty.ptmx_max`), which the floor's own PTYs share (its terminals, the sparks' sessions).
- * Over the whole block (ruled 2026-11-06): A bound a stored field is held to (RESULT_MAX_BYTES, a journal
- * answer's `value`, by flowJournalLineOf; HOST_CALLS_WAITING_MAX, a run record's `open`; STEP_LINES_MAX, a record
- * step's `lines`; FOLDER_CHARS, the journal head's `folder`; RUN_AGENTS_MAX, the record's `agents`) is only ever
- * raised; lowering one is a migration, never an edit. */
+ * Over the whole block (ruled 2026-11-06): A bound a stored field is held to (SCRIPT_MAX_BYTES, a kept
+ * version's bytes; RESULT_MAX_BYTES, a journal answer's `value`, by flowJournalLineOf; ARGS_DEPTH_MAX, a kept journal
+ * line's depth (+4); HOST_CALLS_WAITING_MAX, a run record's `open`; STEP_LINES_MAX, a record step's `lines`;
+ * FOLDER_CHARS, the journal head's `folder`; RUN_AGENTS_MAX, the record's `agents`) is only ever raised; lowering one
+ * is a migration, never an edit. */
 export const FLOW_LIMITS = {
   SCRIPT_MAX_BYTES: 64 * 1024,
   RESULT_MAX_BYTES: 64 * 1024,
