@@ -385,11 +385,13 @@ export async function startStep(
   try {
     ({ runtimeRunId } = await ports.agents.spawn(launch, { by: "flow", run: run.run, call }));
   } catch (error) {
-    // F4: a spawn the runtime refused started no agent, so it gives back the one it reserved
+    // F4: a spawn the runtime refused started no agent, so it gives back the one it reserved. It reserved its own, so
+    // the count is 1 or more here; unclamped, a double release fails the record's write loudly (its `min(0)`), never
+    // hidden (no silent fallback)
     write(
       call,
       (step) => step,
-      (record) => ({ agents: Math.max(0, (record.agents ?? 0) - 1) }),
+      (record) => ({ agents: (record.agents ?? 0) - 1 }),
     );
     const why = oneLineWords(error instanceof Error ? error.message : String(error), FLOW_LOG_MAX);
     return { ok: false, refused: `VibeField couldn't start ${labelWords(label)}: ${why}` };
