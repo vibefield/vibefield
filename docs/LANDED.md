@@ -40396,3 +40396,101 @@ rv-hub-lag A (no production code for #116, one regression row) governs #116.
 - The draft corrections, at item 211's slot (VF-PM's baton): `draft/specs/terminal-pipeline-v3.md`'s as-built notes
   for #97 (:1287), #96 (:1369, law 3), #93 (:61), #116 (:133), #114 (§8, TP-S3d) and #95 (:1060, TP-R6 :1804); and
   petition G36 into `draft/petitions/README.md`.
+
+## Item 212 — the shell keeps its fieldd honestly: a busy incumbent is waited for and never superseded at the first probe, recovery is a bounded loop with a crash-loop state and the person's Try again, and a fieldd that stops answering is said Not responding, an owned one ended alone at the wedge bound (RV #30, #29, #67) (2026-11-06)
+(2026-11-06; twelve commits on lane `rv/shell-recovery`, RV's (vibe-field-62), built in
+`/Volumes/SamsungRed/lanes/au/vibe-field` over main `285fad957` (`204832460` … `a8680217f`, the shas a9's rows
+proved); re-cut by `git replay` onto `5d58c8731` as `49735fb67` (red), `280134e2c`, `2a7fc5a89`, `c67e9af05`,
+`5edd87204` (red), `b5f5ebe24`, `17fec7db1`, `388c636af`, `1f44b2763` (red), `b935ed7d2`, `1d0d0599d` and `86d14e31b`.
+Verified at `86d14e31b` (run 201, a9's, on the old mini), M201; landed as `86d14e31b`, a fast-forward of main
+`5d58c8731`, 2026-11-06T23:31:07Z.)
+RV's sixth landing: the plan's lane rv/shell-recovery, wave 3, three findings of the shell's link to its fieldd. Built
+at rv-service-recovery's leans, which James ruled at 2026-11-06 22:56Z ("all leans"): a switch to a person counts as
+that person's ask, Restarting… shows during the person's uncounted attempt, and the tray image while Not responding
+stays as it is.
+
+**The findings.**
+- **#30** (`gap3-2`, present): `run()` decided adopt-or-spawn on one probe and put a listener that took the dial but
+  not the hello within 1.5 s in the class of "nothing to adopt", so a busy fieldd was superseded (a full agent-plane
+  restart). The readiness poll then read the superseded incumbent's late answer as its race's winner and could stop
+  our child, leaving neither alive. The probe's timer also gave its verdict ahead of a hello ack already read in the
+  same turn.
+- **#29** (`gap3-3`, present): fieldd's recovery had no bound and no state: a fieldd that kept dying was respawned for
+  ever, and neither the status item nor the window said so or offered the person anything.
+- **#67** (`gap3-8`, present): a fieldd whose loop stalled kept its socket open, so its client stayed `ready` while
+  nothing answered; the shell's link had no liveness watch, where the floor's has had one since WG-D1.
+
+**What landed.**
+- fieldd-supervisor (#30): `io-turn.ts`, the shell's one WG-E1 yield (`afterIoTurn`), through which the probe's
+  timeout now gives its verdict. A probe-timeout is busy, not gone: `awaitBusyIncumbent` asks whether the recorded pid
+  exists (`kill(pid, 0)`, no signal) and probes again, its budget doubling, for the spawn's own readiness bound (no
+  new constant), then goes through the one adopt / replace / spawn dispatch; a probe-timeout that reaches the spawn is
+  a named takeover (`fieldd.supervisor.takeover`). The incumbent a spawn supersedes, answering late, is closed and
+  logged (`incumbent_answered_late`), never its race's winner.
+- contracts first (#29, #67): `shell.ts`'s `FIELDD_LINK`, `FielddLinkState` (`recovering`, `crash-loop`,
+  `unresponsive`), `FielddLinkUnavailable` and `DesktopShellState.fieldd`, typed, never a passthrough blob; the
+  replace door's `field-service` reason (the person's Try again); one EL9 fixture per state.
+- electron-shell (#29): `FielddHandleCoordinator` is the shell's recovery boundary, a bounded loop under the house
+  intensity (three automatic tries in ten minutes, WG-D1's and AL-D8's numbers, cited), then `crash-loop`; a person's
+  ask runs one uncounted attempt, out of the crash loop too. One link model, `fieldd-link.ts`, bound to the attached
+  pair, feeds the status item ("Field service: Restarting…", "Field service: Stopped after 3 tries", Try Again) and
+  the window. The plugin-runtime soak names its own intensity, read only in its own mode.
+- field-app (#29, #67): `frame/field-service-notice.ts`, one held notice on the status line: "Reconnecting to the
+  field service…", then the crash loop's words with Try again through the replace door, and Not responding's; the
+  catalog mounts the shipping notice over fixture states.
+- fieldd-supervisor and electron-shell (#67): `liveness.ts`, `watchLiveness`: one `system.health` ask at a time every
+  5 s while the client is `ready`; only replies count (WG-E2); a miss counts only when main's own tick was on time and
+  one turn of I/O finds no answer (WG-E1); two misses say `unresponsive`, WG-D1's 60 s of reply silence says `wedged`.
+  At `wedged` an OWNED fieldd is ended alone by the existing child-only ladder (SIGTERM, then SIGKILL) and #29's
+  recovery starts it again; an ADOPTED one is only said (ESR §5.3). The watch is off under an inspector; the stop
+  ladder reads a signal-ended child as exited.
+- DESIGN.md §8 and §9: the field service's words (Restarting…, Stopped after 3 tries with Try again, Not responding,
+  and the status line's sentences), and the not-responding timing as built.
+
+**The lights.**
+- Written unrun on the MacBook under the HOLD; reviewed (six issues, all folded: two user-identity rows pinned to the
+  probe's new `recorded`; the soak's own intensity; io-turn's two-timer precondition; a stop-owned stop after a wedge
+  kill still ends the floor, and a signal-ended child reads as exited; §8's "never a session"; the rows' gaps).
+- a9's rows on the old mini (`lanes/rv/a9/w3-i212/`; results `w3-i212-results/`, SUMS-a9 `5f1c1998…`), 25 rows: every
+  red at its named assertion (#30's nine, #29's eighteen and the missing module, #67's twelve, ten and three); every
+  green green, field-app whole 4,380 at the tip; biome, the walls and `gen:check` clean. Births 0. Two rows not as
+  briefed: six liveness rows red at #67's green and at the tip, the TEST's clock (vitest's fake timers date a
+  zero-delay timer made inside a firing timer 1 ms later, so the faked setImmediate verdict landed a step late), fixed
+  forward in `a8680217f`, test-only (the real setImmediate, taken in `vi.hoisted`); and electron-shell's sound-player
+  row, host state (a fresh scratch has no built addon; the lane touches no sound file).
+- r2 (`w3-i212-r2/`; results SUMS-a9 `757dff90…`), all 8 as briefed: the control red at `c38ac9dc7` (the same six),
+  liveness 9 of 9 at `a8680217f`, fieldd-supervisor 94 of 94, electron-shell whole less the sound-player file 2,735
+  and both typechecks, biome.
+- The re-cut is proof-form: range-diff 12 `=`, the own range's `-U0 --stable` patch-id equal (`95b0b28c…`), and the
+  tip's tree equal to git's merge-tree (`lanes/rv/mint/item212/`); DESIGN.md is the one file both sides touched,
+  merged clean.
+- Run 201, a9's, on the old mini: GREEN at `86d14e31b` on `5d58c8731`, every count as briefed, missing [] / extra []
+  (`lanes/ts6/logs/mini/run201/`, SUMS-a9 `999a0aa7…`; verify exit 0 at 23:26:44Z, tree clean, stubs 0): vitest 14,029
+  over 961 files (run 199's + 73 over + 5, every one of the 18 test files at its count from syntax, fixtures.test.ts's
+  three `parses` rows among them), biome 3,482 (+12), cargo 571, node 474 and typecheck 29 as run 199's; `gen:check`
+  no diff. Births 0. Run 200 at the same tip read one row red, item 192's census row (item 216, below); the control
+  read that file green 3 of 3 at the tip and 3 of 3 at main (`lanes/ts6/logs/mini/ctl212/`).
+
+**Found.**
+- run 200 (the mint's first verify) read one row red in fieldd, `system-shutdown-census.test.ts` :519, item 192's: the
+  row reads fieldd's cached inventory once after the successor is listed, and since item 201's #43 the successor is
+  born on the floor's exit, which can come before the next inventory drops the old row. Nothing of this lane reaches
+  fieldd; filed as item 216.
+- Under vitest's fake timers, a setImmediate or zero-delay timer made inside a firing timer is due 1 ms later, in the
+  next step of `advanceTimersByTimeAsync`; a hand trace that assumes it runs within the step is a step wrong.
+- #30's intended cost: a relaunch over a truly stalled fieldd waits up to the readiness bound (20 s) on the splash
+  before superseding it, where it waited 1.5 s; adopting a live one saves every helper-hosted run. Under a debugger,
+  accepted for development.
+- The not-responding advice ("If it lasts, quit VibeField and open it again") holds because a wedged pair's census
+  reads unknown and offers "Quit and leave it running".
+
+**Owed.**
+- smoke:plugin-restart and `lab:plugin-runtime:soak --cycles 5`, named in the GO (the recovery loop and the soak's own
+  intensity). They need the old mini's console and queue with gv4's; owed until they read green.
+- The rulings' marks: DESIGN.md and the code comments of items 191, 192, 201, 203 and 212 still say "until James
+  rules"; RV's words commit after this one says the lean James ruled (all fifteen asks, 2026-11-06 22:56Z and 23:11Z).
+- When RV #7 lands, §8's caveat (an agent run whose agent does not re-attach may end with a wedged fieldd) comes out,
+  a dated correction at its source.
+- The draft corrections, at item 212's slot (VF-PM's baton): `design-02-daemons.md` :213; ESR §5.3, §7.1 and §7.3 (the
+  busy-incumbent wait and named takeover, the bounded recovery loop, the liveness watch's child-only end, a stop-owned
+  stop after a wedge kill, `hasExited`); WP12-D10; the plugin-runtime soak's own intensity.
