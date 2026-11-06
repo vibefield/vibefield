@@ -63,6 +63,19 @@ const phoneViewGoldens = [
   "phone-timeline.golden.json",
   "phone-spend.golden.json",
 ];
+// IOS-12c (M-c1; the 12c plan's Q1 (a)) — the phone's Chat goldens, written by field-app's own fold
+// (packages/field-app/test/chat-flow-goldens.test.ts, `VF_WRITE_GOLDENS=1`), which the kit's ChatFlow and
+// ChatMarkdown are held to (FieldProductTests). Read from their folder, so a case the fold's test adds is a required
+// mirror the moment it is committed. Each basename is its own: the walk below maps a copy to its origin by basename.
+const CHAT_FLOW = join(root, "packages/field-app/test/fixtures/chat-flow");
+let chatFlowGoldens = [];
+try {
+  chatFlowGoldens = readdirSync(CHAT_FLOW)
+    .filter((name) => name.endsWith(".golden.json"))
+    .sort();
+} catch {
+  // said with the problems, below
+}
 // Goldens whose origin is another package than the contracts — a design
 // decision both apps compute, not a wire shape — compared byte for byte all
 // the same. PJ-7: the project ink's table (DESIGN.md §2.9), which the design
@@ -96,6 +109,7 @@ const OTHER_ORIGINS = new Map([
   // PG-4t — the views' faces, which the Stories row draws
   ["phone-marks.golden.json", join(PHONE_GODVIEW, "phone-marks.golden.json")],
   ...phoneViewGoldens.map((name) => [name, join(PHONE_GODVIEW, name)]),
+  ...chatFlowGoldens.map((name) => [name, join(CHAT_FLOW, name)]),
 ]);
 // Goldens VENDORED from a sibling project outside this workspace, so there is no origin here to
 // compare with: each is pinned by its sha256 beside the files it tests, and the vendoring script's
@@ -269,6 +283,14 @@ const transcriptFixtures = [
   "spark-transcript-ticket-params.valid.json",
   "spark-transcript-ticket.valid.json",
 ];
+// IOS-12c (M-c1) — the say door's params and its three receipts, which the kit's SparkSay encodes and reads
+const sayFixtures = [
+  "compose-sparks-say-params.valid.json",
+  "compose-sparks-say-params.chips.json",
+  "compose-sparks-say.queued.json",
+  "compose-sparks-say.waking.json",
+  "compose-sparks-say.delivered.json",
+];
 const requiredMirrors = [
   ["freeway", freewayFixtures, ["Tests/FieldFreewayTests"]],
   ["tp", tpFixtures, ["Tests/FieldRoutedTerminalTests"]],
@@ -298,6 +320,9 @@ const requiredMirrors = [
   ["remote", [...remoteFixtures, "phone-fold.golden.json"], ["Tests/FieldProductTests"]],
   // IOS-12b — the sparks' and the needs' lists, and each kind of item, read by Chat on the phone
   ["sparks", sparkFixtures, ["Tests/FieldProductTests"]],
+  // IOS-12c (M-c1) — the phone's Chat: the Mac fold's goldens (in their own folder), and the say door's wire
+  ["chat", chatFlowGoldens.map((name) => `chat-flow/${name}`), ["Tests/FieldProductTests"]],
+  ["chat", sayFixtures, ["Tests/FieldProductTests"]],
   // and the two merged lists Chat's demo door answers under `-vf-mock` (ChatFixtureDoor, DEBUG)
   ["sparks", ["compose-sparks-list.merged.json", "needs-list.merged.json"], ["Sources/FieldHome"]],
   // SP-7a — the spark's transcript, read on the phone as the Mac reads it
@@ -325,6 +350,11 @@ const requiredMirrors = [
     ["Tests/FieldHomeTests"],
   ],
 ];
+if (chatFlowGoldens.length === 0) {
+  problems.push(
+    `the phone's Chat goldens are missing: ${relative(root, CHAT_FLOW)} holds no *.golden.json`,
+  );
+}
 for (const [set, fixtures, folders] of requiredMirrors) {
   for (const folder of folders) {
     for (const fixture of fixtures) {

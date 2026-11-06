@@ -1,0 +1,12 @@
+{
+  "spark": "sp-9q2wloft1",
+  "text": "Have Claude Code in vibe-field (session run-7f3c2a) review the composer test",
+  "requestId": "say-01JC4N0B6WQZ",
+  "chips": [
+    {
+      "start": 5,
+      "length": 46,
+      "kind": "session"
+    }
+  ]
+}
