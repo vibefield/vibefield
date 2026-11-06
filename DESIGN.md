@@ -6388,9 +6388,13 @@ reject"; where each word stands is §8 "The phone's Settings" and "The phone's w
   prompts as the fallback. It is a substitution, never a rewording: wherever Settings or the way in said "this phone",
   "your phone" or "the phone", it says "this iPhone" (or "this iPad", or "this device"), and "This phone" at a
   sentence's start or as a head or tag says "This iPhone".
-- *Owed to L4's word pass, after IOS-13a lands (the lock's own file, the word from FieldDesign's `DeviceWord`):*
-  "Your iPhone passcode works too." and "Anyone holding this phone unlocked…". iOS's own lock reason already says
-  "this device" (LP-4).
+- *As built 2026-11-06 (L4's word pass, LP-4; it was owed here after IOS-13a):* the same substitution reaches every
+  other word the phone shows that named itself. The lock ("The lock" above) says "This iPad can type into your
+  agents’ terminals. …", "Your iPad passcode works too." and "Anyone holding this iPad unlocked…". Chat's away
+  lines say "runs a build this iPad can't read". History's scope line, its empty ledger and its missing notes, the
+  freeway's refusals below (where "from phones" says "from iPads"), a stopped attach's slot line and the corner's
+  "the field was refused" line all name the device the same way. iOS's own lock reason still says "this device"
+  (LP-4).
 
 *(VF-PM 2026-11-05 02:29Z, at IOS-13a; for James's eye.)*
 **The freeway's refusals** (track FW, F1b's kit half; FW-D5; added 2026-11-01). The phone asks its home desktop to
