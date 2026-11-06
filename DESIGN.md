@@ -7089,13 +7089,19 @@ here.
   that has since come, "as of 3h ago" (§8 "The Bands circle"; added 2026-11-06, the assembled review, ‹for James›);
   one on its way, "reading…". From about 216, a size no view uses yet, the open circle's middle names its window:
   "of 5 hours", "of 7 days", "of 7 days · Opus", "of credits" (§8 "The Bands circle", the middle).
+  *(Added 2026-11-06, UM-3's restack, as the phone has said it since UM-4d; ‹for James›: a reset a day or more off
+  is said by its day and clock, "resets Thu 09:00", and one that has come "resets now", never "resets in Thu 09:00"
+  or "resets in now": Settings' line, the popover's and the phone's alike.)*
 - **What needs you.** On the desktop, "not signed in" with **Sign in**, and "couldn't read" with **Retry**. On the
   phone, "Not signed in · sign in on ‹home›" and "Couldn't read · retry", with no act. A sign-in already under way
   says "signing in…" with no act, as Settings' row says "Signing in…" and offers only its cancel; it is said
   "‹plan›: signing in". An agent with no meter says "‹agent› shows no meter"; a profile with no plans, "No meters";
   a profile whose usage cannot be read, "‹profile›: usage unavailable", and every profile's circle at once "Usage
   unavailable". *(Added 2026-11-06, the model's review; ‹for James›: the sign-in under way and its words, its
-  phone words still open, and the circle of every profile.)*
+  phone words still open, and the circle of every profile.)* *(Added 2026-11-06, UM-3's restack, as the phone has
+  said it since UM-4d; ‹for James›: "‹agent› shows no meter" is said of an agent that reports no usage; a plan no
+  agent named, or one whose reading holds no window, says its title alone, "Claude Max", on the desktop's popover
+  and the phone's page alike, since "shows no meter" would be false of an agent that meters.)*
 - **The popover.** Its head says the reading's age, "Read a minute ago", or "Reading usage…", and **default** beside
   the default profile's name while there are several. The bands key says "5 hours · 7 days · a model's week" (said
   "Inside, the next five hours; outside, the week; a hairline, a model's own week"). Its foot, with several
