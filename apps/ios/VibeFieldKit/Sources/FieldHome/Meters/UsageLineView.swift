@@ -94,7 +94,8 @@ struct UsageLineView: View {
 
   /// The line in words, as the desktop says it; a reset is said "resets in 2h" by its length, and "resets Thu 09:00"
   /// or "resets now" by its day or once it has come (the U3 review: never "resets in Thu 09:00").
-  static func words(_ line: UsageLine, form: MeterRules.ResetForm?) -> String {
+  static func words(_ line: UsageLine, form: MeterRules.ResetForm?, age: String? = nil) -> String {
+    // RED STUB (UM-4d, M-phone): a window read before its reset does not say the reading's age yet
     let group = line.group.map { "\($0.label), " } ?? ""
     let reset = line.reset.map { form == .length ? ", resets in \($0)" : ", resets \($0)" } ?? ""
     return "\(group)\(line.label): \(wholeWords(line.usedPercent))% used\(reset)\(line.hot ? ", ahead of pace" : "")"

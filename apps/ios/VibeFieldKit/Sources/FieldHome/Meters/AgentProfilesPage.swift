@@ -34,8 +34,10 @@ struct AgentProfilesWords: Equatable {
   /// One row of the page's Plans group.
   struct PlanRow: Equatable, Identifiable {
     enum Body: Equatable {
-      /// every window as Settings' C1 line, the kept reading's age, and the forecast's sentence
-      case reading(windows: [MeterWindow], kept: String?, forecast: String?, stale: Bool)
+      /// every window as Settings' C1 line, the kept reading's age, the reading's age said in the reset's place of each
+      /// window read before its reset (`MeterWindow.passed`; nil when none was, or its time cannot be read), and the
+      /// forecast's sentence
+      case reading(windows: [MeterWindow], kept: String?, age: String?, forecast: String?, stale: Bool)
       /// the first reading is out
       case firstRead
       /// what it needs, said with no act
@@ -105,7 +107,8 @@ struct AgentProfilesWords: Equatable {
     plans = shown.entries.map { entry in
       PlanRow(
         key: entry.key, provider: entry.provider, title: entry.title,
-        glyph: crowded.contains(entry.provider) ? entry.profiles.first : nil, body: Self.body(entry, home: home))
+        glyph: crowded.contains(entry.provider) ? entry.profiles.first : nil,
+        body: Self.body(entry, home: home, now: now))
     }
   }
 
@@ -142,11 +145,12 @@ struct AgentProfilesWords: Equatable {
   }
 
   /// A plan's row below its title.
-  static func body(_ entry: PlanMeter, home: String) -> PlanRow.Body {
+  static func body(_ entry: PlanMeter, home: String, now: Date) -> PlanRow.Body {
     switch entry.state {
     case .reading(let reading):
       return .reading(
         windows: reading.windows, kept: reading.stale ? entry.right?.words : nil,
+        age: nil,  // RED STUB (UM-4d, M-phone): no window read before its reset says the reading's age yet
         forecast: reading.tightest.forecast?.long, stale: reading.stale)
     case .firstRead:
       return .firstRead
@@ -425,7 +429,7 @@ private struct AgentPlanRowView: View {
   @ViewBuilder
   private var detail: some View {
     switch row.body {
-    case .reading(let windows, let kept, let forecast, let stale):
+    case .reading(let windows, let kept, _, let forecast, let stale):
       if let kept {
         Text(kept)
           .font(ChromeListType.detail)

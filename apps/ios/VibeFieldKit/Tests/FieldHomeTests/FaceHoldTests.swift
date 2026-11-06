@@ -122,6 +122,19 @@ struct FaceHoldTests {
     #expect(!side.hot)
   }
 
+  /// DESIGN.md §8 "A window read before its reset" — the phone's common case (UM-D8): held three hours after the
+  /// batch, This Mac's five hours (64%, its reset at 14:30Z) was read before its reset, so its bud says the tightest
+  /// window still running, the week at 47%, unlit — never the spent five hours.
+  @Test("a bud held hours after its batch says its tightest window still running, never one read before its reset")
+  func budAfterAReset() throws {
+    let reading = try AgentProfilesPageTests.reading()
+    let later = Self.now.addingTimeInterval(3 * 3600)
+    let native = try #require(reading.profiles.first { $0.kind == "native" })
+    let label = FaceHold.budLabel(native, reading: reading, now: later)
+    #expect(label.state == "47% · 7D")
+    #expect(!label.hot)
+  }
+
   @Test("a bud's label stands outside it along its spoke: 160 + 33 + half × |cos a| + 12 × |sin a|, 38 reached")
   func labelRadius() throws {
     let spot = try #require(FaceHold.spots(1, face: Self.face).first)

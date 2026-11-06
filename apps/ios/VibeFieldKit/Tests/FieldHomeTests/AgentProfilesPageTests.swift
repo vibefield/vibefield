@@ -110,13 +110,14 @@ struct AgentProfilesPageTests {
     #expect(titles == ["Claude Max", "ChatGPT Business", "Kimi Code"])
     let bodies = work.plans.map(\.body)
     let first = try #require(bodies.first)
-    guard case .reading(let windows, let kept, let forecast, let stale) = first else {
+    guard case .reading(let windows, let kept, let age, let forecast, let stale) = first else {
       Issue.record("Work's first plan is not a reading: \(first)")
       return
     }
     let ids = windows.map(\.line.id)
     #expect(ids == ["five-hour", "seven-day"])
     #expect(kept == nil)
+    #expect(age == nil)
     #expect(forecast == "Runs out in ~1h 30m at this pace")
     #expect(!stale)
     #expect(bodies.dropFirst().first == .needs("Couldn't read · retry"))
@@ -130,7 +131,7 @@ struct AgentProfilesPageTests {
     let words = Self.words(try Self.reading())
     #expect(words.plans.count == 7)
     let kept = words.plans.compactMap { row -> String? in
-      guard case .reading(_, let kept, _, _) = row.body else { return nil }
+      guard case .reading(_, let kept, _, _, _) = row.body else { return nil }
       return kept
     }
     #expect(kept == ["as of 32m ago"])
@@ -138,6 +139,44 @@ struct AgentProfilesPageTests {
     #expect(crowded.count == 2)
     let alone = words.plans.filter { $0.glyph == nil }.map(\.provider)
     #expect(alone.allSatisfy { !crowded.contains($0) })
+  }
+
+  /// DESIGN.md §8 "A window read before its reset", §9 "A reading" — the phone's common case (UM-D8): the home's batch
+  /// read three hours on, after the five hours reset. A window read before its reset says the reading's age where its
+  /// reset stood, unlit and with no reset mark, as Settings' C1 line says it (48a30767d); a window still running keeps
+  /// its reset; the plan's word is its tightest still running. A kept reading keeps its own age above its lines too.
+  @Test("a window read before its reset says the reading's age where its reset stood; the tightest still runs")
+  func passedSaysItsAge() throws {
+    let reading = try Self.reading()
+    let later = Self.now.addingTimeInterval(3 * 3600)
+    let words = AgentProfilesWords(reading: reading, lens: Self.lens(reading, "native"), home: "studio", now: later)
+    let anthropic = try #require(words.plans.first { $0.key == "plan:anthropic" })
+    guard case .reading(let windows, let kept, let age, let forecast, _) = anthropic.body else {
+      Issue.record("This Mac's Anthropic plan is not a reading: \(anthropic.body)")
+      return
+    }
+    #expect(kept == nil)
+    #expect(age == "as of 3h 1m ago")
+    #expect(forecast == nil)
+    let passed = windows.filter { $0.passed }.map(\.line.id)
+    #expect(passed == ["five-hour"])
+    let five = try #require(windows.first { $0.passed })
+    let fiveSaid = UsageLineView.words(five.line, form: five.resetForm, age: age)
+    #expect(fiveSaid == "5H: 64% used, as of 3h 1m ago")
+    let week = try #require(windows.first { $0.line.id == "seven-day" })
+    let weekSaid = UsageLineView.words(week.line, form: week.resetForm)
+    #expect(weekSaid == "7D: 47% used, resets in 9h")
+    let openai = try #require(words.plans.first { $0.key == "plan:openai" })
+    guard case .reading(_, let openaiKept, let openaiAge, _, let stale) = openai.body else {
+      Issue.record("This Mac's OpenAI plan is not a reading: \(openai.body)")
+      return
+    }
+    #expect(stale)
+    #expect(openaiKept == "as of 3h 32m ago")
+    #expect(openaiAge == "as of 3h 32m ago")
+    let native = try #require(words.profiles.first { $0.profileId == "native" })
+    #expect(native.word == "47%")
+    #expect(!native.hot)
   }
 
   @Test("an agent with no meter says ‹agent› shows no meter; a plan no agent named says its title alone")
@@ -195,6 +234,9 @@ struct AgentProfilesPageTests {
     #expect(UsageLineView.words(line("2h"), form: .length) == "7D: 42% used, resets in 2h")
     #expect(UsageLineView.words(line("Thu 09:00"), form: .day) == "7D: 42% used, resets Thu 09:00")
     #expect(UsageLineView.words(line("now"), form: .now) == "7D: 42% used, resets now")
+    // a window read before its reset says the reading's age in its reset's place (a reading whose time cannot be
+    // read hands no age, and keeps "resets now")
+    #expect(UsageLineView.words(line("now"), form: .now, age: "as of 3h ago") == "7D: 42% used, as of 3h ago")
   }
 
   @Test("a tap on a plan's arc focuses it; a tap in the middle focuses none")
