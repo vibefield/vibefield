@@ -84,8 +84,13 @@ export interface MockFileTransfer {
   pulls: Array<Record<string, unknown>>;
   /** ONE-SHOT: the next pull the floor runs is answered behind a `.snapshot` of the table as it was before that pull
    * began, both in ONE write, one chunk, as `deltaInSameChunk` writes its race. A floor may write them in that order
-   * (the snapshot write-order rule, W3-16, pending, forbids only the other). Cleared once written. */
+   * (the snapshot write-order rule, W3-16, pending, forbids only a snapshot written after the answer that omits the
+   * pull while it runs). Cleared once written. */
   snapshotBeforeAnswer: boolean;
+  /** ONE-SHOT: the next pull the floor runs is answered, then ends with no delta (its row deleted, as an end the
+   * stream lost), then the `.snapshot` that loss is owed follows, all in ONE write, one chunk: the pull's end reaches
+   * fieldd only in a snapshot read with its answer (pulls.ts `#accept`'s residual). Cleared once written. */
+  snapshotAfterAnswer: boolean;
 }
 
 export function mockFileTransfer(overrides: Partial<MockFileTransfer> = {}): MockFileTransfer {
@@ -96,6 +101,7 @@ export function mockFileTransfer(overrides: Partial<MockFileTransfer> = {}): Moc
     running: new Map(),
     pulls: [],
     snapshotBeforeAnswer: false,
+    snapshotAfterAnswer: false,
     ...overrides,
   };
 }
@@ -1071,9 +1077,9 @@ export class MockMgmtServer {
    *  4. in capture mode they are refused MESH_CAPTURING;
    *  5. params the floor cannot read are PRECONDITION_FAILED;
    *  6. `roots` registers each root or answers it ROOT_UNGATED, and `pull` is refused CONFLICT (by its id, then by
-   *     its digest), then RESOURCE_EXHAUSTED past DRIVE_LIMITS.PULLS_IN_FLIGHT, retryable true with no details:
-   *     parity by reading field-native `mgmt/file_transfer.rs`'s `refusal()` (W3's stack B). C1 names neither, so
-   *     the flag waits on VF-PM's W3-15. */
+   *     its digest), then RESOURCE_EXHAUSTED past DRIVE_LIMITS.PULLS_IN_FLIGHT, retryable true with no details, as
+   *     the floor answers it (field-native `mgmt/file_transfer.rs`'s `refusal()`, read) and as VF-PM's W3-15 rules
+   *     it; its golden (`error-data.file-transfer-exhausted.json`) is the lead's. */
   private onFileTransfer(
     sock: Socket,
     msg: { id: number; method: string; params?: Record<string, unknown> },
@@ -1164,23 +1170,37 @@ export class MockMgmtServer {
       return;
     }
     transfer.running.set(transferId, { transferId, peer, root, digest, bytes: 0 });
-    if (!transfer.snapshotBeforeAnswer) {
+    if (!transfer.snapshotBeforeAnswer && !transfer.snapshotAfterAnswer) {
       reply({ result: { transferId } });
       return;
     }
-    transfer.snapshotBeforeAnswer = false;
-    // the table before this pull began (`running`), then its answer: ONE write, one chunk
+    const answer = `${JSON.stringify({ jsonrpc: "2.0", id: msg.id, result: { transferId } })}\n`;
+    if (transfer.snapshotBeforeAnswer) {
+      transfer.snapshotBeforeAnswer = false;
+      // the table before this pull began (`running`), then its answer: ONE write, one chunk
+      sock.write(`${this.fileTransferSnapshots(sock, running)}${answer}`);
+      return;
+    }
+    transfer.snapshotAfterAnswer = false;
+    // its answer, its end with no delta, then the snapshot of the table without it: ONE write, one chunk
+    transfer.running.delete(transferId);
+    const after = [...transfer.running.values()];
+    sock.write(`${answer}${this.fileTransferSnapshots(sock, after)}`);
+  }
+
+  /** DR-3b — one `native.mesh.fileTransfer.snapshot` line listing `transfers` for each file-transfer subscription on
+   * `sock`, for a test that writes it in one chunk with an answer. */
+  private fileTransferSnapshots(sock: Socket, transfers: MockFileTransferRow[]): string {
     let lines = "";
     for (const e of this.issued) {
       if (e.sock !== sock || e.method !== "native.mesh.fileTransfer.subscribe") continue;
       lines += `${JSON.stringify({
         jsonrpc: "2.0",
         method: "native.mesh.fileTransfer.snapshot",
-        params: { subId: e.subId, payload: { transfers: running } },
+        params: { subId: e.subId, payload: { transfers } },
       })}\n`;
     }
-    const answer = JSON.stringify({ jsonrpc: "2.0", id: msg.id, result: { transferId } });
-    sock.write(`${lines}${answer}\n`);
+    return lines;
   }
 
   /** DR-3b — push one `native.mesh.fileTransfer.delta` to every file-transfer subscription. A `completed` or `failed`

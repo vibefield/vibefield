@@ -30,7 +30,7 @@ import { RpcCallError } from "../native-link";
 
 /** Lane LIFECYCLE for the drive's lanes, over the mgmt channel: its own, with `drive` admitted, because doc-sync's
  * `LaneControl` pins `doc-sync` (doc-sync.ts:92-104) and the daemon's closure `doc-sync | presence`
- * (daemon.ts:1564-1584). */
+ * (daemon.ts:1564-1583). */
 export interface DriveLaneControl {
   open(req: { laneId: number; class: "reliable"; peer: string; protocol: "drive" }): Promise<void>;
   close(laneId: number): Promise<void>;

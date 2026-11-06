@@ -255,7 +255,7 @@ describe("DR-3b — the drive's pulls over the floor's file transfer", () => {
     expect(await refused(ROOTS, { roots: ["../up"] })).toMatchObject(unreadable);
     expect(await refused(PULL, { transferId: "lower" })).toMatchObject(unreadable);
     // 6. an ungated node holds the root; a pull is refused CONFLICT by its id, then by its digest, and one past
-    // DRIVE_LIMITS.PULLS_IN_FLIGHT RESOURCE_EXHAUSTED (retryable true: the floor's `refusal()`, read; W3-15 pending)
+    // DRIVE_LIMITS.PULLS_IN_FLIGHT RESOURCE_EXHAUSTED (retryable true: the floor's `refusal()`, read; VF-PM's W3-15)
     const held = await link.request(ROOTS, { roots: [ROOT] });
     expect(NativeFileTransferRootsResult.parse(held)).toEqual({
       roots: [{ name: ROOT, registered: false, reason: MESH_FILE_TRANSFER.ROOT_UNGATED }],
@@ -315,13 +315,52 @@ describe("DR-3b — the drive's pulls over the floor's file transfer", () => {
     const state = settled(landed);
     await until(() => !transfer.snapshotBeforeAnswer, "the snapshot and the answer, written");
     const id = idOf(transfer, digest);
-    const name = join(landsDir, `${digest}.${id}`);
-    // it may have been written before the answer, so only a landed file settles the pull, and none has landed
-    await until(() => looked.includes(name), "the lands folder, read for this pull");
+    // it may have been written before the answer, so it says nothing of the pull: no end, and no lands folder read
     await roundTrip(link);
     expect(state()).toBe("pending");
+    expect(looked).toEqual([]);
     mock.pushFileTransferDelta(completed(id, digest));
-    await expect(landed).resolves.toEqual({ path: name });
+    await expect(landed).resolves.toEqual({ path: join(landsDir, `${digest}.${id}`) });
+  });
+
+  it("reads no landed name for a snapshot written before a pull's answer, and ends the pull on its own delta", async () => {
+    const transfer = mockFileTransfer();
+    const { mock, link, root, landsDir } = await floor(transfer);
+    const id = idFor(1);
+    const drive = pulls(link, root, { mintId: () => id });
+    await drive.start();
+    // its landed name is in the folder, as when the floor has placed the file and then fails the pull (`finish`)
+    const digest = digestOf(1);
+    writeFileSync(join(landsDir, `${digest}.${id}`), "object bytes");
+    transfer.snapshotBeforeAnswer = true;
+    const landed = drive.pull(ask(digest));
+    const state = settled(landed);
+    await until(() => !transfer.snapshotBeforeAnswer, "the snapshot and the answer, written");
+    await roundTrip(link);
+    expect(state()).toBe("pending");
+    const reason = MESH_FILE_TRANSFER.FAILED_INTEGRITY;
+    mock.pushFileTransferDelta({ kind: "failed", transferId: id, reason, message: "bad" });
+    await expect(landed).rejects.toMatchObject({ reason, transferId: id });
+  });
+
+  it("holds a pull whose end came only in a snapshot read with its answer, until the next snapshot (the residual)", async () => {
+    const transfer = mockFileTransfer();
+    const { mock, link, root } = await floor(transfer);
+    const drive = pulls(link, root);
+    await drive.start();
+    // the floor answers the pull, the pull ends and its delta is lost, and the snapshot that loss is owed follows,
+    // in ONE write: read before the pull's fence ran, the snapshot may predate the answer, so it settles nothing
+    transfer.snapshotAfterAnswer = true;
+    const landed = drive.pull(ask(digestOf(1)));
+    const state = settled(landed);
+    await until(() => !transfer.snapshotAfterAnswer, "the answer and the snapshot, written");
+    await roundTrip(link);
+    expect(transfer.running.size).toBe(0);
+    expect(state()).toBe("pending");
+    // pulls.ts `#accept`'s residual, an ask for VF-PM: the next snapshot comes after the fence, and the lands rule
+    // settles the pull
+    mock.pushFileTransferSnapshot();
+    await expect(landed).rejects.toMatchObject({ reason: MESH_FILE_TRANSFER.FAILED_IO });
   });
 
   it("mints a ULID and asks with the contract's fields; a path outside the grammar is refused, unsent", async () => {
@@ -442,7 +481,7 @@ describe("DR-3b — the drive's pulls over the floor's file transfer", () => {
     }
     await until(() => transfer.running.size === DRIVE_LIMITS.PULLS_IN_FLIGHT, "four pulls run");
     const sent = mock.meshCalls.length;
-    // retryable true is this side's choice (pulls.ts): C1 names no flag, an ask for VF-PM
+    // retryable true and no details, as the floor's `refusal()` answers it (read) and VF-PM's W3-15 rules
     await expect(drive.pull(ask(digestOf(9)))).rejects.toMatchObject({
       kind: "RESOURCE_EXHAUSTED",
       retryable: true,
@@ -459,6 +498,8 @@ describe("DR-3b — the drive's pulls over the floor's file transfer", () => {
     const digest = digestOf(1);
     const landed = drive.pull(ask(digest));
     await until(() => transfer.running.size === 1, "the pull runs");
+    // the snapshot below comes after the pull's fence (a round trip after its answer): the lands rule's
+    await roundTrip(link);
     const id = idOf(transfer, digest);
     // it ended while the reader lagged: its delta was lost, its file is in place
     writeFileSync(join(landsDir, `${digest}.${id}`), "object bytes");
@@ -475,6 +516,8 @@ describe("DR-3b — the drive's pulls over the floor's file transfer", () => {
     const digest = digestOf(1);
     const landed = drive.pull(ask(digest));
     await until(() => transfer.running.size === 1, "the pull runs");
+    // the snapshot below comes after the pull's fence (a round trip after its answer): the lands rule's
+    await roundTrip(link);
     const id = idOf(transfer, digest);
     // the floor's temporary is no landed file, and only the floor removes it
     const temporary = join(landsDir, `${digest}.${id}.0123abcd.truffle-tmp`);
