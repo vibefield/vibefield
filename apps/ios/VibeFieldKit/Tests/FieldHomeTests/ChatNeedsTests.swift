@@ -166,7 +166,9 @@ struct ChatNeedsTests {
     #expect(said?.act == .said(choice: 1) && said?.holds == true)
     let answered = said?.item.answer?.choice
     #expect(answered == 1)
-    // the record says what the act did: the queue is asked again
+    // the record says what the act did: the queue is asked again. That ask is a task of its own, begun as the answer
+    // returns, so the door counts it after `said` may already stand: wait for it (a9's kit at 81be8567f read 1 here)
+    await settle { door.count("needs.list") >= 2 }
     #expect(door.count("needs.list") >= 2)
     gate.open()
   }
