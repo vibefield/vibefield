@@ -1344,6 +1344,10 @@ describe("UI system ownership boundaries", () => {
     expect(rule).toContain("width: 52px");
     expect(rule).not.toMatch(/\bheight:/);
     expect(godview).toMatch(/^\.vf-monitor-claims \{[^}]*left: 79px/m);
+    // the review: at one z-index the strip, later in the DOM, painted its chips (a Retry and the approval line among
+    // them, both taking clicks) over the popover's head and the cards beside the add — the column stands one over it
+    expect(rule).toContain("z-index: 8");
+    expect(godview).toMatch(/^\.vf-monitor-claims \{[^}]*z-index: 7;/m);
     // the slot mounts VibeField's column, behind its own boundary; puppeteer-views' usage column left the path
     const monitor = source("godview/GodviewMonitor.tsx");
     expect(monitor).toMatch(

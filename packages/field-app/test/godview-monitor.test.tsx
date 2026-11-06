@@ -1927,6 +1927,37 @@ describe("the monitor stage", () => {
     expect(host.textContent).toContain("Usage unavailable · Retry");
   });
 
+  it("draws a usage port with no rows feed as usage that cannot be read, never a first read that never ends", async () => {
+    // the review: a port without `subscribeRows` (the catalog's spawn bloom door) sits loading forever, and every
+    // signed-in plan breathed as a first read that never ends (meters.ts NoMeterReason: never that)
+    const door = tabDoor();
+    expect(door.usage.subscribeRows).toBeUndefined();
+    const host = await mountMonitor("list", door);
+    const work = host.querySelector('[data-profile="work"] .vf-profiles-circle');
+    expect(work?.querySelector(".vf-bands-breath")).toBeNull();
+    expect(work?.querySelector('circle[data-part="empty"]')).not.toBeNull();
+    expect(work?.getAttribute("aria-label")).toBe(
+      "Work: usage unavailable, click to show only its sessions",
+    );
+  });
+
+  it("lets Godview's keys go when a pinned popover's profile leaves the feed (ruling 11)", async () => {
+    // the review: the pin outlived its circle, so the stage held the keys with nothing open until the next Esc
+    const door = tabDoor();
+    const host = await mountMonitor("list", door);
+    expect(monitorHoldsKeys()).toBe(false);
+    await act(async () =>
+      host.querySelector<HTMLButtonElement>('[data-profile="work"] .vf-profiles-circle')?.click(),
+    );
+    expect(host.querySelector('[data-profile="work"] .vf-profiles-pop')).not.toBeNull();
+    expect(monitorHoldsKeys()).toBe(true);
+    await act(async () => door.pushSets([NATIVE_SET, EMPTY_SET]));
+    await settle();
+    expect(host.querySelector('[data-profile="work"]')).toBeNull();
+    expect(host.querySelector(".vf-profiles-pop")).toBeNull();
+    expect(monitorHoldsKeys()).toBe(false);
+  });
+
   /** The stage as the overlay mounts it, with the routes to Settings and the column's moment. */
   async function mountRouted(
     door: MonitorDoor,
