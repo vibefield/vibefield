@@ -9,6 +9,8 @@ import {
   statSync,
   writeFileSync,
 } from "node:fs";
+import { createServer, type IncomingHttpHeaders } from "node:http";
+import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { AGENT_CATALOG, AgentDistributionRecord, ENV_PREFIXES, LAYOUT } from "@vibefield/contracts";
@@ -419,6 +421,128 @@ describe("the stub — the smoke's own stand-in, run as the program it is", () =
     expect(record.map((entry) => entry.line)).toEqual(["pasted words 11m", "exit"]);
     expect(record[0]?.pid).toBe(child.pid);
     expect(record[0]?.cwd).toBe(realpathSync(staged.work));
+  });
+
+  // Item 185: 11m's Send is puppeteer's paste-and-submit, which is confirmed only by the agent's own
+  // UserPromptSubmit hook carrying the prompt (puppeteer 0.3.3: adapter-claude services/prompt.js, 5000 ms). So the
+  // stub, given a line, does what the agent does: it POSTs the hook its --settings names and waits for the answer.
+  // The settings are the shape puppeteer writes (launch/settings.js `handlerFor`: the bearer a `$VAR` reference,
+  // resolved through `allowedEnvVars`, never a value on disk), and the body the fields its pipeline reads
+  // (normalization/pipeline.js `normalize`; wire.js holds UserPromptSubmit to a string `prompt`).
+  it("tells each prompt to the UserPromptSubmit hook its settings name, as the agent does, and records the line only once the hook has answered (item 185)", async () => {
+    const staged = stageTypedAgent({
+      vibefieldRoot: root(),
+      source: {},
+      ownerHome: "/Users/owner",
+    });
+    const lines = staged.lines;
+    if (lines === undefined) throw new Error("the godview smoke's stub records no lines");
+    // puppeteer's own variable for the bridge's bearer (adapter-claude driver.js TOKEN_ENV_VAR)
+    const variable = "PUPPETEER_HOOK_TOKEN";
+    const token = `token-${process.pid}-never-recorded`;
+    const sessionId = "6f1d2c3b-4a5e-4f60-8a7b-9c0d1e2f3a4b";
+    const heard: {
+      method: string | undefined;
+      path: string | undefined;
+      headers: IncomingHttpHeaders;
+      body: unknown;
+      recordedAsHeard: string[];
+      recordedAsAnswered: string[];
+    }[] = [];
+    const bridge = createServer((request, response) => {
+      let text = "";
+      request.setEncoding("utf8");
+      request.on("data", (chunk: string) => {
+        text += chunk;
+      });
+      request.on("end", () => {
+        const recordedAsHeard = readTypedAgentLines(lines).map((entry) => entry.line);
+        // a late answer, so a line recorded before the hook answers would show
+        setTimeout(() => {
+          heard.push({
+            method: request.method,
+            path: request.url,
+            headers: request.headers,
+            body: JSON.parse(text) as unknown,
+            recordedAsHeard,
+            recordedAsAnswered: readTypedAgentLines(lines).map((entry) => entry.line),
+          });
+          response.writeHead(200, { "content-type": "application/json" });
+          response.end("{}");
+        }, 250);
+      });
+    });
+    await new Promise<void>((listening) => bridge.listen(0, "127.0.0.1", listening));
+    try {
+      const { port } = bridge.address() as AddressInfo;
+      const endpoint = `http://127.0.0.1:${port}/hooks`;
+      const handler = {
+        type: "http",
+        url: endpoint,
+        headers: { Authorization: `Bearer $${variable}` },
+        allowedEnvVars: [variable],
+        timeout: 5,
+      };
+      const settings = join(dirname(staged.calls), "settings.json");
+      writeFileSync(
+        settings,
+        JSON.stringify({
+          hooks: {
+            SessionStart: [{ hooks: [handler] }],
+            UserPromptSubmit: [{ hooks: [handler] }],
+            Stop: [{ hooks: [handler] }],
+          },
+        }),
+      );
+      const child = spawn(staged.stub, ["--session-id", sessionId, "--settings", settings], {
+        cwd: staged.work,
+        env: { ...process.env, [variable]: token },
+        stdio: ["pipe", "pipe", "pipe"],
+      });
+      const left = exited(child);
+      let said = "";
+      child.stderr?.on("data", (chunk: Buffer) => {
+        said += chunk.toString("utf8");
+      });
+      await new Promise<void>((ready) =>
+        child.stdout?.on("data", (chunk: Buffer) => {
+          said += chunk.toString("utf8");
+          if (said.includes("Type exit to leave")) ready();
+        }),
+      );
+      child.stdin?.write("pasted words 11m\n");
+      child.stdin?.write("exit\n");
+      expect(await left).toBe(0);
+      // one hook, the prompt's: the session's id, the line verbatim, the bearer resolved from the environment
+      expect(heard.map((hook) => hook.body)).toEqual([
+        {
+          session_id: sessionId,
+          cwd: realpathSync(staged.work),
+          hook_event_name: "UserPromptSubmit",
+          prompt: "pasted words 11m",
+        },
+      ]);
+      expect(heard[0]?.method).toBe("POST");
+      expect(heard[0]?.path).toBe("/hooks");
+      expect(heard[0]?.headers.authorization).toBe(`Bearer ${token}`);
+      expect(heard[0]?.headers["content-type"]).toBe("application/json");
+      // told before it is recorded, and recorded only once the hook has answered
+      expect(heard[0]?.recordedAsHeard).toEqual([]);
+      expect(heard[0]?.recordedAsAnswered).toEqual([]);
+      // the line carries the hook's status and nothing else of it; `exit` is the stub's way out, no prompt
+      expect(readTypedAgentLines(lines)).toEqual([
+        { pid: child.pid, cwd: realpathSync(staged.work), line: "pasted words 11m", hooks: [200] },
+        { pid: child.pid, cwd: realpathSync(staged.work), line: "exit" },
+      ]);
+      // EL7: never the URL, a header or the token, in a record or a word said
+      for (const text of [readFileSync(lines, "utf8"), readFileSync(staged.calls, "utf8"), said]) {
+        expect(text).not.toContain(token);
+        expect(text).not.toContain("127.0.0.1");
+        expect(text).not.toContain("Bearer");
+      }
+    } finally {
+      await new Promise((closed) => bridge.close(closed));
+    }
   });
 });
 
