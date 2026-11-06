@@ -137,6 +137,10 @@
 
     var login: String? { standing == .signedOut ? nil : Self.login }
 
+    /// RED STUB (UM-4d): the meters have no home and no door.
+    var home: String? { nil }
+    var metersDoor: MetersFixtureDoor? { nil }
+
     func signIn() { standing = .up }
 
     func signOut() { standing = .signedOut }

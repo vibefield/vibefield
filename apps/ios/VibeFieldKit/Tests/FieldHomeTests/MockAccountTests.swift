@@ -103,4 +103,19 @@ struct MockAccountTests {
     mock.signIn()
     #expect(mock.fieldIsLive)
   }
+
+  @Test("UM-4: the meters read studio, the home, through the fixture door — only while it answers")
+  func metersReadTheHome() {
+    let mock = MockAccount()
+    #expect(mock.home == "dev-1")
+    #expect(mock.metersDoor != nil)
+    mock.standing = .reconnecting
+    #expect(mock.home == "dev-1")
+    #expect(mock.metersDoor == nil)
+    mock.signOut()
+    #expect(mock.home == nil)
+    #expect(mock.metersDoor == nil)
+    mock.signIn()
+    #expect(mock.metersDoor != nil)
+  }
 }

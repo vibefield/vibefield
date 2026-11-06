@@ -158,6 +158,9 @@ struct BandsGeometry: Equatable, Sendable {
   var hotDot: HotDot? = nil
   /// "Usage: …", "‹profile›: usage unavailable", "Usage unavailable" or "No meters"
   let label: String
+
+  /// RED STUB (UM-4d): no touch finds a plan.
+  func plan(at x: Double, _ y: Double) -> String? { nil }
 }
 
 struct BandsOptions: Equatable, Sendable {
