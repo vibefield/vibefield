@@ -315,7 +315,12 @@ open, and comes from npm again.
   (`declined` is a row). fieldd's doors answer from it; no product code compares an agent id to a
   literal (R23b — the gate's allow-list names the few presentation tables that may, each with an exact
   count). After editing the table: `pnpm --filter @vibefield/contracts gen:schema`, then copy
-  `fixtures/agent-catalog.valid.json` to the kit's five mirrors (`pnpm check:ios-fixtures` names them).
+  `fixtures/agent-catalog.valid.json` to the kit's six mirrors (`pnpm check:ios-fixtures` names them),
+  each a `Fixtures` folder under `apps/ios/VibeFieldKit`: `Sources/FieldWorkspace`, and the tests'
+  of FieldProduct, FieldMesh, FieldSwarm, FieldWorkspace and FieldHome.
+  > **Errata (2026-11-06, UM-4b):** this said "the kit's five mirrors". UM-4b added a sixth,
+  > `Tests/FieldHomeTests/Fixtures`: the catalog the usage bands golden was computed over, which
+  > BandsParityTests and MeterModelTests read (its `usage` row in `scripts/check-ios-fixtures.mjs`).
 - **EL2 — bytes never ride JSON-RPC or Node.** Control via contract surfaces; data planes
   via ticketed direct sockets.
 - **EL7 — same-uid agents are the adversary.** Scoped bearer tokens on every surface;
