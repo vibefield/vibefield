@@ -1,7 +1,9 @@
 // DR-3b (W3, VF-RELAY) — the drive's test fakes: its two lane planes (doc-sync-service.test.ts's FakeControl and
-// FakeBytes, with `drive` admitted), its holders store (holders-store.ts's, with the store's own snapshot shape), a
-// floor that refuses every file-transfer verb, and a logger that keeps every event. Test-local; never shipped.
-import { MESH_FILE_TRANSFER, RPC_ERROR_CODES, STORES } from "@vibefield/contracts";
+// FakeBytes, with `drive` admitted), its holders store (holders-store.ts's, with the store's own snapshot shape),
+// floors that refuse file-transfer verbs, the pin's unsupported golden, and a logger that keeps every event.
+// Test-local; never shipped.
+import { readFileSync } from "node:fs";
+import { ErrorData, RPC_ERROR_CODES, STORES } from "@vibefield/contracts";
 import type { LogFields, Logger } from "@vibefield/logging";
 import type { LaneInfo } from "../src/doc-sync";
 import type { DriveHoldersMesh } from "../src/drive/holders";
@@ -10,6 +12,17 @@ import type { DrivePullsFloor } from "../src/drive/pulls";
 import { RpcCallError } from "../src/native-link";
 
 type Handler = (payload: unknown, kind: "snapshot" | "delta") => void;
+
+const UNSUPPORTED_FIXTURE = new URL(
+  "../../contracts/fixtures/error-data.file-transfer-unsupported.json",
+  import.meta.url,
+);
+
+/** The floor at the `=0.7.24` pin's answer to every file-transfer verb, as the contract's golden holds it
+ * (`error-data.file-transfer-unsupported.json`), parsed through `ErrorData` (EL9). */
+export const UNSUPPORTED_GOLDEN = ErrorData.parse(
+  JSON.parse(readFileSync(UNSUPPORTED_FIXTURE, "utf8")),
+);
 
 /** The drive's lane lifecycle, in memory: every open and close it was asked, and a stream a test announces on. */
 export class FakeDriveLaneControl implements DriveLaneControl {
@@ -81,6 +94,8 @@ export class FakeDriveStore {
   readonly writes: Array<{ deviceId: string; storeId: string; data: unknown }> = [];
   /** the next member write fails, as a mesh that is down does */
   failNextSet = false;
+  /** the next member subscribe fails, as a store with no node up does */
+  failNextSubscribe = false;
   readonly #handlers = new Map<string, Handler>();
 
   member(deviceId: string): DriveHoldersMesh {
@@ -95,6 +110,10 @@ export class FakeDriveStore {
         return { storeId, version: this.writes.length };
       },
       subscribeStoreManaged: async (storeId: string, onEvent: Handler) => {
+        if (this.failNextSubscribe) {
+          this.failNextSubscribe = false;
+          throw new Error("mesh node not up");
+        }
         this.#handlers.set(deviceId, onEvent);
         return { snapshot: this.snapshot(storeId), dispose: () => this.#handlers.delete(deviceId) };
       },
@@ -145,14 +164,34 @@ export function refusingFloor(error: RpcCallError): DrivePullsFloor & { asked: s
   };
 }
 
-/** The floor at the `=0.7.24` pin: every verb answers `error-data.file-transfer-unsupported.json`. */
+/** The floor at the `=0.7.24` pin: every verb answers UNSUPPORTED_GOLDEN. */
 export function unsupportedFloor(): DrivePullsFloor & { asked: string[] } {
-  const details = {
-    service: MESH_FILE_TRANSFER.SERVICE,
-    state: MESH_FILE_TRANSFER.STATE_UNSUPPORTED,
+  const { kind, retryable, details } = UNSUPPORTED_GOLDEN;
+  const code = RPC_ERROR_CODES[kind];
+  return refusingFloor(new RpcCallError(kind, "unsupported", retryable, details, code));
+}
+
+/** A floor whose stream is refused ONCE with `error` (a node gate, say), then answered with no pull running; every
+ * declared root registers. `asked` is every method that reached it. */
+export function streamRefusedOnce(error: RpcCallError): DrivePullsFloor & { asked: string[] } {
+  const asked: string[] = [];
+  let refuse = true;
+  return {
+    asked,
+    request: async (method: string, params: unknown) => {
+      asked.push(method);
+      const roots = (params as { roots?: string[] } | undefined)?.roots ?? [];
+      return { roots: roots.map((name) => ({ name, registered: true })) };
+    },
+    subscribe: async (method: string) => {
+      asked.push(method);
+      if (refuse) {
+        refuse = false;
+        throw error;
+      }
+      return { snapshot: { transfers: [] }, dispose: () => undefined };
+    },
   };
-  const code = RPC_ERROR_CODES.UNAVAILABLE;
-  return refusingFloor(new RpcCallError("UNAVAILABLE", "unsupported", false, details, code));
 }
 
 export interface CapturedLog {

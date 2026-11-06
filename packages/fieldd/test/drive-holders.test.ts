@@ -2,6 +2,8 @@
 // `DriveHoldersSlice`): DocHoldersService's shape for the drive. The slice is DISCOVERY, published per the contract
 // while the drive is OPEN, whatever the floor's file transfer can do (the W3 critic's finding 2, VF-PM's W3-9).
 // Against the scripted floor (the first row: the slice lands in STORES.DRIVE's own map) and an in-memory store.
+// Nothing here pulls: the DrivePulls these rows compose answer from floors that accept no pull, so UNUSED_ROOT is a
+// path no row reads or makes.
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -19,13 +21,14 @@ import { DrivePulls } from "../src/drive/pulls";
 import { DriveService } from "../src/drive/service";
 import { OutboundLaneIdAllocator } from "../src/lane-id";
 import { MeshClient } from "../src/mesh-client";
-import { NativeLink } from "../src/native-link";
+import { NativeLink, RpcCallError } from "../src/native-link";
 import { MockMgmtServer } from "../src/testing/mock-mgmt";
 import {
   FakeDriveLaneBytes,
   FakeDriveLaneControl,
   FakeDriveStore,
   sleep,
+  streamRefusedOnce,
   unsupportedFloor,
   until,
 } from "./drive-fakes";
@@ -33,6 +36,8 @@ import { nativeEndpoint } from "./native-harness";
 
 const NOW = 1_800_000_000_000;
 const READY: DriveHolding = { state: "ready", held: { objects: 3, bytes: 4_096 } };
+const UNUSED_ROOT = join(tmpdir(), "vf-dh-never-read");
+const SUBSCRIBE = "native.mesh.fileTransfer.subscribe";
 
 const cleanup: Array<() => void | Promise<void>> = [];
 afterEach(async () => {
@@ -63,16 +68,28 @@ function holders(
   store: FakeDriveStore,
   deviceId: string,
   drive: () => DriveHolding | null = () => READY,
+  linked: () => boolean = () => true,
 ): DriveHolders {
   const service = new DriveHolders({
     mesh: store.member(deviceId),
     deviceId: () => deviceId,
     drive,
+    linked,
     debounceMs: 5,
     now: () => NOW,
   });
   cleanup.push(() => service.stop());
   return service;
+}
+
+/** The lane relay over fakes: these rows are the slice's. */
+function relay(): DriveLaneRelay {
+  return new DriveLaneRelay({
+    control: new FakeDriveLaneControl(),
+    bytes: new FakeDriveLaneBytes(),
+    allocateLaneId: new OutboundLaneIdAllocator().allocate,
+    isSelfPeer: () => true,
+  });
 }
 
 /** A slice as a desktop publishes it. */
@@ -96,6 +113,7 @@ describe("DR-3b — the drive's holders slice", () => {
       mesh,
       deviceId: () => mock.meshDeviceId,
       drive: () => READY,
+      linked: () => true,
       now: () => NOW,
     });
     cleanup.push(() => studio.stop());
@@ -161,32 +179,33 @@ describe("DR-3b — the drive's holders slice", () => {
     expect(ids(studio)).toEqual(["loft"]);
   });
 
-  it("publishes while the drive is open on a floor that cannot pull, nothing while closed, and again after a failed publish", async () => {
+  it("publishes while the drive is open on a floor that cannot pull, nothing while closed or unlinked, and again after a failed publish", async () => {
     const store = new FakeDriveStore();
     let open = false;
-    const studio = holders(store, "studio", () => (open ? READY : null));
+    let linked = true;
+    const studio = holders(store, "studio", () => (open ? READY : null), () => linked);
     const pulls = new DrivePulls({
       floor: unsupportedFloor(),
-      landsDir: "lands",
+      userRoot: UNUSED_ROOT,
       roots: () => [],
       bootId: () => "boot-1",
+      linked: () => linked,
     });
-    const relay = new DriveLaneRelay({
-      control: new FakeDriveLaneControl(),
-      bytes: new FakeDriveLaneBytes(),
-      allocateLaneId: new OutboundLaneIdAllocator().allocate,
-      isSelfPeer: () => true,
-    });
-    const service = new DriveService({ relay, pulls, holders: studio });
+    const service = new DriveService({ relay: relay(), pulls, holders: studio });
     cleanup.push(() => service.stop());
     await service.start();
     expect(pulls.unsupported()).toBe(true);
     // closed: no slice, whatever else is true
     expect(store.writes).toEqual([]);
     open = true;
+    // unlinked (a capture, say): no account to scope a slice to
+    linked = false;
+    await studio.publish();
+    expect(store.writes).toEqual([]);
+    linked = true;
     store.failNextSet = true;
     await service.driveChanged();
-    await sleep(30);
+    await until(() => !store.failNextSet, "the failed publish");
     expect(store.writes).toEqual([]);
     // the next change publishes it: the slice is a fact about now
     await service.driveChanged();
@@ -196,5 +215,49 @@ describe("DR-3b — the drive's holders slice", () => {
       protocol: DRIVE_PROTOCOL,
       state: "ready",
     });
+  });
+
+  it("withdraws its slice once the drive closes: one null slice, and no peer holds it", async () => {
+    // drive.ts: a desktop whose drive is not open publishes no slice at all, and the store has no withdraw verb
+    const store = new FakeDriveStore();
+    let open = true;
+    const studio = holders(store, "studio", () => (open ? READY : null));
+    const laptop = holders(store, "laptop", () => null);
+    await laptop.start();
+    await studio.start();
+    expect(ids(laptop)).toEqual(["studio"]);
+    open = false;
+    studio.schedule();
+    await until(() => store.writes.length === 2, "the withdrawal");
+    expect(store.writes[1]).toEqual({ deviceId: "studio", storeId: STORES.DRIVE, data: null });
+    expect(ids(laptop)).toEqual([]);
+    // once: a drive still closed writes nothing more, and the laptop, never open, never wrote
+    await studio.publish();
+    expect(store.writes.map((write) => write.deviceId)).toEqual(["studio", "studio"]);
+  });
+
+  it("hears the store again at node-up after a refused subscribe, and the service re-arms the pulls' stream with it", async () => {
+    const store = new FakeDriveStore();
+    store.put("laptop", slice("laptop"));
+    store.failNextSubscribe = true;
+    const studio = holders(store, "studio");
+    const notUp = { service: "mesh-gateway", state: "starting" };
+    const refusal = new RpcCallError("UNAVAILABLE", "mesh node not up", true, notUp, -32006);
+    const refusedOnce = streamRefusedOnce(refusal);
+    const pulls = new DrivePulls({
+      floor: refusedOnce,
+      userRoot: UNUSED_ROOT,
+      roots: () => [],
+      bootId: () => "boot-1",
+      linked: () => true,
+    });
+    const service = new DriveService({ relay: relay(), pulls, holders: studio });
+    cleanup.push(() => service.stop());
+    await service.start();
+    expect(ids(studio)).toEqual([]);
+    expect(refusedOnce.asked.filter((method) => method === SUBSCRIBE)).toHaveLength(1);
+    await service.nodeUp();
+    expect(ids(studio)).toEqual(["laptop"]);
+    expect(refusedOnce.asked.filter((method) => method === SUBSCRIBE)).toHaveLength(2);
   });
 });

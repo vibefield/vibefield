@@ -69,14 +69,18 @@ export interface MockFileTransfer {
   /** the node was built GATED (`loginAllow` non-empty): a declared root registers. Ungated, each root answers
    * `registered: false` with MESH_FILE_TRANSFER.ROOT_UNGATED, and the floor holds it. */
   gated: boolean;
-  /** the set the floor holds: the last `roots` declaration it answered */
+  /** the set the floor holds: the last `roots` declaration it answered. A `native.mesh.retire` (the unlink) drops it,
+   * as C1's nit 8 has the floor drop it at a stop or an unlink. Not modelled: the login the set is bound to, and a
+   * stop (this mock has no `native.mesh.stop` arm). */
   roots: string[];
   /** every `roots` declaration the floor answered, in order */
   declared: string[][];
   /** the pulls running now, by transferId: what `subscribe` and `pushFileTransferSnapshot` list. A test ends one with
-   * `pushFileTransferDelta` (completed or failed), or deletes it to model an end the stream lost. */
+   * `pushFileTransferDelta` (completed or failed), deletes it to model an end the stream lost, or ends them all with
+   * `endFileTransfers()` (a teardown, as a retire does). */
   running: Map<string, MockFileTransferRow>;
-  /** every `pull`'s params as asked, in order, refused ones included */
+  /** every `pull` that passed the node gate and the capture check, its params as asked, in order: the ones refused
+   * after that (params, CONFLICT, RESOURCE_EXHAUSTED) included */
   pulls: Array<Record<string, unknown>>;
 }
 
@@ -139,10 +143,12 @@ export class MockMgmtServer {
    * build with no node"). */
   egress: "unsupported" | "mesh-down" | MockEgress = "unsupported";
   /** DR-3b — the floor's FILE TRANSFER (`native.mesh.fileTransfer.*`), answered ahead of every mesh gate in the
-   * floor's refusal order (contracts mgmt.ts, W3-1). `"unsupported"` — the default — refuses every verb
-   * `file-transfer-unsupported`, retryable false, as the floor at the `=0.7.24` pin answers
-   * (`error-data.file-transfer-unsupported.json`). A `MockFileTransfer` answers as a floor whose truffle pulls by a
-   * named root. `pushFileTransferDelta()` / `pushFileTransferSnapshot()` drive its stream. */
+   * floor's refusal order (C1's contracts mgmt.ts, W3-1). `"unsupported"` — the default — refuses every declared
+   * verb `file-transfer-unsupported`, retryable false, as the floor at the `=0.7.24` pin answers
+   * (`error-data.file-transfer-unsupported.json`; drive-pulls.test.ts holds it to that golden). A `MockFileTransfer`
+   * answers as a floor whose truffle pulls by a named root. On either, a name the contract does not declare answers
+   * NOT_FOUND first. `pushFileTransferDelta()` / `pushFileTransferSnapshot()` / `endFileTransfers()` drive its
+   * stream. */
   fileTransfer: "unsupported" | MockFileTransfer = "unsupported";
   /** UA-P-0j — the floor's mesh POSTURE, modelled only for a suite that opts
    * in; `undefined` (the default) keeps the scripted node every older row
@@ -756,6 +762,9 @@ export class MockMgmtServer {
       // the floor's unlink: the node is retired and its serves with it
       case "native.mesh.retire":
         this.meshServes.clear();
+        // DR-3b — and its file transfer's held roots, and every pull it ran (C1's nit 8; W3-2)
+        if (typeof this.fileTransfer === "object") this.fileTransfer.roots = [];
+        this.endFileTransfers();
         reply({ result: { retired: true, archivedTo: null } });
         return;
       case "native.mesh.serve.list":
@@ -1048,14 +1057,17 @@ export class MockMgmtServer {
     }
   }
 
-  /** DR-3b — the file transfer's facade, in the floor's refusal order (contracts mgmt.ts, W3-1 and W3-2):
-   *  1. `file-transfer-unsupported` first, for every verb, node or no node;
+  /** DR-3b — the file transfer's facade, in the floor's refusal order (C1's contracts mgmt.ts, W3-1 and W3-2):
+   *  0. a name the contract does not declare (methods.ts declares `roots`, `pull` and `subscribe`; `offer` stays
+   *     reserved) answers NOT_FOUND on either arm, ahead of step 1, as VF-FLOOR's facade reads the method first;
+   *  1. `file-transfer-unsupported` first, for every declared verb, node or no node;
    *  2. `subscribe` is answered with no node up: its stream outlives node rebuilds;
    *  3. `roots` and `pull` with no node answer the node gate (`meshPosture: null`, `meshUnavailable`);
    *  4. in capture mode they are refused MESH_CAPTURING;
    *  5. params the floor cannot read are PRECONDITION_FAILED;
    *  6. `roots` registers each root or answers it ROOT_UNGATED, and `pull` is refused CONFLICT (by its id, then by
-   *     its digest), then RESOURCE_EXHAUSTED past DRIVE_LIMITS.PULLS_IN_FLIGHT. */
+   *     its digest), then RESOURCE_EXHAUSTED past DRIVE_LIMITS.PULLS_IN_FLIGHT. Its retryable true is UNVERIFIED
+   *     parity with the floor: C1 names no flag, and the floor's arm that answers it (stack B's C6) is not built. */
   private onFileTransfer(
     sock: Socket,
     msg: { id: number; method: string; params?: Record<string, unknown> },
@@ -1076,6 +1088,12 @@ export class MockMgmtServer {
           data: { kind, retryable, ...(details !== undefined ? { details } : {}) },
         },
       });
+    const subscribe = msg.method === "native.mesh.fileTransfer.subscribe";
+    const roots = msg.method === "native.mesh.fileTransfer.roots";
+    if (!subscribe && !roots && msg.method !== "native.mesh.fileTransfer.pull") {
+      refuse(-32601, "NOT_FOUND", "method not found", false);
+      return;
+    }
     const transfer = this.fileTransfer;
     if (transfer === "unsupported") {
       refuse(-32006, "UNAVAILABLE", "this floor cannot pull by a named root", false, {
@@ -1084,15 +1102,10 @@ export class MockMgmtServer {
       });
       return;
     }
-    if (msg.method === "native.mesh.fileTransfer.subscribe") {
+    if (subscribe) {
       const subId = `s${this.nextSub++}`;
       this.issued.push({ sock, subId, method: msg.method });
       reply({ result: { subId, snapshot: { transfers: [...transfer.running.values()] } } });
-      return;
-    }
-    const roots = msg.method === "native.mesh.fileTransfer.roots";
-    if (!roots && msg.method !== "native.mesh.fileTransfer.pull") {
-      refuse(-32601, "NOT_FOUND", "method not found", false);
       return;
     }
     let down: string | undefined;
@@ -1159,6 +1172,21 @@ export class MockMgmtServer {
       this.fileTransfer.running.delete(transferId);
     }
     this.pushDelta("mesh.fileTransfer.subscribe", payload);
+  }
+
+  /** DR-3b — the node goes (a retire here; a stop or a rebuild at the floor): every pull it ran ends `failed`
+   * NODE_DOWN on the same stream, as C1's W3-2 has the floor send it. Setting the node gate is the test's. */
+  endFileTransfers(): void {
+    const transfer = this.fileTransfer;
+    if (typeof transfer !== "object") return;
+    for (const transferId of [...transfer.running.keys()]) {
+      this.pushFileTransferDelta({
+        kind: "failed",
+        transferId,
+        reason: MESH_FILE_TRANSFER.FAILED_NODE_DOWN,
+        message: "the node that ran this pull is gone",
+      });
+    }
   }
 
   /** DR-3b — push a `native.mesh.fileTransfer.snapshot` (the lag resync, P5) to every file-transfer subscription:

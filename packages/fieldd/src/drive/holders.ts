@@ -18,9 +18,14 @@ import { createNoopLogger, type Logger } from "@vibefield/logging";
 // integration lane that wires the drive comes after EL8-TRUFFLE (w3-plan.md §5.8), so no released build publishes a
 // slice from a floor that cannot serve.
 //
-// A closed drive publishes nothing. The store has no verb that withdraws a slice (`native.mesh.store.*` is open, get,
-// set, subscribe), so one published before a close stays until its publisher leaves the mesh; withdrawing it is the
-// integration lane's question, not this module's.
+// A closed drive publishes no slice (drive.ts `DriveHolderState`: "publishes no slice at all"). The store has no verb
+// that withdraws one (`native.mesh.store.*` is open, get, set, subscribe), so a drive that closes after it published
+// writes ONE null slice: the floor's `store.set` asks only that `data` be present (field-native `mgmt/mesh.rs`'s
+// `store.set` arm, `store_data_allowed`), and every reader of STORES.DRIVE holds nothing for a slice that does not
+// parse (`#adopt` below). UNVERIFIED that a null slice is DS-L2's own word for "none": an ask for VF-PM's records.
+//
+// Nothing is published or withdrawn while the node is not linked (`linked`): a capture has no account to scope a
+// slice to, and the floor refuses `store.set` in one (MESH_CAPTURING, the belt; this is the suspenders).
 
 /** The mesh store, narrowed to the two calls the slice makes: MeshClient's `setSlice` and `subscribeStoreManaged`
  * (mesh-client.ts:492, :515), as `HoldersMesh` narrows them for the docs slice (library-doc.ts:337-343). */
@@ -43,8 +48,12 @@ export interface DriveHoldersOptions {
   mesh: DriveHoldersMesh;
   /** This desktop's mesh deviceId (D30): the store's own owner key. */
   deviceId: () => string;
-  /** The drive now, or `null` while it is not open: then nothing is published. */
+  /** The drive now, or `null` while it is not open: then nothing is published, and a slice published before is
+   * withdrawn. */
   drive: () => DriveHolding | null;
+  /** Whether this desktop's node is linked: neither unlinked nor capturing a login. The slice is written only then,
+   * as the daemon declares no serve without an account (daemon.ts `productServeSpec`). */
+  linked: () => boolean;
   logger?: Logger;
   /** Coalesce a burst of changes into one publish (default 1 s). */
   debounceMs?: number;
@@ -60,6 +69,8 @@ export class DriveHolders {
   #timer: ReturnType<typeof setTimeout> | null = null;
   #dispose: (() => void) | null = null;
   #subscribing: Promise<void> | null = null;
+  /** a slice of this desktop's is in the store: the next close withdraws it */
+  #published = false;
   #stopped = false;
 
   constructor(opts: DriveHoldersOptions) {
@@ -68,7 +79,8 @@ export class DriveHolders {
   }
 
   /** Hear the store, then publish. Never throws: a store the node cannot serve yet (no node up) is heard again at
-   * `nodeUp`, and a publish that fails goes again on the next change. */
+   * `nodeUp`, a publish that fails goes again on the next change, and a slice outside its contract is logged and not
+   * written (`publish`). */
   async start(): Promise<void> {
     await this.#subscribe();
     await this.publish();
@@ -91,20 +103,32 @@ export class DriveHolders {
     this.#timer.unref?.();
   }
 
-  /** This desktop's slice, now, into STORES.DRIVE: nothing while the drive is closed. */
+  /** This desktop's slice, now, into STORES.DRIVE; while the drive is closed, nothing, or the one withdrawal of a
+   * slice published before. Never throws: a slice outside its contract (an empty deviceId before the mesh identity is
+   * known, a count that is no integer) is logged and not written. */
   async publish(): Promise<void> {
-    if (this.#stopped) return;
+    if (this.#stopped || !this.#opts.linked()) return;
     const drive = this.#opts.drive();
-    if (drive === null) return;
-    const slice = DriveHoldersSlice.parse({
+    if (drive === null) {
+      await this.#withdraw();
+      return;
+    }
+    const slice = DriveHoldersSlice.safeParse({
       deviceId: this.#opts.deviceId(),
       protocol: DRIVE_PROTOCOL,
       state: drive.state,
       held: { objects: drive.held.objects, bytes: drive.held.bytes },
       publishedAt: (this.#opts.now ?? Date.now)(),
     });
+    if (!slice.success) {
+      this.#log.warn("fieldd.drive.holders_slice_invalid", "The drive's slice broke its contract", {
+        issues: slice.error.issues.length,
+      });
+      return;
+    }
     try {
-      await this.#opts.mesh.setSlice(STORES.DRIVE, slice);
+      await this.#opts.mesh.setSlice(STORES.DRIVE, slice.data);
+      this.#published = true;
     } catch (error) {
       // the mesh is down: the slice is a fact about now, and the next change publishes it again
       this.#log.info("fieldd.drive.holders_unpublished", "The drive's slice was not published", {
@@ -130,6 +154,20 @@ export class DriveHolders {
     this.#dispose?.();
     this.#dispose = null;
     this.#slices.clear();
+  }
+
+  /** The drive closed after it published: ONE null slice, so no reader holds it (the header). A withdrawal that fails
+   * goes again on the next change. */
+  async #withdraw(): Promise<void> {
+    if (!this.#published) return;
+    try {
+      await this.#opts.mesh.setSlice(STORES.DRIVE, null);
+      this.#published = false;
+    } catch (error) {
+      this.#log.info("fieldd.drive.holders_unwithdrawn", "The drive's slice was not withdrawn", {
+        error: String(error),
+      });
+    }
   }
 
   #subscribe(): Promise<void> {

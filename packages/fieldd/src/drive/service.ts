@@ -1,4 +1,9 @@
-import { DRIVE_SERVICE, DriveUnavailableDetails, RPC_ERROR_CODES } from "@vibefield/contracts";
+import {
+  DRIVE_SERVICE,
+  DriveUnavailableDetails,
+  MeshNotUpDetails,
+  RPC_ERROR_CODES,
+} from "@vibefield/contracts";
 import { RpcCallError } from "../native-link";
 import type { DriveHolders } from "./holders";
 import type { DriveLaneRelay } from "./lane-relay";
@@ -14,13 +19,17 @@ import {
 // ONE VibeField-shaped port, which the files worker's adapter binds mille-drive's transport to at DR-2. No mille type
 // rides it, `import type` included (R24, scripts/check-import-boundaries.mjs's R24 row).
 //
-// Every UNAVAILABLE it answers is DRIVE_SERVICE's (DR-L8), its details `DriveUnavailableDetails`:
+// The two UNAVAILABLEs that ARE the drive's states are answered in DRIVE_SERVICE's words (DR-L8), their details
+// `DriveUnavailableDetails`:
 //  - a floor that cannot pull by a named root is STATE_UNBUILT, retryable false (W3's rider D: truffle T-3 is not
 //    adopted, and nothing a retry changes until VibeField moves);
-//  - any other UNAVAILABLE on the way (the node gate, the mgmt link, a lane that will not open) is STATE_MESH_DOWN,
-//    retryable true: what this desktop holds still serves here, and nothing moves between desktops.
-// Every other refusal (CONFLICT, RESOURCE_EXHAUSTED, PRECONDITION_FAILED, a pull's FAILED_* word) passes as it came:
-// mapping a failed pull to the drive's own error codes is the worker adapter's (DR-2).
+//  - the mesh facade's node gate (`MeshNotUpDetails`, a pull's or a lane's) is STATE_MESH_DOWN, its retryable flag
+//    the floor's: what this desktop holds still serves here, and nothing moves between desktops. egress.ts:291-292
+//    reads the node gate the same way.
+// Any other UNAVAILABLE names its own `{service, state}` and passes as it came: a floor that is not answering
+// (native-link.ts `refuseAtTheDoor`) or a link that closed is not a node that is down, and DRIVE_SERVICE has no word
+// for either. So does every other refusal (CONFLICT, RESOURCE_EXHAUSTED, PRECONDITION_FAILED, a pull's FAILED_*
+// word): mapping a failed pull to the drive's own error codes is the worker adapter's (DR-2).
 //
 // Nothing constructs it: the daemon's wiring is the integration lane's, after EL8-TRUFFLE (w3-plan.md §5.8).
 
@@ -44,13 +53,26 @@ export interface DriveServiceOptions {
   holders: DriveHolders;
 }
 
+/** The node gate's service: `MeshNotUpDetails.service` is "always mesh-gateway" (mgmt.ts), a word no registry holds;
+ * egress.ts:292 reads the same literal. */
+const NODE_GATE_SERVICE = "mesh-gateway";
+
+/** Whether a refusal is the mesh facade's node gate: no node is up (field-native `mgmt/mesh.rs` `unavailable`). */
+function isNodeGate(error: RpcCallError): boolean {
+  const details = MeshNotUpDetails.safeParse(error.details);
+  return details.success && details.data.service === NODE_GATE_SERVICE;
+}
+
 /** The drive's refusal for what a part answered: DRIVE_SERVICE's UNAVAILABLE, or the error as it came. */
 export function driveRefusal(error: unknown): unknown {
   if (!(error instanceof RpcCallError) || error.kind !== "UNAVAILABLE") return error;
   if (isFileTransferUnsupported(error)) {
     return unavailable(DRIVE_SERVICE.STATE_UNBUILT, false, "this floor cannot move objects yet");
   }
-  return unavailable(DRIVE_SERVICE.STATE_MESH_DOWN, true, error.message);
+  if (isNodeGate(error)) {
+    return unavailable(DRIVE_SERVICE.STATE_MESH_DOWN, error.retryable, error.message);
+  }
+  return error;
 }
 
 function unavailable(state: string, retryable: boolean, message: string): RpcCallError {
@@ -70,7 +92,8 @@ export class DriveService implements DriveTransportPort {
   }
 
   /** Claim the drive's lanes, arm the pulls' stream and roots, hear and publish the holders slice. Only the lane
-   * table's subscribe can throw (doc-sync's start does the same); the other two degrade honestly. */
+   * table's subscribe can throw (doc-sync's start does the same); the pulls and the holders log what they could not
+   * do and never throw (pulls.ts `start`, holders.ts `start`). */
   async start(): Promise<void> {
     await this.#relay.start();
     await this.#pulls.start();

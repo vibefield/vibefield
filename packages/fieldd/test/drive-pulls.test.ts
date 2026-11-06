@@ -15,6 +15,7 @@ import {
   LAYOUT,
   MESH_FILE_TRANSFER,
   NativeFileTransferPullParams,
+  NativeFileTransferRootsResult,
   RPC_ERROR_CODES,
   SOCKETS,
 } from "@vibefield/contracts";
@@ -39,6 +40,7 @@ import {
   FakeDriveStore,
   refusingFloor,
   sleep,
+  UNSUPPORTED_GOLDEN,
   until,
 } from "./drive-fakes";
 import { nativeEndpoint } from "./native-harness";
@@ -47,6 +49,7 @@ const ROOT = FILE_TRANSFER_ROOTS.DRIVE_OBJECTS.name;
 const SHA = "075eeb056ba8f587858fe88dd968e5d29207d6537944d88d8826a56cb8e89a42";
 const SUBSCRIBE = "native.mesh.fileTransfer.subscribe";
 const ROOTS = "native.mesh.fileTransfer.roots";
+const PULL = "native.mesh.fileTransfer.pull";
 
 const cleanup: Array<() => void | Promise<void>> = [];
 afterEach(async () => {
@@ -57,6 +60,17 @@ afterEach(async () => {
 const digestOf = (n: number) => n.toString(16).padStart(64, "0");
 const pathOf = (digest: string) => `${digest.slice(0, 2)}/${digest}`;
 const ask = (digest: string, peer = "peer-a") => ({ peer, digest, path: pathOf(digest) });
+
+/** The nth fixed transferId: a ULID's shape (FILE_TRANSFER_ID_PATTERN), two digits at its end. */
+const idFor = (n: number) => `01JC8ZK4W2MX7N3Q5R9T6V0B${String(n).padStart(2, "0")}`;
+/** A pull as the floor reads it, sent to the floor with no DrivePulls between: the nth id, the mth digest. */
+const pullOf = (n: number, m: number) => ({
+  transferId: idFor(n),
+  peer: "peer-a",
+  root: ROOT,
+  path: pathOf(digestOf(m)),
+  digest: digestOf(m),
+});
 
 function completed(transferId: string, digest: string) {
   return {
@@ -69,13 +83,20 @@ function completed(transferId: string, digest: string) {
   };
 }
 
+/** An answer's ErrorData as the wire carried it: NativeLink keeps its `kind`, `retryable` and `details`. */
+const errorData = (error: RpcCallError) => ({
+  kind: error.kind,
+  retryable: error.retryable,
+  details: error.details,
+});
+
 /** A round trip on the link: every reply the floor wrote before it has been read, and its continuation run. */
 async function roundTrip(link: NativeLink): Promise<void> {
   await link.request("native.lifecycle.ping", {});
   await sleep(10);
 }
 
-/** The scripted floor over a real NativeLink, and this desktop's `lands` folder under the same temp root. */
+/** The scripted floor over a real NativeLink, and this desktop's user root and `lands` folder under one temp root. */
 async function floor(transfer: "unsupported" | MockFileTransfer = mockFileTransfer()) {
   const dir = mkdtempSync(join(tmpdir(), "vf-dp-"));
   cleanup.push(() => rmSync(dir, { recursive: true, force: true }));
@@ -95,15 +116,16 @@ async function floor(transfer: "unsupported" | MockFileTransfer = mockFileTransf
   await link.connect();
   const landsDir = join(dir, ...LAYOUT.DRIVE_INCOMING_DIR);
   mkdirSync(landsDir, { recursive: true });
-  return { mock, link, landsDir };
+  return { mock, link, root: dir, landsDir };
 }
 
-function pulls(link: NativeLink, landsDir: string, extra: Partial<DrivePullsOptions> = {}) {
+function pulls(link: NativeLink, root: string, extra: Partial<DrivePullsOptions> = {}) {
   const drive = new DrivePulls({
     floor: link,
-    landsDir,
+    userRoot: root,
     roots: () => [ROOT],
     bootId: () => "boot-1",
+    linked: () => true,
     ...extra,
   });
   cleanup.push(() => drive.stop());
@@ -123,6 +145,7 @@ function serviceOver(drive: DrivePulls) {
     mesh: new FakeDriveStore().member("studio"),
     deviceId: () => "studio",
     drive: () => null,
+    linked: () => true,
   });
   const service = new DriveService({ relay, pulls: drive, holders });
   cleanup.push(() => service.stop());
@@ -154,17 +177,16 @@ function settled(promise: Promise<unknown>): () => string {
 
 describe("DR-3b — the drive's pulls over the floor's file transfer", () => {
   it("reads the pin's floor as unsupported, caches it for the boot, and the service says unbuilt", async () => {
-    const { mock, link, landsDir } = await floor("unsupported");
-    const drive = pulls(link, landsDir);
+    const { mock, link, root } = await floor("unsupported");
+    let boot: string | undefined = "boot-1";
+    const drive = pulls(link, root, { bootId: () => boot });
     await drive.start();
     expect(drive.unsupported()).toBe(true);
     expect(mock.meshCalls).toEqual([SUBSCRIBE]);
-    // cached: refused here, in the floor's own words, and never sent
-    await expect(drive.pull(ask(digestOf(1)))).rejects.toMatchObject({
-      kind: "UNAVAILABLE",
-      retryable: false,
-      details: { service: MESH_FILE_TRANSFER.SERVICE, state: MESH_FILE_TRANSFER.STATE_UNSUPPORTED },
-    });
+    // cached: refused here, in the floor's own words (the pin's golden), and never sent
+    const cached = await drive.pull(ask(digestOf(1))).catch((error: unknown) => error);
+    expect(cached).toBeInstanceOf(RpcCallError);
+    expect(errorData(cached as RpcCallError)).toEqual(UNSUPPORTED_GOLDEN);
     expect(mock.meshCalls).toEqual([SUBSCRIBE]);
     const { service } = serviceOver(drive);
     const refusal = await service.pull(ask(digestOf(1))).catch((error: unknown) => error);
@@ -174,19 +196,89 @@ describe("DR-3b — the drive's pulls over the floor's file transfer", () => {
       service: DRIVE_SERVICE.SERVICE,
       state: DRIVE_SERVICE.STATE_UNBUILT,
     });
+    // the cache is the boot's: a floor of another boot is asked again, and a boot not known caches nothing
+    boot = "boot-2";
+    expect(drive.unsupported()).toBe(false);
+    await drive.pull(ask(digestOf(1))).catch(() => undefined);
+    expect(mock.meshCalls).toEqual([SUBSCRIBE, PULL]);
+    expect(drive.unsupported()).toBe(true);
+    boot = undefined;
+    await drive.pull(ask(digestOf(1))).catch(() => undefined);
+    await drive.pull(ask(digestOf(1))).catch(() => undefined);
+    expect(drive.unsupported()).toBe(false);
+    expect(mock.meshCalls).toEqual([SUBSCRIBE, PULL, PULL, PULL]);
     // a floor before the facade (a node answers these verbs method-not-found) reads the same
     const notFound = new RpcCallError("NOT_FOUND", "method not found", false, undefined, -32601);
     const old = refusingFloor(notFound);
-    const before = pulls(link, landsDir, { floor: old });
+    const before = pulls(link, root, { floor: old });
     await before.start();
     expect(before.unsupported()).toBe(true);
     expect(old.asked).toEqual([SUBSCRIBE]);
   });
 
-  it("applies the stream's snapshot before its deltas: a replay that lists a pull leaves it running", async () => {
+  it("holds the scripted floor to C1's refusal order, and its default to the pin's golden", async () => {
+    // mock-mgmt's ~80 consumers read its default; these answers are the wire's, with no DrivePulls between
+    const { mock, link } = await floor("unsupported");
+    const refused = async (method: string, params: unknown = {}): Promise<RpcCallError> => {
+      const error = await link.request(method, params).catch((caught: unknown) => caught);
+      expect(error, method).toBeInstanceOf(RpcCallError);
+      return error as RpcCallError;
+    };
+    const offer = "native.mesh.fileTransfer.offer";
+    const notFound = { kind: "NOT_FOUND", code: -32601 };
+    // 0. a name the contract does not declare is none, ahead of step 1
+    expect(await refused(offer)).toMatchObject(notFound);
+    // 1. the pin's floor answers every declared verb the golden, -32006, node or no node
+    mock.meshUnavailable = true;
+    for (const verb of [ROOTS, PULL, SUBSCRIBE]) {
+      const error = await refused(verb);
+      expect(error.code, verb).toBe(RPC_ERROR_CODES.UNAVAILABLE);
+      expect(errorData(error), verb).toEqual(UNSUPPORTED_GOLDEN);
+    }
+    const transfer = mockFileTransfer({ gated: false });
+    mock.fileTransfer = transfer;
+    expect(await refused(offer)).toMatchObject(notFound);
+    // 2. the stream is answered with no node; 3. roots and pull answer the node gate
+    expect(await link.request(SUBSCRIBE, {})).toMatchObject({ snapshot: { transfers: [] } });
+    const gate = { kind: "UNAVAILABLE", details: { service: "mesh-gateway" } };
+    expect(await refused(ROOTS)).toMatchObject(gate);
+    expect(await refused(PULL)).toMatchObject(gate);
+    // 4. a capture refuses them MESH_CAPTURING
+    mock.meshUnavailable = false;
+    mock.meshPosture = { mode: "capture" };
+    const capturing = { kind: "PRECONDITION_FAILED", details: { code: "MESH_CAPTURING" } };
+    expect(await refused(ROOTS)).toMatchObject(capturing);
+    expect(await refused(PULL)).toMatchObject(capturing);
+    mock.meshPosture = undefined;
+    // 5. params the floor cannot read
+    const unreadable = { kind: "PRECONDITION_FAILED", code: RPC_ERROR_CODES.PRECONDITION_FAILED };
+    expect(await refused(ROOTS, { roots: ["../up"] })).toMatchObject(unreadable);
+    expect(await refused(PULL, { transferId: "lower" })).toMatchObject(unreadable);
+    // 6. an ungated node holds the root; a pull is refused CONFLICT by its id, then by its digest, and one past
+    // DRIVE_LIMITS.PULLS_IN_FLIGHT RESOURCE_EXHAUSTED (retryable true: UNVERIFIED parity with C6)
+    const held = await link.request(ROOTS, { roots: [ROOT] });
+    expect(NativeFileTransferRootsResult.parse(held)).toEqual({
+      roots: [{ name: ROOT, registered: false, reason: MESH_FILE_TRANSFER.ROOT_UNGATED }],
+    });
+    expect(await link.request(PULL, pullOf(1, 1))).toEqual({ transferId: idFor(1) });
+    const conflict = { kind: "CONFLICT", retryable: false, code: RPC_ERROR_CODES.CONFLICT };
+    expect(await refused(PULL, pullOf(1, 2))).toMatchObject(conflict);
+    expect(await refused(PULL, pullOf(2, 1))).toMatchObject(conflict);
+    for (let n = 2; n <= DRIVE_LIMITS.PULLS_IN_FLIGHT; n++) {
+      await link.request(PULL, pullOf(n, n));
+    }
+    expect(transfer.running.size).toBe(DRIVE_LIMITS.PULLS_IN_FLIGHT);
+    expect(await refused(PULL, pullOf(9, 9))).toMatchObject({
+      kind: "RESOURCE_EXHAUSTED",
+      retryable: true,
+      code: RPC_ERROR_CODES.RESOURCE_EXHAUSTED,
+    });
+  });
+
+  it("leaves a pull running while the stream's replay still lists it, and settles it on its delta", async () => {
     const transfer = mockFileTransfer();
-    const { mock, link, landsDir } = await floor(transfer);
-    const drive = pulls(link, landsDir);
+    const { mock, link, root, landsDir } = await floor(transfer);
+    const drive = pulls(link, root);
     link.on("connected", () => void drive.connected());
     await drive.start();
     const digest = digestOf(1);
@@ -206,8 +298,8 @@ describe("DR-3b — the drive's pulls over the floor's file transfer", () => {
 
   it("mints a ULID and asks with the contract's fields; a path outside the grammar is refused, unsent", async () => {
     const transfer = mockFileTransfer();
-    const { mock, link, landsDir } = await floor(transfer);
-    const drive = pulls(link, landsDir);
+    const { mock, link, root } = await floor(transfer);
+    const drive = pulls(link, root);
     await drive.start();
     void drive.pull(ask(digestOf(1))).catch(() => undefined);
     await until(() => transfer.pulls.length === 1, "the pull reached the floor");
@@ -227,28 +319,33 @@ describe("DR-3b — the drive's pulls over the floor's file transfer", () => {
     expect(mock.meshCalls.length).toBe(sent);
   });
 
-  it("resolves a completion with the landed path, and refuses one landed under another name", async () => {
+  it("resolves a completion with the landed path, and refuses one landed under another name or digest", async () => {
     const transfer = mockFileTransfer();
-    const { mock, link, landsDir } = await floor(transfer);
-    const drive = pulls(link, landsDir);
+    const { mock, link, root, landsDir } = await floor(transfer);
+    const drive = pulls(link, root);
     await drive.start();
     const first = drive.pull(ask(digestOf(1)));
     const second = drive.pull(ask(digestOf(2)));
-    await until(() => transfer.running.size === 2, "both pulls run");
+    const third = drive.pull(ask(digestOf(4)));
+    await until(() => transfer.running.size === 3, "three pulls run");
     const a = idOf(transfer, digestOf(1));
     const b = idOf(transfer, digestOf(2));
+    const c = idOf(transfer, digestOf(4));
     mock.pushFileTransferDelta(completed(a, digestOf(1)));
     await expect(first).resolves.toEqual({ path: join(landsDir, `${digestOf(1)}.${a}`) });
     // a name this pull did not ask for is never handed on as its object
     mock.pushFileTransferDelta({ ...completed(b, digestOf(2)), incoming: `${digestOf(3)}.${b}` });
     await expect(second).rejects.toBeInstanceOf(DrivePullFailed);
     await expect(second).rejects.toMatchObject({ reason: MESH_FILE_TRANSFER.FAILED_IO });
+    // nor one whose name and digest agree with each other but name another object
+    mock.pushFileTransferDelta(completed(c, digestOf(5)));
+    await expect(third).rejects.toMatchObject({ reason: MESH_FILE_TRANSFER.FAILED_IO });
   });
 
   it("rejects a failure with the floor's word, and reads a word it does not know as io", async () => {
     const transfer = mockFileTransfer();
-    const { mock, link, landsDir } = await floor(transfer);
-    const drive = pulls(link, landsDir);
+    const { mock, link, root } = await floor(transfer);
+    const drive = pulls(link, root);
     await drive.start();
     const first = drive.pull(ask(digestOf(1)));
     const second = drive.pull(ask(digestOf(2)));
@@ -262,17 +359,41 @@ describe("DR-3b — the drive's pulls over the floor's file transfer", () => {
     await expect(second).rejects.toMatchObject({ reason: MESH_FILE_TRANSFER.FAILED_IO });
   });
 
+  it("ends a pull the node's teardown ends, node-down on the same stream, and frees its digest", async () => {
+    const transfer = mockFileTransfer();
+    const { mock, link, root } = await floor(transfer);
+    const drive = pulls(link, root);
+    await drive.start();
+    expect(transfer.roots).toEqual([ROOT]);
+    const digest = digestOf(1);
+    const ended = drive.pull(ask(digest)).catch((error: unknown) => error);
+    await until(() => transfer.running.size === 1, "the pull runs");
+    // an unlink retires the node: the floor drops the held roots and ends every pull it ran (C1's W3-2)
+    await link.request("native.mesh.retire", {});
+    const failure = await ended;
+    expect(failure).toBeInstanceOf(DrivePullFailed);
+    expect(failure).toMatchObject({ reason: MESH_FILE_TRANSFER.FAILED_NODE_DOWN });
+    expect(transfer.roots).toEqual([]);
+    // the node is gone and the digest is free: the next pull of it reaches the floor, and its node gate
+    mock.meshUnavailable = true;
+    const sent = asked(mock, PULL);
+    const again = await drive.pull(ask(digest)).catch((error: unknown) => error);
+    expect(asked(mock, PULL)).toBe(sent + 1);
+    expect(again).toMatchObject({ kind: "UNAVAILABLE", details: { service: "mesh-gateway" } });
+  });
+
   it("refuses a second pull of a running digest here, in the floor's CONFLICT shape, unsent", async () => {
     const transfer = mockFileTransfer();
-    const { mock, link, landsDir } = await floor(transfer);
-    const drive = pulls(link, landsDir);
+    const { mock, link, root } = await floor(transfer);
+    const drive = pulls(link, root);
     await drive.start();
     void drive.pull(ask(digestOf(1))).catch(() => undefined);
     await until(() => transfer.running.size === 1, "the pull runs");
     const sent = mock.meshCalls.length;
     const refusal = await drive.pull(ask(digestOf(1), "peer-b")).catch((error: unknown) => error);
     expect(refusal).toBeInstanceOf(RpcCallError);
-    // error-data.file-transfer-conflict.json (C1, nit 9): CONFLICT, retryable false, no details
+    // C1's error-data.file-transfer-conflict.json (nit 9): CONFLICT, retryable false, no details. C1 is not on this
+    // lane's base, so the shape is written out; once C1 and this lane are both on main, the row reads the golden.
     expect(refusal).toMatchObject({
       kind: "CONFLICT",
       retryable: false,
@@ -285,26 +406,27 @@ describe("DR-3b — the drive's pulls over the floor's file transfer", () => {
 
   it("runs DRIVE_LIMITS.PULLS_IN_FLIGHT pulls at once, and refuses one more here, unsent", async () => {
     const transfer = mockFileTransfer();
-    const { mock, link, landsDir } = await floor(transfer);
-    const drive = pulls(link, landsDir);
+    const { mock, link, root } = await floor(transfer);
+    const drive = pulls(link, root);
     await drive.start();
     for (let n = 1; n <= DRIVE_LIMITS.PULLS_IN_FLIGHT; n++) {
       void drive.pull(ask(digestOf(n))).catch(() => undefined);
     }
     await until(() => transfer.running.size === DRIVE_LIMITS.PULLS_IN_FLIGHT, "four pulls run");
     const sent = mock.meshCalls.length;
+    // retryable true is this side's choice (pulls.ts): C1 names no flag, an ask for VF-PM
     await expect(drive.pull(ask(digestOf(9)))).rejects.toMatchObject({
       kind: "RESOURCE_EXHAUSTED",
+      retryable: true,
       code: RPC_ERROR_CODES.RESOURCE_EXHAUSTED,
     });
     expect(mock.meshCalls.length).toBe(sent);
-    expect(DRIVE_LIMITS.PULLS_IN_FLIGHT).toBe(4);
   });
 
   it("resyncs a pull the snapshot no longer lists as completed when its file landed", async () => {
     const transfer = mockFileTransfer();
-    const { mock, link, landsDir } = await floor(transfer);
-    const drive = pulls(link, landsDir);
+    const { mock, link, root, landsDir } = await floor(transfer);
+    const drive = pulls(link, root);
     await drive.start();
     const digest = digestOf(1);
     const landed = drive.pull(ask(digest));
@@ -319,8 +441,8 @@ describe("DR-3b — the drive's pulls over the floor's file transfer", () => {
 
   it("resyncs a pull the snapshot no longer lists, with nothing landed, as failed io", async () => {
     const transfer = mockFileTransfer();
-    const { mock, link, landsDir } = await floor(transfer);
-    const drive = pulls(link, landsDir);
+    const { mock, link, root, landsDir } = await floor(transfer);
+    const drive = pulls(link, root);
     await drive.start();
     const digest = digestOf(1);
     const landed = drive.pull(ask(digest));
@@ -337,9 +459,9 @@ describe("DR-3b — the drive's pulls over the floor's file transfer", () => {
 
   it("asks a floor once unsupported again at a reconnect, and declares the roots at node-up and every reconnect", async () => {
     const transfer = mockFileTransfer();
-    const { mock, link, landsDir } = await floor("unsupported");
+    const { mock, link, root } = await floor("unsupported");
     mock.meshUnavailable = true;
-    const drive = pulls(link, landsDir);
+    const drive = pulls(link, root);
     link.on("connected", () => void drive.connected());
     await drive.start();
     expect(drive.unsupported()).toBe(true);
@@ -361,15 +483,25 @@ describe("DR-3b — the drive's pulls over the floor's file transfer", () => {
     expect(transfer.declared[1]).toEqual([ROOT]);
   });
 
-  it("reads ROOT_UNGATED as held, never refused, and declares none while the drive is closed", async () => {
+  it("reads ROOT_UNGATED as held, never refused; declares nothing while unlinked, and none while the drive is closed", async () => {
     const transfer = mockFileTransfer({ gated: false });
-    const { link, landsDir } = await floor(transfer);
+    const { link, root } = await floor(transfer);
     let open = true;
-    const drive = pulls(link, landsDir, { roots: () => (open ? [ROOT] : []) });
+    let linked = true;
+    const drive = pulls(link, root, {
+      roots: () => (open ? [ROOT] : []),
+      linked: () => linked,
+    });
     await drive.start();
     expect(transfer.declared).toEqual([[ROOT]]);
     const ungated = MESH_FILE_TRANSFER.ROOT_UNGATED;
     expect(drive.roots()).toEqual([{ name: ROOT, state: "held", reason: ungated }]);
+    // unlinked (a capture, say): nothing is declared, at node-up or asked, and the floor's held set stands
+    linked = false;
+    await drive.nodeUp();
+    await drive.declareRoots();
+    expect(transfer.declared).toEqual([[ROOT]]);
+    linked = true;
     open = false;
     expect(await drive.declareRoots()).toEqual([]);
     expect(transfer.declared).toEqual([[ROOT], []]);
@@ -377,9 +509,9 @@ describe("DR-3b — the drive's pulls over the floor's file transfer", () => {
 
   it("drops a payload outside the contract, and the pull still settles on the next good one", async () => {
     const transfer = mockFileTransfer();
-    const { mock, link, landsDir } = await floor(transfer);
+    const { mock, link, root, landsDir } = await floor(transfer);
     const events: CapturedLog[] = [];
-    const drive = pulls(link, landsDir, { logger: captureLogger(events) });
+    const drive = pulls(link, root, { logger: captureLogger(events) });
     await drive.start();
     const digest = digestOf(1);
     const landed = drive.pull(ask(digest));
@@ -396,10 +528,10 @@ describe("DR-3b — the drive's pulls over the floor's file transfer", () => {
     await expect(landed).resolves.toEqual({ path: join(landsDir, `${digest}.${id}`) });
   });
 
-  it("answers every refusal of its own as DriveUnavailableDetails: unbuilt, or mesh-down", async () => {
+  it("answers the floor's unsupported and its node gate as DriveUnavailableDetails, and any other UNAVAILABLE as it came", async () => {
     const transfer = mockFileTransfer();
-    const { mock, link, landsDir } = await floor(transfer);
-    const drive = pulls(link, landsDir);
+    const { mock, link, root } = await floor(transfer);
+    const drive = pulls(link, root);
     const { service, control } = serviceOver(drive);
     await drive.start();
     const refusals: unknown[] = [];
@@ -424,24 +556,67 @@ describe("DR-3b — the drive's pulls over the floor's file transfer", () => {
       { service: DRIVE_SERVICE.SERVICE, state: DRIVE_SERVICE.STATE_MESH_DOWN, retryable: true },
       { service: DRIVE_SERVICE.SERVICE, state: DRIVE_SERVICE.STATE_UNBUILT, retryable: false },
     ]);
+    // a floor that is not answering names its own service and state: never the node gate's mesh-down
+    const unresponsive = { service: "native", state: "unresponsive" };
+    control.refuse = new RpcCallError("UNAVAILABLE", "not answering", true, unresponsive);
+    const record = new Uint8Array(1);
+    const passed = await service.send("peer-a", record).catch((error: unknown) => error);
+    expect(passed).toBe(control.refuse);
   });
 
-  it("refuses a previous fieldd's running digest here, and surfaces its completion as an adopt candidate", async () => {
-    // field-native outlives fieldd: the first snapshot lists a pull this fieldd never minted (the W3 critic's
-    // finding 4). Its digest is held, and its landed file is the drive's to adopt, never an answer to a pull.
+  it("passes every other refusal as it came, and hands a drive change, a node-up and a reconnect to its parts", async () => {
+    const transfer = mockFileTransfer();
+    const { mock, link, root } = await floor(transfer);
+    const drive = pulls(link, root);
+    const { service } = serviceOver(drive);
+    await service.start();
+    expect(transfer.declared).toEqual([[ROOT]]);
+    const digest = digestOf(1);
+    const ended = service.pull(ask(digest)).catch((error: unknown) => error);
+    await until(() => transfer.running.size === 1, "the pull runs");
+    // this side's refusals in the floor's shapes pass untouched: CONFLICT, PRECONDITION_FAILED
+    const conflict = await service.pull(ask(digest, "peer-b")).catch((error: unknown) => error);
+    expect(conflict).toMatchObject({
+      kind: "CONFLICT",
+      retryable: false,
+      code: RPC_ERROR_CODES.CONFLICT,
+    });
+    const outside = service.pull({ peer: "peer-a", digest: digestOf(2), path: "../up" });
+    await expect(outside).rejects.toMatchObject({ kind: "PRECONDITION_FAILED" });
+    // a pull's end passes with the floor's word: mapping it is the worker adapter's (DR-2)
+    const rejected = MESH_FILE_TRANSFER.FAILED_REJECTED;
+    const id = idOf(transfer, digest);
+    mock.pushFileTransferDelta({ kind: "failed", transferId: id, reason: rejected, message: "no" });
+    const failure = await ended;
+    expect(failure).toBeInstanceOf(DrivePullFailed);
+    expect(failure).toMatchObject({ reason: rejected });
+    // the roots, again: at a drive change, a node-up and a reconnect
+    await service.driveChanged();
+    await service.nodeUp();
+    await service.connected();
+    expect(transfer.declared).toEqual([[ROOT], [ROOT], [ROOT], [ROOT]]);
+  });
+
+  it("refuses a previous fieldd's running digests here, and surfaces what they land as adopt candidates", async () => {
+    // field-native outlives fieldd: the first snapshot lists pulls this fieldd never minted (the W3 critic's
+    // finding 4). Their digests are held, and what they land is the drive's to adopt, never an answer to a pull.
     const transfer = mockFileTransfer();
     const digest = digestOf(1);
+    const lagged = digestOf(2);
     const foreign = "01JC8ZK4W2MX7N3Q5R9T6V0B1D";
-    transfer.running.set(foreign, {
-      transferId: foreign,
-      peer: "peer-b",
-      root: ROOT,
-      digest,
-      bytes: 16_384,
-      total: 48_213,
+    const earlier = "01JC8ZK4W2MX7N3Q5R9T6V0B1E";
+    const row = { peer: "peer-b", root: ROOT, bytes: 16_384, total: 48_213 };
+    transfer.running.set(foreign, { ...row, transferId: foreign, digest });
+    transfer.running.set(earlier, { ...row, transferId: earlier, digest: lagged });
+    const { mock, link, root, landsDir } = await floor(transfer);
+    const looked: string[] = [];
+    const drive = pulls(link, root, {
+      exists: async (path) => {
+        looked.push(path);
+        return existsSync(path);
+      },
     });
-    const { mock, link, landsDir } = await floor(transfer);
-    const drive = pulls(link, landsDir);
+    const { service } = serviceOver(drive);
     await drive.start();
     const sent = mock.meshCalls.length;
     await expect(drive.pull(ask(digest))).rejects.toMatchObject({
@@ -449,11 +624,20 @@ describe("DR-3b — the drive's pulls over the floor's file transfer", () => {
       retryable: false,
     });
     expect(mock.meshCalls.length).toBe(sent);
+    // the earlier one ended while the reader lagged: its file is in place, and the next snapshot no longer lists it
+    const landed = join(landsDir, `${lagged}.${earlier}`);
+    writeFileSync(landed, "object bytes");
+    transfer.running.delete(earlier);
+    mock.pushFileTransferSnapshot();
+    await until(() => looked.includes(landed), "the lands folder, read");
+    // surfaced before any listener: held for the first, which the service hands it to
     const candidates: DriveAdoptCandidate[] = [];
-    drive.onAdoptCandidate((candidate) => candidates.push(candidate));
+    service.onAdoptCandidate((candidate) => candidates.push(candidate));
+    expect(candidates).toEqual([{ transferId: earlier, digest: lagged, path: landed }]);
     mock.pushFileTransferDelta(completed(foreign, digest));
-    await until(() => candidates.length === 1, "the adopt candidate");
+    await until(() => candidates.length === 2, "the second adopt candidate");
     expect(candidates).toEqual([
+      { transferId: earlier, digest: lagged, path: landed },
       { transferId: foreign, digest, path: join(landsDir, `${digest}.${foreign}`) },
     ]);
     // its end freed the digest

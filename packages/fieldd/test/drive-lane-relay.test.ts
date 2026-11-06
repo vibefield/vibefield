@@ -101,10 +101,12 @@ describe("DR-3b — the drive's lane relay", () => {
     const { control, bytes, relay, frames } = harness();
     await relay.start();
     const out = [bytesOf(222, 173), bytesOf(), bytesOf(190, 239, 0)];
-    // issued back to back, before the lane is open: the queue keeps their order
+    // issued back to back, before the lane is open: the queue keeps their order, and ONE pump opens ONE lane
     const sends = out.map((record) => relay.send("peer-a", record));
     expect(await Promise.all(sends)).toEqual([true, true, true]);
     expect(bytes.sent.map((s) => [...s.payload])).toEqual([[222, 173], [], [190, 239, 0]]);
+    expect(control.opened).toHaveLength(1);
+    expect(new Set(bytes.sent.map((s) => s.laneId)).size).toBe(1);
     control.announce(opened(IN, "peer-b"));
     bytes.deliver(IN, bytesOf(1, 2, 3));
     bytes.deliver(IN, bytesOf(4));
@@ -132,8 +134,11 @@ describe("DR-3b — the drive's lane relay", () => {
     await relay.start();
     control.announce(opened(IN, "peer-a"));
     bytes.deliver(IN, new Uint8Array(DRIVE_LIMITS.LANE_RECORD_BYTES + 1));
+    // the bound itself is delivered
+    bytes.deliver(IN, new Uint8Array(DRIVE_LIMITS.LANE_RECORD_BYTES));
     bytes.deliver(IN, bytesOf(9));
-    expect(frames).toEqual([{ peer: "peer-a", record: [9] }]);
+    expect(frames.map((frame) => frame.record.length)).toEqual([DRIVE_LIMITS.LANE_RECORD_BYTES, 1]);
+    expect(frames.at(-1)).toEqual({ peer: "peer-a", record: [9] });
     expect(events.filter((e) => e.event === "fieldd.drive.lane_record_dropped")).toHaveLength(1);
   });
 
@@ -154,10 +159,12 @@ describe("DR-3b — the drive's lane relay", () => {
     expect(bytes.sent.map((s) => s.payload[0])).toEqual([1, 2]);
   });
 
-  it("takes a peer down when its last lane closes, and dispose closes the relay's own lanes", async () => {
+  it("takes a peer down when its LAST lane closes, either way, and dispose closes only the relay's own lanes", async () => {
     const { control, relay } = harness();
     const peers: Array<[string, boolean]> = [];
     relay.onPeer((peer, up) => peers.push([peer, up]));
+    const closed = (laneId: number, inbound: boolean) =>
+      control.announce({ kind: "closed", laneId, inbound, reason: "peer-closed" });
     await relay.start();
     control.announce(opened(IN, "peer-b"));
     expect(await relay.send("peer-a", bytesOf(1))).toBe(true);
@@ -165,8 +172,22 @@ describe("DR-3b — the drive's lane relay", () => {
       ["peer-b", true],
       ["peer-a", true],
     ]);
-    control.announce({ kind: "closed", laneId: IN, inbound: true, reason: "peer-closed" });
+    closed(IN, true);
     expect(peers.at(-1)).toEqual(["peer-b", false]);
+    // peer-a opens a lane to us beside ours to it: its inbound one closes, and our outbound one keeps it up
+    control.announce(opened(IN + 1, "peer-a"));
+    closed(IN + 1, true);
+    // peer-b again, both ways: our outbound lane closes, and its inbound one keeps it up
+    expect(await relay.send("peer-b", bytesOf(2))).toBe(true);
+    control.announce(opened(IN + 2, "peer-b"));
+    closed(2, false);
+    expect(peers).toEqual([
+      ["peer-b", true],
+      ["peer-a", true],
+      ["peer-b", false],
+      ["peer-b", true],
+    ]);
+    // dispose with peer-b's inbound lane live: field-native's to reap, so only our own lane 1 is closed
     await relay.dispose();
     expect(control.closed).toEqual([1]);
   });

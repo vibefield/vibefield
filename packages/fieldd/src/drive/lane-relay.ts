@@ -244,10 +244,12 @@ export class DriveLaneRelay {
     }
   }
 
-  /** Open a lane to `lane`'s peer. False when the floor refused: every record queued for it is refused with it. */
+  /** Open a lane to `lane`'s peer. False when no id could be drawn (the allocator's space is spent, lane-id.ts:20-24)
+   * or the floor refused: every record queued for it is refused with that error, never left pending. */
   async #open(lane: PeerLane): Promise<boolean> {
-    const laneId = this.#opts.allocateLaneId();
+    let laneId: number;
     try {
+      laneId = this.#opts.allocateLaneId();
       await this.#opts.control.open({
         laneId,
         class: "reliable",

@@ -4,6 +4,7 @@ import {
   DRIVE_LIMITS,
   FILE_TRANSFER_ROOTS,
   type FileTransferRootName,
+  LAYOUT,
   MESH_FILE_TRANSFER,
   NativeFileTransferDelta,
   NativeFileTransferPullParams,
@@ -71,7 +72,7 @@ export interface DriveLanded {
 export interface DriveAdoptCandidate {
   transferId: string;
   digest: string;
-  /** the landed file, joined under `landsDir` */
+  /** the landed file, in this desktop's `lands` folder */
   path: string;
 }
 
@@ -99,11 +100,17 @@ export class DrivePullFailed extends Error {
 
 export interface DrivePullsOptions {
   floor: DrivePullsFloor;
-  /** this desktop's `lands` folder for FILE_TRANSFER_ROOTS.DRIVE_OBJECTS: LAYOUT.DRIVE_INCOMING_DIR under the user
-   * root, joined by the caller. fieldd joins a landed NAME under its own row (mgmt.ts `FileTransferLanded`). */
-  landsDir: string;
+  /** This desktop's user root. A pull lands in FILE_TRANSFER_ROOTS.DRIVE_OBJECTS' `lands` LAYOUT row under it, which
+   * this module reads from the registry: fieldd joins a landed NAME under its own row (mgmt.ts `FileTransferLanded`),
+   * and no caller names the folder. */
+  userRoot: string;
   /** The roots this desktop serves now, declared WHOLE: the drive's while it is open, none while it is closed. */
   roots: () => FileTransferRootName[];
+  /** Whether this desktop's node is linked: neither unlinked nor capturing a login. The roots are declared only then,
+   * "at every linked node-up and again after every reconnect" (C1's nit 8, mgmt.ts `NativeFileTransferRootsParams`),
+   * as the daemon declares no serve without an account (daemon.ts `productServeSpec`). The floor's MESH_CAPTURING
+   * refusal of a declaration is the belt; this is the suspenders. */
+  linked: () => boolean;
   /** The floor's boot (`NativeHealth.bootId`). `file-transfer-unsupported` is cached for this boot alone; `undefined`
    * caches nothing (FloorEgress's rule, egress.ts:134-139). */
   bootId: () => string | undefined;
@@ -160,8 +167,9 @@ export function failedWord(reason: string): string {
 
 /** Whether an answer is the floor saying it cannot pull by a named root: the pin's golden
  * (`error-data.file-transfer-unsupported.json`), UNAVAILABLE `{service: "mesh", state:
- * "file-transfer-unsupported"}`. */
-export function isFileTransferUnsupported(error: unknown): error is RpcCallError {
+ * "file-transfer-unsupported"}`. A boolean, never a type guard: `false` says nothing of the error's type (an
+ * RpcCallError of another kind or state is still one, and a guard would have the compiler drop it). */
+export function isFileTransferUnsupported(error: unknown): boolean {
   if (!(error instanceof RpcCallError) || error.kind !== "UNAVAILABLE") return false;
   const details = UnavailableDetails.safeParse(error.details);
   return (
@@ -180,6 +188,14 @@ function unsupportedRefusal(): RpcCallError {
     { service: MESH_FILE_TRANSFER.SERVICE, state: MESH_FILE_TRANSFER.STATE_UNSUPPORTED },
     RPC_ERROR_CODES.UNAVAILABLE,
   );
+}
+
+/** A pull asked of, or still running on, pulls that are stopped (fieldd's shutdown): UNAVAILABLE and retryable, as
+ * fieldd's other services refuse while they stop (made-app-service.ts:1646-1650, mesh-board.ts:876-879), because the
+ * next boot pulls again and adopts what a running pull lands. It names no `{service, state}`: DRIVE_SERVICE has no
+ * word for a stopping drive (drive.ts `DriveUnavailableState`), and the floor's words are not this. */
+function stoppedRefusal(message: string): RpcCallError {
+  return new RpcCallError("UNAVAILABLE", message, true, undefined, RPC_ERROR_CODES.UNAVAILABLE);
 }
 
 /** Whether a floor cannot pull at all: the golden, or a floor before the facade (method not found). */
@@ -212,6 +228,8 @@ function issues(error: { issues: ReadonlyArray<unknown> }): number {
 export class DrivePulls {
   readonly #opts: DrivePullsOptions;
   readonly #log: Logger;
+  /** where a pull lands: FILE_TRANSFER_ROOTS.DRIVE_OBJECTS' `lands` row under the user root */
+  readonly #landsDir: string;
   readonly #exists: (path: string) => Promise<boolean>;
   readonly #mintId: () => string;
   /** transferId → a pull this fieldd minted */
@@ -229,7 +247,8 @@ export class DrivePulls {
   #roots: DriveRootState[] = [];
   /** Stream events in arrival order, applied in a later macrotask. A pull's answer and a snapshot can arrive in one
    * read, and the answer's continuation (which marks the pull accepted) is a microtask the snapshot would otherwise
-   * overtake, settling a running pull by the lands rule. */
+   * overtake: the pull, not yet accepted, would be skipped, and one that ended while the reader lagged would wait for
+   * the next snapshot. Applied after it, the snapshot judges the pull by the lands rule. */
   #events: Array<{ payload: unknown; kind: "snapshot" | "delta" }> = [];
   #drain: ReturnType<typeof setImmediate> | null = null;
   readonly #adoptListeners = new Set<(candidate: DriveAdoptCandidate) => void>();
@@ -241,6 +260,7 @@ export class DrivePulls {
   constructor(opts: DrivePullsOptions) {
     this.#opts = opts;
     this.#log = (opts.logger ?? createNoopLogger()).child({ component: "drive.pulls" });
+    this.#landsDir = join(opts.userRoot, ...LAYOUT[FILE_TRANSFER_ROOTS.DRIVE_OBJECTS.lands]);
     this.#exists = opts.exists ?? landedExists;
     this.#mintId = opts.mintId ?? (() => ulid());
   }
@@ -285,8 +305,11 @@ export class DrivePulls {
   }
 
   /** Pull one object. Resolves once it has landed; rejects with the floor's refusal (untouched), a refusal of this
-   * side's in the floor's own shape, or `DrivePullFailed` with the floor's word. */
+   * side's in the floor's own shape and the floor's order (C1's rider A: a floor that cannot pull first, then the
+   * params, then CONFLICT and RESOURCE_EXHAUSTED), or `DrivePullFailed` with the floor's word. */
   async pull(request: DrivePullRequest): Promise<DriveLanded> {
+    if (this.#stopped) throw stoppedRefusal("the drive's pulls are stopped");
+    if (this.unsupported()) throw unsupportedRefusal();
     const asked = NativeFileTransferPullParams.safeParse({
       transferId: this.#mintId(),
       peer: request.peer,
@@ -303,8 +326,6 @@ export class DrivePulls {
         RPC_ERROR_CODES.PRECONDITION_FAILED,
       );
     }
-    if (this.#stopped) throw new Error("the drive's pulls are stopped");
-    if (this.unsupported()) throw unsupportedRefusal();
     const params = asked.data;
     if (this.#running.has(params.digest)) {
       throw new RpcCallError(
@@ -316,6 +337,8 @@ export class DrivePulls {
       );
     }
     if (this.#running.size >= DRIVE_LIMITS.PULLS_IN_FLIGHT) {
+      // retryable true is this side's choice: C1 names no flag for RESOURCE_EXHAUSTED, and the floor's arm that
+      // answers it (W3's stack B, C6) is not built. UNVERIFIED parity with C6, an ask for VF-PM.
       throw new RpcCallError(
         "RESOURCE_EXHAUSTED",
         `${DRIVE_LIMITS.PULLS_IN_FLIGHT} pulls are running`,
@@ -366,7 +389,7 @@ export class DrivePulls {
     this.#events = [];
     for (const own of [...this.#own.values()]) {
       this.#untrack(own);
-      own.reject(new Error("fieldd stopped; the next boot adopts what this pull lands"));
+      own.reject(stoppedRefusal("fieldd stopped; the next boot adopts what this pull lands"));
     }
     this.#foreign.clear();
     this.#running.clear();
@@ -412,7 +435,7 @@ export class DrivePulls {
   }
 
   async #declare(): Promise<readonly DriveRootState[]> {
-    if (this.#stopped || this.unsupported()) return this.#roots;
+    if (this.#stopped || this.unsupported() || !this.#opts.linked()) return this.#roots;
     const method = "native.mesh.fileTransfer.roots";
     let answer: unknown;
     try {
@@ -536,7 +559,7 @@ export class DrivePulls {
       if (digest === undefined) return;
       this.#forgetForeign(delta.transferId);
       if (named && delta.digest === digest) {
-        const path = join(this.#opts.landsDir, delta.incoming);
+        const path = join(this.#landsDir, delta.incoming);
         this.#surface({ transferId: delta.transferId, digest, path });
       }
       return;
@@ -547,11 +570,11 @@ export class DrivePulls {
       own.reject(new DrivePullFailed(MESH_FILE_TRANSFER.FAILED_IO, message, own.transferId));
       return;
     }
-    own.resolve({ path: join(this.#opts.landsDir, delta.incoming) });
+    own.resolve({ path: join(this.#landsDir, delta.incoming) });
   }
 
   async #settleUnlisted(own: OwnPull): Promise<void> {
-    const path = join(this.#opts.landsDir, `${own.digest}.${own.transferId}`);
+    const path = join(this.#landsDir, `${own.digest}.${own.transferId}`);
     if (await this.#landed(path)) {
       own.resolve({ path });
       return;
@@ -561,7 +584,7 @@ export class DrivePulls {
   }
 
   async #adoptIfLanded(transferId: string, digest: string): Promise<void> {
-    const path = join(this.#opts.landsDir, `${digest}.${transferId}`);
+    const path = join(this.#landsDir, `${digest}.${transferId}`);
     if (await this.#landed(path)) this.#surface({ transferId, digest, path });
   }
 
