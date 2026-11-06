@@ -492,6 +492,20 @@ describe("the popover (DESIGN.md §8 'Godview's profiles column')", () => {
   });
 });
 
+/* ── names (the column's sheet stands beside Settings') ─────────────────── */
+
+describe("the column's names stand apart from Settings' own", () => {
+  it("styles no `.vf-profiles-row` (Settings' agent row) and draws none in the popover", () => {
+    // `.vf-profiles-row` is Agent Profiles' agent row (profiles-settings.css): a rule of the column's on it would
+    // re-lay Settings' rows, and Settings' on the popover's would re-lay its plans
+    expect(CSS).not.toMatch(/\.vf-profiles-rows?\b/u);
+    const page = mount(
+      <ProfilesColumnView {...column({ circles: [thisMac()], open: FIXTURE_NATIVE.id })} />,
+    );
+    expect(page.querySelector(".vf-profiles-row")).toBeNull();
+  });
+});
+
 /* ── motion (M6) ──────────────────────────────────────────────────────────── */
 
 describe("the column's motion, and none under Reduce Motion or with Godview's animations off (M6)", () => {
