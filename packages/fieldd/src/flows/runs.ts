@@ -1216,7 +1216,9 @@ export class FlowRuns {
         state: end.state,
         error: error instanceof Error ? error.message : String(error),
       });
-      this.#changed();
+      // 1o (the F4b fix review): told as every write is (#told), so a list that can't be read here is said as a
+      // tell's, never thrown out of the end in place of the end's own failure
+      this.#told();
     }
   }
 
