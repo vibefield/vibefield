@@ -15,6 +15,7 @@ import {
   useState,
 } from "react";
 import { meterWindows } from "../../usage/meters";
+import { resetForm } from "../../usage/rules";
 import type { SettingsSubpage } from "../SettingsDialog";
 import { borderCls, fieldCls, labelCls, SettingsRow, SettingsSection } from "../settings-ui";
 import type { AgentsNotice } from "./AgentsView";
@@ -145,32 +146,48 @@ export function profileAgentSubpage(
 /** The track's height before it is measured (the stylesheet's 14 px). */
 const TRACK_HEIGHT = 14;
 
+/** How a line's reset is said (the leaf's `resetForm`): by its length, by its day and clock, or now. */
+export type UsageResetForm = NonNullable<ReturnType<typeof resetForm>>;
+
 /** UM-D3, UM-D4 — Settings' C1 lines as the meters read them (`usage/meters.ts`'s
  * `meterWindows`: Settings' own lines, every window in play), with the words of
  * each window that runs out before its reset at this pace ("out in ~35m"), said
- * at its line's end — so Settings and Godview's popover never say different things. */
+ * at its line's end, and how each reset is said (`resetForm`) — so Settings and
+ * Godview's popover never say different things. */
 function meterLines(
   metrics: Parameters<typeof meterWindows>[0],
   now: Date,
-): { lines: UsageLine[]; forecasts: Readonly<Record<string, string>> } {
+): {
+  lines: UsageLine[];
+  forecasts: Readonly<Record<string, string>>;
+  resetForms: Readonly<Record<string, UsageResetForm>>;
+} {
   const windows = meterWindows(metrics, now);
   const forecasts: Record<string, string> = {};
+  const resetForms: Record<string, UsageResetForm> = {};
   for (const window of windows) {
     if (window.forecast !== undefined) forecasts[window.line.id] = window.forecast.short;
+    const form = resetForm(window);
+    if (form !== undefined) resetForms[window.line.id] = form;
   }
-  return { lines: windows.map((window) => window.line), forecasts };
+  return { lines: windows.map((window) => window.line), forecasts, resetForms };
 }
 
 /** One window's line. The figure's place is laid out in pixels, so the
  * track and the figure are measured, and again whenever either resizes. A
  * window that runs out before its reset says when at its end, in the reset's
- * place (UM-D4). */
+ * place (UM-D4). A reset is said "resets in 2h" by its length (§9's ruled
+ * words); by its day and clock, "resets Thu 09:00", and once it has come,
+ * "resets now", as the phone says them (§9 "A reading", ‹for James›). A line
+ * handed no form is said by its length. */
 function UsageLineView({
   line,
   forecast,
+  form,
 }: {
   line: UsageLine;
   forecast?: string | undefined;
+  form?: UsageResetForm | undefined;
 }): ReactElement {
   const track = useRef<HTMLSpanElement | null>(null);
   const figure = useRef<HTMLSpanElement | null>(null);
@@ -208,9 +225,13 @@ function UsageLineView({
   const nowWidth = USAGE_NOW_WIDTH + 2 * USAGE_NOW_FLARE;
   const words = `${line.group !== undefined ? `${line.group.label}, ` : ""}${line.label}: ${Math.round(
     line.usedPercent,
-  )}% used${line.reset !== undefined ? `, resets in ${line.reset}` : ""}${
-    line.hot ? ", ahead of pace" : ""
-  }${forecast !== undefined ? `, ${forecast}` : ""}`;
+  )}% used${
+    line.reset === undefined
+      ? ""
+      : form === "day" || form === "now"
+        ? `, resets ${line.reset}`
+        : `, resets in ${line.reset}`
+  }${line.hot ? ", ahead of pace" : ""}${forecast !== undefined ? `, ${forecast}` : ""}`;
   return (
     // biome-ignore lint/a11y/useSemanticElements: a row of the timeline's grid; see UsageTimeline
     <div
@@ -268,6 +289,7 @@ function UsageLineView({
 export function UsageTimeline({
   lines,
   forecasts,
+  resetForms,
   label,
   variant = "row",
 }: {
@@ -275,8 +297,9 @@ export function UsageTimeline({
   /** UM-D4 — the words of each window that runs out before its reset, by its
    * line's id (`meterLines`), said at the line's end */
   forecasts?: Readonly<Record<string, string>> | undefined;
-  /** UM-3 red: the skeleton — each line's reset form, by its line's id, not yet said */
-  resetForms?: Readonly<Record<string, "length" | "day" | "now">> | undefined;
+  /** UM-D3 — how each line's reset is said, by its line's id (`meterLines`,
+   * the leaf's `resetForm`): by its length, by its day and clock, or now */
+  resetForms?: Readonly<Record<string, UsageResetForm>> | undefined;
   /** what these windows belong to, for a screen reader */
   label: string;
   /** on a plan card the lines take the card's width (pass 19: 34 · track · 66) */
@@ -299,6 +322,7 @@ export function UsageTimeline({
             heading={heads ? group.label : undefined}
             line={line}
             forecast={forecasts?.[line.id]}
+            form={resetForms?.[line.id]}
           />
         );
       })}
@@ -312,10 +336,12 @@ function UsageGroupLine({
   heading,
   line,
   forecast,
+  form,
 }: {
   heading?: string | undefined;
   line: UsageLine;
   forecast?: string | undefined;
+  form?: UsageResetForm | undefined;
 }) {
   return (
     <>
@@ -324,7 +350,7 @@ function UsageGroupLine({
           {heading}
         </span>
       )}
-      <UsageLineView line={line} forecast={forecast} />
+      <UsageLineView line={line} forecast={forecast} form={form} />
     </>
   );
 }
@@ -393,7 +419,7 @@ export function PlanCardView({
   refreshingUsage?: boolean;
   onAct?: ((card: PlanCard) => void) | undefined;
 }): ReactElement {
-  const { lines, forecasts } = meterLines(card.metrics, now);
+  const { lines, forecasts, resetForms } = meterLines(card.metrics, now);
   const loading =
     refreshingUsage && card.named && card.namedBy !== undefined && card.act?.kind !== "reauth";
   const titleId = useId();
@@ -441,7 +467,13 @@ export function PlanCardView({
         className={`vf-profiles-plan-usage${loading && lines.length === 0 ? " is-loading" : ""}`}
       >
         {lines.length > 0 ? (
-          <UsageTimeline lines={lines} forecasts={forecasts} label={card.title} variant="card" />
+          <UsageTimeline
+            lines={lines}
+            forecasts={forecasts}
+            resetForms={resetForms}
+            label={card.title}
+            variant="card"
+          />
         ) : card.sentence !== undefined ? (
           // Preserve the sentence's space while the skeleton replaces it,
           // including wrapped failure messages on narrow cards.
@@ -1179,9 +1211,9 @@ function ProfileAgentRowView({
   const badged = row.badges.length > 0 && (row.state === "signed-in" || row.state === "expired");
   // Usage may arrive before the identity that places it on a plan. Keep it
   // for that card instead of briefly moving the meters into the agent row.
-  const { lines, forecasts } =
+  const { lines, forecasts, resetForms } =
     badged || row.state === "unread"
-      ? { lines: [], forecasts: {} }
+      ? { lines: [], forecasts: {}, resetForms: {} }
       : meterLines(row.usage, now ?? new Date());
   let action: ReactNode = null;
   if (row.state === "expired") {
@@ -1251,7 +1283,12 @@ function ProfileAgentRowView({
             )}
           </span>
         )}
-        <UsageTimeline lines={lines} forecasts={forecasts} label={row.label} />
+        <UsageTimeline
+          lines={lines}
+          forecasts={forecasts}
+          resetForms={resetForms}
+          label={row.label}
+        />
       </div>
       <div className="vf-agents-row-actions">{action}</div>
       <Chevron />
@@ -1371,7 +1408,7 @@ export function ProfileAgentPageView({
   extensions,
 }: ProfileAgentPageViewProps): ReactElement {
   const at = now ?? new Date();
-  const { lines, forecasts } = meterLines(row.usage, at);
+  const { lines, forecasts, resetForms } = meterLines(row.usage, at);
   const identity = row.persona.identity;
   const signedIn = row.state === "signed-in" || row.state === "expired";
   // a vendor agent's one sign-in is on its company's plan: the card says it best
@@ -1487,7 +1524,11 @@ export function ProfileAgentPageView({
       >
         <div className="vf-agents-list vf-profiles-signins">
           {signInLines(row, plans).map((line) => {
-            const { lines: windows, forecasts: windowForecasts } = meterLines(line.metrics, at);
+            const {
+              lines: windows,
+              forecasts: windowForecasts,
+              resetForms: windowResetForms,
+            } = meterLines(line.metrics, at);
             const plan = plans.find((candidate) => candidate.id === line.planId);
             const loading =
               refreshingUsage &&
@@ -1509,7 +1550,12 @@ export function ProfileAgentPageView({
                     {line.inUse && <span className="vf-profiles-tag">in use</span>}
                   </span>
                   <span className="vf-agents-row-fact">{line.fact}</span>
-                  <UsageTimeline lines={windows} forecasts={windowForecasts} label={line.title} />
+                  <UsageTimeline
+                    lines={windows}
+                    forecasts={windowForecasts}
+                    resetForms={windowResetForms}
+                    label={line.title}
+                  />
                   {loading && <UsageLoading label={line.title} hasReading={windows.length > 0} />}
                 </div>
               </div>
@@ -1559,7 +1605,12 @@ export function ProfileAgentPageView({
             {own !== undefined && card?.note !== undefined && (
               <p className="vf-profiles-plan-note">{card.note}</p>
             )}
-            <UsageTimeline lines={lines} forecasts={forecasts} label={row.label} />
+            <UsageTimeline
+              lines={lines}
+              forecasts={forecasts}
+              resetForms={resetForms}
+              label={row.label}
+            />
             {refreshingUsage && row.state === "signed-in" && (
               <UsageLoading label={title} hasReading={lines.length > 0} />
             )}

@@ -2,9 +2,10 @@ import { FieldGlyph } from "@vibefield/design-kit/glyphs";
 import { AgentIcon, ProfileGlyph } from "@vibefield/puppeteer-view-sdk/react";
 import { MONITOR_STAGE_CLASS } from "@vibefield/puppeteer-views";
 import { type CSSProperties, type ReactElement, useLayoutEffect, useRef, useState } from "react";
-import { UsageTimeline } from "../../panels/agents/ProfilesView";
+import { type UsageResetForm, UsageTimeline } from "../../panels/agents/ProfilesView";
 import { bandsGeometry, bandsLabel } from "../../usage/bands";
-import type { PlanMeter, ProfileMeters } from "../../usage/meters";
+import type { MeterWindow, PlanMeter, ProfileMeters } from "../../usage/meters";
+import { resetForm } from "../../usage/rules";
 import { BandsCircle, BandsKey } from "./BandsCircle";
 import type { ColumnCircle } from "./ProfilesColumnView";
 
@@ -104,6 +105,19 @@ function NeedAct({
   );
 }
 
+/** How the C1 line says its window's reset, as Settings' line says it (the leaf's `resetForm`; UM-D3). */
+function formOf(window: MeterWindow): Readonly<Record<string, UsageResetForm>> | undefined {
+  const form = resetForm(window);
+  return form === undefined ? undefined : { [window.line.id]: form };
+}
+
+/** What a plan with no meter says (§9 "What needs you"): "‹agent› shows no meter" is an agent that reports no
+ * usage; a plan no agent named, or whose reading holds no window, says its title alone, as the phone does (UM-D3;
+ * ‹for James›), since "shows no meter" would be false of an agent that meters. */
+function noneWords(entry: Extract<PlanMeter, { kind: "no-meter" }>): string {
+  return entry.why === "unreported" ? `${entry.agent} shows no meter` : entry.title;
+}
+
 /** One plan on the circle: its mark, its title, its right words, and its tightest window's C1 line. */
 function PlanRow({
   entry,
@@ -142,7 +156,11 @@ function PlanRow({
       </span>
       {entry.kind === "reading" ? (
         <span className="vf-profiles-pop-row-meter">
-          <UsageTimeline lines={[entry.tightest.line]} label={entry.title} />
+          <UsageTimeline
+            lines={[entry.tightest.line]}
+            resetForms={formOf(entry.tightest)}
+            label={entry.title}
+          />
         </span>
       ) : entry.kind === "first-read" ? (
         <span
@@ -247,7 +265,7 @@ export function ProfilePopoverView({
               <span className="vf-profiles-pop-none-mark" aria-hidden="true">
                 <AgentIcon providerId={entry.provider} />
               </span>
-              {`${entry.agent} shows no meter`}
+              {noneWords(entry)}
             </p>
           ))}
         </div>
