@@ -11,6 +11,7 @@ import {
   RECORD_STORES,
   RunSummary,
 } from "@vibefield/contracts";
+import type { LogFields, Logger } from "@vibefield/logging";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { FlowStepTurnEnd } from "../src/flow-step-events";
 import type { FlowsHostLaunch } from "../src/flows/launch";
@@ -22,7 +23,12 @@ import {
   FlowRuns,
   type FlowRunsList,
 } from "../src/flows/runs";
-import type { FlowStepLaunch, FlowStepOrigin, FlowStepSession } from "../src/flows/steps";
+import {
+  type FlowStepLaunch,
+  type FlowStepOrigin,
+  type FlowStepSession,
+  stepFailed,
+} from "../src/flows/steps";
 import * as words from "../src/flows/words";
 import type { RpcCallError } from "../src/native-link";
 import { recordsUnreadable, UNREADABLE_WORDS } from "../src/signed-record";
@@ -137,6 +143,18 @@ async function harness(
   const hands: Handed[] = [];
   const items: FlowItemRaise[] = [];
   const turnListeners = new Set<(end: FlowStepTurnEnd) => void>();
+  /** what fieldd's log was told at warn, in order */
+  const warned: { event: string; fields: LogFields | undefined }[] = [];
+  const logger: Logger = {
+    child: () => logger,
+    trace: () => undefined,
+    debug: () => undefined,
+    info: () => undefined,
+    warn: (event, _message, fields) => void warned.push({ event, fields }),
+    error: () => undefined,
+    fatal: () => undefined,
+    isLevelEnabled: () => true,
+  };
   /** a step's turn ended, as flow-step-events.ts tells it */
   const endTurn = (end: FlowStepTurnEnd) => {
     for (const listener of turnListeners) listener(end);
@@ -201,6 +219,7 @@ async function harness(
       launch: { kind: "launch", launch: opts.launch ?? (await flowsHostLaunch()) },
       environment: PATH_ONLY,
     },
+    logger,
   });
   opened.push(runs);
   /** a flow's file in the person's library, as they saved it */
@@ -242,6 +261,7 @@ async function harness(
     setProfiles,
     setSparkScope,
     kinds,
+    warned,
   };
 }
 
@@ -1320,6 +1340,134 @@ describe("CP-4a2b — a step's answer: heard once, bounded whole, checked agains
     );
     expect(record?.open.map((step) => [step.call, step.state])).toEqual([[stuck + 1, "working"]]);
     expect(h.spawned.map((spawn) => spawn.origin.call)).toEqual([stuck + 1]);
+  });
+
+  it("R14d (F2 review T1, T3, T6): a start that throws while the runs store does not answer settles its step with no read on the failure road: no rejection escapes, its call's own label names it, and its slot frees", async () => {
+    const h = await harness();
+    // past FLOW_LABEL_MAX, so the record's entry keeps no label: only the call's own names the step (T3)
+    const long = "Look ".repeat(26).trim();
+    const good = { agent: "claude", label: "Good", cwd: "/work/app", profile: "work" };
+    const look = { agent: "claude", label: long, profile: "work", cwd: "/work/app", model: "opus" };
+    h.approved("broken", callsEach([look], good));
+    // the start throws as the disk stops answering, and the store's next read before the answer's line refuses
+    const read = h.records.runRecord.bind(h.records);
+    let refusing = false;
+    vi.spyOn(h.records, "runRecord").mockImplementation((run) => {
+      if (!refusing) return read(run);
+      refusing = false;
+      throw recordsUnreadable(RECORD_STORES.SERVICE_FLOWS, UNREADABLE_WORDS.flows, true);
+    });
+    const append = h.records.appendRun.bind(h.records);
+    vi.spyOn(h.records, "appendRun").mockImplementation((run, entry) => {
+      if (entry.kind === "answer") refusing = false;
+      return append(run, entry);
+    });
+    vi.spyOn(h.runs.ports.agents, "models").mockImplementation(async () => {
+      refusing = true;
+      throw new Error("EIO: i/o error, read");
+    });
+    const unhandled: unknown[] = [];
+    const onUnhandled = (reason: unknown) => void unhandled.push(reason);
+    process.on("unhandledRejection", onUnhandled);
+    try {
+      const run = startedRun(await h.start({ flow: "broken" })).run;
+      await waitFor(() => expect(h.enqueued).toHaveLength(1));
+      expect(refusalsOf(h, run)).toEqual([stepFailed(long)]);
+      expect(stepFailed(long)).not.toBe(stepFailed(undefined));
+      const record = h.records.runRecord(run);
+      expect(record?.steps.map((step) => [step.call, step.state])).toEqual([[1, "failed"]]);
+      expect(record?.open.map((step) => [step.call, step.state])).toEqual([[2, "working"]]);
+    } finally {
+      process.off("unhandledRejection", onUnhandled);
+    }
+    expect(unhandled).toEqual([]);
+  });
+
+  it("R14e (F2 review T5): a read that throws on a step's own road, before its waiter, settles the step failed: no rejection escapes, and its entry never holds a slot", async () => {
+    const h = await harness();
+    const good = { agent: "claude", label: "Good", cwd: "/work/app", profile: "work" };
+    const look = { agent: "claude", label: "Look", profile: "work", cwd: "/work/app" };
+    h.approved("unread", callsEach([look], good));
+    // the step's entry is on the record; the read the step's road takes next is the disk's to refuse
+    const read = h.records.runRecord.bind(h.records);
+    const write = h.records.writeRunRecord.bind(h.records);
+    let entered = false;
+    let refusing = false;
+    vi.spyOn(h.records, "writeRunRecord").mockImplementation((run, fields) => {
+      write(run, fields);
+      if (!entered && fields.open.some((step) => step.call === 1)) {
+        entered = true;
+        refusing = true;
+      }
+    });
+    vi.spyOn(h.records, "runRecord").mockImplementation((run) => {
+      if (!refusing) return read(run);
+      refusing = false;
+      throw recordsUnreadable(RECORD_STORES.SERVICE_FLOWS, UNREADABLE_WORDS.flows, true);
+    });
+    const run = startedRun(await h.start({ flow: "unread" })).run;
+    await waitFor(() => expect(h.enqueued).toHaveLength(1));
+    expect(refusalsOf(h, run)).toEqual([stepFailed("Look")]);
+    const record = h.records.runRecord(run);
+    expect(record?.steps.map((step) => [step.label, step.state])).toEqual([["Look", "failed"]]);
+    expect(record?.open.map((step) => [step.call, step.state])).toEqual([[2, "working"]]);
+  });
+
+  it("R14f (F2 review T2): a start that throws after its agent started and before its line was queued fails the step, and fieldd's warn names the agent it leaves (slice 13's R42 ends it)", async () => {
+    const h = await harness();
+    h.approved("review", REVIEW_CATCHES);
+    vi.spyOn(h.runs.ports.inputs, "enqueue").mockImplementationOnce(() => {
+      throw new Error("the input queue refused it");
+    });
+    const run = startedRun(await h.start({ flow: "review" })).run;
+    expect((await settled(h.runs, run, "done")).log).toBe(stepFailed("Diff"));
+    expect(h.spawned.map((spawn) => spawn.origin.call)).toEqual([1]);
+    expect(h.records.runRecord(run)?.steps).toMatchObject([
+      { call: 1, session: "rt-step1", state: "failed" },
+    ]);
+    expect(h.warned.filter((said) => said.event === "fieldd.flows.step.orphan")).toEqual([
+      {
+        event: "fieldd.flows.step.orphan",
+        fields: expect.objectContaining({ run, call: 1, runtimeRunId: "rt-step1" }),
+      },
+    ]);
+  });
+
+  it("R14g (F2 review T2): a record that can't say a queued line was queued is logged, never thrown: the step works on, and its agent's answer settles it", async () => {
+    const h = await harness();
+    h.approved("review", ANSWERED);
+    const write = h.records.writeRunRecord.bind(h.records);
+    let refused = false;
+    vi.spyOn(h.records, "writeRunRecord").mockImplementation((run, fields) => {
+      const queued = fields.open.some((step) => step.lines?.some((line) => line.sent === "queued"));
+      if (!refused && queued) {
+        refused = true;
+        throw new Error("ENOSPC: no space left on device, write");
+      }
+      write(run, fields);
+    });
+    const run = startedRun(await h.start({ flow: "review" })).run;
+    await waitFor(() =>
+      expect(h.warned.map((said) => said.event)).toContain("fieldd.flows.step.queued"),
+    );
+    expect(refusalsOf(h, run)).toEqual([]);
+    expect(h.records.runRecord(run)?.open).toMatchObject([
+      {
+        call: 1,
+        session: "rt-step1",
+        state: "working",
+        lines: [{ line: "prompt", sent: "sending" }],
+      },
+    ]);
+    h.endTurn({
+      run,
+      call: 1,
+      runtimeRunId: "rt-step1",
+      turn: "t1",
+      outcome: "completed",
+      text: "all clean",
+    });
+    expect((await settled(h.runs, run, "done")).log).toBe("all clean");
   });
 });
 
