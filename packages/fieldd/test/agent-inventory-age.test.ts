@@ -16,7 +16,7 @@
 // routes, so a birth or a terminate that goes ahead fails at the cell's paper
 // socket: these rows read whether one was ASKED (spies on the terminal
 // service), never what a cell would have answered.
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import type { SessionExitedEvent } from "@vibecook/ghosttea-client";
@@ -143,19 +143,22 @@ interface AgentDaemonSeams {
   lastBoard?: Array<Record<string, unknown>>;
   /** the process table a typed run is proven against (default: the kit's one `ps` read) */
   processTable?: NonNullable<FielddConfig["agentGateway"]>["processTable"];
+  /** the root as the disk holds it when fieldd starts, made after the staged records are written */
+  beforeBoot?: (dataDir: string) => void;
 }
 
 /** A daemon over the mock floor answering `observedState` on the fixtures'
  * routes, its agent runtime composing the scripted agent, `staged(dataDir)`
  * written as signed records before it boots, and the seams it is handed (the
- * last run's picture of the board, the process table); and a connection that
- * may resume (`agent.spawn`) and read the fold. */
+ * last run's picture of the board, the process table, the root as the disk
+ * holds it at boot); and a connection that may resume (`agent.spawn`) and read
+ * the fold. */
 async function agentDaemonOn(
   observedState: unknown,
   staged: (dataDir: string) => AgentSessionRecord[],
   seams: AgentDaemonSeams = {},
 ): Promise<AgentFloor> {
-  const { lastBoard, processTable } = seams;
+  const { lastBoard, processTable, beforeBoot } = seams;
   const dataDir = mkdtempSync(join(tmpdir(), "vf-agent-age-"));
   cleanup.push(() => rmSync(dataDir, { recursive: true, force: true }));
   mkdirSync(join(dataDir, "native", "run"), { recursive: true });
@@ -176,6 +179,7 @@ async function agentDaemonOn(
     };
     writeFileSync(path, `${JSON.stringify(picture)}\n`);
   }
+  beforeBoot?.(dataDir);
   const mock = new MockMgmtServer(nativeEndpoint(dataDir, SOCKETS.MGMT));
   mock.observedState = observedState;
   mock.terminalRoutes = fixtureRoutes();
@@ -856,5 +860,50 @@ describe("the boot's grace, per record (item 201, vf-runtime-8; the mock floor)"
       daemon.agents.liveUnder(new Set(["persona-b"])),
       "and no phantom counts under B's persona",
     ).toBe(0);
+  });
+});
+
+// Item 201 (RV #48, vf-runtime-5) — the boot's re-attach reads the records the last fieldd left (AR-4). One that could
+// not list them (here a same-uid file where their folder is, B177's shape in agent-session.test.ts) says so in
+// fieldd's log and goes on with none (DESIGN.md §9, item 177), and it has not run: a run the fold lacks may still be
+// a live PTY no map holds. So nothing is settled on records it could not read: the settle joiners (needs, inputs,
+// crews) and the last run's picture wait, fieldd's own stop census is unread, and a sign-out counts every un-exited
+// record under its sign-in as running. The signing key sits beside the folder (`LAYOUT.AGENT_SESSIONS_KEY_FILE`), so
+// the records verify once the folder is back. The boot feeds the re-attach its first inventory before `bootstrap`
+// answers, and the list refuses before the re-attach's first await, so its state is read right after the boot.
+describe("records the re-attach could not read (item 201, vf-runtime-5; the mock floor)", () => {
+  /** the sessions' folder moved aside, and a same-uid file where it was: every list refuses (item 177) */
+  const unreadable = (dataDir: string): void => {
+    const sessions = join(dataDir, ...LAYOUT.AGENT_SESSIONS_DIR);
+    renameSync(sessions, `${sessions}.away`);
+    writeFileSync(sessions, "not a folder", { mode: 0o600 });
+  };
+  /** the file gone and the folder back where it was, its records as the last fieldd left them */
+  const readableAgain = (dataDir: string): void => {
+    const sessions = join(dataDir, ...LAYOUT.AGENT_SESSIONS_DIR);
+    rmSync(sessions, { force: true });
+    renameSync(`${sessions}.away`, sessions);
+  };
+
+  it("a re-attach that could not list the records settles nothing: fieldd's stop census is unread, and once they read again, before any re-attach has, a sign-out counts their run as running", async () => {
+    const run = "run-unread-under-persona";
+    const { daemon, dataDir } = await agentDaemonOn(
+      freshFloor(),
+      // a run under a sign-in whose PTY this floor does not list: one a re-attach that read it would hold
+      (dir) => [runRecord(run, "pty-not-listed-unread", dir, { profileId: "persona-u" })],
+      { beforeBoot: unreadable },
+    );
+    await until(() => daemon.terminals.observation() !== undefined, 5_000, "the first inventory");
+    expect(daemon.agents.reattachSettled(), "nothing is settled on unread records").toBe(false);
+    expect(daemon.agents.plainStopCensus(), "fieldd's own stop cannot say what it ends").toEqual({
+      settled: false,
+    });
+
+    // the folder answers again, and no inventory has come since
+    readableAgain(dataDir);
+    expect(
+      daemon.agents.liveUnder(new Set(["persona-u"])),
+      "a record no re-attach has read may be a live PTY: its run counts as running",
+    ).toBe(1);
   });
 });
