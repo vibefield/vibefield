@@ -528,17 +528,27 @@ export class NeedsQueue implements TalkHolds {
   /** A flow run ended (done, stopped, failed or set aside): its open items end, and an answer after is refused
    * `ended`. Nothing is owed: the runs say the end themselves. */
   onFlowRunEnded(run: string): void {
-    for (const record of [...this.#records.values()]) {
-      const { item } = record;
-      if (item.run?.run !== run || needsStateOf(item) !== "open") continue;
-      this.#stand({ ...record, item: { ...item, state: "ended" satisfies NeedsItemState } });
-    }
+    for (const record of [...this.#records.values()])
+      if (record.item.run?.run === run && needsStateOf(record.item) === "open")
+        this.#endFlow(record);
     this.#emit();
   }
 
-  /** RED skeleton: ends nothing. */
-  endFlowItem(_id: NeedsItemId): boolean {
-    return false;
+  /** The runs end one item alone: an open flow item whose call their journal already answered (the boot case of
+   * R13d/R36: the run's record's `held.item` names it, and the queue's record of the answer was not kept). Answers
+   * whether it ended one: an item no longer open, one that holds no flow run, or an id never held ends nothing. */
+  endFlowItem(id: NeedsItemId): boolean {
+    const record = this.#records.get(id);
+    if (record?.item.run === undefined || needsStateOf(record.item) !== "open") return false;
+    this.#endFlow(record);
+    this.#emit();
+    return true;
+  }
+
+  /** A flow item ended with no answer: it follows what the runs did, so it stands whatever the disk does, and holds
+   * nothing more (no answer, nothing owed): its file goes, and it is remembered for an answer that comes after. */
+  #endFlow(record: NeedsRecord): void {
+    this.#stand({ ...record, item: { ...record.item, state: "ended" satisfies NeedsItemState } });
   }
 
   // ── the window's answer ──
