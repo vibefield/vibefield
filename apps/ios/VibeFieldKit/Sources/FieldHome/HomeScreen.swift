@@ -125,6 +125,9 @@ public struct HomeScreen: View {
   /// marks (SP-1d): both for the app's life, written nowhere.
   @State private var chat = ChatFeed()
   @State private var chatLedger = ThreadLedger()
+  /// IOS-12c — the spark whose thread stands on Chat (pushed in Chat's own stack), or none: the bar steps aside for
+  /// it, and the ledger reads it while Chat is the page.
+  @State private var chatThread: String?
   /// The note over the bar (S-4): which needs are new, and the spark it says.
   @State private var chatNotes = ChatNotes()
   @State private var chatNote: SparkSummary?
@@ -869,11 +872,21 @@ public struct HomeScreen: View {
     let entries = chatEntries
     return ChatPage(
       entries: entries, ledger: chatLedger, desktops: chatDesktopNames(entries), away: chatAway,
-      heard: chat.reading.heard, onWake: { spark in Task { try? await chat.wake(spark) } }
+      heard: chat.reading.heard, onWake: { spark in Task { try? await chat.wake(spark) } },
+      feed: chat, thread: $chatThread, onOpenPane: openSparkPane
     )
     .safeAreaInset(edge: .bottom, spacing: 0) {
-      Color.clear.frame(height: AppBar.clearance(homeInset: homeInset, stepper: false))
+      // a thread's composer takes the bar's place: no clearance under it
+      Color.clear.frame(height: chatThread == nil ? AppBar.clearance(homeInset: homeInset, stepper: false) : 0)
     }
+  }
+
+  /// IOS-12c (PC-D2 A) — Open its pane: the spark's own run's session card on the Field, which IS the attach (FW-D2),
+  /// found by the run's board key (`runtimeRunId`, a bubble's `runKey`). A run the board no longer shows opens nothing.
+  private func openSparkPane(_ run: AgentRemoteRow) {
+    guard let bubble = bubbles.first(where: { $0.runKey == run.runtimeRunId }) else { return }
+    selectedTab = .field
+    openCard(on: bubble)
   }
 
   /// IOS-12b — Chat's list: every spark the home lists, read by SP-1b's rule
@@ -907,6 +920,10 @@ public struct HomeScreen: View {
       }
       .onChange(of: selectedTab) { _, tab in
         if tab == .chat { chatNote = nil }
+        chatLedger.show(ChatThreads.onScreen(tab: tab, thread: chatThread), chatEntries)
+      }
+      .onChange(of: chatThread) { _, thread in
+        chatLedger.show(ChatThreads.onScreen(tab: selectedTab, thread: thread), chatEntries)
       }
       .onChange(of: scenePhase) { _, phase in
         if phase == .active { chat.refresh() }
@@ -1032,9 +1049,14 @@ public struct HomeScreen: View {
           .ignoresSafeArea()
           .onTapGesture { setAccountMenu(open: false) }
       }
-      barRow
-        .padding(.bottom, barTyping ? AppBar.gapAboveKeyboard : AppBar.bottomGap(homeInset: homeInset))
+      if !barAside {
+        barRow
+          .padding(.bottom, barTyping ? AppBar.gapAboveKeyboard : AppBar.bottomGap(homeInset: homeInset))
+          .transition(.move(edge: .bottom).combined(with: .opacity))
+      }
     }
+    // IOS-12c (§8): in a thread the bar steps aside and the composer takes its place, as Messages does (380ms)
+    .animation(reduceMotion ? .easeInOut(duration: 0.2) : .easeInOut(duration: 0.38), value: barAside)
     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
     .ignoresSafeArea(.container, edges: .bottom)
     .animation(reduceMotion ? .easeInOut(duration: 0.2) : AppBar.motion, value: barState)
@@ -1089,13 +1111,18 @@ public struct HomeScreen: View {
     var folded: Bool
     var stepper: Bool
     var typing: Bool
+    /// IOS-12c — a thread stands on Chat: the bar steps aside.
+    var aside: Bool
   }
 
   private var barState: BarState {
     BarState(
       tab: selectedTab, folded: barFolded, stepper: barStepper || slotProject != nil || slotSession != nil,
-      typing: barTyping)
+      typing: barTyping, aside: barAside)
   }
+
+  /// IOS-12c — a thread stands on Chat, and its composer is in the bar's place.
+  private var barAside: Bool { selectedTab == .chat && chatThread != nil }
 
   /// History's scroll has folded the bar to its glyph (the page's minimize).
   private var barFolded: Bool { selectedTab == .history && history.barMinimized && !accountMenuOpen }

@@ -5,8 +5,8 @@ import SwiftUI
 // IOS-12b (PC-D1 A, PC-L1, PC-L4, PC-L5; DESIGN.md §8 "The phone's Chat", §9 "Chat on the phone") — CHAT'S PAGE:
 // History's page (its large title, its paper, its group head), the list's subtitle counting what is true, a line for
 // each desktop whose sparks are its last word, and one row per spark, newest activity first (CH-D1). The Needs you
-// group is IOS-12d's, the thread IOS-12c's: a row here says its spark's status and its dot, and Wake stands in its
-// menu while it sleeps.
+// group is IOS-12d's. A row says its spark's status and its dot; pressed, it opens the spark's thread (IOS-12c), pushed
+// in this page's own stack; held, its menu offers Open its pane while its own run is live, and Wake while it sleeps.
 
 /// Chat's words (§9 "Chat on the phone"), pure.
 enum ChatWords {
@@ -129,17 +129,52 @@ struct ChatPage: View {
   /// The home has answered the list at least once (else nothing is claimed, not even "No sparks yet.").
   let heard: Bool
   let onWake: (SparkSummary) -> Void
+  /// IOS-12c — the threads' reads and sends go through Chat's feed, and the thread shown is the screen's (the bar
+  /// steps aside for it, and the ledger reads it).
+  let feed: ChatFeed
+  @Binding var thread: String?
+  /// Open its pane: the spark's own run's session card, which is the attach (FW-D2).
+  let onOpenPane: (AgentRemoteRow) -> Void
+  #if DEBUG
+    /// The stills' thread has been opened once (`ChatFixtureDoor.openThread`); back then stays back.
+    @State private var openedForStills = false
+  #endif
+
+  /// The stack's path: the shown thread, or none.
+  private var path: Binding<[String]> {
+    Binding(get: { thread.map { [$0] } ?? [] }, set: { thread = $0.last })
+  }
 
   var body: some View {
-    NavigationStack {
+    NavigationStack(path: path) {
       // IOS-12e (§2.10): Chat's list is one stage; a row's face moves on it while its spark works
       SparkStageHost {
         list
           .background(ChromePalette.paper.ignoresSafeArea())
       }
       .navigationTitle(ChatWords.title)
+      .navigationDestination(for: String.self) { spark in
+        if let entry = entries.first(where: { $0.spark.id == spark }) {
+          ChatThreadView(
+            entry: entry, feed: feed,
+            away: ChatThreads.away(of: entry.spark, in: away, connected: feed.reading.connected),
+            onOpenPane: onOpenPane)
+        } else {
+          // the spark left the list while its thread stood: the list again
+          Color.clear.onAppear { thread = nil }
+        }
+      }
     }
     .tint(ChromePalette.ink)
+    #if DEBUG
+      // the stills, under `-vf-mock`: the named thread opens once the list holds its spark (set before then, the
+      // destination would find no spark and stand the list again)
+      .onChange(of: entries.map(\.spark.id), initial: true) { _, ids in
+        guard !openedForStills, let spark = ChatFixtureDoor.openThread, ids.contains(spark) else { return }
+        openedForStills = true
+        thread = spark
+      }
+    #endif
   }
 
   private var list: some View {
@@ -175,7 +210,9 @@ struct ChatPage: View {
             let now = Int64((context.date.timeIntervalSince1970 * 1000).rounded())
             VStack(spacing: 0) {
               ForEach(Array(entries.enumerated()), id: \.element.id) { index, entry in
-                ChatRow(entry: entry, mark: ledger.mark(of: entry), now: now, separated: index > 0, onWake: onWake)
+                ChatRow(
+                  entry: entry, mark: ledger.mark(of: entry), now: now, separated: index > 0, onWake: onWake,
+                  onOpen: { thread = entry.spark.id }, onOpenPane: onOpenPane)
               }
             }
           }
@@ -220,6 +257,9 @@ struct ChatRow: View {
   let now: Int64
   let separated: Bool
   let onWake: (SparkSummary) -> Void
+  /// IOS-12c — pressed: its thread
+  let onOpen: () -> Void
+  let onOpenPane: (AgentRemoteRow) -> Void
 
   static let height: CGFloat = 76
   static let face: CGFloat = 48
@@ -273,15 +313,26 @@ struct ChatRow: View {
       }
     }
     .contentShape(Rectangle())
-    .contextMenu {
-      if !entry.awake {
-        Button(ChatWords.wake) { onWake(entry.spark) }
-      }
-    }
+    .onTapGesture(perform: onOpen)
+    .contextMenu { acts }
     .accessibilityElement(children: .ignore)
     .accessibilityLabel(ChatWords.row(entry, time: time, mark: mark))
-    .accessibilityActions {
-      if !entry.awake {
+    .accessibilityAddTraits(.isButton)
+    .accessibilityAction(.default, onOpen)
+    .accessibilityActions { acts }
+  }
+
+  /// §8's row menu, in its order: **Open its pane** while its own run is live, then **Wake** while it sleeps (IOS-12c,
+  /// `ChatThreadActs.menu`, the thread's ⋯ too). Put to sleep and Its profile join when the phone has their doors.
+  @ViewBuilder
+  private var acts: some View {
+    ForEach(ChatThreadActs.menu(entry), id: \.self) { act in
+      switch act {
+      case .openPane:
+        Button(ChatThreadWords.openPane) {
+          if let run = entry.run { onOpenPane(run) }
+        }
+      case .wake:
         Button(ChatWords.wake) { onWake(entry.spark) }
       }
     }
