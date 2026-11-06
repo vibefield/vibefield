@@ -2,7 +2,9 @@ import {
   AgentAccountUsageBatch,
   type AgentAccountUsageEntry,
   AgentRecordedLanesResult,
+  AgentsInstallsResult,
   AgentsProfileSetsListResult,
+  type AgentsUsageParams,
   DeviceInfo,
   IndexSearchResult,
   IndexSessionsResult,
@@ -285,22 +287,39 @@ function viewsBatch(batch: AgentAccountUsageBatch): AccountUsageBatch {
   return { refreshedAt: batch.generatedAt, entries: batch.entries.map(toEntry) };
 }
 
+/**
+ * The usage port over fieldd's two usage doors (`agents.usage`, its
+ * subscription) and This Mac's installs.
+ *
+ * UM-3 (2a; DESIGN.md §8 "Godview's profiles column") — THE ONE SUBSCRIPTION
+ * is the port's own: its first reader opens `agents.usage.subscribe` (the
+ * profiles column's rows, which the limit moment reads too, or a views reader
+ * while one stands), every later reader shares it, and the last to leave
+ * closes it. One refused or lost is dropped, so the next reader to come opens
+ * it again: the strip's Retry is the stage's reader leaving and coming back.
+ * Until UM-3's column, puppeteer-views' `UsageColumn` was the only opener and
+ * the rows rode its batch (AO-6b3); the views' face (`snapshot`, `subscribe`)
+ * stays this wave, a reader of the same subscription.
+ */
 export function usagePortOver(client: DoorClient): MonitorUsagePort {
   const listeners = new Set<(state: MonitorFeedState) => void>();
   const errors = new Map<"snapshot" | "subscription", string>();
   let snapshotAttempt = 0;
   let subscriptionReady = false;
   let state: MonitorFeedState = { state: "loading" };
-  // AO-6b3 — fieldd's rows, read once with the column's batch and handed to
-  // the limit moment: the moment reads what the column draws, and no second
-  // `agents.usage.subscribe` is opened for it
+  // each reader is its own entry (a listener handed twice is two readers), so
+  // the count of entries is the count of readers holding the subscription
   const rowsListeners = new Set<(rows: readonly AgentAccountUsageEntry[]) => void>();
+  const batchListeners = new Set<(batch: AccountUsageBatch) => void>();
   let rows: readonly AgentAccountUsageEntry[] | null = null;
+  /** the subscription's last readable frame, for a views reader that joins it */
+  let batch: AccountUsageBatch | null = null;
+  let feed: { close(): void } | null = null;
   const read = (payload: unknown): AccountUsageBatch => {
-    const batch = AgentAccountUsageBatch.parse(payload);
-    rows = batch.entries;
-    for (const listener of rowsListeners) listener(batch.entries);
-    return viewsBatch(batch);
+    const parsed = AgentAccountUsageBatch.parse(payload);
+    rows = parsed.entries;
+    for (const listener of rowsListeners) listener(parsed.entries);
+    return viewsBatch(parsed);
   };
   const report = (source: "snapshot" | "subscription", cause?: unknown): void => {
     if (source === "subscription") subscriptionReady = cause === undefined;
@@ -313,10 +332,71 @@ export function usagePortOver(client: DoorClient): MonitorUsagePort {
     state = reason ? { state: "unavailable", reason } : { state: "ready" };
     for (const listener of listeners) listener(state);
   };
+  const open = (): void => {
+    subscriptionReady = false;
+    batch = null;
+    let cancelled = false;
+    let unsubscribe: (() => void) | null = null;
+    const opened = {
+      close: (): void => {
+        cancelled = true;
+        unsubscribe?.();
+      },
+    };
+    feed = opened;
+    const deliver = (payload: unknown): void => {
+      // Keep the last good batch on an unreadable frame, but expose the
+      // failure to the host. A later valid frame clears this failure.
+      try {
+        const next = read(payload);
+        batch = next;
+        report("subscription");
+        for (const listener of batchListeners) listener(next);
+      } catch (cause) {
+        report("subscription", cause);
+      }
+    };
+    void client
+      .subscribe("agents.usage.subscribe", {}, (payload) => {
+        if (!cancelled) deliver(payload);
+      })
+      .then((subscription) => {
+        if (cancelled) {
+          subscription.unsubscribe();
+          return;
+        }
+        unsubscribe = subscription.unsubscribe;
+        deliver(subscription.snapshot);
+      })
+      .catch((cause: unknown) => {
+        if (cancelled) return;
+        if (feed === opened) feed = null;
+        report("subscription", cause);
+      });
+  };
+  /** A reader joins: the subscription opens for the first, or again after a refusal. */
+  const hold = <T>(into: Set<T>, entry: T): (() => void) => {
+    into.add(entry);
+    if (feed === null) open();
+    return () => {
+      if (!into.delete(entry)) return;
+      if (rowsListeners.size + batchListeners.size > 0) return;
+      feed?.close();
+      feed = null;
+    };
+  };
+  const ask = async (params: AgentsUsageParams): Promise<AccountUsageBatch> => {
+    const attempt = ++snapshotAttempt;
+    try {
+      const answered = read(await client.request("agents.usage", params));
+      if (attempt === snapshotAttempt) report("snapshot");
+      return answered;
+    } catch (cause) {
+      if (attempt === snapshotAttempt) report("snapshot", cause);
+      throw cause;
+    }
+  };
   return {
-    // UM-3 2a red: the skeleton — the rows port's own verbs answer nothing yet
-    refresh: async () => undefined,
-    installs: async () => undefined,
     subscribeState: (listener) => {
       listeners.add(listener);
       listener(state);
@@ -325,57 +405,28 @@ export function usagePortOver(client: DoorClient): MonitorUsagePort {
       };
     },
     subscribeRows: (listener) => {
-      rowsListeners.add(listener);
+      const entry = (next: readonly AgentAccountUsageEntry[]): void => listener(next);
       if (rows !== null) listener(rows);
-      return () => {
-        rowsListeners.delete(listener);
-      };
+      return hold(rowsListeners, entry);
     },
-    snapshot: async () => {
-      const attempt = ++snapshotAttempt;
+    refresh: async (profileIds) => {
+      await ask({ refresh: true, profileIds: [...profileIds] });
+    },
+    installs: async () => {
       try {
-        const batch = read(await client.request("agents.usage", {}));
-        if (attempt === snapshotAttempt) report("snapshot");
-        return batch;
-      } catch (cause) {
-        if (attempt === snapshotAttempt) report("snapshot", cause);
-        throw cause;
+        const parsed = AgentsInstallsResult.safeParse(await client.request("agents.installs", {}));
+        return parsed.success
+          ? new Set(parsed.data.installs.map((install) => install.provider))
+          : undefined;
+      } catch {
+        return undefined;
       }
     },
+    snapshot: () => ask({}),
     subscribe: (listener) => {
-      subscriptionReady = false;
-      let cancelled = false;
-      let unsubscribe: (() => void) | null = null;
-      const deliver = (payload: unknown): void => {
-        // Keep the last good batch on an unreadable frame, but expose the
-        // failure to the host. A later valid frame clears this failure.
-        try {
-          const batch = read(payload);
-          report("subscription");
-          listener(batch);
-        } catch (cause) {
-          report("subscription", cause);
-        }
-      };
-      void client
-        .subscribe("agents.usage.subscribe", {}, (payload) => {
-          if (!cancelled) deliver(payload);
-        })
-        .then((subscription) => {
-          if (cancelled) {
-            subscription.unsubscribe();
-            return;
-          }
-          unsubscribe = subscription.unsubscribe;
-          deliver(subscription.snapshot);
-        })
-        .catch((cause: unknown) => {
-          if (!cancelled) report("subscription", cause);
-        });
-      return () => {
-        cancelled = true;
-        unsubscribe?.();
-      };
+      const entry = (next: AccountUsageBatch): void => listener(next);
+      if (batch !== null && feed !== null) listener(batch);
+      return hold(batchListeners, entry);
     },
   };
 }

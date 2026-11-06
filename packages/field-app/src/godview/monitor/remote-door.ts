@@ -11,9 +11,11 @@ export type MonitorFeedState =
  * parse failures beside it, without inventing an empty usage batch. */
 export interface MonitorUsagePort extends AccountUsagePort {
   subscribeState?(listener: (state: MonitorFeedState) => void): () => void;
-  /** AO-6b3 — fieldd's own rows, as the column's feed delivers them: the
-   * limit moment reads the readings the column draws, through the column's
-   * one subscription, and opens none of its own. The latest rows at once. */
+  /** AO-6b3 — fieldd's own rows: the latest at once, then every readable
+   * frame. UM-3 (2a): the port's one subscription is opened by its first
+   * reader and closed by its last (`usagePortOver`), so the profiles column and
+   * the limit moment read the same rows through it, and a reader that leaves
+   * and comes back opens one that was refused again. */
   subscribeRows?(listener: (rows: readonly AgentAccountUsageEntry[]) => void): () => void;
   /** UM-3 (DESIGN.md §8 "Godview's profiles column": a popover's Retry) —
    * read these profiles' usage again (`agents.usage` with `refresh: true` and
