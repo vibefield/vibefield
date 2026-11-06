@@ -99,7 +99,7 @@ pub async fn handle(
     // A name under the prefix that the contract does not declare answers
     // NOT_FOUND there, as this facade's own unknown names do.
     if method.starts_with("native.mesh.fileTransfer.") {
-        super::file_transfer::handle(state, tx, method, id);
+        super::file_transfer::handle(state, tx, method, params, id).await;
         return;
     }
     if method == "native.mesh.retire" {

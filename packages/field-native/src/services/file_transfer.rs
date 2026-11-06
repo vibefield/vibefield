@@ -32,9 +32,14 @@
 //! `crates/truffle-core/src/file_transfer/types.rs:198-215`), and an adapter
 //! written now would fold it into `io` through a `_` arm.
 
-use crate::config::NativeConfig;
-use crate::contracts::FileTransferRootName;
-use std::collections::{BTreeMap, HashMap};
+use crate::config::{FileTransferRootDirs, NativeConfig};
+use crate::contracts::{
+    Blake3Hex, FileTransferId, FileTransferRootName, NativeFileTransferPullParams,
+    NativeFileTransferRoot, NativeFileTransferRow,
+};
+use crate::registries::{drive_limits, mesh_file_transfer};
+use crate::services::mesh::{TEARDOWN_RETIRED, TEARDOWN_STOPPED};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
@@ -43,7 +48,9 @@ use tokio::sync::{broadcast, oneshot};
 
 /// The facade's substrate. Held on the mesh unit (`services/mesh.rs`'s
 /// `Shared`) beside egress's, and read per request through
-/// `MeshHandle::file_transfer`.
+/// `MeshHandle::file_transfer`. The facade has answered steps 1 to 5 of the
+/// contract's refusal order before a verb reaches an arm
+/// (`mgmt/file_transfer.rs`), so an arm answers step 6 and its substrate.
 #[async_trait::async_trait]
 pub trait FileTransferBackend: Send + Sync {
     /// Which arm answers: logged at boot, asserted by tests, never shown.
@@ -51,6 +58,69 @@ pub trait FileTransferBackend: Send + Sync {
     /// `false` = every verb answers `file-transfer-unsupported`, first, node or
     /// no node (the refusal order's step 1).
     fn supported(&self) -> bool;
+    /// A node was installed (`MeshHandle::on_node_installed`): its substrate,
+    /// whether the node was BUILT gated, and the posture's login.
+    async fn attach(&self, substrate: Arc<dyn PullSubstrate>, gated: bool, login: Option<String>);
+    /// The node is being taken down (`MeshHandle::teardown_node`), for
+    /// `reason`, its word.
+    async fn detach(&self, reason: &str);
+    /// `roots`: the WHOLE declared set, replacing the last, under the gate and
+    /// the login the facade read for this request. One answer per name asked.
+    async fn roots(
+        &self,
+        roots: Vec<FileTransferRootName>,
+        gated: bool,
+        login: Option<String>,
+    ) -> Result<Vec<NativeFileTransferRoot>, FileTransferError>;
+    /// `pull`: start one pull. Answered at once; its end rides the stream.
+    fn pull(&self, params: NativeFileTransferPullParams) -> Result<(), FileTransferError>;
+    /// The pulls running now, ordered by transferId: the stream's snapshot.
+    fn snapshot(&self) -> Vec<NativeFileTransferRow>;
+    /// The stream of the pulls' progress and ends. It is the arm's, so it is
+    /// the mesh unit's, held across node rebuilds (W3-2).
+    fn subscribe(&self) -> broadcast::Receiver<PullEvent>;
+}
+
+/// Why an arm refused a verb. The facade maps each arm onto the wire
+/// (`mgmt/file_transfer.rs`); nothing else reads these.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum FileTransferError {
+    /// This arm cannot pull by a named root: every verb, for the floor's life.
+    Unsupported,
+    /// No node's substrate is attached: the node gate's answer.
+    MeshDown,
+    /// A live transferId, or a digest a running pull holds: the words say which.
+    Conflict(&'static str),
+    /// DRIVE_LIMITS.PULLS_IN_FLIGHT pulls are running.
+    Exhausted,
+    /// Anything else, verbatim.
+    Internal(String),
+}
+
+/// One event on the stream, as the facade writes it to
+/// `native.mesh.fileTransfer.delta` (contracts mgmt.ts
+/// `NativeFileTransferDelta`): a progress, or a pull's end.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum PullEvent {
+    Progress {
+        transfer_id: FileTransferId,
+        bytes: u64,
+        total: u64,
+    },
+    /// The file is in place in its root's `lands` folder, named `incoming`.
+    Completed {
+        transfer_id: FileTransferId,
+        digest: Blake3Hex,
+        incoming: String,
+        bytes: u64,
+        sha256: String,
+    },
+    /// Nothing of the pull is left in the `lands` folder.
+    Failed {
+        transfer_id: FileTransferId,
+        reason: &'static str,
+        message: String,
+    },
 }
 
 /// The arm production builds: [`UnsupportedFileTransfer`] at the `=0.7.24` pin,
@@ -71,6 +141,27 @@ impl FileTransferBackend for UnsupportedFileTransfer {
     }
     fn supported(&self) -> bool {
         false
+    }
+    /// No substrate is used: production's teardown and install pass through.
+    async fn attach(&self, _: Arc<dyn PullSubstrate>, _: bool, _: Option<String>) {}
+    async fn detach(&self, _: &str) {}
+    async fn roots(
+        &self,
+        _: Vec<FileTransferRootName>,
+        _: bool,
+        _: Option<String>,
+    ) -> Result<Vec<NativeFileTransferRoot>, FileTransferError> {
+        Err(FileTransferError::Unsupported)
+    }
+    fn pull(&self, _: NativeFileTransferPullParams) -> Result<(), FileTransferError> {
+        Err(FileTransferError::Unsupported)
+    }
+    fn snapshot(&self) -> Vec<NativeFileTransferRow> {
+        Vec::new()
+    }
+    /// A stream that never carries anything: its sender is gone at once.
+    fn subscribe(&self) -> broadcast::Receiver<PullEvent> {
+        broadcast::channel(1).1
     }
 }
 
@@ -146,18 +237,75 @@ pub struct PullProgress {
     pub total: u64,
 }
 
-/// The named-root arm (module note). W3 stack B's C4 builds its seam only: it
-/// says it is supported, and the facade answers every verb past step 1 INTERNAL
-/// "not built" (`mgmt/file_transfer.rs`) until C5 and C6 build it.
+/// The stream's event buffer (the door's and the lanes'): a subscriber that
+/// falls behind it is owed a snapshot, never a gap (`mgmt/file_transfer.rs`).
+const STREAM_CAPACITY: usize = 64;
+
+/// The suffix truffle gives a pull's temporary, `<landed>.<token>.truffle-tmp`
+/// (truffle-core-0.7.24 `file_transfer/mod.rs:553`; contracts mgmt.ts
+/// `FILE_TRANSFER_LANDED_PATTERN`).
+const TEMP_SUFFIX: &str = ".truffle-tmp";
+
+/// The named-root arm (module note).
+///
+/// THE HELD SET (DR-2a's review nit 8 as the W3 critic's finding 0 rewrote it;
+/// contracts mgmt.ts `NativeFileTransferRootsParams`): the floor holds the last
+/// declared set BOUND TO THE LOGIN it was declared under, serves it again from
+/// every node attached GATED for that same login, serves nothing from a node
+/// gated to another login until fieldd declares, and drops it at a stop or an
+/// unlink (`detach` for TEARDOWN_STOPPED or TEARDOWN_RETIRED). The gate is the
+/// node's BUILT allow-list (`!login_allow().is_empty()`), never the posture.
+///
+/// THE FOLDERS (the critic's finding 11): a root's `serves` and `lands`
+/// leaves are made and then ALWAYS set to 0700, even when they exist; a folder
+/// on the way to them that the floor itself creates (a `drive/` mille has not
+/// made yet) is 0700 too, as the run dir is (lib.rs, `bootstrap_with_logging`).
+/// Nothing else is touched: `harden_state_dir` recurses, and `drive/` is
+/// mille's root. On Windows the tree inherits the user profile's ACL.
 pub struct NamedRootsFileTransfer {
-    _private: (),
+    core: Arc<Core>,
+}
+
+/// What the arm's tasks share with it.
+struct Core {
+    config: NativeConfig,
+    events: broadcast::Sender<PullEvent>,
+    inner: Mutex<Inner>,
+}
+
+#[derive(Default)]
+struct Inner {
+    /// the installed node's substrate, `None` between nodes
+    node: Option<Attached>,
+    /// counts attaches, so an answer that awaited the substrate writes only
+    /// to the node it asked
+    attaches: u64,
+    held: Option<Held>,
+}
+
+struct Attached {
+    id: u64,
+    substrate: Arc<dyn PullSubstrate>,
+    /// the roots this node serves now
+    serving: BTreeSet<FileTransferRootName>,
+}
+
+/// The last declared set and the login it was declared under.
+struct Held {
+    login: Option<String>,
+    roots: Vec<FileTransferRootName>,
 }
 
 impl NamedRootsFileTransfer {
     /// The arm for the user root `config` names.
     pub fn new(config: &NativeConfig) -> Self {
-        let _ = config;
-        Self { _private: () }
+        Self {
+            core: Arc::new(Core {
+                config: config.clone(),
+                events: broadcast::channel(STREAM_CAPACITY).0,
+                inner: Mutex::new(Inner::default()),
+            }),
+        }
     }
 
     /// TESTS ONLY — the idle bound a pull may sit without a byte.
@@ -167,10 +315,13 @@ impl NamedRootsFileTransfer {
         self
     }
 
-    /// TESTS ONLY — the stream's event buffer, so a row can make its reader lag.
+    /// TESTS ONLY — the stream's event buffer, so a row can make its reader
+    /// lag. A shape is set before the arm is installed; once shared it stays.
     #[doc(hidden)]
-    pub fn with_stream_capacity(self, capacity: usize) -> Self {
-        let _ = capacity;
+    pub fn with_stream_capacity(mut self, capacity: usize) -> Self {
+        if let Some(core) = Arc::get_mut(&mut self.core) {
+            core.events = broadcast::channel(capacity).0;
+        }
         self
     }
 }
@@ -180,9 +331,252 @@ impl FileTransferBackend for NamedRootsFileTransfer {
     fn arm(&self) -> &'static str {
         "named-roots"
     }
+
     fn supported(&self) -> bool {
         true
     }
+
+    /// Per node: the cap and the push refusal once, then the held roots, when
+    /// the node is gated for the login they were declared under.
+    async fn attach(&self, substrate: Arc<dyn PullSubstrate>, gated: bool, login: Option<String>) {
+        substrate.set_cap(drive_limits::OBJECT_MAX_BYTES).await;
+        substrate.refuse_pushes().await;
+        let (node, held) = {
+            let mut inner = lock(&self.core.inner);
+            inner.attaches += 1;
+            let node = inner.attaches;
+            inner.node = Some(Attached {
+                id: node,
+                substrate: substrate.clone(),
+                serving: BTreeSet::new(),
+            });
+            let held = match &inner.held {
+                Some(held) if gated && held.login == login => held.roots.clone(),
+                _ => Vec::new(),
+            };
+            (node, held)
+        };
+        let mut served = 0;
+        for name in held {
+            if self.core.serve(&substrate, node, name).await.registered {
+                served += 1;
+            }
+        }
+        tracing::info!(
+            event = "field_native.mesh.file_transfer.attached",
+            component = "mesh",
+            gated,
+            served,
+            "The file transfer attached to the installed node"
+        );
+    }
+
+    /// The node goes, and what it served goes with it; a stop or an unlink
+    /// drops the held set too (finding 0).
+    async fn detach(&self, reason: &str) {
+        let mut inner = lock(&self.core.inner);
+        inner.node = None;
+        if reason == TEARDOWN_STOPPED || reason == TEARDOWN_RETIRED {
+            inner.held = None;
+        }
+    }
+
+    async fn roots(
+        &self,
+        roots: Vec<FileTransferRootName>,
+        gated: bool,
+        login: Option<String>,
+    ) -> Result<Vec<NativeFileTransferRoot>, FileTransferError> {
+        let (substrate, node, serving) = {
+            let mut inner = lock(&self.core.inner);
+            let Some(attached) = inner.node.as_ref() else {
+                return Err(FileTransferError::MeshDown);
+            };
+            let current = (
+                attached.substrate.clone(),
+                attached.id,
+                attached.serving.clone(),
+            );
+            inner.held = Some(Held {
+                login,
+                roots: roots.clone(),
+            });
+            current
+        };
+        // What the set drops, or everything on a node that cannot serve.
+        for name in serving
+            .into_iter()
+            .filter(|name| !gated || !roots.contains(name))
+        {
+            substrate.unserve_root(name).await;
+            if let Some(attached) = lock(&self.core.inner)
+                .node
+                .as_mut()
+                .filter(|attached| attached.id == node)
+            {
+                attached.serving.remove(&name);
+            }
+        }
+        let mut answers = Vec::with_capacity(roots.len());
+        for name in roots {
+            answers.push(if gated {
+                self.core.serve(&substrate, node, name).await
+            } else {
+                refused(name, mesh_file_transfer::ROOT_UNGATED)
+            });
+        }
+        Ok(answers)
+    }
+
+    fn pull(&self, _: NativeFileTransferPullParams) -> Result<(), FileTransferError> {
+        // W3 stack B's C5: the pulls are C6's.
+        Err(FileTransferError::Internal("not built".into()))
+    }
+
+    fn snapshot(&self) -> Vec<NativeFileTransferRow> {
+        Vec::new()
+    }
+
+    fn subscribe(&self) -> broadcast::Receiver<PullEvent> {
+        self.core.events.subscribe()
+    }
+}
+
+impl Core {
+    /// Serve `name` from the node `node`: its folders made (0700), its `lands`
+    /// folder swept, and the substrate asked unless this node serves it
+    /// already, so a repeat is a no-op.
+    async fn serve(
+        &self,
+        substrate: &Arc<dyn PullSubstrate>,
+        node: u64,
+        name: FileTransferRootName,
+    ) -> NativeFileTransferRoot {
+        let dirs = self.config.file_transfer_root(name);
+        if let Err(e) = self.make_root_dirs(&dirs) {
+            tracing::warn!(
+                event = "field_native.mesh.file_transfer.root_folders_failed",
+                component = "mesh",
+                root = %name,
+                error = %e,
+                "A named root's folders could not be made"
+            );
+            return refused(name, io_word(&e));
+        }
+        self.sweep(&dirs.lands);
+        let serving = lock(&self.inner)
+            .node
+            .as_ref()
+            .is_some_and(|attached| attached.id == node && attached.serving.contains(&name));
+        if !serving {
+            if let Err(message) = substrate.serve_root(name, &dirs.serves).await {
+                tracing::warn!(
+                    event = "field_native.mesh.file_transfer.serve_failed",
+                    component = "mesh",
+                    root = %name,
+                    error = %message,
+                    "The node refused to serve a named root"
+                );
+                return refused(name, mesh_file_transfer::FAILED_IO);
+            }
+            if let Some(attached) = lock(&self.inner)
+                .node
+                .as_mut()
+                .filter(|attached| attached.id == node)
+            {
+                attached.serving.insert(name);
+            }
+        }
+        NativeFileTransferRoot {
+            name,
+            registered: true,
+            reason: None,
+        }
+    }
+
+    fn make_root_dirs(&self, dirs: &FileTransferRootDirs) -> std::io::Result<()> {
+        self.make_private_dir(&dirs.serves)?;
+        self.make_private_dir(&dirs.lands)
+    }
+
+    /// Make `leaf` under the user root: every folder on the way that the floor
+    /// creates is 0700, and the leaf is set to 0700 whether it was made now or
+    /// before. A folder that exists on the way is left as it is.
+    fn make_private_dir(&self, leaf: &Path) -> std::io::Result<()> {
+        let root = &self.config.data_dir;
+        let below = leaf.strip_prefix(root).map_err(|_| {
+            std::io::Error::other("a named root's folder lies outside the user root")
+        })?;
+        let mut path = root.clone();
+        for part in below.components() {
+            path.push(part);
+            match std::fs::create_dir(&path) {
+                Ok(()) => set_private(&path)?,
+                Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
+                Err(e) => return Err(e),
+            }
+        }
+        set_private(leaf)
+    }
+
+    /// Remove every `*.truffle-tmp` in `lands`: what pulls that failed, or ran
+    /// on an earlier node or floor, left behind. A landed name is never
+    /// touched: it is fieldd's to adopt or sweep.
+    fn sweep(&self, lands: &Path) {
+        let Ok(entries) = std::fs::read_dir(lands) else {
+            return;
+        };
+        for entry in entries.flatten() {
+            let name = entry.file_name();
+            if !name
+                .to_str()
+                .is_some_and(|name| name.ends_with(TEMP_SUFFIX))
+            {
+                continue;
+            }
+            if let Err(e) = std::fs::remove_file(entry.path()) {
+                tracing::warn!(
+                    event = "field_native.mesh.file_transfer.sweep_failed",
+                    component = "mesh",
+                    error = %e,
+                    "A pull's leftover temporary could not be removed"
+                );
+            }
+        }
+    }
+}
+
+/// A root this request could not register, and the MESH_FILE_TRANSFER word
+/// that says why.
+fn refused(name: FileTransferRootName, word: &str) -> NativeFileTransferRoot {
+    NativeFileTransferRoot {
+        name,
+        registered: false,
+        reason: Some(word.to_owned()),
+    }
+}
+
+/// A disk that refused the write is NO_SPACE (DR-L8's "out of room"); any
+/// other local failure is IO.
+fn io_word(e: &std::io::Error) -> &'static str {
+    if e.kind() == std::io::ErrorKind::StorageFull {
+        mesh_file_transfer::FAILED_NO_SPACE
+    } else {
+        mesh_file_transfer::FAILED_IO
+    }
+}
+
+#[cfg(unix)]
+fn set_private(path: &Path) -> std::io::Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o700))
+}
+
+/// No mode bit on Windows: the folders inherit the user profile's ACL, as the
+/// mesh state dir does (`services/mesh.rs`, `harden_state_dir`).
+#[cfg(not(unix))]
+fn set_private(_: &Path) -> std::io::Result<()> {
+    Ok(())
 }
 
 /// A poisoned lock still holds a consistent table here: every writer below

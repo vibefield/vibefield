@@ -1,4 +1,14 @@
+use crate::contracts::FileTransferRootName;
 use std::path::{Path, PathBuf};
+
+/// DR-3a (W3) — a named pull root's folders under the user root: the one it
+/// serves to the account's other nodes, and the one a pull from it lands in,
+/// unverified (`NativeConfig::file_transfer_root`).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct FileTransferRootDirs {
+    pub serves: PathBuf,
+    pub lands: PathBuf,
+}
 
 /// The terminal mesh's master switch: the ONE spelling of the env var, read by
 /// `NativeConfig::from_env` below and by nothing else in this process.
@@ -492,6 +502,25 @@ impl NativeConfig {
         self.join_layout(crate::registries::layout::MESH_STATE_DIR)
     }
 
+    /// DR-3a (W3) — the two folders of the named pull root `name` under this
+    /// user root, joined from its generated LAYOUT rows (contracts
+    /// registries.ts `FILE_TRANSFER_ROOTS`). The match is exhaustive over the
+    /// generated enum, so a root the contract adds fails the build here until
+    /// it names its rows.
+    pub fn file_transfer_root(&self, name: FileTransferRootName) -> FileTransferRootDirs {
+        use crate::registries::file_transfer_roots;
+        let (serves, lands) = match name {
+            FileTransferRootName::DriveObjects => (
+                file_transfer_roots::DRIVE_OBJECTS_SERVES,
+                file_transfer_roots::DRIVE_OBJECTS_LANDS,
+            ),
+        };
+        FileTransferRootDirs {
+            serves: self.join_layout(serves),
+            lands: self.join_layout(lands),
+        }
+    }
+
     /// UA-D10: every path under the data root derives from the generated
     /// LAYOUT segments — this is the only join site in the native plane.
     fn join_layout(&self, segments: &[&str]) -> PathBuf {
@@ -650,6 +679,19 @@ mod tests {
                 "{user_root}"
             );
         }
+    }
+
+    /// DR-3a (W3) — a named root's two folders are its generated LAYOUT rows
+    /// under the user root: the drive's objects are served, a pull lands in its
+    /// incoming, and never one folder for both.
+    #[test]
+    fn a_named_roots_folders_are_its_layout_rows_under_the_user_root() {
+        let user_root = Path::new("/data/VibeField/users/1");
+        let config = NativeConfig::for_data_dir(user_root.to_path_buf());
+        let dirs = config.file_transfer_root(FileTransferRootName::DriveObjects);
+        assert_eq!(dirs.serves, user_root.join("drive").join("objects"));
+        assert_eq!(dirs.lands, user_root.join("drive").join("incoming"));
+        assert_ne!(dirs.serves, dirs.lands);
     }
 
     /// TM-1 — the plan is a two-state answer to ONE question, and `Off` is the

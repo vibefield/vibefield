@@ -212,6 +212,14 @@ pub struct LinkFacts {
     pub failure: Option<&'static str>,
 }
 
+/// DR-3a (W3) — `teardown_node`'s word for the posture going offline (`stop`).
+/// The file transfer drops its held roots after it, as after an unlink: the set
+/// is bound to a login, and neither leaves one (contracts mgmt.ts
+/// `NativeFileTransferRootsParams`; the W3 critic's finding 0).
+pub const TEARDOWN_STOPPED: &str = "stopped";
+/// DR-3a (W3) — `teardown_node`'s word for an unlink (`retire`).
+pub const TEARDOWN_RETIRED: &str = "retired";
+
 /// TS-1 — no sidecar was found: reinstalling VibeField is the way forward.
 pub const FAILURE_SIDECAR_MISSING: &str = "sidecar_missing";
 /// TS-1 — the build failed after the sidecar started.
@@ -453,16 +461,31 @@ impl MeshHandle {
         };
     }
 
-    /// DR-3a (W3) TEST SEAM — hand the file-transfer arm a node's substrate, as
-    /// a bring-up that installs a node will at EL8-TRUFFLE. Nothing in the
+    /// DR-3a (W3) TEST SEAM — hand the file-transfer arm a node's substrate
+    /// through the one install hook, [`Self::on_node_installed`], as a
+    /// bring-up that installs a node will at EL8-TRUFFLE. Nothing in the
     /// product calls it.
-    ///
-    /// W3 stack B's C4 (red): it attaches nothing yet, so every row that needs
-    /// a substrate fails by assertion; C5 routes it through the one install
-    /// hook.
     #[doc(hidden)]
     pub async fn attach_file_transfer_for_tests(&self, substrate: Arc<dyn PullSubstrate>) {
-        let _ = substrate;
+        self.on_node_installed(substrate).await;
+    }
+
+    /// DR-3a (W3, the critic's finding 1) — THE install hook: a node was
+    /// installed, so the file transfer's arm is handed its substrate with the
+    /// two facts its gate reads, the gate the node was BUILT with
+    /// (`login_allow`, see `Shared::login_allow`) and the posture's login. The
+    /// arm caps the node, refuses pushes, and serves the held roots again when
+    /// the node is gated for the login they were declared under
+    /// (`services/file_transfer.rs`).
+    ///
+    /// ONE hook, so the product's path and the tests' cannot drift: in W3 only
+    /// [`Self::attach_file_transfer_for_tests`] reaches it; at EL8-TRUFFLE
+    /// `spawn_bring_up`'s `Ok(node)` branch (before its `send_replace`) and
+    /// [`Self::install_node_for_tests`] call it with the node itself.
+    pub(crate) async fn on_node_installed(&self, substrate: Arc<dyn PullSubstrate>) {
+        let gated = !self.login_allow().is_empty();
+        let login = self.login();
+        self.file_transfer().attach(substrate, gated, login).await;
     }
 
     /// DS-1b PROBE SEAM — install a node a test built itself, for the
@@ -701,6 +724,11 @@ impl MeshHandle {
         if self.egress().reset().await > 0 {
             self.note_egress_changed();
         }
+        // DR-3a (W3) — the file transfer's roots were this node's, so the arm
+        // forgets them with it; a stop or an unlink also drops the held set,
+        // which no other teardown does (the critic's finding 0). BEFORE the
+        // node stops.
+        self.file_transfer().detach(reason).await;
         // Item 79 (2026-10-27) — STOP the node, then drop it. This line used to
         // read `drop(had); // node drop kills the sidecar (kill_on_drop)`, and
         // that was false: truffle's `Node::drop` only cancels the node-scoped
@@ -736,7 +764,7 @@ impl MeshHandle {
     /// both of which the user may resolve and retry.
     pub async fn stop(&self) -> bool {
         let was_up = self.shared.node.borrow().is_some();
-        self.teardown_node("stopped").await;
+        self.teardown_node(TEARDOWN_STOPPED).await;
         *self.shared.mode.lock().unwrap() = None;
         self.forget_facts();
         self.shared
@@ -793,7 +821,7 @@ impl MeshHandle {
             },
             None => false,
         };
-        self.teardown_node("retired").await;
+        self.teardown_node(TEARDOWN_RETIRED).await;
         *self.shared.mode.lock().unwrap() = None;
         self.forget_facts();
         self.shared.set(
