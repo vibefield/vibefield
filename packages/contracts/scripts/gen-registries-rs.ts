@@ -5,12 +5,14 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { MESH_EGRESS, NATIVE_REFUSALS } from "../src/mgmt";
+import { MESH_EGRESS, MESH_FILE_TRANSFER, NATIVE_REFUSALS } from "../src/mgmt";
 import {
   APP_ID,
   CELL_ISOLATION,
   CELL_SUPERVISION,
+  DRIVE_LIMITS,
   ENV_PREFIXES,
+  FILE_TRANSFER_ROOTS,
   FILES,
   FREEWAY,
   FREEWAY_CODES,
@@ -73,6 +75,24 @@ const lines: string[] = [
       ? `    pub const ${k}: &[u16] = &[${v.join(", ")}];`
       : `    pub const ${k}: &str = "${v}";`,
   ),
+  "}",
+  "",
+  "/// DR-2a — the file transfer's registry (contracts mgmt.ts `MESH_FILE_TRANSFER`): the",
+  "/// floor's refusal, a pull's failure words, the path bound and the progress cadence, one",
+  "/// vocabulary for the floor's writer and fieldd's reader.",
+  "pub mod mesh_file_transfer {",
+  ...Object.entries(MESH_FILE_TRANSFER).map(([k, v]) =>
+    typeof v === "number"
+      ? `    pub const ${k}: u64 = ${v};`
+      : `    pub const ${k}: &str = "${v}";`,
+  ),
+  "}",
+  "",
+  "/// DR-2a — the drive's bounds (`DRIVE_LIMITS`): the object cap the floor hands its node's",
+  "/// file transfer, the lane record and the pulls in flight. One authority with fieldd and",
+  "/// mille-drive's open; see registries.ts.",
+  "pub mod drive_limits {",
+  ...Object.entries(DRIVE_LIMITS).map(([k, v]) => `    pub const ${k}: u64 = ${v};`),
   "}",
   "",
   "/// TC-D6(c) — per-class scrollback BYTE caps, enforced at the native create",
@@ -181,6 +201,17 @@ const lines: string[] = [
   "    pub const ALL: &[(&str, &[&str])] = &[",
   ...Object.keys(LAYOUT).map((k) => `        ("${k}", ${k}),`),
   "    ];",
+  "}",
+  "",
+  "/// DR-2a — the named pull roots (`FILE_TRANSFER_ROOTS`), a CLOSED set the floor matches:",
+  "/// each root's name on the wire, the LAYOUT row it serves and the one a pull from it lands",
+  "/// in. Never a path (EL7). See registries.ts.",
+  "pub mod file_transfer_roots {",
+  ...Object.entries(FILE_TRANSFER_ROOTS).flatMap(([k, v]) => [
+    `    pub const ${k}: &str = "${v.name}";`,
+    `    pub const ${k}_SERVES: &[&str] = super::layout::${v.serves};`,
+    `    pub const ${k}_LANDS: &[&str] = super::layout::${v.lands};`,
+  ]),
   "}",
 ];
 

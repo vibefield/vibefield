@@ -38,11 +38,16 @@
 // through `phone-code.vector.json`, which field-native never reads.
 // The person (src/users.ts — the roster file, the face, and IOS-8f's `UserMeResult`) is TS-only: fieldd and
 // Electron main read and serve it, the phone decodes it by hand, and field-native reads none of it.
+// The drive (DR-2a) is split as the freeway is. Its own shapes (src/drive.ts: the holders' slice and the drive's
+// refusals) are TS-only: the floor carries the slice as opaque store JSON under its byte cap and reads none of it. Its
+// file transfer (src/mgmt.ts `NativeFileTransfer*`) is the floor's seam and rides the bundle, with artifacts.ts's
+// `Blake3Hex` named beside it; its registries reach Rust through gen-registries-rs.ts.
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ZodTypeAny } from "zod";
 import { zodToJsonSchema } from "zod-to-json-schema";
+import { Blake3Hex } from "../src/artifacts";
 import {
   DiagnosticCursorV1,
   DiagnosticLogDeltaV1,
@@ -117,6 +122,10 @@ import {
   DesiredState,
   DesiredTerminal,
   DesiredWorker,
+  FileTransferId,
+  FileTransferLanded,
+  FileTransferPath,
+  FileTransferRootName,
   MeshConfig,
   MeshEgressLoopbackAddress,
   MeshEgressProxy,
@@ -153,6 +162,14 @@ import {
   NativeDoorPane,
   NativeDoorSnapshot,
   NativeDoorSubscribeResult,
+  NativeFileTransferDelta,
+  NativeFileTransferPullParams,
+  NativeFileTransferPullResult,
+  NativeFileTransferRoot,
+  NativeFileTransferRootsParams,
+  NativeFileTransferRootsResult,
+  NativeFileTransferRow,
+  NativeFileTransferSnapshot,
   NativeHealth,
   NativePrepareRestartParams,
   NativePrepareRestartResult,
@@ -449,6 +466,23 @@ const bundle = tightenLoggingWireSchema(
       // tick's params. Bundle-only for the same reason: nothing else embeds them.
       PingAck,
       NativeTickParams,
+      // DR-2a — the file transfer's floor seam (mgmt.ts `NativeFileTransfer*`). Bundle-only
+      // for the same reason. The four strings and the digest are named because several of its
+      // shapes embed each (the id every one), so typify resolves one type rather than a nested
+      // path; the digest is artifacts.ts's `Blake3Hex`, the drive's object name.
+      FileTransferId,
+      FileTransferRootName,
+      FileTransferPath,
+      FileTransferLanded,
+      Blake3Hex,
+      NativeFileTransferRootsParams,
+      NativeFileTransferRoot,
+      NativeFileTransferRootsResult,
+      NativeFileTransferPullParams,
+      NativeFileTransferPullResult,
+      NativeFileTransferRow,
+      NativeFileTransferSnapshot,
+      NativeFileTransferDelta,
     },
   }),
 );
