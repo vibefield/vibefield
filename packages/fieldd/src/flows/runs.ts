@@ -69,6 +69,10 @@ export interface FlowRunPorts {
   readonly agents: FlowStepPorts["agents"];
   /** each session's input queue, for a step's prompt (D5) */
   readonly inputs: FlowStepPorts["inputs"];
+  /** the sessions an `in:` may name (D9) */
+  readonly sessions: FlowStepPorts["sessions"];
+  /** the folder a run's input names (CP4-Q20 (a)) */
+  folderOf: FlowStepPorts["folderOf"];
   /** the Agent Profiles that exist now, by id: a run's frozen scope narrows to them (D8) */
   profiles(): readonly string[];
   /** how a run's host is started */

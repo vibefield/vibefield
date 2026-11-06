@@ -36,7 +36,18 @@ export interface FlowStepOrigin {
   readonly call: number;
 }
 
-/** fieldd's own interface to a run's steps (R32): the runtime's spawn and each session's input queue. */
+/** A session a step's `in:` names, as fieldd knows it (D9): live under this daemon, the Agent Profile it is placed
+ * in (`profileSetOfRun`), who started it, the spark it is the own session of, and whether it waits on a permission. */
+export interface FlowStepSession {
+  readonly live: boolean;
+  readonly profile?: string | undefined;
+  readonly origin?: { readonly by: string; readonly run?: string | undefined } | undefined;
+  readonly spark?: string | undefined;
+  readonly onPermission: boolean;
+}
+
+/** fieldd's own interface to a run's steps (R32): the runtime's spawn, each session's input queue, the sessions an
+ * `in:` may name, and the folder an input names (CP4-Q20 (a)). */
 export interface FlowStepPorts {
   readonly agents: {
     spawn(launch: FlowStepLaunch, origin: FlowStepOrigin): Promise<{ runtimeRunId: string }>;
@@ -48,6 +59,9 @@ export interface FlowStepPorts {
       from: AgentInputSender,
     ): { id: string; position: number };
   };
+  readonly sessions: { of(runtimeRunId: string): FlowStepSession | undefined };
+  /** the folder an input of `kind` (`session`, `project`) names by `value`; none for another kind or one not found */
+  folderOf(kind: string, value: string): string | undefined;
 }
 
 /** The run a step is of, as its words are marked: its slug, its mark's name, and the spark that started it. */

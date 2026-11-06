@@ -20,7 +20,7 @@ import {
   FlowRuns,
   type FlowRunsList,
 } from "../src/flows/runs";
-import type { FlowStepLaunch, FlowStepOrigin } from "../src/flows/steps";
+import type { FlowStepLaunch, FlowStepOrigin, FlowStepSession } from "../src/flows/steps";
 import * as words from "../src/flows/words";
 import type { RpcCallError } from "../src/native-link";
 import type { FlowChangedRaise } from "../src/tool-plane/rooms/you/queue";
@@ -85,6 +85,10 @@ async function harness(
     readonly launch?: FlowsHostLaunch;
     /** the runtime's refusal of every spawn, in its words */
     readonly spawnRefuses?: string;
+    /** the sessions fieldd knows, by their runtime run id */
+    readonly sessions?: Readonly<Record<string, FlowStepSession>>;
+    /** the folders inputs name, by `<kind>:<value>` */
+    readonly folders?: Readonly<Record<string, string>>;
   } = {},
 ) {
   const root = mkdtempSync(join(tmpdir(), "vf-flow-runs-"));
@@ -126,6 +130,8 @@ async function harness(
         return { id: `in-${enqueued.length}`, position: 1 };
       },
     },
+    sessions: { of: (runtimeRunId) => opts.sessions?.[runtimeRunId] },
+    folderOf: (kind, value) => opts.folders?.[`${kind}:${value}`],
     host: {
       launch: { kind: "launch", launch: opts.launch ?? (await flowsHostLaunch()) },
       environment: PATH_ONLY,
@@ -645,5 +651,160 @@ describe("CP-4a2b — a run's live steps, LIVE_STEPS_MAX at once (§13a slice 8b
       expect(h.spawned.filter((spawn) => spawn.origin.run === other)).toHaveLength(1),
     );
     expect(h.spawned).toHaveLength(FLOW_LIMITS.LIVE_STEPS_MAX + 1);
+  });
+});
+
+// CP-4a2b (§13a slice 8c-1; D9, CP4-Q20 (a)) — what a step's call may be, held at the call with nothing spawned, in
+// DESIGN.md §9's words ("A step's call refused"): its option keys, its Agent Profile within the run's scope, an `in:`
+// that names a live session within scope that is no spark's own and no other flow's and waits on no permission; and
+// the folder a step with none runs in, the one its run's input names.
+
+/** A flow that calls a step with each of `calls`' options in turn, keeping each refusal; then awaits `last`'s. */
+const callsEach = (calls: readonly object[], last?: object): string =>
+  [
+    'export const meta = { name: "Checks", input: { target: "session" } };',
+    "export default async function () {",
+    `  for (const options of ${JSON.stringify(calls)}) {`,
+    '    try { await agent("go", options); } catch (e) { log(e.message); }',
+    "  }",
+    ...(last !== undefined
+      ? [`  return await agent("Review this", ${JSON.stringify(last)});`]
+      : []),
+    "}",
+    "",
+  ].join("\n");
+
+/** The refusals a run's journal kept, in its calls' order. */
+function refusalsOf(h: Harness, run: string): string[] {
+  const read = h.records.readRun(run);
+  return read.kind === "kept"
+    ? read.lines.flatMap((line) =>
+        line.kind === "answer" && line.refused !== undefined ? [line.refused] : [],
+      )
+    : [];
+}
+
+const IN_REFUSED =
+  "VibeField didn't send ‹label›: that session is outside this run's Agent Profiles, isn't running, is a spark's or another flow's, or is waiting on a permission.";
+const NO_FOLDER =
+  "None of its steps names a folder, and its input names none. Run it from a session or a project, or name a folder in it.";
+
+describe("CP-4a2b — what a step's call may be, held at the call with nothing spawned (§13a slice 8c-1)", () => {
+  it("R16 (D9): a key a step may not set, and an Agent Profile outside the run's scope, are refused in §9's words with no spawn", async () => {
+    const h = await harness();
+    h.approved(
+      "checks",
+      callsEach([
+        { agent: "claude", label: "Budget", cwd: "/work/app", profile: "work", budget: 5 },
+        { agent: "claude", label: "Review", cwd: "/work/app", profile: "review" },
+        { agent: "claude", label: "Gone", cwd: "/work/app", profile: "nowhere" },
+      ]),
+    );
+    const run = startedRun(await h.start({ flow: "checks", scope: ["work"] })).run;
+    await settled(h.runs, run, "done");
+    expect(refusalsOf(h, run)).toEqual([
+      "VibeField didn't start Budget: it asks for budget, which a step may not set.",
+      "VibeField didn't start Review: it names an Agent Profile this run can't use (review).",
+      "VibeField didn't start Gone: it names an Agent Profile this run can't use (nowhere).",
+    ]);
+    expect(h.spawned).toEqual([]);
+    expect(h.records.runRecord(run)).toMatchObject({ calls: 3, open: [] });
+    expect(h.records.runRecord(run)?.steps.map((step) => step.state)).toEqual([
+      "failed",
+      "failed",
+      "failed",
+    ]);
+  });
+
+  it("R15 (D9): an in: that names a session gone, outside the scope, another flow's step, a spark's own, or one on a permission is refused, nothing sent; your own session in scope is handed the line", async () => {
+    const yours: FlowStepSession = { live: true, profile: "work", onPermission: false };
+    const h = await harness({
+      sessions: {
+        "run-yours": yours,
+        "run-exited": { ...yours, live: false },
+        "run-home": { ...yours, profile: "home" },
+        "run-other-flow": { ...yours, origin: { by: "flow", run: "fr-0ther0ther0ther0" } },
+        "run-vela": { ...yours, spark: VELA },
+        "run-asking": { ...yours, onPermission: true },
+      },
+    });
+    const refused = [
+      "run-nowhere",
+      "run-exited",
+      "run-home",
+      "run-other-flow",
+      "run-vela",
+      "run-asking",
+    ];
+    h.approved(
+      "checks",
+      callsEach(
+        refused.map((session) => ({ in: session, label: session })),
+        { in: "run-yours", label: "Yours" },
+      ),
+    );
+    const run = startedRun(
+      await h.start({ flow: "checks", input: { target: "run-yours" }, scope: ["work"] }),
+    ).run;
+    await waitFor(() => expect(h.enqueued).toHaveLength(1));
+    expect(refusalsOf(h, run)).toEqual(
+      refused.map((session) => IN_REFUSED.replace("‹label›", session)),
+    );
+    expect(h.spawned).toEqual([]);
+    expect(h.enqueued[0]).toEqual({
+      runtimeRunId: "run-yours",
+      text: "Review this",
+      from: { kind: "flow", flow: "checks", name: "Checks", run, call: refused.length + 1 },
+      step: {
+        call: refused.length + 1,
+        label: "Yours",
+        session: "run-yours",
+        handed: true,
+        state: "working",
+        lines: [{ line: "in", n: 1, sent: "sending" }],
+      },
+    });
+    expect(h.records.runRecord(run)?.open).toEqual([
+      {
+        call: refused.length + 1,
+        label: "Yours",
+        session: "run-yours",
+        handed: true,
+        state: "working",
+        lines: [{ line: "in", n: 1, sent: "queued" }],
+      },
+    ]);
+  });
+
+  it("the folder (CP4-Q20 (a)): a step with no folder runs in the one its run's input names, a session's or a project's; with none named, its call is refused in §9's words", async () => {
+    const h = await harness({
+      folders: { "session:run-yours": "/work/yours", "project:pj-1": "/work/pj1" },
+    });
+    const noFolder = (name: string, input: string) =>
+      [
+        `export const meta = { name: "${name}", input: ${input} };`,
+        "export default async function () {",
+        "  const none = {};",
+        '  try { await agent("go", { agent: "claude", profile: "work", label: "Here", cwd: none.cwd }); }',
+        "  catch (e) { log(e.message); }",
+        "}",
+        "",
+      ].join("\n");
+    h.approved("in-session", noFolder("In session", '{ target: "session" }'));
+    h.approved("in-project", noFolder("In project", '{ where: "project" }'));
+    h.approved("nowhere", noFolder("Nowhere", '{ note: "text" }'));
+    const inSession = startedRun(
+      await h.start({ flow: "in-session", input: { target: "run-yours" } }),
+    ).run;
+    const inProject = startedRun(
+      await h.start({ flow: "in-project", input: { where: "pj-1" } }),
+    ).run;
+    await waitFor(() => expect(h.spawned).toHaveLength(2));
+    const cwdOf = (run: string) => h.spawned.find((spawn) => spawn.origin.run === run)?.launch.cwd;
+    expect(cwdOf(inSession)).toBe("/work/yours");
+    expect(cwdOf(inProject)).toBe("/work/pj1");
+    const nowhere = startedRun(await h.start({ flow: "nowhere", input: { note: "hello" } })).run;
+    expect((await settled(h.runs, nowhere, "done")).log).toBe(NO_FOLDER);
+    expect(h.spawned).toHaveLength(2);
   });
 });
