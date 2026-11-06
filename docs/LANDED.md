@@ -39508,6 +39508,8 @@ and leaves the connection queued. So the claim is about the NEXT connection, and
   - `accept_failing` read 1 per listener and `accept_recovered` 0: the probes WERE the dropped connections.
   - fd's 17:52Z reading ("XNU puts it back on the queue") was false, and was corrected at its source. The leading
     read (a door backlog re-holding the freed descriptors) fell too, and item 204's reach was corrected with it.
+  > *Corrected 2026-11-06 (fd):* the reading was sent at 17:47:31Z (the session transcript's timestamp); its label
+  > "17:52Z" was an estimate, 5 min fast. Commit `285fad957`'s message carries the same label and stays as it is.
 - r3 (vf-m1, 18:23Z): the TIP was GREEN, tip-b and the lane ×3 at ~1.7 s each.
   - Its red panicked at the fresh door's `expect` with `ECONNREFUSED`, before the row's verdict line.
   - VF-PM ruled that it is not a red of record.
@@ -39642,3 +39644,85 @@ Resumed and cleared Claude sessions stayed dark, with no context, model or rate-
 - The draft corrections, at item 203's slot: `draft/launch/esp-9-3-residuals-ar7j.md` (probe F2 beside probe F),
   `draft/specs/electron-security-packaging.md` §9.3's dispatch rule, and `draft/rv/james-asks.md`'s rv-forwarder-role
   note.
+
+## Item 206 — fieldd's MeshData lane link dials again after a dropped accept: its hello settles when the bridge closes the socket, and the link redials itself on fieldd's one back-off
+(2026-11-06; three commits, `0d60d4a0e` (red), `55f5c9939` and `2c6ffe1ff`, on branch `item206-mint` over main
+`83300c08d`, fd's, in `/Volumes/SamsungRed/lanes/item190`. They were cut on `285fad957` as r1 (`f37a54b00` → `2f1abc01a`
+→ `4db3743e5`) and r2 (`76648292b`, a replaced red → `9fe8501fb` → `2b4b877d4`), and r2's three were re-cut onto
+`83300c08d` in proof form. M197 is `2c6ffe1ff` itself, a fast-forward of main `83300c08d` by the fixer, run 197, landed
+2026-11-06T20:11:45Z. A first mint, `96299af93` on `02aed7ec2`, was superseded and never ran: RV's docs-only records
+(`83300c08d`) moved main first, and the re-cut onto them came before the run.)
+Filed by VF-PM at 18:19Z, from fd's reading of who retries a dropped accept (item 198's records question). Plan v0.1
+`27f76735`; D1 RULED (A) by VF-PM at 19:25Z: the back-off lives in the link, in NativeLink's own shape.
+
+**What.** A daemon fix with real reach.
+- `MeshLaneLink.connect()` awaited a hello that settled only on HELLO_OK, on a refusal, or on its own 5 s timer. A
+  connection the bridge closed first cost the whole 5 s. macOS's failed accept is exactly that: XNU drops the
+  connection it could not give a descriptor (item 198).
+- CP-1b's `redialLanes` (`daemon.ts`) dialed once, 1 s after "disconnected", or on native "connected". A redial
+  that met a dropped accept had its own "disconnected" fire inside the still-pending dial, and after `redial_failed`
+  nothing re-armed it but the next mgmt reconnect. A dial that failed at the connect itself (ENOENT, ECONNREFUSED)
+  emitted no "disconnected" at all.
+- Under floor descriptor pressure, item 198's own condition, mgmt stays connected. So doc sync, presence and the tool
+  plane's lanes stayed down without bound. What the tool plane does with a closed link is unread.
+- Out of scope: the boot. A failed FIRST dial still closes the link for the boot (CP-1b's "a link this boot closed
+  stays closed"). James rules it on the board (`meshdata-boot-redial`; VF-PM's lean: not terminal).
+
+**The fix.**
+- `0d60d4a0e` (red), `mesh-lane.test.ts`. `fakeBridge()` gains `dropAtAccept(n)` (the client's connect succeeds,
+  then EOF: macOS's dropped accept) and `accepted()`, and the new describe holds four rows:
+  - R1: a connection closed before HELLO_OK fails `connect()` within 1 s;
+  - R2: with `redial`, a dropped link comes back past two dropped accepts, with "reconnecting" at 500, 1000 and
+    2000 ms;
+  - R3: `dialNow()` during the back-off dials at once, and the next drop starts again at 500;
+  - R4: `close()` during the back-off ends it. It holds at the red too: CP-1b's law, kept.
+- `55f5c9939`, the link (`mesh-lane.ts`).
+  - The hello also settles on the socket's `close` ("the MeshData bridge closed the connection before HELLO_OK").
+    The 5 s timer stays, for a bridge that holds the socket and says nothing.
+  - `MeshLaneLinkOptions.redial` (off by default): an established link that drops, or a redial dial that fails, arms
+    ONE timer at `reconnectDelayMs(attempts)` and emits "reconnecting". A success resets it. `dialNow()` is
+    NativeLink's twin. `close()` clears the timer.
+  - A failed FIRST `connect()` arms nothing, so the boot keeps CP-1b's rule by construction.
+  - Logs, item 198's policy: `fieldd.mesh_lane.redial_failed` (warn) at a run's first failure only;
+    `fieldd.mesh_lane.redialed` (info) at recovery, with `attempts`.
+  - Three changes the plan did not name, accepted by VF-PM at 19:33Z:
+    - a failed hello destroys its socket, as NativeLink's failed dial does, so a redial leaves no open connection
+      behind per attempt;
+    - `#onClose` ignores a stale socket (NativeLink's guard);
+    - the hello's timer removes its listeners too, where before a timeout left both behind.
+  - `native-link.ts` exports `reconnectDelayMs(attempts)`, its own formula unchanged: 500 ms doubling to 10 s.
+    fieldd has one back-off for its two links to the floor.
+- `2c6ffe1ff`, the daemon: `redial: true`, and `native.on("connected", () => laneLink.dialNow())` replaces CP-1b's
+  24-line closure.
+
+**The lights.**
+- r1 (the old mini, a9's, 19:40Z) was NOT AS BRIEFED in two places, and neither was the link's.
+  - R2 measured nothing. Its `until(() => l.connected)` checked before its first wait, and `bridge.drop()` ends the
+    bridge's socket a turn before the link sees the EOF. So `{ back: true, delays: [] }` came within milliseconds,
+    at the red and at the tip alike. R3 passed at the tip ×4, waiting on the same three delays.
+  - tip-biome had R1's `.then(…)` reflow, and a warning for an unused `rmSync` import that predates the lane (main
+    `285fad957` has it).
+  - R1, R3, R4 and tip-tsc were as briefed, and so was the lane: `native-link.test.ts` 46 and `doc-sync-host.test.ts`
+    8, ×3, with no root and no live field-native.
+- r2 replaced the red: R2 awaits the drop first and asserts `{ dropped, back, delays }`, with the reflow and the
+  import folded in (VF-PM 19:41Z). The link and the daemon were re-applied with equal patch-ids.
+- r2 (the old mini, a9's, 19:44:43–19:48:34Z) was ALL AS BRIEFED. red-b: 3 failed | 1 passed, R2 reading
+  `{ dropped: true, back: false, delays: [] }` after its 6 s. tip-b: 4 passed, R2 in 3526 ms. tip-tsc 0; tip-biome
+  0 with no warning. `red` ×3 was RED, and `lane` ×3 was green (mesh-lane 21, native-link 46, doc-sync-host 8),
+  each run leaving no root but `node-compile-cache` and no live field-native.
+- The re-cut onto `83300c08d`, by `recut-206.sh`: 3 of 3 "=", and the range patch-id (`-U0 --stable`) equal before and
+  after. The head's tree equals the merge-tree.
+- Run 197 on vf-m1, a9's, packet `lanes/item190/item206-mint-2/`: armed 20:03:51Z at a 1-min load of 7.40 (under
+  the < 10 gate; it peaked at 26 mid-run), green at 20:09:27Z, verify exit 0 (its log `verify.log` `8f476d1f…`,
+  read at source). vitest 13,956 | 0 | 21 over 956 files (run196: 13,952); fieldd 3567 | 15 (3563 at run196). The
+  one per-file change is `test/mesh-lane.test.ts` 17 → 21, and `native-link.test.ts` stays 46. cargo 550 in 36
+  results, as run196. No birth in the run's window. The first mint, `96299af93`, never ran.
+- No test ran on the MacBook (the pressure HOLD). The code was held to biome's width by hand, and the scripts took
+  `bash -n` there.
+
+**Owed.**
+- **The boot half:** James's `meshdata-boot-redial`. On his word, a boot whose first dial fails redials on the same
+  back-off instead of closing the link for the boot.
+- **The tool plane's behaviour with a closed lane link** is unread. It matters only while the boot half stands.
+
+Item 206 closes in this entry. Its boot half stays on the board.
