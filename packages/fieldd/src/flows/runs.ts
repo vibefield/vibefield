@@ -29,6 +29,8 @@ import type {
   FlowItemActs,
   FlowItemAnswer,
   FlowItemRaise,
+  FlowItemStart,
+  FlowItemStarted,
 } from "../tool-plane/rooms/you/queue";
 import { type FlowForm, matchAnswer } from "./form-check";
 import type { FlowJournalEntry } from "./journal";
@@ -62,6 +64,10 @@ import * as words from "./words";
 // - A start (CP4-Q5 (a)) reads the flow in the library against its approval. A changed flow, or one never approved,
 //   starts nothing: it raises the needs queue's `flow-changed` item and answers `{waits}` (N5). An approved one runs
 //   the bytes fieldd KEPT under the approval's hash (D8), never the library's file.
+// - The item's act (R4–R6, `acts.start`) begins the run its start asked for (Q4: input, starter, scope; a spark's
+//   `from`). Run this version runs the library's bytes the item asked about, approved as yours past every refusal
+//   ("Run this version (approves it)"), so an act that can't begin approves nothing; Run the one you approved runs the
+//   bytes fieldd kept. Its refusals are the start's words, answered as the act's `failed`.
 // - Its refusals (DESIGN.md §9 "When a run can't start", words.ts) are PRECONDITION_FAILED with a `reason`, before
 //   anything is written: no flow, a file past SCRIPT_MAX_BYTES, an input the flow does not name, a version not kept,
 //   an input naming a session or a project VibeField can't find, a step that names no folder in a run whose input
@@ -333,7 +339,7 @@ export class FlowRuns {
   /** The runs' side of their items (the needs queue's FlowItemActs, bound in slice 15), an answer handed on once. */
   readonly acts: FlowItemActs = {
     answer: (answer) => this.#answered(answer),
-    start: () => Promise.reject(new Error("CP-4a2b: a changed flow's start is R4–R6's")),
+    start: async (start) => this.#acted(start),
   };
 
   /** fieldd's own stop: every host stopped, each run left as its journal and record say, for the next boot. */
@@ -345,10 +351,42 @@ export class FlowRuns {
     await Promise.all([...this.#live.values()].map((live) => live.host?.stop()));
   }
 
-  /** Begin a run of the approved bytes `hash`: its refusals, then its record and its head (D18), then its host. */
-  #begin(params: FlowRunStartParams, hash: string): RunSummary {
+  /** R4–R6 (CP4-Q5 (a), Q4) — a changed flow's act: the run its start asked for, begun on the version chosen. Its
+   * scope is the start's, narrowed at the act to the profiles that exist, never widened (D8, at `#begin`). A refusal
+   * is the act's `failed`, in the start's words, with nothing approved and nothing begun. */
+  #acted(act: FlowItemStart): FlowItemStarted {
+    const { start } = act;
+    // a record from before Q4 keeps no start: its act's words are asked (R4–R6), and none is guessed
+    if (start === undefined)
+      throw new Error("CP-4a2b: a changed flow's act with no start waits on its words (R4–R6)");
+    const params: FlowRunStartParams = {
+      flow: act.flow,
+      input: start.input,
+      starter: start.starter,
+      scope: start.scope,
+      ...(act.from !== undefined ? { from: act.from } : {}),
+    };
+    try {
+      if (act.version === "approved")
+        return { outcome: "done", run: this.#begin(params, act.hash).run };
+      // Run this version: the library's bytes, while they are still the version the item asked about
+      const file = this.ports.library.read(act.flow);
+      if (file === undefined) throw refused("not-found", words.notFound(act.flow));
+      if ("tooBig" in file) throw refused("too-big", words.tooBig());
+      if (file.hash !== act.hash) throw refused("version", words.notAVersion(act.flow));
+      return { outcome: "done", run: this.#begin(params, file.hash, file.bytes).run };
+    } catch (error) {
+      if (error instanceof RpcCallError) return { outcome: "failed", reason: error.message };
+      throw error;
+    }
+  }
+
+  /** Begin a run of the version `hash`: its refusals, then (`approving`, Run this version's bytes) its approval as
+   * yours, then its record and its head (D18), then its host. Without `approving` the bytes are the ones fieldd kept
+   * under an approval's hash (D8). */
+  #begin(params: FlowRunStartParams, hash: string, approving?: Uint8Array): RunSummary {
     const { records } = this.ports;
-    const bytes = records.bytes(hash);
+    const bytes = approving ?? records.bytes(hash);
     if (bytes === undefined) throw refused("version", words.notAVersion(params.flow));
     const read = readFlow(bytes);
     const meta = read.meta;
@@ -393,6 +431,9 @@ export class FlowRuns {
     const run = `fr-${randomBytes(8).toString("hex")}` as FlowRunId;
     const profiles = new Set(this.ports.profiles());
     const scope = [...new Set(params.scope)].filter((profile) => profiles.has(profile));
+    // Run this version (approves it): past every refusal, so an act that can't begin approves nothing; the approval
+    // keeps its bytes, which the run's host is woken on
+    if (approving !== undefined) records.approve(params.flow, approving);
     records.beginRun(
       { run, flow: params.flow, name, n, hash, starter: params.starter, input: params.input },
       { scope, state: "running", calls: 0, allowed: FLOW_LIMITS.CALLS_MAX, open: [], steps: [] },

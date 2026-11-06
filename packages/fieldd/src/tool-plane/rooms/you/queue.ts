@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import {
   type AgentProfileSetId,
   type ComposeAskUserInput,
+  canonicalJson,
   NEEDS_CHOICE_MAX,
   NEEDS_CHOICE_WORDS,
   NEEDS_CHOICES_MAX,
@@ -209,11 +210,11 @@ export interface FlowItemStart {
   readonly id: NeedsItemId;
   readonly flow: string;
   readonly hash: string;
-  /** R4–R6: Run this version (`this`: its bytes approved, then run) or Run the one you approved (`approved`). Not
-   * built yet: the queue says none */
-  readonly version?: "this" | "approved" | undefined;
+  /** R4–R6 (CP4-Q5 (a)): Run this version (`this`: its bytes approved as yours, then run) or Run the one you approved
+   * (`approved`: the bytes fieldd kept, run as they are) */
+  readonly version: "this" | "approved";
   readonly start?: NeedsPendingStart | undefined;
-  /** R4–R6: the spark whose flow_run the item tells (item.from, its session among it). Not built yet */
+  /** R4–R6: the spark whose flow_run the item tells (item.from, its session among it); absent for yours */
   readonly from?: HoldSender | undefined;
 }
 
@@ -595,7 +596,8 @@ export class NeedsQueue implements TalkHolds {
    * tells no one. Its acts: Run this version, Run the one you approved (only while one is), Not now last; See the
    * change is the card's, drawn from `script`. The same teller asking to run the same bytes while it is open is that
    * item, never a second. Q4: the start as it was asked is kept on the record, never on the item, and handed back to
-   * the runs with the act. */
+   * the runs with the act. Asked again with another start, the item's start is replaced by the latest, so its act
+   * begins what was asked last (RULED "replace", 2026-11-06); the same start again changes nothing. */
   flowChanged(raise: FlowChangedRaise): NeedsItemId {
     const { script, from } = raise;
     for (const record of this.#records.values()) {
@@ -606,8 +608,15 @@ export class NeedsQueue implements TalkHolds {
         item.script?.flow === script.flow &&
         item.script.hash === script.hash &&
         item.from.spark === from?.spark
-      )
+      ) {
+        const { start } = raise;
+        if (start !== undefined) {
+          const kept = record.start;
+          if (kept === undefined || canonicalJson(kept) !== canonicalJson(start))
+            this.#keep({ ...record, start });
+        }
         return item.id;
+      }
     }
     if (from !== undefined) this.#bound(from.spark);
     const id = NeedsStore.mintId();
@@ -862,6 +871,7 @@ export class NeedsQueue implements TalkHolds {
         ...owed((spark, flow) => words.flowNotNowFact(spark, flow, script.approved !== undefined)),
       };
     const approved = choice === 1 && script.approved !== undefined ? script.approved : undefined;
+    const { spark, session, name } = item.from;
     this.#keep({ ...record, acting: { choice, at } });
     let started: FlowItemStarted;
     try {
@@ -869,8 +879,11 @@ export class NeedsQueue implements TalkHolds {
         id: item.id,
         flow: script.flow,
         hash: approved ?? script.hash,
+        version: approved !== undefined ? "approved" : "this",
         // Q4: the start as it was asked, absent on a record from before it
         ...(record.start !== undefined ? { start: record.start } : {}),
+        // a spark's: the flow_run that waits on it, as the spark bound it
+        ...(spark !== undefined && session !== undefined ? { from: { spark, name, session } } : {}),
       });
     } catch (err) {
       started = { outcome: "failed", reason: (err as Error).message };
