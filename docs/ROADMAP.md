@@ -404,9 +404,10 @@ phone"; DECISIONS PC
   signature, its load under the hardened runtime, `desktop.sound.rendered`); ESR §6.2's flip at the next draft slot;
   the mark's clearance check before it ships.
 
-**MA — Apps (what your agents make, open on every device)** · vibe-field-19 (lanes `lanes/ma/1`, `lanes/ma-3`) · law:
-`draft/thinking-mini-apps.md` §3–§5 and §9 (the page *Apps in a Pocket*, MfeTjw5K; sources `draft/ios-pocket/apps/`),
-`specs/artifact-hub.md`, design-06 §5, DESIGN.md §2.9, §8 "The phone's Apps" and §9 "Apps"; DECISIONS MA
+**MA — Apps (what your agents make, open on every device)** · vibe-field-19 (lanes `lanes/ma/1`, `lanes/ma-3`,
+`lanes/ma-4`) · law: `draft/thinking-mini-apps.md` §3–§5 and §9 (the page *Apps in a Pocket*, YJ28uyY3, where it
+moved 11-05 22:09Z from MfeTjw5K; sources `draft/ios-pocket/apps/`), `specs/artifact-hub.md`, design-06 §5,
+DESIGN.md §2.9, §8 "The phone's Apps" and §9 "Apps"; DECISIONS MA
 - Ruled 11-05 07:53:09–07:55:14Z (James, on the page): MA-D7…D9 and D11…D13 A; MA-D10 B, against the lean (an
   app's icon is a crop of its preview, and its project's ink and title's initial until it has one); MA-D1…D6 carried
   A under his typed "good, all ruled, now implement and land this properly" (08:02Z). It takes AH's rows from §4.
@@ -420,14 +421,18 @@ phone"; DECISIONS PC
 - Landed 11-05: **MA-3e, M-B** (`d8afd7a6e` → `ac2fc574f`, stacked as M162, run 162; LANDED "MA-3e (M-B)"): the
   six doors answer. `artifact.open` is `export-unbuilt` until rosetta 0.1.4, and `artifact.mark` is `intent-unbuilt`
   until 3h.
-- Next: **MA-4, the desk** (lane `ma-4`, building; held at its mint until James rules MA's place in 0.9) · rosetta
-  0.1.4 (RO-32…RO-35, drafted in `lanes/ma/rosetta`; James files and releases it) → its EL8 → MA-3f, serving → MA-3h,
-  Keep and Hide as intent · **MA-6, the phone's shelf** (IOS-13a, ahead of it, landed 11-06) ·
-  **MA-5, the phone's host** after SP-4 and its probes P1/P2 (cp-landing's queue).
-- Owed: the 10 words marked ‹for James› in DESIGN.md §8 and §9; MA's place in 0.9 (James; the lean: 0.10, with
-  nothing visible in build 6); carried from AH: AH-4's review, its LANDED entry and its physical witnesses
-  (`cce684ce3`, on main since 08-03), AH-1's two-client witness, AH-3's physical closeout, and device-retirement GC
-  with TS's "forget a device".
+- Landed 11-06: **MA-4, the desk** (`a16205d5c` → `2cccfb168`, stacked as M166, run 166; LANDED "MA-4"), in 0.9 by
+  James's "MA-4 in" (00:30Z): From your agents under Live on the Apps shelf, History's `artifacts` port (dormant
+  until RO-37), and the screen's word Apps. Every open is still `export-unbuilt`.
+- Next: **MA-3f, serving**: the copy in VibeField's files worker if James rules the Drive's DR-D1 (a)
+  (`draft/thinking-drive.md`, PROPOSED 11-06, page *The Drive*), else rosetta 0.1.4 (RO-32…RO-35, drafted in
+  `lanes/ma/rosetta`; James files and releases it) and its EL8 · MA-3h, Keep and Hide as intent · **MA-6, the phone's
+  shelf** (IOS-13a, ahead of it, landed 11-06) · **MA-5, the phone's host** after SP-4 and its probes P1/P2
+  (cp-landing's queue).
+- Owed: the 10 words marked ‹for James› in DESIGN.md §8 and §9, and §9's interim words for Live (MA-4); the
+  Drive's nine marks; MA-4's witness by eye; smoke:godview on vf-m1 (items 185, 186); carried from AH: AH-4's
+  review, its LANDED entry and its physical witnesses (`cce684ce3`, on main since 08-03), AH-1's two-client
+  witness, AH-3's physical closeout, and device-retirement GC with TS's "forget a device".
 
 **HN — Cards in Hand** · vibe-field-a1 (lane `lanes/hn`) · law `draft/thinking-cards-in-hand.md` §6 (page sources `draft/cards-in-hand/`), DESIGN.md §1/§5/§6/§8/§9/§10/§13
 - Ruled 10-29 10:40Z (James): all sixteen at their leans (LN-D1…D3, HN-D1…D10, PL-D1…D3); HN-D1 was his own pick on
@@ -1223,7 +1228,7 @@ Petition status lives in `draft/petitions/README.md`. Still open or owed there:
 | DK — the desk migration | COMPLETE; landed 10-09 | `thinking-desk-migration.md`, `thinking-the-desk.md`, ICE design-015…018, `docs/desk-gates.md` | James's parked build rulings |
 | GT — Godview terminal | PARKED; the deck's ladder done (GT-0…GT-8) | `specs/godview-terminal.md` | G29; GT-D22; row 13b |
 | TP / TC — terminal pipeline and custody | PARKED; TC RATIFIED 10-28 (Q6) | `specs/terminal-pipeline-v3*.md`, `specs/terminal-custody.md`, `thinking-terminal-mesh-cells.md`, `thinking-floor-wedge.md`, `thinking-inventory-latency.md` | D6's cell half |
-| MA — Apps (was AH — Artifact Hub) | ACTIVE since 11-05 (MA-D1…D13 ruled); MA-0a + MA-1a landed (M152); AH-1…3 landed, AH-4 unledgered | `thinking-mini-apps.md`, `specs/artifact-hub.md`, design-06 §5; DESIGN.md §2.9/§8/§9/§13 | MA-3 (fieldd), then MA-4 at James's 0.9 word |
+| MA — Apps (was AH — Artifact Hub) | ACTIVE since 11-05 (MA-D1…D13 ruled; MA-4 in 0.9, James 11-06); MA-0a + MA-1a (M152), MA-3 (M157, M162) and MA-4 (M166) landed; AH-1…3 landed, AH-4 unledgered | `thinking-mini-apps.md`, `specs/artifact-hub.md`, design-06 §5; DESIGN.md §2.9/§8/§9/§13 | MA-3f serving (DR-1 if the Drive rules DR-D1 (a)), then MA-3h; MA-6 the phone's shelf |
 | PLUG — shipped core | COMPLETE: P0–P7, P8b–d (P8c via WP8), PRC-4/5; later publishing/validation work is separate | `specs/plugin-architecture.md`, `thinking-p8-loadable-artifact.md` | existing product gates; no blanket 24-hour prerequisite |
 | PRC-6 — plugin runtime validation | OPEN; diagnostics in draft [PR #7](https://github.com/vibefield/vibefield/pull/7); Linux CI passed, full verification and calibration pending | `thinking-prc6c2-physical-soak.md` §9–10 | full verify → guarded 32-cycle current-desk calibration + listener control; historical failures stay open; literal 24h only for that claim |
 | PLUG — publishing | PARKED: KIT/P8e | `thinking-p8-loadable-artifact.md`, `specs/trust-and-distribution.md` | publishing scope; TD registry + R2 process host |

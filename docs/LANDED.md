@@ -35611,6 +35611,8 @@ Item 183 closes in this entry.
 - 3f, serving, after rosetta 0.1.4's EL8: the exporter, the export door's route, D10's tidy.
 - 3h, Keep and Hide as replicated intent.
 - MA-4, the desk, held at its mint for James's 0.9 word.
+  > *Answered 2026-11-06:* James ruled "MA-4 in" for 0.9 (00:30Z), and MA-4 landed as M166 `2cccfb168`
+  > (LANDED "MA-4").
 - Not pinned: the home's cross-desktop project join on a routed `index.artifacts` page, its malformed-page refusal
   and the `not-a-root-url` log line.
 
@@ -36113,3 +36115,107 @@ paths adapted, nothing else, as ruled 2026-11-05 22:12Z). The first mini went of
   Chat's count is 1 in all six of 12b's stills.
 
 IOS-13a closes in this entry.
+
+## MA-4 — the desk's Apps: From your agents stands under Live on the Apps shelf, History's `artifacts` port is built and dormant, and the screen's word is Apps; every open still answers `export-unbuilt` until 3f (track MA) (2026-11-06; `a16205d5c` → `2cccfb168`, 9 commits on main `434a1f849`, lane `ma/4-desk` in `/Volumes/SamsungRed/lanes/ma-4/vibe-field`, re-cut by `git replay` as `ma/4-T`, stacked as M166 `2cccfb168`, run 166)
+- **James, 00:30Z (through VF-PM): "MA-4 in"**, so MA-4 ships in 0.9. MA-D13 (a)'s renames reach build 6 with it (C14
+  as ruled). Its three slices are red then green, and each has its own report in `lanes/ma-4/reports/`.
+- **The honest state:**
+  - From your agents draws on the desk. Open asks `artifact.open`, which still answers
+    `UNAVAILABLE {service:"apps", state:"export-unbuilt"}`. The tile says so, with "Open in ‹host›" when the app has
+    a hosted link. Keep and Hide ask `artifact.mark`, which answers `intent-unbuilt` until 3h.
+  - History's `artifacts` port is built and dormant: the room draws nothing from it until RO-37 and 4d.
+  - Live's states and the Hub's lines speak in DESIGN.md §9's dated interim words, owed to James.
+
+**What landed.** 37 files, +6224 −249.
+- **Pin-class, by name:**
+  - `packages/design-kit/src/tokens.css` (+2): `--vf-app-fallback-tile: #232326` in `.dark`; DESIGN.md §2.9 states
+    it first.
+  - `packages/electron-shell/src/testing/smoke.ts` (+28 −28): 4c's words.
+  - `plugins/browser/vibefield.plugin.json` (+1 −1): the surface title "Apps", while the surface id keeps the inside
+    word (L17).
+  - `packages/electron-shell/src/main/bootstrap.ts` (+7): the window's `apps.use`.
+  - The pin-class ERE: no hit. Contracts, release-class, Rust, locks and packaging: none.
+- **Governing docs:**
+  - DESIGN.md (+11 −1): §8's 24 gap between Live and From your agents, and §9's dated interim words.
+  - `docs/UI_SYSTEM.md` (+11): the catalog mounts the shipping `MadeApps` on its own fixture adapter, and the catalog
+    CSS bans `.vf-apps-*` (C18).
+- **The replay:** `d23d0b141` was replayed onto main with no worktree: range-diff 9/9 `=`, and all 37 files' lines
+  identical. DESIGN.md is the one file shared with main since `8aea8fe58`. Main's hunks there (4187+3, 5759+14,
+  6096+18, 6308+21: CP-4a2b's §9 line and 13a's six commits) are disjoint from MA-4's (1407 and 6407).
+- **4a, From your agents** (`field-app/src/frame/apps/`, new):
+  - The made apps' group draws under Live: by day, a search field, and tiles in AH's form, with a preview or the
+    fallback squircle (the project's ink and the app's initial; the dark tile by night).
+  - The fact line names the agent from the catalog, then the project, the desktop and its state.
+  - Its `•••` menu holds Keep, Versions and Hide. Its states are honest: a library still reading, an app not written
+    out yet, an asleep desktop.
+  - The catalog plate mounts the shipping view over a fixture client. The window gains `apps.use`.
+- **4b, History's port** (`field-app/src/history/`):
+  - `catalogPortOver()` gains `artifacts: {list, read}`. `list` maps `index.artifacts` to rosetta's `ArtifactPage`.
+  - `read` goes through the session port: an open lease's grant, else a one-shot ticket outside `leases`. It never
+    releases the room's lease, and it is bounded at 16 MiB.
+  - It is dormant until RO-37.
+- **4c, the shelf:**
+  - `.vf-head-hub` holds the plugin's surface (Live) and From your agents, in that order and 24 apart. Live's waits
+    fill the box only when nothing follows them.
+  - The screen says Apps: the package and its tooltip ("Close the apps"), the dot's words, the sheet's name, the
+    surface title. The Hub's header says Live. The internal names stay.
+  - The catalog's head plates draw both groups. The catalog's prose and the glyph plate say Apps.
+- **The tail:** 4a's biome format, folded with the one test row that reads the CSS as text (Found); DESIGN.md's
+  interim words and gap, before the plates; the catalog plates.
+
+**The proof.**
+- **The MacBook** (nice 19, through `vitest-slot.sh`; speed, not proof):
+  - Each slice's red rows failed by assertion at their commit.
+  - At the lane tip: made-apps 74, history-doors 57, head 107, head-model 28, design-system 8, ui-system-boundaries 48,
+    package-circle 13, artifact-panel 11; the field-app audits (text-ramp, build-edges, glyphs, plugin-surface-view,
+    chat-at-rows, spark-face, surface-registry) 64; bootstrap 16; the 33 smoke-text files 522; plugins/browser 15.
+  - tsc 0 for field-app, electron-shell and plugins/browser. biome 0 errors.
+  - design-system.test's two-group row was probed red with the plates' `made` taken out. 4b's eleven mutation probes
+    each turned its row red.
+- **Run 166, the green** (a9's mint of `2cccfb168` on `434a1f849`, HAS `7a7f22623`, on vf-m1): `pnpm verify` exit 0
+  at 01:17:55Z.
+  - field-app 4181 (+112: made-apps 74 new, history-doors 35 → 57, head 96 → 107, artifact-panel 7 → 11,
+    ui-system-boundaries 47 → 48).
+  - electron-shell 2669|3 (+1, bootstrap 15 → 16).
+  - vitest 13,430 passed, 0 failed, 21 skipped; biome 3385 (+6 new files).
+  - contracts 1751, fieldd 3457|14, plugin-browser 15, node 473 and cargo 545, each unchanged.
+  - census OK, bundle assert OK (History lazy), gen:check clean. Each count equals the packet's, measured file by file
+    at the tip.
+  - smoke-catalog.test, never lit on the Mac (the lane's install held no Electron binary), passed 9/9.
+  - The log is `/Volumes/SamsungRed/lanes/ts6/logs/m1/run166/verify.log`, sha256
+    `c088db6cc764fa489e7b8cea4a74403b9a73e28a25c670c339e1e19e38cc7032`.
+- **smoke:godview on vf-m1 is a host or main question, not a pass.**
+  - MA-4's rung passed: "the Hub bound: its Live in the shelf, once in the page", and "the sheet grew on Apps to
+    544 × 420; the circle stepped aside".
+  - The row then went red at 11m's chat send: Polaris `hello: false`, Delivered null, "Polaris may not have it".
+    MA-4's diff touches no chat, spark, flow or receipt code. Filed as item 185.
+  - The control at main `434a1f849` on the same host went red earlier, at GT-D5's pane close, a step run 166 passed.
+    Filed as item 186.
+  - This was vf-m1's first smoke:godview, on canvas2d with no WebGPU adapter.
+  - The re-run of MA-4's row (run 166r at `2cccfb168`) went red on the same 11m line with identical numbers (given
+    150 ms, delivered null, receipts [null], heard 12×4); its Apps rung and GT-D5 passed again. The control's second try
+    at main (run 166c2, `434a1f849`) reached 11m and went red on the same line, so item 185 is main's or the host's;
+    item 186, GT-D5, was seen once at main (run 166c). The logs are `smoke-godview.clean.log` under
+    `/Volumes/SamsungRed/lanes/ts6/logs/m1/` in `run166`, `run166r`, `run166c` and `run166c2`.
+- The land: main fast-forwarded `434a1f849` → `2cccfb168` at 03:20:31Z (the fixer), 37 files +6224 −249.
+
+**Found.**
+- **A format commit can change what a test reads.** The tail's biome `--write` rewrote made-apps.css's
+  `font: 650 26px/1` as `650 26px / 1`, and made-apps.test reads the CSS as text. The commit's first cut said nothing a
+  test read had changed. The tip lights caught the red (73/74), and the fix was folded into that commit, its message
+  corrected, before the re-cut (`9eac0b8a9` → `3215fcd2b`, never landed).
+- **13a moved DESIGN.md between the rehearsal and the cut.** The packet's hunk table, measured against `a6ab8f5ce`,
+  was corrected at its source from the fixer's pre-check. UI_SYSTEM.md, in the 37 but unnamed, was named.
+- **rosetta 0.1.3 already answers a page's bytes:** its content route, blake3-checked, behind a session grant.
+  `MadeAppExporter` is the seam. So Open need not wait for rosetta 0.1.4: the record `draft/thinking-drive.md`
+  (track DR, PROPOSED 2026-11-06, page *The Drive*) puts the copy in the files worker (DR-1 = 3f retargeted), under
+  the user's own root, held by every desktop.
+
+**Owed.**
+- **To James:** DESIGN.md §9's interim words (Live's four states, the Hub's lines), with the other ‹for James› words;
+  the Drive's nine marks.
+- **The witness** (the desk's eye, both themes and reduced motion): the catalog's head plates with both groups; the
+  made group moving when a Hub binds or restarts (Live's height changes; it is never remounted); Open from the shelf
+  after 3f or DR-1.
+- RO-37's `recovered_from` (4b), then 4d. 3h, Keep and Hide as intent.
+- smoke:godview on vf-m1: items 185 and 186.
