@@ -18,41 +18,35 @@ import {
   usageLines,
   usageOf,
 } from "../panels/agents/profiles-model";
+import { windowWords } from "../setup/limit-moment";
+import { durationWords, forecastOf, type MeterForecast, pressureOf, tightestOf } from "./rules";
 
 // UM-1 (track UM; the round-4 page's marks ruled A, UM-D16 = E "Bands" in round 3, and the carried marks UM-D3, D4,
-// D13 and D15 at their leans by James's word of 2026-11-06 03:11Z) — ONE PROFILE'S METERS, PURE: every plan an Agent
-// Profile runs on, read as Settings reads it, in the order a glance can trust. Godview's profiles column, its
-// popover, the phone's Agent Profiles page and its held face all draw from this one model (UM-D3, one meter
-// everywhere), and the phone is held to it by the bands golden (`perf/lib/phone-goldens.ts`).
+// D12, D13 and D15 at their leans by James's word of 2026-11-06 03:11Z) — THE PROFILES' METERS, PURE: every plan an
+// Agent Profile runs on, read as Settings reads it, in the order a glance can trust; and every profile's at once (the
+// union, UM-D12). Godview's profiles column, its popover, the phone's Agent Profiles page and its held face all draw
+// from this one model (UM-D3, one meter everywhere), and the phone is held to it by the usage bands golden
+// (`test/fixtures/usage/usage-bands.golden.json`, computed by `golden.ts`).
 //
 // The join is Settings' own (`panels/agents/profiles-model.ts`), reused and never copied: a plan's reading is the
 // reading of the sign-in that named its account (`namedBy` → `usageOf`), its windows are Settings' C1 lines
 // (`usageLines`), its sign-in is `signInState`'s, and its orange is `isHot`, the pace rule (UM-D3: Godview's flat 80%
-// retires). What this file adds is the drawing's (draft/profile-meters/round4/src/p3a-core.js): the tightest window
-// by pressure (UM-D13), the forecast (UM-D4), the budget's pace-less rule, and the stable order (UM-D15). AR-L1: no
-// agent is named here — the order and the labels are the agent catalog's.
+// retires). The meter's rules — the tightest window (UM-D13), the forecast (UM-D4), the words for a length — are the
+// leaf `rules.ts`'s, which Settings may read too. What this file adds is the drawing's (draft/profile-meters/round4/
+// src/p3a-core.js): the budget's pace-less rule, the stable order (UM-D15), and the union of every profile's plans
+// (`subsOf`, `subGlyphs`). AR-L1: no agent is named here — the order and the labels are the agent catalog's.
 
 /** UM-D15's three groups, a first read standing with the readings it is waiting for. */
 export type MeterKind = "reading" | "first-read" | "needs-you" | "no-meter";
 
-/** What a plan that needs you asks for: a sign-in, or another read. */
-export type MeterNeed = "sign-in" | "retry";
+/** What a plan that needs you asks for: a sign-in, the sign-in already under way (nothing to ask: it is said), or
+ * another read. */
+export type MeterNeed = "sign-in" | "signing-in" | "retry";
 
-/** Why a plan shows no meter: its account is named by no agent here, its agent reports no usage, or its reading
- * holds no window. */
-export type NoMeterReason = "unnamed" | "unreported" | "no-windows";
-
-/** UM-D4 — when a window runs out at this pace, said only while it runs ahead and only before its reset. */
-export interface MeterForecast {
-  /** minutes to the limit at this pace, unrounded */
-  minutes: number;
-  /** "~35m": rounded as the drawing rounds (to the minute under 10, to 5 under the hour, to 15 from it) */
-  words: string;
-  /** "out in ~35m": a meter's right words */
-  short: string;
-  /** "Runs out in ~35m at this pace" */
-  long: string;
-}
+/** Why a plan shows no meter: its account is named by no agent here, its agent reports no usage, its reading holds no
+ * window, or the usage door itself could not answer (ruling 10: the circle says No meters, never a first read that
+ * never ends). */
+export type NoMeterReason = "unnamed" | "unreported" | "no-windows" | "unavailable";
 
 /** One window of a reading, as the meters draw it. */
 export interface MeterWindow {
@@ -62,10 +56,12 @@ export interface MeterWindow {
   line: UsageLine;
   /** a credit budget, which fills both bands */
   budget: boolean;
+  /** its length in words, as the limit moment says it ("7 days", "5 hours"), or its label when it names none */
+  lengthWords: string;
   /** minutes to the reset, unrounded (negative once it has passed); absent for a window that names no reset and for
    * a budget */
   resetIn?: number;
-  /** UM-D13's rank: ahead of pace first, then spent, then the fuller */
+  /** UM-D13's rank (`pressureOf`): ahead of pace first, then spent, then the fuller */
   pressure: number;
   forecast?: MeterForecast;
 }
@@ -80,8 +76,19 @@ export interface MeterRight {
   icon: boolean;
 }
 
+/** A profile a meter is in, as its mark draws it (`ProfileGlyph`: the set's kind — This Mac is the laptop whatever it
+ * says —, its glyph token, filled while it is the default) and as it is named. */
+export interface MeterProfile {
+  setId: string;
+  kind: AgentProfileSet["kind"];
+  glyph?: string;
+  filled: boolean;
+  label: string;
+}
+
 interface MeterBase {
-  /** stable within the profile: `plan:<id>`, or `agent:<profileId>` for an agent on no plan */
+  /** stable within the view: `plan:<id>`, or `agent:<profileId>` for an agent on no plan; in the union, the first
+   * profile holding it, a slash, then that (`work/plan:anthropic`) */
   key: string;
   /** the agent whose mark it wears: the sign-in that reads it */
   provider: string;
@@ -93,6 +100,9 @@ interface MeterBase {
   profileId?: string;
   /** the plan, when it is one */
   plan?: { id: string; service: AgentSignInService; account?: string };
+  /** the profiles it is in: its own, for one profile's meters; in the union (UM-D12), the managed profiles that hold
+   * it, else This Mac (the drawing's `subGlyphs`) — what a crowded agent wears under its mark */
+  profiles: MeterProfile[];
 }
 
 export interface ReadingMeter extends MeterBase {
@@ -124,10 +134,10 @@ export interface NoMeter extends MeterBase {
 }
 export type PlanMeter = ReadingMeter | FirstReadMeter | NeedsYouMeter | NoMeter;
 
-/** One profile's meters. */
+/** One profile's meters, or every profile's (`everyPlan`). */
 export interface ProfileMeters {
   /** UM-D15 — readings, then those that need you, then no meter; within each, the catalog's agent order, then the
-   * profile's own */
+   * profiles' own */
   entries: PlanMeter[];
   /** UM-D13 — the plan whose tightest window is the most pressed */
   tightest?: ReadingMeter;
@@ -135,58 +145,23 @@ export interface ProfileMeters {
   hot: boolean;
 }
 
-/** Settings' `resetWords` says a reset this many minutes off, or more, by its day and clock ("Thu 09:00", in the
- * reader's own zone and locale), a nearer one as a length ("2h 10m"), and one already past as "now". */
-export const RESET_BY_DAY_MINUTES = 24 * 60;
+/** How a plan is titled, given whether an agent named its account. */
+export type PlanTitle = (plan: AgentPlan, named: boolean) => string;
 
-/** How Settings' `resetWords` says a window's reset: as a length, by its day, or "now"; nothing when it names none. */
-export function resetForm(window: MeterWindow): "length" | "day" | "now" | undefined {
-  if (window.resetIn === undefined) return undefined;
-  if (window.resetIn <= 0) return "now";
-  return Math.round(window.resetIn) >= RESET_BY_DAY_MINUTES ? "day" : "length";
-}
+/** Settings' card's title, the default: the product's own name for the plan once an agent named its account ("Claude
+ * Max"), the product alone before ("Claude"). */
+export const settingsPlanTitle: PlanTitle = (plan, named) =>
+  planTitle(plan.service, named ? plan.account?.plan : undefined);
 
-/** A length as the drawing says it: "45m", "2h 10m", "3d 4h" (its `dur`, the carry made exact). */
-export function durationWords(minutes: number): string {
-  const whole = Math.round(minutes);
-  if (whole < 60) return `${Math.max(1, whole)}m`;
-  if (whole < 24 * 60) {
-    const hours = Math.floor(whole / 60);
-    const rest = whole % 60;
-    return rest === 0 ? `${hours}h` : `${hours}h ${rest}m`;
-  }
-  const hours = Math.round(whole / 60);
-  const days = Math.floor(hours / 24);
-  const rest = hours % 24;
-  return rest === 0 ? `${days}d` : `${days}d ${rest}h`;
-}
-
-/** UM-D4 — the forecast: at this pace the window is spent before it resets. Never for a budget (pace-less), a
- * window already spent, one whose length or reset is unknown, or one not ahead of pace. */
-export function forecastOf(window: {
-  usedPercent: number;
-  elapsedPercent?: number | undefined;
-  durationMinutes?: number | undefined;
-  resetIn?: number | undefined;
-  budget: boolean;
-}): MeterForecast | undefined {
-  const { usedPercent: used, elapsedPercent: elapsed, durationMinutes: length, resetIn } = window;
-  if (window.budget || length === undefined || elapsed === undefined || resetIn === undefined) {
-    return undefined;
-  }
-  if (used >= 100 || !isHot(used, elapsed)) return undefined;
-  // ahead of pace means some time has gone (isHot), so the pace is a positive share per minute
-  const perMinute = used / ((elapsed / 100) * length);
-  const minutes = (100 - used) / perMinute;
-  if (minutes >= resetIn) return undefined;
-  const words = `~${
-    minutes < 10
-      ? `${Math.max(1, Math.round(minutes))}m`
-      : minutes < 60
-        ? `${Math.round(minutes / 5) * 5}m`
-        : durationWords(Math.round(minutes / 15) * 15)
-  }`;
-  return { minutes, words, short: `out in ${words}`, long: `Runs out in ${words} at this pace` };
+export interface MetersOptions {
+  /** This Mac's agents as Settings' page lists them — the installed ones and one signing in; absent, every agent */
+  installed?: ReadonlySet<string>;
+  /** how a plan is titled (`settingsPlanTitle` by default) */
+  title?: PlanTitle;
+  /** the usage batch's own state: "unavailable" when the door refused or could not answer (ruling 10; ruling 17's
+   * home that does not share usage), so `rows` holds no reading to wait for — every plan that would read shows no
+   * meter. Absent, the rows are the batch (empty before its first frame: every metered sign-in is a first read). */
+  usage?: "available" | "unavailable";
 }
 
 /** A budget's line without a pace: no now line, and Settings' rule for a window of no known pace (80 or more). */
@@ -204,7 +179,7 @@ function paceless(line: UsageLine): UsageLine {
 }
 
 /** A reading's windows as the meters draw them: Settings' C1 lines (the windows in play, in the adapter's order),
- * each with its budget, its reset, its pressure and its forecast. */
+ * each with its budget, its length in words, its reset, its pressure and its forecast. */
 export function meterWindows(
   metrics: readonly AgentAccountUsageMetric[],
   now: Date,
@@ -220,7 +195,8 @@ export function meterWindows(
       metric,
       line,
       budget,
-      pressure: (line.hot ? 1000 : 0) + (line.usedPercent >= 100 ? 500 : 0) + line.usedPercent,
+      lengthWords: windowWords(metric),
+      pressure: pressureOf(line),
     };
     if (line.resets && metric.resetsAt !== undefined) {
       window.resetIn = (Date.parse(metric.resetsAt) - now.getTime()) / 60_000;
@@ -231,19 +207,16 @@ export function meterWindows(
       durationMinutes: metric.durationMinutes,
       resetIn: window.resetIn,
       budget,
+      hot: line.hot,
     });
     if (forecast !== undefined) window.forecast = forecast;
     return [window];
   });
 }
 
-/** UM-D13 — the window closest to its limit: the most pressed, the first of equals. */
+/** UM-D13 — a reading's window closest to its limit (`tightestOf` on its lines). */
 export function tightestWindow(windows: readonly MeterWindow[]): MeterWindow | undefined {
-  let tightest: MeterWindow | undefined;
-  for (const window of windows) {
-    if (tightest === undefined || window.pressure > tightest.pressure) tightest = window;
-  }
-  return tightest;
+  return tightestOf(windows, (window) => window.line);
 }
 
 /** The catalog's name for an agent, or its id: a newer peer's agent is carried, never renamed. */
@@ -266,8 +239,19 @@ const GROUP: Readonly<Record<MeterKind, number>> = {
 
 const NEED_WORDS: Readonly<Record<MeterNeed, string>> = {
   "sign-in": "not signed in",
+  "signing-in": "signing in…",
   retry: "couldn’t read",
 };
+
+function profileOf(set: AgentProfileSet): MeterProfile {
+  return {
+    setId: set.id,
+    kind: set.kind,
+    ...(set.glyph !== undefined ? { glyph: set.glyph } : {}),
+    filled: set.default,
+    label: set.label,
+  };
+}
 
 function rightOf(window: MeterWindow, stale: boolean, fetchedAt: string, now: Date): MeterRight {
   if (stale) {
@@ -297,8 +281,10 @@ function readOf(
   persona: AgentPersona,
   rows: readonly AgentAccountUsageEntry[],
   now: Date,
+  options: MetersOptions,
 ): PlanMeter {
-  const usage = usageOf(rows, persona);
+  // RED SKELETON: an unavailable batch reads as one not read yet (the first read that never ends)
+  const usage = options.usage === "unavailable" ? undefined : usageOf(rows, persona);
   const state = signInState(persona, usage);
   const needs = (need: MeterNeed): NeedsYouMeter => ({
     ...base,
@@ -327,7 +313,9 @@ function readOf(
       right: rightOf(tightest, stale, usage.fetchedAt, now),
     };
   }
-  if (state === "signed-out" || state === "signing-in" || usage?.state === "unauthenticated") {
+  // Settings says "Signing in…" and offers only its cancel: the meter says the same, and asks nothing
+  // RED SKELETON: a sign-in under way still asks to sign in
+  if (state === "signing-in" || state === "signed-out" || usage?.state === "unauthenticated") {
     return needs("sign-in");
   }
   if (usage === undefined) {
@@ -342,7 +330,8 @@ function readOf(
   }
   if (usage.state === "unsupported") return { ...base, kind: "no-meter", why: "unreported" };
   if (usage.state === "available") return { ...base, kind: "no-meter", why: "no-windows" };
-  // unavailable, rate-limited, or a state this build cannot name: it could not be read
+  // unavailable, rate-limited (the provider's backoff is the service's: a Retry never spends a call early), or a
+  // state this build cannot name: it could not be read
   return needs("retry");
 }
 
@@ -352,6 +341,7 @@ function planEntry(
   holder: AgentPersona,
   rows: readonly AgentAccountUsageEntry[],
   now: Date,
+  options: MetersOptions,
 ): PlanMeter {
   const namer = set.personas.find((persona) => persona.profileId === plan.namedBy);
   const account = accountWords(plan.account);
@@ -360,33 +350,55 @@ function planEntry(
     key: `plan:${plan.id}`,
     provider,
     agent: agentName(provider),
-    // Settings' card's title: the plan's own name once an agent named its account, the product alone before
-    title: planTitle(plan.service, account === undefined ? undefined : plan.account?.plan),
+    // RED SKELETON: the title handed in is ignored
+    title: settingsPlanTitle(plan, account !== undefined),
     plan: {
       id: plan.id,
       service: plan.service,
       ...(account !== undefined ? { account } : {}),
     },
     ...(namer !== undefined ? { profileId: namer.profileId } : {}),
+    // RED SKELETON: no profile is carried yet
+    profiles: [],
   };
   if (account === undefined || namer === undefined) {
     return { ...base, kind: "no-meter", why: "unnamed" };
   }
-  return readOf(base, namer, rows, now);
+  return readOf(base, namer, rows, now, options);
+}
+
+/** UM-D15's order (a stable sort: equals keep the order given), UM-D13's tightest plan and the hot rule. */
+function metersOf(entries: PlanMeter[], rank: (entry: PlanMeter) => number): ProfileMeters {
+  entries.sort(
+    (a, b) =>
+      GROUP[a.kind] - GROUP[b.kind] ||
+      catalogRank(a.provider) - catalogRank(b.provider) ||
+      rank(a) - rank(b),
+  );
+  const tightest = tightestOf(
+    entries.filter((entry): entry is ReadingMeter => entry.kind === "reading"),
+    (entry) => entry.tightest.line,
+  );
+  return {
+    entries,
+    ...(tightest !== undefined ? { tightest } : {}),
+    hot: entries.some((entry) => entry.kind === "reading" && entry.hot),
+  };
 }
 
 /**
  * One profile's meters: every plan its agents run on (each once), and every agent of it on no plan, read through
  * Settings' join, in UM-D15's order, with UM-D13's tightest plan and the hot rule. `rows` is the usage batch's
- * entries (empty before the first batch: every metered sign-in is then a first read). `installed`, when given,
- * lists This Mac's agents as Settings' page does — the installed ones and one signing in; absent, every agent.
+ * entries; `options` says which of This Mac's agents are listed, how a plan is titled, and whether the batch could be
+ * read at all.
  */
 export function planMeters(
   set: AgentProfileSet,
   rows: readonly AgentAccountUsageEntry[],
   now: Date,
-  installed?: ReadonlySet<string>,
+  options: MetersOptions = {},
 ): ProfileMeters {
+  const { installed } = options;
   const listed = set.personas.filter(
     (persona) =>
       set.kind !== "native" ||
@@ -401,7 +413,7 @@ export function planMeters(
     const holder = plan.holders.map((id) => shown.get(id)).find((persona) => persona !== undefined);
     if (holder === undefined) continue;
     for (const id of plan.holders) holding.add(id);
-    found.push(planEntry(set, plan, holder, rows, now));
+    found.push(planEntry(set, plan, holder, rows, now, options));
   }
   for (const persona of listed) {
     if (holding.has(persona.profileId)) continue;
@@ -414,27 +426,101 @@ export function planMeters(
           agent,
           title: agent,
           profileId: persona.profileId,
+          // RED SKELETON: no profile is carried yet
+          profiles: [],
         },
         persona,
         rows,
         now,
+        options,
       ),
     );
   }
-  // Array.prototype.sort is stable: equals keep the profile's own order
-  const entries = found.sort(
-    (a, b) => GROUP[a.kind] - GROUP[b.kind] || catalogRank(a.provider) - catalogRank(b.provider),
-  );
-  let tightest: ReadingMeter | undefined;
-  for (const entry of entries) {
-    if (entry.kind !== "reading") continue;
-    if (tightest === undefined || entry.tightest.pressure > tightest.tightest.pressure) {
-      tightest = entry;
+  return metersOf(found, () => 0);
+}
+
+/** Which plan of another profile is this one: the same company and the same account (its handle before its email,
+ * as puppeteer's `profileSetPlans` keys it), or the same borrowed sign-in when it names no account. */
+function sharedKey(plan: AgentPlan): string | undefined {
+  const who = (plan.account?.account ?? plan.account?.email)?.trim().toLowerCase();
+  if (who !== undefined && who.length > 0) return `named\u0000${plan.service.id}\u0000${who}`;
+  if (plan.borrowedFrom !== undefined) {
+    return `via\u0000${plan.service.id}\u0000${plan.borrowedFrom}`;
+  }
+  return undefined;
+}
+
+/** Of two profiles' meters for one shared plan, the one the union shows: a reading, then a first read, then a need. */
+const SHOWN: Readonly<Record<MeterKind, number>> = {
+  reading: 0,
+  "first-read": 1,
+  "needs-you": 2,
+  "no-meter": 3,
+};
+
+/**
+ * UM-D12 — every profile's meters at once (the drawing's `subsOf(m, null)`: the Me menu's circle, the held face's hub
+ * ring, the page with no profile chosen, the All profiles row): each profile's plans, a plan two profiles share being
+ * ONE entry that is in both (the plan's `alsoIn` names the other profile and both name one account, puppeteer's own
+ * match). Its meter is the better of the two readings (a reading, then a first read, then a need; equals, the earlier
+ * profile's). A draft profile (AO-D14) is left out until an agent signs in (ruling 7). Ordered as UM-D15 orders one
+ * profile, then by the first profile holding it, then each profile's own order.
+ */
+export function everyPlan(
+  sets: readonly AgentProfileSet[],
+  rows: readonly AgentAccountUsageEntry[],
+  now: Date,
+  options: MetersOptions = {},
+): ProfileMeters {
+  // RED SKELETON: the union holds nothing yet
+  if (sets.length >= 0) return { entries: [], hot: false };
+  interface Held {
+    entry: PlanMeter;
+    key: string;
+    sets: AgentProfileSet[];
+    shared?: string;
+    first: number;
+  }
+  const held: Held[] = [];
+  const kept = sets.filter((set) => set.draft !== true);
+  for (const [index, set] of kept.entries()) {
+    for (const entry of planMeters(set, rows, now, options).entries) {
+      const plan =
+        entry.plan === undefined
+          ? undefined
+          : (set.plans ?? []).find((each) => each.id === entry.plan?.id);
+      const shared = plan === undefined ? undefined : sharedKey(plan);
+      const same =
+        plan === undefined || shared === undefined
+          ? undefined
+          : held.find(
+              (other) =>
+                other.shared === shared && other.sets.some((each) => plan.alsoIn.includes(each.id)),
+            );
+      if (same !== undefined) {
+        same.sets.push(set);
+        if (SHOWN[entry.kind] < SHOWN[same.entry.kind]) same.entry = entry;
+        continue;
+      }
+      held.push({
+        entry,
+        key: `${set.id}/${entry.key}`,
+        sets: [set],
+        ...(shared !== undefined ? { shared } : {}),
+        first: index,
+      });
     }
   }
-  return {
-    entries,
-    ...(tightest !== undefined ? { tightest } : {}),
-    hot: entries.some((entry) => entry.kind === "reading" && entry.hot),
-  };
+  const first = new Map<PlanMeter, number>();
+  const entries = held.map((each): PlanMeter => {
+    const managed = each.sets.filter((set) => set.kind !== "native");
+    const entry: PlanMeter = {
+      ...each.entry,
+      key: each.key,
+      profiles: (managed.length > 0 ? managed : each.sets).map(profileOf),
+    };
+    first.set(entry, each.first);
+    return entry;
+  });
+  return metersOf(entries, (entry) => first.get(entry) ?? 0);
 }

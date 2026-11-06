@@ -1,11 +1,13 @@
-import { windowWords } from "../setup/limit-moment";
-import { type MeterWindow, type PlanMeter, type ReadingMeter, resetForm } from "./meters";
+import type { MeterProfile, MeterWindow, PlanMeter, ReadingMeter } from "./meters";
+import { resetForm } from "./rules";
 
-// UM-1 (UM-D16 = E, "Bands", round 3, James) — THE BANDS CIRCLE'S GEOMETRY, PURE: every plan of one Agent Profile on
-// one circle, an arc segment each, five hours on the inner band, the week on the outer, a model's own week as a
-// hairline outside them at full size, a budget filling both. Transcribed from the ruled drawing
-// (draft/profile-meters/round4/src/p3e-dials.js: `bandsOf`, `drawBands`, `meterOnArc`, `centreSvg`, `dialSvg`),
-// whose detail follows the size: level 0 below 38 px, 1 to 71 (the column's 40), 2 to 149, 3 from 150 (opened).
+// UM-1 (UM-D16 = E, "Bands", round 3, James) — THE BANDS CIRCLE'S GEOMETRY, PURE: every plan of one Agent Profile (or
+// of every profile, UM-D12's union) on one circle, an arc segment each, five hours on the inner band, the week on the
+// outer, a model's own week as a hairline outside them at full size, a budget filling both. Transcribed from the ruled
+// drawing (draft/profile-meters/round4/src/p3e-dials.js: `bandsOf`, `drawBands`, `meterOnArc`, `centreSvg`, `dialSvg`),
+// whose detail follows the size: level 0 below 38 px, 1 to 71 (the column's 40), 2 to 149, 3 from 150 (opened). Drawn
+// AROUND something round already there (the phone's face: 96 across, the hole 34, the band 8 — the drawing's
+// `faceRingSvg`), the bands take the hole's measure instead and draw at level 1 with nothing in the middle.
 //
 // No DOM and no colour: the arcs, lit heads, notches, need threads, marks, the centre and the hot dot are numbers and
 // tones, which the desktop's BandsCircle and the phone's BandsDial draw in DESIGN.md's tokens (the hot dot is
@@ -64,10 +66,12 @@ export interface BandsMark {
   size: number;
   paint: BandsPaint;
   opacity: number;
-  /** what the plan needs, on a disc at its upper right: the key glyph (sign in) or "!" (retry), r × 1.32 and r × 1.25 */
+  /** what the plan needs, on a disc at its upper right: the key glyph (sign in) or "!" (retry), r × 1.32 and r × 1.25;
+   * a sign-in under way asks nothing, so wears none */
   badge?: { need: "sign-in" | "retry"; x: number; y: number; r: number };
-  /** an agent with more than one plan here wears the profile's glyph under its mark (an All view) */
-  glyph?: { x: number; y: number; size: number; paint: BandsPaint };
+  /** UM-D12 — an agent with more than one plan in view wears the glyph of the profile it is in under its mark (the
+   * meter's first profile: the drawing's `subGlyphs(m, sub)[0]`), so its plans can be told apart */
+  glyph?: { x: number; y: number; size: number; paint: BandsPaint; profile: MeterProfile };
 }
 
 /** One plan's segment: what it draws, and where a pointer finds it. */
@@ -91,7 +95,8 @@ export type BandsCentreItem =
   | ({ kind: "mark" } & BandsMark)
   | {
       kind: "text";
-      /** the percent; "…" (a first read); "!" (needs you, small); "Sign in" or "Retry"; the window; the say line */
+      /** the percent; "…" (a first read, a sign-in under way); "!" (needs you, small); "Sign in" or "Retry"; the
+       * window; the say line */
       role: "figure" | "ellipsis" | "bang" | "act" | "sub" | "say";
       text: string;
       /** its middle across, and its baseline */
@@ -108,7 +113,8 @@ export type BandsCentreItem =
 export interface BandsGeometry {
   size: number;
   level: BandsLevel;
-  /** the circle's middle, the hole the bands leave, and what it holds */
+  /** the circle's middle, the hole the bands leave (one plan's, for the dashed ring; the face's, drawn around it), and
+   * what it holds */
   centre: { x: number; y: number; r: number; items: BandsCentreItem[] };
   /** the plans on the circle, in the profile's order (a plan with no meter is left off) */
   plans: BandsPlan[];
@@ -129,8 +135,13 @@ export interface BandsOptions {
   focus?: string;
   /** each plan answers a pointer: its hit arc */
   hit?: boolean;
-  /** an agent with more than one plan here wears the profile's glyph under its mark */
+  /** the view has several profiles (an All view, the drawing's `m.multi`): an agent with more than one entry here, a
+   * plan with no meter counted, wears its profile's glyph under its mark (UM-D12) */
   crowd?: boolean;
+  /** drawn around something round already there (the phone's face): the hole's radius and the band's depth. The
+   * bands are the hole's (each max(2.2, (band − 1.2) / 2) wide, 1.2 apart, the rim at hole + band), drawn at level 1,
+   * with no marks and nothing in the middle; the level said is at most 2. */
+  around?: { hole: number; band: number };
 }
 
 /** The inner band's reach: a window of five hours or less. */
@@ -175,7 +186,7 @@ export function bandsOf(entry: PlanMeter): PlanBands {
 export function windowOf(window: MeterWindow): string {
   if (window.budget) return "of credits";
   const part = window.line.group?.label.replace(/ only$/u, "");
-  return `of ${windowWords(window.metric)}${part !== undefined ? ` · ${part}` : ""}`;
+  return `of ${window.lengthWords}${part !== undefined ? ` · ${part}` : ""}`;
 }
 
 /** What the middle says under a plan at full size, and the end of its words: its forecast, its reset, a kept
@@ -185,7 +196,15 @@ export function bandsSay(entry: PlanMeter): { words: string; hot: boolean } {
     case "first-read":
       return { words: "reading…", hot: false };
     case "needs-you":
-      return { words: entry.need === "sign-in" ? "sign in" : "couldn’t read", hot: false };
+      return {
+        words:
+          entry.need === "sign-in"
+            ? "sign in"
+            : entry.need === "signing-in"
+              ? "signing in…"
+              : "couldn’t read",
+        hot: false,
+      };
     case "no-meter":
       return { words: "", hot: false };
     case "reading": {
@@ -203,11 +222,13 @@ export function bandsSay(entry: PlanMeter): { words: string; hot: boolean } {
   }
 }
 
-/** A plan in words: "Claude Max: 64% of 5 hours, out in ~35m"; "Kimi Code: not signed in". */
+/** A plan in words: "Claude Max: 64% of 5 hours, out in ~35m"; "Kimi Code: not signed in"; "Codex: signing in". */
 export function bandsPlanWords(entry: PlanMeter): string {
   switch (entry.kind) {
     case "needs-you":
-      return `${entry.title}: ${entry.right.words}`;
+      return entry.need === "signing-in"
+        ? `${entry.title}: signing in`
+        : `${entry.title}: ${entry.right.words}`;
     case "first-read":
       return `${entry.title}: reading`;
     case "no-meter":
@@ -285,7 +306,7 @@ function meterOnArc(
   r: number,
   width: number,
   window: MeterWindow | undefined,
-  options: { need?: "sign-in" | "retry"; firstRead?: boolean; notch?: boolean } = {},
+  options: { need?: NeedsYou["need"]; firstRead?: boolean; notch?: boolean } = {},
 ): void {
   const { c, level } = context;
   const round = level <= 1;
@@ -405,7 +426,12 @@ function meterOnArc(
   }
 }
 
+type NeedsYou = Extract<PlanMeter, { kind: "needs-you" }>;
+
 const planHot = (entry: PlanMeter): boolean => entry.kind === "reading" && entry.hot;
+/** a first read, or a sign-in under way: nothing to read yet, and nothing to ask — the middle says "…" */
+// RED SKELETON: only a first read waits
+const waiting = (entry: PlanMeter): boolean => entry.kind === "first-read";
 
 /** The plan that decides the middle: the most pressed reading, else the first read, else what needs you. */
 function decidingPlan(onCircle: readonly PlanMeter[]): PlanMeter | undefined {
@@ -428,7 +454,7 @@ function markOf(
   y: number,
   size: number,
   dim: boolean,
-  extras: { badge?: boolean; glyph?: boolean } = {},
+  extras: { badge?: boolean; glyph?: MeterProfile } = {},
 ): BandsMark {
   const mark: BandsMark = {
     provider: entry.provider,
@@ -438,7 +464,7 @@ function markOf(
     paint: entry.kind === "needs-you" ? ink(46) : planHot(entry) ? ATTENTION : ink(84),
     opacity: dim ? DIM : 1,
   };
-  if (extras.badge === true && entry.kind === "needs-you") {
+  if (extras.badge === true && entry.kind === "needs-you" && entry.need !== "signing-in") {
     mark.badge = {
       need: entry.need,
       x: x + size * 0.52,
@@ -446,8 +472,15 @@ function markOf(
       r: Math.max(4.2, size * 0.3),
     };
   }
-  if (extras.glyph === true)
-    mark.glyph = { x, y: y + size * 0.87, size: size * 0.64, paint: ink(60) };
+  if (extras.glyph !== undefined) {
+    mark.glyph = {
+      x,
+      y: y + size * 0.87,
+      size: size * 0.64,
+      paint: ink(60),
+      profile: extras.glyph,
+    };
+  }
   return mark;
 }
 
@@ -517,7 +550,7 @@ function centreOf(
   const used = plan.kind === "reading" ? Math.round(plan.tightest.line.usedPercent) : undefined;
   const act = plan.kind === "needs-you" ? (plan.need === "sign-in" ? "Sign in" : "Retry") : "";
   if (level <= 1 || r < 15) {
-    if (plan.kind === "first-read") {
+    if (waiting(plan)) {
       return [text("ellipsis", "…", c, c + r * 0.32, Math.min(r, 14), "display", 800, ink(50))];
     }
     if (used === undefined) {
@@ -534,7 +567,7 @@ function centreOf(
       { kind: "mark", ...markOf(plan, c, top + mark / 2, mark, false) },
     ];
     const baseline = top + mark + 3;
-    if (plan.kind === "first-read") {
+    if (waiting(plan)) {
       items.push(text("ellipsis", "…", c, baseline + size * 0.72, size, "display", 800, ink(50)));
     } else if (used === undefined) {
       items.push(text("act", act, c, baseline + size * 0.6, size * 0.56, "sans", 700, ink(70)));
@@ -563,7 +596,7 @@ function centreOf(
     { kind: "mark", ...markOf(plan, c, top + mark / 2, mark, false, { badge: true }) },
   ];
   const figure = top + mark + 6 + size * 0.72;
-  if (plan.kind === "first-read") {
+  if (waiting(plan)) {
     items.push(text("ellipsis", "…", c, figure, size, "display", 800, ink(46)));
   } else if (used === undefined) {
     items.push(text("act", act, c, figure - size * 0.12, size * 0.5, "display", 750, ink(86)));
@@ -595,57 +628,117 @@ function centreOf(
   }
   return items;
 }
+/** A circle's rings at a size (the drawing's `drawBands` measures): the detail it draws at, the band, the gap
+ * between the bands, a model's week's hairline, the rim, each band's middle, both bands at once, the plans' gap and
+ * the hole. */
+interface Rings {
+  draw: BandsLevel;
+  markSize: number;
+  markZone: number;
+  band: number;
+  gap: number;
+  hairline: number;
+  rim: number;
+  rOuter: number;
+  rInner: number;
+  rBoth: number;
+  gapDeg: number;
+  hole: number;
+}
+
+function ringsOf(size: number, level: BandsLevel, count: number, options: BandsOptions): Rings {
+  const around = options.around;
+  const draw: BandsLevel = around !== undefined ? 1 : level;
+  const markSize = draw >= 3 ? 16 : 10.5;
+  const markZone =
+    around !== undefined ? 0 : draw >= 3 ? markSize + 9 : draw === 2 ? markSize + 5 : 0;
+  const band =
+    around !== undefined
+      ? Math.max(2.2, (around.band - 1.2) / 2)
+      : draw >= 3
+        ? clamp(size * 0.046, 8, 11)
+        : draw === 2
+          ? clamp(size * 0.052, 4, 5.6)
+          : clamp(size * 0.066, 2.6, 3.4);
+  const gap = around !== undefined ? 1.2 : draw >= 3 ? 2.6 : draw === 2 ? 1.6 : 1.1;
+  const hairline = around === undefined && draw >= 3 ? 3 : 0;
+  const rim =
+    around !== undefined
+      ? around.hole + around.band
+      : size / 2 - markZone - (hairline > 0 ? hairline + 3.5 : 0) - (draw >= 1 ? 0.8 : 0.5);
+  const rInner = rim - band - gap - band / 2;
+  const gapPx = count > 1 ? clamp(size * 0.032, 2.8, 8) : 0;
+  return {
+    draw,
+    markSize,
+    markZone,
+    band,
+    gap,
+    hairline,
+    rim,
+    rOuter: rim - band / 2,
+    rInner,
+    rBoth: rim - band - gap / 2,
+    gapDeg: gapPx / rInner / DEG,
+    hole:
+      around !== undefined
+        ? around.hole
+        : rInner - band / 2 - (draw >= 3 ? 7 : draw === 2 ? 5 : 2.5),
+  };
+}
+
+/** UM-D12 — the agents with more than one entry in view, a plan with no meter counted (the drawing's
+ * `crowdedAgents`). */
+function crowdedOf(entries: readonly PlanMeter[]): Set<string> {
+  const seen = new Set<string>();
+  const crowded = new Set<string>();
+  for (const entry of entries) {
+    if (seen.has(entry.provider)) crowded.add(entry.provider);
+    seen.add(entry.provider);
+  }
+  return crowded;
+}
 
 /**
- * One profile's Bands circle at a size (the drawing's `drawBands` inside `dialSvg`): its plans' segments in the
- * entries' order (a plan with no meter is left off; with none left, the dashed ring), the centre, the hot dot, and
- * the words. `entries` are `planMeters`' (UM-D15's order).
+ * One profile's Bands circle at a size, or every profile's (the drawing's `drawBands` inside `dialSvg`): its plans'
+ * segments in the entries' order (a plan with no meter is left off; with none left, the dashed ring, the profile's
+ * glyph kept in its middle), the centre, the hot dot, and the words. `entries` are `planMeters`' or `everyPlan`'s
+ * (UM-D15's order).
  */
 export function bandsGeometry(
   size: number,
   entries: readonly PlanMeter[],
   options: BandsOptions = {},
 ): BandsGeometry {
-  const level = bandsLevel(size);
+  const sized = bandsLevel(size);
+  const level: BandsLevel =
+    options.around !== undefined ? (Math.min(2, sized) as BandsLevel) : sized;
   const c = size / 2;
   const onCircle = entries.filter((entry) => entry.kind !== "no-meter");
   const label = bandsLabel(entries);
-  if (onCircle.length === 0) {
+  const empty = onCircle.length === 0;
+  // RED SKELETON: drawn around nothing yet (the hole's measure is not taken)
+  const { around: _around, ...unringed } = options;
+  const rings = ringsOf(size, level, empty ? 1 : onCircle.length, unringed);
+  const { draw, markSize, markZone, band, gap, hairline, rim, rOuter, rInner, rBoth, gapDeg } =
+    rings;
+  if (empty) {
+    // the glyph stays where one plan's circle puts it, so it does not jump as the meters come and go
+    // RED SKELETON: the dashed ring drops the glyph
+    const items: BandsCentreItem[] = [];
     return {
       size,
       level,
-      centre: { x: c, y: c, r: 0, items: [] },
+      centre: { x: c, y: c, r: rings.hole, items },
       plans: [],
       empty: { r: size / 2 - 3, width: 1.2, paint: ink(14), dash: [2, 3] },
       label,
     };
   }
   const count = onCircle.length;
-  const markSize = level >= 3 ? 16 : 10.5;
-  const markZone = level >= 3 ? markSize + 9 : level === 2 ? markSize + 5 : 0;
-  const band =
-    level >= 3
-      ? clamp(size * 0.046, 8, 11)
-      : level === 2
-        ? clamp(size * 0.052, 4, 5.6)
-        : clamp(size * 0.066, 2.6, 3.4);
-  const gap = level >= 3 ? 2.6 : level === 2 ? 1.6 : 1.1;
-  const hairline = level >= 3 ? 3 : 0;
-  const rim = size / 2 - markZone - (hairline > 0 ? hairline + 3.5 : 0) - (level >= 1 ? 0.8 : 0.5);
-  const rOuter = rim - band / 2;
-  const rInner = rim - band - gap - band / 2;
-  const rBoth = rim - band - gap / 2;
-  const gapPx = count > 1 ? clamp(size * 0.032, 2.8, 8) : 0;
-  const gapDeg = gapPx / rInner / DEG;
   const span = (360 - count * gapDeg) / count;
-  const crowded = new Set<string>();
-  if (options.crowd === true) {
-    const seen = new Set<string>();
-    for (const entry of onCircle) {
-      if (seen.has(entry.provider)) crowded.add(entry.provider);
-      seen.add(entry.provider);
-    }
-  }
+  // RED SKELETON: only the plans on the circle are counted
+  const crowded = options.crowd === true ? crowdedOf(onCircle) : new Set<string>();
   const plans = onCircle.map((entry, index): BandsPlan => {
     const from = -90 + gapDeg / 2 + index * (span + gapDeg);
     const dim = options.focus !== undefined && options.focus !== entry.key;
@@ -660,7 +753,7 @@ export function bandsGeometry(
     };
     const context: ArcContext = {
       c,
-      level,
+      level: draw,
       dim,
       stale: entry.kind === "reading" && entry.stale,
     };
@@ -711,9 +804,10 @@ export function bandsGeometry(
         rim + (hairline > 0 ? hairline + 3.5 : 0) + 4.5 + markSize / 2,
         from + span / 2,
       );
+      const profile = crowded.has(entry.provider) ? entry.profiles[0] : undefined;
       plan.mark = markOf(entry, spot.x, spot.y, markSize, dim, {
-        badge: level >= 3,
-        glyph: crowded.has(entry.provider),
+        badge: draw >= 3,
+        ...(profile !== undefined ? { glyph: profile } : {}),
       });
     }
     if (options.hit === true) {
@@ -726,11 +820,12 @@ export function bandsGeometry(
     }
     return plan;
   });
-  const hole = rInner - band / 2 - (level >= 3 ? 7 : level === 2 ? 5 : 2.5);
+  const items =
+    options.around !== undefined ? [] : centreOf(c, rings.hole, draw, onCircle, options);
   const geometry: BandsGeometry = {
     size,
     level,
-    centre: { x: c, y: c, r: hole, items: centreOf(c, hole, level, onCircle, options) },
+    centre: { x: c, y: c, r: rings.hole, items },
     plans,
     label,
   };

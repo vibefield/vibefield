@@ -1,6 +1,5 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { AgentAccountUsageBatch, AgentsProfileSetsListResult } from "@vibefield/contracts";
 import type {
   AgentView,
   FrameScheduler,
@@ -36,14 +35,6 @@ import { createGodviewMonitorFeed } from "../../src/godview/monitor/model-replic
 import type { ModelBoardPort } from "../../src/godview/monitor/remote-door";
 import { boardJoins, boardJoinsKey } from "../../src/godview/monitor/window-local";
 import { createRowOrder, createWindowRows } from "../../src/godview/monitor/window-rows";
-import { type BandsOptions, bandsGeometry } from "../../src/usage/bands";
-import {
-  forecastOf,
-  type MeterWindow,
-  type PlanMeter,
-  planMeters,
-  resetForm,
-} from "../../src/usage/meters";
 
 /**
  * PG-3a (Q-J1 (a), James 2026-11-01 03:55Z) — THE PHONE'S GOLDENS, COMPUTED: what the home's
@@ -134,31 +125,6 @@ export const PHONE_VIEW_MIRROR = "apps/ios/VibeFieldKit/Tests/FieldHomeTests/Fix
 export const PHONE_TOOLKIT_GOLDEN = "phone-toolkit.golden.json";
 /** PG-4t (Q3 (a)) — the views' faces as the registry's manifests carry them: what the phone's Stories row draws */
 export const PHONE_MARKS_GOLDEN = "phone-marks.golden.json";
-/** UM-1 (UM-D16 E; UM-D3, D4, D13, D15) — the meters and the Bands circles over the contracts' profiles and usage:
- * what the phone's meter model and Bands layout (FieldHome/Meters, UM's U3 lane) are held to */
-export const PHONE_BANDS_GOLDEN = "phone-bands.golden.json";
-export const PHONE_BANDS_INPUTS = [
-  "agents-profile-sets.valid.json",
-  "agent-usage.valid.json",
-] as const;
-/** The bands golden's fixed now: the last day of the fixtures' week, so every reset they name is said as a length or
- * "now", never by its day and clock (`resetWords`' "Thu 09:00" is the reader's zone and locale). */
-export const PHONE_BANDS_NOW = "2026-09-16T12:00:00.000Z";
-/** The sizes the ruled drawing draws a profile's circle at (draft/profile-meters/round4/src/p4f-frames.js). */
-export const PHONE_BANDS_SIZES: ReadonlyArray<{
-  size: number;
-  where: string;
-  options: BandsOptions;
-}> = [
-  { size: 26, where: "the Me menu's Agent Profiles row", options: { centre: "none" } },
-  {
-    size: 54,
-    where: "a profile's bud in the held face's bloom",
-    options: { centre: "glyph", hotDot: true },
-  },
-  { size: 206, where: "the held face's own circle", options: {} },
-  { size: 212, where: "the desktop's popover and the Agent Profiles page", options: { hit: true } },
-];
 /** this folder: where a view lane's `phone-goldens-<view>.ts` lives */
 export const PHONE_GOLDENS_LIB_DIR = import.meta.dirname;
 
@@ -179,8 +145,6 @@ export function phoneGoldenMirrors(
     [PHONE_BODY_GOLDEN]: ["apps/ios/VibeFieldKit/Tests/FieldMeshTests/Fixtures"],
     [PHONE_TOOLKIT_GOLDEN]: [PHONE_VIEW_MIRROR],
     [PHONE_MARKS_GOLDEN]: [PHONE_VIEW_MIRROR],
-    // UM-1: where the phone's meter suites will run (MeterModelTests, BandsParityTests; UM's U3 lane copies it)
-    [PHONE_BANDS_GOLDEN]: [PHONE_VIEW_MIRROR],
     ...Object.fromEntries(
       Object.keys(views).map((view) => [phoneViewGoldenName(view), [PHONE_VIEW_MIRROR]]),
     ),
@@ -229,19 +193,17 @@ export const PHONE_VISIBLE = {
  * whole-mesh resync, which the door delivers as a `snapshot` (PG-1c). */
 export type WitnessDelivery = { at: number; frame: unknown } | { at: "resync"; resync: unknown };
 
-/** A contracts golden, parsed. */
-const contractsFixture = (name: string): unknown =>
-  JSON.parse(readFileSync(join(FIELD_APP, "..", "contracts", "fixtures", name), "utf8"));
-
 export function readWitnessInputs(): { open: unknown; deliveries: readonly WitnessDelivery[] } {
-  const frames = contractsFixture(PHONE_WITNESS_INPUTS[1]) as unknown[];
+  const read = (name: string): unknown =>
+    JSON.parse(readFileSync(join(FIELD_APP, "..", "contracts", "fixtures", name), "utf8"));
+  const frames = read(PHONE_WITNESS_INPUTS[1]) as unknown[];
   const deliveries: WitnessDelivery[] = [];
   for (const [index, frame] of frames.entries()) {
     deliveries.push({ at: index, frame });
     if (index === PHONE_RESYNC_AFTER)
-      deliveries.push({ at: "resync", resync: contractsFixture(PHONE_WITNESS_INPUTS[2]) });
+      deliveries.push({ at: "resync", resync: read(PHONE_WITNESS_INPUTS[2]) });
   }
-  return { open: contractsFixture(PHONE_WITNESS_INPUTS[0]), deliveries };
+  return { open: read(PHONE_WITNESS_INPUTS[0]), deliveries };
 }
 
 type FrameKind = "delta" | "snapshot" | "state" | "resync";
@@ -837,105 +799,6 @@ export function phoneMarksGolden(): Record<string, unknown> {
   };
 }
 
-const BANDS_NOTE =
-  "UM-1 (UM-D16 E, Bands; UM-D3, D4, D13, D15) — the phone's meters golden: the desktop's meter model (packages/field-app/src/usage/meters.ts planMeters: each plan read through Settings' join, namedBy, usageOf, usageLines, signInState; UM-D15's order by the agent catalog; UM-D13's tightest window by pressure; the pace rule isHot, a budget pace-less) and its Bands geometry (src/usage/bands.ts bandsGeometry, the ruled drawing's drawBands) over contracts' agents-profile-sets.valid.json and agent-usage.valid.json at a fixed now, every profile at the four sizes the drawing draws a circle at (sizes: each with where it stands and its options), and UM-D4's forecast over a fixed vector (calls.forecast, each {in, out}). meters: per profile, its entries in order (a reading's windows as Settings' C1 lines with budget, durationMinutes, resetIn, pressure and forecast; tightest by window id), its tightest plan and its hot rule. circles: per profile and size, the level, the centre and its items, each plan's arcs (band, part, r, from, to, width, cap, paint as a tone, opacity, dash), notches, mark, hit arc and words, the empty ring or the hot dot, and the label. Angles in degrees from three o'clock, clockwise; every number to 0.01. The now is the last day of the fixtures' week, so every reset is said as a length or now: a reset said by its day and clock is the reader's zone and locale, and the computation refuses it. Mirrored into FieldHomeTests for the phone's meter suites (UM's U3 lane), the copy then held by pnpm check:ios-fixtures. GENERATED by packages/field-app/perf/phone-goldens.generate.perf.ts (pnpm --filter @vibefield/field-app phone:goldens). A puppeteer EL8 moves it (plan titles are puppeteer-views'): regenerate and copy to the kit in the same commit. Never edit by hand; a regeneration is a re-bless, said in its commit, and never over a defect.";
-
-/** UM-D4's forecast over a fixed vector: each rounding (the minute under 10, five under the hour, 15 from it, the
- * five that rounds to 60), and each refusal (the reset first, not ahead, spent, a budget, no length). */
-const BANDS_FORECASTS: ReadonlyArray<{
-  usedPercent: number;
-  elapsedPercent?: number;
-  durationMinutes?: number;
-  resetIn?: number;
-  budget: boolean;
-}> = [
-  { usedPercent: 97, elapsedPercent: 58, durationMinutes: 300, resetIn: 126, budget: false },
-  { usedPercent: 99.9, elapsedPercent: 90, durationMinutes: 300, resetIn: 30, budget: false },
-  { usedPercent: 82, elapsedPercent: 55, durationMinutes: 300, resetIn: 135, budget: false },
-  { usedPercent: 70, elapsedPercent: 45.1, durationMinutes: 300, resetIn: 164.7, budget: false },
-  { usedPercent: 64, elapsedPercent: 50, durationMinutes: 300, resetIn: 150, budget: false },
-  { usedPercent: 86, elapsedPercent: 70, durationMinutes: 10_080, resetIn: 3024, budget: false },
-  { usedPercent: 50, elapsedPercent: 10, durationMinutes: 43_200, resetIn: 38_880, budget: false },
-  { usedPercent: 60, elapsedPercent: 50, durationMinutes: 300, resetIn: 30, budget: false },
-  { usedPercent: 30, elapsedPercent: 50, durationMinutes: 300, resetIn: 150, budget: false },
-  { usedPercent: 100, elapsedPercent: 60, durationMinutes: 300, resetIn: 120, budget: false },
-  { usedPercent: 90, budget: true },
-  { usedPercent: 85, elapsedPercent: 40, resetIn: 180, budget: false },
-];
-
-/** Every number to 0.01, so the phone compares within a hundredth. */
-function hundredths(value: unknown): unknown {
-  if (typeof value === "number") return Math.round(value * 100) / 100;
-  if (Array.isArray(value)) return value.map(hundredths);
-  if (value !== null && typeof value === "object")
-    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, hundredths(item)]));
-  return value;
-}
-
-/** A reading's window as the golden records it: Settings' C1 line, and what the meters add to it. */
-function bandsWindow(window: MeterWindow): Record<string, unknown> {
-  return {
-    ...window.line,
-    budget: window.budget,
-    durationMinutes: window.metric.durationMinutes,
-    resetIn: window.resetIn,
-    pressure: window.pressure,
-    forecast: window.forecast,
-  };
-}
-
-/** An entry as the golden records it: a reading's windows as above, its tightest by id. */
-function bandsEntry(entry: PlanMeter): Record<string, unknown> {
-  const record: Record<string, unknown> = { ...entry };
-  if (entry.kind === "reading") {
-    record.windows = entry.windows.map(bandsWindow);
-    record.tightest = entry.tightest.line.id;
-  }
-  return record;
-}
-
-/** UM-1 — the bands golden: every profile of the contracts' sets, its meters and its circle at each size. */
-export function phoneBandsGolden(): Record<string, unknown> {
-  const { sets } = AgentsProfileSetsListResult.parse(contractsFixture(PHONE_BANDS_INPUTS[0]));
-  const { entries: rows } = AgentAccountUsageBatch.parse(contractsFixture(PHONE_BANDS_INPUTS[1]));
-  const now = new Date(PHONE_BANDS_NOW);
-  const profiles = sets.map((set) => ({ set: set.id, meters: planMeters(set, rows, now) }));
-  for (const { set, meters } of profiles) {
-    for (const entry of meters.entries) {
-      if (entry.kind !== "reading") continue;
-      for (const window of entry.windows) {
-        // a defect in the golden's own input, never a fallback: the words would be this host's zone
-        if (resetForm(window) === "day")
-          throw new Error(
-            `${set} ${entry.key} ${window.line.id}: a reset said by its day is the reader's zone; set PHONE_BANDS_NOW within a day of it`,
-          );
-      }
-    }
-  }
-  return hundredths({
-    "//": BANDS_NOTE,
-    versions: puppeteerVersions(),
-    inputs: [...PHONE_BANDS_INPUTS],
-    now: PHONE_BANDS_NOW,
-    sizes: PHONE_BANDS_SIZES,
-    meters: profiles.map(({ set, meters }) => ({
-      set,
-      entries: meters.entries.map(bandsEntry),
-      tightest: meters.tightest?.key ?? null,
-      hot: meters.hot,
-    })),
-    circles: profiles.flatMap(({ set, meters }) =>
-      PHONE_BANDS_SIZES.map(({ size, options }) => ({
-        set,
-        ...bandsGeometry(size, meters.entries, options),
-      })),
-    ),
-    calls: {
-      forecast: BANDS_FORECASTS.map((input) => ({ in: input, out: forecastOf(input) ?? null })),
-    },
-  }) as Record<string, unknown>;
-}
-
 /** PG-4s — ONE WRITER OF EVERY PHONE GOLDEN: the fold and body goldens, the toolkit's, and one per registered view
  * (`views` is for the parity test's probe). The generator writes exactly these, and the parity test compares them.
  * A view's file is this file's header around its lane's note and compute's steps, over the window's rows cloned
@@ -948,7 +811,6 @@ export async function phoneAllGoldenFiles(
     ...phoneGoldenFiles(goldens),
     [PHONE_TOOLKIT_GOLDEN]: `${printed(phoneToolkitGolden(), 0, "")}\n`,
     [PHONE_MARKS_GOLDEN]: `${printed(phoneMarksGolden(), 0, "")}\n`,
-    [PHONE_BANDS_GOLDEN]: `${printed(phoneBandsGolden(), 0, "")}\n`,
   };
   for (const [view, load] of Object.entries(views)) {
     const { golden } = await load();

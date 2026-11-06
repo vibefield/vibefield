@@ -1,23 +1,25 @@
 // UM-1 (UM-D16 = E, "Bands", round 3) — the Bands circle's geometry, pure (`src/usage/bands.ts`): every plan of a
-// profile on one circle, five hours inside, the week outside, a model's week a hairline at full size, a budget both;
-// the detail by the size's level, the centre, the hot dot (Settings' pace rule, UM-D3) and the words. The numbers are
-// the ruled drawing's (draft/profile-meters/round4/src/p3e-dials.js); the phone is held to them by the bands golden.
+// profile (or of every profile, UM-D12) on one circle, five hours inside, the week outside, a model's week a hairline
+// at full size, a budget both; the detail by the size's level, drawn around the phone's face, the centre, the hot dot
+// (Settings' pace rule, UM-D3) and the words. The numbers are the ruled drawing's
+// (draft/profile-meters/round4/src/p3e-dials.js); the phone is held to them by the usage bands golden, a VibeField
+// golden this file checks byte for byte (`test/fixtures/usage/usage-bands.golden.json`).
 
+import { existsSync, readFileSync } from "node:fs";
 import type {
   AgentAccountUsageEntry,
   AgentAccountUsageMetric,
   AgentPersona,
   AgentProfileSet,
 } from "@vibefield/contracts";
+import { planTitle } from "@vibefield/puppeteer-views";
 import { describe, expect, it } from "vitest";
 import {
-  PHONE_BANDS_GOLDEN,
-  PHONE_BANDS_NOW,
-  PHONE_BANDS_SIZES,
-  PHONE_GOLDEN_MIRRORS,
-  PHONE_VIEW_MIRROR,
-  phoneBandsGolden,
-} from "../perf/lib/phone-goldens";
+  readUsageBandsInputs,
+  USAGE_BANDS_CASES,
+  USAGE_BANDS_GOLDEN,
+  usageBandsFile,
+} from "../perf/lib/usage-bands-golden";
 import {
   arcPath,
   type BandsArc,
@@ -28,7 +30,7 @@ import {
   bandsLevel,
   bandsOf,
 } from "../src/usage/bands";
-import { type PlanMeter, planMeters } from "../src/usage/meters";
+import { everyPlan, type PlanMeter, planMeters } from "../src/usage/meters";
 
 const NOW = new Date("2026-11-06T12:00:00.000Z");
 const DEG = Math.PI / 180;
@@ -468,6 +470,12 @@ describe("UM-1 — the centre, the marks and the hot dot", () => {
     expect(
       bandsGeometry(212, twice, { crowd: true }).plans.map((each) => each.mark?.glyph?.size),
     ).toEqual([16 * 0.64, 16 * 0.64]);
+    expect(
+      bandsGeometry(212, twice, { crowd: true }).plans.map((each) => each.mark?.glyph?.profile),
+    ).toEqual([
+      { setId: "work", kind: "managed", filled: false, label: "Work" },
+      { setId: "work", kind: "managed", filled: false, label: "Work" },
+    ]);
     expect(bandsGeometry(212, twice).plans.map((each) => each.mark?.glyph)).toEqual([
       undefined,
       undefined,
@@ -578,75 +586,320 @@ describe("UM-1 — arcs as paths", () => {
   });
 });
 
-describe("UM-1 — the phone's bands golden", () => {
-  it("records the contracts' profiles at 26, 54, 206 and 212, at the last day of their week, mirrored for the phone", () => {
-    const golden = phoneBandsGolden() as {
-      "//"?: string;
-      now?: string;
-      sizes?: Array<{ size: number }>;
-      meters?: Array<{
-        set: string;
-        entries: Array<{ key: string; kind: string; need?: string }>;
-        tightest: string | null;
-        hot: boolean;
-      }>;
-      circles?: Array<{
-        set: string;
-        size: number;
-        level: number;
-        label: string;
-        plans: unknown[];
-      }>;
-      calls?: { forecast?: Array<{ out: { words: string } | null }> };
+
+describe("UM-1 — around the phone's face (the hole mode)", () => {
+  const entries = () =>
+    meters([
+      [
+        "claude",
+        [
+          paced("5h", 20, 50),
+          paced("7d", 40, 50, 10_080),
+          paced("fable", 4, 50, 10_080, { group: { id: "scope:fable", label: "Fable only" } }),
+        ],
+      ],
+      ["codex", [paced("5h", 30, 50)]],
+      ["kimi", { state: "unauthenticated" }],
+    ]);
+
+  it("takes the hole's measure at 96 across, the hole 34 and the band 8: bands 3.4 wide, 1.2 apart, the rim at 42", () => {
+    const geometry = bandsGeometry(96, entries(), {
+      around: { hole: 34, band: 8 },
+      centre: "glyph",
+    });
+    expect(geometry.level).toBe(2);
+    expect(geometry.centre).toEqual({ x: 48, y: 48, r: 34, items: [] });
+    const [claude, codex, kimi] = geometry.plans;
+    const outer = only(arcsOf(only(claude, "Claude"), "outer", "track")[0], "the outer track");
+    const inner = only(arcsOf(only(claude, "Claude"), "inner", "track")[0], "the inner track");
+    expect(outer.r).toBeCloseTo(40.3, 6);
+    expect(inner.r).toBeCloseTo(35.7, 6);
+    expect(outer.width).toBeCloseTo(3.4, 6);
+    // drawn at level 1: round ends on the ink's small track
+    expect(outer).toMatchObject({ cap: "round", paint: { tone: "ink", percent: 12 } });
+    expect(only(kimi, "Kimi").arcs[0]).toMatchObject({ band: "both", part: "thread" });
+    expect(only(kimi, "Kimi").arcs[0]?.r).toBeCloseTo(38, 6);
+    // the plans' gap is clamp(96 × 0.032, 2.8, 8) px along the inner band
+    const after = only(claude, "Claude").from + only(claude, "Claude").span;
+    expect((only(codex, "Codex").from - after) * DEG * 35.7).toBeCloseTo(3.072, 6);
+    // no marks, no hairline, a notch of level 1's reach
+    expect(geometry.plans.map((plan) => plan.mark)).toEqual([undefined, undefined, undefined]);
+    expect(arcsOf(only(claude, "Claude"), "hairline")).toEqual([]);
+    const notch = only(only(claude, "Claude").notches[0], "the notch");
+    expect(notch.width).toBe(1.25);
+    expect(Math.hypot(notch.x2 - notch.x1, notch.y2 - notch.y1)).toBeCloseTo(3.4 + 2 * 1.5, 6);
+    // with no meters, the same dashed ring around the face, nothing in the middle
+    const none = bandsGeometry(96, meters([["opencode", { state: "unsupported" }]]), {
+      around: { hole: 34, band: 8 },
+      centre: "glyph",
+    });
+    expect(none.empty?.r).toBe(45);
+    expect(none.centre).toEqual({ x: 48, y: 48, r: 34, items: [] });
+  });
+});
+
+describe("UM-1 — No meters keeps the profile's glyph; usage unavailable says No meters", () => {
+  it("draws the glyph where one plan's circle puts it, so it does not jump as the meters come and go", () => {
+    const none = (size: number) =>
+      bandsGeometry(size, meters([["opencode", { state: "unsupported" }]]), { centre: "glyph" });
+    for (const size of [40, 54]) {
+      const one = bandsGeometry(size, meters([["claude", [paced("5h", 20, 50)]]]), {
+        centre: "glyph",
+      });
+      expect(none(size).empty, `${size}`).toBeDefined();
+      expect(none(size).centre.items, `${size}`).toEqual(one.centre.items);
+    }
+    expect(none(212).centre.items).toEqual([
+      {
+        kind: "glyph",
+        x: 106,
+        y: 106,
+        size: Math.min(radii(212).hole * 1.18, 20),
+        paint: { tone: "ink", percent: 86 },
+      },
+    ]);
+    expect(none(212).centre.r).toBeCloseTo(radii(212).hole, 6);
+    // a circle that speaks for its plans, or says nothing, keeps nothing
+    const plain = bandsGeometry(40, meters([["opencode", { state: "unsupported" }]]));
+    expect(plain.centre.items).toEqual([]);
+  });
+
+  it("with usage unavailable, every profile's circle is the dashed ring with its glyph, no hot dot, No meters", () => {
+    const set: AgentProfileSet = {
+      id: "native",
+      kind: "native",
+      label: "This Mac",
+      default: true,
+      createdAt: "1970-01-01T00:00:00.000Z",
+      personas: [own("claude"), own("codex")],
+      plans: [],
     };
-    expect(golden.now).toBe(PHONE_BANDS_NOW);
-    expect(golden.sizes?.map((entry) => entry.size)).toEqual([26, 54, 206, 212]);
-    expect(PHONE_BANDS_SIZES.map((entry) => entry.size)).toEqual([26, 54, 206, 212]);
-    expect(golden.meters?.map((profile) => profile.set)).toEqual(["native", "work"]);
-    const [thisMac, work] = golden.meters ?? [];
-    expect(thisMac).toMatchObject({ tightest: "plan:anthropic", hot: true });
-    expect(thisMac?.entries.map((entry) => `${entry.key} ${entry.kind}`)).toEqual([
-      "plan:anthropic reading",
+    const rows: AgentAccountUsageEntry[] = [
+      {
+        provider: "claude",
+        label: "claude",
+        state: "available",
+        metrics: [paced("5h", 90, 40)],
+        fetchedAt: from(-1),
+      },
+    ];
+    const entries = planMeters(set, rows, NOW, { usage: "unavailable" }).entries;
+    const geometry = bandsGeometry(40, entries, { centre: "glyph", hotDot: true });
+    expect(geometry.plans).toEqual([]);
+    expect(geometry.empty).toMatchObject({ dash: [2, 3] });
+    expect(geometry.centre.items).toEqual([
+      expect.objectContaining({ kind: "glyph", x: 20, y: 20 }),
     ]);
-    // Work: its Codex signing in needs you; Hermes's plans meter nothing (no agent names two of them, and
-    // the catalog meters no usage for Hermes)
-    expect(work?.entries.map((entry) => `${entry.key} ${entry.kind}`)).toEqual([
-      "agent:0b7e2c4d-9a1f-4e58-8c1d-3f2a6b9e7d10 needs-you",
-      "plan:nous no-meter",
-      "plan:anthropic no-meter",
-      "plan:github no-meter",
+    expect(geometry.hotDot).toBeUndefined();
+    expect(geometry.label).toBe("No meters");
+  });
+});
+
+describe("UM-1 — a sign-in under way", () => {
+  const signingIn = () =>
+    meters([["codex", { state: "unauthenticated" }]], {
+      codex: { signingIn: { sessionId: "s", since: from(-1) } },
+    });
+
+  it("draws the dashed thread, asks nothing (no badge, no act), and says '…' in the middle", () => {
+    const opened = bandsGeometry(232, signingIn());
+    const plan = planAt(opened, 0);
+    expect(plan.arcs.map((arc) => [arc.band, arc.part, arc.paint])).toEqual([
+      ["both", "thread", { tone: "ink", percent: 46 }],
     ]);
-    expect(work).toMatchObject({ tightest: null, hot: false });
+    expect(plan.mark?.badge).toBeUndefined();
     expect(
-      golden.circles?.map(
-        (circle) => `${circle.set} ${circle.size} ${circle.level} ${circle.plans.length}`,
+      opened.centre.items.map((item) =>
+        item.kind === "text" ? [item.role, item.text] : [item.kind],
       ),
-    ).toEqual([
-      "native 26 0 1",
-      "native 54 1 1",
-      "native 206 3 1",
-      "native 212 3 1",
-      "work 26 0 1",
-      "work 54 1 1",
-      "work 206 3 1",
-      "work 212 3 1",
+    ).toEqual([["mark"], ["ellipsis", "…"], ["sub", "Codex"]]);
+    expect(
+      bandsGeometry(212, signingIn()).centre.items.map((item) =>
+        item.kind === "text" ? [item.role, item.text] : [item.kind],
+      ),
+    ).toEqual([["mark"], ["ellipsis", "…"]]);
+    expect(bandsGeometry(40, signingIn()).centre.items).toEqual([
+      expect.objectContaining({ role: "ellipsis", text: "…" }),
     ]);
-    expect(golden.circles?.[0]?.label).toBe("Usage: Claude Max: 103% of 7 days, resets in 12h");
-    expect(golden.calls?.forecast?.map((entry) => entry.out?.words ?? null)).toEqual([
-      "~5m",
-      "~1m",
-      "~35m",
-      "~60m",
-      "~1h 30m",
-      "~19h 15m",
-      "~3d",
-      null,
-      null,
-      null,
-      null,
-      null,
+  });
+
+  it("says 'signing in', never 'not signed in'", () => {
+    expect(bandsLabel(signingIn())).toBe("Usage: Codex: signing in");
+    expect(bandsLabel(signingIn())).not.toMatch(/not signed in/u);
+  });
+});
+
+describe("UM-D12 — a crowded agent wears its profile's glyph", () => {
+  const set = (id: string, glyph: string, profileIds: readonly string[]): AgentProfileSet => ({
+    id,
+    kind: "managed",
+    label: id,
+    glyph,
+    default: false,
+    createdAt: "1970-01-01T00:00:00.000Z",
+    personas: profileIds.map((profileId) => ({ ...own("claude"), profileId, kind: "managed" })),
+    plans: [],
+  });
+  const reading = (profileId: string, used: number): AgentAccountUsageEntry => ({
+    provider: "claude",
+    label: "claude",
+    profileId,
+    state: "available",
+    metrics: [paced("5h", used, 50)],
+    fetchedAt: from(-1),
+  });
+
+  it("counts a plan with no meter: two Claudes, one unmetered, crowd the one on the circle", () => {
+    const entries = planMeters(
+      set("work", "briefcase", ["claude-a", "claude-b"]),
+      [
+        reading("claude-a", 20),
+        { ...reading("claude-b", 0), state: "unsupported", metrics: [] },
+      ],
+      NOW,
+    ).entries;
+    const crowded = bandsGeometry(212, entries, { crowd: true });
+    expect(crowded.plans).toHaveLength(1);
+    expect(crowded.plans[0]?.mark?.glyph?.profile).toMatchObject({
+      setId: "work",
+      glyph: "briefcase",
+    });
+    expect(bandsGeometry(212, entries).plans[0]?.mark?.glyph).toBeUndefined();
+  });
+
+  it("every profile's Claudes, each in its own profile's glyph", () => {
+    const union = everyPlan(
+      [set("work", "briefcase", ["claude-w"]), set("side", "flask", ["claude-s"])],
+      [reading("claude-w", 20), reading("claude-s", 30)],
+      NOW,
+    );
+    const geometry = bandsGeometry(214, union.entries, { crowd: true, hit: true });
+    expect(geometry.plans.map((plan) => plan.mark?.glyph?.profile.glyph)).toEqual([
+      "briefcase",
+      "flask",
     ]);
-    expect(golden["//"]).toMatch(/never over a defect/u);
-    expect(PHONE_GOLDEN_MIRRORS[PHONE_BANDS_GOLDEN]).toEqual([PHONE_VIEW_MIRROR]);
+  });
+});
+
+describe("UM-1 — the usage bands golden", () => {
+  interface Golden {
+    meters: Array<{
+      of: string;
+      entries: Array<{
+        kind: string;
+        title: string;
+        need?: string;
+        why?: string;
+        stale?: boolean;
+        right?: { words: string };
+        windows?: Array<{ budget: boolean }>;
+      }>;
+    }>;
+    circles: Array<{
+      size: number;
+      options: { around?: unknown; crowd?: boolean };
+      label: string;
+      level: number;
+      empty?: unknown;
+      centre: { items: Array<{ kind: string; text?: string }> };
+      plans: Array<{
+        words: string;
+        span: number;
+        arcs: Array<{ band: string; part: string; opacity: number }>;
+        mark?: { glyph?: unknown };
+      }>;
+    }>;
+  }
+  const golden = (): Golden => JSON.parse(usageBandsFile()) as Golden;
+
+  it("is the meters and the circles over the contracts' fixtures, byte for byte", () => {
+    const committed = existsSync(USAGE_BANDS_GOLDEN)
+      ? readFileSync(USAGE_BANDS_GOLDEN, "utf8")
+      : null;
+    expect(
+      committed,
+      "regenerate from packages/field-app: ./node_modules/.bin/vitest run --config vitest.perf.config.ts perf/usage-bands.generate.perf.ts",
+    ).toBe(usageBandsFile());
+  });
+
+  it("is VibeField's own: no puppeteer version, and no plan named by planTitle", () => {
+    const keys = (value: unknown): string[] =>
+      value === null || typeof value !== "object"
+        ? []
+        : Array.isArray(value)
+          ? value.flatMap(keys)
+          : Object.entries(value).flatMap(([key, item]) => [key, ...keys(item)]);
+    expect(golden().circles.length).toBeGreaterThan(0);
+    expect(keys(golden())).not.toContain("versions");
+    const titles = new Set<string>();
+    for (const sets of Object.values(readUsageBandsInputs().sets)) {
+      for (const set of sets) {
+        for (const plan of set.plans ?? []) {
+          titles.add(planTitle(plan.service, plan.account?.plan));
+          titles.add(planTitle(plan.service, undefined));
+        }
+      }
+    }
+    const said: string[] = [];
+    for (const meters of golden().meters) {
+      for (const entry of meters.entries) said.push(entry.title);
+    }
+    for (const circle of golden().circles) {
+      said.push(...circle.label.replace(/^Usage: /u, "").split("; "));
+      for (const plan of circle.plans) said.push(plan.words);
+      for (const item of circle.centre.items) if (item.text !== undefined) said.push(item.text);
+    }
+    for (const words of said) {
+      for (const title of titles) {
+        expect(words === title || words.startsWith(`${title}:`), `"${words}" says ${title}`).toBe(
+          false,
+        );
+      }
+    }
+  });
+
+  it("holds every state the meters draw: one plan and several, each need, a first read, a budget, the hairline, a kept reading, usage unavailable, every profile", () => {
+    const { meters: all, circles } = golden();
+    const entries = all.flatMap((each) => each.entries);
+    const said = (entry: Golden["meters"][number]["entries"][number]) =>
+      [entry.kind, entry.need ?? entry.why ?? ""].join(" ").trim();
+    expect(new Set(entries.map(said))).toEqual(
+      new Set([
+        "reading",
+        "first-read",
+        "needs-you sign-in",
+        "needs-you signing-in",
+        "needs-you retry",
+        "no-meter unreported",
+        "no-meter unnamed",
+        "no-meter unavailable",
+      ]),
+    );
+    const kept = entries.filter((entry) => entry.stale === true);
+    expect(kept.map((entry) => entry.right?.words)).toContain("as of 32m ago");
+    const budgets = entries.filter((entry) => entry.windows?.some((window) => window.budget));
+    expect(budgets.length).toBeGreaterThan(0);
+    const arcs = circles.flatMap((circle) => circle.plans.flatMap((plan) => plan.arcs));
+    expect(arcs.some((arc) => arc.band === "both" && arc.part === "fill")).toBe(true);
+    expect(arcs.some((arc) => arc.part === "breath")).toBe(true);
+    expect(arcs.some((arc) => arc.part === "thread")).toBe(true);
+    expect(arcs.some((arc) => arc.part === "fill" && arc.opacity === 0.5)).toBe(true);
+    const hairline = (circle: Golden["circles"][number]) =>
+      circle.plans.some((plan) => plan.arcs.some((arc) => arc.band === "hairline"));
+    expect(circles.some((circle) => circle.level === 3 && hairline(circle))).toBe(true);
+    expect(circles.some((circle) => circle.plans.length === 1)).toBe(true);
+    expect(circles.some((circle) => circle.plans.length > 2)).toBe(true);
+    expect(circles.some((circle) => circle.options.around !== undefined)).toBe(true);
+    expect(
+      circles.some((circle) => circle.empty !== undefined && circle.centre.items.length === 1),
+    ).toBe(true);
+    const crowded = circles.filter((circle) =>
+      circle.plans.some((plan) => plan.mark?.glyph !== undefined),
+    );
+    expect(crowded.length).toBeGreaterThan(0);
+    expect(all.some((each) => each.of === "every")).toBe(true);
+    expect(USAGE_BANDS_CASES.map((each) => each.size)).toEqual(
+      expect.arrayContaining([26, 36, 40, 54, 96, 206, 212, 214, 232]),
+    );
   });
 });

@@ -1,7 +1,10 @@
-// UM-1 (track UM; UM-D3, D4, D13 and D15 at their leans, James 2026-11-06 03:11Z) — one profile's meters, pure
+// UM-1 (track UM; UM-D3, D4, D12, D13 and D15 at their leans, James 2026-11-06 03:11Z) — the profiles' meters, pure
 // (`src/usage/meters.ts`): every plan read through Settings' own join, in the order a glance can trust, with the
-// tightest window, the forecast, the budget's pace-less rule and the pace rule's orange.
+// tightest window, the forecast, the budget's pace-less rule and the pace rule's orange; and every profile's at once,
+// a shared plan once (UM-D12). The meter's rules are a leaf (`src/usage/rules.ts`) Settings may read without a cycle.
 
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import {
   AGENT_CATALOG_IDS,
   type AgentAccountUsageEntry,
@@ -12,18 +15,24 @@ import {
 } from "@vibefield/contracts";
 import { planTitle } from "@vibefield/puppeteer-views";
 import { describe, expect, it } from "vitest";
-import { resetWords, usageLines } from "../src/panels/agents/profiles-model";
+import { isHot, resetWords, usageLines } from "../src/panels/agents/profiles-model";
 import {
-  durationWords,
-  forecastOf,
+  everyPlan,
   meterWindows,
   type PlanMeter,
   type ProfileMeters,
   planMeters,
-  RESET_BY_DAY_MINUTES,
-  resetForm,
+  settingsPlanTitle,
   tightestWindow,
 } from "../src/usage/meters";
+import {
+  durationWords,
+  forecastOf,
+  pressureOf,
+  RESET_BY_DAY_MINUTES,
+  resetForm,
+  tightestOf,
+} from "../src/usage/rules";
 
 const NOW = new Date("2026-11-06T12:00:00.000Z");
 /** an instant `minutes` from now, as the wire spells it */
@@ -223,18 +232,20 @@ describe("UM-1 — a plan's reading is Settings' join", () => {
     const plans = [ownPlan("anthropic", "claude"), ownPlan("openai", "codex")];
     const installed = new Set(["claude"]);
     expect(
-      planMeters(profile(personas, plans), [], NOW, installed).entries.map((entry) => entry.key),
+      planMeters(profile(personas, plans), [], NOW, { installed }).entries.map(
+        (entry) => entry.key,
+      ),
     ).toEqual(["plan:anthropic", "agent:grok:native-default"]);
     expect(planMeters(profile(personas, plans), [], NOW).entries.map((entry) => entry.key)).toEqual(
       ["plan:anthropic", "plan:openai", "agent:grok:native-default"],
     );
     const managed = profile(personas, plans, { id: "work", kind: "managed", label: "Work" });
-    expect(planMeters(managed, [], NOW, installed).entries).toHaveLength(3);
+    expect(planMeters(managed, [], NOW, { installed }).entries).toHaveLength(3);
   });
 });
 
 describe("UM-1 — what a plan's meter says it is", () => {
-  it("needs you: an expired, signed-out or signing-in sign-in asks to sign in; a reading not taken asks to retry", () => {
+  it("needs you: an expired or signed-out sign-in asks to sign in, one under way says so; a reading not taken asks to retry", () => {
     const signedOut = own("claude", {
       identity: { loggedIn: false, verifiedAt: from(-5) },
     });
@@ -258,7 +269,7 @@ describe("UM-1 — what a plan's meter says it is", () => {
     expect(kinds(meters).sort()).toEqual(
       [
         "agent:claude:native-default needs-you sign-in",
-        "agent:codex:native-default needs-you sign-in",
+        "agent:codex:native-default needs-you signing-in",
         "agent:grok:native-default needs-you sign-in",
         "agent:kimi:native-default needs-you sign-in",
         "agent:antigravity:native-default needs-you retry",
@@ -535,6 +546,7 @@ describe("UM-D4 — the forecast, only while ahead of pace and before the reset"
         durationMinutes,
         resetIn: ((100 - elapsedPercent) / 100) * durationMinutes,
         budget: false,
+        hot: isHot(usedPercent, elapsedPercent),
       })?.words;
     expect(say(97, 58)).toBe("~5m");
     expect(say(99.9, 90)).toBe("~1m");
@@ -553,11 +565,12 @@ describe("UM-D4 — the forecast, only while ahead of pace and before the reset"
       durationMinutes: 300,
       resetIn: 150,
       budget: false,
+      hot: isHot(60, 50),
     };
     expect(forecastOf(base)?.words).toBe("~1h 45m");
     expect(forecastOf({ ...base, budget: true })).toBeUndefined();
-    expect(forecastOf({ ...base, usedPercent: 100 })).toBeUndefined();
-    expect(forecastOf({ ...base, usedPercent: 30 })).toBeUndefined();
+    expect(forecastOf({ ...base, usedPercent: 100, hot: isHot(100, 50) })).toBeUndefined();
+    expect(forecastOf({ ...base, usedPercent: 30, hot: isHot(30, 50) })).toBeUndefined();
     expect(forecastOf({ ...base, durationMinutes: undefined })).toBeUndefined();
     expect(forecastOf({ ...base, elapsedPercent: undefined })).toBeUndefined();
     // the limit comes after the reset (100 minutes at this pace, 30 to the reset)
@@ -588,5 +601,229 @@ describe("UM-1 — the words' lengths and the reset's form", () => {
     expect(resetWords(new Date(from(-5)), NOW)).toBe("now");
     const [noReset] = meterWindows([{ id: "n", label: "N", kind: "window", usedPercent: 4 }], NOW);
     expect(resetForm(only(noReset, "a window with no reset"))).toBeUndefined();
+  });
+});
+
+describe("UM-1 — the meter's rules are a leaf", () => {
+  it("imports nothing but the contracts, so Settings may read it while the meters read Settings (no cycle)", () => {
+    const source = readFileSync(join(import.meta.dirname, "../src/usage/rules.ts"), "utf8");
+    const specifiers = [
+      ...source.matchAll(/\bfrom\s+["']([^"']+)["']/gu),
+      ...source.matchAll(/\bimport\s*\(\s*["']([^"']+)["']/gu),
+      ...source.matchAll(/^\s*import\s+["']([^"']+)["']/gmu),
+    ].map((match) => match[1]);
+    expect(specifiers.filter((specifier) => specifier !== "@vibefield/contracts")).toEqual([]);
+    // what it holds: the drawing's pressure, and the most pressed window, the first of equals
+    expect(pressureOf({ hot: true, usedPercent: 45 })).toBe(1045);
+    expect(pressureOf({ hot: true, usedPercent: 100 })).toBe(1600);
+    expect(pressureOf({ hot: false, usedPercent: 70 })).toBe(70);
+    const lines = [
+      { id: "a", hot: false, usedPercent: 70 },
+      { id: "b", hot: true, usedPercent: 45 },
+      { id: "c", hot: true, usedPercent: 45 },
+    ];
+    expect(tightestOf(lines)?.id).toBe("b");
+    const first = only(lines[0], "the first line");
+    expect(tightestOf([{ wrapped: first }], (each) => each.wrapped)?.wrapped.id).toBe("a");
+    expect(tightestOf([])).toBeUndefined();
+  });
+
+  it("forecasts only on the orange it is handed: the pace rule is Settings', never decided here", () => {
+    const ahead = {
+      usedPercent: 60,
+      elapsedPercent: 50,
+      durationMinutes: 300,
+      resetIn: 150,
+      budget: false,
+    };
+    expect(forecastOf({ ...ahead, hot: true })?.words).toBe("~1h 45m");
+    expect(forecastOf({ ...ahead, hot: false })).toBeUndefined();
+    // no time gone: no pace to run ahead of, whatever it is handed
+    expect(forecastOf({ ...ahead, elapsedPercent: 0, hot: true })).toBeUndefined();
+  });
+});
+
+describe("UM-1 — a sign-in under way, a door that cannot answer, and a plan's title", () => {
+  it("a sign-in under way says 'signing in…', never 'not signed in', and asks nothing", () => {
+    const signingIn = persona("codex", "work-codex", {
+      identity: undefined,
+      signingIn: { sessionId: "s", since: from(-1) },
+    });
+    const set = profile([signingIn], [], { id: "work", kind: "managed", label: "Work" });
+    const refused = row("codex", [], { state: "unauthenticated", profileId: "work-codex" });
+    for (const rows of [[], [refused]]) {
+      const entry = entryOf(planMeters(set, rows, NOW), "agent:work-codex");
+      expect(entry).toMatchObject({
+        kind: "needs-you",
+        need: "signing-in",
+        right: { kind: "need", words: "signing in…", hot: false, icon: false },
+      });
+    }
+  });
+
+  it("usage unavailable: every plan that would read shows no meter, never a first read that never ends", () => {
+    const set = profile(
+      [own("claude"), own("codex", { identity: { loggedIn: false, verifiedAt: from(-5) } })],
+      [ownPlan("anthropic", "claude"), plan("openai", undefined, ["codex:native-default"])],
+    );
+    expect(kinds(planMeters(set, [], NOW))).toEqual([
+      "plan:anthropic first-read",
+      "plan:openai no-meter unnamed",
+    ]);
+    const unavailable = planMeters(set, [row("claude", [paced("5h", 30, 50)])], NOW, {
+      usage: "unavailable",
+    });
+    expect(kinds(unavailable)).toEqual([
+      "plan:anthropic no-meter unavailable",
+      "plan:openai no-meter unnamed",
+    ]);
+    expect(unavailable).toMatchObject({ hot: false });
+    expect(unavailable.tightest).toBeUndefined();
+  });
+
+  it("titles a plan as Settings' card does, or by the title it is handed", () => {
+    // a plan whose account an agent named, and one whose account nobody names
+    const set = profile(
+      [own("claude"), own("codex")],
+      [
+        ownPlan("anthropic", "claude"),
+        plan("openai", undefined, ["codex:native-default"], { account: undefined }),
+      ],
+    );
+    const anthropic = only(set.plans?.[0], "the named plan");
+    const openai = only(set.plans?.[1], "the unnamed plan");
+    expect(settingsPlanTitle(anthropic, true)).toBe(planTitle(anthropic.service, "max"));
+    expect(settingsPlanTitle(openai, false)).toBe(planTitle(openai.service, undefined));
+    expect(planMeters(set, [], NOW).entries.map((entry) => entry.title)).toEqual([
+      settingsPlanTitle(anthropic, true),
+      settingsPlanTitle(openai, false),
+    ]);
+    const titled = planMeters(set, [], NOW, {
+      title: (each, named) => `${each.service.label}${named ? " (named)" : ""}`,
+    });
+    expect(titled.entries.map((entry) => entry.title)).toEqual(["anthropic (named)", "openai"]);
+  });
+
+  it("each entry is in its own profile, drawn as its mark draws it, its windows' lengths in words", () => {
+    const work = profile([persona("claude", "work-claude")], [], {
+      id: "work",
+      kind: "managed",
+      label: "Work",
+      glyph: "briefcase",
+      default: true,
+    });
+    expect(planMeters(work, [], NOW).entries[0]?.profiles).toEqual([
+      { setId: "work", kind: "managed", glyph: "briefcase", filled: true, label: "Work" },
+    ]);
+    expect(planMeters(profile([own("claude")], []), [], NOW).entries[0]?.profiles).toEqual([
+      { setId: "native", kind: "native", filled: true, label: "This Mac" },
+    ]);
+    // and each window's length is named as the limit moment names it
+    const windows = meterWindows(
+      [paced("5h", 10, 50), paced("7d", 10, 50, 10_080), window("x", 10, 90, 45)],
+      NOW,
+    );
+    expect(windows.map((each) => each.lengthWords)).toEqual(["5 hours", "7 days", "90 minutes"]);
+  });
+});
+
+describe("UM-D12 — every profile's meters at once", () => {
+  const kim = { email: "kim@example.com", plan: "max" };
+  /** This Mac's Claude and Work's on one account (each plan's alsoIn names the other), Side's Claude on another,
+   * Work's Codex, and a draft profile. */
+  const sets = (): AgentProfileSet[] => [
+    profile(
+      [own("claude")],
+      [
+        plan("anthropic", "claude:native-default", ["claude:native-default"], {
+          account: kim,
+          alsoIn: ["work"],
+        }),
+      ],
+      { default: false },
+    ),
+    profile(
+      [persona("codex", "work-codex"), persona("claude", "work-claude")],
+      [
+        plan("openai", "work-codex", ["work-codex"], { account: { email: "kim@work.example" } }),
+        plan("anthropic", "work-claude", ["work-claude"], { account: kim, alsoIn: ["native"] }),
+      ],
+      { id: "work", kind: "managed", label: "Work", glyph: "briefcase", default: true },
+    ),
+    profile(
+      [persona("claude", "side-claude")],
+      [
+        plan("anthropic", "side-claude", ["side-claude"], {
+          account: { email: "lee@example.com" },
+        }),
+      ],
+      { id: "side", kind: "managed", label: "Side", glyph: "flask", default: false },
+    ),
+    profile([persona("claude", "draft-claude", { identity: undefined })], [], {
+      id: "draft",
+      kind: "managed",
+      label: "New profile",
+      default: false,
+      draft: true,
+    }),
+  ];
+  const rows = [
+    row("claude", [paced("5h", 30, 50)], { profileId: "claude:native-default" }),
+    row("claude", [paced("5h", 31, 50)], { profileId: "work-claude" }),
+    row("codex", [paced("5h", 40, 50)], { profileId: "work-codex" }),
+  ];
+
+  it("a plan two profiles share is one entry in both, wearing the managed profile's glyph", () => {
+    const union = everyPlan(sets(), rows, NOW);
+    const shared = entryOf(union, "native/plan:anthropic");
+    // the earlier profile's reading, the managed profile's glyph (This Mac's only when no managed profile holds it)
+    expect(reading(shared).tightest.line.usedPercent).toBe(30);
+    expect(shared.profiles).toEqual([
+      { setId: "work", kind: "managed", glyph: "briefcase", filled: true, label: "Work" },
+    ]);
+    expect(union.entries.filter((entry) => entry.key.endsWith("plan:anthropic"))).toHaveLength(2);
+  });
+
+  it("two Claude plans on two accounts stay two entries, each in its own profile; a draft profile is left out", () => {
+    const union = everyPlan(sets(), rows, NOW);
+    expect(entryOf(union, "side/plan:anthropic").profiles.map((each) => each.setId)).toEqual([
+      "side",
+    ]);
+    expect(union.entries.some((entry) => entry.key.startsWith("draft/"))).toBe(false);
+    const holders = union.entries.flatMap((entry) => entry.profiles.map((each) => each.setId));
+    expect(holders).not.toContain("draft");
+  });
+
+  it("orders the union as UM-D15 orders a profile, then by the first profile holding each", () => {
+    const union = everyPlan(sets(), rows, NOW);
+    expect(kinds(union)).toEqual([
+      "native/plan:anthropic reading",
+      "side/plan:anthropic first-read",
+      "work/plan:openai reading",
+    ]);
+    expect(union.tightest?.key).toBe("work/plan:openai");
+    expect(union.hot).toBe(false);
+  });
+
+  it("keeps a shared plan's reading over another profile's need, and This Mac's glyph when no managed profile holds it", () => {
+    const [native, work] = sets();
+    const signedOut: AgentProfileSet = {
+      ...only(work, "Work"),
+      personas: [
+        persona("claude", "work-claude", {
+          identity: { loggedIn: false, verifiedAt: from(-5) },
+        }),
+      ],
+      plans: [
+        plan("anthropic", "work-claude", ["work-claude"], { account: kim, alsoIn: ["native"] }),
+      ],
+    };
+    // Work's own sign-in has no reading here: it needs you
+    const unread = rows.filter((each) => each.profileId !== "work-claude");
+    const union = everyPlan([signedOut, only(native, "This Mac")], unread, NOW);
+    // Work comes first here, so the entry is Work's key; its meter is This Mac's reading
+    expect(kinds(union)).toEqual(["work/plan:anthropic reading"]);
+    const alone = everyPlan([only(native, "This Mac")], unread, NOW);
+    expect(alone.entries[0]?.profiles.map((each) => each.kind)).toEqual(["native"]);
   });
 });
