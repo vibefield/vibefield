@@ -3294,7 +3294,7 @@ describe("CP-4a2b — the host's life: parked and woken, and D2's lookup at a wa
     expect((await settled(h.runs, run, "done")).log).toBe("ab");
   });
 
-  it("MM3 (the F4 logic review; ruled 2026-11-06): D2's lookup that binds a step's live agent at a wake reserves no agent, and a respawn of a step with no session reserves one, as LL1 counts a start", async () => {
+  it("MM3 (the F4 logic review; ruled 2026-11-06): D2's lookup that binds a step's live agent at a wake reserves no agent, and a journaled call with no record entry starts once and reserves one, as LL1 counts a start", async () => {
     // the bind: two agents started, and a wake that binds A keeps the count at 2
     const bound = await harness({ hostIdleMs: IDLE_MS });
     bound.approved("two", TWO);
@@ -3310,7 +3310,7 @@ describe("CP-4a2b — the host's life: parked and woken, and D2's lookup at a wa
       hosts: bound.hosts.length,
       agents: bound.records.runRecord(two)?.agents,
     }).toEqual({ state: "done", hosts: 2, agents: 2 });
-    // the respawn: R13e's journaled call with no entry spawns, and counts one more
+    // the first start: R13e's journaled call with no entry, never started, spawns once and counts one more
     const again = await harness({ hostIdleMs: IDLE_MS });
     again.approved("seq", SEQ);
     const seq = startedRun(await again.start({ flow: "seq" })).run;
@@ -3325,7 +3325,9 @@ describe("CP-4a2b — the host's life: parked and woken, and D2's lookup at a wa
 
   it("R29 (D1, CL-K-d): of the runs ready at once, HOSTS_LIVE_MAX hosts start; the runs past it read waiting, their records kept, and each starts its host when one leaves, in the order they began", async () => {
     const max = FLOW_LIMITS.HOSTS_LIVE_MAX;
-    const h = await harness();
+    // TT5 (the 10a review): no park in a row about the cap; at fieldd's 10 s idle, runs 2 and 3's steps, never
+    // answered here, would park on a loaded host and start run 5 early
+    const h = await harness({ hostIdleMs: 600_000 });
     h.approved("review", ANSWERED);
     const started: RunSummary[] = [];
     for (let i = 0; i < max + 2; i += 1)
