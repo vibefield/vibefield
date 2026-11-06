@@ -476,6 +476,16 @@ export class FlowRecords {
     );
   }
 
+  /** CP-4a2b (1d review Z2) — end the record of a run that never began: one whose record is kept and whose journal is
+   * none (`readRun` reads `unbegun`: its head was refused at its begin), so no synced line stands for `writeRunRecord`
+   * to name. Written with the runs' `fields` over the run's own facts, its head's MAC and its tail as its begin kept
+   * them. Refused while a journal stands under the id (that is `writeRunRecord`'s road), and for a run lost or a newer
+   * VibeField's as that road refuses them. Durable when it returns; throws when the disk does not take it. Slice 14's
+   * boot settles a running record that never began by this same write. */
+  endUnbegun(run: FlowRunId, fields: FlowRunStart): void {
+    throw new Error(`CP-4a2b 1f: ${run}'s end (${fields.state}) is built in 1f's green`);
+  }
+
   /** CP-4a2b (D18) — a run's record alone, when it verifies: a run's summary is drawn from it, never from its journal.
    * Throws the store's refusal when it cannot be read; nothing for one set aside or a newer VibeField's. */
   runRecord(run: string): FlowRunRecord | undefined {

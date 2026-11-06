@@ -2111,20 +2111,40 @@ describe("CP-4a2b — a changed flow's acts begin the asked-for run (§13a slice
     expect(h.records.runRecords().map((record) => record.state)).toEqual(["failed", "failed"]);
   });
 
-  it("R6g (1b review V2): a run that never began, its record kept and its ending refused too, is passed by at the bounds until a restart settles it", async () => {
+  it("R6g (1b review V2; 1d review Z3): a run that never began, its record kept and its ending refused too, is passed by at the bounds until a restart settles it, and reads in this life as never begun", async () => {
     const h = await harness();
     h.approved("hello", HELLO);
     const journals = join(h.root, "fieldd", "flows", RUNS_DIR);
     writeFileSync(journals, "not a folder");
-    vi.spyOn(h.records, "writeRunRecord").mockImplementationOnce(() => {
+    vi.spyOn(h.records, "endUnbegun").mockImplementationOnce(() => {
       throw new Error("ENOSPC: no space left on device, write");
     });
     await expect(h.start()).rejects.toMatchObject({ message: words.neverBegan("Hello") });
     expect(h.records.runRecords()).toMatchObject([{ state: "running" }]);
+    // Z3: the record stands as the disk keeps it, and this life reads the run failed, in §9's words
+    const unbegun = h.records.runRecords()[0]?.run ?? "";
+    const said = { state: "failed", log: words.neverBegan("Hello"), endedAt: expect.any(String) };
+    expect(h.runs.list().runs).toMatchObject([{ run: unbegun, ...said }]);
+    expect(h.runs.read(unbegun)?.summary).toMatchObject(said);
     // the journals' folder answers again: RUNS_LIVE_MAX running records, the one that never began among them
     rmSync(journals);
     for (let i = 0; i < FLOW_LIMITS.RUNS_LIVE_MAX - 1; i += 1) seeded(h, i, "running");
     expect(startedRun(await h.start()).state).toBe("running");
+  });
+
+  it("R6i (1d review Z4): a run whose bytes are gone by its wake is ended lost there, and the door answers it lost, as its record says", async () => {
+    const h = await harness();
+    h.approved("hello", HELLO);
+    // its begin reads the approved bytes; by its wake they are gone (D8: bytes that no longer hash are lost)
+    const begin = h.records.beginRun.bind(h.records);
+    vi.spyOn(h.records, "beginRun").mockImplementationOnce((entry, start) => {
+      const head = begin(entry, start);
+      vi.spyOn(h.records, "bytes").mockReturnValue(undefined);
+      return head;
+    });
+    const summary = startedRun(await h.start());
+    expect(summary.state).toBe("lost");
+    expect(h.records.runRecord(summary.run)?.state).toBe("lost");
   });
 
   it("R6h (1b review V4): a records write the disk refuses at a run's begin is said in the store's own shape, UNAVAILABLE for the flows, in its sentence", async () => {

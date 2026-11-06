@@ -498,6 +498,8 @@ const HEAD = {
 } as const;
 const CALL_1 = { kind: "call", call: 1, what: "agent", key: "a".repeat(64), n: 1 } as const;
 const ANSWER_1 = { kind: "answer", call: 1, value: "clean" } as const;
+/** When a run that never began is ended (JT11). */
+const ENDED = "2026-11-05T04:01:00.000Z";
 
 describe("CP-4a2b — a run's record, its journal's anchor (D18)", () => {
   const journalOf = (h: ReturnType<typeof harness>) =>
@@ -720,5 +722,46 @@ describe("CP-4a2b — a run's record, its journal's anchor (D18)", () => {
       rmSync(beside, { recursive: true });
     }
     expect(readFileSync(recordOf(h), "utf8")).toBe(bytes);
+  });
+
+  it("JT11 (1d review Z2): a run that never began is ended by endUnbegun, its own facts, head and tail as its begin kept them; a run whose journal stands is refused there, and so is a run with no record", () => {
+    const h = harness();
+    // the disk refuses the head (JT8): the run's record stands with no journal
+    mkdirSync(h.dir, { recursive: true, mode: 0o700 });
+    writeFileSync(join(h.dir, RUNS_DIR), "not a folder", { mode: 0o600 });
+    const records = h.records();
+    expect(() => beganRun(records, HEAD)).toThrow();
+    const begun = records.runRecord(RUN);
+    if (begun === undefined) throw new Error("the record was not kept");
+    // every other write of a record names the journal's last synced line, and this run has none
+    expect(() => records.writeRunRecord(RUN, { ...RUN_START, state: "failed" })).toThrow();
+    const ending = { state: "failed", endedAt: ENDED, log: "It never began." } as const;
+    records.endUnbegun(RUN, { ...RUN_START, ...ending });
+    // durable when it returns: a new store reads it so, and the run still never began
+    expect(h.records().readRun(RUN)).toMatchObject({
+      kind: "unbegun",
+      record: {
+        ...ending,
+        run: begun.run,
+        flow: begun.flow,
+        name: begun.name,
+        n: begun.n,
+        hash: begun.hash,
+        starter: begun.starter,
+        head: begun.head,
+        tail: begun.tail,
+        startedAt: begun.startedAt,
+      },
+    });
+    // a run whose journal stands is writeRunRecord's: refused here, its record left as it was
+    const other = harness();
+    const kept = other.records();
+    beganRun(kept, HEAD);
+    const bytes = readFileSync(recordOf(other), "utf8");
+    expect(() => kept.endUnbegun(RUN, { ...RUN_START, ...ending })).toThrow();
+    expect(readFileSync(recordOf(other), "utf8")).toBe(bytes);
+    // and a run with no record at all
+    const none = harness().records();
+    expect(() => none.endUnbegun(RUN, { ...RUN_START, ...ending })).toThrow();
   });
 });
