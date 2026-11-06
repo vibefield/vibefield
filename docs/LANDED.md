@@ -31611,6 +31611,8 @@ design-kit, two in electron-shell, one each in field-app, DESIGN.md, DECISIONS, 
   > a spark's words and the say, held to the Mac fold's own goldens. Its thread, M-c2, is next: M-b2 landed
   > 11-06 (`3b8611ec4`).
   > *Answered 2026-11-06:* M-b2 landed (`3b8611ec4`, run 182; LANDED "SP-7a's M-b2").
+  > *Answered in part 2026-11-06:* IOS-12e, the star in Metal, landed (`09378c9ec`, M186, run 186; LANDED
+  > "IOS-12e"). The note's live face and 12f wait on M-phone.
 - Item 169 (filed). cp3 §5's line at the draft queue, on VF-PM's word. The two-desktop run (James).
 
 ## SD-1 — the sound identity's law and its code: DESIGN.md §14 Sound, and `@vibefield/sound` beside contracts (2026-11-05; `8b22e7b01` → `1ebe7b461`, 3 commits on main `f599761bc`, lane `sd/1-sound-law` in `/Volumes/SamsungRed/lanes/sd1/vibe-field`, stacked as M126 `1ebe7b461`, run 126)
@@ -31951,6 +31953,12 @@ packet says so.
   > a spark's words and the say, held to the Mac fold's own goldens. Its thread, M-c2, is next: M-b2 landed
   > 11-06 (`3b8611ec4`).
   > *Answered 2026-11-06:* M-b2 landed (`3b8611ec4`, run 182; LANDED "SP-7a's M-b2").
+  > *Answered in part 2026-11-06:* IOS-12e, the star in Metal, landed (`09378c9ec`, M186, run 186; LANDED
+  > "IOS-12e"). The note's live face and 12f wait on M-phone.
+  > *2026-11-06, on Validation's face slot (IOS-12e's stack):* the face suite's three main-actor warnings
+  > (SparkFlatStarTests :116, :117 and :119; `SparkFlatFace.viewBox(framed:)` and `palette(of:)` called from a
+  > nonisolated suite) went in `8e1eaf009`: both, and the two lets `viewBox` reads, are `nonisolated` (the 11-06
+  > rule). The Xcode 27.3 beta printed them. The fix rode IOS-12e's mint, whose kit build covers it.
 
 ## AR-7j — agents typed into a pane are managed in the packaged app: fieldd's own executable runs every launcher in one closed role (2026-11-05; `66037db65` → `45c3680a3`, 5 commits on main `dbb8c76ad`, lane `lp/ar7j` in `/Volumes/SamsungRed/lanes/lp-ar7j/vibe-field`, minted as M128 `45c3680a3`, run 128)
 
@@ -37362,6 +37370,8 @@ It answers in part IOS-12a's and IOS-12b's Owed ("12c the thread"), each noted i
   the wiring and its ten stills. SP-7's M-b2 landed 11-06 (`3b8611ec4`) and M-phone has not, so M-c2 is cut on the
   mint chain's end once IOS-12e's mint is staged (VF-PM 09:28Z, ruled (a)): the HomeScreen.swift hunk is its last
   commit, M-phone's lead (vibe-field-b7) is sent its exact lines before it, and whichever lands second re-cuts it.
+  > *Answered in part 2026-11-06:* IOS-12e's mint landed (`09378c9ec`, M186; LANDED "IOS-12e"), and M-c2 was cut
+  > on it, its HomeScreen.swift hunk last (vibe-field-b7, 10:37Z: no hold).
 - 12d (needs you) on 12c; 12f after 12e and M-phone.
 
 Two inserts into older entries: IOS-12a's and IOS-12b's Owed.
@@ -38094,3 +38104,147 @@ import walls (root `package.json`, one line, pin-class).
   count.
 
 Item 195 closes in this entry.
+
+## IOS-12e — the star in Metal: a spark's live face on the phone is the engine's own, its Buddy and its shader transcribed and held to the engine's rows and stills (track IOS)
+
+(2026-11-06; `5bc16c497` → `09378c9ec`, 18 commits on main `856c47aac`, lane `ios/12e` in
+`/Volumes/SamsungRed/lanes/ios12b/vibe-field` (12b's landed worktree), the IOS session's; minted as M186 `09378c9ec`,
+run 186, and landed 10:42:20Z by the fixer, a fast-forward of `856c47aac`. Cut on `85b65c52a`, then rehearsed onto
+main seven times as it moved (the `rehearsal/12e-*` branches, local, never pushed); the seventh, r4 on item 195's
+records, is T. The one hand step is e1's biome.jsonc hunk, keep-both with M-c1's ignore. The range's patch-id outside
+biome.jsonc is `900b96085560c283` at the first cut and at T.)
+The lane's shas, which the source's dated lines and the commit messages name, are main's as follows: e6 `92c4bfd34`
+= `862c02d6e`; the build's one error `d94269c04` = `a82f582e6`; the goldens `3682c4f48` = `76370ab45`; 12b's fix
+`566c03fd1` = `8e1eaf009`; the gallery `47ea960b1` = `1c0f4846f`; the first corner `68521e930` = `4b8f92072`; the
+window row `5e6f48701` = `6bb2717e0`; the fix `e2973603a` = `09378c9ec`. The plan
+(`/Volumes/SamsungRed/lanes/ios12/IOS-12e-plan.md`, v0.1 05:22Z) was ruled by VF-PM at every lean at 05:50Z, its Q2
+bound for good at 07:51Z on the first measurement, and its §4 (a) at 07:52Z. It answers in part IOS-12a's and
+IOS-12b's Owed ("12e the star in Metal"), each noted in its entry.
+
+**What it rests on.**
+- PC-D6 A ("`agentDNA` in Swift, held to goldens, and the star in Metal") and DESIGN.md §2.10 (S-1…S-5, the statuses,
+  framed and free, the phone's size table, "Still and live", Motion).
+- The vendored engine, `packages/design-kit/src/spark-face/vendor/sparks.js` (James's `agent-sparks/sparks.js` at
+  `025b495`, byte for byte): its CPU half, `Buddy`, which lays each face as 32 rows of vec4 a frame, and its GPU
+  half, the vertex and fragment shaders in GLSL ES 3.0.
+- IOS-12a's DNA golden, and IOS-12b's `SparkEngine`, `Mulberry32` and flat star, which stay the fallback.
+
+**What is real.**
+- **DESIGN.md first** (e3, `e07862872`): §2.10's phone paragraph, *Amended 2026-11-06*. The star is drawn in Metal, the
+  engine transcribed and held to its own rows and stills; one stage per screen; never a blank.
+- **The engine's own goldens** (design-kit; a9 ran both generators on vf-m1):
+  - `scripts/spark-rows-golden.mjs` runs the vendored engine and writes each status's rows as the GPU reads them,
+    with each status's recipe as the engine resolves it, mouthless (`fixtures/spark-rows.golden.json`);
+  - `scripts/spark-stills-golden.mjs` and `spark-stills-render.cjs` have Electron draw the engine's own WebGL2 pixels
+    at the phone's @3x: 58 stills in `fixtures/spark-stills/`, and a manifest naming their host (vf-m1, Apple M4,
+    darwin 27.2.0, Electron 43.1.1, ANGLE's Metal renderer);
+  - biome.jsonc ignores the rows golden and the manifest (generated, the PG-3a way), after M-c1's ignore;
+  - the kit's copies, 60 in all, with their `check-ios-fixtures` rows in the same commit (292 copies → 352).
+- **The star** (`FieldDesign/SparkFace/`):
+  - `SparkBuddy`, `SparkMotion` and `SparkRecipes` transcribe `Buddy`, its motions and its recipes;
+  - `Resources/Shaders/SparkStar.metal` transcribes the vertex and fragment shaders from GLSL ES 3.0 to MSL;
+  - `SparkStarRenderer` draws it, `SparkStills` reads the stills, and `SparkFaceView` is a face's one view.
+- **The rows match the engine's within 1e-4** (live, under reduced motion, across a status change and as stills),
+  and the stills within Q2's bound (below). A phone face draws from Mulberry32 on its own seed, the engine's generator.
+- **The stage** (`SparkStage`, `SparkStageView`): one transparent Metal layer per screen over its content, drawing
+  every live face (at most 32; past that a face is a still) at most 60 frames a second (30 in Low Power Mode), each
+  in its scroll view's clip, and no frame while none is on screen. The layer's corner comes from UIKit, where the
+  layer is, and the faces report their boxes in the window's space (`.global`). A face outside a stage is a still,
+  drawn once offscreen and kept (the last 256).
+- **Never a blank:** where Metal cannot build the star, the face is the flat star, and the log says so once.
+- **Chat's list** (e6, `862c02d6e`): the list is one stage, and a row's face is the star, live while its spark works.
+- **IOS-12b's fix** (`8e1eaf009`): `SparkFlatFace`'s pure statics are `nonisolated` (a dated line in 12b's Owed).
+- **The DEBUG gallery** (`1c0f4846f`): `-vf-spark-gallery[-scrolled][=light|dark]` shows every status Chat's list can
+  say, live beside still, on the shipping face, with `SparkStageReadout` saying what the stage measures.
+  `-vf-reduce-motion` and `-vf-spark-flat` stage the other two looks.
+  - **One departure, stated:** `accessibilityReduceMotion` is get-only, so `-vf-reduce-motion` sets
+    `_accessibilityReduceMotion` (the public setter, iOS 13+) through `transformEnvironment`, in DEBUG alone.
+
+**What is stubbed or left.**
+- The note's face (22) is still the flat star: ChatNote is as 12b landed it (ruled 06:48Z), its live face after
+  M-phone. The note is not stilled (accepted 08:26Z): it shows only for a NEW need while another tab stands (S-4),
+  which no launch flag stages, and the kit's S-4 row is its witness.
+- The thread's head and its one live face are M-c2's. The hatch is 12f's, and a stage in a sheet needs its window's
+  space to be `.global` (noted for 12f). The Field's rims are 12g's.
+- No device has drawn it: the kit and the stills are the simulator's (vf-m1, the iPhone 17).
+- Whether Chat's list reaches under the bars was never witnessed (the mock list has no live face). The stage no
+  longer depends on it.
+
+**Validation.**
+- **Where:** every run is a9's on vf-m1, the kit's and the stills' on Xcode 27.3 beta 27C5020n and the iPhone 17
+  simulator `67E36A30`, logs under `lanes/ts6/logs/m1/ios12e-*`. `98f3ccc3a`, `68428ef36`, `57580a5f9` and
+  `c6e23ecb1` are rehearsals, kept local.
+- The generators' first runs (e1's rows, e2's stills) at `6cc263991` (= `d0b6a5517`); the build-only slot at
+  `d94269c04`, green.
+- **The kit at `3682c4f48`:** GREEN, 6/6 suites, 17/17 rows. **Q2's first measurement** (`report.json`, read 08:00Z)
+  was 58 stills of 4,356 to 291,600 pixels each:
+  - max |Δ| 0 on 10 stills, 1 on 47 and 63 on 1;
+  - the worst mean 0.0033/255, and the least share within 6 99.995% (one pixel of 20,736);
+  - past 32, one pixel: (72, 0) of `48-framed-light-sleeping-4211`, a coverage sample on the disc's top edge, where
+    the two rasterisers chose differently;
+  - the 1-step noise follows the glow's arc and the disc's edge. It is precision (ANGLE's GLSL highp against MSL
+    `float` in the glow's falloff), not transcription, which would show structured (an eye, a prop, the disc).
+  - VF-PM ruled the start bound on it (07:51Z): at least 99.5% of a still's pixels within 6/255 a channel, a mean
+    |Δ| at most 1/255, and every pixel past 32/255 named.
+- **§4's gate, by eye** (Found 1): at r1 `98f3ccc3a`, kit GREEN (7 suites, 19 rows), stills 12/12, RED by eye; at
+  `68428ef36`, kit GREEN (7, 20), stills 12/12, RED by eye again.
+- **The packet at `57580a5f9`** (on `68428ef36`; RED at `c6e23ecb1`):
+  - **kit-red, the verdict of record r2's** (10:25:46Z → 10:27:37Z, logs `kit-red-tree-166709b07565.r2`): "RED AS
+    EXPECTED — the new row alone fails, 7 suites and 20 rows pass, no crash"; 40 tests, 1 issue; the build green.
+    **The measurement**, the row's issue line: `↳ drawn at 100.0, laid out at 224.0`. Laid out at 224 is the host's
+    top inset (the simulator window's 62 and the row's 62) plus the row's 100; drawn at 100 is the face's box with
+    the layer's corner read as SwiftUI reported it, (0, 0). A live face drew 124 pt high: the stills' class.
+  - **kit:** GREEN, 8 suites and 21 rows, 12b's three warnings gone.
+  - **the stills:** 12 of 12 (10:18:59Z → 10:22:23Z), each read by eye (10:26Z) with its readout line: in both looks
+    every live face at 48 and 30 sits on its own row and wears its row's look, as its still does; nothing over the
+    header; the readout where the pixels are (Hello's 48-live face laid at (166.0, 214.3) pt, which is (498, 643)
+    px); reduced motion in still poses; scrolled half a row, each face cut where its still is; the flat star in
+    every cell; the real list under the mock door, Vela and Kiwi as stills (none works).
+  - The verdicts carry to T by apps/ios `dfe285dea164`, equal at `57580a5f9` and at T.
+- **The lights at T on the MacBook**, one row at a time after a swap read of 1506.69 MB free (10:30Z):
+  `check-ios-fixtures` 352 copies and 93 pins; `check-import-boundaries --enforce` clean; biome over the range's
+  nine biome-read files, 5 checked, no fixes.
+- **Run 186** at `09378c9ec` (armed 10:33:59Z): `pnpm verify` exit 0 at 10:39:10Z; vitest 13,737 | 0 | 21 over 949
+  files, node 474/474, cargo 545/0 in 34 results; 29 projects typechecked; biome 3,435 files, no fixes (run 184's
+  3,432 and the three design-kit scripts); the walls clean; the iOS fixtures 352 copies and 93 pins; gen clean;
+  field-app's per-file counts and the bundle assert as run 184's. verify.log sha256 `4cfb60c82ddfc558…`
+  (`lanes/ts6/logs/m1/run186/`).
+- **Landed:** main fast-forwarded `856c47aac` → `09378c9ec` on VF-PM's GO (10:42:20Z, the fixer's stamp).
+
+**Found.**
+1. **A live face was drawn one top inset high, twice** (§4's gate, by eye):
+   - At r1 every live face at 48 and 30 drew about 62 pt high (median 62: the iPhone 17's top safe-area inset), so
+     each row's live cell showed the NEXT status's face, Hello's pair sat over the header and Asleep's were empty.
+   - **e6's premise, its erratum dated 2026-11-06** in `4b8f92072`, which replaced the comment: e6 said the layer
+     fills "the content's whole frame, the safe area it reaches into too", which holds only for a content that
+     reaches under the bars. The gallery's stops at them.
+   - The first fix (`4b8f92072`) read the layer's corner from a SwiftUI proxy, in a space named after the overlay.
+     The second stills were byte-identical to the first (`light-gallery.png` `47593f65…` at both), and the offset
+     per status read 59.4 to 62.9 pt: the inset, not a row (64). SwiftUI reports (0, 0) for the ignoring overlay's
+     corner while UIKit places the MTKView 62 pt higher. **That claim's correction is dated at its source**,
+     `SparkStage.origin`'s doc (`09378c9ec`), in VF-PM's words; the falsified claim stays readable in git.
+   - The fix: the corner from UIKit (`convert(.zero, to: nil)`, in layoutSubviews, didMoveToWindow and each frame),
+     and the faces' boxes in `.global`. The row that sees the class (`6bb2717e0`): SparkStageHostTests hosts the stage
+     in a UIWindow under `additionalSafeAreaInsets` 62/34 and holds the drawn box to the layout's.
+2. **A frozen filter called a true red false.** kit-red's first run was red as expected in substance (the window row
+   alone failed, on its own #expect), yet the script said "kit-red NOT AS EXPECTED: no 'drawn at' issue line".
+   xcodebuild prints an issue's words on the line after the row's, as `↳ …`, and the filter kept only lines carrying
+   the row's title. VF-PM ruled 10:22Z: the filter fixed (a `↳` line is kept with the row before it), re-frozen as
+   `run-12e-kit-stills-57580a5f9.r2.sh` with logs of its own, and kit-red re-run alone. The first run's logs stand.
+3. **Item 197** (FILED by VF-PM 10:27Z, design-kit's): a framed still's status ring is cut square at its box, in the
+   engine's golden itself. `48-framed-light-asking-4211.png` is a 144 × 144 canvas whose ring runs into its border
+   (329 of its 576 border pixels opaque). The phone draws the still as it is, and Q2's bound holds. The fix is the
+   generator's canvas and a re-bless.
+4. UIResponder names `next`, so the stage layer's texture turn is `turn` (the build's one error, `a82f582e6`).
+5. A View's statics are main-actor isolated: 12b's face suite, a nonisolated suite, called two in #expect, and the
+   Xcode 27.3 beta warned three times. Swift 6 makes those errors (`8e1eaf009`).
+6. Noted, no item (VF-PM 10:27Z): the Field tab's badge reads none, 2, 1 and 3 across the four list stills, since the
+   mock board moves while a still waits (12 s). No 12e change touches it.
+
+**Owed.**
+- Item 197 (design-kit): the stills generator's canvas and a re-bless.
+- **M-c2, the thread** (the IOS session): cut on this land, its head's one live face on this stage.
+- The note's live face after M-phone; 12f (New spark, the hatch) after M-phone.
+
+Three inserts into older entries: IOS-12a's Owed; IOS-12b's Owed, with a dated line on its face slot; and M-c1's
+Owed.
