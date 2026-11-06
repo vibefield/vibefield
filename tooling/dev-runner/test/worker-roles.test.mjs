@@ -91,6 +91,12 @@ test("every process bin.ts guards from SIGUSR1 is asked SIGUSR1 by its --verify 
   );
   assert.ok(SEA.includes("atReady: sigusr1Ask,"), "probe A asks the ready daemon SIGUSR1");
   assert.ok(guarded.length > 0, "bin.ts has roles that take the guard");
+  // +1: the daemon's tail branch
+  assert.equal(
+    guarded.length + 1,
+    (BIN.match(/refuseInspectorSignal\(\);/g) ?? []).length,
+    "every refuseInspectorSignal() call site is a branch this row read",
+  );
   // the SEA builder's top-level functions, each with its body
   const functions = [...SEA.matchAll(/\n(?:async )?function (\w+)\(([\s\S]*?)\n\}\n/g)];
   const unasked = [];
