@@ -159,7 +159,11 @@ export type AgentAccountUsageEntry = z.infer<typeof AgentAccountUsageEntry>;
  * frame: FULL snapshots in provider order (state transfer, never edges — a
  * missed frame is repaired by the next one), at most one per tick per
  * connection. Before the first refresh answers, `entries` is empty and
- * `generatedAt` still stamps the answer: an honest empty, never a throw. */
+ * `generatedAt` still stamps the answer: an honest empty, never a throw.
+ * *Corrected 2026-11-06 (UM-D8 A): at most one frame per stream floor
+ * (`PRODUCT_API_LIMITS.STREAM_MIN_INTERVAL_MS`, 250 ms) per subscription, the
+ * WHOLE_VALUE_STREAM `agents.usage.subscribe` declares (methods.ts); a frame
+ * equal to the batch the reader holds is not sent.* */
 export const AgentAccountUsageBatch = z
   .object({
     entries: z.array(AgentAccountUsageEntry),
@@ -169,7 +173,11 @@ export const AgentAccountUsageBatch = z
 export type AgentAccountUsageBatch = z.infer<typeof AgentAccountUsageBatch>;
 
 /** An explicit refresh waits for a reading, bypassing the normal poll interval
- * while preserving provider backoff and the monitor's repeated-click guard. */
+ * while preserving provider backoff and the monitor's repeated-click guard.
+ * *Corrected 2026-11-06 (UM-D8 A): from this desktop's own windows. Any other
+ * caller's `refresh: true` (the phone's, over the tailnet) takes no reading:
+ * it is answered the cached batch, whose `generatedAt` and each entry's
+ * `fetchedAt`/`stale` say how old it is (fieldd's door, daemon.ts).* */
 export const AgentsUsageParams = z
   .object({
     refresh: z.boolean().optional(),
