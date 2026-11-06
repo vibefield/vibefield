@@ -10360,6 +10360,19 @@ a name that is, or starts with, "VibeField" shows the flow's slug instead, so a 
 - **A step's call refused.** The script's `await` throws with these words, and the run's journal keeps them:
   - "VibeField didn't start ‹label›: it names an Agent Profile this run can't use (‹profile›)."
   - "VibeField didn't start ‹label›: it asks for ‹key›, which a step may not set."
+  - *Proposed 2026-11-06 (CP-4a2b, 13a's D9 and slice 8c; ruled 2026-11-06), open as the rest are:*
+    - "VibeField didn't start ‹label›: it names no agent."
+    - "VibeField didn't start ‹label›: it names an agent VibeField doesn't start (‹agent›)."
+    - "VibeField didn't start ‹label›: it names a model ‹agent› doesn't offer (‹model›)."
+    - "VibeField didn't start ‹label›: its model isn't written as a model's name."
+    - "VibeField didn't start ‹label›: it names no Agent Profile, and this run has none to give it."
+    - "VibeField didn't start ‹label›: its folder (‹folder›) is outside this run's folder and your projects."
+    - "VibeField didn't start ‹label›: its prompt isn't words."
+
+    ‹agent› is the agent as the script wrote it where VibeField doesn't start it, and the catalog's name for it where
+    it does; ‹model› is the model as written; both are said on one line and cut at 64 characters with "…". ‹folder›
+    is the folder's last name, never its path. A step's model is a model's name alone: a flow sets none of its
+    controls.
   - "VibeField didn't send ‹label›: that session is outside this run's Agent Profiles, isn't running, is a spark's or
     another flow's, or is waiting on a permission."
   - "VibeField couldn't start ‹label›: ‹the runtime's words›"
