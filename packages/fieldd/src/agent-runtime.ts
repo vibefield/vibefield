@@ -730,8 +730,12 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
    * not ended yet, held or not: the old run's workspace lease is still taken */
   private readonly exitCleanups = new Map<string, Promise<void>>();
   private readonly byTerminal = new Map<string, string>();
-  /** the FIRST inventory of this boot is the re-attach; once */
-  private reattachStarted = false;
+  /** AR-4 — the boot's re-attach (`reattach`), in one state: `unstarted` until the FIRST inventory of this boot, which
+   * starts it; `running` while it reads the records the last fieldd left and attaches, holds or keeps each; `done`
+   * once it has. AR-S2 — until `done` an un-exited record may be a live PTY no map holds yet. Item 201 (RV #48,
+   * vf-runtime-5) — `unread`: the records could not be listed, so it has not run, and nothing is settled on them
+   * (`reattachSettled`, `liveUnder`) */
+  private reattachState: "unstarted" | "running" | "unread" | "done" = "unstarted";
   /** AC-3 — pending runs whose idle resume was withheld, said once each */
   private readonly idleWithheld = new Set<string>();
   /** puppeteer's durable claims — the authority on a run's epoch (AR-4b) */
@@ -769,9 +773,6 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
    * so the default set decides and it may be any. */
   private readonly creating = new Map<number, string | null>();
   private creationSeq = 0;
-  /** AR-S2 — the boot's re-attach has run on an observed floor: until then an
-   * un-exited record may be a live PTY no map holds yet. */
-  private reattachDone = false;
   /** AR-D25 — the personas a row may still be continued under (registered,
    * not signed out), refreshed on every profiles change: rows are summarized
    * synchronously. */
@@ -1080,9 +1081,11 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
 
   /** LR (2026-10-15) — this boot's re-attach has run, and every record it held
    * for a grace has been attached or stamped: from here a run the fold does
-   * not hold is not coming back on its own (`agent-last-run.ts`). */
+   * not hold is not coming back on its own (`agent-last-run.ts`). Item 201 (RV #48, vf-runtime-5) — never on records
+   * it could not read (`unread`): a run the fold lacks may be live then, and what reads this as settled ends what the
+   * fold lacks (the settle joiners' crews and kept words, the last run's picture, fieldd's own stop census). */
   reattachSettled(): boolean {
-    return this.reattachDone && this.awaitingBoot.size === 0;
+    return this.reattachState === "done" && this.awaitingBoot.size === 0;
   }
 
   /** Item 192 (RV #6, gap3-1) — what fieldd's OWN stop ends, the one authority on it (`system.shutdown.census`, and
@@ -2513,8 +2516,8 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     const rows = new Map(terminals.map((row) => [row.sessionId, row]));
     // AR-4 — the FIRST inventory of a boot is the re-attach: the records left
     // by the last fieldd, against the PTYs this floor still lists.
-    if (!this.reattachStarted) {
-      this.reattachStarted = true;
+    if (this.reattachState === "unstarted") {
+      this.reattachState = "running";
       void this.reattach(rows);
     } else if (this.awaitingBoot.size > 0) {
       this.sweepAwaiting(rows);
@@ -2636,7 +2639,8 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
    * default set decides those). Before the floor has answered and the boot's
    * re-attach has run, every un-exited record under them counts: it may be a
    * live PTY no map holds yet. An exited run is not one, whatever pane it left
-   * behind. */
+   * behind. Item 201 (RV #48) — a re-attach that could not list the records has not run: once they read again, every
+   * un-exited one counts until a re-attach has read it. */
   liveUnder(profileIds: ReadonlySet<string>): number {
     const under = (id: string | null | undefined): boolean =>
       id !== undefined && id !== null && profileIds.has(id);
@@ -2661,7 +2665,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     }
     const terminals = this.opts.terminals?.() ?? null;
     const observed =
-      terminals !== null && terminals.observation() !== undefined && this.reattachDone;
+      terminals !== null && terminals.observation() !== undefined && this.reattachState === "done";
     for (const record of this.records.list()) {
       const id = record.terminalSessionId;
       if (!under(record.profileId) || record.exited !== undefined) continue;
@@ -3596,7 +3600,9 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
 
   /** The records the last fieldd left, against the PTYs this floor lists:
    * listed → attached at the next epoch (or held pending); unlisted → held
-   * for one grace (a cell may not have published yet), then stamped. */
+   * for one grace (a cell may not have published yet), then stamped.
+   * Item 201 (RV #48, vf-runtime-5) — records it could not list leave it `unread`, never `done`: it said so and went on
+   * with none (DESIGN.md §9, item 177), and it has not run. */
   private async reattach(rows: ReadonlyMap<string, TerminalInfo>): Promise<void> {
     let records: AgentSessionRecord[];
     try {
@@ -3609,7 +3615,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
           error: error instanceof Error ? error.message : String(error),
         },
       );
-      this.reattachDone = true;
+      this.reattachState = "unread";
       return;
     }
     for (const record of records) {
@@ -3665,7 +3671,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     }
     // AR-D25 — a persona signed out while its sessions ran is finished once
     // none does; after a restart this is the first moment that is known
-    this.reattachDone = true;
+    this.reattachState = "done";
     void this.profiles.sweep();
     // AO-D14 — every start: a draft profile no sign-in kept is deleted
     void this.profiles.sweepDrafts();
