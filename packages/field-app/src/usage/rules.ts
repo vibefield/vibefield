@@ -5,8 +5,11 @@
 // here, so the meters need nothing of setup/).
 //
 // It imports nothing, so every reader may: the meter model (`meters.ts`), the Bands geometry (`bands.ts`), the limit
-// moment and Settings' own page (`panels/agents/profiles-model.ts`, U2's 2e, so Settings says the same meter, UM-D3) —
-// the last reads this file while `meters.ts` reads Settings', and a leaf keeps that from being a cycle. What a window's
+// moment, and Settings' own page and the column's popover (`panels/agents/ProfilesView.tsx` and
+// `godview/profiles-column/ProfilePopoverView.tsx` read `resetForm`, UM-3, so Settings says the same meter, UM-D3).
+// Settings reads the meters' windows from `meters.ts` (`meterWindows`, that file's own), which reads Settings' lines
+// (`panels/agents/profiles-model.ts`, which reads nothing here): ProfilesView → meters → profiles-model, no module
+// cycle. A reader imports each rule from the module that owns it; none moves to spare an import. What a window's
 // orange is stays Settings' (`isHot`): a reader hands its `hot` in, and nothing here decides it.
 
 /** Settings' `resetWords` says a reset this many minutes off, or more, by its day and clock ("Thu 09:00", in the
