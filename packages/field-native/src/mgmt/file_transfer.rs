@@ -287,7 +287,12 @@ impl Stream {
     /// disposes its old subscription only once that answer is read (DR-3b,
     /// `drive/pulls.ts`, `#doSubscribe`), so it still routes the line there;
     /// the answer's snapshot, built after it in one hold of the arm's lock,
-    /// supersedes it, and the write order (W3-16) holds for both. The
+    /// supersedes it, and the write order (W3-16) holds for both. When the
+    /// reader's re-subscribe times out instead (its TIMEOUT, `mayHaveRun`),
+    /// it drops the old subscription before the late answer, so that line has
+    /// no route; the plain subscribe it sends next answers a snapshot built
+    /// after the line, which settles the line's pull by the resync rule
+    /// (contracts `NativeFileTransferSnapshot`). The
     /// forwarder waits on nothing the mesh worker holds, and between two
     /// awaits it runs a `try_recv`, a `try_send` or a `write_snapshot`, so the
     /// wait is bounded.
