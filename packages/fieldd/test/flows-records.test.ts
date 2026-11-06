@@ -724,7 +724,7 @@ describe("CP-4a2b — a run's record, its journal's anchor (D18)", () => {
     expect(readFileSync(recordOf(h), "utf8")).toBe(bytes);
   });
 
-  it("JT11 (1d review Z2): a run that never began is ended by endUnbegun, its own facts, head and tail as its begin kept them; a run whose journal stands is refused there, and so is a run with no record", () => {
+  it("JT11 (1d review Z2; 1f+1g review BB2): a run that never began is ended by endUnbegun, its own facts, head and tail as its begin kept them; a run whose journal stands is refused there, and so is a run with no record, and a newer VibeField's in the store's own shape", () => {
     const h = harness();
     // the disk refuses the head (JT8): the run's record stands with no journal
     mkdirSync(h.dir, { recursive: true, mode: 0o700 });
@@ -734,7 +734,9 @@ describe("CP-4a2b — a run's record, its journal's anchor (D18)", () => {
     const begun = records.runRecord(RUN);
     if (begun === undefined) throw new Error("the record was not kept");
     // every other write of a record names the journal's last synced line, and this run has none
-    expect(() => records.writeRunRecord(RUN, { ...RUN_START, state: "failed" })).toThrow();
+    expect(() => records.writeRunRecord(RUN, { ...RUN_START, state: "failed" })).toThrow(
+      `no journal this VibeField keeps stands under ${RUN} (unbegun)`,
+    );
     const ending = { state: "failed", endedAt: ENDED, log: "It never began." } as const;
     records.endUnbegun(RUN, { ...RUN_START, ...ending });
     // durable when it returns: a new store reads it so, and the run still never began
@@ -758,10 +760,33 @@ describe("CP-4a2b — a run's record, its journal's anchor (D18)", () => {
     const kept = other.records();
     beganRun(kept, HEAD);
     const bytes = readFileSync(recordOf(other), "utf8");
-    expect(() => kept.endUnbegun(RUN, { ...RUN_START, ...ending })).toThrow();
+    expect(() => kept.endUnbegun(RUN, { ...RUN_START, ...ending })).toThrow(
+      `${RUN} is no run this VibeField keeps that never began (kept)`,
+    );
     expect(readFileSync(recordOf(other), "utf8")).toBe(bytes);
     // and a run with no record at all
     const none = harness().records();
-    expect(() => none.endUnbegun(RUN, { ...RUN_START, ...ending })).toThrow();
+    expect(() => none.endUnbegun(RUN, { ...RUN_START, ...ending })).toThrow(
+      `${RUN} is no run this VibeField keeps that never began (absent)`,
+    );
+    // BB2: a newer VibeField's record with no journal reads as no run, and holds its key as it is read, so it is the
+    // second check that refuses it, in the store's own shape, its record's bytes left as they were
+    const newer = harness();
+    mkdirSync(newer.dir, { recursive: true, mode: 0o700 });
+    writeFileSync(join(newer.dir, RUNS_DIR), "not a folder", { mode: 0o600 });
+    expect(() => beganRun(newer.records(), HEAD)).toThrow();
+    resigned(newer, (body) => {
+      body["format"] = FLOW_RECORD_FORMAT + 1;
+    });
+    const held = readFileSync(recordOf(newer), "utf8");
+    expect(newer.records().readRun(RUN)).toEqual({ kind: "absent" });
+    const fresh = newer.records();
+    expect(outcome(() => fresh.endUnbegun(RUN, { ...RUN_START, ...ending }))).toEqual({
+      kind: "UNAVAILABLE",
+      retryable: true,
+      details: { service: RECORD_STORES.SERVICE_FLOWS, state: RECORD_STORES.STATE_UNREADABLE },
+      message: UNREADABLE_WORDS.flows,
+    });
+    expect(readFileSync(recordOf(newer), "utf8")).toBe(held);
   });
 });

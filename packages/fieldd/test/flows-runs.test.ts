@@ -2197,9 +2197,11 @@ describe("CP-4a2b — a changed flow's acts begin the asked-for run (§13a slice
     expect(h.records.runRecords().map((record) => record.state)).toEqual(["failed", "failed"]);
   });
 
-  it("R6g (1b review V2; 1d review Z3): a run that never began, its record kept and its ending refused too, is passed by at the bounds until a restart settles it, and reads in this life as never begun", async () => {
+  it("R6g (1b review V2; 1d review Z3; 1f+1g review BB1): a run that never began, its record kept and its ending refused too, is passed by at the bounds until a restart settles it, and reads in this life as never begun, its subscribers told", async () => {
     const h = await harness();
     h.approved("hello", HELLO);
+    const told: FlowRunsList[] = [];
+    h.runs.onChange((list) => void told.push(list));
     const journals = join(h.root, "fieldd", "flows", RUNS_DIR);
     writeFileSync(journals, "not a folder");
     vi.spyOn(h.records, "endUnbegun").mockImplementationOnce(() => {
@@ -2212,6 +2214,8 @@ describe("CP-4a2b — a changed flow's acts begin the asked-for run (§13a slice
     const said = { state: "failed", log: words.neverBegan("Hello"), endedAt: expect.any(String) };
     expect(h.runs.list().runs).toMatchObject([{ run: unbegun, ...said }]);
     expect(h.runs.read(unbegun)?.summary).toMatchObject(said);
+    // BB1: its subscribers' last frame holds it so too
+    expect(told.at(-1)?.runs).toMatchObject([{ run: unbegun, ...said }]);
     // the journals' folder answers again: RUNS_LIVE_MAX running records, the one that never began among them
     rmSync(journals);
     for (let i = 0; i < FLOW_LIMITS.RUNS_LIVE_MAX - 1; i += 1) seeded(h, i, "running");
@@ -2230,6 +2234,34 @@ describe("CP-4a2b — a changed flow's acts begin the asked-for run (§13a slice
     });
     const summary = startedRun(await h.start());
     expect(summary.state).toBe("lost");
+    expect(h.records.runRecord(summary.run)?.state).toBe("lost");
+  });
+
+  it("R6j (1f+1g review BB3): a woken run whose record can't be read again is answered as it was read: the door says running, fieldd's warn says why, and the record reads lost", async () => {
+    const h = await harness();
+    h.approved("hello", HELLO);
+    // R6i's road: its bytes are gone by its wake, so the wake ends it lost
+    const begin = h.records.beginRun.bind(h.records);
+    vi.spyOn(h.records, "beginRun").mockImplementationOnce((entry, start) => {
+      const head = begin(entry, start);
+      vi.spyOn(h.records, "bytes").mockReturnValue(undefined);
+      return head;
+    });
+    // the read after the wake, the first to find it lost, is the disk's to refuse
+    const read = h.records.runRecord.bind(h.records);
+    let refused = false;
+    vi.spyOn(h.records, "runRecord").mockImplementation((run) => {
+      const record = read(run);
+      if (!refused && record?.state === "lost") {
+        refused = true;
+        throw new Error("EIO: i/o error, read");
+      }
+      return record;
+    });
+    const summary = startedRun(await h.start());
+    expect(refused).toBe(true);
+    expect(summary.state).toBe("running");
+    expect(h.warned.map((said) => said.event)).toContain("fieldd.flows.run.reread");
     expect(h.records.runRecord(summary.run)?.state).toBe("lost");
   });
 
