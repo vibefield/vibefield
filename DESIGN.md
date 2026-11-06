@@ -7861,6 +7861,12 @@ Every profile's mark null.)* The phone's corner, sheet and token wear SF Symbols
 do (an × is the system's `xmark`, as the bar's search field draws it), and a profile's glyph there is the same
 `ProfileGlyph` vocabulary drawn as SF Symbols, through one presentation table that is tested against the
 vocabulary's list (`ProfileGlyphSymbols`, UM-4). Nothing joins the picks.
+*(Corrected 2026-11-06, U3's repair, its review's finding 14: no list holds the table to the vocabulary. Its test,
+`ProfileGlyphSymbolsTests`, compares it with eleven tokens hand-copied from puppeteer-view-sdk's `PROFILE_GLYPHS`
+(0.3.3, as the test names it), and the phone's plan titles (`PlanTitles`, §9 "The meters' words") are hand-copied
+the same way from puppeteer-views' `SERVICE_PRODUCTS`, held by a few hand-written titles in `MeterModelTests`. An
+EL8 that moves either is caught by review alone. Owed: a generator that writes both from the pinned packages into a
+VibeField-origin fixture, mirrored and named in `scripts/check-ios-fixtures.mjs`, which the two tests read.)*
 
 **`missing`** (2026-10-03, R2) is the desk's missing face as a mark — a card with two of its 45°
 hatches — for a name the set does not hold; an act that declares no glyph at all shows its label
