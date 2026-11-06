@@ -1557,6 +1557,8 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       pairingFile: join(config.dataDir, ...LAYOUT.PAIRING_FILE),
       bootId,
       logger: logger.child({ component: "mesh.lane" }),
+      // CP-1b, item 206 — the link dials itself again after a drop or a failed redial, on fieldd's one back-off
+      redial: true,
     });
     const laneIds = new OutboundLaneIdAllocator();
     const laneControl = {
@@ -1703,33 +1705,12 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       );
     }
     // CP-1b — the lane link redials. It was dialed once per boot, so after a floor restart (NativeLink's "connected")
-    // or a dropped socket ("disconnected") every lane's bytes went nowhere until fieldd restarted: doc sync's, and now
-    // the compose plane's doors, whose bridges redial a restarted floor on their own (CP-1a). One dial at a time; a
-    // link this boot closed (doc sync's boot failure above, a shutdown) stays closed.
-    let laneDial: Promise<void> | null = null;
-    const redialLanes = (why: "floor" | "dropped"): void => {
-      if (laneDial !== null || laneLink.connected || laneLink.closed) return;
-      laneDial = laneLink
-        .connect()
-        .then(() => logger.info("fieldd.mesh_lane.redialed", "The MeshData link is back", { why }))
-        .catch((error: unknown) =>
-          logger.warn(
-            "fieldd.mesh_lane.redial_failed",
-            "The MeshData link could not be dialed again",
-            {
-              why,
-              error: String(error),
-            },
-          ),
-        )
-        .finally(() => {
-          laneDial = null;
-        });
-    };
-    native.on("connected", () => redialLanes("floor"));
-    laneLink.on("disconnected", () => {
-      setTimeout(() => redialLanes("dropped"), 1_000).unref?.();
-    });
+    // or a dropped socket every lane's bytes went nowhere until fieldd restarted: doc sync's, and now the compose
+    // plane's doors, whose bridges redial a restarted floor on their own (CP-1a). Item 206 — the link owns its redial
+    // (`redial: true` above: a drop or a failed redial dials again on fieldd's one back-off, 500 ms doubling to 10 s),
+    // so a dropped accept costs it one step and never the link; the floor coming back dials it at once. A link this
+    // boot closed (doc sync's boot failure above, a shutdown) stays closed.
+    native.on("connected", () => laneLink.dialNow());
     // P7 §5.3.1 — fetch/verify/install (user-initiated only; no phone-home)
     const installer = new RegistryInstallService({
       dataDir: config.dataDir,
