@@ -31591,6 +31591,7 @@ design-kit, two in electron-shell, one each in field-app, DESIGN.md, DECISIONS, 
   spark on the phone.
   > *Answered in part 2026-11-06:* the phone's transcript reader, SP-7a's M-b, landed (`432784612`, LANDED
   > "SP-7a's M-b"). 12c still waits on M-a, the home's carry and the owner's routed serve, which mints next.
+  > *Answered in part 2026-11-06:* M-a landed (`d6fe77980`, LANDED "SP-7a's M-a"). 12c waits on M-b2 alone.
 - Item 169 (filed). cp3 §5's line at the draft queue, on VF-PM's word. The two-desktop run (James).
 
 ## SD-1 — the sound identity's law and its code: DESIGN.md §14 Sound, and `@vibefield/sound` beside contracts (2026-11-05; `8b22e7b01` → `1ebe7b461`, 3 commits on main `f599761bc`, lane `sd/1-sound-law` in `/Volumes/SamsungRed/lanes/sd1/vibe-field`, stacked as M126 `1ebe7b461`, run 126)
@@ -31926,6 +31927,7 @@ packet says so.
 - On IOS-12: 12e and 12f. 12c waits on SP-7 (NOT landed), and 12d on 12c.
   > *Answered in part 2026-11-06:* the phone's transcript reader, SP-7a's M-b, landed (`432784612`, LANDED
   > "SP-7a's M-b"). 12c still waits on M-a, the home's carry and the owner's routed serve, which mints next.
+  > *Answered in part 2026-11-06:* M-a landed (`d6fe77980`, LANDED "SP-7a's M-a"). 12c waits on M-b2 alone.
 
 ## AR-7j — agents typed into a pane are managed in the packaged app: fieldd's own executable runs every launcher in one closed role (2026-11-05; `66037db65` → `45c3680a3`, 5 commits on main `dbb8c76ad`, lane `lp/ar7j` in `/Volumes/SamsungRed/lanes/lp-ar7j/vibe-field`, minted as M128 `45c3680a3`, run 128)
 
@@ -37042,7 +37044,154 @@ SP-7"), each noted in its entry.
 
 **Owed.**
 - M-a (minting on vf-m1 at `fcb93a0fa`), then M-b2: the remote endpoint, `device`, two copies and the 9426 pin.
+  > *Answered in part 2026-11-06:* M-a landed (`d6fe77980`, LANDED "SP-7a's M-a"); M-b2 stays owed.
 - IOS-12c, the thread, on this reader (the IOS session; its fold cuts on `d14e46104`).
 - The phone's transcript on a real device, after M-b2 (James's hand).
 
 Two inserts into older entries: IOS-12a's and IOS-12b's Owed.
+
+## SP-7a's M-a — the phone asks its home for a spark's transcript on another desktop: the door federates, the home carries the ask, and the owner mints at its worker's routed serve (track SP)
+
+(2026-11-06; `5082e3bc6` → `d6fe77980`, 7 commits on main `ca63358ae`, lane `sp7a-ma` in
+`/Volumes/SamsungRed/lanes/pg9s5a/vibe-field`, fd's (vibe-field-d7); landed 2026-11-06T07:45:18Z by the fixer, a
+fast-forward of main `ca63358ae` to `d6fe77980` itself. Cut on
+`ce97aa630` (06:35Z, tip `b290a0135`), then re-cut onto `b639fa044` (06:37Z). a9's patch for biome was folded into a1,
+a3 and a4 (06:52Z). It was then re-cut onto `432784612`, M-b's land (07:16Z), and onto `ca63358ae`, M-b's records
+(07:31Z). Every re-cut was 7 "=", with the own range's patch-id equal and the tip's tree equal to `git merge-tree`'s.)
+M-a is the half of SP-7a's road 7a that is on the desktops (`/Volumes/SamsungRed/lanes/sp7/SP-7a-plan.md`). The kit's
+reader is M-b (LANDED "SP-7a's M-b"), and M-b2 joins the two. It answers in part M-b's Owed and, with M-b, IOS-12a's
+and IOS-12b's, each noted in its entry.
+
+**What it rests on.**
+- TH-1's transcript worker: an ephemeral loopback listener per generation. Its ticket door,
+  `compose.sparks.transcript.openTicket`, minted for a window alone.
+- DS-7's ticket by forward (the owner mints, the asker's daemon carries) and F1b's `onBehalfOf.clientDeviceId`
+  (restrict-only), and DS-L4 (the phone asks only its home).
+- The route-per-process serve (`route-serve.ts`): the cells (9422) and rosettad's index serve (9424,
+  `index-serve.ts`), whose shape this is.
+- The plan's five decisions (`SP-7a-plan.md` §1, VF-PM's to rule), built at their leans after VF-PM's review:
+  - D1 (B): the worker gets its own routed serve.
+  - D2: the owner's rule for the phone.
+  - D3: the home carries, and the answer passes untouched.
+  - D4: the endpoint is a union.
+  - D5: the next free port.
+
+**What is real.**
+- **The contracts** (`packages/contracts`):
+  - `openTicket` is `federate` (`methods.ts`, with a dated correction), and its params take `device?`.
+  - The answer's endpoint is a union: `WorkspaceLoopbackSocket` | `RemoteSparkTranscriptSocket`, a tailnet
+    `ws(s)://…:9426/transcripts`.
+  - `PORTS.SPARK_TRANSCRIPT_SERVE` is 9426. It is not routable: no desktop's window dials another's worker.
+  - `SPARK_TRANSCRIPT_SERVICE.STATE_DOORS_NOT_PUBLISHED` is `doors_not_published`.
+  - `registries.ts`' two TS-only notes get dated corrections: the phone reads these too.
+  - field-native's `registries.rs` gains its line, spelled by hand as the generator spells it. Gen freshness held at
+    run174.
+  - Two goldens: `spark-transcript-ticket.remote.json` and `spark-transcript-ticket-params.device.json`.
+- **The routed serve** (`fieldd/src/transcripts/serve.ts`):
+  - `TranscriptServeDriver` puts the worker's tailnet listener onto the ready generation's port, gated by the linked
+    login.
+  - It is re-aimed at each generation and withdrawn while none is ready (`health().port`, which the supervisor now
+    reports).
+  - `transcriptEndpointFrom` reads the phone's endpoint off the LIVE serve aimed at the generation answering now, and
+    never hands out a URL the contract would refuse.
+- **The owner's rule** (`tickets.ts`):
+  - A window mints as before.
+  - This person's phone on the tailnet door mints as itself (`clientIdFor(principal)`).
+  - A phone behind its home mints as the home's client for that phone (`clientIdFor(principal, onBehalfOf)`). That
+    holds only when the roster says the named device is no desktop.
+  - Anyone else is FORBIDDEN.
+  - With no live serve aimed at the generation, the phone hears `doors_not_published`, which is retryable and names
+    the desktop.
+- **The home's carry** (`forward.ts`, `sparkTranscriptForwardVia`, wrapped around the device forwarder in
+  `daemon.ts`):
+  - It carries only a self `tailnet` principal's ask. A window, the shell, a plugin, an agent, a guest and a peer's
+    own forward are refused (FORBIDDEN_SCOPE, naming the method, the principal and the device).
+  - It passes the owner's answer back untouched, once it parses as a ticket naming a remote socket. An answer that is
+    no ticket is INCOMPATIBLE; one that names a loopback socket is `doors_not_published`.
+  - A ticket mint is never journaled (`CREDENTIAL_MINTS`).
+- **The wiring** (`daemon.ts`, 12 hunks):
+  - The serve driver comes after the index serve's, refreshed on the worker's transitions, the link and the node.
+  - The ticket door's road is late-bound (this device, the live serves, the roster's word on desktops).
+  - The forward's wrap; `desiredServes`' entry; the dispose in each of the three stop paths.
+- **The docs:** `docs/agent-plane/api.html` (the door's row, the paragraph's correction and the wire note) and
+  `architecture.html` (the umbrella's paragraph).
+- **The rows:**
+  - contracts +5: `spark-transcript.test.ts` 13 → 16, and `fixtures.test.ts` +2 goldens.
+  - fieldd +16: the ticket 4 → 7, the serve 4, the forward 6, the receipts 29 → 30, the worker's health port, and
+    `spark-transcript-forward.e2e.test.ts`'s 2.
+  - The e2e boots two real daemons on F1b's harness. The phone homes to A and reads the spark B keeps through A's
+    carry, at B's serve as the mock floor declares it (`ws://mock.ts.net:9426/transcripts`), single use. A window on
+    A and A's daemon on its own account are refused.
+
+**What is stubbed or left.**
+- **The phone does not read another desktop's spark yet.** The kit's reader takes a loopback ticket alone (M-b), so
+  the remote endpoint this answers is refused there in fieldd's words. That is **M-b2**: the kit's remote endpoint,
+  `device` in its ask, the two goldens' copies, and the 9426 pin.
+- The e2e stands in for the phone's node: the mock floor declares the serve and runs no tailnet listener. A phone's
+  real dial across the tailnet is the device run (James's hand), after M-b2.
+- FW-L12 is conditional: once FW-R5, FW-R7 and FW-R8 land, the serve folds under the freeway host with the index
+  serve.
+
+**Validation.**
+- **The pre-light** (a9, the old mini, 06:43Z; `lanes/ts6/logs/oldmini/sp7a-ma-pre/`, `ma.out`
+  `631aa18307352e89…`):
+  - a1–a4 read as briefed: 6 failed of 701, then 701; 13 failed of 50, then 50.
+  - Its verify at `91f32fbc9` went red at biome on three files, and a9's read-only patch (`2b8ce3ef…`) was folded.
+    Typecheck (29) and `check:ios-fixtures` were green before it.
+- **The fold, runs 1–6** (the old mini; `lanes/ts6/logs/oldmini/sp7a-ma-fold/`, `ma.out`
+  `ca9ce46192eb25c99ee1a39fce1daba6fa832554e0a019d8f651b825be96b7ac`):
+  - R1 a1 RED `bebe7c72a`: "Tests 6 failed | 695 passed (701)"
+    (`b6e20fe6017a561d28e61cf373dc5804338ef50365084d7089f47c68868a7802`).
+  - R2 a2 GREEN `9a7be03f4`: 701 passed (`4704ef5b2ceb3643e50986812e52d7f35351242f4cafb475b338fa75d1ecdb63`).
+  - R3 a3 RED `894e6a546`: "13 failed | 37 passed (50)", the thirteen by name
+    (`9f8f3dbc431f63e2fac6571a08d88dacd61e83d186917e5ee9bae9506b268dd3`).
+  - R4 a4 GREEN `0b2935e02`: 50 passed (`b24e8519ef87f97e8ec31157f75578aab091aa30c6c58d033cbb41f50723d814`).
+  - R5 e2e RED `d6e33239d`: "2 failed (2)", both at "until: B's transcript serve — not met within 15000 ms"
+    (`4a3ac757835951664dc2d9b9af25757b4155a41ebea276b56c7995089297325a`).
+  - R6 a4b GREEN `dc9159659`: 52 passed, six files
+    (`417c5d9565969614fa41a790a0d536ca5616b8b2122400a6d26b9af78c574e88`).
+  - The code carried by "=" through both later re-cuts.
+- **Run173,** `pnpm verify` at `dc9159659` on the old mini, its first full fieldd run (armed 06:56:33Z at a 1-min
+  load of 5.46; it ended at 58.4):
+  - Exit 1 (`lanes/ts6/logs/oldmini/run173/`, `verify.log`
+    `ddb0b2e1587ddd46298624bd48eefd834fbc35fcd14157fb17a8c5b8840a0050`).
+  - Green through biome (3407 files, the three folded clean), typecheck 29 and contracts "1780 passed".
+  - fieldd "1 failed | 3503 passed | 14 skipped (3518)". **The one red is item 190, not M-a's:**
+    `swarm-replay.e2e.test.ts:271`, PG-9 S4c, `expected 'local-2d9faa3e…' to be 'dev-swarm'`.
+    - S4c's replay stamps each frame with `currentDeviceId()` as it plays, and plays its corpus within 2 s of boot.
+      Under that load the mesh identity (DeviceService's first sync) came after the span, so the held rows kept the
+      local fallback.
+    - M-a reads that id inside the ticket door's road and never writes it.
+    - The file alone was green at `b639fa044` on the old mini and at `dc9159659` on vf-m1 (a9, 07:08Z and 07:13Z).
+    - Item 190's deterministic red on main (`5e16341f1`, the old mini, 07:29Z: the held rows `local-…` with no M-a
+      code present) is the proof (VF-PM 07:12Z). Its fix lands after this.
+- **Run174,** `pnpm verify` at `fcb93a0fa` on vf-m1: exit 0 at 07:26:50Z (`lanes/ts6/logs/m1/run174/`, `verify.log`
+  `26e3ba9e71c9769037e5bddaa9beb22526343c49b7bcc8c95ffd2d507c4c5672`, `run174.out`
+  `ee7a5dedb2915f03d40eabf6c0905ce375933e88b4f175f266882849f53eda3a`).
+  - contracts 1780; fieldd "3504 passed | 15 skipped (3519)"; vitest 13,520 | 0 | 21.
+  - "ios fixtures: 275 copies identical"; "ios pins: 92 contract values identical"; biome "Checked 3408 files";
+    typecheck 29; cargo 34 results, 545 passed; gen fresh; the census and the bundle assert OK.
+  - `swarm-replay.e2e` 2/2. Every count as briefed, missing [] / extra [].
+- **Run175,** `pnpm verify` at `d6fe77980` on vf-m1, the land's: exit 0 at 07:42:09Z, armed 07:36:49Z
+  (`lanes/ts6/logs/m1/run175/`, `verify.log` `f1021c757d1ffe1386396ec2a8d17f9017f51d93dfb070b532b178d2bd6aaca3`,
+  `run175.out` `b1fcceff190c33e17c6c48687fd1440ee59aac56f2e1e67720f3c907450c6847`). Every count equals run174's, and
+  the per-file diff too; `swarm-replay.e2e` 2/2; missing [] / extra [].
+- No test ran on the MacBook (the pressure HOLD). Pin-class: none.
+
+**Found.**
+- **A brief that says "nothing here has compiled" owes a hand pass with biome's rules over every new or moved file
+  before it is frozen** (VF-PM 06:45Z). The pre-light's red (a chain that fit in 100, a braceless `if … throw` past
+  it, an import out of order) voided the whole brief built on it. The fold's own hand pass measured every one-line
+  form, and run173's biome read it clean.
+- **S4c's replay raced the mesh identity** (item 190, above). A slow floor's desktop would have shown the phone its
+  swarm under the local id.
+- The pre-light's first counts were loose (contracts +5 and fieldd +14, +16 with the e2e), corrected in its brief. The
+  e2e red's first expectation was one row, and both rows fail at the pair's boot.
+
+**Owed.**
+- M-b2: the kit's remote endpoint, `device`, the two copies and the 9426 pin. Then IOS-12c draws the thread.
+- Item 190's mint, re-cut onto this main.
+- The phone reading another desktop's spark on a real device, after M-b2 (James's hand).
+- FW-L12's fold under the freeway host, when FW-R5, R7 and R8 land.
+
+Three inserts into older entries: M-b's Owed, and IOS-12a's and IOS-12b's.
