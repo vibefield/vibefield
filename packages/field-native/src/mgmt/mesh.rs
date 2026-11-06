@@ -69,8 +69,11 @@ fn wrapped_store_slice_allowed(store_id: &str, owner: &str, slice: &Value) -> bo
         .is_some_and(|data| store_data_allowed(store_id, owner, data))
 }
 
+/// `conn_id` is the connection the request came on (`mgmt/mod.rs`,
+/// `handle_conn`); the file transfer's `subscribe` reads it (W3-20).
 pub async fn handle(
     state: &Arc<DaemonState>,
+    conn_id: u64,
     tx: &Tx,
     method: &str,
     params: &Value,
@@ -97,9 +100,11 @@ pub async fn handle(
     // egress's refusal order (`file_transfer.rs`): `file-transfer-unsupported`
     // is a fact about this floor's truffle that holds with or without a node.
     // A name under the prefix that the contract does not declare answers
-    // NOT_FOUND there, as this facade's own unknown names do.
+    // NOT_FOUND there, as this facade's own unknown names do. It is handed the
+    // connection: a `subscribe` replaces the stream that connection holds
+    // (W3-20, VF-PM 2026-11-06).
     if method.starts_with("native.mesh.fileTransfer.") {
-        super::file_transfer::handle(state, tx, method, params, id).await;
+        super::file_transfer::handle(state, conn_id, tx, method, params, id).await;
         return;
     }
     if method == "native.mesh.retire" {

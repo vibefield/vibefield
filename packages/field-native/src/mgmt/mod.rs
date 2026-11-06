@@ -36,6 +36,9 @@ pub mod mesh;
 /// DS-1 — the egress verbs, dispatched from `mesh::handle` ahead of its node gate.
 mod mesh_egress;
 
+/// W3-20 — each connection's one file-transfer stream, by `conn_id`; `DaemonState` keeps it.
+pub(crate) use file_transfer::FileTransferStreams;
+
 use crate::config::MeshPlan;
 use crate::contracts::{
     DesiredState, Hello, NativeDetachResult, NativePrepareRestartParams,
@@ -246,6 +249,7 @@ pub async fn serve(mut listener: local_ipc::Listener, state: Arc<DaemonState>) {
             }
             mesh::handle(
                 &mesh_state,
+                request.conn_id,
                 &request.tx,
                 &request.method,
                 &request.params,

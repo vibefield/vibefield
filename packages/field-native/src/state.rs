@@ -238,6 +238,10 @@ pub struct DaemonState {
     pub freeway: crate::services::freeway::FreewayHandle,
     /// CP-1a — the floor's door unit: `native.door.*` reach it.
     pub door: crate::services::door::DoorHandle,
+    /// W3-20 (VF-PM 2026-11-06) — the one `native.mesh.fileTransfer` stream
+    /// each management connection holds, by `conn_id`: a later subscribe on
+    /// the connection replaces it (`mgmt/file_transfer.rs`).
+    pub(crate) file_transfer_streams: crate::mgmt::FileTransferStreams,
     /// Process-owned native diagnostic producer. Embedded unit tests omit it;
     /// the production main installs it before service composition.
     pub logging: Option<NativeLogging>,
@@ -287,6 +291,7 @@ impl DaemonState {
             terminal_mesh,
             freeway,
             door,
+            file_transfer_streams: crate::mgmt::FileTransferStreams::default(),
             logging,
             restart: crate::restart::RestartControl::default(),
             manager: crate::orphan::ManagerPresence::new(std::time::Instant::now()),

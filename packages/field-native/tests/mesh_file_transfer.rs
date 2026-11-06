@@ -53,6 +53,9 @@ const SNAPSHOT: &str = "native.mesh.fileTransfer.snapshot";
 /// second, so a deadline per line would restart for ever: the budget is the
 /// whole wait's (`tests/mgmt_server.rs`'s `recv`).
 const BUDGET: Duration = Duration::from_secs(10);
+/// How long a row listens on past the line it waited for, to see that nothing
+/// else comes: a second forwarder, woken by the same event, writes within it.
+const QUIET: Duration = Duration::from_millis(500);
 
 struct Mgmt {
     reader: tokio::io::Lines<BufReader<tokio::io::ReadHalf<local_ipc::ClientStream>>>,
@@ -174,6 +177,23 @@ impl Mgmt {
                 return (note, delta);
             }
         }
+    }
+
+    /// Every notification kept, then every line read for `window`, ticks
+    /// aside: what is left once a row has read what it waited for.
+    async fn rest_for(&mut self, window: Duration) -> Vec<Value> {
+        let mut rest: Vec<Value> = self.notes.drain(..).collect();
+        let deadline = Instant::now() + window;
+        while let Ok(line) = timeout_at(deadline, self.reader.next_line()).await {
+            let line = line
+                .expect("mgmt read error")
+                .expect("mgmt connection closed");
+            let msg: Value = serde_json::from_str(&line).expect("json line");
+            if msg["method"] != "native.lifecycle.tick" {
+                rest.push(msg);
+            }
+        }
+        rest
     }
 }
 
@@ -825,11 +845,12 @@ async fn a_live_transfer_id_or_a_running_digest_is_a_conflict() {
 }
 
 /// Row 10 — past DRIVE_LIMITS.PULLS_IN_FLIGHT the next pull is
-/// RESOURCE_EXHAUSTED -32010, retryable (a slot frees when a pull ends), with
-/// no details, since C1 names none; and CONFLICT comes first (the header's
-/// step 6).
+/// RESOURCE_EXHAUSTED -32010, its data the `error-data.file-transfer-exhausted`
+/// golden key for key (W3-15, VF-PM 2026-11-06: retryable, because a pull may
+/// be asked again once a running one ends, and no details); and CONFLICT comes
+/// first (the header's step 6).
 /// Probe: check the bound before CONFLICT → the live id answers -32010; answer
-/// it retryable false, or with details → the shape asserts red.
+/// it retryable false, or with details → the golden asserts red.
 #[tokio::test]
 async fn a_pull_past_the_bound_is_resource_exhausted() {
     let (_dir, daemon, pulls) = gated_floor().await;
@@ -842,10 +863,12 @@ async fn a_pull_past_the_bound_is_resource_exhausted() {
     }
     let past = mgmt.call(PULL, pull_params(bound + 1)).await;
     assert_eq!(past["error"]["code"], -32010, "{past}");
-    let data = error_data(&past);
-    assert_eq!(data.kind, ErrorKind::ResourceExhausted);
-    assert!(data.retryable, "{past}");
-    assert!(data.details.is_none(), "{past}");
+    assert_eq!(error_data(&past).kind, ErrorKind::ResourceExhausted);
+    assert_eq!(
+        past["error"]["data"],
+        golden("error-data.file-transfer-exhausted.json"),
+        "{past}: the golden"
+    );
     let mut live = pull_params(bound + 2);
     live["transferId"] = json!(transfer_id(1));
     let reply = mgmt.call(PULL, live).await;
@@ -1280,4 +1303,61 @@ async fn shutdown_ends_a_running_pull_and_leaves_no_temporaries() {
     assert_eq!(pulls.in_flight(), 0, "the pull's task ended with the floor");
     assert!(temps(&lands).is_empty(), "{:?}", temps(&lands));
     assert!(!lands.join(landed(1)).exists());
+}
+
+/// Row 20 — W3-20 (VF-PM 2026-11-06): a second `subscribe` on one connection
+/// REPLACES its stream, so one forwarder is left: a pull's delta arrives once,
+/// on the second subId, and the first subId is quiet. The floor stops the
+/// first forwarder and waits for its end before it answers the second
+/// subscribe (`mgmt/file_transfer.rs`, `Stream::end`), so no line of the first
+/// can follow that answer; that order is argued at its source, and this row
+/// sees that one forwarder is left. It reads every line for QUIET past the
+/// pull's end: a second forwarder still alive would be woken by the same
+/// event and write within it.
+/// Probe: key `FileTransferStreams` by subId, so no subscribe replaces another
+/// (the floor before W3-20) → the pull's `completed` comes twice, once on the
+/// first subId, and the end's subId assert or the quiet assert reds.
+#[tokio::test]
+async fn a_second_subscribe_on_one_connection_leaves_one_forwarder() {
+    let (_dir, daemon, pulls) = gated_floor().await;
+    let mut mgmt = Mgmt::connect(&daemon).await;
+    let first = mgmt.call(SUBSCRIBE, json!({})).await;
+    let first_id = first["result"]["subId"].clone();
+    let _: NativeFileTransferSnapshot = parse(&first["result"]["snapshot"]);
+    let second = mgmt.call(SUBSCRIBE, json!({})).await;
+    let second_id = second["result"]["subId"].clone();
+    let _: NativeFileTransferSnapshot = parse(&second["result"]["snapshot"]);
+    assert!(second_id.is_string(), "{second}");
+    assert_ne!(first_id, second_id, "a new stream has a new subId");
+
+    pulls.script(&path_of(&digest(1)), Scripted::land(b"once", SHA256));
+    let reply = mgmt.call(PULL, pull_params(1)).await;
+    let _: NativeFileTransferPullResult = parse(&reply["result"]);
+    let (note, end) = mgmt.end_of(&transfer_id(1)).await;
+    assert_eq!(
+        note["params"]["subId"], second_id,
+        "the second stream carries the pull"
+    );
+    assert!(
+        matches!(end, NativeFileTransferDelta::Variant1 { .. }),
+        "{end:?}"
+    );
+
+    let rest = mgmt.rest_for(QUIET).await;
+    let pulled = transfer_id(1);
+    let again: Vec<&Value> = rest
+        .iter()
+        .filter(|n| n["params"]["payload"]["transferId"] == pulled.as_str())
+        .collect();
+    assert!(again.is_empty(), "the pull's end arrives once: {again:?}");
+    let on_first: Vec<&Value> = rest
+        .iter()
+        .filter(|n| n["params"]["subId"] == first_id)
+        .collect();
+    assert!(
+        on_first.is_empty(),
+        "the first subId is quiet: {on_first:?}"
+    );
+    drop(mgmt);
+    daemon.shutdown().await;
 }

@@ -86,8 +86,8 @@ pub trait FileTransferBackend: Send + Sync {
     /// table either before the rows are built (and they list it) or after the
     /// line is queued (and its answer, written once `pull` returns, follows
     /// it on the same connection). That is the snapshot write-order rule
-    /// (W3-16, pending): on one connection, a snapshot never omits a pull
-    /// still running whose answer was written before it. The API does not
+    /// (W3-16, VF-PM 2026-11-06): on one connection, a snapshot never omits a
+    /// pull still running whose answer was written before it. The API does not
     /// enforce it: rows carried out of `write` and queued after it returns,
     /// as the tests' `snapshot()` carries them for a row that queues no line,
     /// re-open the race this method closes. `write` must not block, await, or
@@ -342,8 +342,9 @@ const PROGRESS_MIN_INTERVAL: Duration =
 /// `NativeFileTransferSnapshot`). A snapshot is built and queued under the
 /// same lock a pull's row enters under (`write_snapshot`), so on one
 /// connection it never omits a pull still running whose answer was written
-/// before it (the snapshot write-order rule (W3-16, pending)). A teardown ends
-/// every pull `failed` NODE_DOWN (`detach`, the critic's finding 3).
+/// before it (the snapshot write-order rule (W3-16, VF-PM 2026-11-06)). A
+/// teardown ends every pull `failed` NODE_DOWN (`detach`, the critic's
+/// finding 3).
 pub struct NamedRootsFileTransfer {
     core: Arc<Core>,
 }
@@ -1402,7 +1403,7 @@ mod tests {
         /// TESTS ONLY — the rows a snapshot written now lists, copied out of
         /// `write` for a row that queues no line: the two-step read no line
         /// may ever be queued from (the snapshot write-order rule (W3-16,
-        /// pending)).
+        /// VF-PM 2026-11-06)).
         fn snapshot(&self) -> Vec<NativeFileTransferRow> {
             let mut rows = Vec::new();
             self.write_snapshot(&mut |listed| rows = listed);
@@ -1784,18 +1785,18 @@ mod tests {
         }
     }
 
-    /// The snapshot write-order rule (W3-16, pending), at the arm, on a real
-    /// outbox: a pull started while a snapshot is being written, from another
-    /// thread (the serial mesh worker beside a stream's forwarder), cannot
-    /// enter the table or answer until the snapshot's line is queued. So the
-    /// outbox reads [the snapshot, without the pull; the pull's answer], never
-    /// the answer first, the next snapshot lists the pull, and the teardown
-    /// leaves no temporary of it. The two lines carry the facade's payload
-    /// shapes, written by the test and read through the generated types; the
-    /// facade's own frames are `mgmt/file_transfer.rs`'s rows. This `write`
-    /// breaks the trait's "must not block" on purpose: it holds the window
-    /// open for 200 ms from the moment the pull's thread is about to pull, and
-    /// it only `try_lock`s the arm.
+    /// The snapshot write-order rule (W3-16, VF-PM 2026-11-06), at the arm, on
+    /// a real outbox: a pull started while a snapshot is being written, from
+    /// another thread (the serial mesh worker beside a stream's forwarder),
+    /// cannot enter the table or answer until the snapshot's line is queued.
+    /// So the outbox reads [the snapshot, without the pull; the pull's
+    /// answer], never the answer first, the next snapshot lists the pull, and
+    /// the teardown leaves no temporary of it. The two lines carry the
+    /// facade's payload shapes, written by the test and read through the
+    /// generated types; the facade's own frames are `mgmt/file_transfer.rs`'s
+    /// rows. This `write` breaks the trait's "must not block" on purpose: it
+    /// holds the window open for 200 ms from the moment the pull's thread is
+    /// about to pull, and it only `try_lock`s the arm.
     /// Probe: build the rows under the lock and hand them to `write` after
     /// dropping it (two steps) → the `try_lock` assert reds (the table is free
     /// inside `write`); were it skipped, the pull would answer inside the
