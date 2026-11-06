@@ -120,6 +120,9 @@ interface LiveRun {
   readonly ran?: string | undefined;
   /** each step's answer, by its call, while its host waits on it (the step's result is slice 9's) */
   readonly waiting: Map<number, (answer: FlowHostAnswer) => void>;
+  /** the run's input and the kinds its meta names them by, read at its wake: the folder a step names none of
+   * (CP4-Q20 (a)) */
+  inputs?: { readonly values: FlowInput; readonly kinds: Readonly<Record<string, string>> };
   /** the steps waiting for a slot (CP4-S7), in their calls' order: started when one frees (slice 9) */
   readonly slotted: { readonly call: number; readonly args: readonly unknown[] }[];
 }
@@ -340,6 +343,7 @@ export class FlowRuns {
       this.#finish(run, { state: "lost" });
       return;
     }
+    live.inputs = { values: read.head.input ?? {}, kinds: readFlow(bytes).meta?.input ?? {} };
     const replay = new FlowReplay({
       prior: read.lines,
       append: (entry) => {
@@ -394,9 +398,17 @@ export class FlowRuns {
       live.slotted.push({ call: number, args: call.args });
       return answer;
     }
+    const profiles = new Set(this.ports.profiles());
     const started = await startStep(
       this.ports,
-      { run, flow: record.flow, name: record.name, ran: live.ran },
+      {
+        run,
+        flow: record.flow,
+        name: record.name,
+        ran: live.ran,
+        scope: record.scope.filter((profile) => profiles.has(profile)),
+        folder: this.#folderOf(live),
+      },
       this.#stepWrite(run),
       number,
       call.args,
@@ -406,6 +418,17 @@ export class FlowRuns {
       return started;
     }
     return answer;
+  }
+
+  /** The folder a run's input names, the first of its inputs in its meta's order whose kind names one (CP4-Q20 (a));
+   * none when no input does. */
+  #folderOf(live: LiveRun): string | undefined {
+    for (const [name, kind] of Object.entries(live.inputs?.kinds ?? {})) {
+      const value = live.inputs?.values[name];
+      const folder = value !== undefined ? this.ports.folderOf(kind, value) : undefined;
+      if (folder !== undefined) return folder;
+    }
+    return undefined;
   }
 
   /** The record's open step, written through the one writer of a run's record. */
@@ -433,8 +456,9 @@ export class FlowRuns {
                   ...(entry.phase !== undefined ? { phase: entry.phase } : {}),
                   // CP4-S7: past the run's LIVE_STEPS_MAX live steps, it waits for a slot
                   state:
-                    record.open.filter((step) => SLOT_STATES.has(step.state)).length >=
-                    FLOW_LIMITS.LIVE_STEPS_MAX
+                    record.open.filter(
+                      (step) => SLOT_STATES.has(step.state) && step.handed !== true,
+                    ).length >= FLOW_LIMITS.LIVE_STEPS_MAX
                       ? "waiting"
                       : "starting",
                 },

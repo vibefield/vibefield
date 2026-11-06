@@ -72,6 +72,10 @@ export interface FlowStepRun {
   readonly name: string;
   /** the spark that started the run, by its name (Q-B2 (a)); none for yours */
   readonly ran?: string | undefined;
+  /** its Agent Profiles now: its frozen scope, narrowed to the profiles that exist (D8) */
+  readonly scope: readonly string[];
+  /** the folder its input names, a session's or a project's, where a step that names none runs (CP4-Q20 (a)) */
+  readonly folder?: string | undefined;
 }
 
 /** The run's record of its open step `call`, written through the runs (the one writer of a run's record). */
@@ -98,6 +102,41 @@ const optionsOf = (args: readonly unknown[]): StepOptions => {
 const said = (value: unknown): string | undefined =>
   typeof value === "string" && value.length > 0 ? value : undefined;
 
+/** The keys an `agent()` call may set (D9): any other is refused in words. */
+const STEP_KEYS: ReadonlySet<string> = new Set([
+  "agent",
+  "model",
+  "profile",
+  "cwd",
+  "label",
+  "phase",
+  "schema",
+  "in",
+]);
+
+/** The keys whose value fieldd acts on, each a name or a path; another value is slice 8c-2's to refuse in words. */
+const NAMED_KEYS = ["agent", "profile", "cwd", "in"] as const;
+
+/** DESIGN.md §9's folder sentence, at the start and at a call that names none (CP4-Q20 (a)). */
+export const NO_FOLDER =
+  "None of its steps names a folder, and its input names none. Run it from a session or a project, or name a folder in it.";
+
+/** A step's call refused before anything started (§9 "A step's call refused"). */
+const didntStart = (label: string | undefined, why: string): FlowStepStarted => ({
+  ok: false,
+  refused: `VibeField didn't start ${labelWords(label)}: ${why}`,
+});
+
+/** Whether a step may be handed `session` (D9's `in:`): live, in the run's scope, no spark's own, no other flow's
+ * step, and waiting on no permission. Your own session is the review loop's shape, and is allowed. */
+const mayHand = (run: FlowStepRun, session: FlowStepSession | undefined): boolean =>
+  session?.live === true &&
+  session.profile !== undefined &&
+  run.scope.includes(session.profile) &&
+  session.spark === undefined &&
+  !(session.origin?.by === "flow" && session.origin.run !== run.run) &&
+  !session.onPermission;
+
 /** ‹label› in a step's words: its label on one line, cut at 64 with "…"; "this step" for one with none. */
 export function labelWords(label: string | undefined): string {
   const words = label === undefined ? "" : nameWords(label);
@@ -116,13 +155,49 @@ export async function startStep(
   const options = optionsOf(args);
   const prompt = args[0];
   const label = said(options["label"]);
+  // the words for a prompt that is not words, and for a named key's value that is not a name, are slice 8c-2's: until
+  // then such a call is not started at all, and the host refuses it in fieldd's own words
+  if (
+    typeof prompt !== "string" ||
+    NAMED_KEYS.some((key) => options[key] !== undefined && said(options[key]) === undefined)
+  )
+    throw new Error("CP-4a2b: a step's prompt and names are checked in M-r2's slice 8c-2");
+  const key = Object.keys(options).find((option) => !STEP_KEYS.has(option));
+  if (key !== undefined)
+    return didntStart(label, `it asks for ${nameWords(key)}, which a step may not set.`);
+  const from: AgentInputSender = {
+    kind: "flow",
+    flow: run.flow,
+    name: run.name,
+    run: run.run,
+    call,
+    ...(run.ran !== undefined ? { ran: run.ran } : {}),
+  };
+  const handed = said(options["in"]);
+  if (handed !== undefined) {
+    // an in: beside a spawn's keys is slice 8c-2's (ruling A3)
+    if (["agent", "model", "profile", "cwd"].some((option) => options[option] !== undefined))
+      throw new Error("CP-4a2b: an in: beside a spawn's keys is decided in M-r2's slice 8c-2");
+    if (!mayHand(run, ports.sessions.of(handed)))
+      return {
+        ok: false,
+        refused: `VibeField didn't send ${labelWords(label)}: that session is outside this run's Agent Profiles, isn't running, is a spark's or another flow's, or is waiting on a permission.`,
+      };
+    return sent(ports, write, call, handed, "in", prompt, from);
+  }
   const agent = said(options["agent"]);
-  const cwd = said(options["cwd"]);
-  // D9's checks on each option, and the folder a step names none of, are slice 8c's: until then a call they would
-  // decide is not started at all, and the host refuses it in fieldd's own words
-  if (typeof prompt !== "string" || agent === undefined || cwd === undefined)
-    throw new Error("CP-4a2b: a step's options are checked in M-r2's slice 8c");
+  // no agent named, and an agent or a model the catalog or the runtime does not offer, are slice 8c-2's (W-a…W-c)
+  if (agent === undefined)
+    throw new Error("CP-4a2b: a step's agent is checked in M-r2's slice 8c-2");
   const profileSet = said(options["profile"]);
+  if (profileSet !== undefined && !run.scope.includes(profileSet))
+    return didntStart(
+      label,
+      `it names an Agent Profile this run can't use (${nameWords(profileSet)}).`,
+    );
+  // CP4-Q20 (a): a step with no folder runs in the one its run's input names, and none is a default
+  const cwd = said(options["cwd"]) ?? run.folder;
+  if (cwd === undefined) return { ok: false, refused: NO_FOLDER };
   const launch: FlowStepLaunch = {
     agent,
     cwd,
@@ -136,27 +211,34 @@ export async function startStep(
     const why = oneLineWords(error instanceof Error ? error.message : String(error), FLOW_LOG_MAX);
     return { ok: false, refused: `VibeField couldn't start ${labelWords(label)}: ${why}` };
   }
-  // D5 4–5: the session and the prompt's intent, before the queue takes it
+  return sent(ports, write, call, runtimeRunId, "prompt", prompt, from);
+}
+
+/** D5 4–7 for a step's first line, `prompt` to the session it started or `in` to the one it was handed: the session
+ * (`handed` for an `in:`, never ended, CP4-Q10), `working` and the line's intent on the record before the queue takes
+ * it, then `queued` in the same tick. */
+function sent(
+  ports: FlowStepPorts,
+  write: FlowStepWrite,
+  call: number,
+  session: string,
+  line: "prompt" | "in",
+  text: string,
+  from: AgentInputSender,
+): FlowStepStarted {
   write(call, (step) => ({
     ...step,
-    session: runtimeRunId,
+    session,
+    ...(line === "in" ? { handed: true as const } : {}),
     state: "working",
-    lines: [{ line: "prompt", n: 1, sent: "sending" }],
+    lines: [{ line, n: 1, sent: "sending" }],
   }));
-  ports.inputs.enqueue(runtimeRunId, prompt, {
-    kind: "flow",
-    flow: run.flow,
-    name: run.name,
-    run: run.run,
-    call,
-    ...(run.ran !== undefined ? { ran: run.ran } : {}),
-  });
-  // D5 7: in the tick the queue took it
+  ports.inputs.enqueue(session, text, from);
   write(call, (step) => ({
     ...step,
-    lines: (step.lines ?? []).map((line) =>
-      line.line === "prompt" && line.n === 1 ? { ...line, sent: "queued" } : line,
+    lines: (step.lines ?? []).map((kept) =>
+      kept.line === line && kept.n === 1 ? { ...kept, sent: "queued" } : kept,
     ),
   }));
-  return { working: runtimeRunId };
+  return { working: session };
 }
