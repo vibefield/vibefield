@@ -6027,6 +6027,10 @@ more** and **Not now**. An agent's own ask has no answer here, only **Show**: it
 spark's own run's ask draws no card in that spark's thread at all, since the thread is that pane (§8 "Chat's thread").
 *Amended 2026-11-05 (TH-1; ER-C16; TH-Q29 (a)):* the pane left Chat, so it does: Show alone, "Answer it in its pane.",
 the asker named as the spark, "Vela asks to run Bash".
+*Amended 2026-11-06 (CP-4a2b, §13a slice 6's N5; CP4-Q5 (a); cp-landing 03:43Z; the words are open until James reads
+them on a card):* a flow that changed since you approved it, or that you never approved, asks before its run starts.
+Its acts are **Run this version**, **Run the one you approved** (only while a version of it is approved) and **Not
+now**. **See the change** is drawn before them, from the item's script, and opens it; it answers nothing.
 A window answers by the act's place among the item's acts, never by its word, so rewording an act here changes nothing
 on the wire.
 A send is held for the person's OK when it is a spark's first send into a session the person started, whatever that
@@ -6053,6 +6057,13 @@ below), and the spark's next session hears it; a line VibeField cannot confirm i
 - a held spawn allowed: "VibeField: you allowed Vela one more agent: Claude Code started as ‹session›"; not allowed:
   "VibeField: you said Not now to one more agent for Vela: limit, 8 live agents is the most a spark may run"; one
   allowed that could not start: "VibeField: the agent you allowed Vela could not start: ‹reason›";
+- a changed flow a spark ran (CP-4a2b, the amendment above), run: "VibeField: you ran ‹flow› for Vela as it is now: it
+  started as ‹run›", or "VibeField: you ran ‹flow› as you approved it, for Vela: it started as ‹run›"; not run:
+  "VibeField: you said Not now to Vela's run of ‹flow›: it changed since you approved it, so it did not run", and for
+  one never approved, "VibeField: you said Not now to Vela's run of ‹flow›: you haven't approved it, so it did not
+  run"; one that could not then start: "VibeField: the run of ‹flow› you allowed Vela could not start: ‹reason›".
+  ‹flow› is the flow's name as its mark says it (§9 "When a run can't go on, or waits"), and ‹run› the run's id. A
+  changed flow you run yourself tells no spark;
 - a spark's words its session gave no echo for (as built since CP-2): "VibeField: your words to Claude Code are
   uncertain: no echo came; read the session to see";
 - a spark's words a restart broke into while they were being sent (item 158): "VibeField: VibeField restarted while
