@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   type AgentInputSender,
+  FLOW_HOST,
   FLOW_LIMITS,
   FLOW_RUNS_LISTED_MAX,
   type FlowRunRecordStep,
@@ -64,6 +65,15 @@ const HELLO = [
 ].join("\n");
 /** The same flow, edited after its approval. */
 const HELLO_EDITED = HELLO.replace('log("hi")', 'log("hello again")');
+/** A flow its static read refuses (the sandbox's eval shape, Q-B3 (a)), as a newer read rule refuses a script
+ * approved before it (Q-a). */
+const EVALS = [
+  'export const meta = { name: "Evals" };',
+  "export default async function () {",
+  '  log(String(eval("1 + 1")));',
+  "}",
+  "",
+].join("\n");
 /** A flow that takes one input. */
 const TAKES_TARGET = [
   'export const meta = { name: "Targets", input: { target: "session" } };',
@@ -108,6 +118,8 @@ async function harness(
     readonly profiles?: readonly string[];
     /** the host a run starts: fieldd's own build, or a stand-in's */
     readonly launch?: FlowsHostLaunch;
+    /** a copy of VibeField that can't start a flow's host, and why (Q-b) */
+    readonly unconfigured?: string;
     /** the runtime's refusal of every spawn, in its words */
     readonly spawnRefuses?: string;
     /** the sessions fieldd knows, by their runtime run id */
@@ -224,7 +236,10 @@ async function harness(
     defaultProfile: () =>
       opts.defaultProfile === null ? undefined : (opts.defaultProfile ?? "work"),
     host: {
-      launch: { kind: "launch", launch: opts.launch ?? (await flowsHostLaunch()) },
+      launch:
+        opts.unconfigured !== undefined
+          ? { kind: "unconfigured", reason: opts.unconfigured }
+          : { kind: "launch", launch: opts.launch ?? (await flowsHostLaunch()) },
       environment: PATH_ONLY,
     },
     logger,
@@ -381,6 +396,68 @@ describe("CP-4a2b — a run starts from the bytes fieldd kept, or asks first; it
     await settled(h.runs, second.run, "done");
   });
 
+  it("R1b (Q-a, ruled 2026-11-06): a once-approved script the static read now refuses is refused at its start, before any journal line, in the read's own words; its approval stands, and Run this version of one approves nothing", async () => {
+    const h = await harness();
+    const approval = h.approved("evals", EVALS);
+    expect(await refusalOf(h.start({ flow: "evals" }))).toEqual({
+      reason: "read",
+      message: "it calls eval(), which a flow may not",
+    });
+    // one reader, one gate: Run this version of a version the read refuses is refused there too, before its approval
+    const edited = h.write("evals", `${EVALS}// edited\n`);
+    const waits = waitsOf(await h.start({ flow: "evals" }));
+    const act = h.runs.acts.start({
+      id: waits,
+      flow: "evals",
+      hash: flowHashOf(edited),
+      version: "this",
+      start: askedOf(h, 0),
+    });
+    expect(await act).toEqual({
+      outcome: "failed",
+      reason: "it calls eval(), which a flow may not",
+    });
+    expect(h.records.approval("evals")?.hash).toBe(approval.hash);
+    expect(h.records.runRecords()).toEqual([]);
+    expect(h.records.runs()).toEqual([]);
+  });
+
+  it("R1c (Q-b): a copy of VibeField that can't start a flow's host refuses a run at its start in §9's host words, UNAVAILABLE as the flows' doors say it, and records nothing; an act on a kept start is refused the same way", async () => {
+    const h = await harness({ unconfigured: "no flows host beside fieldd" });
+    const approval = h.approved("hello", HELLO);
+    const hostless = {
+      kind: "UNAVAILABLE",
+      message: words.hostUnconfigured(),
+      retryable: false,
+      details: { service: FLOW_HOST.SERVICE, state: FLOW_HOST.STATE_UNCONFIGURED },
+    };
+    await expect(h.start()).rejects.toMatchObject(hostless);
+    // an item raised before the host went missing is acted on now: refused, nothing begun
+    const act = h.runs.acts.start({
+      id: "ny-0f2e4d6c8b0a1928" as NeedsItemId,
+      flow: "hello",
+      hash: approval.hash,
+      version: "approved",
+      start: { input: {}, starter: { by: "you" }, scope: ["work"] },
+    });
+    expect(await act).toEqual({ outcome: "failed", reason: hostless.message });
+    expect(h.records.runRecords()).toEqual([]);
+    expect(h.records.runs()).toEqual([]);
+  });
+
+  it("R1d: an approval whose kept bytes no longer hash to it (an agent edited them) starts nothing, refused at its start in §9's version words before any journal line", async () => {
+    const h = await harness();
+    const approval = h.approved("hello", HELLO);
+    const kept = join(h.root, "fieldd", "flows", "bytes", `${approval.hash}.flow.js`);
+    writeFileSync(kept, 'export const meta = { name: "Edited" };\n');
+    expect(await refusalOf(h.start())).toEqual({
+      reason: "version",
+      message: words.notAVersion("hello"),
+    });
+    expect(h.records.runRecords()).toEqual([]);
+    expect(h.records.runs()).toEqual([]);
+  });
+
   it("R2/R3: a flow changed since its approval, and one never approved, ask before any run: the item names the bytes, and nothing is journaled or kept", async () => {
     const h = await harness();
     const approval = h.approved("hello", HELLO);
@@ -529,6 +606,8 @@ describe("CP-4a2b — a run starts from the bytes fieldd kept, or asks first; it
       words.runsPerSpark("‹spark›"),
       words.noSparkProfiles("‹spark›"),
       words.noProfiles(),
+      words.notAVersion("‹flow›"),
+      words.hostUnconfigured(),
     ]) {
       expect(said).not.toBe("");
       expect(design, said).toContain(`"${said}"`);
@@ -2232,6 +2311,62 @@ describe("CP-4a2b — a changed flow's acts begin the asked-for run (§13a slice
       starter: { by: "spark", spark: VELA },
     });
     expect((await settled(h.runs, run, "done")).log).toBe("hi");
+  });
+
+  it("R5b (R4–R6 review H1): Run the one you approved runs the approval standing at the act, never the one that stood at the ask", async () => {
+    const h = await harness();
+    const first = h.approved("hello", HELLO);
+    h.write("hello", HELLO_EDITED);
+    const waits = waitsOf(await h.start());
+    // the approval moves on after the ask: a third version is approved, as the library's or a proposal's is
+    const standing = h.approved("hello", `${HELLO}// a third version\n`);
+    const act = h.runs.acts.start({
+      id: waits,
+      flow: "hello",
+      hash: first.hash,
+      version: "approved",
+      start: askedOf(h, 0),
+    });
+    const run = ranOf(await act);
+    expect(h.records.runRecord(run)?.hash).toBe(standing.hash);
+    await settled(h.runs, run, "done");
+  });
+
+  it("R5c (R4–R6 review H1): Run the one you approved, for a flow with no approval standing at the act, is refused in §9's version words and begins nothing, though bytes are kept under its hash", async () => {
+    const h = await harness();
+    // a proposal keeps its bytes, and approves nothing
+    const kept = h.records.keep(h.write("fresh", HELLO));
+    const waits = waitsOf(await h.start({ flow: "fresh" }));
+    const act = h.runs.acts.start({
+      id: waits,
+      flow: "fresh",
+      hash: kept,
+      version: "approved",
+      start: askedOf(h, 0),
+    });
+    expect(await act).toEqual({ outcome: "failed", reason: words.notAVersion("fresh") });
+    expect(h.records.approval("fresh")).toBeUndefined();
+    expect(h.records.runRecords()).toEqual([]);
+  });
+
+  it("R4d (R4–R6 review H3): Run this version, on a version that already stands, approves nothing again: its approval keeps its approvedAt and the proposal it came from", async () => {
+    const h = await harness();
+    h.approved("hello", HELLO);
+    const edited = h.write("hello", HELLO_EDITED);
+    const waits = waitsOf(await h.start());
+    // the version asked about is approved meanwhile, from a spark's proposal
+    const standing = h.records.approve("hello", edited, { proposal: "fp-k3v9q2m7" });
+    const act = h.runs.acts.start({
+      id: waits,
+      flow: "hello",
+      hash: flowHashOf(edited),
+      version: "this",
+      start: askedOf(h, 0),
+    });
+    const run = ranOf(await act);
+    expect(h.records.approval("hello")).toEqual(standing);
+    expect(h.records.runRecord(run)?.hash).toBe(standing.hash);
+    await settled(h.runs, run, "done");
   });
 
   it("R4b (R4–R6 review G2; CP-L4, TL-D5): a spark's kept start, its own or a Run in its thread, narrows again at its act to the spark's Agent Profiles now; a spark that is gone starts nothing, nothing approved", async () => {

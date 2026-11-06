@@ -41,6 +41,12 @@ export const noSpark = (): string => "VibeField can't find that spark; nothing w
 export const neverBegan = (flow: string): string =>
   `VibeField couldn't begin ${flow}: it couldn't keep the run's record. Nothing was started.`;
 
+/** A copy of VibeField that can't start a flow's host (its file is not beside fieldd; FLOW_HOST.STATE_UNCONFIGURED):
+ * a run is refused at its start in §9's host sentence ("When a run's script cannot go on"), the agents' sentence for
+ * the same loss (Q-b). */
+export const hostUnconfigured = (): string =>
+  "VibeField can't run flows: this copy of VibeField is missing the file it runs them with. Reinstall VibeField.";
+
 /** No run fieldd keeps under that id. */
 export const noSuchRun = (run: string): string => `VibeField has no run ${run}.`;
 
