@@ -184,13 +184,25 @@ public final class HistoryDesktops {
 
   /// SE-P1 (SE-D4 A) — Live now's words, asked of each desktop over its OWN live runs (`runs`: a device id → the
   /// native ids of the runs it owns, as the field's rows name them): a run's transcript is on the desktop it runs on.
-  /// A desktop whose door does not answer is not asked, and its runs match on their facts alone.
-  /// SE-P1 (red): the stub routes nothing.
-  public func searchLive(_ query: String, runs: [String: [String]]) async {}
+  /// A desktop whose door does not answer is not asked, and its runs match on their facts alone. In turn, as `search`.
+  public func searchLive(_ query: String, runs: [String: [String]]) async {
+    for reader in readers where !reader.isReplaying {
+      guard let owned = runs[reader.deviceId], !owned.isEmpty else { continue }
+      await reader.searchLive(query, nativeSessionIds: owned)
+    }
+  }
 
   /// SE-P1 — every answering desktop's lines for `query`, by the run's native id: what Live now joins to its rows.
-  /// SE-P1 (red): the stub joins nothing.
-  public func liveLines(_ query: String) -> [String: [HistoryHit]] { [:] }
+  /// A desktop whose last answer was to other words adds none.
+  public func liveLines(_ query: String) -> [String: [HistoryHit]] {
+    let words = query.trimmingCharacters(in: .whitespaces)
+    var lines: [String: [HistoryHit]] = [:]
+    for reader in readers {
+      guard let live = reader.live, live.query == words else { continue }
+      lines.merge(live.lines) { held, more in held + more }
+    }
+    return lines
+  }
 
   private func replace(_ reader: HistoryDesktopReader) {
     readers.removeAll { $0.deviceId == reader.deviceId }

@@ -562,9 +562,34 @@ public final class HistoryDesktopReader: Identifiable {
   /// SE-P1 (SE-D4 A) — Live now's ask: the words over THIS desktop's live runs alone (`nativeSessionIds`, the
   /// contract's scope for "the live runs a reader can jump to"), at the tailnet's page. The lines land in `live`, by
   /// the run's native id; Everything's hits, its query and the recent searches are not touched. An unanswered ask
-  /// keeps what was last shown (H-D7); a refusal dims as every read's does.
-  /// SE-P1 (red): the stub asks nothing.
-  public func searchLive(_ query: String, nativeSessionIds: [String]) async {}
+  /// keeps what was last shown (H-D7); a refusal dims as every read's does. Lines are kept only for the runs asked
+  /// about: an answer is filed under the runs this desktop owns, never another's.
+  public func searchLive(_ query: String, nativeSessionIds: [String]) async {
+    let words = query.trimmingCharacters(in: .whitespaces)
+    let runs = Array(nativeSessionIds.prefix(HistoryReads.liveRuns))
+    guard let door, !closed, !words.isEmpty, !runs.isEmpty else { return }
+    let params: [String: JSONValue] = [
+      "q": .string(words), "nativeSessionIds": .array(runs.map { .string($0) }),
+      "limit": .int(Int64(HistoryReads.listRows)),
+    ]
+    do {
+      let answer = try await door.call("index.search", params: .object(params)).decode(IndexSearchResult.self)
+      guard !closed else { return }
+      guard answer.answered else {
+        failure = answer.detail ?? "the index did not answer the search"
+        return
+      }
+      let asked = Set(runs)
+      var lines: [String: [HistoryHit]] = [:]
+      for group in FieldHistoryModel.hitGroups(answer, now: now()) {
+        guard let run = group.nativeSessionId, asked.contains(run) else { continue }
+        lines[run, default: []] += group.rows
+      }
+      live = HistoryLiveAnswer(query: words, lines: lines)
+    } catch {
+      refused(error)
+    }
+  }
 
   // MARK: Refusals
 

@@ -343,11 +343,10 @@ public struct IndexSearchHit: Sendable, Equatable, Identifiable, Decodable {
     at = object.int("at")
     snippet = object.string("snippet") ?? ""
     device = object.string("device")
-    // SE-P1 (red): the root's facts are declared, and read nothing yet
-    cwd = nil
-    projectId = nil
-    provider = nil
-    projectKey = nil
+    cwd = object.string("cwd")
+    projectId = object.string("projectId")
+    provider = object.string("provider")
+    projectKey = object.string("projectKey")
     unknownFields = object.unknownFields
   }
 

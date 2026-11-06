@@ -1,3 +1,4 @@
+import FieldAgents
 import FieldProduct
 import Foundation
 
@@ -576,26 +577,33 @@ extension FieldHistoryModel {
   /// hit rolls up to), rosetta's `[`/`]` marks stripped (the row marks the
   /// terms itself); `anchor` is the row's timelineId, which the document's
   /// rows carry as their ids — a landing scrolls to it when the page holds it.
+  ///
+  /// SE-P1 — a group carries its root's facts as the group's first hit said them (every hit of one root carries the
+  /// same): the native id Live now joins a run's lines by, the folder's last name (`folderName`, the desktop's
+  /// rule), the catalog agent (its mark; "agent" while the index maps none) and the PJ key.
   public static func hitGroups(_ result: IndexSearchResult, now: Date) -> [HistoryHitGroup] {
     var order: [String] = []
     var groups: [String: [HistoryHit]] = [:]
-    var facts: [String: (title: String, kind: String, at: Int64?)] = [:]
+    var firsts: [String: IndexSearchHit] = [:]
     for hit in result.hits {
       let key = hit.rootSessionId ?? hit.sessionId
       if groups[key] == nil {
         order.append(key)
-        facts[key] = (hit.title ?? "untitled session", hit.kind, hit.at)
+        firsts[key] = hit
       }
       let text = hit.snippet.replacingOccurrences(of: "[", with: "").replacingOccurrences(of: "]", with: "")
       groups[key, default: []].append(
         HistoryHit(id: "\(hit.sessionId)/\(hit.timelineId)", anchor: hit.timelineId, who: hit.kind == "user" ? .you : .agent, text: text, at: clock(hit.at)))
     }
     return order.map { key in
-      let fact = facts[key]!
+      let first = firsts[key]!
       let rows = groups[key] ?? []
+      let folder = FieldAgents.folderName(first.cwd, fallback: "")
       return HistoryHitGroup(
-        id: "g-\(key)", projectId: "", sessionId: key, sessionTitle: fact.title, agent: "agent",
-        day: fact.at.map { dayHeader($0, now: now) } ?? "—", rows: rows)
+        id: "g-\(key)", projectId: "", sessionId: key, sessionTitle: first.title ?? "untitled session",
+        agent: first.provider ?? "agent", day: first.at.map { dayHeader($0, now: now) } ?? "—", rows: rows,
+        nativeSessionId: first.nativeSessionId, folder: folder.isEmpty ? nil : folder, provider: first.provider,
+        projectKey: first.projectKey)
     }
   }
 

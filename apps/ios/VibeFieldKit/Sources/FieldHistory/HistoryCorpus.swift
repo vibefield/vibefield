@@ -343,12 +343,11 @@ public struct HistoryHitGroup: Identifiable, Equatable, Sendable, Codable {
     self.projectKey = projectKey
   }
 
-  /// The same group holding only `rows` — a filter's narrowing (the kind, the local match).
-  /// SE-P1 (red): the stub keeps the session's words and drops the root's facts, as the filters' copies did.
+  /// The same group holding only `rows` — a filter's narrowing (the kind, the local match), its root's facts kept.
   public func keeping(_ rows: [HistoryHit]) -> HistoryHitGroup {
     HistoryHitGroup(
       id: id, projectId: projectId, sessionId: sessionId, sessionTitle: sessionTitle, agent: agent, day: day,
-      rows: rows)
+      rows: rows, nativeSessionId: nativeSessionId, folder: folder, provider: provider, projectKey: projectKey)
   }
 }
 
