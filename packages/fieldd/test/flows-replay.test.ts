@@ -525,6 +525,29 @@ describe("CP-4a2b — replay's order, and the one answer writer (§13a slice 10b
     });
   });
 
+  it("P10b (D21; the 10b fix's delta review, #1): a race made again in its first life's order hears the answers one release gives in journal order, so it makes C again, never D", async () => {
+    // its first life: A and B raced; B's answer came, then A's before the script, having taken B, made C. Made again
+    // A then B, B's call releases both answers at once, and the race must take B, the first the journal holds
+    const { replay, handed, appended } = replayOf([
+      made(1, "a"),
+      made(2, "b"),
+      answer(2, "B"),
+      answer(1, "A"),
+      made(3, "c"),
+    ]);
+    const first = await Promise.race([
+      replay.call(ask("a")).then(() => "A"),
+      replay.call(ask("b")).then(() => "B"),
+    ]);
+    void replay.call(ask(first === "B" ? "c" : "d"));
+    await settle();
+    expect({ first, handed, appended }).toEqual({
+      first: "B",
+      handed: [{ ...ask("c"), call: 3 }],
+      appended: [],
+    });
+  });
+
   it("P11 (D21): two branches that make the same call after their own answers keep their first life's #1 and #2", async () => {
     // its first life: B's answer came first, so B's branch made C as its #1 (call 3), and A's made it as #2 (call 4)
     const { replay, handed, appended } = replayOf([

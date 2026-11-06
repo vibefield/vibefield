@@ -877,6 +877,9 @@ export class FlowRuns {
         calls.out += 1;
         this.#heard(run, live, calls);
         try {
+          // D21 (the 10b fix's delta review, #8): every answer takes the same hops from `replay.call` to the pipe, and
+          // the supervisor's `then` is attached as this returns; a hop on one answer's road alone reorders what the
+          // script hears (R28c)
           return await replay.call(call);
         } finally {
           calls.out -= 1;
@@ -1234,9 +1237,11 @@ export class FlowRuns {
     const record = this.ports.records.runRecord(run);
     if (record === undefined) return;
     if (slotsTaken(record.open) >= FLOW_LIMITS.LIVE_STEPS_MAX) return;
-    const next = live.slotted.shift();
+    const next = live.slotted[0];
     if (next === undefined) return;
+    // T4c: the call leaves the line once the write that starts it lands; a write that throws keeps it in line
     this.#stepWrite(run)(next.call, (step) => ({ ...step, state: "starting" }));
+    live.slotted.shift();
     void this.#launch(run, live, next.call, next.args);
   }
 
@@ -1289,11 +1294,12 @@ export class FlowRuns {
    *   longer `live.replay`, so it hears nothing (its waiters are dropped, never resolved); with no host up, the answer
    *   is only journaled, and the woken host hears it from its journal, in journal order (D21, R28).
    * - P13: the hand-on comes BEFORE the record follows the line (`#lagging`). A line that lands with no host up wakes
-   *   its run there (`#journaled`, `#rouse`, `#wake`), and the generation that wake starts read the line from its
+   *   its run there (`#lagging`, `#rouse`, `#wake`), and the generation that wake starts read the line from its
    *   journal, so it is never handed the line as well. An answer the record's follow-up journals in its turn (a
    *   slot's start that throws, `#unslot`) is handed on after this one, in the journal's order (D21).
    * - T4: once the line has landed nothing refuses it: the record's settle that throws is the record lagging the
-   *   journal (D18), said in fieldd's log, and the next record write settles it (XX4, `#replace`). A line the disk
+   *   journal (D18), said in fieldd's log, and the next record write settles it (XX4, `#replace`). The line's own
+   *   consequences, the slot it frees and D1's wake, never wait on that write (T4c). A line the disk
    *   refuses is not kept, so the script hears JOURNAL_REFUSED and a restart asks the step again.
    * - A run no longer driven, or set aside (D7), journals nothing: no answer lands past its decided end. */
   #answer(run: FlowRunId, live: LiveRun, call: number, what: string, said: FlowHostAnswer): void {
@@ -1324,10 +1330,24 @@ export class FlowRuns {
   }
 
   /** T4 (the F2 review) — a line the journal took, followed by its record: a record write that throws there is the
-   * record lagging its journal (D18), said in fieldd's log and carried by the next write, never the line refused. */
+   * record lagging its journal (D18), said in fieldd's log and carried by the next write, never the line refused.
+   * An answer's own consequences go on whatever its record did (the 10b fix's delta review, #2; T4c): the slot it
+   * frees (CP4-S7) and D1's wake of a run whose host is parked or still leaving. Behind a settle that threw, a parked
+   * run would wait for a boot with its answer in its journal. */
   #lagging(run: FlowRunId, entry: FlowJournalEntry, args?: readonly unknown[]): void {
+    this.#following(run, entry, () => this.#journaled(run, entry, args));
+    if (entry.kind !== "answer") return;
+    const live = this.#live.get(run);
+    if (live === undefined) return;
+    this.#following(run, entry, () => this.#unslot(run, live));
+    if (live.host === undefined || live.parking === true) this.#rouse(run);
+  }
+
+  /** The record following its journal's `entry`: a write that throws is the record lagging (D18), said in fieldd's log
+   * and carried by the next write (XX4). */
+  #following(run: FlowRunId, entry: FlowJournalEntry, follow: () => void): void {
     try {
-      this.#journaled(run, entry, args);
+      follow();
     } catch (error) {
       this.#logger.warn(
         "fieldd.flows.run.lag",
@@ -1492,7 +1512,7 @@ export class FlowRuns {
 
   /** A line the run's journal took, as its record follows it (D18's cadence): a call counts (D10), and an agent's
    * call opens its step, `starting` (D5 step 2); an answer settles its step, `failed` for a refusal. A call's `args`
-   * are its own, as its host sent them. */
+   * are its own, as its host sent them. The record alone: an answer's slot and wake are `#lagging`'s, after it. */
   #journaled(run: FlowRunId, entry: FlowJournalEntry, args?: readonly unknown[]): void {
     // F9 (slices 7–9 review): a step handed a session by `in:` is no spawn, so it never waits for a slot; that is
     // decided here, at its call line, so no "waiting" reaches its record and it is never put in line
@@ -1525,14 +1545,6 @@ export class FlowRuns {
         const orphan = this.#live.get(run)?.orphans.get(entry.call);
         return settleStep(start, entry.call, answeredOf(entry), orphan);
       });
-    // CP4-S7: an answer frees its step's slot; D1: and wakes a run whose host is parked, or still leaving
-    if (entry.kind === "answer") {
-      const live = this.#live.get(run);
-      if (live !== undefined) {
-        this.#unslot(run, live);
-        if (live.host === undefined || live.parking === true) this.#rouse(run);
-      }
-    }
   }
 
   /** A host's end, as its run ends (or, for a host that left, waits for its next wake: DESIGN.md §9). fieldd's own stop

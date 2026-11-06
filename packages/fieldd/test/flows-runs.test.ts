@@ -3115,6 +3115,16 @@ const CUT_TWO = [
   "",
 ].join("\n");
 
+/** Two steps raced, A and B: the run's one log line is the text of the answer the race took. */
+const RACE = [
+  'export const meta = { name: "Race" };',
+  "export default async function () {",
+  `  const first = await Promise.race([agent("look at a", ${stepAt("A")}), agent("look at b", ${stepAt("B")})]);`,
+  "  log(first.text);",
+  "}",
+  "",
+].join("\n");
+
 /** One step: its answer's text said as the run's one log line, or the words of its refusal when it is refused. */
 const CATCHES = [
   'export const meta = { name: "Review" };',
@@ -3169,6 +3179,22 @@ describe("CP-4a2b — the host's life: parked and woken, D2's lookup at a wake, 
    * both once the host has left. B's call journaled BEFORE A's answer is no journal SEQ can write: D21 holds A's
    * answer behind a call its script makes only once it hears A, and D7 sets that run aside (P12's journal). */
   const KILL_GRACE_MS = 2_000;
+  /** T4's arm: `h`'s next record write throws once, just after its journal takes a line of `kind`. */
+  const lagsOnce = (h: Harness, kind: "call" | "answer") => {
+    const append = h.records.appendRun.bind(h.records);
+    const write = h.records.writeRunRecord.bind(h.records);
+    let armed = false;
+    vi.spyOn(h.records, "appendRun").mockImplementation((run, entry) => {
+      const kept = append(run, entry);
+      if (entry.kind === kind) armed = true;
+      return kept;
+    });
+    vi.spyOn(h.records, "writeRunRecord").mockImplementation((run, fields) => {
+      if (!armed) return write(run, fields);
+      armed = false;
+      throw new Error("ENOSPC: no space left on device, write");
+    });
+  };
   const killedBeforeEntry = async (h: Harness, run: string) => {
     h.hosts[0]?.child.kill("SIGSTOP");
     await within(PARK_MS, () => stateOf(h, run) === "waiting");
@@ -3176,14 +3202,20 @@ describe("CP-4a2b — the host's life: parked and woken, D2's lookup at a wake, 
     answerStep(h, run, 1, "a");
     await within(PARK_MS, () => answersOf(h, run).length === 1);
     h.records.appendRun(run, seqB());
-    // one host still, so the wake to come reads B's line: a second here is a host that left on its shutdown before
-    // its SIGSTOP, so A's answer woke the run before B's line landed, and B, journaled again with its entry, would
-    // pass this row without ever meeting D2's last row
+    // one host still, so the wake to come reads B's line. A second here is a wake A's answer fired inside host 0's
+    // grace (#rouse's parking wait broken, R27d's rule): B, journaled again with its entry, would pass this row
+    // without ever meeting D2's last row. (The idle can't park host 0 before its SIGSTOP: the enqueue's poll runs
+    // first; the 10b fix's delta review, #4 and #9.)
     const journal = { kinds: h.kinds(run), hosts: h.hosts.length };
     expect(journal).toEqual({ kinds: ["head", "call", "answer", "call"], hosts: 1 });
     await within(PARK_MS + KILL_GRACE_MS, () => h.enqueued.length === 2);
-    // PARKED's `left`, read after the wake: the run woke only once its old host had left
-    expect({ hosts: h.hosts.length, left: left(h, 0) }).toEqual({ hosts: 2, left: true });
+    // PARKED's `left`, and R27d's order: the run woke only once its old host had left
+    const [old, next] = h.hosts;
+    expect({
+      hosts: h.hosts.length,
+      left: old?.leftAt !== undefined,
+      after: (next?.at ?? 0) >= (old?.leftAt ?? Number.POSITIVE_INFINITY),
+    }).toEqual({ hosts: 2, left: true, after: true });
   };
 
   it("R27 (D1): a run whose step waits past HOST_IDLE_MS with no frame is parked: its host has left, it reads waiting, never stopped, and its journal gains no line; the step's answer wakes it, and it ends done", async () => {
@@ -3549,8 +3581,7 @@ describe("CP-4a2b — the host's life: parked and woken, D2's lookup at a wake, 
   });
 
   it("R31 (D7; slice 10b): a woken script's new call, made while a call its journal holds is never made again, is never journaled, counted or spawned, and the run is set aside lost in §9's words", async () => {
-    const grace = 2_000;
-    const h = await harness({ hostIdleMs: IDLE_MS, timings: { stopGraceMs: grace } });
+    const h = await harness({ hostIdleMs: IDLE_MS, timings: { stopGraceMs: KILL_GRACE_MS } });
     h.approved("seq", SEQ);
     const run = startedRun(await h.start({ flow: "seq" })).run;
     await waitFor(() => expect(h.enqueued).toHaveLength(1));
@@ -3561,7 +3592,7 @@ describe("CP-4a2b — the host's life: parked and woken, D2's lookup at a wake, 
     answerStep(h, run, 1, "a");
     await within(PARK_MS, () => answersOf(h, run).length === 1);
     h.records.appendRun(run, unmade(2));
-    await within(PARK_MS + grace, () => stateOf(h, run) === "lost");
+    await within(PARK_MS + KILL_GRACE_MS, () => stateOf(h, run) === "lost");
     const said = words.asideNew("Seq");
     const ended = h.runs.read(run)?.summary;
     const aside = { state: ended?.state, log: ended?.log, told: toldAside(h, run) };
@@ -3644,6 +3675,26 @@ describe("CP-4a2b — the host's life: parked and woken, D2's lookup at a wake, 
     });
   });
 
+  it("R28c (D21; the 10b fix's delta review, #8): a race whose answers land B then A while its run is parked takes B once woken, as the journal orders them, through the runs' handler and the host's pipe", async () => {
+    const h = await harness({ hostIdleMs: IDLE_MS });
+    h.approved("race", RACE);
+    const run = startedRun(await h.start({ flow: "race" })).run;
+    await waitFor(() => expect(h.enqueued).toHaveLength(2));
+    expect(await parkedAt(h, run)).toEqual(PARKED);
+    // B's answer wakes the run; A's lands at once, before the woken host makes A and B again, so B's call releases both
+    answerStep(h, run, 2, "b");
+    answerStep(h, run, 1, "a");
+    await within(PARK_MS, () => stateOf(h, run) === "done");
+    const ended = h.runs.read(run)?.summary;
+    const lines = answersOf(h, run).map(({ call }) => call);
+    expect({ state: ended?.state, log: ended?.log, lines, spawned: h.spawned.length }).toEqual({
+      state: "done",
+      log: "b",
+      lines: [2, 1],
+      spawned: 2,
+    });
+  });
+
   it("P14 (D22, CL-H6; slice 10b): a turn end told again, while its run is parked and once its woken host made the call again, journals one answer line", async () => {
     const made = vi.spyOn(FlowReplay.prototype, "call");
     try {
@@ -3676,19 +3727,7 @@ describe("CP-4a2b — the host's life: parked and woken, D2's lookup at a wake, 
     const lagging = async (kind: "call" | "answer") => {
       const h = await harness();
       h.approved("review", CATCHES);
-      const append = h.records.appendRun.bind(h.records);
-      const write = h.records.writeRunRecord.bind(h.records);
-      let armed = false;
-      vi.spyOn(h.records, "appendRun").mockImplementation((run, entry) => {
-        const kept = append(run, entry);
-        if (entry.kind === kind) armed = true;
-        return kept;
-      });
-      vi.spyOn(h.records, "writeRunRecord").mockImplementation((run, fields) => {
-        if (!armed) return write(run, fields);
-        armed = false;
-        throw new Error("ENOSPC: no space left on device, write");
-      });
+      lagsOnce(h, kind);
       const run = startedRun(await h.start({ flow: "review" })).run;
       // XX3 (the 10b read): the first boot waits as every row's does
       await waitFor(() => expect(h.enqueued).toHaveLength(1));
@@ -3709,6 +3748,41 @@ describe("CP-4a2b — the host's life: parked and woken, D2's lookup at a wake, 
     // the answer line landed and its record's settle threw: the script hears the answer the journal holds, and the
     // run's next record write settles the step its settle missed (XX4)
     expect(await lagging("answer")).toEqual(heard);
+  });
+
+  it("T4c (D1, T4; the 10b fix's delta review, #2): an answer whose record settle throws still wakes its run, parked or its host still leaving: the woken host hears the answer its journal holds, the run ends done, and the wake's own write settles the step (XX4)", async () => {
+    /** An ANSWERED run, parked or (`leaving`) its host stopped inside its leave grace, whose answer's settle throws. */
+    const lagged = async (leaving: boolean) => {
+      const h = await harness({ hostIdleMs: IDLE_MS, timings: { stopGraceMs: KILL_GRACE_MS } });
+      h.approved("review", ANSWERED);
+      const run = startedRun(await h.start({ flow: "review" })).run;
+      await waitFor(() => expect(h.enqueued).toHaveLength(1));
+      if (leaving) {
+        // the host can't hear its shutdown, so it leaves only at its grace's SIGKILL (R27d)
+        h.hosts[0]?.child.kill("SIGSTOP");
+        await within(PARK_MS, () => stateOf(h, run) === "waiting");
+      } else await parkedAt(h, run);
+      lagsOnce(h, "answer");
+      answerStep(h, run, 1, "all clean");
+      await within(PARK_MS + KILL_GRACE_MS, () => stateOf(h, run) === "done");
+      const ended = h.runs.read(run)?.summary;
+      const working = (h.records.runRecord(run)?.open ?? [])
+        .filter((step) => step.call === 1 && step.state === "working")
+        .map((step) => step.call);
+      return {
+        state: ended?.state,
+        log: ended?.log,
+        hosts: h.hosts.length,
+        kinds: h.kinds(run),
+        working,
+      };
+    };
+    const kinds = ["head", "call", "answer", "log", "end"];
+    const woken = { state: "done", log: "all clean", hosts: 2, kinds, working: [] };
+    // parked: no host up, so the answer's own wake starts one
+    expect(await lagged(false)).toEqual(woken);
+    // still leaving: the answer owes the wake, which the old host's end pays (R27d)
+    expect(await lagged(true)).toEqual(woken);
   });
 
   it("P8r (XX1(b), the 10b read; slice 10b): through the runs, a step's answer nested past ARGS_DEPTH_MAX is refused to its script and journaled as that refusal, so its journal reads back", async () => {
