@@ -322,7 +322,10 @@ public enum PhoneSearch {
     id.flatMap { id in live.profiles.first { $0.id == id } }
   }
 
-  static func lead(_ profile: AgentProfileSet) -> Lead { .profile(glyph: profile.glyph, native: profile.kind == "native") }
+  /// What leads a profile wherever search names it: a chip, a token, an offer, a live row's pill.
+  public static func lead(_ profile: AgentProfileSet) -> Lead {
+    .profile(glyph: profile.glyph, native: profile.kind == "native")
+  }
 
   /// Live now's chips (SE-D5): the profiles, less the one chosen, each with its sessions and the waiting dot; then
   /// the desktops, less the one chosen, each with its sessions or "asleep". Counts are every session's, unfiltered.

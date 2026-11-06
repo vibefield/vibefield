@@ -92,16 +92,15 @@ enum AppBar {
   /// magnifier as a token: 30 tall, corners 15 (half its height), padded 9 before its glyph and 4 after its ×; its
   /// glyph 13, 5 before its name; its × a 20 round holding `xmark` at 8. A second token stands 2 closer to the first.
   /// It pops in from 0.7 on the bar's spring (`motion`).
-  /// SE-2c (red): the numbers are zero.
-  static let tokenHeight: CGFloat = 0
-  static let tokenLeading: CGFloat = 0
-  static let tokenTrailing: CGFloat = 0
-  static let tokenGlyph: CGFloat = 0
-  static let tokenGap: CGFloat = 0
-  static let tokenClose: CGFloat = 0
-  static let tokenCloseGlyph: CGFloat = 0
-  static let tokenOverlap: CGFloat = 0
-  static let tokenPopFrom: CGFloat = 0
+  static let tokenHeight: CGFloat = 30
+  static let tokenLeading: CGFloat = 9
+  static let tokenTrailing: CGFloat = 4
+  static let tokenGlyph: CGFloat = 13
+  static let tokenGap: CGFloat = 5
+  static let tokenClose: CGFloat = 20
+  static let tokenCloseGlyph: CGFloat = 8
+  static let tokenOverlap: CGFloat = 2
+  static let tokenPopFrom: CGFloat = 0.7
 
   /// How far above the screen's bottom edge the row sits: where iOS 26 puts
   /// its own bar, 13 pt below the safe area's line on a phone with a home
@@ -285,12 +284,21 @@ private struct UnreadDot: View {
 /// `glassID`), and the circle that closes it. At the bar's height with the
 /// keyboard down; the system's typing row (48 pt, 10 pt from the edges, 8 pt
 /// above the keys) with it up.
+///
+/// SE-2 (SE-D5 A; DESIGN.md §8 "The phone's search") — the chosen filters
+/// stand after the magnifier as tokens, each removed by its × (the software
+/// keyboard reports no Backspace on an empty field), popping in from 0.7 on the
+/// bar's spring; the placeholder is **Search**, and none once two stand.
 struct SearchBarRow: View {
   @Binding var query: String
   var focus: FocusState<Bool>.Binding
   let typing: Bool
   let glass: Namespace.ID
+  let tokens: [PhoneSearch.Token]
+  let onRemove: (PhoneSearch.Filter) -> Void
   let onClose: () -> Void
+
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
   var body: some View {
     let size = typing ? AppBar.fieldHeightTyping : AppBar.height
@@ -299,7 +307,13 @@ struct SearchBarRow: View {
         Image(systemName: "magnifyingglass")
           .font(.system(size: 17, weight: .medium))
           .foregroundStyle(ChromePalette.inkTertiary)
-        TextField("Search sessions", text: $query)
+        ForEach(Array(tokens.enumerated()), id: \.element.id) { index, token in
+          FieldToken(token: token) { onRemove(token.filter) }
+            .padding(.leading, index > 0 ? -AppBar.tokenOverlap : 0)
+            .transition(reduceMotion ? .opacity : .scale(scale: AppBar.tokenPopFrom).combined(with: .opacity))
+        }
+        TextField(PhoneSearch.placeholder(tokens: tokens.count) ?? "", text: $query)
+          .accessibilityLabel("Search")
           .font(.system(size: 17))
           .foregroundStyle(ChromePalette.ink)
           .focused(focus)
@@ -319,6 +333,7 @@ struct SearchBarRow: View {
           .accessibilityLabel("Clear search")
         }
       }
+      .animation(reduceMotion ? FieldMotion.plainEase(SearchSheet.reducedFade) : AppBar.motion, value: tokens)
       .padding(.leading, 18)
       .padding(.trailing, 14)
       .frame(maxWidth: .infinity)
@@ -340,6 +355,41 @@ struct SearchBarRow: View {
       .glassID("close", in: glass)
       .accessibilityLabel("Close search")
     }
+  }
+}
+
+/// A token in the search field (SE-D5 A): 30 tall, corners 15, on the ink at
+/// 9%, padded 9 before its glyph and 4 after its ×; the glyph 13, 5 before its
+/// name at 14/600; its × a 20 round holding `xmark` at 8 in the tertiary ink
+/// (§13), which removes it.
+struct FieldToken: View {
+  let token: PhoneSearch.Token
+  let onRemove: () -> Void
+
+  var body: some View {
+    HStack(spacing: AppBar.tokenGap) {
+      SearchLeadGlyph(lead: token.lead, size: AppBar.tokenGlyph)
+      Text(token.label)
+        .font(ChromeType.sans(14, .semibold))
+        .lineLimit(1)
+      Button(action: onRemove) {
+        Image(systemName: "xmark")
+          .font(.system(size: AppBar.tokenCloseGlyph, weight: .semibold))
+          .foregroundStyle(ChromePalette.inkTertiary)
+          .frame(width: AppBar.tokenClose, height: AppBar.tokenClose)
+          .contentShape(Circle())
+      }
+      .buttonStyle(.plain)
+      .accessibilityLabel("Remove \(token.label)")
+    }
+    .foregroundStyle(ChromePalette.ink)
+    .padding(.leading, AppBar.tokenLeading)
+    .padding(.trailing, AppBar.tokenTrailing)
+    .frame(height: AppBar.tokenHeight)
+    .background(Capsule().fill(ChromePalette.searchToken))
+    .fixedSize()
+    .accessibilityElement(children: .contain)
+    .accessibilityLabel("Filter: \(token.label)")
   }
 }
 

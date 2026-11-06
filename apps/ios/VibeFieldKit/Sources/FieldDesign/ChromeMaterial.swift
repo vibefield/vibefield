@@ -77,6 +77,11 @@ public struct ChromeShadow: Sendable {
   public static let knob = ChromeShadow(
     color: Color.black.opacity(0.18), radius: 1.5, y: 1)
 
+  /// SE-2 — the chosen half of search's switch, on paper: `0 1px 4px rgb(0 0 0 / 14%)` (DESIGN.md §8 "The phone's
+  /// search", the drawing's `.ps-seg button[aria-checked="true"]`).
+  public static let chosen = ChromeShadow(
+    color: Color.black.opacity(0.14), radius: 2, y: 1)
+
   public init(color: Color, radius: CGFloat, y: CGFloat) {
     self.color = color
     self.radius = radius

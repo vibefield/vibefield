@@ -1148,8 +1148,12 @@ public struct HomeScreen: View {
             sessionSlot(session)
           }
           if selectedTab == .search {
-            SearchBarRow(query: $searchQuery, focus: $searchFocused, typing: barTyping, glass: barGlass, onClose: closeSearch)
-              .padding(.horizontal, barTyping ? AppBar.marginTyping : AppBar.margin)
+            // SE-2c: the field holds no token until SE-2e hands it the sheet's.
+            SearchBarRow(
+              query: $searchQuery, focus: $searchFocused, typing: barTyping, glass: barGlass, tokens: [],
+              onRemove: { _ in }, onClose: closeSearch
+            )
+            .padding(.horizontal, barTyping ? AppBar.marginTyping : AppBar.margin)
           } else if !accountMenuOpen {
             if barFolded {
               foldedTabs

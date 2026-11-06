@@ -256,6 +256,28 @@ public enum ChromePalette {
   /// glass (251 → 233) and white/14% over the dark (22 → 55).
   public static let tabPill = dynamic(light: 0x000000, lightAlpha: 0.07, dark: 0xFFFFFF, darkAlpha: 0.14)
 
+  // MARK: - Search (SE-2; DESIGN.md §8 "The phone's search", "The phone's profile token")
+
+  /// `--vf-search-scrim` (§5, *Search scrim*, returned 2026-11-06 by SE-D3 A): the Peek's dim, `black/16` by day and
+  /// `black/46` by night, laid alone with no blur over the page under search's sheet. Held to the token by
+  /// `pnpm check:ios-fixtures`.
+  public static let searchScrim = dynamic(
+    light: 0x000000, lightAlpha: 0.16, dark: 0x000000, darkAlpha: 0.46)
+  /// The ink at 7%: a chip at rest (§8, the drawing's `.ps-fchip`).
+  public static let searchChip = dynamic(light: 0x000000, lightAlpha: 0.07, dark: 0xFFFFFF, darkAlpha: 0.07)
+  /// The ink at 12%: a chip pressed.
+  public static let searchChipPressed = dynamic(
+    light: 0x000000, lightAlpha: 0.12, dark: 0xFFFFFF, darkAlpha: 0.12)
+  /// The ink at 8%: the switch's track, the profile token's ×, an offer's round, the Filter capsule and an empty
+  /// list's one act.
+  public static let searchWell = dynamic(light: 0x000000, lightAlpha: 0.08, dark: 0xFFFFFF, darkAlpha: 0.08)
+  /// The ink at 9%: a token in the search field.
+  public static let searchToken = dynamic(light: 0x000000, lightAlpha: 0.09, dark: 0xFFFFFF, darkAlpha: 0.09)
+  /// The ink at 11%: a match's wash, the Peek's (K1: the text's own ink at 600 on it).
+  public static let searchMark = dynamic(light: 0x000000, lightAlpha: 0.11, dark: 0xFFFFFF, darkAlpha: 0.11)
+  /// The ink at 14%: the hairline between two groups of chips.
+  public static let searchRule = dynamic(light: 0x000000, lightAlpha: 0.14, dark: 0xFFFFFF, darkAlpha: 0.14)
+
   // MARK: - The way in (WI-2, DESIGN.md §8 "The phone's way in")
 
   /// The seat under the way in's words: the field's own ground, white at 66% by day and black at 62% by night,
