@@ -1907,13 +1907,14 @@ describe("CP-4a2b — a run's folder, held at its start (slice 7's R8b)", () => 
     expect(cwdOf(old)).toBe("/work/moved");
   });
 
-  it("R8b: a step that names no folder, in a run whose input names none, is refused at the start in §9's words, nothing journaled; a session or project its input names that VibeField can't find is refused too, and one whose folder it can't run in (GG1), before any approval", async () => {
+  it("R8b: a step that names no folder, in a run whose input names none, is refused at the start in §9's words, nothing journaled; a session or project its input names that VibeField can't find is refused too, and one whose folder it can't run in (GG1), before any approval; only the folder the run holds, its first input's, is checked (JJ1)", async () => {
     const h = await harness({
       folders: {
         "session:run-yours": "/work/yours",
         "project:pj-1": "/work/pj1",
-        // GG1: folders VibeField finds and can't run in, one past the head's bound and an empty one
+        // GG1: folders VibeField finds and can't run in, one past the head's bound and empty ones
         "session:run-long": `/${"a".repeat(FLOW_LIMITS.FOLDER_CHARS)}`,
+        "session:run-blank": "",
         "project:pj-0": "",
       },
     });
@@ -1980,6 +1981,21 @@ describe("CP-4a2b — a run's folder, held at its start (slice 7's R8b)", () => 
       "/work/pj1",
       "/work/yours",
     ]);
+    // JJ1 (the 1l review; ruled 2026-11-06): only the folder the run holds, its first input's, is checked. An
+    // unusable first folder is refused, never passed over for the next input's (no silent fallback)
+    h.approved("two", stepWith("", '{ target: "session", other: "session" }'));
+    const passed = h.start({ flow: "two", input: { target: "run-long", other: "run-yours" } });
+    expect(await refusalOf(passed)).toEqual({
+      reason: "input-session",
+      message: "VibeField can't run in the folder of the session its input names.",
+    });
+    // and a later input's folder, which nothing of the run's uses, refuses nothing, empty or past the bound
+    for (const other of ["run-blank", "run-long"]) {
+      const started = h.start({ flow: "two", input: { target: "run-yours", other } });
+      expect(await refusalOf(started), other).toBe("started");
+      const read = h.records.readRun(startedRun(await started).run);
+      expect(read.kind === "kept" ? read.head.folder : read.kind, other).toBe("/work/yours");
+    }
   });
 
   it("says R8b's refusals in DESIGN.md's own words (§9 \"When a run can't start\")", () => {
