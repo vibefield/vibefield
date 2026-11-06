@@ -24,7 +24,7 @@
     static let argument = "-vf-mock-usage="
     /// The instant the batch is read at: `agent-usage.budget`'s, half a minute after its last reading (the golden's
     /// `nows`).
-    static let now = Date(timeIntervalSince1970: 0)  // RED STUB
+    static let now = Date(timeIntervalSince1970: 1_789_560_000)
 
     let usage: Usage
 
@@ -32,7 +32,6 @@
 
     /// The door the launch arguments name.
     static func launched(_ arguments: [String] = ProcessInfo.processInfo.arguments) -> MetersFixtureDoor {
-      return MetersFixtureDoor(usage: .readings)  // RED STUB: the arguments are not read
       let word = arguments.first { $0.hasPrefix(argument) }.map { String($0.dropFirst(argument.count)) }
       return MetersFixtureDoor(usage: word.flatMap(Usage.init(rawValue:)) ?? .readings)
     }
@@ -68,7 +67,6 @@
     }
 
     private func usageAnswer() throws -> JSONValue {
-      return try answer("agent-usage.empty")  // RED STUB: every state answers the empty batch
       switch usage {
       case .readings: return try answer("agent-usage.budget")
       case .firstRead: return try answer("agent-usage.empty")

@@ -75,7 +75,6 @@ final class MetersFeed {
   /// The home's door, handed over when it changes or the app comes forward (nil: none — the watch ends and the last
   /// word stands).
   func attach(_ door: (any ChatDoor)?, home: String?) {
-    return;  // RED STUB (UM-4 PH-3): the green asks the home
     if door === self.door, home == reading.home { return }
     watch?.cancel()
     watch = nil
@@ -98,7 +97,6 @@ final class MetersFeed {
   /// A meter view opened (the Me menu, the page, the hold): the home's profiles again, since a sign-in on the desktop
   /// may have changed its plans.
   func open() {
-    return;  // RED STUB
     readProfiles()
   }
 
