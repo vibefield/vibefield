@@ -1,0 +1,17 @@
+{
+  "id": "ny-9a7b5c3d1e0f2468",
+  "kind": "flow-lost",
+  "state": "open",
+  "from": {
+    "name": "Release check · run 14"
+  },
+  "spark": "sp-7k2m9q4x",
+  "asked": "2026-11-05T09:00:01.000Z",
+  "choices": ["Resume the step", "Stop the run"],
+  "run": {
+    "run": "fr-k3v9q2m7x1",
+    "flow": "release-check",
+    "call": 5,
+    "label": "review · round 2 of 3"
+  }
+}

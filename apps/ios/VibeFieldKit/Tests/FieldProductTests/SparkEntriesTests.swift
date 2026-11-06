@@ -84,7 +84,7 @@ struct SparkEntriesTests {
     #expect(vela.needsYou && vela.awake && vela.blocked && vela.heard)
     let runKey = vela.run?.runtimeRunId
     #expect(runKey == "run-12")
-    // its question and its held send are its own items (only an agent-ask from its own run is its row's)
+    // its question and its held send are its own items
     let itemIds = vela.items.map { $0.id }
     #expect(itemIds == ["ny-3f9a1c0b7e2d4a61", "ny-8c41d2e09a77b305"])
     #expect(vela.activityAt == 1_793_271_730_118)
@@ -172,7 +172,7 @@ struct SparkEntriesTests {
     ])
   }
 
-  @Test("whose a run and an item are: its own session, the agents it started, its items but its own run's asks")
+  @Test("whose a run and an item are: its own session, the agents it started, its items with its own run's asks (TH-1)")
   func whose() throws {
     let all = try Self.sparks()
     let spark = try #require(all.first)
@@ -186,15 +186,30 @@ struct SparkEntriesTests {
     #expect(none == nil)
     let agents = SparkEntries.agentRuns(of: spark, in: [own, agent]).map { $0.runtimeRunId }
     #expect(agents == ["run-31"])
-    // an agent's ask from the spark's own run is its row's blocker, read there once; from an agent it started, its
+    // IOS-12d (TH-1's TH-Q29 (a), ER-C2): an agent's ask from the spark's own run is its item and draws its card, as
+    // one from an agent it started is; the pane left Chat, so its row's wait no longer says it alone
     let askJSON = try Fixture.json("needs-item.agent-ask")
-    let fromOwn = try NeedsItem(json: edited(askJSON, [.key("from"), .key("session")], .string("run-12")))
+    let fromRun = edited(askJSON, [.key("from"), .key("session")], .string("run-12"))
+    let ownJSON = edited(fromRun, [.key("id")], .string("ny-0wn0a5k0vela"))
+    let fromOwn = try NeedsItem(json: ownJSON)
     let fromAgent = try NeedsItem(json: askJSON)
-    let kept = SparkEntries.items(of: spark, rows: [own, agent], items: [fromOwn, fromAgent]).map { $0.id }
-    #expect(kept == [fromAgent.id])
-    // and its own run is the one its record names, though it has not reached the board
-    let byRecord = SparkEntries.items(of: spark, rows: [], items: [fromOwn])
-    #expect(byRecord.isEmpty)
+    let kept = SparkEntries.items(of: spark, items: [fromOwn, fromAgent]).map { $0.id }
+    #expect(kept == [fromOwn.id, fromAgent.id])
+    // its own session's runs: the board's, then the one its record names, though it has not reached the board
+    let runs = SparkEntries.ownRuns(of: spark, in: [elsewhere, agent, own])
+    #expect(runs == ["run-12"])
+    let byRecord = SparkEntries.ownRuns(of: spark, in: [])
+    #expect(byRecord == ["run-12"])
+    let ownAsk = NeedsCards.isOwnAsk(fromOwn, ownRuns: runs)
+    let agentAsk = NeedsCards.isOwnAsk(fromAgent, ownRuns: runs)
+    #expect(ownAsk && !agentAsk)
+    // the entry carries them, and its own run waiting with its ask in the queue still says the row's word
+    let entries = SparkEntries.entries(sparks: all, rows: [own, agent], items: [fromOwn])
+    let vela = try #require(entries.first { $0.spark.id == Self.vela })
+    #expect(vela.ownRuns == ["run-12"])
+    let itemIds = vela.items.map { $0.id }
+    #expect(itemIds == [fromOwn.id])
+    #expect(vela.status == .asking)
   }
 
   @Test("PC-D5 A: Chat counts the sparks that need you, their agents' asks among them, each spark once")

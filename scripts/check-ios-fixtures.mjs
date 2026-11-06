@@ -76,6 +76,18 @@ try {
 } catch {
   // said with the problems, below
 }
+// IOS-12d (Q1 (a), VF-PM 2026-11-06 19:12Z) — the needs-you card's goldens, written by field-app's own card
+// (packages/field-app/test/needs-card-goldens.test.ts, `VF_WRITE_GOLDENS=1`), which the kit's NeedsCards is held to
+// (FieldProductTests). Read from their folder, as the flow's are.
+const NEEDS_CARD = join(root, "packages/field-app/test/fixtures/needs-card");
+let needsCardGoldens = [];
+try {
+  needsCardGoldens = readdirSync(NEEDS_CARD)
+    .filter((name) => name.endsWith(".golden.json"))
+    .sort();
+} catch {
+  // said with the problems, below
+}
 // Goldens whose origin is another package than the contracts — a design
 // decision both apps compute, not a wire shape — compared byte for byte all
 // the same. PJ-7: the project ink's table (DESIGN.md §2.9), which the design
@@ -124,6 +136,7 @@ const OTHER_ORIGINS = new Map([
   ],
   ...phoneViewGoldens.map((name) => [name, join(PHONE_GODVIEW, name)]),
   ...chatFlowGoldens.map((name) => [name, join(CHAT_FLOW, name)]),
+  ...needsCardGoldens.map((name) => [name, join(NEEDS_CARD, name)]),
 ]);
 // Goldens VENDORED from a sibling project outside this workspace, so there is no origin here to
 // compare with: each is pinned by its sha256 beside the files it tests, and the vendoring script's
@@ -273,6 +286,15 @@ const sparkFixtures = [
   "needs-item.held-spawn.json",
   "needs-item.agent-ask.json",
   "needs-item.unknown-kind.json",
+  // IOS-12d — CP-4's six flow kinds, which Chat draws as the Mac's card does until CP-4b, and needs.answer's wire
+  "needs-item.flow-proposal.json",
+  "needs-item.flow-gate.json",
+  "needs-item.flow-changed.json",
+  "needs-item.flow-repair.json",
+  "needs-item.flow-cap.json",
+  "needs-item.flow-lost.json",
+  "needs-answer-params.valid.json",
+  "needs-answer-result.valid.json",
 ];
 // SP-7a — the spark's transcript on the phone: every line kind, the worker's five frames, the window's one open, and
 // the ticket's answer and ask, which the kit's own `SparkTranscriptWire` and `SparkTranscriptReader` read
@@ -365,6 +387,14 @@ const requiredMirrors = [
   ["chat", sayFixtures, ["Tests/FieldProductTests"]],
   // and the two merged lists Chat's demo door answers under `-vf-mock` (ChatFixtureDoor, DEBUG)
   ["sparks", ["compose-sparks-list.merged.json", "needs-list.merged.json"], ["Sources/FieldHome"]],
+  // IOS-12d — the needs-you card's goldens (in their own folder), and the items and the catalog Chat's demo door
+  // answers its cards with under `-vf-mock` (ChatFixtureDoor's `-vf-needs-case=`)
+  ["needs-card", needsCardGoldens.map((name) => `needs-card/${name}`), ["Tests/FieldProductTests"]],
+  [
+    "chat",
+    ["needs-item.held-spawn.json", "needs-item.agent-ask.json", "agent-catalog.valid.json"],
+    ["Sources/FieldHome"],
+  ],
   // IOS-12c (M-c2) — the thread cases Chat's demo door draws under `-vf-mock` (ChatFixtureDoor)
   [
     "chat",
@@ -422,6 +452,11 @@ const requiredMirrors = [
 if (chatFlowGoldens.length === 0) {
   problems.push(
     `the phone's Chat goldens are missing: ${relative(root, CHAT_FLOW)} holds no *.golden.json`,
+  );
+}
+if (needsCardGoldens.length === 0) {
+  problems.push(
+    `the needs-you card's goldens are missing: ${relative(root, NEEDS_CARD)} holds no *.golden.json`,
   );
 }
 for (const [set, fixtures, folders] of requiredMirrors) {

@@ -131,7 +131,9 @@ struct SparkShapesTests {
 
   @Test("every kind of item reads whole; a kind this build does not know is kept, and its new field named")
   func items() throws {
-    for name in ["question", "held-send", "held-send-cut", "held-spawn", "agent-ask"] {
+    // IOS-12d: CP-4's six flow kinds with them, their run and script held to the contract
+    let flows = ["flow-proposal", "flow-gate", "flow-changed", "flow-repair", "flow-cap", "flow-lost"]
+    for name in ["question", "held-send", "held-send-cut", "held-spawn", "agent-ask"] + flows {
       let item = try NeedsItem(json: try Fixture.json("needs-item.\(name)"))
       #expect(item.knownKind != nil, "\(name)")
       #expect(item.unknownFields.isEmpty, "\(name)")
@@ -142,6 +144,43 @@ struct SparkShapesTests {
     #expect(gate.state == "waiting")
     #expect(gate.spark == nil)
     #expect(gate.unknownFields == ["step"])
+  }
+
+  @Test("IOS-12d — what the card says is read: a held send's session, a spawn's agent, folder and count, an answer")
+  func cardFacts() throws {
+    let send = try NeedsItem(json: try Fixture.json("needs-item.held-send"))
+    #expect(send.to?.session == "run-31")
+    #expect(send.to?.name == "claude·2")
+    #expect(send.count == 2)
+    let spawn = try NeedsItem(json: try Fixture.json("needs-item.held-spawn"))
+    #expect(spawn.agent == "claude")
+    #expect(spawn.folder == "vibe-field")
+    #expect(spawn.live == 8)
+    let kinds = NeedsItemKind.allCases.map { $0.rawValue }
+    #expect(kinds.count == 10)
+    let answered = try NeedsAnswerResult(json: try Fixture.json("needs-answer-result.valid")).item
+    let answer = try #require(answered.answer)
+    #expect(answered.state == "answered")
+    #expect(answer.choice == 0 && answer.outcome == "done" && !answer.told)
+    #expect(answer.waits == "Vela's session is starting; it hears your answer when it wakes")
+    #expect(answer.reason == nil)
+    // a script's hash that is no SHA-256 refuses the item, as zod does
+    let changed = try Fixture.json("needs-item.flow-changed")
+    let bad = edited(changed, [.key("script"), .key("hash")], .string("not-a-hash"))
+    #expect(throws: (any Error).self) { try NeedsItem(json: bad) }
+  }
+
+  @Test("IOS-12d — an answer goes by the act's place, carried to the item's desktop")
+  func answerParams() throws {
+    let here = NeedsAnswerParams(item: "ny-3f9a1c0b7e2d4a61", choice: 0, device: nil).json
+    let want = try Fixture.json("needs-answer-params.valid")
+    #expect(here == want)
+    let carried = NeedsAnswerParams(item: "ny-3f9a1c0b7e2d4a61", choice: 1, device: "dev-01HQ9S7XZ2").json
+    let fields: JSONValue = .object([
+      "item": .string("ny-3f9a1c0b7e2d4a61"), "choice": .int(1), "device": .string("dev-01HQ9S7XZ2"),
+    ])
+    #expect(carried == fields)
+    #expect(NeedsAnswerParams.method == "needs.answer")
   }
 
   @Test("an item the phone cannot read costs only itself")

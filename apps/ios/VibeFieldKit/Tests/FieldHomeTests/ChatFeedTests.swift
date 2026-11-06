@@ -1,9 +1,9 @@
 import FieldDesign
-import FieldProduct
 import Foundation
 import Testing
 
 @testable import FieldHome
+@testable import FieldProduct
 
 /// IOS-12b (PC-L2, PC-L4; §9 "Chat on the phone") — Chat's feed and its words. The feed asks the home for both lists
 /// with `scope: "mesh"` and asks again only when something moved (a door handed over, the board's live sparks, a
@@ -211,6 +211,29 @@ struct ChatFeedTests {
   }
 
   // MARK: - The words (§9 "Chat on the phone")
+
+  // IOS-12d (TH-1, the Mac's `needsOf`; the 12d plan's Found 1)
+  @Test("its own run waiting with its ask in the queue is ONE need, its key the item's")
+  func oneNeed() throws {
+    let list = try ComposeSparksList(json: try #require(ChatFixtureDoor.fixture("compose-sparks-list.merged")))
+    let vela = try #require(list.sparks.first { $0.id == ChatNeedsTests.vela })
+    let row = try Self.row(spark: ChatNeedsTests.vela)
+    let ask = try NeedsItem(json: try #require(ChatFixtureDoor.fixture("needs-item.agent-ask")))
+    let from: JSONValue = .object(["name": .string("Claude Code"), "session": .string(row.runtimeRunId)])
+    let ownAsk = try ChatNeedsTests.ask(["from": from])
+    func entry(_ items: [NeedsItem]) -> SparkEntry {
+      SparkEntry(
+        spark: vela, run: row, status: .approval, needsYou: true, awake: true, blocked: true, heard: true,
+        items: items, ownRuns: [row.runtimeRunId], activityAt: 0)
+    }
+    let queued = ChatNotes.keys(entry([ownAsk]))
+    #expect(queued == [ownAsk.id])
+    let waiting = ChatNotes.keys(entry([]))
+    #expect(waiting == ["\(row.runtimeRunId):wait"])
+    // an agent it started asking beside its own run's wait: two needs
+    let both = ChatNotes.keys(entry([ask]))
+    #expect(both == ["\(row.runtimeRunId):wait", ask.id])
+  }
 
   @Test("the subtitle counts what is true: the sparks, where they live, and how many need you")
   func subtitle() {

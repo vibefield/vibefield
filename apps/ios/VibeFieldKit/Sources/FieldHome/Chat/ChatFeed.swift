@@ -84,6 +84,16 @@ final class ChatFeed {
   private(set) var sends = ChatSends()
   /// Moves each time a different door is handed over (or none): an open thread reads again on the new one.
   private(set) var doorTurn = 0
+  /// IOS-12d — what this phone answers, by item (the Mac's `useNeedsCard`), for the app's life, written nowhere.
+  private(set) var answering: [String: ChatAnswering] = [:]
+  /// IOS-12d — answers that came back off screen and did not go as asked (Q4), oldest first: the note says each.
+  private(set) var offScreen: [ChatOffScreen] = []
+  /// IOS-12d — the catalog's labels by agent id, as the home's `agent.catalog` says them (Q1).
+  private(set) var labels: [String: String] = [:]
+  /// IOS-12d — where Chat's cards stand (HomeScreen says, d5; until then every card is taken as shown).
+  private(set) var shown = ChatShown()
+  /// How long a said or refused card holds; a test hands its own.
+  @ObservationIgnored var pause: @MainActor (Duration) async -> Void = { try? await Task.sleep(for: $0) }
 
   @ObservationIgnored private var door: (any ChatDoor)?
   @ObservationIgnored private var home: String?
@@ -250,4 +260,16 @@ final class ChatFeed {
       watchNeeds(device: desktop.device)
     }
   }
+
+  // MARK: IOS-12d — what waits on you (IOS-12d's d3 skeleton: d4 brings the body.)
+
+  func press(_ item: NeedsItem, choice: Int, spark: String, names: NeedsNames) {}
+
+  func run(_ runtimeRunId: String) -> AgentRemoteRow? { nil }
+
+  func label(_ agent: String) -> String? { nil }
+
+  func show(page: Bool, thread: String?) {}
+
+  func heard(_ note: ChatOffScreen) {}
 }

@@ -1,0 +1,15 @@
+{
+  "id": "ny-6c1d8e2f9a3b7d05",
+  "kind": "flow-changed",
+  "state": "open",
+  "from": {
+    "name": "Nightly sweep"
+  },
+  "asked": "2026-11-05T02:20:00.000Z",
+  "choices": ["Run this version", "Run the one you approved", "Not now"],
+  "script": {
+    "flow": "nightly-sweep",
+    "hash": "d71c93eea4c1d1628cb52731e6121ccb5a033bd887531571a0bb19b6d803e329",
+    "approved": "9e413602b57526f7956e04302406a4b586d8a6229f13cdb9a9036b884cfdca18"
+  }
+}

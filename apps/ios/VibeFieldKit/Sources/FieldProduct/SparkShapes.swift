@@ -266,6 +266,41 @@ public struct NeedsFrom: Sendable, Equatable {
   }
 }
 
+/// A held send's session (`NeedsItem.to`): its run, and its name as fieldd says it.
+public struct NeedsTo: Sendable, Equatable {
+  public let session: String
+  public let name: String
+
+  init(json: JSONValue) throws {
+    var to = try WireObject(shape: "NeedsItem.to", value: json)
+    session = try to.text("session", 1...Int.max)
+    name = try to.text("name", SparkWire.needsName)
+  }
+}
+
+/// How an item was answered (`NeedsAnswer`): the act by its place, when, what the act came to (`done` | `failed`,
+/// OPEN) and fieldd's words for a failure, and whether the spark has heard it, with why not.
+public struct NeedsAnswer: Sendable, Equatable {
+  public let choice: Int
+  public let at: String
+  public let outcome: String
+  public let reason: String?
+  public let told: Bool
+  public let waits: String?
+
+  init(json: JSONValue) throws {
+    var answer = try WireObject(shape: "NeedsAnswer", value: json)
+    let choice = try answer.integer("choice", atLeast: 0)
+    guard choice <= 4 else { throw WireDecodeError(shape: "NeedsAnswer", reason: "`choice` is past 4") }
+    self.choice = Int(choice)
+    at = try answer.text("at", 1...Int.max)
+    outcome = try answer.text("outcome", 1...32)
+    reason = try answer.typedString("reason", SparkWire.needsReason)
+    told = try answer.flag("told")
+    waits = try answer.typedString("waits", SparkWire.needsReason)
+  }
+}
+
 /// One item of the needs-you queue (`NeedsItem`, CP-3): a question, a held send or spawn, or an agent's own ask. The
 /// phone reads what Chat's list and its thread say; the item's other facts (the held send's session, the spawn's
 /// folder, an answer) are held to the contract and passed over.
@@ -287,9 +322,17 @@ public struct NeedsItem: Sendable, Equatable, Identifiable {
   public let cut: Bool
   public let choices: [String]?
   public let count: Int64?
+  /// A held send: the session it is for.
+  public let to: NeedsTo?
+  /// A held spawn: the agent (the catalog's id), its folder by its last segment, and the spark's live agents.
+  public let agent: String?
+  public let folder: String?
+  public let live: Int64?
   /// An agent's own ask: its blocker's kind (`permission` | `question`, OPEN), and a permission's tool.
   public let ask: String?
   public let tool: String?
+  /// How it was answered: an item fieldd handed back from `needs.answer`.
+  public let answer: NeedsAnswer?
   public let unknownFields: [String]
 
   /// The kind as this build names it, else nil (`needsKindOf`).
@@ -345,6 +388,12 @@ public struct NeedsItem: Sendable, Equatable, Identifiable {
       _ = try answer.typedString("waits", SparkWire.needsReason)
       return choice
     }
+    // IOS-12d's d3 skeleton: d4 brings the body.
+    to = nil
+    agent = nil
+    folder = nil
+    live = nil
+    answer = nil
     unknownFields = object.unknownFields
   }
 }
@@ -372,6 +421,39 @@ public struct NeedsList: Sendable, Equatable {
     self.refused = refused
     desktops = try ComposeDesktop.list(&object, shape: "NeedsListResult")
     unknownFields = object.unknownFields
+  }
+}
+
+// MARK: - An answer
+
+/// IOS-12d — `needs.answer`'s params: the act by its place among the item's choices, never its word (§9), carried to
+/// the item's desktop by the home (`device`; IOS-12a, PC-L2).
+public struct NeedsAnswerParams: Sendable, Equatable {
+  public static let method = "needs.answer"
+  public let item: String
+  public let choice: Int
+  public let device: String?
+
+  public init(item: String, choice: Int, device: String?) {
+    self.item = item
+    self.choice = choice
+    self.device = device
+  }
+
+  public var json: JSONValue {
+    // IOS-12d's d3 skeleton: d4 brings the body.
+    .object([:])
+  }
+}
+
+/// `needs.answer`'s answer: the item, answered, as fieldd recorded it.
+public struct NeedsAnswerResult: Sendable, Equatable {
+  public let item: NeedsItem
+  public let unknownFields: [String]
+
+  public init(json: JSONValue) throws {
+    // IOS-12d's d3 skeleton: d4 brings the body.
+    throw WireDecodeError(shape: "NeedsAnswerResult", reason: "not read yet")
   }
 }
 

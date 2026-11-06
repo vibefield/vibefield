@@ -67,6 +67,9 @@ public struct SparkEntry: Sendable, Equatable, Identifiable {
   /// The needs-you queue's open items for it, oldest first: its question, its held send or spawn, an ask from an
   /// agent it started. Its own run's asks are its row's wait, read there once.
   public let items: [NeedsItem]
+  /// The runs that are its own session: the one its record names, and any the board says is its own. An agent's ask
+  /// from one of them is its own run's (`NeedsCards.isOwnAsk`).
+  public let ownRuns: [String]
   /// When it last did anything, as epoch ms: its own run, the agents it started, or its record.
   public let activityAt: Int64
 
@@ -105,6 +108,14 @@ public enum SparkEntries {
       return !(item.knownKind == .agentAsk && item.from.session.map(own.contains) == true)
     }
   }
+
+  /// The spark's items, of its desktop. IOS-12d's d3 skeleton: d4 brings the body.
+  public static func items(of spark: SparkSummary, items: [NeedsItem]) -> [NeedsItem] {
+    Self.items(of: spark, rows: [], items: items)
+  }
+
+  /// The runs that are the spark's own session. IOS-12d's d3 skeleton: d4 brings the body.
+  public static func ownRuns(of spark: SparkSummary, in rows: [AgentRemoteRow]) -> [String] { [] }
 
   /// A row or an item of the spark's desktop; a spark from a daemon before IOS-12a names none and takes any.
   static func onItsDesktop(_ device: String, _ spark: SparkSummary) -> Bool {
@@ -182,7 +193,8 @@ public enum SparkEntries {
       let times = [time(spark.updatedAt)] + ([run].compactMap { $0 } + agents).map(Self.activity)
       return SparkEntry(
         spark: spark, run: run, status: status, needsYou: status.needsYou, awake: awake,
-        blocked: awake && waits(run), heard: heard(run), items: mine, activityAt: times.max() ?? 0)
+        blocked: awake && waits(run), heard: heard(run), items: mine, ownRuns: [],
+        activityAt: times.max() ?? 0)
     }
     .sorted { a, b in
       a.activityAt != b.activityAt
