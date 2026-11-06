@@ -13,7 +13,10 @@
 //    holds the terminal with `cat` — so end-of-file at the prompt ends the
 //    agent and leaves the shell;
 //  · `createSession`, for the runs a door starts (a resume from a typed
-//    run's record is an ordinary one), and `attachSession` when a row asks.
+//    run's record is an ordinary one), and `attachSession` when a row asks;
+//  · when a row asks (`observed`), a binding that witnesses its turns, whose
+//    status a row moves by handing it a turn (`typedEvent`), as
+//    agent-session.test.ts's scripted agent does (ST).
 //
 // Test-only; the gate's R23 never reads it.
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -21,6 +24,7 @@ import { dirname, join } from "node:path";
 import type { AgentCatalogEntry } from "@vibefield/contracts";
 import type {
   AgentAdapterBinding,
+  AgentEvent,
   AgentHost,
   AgentNativeInvocationResolution,
   BoundIngress,
@@ -60,6 +64,12 @@ export interface TypedAttach {
   ingress: AttachProviderSessionOptions["ingress"];
 }
 
+/** ST — an observed binding's candidate listener, by terminal (`observed: true`). */
+export type TypedCandidates = Map<
+  string,
+  Parameters<AgentAdapterBinding["events"]["onCandidate"]>[0]
+>;
+
 /** What the scripted agent left behind, for a row to read. */
 export interface TypedScript {
   directory: string;
@@ -75,6 +85,8 @@ export interface TypedScript {
   attached: TypedAttach[];
   /** sessions a door started (`createSession`) */
   created: Array<{ runtimeSessionId: string; resume: string | undefined }>;
+  /** ST — each observed binding's candidate listener, by terminal (`observed: true`) */
+  observed: TypedCandidates;
 }
 
 /** Lay the scripted agent's files out in `directory`. */
@@ -96,6 +108,7 @@ export function typedScript(directory: string): TypedScript {
     preparing: { count: 0 },
     attached: [],
     created: [],
+    observed: new Map(),
   };
 }
 
@@ -107,16 +120,28 @@ export function linesOf(path: string): string[] {
     .filter((line) => line !== "");
 }
 
+/** `observed` — ST: the binding witnesses its turns (`native-hooks`), and a
+ * row moves its status by handing the kept listener a turn (`typedEvent`);
+ * absent, it reads as `terminal-only`, a status fieldd cannot read. */
 function binding(
   host: AgentHost,
   runtimeSessionId: string,
   sessionId: string,
+  observed?: TypedCandidates,
 ): AgentAdapterBinding {
   return {
     sessionId,
     runtimeSessionId,
-    observationLevel: () => "terminal-only",
-    events: { onCandidate: () => () => undefined },
+    observationLevel: () => (observed === undefined ? "terminal-only" : "native-hooks"),
+    events: {
+      onCandidate: (listener) => {
+        if (observed === undefined) return () => undefined;
+        observed.set(runtimeSessionId, listener);
+        return () => {
+          if (observed.get(runtimeSessionId) === listener) observed.delete(runtimeSessionId);
+        };
+      },
+    },
     services: {
       prompt: {
         async submit(submission: PromptSubmission): Promise<PromptReceipt> {
@@ -133,6 +158,28 @@ function binding(
     },
     async dispose() {},
   };
+}
+
+/** What the observed scripted agent can report, in puppeteer's own event
+ * shapes: a turn's start and end. */
+export type TypedEvent = Extract<AgentEvent, { type: "turn:started" | "turn:completed" }>;
+
+/** ST — the observed scripted agent reports an event, as an adapter's native
+ * hook would: `turn:started` reads as `working` and `turn:completed` as idle
+ * (agent-session.test.ts's `scriptedEvent`, for a typed run's binding). */
+export function typedEvent(script: TypedScript, runtimeSessionId: string, event: TypedEvent): void {
+  const listener = script.observed.get(runtimeSessionId);
+  if (listener === undefined) throw new Error(`no observed binding on ${runtimeSessionId}`);
+  const prepared = script.prepared.find((p) => p.adoptedIn === runtimeSessionId);
+  listener({
+    type: event.type,
+    sessionId: prepared?.sessionId ?? runtimeSessionId,
+    timestamp: new Date().toISOString(),
+    monotonicTime: performance.now(),
+    source: "native-hook",
+    confidence: "authoritative",
+    event,
+  } as Parameters<typeof listener>[0]);
 }
 
 /** The scripted agent's grammar — the whole of it. */
@@ -167,6 +214,15 @@ export interface TypedProviderOptions {
   /** the program the recipe names (default `/bin/sh`): one that does not
    * exist is a recipe the launcher cannot run */
   recipeCommand?: string;
+  /** item 191 — shell words the recipe runs BEFORE its MANAGED line, so a row
+   * that read the line knows they ran: `trap '' INT; ` makes an agent that
+   * ignores ⌃C for good (`cat` inherits the ignore across the exec; a SIGTERM
+   * still ends it, and so does end of input), agent-session.test.ts's
+   * IGNORES_INT for a typed run */
+  prologue?: string;
+  /** ST — the binding witnesses its turns (`native-hooks`): a row moves its
+   * status with `typedEvent` (default: `terminal-only`, unreadable) */
+  observed?: boolean;
   /** SB-2 — the agent can hold a sign-in in an Agent Profile (the scripted
    * account capability, agent-session.test.ts's): its root variable is on the
    * launch allow-list, so a launch carries it and puppeteer attributes the
@@ -179,6 +235,7 @@ export function typedProvider(
   options: TypedProviderOptions = {},
 ): AgentProvider {
   let counter = 0;
+  const observed = options.observed === true ? script.observed : undefined;
   const ingressFor = (n: number): BoundIngress => ({
     port: 41_000 + n,
     token: `typed-bearer-${n}`,
@@ -220,13 +277,16 @@ export function typedProvider(
         sessionId,
         launch: {
           command: options.recipeCommand ?? "/bin/sh",
-          args: ["-c", `echo "MANAGED ${sessionId}" >> '${script.managedLog}'; exec /bin/cat`],
+          args: [
+            "-c",
+            `${options.prologue ?? ""}echo "MANAGED ${sessionId}" >> '${script.managedLog}'; exec /bin/cat`,
+          ],
           cwd: session.cwd,
           env: { SCRIPTED_TYPED: sessionId },
         },
         async adopt(runtimeSessionId: string) {
           prepared.adoptedIn = runtimeSessionId;
-          return binding(session.host, runtimeSessionId, sessionId);
+          return binding(session.host, runtimeSessionId, sessionId, observed);
         },
         async dispose() {},
       };
@@ -241,7 +301,12 @@ export function typedProvider(
         env: {},
       });
       script.created.push({ runtimeSessionId, resume: session.resume });
-      return binding(session.host, runtimeSessionId, session.resume ?? `typed-native-${n}`);
+      return binding(
+        session.host,
+        runtimeSessionId,
+        session.resume ?? `typed-native-${n}`,
+        observed,
+      );
     },
     ...(options.attach === true
       ? {
@@ -251,7 +316,7 @@ export function typedProvider(
               sessionId: attach.sessionId,
               ingress: attach.ingress,
             });
-            return binding(attach.host, attach.runtimeSessionId, attach.sessionId);
+            return binding(attach.host, attach.runtimeSessionId, attach.sessionId, observed);
           },
         }
       : {}),

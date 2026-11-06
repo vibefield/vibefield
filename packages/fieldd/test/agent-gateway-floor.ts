@@ -205,6 +205,10 @@ export interface FloorConfig {
   /** compose the agent index (a scripted rosettad) and resume-when-idle's
    * thresholds: what a run that MAY be replaced at idle is replaced by */
   index?: { afterMs: number; pollMs: number };
+  /** ST — how long a sent Stop waits to be heard (default
+   * `AGENT_STOP.HEARD_WITHIN_MS`): a row waits its own bound, not the
+   * product's */
+  stopHeardWithinMs?: number;
 }
 
 async function openRpc(port: number): Promise<WsRpc> {
@@ -324,6 +328,9 @@ export async function floor(config: FloorConfig): Promise<Floor> {
           rosettadHome: indexHome,
           agentResumeWhenIdle: config.index,
         }),
+    ...(config.stopHeardWithinMs !== undefined
+      ? { agentStopHeardWithinMs: config.stopHeardWithinMs }
+      : {}),
     agentCatalog: TYPED_CATALOG,
     // the scripted agent and no other: nothing of any vendor's is composed
     agentProviders: () => [

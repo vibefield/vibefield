@@ -96,7 +96,7 @@ import {
   noTerminalHost,
   type SystemAudit,
 } from "../src/agent-runtime";
-import { endTypedProcess, typedRunProof } from "../src/agent-typed-run";
+import { endTypedRun, TYPED_END, typedRunProof } from "../src/agent-typed-run";
 import type { AuditMutation, AuditMutationOutcome } from "../src/audit-service";
 import { AGENT_SHIM_ROLE_ARG } from "../src/roles";
 // `born` names a terminal's birth in this file's rows; the agent's is `birth`
@@ -108,6 +108,7 @@ import {
   TYPED_PROVIDER,
   type TypedProviderOptions,
   type TypedScript,
+  typedEvent,
   typedProvider,
   typedScript,
 } from "./agent-gateway-fixture";
@@ -2970,17 +2971,170 @@ describe("a typed run's proof — what its record must show before fieldd attach
     ).toEqual({ holds: false, why: "shell-named" });
   });
 
-  it(
-    "ends a typed run's PROCESS only when the table shows the pid to be the process the record names — and then with the signal asked, on that pid",
-    async () => {
-      // a pid no process can hold: whatever a broken rule did with it would reach nobody
-      const NOBODY = 3_999_999;
-      const table = running();
-      expect(endTypedProcess({ pid: NOBODY, startedAt: AGENT_STARTED }, undefined)).toBe("unknown");
-      expect(endTypedProcess({ pid: NOBODY, startedAt: AGENT_STARTED }, table)).toBe("gone");
-      table.set(NOBODY, proc(NOBODY, 1, "2026-09-27T21:00:00.000Z"));
-      expect(endTypedProcess({ pid: NOBODY, startedAt: AGENT_STARTED }, table)).toBe("not-it");
+  // ── a typed run's END (item 191): its PROCESS, never its terminal, which is the person's shell ──
+  /** The table at a typed run's end: the agent (600) under the shell (500), its own subtree (610, and 620 beneath it),
+   * a job of the person's beside it in the same shell (700), and two rows under the agent that prove nothing — one
+   * that says it started before the agent did (630: no child does), one whose start `ps` could not read (640). */
+  const ending = (): Map<number, ProcessRecord> =>
+    new Map([
+      ...running(),
+      [610, proc(610, 600, "2026-09-27T20:05:01.000Z")],
+      [620, proc(620, 610, "2026-09-27T20:05:02.000Z")],
+      [630, proc(630, 600, "2026-09-27T20:04:00.000Z")],
+      // `proc` would give an undefined start its default: stated whole
+      [640, { pid: 640, parentPid: 600, startedAt: undefined }],
+      [700, proc(700, 500, "2026-09-27T20:06:00.000Z")],
+    ]);
+  /** `endTypedRun` over a table the row states: every signal recorded and none sent, and a pid watch the row fires. */
+  function ender(
+    table: () => ReadonlyMap<number, ProcessRecord> | undefined,
+    options: { kill?: (pid: number, signal: NodeJS.Signals) => void } = {},
+  ) {
+    const signals: Array<[number, NodeJS.Signals]> = [];
+    const watched: number[] = [];
+    let heard: (() => void) | undefined;
+    let unwatched = 0;
+    const readTable = vi.fn(async () => table());
+    const recorded = (pid: number, signal: NodeJS.Signals): void => {
+      signals.push([pid, signal]);
+    };
+    return {
+      signals,
+      watched,
+      readTable,
+      /** the agent's pid is gone, as its watch hears it */
+      exit: () => heard?.(),
+      unwatched: () => unwatched,
+      deps: {
+        shellPid: 500,
+        readTable,
+        kill: options.kill ?? recorded,
+        watch: (pid: number, onExit: () => void) => {
+          watched.push(pid);
+          heard = onExit;
+          return () => {
+            unwatched += 1;
+          };
+        },
+      },
+    };
+  }
 
+  it("ends a typed run's PROCESS by SIGTERM on the pid the table proves, and does nothing more once its pid watch hears it end: no SIGKILL, no second read, never the shell", async () => {
+    vi.useFakeTimers();
+    try {
+      const box = ender(() => ending());
+      const end = endTypedRun({ pid: 600, startedAt: AGENT_STARTED }, box.deps);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(box.signals).toEqual([[600, "SIGTERM"]]);
+      expect(box.watched).toEqual([600]);
+      // the agent obeys: its watch answers long before the grace, and so does the end
+      await vi.advanceTimersByTimeAsync(100);
+      box.exit();
+      expect(await end).toBe("signalled");
+      expect(box.unwatched()).toBe(1);
+      await vi.advanceTimersByTimeAsync(TYPED_END.termGraceMs * 2);
+      expect(box.signals).toEqual([[600, "SIGTERM"]]);
+      expect(box.readTable).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("SIGKILLs a typed run's process that outlives the grace, and its subtree as the second read proves it — never the shell, never the person's other job, never a row that proves nothing", async () => {
+    vi.useFakeTimers();
+    try {
+      const box = ender(() => ending());
+      const end = endTypedRun({ pid: 600, startedAt: AGENT_STARTED }, box.deps);
+      // a TUI that traps SIGTERM: nothing more until the grace is over
+      await vi.advanceTimersByTimeAsync(TYPED_END.termGraceMs - 1);
+      expect(box.signals).toEqual([[600, "SIGTERM"]]);
+      expect(box.readTable).toHaveBeenCalledTimes(1);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(await end).toBe("signalled");
+      expect(box.signals).toEqual([
+        [600, "SIGTERM"],
+        [600, "SIGKILL"],
+        [610, "SIGKILL"],
+        [620, "SIGKILL"],
+      ]);
+      for (const spared of [500, 630, 640, 700]) {
+        expect(box.signals.map(([pid]) => pid)).not.toContain(spared);
+      }
+      expect(box.readTable).toHaveBeenCalledTimes(2);
+      expect(box.unwatched()).toBe(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("kills nothing at the grace that the second read does not prove: a pid handed on is the run's process gone (the end placed), a table unread places nothing (unknown)", async () => {
+    vi.useFakeTimers();
+    try {
+      const handedOn = ending();
+      handedOn.set(600, proc(600, 500, "2026-09-27T21:00:00.000Z"));
+      const seconds: Array<[ReadonlyMap<number, ProcessRecord> | undefined, string]> = [
+        [handedOn, "signalled"],
+        // a SIGTERM went out, and nothing says whether the process still runs: no end is placed (a TUI that traps
+        // SIGTERM would still run, and fieldd must not say it ended)
+        [undefined, "unknown"],
+      ];
+      for (const [second, answer] of seconds) {
+        let reads = 0;
+        const box = ender(() => {
+          reads += 1;
+          return reads === 1 ? ending() : second;
+        });
+        const end = endTypedRun({ pid: 600, startedAt: AGENT_STARTED }, box.deps);
+        await vi.advanceTimersByTimeAsync(TYPED_END.termGraceMs);
+        expect(await end).toBe(answer);
+        expect(box.signals).toEqual([[600, "SIGTERM"]]);
+        expect(box.readTable).toHaveBeenCalledTimes(2);
+      }
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("signals nothing the table does not prove: the shell itself (B1, before any read), a pid handed on, a pid gone, a table unread", async () => {
+    const shell = ender(() => ending());
+    expect(await endTypedRun({ pid: 500, startedAt: T0 }, shell.deps)).toBe("not-it");
+    expect(shell.readTable).not.toHaveBeenCalled();
+    const reused = ender(() => ending());
+    expect(
+      await endTypedRun({ pid: 600, startedAt: "2026-09-27T19:00:00.000Z" }, reused.deps),
+    ).toBe("not-it");
+    const gone = ender(() => {
+      const table = ending();
+      table.delete(600);
+      return table;
+    });
+    expect(await endTypedRun({ pid: 600, startedAt: AGENT_STARTED }, gone.deps)).toBe("gone");
+    const unread = ender(() => undefined);
+    expect(await endTypedRun({ pid: 600, startedAt: AGENT_STARTED }, unread.deps)).toBe("unknown");
+    for (const box of [shell, reused, gone, unread]) {
+      expect(box.signals).toEqual([]);
+      expect(box.watched).toEqual([]);
+    }
+  });
+
+  it("answers a SIGTERM the system refused for what it means: a pid already gone is gone, one not ours to signal is unknown — and waits on neither", async () => {
+    const refusing = (code: string) =>
+      ender(() => ending(), {
+        kill: () => {
+          throw Object.assign(new Error(code), { code });
+        },
+      });
+    const gone = refusing("ESRCH");
+    expect(await endTypedRun({ pid: 600, startedAt: AGENT_STARTED }, gone.deps)).toBe("gone");
+    const theirs = refusing("EPERM");
+    expect(await endTypedRun({ pid: 600, startedAt: AGENT_STARTED }, theirs.deps)).toBe("unknown");
+    expect([...gone.watched, ...theirs.watched]).toEqual([]);
+  });
+
+  it(
+    "ends a REAL process the record names by SIGTERM, and hears it end by the kit's own pid watch — a process the record does not name is left alone",
+    async () => {
       // a process of the test's own, and the start the system gives it
       const child = spawn("/bin/sleep", ["120"], { stdio: "ignore" });
       const ended = new Promise<NodeJS.Signals | null>((resolve) =>
@@ -2991,14 +3145,19 @@ describe("a typed run's proof — what its record must show before fieldd attach
       });
       const pid = child.pid as number;
       const startedAt = await poll(async () => await processStartedAt(pid), 30_000);
+      const table = running();
       table.set(pid, proc(pid, process.pid, startedAt));
+      // the test process stands as the shell: the walk only ever descends from the agent
+      const deps = { shellPid: process.pid, readTable: async () => table };
       // the record names another start: not that process, and it is left alone
-      expect(endTypedProcess({ pid, startedAt: "2020-02-02T02:02:02.000Z" }, table)).toBe("not-it");
+      expect(await endTypedRun({ pid, startedAt: "2020-02-02T02:02:02.000Z" }, deps)).toBe(
+        "not-it",
+      );
       await sleep(300);
       expect(child.exitCode).toBeNull();
       expect(child.signalCode).toBeNull();
       // the record names it: signalled, and it ends by that signal
-      expect(endTypedProcess({ pid, startedAt }, table)).toBe("signalled");
+      expect(await endTypedRun({ pid, startedAt }, deps)).toBe("signalled");
       expect(await ended).toBe("SIGTERM");
     },
     PROCESS_BUDGET_MS,
@@ -3360,6 +3519,115 @@ describe("a name typed in a pane — the REAL floor (AR-7b)", () => {
           (error: { rpc?: { data?: { details?: unknown } } }) => error.rpc?.data?.details,
         )) as { state?: string } | undefined;
       expect(refused?.state).toBe("not-alive");
+    },
+    FLOOR_BUDGET_MS,
+  );
+
+  it(
+    "a spark's Stop the ladder cannot hear on a typed run leaves the person's shell, and its agent, to the person: sent twice, then unheard — the shell's terminal is never the ladder's (item 191)",
+    async () => {
+      // An agent whose turns fieldd reads, typed in the pane, that ignores ⌃C for good: the ladder's caller since
+      // 11-02 (a spark's agent_interrupt, which is `agent.interrupt`) is never heard, and its status keeps reading
+      // working. The bound is the row's own.
+      const box = await floor({
+        bundle: shimScript,
+        stopHeardWithinMs: 500,
+        provider: { observed: true, prologue: "trap '' INT; " },
+      });
+      const pane = await openPane(box);
+      await type(box, pane, TYPED_COMMAND);
+      const row = await adopted(box, pane);
+      const pid = readRecord(box.dataDir, row.runtimeRunId).process?.pid as number;
+      // the MANAGED line is written after the prologue: the ⌃C ignore stands
+      await until(() => (linesOf(box.script.managedLog).length === 1 ? true : undefined));
+      await until(
+        () => (box.script.observed.has(pane.sessionId) ? true : undefined),
+        FLOOR_WAIT_MS,
+        "the typed run's observed binding",
+      );
+      typedEvent(box.script, pane.sessionId, { type: "turn:started" });
+      await until(
+        () => (rowOf(box, row.runtimeRunId)?.status === "working" ? true : undefined),
+        FLOOR_WAIT_MS,
+        "the typed run working",
+      );
+
+      expect(await box.win.call("agent.interrupt", { runtimeRunId: row.runtimeRunId })).toEqual({
+        accepted: true,
+      });
+      const stop = await until(
+        () => {
+          const now = rowOf(box, row.runtimeRunId);
+          if (now === undefined) return "the run ended";
+          const held = now.stop;
+          return held?.unheardAt !== undefined || held?.stage === "terminating" ? held : undefined;
+        },
+        FLOOR_WAIT_MS,
+        "the Stop left to the person (before item 191: the ladder ending the pane's terminal)",
+      );
+      if (typeof stop === "string") throw new Error(stop);
+      // before item 191 the second bound placed the floor's terminate ladder on the pane's own session — the person's
+      // shell — and the stop read `terminating`
+      expect(stop).toMatchObject({ stage: "resent", unheardAt: expect.any(String) });
+      expect(isAlive(pane.pid)).toBe(true);
+      expect(isAlive(pid)).toBe(true);
+      // several bounds later nothing more was done: the re-send was fieldd's last act
+      await quiet(2_000);
+      expect(isAlive(pane.pid)).toBe(true);
+      expect(isAlive(pid)).toBe(true);
+      expect(listedRow(box, pane.sessionId)?.pid).toBe(pane.pid);
+      expect(rowOf(box, row.runtimeRunId)?.stop).toEqual(stop);
+      const escalated = await until(() => {
+        const acts = auditActs(box.dataDir, "agent.session.stop_escalated").filter(
+          (act) => act.attempt.target.id === row.runtimeRunId,
+        );
+        return acts.length > 0 && acts.every((act) => act.outcome !== undefined) ? acts : undefined;
+      });
+      expect(escalated.map((act) => act.attempt.attrs?.["stage"])).toEqual(["resent"]);
+      expect(escalated[0]?.attempt.actor.kind).toBe("system");
+
+      // the person ends it the way they end it, at its prompt: the exit is the Stop heard, and the shell answers
+      await key(box, pane, END_OF_INPUT);
+      await until(
+        () => (rowOf(box, row.runtimeRunId) === undefined ? true : undefined),
+        FLOOR_WAIT_MS,
+        "the row leaving",
+      );
+      expect(isAlive(pid)).toBe(false);
+      expect(readRecord(box.dataDir, row.runtimeRunId).exited).toMatchObject({
+        reason: "process-exited",
+        stop: { sentAt: stop.sentAt, heardBy: "exit" },
+      });
+      expect(isAlive(pane.pid)).toBe(true);
+      await answers(box, pane, "after-the-unheard-stop");
+    },
+    FLOOR_BUDGET_MS,
+  );
+
+  it(
+    "a typed run's End is its process's, never the shell's: talk's agent_stop ends the agent by SIGTERM on the pid its record proves, the run closes as that process's exit, and the person's shell answers (item 191)",
+    async () => {
+      const box = await floor({ bundle: shimScript });
+      const pane = await openPane(box);
+      await type(box, pane, TYPED_COMMAND);
+      const row = await adopted(box, pane);
+      const pid = readRecord(box.dataDir, row.runtimeRunId).process?.pid as number;
+      await until(() => (linesOf(box.script.managedLog).length === 1 ? true : undefined));
+
+      // CP-2's end (a spark's agent_stop), the one End half A reaches, through endLive: the shell's pid the floor
+      // lists, the process table, the run's own pid watch. Before item 191 it was the floor's terminate on the
+      // pane's own session — the person's shell — and the run closed as that terminal's exit.
+      await box.daemon.agents.endRun(row.runtimeRunId);
+      await until(
+        () => (rowOf(box, row.runtimeRunId) === undefined ? true : undefined),
+        FLOOR_WAIT_MS,
+        "the row leaving",
+      );
+      expect(isAlive(pid)).toBe(false);
+      expect(readRecord(box.dataDir, row.runtimeRunId).exited?.reason).toBe("process-exited");
+      expect(listedRow(box, pane.sessionId)?.pid).toBe(pane.pid);
+      expect(isAlive(pane.pid)).toBe(true);
+      await answers(box, pane, "after-the-end");
     },
     FLOOR_BUDGET_MS,
   );

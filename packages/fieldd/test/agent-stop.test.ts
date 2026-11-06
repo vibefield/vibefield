@@ -22,10 +22,17 @@ const stop = (overrides: Partial<AgentStopState> = {}): AgentStopState => ({
   ...overrides,
 });
 
-const READABLE_WORKING: StopFacts = { readable: true, known: true, working: true };
-const READABLE_IDLE: StopFacts = { readable: true, known: true, working: false };
-const READABLE_UNKNOWN: StopFacts = { readable: true, known: false, working: false };
-const UNREADABLE: StopFacts = { readable: false, known: true, working: true };
+const READABLE_WORKING: StopFacts = { readable: true, known: true, working: true, typed: false };
+const READABLE_IDLE: StopFacts = { readable: true, known: true, working: false, typed: false };
+const READABLE_UNKNOWN: StopFacts = {
+  readable: true,
+  known: false,
+  working: false,
+  typed: false,
+};
+const UNREADABLE: StopFacts = { readable: false, known: true, working: true, typed: false };
+/** AR-7 — a run typed in the person's own shell, its status read and saying `working` (item 191). */
+const TYPED_WORKING: StopFacts = { ...READABLE_WORKING, typed: true };
 
 describe("ST-D3 — which runs fieldd can read", () => {
   it("reads a run whose turns puppeteer witnesses: structured, native hooks or a native log", () => {
@@ -64,10 +71,32 @@ describe("ST-D2/D3 — the one step a Stop takes at its bound", () => {
   it("leaves a run whose status cannot be read to the person after the re-send: never ends it", () => {
     expect(nextStopStep(stop({ stage: "resent" }), UNREADABLE)).toBe("unheard");
     expect(
-      nextStopStep(stop({ stage: "resent" }), { readable: false, known: true, working: false }),
+      nextStopStep(stop({ stage: "resent" }), {
+        readable: false,
+        known: true,
+        working: false,
+        typed: false,
+      }),
     ).toBe("unheard");
     // a readable run whose status says nothing is not ended either: no word says it still works
     expect(nextStopStep(stop({ stage: "resent" }), READABLE_UNKNOWN)).toBe("unheard");
+  });
+
+  it("never ends a run typed in the person's own shell: after the re-send it is left to the person, working or not (item 191, rv-typed-stop Q1 (a))", () => {
+    // before item 191 a typed run still `working` after the re-send was ended through the floor's ladder — on its
+    // terminal, which is the person's shell
+    expect(nextStopStep(stop({ stage: "resent" }), TYPED_WORKING)).toBe("unheard");
+    expect(nextStopStep(stop({ stage: "resent" }), { ...READABLE_IDLE, typed: true })).toBe(
+      "unheard",
+    );
+    // the same facts on a run one of our doors started: its own PTY is the ladder's
+    expect(nextStopStep(stop({ stage: "resent" }), READABLE_WORKING)).toBe("terminate");
+    // the re-send is the run's own stop, typed or not; Pause, and a Stop already done with, are as for any run
+    expect(nextStopStep(stop(), TYPED_WORKING)).toBe("resend");
+    expect(nextStopStep(stop({ stage: "resent" }), TYPED_WORKING, true)).toBe("unheard");
+    expect(nextStopStep(stop({ stage: "resent", unheardAt: UNHEARD_AT }), TYPED_WORKING)).toBe(
+      "none",
+    );
   });
 
   it("takes no step for a Stop heard, terminating, already unheard, or in a stage it does not know", () => {
@@ -88,7 +117,9 @@ describe("ST — a status is the Stop heard", () => {
   });
 
   it("never hears an unreadable status: only the exit can say", () => {
-    expect(heardByStatus(stop(), { readable: false, known: true, working: false })).toBe(false);
+    expect(
+      heardByStatus(stop(), { readable: false, known: true, working: false, typed: false }),
+    ).toBe(false);
   });
 
   it("never hears a status that says nothing: `unknown` is no evidence the turn stopped", () => {
@@ -98,7 +129,9 @@ describe("ST — a status is the Stop heard", () => {
   });
 
   it("hears a run blocked on the person: its status left working", () => {
-    expect(heardByStatus(stop(), { readable: true, known: true, working: false })).toBe(true);
+    expect(
+      heardByStatus(stop(), { readable: true, known: true, working: false, typed: false }),
+    ).toBe(true);
   });
 
   it("does not take a dying process's status for its word while the ladder ends it", () => {
