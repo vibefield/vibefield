@@ -11,7 +11,10 @@ import { nestsWithin } from "./protocol";
 //   in one `enum`, which the byte bound alone would admit at hundreds of short values.
 // - The subset's own shape: `type` one of FORM_TYPES (one word, never a list); `properties` an object of forms;
 //   `required` a list of names; `items` one form (never a list); `enum` 1..FORM_ENUM_MAX JSON scalars. A value it
-//   cannot read is `malformed`, naming its keyword.
+//   cannot read is `malformed`, naming its keyword. Every other keyword is refused, `description` among them; it is
+//   the first candidate to widen the subset by (DESIGN.md §9; ruled 2026-11-06), and a widening only adds.
+// - A form's top is `type` object, a top with no `type` refused too (`top`): a step's answer is its fields beside its
+//   text (Q-A1 (a)). The top's own keywords and their shapes are read first, then its type.
 // - An answer is read from its last fenced `json` block, else its whole text, and bounded at RESULT_MAX_BYTES before any
 //   parse: past it the answer is a miss. A match gives the parsed value back whole (the runs spread an object's fields
 //   beside `text`, Q-A1 (a)); `properties` holds the fields it names, and fields it does not name pass.
@@ -56,12 +59,14 @@ export interface FlowForm {
 }
 
 /** Why a form is refused at the call, before its step starts (DESIGN.md §9, "A form the run can't check"): a keyword
- * outside the subset (said on one line, cut at FORM_KEYWORD_WORDS_MAX); one of the three bounds; or a value the subset
- * cannot read, by its keyword (none: the form itself is no schema object). */
+ * outside the subset (said on one line, cut at FORM_KEYWORD_WORDS_MAX); one of the three bounds; a value the subset
+ * cannot read, by its keyword (none: the form itself is no schema object); or a top that is not `type` object. The
+ * runs compose each sentence with the step's label. */
 export type FormRefusal =
   | { readonly kind: "keyword"; readonly keyword: string }
   | { readonly kind: "too-large"; readonly bound: "bytes" | "depth" | "enum" }
-  | { readonly kind: "malformed"; readonly keyword?: FormKeyword };
+  | { readonly kind: "malformed"; readonly keyword?: FormKeyword }
+  | { readonly kind: "top" };
 
 export type FormCheck =
   | { readonly ok: true; readonly form: FlowForm }
@@ -92,7 +97,7 @@ const refused = (refusal: FormRefusal): FormCheck => ({ ok: false, refusal });
 const malformed = (keyword: FormKeyword): FormCheck => refused({ kind: "malformed", keyword });
 
 /** A script's `schema` as a form, or why it is refused: the nesting first (canonical JSON recurses), then the bytes,
- * then one walk that holds each node's keywords, their shapes, the depth and each enum's width. */
+ * then one walk that holds each node's keywords, their shapes, the depth and each enum's width, and the top's type. */
 export function checkForm(schema: unknown): FormCheck {
   if (!isObject(schema)) return refused({ kind: "malformed" });
   if (!nestsWithin(schema, FORM_JSON_DEPTH_MAX))
@@ -137,6 +142,8 @@ export function checkForm(schema: unknown): FormCheck {
       for (let i = children.length - 1; i >= 0; i--)
         stack.push([children[i] as Record<string, unknown>, depth + 1]);
     }
+    // the top alone is depth 1: its own keywords and their shapes are read, then its type
+    if (depth === 1 && type !== "object") return refused({ kind: "top" });
   }
   return { ok: true, form: schema as FlowForm };
 }
