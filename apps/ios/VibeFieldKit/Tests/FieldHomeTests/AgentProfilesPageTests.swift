@@ -9,6 +9,8 @@ import Testing
 /// the page says where its reading comes from, its Profiles (All profiles first with several, the lens's check), its
 /// Plans under the lens's head, a need's words with no act, and — wave 1, UM-D14's interim — no Show and no sessions
 /// line. The home is the meters fixture's (This Mac, Work, Side and a draft) over the budget batch, read at its stamp.
+/// Since the U3 review: the home's honest empty is a first read, only an agent that never meters "shows no meter",
+/// and a reset a day or more off is said by its day.
 ///
 /// No key path and no `try` inside an #expect/#require argument: hoisted into a `let` first (T10f's kit trap).
 @Suite("the Me menu's row and the Agent Profiles page say what the home's meters say")
@@ -138,17 +140,61 @@ struct AgentProfilesPageTests {
     #expect(alone.allSatisfy { !crowded.contains($0) })
   }
 
-  @Test("an agent with no meter is a line of its own: ‹agent› shows no meter")
+  @Test("an agent with no meter says ‹agent› shows no meter; a plan no agent named says its title alone")
   func noMeter() throws {
     var reading = try Self.reading(sets: "agents-profile-sets.valid")
     reading.usage = .batch(try AgentAccountUsageBatch(json: try HomeFixture.json("agent-usage.valid")))
+    let catalog = MeterCatalog(rows: reading.catalog)
+    let meters = reading.meters(of: "work", now: Self.now)
+    let why = Dictionary(uniqueKeysWithValues: meters.entries.compactMap { entry in entry.why.map { (entry.key, $0) } })
     let work = Self.words(reading, lens: "work")
-    let none = work.plans.compactMap { row -> String? in
-      guard case .none(let said) = row.body else { return nil }
-      return said
+    var unreported = 0
+    var unnamed = 0
+    for row in work.plans {
+      guard case .none(let said) = row.body else { continue }
+      switch why[row.key] {
+      case .unreported?:
+        unreported += 1
+        #expect(said == "\(catalog.name(row.provider)) shows no meter")
+      case .unnamed?, .noWindows?:
+        unnamed += 1
+        #expect(said == row.title, "\(row.key): an agent that meters is said to show no meter")
+      default:
+        Issue.record("\(row.key) says \(said) with no reason to show no meter")
+      }
     }
-    #expect(!none.isEmpty)
-    #expect(none.allSatisfy { $0.hasSuffix(" shows no meter") })
+    #expect(unreported == 1)
+    #expect(unnamed == 2)
+  }
+
+  @Test("the home's honest empty, before its first refresh, is a first read: Reading usage…, never Read 3d ago")
+  func emptyBatchIsAFirstRead() throws {
+    let raw = try #require(MetersFixtureDoor.fixture("agent-usage.empty"))
+    let empty = try Self.reading(.batch(try AgentAccountUsageBatch(json: raw)))
+    #expect(empty.firstRead)
+    let words = Self.words(empty)
+    #expect(words.read == "Reading usage…")
+    #expect(words.menuWord == "reading…")
+    let waiting = try Self.reading(.waiting)
+    #expect(waiting.firstRead)
+    let read = try Self.reading()
+    #expect(!read.firstRead)
+    let refused = try Self.reading(.notShared)
+    #expect(!refused.firstRead)
+    let down = try Self.reading(.unavailable)
+    #expect(!down.firstRead)
+  }
+
+  @Test("a window's reset aloud: by its length \"resets in 2h\", by its day \"resets Thu 09:00\", or \"resets now\"")
+  func resetSaid() {
+    func line(_ reset: String) -> UsageLine {
+      UsageLine(
+        id: "seven-day", label: "7D", group: nil, usedPercent: 42, elapsedPercent: 50, reset: reset, resets: true,
+        hot: false)
+    }
+    #expect(UsageLineView.words(line("2h"), form: .length) == "7D: 42% used, resets in 2h")
+    #expect(UsageLineView.words(line("Thu 09:00"), form: .day) == "7D: 42% used, resets Thu 09:00")
+    #expect(UsageLineView.words(line("now"), form: .now) == "7D: 42% used, resets now")
   }
 
   @Test("a tap on a plan's arc focuses it; a tap in the middle focuses none")

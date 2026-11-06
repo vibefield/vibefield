@@ -198,6 +198,29 @@ struct BandsOptions: Equatable, Sendable {
   }
 }
 
+// MARK: - The phone's placements
+
+/// Every place the phone draws a Bands circle, each with the usage bands golden's options for that place, so the
+/// circle the parity holds is the circle drawn (the U3 review). A STUB (its red): the options as the views drew them.
+extension BandsOptions {
+  /// The Me menu's Agent Profiles row at 26.
+  static func menuRow(every: Bool) -> BandsOptions { BandsOptions(centre: .none, every: every) }
+  /// The Agent Profiles page's circle at 214.
+  static func page(every: Bool, several: Bool, focus: String?) -> BandsOptions {
+    BandsOptions(focus: focus, hit: true, crowd: every && several, every: every)
+  }
+  /// A profile's row on the page at 36.
+  static let profileRow = BandsOptions(centre: .glyph, hotDot: true)
+  /// The page's All profiles row at 36.
+  static let allProfilesRow = BandsOptions(centre: .glyph, hotDot: true, every: true)
+  /// A profile's bud in the held face's bloom at 54.
+  static let bud = BandsOptions(centre: .glyph, hotDot: true)
+  /// The held face's open circle at 206.
+  static func held(every: Bool) -> BandsOptions { BandsOptions(crowd: every, every: every) }
+  /// The ring the held face wears, 96 across.
+  static func faceRing(every: Bool) -> BandsOptions { BandsOptions(around: (34, 8), every: every) }
+}
+
 /// A plan's bands: the inner its first window of five hours or less; the outer its most pressed longer window that
 /// meters the whole plan; the hairline a window that meters part of it; a budget fills both.
 struct PlanBands: Equatable, Sendable {

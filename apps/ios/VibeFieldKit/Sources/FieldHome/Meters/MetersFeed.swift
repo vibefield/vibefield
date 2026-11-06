@@ -40,6 +40,9 @@ struct MetersReading: Equatable {
   var catalog: [AgentCatalogRow] = []
   var usage: Usage = .waiting
 
+  /// No reading has come yet. A STUB (the U3 review's red): no answer yet only.
+  var firstRead: Bool { usage == .waiting }
+
   /// The profiles that stand on a circle (ruling 7), in the home's order: the lens's (`ProfileLens.adopt`).
   var profiles: [AgentProfileSet] { sets.filter(MeterModel.hasCircle) }
 

@@ -101,6 +101,35 @@ struct BandsParityTests {
     }
   }
 
+  @Test("every phone placement draws with its golden case's options, so the circle the parity holds is the one drawn")
+  func placements() throws {
+    let golden = try Self.golden()
+    let circles = try #require(golden["circles"]?.arrayValue)
+    let drawn: [(name: String, options: BandsOptions)] = [
+      ("one profile, nothing in the middle", .menuRow(every: false)),
+      ("every profile, nothing in the middle", .menuRow(every: true)),
+      ("several plans on a profile's row", .profileRow),
+      ("every profile at the All profiles row", .allProfilesRow),
+      (
+        "every profile opened: a shared plan once, the crowded agents in their profiles' glyphs",
+        .page(every: true, several: true, focus: nil)
+      ),
+      (
+        "one profile chosen, a need pointed at: the others dim and the middle asks for it",
+        .page(every: false, several: true, focus: "plan:openai")
+      ),
+      ("several plans as a bud", .bud),
+      ("several plans held", .held(every: false)),
+      ("every profile around the face", .faceRing(every: true)),
+    ]
+    for place in drawn {
+      let circle = try #require(
+        circles.first { $0["name"]?.stringValue == place.name }, "no golden case: \(place.name)")
+      let recorded = Self.options(circle["options"])
+      #expect(recorded == place.options, "\(place.name)")
+    }
+  }
+
   @Test("UM-D4's forecast over the golden's fixed vector")
   func forecasts() throws {
     let golden = try Self.golden()

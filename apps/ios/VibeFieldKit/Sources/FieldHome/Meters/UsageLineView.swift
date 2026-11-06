@@ -87,11 +87,12 @@ struct UsageLineView: View {
       .frame(width: 58, alignment: .leading)
     }
     .accessibilityElement()
-    .accessibilityLabel(words)
+    .accessibilityLabel(Self.words(line, form: nil))
   }
 
-  /// The line in words, as the desktop says it.
-  private var words: String {
+  /// The line in words, as the desktop says it. A STUB for its reset's form (the U3 review's red): every reset is
+  /// said by its length.
+  static func words(_ line: UsageLine, form: MeterRules.ResetForm?) -> String {
     let group = line.group.map { "\($0.label), " } ?? ""
     let reset = line.reset.map { ", resets in \($0)" } ?? ""
     return "\(group)\(line.label): \(wholeWords(line.usedPercent))% used\(reset)\(line.hot ? ", ahead of pace" : "")"
