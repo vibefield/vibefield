@@ -1045,10 +1045,15 @@ DESIGN.md §2.9, §8 "The phone's Apps" and §9 "Apps"; DECISIONS MA
   release (0.3.x or 0.4.0) for AO-7's `installRecipe`, item 50's env seam, item 39 and the tuck (push and merge
   `vf/item-39`, `vf/after-a` first) · mille's first
   npm release · adopt rosettad's published archives (RD-D7) · RD-4's pipelines (who runs them is open, §9).
-- The Mac mini (Q24): full Xcode 26 there is DEFERRED (James, 2026-10-28 08:46Z: "not able to install xcode on mini
-  right now, please run those test on this mac instead"), so row 30 (`smoke:update`), the one gate row that needs it,
-  runs on James's Mac. Claude lists the mini's leftovers, read-only, for his hand (`/tmp/vf-smoke-*`, `~/vf-lanes`
-  and its `pb`, `tp` and `el8gt*` trees). Agents delete nothing.
+- The Mac mini (Q24): full Xcode was INSTALLED there (James, 2026-10-28 ~20:54Z: Xcode 27.1, 27A9275; read 20:57Z:
+  `actool` and Icon Composer's `ictool` executable, the two files `run-electron-builder.mjs` requires), and row 30
+  (`smoke:update`), the one gate row that needs it, ran there 5/5 that evening (§6). The mini is OFFLINE from
+  2026-11-05 (at James's account switch; LANDED "CP-4a2b's M-h"): vf-m1 is the lane host now, and row 30 has not run
+  there. James cleared the mini's leftovers by hand from Claude's read-only list (2026-10-28 ~15:18Z). Agents delete
+  nothing.
+  *Corrected 2026-11-06: this line said the install was DEFERRED (James, 2026-10-28 08:46Z: "not able to install
+  xcode on mini right now, please run those test on this mac instead"), with row 30 on James's Mac, and that Claude
+  would list the mini's leftovers.*
 - The npm token that leaked 10-26 is NOT rotated yet (Q26): a board reminder through VF-PM until he rotates it.
 - DESIGN.md §1.1 (his edit): Godview's visual source is puppeteer's Godview, not `p008/chopsticks/apps/godview`; drop
   "honest mock label" (the mock left at AR-3). Text in `thinking-ar-views-port.md` §9, refreshed for GV-D1 and the
@@ -1069,7 +1074,15 @@ DESIGN.md §2.9, §8 "The phone's Apps" and §9 "Apps"; DECISIONS MA
 - Re-sign trust-root v1 before 2027-04-19T20:52:49Z: James signs v2 (`trust-keygen assemble … --previous <v1>`, `sign`); a lane embeds it as a ROTATION; the re-sign procedure folds into `specs/trust-and-distribution.md` (or the P9 runbook) before its hand-off archives — LANDED "TD-1"; `specs/trust-and-distribution.md` §2.
 - Two electron-shell unit tests download Electron's binary through their imports — LANDED "CI — Electron's binary is fetched and proven before any test".
 - A guard that every `link:` row resolves before `pnpm build`, unless preflight's refusal covers it; retires with mille's release — LANDED "The Rust toolchain is pinned".
-- `smoke:update` raises a keychain dialog with a person present (use a run keychain; the fixer's item). Row 30 runs on James's Mac, since the mini's Xcode is deferred (Q24, §5); until the run keychain is built, he cancels each run's dialog (never Reset, never a password).
+- `smoke:update` raises a keychain dialog with a person present (use a run keychain; the fixer's item). Row 30 ran on
+  the Mac mini once its Xcode was in (Q24, §5): 5/5 at `3e6c941a8` (prod-builder, 2026-10-28 21:09–21:14Z) under
+  Xcode 27.1 and `TMPDIR=/tmp`. Under the lane's own TMPDIR the per-run `meshdata.sock` path was 104 bytes, over the
+  103-byte `sun_path` limit, and the first try's run 5 went red (`channel-unresolved`, 21:08Z). Unattended (the
+  first try, armed 21:03Z), runs 1–4 waited on no keychain; attended (the rerun), each run took ~19 s longer with a
+  SecurityAgent up (the dialog waiting, inferred). The mini is offline from 11-05 and row 30 has not run on vf-m1, so
+  the next gate:landing on James's Mac carries it (full Xcode 26.6 there, both files read 2026-11-06). Until the run
+  keychain is built, a person present cancels each run's dialog (never Reset, never a password). *Corrected
+  2026-11-06: this line said row 30 runs on James's Mac because the mini's Xcode was deferred.*
 - `cargo audit` runs report-first (`audit.yml`, `continue-on-error`); chacha20 is YANKED in Cargo.lock (run 40590297837); harden it after chacha20 moves (Q28, §3 item 7).
 - Shipped Rust daemons inherited `allow-jit`, shipped binaries embedded `~/.cargo/registry` paths, and `package-census
   --assert --strict` was red on MV's chunks (`build-hf.md` M3–M5) — LANDED "LP-6" (each daemon its own entitlements),

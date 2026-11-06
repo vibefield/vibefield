@@ -18077,6 +18077,8 @@ is stale (his example: the widgetlab port, retired by the desk). The record is
   compact.md's D-1 and D-10, he ruled 08:39Z–08:40Z (read back 08:41Z). Two rulings followed on the board: Q25's
   `draft/ground/results` KEPT (08:37:56Z) and Q24's Xcode install on the mini DEFERRED (08:46Z), so row 30 runs on his
   Mac.
+  > *Corrected 2026-11-06: James installed Xcode 27.1 on the mini that evening (~20:54Z), and row 30 ran there 5/5
+  > (21:14Z); the mini is offline from 2026-11-05 (ROADMAP §5).*
 - The records pass: workflow `wf_eb6198ce-c1f` (nine writers, one adversarial reviewer, 07:44Z–08:32Z). The reviewer's
   blocker and its 19 findings were fixed before this commit.
 
