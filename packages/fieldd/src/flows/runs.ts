@@ -1273,8 +1273,8 @@ export class FlowRuns {
       }
       value = { ...(match.value as Readonly<Record<string, unknown>>), text };
     }
-    // D11: fields that alone pass the bound are a miss, never a truncation; anything else the one cutter bounds as the
-    // replay hands it on (replay.ts), which marks it `cut` for the journal and the script's worker
+    // D11: fields that alone pass the bound are a miss, never a truncation; anything else is bounded as the one writer
+    // journals it (`#answer` → `flowAnswerLine`, D22), which marks it `cut` for the journal and the script's worker
     const bounded = boundedAnswer({ ok: true, value });
     if (!bounded.ok && bounded.miss === true) {
       this.#missed(run, live, record, step, end.runtimeRunId, bounded.refused);

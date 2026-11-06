@@ -1,10 +1,18 @@
 import { FLOW_LIMITS, nameWords } from "@vibefield/contracts";
 
-// CP-4a2b (§13a slice 7) — what a run says when it cannot start, one authority: DESIGN.md §9 "When a run can't start",
-// line for line. Each is the sentence said after "Couldn't run ‹flow›:", which the window says before it. ‹flow› is
-// `markName`'s: the name the flow's `meta` gives it, on one line and cut at 64 characters with "…"; a name that is, or
-// starts with, "VibeField" (trimmed, any case) shows the flow's slug instead, so a flow never speaks as VibeField
-// (R18). The bounds are FLOW_LIMITS' own numbers, so the words never say one the runs do not hold.
+// CP-4a2b (§13a slices 7–11) — what VibeField says of a run, one authority: DESIGN.md §9, line for line. No sentence
+// is here before §9 holds it. The file holds:
+// - a run's refusals: why it can't start ("When a run can't start"), said after "Couldn't run ‹flow›:", which the
+//   window says before it; the host's sentence ("When a run's script cannot go on"); why a step's call is refused,
+//   said after steps.ts's "VibeField didn't start ‹label›:" ("A step's call refused"); and why a run can't go on, each
+//   said whole ("A run that can't go on");
+// - an ask's frames (slice 11, "An ask refused"): the words a script's `await ask()` throws with when VibeField didn't
+//   ask you (the read's own words inside them, unchanged) or couldn't keep the question;
+// - the spark's facts (slice 11, "What VibeField tells a spark"): what a run a spark started tells that spark when it
+//   holds on you and when it ends, built from the spark's name, ‹flow› and the run's id alone.
+// ‹flow› is `markName`'s: the name the flow's `meta` gives it, on one line and cut at 64 characters with "…"; a name
+// that is, or starts with, "VibeField" (trimmed, any case) shows the flow's slug instead, so a flow never speaks as
+// VibeField (R18). The bounds are FLOW_LIMITS' own numbers, so the words never say one the runs do not hold.
 
 /** A flow's name as its mark says it (‹flow›): its `meta.name` on one line, or its slug (R18). */
 export function markName(name: string | undefined, flow: string): string {
