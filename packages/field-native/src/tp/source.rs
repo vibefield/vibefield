@@ -1,16 +1,19 @@
 //! Where the door's sessions come from (terminal-pipeline-v3 TP-D26 / G22).
 //! The door layer needs exactly three things of a session: the live
-//! `ghosttea::Session` by id, its `FrameHub` (the TRF1 packets the engine
-//! publishes), and its model generation. `SessionSource` names that seam once;
-//! two implementations are expected to stand behind it:
+//! `ghosttea::Session` by id, a feed of ITS frames (the TRF1 packets the engine
+//! publishes, routed once per cell: `frames.rs`), and its model generation.
+//! `SessionSource` names that seam once; two implementations are expected to
+//! stand behind it:
 //!
 //! - `DirectSessions` (here, TP-S3b): sessions a focused harness spawns ITSELF
-//!   with `Session::spawn` and a per-session hub.
-//! - `ServiceSessions` (G22, production): the SAME session set the UDS plane
-//!   serves — sessions by id, their hubs, spawn-through-the-service with the
-//!   service's private-env strip. The production cell installs this source;
-//!   there is no mirror and no second session registry.
+//!   with `Session::spawn` and a per-session hub, one router per hub.
+//! - `ServiceSource` (G22, production): the SAME session set the UDS plane
+//!   serves — `ServiceSessions` by id, spawn-through-the-service with the
+//!   service's private-env strip — and ONE router over the service's one frame
+//!   hub. The production cell installs this source; there is no mirror and no
+//!   second session registry.
 
+use super::frames::{FrameFeed, FrameRouter};
 use ghosttea::{FrameHub, ServiceSessions, Session, SessionLifecycleEvent};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -25,10 +28,10 @@ pub const DIRECT_LIFECYCLE_CAPACITY: usize = 16;
 pub trait SessionSource: Send + Sync {
     /// The live session, or None — the door answers `SESSION_UNKNOWN`.
     fn session(&self, session_id: &str) -> Option<Arc<Session>>;
-    /// The hub the session's frames are published on. With one hub per session
-    /// every packet is this session's; with a shared hub the door filters by
-    /// the packet's `session_handle` (it does so either way).
-    fn frames(&self, session_id: &str) -> Option<FrameHub>;
+    /// This session's frames only, routed once per cell (RV #93); a `Lost` on
+    /// them is this session's loss. None when the session is not registered:
+    /// the door starts no pump.
+    fn frame_feed(&self, session_id: &str) -> Option<FrameFeed>;
     /// TP-S3f/G24 — the lifecycle bus behind the `session-events` capability.
     /// `None` means this source has no bus (`NoSessions`) and the door never
     /// emits `SessionEvent`. The receiver is BOUNDED: when it reports `Lagged`,
@@ -39,26 +42,50 @@ pub trait SessionSource: Send + Sync {
     }
 }
 
-/** G22's production adapter. The trait is ours and `ServiceSessions` is
- * Ghosttea's, so this direct implementation keeps the shared registry free of
- * wrapper state. */
-impl SessionSource for ServiceSessions {
-    fn session(&self, session_id: &str) -> Option<Arc<Session>> {
-        ServiceSessions::session(self, session_id)
-    }
+/// The TRF1 handle a session's packets carry at byte 8; the engine's summary
+/// states it as text.
+fn session_handle(session: &Session) -> Option<u64> {
+    session.summary().handle.parse().ok()
+}
 
-    fn frames(&self, session_id: &str) -> Option<FrameHub> {
-        self.frames_for(session_id)
-    }
+/// G22's production source. `ServiceSessions` is ghosttea's, and the service
+/// publishes every session's frames on its ONE hub; this wrapper holds the one
+/// routing table that turns that hub into per-session feeds (RV #93), never a
+/// second session registry: sessions, their membership and their lifecycle stay
+/// the service's own (G22; TP-D26 = C′ stands).
+pub struct ServiceSource {
+    sessions: ServiceSessions,
+    router: FrameRouter,
+}
 
-    fn subscribe_lifecycle(&self) -> Option<broadcast::Receiver<SessionLifecycleEvent>> {
-        Some(ServiceSessions::subscribe_lifecycle(self))
+impl ServiceSource {
+    /// Builds the router over the service's hub, so it needs a tokio runtime
+    /// context (the cell builds its door inside one).
+    pub fn new(sessions: ServiceSessions) -> Self {
+        let router = FrameRouter::new(&sessions.frames());
+        Self { sessions, router }
     }
 }
 
-/// Sessions spawned directly by this harness, each with its own hub.
+impl SessionSource for ServiceSource {
+    fn session(&self, session_id: &str) -> Option<Arc<Session>> {
+        self.sessions.session(session_id)
+    }
+
+    fn frame_feed(&self, session_id: &str) -> Option<FrameFeed> {
+        let session = self.sessions.session(session_id)?;
+        Some(self.router.feed(session_handle(&session)?))
+    }
+
+    fn subscribe_lifecycle(&self) -> Option<broadcast::Receiver<SessionLifecycleEvent>> {
+        Some(self.sessions.subscribe_lifecycle())
+    }
+}
+
+/// Sessions spawned directly by this harness, each with its own hub and the
+/// router over it.
 pub struct DirectSessions {
-    inner: Mutex<HashMap<String, (Arc<Session>, FrameHub)>>,
+    inner: Mutex<HashMap<String, (Arc<Session>, FrameRouter)>>,
     lifecycle: broadcast::Sender<SessionLifecycleEvent>,
 }
 
@@ -90,10 +117,13 @@ impl DirectSessions {
     }
 
     /// Adopt a session spawned with `hub` (the caller spawned it, so it also
-    /// chose the spawn options, the env strip and the exit callback).
+    /// chose the spawn options, the env strip and the exit callback). One
+    /// router per adopted hub routes its frames, so this needs a tokio runtime
+    /// context.
     pub fn insert(&self, session: Arc<Session>, hub: FrameHub) {
         let id = session.id();
-        self.inner.lock().unwrap().insert(id, (session, hub));
+        let router = FrameRouter::new(&hub);
+        self.inner.lock().unwrap().insert(id, (session, router));
     }
 
     pub fn remove(&self, session_id: &str) -> Option<Arc<Session>> {
@@ -118,12 +148,10 @@ impl SessionSource for DirectSessions {
             .map(|(s, _)| s.clone())
     }
 
-    fn frames(&self, session_id: &str) -> Option<FrameHub> {
-        self.inner
-            .lock()
-            .unwrap()
-            .get(session_id)
-            .map(|(_, h)| h.clone())
+    fn frame_feed(&self, session_id: &str) -> Option<FrameFeed> {
+        let inner = self.inner.lock().unwrap();
+        let (session, router) = inner.get(session_id)?;
+        Some(router.feed(session_handle(session)?))
     }
 
     fn subscribe_lifecycle(&self) -> Option<broadcast::Receiver<SessionLifecycleEvent>> {
@@ -140,7 +168,7 @@ impl SessionSource for NoSessions {
     fn session(&self, _: &str) -> Option<Arc<Session>> {
         None
     }
-    fn frames(&self, _: &str) -> Option<FrameHub> {
+    fn frame_feed(&self, _: &str) -> Option<FrameFeed> {
         None
     }
 }

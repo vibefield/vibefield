@@ -32,6 +32,7 @@
 use crate::registries;
 use crate::tp::door::{Door, DoorConfig};
 use crate::tp::grant::{GrantKey, GrantValidityLimits, GrantVerifier};
+use crate::tp::source::ServiceSource;
 use anyhow::{Context, Result};
 use ghosttea::{ipc, TerminalService, TerminalServiceConfig, TerminalServiceListeners, TextEngine};
 use serde::{Deserialize, Serialize};
@@ -263,10 +264,14 @@ pub async fn run_cell(args: CellArgs) -> Result<()> {
                 },
                 GrantValidityLimits::default(),
             );
+            // The router over the service's one frame hub starts here, inside
+            // the runtime, beside the door that reads it (RV #93).
+            let source = ServiceSource::new(service_sessions.clone());
             let config = DoorConfig::new(verifier, bootstrap.allowed_origins.clone())
-                // The T1 and UDS doors now resolve against the exact same live
-                // sessions and frame hubs. No copied inventory can race a birth.
-                .with_source(std::sync::Arc::new(service_sessions.clone()));
+                // The T1 and UDS doors resolve against the exact same live
+                // sessions and the same frame hub, routed once per cell into
+                // per-session feeds. No copied inventory can race a birth.
+                .with_source(std::sync::Arc::new(source));
             match Door::serve(config).await {
                 Ok(door) => Some(door),
                 Err(error) => {

@@ -24,6 +24,7 @@ mod tp_mint;
 
 use field_native::tp::crc32c::crc32c;
 use field_native::tp::door::{Door, DoorConfig};
+use field_native::tp::frames::FrameFeed;
 use field_native::tp::grant::{GrantKey, GrantValidityLimits, GrantVerifier};
 use field_native::tp::source::{DirectSessions, SessionSource, Trf1Header};
 use field_native::tp::wire::{decode_envelope, JSON_MAX_SAFE_INTEGER};
@@ -1296,8 +1297,8 @@ impl SessionSource for HoldingSource {
         self.inner.session(session_id)
     }
 
-    fn frames(&self, session_id: &str) -> Option<FrameHub> {
-        self.inner.frames(session_id)
+    fn frame_feed(&self, session_id: &str) -> Option<FrameFeed> {
+        self.inner.frame_feed(session_id)
     }
 
     fn subscribe_lifecycle(

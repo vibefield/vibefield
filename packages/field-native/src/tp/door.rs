@@ -30,8 +30,10 @@
 //! frames — `AttachFramesLeg`, `TransportCredit`, `SceneApplied`,
 //! `CalibrationPing` (echoed as a `calibration` unit; doubles as the frames
 //! heartbeat). Where the sessions come from is the `SessionSource` (source.rs):
-//! production installs G22's shared `ServiceSessions`; focused harnesses may
-//! install `DirectSessions` or the empty connection-only source.
+//! production installs `ServiceSource` — G22's shared `ServiceSessions` with
+//! ONE router over the service's one frame hub (frames.rs), so a pump holds
+//! only its own session's frames (RV #93); focused harnesses may install
+//! `DirectSessions` or the empty connection-only source.
 //!
 //! Concurrency: one read task per socket plus one WRITER task owning its sink
 //! (every message to a leg — replies, the lease, presentation units — rides an
@@ -103,9 +105,9 @@ pub struct DoorConfig {
     pub heartbeat_ttl: Duration,
     pub protocol_limits: ProtocolLimits,
     pub cell_caps: ReceiverCapacities,
-    /// TP-S3b/G22 — where sessions come from (`ServiceSessions` in production,
-    /// `DirectSessions` in activation harnesses, `NoSessions` by default for
-    /// connection-only tests).
+    /// TP-S3b/G22 — where sessions come from (`ServiceSource` over G22's
+    /// `ServiceSessions` in production, `DirectSessions` in activation
+    /// harnesses, `NoSessions` by default for connection-only tests).
     pub source: Arc<dyn SessionSource>,
     /// the cadence of the activation tick (deadlines, expiry, lag by time)
     pub tick: Duration,
@@ -830,7 +832,7 @@ fn start_pump(state: &DoorState, activation_id: &str) {
         let Some(session) = state.config.source.session(&a.session_id) else {
             return;
         };
-        let Some(hub) = state.config.source.frames(&a.session_id) else {
+        let Some(feed) = state.config.source.frame_feed(&a.session_id) else {
             return;
         };
         let Some(ledger) = reg.activations.credit_ledger(frames.connection_id) else {
@@ -839,7 +841,6 @@ fn start_pump(state: &DoorState, activation_id: &str) {
         let Some(scene_epoch) = a.scene_epoch.clone() else {
             return;
         };
-        let session_handle: u64 = session.summary().handle.parse().unwrap_or(0);
         let per_activation = ledger.per_activation_limit.max(1);
         let connection = ledger.connection.limit.max(1);
         let max_chunk = (state.config.protocol_limits.max_presentation_chunk_bytes)
@@ -855,8 +856,7 @@ fn start_pump(state: &DoorState, activation_id: &str) {
             frames,
             scene_epoch,
             session,
-            hub,
-            session_handle,
+            feed,
             max_chunk_bytes: max_chunk,
             max_urgent_unit_bytes: state
                 .config

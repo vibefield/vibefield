@@ -11,12 +11,13 @@
 //! - Seed = `Session::refresh()` (a forced FULL frame, catalog reset) sent as
 //!   a `seed` transfer with `baseContent = null`; then ordinary deltas flow in
 //!   the engine's own order, so the lineage holds.
-//! - Any DROPPED frame (credit starvation, a hub lag, demand gone and back)
-//!   breaks the lineage — so the pump marks `needs_full`, drops every further
-//!   delta (COALESCING — the model keeps updating, the mailbox does not grow),
-//!   and repairs with ONE `catchup` transfer (another forced full frame, `base`
-//!   = last sent, `result` = the new revision) once credit allows. A full frame
-//!   is exactly the spec's "coalesced delta bounded by the model".
+//! - Any DROPPED frame (credit starvation, a loss of the session's own frames,
+//!   demand gone and back) breaks the lineage — so the pump marks `needs_full`,
+//!   drops every further delta (COALESCING — the model keeps updating, the
+//!   mailbox does not grow), and repairs with ONE `catchup` transfer (another
+//!   forced full frame, `base` = last sent, `result` = the new revision) once
+//!   credit allows. A full frame is exactly the spec's "coalesced delta bounded
+//!   by the model".
 //! - A transfer is CHUNKED to `maxChunkBytes` and always COMPLETES: a starved
 //!   chunk waits for credit. Past `maxActivationCatchupMs` with nothing
 //!   admissible the pump SAYS so — `presentation: stopped{overload}`, once per
@@ -27,19 +28,22 @@
 //!   it, and the stop permanent).
 //! - An oversized catalog-reset frame is already self-contained: transfer it
 //!   directly. Refreshing in response would make two viewers refresh each other.
-//! - Frames for other sessions on a shared hub are skipped by handle; the
-//!   worker validates the TRF1 identity it was told at attach (`trfIdentity`).
+//! - Frames are routed per session, once per cell (`frames.rs`, RV #93): the
+//!   pump holds a feed of its own session's frames and subscribes only while
+//!   live, so a neighbour's frame never wakes it and a parked pump wakes for
+//!   none. The worker validates the TRF1 identity it was told at attach
+//!   (`trfIdentity`).
 
 use super::activation::{LegRef, Outbound, UnitClass};
 use super::crc32c::crc32c;
+use super::frames::{FrameFeed, FrameLoss, SessionFrames};
 use super::source::Trf1Header;
 use super::wire::{encode_envelope, SceneContentStamp, SceneEpoch};
-use ghosttea::{FrameHub, Session};
+use ghosttea::Session;
 use serde_json::{json, Value};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::broadcast;
 use tokio::sync::Notify;
 
 /// The door, as the pump sees it.
@@ -92,8 +96,9 @@ pub struct PumpStart {
     pub credit_epoch: u64,
     pub frames: LegRef,
     pub session: Arc<Session>,
-    pub hub: FrameHub,
-    pub session_handle: u64,
+    /// This session's frames only: least authority — the pump reaches its own
+    /// session's route, never the cell's session set.
+    pub feed: FrameFeed,
     pub scene_epoch: SceneEpoch,
     pub max_chunk_bytes: usize,
     /// a delta larger than this is not an urgent incremental — it becomes a
@@ -150,7 +155,6 @@ async fn run_pump<H: PumpHost>(
     notify: Arc<Notify>,
     stop: Arc<AtomicBool>,
 ) {
-    let (mut rx, _baseline) = start.hub.subscribe();
     let activation: Arc<str> = Arc::from(start.activation_id.as_str());
     let mut pump = Pump {
         host,
@@ -165,6 +169,9 @@ async fn run_pump<H: PumpHost>(
     };
     let mut needs_full = true;
     let mut last_scene_generation = None;
+    // This session's frames, subscribed only while live: a parked pump holds
+    // no subscription, so no frame wakes it (RV #93).
+    let mut subscription: Option<SessionFrames> = None;
     loop {
         if pump.stop.load(Ordering::Acquire) {
             break;
@@ -179,17 +186,16 @@ async fn run_pump<H: PumpHost>(
         // epoch remembers that break, so a new consumer receives a whole scene.
         if scene_generation.is_none() {
             needs_full = true;
-            tokio::select! {
-                _ = pump.notify.notified() => {}
-                r = rx.recv() => match r {
-                    Ok(_) | Err(broadcast::error::RecvError::Lagged(_)) => {}
-                    Err(broadcast::error::RecvError::Closed) => break,
-                }
-            }
+            subscription = None;
+            pump.notify.notified().await;
             continue;
         }
+        // Going live subscribes BEFORE the full frame is forced: the refresh
+        // is routed after this subscribe, so it is never missed (the park set
+        // `needs_full`).
+        let rx = subscription.get_or_insert_with(|| pump.start.feed.subscribe());
         if needs_full {
-            match pump.full_frame(&mut rx).await {
+            match pump.full_frame(rx).await {
                 Step::Continue => {
                     needs_full = false;
                     continue;
@@ -201,12 +207,10 @@ async fn run_pump<H: PumpHost>(
         tokio::select! {
             _ = pump.notify.notified() => { /* demand/credit moved — re-evaluate */ }
             r = rx.recv() => match r {
-                Err(broadcast::error::RecvError::Lagged(_)) => { needs_full = true; }
-                Err(broadcast::error::RecvError::Closed) => break,
+                // a loss of this session's own frames breaks the lineage
+                Err(FrameLoss::Lost) => { needs_full = true; }
+                Err(FrameLoss::Closed) => break,
                 Ok(packet) => {
-                    if packet.session_handle != pump.start.session_handle {
-                        continue;
-                    }
                     // The frame and the wake can both be ready. Re-check the
                     // attachment before sending a delta, including a whole
                     // none -> live cycle that happened while select waited.
@@ -305,7 +309,7 @@ impl<H: PumpHost> Pump<H> {
     /// Force a FULL frame from the engine and send it as a transfer (seed the
     /// first time, catch-up after). Waits for credit per chunk (overload said
     /// past the bound, the wait kept).
-    async fn full_frame(&mut self, rx: &mut broadcast::Receiver<ghosttea::FramePacket>) -> Step {
+    async fn full_frame(&mut self, rx: &mut SessionFrames) -> Step {
         // Wait for admissible credit BEFORE forcing the engine: a refresh with
         // nowhere to send it would only churn the model.
         let minimal = self.start.max_chunk_bytes.min(4096) as u64;
@@ -315,27 +319,28 @@ impl<H: PumpHost> Pump<H> {
         if self.start.session.refresh().is_err() {
             return Step::End;
         }
-        // The forced full frame is in the hub now (publish is synchronous);
-        // skip anything older in the channel and take the first FULL frame.
+        // The forced full frame is in the hub now (publish is synchronous), and
+        // `rx` subscribed before the refresh, so it is routed here; skip
+        // anything older and take the first FULL frame.
         let deadline = tokio::time::Instant::now() + self.start.seed_wait;
         let packet = loop {
             let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
             match tokio::time::timeout(remaining, rx.recv()).await {
                 Err(_) => {
-                    // The forced frame never reached us: the receiver lagged past
-                    // it, or the engine was too busy to render one in time. Say
-                    // so and ask again (at most one refresh per `seed_wait`) —
-                    // ending here would leave the activation stopped for good (C3).
+                    // The forced frame never reached us: this session's frames
+                    // were lost past it, or the engine was too busy to render
+                    // one in time. Say so and ask again (at most one refresh per
+                    // `seed_wait`) — ending here would leave the activation
+                    // stopped for good (C3).
                     self.host
                         .presentation_stopped(&self.start.activation_id, "overload");
                     return Step::Retry;
                 }
-                Ok(Err(broadcast::error::RecvError::Closed)) => return Step::End,
-                Ok(Err(broadcast::error::RecvError::Lagged(_))) => continue,
+                Ok(Err(FrameLoss::Closed)) => return Step::End,
+                // the full frame may be among the lost, or still to come: keep
+                // waiting for it (the deadline bounds the wait)
+                Ok(Err(FrameLoss::Lost)) => continue,
                 Ok(Ok(packet)) => {
-                    if packet.session_handle != self.start.session_handle {
-                        continue;
-                    }
                     if Trf1Header::parse(&packet)
                         .is_some_and(|h| h.full_snapshot && h.glyph_catalog_reset)
                     {
@@ -508,7 +513,9 @@ impl<H: PumpHost> Pump<H> {
 #[cfg(all(test, unix))]
 mod tests {
     use super::*;
+    use crate::tp::frames::FrameRouter;
     use ghosttea::session::{Persistence, SpawnOptions};
+    use ghosttea::FrameHub;
     use ghosttea::{SessionEnvironment, SessionProgramKind, TerminationSource, TextEngine};
     use std::collections::HashMap;
     use std::sync::atomic::AtomicUsize;
@@ -549,10 +556,12 @@ mod tests {
     }
 
     /// The cell's shape (RV #93): idle sessions publishing on ONE hub, as G22's
-    /// service publishes every session's frames on its one hub. Every pump in
-    /// these rows starts through `start`, so the frame seam is spelled once.
+    /// service publishes every session's frames on its one hub, and ONE router
+    /// over it, as `ServiceSource` builds it. Every pump in these rows starts
+    /// through `start`, so the frame seam is spelled once.
     struct SharedHub {
         hub: FrameHub,
+        router: FrameRouter,
         sessions: Vec<Arc<Session>>,
     }
 
@@ -560,7 +569,12 @@ mod tests {
         fn new(count: usize) -> Self {
             let hub = FrameHub::new(32);
             let sessions = (0..count).map(|_| idle_session(&hub)).collect();
-            Self { hub, sessions }
+            let router = FrameRouter::new(&hub);
+            Self {
+                hub,
+                router,
+                sessions,
+            }
         }
 
         /// A pump of `session` whose units go to `out`, on `connection_id`.
@@ -571,6 +585,7 @@ mod tests {
             connection_id: u64,
             out: UnboundedSender<Outbound>,
         ) -> PumpStart {
+            let handle: u64 = session.summary().handle.parse().unwrap();
             PumpStart {
                 activation_id: activation_id.into(),
                 session_id: session.id(),
@@ -586,8 +601,7 @@ mod tests {
                     selection_credit: None,
                 },
                 session: session.clone(),
-                hub: self.hub.clone(),
-                session_handle: session.summary().handle.parse().unwrap(),
+                feed: self.router.feed(handle),
                 scene_epoch: SceneEpoch {
                     cell_boot_id: "shared-hub-test".into(),
                     model_generation: 1,
@@ -746,9 +760,10 @@ mod tests {
     }
 
     /// RV #93 (native-tp-4): a parked pump (demand none) holds no subscription,
-    /// so no frame wakes it. On the shared hub it woke for every packet of
-    /// every session, only to read the registry and park again. Going live
-    /// subscribes before the forced refresh, so the catch-up it owes goes out.
+    /// so no frame wakes it, its own session's included. On the shared hub it
+    /// woke for every packet of every session, only to read the registry and
+    /// park again. Going live subscribes before the forced refresh, so the
+    /// catch-up it owes goes out.
     #[tokio::test]
     async fn a_parked_pump_holds_no_subscription_and_never_wakes() {
         let cell = SharedHub::new(2);
@@ -768,9 +783,14 @@ mod tests {
         }
         host.scene_reads.store(0, Ordering::SeqCst);
 
+        // 16 of B's frames and 8 of A's own, in two batches: routing alone
+        // keeps B's away, and only a dropped subscription keeps A's away too.
         for _ in 0..2 {
             for _ in 0..8 {
                 b.refresh().unwrap();
+            }
+            for _ in 0..4 {
+                a.refresh().unwrap();
             }
             tokio::task::yield_now().await;
         }
@@ -786,7 +806,7 @@ mod tests {
 
         assert_eq!(
             parked_reads, 0,
-            "B's frames woke a parked pump: it held a subscription"
+            "frames woke a parked pump: it held a subscription"
         );
         assert_eq!(begin["transfer"]["kind"], "catchup");
     }

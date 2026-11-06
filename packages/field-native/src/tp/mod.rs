@@ -21,7 +21,9 @@
 //! - `ledger` — the cell-side transport rules: high-water, nonces, tombstones;
 //! - `wire` — the tagged JSON messages of this slice (serde mirrors of the
 //!   contracts' zod shapes; golden fixtures pin both sides — EL9);
-//! - `door` — the WebSocket server: accept → hello → verify → admit → heartbeat.
+//! - `door` — the WebSocket server: accept → hello → verify → admit → heartbeat;
+//! - `frames` — the cell's one frame router: the service's one hub routed per
+//!   session, so a pump holds only its own session's frames (RV #93).
 //!
 //! Every number comes from the generated `registries::terminal_pipeline` (one
 //! authority with fieldd and the renderer; provisional until the numeric
@@ -31,6 +33,7 @@
 pub mod activation;
 pub mod crc32c;
 pub mod door;
+pub mod frames;
 pub mod grant;
 pub mod jcs;
 pub mod ledger;
