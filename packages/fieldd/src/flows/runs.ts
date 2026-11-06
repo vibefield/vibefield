@@ -76,6 +76,9 @@ import * as words from "./words";
 // - A step (slices 8–9): its agent by steps.ts's one spawn road, its slot (CP4-S7), its answer by its turn's end
 //   (CP4-S2), checked against its form (D12) and bounded whole (D11); a miss is the repair turn, and a second holds
 //   the run on the person (`flow-repair`), whose act the needs queue hands the runs once (`acts`).
+// - A step an `in:` hands a live session (slice 9b): the step listener is told of the hand by steps.ts, before the
+//   line, and let go at the step's answer (a failed turn among them), at the run's end and at fieldd's own stop; a
+//   repair turn keeps it. A later fieldd re-hands it at boot (14, D2's lookup).
 // Built later in M-r2: ask() (slice 11; until then it is refused in fieldd's words), the park and its wakes and D2's
 // lookup (10a), the one answer writer (10b), the cap (12), Stop (13) and boot (14).
 
@@ -165,6 +168,8 @@ interface LiveRun {
   inputs?: { readonly values: FlowInput; readonly kinds: Readonly<Record<string, string>> };
   /** the steps waiting for a slot (CP4-S7), in their calls' order: started when one frees (slice 9) */
   readonly slotted: { readonly call: number; readonly args: readonly unknown[] }[];
+  /** each open step's handed session, by its call: how to let the step listener go (9b) */
+  readonly hands: Map<number, () => void>;
 }
 
 /** A step's answer, while its host waits on it: given once (D22), or the call's handler failing. */
@@ -333,6 +338,7 @@ export class FlowRuns {
     this.#closing = true;
     this.#offTurns();
     this.#listeners.clear();
+    for (const live of this.#live.values()) this.#letGo(live);
     await Promise.all([...this.#live.values()].map((live) => live.host?.stop()));
   }
 
@@ -392,6 +398,7 @@ export class FlowRuns {
       forms: new Map(),
       misses: new Map(),
       slotted: [],
+      hands: new Map(),
       ...(params.from !== undefined && params.starter.by === "spark"
         ? { ran: nameWords(params.from.name) }
         : {}),
@@ -491,7 +498,16 @@ export class FlowRuns {
       if ("refused" in started) {
         live.waiting.delete(number);
         waiter?.resolve(started);
-      } else if (started.form !== undefined) live.forms.set(number, started.form);
+        return;
+      }
+      if (started.form !== undefined) live.forms.set(number, started.form);
+      // 9b: a handed session is let go at the step's answer; a step its run no longer waits on (answered, or the run
+      // ended while the start settled) lets it go now
+      if (started.unhand !== undefined) {
+        if (this.#live.get(run) === live && live.waiting.has(number))
+          live.hands.set(number, started.unhand);
+        else started.unhand();
+      }
     } catch (error) {
       // a handler that fails: the host refuses the call in fieldd's own words
       live.waiting.delete(number);
@@ -587,7 +603,16 @@ export class FlowRuns {
     live.waiting.delete(call);
     live.forms.delete(call);
     live.misses.delete(call);
+    // 9b: a handed session's later turns are never this step's
+    live.hands.get(call)?.();
+    live.hands.delete(call);
     waiter.resolve(answer);
+  }
+
+  /** Every handed session of a run let go (9b): at its end, and at fieldd's own stop. */
+  #letGo(live: LiveRun): void {
+    for (const unhand of live.hands.values()) unhand();
+    live.hands.clear();
   }
 
   /** A step's answer missed its form (CP4-Q7 (a)): the repair line once; a miss after it holds the run on the person
@@ -766,6 +791,7 @@ export class FlowRuns {
   #finish(run: FlowRunId, end: RunEnd): void {
     const live = this.#live.get(run);
     this.#live.delete(run);
+    if (live !== undefined) this.#letGo(live);
     try {
       this.ports.records.appendRun(run, {
         kind: "end",

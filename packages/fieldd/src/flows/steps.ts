@@ -22,6 +22,8 @@ import { checkForm, type FlowForm, type FormRefusal } from "./form-check";
 // D9's checks are held here, before any spawn or send, each in §9's words: the keys, the agent (the catalog's door),
 // its Agent Profile (named, or the spark's own or your default, held to the run's scope), its folder (the run's, or a
 // project's, or inside one), its model (a name the runtime discovered), its prompt, and an `in:`.
+// An `in:` hands a live session the step's line instead of a spawn (D5 4–7 the same), and the step listener is told of
+// the hand first (slice 9b), since that session is no flow's run.
 // Built later in M-r2: D2's lookup at a wake (10a), the answer and a freed slot (9).
 
 /** What a step's agent is started with: the runtime's spawn, by fieldd's own interface (R32). */
@@ -260,7 +262,15 @@ export async function startStep(
         ok: false,
         refused: `VibeField didn't send ${labelWords(label)}: that session is outside this run's Agent Profiles, isn't running, is a spark's or another flow's, or is waiting on a permission.`,
       };
-    return { ...sent(ports, write, call, handed, "in", prompt, from), form };
+    // 9b: the session is no flow's run, so the step listener is told of the hand before the line is queued, and so
+    // before it can be delivered or its turn start; the runs let it go at the answer
+    const unhand = ports.stepEnds.hand(handed, { run: run.run, call });
+    try {
+      return { ...sent(ports, write, call, handed, "in", prompt, from), form, unhand };
+    } catch (error) {
+      unhand();
+      throw error;
+    }
   }
   // D9's agent: named, and offered for a spawn by the catalog's door (R23b)
   const agent = said(options["agent"]);

@@ -1,10 +1,12 @@
 import { createNoopLogger, type Logger } from "@vibefield/logging";
-import { ownLive, type RunEntered } from "./run-entry";
+import { ownLive, type RunEntered, type RunEnteredAgent } from "./run-entry";
 
 // CP-4a2b (§13a slice 4; CP4-S2, CP4-Q17 as re-ruled) — a flow step's turn end, read in fieldd from puppeteer's
 // provider-neutral events, never from a transcript, a vendor's file, rosetta or History (AR-L1). The runs
 // (flows/runs.ts) hear it through this interface, so `flows/` imports no puppeteer (R29/R31). It hears a run as it
-// enters the agent runtime (`onRunEntered`), and listens only to a run a flow started: `origin {by: "flow", run, call}`.
+// enters the agent runtime (`onRunEntered`), and listens to a run a flow started: `origin {by: "flow", run, call}`.
+// Since slice 9b it keeps every run's handle until its end, listening to none, so a session an `in:` hands a step
+// (D9) is listened to as that step's from the hand: from a turn that starts after it, until the runs let it go.
 // The road (step0-cp4.md CP4-S2):
 // - `turn:completed`'s `lastAssistantMessage`, the provider's own final text when it gives one (Claude's Stop hook);
 // - else the turn's last `conversation:assistant-message` that is final (not `final: false`) and not `displayOnly`,
@@ -32,11 +34,22 @@ export interface FlowStepTurnEnd {
 const worded = (text: string | undefined): text is string =>
   typeof text === "string" && text.trim() !== "";
 
+/** A step whose session's events are listened to: its run, its call, and the session it works in. */
+interface StepAt {
+  readonly run: string;
+  readonly call: number;
+  readonly runtimeRunId: string;
+}
+
 /** The step listener: one per fieldd, told every run as it enters, and telling the runs each step's turn end. */
 export class FlowStepEvents {
   readonly #listeners = new Set<(end: FlowStepTurnEnd) => void>();
   /** each step's run listened to, by its runtime run: how to stop listening */
   readonly #runs = new Map<string, readonly (() => void)[]>();
+  /** every run's agent as it entered, until its end, listened to by nothing until a hand (9b) */
+  readonly #agents = new Map<string, RunEnteredAgent>();
+  /** each handed session's steps, by the session and then by `‹run› ‹call›`: how to let each go (9b) */
+  readonly #hands = new Map<string, Map<string, () => void>>();
 
   constructor(readonly logger: Logger = createNoopLogger()) {}
 
@@ -46,23 +59,72 @@ export class FlowStepEvents {
     return () => this.#listeners.delete(listener);
   }
 
-  /** CP-4a2b (§13a slice 9b): a session an `in:` hands a flow's step, listened to as that step's until the answer
-   * this returns is called. Not built yet. */
-  hand(_runtimeRunId: string, _step: { readonly run: string; readonly call: number }): () => void {
-    throw new Error("CP-4a2b: a handed session's listener is not built (§13a slice 9b)");
+  /** CP-4a2b (§13a slice 9b): a session an `in:` hands a flow's step (D9), listened to as that step's until the answer
+   * is called or the session ends. Only a turn that starts after the hand is the step's; a turn in flight at the hand
+   * never is. The same step handed again is listened to once (CL-H6). A session this fieldd never heard enter holds
+   * nothing, and says so. */
+  hand(runtimeRunId: string, step: { readonly run: string; readonly call: number }): () => void {
+    const key = `${step.run} ${step.call}`;
+    const hands = this.#hands.get(runtimeRunId) ?? new Map<string, () => void>();
+    const kept = hands.get(key);
+    if (kept !== undefined) return kept;
+    const agent = this.#agents.get(runtimeRunId);
+    if (agent === undefined) {
+      this.logger.warn(
+        "fieldd.flows.step_hand_unheard",
+        "A flow step was handed a session this fieldd has not heard enter",
+        { runtimeRunId },
+      );
+      return () => undefined;
+    }
+    const offs = this.#listen(agent, { run: step.run, call: step.call, runtimeRunId }, true);
+    let gone = false;
+    const off = () => {
+      if (gone) return;
+      gone = true;
+      for (const each of offs) each();
+      hands.delete(key);
+      if (hands.size === 0 && this.#hands.get(runtimeRunId) === hands)
+        this.#hands.delete(runtimeRunId);
+    };
+    hands.set(key, off);
+    this.#hands.set(runtimeRunId, hands);
+    return off;
   }
 
-  /** A run entered the agent runtime: a flow's step is listened to from here, once in this fieldd's life. */
+  /** A run entered the agent runtime: its handle is kept for a hand (9b), and a flow's step is listened to from here,
+   * once in this fieldd's life. */
   entered(entered: RunEntered): void {
     const { agent, runtimeRunId, origin } = entered;
+    this.#agents.set(runtimeRunId, agent);
     if (origin?.by !== "flow" || typeof origin.run !== "string" || typeof origin.call !== "number")
       return;
     if (this.#runs.has(runtimeRunId)) return;
-    const step = { run: origin.run, call: origin.call, runtimeRunId };
+    this.#runs.set(
+      runtimeRunId,
+      this.#listen(agent, { run: origin.run, call: origin.call, runtimeRunId }, false),
+    );
+  }
+
+  /** A run ended: its listeners go, the hands on it among them, and its handle with them. */
+  forget(runtimeRunId: string): void {
+    for (const off of this.#runs.get(runtimeRunId) ?? []) off();
+    this.#runs.delete(runtimeRunId);
+    for (const off of [...(this.#hands.get(runtimeRunId)?.values() ?? [])]) off();
+    this.#hands.delete(runtimeRunId);
+    this.#agents.delete(runtimeRunId);
+  }
+
+  /** One step's listening on its session (CP4-S2's road): each turn's end told once (CL-H6). `fromHand`: only a turn
+   * that started after the listening began is told, so a turn in flight at the hand never is (9b). */
+  #listen(agent: RunEnteredAgent, step: StepAt, fromHand: boolean): (() => void)[] {
+    const { runtimeRunId } = step;
     /** the turn's last final message, not displayOnly, so far */
     let last: string | undefined;
     /** the turns already told */
     const told = new Set<string>();
+    /** for a hand: the turn that started since it, by its id when it said one; none while none has */
+    let started: { readonly turn: string | undefined } | undefined;
     // a listener that throws is said, never thrown into puppeteer's own emitter
     const tell = (end: FlowStepTurnEnd) => {
       for (const listener of this.#listeners) {
@@ -81,13 +143,21 @@ export class FlowStepEvents {
       }
     };
     const ended = (turn: string | undefined): boolean => {
+      if (fromHand) {
+        // a turn in flight at the hand ends with none started since, or as another turn than the one that did
+        if (started === undefined) return false;
+        if (started.turn !== undefined && turn !== undefined && started.turn !== turn) return false;
+        started = undefined;
+      }
       if (turn !== undefined && told.has(turn)) return false;
       if (turn !== undefined) told.add(turn);
       return true;
     };
-    this.#runs.set(runtimeRunId, [
+    return [
       agent.on("turn:started", (envelope) => {
-        if (ownLive(envelope)) last = undefined;
+        if (!ownLive(envelope)) return;
+        last = undefined;
+        if (fromHand) started = { turn: envelope.event.turnId ?? envelope.turnId };
       }),
       agent.on("conversation:assistant-message", (envelope) => {
         if (!ownLive(envelope)) return;
@@ -117,12 +187,6 @@ export class FlowStepEvents {
         last = undefined;
         tell({ ...step, ...(turn !== undefined ? { turn } : {}), outcome: "failed" });
       }),
-    ]);
-  }
-
-  /** A run ended: its listeners go. */
-  forget(runtimeRunId: string): void {
-    for (const off of this.#runs.get(runtimeRunId) ?? []) off();
-    this.#runs.delete(runtimeRunId);
+    ];
   }
 }
