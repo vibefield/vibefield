@@ -3705,6 +3705,20 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   is said here too when it returns after its card has left the screen, as a plain notice in the
   card's own words ("You said Allow one more · Couldn't start the agent: …"; "Couldn't answer:
   …"; §8 "Chat's thread", the needs-you card).
+  *Amended 2026-11-06 (item 212, RV #29; the words at the lean until James rules
+  rv-service-recovery):* **the field service** is said here when it went away and did not come
+  back at once (`desktopState.fieldd`), in every window and over Godview's cover, as every notice
+  is. While main starts it again it holds **"Reconnecting to the field service…"**, with no act.
+  When three automatic tries in ten minutes have not kept it up, main stops trying, and the line
+  holds **"VibeField's field service stopped after 3 tries. Your terminal sessions keep
+  running."** with **Try again** at its end; a state that does not say how many tries reads
+  "VibeField's field service stopped. Your terminal sessions keep running." and never guesses a
+  number. Try again reloads the window, and a window opening is a person asking: main starts the
+  field service once more and begins its count again. Where the window has no way to reload, the
+  notice holds without its act. Either notice goes the moment the field service is back. The
+  sessions sentence is true by the two
+  planes (the terminal service outlives the field service) and says nothing more; the tries are
+  the status item's words too (§9 "The field service's words").
 - **The selection bar** (Chrome on the Mat §3.1; MC-D2 the line's glass, ruled 2026-10-01; MC-D1;
   One Frame §7; R1, R2, R3, R7–R10, R23, R25; DK-11): one element over `handle.selection`'s anchor,
   placed imperatively each time the anchor publishes — never a render per frame.
@@ -7559,6 +7573,20 @@ Every place that says what a terminal's life is says those two facts, and no pla
   so nothing asks and nothing ends. The status item is shown whatever **Show status item** says, and its first row
   says "VibeField is running in the background". Its **Quit VibeField** is the quit, through the boxes above. Opening
   a window brings the Dock icon back.
+
+**The field service's words** (item 212, RV #29; added 2026-11-06. The first four rows below lived only in the shell's
+code until then; the words item 212 adds stand at the lean until James rules rv-service-recovery.) The status item's
+service row says how the field service stands for the attached person, in title case as macOS menus are: **Field
+service: Starting…** · **Field service: Ready** (**Field service: Ready — diagnostics need attention** while the
+evidence needs it) · **Field service: Reconnecting…** · **Field service: Unavailable**. When it goes away and does not
+come back at once, main tries again, and the row reads **Field service: Restarting…**. When three automatic tries in
+ten minutes have not kept it up (the house rule: WG-D1's three restarts of the terminal service in ten minutes, and
+AL-D8's three relaunches), main stops trying, and the row reads **Field service: Stopped after 3 tries** (**Field
+service: Stopped** where the count is not known: never a guessed number), with **Try Again** under it, which starts it
+once more and begins the count again; opening a window does the same, and so does switching to that person. A daemon
+that cannot stay up is a fault to say, never one to spin on. The window says the same on its status line (§8 "The
+status line"): "Reconnecting to the field service…", then "VibeField's field service stopped after 3 tries. Your
+terminal sessions keep running." with **Try again**.
 
 ---
 
