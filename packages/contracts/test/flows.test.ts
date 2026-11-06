@@ -437,6 +437,20 @@ describe("CP-4a2a — a run's journal (CP4-S15, CP-D9; the fixtures' MACs are re
     expect(flowJournalLineOf({ ...bare, value: { cut: "not text" }, cut: true })).toBeUndefined();
   });
 
+  it("F19b (13a's D11): a step's answer cut short, {text, …fields}, reads back as its known line; any other cut value stays unknown", () => {
+    const { value: _value, ...bare } = answerFixture();
+    const step = { text: "the step's last message, cut", verdict: "clean", n: 2 };
+    expect(flowJournalLineOf({ ...bare, value: step, cut: true })).toMatchObject({
+      kind: "answer",
+      value: step,
+      cut: true,
+    });
+    for (const value of [{ text: 1 }, { notes: "no text" }, ["a list"], 3, null, true]) {
+      const line = flowJournalLineOf({ ...bare, value, cut: true });
+      expect(line, JSON.stringify(value)).toBeUndefined();
+    }
+  });
+
   it("F20: an answer's value is bounded at RESULT_MAX_BYTES of its JSON's UTF-8 bytes", () => {
     const { value: _value, ...bare } = answerFixture();
     const max = FLOW_LIMITS.RESULT_MAX_BYTES;

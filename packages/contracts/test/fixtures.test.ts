@@ -205,6 +205,7 @@ import {
   FlowsScriptParams,
   FlowsScriptResult,
   FlowsStopResult,
+  flowJournalLineOf,
 } from "../src/flows";
 import { ForwardEnvelope } from "../src/forwarding";
 import {
@@ -1381,6 +1382,24 @@ describe("Item 192 (RV #6) — a stop names ONE census: the floor's sessions or 
     // a run without its agent's label is no row the box can name
     const unnamed = { runs: [{ runId: "01JA7RUNAAAAAAAAAAAAAAAAAA" }] };
     expect(SystemShutdownCensusResult.safeParse(unnamed).success).toBe(false);
+  });
+});
+
+describe("CP-4a2b (13a's D11) — a step's answer cut short, journaled, reads back through the journal's own reader", () => {
+  it("reads flow-journal-line.answer-cut as its known line: its fields whole, its text cut, and `cut` kept", () => {
+    const file = join(FIXTURES, "flow-journal-line.answer-cut.json");
+    const raw: unknown = JSON.parse(readFileSync(file, "utf8"));
+    expect(flowJournalLineOf(raw)).toMatchObject({
+      kind: "answer",
+      seq: 3,
+      call: 1,
+      value: {
+        text: "Reviewed the diff: no blocking findings, and the parser's",
+        verdict: "clean",
+        n: 2,
+      },
+      cut: true,
+    });
   });
 });
 

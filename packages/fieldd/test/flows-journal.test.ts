@@ -82,6 +82,43 @@ const linesOf = (file: string): string[] => readFileSync(file, "utf8").split("\n
 const asides = (dir: string): string[] =>
   readdirSync(join(dir, RUNS_DIR)).filter((name) => name !== `${RUN}${JOURNAL_SUFFIX}`);
 
+/** Contracts' fixtures as one run's journal, head, call and `answer`, beside its signed record, read back under the
+ * fixture key they were MAC'd with (J1b, J1c). */
+function readFixtureChain(answer: string) {
+  const s = store({ key: FIXTURE_KEY });
+  mkdirSync(join(s.dir, RUNS_DIR), { recursive: true, mode: 0o700 });
+  const names = ["flow-journal-head.valid", "flow-journal-line.call", answer];
+  const lines = names.map((name) => JSON.parse(fixtureText(name)) as Record<string, unknown>);
+  const text = lines.map((line) => JSON.stringify(line)).join("\n");
+  writeFileSync(s.file, `${text}\n`, { mode: 0o600 });
+  // CP-4a2b (D18): a journal is kept only beside its run's record, signed under the same key, naming the head's MAC
+  // and the last line's
+  const head = lines[0] as Record<string, unknown>;
+  const record = {
+    ...RUN_START,
+    format: FLOW_RECORD_FORMAT,
+    run: RUN,
+    flow: head["flow"],
+    name: head["name"],
+    n: head["n"],
+    hash: head["hash"],
+    starter: head["starter"],
+    head: head["mac"],
+    tail: { seq: 3, mac: lines[2]?.["mac"] },
+    startedAt: head["at"],
+  };
+  mkdirSync(join(s.dir, RUN_RECORDS_DIR), { recursive: true, mode: 0o700 });
+  writeFileSync(
+    join(s.dir, RUN_RECORDS_DIR, `${RUN}.json`),
+    JSON.stringify({
+      ...record,
+      signature: new RecordSigner({ keyPath: s.keyPath }).sign(record),
+    }),
+    { mode: 0o600 },
+  );
+  return s.records.readRun(RUN);
+}
+
 describe("CP-4a2a — a run's journal, kept by the flows store (CP4-S15)", () => {
   it("J1: lines append in order, each chained to the one before, and read back whole", () => {
     const s = written();
@@ -108,47 +145,24 @@ describe("CP-4a2a — a run's journal, kept by the flows store (CP4-S15)", () =>
   });
 
   it("J1b: contracts' fixtures, a chain of head, call and answer, read back under the key they were signed with", () => {
-    const s = store({ key: FIXTURE_KEY });
-    mkdirSync(join(s.dir, RUNS_DIR), { recursive: true, mode: 0o700 });
-    const lines = [
-      "flow-journal-head.valid",
-      "flow-journal-line.call",
-      "flow-journal-line.answer",
-    ].map((name) => JSON.parse(fixtureText(name)) as Record<string, unknown>);
-    const text = lines.map((line) => JSON.stringify(line)).join("\n");
-    writeFileSync(s.file, `${text}\n`, { mode: 0o600 });
-    // CP-4a2b (D18): a journal is kept only beside its run's record, signed under the same key, naming the head's MAC
-    // and the last line's
-    const head = lines[0] as Record<string, unknown>;
-    const record = {
-      ...RUN_START,
-      format: FLOW_RECORD_FORMAT,
-      run: RUN,
-      flow: head["flow"],
-      name: head["name"],
-      n: head["n"],
-      hash: head["hash"],
-      starter: head["starter"],
-      head: head["mac"],
-      tail: { seq: 3, mac: lines[2]?.["mac"] },
-      startedAt: head["at"],
-    };
-    mkdirSync(join(s.dir, RUN_RECORDS_DIR), { recursive: true, mode: 0o700 });
-    writeFileSync(
-      join(s.dir, RUN_RECORDS_DIR, `${RUN}.json`),
-      JSON.stringify({
-        ...record,
-        signature: new RecordSigner({ keyPath: s.keyPath }).sign(record),
-      }),
-      { mode: 0o600 },
-    );
-    const read = s.records.readRun(RUN);
+    const read = readFixtureChain("flow-journal-line.answer");
     expect(read.kind).toBe("kept");
     expect((read as { lines?: { kind: string }[] }).lines?.map((line) => line.kind)).toEqual([
       "head",
       "call",
       "answer",
     ]);
+  });
+
+  it("J1c (13a's D11): a step's answer cut short, journaled with `cut`, reads back as its answer, never passed over", () => {
+    const read = readFixtureChain("flow-journal-line.answer-cut");
+    expect(read.kind).toBe("kept");
+    const lines = (read as { lines?: { kind: string; value?: unknown; cut?: true }[] }).lines;
+    expect(lines?.map((line) => line.kind)).toEqual(["head", "call", "answer"]);
+    expect(lines?.[2]).toMatchObject({
+      value: { text: "Reviewed the diff: no blocking findings, and the parser's", n: 2 },
+      cut: true,
+    });
   });
 
   it("J2: a forged line (an answer changed after it was signed) sets the run aside as lost, never replayed", () => {
