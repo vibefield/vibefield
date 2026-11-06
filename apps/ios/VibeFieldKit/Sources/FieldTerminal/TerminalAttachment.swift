@@ -1,3 +1,4 @@
+import FieldDesign
 import FieldProduct
 import FieldRoutedTerminal
 import Foundation
@@ -281,7 +282,7 @@ public final class TerminalAttachment {
     guard let client, let sessionID else { return .idle }
     return Self.phase(
       for: client.state, session: client.sessions[sessionID],
-      presented: client.hasPresented(sessionID), deadline: deadline, device: deviceName)
+      presented: client.hasPresented(sessionID), deadline: deadline, device: deviceName, here: DeviceWord.current)
   }
 
   /// Whether the CELL accepted this client's right to type. The grant asks; the
@@ -417,7 +418,7 @@ public final class TerminalAttachment {
         guard attach == self.attachID, !Task.isCancelled else { return }
         self.log.error(
           "mint stopped after \(Self.seconds(self.deadline)) s session=\(sessionID)")
-        self.localPhase = .stalled(Self.stallWords(.ticket, after: self.deadline))
+        self.localPhase = .stalled(Self.stallWords(.ticket, after: self.deadline, here: DeviceWord.current))
         return
       } catch {
         guard attach == self.attachID, !Task.isCancelled else { return }
@@ -1319,10 +1320,12 @@ public final class TerminalAttachment {
   /// card is about gone. A run the cell said EXITED is ended with its facts
   /// first — before its removal ends the activation too, and after it, so the
   /// card keeps the run's words rather than the removal's — and a run whose
-  /// LEASE says it exited, with no facts, in the field's words (C8).
+  /// LEASE says it exited, with no facts, in the field's words (C8). `here` is the device the words are read on
+  /// (`stallWords`): the attachment's own `phase` passes `DeviceWord.current`, and a caller that names none reads
+  /// "this device", never a phone.
   nonisolated static func phase(
     for state: RoutedTerminalClient.State, session: RoutedSessionState?, presented: Bool = false,
-    deadline: Duration = stepDeadline, device: String? = nil
+    deadline: Duration = stepDeadline, device: String? = nil, here: DeviceWord = .unknown
   ) -> TerminalPhase {
     if let exit = session?.exit { return .ended(runEndedWords(device: device, exit: exit)) }
     // C8 — the LEASE says the run exited (`stopped{exited}` / `revoked{exited}`)
@@ -1366,20 +1369,21 @@ public final class TerminalAttachment {
     case .reconnecting, .staleRoute: return .connecting
     case .refused(let code): return .refused(code)
     case .failed(let reason): return .failed(reason)
-    case .stalled(let step): return .stalled(stallWords(step, after: deadline))
+    case .stalled(let step): return .stalled(stallWords(step, after: deadline, here: here))
     }
   }
 
   /// fix8 — where an attach stopped, as the banner's second line: what was
   /// asked of whom, what never came, and after how long (DESIGN.md §8, the
-  /// phone's session card).
+  /// phone's session card). `here` is the device the person reads it on, named as its platform names it
+  /// (`DeviceWord`; L4's word pass, 2026-11-06).
   nonisolated static func stallWords(
-    _ step: RoutedTerminalClient.AttachStep, after deadline: Duration
+    _ step: RoutedTerminalClient.AttachStep, after deadline: Duration, here: DeviceWord
   ) -> String {
     let what =
       switch step {
       case .ticket: "the ticket was asked for and never came back"
-      case .slot: "this phone's last terminal never let go of its connection"
+      case .slot: "\(here.this)'s last terminal never let go of its connection"
       case .dial: "the dial over the mesh got no answer"
       case .control: "the terminal took the dial but never attached the session"
       case .frames: "the session attached but its screen never did"
