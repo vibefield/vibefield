@@ -177,7 +177,9 @@ export type AgentAccountUsageBatch = z.infer<typeof AgentAccountUsageBatch>;
  * *Corrected 2026-11-06 (UM-D8 A): from this desktop's own windows. Any other
  * caller's `refresh: true` (the phone's, over the tailnet) takes no reading:
  * it is answered the cached batch, whose `generatedAt` and each entry's
- * `fetchedAt`/`stale` say how old it is (fieldd's door, daemon.ts).* */
+ * `fetchedAt`/`stale` say how old it is (fieldd's door, daemon.ts) — with
+ * nothing cached yet, the one reading any cold read kicks
+ * (`AccountUsageService.snapshot`).* */
 export const AgentsUsageParams = z
   .object({
     refresh: z.boolean().optional(),
