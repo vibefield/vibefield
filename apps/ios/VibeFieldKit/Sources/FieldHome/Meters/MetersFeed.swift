@@ -83,11 +83,15 @@ final class MetersFeed {
   @ObservationIgnored private var door: (any ChatDoor)?
   @ObservationIgnored private var watch: (any ChatWatch)?
   @ObservationIgnored private var ask = 0
+  /// Whether `attach` has run: its first call always does, so a feed handed no door and no home says "usage
+  /// unavailable", never a first read that never ends (ruling 10). Only a true repeat is skipped.
+  @ObservationIgnored private var attached = false
 
   /// The home's door, handed over when it changes or the app comes forward (nil: none — the watch ends and the last
   /// word stands).
   func attach(_ door: (any ChatDoor)?, home: String?) {
-    if door === self.door, home == reading.home { return }
+    if attached, door === self.door, home == reading.home { return }
+    attached = true
     watch?.cancel()
     watch = nil
     self.door = door
