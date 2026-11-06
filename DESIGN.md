@@ -7268,7 +7268,9 @@ here.
   home that does not share usage yet says "‹home› doesn't share usage yet" on the page and the hold (the lead's
   words; never a blank), and the Me menu row's word then is ‹for James›.
 - **The token** is said "Showing only ‹profile›", its × "Show every profile". Its menu says **Agent Profiles…**,
-  **Show**, each profile with its sessions ("1 session", "4 sessions"), and **Every profile**.
+  **Show**, each profile with its sessions ("1 session", "4 sessions"), and **Every profile**. *(Added 2026-11-06,
+  the M-phone stack, as SE-2d built it; ‹for James›: VoiceOver says the token's hint after its name, "Opens the
+  profiles to show", and "menu open" as its value while the menu stands, as the corner's face says it.)*
 - **Said and not drawn:** a circle is "Usage: ‹plan›: 42% of 5 hours, resets in 2h; ‹plan›: not signed in", "No
   meters" or "‹profile›: usage unavailable" (every profile's circle at once, "Usage unavailable"; ‹for James›);
   the column is "Agent profiles", and its circle "‹profile›, tightest
@@ -7319,6 +7321,10 @@ field gives them, and “q” what was typed.
   sessions", "Show only what runs on ‹desktop›" or "Only in ‹folder›", over "a filter · 4 sessions", "a filter ·
   asleep" or "a filter", with **Filter**. A token's × is said "Remove ‹name›". The placeholder is **Search** (§9
   "Apps").
+- **The phone's spoken hints** *(added 2026-11-06, the M-phone stack, as SE-2c built them; ‹for James›)*: VoiceOver
+  says a hint after a control's name, and nothing draws it. A chip says "Adds a filter", an offer "Adds the filter",
+  a live row "Opens its card on Field", and a past row "Opens the session in History", or "Opens History at the
+  line" when its match is a line. The token's is §9 "The meters' words".
 
 **Chat's words** (track CO, SP-1d; where each stands is §8 "Chat's list", "Chat's thread" and "Chat's composer").
 - The hello and its starters: "Hi, I'm Vela. I can start agents for you, keep track of the ones you run, and carry
