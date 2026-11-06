@@ -158,6 +158,8 @@ describe("CP-4a1 — the library and fieldd's records on disk (CP4-Q18 (a))", ()
       FORM_BYTES_MAX: 4_096,
       FORM_DEPTH_MAX: 8,
       FORM_ENUM_MAX: 64,
+      // the slices 7–9 review's F5 (Q2, ruled at the lean): the lines a step's record keeps
+      STEP_LINES_MAX: 16,
     });
   });
 
@@ -545,6 +547,13 @@ describe("CP-4a2b — a run's record, its states and its bounds (13b.3's C6, C9,
     expect(FlowRunRecord.safeParse({ ...record(), open: [{ ...step(41), lines }] }).success).toBe(
       true,
     );
+    // a step keeps FLOW_LIMITS.STEP_LINES_MAX lines at most (F5's Q2): its prompt and each repair line
+    const repairs = (n: number) =>
+      Array.from({ length: n }, (_, i) => ({ line: "repair", n: i + 1, sent: "queued" }));
+    const keeps = (n: number) =>
+      FlowRunRecord.safeParse({ ...record(), open: [{ ...step(41), lines: repairs(n) }] }).success;
+    expect(keeps(FLOW_LIMITS.STEP_LINES_MAX)).toBe(true);
+    expect(keeps(FLOW_LIMITS.STEP_LINES_MAX + 1)).toBe(false);
     // the record names its head and tail by their MACs, lowercase hex
     expect(FlowRunRecord.safeParse({ ...record(), head: "x" }).success).toBe(false);
   });

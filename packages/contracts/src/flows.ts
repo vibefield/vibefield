@@ -400,7 +400,7 @@ export const FlowRunRecordStep = z
           })
           .passthrough(),
       )
-      .max(16)
+      .max(FLOW_LIMITS.STEP_LINES_MAX)
       .optional(),
   })
   .passthrough();
