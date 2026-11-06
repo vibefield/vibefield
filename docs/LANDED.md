@@ -36316,3 +36316,67 @@ IOS-13a closes in this entry.
 - Item 187: rung 11m's Jump to, red on vf-m1 in run 167; the 11m row is green only after it.
 - **Closes item 185.** TH-1's Owed 11m smoke gains a dated correction at its line, TH-2's Jump to rung a dated note
   at its line ("TH-1 and TH-2"), and ROADMAP's SP-1d bullet says Send as it is since TH-1.
+
+## Item 188 — the screenshot tool's happy path waits for its helper's exit before it reads the argv line: the still rides stdout and the argv line stderr, and push 103's CI runner handed the test the still first (2026-11-06)
+(2026-11-06; two commits, `48a63a7f1` (red) and `e04c2d83e`, on lane `hk/item188-mint-e04c2d83e` over main
+`c92b33692`, HK's, in `/Volumes/SamsungRed/lanes/hk`; first cut on `b286a617c` as `0d64b24cc` and `63a0b1615`;
+M169 is `e04c2d83e` itself, a fast-forward of main `c92b33692`, run 169, landed 2026-11-06T04:48:13Z.) Filed by VF-PM at
+04:12Z from push 103's verify.
+
+**The finding.** Push 103's CI verify (run `42156440154`, main `0e2d26a50`, attempt 1) failed at 03:44Z on one row:
+`@vibefield/screenshot`'s `test/tool.test.ts` › "the happy path" › "answers ok with the helper's still, minus the
+wire version", "expected false to be true" at `tool.test.ts:62:90`.
+- The package read "Tests  1 failed | 37 passed (38)"; every other count of the run was green.
+- The race: the row looked for the fake helper's argv line (`["--once"]`, written to stderr) among the diagnostics
+  the moment `capture()` resolved, but the tool settles a capture on stdout's verdict and turns stderr into
+  diagnostics on its own listener, so on two pipes a loaded runner can hand the parent the still first.
+- The same row was green on vf-m1 in runs 163–167 and on push 102, and `packages/screenshot` had not changed since
+  SNAP-0. VF-PM's re-run of the job on the same sha (attempt 2) read success at 04:36:49Z.
+
+**The ruling.** The test owes the wait, not the tool (VF-PM, 04:19Z). A capture is answered by its verdict. stderr
+is diagnostics, never protocol, and holding a still until stderr drains would slow every capture for a pipe that
+carries no answer. The tool already judges a helper's end on 'close', not 'exit'.
+
+**The red.** `48a63a7f1`: `packages/screenshot/test/helpers.ts` +6 −2 and `test/tool.test.ts` +12 −2.
+- The fake helper gains `FAKE_HELPER_LATE_ARGS=1`: in mode `ok` it writes the argv line 50 ms after the still.
+  Every other mode is unchanged.
+- The happy path's body becomes `answersOkWithTheStill(t)`, unchanged. A second row, "answers the same when the
+  helper's stderr lands after its still (item 188)", runs it on the late fake.
+- Red 3 of 3 on this Mac at `tool.test.ts:63:90`, CI's assertion and column; the original row green.
+
+**The fix.** `e04c2d83e`: `test/tool.test.ts` +6 −1. Before the argv check, `vi.waitFor` (a 3 s bound) the
+lifecycle `screenshot.helper.exited`, which the tool emits from the child's 'close'. Node fires 'close' only after
+the child's stdio streams have closed, so every diagnostic comes before it: an ordering, not a sleep. No product
+change.
+
+**The lights,** on this Mac (nice 19; the lane at `b286a617c` with a filtered install; logs in
+`/Volumes/SamsungRed/lanes/hk-out/item188/`):
+- `tool.test.ts` 5 of 5 "Tests  23 passed (23)"; the package's tests "Tests  39 passed (39)"; `tsc --noEmit` exit
+  0; biome on the two files clean.
+- Re-cut onto `c92b33692`: carry-check holds (2/2 patch-ids, 2/2 files byte-identical), the range-diff reads 2/2
+  "=", and the file reads 1 failed | 22 passed at the red and 23 passed at T.
+
+**The witness.** Run 169 (a9's mint on vf-m1, M169 the commit itself; the bundle `item188-e04c2d83e.bundle`,
+114,330 B, sha256 `3d18bcfe66f5…`, requiring only `0e2d26a50`):
+- `lanes/ts6/logs/m1/run169/run169.out` (sha256
+  `96ba1bb31379844c4d003e55d7fa19d85fdf46b950945845dba2b35385db5aef`): "ts6-mini verify ARMED 04:38:13Z"; "verify
+  exit 0 04:44:36Z"; "test target:  NX   Successfully ran target test for 29 projects"; "cargo test results: ok
+  34, FAILED 0"; "tree clean after verify"; "stubs left: 0".
+- `verify.log` (sha256 `2bb0461bbeee116aac6c8abd645d0b7772b1c117cef22a476d1fd13d9afaaa82`; its clean copy
+  `verify.clean.log`, `7ffca637a517cb7b0e9807bdc0720a030096319f41d78aa235aa51807901be42`):
+  - screenshot "Tests  39 passed (39)", run 168's 38 + 1, with "✓ test/tool.test.ts (23 tests)", the only per-file
+    change from run 168;
+  - vitest 13,487 | 0 | 21 over 28 packages, run 168's 13,486 + 1; electron-shell "Tests  2670 passed | 3 skipped
+    (2673)", field-app 4181, contracts 1775 and fieldd "Tests  3488 passed | 14 skipped (3502)", each as at run 168;
+  - node "ℹ tests 473", "ℹ fail 0"; biome "Checked 3399 files"; cargo 545 passed in 34 suites ("test result: ok"
+    each);
+  - the census "no drift" and "census assert OK — no §7.3 violation"; "bundle assert OK".
+- `run169-next.out` (`48236baa…`): "the locks stand: no re-install"; "preflight exit 0 · 1 WARN/FAIL lines", R23's
+  `acp` candidate (the standing warning).
+- `run169-hid.log` (`34f18b75…`): the console unlocked and idle, HID idle 11,537 s at the arm and 11,920 s at the end.
+- The red at `48a63a7f1` (`run169-red.log`, `a38e5d27…`; tree `846306e3fbe7`, clean): "EXIT 1", "Tests  1 failed |
+  22 passed (23)", the item 188 row, "expected false to be true" at `tool.test.ts:63:90`.
+- The file at T (`run169-green.log`, `d185e60b…`; tree `d416a04908b8`, clean): "EXIT 0", "Tests  23 passed (23)".
+- The land (the fixer's, 2026-11-06T04:48:13Z): main fast-forwarded from `c92b33692`, 2 files +24 −5.
+
+Item 188 closes in this entry.
