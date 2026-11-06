@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   type AgentInputSender,
-  FLOW_HOST,
+  ErrorData,
   FLOW_LIMITS,
   FLOW_RUNS_LISTED_MAX,
   type FlowRunRecordStep,
@@ -434,13 +434,23 @@ describe("CP-4a2b — a run starts from the bytes fieldd kept, or asks first; it
   it("R1c (Q-b): a copy of VibeField that can't start a flow's host refuses a run at its start in §9's host words, UNAVAILABLE as the flows' doors say it, and records nothing; an act on a kept start is refused the same way", async () => {
     const h = await harness({ unconfigured: "no flows host beside fieldd" });
     const approval = h.approved("hello", HELLO);
-    const hostless = {
-      kind: "UNAVAILABLE",
-      message: words.hostUnconfigured(),
-      retryable: false,
-      details: { service: FLOW_HOST.SERVICE, state: FLOW_HOST.STATE_UNCONFIGURED },
-    };
-    await expect(h.start()).rejects.toMatchObject(hostless);
+    // EL9 (the version review NN4): the refusal's data is the contract's, as its fixture pins it, never restated
+    const fixture = join(
+      import.meta.dirname,
+      "../../contracts/fixtures/error-data.flows-host-unavailable.json",
+    );
+    const unavailable = ErrorData.parse(JSON.parse(readFileSync(fixture, "utf8")));
+    const refusal = await h.start().then(
+      () => undefined,
+      (error: RpcCallError) => error,
+    );
+    expect(refusal?.message).toBe(words.hostUnconfigured());
+    const data = ErrorData.parse({
+      kind: refusal?.kind,
+      retryable: refusal?.retryable,
+      details: refusal?.details,
+    });
+    expect(data).toEqual(unavailable);
     // an item raised before the host went missing is acted on now: refused, nothing begun
     const act = h.runs.acts.start({
       id: "ny-0f2e4d6c8b0a1928" as NeedsItemId,
@@ -449,7 +459,7 @@ describe("CP-4a2b — a run starts from the bytes fieldd kept, or asks first; it
       version: "approved",
       start: { input: {}, starter: { by: "you" }, scope: ["work"] },
     });
-    expect(await act).toEqual({ outcome: "failed", reason: hostless.message });
+    expect(await act).toEqual({ outcome: "failed", reason: words.hostUnconfigured() });
     expect(h.records.runRecords()).toEqual([]);
     expect(h.records.runs()).toEqual([]);
   });
@@ -2375,6 +2385,30 @@ describe("CP-4a2b — a changed flow's acts begin the asked-for run (§13a slice
     });
     const run = ranOf(await act);
     expect(h.records.approval("hello")).toEqual(standing);
+    expect(h.records.runRecord(run)?.hash).toBe(standing.hash);
+    await settled(h.runs, run, "done");
+  });
+
+  it("R4e (the version review NN3, ruled 2026-11-06): Run this version, on a version that stands whose kept bytes were edited in place, runs it: the library's file, whose hash is the standing one, keeps its bytes again, and approves nothing", async () => {
+    const h = await harness();
+    h.approved("hello", HELLO);
+    const edited = h.write("hello", HELLO_EDITED);
+    const waits = waitsOf(await h.start());
+    // the version asked about is approved meanwhile, and then its kept bytes are edited in place (an agent's)
+    const standing = h.records.approve("hello", edited, { proposal: "fp-k3v9q2m7" });
+    const kept = join(h.root, "fieldd", "flows", "bytes", `${standing.hash}.flow.js`);
+    writeFileSync(kept, 'export const meta = { name: "Edited" };\n');
+    const acted = await h.runs.acts.start({
+      id: waits,
+      flow: "hello",
+      hash: flowHashOf(edited),
+      version: "this",
+      start: askedOf(h, 0),
+    });
+    expect(acted).toMatchObject({ outcome: "done" });
+    expect(readFileSync(kept, "utf8")).toBe(HELLO_EDITED);
+    expect(h.records.approval("hello")).toEqual(standing);
+    const run = ranOf(acted);
     expect(h.records.runRecord(run)?.hash).toBe(standing.hash);
     await settled(h.runs, run, "done");
   });
