@@ -236,11 +236,12 @@ function sealedDirectory(): string {
 }
 
 /** AR-7j (electron-security-packaging.md §9.3) — a packaged process of fieldd's
- * that STAYS (the daemon, the files worker) opens no inspector by a signal. On
- * Node, SIGUSR1 opens one on 127.0.0.1, and a same-uid process may send it. A
- * listener of our own takes the signal from Node's inspector (measured on a plain
- * Node 26.5.0: SIGUSR1 then opens nothing and the process runs on; the SEA's own
- * reading is build-fieldd-sea --verify's and desk-gates row 34's), from this
+ * that STAYS (the daemon, the files worker, the transcript worker, the flow host)
+ * opens no inspector by a signal. On Node, SIGUSR1 opens one on 127.0.0.1, and a
+ * same-uid process may send it. A listener of our own takes the signal from Node's
+ * inspector (measured on a plain Node 26.5.0: SIGUSR1 then opens nothing and the
+ * process runs on; the SEA's own reading is build-fieldd-sea --verify's, which asks
+ * each of the four at its probe, and desk-gates row 34's), from this
  * statement on; the executable's own start, before its first statement runs, is
  * the window that remains.
  *

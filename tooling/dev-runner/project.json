@@ -14,6 +14,8 @@
         "{workspaceRoot}/packages/fieldd/package.json",
         "{workspaceRoot}/packages/fieldd/scripts/**/*",
         "{workspaceRoot}/packages/fieldd/src/workspace/**/*",
+        "{workspaceRoot}/packages/fieldd/src/roles.ts",
+        "{workspaceRoot}/packages/fieldd/src/bin.ts",
         "{workspaceRoot}/packages/contracts/src/**/*",
         "{workspaceRoot}/scripts/stage-package.mjs",
         "{workspaceRoot}/scripts/third-party-notices.mjs",

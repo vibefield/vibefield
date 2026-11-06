@@ -78,11 +78,13 @@ const AGENT_SHIM_ROLE_ARG = "--vibefield-role=agent-shim";
 //    execArgv leaves SIGUSR1 BLOCKED for the whole process, and the agent-shim role execs the
 //    agent in place, which keeps the mask — every typed agent, and what it starts without
 //    resetting its mask, would be born deaf to SIGUSR1, unlike under `pnpm dev` (measured on
-//    Node 26.5.0). So the daemon and the files worker take SIGUSR1 from the inspector with a
-//    listener of their own from their first statement (bin.ts `refuseInspectorSignal`); what
-//    remains is the executable's start before that statement, and the agent-shim role, which
-//    leaves SIGUSR1 to Node and holds nothing a process of the same uid lacks.
-// --verify probes each: NODE_OPTIONS and the agent's SIGUSR1 at probe D, the daemon's at probe A.
+//    Node 26.5.0). So the four processes that stay (the daemon, the files worker, the transcript
+//    worker and the flow host) take SIGUSR1 from the inspector with a listener of their own from
+//    their first statement (bin.ts `refuseInspectorSignal`); what remains is the executable's
+//    start before that statement, and the agent-shim role, which leaves SIGUSR1 to Node and holds
+//    nothing a process of the same uid lacks.
+// --verify probes each: NODE_OPTIONS and the agent's SIGUSR1 at probe D; the daemon's SIGUSR1 at
+// probe A, the files worker's at C, the transcript worker's at C2 and the flow host's at C3.
 const SEA_EXEC_ARGV_EXTENSION = "none";
 
 // postject's SEA contract. The sentinel fuse and the Mach-O segment name are Node's, not
@@ -317,8 +319,9 @@ function writeManifest({ exe, blobSha256, node }) {
       useSnapshot: false,
       useCodeCache: false,
       execArgvExtension: SEA_EXEC_ARGV_EXTENSION,
-      // AR-7j — not the blob's: bin.ts's own listener, in the daemon and the files worker
-      sigusr1Inspector: "refused by the daemon's and the files worker's own listener",
+      // AR-7j — not the blob's: bin.ts's own listener, in each of the four processes that stay
+      sigusr1Inspector:
+        "refused by each staying process's own listener: the daemon, the files worker, the transcript worker and the flow host, asked at --verify's probes A, C, C2 and C3",
     },
     signature: process.platform === "darwin" ? "adhoc" : "none",
   };
@@ -432,10 +435,11 @@ function bootProbe({ exe, cwd, env, deadlineMs = 30_000, atReady }) {
   });
 }
 
-/** AR-7j (ESP §9.3) — asked of a READY daemon: SIGUSR1, which on a plain Node opens an
- * inspector on 127.0.0.1:9229 and says "Debugger listening" on stderr. The daemon's own
- * listener (bin.ts `refuseInspectorSignal`) makes it nothing: no inspector, and the daemon
- * still running. */
+/** AR-7j (ESP §9.3) — asked of a READY process that stays (the daemon at probe A; the files
+ * worker, the transcript worker and the flow host at probes C, C2 and C3): SIGUSR1, which on a
+ * plain Node opens an inspector on 127.0.0.1:9229 and says "Debugger listening" on stderr. The
+ * process's own listener (bin.ts `refuseInspectorSignal`) makes it nothing: no inspector, and
+ * the process still running. */
 async function sigusr1Ask({ child, stderr }) {
   const before = stderr().length;
   child.kill("SIGUSR1");
@@ -445,6 +449,19 @@ async function sigusr1Ask({ child, stderr }) {
     inspector: /Debugger listening/u.test(said),
     alive: child.exitCode === null && child.signalCode === null,
   };
+}
+
+/** AR-7j — the --verify row for a role's sigusr1Ask answer (probes C, C2 and C3), as `say`'s
+ * arguments: green only when SIGUSR1 opened no inspector and the host still ran. No answer is a
+ * host that ended before the ask could read it. */
+function sigusr1Row(role, answer) {
+  if (answer === undefined)
+    return [false, `${role} role: SIGUSR1 never answered (the host ended first)`];
+  const ok = answer.inspector === false && answer.alive === true;
+  return [
+    ok,
+    `${role} role: SIGUSR1 ${answer.inspector ? "OPENED AN INSPECTOR" : "opened no inspector"}, the host ${answer.alive ? "still running" : "ENDED by it"}${ok ? " (its own listener, bin.ts refuseInspectorSignal)" : ""}`,
+  ];
 }
 
 /**
@@ -663,16 +680,22 @@ function transcriptHostProbe({ exe, folder, deadlineMs = 30_000 }) {
       if (m?.t === "ready") {
         result.readyMs = Date.now() - started;
         result.port = m.port;
-        child.send({
-          t: "req",
-          id: 1,
-          op: "registerTicket",
-          args: {
-            ticket: randomBytes(32).toString("base64url"),
-            spark: "sp-probe00",
-            clientId: "probe",
-            expiresAt: Date.now() + 60_000,
-          },
+        // AR-7j — the ready worker is sent SIGUSR1 first (sigusr1Ask), as probe A asks the daemon;
+        // the ticket is then asked of the worker that heard it
+        void sigusr1Ask({ child, stderr: () => stderr }).then((answer) => {
+          result.sigusr1 = answer;
+          if (settled) return;
+          child.send({
+            t: "req",
+            id: 1,
+            op: "registerTicket",
+            args: {
+              ticket: randomBytes(32).toString("base64url"),
+              spark: "sp-probe00",
+              clientId: "probe",
+              expiresAt: Date.now() + 60_000,
+            },
+          });
         });
       } else if (m?.t === "res" && m.id === 1) {
         if (!m.ok) return finish({ ok: false, reason: `ticket refused: ${m.error?.message}` });
@@ -752,17 +775,23 @@ function flowsHostProbe({ exe, deadlineMs = 30_000 }) {
     const heard = (m) => {
       if (m?.t === "ready") {
         result.readyMs = Date.now() - started;
-        tell({
-          t: "run",
-          script,
-          input: {},
-          limits: {
-            callMaxBytes: 64 * 1024,
-            logMaxChars: 200,
-            heapMb: 128,
-            rssMb: 512,
-            argsDepthMax: 32,
-          },
+        // AR-7j — the ready host is sent SIGUSR1 first (sigusr1Ask), as probe A asks the daemon; the
+        // run is then asked of the host that heard it
+        void sigusr1Ask({ child, stderr: () => stderr }).then((answer) => {
+          result.sigusr1 = answer;
+          if (settled) return;
+          tell({
+            t: "run",
+            script,
+            input: {},
+            limits: {
+              callMaxBytes: 64 * 1024,
+              logMaxChars: 200,
+              heapMb: 128,
+              rssMb: 512,
+              argsDepthMax: 32,
+            },
+          });
         });
       } else if (m?.t === "call") {
         result.call = m.what;
@@ -846,11 +875,17 @@ function filesHostProbe({ exe, native, folder, deadlineMs = 30_000 }) {
       if (m?.t === "ready") {
         result.readyMs = Date.now() - started;
         result.mille = m.mille?.packageVersion;
-        child.send({
-          t: "req",
-          id: 1,
-          op: "list",
-          args: { rootPath: folder, segments: [], offset: 0, limit: 50, kinds: "all" },
+        // AR-7j — the ready worker is sent SIGUSR1 first (sigusr1Ask), as probe A asks the daemon;
+        // the list is then asked of the worker that heard it
+        void sigusr1Ask({ child, stderr: () => stderr }).then((answer) => {
+          result.sigusr1 = answer;
+          if (settled) return;
+          child.send({
+            t: "req",
+            id: 1,
+            op: "list",
+            args: { rootPath: folder, segments: [], offset: 0, limit: 50, kinds: "all" },
+          });
         });
       } else if (m?.t === "res" && m.id === 1) {
         if (!m.ok) return finish({ ok: false, reason: `list refused: ${m.error?.message}` });
@@ -1069,6 +1104,8 @@ async function verify({ exe, manifest }) {
         ? `files-host role: ready in ${c.readyMs} ms (mille ${c.mille}), listed ${c.listed} entries of the sandbox, rss ${(c.rss / 1e6).toFixed(1)} MB`
         : `files-host role: ${c.reason}${c.stderr ? ` — stderr: ${c.stderr.trim().split("\n").slice(-3).join(" / ")}` : ""}`,
     );
+    // AR-7j (ESP §9.3) — the files worker's own SIGUSR1 listener, asked once it said ready
+    if (c.readyMs !== undefined) say(...sigusr1Row("files-host", c.sigusr1));
 
     // Probe C2 (TH-1) — the executable in its transcript-host ROLE: the mille-free worker loads
     // its bundle staged beside it, takes the folder and its key on its IPC pipe, says ready with
@@ -1080,6 +1117,8 @@ async function verify({ exe, manifest }) {
         ? `transcript-host role: ready in ${c2.readyMs} ms on 127.0.0.1:${c2.port}, a ticket held`
         : `transcript-host role: ${c2.reason ?? `the ticket's port ${c2.ticketPort} is not the listener's ${c2.port}`}${c2.stderr ? ` — stderr: ${c2.stderr.trim().split("\n").slice(-3).join(" / ")}` : ""}`,
     );
+    // AR-7j (ESP §9.3) — the transcript worker's own SIGUSR1 listener, asked once it said ready
+    if (c2.readyMs !== undefined) say(...sigusr1Row("transcript-host", c2.sigusr1));
 
     // Probe C3 (CP-4a2a) — the executable in its flows-host ROLE: the host loads its bundle staged beside it, says
     // ready on its pipe (fd 3, one JSON message a line), starts the script's worker from the same bundle, which locks
@@ -1092,6 +1131,8 @@ async function verify({ exe, manifest }) {
         ? `flows-host role: ready in ${c3.readyMs} ms, one ${c3.call} call answered, the realm frozen, no process in the compartment`
         : `flows-host role: ${c3.reason ?? `the script said ${JSON.stringify(c3.value)}`}${c3.stderr ? ` — stderr: ${c3.stderr.trim().split("\n").slice(-3).join(" / ")}` : ""}`,
     );
+    // AR-7j (ESP §9.3) — the flow host's own SIGUSR1 listener, asked once it said ready
+    if (c3.readyMs !== undefined) say(...sigusr1Row("flows-host", c3.sigusr1));
 
     // Probe D (AR-7j, LP-D1) — the executable in its agent-shim ROLE, exactly as every
     // packaged launcher execs it: the SEALED shim beside it runs (never the home's poisoned
