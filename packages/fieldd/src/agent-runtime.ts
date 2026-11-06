@@ -3673,22 +3673,41 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
 
   /** A record whose PTY the first inventory lacked (AR-4b): the same grace
    * the exit backstop gives, so a cell that had not published its rows yet
-   * is not read as a dead process — then attached or stamped. */
+   * is not read as a dead process — then attached or stamped. Item 201 (RV #49) — at its OWN deadline: the re-attach
+   * holds a batch's records one at a time, awaiting a listed record's attach between two of them, and the boot's one
+   * timer follows the earliest deadline still to come (`armBootSweep`), never only the batch's first. */
   private awaitBoot(record: AgentSessionRecord): void {
     this.awaitingBoot.set(record.runtimeRunId, {
       record,
       deadline: Date.now() + EXIT_GRACE_MS,
     });
-    if (this.awaitingSweep === null) {
-      this.awaitingSweep = setTimeout(() => {
-        this.awaitingSweep = null;
-        if (this.disposed) return;
-        const terminals = this.opts.terminals?.() ?? null;
-        const listed = terminals?.observation() !== undefined ? terminals.list() : [];
-        this.sweepAwaiting(new Map(listed.map((row) => [row.sessionId, row])));
-      }, EXIT_GRACE_MS + 100);
-      this.awaitingSweep.unref();
+    this.armBootSweep();
+  }
+
+  /** Item 201 (RV #49) — the boot's one sweep timer, at the earliest deadline among the held records not yet due at
+   * `judgedAt` (the caller's clock: a sweep passes its own, so a record that fell due while it ran is armed for, at
+   * once, never left). None is armed while one stands: it is for that earliest deadline or an earlier one (a record
+   * held later has a later deadline), and its sweep arms for what remains. A record past its deadline is not armed
+   * for: its sweep left it held only because a cell's inventory is older than its bound, and the observation that
+   * clears that re-tells the rows (`handleInventory`), so the deferral never spins. Item 131 — libuv may complete a
+   * timer up to a millisecond early by `Date.now()`: its sweep finds the record not yet due and arms again for the
+   * rest, so no margin is added. */
+  private armBootSweep(judgedAt = Date.now()): void {
+    if (this.disposed || this.awaitingSweep !== null) return;
+    let next: number | undefined;
+    for (const { deadline } of this.awaitingBoot.values()) {
+      if (deadline > judgedAt && (next === undefined || deadline < next)) next = deadline;
     }
+    if (next === undefined) return;
+    const delayMs = Math.max(0, next - Date.now());
+    this.awaitingSweep = setTimeout(() => {
+      this.awaitingSweep = null;
+      if (this.disposed) return;
+      const terminals = this.opts.terminals?.() ?? null;
+      const listed = terminals?.observation() !== undefined ? terminals.list() : [];
+      this.sweepAwaiting(new Map(listed.map((row) => [row.sessionId, row])));
+    }, delayMs);
+    this.awaitingSweep.unref();
   }
 
   /** Attach a held record whose PTY is listed now, and stamp one whose grace
@@ -3700,7 +3719,10 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
    * every stamp waits: the record stays held, counts under its persona
    * (`liveUnder`) and keeps the re-attach unsettled (`reattachSettled`). The
    * observation that clears it re-tells the rows (`TerminalService.onInventory`),
-   * and `handleInventory` sweeps again then. */
+   * and `handleInventory` sweeps again then.
+   *
+   * Item 201 (RV #49) — a record not yet due keeps the boot's one timer: the sweep ends by arming it for the earliest
+   * deadline still to come (`armBootSweep`, judged at this sweep's own clock), whoever called it. */
   private sweepAwaiting(rows: ReadonlyMap<string, TerminalInfo>): void {
     const now = Date.now();
     const staleCells = this.opts.terminals?.()?.staleCells().length ?? 0;
@@ -3766,6 +3788,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       );
     }
     this.sweepDeferred = deferred > 0;
+    this.armBootSweep(now);
   }
 
   /** Item 121 — AR-4b's cell rule (`cellAdmits`) on the record as it stands on

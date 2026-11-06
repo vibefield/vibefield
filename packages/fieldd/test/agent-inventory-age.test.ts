@@ -65,7 +65,7 @@ afterEach(async () => {
 });
 
 /** Past the boot's grace for a record whose PTY the first inventory lacked:
- * EXIT_GRACE_MS (1.5 s) and the sweep 100 ms after it, with room for a loaded
+ * EXIT_GRACE_MS (1.5 s), its sweep at that deadline, with room for a loaded
  * host's late timer. */
 const PAST_THE_BOOT_GRACE_MS = 3_000;
 
