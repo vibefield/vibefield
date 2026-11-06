@@ -29000,6 +29000,12 @@ puppeteer `v0.3.2` (`95a70aa77`).
 (2026-11-02; six commits `2bcb3441f` → `50c30574a` on lane `fix/item153` over main `d4eb2e74f`, the fixer's; M102 is
 `50c30574a` itself, a fast-forward of main `d4eb2e74f`, run 102, landed 2026-11-02T06:33:20Z.) Granted by VF-PM at
 06:05Z, on a9's measure of the gate host.
+  > *Corrected 2026-11-06 (item 195):* this entry's "the test suites remove the temp roots they make" held for the
+  > packages it names. Its scope was a9's list of `vf-*` dirs, and its witness ran on the packages that list named.
+  > `tooling/plugin-build`'s four suites make theirs under `plugin-build-`, `plugin-build-test-`, `vfplugin-src-`,
+  > `vfplugin-out-`, `registry-sign-test-` and `manifest-` (`vfplugin-` has no hyphen after `vf`), so they were in
+  > neither, and every verify left 40 until item 195 (LANDED "Item 195"). Item 195 also made the rule a gate in
+  > `check:walls`.
 
 **The red.** Our suites made their roots with `mkdtempSync(join(tmpdir(), …))` and never removed them.
 - a9's list (`~/vf-lanes/tmp/a9-vf-list-0536` on the mini, after the lanes' TMPDIR=/tmp runs) held 33,345 vf-* dirs,
@@ -37994,3 +38000,97 @@ event, no install. The pin-class ERE: no hit.
 - The sibling filings and releases (rosetta 0.1.4, truffle 0.7.27, mille's drive) and their EL8s, James's hand.
 
 Land 2026-11-06T09:33:41Z by the fixer.
+
+## Item 195 — plugin-build's suites remove the temp roots they make, and check:walls holds the rule for every package: a test file that makes a temp root removes one (2026-11-06)
+(2026-11-06; three commits, `b0d118a7a`, `705bdb85e` (red) and `b001e9bd5`, on lane `item195` over main `86d274f10`,
+fd's, in `/Volumes/SamsungRed/lanes/item190`; first cut on `69c0048cd` as `c2d0743e2` → `4d23ef3e9`, kept as
+`item195-r0`. M184 is `b001e9bd5` itself, a fast-forward of main `86d274f10` by the fixer, run 184, landed
+2026-11-06T09:42:03Z.)
+Filed by VF-PM at 08:17:44Z; a9 attributed it by birth time at 08:28Z; the lane opened at 08:49Z.
+
+**The finding.** Every `pnpm verify` left 40 roots in the host's temp dir from `tooling/plugin-build`'s four suites.
+- a9's births by `stat %B`, runs 173–176: `plugin-build-` 11, `plugin-build-test-` 3, `vfplugin-src-` 7,
+  `vfplugin-out-` 12, `registry-sign-test-` 3, `manifest-` 4.
+- The sites: `fixture` in build.test.ts, `tempOutPath` in emit.test.ts, `writeBundle` and `freshDir` in
+  pack.test.ts, `tempDir` and `writeManifest` in registry-sign.test.ts. None of the four files removed anything.
+- Item 153 (M102) had fixed the class package by package. Its scope was a9's list of `vf-*` dirs, and none of these
+  prefixes starts with `vf-` (`vfplugin-` has no hyphen after `vf`). So plugin-build was in neither its list nor its
+  leftover witness. Item 153's entry carries the dated correction.
+- A sweep of main's 269 test files that name `mkdtemp` found these four the only ones with no removal form.
+
+**The fix.** `b0d118a7a`: `tooling/plugin-build/test/temp-dir.ts` is item 153's `tempDir(prefix)` (users' in shape).
+It makes the root under `tmpdir()`, and `onTestFinished` removes it, pass or fail, throwing at describe scope.
+- The six helpers make their roots through it, one line each. registry-sign's own prefix-less `tempDir()` is gone.
+- The four files drop `mkdtempSync` and `node:os`. The prefixes are unchanged. No product code.
+
+**The gate.** `705bdb85e` (red) and `b001e9bd5`: `scripts/check-test-temp-roots.mjs`, in `check:walls` after the
+import walls (root `package.json`, one line, pin-class).
+- A test-side file (under `test/`, `tests/` or `__tests__/`, or named `*.test.*` / `*.spec.*`) that calls `mkdtemp(`
+  or `mkdtempSync(` must call `rm`, `rmSync`, `rmdir`, `rmdirSync`, `removeTempRoot` or `removeWhenTestEnds`.
+- A root under a provided run root (`mkdtemp(join(inject(…), …))`, fieldd's three host bundles) is exempt.
+- Comment lines are not read. The grain is the file, as the leak was; a partial removal is the leftover witness's to
+  measure.
+- Its self-test holds four positives, seven cleans and the read counts. The red's skeleton read nothing, so the
+  self-test failed and the walls stage was red.
+
+**The lights.**
+- The re-cut onto `86d274f10` (VF-A's tip): 3 of 3 "=", the patch-id `ab589770…` equal, and the tip's tree
+  `425d5fc546eb` equal to the merge-tree.
+- Run 184 on vf-m1, a9's, on the packet `lanes/item190/item195-r1/` (brief `d5a6879e…`, bundle `87e21361…`,
+  the frozen `item195-witness.sh` and `item195-check-rows.sh`): all four runs as briefed, missing [] / extra []
+  throughout (`lanes/ts6/logs/m1/run184/`, its `i195/`; armed on main `86d274f10` at 09:33:50Z).
+  - The witness (`item195-witness.sh`): at `86d274f10`, 9 files and 77 tests passed, 41 left in its TMPDIR, the six
+    at their counts (40) and one `node-compile-cache`. At `b001e9bd5`, the same 77 tests, 1 left, the cache alone.
+  - The check rows (`item195-check-rows.sh`): the red's self-test exit 1 ("0 test files read (9), 0 make one (7)",
+    the four positives FAIL); the tip's exit 0 ("9 … (9), 7 … (7)", all passed); the tip's tree "clean — 261 of
+    1095 test files make a temp root; all remove"; `86d274f10`'s tree exit 1, naming exactly build:38, emit:45,
+    pack:11 and :21, registry-sign:23 and :35.
+  - biome over the seven paths "No fixes applied"; "nested rows: 0" over the four test files.
+  - `pnpm verify` at `b001e9bd5`: exit 0 at 09:39:16Z, armed 09:34:06Z (`verify.log`
+    `9c2f7e7c3218d6234c83f43f7797d5a39168d1daab3a1bcde6738754030dd3cf`). `check:walls` printed the new self-test
+    and "clean — 261 of 1095". Every count VF-A's run183's (contracts 1889, fieldd 3513 | 15, vitest 13,737 | 0 |
+    21, cargo 545); biome "Checked 3432 files", run183's 3430 and the two new files; per file, no line moves.
+  - Births by `stat %B` in the window (09:33:55Z–09:39:26Z): none of the six. Three others, each a directory born
+    at 09:37:59Z in the cargo test stage, named `.tmp` and six characters, Rust tempfile's default form
+    (`.tmpF4EmuL` 4 KiB, `.tmpOY5nM0` 8 KiB, `.tmpbeRd9Z` 4 KiB). They are the two or three a verify that were
+    unnamed in runs 174–176, owed below.
+  - The scripts' /tmp directories are kept: `vf195c.7lq4`, `vf195w.Ofs9`, `vf195w.apFr`.
+- No test ran on the MacBook (the pressure HOLD). The two scripts took a `bash -n` parse there under the light-row
+  door.
+
+**Found.**
+- **`git archive` refuses the whole call when any one pathspec matches nothing.** Main has no `__tests__/` and no
+  `*.spec.*`, so the check rows take each glob alone.
+
+**Owed.**
+- **A second class, a raced removal: `vf-km-`, item 196** (filed by VF-PM 09:33Z). a9's old-mini filler of M-r2's
+  whole suites left two `vf-km-` entries in `/private/tmp`, one of 4 KiB and one empty, born during the run. An
+  earlier pass of the same run left none. Intermittent; kept and undiagnosed.
+  - The maker is `packages/fieldd/test/terminal-kill-matrix.test.ts:64`. `spawnNative` makes the floor's data dir
+    with `shortTmpRoot("vf-km-")` and registers its `rmSync` at once, so the file has its removal and this
+    entry's gate rightly passes it.
+  - fd's reading of the file, not yet proven by a run: the `afterEach` runs the cleanups first, and SIGKILLs the
+    rows' field-native children only after them. So a live field-native, whose logs and sockets live under that
+    dir, can write into it while it is removed. The `rmSync` has no `maxRetries`, and the loop's
+    `catch { /* already-stopped is fine */ }` swallows an ENOTEMPTY.
+  - The likely shape: stop the children and await their exit before their dirs go, and remove through
+    `removeTempRoot`, which retries and names a leak on stderr. Item 196 is fd's: one commit after this records
+    batch, witnessed by three runs of the file on the old mini with births counted.
+- **A third class, cargo's test temp: `.tmp` + six characters, Rust tempfile's default form.** run184's three, born
+  together in the cargo test stage. `tempfile::tempdir()` and `TempDir::new()` remove on drop, so each is a drop
+  that never ran: a test killed or aborted, a child outliving its dir, or a build step. Owed as item 196, the
+  class's one lane (VF-PM 09:44Z).
+  - a9's listing on vf-m1 (names only, 09:42Z): each is a field-native state root, `native/run/` holding
+    `termcell.N.crumb` and `termframe.N.sock` (one also `termctl.1.sock`), instances 1 and 2.
+  - The crumb is the terminal cell's own write (`cell.rs`, `config.rs`'s `terminal_cell_crumb_file`), so a cell
+    child outlived its test's `TempDir` and wrote into the dir after the drop, or during it: item 196's class,
+    a test's child outliving its temp dir, in Rust.
+  - The candidates, by fd's read of main (unproven): the tests that boot a whole field-native, whose terminal
+    service spawns the cells, under a default-prefix `tempfile::tempdir()`. They are `tests/mesh_unit.rs` (26 such
+    tempdirs), `tests/mgmt_server.rs` (8), `tests/door_bridge.rs` (8) and `src/services/mesh.rs` (6), and one each
+    in `door.rs`, `mesh_bridge.rs` and `mesh_egress.rs`. On unix, `cell_lifecycle.rs` and the route probe make
+    named roots under `/tmp`, so they are not it.
+- The roots already left on the hosts are James's reap: 33,561 entries on the old mini, 1,003 on vf-m1 at a9's
+  count.
+
+Item 195 closes in this entry.
