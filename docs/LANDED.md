@@ -39348,6 +39348,10 @@ keeps running. Live from the second TD-4 nightly.
   pre-light's xcodebuild; df 14 before and after; swap 1,743 MB.
 - At LAND: gate:landing's smoke:update (desk-gates row 30, WP12f's packaged apply) is armed on the old mini at
   `09940c201`, waiting on James's console unlock; owed until it runs.
+  > *Answered 2026-11-06 18:45Z:* smoke:update row 30 GREEN on the old mini at `09940c201` (a9; exit 0 on try 1,
+  > 18:35–18:40Z, the console unlocked; the five runs ok: staged, forged, rollback, killed and unresolved;
+  > outsideTheRoot []; daemons left none; log `smkup-09940c201-t1/smoke:update.log` `a94e96b3…`). It leaves James's
+  > console list.
 
 **Found.**
 - A plain stop that names neither census still asks no one: the supervisor's stale-build replacement and the dev
@@ -39363,3 +39367,86 @@ keeps running. Live from the second TD-4 nightly.
   rv/vf-restart-truth's, after EL8-2.
 - The draft specs (through the draft queue): `build-wp12-updater.md` §12 B3/B4, `electron-shell-refactor.md` §7.3's
   amendment and `thinking-update-ux.md`, each a dated correction at its source.
+
+## Item 201 — fieldd's held and re-attached runs keep their lifecycle: a held run's end is told, a replacement waits for the old process to exit, the boot's grace is swept per record, an unread re-attach settles nothing and asks again, and a dead pane is no live terminal (RV #17, #43, #49, #48, #50) (2026-11-06)
+(2026-11-06; thirteen commits on lane `rv/fieldd-lifecycle`, RV's (vibe-field-06, vibe-field-62 since the 17:16Z
+restart), built in `/Volumes/SamsungRed/lanes/fg2/records-fu1` over item 192's pre-mint tip `992d2649b` (`aad0c6cfc` …
+`b392ef707`); re-cut by `git replay` onto `09940c201` (M193) as `b358bdfe6` … `7f243f4c9`, the shas a9's rows proved;
+replayed again onto `ef6b7a05b` as `a258ae2ae` (red), `0c11966ed`, `dca330791` (red), `c2a50aea7`, `7ea70f20f` (red),
+`a8e641097`, `4f1ef183d` (red), `da3097ee7`, `9a3128a4b` (red), `b30e5fffb`, `16eff47eb` (words), `8529da0e6` (red)
+and `db181a008`. M194 is `db181a008` itself, a fast-forward of main `ef6b7a05b` by the fixer, run 194, landed
+2026-11-06T18:57:17Z.)
+RV's third landing: the plan's lane rv/fieldd-lifecycle, wave 2, five findings of fieldd's agent runtime and monitor
+feed. #48's re-ask is built at rv-s9-records' lean B, which James has not ruled.
+
+**The findings.**
+- **#17** (`gap2-6`, medium, confirmed): a held run that ends told no one. `closePending` and the replacement's point
+  of no return never called `ended()`, so kept queued words never delivered or dropped, held sends held their slots,
+  the crew card kept a ghost member and the spark's "ended" wake was lost, after every fieldd restart.
+- **#43** (`vf-runtime-3`, low, confirmed): a replacement read "gone" from the inventory's absence within its 100 ms
+  poll, so the successor was born while the old TUI lived about 1–1.7 s more on the same native session.
+- **#49** (`vf-runtime-8`, low, confirmed): the boot's grace sweep was armed once per batch, so a record held after
+  the batch's first waited for an inventory a quiet floor never sends.
+- **#48** (`vf-runtime-5`, low, plausible): a re-attach that could not list the records set itself done, so fieldd
+  read "settled" over runs it never read and a sign-out counted none of them as running; and it never asked again.
+- **#50** (`vf-feed-2`, low, confirmed): `hostTerminalFrom` dropped the floor's `exited`, so a removed app run's kept
+  pane stood as a live, attachable, writable bare-terminal row, which the phone and peers offered to type into.
+
+**What landed.**
+- fieldd `agent-runtime.ts`:
+  - #17: `closePending` and `replacePendingClaimed` tell `ended()` once, while the run is still in the fold, before
+    any successor is born; `releasePending` and `dispose` tell nothing, as no end is theirs.
+  - #43: a replacement waits for the floor's own exit, heard through the one exit door (`handleTerminalExit` →
+    `heardExit`), bounded by item 59's `ASKED_EXIT_GRACE_MS` (no new constant, no poll); past it the refusal is
+    today's `PRECONDITION_FAILED` (retryable, `terminal-alive`).
+  - #49: `armBootSweep()` keeps one timer at the earliest deadline still to come, armed as each record is held and
+    again at the end of every sweep.
+  - #48: `reattachState` (`unstarted`, `running`, `unread`, `done`) replaces the two booleans; an unread re-attach is
+    not settled, the census stays unread and `liveUnder` counts every un-exited record as running; at lean B the
+    floor's next inventory asks again (no timer), the warn is said once per unread stretch, and the ask keeps every
+    row this boot already gave its runs.
+- docs/agent-plane `system.html` (#43, in its green): resume-when-idle's "given 5 s to leave the inventory" gets a
+  dated correction at its source; leaving the inventory is not exiting, and the replacement now waits for the floor's
+  own `session-exited`.
+- fieldd `agent-monitor.ts` (#50): `hostTerminalFrom` forwards `exited`, so the backend draws no live terminal for a
+  husk; the Q06 comment now says the fold's join, never the husk, finds the pane.
+- DESIGN.md §9 (#48): a dated amendment to item 177's sessions paragraph: a start's re-attach that could not read the
+  sessions has not happened, nothing takes them as settled until it has, and it reads them again at the floor's next
+  listing (words at the lean, open until James rules rv-s9-records).
+
+**The lights.**
+- Written unrun on the MacBook under the HOLD. The lane's review found one biome miss (a condition split that biome
+  joins at 99 columns) and the rows' gaps; its fixer folded the join into #48's green before the first re-cut.
+- a9's rows on vf-m1 at `7f243f4c9` (`lanes/rv/a9/w2-i201/`, SUMS `df7eaf06…`; results `a9-results/`, log
+  `m1-i201.log` `46e48e9e…`), all thirteen as briefed: F1–F7's reds at their stated assertions (#17's three rows,
+  #43's three, #49's one, #48's two, #50's four); F8's mutation probe red (#43's shortcut for a pane the floor already
+  lists `exited` removed: "never refused as alive: the husk's process has ended"), porcelain clean after; F9 264 of
+  264 over the twelve fieldd files the lane touches or leans on; F10 the real floor's 4 rows (`session-exited`, B177);
+  F11 tsc 0; F12 biome clean over the five files; F13 field-app's catalog fixture 4 of 4. Births 0.
+- Both re-cuts are proof-form: range-diff 13 `=`, the own range's `-U0 --stable` patch-id equal (`ea8fa4c6…`), and the
+  tip's tree equal to git's merge-tree (`lanes/rv/mint/item201/`).
+- Run 194, a9's, on the old mini: GREEN, every per-file count as briefed, missing [] / extra []
+  (`lanes/ts6/logs/mini/run194/`; verify exit 0 at 18:46:55Z, tree clean, stubs 0). Nested rows 0 over the lane's
+  three test files. fieldd 3561 passed and 15 skipped (+13: `agent-inventory-age.test.ts` 9 → 19,
+  `agent-monitor.test.ts` 29 → 31, `agent-remote-cut.test.ts` 10 → 11); vitest 13,950 passed, 0 failed and 21 skipped
+  over 956 files; contracts 1936, field-app 4373, electron-shell 2707 passed and 2 skipped, node 474, cargo 35 / 548,
+  typecheck 29, biome 3470 and gen as run 193's. The brief said +14 (3562 and 13,951); that was its own arithmetic,
+  corrected at its source (`ERRATUM.md` beside it), and a9's totals are the per-file sum. Births 0. Host: load 1.67 at
+  arm, 15.38 at its peak; df 13 GiB; swap 1,975 MB.
+- At LAND: gate:landing's smoke:godview (#50's husk rule) is owed. The old mini's console was locked at the land, so
+  it is answered here when it runs.
+
+**Found.**
+- A replacement that fails past its point of no return has still ended the old run and tells nothing more;
+  `terminated: false` (the floor holds no live session) proceeds as before.
+- #50: a run whose first assembly comes while its PTY is already listed `exited` takes its `runtimeRunId` as its row
+  id, not the pane's session id. Only an exited app run re-listed from its record at a fieldd boot over a floor that
+  already lists the husk does this; every fieldd join reads `idOf`/`rowForRun` or `terminal.runtimeSessionId`, never
+  the row id.
+
+**Owed.**
+- James's rv-s9-records: built at lean B. Under A the re-ask pair (`9a3128a4b`, `b30e5fffb`) drops and the §9
+  amendment loses its last sentence; under C that sentence gains the ladder. A different ruling changes DESIGN.md
+  first, then `agent-runtime.ts`.
+- No draft correction: the design names no draft claim for these ranks, and `agent-monitor.ts`'s Q06 comment, the one
+  place that stated #50's defect, is corrected in place.
