@@ -132,50 +132,57 @@ struct ChatPage: View {
 
   var body: some View {
     NavigationStack {
-      ScrollView {
-        LazyVStack(alignment: .leading, spacing: 0) {
-          head
-          if entries.isEmpty {
-            if heard, away.isEmpty {
-              VStack(alignment: .leading, spacing: 6) {
-                Text(ChatWords.emptyTitle)
-                  .font(ChromeType.sans(15, .semibold))
-                  .foregroundStyle(ChromePalette.ink)
-                Text(ChatWords.emptyText)
-                  .font(ChromeType.sans(13.5))
-                  .foregroundStyle(ChromePalette.inkTertiary)
-                  .lineSpacing(3)
-              }
-              .padding(.horizontal, 20)
-              .padding(.vertical, 24)
+      // IOS-12e (§2.10): Chat's list is one stage; a row's face moves on it while its spark works
+      SparkStageHost {
+        list
+          .background(ChromePalette.paper.ignoresSafeArea())
+      }
+      .navigationTitle(ChatWords.title)
+    }
+    .tint(ChromePalette.ink)
+  }
+
+  private var list: some View {
+    ScrollView {
+      LazyVStack(alignment: .leading, spacing: 0) {
+        head
+        if entries.isEmpty {
+          if heard, away.isEmpty {
+            VStack(alignment: .leading, spacing: 6) {
+              Text(ChatWords.emptyTitle)
+                .font(ChromeType.sans(15, .semibold))
+                .foregroundStyle(ChromePalette.ink)
+              Text(ChatWords.emptyText)
+                .font(ChromeType.sans(13.5))
+                .foregroundStyle(ChromePalette.inkTertiary)
+                .lineSpacing(3)
             }
-          } else {
-            HStack(spacing: 4) {
-              Text(ChatWords.sparks)
-              Text("·")
-              Text("\(entries.count)")
-            }
-            .chromeGroupHead()
-            .frame(minHeight: 30)
             .padding(.horizontal, 20)
-            .padding(.top, 22)
-            .padding(.bottom, 8)
-            TimelineView(.periodic(from: .now, by: 60)) { context in
-              let now = Int64((context.date.timeIntervalSince1970 * 1000).rounded())
-              VStack(spacing: 0) {
-                ForEach(Array(entries.enumerated()), id: \.element.id) { index, entry in
-                  ChatRow(entry: entry, mark: ledger.mark(of: entry), now: now, separated: index > 0, onWake: onWake)
-                }
+            .padding(.vertical, 24)
+          }
+        } else {
+          HStack(spacing: 4) {
+            Text(ChatWords.sparks)
+            Text("·")
+            Text("\(entries.count)")
+          }
+          .chromeGroupHead()
+          .frame(minHeight: 30)
+          .padding(.horizontal, 20)
+          .padding(.top, 22)
+          .padding(.bottom, 8)
+          TimelineView(.periodic(from: .now, by: 60)) { context in
+            let now = Int64((context.date.timeIntervalSince1970 * 1000).rounded())
+            VStack(spacing: 0) {
+              ForEach(Array(entries.enumerated()), id: \.element.id) { index, entry in
+                ChatRow(entry: entry, mark: ledger.mark(of: entry), now: now, separated: index > 0, onWake: onWake)
               }
             }
           }
         }
-        .padding(.bottom, 24)
       }
-      .background(ChromePalette.paper.ignoresSafeArea())
-      .navigationTitle(ChatWords.title)
+      .padding(.bottom, 24)
     }
-    .tint(ChromePalette.ink)
   }
 
   private var head: some View {
@@ -219,11 +226,16 @@ struct ChatRow: View {
   static let side: CGFloat = 16
   static let gap: CGFloat = 12
   static let dot: CGFloat = 10
+  /// The statuses a face moves through while its spark works: "live while it works" (§2.10's table), the Mac's
+  /// `AT_WORK` (ChatPanelView.tsx). Any other status is a still.
+  static let atWork: Set<SparkStatus> = [.thinking, .planning, .searching, .reviewing, .running, .focus]
 
   var body: some View {
     let time = SparkEntries.activityWords(at: entry.activityAt, now: now)
     HStack(spacing: Self.gap) {
-      SparkFlatFace(seed: entry.spark.seed, size: Self.face)
+      SparkFaceView(
+        seed: entry.spark.seed, status: entry.status.rawValue, size: Self.face,
+        live: Self.atWork.contains(entry.status))
       VStack(alignment: .leading, spacing: 2) {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
           Text(entry.spark.name)

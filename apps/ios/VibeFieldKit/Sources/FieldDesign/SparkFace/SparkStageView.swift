@@ -153,7 +153,9 @@ public struct SparkStageHost<Content: View>: View {
       .coordinateSpace(.named(SparkStage.space))
       .overlay {
         if let layer = holder?.layer {
+          // the content's whole frame, the safe area it reaches into too: the faces report in that space
           SparkStageLayerView(layer: layer)
+            .ignoresSafeArea()
             .allowsHitTesting(false)
             .accessibilityHidden(true)
         }
