@@ -385,8 +385,8 @@ public struct HomeScreen: View {
 
       // PG-4t — the Stories row: last, so it stands above the overlays and wears neither, outside the swarm.
       storiesRow
-      // SE-2 — the profile token, beside the row and outside the swarm: the lens recedes every view's rows, so the
-      // token that says so stands over every view (its frame is the swarm's obstacle in `chrome`).
+      // SE-2 — the profile token, beside the row and outside the swarm: the lens filters whichever view stands, so
+      // the token that says so stands over every view (its frame is the swarm's obstacle in `chrome`).
       lensToken
     }
     // The lab covers the stage (IOS-6c); presented here rather than on the
