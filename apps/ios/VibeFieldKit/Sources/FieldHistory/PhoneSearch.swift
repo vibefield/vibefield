@@ -376,10 +376,10 @@ public enum PhoneSearch {
     id.flatMap { id in live.profiles.first { $0.id == id } }
   }
 
-  /// What leads a profile wherever search names it: a chip, a token, an offer, a live row's pill.
+  /// What leads a profile wherever search names it: a chip, a token, an offer, a live row's pill — its glyph filled
+  /// while it is the default profile (DESIGN.md §8, "the profile's glyph (filled for the default)").
   public static func lead(_ profile: AgentProfileSet) -> Lead {
-    // RED STUB (SE-2r): the default profile's glyph is not filled yet
-    .profile(glyph: profile.glyph, native: profile.kind == "native", filled: false)
+    .profile(glyph: profile.glyph, native: profile.kind == "native", filled: profile.isDefault)
   }
 
   /// Live now's chips (SE-D5): the profiles, less the one chosen, each with its sessions and the waiting dot; then
