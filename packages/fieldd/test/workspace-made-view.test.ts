@@ -10,7 +10,10 @@
 //   · a theme it cannot read, a page it will not read (a link, a link on the way, a folder, a FIFO,
 //     none), a page outside its root, a page over the bound, a folder outside its root or behind a
 //     link — each refused, with nothing written and a previous view whole;
-//   · a worker with no roots, or with roots that overlap, refuses every view.
+//   · a page hard-linked to a file outside its root, as rosetta's link placement leaves it, read;
+//   · a rename refused after the temp is written: the temp removed, what was there kept;
+//   · a worker with no roots, or with roots that overlap, refuses every view; a root that is not
+//     there is root-missing, and the worker makes neither (fieldd makes both).
 import { execFileSync } from "node:child_process";
 import {
   existsSync,
@@ -84,7 +87,9 @@ function layout(): Layout {
   const base = realpathSync(mkdtempSync(join(tmpdir(), "vf-mv-")));
   cleanup.push(() => rmSync(base, { recursive: true, force: true }));
   const roots = { sourceRoot: join(base, "made-src"), servedRoot: join(base, "made") };
+  // both roots made, as fieldd makes them: the worker makes neither
   mkdirSync(join(roots.sourceRoot, APP, DIGEST), { recursive: true });
+  mkdirSync(roots.servedRoot);
   const source = join(roots.sourceRoot, APP, DIGEST, "index.html");
   writeFileSync(source, VECTOR.embed.page);
   return { base, roots, source, folder: join(roots.servedRoot, APP, DIGEST) };
@@ -205,6 +210,24 @@ describe("a made app's view (DR-1b), built by the real files worker", () => {
     expect(readdirSync(folder)).toEqual([VIEW]);
   });
 
+  it("reads a page hard-linked to a file outside the export-source root, as rosetta links it", async () => {
+    const { base, roots, source, folder } = layout();
+    // R-1's `method: "link"`: the page is one more name for rosetta's stored object, which lives
+    // in its own asset root; a hard link is a regular file, never a link the walk refuses
+    const stored = join(base, "asset-root", `${DIGEST}.html`);
+    mkdirSync(dirname(stored));
+    writeFileSync(stored, VECTOR.embed.page);
+    rmSync(source);
+    linkSync(stored, source);
+    const supervisor = await ready(roots);
+    const answer = await build(supervisor, source, folder, VECTOR.embed.theme);
+    expect(answer).toEqual({ bytes: Buffer.byteLength(VECTOR.embed.view) });
+    expect(readFileSync(join(folder, VIEW), "utf8")).toBe(VECTOR.embed.view);
+    // the object is read, never written: its two names hold its own bytes
+    expect(statSync(source).nlink).toBe(2);
+    expect(readFileSync(stored, "utf8")).toBe(VECTOR.embed.page);
+  });
+
   it("refuses a theme it cannot read before it touches anything, and keeps a previous view", async () => {
     const { roots, source, folder } = layout();
     const supervisor = await ready(roots);
@@ -217,8 +240,8 @@ describe("a made app's view (DR-1b), built by the real files worker", () => {
       const error = await refusal(build(supervisor, source, folder, theme));
       expect(error.error, row.case).toEqual(refused);
     }
-    // nothing was made: not the folder, not even the served root
-    expect(existsSync(roots.servedRoot)).toBe(false);
+    // nothing was made: the served root holds no folder
+    expect(readdirSync(roots.servedRoot)).toEqual([]);
     await build(supervisor, source, folder, VECTOR.embed.theme);
     const closing = VECTOR.refusedVariables[0];
     if (closing === undefined) throw new Error("the vector has no refusedVariables");
@@ -252,7 +275,8 @@ describe("a made app's view (DR-1b), built by the real files worker", () => {
       const error = await refusal(build(supervisor, page, folder, VECTOR.embed.theme));
       expect(error.error.code, page).toBe("not-found");
     }
-    expect(existsSync(folder)).toBe(false);
+    // nothing was made below the served root
+    expect(readdirSync(roots.servedRoot)).toEqual([]);
   });
 
   it.skipIf(process.platform === "win32")("refuses a FIFO without opening it", async () => {
@@ -272,11 +296,17 @@ describe("a made app's view (DR-1b), built by the real files worker", () => {
     const { base, roots, folder } = layout();
     const outside = join(base, "outside.html");
     writeFileSync(outside, "<p>not exported</p>");
-    mkdirSync(roots.servedRoot, { recursive: true });
     const served = join(roots.servedRoot, "page.html");
     writeFileSync(served, "<p>a served file</p>");
     const supervisor = await ready(roots);
-    for (const page of [outside, served, roots.sourceRoot, join(APP, DIGEST, "index.html")]) {
+    // and a path no file can have (a NUL): malformed before the disk is asked
+    for (const page of [
+      outside,
+      served,
+      roots.sourceRoot,
+      join(APP, DIGEST, "index.html"),
+      join(roots.sourceRoot, APP, DIGEST, "index\0.html"),
+    ]) {
       const error = await refusal(build(supervisor, page, folder, VECTOR.embed.theme));
       expect(error.error.code, page).toBe("invalid");
     }
@@ -309,7 +339,6 @@ describe("a made app's view (DR-1b), built by the real files worker", () => {
   it("refuses a folder outside the served root or behind a link, never writing in the export's", async () => {
     const { base, roots, source } = layout();
     const exported = dirname(source);
-    mkdirSync(roots.servedRoot, { recursive: true });
     // links on the way below the served root: one into the export's own folder, one out of the root
     symlinkSync(join(roots.sourceRoot, APP), join(roots.servedRoot, "into-export"));
     symlinkSync(base, join(roots.servedRoot, "out"));
@@ -319,6 +348,7 @@ describe("a made app's view (DR-1b), built by the real files worker", () => {
       [exported, "invalid"],
       [roots.servedRoot, "invalid"],
       [join(base, "elsewhere"), "invalid"],
+      [join(roots.servedRoot, "a\0b"), "invalid"],
       [join(roots.servedRoot, "into-export", DIGEST), "not-found"],
       [join(roots.servedRoot, "out", "elsewhere"), "not-found"],
       [join(roots.servedRoot, "a-file"), "not-a-directory"],
@@ -332,6 +362,19 @@ describe("a made app's view (DR-1b), built by the real files worker", () => {
     expect(readdirSync(exported)).toEqual(["index.html"]);
     expect(readFileSync(source, "utf8")).toBe(VECTOR.embed.page);
     expect(existsSync(join(base, "elsewhere"))).toBe(false);
+  });
+
+  it("removes its temp when the rename is refused after the view is written, keeping what was there", async () => {
+    const { roots, source, folder } = layout();
+    // the view's name taken by a folder: the temp is written whole and fsynced, then rename(2)
+    // refuses a file over a folder (EISDIR), the one failure a row can make after the temp exists
+    mkdirSync(join(folder, VIEW), { recursive: true });
+    const supervisor = await ready(roots);
+    const error = await refusal(build(supervisor, source, folder, VECTOR.embed.theme));
+    expect(error.error.code).toBe("internal");
+    expect(readdirSync(folder)).toEqual([VIEW]);
+    expect(statSync(join(folder, VIEW)).isDirectory()).toBe(true);
+    expect(readdirSync(join(folder, VIEW))).toEqual([]);
   });
 
   it("refuses every view on a worker with no roots, or with roots that overlap", async () => {
@@ -356,5 +399,36 @@ describe("a made app's view (DR-1b), built by the real files worker", () => {
       });
     }
     expect(readdirSync(nested)).toEqual([DIGEST]);
+  });
+
+  it("answers root-missing for a root that is not there, and makes neither root", async () => {
+    const { base, roots, source, folder } = layout();
+    // a served root that is not there, and one whose missing tail lies behind a link into the
+    // export: fieldd makes the roots, never the worker, so nothing lands in the export's tree
+    rmSync(roots.servedRoot, { recursive: true });
+    const into = join(base, "into-export");
+    symlinkSync(join(roots.sourceRoot, APP), into);
+    for (const servedRoot of [roots.servedRoot, join(into, "made")]) {
+      const missing = await ready({ sourceRoot: roots.sourceRoot, servedRoot });
+      const target = join(servedRoot, APP, DIGEST);
+      const error = await refusal(build(missing, source, target, VECTOR.embed.theme));
+      expect(error.error, servedRoot).toEqual({
+        code: "root-missing",
+        message: "the served made folder is not there",
+      });
+    }
+    expect(existsSync(roots.servedRoot)).toBe(false);
+    expect(readdirSync(join(roots.sourceRoot, APP))).toEqual([DIGEST]);
+    // an export-source root that is not there
+    mkdirSync(roots.servedRoot);
+    const gone = join(base, "made-src-gone");
+    const orphan = await ready({ sourceRoot: gone, servedRoot: roots.servedRoot });
+    const page = join(gone, APP, DIGEST, "index.html");
+    const error = await refusal(build(orphan, page, folder, VECTOR.embed.theme));
+    expect(error.error).toEqual({
+      code: "root-missing",
+      message: "the export-source folder is not there",
+    });
+    expect(readdirSync(roots.servedRoot)).toEqual([]);
   });
 });

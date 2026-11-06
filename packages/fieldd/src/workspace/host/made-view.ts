@@ -17,18 +17,21 @@ import { WorkerFailure } from "./engine";
 //
 // TWO ROOTS, named by fieldd at `init` (`MadeViewRoots`): the export-source
 // root, where rosetta's export places a page and nothing is served, and the
-// served made root (`artifacts/made`), which holds views alone. A view never
-// writes into the export's folder or over its link: the roots must not overlap
+// served made root (`artifacts/made`), which holds views alone. fieldd makes
+// both; the worker makes neither (a root that is not there is `root-missing`),
+// so nothing is made before the roots are proved apart. A view never writes
+// into the export's folder or over its link: the roots must not overlap
 // (lexically, then by real path), and the view replaces its file by rename,
 // never writing through it, so a hard link to an old view keeps the old bytes.
 //
 // THE PAGE: an absolute path below the export-source root. Every entry on the
 // way is read with lstat and a symlink anywhere is refused, never followed; the
-// page must be a regular file (a FIFO is never opened); it is opened no-follow
-// and no-block, then held to what was asked: its real path inside the root and
-// its inode the one the open holds (a link swapped in after the walk reads
-// nothing outside). At most MADE_APP_VIEW.PAGE_MAX_BYTES, by its stat and
-// again while it is copied (a page that grows is refused, never cut).
+// page must be a regular file (a FIFO is never opened; a hard link is one, as
+// R-1's `method: "link"` places a page); it is opened no-follow and no-block,
+// then held to what was asked: its real path inside the root and its inode the
+// one the open holds (a link swapped in after the walk reads nothing outside).
+// At most MADE_APP_VIEW.PAGE_MAX_BYTES, by its stat and again while it is
+// copied (a page that grows is refused, never cut).
 //
 // THE FOLDER: an absolute path below the served root, made here one folder at
 // a time (0700) when it is not there, with no symlink on the way. The view is
@@ -37,17 +40,23 @@ import { WorkerFailure } from "./engine";
 // that fails before the rename leaves the previous view whole and no temp.
 //
 // What is refused, and how: a theme `madeAppViewHead` cannot read is `invalid`
-// before anything is touched; a path outside its root, or a root itself, is
-// `invalid` (the ask is malformed: fieldd names both, FS-D7); a page or folder
-// behind a symlink, gone, or not a regular file is `not-found` (one answer,
-// never a map of what lies outside); a folder that is a file is
+// before anything is touched; a path outside its root, a root itself, or a
+// path with a NUL is `invalid` (the ask is malformed: fieldd names both,
+// FS-D7); a root that is not there is `root-missing`; a page or folder behind
+// a symlink, or a page gone, unreadable or not a regular file, is `not-found`
+// (one answer, never a map of what lies outside); a folder that is a file is
 // `not-a-directory`; a page past the bound is `too-large`; a worker started
-// without roots answers `internal`.
+// without roots answers `internal`, as does anything else the disk says (a
+// full descriptor table, an I/O error): the worker's trouble, never a page
+// that is not there.
 //
 // EL2 (DR-L4): the bytes stay in this process. The answer is the view's size.
 // DR-L3: the page is not re-hashed here. The worker holds no blake3 before
 // mille-drive (DR-2), so until then the view trusts rosetta's verified
-// placement (R-1) — the wave-0 critic's open item, owed a ruling.
+// placement (R-1) — the wave-0 critic's missing_work 16, owed James's ruling
+// BEFORE DR-1 (B) wires a caller: (a) R-1's placement suffices until DR-2,
+// recorded at DR-L3, or (b) a blake3 dependency, and `BuildMadeViewArgs`
+// carries R-1's `page.blake3`, checked while the page is copied.
 // Windows has no O_NOFOLLOW or O_NONBLOCK (the walk and the post-open check
 // stand alone there), and the rename is plain: `durableRename`, the cure for a
 // reader holding the view at that instant, lives in @vibefield/logging, whose
@@ -61,6 +70,18 @@ const CHUNK_BYTES = 64 * 1024;
 
 const PAGE_UNREAD = "no page there that a view may read";
 const FOLDER_UNREACHED = "no folder there that a view may be written in";
+/** What the disk says of a page no view may read: gone, a folder or a link
+ * swapped in after the walk, a device, no permission. Anything else is the
+ * worker's own trouble, answered `internal` with its errno (module header). */
+const PAGE_REFUSALS = new Set<unknown>([
+  "ENOENT",
+  "ENOTDIR",
+  "ELOOP",
+  "EACCES",
+  "EPERM",
+  "ENXIO",
+  "EISDIR",
+]);
 
 /** Build one made app's view (module header). */
 export async function buildMadeView(
@@ -78,14 +99,8 @@ export async function buildMadeView(
   const pageSegments = segmentsBelow(roots.sourceRoot, args.source, "page");
   const folderSegments = segmentsBelow(roots.servedRoot, args.folder, "folder");
   if (overlap(roots.sourceRoot, roots.servedRoot)) throw overlapping();
-  let sourceRoot: string;
-  try {
-    sourceRoot = await realpath(roots.sourceRoot);
-  } catch {
-    throw new WorkerFailure("root-missing", "the export-source folder is not there");
-  }
-  await mkdir(roots.servedRoot, { recursive: true, mode: 0o700 });
-  const servedRoot = await realpath(roots.servedRoot);
+  const sourceRoot = await realRoot(roots.sourceRoot, "the export-source folder is not there");
+  const servedRoot = await realRoot(roots.servedRoot, "the served made folder is not there");
   if (overlap(sourceRoot, servedRoot)) throw overlapping();
   const page = await openPage(sourceRoot, pageSegments);
   try {
@@ -101,7 +116,8 @@ export async function buildMadeView(
 function segmentsBelow(root: string, path: string, what: "page" | "folder"): string[] {
   const below = isAbsolute(path) ? relative(root, path) : "";
   const segments = below.split(sep);
-  if (below === "" || isAbsolute(below) || segments.some((s) => s === "" || s === "..")) {
+  const malformed = (s: string) => s === "" || s === ".." || s.includes("\0");
+  if (below === "" || isAbsolute(below) || segments.some(malformed)) {
     const where = what === "page" ? "the export-source root" : "the served made root";
     throw new WorkerFailure("invalid", `a view's ${what} is an absolute path below ${where}`);
   }
@@ -114,6 +130,16 @@ function overlap(a: string, b: string): boolean {
 
 function overlapping(): WorkerFailure {
   return new WorkerFailure("invalid", "the export-source and served roots overlap");
+}
+
+/** A root's real path, or `root-missing`: fieldd makes both roots and the
+ * worker neither, so nothing is made before they are proved apart. */
+async function realRoot(path: string, missing: string): Promise<string> {
+  try {
+    return await realpath(path);
+  } catch {
+    throw new WorkerFailure("root-missing", missing);
+  }
 }
 
 /** The page, walked with lstat from its root, opened no-follow and no-block,
@@ -145,7 +171,7 @@ async function openPage(root: string, segments: readonly string[]): Promise<File
     return handle;
   } catch (error) {
     await handle?.close().catch(() => undefined);
-    if (error instanceof WorkerFailure) throw error;
+    if (error instanceof WorkerFailure || !PAGE_REFUSALS.has(codeOf(error))) throw error;
     throw new WorkerFailure("not-found", PAGE_UNREAD);
   }
 }

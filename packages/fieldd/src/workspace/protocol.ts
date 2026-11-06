@@ -304,7 +304,8 @@ export type AttachEvent =
 
 /** The two roots a view is built between, absolute paths on this desktop,
  * named by fieldd in every generation's `init`. A worker started without
- * them refuses every view. */
+ * them refuses every view. fieldd makes both folders and the worker neither:
+ * while one is not there, a view answers `root-missing`. */
 export interface MadeViewRoots {
   /** where rosetta's export places a page (rosettad's `--export-root`); never
    * served */
