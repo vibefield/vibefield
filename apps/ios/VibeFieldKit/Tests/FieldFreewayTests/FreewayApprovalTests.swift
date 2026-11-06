@@ -41,19 +41,45 @@ struct FreewayApprovalTests {
 
   @Test("each refusal is said in the phone's words, the desktop by name")
   func words() {
-    let said = { (error: FieldProductError) in FreewayApproval.said(error, desktop: "laptop").message }
-    #expect(said(forbiddenApproval) == "laptop won't approve a connection from this phone")
+    let said = { (error: FieldProductError) in FreewayApproval.said(error, desktop: "laptop", device: "iPhone").message }
+    #expect(said(forbiddenApproval) == "laptop won't approve a connection from this iPhone")
     #expect(
       said(approvalRefusal(FreewayContract.Approval.stateUncorrelated))
-        == "laptop doesn't know this phone yet")
+        == "laptop doesn't know this iPhone yet")
     #expect(
       said(approvalRefusal(FreewayContract.Approval.stateUnread))
-        == "laptop isn't ready for this phone's connection yet")
+        == "laptop isn't ready for this iPhone's connection yet")
     #expect(
       said(approvalRefusal(FreewayContract.Approval.stateDown))
-        == "laptop isn't taking connections from phones right now")
+        == "laptop isn't taking connections from iPhones right now")
     #expect(said(unreachableOwner) == "your home desktop can't reach laptop right now")
-    #expect(said(FreewayApproval.noHome) == "this phone isn't connected to its home desktop")
+    #expect(said(FreewayApproval.noHome) == "this iPhone isn't connected to its home desktop")
+  }
+
+  @Test("L4's word pass: a refusal names the device as its platform does, the noun the UI layer gives")
+  func deviceNamed() {
+    let refusals = [
+      forbiddenApproval, approvalRefusal(FreewayContract.Approval.stateUncorrelated),
+      approvalRefusal(FreewayContract.Approval.stateUnread), approvalRefusal(FreewayContract.Approval.stateDown),
+      unreachableOwner, FreewayApproval.noHome,
+    ]
+    for device in ["iPad", "device"] {
+      for error in refusals {
+        let words = FreewayApproval.said(error, desktop: "laptop", device: device).message
+        #expect(!words.localizedCaseInsensitiveContains("phone"), "\(device): \(words)")
+      }
+    }
+    let said = { (error: FieldProductError) in FreewayApproval.said(error, desktop: "laptop", device: "iPad").message }
+    #expect(said(forbiddenApproval) == "laptop won't approve a connection from this iPad")
+    #expect(said(approvalRefusal(FreewayContract.Approval.stateUncorrelated)) == "laptop doesn't know this iPad yet")
+    #expect(
+      said(approvalRefusal(FreewayContract.Approval.stateUnread)) == "laptop isn't ready for this iPad's connection yet")
+    #expect(
+      said(approvalRefusal(FreewayContract.Approval.stateDown)) == "laptop isn't taking connections from iPads right now")
+    #expect(said(FreewayApproval.noHome) == "this iPad isn't connected to its home desktop")
+    #expect(
+      FreewayApproval.said(FreewayApproval.noHome, desktop: "laptop", device: "device").message
+        == "this device isn't connected to its home desktop")
   }
 
   @Test("with no home to ask, the refusal is the kit's own, retryable: the phone re-homes")
@@ -70,21 +96,21 @@ struct FreewayApprovalTests {
       forbiddenApproval, approvalRefusal("uncorrelated"), approvalRefusal("unread"),
       approvalRefusal("down"), unreachableOwner,
     ] {
-      let said = FreewayApproval.said(error, desktop: "laptop")
+      let said = FreewayApproval.said(error, desktop: "laptop", device: "iPhone")
       #expect(said.kind == error.kind)
       #expect(said.retryable == error.retryable)
       #expect(said.details == error.details)
     }
-    #expect(!FreewayApproval.said(forbiddenApproval, desktop: "laptop").retryable)
-    #expect(FreewayApproval.said(approvalRefusal("down"), desktop: "laptop").retryable)
+    #expect(!FreewayApproval.said(forbiddenApproval, desktop: "laptop", device: "iPhone").retryable)
+    #expect(FreewayApproval.said(approvalRefusal("down"), desktop: "laptop", device: "iPhone").retryable)
   }
 
   @Test("a refusal this phone has no words for keeps the door's own")
   func unknownKeepsTheDoorsWords() {
     let odd = approvalRefusal("brand-new-state")
-    #expect(FreewayApproval.said(odd, desktop: "laptop") == odd)
+    #expect(FreewayApproval.said(odd, desktop: "laptop", device: "iPhone") == odd)
     let internalError = FieldProductError(kind: "INTERNAL", message: "boom")
-    #expect(FreewayApproval.said(internalError, desktop: "laptop") == internalError)
+    #expect(FreewayApproval.said(internalError, desktop: "laptop", device: "iPhone") == internalError)
   }
 }
 
@@ -117,7 +143,7 @@ struct FreewayApprovalRefusalTests {
   func dialing(_ mesh: TestMesh, _ approvals: ScriptedApprovals) -> FreewayDesktopLink.Dialing {
     FreewayDesktopLink.Dialing(
       dial: { mesh.dial() }, host: "desk.tail1234.ts.net", deviceId: "dev-desk",
-      approve: { try approvals.next() }, deviceName: "phone", desktopName: "laptop")
+      approve: { try approvals.next() }, deviceName: "phone", desktopName: "laptop", deviceNoun: "iPad")
   }
 
   @Test("the ask hears the refusal in the phone's words, and a refusal no retry fixes is not asked again on its own")
@@ -130,7 +156,7 @@ struct FreewayApprovalRefusalTests {
       Issue.record("a refused approval linked")
     } catch let error as FieldProductError {
       #expect(error.kind == "FORBIDDEN_SCOPE")
-      #expect(error.message == "laptop won't approve a connection from this phone")
+      #expect(error.message == "laptop won't approve a connection from this iPad", "the link says the Dialing's noun")
     }
     guard case .refused(let refusal) = await desktop.state else {
       Issue.record("refused, and waiting for a tap: \(await desktop.state)")
@@ -168,7 +194,7 @@ struct FreewayApprovalRefusalTests {
       _ = try await within(5, "the refused ask") { try await desktop.link() }
       Issue.record("an uncorrelated phone linked at once")
     } catch let error as FieldProductError {
-      #expect(error.message == "laptop doesn't know this phone yet")
+      #expect(error.message == "laptop doesn't know this iPad yet")
       #expect(error.retryable)
     }
     var hosts = mesh.hosts.makeAsyncIterator()
