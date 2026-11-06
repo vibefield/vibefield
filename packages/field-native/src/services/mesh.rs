@@ -53,7 +53,7 @@
 use crate::config::{MeshProbeIdentity, NativeConfig};
 use crate::contracts::{MeshMode, UnitHealth, UnitState};
 use crate::manager::NativeService;
-use crate::services::file_transfer::{self, FileTransferBackend};
+use crate::services::file_transfer::{self, FileTransferBackend, PullSubstrate};
 use crate::services::mesh_egress::{self, EgressBackend};
 use serde_json::Value;
 use std::collections::HashMap;
@@ -146,9 +146,8 @@ struct Shared {
     /// (`services/file_transfer.rs`): `UnsupportedFileTransfer` in production
     /// at the `=0.7.24` pin, whose truffle cannot pull by a named root. Behind
     /// a mutex, as egress's is, for one writer: the test seam that installs
-    /// another arm, which W3's stack B adds (`install_file_transfer_for_tests`,
-    /// egress's `install_egress_for_tests` shape). Nothing in this build writes
-    /// it after construction, and production never swaps it.
+    /// another arm (`MeshHandle::install_file_transfer_for_tests`, egress's
+    /// `install_egress_for_tests` shape). Production never swaps it.
     file_transfer: Mutex<Arc<dyn FileTransferBackend>>,
     /// TS-1 (track TS) — the sign-in facts of the current bring-up and its
     /// node ([`LinkFacts`]): what a person needs to act on a link that waits on
@@ -417,6 +416,53 @@ impl MeshHandle {
     #[doc(hidden)]
     pub fn install_egress_for_tests(&self, backend: Arc<dyn EgressBackend>) {
         *self.shared.egress.lock().unwrap() = backend;
+    }
+
+    /// DR-3a (W3) TEST SEAM — install a file-transfer arm, for tests only.
+    ///
+    /// Production builds `file_transfer::default_backend()` at construction
+    /// and never swaps it: at the `=0.7.24` pin that is the unsupported arm. A
+    /// test installs `NamedRootsFileTransfer` here, the arm that is unreachable
+    /// in production until EL8-TRUFFLE, and pairs it with
+    /// [`Self::force_node_presence_for_tests`] and
+    /// [`Self::attach_file_transfer_for_tests`], because the same wall stands:
+    /// no node can be built headlessly. What such a test witnesses is the
+    /// FACADE and the arm over `ScriptedPulls`, never truffle's pull.
+    #[doc(hidden)]
+    pub fn install_file_transfer_for_tests(&self, backend: Arc<dyn FileTransferBackend>) {
+        *self.shared.file_transfer.lock().unwrap() = backend;
+    }
+
+    /// DR-3a (W3) TEST SEAM — record the two facts the file transfer's gate
+    /// reads, as a bring-up records them, with no node built: the posture
+    /// (`linked` under `login`) and the gate the node was built with
+    /// (`[login]` when `gated`, `[]` when not).
+    ///
+    /// `gated: false` under a login is the window the contract names for an
+    /// ungated node (mgmt.ts `NativeFileTransferRootsParams`: "a promotion's
+    /// capture node until its rebuild"), which no single verb holds still. The
+    /// next `start` records both facts again through `spawn_bring_up`. Nothing
+    /// in the product calls it.
+    #[doc(hidden)]
+    pub fn record_gate_for_tests(&self, login: &str, gated: bool) {
+        *self.shared.mode.lock().unwrap() = Some((MeshMode::Linked, Some(login.to_owned())));
+        *self.shared.login_allow.lock().unwrap() = if gated {
+            vec![login.to_owned()]
+        } else {
+            Vec::new()
+        };
+    }
+
+    /// DR-3a (W3) TEST SEAM — hand the file-transfer arm a node's substrate, as
+    /// a bring-up that installs a node will at EL8-TRUFFLE. Nothing in the
+    /// product calls it.
+    ///
+    /// W3 stack B's C4 (red): it attaches nothing yet, so every row that needs
+    /// a substrate fails by assertion; C5 routes it through the one install
+    /// hook.
+    #[doc(hidden)]
+    pub async fn attach_file_transfer_for_tests(&self, substrate: Arc<dyn PullSubstrate>) {
+        let _ = substrate;
     }
 
     /// DS-1b PROBE SEAM — install a node a test built itself, for the
