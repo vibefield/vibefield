@@ -130,6 +130,8 @@ async function harness(
     readonly offers?: Readonly<Record<string, string>>;
     /** the models the runtime discovers, by agent */
     readonly models?: Readonly<Record<string, readonly string[]>>;
+    /** the runtime's models held until this settles, each ask counted (RA2: both starts parked at their await) */
+    readonly modelsHeld?: Promise<unknown>;
     /** the project folders this desktop knows */
     readonly projectFolders?: readonly string[];
     /** each spark's own Agent Profile */
@@ -163,6 +165,8 @@ async function harness(
   const hands: Handed[] = [];
   const items: FlowItemRaise[] = [];
   const turnListeners = new Set<(end: FlowStepTurnEnd) => void>();
+  /** how many times a step asked the runtime for its models */
+  let modelAsks = 0;
   /** what fieldd's log was told at warn, in order */
   const warned: { event: string; fields: LogFields | undefined }[] = [];
   const logger: Logger = {
@@ -219,7 +223,11 @@ async function harness(
         const label = (opts.offers ?? { claude: "Claude Code" })[agent];
         return label !== undefined ? { label } : undefined;
       },
-      models: async (agent) => (opts.models ?? { claude: ["opus", "sonnet"] })[agent],
+      models: async (agent) => {
+        modelAsks += 1;
+        if (opts.modelsHeld !== undefined) await opts.modelsHeld;
+        return (opts.models ?? { claude: ["opus", "sonnet"] })[agent];
+      },
     },
     inputs: {
       enqueue: (runtimeRunId, text, from) => {
@@ -286,6 +294,7 @@ async function harness(
     setSparkScope,
     kinds,
     warned,
+    modelAsks: () => modelAsks,
   };
 }
 
@@ -2814,11 +2823,20 @@ describe("CP-4a2b — a run's agents, RUN_AGENTS_MAX started, counted until its 
   });
 
   it("RA2: two steps started together at RUN_AGENTS_MAX − 1, each awaiting the runtime's models before its spawn: exactly one is spawned, and the other refused", async () => {
-    const h = await harness();
+    let free: () => void = () => {};
+    const held = new Promise<void>((resolve) => {
+      free = resolve;
+    });
+    const h = await harness({ modelsHeld: held });
     const max = FLOW_LIMITS.RUN_AGENTS_MAX;
     h.approved("agents", agentsAtOnce(2, { model: "opus" }));
     keeping(h, max - 1);
     const run = startedRun(await h.start({ flow: "agents" })).run;
+    // the race, held (the F4b review MM1): both starts wait at their models() await, and neither has reserved, so
+    // the two reserve after it whatever the host's pipe makes of the two calls
+    await waitFor(() => expect(h.modelAsks()).toBe(2));
+    expect(h.records.runRecord(run)).toMatchObject({ agents: max - 1 });
+    free();
     const outcomes = () => [outcomeOf(h, run, 1), outcomeOf(h, run, 2)];
     await waitFor(() => expect(outcomes()).not.toContain(undefined));
     const refused = [1, 2].filter((call) => outcomeOf(h, run, call) !== "spawned");
