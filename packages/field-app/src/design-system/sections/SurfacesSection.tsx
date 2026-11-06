@@ -216,7 +216,7 @@ export function SurfacesSection(): ReactElement {
           </div>
         </Specimen>
         <Specimen
-          title="Artifacts — the Hub at the Artifacts shelf's width"
+          title="Live — the Hub at the Apps shelf's width"
           source="plugins/browser/src/ArtifactPanel.tsx · DESIGN.md §8"
           darkStage
         >

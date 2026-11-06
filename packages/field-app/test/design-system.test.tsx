@@ -244,12 +244,11 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
       expect(tile?.querySelector("svg.vf-glyph"), name).not.toBeNull();
       expect(tile?.querySelector("small")?.textContent, name).toBe("instrument");
     }
-    // HN-8 (§13): Artifacts' glyph in a button is `package`, the pill's button's and the covered
+    // HN-8 (§13): Apps' glyph in a button is `package`, the pill's button's and the covered
     // views' circle's, at rest and at the circle's 18 — never `sidepanel`, the retired side
-    // panel's toggle, inverted. (Named for the button: the head's `artifacts` plate is below.)
-    const artifactsButton = container?.querySelector<HTMLElement>(
-      '#glyphs button[title="Artifacts"]',
-    );
+    // panel's toggle, inverted. (Named for the button, "Apps" since MA-4c: the head's `artifacts`
+    // plate is below.)
+    const artifactsButton = container?.querySelector<HTMLElement>('#glyphs button[title="Apps"]');
     const packageGlyph = artifactsButton?.querySelector("[data-glyph]");
     expect(packageGlyph?.getAttribute("data-glyph")).toBe("package");
     expect(packageGlyph?.getAttribute("width")).toBe("18");
@@ -460,6 +459,27 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
     expect(
       artifacts?.querySelector('[data-shelf="artifacts"] .vf-artifact-header h2')?.textContent,
     ).toBe("Live");
+    // MA-4c (§8 as amended): From your agents follows Live in the one box, whether Live shows
+    // its tiles or why it waits — the shipping group over its fixture adapter, never a copy
+    for (const [plate, live] of [
+      ["artifacts", "vf-artifact-panel"],
+      ["covered", "vf-artifact-panel"],
+      ["artifacts-off", "vf-head-waits"],
+      ["artifacts-cant-run", "vf-head-waits"],
+      ["artifacts-opening", "vf-head-waits"],
+      ["artifacts-not-starting", "vf-head-waits"],
+    ] as const) {
+      // the shelf that shows: under a cover the pill's own stands shut beside the circle's sheet
+      const hub = headPlate(plate)?.querySelector(
+        '[data-shelf="artifacts"][data-shown] .vf-head-hub',
+      );
+      const groups = Array.from(hub?.children ?? []);
+      expect(
+        groups.map((group) => group.className.split(" ")[0]),
+        plate,
+      ).toEqual([live, "vf-apps"]);
+      expect(groups[1]?.getAttribute("aria-label"), plate).toBe("From your agents");
+    }
     const off = headPlate("artifacts-off")?.querySelector('[data-shelf="artifacts"]');
     expect(off?.textContent).toContain("Live apps are off");
     expect(off?.textContent).toContain("Turn on the Browser plugin in Settings › Plugins.");

@@ -122,8 +122,8 @@ export function ChromeSection({
           <div className="vf-ds-stage-card card-b" />
           {/* The head on its real controller (One Frame FR-3), in a folder —
               the readout alone at its right since FR-4 (the theme went into
-              the Me menu), and Artifacts in the pill since HN-8: its package
-              grows the sheet on that shelf, which waits here, with no plugin
+              the Me menu), and Apps in the pill since HN-8: its package grows
+              the sheet on that shelf, whose Live waits here, with no plugin
               host to bind the Hub. */}
           <HeadLive surface={surface} onSurfaceChange={changeSurface} />
 
@@ -165,9 +165,9 @@ export function ChromeSection({
         </div>
         <p className="vf-ds-stage-caption">
           The head — the field's name pill with its crumbs, whose chevron and package grow its sheet
-          on Fields or Artifacts, and the zoom readout, which grows its menu — the line's Objects
-          and your face are interactive. Open one to inspect its motion and the rule that only one
-          of them is open at a time. Your menu's Theme sets this page's theme, as it sets the app's.
+          on Fields or Apps, and the zoom readout, which grows its menu — the line's Objects and
+          your face are interactive. Open one to inspect its motion and the rule that only one of
+          them is open at a time. Your menu's Theme sets this page's theme, as it sets the app's.
         </p>
       </Specimen>
 
@@ -186,10 +186,11 @@ export function ChromeSection({
           Every state the page's head plates draw — the field's top as one name, the package after
           its rule and with its dot while a source is unavailable, the crumbs folded into the pill
           inside a folder, a long path in a narrow window dropping whole leading names, renaming in
-          place, the sheet grown from the pill on Fields and on Artifacts (the Hub's tiles, the
-          plugin off, the Hub opening), the same sheet under a cover grown from the package circle,
-          the zoom's solid menu with its keys, and the palette under the head — then the zoom's keys
-          as Windows says them, in this page's theme. No keycaps and no plus in the head.
+          place, the sheet grown from the pill on Fields and on Apps (Live's tiles or why it waits —
+          the plugin off, the Hub opening — then From your agents), the same sheet under a cover
+          grown from the package circle, the zoom's solid menu with its keys, and the palette under
+          the head — then the zoom's keys as Windows says them, in this page's theme. No keycaps and
+          no plus in the head.
         </p>
       </Specimen>
 
@@ -303,7 +304,7 @@ export function ChromeSection({
       </Specimen>
 
       <Specimen
-        title="The package circle — Artifacts under a cover"
+        title="The package circle — Apps under a cover"
         source="frame/PackageCircleView.tsx · DESIGN.md §8, §10, §6"
         bleed
       >
@@ -317,14 +318,14 @@ export function ChromeSection({
           ))}
         </div>
         <p className="vf-ds-stage-caption">
-          Under a cover the pill is the desk's and hides with it, and Artifacts' door stands alone
-          at the head's left: the package circle, 40 on the line's glass at x 96, search's mirror.
-          Over Godview the Stories row keeps one head gap from it, a side of 148; over History its
-          dot says an artifact's source is unavailable, and its tooltip which — "Artifacts —
-          vibe-field's source is unavailable"; while the terminals are maximized it stands at the
-          left end of their title bar, 30 × 24 in the deck's ink, as search stands at the right, its
-          tooltip saying how many — "Artifacts — 2 sources unavailable". It grows the pill's sheet
-          on its Artifacts shelf, which the head's plates draw.
+          Under a cover the pill is the desk's and hides with it, and Apps' door stands alone at the
+          head's left: the package circle, 40 on the line's glass at x 96, search's mirror. Over
+          Godview the Stories row keeps one head gap from it, a side of 148; over History its dot
+          says an app's source is unavailable, and its tooltip which — "Apps — vibe-field's source
+          is unavailable"; while the terminals are maximized it stands at the left end of their
+          title bar, 30 × 24 in the deck's ink, as search stands at the right, its tooltip saying
+          how many — "Apps — 2 sources unavailable". It grows the pill's sheet on its Apps shelf,
+          which the head's plates draw: Live, then From your agents.
         </p>
       </Specimen>
 

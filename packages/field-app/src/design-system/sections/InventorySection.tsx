@@ -86,7 +86,7 @@ const INVENTORY = [
       "Settings sidebar",
       "Settings section",
       "Settings row",
-      "Artifact Hub",
+      "Live (the Hub)",
       "Command palette",
       "Loading veil",
       "Boot splash",

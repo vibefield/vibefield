@@ -3,6 +3,7 @@ import type { DocRegistryEntry } from "@vibefield/contracts";
 import { ArtifactPanelPreview } from "@vibefield/plugin-browser/design-system";
 import { type ReactElement, useState } from "react";
 import type { DocManagerApi, DocManagerState } from "../doc-manager";
+import { MadeAppsPreview } from "../frame/apps/design-system";
 import type { FrameSurface, SheetShelf } from "../frame/frame-surface";
 import { Head, useShownShelf } from "../frame/Head";
 import { type HeadArtifacts, type HeadDocTile, HeadView } from "../frame/HeadView";
@@ -181,11 +182,11 @@ export const HEAD_STATE_LABEL: Record<HeadState, string> = {
   narrow: "Narrow · FitPath",
   renaming: "Renaming",
   explorer: "The fields",
-  artifacts: "The artifacts",
-  "artifacts-off": "Artifacts off",
-  "artifacts-cant-run": "Artifacts can't run",
-  "artifacts-opening": "Opening Artifacts",
-  "artifacts-not-starting": "Artifacts not starting",
+  artifacts: "The apps",
+  "artifacts-off": "Live apps off",
+  "artifacts-cant-run": "Live apps can't run",
+  "artifacts-opening": "Opening live apps",
+  "artifacts-not-starting": "Live apps not starting",
   covered: "Under a cover",
   zoom: "The zoom's menu",
   palette: "The palette, ⌘K",
@@ -195,16 +196,19 @@ export const HEAD_STATE_LABEL: Record<HeadState, string> = {
 /** The package's dot as the product words it (PL-D1): one source unavailable, by its title. */
 const FIXTURE_DOT = artifactsDotWords(["vibe-field"]);
 
-/** What a plate's Artifacts shelf holds: the Hub's own fixture adapter, populated, or why it is
- * not there; null for the plates that do not open it. */
+/** What a plate's Apps shelf holds (DESIGN.md §8 "Artifacts — the Artifacts shelf's contents", as
+ * amended): Live — the Hub's own fixture adapter, populated, or why it is not there — and From your
+ * agents after it, the shipping group over its fixture adapter, drawn whether a Hub is bound or not
+ * (MA-4c); null for the plates that do not open it. */
 function plateArtifacts(state: HeadState): HeadArtifacts | null {
+  const made = <MadeAppsPreview state="populated" />;
   if (state === "artifacts" || state === "covered") {
-    return { state: "hub", hub: <ArtifactPanelPreview state="populated" /> };
+    return { state: "hub", hub: <ArtifactPanelPreview state="populated" />, made };
   }
-  if (state === "artifacts-off") return { state: "off" };
-  if (state === "artifacts-cant-run") return { state: "cant-run" };
-  if (state === "artifacts-opening") return { state: "opening" };
-  if (state === "artifacts-not-starting") return { state: "not-starting" };
+  if (state === "artifacts-off") return { state: "off", made };
+  if (state === "artifacts-cant-run") return { state: "cant-run", made };
+  if (state === "artifacts-opening") return { state: "opening", made };
+  if (state === "artifacts-not-starting") return { state: "not-starting", made };
   return null;
 }
 
