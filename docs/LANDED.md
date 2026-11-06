@@ -479,6 +479,10 @@ health, folder port zero, the too-narrow VibeField serve facade, and Truffle lis
 config echo. AH-1 now pays those serving debts through fingerprinted ids and exact v0.7.12
 consumption. `shell.*` scopes and main's recovering ProductAPI client are landed, but its
 callable bidirectional provider half is not; AH-3/4 own that bridge.
+  > *Corrected 2026-11-06 (item 186):* GT-D5's "close still detaches" did not hold for a restored or adopted pane
+  > whose shell was never typed into. From GV's `b04ca35a4` (2026-11-02; LANDED "GV — terminal owners govern pane
+  > lifecycle"), the deck gave such a pane the reaper's birth receipt (`bornHere` became `isUnusedShell`), so ⌘W
+  > released it `unused` and its shell was terminated, until item 186 (LANDED "Items 186 and 187").
 
 ## AH-1 — durable live serving
 
@@ -34093,6 +34097,12 @@ contracts (7 of them fixtures), 5 fieldd sources and 8 fieldd tests.
   > *Noted 2026-11-06 (item 185):* rung 11m's Jump to (`872abf1ae`) first ran in run 167 (vf-m1, 11-06), after
   > its send read Delivered, and is red there: "Could not jump — its terminal is not on this desktop's floor".
   > It is item 187's.
+  > *Corrected 2026-11-06 (item 187):* TH-2's one reveal helper (`bc3b2973b`) held History's rule on the wrong
+  > source, so the 11m smoke stayed owed and Jump to was false off the tailnet until item 187. Its three reveals (the
+  > head's Jump to, the needs-you card's Show, a crew member's reveal) read a run's floor session off the field
+  > board's `terminal` join, which fieldd withholds while this desktop's terminal doors are not published (TM-2
+  > F-M4), so a run on this floor was refused "its terminal is not on this desktop's floor". They read fieldd's
+  > `agent.list` now, as History's Jump to does (LANDED "Items 186 and 187").
 - Item 178: the three-table check and SIDECARS' data module, closed by 178's own entry.
 - CO-1b's trailing words in field-app and electron-shell, owed by "Items 158 and 159, and CO-1b": built here
   (`1e78cc107`), so that line closes in this entry.
@@ -36560,3 +36570,197 @@ Item 188 closes in this entry.
   ‹run›".
 - The records beyond LANDED, ROADMAP and DECISIONS: none. The flow host's environment, said as PATH alone in
   CP-4a2a's entry, gains a dated correction at each of its four lines.
+
+## Items 186 and 187 — two of vf-m1's smoke:godview reds, fixed where they lived: Godview's unused-shell reaper receipts only a shell the deck itself birthed, so a restored or adopted pane that was never typed into survives ⌘W (GT-D5), and Chat's reveals read where a run's terminal is from fieldd's agent.list, so Jump to works off the tailnet (2026-11-06; `f1e3d47a5` → `1dd005d9d`, 6 commits on main `85b65c52a`, b5a's and bth's, stacked as M170 `1dd005d9d`, run 170)
+
+One stacked mint (VF-PM 04:30Z): item 186's two commits, then item 187's four (its fix, then its fold), cut by
+cp-landing onto M-r1's records (push 104). Both items were filed from vf-m1's `smoke:godview` (LANDED "MA-4" and
+"Item 185"). The stack is 16 files, +590 −112, all under `packages/field-app`; carry-check holds on both
+segments (2/2 and 4/4 patch-ids; 2/2 and 14/14 unshared files byte-identical; the range-diffs all six "="), and the
+pin-class pattern has no hit.
+
+**Item 186, the finding** (b5a's diagnosis, `lanes/co-plan/lanes/item186/diagnosis.md`, sha256 `a0aba6c0…`,
+read-only at `434a1f849`; ACCEPTED and RULED by VF-PM at 03:58Z):
+- GT-D5 broke through Godview's unused-shell reaper, not through custody. GodviewDeck's layout effect
+  (`GodviewDeck.tsx:1719-1721`) named its predicate `bornHere` but read the floor's lifetime fact,
+  `bornHere = isUnusedShell`, so every pane whose shell never had input got a birth receipt, restored and adopted
+  ones included.
+- The road: ⌘W → `releaseUnusedShell` → `terminal.release` "unused" → fieldd's durable release queue →
+  ghosttea 0.14.0 `release_if(Unused)` → terminate. `release_if` never reads the session's persistence, so
+  keep-until-exit was never read.
+- Two statements disagreed with the code: GT-D5's "close still detaches" (LANDED "GT-3"), and the receipts' law,
+  that a shell's BIRTH is recorded for the reaper, with no second birth authority (LANDED "GT — a clean agent exit
+  returns the pane to its shell"), as puppeteer-views' `unused-pane-sessions.js:14` says: "This never grants
+  ownership to a restored or previously used session".
+- It was intermittent by which session held the lowest id. The smoke closes the active pane, which after a reload
+  and claim is `leaves[0]`, the lowest session id in fieldd's sorted list, and the ids are random UUIDs.
+  - Run 166c (vf-m1, `434a1f849`) red: the pane closed (`3bd34cb1`) was a never-typed shell the deck never birthed.
+  - Runs 166, 166c2 and 166r passed GT-D5's step: in two the lowest id was the typed pane, and run 166r's never-typed
+    pane survived the 2 s read (whether its release landed after it is unproven).
+  - It was first seen on vf-m1, on 11-06.
+- It came in with `b04ca35a4` (GV, 2026-11-02), which changed `bornHere` from `bornInThisView(runtime)` to
+  `isUnusedShell(runtime, id)` (`git log -S`).
+- The owner is Godview, field-app's deck: field-native and ghosttea did what the owner's release asked, and fieldd
+  only relayed it.
+
+**Item 186, the fix** (b5a; red `f1e3d47a5`, green `d3162786b`):
+- `bornHere` is the deck's own birth receipt (the receipts' law; `unused-pane-sessions.js:14`), so a pane the deck
+  never birthed closes to a detach. In `GodviewDeck.tsx` alone:
+  - `deckBirths`, the deck's own birth receipts, kept for the deck's life, are minted AT the birth: in `bornSession`
+    (the door's new terminal, a ⌘D split, a GT-D8 rehydrated pane, the last pane's fresh shell), and at the opening
+    shell the deck asks fieldd for (`openingBirth`).
+  - The layout effect's `bornHere` is now
+    `(deckBirths.has(id) || runtime.sessionCreatedHere(id)) && isUnusedShell(runtime, id)`;
+    `sessionCreatedHere` is ghosttea's own receipt for its opening shell.
+  - A pool retry's replacement runtime re-grants exactly the deck's births.
+  - Untouched: field-native, ghosttea, puppeteer-views, fieldd, the release outbox and the launcher's gate (QL-D7).
+- The rows, red first (`godview-deck-frames.test.tsx`, "a pane closes to a detach unless the deck birthed its shell
+  (GT-D5, item 186)"):
+  - RED: a claimed stranger, never typed and not born here, loses its pane with no `terminal.release` and no
+    `terminal.terminate`. It failed on its assertion, receiving `terminal.release` with `condition: "unused"`.
+  - RED: run 166c's shape after a reload (a restored never-typed split with the lowest id and active, the typed
+    first pane, an adopted stranger): closing the split, then the stranger, releases nothing.
+  - PIN: a shell the deck's own door birthed, never typed, is still released `unused` when its pane closes.
+  - The red's light: 2 failed | 1 passed | 82 skipped (85).
+- The fixture's gap, found on the way: the file's "claimed" panes had no native summary, so `isUnusedShell` read
+  them as unknown, never unused, and no row saw this. The new rows give the floor's real word, `bornSummary`.
+- b5a's lights (this Mac, targeted only): godview-deck-frames 85 passed, the two reds green and the PIN held; 11
+  neighbour files 235 passed; the 7 other files that mount the deck 264 passed; field-app tsc 0; biome clean.
+
+**Item 187, the finding** (bth's diagnosis, `lanes/co-plan/lanes/item187/diagnosis.md`, sha256 `2cd590bb…`,
+read-only at `1c0f7b748`, holding unchanged at `b286a617c`; ACCEPTED by VF-PM at 04:30Z):
+- Run 167 (vf-m1) went red at rung 11m's Jump to, after its send read Delivered: "Could not jump — its terminal is
+  not on this desktop's floor". It was a PRODUCT bug in TH-2's reveal road, not in the rung and not a floor mismatch.
+- Chat's three reveals (the head's Jump to, the needs-you card's Show, a crew member's reveal) read a run's floor
+  session off the FIELD board row's `terminal` join, through `floorSessionOf` (`reveal-run.ts`).
+- fieldd withholds that join from every reader of the field board while this desktop's terminal doors are not
+  published on the tailnet: `attachableRows` (`agent-field.ts`), TM-2 (F-M4)'s gate, deliberate and pinned by
+  `agent-field-daemon.test.ts`, since the same door carries the board to the phone, where the join is the attach
+  promise.
+- So on a desktop off the tailnet (every smoke's root, a first run, an offline laptop) a run on this floor was
+  refused. On a desktop whose doors are published the row carries the join, which is how it hid in daily use.
+- History's Jump to, whose rule TH-2 said it copied (`bc3b2973b`), reads the same rule off `agent.list`, which fieldd
+  keeps whole for this desktop's windows. The rule was copied; its source was not.
+- The owner is CO, TH-2's reveal road in field-app. fieldd's gate behaves as designed and tested.
+
+**Item 187, the fix** (bth; red `fdb43387a`, green `2e2785032`; field-app only, with fieldd, its F-M4 gate,
+contracts and the wire untouched):
+- `chat/reveal-run.ts`: `revealRun(row, runs, doors?)` keeps the board row for what the board is right about (a row
+  gone or not alive is NOT_RUNNING, and `agent.list` is not asked), then reads `agent.list` ONCE at the press,
+  through the door it is handed, and takes the floor session from the row whose `runtimeRunId` is the run's.
+- An `agent.list` that cannot be read is refused in new words, `RUNS_UNREAD`: "VibeField could not tell where its
+  terminal is", said as "Could not jump — VibeField could not tell where its terminal is". VF-PM accepted them at
+  04:49Z with no DESIGN.md line, since DESIGN.md's generic "Could not jump — …" covers them.
+- `history/jump.ts` holds the one rule, shared rather than copied: `floorRunOfRow` (not exited, `hosted: "local"`
+  with a session id) and the tolerant reader `floorRunWhere`, under `liveRunOf` (History's join, on the
+  conversation) and the new `floorRunOf` (Chat's, on the run); `readRunRows` is the one `agent.list` read, null
+  when unreadable, apart from an empty list. History's `readLiveRun` is `readRunRows` plus `liveRunOf` (the fold,
+  below, gives it an unread state of its own).
+- `ChatView` takes a required `runs` door and its three reveals pass it; `ChromeLayer` hands it the window's
+  `fieldd` client, the door History's Jump to reads.
+- Errata in code, dated 2026-11-06 (item 187): `reveal-run.ts`'s header corrects its claim (it held the rule, on the
+  wrong source); `floorSessionOf` is RETIRED, its correction in that header; `jump.ts`'s header records that both
+  Jump tos read `agent.list`, never the board's join. TH-2's LANDED entry gains its note here ("TH-1 and TH-2").
+- The rows, red first (`reveal-run.test.ts`, "item 187 — whether a run's terminal is here is fieldd's agent.list,
+  never the board's join", four rows on a fake `agent.list` door from contracts' `agent-session-summary.valid.json`):
+  - RED: a board row with NO join, which `agent.list` puts on this floor, is revealed ("expected { state:
+    'refused', …(1) } to deeply equal { state: 'jumped' }": the bug itself).
+  - RED: a board row whose join says local is refused NOT_ON_THIS_FLOOR when `agent.list` puts the run elsewhere,
+    and one whose `agent.list` cannot be read is refused RUNS_UNREAD; at red both went on to open the deck.
+  - PIN: a run not alive on the board is NOT_RUNNING, and `agent.list` is not asked.
+  - The red's light: 3 failed | 7 passed (10). The rows call the green's signature, so field-app's typecheck does
+    not pass at the red's own sha; the green moves every call.
+- The fixture: `test/runs-door-fixture.ts` (new) is a fixture ADAPTER (`runsDoor`, `runsOverBoard`, `NO_RUNS`); no
+  markup is copied. history-jump gains three rows, chat-view one (the head's Jump to on a board row with no join
+  says "Jumped to its pane"), and needs-card's Show reads through the door.
+- bth's lights (this Mac, targeted): 8 files, 258 passed (reveal-run 8, history-jump 12, chat-view 41, needs-card
+  46, chat-composer 71, chat-thread-items 22, glyphs 10, ui-system-boundaries 48); field-app tsc 0; biome clean.
+
+**Item 187, the fold** (bth; red `ef2bc3914`, green `1dd005d9d`; VF-PM ruled (a) at 04:56Z on the
+records' read of the sources, b158's): History's Jump to read an unread `agent.list` (a refusal, or an answer with
+no `sessions`) as "This session has ended — Resume it", the same false-reason class as item 187, and the two Jump
+tos drifted on that one case.
+- `history/jump.ts`: `readLiveRun` answers a `LiveRunReading`, one of `{ state: "here", run }`,
+  `{ state: "not-here" }` and `{ state: "unread" }`. `RUNS_UNREAD` moved here from `chat/reveal-run.ts`, beside the
+  shared rule: the ONE sentence both Jump tos import, with no copy left.
+- `history/acts.ts`: `jumpTarget` refuses `unread` with `RUNS_UNREAD`, "Could not jump — VibeField could not tell
+  where its terminal is"; `not-here` is still "ended". `resumeTarget` counts only `here` as running, so `unread`
+  goes on to fieldd, whose one-run law refuses a second run.
+- `history/HistoryView.tsx`: the act's reading sets `live` from `state === "here"`, so on `unread` the act still
+  offers Resume, and only Jump to's press says `unread` (bth's judgment call, below).
+- The rows, red first: history-view gains 2 (26 → 28), one loop over the two unread kinds, each failing at red on
+  its note, "This session has ended — Resume it". history-jump's P3 CHANGES MEANING, the one existing History row
+  that does: retitled "asks one plain `agent.list`; a fold that cannot answer is unread, never not here (item
+  187)", with a dated *Corrected* line at the row (12 → 12).
+- bth's lights: none on this Mac (the swap hold, 842.62M free at 05:01Z); the fold's reds and greens are the
+  mint's, by its commits' bodies.
+
+**Validation.**
+- **The mint, run 170, and the full light**, at `1dd005d9d` on `85b65c52a`:
+  - `lanes/ts6/logs/m1/run170/run170.out` (sha256
+    `ed01fc6fb95b322a01c6ae8d5340df728c85acabcdc79d138e239983ab29f200`): "ts6-mini verify ARMED 05:18:46Z";
+    "verify exit 0 05:23:56Z"; "test target:  NX   Successfully ran target test for 29 projects"; "cargo test
+    results: ok 34, FAILED 0"; "tree clean after verify"; "stubs left: 0".
+  - `verify.log` (sha256 `2ee2f962d2b719583c15edc39c331f034b3dc0f31e0956ded0591209a561d4f8`; its clean copy
+    `verify.clean.log`, `fe7e17990905a1cabf341cb10cb14a4ea95a15e9c9555790ed5015eaac9c75df`):
+    - field-app "Tests  4192 passed (4192)" (4181 + 11: godview-deck-frames 82 → 85, reveal-run 6 → 8,
+      history-jump 9 → 12, history-view 26 → 28, chat-view 40 → 41; nothing else in field-app moved);
+    - screenshot "Tests  39 passed (39)" (item 188's +1, on main); fieldd "Tests  3488 passed | 14 skipped
+      (3502)"; contracts "Tests  1775 passed (1775)"; electron-shell "Tests  2670 passed | 3 skipped (2673)";
+      plugins/browser "Tests  15 passed (15)";
+    - vitest 13,498 | 0 | 21 over 940 files; node "ℹ tests 473", "ℹ fail 0"; biome "Checked 3400 files in
+      1624ms. No fixes applied." (3399 + `test/runs-door-fixture.ts`); cargo 545 in 34 suites;
+    - "bundle assert OK — initial 943.2 KB raw / 248.8 KB gz, world lazy, History lazy", byte-equal to runs 168
+      and 169, so no chunk was added or split; the census "TOTAL 106 files across 9 packages", "no drift",
+      "census assert OK — no §7.3 violation"; `gen:check` clean;
+    - every count equals the brief (`a9-mint-brief-stack-1dd005d9d.md`, sha256 `28e8916bc4aeca1e…`), read by a9
+      (vibe-field-dd) on vf-m1.
+- **The witness** is the two red-first files (above) and the mint's `smoke:godview`, GT-D5's pane close and rung
+  11m's Jump to:
+  - The reds, each at its own sha, then every filter green at T (`q13.log`, sha256
+    `14079c6993a53e8531bf96dca923cf85814a45320a00f0fea278d071e4146377`; each run's own log in `reds/`):
+    - 186-R `f1e3d47a5`: godview-deck-frames `-t "GT-D5, item 186"` "Tests  2 failed | 1 passed | 82 skipped
+      (85)", "the claimed stranger's close released it: expected [ Array(1) ] to deeply equal []" and "the
+      restored split's close released a session"; the whole file 2 failed | 83 passed; at T 3 passed;
+    - 187-R1/R2 `fdb43387a`: reveal-run `-t "item 187"` "3 failed | 1 passed | 6 skipped (10)", row 1 "expected
+      { state: 'refused', …(1) } to deeply equal { state: 'jumped' }"; the whole file 3 failed | 7 passed; at T
+      `-t "item 187"` 4 passed;
+    - 187-T `fdb43387a`: field-app `tsc --noEmit` EXIT 2 by design, 4 × TS2554 at reveal-run.test.ts's call
+      sites only, 0 errors elsewhere;
+    - RF1/RF2 `ef2bc3914` (the fold): history-view `-t "item 187"` "2 failed | 26 skipped (28)", each "expected
+      'This session has ended — Resume it' to be 'Could not jump — VibeField could not …'"; history-jump's fold
+      row "1 failed | 11 skipped (12)"; RF3, the fold red's tsc, EXIT 0; at T 2 and 1 passed;
+    - at T: the G block "Tests  446 passed (446)"; history-jump `-t "item 187"` 4 passed | 8 skipped; chat-view's
+      and needs-card's rows 1 each; field-app tsc 0 errors and biome "Checked 16 files … No fixes applied" (the
+      first tsc and biome readings for 187's green and its fold); 186's own lights 235 and 264 passed.
+  - `smoke:godview` at T, one try, under the console gate (`run170-row.out`, `21e7ea02de26043b…`;
+    `smoke-godview.log`, `966a193597d8ca45…`): exit 0 at 05:26:13Z, `SMOKE_GODVIEW {"ok":true`. GT-D5:
+    `closeAcceleratorWhileGodviewOpen: null`, `closedPaneSurvived` set, `panesAfterClose: 2`, no "KILLED" line.
+    Rung 11m: `receipts: [null, "Delivered"]`, `waitedMs {ready: 0, given: 149, delivered: 150}`, then the jump
+    note EXACTLY "Jumped to its pane", the floor session active and showing. Every step past smoke.ts :11071,
+    never run before on any host, ran green: History's JUMP TO ("Resumed in the active pane"), deckAway, the
+    edge, maximized, the warm open, the Peek photos, History by project, and the timeline's past.
+  - Control C at `85b65c52a`: chat-view 40 passed with "not wrapped in act" 2, equal to the tip's 2, so they
+    predate item 187.
+  - a9's audit grep for item 186 (one `terminal.session.release` with `condition: "unused"` for `3bd34cb1`, and no
+    `terminal.session.terminate`, would confirm the road) came back NOT KEPT: the smoke homes keep no audit trail
+    (`users/` empty, no audit directory), and in 166c's home `3bd34cb1` is in no file. It is recorded as not kept,
+    never as absent.
+- **Landed:** The fixer's ff `85b65c52a` → `1dd005d9d` by land-stack5.sh on VF-PM's GO, then this commit
+
+**Owed.**
+- **Found, not changed** (`d3162786b`'s body): `openingShellOf` (L20, call placement) reads
+  `isUnusedShell || openingBirth` as "born here", the same conflation for placement. It decides which pane a call
+  replaces, never a release: with no receipt, a replaced claimed shell is detached and kept.
+- The launcher's gate may still draw a launcher on a restored unused shell; a launch from it replaces the pane, and
+  the shell is detached and kept, not released.
+- Item 187's diagnosis named an optional line on `attachableRows`' doc (a local window's field board is gated too);
+  fieldd is untouched, so it is not written.
+- For James's eye (accepted by VF-PM 04:49Z; not a hold): Jump to's new refusal, "Could not jump — VibeField could
+  not tell where its terminal is".
+- For James's eye (bth's judgment call, accepted by VF-PM 05:08Z; not a hold):
+  "on an unread list History offers Resume; fieldd refuses a second run". Keeping the last reading instead would
+  show a NEW choice the previous session's Jump to, since `live` is never reset between two choices; so only Jump
+  to's press says "unread".
+- **Closes items 186 and 187.** GT-3's "close still detaches" gains a dated correction at its paragraph's end
+  ("GT-3"), and TH-2's reveal road one after item 185's notes ("TH-1 and TH-2").
