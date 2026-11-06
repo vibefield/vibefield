@@ -255,7 +255,7 @@ describe("DR-3b — the drive's pulls over the floor's file transfer", () => {
     expect(await refused(ROOTS, { roots: ["../up"] })).toMatchObject(unreadable);
     expect(await refused(PULL, { transferId: "lower" })).toMatchObject(unreadable);
     // 6. an ungated node holds the root; a pull is refused CONFLICT by its id, then by its digest, and one past
-    // DRIVE_LIMITS.PULLS_IN_FLIGHT RESOURCE_EXHAUSTED (retryable true: UNVERIFIED parity with C6)
+    // DRIVE_LIMITS.PULLS_IN_FLIGHT RESOURCE_EXHAUSTED (retryable true: the floor's `refusal()`, read; W3-15 pending)
     const held = await link.request(ROOTS, { roots: [ROOT] });
     expect(NativeFileTransferRootsResult.parse(held)).toEqual({
       roots: [{ name: ROOT, registered: false, reason: MESH_FILE_TRANSFER.ROOT_UNGATED }],
@@ -294,6 +294,34 @@ describe("DR-3b — the drive's pulls over the floor's file transfer", () => {
     expect(state()).toBe("pending");
     mock.pushFileTransferDelta(completed(id, digest));
     await expect(landed).resolves.toEqual({ path: join(landsDir, `${digest}.${id}`) });
+  });
+
+  it("leaves a pull running when a snapshot written before its answer comes in the same read, and settles it on its delta", async () => {
+    const transfer = mockFileTransfer();
+    const { mock, link, root, landsDir } = await floor(transfer);
+    const looked: string[] = [];
+    const drive = pulls(link, root, {
+      exists: async (path) => {
+        looked.push(path);
+        return existsSync(path);
+      },
+    });
+    await drive.start();
+    // the floor writes its table as it was before this pull began, then the pull's answer, in ONE write: the
+    // snapshot is read first, and judged after the answer's continuation has accepted the pull
+    transfer.snapshotBeforeAnswer = true;
+    const digest = digestOf(1);
+    const landed = drive.pull(ask(digest));
+    const state = settled(landed);
+    await until(() => !transfer.snapshotBeforeAnswer, "the snapshot and the answer, written");
+    const id = idOf(transfer, digest);
+    const name = join(landsDir, `${digest}.${id}`);
+    // it may have been written before the answer, so only a landed file settles the pull, and none has landed
+    await until(() => looked.includes(name), "the lands folder, read for this pull");
+    await roundTrip(link);
+    expect(state()).toBe("pending");
+    mock.pushFileTransferDelta(completed(id, digest));
+    await expect(landed).resolves.toEqual({ path: name });
   });
 
   it("mints a ULID and asks with the contract's fields; a path outside the grammar is refused, unsent", async () => {

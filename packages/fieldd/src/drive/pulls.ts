@@ -35,14 +35,20 @@ import { RpcCallError } from "../native-link";
 //    critic's finding 4). Their digests are refused here like any running one, and their completions surface as
 //    adopt candidates (`onAdoptCandidate`), never as an answer to a pull of this boot.
 //  - A pull the stream's snapshot no longer lists ended while the reader lagged: completed when its landed name is in
-//    the folder, failed FAILED_IO otherwise (mgmt.ts `NativeFileTransferSnapshot`). Only names matching that rule are
-//    read; a `*.truffle-tmp` beside them is the floor's.
+//    the folder, failed FAILED_IO otherwise (mgmt.ts `NativeFileTransferSnapshot`). Only a snapshot written AFTER the
+//    pull's answer says so (the snapshot write-order rule, W3-16, pending). One that may have been written before it
+//    settles the pull only when its landed name is in the folder, and otherwise leaves it running (`#accept`). Only
+//    names matching that rule are read; a `*.truffle-tmp` beside them is the floor's.
 //  - `file-transfer-unsupported` is a fact of the floor's boot (mgmt.ts `MESH_FILE_TRANSFER`): cached for that boot,
 //    asked again at a reconnect, as `FloorEgress` keeps `egress-unsupported` (egress.ts:143-158).
 //
 // Every payload from the floor is held to its contract (`safeParse`); one outside it is dropped and logged.
 
-/** The floor's two verbs, as NativeLink answers them (native-link.ts:1159 `request`, :1274 `subscribe`). */
+/** The floor's two verbs, as NativeLink answers them (native-link.ts:1159 `request`, :1274 `subscribe`). The snapshot
+ * rule (`DrivePulls.#accept`) reads NativeLink's timing: an answer settles its promise as its line is read
+ * (native-link.ts:899), and an event reaches `onEvent` as its line is read (:924), in the continuation of the answer
+ * that carried it (:1110), or at its subscribe's activation, a setImmediate that subscribe's continuation sets
+ * (:1287-1290). A floor that delivered an event later than these would break that rule. */
 export interface DrivePullsFloor {
   request(method: string, params: unknown): Promise<unknown>;
   subscribe(
@@ -125,8 +131,9 @@ export interface DrivePullsOptions {
 interface OwnPull {
   readonly transferId: string;
   readonly digest: string;
-  /** the floor answered it: from here a snapshot that does not list it says it ended */
-  accepted: boolean;
+  /** null until the floor answered it; then its fence (`DrivePulls.#accept`): a snapshot that does not list it says
+   * it ended only when that snapshot arrived once this fence had run */
+  fence: number | null;
   readonly landed: Promise<DriveLanded>;
   readonly resolve: (landed: DriveLanded) => void;
   readonly reject: (error: Error) => void;
@@ -141,7 +148,7 @@ function ownPull(transferId: string, digest: string): OwnPull {
   });
   // handled here, so an end that arrives before the caller awaits is never an unhandled rejection
   landed.catch(() => undefined);
-  return { transferId, digest, accepted: false, landed, resolve, reject };
+  return { transferId, digest, fence: null, landed, resolve, reject };
 }
 
 /** JSON-RPC's method-not-found. A floor before VF-FLOOR's facade answers these verbs so with a node up (mgmt.ts's
@@ -245,12 +252,15 @@ export class DrivePulls {
   #subscribing: Promise<void> | null = null;
   #declaring: Promise<unknown> = Promise.resolve();
   #roots: DriveRootState[] = [];
-  /** Stream events in arrival order, applied in a later macrotask. A pull's answer and a snapshot can arrive in one
-   * read, and the answer's continuation (which marks the pull accepted) is a microtask the snapshot would otherwise
-   * overtake: the pull, not yet accepted, would be skipped, and one that ended while the reader lagged would wait for
-   * the next snapshot. Applied after it, the snapshot judges the pull by the lands rule. */
-  #events: Array<{ payload: unknown; kind: "snapshot" | "delta" }> = [];
+  /** Stream events in arrival order, each stamped with the fences run when it arrived (`#accept`), applied in a later
+   * macrotask. A pull's answer and a snapshot can arrive in one read, in either order, and the answer's continuation
+   * (which accepts the pull) runs after every line of that read: applied after it, a snapshot sees the pull accepted
+   * whichever line came first, and its stamp says whether it may have been written before the answer. */
+  #events: Array<{ payload: unknown; kind: "snapshot" | "delta"; fencesRun: number }> = [];
   #drain: ReturnType<typeof setImmediate> | null = null;
+  /** fences set (a pull's is the count once its own is set) and fences run (`#accept`) */
+  #fencesSet = 0;
+  #fencesRun = 0;
   readonly #adoptListeners = new Set<(candidate: DriveAdoptCandidate) => void>();
   /** Candidates no listener has taken yet. Bounded by the floor: only a previous fieldd's pulls become candidates,
    * and the floor runs at most DRIVE_LIMITS.PULLS_IN_FLIGHT at once. */
@@ -337,8 +347,8 @@ export class DrivePulls {
       );
     }
     if (this.#running.size >= DRIVE_LIMITS.PULLS_IN_FLIGHT) {
-      // retryable true is this side's choice: C1 names no flag for RESOURCE_EXHAUSTED, and the floor's arm that
-      // answers it (W3's stack B, C6) is not built. UNVERIFIED parity with C6, an ask for VF-PM.
+      // retryable true and no details, as the floor answers it: parity by reading field-native
+      // `mgmt/file_transfer.rs`'s `refusal()` (W3's stack B). C1 names neither, so the flag waits on VF-PM's W3-15.
       throw new RpcCallError(
         "RESOURCE_EXHAUSTED",
         `${DRIVE_LIMITS.PULLS_IN_FLIGHT} pulls are running`,
@@ -364,7 +374,7 @@ export class DrivePulls {
       this.#untrack(own);
       throw new RpcCallError("INTERNAL", "the floor answered the pull outside its contract", false);
     }
-    own.accepted = true;
+    this.#accept(own);
     return await own.landed;
   }
 
@@ -480,7 +490,7 @@ export class DrivePulls {
     if (bootId !== undefined) this.#unsupportedBoot = bootId;
     // A pull the floor accepted ran on a boot that could pull. This one cannot, so that boot is gone.
     for (const own of [...this.#own.values()]) {
-      if (!own.accepted) continue;
+      if (own.fence === null) continue;
       this.#untrack(own);
       const word = MESH_FILE_TRANSFER.FAILED_NODE_DOWN;
       own.reject(new DrivePullFailed(word, "the floor that ran this pull is gone", own.transferId));
@@ -493,9 +503,39 @@ export class DrivePulls {
     });
   }
 
+  /** The floor answered `own`: from here a snapshot that does not list it can say it ended, but only one written
+   * after the answer can (the snapshot write-order rule, W3-16, pending), and lines are not read one at a time. So
+   * the pull gets a FENCE: a setImmediate set here, counted in `#fencesRun` when it runs, which `#onEvent` stamps on
+   * every event as it arrives.
+   *  - A snapshot written BEFORE the answer arrives before the fence runs. Its line was read before the answer's, and
+   *    NativeLink hands it on as that line is read (native-link.ts:924), or in the continuation of the answer that
+   *    carried it (:1110; `#doSubscribe`), both before any macrotask, or at its subscribe's activation
+   *    (:1287-1290), a setImmediate set in NativeLink's own continuation (:1284), which runs before this one
+   *    because this one waits on one more await (`request`, :1161, then `pull`'s); setImmediate runs in the order
+   *    set.
+   *  - So a snapshot that arrives once the fence has run was written after the answer: a pull it omits has ended, and
+   *    the lands rule settles it (`#settleUnlisted`).
+   *  - One that arrived before the fence may have been written before the answer, when the pull was not yet running.
+   *    It settles the pull only when its landed name is in the folder, which only this pull writes
+   *    (`#settleIfLanded`); otherwise the pull runs on.
+   * A pull left running ends as any running one does: its terminal delta, matched by its id whatever its fence
+   * (`#onDelta`); a snapshot that omits it and arrives after the fence, such as the `.snapshot` the floor owes when
+   * its stream loses that delta (field-native `mgmt/file_transfer.rs`'s forwarder); the floor's idle bound, which
+   * ends a pull no byte reaches (W3-4); `failed` NODE_DOWN when the node goes (W3-2); `#noteUnsupported`, when the
+   * floor of a new boot cannot pull; `stop`. One case none of these settles soon: its end was lost, and every
+   * snapshot written after its end arrived before its fence ran, in the reads of the turn that carried its answer.
+   * It waits for the next snapshot (a later loss, or NativeLink's replay at a reconnect, :1105-1128) or `stop`. */
+  #accept(own: OwnPull): void {
+    this.#fencesSet += 1;
+    own.fence = this.#fencesSet;
+    setImmediate(() => {
+      this.#fencesRun += 1;
+    });
+  }
+
   #onEvent(payload: unknown, kind: "snapshot" | "delta"): void {
     if (this.#stopped) return;
-    this.#events.push({ payload, kind });
+    this.#events.push({ payload, kind, fencesRun: this.#fencesRun });
     if (this.#drain === null) this.#drain = setImmediate(() => this.#applyEvents());
   }
 
@@ -503,14 +543,15 @@ export class DrivePulls {
     this.#drain = null;
     for (const event of this.#events.splice(0)) {
       if (this.#stopped) return;
-      if (event.kind === "snapshot") this.#onSnapshot(event.payload);
+      if (event.kind === "snapshot") this.#onSnapshot(event.payload, event.fencesRun);
       else this.#onDelta(event.payload);
     }
   }
 
-  /** P5: the snapshot is the truth. A row this fieldd did not mint is a previous fieldd's; an accepted pull of this
-   * fieldd's, or a foreign one, that it no longer lists ended while the reader lagged. */
-  #onSnapshot(payload: unknown): void {
+  /** P5: the snapshot is the truth. A row this fieldd did not mint is a previous fieldd's, and a foreign row it no
+   * longer lists ended while the reader lagged. So did an accepted pull of this fieldd's it no longer lists, when the
+   * snapshot arrived once that pull's fence had run (`#accept`); before that, only a landed file settles the pull. */
+  #onSnapshot(payload: unknown, fencesRun: number): void {
     const snapshot = NativeFileTransferSnapshot.safeParse(payload);
     if (!snapshot.success) {
       this.#dropped("snapshot", issues(snapshot.error));
@@ -519,7 +560,11 @@ export class DrivePulls {
     const listed = new Map<string, string>();
     for (const row of snapshot.data.transfers) listed.set(row.transferId, row.digest);
     for (const own of [...this.#own.values()]) {
-      if (!own.accepted || listed.has(own.transferId)) continue;
+      if (own.fence === null || listed.has(own.transferId)) continue;
+      if (fencesRun < own.fence) {
+        void this.#settleIfLanded(own);
+        continue;
+      }
       this.#untrack(own);
       void this.#settleUnlisted(own);
     }
@@ -581,6 +626,16 @@ export class DrivePulls {
     }
     const message = "the pull ended while the stream lagged, and nothing landed";
     own.reject(new DrivePullFailed(MESH_FILE_TRANSFER.FAILED_IO, message, own.transferId));
+  }
+
+  /** A pull a snapshot omits that may have been written before the pull's answer (`#accept`): completed when its
+   * landed name is in the folder and nothing settled it meanwhile, and otherwise left running. */
+  async #settleIfLanded(own: OwnPull): Promise<void> {
+    const path = join(this.#landsDir, `${own.digest}.${own.transferId}`);
+    if (!(await this.#landed(path))) return;
+    if (this.#own.get(own.transferId) !== own) return;
+    this.#untrack(own);
+    own.resolve({ path });
   }
 
   async #adoptIfLanded(transferId: string, digest: string): Promise<void> {

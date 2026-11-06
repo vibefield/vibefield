@@ -15,14 +15,14 @@ import { RpcCallError } from "../native-link";
 // narrows EL2 to an object's bytes, which never come here), so a record is bytes in and the same bytes out.
 //
 //  - One RELIABLE lane per peer and direction, with no docId (an account has one drive): each direction is one
-//    ordered stream. Every lane id is drawn from the boot's ONE allocator (lane-id.ts:3-10; daemon.ts:1561),
+//    ordered stream. Every lane id is drawn from the boot's ONE allocator (lane-id.ts:3-10; daemon.ts:1563),
 //    injected and never minted here, so the drive's ids never collide with doc-sync's or presence's (the W3
 //    critic's finding 7; the floor refuses a duplicate lane id PRECONDITION_FAILED).
 //  - Inbound only from this account's peers (`isSelfPeer`, UA-P-0f): a foreign or lossy `drive` lane is closed, the
 //    shape of "no" doc-sync gives (doc-sync.ts:835-852). Another protocol's lane is its own service's.
 //  - A record is at most DRIVE_LIMITS.LANE_RECORD_BYTES: a larger one is refused outbound and dropped inbound with a
 //    warn, because mille-drive bounds an inbound frame only at its own update bound.
-//  - Each peer's records wait in one queue that paces under MeshLaneLink's send watermark (mesh-lane.ts:54-63), as
+//  - Each peer's records wait in one queue that paces under MeshLaneLink's send watermark (mesh-lane.ts:66-69), as
 //    doc-sync's sends do (doc-sync.ts:1775-1784). Past the queue's bound a record is dropped with a warn;
 //    mille-drive's next Hello recovers what a drop loses.
 //
@@ -30,7 +30,7 @@ import { RpcCallError } from "../native-link";
 
 /** Lane LIFECYCLE for the drive's lanes, over the mgmt channel: its own, with `drive` admitted, because doc-sync's
  * `LaneControl` pins `doc-sync` (doc-sync.ts:92-104) and the daemon's closure `doc-sync | presence`
- * (daemon.ts:1562-1582). */
+ * (daemon.ts:1564-1584). */
 export interface DriveLaneControl {
   open(req: { laneId: number; class: "reliable"; peer: string; protocol: "drive" }): Promise<void>;
   close(laneId: number): Promise<void>;
@@ -40,7 +40,7 @@ export interface DriveLaneControl {
   ): Promise<{ lanes: LaneInfo[] }>;
 }
 
-/** The byte plane, as MeshLaneLink offers it (mesh-lane.ts:152, :208, :221, :231). One `send` is one record. */
+/** The byte plane, as MeshLaneLink offers it (mesh-lane.ts:175, :231, :244, :254). One `send` is one record. */
 export interface DriveLaneBytes {
   send(laneId: number, payload: Uint8Array): boolean;
   onLane(laneId: number, handler: (payload: Uint8Array) => void): void;
@@ -60,7 +60,7 @@ export interface DriveLaneRelayOptions {
   /** The send watermark (default MeshLaneLink's, DEFAULT_SEND_MAX_BUFFERED_BYTES). */
   sendWatermarkBytes?: number;
   /** The most bytes one peer's queue holds before a record is dropped (default the same 4 MiB: the same amount of
-   * unmoved data is the same amount of trouble, mesh-lane.ts:60-62). */
+   * unmoved data is the same amount of trouble, mesh-lane.ts:66-68). */
   maxQueuedBytes?: number;
 }
 
