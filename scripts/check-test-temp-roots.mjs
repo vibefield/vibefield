@@ -18,15 +18,73 @@
 //   exit 0 when every test file that makes a root removes one; exit 1 with each `file:line` that
 //   makes a root in a file that removes none. --self-test runs the rule on fixtures in a temp dir
 //   (removed after) and exits 1 on any miss.
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join, relative, resolve, sep } from "node:path";
+
+// The import walls' skips (check-import-boundaries.mjs), and the state a checkout keeps for its
+// machine alone (`.nx`, `.vibefield`).
+const SKIP_DIRS = new Set([
+  ".cache",
+  ".git",
+  ".idea",
+  ".nx",
+  ".pnpm-store",
+  ".turbo",
+  ".vibefield",
+  ".vite",
+  "build",
+  "coverage",
+  "dist",
+  "draft",
+  "node_modules",
+  "out",
+  "target",
+]);
+const SOURCE = /\.(?:ts|tsx|mts|cts|js|mjs|cjs)$/;
+const DECLARATION = /\.d\.[cm]?ts$/;
+const TEST_SIDE = /(?:^|\/)(?:test|tests|__tests__)\/|\.(?:test|spec)\.[cm]?[jt]sx?$/;
+const MAKES = /\bmkdtemp(?:Sync)?\s*\(/;
+const UNDER_PROVIDED_ROOT = /\bmkdtemp(?:Sync)?\s*\(\s*join\(\s*inject\(/;
+const REMOVES = /\b(?:rm|rmSync|rmdir|rmdirSync|removeTempRoot|removeWhenTestEnds)\s*\(/;
+const COMMENT_LINE = /^\s*(?:\/\/|\/\*|\*)/;
+
+/** The test-side source files under `root`, as `/`-separated paths relative to it, sorted. */
+function testSideFiles(root) {
+  const out = [];
+  const walk = (absDir) => {
+    for (const entry of readdirSync(absDir, { withFileTypes: true })) {
+      if (entry.isDirectory()) {
+        if (!SKIP_DIRS.has(entry.name)) walk(join(absDir, entry.name));
+      } else if (entry.isFile() && SOURCE.test(entry.name) && !DECLARATION.test(entry.name)) {
+        const rel = relative(root, join(absDir, entry.name)).split(sep).join("/");
+        if (TEST_SIDE.test(rel)) out.push(rel);
+      }
+    }
+  };
+  walk(root);
+  return out.sort();
+}
 
 /** The test-side files read, how many make a temp root, and each line that makes one in a file that
  * removes none, as `{ file, line }`. */
-function findUnremovedRoots(_root) {
-  // item 195 (red): the skeleton reads nothing and names nothing
-  return { read: 0, makers: 0, misses: [] };
+function findUnremovedRoots(root) {
+  const files = testSideFiles(root);
+  let makers = 0;
+  const misses = [];
+  for (const file of files) {
+    const code = readFileSync(join(root, file), "utf8")
+      .split("\n")
+      .map((text) => (COMMENT_LINE.test(text) ? "" : text));
+    const made = [...code.entries()].filter(
+      ([, text]) => MAKES.test(text) && !UNDER_PROVIDED_ROOT.test(text),
+    );
+    if (made.length === 0) continue;
+    makers += 1;
+    if (code.some((text) => REMOVES.test(text))) continue;
+    for (const [i] of made) misses.push({ file, line: i + 1 });
+  }
+  return { read: files.length, makers, misses };
 }
 
 // --- self-test ---------------------------------------------------------------
