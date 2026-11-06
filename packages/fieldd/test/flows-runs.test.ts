@@ -365,7 +365,8 @@ describe("CP-4a2b — a run starts from the bytes fieldd kept, or asks first; it
   });
 
   it("R8: a start is refused, in §9's words, for a flow not in the library, a file past its bound, and an input the flow does not take", async () => {
-    const h = await harness();
+    // the session its input names is one VibeField can find (R8b)
+    const h = await harness({ folders: { "session:run-1": "/work/one" } });
     expect(await refusalOf(h.start({ flow: "nowhere" }))).toEqual({
       reason: "not-found",
       message: "VibeField can't find nowhere in your flows.",
@@ -757,6 +758,7 @@ describe("CP-4a2b — what a step's call may be, held at the call with nothing s
   it("R15 (D9): an in: that names a session gone, outside the scope, another flow's step, a spark's own, or one on a permission is refused, nothing sent; your own session in scope is handed the line", async () => {
     const yours: FlowStepSession = { live: true, profile: "work", onPermission: false };
     const h = await harness({
+      folders: { "session:run-yours": "/work/yours" },
       sessions: {
         "run-yours": yours,
         "run-exited": { ...yours, live: false },
@@ -858,6 +860,7 @@ const W = (label: string, why: string) => `VibeField didn't start ${label}: ${wh
 describe("CP-4a2b — a step's agent, model, folder, prompt and profile, held at the call with nothing spawned (§13a slice 8c-2)", () => {
   it("R16 (D9; W-a…W-f, A1, A3): no agent, one not offered, a model it doesn't offer or not written as a name, a folder outside the bound, and a spawn's key beside in:, each refused with no spawn; a discovered model starts", async () => {
     const h = await harness({
+      folders: { "session:run-yours": "/work/yours" },
       sessions: { "run-yours": { live: true, profile: "work", onPermission: false } },
     });
     const at = { cwd: "/work/app", profile: "work" };
@@ -1193,5 +1196,72 @@ describe("CP-4a2b — a step's answer: heard once, bounded whole, checked agains
       state: "working",
       session: "rt-step9",
     });
+  });
+});
+
+// CP-4a2b (slice 7's R8b; D9, CP4-Q20 (a); Q2 (a), ruled 2026-11-06) — the folder at the start, read from the
+// static read's `cwd` (one reader): a script with a step that names no folder, whose input names none, is refused
+// before any journal line; an input that names a session or a project VibeField can't find is refused too (§9's
+// PROPOSED lines, 804c16ed3). A step whose folder is computed passes, to its call.
+
+describe("CP-4a2b — a run's folder, held at its start (slice 7's R8b)", () => {
+  /** A one-step flow: its step names its folder plainly, computes it, or names none. */
+  const stepWith = (cwd: string, input = "{}") =>
+    [
+      `export const meta = { name: "Folder", input: ${input} };`,
+      "export default async function () {",
+      "  const none = {};",
+      `  await agent("go", { agent: "claude", label: "Go", profile: "work"${cwd} });`,
+      "}",
+      "",
+    ].join("\n");
+
+  it("R8b: a step that names no folder, in a run whose input names none, is refused at the start in §9's words, nothing journaled; a session or project its input names that VibeField can't find is refused too", async () => {
+    const h = await harness({
+      folders: { "session:run-yours": "/work/yours", "project:pj-1": "/work/pj1" },
+    });
+    h.approved("bare", stepWith(""));
+    expect(await refusalOf(h.start({ flow: "bare" }))).toEqual({
+      reason: "folder",
+      message: NO_FOLDER,
+    });
+    h.approved("in-session", stepWith("", '{ target: "session" }'));
+    expect(
+      await refusalOf(h.start({ flow: "in-session", input: { target: "run-gone" } })),
+    ).toEqual({
+      reason: "input-session",
+      message: "VibeField can't find the session its input names.",
+    });
+    h.approved("in-project", stepWith("", '{ where: "project" }'));
+    expect(await refusalOf(h.start({ flow: "in-project", input: { where: "pj-9" } }))).toEqual({
+      reason: "input-project",
+      message: "VibeField can't find the project its input names.",
+    });
+    expect(h.records.runs()).toEqual([]);
+    expect(h.spawned).toEqual([]);
+    // what the start lets through: the input's folder, one written plainly, one computed (held at its call)
+    startedRun(await h.start({ flow: "in-session", input: { target: "run-yours" } }));
+    startedRun(await h.start({ flow: "in-project", input: { where: "pj-1" } }));
+    h.approved("named", stepWith(', cwd: "/work/app"'));
+    startedRun(await h.start({ flow: "named" }));
+    h.approved("computed", stepWith(", cwd: none.cwd"));
+    startedRun(await h.start({ flow: "computed" }));
+    await waitFor(() => expect(h.spawned).toHaveLength(3));
+    expect(h.spawned.map((spawn) => spawn.launch.cwd).sort()).toEqual([
+      "/work/app",
+      "/work/pj1",
+      "/work/yours",
+    ]);
+  });
+
+  it("says R8b's refusals in DESIGN.md's own words (§9 \"When a run can't start\")", () => {
+    const design = readFileSync(join(import.meta.dirname, "../../../DESIGN.md"), "utf8").replace(
+      /\s+/g,
+      " ",
+    );
+    for (const said of [words.inputNotFound("session"), words.inputNotFound("project"), NO_FOLDER]) {
+      expect(said).not.toBe("");
+      expect(design, said).toContain(`"${said}"`);
+    }
   });
 });
