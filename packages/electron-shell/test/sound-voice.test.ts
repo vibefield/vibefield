@@ -1,8 +1,10 @@
 /**
  * SD-2 (DESIGN.md §14 "When it speaks", "Where it plays") — the voice composed in main. Main reads every desktop's
  * agents through fieldd's mesh board (`agent.subscribe {scope: "mesh", projection: "field"}`), feeds
- * `@vibefield/sound`'s voice, and plays what it says only while a VibeField window is in front, Play sounds is on and
- * Quiet does not hold. The frames are contracts' EL9 fixture rows, re-dressed; the clock is virtual.
+ * `@vibefield/sound`'s voice, and plays what it says while Play sounds is on and Quiet does not hold. SD-3 (§14 "Away"):
+ * while no VibeField window is in front it plays too, centred in the theme's space, says no reminder, and each request
+ * raises its silent notices, played or not. The frames are contracts' EL9 fixture rows, re-dressed; the clock is
+ * virtual.
  */
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -10,6 +12,7 @@ import { AgentFieldRow } from "@vibefield/contracts";
 import type { FielddHandle } from "@vibefield/fieldd-supervisor";
 import type { RenderOptions, VoiceCue } from "@vibefield/sound";
 import { describe, expect, it, vi } from "vitest";
+import type { AwayNotice } from "../src/main/away-notices";
 import { SoundObserver, type SoundPorts } from "../src/main/sound-voice";
 
 const BASE = AgentFieldRow.parse(
@@ -113,6 +116,7 @@ function rig(
     wall: Date.UTC(2026, 10, 5, 15),
   };
   const heard: Heard[] = [];
+  const posted: (AwayNotice & { readonly at: number })[] = [];
   const ports: SoundPorts = {
     front: () => state.front,
     theme: () => state.theme,
@@ -122,6 +126,7 @@ function rig(
     }),
     now: () => state.wall + t,
     play: (cue, options) => heard.push({ at: t, cue, options }),
+    notice: (notice) => posted.push({ at: t, ...notice }),
   };
   let onEvent: OnEvent = () => {};
   const unsubscribe = vi.fn();
@@ -160,6 +165,7 @@ function rig(
   return {
     observer,
     heard,
+    posted,
     errors,
     state,
     subscribed,
@@ -255,17 +261,12 @@ describe("the gates: in front, Play sounds, Quiet (§14 'Where it plays', §8 'S
     r.frame(delta(HERE, [row("a", "idle")]));
     r.advance(10_000);
   };
-  it("plays nothing while no VibeField window is in front (until SD-3's notices)", async () => {
-    const r = rig({ front: false });
-    await done(r);
-    expect(r.heard).toEqual([]);
-    expect(r.observer.dropped).toEqual({ away: 1, off: 0, quiet: 0 });
-  });
-  it("plays nothing while Play sounds is off", async () => {
+  it("plays nothing while Play sounds is off, and posts no notice in front", async () => {
     const r = rig({ sounds: false });
     await done(r);
     expect(r.heard).toEqual([]);
-    expect(r.observer.dropped).toEqual({ away: 0, off: 1, quiet: 0 });
+    expect(r.posted).toEqual([]);
+    expect(r.observer.dropped).toEqual({ off: 1, quiet: 0, remindAway: 0 });
   });
   it("plays nothing while Quiet holds, and plays again once it has ended by itself", async () => {
     const r = rig({ quietUntil: Date.UTC(2026, 10, 5, 15) + 20_000 });
@@ -277,6 +278,111 @@ describe("the gates: in front, Play sounds, Quiet (§14 'Where it plays', §8 'S
     r.frame(delta(HERE, [row("a", "idle")]));
     r.advance(10_000);
     expect(r.heard.map((h) => h.cue)).toEqual(["done"]);
+  });
+});
+
+describe("away: VibeField plays the sound itself, and a silent notice says it (SD-3, §14 'Away')", () => {
+  const AGENT = "Claude Code in vibe-field";
+  it("plays the sound with no window in front, and posts its notice, which opens Godview", async () => {
+    const r = rig({ front: false });
+    await r.attach(open([row("a", "working"), row("b", "working")]));
+    r.frame(delta(HERE, [row("a", "idle")]));
+    r.advance(10_000);
+    expect(r.said()).toEqual(["1220 done"]);
+    expect(r.posted).toEqual([{ at: 1220, title: AGENT, body: "Done", opens: "godview" }]);
+    expect(r.observer.posted).toBe(1);
+    expect(r.observer.dropped).toEqual({ off: 0, quiet: 0, remindAway: 0 });
+  });
+  it("posts the notice, silent, with Play sounds off: the two are separate things (Q1)", async () => {
+    const r = rig({ front: false, sounds: false });
+    await r.attach(open([row("a", "working"), row("b", "working")]));
+    r.frame(delta(HERE, [row("a", "working", { blockers: [{ id: "q1", kind: "question" }] })]));
+    r.advance(3_000);
+    expect(r.heard).toEqual([]);
+    expect(r.posted.map((n) => [n.title, n.body])).toEqual([[AGENT, "Has a question"]]);
+    expect(r.observer.dropped.off).toBe(1);
+  });
+  it("posts the notice while Quiet holds, and plays nothing", async () => {
+    const r = rig({ front: false, quietUntil: Date.UTC(2026, 10, 5, 15) + 60_000 });
+    await r.attach(open([row("a", "working"), row("b", "working")]));
+    r.frame(delta(HERE, [row("a", "working", { blockers: [{ id: "p1", kind: "permission" }] })]));
+    r.advance(3_000);
+    expect(r.heard).toEqual([]);
+    expect(r.posted.map((n) => n.body)).toEqual(["Needs your approval"]);
+    expect(r.observer.dropped.quiet).toBe(1);
+  });
+  it("posts nothing while a window is in front: the window says it there", async () => {
+    const r = rig();
+    await r.attach(open([row("a", "working"), row("b", "working")]));
+    r.frame(delta(HERE, [row("a", "idle")]));
+    r.advance(10_000);
+    expect(r.said()).toEqual(["1220 done"]);
+    expect(r.posted).toEqual([]);
+  });
+  it("centres every sound in the theme's space, never far, and never by a pane", async () => {
+    const r = rig({ front: false, theme: "dark" });
+    await r.attach(
+      open(
+        [
+          row("a", "working", { session: "pty-a" }),
+          row("b", "working", { session: "pty-b" }),
+          row("z", "working"),
+        ],
+        [row("r", "working", { device: THERE })],
+      ),
+    );
+    r.observer.attention({ focused: null, places: { "pty-a": -0.9, "pty-b": 0.6 } });
+    r.frame(delta(THERE, [row("r", "idle", { device: THERE })]));
+    r.frame(
+      delta(HERE, [row("a", "idle", { session: "pty-a" }), row("b", "idle", { session: "pty-b" })]),
+    );
+    r.advance(10_000);
+    expect(r.heard.map((h) => [h.options.space, h.options.pan])).toEqual([
+      ["night", 0],
+      ["night", 0],
+    ]);
+    const chord = r.heard.find((h) => h.options.count === 2);
+    expect(chord?.options.notePans).toEqual([0, 0]);
+  });
+  it("titles a Done chord by its number, and All quiet by the app (Q2)", async () => {
+    const r = rig({ front: false });
+    await r.attach(open([row("a", "working"), row("b", "working"), row("c", "working")]));
+    r.frame(delta(HERE, [row("a", "idle"), row("b", "idle")]));
+    r.advance(10_000);
+    r.frame(delta(HERE, [row("c", "idle")]));
+    r.advance(10_000);
+    expect(r.posted.map((n) => [n.title, n.body])).toEqual([
+      ["2 agents", "Done"],
+      ["VibeField", "All quiet"],
+    ]);
+  });
+  it("names each agent of a request two agents share, and plays it once", async () => {
+    const r = rig({ front: false });
+    await r.attach(open([row("a", "working"), row("b", "working"), row("z", "working")]));
+    r.frame(
+      delta(HERE, [
+        row("a", "working", { blockers: [{ id: "q1", kind: "question" }] }),
+        row("b", "working", { blockers: [{ id: "q2", kind: "question" }] }),
+      ]),
+    );
+    r.advance(3_000);
+    expect(r.heard.map((h) => h.cue)).toEqual(["question"]);
+    expect(r.posted.map((n) => [n.title, n.body])).toEqual([
+      [AGENT, "Has a question"],
+      [AGENT, "Has a question"],
+    ]);
+  });
+  it("says no reminder away, and saves none for later: the first notice waits (Q6)", async () => {
+    const r = rig({ front: false });
+    await r.attach(open([row("a", "working"), row("b", "working")]));
+    r.frame(delta(HERE, [row("a", "working", { blockers: [{ id: "p1", kind: "permission" }] })]));
+    r.advance(700_000);
+    expect(r.heard.map((h) => h.cue)).toEqual(["approval"]);
+    expect(r.posted).toHaveLength(1);
+    expect(r.observer.dropped.remindAway).toBe(2);
+    r.state.front = true;
+    r.advance(1_000_000);
+    expect(r.heard.map((h) => h.cue)).toEqual(["approval"]);
   });
 });
 
@@ -328,6 +434,23 @@ describe("the window's attention: focus and place, by floor session (SD-D11, SD-
     r.frame(delta(THERE, [row("r", "idle", { device: THERE, session: "pty-r" })]));
     r.advance(10_000);
     expect(r.heard.map((h) => [h.options.space, h.options.pan])).toEqual([["far", 0]]);
+  });
+});
+
+describe("held in main's source (main/index.ts runs at its load, so no unit reaches its wiring)", () => {
+  const index = readFileSync(new URL("../src/main/index.ts", import.meta.url), "utf8");
+  const start = index.indexOf("new SoundObserver(");
+  const wiring = index.slice(start, index.indexOf("const offerConnect", start));
+  it("listens where a player can play or the OS can show a notice (SD-3)", () => {
+    expect(start).toBeGreaterThan(0);
+    expect(index.slice(0, start)).toMatch(
+      /const voice =\s*desktopSound\?\.state\(\) === "ready" \|\| Notification\.isSupported\(\)\s*\? $/u,
+    );
+  });
+  it("shows a notice silent, and never in a smoke or a marked run", () => {
+    expect(wiring).toMatch(
+      /notice: \(words\) => \{\s*if \(isSmokeLike\(MODE\) \|\| process\.env\["VF_SMOKE_RUN"\] !== undefined\) return;\s*if \(!Notification\.isSupported\(\)\) return;\s*showViewNotice\(words, \{ silent: true, event: "desktop\.away_notice\.reveal_failed" \}\);/u,
+    );
   });
 });
 

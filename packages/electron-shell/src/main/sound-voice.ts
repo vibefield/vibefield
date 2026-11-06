@@ -10,13 +10,19 @@ import {
   type VoiceClock,
   type VoiceCue,
 } from "@vibefield/sound";
+import { type AwayNotice, awayNameOf, awayNoticesOf } from "./away-notices";
 import type { FielddHandleCoordinator } from "./fieldd-handle-coordinator";
 
 // SD-2 (DESIGN.md §14 "When it speaks", "Where it plays"; SD-D11…D14) — the field's voice, composed in main. Main reads
 // every one of the person's desktops through fieldd's mesh board (`agent.subscribe {scope: "mesh", projection:
 // "field"}` on the attached user's shell-main client, re-subscribed on every new handle as the needs notices are),
-// feeds each row's status to @vibefield/sound's voice, and plays what the voice says only while a VibeField window is
-// in front (until SD-3's notices carry the rest), Play sounds is on and Quiet does not hold.
+// feeds each row's status to @vibefield/sound's voice, and plays what the voice says while Play sounds is on and Quiet
+// does not hold, in front and away.
+// - SD-3 (§14 "Away"; James, 2026-11-06: "sound on/off and notification on/off are two separate things"): while no
+//   VibeField window is in front, each request the voice says also raises its silent OS notices (away-notices.ts),
+//   whether or not the sound plays: the sound is Play sounds' and Quiet's, the notice macOS's and Focus's. Away the
+//   sound is centred in the theme's space, never far (you are at none of your desktops), and a reminder is not said
+//   at all: the first notice waits in Notification Center.
 // - The open, a reconnect's replayed open and one desktop's own reset are FACTS, never news: each row is first
 //   forgotten (unknown), so what it is now is heard as the first thing known about it, which the voice never sounds.
 // - A row that leaves the board is forgotten the same way, which cancels anything it was about to say.
@@ -40,13 +46,16 @@ export interface SoundPorts {
   /** The wall clock, epoch ms (Quiet's end is a wall moment). */
   now(): number;
   play(cue: VoiceCue, options: RenderOptions): void;
+  /** SD-3 — show one notice, silent; a click opens `notice.opens`. Main's port never shows one in a smoke. */
+  notice(notice: AwayNotice): void;
 }
 
 /** Why a sound the voice said was not played. */
 export interface SoundDrops {
-  away: number;
   off: number;
   quiet: number;
+  /** a reminder that came due while no window was in front: neither played nor posted (§14 "Away") */
+  remindAway: number;
 }
 
 interface Known {
@@ -64,7 +73,8 @@ const REAL_CLOCK: VoiceClock<ReturnType<typeof setTimeout>> = {
 
 export class SoundObserver {
   private readonly voice: Voice;
-  private readonly drops: SoundDrops = { away: 0, off: 0, quiet: 0 };
+  private readonly drops: SoundDrops = { off: 0, quiet: 0, remindAway: 0 };
+  private posts = 0;
   private readonly rows = new Map<string, Known>();
   private here: string | null = null;
   private seen: SoundAttention = { focused: null, places: {} };
@@ -110,6 +120,11 @@ export class SoundObserver {
   /** Sounds the voice said and the gates held back, by gate. */
   get dropped(): Readonly<SoundDrops> {
     return { ...this.drops };
+  }
+
+  /** Notices posted while no window was in front. */
+  get posted(): number {
+    return this.posts;
   }
 
   /** The window in front says which session has the keyboard and where each shown session sits. */
@@ -254,6 +269,21 @@ export class SoundObserver {
   }
 
   private said(request: PlayRequest): void {
+    const away = !this.ports.front();
+    if (away) {
+      if (request.reminder) {
+        this.drops.remindAway++;
+        return;
+      }
+      const notices = awayNoticesOf(request, (id) => {
+        const known = this.rows.get(id);
+        return known === undefined ? undefined : awayNameOf(known.row);
+      });
+      for (const notice of notices) {
+        this.posts++;
+        this.ports.notice(notice);
+      }
+    }
     const preferences = this.ports.preferences();
     if (!preferences.sounds) {
       this.drops.off++;
@@ -263,22 +293,24 @@ export class SoundObserver {
       this.drops.quiet++;
       return;
     }
-    if (!this.ports.front()) {
-      this.drops.away++;
-      return;
-    }
-    this.ports.play(request.cue, renderOptionsOf(request, this.ports.theme()));
+    this.ports.play(request.cue, renderOptionsOf(request, this.ports.theme(), away));
   }
 }
 
-/** What the voice asked for, as one render: the space by the theme (or far), at the five baked places. */
-export function renderOptionsOf(request: PlayRequest, theme: "light" | "dark"): RenderOptions {
+/** What the voice asked for, as one render: the space by the theme (or far), at the five baked places. Away (SD-3)
+ * every sound is centred in the theme's space. */
+export function renderOptionsOf(
+  request: PlayRequest,
+  theme: "light" | "dark",
+  away = false,
+): RenderOptions {
+  const place = (pan: number): number => (away ? 0 : nearestPlace(pan));
   return {
-    space: request.far ? "far" : theme === "dark" ? "night" : "day",
+    space: request.far && !away ? "far" : theme === "dark" ? "night" : "day",
     profile: "desktop",
     count: request.count,
-    pan: nearestPlace(request.pan),
-    ...(request.notePans === undefined ? {} : { notePans: request.notePans.map(nearestPlace) }),
+    pan: place(request.pan),
+    ...(request.notePans === undefined ? {} : { notePans: request.notePans.map(place) }),
     level: request.level,
     variant: request.variant,
     stretch: request.stretch,

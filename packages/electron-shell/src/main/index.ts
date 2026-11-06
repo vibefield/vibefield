@@ -1356,6 +1356,29 @@ async function main(
           error,
         ),
     );
+    // One OS notice whose click brings the primary window forward onto `opens`: an agent's notify (CP-3) and the
+    // field's voice away (SD-3) share it. `silent` keeps macOS's own sound off where VibeField plays its own.
+    const showViewNotice = (
+      words: { readonly title: string; readonly body: string; readonly opens: FrameView },
+      options: { readonly silent: boolean; readonly event: string },
+    ): void => {
+      const notice = new Notification({
+        title: words.title,
+        body: words.body,
+        silent: options.silent,
+      });
+      notice.on("click", () => {
+        void revealPrimaryWindow().then(
+          (window) => {
+            if (!window.isDestroyed()) viewStates?.ensure(window.webContents).set(words.opens);
+          },
+          (error: unknown) => {
+            logger.error(options.event, "The notice could not open its view", error);
+          },
+        );
+      });
+      notice.show();
+    };
     // CP-3 (CP3-D5 A) — an agent's notify, said outside the app while no
     // VibeField window is in front; the window's status line says it inside.
     // A click opens Chat, whoever told it. A smoke never puts one on the
@@ -1366,22 +1389,7 @@ async function main(
         focused: () => BrowserWindow.getFocusedWindow() !== null,
         notify: (words) => {
           if (isSmokeLike(MODE) || !Notification.isSupported()) return;
-          const notice = new Notification({ title: words.title, body: words.body });
-          notice.on("click", () => {
-            void revealPrimaryWindow().then(
-              (window) => {
-                if (!window.isDestroyed()) viewStates?.ensure(window.webContents).set(words.opens);
-              },
-              (error: unknown) => {
-                logger.error(
-                  "desktop.needs_notice.reveal_failed",
-                  "The notice could not open its view",
-                  error,
-                );
-              },
-            );
-          });
-          notice.show();
+          showViewNotice(words, { silent: false, event: "desktop.needs_notice.reveal_failed" });
         },
       },
       (error) =>
@@ -1391,11 +1399,13 @@ async function main(
           error,
         ),
     );
-    // SD-2 (DESIGN.md §14 "When it speaks", "Where it plays") — every desktop's agents through fieldd's mesh board,
-    // heard by the field's voice and played while a VibeField window is in front, Play sounds is on and Quiet does
-    // not hold. Only where a player can play: no player, no listening.
+    // SD-2 and SD-3 (DESIGN.md §14 "When it speaks", "Where it plays", "Away") — every desktop's agents through
+    // fieldd's mesh board, heard by the field's voice: played while Play sounds is on and Quiet does not hold, in front
+    // and away; and away, each request it says raises its notices too, silent, played or not (sound and notice are two
+    // separate things). It listens where a player can play or the OS can show a notice. Neither a harness nor a MARKED
+    // run (`VF_SMOKE_RUN`) ever shows one, as neither makes a sound.
     const voice =
-      desktopSound?.state() === "ready"
+      desktopSound?.state() === "ready" || Notification.isSupported()
         ? new SoundObserver(
             bundle.handles,
             {
@@ -1404,6 +1414,11 @@ async function main(
               preferences: () => soundPreferences ?? { sounds: false },
               now: () => Date.now(),
               play: (cue, options) => desktopSound?.play(cue, options),
+              notice: (words) => {
+                if (isSmokeLike(MODE) || process.env["VF_SMOKE_RUN"] !== undefined) return;
+                if (!Notification.isSupported()) return;
+                showViewNotice(words, { silent: true, event: "desktop.away_notice.reveal_failed" });
+              },
             },
             (error) =>
               logger.error(

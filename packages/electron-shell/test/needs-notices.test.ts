@@ -187,11 +187,17 @@ describe("an agent's notify outside the app (CP-3, CP3-D5 A)", () => {
       );
     });
 
-    it("a click reveals the primary window on the view the notice opens", () => {
-      expect(wiring).toMatch(
+    it("a click reveals the primary window on the view the notice opens (the helper SD-3 shares)", () => {
+      const helperAt = index.indexOf("const showViewNotice = (");
+      expect(helperAt).toBeGreaterThan(0);
+      const helper = index.slice(helperAt, start);
+      expect(helper).toMatch(
         /notice\.on\("click", \(\) => \{\s*void revealPrimaryWindow\(\)\.then\(/u,
       );
-      expect(wiring).toContain(".set(words.opens)");
+      expect(helper).toContain(".set(words.opens)");
+      expect(wiring).toContain(
+        'showViewNotice(words, { silent: false, event: "desktop.needs_notice.reveal_failed" });',
+      );
     });
   });
 });
