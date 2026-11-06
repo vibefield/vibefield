@@ -2627,10 +2627,23 @@
                   <strong>Resume-when-idle replaces it on evidence</strong>
                   <p>
                     Once the index says the conversation has been still for 30 s — polled every 5 s, backing
-                    off by doubling to 60 s while the index cannot answer — the old PTY is terminated, given
-                    5 s to leave the inventory, and the continuation is resumed into a new run in a new PTY.
-                    The new row names the PTY it replaced so the deck hands the pane over. Two processes on
-                    one native session is the one thing a resume must never make.
+                    off by doubling to 60 s while the index cannot answer — the old PTY is terminated, waited
+                    for until the floor says it exited (within the termination ladder and one grace, item
+                    59's bound; a kept pane the floor already lists exited has said so, item 97), and the
+                    continuation is resumed into a new run in a new PTY. Past that bound the replacement is
+                    refused retryably and nothing is born; a PTY the floor no longer lists running is then
+                    closed as an unknown exit by the inventory's backstop one grace later, and a retry
+                    resumes from that record (item 59). A person's resume of a pending row is the same
+                    replacement. The new row names the PTY it replaced so the deck hands the pane over. Two
+                    processes on one native session is the one thing a resume must never make.
+                    <em>Corrected 2026-11-06 (item 201, RV #43, vf-runtime-3):</em> this said the old PTY was
+                    "given 5 s to leave the inventory". Leaving the inventory is not exiting: the floor drops a
+                    PTY whose termination fieldd asked for at once and reports its exit when the session
+                    concludes, a ladder later (item 59), so the successor was born while the old agent still
+                    ran, for about 2 s when it outlives the first interrupt. The replacement now waits for the
+                    floor's own <code>session-exited</code>, heard through the runtime's one exit door, and an
+                    exit heard during a replacement that is then refused closes the row with the floor's
+                    outcome.
                   </p>
                 </div>
               </div>

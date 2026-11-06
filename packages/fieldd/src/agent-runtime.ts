@@ -301,8 +301,10 @@ const TERMINATION_LADDER_MS = 5_000;
  * (service.rs, unchanged from 218e11f to v0.13.1), so the inventory can drop
  * such a terminal a whole ladder before its exit arrives. It is the ladder plus
  * EXIT_GRACE_MS, the same one turn any exit gets: one margin, not two. A
- * terminal that left without our ask keeps EXIT_GRACE_MS alone. */
-const ASKED_EXIT_GRACE_MS = TERMINATION_LADDER_MS + EXIT_GRACE_MS;
+ * terminal that left without our ask keeps EXIT_GRACE_MS alone. Item 201 (RV
+ * #43) — and the bound a replacement waits for the exit of the PTY it ended
+ * (`awaitPendingExit`). Exported for the rows that wait on either. */
+export const ASKED_EXIT_GRACE_MS = TERMINATION_LADDER_MS + EXIT_GRACE_MS;
 /** A login pane left open indefinitely still gets one verification. */
 const LOGIN_TIMEOUT_MS = 10 * 60_000;
 /** AR-S2 — how long a stop waits for a just-born session to be placed on its
@@ -316,16 +318,17 @@ const STOP_EXIT_WAIT_MS = 12_000;
 /** AR-4 — resume-when-idle. A pending run (a live PTY this boot could not
  * re-attach to) is resumed into a new run once the index says its
  * conversation has been still for `RESUME_IDLE_AFTER_MS`, asked every
- * `RESUME_POLL_MS`; the PTY it replaces is given `REPLACE_GRACE_MS` to leave
- * the inventory before the new run is born — two processes on one native
- * session is the one thing a resume must never make. */
+ * `RESUME_POLL_MS`; the PTY it replaces has EXITED, by the floor's word, before
+ * the new run is born, and past the asked bound (ASKED_EXIT_GRACE_MS) the
+ * replacement refuses retryably — two processes on one native session is the
+ * one thing a resume must never make. Item 201 (RV #43): leaving the inventory
+ * is not that word; a terminated PTY leaves it a ladder before it exits. */
 const RESUME_IDLE_AFTER_MS = 30_000;
 /** AC-3 — how long a door that only REPORTS the index's state waits for a
  * ready daemon's first census (the roll call fills in behind the ready line);
  * the enrollment's own wait is the profile service's */
 const HISTORY_STATE_WAIT_MS = 3_000;
 const RESUME_POLL_MS = 5_000;
-const REPLACE_GRACE_MS = 5_000;
 /** AR-4b — the idle poll backs off while the index cannot answer (doubling
  * per unanswered poll, capped), and returns to its cadence on the first answer. */
 const RESUME_POLL_MAX_MS = 60_000;
@@ -579,6 +582,10 @@ interface ManagedEntry {
 /** Item 124 — one birth's identity (`AgentRuntimeService.identity`): each attempt of a briefed birth has its own. */
 type BirthIdentity = ReturnType<AgentRuntimeService["identity"]>;
 
+/** How a pending run's process ended, as its record is stamped (`closePending`): the floor's own
+ * `session-exited`, or the inventory's backstop's unknown. */
+type PendingExit = { exitCode: number | null; signal: string | null; reason: string };
+
 /** AR-4 — a run whose PTY outlived a fieldd that could NOT re-attach to it:
  * held in the fold as a pending row (live, unobserved) until its
  * conversation goes idle or a person resumes it. */
@@ -594,6 +601,12 @@ interface PendingEntry {
   poll?: NodeJS.Timeout | undefined;
   /** the replacement is under way: the old PTY is leaving, the new run being born */
   resuming: boolean;
+  /** Item 201 (RV #43) — the floor's exit for this PTY, heard while a replacement holds the entry
+   * (`handleTerminalExit`): the replacement's word that the old process has ended, and, when it is
+   * refused before its point of no return, the outcome the row closes with (`restore`) */
+  heardExit?: PendingExit | undefined;
+  /** Item 201 (RV #43) — the waiting replacement's wake (`awaitPendingExit`), told when that exit is heard */
+  onExit?: (() => void) | undefined;
   /** consecutive idle polls the index could not answer (the backoff) */
   failures: number;
   /** AR-7c — a typed run held pending: stops the watch on its process, which
@@ -2448,7 +2461,16 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       reason: event.exitOutcome,
       requestedTermination: event.requestedTermination,
     };
-    if (this.pending.has(runtimeRunId)) {
+    const held = this.pending.get(runtimeRunId);
+    if (held !== undefined) {
+      // Item 201 (RV #43) — a replacement holds the entry: this exit is its word that the old process ended, heard
+      // here, the runtime's one exit door. It wakes the replacement, and a replacement refused before its point of no
+      // return closes the row with it (`restore`)
+      if (held.resuming) {
+        held.heardExit ??= exit;
+        held.onExit?.();
+        return;
+      }
       this.closePending(runtimeRunId, exit, "exit");
       return;
     }
@@ -2507,24 +2529,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
         entry.seenInInventory = true;
         entry.terminal = row;
       }
-      if (row !== undefined && row.exited !== true) {
-        if (entry.backstop !== undefined) {
-          clearTimeout(entry.backstop);
-          entry.backstop = undefined;
-        }
-      } else if (entry.seenInInventory && !entry.resuming && entry.backstop === undefined) {
-        // a pending PTY that left, or is listed exited: the process ended on
-        // its own — stamped after the same grace the attached runs get
-        entry.backstop = setTimeout(() => {
-          entry.backstop = undefined;
-          this.closePending(
-            runtimeRunId,
-            { exitCode: null, signal: null, reason: "unknown" },
-            "exit",
-          );
-        }, this.exitGraceMs(id));
-        entry.backstop.unref();
-      }
+      this.judgePendingBackstop(runtimeRunId, entry, row);
     }
     for (const [runtimeRunId, entry] of this.managed) {
       const row = rows.get(entry.info.terminalSessionId);
@@ -2572,6 +2577,36 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       }
     }
     if (changed) this.publish();
+  }
+
+  /** The inventory's exit backstop for a pending run, judged from its PTY's row (`handleInventory`):
+   * listed and running clears it; absent, or listed exited (item 97), once seen and while no
+   * replacement holds the entry, arms it at the exit's grace (`exitGraceMs`). Item 201 (RV #43) — a
+   * refused replacement judges it again (`restore`): it cleared the backstop at its start, and the
+   * PTY may have left meanwhile with no inventory still to come. */
+  private judgePendingBackstop(
+    runtimeRunId: string,
+    entry: PendingEntry,
+    row: TerminalInfo | undefined,
+  ): void {
+    if (row !== undefined && row.exited !== true) {
+      if (entry.backstop !== undefined) {
+        clearTimeout(entry.backstop);
+        entry.backstop = undefined;
+      }
+    } else if (entry.seenInInventory && !entry.resuming && entry.backstop === undefined) {
+      // a pending PTY that left, or is listed exited: the process ended on
+      // its own — stamped after the same grace the attached runs get
+      entry.backstop = setTimeout(() => {
+        entry.backstop = undefined;
+        this.closePending(
+          runtimeRunId,
+          { exitCode: null, signal: null, reason: "unknown" },
+          "exit",
+        );
+      }, this.exitGraceMs(entry.record.terminalSessionId));
+      entry.backstop.unref();
+    }
   }
 
   // ── personas (agent-profiles.ts) ──
@@ -4294,14 +4329,18 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     return work;
   }
 
-  /** The replacement: the old PTY terminated and GONE from the inventory —
-   * a verdict, not a delay: a PTY that outlives the grace refuses the
-   * replacement and the run stays pending — then the record stamped, then
+  /** The replacement: the old PTY terminated and EXITED, by the floor's word
+   * (`awaitPendingExit`, or a kept pane the floor listed exited, item 97; item
+   * 201) — a verdict, not a delay: a PTY whose exit has not come by the asked
+   * bound refuses the replacement retryably — then the record stamped, then
    * the continuation resumed into a new run whose row names the PTY it
-   * replaced and whose id the old record names in turn. Every throw before
-   * the point of no return puts the entry back the way it was. A manual
-   * resume is ledgered by its door with the caller as the actor; only the
-   * daemon's own idle resume is ledgered here, as the system. */
+   * replaced and whose id the old record names in turn. Every throw before the
+   * point of no return restores the entry (`restore`): an exit heard meanwhile
+   * closes it with the floor's outcome; else a PTY the inventory no longer
+   * lists running is closed by its backstop one grace later, and one it still
+   * lists running stays pending. A manual resume is ledgered by its door with
+   * the caller as the actor; only the daemon's own idle resume is ledgered
+   * here, as the system. */
   private async replacePending(
     entry: PendingEntry,
     cwdOverride: string | undefined,
@@ -4361,6 +4400,9 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       });
     }
     entry.resuming = true;
+    // Item 201 (RV #43) — from here the PTY's exit is this replacement's (`handleTerminalExit`): no window between
+    // asking the floor to end it and waiting for its word
+    entry.heardExit = undefined;
     if (entry.poll !== undefined) {
       clearTimeout(entry.poll);
       entry.poll = undefined;
@@ -4375,11 +4417,26 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       clearTimeout(entry.backstop);
       entry.backstop = undefined;
     }
+    const oldId = record.terminalSessionId;
     const restore = (): void => {
       entry.resuming = false;
-      if (this.pending.get(record.runtimeRunId) === entry) this.armPending(entry);
+      entry.onExit = undefined;
+      const heard = entry.heardExit;
+      entry.heardExit = undefined;
+      if (this.pending.get(record.runtimeRunId) !== entry) return;
+      // Item 201 (RV #43) — an exit heard while the replacement held the entry ended the run: the row closes with
+      // the floor's own outcome (and its listeners hear it, RV #17), never left pending over a dead PTY
+      if (heard !== undefined) {
+        this.closePending(record.runtimeRunId, heard, "exit");
+        return;
+      }
+      // and a PTY that left meanwhile is judged as the inventory judges it: the replacement held its backstop off,
+      // and no inventory may come to arm it again
+      const terminals = this.opts.terminals?.() ?? null;
+      if (oldId !== undefined && terminals?.observation() !== undefined)
+        this.judgePendingBackstop(record.runtimeRunId, entry, terminals.get(oldId));
+      this.armPending(entry);
     };
-    const oldId = record.terminalSessionId;
     const work = async (): Promise<ManagedEntry> => {
       let briefing: AgentRunBriefing;
       // ── before the point of no return: every throw restores the entry ──
@@ -4410,14 +4467,19 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
                 { runtimeRunId: record.runtimeRunId, sessionId: oldId, state: "not-agent-cell" },
               );
             }
-            // 1. the old PTY leaves first, and is GONE before the new run is
-            // born — two processes on one native session is the one thing a
-            // resume must never make
+            // 1. the old PTY leaves first, and has EXITED, by the floor's word,
+            // before the new run is born — two processes on one native session
+            // is the one thing a resume must never make. Item 201 (RV #43):
+            // its leaving the inventory is not that word (a terminate fieldd
+            // asked for drops the row a ladder before the exit). `terminated:
+            // false` is the floor holding no live session: nothing to wait for.
+            // Nor is a kept pane it listed exited (item 97): that row is its
+            // word that the process ended, and the exit it told then is not
+            // told again for this terminate
             const ended = await terminals.terminate(oldId);
-            const gone = ended.terminated
-              ? await this.awaitGone(terminals, oldId, REPLACE_GRACE_MS)
-              : true;
-            if (!gone) {
+            const exitOwed = ended.terminated && row.exited !== true;
+            const heard = exitOwed ? await this.awaitPendingExit(entry, oldId) : true;
+            if (!heard) {
               throw new RpcCallError(
                 "PRECONDITION_FAILED",
                 "the session's terminal did not exit within the grace; the run stays pending",
@@ -4426,7 +4488,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
                   runtimeRunId: record.runtimeRunId,
                   sessionId: oldId,
                   state: "terminal-alive",
-                  graceMs: REPLACE_GRACE_MS,
+                  graceMs: ASKED_EXIT_GRACE_MS,
                 },
               );
             }
@@ -4587,19 +4649,28 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     return sessionId === undefined ? undefined : terminals.staleRefusal(sessionId, operation);
   }
 
-  /** True once the session has left the inventory; false when it is still
-   * listed at the deadline — a verdict the caller must act on. */
-  private async awaitGone(
-    terminals: TerminalService,
-    sessionId: string,
-    ms: number,
-  ): Promise<boolean> {
-    const deadline = Date.now() + ms;
-    while (this.listed(terminals, sessionId)) {
-      if (Date.now() >= deadline) return false;
-      await new Promise((resolve) => setTimeout(resolve, 100));
+  /** Item 201 (RV #43, vf-runtime-3) — true once the floor says the PTY a replacement asked it to
+   * end has EXITED (its `session-exited`, heard through `handleTerminalExit`, the runtime's one
+   * exit door); false when that word has not come by the bound a termination fieldd asked for
+   * gets (item 59's ASKED_EXIT_GRACE_MS from the ask, `exitGraceMs`) — a verdict the caller must
+   * act on. Its leaving the inventory is not that word: the floor drops a terminated row at once
+   * and reports the exit when the session concludes. No poll and no second source: an exit heard
+   * before the wait begins, even in the terminate's own read, is already on the entry. */
+  private async awaitPendingExit(entry: PendingEntry, sessionId: string): Promise<boolean> {
+    if (entry.heardExit !== undefined) return true;
+    // counted now, while the ask stands
+    const bound = this.exitGraceMs(sessionId);
+    let timer: NodeJS.Timeout | undefined;
+    try {
+      return await new Promise<boolean>((resolve) => {
+        entry.onExit = () => resolve(true);
+        timer = setTimeout(() => resolve(false), bound);
+        timer.unref();
+      });
+    } finally {
+      clearTimeout(timer);
+      entry.onExit = undefined;
     }
-    return true;
   }
 
   /** The daemon's own act, in the ledger as the system actor when the daemon
