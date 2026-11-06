@@ -39267,6 +39267,9 @@ the person's own shell.
   prefix; the REAL-floor rows left no root. Host: load 1.77 at arm, peak 51.25; df 13 before and after; swap 1,751 MB.
 - At LAND, owed: gate:landing's smoke:godview row 14 (R1's typed-run witness); the old mini's console is locked, so it
   joins item 196's owed smokes on James's list.
+  > *Answered 2026-11-06 17:52Z:* smoke:godview row 14 GREEN on the old mini at `0d1d66f05` (a9; exit 0, a 133 s row;
+  > the console unlocked and no input mid-row; the five typed-run items as R1 asks; SMOKE_DAEMONS left none; log
+  > `smk-godview-0d1d66f05/smoke:godview.log` `ac1bc9aa…`). It leaves James's console list.
 
 **Found.**
 - endLive's typed branch is reachable today only through endRun (talk's agent_stop). The person's own Stop and End run
@@ -39281,3 +39284,82 @@ the person's own shell.
 - `draft/thinking-ar7-typed-agents.md` §5.3, a dated correction at the source (through the draft queue): it says
   stopUnder "interrupts and signals a typed run's PROCESS"; the code (B4) leaves the process running, and the process
   is ended only through endLive/endTypedRun (item 191).
+
+## Item 192 — a release that keeps the floor ends the agent runs whose agents don't re-attach, and now fieldd counts them, the person consents, and fieldd re-checks them at its own stop (RV #6) (2026-11-06)
+(2026-11-06; six commits, `2c04820a5` (docs), `8baa41e0e` (red), `ea1954035`, `b3e7fdb8e` (words), `a356d2428` (tail
+red) and `992d2649b`, on lane `rv/update-census` over main `3b8611ec4`, RV's (vibe-field-06, vibe-field-62 since the
+17:16Z restart), in `/Volumes/SamsungRed/lanes/fg2/vibe-field`; re-cut onto `9502d8852` as `e93170f62`, `01710672a`,
+`e11c6beb8`, `87a8e03b4`, `c17a3909a` and `09940c201` by a rebase with two hand-resolved conflicts (below). M193 is
+`09940c201` itself, a fast-forward of main `9502d8852` by the fixer, run 193, landed 2026-11-06T18:13:00Z.)
+RV's second landing. The plan's lane rv/update-census, wave 1, built at rv-update-census's lean C with option A's
+words, which James has not ruled.
+
+**The finding.** RV #6 (`gap3-1`, high, confirmed twice): since TD-4 a release whose signed manifest leaves
+field-native alone read "keeps sessions": no census, no consent box, and a silent apply on the timer, at lid-open or
+at window close. Its plain stop ends fieldd, and `dispose({detach})` leaves every agent whose helper lives in fieldd's
+tree (the Codex app-server, the Grok leader, the OpenCode serve, the Hermes host) dead behind a pane that says it
+keeps running. Live from the second TD-4 nightly.
+
+**What landed.**
+- docs/agent-plane, first: system.html's lifetime claim ("A managed session survives a fieldd restart") gets a dated
+  correction at its source (the PTY survives; the run survives only where its agent re-attaches); api.html gains the
+  `system.shutdown.census` door; the umbrella points back.
+- contracts: `SystemShutdownParams.agents {runs}` (the consent of fieldd's own stop; `native` and `agents` together
+  are malformed), `SystemShutdownCensusRun` and `SystemShutdownCensusResult` (the catalog's label, never an id:
+  AR-L1), the door `system.shutdown.census` (product, native.admin, idempotent, local), `UpdateConsentSession.agent`,
+  four fixtures. Outside gen by its own rule, so no Rust or Swift change.
+- fieldd: `plainStopCensus()`, the one authority: every live managed run of this boot whose catalog row does not claim
+  `offers.reattach`, read from the claim with no vendor named (R23b); `births` counts creations, replacements and (the
+  tail) every re-attach in flight past the boot's own (G5's retry, the sweep's of a PTY listed late); unsettled until
+  the boot's re-attach settles. A consented stop closes launches (spawn, resume, adoption and G5's retry ask again
+  right before their birth), re-checks the census against the consent, and refuses
+  `PRECONDITION_FAILED {live, births}` (the floor's stop's shape) or `UNAVAILABLE {agents, reattaching}`.
+- electron-shell: the apply reads ONE census of the stop the verdict needs on every prepare (the `nativeTouched`
+  exemption and safe-window's `planes` retire), sends `{reason, agents: {runs}}`, and holds the silent path while the
+  plain stop ends any run; the tray and the doctor name agent runs.
+- field-app: the consent, the staged cost and the Me row name agent runs for a release that keeps the floor; the
+  consent list's name follows the snapshot's stop.
+- DESIGN.md §8/§9: option A's words ("Updating ends 2 agent runs", "Update Ends 2 Agent Runs…"), each marked open
+  until James rules rv-update-census.
+
+**The lights.**
+- Written unrun on the MacBook under the HOLD. w1p1 on vf-m1 through a9 (`lanes/ts6/logs/m1/rv-w1p1/`, `rv.out`
+  `2d50b87a…`): the reds U1–U6 at `5ca97e13f` as briefed, the greens U8–U15 and the walls U17–U18 at `60d724616`, and
+  the mutant U19 (the resume gate removed: its row red). U7 and U16, biome, were red on a format miss in
+  `system-shutdown-census.test.ts`; it was folded into the red by a fixup and the tail rebased on it
+  (`lanes/rv/a9/w1p2/update-census-recut.txt`), so the shas above are the re-cut's.
+- w1p2 on vf-m1 (`lanes/rv/a9/w1p2-results/`, `rv.out` `cc280e0e…`): V1–V14 all as briefed: biome clean on the re-cut
+  red; the tail red's three rows red at :559, :642 and :718 for the right reasons (`births: +0` vs 1,
+  `expected 2 to be 1`); the census file 11 of 11 at the tip; G5's pair; tsc 0 for every package.
+- The re-cut onto `9502d8852` (`lanes/rv/mint/item192/09940c201-on-9502d8852/`, SUMS `313dab02…`) was NOT proof-form.
+  `git replay` stopped on two fieldd test helpers that item 191 (M192) and this lane each extended at one spot,
+  resolved by keeping both sides and nothing else: `agent-gateway-floor.ts` (191's `stopHeardWithinMs` beside 192's
+  `catalog`) and `agent-gateway-fixture.ts` (191's `type AgentEvent` and `observed` beside 192's `attachAnswer`).
+  range-diff 4 `=` and 2 `!` (only those hunks); every other path of the tip equals git's merge-tree; `methods.ts`'s
+  `-U0` patch-id moved by a diff slide (its `-U3` is equal).
+- Run 193, a9's, on the old mini: GREEN, every count as briefed, missing [] / extra [] (a9 = vibe-field-31,
+  `lanes/ts6/logs/mini/run193/`, `verify.log` `addad381…`; verify exit 0 at 18:08:43Z, tree clean, stubs 0). Nested
+  rows 0 over the lane's eleven test files. contracts 1936 (+7: `fixtures.test.ts` 702 → 709); fieldd 3548 passed and
+  15 skipped (+12: `system-shutdown-census.test.ts` NEW 11, `agent-runtime.test.ts` 40 → 41); field-app 4373 (+9);
+  electron-shell 2707 passed and 2 skipped (+20: `pair-stop.test.ts` NEW 10); vitest 13,937 passed, 0 failed and 21
+  skipped over 956 files; biome 3470; node 474, cargo 35 / 548 and typecheck 29 as run 192's; gen's freshness stage
+  passed, and no generated file moved. Births: one root, `vf-conv-B-…`, which main's `doc-sync-convergence.test.ts`
+  makes, not this lane; the census file left none. Host: load 10.36 at the test stage's start, peak 44.20 beside a
+  pre-light's xcodebuild; df 14 before and after; swap 1,743 MB.
+- At LAND: gate:landing's smoke:update (desk-gates row 30, WP12f's packaged apply) is armed on the old mini at
+  `09940c201`, waiting on James's console unlock; owed until it runs.
+
+**Found.**
+- A plain stop that names neither census still asks no one: the supervisor's stale-build replacement and the dev
+  runner. Unchanged, by design.
+- The REAL floor's refusal before its re-attach settles is not covered: the awaitingBoot grace is timing-shaped there.
+  The unit seam covers the unsettled branch.
+
+**Owed.**
+- James's rv-update-census: built at lean C with A's words. A different ruling changes DESIGN.md first, then
+  `update-words.ts` and `apply.ts`. R8's "Your sessions keep running" and R10's "Checks your sessions first" are
+  asked, unchanged.
+- Option C's narrowing (which runs survive a fieldd-only restart, by puppeteer's release fact) is
+  rv/vf-restart-truth's, after EL8-2.
+- The draft specs (through the draft queue): `build-wp12-updater.md` §12 B3/B4, `electron-shell-refactor.md` §7.3's
+  amendment and `thinking-update-ux.md`, each a dated correction at its source.
