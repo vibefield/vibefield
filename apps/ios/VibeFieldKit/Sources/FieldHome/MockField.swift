@@ -1,6 +1,7 @@
 #if DEBUG
   import FieldDesign
   import FieldMesh
+  import FieldProduct
   import FieldSettings
   import Foundation
   import Observation
@@ -149,5 +150,13 @@
     func signIn() { standing = .up }
 
     func signOut() { standing = .signedOut }
+  }
+
+  extension MockAccount {
+    /// SE-2 — Live now's rows under `-vf-mock`. SE-2e (red): none.
+    static func searchRows() -> [RemoteFieldRow] { [] }
+
+    /// SE-2 — the home's profiles under `-vf-mock`. SE-2e (red): none.
+    static func searchProfiles() -> [AgentProfileSet] { [] }
   }
 #endif
