@@ -46,6 +46,16 @@ export const neverBegan = (flow: string): string =>
 export const leftTwice = (flow: string): string =>
   `VibeField ended ${flow}: its script stopped twice before it could go on.`;
 
+/** D7 (slice 10b) — a run set aside `lost` when its host goes quiet with a new call held, while calls its journal
+ * holds were not made again: DESIGN.md §9's "A run that can't go on". */
+export const asideNew = (flow: string): string =>
+  `VibeField set ${flow} aside: run again, its script asked for something it never asked before.`;
+
+/** D7 (slice 10b; §9, PROPOSED) — set aside when its host goes quiet with nothing new asked: calls its journal holds
+ * not made again, or an answer behind them its journal's order can't release. */
+export const asideUnmatched = (flow: string): string =>
+  `VibeField set ${flow} aside: run again, its script didn't ask what it asked before.`;
+
 /** A copy of VibeField that can't start a flow's host (its file is not beside fieldd; FLOW_HOST.STATE_UNCONFIGURED):
  * a run is refused at its start in §9's host sentence ("When a run's script cannot go on"), the agents' sentence for
  * the same loss (Q-b). */

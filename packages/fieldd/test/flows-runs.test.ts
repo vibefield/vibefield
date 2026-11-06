@@ -20,7 +20,7 @@ import { RUNS_DIR } from "../src/flows/journal";
 import type { FlowsHostLaunch } from "../src/flows/launch";
 import { FlowLibrary } from "../src/flows/library";
 import { FlowRecords, flowHashOf } from "../src/flows/records";
-import { flowCallKey } from "../src/flows/replay";
+import { FlowReplay, flowCallKey } from "../src/flows/replay";
 import {
   type FlowRunSpark,
   type FlowRunStarted,
@@ -3100,7 +3100,32 @@ const HELD_TWO = [
   "",
 ].join("\n");
 
-describe("CP-4a2b — the host's life: parked and woken, and D2's lookup at a wake (§13a slice 10a)", () => {
+/** Two steps at once, A and B; its one log line says A's text, and whether B's came cut short (FLOW_CUT_MARK). */
+const CUT_TWO = [
+  'export const meta = { name: "Cut" };',
+  "export default async function () {",
+  `  const [a, b] = await Promise.all([agent("look at a", ${stepAt("A")}), agent("look at b", ${stepAt("B")})]);`,
+  '  log(a.text + " " + b.text.endsWith("…"));',
+  "}",
+  "",
+].join("\n");
+
+/** A call line no flow here makes, as its host would journal it: what a journal its script, run again, can't match
+ * holds (D7's rows, slice 10b). */
+const unmade = (call: number) => ({
+  kind: "call" as const,
+  call,
+  what: "agent",
+  key: flowCallKey("agent", [
+    "look at x",
+    { agent: "claude", label: "X", profile: "work", cwd: "/work/app" },
+  ]),
+  n: 1,
+  label: "X",
+  agent: "claude",
+});
+
+describe("CP-4a2b — the host's life: parked and woken, D2's lookup at a wake, and replay's order (§13a slices 10a, 10b)", () => {
   /** Whether host `i` the runs started has left. */
   const left = (h: Harness, i: number): boolean => h.hosts[i]?.leftAt !== undefined;
   /** The run's state, as its summary reads it now. */
@@ -3453,5 +3478,166 @@ describe("CP-4a2b — the host's life: parked and woken, and D2's lookup at a wa
     const held = h.records.runRecord(run)?.held;
     const rests = { state: stateOf(h, run), hosts: h.hosts.length, held };
     expect(rests).toEqual({ state: "waiting", hosts: 1, held: undefined });
+  });
+
+  // slice 10b (D21, D22, D7; ruled 2026-11-06): a woken host hears its answers in its journal's order, from one
+  // writer, the runs, each journaled once and handed to the host whose replay is current; a script that, run again,
+  // can't match its journal is set aside lost at D1's park, in §9's words, on its record and in fieldd's log
+
+  /** The words fieldd's log said `run` ended in, or none. */
+  const toldEnd = (h: Harness, run: string): unknown => {
+    const told = h.warned.find(({ event, fields }) => {
+      return event === "fieldd.flows.run.ended" && fields?.["run"] === run;
+    });
+    return told?.fields?.["log"];
+  };
+  /** DESIGN.md, its runs of white space as one space. */
+  const designText = () =>
+    readFileSync(join(import.meta.dirname, "../../../DESIGN.md"), "utf8").replace(/\s+/g, " ");
+
+  it("P12 (D7, D21; slice 10b): a woken run whose journal holds a call its script never makes again is set aside lost at HOST_IDLE_MS, in §9's Proposed words, with nothing spawned", async () => {
+    const h = await harness({ hostIdleMs: IDLE_MS });
+    h.approved("review", ANSWERED);
+    const run = startedRun(await h.start({ flow: "review" })).run;
+    await waitFor(() => expect(h.enqueued).toHaveLength(1));
+    expect(await parkedAt(h, run)).toEqual(PARKED);
+    // a call line the script never makes, kept while the run waits; its step's answer, after it, wakes the run
+    h.records.appendRun(run, unmade(2));
+    answerStep(h, run, 1, "all clean");
+    await within(PARK_MS, () => stateOf(h, run) === "lost");
+    const said = words.asideUnmatched("Review");
+    const ended = h.runs.read(run)?.summary;
+    const aside = { state: ended?.state, log: ended?.log, told: toldEnd(h, run) };
+    expect({ ...aside, spawned: h.spawned.length }).toEqual({
+      state: "lost",
+      log: said,
+      told: said,
+      spawned: 1,
+    });
+    expect(h.kinds(run)).toEqual(["head", "call", "call", "answer", "end"]);
+    expect(designText()).toContain(`"${words.asideUnmatched("‹flow›")}"`);
+  });
+
+  it("R31 (D7; slice 10b): a woken script's new call, made while a call its journal holds is never made again, is never journaled, counted or spawned, and the run is set aside lost in §9's words", async () => {
+    const grace = 2_000;
+    const h = await harness({ hostIdleMs: IDLE_MS, timings: { stopGraceMs: grace } });
+    h.approved("seq", SEQ);
+    const run = startedRun(await h.start({ flow: "seq" })).run;
+    await waitFor(() => expect(h.enqueued).toHaveLength(1));
+    // the host can't hear its shutdown, so it leaves only at its grace's SIGKILL (R27d): A's answer is journaled in
+    // that grace, then a call line the script never makes, and the run wakes on both once the host has left
+    h.hosts[0]?.child.kill("SIGSTOP");
+    await within(PARK_MS, () => stateOf(h, run) === "waiting");
+    answerStep(h, run, 1, "a");
+    await within(PARK_MS, () => answersOf(h, run).length === 1);
+    h.records.appendRun(run, unmade(2));
+    await within(PARK_MS + grace, () => stateOf(h, run) === "lost");
+    const said = words.asideNew("Seq");
+    const ended = h.runs.read(run)?.summary;
+    const aside = { state: ended?.state, log: ended?.log, told: toldEnd(h, run) };
+    const counted = { calls: h.records.runRecord(run)?.calls, spawned: h.spawned.length };
+    expect({ ...aside, ...counted }).toEqual({
+      state: "lost",
+      log: said,
+      told: said,
+      calls: 2,
+      spawned: 1,
+    });
+    expect(h.kinds(run)).toEqual(["head", "call", "answer", "call", "end"]);
+    expect(designText()).toContain(`"${words.asideNew("‹flow›")}"`);
+  });
+
+  it("P13 (D22; slice 10b): an answer journaled after a woken host read its journal is handed to that host's replay alone; the parked host's replay hears nothing after its park", async () => {
+    const made = vi.spyOn(FlowReplay.prototype, "call");
+    const heard = vi.spyOn(FlowReplay.prototype, "answered");
+    try {
+      const h = await harness({ hostIdleMs: IDLE_MS });
+      h.approved("two", TWO);
+      const run = startedRun(await h.start({ flow: "two" })).run;
+      await waitFor(() => expect(h.enqueued).toHaveLength(2));
+      expect(await parkedAt(h, run)).toEqual(PARKED);
+      const parked = made.mock.contexts[0];
+      // A's answer wakes the run; B's lands at once, after the woken host's read and before it makes B again
+      answerStep(h, run, 1, "a");
+      answerStep(h, run, 2, "b");
+      await within(PARK_MS, () => stateOf(h, run) === "done");
+      const to = heard.mock.contexts.map((replay) => (replay === parked ? "parked" : "woken"));
+      const calls = heard.mock.calls.map(([call]) => call);
+      expect({ state: stateOf(h, run), to, calls }).toEqual({
+        state: "done",
+        to: ["woken"],
+        calls: [2],
+      });
+    } finally {
+      made.mockRestore();
+      heard.mockRestore();
+    }
+  });
+
+  it("R28 (D22, D21; slice 10b): an answer that lands while a woken host starts is journaled once and heard once, and starts no second agent", async () => {
+    const h = await harness({ hostIdleMs: IDLE_MS });
+    h.approved("two", TWO);
+    const run = startedRun(await h.start({ flow: "two" })).run;
+    await waitFor(() => expect(h.enqueued).toHaveLength(2));
+    expect(await parkedAt(h, run)).toEqual(PARKED);
+    // A's answer wakes the run; B's lands at once, in the window before the woken host makes B again
+    answerStep(h, run, 1, "a");
+    answerStep(h, run, 2, "b");
+    await within(PARK_MS, () => stateOf(h, run) === "done");
+    const ended = h.runs.read(run)?.summary;
+    const lines = answersOf(h, run).map(({ call }) => call);
+    expect({ state: ended?.state, log: ended?.log, lines, spawned: h.spawned.length }).toEqual({
+      state: "done",
+      log: "ab",
+      lines: [1, 2],
+      spawned: 2,
+    });
+  });
+
+  it("R28b (D22, TT4; slice 10b): an answer cut at RESULT_MAX_BYTES that lands while a woken host starts reaches its script cut short, and its one journal line carries the mark", async () => {
+    const h = await harness({ hostIdleMs: IDLE_MS });
+    h.approved("cut", CUT_TWO);
+    const run = startedRun(await h.start({ flow: "cut" })).run;
+    await waitFor(() => expect(h.enqueued).toHaveLength(2));
+    expect(await parkedAt(h, run)).toEqual(PARKED);
+    answerStep(h, run, 1, "a");
+    answerStep(h, run, 2, "x".repeat(FLOW_LIMITS.RESULT_MAX_BYTES + 100));
+    await within(PARK_MS, () => stateOf(h, run) === "done");
+    const ended = h.runs.read(run)?.summary;
+    const marks = answersOf(h, run)
+      .filter(({ call }) => call === 2)
+      .map((line) => line.cut);
+    expect({ state: ended?.state, log: ended?.log, marks }).toEqual({
+      state: "done",
+      log: "a true",
+      marks: [true],
+    });
+  });
+
+  it("P14 (D22, CL-H6; slice 10b): a turn end told again, while its run is parked and once its woken host made the call again, journals one answer line", async () => {
+    const made = vi.spyOn(FlowReplay.prototype, "call");
+    try {
+      const h = await harness({ hostIdleMs: IDLE_MS });
+      h.approved("two", TWO);
+      const run = startedRun(await h.start({ flow: "two" })).run;
+      await waitFor(() => expect(h.enqueued).toHaveLength(2));
+      expect(await parkedAt(h, run)).toEqual(PARKED);
+      const parked = made.mock.contexts[0];
+      const a = { run, call: 1, runtimeRunId: sessionOf(h, run, 1), turn: "t1" } as const;
+      const endA = () => h.endTurn({ ...a, outcome: "completed", text: "a" });
+      // A's turn end told twice at once, the first waking the run; then again, once the woken host made A and B again
+      endA();
+      endA();
+      const woken = () => made.mock.contexts.filter((replay) => replay !== parked).length;
+      await within(PARK_MS, () => woken() === 2);
+      endA();
+      answerStep(h, run, 2, "b");
+      await within(PARK_MS, () => stateOf(h, run) === "done");
+      const lines = answersOf(h, run).map(({ call }) => call);
+      const ended = { state: stateOf(h, run), log: h.runs.read(run)?.summary.log, lines };
+      expect(ended).toEqual({ state: "done", log: "ab", lines: [1, 2] });
+    } finally {
+      made.mockRestore();
+    }
   });
 });

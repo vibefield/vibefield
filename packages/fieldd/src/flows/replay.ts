@@ -10,6 +10,7 @@ import type { FlowJournalEntry } from "./journal";
 import { nestsWithin } from "./protocol";
 import {
   boundedAnswer,
+  type FlowBoundedAnswer,
   type FlowCallHandler,
   type FlowHostAnswer,
   type FlowHostCall,
@@ -45,7 +46,15 @@ export interface FlowReplayOptions {
    * line comes with the call's own arguments, which the runs read its `in:` from (F9) */
   readonly append: (entry: FlowJournalEntry, args?: readonly unknown[]) => void;
   /** what does a new call: the runs (CP-4a2b); a scripted one in the tests */
-  readonly inner: FlowCallHandler;
+  readonly inner: FlowCallStarter;
+}
+
+/** What starts a run's calls past its journal (D22, slice 10b): the runs; a scripted one in the tests. A call's answer
+ * reaches its replay through `FlowReplay.answered`, never through what `call` returns; until 10b's green, the replay
+ * still reads what it returns. Its `log` hears each new log line. */
+export interface FlowCallStarter {
+  call(call: FlowHostCall & { readonly call: number }): unknown;
+  log(text: string): void;
 }
 
 /** The words a script hears when its run's journal did not take a call or its answer. */
@@ -57,6 +66,52 @@ const asCarried = (value: unknown): unknown => {
   const text = JSON.stringify(value);
   return text === undefined ? null : (JSON.parse(text) as unknown);
 };
+
+/** D7 (slice 10b) — why a quiet host can't go on, as its replay reads it at D1's park:
+ * - `new`: a new call held, while calls the journal holds are not made again (§9: "…its script asked for something
+ *   it never asked before.");
+ * - `unmatched`: calls the journal holds not made again, an answer behind them held, and nothing new asked (§9,
+ *   Proposed: "…its script didn't ask what it asked before."). */
+export type FlowReplayStuck = "new" | "unmatched";
+
+/** An answer as the runs journal it (D22): its journal line, and what the script hears (a cut text marked `cut`). */
+export interface FlowAnswerLine {
+  readonly entry: Extract<FlowJournalEntry, { readonly kind: "answer" }>;
+  readonly heard: FlowHostAnswer;
+}
+
+/** D11, D22 — the one road from a call's answer to its journal line and to what its script hears: JSON's own value
+ * (an undefined in a list is null), refused when it nests past ARGS_DEPTH_MAX or is not plain JSON, then bounded by
+ * the one cutter (`boundedAnswer`: a text past RESULT_MAX_BYTES cut and marked `cut`). Pure: no I/O, no clock. */
+export function flowAnswerLine(call: number, what: string, said: FlowHostAnswer): FlowAnswerLine {
+  let answer: FlowBoundedAnswer;
+  try {
+    // an answer of nothing is kept, and replayed, as null: the journal's answer is a value or a refusal
+    const carried = said.ok ? asCarried(said.value) : undefined;
+    answer =
+      said.ok && !nestsWithin(carried, FLOW_LIMITS.ARGS_DEPTH_MAX)
+        ? {
+            ok: false,
+            refused: `VibeField can't hand this ${what}'s answer on: it nests deeper than ${FLOW_LIMITS.ARGS_DEPTH_MAX}`,
+          }
+        : boundedAnswer(said.ok ? { ok: true, value: carried } : said);
+  } catch {
+    answer = {
+      ok: false,
+      refused: `VibeField can't hand this ${what}'s answer on: it is not plain JSON`,
+    };
+  }
+  if (!answer.ok)
+    return {
+      entry: { kind: "answer", call, refused: answer.refused },
+      heard: { ok: false, refused: answer.refused },
+    };
+  const cut = answer.cut === true ? { cut: true as const } : {};
+  return {
+    entry: { kind: "answer", call, value: answer.value, ...cut },
+    heard: { ok: true, value: answer.value, ...cut },
+  };
+}
 
 /** The label, agent and phase a card shows, where the script's options name them plainly. */
 function cardOf(args: readonly unknown[]): { label?: string; agent?: string; phase?: string } {
@@ -156,42 +211,26 @@ export class FlowReplay implements FlowCallHandler {
     this.#opts.inner.log(text);
   }
 
+  /** D22, D21 (slice 10b) — a call's answer as the runs journaled it, handed to this host's replay, to be released to
+   * its script in journal order. Declared in 10b's red; its green builds it. */
+  answered(_call: number, _answer: FlowHostAnswer): void {}
+
+  /** D7 (slice 10b) — what keeps this replay's quiet host from going on, read at D1's park; none when it only waits.
+   * Declared in 10b's red; its green builds it. */
+  stuck(): FlowReplayStuck | undefined {
+    return undefined;
+  }
+
   async #handOn(call: FlowHostCall & { readonly call: number }): Promise<FlowHostAnswer> {
-    const said = await this.#opts.inner.call(call);
-    let answer: ReturnType<typeof boundedAnswer>;
+    // until 10b's green, the runs' answer is what their call resolves to
+    const said = (await this.#opts.inner.call(call)) as FlowHostAnswer;
+    const line = flowAnswerLine(call.call, call.what, said);
     try {
-      // an answer of nothing is kept, and replayed, as null: the journal's answer is a value or a refusal
-      const carried = said.ok ? asCarried(said.value) : undefined;
-      answer =
-        said.ok && !nestsWithin(carried, FLOW_LIMITS.ARGS_DEPTH_MAX)
-          ? {
-              ok: false,
-              refused: `VibeField can't hand this ${call.what}'s answer on: it nests deeper than ${FLOW_LIMITS.ARGS_DEPTH_MAX}`,
-            }
-          : boundedAnswer(said.ok ? { ok: true, value: carried } : said);
-    } catch {
-      answer = {
-        ok: false,
-        refused: `VibeField can't hand this ${call.what}'s answer on: it is not plain JSON`,
-      };
-    }
-    try {
-      this.#opts.append(
-        answer.ok
-          ? {
-              kind: "answer",
-              call: call.call,
-              value: answer.value,
-              ...(answer.cut === true ? { cut: true as const } : {}),
-            }
-          : { kind: "answer", call: call.call, refused: answer.refused },
-      );
+      this.#opts.append(line.entry);
     } catch {
       // the step's answer is not kept, so the script does not hear it: a restart asks the step again
       return { ok: false, refused: JOURNAL_REFUSED };
     }
-    return answer.ok
-      ? { ok: true, value: answer.value, ...(answer.cut === true ? { cut: true as const } : {}) }
-      : answer;
+    return line.heard;
   }
 }

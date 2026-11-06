@@ -5,7 +5,7 @@ import { FLOW_LIMITS, FLOW_RECORD_FORMAT, type FlowJournalKnownLine } from "@vib
 import { afterEach, describe, expect, inject, it } from "vitest";
 import type { FlowJournalEntry } from "../src/flows/journal";
 import { FlowRecords } from "../src/flows/records";
-import { FlowReplay, flowCallKey } from "../src/flows/replay";
+import { FlowReplay, flowAnswerLine, flowCallKey } from "../src/flows/replay";
 import {
   type FlowCallHandler,
   type FlowHostAnswer,
@@ -19,6 +19,9 @@ import { beganRun } from "./flows-run-records";
 // CP-4a2a (step0-cp4a2.md §12 commit 8; CP-D9) — replay: a run's calls answered from its journal by their key and
 // `#n`, never handed on twice; a new call journaled before it is handed on, then its answer. And J7: the journal's key
 // and its MACs never reach the host.
+// CP-4a2b (§13a slice 10b; D21, D22, D7) — the answers a replay releases, in the journal's order, one queue; the runs
+// the one writer of an answer line (the `writer` below plays them), the replay its hearer; and a new call held while
+// calls the journal holds are not made again.
 
 const FIXTURES = join(import.meta.dirname, "..", "..", "contracts", "fixtures");
 const RUN = "fr-k3v9q2m7x1";
@@ -61,6 +64,49 @@ function prior(body: FlowJournalEntry[]): FlowJournalKnownLine[] {
     head,
     ...body.map((entry, i) => ({ ...entry, format: 1, seq: i + 2, at: head.at })),
   ] as FlowJournalKnownLine[];
+}
+
+/** A turn of the event loop: every answer a replay released is heard by then. */
+const settle = () => new Promise<void>((resolve) => setImmediate(resolve));
+
+/** The runs' one write, scripted (D22): `said` journaled once through the one cutter, then handed to `replay`. */
+function journalAnswer(
+  replay: FlowReplay,
+  append: (entry: FlowJournalEntry) => void,
+  call: number,
+  said: FlowHostAnswer,
+  what = "agent",
+): void {
+  const line = flowAnswerLine(call, what, said);
+  append(line.entry);
+  replay.answered(call, line.heard);
+}
+
+/** The runs' side of the seam (D22), scripted: each call handed on is counted and, given `answer`, answered at once
+ * by the runs' one write (`journalAnswer`) to the replay `bind` names; each log line is kept. It returns nothing: a
+ * replay hears an answer through `answered` alone. */
+function writer(
+  append: (entry: FlowJournalEntry) => void,
+  answer?: (call: FlowHostCall) => FlowHostAnswer,
+) {
+  const calls: FlowHostCall[] = [];
+  const logs: string[] = [];
+  let replay: FlowReplay | undefined;
+  const handler = {
+    call: (call: FlowHostCall & { readonly call: number }): void => {
+      calls.push(call);
+      if (answer !== undefined && replay !== undefined)
+        journalAnswer(replay, append, call.call, answer(call), call.what);
+    },
+    log: (text: string): void => {
+      logs.push(text);
+    },
+  };
+  const bind = (made: FlowReplay): FlowReplay => {
+    replay = made;
+    return made;
+  };
+  return { handler, calls, logs, bind };
 }
 
 const REVIEW = [
@@ -111,7 +157,7 @@ describe("CP-4a2a — replay by a call's key and #n (CP-D9)", () => {
     expect(appended).toEqual([]);
   });
 
-  it("P3: a call the journal already answered is answered from it, never handed on, and a refusal replays as one", async () => {
+  it("P3: a call the journal already answered is released from it in journal order, never handed on, and a refusal replays as one", async () => {
     const key = flowCallKey("agent", REVIEW);
     const { handler, calls } = inner();
     const appended: FlowJournalEntry[] = [];
@@ -138,22 +184,25 @@ describe("CP-4a2a — replay by a call's key and #n (CP-D9)", () => {
     expect(appended).toEqual([]);
   });
 
-  it("P4: a new call is journaled, handed on once with its number, and its answer journaled after", async () => {
+  it("P4: a new call is journaled, handed on once with its number, and its answer, journaled after by the runs (D22), is what it hears", async () => {
     const key = flowCallKey("agent", ["a"]);
-    const { handler, calls } = inner(() => ({ ok: true, value: "fresh" }));
     const appended: FlowJournalEntry[] = [];
-    const replay = new FlowReplay({
-      prior: prior([
-        { kind: "call", call: 1, what: "agent", key, n: 1 },
-        { kind: "answer", call: 1, value: "old" },
-      ]),
-      append: (entry) => appended.push(entry),
-      inner: handler,
-    });
+    const append = (entry: FlowJournalEntry) => void appended.push(entry);
+    const w = writer(append, () => ({ ok: true, value: "fresh" }));
+    const replay = w.bind(
+      new FlowReplay({
+        prior: prior([
+          { kind: "call", call: 1, what: "agent", key, n: 1 },
+          { kind: "answer", call: 1, value: "old" },
+        ]),
+        append,
+        inner: w.handler,
+      }),
+    );
     expect(await replay.call({ what: "agent", args: ["a"] })).toEqual({ ok: true, value: "old" });
     // the same call a second time is new: #2, call 2
     expect(await replay.call({ what: "agent", args: ["a"] })).toEqual({ ok: true, value: "fresh" });
-    expect(calls).toEqual([{ what: "agent", args: ["a"], call: 2 }]);
+    expect(w.calls).toEqual([{ what: "agent", args: ["a"], call: 2 }]);
     expect(appended).toEqual([
       { kind: "call", call: 2, what: "agent", key, n: 2 },
       { kind: "answer", call: 2, value: "fresh" },
@@ -212,18 +261,15 @@ describe("CP-4a2a — replay by a call's key and #n (CP-D9)", () => {
   it("P8: an answer nested past ARGS_DEPTH_MAX is refused to the script and journaled as a refusal, so its journal reads back (bth's review P1)", async () => {
     let deep: unknown = "x";
     for (let i = 0; i < FLOW_LIMITS.ARGS_DEPTH_MAX + 1; i++) deep = [deep];
-    const { handler, calls } = inner(() => ({ ok: true, value: deep }));
     const appended: FlowJournalEntry[] = [];
-    const replay = new FlowReplay({
-      prior: [],
-      append: (entry) => appended.push(entry),
-      inner: handler,
-    });
+    const append = (entry: FlowJournalEntry) => void appended.push(entry);
+    const w = writer(append, () => ({ ok: true, value: deep }));
+    const replay = w.bind(new FlowReplay({ prior: [], append, inner: w.handler }));
     await expect(replay.call({ what: "agent", args: ["a"] })).resolves.toMatchObject({
       ok: false,
       refused: expect.stringMatching(/nest/),
     });
-    expect(calls).toHaveLength(1);
+    expect(w.calls).toHaveLength(1);
     expect(appended.at(-1)).toMatchObject({
       kind: "answer",
       call: 1,
@@ -246,14 +292,11 @@ describe("CP-4a2a — replay by a call's key and #n (CP-D9)", () => {
         hash: "f".repeat(64),
         starter: { by: "you" },
       });
-      const { handler } = inner(() => ({ ok: true, value: [1, undefined, "x"] }));
-      const replay = new FlowReplay({
-        prior: [],
-        append: (entry) => {
-          records.appendRun(RUN, entry);
-        },
-        inner: handler,
-      });
+      const append = (entry: FlowJournalEntry) => {
+        records.appendRun(RUN, entry);
+      };
+      const w = writer(append, () => ({ ok: true, value: [1, undefined, "x"] }));
+      const replay = w.bind(new FlowReplay({ prior: [], append, inner: w.handler }));
       await expect(replay.call({ what: "agent", args: ["a"] })).resolves.toEqual({
         ok: true,
         value: [1, null, "x"],
@@ -307,17 +350,20 @@ describe("CP-4a2a — the journal stays fieldd's (CP4-S15)", () => {
     const script = new TextEncoder().encode(
       'export const meta = { name: "P9" };\nexport default async function () {\n  return await agent("Review");\n}\n',
     );
-    const once = async (handler: FlowCallHandler): Promise<unknown> => {
+    const append = (entry: FlowJournalEntry) => records.appendRun(run, entry);
+    const once = async (w: ReturnType<typeof writer>): Promise<unknown> => {
       const read = records.readRun(run);
       const host = startFlowHost({
         launch: { kind: "launch", launch: await flowsHostLaunch() },
         bytes: script,
         input: {},
-        handler: new FlowReplay({
-          prior: read.kind === "kept" ? read.lines : [],
-          append: (entry) => records.appendRun(run, entry),
-          inner: handler,
-        }),
+        handler: w.bind(
+          new FlowReplay({
+            prior: read.kind === "kept" ? read.lines : [],
+            append,
+            inner: w.handler,
+          }),
+        ),
         environment: { PATH: process.env["PATH"] ?? "/usr/bin:/bin" },
       });
       runs.push(host);
@@ -328,8 +374,11 @@ describe("CP-4a2a — the journal stays fieldd's (CP4-S15)", () => {
       ]);
       return ended;
     };
-    const long = inner(() => ({ ok: true, value: "x".repeat(FLOW_LIMITS.RESULT_MAX_BYTES + 100) }));
-    const first = await once(long.handler);
+    const long = writer(append, () => ({
+      ok: true,
+      value: "x".repeat(FLOW_LIMITS.RESULT_MAX_BYTES + 100),
+    }));
+    const first = await once(long);
     expect(first).toMatchObject({ kind: "done" });
     const heard = (first as { value?: unknown }).value;
     expect(typeof heard).toBe("string");
@@ -344,8 +393,8 @@ describe("CP-4a2a — the journal stays fieldd's (CP4-S15)", () => {
       value: (heard as string).slice(0, -1),
     });
     // a host started again from the journal hears the same text, byte for byte, and hands nothing on
-    const again = inner();
-    const second = await once(again.handler);
+    const again = writer(append);
+    const second = await once(again);
     expect(second).toEqual({ kind: "done", value: heard });
     expect(again.calls).toEqual([]);
   });
@@ -380,7 +429,8 @@ describe("CP-4a2a — the journal stays fieldd's (CP4-S15)", () => {
         "});",
       ]),
     );
-    const { handler, logs } = inner(() => ({ ok: true, value: { verdict: "clean" } }));
+    const append = (entry: FlowJournalEntry) => records.appendRun(run, entry);
+    const w = writer(append, () => ({ ok: true, value: { verdict: "clean" } }));
     const read = records.readRun(run);
     const host = startFlowHost({
       launch: { kind: "launch", launch: { command: process.execPath, args: [file] } },
@@ -388,18 +438,21 @@ describe("CP-4a2a — the journal stays fieldd's (CP4-S15)", () => {
         'export const meta = { name: "J7" };\nexport default async function () {}\n',
       ),
       input: {},
-      handler: new FlowReplay({
-        prior: read.kind === "kept" ? read.lines : [],
-        append: (entry) => records.appendRun(run, entry),
-        inner: handler,
-      }),
+      handler: w.bind(
+        new FlowReplay({
+          prior: read.kind === "kept" ? read.lines : [],
+          append,
+          inner: w.handler,
+        }),
+      ),
       environment: { PATH: process.env["PATH"] ?? "/usr/bin:/bin" },
     });
     runs.push(host);
     const deadline = Date.now() + 15_000;
-    while (logs.length === 0 && Date.now() < deadline) await new Promise((r) => setTimeout(r, 25));
-    expect(logs).toHaveLength(1);
-    const heard = logs[0] as string;
+    while (w.logs.length === 0 && Date.now() < deadline)
+      await new Promise((r) => setTimeout(r, 25));
+    expect(w.logs).toHaveLength(1);
+    const heard = w.logs[0] as string;
     expect(existsSync(keyPath), "the store made the journal's key").toBe(true);
     const key = readFileSync(keyPath, "utf8").trim();
     expect(heard).not.toContain(key);
@@ -413,5 +466,153 @@ describe("CP-4a2a — the journal stays fieldd's (CP4-S15)", () => {
       "answer",
       "log",
     ]);
+  });
+});
+
+describe("CP-4a2b — replay's order, and the one answer writer (§13a slice 10b; D21, D22, D7)", () => {
+  /** `agent(prompt)`, as the script makes it. */
+  const ask = (prompt: string): FlowHostCall => ({ what: "agent", args: [prompt] });
+  /** A journal's call line: call `call`, the `n`th `agent(prompt)` of its life. */
+  const made = (call: number, prompt: string, n = 1): FlowJournalEntry => ({
+    kind: "call",
+    call,
+    what: "agent",
+    key: flowCallKey("agent", [prompt]),
+    n,
+  });
+  /** A journal's answer line. */
+  const answer = (call: number, value: string): FlowJournalEntry => ({
+    kind: "answer",
+    call,
+    value,
+  });
+  /** A host's replay of the journal `body`, with the runs' side scripted (no call answered unless a row does). */
+  const replayOf = (body: FlowJournalEntry[]) => {
+    const appended: FlowJournalEntry[] = [];
+    const append = (entry: FlowJournalEntry) => void appended.push(entry);
+    const w = writer(append);
+    const replay = w.bind(new FlowReplay({ prior: prior(body), append, inner: w.handler }));
+    return { replay, appended, append, handed: w.calls };
+  };
+  /** What a call is heard as, once it is: nothing until then. */
+  const hearing = (said: Promise<FlowHostAnswer>) => {
+    const heard: { answer?: FlowHostAnswer } = {};
+    void said.then((answer) => {
+      heard.answer = answer;
+    });
+    return heard;
+  };
+
+  it("P10 (D21): a race replayed hears its answers in journal order, so it makes again the call its first life made (C), never another (D)", async () => {
+    // its first life: A and B raced, B's answer came first and the script made C; then A's answer came
+    const { replay, handed, appended } = replayOf([
+      made(1, "a"),
+      made(2, "b"),
+      answer(2, "B"),
+      made(3, "c"),
+      answer(1, "A"),
+    ]);
+    const first = await Promise.race([
+      replay.call(ask("a")).then(() => "A"),
+      replay.call(ask("b")).then(() => "B"),
+    ]);
+    void replay.call(ask(first === "B" ? "c" : "d"));
+    await settle();
+    expect({ first, handed, appended }).toEqual({
+      first: "B",
+      handed: [{ ...ask("c"), call: 3 }],
+      appended: [],
+    });
+  });
+
+  it("P11 (D21): two branches that make the same call after their own answers keep their first life's #1 and #2", async () => {
+    // its first life: B's answer came first, so B's branch made C as its #1 (call 3), and A's made it as #2 (call 4)
+    const { replay, handed, appended } = replayOf([
+      made(1, "a"),
+      made(2, "b"),
+      answer(2, "B"),
+      made(3, "c", 1),
+      answer(1, "A"),
+      made(4, "c", 2),
+      answer(3, "C after B"),
+      answer(4, "C after A"),
+    ]);
+    const after = async (prompt: string) => {
+      await replay.call(ask(prompt));
+      return replay.call(ask("c"));
+    };
+    const [afterA, afterB] = await Promise.all([after("a"), after("b")]);
+    expect({ afterA, afterB, handed, appended }).toEqual({
+      afterA: { ok: true, value: "C after A" },
+      afterB: { ok: true, value: "C after B" },
+      handed: [],
+      appended: [],
+    });
+  });
+
+  it("P12 (D7, D21): an answer behind a call its script never makes again is never released: the replay reads unmatched, and hands nothing on", async () => {
+    // its first life made X between A and A's answer; this life never makes X
+    const { replay, handed, appended } = replayOf([made(1, "a"), made(2, "x"), answer(1, "A")]);
+    const a = hearing(replay.call(ask("a")));
+    await settle();
+    expect({ heard: a.answer, stuck: replay.stuck(), handed, appended }).toEqual({
+      heard: undefined,
+      stuck: "unmatched",
+      handed: [],
+      appended: [],
+    });
+  });
+
+  it("P13 (D22): what the inner handler's call resolves to is never journaled and never heard; the script hears the answer the runs journal", async () => {
+    const appended: FlowJournalEntry[] = [];
+    const append = (entry: FlowJournalEntry) => void appended.push(entry);
+    // a handler as handlers were before D22: its call resolves with an answer
+    const late = inner(() => ({ ok: true, value: "late" }));
+    const replay = new FlowReplay({ prior: [], append, inner: late.handler });
+    const a = hearing(replay.call(ask("a")));
+    await settle();
+    const before = { heard: a.answer, appended: [...appended] };
+    journalAnswer(replay, append, 1, { ok: true, value: "the runs'" });
+    await settle();
+    expect({ before, heard: a.answer, handed: late.calls }).toEqual({
+      before: { heard: undefined, appended: [made(1, "a")] },
+      heard: { ok: true, value: "the runs'" },
+      handed: [{ ...ask("a"), call: 1 }],
+    });
+    expect(appended).toEqual([made(1, "a"), answer(1, "the runs'")]);
+  });
+
+  it("R28 (D21's one queue, scripted): an answer handed on after its host started waits behind every answer still held, and is released after them, in journal order", async () => {
+    // A was answered and B out when the host parked; this life makes B first, so A's answer waits for A's call
+    const { replay, append, handed } = replayOf([made(1, "a"), made(2, "b"), answer(1, "A")]);
+    const order: string[] = [];
+    const heardAs = (said: Promise<FlowHostAnswer>) =>
+      said.then((heard) => order.push(heard.ok ? String(heard.value) : heard.refused));
+    const b = heardAs(replay.call(ask("b")));
+    await settle();
+    journalAnswer(replay, append, 2, { ok: true, value: "B" });
+    await settle();
+    const early = [...order];
+    const a = heardAs(replay.call(ask("a")));
+    await Promise.all([a, b]);
+    expect({ early, order, handed }).toEqual({
+      early: [],
+      order: ["A", "B"],
+      handed: [{ ...ask("b"), call: 2 }],
+    });
+  });
+
+  it("R31 (D7): a new call made while a call its journal holds is not made again is held: never journaled, never handed on, and read as new", async () => {
+    // its first life made X after A's answer; this life makes B there instead
+    const { replay, handed, appended } = replayOf([made(1, "a"), answer(1, "A"), made(2, "x")]);
+    expect(await replay.call(ask("a"))).toEqual({ ok: true, value: "A" });
+    const b = hearing(replay.call(ask("b")));
+    await settle();
+    expect({ heard: b.answer, stuck: replay.stuck(), handed, appended }).toEqual({
+      heard: undefined,
+      stuck: "new",
+      handed: [],
+      appended: [],
+    });
   });
 });
