@@ -411,6 +411,15 @@ describe("the popover (DESIGN.md §8 'Godview's profiles column')", () => {
     expect(row?.querySelectorAll('.vf-profiles-usage [role="listitem"]')).toHaveLength(1);
   });
 
+  it("draws Settings' C1 line in a row at 196 × 12 (§8), Settings' own 14 track taken down to 12", () => {
+    // the review: the width was capped at 196 and the track kept Settings' 14; the line measures its track's height
+    // (UsageLineView), so its now line follows
+    expect(CSS).toMatch(/\n\.vf-profiles-pop-row-meter \{[^}]*max-width: 196px;/u);
+    expect(CSS).toContain(
+      "\n.vf-profiles-pop-row-meter .vf-profiles-usage-track {\n  height: 12px;\n}",
+    );
+  });
+
   it("wave 1: a plan's row takes no click — not a button, never pressed", () => {
     const page = mount(<ProfilePopoverView {...popover(thisMac())} />);
     expect(page.querySelectorAll(".vf-profiles-pop-row").length).toBeGreaterThan(0);
@@ -603,5 +612,10 @@ describe("the column's motion, and none under Reduce Motion or with Godview's an
       expect(rules).toMatch(/\.vf-bands-breath[^{]*\{[^}]*animation: none;[^}]*opacity: 0\.6;/u);
     }
     expect(reduced).toMatch(/\.vf-profiles-circle[^{]*\{[^}]*transition: none;/u);
+    // the review: with Godview's animations off the ring and the hover still eased (§8: "and Godview's animations
+    // off: … the ring and the hover change at once")
+    expect(CSS).toContain(
+      '\n.vf-godview[data-godview-animations="off"] .vf-profiles-circle,\n.vf-godview[data-godview-animations="off"] .vf-profiles-add {\n  transition: none;\n}',
+    );
   });
 });
