@@ -169,13 +169,15 @@ async function harness(
   let modelAsks = 0;
   /** what fieldd's log was told at warn, in order */
   const warned: { event: string; fields: LogFields | undefined }[] = [];
+  /** what fieldd's log was told at error, in order, its third argument as given */
+  const errored: { event: string; error: unknown }[] = [];
   const logger: Logger = {
     child: () => logger,
     trace: () => undefined,
     debug: () => undefined,
     info: () => undefined,
     warn: (event, _message, fields) => void warned.push({ event, fields }),
-    error: () => undefined,
+    error: (event, _message, error) => void errored.push({ event, error }),
     fatal: () => undefined,
     isLevelEnabled: () => true,
   };
@@ -294,6 +296,7 @@ async function harness(
     setSparkScope,
     kinds,
     warned,
+    errored,
     modelAsks: () => modelAsks,
   };
 }
@@ -2770,6 +2773,37 @@ describe("CP-4a2b — a changed flow's acts begin the asked-for run (§13a slice
       details: { service: RECORD_STORES.SERVICE_FLOWS, state: RECORD_STORES.STATE_UNREADABLE },
     });
     expect(h.records.runRecords()).toEqual([]);
+  });
+
+  it("R6k (the F4b fix review; ruled 2026-11-06): a run's end the disk refuses, its list then unreadable too, is said in fieldd's log as the end's own failure, never the list's; the list's is said as a tell's", async () => {
+    const h = await harness();
+    h.approved("hello", HELLO);
+    // a subscriber, so the end's catch reads the list; the store refuses that one read, just after the end's line
+    h.runs.onChange(() => undefined);
+    const append = h.records.appendRun.bind(h.records);
+    const listed = h.records.runRecords.bind(h.records);
+    const full = "ENOSPC: no space left on device, write";
+    let refusing = false;
+    vi.spyOn(h.records, "appendRun").mockImplementation((run, entry) => {
+      if (entry.kind !== "end") return append(run, entry);
+      refusing = true;
+      throw new Error(full);
+    });
+    vi.spyOn(h.records, "runRecords").mockImplementation(() => {
+      if (!refusing) return listed();
+      refusing = false;
+      throw recordsUnreadable(RECORD_STORES.SERVICE_FLOWS, UNREADABLE_WORDS.flows, true);
+    });
+    const run = startedRun(await h.start()).run;
+    const errors = () => h.errored.map(({ event }) => event);
+    await waitFor(() => expect(errors()).toContain("fieldd.flows.run.end"));
+    const told = h.warned.filter(({ event }) => event === "fieldd.flows.run.told");
+    expect(h.errored).toEqual([
+      { event: "fieldd.flows.run.end", error: expect.objectContaining({ run, error: full }) },
+    ]);
+    expect(told).toEqual([
+      { event: "fieldd.flows.run.told", fields: { error: UNREADABLE_WORDS.flows } },
+    ]);
   });
 });
 
