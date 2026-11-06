@@ -96,6 +96,13 @@ const OTHER_ORIGINS = new Map([
     "spark-flat-star.golden.json",
     join(root, "packages/design-kit/fixtures/spark-flat-star.golden.json"),
   ],
+  // IOS-12e — the engine's rows (spark-rows-golden.mjs), which SparkBuddy is held to, and the stills' manifest
+  // (spark-stills-golden.mjs), which names each PNG the Metal star is held to; the PNGs are held below
+  ["spark-rows.golden.json", join(root, "packages/design-kit/fixtures/spark-rows.golden.json")],
+  [
+    "spark-stills.manifest.json",
+    join(root, "packages/design-kit/fixtures/spark-stills.manifest.json"),
+  ],
   [
     "phone-fold.golden.json",
     join(root, "packages/field-app/test/fixtures/phone-godview/phone-fold.golden.json"),
@@ -320,7 +327,12 @@ const requiredMirrors = [
   // IOS-12a (PC-D6 A) — the spark face's DNA golden: the phone deals a spark's face from the desktop's own engine
   [
     "spark-face",
-    ["spark-dna.golden.json", "spark-flat-star.golden.json"],
+    [
+      "spark-dna.golden.json",
+      "spark-flat-star.golden.json",
+      "spark-rows.golden.json",
+      "spark-stills.manifest.json",
+    ],
     ["Tests/FieldDesignTests"],
   ],
   // IOS-8f — `user.me`'s answers, read by the kit's own `UserMeResult`
@@ -517,6 +529,55 @@ for (const searchRoot of searchRoots) {
         `${relative(root, copy)} differs from ${relative(root, origin)}\n` +
           `  fix: cp ${relative(root, origin)} ${relative(root, copy)}`,
       );
+    }
+  }
+}
+
+// IOS-12e — the stills golden's PNGs: packages/design-kit/fixtures/spark-stills/, drawn by spark-stills-golden.mjs and
+// named with their sha256 in its manifest (mirrored above as JSON). The kit's copies in FieldDesignTests'
+// Fixtures/spark-stills must be the same set of files, byte for byte, and the set the manifest names: a PNG copied
+// by hand, one left behind by a redraw, or a case the copy lacks is red here before it is a kit slot's.
+{
+  const ORIGIN = join(root, "packages/design-kit/fixtures/spark-stills");
+  const COPY = join(root, "apps/ios/VibeFieldKit/Tests/FieldDesignTests/Fixtures/spark-stills");
+  const MANIFEST = join(root, "packages/design-kit/fixtures/spark-stills.manifest.json");
+  const pngs = (dir) => {
+    let names;
+    try {
+      names = readdirSync(dir);
+    } catch {
+      return null;
+    }
+    return names.filter((name) => name.endsWith(".png")).sort();
+  };
+  const origin = pngs(ORIGIN);
+  const copy = pngs(COPY);
+  let named = null;
+  try {
+    const manifest = JSON.parse(readFileSync(MANIFEST, "utf8"));
+    named = manifest.cases.map(({ file }) => file.slice(file.lastIndexOf("/") + 1)).sort();
+  } catch {
+    problems.push(`the stills' manifest is unreadable: ${relative(root, MANIFEST)}`);
+  }
+  if (origin === null) problems.push(`the stills golden is missing: ${relative(root, ORIGIN)}`);
+  if (copy === null)
+    problems.push(`required spark-face mirror is missing: ${relative(root, COPY)}`);
+  if (origin !== null && named !== null && origin.join("\n") !== named.join("\n"))
+    problems.push(`${relative(root, ORIGIN)} is not the set its manifest names: redraw it`);
+  if (origin !== null && copy !== null) {
+    for (const name of new Set([...origin, ...copy])) {
+      const from = join(ORIGIN, name);
+      const to = join(COPY, name);
+      const fix = `  fix: cp ${relative(root, from)} ${relative(root, to)}`;
+      if (!origin.includes(name)) {
+        problems.push(`${relative(root, to)} has no origin in ${relative(root, ORIGIN)}`);
+      } else if (!copy.includes(name)) {
+        problems.push(`${relative(root, to)} is missing\n${fix}`);
+      } else if (!readFileSync(from).equals(readFileSync(to))) {
+        problems.push(`${relative(root, to)} differs from ${relative(root, from)}\n${fix}`);
+      } else {
+        checked += 1;
+      }
     }
   }
 }
