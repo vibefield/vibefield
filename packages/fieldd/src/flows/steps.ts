@@ -51,6 +51,13 @@ export interface FlowStepSession {
 export interface FlowStepPorts {
   readonly agents: {
     spawn(launch: FlowStepLaunch, origin: FlowStepOrigin): Promise<{ runtimeRunId: string }>;
+    /** the catalog's door (R23b): an agent offered for a spawn here, by the catalog's name for it; none otherwise */
+    offers(agent: string): { readonly label: string } | undefined;
+    /** the models the runtime discovers for `agent` in that folder and profile, by id; none when it can read none */
+    models(
+      agent: string,
+      where: { readonly cwd: string; readonly profileSet: string },
+    ): Promise<readonly string[] | undefined>;
   };
   readonly inputs: {
     enqueue(
@@ -62,6 +69,12 @@ export interface FlowStepPorts {
   readonly sessions: { of(runtimeRunId: string): FlowStepSession | undefined };
   /** the folder an input of `kind` (`session`, `project`) names by `value`; none for another kind or one not found */
   folderOf(kind: string, value: string): string | undefined;
+  /** the project folders this desktop knows: a step's `cwd` may be one, or inside one (D9) */
+  projectFolders(): readonly string[];
+  /** the Agent Profile a spark thinks under (`thinksUnder`): a step of its run that names none takes it (A2) */
+  sparkProfile(spark: string): string | undefined;
+  /** the person's default Agent Profile: a step of your run that names none takes it (A2); none, it is refused */
+  defaultProfile(): string | undefined;
 }
 
 /** The run a step is of, as its words are marked: its slug, its mark's name, and the spark that started it. */
@@ -76,6 +89,8 @@ export interface FlowStepRun {
   readonly scope: readonly string[];
   /** the folder its input names, a session's or a project's, where a step that names none runs (CP4-Q20 (a)) */
   readonly folder?: string | undefined;
+  /** the spark whose own start the run is, whose profile a step that names none takes (A2); none for yours */
+  readonly spark?: string | undefined;
 }
 
 /** The run's record of its open step `call`, written through the runs (the one writer of a run's record). */

@@ -89,6 +89,16 @@ async function harness(
     readonly sessions?: Readonly<Record<string, FlowStepSession>>;
     /** the folders inputs name, by `<kind>:<value>` */
     readonly folders?: Readonly<Record<string, string>>;
+    /** the agents the catalog offers, by id, to the catalog's name for each */
+    readonly offers?: Readonly<Record<string, string>>;
+    /** the models the runtime discovers, by agent */
+    readonly models?: Readonly<Record<string, readonly string[]>>;
+    /** the project folders this desktop knows */
+    readonly projectFolders?: readonly string[];
+    /** each spark's own Agent Profile */
+    readonly sparkProfiles?: Readonly<Record<string, string>>;
+    /** the person's default Agent Profile; null for none */
+    readonly defaultProfile?: string | null;
   } = {},
 ) {
   const root = mkdtempSync(join(tmpdir(), "vf-flow-runs-"));
@@ -121,6 +131,11 @@ async function harness(
         if (opts.spawnRefuses !== undefined) throw new Error(opts.spawnRefuses);
         return { runtimeRunId: `rt-step${spawned.length}` };
       },
+      offers: (agent) => {
+        const label = (opts.offers ?? { claude: "Claude Code" })[agent];
+        return label !== undefined ? { label } : undefined;
+      },
+      models: async (agent) => (opts.models ?? { claude: ["opus", "sonnet"] })[agent],
     },
     inputs: {
       enqueue: (runtimeRunId, text, from) => {
@@ -132,6 +147,10 @@ async function harness(
     },
     sessions: { of: (runtimeRunId) => opts.sessions?.[runtimeRunId] },
     folderOf: (kind, value) => opts.folders?.[`${kind}:${value}`],
+    projectFolders: () => opts.projectFolders ?? ["/work"],
+    sparkProfile: (spark) => (opts.sparkProfiles ?? { [VELA]: "work" })[spark],
+    defaultProfile: () =>
+      opts.defaultProfile === null ? undefined : (opts.defaultProfile ?? "work"),
     host: {
       launch: { kind: "launch", launch: opts.launch ?? (await flowsHostLaunch()) },
       environment: PATH_ONLY,
@@ -806,5 +825,143 @@ describe("CP-4a2b — what a step's call may be, held at the call with nothing s
     const nowhere = startedRun(await h.start({ flow: "nowhere", input: { note: "hello" } })).run;
     expect((await settled(h.runs, nowhere, "done")).log).toBe(NO_FOLDER);
     expect(h.spawned).toHaveLength(2);
+  });
+});
+
+// CP-4a2b (§13a slice 8c-2; D9, A1–A3, ruled 2026-11-06, confirmed) — the rest of what a step's call
+// may be, in §9's PROPOSED lines (dd7eb1c53): its agent, offered by the catalog's door; its model, a model's name the
+// runtime discovered for that agent; its folder, within its run's folder or a project this desktop knows; its
+// prompt, words; its Agent Profile when it names none, the spark's own or your default, held to the run's scope, and
+// never the runtime's own default; and an `in:` that sets none of a spawn's keys.
+
+const W = (label: string, why: string) => `VibeField didn't start ${label}: ${why}`;
+
+describe("CP-4a2b — a step's agent, model, folder, prompt and profile, held at the call with nothing spawned (§13a slice 8c-2)", () => {
+  it("R16 (D9; W-a…W-f, A1, A3): no agent, one not offered, a model it doesn't offer or not written as a name, a folder outside the bound, and a spawn's key beside in:, each refused with no spawn; a discovered model starts", async () => {
+    const h = await harness({
+      sessions: { "run-yours": { live: true, profile: "work", onPermission: false } },
+    });
+    const at = { cwd: "/work/app", profile: "work" };
+    h.approved(
+      "checks",
+      callsEach(
+        [
+          { ...at, label: "No agent" },
+          { ...at, label: "Seven", agent: 7 },
+          { ...at, label: "Nobody", agent: "nobody" },
+          { ...at, label: "Flag", agent: "claude", model: "--dangerously-skip-permissions" },
+          { ...at, label: "Shape", agent: "claude", model: { modelId: "opus" } },
+          { label: "Outside", agent: "claude", profile: "work", cwd: "/etc" },
+          { label: "Climbs", agent: "claude", profile: "work", cwd: "/work/../etc" },
+          { label: "Relative", agent: "claude", profile: "work", cwd: "app" },
+          { label: "Both", in: "run-yours", agent: "claude" },
+        ],
+        { ...at, label: "Opus", agent: "claude", model: "opus" },
+      ),
+    );
+    const run = startedRun(
+      await h.start({ flow: "checks", input: { target: "run-yours" }, scope: ["work"] }),
+    ).run;
+    await waitFor(() => expect(h.spawned).toHaveLength(1));
+    expect(refusalsOf(h, run)).toEqual([
+      W("No agent", "it names no agent."),
+      W("Seven", "it names no agent."),
+      W("Nobody", "it names an agent VibeField doesn't start (nobody)."),
+      W("Flag", "it names a model Claude Code doesn't offer (--dangerously-skip-permissions)."),
+      W("Shape", "its model isn't written as a model's name."),
+      W("Outside", "its folder (etc) is outside this run's folder and your projects."),
+      W("Climbs", "its folder (etc) is outside this run's folder and your projects."),
+      W("Relative", "its folder (app) is outside this run's folder and your projects."),
+      W("Both", "it asks for agent, which a step may not set."),
+    ]);
+    expect(h.enqueued).toHaveLength(1);
+    expect(h.spawned[0]?.launch).toEqual({
+      agent: "claude",
+      cwd: "/work/app",
+      profileSet: "work",
+      model: { modelId: "opus" },
+      title: "Checks · Opus",
+    });
+  });
+
+  it("W-e: a prompt that isn't words is refused, with nothing spawned", async () => {
+    const h = await harness();
+    h.approved(
+      "numbers",
+      [
+        'export const meta = { name: "Numbers" };',
+        "export default async function () {",
+        '  try { await agent(42, { agent: "claude", label: "Count", profile: "work", cwd: "/work/app" }); }',
+        "  catch (e) { log(e.message); }",
+        "}",
+        "",
+      ].join("\n"),
+    );
+    const run = startedRun(await h.start({ flow: "numbers" })).run;
+    expect((await settled(h.runs, run, "done")).log).toBe(W("Count", "its prompt isn't words."));
+    expect(h.spawned).toEqual([]);
+  });
+
+  it("A2 (W-g): a step that names no Agent Profile takes your default, or the spark's own for its run, each held to the run's scope; with none to give it, it is refused, never the runtime's own default", async () => {
+    const unnamed = (name: string) =>
+      [
+        `export const meta = { name: "${name}" };`,
+        "export default async function () {",
+        '  try { await agent("go", { agent: "claude", label: "Go", cwd: "/work/app" }); }',
+        "  catch (e) { log(e.message); }",
+        "}",
+        "",
+      ].join("\n");
+    // yours takes your default, and the spark's run its own
+    const h = await harness({ sparkProfiles: { [VELA]: "review" } });
+    h.approved("unnamed", unnamed("Unnamed"));
+    const yours = startedRun(await h.start({ flow: "unnamed", scope: ["work", "review"] })).run;
+    const velas = startedRun(
+      await h.start({
+        flow: "unnamed",
+        starter: { by: "spark", spark: VELA },
+        from: VELA_FROM,
+        scope: ["work", "review"],
+      }),
+    ).run;
+    await waitFor(() => expect(h.spawned).toHaveLength(2));
+    const profileOf = (run: string) =>
+      h.spawned.find((spawn) => spawn.origin.run === run)?.launch.profileSet;
+    expect(profileOf(yours)).toBe("work");
+    expect(profileOf(velas)).toBe("review");
+    // a default outside the run's scope is refused as a named one is
+    const outside = await harness({ defaultProfile: "home", profiles: ["work", "home"] });
+    outside.approved("unnamed", unnamed("Unnamed"));
+    const homeless = startedRun(await outside.start({ flow: "unnamed", scope: ["work"] })).run;
+    expect((await settled(outside.runs, homeless, "done")).log).toBe(
+      W("Go", "it names an Agent Profile this run can't use (home)."),
+    );
+    // no default at all: refused, never the runtime's own
+    const none = await harness({ defaultProfile: null });
+    none.approved("unnamed", unnamed("Unnamed"));
+    const bare = startedRun(await none.start({ flow: "unnamed" })).run;
+    expect((await settled(none.runs, bare, "done")).log).toBe(
+      W("Go", "it names no Agent Profile, and this run has none to give it."),
+    );
+    expect([...outside.spawned, ...none.spawned]).toEqual([]);
+  });
+
+  it("says each step refusal in DESIGN.md's own words (§9 \"A step's call refused\")", () => {
+    const design = readFileSync(join(import.meta.dirname, "../../../DESIGN.md"), "utf8").replace(
+      /\s+/g,
+      " ",
+    );
+    for (const said of [
+      W("‹label›", "it names no agent."),
+      W("‹label›", "it names an agent VibeField doesn't start (‹agent›)."),
+      W("‹label›", "it names a model ‹agent› doesn't offer (‹model›)."),
+      W("‹label›", "its model isn't written as a model's name."),
+      W("‹label›", "it names no Agent Profile, and this run has none to give it."),
+      W("‹label›", "its folder (‹folder›) is outside this run's folder and your projects."),
+      W("‹label›", "its prompt isn't words."),
+      W("‹label›", "it names an Agent Profile this run can't use (‹profile›)."),
+      W("‹label›", "it asks for ‹key›, which a step may not set."),
+    ])
+      expect(design, said).toContain(`"${said}"`);
   });
 });

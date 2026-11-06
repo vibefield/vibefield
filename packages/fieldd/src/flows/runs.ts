@@ -73,6 +73,11 @@ export interface FlowRunPorts {
   readonly sessions: FlowStepPorts["sessions"];
   /** the folder a run's input names (CP4-Q20 (a)) */
   folderOf: FlowStepPorts["folderOf"];
+  /** the project folders this desktop knows (D9's `cwd`) */
+  projectFolders: FlowStepPorts["projectFolders"];
+  /** a spark's own Agent Profile, and the person's default: a step that names none takes one (A2) */
+  sparkProfile: FlowStepPorts["sparkProfile"];
+  defaultProfile: FlowStepPorts["defaultProfile"];
   /** the Agent Profiles that exist now, by id: a run's frozen scope narrows to them (D8) */
   profiles(): readonly string[];
   /** how a run's host is started */
