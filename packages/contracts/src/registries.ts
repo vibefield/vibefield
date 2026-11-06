@@ -576,7 +576,9 @@ export const AGENT_STOP = {
  *    looping script's one bound;
  *  - LIVE_STEPS_MAX: a run's step agents alive at once; one more waits for a slot, visibly (CP4-S7). They do not count
  *    against a spark's 8 (fieldd's `SPARK_LIVE_AGENTS_MAX`, `talk/verbs.ts`), and they bound how many PTYs one
- *    `parallel` can take.
+ *    `parallel` can take. *Corrected 2026-11-06 (the slices 7–9 review's F4; ruled 2026-11-06): it counts a run's steps
+ *    that hold a slot (starting, working, repairing, holding), never its agents alive. An answered step's agent lives
+ *    on until the run's end or a Stop (CP4-Q10), so this bounds no PTYs: a run's are bounded by RUN_AGENTS_MAX.*
  * CP-4a2a (4A2-Q7, ruled by VF-PM 2026-11-05 08:51Z, re-ruled (b) 11:46Z) — a run's host, its bounds, each as
  * provisional:
  *  - HOST_HEAP_MB: the V8 old-generation cap on the worker_threads Worker a run's script runs in, inside its host
