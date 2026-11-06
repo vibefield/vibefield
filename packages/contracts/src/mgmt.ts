@@ -1394,23 +1394,36 @@ export type MeshEgressUnavailableDetails = z.infer<typeof MeshEgressUnavailableD
 // `native.mesh.fileTransfer.delta`, ONE method with a `kind`, because fieldd's NativeLink routes only `.delta` and
 // `.snapshot` notifications to a subscription (the lane stream's finding, `spawn_lane_forwarder`).
 //
-// With no node every verb answers the node gate's UNAVAILABLE (`MeshNotUpDetails`); in capture mode `roots` and `pull`
-// are refused MESH_CAPTURING, as `serve.add` is; a floor whose truffle cannot pull by a named root answers
-// MESH_FILE_TRANSFER.STATE_UNSUPPORTED. The floor's facade is its own slice (the critic's wave 3, VF-FLOOR); until it
-// lands, a node answers these verbs NOT_FOUND, and fieldd calls none of them.
+// The floor refuses in ONE order, egress's (W3-1, VF-PM 2026-11-06):
+//  1. a floor whose truffle cannot pull by a named root answers MESH_FILE_TRANSFER.STATE_UNSUPPORTED to EVERY verb,
+//     first, node or no node: a capability fact for the floor's life, as `egress-unsupported` is;
+//  2. `subscribe` is answered with no node up (below);
+//  3. `roots` and `pull` with no node answer the node gate's UNAVAILABLE (`MeshNotUpDetails`);
+//  4. in capture mode they are refused MESH_CAPTURING, as `serve.add` is;
+//  5. params the floor cannot read are PRECONDITION_FAILED;
+//  6. then `roots` registers each root or answers it ROOT_UNGATED, and `pull` is refused CONFLICT (by its id, then by
+//     its digest) and then RESOURCE_EXHAUSTED (`NativeFileTransferPullParams`).
+// `subscribe`'s stream is the floor's mesh unit's, held across node rebuilds: it is answered with no node up, and a
+// pull a teardown ends is sent `failed` NODE_DOWN on it (W3-2, VF-PM 2026-11-06). fieldd's NativeLink keeps a refused
+// subscription's replay silent until its next reconnect, so a stream gated on the node would go dead while it is down.
+// *Rewritten 2026-11-06 (W3-1, W3-2): it said that with no node every verb answers the node gate.*
+// The floor's facade is its own slice (the critic's wave 3, VF-FLOOR); until it lands, a node answers these verbs
+// NOT_FOUND, and fieldd calls none of them.
 
 /** The file transfer's registry. Generated into Rust (`registries::mesh_file_transfer`), so the floor's writer and
  * fieldd's reader share one vocabulary.
  *  - SERVICE, STATE_UNSUPPORTED: `UNAVAILABLE {service, state}` from a floor whose truffle cannot pull by a named root
  *    (before truffle T-3's release, which its EL8 adopts). A capability fact for the floor's life, as egress's is.
  *  - ROOT_UNGATED: a declared root's `reason` (`registered: false`) while the node was built UNGATED: the floor holds
- *    the declaration and serves the root from the next node it builds gated (`NativeFileTransferRootsParams`).
+ *    the declaration and serves the root from the next node it builds gated for the login it was declared under
+ *    (`NativeFileTransferRootsParams`).
  *  - FAILED_*: a pull's end, `kind: "failed"`'s `reason`. Open on the wire: a reader treats a word it does not know as
  *    FAILED_IO.
  *    - REJECTED: the holder refused: no such root, a path outside it, no such file. RFC 032 answers one word whatever
  *      the cause, so the asker learns nothing of what exists.
  *    - UNSUPPORTED: the holder's truffle predates named roots (T-3's `Unsupported`).
- *    - TIMEOUT: no offer came, or the bytes stopped coming.
+ *    - TIMEOUT: no offer came, or the bytes stopped coming (the floor's own idle bound: floor-local and PROVISIONAL,
+ *      W3-4).
  *    - INTEGRITY: the bytes did not match the holder's SHA-256.
  *    - TOO_LARGE: the holder offered more than this node's cap, DRIVE_LIMITS.OBJECT_MAX_BYTES, and truffle refused the
  *      offer before a byte moved. truffle says so as an untyped protocol error, so a floor that cannot tell it apart
@@ -1470,18 +1483,25 @@ export const FileTransferLanded = z.string().regex(new RegExp(FILE_TRANSFER_LAND
 export type FileTransferLanded = z.infer<typeof FileTransferLanded>;
 
 /** `native.mesh.fileTransfer.roots`: the WHOLE set of named roots this desktop serves, replacing the last (an empty
- * list serves none), so a repeat is a no-op. fieldd declares it when the node is up and again after every reconnect
- * (facade state is rebuilt, never persisted), and the floor applies it again at every node it builds, because a
- * capture's promotion rebuilds the node and its roots with it. For each name the floor makes the root's two folders
- * (0700), serves the `serves` one under the name and never the `lands` one, and caps every transfer of the node at
- * DRIVE_LIMITS.OBJECT_MAX_BYTES.
+ * list serves none), so a repeat is a no-op. fieldd declares it at every linked node-up and again after every
+ * reconnect (facade state is rebuilt, never persisted).
+ *
+ * The floor HOLDS the last declared set, BOUND TO THE LOGIN it was declared under (the node's posture), and serves it
+ * again from every node it builds GATED for that same login: a promotion's rebuild, a renewal, a rebuild after the
+ * sidecar exits or after logging is required. It DROPS the set at a stop or an unlink, and serves NOTHING from a node
+ * gated to another login until fieldd declares. While the node captures, a declaration is refused MESH_CAPTURING (the
+ * header's order). For each name the floor makes the root's two folders (0700), serves the `serves` one under the name
+ * and never the `lands` one, and caps every transfer of the node at DRIVE_LIMITS.OBJECT_MAX_BYTES.
+ * *Rewritten 2026-11-06 (DR-2a's review nit 8, VF-PM; the W3 critic's finding 0, ruled W3-8): it said the floor
+ * applies the set again at every node it builds "because a capture's promotion rebuilds the node", while a
+ * declaration in capture mode is refused, and it bound the set to no login.*
  *
  * The floor serves a root only from a node built GATED (`MeshSelfIdentity.loginAllow` non-empty, the gate the floor
  * reads per request). truffle serves a named pull to any peer that names a path, with no check on who asks, so the
  * account's gate is the node's: a linked node's peers are its account's own desktops and phone, and every other
  * login's hello is refused (UA-P-4, FILE_TRANSFER_ROOTS). On a node built ungated (a promotion's capture node until its
  * rebuild, the development override's) each root answers `registered: false` with MESH_FILE_TRANSFER.ROOT_UNGATED,
- * and the floor serves it from the next node it builds gated.
+ * and the floor serves it from the next node it builds gated for the same login.
  *
  * When it registers a root the floor also removes every `*.truffle-tmp` in its `lands` folder that no running pull
  * owns: what pulls that failed, or ran on an earlier node or floor, left behind (`NativeFileTransferDelta`). */
@@ -1513,7 +1533,13 @@ export const NativeFileTransferRootsResult = z
 export type NativeFileTransferRootsResult = z.infer<typeof NativeFileTransferRootsResult>;
 
 /** `native.mesh.fileTransfer.pull`: pull one file from a peer's named root. NOT idempotent: fieldd mints the
- * `transferId`, and a second pull under a live id is a CONFLICT, as a second `lane.open` under a live lane is.
+ * `transferId`. A second pull under a live transferId, or a second pull of a digest a running pull is already pulling
+ * under ANY transferId, is refused CONFLICT (DR-2a's review nit 9, VF-PM 2026-11-06), retryable false
+ * (`error-data.file-transfer-conflict`). False because fieldd's own table keeps both from reaching the floor (a fresh
+ * ULID per pull; a running digest refused locally), so the floor's CONFLICT is a belt: it settles when the running
+ * pull ends on the stream, and the caller's retry is mille-drive's back-off, never a resend of the same request.
+ * *Corrected 2026-11-06: it said a second pull is a CONFLICT "as a second `lane.open` under a live lane is"; the floor
+ * answers a duplicate lane id PRECONDITION_FAILED (field-native `mgmt/mesh.rs`, `native.mesh.lane.open`).*
  *  - peer: the truffle peer id (`PeerInfo.id`), as `lane.open`'s.
  *  - root, path: where the holder serves the file; never the holder's own path.
  *  - digest: the blake3 the object is named by. It names the landed file, and the floor never checks it (DR-L3 is
@@ -1521,8 +1547,8 @@ export type NativeFileTransferRootsResult = z.infer<typeof NativeFileTransferRoo
  * It names no size. T-3's pull takes none (`pull_named_file(peer, root, path, local_path)`), and mille-drive's
  * transport asks none (`pull(from, digest, into)`): the two nodes' caps bound what can land (MESH_FILE_TRANSFER's
  * TOO_LARGE), and the blake3 check refuses a wrong file of any size.
- * The answer comes at once (`NativeFileTransferPullResult`), or a refusal: PRECONDITION_FAILED for a request the
- * floor cannot read, RESOURCE_EXHAUSTED past DRIVE_LIMITS.PULLS_IN_FLIGHT. */
+ * The answer comes at once (`NativeFileTransferPullResult`), or a refusal in the header's order: PRECONDITION_FAILED
+ * for a request the floor cannot read, CONFLICT as above, RESOURCE_EXHAUSTED past DRIVE_LIMITS.PULLS_IN_FLIGHT. */
 export const NativeFileTransferPullParams = z
   .object({
     transferId: FileTransferId,

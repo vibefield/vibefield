@@ -852,8 +852,10 @@ export const MADE_APP_VIEW = {
  * room, and a sibling release not yet adopted each say so") — the drive's honest refusal vocabulary
  * (`DriveUnavailableDetails`, drive.ts): `UnavailableDetails.service` on every refusal, and the states a reader
  * branches on, each a contract string, never a sentence.
- *  - STATE_UNBUILT: this desktop carries no drive engine: mille-drive's release is not adopted yet (DR-2 waits on its
- *    EL8). Retryable false: nothing a retry changes until VibeField moves.
+ *  - STATE_UNBUILT: this desktop cannot keep a drive yet: it carries no drive engine (mille-drive's release is not
+ *    adopted; DR-2 waits on its EL8), or its floor cannot move an object by a named root (truffle T-3 is not adopted,
+ *    and the floor answers MESH_FILE_TRANSFER.STATE_UNSUPPORTED). Retryable false: nothing a retry changes until
+ *    VibeField moves. *Widened 2026-11-06 (W3's rider D, ruled W3-5).*
  *  - STATE_STARTING: the files worker is opening the drive. Retryable true.
  *  - STATE_NOT_LINKED: the desktop has no linked login, so it holds no account to keep a drive for (DR-L1).
  *    MADE_APP_OPEN's word for the same fact. Retryable true: a link can come.

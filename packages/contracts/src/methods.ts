@@ -881,8 +881,10 @@ export const METHODS: MethodDef[] = [
     surface: "mgmt",
     method: "native.mesh.fileTransfer.pull",
     scope: null,
-    // NOT idempotent: transferId is caller-minted, and a second pull under a live id is a
-    // collision to refuse, as a second `lane.open` under a live lane is
+    // NOT idempotent: transferId is caller-minted. A second pull under a live id, or of a
+    // digest a running pull holds, is refused CONFLICT (mgmt.ts `NativeFileTransferPullParams`).
+    // Corrected 2026-11-06 (nit 9): it said "as a second `lane.open` under a live lane is";
+    // a duplicate lane id is PRECONDITION_FAILED.
     idempotent: false,
     locality: "local",
   }),

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { UnavailableDetails } from "./errors";
 import { DRIVE_SERVICE, MESH_CONTROL_LIMITS } from "./registries";
 
 // ── DR-2a — the drive's own shapes (`draft/thinking-drive.md` v0.3: DR-D4 (a), DR-D5 (a), DR-D7 (a), DR-L8; the wave-0
@@ -65,15 +66,11 @@ export const DriveUnavailableState = z.enum([
 ]);
 export type DriveUnavailableState = z.infer<typeof DriveUnavailableState>;
 
-/** Every UNAVAILABLE the drive answers (DR-L8), `WorkspaceUnavailableDetails`' shape over `UnavailableDetails`' fields:
- * the service, the state, how far a copy has come (`progress`, 0 to 1), and `device` when the refusal is about another
- * desktop (an object only it holds). */
-export const DriveUnavailableDetails = z
-  .object({
-    service: z.literal(DRIVE_SERVICE.SERVICE),
-    state: DriveUnavailableState,
-    progress: z.number().min(0).max(1).optional(),
-    device: z.string().optional(),
-  })
-  .passthrough();
+/** Every UNAVAILABLE the drive answers (DR-L8): `UnavailableDetails` extended, as `MeshEgressUnavailableDetails` is.
+ * The service and the state narrow to the drive's; `progress` (how far a copy has come, 0 to 1) and `device` (when the
+ * refusal is about another desktop: an object only it holds) stay UnavailableDetails' own (DR-2a's review nit 10). */
+export const DriveUnavailableDetails = UnavailableDetails.extend({
+  service: z.literal(DRIVE_SERVICE.SERVICE),
+  state: DriveUnavailableState,
+}).passthrough();
 export type DriveUnavailableDetails = z.infer<typeof DriveUnavailableDetails>;

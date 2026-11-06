@@ -15,7 +15,7 @@ import {
   DriveUnavailableDetails,
   DriveUnavailableState,
 } from "../src/drive";
-import { ErrorData } from "../src/errors";
+import { ErrorData, RPC_ERROR_CODES, UnavailableDetails } from "../src/errors";
 import { METHODS } from "../src/methods";
 import {
   FileTransferLanded,
@@ -303,6 +303,12 @@ describe("DR-2a — a pull's outcomes ride one delta method, with a kind", () =>
 });
 
 describe("DR-2a — the file transfer's verbs are local mgmt methods", () => {
+  it("refuses a second pull of a live id or a running digest CONFLICT, not retryable, with no details (nit 9)", () => {
+    const refusal = ErrorData.parse(fixture("error-data.file-transfer-conflict.json"));
+    expect(refusal).toEqual({ kind: "CONFLICT", retryable: false });
+    expect(RPC_ERROR_CODES[refusal.kind]).toBe(-32004);
+  });
+
   it("declares roots, pull and subscribe, and leaves offer reserved", () => {
     const verbs = METHODS.filter((m) => m.method.startsWith("native.mesh.fileTransfer."));
     expect(verbs.map((m) => m.method).sort()).toEqual([
@@ -326,7 +332,9 @@ describe("DR-2a — the file transfer's verbs are local mgmt methods", () => {
 });
 
 describe("DR-2a — the drive's document rides a `drive` lane (DR-D7 (a), as v0.3 reads it)", () => {
-  it("admits `drive` beside the three protocols, on a reliable lane with no docId", () => {
+  // Retitled 2026-11-06 (DR-2a's review nit 11): neither the schema nor the floor holds a `drive` lane to its class
+  // or its docId; the golden open is the convention fieldd follows, and this row reads it.
+  it("admits `drive` beside the three protocols, and reads its golden open: reliable, with no docId", () => {
     expect(MeshLaneProtocol.options).toEqual(["doc-sync", "presence", "mcp", "drive"]);
     const open = MeshLaneOpenRequest.parse(fixture("mesh-lane-open-request.drive.json"));
     expect(open.protocol).toBe("drive");
@@ -402,6 +410,21 @@ describe("DR-2a — the drive's refusals say which state it is in (DR-L8)", () =
       progress: 0.4,
     };
     expect(DriveUnavailableDetails.safeParse(copying).success).toBe(true);
+  });
+
+  it("extends UnavailableDetails, as egress's do: progress 0 to 1, device optional (nit 10)", () => {
+    const base = { service: DRIVE_SERVICE.SERVICE, state: DRIVE_SERVICE.STATE_NOT_HELD };
+    const ok = (extra: object) => DriveUnavailableDetails.safeParse({ ...base, ...extra }).success;
+    expect(ok({ device: "dev-1" })).toBe(true);
+    for (const progress of [0, 0.5, 1]) {
+      expect(ok({ progress }), `${progress}`).toBe(true);
+    }
+    for (const progress of [-0.1, 1.1]) {
+      expect(ok({ progress }), `${progress}`).toBe(false);
+    }
+    // the shared fields are UnavailableDetails' own, never a copy
+    expect(DriveUnavailableDetails.shape.progress).toBe(UnavailableDetails.shape.progress);
+    expect(DriveUnavailableDetails.shape.device).toBe(UnavailableDetails.shape.device);
   });
 
   it("parses the refusal a desktop without the drive's engine answers", () => {
