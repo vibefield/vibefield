@@ -1,6 +1,7 @@
 import FieldAgents
 import FieldMesh
 import FieldProduct
+import FieldSwarm
 import Foundation
 import Testing
 
@@ -95,5 +96,60 @@ struct LensRecedeTests {
 
   // RETIRED 2026-11-06 (SE-2h): `bubbleCarriesTheProfile`. `FieldBubble.profileSet` was written and never read — the
   // swarm does not recede yet (owed: a recede weight in FieldSwarm's renderer, which brings the body's profile back
-  // with its reader).
+  // with its reader). *Back 2026-11-06 (SE-2n), with its reader:* the swarm's recede (`GodviewRecede.swarm`).
+
+  /// SE-2n — a body carries the home's profile on the home's own rows, agents and bare terminals alike; a peer's
+  /// carries none, its profile being its own desktop's (the lead's ruling 17).
+  @Test("a body carries the home's profile on the home's rows, and none on a peer's")
+  func bubbleCarriesTheProfile() throws {
+    let rows = try HomeFixture.witnessRows()
+    let catalog = AgentCatalog(entries: [])
+    var homeProfiles = 0
+    for row in rows {
+      let bubble = fieldBubble(from: row, fieldIsLive: true, catalog: catalog, suppressUnread: false)
+      let expected = row.isSelf ? row.row.monitor.profileSet : nil
+      #expect(bubble.profileSet == expected)
+      if bubble.profileSet != nil { homeProfiles += 1 }
+    }
+    #expect(homeProfiles > 0)
+  }
+
+  /// SE-2n (the S2 review's finding 2, its owed half) — the swarm's bodies recede by the lens, as the list's rows do:
+  /// a body the rule recedes settles at the toolkit's weight, the faintest while every body recedes, and steps there
+  /// at the toolkit's pace; with no lens nothing recedes, and a receded body comes back at the same pace.
+  @Test("the swarm's bodies recede by the lens: the home's under it stand, every other body at the recede's weight")
+  func swarmRecedesByLens() throws {
+    let rows = try HomeFixture.witnessRows()
+    let catalog = AgentCatalog(entries: [])
+    let bubbles = rows.map { fieldBubble(from: $0, fieldIsLive: true, catalog: catalog, suppressUnread: false) }
+    let native = GodviewRecede.swarm(bubbles, lens: "native")
+    var receded = 0
+    var standing = 0
+    for (row, bubble) in zip(rows, bubbles) {
+      let recedes = GodviewRecede.byLens(isSelf: row.isSelf, profileSet: row.row.monitor.profileSet, lens: "native")
+      let expected: Double? = recedes ? GodviewRecede.receded : nil
+      let target = native.targets[bubble.id]
+      #expect(target == expected)
+      if recedes { receded += 1 } else { standing += 1 }
+    }
+    // the witness holds both, so a constant cannot pass this row
+    #expect(receded > 0)
+    #expect(standing > 0)
+    let step = native.approach(1, GodviewRecede.receded, 16)
+    #expect(step == GodviewRecede.approach(1, toward: GodviewRecede.receded, deltaMs: 16))
+
+    // a profile no session runs under recedes every body, to the faintest weight
+    let work = GodviewRecede.swarm(bubbles, lens: "work")
+    let count = work.targets.count
+    #expect(count == bubbles.count)
+    let weights = Set(work.targets.values)
+    #expect(weights == [GodviewRecede.recededEmpty])
+
+    // no lens: nothing recedes, and a body receded before comes back at the toolkit's pace
+    let none = GodviewRecede.swarm(bubbles, lens: nil)
+    let nothing = none.targets.isEmpty
+    #expect(nothing)
+    let back = none.approach(GodviewRecede.receded, 1, 16)
+    #expect(back == GodviewRecede.approach(GodviewRecede.receded, toward: 1, deltaMs: 16))
+  }
 }

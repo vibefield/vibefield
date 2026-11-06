@@ -1,3 +1,5 @@
+import FieldAgents
+import FieldSwarm
 import Foundation
 
 // PG-4s — RECEDING, transcribed from puppeteer-view-sdk 0.3.2 at the pin `95a70aa7`, `src/toolkit/state-words.ts`
@@ -44,5 +46,15 @@ enum GodviewRecede {
     let rate = ((1 - receded) * GodviewFormat.jsMax0(deltaMs)) / ms
     if abs(target - current) <= rate { return target }
     return current + GodviewFormat.jsSign(target - current) * rate
+  }
+
+  /// SE-2 (the S2 review's finding 2, its owed half) — the lens on the swarm, as the list, the rain and the timeline
+  /// take it: under a lens every body but the home's under the chosen profile recedes, to `receded`, or to
+  /// `recededEmpty` while every body does; with none, nothing recedes, and a body receded before comes back. A body
+  /// carries the home's profile only on the home's own rows (`FieldBubble.profileSet`), so its profile decides alone.
+  /// Each frame's step is `approach`, the toolkit's pace.
+  /// RED STUB (SE-2n): no body recedes.
+  static func swarm(_ bubbles: [FieldBubble], lens: String?) -> SwarmRecede {
+    SwarmRecede(targets: [:], approach: { _, target, _ in target })
   }
 }

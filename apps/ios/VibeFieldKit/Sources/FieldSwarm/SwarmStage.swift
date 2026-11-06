@@ -38,6 +38,25 @@ public func arrivalCurve(elapsed: Double) -> (scale: Double, opacity: Double) {
   return (1.035 + (1 - 1.035) * inOut((t - 0.88) / 0.12), 1)
 }
 
+/// SE-2 (DESIGN.md §8 "The phone's profile token": the lens on Field) — the lens's recede on the swarm, as the host
+/// decides it: the weight each receded body settles at, and the step a weight takes toward its target each frame.
+/// FieldSwarm holds no rule and no number of its own: the home screen hands in its Godview toolkit's
+/// (`GodviewRecede.swarm`, FieldHome), the recede the list, the rain and the timeline read, so a body recedes as their
+/// rows do. The weight multiplies the body's paint.
+public struct SwarmRecede {
+  /// The weight each receded body settles at, by bubble id; a body not named stands at 1.
+  public var targets: [String: Double]
+  /// One frame's step from a weight toward its target over `deltaMs` milliseconds.
+  public var approach: (_ current: Double, _ target: Double, _ deltaMs: Double) -> Double
+
+  public init(
+    targets: [String: Double], approach: @escaping (_ current: Double, _ target: Double, _ deltaMs: Double) -> Double
+  ) {
+    self.targets = targets
+    self.approach = approach
+  }
+}
+
 /// Draw order: idle under working under blocked, later arrivals on top.
 func statusRank(_ status: AgentVisualStatus) -> Int {
   switch status {
@@ -103,6 +122,9 @@ public final class SwarmStage {
   /// The clock the models read (the elapsed line, the freshness); a fixture
   /// drives it.
   public var now: () -> Date = { .now }
+  /// SE-2 — the lens's recede (`SwarmRecede`); nil: nothing recedes, every body at 1.
+  /// RED STUB (SE-2n): the stage does not read it yet, so every body draws at 1.
+  public var recede: SwarmRecede?
 
   private var models: [String: SwarmBodyModel] = [:]
   private var modelsAt = 0.0

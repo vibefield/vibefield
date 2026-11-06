@@ -174,6 +174,11 @@ public struct FieldBubble: Identifiable, Sendable, Equatable {
   /// agent it started. Its wait is counted on Chat, with its spark, so Field's badge leaves it out; its bubble still
   /// turns orange. false on every run a person started, on every bare terminal and on the mock.
   public let ofSpark: Bool
+  /// SE-2 (SE-P6; DESIGN.md §8 "The phone's profile token", the lens on Field) — the home's profile the run is under
+  /// (`MonitorAgentRow.profileSet`), which the phone's lens keys on: only on the home's own rows, a profile id being a
+  /// desktop's own (the lead's ruling 17). nil on a peer's row and on every source with no desktop. The swarm's recede
+  /// reads it (`GodviewRecede.swarm`, FieldHome), as the list, the rain and the timeline read the row's.
+  public let profileSet: String?
 
   public init(
     id: String,
@@ -193,7 +198,8 @@ public struct FieldBubble: Identifiable, Sendable, Equatable {
     modelId: String? = nil,
     runKey: String? = nil,
     terminalJoin: AgentJoin? = nil,
-    ofSpark: Bool = false
+    ofSpark: Bool = false,
+    profileSet: String? = nil
   ) {
     self.id = id
     self.project = project
@@ -213,6 +219,7 @@ public struct FieldBubble: Identifiable, Sendable, Equatable {
     self.runKey = runKey
     self.terminalJoin = terminalJoin
     self.ofSpark = ofSpark
+    self.profileSet = profileSet
   }
 
   /// Item 154 — the card's join, whatever the body is: an agent's run, or a bare terminal's pane. Every reader of a

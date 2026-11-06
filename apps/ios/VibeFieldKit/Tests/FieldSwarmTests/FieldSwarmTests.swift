@@ -468,6 +468,35 @@ private func catalogGolden() throws -> [CatalogMarkRow] {
     stage.pump(time: 2.6)
     #expect(created.count == 1)
   }
+
+  /// SE-2n (DESIGN.md §8 "The phone's profile token": the lens on Field) — a body the host recedes is drawn at its
+  /// weight from its first frame; a weight then steps toward a new target at the host's pace each frame, and with no
+  /// recede every body stands at 1. The pace here is the row's own (a hundredth a millisecond), so a step is counted.
+  @Test func aRecededBodyDrawsAtTheHostsWeightAndStepsBackAtItsPace() {
+    let stage = stage()
+    stage.update(bubbles: [bubble(id: "a"), bubble(id: "b")], time: 0)
+    stage.pump(time: 0)
+    let pace: (Double, Double, Double) -> Double = { current, target, deltaMs in
+      let rate = deltaMs / 100
+      if abs(target - current) <= rate { return target }
+      return current + (target > current ? rate : -rate)
+    }
+    stage.recede = SwarmRecede(targets: ["b": 0.22], approach: pace)
+    let first = stage.frame(time: 0.01, motion: false).bodies
+    let a = first.first { $0.model.id == "a" }?.opacity
+    let b = first.first { $0.model.id == "b" }?.opacity
+    #expect(a == 1)
+    #expect(b == 0.22)
+    // the lens let go: the body steps back, the frame's 10 ms at a hundredth a millisecond
+    stage.recede = SwarmRecede(targets: [:], approach: pace)
+    let next = stage.frame(time: 0.02, motion: false).bodies
+    let stepped = next.first { $0.model.id == "b" }?.opacity ?? 0
+    #expect(abs(stepped - 0.32) < 1e-9)
+    // no recede at all: every body stands at 1
+    stage.recede = nil
+    let plain = stage.frame(time: 0.03, motion: false).bodies.map(\.opacity)
+    #expect(plain == [1, 1])
+  }
 }
 
 @Suite @MainActor struct ShaderCompileTests {
