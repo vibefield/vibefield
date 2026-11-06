@@ -10,7 +10,7 @@ import Testing
 /// hold, and the `-vf-mock-hold` door. The home is the meters fixture's over the budget batch, read at its stamp
 /// (`AgentProfilesPageTests.reading`). Letting go is the lens's (`ProfileLensTests`). Since the U3 review: how the
 /// held face stands and closes (a let-go, or a hold the system takes away), and the words for a home whose usage is
-/// not read.
+/// not read. Since U3's repair: a sign-in under way asks nothing, so the line counts it neither read nor needing you.
 ///
 /// No key path and no `try` inside an #expect/#require argument: hoisted into a `let` first (T10f's kit trap).
 @Suite("the held face: where the profiles bloom, what a finger reaches, and what is said")
@@ -61,11 +61,31 @@ struct FaceHoldTests {
     #expect(open == FaceHold.Words(verb: nil, rest: "Cancel", line: "let go here to leave the field as it is"))
   }
 
-  @Test("one need is said as one: Show Side over \"0 read · 1 needs you\" (§9 \"The phone's hold\")")
+  @Test("a sign-in under way asks nothing: Show Side over \"0 read · none need you\" (§9 \"What needs you\")")
+  func signingInAsksNothing() throws {
+    let reading = try AgentProfilesPageTests.reading()
+    // Side's two: its Anthropic plan's first read, and its Codex agent's sign-in under way
+    let meters = reading.meters(of: "side", now: Self.now)
+    let kinds = meters.entries.map(\.kind)
+    #expect(kinds == [.firstRead, .needsYou])
+    let needs = meters.entries.compactMap(\.need)
+    #expect(needs == [.signingIn])
+    let side = FaceHold.words(reading, reach: .bud("side"), home: "studio", now: Self.now)
+    #expect(side == FaceHold.Words(verb: "Show", rest: "Side", line: "0 read · none need you"))
+    // the hub's plans: three readings, Work's retry and its Kimi's sign-in; Side's first read and sign-in ask nothing
+    let all = FaceHold.words(reading, reach: .hub, home: "studio", now: Self.now)
+    #expect(all.line == "3 read · 2 need you · every profile")
+  }
+
+  @Test("one need is said as one: a plan that couldn't be read beside a sign-in under way is \"0 read · 1 needs you\"")
   func oneNeed() throws {
     let reading = try AgentProfilesPageTests.reading()
-    let side = FaceHold.words(reading, reach: .bud("side"), home: "studio", now: Self.now)
-    #expect(side == FaceHold.Words(verb: "Show", rest: "Side", line: "0 read · 1 needs you"))
+    let side = reading.meters(of: "side", now: Self.now)
+    let work = reading.meters(of: "work", now: Self.now)
+    let retry = try #require(work.entries.first { $0.need == .retry })
+    let meters = ProfileMeters(entries: side.entries + [retry], tightest: nil, hot: false)
+    let line = FaceHold.reads(meters)
+    #expect(line == "0 read · 1 needs you")
   }
 
   @Test("the hold says the home's usage as it stands — not shared, unavailable, a first read — never none need you")
