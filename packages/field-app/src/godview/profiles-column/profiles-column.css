@@ -281,8 +281,11 @@
   transition: background-color 160ms ease;
 }
 
+/* the hover's ink comes with its ground (it is 0,3,0 over the primary's 0,2,0), so the primary's label — the card's
+   solid — never stands on the pale fill (AO-6b3's rule for the strip's acts, kept at the card's new anchor) */
 .vf-profiles-limit-act:hover:not(:disabled) {
   background: color-mix(in srgb, var(--vf-foreground) 14%, transparent);
+  color: var(--vf-text-primary);
 }
 
 .vf-profiles-limit-act[data-variant="primary"] {
