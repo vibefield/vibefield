@@ -992,7 +992,7 @@ export class NativeLink extends EventEmitter {
   private scheduleReconnect(): void {
     if (this.closed || this.superseded || this.opts.reconnect === false) return;
     if (this.reconnectTimer || this.sock) return;
-    const delay = Math.min(500 * 2 ** this.attempts, 10_000);
+    const delay = reconnectDelayMs(this.attempts);
     this.attempts += 1;
     this.emit("reconnecting", delay);
     this.reconnectTimer = setTimeout(() => {
@@ -1372,6 +1372,12 @@ export function terminalCreateTarget(
  * with agent cells and no interactive one (it hosts no deck). */
 function cellEndpoints(snapshot: TerminalRouteSnapshot): TerminalEndpoints | undefined {
   return terminalCreateTarget(snapshot, "interactive")?.endpoints;
+}
+
+/** fieldd's one back-off for its links to the floor: 500 ms doubling to 10 s, by the attempts made since the last
+ * success. NativeLink's mgmt dial and, since item 206, the MeshData lane link (mesh-lane.ts) both take it. */
+export function reconnectDelayMs(attempts: number): number {
+  return Math.min(500 * 2 ** attempts, 10_000);
 }
 
 function isRetryableInitialTransportFailure(error: unknown): boolean {

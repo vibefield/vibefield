@@ -8,6 +8,7 @@ import {
   MeshDataFrameReader,
 } from "@vibefield/contracts";
 import { createNoopLogger, type Logger } from "@vibefield/logging";
+import { reconnectDelayMs } from "./native-link";
 import { ackMacMatches, computeAckMac, computePairingMac, newPairingNonce } from "./pairing";
 
 // MeshLaneLink (design-02 §2.5, D5) — fieldd's end of the byte plane.
@@ -45,6 +46,11 @@ export interface MeshLaneLinkOptions {
    * already has (PF4). Shed strategy here is REFUSE, not drop: losing a doc
    * update silently is the failure this plane exists to prevent. */
   sendMaxBufferedBytes?: number;
+  /** Item 206 — dial again after an established link drops, or after a redial fails, on fieldd's one back-off
+   * (`reconnectDelayMs`: 500 ms doubling to 10 s), one timer at a time, "reconnecting" emitted with each delay. A
+   * success resets it; `dialNow()` is the floor's trigger; a link `close()` ended never dials again (CP-1b). Off by
+   * default: the daemon turns it on. A failed FIRST `connect()` arms nothing, so the boot keeps CP-1b's rule. */
+  redial?: boolean;
 }
 
 type LaneHandler = (payload: Uint8Array) => void;
@@ -78,6 +84,12 @@ export class MeshLaneLink extends EventEmitter {
    * degrades to the pre-WIN-10 behaviour rather than to a false refusal. */
   #expectedAckMac: string | null = null;
   readonly #logger: Logger;
+  /** Item 206 — the redial: its one timer, the attempts since the last success, the dial in flight, and whether
+   * this run of failures has been logged (a run warns once, at its first failure). */
+  #redialTimer: NodeJS.Timeout | null = null;
+  #redialAttempts = 0;
+  #redialing: Promise<void> | null = null;
+  #redialFailing = false;
 
   connected = false;
 
@@ -93,7 +105,7 @@ export class MeshLaneLink extends EventEmitter {
     const sock = await this.#open();
     this.#sock = sock;
     sock.on("data", (chunk: Buffer) => this.#onData(chunk));
-    sock.on("close", () => this.#onClose());
+    sock.on("close", () => this.#onClose(sock));
     sock.on("error", (error) => {
       this.#logger.warn("fieldd.mesh_lane.socket_error", "The MeshData socket errored", {
         error: String(error),
@@ -105,27 +117,31 @@ export class MeshLaneLink extends EventEmitter {
     const mac = computePairingMac(secretHex, this.opts.bootId, ts);
     const nonce = newPairingNonce();
     this.#expectedAckMac = computeAckMac(secretHex, nonce, this.opts.bootId);
-    // Both listeners are registered, so both must be removed — `once` only
+    // Every listener is registered, so every one must be removed — `once` only
     // removes the one that fires, and every reconnect would otherwise leave the
-    // other behind (MaxListenersExceededWarning at 11, then a slow leak).
+    // others behind (MaxListenersExceededWarning at 11, then a slow leak); the
+    // timer removes them too, where before it left both.
+    //
+    // Item 206 — the socket's own close settles the hello too: a bridge that closes the connection first (macOS
+    // drops one whose accept could not get a descriptor; item 198) fails it now, not at the timer. The timer stays,
+    // for a bridge that holds the socket and says nothing.
     const helloOk = new Promise<void>((resolve, reject) => {
-      const timer = setTimeout(() => reject(new Error("meshdata hello timed out")), 5_000);
-      const onOk = () => {
+      const settle = (error?: Error) => {
         clearTimeout(timer);
-        cleanup();
-        resolve();
-      };
-      const onRefused = (reason: string) => {
-        clearTimeout(timer);
-        cleanup();
-        reject(new Error(`meshdata hello refused: ${reason}`));
-      };
-      const cleanup = () => {
         this.off("hello-ok", onOk);
         this.off("hello-refused", onRefused);
+        sock.off("close", onClosed);
+        if (error === undefined) resolve();
+        else reject(error);
       };
+      const timer = setTimeout(() => settle(new Error("meshdata hello timed out")), 5_000);
+      const onOk = () => settle();
+      const onRefused = (reason: string) => settle(new Error(`meshdata hello refused: ${reason}`));
+      const onClosed = () =>
+        settle(new Error("the MeshData bridge closed the connection before HELLO_OK"));
       this.once("hello-ok", onOk);
       this.once("hello-refused", onRefused);
+      sock.once("close", onClosed);
     });
     sock.write(
       encodeMeshDataJsonFrame(MESHDATA_FRAME.HELLO, 0, {
@@ -135,7 +151,14 @@ export class MeshLaneLink extends EventEmitter {
         nonce,
       }),
     );
-    await helloOk;
+    try {
+      await helloOk;
+    } catch (error) {
+      // a failed hello's socket is never used again, so it goes now, as NativeLink's failed dial does: a redial
+      // must not leave one open connection behind per attempt
+      sock.destroy();
+      throw error;
+    }
     this.connected = true;
   }
 
@@ -232,8 +255,19 @@ export class MeshLaneLink extends EventEmitter {
     this.#handlers.delete(laneId);
   }
 
+  /** Item 206 — NativeLink's `dialNow()`: the floor is back, so dial at once, and start the back-off over. */
+  dialNow(): void {
+    if (this.#closed || this.connected) return;
+    if (this.#redialTimer !== null) clearTimeout(this.#redialTimer);
+    this.#redialTimer = null;
+    this.#redialAttempts = 0;
+    this.#redial("floor");
+  }
+
   close(): void {
     this.#closed = true;
+    if (this.#redialTimer !== null) clearTimeout(this.#redialTimer);
+    this.#redialTimer = null;
     this.connected = false;
     this.#helloSettled = false;
     for (const held of this.#orphans.values()) clearTimeout(held.timer);
@@ -375,13 +409,62 @@ export class MeshLaneLink extends EventEmitter {
     );
   }
 
-  #onClose(): void {
+  #onClose(sock: Socket): void {
+    // a stale socket (replaced by a later dial, or one close() ended) must not reset the current one's handshake
+    if (sock !== this.#sock) return;
+    const wasConnected = this.connected;
     this.connected = false;
     this.#helloSettled = false; // a reconnect gets a fresh handshake
     this.#expectedAckMac = null; // ...and a fresh challenge; never reuse the old proof
     this.#reader.reset();
     this.#rejectBarriers(new Error("meshdata link disconnected"));
-    if (!this.#closed) this.emit("disconnected");
+    if (this.#closed) return;
+    this.emit("disconnected");
+    // an established link that drops is dialed again; a dial that fails is re-armed by #redial's own ending
+    if (wasConnected) this.#scheduleRedial();
+  }
+
+  /** Item 206 — one timer at a time, on fieldd's one back-off; nothing for a closed, connected or dialing link. */
+  #scheduleRedial(): void {
+    if (this.opts.redial !== true || this.#closed || this.connected) return;
+    if (this.#redialTimer !== null || this.#redialing !== null) return;
+    const delay = reconnectDelayMs(this.#redialAttempts);
+    this.#redialAttempts += 1;
+    this.emit("reconnecting", delay);
+    this.#redialTimer = setTimeout(() => {
+      this.#redialTimer = null;
+      this.#redial("dropped");
+    }, delay);
+    this.#redialTimer.unref?.();
+  }
+
+  /** Item 206 — one redial dial; its failure arms the next, and a run of failures warns once (item 198's policy). */
+  #redial(why: "floor" | "dropped"): void {
+    if (this.#closed || this.connected || this.#redialing !== null) return;
+    this.#redialing = this.connect()
+      .then(
+        () => {
+          this.#logger.info("fieldd.mesh_lane.redialed", "The MeshData link is back", {
+            why,
+            attempts: this.#redialAttempts,
+          });
+          this.#redialAttempts = 0;
+          this.#redialFailing = false;
+        },
+        (error: unknown) => {
+          if (this.#redialFailing) return;
+          this.#redialFailing = true;
+          this.#logger.warn(
+            "fieldd.mesh_lane.redial_failed",
+            "The MeshData link could not be dialed again; it is retried on the back-off",
+            { why, error: String(error) },
+          );
+        },
+      )
+      .finally(() => {
+        this.#redialing = null;
+        this.#scheduleRedial();
+      });
   }
 
   #settleBarrier(laneId: number, error?: Error): void {
