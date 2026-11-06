@@ -30,11 +30,15 @@ export interface Harness {
    * sun_path safety margin (for the data-root-too-long guard). */
   mkLongRoot(): string;
   /** Boot a real product server on an ephemeral port. `verify` defaults to
-   * accepting exactly `token`; pass `verify: () => null` for a foreign listener. */
+   * accepting exactly `token`; pass `verify: () => null` for a foreign listener.
+   * `health: "never"` (item 212, RV #67) leaves `system.health` unanswered: a
+   * fieldd whose loop stopped answering after its hello, as the shell's
+   * liveness watch meets one. */
   startProduct(opts?: {
     token?: string;
     scopes?: readonly Scope[];
     verify?: (t: string) => { tokenId: string; scopes: Scope[]; label: string } | null;
+    health?: "answer" | "never";
   }): Promise<{ api: ProductApi; port: number; token: string }>;
   /** Item 212 (RV #30) — a busy fieldd: ONE port under ONE bootId whose kernel completes every dial while nothing
    * is read (`pauseOnConnect`), until `open()` pipes each held socket, and every later one, to the live ProductApi
@@ -96,8 +100,14 @@ export function createHarness(): Harness {
         port: 0,
         tokens: { verify: opts?.verify ?? acceptOnly(token, opts?.scopes) },
       });
-      // a scope-null product method, so a hello'd client can request with no grant
-      api.register("system.health", () => ({ ok: true, state: "READY" }));
+      // a scope-null product method, so a hello'd client can request with no grant; `never` is a call that is never
+      // answered (the ProductApi bounds no handler), while the hello and the door's tick still are
+      api.register(
+        "system.health",
+        opts?.health === "never"
+          ? () => new Promise<never>(() => {})
+          : () => ({ ok: true, state: "READY" }),
+      );
       const port = await api.listen();
       apis.push(api);
       return { api, port, token };

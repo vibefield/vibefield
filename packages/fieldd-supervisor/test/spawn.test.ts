@@ -1,3 +1,4 @@
+import { spawn } from "node:child_process";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { CONTRACTS_VERSION } from "@vibefield/contracts";
@@ -395,6 +396,79 @@ describe("spawn: no adoptable fieldd exists", () => {
     // nothing stopped our child for a winner that was never in the race
     expect(() => process.kill(handle.childPid as number, 0)).not.toThrow();
     await expect(handle.client.request("system.health")).resolves.toMatchObject({ ok: true });
+  }, 15_000);
+
+  it("an owned fieldd that stops answering is said unresponsive, then ended alone, and its recorded floor is never signalled (item 212, RV #67)", async () => {
+    // The child's record names the harness's ProductApi, whose system.health is never answered: the link stays open
+    // and `ready` while its replies are silent, as a stalled fieldd's does (the fixture serves nothing itself, so its
+    // own loop is not what goes quiet). A sleeper stands in for the floor the record names: a signal would end it.
+    const { port, token } = await h.startProduct({ health: "never" });
+    const floor = spawn(process.execPath, ["--eval", "setInterval(() => {}, 1e6)"], {
+      stdio: "ignore",
+    });
+    h.trackPid(floor.pid);
+    const root = h.mkRoot();
+    const logs: FielddSupervisorEvent[] = [];
+    const sup = spawnSup(
+      root,
+      FIXTURE_READY,
+      { TEST_PRODUCT_PORT: String(port), SHELL_TOKEN: token, NATIVE_PID: String(floor.pid) },
+      logs,
+      { liveness: { intervalMs: 200, missThreshold: 2, confirmMs: 1_000 } },
+    );
+
+    const handle = await sup.ensure();
+    trackSpawnedPid(logs);
+    h.trackPid(handle.childPid);
+    expect(handle.ownership).toBe("spawned");
+    expect(handle.info.nativePid).toBe(floor.pid);
+    const heard: string[] = [];
+    handle.onLiveness((liveness) => heard.push(liveness.kind));
+
+    // the wedge bound ends the child by the child-only ladder; its exit retires the handle's client
+    await expect.poll(() => handle.client.status, { timeout: 8_000 }).toBe("closed");
+    expect(heard).toEqual(["unresponsive", "wedged"]);
+    expect(hasLifecycle(logs, "fieldd.supervisor.wedge_killed")).toBe(true);
+    expect(await waitDead(handle.childPid as number)).toBe(true);
+    // no floor pid rides that ladder, and no verb a stalled loop could not answer: the floor lives
+    expect(() => process.kill(floor.pid as number, 0)).not.toThrow();
+    expect(hasLifecycle(logs, "fieldd.supervisor.shutdown_requested_rpc")).toBe(false);
+  }, 15_000);
+
+  it("a stop-owned dispose after the wedge kill still ends the floor the record names, and forces nothing (item 212, RV #67)", async () => {
+    // The wedge ladder ended the child alone. A dispose that follows before any respawn (a dev or smoke quit while the
+    // shell's recovery has no new handle yet) is stop-owned's full teardown: the handle's stop must not answer with
+    // the wedge ladder's promise, which ended no floor. The child is already gone, so its stop waits out nothing.
+    const { port, token } = await h.startProduct({ health: "never" });
+    const floor = spawn(process.execPath, ["--eval", "setInterval(() => {}, 1e6)"], {
+      stdio: "ignore",
+    });
+    h.trackPid(floor.pid);
+    const root = h.mkRoot();
+    const logs: FielddSupervisorEvent[] = [];
+    const sup = spawnSup(
+      root,
+      FIXTURE_READY,
+      { TEST_PRODUCT_PORT: String(port), SHELL_TOKEN: token, NATIVE_PID: String(floor.pid) },
+      logs,
+      {
+        shutdownPolicy: "stop-owned",
+        liveness: { intervalMs: 200, missThreshold: 2, confirmMs: 1_000 },
+      },
+    );
+
+    const handle = await sup.ensure();
+    trackSpawnedPid(logs);
+    h.trackPid(handle.childPid);
+    expect(handle.ownership).toBe("spawned");
+    await expect.poll(() => handle.client.status, { timeout: 8_000 }).toBe("closed");
+    expect(hasLifecycle(logs, "fieldd.supervisor.wedge_killed")).toBe(true);
+    expect(await waitDead(handle.childPid as number)).toBe(true);
+    expect(() => process.kill(floor.pid as number, 0)).not.toThrow();
+
+    await sup.dispose();
+    expect(await waitDead(floor.pid as number), "the floor of record, at the stop").toBe(true);
+    expect(hasLifecycle(logs, "fieldd.supervisor.force_killed")).toBe(false);
   }, 15_000);
 });
 

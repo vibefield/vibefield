@@ -17,6 +17,7 @@ const fixture = (name: string): unknown =>
 const READY: FielddRecoveryState = { kind: "ready" };
 const RECOVERING: FielddRecoveryState = { kind: "recovering", attempt: 1, of: 3 };
 const CRASH_LOOP: FielddRecoveryState = { kind: "crash-loop", failures: 3, since: 1_000 };
+const UNRESPONSIVE: FielddRecoveryState = { kind: "unresponsive" };
 
 describe("the field service's link, projected (item 212, RV #29)", () => {
   it("says the client's own word while recovery is at rest, and tells the window nothing", () => {
@@ -103,5 +104,52 @@ describe("the link model, bound to the attached pair (item 212, RV #29)", () => 
     link.recoveryChanged(pair, { kind: "recovering", attempt: 1, of: 3 });
     link.clientStatus("closed");
     expect(views).toHaveLength(1);
+  });
+});
+
+// Item 212 (RV #67) — the handle's liveness, which the coordinator forwards through the same state: the field service
+// up and its replies silent. It refines a READY client only: a client that left ready says its own word, the truer one
+// once the socket is gone. A crash loop or a recovery outranks it by construction (the coordinator says the silence of
+// a live handle alone, and both come after a death).
+describe("the field service not responding (item 212, RV #67)", () => {
+  it("says Not responding to the status item and the window while the client is up, as the contract's fixture reads", () => {
+    const view = projectFielddLink({ client: "ready", recovery: UNRESPONSIVE });
+    expect(view.link).toBe("unresponsive");
+    expect(view.serviceTries).toBeUndefined();
+    expect(view.fieldd).toEqual(fixture("fieldd-link-unavailable.unresponsive.json"));
+    expect(FielddLinkUnavailable.safeParse(view.fieldd).success).toBe(true);
+  });
+
+  it("lets a client that left ready say its own word over the silence", () => {
+    const silent = (client: string | null) => projectFielddLink({ client, recovery: UNRESPONSIVE });
+    expect(silent("reconnecting")).toEqual({
+      link: "reconnecting",
+      serviceTries: undefined,
+      fieldd: null,
+    });
+    expect(silent("closed").link).toBe("unavailable");
+    expect(silent(null).link).toBe("starting");
+  });
+
+  it("is said and taken back by the attached pair's coordinator, as its recovery is", () => {
+    const views: FielddLinkView[] = [];
+    const link = new FielddLink((view) => views.push(view));
+    const pair = { recovery: READY };
+    link.attach(pair);
+    link.clientStatus("ready");
+    link.recoveryChanged(pair, UNRESPONSIVE);
+    expect(link.view().fieldd).toEqual({ service: "fieldd", state: "unresponsive" });
+    link.recoveryChanged(pair, READY);
+    expect(link.view().fieldd).toBeNull();
+    // a switch to a pair whose field service is silent says so at once, once its client's word is ready
+    link.attach({ recovery: UNRESPONSIVE });
+    link.clientStatus("ready");
+    expect(views.map((view) => view.link)).toEqual([
+      "ready",
+      "unresponsive",
+      "ready",
+      "starting",
+      "unresponsive",
+    ]);
   });
 });

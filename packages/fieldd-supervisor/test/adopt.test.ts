@@ -164,6 +164,28 @@ describe("adopt: a live fieldd is discovered, not respawned", () => {
     expect(handle.ownership).toBe("adopted");
     expect(handle.info.buildId).toBe("dev-current");
   });
+
+  it("an adopted fieldd that stops answering is said unresponsive, then wedged, and never signalled (item 212, RV #67; ESR §5.3)", async () => {
+    const { port, token } = await h.startProduct({ health: "never" });
+    const root = h.mkRoot();
+    // the recorded pid is THIS test process: alive, and a signal sent to it would end the test
+    h.writeRunFiles(root, { port, pid: process.pid, token });
+    const events: FielddSupervisorEvent[] = [];
+    const handle = await adoptSup(root, {
+      liveness: { intervalMs: 200, missThreshold: 2, confirmMs: 1_000 },
+      onEvent: (event) => events.push(event),
+    }).ensure();
+    expect(handle.ownership).toBe("adopted");
+    const heard: string[] = [];
+    handle.onLiveness((liveness) => heard.push(liveness.kind));
+
+    await expect.poll(() => handle.liveness.kind, { timeout: 8_000 }).toBe("wedged");
+    expect(heard).toEqual(["unresponsive", "wedged"]);
+    // only said: no ladder for a fieldd this shell did not start, and its client is left as it stands
+    expect(lifecycleNames(events)).not.toContain("fieldd.supervisor.wedge_killed");
+    expect(lifecycleNames(events)).not.toContain("fieldd.supervisor.stop_requested");
+    expect(handle.client.status).toBe("ready");
+  }, 15_000);
 });
 
 describe("tryAdopt: the non-adoption taxonomy (§12.2)", () => {

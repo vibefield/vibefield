@@ -293,6 +293,17 @@ describe("the field service's row and its Try Again (item 212, RV #29)", () => {
     expect(has(menu)).toBe(false);
   });
 
+  // RV #67 (§9, the words at the lean until James rules rv-service-recovery): up, and its replies silent
+  it("says Not responding while the field service is up and silent, and offers nothing under it", () => {
+    const menu = buildTrayMenu(
+      snapshot({ link: "unresponsive" }),
+      { ...actions(), retryFieldService: vi.fn() },
+      "darwin",
+    );
+    expect(byId(menu, "status").label).toBe("Field service: Not responding");
+    expect(has(menu)).toBe(false);
+  });
+
   it("says it stopped after its tries, with Try Again under the row, which asks for the field service", () => {
     const retryFieldService = vi.fn();
     const menu = buildTrayMenu(

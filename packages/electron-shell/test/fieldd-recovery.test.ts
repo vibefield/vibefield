@@ -1,4 +1,4 @@
-import type { FielddHandle, FielddSupervisor } from "@vibefield/fieldd-supervisor";
+import type { FielddHandle, FielddLiveness, FielddSupervisor } from "@vibefield/fieldd-supervisor";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   FielddCrashLoopError,
@@ -15,6 +15,13 @@ function deferred<T>() {
   });
   return { promise, resolve };
 }
+
+/** Item 212 (RV #67) — the liveness of a handle whose watch says nothing: every fake handle carries it, as every real
+ * handle does (the coordinator listens to the liveness of each handle it adopts). */
+const STEADY = {
+  liveness: { kind: "responsive" },
+  onLiveness: () => () => undefined,
+} as const;
 
 function handle(
   name: string,
@@ -39,6 +46,7 @@ function handle(
   return {
     info: { bootId: name, port: 4242 },
     client,
+    ...STEADY,
   } as unknown as FielddHandle;
 }
 
@@ -161,6 +169,7 @@ describe("fieldd main-process recovery", () => {
             return () => statusListeners.delete(listener);
           },
         },
+        ...STEADY,
       } as unknown as FielddHandle;
       const newHandle = handle("boot-2", []);
       const upstream = vi
@@ -305,6 +314,7 @@ describe("fieldd main-process recovery", () => {
     const readyHandle = {
       info: { bootId: "same-boot", port: 4242 },
       client,
+      ...STEADY,
     } as unknown as FielddHandle;
     const coordinator = new FielddHandleCoordinator({
       upstreamEnsure: vi.fn(async () => readyHandle) as unknown as FielddSupervisor["ensure"],
@@ -347,10 +357,12 @@ describe("fieldd main-process recovery", () => {
 });
 
 /** A handle whose client the test ends: `die()` closes it, as an owned child's exit or an adopted client's terminal
- * failure does. */
+ * failure does. `tell()` is its liveness watch speaking (item 212, RV #67). */
 function mortal(name: string) {
   let status = "ready";
+  let liveness: FielddLiveness = { kind: "responsive" };
   const listeners = new Set<() => void>();
+  const watchers = new Set<(next: FielddLiveness) => void>();
   const handle = {
     info: { bootId: name, port: 4242 },
     client: {
@@ -362,6 +374,13 @@ function mortal(name: string) {
         return () => listeners.delete(listener);
       },
     },
+    get liveness() {
+      return liveness;
+    },
+    onLiveness(watcher: (next: FielddLiveness) => void) {
+      watchers.add(watcher);
+      return () => watchers.delete(watcher);
+    },
   } as unknown as FielddHandle;
   return {
     handle,
@@ -369,6 +388,11 @@ function mortal(name: string) {
       status = "closed";
       for (const listener of [...listeners]) listener();
     },
+    tell(next: FielddLiveness): void {
+      liveness = next;
+      for (const watcher of [...watchers]) watcher(next);
+    },
+    watching: () => watchers.size,
   };
 }
 
@@ -641,5 +665,89 @@ describe("fieldd recovery under the house intensity (item 212, RV #29)", () => {
     expect(upstream).toHaveBeenCalledTimes(3);
     expect(coordinator.currentHandle).toBe(second.handle);
     expect(coordinator.recovery).toEqual({ kind: "ready" });
+  });
+});
+
+// Item 212 (RV #67) — the coordinator forwards its current handle's liveness into the same `onState` the recovery
+// speaks through (fieldd-link.ts projects it): `unresponsive` while a live handle's replies are silent, `ready` at its
+// next reply. A silence is said only while the handle lives, so a crash loop or a recovery always outranks it. While
+// held for a stop it is not heard (a stopping fieldd goes quiet), and it is read again when the hold is released.
+describe("the field service's silence, forwarded (item 212, RV #67)", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it("says unresponsive while the handle's replies are silent, once, and ready again at its next reply", async () => {
+    const life = mortal("boot-1");
+    const states: FielddRecoveryState[] = [];
+    const coordinator = new FielddHandleCoordinator({
+      upstreamEnsure: vi.fn(async () => life.handle) as unknown as FielddSupervisor["ensure"],
+      onState: (state) => states.push(state),
+    });
+
+    await coordinator.ensure();
+    life.tell({ kind: "unresponsive", silentMs: 10_000 });
+    expect(coordinator.recovery).toEqual({ kind: "unresponsive" });
+    life.tell({ kind: "wedged", silentMs: 60_000 }); // the same word for the person
+    life.tell({ kind: "responsive" });
+    expect(states).toEqual([{ kind: "unresponsive" }, { kind: "ready" }]);
+    expect(coordinator.recovery).toEqual({ kind: "ready" });
+  });
+
+  it("hears nothing while held for a stop, and reads the handle again when the hold is released", async () => {
+    const life = mortal("boot-1");
+    const states: FielddRecoveryState[] = [];
+    const coordinator = new FielddHandleCoordinator({
+      upstreamEnsure: vi.fn(async () => life.handle) as unknown as FielddSupervisor["ensure"],
+      onState: (state) => states.push(state),
+    });
+
+    await coordinator.ensure();
+    coordinator.holdForStop();
+    life.tell({ kind: "unresponsive", silentMs: 10_000 });
+    expect(states).toEqual([]);
+    // the quit (or the update) aborted before it stopped anything: the silence it did not hear is said now
+    coordinator.releaseHold();
+    expect(states).toEqual([{ kind: "unresponsive" }]);
+  });
+
+  it("after the wedge kill ends the child, the silence goes and the recovery starts a respawn", async () => {
+    const { lives, calls, upstream } = lifetimes(2);
+    const states: FielddRecoveryState[] = [];
+    const coordinator = new FielddHandleCoordinator({
+      upstreamEnsure: upstream,
+      onState: (state) => states.push(state),
+      now: () => 0,
+    });
+
+    await coordinator.ensure();
+    lives[0]!.tell({ kind: "unresponsive", silentMs: 10_000 });
+    lives[0]!.tell({ kind: "wedged", silentMs: 60_000 });
+    // the supervisor ends an owned child at the bound; its exit closes the handle's client
+    lives[0]!.die();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(calls).toHaveBeenCalledTimes(2);
+    expect(coordinator.currentHandle).toBe(lives[1]!.handle);
+    expect(states).toEqual([{ kind: "unresponsive" }, { kind: "ready" }]);
+    // the dead handle is no longer heard, and the live one is
+    expect(lives[0]!.watching()).toBe(0);
+    expect(lives[1]!.watching()).toBe(1);
+  });
+
+  it("a person's ask while it is silent is no recovery: nothing begins again and the silence is still said", async () => {
+    const life = mortal("boot-1");
+    const states: FielddRecoveryState[] = [];
+    const upstream = vi.fn(async () => life.handle);
+    const coordinator = new FielddHandleCoordinator({
+      upstreamEnsure: upstream as unknown as FielddSupervisor["ensure"],
+      onState: (state) => states.push(state),
+    });
+
+    await coordinator.ensure();
+    life.tell({ kind: "unresponsive", silentMs: 10_000 });
+    // a window reloading asks as a person: fieldd is up, so it gets the live handle and nothing is reset
+    await expect(coordinator.ensure({ person: true })).resolves.toBe(life.handle);
+    expect(upstream).toHaveBeenCalledTimes(2);
+    expect(states).toEqual([{ kind: "unresponsive" }]);
+    expect(coordinator.recovery).toEqual({ kind: "unresponsive" });
   });
 });

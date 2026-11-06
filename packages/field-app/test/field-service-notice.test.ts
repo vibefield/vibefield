@@ -27,8 +27,11 @@ const state = (name: string): FielddLinkUnavailable =>
   );
 const RECOVERING = state("recovering");
 const CRASH_LOOP = state("crash-loop");
+const UNRESPONSIVE = state("unresponsive");
 const STOPPED =
   "VibeField's field service stopped after 3 tries. Your terminal sessions keep running.";
+const NOT_RESPONDING =
+  "VibeField's field service isn't responding. Your terminal sessions keep running. If it lasts, quit VibeField and open it again.";
 
 beforeEach(() => {
   vi.useFakeTimers();
@@ -117,5 +120,34 @@ describe("the field service on the status line (item 212, RV #29)", () => {
     expect(fieldServiceNotice(CRASH_LOOP, retry)).toMatchObject({ text: STOPPED });
     expect(fieldServiceNotice(CRASH_LOOP, retry)?.act?.run).toBe(retry);
     expect(fieldServiceNotice(RECOVERING, retry)?.act).toBeUndefined();
+    expect(fieldServiceNotice(UNRESPONSIVE, retry)).toMatchObject({ text: NOT_RESPONDING });
+  });
+});
+
+// Item 212 (RV #67; DESIGN.md §8 "The status line", amended 2026-11-06, the words at the lean until James rules
+// rv-service-recovery) — the field service up and silent: main hears no reply to two asks in a row, and the window
+// holds it in plain words, with no act (there is nothing a person's ask would start while it is up).
+describe("the field service not responding, on the status line (item 212, RV #67)", () => {
+  it("holds Not responding with no act, and withdraws it the moment the field service answers", () => {
+    const teller = fieldServiceTeller({ replaceRenderer: vi.fn() });
+    teller.tell(UNRESPONSIVE);
+    expect(getStatusNotice()?.text).toBe(NOT_RESPONDING);
+    expect(getStatusNotice()?.act).toBeUndefined();
+    vi.advanceTimersByTime(STATUS_STAND_MS * 3);
+    expect(getStatusNotice()?.text).toBe(NOT_RESPONDING);
+    teller.tell(null);
+    expect(getStatusNotice()).toBeNull();
+  });
+
+  it("gives way to Reconnecting… when a field service main started is ended at the bound and does not come back at once", () => {
+    const teller = fieldServiceTeller({ replaceRenderer: vi.fn() });
+    teller.tell(UNRESPONSIVE);
+    teller.tell(RECOVERING);
+    teller.tell(null);
+    expect(getStatusNotice()).toBeNull();
+    expect(statusLineSaid().map((said) => said.text)).toEqual([
+      NOT_RESPONDING,
+      "Reconnecting to the field service…",
+    ]);
   });
 });

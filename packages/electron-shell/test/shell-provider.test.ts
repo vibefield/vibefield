@@ -58,6 +58,9 @@ function fakeHandle(bootId: string, client: FakeClient): FielddHandle {
   return {
     info: { bootId, port: 4242 },
     client,
+    // item 212 (RV #67) — a handle's liveness, which the coordinator listens to: this one's watch says nothing
+    liveness: { kind: "responsive" },
+    onLiveness: () => () => undefined,
   } as unknown as FielddHandle;
 }
 
