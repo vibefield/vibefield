@@ -134,6 +134,8 @@ describe("the find door (`find-door.ts`)", () => {
         here: true,
         note: "2 agents",
         quiet: false,
+        agents: 2,
+        sessions: 3,
       },
       {
         id: "studio",
@@ -142,23 +144,28 @@ describe("the find door (`find-door.ts`)", () => {
         here: false,
         note: "1 agent",
         quiet: false,
+        agents: 1,
+        sessions: 1,
       },
     ];
     const profiles = [
-      { id: "native", label: "This Mac" },
-      { id: "work", label: "Work" },
+      { id: "native", label: "This Mac", sessions: 2 },
+      { id: "work", label: "Work", sessions: 1 },
     ];
-    expect(filterToken({ desks, desk: null, profiles, profile: null })).toBeNull();
-    expect(filterToken({ desks, desk: "studio", profiles, profile: null })).toEqual({
+    const none = { desks, desk: null, profiles, profile: null, sessions: 4 };
+    expect(filterToken(none)).toBeNull();
+    expect(filterToken({ ...none, desk: "studio" })).toEqual({
       desk: desks[1],
       profile: null,
     });
-    expect(filterToken({ desks, desk: "studio", profiles, profile: "work" })).toEqual({
+    expect(filterToken({ ...none, desk: "studio", profile: "work" })).toEqual({
       desk: desks[1],
       profile: profiles[1],
     });
     // a choice the lists no longer hold names nothing (it fell back to all)
-    expect(filterToken({ desks: [], desk: "gone", profiles: [], profile: "gone" })).toBeNull();
+    expect(
+      filterToken({ desks: [], desk: "gone", profiles: [], profile: "gone", sessions: 0 }),
+    ).toBeNull();
   });
 });
 
@@ -223,6 +230,25 @@ describe("the rows and the words (`peek-live.ts`)", () => {
     expect(ownRow?.floorSessionId).toBe("pty-7");
     expect(peerRow?.remote).toEqual({ name: "studio", os: "linux" });
     expect(peerRow?.floorSessionId).toBeNull();
+  });
+
+  it("says the profile a run of this desktop's runs under, a shell's too — never a peer's (SE-D1)", () => {
+    const own = run("own", { provider: "claude", profileSet: "work" });
+    const bare = run("bare", { provider: "claude" });
+    const peer = run("peer", {
+      provider: "codex",
+      desk: { id: "studio", name: "studio", os: "linux", self: false },
+    });
+    const shell = run("pty-2", { project: "scratch", profileSet: "native" });
+    const rows = peekLiveRows([found(own), found(bare), found(peer)], [own, bare, peer, shell], "");
+    // a peer's run carries no profile (the find join drops it, `find-agents.ts`), and a run
+    // under none says none
+    expect(rows.map((row) => [row.id, row.profile])).toEqual([
+      ["own", "work"],
+      ["bare", null],
+      ["peer", null],
+      ["pty-2", "native"],
+    ]);
   });
 
   it("the foot and the empty body, in the kit's words — and honest while the feed is out", () => {
@@ -568,6 +594,8 @@ describe("Live now's chrome pieces each stand alone (MV-8b)", () => {
             here: true,
             note: "1 agent",
             quiet: false,
+            agents: 1,
+            sessions: 1,
           },
           {
             id: "b",
@@ -576,11 +604,14 @@ describe("Live now's chrome pieces each stand alone (MV-8b)", () => {
             here: false,
             note: "0 agents",
             quiet: false,
+            agents: 0,
+            sessions: 0,
           },
         ],
         desk: null,
         profiles: [],
         profile: null,
+        sessions: 1,
       },
       rows: [row],
       hot: 0,

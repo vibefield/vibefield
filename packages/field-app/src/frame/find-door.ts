@@ -27,9 +27,14 @@ export interface LiveFindAgent extends FindAgent {
   readonly desk: LiveDesk;
   /** this desktop's floor session for the run's terminal; absent for a peer's */
   readonly floorSessionId?: string;
+  /** SE-D1 — the Agent Profile a run of THIS desktop's runs under (the row's
+   * own word, `agentProfileSet`): what its live row says after folder · agent.
+   * Absent for a peer's run: a profile is its own desktop's, so the lens is
+   * this desktop's alone (the lead's ruling 16). */
+  readonly profileSet?: string;
 }
 
-/** A desktop the scope row's first dropdown offers (DS-3's choices). */
+/** A desktop the Filter menu's Desktops offers (DS-3's choices; SE-D1). */
 export interface LiveDeskChoice {
   readonly id: string;
   readonly name: string;
@@ -39,9 +44,14 @@ export interface LiveDeskChoice {
   readonly note: string;
   /** not answering, asleep or another version: drawn quiet */
   readonly quiet: boolean;
+  /** its agents, the note's number while it answers: what All desktops sums */
+  readonly agents: number;
+  /** every live session on it, the shells too, whatever the profile filter
+   * holds: what a typed name's offer counts (SE-D1) */
+  readonly sessions: number;
 }
 
-/** An Agent Profile the scope row's second dropdown offers (AR-S5's tabs). */
+/** An Agent Profile the Filter menu's Profiles offers (AR-S5's tabs; SE-D1). */
 export interface LiveProfileChoice {
   readonly id: string;
   readonly label: string;
@@ -49,8 +59,11 @@ export interface LiveProfileChoice {
   readonly kind?: "native" | "managed" | undefined;
   /** the profile new sessions use: its glyph is drawn filled */
   readonly isDefault?: boolean | undefined;
-  /** a session under it waits on you: one orange dot */
+  /** a session under it waits on you: "waiting" beside its name */
   readonly blocked?: boolean | undefined;
+  /** every live session under it, the shells too, whatever the desktop filter
+   * holds: the menu's count and a typed name's offer's (SE-D1) */
+  readonly sessions: number;
 }
 
 /** GV-D3 — the view's filters, which search's Live now carries (they filter
@@ -66,6 +79,9 @@ export interface LiveFilters {
   /** TS-4 (TS-D7) — this Mac is not connected: the desktop filter ends on a
    * ghost row, Your other devices · Connect…; absent or false, no row */
   readonly connect?: boolean;
+  /** every live session the view holds, whatever the filters keep: what Every
+   * profile counts (SE-D1) */
+  readonly sessions: number;
 }
 
 export const NO_LIVE_FILTERS: LiveFilters = Object.freeze({
@@ -73,6 +89,7 @@ export const NO_LIVE_FILTERS: LiveFilters = Object.freeze({
   desk: null,
   profiles: Object.freeze([]),
   profile: null,
+  sessions: 0,
 });
 
 export interface GodviewFindDoor {

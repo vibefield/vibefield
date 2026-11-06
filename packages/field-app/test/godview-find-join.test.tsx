@@ -265,6 +265,38 @@ describe("the join's rules (`createFindAgents`)", () => {
     expect(moved[1]).toBe(peerRow);
   });
 
+  it("names the profile this desktop's run and shell run under — never a peer's, whatever its row says (SE-D1)", () => {
+    const project = createFindAgents();
+    const here = { id: "here", name: "MacBook Pro", os: "mac" as const, self: true };
+    const own = modelRow("row-a", { device: here, profileSet: "work" });
+    const shell = modelRow("pty-c", { kind: "terminal", device: here, profileSet: "native" });
+    const none = modelRow("row-none", { device: here });
+    // a peer's set id is its owner's: the window's rows drop it, and this join never carries one
+    const peer = modelRow("peer", {
+      device: { id: "away", name: "Loft", os: "linux", self: false },
+      profileSet: "work",
+    });
+    const rows = project([own, shell, none, peer], new Map([[own.id, "run-a"]]), [spokenRun]);
+    expect(rows.map((row) => [row.id, row.profileSet])).toEqual([
+      ["row-a", "work"],
+      ["pty-c", "native"],
+      ["row-none", undefined],
+      ["peer", undefined],
+    ]);
+    // absence is kept: a row under no profile names none, and a peer's names none at all
+    expect("profileSet" in (rows[2] ?? {})).toBe(false);
+    expect("profileSet" in (rows[3] ?? {})).toBe(false);
+    // a profile that moves is a new row (a new model row)
+    const moved = project(
+      [{ ...own, profileSet: "native" }, shell, none, peer],
+      new Map([[own.id, "run-a"]]),
+      [spokenRun],
+    );
+    expect(moved[0]).not.toBe(rows[0]);
+    expect(moved[0]?.profileSet).toBe("native");
+    expect(moved[1]).toBe(rows[1]);
+  });
+
   it("reuses unchanged rows and lists, preserving input order and local-only joins", () => {
     const project = createFindAgents();
     const own = modelRow("row-a");

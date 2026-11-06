@@ -48,9 +48,10 @@ import type { GodviewTheme } from "./GodviewTuningPanel";
 import { HEAD_RESERVE } from "./head-row";
 import { type MonitorAccountFacts, MonitorAccountFactsContext } from "./monitor/account-facts";
 import { type ChromeRun, NO_RUNS, useChromeKey } from "./monitor/chrome-facts";
-import { choiceNote, type DeviceChoice } from "./monitor/device-filter";
+import type { DeviceChoice } from "./monitor/device-filter";
 import { useMonitorFeed } from "./monitor/GodviewAgentsProvider";
 import { setMonitorHoldsKeys } from "./monitor/launcher-keys";
+import { liveFiltersOf } from "./monitor/live-filters";
 import { MonitorMomentRowsContext } from "./monitor/moment-rows";
 import { useMonitorHistory } from "./monitor/monitor-history";
 import { openEndedLane } from "./monitor/open-ended-lane";
@@ -852,32 +853,20 @@ export function GodviewMonitor({
   // SB-3: read at event time — a view's report lands between renders
   const readViewHoldsKeys = useCallback(() => viewHoldsKeysRef.current, []);
   // TS-4 (TS-D7) — not connected: the filter is offered on This Mac alone, so
-  // its ghost row, Your other devices · Connect…, has somewhere to be
+  // its ghost row, Your other devices · Connect…, has somewhere to be; SE-D1 —
+  // each choice counts what it holds, every row's (`live-filters.ts`)
+  const liveFiltersNow = liveFiltersOf({
+    devices,
+    desk: deviceChosen,
+    tabs: showTabs ? tabs : null,
+    profile: chosenId ?? null,
+    connect: offersConnect,
+    agents,
+    here,
+  });
   const liveFilters = useHeldWhileSame<LiveFilters>(
-    {
-      desks:
-        devices.length > 1 || (offersConnect && devices.length === 1)
-          ? devices.map((device) => ({
-              id: device.id,
-              name: device.name,
-              os: device.os,
-              here: device.here,
-              note: choiceNote(device),
-              quiet: device.state !== "live",
-            }))
-          : [],
-      desk: deviceChosen,
-      profiles: showTabs ? tabs : [],
-      profile: chosenId ?? null,
-      connect: offersConnect,
-    },
-    JSON.stringify([
-      devices,
-      deviceChosen,
-      showTabs ? tabs : null,
-      chosenId ?? null,
-      offersConnect,
-    ]),
+    liveFiltersNow,
+    JSON.stringify(liveFiltersNow),
   );
   const transcripts = door?.transcripts ?? NO_TRANSCRIPTS;
   const findDoor = useMemo<GodviewFindDoor>(

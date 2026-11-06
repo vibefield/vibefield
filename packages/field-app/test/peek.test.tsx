@@ -989,6 +989,28 @@ const scopeTab = (name: string): void =>
 const liveNowTab = (): void => scopeTab("Live now");
 const everythingTab = (): void => scopeTab("Everything");
 
+/** The two desktops the monitor offers: one run on each (`LIVE_RUNS`). */
+const HERE_DESK = {
+  id: "here",
+  name: "MacBook Pro",
+  os: "macos" as const,
+  here: true,
+  note: "1 agent",
+  quiet: false,
+  agents: 1,
+  sessions: 1,
+};
+const STUDIO_DESK = {
+  id: "studio",
+  name: "studio",
+  os: "linux" as const,
+  here: false,
+  note: "1 agent",
+  quiet: false,
+  agents: 1,
+  sessions: 1,
+};
+
 /** Godview's monitor, as it publishes Live now's door: its rows, rosetta's
  * port, its select, and the two filters — which republish the door as the
  * monitor would. */
@@ -1004,16 +1026,21 @@ function godviewDoor(patch: Partial<LiveFilters> = {}): {
   const searched: unknown[] = [];
   const history = liveHistory(searched);
   let filters: LiveFilters = {
-    desks: [
-      { id: "here", name: "MacBook Pro", os: "macos", here: true, note: "1 agent", quiet: false },
-      { id: "studio", name: "studio", os: "linux", here: false, note: "1 agent", quiet: false },
-    ],
+    desks: [HERE_DESK, STUDIO_DESK],
     desk: null,
     profiles: [
-      { id: "native", label: "This Mac", kind: "native", isDefault: true },
-      { id: "work", label: "Work", kind: "managed", glyph: "briefcase", blocked: true },
+      { id: "native", label: "This Mac", kind: "native", isDefault: true, sessions: 0 },
+      {
+        id: "work",
+        label: "Work",
+        kind: "managed",
+        glyph: "briefcase",
+        blocked: true,
+        sessions: 1,
+      },
     ],
     profile: null,
+    sessions: 2,
     ...patch,
   };
   let current: GodviewFindDoor;
@@ -1159,12 +1186,7 @@ describe("Search — the Peek, in Godview: Live now (P2)", () => {
   });
 
   it("ends the desktop filter on the ghost row while this Mac is not connected (TS-4): This Mac alone, then Your other devices · Connect…", async () => {
-    const godview = godviewDoor({
-      desks: [
-        { id: "here", name: "MacBook Pro", os: "macos", here: true, note: "1 agent", quiet: false },
-      ],
-      connect: true,
-    });
+    const godview = godviewDoor({ desks: [HERE_DESK], connect: true });
     const asked: ShellCommand[] = [];
     const stop = onShellPresentationRequest((command) => asked.push(command));
     try {

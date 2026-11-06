@@ -44,6 +44,9 @@ export interface PeekLiveRow {
   readonly agent: string | null;
   /** another desktop's run: where it runs (no mirror until DS-4, K10) */
   readonly remote: Pick<LiveDesk, "name" | "os"> | null;
+  /** SE-D1 — the Agent Profile this desktop's run runs under, by its id: null
+   * for a peer's run (a profile is its own desktop's) and for one under none */
+  readonly profile: string | null;
   /** the lines that matched, newest first */
   readonly lines: readonly PeekLine[];
   /** this desktop's floor session: what the live peek watches */
@@ -76,6 +79,8 @@ function liveRowOf(row: FindRow<LiveFindAgent>): PeekLiveRow {
     folder,
     agent: run.agent?.provider.label || (state === "shell" ? "shell" : null),
     remote: run.desk.self ? null : { name: run.desk.name, os: run.desk.os },
+    // RED (SE-1a): no row says its profile yet — the green reads the run's own
+    profile: null,
     lines: linesOf(row.hits),
     floorSessionId: run.floorSessionId ?? null,
     run,

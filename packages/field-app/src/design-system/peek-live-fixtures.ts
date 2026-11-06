@@ -104,17 +104,29 @@ export const LIVE_FIXTURE_FILTERS: LiveFilters = {
       name: "MacBook Pro",
       os: "macos",
       here: true,
-      note: "2 agents",
+      note: "1 agent",
       quiet: false,
+      agents: 1,
+      sessions: 2,
     },
-    { id: "studio", name: "studio", os: "linux", here: false, note: "1 agent", quiet: false },
+    {
+      id: "studio",
+      name: "studio",
+      os: "linux",
+      here: false,
+      note: "1 agent",
+      quiet: false,
+      agents: 1,
+      sessions: 1,
+    },
   ],
   desk: null,
   profiles: [
-    { id: "native", label: "This Mac", kind: "native", isDefault: true },
-    { id: "work", label: "Work", kind: "managed", glyph: "briefcase", blocked: true },
+    { id: "native", label: "This Mac", kind: "native", isDefault: true, sessions: 0 },
+    { id: "work", label: "Work", kind: "managed", glyph: "briefcase", blocked: true, sessions: 0 },
   ],
   profile: null,
+  sessions: 3,
 };
 
 /** TS-4 (TS-D7) — this Mac not connected: the desktop filter holds This Mac
