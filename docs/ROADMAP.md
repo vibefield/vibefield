@@ -390,12 +390,16 @@ phone"; DECISIONS PC
   - the two-desktop run of the merge and a forwarded say (James);
   - for James's eye: §9's away lines, and an ask that does not move a spark's row (CH-D1, both platforms).
 
-**SD — the sound identity** · vibe-field-4a, the sound lead (ex vibe-field-61; lane `lanes/sd1`) · law: DESIGN.md
-§14 "Sound — the field, heard" and §8 "Settings → Sound"; the page *Hear What Needs You* (Lq2MXZkT; sources
-`draft/sound/`) and `draft/sound/design-sound.md` §14–§15; DECISIONS SD
+**SD — the sound identity** · the sound lead (vibe-field-4a until the 11-05 account switch, ex vibe-field-61;
+lane `lanes/sd1`) · law: DESIGN.md §14 "Sound — the field, heard", §8 "Settings → Sound" and §9's queue line;
+the pages *Hear What Needs You* (Lq2MXZkT; sources `draft/sound/`) and *Heard While Away* (Rfw94D2y, SD-3's
+Q1–Q3), and `draft/sound/design-sound.md` §14–§15; DECISIONS SD
 - Ruled 11-05 00:40:17–00:42:43Z (James, on the page): SD-D1…D22, all at the leans, with no tuning and no trials
   saved; his word at 00:43Z, "all ruled with your lean, now land this nicely". SND-0's listening week is skipped by
   that ruling. It left §4, where Q27 had parked it until James picked it up.
+- Ruled 11-06 07:22–07:28Z (James, on *Heard While Away*): sound and notice are two separate things (Q1), so
+  away VibeField plays the sound itself and a silent notice says what happened; the notice's words (Q2) and a
+  click to Godview (Q3) at the leans. SD-D15 is amended.
 - Landed 11-05: **SD-1, the law and its code** (`8b22e7b01` → `1ebe7b461`, stacked as M126, run 126; LANDED
   "SD-1"): DESIGN.md §14; `@vibefield/sound`, a second zero-dependency root beside contracts (the field, Starlight,
   the spaces, the masters, the family, the touch and the voice), sample for sample the lab engine; wall R31.
@@ -404,11 +408,14 @@ phone"; DECISIONS PC
   (this desktop's agents placed by the panes, every other desktop's from across the field), through the system-sound
   path (a Node-API player at the alert volume); the renders in a worker; Settings → Sound; Quiet in the status item.
   CLAUDE.md's taxonomy names `sound` (James's typed word).
-- Next: **SD-3, away**: the notices' sounds, rendered at package time (§9's notice line moves in DESIGN.md first);
-  SD-4, the phone (its own kit slot); SD-5, the mark, a terminal's bell and the bloom.
-- Owed: James's audible check (LANDED "SD-2", Owed); the next signed nightly's reads of the player (its release
-  signature, its load under the hardened runtime, `desktop.sound.rendered`); ESR §6.2's flip at the next draft slot;
-  the mark's clearance check before it ships.
+- Landed 11-06: **SD-3, away** (`863a67aa1` → `67034fe61`, stacked as M181, run 181; LANDED
+  "SD-3"): with no VibeField window in front, the voice plays every agent's sound, centred in the theme's
+  space, and posts a silent notice for each sound it says (the agent, then what happened; a click opens
+  Godview); Settings → Sound's foot says so.
+- Next: SD-4, the phone (its own kit slot); SD-5, the mark, a terminal's bell and the bloom.
+- Owed: James's audible check and his away row (LANDED "SD-2" and "SD-3", Owed); his eye on the foot's words
+  (`sd3-foot-words`); the next signed nightly's reads of the player (its release signature, its load under the
+  hardened runtime, `desktop.sound.rendered`); the mark's clearance check before it ships.
 
 **MA — Apps (what your agents make, open on every device)** · vibe-field-19 (lanes `lanes/ma/1`, `lanes/ma-3`,
 `lanes/ma-4`) · law: `draft/thinking-mini-apps.md` §3–§5 and §9 (the page *Apps in a Pocket*, YJ28uyY3, where it
@@ -1299,7 +1306,7 @@ Petition status lives in `draft/petitions/README.md`. Still open or owed there:
 | LOG — logging and audit | PARKED; item 78 landed | `specs/logging-and-diagnostics.md` | LOG-39 for the beta |
 | UI — design system | COMPLETE; owed slices | `DESIGN.md`, `docs/UI_SYSTEM.md` | InlineNotice tones; the desk sweep |
 | SNAP — screenshot tool | PARKED; SNAP-0/1/1a/3/3a/3b landed | `thinking-screenshot-tool.md`, `draft/composer/build-edge-trays.md` | live checks; the still as `desk.photo` |
-| SD — the sound identity | ACTIVE since 11-05 (SD-D1…D22 ruled at the leans); SD-1 landed 11-05 (DESIGN.md §14 and `@vibefield/sound`, M126 `1ebe7b461`, run 126); SD-2 landed 11-05 (the desktop hears it, M138 `9e5b6eec8`, run 138) | DESIGN.md §14; `draft/sound/design-sound.md` | SD-3, away |
+| SD — the sound identity | ACTIVE since 11-05 (SD-D1…D22 ruled at the leans); SD-1 landed 11-05 (DESIGN.md §14 and `@vibefield/sound`, M126 `1ebe7b461`, run 126); SD-2 landed 11-05 (the desktop hears it, M138 `9e5b6eec8`, run 138); SD-3 landed 11-06 (away, M181 `67034fe61`, run 181) | DESIGN.md §14; `draft/sound/design-sound.md` | SD-4, the phone |
 | WIN — Windows port | PARKED since 08-24 (`c16e618f4`) | `thinking-windows-port.md`, `docs/WINDOWS_PORT_STATUS.md` | a Windows leg on the rails |
 | LSF — live surfaces foundation | COMPLETE; LSF-4 landed 10-26 | `specs/live-surfaces-foundation.md` | consumed by PT; §18 Windows rows with WIN |
 | CO — the compose plane | ACTIVE; CP-0, SP-1a, CP-1a…1c, CP-1d, MT-0, CP-2, SP-1b, SP-1c, SP-1d, CP-3 (`ce6577783`, run 88), TU-1 (`57569bca3`, mint M96), the handle (`045f10ec7`, mint M100), items 158 and 159 with CO-1b (`9b3164ccf`, mint M129), CP-5a (`fc70097e3`, mint M140), CP-4a1 (`1a3ca5f24`, mint M143), SP-1e2's fieldd half (`068cab410`, mint M146), TH-1/TH-2 (`d5c6995fb`, mint M147), SP-1e2's card (`320d4b882`, mint M156), CP-4a2a (`c07039551`, mint M159), CP-4a2b's M-h (`aebd6a80b`, mint M163) and M-r1 (`c92b33692`, mint M168) landed | `compose-plane/thinking-roled-agents.md` §15–§17, `compose-plane/v2/`, `thinking-tool-plane.md`; the CO round (Druyc3Ua); DESIGN.md §2.10 | SP-1e4 · CP-4a2b…4f · CP-5b…d |

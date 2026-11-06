@@ -37689,3 +37689,130 @@ ancestor of `2b9b66c14`; `355dffd82` is SP-D13's, on main.
 
 Two inserts into older entries: SP-D13's Owed, answered in part, and a dated correction under AR-5b's "local-only
 forever", at its source.
+
+## SD-3 — away: VibeField plays the sound itself, and a silent notice says what happened (2026-11-06; `863a67aa1` → `67034fe61`, 3 commits on main `c9493b957`, lane `sd/3-away` in `/Volumes/SamsungRed/lanes/sd1/vibe-field`, stacked as M181 `67034fe61`, run 181)
+
+**What it rests on.**
+- SD-2 (LANDED "SD-2"): main's voice over the mesh board, the system-sound player, Settings → Sound, and Quiet in
+  the status item.
+- James's rulings on the page *Heard While Away* (https://claude.ai/artifact/Rfw94D2yY85o3UGCwXqaZ1, db
+  `decisions`), 2026-11-06:
+  - Q2 (a), the notice's words, and Q3 (a), a click opens Godview: picked in the store at 07:22:32Z and 07:22:36Z.
+  - Q1, typed at 07:23Z: "for Q1, i think sound on/off and notification on/off are two separate things". That
+    closed round 1 at its (b), a silent notice with the sounds off, and opened round 2: what plays the sound away.
+  - Q1 round 2 (a), typed at 07:28Z: "yes, go with lean". VibeField plays the sound itself, away too. The store
+    holds it as `sd3-q1` {round 2, a}, with his words quoted.
+  - VF-PM ruled Q4–Q7 at the leans (2026-11-05 23:05Z). With Q1 (a), Q7 (the files' format) falls away, and Q4 is
+    the voice's own chord, its number in the notice's words.
+- The page was first published at 2026-11-05 23:13Z on the account James used then (`7x5Dsm2k`, untouched since).
+  At 07:21Z James asked for it "under my current account": `Rfw94D2y`, byte-identical, its store empty.
+
+**What** (9 files, +401 −64; the tests are 222 of the added lines):
+- **DESIGN.md first** (`863a67aa1`, docs only):
+  - §14 "Where it plays": "In VibeField" plays in front and away. "Away (SD-D15, amended at SD-3)" sets out the two
+    separate things, the sound away (every agent; centred in the theme's space, never far; no reminder), the
+    notice's words and the click.
+  - §14 "Quiet": the notices follow Focus, and away a quiet sound's notice still comes, silent.
+  - §9: the queue's notice line moves. While no window is in front, the voice raises a silent notice for each sound
+    it says, beside an agent's notify.
+  - §8 Settings → Sound: the foot's second sentence.
+- **Main** (`100fa2920`):
+  - `away-notices.ts` (new, pure): the notices one request raises.
+    - One agent: `sessionName` (its agent's label in its folder, since the field row carries no title), then Done,
+      Has a question, Needs your approval, or Stopped: it failed.
+    - A Done chord: "N agents", then Done. All quiet: "VibeField", then All quiet.
+    - A request two agents share: one notice each. An agent that has gone: none. A click opens `godview`.
+  - `sound-voice.ts`'s `said()`:
+    - Away, a reminder is neither played nor posted (`dropped.remindAway`). Otherwise the request's notices go to
+      the `notice` port, whatever Play sounds and Quiet say (`posted`).
+    - Then the sound plays under Play sounds and Quiet, in front or away.
+    - `renderOptionsOf(…, away)` centres every sound in the theme's space.
+  - `index.ts`:
+    - The voice is built where a player is ready or the OS can show a notice.
+    - Its notice port returns in a harness or a marked run (`VF_SMOKE_RUN`), and shows the notice `silent`.
+    - `showViewNotice` is the one click helper. CP-3's notify notice and the voice's share it; the notify is as it
+      was.
+- **The window** (`67034fe61`): Settings → Sound's foot. "For now they play only while a VibeField window is in
+  front" becomes "While VibeField is in the background, a notice says what happened too, and System Settings →
+  Notifications decides whether it shows."
+- **Tests:**
+  - `away-notices.test.ts`, 7, new.
+  - `sound-voice.test.ts`, 25 (16 on main): SD-2's away-drop row is folded into the Play-sounds-off row, and 10 are
+    new: eight away rows and two rows on main's source.
+  - `needs-notices.test.ts`, 7: CP-3's source row follows the click into the shared helper.
+  - `sound-settings.test.tsx`, 11: the foot row reads the new sentence.
+
+**Validation.**
+- **Nothing ran on the MacBook.** The Mac HOLD (co-plan/HOLD, VF-PM 05:18Z) covers vitest, tsc and biome. Line
+  widths were checked by script against biome's 100.
+- **The light** (a9 on the old mini, 07:44:34–07:45:02Z, at the first cut `9a7b0391f` on `ca63358ae`; direct
+  binaries, no audio; logs in `lanes/ts6/logs/oldmini/fill-sd3/`):
+  - electron-shell 39/39 (away-notices 7, sound-voice 25, needs-notices 7);
+  - field-app's sound-settings 11/11;
+  - tsc 0 on both packages;
+  - biome on the 8 files: "No fixes applied", so no format patch.
+- **Two re-cuts, carried.** Each had a clean merge-tree, and each carried the three patch-ids `ac218842dbe5`,
+  `4b2a592a4c46` and `5efbeef0136f`, which are also the first cut's (`6c02d60be` → `9a7b0391f` on `ca63358ae`, the
+  cut a9's light read).
+  - Onto `e1a416f96`, SP-7a's M-a records, at 08:17Z. No file was in both diffs, and SD-3's nine files were
+    byte-identical between the tips. VF-PM verified the packet by his own diff at 08:19:40Z: brief sha256
+    `f0042073…`, bundle `2ac4349a…`.
+  - Onto `c9493b957`, M-U1's mint of record, at 08:51Z, as the landed `863a67aa1` → `67034fe61`. `git range-diff`
+    read all three as `=`. DESIGN.md was the one shared file: SD-3's hunks were identical, with their context, at new
+    line numbers, and the other eight files byte-identical. M-U1's DESIGN.md change was re-read for meaning, and none
+    of its lines speaks of notices or sound. VF-PM verified the packet at 08:51:35Z: brief `4bc50117…`, bundle
+    `bccf870e…`.
+- **Run 181** (a9's `pnpm verify` at `67034fe61` on vf-m1; armed at 09:02:32Z on main `c9493b957`, M-U1's land):
+  exit 0 at 09:07:37Z.
+  - electron-shell 2,687 passed: M-U1's 2,671 plus 16. field-app 4,275, unchanged.
+  - vitest 13,632, which is 13,616 plus 16. biome checked 3,423 files with no fixes.
+  - The generated files were fresh and the tree was clean after.
+  - `verify.log` sha256 `66a050f1…`, in `lanes/ts6/logs/m1/run181/`.
+- **Landed:** main fast-forwarded `c9493b957` → `67034fe61` at 2026-11-06T09:09:34Z. It was the fixer's land, on
+  VF-PM's GO of 09:08:38Z, with the fixer's gates all read and the numstat exactly the nine files.
+
+**Not witnessed (said).**
+- **No notice was shown and no sound heard.** The smokes post none (a harness or a marked run returns first), and
+  no agent plays sound on the live Mac. The four steps are James's hand row (Owed).
+- **`silent: true` on macOS** is read from Electron 43.1.1's source (`silent` gives `content.sound = nil` in
+  `cocoa_notification.mm`). It is not witnessed.
+
+**Found (said).**
+- §14's head still said "until SD-2 lands, nothing in the product plays it" after SD-2 landed. It is settled at its
+  source.
+- The voice was built only where a player was ready ("no player, no listening"). With the notice its own thing, it
+  is built where the OS can show one too.
+- CP-3's source audit read the click inside its slice of `index.ts`. The shared helper moved it, and the audit now
+  follows the helper.
+
+**Calls beyond the picks** (VF-PM 07:44Z: none flagged; with the foot's words, on James's board as
+`sd3-foot-words`):
+1. Away, every sound is centred in the theme's space, never far: Q5's reason, "you are at none of your desktops".
+2. A request two agents share plays once and raises a notice for each, so no plural is invented.
+3. The voice is built where a player is ready or the OS can show a notice.
+4. The notice port returns in a marked run too, as the sound does.
+5. CP-3's notify and the voice's notices share one click helper; the notify is unchanged.
+
+**Errata, corrected at their sources.**
+- DESIGN.md §14's head, SD-2's stale line, with a dated note.
+- DESIGN.md §14 "In VibeField" and §8's foot: SD-2's "until SD-3" lines, settled with dated notes.
+
+**Carried here** (VF-PM's rule: a later entry carries new evidence, with no insert into SD-2's):
+- prod-builder's asar worker probe (VF-PM 2026-11-05 06:55Z): "asar worker mechanism GREEN 06:52Z: Electron 43.1.1
+  main-process mode from inside a scratch app.asar, no source folder; the shipped worker requires only
+  node:worker_threads; the fused packaged app still owed".
+- SD-2's draft debt is paid. ESR §6.2's three sound rows were flipped to LANDED M138 at slot 17 (dev-local
+  `426635d5e`).
+
+**Owed.**
+- **James's hand, the away row**, beside SD-2's audible check, with VibeField in the background:
+  1. An agent's Done plays, and a silent banner reads "Claude Code in vibe-field" / "Done".
+  2. With VibeField's notices off in System Settings → Notifications, the sound plays alone.
+  3. With Play sounds off, or Quiet, the banner comes silent and nothing plays.
+  4. A click brings VibeField forward on Godview.
+- **James's eye:** the foot's words (`sd3-foot-words`).
+- **SD-2's, still owed:** the next signed nightly's reads of the player; smoke:update at the next gate:landing; L6's
+  census baseline.
+- **draft:** `design-sound.md`'s Status, §14 and §15 for SD-3, at the next draft slot.
+- **Next:** SD-4, the phone; SD-5, the mark, a terminal's bell and the bloom. The mark's clearance check before it
+  ships.
