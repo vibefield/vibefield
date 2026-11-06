@@ -104,6 +104,10 @@ export interface MockFileTransfer {
    * answer is never written, as a floor that ran it past fieldd's deadline: fieldd reads its own TIMEOUT, and a late
    * answer would settle nothing (native-link.ts `noteLateReply`). Cleared once run. */
   subscribeUnanswered: boolean;
+  /** The next this many `subscribe`s are refused RESOURCE_EXHAUSTED, as the floor answers every `native.mesh.*`
+   * request that finds its mesh queue full (field-native `mgmt/mod.rs`'s `mesh_queue_full`): refused before it runs,
+   * so the stream the connection holds stands. Counted down as each is refused. */
+  refuseSubscribes: number;
   /** every subId the floor answered a `subscribe` with, in order */
   subscribed: string[];
   /** every subId a later `subscribe` on the same connection replaced, in order: the floor stopped its stream, and
@@ -122,6 +126,7 @@ export function mockFileTransfer(overrides: Partial<MockFileTransfer> = {}): Moc
     snapshotAfterAnswer: false,
     holdAnswers: false,
     subscribeUnanswered: false,
+    refuseSubscribes: 0,
     subscribed: [],
     replaced: [],
     ...overrides,
@@ -1106,7 +1111,9 @@ export class MockMgmtServer {
    *     reserved) answers NOT_FOUND on either arm, ahead of step 1, as VF-FLOOR's facade reads the method first;
    *  1. `file-transfer-unsupported` first, for every declared verb, node or no node;
    *  2. `subscribe` is answered with no node up: its stream outlives node rebuilds. One on a connection that already
-   *     holds a file-transfer stream REPLACES it, and the old subId goes quiet (W3-20, VF-PM 2026-11-06);
+   *     holds a file-transfer stream REPLACES it, and the old subId goes quiet (W3-20, VF-PM 2026-11-06).
+   *     `MockFileTransfer.refuseSubscribes` refuses it unrun, as a full mesh queue does (at the floor that refusal
+   *     comes ahead of step 0, for any `native.mesh.*` request);
    *  3. `roots` and `pull` with no node answer the node gate (`meshPosture: null`, `meshUnavailable`);
    *  4. in capture mode they are refused MESH_CAPTURING;
    *  5. params the floor cannot read are PRECONDITION_FAILED;
@@ -1149,6 +1156,14 @@ export class MockMgmtServer {
       return;
     }
     if (subscribe) {
+      if (transfer.refuseSubscribes > 0) {
+        transfer.refuseSubscribes -= 1;
+        const code = RPC_ERROR_CODES.RESOURCE_EXHAUSTED;
+        refuse(code, "RESOURCE_EXHAUSTED", "mesh request queue is full", true, {
+          service: "mesh-gateway",
+        });
+        return;
+      }
       // the stream this connection held, if any, is stopped, and its subId goes quiet (W3-20, VF-PM 2026-11-06)
       for (const e of this.issued) {
         if (e.sock === sock && e.method === msg.method) transfer.replaced.push(e.subId);

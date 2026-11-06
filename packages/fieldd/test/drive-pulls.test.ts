@@ -595,6 +595,119 @@ describe("DR-3b — the drive's pulls over the floor's file transfer", () => {
     expect(await held).toMatchObject({ reason: MESH_FILE_TRANSFER.FAILED_IO });
   });
 
+  it("holds every accepted pull once a re-subscribe and its plain subscribe both read TIMEOUT, and the retry's snapshot settles them", async () => {
+    const transfer = mockFileTransfer();
+    // the link's own deadline, short, so fieldd's TIMEOUTs come within the row
+    const { mock, link, root, landsDir } = await floor(transfer, 1_000);
+    let minted = 0;
+    const drive = pulls(link, root, {
+      mintId: () => {
+        minted += 1;
+        return idFor(minted);
+      },
+      heldBoundMs: 6_000,
+      retryDelaysMs: [100],
+    });
+    await drive.start();
+    // a pull runs on, its answer read long before (its fence has run), and nothing holds it
+    const digest = digestOf(1);
+    const running = drive.pull(ask(digest));
+    // handled before anything can settle it, so an early rejection is never unhandled
+    running.catch(() => undefined);
+    await until(() => transfer.running.size === 1, "the first pull runs");
+    await roundTrip(link);
+    // a second pull is held (race#0 (b)), and the floor's mesh worker is backlogged: it RUNS the re-subscribe, which
+    // replaces the stream (W3-20), past fieldd's deadline
+    transfer.subscribeUnanswered = true;
+    transfer.snapshotAfterAnswer = true;
+    const held = drive.pull(ask(digestOf(2))).catch((error: unknown) => error);
+    await until(() => transfer.replaced.length === 1, "the re-subscribe, run");
+    // the plain subscribe that follows its TIMEOUT is run and read TIMEOUT too; meanwhile the first pull ends with no
+    // stream to carry its end, its file in place
+    transfer.subscribeUnanswered = true;
+    const path = join(landsDir, `${digest}.${idFor(1)}`);
+    writeFileSync(path, "object bytes");
+    transfer.running.delete(idFor(1));
+    // with no stream every accepted pull is held (W3-21, VF-PM 2026-11-06), and the subscribe is retried: its
+    // snapshot, built after both answers, omits both, and the lands rule settles each, long before the bound
+    await expect(running).resolves.toEqual({ path });
+    expect(await held).toMatchObject({ reason: MESH_FILE_TRANSFER.FAILED_IO });
+    expect(asked(mock, SUBSCRIBE)).toBe(4);
+    // each subscribe the floor ran replaced the one before it, the two fieldd read as refused included: ONE stream
+    // stands, the retry's
+    expect(transfer.subscribed).toHaveLength(4);
+    expect(transfer.replaced).toEqual(transfer.subscribed.slice(0, 3));
+  });
+
+  it("ends every held pull FAILED_TIMEOUT at its bound when each retry is refused, and asks a bounded number of times", async () => {
+    const transfer = mockFileTransfer();
+    const { mock, link, root } = await floor(transfer, 1_000);
+    const events: CapturedLog[] = [];
+    const bound = 2_500;
+    const delays = [100, 200, 400];
+    const drive = pulls(link, root, {
+      heldBoundMs: bound,
+      retryDelaysMs: delays,
+      logger: captureLogger(events),
+    });
+    await drive.start();
+    const running = drive.pull(ask(digestOf(1))).catch((error: unknown) => error);
+    await until(() => transfer.running.size === 1, "the first pull runs");
+    await roundTrip(link);
+    // a second pull is held, the floor runs its re-subscribe past fieldd's deadline, and from there it refuses every
+    // subscribe, its mesh queue full (RESOURCE_EXHAUSTED, never run)
+    transfer.subscribeUnanswered = true;
+    transfer.snapshotAfterAnswer = true;
+    const held = drive.pull(ask(digestOf(2))).catch((error: unknown) => error);
+    await until(() => transfer.replaced.length === 1, "the re-subscribe, run");
+    transfer.refuseSubscribes = Number.POSITIVE_INFINITY;
+    // the stream goes at the re-subscribe's TIMEOUT, and the first pull is held from there
+    await until(() => events.some(subscribeRefused), "the re-subscribe's TIMEOUT");
+    const emptied = Date.now();
+    // the refusals end nothing: each pull's bound does
+    for (const failure of [await held, await running]) {
+      expect(failure).toBeInstanceOf(DrivePullFailed);
+      expect(failure).toMatchObject({ reason: MESH_FILE_TRANSFER.FAILED_TIMEOUT });
+    }
+    const waited = Date.now() - emptied;
+    expect(waited).toBeGreaterThanOrEqual(bound - 100);
+    expect(waited).toBeLessThan(bound + 1_000);
+    // asked: at the start, the re-subscribe, the plain subscribe and its series' retries, and nothing after
+    const subscribes = 3 + delays.length;
+    expect(asked(mock, SUBSCRIBE)).toBe(subscribes);
+    expect(events.filter(subscribeRefused)).toHaveLength(subscribes - 1);
+    await sleep(500);
+    expect(asked(mock, SUBSCRIBE)).toBe(subscribes);
+  });
+
+  it("holds a pull accepted while no stream stands at once, asks for the stream, and the first fresh snapshot settles it", async () => {
+    const transfer = mockFileTransfer();
+    // the stream is refused twice, its mesh queue full: at the start, and at the pull's own ask
+    transfer.refuseSubscribes = 2;
+    const { mock, link, root, landsDir } = await floor(transfer);
+    const id = idFor(1);
+    const bound = 4_321;
+    const drive = pulls(link, root, { mintId: () => id, heldBoundMs: bound, retryDelaysMs: [300] });
+    await drive.start();
+    expect(asked(mock, SUBSCRIBE)).toBe(1);
+    const timers = vi.spyOn(globalThis, "setTimeout");
+    cleanup.push(() => timers.mockRestore());
+    const digest = digestOf(1);
+    const landed = drive.pull(ask(digest));
+    const state = settled(landed);
+    // held as its answer is read (its bound's timer set), and the stream asked for with no node-up
+    await until(() => asked(mock, SUBSCRIBE) === 2, "the pull's own ask for the stream");
+    expect(timers.mock.calls.some((call) => call[1] === bound)).toBe(true);
+    expect(state()).toBe("pending");
+    // it ends at the floor with no stream to carry its end, its file in place
+    const path = join(landsDir, `${digest}.${id}`);
+    writeFileSync(path, "object bytes");
+    transfer.running.delete(id);
+    // the retry's snapshot, the first fresh one, omits it, and the lands rule settles it long before the bound
+    await expect(landed).resolves.toEqual({ path });
+    expect(asked(mock, SUBSCRIBE)).toBe(3);
+  });
+
   it("settles a held pull with the stop's own refusal, and the stop clears its bound's timer", async () => {
     const transfer = mockFileTransfer();
     const { link, root } = await floor(transfer);
