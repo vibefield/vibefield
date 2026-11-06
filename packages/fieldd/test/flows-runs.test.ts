@@ -2933,10 +2933,11 @@ describe("CP-4a2b — a changed flow's acts begin the asked-for run (§13a slice
 // re-bound, and tells nothing more), and when it ends, once its `end` line is kept: done, failed or lost. Your answer
 // to a hold tells nothing (the run goes on), a spark that is gone is told nothing, and a Run you start in a spark's
 // thread (`{by: "you", spark}`) is yours, and tells the spark nothing (T3b). The runs tell through their `waker` port
-// (Q10), which the harness records; these rows read whom it told and how often, never what: the facts' words are
-// red-b's, once §9 holds them. A hold row runs on the real needs queue (`needsQueue`), whose `minted` decides its
-// tell, and reads that tell once told (`within`); the counts across a wake are the host's life's rows, on R13d's and
-// R13e-ask's roads.
+// (Q10), which the harness records. A row reads each fact it tells whole, whom and what, and how often (red-b): a fact
+// is its words.ts sentence (§9's Proposed "What VibeField tells a spark", bafdcd544), built from the spark's name,
+// ‹flow› and the run's id alone, and never holds the gate's question, a step's answer, a log line or what the script
+// threw. A hold row runs on the real needs queue (`needsQueue`), whose `minted` decides its tell, and reads that tell
+// once told (`within`); the counts across a wake are the host's life's rows, on R13d's and R13e-ask's roads.
 
 /** Vela's own run, from its thread, as its flow_run starts one (slice 11b). */
 const VELAS: Partial<FlowRunStartParams> = {
@@ -2946,6 +2947,17 @@ const VELAS: Partial<FlowRunStartParams> = {
 
 /** The sparks the runs told (slice 11b), one per fact, in order, from the `from`th fact on: whom, never what. */
 const toldOf = (h: Harness, from = 0): string[] => h.facts.slice(from).map(({ spark }) => spark);
+
+/** The facts the runs told (slice 11b's red-b), each whole, whom and what, in order, from the `from`th fact on. */
+const factsOf = (h: Harness, from = 0) => h.facts.slice(from);
+
+/** What Vela's run `run` of `flow`, whose `meta` names it `name`, tells Vela (slice 11b's red-b, R35, Q9): `fact`, one
+ * of words.ts's four, said of Vela by the name the runs know it by (the harness's `sparkOf`, and its start's `from`:
+ * both "Vela"), of ‹flow› (`markName`'s) and of the run's id; the whole pair the `waker` port takes. */
+const toVela = (fact: typeof words.factAsking, name: string, flow: string, run: string) => ({
+  spark: VELA,
+  fact: fact(VELA_FROM.name, words.markName(name, flow), run),
+});
 
 describe("CP-4a2b — the spark's facts: a run a spark started tells it when the run holds on you, and when it ends (§13a slice 11b)", () => {
   /** A gate whose refusal its script catches and logs: until ask() is built (slice 11a) its run ends done; once it
@@ -2984,15 +2996,15 @@ describe("CP-4a2b — the spark's facts: a run a spark started tells it when the
     // its hold, read once told. At this red its ask is refused at its call, and the script's throw ends the run
     // failed: nothing raised, nothing told
     await within(WAIT_MS, () => h.facts.length > 0 || ended(h, run));
-    expect({ raised: h.raisedAs.map(({ minted }) => minted), told: toldOf(h) }).toEqual({
+    expect({ raised: h.raisedAs.map(({ minted }) => minted), told: factsOf(h) }).toEqual({
       raised: [true],
-      told: [VELA],
+      told: [toVela(words.factAsking, "Gate then step", "ship", run)],
     });
     // your answer, on the needs queue as a window gives it: the run goes on to its step A, and tells nothing
     const held = h.facts.length;
     await needsOf(h).answer(h.raisedAs[0]?.id ?? "", 0, PRINCIPAL);
     await within(WAIT_MS, () => h.enqueued.length > 0 || ended(h, run));
-    const answered = toldOf(h, held);
+    const answered = factsOf(h, held);
     // A's answer ends the run, and its end tells once
     h.endTurn({
       run,
@@ -3003,9 +3015,9 @@ describe("CP-4a2b — the spark's facts: a run a spark started tells it when the
       text: "a",
     });
     await within(WAIT_MS, () => ended(h, run));
-    expect({ answered, end: toldOf(h, held), state: h.runs.read(run)?.summary.state }).toEqual({
+    expect({ answered, end: factsOf(h, held), state: h.runs.read(run)?.summary.state }).toEqual({
       answered: [],
-      end: [VELA],
+      end: [toVela(words.factDone, "Gate then step", "ship", run)],
       state: "done",
     });
   });
@@ -3024,26 +3036,30 @@ describe("CP-4a2b — the spark's facts: a run a spark started tells it when the
     // its hold, read once told: the wake rides the raise's own road (Q3 (b)), so PARK_MS is ample, and at this red,
     // where nothing tells, the row reads its value inside vitest's budget, never past it
     await within(PARK_MS, () => h.facts.length > 0 || ended(h, run));
-    const held = toldOf(h);
+    const held = factsOf(h);
     // your Ask once more: the run goes on, and tells nothing
     expect(await askOnceMore(h, run)).toEqual({ outcome: "done" });
     expect({
       raised: h.raisedAs.map(({ minted }) => minted),
       held,
-      answered: toldOf(h, held.length),
-    }).toEqual({ raised: [true], held: [VELA], answered: [] });
+      answered: factsOf(h, held.length),
+    }).toEqual({
+      raised: [true],
+      held: [toVela(words.factAsking, "Review", "review", run)],
+      answered: [],
+    });
   });
 
   it("R35 (Q9 (b), D18; slice 11b): a run a spark started tells that spark once when it ends, once its `end` line is kept, whether or not the record's write after it lands: done, failed (its script threw), and lost (its bytes gone by its wake); an `end` line the disk refuses tells nothing, nor an end whose spark is gone", async () => {
     const h = await harness();
     h.approved("hello", HELLO);
     h.approved("throws", THROWS);
-    /** the sparks told from the start of a run of `flow`, Vela's own, to its end in `state` */
-    const toldAtEnd = async (flow: string, state: string): Promise<string[]> => {
+    /** a run of `flow`, Vela's own, to its end in `state`, and the facts told from its start */
+    const toldAtEnd = async (flow: string, state: string) => {
       const from = h.facts.length;
       const run = startedRun(await h.start({ flow, ...VELAS })).run;
       await settled(h.runs, run, state);
-      return toldOf(h, from);
+      return { run, told: factsOf(h, from) };
     };
     const done = await toldAtEnd("hello", "done");
     const failed = await toldAtEnd("throws", "failed");
@@ -3056,9 +3072,9 @@ describe("CP-4a2b — the spark's facts: a run a spark started tells it when the
       return head;
     });
     const lost = await toldAtEnd("hello", "lost");
-    /** whom Vela's run of HELLO told, its store refusing its `end` line (`line`, R6k's road) or the record's write
-     * after that line (`record`): read once fieldd's log says its end was not kept */
-    const refused = async (what: "line" | "record"): Promise<string[]> => {
+    /** Vela's run of HELLO, its store refusing its `end` line (`line`, R6k's road) or the record's write after
+     * that line (`record`), and the facts it told: read once fieldd's log says its end was not kept */
+    const refused = async (what: "line" | "record") => {
       const r = await harness();
       r.approved("hello", HELLO);
       const full = new Error("ENOSPC: no space left on device, write");
@@ -3072,9 +3088,9 @@ describe("CP-4a2b — the spark's facts: a run a spark started tells it when the
         if (what === "record" && fields.endedAt !== undefined) throw full;
         write(run, fields);
       });
-      startedRun(await r.start({ flow: "hello", ...VELAS }));
+      const run = startedRun(await r.start({ flow: "hello", ...VELAS })).run;
       await within(WAIT_MS, () => notKept(r));
-      return toldOf(r);
+      return { run, told: factsOf(r) };
     };
     // the record's write after the `end` line refused: the line is kept, so the end is told
     const unrecorded = await refused("record");
@@ -3095,14 +3111,71 @@ describe("CP-4a2b — the spark's facts: a run a spark started tells it when the
       text: "ok",
     });
     await within(WAIT_MS, () => ended(g, run));
-    const gone = { state: g.runs.read(run)?.summary.state, told: toldOf(g) };
-    expect({ done, failed, lost, unrecorded, unkept, gone }).toEqual({
-      done: [VELA],
-      failed: [VELA],
-      lost: [VELA],
-      unrecorded: [VELA],
+    const gone = { state: g.runs.read(run)?.summary.state, told: factsOf(g) };
+    expect({
+      done: done.told,
+      failed: failed.told,
+      lost: lost.told,
+      unrecorded: unrecorded.told,
+      unkept: unkept.told,
+      gone,
+    }).toEqual({
+      done: [toVela(words.factDone, "Hello", "hello", done.run)],
+      failed: [toVela(words.factFailed, "Throws", "throws", failed.run)],
+      lost: [toVela(words.factSetAside, "Hello", "hello", lost.run)],
+      unrecorded: [toVela(words.factDone, "Hello", "hello", unrecorded.run)],
       unkept: [],
       gone: { state: "done", told: [] },
+    });
+  });
+
+  it("R35 (Q9; slice 11b's red-b): a fact is built from the spark's name, ‹flow› and the run's id alone: none holds the gate's question, a step's answer, a log line or what the script threw", async () => {
+    // a gate raced against a step: the step's answer wins the race, and the script logs a line and throws, its gate
+    // still waiting, so the run tells Vela it holds on you, then that it failed. At this red its ask is refused at its
+    // call, the race's refusal ends the run failed, and nothing tells
+    const UNSAID = [
+      'export const meta = { name: "Unsaid" };',
+      "export default async function () {",
+      `  await Promise.race([ask("Feed the zebra?", ["Feed", "Wait"]), agent("Review the diff", ${STEP_AT})]);`,
+      '  log("the quokka line");',
+      '  throw new Error("the narwhal throw");',
+      "}",
+      "",
+    ].join("\n");
+    // what the run said or heard, each by a word only it holds: the gate's question, the step's answer, the log line
+    // and what the script threw
+    const marks = ["zebra", "otter", "quokka", "narwhal"];
+    const h = await harness({ needsQueue: true });
+    h.approved("unsaid", UNSAID);
+    const run = startedRun(await h.start({ flow: "unsaid", ...VELAS })).run;
+    await within(WAIT_MS, () => h.enqueued.length > 0 || ended(h, run));
+    h.endTurn({
+      run,
+      call: 2,
+      runtimeRunId: "rt-step1",
+      turn: "t1",
+      outcome: "completed",
+      text: "the otter answer",
+    });
+    await within(WAIT_MS, () => ended(h, run));
+    // its end's tell read once told: at this red, where nothing tells, inside vitest's budget, never past it
+    await within(PARK_MS, () => h.facts.length >= 2);
+    // where the run keeps each: its item's question, its journal's answer and `end` line, and its record's log line
+    const kept = JSON.stringify([h.items, h.records.readRun(run), h.records.runRecord(run)]);
+    const told = factsOf(h);
+    expect({
+      told,
+      kept: marks.filter((mark) => kept.includes(mark)),
+      marked: told.filter(({ fact }) => marks.some((mark) => fact.includes(mark))),
+      state: h.runs.read(run)?.summary.state,
+    }).toEqual({
+      told: [
+        toVela(words.factAsking, "Unsaid", "unsaid", run),
+        toVela(words.factFailed, "Unsaid", "unsaid", run),
+      ],
+      kept: marks,
+      marked: [],
+      state: "failed",
     });
   });
 
@@ -4891,13 +4964,14 @@ describe("CP-4a2b — the host's life: parked and woken, D2's lookup at a wake, 
 
   // slice 11b (Q5, Q9 (a); the rulings for red-a's revision, 2026-11-06): the wake counts. A spark's own run tells
   // it once for each hold the needs queue MINTED: a gate made again at a wake is re-bound (D2) and tells nothing more.
-  // Vela's runs, on the real queue; each row reads whom the runs told (`toldOf`) and how often, never what, once parked
-  // and once parked again, so a park or a wake that told shows in its reads too. At this red an ask is still refused
-  // and nothing tells: each row reads red on its counts.
+  // Vela's runs, on the real queue; each row reads the facts the runs told, whole (`factsOf`: whom and what, red-b),
+  // and how often, once parked and once parked again, so a park or a wake that told shows in its reads too. At this
+  // red an ask is still refused and nothing tells: each row reads red on its counts and its facts.
 
   it("R35 (Q5, Q9 (a): the wake counts on R13d's road; slice 11b): a gate a spark's run holds across a wake tells that spark once, at its mint, and nothing more at its re-bind; two gates beside a step tell it twice in all", async () => {
     /** Vela's run of `text` on the real queue, its `gates` held beside step `call` and parked; then that step's answer
-     * wakes it, and its gates, made again, are re-bound. Its raises, and whom it told by the park and after the wake */
+     * wakes it, and its gates, made again, are re-bound. The run, its raises, and the facts it told by the park and
+     * after the wake */
     const acrossWake = async (flow: string, text: string, gates: number, call: number) => {
       const h = await harness({ hostIdleMs: IDLE_MS, needsQueue: true });
       h.approved(flow, text);
@@ -4905,23 +4979,25 @@ describe("CP-4a2b — the host's life: parked and woken, D2's lookup at a wake, 
       const parked = () => h.items.length >= gates && h.enqueued.length > 0 && left(h, 0);
       // parked, its holds' tells read once told
       await within(PARK_MS, () => (parked() && h.facts.length >= gates) || over(h, run));
-      const held = toldOf(h);
+      const held = factsOf(h);
       answerStep(h, run, call, "ok");
       await within(PARK_MS, () => (h.items.length >= 2 * gates && left(h, 1)) || over(h, run));
-      return { raises: h.items.length, held, woken: toldOf(h, held.length) };
+      return { run, read: { raises: h.items.length, held, woken: factsOf(h, held.length) } };
     };
-    expect({
-      one: await acrossWake("gate", GATE_AND_STEP, 1, 2),
-      two: await acrossWake("gates", TWO_GATES_AND_STEP, 2, 3),
-    }).toEqual({
-      one: { raises: 2, held: [VELA], woken: [] },
-      two: { raises: 4, held: [VELA, VELA], woken: [] },
+    const one = await acrossWake("gate", GATE_AND_STEP, 1, 2);
+    const two = await acrossWake("gates", TWO_GATES_AND_STEP, 2, 3);
+    // what each run tells Vela of a gate it holds: once for GATE_AND_STEP's, and once for each of TWO_GATES_AND_STEP's
+    const ofOne = toVela(words.factAsking, "Gate and step", "gate", one.run);
+    const ofTwo = toVela(words.factAsking, "Gates and step", "gates", two.run);
+    expect({ one: one.read, two: two.read }).toEqual({
+      one: { raises: 2, held: [ofOne], woken: [] },
+      two: { raises: 4, held: [ofTwo, ofTwo], woken: [] },
     });
   });
 
   it("R35 (Q5 §5, Q9 (a): the wake counts on R13e-ask's roads; slice 11b): an ask journaled with no item tells the spark whose run it is once, at the wake that mints its item; one whose item the needs queue kept is re-bound there, and tells nothing", async () => {
     /** Vela's run of SEQ_ASK killed between its ask's call line and its item (R13e-ask's road), the item `kept` by the
-     * needs queue before the kill or not. Its raises, and whom it told once its woken run is parked again */
+     * needs queue before the kill or not. The run, its raises, and the facts it told once woken and parked again */
     const woken = async (kept: boolean) => {
       const h = await harness({
         hostIdleMs: IDLE_MS,
@@ -4943,10 +5019,12 @@ describe("CP-4a2b — the host's life: parked and woken, D2's lookup at a wake, 
       await killedBeforeEntry(h, run, seqAsk(), () => h.items.length > 0 || over(h, run));
       // parked again: a mint's tell read once told, and a re-bind's, were there one, told by then
       await within(PARK_MS, () => (left(h, 1) && (kept || h.facts.length > 0)) || over(h, run));
-      return { raises: h.items.length, told: toldOf(h) };
+      return { run, read: { raises: h.items.length, told: factsOf(h) } };
     };
-    expect({ minted: await woken(false), kept: await woken(true) }).toEqual({
-      minted: { raises: 1, told: [VELA] },
+    const fresh = await woken(false);
+    const rebound = await woken(true);
+    expect({ minted: fresh.read, kept: rebound.read }).toEqual({
+      minted: { raises: 1, told: [toVela(words.factAsking, "Seq ask", "seq-ask", fresh.run)] },
       kept: { raises: 1, told: [] },
     });
   });

@@ -113,3 +113,26 @@ export const runsPerSpark = (spark: string): string =>
  * started, said after steps.ts's "VibeField didn't start ‹label›:" (DESIGN.md §9 "A step's call refused"). */
 export const agentsStarted = (): string =>
   "this run has already started as many agents as a run may.";
+
+// The spark's facts (slice 11, Q9; §9 "What VibeField tells a spark", PROPOSED, ruled 2026-11-06): one marked
+// line each, without the "VibeField: " the input queue's mark adds (markedText) and with no closing stop, as that
+// family's are (tool-plane/rooms/you/words.ts). Built from the spark's name (`nameWords`: one line, cut at 64), ‹flow›
+// (`markName`'s) and the run's id alone: never the gate's question, a step's answer, a log line or what the script threw.
+const sparksRun = (spark: string, flow: string, run: string): string =>
+  `${nameWords(spark)}'s run of ${flow} (${run})`;
+
+/** A run a spark started holds on you: a gate's item, or a step whose answer missed twice (Q9 (a)). */
+export const factAsking = (spark: string, flow: string, run: string): string =>
+  `${sparksRun(spark, flow, run)} is asking you`;
+
+/** A run a spark started ended `done` (Q9 (b)). */
+export const factDone = (spark: string, flow: string, run: string): string =>
+  `${sparksRun(spark, flow, run)} is done`;
+
+/** A run a spark started ended `failed` (Q9 (b)). */
+export const factFailed = (spark: string, flow: string, run: string): string =>
+  `${sparksRun(spark, flow, run)} failed`;
+
+/** A run a spark started was set aside `lost` (Q9 (b); D7). */
+export const factSetAside = (spark: string, flow: string, run: string): string =>
+  `${sparksRun(spark, flow, run)} was set aside`;
