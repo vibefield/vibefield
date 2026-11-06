@@ -278,6 +278,61 @@ describe("Connect Your Devices… (TS-4; TS-D7)", () => {
   });
 });
 
+// Item 212 (RV #29; DESIGN.md §9 "The field service's words", at the lean until James rules rv-service-recovery)
+describe("the field service's row and its Try Again (item 212, RV #29)", () => {
+  const has = (menu: ReturnType<typeof buildTrayMenu>) =>
+    menu.some((item) => item.id === "retry-field-service");
+
+  it("says Restarting… while main starts it again, and offers nothing", () => {
+    const menu = buildTrayMenu(
+      snapshot({ link: "recovering" }),
+      { ...actions(), retryFieldService: vi.fn() },
+      "darwin",
+    );
+    expect(byId(menu, "status").label).toBe("Field service: Restarting…");
+    expect(has(menu)).toBe(false);
+  });
+
+  it("says it stopped after its tries, with Try Again under the row, which asks for the field service", () => {
+    const retryFieldService = vi.fn();
+    const menu = buildTrayMenu(
+      snapshot({ link: "crash-loop", serviceTries: 3, connectDevices: true }),
+      { ...actions(), retryFieldService, connectDevices: vi.fn() },
+      "darwin",
+    );
+    expect(byId(menu, "status").label).toBe("Field service: Stopped after 3 tries");
+    expect(menu.map((item) => item.id ?? item.type).slice(0, 4)).toEqual([
+      "open",
+      "status",
+      "retry-field-service",
+      "connect-devices",
+    ]);
+    expect(byId(menu, "retry-field-service").label).toBe("Try Again");
+    byId(menu, "retry-field-service").click?.();
+    expect(retryFieldService).toHaveBeenCalledTimes(1);
+  });
+
+  it("never guesses a count, and says one try as one", () => {
+    const status = (patch: Partial<TraySnapshot>) => {
+      const menu = buildTrayMenu(snapshot({ link: "crash-loop", ...patch }), actions(), "darwin");
+      return byId(menu, "status").label;
+    };
+    expect(status({})).toBe("Field service: Stopped");
+    expect(status({ serviceTries: 1 })).toBe("Field service: Stopped after 1 try");
+  });
+
+  it("offers Try Again only in crash-loop, only with the act, and releases it while quitting", () => {
+    const a = { ...actions(), retryFieldService: vi.fn() };
+    expect(has(buildTrayMenu(snapshot({ link: "ready" }), a, "darwin"))).toBe(false);
+    expect(has(buildTrayMenu(snapshot({ link: "unavailable" }), a, "darwin"))).toBe(false);
+    const stopped = snapshot({ link: "crash-loop", serviceTries: 3 });
+    expect(has(buildTrayMenu(stopped, actions(), "darwin"))).toBe(false);
+    const quitting = snapshot({ link: "crash-loop", serviceTries: 3, quitting: true });
+    expect(byId(buildTrayMenu(quitting, a, "darwin"), "retry-field-service").click).toBeUndefined();
+    expect(byId(buildTrayMenu(quitting, a, "win32"), "retry-field-service").enabled).toBe(false);
+  });
+});
+
 describe("the Switch User submenu (UA-5)", () => {
   const users = [
     { userId: "01AAA", name: "James", attached: true },

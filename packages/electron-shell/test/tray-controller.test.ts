@@ -292,6 +292,22 @@ describe("TrayController", () => {
     expect(downloadUpdate).toHaveBeenCalledTimes(1);
   });
 
+  it("routes Try Again through the same guarded actions (item 212, RV #29)", async () => {
+    const retryFieldService = vi.fn(async () => {});
+    const h = harness("darwin", false, {}, "visible", { retryFieldService });
+    h.controller.update({ link: "crash-loop", serviceTries: 3 });
+    vi.advanceTimersByTime(100);
+    menuItem(h.menus.at(-1)!, "retry-field-service").click?.();
+    await Promise.resolve();
+    expect(retryFieldService).toHaveBeenCalledTimes(1);
+    // a menu built before the quit began acts on nothing after it
+    const before = h.menus.at(-1)!;
+    h.controller.update({ quitting: true });
+    menuItem(before, "retry-field-service").click?.();
+    await Promise.resolve();
+    expect(retryFieldService).toHaveBeenCalledTimes(1);
+  });
+
   it("disposes idempotently and cancels a pending rebuild", () => {
     const h = harness();
     h.controller.update({ link: "ready" });
@@ -359,6 +375,9 @@ describe("trayImageKind", () => {
       { link: "unavailable", update: staged(true) },
       "offline",
     ],
+    // item 212 (RV #29) — a field service main is starting again, or has stopped starting, is no service either
+    ["main starts the field service again", { link: "recovering" }, "offline"],
+    ["main stopped after its tries", { link: "crash-loop", serviceTries: 3 }, "offline"],
     ["at rest", {}, "base"],
     [
       "a found update with updates off",

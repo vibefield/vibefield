@@ -1,8 +1,10 @@
 import type { FielddHandle, FielddSupervisor } from "@vibefield/fieldd-supervisor";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  FielddCrashLoopError,
   FielddDaemonBootFence,
   FielddHandleCoordinator,
+  type FielddRecoveryState,
 } from "../src/main/fieldd-handle-coordinator";
 import { RecoveringFielddObservers } from "../src/main/recovering-fieldd-observers";
 
@@ -331,5 +333,303 @@ describe("fieldd main-process recovery", () => {
     observers.dispose();
     expect(unsubscribePreferences).toHaveBeenCalledTimes(1);
     expect(unsubscribeHealth).toHaveBeenCalledTimes(1);
+  });
+});
+
+/** A handle whose client the test ends: `die()` closes it, as an owned child's exit or an adopted client's terminal
+ * failure does. */
+function mortal(name: string) {
+  let status = "ready";
+  const listeners = new Set<() => void>();
+  const handle = {
+    info: { bootId: name, port: 4242 },
+    client: {
+      get status() {
+        return status;
+      },
+      onStatusChange(listener: () => void) {
+        listeners.add(listener);
+        return () => listeners.delete(listener);
+      },
+    },
+  } as unknown as FielddHandle;
+  return {
+    handle,
+    die(): void {
+      status = "closed";
+      for (const listener of [...listeners]) listener();
+    },
+  };
+}
+
+/** `count` handles the upstream hands out in turn, one per spawn — and, as the supervisor does, the live one while it
+ * lives. */
+function lifetimes(count: number) {
+  const lives = Array.from({ length: count }, (_, index) => mortal(`boot-${index + 1}`));
+  let next = 0;
+  const calls = vi.fn(async () => {
+    const live = lives[next - 1];
+    if (live !== undefined && live.handle.client.status === "ready") return live.handle;
+    return lives[next++]!.handle;
+  });
+  return {
+    lives,
+    calls,
+    upstream: calls as unknown as FielddSupervisor["ensure"],
+    spawned: () => next,
+  };
+}
+
+// Item 212 (RV #29) — recovery is a bounded loop under the house intensity: every AUTOMATIC attempt (the one at a
+// death, and each after a failed one, spaced by the reprobe grace) is counted in a sliding window; past `max` main
+// stops and says crash-loop, an incidental caller is refused typed, and only a person's ask starts fieldd again.
+// Deterministic: fake timers drive the spacing, an injected clock the window.
+describe("fieldd recovery under the house intensity (item 212, RV #29)", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it("retries a respawn that failed after a death once the spacing has passed", async () => {
+    const first = mortal("boot-1");
+    const second = mortal("boot-2");
+    const upstream = vi
+      .fn()
+      .mockResolvedValueOnce(first.handle)
+      .mockRejectedValueOnce(new Error("spawn failed"))
+      .mockResolvedValueOnce(second.handle) as unknown as FielddSupervisor["ensure"];
+    const states: FielddRecoveryState[] = [];
+    const coordinator = new FielddHandleCoordinator({
+      upstreamEnsure: upstream,
+      reprobeAfterMs: 25,
+      onState: (state) => states.push(state),
+    });
+    const observed: FielddHandle[] = [];
+    coordinator.onHandle((value) => observed.push(value));
+
+    await coordinator.ensure();
+    first.die();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(upstream).toHaveBeenCalledTimes(2);
+    expect(states).toEqual([{ kind: "recovering", attempt: 1, of: 3 }]);
+    await vi.advanceTimersByTimeAsync(24);
+    expect(upstream).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(upstream).toHaveBeenCalledTimes(3);
+    expect(observed).toEqual([first.handle, second.handle]);
+    expect(states).toEqual([{ kind: "recovering", attempt: 1, of: 3 }, { kind: "ready" }]);
+    expect(coordinator.recovery).toEqual({ kind: "ready" });
+  });
+
+  it("trips when every respawn fails: recovering twice, then crash-loop, and nothing more starts", async () => {
+    const first = mortal("boot-1");
+    const upstream = vi
+      .fn()
+      .mockResolvedValueOnce(first.handle)
+      .mockRejectedValue(new Error("spawn failed")) as unknown as FielddSupervisor["ensure"];
+    const states: FielddRecoveryState[] = [];
+    const coordinator = new FielddHandleCoordinator({
+      upstreamEnsure: upstream,
+      reprobeAfterMs: 25,
+      onState: (state) => states.push(state),
+      now: () => 1_000,
+    });
+
+    await coordinator.ensure();
+    first.die();
+    await vi.advanceTimersByTimeAsync(0);
+    await vi.advanceTimersByTimeAsync(25);
+    await vi.advanceTimersByTimeAsync(25);
+    expect(upstream).toHaveBeenCalledTimes(4);
+    expect(states).toEqual([
+      { kind: "recovering", attempt: 1, of: 3 },
+      { kind: "recovering", attempt: 2, of: 3 },
+      { kind: "crash-loop", failures: 3, since: 1_000 },
+    ]);
+    await vi.advanceTimersByTimeAsync(600_000);
+    expect(upstream).toHaveBeenCalledTimes(4);
+  });
+
+  it("trips a fieldd that keeps dying after it came up — every 61 s is still a crash loop — and refuses an incidental ensure typed", async () => {
+    const { lives, calls, upstream } = lifetimes(5);
+    const states: FielddRecoveryState[] = [];
+    let now = 5_000;
+    const coordinator = new FielddHandleCoordinator({
+      upstreamEnsure: upstream,
+      onState: (state) => states.push(state),
+      now: () => now,
+    });
+
+    await coordinator.ensure();
+    for (const life of lives.slice(0, 4)) {
+      life.die();
+      await vi.advanceTimersByTimeAsync(0);
+      now += 61_000;
+    }
+    // the boot, then exactly max automatic attempts; the fourth death trips and starts nothing
+    expect(calls).toHaveBeenCalledTimes(4);
+    expect(states).toEqual([{ kind: "crash-loop", failures: 3, since: 5_000 + 3 * 61_000 }]);
+    await expect(coordinator.ensure()).rejects.toBeInstanceOf(FielddCrashLoopError);
+    expect(calls).toHaveBeenCalledTimes(4);
+  });
+
+  it("a person's ask runs one attempt at once and begins the count again (WG-D5's shape)", async () => {
+    const { lives, calls, upstream } = lifetimes(8);
+    const states: FielddRecoveryState[] = [];
+    const coordinator = new FielddHandleCoordinator({
+      upstreamEnsure: upstream,
+      onState: (state) => states.push(state),
+      now: () => 0,
+    });
+
+    await coordinator.ensure();
+    for (const life of lives.slice(0, 4)) {
+      life.die();
+      await vi.advanceTimersByTimeAsync(0);
+    }
+    expect(coordinator.recovery.kind).toBe("crash-loop");
+    expect(calls).toHaveBeenCalledTimes(4);
+
+    await expect(coordinator.ensure({ person: true })).resolves.toBe(lives[4]!.handle);
+    expect(calls).toHaveBeenCalledTimes(5);
+    expect(coordinator.recovery).toEqual({ kind: "ready" });
+    // a fresh count: three more deaths each get their automatic attempt, and the fourth trips again
+    for (const life of lives.slice(4, 8)) {
+      life.die();
+      await vi.advanceTimersByTimeAsync(0);
+    }
+    expect(calls).toHaveBeenCalledTimes(8);
+    expect(states.map((state) => state.kind)).toEqual([
+      "crash-loop",
+      "recovering",
+      "ready",
+      "crash-loop",
+    ]);
+  });
+
+  it("a window booting while fieldd is up begins nothing again: the boot fence's reloads never reset the count", async () => {
+    const { lives, upstream, spawned } = lifetimes(5);
+    const states: FielddRecoveryState[] = [];
+    const coordinator = new FielddHandleCoordinator({
+      upstreamEnsure: upstream,
+      onState: (state) => states.push(state),
+      now: () => 0,
+    });
+
+    await coordinator.ensure({ person: true });
+    for (const life of lives.slice(0, 3)) {
+      life.die();
+      await vi.advanceTimersByTimeAsync(0);
+      // each recovery is a new boot, which fences every window; each reloaded window's bootstrap asks as a person
+      await expect(coordinator.ensure({ person: true })).resolves.toBe(coordinator.currentHandle);
+    }
+    lives[3]!.die();
+    await vi.advanceTimersByTimeAsync(0);
+    // the boot, then three automatic attempts; the fourth death trips as it would with no window open
+    expect(spawned()).toBe(4);
+    expect(states).toEqual([{ kind: "crash-loop", failures: 3, since: 0 }]);
+  });
+
+  it("counts only the attempts inside its window: a fieldd dying more slowly than max per window never trips", async () => {
+    const { lives, calls, upstream } = lifetimes(6);
+    let now = 0;
+    const coordinator = new FielddHandleCoordinator({
+      upstreamEnsure: upstream,
+      intensity: { max: 2, windowMs: 1_000 },
+      now: () => now,
+    });
+
+    await coordinator.ensure();
+    for (const life of lives.slice(0, 5)) {
+      life.die();
+      await vi.advanceTimersByTimeAsync(0);
+      now += 600;
+    }
+    expect(calls).toHaveBeenCalledTimes(6);
+    expect(coordinator.recovery).toEqual({ kind: "ready" });
+  });
+
+  it("while recovering, an incidental ensure joins the scheduled attempt, and starts and counts nothing of its own", async () => {
+    const first = mortal("boot-1");
+    const second = mortal("boot-2");
+    const third = mortal("boot-3");
+    const upstream = vi
+      .fn()
+      .mockResolvedValueOnce(first.handle)
+      .mockRejectedValueOnce(new Error("spawn failed"))
+      .mockResolvedValueOnce(second.handle)
+      .mockResolvedValueOnce(third.handle) as unknown as FielddSupervisor["ensure"];
+    const coordinator = new FielddHandleCoordinator({
+      upstreamEnsure: upstream,
+      reprobeAfterMs: 25,
+      now: () => 0,
+    });
+
+    await coordinator.ensure();
+    first.die();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(coordinator.recovery).toEqual({ kind: "recovering", attempt: 1, of: 3 });
+    const joined = coordinator.ensure();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(upstream).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(25);
+    await expect(joined).resolves.toBe(second.handle);
+    expect(upstream).toHaveBeenCalledTimes(3);
+    // two automatic attempts so far and the joiner's none: one more death gets the third, and the next trips
+    second.die();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(upstream).toHaveBeenCalledTimes(4);
+    third.die();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(upstream).toHaveBeenCalledTimes(4);
+    expect(coordinator.recovery).toEqual({ kind: "crash-loop", failures: 3, since: 0 });
+  });
+
+  it("held for a stop during the spacing: the scheduled attempt never runs, and its joiner is told", async () => {
+    const first = mortal("boot-1");
+    const upstream = vi
+      .fn()
+      .mockResolvedValueOnce(first.handle)
+      .mockRejectedValue(new Error("spawn failed")) as unknown as FielddSupervisor["ensure"];
+    const coordinator = new FielddHandleCoordinator({
+      upstreamEnsure: upstream,
+      reprobeAfterMs: 25,
+    });
+
+    await coordinator.ensure();
+    first.die();
+    await vi.advanceTimersByTimeAsync(0);
+    const joined = coordinator.ensure();
+    coordinator.holdForStop();
+    await expect(joined).rejects.toThrow(/held for a stop/);
+    await vi.advanceTimersByTimeAsync(600_000);
+    expect(upstream).toHaveBeenCalledTimes(2);
+  });
+
+  it("a hold released before any stop lets the recovery it paused go on, where it stood", async () => {
+    const first = mortal("boot-1");
+    const second = mortal("boot-2");
+    const upstream = vi
+      .fn()
+      .mockResolvedValueOnce(first.handle)
+      .mockRejectedValueOnce(new Error("spawn failed"))
+      .mockResolvedValueOnce(second.handle) as unknown as FielddSupervisor["ensure"];
+    const coordinator = new FielddHandleCoordinator({
+      upstreamEnsure: upstream,
+      reprobeAfterMs: 25,
+      now: () => 0,
+    });
+
+    await coordinator.ensure();
+    first.die();
+    await vi.advanceTimersByTimeAsync(0);
+    coordinator.holdForStop();
+    await vi.advanceTimersByTimeAsync(25);
+    expect(upstream).toHaveBeenCalledTimes(2);
+    // the quit (or the update) aborted before it stopped anything
+    coordinator.releaseHold();
+    expect(coordinator.recovery).toEqual({ kind: "recovering", attempt: 1, of: 3 });
+    await vi.advanceTimersByTimeAsync(25);
+    expect(upstream).toHaveBeenCalledTimes(3);
+    expect(coordinator.currentHandle).toBe(second.handle);
+    expect(coordinator.recovery).toEqual({ kind: "ready" });
   });
 });

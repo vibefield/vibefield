@@ -469,6 +469,24 @@ describe("createBootstrapHandler (once per generation)", () => {
     expect(onRevokeError).not.toHaveBeenCalled();
   });
 
+  // Item 212 (RV #29) — a window booting is a person looking: its mint asks for fieldd as a person, which starts it
+  // again after main stopped trying (the crash-loop). A revocation's retry is an incidental caller and asks as none.
+  it("asks for fieldd as a person to mint, and never to retry a revocation", async () => {
+    const daemon = fakeDaemon({ failFirstRevoke: true });
+    const handler = createBootstrapHandler({
+      owns: () => true,
+      ensure: daemon.ensure,
+      desktopBootId: DESKTOP_BOOT_ID,
+    });
+    const s = fakeSender(1);
+    await handler({ sender: s.wc });
+
+    s.navigate();
+
+    await vi.waitFor(() => expect(daemon.revoked).toEqual(["tk_000000000001"]));
+    expect(vi.mocked(daemon.ensure).mock.calls).toEqual([[{ person: true }], []]);
+  });
+
   it("revokes a mint that completes after its generation already retired", async () => {
     let finishMint: ((value: { token: string; tokenId: string }) => void) | undefined;
     const mintResult = new Promise<{ token: string; tokenId: string }>((resolve) => {
