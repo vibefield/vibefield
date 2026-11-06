@@ -364,6 +364,30 @@ describe("PG-9 S4c — the frames, played once at their own times, the last one 
     expect(heard).toEqual([2, 3]);
     expect(vi.getTimerCount(), "held: no frame left to schedule").toBe(0);
   });
+
+  it("item 190 — plays its standing frame again when this desktop's device id moves: a slow floor's identity reaches every held row, once, and a restamp with the id unmoved plays nothing", () => {
+    vi.useFakeTimers({ now: NOW });
+    let device = "local-boot";
+    const replay = createSwarmReplay(parseSwarmCorpus(THREE), { deviceId: () => device });
+    cleanup.push(() => replay.dispose());
+    const heard: Array<string | undefined> = [];
+    cleanup.push(replay.subscribe((rows) => heard.push(rows.sessions[0]?.device)));
+    // past the span (48 ms): every frame played under the boot's local id, and the last one held
+    vi.advanceTimersByTime(100);
+    expect(replay.position().frame).toBe(2);
+    expect(heard).toEqual(["local-boot", "local-boot"]);
+    replay.restamp();
+    expect(heard, "the id has not moved: nothing plays").toHaveLength(2);
+    // the mesh identity arrives after the span, as a slow floor's does
+    device = "dev-1";
+    replay.restamp();
+    expect(heard.slice(2)).toEqual(["dev-1"]);
+    expect(replay.list().sessions.map((row) => row.device)).toEqual(["dev-1"]);
+    expect(replay.position().frame, "still the held frame").toBe(2);
+    expect(revisionOf(replay.list()), "at its own revision").toBe(3);
+    replay.restamp();
+    expect(heard.slice(2), "once").toEqual(["dev-1"]);
+  });
 });
 
 describe("PG-9 S4c — the monitor reads the replay as it reads the runtime", () => {

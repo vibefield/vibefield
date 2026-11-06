@@ -14,7 +14,10 @@
 //   · the swarm stands BESIDE the agent runtime, never in it: the runtime's own fold stays empty;
 //   · this desktop's window reads the same swarm on its model board;
 //   · the replay keeps no picture: `agent.lastRun` answers none, and the last run's file a previous boot
-//     left is never read as this boot's nor written over.
+//     left is never read as this boot's nor written over;
+//   · item 190: a mesh identity the floor gives only after the corpus's span still reaches every held
+//     row. The replay stamps a frame as it plays, and plays its corpus within 2 s of boot, before a
+//     slow floor's identity arrives (run173, the old mini under a full fieldd run, 2026-11-06).
 //
 // The corpus is field-app's in-repo n10-2s-s1: a FILE read here, not a module imported (fieldd imports
 // nothing of field-app's). Kept where the generator's own tests keep it, so a corpus format change
@@ -52,6 +55,8 @@ const CORPUS = join(
 );
 /** this desktop: the mock floor's mesh identity */
 const DEVICE = "dev-swarm";
+/** the corpus's span: n10-2s-s1's last fold frame plays 2000 ms after its first */
+const SPAN_MS = 2_000;
 
 const ENDPOINTS = {
   controlSocket: "/mock/native/run/termctl.sock",
@@ -138,9 +143,13 @@ interface SwarmDesktop {
   dataDir: string;
   /** the product door as the sidecar forwards a tailnet caller to it */
   door: string;
+  /** the floor, scripted */
+  mock: MockMgmtServer;
 }
 
-async function bootSwarmDesktop(): Promise<SwarmDesktop> {
+/** `identity: false` (item 190): the floor withholds this desktop's mesh identity, answering the
+ * devices slice with no id, until the row hands it over. */
+async function bootSwarmDesktop(opts: { identity?: boolean } = {}): Promise<SwarmDesktop> {
   expect(existsSync(CORPUS), `the in-repo corpus ${CORPUS}`).toBe(true);
   const dataDir = mkdtempSync(join(tmpdir(), "vf-s4c-"));
   cleanup.push(() => rmSync(dataDir, { recursive: true, force: true }));
@@ -152,7 +161,7 @@ async function bootSwarmDesktop(): Promise<SwarmDesktop> {
   writeFileSync(picture, PICTURE);
 
   const mock = new MockMgmtServer(nativeEndpoint(dataDir, SOCKETS.MGMT));
-  mock.meshDeviceId = DEVICE;
+  mock.meshDeviceId = opts.identity === false ? "" : DEVICE;
   mock.helloTerminal = ENDPOINTS;
   mock.helloTerminalMesh = true;
   mock.observedState = { generation: 0, bootId: "mock-boot", terminals: [], workers: [] };
@@ -179,6 +188,7 @@ async function bootSwarmDesktop(): Promise<SwarmDesktop> {
     daemon,
     dataDir,
     door: `ws://127.0.0.1:${daemon.controlPort}/t/${productPathSecret(mock)}`,
+    mock,
   };
 }
 
@@ -322,5 +332,36 @@ describe("PG-9 S4c — a dev desktop's fieldd plays a recorded swarm through the
     expect(await window.call("agent.lastRun", {})).toEqual({ state: "none" });
     await daemon.stop();
     expect(readFileSync(join(dataDir, ...LAYOUT.AGENT_LAST_BOARD_FILE), "utf8")).toBe(PICTURE);
+  }, 60_000);
+
+  it("item 190 — an identity the floor gives only after the corpus's span still reaches the phone: every held run is this desktop's, never the local id it booted under", async () => {
+    const { daemon, door, mock } = await bootSwarmDesktop({ identity: false });
+    const runs = corpusRuns();
+    // past the span: the corpus has played to its held last frame under the local fallback
+    await new Promise((resolve) => setTimeout(resolve, SPAN_MS + 1_000));
+    const booted = daemon.devices.currentDeviceId();
+    expect(booted, "the floor withholds: the local fallback").toMatch(/^local-/);
+    // the identity arrives, as a slow floor's does, long after the replay played its last frame
+    mock.meshDeviceId = DEVICE;
+    mock.pushPeersDelta({ kind: "peerUpdated" });
+    await until(
+      () => daemon.devices.currentDeviceId() === DEVICE,
+      8_000,
+      "this desktop's mesh identity",
+    );
+    const phone = await phoneOn(door);
+    const { subId, snapshot: open } = (await phone.call("agent.subscribe", {
+      projection: "remote",
+      scope: "mesh",
+    })) as { subId: string; snapshot: AgentRemoteMeshOpen };
+    expect(open.devices[0]).toMatchObject({ device: DEVICE, state: "live" });
+    const held = () => heldBoard(open, meshFrames(phone, subId), DEVICE);
+    const stamps = () => [...held().values()].map((row) => AgentRemoteRow.parse(row).device);
+    await settle(
+      () => held().size === runs.length && stamps().every((device) => device === DEVICE),
+      6_000,
+    );
+    expect([...held().keys()].sort()).toEqual(runs);
+    expect(new Set(stamps()), "every held run is this desktop's").toEqual(new Set([DEVICE]));
   }, 60_000);
 });

@@ -84,6 +84,9 @@ export interface SwarmReplay extends AgentMonitorFold {
   readonly corpus: SwarmCorpus;
   /** where the replay stands: the fold frame it last played (the last one: held) */
   position(): { frame: number };
+  /** item 190 — the frame standing now, played again under this desktop's device id when the id
+   * has moved since it played (a mesh identity that arrives after the span); else nothing plays */
+  restamp(): void;
   dispose(): void;
 }
 
@@ -415,6 +418,9 @@ export function createSwarmReplay(corpus: SwarmCorpus, opts: SwarmReplayOptions)
       acknowledgeFailureBlocker: async () => false,
     },
     position: () => ({ frame: played }),
+    restamp() {
+      // item 190 (red): the skeleton plays nothing
+    },
     dispose() {
       disposed = true;
       if (timer !== null) clearTimeout(timer);
