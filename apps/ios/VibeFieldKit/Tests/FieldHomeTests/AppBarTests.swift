@@ -4,7 +4,6 @@ import FieldDesign
 import Foundation
 import SwiftUI
 import Testing
-import UIKit
 
 @testable import FieldHome
 
@@ -160,14 +159,15 @@ struct AppBarTests {
     let sheet = ChromeShadow.sheet
     #expect(sheet.radius == 30)
     #expect(sheet.y == 24)
-    for style in [UIUserInterfaceStyle.light, .dark] {
-      let resolved = UIColor(sheet.color).resolvedColor(with: UITraitCollection(userInterfaceStyle: style))
-      var white: CGFloat = -1
-      var alpha: CGFloat = -1
-      let read = resolved.getWhite(&white, alpha: &alpha)
-      #expect(read, "\(style.rawValue): a grey")
-      #expect(white == 0, "\(style.rawValue): black")
-      #expect(abs(alpha - 0.18) < 0.001, "\(style.rawValue): \(alpha)")
+    // a SwiftUI colour, so it resolves in SwiftUI's environment (TerminalGroundTests' pattern): `getWhite` reads only
+    // a grey UIKit colour, and this one is RGB
+    for scheme in [ColorScheme.light, .dark] {
+      var environment = EnvironmentValues()
+      environment.colorScheme = scheme
+      let resolved = sheet.color.resolve(in: environment)
+      let black = resolved.red == 0 && resolved.green == 0 && resolved.blue == 0
+      #expect(black, "\(scheme): black")
+      #expect(abs(resolved.opacity - 0.18) < 0.001, "\(scheme): \(resolved.opacity)")
     }
   }
 
