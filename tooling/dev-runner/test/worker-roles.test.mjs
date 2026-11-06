@@ -69,3 +69,41 @@ test("probe C3's caps are FLOW_LIMITS' own: its heapMb and rssMb equal registrie
   assert.equal(only(SEA, "heapMb", "probe C3"), only(registries, "HOST_HEAP_MB", "registries.ts"));
   assert.equal(only(SEA, "rssMb", "probe C3"), only(registries, "HOST_RSS_MB", "registries.ts"));
 });
+
+// AR-7j (ESP §9.3; M-h's Owed, ruled (a) by VF-PM 2026-11-06 05:11Z) — every packaged fieldd process that STAYS takes
+// SIGUSR1 from the inspector with bin.ts's own listener (`refuseInspectorSignal`), and the SEA's --verify asks each one
+// SIGUSR1 once it is ready (`sigusr1Ask`): no inspector, and the process still running. Both files are read as TEXT,
+// so a role given the guard and never asked at its probe fails this row, not a packaged run.
+test("every process bin.ts guards from SIGUSR1 is asked SIGUSR1 by its --verify probe: the daemon at A, each role at its own", () => {
+  const BIN = read("packages/fieldd/src/bin.ts");
+  const at = BIN.indexOf("const role = roleOf(process.argv);");
+  assert.ok(at >= 0, "bin.ts dispatches on `const role = roleOf(process.argv);`");
+  const dispatch = BIN.slice(at);
+  // each `role === "<role>"` branch, from its test to the next `} else`, and the daemon's closing `else`
+  const branches = [...dispatch.matchAll(/role === "([a-z-]+)"\) \{([\s\S]*?)\n\} else/g)];
+  const guarded = branches
+    .filter(([, , body]) => body.includes("refuseInspectorSignal();"))
+    .map(([, name]) => name);
+  const daemon = dispatch.slice(dispatch.lastIndexOf("\n} else {"));
+  assert.ok(
+    daemon.includes("refuseInspectorSignal();"),
+    "the daemon (bin.ts's last branch) takes the guard",
+  );
+  assert.ok(SEA.includes("atReady: sigusr1Ask,"), "probe A asks the ready daemon SIGUSR1");
+  assert.ok(guarded.length > 0, "bin.ts has roles that take the guard");
+  // the SEA builder's top-level functions, each with its body
+  const functions = [...SEA.matchAll(/\n(?:async )?function (\w+)\(([\s\S]*?)\n\}\n/g)];
+  const unasked = [];
+  for (const role of guarded) {
+    const name = [...roleArgs].find(([, arg]) => arg === `--vibefield-role=${role}`)?.[0];
+    assert.ok(name, `roles.ts has an argument for ${role}`);
+    const probes = functions.filter(([, , body]) => body.includes(`spawn(exe, [${name}_ROLE_ARG]`));
+    assert.equal(
+      probes.length,
+      1,
+      `one --verify probe spawns the ${role} role (found ${probes.length})`,
+    );
+    if (!probes[0][2].includes("sigusr1Ask(")) unasked.push(`${role} (${probes[0][1]})`);
+  }
+  assert.deepEqual(unasked, [], "each guarded role's probe asks it SIGUSR1 once it is ready");
+});
