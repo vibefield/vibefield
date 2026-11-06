@@ -30,6 +30,8 @@ public enum SparkTranscriptLimits {
   /// `SPARK_TRANSCRIPT.RETRY_MIN_MS` doubling to `RETRY_MAX_MS`: the asks again.
   public static let retryMinMs: Int64 = 500
   public static let retryMaxMs: Int64 = 10_000
+  /// `PORTS.SPARK_TRANSCRIPT_SERVE`: the worker's routed serve, the tailnet port a phone's ticket names (SP-7a D1).
+  public static let servePort = 9426
   /// The door that hands a ticket (`methods.ts`).
   public static let openTicketMethod = "compose.sparks.transcript.openTicket"
 }

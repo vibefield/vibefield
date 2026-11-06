@@ -184,6 +184,34 @@ struct SparkTranscriptWireTests {
     #expect(SparkTranscriptReader.ticketParams(spark: "sp-9q2wloft1") == params)
   }
 
+  @Test("the phone's ticket: the worker's routed serve on its tailnet port, never loopback, no other port or path")
+  func remoteTicket() throws {
+    let golden = try Fixture.json("spark-transcript-ticket.remote")
+    let answer = try? SparkTranscriptTicket(json: golden)
+    #expect(answer?.endpoint.absoluteString == "ws://studio-mbp.tail9f2c.ts.net:9426/transcripts")
+    #expect(answer?.runs.count == 2)
+    #expect(SparkTranscriptLimits.servePort == 9426)
+    let fields = golden.objectValue ?? [:]
+    let host = "studio-mbp.tail9f2c.ts.net"
+    let secure = try? SparkTranscriptTicket(
+      json: .object(fields.merging(["endpoint": .string("wss://\(host):9426/transcripts")]) { $1 }))
+    #expect(secure?.endpoint.scheme == "wss")
+    // the contract's own refusals (`spark-transcript.test.ts`), and a user in the host, which no ticket carries
+    for endpoint in [
+      "ws://\(host):9999/transcripts", "ws://\(host):9426/transcripts?ticket=x", "ws://\(host):9426/transcripts#x",
+      "ws://\(host):9426/elsewhere", "ws://localhost:9426/transcripts", "ws://[::1]:9426/transcripts",
+      "http://\(host):9426/transcripts", "ws://me@\(host):9426/transcripts",
+    ] {
+      let refused = try? SparkTranscriptTicket(json: .object(fields.merging(["endpoint": .string(endpoint)]) { $1 }))
+      #expect(refused == nil, "\(endpoint)")
+    }
+    // the ask names the desktop that keeps the spark, and names none when there is none
+    let device = try Fixture.json("spark-transcript-ticket-params.device")
+    #expect(SparkTranscriptReader.ticketParams(spark: "sp-9q2wloft1", device: "dev-01HQ9S7UD1") == device)
+    let own = try Fixture.json("spark-transcript-ticket-params.valid")
+    #expect(SparkTranscriptReader.ticketParams(spark: "sp-9q2wloft1", device: nil) == own)
+  }
+
   @Test("the window's one message: the ticket, and the runs it reads, each after the line it holds")
   func open() throws {
     let golden = try Fixture.json("spark-transcript-open.valid")

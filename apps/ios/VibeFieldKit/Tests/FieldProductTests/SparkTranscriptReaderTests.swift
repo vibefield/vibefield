@@ -190,12 +190,12 @@ private func runIds(_ reading: SparkTranscriptReading) -> [String] {
 @MainActor
 struct SparkTranscriptReaderTests {
   private func make(
-    _ door: TranscriptDoor, _ transport: TranscriptTransport, _ naps: Naps = Naps(), whole: Bool = false,
-    held: SparkTranscriptReading = .reading, openTimeout: Duration = .seconds(10)
+    _ door: TranscriptDoor, _ transport: TranscriptTransport, _ naps: Naps = Naps(), device: String? = nil,
+    whole: Bool = false, held: SparkTranscriptReading = .reading, openTimeout: Duration = .seconds(10)
   ) -> SparkTranscriptReader {
     SparkTranscriptReader(
-      spark: Golden.spark, door: door, transport: transport, whole: whole, held: held, sleep: naps.sleep,
-      openTimeout: openTimeout)
+      spark: Golden.spark, device: device, door: door, transport: transport, whole: whole, held: held,
+      sleep: naps.sleep, openTimeout: openTimeout)
   }
 
   /// The reader's first socket, ready, `lines` served, caught up.
@@ -239,6 +239,20 @@ struct SparkTranscriptReaderTests {
     }
     #expect(dropped == 1 && !whole && runs.count == 2)
     #expect(reader.skipped == 1)
+    reader.cancel()
+  }
+
+  @Test("asks its ticket naming the desktop that keeps the spark, which the home carries the ask to (SP-7a D3)")
+  func namesTheDesktop() async throws {
+    let door = TranscriptDoor()
+    let transport = TranscriptTransport()
+    let reader = make(door, transport, device: "dev-01HQ9S7UD1")
+    reader.start()
+    await waitFor("the ticket's ask") { !door.asked.isEmpty }
+    let asked = door.asked.first?.params
+    let params = try Fixture.json("spark-transcript-ticket-params.device")
+    #expect(asked == params)
+    #expect(reader.device == "dev-01HQ9S7UD1")
     reader.cancel()
   }
 

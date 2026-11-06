@@ -79,6 +79,8 @@ public final class SparkTranscriptReader {
   public typealias Sleep = @Sendable (Duration) async throws -> Void
 
   public let spark: String
+  /// the desktop that keeps the spark, named in the ticket's ask; nil for the home's own
+  public let device: String?
   public private(set) var reading: SparkTranscriptReading = .reading
   /// whether every run is asked for, the earlier conversations' too (`readWhole()`)
   public private(set) var whole: Bool
@@ -107,14 +109,17 @@ public final class SparkTranscriptReader {
 
   private static let logger = Logger(subsystem: "com.jamesyong.vibefield.kit", category: "chat.transcript")
 
-  /// `held`: a reading already drawn for this spark, kept drawn while the reader asks again (the Mac's `held`, as when
-  /// the earlier conversations are asked for).
+  /// `device`: the desktop that keeps the spark, which the home carries the ask to (SP-7a D3); nil asks the home of
+  /// its own. `held`: a reading already drawn for this spark, kept drawn while the reader asks again (the Mac's `held`,
+  /// as when the earlier conversations are asked for).
   public init(
-    spark: String, door: any SparkTranscriptDoor, transport: any ProductTransport, whole: Bool = false,
-    held: SparkTranscriptReading = .reading, sleep: @escaping Sleep = { try await Task.sleep(for: $0) },
+    spark: String, device: String? = nil, door: any SparkTranscriptDoor, transport: any ProductTransport,
+    whole: Bool = false, held: SparkTranscriptReading = .reading,
+    sleep: @escaping Sleep = { try await Task.sleep(for: $0) },
     openTimeout: Duration = .milliseconds(SparkTranscriptLimits.openTimeoutMs)
   ) {
     self.spark = spark
+    self.device = device
     self.door = door
     self.transport = transport
     self.whole = whole
@@ -129,8 +134,11 @@ public final class SparkTranscriptReader {
     }
   }
 
-  /// The ticket's ask, as the door reads it.
-  public nonisolated static func ticketParams(spark: String) -> JSONValue { .object(["spark": .string(spark)]) }
+  /// The ticket's ask, as the door reads it: the spark, and the desktop that keeps it when there is one to name.
+  public nonisolated static func ticketParams(spark: String, device: String? = nil) -> JSONValue {
+    // SP-7a M-b2 (red): the skeleton names no desktop
+    .object(["spark": .string(spark)])
+  }
 
   /// Begins reading. Once; a cancelled reader stays cancelled.
   public func start() {
