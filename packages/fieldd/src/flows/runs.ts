@@ -185,9 +185,9 @@ interface LiveRun {
   readonly forms: Map<number, FlowForm>;
   /** each open step's latest miss, in fieldd's words: what Ask once more's repair line says again */
   readonly misses: Map<number, string>;
-  /** the run's input and the kinds its meta names them by, read at its wake: the folder a step names none of
-   * (CP4-Q20 (a)) */
-  inputs?: { readonly values: FlowInput; readonly kinds: Readonly<Record<string, string>> };
+  /** the run's folder, a step that names none runs in (CP4-Q20 (a)), held at its start (F6; R8b): its journal's head's,
+   * or, for a head from before it, the one its input names at its wake; frozen, as its scope is */
+  folder?: string | undefined;
   /** the steps waiting for a slot (CP4-S7), in their calls' order: started when one frees (slice 9) */
   readonly slotted: { readonly call: number; readonly args: readonly unknown[] }[];
   /** each open step's handed session, by its call: how to let the step listener go (9b) */
@@ -502,7 +502,17 @@ export class FlowRuns {
     let head: FlowJournalHead;
     try {
       head = records.beginRun(
-        { run, flow: params.flow, name, n, hash, starter: params.starter, input: params.input },
+        {
+          run,
+          flow: params.flow,
+          name,
+          n,
+          hash,
+          starter: params.starter,
+          input: params.input,
+          // F6 (slices 7–9 review): the folder its input names, found above, held on its head for its steps
+          ...(folder !== undefined ? { folder } : {}),
+        },
         { scope, state: "running", calls: 0, allowed: FLOW_LIMITS.CALLS_MAX, open: [], steps: [] },
       );
     } catch (error) {
@@ -677,7 +687,9 @@ export class FlowRuns {
       this.#finish(run, { state: "lost" });
       return true;
     }
-    live.inputs = { values: read.head.input ?? {}, kinds: readFlow(bytes).meta?.input ?? {} };
+    // F6: the head's folder, held at the run's start; a head from before it derives one from its input, once, here
+    live.folder =
+      read.head.folder ?? this.#folderOf(read.head.input ?? {}, readFlow(bytes).meta?.input ?? {});
     const replay = new FlowReplay({
       prior: read.lines,
       append: (entry, args) => {
@@ -817,7 +829,7 @@ export class FlowRuns {
         name: record.name,
         ran: live.ran,
         scope: record.scope.filter((profile) => profiles.has(profile)),
-        folder: this.#folderOf(live),
+        folder: live.folder,
         ...(record.starter.by === "spark" && record.starter.spark !== undefined
           ? { spark: record.starter.spark }
           : {}),
@@ -992,11 +1004,11 @@ export class FlowRuns {
     return false;
   }
 
-  /** The folder a run's input names, the first of its inputs in its meta's order whose kind names one (CP4-Q20 (a));
-   * none when no input does. */
-  #folderOf(live: LiveRun): string | undefined {
-    for (const [name, kind] of Object.entries(live.inputs?.kinds ?? {})) {
-      const value = live.inputs?.values[name];
+  /** The folder a run's input `values` name, the first of its inputs in its meta's order (`kinds`) whose kind names
+   * one (CP4-Q20 (a)); none when no input does. Read at the wake of a run whose head holds no folder (F6). */
+  #folderOf(values: FlowInput, kinds: Readonly<Record<string, string>>): string | undefined {
+    for (const [name, kind] of Object.entries(kinds)) {
+      const value = values[name];
       const folder = value !== undefined ? this.ports.folderOf(kind, value) : undefined;
       if (folder !== undefined) return folder;
     }
