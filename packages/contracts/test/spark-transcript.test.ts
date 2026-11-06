@@ -3,12 +3,19 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { METHODS, reachableFromTailnet } from "../src/methods";
-import { RECORD_STORES, SPARK_TRANSCRIPT, SPARK_TRANSCRIPT_SERVICE } from "../src/registries";
+import {
+  INDEX_TICKET,
+  PORTS,
+  RECORD_STORES,
+  SPARK_TRANSCRIPT,
+  SPARK_TRANSCRIPT_SERVICE,
+} from "../src/registries";
 import {
   SPARK_TRANSCRIPT_FORMAT,
   SPARK_TRANSCRIPT_KINDS,
   SparkTranscriptLine,
   SparkTranscriptOpen,
+  SparkTranscriptOpenTicketParams,
   SparkTranscriptOpenTicketResult,
   SparkTranscriptServerFrame,
   sparkTranscriptLineOf,
@@ -127,17 +134,27 @@ describe("a transcript line (TH0-Q1 = O1)", () => {
   });
 });
 
-describe("the ticket (TH-Q30 (a′); VF-PM's X2: local, a renderer window alone, sparks.use)", () => {
-  it("is a local sparks.use row that is never idempotent: each answer is a fresh credential", () => {
+describe("the ticket (TH-Q30 (a′); SP-7a D2–D5: a window answered loopback, the phone the worker's routed serve)", () => {
+  it("is a federated sparks.use row that is never idempotent: the home carries a phone's ask (SP-7a D3)", () => {
     const def = METHODS.find((m) => m.method === "compose.sparks.transcript.openTicket");
     expect(def).toMatchObject({
       surface: "product",
       scope: "sparks.use",
       idempotent: false,
-      locality: "local",
+      locality: "federate",
     });
-    // the scope alone would admit the phone's preset: fieldd's own gate narrows it to a window of this desktop
+    // the scope admits the phone's preset; fieldd's own gate names whom it mints for (SP-7a D2)
     expect(def !== undefined && reachableFromTailnet(def)).toBe(true);
+  });
+
+  it("asks for a spark, naming the desktop that keeps it when the home carries the ask (SP-7a D3)", () => {
+    const ask = (name: string) => SparkTranscriptOpenTicketParams.parse(fixture(name));
+    expect(ask("spark-transcript-ticket-params.valid")).toEqual({ spark: "sp-9q2wloft1" });
+    expect(ask("spark-transcript-ticket-params.device").device).toBe("dev-01HQ9S7UD1");
+    for (const device of ["", "x".repeat(129), 7]) {
+      const refused = SparkTranscriptOpenTicketParams.safeParse({ spark: "sp-9q2wloft1", device });
+      expect(refused.success, String(device)).toBe(false);
+    }
   });
 
   it("answers a loopback endpoint with no credential in it, a single-use ticket and the spark's runs", () => {
@@ -159,6 +176,40 @@ describe("the ticket (TH-Q30 (a′); VF-PM's X2: local, a renderer window alone,
     expect(SPARK_TRANSCRIPT.TICKET_TTL_MS).toBe(60_000);
   });
 
+  it("answers the phone the worker's routed serve on the tailnet: never loopback, no other port, no query (SP-7a D4)", () => {
+    const parsed = SparkTranscriptOpenTicketResult.safeParse(
+      fixture("spark-transcript-ticket.remote"),
+    );
+    expect(parsed.success, "the remote golden parses").toBe(true);
+    if (!parsed.success) return;
+    const served = new URL(parsed.data.endpoint);
+    expect(served.port).toBe(String(PORTS.SPARK_TRANSCRIPT_SERVE));
+    expect(served.pathname).toBe("/transcripts");
+    const host = "studio-mbp.tail9f2c.ts.net";
+    const port = PORTS.SPARK_TRANSCRIPT_SERVE;
+    for (const endpoint of [
+      `ws://${host}:9999/transcripts`,
+      `ws://${host}:${port}/transcripts?ticket=x`,
+      `ws://${host}:${port}/transcripts#x`,
+      `ws://${host}:${port}/elsewhere`,
+      `ws://localhost:${port}/transcripts`,
+      `ws://[::1]:${port}/transcripts`,
+      `http://${host}:${port}/transcripts`,
+    ])
+      expect(
+        SparkTranscriptOpenTicketResult.safeParse({ ...parsed.data, endpoint }).success,
+        endpoint,
+      ).toBe(false);
+  });
+
+  it("serves the phone's road on its own port, by name: the next free one at landing (SP-7a D5)", () => {
+    expect(PORTS.SPARK_TRANSCRIPT_SERVE).toBe(9426);
+    const assigned = Object.entries(PORTS).filter(([, port]) => port !== 0);
+    expect(
+      assigned.filter(([, port]) => port === PORTS.SPARK_TRANSCRIPT_SERVE).map(([name]) => name),
+    ).toEqual(["SPARK_TRANSCRIPT_SERVE"]);
+  });
+
   it("names its honest UNAVAILABLE: the worker's phases in the files worker's words; unreadable is item 172's word", () => {
     expect(SPARK_TRANSCRIPT_SERVICE).toEqual({
       SERVICE: "spark-transcripts",
@@ -168,7 +219,12 @@ describe("the ticket (TH-Q30 (a′); VF-PM's X2: local, a renderer window alone,
       STATE_UNCONFIGURED: "unconfigured",
       STATE_FAILED: "failed",
       STATE_STOPPED: "stopped",
+      STATE_DOORS_NOT_PUBLISHED: "doors_not_published",
     });
+    // a phone's ticket with no live serve to hand out is the index ticket's word for the same fact (SP-7a D2)
+    expect(SPARK_TRANSCRIPT_SERVICE.STATE_DOORS_NOT_PUBLISHED).toBe(
+      INDEX_TICKET.STATE_DOORS_NOT_PUBLISHED,
+    );
     // a folder or a file the disk does not hand over is the store's own refusal, in RECORD_STORES' word (TH-1's fold)
     expect(RECORD_STORES.STATE_UNREADABLE).toBe("records-unreadable");
   });
