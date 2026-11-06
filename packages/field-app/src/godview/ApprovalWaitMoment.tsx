@@ -24,9 +24,10 @@ import { useSetupLedger } from "../setup/ledger";
 // 2026-10-29; DESIGN.md §8 "Asking again") — the line after an approval that
 // waited more than ten minutes, as the wait clears: the agent, as its own mark
 // and its project; "It waited 14m for you."; the phone's line; Connect your
-// devices; and ×. Drawn in the claims strip's moment chrome (the limit
-// moment's), so the strip says one moment the one way, the limit moment first
-// (`ClaimsStripMoment.tsx`).
+// devices; and ×. Drawn in the claims strip's moment chrome (the row it
+// shared with the limit moment until UM-D23 moved that beside the profiles
+// column's add, 2026-11-06; the strip holds this line alone since,
+// `ClaimsStripMoment.tsx`).
 
 /** The row itself, controller-free, so the catalog mounts the shipping face.
  * Each act is handed the element it was pressed on. */
@@ -103,14 +104,10 @@ const LEAVE_MS = 180;
 export function ApprovalWaitMoment({
   rows,
   offersConnect,
-  held = false,
 }: {
   rows: readonly ApprovalWaitRow[];
   /** this Mac is in the ordinary unconnected state (`useOffersConnect`) */
   offersConnect: boolean;
-  /** another moment holds the strip: a wait that clears now is not said, and
-   * a line already said stands aside until the strip is free */
-  held?: boolean;
 }): ReactElement | null {
   const client = useFielddClient();
   const ledger = useSetupLedger();
@@ -125,21 +122,21 @@ export function ApprovalWaitMoment({
     waits.current ??= new ApprovalWaits();
     const cleared = waits.current.observe(rows);
     const fact = cleared[0];
-    if (fact === undefined || said.current || held) return;
+    if (fact === undefined || said.current) return;
     if (!approvalWaitOpen({ offersConnect, asksOn, ledger, now: Date.now() })) return;
     said.current = true;
     setShown(fact);
     client
       .request("setup.moment", { moment: APPROVAL_WAIT_MOMENT, state: "asked" })
       .catch(() => undefined);
-  }, [client, rows, held, offersConnect, asksOn, ledger]);
+  }, [client, rows, offersConnect, asksOn, ledger]);
   useEffect(() => {
     if (!leaving) return;
     const timer = setTimeout(() => setShown(null), LEAVE_MS);
     return () => clearTimeout(timer);
   }, [leaving]);
   // the next state change, or the link landing, takes the row away at once
-  if (shown === null || held || !offersConnect || !approvalWaitStands(shown, rows)) return null;
+  if (shown === null || !offersConnect || !approvalWaitStands(shown, rows)) return null;
   return (
     <ApprovalWaitCard
       fact={shown}

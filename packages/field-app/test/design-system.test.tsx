@@ -192,13 +192,13 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
     // MV-7: spend's specimen, on the shipping view through GodviewPreview and its fixture door
     expect(container?.textContent).toContain("Spend — where the money went");
     expect(container?.querySelector("[data-godview-spend-catalog] .vf-godview")).not.toBeNull();
-    // AO-6b — the limit moment: the shipping card on the shipping stage's claims strip,
-    // over the shipping rule's fixture
+    // AO-6b, UM-D23 — the limit moment: the shipping card beside the shipping stage's
+    // profiles column's add, over the shipping rule's fixture
     const limit = container?.querySelector(
-      "[data-godview-limit-catalog] .vf-godview .vf-monitor-claims .vf-monitor-moment",
+      "[data-godview-limit-catalog] .vf-godview .vf-profiles-add-item > .vf-profiles-moment > .vf-profiles-limit",
     );
-    expect(limit?.querySelector(".vf-monitor-moment-use")?.textContent).toBe("92% · 7 days");
-    expect(limit?.querySelector(".vf-monitor-moment-title")?.textContent).toBe(
+    expect(limit?.querySelector(".vf-profiles-limit-use")?.textContent).toBe("92% · 7 days");
+    expect(limit?.querySelector(".vf-profiles-limit-title")?.textContent).toBe(
       "Another subscription?",
     );
     expect([...(limit?.querySelectorAll("button") ?? [])].map((b) => b.textContent)).toEqual([

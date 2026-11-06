@@ -551,18 +551,21 @@
   pointer-events: none;
 }
 
-/* AO-6b (DESIGN.md §8 "The moments"; one row since AO-6b3) — the limit
-   moment: VibeField's row on its claims strip, once, after the counts on
+/* AO-6b (DESIGN.md §8 "The moments"; one row since AO-6b3) — the strip's
+   moment row: VibeField's row on its claims strip, once, after the counts on
    their line or under them when the stage is too narrow to hold both. Only
    while it shows does the strip widen to its content and wrap: otherwise its
    chips shrink on one line, as they always did. The strip measures the row,
    so the swarm steers around it as around the counts, and in either place it
    ends above the deck's fill line, so a raised deck never covers its acts.
    Godview's instrument skin (its panel, border and inks follow Godview's
-   theme, not the app's), the attention ink for the number (§2.7) and the
-   fill for the line along its foot, and the profile notice's 300ms entry: a
-   transition, never a keyframe (the overlay runs none), and none under Reduce
-   Motion. */
+   theme, not the app's) and the profile notice's 300ms entry: a transition,
+   never a keyframe (the overlay runs none), and none under Reduce Motion.
+   *Amended 2026-11-06 (UM-D23; DESIGN.md §8 "The moments" and "Asking
+   again"):* the limit moment left the strip for the profiles column's add
+   (`profiles-column.css`, round 4's card), and its own number and the line
+   along its foot left with it; the row is the approval line's alone (TS-4b),
+   which keeps the skin it shared. */
 .vf-monitor-claims:has(> .vf-monitor-moment) {
   flex-wrap: wrap;
   width: max-content;
@@ -617,14 +620,6 @@
   height: 12px;
 }
 
-/* the number is read, so it takes Godview's attention ink, never the fill (§2.5, §2.7) */
-.vf-monitor-moment-use {
-  color: var(--vf-monitor-ink-attention);
-  font-size: 10px;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-}
-
 .vf-monitor-moment-title {
   margin: 0;
   font-size: 11px;
@@ -661,21 +656,6 @@
 .vf-monitor-moment-acts {
   display: flex;
   gap: 4px;
-}
-
-/* The window's use: a 2px line along the row's foot, between its corners, in the attention fill. */
-.vf-monitor-moment-bar {
-  position: absolute;
-  inset: auto 10px 0;
-  height: 2px;
-}
-
-.vf-monitor-moment-bar::after {
-  position: absolute;
-  inset: 0 auto 0 0;
-  width: var(--vf-moment-used);
-  background: var(--vf-orange);
-  content: "";
 }
 
 /* The acts hover as the deck fault's Try again does (the rule is that one's, below). */
@@ -2026,7 +2006,7 @@
   cursor: pointer;
 }
 
-/* …and the limit moment's acts hover as it does (AO-6b3): the ink comes with the ground, so the
+/* …and the strip moment's acts hover as it does (AO-6b3; the approval line's since UM-D23): the ink comes with the ground, so the
    primary's panel-coloured label never stands on the hover's (it is 0,3,0 over the primary's 0,2,0). */
 .vf-godview-deck-fault-retry:hover,
 .vf-monitor-moment-act:hover:not(:disabled) {

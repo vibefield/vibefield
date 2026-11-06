@@ -314,22 +314,28 @@ export interface GodviewMonitorProps {
    * curtain over it is the window's one question. The head stays live. */
   still?: boolean;
   /** AO-6b — a moment VibeField says once on its claims strip, after the
-   * counts: the limit moment (`LimitMoment.tsx`) and, since TS-4b, the approval
-   * line behind it (`ClaimsStripMoment.tsx`), the overlay's controller in the
-   * product and the shipping card in the catalog. Its own boundary, solid to
-   * the swarm as the strip is, and lent the stage's account facts
-   * (`MonitorAccountFacts`: the profile filter's sets, the usage column's
-   * rows) and its rows (`MonitorMomentRowsContext`), so it opens no feed of its
-   * own. Withheld while the stage is still: the curtain is the window's one
-   * question. */
+   * counts: since UM-D23 (2026-11-06) the approval line alone (TS-4b,
+   * `ClaimsStripMoment.tsx`), the overlay's controller in the product and the
+   * shipping card in the catalog. Its own boundary, solid to the swarm as the
+   * strip is, and lent the stage's account facts (`MonitorAccountFacts`: the
+   * profile filter's sets, the usage rows) and its rows
+   * (`MonitorMomentRowsContext`), so it opens no feed of its own. Withheld
+   * while the stage is still: the curtain is the window's one question. */
   moment?: ReactNode;
   /** TS-4 (TS-D7) — this Mac is not connected (its owner reads the link: the
    * overlay's `useOffersConnect`): the desktop filter is offered on This Mac
    * alone and ends on the ghost row. Default false: a catalog's stage. */
   offersConnect?: boolean;
-  /** UM-3 2d red: the skeleton — the column's routes and its moment, not yet read. */
+  /** UM-D22 — the profiles column's add: Settings → Agent Profiles on New
+   * profile… (`openNewProfile`, AO-6b3's door); absent while Settings is open,
+   * where the add draws disabled. */
   openNewProfile?: (() => void) | undefined;
+  /** UM-3 (ruling 9) — a popover's Sign in and Agent Profiles…: Settings →
+   * Agent Profiles on that profile's page; absent while Settings is open. */
   openProfile?: ((setId: string) => void) | undefined;
+  /** UM-D23 — the limit moment (`LimitMoment.tsx`), beside the profiles
+   * column's add in its card's place, lent the stage's account facts as the
+   * strip's moment is. Withheld while the stage is still. */
   limitMoment?: ReactNode;
 }
 
@@ -356,6 +362,9 @@ export function GodviewMonitor({
   still = false,
   moment,
   offersConnect = false,
+  openNewProfile,
+  openProfile,
+  limitMoment,
 }: GodviewMonitorProps): ReactElement {
   const stageRef = useRef<HTMLElement>(null);
   // The palette reads THIS stage's Godview root, never the document's first:
@@ -477,6 +486,16 @@ export function GodviewMonitor({
   const accountFacts = useMemo<MonitorAccountFacts>(
     () => ({ sets: profileSetsRead ? profileSets : null, usage: usageRows }),
     [profileSets, profileSetsRead, usageRows],
+  );
+  // UM-D23 — the limit moment beside the column's add, lent the facts it speaks from
+  const columnMoment = useMemo(
+    () =>
+      still || limitMoment === undefined || limitMoment === null ? undefined : (
+        <MonitorAccountFactsContext.Provider value={accountFacts}>
+          <ChromeBoundary name="Moment">{limitMoment}</ChromeBoundary>
+        </MonitorAccountFactsContext.Provider>
+      ),
+    [still, limitMoment, accountFacts],
   );
   const claimsRef = useRef<HTMLDivElement>(null);
   // M49 — the claims behind their own boundary, INSIDE the strip: the strip
@@ -970,6 +989,9 @@ export function GodviewMonitor({
               port={usagePort}
               chosen={chosenId ?? null}
               onChoose={setProfileTab}
+              openNewProfile={openNewProfile}
+              openProfile={openProfile}
+              moment={columnMoment}
             />
           </ChromeBoundary>
         </div>

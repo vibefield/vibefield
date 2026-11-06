@@ -79,7 +79,7 @@ export function GodviewSection({ dark = false }: { dark?: boolean } = {}): React
         </div>
       </Specimen>
       <Specimen
-        title="The limit moment — once, on the claims strip: a plan at 90% or more of a window while This Mac is the only profile (AO-6b)"
+        title="The limit moment — once, beside the profiles column's add: a plan at 90% or more of a window while This Mac is the only profile (AO-6b, UM-D23)"
         source="godview/LimitMoment.tsx"
         bleed
       >
@@ -87,7 +87,7 @@ export function GodviewSection({ dark = false }: { dark?: boolean } = {}): React
           <GodviewPreview
             door={profilesDoor}
             theme={theme}
-            moment={
+            limitMoment={
               // the shipping card over the shipping rule's fixture; a catalog acts on no one
               FIXTURE_LIMIT_MOMENT === null ? null : (
                 <LimitMomentCard

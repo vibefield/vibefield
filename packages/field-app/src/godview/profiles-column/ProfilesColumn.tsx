@@ -36,7 +36,9 @@ const THIS_MAC: AgentProfileSet = {
   personas: [],
 };
 
-/** UM-3 2d red: the skeleton — the column's add presses, not yet provided. */
+/** UM-D23, ruling 6 — how many times the column's add was pressed while the column stood, lent to the moment beside
+ * it: a press while the limit card shows does what its Add a profile… does, so the card retires
+ * (`LimitMoment.tsx`). */
 export const ColumnAddPresses = createContext(0);
 
 /** How often the column's words read the clock again: a reset and a forecast move by the minute. */
@@ -114,6 +116,7 @@ function ProfilesColumnController({
   const [pointed, setPointed] = useState<string | null>(null);
   const [pinned, setPinned] = useState<string | null>(null);
   const [focus, setFocus] = useState<string | null>(null);
+  const [addPresses, setAddPresses] = useState(0);
   const pointedProfile = pointed !== null && pointed !== ADD_TARGET ? pointed : null;
   const open =
     circles.find((circle) => circle.set.id === (pointedProfile ?? pinned))?.set.id ?? null;
@@ -156,7 +159,11 @@ function ProfilesColumnController({
       read={openCircle === undefined ? "" : readWords(openCircle.meters, clock)}
       addOpen={pointed === ADD_TARGET}
       canAdd={openNewProfile !== undefined}
-      moment={moment}
+      moment={
+        moment === undefined ? undefined : (
+          <ColumnAddPresses.Provider value={addPresses}>{moment}</ColumnAddPresses.Provider>
+        )
+      }
       onPoint={setPointed}
       onCircle={(setId) => {
         if (!lens) {
@@ -173,7 +180,11 @@ function ProfilesColumnController({
         setPointed(null);
       }}
       onFocusPlan={setFocus}
-      onAdd={() => openNewProfile?.()}
+      onAdd={() => {
+        if (openNewProfile === undefined) return;
+        openNewProfile();
+        setAddPresses((presses) => presses + 1);
+      }}
       onOpenProfile={(setId) => openProfile?.(setId)}
       onRetry={(profileIds) => {
         port?.refresh?.(profileIds).catch(() => undefined);

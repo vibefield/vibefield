@@ -186,6 +186,120 @@
   display: none;
 }
 
+/* ── the limit moment (UM-D23; DESIGN.md §8 "The moments"): AO-6b's words and rule in round 4's card, beside the
+   add in its card's place — a menu's solid, 284 wide, corners 16, padded 12 14 13, its lines 9 apart, a pointer at
+   the add (a 12 square turned 45°, 6 out of its left edge and 28 down, ringed on its two outer sides). It enters with
+   the profile notice's 300ms fade, a transition never a keyframe, and none under Reduce Motion. ── */
+.vf-profiles-limit {
+  position: relative;
+  box-sizing: border-box;
+  display: grid;
+  gap: 9px;
+  width: 284px;
+  padding: 12px 14px 13px;
+  border-radius: 16px;
+  background: var(--vf-profiles-solid);
+  box-shadow:
+    0 0 0 1px var(--vf-profiles-solid-ring),
+    var(--vf-profiles-solid-shadow);
+  color: var(--vf-foreground);
+  text-align: left;
+  transition: opacity 300ms ease-out;
+}
+
+@starting-style {
+  .vf-profiles-limit {
+    opacity: 0;
+  }
+}
+
+.vf-godview[data-godview-animations="off"] .vf-profiles-limit {
+  transition: none;
+}
+
+.vf-profiles-limit::before {
+  position: absolute;
+  top: 28px;
+  left: -6px;
+  width: 12px;
+  height: 12px;
+  background: var(--vf-profiles-solid);
+  box-shadow: -1px 1px 0 var(--vf-profiles-solid-ring);
+  transform: rotate(45deg);
+  content: "";
+}
+
+.vf-profiles-limit-title {
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+/* the plan as Agent Profiles names it: the company's mark at 14 and the plan at 12.5/600, the use at its end */
+.vf-profiles-limit-plan {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.vf-profiles-limit-plan > svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* the number is read, so it takes Godview's attention ink, never the fill (§2.5, §2.7) */
+.vf-profiles-limit-use {
+  margin-left: auto;
+  color: var(--vf-monitor-ink-attention);
+  font-size: 11.5px;
+  font-style: normal;
+  font-weight: 600;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.vf-profiles-limit-acts {
+  display: flex;
+  gap: 8px;
+}
+
+/* its acts: 26 tall, corners 13, padded 0 11, at 11.5/600; the primary in the ink, the other on the ready fill */
+.vf-profiles-limit-act {
+  height: 26px;
+  padding: 0 11px;
+  border: 0;
+  border-radius: 13px;
+  background: color-mix(in srgb, var(--vf-foreground) 8%, transparent);
+  color: var(--vf-text-primary);
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 160ms ease;
+}
+
+.vf-profiles-limit-act:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--vf-foreground) 14%, transparent);
+}
+
+.vf-profiles-limit-act[data-variant="primary"] {
+  background: var(--vf-foreground);
+  color: var(--vf-profiles-solid);
+}
+
+.vf-profiles-limit-act:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.vf-profiles-limit-act:focus-visible {
+  outline: 2px solid var(--vf-select);
+  outline-offset: 2px;
+}
+
 /* ── the popover: about 566 wide, corners 20, padded 12 14 11, its top 6 above the circle's, lifted to stay in ── */
 .vf-profiles-pop {
   top: calc(-6px - var(--vf-profiles-pop-lift, 0px));
@@ -476,6 +590,10 @@
 
   .vf-profiles-circle,
   .vf-profiles-add {
+    transition: none;
+  }
+
+  .vf-profiles-limit {
     transition: none;
   }
 }

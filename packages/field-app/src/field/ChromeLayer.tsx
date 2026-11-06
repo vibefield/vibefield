@@ -203,6 +203,9 @@ export function ChromeLayer({
   // Settings is closed (AO-6b3): an open panel takes no new page, so the
   // moment would retire without its form ever showing
   const openNewProfile = useCallback(() => openSettings("new-profile"), [openSettings]);
+  // UM-3 (ruling 9) — the profiles column's Sign in and Agent Profiles…: that
+  // profile's page, handed to the cover while Settings is closed, as above
+  const openProfile = useCallback((profile: string) => openSettings({ profile }), [openSettings]);
 
   // Opening it is asking the owner (which folds Settings and every other
   // surface); a fold of its own leaves the others alone.
@@ -503,7 +506,12 @@ export function ChromeLayer({
           the palette and the loading veil: a document that is still opening
           owns the window more than any view does. */}
       <ViewFrame
-        godview={<GodviewOverlay openNewProfile={showSettings ? undefined : openNewProfile} />}
+        godview={
+          <GodviewOverlay
+            openNewProfile={showSettings ? undefined : openNewProfile}
+            openProfile={showSettings ? undefined : openProfile}
+          />
+        }
         history={historyView}
         chat={chatView}
         surface={surface}

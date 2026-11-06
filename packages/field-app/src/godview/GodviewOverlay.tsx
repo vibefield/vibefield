@@ -31,6 +31,7 @@ import {
 } from "./GodviewTuningPanel";
 import { useGodviewTheme } from "./godview-theme";
 import { LastRunCurtain } from "./LastRunCurtain";
+import { LimitMoment } from "./LimitMoment";
 import { useLabSwitches } from "./lab-switches";
 import {
   askLastRun,
@@ -103,10 +104,15 @@ function whenIdle(task: () => void, timeoutMs: number): () => void {
  * there is no bit of its own any more. */
 export function GodviewOverlay({
   openNewProfile,
+  openProfile,
 }: {
   /** AO-6b3 — the frame's Settings on Agent Profiles' New profile… form, for
-   * the limit moment's Add a profile…; absent while Settings is open */
+   * the limit moment's Add a profile… and (UM-D22) the profiles column's add;
+   * absent while Settings is open */
   openNewProfile?: (() => void) | undefined;
+  /** UM-3 (ruling 9) — the frame's Settings on one profile's page, for the
+   * profiles column's Sign in and Agent Profiles…; absent while Settings is open */
+  openProfile?: ((setId: string) => void) | undefined;
 } = {}): ReactElement | null {
   const open = useActiveView() === "godview";
   const [everOpened, setEverOpened] = useState(false);
@@ -363,14 +369,14 @@ export function GodviewOverlay({
                 publishesFind
                 onSelectView={monitor.selectView}
                 still={question !== null}
-                // AO-6b — the limit moment, once, on the claims strip; TS-4b —
-                // the approval line behind it (TS-D20b)
-                moment={
-                  <ClaimsStripMoment
-                    openNewProfile={openNewProfile}
-                    offersConnect={offersConnect}
-                  />
-                }
+                // UM-D22/D23 — the profiles column's routes to Settings, and
+                // AO-6b's limit moment, once, beside its add
+                openNewProfile={openNewProfile}
+                openProfile={openProfile}
+                limitMoment={<LimitMoment openNewProfile={openNewProfile} />}
+                // TS-4b — the approval line, the claims strip's one moment
+                // since the limit moment left it (TS-D20b, amended by UM-D23)
+                moment={<ClaimsStripMoment offersConnect={offersConnect} />}
                 // TS-4 — not connected: the desktop filter's ghost row
                 offersConnect={offersConnect}
               />

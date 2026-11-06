@@ -18,7 +18,8 @@ export interface ShellPresentationState {
     | "new-profile"
     | "updates"
     | "whats-new"
-    /** UM-3 2d red: the skeleton — one profile's page, not yet opened */
+    /** UM-3 (ruling 9) — Godview's profiles column: a popover's Sign in and
+     * Agent Profiles… open Agent Profiles on that profile's page */
     | { readonly profile: string };
   /** TS-4 (TS-D7) — the status item's Connect Your Devices… and the away
    * notice's Connect…: Settings → Devices begins the link once it can read it,
@@ -72,6 +73,9 @@ export function settingsOpening(target: ShellPresentationState["target"]): {
   atNotes?: boolean;
 } {
   if (target === "account" || target === "devices" || target === "updates") return { page: target };
+  if (typeof target === "object") {
+    return { page: "profiles", profiles: { kind: "profile", set: target.profile } };
+  }
   if (target === "new-profile") return { page: "profiles", profiles: { kind: "new" } };
   if (target === "whats-new") return { page: "updates", atNotes: true };
   return { page: "general" };

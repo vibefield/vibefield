@@ -56,6 +56,7 @@ export function GodviewPreview({
   deckControls = false,
   lastRun,
   moment,
+  limitMoment,
 }: {
   door?: MonitorDoor | null;
   panes?: MonitorPaneFacts;
@@ -75,8 +76,11 @@ export function GodviewPreview({
   deckControls?: boolean;
   /** the last run's question, standing over the stage (LR) */
   lastRun?: LastRunState;
-  /** AO-6b — the moment on the claims strip: the shipping card over a fixture */
+  /** TS-4b — the approval line on the claims strip: the shipping card over a fixture */
   moment?: ReactNode;
+  /** AO-6b, UM-D23 — the limit moment beside the profiles column's add, where the stage stands it: the shipping
+   * card over a fixture */
+  limitMoment?: ReactNode;
 } = {}): ReactElement {
   const [viewId, setViewId] = useState(initialView);
   const [deckState, setDeckState] = useState<GodviewDeckState>(initialDeckState);
@@ -135,6 +139,7 @@ export function GodviewPreview({
               onSelectView={setViewId}
               still={lastRun !== undefined}
               moment={moment}
+              limitMoment={limitMoment}
             />
           }
           curtain={
