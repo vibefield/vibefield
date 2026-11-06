@@ -5,7 +5,7 @@
 // through the D6 ticket; churn leaves no residue. Row 2 (field-native's own
 // SIGTERM sweep) is pinned Rust-side in field-native/tests/terminal_unit.rs.
 import { type ChildProcess, spawn } from "node:child_process";
-import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { GhostteaAutomationClient } from "@vibecook/ghosttea-client";
@@ -14,8 +14,11 @@ import { afterEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
 import { bootstrap, type FielddConfig, type FielddDaemon } from "../src/index";
 import {
+  endProcessesUnder,
   type FloorScene,
+  killDaemonTree,
   nativeBinPath,
+  removeTempRoot,
   shortTmpRoot,
   waitForMgmtEndpoint,
   waitWithEvidence,
@@ -33,6 +36,8 @@ const SH = WIN ? CMD : "/bin/sh";
 
 let children: ChildProcess[] = [];
 let cleanup: Array<() => void | Promise<void>> = [];
+/** Item 196 — the data roots this row's floors made, removed by `afterEach` only once nothing runs under them. */
+let roots: string[] = [];
 /** Item 68 — the row's latest daemon over its floor, for every wait's evidence (`boot` sets it), and when each floor
  * was spawned. */
 let scene: FloorScene | undefined;
@@ -51,8 +56,16 @@ afterEach(async () => {
       /* already-stopped is fine */
     }
   }
-  for (const c of children) c.kill("SIGKILL");
+  // Item 196 — then the floors, and only after them their roots. Each floor is ended and its exit awaited, then
+  // whatever still runs under its root: its cells, which are the floor's children and outlive it. The roots used to
+  // go first, while their floors still ran, and a removal raced by a live writer left the root behind (`vf-km-`).
+  const floors = children;
   children = [];
+  await Promise.all(floors.map((child) => killDaemonTree(child)));
+  const dirs = roots;
+  roots = [];
+  await Promise.all(dirs.map((dir) => endProcessesUnder(dir)));
+  for (const dir of dirs) removeTempRoot(dir);
 });
 
 interface NativeHandle {
@@ -62,7 +75,7 @@ interface NativeHandle {
 
 async function spawnNative(dir?: string, env: Record<string, string> = {}): Promise<NativeHandle> {
   const dataDir = dir ?? shortTmpRoot("vf-km-");
-  if (dir === undefined) cleanup.push(() => rmSync(dataDir, { recursive: true, force: true }));
+  if (dir === undefined) roots.push(dataDir);
   spawnedAt.set(dataDir, Date.now());
   const child = spawn(BIN, [], {
     env: {

@@ -7,11 +7,11 @@
 // Every helper takes `platform` explicitly (defaulting to the real one) so the
 // win32 branch is reachable from a unit test on a mac rather than only from a
 // Windows box.
-import { type ChildProcess, spawn } from "node:child_process";
+import { type ChildProcess, execFileSync, spawn } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, realpathSync, rmSync } from "node:fs";
 import { createConnection } from "node:net";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, posix } from "node:path";
 import { LAYOUT, pipeEndpointFor, SOCKETS } from "@vibefield/contracts";
 import { cargoBinaries } from "../../../scripts/cargo-target.mjs";
 import type { NativeLink } from "../src/native-link";
@@ -153,6 +153,75 @@ export async function killDaemonTree(child: ChildProcess): Promise<void> {
     }
   }
   await exited;
+}
+
+/** Item 196 — end every process still running under a floor's data root, and
+ * resolve once each is gone. Call it after `killDaemonTree` has ended the
+ * floor, and before `removeTempRoot`.
+ *
+ * On unix `killDaemonTree` reaches the floor's one pid. Its terminal cells are
+ * the FLOOR's children, built to outlive it (they drain when their leash
+ * closes), so they go on binding and writing under the root while the suite
+ * removes it, and the removal leaves what they wrote behind. A cell names its
+ * own paths under the root in its argv (`--control`, `--frame`, `--crumb`), so
+ * the root finds every cell, orphaned or not. The floor goes first so that it
+ * can start no cell after the sweep. win32 needs none of this: `taskkill /T`
+ * already walked the tree from the living floor.
+ *
+ * It kills by path on a shared host, so it sweeps only a harness temp root as
+ * `shortTmpRoot` makes one on unix (`/tmp/vf-<prefix><6 random>`) and throws on
+ * anything else, before pgrep runs: `/tmp` itself, an empty or relative path, a
+ * `..`, a trailing slash, a root outside `/tmp`. */
+export async function endProcessesUnder(
+  dir: string,
+  platform: NodeJS.Platform = process.platform,
+): Promise<void> {
+  if (platform === "win32") return;
+  const name = posix.basename(dir);
+  if (posix.join("/tmp", name) !== dir || !HARNESS_ROOT.test(name)) {
+    throw new Error(`endProcessesUnder refuses "${dir}": not a harness temp root (/tmp/vf-…)`);
+  }
+  const pids = processesNaming(`${dir}/`);
+  for (const pid of pids) {
+    try {
+      process.kill(pid, "SIGKILL");
+    } catch {
+      // already gone
+    }
+  }
+  const deadline = Date.now() + 3_000;
+  for (const pid of pids) {
+    while (isRunning(pid) && Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, 25));
+    }
+  }
+}
+
+/** A harness temp root's name: `vf-`, its prefix's rest, and mkdtemp's six. */
+const HARNESS_ROOT = /^vf-[A-Za-z0-9-]*[A-Za-z0-9]{6}$/;
+
+/** The pids whose argv contains `text`, matched literally (`pgrep -f` reads
+ * an extended regular expression, so the text is escaped). pgrep exits 1 when
+ * nothing matches, and that is the empty answer. */
+function processesNaming(text: string): number[] {
+  const pattern = text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  try {
+    return execFileSync("pgrep", ["-f", pattern], { encoding: "utf8" })
+      .split("\n")
+      .filter((line) => line !== "")
+      .map(Number);
+  } catch {
+    return [];
+  }
+}
+
+function isRunning(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === "EPERM";
+  }
 }
 
 /** Remove a suite's temp data root, tolerating Windows' slow handle release.

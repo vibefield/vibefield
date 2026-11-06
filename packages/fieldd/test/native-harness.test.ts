@@ -10,6 +10,7 @@ import { join } from "node:path";
 import { pipeEndpointFor, SOCKETS, TerminalRouteSnapshot } from "@vibefield/contracts";
 import { afterEach, describe, expect, it } from "vitest";
 import {
+  endProcessesUnder,
   floorEvidence,
   nativeBinPath,
   nativeBuildEnv,
@@ -115,6 +116,27 @@ describe("the native harness is platform-shaped (WIN-4)", () => {
         rmSync(unix, { recursive: true, force: true });
       }
     }
+  });
+
+  it("item 196 — endProcessesUnder sweeps only a harness temp root and throws on /tmp, an empty path or any other", async () => {
+    // it kills by path on a shared host, so every shape but `/tmp/vf-<prefix><6>` is refused before pgrep runs
+    const refused = [
+      "/tmp",
+      "",
+      "/tmp/",
+      "tmp/vf-km-AbCdEf",
+      "/tmp/vf-km-AbCdEf/",
+      "/tmp/../tmp/vf-km-AbCdEf",
+      "/private/tmp/vf-km-AbCdEf",
+      "/tmp/vf-",
+      "/tmp/vf-abc",
+      "/tmp/km-AbCdEf",
+    ];
+    for (const dir of refused) {
+      await expect(endProcessesUnder(dir, "darwin"), `"${dir}"`).rejects.toThrow(/refuses/);
+    }
+    // the mkdtemp shape passes it; nothing runs under a root that was never made
+    await expect(endProcessesUnder("/tmp/vf-km-AbCdEf", "darwin")).resolves.toBeUndefined();
   });
 });
 
