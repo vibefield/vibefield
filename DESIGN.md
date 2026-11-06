@@ -5628,7 +5628,10 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   looks two ways. The 48 scope row and its dropdowns retire into the field's end (**+ Filter** and a small switch),
   and their 48 go back to the list; a typed profile or desktop name offers its filter; live rows say their profile,
   and the live peek wears a head. GV-D9 stands: the two scopes stay, and B, one list, was declined. Below, each
-  change is said where it stands. Nothing is drawn yet: SE-1 draws it, and until then the scope row stands.
+  change is said where it stands. *Drawn 2026-11-06, SE-1 (the M-desk stack): the tokens, + Filter and the small
+  switch, a typed name's offer, a live row's profile and the live peek's head; the scope row and its dropdowns are
+  gone from the code too.* *(Corrected the same day, the M-desk stack: this said "Nothing is drawn yet: SE-1 draws
+  it, and until then the scope row stands.")*
   - **The button** is the frame's: a 40 glass circle (the line's glass, §5) at the head's right end —
     16 in, `top-2`, on the lights' axis — holding `search` 15 in secondary ink (primary under the
     pointer), lifted 8 so **its key is printed under it**, as the views track prints its keys: ⌘F at
@@ -5688,7 +5691,10 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     Everything it says "Search your whole agentic past…". In Godview the placeholder says "Words said
     in a live session, a folder, an agent…". **Since SE-D1** (2026-11-06) the field's parts stand 8
     apart (14 until then), `search` 18 keeps 4 more after it, and in order they are: `search`, **the
-    tokens**, the words (4 in), **the field's end**, and close (each below). **The body**: the list,
+    tokens**, the words (4 in), **the field's end**, and close (each below). The words keep at least **120**
+    of the field whatever the tokens hold, so in a narrow popup the tokens give way first and a long query scrolls
+    under them (*added 2026-11-06, SE-1 as built: `.vf-peek-field input`'s `min-width` in `frame/peek.css`*).
+    **The body**: the list,
     380 wide, and the peek beside it, a hairline between them; since SE-D1 it is 48 taller, the scope
     row's. **The foot**, 52 tall over a hairline: one count sentence at 12/400 in tertiary ink, and
     **Open** — 32 tall, corners 16, 12.5/600 on the ready fill (14% under the pointer) — with **↵
@@ -5715,8 +5721,12 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       segment made small: the ready fill as its track, padding 2, corners 10; each half 26 tall, padded 0 10, corners
       8, at 12/500 in secondary ink, the chosen one solid in primary ink with the hairline and a 1px shadow.
     - **The Filter menu** is a solid menu (§5), right-aligned 4 under the button, at least 240 wide and at most 430
-      tall, scrolling past that, its groups under the menus' eyebrow (mono 10, uppercase, tracked 0.08em, tertiary;
-      `frame/menu.css`). Live now's, in Godview: **Profiles**, only while there is a profile besides This Mac —
+      tall, and never past the popup's bottom (it starts 50 under the popup's top and stops 30 short of its foot,
+      so it is at most the popup's height less 80), scrolling past that, its groups under the menus' eyebrow (mono
+      10, uppercase, tracked 0.08em, tertiary; `frame/menu.css`). *(Corrected 2026-11-06, the M-desk stack: this
+      said "at most 430 tall, scrolling past that"; SE-1's review bounds it by the popup too,
+      `min(430, popup − 80)`, so in a short window the menu scrolls inside the popup instead of being cut by it.)*
+      Live now's, in Godview: **Profiles**, only while there is a profile besides This Mac —
       **Every profile**, then each profile, its glyph 12, "waiting" beside one a session under it waits in, else its
       sessions ("4 sessions") — then **Desktops** — **All desktops** with its agents ("6 agents"), then each desktop,
       its OS mark 11 and "name · here" beside this one, its agents or its standing beside it, a desktop not answering
@@ -5778,8 +5788,10 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     terminal into a pane here.
     **It wears a head** (SE-D1 A, 2026-11-06), the past peek's recipe, 12 above the pane and 8 under the
     peek's top: the run's title at 15/600, and under it at 12 in tertiary ink its folder, agent, profile
-    (only as its row says one), where it runs — "on this Mac" (`thisDeviceWord`: "on this PC" off the
-    Mac) or "on studio" — and its state, joined by " · ".
+    (only as its row says one), where it runs — "on this Mac" (`onThisDeviceWords`, the same noun as
+    `thisDeviceWord`'s: "on this PC" off the Mac) or "on studio" — and its state, joined by " · ". *(Corrected
+    2026-11-06, the M-desk stack: this named `thisDeviceWord`, which says "This Mac"; SE-1's review gave the
+    sentence's form its own function in `account/link.ts` rather than re-casing that label.)*
   - **The peek** (K8, until the docket's PK3 rules): what opening the row would show. Today, that
     session's matched lines — every hit the index answered for it, in reading order, each led by
     who said it and marked as above, at 13.5/1.55 in primary ink — under the session's title at
@@ -7161,8 +7173,9 @@ field gives them, and “q” what was typed.
 - **The Peek's offer.** "Show only ‹profile›'s sessions" or "Show only what runs on ‹desktop›", with its sessions and
   ⇥. Open on it says **Add the filter**, and its peek "The field, the button and the stage keep it until you remove
   it."
-- **The live peek's head** says where a run runs, "on this Mac" ("on this PC" off the Mac; `thisDeviceWord`) or "on
-  ‹desktop›".
+- **The live peek's head** says where a run runs, "on this Mac" ("on this PC" off the Mac; `onThisDeviceWords`, the
+  noun `thisDeviceWord` says) or "on ‹desktop›". *(Corrected 2026-11-06, the M-desk stack: this named
+  `thisDeviceWord` alone.)*
 - **Everything looks through every profile** (UM-D28): while Godview's profile filter is on, Everything's foot adds
   " · every profile; ‹profile› comes back on Live now" on the desktop, and " · every profile; ‹profile› comes back on
   Field" on the phone.
@@ -7732,8 +7745,11 @@ as the coin's marks (§2.8) and the crew card's ring are, so it is geometry: one
 allowlist, never an icon, and no glyph stands for usage. Its middle holds a profile's own glyph from puppeteer's
 `ProfileGlyph` set, kept outside this set as the vendor marks are (below). Everything else the column and the Peek
 wear is already among the 65: the add and **+ Filter** are `plus`; a token's × and the popover's are `close`; the
-add's card wears `gear`; a reset is led by `reset`; Everything's projects wear `folder`, what was said `message`, and
-**Every profile** keeps `person`. The phone's corner, sheet and token wear SF Symbols, as the corner's rows already
+add's card wears `gear`; a reset is led by `reset`; Everything's projects wear `folder` and what was said `message`.
+**Every profile** wears no mark: in + Filter's menu it leads with nothing, as All desktops, Every project and Any
+agent do (round 4's `tokens` variant), and no token stands for it. *(Corrected 2026-11-06, the M-desk stack: this
+said "and **Every profile** keeps `person`", the retired scope row's dropdown's glyph; `peek-filters.test.ts` pins
+Every profile's mark null.)* The phone's corner, sheet and token wear SF Symbols, as the corner's rows already
 do (an × is the system's `xmark`, as the bar's search field draws it), and a profile's glyph there is the same
 `ProfileGlyph` vocabulary drawn as SF Symbols, through one presentation table that is tested against the
 vocabulary's list (`ProfileGlyphSymbols`, UM-4). Nothing joins the picks.
