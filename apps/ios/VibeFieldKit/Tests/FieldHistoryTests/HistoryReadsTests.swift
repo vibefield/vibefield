@@ -166,6 +166,73 @@ struct HistoryReadsTests {
     #expect(door.closed, "a door the reader owns is closed with it")
   }
 
+  /// SE-2j (the S2 review's finding 5) — an answer is to its words AND its kind: Prompts' answer to "needle" holds
+  /// prompts alone, so it never answers Everything with every kind; asking again with the kind changed asks the index
+  /// again, without the kind.
+  @Test("search: an answer is the words' and the kind's; another kind is unanswered until it is asked again")
+  @MainActor
+  func searchAnswersItsKind() async throws {
+    let door = ScriptedDoor()
+    let reader = HistoryDesktopReader(deviceId: "dev-1", name: "studio", door: door)
+    reader.start()
+    await settle("the standing") { door.asked.contains("index.status") }
+    await reader.search("needle", kind: .prompts)
+    let prompts = try #require(door.searched.last)
+    #expect(prompts["kind"]?.stringValue == "user")
+    #expect(reader.answered(kind: .prompts) == "needle")
+    #expect(reader.answered(kind: .any) == nil, "prompts alone never answer every kind")
+    await reader.search("needle", kind: .any)
+    #expect(door.searched.count == 2)
+    let everyKind = try #require(door.searched.last)
+    #expect(everyKind["kind"] == nil)
+    #expect(reader.answered(kind: .any) == "needle")
+    #expect(reader.answered(kind: .prompts) == nil)
+    reader.close()
+  }
+
+  /// SE-2j (the S2 review's finding 16) — an ask whose task was cancelled (newer words took over) lands nothing: an
+  /// older answer arriving after a newer one would put the older words' lines and hits back.
+  @Test("search: a cancelled ask lands nothing, in Live now or Everything")
+  @MainActor
+  func cancelledAskLandsNothing() async throws {
+    let door = ScriptedDoor()
+    let reader = HistoryDesktopReader(deviceId: "dev-1", name: "studio", door: door)
+    reader.start()
+    await settle("the standing") { door.asked.contains("index.status") }
+    // the test runs on the main actor, so each task starts only at its `value`: cancelled before it runs
+    let live = Task { await reader.searchLive("needle", nativeSessionIds: ["native-s0"]) }
+    live.cancel()
+    await live.value
+    #expect(reader.live == nil)
+    let past = Task { await reader.search("needle", kind: .any) }
+    past.cancel()
+    await past.value
+    #expect(reader.corpus.searchedQuery == nil)
+    #expect(reader.answered(kind: .any) == nil)
+    reader.close()
+  }
+
+  /// SE-2j — the desktops stop asking once the ask is cancelled: no desktop is asked in a task that newer words
+  /// replaced.
+  @Test("search: the desktops ask nothing more once the ask is cancelled")
+  @MainActor
+  func desktopsStopOnceCancelled() async throws {
+    let studio = ScriptedDoor()
+    let loft = ScriptedDoor()
+    let desktops = HistoryDesktops(cache: nil)
+    desktops.attach(deviceId: "dev-1", name: "studio", isHome: true, door: studio, ownsDoor: false)
+    desktops.attach(deviceId: "dev-2", name: "loft", isHome: false, door: loft, ownsDoor: false)
+    await settle("both standings") { studio.asked.contains("index.status") && loft.asked.contains("index.status") }
+    let live = Task { await desktops.searchLive("needle", runs: ["dev-1": ["native-s0"], "dev-2": ["native-l1"]]) }
+    live.cancel()
+    await live.value
+    let past = Task { await desktops.search("needle", kind: .any) }
+    past.cancel()
+    await past.value
+    #expect(studio.searched.isEmpty)
+    #expect(loft.searched.isEmpty)
+  }
+
   /// SE-P1 (SE-D4 A) — Live now's ask: the words over this desktop's live runs alone (`nativeSessionIds`), at the
   /// tailnet's page; the lines land by the run's native id, and Everything's hits, query and recent searches stand.
   @Test("live: the words are asked over the live runs, and the lines land by the run's native id")

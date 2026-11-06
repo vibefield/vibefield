@@ -241,7 +241,7 @@ struct PhoneSearchWorldTests {
   func answerersFromReaders() {
     let up = HistoryDesktopReader.fixed(corpus: .mock, standing: .connected)
     let down = HistoryDesktopReader.fixed(corpus: .mock, standing: .asleep)
-    let past = PhoneSearchWorld.pastAnswerers([up, down])
+    let past = PhoneSearchWorld.pastAnswerers([up, down], kind: .any)
     #expect(
       past == [
         PhoneSearchWorld.Answerer(name: "studio", awake: true, asks: false, answered: nil),

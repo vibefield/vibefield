@@ -132,6 +132,11 @@ public final class HistoryDesktopReader: Identifiable {
   public private(set) var live: HistoryLiveAnswer?
   /// Whether this reader replays the cache (no door, or a door that stopped).
   public var isReplaying: Bool { door == nil || !standing.isAwake }
+
+  /// SE-2j — the words this desktop's index last answered for Everything with `kind`. STUB (SE-2j red): none.
+  public func answered(kind: FieldHistoryModel.SearchKind) -> String? {
+    nil
+  }
   /// PJ-7 — the door this reader asks, which the ledger may ask too (one door
   /// per desktop, the phone's budget): nil while it replays the cache.
   var openDoor: (any HistoryDoor)? { closed ? nil : door }

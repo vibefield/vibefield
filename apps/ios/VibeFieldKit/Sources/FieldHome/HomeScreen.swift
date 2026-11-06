@@ -1200,7 +1200,8 @@ public struct HomeScreen: View {
         query: searchQuery, asking: searchAsking)
     case .everything:
       PhoneSearchWorld.pastAsked(
-        PhoneSearchWorld.pastAnswerers(historyDesktops.readers), query: searchQuery, asking: searchAsking)
+        PhoneSearchWorld.pastAnswerers(historyDesktops.readers, kind: search.kind), query: searchQuery,
+        asking: searchAsking)
     }
   }
 
