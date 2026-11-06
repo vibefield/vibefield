@@ -121,6 +121,8 @@ export interface FlowRunPorts {
   defaultProfile: FlowStepPorts["defaultProfile"];
   /** the Agent Profiles that exist now, by id: a run's frozen scope narrows to them (D8) */
   profiles(): readonly string[];
+  /** G2 (CP-L4, TL-D5): a spark's Agent Profiles now, or none for a spark that is gone. Not read yet */
+  sparkScope?(spark: string): readonly string[] | undefined;
   /** how a run's host is started */
   readonly host: Pick<FlowHostOptions, "launch" | "environment" | "timings" | "heapMb" | "rssMb">;
   readonly logger?: Logger | undefined;

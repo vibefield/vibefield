@@ -28,6 +28,14 @@ export const noSuchInput = (flow: string, name: string): string =>
 export const inputNotFound = (kind: "session" | "project"): string =>
   `VibeField can't find the ${kind} its input names.`;
 
+/** The spark a start was asked by, or in whose thread, is gone (G2; CP-L4). */
+export const noSpark = (): string => "VibeField can't find that spark; nothing was started.";
+
+/** A run whose record fieldd could not keep: it never began (D18). §9 says it whole, under "A run that can't go on",
+ * never after "Couldn't run ‹flow›:". */
+export const neverBegan = (flow: string): string =>
+  `VibeField couldn't begin ${flow}: it couldn't keep the run's record. Nothing was started.`;
+
 /** No run fieldd keeps under that id. */
 export const noSuchRun = (run: string): string => `VibeField has no run ${run}.`;
 

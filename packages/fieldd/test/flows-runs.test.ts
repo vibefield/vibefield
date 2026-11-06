@@ -8,6 +8,7 @@ import {
   type FlowRunRecordStep,
   type FlowStarter,
   type NeedsItemId,
+  RECORD_STORES,
   RunSummary,
 } from "@vibefield/contracts";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -24,6 +25,7 @@ import {
 import type { FlowStepLaunch, FlowStepOrigin, FlowStepSession } from "../src/flows/steps";
 import * as words from "../src/flows/words";
 import type { RpcCallError } from "../src/native-link";
+import { recordsUnreadable, UNREADABLE_WORDS } from "../src/signed-record";
 import type {
   FlowChangedRaise,
   FlowItemRaise,
@@ -128,6 +130,8 @@ async function harness(
   const library = new FlowLibrary({ dir: libraryDir, records });
   const raised: FlowChangedRaise[] = [];
   let profiles: readonly string[] = opts.profiles ?? ["work", "review"];
+  /** each spark's Agent Profiles now (CP-L4): a spark not here is gone */
+  const sparkScopes = new Map<string, readonly string[]>([[VELA, ["work", "review"]]]);
   const spawned: Spawned[] = [];
   const enqueued: Enqueued[] = [];
   const hands: Handed[] = [];
@@ -166,6 +170,7 @@ async function harness(
       },
     },
     profiles: () => profiles,
+    sparkScope: (spark) => sparkScopes.get(spark),
     agents: {
       spawn: async (launch, origin) => {
         spawned.push({ launch, origin, open: openOf(origin.run) });
@@ -210,6 +215,11 @@ async function harness(
   const setProfiles = (next: readonly string[]) => {
     profiles = next;
   };
+  /** a spark's Agent Profiles from now on, or (undefined) the spark gone */
+  const setSparkScope = (spark: string, scope: readonly string[] | undefined) => {
+    if (scope === undefined) sparkScopes.delete(spark);
+    else sparkScopes.set(spark, scope);
+  };
   /** the run's journal's lines' kinds, as the store reads it now */
   const kinds = (run: string): string[] => {
     const read = records.readRun(run);
@@ -230,6 +240,7 @@ async function harness(
     approved,
     start,
     setProfiles,
+    setSparkScope,
     kinds,
   };
 }
@@ -1596,7 +1607,50 @@ describe("CP-4a2b — a changed flow's acts begin the asked-for run (§13a slice
     expect((await settled(h.runs, run, "done")).log).toBe("hi");
   });
 
-  it("R6 (CP4-Q5 (a)): an act that can't begin is failed in §9's start words, nothing approved and nothing begun: a version changed again since it asked, and an input the version no longer takes", async () => {
+  it("R4b (R4–R6 review G2; CP-L4, TL-D5): a spark's kept start, its own or a Run in its thread, narrows again at its act to the spark's Agent Profiles now; a spark that is gone starts nothing, nothing approved", async () => {
+    const h = await harness();
+    const approval = h.approved("hello", HELLO);
+    const edited = h.write("hello", HELLO_EDITED);
+    const own = waitsOf(
+      await h.start({
+        starter: { by: "spark", spark: VELA },
+        from: VELA_FROM,
+        scope: ["work", "review"],
+      }),
+    );
+    // Vela is under review alone since it asked, as an Allow re-reads it
+    h.setSparkScope(VELA, ["review"]);
+    const run = ranOf(
+      await h.runs.acts.start({
+        id: own,
+        flow: "hello",
+        hash: approval.hash,
+        version: "approved",
+        start: askedOf(h, 0),
+        from: VELA_FROM,
+      }),
+    );
+    expect(h.records.runRecord(run)?.scope).toEqual(["review"]);
+    await settled(h.runs, run, "done");
+    // a Run in Vela's thread is yours, its scope Vela's (CP4-Q20 (a)): acted on once Vela is gone
+    const thread = waitsOf(
+      await h.start({ starter: { by: "you", spark: VELA }, scope: ["review"] }),
+    );
+    h.setSparkScope(VELA, undefined);
+    expect(
+      await h.runs.acts.start({
+        id: thread,
+        flow: "hello",
+        hash: flowHashOf(edited),
+        version: "this",
+        start: askedOf(h, 1),
+      }),
+    ).toEqual({ outcome: "failed", reason: words.noSpark() });
+    expect(h.records.approval("hello")?.hash).toBe(approval.hash);
+    expect(h.records.runRecords().map((record) => record.run)).toEqual([run]);
+  });
+
+  it("R6 (CP4-Q5 (a); R4–R6 review H5): an act that can't begin is failed in §9's start words, nothing approved and nothing begun: a version changed again since it asked, an input the version no longer takes, and a bound reached since", async () => {
     const h = await harness();
     const approval = h.approved("hello", HELLO);
     const edited = h.write("hello", HELLO_EDITED);
@@ -1629,6 +1683,58 @@ describe("CP-4a2b — a changed flow's acts begin the asked-for run (§13a slice
       }),
     ).toEqual({ outcome: "failed", reason: words.noSuchInput("Targets", "target") });
     expect(h.records.approval("targets")?.hash).toBe(targets.hash);
+    expect(h.records.runRecords()).toEqual([]);
+    // a bound reached since it asked (D3): refused before its approval is written, as every refusal is
+    const bound = waitsOf(await h.start({ flow: "targets" }));
+    for (let i = 0; i < FLOW_LIMITS.RUNS_LIVE_MAX; i += 1) seeded(h, i, "running");
+    expect(
+      await h.runs.acts.start({
+        id: bound,
+        flow: "targets",
+        hash: flowHashOf(bare),
+        version: "this",
+        start: askedOf(h, 2),
+      }),
+    ).toEqual({ outcome: "failed", reason: words.runsLive("Targets") });
+    expect(h.records.approval("targets")?.hash).toBe(targets.hash);
+  });
+
+  it("R6c (R4–R6 review H2): Run this version checks the run's begin before it approves, so the store's refusal leaves no approval; a disk's refusal is said in §9's words, never its own, and past the checks the run never began", async () => {
+    const h = await harness();
+    const approval = h.approved("hello", HELLO);
+    const edited = h.write("hello", HELLO_EDITED);
+    const act = async () => {
+      const waits = waitsOf(await h.start());
+      return h.runs.acts.start({
+        id: waits,
+        flow: "hello",
+        hash: flowHashOf(edited),
+        version: "this",
+        start: askedOf(h, h.raised.length - 1),
+      });
+    };
+    // the runs store refuses the run's begin (item 172's guard): refused before the approval is written
+    const refusing = vi.spyOn(h.records, "checkBegin").mockImplementation(() => {
+      throw recordsUnreadable(RECORD_STORES.SERVICE_FLOWS, UNREADABLE_WORDS.flows, true);
+    });
+    expect(await act()).toEqual({ outcome: "failed", reason: UNREADABLE_WORDS.flows });
+    refusing.mockRestore();
+    expect(h.records.approval("hello")?.hash).toBe(approval.hash);
+    // a disk that refuses the approval: nothing was changed, so the store's sentence says it, never the disk's words
+    const approving = vi.spyOn(h.records, "approve").mockImplementation(() => {
+      throw new Error("EIO: i/o error, write");
+    });
+    expect(await act()).toEqual({ outcome: "failed", reason: UNREADABLE_WORDS.flows });
+    approving.mockRestore();
+    expect(h.records.approval("hello")?.hash).toBe(approval.hash);
+    // the one window past the checks: a disk that takes the approval and refuses the run's record. The run never
+    // began, in §9's words; the approval, the person's own, stands
+    const beginning = vi.spyOn(h.records, "beginRun").mockImplementation(() => {
+      throw new Error("ENOSPC: no space left on device, write");
+    });
+    expect(await act()).toEqual({ outcome: "failed", reason: words.neverBegan("Hello") });
+    beginning.mockRestore();
+    expect(h.records.approval("hello")?.hash).toBe(flowHashOf(edited));
     expect(h.records.runRecords()).toEqual([]);
   });
 });

@@ -297,11 +297,7 @@ export class FlowRecords {
    * refuses the head leaves the record alone: a run that never began. */
   beginRun(entry: FlowJournalHeadEntry, start: FlowRunStart): FlowJournalHead {
     const run = FlowRunId.parse(entry.run);
-    const key = this.#key(RUNS_DIR, run);
-    this.#guard.writable(key);
-    const path = this.#journalPath(run);
-    if (existsSync(path) || existsSync(this.#recordPath(run)))
-      throw new Error(`a run is already kept under ${run}`);
+    this.checkBegin(run);
     const head = FlowJournalHead.parse({
       ...entry,
       format: FLOW_RECORD_FORMAT,
@@ -330,6 +326,14 @@ export class FlowRecords {
     this.#tails.set(run, { seq: 1, mac, bytes: Buffer.byteLength(text, "utf8") });
     this.#synced.set(run, { seq: 1, mac });
     return head;
+  }
+
+  /** What `beginRun` checks before it writes anything: the store's refusal while a run's begin under `run` would not
+   * be kept (item 172: its boot read failed, or a newer VibeField holds the id), and a run already kept under it. */
+  checkBegin(run: FlowRunId): void {
+    this.#guard.writable(this.#key(RUNS_DIR, run));
+    if (existsSync(this.#journalPath(run)) || existsSync(this.#recordPath(run)))
+      throw new Error(`a run is already kept under ${run}`);
   }
 
   /** CP-4a2a — append a line to a run's journal, chained to the one before it, and fsynced before this returns: a

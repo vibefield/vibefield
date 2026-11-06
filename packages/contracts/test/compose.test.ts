@@ -51,7 +51,13 @@ import {
   SparkRecord,
   SparkSummary,
 } from "../src/compose";
-import { FLOW_INPUT_VALUE_MAX, FLOW_INPUTS_MAX, FlowInput, FlowStarter } from "../src/flows";
+import {
+  FLOW_INPUT_VALUE_MAX,
+  FLOW_INPUTS_MAX,
+  FlowInput,
+  FlowRunRecord,
+  FlowStarter,
+} from "../src/flows";
 import { METHODS, reachableFromTailnet } from "../src/methods";
 import {
   FLOW_LIMITS,
@@ -915,7 +921,7 @@ describe("CP-4a2b — a changed flow's pending start, on its needs record (13a s
     expect(NeedsRecord.safeParse({ ...kept(), start: "run it" }).success).toBe(false);
   });
 
-  it("Q4c: its input and its starter read as flows.ts's FlowInput and FlowStarter do, at each of their bounds", () => {
+  it("Q4c: its input, its starter and its scope read as flows.ts's FlowInput, FlowStarter and FlowRunRecord's scope do, at each of their bounds", () => {
     const named = (n: number) =>
       Object.fromEntries(Array.from({ length: n }, (_, i) => [`input${i}`, "x"]));
     for (const input of [
@@ -942,6 +948,20 @@ describe("CP-4a2b — a changed flow's pending start, on its needs record (13a s
     ])
       expect(reads({ starter }), JSON.stringify(starter)).toBe(
         FlowStarter.safeParse(starter).success,
+      );
+    // the scope an act begins is the run's record's (the Q4 review G4): held to it at each bound
+    const profiles = (n: number) => Array.from({ length: n }, (_, i) => `profile-${i}`);
+    for (const scope of [
+      [],
+      ["work"],
+      profiles(64),
+      profiles(65),
+      [""],
+      ["x".repeat(128)],
+      ["x".repeat(129)],
+    ])
+      expect(reads({ scope }), `${scope.length}: ${scope[0]?.length}`).toBe(
+        FlowRunRecord.shape.scope.safeParse(scope).success,
       );
   });
 });

@@ -1546,7 +1546,7 @@ describe("CP-4a2b — a flow run's items: the runs' acts, then Stop the run; an 
     ]);
   });
 
-  it("N5d (Q4's dedup, RULED replace, 2026-11-06): the same teller asking the same bytes again with another start replaces the open item's start, so its act begins the latest; the same start changes nothing", async () => {
+  it("N5d (Q4's dedup, RULED replace, 2026-11-06; R4–R6 review H4, H5): the same teller asking the same bytes again with another start replaces the open item's start and its session, so its act begins the latest and tells who asked it; the same start writes nothing", async () => {
     const h = harness();
     const first = {
       input: { target: "run-40" },
@@ -1554,14 +1554,21 @@ describe("CP-4a2b — a flow run's items: the runs' acts, then Stop the run; an 
       scope: ["work"],
     };
     const latest = { ...first, input: { target: "run-41" }, scope: ["work", "review"] };
-    const raise = { script: CHANGED, name: "Release check", from: VELA_FROM };
-    const id = h.queue.flowChanged({ ...raise, start: first });
-    expect(h.queue.flowChanged({ ...raise, start: latest })).toBe(id);
+    // Vela asks again from its next session
+    const again = { ...VELA_FROM, session: "run-vela-2" };
+    const raise = { script: CHANGED, name: "Release check" };
+    const id = h.queue.flowChanged({ ...raise, from: VELA_FROM, start: first });
+    expect(h.queue.flowChanged({ ...raise, from: again, start: latest })).toBe(id);
     expect(h.queue.list()).toHaveLength(1);
-    expect(h.kept().find((record) => record.item.id === id)?.start).toEqual(latest);
-    // the same start again: the same item, its start as it was
-    expect(h.queue.flowChanged({ ...raise, start: { ...latest } })).toBe(id);
-    expect(h.kept().find((record) => record.item.id === id)?.start).toEqual(latest);
+    const kept = () => h.kept().find((record) => record.item.id === id);
+    expect(kept()?.start).toEqual(latest);
+    expect(kept()?.item.from).toEqual(again);
+    // the same start again: the same item, and nothing is written
+    const store = (h.queue as unknown as { opts: { store: NeedsStore } }).opts.store;
+    const writes = vi.spyOn(store, "write");
+    expect(h.queue.flowChanged({ ...raise, from: again, start: { ...latest } })).toBe(id);
+    expect(writes).not.toHaveBeenCalled();
+    writes.mockRestore();
     const started: FlowItemStart[] = [];
     h.queue.bindFlowActs(startsInto(started));
     await h.queue.answer(id, 0, principal);
@@ -1571,7 +1578,7 @@ describe("CP-4a2b — a flow run's items: the runs' acts, then Stop the run; an 
         flow: "release-check",
         hash: CHANGED.hash,
         version: "this",
-        from: VELA_FROM,
+        from: again,
         start: latest,
       },
     ]);
