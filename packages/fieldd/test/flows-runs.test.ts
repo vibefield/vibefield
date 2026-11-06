@@ -3030,6 +3030,9 @@ describe("CP-4a2b — a run's agents, RUN_AGENTS_MAX started, counted until its 
 /** D1's idle, lowered for these rows, and the longest a row waits for a park, an end or a host's leaving. */
 const IDLE_MS = 250;
 const PARK_MS = 5_000;
+/** D1's idle for a row whose run is held before its host parks (steps 1p, 1q): long past the two turn ends a hold
+ * takes, so the park reads the hold. */
+const HOLD_IDLE_MS = 1_000;
 
 /** Resolves once `ready()` holds, or after `ms` whatever it reads: a row then fails on what it reads, never on a
  * wait's own timeout. */
@@ -3386,7 +3389,7 @@ describe("CP-4a2b — the host's life: parked and woken, and D2's lookup at a wa
 
   it("TT1 (the 10a review): a held run woken while HOSTS_LIVE_MAX hosts run waits its turn reading holding, never waiting", async () => {
     const max = FLOW_LIMITS.HOSTS_LIVE_MAX;
-    const h = await harness({ hostIdleMs: IDLE_MS });
+    const h = await harness({ hostIdleMs: HOLD_IDLE_MS });
     h.approved("held", HELD_TWO);
     const run = startedRun(await h.start({ flow: "held" })).run;
     await waitFor(() => expect(h.enqueued).toHaveLength(2));
@@ -3395,8 +3398,10 @@ describe("CP-4a2b — the host's life: parked and woken, and D2's lookup at a wa
     h.endTurn({ ...missed, turn: "t1", text: "no json here" });
     await within(PARK_MS, () => h.enqueued.length === 3);
     h.endTurn({ ...missed, turn: "t2", text: "still none" });
-    // held on the person and parked; then every host taken, by runs with no call out, which never park
+    // held on the person, then parked: #park's own road reads the hold (step 1q folds its check in here)
     await within(PARK_MS, () => h.items.length === 1 && left(h, 0));
+    expect({ state: stateOf(h, run), left: left(h, 0) }).toEqual({ state: "holding", left: true });
+    // every host taken, by runs with no call out, which never park
     h.approved("stuck", STUCK);
     for (let i = 0; i < max; i += 1) await h.start({ flow: "stuck" });
     await within(PARK_MS, () => h.hosts.length === max + 1);
@@ -3415,5 +3420,38 @@ describe("CP-4a2b — the host's life: parked and woken, and D2's lookup at a wa
     const held = h.records.runRecord(run)?.held?.kind;
     const rests = { state: stateOf(h, run), hosts: h.hosts.length, held };
     expect(rests).toEqual({ state: "holding", hosts: 1, held: "flow-repair" });
+  });
+
+  // step 1q (the builder's read of 1p; ruled 2026-11-06): a hold set, or released, while the run is parked is a write
+  // of a run at rest too, so it reads `holding` exactly while the person holds it
+
+  it("TT1 (road 4; ruled 2026-11-06): a hold set while the run is parked reads holding, never waiting", async () => {
+    const h = await harness({ hostIdleMs: IDLE_MS });
+    h.approved("review", FORMED_CATCHES);
+    const run = startedRun(await h.start({ flow: "review" })).run;
+    await waitFor(() => expect(h.enqueued).toHaveLength(1));
+    expect(await parkedAt(h, run)).toEqual(PARKED);
+    // the step's agent works on while its host is parked, and misses its form twice
+    const a = sessionOf(h, run, 1);
+    const missed = { run, call: 1, runtimeRunId: a, outcome: "completed" } as const;
+    h.endTurn({ ...missed, turn: "t1", text: "no json here" });
+    await within(PARK_MS, () => h.enqueued.length === 2);
+    h.endTurn({ ...missed, turn: "t2", text: "still none" });
+    await within(PARK_MS, () => h.items.length === 1);
+    const held = h.records.runRecord(run)?.held?.kind;
+    const rests = { state: stateOf(h, run), hosts: h.hosts.length, held };
+    expect(rests).toEqual({ state: "holding", hosts: 1, held: "flow-repair" });
+  });
+
+  it("TT1 (road 5; ruled 2026-11-06): a hold released while the run is parked reads waiting again, never holding", async () => {
+    const h = await harness({ hostIdleMs: HOLD_IDLE_MS });
+    const run = await heldOnRepair(h);
+    await within(PARK_MS, () => left(h, 0) && stateOf(h, run) !== "running");
+    expect({ state: stateOf(h, run), left: left(h, 0) }).toEqual({ state: "holding", left: true });
+    // the person's Ask once more: the repair line again, and the hold dropped in the same write (F5)
+    expect(await askOnceMore(h, run)).toEqual({ outcome: "done" });
+    const held = h.records.runRecord(run)?.held;
+    const rests = { state: stateOf(h, run), hosts: h.hosts.length, held };
+    expect(rests).toEqual({ state: "waiting", hosts: 1, held: undefined });
   });
 });
