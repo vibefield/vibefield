@@ -7,6 +7,7 @@ import {
   nameWords,
   oneLineWords,
 } from "@vibefield/contracts";
+import type { Logger } from "@vibefield/logging";
 import { checkForm, type FlowForm, type FormRefusal } from "./form-check";
 
 // CP-4a2b (§13a slice 8; D5, D9) — a flow's steps: `startStep` is the ONE road a step's agent is started by
@@ -97,6 +98,21 @@ export interface FlowStepPorts {
   sparkProfile(spark: string): string | undefined;
   /** the person's default Agent Profile: a step of your run that names none takes it (A2); none, it is refused */
   defaultProfile(): string | undefined;
+  /** fieldd's log: a step's queued line its record could not mark (F2 review T2) */
+  readonly logger?: Logger | undefined;
+}
+
+/** F2 review T2 — a step's start that threw after its agent started and before its line was queued: the step fails,
+ * and the agent it started is left running, named here for fieldd's warn (slice 13's R42 ends it). Any other throw
+ * from `startStep` came before any spawn or line, and leaves nothing. */
+export class FlowStepOrphaned extends Error {
+  readonly runtimeRunId: string;
+
+  constructor(runtimeRunId: string, cause: unknown) {
+    super(`a step's agent started as ${runtimeRunId}, and its line was not queued`, { cause });
+    this.name = "FlowStepOrphaned";
+    this.runtimeRunId = runtimeRunId;
+  }
 }
 
 /** The run a step is of, as its words are marked: its slug, its mark's name, and the spark that started it. */
@@ -166,6 +182,12 @@ const optionsOf = (args: readonly unknown[]): StepOptions => {
 
 const said = (value: unknown): string | undefined =>
   typeof value === "string" && value.length > 0 ? value : undefined;
+
+/** A step's label as its call wrote it, for its words (labelWords cuts it): read from the call's own args, never
+ * the run's record, so a road that fails reads nothing, and a label past FLOW_LABEL_MAX still names it (F2 review T1,
+ * T3). */
+export const labelOf = (args: readonly unknown[]): string | undefined =>
+  said(optionsOf(args)["label"]);
 
 /** The keys an `agent()` call may set (D9): any other is refused in words. */
 const STEP_KEYS: ReadonlySet<string> = new Set([
@@ -339,14 +361,19 @@ export async function startStep(
     const why = oneLineWords(error instanceof Error ? error.message : String(error), FLOW_LOG_MAX);
     return { ok: false, refused: `VibeField couldn't start ${labelWords(label)}: ${why}` };
   }
-  return { ...sent(ports, write, call, runtimeRunId, "prompt", prompt, from), form };
+  try {
+    return { ...sent(ports, write, call, runtimeRunId, "prompt", prompt, from), form };
+  } catch (error) {
+    // T2: its agent started, and its line was not queued (the session's write, or the queue refused it)
+    throw new FlowStepOrphaned(runtimeRunId, error);
+  }
 }
 
 /** D5 4–7 for a step's first line, `prompt` to the session it started or `in` to the one it was handed: the session
  * (`handed` for an `in:`, never ended, CP4-Q10), `working` and the line's intent on the record before the queue takes
  * it, then `queued` in the same tick. */
 function sent(
-  ports: Pick<FlowStepPorts, "inputs">,
+  ports: Pick<FlowStepPorts, "inputs" | "logger">,
   write: FlowStepWrite,
   call: number,
   session: string,
@@ -362,12 +389,22 @@ function sent(
     lines: [{ line, n: 1, sent: "sending" }],
   }));
   ports.inputs.enqueue(session, text, from);
-  write(call, (step) => ({
-    ...step,
-    lines: (step.lines ?? []).map((kept) =>
-      kept.line === line && kept.n === 1 ? { ...kept, sent: "queued" } : kept,
-    ),
-  }));
+  // F2 review T2: the line is queued, so the step works and its agent's answer settles it; a record that cannot say
+  // so is logged, never thrown, and reads `sending` (D5's window: never a line it lacks)
+  try {
+    write(call, (step) => ({
+      ...step,
+      lines: (step.lines ?? []).map((kept) =>
+        kept.line === line && kept.n === 1 ? { ...kept, sent: "queued" } : kept,
+      ),
+    }));
+  } catch (error) {
+    ports.logger?.warn(
+      "fieldd.flows.step.queued",
+      "A flow step's line was queued, and its record could not say so; its answer settles the step",
+      { call, session, error: error instanceof Error ? error.message : String(error) },
+    );
+  }
   return { working: session };
 }
 

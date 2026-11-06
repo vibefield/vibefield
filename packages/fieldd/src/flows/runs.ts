@@ -40,8 +40,10 @@ import type { FlowRecords, FlowRunStart } from "./records";
 import { FlowReplay } from "./replay";
 import { readFlow } from "./static-read";
 import {
+  FlowStepOrphaned,
   type FlowStepPorts,
   type FlowStepWrite,
+  labelOf,
   labelWords,
   NO_FOLDER,
   sendRepair,
@@ -568,9 +570,17 @@ export class FlowRuns {
    * (`#turnEnded`), or its refusal. */
   async #step(run: FlowRunId, live: LiveRun, call: FlowHostCall): Promise<FlowHostAnswer> {
     const number = call.call;
-    const record = this.ports.records.runRecord(run);
-    if (number === undefined || record === undefined)
-      throw new Error(`a step of ${run} with no call number or no record`);
+    if (number === undefined) throw new Error(`a step of ${run} with no call number`);
+    // F2 review T5: a read that fails on the step's road, before its waiter, settles the step failed (its answer is
+    // journaled as the refusal, and its entry's slot frees), never a rejection that leaves the entry holding one
+    let record: FlowRunRecord | undefined;
+    try {
+      record = this.ports.records.runRecord(run);
+    } catch (error) {
+      this.#startThrew(run, number, error);
+      return { ok: false, refused: stepFailed(labelOf(call.args)) };
+    }
+    if (record === undefined) return { ok: false, refused: stepFailed(labelOf(call.args)) };
     const answer = new Promise<FlowHostAnswer>((resolve) => live.waiting.set(number, { resolve }));
     // CP4-S7: a step its entry put past the run's slots waits, with no spawn, until one frees
     if (record.open.find((step) => step.call === number)?.state === "waiting")
@@ -607,16 +617,31 @@ export class FlowRuns {
     } catch (error) {
       // F2 (slices 7–9 review): a start that throws is the step's refusal, "‹label› failed.", never the call's
       // rejection, so its answer is journaled, its step settles `failed` and frees its slot (`#unslot`), and the script
-      // hears the same on a replay; a rejection would journal nothing and hold the slot forever
+      // hears the same on a replay; a rejection would journal nothing and hold the slot forever. Its review's T1: this
+      // road does no I/O before the waiter is answered (a store that does not answer is the commonest throw here), and
+      // its label is the call's own (T3)
+      live.waiting.delete(number);
+      waiter?.resolve({ ok: false, refused: stepFailed(labelOf(args)) });
+      this.#startThrew(run, number, error);
+    }
+  }
+
+  /** A step's start that threw, in fieldd's log (F2 review T2): one past its spawn names the agent it leaves running,
+   * which slice 13's R42 ends; any other came before any spawn or line. */
+  #startThrew(run: FlowRunId, call: number, error: unknown): void {
+    const messageOf = (said: unknown) => (said instanceof Error ? said.message : String(said));
+    if (error instanceof FlowStepOrphaned)
+      this.#logger.warn(
+        "fieldd.flows.step.orphan",
+        "A flow step's agent started, and its line was not queued; the step failed, and its agent is left running",
+        { run, call, runtimeRunId: error.runtimeRunId, error: messageOf(error.cause) },
+      );
+    else
       this.#logger.warn("fieldd.flows.step.start", "A flow step's start threw; the step failed", {
         run,
-        call: number,
-        error: error instanceof Error ? error.message : String(error),
+        call,
+        error: messageOf(error),
       });
-      const step = this.ports.records.runRecord(run)?.open.find((open) => open.call === number);
-      live.waiting.delete(number);
-      waiter?.resolve({ ok: false, refused: stepFailed(step?.label) });
-    }
   }
 
   #startStep(
