@@ -32,8 +32,9 @@ import type { AgentProvider, AgentProviderSessionOptions } from "@vibefield/pupp
 import { afterEach, describe, expect, it, vi } from "vitest";
 import WebSocket from "ws";
 import { LAST_RUN_SETTLE_MS } from "../src/agent-last-run";
-import { EXIT_GRACE_MS } from "../src/agent-runtime";
+import { ASKED_EXIT_GRACE_MS, EXIT_GRACE_MS } from "../src/agent-runtime";
 import { bootstrap, type FielddDaemon, SessionRecordStore } from "../src/index";
+import { RpcCallError } from "../src/native-link";
 import type { SecretStore } from "../src/plugin-settings";
 import { MockMgmtServer } from "../src/testing/mock-mgmt";
 import { SCRIPTED_CATALOG } from "./agent-catalog-fixture";
@@ -499,6 +500,96 @@ describe("item 59 — a run's exit after a termination fieldd asked for (the moc
     expect(Date.now() - askedAt, "never before the asked bound").toBeGreaterThanOrEqual(6_000);
     expect(records.read(RUN)?.exited?.reason).toBe("unknown");
   }, 30_000);
+
+  // Item 201 (RV #43, vf-runtime-3) — the replacement a resume of a held run is: the old PTY has EXITED, by the
+  // floor's own `session-exited`, before its successor is born. Its leaving the inventory is not that word: the floor
+  // drops a row whose termination fieldd asked for at once, and reports the exit when the session concludes, a ladder
+  // later (the rows above). Past the asked bound the replacement refuses retryably, and an exit it heard while it held
+  // the row closes the row with the floor's outcome. The terminate is the floor's answer (spied), as above.
+  it("a replacement waits for the floor's exit, not the inventory's absence: nothing is born while the asked exit is owed, and the birth follows the exit", async () => {
+    const { mock, daemon, rpc, births } = await heldRun();
+    const askedAt = Date.now();
+    vi.spyOn(daemon.terminals, "terminationAskedAt").mockImplementation((id) =>
+      id === CLAUDE ? askedAt : undefined,
+    );
+    // the terminate the floor takes: the PTY leaves the inventory at once, and its exit is owed
+    vi.spyOn(daemon.terminals, "terminate").mockImplementation(async () => {
+      mock.pushObserved(withoutClaude());
+      return { terminated: true };
+    });
+    const spawnedAt: number[] = [];
+    const spawn = daemon.terminals.spawn.bind(daemon.terminals);
+    vi.spyOn(daemon.terminals, "spawn").mockImplementation((spec) => {
+      spawnedAt.push(Date.now());
+      return spawn(spec);
+    });
+    const asked = rpc.callErr("agent.resume", { runtimeRunId: RUN });
+    await until(
+      () => daemon.terminals.get(CLAUDE) === undefined,
+      5_000,
+      "the PTY left the inventory",
+    );
+    // the old process's ladder, while its exit is owed: an idle TUI outlives the first ^C until SIGTERM at 2 s
+    await sleep(1_500);
+    expect(births, "nothing born while the asked exit is owed").toEqual([]);
+    const exitAt = Date.now();
+    await daemon.agents.handleTerminalExit(exited());
+    await asked;
+    expect(births, "the birth follows the floor's exit").toEqual([`native-${RUN}`]);
+    expect(spawnedAt[0], "the successor asked for after it").toBeGreaterThanOrEqual(exitAt);
+  }, 30_000);
+
+  it("a replacement whose asked exit never comes refuses retryably at the asked bound and births nothing; the backstop closes the row unknown, with no inventory after the drop", async () => {
+    const { mock, daemon, rpc, records, births } = await heldRun();
+    const askedAt = Date.now();
+    vi.spyOn(daemon.terminals, "terminationAskedAt").mockImplementation((id) =>
+      id === CLAUDE ? askedAt : undefined,
+    );
+    vi.spyOn(daemon.terminals, "terminate").mockImplementation(async () => {
+      mock.pushObserved(withoutClaude());
+      return { terminated: true };
+    });
+    const spawn = vi.spyOn(daemon.terminals, "spawn");
+    const refused = await rpc.callErr("agent.resume", { runtimeRunId: RUN });
+    const refusedAfterMs = Date.now() - askedAt;
+    expect(births, "nothing born without the floor's word").toEqual([]);
+    expect(spawn).not.toHaveBeenCalled();
+    expect(answerOf(refused), "the replacement's own refusal, at the asked bound").toEqual({
+      kind: "PRECONDITION_FAILED",
+      retryable: true,
+      details: {
+        runtimeRunId: RUN,
+        sessionId: CLAUDE,
+        state: "terminal-alive",
+        graceMs: ASKED_EXIT_GRACE_MS,
+      },
+    });
+    // as item 59's row reads its bound: a timer's ms rounding never decides it
+    expect(refusedAfterMs, "at the asked bound").toBeGreaterThanOrEqual(ASKED_EXIT_GRACE_MS - 500);
+    // the refusal judges the backstop again (the replacement had held it off), and no inventory comes to arm it
+    await until(
+      () => records.read(RUN)?.exited?.reason === "unknown",
+      5_000,
+      "the backstop closing the row after the refusal",
+    );
+    expect(births).toEqual([]);
+  }, 30_000);
+
+  it("an exit heard during a replacement that is then refused closes the row with the floor's own outcome, and nothing is born", async () => {
+    const { daemon, rpc, records, births } = await heldRun();
+    // the floor's exit comes in the terminate's own read, and its connection dies before the answer
+    vi.spyOn(daemon.terminals, "terminate").mockImplementation(async () => {
+      await daemon.agents.handleTerminalExit(exited());
+      throw new RpcCallError("UNAVAILABLE", "the terminal floor died mid-terminate", true, {
+        service: "terminal",
+        state: "unreachable",
+      });
+    });
+    const refused = await rpc.callErr("agent.resume", { runtimeRunId: RUN });
+    expect(refused.data?.kind).toBe("UNAVAILABLE");
+    expect(records.read(RUN)?.exited?.reason, "the floor's word").toBe("application-terminated");
+    expect(births).toEqual([]);
+  }, 30_000);
 });
 
 // Item 201 (RV #17, gap2-6) — a held run's end reaches the run-ended listeners (`onRunEnded`) as a managed run's
@@ -580,6 +671,17 @@ describe("a husk the floor lists exited (item 97; the mock floor)", () => {
     const rows = husk["terminals"] as Array<Record<string, unknown>>;
     return { ...husk, terminals: rows.map(({ exited: _exited, ...row }) => row) };
   };
+  /** the husk fixture once a terminate has removed the kept pane: the floor drops a husk's entry at once (ghosttea's
+   * `Command::Terminate`), and the exit it told when the process ended is not told again */
+  const withoutHusk = (): Record<string, unknown> => {
+    const husk = fixture("observed-state.exited-husk.json");
+    const rows = husk["terminals"] as Array<{ sessionId: string }>;
+    return {
+      ...husk,
+      generation: Number(husk["generation"]) + 1,
+      terminals: rows.filter((row) => row.sessionId !== HUSK),
+    };
+  };
   /** The grace, and the 5 s every row here gives an observation to land. */
   const STAMPED_WITHIN_MS = EXIT_GRACE_MS + 5_000;
 
@@ -615,6 +717,49 @@ describe("a husk the floor lists exited (item 97; the mock floor)", () => {
     const row = daemon.agents.list().sessions.find((r) => r.runtimeRunId === run);
     expect(row?.continuation?.exited).toBe(true);
   });
+
+  // Item 201 (RV #43, vf-runtime-3) — a replacement waits for the floor's word that the PTY it ended has exited, and
+  // a husk's row is that word, said before the replacement asked: the floor told the exit when the process ended,
+  // and a terminate of the kept pane does not tell it again. A guard: green on the inventory's absence before item
+  // 201 (the terminate removes the pane), and on the husk's row after it.
+  it("a person's resume of a pending run whose PTY is listed exited replaces it at once: the floor's row is its word that the process ended, and no exit is waited for", async () => {
+    const run = "run-pending-husk-resumed";
+    const { mock, daemon, rpc, records, births } = await agentDaemonOn(
+      beforeTheExit(),
+      (dataDir) => [runRecord(run, HUSK, dataDir)],
+    );
+    await until(
+      () => daemon.agents.list().sessions.some((row) => row.runtimeRunId === run),
+      5_000,
+      "held pending",
+    );
+    // the terminate the floor takes on a kept pane: the ask stands from its call (item 59), the pane leaves the
+    // inventory at once, and the answer is Ok
+    let askedAt: number | undefined;
+    vi.spyOn(daemon.terminals, "terminationAskedAt").mockImplementation((id) =>
+      id === HUSK ? askedAt : undefined,
+    );
+    vi.spyOn(daemon.terminals, "terminate").mockImplementation(async () => {
+      askedAt = Date.now();
+      mock.pushObserved(withoutHusk());
+      return { terminated: true };
+    });
+    mock.pushObserved(fixture("observed-state.exited-husk.json"));
+    await until(() => daemon.terminals.get(HUSK)?.exited === true, 5_000, "the husk's row heard");
+    // asked within the husk's grace (EXIT_GRACE_MS), before the backstop it arms could close the row
+    const asked = await rpc.callErr("agent.resume", { runtimeRunId: run });
+    expect(
+      (asked.data?.details as { state?: unknown } | undefined)?.state,
+      "never refused as alive: the husk's process has ended",
+    ).not.toBe("terminal-alive");
+    expect(births, "the successor is born, with no wait for an exit already told").toEqual([
+      `native-${run}`,
+    ]);
+    expect(
+      records.read(run)?.exited?.reason,
+      "past the point of no return: the paper cell refused the successor's birth",
+    ).toBe("replace-failed");
+  }, 30_000);
 
   it("a restart across the exit: a record whose pane the FIRST inventory lists exited is stamped after the boot's grace, never held as running", async () => {
     // fieldd was down while the agent ended; the floor kept its pane, listed `exited`, and has no exit event to give
