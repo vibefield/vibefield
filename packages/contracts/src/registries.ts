@@ -171,6 +171,12 @@ export const STORES = {
    * may still publish one) and fieldd's mock floor records writes to it (the
    * row that pins that nothing is written). Never a new reader or writer. */
   AGENT_FIELD: "field.agents.v1",
+  /** DR-2a (`draft/thinking-drive.md` v0.3; DR-D7 (a)) — the drive's holders: one slice per desktop whose drive is
+   * open (`DriveHoldersSlice`, drive.ts). The capability is the publication (DeviceCapabilities names no drive, and a
+   * desktop before the drive publishes nothing here), so a desktop dials a `drive` lane only to a peer with a slice.
+   * DISCOVERY only (the wave-0 critic): which object a desktop holds rides the drive's own lane, never this slice, and
+   * no path rides it at all (EL7: a pull names a root and a path relative to it). */
+  DRIVE: "field.drive.v1",
 } as const;
 
 /** Cross-plane bounds for the opaque SyncedStore → native mgmt → fieldd path
@@ -182,6 +188,9 @@ export const MESH_CONTROL_LIMITS = {
   ARTIFACT_SLICE_BYTES: 256 * 1024,
   DEVICE_SLICE_BYTES: 64 * 1024,
   AGENT_FIELD_SLICE_BYTES: 64 * 1024,
+  /** DR-2a — STORES.DRIVE's slice: a protocol, a state and two counts, so a device-sized budget is generous; the cap
+   * is what stops one peer amplifying every reader's holder table. */
+  DRIVE_SLICE_BYTES: 64 * 1024,
   MGMT_FRAME_BYTES: 80 * 1024 * 1024,
   MGMT_QUEUED_BYTES: 96 * 1024 * 1024,
   MGMT_OUTBOX_MESSAGES: 64,
@@ -837,6 +846,55 @@ export const MADE_APP_VIEW = {
   VARIABLE_NAME_BYTES: 64,
   VALUE_BYTES: 256,
   REFUSED_THEME: "theme-unreadable",
+} as const;
+
+/** DR-2a (`draft/thinking-drive.md` v0.3, DR-L8: "a drive still copying, an object not yet held, a desktop out of
+ * room, and a sibling release not yet adopted each say so") — the drive's honest refusal vocabulary
+ * (`DriveUnavailableDetails`, drive.ts): `UnavailableDetails.service` on every refusal, and the states a reader
+ * branches on, each a contract string, never a sentence.
+ *  - STATE_UNBUILT: this desktop carries no drive engine: mille-drive's release is not adopted yet (DR-2 waits on its
+ *    EL8). Retryable false: nothing a retry changes until VibeField moves.
+ *  - STATE_STARTING: the files worker is opening the drive. Retryable true.
+ *  - STATE_NOT_LINKED: the desktop has no linked login, so it holds no account to keep a drive for (DR-L1).
+ *    MADE_APP_OPEN's word for the same fact. Retryable true: a link can come.
+ *  - STATE_MESH_DOWN: the drive is open and this desktop's node is not up: what it holds still serves here, and
+ *    nothing moves between desktops. Retryable true.
+ *  - STATE_COPYING: the drive is still copying what this desktop holds eagerly (DR-D5 (a)); the refusal may carry
+ *    `progress`. Retryable true.
+ *  - STATE_NOT_HELD: the object asked for is on another desktop and not here yet (an older version is held on
+ *    demand). Retryable true.
+ *  - STATE_OUT_OF_ROOM: this desktop's disk refused a write (mille-drive's out-of-space, the wave-0 critic's ENOSPC).
+ *    Retryable false: nothing a retry changes until the person makes room.
+ * TS-only: no native reader. The floor's own refusals on the pull it carries are MESH_FILE_TRANSFER's (mgmt.ts). */
+export const DRIVE_SERVICE = {
+  SERVICE: "drive",
+  STATE_UNBUILT: "unbuilt",
+  STATE_STARTING: "starting",
+  STATE_NOT_LINKED: "not-linked",
+  STATE_MESH_DOWN: "mesh-down",
+  STATE_COPYING: "copying",
+  STATE_NOT_HELD: "not-held",
+  STATE_OUT_OF_ROOM: "out-of-room",
+} as const;
+
+/** DR-2a — the drive's bounds, each ONE value its two holders read (the wave-0 critic: one registry value feeds both,
+ * so neither side admits what the other cannot move). PROVISIONAL, as MADE_APP_LIMITS' are.
+ *  - OBJECT_MAX_BYTES: the largest object the drive keeps or moves. fieldd hands it to mille-drive's open
+ *    (`maxObjectBytes`), and the floor hands it to truffle's `set_max_transfer_size`, which is the NODE's: it bounds
+ *    every pull the node makes. 64 MiB is mille-drive's own default, four times the largest captured page
+ *    (MADE_APP_VIEW.PAGE_MAX_BYTES).
+ *  - LANE_RECORD_BYTES: the largest record fieldd relays on a `drive` lane: mille-drive's `maxFrameBytes`, so a larger
+ *    document update travels as its chunks. At most DOC_SYNC_MAX_RECORD_BYTES (a meshdata frame less its header),
+ *    and 1 MiB for doc-sync's reason (DOC_SYNC_CHUNK_BYTES): well under MeshLaneLink's 4 MiB send watermark, and small
+ *    on the files worker's JSON pipe, which carries a record as base64 (a third larger).
+ *  - PULLS_IN_FLIGHT: the pulls one desktop runs at once: mille-drive's `maxConcurrentPulls`, and the floor's belt,
+ *    which refuses one more RESOURCE_EXHAUSTED.
+ * The drive's disk budget is OWED, not here: the record's §10 risk 5 reads the real library's sizes first. Generated
+ * into Rust (`registries::drive_limits`). */
+export const DRIVE_LIMITS = {
+  OBJECT_MAX_BYTES: 64 * 1024 * 1024,
+  LANE_RECORD_BYTES: 1024 * 1024,
+  PULLS_IN_FLIGHT: 4,
 } as const;
 
 /** DS-L3 — the rows protocol's numbers (`rows.ts`; design-06 §8). A snapshot
@@ -2389,6 +2447,23 @@ export const LAYOUT = {
    * and placeIds only: no path, no remote. */
   PROJECTS_DIR: ["projects"],
   PROJECT_KEYS_FILE: ["projects", "keys.json"],
+  /** DR-2a (`draft/thinking-drive.md` v0.3; DR-L1: "the drive is the account's", under `users/<fuid>/drive/`) — the
+   * drive. DRIVE_DIR is its root, which mille-drive keeps (its document, its LOCK, its `built/` and `staging/`; the MD
+   * lane, unreleased), opened by the files worker at DR-2.
+   *  - DRIVE_OBJECTS_DIR: the objects, each a read-only file named by its blake3 (DR-L2, DR-L3), in mille-drive's own
+   *    shards (`<2 hex>/<64 hex>`, its `objectRelpath`). The ONE folder another desktop may pull from:
+   *    FILE_TRANSFER_ROOTS.DRIVE_OBJECTS serves it by name. DR-2 checks at open that it is the drive's `objectsRoot()`.
+   *  - DRIVE_INCOMING_DIR: where a pull from another desktop lands, UNVERIFIED (`<digest>.<transferId>`): truffle
+   *    checks a SHA-256, never the blake3 an object is named by, so a pulled file joins the objects only after
+   *    mille-drive's check (DR-L3), and nothing is ever served from here.
+   *  - DRIVE_IMPORT_DIR: where rosetta's export writes a captured page (R-1's `--export-root`), on the drive's volume,
+   *    so the drive links it rather than copying it (the wave-0 critic's R-1 ↔ DR-2 seam).
+   * The two VibeField folders sit inside the drive's root; mille-drive's sweep removes only its own `mdrive-*`
+   * temporaries. */
+  DRIVE_DIR: ["drive"],
+  DRIVE_OBJECTS_DIR: ["drive", "objects"],
+  DRIVE_INCOMING_DIR: ["drive", "incoming"],
+  DRIVE_IMPORT_DIR: ["drive", "import"],
 } as const;
 
 /** The segments that live at the VibeField ROOT and never re-root under
@@ -2405,6 +2480,31 @@ export const LAYOUT_ROOT_LEVEL = [
   "MACHINE_DISTRIBUTION_FILE",
   "MACHINE_UPDATES_DIR",
 ] as const satisfies readonly (keyof typeof LAYOUT)[];
+
+/** One named pull root: its name on the wire, and the LAYOUT rows it serves and lands in. */
+interface FileTransferRootRow {
+  name: string;
+  serves: keyof typeof LAYOUT;
+  lands: keyof typeof LAYOUT;
+}
+
+/** DR-2a (DR-D7 (a) as v0.3 reads it; truffle T-3, RFC 032 "named pull roots") — the folders another desktop of the
+ * account may PULL from this one, as a CLOSED map: each root's name, the LAYOUT row it serves, and the LAYOUT row a
+ * pull from it lands in. Never a path (EL7): fieldd declares names (`native.mesh.fileTransfer.roots`), the floor joins
+ * the rows under its own user root, and a pull names `{root, path}` with the path RELATIVE to the root, so no desktop
+ * learns another's layout.
+ *  - name: in truffle's root grammar (`[a-z0-9][a-z0-9._-]{0,63}`), the same on every desktop.
+ *  - serves, lands: LAYOUT keys, never segments, so the map moves with the layout. A root never lands in a folder any
+ *    root serves: what lands is unverified until its reader checks it, and a served file is passed on to any peer that
+ *    asks.
+ * Generated into Rust (`registries::file_transfer_roots`): the floor's closed match reads it. */
+export const FILE_TRANSFER_ROOTS = {
+  DRIVE_OBJECTS: {
+    name: "drive-objects",
+    serves: "DRIVE_OBJECTS_DIR",
+    lands: "DRIVE_INCOMING_DIR",
+  },
+} as const satisfies Record<string, FileTransferRootRow>;
 
 /** The CLOSED Electron IPC surface (ESR spec §6.2 + LOG §12.4/§14): these channels, nothing
  * else. Payload schemas live in shell.ts; call sites import these names — a raw

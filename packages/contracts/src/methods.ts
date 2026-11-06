@@ -853,6 +853,37 @@ export const METHODS: MethodDef[] = [
     locality: "local",
   }),
 
+  // DR-2a — FILE TRANSFER (design-01 :139's reserved `fileTransfer`; `thinking-drive.md` v0.3, DR-D7 (a); shapes in
+  // mgmt.ts `NativeFileTransfer*`): the named roots this desktop serves, a pull from a peer's root, and the stream of
+  // pulls. CONTROL only, like lanes: the bytes go Rust to Rust through the node (EL2). `offer` (a push) stays reserved
+  // and undeclared. Declared ahead of the floor's facade (the critic's VF-FLOOR, wave 3): until it lands a node answers
+  // these NOT_FOUND, and fieldd calls none of them.
+  defineMethod({
+    surface: "mgmt",
+    method: "native.mesh.fileTransfer.roots",
+    scope: null,
+    // the whole set, replacing the last: the same declaration twice serves the same roots
+    idempotent: true,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "mgmt",
+    method: "native.mesh.fileTransfer.pull",
+    scope: null,
+    // NOT idempotent: transferId is caller-minted, and a second pull under a live id is a
+    // collision to refuse, as a second `lane.open` under a live lane is
+    idempotent: false,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "mgmt",
+    method: "native.mesh.fileTransfer.subscribe",
+    scope: null,
+    idempotent: true,
+    locality: "local",
+    subscription: true,
+  }),
+
   // B3 — DocumentService, P0 local-only subset (design-01 §5.1, M4; design-02 §5 fence).
   // The rest of the doc.* catalog (subscribeRegistry/close/delete/compact/export/import)
   // is deferred and deliberately undeclared — the lint enforces declared == shipped.

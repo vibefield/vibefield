@@ -172,6 +172,7 @@ import {
   LaneHelloOk,
   LanePutMeta,
 } from "../src/docs";
+import { DriveHoldersSlice } from "../src/drive";
 import { Hello, HelloAck, RpcRequest, RpcResponse, TerminalRouteSnapshot } from "../src/envelope";
 import { ErrorData } from "../src/errors";
 import {
@@ -241,6 +242,12 @@ import {
   NativeDoorOpen,
   NativeDoorSnapshot,
   NativeDoorSubscribeResult,
+  NativeFileTransferDelta,
+  NativeFileTransferPullParams,
+  NativeFileTransferPullResult,
+  NativeFileTransferRootsParams,
+  NativeFileTransferRootsResult,
+  NativeFileTransferSnapshot,
   NativeHealth,
   NativeLinkHealth,
   NativePrepareRestartParams,
@@ -499,6 +506,18 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "mesh-egress-route-bound": MeshEgressRouteBound,
   "mesh-egress-route-ref": MeshEgressRouteRef,
   "mesh-egress-route-table": MeshEgressRouteTable,
+  // DR-2a — the drive's file transfer (mgmt.ts `NativeFileTransfer*`): the roots asked for and as
+  // the floor holds them, a pull and its answer, the stream's snapshot (one running pull, and the
+  // EMPTY one a fresh floor answers) and one delta per kind. Its lane is `mesh-lane-open-request`'s
+  // `.drive` and its refusals are `error-data.*`'s; the holders' slice is drive.ts's, TS-only.
+  // Their own rows: drive.test.ts. field-native parses the floor's half at the facade's slice.
+  "native-file-transfer-roots-params": NativeFileTransferRootsParams,
+  "native-file-transfer-roots-result": NativeFileTransferRootsResult,
+  "native-file-transfer-pull-params": NativeFileTransferPullParams,
+  "native-file-transfer-pull-result": NativeFileTransferPullResult,
+  "native-file-transfer-snapshot": NativeFileTransferSnapshot,
+  "native-file-transfer-delta": NativeFileTransferDelta,
+  "drive-holders-slice": DriveHoldersSlice,
   // FW (thinking-freeway.md v0.3 §5.1, §5.2) — the freeway's link wire and its floor seam. The
   // welcome, the declaration, the state and the revoke each have TWO fixtures on purpose: a phone's
   // welcome and a desktop's (no client id, no rights), a phone-only declaration and a pair's (the

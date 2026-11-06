@@ -14,6 +14,7 @@ export * from "./devices";
 export * from "./doclane";
 export * from "./docs";
 export * from "./docsync";
+export * from "./drive";
 export * from "./endpoints";
 export * from "./envelope";
 export * from "./errors";
