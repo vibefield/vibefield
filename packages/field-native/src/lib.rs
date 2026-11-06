@@ -127,6 +127,12 @@ pub async fn bootstrap_with_logging(
     boot_id: String,
     logging: Option<logging::NativeLogging>,
 ) -> Result<RunningDaemon> {
+    // TC-D6(a): before any listener binds. A process launched by launchd inherits a 256-fd soft limit, which the
+    // 24+5N measurement puts one session past at #47 — the rehearsed silent death this raise ends. It lives in the
+    // boot, not in main, so every floor runs at the product's limit: item 198 found the in-process test floors at
+    // the shell's 256, where eight of them in one test binary ran out. The raise is idempotent, and its test-only
+    // switch (`rlimit::TEST_NO_RLIMIT_ENV`) still holds a child floor at the limit it inherited.
+    rlimit::raise_file_limit();
     tracing::info!(
         event = "field_native.lifecycle.boot_started",
         component = "bootstrap",
