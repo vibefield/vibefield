@@ -130,7 +130,7 @@ function listBytes(headers: readonly { name: string; value: string }[]): number 
   return headers.reduce((sum, h) => sum + bytes(h), 0);
 }
 
-function valueOf(entry: HeaderEntry): string {
+function headerValueOf(entry: HeaderEntry): string {
   return entry.value ?? (entry.fill ?? "").repeat(entry.bytes ?? 0);
 }
 
@@ -139,7 +139,7 @@ function listOf(row: HeaderList): { name: string; value: string }[] {
   if (row.count !== undefined) {
     return Array.from({ length: row.count }, (_, i) => ({ name: `X-H${pad(i)}`, value: "1" }));
   }
-  return (row.headers ?? []).map((entry) => ({ name: entry.name, value: valueOf(entry) }));
+  return (row.headers ?? []).map((entry) => ({ name: entry.name, value: headerValueOf(entry) }));
 }
 
 /** A host of exactly `bytes` bytes: `h` and two digits, `x`s, then `.example.com`. */
