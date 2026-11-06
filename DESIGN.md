@@ -7873,13 +7873,20 @@ allowlist, never an icon, and no glyph stands for usage. Its middle holds a prof
 `ProfileGlyph` set, kept outside this set as the vendor marks are (below). Everything else the column and the Peek
 wear is already among the 65: the add and **+ Filter** are `plus`; a token's × and the popover's are `close`; the
 add's card wears `gear`; a reset is led by `reset`; Everything's projects wear `folder` and what was said `message`.
-**Every profile** wears no mark: in + Filter's menu it leads with nothing, as All desktops, Every project and Any
-agent do (round 4's `tokens` variant), and no token stands for it. *(Corrected 2026-11-06, the M-desk stack: this
-said "and **Every profile** keeps `person`", the retired scope row's dropdown's glyph; `peek-filters.test.ts` pins
-Every profile's mark null.)* The phone's corner, sheet and token wear SF Symbols, as the corner's rows already
-do (an × is the system's `xmark`, as the bar's search field draws it), and a profile's glyph there is the same
-`ProfileGlyph` vocabulary drawn as SF Symbols, through one presentation table that is tested against the
-vocabulary's list (`ProfileGlyphSymbols`, UM-4). Nothing joins the picks.
+On the desk **Every profile** wears no mark: in + Filter's menu it leads with nothing, as All desktops, Every project
+and Any agent do (round 4's `tokens` variant), and no token stands for it. *(Corrected 2026-11-06, the M-desk stack:
+this said "and **Every profile** keeps `person`", the retired scope row's dropdown's glyph; `peek-filters.test.ts`
+pins Every profile's mark null.)* *(Corrected 2026-11-06, M-phone's assembly: the sentence read as if no surface
+marked Every profile; it is the desk's menu that wears none. On the phone the token's menu's **Every profile** (at
+19, §8 "The phone's profile token") and the Agent Profiles page's **All profiles** (at 15, in its circle's middle, §8
+"The phone's corner") wear `person`, the SF Symbol `ProfileGlyphSymbols.everyProfile` draws, as UM-4 built them on
+this sentence's earlier "keeps `person`". §8 names "the profiles glyph" at both, as round 4's drawing does
+(`fg('profiles', …)`), and `profiles` is not among the phone's picks. ‹for James›: the phone keeps `person`, or
+`profiles` joins the iOS picks (`tooling/glyphs/picks.json`, as WI-3's `tape` did) and the table and both §8 sites
+follow it.)* The phone's corner, sheet and token wear SF Symbols, as the corner's rows already do (an × is the
+system's `xmark`, as the bar's search field draws it), and a profile's glyph there is the same `ProfileGlyph`
+vocabulary drawn as SF Symbols, through one presentation table that is tested against the vocabulary's list
+(`ProfileGlyphSymbols`, UM-4). Nothing joins the picks.
 *(Corrected 2026-11-06, U3's repair, its review's finding 14: no list holds the table to the vocabulary. Its test,
 `ProfileGlyphSymbolsTests`, compares it with eleven tokens hand-copied from puppeteer-view-sdk's `PROFILE_GLYPHS`
 (0.3.3, as the test names it), and the phone's plan titles (`PlanTitles`, §9 "The meters' words") are hand-copied
