@@ -217,6 +217,8 @@ function liveRowsKey(rows: readonly LiveFindAgent[]): string {
         row.desk.id,
         row.desk.name,
         row.desk.os,
+        // SE-D1: the profile a row of this desktop's says
+        row.profileSet ?? "",
       ].join("\u0001"),
     )
     .join("\n");

@@ -79,8 +79,7 @@ function liveRowOf(row: FindRow<LiveFindAgent>): PeekLiveRow {
     folder,
     agent: run.agent?.provider.label || (state === "shell" ? "shell" : null),
     remote: run.desk.self ? null : { name: run.desk.name, os: run.desk.os },
-    // RED (SE-1a): no row says its profile yet — the green reads the run's own
-    profile: null,
+    profile: run.profileSet ?? null,
     lines: linesOf(row.hits),
     floorSessionId: run.floorSessionId ?? null,
     run,

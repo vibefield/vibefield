@@ -2,6 +2,7 @@ import type { AgentView } from "@vibefield/puppeteer-view-sdk/model";
 import { detailLine, projectName } from "@vibefield/puppeteer-view-sdk/toolkit";
 import type { LiveDesk, LiveFindAgent } from "../../frame/find-door";
 import type { ChromeRun } from "./chrome-facts";
+import { agentProfileSet } from "./profile-tabs";
 
 /** The facts Find joins on, per run. Evidence recency is read fresh at a join,
  * without redrawing the sheet for every evidence tick (M19, MV-3d). */
@@ -38,6 +39,12 @@ function deskOs(os: string | undefined): LiveDesk["os"] {
  * model's own desktop) and, for this desktop's runs, the floor session its
  * terminal is (`floorSessionId`, the board's join) — what the live peek
  * watches and Jump to reveals. A peer's row names no floor session here.
+ *
+ * SE-D1: a row of this desktop's also names the Agent Profile it runs under
+ * (`profileSet`, the row's own word through `agentProfileSet`), what its live
+ * row says; a peer's names none, whatever its model row carries — a profile is
+ * its own desktop's. A row's profile is its model row's, so a profile that
+ * moves is a new model row and a new find row.
  */
 interface CachedFindAgent {
   readonly floorSessionId: string | undefined;
@@ -84,6 +91,7 @@ export function createFindAgents(): (
       ) {
         return held.row;
       }
+      const profileSet = agentProfileSet(row);
       const made: LiveFindAgent = {
         id: row.id,
         createdAtMs: row.createdAt,
@@ -98,6 +106,7 @@ export function createFindAgents(): (
           self: row.device.self,
         },
         ...(floorSessionId !== undefined && floorSessionId !== "" ? { floorSessionId } : {}),
+        ...(profileSet !== undefined ? { profileSet } : {}),
         ...(row.kind === "agent"
           ? {
               agent: {
