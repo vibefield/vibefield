@@ -387,6 +387,15 @@ const eyebrows = (): string[] =>
   [...(pop()?.querySelectorAll(".vf-peek-menu .vf-menu-eye") ?? [])].map(
     (eye) => eye.textContent ?? "",
   );
+/** + Filter's groups as assistive tech hears them: each a group named by its
+ * eyebrow, holding its own radio set — one checked row each. */
+const menuGroups = (): Array<[string | null, number]> =>
+  [...(pop()?.querySelectorAll('.vf-peek-menu [role="group"]') ?? [])].map(
+    (group): [string | null, number] => [
+      group.getAttribute("aria-label"),
+      group.querySelectorAll('[aria-checked="true"]').length,
+    ],
+  );
 const menuRows = (): HTMLButtonElement[] => [
   ...(pop()?.querySelectorAll<HTMLButtonElement>(".vf-peek-menu .vf-menu-row") ?? []),
 ];
@@ -753,15 +762,27 @@ describe("Search — the Peek, in History (GV-D8/D9/D10)", () => {
     expect(press(input, { key: "Backspace" }).defaultPrevented).toBe(true);
     expect(tokens()).toEqual(["vibe-field", "Prompts only"]);
     expect(input.value).toBe("catalog");
+    // the caret stays at the start, so the next ⌫ takes the next token, never a letter
+    expect(input.selectionStart).toBe(0);
+    expect(press(input, { key: "Backspace" }).defaultPrevented).toBe(true);
+    expect(tokens()).toEqual(["vibe-field"]);
+    expect(input.value).toBe("catalog");
     // anywhere else in the words, ⌫ is the words'
     act(() => input.setSelectionRange(7, 7));
     expect(press(input, { key: "Backspace" }).defaultPrevented).toBe(false);
-    expect(tokens()).toEqual(["vibe-field", "Prompts only"]);
+    expect(tokens()).toEqual(["vibe-field"]);
     // a token's × takes its one filter back, and the caret goes back to the field
     act(() => tokenClear("vibe-field")?.click());
-    expect(tokens()).toEqual(["Prompts only"]);
+    expect(tokens()).toEqual([]);
     expect(document.activeElement).toBe(input);
     await until(() => (options().length === 2 ? true : null), "both rows again");
+    // the menu's three radio sets: each a group of its own, named as its eyebrow says it
+    act(() => filterButton()?.click());
+    expect(menuGroups()).toEqual([
+      ["Projects", 1],
+      ["Said by", 1],
+      ["Agents", 1],
+    ]);
   });
 
   it("Live now, in History, is live while it shows (PK5): the feed opens with the tab and closes on a change of scope, the popup's close, a change of view and unmount", async () => {
@@ -900,6 +921,9 @@ describe("Search — the Peek, in History (GV-D8/D9/D10)", () => {
     const input = await openPeek();
     await searchCatalog(input);
     expect(pop()?.style.width).toBe("552px");
+    // its height, lent to + Filter's menu so the menu stays inside it (peek.css)
+    expect(pop()?.style.getPropertyValue("--vf-peek-h")).toBe(pop()?.style.height);
+    expect(pop()?.style.height).toMatch(/^\d+px$/u);
     expect(pop()?.getAttribute("data-folded")).toBe("true");
     expect(pop()?.querySelector(".vf-peek-split")?.getAttribute("data-folded")).toBe("true");
     expect(pop()?.querySelector(".vf-peek-past")).toBeNull();
@@ -934,6 +958,21 @@ describe("Search — the Peek, in History (GV-D8/D9/D10)", () => {
     }
     // the scope row's rules retired with it (SE-D1)
     expect(css).not.toMatch(/\.vf-peek-(?:scope|dds?|dd-[a-z]+)\b/u);
+  });
+
+  it("+ Filter's menu stays inside the popup in a short window — at most 430, or the popup's height less the 50 above it and 30 below — and each group is a box of its own, never display: contents (SE-1; DESIGN.md §8, The Filter menu)", () => {
+    const css = readFileSync(join(HERE, "..", "src", "frame", "peek.css"), "utf8");
+    const rule = (selector: string): string =>
+      css.match(new RegExp(`^${selector.replace(/[[\]".]/g, "\\$&")} \\{([^}]*)\\}`, "m"))?.[1] ??
+      "";
+    expect(rule(".vf-peek-menu")).toContain(
+      "max-height: min(430px, calc(var(--vf-peek-h) - 80px));",
+    );
+    expect(rule(".vf-peek-menu")).toContain("overflow: auto;");
+    // a group keeps its role: a flex column of its own, as the menu is
+    expect(rule(".vf-peek-menu-group")).toContain("display: flex;");
+    expect(rule(".vf-peek-menu-group")).toContain("flex-direction: column;");
+    expect(css).not.toMatch(/\.vf-peek-menu-group[^{]*\{[^}]*display: contents/u);
   });
 
   it("the empty transcript names the key the button prints (K2), and nothing walks a stepper any more (K3)", async () => {
@@ -1093,6 +1132,8 @@ const STUDIO_DESK = {
  * monitor would. */
 function godviewDoor(patch: Partial<LiveFilters> = {}): {
   door: () => GodviewFindDoor;
+  /** the monitor's filters move under the Peek (a desktop leaves, a profile goes) */
+  refilter: (next: Partial<LiveFilters>) => void;
   select: ReturnType<typeof vi.fn>;
   searched: Array<Record<string, unknown>>;
   listening: () => number;
@@ -1155,6 +1196,10 @@ function godviewDoor(patch: Partial<LiveFilters> = {}): {
   republish();
   return {
     door: () => current,
+    refilter: (next) => {
+      filters = { ...filters, ...next };
+      act(() => republish());
+    },
     select,
     searched: searched as Array<Record<string, unknown>>,
     listening: () => rowListeners.size,
@@ -1247,12 +1292,23 @@ describe("Search — the Peek, in Godview: Live now (P2)", () => {
     ]);
     // connected: no ghost row (TS-4)
     expect(pop()?.querySelector(".vf-peek-menu [data-ghost]")).toBeNull();
-    // a pick sets Godview's filter and closes the menu
-    act(() => menuRow("studio")?.click());
+    // a pick sets Godview's filter and closes the menu; the row that held the keyboard
+    // is gone, so the field takes it back, never the page
+    const studio = menuRow("studio");
+    act(() => {
+      studio?.focus();
+      studio?.click();
+    });
     expect(godview.door().filters.desk).toBe("studio");
     expect(pop()?.querySelector('[role="menu"]')).toBeNull();
     expect(tokens()).toEqual(["studio"]);
+    expect(document.activeElement).toBe(field());
     act(() => filterButton()?.click());
+    // two radio sets, each a group of its own with its one choice: Every profile, and studio
+    expect(menuGroups()).toEqual([
+      ["Profiles", 1],
+      ["Desktops", 1],
+    ]);
     act(() => menuRow("Work")?.click());
     expect(godview.door().filters.profile).toBe("work");
     // the desktop's first, as the button reads them
@@ -1300,7 +1356,12 @@ describe("Search — the Peek, in Godview: Live now (P2)", () => {
         ["menuitem", "Your other devicesConnect…"],
       ]);
       expect(rows[0]?.getAttribute("aria-checked")).toBe("true");
-      expect(pop()?.querySelector(".vf-peek-menu hr.vf-peek-menu-rule")).not.toBeNull();
+      // the ghost row and its hairline close the Desktops group, inside it
+      expect(
+        pop()?.querySelector(
+          '.vf-peek-menu [role="group"][aria-label="Desktops"] hr.vf-peek-menu-rule + [data-ghost]',
+        ),
+      ).not.toBeNull();
       // its one act opens the Connect door, as the status item's row does
       act(() => rows[1]?.click());
       expect(pop()?.querySelector('[role="menu"]')).toBeNull();
@@ -1500,6 +1561,29 @@ describe("Search — the Peek, in Godview: Live now (P2)", () => {
     // Everything's filters are the popup's own, and stand
     everythingTab();
     expect(filterButton()).not.toBeNull();
+  });
+
+  it("folds + Filter's menu with its choices: a desktop and the profiles gone while it is open, it does not come back with them, and the next Esc is the popup's (SE-1)", async () => {
+    const godview = godviewDoor();
+    mount(fieldd());
+    to("godview");
+    const input = await openPeek();
+    const offered = godview.door().filters;
+    const menu = (): Element | null => pop()?.querySelector('[role="menu"]') ?? null;
+    act(() => filterButton()?.click());
+    expect(menu()).not.toBeNull();
+    // studio leaves and Work goes while the menu is open: nothing to filter, no + Filter
+    godview.refilter({ desks: [], profiles: [] });
+    expect(filterButton()).toBeNull();
+    // the choices return: + Filter does, its menu shut
+    godview.refilter({ desks: offered.desks, profiles: offered.profiles });
+    expect(filterButton()?.getAttribute("aria-expanded")).toBe("false");
+    expect(menu()).toBeNull();
+    // gone again under an open menu: one Esc folds the popup, none is spent on a menu not drawn
+    act(() => filterButton()?.click());
+    godview.refilter({ desks: [], profiles: [] });
+    press(input, { key: "Escape" });
+    expect(surfaceNow).toBeNull();
   });
 
   it("listens for the monitor's rows only while Live now shows, holds the stage's keys while open (QL-D2), and yields ⌘F to a view that holds them (SB-3)", async () => {
