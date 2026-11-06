@@ -45,8 +45,9 @@ struct TimelineRow: Equatable, Sendable {
     self.receded = receded
   }
 
-  /// A drawn row with the host's joins.
-  init(_ row: RemoteFieldRow, unread: Bool, colour: SwarmColor?, active: Bool) {
+  /// A drawn row with the host's joins. `lens` is the phone's (SE-2, `GodviewStageInput.lens`) — STUB (SE-2h red):
+  /// read by nothing yet.
+  init(_ row: RemoteFieldRow, unread: Bool, colour: SwarmColor?, active: Bool, lens: String? = nil) {
     self.init(monitor: row.row.monitor, isSelf: row.isSelf, unread: unread, colour: colour, active: active)
   }
 }

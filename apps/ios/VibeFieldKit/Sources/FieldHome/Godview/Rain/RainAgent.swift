@@ -54,8 +54,12 @@ struct RainAgent: Equatable, Sendable {
 
 extension RainAgent {
   /// The rain's reading of one drawn row; `activeId` is the open card's row, by model id (`GodviewStageInput
-  /// .activeId`). `lightsOpenCard` is J-S4's switch, a parameter only so the hand rows can throw it.
-  init(row: RemoteFieldRow, activeId: String? = nil, lightsOpenCard: Bool = RainAgent.lightsOpenCard) {
+  /// .activeId`). `lightsOpenCard` is J-S4's switch, a parameter only so the hand rows can throw it. `lens` is the
+  /// phone's (SE-2, `GodviewStageInput.lens`) — STUB (SE-2h red): read by nothing yet.
+  init(
+    row: RemoteFieldRow, activeId: String? = nil, lens: String? = nil,
+    lightsOpenCard: Bool = RainAgent.lightsOpenCard
+  ) {
     let monitor = row.row.monitor
     id = monitor.id
     kind = monitor.kind

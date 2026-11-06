@@ -52,6 +52,47 @@ struct LensRecedeTests {
     #expect(!anyReceded)
   }
 
+  /// SE-2h (the S2 review's finding 2) — the rain's columns recede by the lens, as the list's rows do: a receded
+  /// column keeps falling, faint (`RainFrame`'s recede steps, transcribed and joined false until now).
+  @Test("the rain's columns recede by the lens: the home's under it stand, every peer's recedes; none without one")
+  func rainRecedesByLens() throws {
+    let rows = try HomeFixture.witnessRows()
+    var receded = 0
+    var standing = 0
+    for row in rows {
+      let expected = GodviewRecede.byLens(isSelf: row.isSelf, profileSet: row.row.monitor.profileSet, lens: "native")
+      let agent = RainAgent(row: row, lens: "native")
+      #expect(agent.receded == expected)
+      if agent.receded { receded += 1 } else { standing += 1 }
+      // no lens: nothing recedes, so every rain golden stands as it was
+      let plain = RainAgent(row: row)
+      #expect(!plain.receded)
+    }
+    // the witness holds both, so a constant cannot pass this row
+    #expect(receded > 0)
+    #expect(standing > 0)
+  }
+
+  /// SE-2h — the timeline's lanes recede by the lens: a receded lane is quiet (`TimelineLanes.laneAlpha`) and leaves
+  /// the pulse map's count, as the desktop's do under its profile filter.
+  @Test("the timeline's lanes recede by the lens: the home's under it stand, every peer's recedes; none without one")
+  func timelineRecedesByLens() throws {
+    let rows = try HomeFixture.witnessRows()
+    var receded = 0
+    var standing = 0
+    for row in rows {
+      let expected = GodviewRecede.byLens(isSelf: row.isSelf, profileSet: row.row.monitor.profileSet, lens: "native")
+      let lane = TimelineRow(row, unread: false, colour: nil, active: false, lens: "native")
+      #expect(lane.receded == expected)
+      if lane.receded { receded += 1 } else { standing += 1 }
+      // no lens: nothing recedes, so the timeline's golden stands as it was
+      let plain = TimelineRow(row, unread: false, colour: nil, active: false)
+      #expect(!plain.receded)
+    }
+    #expect(receded > 0)
+    #expect(standing > 0)
+  }
+
   @Test("a body carries the home's profile on the home's rows, none on a peer's")
   func bubbleCarriesTheProfile() throws {
     let rows = try HomeFixture.witnessRows()
