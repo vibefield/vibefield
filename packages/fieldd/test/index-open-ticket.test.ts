@@ -13,6 +13,12 @@
 // RO-13 (2026-10-04): the desktop window's grant carries `files` beside
 // `read` and reads its session's recorded files; every other holder's carries
 // `read` alone and is `wrong-scope` there — against both daemons.
+// SP-7b (2026-11-06; `SP-7b-plan.md` 7b-1): this person's phone holds a ticket
+// too, by both roads — at its home directly (a self tailnet principal), and
+// through its home to another desktop (a self peer daemon's forward naming the
+// phone behind it). Either way its set is the owner's index serve on the
+// tailnet, which the phone's node dials itself; no answer says
+// `direct-plane-unbuilt` any more.
 import { spawn } from "node:child_process";
 import {
   cpSync,
@@ -56,6 +62,7 @@ import { FakeEgressRoutes } from "../src/egress";
 import { bootstrap, type FielddConfig, type FielddDaemon } from "../src/index";
 import {
   INDEX_SERVE_ID,
+  type IndexTicketAsk,
   IndexTicketMinter,
   indexEndpointsFrom,
   indexServeSpec,
@@ -272,6 +279,23 @@ async function ready(daemon: FielddDaemon): Promise<void> {
 
 async function ticketFor(rpc: WsRpc, sessionId: string): Promise<IndexOpenTicket> {
   return IndexOpenTicket.parse(await rpc.call("index.openTicket", { sessionId }));
+}
+
+/** SP-7b — the phone's ask as an OUTCOME: a refusal fails the row on its first
+ * assertion, with the refusal's own words, rather than throwing past it. */
+async function phoneTicket(
+  phone: WsRpc,
+  ask: { sessionId: string; device?: string },
+): Promise<IndexOpenTicket | undefined> {
+  let answer: unknown;
+  try {
+    answer = await phone.call("index.openTicket", ask);
+  } catch (error) {
+    answer = error instanceof Error ? error.message : error;
+  }
+  const parsed = IndexOpenTicket.safeParse(answer);
+  expect(parsed.success ? "a ticket" : answer).toBe("a ticket");
+  return parsed.success ? parsed.data : undefined;
 }
 
 /** Dial a session socket with a grant on one of its two carriers: the
@@ -593,14 +617,41 @@ describe("AR-8b — the honest refusals", () => {
     });
   }, 30_000);
 
-  it("the phone (a self tailnet principal) is told the plane is unbuilt for it; a guest is told nothing", async () => {
-    const { daemon, mock } = await boot();
+  it("SP-7b: the phone at its home (a self tailnet principal) is minted the tailnet set of the live serve beside a read grant that opens its session; a guest is told nothing", async () => {
+    const { daemon, mock, keys } = await boot();
     await ready(daemon);
-    const phone = await tailnetCaller(daemon, mock, TEST_LOGIN);
-    expectRefusal(
-      await phone.callErr("index.openTicket", { sessionId: "s1" }),
-      INDEX_TICKET.STATE_UNBUILT,
+    const origin = (): string | null => daemon.rosettad?.state().origin ?? null;
+    await until(
+      () => indexEndpointsFrom(daemon.mesh.serves(), origin(), "s1") !== undefined,
+      15_000,
     );
+    const phone = await tailnetCaller(daemon, mock, TEST_LOGIN);
+    const ticket = await phoneTicket(phone, { sessionId: "s1" });
+    if (ticket === undefined) return;
+    // the set the phone's node dials: the serve's, never the loopback pair
+    expect(ticket.endpoints).toEqual(indexEndpointsFrom(daemon.mesh.serves(), origin(), "s1"));
+    expect(new URL(RemoteIndexEndpointSet.parse(ticket.endpoints).sessionUrl).port).toBe(
+      String(PORTS.INDEX_SERVE),
+    );
+    expect(IndexEndpointSet.safeParse(ticket.endpoints).success).toBe(false);
+    // a read grant for exactly that session, keyed by the phone's own login
+    const verdict = verifyGrant(keys.at(-1) as Buffer, ticket.grant, Date.now());
+    expect(verdict.ok).toBe(true);
+    if (!verdict.ok) return;
+    expect(verdict.claims).toMatchObject({ sid: "s1", scope: [SCOPE_READ] });
+    expect(verdict.claims.cid).toMatch(/^tailnet:/);
+    // the serve carries rosettad's whole listener: the grant opens the session there
+    const listener = `${(origin() as string).replace(/^http/, "ws")}/ws/sessions/s1`;
+    expect(await dialSession(listener, ticket.grant)).toMatchObject({
+      opened: true,
+      frame: { frame: "hello" },
+    });
+    const mints = (await auditRecords(daemon)).filter((r) => r.action === "index.ticket.mint");
+    expect(mints.find((r) => r.phase === "outcome")).toMatchObject({
+      outcome: "succeeded",
+      target: { kind: "index-session", id: "s1" },
+      attrs: { scope: [SCOPE_READ] },
+    });
     const guest = await tailnetCaller(daemon, mock, "someone-else@example.com");
     const refused = await guest.callErr("index.openTicket", { sessionId: "s1" });
     expect(refused.data?.kind).toBe("FORBIDDEN_SCOPE");
@@ -700,7 +751,7 @@ describe("AR-8b — IndexTicketMinter, the rule alone", () => {
           clientKind: "shell-main",
         },
       ],
-      // refused a ticket today — the rule still says read alone
+      // refused a ticket (the phone holds one since SP-7b) — the rule still says read alone
       [
         "a plugin",
         {
@@ -849,24 +900,59 @@ describe("AR-8b — IndexTicketMinter, the rule alone", () => {
     ).toMatchObject({ restUrl: live.origin });
   });
 
-  it("DS-7: the phone is still told the plane is unbuilt for it — its ticket is SP-7's", () => {
-    const phone = {
-      principal: { kind: "tailnet", login: TEST_LOGIN, self: true },
+  // SP-7b — this person's phone, asking its home directly
+  const phoneOf = (self = true) =>
+    ({
+      principal: { kind: "tailnet", login: TEST_LOGIN, self, tailscaleId: "node-p" },
       transport: "ws-tailnet",
       receivedAt: 0,
       clientKind: "ios",
-    } as CallerContext;
+    }) as CallerContext;
+
+  it("SP-7b: the phone at its home is minted the tailnet set of the live serve and a read grant keyed by its login and node; with no live serve it is told doors_not_published", () => {
+    const minter = minterOf(live, [serveOf()]);
+    let asked: unknown;
+    try {
+      asked = minter.check(phoneOf(), { sessionId: "s1" });
+    } catch (error) {
+      asked = error;
+    }
+    expect(asked).toMatchObject({ sessionId: "s1", scope: [SCOPE_READ] });
+    const ticket = minter.mint(phoneOf(), asked as IndexTicketAsk);
+    expect(RemoteIndexEndpointSet.parse(ticket.endpoints)).toEqual({
+      sessionUrl: "ws://desk-a.tail1234.ts.net:9424/ws/sessions/s1",
+    });
+    expect(IndexEndpointSet.safeParse(ticket.endpoints).success).toBe(false);
+    expect(ticket.device).toBe("dev-a");
+    const verdict = verifyGrant(key, ticket.grant, 1_000_000);
+    expect(verdict.ok).toBe(true);
+    if (!verdict.ok) return;
+    expect(verdict.claims).toMatchObject({ sid: "s1", scope: [SCOPE_READ] });
+    expect(verdict.claims.cid).toBe(`tailnet:${TEST_LOGIN}#node-p`);
     let refusal: unknown;
     try {
-      minterOf(live, [serveOf()]).check(phone, { sessionId: "s1" });
+      const none = minterOf(live, []);
+      none.mint(phoneOf(), none.check(phoneOf(), { sessionId: "s1" }));
     } catch (error) {
       refusal = error;
     }
-    expect(refusal).toMatchObject({
-      kind: "UNAVAILABLE",
-      retryable: false,
-      details: { service: "index", state: INDEX_TICKET.STATE_UNBUILT },
+    expect(refusal).toMatchObject({ kind: "UNAVAILABLE", retryable: true });
+    expect(IndexTicketRoadDetails.parse((refusal as { details: unknown }).details)).toEqual({
+      service: "index",
+      state: INDEX_TICKET.STATE_DOORS_NOT_PUBLISHED,
+      device: "dev-a",
     });
+  });
+
+  it("SP-7b: a tailnet caller who is not this person is refused FORBIDDEN_SCOPE, and no answer names the unbuilt plane", () => {
+    let refusal: unknown;
+    try {
+      minterOf(live, [serveOf()]).check(phoneOf(false), { sessionId: "s1" });
+    } catch (error) {
+      refusal = error;
+    }
+    expect(refusal).toMatchObject({ kind: "FORBIDDEN_SCOPE", retryable: false });
+    expect(JSON.stringify(refusal)).not.toContain(INDEX_TICKET.STATE_UNBUILT);
   });
 });
 
@@ -1141,7 +1227,7 @@ describe("DS-7 — a transcript on A, by ticket, into a window on B", () => {
     );
   }, 90_000);
 
-  it("an ask without the right is refused on B before anything is carried: a plugin holding index.read, a window without it, the phone through B", async () => {
+  it("an ask without the right is refused on B before anything is carried: a plugin holding index.read, a window without it", async () => {
     const { A, B, routes } = await pair();
     const plugin = await tokenOf(B.daemon, ["index.read"], "ds7-plugin");
     const refused = await plugin.callErr("index.openTicket", { device: "dev-a", sessionId: "s1" });
@@ -1151,11 +1237,7 @@ describe("DS-7 — a transcript on A, by ticket, into a window on B", () => {
     const scope = await reader.callErr("index.openTicket", { device: "dev-a", sessionId: "s1" });
     expect(scope.data?.kind).toBe("FORBIDDEN_SCOPE");
     expect(scope.data?.details).toEqual({ required: "index.read" });
-    const phone = await tailnetCaller(B.daemon, B.mock, TEST_LOGIN);
-    expectRefusal(
-      await phone.callErr("index.openTicket", { device: "dev-a", sessionId: "s1" }),
-      INDEX_TICKET.STATE_UNBUILT,
-    );
+    // (SP-7b: the phone through B is carried — its own describe below)
     // none of them reached A or took a route
     expect((await auditRecords(A.daemon)).some((r) => r.action === "index.ticket.mint")).toBe(
       false,
@@ -1177,6 +1259,48 @@ describe("DS-7 — a transcript on A, by ticket, into a window on B", () => {
       state: INDEX_TICKET.STATE_EGRESS_UNAVAILABLE,
       device: "dev-a",
     });
+  }, 90_000);
+});
+
+// SP-7b (2026-11-06; `SP-7b-plan.md` 7b-1) — the phone through its home. B is
+// the phone's home and carries its ask whole; A mints for B's forward from its
+// own rule, keyed by the phone behind it; B passes A's tailnet set back as A
+// answered it, because the phone's node dials A's serve itself (no route here).
+describe("SP-7b — a transcript on A, by ticket, for the phone whose home is B", () => {
+  it("the phone asks B for A's session: A mints for B's forward keyed by the phone behind it, B passes A's tailnet set back untouched and takes no route — and the grant opens that session", async () => {
+    const { A, B, routes, listen } = await pair();
+    const phone = await tailnetCaller(B.daemon, B.mock, TEST_LOGIN);
+    const ticket = await phoneTicket(phone, { device: "dev-a", sessionId: "s1" });
+    if (ticket === undefined) return;
+    // A's own set, as A answered it: the serve's tailnet coordinate
+    expect(ticket.device).toBe("dev-a");
+    const aOrigin = A.daemon.rosettad?.state().origin ?? null;
+    expect(ticket.endpoints).toEqual(indexEndpointsFrom(A.daemon.mesh.serves(), aOrigin, "s1"));
+    expect(IndexEndpointSet.safeParse(ticket.endpoints).success).toBe(false);
+    // A's grant, read-only, keyed by the phone behind B's forward (not B alone)
+    const verdict = verifyGrant(A.keys.at(-1) as Buffer, ticket.grant, Date.now());
+    expect(verdict.ok).toBe(true);
+    if (!verdict.ok) return;
+    expect(verdict.claims).toMatchObject({ sid: "s1", scope: [SCOPE_READ] });
+    expect(verdict.claims.cid).toMatch(/^peer-fieldd:dev-b#/);
+    // B took no route for it, and holds none
+    expect(routes.asked).toEqual([]);
+    expect(routes.refs("dev-a", PORTS.INDEX_SERVE)).toBe(0);
+    // A's serve carries its rosettad's whole listener: the grant opens the session there
+    expect(await dialSession(`ws://${listen}/ws/sessions/s1`, ticket.grant)).toMatchObject({
+      opened: true,
+      frame: { frame: "hello" },
+    });
+    // A audited the mint; B minted nothing of its own
+    const mints = (await auditRecords(A.daemon)).filter((r) => r.action === "index.ticket.mint");
+    expect(mints.find((r) => r.phase === "outcome")).toMatchObject({
+      outcome: "succeeded",
+      target: { kind: "index-session", id: "s1" },
+      attrs: { scope: [SCOPE_READ] },
+    });
+    expect((await auditRecords(B.daemon)).some((r) => r.action === "index.ticket.mint")).toBe(
+      false,
+    );
   }, 90_000);
 });
 
