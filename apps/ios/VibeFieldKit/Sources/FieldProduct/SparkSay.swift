@@ -1,6 +1,5 @@
 import Foundation
 
-// SKELETON (M-c1's c2, red first): the types the rows read; nothing is checked, encoded or read yet.
 // IOS-12c (M-c1; PC-D3 A; IOS-12a §C) — YOUR WORDS TO A SPARK, on the wire: `compose.sparks.say`'s params and its
 // receipt (`ComposeSparksSayParams` and `ComposeSparksSayResult`, packages/contracts/src/compose.ts), held to the
 // contracts' own fixtures (SparkSayTests). The words join the spark's session's input queue as yours and unmarked, and
@@ -39,9 +38,20 @@ public enum SparkSay {
   public static let chipsMax = 64
 
   /// `ComposeSayRequestId`: `/^[A-Za-z0-9_-]{8,64}$/`, ASCII only.
-  public static func isRequestId(_ id: String) -> Bool { false }
+  public static func isRequestId(_ id: String) -> Bool {
+    let bytes = Array(id.utf8)
+    return (8...64).contains(bytes.count)
+      && bytes.allSatisfy { byte in
+        (0x30...0x39).contains(byte) || (0x41...0x5A).contains(byte) || (0x61...0x7A).contains(byte) || byte == 0x5F
+          || byte == 0x2D
+      }
+  }
 
-  public static func requestId() -> String { "" }
+  /// A fresh request id for a press: `say-` and 20 of a random UUID's hex digits. A retry reuses the press's id.
+  public static func requestId() -> String {
+    let hex = UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased()
+    return "say-" + hex.prefix(20)
+  }
 }
 
 /// `compose.sparks.say`'s params: the spark, your words, the request id, the spark's desktop when this phone is not
@@ -56,6 +66,11 @@ public struct SparkSayParams: Sendable, Equatable {
   public init(
     spark: String, text: String, requestId: String, device: String? = nil, chips: [SparkTranscriptChip]? = nil
   ) throws {
+    guard SparkSay.isRequestId(requestId) else { throw SparkSayRefusal.requestId(requestId) }
+    guard (1...SparkSay.wordsMax).contains(text.utf16.count) else { throw SparkSayRefusal.words }
+    if let chips, chips.count > SparkSay.chipsMax || !SparkTranscriptChip.fit(text, chips) {
+      throw SparkSayRefusal.chips
+    }
     self.spark = spark
     self.text = text
     self.requestId = requestId
@@ -64,7 +79,14 @@ public struct SparkSayParams: Sendable, Equatable {
   }
 
   /// The params as they ride: a key only where it has a value.
-  public var json: JSONValue { .object([:]) }
+  public var json: JSONValue {
+    var fields: [String: JSONValue] = [
+      "spark": .string(spark), "text": .string(text), "requestId": .string(requestId),
+    ]
+    if let device { fields["device"] = .string(device) }
+    if let chips { fields["chips"] = .array(chips.map(\.json)) }
+    return .object(fields)
+  }
 }
 
 /// A send's receipt (`ComposeSparksSayResult`). `state` is OPEN (`ChatFlows.sayStates` names the ones this build
@@ -77,10 +99,20 @@ public struct SparkSayResult: Sendable, Equatable {
   public let unknownFields: [String]
 
   public init(json: JSONValue) throws {
-    spark = ""
-    requestId = ""
-    state = ""
-    position = nil
-    unknownFields = []
+    let shape = "ComposeSparksSayResult"
+    var object = try WireObject(shape: shape, value: json)
+    guard let spark = try SparkWire.id(&object, "spark", shape: shape, SparkWire.isSparkId, "a spark id") else {
+      throw object.missing("spark")
+    }
+    self.spark = spark
+    requestId = try object.text("requestId")
+    guard SparkSay.isRequestId(requestId) else {
+      throw WireDecodeError(shape: shape, reason: "`requestId` is not a request id")
+    }
+    state = try object.text("state", 1...32)
+    // the words are fieldd's to deliver: always true, since a person's words are never held
+    guard try object.flag("queued") else { throw WireDecodeError(shape: shape, reason: "`queued` is not true") }
+    position = try object.typedInt("position", atLeast: 1)
+    unknownFields = object.unknownFields
   }
 }
