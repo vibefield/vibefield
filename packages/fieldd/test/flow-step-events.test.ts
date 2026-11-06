@@ -1,49 +1,13 @@
 import type { Logger } from "@vibefield/logging";
 import { describe, expect, it } from "vitest";
 import { FlowStepEvents, type FlowStepTurnEnd } from "../src/flow-step-events";
-import type { RunEntered, RunEnteredAgent } from "../src/run-entry";
+import type { RunEntered } from "../src/run-entry";
+import { fakeAgent } from "./flow-step-agent";
 
 // CP-4a2b (§13a slice 4; CP4-S2, CP4-Q17 as re-ruled) — a flow step's turn end, read from puppeteer's provider-neutral
 // events in fieldd (flow-step-events.ts): `turn:completed`'s `lastAssistantMessage`, else the turn's last final message
 // that is not `displayOnly`, the run's own and live alone, each turn's end told once. The run is a fake Agent: its
-// `.on` surface, as spark-transcripts.test.ts fakes it.
-
-/** A run as puppeteer's Agent hands it: its `.on` surface, and how many listeners it holds. */
-function fakeAgent() {
-  const listeners = new Map<string, Set<(envelope: unknown) => void>>();
-  let sequence = 0;
-  const agent = {
-    on: (selector: string, listener: (envelope: unknown) => void) => {
-      const set = listeners.get(selector) ?? new Set();
-      set.add(listener);
-      listeners.set(selector, set);
-      return () => set.delete(listener);
-    },
-    monitor: {},
-  } as unknown as RunEnteredAgent;
-  const emit = (
-    type: string,
-    event: Record<string, unknown>,
-    envelope: Record<string, unknown> = {},
-  ) => {
-    const env = {
-      type,
-      category: type.split(":")[0],
-      sequence: ++sequence,
-      sessionId: "pty-step",
-      timestamp: "2026-11-05T22:00:00.000Z",
-      monotonicTime: sequence,
-      source: "hook",
-      confidence: "high",
-      event: { type, ...event },
-      ...envelope,
-    };
-    for (const selector of ["*", `${type.split(":")[0]}:*`, type])
-      for (const listener of listeners.get(selector) ?? []) listener(env);
-  };
-  const held = () => [...listeners.values()].reduce((count, set) => count + set.size, 0);
-  return { agent, emit, held };
-}
+// `.on` surface, as spark-transcripts.test.ts fakes it (flow-step-agent.ts).
 
 /** A flow run's step, as the runs start it (CP-D15). */
 const FLOW = { by: "flow", run: "fr-s2a4b6c8", call: 3 } as const;
@@ -174,6 +138,25 @@ describe("CP-4a2b — a flow step's turn end (CP4-S2)", () => {
     emit("turn:completed", { turnId: "t1", lastAssistantMessage: "done" });
     emit("turn:completed", { turnId: "t1", lastAssistantMessage: "done, said late" });
     expect(heard.map((end) => [end.turn, end.text])).toEqual([["t1", "done"]]);
+  });
+
+  it("SE8 (slices 7–9 review F3): an end with no turn id told again, nothing of the run's own heard since, is told once; a turn:started or an assistant message since makes the next one an end", () => {
+    const { heard, emit } = entered();
+    emit("turn:started", {});
+    emit("turn:completed", { lastAssistantMessage: "no json here" });
+    emit("turn:completed", { lastAssistantMessage: "no json here" });
+    expect(heard.map((end) => end.text)).toEqual(["no json here"]);
+    // the repair's turn, heard starting: its end is told
+    emit("turn:started", {});
+    emit("turn:completed", { lastAssistantMessage: "the repaired answer" });
+    // a turn whose start is not said: its own words are heard before its end
+    emit("conversation:assistant-message", said("and once more", { turnId: undefined }));
+    emit("turn:failed", {});
+    expect(heard.map((end) => [end.outcome, end.text])).toEqual([
+      ["completed", "no json here"],
+      ["completed", "the repaired answer"],
+      ["failed", undefined],
+    ]);
   });
 });
 

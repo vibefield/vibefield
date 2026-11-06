@@ -13,7 +13,7 @@ import {
 } from "@vibefield/contracts";
 import type { LogFields, Logger } from "@vibefield/logging";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { FlowStepTurnEnd } from "../src/flow-step-events";
+import { FlowStepEvents, type FlowStepTurnEnd } from "../src/flow-step-events";
 import { RUNS_DIR } from "../src/flows/journal";
 import type { FlowsHostLaunch } from "../src/flows/launch";
 import { FlowLibrary } from "../src/flows/library";
@@ -39,6 +39,7 @@ import type {
   FlowItemRaise,
   FlowItemStarted,
 } from "../src/tool-plane/rooms/you/queue";
+import { fakeAgent } from "./flow-step-agent";
 import { flowsHostLaunch, standInSource } from "./flows-host-bundle";
 import { beganRun } from "./flows-run-records";
 
@@ -125,6 +126,9 @@ async function harness(
     readonly defaultProfile?: string | null;
     /** the sessions the step listener never heard enter: a hand on one answers none (review F3) */
     readonly unheard?: readonly string[];
+    /** the step listener itself (flow-step-events.ts), for a row whose turn ends go through it (slices 7–9 review F3):
+     * the harness's endTurn then reaches nothing */
+    readonly stepEvents?: FlowStepEvents;
   } = {},
 ) {
   const root = mkdtempSync(join(tmpdir(), "vf-flow-runs-"));
@@ -177,7 +181,7 @@ async function harness(
         return `ny-item${items.length}aaaaaa` as NeedsItemId;
       },
     },
-    stepEnds: {
+    stepEnds: opts.stepEvents ?? {
       onTurnEnd: (listener) => {
         turnListeners.add(listener);
         return () => turnListeners.delete(listener);
@@ -1108,7 +1112,7 @@ function answersOf(h: Harness, run: string) {
 }
 
 describe("CP-4a2b — a step's answer: heard once, bounded whole, checked against its form, repaired once (§13a slice 9)", () => {
-  it("R19 (D22): a step's turn end is its answer, journaled once; the same turn told again journals nothing", async () => {
+  it("R19 (D22; slices 7–9 review F3): a step's turn end is its answer, journaled once; the same turn told again journals nothing, and a missed end told twice with no turn id is one repair", async () => {
     const h = await harness();
     h.approved("review", ANSWERED);
     const run = startedRun(await h.start({ flow: "review" })).run;
@@ -1129,6 +1133,31 @@ describe("CP-4a2b — a step's answer: heard once, bounded whole, checked agains
       open: [],
       steps: [{ call: 1, label: "Diff", session: "rt-step1", state: "answered" }],
     });
+    // F3: a form step's missed end told twice with no turn id, through the step listener itself, is one repair: no
+    // item, the step still repairing, and the repaired answer settles it
+    const events = new FlowStepEvents();
+    const f = await harness({ stepEvents: events });
+    f.approved("review", FORMED);
+    const formed = startedRun(await f.start({ flow: "review" })).run;
+    await waitFor(() => expect(f.enqueued).toHaveLength(1));
+    const step = fakeAgent();
+    events.entered({
+      agent: step.agent,
+      runtimeRunId: "rt-step1",
+      begun: "spawn",
+      origin: { by: "flow", run: formed, call: 1 },
+    });
+    step.emit("turn:started", {});
+    step.emit("turn:completed", { lastAssistantMessage: "no json here" });
+    step.emit("turn:completed", { lastAssistantMessage: "no json here" });
+    await waitFor(() => expect(f.enqueued).toHaveLength(2));
+    expect(f.items).toEqual([]);
+    expect(f.records.runRecord(formed)?.open[0]?.state).toBe("repairing");
+    step.emit("turn:started", {});
+    step.emit("turn:completed", { lastAssistantMessage: fenced('{"verdict":"clean"}') });
+    expect((await settled(f.runs, formed, "done")).log).toBe("clean true");
+    expect(f.enqueued).toHaveLength(2);
+    expect(f.items).toEqual([]);
   });
 
   it("R24: a turn end for a step already answered journals nothing, while its run goes on", async () => {
@@ -1362,9 +1391,9 @@ describe("CP-4a2b — a step's answer: heard once, bounded whole, checked agains
     expect(h.records.runRecord(run)?.steps[0]).toMatchObject({ call: 1, state: "failed" });
   });
 
-  it("R14b (CP4-S7): an answer frees its step's slot, and the step waiting for one starts, the first in call order", async () => {
+  it("R14b (CP4-S7; slices 7–9 review F10): an answer frees its step's slot, and of the two steps waiting for one, the first in call order starts", async () => {
     const h = await harness();
-    h.approved("fan", fanOut(FLOW_LIMITS.LIVE_STEPS_MAX + 1));
+    h.approved("fan", fanOut(FLOW_LIMITS.LIVE_STEPS_MAX + 2));
     const run = startedRun(await h.start({ flow: "fan" })).run;
     await waitFor(() => expect(h.enqueued).toHaveLength(FLOW_LIMITS.LIVE_STEPS_MAX));
     h.endTurn({
@@ -1381,6 +1410,9 @@ describe("CP-4a2b — a step's answer: heard once, bounded whole, checked agains
       state: "working",
       session: "rt-step9",
     });
+    // F10: the one slot went to call 9, never 10, which waits for the next
+    expect(h.records.runRecord(run)?.open.find((step) => step.call === 10)?.state).toBe("waiting");
+    expect(h.spawned).toHaveLength(FLOW_LIMITS.LIVE_STEPS_MAX + 1);
   });
 
   it('R14c (slices 7–9 review F2): a step whose start throws is refused "‹label› failed." and frees its slot: past LIVE_STEPS_MAX caught ones, a valid step starts, never waits', async () => {
