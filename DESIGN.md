@@ -6863,6 +6863,19 @@ a name that is, or starts with, "VibeField" shows the flow's slug instead, so a 
   flows key: an agent that read that key could write an answer you never gave, as it could an approval. Nothing more
   is claimed.
 
+**When VibeField's own program starts nothing** (track RV, item 203; RV #1, pup-claude-1; built at the lean, A, of
+`rv-forwarder-role`; the words are open until James rules rv-forwarder-role). A packaged VibeField runs its daemon,
+its workers and its agents' launchers as one program, told apart by the first argument alone (`roles.ts`,
+`roleOf`). The daemon takes no argument at all, and nothing that starts it hands it one. A first argument that is
+none of the program's roles and asks for none starts nothing. It is a script's path, handed over by a program that
+took VibeField's for Node, as Claude Code's hook and status-line commands did while puppeteer named its own running
+program (`process.execPath`) as their Node. The daemon never starts in its place: started in an agent's process tree,
+it would take the person's own root. The program says one line on its error output and leaves with the shell's
+"cannot run" status (127), as the agents' own lines are said (`agentShimUnavailable`, `unknownRoleLine`):
+- "VibeField: this program takes no arguments; nothing was started."
+
+The line names no path, no argument and no agent, so nothing an agent's settings handed the program is said back.
+
 **The link's words** (track TS, TS-D1 and TS-D2 ruled 2026-10-27). The act is **Continue with
 Tailscale** on every button that starts it — the Connect pane, Settings → Devices, the phone — and
 the place that holds it says **Connect your devices**; the state is **Connected**. A desktop that
