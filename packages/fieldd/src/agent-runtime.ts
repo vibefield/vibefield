@@ -383,7 +383,9 @@ export interface PlainStopRun {
 
 /** What fieldd's own stop ends, or that it cannot say yet: until the boot's re-attach has settled, a run it may
  * still hold is never read as none. `births` are what may become a run the census does not name: creations in
- * flight and replacements in flight (an old PTY terminated, its successor not yet born). */
+ * flight, replacements in flight (an old PTY terminated, its successor not yet born), and re-attaches in flight past
+ * the boot's own (G5's retry of a pending run's transient attach, the sweep's of a record whose PTY the boot's first
+ * inventory lacked: landed, each is a run of this boot, and it may land behind the stop's re-check). */
 export type PlainStopCensus =
   | { settled: false }
   | { settled: true; runs: PlainStopRun[]; births: number };
@@ -729,6 +731,8 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
   private sweepDeferred = false;
   /** replacements in flight (an old PTY terminated, its successor not yet born) */
   private readonly replacements = new Set<Promise<unknown>>();
+  /** Item 192 (RV #6) — re-attaches in flight past the boot's own (`attachCounted`), by run, with how many */
+  private readonly attachesInFlight = new Map<string, number>();
   private readonly idleAfterMs: number;
   private readonly pollMs: number;
   private readonly stopHeardWithinMs: number;
@@ -772,7 +776,8 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
   private publishTimer: NodeJS.Timeout | null = null;
   private disposed = false;
   /** Item 192 (RV #6) — a consented stop of fieldd's own holds the launches closed while it compares its census
-   * (`closeLaunchesForStop`): the doors and an automatic replacement's start refuse, never a birth already under way */
+   * (`closeLaunchesForStop`): the doors and an automatic replacement's start refuse, and G5's next attach waits; never
+   * a birth already under way */
   private launchesClosed = false;
 
   constructor(private readonly opts: AgentRuntimeServiceOptions) {
@@ -1073,7 +1078,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
    * census is every live managed run of this boot — born, re-attached or adopted, sparks and typed runs included,
    * none exiting (`liveUnder`'s rule) — whose catalog row does not claim `reattach` (a provider with no row counts),
    * read from the catalog's own claim with no vendor named (AR-L1, R23b). Not counted: a pending row from an earlier
-   * boot (this stop ends nothing more of it), an exited run, a login pane. */
+   * boot (this stop ends nothing more of it; a re-attach of it in flight is a birth), an exited run, a login pane. */
   plainStopCensus(): PlainStopCensus {
     if (!this.reattachSettled()) return { settled: false };
     const runs: PlainStopRun[] = [];
@@ -1087,14 +1092,21 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
         agent: row?.label ?? entry.info.provider.label,
       });
     }
-    return { settled: true, runs, births: this.creating.size + this.replacements.size };
+    // a re-attach in flight may land after the stop's re-check, a run of this boot that no consent named; one that
+    // has landed entered `managed` inside its act (`attachRecord`), so it is counted once, here or among the runs
+    const attaching = [...this.attachesInFlight.keys()].filter((id) => !this.managed.has(id));
+    return {
+      settled: true,
+      runs,
+      births: this.creating.size + this.replacements.size + attaching.length,
+    };
   }
 
   /** Item 192 (RV #6) — a consented stop of fieldd's own closes the launches before it reads `plainStopCensus`, so no
    * run is born between the census and the stop: spawn, resume and adopt, and an automatic replacement's start,
-   * refuse `UNAVAILABLE {service: "agents", state: "stopping"}` (retryable). A birth already under way finishes — it
-   * is counted in `births`, which refuses the stop. Every refusal of the stop reopens them (`reopenLaunches`); a stop
-   * that goes keeps them closed. */
+   * refuse `UNAVAILABLE {service: "agents", state: "stopping"}` (retryable), and G5's next attach of a pending run is
+   * not asked (`retryAttach`). A birth or an attach already under way finishes — it is counted in `births`, which
+   * refuses the stop. Every refusal of the stop reopens them (`reopenLaunches`); a stop that goes keeps them closed. */
   closeLaunchesForStop(): void {
     this.launchesClosed = true;
   }
@@ -3663,7 +3675,9 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       const row = runningRowOf(rows, terminalId);
       if (row !== undefined && terminalId !== undefined) {
         this.awaitingBoot.delete(runtimeRunId);
-        void this.attachRecord(record, row, terminalId).catch((error: unknown) => {
+        // Item 192 (RV #6) — counted from here: the record no longer keeps the re-attach unsettled. No launch gate:
+        // while a record waits here the census is unsettled and every consented stop refuses
+        void this.attachCounted(record, row, terminalId).catch((error: unknown) => {
           this.logger.warn(
             "fieldd.agents.reattach_failed",
             "A managed session could not be re-attached or held; its record stands",
@@ -3878,6 +3892,26 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     );
   }
 
+  /** Item 192 (RV #6) — an attach past the boot's own re-attach (`sweepAwaiting`'s, G5's retry), counted in
+   * `attachesInFlight` until its act has returned: landed, it is a run of this boot, and it may land behind a consented
+   * stop's re-check, so the census counts it a birth (`plainStopCensus`). By run with how many, never a set: an attach
+   * its adapter calls transient arms G5's retry inside its act (`hold`), and the retry may start before that act's
+   * outcome is written. The boot's own attaches need no count: the census is unsettled until they have returned. */
+  private attachCounted(
+    record: AgentSessionRecord,
+    row: TerminalInfo,
+    terminalId: string,
+    attempt = 0,
+  ): Promise<void> {
+    const runtimeRunId = record.runtimeRunId;
+    this.attachesInFlight.set(runtimeRunId, (this.attachesInFlight.get(runtimeRunId) ?? 0) + 1);
+    return this.attachRecord(record, row, terminalId, attempt).finally(() => {
+      const left = (this.attachesInFlight.get(runtimeRunId) ?? 1) - 1;
+      if (left > 0) this.attachesInFlight.set(runtimeRunId, left);
+      else this.attachesInFlight.delete(runtimeRunId);
+    });
+  }
+
   private async tryAttach(
     record: AgentSessionRecord,
     terminalId: string,
@@ -4037,8 +4071,15 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       const row = entry.terminal;
       if (this.disposed || entry.resuming || this.pending.get(runtimeRunId) !== entry) return;
       if (terminalId === undefined || row === undefined) return;
+      // Item 192 (RV #6) — a stop holding the launches closed holds this attach too: started after the stop's
+      // re-check, it could land before the stop, a run of this boot that no consent named. Armed again at the same
+      // attempt, so the reopening a refused stop brings admits it, as it does the idle poll's (`replacePendingClaimed`)
+      if (this.launchesClosed) {
+        this.retryAttach(entry, attempt);
+        return;
+      }
       entry.attaching = true;
-      void this.attachRecord(entry.record, row, terminalId, attempt)
+      void this.attachCounted(entry.record, row, terminalId, attempt)
         .catch((error: unknown) => {
           this.logger.warn(
             "fieldd.agents.reattach_failed",
