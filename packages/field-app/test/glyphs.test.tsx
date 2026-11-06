@@ -308,6 +308,10 @@ describe("the glyph set", () => {
     // SP-1e2 (DESIGN.md §8 "Chat's crew card"): the head's ring, a meter of the
     // members no longer at work, a track and a stroke drawn from the top — one
     // view, one <svg>; the card's glyphs stay FieldGlyph.
+    // UM-3 (DESIGN.md §8 "The Bands circle", §13 "a meter is never a glyph"): the
+    // Bands circle is geometry the meter model computes (`usage/bands.ts`), drawn
+    // on one surface — one <svg>, which its bands key's small bands share; its
+    // marks and the profile's glyph stay the toolkit's and the add's plus FieldGlyph.
     const allow = new Map<string, number>([
       // TS-D4 (DESIGN.md §13): Tailscale's logomark, a vendor mark kept exact
       ["account/tailscale-mark.tsx", 1],
@@ -315,6 +319,7 @@ describe("the glyph set", () => {
       ["field/desk/bar/KindGlyph.tsx", 1],
       ["field/desk/peers/PeersView.tsx", 1],
       ["godview/os-marks.tsx", 1],
+      ["godview/profiles-column/BandsCircle.tsx", 1],
     ]);
     const found = new Map<string, number>();
     const visit = (base: string, relativeDir: string, skip: (rel: string) => boolean): void => {

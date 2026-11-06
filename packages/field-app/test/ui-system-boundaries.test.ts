@@ -1247,6 +1247,10 @@ describe("UI system ownership boundaries", () => {
       // SP-1c — the New spark sheet
       "chat/NewSparkSheet.tsx",
       "chat/NewSparkSheetView.tsx",
+      // UM-3 — Godview's profiles column
+      "godview/profiles-column/BandsCircle.tsx",
+      "godview/profiles-column/ProfilesColumnView.tsx",
+      "godview/profiles-column/ProfilePopoverView.tsx",
     ]) {
       expect(source(component)).not.toContain("<style");
     }
@@ -1291,6 +1295,7 @@ describe("UI system ownership boundaries", () => {
       "chat/new-spark-sheet.css",
       "chat/needs-card.css",
       "chat/crew-card.css",
+      "godview/profiles-column/profiles-column.css",
     ]) {
       expect(source(stylesheet), stylesheet).not.toMatch(/#[\da-f]{3,8}\b/i);
     }

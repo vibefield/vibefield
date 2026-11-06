@@ -134,6 +134,8 @@ const T4_USES: Readonly<Record<string, number>> = {
   "packages/field-app/src/frame/head.css · .vf-head-sep": 1,
   'packages/field-app/src/frame/menu.css · .vf-menu-row[aria-disabled="true"] .vf-menu-ico': 1,
   "packages/field-app/src/frame/peek.css · .vf-peek-dot[data-state]": 1,
+  // UM-3 (§8 "Godview's profiles column"): the add while Settings is open, a control that is off
+  "packages/field-app/src/godview/profiles-column/profiles-column.css · .vf-profiles-add:disabled": 1,
   "packages/field-app/src/panels/agents/agents-settings.css · .vf-agents-chevron": 1,
   "packages/field-app/src/panels/agents/extensions-settings.css · .vf-ext-cell": 1,
   "packages/field-app/src/panels/agents/extensions-settings.css · .vf-ext-chevron": 1,
