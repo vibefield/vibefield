@@ -37704,6 +37704,11 @@ ancestor of `2b9b66c14`; `355dffd82` is SP-D13's, on main.
   - UM-4 (`um/3-phone`): the usage shapes, Bands in Swift with the golden's FieldHomeTests copy and its required
     mirror, the feed, the Me menu's row, the Agent Profiles page and the held face;
   - then SE-2 (`se/2-phone-search`): the glass sheet, chips and tokens, the token above search, and the lens on Field.
+  > *Answered 2026-11-06:* M-phone landed (`d6d76d079`, run198, M198; LANDED "UM-4 and SE-2"). UM-4, repaired as
+  > `um/3-phone-r`: the usage shapes, Bands in Swift held to the golden's FieldHomeTests copy, the feed, the Me menu's
+  > row, the Agent Profiles page and the held face. Then SE-2, repaired as `se/2-phone-r`: the glass sheet, chips and
+  > tokens, the token above search, and the lens on Field's list, rain, timeline and swarm. The phone reads its home's
+  > usage now: the kit asks `agents.usage` with `{}`, never `refresh`, and watches its subscription.
 - **UM-5**, UM-D14's plan filter on the desk and the phone, in wave 2 after both.
 - **Upstream:** PU-R (UM-D7, the bloom's buds wear their fuel) and PU-S (UM-D6, an agent's body wears its profile),
   James's to file. They ride one puppeteer release and one EL8, behind item 171's 0.3.4, and no UM slice waits on
@@ -38665,6 +38670,10 @@ no body: its 25 are pre-light #1–#25 before the restack, and `um/2-desk` (`59f
 **Owed.**
 - **M-phone**, next: `um/m-phone` stands on `um/m-desk-856` (`48a30767d`) and is re-cut onto this land's main at its
   mint (VF-PM, 10:08Z), before MA-6 opens HomeScreen.swift: UM-4, then SE-2.
+  > *Answered 2026-11-06:* M-phone landed (`d6d76d079`, run198, M198; LANDED "UM-4 and SE-2"), rebased from
+  > `um/m-desk-856`, re-cut through its pre-light and minted onto main `d6fa5e31a`, so MA-6 may open HomeScreen.swift
+  > now. With it the Owed's "bodies' in-branch SHAs" is answered: `6d6ed17c1`, `um/3-phone`'s UM-4d review green,
+  > which `263e2c53d` and `208559ad5` cite, lands as `7d8ab0fb5`.
 - **UM-5**, UM-D14's plan filter, in wave 2: a popover's rows take no click until then.
 - **The Settings catalog plate for a window read before its reset** (UI_SYSTEM.md's meaningful states): Settings says
   it since `ed8099c1e`, and no plate shows it.
@@ -39726,3 +39735,577 @@ Filed by VF-PM at 18:19Z, from fd's reading of who retries a dropped accept (ite
 - **The tool plane's behaviour with a closed lane link** is unread. It matters only while the boot half stands.
 
 Item 206 closes in this entry. Its boot half stays on the board.
+
+## UM-4 and SE-2 — the profile meters reach the phone: the Me menu's Agent Profiles row and page, the held face, and search as a glass sheet over the field, with the profile token above it and its lens on Field (tracks UM and SE)
+
+(2026-11-06; `a43224dbc` → `d6d76d079`, 70 commits on main `d6fa5e31a` (item 206's records): the stack assembled by
+the UM lead (vibe-field-b7) in `/Volumes/SamsungRed/lanes/um1-model/vibe-field`, U3's 23 (UM-4, built there), S2's 35
+(SE-2, built in `/Volumes/SamsungRed/lanes/fix179/vibe-field`) and the lead's nine, then re-cut and minted by
+plumbing as `um/m-phone-mint` with three commits more (vibe-field-e0, the same lead after the second switch,
+~17:15Z); landed 2026-11-06T22:32:57Z (M198) by the fixer, a fast-forward of main `d6fa5e31a` to `d6d76d079` itself.
+The stack, `um/m-phone`, stood on `um/m-desk-856` (`48a30767d`) and was rebased onto `6095a9bb8` (M-desk's records)
+as `um/m-phone-pl`, the first pre-light's packet (tip `9635317bf`): 67 of 67 "=", no conflict, the three files both
+sides touched (DESIGN.md, `apps/ios/README.md`, `scripts/check-ios-fixtures.mjs`) merged as unions
+(`lanes/um/logs/m-phone/range-diff-m-phone-pl.txt`).
+Each red the pre-light found was fixed in the commit that made it and carried, by plumbing with no worktree touched
+(`lanes/um/recut-pl2/`), and each packet ran again on the old mini. pl2 (`2a53dde2d`) fixed the four compile slips
+and was folded onto main `db181a008`, after M-c2's land: 62 "=", four "!" whose patch lines are unchanged (only their
+context is M-c2's), and `1a97eade5`, SE-2e's HomeScreen.swift merged with M-c2's bar as one union, which IOS read as
+HOLDS (17:30Z). pl3 (`60f08c004`) gave the meters' two doors M-c2's `ChatDoor.reader`, and pl4 (`284e39d0c`) held
+SE-2q's PackingTests row to its pack. The mint is pl4 replayed onto main `d6fa5e31a` by the same guarded
+`fold-onto.sh`: 67 of 67 "=", no conflict, its tree the 3-way `merge-tree`'s, and `apps/ios` pl4's at every commit
+(`lanes/um/logs/m-phone/range-diff-m-phone-mint.txt`; that tip, `314019e48`, is kept as `um/m-phone-mint-314019e48`).
+The pre-light's stills, read by eye, found two more, which VF-PM ruled fixed forward at the mint (21:03Z): the feed's
+first attach (`3e5e5e83b` red, `c96468bf1`) and the mock's lens door (`d6d76d079`). Five commits carry dated
+"Re-cut" bullets: `61d207b45` two, and `6fe659003`, `fc5026581`, `f1555cb39` and `c738efa9f` one each. The lanes
+before it are "The lane history", below.)
+Everything M-U1 and M-desk held back on the phone is drawn at this land; DESIGN.md §8 had moved first, at UM-0. The
+phone reads its home's cached usage batch and profiles through the home's one door, with no poll of its own (UM-D8,
+UM-L4), and says them through the desktop's own model, held to the usage bands golden. The Me menu's Agent Profiles row
+stands nearest your name and opens the Agent Profiles page: the circle, then profiles, then plans (UM-D25, UM-D26).
+Holding your face shows your agents' usage over the screen, the profiles bloom from it, and letting go sets the lens
+(UM-D24). Search is no page any more: a glass sheet over the field, Live now first and waiting first, Everything through
+every profile, filtered by chips and tokens (SE-D3…D5, UM-D28). A chosen profile is a token above search, and its lens
+recedes the rest of Field's list, rain, timeline and swarm (UM-D27, SE-D2). MA-6 may open HomeScreen.swift now: the
+sheet names the two slots MA-D7's Apps strip fills.
+
+**What it rests on.**
+- **James's picks** (DECISIONS UM): UM-D24…D28 and SE-D2…D5 A on the page *The Bands Meter* (round 4); UM-D16 E and
+  UM-D19 A, his chat words of 2026-11-05 21:36Z; UM-D8, D12, D13 and D15 at the leans under his 03:11Z word.
+- **M-U1** (LANDED "UM-0…UM-2", `c9493b957`): DESIGN.md first for the phone's corner, its search sheet, its token, §9's
+  words and §13; the model the phone transcribes and its golden; UM-D8's door (`agent.usage` in the tailnet preset,
+  the phone's subscription a passive watcher, its refresh answered from the cache).
+- **M-desk** (LANDED "UM-3 and SE-1", `ed8099c1e`): the desktop's model at its final rules (a window read before its
+  reset, `outranks`, `ageWords`, the forecast's rounding), which the phone matches, and DESIGN.md as M-desk left it,
+  which this stack corrects after.
+- **M-c2** (LANDED "IOS-12c's M-c2", `eda440d58`): the bar that steps aside on a spark's thread, whose `barAside`
+  HomeScreen.swift holds beside search's sheet as one union, and `ChatDoor`, whose `reader` the meters' doors answer.
+- **The lead's rulings in PLAN.md §2**, cited in the bodies as "ruling N": 1 (the hold is 520 ms, ‹for James›), 2
+  (profiles five to eight on a second arc at 224, ‹for James›), 7 (a draft has no circle), 10 (usage that cannot be
+  read draws dashed), 16 and 17 (the lens is self-only and keys on the home's profiles; the usage is the home's, "from
+  studio"; a home that refuses says so), 18 (the phone's watcher is passive), 19 (the page in Settings' materials, no
+  first-use hint, ‹for James›), 20 (one presentation table for the phone's glyphs), 21 (only the profile outlives
+  search; the token's own glass; Your latest sessions; `AppTab.search` retires), 22 (MA-D7's strip above the sheet's
+  switch, ‹for James›), 23 (UM-D14 in wave 2) and 24 (recent searches retire from search, ‹for James›).
+- **The lead's rulings for M-phone** (2026-11-06), named in the bodies: the seam's red reworded; the folds, so that
+  every commit compiles and every green stays green; a sign-in under way asks nothing (the repair, on `274399375`'s
+  open question); SE-P5b at the restack onto PH-4; the swarm follows the list (one recede rule).
+- **VF-PM's rulings for the re-cuts:** the fold onto `db181a008` with the old-base re-cut kept unmerged (19:01Z);
+  pl3, base unchanged, the tip built first (19:24Z); pl4, and item 214 corrected at its source (20:35Z); the mint on
+  vf-m1, armed on main exactly `d6fa5e31a`, its `pnpm verify` the row of record (20:53Z, 20:56Z); the three fixed
+  forward at the mint (21:03Z).
+- **The reviews:** U3's (its feed, page and hold findings, and its finding 14), S2's (findings 1–17) and the M-phone
+  review of the assembled `88c040a16` (B1 and m1–m6).
+- **The phone's ground:** PG's Godview views (the list, the rain, the timeline and the swarm the lens recedes; PG-3a's
+  witness), History's tab and its index doors under SP-D13, the Me menu (IOS-8e, IOS-10a, TS-7, WI-3), and WI-1's
+  scrim retire (`13aef47ec`), whose check returns with the copy.
+
+**What is real.** 97 files, +15,216 −533, no file deleted.
+- **Pin-class: none** (the ERE over the mint's names: 0 hits). No `packages/`, `plugins/`, `tooling/`, `apps/desktop`
+  or Rust file, no contracts source, no manifest, lock, `Package.swift` or `project.pbxproj` moves, and no generated
+  file. Outside the kit: DESIGN.md +67 −14; CLAUDE.md +6 −1 (the catalog law's six mirrors, its errata at the
+  sentence); `apps/ios/README.md` +6 −5; `scripts/check-ios-fixtures.mjs` +70 −2 (the `usage` and `search` mirrors
+  required, and the search scrim's two compares back); `scripts/check-agent-catalog.mjs` +5 (R23b's allow-list gains
+  `MeterModel.swift` at count 2: the phone's plan titles keyed by the company a sign-in is billed through, two of
+  whose ids are also agents', UM-D3). The kit: Sources 52 Swift files (+6489 −487, 17 new) and two Metal shaders
+  (`body.metal` +3 −2, `common.metal` +1 −1); Tests 22 Swift files (+3376 −21, 12 new); 16 JSON fixture copies
+  (+5193), each byte for byte its origin under `packages/contracts/fixtures` or field-app's golden.
+- **UM-4's seam, the one lens** (`a43224dbc` red, `98adda127`; `Meters/ProfileLens.swift`, new): `ProfileLens` keeps
+  the home's profile sets that have a circle, one chosen profile and one desktop. A pick chooses a held profile or
+  every profile, the hold's let-go takes a bud, the hub or open ground, and only the profile outlives search (ruling
+  21). A chosen profile goes when the home no longer holds it, or holds one alone (UM-D12). `AccountMenuRow` is generic
+  over its lead, so a Me-menu row may lead with a view; no row's look moves. S2 was built on this commit.
+- **UM-4a, the home's usage batch (PH-1)** (`48db15e2f` red, `d1695721f`; FieldProduct `AgentUsageShapes.swift`,
+  new): the batch reads as zod reads it, strict, an entry's `state` caught to `unknown`, an entry zod refuses refusing
+  the batch, every object naming its unknown keys. `AgentsUsageParams.cached` is `{}`: the phone never asks
+  `refresh` (UM-D8). `AgentProfileSet` reads its sign-ins (`personas`), its `plans` (nil from an older fieldd) and
+  `draft`, tolerantly; the launch's reads do not move.
+- **UM-4b, the meters and Bands, the desktop's (PH-2)** (`f6b0a6420` red, `9dc577213`; `Meters/MeterModel.swift`,
+  `BandsLayout.swift`, `BandsDial.swift` and FieldDesign's `ProfileGlyphSymbols.swift`, new):
+  - field-app's `meters.ts`, `rules.ts` and `bands.ts`, with the part of Settings' join they read, transcribed line
+    for line: the budget's pace-less line, UM-D13's pressure and tightest, the forecast rounded before its form,
+    UM-D15's stable order, `hasCircle` (ruling 7), `everyPlan` (UM-D12), a window read before its reset (unlit, no
+    forecast, pressure 0, ranked last), `outranks` and `ageWords`. The catalog is the home's (`MeterCatalog`, and
+    `AgentCatalogRow.offersUsage` for the contracts' `isOffered(id, "usage")`).
+  - `BandsDial` draws the geometry on two Canvases in ChromePalette's inks, the first read breathing on §6's 1.1 s.
+  - `ProfileGlyphSymbols` is the one presentation table (ruling 20): puppeteer-view-sdk 0.3.3's eleven profile glyphs
+    as SF Symbols ("rocket" as `paperplane`), the laptop for This Mac, the star for a token this build does not draw,
+    `person` for every profile. The spawn bloom's buds draw through it.
+  - `BandsParityTests` holds the phone to the usage bands golden, mirrored byte for byte with every input it was
+    computed from: 9 meters records, 26 circles and 13 forecasts, within 0.011.
+  - The M-phone review's B1, folded into both commits: the first cut mirrored the golden as it stood before
+    `55631a458` re-blessed it, so check:ios-fixtures was red from this commit to the tip and the model stood behind
+    the desktop's. The copy is now the origin's blob `9d8435882`, and the model is the desktop's at this base. The
+    U3 review's `@testable import FieldProduct` is folded into the red too, so FieldHomeTests builds from here.
+- **UM-4c, the meters' feed (PH-3)** (`61d207b45` red, `8e3fefe0c`; `Meters/MetersFeed.swift` and
+  `MetersFixtureDoor.swift`, new): through the home's one door, as Chat reads it, the feed asks the home's profiles,
+  its catalog and its cached usage (`agents.usage` with `{}`), then watches `agents.usage.subscribe`. A home that
+  refuses `agent.usage` is said by its name, "studio doesn't share usage yet", and is never watched; any other
+  failure is usage unavailable (ruling 10). `-vf-mock` answers from the mirrored fixtures, and `-vf-mock-usage=` picks
+  the first read, the refusal or usage unavailable.
+  - Its review (`04b6cfcd4`, `bca82ac72`): a door that could not answer is watched, and asked again when a meter view
+    opens; a door taken back before any word is usage unavailable, never a first read that never ends.
+  - M-c2's `ChatDoor` requires `reader(spark:device:whole:held:)`, and both of the meters' doors answer it from the
+    red on with a reader that holds the reading it is handed: the meters open no thread (the fold's re-cut, Found).
+  - The mint's fix-forward (`3e5e5e83b` red, `c96468bf1`): the feed's first attach always runs, whatever it is
+    handed, so a phone signed in to no home says "usage unavailable", never "reading…" for ever (ruling 10, Found).
+- **UM-4d, the Me menu's row and the Agent Profiles page (PH-4)** (`8c5728b31` red, `97cf3ff9c`;
+  `Meters/AgentProfilesPage.swift`, `UsageLineView.swift` and `BandsKey.swift`, new; `AccountCorner.swift`,
+  `HomeScreen.swift`, `MockField.swift`):
+  - The row, **Agent Profiles**, stands nearest your name while you are signed in (UM-D25). It leads with every plan's
+    circle at 26 and says the tightest percent, orange while a plan runs hot (UM-D13).
+  - The page is its own sheet in Settings' materials (UM-D26): the circle at 214 (a tap focuses its plan), the key,
+    where the reading comes from ("Read a minute ago, from studio", never a blank), the profiles (All profiles first
+    with several; with one, nothing names a profile) and the plans, each window Settings' C1 line at 12 tall. Wave 1
+    (UM-D14's interim): a plan takes no tap. Opening the menu or the page reads the home's profiles again.
+  - The bands key says "a model's week" with a straight apostrophe, as §9 and the desktop do (the review's m4,
+    folded).
+  - Its review (`5d4e4ad36`, `7d8ab0fb5`): the home's honest empty is a first read; a plan says its agent "shows no
+    meter" only for an agent that reports no usage, and a plan no agent named says its title alone; a reset a day off
+    is said by its day ("resets Thu 09:00"), or "resets now", never "resets in …"; every circle the phone draws reads
+    one placements table, its golden case's options.
+  - The M-phone review's B1, its page half (`545331906` red, `55247ed63`): the page says a window read before its
+    reset by the reading's age where its reset stood, "as of 3h 1m ago", unlit, with no reset mark, from the meters'
+    own `ageWords`, as Settings does since M-desk. The age keeps its own width (‹for James›).
+  - The review's m3 (`c738efa9f`): `AgentProfilesWords.menuWord` and `menuHot`, and `LensToken.viewLead`, read only by
+    tests, leave; the tests read what the menus draw.
+- **UM-4e, the held face (PH-5)** (`518fea034` red, `2642d8ad4`; `Meters/FaceHold.swift` and
+  `FaceHoldOverlay.swift`, new): a 520 ms hold on the face (ruling 1), sequenced before the tap, raises one layer over
+  the screen: the huge words, the circle at 206, the face again wearing its Bands ring, the buds at 160 and, five to
+  eight, at 224 (ruling 2). The reach is the hub, a bud or open ground, and letting go sets the lens. VoiceOver offers
+  the page, each profile and every profile.
+  - Its review (`226cb302b`, `274399375`): a hold the system takes away closes the face and lets nothing go; the hold
+    says the home's state as the page does ("studio doesn't share usage yet"); one need is "1 needs you"; a bud says
+    its group's word, "104% · FABLE"; with one profile only the hub is reached. §6's lift is named once
+    (`FieldMotion.lift`), and GodviewSkin.swift's head is corrected at its source.
+  - The repair (`321f1eff2` red, `410293757`), the lead's ruling on `274399375`'s open question: a sign-in under way
+    asks nothing, so the hold counts it neither read nor needing you, and Side says "0 read · none need you".
+    DESIGN.md §9 dates it; a bud whose one plan is signing in says "NO METER" as built (‹for James›).
+- **SE-2a and SE-2b, search's values** (`8904c16ad` red, `ac1a7b50a`; `16b54f049` red, `afd4a23de`; FieldHistory
+  `PhoneSearch.swift`, new):
+  - A hit carries its root's facts (`cwd`, `projectId`, `provider`, `projectKey`), a group cached before SE-2 still
+    decodes, and Live now's words are asked of each desktop over its own live runs, 256 at most.
+  - `PhoneSearch` decides, pure: Live now waiting first over the field's own sessions, the lens's profile keeping the
+    home's runs (self-only, rulings 16 and 17); Everything over each desktop's index, or **Your latest sessions** before
+    a word, forty at most; the chips and tokens; a typed name's offer from two letters; §9's feet and empty words,
+    with UM-D28's " · every profile; Work comes back on Field"; and where a tap goes.
+- **SE-2c, the glass sheet** (`a8a8a6a4d` red, `6fe659003`; `PhoneSearchSheet.swift`, new): the sheet at the drawing's
+  measure (10 from the sides, never past 56 from the top, corners 34, the rise 24 from 0.94 over 420 ms), its switch,
+  chips, rows, offer, empty words and foot. The field's tokens pop in after the magnifier, and its placeholder is
+  "Search". The search scrim returns (black at 16% and 46%), held by check:ios-fixtures again. MA-D7's two slots are
+  the sheet's: `appsStrip` above the switch before any word, and `appsGroup` first in Everything once a word is typed.
+  Nothing fills them until MA-6.
+- **SE-2d, the profile token** (`c769e3be7` red, `eeb9572b5`; `ProfileLensToken.swift`, new): "Showing only
+  ‹profile›" stands above search in a glass of its own, 40 tall, growing out of the circle. Its × shows every
+  profile; its menu lists the home's profiles with their sessions, a check on the one shown, then Every profile. It
+  shows on Field at rest only, while a profile is chosen (UM-D27).
+- **SE-2e, search stands over the page** (`edd763729` red, `1a97eade5`; `PhoneSearchWorld.swift`, new;
+  `HomeScreen.swift`): `AppTab.search` retires, and the circle opens the sheet over whatever page stands, on Live now.
+  The scrim dims the page and a tap on it closes search; words are asked after 350 ms; a live row opens its body's
+  card on Field, and a past row lands History at its line. Closing clears the desktop token, so only the profile
+  outlives the sheet (ruling 21). Under `-vf-mock`, Live now reads PG-3a's witness through the shipping adapter, a
+  new mirror. Retired with search's page: `HistorySearchView`, `DesktopHead`, the page's decisions in
+  `FieldHistoryModel`, and `ChromePalette.markWash`. HomeScreen.swift holds M-c2's `barAside` beside it as one union.
+- **SE-2f, SE-2h and SE-2n, the lens on Field** (`71275e2f1` red, `6022a31bd`; `3192d8bf8` red, `f6a38a7ae`;
+  `6ca584ce3` red, `2894c738c`): under a lens every row but the home's under the chosen profile recedes, as the
+  desktop's profile filter recedes them. The list's rows, the rain's columns and the timeline's lanes, then the
+  swarm's bodies, each carrying the home's profile, at the toolkit's weight (0.22, or 0.07 when every body recedes)
+  and its 240 ms pace (`SwarmRecede`, `GodviewRecede.swarm`). The mock's lens door (`d6d76d079`, DEBUG only) stands
+  once the home's profiles name it, so `-vf-mock-lens=` shows its lens at shot time (Found).
+- **SE-2q, one recede rule across Field's views** (`55c05ca00` red, `f1555cb39`), the lead's ruling for M-phone: a
+  stale body under the lens weighs the recede's weight alone, as a stale row does in the list, never 0.58 × 0.22, and
+  stepping back it never jumps. `body.metal` reads the weight from the body. PackingTests holds slot 34 to it, and a
+  body that is not stale packs 1 (the re-cut, Found).
+- **The S2 review's fixes** (`31719f441`; `fc5026581` red, `e854697d8`; `008791d9e` red, `5cb65b778`; `b2e063d59` and
+  `c31029f67` red, `879b8b412`; `70b23506f` red, `abf286013`; `0db4ec5b9`):
+  - The token is the stage's, over every view Field shows, the swarm keeping out of its frame; its menu's scrim goes
+    with it, and the menu wears the Me menu's own chrome and rows (findings 1, 9 and 12).
+  - Search says what was answered: "Asking what runs…", " · searching", " · the words were not searched" and
+    "‹desktop› is asleep", and no empty words stand for a question nobody answered (finding 4).
+  - An answer is its words' and its kind's, and a cancelled ask lands nothing (findings 5 and 16).
+  - The sheet stands in a glass container of its own, so iOS 26 never melts it into the field, and wears the page's
+    0 24 60 shadow below iOS 26; its content is composed once a render (findings 6, 8 and 15).
+  - A chip is spoken with its sessions, a token by its filter's name, VoiceOver stays inside search and the token's
+    menu while they stand, and Everything names an agent by the catalog's label (findings 11 and 7).
+  - The README names the mock's populated lens and its empty one (finding 14).
+- **SE-2o, recent searches retire** (`ba37d40ee` red, `384f9d832`; ruling 24): the reader remembers no search and the
+  corpus holds none, and a ledger cached with them still reads, its old key passed over.
+- **SE-2p, SE-P5b** (`5a8bad67b` red, `61b044a38`), the lead's ruling for the restack onto PH-4: the token's menu
+  leads with **Agent Profiles…**, the Me menu's own row and circle, and opens the page; the token hides while the face
+  is held or the page is open; the lens adopts one list, the meters' profiles through `hasCircle`; and every profile
+  glyph search draws is `ProfileGlyphSymbols`'.
+- **SE-2r, the default's glyph filled** (`e69719bf0` red, `7a61ff737`), the review's m2: `PhoneSearch.Lead.profile`
+  carries `filled`, so a chip, a token, an offer, a pill, the token and its menu fill the default profile's glyph, as
+  DESIGN.md §8 and the drawing do. The spawn bloom's buds stay outlined, their own rule.
+- **The words, at their source:**
+  - DESIGN.md §8's three "Nothing is drawn yet" are dated *Drawn* notes, each with its correction (`7cab13327`, the
+    review's m1; MA-6's Apps strip still owed). §8 "The phone's search" stands in a glass container of its own
+    (`2dee5ebc7`), and §8 and §9 say the hold's wave 1 (`8cedcd777`).
+  - §9 "A reading" says the page's age (`55247ed63`); §9 marks the phone's honest words and its spoken hints ‹for
+    James› (`bd9508f4c`; `9f4aa9aa8`, the review's m5).
+  - §13: the phone's glyph table is a hand copy, the generator owed (`889ec4914`), and Every profile wears `person`
+    on the phone (`2873c61d2`).
+  - CLAUDE.md's catalog law names the kit's six mirrors, its errata at the sentence (`ca00aceac`). The iOS README's
+    FieldHome row names the Agent Profiles row and `Meters/` (`314019e48`, the review's m6).
+- **The rows**, by syntax, the kit's seven targets 1234 → 1380 (+146) over main `d6fa5e31a`; pl3's Run 3 printed
+  1379 at the 67, and `3e5e5e83b` adds one:
+  - FieldHomeTests +91 (379 → 470). New: AgentProfilesPageTests 11, FaceHoldTests 14, PhoneSearchWorldTests 14,
+    MetersFeedTests 11, ProfileLensTokenTests 10, ProfileLensTests 8, MeterModelTests 7, LensRecedeTests 6 and
+    BandsParityTests 4. Moved: AppBarTests 8 → 13, MockAccountTests 7 → 8.
+  - FieldHistoryTests +35: PhoneSearchTests 25, new; HistoryReadsTests' file 7 → 15, HistoryFoldTests 9 → 12, and
+    FieldHistoryModelTests 16 → 15 (its `words` row retired with search's page).
+  - FieldProductTests +14: AgentUsageShapeTests 9, new; LaunchShapeTests 14 → 16, IndexHistoryShapeTests 9 → 11, and
+    AgentCatalogShapeTests 7 → 8.
+  - FieldDesignTests +3 (ProfileGlyphSymbolsTests) and FieldSwarmTests +3 (StageTests +2, SpawnBloomPictureTests
+    1 → 2; PackingTests' one row moved in place). FieldMeshTests and FieldAgentsTests +0.
+  - check:ios-fixtures +18 copies (16 JSON mirrors and the scrim's two compares; 374 at the tip, as pl3's Run 3
+    printed), pins +0. No contracts, fieldd, field-app, electron-shell, node `--test` or Rust row moves, and no agent-id
+    literal is added outside R23b's list.
+
+**What is stubbed or left.**
+- **MA-6's Apps strip:** the sheet's `appsStrip` and `appsGroup` stand empty (MA-D7, as amended); MA-6 fills them.
+- **Wave 1 of the lens** (UM-D14 is UM-5's): a plan takes no tap, and the page has no Show and no sessions line. The
+  hold's line under Show all and Show ‹profile› counts the plans' reads where sessions are ruled, since the phone's
+  rows carry no run's profile until UM-5 (DESIGN.md §8 and §9, ‹for James›).
+- **The glyph and plan-title tables are hand copies** of puppeteer-view-sdk's and puppeteer-views' 0.3.3, held by
+  review alone across an EL8; their generator is owed (DESIGN.md §13). "rocket" draws as `paperplane`.
+- **Every profile wears `person` on the phone** (the token's menu, the page's All profiles), where §8 and the drawing
+  name `profiles`, which is not among the phone's picks (‹for James›).
+- **The Me menu's row says no word** while the home does not share usage; the page says it (‹for James›).
+- **Under `-vf-mock`:** a Live now row opens no card (the witness's ids are not the scripted fleet's), the mock's
+  other views draw empty (no link stands), and its swarm recedes every body to 0.07 under any lens (the scripted fleet
+  carries no profile).
+- **No still** shows the token's menu, search over History, the page three hours on, or a stale body receded: no
+  launch flag stages them, and no OS input is used.
+
+**Validation.**
+- **The MacBook, under VF-PM's HOLD:** Swift never runs there, and no swift, xcodebuild, node, tsc or verify row of
+  the stack ran on it. Two bodies record biome over the two edited scripts as light rows, each after the swap gate,
+  "clean" (`48db15e2f`, `f6b0a6420`), and `8904c16ad` compared its two mirrors with `cmp`. Every other row in the
+  bodies is an expectation read from the code, "NOT RUN … owed to vf-m1 through a9". The re-cuts and the mint are git
+  plumbing alone, with no worktree touched.
+- **The pre-light** (a9, the old mini `jaspers-Mac-mini` at Xcode 27.2 (27B52), its iPhone 17 simulator `1F155533`),
+  four packets, each brief and bundle in its `lanes/um/SHA256SUMS-m-phone-*`, and each log folder after the first in
+  `lanes/um/logs/m-phone/`:
+  - **The first packet**, `9635317bf` on `6095a9bb8` (brief `a9-brief-m-phone-prelight-9635317bf.md`,
+    `a0eff95b4b44…`), 18:47Z: Runs 1, 2 and 4 stopped on four one-line slips (Found). Its Run 3 `pnpm verify` was
+    green at the tip, with check:ios-fixtures 370 copies and 93 pins.
+  - **pl2**, `2a53dde2d` on `db181a008` (`3d30d4e2b802…`; `pl2-a9-old-mini/`), 19:22Z: red from #7 on M-c2's
+    `ChatDoor` (Found), parked.
+  - **pl3**, `60f08c004` on `db181a008` (`13b5e29e55f7…`, amended at 19:47Z for #7's four warnings;
+    `pl3-a9-old-mini/`, SUMS-a9 `2027076c4377…`, 854 files), exit 0 at 20:47:58Z. Run 0: the tip built, and built
+    for testing. Run 1, the kit built at every SHA: 53 BUILD SUCCEEDED, 0 FAILED, and 14 carries (their Sources tree
+    their parent's). Run 2, every red then its green: 57 of 57 AS BRIEFED (the 150 rows named red, nine node rows).
+    Run 3 at the tip: FieldHomeTests 469, FieldHistoryTests 86, FieldMeshTests 325, FieldDesignTests 49,
+    FieldAgentsTests 106 and FieldProductTests 300 passed; FieldSwarmTests 44 with one red, PackingTests (Found);
+    check:ios-fixtures 374 copies and 93 pins; `siblings.mjs render --prod --check` exit 0; `pnpm verify` exit 0
+    (20:30:24Z). Run 4: M-phone's 23 stills, light and dark, 46 of 46 shot (`stills.sha256` `49beaf419549…`). Run
+    4b: M-c2's 20 at this tip, 20 of 20, every one moved against M-c2's vf-m1 originals (the cross-host baseline).
+    The lead read both by eye (21:00Z, `lanes/um/recut-pl2/stills-read.md`; Found).
+  - **pl4**, `284e39d0c` on `db181a008` (`b0f40956d3e9…`; `pl4-a9-old-mini/`, SUMS-a9 `dcd6799a5bf6…`), 20:50Z:
+    FieldSwarmTests 44 of 44 at the tip, and PackingTests 9 of 9 at `55c05ca00` and at `f1555cb39`. No Sources file
+    moved, so every other row carried pl3's.
+  - Warnings: main's four standing ones (FreewayDesktopLink.swift:211, SwarmMetalView.swift:58, WorkspaceTests.swift:111
+    and RoutedTerminalFrameSinkTests.swift:285) and the two reds' stubs (Found); no other.
+- **The mint, run198 (M198)** (a9, vf-m1 at Xcode 27.3 beta (27C5020n), its iPhone 17 simulator `67E36A30`, armed on
+  main exactly `d6fa5e31a`). Brief `lanes/um/briefs/a9-brief-m-phone-mint-d6d76d079.md`, bundle
+  `m-phone-mint-d6d76d079-on-d6fa5e31a.bundle` (365,475 bytes, sha256 `87228adc501c…`), both in
+  `lanes/um/SHA256SUMS-m-phone-mint-d6d76d079`; logs `lanes/um/logs/m-phone/mint-a9-vf-m1/` (SUMS-a9 `8a3fe668`) and
+  `lanes/ts6/logs/m1/run198/` (SUMS-a9 `8e4d5e03`). The per-commit runs of the first 67 carry from pl3 and pl4:
+  `apps/ios` at each is pl4's byte for byte, and pl4's Sources are pl3's. The three fixed forward are run here. M0 built
+  `3e5e5e83b`, `c96468bf1` and the tip, then built the tip for testing. M1 ran MetersFeedTests at `3e5e5e83b` (red on
+  its three named issues) and at `c96468bf1` (green), then the kit's seven targets at the tip (1380 by syntax). M2 ran
+  check:ios-fixtures, `siblings.mjs render --prod --check` and `pnpm verify`, the row of record. `d6d76d079`'s lens is
+  witnessed in M3.
+  - M0 and M1 as printed (armed 21:20:51Z on main = `d6fa5e31a`, the arm-time SUMS `58924cff…` 12 of 12): the four
+    builds green (`3e5e5e83b` 61 s, `c96468bf1` and the tip 9 s each, the tip's build-for-testing 65 s), with main's
+    four standing warnings alone. M1a at `3e5e5e83b`: TEST EXECUTE FAILED, 11 tests, 3 issues, all in
+    `noHomeYetIsUnavailable()` (`MetersFeedTests.swift:203` and `:210`, the usage read `.waiting`; `:207`, the row's
+    word "reading…"), no crash. M1b at `c96468bf1`: 11 passed. M1c at the tip: 1380 passed, no issue
+    (FieldHomeTests 470, FieldHistoryTests 86, FieldMeshTests 325, FieldDesignTests 49, FieldSwarmTests 44,
+    FieldAgentsTests 106, FieldProductTests 300).
+  - M2 as printed: `check:ios-fixtures` 374 copies and 93 pins and `siblings.mjs render --prod --check` exit 0
+    (21:26Z). `pnpm verify` armed 21:28:41Z at load {7.18 27.26 17.55}, exit 0 at 21:34:24Z, the tree clean after,
+    no stub left (`verify.log` `6b548468344a…`). Against run197's own counts (`2c6ffe1ff`, main `d6fa5e31a`'s code):
+    vitest 13,956 | 0 | 21 over 956 files, node `--test` 474, cargo 36 results, 550/0, typecheck 29 projects and
+    biome "Checked 3470", each +0; `check:ios-fixtures` 356 → 374 copies (+18), the stack's own; the per-file test
+    list's diff empty.
+  - M3, the stills at the tip, on the OLD MINI (VF-PM RULED 21:47Z): vf-m1 rebooted twice at 21:42Z–21:44Z and has
+    refused keys since, with M3a cut at 37 of 46, never read, and M3b unrun. Brief
+    `lanes/um/briefs/a9-brief-m-phone-mint-m3-old-mini-d6d76d079.md` (with its dated erratum), Xcode 27.2 (27B52), the
+    iPhone 17 simulator `1F155533`; armed 21:56:03Z after James's reap word, done 22:24:16Z exit 0; logs
+    `lanes/um/logs/m-phone/mint-m3-a9-old-mini/` (SUMS-a9 `ece159e7`, out `bd5245ca83c7953f`). One Debug app, built
+    incrementally in pl3's DerivedData with 0 warnings. M3a, M-phone's set of record, 46 of 46 (`stills.sha256`
+    `c5c3d61a1a4d73d9`): the 16 moved by intent read true to the brief's table by eye, with 0 red; the 30 briefed
+    byte-equal all moved, the foreground pl3's by eye (Found). M3b, M-c2's 20 (`61ef9d2b2f189288`): 13 byte-equal
+    against pl3's Run 4b, 7 moved by the thread head's live face (≤ 2/255) or the Dynamic Island band; no content
+    moved, and the bar stands aside on every thread. RULED AS BRIEFED (VF-PM 22:33Z).
+  - Landed 2026-11-06T22:32:57Z as M198.
+
+**Disclosed.**
+- **SKIP_SHAPE=1:** 30 bodies say they were committed with it, since the pre-commit hook's node shape check cannot
+  run under the HOLD. No commit stages a manifest, and `siblings.mjs render --prod --check` (pl3's Run 3, the mint's
+  M2) stands for all 70.
+- **The re-cuts' commits** keep each commit's author and date; their committer is the lead's plumbing
+  (`git commit-tree`), and the five that carry a "Re-cut" bullet carry the lead's session trailer too.
+- **Temp dirs (item 195):** SE-2o's two ledger rows write under HistoryReadsTests' own `scratch()`, a fresh
+  `vf-history-<uuid>` in the simulator's `NSTemporaryDirectory()`, as the suite's rows already did; no row writes to
+  the host. The stack adds no TS test file, so item 195's wall reads nothing new.
+- **Stills re-blessed by a stated change:** `9dc577213` (a glyph-less managed profile's bloom bud draws the star),
+  `97cf3ff9c` and `7d8ab0fb5` (every open-menu still gains the row; the All profiles circle), `274399375` (the hold
+  says the home's state), `2894c738c` (the mock's bodies at 0.07 under a lens) and `7a61ff737` (Work's lead
+  `briefcase` → `briefcase.fill`). `55247ed63` moves none.
+
+**The SHA map.** The first packet's commits were re-cut one for one, and the mint adds three
+(`lanes/um/logs/sha-map-m-phone-d6d76d079.tsv`, columns first packet, pl4, mint, tree, subject; the packets' own maps
+are `lanes/um/recut-pl2/sha-map-pl*.tsv`). `um/m-phone`'s `e2e481516` is the first packet's 67 on `48a30767d`, 67 of
+67 "=".
+
+| # | first packet (`um/m-phone-pl`) | mint (`um/m-phone-mint`) | slice |
+|---|---|---|---|
+| 1 | `aa638d07a` | `a43224dbc` | UM-4 (seam, red): the phone's one lens |
+| 2 | `6658eb289` | `98adda127` | UM-4 (seam): the one lens; a Me-menu row's view lead |
+| 3 | `13b8d0f4b` | `48db15e2f` | UM-4a (red): the home's usage batch and a profile's plans (PH-1) |
+| 4 | `54166a0a5` | `d1695721f` | UM-4a: the home's usage batch and a profile's plans (PH-1) |
+| 5 | `78be55e1a` | `f6b0a6420` | UM-4b (red): the meters and Bands held to the desktop's golden (PH-2) |
+| 6 | `f7a704547` | `9dc577213` | UM-4b: the model and Bands, transcribed; one glyph table (PH-2) |
+| 7 | `c790338fa` | `61d207b45` | UM-4c (red): the meters' feed (PH-3) |
+| 8 | `a71af3c57` | `8e3fefe0c` | UM-4c: the meters' feed reads the home's cached batch (PH-3) |
+| 9 | `35f8e6e82` | `8c5728b31` | UM-4d (red): the Me menu's row and the Agent Profiles page (PH-4) |
+| 10 | `ee54a33db` | `97cf3ff9c` | UM-4d: the Me menu's row and the Agent Profiles page (PH-4) |
+| 11 | `85fa003e9` | `518fea034` | UM-4e (red): the held face (PH-5) |
+| 12 | `fcd4ed1ca` | `2642d8ad4` | UM-4e: hold your face (PH-5) |
+| 13 | `31f7c5f2b` | `04b6cfcd4` | UM-4c (red): review, a door that could not answer |
+| 14 | `6e02f0152` | `bca82ac72` | UM-4c: review, watched and asked again; no door is unavailable |
+| 15 | `168e12975` | `5d4e4ad36` | UM-4d (red): review, the honest empty, no meter, a day's reset, two circles |
+| 16 | `bf8f5d78b` | `7d8ab0fb5` | UM-4d: review, the honest empty is a first read; the placements |
+| 17 | `31b08681f` | `226cb302b` | UM-4e (red): review, the cancel, the home's words, one need, a group's word |
+| 18 | `e5448b3c6` | `274399375` | UM-4e: review, the cancel, the home's words, one need, a group's word |
+| 19 | `e995f141d` | `321f1eff2` | UM-4e (red): repair, a sign-in under way asks nothing |
+| 20 | `df52a184a` | `410293757` | UM-4e: repair, a sign-in under way asks nothing |
+| 21 | `c13520d66` | `ca00aceac` | UM-4b (docs): CLAUDE.md, the kit's six mirrors |
+| 22 | `cb7a9b850` | `889ec4914` | UM-4b (docs): DESIGN.md §13, a hand copy; the generator owed |
+| 23 | `775daa3fe` | `8cedcd777` | UM-4e (docs): DESIGN.md §8 and §9, the hold's wave 1 |
+| 24 | `2c7ac932a` | `8904c16ad` | SE-2a (red): a hit's root facts and Live now's ask |
+| 25 | `03f204d68` | `ac1a7b50a` | SE-2a: a hit's root facts and Live now's ask |
+| 26 | `eef1557ba` | `16b54f049` | SE-2b (red): the phone's search as values |
+| 27 | `8f6e1255c` | `afd4a23de` | SE-2b: the phone's search decides |
+| 28 | `790db30fa` | `a8a8a6a4d` | SE-2c (red): the sheet's measure, the field's tokens, the dim |
+| 29 | `537cde7e6` | `6fe659003` | SE-2c: the glass sheet over the field |
+| 30 | `8613ec8fe` | `c769e3be7` | SE-2d (red): the profile token and its menu |
+| 31 | `d4b428d0d` | `eeb9572b5` | SE-2d: the profile token and its menu |
+| 32 | `fd1bb2963` | `edd763729` | SE-2e (red): search's world |
+| 33 | `b45b2693d` | `1a97eade5` | SE-2e: search stands over the page as a glass sheet |
+| 34 | `98430f942` | `71275e2f1` | SE-2f (red): the lens on Field, the list |
+| 35 | `a381904a7` | `6022a31bd` | SE-2f: the lens recedes the list |
+| 36 | `f6c6f46e5` | `31719f441` | SE-2g: review, the token over every view; its menu's scrim and chrome |
+| 37 | `3b9de5b5e` | `3192d8bf8` | SE-2h (red): the lens reaches the rain and the timeline |
+| 38 | `28d80b2b6` | `f6a38a7ae` | SE-2h: the lens recedes the rain and the timeline |
+| 39 | `6b796d8c4` | `fc5026581` | SE-2i (red): search says what was answered |
+| 40 | `e6e0ffa27` | `e854697d8` | SE-2i: search says what was answered |
+| 41 | `1e0de0b56` | `008791d9e` | SE-2j (red): an answer is its words' and its kind's |
+| 42 | `af23619f6` | `5cb65b778` | SE-2j: an answer is its words' and its kind's; a cancelled ask lands nothing |
+| 43 | `b2c4267f4` | `b2e063d59` | SE-2k (red): the sheet's shadow |
+| 44 | `ed9b4f46e` | `c31029f67` | SE-2k (red): the shadow row reads its colour as SwiftUI resolves it |
+| 45 | `f32ba9a22` | `879b8b412` | SE-2k: the sheet's own glass container and its shadow |
+| 46 | `446fa2cb1` | `70b23506f` | SE-2l (red): a chip's spoken count, the catalog's label |
+| 47 | `fb01cb3f5` | `abf286013` | SE-2l: a chip's spoken count, VoiceOver's modal, the catalog's label |
+| 48 | `4bba84702` | `0db4ec5b9` | SE-2m: review, the README and the lane's owed list |
+| 49 | `4d3232890` | `6ca584ce3` | SE-2n (red): the lens reaches the swarm |
+| 50 | `6fab59c59` | `2894c738c` | SE-2n: the lens recedes the swarm's bodies |
+| 51 | `fb1d8f693` | `ba37d40ee` | SE-2o (red): recent searches retire |
+| 52 | `ce93dfa84` | `384f9d832` | SE-2o: recent searches retire; old caches decode |
+| 53 | `52bcf9816` | `2dee5ebc7` | SE-2 (docs): DESIGN.md §8, the sheet's own glass |
+| 54 | `ceef5ee4e` | `bd9508f4c` | SE-2 (docs): DESIGN.md §9, the phone's honest words |
+| 55 | `94e82da0a` | `5a8bad67b` | SE-2p (red): SE-P5b |
+| 56 | `028be3e7a` | `61b044a38` | SE-2p: SE-P5b, the token's menu leads Agent Profiles…; one glyph table |
+| 57 | `c44afb428` | `55c05ca00` | SE-2q (red): one recede rule across Field's views |
+| 58 | `3e0e9764e` | `f1555cb39` | SE-2q: one recede rule across Field's views |
+| 59 | `a22b3158d` | `2873c61d2` | UM-4 (docs): DESIGN.md §13, Every profile on the phone |
+| 60 | `9c7ea5ce1` | `545331906` | UM-4d (red): the page says a window read before its reset by its age |
+| 61 | `064ea499a` | `55247ed63` | UM-4d: the page says a window read before its reset by its age |
+| 62 | `96184e3bc` | `e69719bf0` | SE-2r (red): the default profile's glyph filled |
+| 63 | `20bb1f2db` | `7a61ff737` | SE-2r: the default profile's glyph filled |
+| 64 | `766ce1d21` | `c738efa9f` | UM-4d, SE-2p (refactor): three members only tests read leave |
+| 65 | `909cb4143` | `7cab13327` | UM-4, SE-2 (docs): DESIGN.md says what M-phone drew |
+| 66 | `4eeef2104` | `9f4aa9aa8` | SE-2 (docs): DESIGN.md §9, the phone's spoken hints |
+| 67 | `9635317bf` | `314019e48` | UM-4 (docs): the iOS README's FieldHome row |
+| 68 | — | `3e5e5e83b` | UM-4c (red): a phone signed in to no home says "usage unavailable"; the feed's first attach |
+| 69 | — | `c96468bf1` | UM-4c: the meters' feed's first attach always runs; only a true repeat is skipped |
+| 70 | — | `d6d76d079` | SE-2 (fix, DEBUG): the mock's lens door stands once the home's profiles name it |
+
+**The lane history.** Every branch below is kept; none landed.
+- **U3** was built on `5963aab04` (M-U1's pre-light #16, main `2d202ec2b`) as `um/3-phone` (tip `f39eb3762`, 19
+  commits) and repaired as `um/3-phone-r` (`a9c624db1`, 23). The repair reworded the seam's red (`0a80df7e2` →
+  `12a339f14`, the tree byte-equal), so the seam became `2afd83fb4`, `dfc488c58`'s twin; it folded the review's
+  `b5e21a9ea` into UM-4b's red, and added the repair's red and green and three docs.
+- **S2** was built on U3's seam `dfc488c58` as `se/2-phone-search` (tip `31e1644a7`, 28) and repaired as
+  `se/2-phone-r` (`03109ebe4`, 32 on the reworded seam), the review's two build fixes, `357321ee7` and `292462bdd`,
+  folded into SE-2e's red.
+- **The assembly:** `um/m-phone-u3` (`04a12bcef`) is U3's 23 on `um/m-desk-856` (`48a30767d`). `um/m-phone` was
+  assembled on it with S2's 32, less `beca82167` (the review's twin, folded into SE-2j's red); SE-2p's and SE-2q's
+  pairs, built on the stack; and the lead's §13 correction: 59, kept as `um/m-phone-88c040a16`, the tip the M-phone
+  review read. After the review it was `e2e481516`, 67: B1 folded into UM-4b's red and green with its page half as a
+  pair, m4 folded into PH-4's green, two bodies corrected in their message alone, m2 as a pair, m3 as a refactor, and
+  m1, m5 and m6 as docs.
+- **The re-cuts:** `um/m-phone-pl` (`9635317bf`, the first packet); `um/m-phone-pl2-old-base` (`db04c72c8`, its
+  four slips fixed on `6095a9bb8`, the fallback, unmerged); `um/m-phone-pl2` (`2a53dde2d`), `um/m-phone-pl3`
+  (`60f08c004`) and `um/m-phone-pl4` (`284e39d0c`), each on `db181a008`; `um/m-phone-mint-314019e48`, the mint's
+  first 67; and `um/m-phone-mint` (`d6d76d079`).
+- The bodies cite lane SHAs. Each resolves through the first packet to the mint:
+
+| lane SHA | where it stands | first packet | mint | cited in |
+|---|---|---|---|---|
+| `dfc488c58` | `um/3-phone`, U3's seam (`2afd83fb4` on `um/3-phone-r`) | `6658eb289` | `98adda127` | `8904c16ad` |
+| `0081e6407` | `um/3-phone`, PH-3's green | `a71af3c57` | `8e3fefe0c` | `04b6cfcd4` |
+| `6b5f37968` | `um/3-phone`, PH-5's green | `fcd4ed1ca` | `2642d8ad4` | `f6b0a6420` |
+| `b5e21a9ea` | `um/3-phone`, the review's import | folded into `78be55e1a` | `f6b0a6420` | `f6b0a6420` |
+| `6d6ed17c1` | `um/3-phone`, UM-4d's review green | `bf8f5d78b` | `7d8ab0fb5` | M-desk's `263e2c53d`, `208559ad5` |
+| `c18bf2be5` | `se/2-phone-search`, SE-2e's red | `fd1bb2963` | `edd763729` | `0db4ec5b9` |
+| `357321ee7` | `se/2-phone-search`, a build fix | folded into `fd1bb2963` | `edd763729` | `edd763729`, `3192d8bf8`, `0db4ec5b9` |
+| `292462bdd` | `se/2-phone-search`, a build fix | folded into `fd1bb2963` | `edd763729` | `edd763729`, `3192d8bf8`, `0db4ec5b9` |
+| `7aa4fec0b` | `se/2-phone-search`, SE-2e's green | `b45b2693d` | `1a97eade5` | `fc5026581`, `0db4ec5b9` |
+| `9ad71db31` | `se/2-phone-search`, SE-2f's red | `98430f942` | `71275e2f1` | `0db4ec5b9` |
+| `ad9a0f44a` | `se/2-phone-search`, SE-2f's green | `a381904a7` | `6022a31bd` | `0db4ec5b9` |
+| `056b62680` | `se/2-phone-search`, SE-2g | `f6c6f46e5` | `31719f441` | `0db4ec5b9` |
+| `998426562` | `se/2-phone-search`, SE-2h's red | `3b9de5b5e` | `3192d8bf8` | `f6a38a7ae` |
+| `8ebd9a3cc` | `se/2-phone-search`, SE-2i's red | `6b796d8c4` | `fc5026581` | `e854697d8` |
+| `6c9435b06` | `se/2-phone-search`, SE-2j's red | `1e0de0b56` | `008791d9e` | `5cb65b778` |
+| `8073395bf` | `se/2-phone-search`, SE-2k's red | `b2c4267f4` | `b2e063d59` | `c31029f67`, `879b8b412` |
+| `90e451fbf` | `se/2-phone-search`, SE-2k's second red | `ed9b4f46e` | `c31029f67` | `879b8b412` |
+| `15f11ebab` | `se/2-phone-search`, SE-2l's red | `446fa2cb1` | `70b23506f` | `abf286013` |
+| `2014589ad` | `se/2-phone-search`, SE-2l's green | `fb01cb3f5` | `abf286013` | `0db4ec5b9` |
+| `8a4581d6a` | no branch (Errata) | folded into `1e0de0b56` | `008791d9e` | `008791d9e`, `5cb65b778` |
+| `beca82167` | `se/2-phone-r`, the review's twin | folded into `1e0de0b56` | `008791d9e` | `008791d9e`, `5cb65b778` |
+| `ac1488581` | `um/m-phone-88c040a16`, §9's honest words | `ceef5ee4e` | `bd9508f4c` | `9f4aa9aa8` |
+
+The bodies cite eight more, each outside the stack. `48a30767d` is `um/m-desk-856`'s tip, main `ed8099c1e` (in
+`f6b0a6420`, `545331906`, `55247ed63`); `6ca5cca45` is M-desk's pre-light #26, main `263e2c53d` (in `8cedcd777`,
+`bd9508f4c`); `5963aab04` is M-U1's pre-light #16, main `2d202ec2b` (in `f6a38a7ae`). On main: `13aef47ec`, WI-1's
+(in `a8a8a6a4d`), and `55631a458` and `c5b4972d4`, M-U1's (in `f6b0a6420`). Three are blobs: `c77285b0b`, the
+golden's copy before the fold, and `9d8435882`, its origin's (in `f6b0a6420`, `9dc577213`); and `5055fd8c…`, the
+witness's mirror (in `1a97eade5`). The "Re-cut" bullets cite `db181a008`, main before the mint's base.
+
+**Errata.**
+- **The bodies cite lane SHAs**, which are not on main. The tables above resolve every one.
+- **`8904c16ad` says S2 was "Built on U3's seam (dfc488c58)":** on main S2 stands on the seam's twin, `98adda127`,
+  whose red's message was reworded and whose tree is byte-equal.
+- **`8a4581d6a`, which `008791d9e` and `5cb65b778` name "on the first lane", stands on no branch:** it is a
+  superseded restack's. The first lane's commit of the same patch (the same patch-id) is its tip, `31e1644a7`.
+- **Four body totals differ from syntax** (the `@Test` functions at each SHA). The brief named the first two "(the
+  body's)":
+  - `48db15e2f`'s "The 11 existing rows" of LaunchShapeTests are 14, so 16 with its two;
+  - `226cb302b`'s FaceHoldTests, "5 red as above, 8 green", are 5 red and 7 green, 12 in all;
+  - `274399375`'s "FaceHoldTests (13: …)" names `words` twice, once among "the seven that stood", and is 12;
+  - `31719f441`'s "`ProfileLensTokenTests` (7 rows)" is 8.
+- **`6022a31bd`'s subject, "the lens reaches Field," overclaims:** it reached the List view alone. `f6a38a7ae` says so
+  (no amend on that lane), and `2894c738c` reaches the swarm.
+- **"since 48a30767d (in this stack's base)"** (`545331906`, `55247ed63`): on main that change is `ed8099c1e`.
+  `f6a38a7ae`'s two files "back to 5963aab04 byte for byte" are byte-identical at `6095a9bb8` as well.
+- **`7d8ab0fb5`'s and `274399375`'s "circles 24"** each carry their own dated correction to 26, since UM-4b's fold.
+- **The bodies' "NOT RUN … owed to vf-m1 through a9"** were paid on two hosts: the pre-light on the old mini (every
+  build by pl3's Run 1, every red and green by its Run 2, the tip's targets and verify by its Run 3, the stills by its
+  Run 4) and the mint on vf-m1 (the tip's build, targets, verify and stills again).
+- **`f1555cb39`'s "Rows (expected at THIS commit)" leave PackingTests out:** they name StageTests,
+  ShaderCompileTests, LensRecedeTests and ListViewTests, and PackingTests reads slot 34 too (Found). Its "Re-cut"
+  bullet says so at the source.
+
+**Found.**
+- **Nothing in the stack had compiled before the pre-light.** The HOLD keeps Swift off the MacBook, and neither lane
+  ran a row. The bodies' "read by eye for Swift 6" were the only check until Run 1.
+- **Four one-line slips stopped the first pre-light** (a9, the old mini, Xcode 27.2, 18:47Z). A bare `return` took the
+  next line's `if` as its value (`61d207b45`'s stubs). A `static let` of `AnyTransition`, which is not `Sendable`
+  (`6fe659003`). Two calls left without `feed:, asked:` that `fc5026581`'s body said were changed. And `read =Self`
+  (`c738efa9f`). Each is fixed where it was made and carried, so 27 Run 2 rows that never ran then ran.
+- **The fold onto M-c2 had a clash no text merge showed** (pl2, 19:22Z): M-c2 gave `ChatDoor` the requirement
+  `reader(spark:device:whole:held:)`, which the meters' two doors lacked from `61d207b45` on. Both gain it there; the
+  meters open no thread, so each reader dials nothing. A sweep of M-c2's other protocols, names and glyphs found none.
+- **SE-2q's rows never ran PackingTests** (pl3's Run 3, 20:33Z): `f1555cb39` made `packedBody`'s slot 34 the dim
+  `body.metal` multiplies a stale body by, and main's `staleAndFocusPackTheirBits` still read the 0/1 mix as 1. The
+  row is held to the new pack at `f1555cb39`, with a body that is not stale packing 1. Item 214, first filed as a main
+  slice, is corrected at its source: "inside M-phone, #58's own expectation" (VF-PM 20:35Z). Main packs 0/1 and is
+  green.
+- **The pre-light's stills, read by eye** (the lead, 21:00Z, `lanes/um/recut-pl2/stills-read.md`): M-c2's 20 were the
+  same by eye, the status bar alone moved, 7 byte-equal below it and 13 within 1/255 at the head's face, and the bar
+  steps aside on every thread. M-phone's 46: 15 of 23 as briefed by eye, the dark set matching the light;
+  menu-signedin drew the first finding below; the other seven, search-desk and the six lens stills, were not as
+  briefed. The read's summary, the lead's 21:02Z word and the mint's brief said "16 of 23", counting menu-signedin
+  among them; the read and the brief carry dated addenda at their sources (21:17Z, VF-PM's rule).
+- **A phone signed in to no home said "reading…" for ever** (menu-signedin): ruling 10's dishonest state, in Release.
+  Handed no door and no home, a fresh feed's `MetersFeed.attach` returned before the line that makes a waiting read
+  unavailable. `noDoorIsUnavailable` passed only because it attached a home, and its dated comment says so. Fixed
+  forward at the mint (`3e5e5e83b` red, `c96468bf1`; VF-PM 21:03Z).
+- **The mock's lens door did not take**, so the six lens stills and search-desk showed no lens. The likely cause, read
+  in the code and not measured: `onChange(of: homeProfiles, initial: true)`'s first call adopted `[]` after the mock's
+  show. Fixed forward at `d6d76d079` (DEBUG only); its witness is the mint's lens stills.
+- **The brief's slips, corrected at their source** (pl3's brief, a dated erratum): lens-list, lens-rain and
+  lens-timeline under `-vf-mock` draw "NO ACTIVE AGENTS", since the mock fills only the swarm, so they expect the
+  token over an empty view; and search-desk opens on Everything, which draws no profile or desktop token (UM-D28), its
+  Work in the foot, " · every profile; Work comes back on Field". lens-work-list was briefed as the empty lens over
+  List, so only the lens door kept its token away.
+- **A still with the live mock swarm has no byte baseline** (M3 on the old mini, 22:24Z). The brief expected the 30
+  PNGs #68–#70 never reach to be byte-equal to pl3's from the same host and Xcode, and all 30 moved. Between two
+  launches of one app the mock swarm settles elsewhere behind the chrome, the Dynamic Island band is drawn in one run
+  and not the other, the simulator's keyboard tip shows once, the Field tab's badge counts the mock's live sessions at
+  shot time, and Timeline's ruler reads the wall clock. The baseline is the eye on the foreground plus the named boxes
+  (`m3a-boxes-vs-pl3-run4.txt`); a same-commit control is offered, not run. The brief carries a dated erratum at its
+  source (VF-PM 22:33Z).
+- **Read as the transcribed rules, not reds:** the page's Side says "reading…" while the batch is read, and every row
+  says "0 plans" while usage is refused or unavailable, since plans count only what a circle draws.
+- **Two reds' stubs print "code after 'return' will never be executed"** (`f6b0a6420` 14, `61d207b45` 4), gone at
+  their greens. Main's own four standing warnings print at the kit's build and build-for-testing.
+- **The bodies' "11" and "8"** (`48db15e2f`'s LaunchShapeTests, `226cb302b`'s FaceHoldTests) are the bodies' slips:
+  the rows ran AS BRIEFED at their syntax counts, 14 and 7.
+- **The golden's copy stood behind its origin** (B1, `f6b0a6420`): the first cut mirrored the golden before
+  `55631a458`'s re-bless, so check:ios-fixtures was red from UM-4b to the tip and the phone's model behind the
+  desktop's. A copy is held to its origin's blob, never to the origin as it stood when the lane was cut.
+- **Twelve of the lanes' first-cut commits left FieldHomeTests unbuilt** (UM-4b's red to PH-5's green, and SE-2e's
+  and SE-2f's four): a value's internal memberwise init read from a suite without `@testable`, and a `@MainActor`
+  class's statics called from a nonisolated row. SE-2j's second ask was bound to `any`, which Swift may read as its
+  existential keyword. Each fix is folded where its row was born, so every commit compiles.
+- **The sheet in the bar's glass container would melt into the field on iOS 26** (`879b8b412`): its foot stood 10
+  above the field, inside the bar's melt of 12. DESIGN.md §8 is corrected at the sentence (`2dee5ebc7`).
+- **The token stood in the swarm's chrome slot only** (`31719f441`): under a lens the List view receded every row
+  with no token to say why or clear it.
+- **Search said "no matches" for a question nobody answered**, and an answer for Prompts answered every kind
+  (`e854697d8`, `5cb65b778`).
+- **The swarm multiplied the stale weight by the recede's** (`f1555cb39`): a stale body under the lens stood at
+  0.128 where a stale row stands at 0.22.
+- **Recent searches were written and cached and read by nothing** after search's page retired (`384f9d832`).
+- **A sign-in under way counted as a need** in the hold's line (`410293757`), though the model says it asks nothing.
+- **DESIGN.md §13 claimed a list the phone does not have** (`889ec4914`) and **read as if no surface marked Every
+  profile** (`2873c61d2`); each is corrected at the sentence.
+- **Every "FOR THE LEAD" line in the lanes' bodies is answered**, inside this stack or, for the desktop's two
+  (`7d8ab0fb5`: the popover's narrowing, and Settings' "resets in" before a day), at M-desk (`30c5c4b12`). Of their
+  "OWED" lines, the closing witness's stills are the pre-light's Run 4 and the mint's M3, less the four no flag
+  stages, and the generator stays owed.
+- **Disclosed: rows written green as guards**, each named so in its body: `8904c16ad`'s `anOldCachedGroupReads`,
+  `ba37d40ee`'s `aLedgerKeptWithRecentSearchesStillReads`, `5a8bad67b`'s `pageRowIsTheMeMenus`, and `545331906`'s
+  FaceHoldTests `budAfterAReset`.
+
+**Owed.**
+- **The generator** for the phone's glyph and plan-title tables: one VibeField-origin fixture written from the pinned
+  packages, mirrored and named in `scripts/check-ios-fixtures.mjs`, which `ProfileGlyphSymbolsTests` and
+  `MeterModelTests` read (DESIGN.md §13's dated note).
+- **To James:**
+  - the board ask `um-stack-words`, W1–W8, the words standing as built in the interim: W1–W4 (08:27Z, M-desk's) and
+    this stack's W5–W8 (10:14Z). W5: a bud whose one plan is signing in says "NO METER" as built, or "SIGNING IN". W6:
+    the hold's line under Show all and Show ‹profile› counts the plans' reads until UM-5. W7: search's honest words.
+    W8: Everything's list before a word, with no desktop's sessions on the phone, says nothing over its foot;
+  - this stack's other marks: the age's own width on the page's line; the token's hint and the phone's spoken hints;
+    Every profile's `person` or `profiles`; the Me menu's row while the home does not share usage; the hub's line
+    without "· every profile" while the usage is not read;
+  - the lead's rulings 1, 2, 19, 22 and 24 as built, with M-U1's and M-desk's marks.
+- **The stills no launch flag stages:** the token's menu, search over History, the page three hours on, and SE-2q's
+  stale body under the lens. And one no row took: `9dc577213`'s bloom bud with the star (PJ-7's picture), a stated
+  re-bless that neither Run 4 nor M3 names.
+- **MA-6**, now unblocked: MA-D7's strip fills the sheet's `appsStrip` and `appsGroup` (`PhoneSearchSheet.swift`).
+- **IOS-12d's d5** follows this land on HomeScreen.swift; its one overlap with the stack is `chatNoteOverlay`, which
+  IOS was told at 19:59Z.
+- **UM-5**, UM-D14's plan filter on the desk and the phone, in wave 2: a plan's tap, the page's Show and sessions
+  line, and the hold's sessions.
+- M-U1's and M-desk's Owed stand otherwise: PU-R and PU-S upstream, SLOT 18's riders, M-desk's Settings plate and
+  catalog stills, and the ‹for James› marks they name.
+
+Two inserts into older entries: M-U1's Owed, "M-phone", answered; and M-desk's Owed, "M-phone", answered, with its
+"bodies' in-branch SHAs" answered in the same block.
