@@ -58,30 +58,48 @@ export interface ProfilePopoverViewProps {
   onRetry: (profileIds: readonly string[]) => void;
 }
 
+/** What a plan's row may ask for, and whether each can be asked here (§8: "No act is inert"). */
+interface RowActs {
+  canOpen: boolean;
+  canRetry: boolean;
+  onOpenProfile: (setId: string) => void;
+  onRetry: (profileIds: readonly string[]) => void;
+}
+
 /** A row's act: what a plan that needs you asks for. A sign-in under way asks nothing. */
 function NeedAct({
   entry,
   setId,
-  onOpenProfile,
-  onRetry,
+  acts,
 }: {
   entry: Extract<PlanMeter, { kind: "needs-you" }>;
   setId: string;
-  onOpenProfile: (setId: string) => void;
-  onRetry: (profileIds: readonly string[]) => void;
+  acts: RowActs;
 }): ReactElement | null {
   if (entry.need === "signing-in") return null;
-  const retry = entry.need === "retry";
+  if (entry.need === "retry") {
+    // Retry reads that one sign-in again: with no sign-in to name, or no door that reads again, none is offered
+    const profileId = entry.profileId;
+    if (!acts.canRetry || profileId === undefined) return null;
+    return (
+      <button
+        type="button"
+        className="vf-profiles-pop-row-act"
+        onClick={() => acts.onRetry([profileId])}
+      >
+        Retry
+      </button>
+    );
+  }
+  // Sign in opens the profile's page; while Settings is open there is none to open, so it draws off, as the add
   return (
     <button
       type="button"
       className="vf-profiles-pop-row-act"
-      onClick={() => {
-        if (!retry) onOpenProfile(setId);
-        else if (entry.profileId !== undefined) onRetry([entry.profileId]);
-      }}
+      disabled={!acts.canOpen}
+      onClick={() => acts.onOpenProfile(setId)}
     >
-      {retry ? "Retry" : "Sign in"}
+      Sign in
     </button>
   );
 }
@@ -92,15 +110,13 @@ function PlanRow({
   setId,
   focused,
   onFocusPlan,
-  onOpenProfile,
-  onRetry,
+  acts,
 }: {
   entry: Exclude<PlanMeter, { kind: "no-meter" }>;
   setId: string;
   focused: boolean;
   onFocusPlan: (key: string | null) => void;
-  onOpenProfile: (setId: string) => void;
-  onRetry: (profileIds: readonly string[]) => void;
+  acts: RowActs;
 }): ReactElement {
   const right = entry.right;
   return (
@@ -134,7 +150,7 @@ function PlanRow({
           aria-hidden="true"
         />
       ) : (
-        <NeedAct entry={entry} setId={setId} onOpenProfile={onOpenProfile} onRetry={onRetry} />
+        <NeedAct entry={entry} setId={setId} acts={acts} />
       )}
     </div>
   );
@@ -153,12 +169,15 @@ export function ProfilePopoverView({
   chosen,
   focus,
   read,
+  canOpen,
+  canRetry,
   onClose,
   onFocusPlan,
   onOpenProfile,
   onRetry,
 }: ProfilePopoverViewProps): ReactElement {
   const { set, meters } = circle;
+  const acts: RowActs = { canOpen, canRetry, onOpenProfile, onRetry };
   const geometry = bandsGeometry(POPOVER_CIRCLE, meters.entries, {
     hit: true,
     ...(focus !== null ? { focus } : {}),
@@ -219,8 +238,7 @@ export function ProfilePopoverView({
               setId={set.id}
               focused={focus === entry.key}
               onFocusPlan={onFocusPlan}
-              onOpenProfile={onOpenProfile}
-              onRetry={onRetry}
+              acts={acts}
             />
           ))}
           {unread.length > 0 ? <p className="vf-profiles-pop-none">{bandsLabel(unread)}</p> : null}
@@ -239,6 +257,7 @@ export function ProfilePopoverView({
         <button
           type="button"
           className="vf-profiles-pop-open"
+          disabled={!canOpen}
           onClick={() => onOpenProfile(set.id)}
         >
           Agent Profiles…

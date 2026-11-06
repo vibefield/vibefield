@@ -491,6 +491,12 @@
   cursor: pointer;
 }
 
+/* Sign in while Settings is open: there is no page to open, so it is off — its word in t4 (§2.4 "Off"), as the add */
+.vf-profiles-pop-row-act:disabled {
+  color: var(--vf-text-faint);
+  cursor: default;
+}
+
 .vf-profiles-pop-none {
   display: flex;
   align-items: center;
@@ -525,6 +531,12 @@
   font: inherit;
   font-weight: 600;
   cursor: pointer;
+}
+
+/* …and Agent Profiles… the same way */
+.vf-profiles-pop-open:disabled {
+  color: var(--vf-text-faint);
+  cursor: default;
 }
 
 /* ── the Bands circle: the model's geometry, the marks over it at its points ── */
