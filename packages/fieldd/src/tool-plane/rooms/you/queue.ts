@@ -18,6 +18,7 @@ import {
   type NeedsItemKind,
   type NeedsItemState,
   type NeedsNotice,
+  type NeedsPendingStart,
   type NeedsRecord,
   type NeedsScript,
   NOTIFY_PER_MINUTE,
@@ -197,13 +198,18 @@ export interface FlowChangedRaise {
   readonly name: string;
   /** the spark whose flow_run waits on it (13b's D5), told what you chose; absent for a run you start */
   readonly from?: HoldSender | undefined;
+  /** Q4 (ruled 2026-11-06 (c)) — the start as it was asked, past `script` and `from`: kept on the item's record alone, and
+   * handed back to the runs with the act */
+  readonly start?: NeedsPendingStart | undefined;
 }
 
-/** A changed flow's start, as the runs are handed it: the item, and the bytes you chose to run. */
+/** A changed flow's start, as the runs are handed it: the item, the bytes you chose to run, and the start as it was
+ * asked (Q4), absent on a record from before it. */
 export interface FlowItemStart {
   readonly id: NeedsItemId;
   readonly flow: string;
   readonly hash: string;
+  readonly start?: NeedsPendingStart | undefined;
 }
 
 /** What the runs did with a start: the run it started, or why it could not start, in fieldd's words. */

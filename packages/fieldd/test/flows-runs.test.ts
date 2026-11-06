@@ -339,10 +339,12 @@ describe("CP-4a2b — a run starts from the bytes fieldd kept, or asks first; it
     const approval = h.approved("hello", HELLO);
     const edited = h.write("hello", HELLO_EDITED);
     expect(await h.start()).toEqual({ waits: "ny-changed1aaaa" });
+    // Q4 (ruled 2026-11-06 (c)): the item's record keeps the start as it was asked, so an act begins this same run
     expect(h.raised).toEqual([
       {
         script: { flow: "hello", hash: flowHashOf(edited), approved: approval.hash },
         name: "Hello",
+        start: { input: {}, starter: { by: "you" }, scope: ["work"] },
       },
     ]);
     // a spark's flow_run of a flow never approved: its item tells that spark
@@ -359,6 +361,7 @@ describe("CP-4a2b — a run starts from the bytes fieldd kept, or asks first; it
       script: { flow: "targets", hash: flowHashOf(fresh) },
       name: "Targets",
       from: VELA_FROM,
+      start: { input: {}, starter: { by: "spark", spark: VELA }, scope: ["work"] },
     });
     expect(h.records.runRecords()).toEqual([]);
     expect(h.records.runs()).toEqual([]);

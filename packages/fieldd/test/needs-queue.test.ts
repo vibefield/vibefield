@@ -9,7 +9,7 @@ import {
   NeedsItem,
   type NeedsItemId,
   NeedsNotice,
-  type NeedsRecord,
+  NeedsRecord,
   type SparkRecord,
   type SparkSummary,
 } from "@vibefield/contracts";
@@ -1463,6 +1463,48 @@ describe("CP-4a2b — a flow run's items: the runs' acts, then Stop the run; an 
     expect(h.woken.at(-1)).toEqual([
       "run-vela",
       "VibeField restarted, and cannot tell whether the run of Release check you allowed Vela started; it is not started again",
+    ]);
+  });
+
+  it("N5c (Q4, ruled 2026-11-06 (c)): a changed flow's pending start is kept on its record, never on its item; read back from the store, contracts' fixture among them, each act hands its own to the runs", async () => {
+    const h = harness();
+    const started: FlowItemStart[] = [];
+    const start = {
+      input: { target: "run-40" },
+      starter: { by: "spark", spark: VELA },
+      scope: ["work", "review"],
+    };
+    const id = h.queue.flowChanged({
+      script: CHANGED,
+      name: "Release check",
+      from: VELA_FROM,
+      start,
+    });
+    expect(h.kept().find((record) => record.item.id === id)?.start).toEqual(start);
+    expect(h.queue.list().find((item) => item.id === id)).not.toHaveProperty("start");
+    // contracts' fixture, kept as fieldd keeps a record (EL9's fieldd side): the store signs it and reads it back
+    const path = join(
+      import.meta.dirname,
+      "../../contracts/fixtures/needs-record.flow-changed-start.json",
+    );
+    const fixture: Record<string, unknown> = JSON.parse(readFileSync(path, "utf8"));
+    const { signature: _signature, ...body } = fixture;
+    const yours = NeedsRecord.parse(body);
+    new NeedsStore({ dir: join(h.root, "needs"), keyPath: join(h.root, "needs.key") }).write(yours);
+    // a restart: both are read back with their starts, and each act hands its own to the runs
+    const again = h.make();
+    again.bindFlowActs(startsInto(started));
+    expect(again.restore()).toBe(2);
+    await again.answer(id, 1, principal);
+    await again.answer(yours.item.id, 0, principal);
+    expect(started).toEqual([
+      { id, flow: "release-check", hash: CHANGED.approved, start },
+      {
+        id: yours.item.id,
+        flow: "nightly-sweep",
+        hash: yours.item.script?.hash,
+        start: yours.start,
+      },
     ]);
   });
 });
