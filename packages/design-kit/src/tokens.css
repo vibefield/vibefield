@@ -96,7 +96,8 @@
   --vf-wizard-logo-filter: invert(1) hue-rotate(180deg);
   --vf-backdrop-dim: rgb(0 0 0 / 10%);
   /* §5 the search scrim (the Peek, §8 "Search"; K7): darker than the backdrop
-     dim, under a blur of 18 — the window blurred and dimmed */
+     dim, under a blur of 18 — the window blurred and dimmed. The phone's search
+     sheet wears the dim alone, with no blur (SE-D3, 2026-11-06) */
   --vf-search-scrim: rgb(0 0 0 / 16%);
   /* §8 the New spark sheet's sky (SP-1c): night in both themes, under the star engine's own night where it draws */
   --vf-spark-night: #060716;
@@ -256,6 +257,33 @@
      word that has to be read; the dark ink is the fill, which reads on the panel. */
   --vf-godview-light-ink-attention: #b25e00;
   --vf-godview-dark-ink-attention: #ff9f0a;
+  /* §2.7 (UM-D21, 2026-11-06): the app's chrome per GODVIEW mode, for the stage's chrome that follows Godview's mode
+     (§8 "Godview's profiles column"): the Line tier's glass with its ring and shadow, a menu's solid with its ring
+     and shadow (§5), the foreground the meters mix (§8 "The Bands circle") and the ramp (§2.4), each the app's own
+     value, by day's under Godview's light and by night's under its dark. */
+  --vf-godview-light-chrome-line: rgb(255 255 255 / 88%);
+  --vf-godview-dark-chrome-line: rgb(28 28 30 / 94%);
+  --vf-godview-light-chrome-line-ring: rgb(0 0 0 / 5%);
+  --vf-godview-dark-chrome-line-ring: rgb(255 255 255 / 15%);
+  --vf-godview-light-chrome-line-shadow: 0 8px 30px rgb(0 0 0 / 8%);
+  --vf-godview-dark-chrome-line-shadow:
+    0 8px 30px rgb(0 0 0 / 40%), inset 0 1px 0 rgb(255 255 255 / 6%);
+  --vf-godview-light-chrome-solid: rgb(255 255 255);
+  --vf-godview-dark-chrome-solid: rgb(28 28 30);
+  --vf-godview-light-chrome-solid-ring: rgb(0 0 0 / 10%);
+  --vf-godview-dark-chrome-solid-ring: rgb(255 255 255 / 15%);
+  --vf-godview-light-chrome-solid-shadow: 0 8px 30px rgb(0 0 0 / 8%);
+  --vf-godview-dark-chrome-solid-shadow: 0 8px 30px rgb(0 0 0 / 40%);
+  --vf-godview-light-chrome-ink: rgb(28 28 30);
+  --vf-godview-dark-chrome-ink: rgb(245 245 247);
+  --vf-godview-light-chrome-text-primary: rgb(28 28 30 / 85%);
+  --vf-godview-dark-chrome-text-primary: rgb(245 245 247 / 85%);
+  --vf-godview-light-chrome-text-secondary: rgb(28 28 30 / 70%);
+  --vf-godview-dark-chrome-text-secondary: rgb(245 245 247 / 70%);
+  --vf-godview-light-chrome-text-tertiary: rgb(28 28 30 / 64%);
+  --vf-godview-dark-chrome-text-tertiary: rgb(245 245 247 / 54%);
+  --vf-godview-light-chrome-text-faint: rgb(28 28 30 / 50%);
+  --vf-godview-dark-chrome-text-faint: rgb(245 245 247 / 38%);
   /* §2.7 + §8 (2026-09-28): the terminal deck is a sheet over the monitor. The
      shadow is §5's Sheet recipe per GODVIEW mode (not the app theme's); the lip
      — since round 3 the Lip, the drag bar (GV-D7) — is never less than the

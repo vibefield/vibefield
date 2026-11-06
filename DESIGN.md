@@ -297,6 +297,25 @@ Godview's dark panel the orange itself reads (9.2:1 on `#111111`), so the dark i
 marks and bars keep the fill `--vf-orange` in both modes (added 2026-10-27, AO-6b3, for the limit
 moment's number, §8).
 
+**The app's chrome in Godview's mode** (added 2026-11-06, track UM; UM-D21 A, ruled by James on the page *The Bands
+Meter*, and the lead's call that the column follows Godview's own mode, as drawn). Godview's profiles column is the
+stage's chrome (§8 "Godview's profiles column"), so it follows Godview's mode, as the deck's shadow and the attention
+ink do, and it is drawn in the APP's chrome, never in the instrument skin above. The values are the app's own (§2.4,
+§5), keyed to the mode: by day's under Godview's light and by night's under its dark. They differ from the app's
+theme only while Settings → Terminal → Look holds Godview's own mode. The meters mix the foreground, and the words
+take the ramp. Each token is `--vf-godview-light-chrome-‹role›` or `--vf-godview-dark-chrome-‹role›`:
+
+| Role | `‹role›` | Light | Dark |
+|---|---|---|---|
+| the Line's glass (§5) | `line` | white at 88% | `#1C1C1E` at 94% |
+| its ring | `line-ring` | the hairline, black at 5% | the strong hairline, white at 15% |
+| its shadow | `line-shadow` | the island shadow | the island shadow and a 6% top light (`inset 0 1px 0` white/6) |
+| a menu's solid (§5) | `solid` | `#FFFFFF` | `#1C1C1E` |
+| its ring | `solid-ring` | the strong hairline, black at 10% | the strong hairline, white at 15% |
+| its shadow | `solid-shadow` | the island shadow | the island shadow |
+| the foreground the meters mix | `ink` | `#1C1C1E` | `#F5F5F7` |
+| t1 · t2 · t3 · t4 (§2.4) | `text-primary` · `-secondary` · `-tertiary` · `-faint` | the ink at 85% · 70% · 64% · 50% | the ink at 85% · 70% · 54% · 38% |
+
 **The phone's one pane** (D-i12, ruled 2026-10-18). The desktop lights a mounted body in its pane's
 colour, because its panes are told apart by colour. The phone has one pane, the open card, so a
 colour there tells nothing. The card's bubble draws its band and its light in **text main**:
@@ -780,11 +799,11 @@ exception again.
 | Tier | Recipe | Use |
 |---|---|---|
 | Island | surface `/80` + `backdrop-blur-xl` (hover `/90`) | the file tree's context menu (§8 "The file tree"); the closed pill and its toolbars retired with the island (FR-2, DK-13) |
-| Line (MC-D2, ruled 2026-10-01) | `--vf-chrome-solid` at 88% (94% by night) + a 24px blur, ringed by the hairline (`--vf-hairline-strong` by night), the island shadow, and by night a 6% top light (`inset 0 1px 0` white/6) | the line (§8), and Chat's composer without the blur, on the panel's solid ground (§8 "Chat's composer") *(corrected 2026-10-31, SP-1d: this said "the composer line", which stopped being a composer at HN-2)*; the views track at its left end on the same pane of glass — the track's own pill folded into it 2026-10-03 (FR-2); the head's name pill and zoom readout, the frame's floating controls at the top (FR-3, 2026-10-03); on the desk, the selection bar and the tools in hand (§8; MC-D2, R20) |
+| Line (MC-D2, ruled 2026-10-01) | `--vf-chrome-solid` at 88% (94% by night) + a 24px blur, ringed by the hairline (`--vf-hairline-strong` by night), the island shadow, and by night a 6% top light (`inset 0 1px 0` white/6) | the line (§8), and Chat's composer without the blur, on the panel's solid ground (§8 "Chat's composer") *(corrected 2026-10-31, SP-1d: this said "the composer line", which stopped being a composer at HN-2)*; the views track at its left end on the same pane of glass — the track's own pill folded into it 2026-10-03 (FR-2); the head's name pill and zoom readout, the frame's floating controls at the top (FR-3, 2026-10-03); on the desk, the selection bar and the tools in hand (§8; MC-D2, R20); Godview's profiles column, WITH its 24 blur, over the stage and in Godview's own mode (§2.7 "The app's chrome in Godview's mode"; §8 "Godview's profiles column"; *added 2026-11-06, UM-D21*) |
 | Sheet | surface `/90` + `backdrop-blur-3xl` | the pill's sheet — its Fields shelf (the fields explorer) and its Artifacts shelf — grown from the head's pill (FR-3) or, under a cover, the package circle (HN-8, §8 "The head"); the open tray left at DK-13 |
 | Overlay chip | surface `/90–95` + `backdrop-blur-xl` | no wearer today: the put-back affordance and the HUD's toasts retired (DK-13, DK-17); the peers' chips wear the line's glass and the status line solid chrome (§8) |
 | Backdrop dim | `black/10` light · `black/40` dark | behind open sheets; canvas recedes to `scale(0.98)` |
-| Search scrim (GV-D8; K7, 2026-10-08) | `black/16` light · `black/46` dark, over a backdrop blur of 18 and `saturate(0.9)` | behind the Peek (§8 "Search"): the window blurred and dimmed, the view and the frame receding to `scale(0.98)` under it. Darker than the backdrop dim so it reads as dimmed (One Frame §23); the backdrop dim stays the sheets' until James rules otherwise (docket PK1). *Since TS-D22 A (2026-10-29):* the phone wears its dim alone, with no blur, under a door that stands over a live field, between the field and the bar (§9). *Retired 2026-11-02 (WI-1, §9's amendment of that day):* no page stands over the field, so the phone wears no scrim, and its Swift copy (`ChromePalette.searchScrim`) and that copy's check went with it |
+| Search scrim (GV-D8; K7, 2026-10-08) | `black/16` light · `black/46` dark, over a backdrop blur of 18 and `saturate(0.9)` | behind the Peek (§8 "Search"): the window blurred and dimmed, the view and the frame receding to `scale(0.98)` under it. Darker than the backdrop dim so it reads as dimmed (One Frame §23); the backdrop dim stays the sheets' until James rules otherwise (docket PK1). *Since TS-D22 A (2026-10-29):* the phone wears its dim alone, with no blur, under a door that stands over a live field, between the field and the bar (§9). *Retired 2026-11-02 (WI-1, §9's amendment of that day):* no page stands over the field, so the phone wears no scrim, and its Swift copy (`ChromePalette.searchScrim`) and that copy's check went with it. *Returned 2026-11-06 (SE-D3 A, ruled by James on the page The Bands Meter):* the phone's search is a glass sheet over the live field (§8 "The phone's search"), so the phone wears the dim again, alone with no blur, at these two values, fading in 240ms; a tap on it closes search. Its Swift copy comes back as `ChromePalette.searchScrim`, held to `--vf-search-scrim` by its check (SE-2) |
 | Setup Assistant (as built since UA-3w; written down 2026-10-29, track FG; on the field, built at FG-3a as the browser's layers, and since FG-3b drawn by the field's own pass over the live field) | `--vf-wizard-surface` (white 75% by day, `rgb(28 28 30)` 55% by night) over a blur of `--vf-wizard-blur` (32px) and a saturation of `--vf-wizard-saturate` (1.12), the island radius (32). On the field (FG): a 1px edge, `--vf-wizard-edge` (white 60% by day, 12% by night) with a top light, `--vf-wizard-edge-light` (white 75%, 8%); the field's shadow, `--vf-shadow-wizard-field` (`0 40px 120px` and `0 12px 32px` in the field's ground at 55% and 28%); and a grain at `--vf-wizard-grain` (3%), so the blur never bands. Its logo (FG-4b): `--vf-wizard-logo-filter`, `invert(1) hue-rotate(180deg)` by day and `none` by night, so the mark is white on smoke and inverted on milk with its colours kept. Its words (FG-O2's judge, and its fix after row 32 at run59b, 2026-10-31): the ramp stops at the glass's own t2, `--vf-wizard-text` (`rgb(28 28 30)` 80% by day, the ramp's t2 by night), t2, t3 and t4 re-projected to it there (`--vf-text-secondary`, `--vf-text-tertiary`, `--vf-text-faint`); a state word takes its glass ink (§2.5), `--vf-ink-healthy` and `--vf-ink-attention` re-projected to `--vf-wizard-ink-healthy` (`#104C1F` by day) and `--vf-wizard-ink-attention` (`#683400` by day), the inks themselves by night; and a quiet button's words stand at t1 on its fill; its panes' words go with its own, so every word on it reads at 4.5:1 (§8) | the Setup Assistant's glass (§8): on the field its frost lets the tunnel's rings through softly (FG-D15 C; by day through a 75% milk since FG-O2's judge, 2026-10-31, at a little over half the strength 55% let through). Over the live field the field draws this recipe itself, in its own frame and from these tokens (FG-D24); over the field's still the backdrop filter draws it |
 
 **Menus are solid, floating controls are glass** (One Frame FR-7, FC-D14 ruled 2026-10-01): a menu
@@ -2817,7 +2836,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     clear of the head's reserve, **56** (the head's foot at 48, plus 8), through the stage's top
     inset (§8 "The monitor view owns its drawing").
     *As built (2026-10-11):* the reserve is `--vf-godview-head-reserve`. The stage's own chrome —
-    the usage column and the claims strip — begins at it, where it began 11 under the bar. The
+    the profiles column and the claims strip — begins at it, where it began 11 under the bar
+    *(amended 2026-11-06, UM-D21: this said "the usage column", which the profiles column replaces;
+    the column's pill stands 8 under the reserve, at 64, §8 "Godview's profiles column")*. The
     swarm steers by the stage's obstacles and reads no inset, so the reserve is the first of
     them, the band across the stage's top. *(Corrected 2026-10-12: this said "its bodies keep
     below the head as they kept below the bar". They do not, and they never did. The swarm's crowd
@@ -2951,6 +2972,147 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     - **VoiceOver** reads the row as a group of buttons, "Views", each its view's name ("Swarm view"), the current
       one selected; the label is not read again. The circles keep their size at every text size, as the bar's do,
       and show the name in the large content viewer.
+- **The Bands circle — every plan of a profile on one circle** (track UM, ruled from the pages *The Round Meter* and
+  *The Bands Meter*: UM-D16 E, James's chat word 2026-11-05 21:36Z; UM-D3, UM-D4, UM-D13 and UM-D15 carried A at the
+  leans under his "now start implement and land this properly", 2026-11-06 03:11Z, and flagged on the board; the
+  drawing is `draft/profile-meters/round4/src/p3e-dials.js`, its rules `p3a-core.js`). **One meter, everywhere** a
+  profile's usage is drawn: Godview's profiles column and its popover, and on the phone the held face, the Me menu's
+  row, the Agent Profiles page and the token's menu (below). It is Settings → Agent Profiles' usage line (AR-D27's
+  C1, `UsageLineView`) bent round, and it reads every plan as Settings reads it, so the two never say different
+  things (UM-D3). Nothing is drawn yet: UM-1 writes its model and geometry, and UM-2 (the desktop) and UM-3 (the
+  phone) draw it.
+  - **What it carries.** One arc per plan the profile holds that meters or needs you, every arc the same length,
+    clockwise from the top, in a stable order (UM-D15): the plans with a reading, then those that need you, each
+    group in the agent catalog's order (`AGENT_CATALOG`), then the profiles' own order. A plan with no meter is
+    left off the circle, and the open views list it. A plan's reading is its namer's (`namedBy`) row, joined as
+    Settings joins it. Arcs stand `clamp(S × 0.032, 2.8, 8)` apart on the inner band; one plan is a whole ring.
+  - **Two bands.** The inside band is the plan's short window, 5 hours (a window of 300 minutes or less). The
+    outside band is its tightest longer window with no group, the week. A model's own week (a window with a
+    `group`, such as Opus only) is a hairline 3 wide, 3.5 outside the outer band, drawn at the open size only. A
+    budget fills both bands as one. A band the plan does not meter is an empty track, the ink at 5%.
+  - **Each band is the C1 line.**
+    - The track is the ink at 12%, round-capped, below 72; from 72 it is 8%, butt-ended.
+    - The fill runs to the window's use. Below 72 it is solid at 64%. From 72 it is a pale body at 28% whose last 12
+      brighten in six steps to 58%, Settings' lit head.
+    - It turns **orange** (`--vf-orange` at 88%, its head lit toward white) when the window runs hot by Settings'
+      rule (UM-D3, below).
+    - A notch marks the time gone (from 38; a budget has none). It is the ink at 84%, 1.25 wide (1.6 from 72, 2
+      from 150), and stands 1.5 past each edge of the band (2.2 from 72, 3 from 150).
+    - A reading kept after a failed refresh draws at 50%.
+  - **A plan that needs you** (a sign-in, or a reading that failed) is a dashed thread across both bands: dots of
+    the ink at 46% (38% for a retry), never a fill. **A first read breathes** as Settings' loading dot does (to 35%
+    and back, 1800ms `ease-in-out`), the track at 16%, only while its first reading is out, and never under Reduce
+    Motion or with Godview's animations off. It is the circle's one loop.
+  - **A profile with no plans** is a dashed circle (the ink at 14%, 1.2 wide, dashes 2 3), said "No meters".
+  - **Four levels of detail, by size:** under 38, 38 to 71, 72 to 149, and 150 and up (the open size).
+    - Below 72 the bands are `clamp(S × 0.066, 2.6, 3.4)` wide and 1.1 apart; to 149, `clamp(S × 0.052, 4, 5.6)`
+      and 1.6 apart; from 150, `clamp(S × 0.046, 8, 11)` and 2.6 apart.
+    - From 72 each arc wears its agent's mark outside it, at its middle: 10.5, or 16 from 150, where the mark of a
+      plan that needs you wears a badge.
+    - The sizes in use are 26 (the phone's menu rows), 36 (the page's profile rows), 40 (the column), 54 (the
+      phone's buds), 206 (the held face's open circle), 212 (the column's popover) and 214 (the phone's page).
+    - Around the held face it is a ring with a hole: 96 across, the hole 34 and the band 8, drawn at the 38-to-71
+      level with nothing in its middle (§8 "The phone's corner").
+  - **The middle.** Below 72, a circle that stands for one profile holds the profile's glyph (puppeteer's
+    `ProfileGlyph`, filled for the default) at `min(r × 1.18, 20)` in the ink at 86%; one that stands for several
+    (the menu row's 26, "All profiles") holds nothing. From 72 it says the plan that decides, or the one you point
+    at: its agent's mark and its percent (800, the display stack), and from 150 its window ("of 5 hours", "of 7
+    days · Opus", "of credits") and its right words (§9 "The meters' words"), in the attention ink when it runs hot.
+  - **The hot dot.** A circle that stands for a profile at a small size (36, 40, 54) wears a dot while any of its
+    plans runs hot: at −45° (the top right), its centre `S/2 − 3` from the middle, its radius `max(3.6, S × 0.085)`,
+    in `--vf-orange`, ringed 1.6 in the ground it stands on. The open sizes say it in words instead. The drawing's
+    `#FF9F0A` is `--vf-orange`, never a literal.
+  - **Hot, and the forecast** (UM-D3, UM-D4). A window is hot by Settings' own rule, `isHot`:
+    - at 100% or more;
+    - with no pace to judge (no time gone, or a budget), at 80% or more;
+    - otherwise when it is past 40% and running more than 1.05 times ahead of the time gone.
+    Godview's flat 80% (puppeteer-views' `USAGE_HOT_PERCENT`) retires with the usage column. A hot window that would
+    run out before its reset says when, at its pace so far: under 10 minutes to the minute, under an hour to 5
+    minutes, and beyond that in 15-minute steps ("~1h 15m"). There is no forecast for a budget, for a window
+    already at 100%, or for one whose reset comes first.
+  - **The tightest** (UM-D13): a plan's tightest window is the one under the most pressure — a hot window first,
+    then one at 100% or more, then the most used — and a profile's word is the tightest of its plans that read.
+  - **Pointing** at an arc at the open size focuses that plan: the others dim to 28%, and the middle says it.
+  - **Said** as an image, "Usage: ‹plan›: 42% of 5 hours, resets in 2h; ‹plan›: not signed in", or "No meters".
+    Its numbers are a geometry module's, never read from the DOM (`packages/field-app/src/usage/bands.ts`, UM-1;
+    its Swift twin is held to the same golden), and it is drawn as geometry, never as a glyph (§13).
+- **Godview's profiles column** (track UM, ruled 2026-11-06 from the page *The Bands Meter*: UM-D21, UM-D22 and
+  UM-D23 A; UM-D19 A, James's chat word 2026-11-05 21:36Z; UM-D12 and UM-D14 carried A at the leans; SE-D2 A; the
+  drawing is `draft/profile-meters/round4/src/p4f-frames.js` and `round4.css`). Your meters stand at the stage's top
+  left, one Bands circle per Agent Profile, and the column is the profile lens. It is VibeField's chrome, drawn by
+  field-app. It replaces puppeteer-views' usage column (`UsageColumn`: 46 wide, a 36 ring tile per account, orange at
+  a flat 80%), whose mount and rule retire with it (UM-D3). Nothing is drawn yet: UM-2 draws it, and until then the
+  usage column stands where it will stand.
+  - **The pill** is Chat's composer turned upright: **52** wide, padded **6**, corners **26**, so each 40 circle is
+    concentric with its ends, with **4** between circles. It hugs its circles and is never the stage's height. It
+    stands at x **13**, y **64** (the head's reserve, 56, plus 8). It wears the Line's glass WITH its 24 blur (§5),
+    in Godview's own mode (§2.7 "The app's chrome in Godview's mode"): it is the stage's chrome, as the claims
+    strip is, and follows Settings → Terminal → Look as the stage does, unlike the head, which wears the frame's
+    theme. It holds no labels, no dividers and no discs.
+  - **A circle** is a 40 round button holding the profile's Bands circle at 40 (§8 "The Bands circle"): the
+    profile's glyph in its middle, and the hot dot while a plan runs hot. Under the pointer, and while its popover
+    is open, it takes the ink at 6% (160ms `ease`). **The lens ring**, the chosen profile's, is 2 in the pill's
+    solid and then 1.5 in the ink, outside the circle's edge. It is the column's only 1.5, for a selection, never
+    a state.
+  - **Which circles.** The profiles stand in Settings' order, This Mac first.
+    - **One profile** (UM-D21, UM-D12): **This Mac**, one circle carrying every plan, with the add under it. There
+      is no lens to choose: a click pins its popover and filters nothing.
+    - **Several** (UM-D19): one circle per profile, and each circle is the lens. A click shows only that profile's
+      sessions and pins its popover; a click on the chosen one shows them all again and closes it.
+    - A profile kept as a draft (AO-D14) has no circle until an agent signs in to it.
+    - This Mac's circle carries the agents Settings lists there, the installed ones: the column asks
+      `agents.installs` once, when it first draws, as the limit moment does.
+    - **Honest states.** While the usage cannot be read, every circle draws the dashed "No meters" circle, and the
+      claims strip keeps "Usage unavailable · Retry" (§9). With no profiles door at all (the catalog's default),
+      the column is This Mac, dashed, and the add.
+  - **One filter** (SE-D2 A). The lens ring, the search field's token and the search button's token are ONE
+    state, Godview's profile filter (GV-D3's, the stage's `profileTab`). Choosing a profile in any one of them
+    rings its circle, shows the tokens and narrows the stage, and clearing any one clears all three (§8 "Search —
+    the Peek").
+  - **The popover** opens beside a circle while the pointer is on it, and a click pins it. It is a menu's solid in
+    Godview's mode, with its ring and shadow (§2.7), corners **20**, about **566** wide and padded 12 14 11. It
+    stands **16** right of the column with its top 6 above the circle's (the pill's edge), lifted as far as it must
+    be to stay inside the stage.
+    - **The head:** the profile's glyph (15) and its name at 14/600; a **default** tag when there are several
+      profiles (10/600, padded 3 6, a capsule ringed by the strong hairline, in the secondary ink); the reading's
+      age at 11.5 in the tertiary ink; and × at the end, a 24 round on the ink at 6% holding `close` 11 in the
+      secondary ink.
+    - **The body:** the circle at **212** in a 212 column, its arcs answering the pointer (§8 "The Bands circle"),
+      with **the bands key** under it: each of its three words led by its band drawn small (16 × 11), at 10.5/500 in
+      the tertiary ink. Beside it, 14 away, one row per plan in the circle's order: the agent's mark (16), the
+      plan's title (as Agent Profiles names it), the right words at the row's end (a reset led by `reset` 9; in the
+      attention ink when hot), and Settings' C1 line for its tightest window at 196 × 12.
+    - A plan that needs you says so ("not signed in", "couldn't read") with its act. **Sign in** opens Settings →
+      Agent Profiles on that profile's page; **Retry** reads that profile's usage again (`agents.usage` with
+      `refresh: true` and its `profileIds`). No act is inert. An agent with no meter says so in a line of its own,
+      its mark at 12.
+    - **A plan's row** shows only that plan's sessions when clicked (UM-D14, carried A). That is the next wave's,
+      after the desktop's and the phone's slices land (UM-4); until then a row takes no click.
+    - **The foot**, over a hairline, at 11/400 in the tertiary ink: the lens's words (§9 "The meters' words"), and
+      **Agent Profiles…** at its end (600, the secondary ink), which opens Settings → Agent Profiles on that
+      profile's page.
+    - **Pinned**, it holds Godview's keys, so **Esc** closes it before a pane hears it; a click outside closes it
+      too.
+  - **The add** (UM-D21, UM-D22) is a 40 round at the column's foot in the ready fill: the ink at 8%, and 14% under
+    the pointer, the ready fill's own step (the drawing's 12% is not one). It holds `plus` 17 in the tertiary ink
+    (the primary under the pointer). A click opens Settings → Agent Profiles on **New profile…** (`openNewProfile`,
+    the door Godview already has, AO-6b3). While Settings is open there is nothing for it to open, so the add draws
+    disabled: `plus` in t4, and no fill step.
+    - Pointing at it shows **the add's card** 16 right of the column, its top 6 above the add's. It is a menu's
+      solid, 270 wide, corners 16, padded 12 14, with 6 between its lines: **Add a profile…** at 13.5/600; AO-5's
+      offer and fact at 12/1.45 in the secondary ink; and its foot, `gear` 11 and "Opens Settings → Agent Profiles
+      on New profile…" at 11/500 in the tertiary ink.
+    - While the limit moment is due, its card stands in the add's card's place (§8 "The moments").
+  - **The stage around it.** The claims strip moves to x **79** (13 + 52 + 14), its top where it was. The swarm
+    steers around the pill, as around every chrome rectangle, and a view in flow keeps its width clear through the
+    stage's left inset. Its boundary is named **Profiles**, and says "Profiles unavailable" where it stood (§8 "The
+    monitor view owns its drawing").
+  - **Said** as a group, "Agent profiles". Each circle is a button, "‹profile›, tightest 42%", and with several
+    profiles ", click to show only its sessions" or, pressed, ", showing only its sessions". The add is "Add a
+    profile…".
+  - **Reduced motion**, and Godview's animations off: the first read does not breathe, and the ring and the hover
+    change at once.
+  - The phone's half is §8 "The phone's corner" and "The phone's profile token".
 - **The Me menu** (UA-D19, ratified 2026-09-22 — Where You Sit II, design 2B): the owner's
   face replaces the Settings gear at the bottom-left (`bottom-4 left-4`; Godview stays beside
   it, `hud.panel` above both — *Godview's button retired 2026-10-03, FR-1: its cell in the views
@@ -3255,6 +3417,11 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     saw waiting says nothing. The strip says one moment at a time, the limit moment first: a wait
     that clears while the limit moment shows is not said, and a line said stands aside while it
     shows. The line stands until ×, its act, the agent's next state, or the link landing.
+  - *Amended 2026-11-06 (UM-D23 A; the lead's reading, ‹for James›):* the limit moment left the strip for the
+    profiles column's add (§8 "The moments"), so the strip holds this line alone, and the two are independent. A
+    wait is said while the limit card shows, and neither stands aside for the other: TS-D20b's reason, one strip
+    with room for one moment, is gone. The line keeps the row's skin it shared with the limit moment (Godview's
+    instrument skin, corners 10, the 300ms fade). ‹for James: whether the two may stand on the stage at once›.
 - **Finish setting up** (track AO, AO-D10 and AO-D12 ruled 2026-10-27; AO-L6): a step skipped in the
   Setup Assistant stays findable and never asks. At the head of Settings, under the account card, one
   tile lists what was skipped, each as a row with its glyph and its one line — "Bring in your past
@@ -3311,30 +3478,33 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     afresh at the press so nothing another door brought in is revoked; a refusal stays on the row in
     the daemon's words. Either act retires the moment, and the row leaves at once. Answering History's
     pane retires the moment of every agent it asked about, whatever its switch said.
-  - **The limit moment** (AO-D11; *built 2026-10-27, AO-6b; one row since AO-6b3, the same day*): a
-    plan at 90% or more of one of its windows while This Mac is the only profile offers a profile
-    once, on VibeField's claims strip beside Godview's usage column: after the counts on their line,
-    or under them when the stage is too narrow to hold both. It speaks for
+  - **The limit moment** (AO-D11; *built 2026-10-27, AO-6b; one row since AO-6b3, the same day; a card beside the
+    profiles column's add since UM-D23, 2026-11-06*): a plan at 90% or more of one of its windows while This Mac is
+    the only profile offers a profile once, **beside the profiles column's add** (§8 "Godview's profiles column"),
+    standing in place of the add's card. It speaks for
     what Agent Profiles shows: a plan with an agent installed on This Mac and an account it names,
     read as its card reads it (a reading kept after a failed refresh too). It never speaks for a
     budget, a standby allowance, a window already past its reset, or a sign-in that has expired. The
-    fullest window speaks, in **one row**: the plan's badge as Agent Profiles names it (the company's
-    mark and the plan), "92% · 7 days" in the attention ink (§2.7), "**Another subscription?**", and
-    **Add a profile…** (the primary, which opens Settings on Agent Profiles' New profile… form) ·
-    **Not now**. A 2px line along the row's foot fills to the window's use in the attention fill. A
+    fullest window speaks, in **one card**: "**Another subscription?**" at 13.5/600; the plan's line, its badge
+    as Agent Profiles names it (the company's mark at 14 and the plan, at 12.5/600) with "92% · 7 days" at
+    its end in the attention ink (§2.7, at 11.5/600); and **Add a profile…** (the primary, which opens
+    Settings on Agent Profiles' New profile… form) · **Not now**. A
     window that meters one part of the plan says the part, as Agent Profiles heads it: "95% · Opus
-    only · 7 days". The percent rounds as the usage column beside it rounds. "Add it as a profile and
+    only · 7 days". The percent rounds as the column's circle rounds it. "Add it as a profile and
     keep working. Each profile keeps its own sign-ins." is the primary act's description, said to a
     screen reader and not drawn. Either act retires the moment and hands the keyboard to the current
-    view's circle in Godview's head, so closing Settings returns there. The row is Godview's
-    instrument skin (its panel, border and inks), corners 10, entering with the profile notice's
-    300ms fade, a transition never a keyframe, and none under Reduce Motion. Only while it shows does
-    the strip widen to its content and wrap, so its chips otherwise shrink on one line as before; it
-    measures the row, so the swarm steers around it as around the counts. In either place the row
-    ends above the deck's fill line (104), so a raised deck never covers its acts, and the views in
-    flow move down by at most the row and a gap. Under the Last
+    view's circle in Godview's head, so closing Settings returns there; a click on the column's add
+    while the card shows does what Add a profile… does. While Settings is open both draw disabled.
+    The card is a menu's solid in Godview's mode, with its ring and shadow (§2.7): 284 wide, corners 16,
+    padded 12 14 13, its lines 9 apart, and a pointer at the add (a 12 square turned 45°, 6 out of the
+    card's left edge and 28 down, ringed on its two outer sides). Its acts are 26 tall, corners 13,
+    padded 0 11, at 11.5/600. It enters with the profile notice's 300ms fade, a transition never a
+    keyframe, and none under Reduce Motion. It stands over the stage, so it moves no view in flow and
+    widens no strip. ‹for James: a deck raised to the fill line (104) covers it, as it covers the column;
+    that is the card under a raised deck that AO-6b3 moved onto the strip, and the lead reads the add's
+    place as worth it›. Under the Last
     Run curtain it waits: the curtain is the window's one question. It reads the stage's own feeds
-    (the profile filter's sets, the usage column's rows) and opens none of its own.
+    (the profile filter's sets, the column's readings) and opens none of its own.
     *Amended 2026-10-27 (AO-6b3; James, 23:13Z: "go ahead and fix, go with your lean", on the review
     of AO-6b2):* it was a card about 150px tall (the badge and the number over a 4px bar, the title,
     the voice drawn, the acts below), which moved every view in flow about 160px down and could sit
@@ -3344,6 +3514,15 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     strip stands at the head's reserve, 56, and the counts' line and its gap end at about 75, so 29px
     remain before 104), and a row on the counts' own line ends at about 85 (56 to 85, measured at AO-6b3's gate),
     so the row stands there.
+    *Amended 2026-11-06 (UM-D23 A, ruled by James on the page The Bands Meter: "AO-6b's words and rule at a new
+    anchor"; its skin is round 4's card, the lead's reading of the drawing):* it was one row on VibeField's claims
+    strip beside Godview's usage column, after the counts on their line or under them when the stage was too
+    narrow, in Godview's instrument skin (its panel, border and inks; corners 10), with a 2px line along its foot
+    filling to the window's use in the attention fill. The strip widened to its content and wrapped only while the
+    row showed, and the row ended above the deck's fill line, moving the views in flow down by at most the row and
+    a gap. The strip keeps its widening and wrapping, and the row's skin, for the approval line alone, which no
+    longer stands aside for the limit moment (§8 "Asking again", amended the same day). The code moves at UM-2;
+    until then it draws the row this amendment describes.
 - **The desk's chrome** (Chrome on the Mat MC-1…MC-6, 2026-09-28; MC-D1 ruled through One Frame's
   lock and MC-D10 with DK-D23, 2026-10-02; the orchestrator's Phase 4 rulings R1–R25, 2026-10-03,
   cited below as Rn; built on the desk by DK-11…DK-16): **the mat keeps its marks and the chrome
@@ -4926,13 +5105,16 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   presses a control the view shows, its legend is printed on that control, under the glyph in
   readable ink (never an outlined box or a corner digit), as the views track prints ⌘1–⌘4 (§8).
   View loops stop under reduced motion or the stage's animations switch. Each piece of host
-  chrome has its own boundary — the head, the usage column, the profile notice, the claims,
+  chrome has its own boundary — the head, the profiles column, the profile notice, the claims,
   System control, the deck and its edge, each pane's frame, the frames and the launchers: one that
   throws says "‹name› unavailable" where it stood (a deck piece in the deck's unavailable face),
   the monitor and its view stay mounted, and it is tried again only for a fact it is handed, at
-  most once a window (1 s, doubling to 30 s while it keeps failing). (Find stood in this list until
+  most once a window (1 s, doubling to 30 s while it keeps failing). *(Amended 2026-11-06, UM-D21:
+  this said "the usage column", whose boundary, "Usage", becomes the profiles column's, "Profiles", at
+  UM-2.)* (Find stood in this list until
   P2, 2026-10-09: the sheet left VibeField for the frame's Peek — whose Live now rows, live peek and
-  scope-row filters each stand behind a boundary of their own, tried again for the rows, the run
+  filters (the field's tokens and + Filter since SE-D1, 2026-11-06; the scope row's until then) each
+  stand behind a boundary of their own, tried again for the rows, the run
   and the filters they draw, each the same object while its content is.) The head and the profile notice
   read only the window's own state, so they stay
   unavailable until the monitor mounts again (M192). It never
@@ -4973,8 +5155,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   stays in its birth slot at 45%, wake and name, until it scrolls out past the left edge. A
   2 × 12px tick in text-muted marks its last recorded activity. It has no glow and, past that
   tick, no body. It is named by its session's title, else by what ran it and its project. A
-  receding filter (the profile tab) takes it to 30% of that; a narrowing one (the scope row's
-  desktop) removes it, as each does a live row. It is lit and read. In VibeField a click on it,
+  receding filter (the profile lens) takes it to 30% of that; a narrowing one (the desktop
+  filter) removes it, as each does a live row. It is lit and read. In VibeField a click on it,
   Return while it is lit, or its line in the reader's list opens its session in History (TV-8, ruled
   2026-10-11); a session that cannot be opened says why on the status line (§8 "The status line").
   Where no host lends that door (puppeteer's own Godview, the phone) it is never a control. Only a
@@ -5337,6 +5519,13 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   middle of the screen with background all blurred and dimmed" (James, 2 Oct). It is History's
   and, since P2 (2026-10-09; docket v9 PK2/PK4/PK5, all (a)), Godview's: puppeteer's Find sheet
   left VibeField with the bar's FIND, and Live now is the Peek's.
+  *Amended 2026-11-06 (track SE; SE-D1 A "Tokens" and SE-D2 A "one filter everywhere", ruled by James on the page
+  The Bands Meter; UM-D28 A; the drawing is `draft/profile-meters/round4/src/p5-peek.js` and `search.css`, variant
+  `tokens`):* a filter is **one token**, in the field, on the button and as the profiles column's ring, so it never
+  looks two ways. The 48 scope row and its dropdowns retire into the field's end (**+ Filter** and a small switch),
+  and their 48 go back to the list; a typed profile or desktop name offers its filter; live rows say their profile,
+  and the live peek wears a head. GV-D9 stands: the two scopes stay, and B, one list, was declined. Below, each
+  change is said where it stands. Nothing is drawn yet: SE-1 draws it, and until then the scope row stands.
   - **The button** is the frame's: a 40 glass circle (the line's glass, §5) at the head's right end —
     16 in, `top-2`, on the lights' axis — holding `search` 15 in secondary ink (primary under the
     pointer), lifted 8 so **its key is printed under it**, as the views track prints its keys: ⌘F at
@@ -5348,6 +5537,10 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     **With a filter on** (Godview's, GV-D3) the glass grows a token after the circle naming it —
     the desktop's OS mark and name, a hairline, the profile's glyph and name ("studio · Work"), at
     13/500 in primary ink — and a 26 × that clears both: a filtered view never looks unfiltered.
+    **It is one state with the field's tokens and the profiles column's ring** (SE-D2 A, 2026-11-06): the
+    button's token, the field's and the ring are Godview's own filter (GV-D3's), so a filter set in any one shows
+    in all three, and clearing any one clears it everywhere — this × clears the field's desktop and profile tokens
+    and the ring, and a token's × in the field or a click on the ringed circle takes its part off this one.
     **In Godview** it stands in the same place, on the head's own row: the Stories row (§8
     "Godview's head — Stories") is centred on the window and keeps one head gap (12) from it, also
     as its glass widens. *(Until the Stories head, built 2026-10-11, it stood over the instrument
@@ -5389,25 +5582,55 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   - **Top to foot.** **The field**: 64 tall, `search` 18 in tertiary ink 22 in, the words at 20/400
     (−0.01em) in primary ink with the select caret, and at its end **close** — a 40 circle, `close`
     12 lifted 9, **esc printed under it** (9/600, secondary), the ready fill under the pointer. In
-    Everything it says "Search your whole agentic past…". **The scope row**, 48 tall between two
-    hairlines: a **Live now · Everything** segment — the ready fill as its track, padding 3, corners
-    12; each half 28 tall at 12.5/500 in secondary ink, the chosen one solid in primary ink with the
-    hairline and a 1px shadow — then that scope's dropdowns, 30 tall, corners 15, a 13 glyph in
-    secondary ink, the name at 12.5/500 and a turned `chevron` 11 in tertiary (the ready fill under
-    the pointer). Everything's are **Every project · Prompts and replies · Any agent**; Live now's,
-    in Godview, are the view's own filters (GV-D3) — **All desktops** (every desktop's OS mark; a
-    desktop's mark and name, `here` beside this one, its agents or its standing beside each, a
-    desktop not answering quiet) and **Every profile** (the person glyph; a profile's own glyph,
-    filled for the default, `waiting` beside one a session under it waits in) — each offered only
-    when there is a choice to make (two desktops; a profile besides This Mac), and they **filter the
-    view too**: the stage shows what search's Live now shows. History's Live now has none. Each
-    opens a solid menu (§5) 4 under it, and a filter that is on names itself on its dropdown. In
-    Godview the placeholder says "Words said in a live session, a folder, an agent…". **The body**:
-    the list, 380 wide, and the peek beside it, a hairline between them. **The foot**, 52 tall over
-    a hairline: one count sentence at 12/400 in tertiary ink, and **Open** — 32 tall, corners 16,
-    12.5/600 on the ready fill (14% under the pointer) — with **↵ printed on it** in tertiary ink: a
-    live row's says **Open in the terminals**; a past row's **Open at the line** in History and
-    **Open in History** in Godview.
+    Everything it says "Search your whole agentic past…". In Godview the placeholder says "Words said
+    in a live session, a folder, an agent…". **Since SE-D1** (2026-11-06) the field's parts stand 8
+    apart (14 until then), `search` 18 keeps 4 more after it, and in order they are: `search`, **the
+    tokens**, the words (4 in), **the field's end**, and close (each below). **The body**: the list,
+    380 wide, and the peek beside it, a hairline between them; since SE-D1 it is 48 taller, the scope
+    row's. **The foot**, 52 tall over a hairline: one count sentence at 12/400 in tertiary ink, and
+    **Open** — 32 tall, corners 16, 12.5/600 on the ready fill (14% under the pointer) — with **↵
+    printed on it** in tertiary ink: a live row's says **Open in the terminals**; a past row's **Open
+    at the line** in History and **Open in History** in Godview.
+    - **A token** is a filter that is on: 28 tall, padded 0 4 0 8, corners 8, on the ready fill, at
+      13.5/500 in primary ink. It leads with a 12 mark in secondary ink — the desktop's OS mark, the
+      profile's glyph (filled for the default), `folder`, `message`, or the agent's mark — then its
+      name, then its × — an 18 round (corners 9), `close` 8 in tertiary ink, primary on a 10% fill
+      under the pointer (the step the bar's controls take), said "Remove ‹name›". Live now's tokens
+      are the desktop's and the profile's, in that order; Everything's the project's, what was said
+      (only when it is not every kind: "Prompts only", "Replies only") and the agent's. A scope shows
+      only its own: Everything shows no profile or desktop, since it looks through every profile
+      (UM-D28). A token stands only for a filter that was chosen, so This Mac alone (TS-4's unconnected
+      state) draws none. Its × clears that one filter and puts the caret back in the field, the hot
+      row back to the first; a desktop's or a profile's clears it from the stage, the button and the
+      column's ring too (SE-D2). In a narrow popup the tokens ellipsize, and a long query scrolls under
+      them.
+    - **The field's end** holds **+ Filter**, then the small switch, 8 apart, and is not drawn while it holds
+      nothing. **+ Filter** is 28 tall, padded 0 10 0 8, corners 14, `plus` 11 and "Filter" 5 apart at 12.5/500 in
+      secondary ink; primary on the ready fill under the pointer and while its menu is open. It is not drawn when the
+      scope has nothing to filter (History's Live now; Godview with This Mac alone and one profile), as the dropdowns
+      were offered only when there was a choice. **The small switch** is **Live now · Everything**, the scope row's
+      segment made small: the ready fill as its track, padding 2, corners 10; each half 26 tall, padded 0 10, corners
+      8, at 12/500 in secondary ink, the chosen one solid in primary ink with the hairline and a 1px shadow.
+    - **The Filter menu** is a solid menu (§5), right-aligned 4 under the button, at least 240 wide and at most 430
+      tall, scrolling past that, its groups under the menus' eyebrow (mono 10, uppercase, tracked 0.08em, tertiary;
+      `frame/menu.css`). Live now's, in Godview: **Profiles**, only while there is a profile besides This Mac —
+      **Every profile**, then each profile, its glyph 12, "waiting" beside one a session under it waits in, else its
+      sessions ("4 sessions") — then **Desktops** — **All desktops** with its agents ("6 agents"), then each desktop,
+      its OS mark 11 and "name · here" beside this one, its agents or its standing beside it, a desktop not answering
+      quiet; TS-4's ghost row, "Your other devices · Connect…", closes the group, and This Mac alone stands for All
+      desktops while unconnected. Everything's: **Projects** (Every project and each, `folder` 12), **Said by**
+      (Prompts and replies · Prompts only · Replies only) and **Agents** (Any agent and each, its mark 12). Each row
+      is a radio; the chosen one sits in the ready fill, and a pick sets the filter, closes the menu and puts the hot
+      row back to the first. The menu lists Profiles before Desktops, as drawn, while the tokens read the desktop
+      first. Its counts are every session's, whatever the other filter holds.
+    - **These filter the view too** (GV-D3): Live now's desktop and profile are Godview's own, so the
+      stage shows what search's Live now shows. Everything's are the popup's own, for its open.
+    - *Retired 2026-11-06 (SE-D1 A):* **the scope row**, 48 tall between two hairlines under the field:
+      the segment (the ready fill as its track, padding 3, corners 12; halves 28 tall at 12.5/500) and
+      that scope's dropdowns (30 tall, corners 15, a 13 glyph, the name at 12.5/500, a turned
+      `chevron` 11; Everything's **Every project · Prompts and replies · Any agent**, Live now's in
+      Godview **All desktops** and **Every profile**), each opening a solid menu 4 under it and naming
+      its filter on itself. Its 48 went back to the list.
   - **A row is a session** — the root a reader lands in; the lines that matched are its evidence,
     never rows of their own. Its head: the title at 14/600, then the time at 12 `tabular-nums` in
     tertiary ink at the right end (the clock inside today, the day and the clock inside the year, the
@@ -5421,10 +5644,23 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     waiting orange, idle and a shell faint), the session's title (the transcript's, else its folder)
     and, where a past row says its time, its state — **waiting · working · idle · a shell**; under
     it folder · agent ("shell" for a bare terminal), and **a run on another desktop says where it
-    runs** (K10): its OS mark and the desktop's name at 11.5/500 in secondary ink. With words, the
+    runs** (K10): its OS mark and the desktop's name at 11.5/500 in secondary ink. **A run of this
+    Mac's says its profile** (SE-D1 A; UM-D12), 8 after folder · agent: the profile's glyph 11 and its
+    name, at 11.5/500 in secondary ink, only while there is a profile besides This Mac. A peer's run
+    says its desktop alone, since a profile is its own desktop's. With words, the
     runs whose facts or transcript hold every word (puppeteer's find model: the live runs joined to
     rosetta's words), by how many lines matched, then waiting → working → idle → shell; without
     words, every live session in that order, the bare shells last.
+  - **A typed name offers its filter** (SE-D1 A; Live now only). When the last word typed, of 2 letters or more and
+    outside quotes, begins a word of a profile's name or a desktop's that could be chosen and is not, the list's
+    first row offers it, a profile before a desktop: its mark at 15 in a 17 column (4 into the row's padding), "Show
+    only Work's sessions" or "Show only what runs on studio" at 14/600, its sessions at the end ("4 sessions"), and
+    **⇥ printed** on a key cap (20 tall, padded 0 6, corners 6, on the ink at 7%, 11/600 in tertiary ink). Its peek
+    is a 56 circle on the ready fill holding the mark at 24, and under it the row's words and "The field, the button
+    and the stage keep it until you remove it." ("Show only Work's sessions. The field, …"). Open on it says **Add
+    the filter**, with ⇥ printed on it. ⇥, ↵ or a click while it is hot applies it: the filter is set, the word
+    leaves the query, the hot row goes back to the first and the caret stays. The foot's counts leave it out. Its
+    count is every session's, as the menu's are.
   - **A match is neutral, everywhere** (K1): the text's own primary ink at 600 on an 11% wash of it,
     corners 3 — never orange, which means "waiting on you" here (§2.5), and never the select blue.
     The peek too: the round-3 kit's orange line marker was a leftover.
@@ -5436,6 +5672,10 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     draws what fits), takes no focus and types nothing. A run on another desktop cannot be watched
     from here (no mirror until DS-4's): the peek says where it runs and that Open brings its
     terminal into a pane here.
+    **It wears a head** (SE-D1 A, 2026-11-06), the past peek's recipe, 12 above the pane and 8 under the
+    peek's top: the run's title at 15/600, and under it at 12 in tertiary ink its folder, agent, profile
+    (only as its row says one), where it runs — "on this Mac" (`thisDeviceWord`: "on this PC" off the
+    Mac) or "on studio" — and its state, joined by " · ".
   - **The peek** (K8, until the docket's PK3 rules): what opening the row would show. Today, that
     session's matched lines — every hit the index answered for it, in reading order, each led by
     who said it and marked as above, at 13.5/1.55 in primary ink — under the session's title at
@@ -5469,11 +5709,16 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     over this window's fieldd client) when Live now comes to show and closes it when it stops — a
     change of scope, the popup's close, unmount — so Godview itself still asks nothing while closed
     (PF6). Until it answers the foot says "Asking what runs…"; refused, "What runs could not be
-    read — ‹fieldd's words›". (K9's "searched in Godview" retired with it.)
+    read — ‹fieldd's words›". (K9's "searched in Godview" retired with it.) **Everything looks through
+    every profile** (UM-D28 A, 2026-11-06): while Godview's profile filter is on, Everything's foot adds
+    " · every profile; Work comes back on Live now".
   - **Keys** (the kit's): ⌘F opens the popup or refocuses its field, on the view's own scope —
     **Live now in Godview, Everything in History** (GV-D9); **Esc** closes an open menu, then the
-    popup, before anything else hears it; **↑ ↓** move the hot row; **↵** opens it; a click opens a
-    row. **One surface at a time**: the popup is one of the frame's open surfaces, `search`
+    popup, before anything else hears it; **↑ ↓** move the hot row; **↵** opens it, or applies the
+    offered filter; **⇥** applies the offered filter while it is hot; **⌫** with the caret at the
+    field's start and nothing selected removes the last token (SE-D1 A: in Everything the agent's,
+    then what was said, then the project's; in Live now the profile's, then the desktop's); a click
+    opens a row. **One surface at a time**: the popup is one of the frame's open surfaces, `search`
     (§10) — the palette, the pill's sheet (a drawer until HN-8), the Me menu, Settings or a change
     of view fold it, and it folds them; ⌘K over it opens the palette, ⌘F over the palette opens it.
   - **Open in the terminals** (P2). A live row — ↵, a click or Open — folds the popup and, in
@@ -5775,6 +6020,80 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   - About's foot carries the non-affiliation line under Tailscale's trademark line, as one foot.
   - Every **This phone** becomes the platform's own label, read at runtime: **This iPhone**, **This iPad**, or
     **This device** where it is neither (§9).
+  *Amended 2026-11-06 (track UM; UM-D26 A, ruled by James on the page The Bands Meter):* **Agent Profiles is a sheet
+  of its own** in Settings' materials, opened from the corner's Me menu and from the profile token's menu (§8 "The
+  phone's corner"), never a page of this root, which gains no row for it.
+- **The phone's corner — your face, held, and Agent Profiles** (track UM, ruled 2026-11-06 from the page *The Bands
+  Meter*: UM-D24, UM-D25 and UM-D26 A; UM-D8 and UM-D12 carried A at the leans; the drawing is
+  `draft/profile-meters/round4/src/p4f-frames.js` and `round4.css`, the bloom's numbers `p3c-phone.js`). The account
+  corner stands as built (IOS-8b, IOS-9e; `AccountCorner.swift`): your face (42) in a 62 glass circle at the bar's
+  left, the search circle's mirror. A tap grows the Me menu from it on the island curve (600ms): 276 of solid chrome,
+  its corners concentric with the circle, read bottom-up from you — you (your name and login, opening Settings ›
+  Account), **Your desktops** (each its OS mark and its word, orange with a dot when one needs you), Settings…, Lock
+  now (only while the lock is on), Sign in (only while the tailnet asks) and Sign out, farthest. UM adds the meters,
+  read from your home desktop: the phone reads the home's cached batch (`agents.usage` and `agents.usage.subscribe`;
+  UM-D8 A) and runs no poll of its own, and the home's profiles (`agents.profileSets.list`) name them. Nothing is
+  drawn yet: UM-3 draws it.
+  - **At rest the face is plain** (UM-D24 A): no ring, no meter's dot and no lens glyph. A tap is still the menu.
+  - **Hold it** for **520ms**, the spawn bloom's own hold (`FieldMotion.longPressDuration`, puppeteer-views'
+    `holdMs`), with 10 of slop before it opens; a short tap stays the menu's. ‹for James: the page said 450 "as the
+    spawn bloom's does"; the bloom's is 520, so the lead ships the bloom's and the page is corrected at its source›.
+    The haptics and Reduce Motion are the spawn bloom's (§8 "Hold, reach, let go"; `BloomHost`).
+  - **Held**, one layer stands over the whole screen, above the tabs and never clipped to the corner:
+    - a veil, the ground at 82%, fading in over 180ms;
+    - the huge words, 112 from the top: 52/800 in the display stack, tracked −0.045em, a verb in them at 40%; and
+      under them a line in mono 11/700 capitals, tracked 0.08em, in the tertiary ink (§9 "The meters' words");
+    - your face drawn again in its 62 glass where the corner stands, the sticker held (turned −4°, at 1.06),
+      wearing the Bands ring (§8 "The Bands circle": 96 across, the hole 34, the band 8) of its plans, or of the
+      reached profile's.
+  - **With one profile**, the words are **Usage** over "3 read · none need you", and your circle at 206 stands
+    under them on a disc of the ground. Letting go anywhere closes it.
+  - **With several**, the profiles bloom from the face.
+    - The buds are 54: a disc ringed by the ink at 14%, with a shadow, holding the profile's Bands circle at 54 with
+      its glyph and the hot dot. The first four stand at −92°, −70°, −48° and −26°, 160 from the face's centre. A
+      fifth to an eighth stand on a second arc at 224, offset half a step (11°) ‹for James: four angles were drawn,
+      and this is the lead's placement for five to eight›. Past eight ‹for James›.
+    - Each bud is labelled outside itself along its spoke, at `160 + 33 + half × |cos a| + 12 × |sin a|` (38 for
+      the reached bud), where half is `max(letters × 5.7, 40) / 2`: its name in mono 9.5/700 capitals, and its state
+      under it ("42% · 5H", "READING", "NO METER"), in the attention ink when it runs hot.
+    - **The reach:** within 30 of the face is the hub; else the nearest bud within 58 is that bud; else within 52
+      is the hub; anywhere else is nothing. A reached bud grows to 1.16 with a drop shadow and its neighbours
+      shrink to 0.94, in 180ms on the lift curve.
+    - **The words follow the reach:** **Show all** over "8 sessions · every profile" on the hub, **Show Work** over
+      Work's sessions on a bud, and **Cancel** over "let go here to leave the field as it is" on open ground, the
+      verb at 40%. The reached profile's circle stands at 206 under them, or every plan's on the hub.
+    - **Let go** on a bud and the field shows that profile (the lens, §8 "The phone's profile token"); on the face,
+      every profile; on open ground, the field as it was.
+  - **VoiceOver** says the face as "‹name›: account. Hold for your agents' usage." A hold-and-reach cannot be made
+    under VoiceOver, so the face carries an action that opens the Agent Profiles page, where every lens the hold
+    offers is a row ‹for James: the action's name›.
+  - **The Me menu's new row** (UM-D25 A) is **Agent Profiles**, after the desktops' closing hairline, so it stands
+    nearest your name. Its glyph is a Bands circle at 26 of every plan, with nothing in its middle, on the menu's
+    surface. Its word is the tightest percent of the home's plans ("42%"), or "reading…" while the first reading is
+    out, and it is orange with the menu's 6 dot while a plan runs hot. A tap folds the menu and opens the page.
+    The row stands while you are signed in; a home that does not share usage yet says so on the page (§9).
+  - **The Agent Profiles page** (UM-D26 A) is a sheet of its own in Settings' materials (§8 "The phone's
+    Settings"): paper, the large title **Agent Profiles**, close only (iOS 26's `role: .close`), corners 40 as
+    Settings' sheet has. From the top:
+    - **the circle** at 214 (a tap on a plan focuses it), the bands key under it, and where the reading comes from:
+      "Read a minute ago, from studio", or "Reading usage…";
+    - **Profiles**, an inset group on the fill under History's group head. Its rows are 60 tall: a Bands circle at
+      36, the profile's name at 17, its line at 13 in the tertiary ink ("default · the agents' own sign-ins · 2
+      plans"), and its word at 15 (the tightest percent; the attention ink at 600 when hot). With several profiles
+      the group leads with **All profiles** (every plan's circle at 36 with the profiles glyph at 15 in its middle,
+      §13, and "3 profiles · 5 plans"), its rows are the lens with a check on the one shown, and the page follows the
+      lens. With one profile its rows take no tap (UM-D12);
+    - **Plans**, or **Every plan** with several profiles, or **Plans in Work** while the lens is on. Per plan: its
+      agent's mark (18), its title, its sessions ("3 sessions · 1 working · 1 waiting for you") or the age of a
+      kept reading ("as of 5m ago"), every window as Settings' C1 line, and "Runs out in ~35m at this pace" while
+      it would (UM-D4). A plan's **Show** and **Showing** are UM-D14's, the next wave's (UM-4). A plan that needs
+      you says where it is fixed, "Not signed in · sign in on studio" or "Couldn't read · retry", and the phone draws
+      no act for either: it signs in on no desktop, and a phone's refresh spends no call (UM-D8). An agent with no
+      meter is a line of its own, "Codex shows no meter";
+    - **the foot:** "Manage profiles in Settings → Agent Profiles. New profiles are made on a desktop."
+  - The drawing's first-use hint, "Hold your face for your agents' usage", is not drawn: it was not a ruled mark
+    ‹for James›.
+  - The desktop's half is §8 "Godview's profiles column".
 - **The phone's Chat** (track IOS, ruled 2026-11-04 from the design page *Chat in a Pocket*: PC-D1 and PC-D3…D8 A,
   James; PC-D2 carried A; the laws PC-L1…L5). Nothing is drawn yet: IOS-12a carries the wire, and IOS-12b…g draw it,
   in that order. One Chat, two sizes (PC-L1): the Mac's sparks, words, statuses and rulings at touch pitch. Every
@@ -5847,6 +6166,11 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     - **Search opens on Apps as well.** Before you type, a strip headed **Apps** stands above History's search: the
       Recent row and **All apps**. The place is one tap from a control that is always on screen, and typed words
       match apps' titles too. History keeps its own **Recent** for searches.
+      *Amended 2026-11-06 (SE-D3 A and SE-D4 A, ruled by James on the page The Bands Meter; MA's lead's placement):*
+      search is a glass sheet over the field now (§8 "The phone's search"), so the strip stands in the sheet. Before
+      any word it stands above the sheet's **Live now · Everything** switch, in both scopes, and gives way once a
+      word is typed. Typed words match apps' titles as an **Apps** group, first in Everything's results (MA-6's
+      seam, which MA-6 draws).
   - **The cues** (MA-D8 A).
     - **The drop.** A new app arrives as a glass capsule (`liquidGlassCapsule`) that falls out of the Dynamic Island:
       316 × 60, corners 30, its icon at 40, **New app** over its name. It stands **4 s**. A tap opens the app, a
@@ -5855,8 +6179,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       would stand 1.3 under it; whether it stands 4 under each phone's own island is James's, open, with the Stories
       row's (§8 "The phone's Stories row"). It grows down out of the island on §6's island curve (560ms) and goes
       back into it (360ms). One drop shows at a time, and a burst of new apps within 4 s becomes one drop that
-      counts them (its words ‹for James›, §9). It is not shown on search, over the account menu, or while an app
-      is open.
+      counts them (its words ‹for James›, §9). It is not shown while the search sheet is open, over the account
+      menu, or while an app is open. *(Amended 2026-11-06, SE-D3: this said "on search", which was a page until the
+      sheet.)*
     - **The dot.** While an app you have not seen waits, search's circle wears a **10** dot of `--vf-cyan`
       (`ChromePalette.info`): TabMark's unread grammar (PC-D5: cyan is unread, orange is what needs you). Its top
       right stands 12 in from the 62 circle's, ringed 2 in the bar's glass. It rides the circle, never the morph into
@@ -5915,6 +6240,108 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     that cannot open shows its icon at 92 over its state's words on paper, with its one act under them.
   - **Reduced motion** (M6): the zoom becomes a fade (140ms), and the drop and the peek appear in place.
   - The desktop's half is §8 "Artifacts — the Artifacts shelf's contents", as amended 2026-11-05.
+- **The phone's search — a glass sheet over the field** (track SE, ruled 2026-11-06 from the page *The Bands
+  Meter*: SE-D3, SE-D4 and SE-D5 A, and UM-D28 A; the drawing is `draft/profile-meters/round4/src/p6-psearch.js` and
+  `search.css`, its sheet with chips). The phone's one search, the Peek's phone shape (§8 "Search — the Peek"): what
+  runs now first, and your past under it. Search stops being a page (the bar's `search` tab retires), so the page
+  you were on stays under it. Nothing is drawn yet: SE-2 draws the sheet, and MA-6 its Apps strip.
+  - **Opening is unchanged.** The search circle morphs into the bar's search field and its close circle, as built
+    (`SearchBarRow`): 62 at rest, 21 from the sides and the foot; with the keyboard up, 48, 10 from the sides and 8
+    above it. **It opens on Live now, every time.** The page under it stays, under the search scrim (§5: the dim
+    alone, with no blur, fading in over 240ms), and a tap on the scrim closes search.
+  - **The sheet** grows above the field, one more shape in the bar's glass container: 10 from each side, its foot
+    10 above the field's top, as tall as what it holds and never higher than 56 from the screen's top, corners 34.
+    Its glass is the bar's: the system's Liquid Glass where the phone has it, and elsewhere the page's recipe
+    (paper at 90% over a blur of 30 and saturate 1.4, a 0.5 inner edge, a top light, and a shadow of 0 24 60 at
+    18%). It rises from the middle of its foot, 24 up and from 0.94, over 420ms on the island curve.
+  - **From the top:**
+    - **MA-D7's Apps strip** (§8 "The phone's Apps", as amended): before any word, the Recent row and **All apps**,
+      above the switch, in both scopes. It gives way once a word is typed.
+    - **The switch**, **Live now · Everything**, 14 in from the sheet's sides and top and 6 above the chips: on the
+      ink at 8%, padding 2, corners 10; each half 30 tall, corners 8, at 13.5/500, the chosen one on paper with a
+      shadow of 0 1 4 at 14%, at 600.
+    - **The chips** (SE-D5 A): one row under the switch that scrolls across, padded 2 14 8, fading out over its last
+      28 at the right. A chip is 32 tall, corners 16, padded 0 12 0 10, on the ink at 7% (12% pressed), at 14/500:
+      its glyph 13 in the secondary ink, its name, and its count at 13 in the tertiary ink in tabular figures, with
+      a 6 orange dot before the count while a session under it waits on you. A 1 × 18 hairline, the ink at 14%,
+      stands between groups.
+      - Live now's: the profiles, only while there is more than one and less the one chosen, each with its
+        sessions and the waiting dot; then the desktops, less the one chosen, each with its sessions or "asleep".
+      - Everything's: **Prompts** and **Replies** while every kind is asked for, then the projects, less the one
+        chosen.
+      - A chip tapped becomes a token in the field.
+    - **The list**, padded 4 6, its rows 1 apart, each with corners 18, padded 11 14 11 16, 10 between its parts,
+      scrolling.
+    - **The foot**, over a hairline, padded 9 20 14, at 12/500 in the tertiary ink: the drawing's faint is a word
+      that is read, so it takes t3 (§2.4).
+  - **Live now first** (SE-D4 A). Its rows are the field's live sessions, the home's cut over the mesh.
+    - Without words, every live session, the waiting first: waiting → working → idle → a shell. With words, the
+      sessions whose facts (title, folder, agent) and transcript hold every word, the most matched lines first and
+      then in that order.
+    - **A live row** has the 8 state dot (§2.5: working green, waiting orange, idle and a shell faint) and the title
+      its body on the field wears (its folder, and the body's detail line), at 16/600 with the words marked as the
+      Peek marks them. Under it, at 13 in the secondary ink: "folder · agent"; then its profile (its glyph 11 and
+      its name), only while there is more than one profile; then its desktop (its OS mark 11 and its name), only for
+      a run off your home. Then its first matched line, who said it at 12 in the tertiary ink and the line at 14 in
+      the secondary ink, ellipsised. At its end is its state word at 13 in the tertiary ink (waiting, working, idle,
+      a shell).
+    - **A tap** closes search and opens that session's card on Field. Return takes the first row.
+  - **Everything** is History's search, as it was: every desktop's index, its hits by session, a tap landing in
+    History at the line. Before a word it lists your latest sessions, from the corpus the phone holds; where the
+    phone holds none, it keeps the recent searches and says so ("Recent searches"). It takes no profile (UM-D28 A):
+    its field shows no profile token, and its foot says it looks through every profile.
+  - **Tokens in the field** (SE-D5 A). A chosen filter stands after the field's 17 magnifier as a token: 30 tall,
+    corners 15, padded 0 4 0 9, on the ink at 9%, at 14/600; its glyph 13, 5 before its name; and its ×, a 20 round
+    holding `xmark` at 8 in the tertiary ink (§13), that removes it. A second token stands 2 closer to the first. A
+    token pops in from 0.7 on the bar's spring (`AppBar.motion`; the drawing's 260ms curve is not one of §6's, so §6
+    gains none). Live now's tokens read the profile, then the desktop; Everything's, what was said, then the project.
+    The phone has no Backspace removal (the software keyboard reports no Backspace on an empty field); the × is the
+    way.
+  - **The placeholder** is **Search** (§9 "Apps": MA-D7's word, since typed words find apps too), and there is none
+    once two tokens stand. The drawing's "Search sessions" before a token is not taken.
+  - **A typed name offers its filter** at the list's top, when the last word typed has 2 letters or more:
+    - in Live now, the first profile with a word in its name that starts so, while there is more than one profile
+      and none is chosen: "Show only Work's sessions" over "a filter · 4 sessions". Else a desktop's: "Show only
+      what runs on studio" over "a filter · 4 sessions", or "a filter · asleep";
+    - in Everything, a project's: "Only in billing-api" over "a filter".
+    - Its row leads with a 32 round on the ink at 8% holding the glyph at 16, its title at 15/600, and at its end a
+      **Filter** capsule (30 tall, corners 15, on the ink at 8%, at 13.5/600). A tap applies it, drops the word and
+      keeps the keyboard.
+  - **Its words** are §9 "Search's words": the foot's sentences, and each empty list with its one way out.
+  - **One lens** (SE-D2 on the phone): the profile chosen on Field rides into the field as Live now's token, and
+    the token above search (below), the sheet's profile token and Field's lens are one state. Only the profile
+    outlives the sheet: a desktop's token clears when search closes.
+  - **With one profile** nothing in it names a profile: no chip, no pill, no offer and no token (UM-D12).
+  - MA-D8's cyan dot stays on the search circle (§8 "The phone's Apps"), never on the field or the sheet, and the
+    drop is not shown while the sheet is open.
+  - **Reduced motion:** the sheet and the tokens appear in place, and the scrim fades.
+- **The phone's profile token** (track UM, ruled 2026-11-06 from the page *The Bands Meter*: UM-D27 A, after James's
+  note that the face's small glyph was not intuitive; the drawing is `round4.css` `.ltok` and `p4f-frames.js`
+  `lensMark` and `lensMenu`). A chosen profile stands beside search, as the desktop's token does, and never touches
+  the search circle's glass. Nothing is drawn yet: UM-3 and SE-2 draw it.
+  - **Where:** its right edge on the search circle's (21 in), its foot 10 above the circle, at the bar's band
+    (`AppBar.band`: 93 on a phone with a 34 home inset).
+  - **The shape:** 40 tall, corners 20, at most 250 wide, padded 0 7 0 4, its parts 2 apart, in the bar's glass,
+    in a glass container of its own. Ten above the circle is inside the bar's melt (12, `AppBar.meltSpacing`), so
+    in the bar's container it would melt into the circle.
+  - **Its name** is a 32 tall button, corners 16, padded 0 7 0 10: the profile's glyph at 15, then, 7 on, the name
+    at 15/600, ellipsised. It opens the token's menu.
+  - **Its ×** is a 26 round on the ink at 8% holding `xmark` at 10 in the secondary ink (§13). It clears the lens,
+    said "Show every profile".
+  - It grows out of the search circle's middle, from 0.35, on the bar's spring. It shows on Field at rest only, and
+    hides while the face is held, while a menu or a page is open, and while search is open. Chat's note stacks
+    above it.
+  - **The token's menu** wears the Me menu's solid chrome and rows (§8 "The phone's corner"): 262 wide, corners 26,
+    its foot 8 above the token (141 up, with the band at 93), 6 of padding under its last row. It pops from the
+    token, from 0.55, over 380ms on the island curve, and a clear scrim closes it. From the bottom, nearest first:
+    **Every profile** (the profiles glyph at 19, §13) with every session ("8 sessions"); each profile, nearest first,
+    with its glyph 18, its name, its sessions and a 34 check column (a check 14 on the one shown); the eyebrow
+    **Show**; a hairline; and **Agent Profiles…**, its glyph a Bands circle at 26 of every plan, which opens the
+    page. Each profile row is a radio: a pick sets the lens and closes the menu.
+  - **The lens on Field** shows the chosen profile's sessions and recedes the rest, as the desktop's profile filter
+    recedes them. It keys on the home's profiles, so the other desktops' sessions recede too, their profiles being
+    their own.
+  - The desktop's half is §8 "Godview's profiles column" and "Search — the Peek".
 - **The file tree** (mille; 2026-08-09 — first consumer is the History room's files rail,
   `draft/archive/superseded/four-views/design.md` §4): a tree is a **reader** surface, not chrome. It leans on
   the type ramp and hairlines, never on materials — no glass, no card, no shadow (four-views
@@ -6520,6 +6947,82 @@ Inside History the room's own words stand as rosetta wrote them, and the Setup A
 - One row stands by decision. An agent that never says who keeps Settings' "Doesn't say who is signed in" over the
   page's "Signed in · doesn't say which account": VibeField cannot know it is signed in.
 
+**The meters' words** (track UM, ruled 2026-11-06 from the page *The Bands Meter*; where each word stands is §8 "The
+Bands circle", "Godview's profiles column", "The moments", "The phone's corner" and "The phone's profile token").
+They are the agents' words above: a **plan** by its product name, a **profile** by its name. ‹plan› is a plan as
+Agent Profiles names it ("Claude Max"), ‹profile› a profile's name, ‹home› the field's name for your home desktop and
+‹agent› the catalog's label (R23b; never a literal). Words marked ‹for James› are owed to him and are not invented
+here.
+- **A reading.** A window says Settings' words: its label, its percent and its reset ("resets in 2h"). A window that
+  runs out first says **"out in ~35m"** at a meter's end, and "Runs out in ~35m at this pace" under a plan's lines on
+  the phone's page, in the attention ink, the time rounded as §8 "The Bands circle" says ("~4m", "~35m", "~1h 15m").
+  A reading kept after a failed refresh says its age, "as of 5m ago"; one on its way, "reading…". The open circle's
+  middle names its window: "of 5 hours", "of 7 days", "of 7 days · Opus", "of credits".
+- **What needs you.** On the desktop, "not signed in" with **Sign in**, and "couldn't read" with **Retry**. On the
+  phone, "Not signed in · sign in on ‹home›" and "Couldn't read · retry", with no act. An agent with no meter says
+  "‹agent› shows no meter"; a profile with no plans, "No meters".
+- **The popover.** Its head says the reading's age, "Read a minute ago", or "Reading usage…", and **default** beside
+  the default profile's name while there are several. The bands key says "5 hours · 7 days · a model's week" (said
+  "Inside, the next five hours; outside, the week; a hairline, a model's own week"). Its foot, with several
+  profiles: "Click it to show only ‹profile›'s sessions", or "Showing only ‹profile›'s sessions · click it again for
+  all". With one profile the foot's words come with UM-D14's plan filter: "Click a plan to show only its sessions",
+  and "Showing one plan's sessions · click it again for all". Then **Agent Profiles…**.
+- **The add.** **Add a profile…**; AO-5's offer and fact, "Keep work, personal, or client accounts separate. Use
+  accounts side by side without signing each other out."; and "Opens Settings → Agent Profiles on New profile…".
+- **The limit moment** keeps AO-6b's words (§8 "The moments"): **Another subscription?**, "92% · 7 days", **Add a
+  profile…** · **Not now**.
+- **When the meters cannot be read**, the claims strip keeps "Usage unavailable · Retry", and a column that throws
+  says "Profiles unavailable".
+- **The profile notice** (Godview's, as built): **No sessions under ‹profile›**, over "Only this profile's sessions
+  show — the search button's × shows them all again." It stays true under SE-D2, since the button's × clears the
+  filter everywhere. ‹for James: whether it names the column's circle too›.
+- **The phone's hold.** With one profile, **Usage** over "3 read · none need you" ("· 1 needs you", "· 2 need
+  you"). With several, **Show all** over "8 sessions · every profile"; **Show ‹profile›** over its sessions ("3
+  sessions · 1 working · 1 waiting for you", or "No sessions"); and **Cancel** over "let go here to leave the field
+  as it is". A bud says its tightest, "42% · 5H" (a model's own week by its group, "95% · OPUS"), or "READING", or
+  "NO METER". The face says "‹name›: account. Hold for your agents' usage."
+- **The Me menu's row** is **Agent Profiles**, its word the tightest percent ("42%") or "reading…".
+- **The page** is **Agent Profiles**: "Read a minute ago, from ‹home›" or "Reading usage…"; **Profiles**, with **All
+  profiles** ("3 profiles · 5 plans") and each profile's line ("default · the agents' own sign-ins · 2 plans");
+  **Plans**, **Every plan** or **Plans in ‹profile›**, each plan with its sessions as the hold says them, or "no
+  sessions"; and its foot, "Manage profiles in Settings → Agent Profiles. New profiles are made on a desktop." A
+  home that does not share usage yet says "‹home› doesn't share usage yet" on the page and the hold (the lead's
+  words; never a blank), and the Me menu row's word then is ‹for James›.
+- **The token** is said "Showing only ‹profile›", its × "Show every profile". Its menu says **Agent Profiles…**,
+  **Show**, each profile with its sessions ("1 session", "4 sessions"), and **Every profile**.
+- **Said and not drawn:** a circle is "Usage: ‹plan›: 42% of 5 hours, resets in 2h; ‹plan›: not signed in"; the
+  column is "Agent profiles", and its circle "‹profile›, tightest 42%", with ", click to show only its sessions" or
+  ", showing only its sessions".
+
+**Search's words** (track SE, ruled 2026-11-06 from the page *The Bands Meter*: SE-D1…D5 A and UM-D28 A; where each
+word stands is §8 "Search — the Peek" and "The phone's search"). ‹profile›, ‹desktop› and ‹folder› are the names the
+field gives them, and “q” what was typed.
+- **The Peek's filters.** A token says its filter's name ("studio", "Work", "billing-api", "Prompts only", "Replies
+  only", "Codex"), and its × is said "Remove ‹name›". **+ Filter** says "Filter". Its menu's groups are **Profiles**
+  and **Desktops** in Live now, and **Projects**, **Said by** and **Agents** in Everything: **Every profile** ("4
+  sessions"), a profile ("waiting", or "4 sessions"), **All desktops** ("6 agents"), a desktop ("studio · here"),
+  **Every project**, **Prompts and replies** · **Prompts only** · **Replies only**, and **Any agent**.
+- **The Peek's offer.** "Show only ‹profile›'s sessions" or "Show only what runs on ‹desktop›", with its sessions and
+  ⇥. Open on it says **Add the filter**, and its peek "The field, the button and the stage keep it until you remove
+  it."
+- **The live peek's head** says where a run runs, "on this Mac" ("on this PC" off the Mac; `thisDeviceWord`) or "on
+  ‹desktop›".
+- **Everything looks through every profile** (UM-D28): while Godview's profile filter is on, Everything's foot adds
+  " · every profile; ‹profile› comes back on Live now" on the desktop, and " · every profile; ‹profile› comes back on
+  Field" on the phone.
+- **The phone's feet.** Live now: "2 sessions · 3 lines matched" with words; "3 of 8 live sessions, waiting first"
+  while a filter narrows it; else "8 live sessions, waiting first". Everything: "4 sessions matched" with words, else
+  "Your latest sessions" ("Recent searches" where the phone holds no latest sessions), then " in ‹folder›" while a
+  project is chosen and, with words and a kind, ", in your prompts" or ", in their replies".
+- **The phone's empty lists.** Live now with a filter on and no words: "No live session in ‹profile› runs on
+  ‹desktop›." ("No live session in ‹profile› runs right now.", "No live session runs on ‹desktop›."), with **Clear
+  the filters**. With words: "No live session holds every word of “q”.", with **Search everything**. With nothing at
+  all: "Nothing runs right now." Everything: "Nothing in your past holds every word of “q”. Try fewer words."
+- **The phone's chips and offers.** A chip's count is its sessions, or "asleep". An offer is "Show only ‹profile›'s
+  sessions", "Show only what runs on ‹desktop›" or "Only in ‹folder›", over "a filter · 4 sessions", "a filter ·
+  asleep" or "a filter", with **Filter**. A token's × is said "Remove ‹name›". The placeholder is **Search** (§9
+  "Apps").
+
 **Chat's words** (track CO, SP-1d; where each stands is §8 "Chat's list", "Chat's thread" and "Chat's composer").
 - The hello and its starters: "Hi, I'm Vela. I can start agents for you, keep track of the ones you run, and carry
   work between them. What first?" · "Spawn 4 Grok agents to research a topic each" · "Keep track of my agents in
@@ -7065,6 +7568,17 @@ word, should rosetta keep it, maps to no glyph.
 The open app's row (§8 "The phone's Apps") draws ··· as `ellipsis`, already among the phone's picks, and ✕ as the
 system's `xmark`, as the bar's search field draws it, so nothing joins the picks. **`package` stays the shelf's
 mark:** the desktop's door to Apps is still `package` (above), and only its noun moved, to Apps (MA-D13 (a)).
+
+**A meter is never a glyph** (added 2026-11-06, track UM; UM-D16 E). The Bands circle (§8) is drawn from readings,
+as the coin's marks (§2.8) and the crew card's ring are, so it is geometry: one inline drawing on `glyphs.test.tsx`'s
+allowlist, never an icon, and no glyph stands for usage. Its middle holds a profile's own glyph from puppeteer's
+`ProfileGlyph` set, kept outside this set as the vendor marks are (below). Everything else the column and the Peek
+wear is already among the 65: the add and **+ Filter** are `plus`; a token's × and the popover's are `close`; the
+add's card wears `gear`; a reset is led by `reset`; Everything's projects wear `folder`, what was said `message`, and
+**Every profile** keeps `person`. The phone's corner, sheet and token wear SF Symbols, as the corner's rows already
+do (an × is the system's `xmark`, as the bar's search field draws it), and a profile's glyph there is the same
+`ProfileGlyph` vocabulary drawn as SF Symbols, through one presentation table that is tested against the
+vocabulary's list (`ProfileGlyphSymbols`, UM-3). Nothing joins the picks.
 
 **`missing`** (2026-10-03, R2) is the desk's missing face as a mark — a card with two of its 45°
 hatches — for a name the set does not hold; an act that declares no glyph at all shows its label
