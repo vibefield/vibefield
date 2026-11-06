@@ -39,11 +39,15 @@ public actor FreewayDesktopLink {
     /// The desktop's name as the phone shows it, for a refusal's words; its tailnet name's first
     /// label when none is given.
     public var desktopName: String
+    /// This phone's device as its platform names it ("iPhone", "iPad", "device"), for a refusal's words
+    /// (`FreewayApproval.said`): FieldDesign's `DeviceWord.noun`, which the mesh fills (L4's word pass). "device"
+    /// where none is given, never a phone.
+    public var deviceNoun: String
 
     public init(
       dial: @escaping @Sendable () async throws -> any FreewayByteStream, host: String,
       deviceId: String, approve: @escaping @Sendable () async throws -> JSONValue,
-      deviceName: String? = nil, desktopName: String? = nil
+      deviceName: String? = nil, desktopName: String? = nil, deviceNoun: String = "device"
     ) {
       self.dial = dial
       self.host = host
@@ -52,6 +56,7 @@ public actor FreewayDesktopLink {
       self.deviceName = deviceName
       self.desktopName =
         desktopName ?? host.split(separator: ".").first.map(String.init) ?? host
+      self.deviceNoun = deviceNoun
     }
   }
 
@@ -135,7 +140,7 @@ public actor FreewayDesktopLink {
       do {
         approved = try await dialing.approve()
       } catch let refused as FieldProductError {
-        throw FreewayApproval.said(refused, desktop: dialing.desktopName)
+        throw FreewayApproval.said(refused, desktop: dialing.desktopName, device: dialing.deviceNoun)
       }
       let stream = try await dialing.dial()
       // The deadline ends the stream under the handshake, so its pending read returns.

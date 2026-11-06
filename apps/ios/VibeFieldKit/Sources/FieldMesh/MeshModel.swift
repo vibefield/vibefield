@@ -1,3 +1,4 @@
+import FieldDesign
 import FieldFreeway
 import FieldProduct
 import Foundation
@@ -239,7 +240,7 @@ public final class MeshModel {
           connection: try await runtime.node.dial(to: live, port: UInt16(FreewayContract.servePort)))
       },
       host: host, deviceId: deviceId, approve: approve, deviceName: deviceName,
-      desktopName: desktopName)
+      desktopName: desktopName, deviceNoun: DeviceWord.current.noun)
   }
 
   /// This node's own tailnet domain (`studio.tail1234.ts.net` → `tail1234.ts.net`).

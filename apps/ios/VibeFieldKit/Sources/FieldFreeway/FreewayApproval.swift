@@ -35,9 +35,11 @@ public enum FreewayApproval {
   /// A refusal of the ask, said in the phone's words — the desktop by name, the way the attach
   /// card names it ("couldn't reach studio's terminal") — with its kind, retryability and details
   /// kept, so whoever retries still reads the door's own taxonomy. A refusal the phone has no words
-  /// for keeps the door's own.
-  public static func said(_ error: FieldProductError, desktop: String) -> FieldProductError {
-    guard let words = words(error, desktop: desktop) else { return error }
+  /// for keeps the door's own. `device` names the phone's device as its platform names it — "iPhone", "iPad" or
+  /// "device", FieldDesign's `DeviceWord.noun`, which the UI layer gives, since FieldFreeway imports no UI (L4's
+  /// word pass; VF-PM 2026-11-06 04:27Z, ruled (b)).
+  public static func said(_ error: FieldProductError, desktop: String, device: String) -> FieldProductError {
+    guard let words = words(error, desktop: desktop, device: device) else { return error }
     return FieldProductError(
       kind: error.kind, message: words, retryable: error.retryable, details: error.details,
       code: error.code)
@@ -45,25 +47,25 @@ public enum FreewayApproval {
 
   /// The sentence for each refusal the desktops send (`freeway-forwarded-approval.e2e.test.ts`
   /// proves their shapes), in the order the owner checks them.
-  static func words(_ error: FieldProductError, desktop: String) -> String? {
+  static func words(_ error: FieldProductError, desktop: String, device: String) -> String? {
     // The owner refuses a forward with no phone behind it, or one naming a desktop: asking again
     // changes nothing (not retryable), so the words do not promise it will.
     if error.kind == "FORBIDDEN_SCOPE" {
-      return "\(desktop) won't approve a connection from this phone"
+      return "\(desktop) won't approve a connection from this \(device)"
     }
     guard let unavailable = error.unavailable else { return nil }
     switch (unavailable.service, unavailable.state) {
     case (FreewayContract.Approval.service, FreewayContract.Approval.stateUncorrelated):
       // Its roster has not matched this phone's node to a device yet; retryable.
-      return "\(desktop) doesn't know this phone yet"
+      return "\(desktop) doesn't know this \(device) yet"
     case (FreewayContract.Approval.service, FreewayContract.Approval.stateUnread):
       // Its floor's state is not read yet (or the floor predates the freeway); retryable.
-      return "\(desktop) isn't ready for this phone's connection yet"
+      return "\(desktop) isn't ready for this \(device)'s connection yet"
     case (FreewayContract.Approval.service, FreewayContract.Approval.stateDown):
       // Its freeway host is not running: not declared yet, between generations, or parked.
-      return "\(desktop) isn't taking connections from phones right now"
+      return "\(desktop) isn't taking connections from \(device)s right now"
     case (FreewayContract.Approval.service, noDoor):
-      return "this phone isn't connected to its home desktop"
+      return "this \(device) isn't connected to its home desktop"
     case ("peer-link", _):
       // The home's own link to the owner, never a guess about the owner (DS-D13).
       return "your home desktop can't reach \(desktop) right now"
