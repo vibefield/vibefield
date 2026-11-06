@@ -208,6 +208,8 @@ public struct AgentProfileSet: Sendable, Equatable, Identifiable {
   public let plans: [AgentPlan]?
   /// AO-D14 — made by Add a profile… and not kept yet
   public let draft: Bool
+  /// sign-ins and plans this build could not read (logs, never the page)
+  public let droppedRows: [String]
 
   public init(json: JSONValue) throws {
     var object = try WireObject(shape: "AgentProfileSet", value: json)
@@ -221,9 +223,12 @@ public struct AgentProfileSet: Sendable, Equatable, Identifiable {
       if let provider = persona["provider"]?.stringValue, !providers.contains(provider) { providers.append(provider) }
     }
     self.providers = providers
-    personas = []
-    plans = nil
-    draft = false
+    var dropped: [String] = []
+    personas = object.optionalRows("personas", AgentPersona.init(json:), dropped: &dropped)
+    plans =
+      object.array("plans") == nil ? nil : object.optionalRows("plans", AgentPlan.init(json:), dropped: &dropped)
+    draft = object.bool("draft") ?? false
+    droppedRows = dropped
   }
 }
 
@@ -241,12 +246,21 @@ public struct AgentPersona: Sendable, Equatable {
   public let signingIn: Bool
 
   public init(json: JSONValue) throws {
-    profileId = ""
-    provider = ""
-    label = ""
-    kind = ""
-    identity = nil
-    signingIn = false
+    var object = try WireObject(shape: "AgentPersona", value: json)
+    profileId = try object.requiredString("profileId")
+    provider = try object.requiredString("provider")
+    label = object.string("label") ?? profileId
+    kind = object.string("kind") ?? "managed"
+    // an identity is read only with the one fact it is for, whether someone is signed in
+    var said = object.object("identity")
+    if let loggedIn = said.bool("loggedIn") {
+      identity = AgentPersonaIdentity(
+        loggedIn: loggedIn, email: said.string("email"), account: said.string("account"),
+        organization: said.string("organization"), plan: said.string("plan"))
+    } else {
+      identity = nil
+    }
+    signingIn = object.value("signingIn")?.objectValue != nil
   }
 }
 
@@ -285,13 +299,21 @@ public struct AgentPlan: Sendable, Equatable {
   public let alsoIn: [String]
 
   public init(json: JSONValue) throws {
-    id = ""
-    service = AgentSignInService(id: "", label: "")
-    account = nil
-    namedBy = nil
-    borrowedFrom = nil
-    holders = []
-    alsoIn = []
+    var object = try WireObject(shape: "AgentPlan", value: json)
+    id = try object.requiredString("id")
+    var company = object.object("service")
+    let serviceId = try company.requiredString("id")
+    service = AgentSignInService(id: serviceId, label: company.string("label") ?? serviceId)
+    account = try object.decodeObject("account") { raw in
+      var whose = try WireObject(shape: "AgentPlan.account", value: raw)
+      return AgentPlanAccount(
+        email: whose.string("email"), account: whose.string("account"),
+        organization: whose.string("organization"), plan: whose.string("plan"))
+    }
+    namedBy = object.string("namedBy")
+    borrowedFrom = object.string("borrowedFrom")
+    holders = (object.array("holders") ?? []).compactMap(\.stringValue)
+    alsoIn = (object.array("alsoIn") ?? []).compactMap(\.stringValue)
   }
 }
 
