@@ -211,6 +211,17 @@ describe("CP-4a2b — a flow step's turn end (CP4-S2)", () => {
       ["completed", "t1", undefined],
       ["completed", "t2", undefined],
     ]);
+    // FF1 (1i review): a refused duplicate that says its id adds it to the turns told, so a late copy of it, after the
+    // next turn started, is refused on the id road
+    expect(
+      leg(
+        ["turn:started", {}],
+        ["turn:completed", missed],
+        ["turn:completed", { turnId: "t1", ...missed }],
+        ["turn:started", { turnId: "t2" }],
+        ["turn:completed", { turnId: "t1", ...missed }],
+      ),
+    ).toEqual([["completed", undefined, "no json here"]]);
   });
 });
 

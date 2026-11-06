@@ -1431,11 +1431,65 @@ describe("CP-4a2b — a step's answer: heard once, bounded whole, checked agains
     expect(await askOnceMore(h, run)).toEqual({ outcome: "failed", reason: stepFailed("Diff") });
     expect((await settled(h.runs, run, "done")).log).toBe(stepFailed("Diff"));
     expect(Math.max(0, ...most)).toBeLessThanOrEqual(FLOW_LIMITS.STEP_LINES_MAX);
+    // EE1 (F5 review): the bound's road says its cause in fieldd's log, as the refusal's road does
+    expect(h.warned.filter((said) => said.event === "fieldd.flows.step.repair")).toEqual([
+      {
+        event: "fieldd.flows.step.repair",
+        fields: {
+          run,
+          call: 1,
+          n: FLOW_LIMITS.STEP_LINES_MAX,
+          lines: FLOW_LIMITS.STEP_LINES_MAX,
+        },
+      },
+    ]);
     expect(h.enqueued).toHaveLength(2);
     expect(h.kinds(run)).toEqual(["head", "call", "answer", "log", "end"]);
     const record = h.records.runRecord(run);
     expect(record?.held).toBeUndefined();
     expect(record?.steps).toMatchObject([{ call: 1, label: "Diff", state: "failed" }]);
+  });
+
+  it("R22e (F5 review EE2): Ask once more whose repair line is kept, and which its session's queue refuses, fails its step in §9's words, the line kept as sending and the hold dropped", async () => {
+    const h = await harness();
+    const run = await heldOnRepair(h);
+    vi.spyOn(h.runs.ports.inputs, "enqueue").mockImplementationOnce(() => {
+      throw new Error("the session's queue is full");
+    });
+    expect(await askOnceMore(h, run)).toEqual({ outcome: "failed", reason: stepFailed("Diff") });
+    expect(h.warned.map((said) => said.event)).toContain("fieldd.flows.step.repair");
+    expect((await settled(h.runs, run, "done")).log).toBe(stepFailed("Diff"));
+    expect(h.enqueued).toHaveLength(2);
+    const record = h.records.runRecord(run);
+    expect(record?.held).toBeUndefined();
+    expect(record?.steps[0]).toMatchObject({ call: 1, label: "Diff", state: "failed" });
+    expect(record?.steps[0]?.lines?.at(-1)).toEqual({ line: "repair", n: 2, sent: "sending" });
+  });
+
+  it("R22f (F5 review EE2): a first repair line kept, and refused by its session's queue, fails its step in §9's words, the line kept as sending and no item raised", async () => {
+    const h = await harness();
+    h.approved("review", FORMED_CATCHES);
+    const run = startedRun(await h.start({ flow: "review" })).run;
+    await waitFor(() => expect(h.enqueued).toHaveLength(1));
+    vi.spyOn(h.runs.ports.inputs, "enqueue").mockImplementationOnce(() => {
+      throw new Error("the session's queue is full");
+    });
+    h.endTurn({
+      run,
+      call: 1,
+      runtimeRunId: "rt-step1",
+      turn: "t1",
+      outcome: "completed",
+      text: "no json here",
+    });
+    expect((await settled(h.runs, run, "done")).log).toBe(stepFailed("Diff"));
+    expect(h.warned.map((said) => said.event)).toContain("fieldd.flows.step.repair");
+    expect(h.enqueued).toHaveLength(1);
+    expect(h.items).toEqual([]);
+    const record = h.records.runRecord(run);
+    expect(record?.held).toBeUndefined();
+    expect(record?.steps[0]).toMatchObject({ call: 1, label: "Diff", state: "failed" });
+    expect(record?.steps[0]?.lines?.at(-1)).toEqual({ line: "repair", n: 1, sent: "sending" });
   });
 
   it("R23 (D11): an answer is bounded whole: its text is cut to what its fields leave, marked cut; fields alone past the bound are a miss, never a truncation", async () => {
