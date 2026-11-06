@@ -76,6 +76,10 @@ try {
 } catch {
   // said with the problems, below
 }
+// UM-1 (2026-11-06) — the meters' golden, which field-app's one writer writes (perf/lib/phone-goldens.ts) and the
+// phone's meter suites will read in FieldHomeTests. Named here, as an origin and in Q-S8's set below; its required
+// mirror (a requiredMirrors row) and its copy land with the suites that read it (UM's U3 lane, PH-2), not before them.
+const PHONE_BANDS_GOLDEN = "phone-bands.golden.json";
 // Goldens whose origin is another package than the contracts — a design
 // decision both apps compute, not a wire shape — compared byte for byte all
 // the same. PJ-7: the project ink's table (DESIGN.md §2.9), which the design
@@ -108,6 +112,8 @@ const OTHER_ORIGINS = new Map([
   ["phone-toolkit.golden.json", join(PHONE_GODVIEW, "phone-toolkit.golden.json")],
   // PG-4t — the views' faces, which the Stories row draws
   ["phone-marks.golden.json", join(PHONE_GODVIEW, "phone-marks.golden.json")],
+  // UM-1 — the meters' golden
+  [PHONE_BANDS_GOLDEN, join(PHONE_GODVIEW, PHONE_BANDS_GOLDEN)],
   ...phoneViewGoldens.map((name) => [name, join(PHONE_GODVIEW, name)]),
   ...chatFlowGoldens.map((name) => [name, join(CHAT_FLOW, name)]),
 ]);
@@ -376,6 +382,7 @@ for (const [set, fixtures, folders] of requiredMirrors) {
     "phone-body.golden.json",
     "phone-toolkit.golden.json",
     "phone-marks.golden.json",
+    PHONE_BANDS_GOLDEN,
     ...phoneViewGoldens,
   ]);
   let committed = [];

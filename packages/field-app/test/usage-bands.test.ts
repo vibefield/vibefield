@@ -422,7 +422,7 @@ describe("UM-1 — the centre, the marks and the hot dot", () => {
     const geometry = bandsGeometry(212, entries);
     const plan = planAt(geometry, 0);
     const { rim } = radii(212);
-    const spot = (rim + 6.5 + 4.5 + 8) as number;
+    const spot = rim + 6.5 + 4.5 + 8;
     const angle = (plan.from + plan.span / 2) * DEG;
     expect(plan.mark).toMatchObject({ provider: "codex", size: 16, paint: { tone: "attention" } });
     expect(plan.mark?.x).toBeCloseTo(106 + spot * Math.cos(angle), 6);
