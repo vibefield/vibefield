@@ -131,45 +131,8 @@ public enum FieldHistoryModel {
     }
   }
 
-  public static func matchCount(_ groups: [HistoryHitGroup]) -> Int { groups.reduce(0) { $0 + $1.rows.count } }
-
-  /// The head of a group: `3 hits · Today`.
-  public static func groupWords(_ group: HistoryHitGroup) -> String {
-    "\(group.rows.count) \(group.rows.count == 1 ? "hit" : "hits") · \(group.day)"
-  }
-
-  /// The foot's count: what the search found, or why it could not look.
-  public static func searchFoot(query: String, matches: Int, standing: DesktopStanding, desktop: String) -> String {
-    if !standing.isAwake { return "Search needs \(desktop)" }
-    if terms(query).isEmpty { return "Recent searches" }
-    return "\(matches) \(matches == 1 ? "match" : "matches")"
-  }
-
-  /// The quiet state in the list, when there is one to say.
-  public struct Quiet: Equatable, Sendable {
-    public let title: String
-    public let body: String
-  }
-
-  public static func quiet(query: String, kind: SearchKind, matches: Int, corpus: HistoryCorpus, standing: DesktopStanding) -> Quiet? {
-    if !standing.isAwake {
-      return Quiet(
-        title: "\(corpus.desktop) is asleep",
-        body:
-          "Search runs on the desktop's index, so it answers again when \(corpus.desktop) wakes. Everything you already opened is still on screen.")
-    }
-    guard !terms(query).isEmpty, matches == 0 else { return nil }
-    let what: String =
-      switch kind {
-      case .prompts: "prompts"
-      case .replies: "replies"
-      case .any: "prompts or replies"
-      }
-    return Quiet(
-      title: "No \(what) say “\(query.trimmingCharacters(in: .whitespaces))”",
-      body:
-        "Searched \(figure(corpus.sessionCount)) sessions across \(corpus.agentCount) agents on \(corpus.desktop). Every word has to appear — try fewer.")
-  }
+  // RETIRED 2026-11-06 (SE-2): `matchCount`, `groupWords`, `searchFoot` and `quiet` — search's page's count, group
+  // heads, foot and quiet states. The phone's sheet says §9's words through `PhoneSearch` (its feet, its empty lists).
 
   /// The pieces of a hit's text, with the terms marked, so the row can draw
   /// a `mark` per term without regexes in the view.

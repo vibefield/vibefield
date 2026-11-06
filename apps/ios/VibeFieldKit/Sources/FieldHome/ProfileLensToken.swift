@@ -201,23 +201,27 @@ struct ProfileLensToken: View {
 
 /// The token's menu, in the Me menu's solid chrome and rows (§8 "The phone's corner"), top to bottom as it stands:
 /// **Agent Profiles…** (its lead the view slot UM-4's seam gives a Me-menu row; SE-P5b puts the Bands circle at 26
-/// there, and until then the column stands empty), a hairline, the eyebrow **Show**, and the picking rows
+/// there, and until then the column stands empty) and a hairline, the eyebrow **Show**, and the picking rows
 /// (`LensToken.items`), each a radio. The caller lays a clear scrim under it that closes it.
 struct ProfileLensMenu<ViewLead: View>: View {
   let items: [LensToken.Item]
   /// A pick: the lens shows that profile (nil: every profile), and the menu closes.
   let onPick: (String?) -> Void
-  let onAgentProfiles: () -> Void
+  /// Opens the Agent Profiles page (UM-4's PH-4). nil while this build has no page to open: the row and its
+  /// hairline do not stand, rather than a row that opens nothing (SE-P5b hands it on the restack).
+  let onAgentProfiles: (() -> Void)?
   @ViewBuilder let viewLead: () -> ViewLead
 
   var body: some View {
     VStack(alignment: .leading, spacing: 1) {
-      AccountMenuRow(label: LensToken.pageWord, action: onAgentProfiles) { viewLead() }
-      Rectangle()
-        .fill(ChromePalette.separator)
-        .frame(height: 1)
-        .padding(.horizontal, 6)
-        .padding(.vertical, 4)
+      if let onAgentProfiles {
+        AccountMenuRow(label: LensToken.pageWord, action: onAgentProfiles) { viewLead() }
+        Rectangle()
+          .fill(ChromePalette.separator)
+          .frame(height: 1)
+          .padding(.horizontal, 6)
+          .padding(.vertical, 4)
+      }
       ChromeEyebrow(LensToken.eyebrow)
         .padding(.horizontal, 14)
         .padding(.top, 8)

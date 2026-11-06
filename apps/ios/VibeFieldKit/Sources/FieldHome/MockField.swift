@@ -3,6 +3,7 @@
   import FieldMesh
   import FieldProduct
   import FieldSettings
+  import FieldWorkspace
   import Foundation
   import Observation
 
@@ -153,10 +154,34 @@
   }
 
   extension MockAccount {
-    /// SE-2 — Live now's rows under `-vf-mock`. SE-2e (red): none.
-    static func searchRows() -> [RemoteFieldRow] { [] }
+    /// The instant the witness is applied at: the view suites' (`HomeFixture.now`).
+    private static let witnessNow = "2026-11-01T00:00:00.000Z"
 
-    /// SE-2 — the home's profiles under `-vf-mock`. SE-2e (red): none.
-    static func searchProfiles() -> [AgentProfileSet] { [] }
+    /// SE-2 — Live now's rows under `-vf-mock` (the scripted fleet has no rows to search): PG-3a's witness, the
+    /// kit's mirror under `Fixtures/` (held byte for byte by `pnpm check:ios-fixtures`), applied as FieldLink
+    /// applies it, and the window's drawn rows read back — Studio the home (seven rows), Loft a peer through it
+    /// (three), Attic asleep (one, greyed). The shipping adapter (`PhoneSearchWorld`) reads them, never a copy.
+    static func searchRows() -> [RemoteFieldRow] {
+      guard
+        let url = Bundle.module.url(
+          forResource: "agent-remote-mesh-open.witness", withExtension: "json", subdirectory: "Fixtures"),
+        let data = try? Data(contentsOf: url),
+        let json = try? JSONValue.parse(data),
+        let open = try? AgentRemoteMeshOpen(json: json)
+      else { return [] }
+      var copy = RemoteMeshCopy()
+      _ = copy.open(open, now: witnessNow)
+      _ = copy.publish()
+      return copy.drawn()
+    }
+
+    /// SE-2 — the home's profiles under `-vf-mock`: the contracts' golden `agents.profileSets.list` answer, through
+    /// FieldWorkspace's fixture door (This Mac and Work), so the lens offers them.
+    static func searchProfiles() -> [AgentProfileSet] {
+      guard let answer = try? WorkspaceFixtureDoor.fixture("agents-profile-sets.valid"),
+        let result = try? AgentProfileSetsResult(json: answer)
+      else { return [] }
+      return result.sets
+    }
   }
 #endif

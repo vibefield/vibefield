@@ -230,8 +230,8 @@ public enum ChromePalette {
   public static let inkFaint = dynamic(light: 0x1C1C1E, lightAlpha: 0.30, dark: 0xFFFFFF, darkAlpha: 0.32)
   /// `--vf-hairline-strong`: the rules between turns.
   public static let ruleStrong = dynamic(light: 0x000000, lightAlpha: 0.10, dark: 0xFFFFFF, darkAlpha: 0.14)
-  /// A search hit's mark: the term, on a wash of the select hue.
-  public static let markWash = dynamic(light: 0x4A90D9, lightAlpha: 0.18, dark: 0x4A90D9, darkAlpha: 0.30)
+  // RETIRED 2026-11-06 (SE-2): `markWash`, the select hue's wash under search's page's marks. A match is marked as the
+  // Peek marks it now, on the ink at 11% (`searchMark`).
 
   // MARK: - The switch (IOS-10a)
 

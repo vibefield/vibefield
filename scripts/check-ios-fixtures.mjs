@@ -333,6 +333,8 @@ const requiredMirrors = [
   // SE-2 — search's answers: both readers' suites, and the DEBUG fixture door's answer (`HistoryFixtureDoor`)
   ["search", searchFixtures, ["Tests/FieldHistoryTests", "Tests/FieldProductTests"]],
   ["search", searchFixtures.slice(0, 1), ["Sources/FieldHistory"]],
+  // SE-2 — Live now's rows under `-vf-mock` (`MockAccount.searchRows`): the witness's open, in FieldHome's bundle
+  ["search", ["agent-remote-mesh-open.witness.json"], ["Sources/FieldHome"]],
   ["launch", launchFixtures, ["Tests/FieldProductTests"]],
   ["launch", sheetFixtures, ["Tests/FieldWorkspaceTests"]],
   ["launch", sheetFixtures.slice(0, 2), ["Sources/FieldWorkspace"]],

@@ -3,13 +3,13 @@ import FieldDesign
 import FieldHistory
 import SwiftUI
 
-/// The phone's views and search (D-i10): Field, History and, since IOS-12b,
-/// Chat (PC-D1 A), and search as a page of its own that the bar's circle opens.
+/// The phone's views (D-i10): Field, History and, since IOS-12b, Chat (PC-D1
+/// A). Search is no page (SE-D3 A, 2026-11-06): the bar's circle opens a
+/// glass sheet over the page that stands (`PhoneSearchSheet`).
 enum AppTab: Hashable {
   case field
   case history
   case chat
-  case search
 
   /// The capsule's tabs, in order: Chat stands third (PC-D1 A).
   static let capsule: [AppTab] = [.field, .history, .chat]
@@ -20,7 +20,6 @@ enum AppTab: Hashable {
     case .field: "Field"
     case .history: "History"
     case .chat: "Chat"
-    case .search: "Search"
     }
   }
 }
@@ -296,6 +295,8 @@ struct SearchBarRow: View {
   let glass: Namespace.ID
   let tokens: [PhoneSearch.Token]
   let onRemove: (PhoneSearch.Filter) -> Void
+  /// Return: the first row opens (§8).
+  let onSubmit: () -> Void
   let onClose: () -> Void
 
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -320,7 +321,7 @@ struct SearchBarRow: View {
           .submitLabel(.search)
           .textInputAutocapitalization(.never)
           .autocorrectionDisabled()
-          .onSubmit { focus.wrappedValue = false }
+          .onSubmit(onSubmit)
         if !query.isEmpty {
           Button {
             query = ""
@@ -395,8 +396,8 @@ struct FieldToken: View {
 
 extension View {
   /// A page under the bar: drawn and touchable only while it is the one
-  /// standing — all three stay alive, so a History stack or a search keeps
-  /// its place across a switch, the way a `TabView`'s tabs do.
+  /// standing — all three stay alive, so a History stack or Chat's thread
+  /// keeps its place across a switch, the way a `TabView`'s tabs do.
   func page(visible: Bool) -> some View {
     opacity(visible ? 1 : 0)
       .allowsHitTesting(visible)

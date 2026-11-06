@@ -357,36 +357,5 @@ public struct HistoryLedgerView: View {
   }
 }
 
-/// SP-6 — a desktop's head over its ledger when the tab groups more than one:
-/// the name, the home's mark, and the standing's dot.
-struct DesktopHead: View {
-  let name: String
-  let standing: FieldHistoryModel.DesktopStanding
-  let isHome: Bool
-
-  var body: some View {
-    HStack(spacing: 8) {
-      Circle()
-        .fill(standing.isAwake ? ChromePalette.green : ChromePalette.inkFaint)
-        .frame(width: 7, height: 7)
-      Text(name)
-        .font(ChromeType.sans(17, .semibold))
-        .foregroundStyle(ChromePalette.ink)
-      if isHome {
-        Text("home")
-          .font(ChromeType.sans(10.5, .medium))
-          .textCase(.uppercase)
-          .tracking(ChromeType.tracking(0.07, of: 10.5))
-          .foregroundStyle(ChromePalette.inkFaint)
-          .padding(.horizontal, 7)
-          .frame(height: 18)
-          .background(Capsule().fill(ChromePalette.fill))
-      }
-      Spacer(minLength: 0)
-    }
-    .padding(.horizontal, HistoryParts.sidePadding)
-    .padding(.top, 26)
-    .padding(.bottom, 6)
-    .accessibilityElement(children: .combine)
-  }
-}
+// RETIRED 2026-11-06 (SE-2): `DesktopHead`, a desktop's head over search's page's hits when more than one desktop
+// answered. Its one reader, `HistorySearchView`, retired with the page.

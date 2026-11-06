@@ -97,6 +97,10 @@ enum SearchSheet {
   /// The scrim fades in and out over 240ms, under Reduce Motion too.
   static var scrimTransition: AnyTransition { .opacity.animation(FieldMotion.plainEase(scrimFade)) }
 
+  /// The words are asked after a pause in typing: the record's own debounce for a question that crosses a radio
+  /// (History's search page's, retired with it).
+  static let askAfter: Duration = .milliseconds(350)
+
   private struct Rise: ViewModifier {
     let risen: Bool
 

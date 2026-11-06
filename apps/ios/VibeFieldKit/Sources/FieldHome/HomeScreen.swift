@@ -117,17 +117,14 @@ public struct HomeScreen: View {
   /// destructive, and the sentence says what goes and what stays.
   @State private var signOutPending = false
   // --- IOS-9a/9e: the two tabs, search, and the account in one bar ---------
-  /// Which page stands: the field, History, Chat (IOS-12b), or search.
+  /// Which page stands: the field, History or Chat (IOS-12b). Search stands over it (SE-2).
   @State private var selectedTab: AppTab = .field
-  /// The page search goes back to when it closes.
-  @State private var tabBeforeSearch: AppTab = .field
   /// IOS-12b — Chat's feed, through the home (its one door), and the threads'
   /// marks (SP-1d): both for the app's life, written nowhere.
   @State private var chat = ChatFeed()
-  /// UM-4 — the meters, through the home (its one door, UM-D8 A), the one lens on its profiles, and the Agent
-  /// Profiles page's sheet.
+  /// UM-4 — the meters, through the home (its one door, UM-D8 A), and the Agent Profiles page's sheet. The one lens
+  /// on the home's profiles stands with search's state (SE-2): the page, the hold and the token set that one value.
   @State private var meters = MetersFeed()
-  @State private var lens = ProfileLens()
   @State private var agentProfilesOpen = false
   /// UM-4 (UM-D24 A) — the held face's standing (a let-go or a hold taken away closes it), and where the corner's
   /// face stands in the window.
@@ -155,10 +152,23 @@ public struct HomeScreen: View {
     /// from the cache with the door gone).
     @State private var demoHistory = false
   #endif
-  /// Search's words and kind: the bar's field writes them, the page reads them.
+  /// SE-2 (SE-D3 A) — search, a glass sheet over the page that stands: whether it is open, its words (the bar's
+  /// field writes them), its own state (the scope, Everything's kind and project) and the field's focus.
+  @State private var searchOpen = false
   @State private var searchQuery = ""
-  @State private var searchKind: FieldHistoryModel.SearchKind = .any
+  @State private var search = SearchState()
   @FocusState private var searchFocused: Bool
+  /// SE-2 (SE-D2 on the phone, UM-D27 A) — the phone's ONE lens (UM-4's seam): the profile the field shows and
+  /// search's profile token, and the desktop search keeps to; and whether the token's menu is open.
+  @State private var lens = ProfileLens()
+  @State private var lensMenuOpen = false
+  /// The screen's full height, read beside `homeInset`: where the search field's top stands (`searchFieldTop`).
+  @State private var screenHeight: CGFloat = 874
+  #if DEBUG
+    /// `-vf-mock`: Live now's rows and the home's profiles (`MockAccount.searchRows`, `searchProfiles`), read once.
+    @State private var mockSearchRows: [RemoteFieldRow] = []
+    @State private var mockProfiles: [AgentProfileSet] = []
+  #endif
   /// The home indicator's inset, read with the keyboard ignored: the bar
   /// rests where iOS 26 rests its own (`AppBar.bottomGap`), and rides the
   /// keyboard only while search is typing.
@@ -511,6 +521,20 @@ public struct HomeScreen: View {
       .swarmObstacle()
       .allowsHitTesting(false)
       .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+    // SE-2 (UM-D27 A; DESIGN.md §8 "The phone's profile token") — the chosen profile above the search circle, on
+    // Field at rest only, growing out of the circle; the swarm keeps out of it while it stands (its own obstacle)
+    Color.clear
+      .overlay(alignment: .bottomTrailing) {
+        if let profile = lens.chosen, lensTokenShows {
+          ProfileLensToken(
+            profile: profile, menuOpen: lensMenuOpen, onMenu: { lensMenuOpen.toggle() },
+            onClear: { lens.show(nil) }
+          )
+          .transition(LensToken.grow(reduceMotion: reduceMotion))
+        }
+      }
+      .padding(.trailing, LensToken.right)
+      .padding(.bottom, LensToken.bottom(homeInset: homeInset))
     // RETIRED 2026-09-23 (IOS-8g): the TERMINAL chip in the top-right. What it
     // opened is the session card's `···` now; the field's corners are the
     // account's and the tab bar's.
@@ -819,13 +843,13 @@ public struct HomeScreen: View {
   /// Three pages under one bar. `TabView` hosted them until IOS-9e; its bar
   /// could not seat the account at the left (see `AppBar`), so the pages are
   /// stacked here and kept alive, the way a TabView keeps its tabs, and the
-  /// bar is ours.
+  /// bar is ours. Search stands over whichever page stands (SE-2: the scrim
+  /// and the sheet are the bar's).
   private var tabs: some View {
     ZStack {
       fieldTab.page(visible: selectedTab == .field)
       historyTab.page(visible: selectedTab == .history)
       chatTab.page(visible: selectedTab == .chat)
-      searchTab.page(visible: selectedTab == .search)
     }
     .background { chatHooks }
     .background { metersHooks }
@@ -838,9 +862,13 @@ public struct HomeScreen: View {
           .onAppear {
             homeInset = geo.safeAreaInsets.bottom
             safeTop = geo.safeAreaInsets.top
+            screenHeight = geo.size.height + geo.safeAreaInsets.top + geo.safeAreaInsets.bottom
           }
           .onChange(of: geo.safeAreaInsets.bottom) { _, inset in homeInset = inset }
           .onChange(of: geo.safeAreaInsets.top) { _, inset in safeTop = inset }
+          .onChange(of: geo.size.height + geo.safeAreaInsets.top + geo.safeAreaInsets.bottom) { _, height in
+            screenHeight = height
+          }
       }
       .ignoresSafeArea(.keyboard)
     }
@@ -851,10 +879,9 @@ public struct HomeScreen: View {
           .onChange(of: geo.safeAreaInsets.bottom) { _, inset in keyboardInset = inset }
       }
     }
-    .onChange(of: selectedTab) { _, tab in
-      history.barMinimized = false
-      if tab != .search { searchFocused = false }
-    }
+    .onChange(of: selectedTab) { history.barMinimized = false }
+    // SE-2 — the lens keys on the home's profiles: read again whenever the home's answer moves
+    .onChange(of: homeProfiles, initial: true) { _, sets in lens.adopt(sets) }
     // Every push and pop opens the bar again, the way the system's does.
     .onChange(of: history.path) { history.barMinimized = false }
   }
@@ -956,15 +983,20 @@ public struct HomeScreen: View {
     }
   }
 
-  /// The note, 12 above the bar's row, while another page stands (search keeps the bar's place).
+  /// The note, 12 above the bar's row, while another page stands and search is closed (it keeps the bar's place);
+  /// above the profile token while the token stands (§8 "The phone's profile token": Chat's note stacks above it).
   @ViewBuilder
   private var chatNoteOverlay: some View {
-    if let spark = chatNote, selectedTab != .chat, selectedTab != .search, !accountMenuOpen, faceHold.held == nil {
+    if let spark = chatNote, selectedTab != .chat, !searchOpen, !accountMenuOpen, faceHold.held == nil {
       ChatNoteView(spark: spark) {
         chatNote = nil
         selectedTab = .chat
       }
-      .padding(.bottom, AppBar.bottomGap(homeInset: homeInset) + AppBar.height + ChatNoteView.gap)
+      .padding(
+        .bottom,
+        (lensTokenShows
+          ? LensToken.bottom(homeInset: homeInset) + LensToken.height
+          : AppBar.bottomGap(homeInset: homeInset) + AppBar.height) + ChatNoteView.gap)
       .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
       .ignoresSafeArea(.container, edges: .bottom)
       .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -1079,24 +1111,150 @@ public struct HomeScreen: View {
       chat.reading, home: linkHome, homeListed: linkDesktops.contains { $0.deviceId == linkHome }, name: chatName)
   }
 
-  private var searchTab: some View {
-    HistorySearchView(
-      desktops: historyDesktops.readers, query: $searchQuery, kind: $searchKind,
-      onLand: { landing, query in
-        // A hit lands in History: the router pushes where it lives, and the
-        // switch follows.
-        searchFocused = false
-        history.land(landing, query: query)
-        selectedTab = .history
-      },
-      onSearch: { words, kind in
-        // SP-6 — the words asked of every desktop that answers
-        Task { await historyDesktops.search(words, kind: kind) }
+  // MARK: - SE-2: search, a glass sheet over the page that stands
+
+  /// The home's profiles, the lens's (UM-4's seam keys on the home's): the home's own answer, or the mock's.
+  private var homeProfiles: [AgentProfileSet] {
+    #if DEBUG
+      if mock != nil { return mockProfiles }
+    #endif
+    return linkHome.flatMap { bloomProfiles[$0] } ?? []
+  }
+
+  /// Live now's world: the window's drawn rows (the mock's witness under `-vf-mock`), the desktops, the lens's
+  /// profiles and the live ask's lines.
+  private var searchLive: PhoneSearch.Live {
+    #if DEBUG
+      if mock != nil {
+        return PhoneSearchWorld.live(
+          rows: mockSearchRows, desks: PhoneSearchWorld.desks(rows: mockSearchRows), lens: lens,
+          lines: historyDesktops.liveLines(searchQuery))
       }
+    #endif
+    return PhoneSearchWorld.live(
+      rows: link?.rows ?? [], desks: PhoneSearchWorld.desks(linkDesktops, home: linkHome), lens: lens,
+      lines: historyDesktops.liveLines(searchQuery))
+  }
+
+  /// What the sheet draws, from the lens, search's state, Live now's world, each desktop's answer and the ledger.
+  private var searchContent: SearchSheetContent {
+    PhoneSearchWorld.content(
+      search, query: searchQuery, lens: lens, live: searchLive,
+      answers: historyDesktops.readers.map { reader in
+        let groups = FieldHistoryModel.visibleHits(query: searchQuery, kind: .any, in: reader.corpus)
+        return (corpus: reader.corpus, groups: groups)
+      },
+      latest: historyDesktops.projects.corpus, agentLabel: { $0 })
+  }
+
+  /// Where the search field's top stands from the screen's top: at rest on the bar's row, typing above the keys.
+  private var searchFieldTop: CGFloat {
+    barTyping
+      ? screenHeight - keyboardInset - AppBar.gapAboveKeyboard - AppBar.fieldHeightTyping
+      : screenHeight - AppBar.bottomGap(homeInset: homeInset) - AppBar.height
+  }
+
+  /// The sheet, over the bar's row in the bar's glass container: 10 from the sides, its foot 10 above the field.
+  private var searchSheet: some View {
+    let content = searchContent
+    return PhoneSearchSheet(
+      content: content, maxHeight: SearchSheet.maxHeight(fieldTop: searchFieldTop), glass: barGlass,
+      onScope: { scope in search.scope = scope },
+      onChip: { filter in applySearchFilter(filter, in: content) },
+      onOffer: { filter in
+        // a tap applies it, drops the word it was typed as and keeps the keyboard
+        applySearchFilter(filter, in: content)
+        searchQuery = PhoneSearch.droppingLastWord(searchQuery)
+      },
+      onLive: openLiveRow, onPast: openPastRow,
+      onAct: { act in PhoneSearchWorld.act(act, state: &search, lens: &lens) },
+      // MA-6's seams (MA-D7): the Apps strip and Everything's Apps group, empty until MA-6 fills them
+      appsStrip: { EmptyView() }, appsGroup: { EmptyView() }
     )
-    .safeAreaInset(edge: .bottom, spacing: 0) {
-      Color.clear.frame(height: AppBar.clearance(homeInset: homeInset, stepper: false))
+    .padding(.horizontal, SearchSheet.side)
+    .padding(.bottom, (barTyping ? AppBar.fieldHeightTyping : AppBar.height) + SearchSheet.gapAboveField)
+    .task(id: "\(searchQuery)|\(search.scope.rawValue)") { await askSearch() }
+  }
+
+  /// The words, asked after a pause in typing (the record's own debounce for a question that crosses a radio): Live
+  /// now's of each desktop over its own live runs, Everything's of every desktop's index.
+  private func askSearch() async {
+    let words = searchQuery.trimmingCharacters(in: .whitespaces)
+    guard !words.isEmpty else { return }
+    try? await Task.sleep(for: SearchSheet.askAfter)
+    guard !Task.isCancelled else { return }
+    switch search.scope {
+    case .live: await historyDesktops.searchLive(words, runs: PhoneSearchWorld.runs(searchLive))
+    case .everything: await historyDesktops.search(words, kind: search.kind)
     }
+  }
+
+  /// A chip's or an offer's filter, named as the chip names it (a project's token keeps the name).
+  private func applySearchFilter(_ filter: PhoneSearch.Filter, in content: SearchSheetContent) {
+    let label = content.chips.joined().first { $0.filter == filter }?.label ?? ""
+    PhoneSearchWorld.apply(filter, label: label, state: &search, lens: &lens)
+  }
+
+  /// The search circle becomes the field (their shared `glassID`), the sheet rises over the page that stands, on
+  /// Live now every time, and the keyboard comes up once the field exists to take it.
+  private func openSearch() {
+    search = SearchState()
+    lensMenuOpen = false
+    searchOpen = true
+    Task {
+      try? await Task.sleep(for: .milliseconds(120))
+      searchFocused = true
+    }
+  }
+
+  /// Search closes: only the profile outlives it (the lead's ruling 21) — the desktop's token, the kind and the
+  /// project clear.
+  private func closeSearch() {
+    searchFocused = false
+    searchOpen = false
+    search = SearchState()
+    lens.searchClosed()
+  }
+
+  /// A live row: search closes and its body's card opens on Field.
+  private func openLiveRow(_ row: PhoneSearch.LiveRow) {
+    closeSearch()
+    selectedTab = .field
+    if let bubble = bubbles.first(where: { $0.id == row.id }) { openCard(on: bubble) }
+  }
+
+  /// A past row: History at its first matched line (the stepper holding the words), or the session itself.
+  private func openPastRow(_ row: PhoneSearch.PastRow) {
+    let corpus =
+      historyDesktops.readers.first { $0.deviceId == row.device }?.corpus ?? historyDesktops.projects.corpus
+    let target = PhoneSearch.target(row, corpus: corpus, query: searchQuery)
+    closeSearch()
+    switch target {
+    case .landing(let landing, let query):
+      history.land(landing, query: query)
+    case .session(let device, let projectId, let id):
+      let project = projectId.map { [HistoryRouter.Route.project(id: $0)] } ?? []
+      history.path = project + [.session(device: device, id: id)]
+    case .card:
+      return
+    }
+    selectedTab = .history
+  }
+
+  /// Return: the first row opens.
+  private func submitSearch() {
+    switch searchContent.rows {
+    case .live(let rows): if let first = rows.first { openLiveRow(first) }
+    case .past(let rows): if let first = rows.first { openPastRow(first) }
+    }
+  }
+
+  /// SE-2 — the profile token stands on Field at rest only (`LensToken.shows`). No face is held on this build (UM-4's
+  /// PH-5 brings the hold; SE-P5b passes it).
+  private var lensTokenShows: Bool {
+    LensToken.shows(
+      lens, onField: selectedTab == .field, searchOpen: searchOpen, faceHeld: false, menuOpen: accountMenuOpen,
+      pageOpen: selection != nil || settingsSheetOpen)
   }
 
   /// The bar (IOS-9e): the account at the left, the tabs at the centre,
@@ -1116,6 +1274,35 @@ public struct HomeScreen: View {
           .ignoresSafeArea()
           .onTapGesture { setAccountMenu(open: false) }
       }
+      // SE-2 — the page under search wears the search scrim (§5: its dim alone, no blur); a tap on it closes search
+      if searchOpen {
+        SearchScrim(onClose: closeSearch)
+          .transition(SearchSheet.scrimTransition)
+      }
+      // SE-2 — the profile token's menu, over a clear scrim that closes it, its foot 8 above the token
+      if lensMenuOpen {
+        Color.clear
+          .contentShape(Rectangle())
+          .ignoresSafeArea()
+          .onTapGesture { lensMenuOpen = false }
+      }
+      Color.clear
+        .overlay(alignment: .bottomTrailing) {
+          if lensMenuOpen, lensTokenShows {
+            ProfileLensMenu(
+              items: LensToken.items(lens, live: searchLive),
+              onPick: { id in
+                lens.show(id)
+                lensMenuOpen = false
+              },
+              // UM-4's Agent Profiles page is not on this build: SE-P5b hands the row its page and its Bands circle
+              onAgentProfiles: nil, viewLead: { EmptyView() }
+            )
+            .transition(LensToken.pop(reduceMotion: reduceMotion))
+          }
+        }
+        .padding(.trailing, LensToken.right)
+        .padding(.bottom, LensToken.menuBottom(homeInset: homeInset))
       if !barAside {
         barRow
           .padding(.bottom, barTyping ? AppBar.gapAboveKeyboard : AppBar.bottomGap(homeInset: homeInset))
@@ -1132,7 +1319,7 @@ public struct HomeScreen: View {
   @ViewBuilder
   private var barRow: some View {
     ZStack(alignment: .bottom) {
-      if selectedTab != .search && !barFolded {
+      if !searchOpen && !barFolded {
         accountCorner
           .padding(.leading, AppBar.margin)
           .frame(maxWidth: .infinity, alignment: .bottomLeading)
@@ -1147,11 +1334,15 @@ public struct HomeScreen: View {
           } else if let session = slotSession {
             sessionSlot(session)
           }
-          if selectedTab == .search {
-            // SE-2c: the field holds no token until SE-2e hands it the sheet's.
+          if searchOpen {
+            // SE-2 — the sheet is one more shape in the bar's glass container, over the field and its tokens
+            searchSheet
+              .transition(SearchSheet.transition(reduceMotion: reduceMotion))
             SearchBarRow(
-              query: $searchQuery, focus: $searchFocused, typing: barTyping, glass: barGlass, tokens: [],
-              onRemove: { _ in }, onClose: closeSearch
+              query: $searchQuery, focus: $searchFocused, typing: barTyping, glass: barGlass,
+              tokens: searchContent.tokens,
+              onRemove: { filter in PhoneSearchWorld.remove(filter, state: &search, lens: &lens) },
+              onSubmit: submitSearch, onClose: closeSearch
             )
             .padding(.horizontal, barTyping ? AppBar.marginTyping : AppBar.margin)
           } else if !accountMenuOpen {
@@ -1179,6 +1370,7 @@ public struct HomeScreen: View {
   /// animation here would override it.
   private struct BarState: Equatable {
     var tab: AppTab
+    var search: Bool
     var folded: Bool
     var stepper: Bool
     var typing: Bool
@@ -1188,21 +1380,25 @@ public struct HomeScreen: View {
 
   private var barState: BarState {
     BarState(
-      tab: selectedTab, folded: barFolded, stepper: barStepper || slotProject != nil || slotSession != nil,
-      typing: barTyping, aside: barAside)
+      tab: selectedTab, search: searchOpen, folded: barFolded,
+      stepper: barStepper || slotProject != nil || slotSession != nil, typing: barTyping, aside: barAside)
   }
 
   /// IOS-12c — a thread stands on Chat, and its composer is in the bar's place.
   private var barAside: Bool { selectedTab == .chat && chatThread != nil }
 
-  /// History's scroll has folded the bar to its glyph (the page's minimize).
-  private var barFolded: Bool { selectedTab == .history && history.barMinimized && !accountMenuOpen }
-  /// A landed search is on top: the stepper rides the bar.
-  private var barStepper: Bool { selectedTab == .history && history.stepperShowing && !accountMenuOpen }
+  /// History's scroll has folded the bar to its glyph (the page's minimize); search open over it unfolds it.
+  private var barFolded: Bool {
+    selectedTab == .history && history.barMinimized && !accountMenuOpen && !searchOpen
+  }
+  /// A landed search is on top: the stepper rides the bar (not while search stands over the page).
+  private var barStepper: Bool {
+    selectedTab == .history && history.stepperShowing && !accountMenuOpen && !searchOpen
+  }
   /// PJ-7 — a project on top of History's stack, no landed search holding the
   /// slot: New agent stands there (TP §6.3).
   private var slotProject: String? {
-    guard selectedTab == .history, !history.stepperShowing, !accountMenuOpen,
+    guard selectedTab == .history, !history.stepperShowing, !accountMenuOpen, !searchOpen,
       case .project(let key)? = history.path.last
     else { return nil }
     return key
@@ -1211,7 +1407,7 @@ public struct HomeScreen: View {
   /// system's typing size. Focus alone is not enough — with a hardware
   /// keyboard the field is focused and no keyboard rises, and the row stays
   /// where it rests.
-  private var barTyping: Bool { selectedTab == .search && keyboardInset > homeInset + 40 }
+  private var barTyping: Bool { searchOpen && keyboardInset > homeInset + 40 }
 
   private var accountCorner: some View {
     // WI-3 — Lock now, only while the lock is on
@@ -1365,7 +1561,7 @@ public struct HomeScreen: View {
   /// PJ-7 — a session on top of History's stack, no landed search holding the
   /// slot: its act (Resume, Jump to, or why not) stands there (TP §6.3).
   private var slotSession: HistorySession? {
-    guard selectedTab == .history, !history.stepperShowing, !accountMenuOpen,
+    guard selectedTab == .history, !history.stepperShowing, !accountMenuOpen, !searchOpen,
       case .session(let device, let id)? = history.path.last
     else { return nil }
     return historyDesktops.projects.corpus.sessions.values.lazy.flatMap { $0 }
@@ -1494,22 +1690,6 @@ public struct HomeScreen: View {
     .accessibilityLabel(desktop.map { "New agent, on \($0.name)" } ?? "New agent")
   }
 
-  /// The search circle becomes the field (their shared `glassID`), and the
-  /// keyboard comes up once the field exists to take it.
-  private func openSearch() {
-    if selectedTab != .search { tabBeforeSearch = selectedTab }
-    selectedTab = .search
-    Task {
-      try? await Task.sleep(for: .milliseconds(120))
-      searchFocused = true
-    }
-  }
-
-  private func closeSearch() {
-    searchFocused = false
-    selectedTab = tabBeforeSearch == .search ? .field : tabBeforeSearch
-  }
-
   /// One curve for the menu's grow and the bar's fold, so they move together.
   private func setAccountMenu(open: Bool) {
     withAnimation(AccountCornerView.grow) { accountMenuOpen = open }
@@ -1611,9 +1791,10 @@ public struct HomeScreen: View {
         // IOS-9d — `-vf-mock`: the whole phone over invented facts and no
         // tailnet. The account is `MockAccount`'s (signed in, 🦊, studio up
         // and mini asleep; every act in the corner moves its standing), the
-        // field is the scripted fleet, History is the records' corpus and
-        // search runs over it. `-vf-mock-tab=history|chat|search` opens a page,
-        // `-vf-mock-open` grows the corner's menu, `-vf-mock-signed-out`
+        // field is the scripted fleet, History is the records' corpus, and
+        // search's Live now reads the witness's rows (SE-2) and Everything the
+        // corpus. `-vf-mock-tab=history|chat` opens a page and `=search` opens
+        // search over Field, `-vf-mock-open` grows the corner's menu, `-vf-mock-signed-out`
         // starts on the `Sign in` circle, `-vf-mock-search=<q>` fills the
         // search field, `-vf-mock-landed` lands the second hit of the first
         // group, and `-vf-mock-folded` folds the bar as a scroll down would.
@@ -1626,14 +1807,25 @@ public struct HomeScreen: View {
           mockActive = true
           if account.fieldIsLive { feed.start() }
           syncMockHistory()
-          if let search = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("-vf-mock-search=") }) {
-            searchQuery = String(search.dropFirst("-vf-mock-search=".count))
+          // SE-2 — Live now's rows (the witness's), the home's profiles (the golden's) and search's doors:
+          // `-vf-mock-lens=<profile>`, `-vf-mock-search-scope=everything`, `-vf-mock-search-filter=desk:<device>`
+          mockSearchRows = MockAccount.searchRows()
+          mockProfiles = MockAccount.searchProfiles()
+          lens.adopt(mockProfiles)
+          let doors = PhoneSearchWorld.Doors.read(ProcessInfo.processInfo.arguments)
+          lens.show(doors.lens)
+          if let words = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("-vf-mock-search=") }) {
+            searchQuery = String(words.dropFirst("-vf-mock-search=".count))
           }
           if let tab = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("-vf-mock-tab=") }) {
             switch tab.dropFirst("-vf-mock-tab=".count) {
             case "history": selectedTab = .history
             case "chat": selectedTab = .chat
-            case "search": openSearch()
+            // search opens over Field, on Live now unless a door says Everything, kept to a desktop if one says so
+            case "search":
+              openSearch()
+              if let scope = doors.scope { search.scope = scope }
+              lens.keep(desk: doors.desk)
             default: selectedTab = .field
             }
           }

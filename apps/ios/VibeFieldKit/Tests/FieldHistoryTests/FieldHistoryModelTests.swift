@@ -103,9 +103,11 @@ struct FieldHistoryModelTests {
   func matching() {
     let any = FieldHistoryModel.hits(for: "badge", kind: .any, in: corpus)
     #expect(any.count == 2)
-    #expect(FieldHistoryModel.matchCount(any) == 5)
+    let anyLines = any.reduce(0) { $0 + $1.rows.count }
+    #expect(anyLines == 5)
     let both = FieldHistoryModel.hits(for: "BADGE 12px", kind: .any, in: corpus)
-    #expect(FieldHistoryModel.matchCount(both) == 4)
+    let bothLines = both.reduce(0) { $0 + $1.rows.count }
+    #expect(bothLines == 4)
     #expect(both.flatMap(\.rows).map(\.id) == ["h1", "h2", "h3", "mh2"])
     let prompts = FieldHistoryModel.hits(for: "badge", kind: .prompts, in: corpus)
     #expect(prompts.flatMap(\.rows).map(\.id) == ["h1", "mh1"])
@@ -115,23 +117,8 @@ struct FieldHistoryModelTests {
     #expect(FieldHistoryModel.hits(for: "zebra", kind: .any, in: corpus).isEmpty)
   }
 
-  @Test("the foot and the quiet states say what happened")
-  func words() {
-    #expect(FieldHistoryModel.searchFoot(query: "", matches: 0, standing: .connected, desktop: "studio") == "Recent searches")
-    #expect(FieldHistoryModel.searchFoot(query: "badge", matches: 1, standing: .connected, desktop: "studio") == "1 match")
-    #expect(FieldHistoryModel.searchFoot(query: "badge", matches: 5, standing: .connected, desktop: "studio") == "5 matches")
-    #expect(FieldHistoryModel.searchFoot(query: "badge", matches: 5, standing: .asleep, desktop: "studio") == "Search needs studio")
-    let none = FieldHistoryModel.quiet(query: "zebra", kind: .prompts, matches: 0, corpus: corpus, standing: .connected)
-    #expect(none?.title == "No prompts say “zebra”")
-    #expect(none?.body == "Searched 1,405 sessions across 9 agents on studio. Every word has to appear — try fewer.")
-    #expect(FieldHistoryModel.quiet(query: "badge", kind: .any, matches: 5, corpus: corpus, standing: .connected) == nil)
-    #expect(FieldHistoryModel.quiet(query: "", kind: .any, matches: 0, corpus: corpus, standing: .connected) == nil)
-    let asleep = FieldHistoryModel.quiet(query: "", kind: .any, matches: 0, corpus: corpus, standing: .asleep)
-    #expect(asleep?.title == "studio is asleep")
-    let group = corpus.hits[0]
-    #expect(FieldHistoryModel.groupWords(group) == "3 hits · Today")
-    #expect(FieldHistoryModel.groupWords(corpus.hits[1]) == "2 hits · Thu")
-  }
+  // RETIRED 2026-11-06 (SE-2): "the foot and the quiet states say what happened" — search's page's foot, quiet states
+  // and group heads retired with the page; the sheet's words are `PhoneSearchTests`' (liveFoot, pastFoot, the empties).
 
   @Test("the marks cut the text at the terms, case-insensitively, and leave the rest whole")
   func marks() {
