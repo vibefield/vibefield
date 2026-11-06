@@ -1404,7 +1404,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   - **From your agents** follows: the pages your agents made, newest first, by day, with a search
     field in the group's head that searches them (the frame's Peek, ⌘F, does not find apps yet). field-app
     draws it beside the hosted Hub, since its doors are no plugin's, so it stands whether a Hub is
-    bound or not.
+    bound or not. It stands **24 under Live** (the lead, 2026-11-06, at MA-4c), whether Live shows
+    its tiles or one of its states, and Live's states fill the shelf's height only when no made group
+    follows them.
   - **A made tile keeps the tile form.** Its 16:10 well (corners 10, the hairline ring) holds the
     app's preview, AH-4's still. Until it has one, the fallback squircle (§2.9's one exception; §8
     "The phone's Apps", the icon) stands centred in the well at 60, the phone's Recent size. Under the
@@ -6405,6 +6407,14 @@ him and are not invented here.
   while your agents' apps still open›. An empty Live says **"No apps yet"** with its one **Publish…** ‹for James:
   that heading, false while your agents' pages stand below it, and its second line›. ‹for James: the Live header's
   quiet count ("4 shared"), and whether the made group has one›.
+  *Interim words (the lead, 2026-11-06, at MA-4c; each is owed to James, and his replace it):* Live's four states
+  read **"Live apps are off"**, **"Live apps can't run"**, **"Opening live apps…"** and **"Live apps aren't
+  starting"**, over §8's second lines as they stand. Live's reading says "Loading live apps", and its unreadable
+  catalog says "Live apps unavailable" over "The app catalog could not be read." A build without it says "Live
+  apps are unavailable in this build." Its errors say app where they said artifact ("That app no longer exists.",
+  "The app limit has been reached."). Its list form's plus is "Add app", a tile's menu "App actions", its
+  region "Live" and its list "Live apps". The empty Live keeps "No apps yet" and its second line, the header's
+  count stands as it is, and the made group draws no count.
 - **History is the one named exception.** Inside History the room's library says Artifacts, as rosetta wrote it,
   until rosetta's room takes the host's words (RO-37), by the room rule below.
 
