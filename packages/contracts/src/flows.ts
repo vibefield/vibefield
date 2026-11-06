@@ -372,7 +372,9 @@ export type RunSummary = z.infer<typeof RunSummary>;
 /** One step of a run's record, for `open` and `steps` (v2.6): its call, the script's label, agent and phase, the
  * runtime run it runs in (D2), `handed` for an `in:` session (never ended, CP4-Q10), its state (FLOW_STEP_STATES,
  * OPEN), and each line VibeField sent it, recorded BEFORE it is queued (D5): which line (`prompt`, `in`, `repair`,
- * `resume`, `unheard`), its `n`, and what is known of its sending (`sending`, `queued`, `uncertain`, OPEN). */
+ * `resume`, `unheard`), its `n`, and what is known of its sending (`sending`, `queued`, `uncertain`, OPEN). `cut`
+ * when its answer was cut short (the journal's answer's `cut`), so RunSummary's step `cut` is projected from the record
+ * alone (C4; added 2026-11-06 on bsp's finding, VF-PM's (b), 22:49Z: v2.7's verbatim block had none). */
 export const FlowRunRecordStep = z
   .object({
     call: FlowCallNumber,
@@ -382,6 +384,7 @@ export const FlowRunRecordStep = z
     session: z.string().min(1).max(128).optional(), // the runtime run it runs in (D2)
     handed: z.literal(true).optional(), // an `in:` session, never ended (CP4-Q10)
     state: z.string().min(1).max(32), // FLOW_STEP_STATES, OPEN
+    cut: z.literal(true).optional(), // its answer was cut short (C4's `cut`, from the journal's answer)
     lines: z
       .array(
         // D5: recorded BEFORE each is queued
