@@ -129,6 +129,9 @@ public struct HomeScreen: View {
   @State private var meters = MetersFeed()
   @State private var lens = ProfileLens()
   @State private var agentProfilesOpen = false
+  /// UM-4 (UM-D24 A) — the held face while a hold stands, and where the corner's face stands in the window.
+  @State private var held: FaceHold.Held?
+  @State private var faceCentre: CGPoint = .zero
   @State private var chatLedger = ThreadLedger()
   /// IOS-12c — the spark whose thread stands on Chat (pushed in Chat's own stack), or none: the bar steps aside for
   /// it, and the ledger reads it while Chat is the page.
@@ -826,6 +829,7 @@ public struct HomeScreen: View {
     .background { chatHooks }
     .background { metersHooks }
     .overlay { bar }
+    .overlay { faceHoldOverlay }
     .overlay(alignment: .bottom) { chatNoteOverlay }
     .background {
       GeometryReader { geo in
@@ -1234,8 +1238,57 @@ public struct HomeScreen: View {
       agentProfiles: AgentProfilesMenuRow(reading: meters.reading, now: meters.clock()) {
         setAccountMenu(open: false)
         agentProfilesOpen = true
-      }
+      },
+      hold: FaceHoldActs(
+        place: { faceCentre = $0 },
+        begin: { beginHold() },
+        move: { moveHold(to: $0) },
+        end: { endHold() },
+        actions: FaceHold.actions(meters.reading.profiles),
+        perform: { performHoldAct($0) })
     )
+  }
+
+  // MARK: - UM-4: the held face
+
+  /// The held face over the whole screen, above the tabs, while a hold stands.
+  @ViewBuilder
+  private var faceHoldOverlay: some View {
+    if let held {
+      FaceHoldOverlay(held: held, reading: meters.reading, now: meters.clock(), face: accountFace, seed: accountSeed)
+        .transition(.opacity)
+    }
+  }
+
+  /// The hold completed: the held face opens on the hub, and the home's profiles are read again.
+  private func beginHold() {
+    meters.open()
+    held = FaceHold.Held(face: faceCentre, reach: .hub)
+  }
+
+  /// The finger moved: what it reaches now, the buds standing in the home's order.
+  private func moveHold(to finger: CGPoint) {
+    guard var next = held else { return }
+    let reach = FaceHold.reach(finger, face: next.face, profiles: meters.reading.profiles.map(\.id))
+    guard reach != next.reach else { return }
+    next.reach = reach
+    held = next
+  }
+
+  /// Let go: the lens takes the reach (a bud, every profile, or as it was), and the held face fades.
+  private func endHold() {
+    guard let last = held else { return }
+    lens.letGo(last.reach)
+    withAnimation(FieldMotion.plainEase(reduceMotion ? 0.09 : 0.18)) { held = nil }
+  }
+
+  /// VoiceOver's acts in place of the hold.
+  private func performHoldAct(_ act: FaceHold.Act) {
+    switch act {
+    case .page: agentProfilesOpen = true
+    case .show(let id): lens.show(id)
+    case .showAll: lens.show(nil)
+    }
   }
 
   /// WI-3 — the corner's Lock now: the menu folds, the curtain stands at once, and Face ID asks over it.
@@ -1574,6 +1627,13 @@ public struct HomeScreen: View {
           if ProcessInfo.processInfo.arguments.contains("-vf-mock-open") { accountMenuOpen = true }
           // UM-4 — the Agent Profiles page over the fixture door's home (`-vf-mock-usage=` picks its usage state)
           if ProcessInfo.processInfo.arguments.contains("-vf-mock-agent-profiles") { agentProfilesOpen = true }
+          // UM-4 — the face held for a photograph, once the corner has placed it and the home's profiles are read
+          if let reach = FaceHold.mockReach(ProcessInfo.processInfo.arguments) {
+            Task {
+              try? await Task.sleep(for: .milliseconds(800))
+              held = FaceHold.Held(face: faceCentre, reach: reach)
+            }
+          }
           if let open = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("-vf-mock-project=") }) {
             let id = String(open.dropFirst("-vf-mock-project=".count))
             if HistoryCorpus.mock.project(id) != nil {

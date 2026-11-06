@@ -42,6 +42,9 @@ struct AccountCornerView: View {
   /// UM-4 (UM-D25 A) — the Agent Profiles row: every plan's circle at 26, the tightest word, and the page. It stands
   /// while you are signed in, after the desktops' closing hairline, nearest your name.
   var agentProfiles: AgentProfilesMenuRow? = nil
+  /// UM-4 (UM-D24 A) — the held face: holding the face (520 ms, 10 of slop) opens your agents' usage over the
+  /// screen; a shorter touch stays the menu's tap. Nil: the face is only the menu's.
+  var hold: FaceHoldActs? = nil
 
   /// The circle's diameter — the bar's row, so the corner and the search
   /// circle are one size — and the menu's corner radius twice over.
@@ -54,6 +57,8 @@ struct AccountCornerView: View {
   static let grow: Animation = .timingCurve(0.25, 1, 0.3, 1, duration: 0.6)
 
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  /// The hold has opened the held face and the finger is still down.
+  @State private var holding = false
 
   var body: some View {
     if face.control == .signIn {
@@ -161,27 +166,68 @@ struct AccountCornerView: View {
     }
   }
 
+  /// The face: a tap grows or folds the menu; UM-4 — a hold (while the menu is closed) opens the held face instead,
+  /// which is why it is a tap gesture after the hold's rather than a Button, whose tap would fire on the hold's let-go.
   private var faceButton: some View {
-    Button(action: onToggle) {
-      ZStack {
-        switch face.control {
-        case .face(let userFace):
-          UserFaceView(face: userFace, size: Self.faceSize, seed: seed, held: isOpen)
-        case .blank, .signIn:
-          // Signed in, and no desktop has said who you are yet: a plain
-          // circle, never a face it would have to take back.
-          Image(systemName: "person")
-            .font(.system(size: 24, weight: .regular))
-            .foregroundStyle(ChromePalette.inkSecondary)
-        }
+    ZStack {
+      switch face.control {
+      case .face(let userFace):
+        UserFaceView(face: userFace, size: Self.faceSize, seed: seed, held: isOpen)
+      case .blank, .signIn:
+        // Signed in, and no desktop has said who you are yet: a plain
+        // circle, never a face it would have to take back.
+        Image(systemName: "person")
+          .font(.system(size: 24, weight: .regular))
+          .foregroundStyle(ChromePalette.inkSecondary)
       }
-      .frame(width: Self.circle, height: Self.circle)
-      .contentShape(Circle())
     }
-    .buttonStyle(.plain)
-    .accessibilityLabel(face.name.isEmpty ? "Account" : "\(face.name): account")
+    .frame(width: Self.circle, height: Self.circle)
+    .contentShape(Circle())
+    .gesture(holdGesture.exclusively(before: TapGesture().onEnded { onToggle() }))
+    .onGeometryChange(for: CGPoint.self) { proxy in
+      let frame = proxy.frame(in: .global)
+      return CGPoint(x: frame.midX, y: frame.midY)
+    } action: { centre in
+      hold?.place(centre)
+    }
+    .accessibilityElement(children: .ignore)
+    .accessibilityLabel(faceLabel)
     .accessibilityAddTraits(.isButton)
     .accessibilityValue(isOpen ? "menu open" : "")
+    .accessibilityAction { onToggle() }
+    .accessibilityActions {
+      // A hold cannot be made under VoiceOver: the face offers what it would reach
+      if let hold, !isOpen {
+        ForEach(hold.actions, id: \.name) { action in
+          Button(action.name) { hold.perform(action.act) }
+        }
+      }
+    }
+  }
+
+  private var faceLabel: String {
+    if hold != nil, !isOpen { return FaceHold.faceLabel(face.name) }
+    return face.name.isEmpty ? "Account" : "\(face.name): account"
+  }
+
+  /// UM-4 — the hold: 520 ms within 10 of slop opens the held face, the finger then reaches, and letting go releases
+  /// it. A shorter touch fails it, and the tap is the menu's. Not while the menu is open.
+  private var holdGesture: some Gesture {
+    LongPressGesture(minimumDuration: FaceHold.hold, maximumDistance: FaceHold.slop)
+      .sequenced(before: DragGesture(minimumDistance: 0, coordinateSpace: .global))
+      .onChanged { value in
+        guard let hold, !isOpen, case .second(true, let drag) = value else { return }
+        if !holding {
+          holding = true
+          hold.begin()
+        }
+        if let drag { hold.move(drag.location) }
+      }
+      .onEnded { _ in
+        guard holding else { return }
+        holding = false
+        hold?.end()
+      }
   }
 
   /// You, beside the face: the name, and the login line or the connection's
