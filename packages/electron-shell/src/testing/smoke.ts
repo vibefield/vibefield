@@ -10137,28 +10137,30 @@ export async function runSmokeGodview(opts: {
 
     // 11k. THE HUB IN THE HEAD, UNDER GODVIEW'S COVER (HN-8, PL-D1…PL-D3;
     //      DESIGN.md §8 "The head", the package circle). Under a cover the pill
-    //      is the desk's and hides with it, and Artifacts' door is the package
+    //      is the desk's and hides with it, and Apps' door is the package
     //      circle at the head's left (the terminals' title bar while they are
     //      maximized). Pressed the way a pointer presses it, it grows the pill's
-    //      sheet on its Artifacts shelf alone: the circle steps aside, on and
-    //      saying Close, and the pill's own sheet stays shut. The shelf is never
-    //      blank — it hosts the Hub's own `hud.side-panel` contribution (the
-    //      Browser plugin's Artifact Hub, once, in this sheet only), or says in
-    //      one of its four waits why none is bound: off, can't run, opening, or
-    //      not starting, the last after the head's own 10 s. The rung waits for
+    //      sheet on its Apps shelf alone: the circle steps aside, on and
+    //      saying Close, and the pill's own sheet stays shut. Its first group,
+    //      Live, is never blank — it hosts the Hub's own `hud.side-panel`
+    //      contribution (the Browser plugin's Hub, named "Live", once, in this
+    //      sheet only), or says in one of its four waits why none is bound: off,
+    //      can't run, opening, or not starting, the last after the head's own
+    //      10 s. (MA-4c, MA-D13 (a): the screen's words are Apps; the inside
+    //      names — `artifacts`, `data-shelf` — stay.) The rung waits for
     //      the shelf to settle past "Opening…", says which it found, and folds
     //      the sheet back with the sheet's own package, where the circle stood.
     //      Added 2026-10-31: HN B3's records claimed this witness of the row and
     //      no rung gave it (LANDED "HN B3", corrected at run 38b). Before 11h,
     //      which must stay last.
     const hubInHead: Record<string, string> = {};
-    /** The shelf's four waits as a person reads them (`HeadView`'s words; DESIGN.md §8
-     * "Artifacts"). */
+    /** Live's four waits as a person reads them (`HeadView`'s words; DESIGN.md §8
+     * "Artifacts", §9 "Apps"). */
     const HUB_WAITS = [
-      "Artifacts are off",
-      "Artifacts can't run",
-      "Opening Artifacts…",
-      "Artifacts aren't starting",
+      "Live apps are off",
+      "Live apps can't run",
+      "Opening live apps…",
+      "Live apps aren't starting",
     ] as const;
     type HubBox = { x: number; y: number; w: number; h: number };
     type HubFacts = {
@@ -10170,7 +10172,7 @@ export async function runSmokeGodview(opts: {
       shown: boolean;
       /** The Hub's panel stands in the covered sheet's shelf. */
       hub: boolean;
-      /** Artifact Hubs in the whole page: one while bound, never one in each sheet. */
+      /** Hubs (Live) in the whole page: one while bound, never one in each sheet. */
       hubs: number;
       /** The words of the wait the shelf says, or null. */
       wait: string | null;
@@ -10194,7 +10196,7 @@ export async function runSmokeGodview(opts: {
       const face =
         shelf === null ? null : shelf.querySelector(".vf-head-waits-face:not([data-leaving])");
       const hub =
-        shelf === null ? null : shelf.querySelector('.vf-head-hub [aria-label="Artifact Hub"]');
+        shelf === null ? null : shelf.querySelector('.vf-head-hub [aria-label="Live"]');
       return {
         view: ${VIEW_NOW},
         circle: circle === null ? null : {
@@ -10211,7 +10213,7 @@ export async function runSmokeGodview(opts: {
         pill: document.querySelector(".vf-head-place")?.getAttribute("data-open") ?? "absent",
         shown: shelf !== null && shelf.hasAttribute("data-shown"),
         hub: hub !== null,
-        hubs: document.querySelectorAll('[aria-label="Artifact Hub"]').length,
+        hubs: document.querySelectorAll('[aria-label="Live"]').length,
         wait: face === null ? null : (face.textContent ?? "").trim(),
       };
     })()`;
@@ -10261,7 +10263,7 @@ export async function runSmokeGodview(opts: {
     const circleAt = await pressAt(".vf-package-circle .vf-package-button");
     await untilRenderer(
       win,
-      "the circle's sheet grown on Artifacts",
+      "the circle's sheet grown on Apps",
       `(() => { const f = ${HUB_FACTS};
         return f.sheet !== null && f.sheet.open && !f.sheet.inert && f.shown
           ? "ok" : JSON.stringify(f); })()`,
@@ -10279,8 +10281,8 @@ export async function runSmokeGodview(opts: {
     if (grown.pill !== "false") {
       throw new Error(`the pill's own sheet opened under Godview: ${JSON.stringify(grown)}`);
     }
-    if (grown.sheet.name !== "Artifacts") {
-      throw new Error(`the covered sheet is not Artifacts': ${JSON.stringify(grown)}`);
+    if (grown.sheet.name !== "Apps") {
+      throw new Error(`the covered sheet is not Apps': ${JSON.stringify(grown)}`);
     }
     // Grown, not its size: DESIGN.md §8 holds the size, and the catalog's plates draw it.
     if (grown.sheet.box.w < circleBox.w * 4 || grown.sheet.box.h < circleBox.h * 4) {
@@ -10298,7 +10300,7 @@ export async function runSmokeGodview(opts: {
     let said = waitSaid(shelf);
     while (
       !shelf.hub &&
-      (said === undefined || said === "Opening Artifacts…") &&
+      (said === undefined || said === "Opening live apps…") &&
       Date.now() < settleBy
     ) {
       await sleep(250);
@@ -10307,16 +10309,14 @@ export async function runSmokeGodview(opts: {
     }
     if (shelf.hub) {
       if (shelf.hubs !== 1) {
-        throw new Error(
-          `${shelf.hubs} Artifact Hubs in the page, not one: ${JSON.stringify(shelf)}`,
-        );
+        throw new Error(`${shelf.hubs} Hubs (Live) in the page, not one: ${JSON.stringify(shelf)}`);
       }
-      hubInHead["the shelf"] = 'the Hub bound: its "Artifact Hub" in the shelf, once in the page';
+      hubInHead["the shelf"] = 'the Hub bound: its "Live" in the shelf, once in the page';
     } else if (said === undefined) {
       throw new Error(
-        `the Artifacts shelf said nothing, neither the Hub nor a wait: ${JSON.stringify(shelf)}`,
+        `the Apps shelf said nothing, neither the Hub nor a wait: ${JSON.stringify(shelf)}`,
       );
-    } else if (said === "Opening Artifacts…") {
+    } else if (said === "Opening live apps…") {
       throw new Error(
         `the shelf still said "${said}" after 15 s, past the head's own 10 s: ` +
           JSON.stringify(shelf),
@@ -10336,14 +10336,14 @@ export async function runSmokeGodview(opts: {
     );
     const folded = await hubFacts();
     if (folded.view !== "godview") {
-      throw new Error(`the Artifacts sheet moved the window: ${folded.view}`);
+      throw new Error(`the Apps sheet moved the window: ${folded.view}`);
     }
     hubInHead["the circle"] =
       `under Godview at ${circleBox.x},${circleBox.y}, ${circleBox.w} × ${circleBox.h}` +
       `${circle.bar ? " in the terminals' bar" : ""}; pressed by the pointer at ` +
       `${circleAt.x},${circleAt.y}`;
     hubInHead["the sheet"] =
-      `grew on Artifacts to ${sheetBox.w} × ${sheetBox.h}; the circle stepped aside, and the ` +
+      `grew on Apps to ${sheetBox.w} × ${sheetBox.h}; the circle stepped aside, and the ` +
       `pill's own sheet stayed shut`;
     hubInHead["the fold"] =
       `the sheet's own package at ${packAt.x},${packAt.y} folded it into the circle; ` +

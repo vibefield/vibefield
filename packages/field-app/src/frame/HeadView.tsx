@@ -16,7 +16,7 @@ import {
   useState,
 } from "react";
 import type { SheetShelf } from "./frame-surface";
-import type { HubWait } from "./head-artifacts";
+import { ARTIFACTS, type HubWait } from "./head-artifacts";
 import type { HeadCrumb } from "./head-canvas";
 import { SyncQuestionView, type SyncQuestionViewProps } from "./SyncQuestionView";
 import type { ViewKeys } from "./views";
@@ -29,10 +29,11 @@ import "./head.css";
 // fixtures. On Canvas: the name pill centred on the window — the field's name
 // and, inside a folder, the crumbs folded in, then the chevron and, after a
 // rule, the package (HN-8, PL-D1) — which grows into its sheet on two
-// shelves, Fields and Artifacts; the zoom readout at the right, which grows
-// its menu. Under a cover the pill is the desk's and hides with it, and the
-// same sheet grows on Artifacts from the package circle (PL-D2). What the
-// head DOES lives in `Head.tsx`; what it shows is all props.
+// shelves, Fields and Apps (the `artifacts` shelf: MA-D13 (a), the screen's
+// word is Apps); the zoom readout at the right, which grows its menu. Under a
+// cover the pill is the desk's and hides with it, and the same sheet grows on
+// Apps from the package circle (PL-D2). What the head DOES lives in
+// `Head.tsx`; what it shows is all props.
 
 /** The sync dot after the name (C6-4): a standing fact, or none. */
 export interface HeadDot {
@@ -51,13 +52,16 @@ export interface HeadDocTile {
   readonly beforeTheDesk?: boolean;
 }
 
-/** What the sheet's Artifacts shelf holds (HN-8; DESIGN.md §8 "Artifacts — the Artifacts
- * shelf's contents"): the Hub's own surface, hosted, while one is bound; with none bound, why
+/** What the sheet's Apps shelf holds (HN-8; DESIGN.md §8 "Artifacts — the Artifacts shelf's
+ * contents", as amended 2026-11-05 — the `artifacts` shelf, Apps on screen): two groups in its
+ * one box. LIVE first: the Hub's own surface, hosted, while one is bound; with none bound, why
  * not — its plugin off or unable to run, the Hub opening or not starting — in words, so the
- * shelf is never blank. */
-export type HeadArtifacts =
+ * shelf is never blank. Then FROM YOUR AGENTS (`made`, MA-4c), drawn whether a Hub is bound or
+ * not; absent where no daemon is asked. */
+export type HeadArtifacts = (
   | { readonly state: "hub"; readonly hub: ReactNode }
-  | { readonly state: HubWait };
+  | { readonly state: HubWait }
+) & { readonly made?: ReactNode };
 
 /** The sheet's fold back into the pill, the circle or the bar (§8: 600ms on the island curve):
  * what it holds stays through it, so it never folds away empty. */
@@ -94,10 +98,10 @@ export interface HeadPlaceViewProps {
   /** The chevron and the package ask for their shelf, or null to shut the sheet: the button
    * that is on shuts it, the other opens it on its shelf or turns it there in place. */
   onShelf?: (shelf: SheetShelf | null) => void;
-  /** The package's standing dot (PL-D1): the words its tooltip and name say while an artifact's
+  /** The package's standing dot (PL-D1): the words its tooltip and name say while a live app's
    * source is unavailable; null, no dot. */
   packageDot?: string | null;
-  /** What the Artifacts shelf holds while it shows, and through its fold; null while shut. */
+  /** What the Apps shelf holds while it shows, and through its fold; null while shut. */
   artifacts?: HeadArtifacts | null;
   /** Go up to a depth (0: the field's top). */
   onJump?: (depth: number) => void;
@@ -182,12 +186,12 @@ function PackageButton({
   readonly glyph: 15 | 18;
   readonly onPress: () => void;
 }): ReactElement {
-  const name = dot ?? "Artifacts";
+  const name = dot ?? ARTIFACTS;
   return (
     <button
       type="button"
       className="vf-head-pack"
-      aria-label={on ? "Close the artifacts" : name}
+      aria-label={on ? "Close the apps" : name}
       aria-expanded={on}
       title={on ? "Close  Esc" : name}
       onClick={onPress}
@@ -204,19 +208,22 @@ interface WaitWords {
   readonly description?: string;
 }
 
-/** The words of each wait (DESIGN.md §8 "Artifacts"). */
+/** The words of each wait (DESIGN.md §8 "Artifacts"), which speak for Live alone (§9 "Apps"):
+ * From your agents stands below them whether a Hub is bound or not. The headings are owed to
+ * James (§9, ‹for James›); until he words them they name Live's tiles, live apps, and keep §8's
+ * second lines. */
 const HUB_WAIT_WORDS: Record<HubWait, WaitWords> = {
   off: {
-    title: "Artifacts are off",
+    title: "Live apps are off",
     description: "Turn on the Browser plugin in Settings › Plugins.",
   },
   "cant-run": {
-    title: "Artifacts can't run",
+    title: "Live apps can't run",
     description: "The Browser plugin can't run in this VibeField — see Settings › Plugins.",
   },
-  opening: { title: "Opening Artifacts…" },
+  opening: { title: "Opening live apps…" },
   "not-starting": {
-    title: "Artifacts aren't starting",
+    title: "Live apps aren't starting",
     description: "Turn the Browser plugin off and on in Settings › Plugins.",
   },
 };
@@ -270,11 +277,12 @@ function HubWaits({ waits }: { readonly waits: HubWait }): ReactElement {
   );
 }
 
-/** The Artifacts shelf: the Hub's, hosted in a box pinned at the OPEN sheet's inner width — a
- * container, so the Hub's own stylesheet answers it with its tiles (PL-D3), and one the sheet's
- * morph clips rather than narrows, so the Hub never reflows while the sheet grows or folds — or
- * why it is not there. Unlike Fields it has no fade at its foot: the Hub's buttons are never
- * faded (§8 "The head"). */
+/** The Apps shelf (`artifacts` inside, Apps on screen — MA-D13 (a)): its two groups in one box
+ * pinned at the OPEN sheet's inner width — a container, so the Hub's own stylesheet and From
+ * your agents' answer it with their tiles (PL-D3), and one the sheet's morph clips rather than
+ * narrows, so neither reflows while the sheet grows or folds. Live first — the Hub's, hosted, or
+ * why it is not there — then From your agents. Unlike Fields it has no fade at its foot: the
+ * Hub's buttons are never faded (§8 "The head"). */
 function ArtifactsShelf({
   shown,
   artifacts,
@@ -287,14 +295,15 @@ function ArtifactsShelf({
       className="vf-head-shelf vf-no-scrollbar"
       data-shelf="artifacts"
       {...(shown ? { "data-shown": "" } : {})}
-      aria-label="Artifacts"
+      aria-label={ARTIFACTS}
       inert={!shown}
     >
       <div className="vf-head-hub">
-        {artifacts === null ? null : artifacts.state === "hub" ? (
-          artifacts.hub
-        ) : (
-          <HubWaits waits={artifacts.state} />
+        {artifacts === null ? null : (
+          <>
+            {artifacts.state === "hub" ? artifacts.hub : <HubWaits waits={artifacts.state} />}
+            {artifacts.made}
+          </>
         )}
       </div>
     </section>
@@ -585,7 +594,7 @@ export function HeadPlaceView({
 
 /** The same sheet under a cover (HN-8, PL-D2; DESIGN.md §8 "The head"), grown from the package
  * circle at the head's left — or, while Godview's terminals are maximized, from the bar's own
- * control — on Artifacts alone: Fields are the desk's and stay with the pill. Its head row is the
+ * control — on Apps alone: Fields are the desk's and stay with the pill. Its head row is the
  * circle's own: the package, now a 28 round button, holding the circle's 18 where the circle held
  * it, its dot where the circle's is, then the shelf's name. The package is on ("Close  Esc") until
  * the fold ends, so nothing in the row changes while the sheet folds back into the circle. Shut,
@@ -615,7 +624,7 @@ function HeadCircleSheetView({
     >
       <div className="vf-head-sheet-row">
         <PackageButton on={on} dot={packageDot} glyph={18} onPress={onShut} />
-        <span className="vf-head-sheet-name">Artifacts</span>
+        <span className="vf-head-sheet-name">{ARTIFACTS}</span>
       </div>
       <ArtifactsShelf shown={open} artifacts={artifacts} />
     </div>
@@ -748,7 +757,7 @@ export function HeadView({
   const side = Math.max(96, right + 16 + 12);
   const shelf = place.shelf ?? null;
   const artifacts = place.artifacts ?? null;
-  // Under a cover the sheet holds Artifacts alone, grown from the package circle; the pill's
+  // Under a cover the sheet holds Apps alone, grown from the package circle; the pill's
   // own sheet stays shut, as the pill is the desk's and hides with it.
   const pillOpen = !covered && shelf !== null;
   const circleOpen = covered && shelf === "artifacts";

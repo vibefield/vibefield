@@ -25,6 +25,7 @@ import { relativeTime } from "../format/relative-time";
 import { PluginSurfaceHost, useVisiblePluginSurfaces } from "../hud/PluginSurfaceSlot";
 import { getRendererLogger } from "../logging";
 import { usePluginRegistrySnapshot } from "../plugin-host/plugin-registry-store";
+import { MadeApps } from "./apps/MadeApps";
 import { useGodviewDeckMaximized } from "./deck-door";
 import { type FrameSurface, foldSurface, type SheetShelf, sheetShelf } from "./frame-surface";
 import {
@@ -35,7 +36,7 @@ import {
   SHEET_FOLD_MS,
   useLingering,
 } from "./HeadView";
-import { useArtifactsDot, useHubWaits } from "./head-artifacts";
+import { useArtifactsDot, useHeadAppsClient, useHubWaits } from "./head-artifacts";
 import type { HeadCanvas } from "./head-canvas";
 import { useFindStep } from "./Peek";
 import type { ViewKeys } from "./views";
@@ -58,10 +59,10 @@ import {
 // (`useShownShelf`, below), handed in as it is to the package circle. What it
 // reads comes through two doors — the document manager (the field, the
 // fields) and the head's canvas door (the path, the zoom) — so the catalog
-// runs this exact controller on fixtures; the package's dot
-// (`head-artifacts.ts`), the Hub's binding (the plugin surfaces) and the
-// terminals' state (`deck-door.ts`) are the window's own stores, which a
-// catalog without a daemon reads empty.
+// runs this exact controller on fixtures; the package's dot and the window's
+// client From your agents asks with (`head-artifacts.ts`), the Hub's binding
+// (the plugin surfaces) and the terminals' state (`deck-door.ts`) are the
+// window's own stores, which a catalog without a daemon reads empty.
 
 /** C6-4 — the pill's sync dot says STANDING states only (pending, a peer
  * offline, declined, epoch-stale): transient syncing lives in Settings and the
@@ -206,6 +207,9 @@ export function Head({
   // or still opening after 10 s and not starting.
   const hub = useVisiblePluginSurfaces("hud.side-panel")[0] ?? null;
   const waits = useHubWaits(usePluginRegistrySnapshot(), hub !== null);
+  // MA-4c — From your agents, the shelf's second group: asked over the window's own client, which
+  // the head's feed hands in; none where no daemon is asked (the catalog, the tests).
+  const appsClient = useHeadAppsClient();
   const artifactsHeld = useLingering(shelf === "artifacts", SHEET_FOLD_MS);
   // PL-D2 with GV-D11 — while Godview's terminals are maximized the package stands in their
   // title bar, and the covered sheet is shut into that control: read as the circle reads it,
@@ -491,14 +495,17 @@ export function Head({
   const current = syncStatuses.find((s) => s.docId === state.doc?.docId);
   const currentId = state.doc?.docId ?? null;
 
-  // The Artifacts shelf's contents while it shows, and through its fold: the Hub,
-  // hosted for this window — its own close shuts the sheet — or why there is none.
-  // An open shelf stays open through the Hub's restart and never folds on an
-  // unbind (DESIGN.md §8 "Artifacts"): it waits in words until the Hub is back.
+  // The Apps shelf's contents while it shows, and through its fold (DESIGN.md §8 "Artifacts —
+  // the Artifacts shelf's contents", as amended 2026-11-05): Live — the Hub, hosted for this
+  // window, its own close shutting the sheet, or why there is none — then From your agents,
+  // drawn whether a Hub is bound or not, so it asks only while the shelf shows. An open shelf
+  // stays open through the Hub's restart and never folds on an unbind: Live waits in words
+  // until the Hub is back.
+  const made = appsClient === null ? null : <MadeApps client={appsClient} />;
   const artifacts: HeadArtifacts | null = !artifactsHeld
     ? null
     : hub === null
-      ? { state: waits }
+      ? { state: waits, made }
       : {
           state: "hub",
           hub: (
@@ -509,6 +516,7 @@ export function Head({
               surfaceId={hub.surfaceId}
             />
           ),
+          made,
         };
 
   return (

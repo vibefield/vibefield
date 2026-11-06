@@ -320,7 +320,7 @@ describe("the head's canvas door over a real engine", () => {
 });
 
 describe("the pill's sheet in the one owner's value (HN-8, PL-D1)", () => {
-  it("names the shelf that shows — Fields or Artifacts — and no other surface is the sheet", () => {
+  it("names the shelf that shows — Fields or Apps (`artifacts`) — and no other surface is the sheet", () => {
     expect(sheetShelf("fields")).toBe("fields");
     expect(sheetShelf("artifacts")).toBe("artifacts");
     const others: readonly (FrameSurface | null)[] = [
@@ -360,11 +360,10 @@ describe("the package's dot (HN-8, PL-D1) — the catalog's standing state, in w
 
   it("says one source by its title, past one how many, and nothing — no dot — while all are there", () => {
     expect(artifactsDotWords([])).toBeNull();
-    expect(artifactsDotWords(["vibe-field"])).toBe(
-      "Artifacts — vibe-field's source is unavailable",
-    );
-    expect(artifactsDotWords(["vibe-field", "Docs"])).toBe("Artifacts — 2 sources unavailable");
-    expect(artifactsDotWords(["a", "b", "c"])).toBe("Artifacts — 3 sources unavailable");
+    // the screen's word is Apps (MA-D13 (a); DESIGN.md §9 "Apps")
+    expect(artifactsDotWords(["vibe-field"])).toBe("Apps — vibe-field's source is unavailable");
+    expect(artifactsDotWords(["vibe-field", "Docs"])).toBe("Apps — 2 sources unavailable");
+    expect(artifactsDotWords(["a", "b", "c"])).toBe("Apps — 3 sources unavailable");
   });
 });
 
@@ -384,7 +383,7 @@ function registryOf(
   } as unknown as PluginRegistrySnapshot;
 }
 
-describe('why the Artifacts shelf has no Hub (HN-8; DESIGN.md §8 "Artifacts"; ruling 10)', () => {
+describe('why the Apps shelf has no Hub for Live (HN-8; DESIGN.md §8 "Artifacts"; ruling 10)', () => {
   it("is off while the plugin that offers the side panel is `disabled` — the one state that turning it on would help", () => {
     expect(hubWaits(registryOf(["disabled"]))).toBe("off");
   });

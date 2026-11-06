@@ -1837,6 +1837,116 @@ describe('MA-4c — From your agents beside the Hub (DESIGN.md §8 "Artifacts �
     }
   });
 
+  it("lets a feed that goes take only its own client: another feed's, put in before the first goes, stands", async () => {
+    const first = appsDoor();
+    const second = appsDoor();
+    function Feed(): null {
+      useArtifactCatalogFeed();
+      return null;
+    }
+    const hosts = [document.createElement("div"), document.createElement("div")];
+    for (const feedHost of hosts) document.body.appendChild(feedHost);
+    const [firstRoot, secondRoot] = hosts.map((feedHost) => createRoot(feedHost));
+    try {
+      act(() =>
+        firstRoot?.render(
+          <FielddProvider client={first.client as unknown as FielddClient}>
+            <Feed />
+          </FielddProvider>,
+        ),
+      );
+      await settle();
+      act(() =>
+        secondRoot?.render(
+          <FielddProvider client={second.client as unknown as FielddClient}>
+            <Feed />
+          </FielddProvider>,
+        ),
+      );
+      await settle();
+      act(() => firstRoot?.unmount());
+      await settle();
+      mount({ open: "artifacts" });
+      await settle();
+      expect(
+        madeIn(shelf("artifacts"))?.getAttribute("aria-label"),
+        "the second feed's client still stands once the first feed has gone",
+      ).toBe("From your agents");
+      expect(second.methods()).toContain("index.apps.subscribe");
+      expect(first.methods()).not.toContain("index.apps.subscribe");
+    } finally {
+      act(() => firstRoot?.unmount());
+      act(() => secondRoot?.unmount());
+      for (const feedHost of hosts) feedHost.remove();
+    }
+  });
+
+  it("keeps From your agents mounted through the Hub's restart under an open shelf: one subscription, never let go, a search being typed kept (§8: the shelf stays open through it)", async () => {
+    vi.useFakeTimers();
+    const door = appsDoor();
+    act(() => setHeadAppsClient(door.client));
+    registry.snapshot = browserRegistry(true);
+    const unbind = bindHub();
+    mount({ open: "artifacts" });
+    await settle();
+    const made = madeIn(shelf("artifacts"));
+    const search = made?.querySelector<HTMLInputElement>('input[type="search"]') ?? null;
+    expect(search?.getAttribute("aria-label"), "the group's search field").toBe("Search apps");
+    act(() => {
+      if (search !== null) setInputValue(search, "clock");
+    });
+    // the Hub goes: Live says it is opening, and the made group stays where it was, the same one
+    act(() => unbind());
+    await settle();
+    expect(shelf("artifacts")?.querySelector(".vf-head-waits")?.textContent).toBe(
+      "Opening live apps…",
+    );
+    expect(madeIn(shelf("artifacts")), "the same group under Live's words, never remounted").toBe(
+      made,
+    );
+    // and it comes back
+    act(() => {
+      bindHub();
+    });
+    await settle();
+    expect(shelf("artifacts")?.textContent).toContain("The Hub");
+    expect(madeIn(shelf("artifacts")), "the same group under the Hub again").toBe(made);
+    expect(search?.value, "the search a person was typing, kept").toBe("clock");
+    expect(
+      door.methods().filter((method) => method === "index.apps.subscribe"),
+      "one subscription through the Hub's restart",
+    ).toHaveLength(1);
+    expect(door.released, "nothing let go while the shelf showed").toEqual([]);
+  });
+
+  it("stands From your agents right under Live, 24 apart, whatever Live says: Live's words at their own height beside it, and the box's whole height only alone in it", async () => {
+    expect(declared(ruleIn(HEAD_CSS, ".vf-head-hub"), "gap"), "the two groups' gap").toBe("24px");
+    expect(
+      declared(ruleIn(HEAD_CSS, ".vf-head-waits"), "flex"),
+      "the words' own height",
+    ).toBeUndefined();
+    expect(declared(ruleIn(HEAD_CSS, ".vf-head-waits:only-child"), "flex")).toBe("1");
+    const door = appsDoor();
+    act(() => setHeadAppsClient(door.client));
+    registry.snapshot = browserRegistry(true);
+    mount({ open: "artifacts" });
+    await settle();
+    const waits = (): Element | null | undefined =>
+      shelf("artifacts")?.querySelector(".vf-head-waits");
+    expect(waits()?.textContent).toBe("Opening live apps…");
+    // (counted, not `matches(":only-child")`: happy-dom keeps an element's first answer to a
+    // structural selector after its sibling goes, so the selector is asked once, at the end)
+    expect(waits()?.parentElement?.children.length, "Live's words and From your agents").toBe(2);
+    expect(waits()?.nextElementSibling, "From your agents right after Live's words").toBe(
+      madeIn(shelf("artifacts")),
+    );
+    // with no client there is no made group, and the words take the box alone, as before MA-4c
+    act(() => setHeadAppsClient(null));
+    expect(madeIn(shelf("artifacts"))).toBeNull();
+    expect(waits()?.parentElement?.children.length, "Live's words alone in the box").toBe(1);
+    expect(waits()?.matches(".vf-head-waits:only-child")).toBe(true);
+  });
+
   it("says the shelf's words as DESIGN.md §9 \"Apps\" and the head's amendment rule them (MA-D13 (a))", async () => {
     const design = readFileSync(join(process.cwd(), "../../DESIGN.md"), "utf8");
     const from = design.indexOf("**Apps** (track MA, ruled 2026-11-05");

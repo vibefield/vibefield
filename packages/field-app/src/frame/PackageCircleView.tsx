@@ -8,17 +8,17 @@ import "./package-circle.css";
 // ruled by James 2026-10-29, Cards in Hand: "Agents start their servers in
 // Godview. Publishing one shouldn't need a trip to the desk."; HN-8) —
 // controller-free, so the catalog mounts this exact markup on fixtures. Under
-// a cover the pill is the desk's and hides with it, and Artifacts' door stands
+// a cover the pill is the desk's and hides with it, and Apps' door stands
 // alone at the head's left, the mirror of search's circle at its right: the
 // frame's, above the cover. Its tooltip, its name and its dot are the pill's
-// package's. What it DOES lives in `PackageCircle.tsx`; what it shows is all
-// props.
+// package's, in Apps' words (MA-D13 (a); DESIGN.md §9 "Apps"). What it DOES
+// lives in `PackageCircle.tsx`; what it shows is all props.
 
 export interface PackageCircleViewProps {
   /** Its sheet shows: the frame's one owner holds `artifacts`. */
   readonly open: boolean;
   /** The standing dot (PL-D1): the words its tooltip and its name say while
-   * an artifact's source is unavailable — which, or how many; null, no dot. */
+   * a live app's source is unavailable — which, or how many; null, no dot. */
   readonly dot: string | null;
   /** A press, and whether the keyboard made it — a click the keyboard makes
    * (Return, Space) has no count. */
@@ -33,7 +33,7 @@ export interface PackageCircleViewProps {
 }
 
 /** The covered views' package circle: `package` 18 on the line's glass at x
- * 96, which grows the pill's sheet on its Artifacts shelf. While the sheet
+ * 96, which grows the pill's sheet on its Apps shelf. While the sheet
  * shows, the sheet stands in its place, its head row the circle's own, so the
  * circle steps aside — unseen, but where the keyboard comes back to — and its
  * button is on, saying what pressing it again does, as the pill's package
@@ -58,7 +58,7 @@ export function PackageCircleView({
         ref={buttonRef}
         type="button"
         className="vf-package-button"
-        aria-label={open ? "Close the artifacts" : name}
+        aria-label={open ? "Close the apps" : name}
         aria-expanded={open}
         title={open ? "Close  Esc" : name}
         onClick={(event) => onPress?.(event.detail === 0)}

@@ -1,5 +1,5 @@
 import { ArtifactView, type PluginRegistrySnapshot } from "@vibefield/contracts";
-import { useSubscription } from "@vibefield/fieldd-client/react";
+import { useFielddClient, useSubscription } from "@vibefield/fieldd-client/react";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { getRendererLogger } from "../logging";
 import type { MadeAppsClient } from "./apps/made-apps";
@@ -15,9 +15,17 @@ import type { MadeAppsClient } from "./apps/made-apps";
 //   twice, and a head with no daemon to ask (the catalog, the tests) reads no dot.
 // - WHY THE SHELF HAS NO HUB, in one of four states: the plugin that offers it is off, it can't
 //   run, it is opening — or, still opening after 10 s, it isn't starting.
+// - THE WINDOW'S CLIENT FOR FROM YOUR AGENTS (MA-4c; L14; §8 "Artifacts — the Artifacts shelf's
+//   contents", as amended 2026-11-05): the shelf's second group asks the window's own doors, which
+//   are no plugin's. A module store as the dot's: FED by the same feed, inside FielddProvider, and
+//   READ by the head's controller, so a head with no daemon to ask (the catalog, the tests) draws
+//   no made group.
+// - THE WORDS ARE APPS (MA-D13 (a); §9 "Apps"): "Artifact" is the code's word, never the
+//   screen's, so the names here (`ARTIFACTS`, the `artifacts` surface) stay as they are.
 
-/** The package's name at rest — the pill's button and the covered views' circle. */
-export const ARTIFACTS = "Artifacts";
+/** The package's name at rest — the pill's button and the covered views' circle — and the
+ * shelf's, which is Apps on screen (MA-D13 (a); DESIGN.md §9 "Apps"). */
+export const ARTIFACTS = "Apps";
 
 /** The titles of the artifacts whose source is unavailable, in the catalog's order. */
 export function unavailableSources(artifacts: readonly ArtifactView[]): string[] {
@@ -26,9 +34,10 @@ export function unavailableSources(artifacts: readonly ArtifactView[]): string[]
     .map((artifact) => artifact.title);
 }
 
-/** The words of the package's dot (DESIGN.md §8 "The head"): STANDING states only, as the sync
- * dot's (C6-4) — orange while an artifact's source is unavailable, said by its title, or past one
- * by how many; null, no dot, while every source is there. Every other state is the shelf's. */
+/** The words of the package's dot (DESIGN.md §8 "The head"; §9 "Apps"): STANDING states only, as
+ * the sync dot's (C6-4) — orange while a live app's source is unavailable, said by its title, or
+ * past one by how many; null, no dot, while every source is there. Every other state is the
+ * shelf's. */
 export function artifactsDotWords(unavailable: readonly string[]): string | null {
   const [only] = unavailable;
   if (only === undefined) return null;
@@ -74,20 +83,51 @@ function readArtifactsDot(): string | null {
   return current;
 }
 
-/** Mount ONCE inside FielddProvider: streams the catalog into the store. A reconnect replays a
- * fresh snapshot (the client's P5 law), so the dot heals with it. */
+// The window's client, or null — From your agents asks with it while the shelf shows.
+let appsClient: MadeAppsClient | null = null;
+const appsListeners = new Set<() => void>();
+
+/** The window's client the shelf's From your agents asks with (DESIGN.md §8 "Artifacts — the
+ * Artifacts shelf's contents", as amended 2026-11-05): put in by the head's feed inside
+ * FielddProvider, and null where no daemon is asked (the catalog, the tests). Test seam + boot
+ * reset as well — the feed owns it in the running app. */
+export function setHeadAppsClient(client: MadeAppsClient | null): void {
+  if (client === appsClient) return;
+  appsClient = client;
+  for (const fn of appsListeners) fn();
+}
+
+function subscribeHeadAppsClient(fn: () => void): () => void {
+  appsListeners.add(fn);
+  return () => appsListeners.delete(fn);
+}
+
+function readHeadAppsClient(): MadeAppsClient | null {
+  return appsClient;
+}
+
+/** The window's client for From your agents, or null: no made group is drawn. */
+export function useHeadAppsClient(): MadeAppsClient | null {
+  return useSyncExternalStore(subscribeHeadAppsClient, readHeadAppsClient);
+}
+
+/** Mount ONCE inside FielddProvider: streams the catalog into the store, and hands the window's
+ * client to the shelf's From your agents for as long as it is mounted (MA-4c). A reconnect
+ * replays a fresh snapshot (the client's P5 law), so the dot heals with it. */
 export function useArtifactCatalogFeed(): void {
+  const client = useFielddClient();
   const sub = useSubscription("artifact.subscribe", {});
   useEffect(() => {
     if (sub.status === "live" && sub.data !== null) setArtifactCatalog(sub.data);
   }, [sub.status, sub.data]);
+  useEffect(() => {
+    setHeadAppsClient(client);
+    return () => {
+      // only its own: a feed that has gone never takes another's client with it
+      if (appsClient === client) setHeadAppsClient(null);
+    };
+  }, [client]);
 }
-
-/** MA-4c RED SKELETON — the window's client the shelf's From your agents asks with (DESIGN.md §8
- * "Artifacts — the Artifacts shelf's contents", as amended 2026-11-05): fed inside FielddProvider
- * by the head's feed, null where no daemon is asked (the catalog, the tests). Not built yet: it
- * keeps nothing, so the shelf draws no made group. */
-export function setHeadAppsClient(_client: MadeAppsClient | null): void {}
 
 /** The package's dot: the words its tooltip and name say while it stands; null while none. */
 export function useArtifactsDot(): string | null {
@@ -98,7 +138,7 @@ export function useArtifactsDot(): string | null {
  * run, it is opening, or it isn't starting. */
 export type HubWait = "off" | "cant-run" | "opening" | "not-starting";
 
-/** How long the shelf says "Opening Artifacts…" before it says the Hub isn't starting (§8
+/** How long the shelf says Live is opening before it says the Hub isn't starting (§8
  * "Artifacts": still opening after 10 s). Nothing in the registry says a Hub failed, so the wait
  * itself is bounded. */
 export const HUB_START_BOUND_MS = 10_000;

@@ -56,6 +56,9 @@ export function parseArtifactSnapshot(value: unknown): ArtifactView[] | null {
   return parsed.success ? parsed.data : null;
 }
 
+/** The catalog's read, as an act's failure names it. */
+const LOAD_LIVE_APPS = "load live apps";
+
 function friendlyError(error: unknown, action: string): string {
   const kind =
     typeof error === "object" && error !== null && "kind" in error
@@ -79,11 +82,11 @@ function friendlyError(error: unknown, action: string): string {
   if (kind === "UNAUTHORIZED" || kind === "FORBIDDEN_SCOPE")
     return `Browser does not have permission to ${action}.`;
   if (kind === "CONFLICT") return "That operation is already in progress. Try again shortly.";
-  if (kind === "RESOURCE_EXHAUSTED") return "The artifact limit has been reached.";
+  if (kind === "RESOURCE_EXHAUSTED") return "The app limit has been reached.";
   if (kind === "NOT_FOUND") {
-    return action === "load artifacts"
-      ? "Artifact services are unavailable in this build."
-      : "That artifact no longer exists.";
+    return action === LOAD_LIVE_APPS
+      ? "Live apps are unavailable in this build."
+      : "That app no longer exists.";
   }
   return `Could not ${action}. Try again.`;
 }
@@ -121,7 +124,9 @@ type CatalogState =
 
 /** The Artifact Hub, the `hud.side-panel` contribution — hosted since HN-8 on the Artifacts shelf
  * of VibeField's pill's sheet, whose Escape, dim and button close it: it draws no close of its own
- * (VibeField DESIGN.md §8 "Artifacts — the Artifacts shelf's contents"). */
+ * (VibeField DESIGN.md §8 "Artifacts — the Artifacts shelf's contents"). Since MA-4c that shelf is
+ * Apps on screen and the Hub is its first group, LIVE: its header, its region and its words say
+ * Live and app, never "artifact", the code's word (MA-D13 (a); §9 "Apps"). */
 export function ArtifactPanel({ client }: { client: PluginProductClient }): ReactElement {
   const [catalog, setCatalog] = useState<CatalogState>({ phase: "loading" });
   const [subscriptionEpoch, setSubscriptionEpoch] = useState(0);
@@ -141,7 +146,7 @@ export function ArtifactPanel({ client }: { client: PluginProductClient }): Reac
       if (disposed) return;
       const artifacts = parseArtifactSnapshot(value);
       if (artifacts === null) {
-        setCatalog({ phase: "error", message: "The artifact catalog could not be read." });
+        setCatalog({ phase: "error", message: "The app catalog could not be read." });
         return;
       }
       setCatalog({ phase: "live", artifacts });
@@ -158,7 +163,7 @@ export function ArtifactPanel({ client }: { client: PluginProductClient }): Reac
       })
       .catch((error: unknown) => {
         if (!disposed)
-          setCatalog({ phase: "error", message: friendlyError(error, "load artifacts") });
+          setCatalog({ phase: "error", message: friendlyError(error, LOAD_LIVE_APPS) });
       });
     return () => {
       disposed = true;
@@ -217,7 +222,7 @@ export function ArtifactPanel({ client }: { client: PluginProductClient }): Reac
         });
         setScreen({ kind: "catalog" });
       } catch (error) {
-        setMutationError(friendlyError(error, "publish this artifact"));
+        setMutationError(friendlyError(error, "publish this app"));
       } finally {
         finishPending(operation);
       }
@@ -234,7 +239,7 @@ export function ArtifactPanel({ client }: { client: PluginProductClient }): Reac
       try {
         await client.request("shell.openExternal", { url: artifact.url });
       } catch (error) {
-        setMutationError(friendlyError(error, "open this artifact"));
+        setMutationError(friendlyError(error, "open this app"));
       } finally {
         finishPending(operation);
       }
@@ -267,7 +272,7 @@ export function ArtifactPanel({ client }: { client: PluginProductClient }): Reac
         await client.request("artifact.unpublish", { artifactId: artifact.artifactId });
         setConfirmRemove(null);
       } catch (error) {
-        setMutationError(friendlyError(error, "remove this artifact"));
+        setMutationError(friendlyError(error, "remove this app"));
       } finally {
         finishPending(operation);
       }
@@ -315,7 +320,7 @@ export function ArtifactPanel({ client }: { client: PluginProductClient }): Reac
         await client.request("artifact.update", { artifactId: artifact.artifactId, title });
         setRenaming(null);
       } catch (error) {
-        setMutationError(friendlyError(error, "rename this artifact"));
+        setMutationError(friendlyError(error, "rename this app"));
       } finally {
         finishPending(operation);
       }
@@ -390,11 +395,11 @@ export function ArtifactPanel({ client }: { client: PluginProductClient }): Reac
       );
     }
     if (catalog.phase === "loading") {
-      return <QuietState title="Loading artifacts" detail="Reading the shared catalog…" />;
+      return <QuietState title="Loading live apps" detail="Reading the shared catalog…" />;
     }
     if (catalog.phase === "error") {
       return (
-        <QuietState title="Artifacts unavailable" detail={catalog.message}>
+        <QuietState title="Live apps unavailable" detail={catalog.message}>
           <UiButton
             variant="primary"
             className="vf-artifact-button"
@@ -409,7 +414,7 @@ export function ArtifactPanel({ client }: { client: PluginProductClient }): Reac
       // The empty catalog draws no Publish… tile, so its one button is the act, in the act's name:
       // one Publish… on screen (VibeField DESIGN.md §8 "Artifacts").
       return (
-        <QuietState title="No artifacts yet" detail="Publish a proxy or a folder">
+        <QuietState title="No apps yet" detail="Publish a proxy or a folder">
           <UiButton
             variant="primary"
             className="vf-artifact-button"
@@ -422,7 +427,7 @@ export function ArtifactPanel({ client }: { client: PluginProductClient }): Reac
       );
     }
     return (
-      <ul className="vf-artifact-list" aria-label="Artifacts">
+      <ul className="vf-artifact-list" aria-label="Live apps">
         {/* Publish… — the Add act as the first tile, in words, where the shelf lays the catalog
             out as tiles (PL-D3); the list form keeps the header's round plus, and its stylesheet
             shows one of the two. */}
@@ -472,10 +477,10 @@ export function ArtifactPanel({ client }: { client: PluginProductClient }): Reac
   ]);
 
   return (
-    <section className="vf-artifact-panel" aria-label="Artifact Hub">
+    <section className="vf-artifact-panel" aria-label="Live">
       <header className="vf-artifact-header">
         <div>
-          <h2>Artifacts</h2>
+          <h2>Live</h2>
           <span>{catalog.phase === "live" ? `${count} shared` : "Shared in your tailnet"}</span>
         </div>
         {screen.kind === "catalog" && (
@@ -483,8 +488,8 @@ export function ArtifactPanel({ client }: { client: PluginProductClient }): Reac
             type="button"
             className="vf-artifact-add"
             disabled={pending !== null}
-            aria-label="Add artifact"
-            title="Add artifact"
+            aria-label="Add app"
+            title="Add app"
             onClick={beginAdd}
           >
             <FieldGlyph name="plus" size={18} />
@@ -762,7 +767,7 @@ function ArtifactRow({
         </span>
       </button>
       <details className="vf-artifact-menu">
-        <summary aria-label={`Actions for ${artifact.title}`} title="Artifact actions">
+        <summary aria-label={`Actions for ${artifact.title}`} title="App actions">
           •••
         </summary>
         <div>

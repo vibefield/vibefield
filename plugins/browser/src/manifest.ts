@@ -25,7 +25,8 @@ export const browserManifest: PluginManifestV1 = {
     surfaces: [
       {
         id: ARTIFACT_SURFACE,
-        title: "Artifacts",
+        // the screen's word (MA-D13 (a); L17): the surface id keeps the inside word
+        title: "Apps",
         slot: "hud.side-panel",
         order: 100,
       },

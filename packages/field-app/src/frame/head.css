@@ -344,19 +344,25 @@
     visibility 0s;
 }
 
-/* The Artifacts shelf hosts the Hub's own surface (§8 "Artifacts — the
-   Artifacts shelf's contents"), the side panel's contribution, in a box
-   pinned at the OPEN sheet's inner width — the sheet's `min(56%, 34rem)` of
-   the window, less the shelf's 20 at each side: 504 at 544. It is spelled in
-   `cqw` because a percentage here would be the shelf's, which the morph
-   narrows: with no container above the head the unit is the window's own
-   (the small viewport), and the catalog's plate, the window it stages, is
-   one, so a plate narrower than the window measures as that window would.
-   The box is a container, so the Hub's own stylesheet answers it with its
-   tiles (PL-D3), and it keeps its width while the sheet grows and folds: the
-   shelf clips it, so the Hub's query never sees the width shrink and the Hub
-   never reflows mid-morph. With no Hub bound, the words stand in the same
-   box, at its centre. */
+/* The Apps shelf (the `artifacts` shelf, Apps on screen: MA-D13 (a)) holds
+   two groups in one box (§8 "Artifacts — the Artifacts shelf's contents", as
+   amended 2026-11-05): Live, the Hub's own surface, the side panel's
+   contribution, then From your agents, field-app's own. The box is pinned at
+   the OPEN sheet's inner width — the sheet's `min(56%, 34rem)` of the window,
+   less the shelf's 20 at each side: 504 at 544. It is spelled in `cqw`
+   because a percentage here would be the shelf's, which the morph narrows:
+   with no container above the head the unit is the window's own (the small
+   viewport), and the catalog's plate, the window it stages, is one, so a
+   plate narrower than the window measures as that window would. The box is a
+   container, so the Hub's own stylesheet and From your agents' answer it with
+   their tiles (PL-D3), and it keeps its width while the sheet grows and
+   folds: the shelf clips it, so neither query sees the width shrink and
+   nothing reflows mid-morph. The two groups stand 24 apart, twice a group's
+   own 12, so they read as two (a number §8's amendment does not state yet).
+   From your agents FOLLOWS Live, whatever Live says: with no Hub bound,
+   Live's words stand at their own height above it (below), so it never sinks
+   to the box's foot: it stands right under Live through the Hub's restart,
+   never remounted. */
 .vf-head-shelf[data-shelf="artifacts"] {
   overflow-x: hidden;
 }
@@ -366,20 +372,28 @@
   width: calc(min(56cqw, 34rem) - 40px);
   min-height: 100%;
   flex-direction: column;
+  gap: 24px;
   container-type: inline-size;
 }
 
-/* With no Hub bound the shelf is never blank (§8 "Artifacts"): why, in
-   words, at its centre — and "Opening Artifacts…" LATE, as History's opening
+/* With no Hub bound Live is never blank (§8 "Artifacts"; §9 "Apps"): why, in
+   words, at its centre — and "Opening live apps…" LATE, as History's opening
    words are: nothing for 120ms, then a 180ms plain `ease` fade, so a quick
    restart never flashes them. Still opening after 10 s, the words turn to
-   "Artifacts aren't starting" in place: the two stand in one cell while the
+   "Live apps aren't starting" in place: the two stand in one cell while the
    words it leaves fade out and the new fade in, over 180ms `ease` (at once
-   under reduced motion, below). */
+   under reduced motion, below). With From your agents after them they stand
+   at their own height, the empty state's own padding, as the Hub's own quiet
+   states do in its tile form (`min-height: 0`), so the made group follows
+   Live directly; alone in the box (no made group: the catalog's live head, a
+   head with no daemon to ask) they take its whole height, at its centre. */
 .vf-head-waits {
   display: grid;
-  flex: 1;
   place-items: center;
+}
+
+.vf-head-waits:only-child {
+  flex: 1;
 }
 
 .vf-head-waits[data-late] {
