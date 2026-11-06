@@ -10215,6 +10215,15 @@ below), and the spark's next session hears it; a line VibeField cannot confirm i
   run"; one that could not then start: "VibeField: the run of ‹flow› you allowed Vela could not start: ‹reason›".
   ‹flow› is the flow's name as its mark says it (§9 "When a run can't go on, or waits"), and ‹run› the run's id. A
   changed flow you run yourself tells no spark;
+- *Proposed 2026-11-06 (CP-4a2b slice 11; CP4-Q22 (a), L5b; ruled 2026-11-06; open until James reads it, as the rest are):*
+  a run a spark started tells that spark when it holds on you, and when it ends: "VibeField: Vela's run of ‹flow›
+  (‹run›) is asking you" (a gate, or a step whose answer missed twice); "VibeField: Vela's run of ‹flow› (‹run›) is
+  done"; "VibeField: Vela's run of ‹flow› (‹run›) failed"; "VibeField: Vela's run of ‹flow› (‹run›) was set aside". Each
+  is said at most once: a hold made again after a wake or a restart is the same hold, your answer to it tells nothing
+  (the run goes on), and a fact waiting for a sleeping spark is lost if VibeField restarts first. They are facts only,
+  never the gate's question, a step's answer, a log line or what the script threw. No act lists a spark's flows until
+  CP-4b serves the flow verbs, so the fact names only the run. A run you start in Vela's thread is yours, and tells Vela
+  nothing;
 - a spark's words its session gave no echo for (as built since CP-2): "VibeField: your words to Claude Code are
   uncertain: no echo came; read the session to see";
 - a spark's words a restart broke into while they were being sent (item 158): "VibeField: VibeField restarted while
@@ -10283,6 +10292,20 @@ run takes them out of the text and keeps their values. One tag is the exception,
 show it: String.raw by another name (`const raw = String.raw`, `(0, String.raw)`) is the script's own tag to the run,
 so what it receives holds the escapes (`impor\u0074(`), never the words as written; only a tag written `String.raw`
 gets the words.
+
+*Proposed 2026-11-06 (CP-4a2b slice 11, 13a's R34; ruled 2026-11-06; open until James reads them on a
+card, as the rest are):* a gate is held to one rule, by the read where its script writes it plainly and by the run at
+its call ("An ask refused"), so a card never offers a gate its run would refuse: a question in words, and one to 4
+choices of the script's own (Stop the run takes the item's last place), each one line of at most 40 characters, none of
+them Stop the run, and no two the same, whatever their case or the spaces around them. Its words:
+- "an ask's question is not words"
+- "an ask offers no choice"
+- "an ask's choices are not a list"
+- "an ask offers ‹n› choices; a gate takes at most 4"
+- "an ask's choice is not one line of words"
+- "an ask's choice is longer than 40 characters"
+- "an ask offers Stop the run, which is VibeField's own"
+- "an ask offers the same choice twice"
 
 **A flow's lines** (track CO, CP-4; CP4-Q7 (a), CP4-Q11 (a) and CP4-S17 (a), ruled at the leans 2026-11-04; the words
 are open until James reads them on a run). A flow's step is an agent the run started, or a session it was handed, and
@@ -10404,6 +10427,12 @@ a name that is, or starts with, "VibeField" shows the flow's slug instead, so a 
     another flow's, or is waiting on a permission."
   - "VibeField couldn't start ‹label›: ‹the runtime's words›"
   - "‹label› failed."
+- *Proposed 2026-11-06 (CP-4a2b slice 11, 13a's R34 and D22; ruled 2026-11-06; open until James reads
+  them, as the rest are):* **An ask refused.** As a step's call is: the script's `await` throws with these words, the
+  run's journal keeps them, and the call counts toward the run's 40.
+  - an `ask()` its gate's rule refuses at its call, in the read's own words, unchanged ("What a flow's read refuses"):
+    "VibeField didn't ask you: ‹the read's words›."
+  - one VibeField could not put in what waits on you: "VibeField couldn't ask you: it couldn't keep the question."
 - **A form the run can't check** (Q-A2 (a): a subset of JSON Schema, checked by fieldd). The subset stays narrow
   (ruled 2026-11-06): `type` is one word, `items` is one form, `enum` holds one or more JSON scalars, and a
   field the form does not name passes.
