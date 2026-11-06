@@ -1291,6 +1291,25 @@ describe("CP-4a2b — a step's answer: heard once, bounded whole, checked agains
       session: "rt-step9",
     });
   });
+
+  it('R14c (slices 7–9 review F2): a step whose start throws is refused "‹label› failed." and frees its slot: past LIVE_STEPS_MAX caught ones, a valid step starts, never waits', async () => {
+    const h = await harness();
+    const stuck = FLOW_LIMITS.LIVE_STEPS_MAX + 1;
+    // W-h's stub throws at a folder that is no name: a start that throws, as an enqueue guard or a record refusal does
+    const bad = Array.from({ length: stuck }, () => ({ label: "Bad", cwd: "" }));
+    const good = { agent: "claude", label: "Good", cwd: "/work/app", profile: "work" };
+    h.approved("stuck", callsEach(bad, good));
+    const run = startedRun(await h.start({ flow: "stuck", scope: ["work"] })).run;
+    await waitFor(() => expect(h.enqueued).toHaveLength(1));
+    // each is journaled as its refusal, so its step settles failed, and the script hears it (on a replay too)
+    expect(refusalsOf(h, run)).toEqual(Array.from({ length: stuck }, () => "Bad failed."));
+    const record = h.records.runRecord(run);
+    expect(record?.steps.map((step) => [step.label, step.state])).toEqual(
+      Array.from({ length: stuck }, () => ["Bad", "failed"]),
+    );
+    expect(record?.open.map((step) => [step.call, step.state])).toEqual([[stuck + 1, "working"]]);
+    expect(h.spawned.map((spawn) => spawn.origin.call)).toEqual([stuck + 1]);
+  });
 });
 
 // CP-4a2b (slice 7's R8b; D9, CP4-Q20 (a); Q2 (a), ruled 2026-11-06) — the folder at the start, read from the
