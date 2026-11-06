@@ -2861,4 +2861,35 @@ describe("CP-4a2b — a run's agents, RUN_AGENTS_MAX started, counted until its 
     expect(h.hands).toMatchObject([{ runtimeRunId: "run-yours", run, call: 2, gone: false }]);
     expect(h.records.runRecord(run)).toMatchObject({ agents: max });
   });
+
+  it("RA4 (the F4b review MM2): a list the store refuses just after a reservation's write landed is said in fieldd's log, never thrown out of the write: the step still spawns, and its run counts the one agent it started", async () => {
+    const h = await harness();
+    h.approved("agents", agentsAtOnce(1));
+    // a subscriber, so each write's list is read; the store refuses the one read just after the reservation lands
+    h.runs.onChange(() => undefined);
+    const write = h.records.writeRunRecord.bind(h.records);
+    const listed = h.records.runRecords.bind(h.records);
+    let reserved = false;
+    let refusing = false;
+    vi.spyOn(h.records, "writeRunRecord").mockImplementation((run, fields) => {
+      write(run, fields);
+      if (!reserved && fields.agents === 1) {
+        reserved = true;
+        refusing = true;
+      }
+    });
+    vi.spyOn(h.records, "runRecords").mockImplementation(() => {
+      if (!refusing) return listed();
+      refusing = false;
+      throw recordsUnreadable(RECORD_STORES.SERVICE_FLOWS, UNREADABLE_WORDS.flows, true);
+    });
+    const run = startedRun(await h.start({ flow: "agents" })).run;
+    await waitFor(() => expect(outcomeOf(h, run, 1)).toBeDefined());
+    const events = h.warned.map(({ event }) => event);
+    expect(reserved).toBe(true);
+    expect(outcomeOf(h, run, 1)).toBe("spawned");
+    expect(h.records.runRecord(run)).toMatchObject({ agents: 1 });
+    expect(events).toContain("fieldd.flows.run.told");
+    expect(events).not.toContain("fieldd.flows.step.start");
+  });
 });
