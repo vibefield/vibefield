@@ -82,14 +82,7 @@ The catalog currently mounts these shipping views directly:
   swarm-circle state matrix — and, since GV-D1 (2026-10-11), Godview's head: the shipping
   `GodviewHeadView`, which the shipping monitor mounts, so every Godview specimen wears it and no
   catalog module names it. The stage specimen stages the catalog's own button for the System
-  control panel, which the product reaches from the palette.
-  *Ruled 2026-11-06 (UM-D21; mounted at UM-2):* the profiles column (DESIGN.md §8 "Godview's profiles
-  column", "The Bands circle") replaces the usage column in every specimen, since the shipping monitor
-  mounts it. Its plates mount the shipping column view over a fixture usage port built from the
-  profiles fixtures (the client's answers and the clock replaced, never the view): This Mac alone with
-  the add; several profiles with a lens on; a first reading; a plan that needs you; a plan running hot;
-  the popover pinned; and the limit moment beside the add. Each plate is drawn in both Godview modes and
-  under reduced motion. The column's namespace is its own, and the catalog's CSS may not own a rule in it
+  control panel, which the product reaches from the palette
 - the command palette (re-cut by One Frame FR-3: the frame's acts and the plugins' commands, each
   key at its row's end), settings dialog and loading veil (the side-panel frame retired into the
   right edge's drawer at FR-4, and the drawer into the pill's Artifacts shelf at HN-8)
@@ -223,12 +216,7 @@ The catalog currently mounts these shipping views directly:
   over History before anything is read, and the popup holding words over the shipping History view
   drawn from the same demo, so a pick lands that room on the line; the plate is the window, the
   scrim and the popup drawn in it and the view receding by the product's own rule. The search
-  interim's plate (the room's own sheet) retired with it.
-  *Ruled 2026-11-06 (SE-D1 A, SE-D2 A; mounted at SE-1):* the Peek's Tokens plates, on the same
-  shipping controller and its live fixture door, whose runs carry their profiles and whose filters
-  carry their counts: a token in the field (and the button's, the same state), the offer a typed
-  name makes, the + Filter menu open on its groups, a live row with its profile, and the live peek
-  with its head. The scope row's plates retire with the row
+  interim's plate (the room's own sheet) retired with it
 - the desk's selection bar (DK-11): `SelectionBarView` over fixture selections, a plate per state —
   one object with its kind's own act (drawn by the bar's one path renderer), two ("Send 2 to…"),
   taped ("Lift the tape"), a missing face ("Clock · plugin off"), an act with no glyph and a name
@@ -297,12 +285,10 @@ canvas, accessibility and lifecycle; field-app no longer supplies a physics cont
 Each view's sheet is scoped to `.mv-<id>` and reads only its own custom properties and the finite
 SDK `MONITOR_SKIN` (DESIGN §8). Host CSS names no view class. The head reads marks and focus keys
 from manifests (`godview/GodviewHeadView.tsx`, its sheet beside it; DESIGN §8 "Godview's head —
-Stories"). Every host chrome piece has its own `ChromeBoundary` — the head, the profiles column, the
-profile notice and the claims in `GodviewMonitor` *(amended 2026-11-06, UM-D21: this said "usage", the
-usage column's boundary, which becomes the profiles column's, "Profiles", at UM-2)*; System control
-and the deck in `GodviewOverlay`; the deck's edge in `GodviewStage`; each pane's frame, the frames
-and the launchers in `GodviewDeck` — so a throw names that piece unavailable where it stood
-without unmounting the monitor or its view,
+Stories"). Every host chrome piece has its own `ChromeBoundary` — the head, usage, the
+profile notice and the claims in `GodviewMonitor`; System control and the deck in `GodviewOverlay`;
+the deck's edge in `GodviewStage`; each pane's frame, the frames and the launchers in `GodviewDeck` —
+so a throw names that piece unavailable where it stood without unmounting the monitor or its view,
 and each is tried again only for a fact it reads (its `retryKey`), at most once per window: 1 s,
 doubling to 30 s while it keeps failing. The head and the
 profile notice have no `retryKey`, as they read only the window's own state: they are not tried
