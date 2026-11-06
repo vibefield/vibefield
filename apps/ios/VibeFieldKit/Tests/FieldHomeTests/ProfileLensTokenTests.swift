@@ -106,9 +106,10 @@ struct ProfileLensTokenTests {
     #expect(every.pick == nil)
     #expect(every.lead == nil)
     let work = try #require(items.first { $0.pick == "work" })
-    #expect(work.lead == PhoneSearch.Lead.profile(glyph: nil, native: false))
+    #expect(work.lead == PhoneSearch.Lead.profile(glyph: nil, native: false, filled: false))
+    // This Mac is the default here (`ProfileLensTests.set`): its lead is filled (the laptop draws the same either way)
     let native = try #require(items.first { $0.pick == "native" })
-    #expect(native.lead == PhoneSearch.Lead.profile(glyph: nil, native: true))
+    #expect(native.lead == PhoneSearch.Lead.profile(glyph: nil, native: true, filled: true))
 
     lens.show(nil)
     let none = LensToken.items(lens, live: field)
@@ -168,20 +169,22 @@ struct ProfileLensTokenTests {
 
   /// SE-P5b (ruling 20; the S2 review's finding 10) — search's leads (a chip, a token, an offer, a pill, the token's
   /// menu) draw a profile through the phone's ONE glyph table, as the bloom's buds do (`SpawnBloomOverlay.symbol`):
-  /// This Mac the laptop, a token the vocabulary's symbol, outlined as the bloom draws it, and one this build does not
-  /// draw — or none — the star (puppeteer's `profileMarkName`), never a person. `SearchLeadGlyph` is a view, so the row
-  /// runs on the main actor.
+  /// This Mac the laptop, a token the vocabulary's symbol — outlined, and filled for the default profile (DESIGN.md §8,
+  /// the M-phone review's m2) — and one this build does not draw, or none, the star (puppeteer's `profileMarkName`),
+  /// never a person. `SearchLeadGlyph` is a view, so the row runs on the main actor.
   @MainActor
   @Test("search's leads draw a profile through the one glyph table: the laptop, the vocabulary's symbol, else the star")
   func leadsDrawTheOneTable() {
     let tokens: [String?] = ProfileGlyphSymbols.symbols.keys.sorted().map { Optional($0) } + [nil, "no-such-glyph"]
     for token in tokens {
-      let drawn = SearchLeadGlyph.profileSymbol(glyph: token, native: false)
-      let table = ProfileGlyphSymbols.symbol(glyph: token, native: false, filled: false)
-      let name = token ?? "no glyph"
-      #expect(drawn == table, "\(name)")
+      for filled in [false, true] {
+        let drawn = SearchLeadGlyph.profileSymbol(glyph: token, native: false, filled: filled)
+        let table = ProfileGlyphSymbols.symbol(glyph: token, native: false, filled: filled)
+        let name = "\(token ?? "no glyph")\(filled ? ", filled" : "")"
+        #expect(drawn == table, "\(name)")
+      }
     }
-    let native = SearchLeadGlyph.profileSymbol(glyph: "briefcase", native: true)
+    let native = SearchLeadGlyph.profileSymbol(glyph: "briefcase", native: true, filled: true)
     #expect(native == ProfileGlyphSymbols.laptop)
   }
 }

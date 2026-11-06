@@ -199,8 +199,9 @@ public enum PhoneSearch {
 
   /// What leads a chip, a token or an offer: the drawing's glyph, the view's to draw.
   public enum Lead: Equatable, Sendable {
-    /// a profile's own glyph word, and whether it is the agents' own folders (This Mac's)
-    case profile(glyph: String?, native: Bool)
+    /// a profile's own glyph word, whether it is the agents' own folders (This Mac's), and whether it is the default
+    /// profile, whose glyph is drawn filled
+    case profile(glyph: String?, native: Bool, filled: Bool)
     /// a desktop's OS mark (`platform`)
     case desk(platform: String?)
     /// who said it (§13's `message`)
@@ -377,7 +378,8 @@ public enum PhoneSearch {
 
   /// What leads a profile wherever search names it: a chip, a token, an offer, a live row's pill.
   public static func lead(_ profile: AgentProfileSet) -> Lead {
-    .profile(glyph: profile.glyph, native: profile.kind == "native")
+    // RED STUB (SE-2r): the default profile's glyph is not filled yet
+    .profile(glyph: profile.glyph, native: profile.kind == "native", filled: false)
   }
 
   /// Live now's chips (SE-D5): the profiles, less the one chosen, each with its sessions and the waiting dot; then

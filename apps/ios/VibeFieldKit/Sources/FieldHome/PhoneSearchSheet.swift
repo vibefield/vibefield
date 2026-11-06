@@ -355,8 +355,8 @@ struct SearchLeadGlyph: View {
 
   var body: some View {
     switch lead {
-    case .profile(let glyph, let native):
-      Image(systemName: Self.profileSymbol(glyph: glyph, native: native))
+    case .profile(let glyph, let native, let filled):
+      Image(systemName: Self.profileSymbol(glyph: glyph, native: native, filled: filled))
         .font(.system(size: size, weight: .regular))
         .accessibilityHidden(true)
     case .desk(let platform):
@@ -376,7 +376,8 @@ struct SearchLeadGlyph: View {
   /// buds draw it (`SpawnBloomOverlay.symbol`): This Mac's laptop, a token's symbol outlined, the star for a token this
   /// build does not draw. *(Until SE-P5b, 2026-11-06, a lead kept a rule of its own: the token's name when the system
   /// had a symbol of it, else the laptop for This Mac and `person.crop.circle` otherwise.)*
-  static func profileSymbol(glyph: String?, native: Bool) -> String {
+  static func profileSymbol(glyph: String?, native: Bool, filled: Bool) -> String {
+    // RED STUB (SE-2r): drawn outlined whatever `filled` says
     ProfileGlyphSymbols.symbol(glyph: glyph, native: native, filled: false)
   }
 }

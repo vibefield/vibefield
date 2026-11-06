@@ -168,10 +168,31 @@ struct PhoneSearchTests {
     let labels = tokens.map { $0.label }
     #expect(labels == ["Work", "loft"])
     let leads = tokens.map { $0.lead }
-    #expect(leads == [.profile(glyph: "briefcase", native: false), .desk(platform: "linux")])
+    #expect(leads == [.profile(glyph: "briefcase", native: false, filled: false), .desk(platform: "linux")])
     #expect(PhoneSearch.placeholder(tokens: 0) == "Search")
     #expect(PhoneSearch.placeholder(tokens: 1) == "Search")
     #expect(PhoneSearch.placeholder(tokens: 2) == nil)
+  }
+
+  /// DESIGN.md §8 "Search — the Peek" (a token leads with "the profile's glyph (filled for the default)"), the
+  /// drawing's `pg(v.glyph, v.isDefault, …)` and `ProfileGlyphSymbols`' own rule: a profile's lead carries whether it
+  /// is the default, so a chip, a token, an offer, a pill and the token's menu draw it filled (the M-phone review's
+  /// m2).
+  @Test("a profile's lead is filled while it is the default profile, This Mac's and a managed one's alike")
+  func leadFillsTheDefault() throws {
+    let leads = try Self.profiles().map(PhoneSearch.lead)
+    #expect(leads == [
+      .profile(glyph: nil, native: true, filled: true),
+      .profile(glyph: "briefcase", native: false, filled: false),
+      .profile(glyph: nil, native: false, filled: false),
+    ])
+    let work = try AgentProfileSet(
+      json: .object([
+        "id": .string("work"), "kind": .string("managed"), "label": .string("Work"), "default": .bool(true),
+        "glyph": .string("briefcase"), "personas": .array([]),
+      ]))
+    let lead = PhoneSearch.lead(work)
+    #expect(lead == .profile(glyph: "briefcase", native: false, filled: true))
   }
 
   @Test("a typed name offers its filter: a profile while none is chosen, else a desktop; two letters at least")
@@ -179,7 +200,7 @@ struct PhoneSearchTests {
     let field = try Self.field()
     let work = PhoneSearch.liveOffer(field, query: "billing wo", profile: nil, desk: nil)
     #expect(work == PhoneSearch.Offer(
-      filter: .profile("work"), lead: .profile(glyph: "briefcase", native: false),
+      filter: .profile("work"), lead: .profile(glyph: "briefcase", native: false, filled: false),
       title: "Show only Work's sessions", note: "a filter · 4 sessions"))
     // a word inside a name: "mac" starts This Mac's second word
     let mac = PhoneSearch.liveOffer(field, query: "mac", profile: nil, desk: nil)
