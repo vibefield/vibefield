@@ -13,7 +13,8 @@
 //   · a page hard-linked to a file outside its root, as rosetta's link placement leaves it, read;
 //   · a rename refused after the temp is written: the temp removed, what was there kept;
 //   · a worker with no roots, or with roots that overlap, refuses every view; a root that is not
-//     there is root-missing, and the worker makes neither (fieldd makes both).
+//     there is root-missing (any other refusal of a root is internal), and the worker makes
+//     neither (fieldd makes both).
 import { execFileSync } from "node:child_process";
 import {
   existsSync,
@@ -401,7 +402,7 @@ describe("a made app's view (DR-1b), built by the real files worker", () => {
     expect(readdirSync(nested)).toEqual([DIGEST]);
   });
 
-  it("answers root-missing for a root that is not there, and makes neither root", async () => {
+  it("answers root-missing only for a root that is not there, and makes neither root", async () => {
     const { base, roots, source, folder } = layout();
     // a served root that is not there, and one whose missing tail lies behind a link into the
     // export: fieldd makes the roots, never the worker, so nothing lands in the export's tree
@@ -419,6 +420,15 @@ describe("a made app's view (DR-1b), built by the real files worker", () => {
     }
     expect(existsSync(roots.servedRoot)).toBe(false);
     expect(readdirSync(join(roots.sourceRoot, APP))).toEqual([DIGEST]);
+    // a root the disk refuses for any other reason (a link loop) is the worker's own trouble:
+    // internal, its errno named, never root-missing
+    const loop = join(base, "made-loop");
+    symlinkSync(loop, loop);
+    const looped = await ready({ sourceRoot: roots.sourceRoot, servedRoot: loop });
+    const loopFolder = join(loop, APP, DIGEST);
+    const trouble = await refusal(build(looped, source, loopFolder, VECTOR.embed.theme));
+    expect(trouble.error.code).toBe("internal");
+    expect(trouble.error.message).toContain("(ELOOP)");
     // an export-source root that is not there
     mkdirSync(roots.servedRoot);
     const gone = join(base, "made-src-gone");

@@ -82,6 +82,8 @@ const PAGE_REFUSALS = new Set<unknown>([
   "ENXIO",
   "EISDIR",
 ]);
+/** What the disk says of a root that is not there (a file on its way is one). */
+const ROOT_ABSENT = new Set<unknown>(["ENOENT", "ENOTDIR"]);
 
 /** Build one made app's view (module header). */
 export async function buildMadeView(
@@ -132,12 +134,15 @@ function overlapping(): WorkerFailure {
   return new WorkerFailure("invalid", "the export-source and served roots overlap");
 }
 
-/** A root's real path, or `root-missing`: fieldd makes both roots and the
- * worker neither, so nothing is made before they are proved apart. */
+/** A root's real path, or `root-missing` while it is not there: fieldd makes
+ * both roots and the worker neither, so nothing is made before they are proved
+ * apart. Anything else the disk says of a root is the worker's own trouble,
+ * answered `internal` with its errno (module header), never a missing root. */
 async function realRoot(path: string, missing: string): Promise<string> {
   try {
     return await realpath(path);
-  } catch {
+  } catch (error) {
+    if (!ROOT_ABSENT.has(codeOf(error))) throw error;
     throw new WorkerFailure("root-missing", missing);
   }
 }
