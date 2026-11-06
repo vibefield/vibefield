@@ -15,6 +15,7 @@ import type {
   FrameZoomAct,
   GodviewDeckState,
   RendererParticipantIdentity,
+  RendererReplaceReason,
   ScreenshotCaptureResult,
   ScreenshotPreviewResult,
   ShellCommand,
@@ -311,8 +312,10 @@ export interface FieldHost {
    * the page, which reopens its own board (`vf-window-doc`) with them; the page's
    * own reload is a navigation the shell refuses outside dev. Save the board FIRST.
    * Same reload race as `usersCreate`. Optional: a browser harness has no main, and
-   * reloads the page itself (plugin-host/replace-renderer.ts). */
-  readonly replaceRenderer?: (reason: "plugin-kinds") => Promise<unknown>;
+   * reloads the page itself (plugin-host/replace-renderer.ts). Item 212 (RV #29): also
+   * the status line's Try again (`field-service`), whose reloaded window is the person's
+   * ask for the field service (frame/field-service-notice.ts). */
+  readonly replaceRenderer?: (reason: RendererReplaceReason) => Promise<unknown>;
   /** SNAP-D3 — the native screenshot helper, through main. Optional like the
    * users doors: a browser harness has no helper to spawn, and a surface that
    * offers the capture renders disabled and says so. The answer is the

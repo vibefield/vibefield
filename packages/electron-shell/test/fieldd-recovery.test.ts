@@ -65,7 +65,10 @@ describe("fieldd main-process recovery", () => {
       .mockRejectedValueOnce(new Error("first boot failed"))
       .mockResolvedValueOnce(readyHandle) as unknown as FielddSupervisor["ensure"];
     const failures: unknown[] = [];
-    const coordinator = new FielddHandleCoordinator(upstream, (error) => failures.push(error));
+    const coordinator = new FielddHandleCoordinator({
+      upstreamEnsure: upstream,
+      onEnsureError: (error) => failures.push(error),
+    });
     const observed: FielddHandle[] = [];
     coordinator.onHandle((value) => observed.push(value));
 
@@ -89,7 +92,7 @@ describe("fieldd main-process recovery", () => {
       .fn()
       .mockResolvedValueOnce(oldHandle)
       .mockResolvedValueOnce(newHandle) as unknown as FielddSupervisor["ensure"];
-    const coordinator = new FielddHandleCoordinator(upstream);
+    const coordinator = new FielddHandleCoordinator({ upstreamEnsure: upstream });
     const observed: FielddHandle[] = [];
     coordinator.onHandle((value) => observed.push(value));
 
@@ -113,7 +116,7 @@ describe("fieldd main-process recovery", () => {
       return () => statusListeners.delete(listener);
     };
     const upstream = vi.fn().mockResolvedValue(current) as unknown as FielddSupervisor["ensure"];
-    const coordinator = new FielddHandleCoordinator(upstream);
+    const coordinator = new FielddHandleCoordinator({ upstreamEnsure: upstream });
     await coordinator.ensure();
     expect(upstream).toHaveBeenCalledTimes(1);
 
@@ -128,7 +131,7 @@ describe("fieldd main-process recovery", () => {
   it("an update that aborted BEFORE the stop releases the hold, and recovery works again", async () => {
     const current = handle("boot-1", []);
     const upstream = vi.fn().mockResolvedValue(current) as unknown as FielddSupervisor["ensure"];
-    const coordinator = new FielddHandleCoordinator(upstream);
+    const coordinator = new FielddHandleCoordinator({ upstreamEnsure: upstream });
     await coordinator.ensure();
     coordinator.holdForStop();
     expect(coordinator.isHeld).toBe(true);
@@ -164,7 +167,10 @@ describe("fieldd main-process recovery", () => {
         .fn()
         .mockResolvedValueOnce(oldHandle)
         .mockResolvedValueOnce(newHandle) as unknown as FielddSupervisor["ensure"];
-      const coordinator = new FielddHandleCoordinator(upstream, undefined, undefined, 25);
+      const coordinator = new FielddHandleCoordinator({
+        upstreamEnsure: upstream,
+        reprobeAfterMs: 25,
+      });
       const observed: FielddHandle[] = [];
       coordinator.onHandle((value) => observed.push(value));
 
@@ -186,7 +192,11 @@ describe("fieldd main-process recovery", () => {
     const upstream = vi.fn(async () => readyHandle) as unknown as FielddSupervisor["ensure"];
     const ensureFailures = vi.fn();
     const listenerFailures = vi.fn();
-    const coordinator = new FielddHandleCoordinator(upstream, ensureFailures, listenerFailures);
+    const coordinator = new FielddHandleCoordinator({
+      upstreamEnsure: upstream,
+      onEnsureError: ensureFailures,
+      onListenerError: listenerFailures,
+    });
     const observed = vi.fn();
     coordinator.onHandle(() => {
       throw new Error("observer bind exploded");
@@ -211,7 +221,7 @@ describe("fieldd main-process recovery", () => {
       .fn()
       .mockResolvedValueOnce(oldHandle)
       .mockResolvedValueOnce(newHandle) as unknown as FielddSupervisor["ensure"];
-    const coordinator = new FielddHandleCoordinator(upstream);
+    const coordinator = new FielddHandleCoordinator({ upstreamEnsure: upstream });
     const pluginStops: Record<string, ReturnType<typeof vi.fn>> = {};
     const pluginPending = new Map<string, ReturnType<typeof deferred<() => void>>>();
     const preferences: unknown[] = [];
@@ -296,9 +306,9 @@ describe("fieldd main-process recovery", () => {
       info: { bootId: "same-boot", port: 4242 },
       client,
     } as unknown as FielddHandle;
-    const coordinator = new FielddHandleCoordinator(
-      vi.fn(async () => readyHandle) as unknown as FielddSupervisor["ensure"],
-    );
+    const coordinator = new FielddHandleCoordinator({
+      upstreamEnsure: vi.fn(async () => readyHandle) as unknown as FielddSupervisor["ensure"],
+    });
     const preferences: unknown[] = [];
     const health: unknown[] = [];
     const observePlugins = vi.fn(async () => vi.fn());

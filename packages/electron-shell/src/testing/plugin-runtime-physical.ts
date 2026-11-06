@@ -3,6 +3,10 @@ import { readdirSync, readFileSync, readlinkSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { FIRST_PARTY_RETENTION, type NodeLogging, PLUGIN_RETENTION } from "@vibefield/logging";
 import { app, type BrowserWindow } from "electron";
+import {
+  FIELDD_RECOVERY_INTENSITY,
+  type FielddRecoveryIntensity,
+} from "../main/fieldd-handle-coordinator";
 
 const MiB = 1024 * 1024;
 const MAX_CYCLES = 10_000;
@@ -126,6 +130,24 @@ export function pluginRuntimeSoakConfig(
     injection: injectionRaw,
     claim: durationMs === MAX_DURATION_MS ? "24h" : "calibration",
   };
+}
+
+/** Item 212 (RV #29) — the soak's own fieldd recovery intensity, which main's coordinator takes
+ * in place of the house's (FIELDD_RECOVERY_INTENSITY: three automatic attempts in ten minutes).
+ * Every cycle SIGKILLs the owned fieldd on purpose and waits for main's automatic replacement, so
+ * under the house's a run past three cycles in ten minutes would end in a crash loop it caused
+ * itself. The lab allows one automatic attempt per cycle it may run, past the house's own
+ * allowance, in one window as long as the longest run: a fieldd that keeps failing to start still
+ * ends in the crash loop, and the cycle fails at its own deadline. Null outside the soak: the
+ * restart smoke's one cycle keeps the house's. */
+export function pluginRuntimeSoakRecoveryIntensity(
+  config: PluginRuntimeSoakConfig = pluginRuntimeSoakConfig(),
+): FielddRecoveryIntensity | null {
+  if (!config.enabled) return null;
+  return Object.freeze({
+    max: (config.cycles ?? MAX_CYCLES) + FIELDD_RECOVERY_INTENSITY.max,
+    windowMs: MAX_DURATION_MS,
+  });
 }
 
 export type CountVector = Readonly<Record<string, number>>;

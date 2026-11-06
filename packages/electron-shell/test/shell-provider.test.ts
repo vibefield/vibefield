@@ -99,9 +99,9 @@ function call(
 async function fixture(nativeOverrides?: Partial<ShellProviderNative>) {
   const client = new FakeClient();
   const handle = fakeHandle("boot-1", client);
-  const coordinator = new FielddHandleCoordinator(
-    vi.fn(async () => handle) as unknown as FielddSupervisor["ensure"],
-  );
+  const coordinator = new FielddHandleCoordinator({
+    upstreamEnsure: vi.fn(async () => handle) as unknown as FielddSupervisor["ensure"],
+  });
   const parent = fakeWindow();
   const native: ShellProviderNative = {
     parentWindow: vi.fn(() => parent),
@@ -142,9 +142,10 @@ describe("RecoveringShellProvider", () => {
         .mockResolvedValue({
           registered: [...SHELL_PROVIDER_METHODS],
         });
-      const coordinator = new FielddHandleCoordinator(
-        vi.fn(async () => fakeHandle("boot-1", client)) as unknown as FielddSupervisor["ensure"],
-      );
+      const upstream = vi.fn(async () => fakeHandle("boot-1", client));
+      const coordinator = new FielddHandleCoordinator({
+        upstreamEnsure: upstream as unknown as FielddSupervisor["ensure"],
+      });
       const native: ShellProviderNative = {
         parentWindow: () => fakeWindow(),
         showOpenDialog: vi.fn(async () => ({ canceled: true, filePaths: [] })),
@@ -704,12 +705,11 @@ describe("RecoveringShellProvider", () => {
     const first = new FakeClient();
     const second = new FakeClient();
     const handles = [fakeHandle("boot-1", first), fakeHandle("boot-2", second)];
-    const coordinator = new FielddHandleCoordinator(
-      vi
-        .fn()
-        .mockResolvedValueOnce(handles[0])
-        .mockResolvedValueOnce(handles[1]) as unknown as FielddSupervisor["ensure"],
-    );
+    const upstream = vi
+      .fn()
+      .mockResolvedValueOnce(handles[0])
+      .mockResolvedValueOnce(handles[1]) as unknown as FielddSupervisor["ensure"];
+    const coordinator = new FielddHandleCoordinator({ upstreamEnsure: upstream });
     const native: ShellProviderNative = {
       parentWindow: () => fakeWindow(),
       showOpenDialog: vi.fn(async () => ({ canceled: true, filePaths: [] })),

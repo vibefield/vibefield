@@ -1,7 +1,16 @@
 import type { SoundPlayerState, UpdateView } from "@vibefield/contracts";
 import { stagedTrayLabel } from "./updates/apply";
 
-export type TrayLinkState = "starting" | "ready" | "reconnecting" | "unavailable";
+/** The status item's service row (DESIGN.md §9 "The field service's words"). Item 212 (RV #29): `recovering`
+ * while main starts fieldd again after it went away, `crash-loop` once the house intensity stopped it
+ * (`main/fieldd-link.ts`). */
+export type TrayLinkState =
+  | "starting"
+  | "ready"
+  | "reconnecting"
+  | "unavailable"
+  | "recovering"
+  | "crash-loop";
 export type TrayEvidenceState = "healthy" | "degraded";
 export type TrayUpdateState =
   | { readonly kind: "idle" }
@@ -35,6 +44,9 @@ export type TrayUpdateState =
 
 export interface TraySnapshot {
   readonly link: TrayLinkState;
+  /** Item 212 (RV #29) — with `link` at `crash-loop`: how many automatic tries main made before it stopped, as the row
+   * says them. Absent says none (never a guessed number). */
+  readonly serviceTries?: number | undefined;
   readonly evidence: TrayEvidenceState;
   readonly update: TrayUpdateState;
   /** UA-2 — the attached user's display name; absent hides the row (older
@@ -96,6 +108,9 @@ export interface TrayActions {
   newUser?: () => void;
   /** SD-2 — Quiet for an hour, until tomorrow, or (null) the sounds back on; absent hides the row. */
   quietSounds?: (quiet: "hour" | "tomorrow" | null) => void;
+  /** Item 212 (RV #29) — Try Again, under the service row in the crash loop: the person's ask that starts the field
+   * service once more; absent hides the row. */
+  retryFieldService?: () => void;
   quit(): void;
 }
 
@@ -124,7 +139,39 @@ function serviceStatus(snapshot: TraySnapshot): string {
       return "Field service: Reconnecting…";
     case "unavailable":
       return "Field service: Unavailable";
+    // Item 212 (RV #29; DESIGN.md §9 "The field service's words", at the lean until James rules rv-service-recovery)
+    case "recovering":
+      return "Field service: Restarting…";
+    case "crash-loop":
+      return snapshot.serviceTries === undefined
+        ? "Field service: Stopped"
+        : `Field service: Stopped after ${triesWords(snapshot.serviceTries)}`;
   }
+}
+
+/** "1 try", "3 tries". */
+function triesWords(tries: number): string {
+  return tries === 1 ? "1 try" : `${tries} tries`;
+}
+
+/** Item 212 (RV #29) — Try Again, right under the service row while main has stopped starting the field service, in
+ * title case as macOS menus are; nothing acts while the app quits (`actionable`). */
+function retryItem(
+  snapshot: TraySnapshot,
+  actions: TrayActions,
+  platform: TrayPlatform,
+  actionable: boolean,
+): TrayMenuItem[] {
+  const retry = actions.retryFieldService;
+  if (snapshot.link !== "crash-loop" || retry === undefined) return [];
+  return [
+    {
+      id: "retry-field-service",
+      label: "Try Again",
+      ...availability(platform, actionable),
+      ...(actionable ? { click: retry } : {}),
+    },
+  ];
 }
 
 /** UA-7 — who a row names: the face leads and the name makes it certain
@@ -372,6 +419,7 @@ export function buildTrayMenu(
       label: serviceStatus(snapshot),
       ...availability(platform, false),
     },
+    ...retryItem(snapshot, actions, platform, actionable),
     // TS-4 (TS-D7; DESIGN.md §8 "Asking again") — a row, never a badge, in title
     // case as macOS menus are; gone the moment the link lands
     ...(snapshot.connectDevices === true && actions.connectDevices !== undefined

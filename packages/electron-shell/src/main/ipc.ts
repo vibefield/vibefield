@@ -33,7 +33,6 @@ import {
   UsersUpdateParams,
   WindowLightsState as WindowLightsStateSchema,
 } from "@vibefield/contracts";
-import type { FielddSupervisor } from "@vibefield/fieldd-supervisor";
 import type { Logger } from "@vibefield/logging";
 import { ipcMain, type WebContents } from "electron";
 import { createBootstrapHandler, type WindowRendererBoundary } from "./bootstrap";
@@ -43,6 +42,7 @@ import {
   createClipboardDoor,
   createClipboardImageDoor,
 } from "./clipboard-door";
+import type { FielddEnsure } from "./fieldd-handle-coordinator";
 import { shellIdentity } from "./login-shell";
 import { createScreenshotDoor } from "./screenshot-door";
 import { createScreenshotPreviewDoor } from "./screenshot-preview";
@@ -68,7 +68,7 @@ import { createZoomHapticDoor } from "./zoom-haptics";
 
 export function registerWindowBootstrap(
   registry: WindowRegistry,
-  ensure: FielddSupervisor["ensure"],
+  ensure: FielddEnsure,
   desktopBootId: string,
   logger?: Logger,
 ): WindowRendererBoundary {

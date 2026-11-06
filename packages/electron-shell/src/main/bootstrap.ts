@@ -4,8 +4,9 @@ import {
   type WindowConnection,
   type WindowTerminalBootstrap,
 } from "@vibefield/contracts";
-import type { FielddHandle, FielddSupervisor } from "@vibefield/fieldd-supervisor";
+import type { FielddHandle } from "@vibefield/fieldd-supervisor";
 import type { WebContents } from "electron";
+import type { FielddEnsure } from "./fieldd-handle-coordinator";
 
 // The bootstrap mint, PURE (ESR §6.2–6.3): the sender policy plus the
 // once-per-generation cache the contract table promises ("once per webContents
@@ -63,7 +64,9 @@ export interface WindowBootstrapHandler extends WindowRendererBoundary {
 
 export function createBootstrapHandler(deps: {
   owns: (sender: WebContents) => boolean;
-  ensure: FielddSupervisor["ensure"];
+  /** Item 212 (RV #29) — the mint asks as a person (a window booting is a person looking: it starts the field
+   * service again out of a crash loop); a revocation's retry asks as no one. */
+  ensure: FielddEnsure;
   /** Stable for one Electron main process. Renderer code never selects it. */
   desktopBootId: string;
   /** Main-owned transport choice and shell policy for this renderer boot. */
@@ -315,13 +318,13 @@ export function createBootstrapHandler(deps: {
 }
 
 async function mint(
-  ensure: FielddSupervisor["ensure"],
+  ensure: FielddEnsure,
   reapStaleForBoot: (handle: FielddHandle) => Promise<void>,
   senderId: number,
   rendererParticipant: RendererParticipantIdentityValue,
   terminal: WindowTerminalBootstrap | undefined,
 ): Promise<{ connection: WindowConnection; tokenId: string; handle: FielddHandle }> {
-  const handle = await ensure();
+  const handle = await ensure({ person: true });
   // A production fieldd outlives Electron. Reap grants left by a previous
   // shell crash once per daemon boot, before issuing this shell's first grant.
   await reapStaleForBoot(handle);

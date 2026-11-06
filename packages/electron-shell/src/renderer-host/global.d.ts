@@ -5,6 +5,7 @@ import type {
   FrameViewState,
   FrameZoomAct,
   GodviewDeckState,
+  RendererReplaceReason,
   ScreenshotCaptureResult,
   ScreenshotPreviewResult,
   ShellCommand,
@@ -109,8 +110,10 @@ declare global {
       usersSwitch(params: { userId: string }): Promise<BridgeUserRecord>;
       /** DK-9 — replace THIS window's renderer: main reloads the page, which reopens
        * its own board with a plugin's new kinds. The page saves its board first.
+       * Item 212 (RV #29): also the status line's Try again (`field-service`), whose
+       * reloaded window is the person's ask for the field service.
        * RELOAD RACE — see `usersSwitch`. */
-      replaceRenderer(reason: "plugin-kinds"): Promise<{ replacing: true }>;
+      replaceRenderer(reason: RendererReplaceReason): Promise<{ replacing: true }>;
       /** HN-6 — a file another app handed over, by its path on disk; null for one not on disk.
        * The preload reads it itself (`webUtils`): no IPC. */
       pathForFile(file: File): string | null;

@@ -227,6 +227,10 @@ import {
 
 // MV-0 — the Godview perf lab rides the same bundle, for the same reason.
 export { runGodviewPerfLab } from "./godview-perf-lab";
+// Item 212 (RV #29) — main reads the plugin-runtime soak's own fieldd recovery
+// intensity BEFORE the pair boots (each pair's coordinator is built with it),
+// so the soak's reader is a door of this bundle's like the stagers below.
+export { pluginRuntimeSoakRecoveryIntensity } from "./plugin-runtime-physical";
 export { runTerminalDoorProbe } from "./terminal-door-probe";
 // TP-S0c — the perf lab rides the SAME test-only bundle every smoke does, so
 // main reaches it through the one runtime-external import it already has and no

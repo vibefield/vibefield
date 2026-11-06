@@ -26,6 +26,7 @@ import { transcriptDoorOver } from "../chat/transcript-port";
 import type { DocManager, DocManagerState } from "../doc-manager";
 import type { LineActs } from "../frame/Composer";
 import { Cards } from "../frame/cards/Cards";
+import { fieldServiceTeller } from "../frame/field-service-notice";
 import { type FrameSurface, foldSurface, type SheetShelf } from "../frame/frame-surface";
 import { Head } from "../frame/Head";
 import { canvasHead } from "../frame/head-canvas";
@@ -234,6 +235,13 @@ export function ChromeLayer({
     if (onDesktopState === undefined) return;
     return onDesktopState(setDesktopState);
   }, []);
+  // Item 212 (RV #29) — the field service as main holds it for this person (`desktopState.fieldd`), said on the status
+  // line, which stands over every view's cover: Reconnecting… while main starts it again, the stopped notice with Try
+  // again once it stopped trying (`frame/field-service-notice.ts`). The window detects nothing itself.
+  const fieldService = useMemo(() => fieldServiceTeller(getHost()), []);
+  const fielddLink = desktopState?.fieldd;
+  useEffect(() => fieldService.tell(fielddLink), [fieldService, fielddLink]);
+  useEffect(() => () => fieldService.stop(), [fieldService]);
 
   // A sheet (the fields explorer, Settings) and the loading veil take NO gate
   // (DK-17, the retire table's last row): their stage holds wrote ICE's

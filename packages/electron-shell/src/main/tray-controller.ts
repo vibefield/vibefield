@@ -88,6 +88,8 @@ export interface TrayControllerActions {
   connectDevices?: () => Promise<void>;
   /** SD-2 — Quiet Sounds: an hour, until tomorrow, or (null) the sounds back on; absent hides the row. */
   quietSounds?: (quiet: "hour" | "tomorrow" | null) => Promise<void>;
+  /** Item 212 (RV #29) — Try Again, in the crash loop: the person's ask for the field service; absent hides the row. */
+  retryFieldService?: () => Promise<void>;
   quit(): void;
 }
 
@@ -106,7 +108,14 @@ const REBUILD_COALESCE_MS = 100;
 const NATIVE_LAYOUT_SETTLE_MS = 250;
 
 export function trayImageKind(snapshot: TraySnapshot): TrayImageKind {
-  if (snapshot.link === "unavailable") return "offline";
+  // item 212 (RV #29): a field service main is starting again, or has stopped starting, is no service either
+  if (
+    snapshot.link === "unavailable" ||
+    snapshot.link === "recovering" ||
+    snapshot.link === "crash-loop"
+  ) {
+    return "offline";
+  }
   // AU-4 (AU-G14) — the attention badge keeps ONE meaning: a degraded
   // service or a failed check. It outranks the update.
   if (snapshot.evidence === "degraded" || snapshot.update.kind === "failed") return "attention";
@@ -466,6 +475,12 @@ export class TrayController {
         ? {
             quietSounds: (quiet: "hour" | "tomorrow" | null) =>
               this.runAction("quietSounds", () => this.options.actions.quietSounds!(quiet)),
+          }
+        : {}),
+      ...(this.options.actions.retryFieldService !== undefined
+        ? {
+            retryFieldService: () =>
+              this.runAction("retryFieldService", this.options.actions.retryFieldService!),
           }
         : {}),
       setBackgroundShell: (enabled) =>

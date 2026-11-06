@@ -77,7 +77,13 @@ import { createDesktopSound, type DesktopSound } from "./desktop-sound";
 import { desktopDevelopmentExtension } from "./development-extension";
 import { installLocalDiagnosticsPort } from "./diagnostics-port";
 import { buildSupervisor, dataRoot, sayFatalSmokeHome } from "./fieldd";
-import { FielddDaemonBootFence, FielddHandleCoordinator } from "./fieldd-handle-coordinator";
+import {
+  FIELDD_RECOVERY_INTENSITY,
+  FielddDaemonBootFence,
+  FielddHandleCoordinator,
+  type FielddRecoveryState,
+} from "./fieldd-handle-coordinator";
+import { FielddLink } from "./fieldd-link";
 import {
   registerBrowserDataClear,
   registerClipboardRead,
@@ -170,7 +176,6 @@ import { fileThemeStore, THEME_FILE, ThemeOwner } from "./theme";
 import { TrayController } from "./tray-controller";
 import { TrayEvidenceMonitor } from "./tray-evidence";
 import {
-  type TrayLinkState,
   type TraySnapshot,
   type TrayUpdateState,
   trayUpdateOf,
@@ -875,7 +880,15 @@ async function main(
     );
   }
   const pluginProvenance = new RendererPluginProvenanceCatalog();
-  let observedLink: TrayLinkState = "starting";
+  /** The window's desktop state, published again with what it carries now (assigned once it can be). */
+  let republishDesktopState: (() => void) | null = null;
+  // Item 212 (RV #29) — the ONE link model (fieldd-link.ts): the ATTACHED pair's client status and its coordinator's
+  // bounded recovery, projected to the status item's service row and the window's `desktopState.fieldd`. It is bound
+  // to the attached pair at every attachment (wireAttachment); background pairs move none of it.
+  const fielddLink = new FielddLink((view) => {
+    trayController?.update({ link: view.link, serviceTries: view.serviceTries });
+    republishDesktopState?.();
+  });
   const observedSnapshots: {
     preferences?: unknown;
     health?: unknown;
@@ -885,17 +898,6 @@ async function main(
   let healthObservationUnavailable = false;
   let evidenceMonitor: TrayEvidenceMonitor | null = null;
   let enforceBackgroundEscapeHatch = (): void => undefined;
-  const publishLink = (status: string): void => {
-    observedLink =
-      status === "ready"
-        ? "ready"
-        : status === "reconnecting"
-          ? "reconnecting"
-          : status === "failed" || status === "closed"
-            ? "unavailable"
-            : "starting";
-    trayController?.update({ link: observedLink });
-  };
   let statusItemForced = BACKGROUND_RELAUNCH && MODE === "production";
   /** AL-6 — the effective `desktop.keepRunningOnQuit`, off until the preferences are read */
   let keepRunningOnQuit = false;
@@ -1070,6 +1072,43 @@ async function main(
     }
     if (userId === attached.userId) await showUnplannedExitNotice(lastExit, lastManagerExit);
   };
+  // Item 212 (RV #29) — the plugin-runtime soak SIGKILLs the fieldd it owns every cycle and waits for main's
+  // automatic replacement, so under the house intensity a run past three cycles in ten minutes would end in a crash
+  // loop the lab caused itself. The soak names its own (test-only, read through the testing bundle's door, said
+  // once); every other mode, the plain restart smoke's one cycle included, keeps the house's.
+  const soakIntensity =
+    MODE === "smoke-plugin-restart" ? (await testing()).pluginRuntimeSoakRecoveryIntensity() : null;
+  const recoveryIntensity = soakIntensity ?? FIELDD_RECOVERY_INTENSITY;
+  if (soakIntensity !== null) {
+    logger.info(
+      "desktop.fieldd.recovery_intensity",
+      "The plugin-runtime soak names its own fieldd recovery intensity",
+      { max: soakIntensity.max, windowMs: soakIntensity.windowMs },
+    );
+  }
+  // Item 212 (RV #29) — every pair's recovery, said in the log; the attached pair's is said in the window too
+  const logRecovery = (userId: string, state: FielddRecoveryState): void => {
+    switch (state.kind) {
+      case "recovering":
+        logger.warn(
+          "desktop.fieldd.recovering",
+          "fieldd went away and starting it again failed; main tries again after a pause",
+          { userId, attempt: state.attempt, of: state.of },
+        );
+        return;
+      case "crash-loop":
+        logger.error(
+          "desktop.fieldd.crash_loop",
+          "fieldd kept going away; main stopped starting it until a person asks",
+          undefined,
+          { userId, failures: state.failures, windowMs: recoveryIntensity.windowMs },
+        );
+        return;
+      case "ready":
+        logger.info("desktop.fieldd.recovered", "fieldd is back after a recovery", { userId });
+        return;
+    }
+  };
   const pairBundles = new Map<string, PairBundle>();
   let windowRendererBoundary: ReturnType<typeof registerWindowBootstrap> | null = null;
   const ensurePairBundle = (
@@ -1090,10 +1129,13 @@ async function main(
       userId,
       ...(environment !== undefined ? { environment } : {}),
     });
-    const handles = new FielddHandleCoordinator(
-      (options) => sup.ensure(options),
-      (error) => {
-        publishLink("failed");
+    // Item 212 (RV #29) — each pair has its own coordinator, so its own bounded recovery under the house intensity
+    // (the soak's in its lab); only the attached pair's moves the link (fielddLink ignores the others).
+    const handles: FielddHandleCoordinator = new FielddHandleCoordinator({
+      upstreamEnsure: (options) => sup.ensure(options),
+      intensity: recoveryIntensity,
+      onEnsureError: (error) => {
+        fielddLink.ensureFailed(handles);
         pluginProvenance.invalidate();
         healthObservationUnavailable = true;
         evidenceMonitor?.markRemoteUnavailable();
@@ -1103,14 +1145,18 @@ async function main(
           error,
         );
       },
-      (error) => {
+      onListenerError: (error) => {
         logger.error(
           "desktop.fieldd.observer_bind_failed",
           "A main-process fieldd observer could not bind",
           error,
         );
       },
-    );
+      onState: (state) => {
+        fielddLink.recoveryChanged(handles, state);
+        logRecovery(userId, state);
+      },
+    });
     handles.onHandle((handle) => void claimLease(userId, handle));
     const bundle = { supervisor: sup, handles };
     pairBundles.set(userId, bundle);
@@ -1129,10 +1175,13 @@ async function main(
     bundle: PairBundle,
     userRoot: string,
   ): { offersConnect(): boolean; dispose(): void } => {
+    // Item 212 (RV #29) — the link follows this pair now: its recovery as it stands, its client's word from the
+    // observers below
+    fielddLink.attach(bundle.handles);
     const observers = new RecoveringFielddObservers(bundle.handles, {
       onStatus: (status) => {
         if (status !== "ready") pluginProvenance.invalidate();
-        publishLink(status);
+        fielddLink.clientStatus(status);
         logger.info("desktop.fieldd.link_state_changed", "fieldd link state changed", {
           status,
         });
@@ -1689,7 +1738,9 @@ async function main(
       const previousRecord = file.users.find((u) => u.userId === previousId);
       const targetRoot = userRootFor(attached.rootReal, target);
       const bundle = ensurePairBundle(target.userId, targetRoot);
-      await bundle.handles.ensure();
+      // item 212 (RV #29): a switch to a person is that person asking for their field service (out of its crash
+      // loop too), as the reloaded window's bootstrap would
+      await bundle.handles.ensure({ person: true });
       shellDisposers.delete(attachmentDisposer);
       attachmentWiring.dispose();
       supervisor = bundle.supervisor;
@@ -2335,6 +2386,8 @@ async function main(
       ...(latestUpdateView === null ? {} : { update: latestUpdateView }),
       // BP-1c — whether the desk browser keeps sign-ins here, as main found it at start (one word, never a path)
       browser: { signIns: browserProfiles.signIns },
+      // item 212 (RV #29) — the attached person's field service, as the link model holds it (null while it is up)
+      fieldd: fielddLink.view().fieldd,
     });
     latestDesktopState = state;
     const window = registry.primary();
@@ -2342,6 +2395,12 @@ async function main(
       window.webContents.send(IPC_CHANNELS.desktopState, state);
     }
   };
+  republishDesktopState = () => {
+    if (latestDesktopRaw !== null) publishDesktopState(latestDesktopRaw);
+  };
+  shellDisposers.add(() => {
+    republishDesktopState = null;
+  });
 
   primaryWindowOpener = () =>
     registry.revealPrimary(() => {
@@ -2698,7 +2757,8 @@ async function main(
   trayController = new TrayController({
     runtime: createElectronTrayRuntime(resources),
     initial: {
-      link: observedLink,
+      link: fielddLink.view().link,
+      serviceTries: fielddLink.view().serviceTries,
       evidence: evidenceMonitor.current(),
       update: { kind: "idle" },
       ...trayUsers(),
@@ -2739,6 +2799,11 @@ async function main(
       },
       newUser: async () => {
         await createAndAttach({});
+      },
+      // Item 212 (RV #29) — Try Again, under the service row in the crash loop: the person's ask, which starts the
+      // attached person's field service once more and begins its count again
+      retryFieldService: async () => {
+        await fielddHandles?.ensure({ person: true });
       },
       // AL-6 — the status item's Quit VibeField quits, even while Keep running when VibeField quits is on
       quit: () => (lifecycleFlow === null ? app.quit() : lifecycleFlow.quitFully()),

@@ -1,8 +1,9 @@
-import type { NeedsNotice } from "@vibefield/contracts";
+import type { FielddLinkUnavailable, NeedsNotice } from "@vibefield/contracts";
 import { EmptyState, StatusDot, UnavailableState } from "@vibefield/design-kit";
 import type { ReactElement, ReactNode } from "react";
 import { DeskUnavailableView } from "../../field/desk/DeskUnavailableView";
 import { BEFORE_THE_DESK, DEGRADED_SENTENCE, failedWords } from "../../field/desk/desk-words";
+import { fieldServiceNotice } from "../../frame/field-service-notice";
 import { needsNoticeStatus } from "../../frame/needs-notices";
 import { StatusLineView } from "../../frame/StatusLine";
 import { Icon, Section, Specimen } from "../catalog-ui";
@@ -27,6 +28,21 @@ const NOTIFY_FIXTURE: NeedsNotice = {
     "the build is green on every package; fieldd's slow suite took 4m 12s, and the two GPU smokes wait for the Mac mini to unlock",
   at: "2026-10-31T16:13:01.000Z",
 };
+// Item 212 (RV #29) — the field service as main publishes it (`desktopState.fieldd`; contracts'
+// `fieldd-link-unavailable.*` fixtures), said through the window's own `fieldServiceNotice`, so each plate is the
+// shipping notice, never a copy of its words.
+const FIELD_SERVICE_RECOVERING: FielddLinkUnavailable = {
+  service: "fieldd",
+  state: "recovering",
+  attempt: 1,
+  of: 3,
+};
+const FIELD_SERVICE_STOPPED: FielddLinkUnavailable = {
+  service: "fieldd",
+  state: "crash-loop",
+  failures: 3,
+};
+const retryFixture = (): void => undefined;
 
 export function StatusSection(): ReactElement {
   return (
@@ -154,6 +170,22 @@ export function StatusSection(): ReactElement {
                 act: { label: "Reload", run: reloadFixture },
               }}
             />
+          </div>
+        </Specimen>
+        <Specimen
+          title="The status line — main starts the field service again"
+          source="frame/field-service-notice.ts"
+        >
+          <div className="vf-ds-status-line-stage">
+            <StatusLineView notice={fieldServiceNotice(FIELD_SERVICE_RECOVERING, retryFixture)} />
+          </div>
+        </Specimen>
+        <Specimen
+          title="The status line — main stopped after its tries, with Try again"
+          source="frame/field-service-notice.ts"
+        >
+          <div className="vf-ds-status-line-stage">
+            <StatusLineView notice={fieldServiceNotice(FIELD_SERVICE_STOPPED, retryFixture)} />
           </div>
         </Specimen>
       </div>
