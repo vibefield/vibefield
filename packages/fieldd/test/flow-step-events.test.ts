@@ -179,8 +179,9 @@ describe("CP-4a2b — a flow step's turn end (CP4-S2)", () => {
 
 // CP-4a2b (§13a slice 9b; ruled 2026-11-06) — a step handed a live session by `in:` (D9). That session is no flow's run
 // (your own, here), so nothing listens to it until the runs hand it: from the hand, its turn ends are told as the
-// step's `{run, call}` by the same road, from a turn that STARTS after the hand (a turn in flight at the hand is never
-// the step's), each turn's end once (CL-H6), until the runs let it go or the session ends.
+// step's `{run, call}` by the same road, from the first turn:started the listener HEARS after the hand (a turn heard
+// starting before the hand is never the step's; one whose turn:started arrives late is, review F2, until slice 15 arms
+// at the paste), each turn's end once (CL-H6), until the runs let it go or the session ends.
 
 /** A handed step: call 2 of a run. */
 const STEP = { run: "fr-h4nd3d00", call: 2 } as const;
@@ -235,7 +236,7 @@ describe("CP-4a2b — a session an `in:` hands a step (§13a slice 9b)", () => {
     ]);
   });
 
-  it("SH2: a turn in flight at the hand is never the step's, with turn ids and with none; the next turn that starts is", () => {
+  it("SH2: a turn heard starting before the hand is never the step's, with turn ids and with none; the next turn heard starting is", () => {
     const withIds = yours();
     withIds.emit("turn:started", { turnId: "t0" });
     withIds.emit("conversation:assistant-message", said("your own words", { turnId: "t0" }));
@@ -245,7 +246,7 @@ describe("CP-4a2b — a session an `in:` hands a step (§13a slice 9b)", () => {
     withIds.emit("turn:started", { turnId: "t1" });
     withIds.emit("turn:completed", { turnId: "t1", lastAssistantMessage: "the step's end" });
     expect(withIds.heard.map((end) => [end.turn, end.text])).toEqual([["t1", "the step's end"]]);
-    // a provider that says no turn ids: the turn in flight fails at the hand's side, and is still not the step's
+    // a provider that says no turn ids: the turn heard starting before the hand fails, and is still not the step's
     const bare = yours();
     bare.emit("turn:started", {});
     bare.emit("conversation:assistant-message", said("in flight", { turnId: undefined }));

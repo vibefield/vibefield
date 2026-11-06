@@ -6,7 +6,11 @@ import { ownLive, type RunEntered, type RunEnteredAgent } from "./run-entry";
 // (flows/runs.ts) hear it through this interface, so `flows/` imports no puppeteer (R29/R31). It hears a run as it
 // enters the agent runtime (`onRunEntered`), and listens to a run a flow started: `origin {by: "flow", run, call}`.
 // Since slice 9b it keeps every run's handle until its end, listening to none, so a session an `in:` hands a step
-// (D9) is listened to as that step's from the hand: from a turn that starts after it, until the runs let it go.
+// (D9) is listened to as that step's from the hand, until the runs let it go: from the first turn:started this
+// listener HEARS after the hand. That is not "a turn that starts after the hand": a turn begun before it whose
+// turn:started arrives after it (IPC) reads as the step's, and so do a turn you start before the line's paste and, with
+// two hands on one session, the first hand's turn for the second (review F1, F2). Slice 15 arms each hand at its own
+// line's paste.
 // The road (step0-cp4.md CP4-S2):
 // - `turn:completed`'s `lastAssistantMessage`, the provider's own final text when it gives one (Claude's Stop hook);
 // - else the turn's last `conversation:assistant-message` that is final (not `final: false`) and not `displayOnly`,
@@ -60,9 +64,10 @@ export class FlowStepEvents {
   }
 
   /** CP-4a2b (§13a slice 9b): a session an `in:` hands a flow's step (D9), listened to as that step's until the answer
-   * is called or the session ends. Only a turn that starts after the hand is the step's; a turn in flight at the hand
-   * never is. The same step handed again is listened to once (CL-H6). A session this fieldd never heard enter holds
-   * nothing, and says so. */
+   * is called or the session ends. The step's turn is the first whose turn:started this listener hears after the hand:
+   * a turn whose turn:started was heard before the hand is never the step's, but one begun before the hand whose
+   * turn:started arrives after it is (review F2), until slice 15 arms the hand at its line's paste. The same step
+   * handed again is listened to once (CL-H6). A session this fieldd never heard enter holds nothing, and says so. */
   hand(runtimeRunId: string, step: { readonly run: string; readonly call: number }): () => void {
     const key = `${step.run} ${step.call}`;
     const hands = this.#hands.get(runtimeRunId) ?? new Map<string, () => void>();
@@ -116,7 +121,8 @@ export class FlowStepEvents {
   }
 
   /** One step's listening on its session (CP4-S2's road): each turn's end told once (CL-H6). `fromHand`: only a turn
-   * that started after the listening began is told, so a turn in flight at the hand never is (9b). */
+   * whose turn:started was HEARD after the listening began is told (9b), so a turn heard starting before the hand never
+   * is; one whose turn:started arrives late is (review F2; slice 15 arms at the paste). */
   #listen(agent: RunEnteredAgent, step: StepAt, fromHand: boolean): (() => void)[] {
     const { runtimeRunId } = step;
     /** the turn's last final message, not displayOnly, so far */
@@ -144,7 +150,7 @@ export class FlowStepEvents {
     };
     const ended = (turn: string | undefined): boolean => {
       if (fromHand) {
-        // a turn in flight at the hand ends with none started since, or as another turn than the one that did
+        // a turn heard starting before the hand ends with none heard started since, or as another turn than that one
         if (started === undefined) return false;
         if (started.turn !== undefined && turn !== undefined && started.turn !== turn) return false;
         started = undefined;
