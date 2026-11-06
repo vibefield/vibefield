@@ -10336,6 +10336,10 @@ are open until James reads them on a board). A Run that VibeField refuses starts
 - "‹flow› takes no input named ‹name›; nothing was started."
 - "None of its steps names a folder, and its input names none. Run it from a session or a project, or name a folder in
   it." This holds for every run, a spark's too (CP4-Q20 (a), kept by Q-A9 (b)).
+- *Proposed 2026-11-06 (CP-4a2b, 13a's R8b; ruled 2026-11-06), open as the rest are:* an input that names a session
+  or a project VibeField can't find (CP4-Q20 (a): the folder a step with none runs in):
+  - "VibeField can't find the session its input names."
+  - "VibeField can't find the project its input names."
 - "VibeField can't find that spark; nothing was started."
 - "VibeField has no run ‹run›."
 - "That version isn't one of ‹flow›'s."
