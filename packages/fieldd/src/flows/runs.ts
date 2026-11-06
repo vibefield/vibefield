@@ -288,6 +288,8 @@ export class FlowRuns {
         },
         name: words.markName(readFlow(file.bytes).meta?.name, file.flow),
         ...(params.from !== undefined ? { from: params.from } : {}),
+        // Q4 (ruled 2026-11-06 (c)): the start as it was asked, kept on the item's record, so an act begins this same run
+        start: { input: params.input, starter: params.starter, scope: [...params.scope] },
       });
       return { waits };
     }

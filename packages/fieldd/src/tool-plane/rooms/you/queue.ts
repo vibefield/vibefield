@@ -589,7 +589,8 @@ export class NeedsQueue implements TalkHolds {
    * names its flow): it is told what you chose, and its open items' watermark counts it. Yours names the flow, and
    * tells no one. Its acts: Run this version, Run the one you approved (only while one is), Not now last; See the
    * change is the card's, drawn from `script`. The same teller asking to run the same bytes while it is open is that
-   * item, never a second. */
+   * item, never a second. Q4: the start as it was asked is kept on the record, never on the item, and handed back to
+   * the runs with the act. */
   flowChanged(raise: FlowChangedRaise): NeedsItemId {
     const { script, from } = raise;
     for (const record of this.#records.values()) {
@@ -622,6 +623,7 @@ export class NeedsQueue implements TalkHolds {
         ],
         script,
       },
+      ...(raise.start !== undefined ? { start: raise.start } : {}),
     });
     this.#emit();
     return id;
@@ -858,7 +860,13 @@ export class NeedsQueue implements TalkHolds {
     this.#keep({ ...record, acting: { choice, at } });
     let started: FlowItemStarted;
     try {
-      started = await acts.start({ id: item.id, flow: script.flow, hash: approved ?? script.hash });
+      started = await acts.start({
+        id: item.id,
+        flow: script.flow,
+        hash: approved ?? script.hash,
+        // Q4: the start as it was asked, absent on a record from before it
+        ...(record.start !== undefined ? { start: record.start } : {}),
+      });
     } catch (err) {
       started = { outcome: "failed", reason: (err as Error).message };
     }
