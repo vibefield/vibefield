@@ -338,6 +338,11 @@ const R23B_ALLOW = [
     count: 23,
     why: "the History tab's sample corpus (IOS-9b, H-D4): the record's six screens drawn over fixture values until the wire carries the corpus — fixture data, never compared",
   },
+  {
+    file: "apps/ios/VibeFieldKit/Sources/FieldHome/Meters/MeterModel.swift",
+    count: 2,
+    why: "the phone's plan titles (UM-4, UM-D3): puppeteer-views' SERVICE_PRODUCTS (ServiceMark.js, planTitle) keyed by the COMPANY a sign-in is billed through, two of whose ids (Kimi's, OpenCode's) are also agents' ids — presentation, never compared to an agent",
+  },
 ];
 
 /** The trees R23b lexes, relative to the repo root (`*` is one directory

@@ -61,6 +61,8 @@ public struct AgentCatalogRow: Sendable, Equatable, Decodable, Identifiable {
   /// PJ-7 — History's Resume exists only when this desktop offers it for the
   /// agent (`offers.resume`); absent otherwise (D-i6).
   public let canResume: Bool
+  /// UM-4 — the meters wait for a reading only of an agent the catalog says reports usage (`offers.usage`).
+  public let offersUsage: Bool
   public let unknownFields: [String]
 
   public init(json: JSONValue) throws {
@@ -74,6 +76,7 @@ public struct AgentCatalogRow: Sendable, Equatable, Decodable, Identifiable {
     var offers = object.object("offers")
     canSpawn = offers.bool("spawn") == true
     canResume = offers.bool("resume") == true
+    offersUsage = false
     unknownFields = object.unknownFields
   }
 

@@ -1,3 +1,4 @@
+import FieldDesign
 import Foundation
 import SwiftUI
 import Testing
@@ -59,5 +60,20 @@ import UIKit
         }
       }
     }
+  }
+
+  /// UM-4 (ruling 20) — the bloom's buds draw a profile's glyph through the phone's ONE table, so a profile looks the
+  /// same on the field's bloom, the held face's and the Agent Profiles page: This Mac the laptop, a token the
+  /// vocabulary's symbol, and one this build does not draw the star (puppeteer's `profileMarkName`), never a person.
+  @Test func theBudsDrawAProfileThroughThePhonesOneGlyphTable() {
+    let native = SpawnBloomOverlay.symbol(BloomProfile(id: "native", label: "Default", isDefault: false))
+    #expect(native == ProfileGlyphSymbols.laptop)
+    let work = SpawnBloomOverlay.symbol(BloomProfile(id: "work", label: "Work", isDefault: true, glyph: "briefcase"))
+    #expect(work == ProfileGlyphSymbols.symbol(glyph: "briefcase", native: false, filled: false))
+    let unknown = SpawnBloomOverlay.symbol(
+      BloomProfile(id: "side", label: "Side", isDefault: false, glyph: "no-such-glyph"))
+    #expect(unknown == "star")
+    let bare = SpawnBloomOverlay.symbol(BloomProfile(id: "side", label: "Side", isDefault: false))
+    #expect(bare == "star")
   }
 }

@@ -59,6 +59,17 @@ import Testing
     #expect(named.catalog.first?.mark == "claude")
   }
 
+  /// UM-4 (UM-D8 A) — the meters wait for a first reading only of an agent the catalog says reports usage
+  /// (`offers.usage`, the contracts' `isOffered(id, "usage")`); a row that does not say offers none.
+  @Test func aRowSaysWhetherItsAgentReportsUsage() throws {
+    let result = try AgentCatalogResult(json: try Fixture.json("agent-catalog.valid"))
+    let reports = result.catalog.map(\.offersUsage)
+    #expect(reports == [true, true, true, true, false, false, true, false, false, false])
+    let silent = try AgentCatalogRow(
+      json: .object(["id": .string("claude-next"), "label": .string("Claude Next"), "status": .string("preview")]))
+    #expect(!silent.offersUsage)
+  }
+
   /// AC-D3's word is carried RAW: a status a newer desktop adds is a row, not a
   /// refusal — and a row that says nothing about surfaces is a row that did not
   /// say, never a `false`.

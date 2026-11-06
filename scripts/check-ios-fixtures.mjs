@@ -116,8 +116,8 @@ const OTHER_ORIGINS = new Map([
   // PG-4t — the views' faces, which the Stories row draws
   ["phone-marks.golden.json", join(PHONE_GODVIEW, "phone-marks.golden.json")],
   // UM-1 (2026-11-06) — the meters' golden: field-app's meter model and Bands geometry (src/usage/golden.ts, written
-  // by perf/usage-bands.generate.perf.ts), a VibeField golden outside the phone Godview's family. Named here as an
-  // origin only: its FieldHomeTests copy and its required mirror land with the suites that read it (UM's U3, PH-2).
+  // by perf/usage-bands.generate.perf.ts), a VibeField golden outside the phone Godview's family. Its FieldHomeTests
+  // copy is required below (the `usage` rows, UM-4 PH-2), where BandsParityTests holds the phone's meters to it.
   [
     "usage-bands.golden.json",
     join(root, "packages/field-app/test/fixtures/usage/usage-bands.golden.json"),
@@ -372,6 +372,20 @@ const requiredMirrors = [
     "usage",
     ["agent-usage.budget.json", "agent-usage.empty.json", "agents-profile-sets.meters.json"],
     ["Sources/FieldHome"],
+  ],
+  // UM-4 PH-2 — the usage bands golden and every input it was computed from (its `inputs`, and the catalog whose order
+  // and names it carries), which BandsParityTests and MeterModelTests (FieldHomeTests) recompute it over
+  [
+    "usage",
+    [
+      "usage-bands.golden.json",
+      "agents-profile-sets.valid.json",
+      "agents-profile-sets.meters.json",
+      "agent-usage.valid.json",
+      "agent-usage.budget.json",
+      "agent-catalog.valid.json",
+    ],
+    ["Tests/FieldHomeTests"],
   ],
   // the fold's parity golden and its inputs; the field cut's project-key collapse beside the remote cut's;
   // PG-3e — the body golden, which the drawn rows' bubbles are held to (PhoneBodyParityTests)

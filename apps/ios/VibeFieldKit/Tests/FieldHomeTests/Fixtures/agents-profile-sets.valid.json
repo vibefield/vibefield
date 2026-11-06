@@ -1,0 +1,244 @@
+{
+  "sets": [
+    {
+      "id": "native",
+      "kind": "native",
+      "label": "This Mac",
+      "default": false,
+      "createdAt": "1970-01-01T00:00:00.000Z",
+      "personas": [
+        {
+          "profileId": "claude:native-default",
+          "provider": "claude",
+          "label": "Default",
+          "kind": "native-default",
+          "createdAt": "1970-01-01T00:00:00.000Z",
+          "set": "native",
+          "folder": "~/.claude",
+          "identity": {
+            "loggedIn": true,
+            "email": "kim@example.com",
+            "plan": "max",
+            "verifiedAt": "2026-09-23T09:41:20.000Z",
+            "source": {
+              "kind": "native-status",
+              "stability": "documented"
+            }
+          },
+          "holds": [
+            {
+              "service": {
+                "id": "anthropic",
+                "label": "Anthropic"
+              },
+              "email": "kim@example.com",
+              "plan": "max",
+              "key": false,
+              "planId": "anthropic",
+              "runsOn": true
+            }
+          ]
+        }
+      ],
+      "plans": [
+        {
+          "id": "anthropic",
+          "service": {
+            "id": "anthropic",
+            "label": "Anthropic"
+          },
+          "account": {
+            "email": "kim@example.com",
+            "plan": "max"
+          },
+          "namedBy": "claude:native-default",
+          "holders": ["claude:native-default"],
+          "alsoIn": []
+        }
+      ]
+    },
+    {
+      "id": "work",
+      "kind": "managed",
+      "label": "Work",
+      "glyph": "briefcase",
+      "default": true,
+      "createdAt": "2026-09-23T09:00:00.000Z",
+      "folder": "~/Library/Application Support/VibeField/users/1/agents/profiles/work",
+      "personas": [
+        {
+          "profileId": "0b7e2c4d-9a1f-4e58-8c1d-3f2a6b9e7d10",
+          "provider": "codex",
+          "label": "Work",
+          "kind": "managed",
+          "createdAt": "2026-09-23T09:01:00.000Z",
+          "set": "work",
+          "folder": "~/Library/Application Support/VibeField/users/1/agents/profiles/work/codex-0b7e2c4d",
+          "signingIn": {
+            "sessionId": "sess_login_1",
+            "since": "2026-09-23T09:01:02.000Z"
+          },
+          "runtimeId": "rt_0b7e2c4d9a1f3e58"
+        },
+        {
+          "profileId": "5c1d3f2a-6b9e-4d10-8a1f-0b7e2c4d9e58",
+          "provider": "hermes",
+          "label": "Work",
+          "kind": "managed",
+          "createdAt": "2026-09-23T09:02:00.000Z",
+          "set": "work",
+          "folder": "~/Library/Application Support/VibeField/users/1/agents/profiles/work/hermes-5c1d3f2a",
+          "identity": {
+            "loggedIn": true,
+            "method": "oauth",
+            "email": "kim@example.com",
+            "plan": "Plus",
+            "signIns": [
+              {
+                "service": {
+                  "id": "nous",
+                  "label": "Nous Research"
+                },
+                "method": "oauth",
+                "subscription": true,
+                "inUse": true,
+                "email": "kim@example.com",
+                "plan": "Plus"
+              },
+              {
+                "service": {
+                  "id": "anthropic",
+                  "label": "Anthropic"
+                },
+                "method": "oauth",
+                "subscription": true
+              },
+              {
+                "service": {
+                  "id": "github",
+                  "label": "GitHub"
+                },
+                "method": "gh-cli",
+                "borrowedFrom": "GitHub CLI"
+              },
+              {
+                "service": {
+                  "id": "openrouter",
+                  "label": "OpenRouter"
+                },
+                "method": "api-key"
+              }
+            ],
+            "verifiedAt": "2026-09-23T09:05:00.000Z",
+            "source": {
+              "kind": "native-protocol",
+              "stability": "experimental"
+            }
+          },
+          "holds": [
+            {
+              "service": {
+                "id": "nous",
+                "label": "Nous Research"
+              },
+              "method": "oauth",
+              "subscription": true,
+              "inUse": true,
+              "email": "kim@example.com",
+              "plan": "Plus",
+              "key": false,
+              "planId": "nous",
+              "runsOn": true
+            },
+            {
+              "service": {
+                "id": "anthropic",
+                "label": "Anthropic"
+              },
+              "method": "oauth",
+              "subscription": true,
+              "key": false,
+              "planId": "anthropic",
+              "runsOn": false
+            },
+            {
+              "service": {
+                "id": "github",
+                "label": "GitHub"
+              },
+              "method": "gh-cli",
+              "borrowedFrom": "GitHub CLI",
+              "key": false,
+              "planId": "github",
+              "runsOn": false
+            },
+            {
+              "service": {
+                "id": "openrouter",
+                "label": "OpenRouter"
+              },
+              "method": "api-key",
+              "key": true,
+              "runsOn": false
+            }
+          ]
+        }
+      ],
+      "plans": [
+        {
+          "id": "nous",
+          "service": {
+            "id": "nous",
+            "label": "Nous Research"
+          },
+          "account": {
+            "email": "kim@example.com",
+            "plan": "Plus"
+          },
+          "namedBy": "5c1d3f2a-6b9e-4d10-8a1f-0b7e2c4d9e58",
+          "holders": ["5c1d3f2a-6b9e-4d10-8a1f-0b7e2c4d9e58"],
+          "alsoIn": []
+        },
+        {
+          "id": "anthropic",
+          "service": {
+            "id": "anthropic",
+            "label": "Anthropic"
+          },
+          "holders": ["5c1d3f2a-6b9e-4d10-8a1f-0b7e2c4d9e58"],
+          "alsoIn": []
+        },
+        {
+          "id": "github",
+          "service": {
+            "id": "github",
+            "label": "GitHub"
+          },
+          "borrowedFrom": "GitHub CLI",
+          "holders": ["5c1d3f2a-6b9e-4d10-8a1f-0b7e2c4d9e58"],
+          "alsoIn": []
+        }
+      ]
+    }
+  ],
+  "signIn": ["claude", "codex", "grok", "hermes"],
+  "identity": ["claude", "codex", "hermes"],
+  "signOut": ["claude"],
+  "reading": false,
+  "routes": {
+    "hermes": [
+      {
+        "id": "portal",
+        "label": "Nous Portal",
+        "service": {
+          "id": "nous",
+          "label": "Nous Research"
+        }
+      },
+      {
+        "id": "provider",
+        "label": "Another provider…"
+      }
+    ]
+  }
+}
