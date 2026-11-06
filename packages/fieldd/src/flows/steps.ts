@@ -60,9 +60,10 @@ export interface FlowStepOf {
 }
 
 /** The step listener's side of an `in:` (flow-step-events.ts, §13a slice 9b): a session handed a step is no flow's
- * run, so its turn ends are told as that step's only once the runs hand it. The answer is how to let it go. */
+ * run, so its turn ends are told as that step's only once the runs hand it. The answer is how to let it go, or none
+ * when the listener never heard the session enter (review F3), which nothing would then answer. */
 export interface FlowStepHand {
-  hand(runtimeRunId: string, step: FlowStepOf): () => void;
+  hand(runtimeRunId: string, step: FlowStepOf): (() => void) | undefined;
 }
 
 /** fieldd's own interface to a run's steps (R32): the runtime's spawn, each session's input queue, the sessions an
@@ -268,7 +269,7 @@ export async function startStep(
     try {
       return { ...sent(ports, write, call, handed, "in", prompt, from), form, unhand };
     } catch (error) {
-      unhand();
+      unhand?.();
       throw error;
     }
   }

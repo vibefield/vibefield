@@ -109,6 +109,8 @@ async function harness(
     readonly sparkProfiles?: Readonly<Record<string, string>>;
     /** the person's default Agent Profile; null for none */
     readonly defaultProfile?: string | null;
+    /** the sessions the step listener never heard enter: a hand on one answers none (review F3) */
+    readonly unheard?: readonly string[];
   } = {},
 ) {
   const root = mkdtempSync(join(tmpdir(), "vf-flow-runs-"));
@@ -151,6 +153,7 @@ async function harness(
         return () => turnListeners.delete(listener);
       },
       hand: (runtimeRunId, step) => {
+        if (opts.unheard?.includes(runtimeRunId)) return undefined;
         const handed: Handed = { runtimeRunId, ...step, at: enqueued.length, gone: false };
         hands.push(handed);
         return () => {
@@ -1449,5 +1452,37 @@ describe("CP-4a2b — a step handed a session: heard from the hand, let go at th
     expect(h.hands.filter((hand) => hand.run === leaves)).toEqual([
       { runtimeRunId: "run-yours", run: leaves, call: 1, at: 1, gone: true },
     ]);
+  });
+
+  it('R19h-4 (9b, review F3): a step handed a session the step listener never heard enter is refused "‹label› failed." before its line is queued, never left waiting', async () => {
+    const h = await harness({ sessions: { "run-yours": HANDED_YOURS }, unheard: ["run-yours"] });
+    h.approved(
+      "unheard",
+      [
+        'export const meta = { name: "Unheard" };',
+        "export default async function () {",
+        '  try { await agent("Review this", { in: "run-yours", label: "Yours" }); }',
+        "  catch (e) { log(e.message); }",
+        "}",
+        "",
+      ].join("\n"),
+    );
+    const run = startedRun(await h.start({ flow: "unheard" })).run;
+    await waitFor(() => expect(h.enqueued.length + refusalsOf(h, run).length).toBeGreaterThan(0));
+    expect(h.enqueued).toEqual([]);
+    expect(refusalsOf(h, run)).toEqual(["Yours failed."]);
+    expect((await settled(h.runs, run, "done")).log).toBe("Yours failed.");
+    expect(h.hands).toEqual([]);
+  });
+
+  it("R19h-5 (9b): fieldd's own stop lets a handed step's hand go, the run left as it stands for the next boot", async () => {
+    const h = await harness({ sessions: { "run-yours": HANDED_YOURS } });
+    h.approved("handed", handedTo());
+    const run = startedRun(await h.start({ flow: "handed" })).run;
+    await waitFor(() => expect(h.enqueued).toHaveLength(1));
+    expect(h.hands.map((hand) => hand.gone)).toEqual([false]);
+    await h.runs.close();
+    expect(h.hands.map((hand) => hand.gone)).toEqual([true]);
+    expect(h.records.runRecord(run)?.state).toBe("running");
   });
 });

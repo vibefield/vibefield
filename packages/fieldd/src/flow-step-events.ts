@@ -68,7 +68,10 @@ export class FlowStepEvents {
    * a turn whose turn:started was heard before the hand is never the step's, but one begun before the hand whose
    * turn:started arrives after it is (review F2), until slice 15 arms the hand at its line's paste. The same step
    * handed again is listened to once (CL-H6). A session this fieldd never heard enter holds nothing, and says so. */
-  hand(runtimeRunId: string, step: { readonly run: string; readonly call: number }): () => void {
+  hand(
+    runtimeRunId: string,
+    step: { readonly run: string; readonly call: number },
+  ): (() => void) | undefined {
     const key = `${step.run} ${step.call}`;
     const hands = this.#hands.get(runtimeRunId) ?? new Map<string, () => void>();
     const kept = hands.get(key);

@@ -270,9 +270,10 @@ describe("CP-4a2b — a session an `in:` hands a step (§13a slice 9b)", () => {
   it("SH3: let go, a handed session is told nothing more: at the runs' word (the answer, a failed turn, the run's end), and at the session's own end", () => {
     const { events, heard, emit, held } = yours();
     const off = events.hand(YOURS, STEP);
+    expect(off).toBeDefined();
     emit("turn:started", { turnId: "t1" });
     emit("turn:failed", { turnId: "t1", error: "the provider stopped" });
-    off();
+    off?.();
     expect(held()).toBe(0);
     emit("turn:started", { turnId: "t2" });
     emit("turn:completed", { turnId: "t2", lastAssistantMessage: "your next turn" });
@@ -308,12 +309,15 @@ describe("CP-4a2b — a session an `in:` hands a step (§13a slice 9b)", () => {
     ]);
   });
 
-  it("SH5: a session this fieldd never heard enter holds nothing, and says so once", () => {
+  it("SH5 (review F3): a session this fieldd never heard enter is not heard: the hand answers none, holds nothing, and says so once", () => {
     const logged: string[] = [];
     const events = new FlowStepEvents(warnings(logged));
-    const off = events.hand("run-never", STEP);
+    expect(events.hand("run-never", STEP)).toBeUndefined();
     expect(logged).toEqual(["fieldd.flows.step_hand_unheard"]);
-    off();
-    expect(logged).toHaveLength(1);
+    // a session heard enter, then ended, is not heard either
+    const { events: heard, held } = yours();
+    heard.forget(YOURS);
+    expect(heard.hand(YOURS, STEP)).toBeUndefined();
+    expect(held()).toBe(0);
   });
 });
