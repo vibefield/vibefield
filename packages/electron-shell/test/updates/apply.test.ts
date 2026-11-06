@@ -305,7 +305,6 @@ describe("EDP-34's safe window — the predicate, as a truth table", () => {
     windowless: true,
     trayResident: true,
     displayHeldAwake: false,
-    planes: ["shell", "fieldd", "field-native"],
     census: 0,
   };
   it.each([
@@ -322,21 +321,16 @@ describe("EDP-34's safe window — the predicate, as a truth table", () => {
       { displayHeldAwake: "unknown" },
       { open: false, clause: "display-awake-unheld" },
     ],
+    // Item 192 (RV #6) — the census is already of the stop the release's planes need (the floor's sessions, or the
+    // agent runs fieldd's own stop ends when field-native stays): the gate is that census at zero, for every release
     [
-      "a native-touching release with live sessions",
+      "the release's stop ends live sessions or runs",
       { census: 2 },
       { open: false, clause: "plane-gate" },
     ],
     [
-      "a native-touching release with an unknown census",
+      "the release's stop has an unknown census",
       { census: "unknown" },
-      { open: false, clause: "plane-gate" },
-    ],
-    // Item 192 (RV #6) — the census is already of the stop the planes need: a release that leaves field-native
-    // alone is gated by the agent runs fieldd's own stop ends
-    [
-      "a release that leaves field-native alone, with runs its stop ends",
-      { planes: ["shell", "fieldd"], census: 2 },
       { open: false, clause: "plane-gate" },
     ],
     [

@@ -9,7 +9,7 @@ import type { FielddHandle } from "@vibefield/fieldd-supervisor";
 import { app, dialog, net, autoUpdater as squirrel } from "electron";
 import { autoUpdater, CancellationToken } from "electron-updater";
 import { getAppCacheDir } from "electron-updater/out/AppAdapter";
-import { readCensus, requestConsentedStop } from "../pair-stop";
+import { readCensus, readPlainCensus, requestConsentedStop } from "../pair-stop";
 import type { QuitFlow } from "../quit-flow";
 import {
   type ApplyPort,
@@ -157,9 +157,12 @@ export function createElectronApplyPort(deps: {
   return {
     wired: deps.platform === "darwin",
 
-    census(): Promise<CensusSnapshot> {
-      // IL-D5 (a) — a list that names a cell older than its bound is unknown too (`censusOf`)
-      return readCensus(async () => (await deps.fieldd.ensure()).client);
+    census(native): Promise<CensusSnapshot> {
+      const client = async () => (await deps.fieldd.ensure()).client;
+      // IL-D5 (a) — a list that names a cell older than its bound is unknown too (`censusOf`). Item 192 (RV #6) — a
+      // release that leaves field-native alone stops fieldd alone, whose own census fieldd keeps (the agent runs it
+      // ends)
+      return native ? readCensus(client) : readPlainCensus(client);
     },
 
     async confirm(content: BoxContent): Promise<boolean> {
@@ -190,7 +193,8 @@ export function createElectronApplyPort(deps: {
         return { ok: false, reason: "fieldd is not attached" };
       }
       // B3: a release that leaves the floor's bytes alone stops fieldd alone (its plain stop), and the floor and its
-      // sessions live on for the next fieldd to adopt
+      // sessions live on for the next fieldd to adopt. Item 192 (RV #6): that stop names the agent runs the person
+      // consented to end (`sessions` are their run ids), and fieldd re-checks them as the floor re-checks its sessions
       const outcome = await requestConsentedStop(
         handle.client,
         { reason: "update", sessions, native, toVersion: version },

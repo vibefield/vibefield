@@ -10,6 +10,10 @@
 // `decideUpdate` (B1); the apply re-reads a FRESH verified policy at the click and holds `policy-unreachable` when it
 // cannot (B2, no offline allowance); and a release whose signed manifest leaves the native plane's bytes alone keeps
 // the floor and its sessions — no census gate, no consent box, `native: false` (B3).
+// *Corrected 2026-11-06 (Item 192, RV #6, gap3-1):* it keeps the floor's TERMINAL sessions, but its stop is fieldd's
+// own, which ends every live run whose agent doesn't re-attach. So that stop has its census too (fieldd's
+// `system.shutdown.census`, read through `ApplyPort.census(false)`), the consent names its agent runs, fieldd re-checks
+// them at the stop (`system.shutdown {agents}`), and the silent apply holds while it would end one.
 // L3b-ii (B4–B6): a staged update applies ON ITS OWN when EDP-34's safe window holds (`considerSilentApply`: on staged,
 // on the last window's close, on resume, and on a 30-minute timer that lives only while staged); the root keys anchor
 // on the adopted rotation chain, persisted as signed documents and re-verified from the embedded keys at every load;
@@ -39,7 +43,6 @@ import {
   releaseTagOf,
   STABLE_TAG_PATTERN,
   UPDATE_CHANNELS,
-  UPDATE_PLANES,
   UPDATES_AUDIT_ACTIONS,
   UPDATES_SERVICE,
   type UpdateAppLocation,
@@ -47,7 +50,6 @@ import {
   type UpdateChannel,
   type UpdateCheckResult,
   type UpdateDownloadResult,
-  type UpdatePlane,
   type UpdatePolicy,
   type UpdatesUnavailableState,
   type UpdateView,
@@ -115,9 +117,10 @@ export type UpdateState =
         | "policy-unverified"
         // AU-7 — a read-only copy: staged before it got there, never installed from there
         | "location";
-      /** WP12c — the live sessions the last census read (the tray's verb says them); absent where unwired */
+      /** WP12c — what the release's stop ends, as the last census read it (the tray's verb says them): the floor's
+       * sessions, or (RV #6) the agent runs fieldd's own stop ends when `keepsSessions`; absent where unwired */
       readonly sessions?: number | "unknown";
-      /** L3b-i (B3) — the release leaves the native plane's bytes alone: the floor and its sessions live on */
+      /** L3b-i (B3) — the release leaves the native plane's bytes alone: the floor and its terminal sessions live on */
       readonly keepsSessions?: true;
     }
   | {
@@ -183,12 +186,9 @@ export interface UpdateControllerOptions {
   readonly currentVersion?: string;
   /** AU-6 (LC-18) — when this build was made (the staged identity's `builtAt`), epoch ms; absent on an older stage */
   readonly builtAt?: number;
-  /** WP12c (§10 S7) — EDP-34's context minus the census and the planes (the controller holds both: the planes are
-   * B3's verdict); doctor names the failing clause */
-  readonly safeWindowContext?: () => Omit<
-    SafeWindowContext,
-    "census" | "planes" | "displayHeldAwake"
-  >;
+  /** WP12c (§10 S7) — EDP-34's context minus the census and the display (the controller holds both: the census is of
+   * the stop B3's verdict needs, RV #6); doctor names the failing clause */
+  readonly safeWindowContext?: () => Omit<SafeWindowContext, "census" | "displayHeldAwake">;
   /** L3b-ii (B4) — the display clause's reader (`display-awake.ts`), read fresh by each silent evaluation; absent, the
    * clause is `unknown`, which is closed. */
   readonly displayHeldAwake?: () => Promise<boolean | "unknown">;
@@ -246,7 +246,8 @@ export type RestartOutcome =
         | "quit-underway"
         | "policy-unreachable"
         | "policy-unverified"
-        // the silent path (B4) never asks: a touched release with live sessions waits for a person
+        // the silent path (B4) never asks: a release whose stop ends live sessions or agent runs (RV #6) waits for a
+        // person
         | "sessions"
         // C2 (L3c-i): the prepared snapshot went stale before the answer — a fresh prepare, never a silent proceed
         | "expired"
@@ -535,7 +536,6 @@ export class UpdateController {
       applyWired: this.options.apply?.wired === true,
       policy: this.lastVerified === null ? null : leversOf(this.lastVerified.policy),
       hostOs: this.options.hostOsVersion?.() ?? null,
-      nativeTouched: this.native.touched,
       ...(this.where !== undefined ? { location: this.where } : {}),
     });
   }
@@ -894,7 +894,6 @@ export class UpdateController {
           safeWindow({
             ...windowContext(),
             displayHeldAwake: this.display,
-            planes: this.planes(),
             census: this.censusCount,
           }),
         ),
@@ -936,10 +935,11 @@ export class UpdateController {
       lines.push(`release notes: ${verified.head} — ${notesState(verified)}`);
     }
     if (state.kind === "staged") {
+      const runsEnd = agentRunsEnd(this.censusCount);
       lines.push(
         this.native.touched
           ? `native plane: touched (${this.native.why}) — the apply ends its sessions`
-          : `native plane: untouched by ${state.version} — its sessions keep running`,
+          : `native plane: untouched by ${state.version} — its terminal sessions keep running; ${runsEnd}`,
       );
     }
     if (state.kind === "staged") {
@@ -990,10 +990,12 @@ export class UpdateController {
    * unreachable or unverified holds, with the person told why; a lever that now refuses (a kill switch or a yank
    * published after the download, a floor) stops it — and (B3) the native plane's verdict from that same chain: a
    * release that leaves the floor's bytes alone skips the census and the consent and stops fieldd alone.
+   * *Corrected 2026-11-06 (Item 192, RV #6):* it takes ONE census of fieldd's own stop instead (the agent runs it
+   * ends), asks when it ends any, and stops fieldd alone with them named.
    *
    * L3b-ii (B4): `silent` is the safe window's own apply. It never shows a box: a refusal holds, said in the ledger and
-   * doctor; and a release that touches the floor needs a FRESH census at zero (never the tray's periodic count — a
-   * session born in the gap is the refusal fieldd's own re-check already makes). */
+   * doctor; and a release needs a FRESH census of its stop at zero (never the tray's periodic count — a session or
+   * run born in the gap is the refusal fieldd's own re-check already makes). */
   async restartToInstall(opts: { readonly silent?: boolean } = {}): Promise<RestartOutcome> {
     // single-flight: a person's click while the silent path is mid-check (or the reverse) is the same apply
     if (this.restarting) return { ok: false, reason: "quit-underway" };
@@ -1008,13 +1010,16 @@ export class UpdateController {
         return { ok: false, reason: prepared.reason };
       }
       if (prepared.sessions.length > 0) {
-        // the silent path asks no one: live sessions wait for a person (EDP-33, EDP-34's plane gate)
+        // the silent path asks no one: live sessions, or the agent runs fieldd's own stop ends (RV #6), wait for a
+        // person (EDP-33, EDP-34's plane gate)
         if (silent || apply === undefined) {
           this.prepared = null;
           return { ok: false, reason: "sessions" };
         }
         // the tray's consent: the native box between the two phases, showing THIS snapshot
-        const consented = await apply.confirm(consentBox(prepared.version, prepared.sessions));
+        const consented = await apply.confirm(
+          consentBox(prepared.version, prepared.sessions, !prepared.keepsSessions),
+        );
         if (!consented) {
           this.prepared = null;
           return { ok: false, reason: "consent-declined" };
@@ -1169,17 +1174,15 @@ export class UpdateController {
       };
     }
 
-    // B3 — the planes, by digest, from the same fresh chain; a touched release takes ONE census snapshot
+    // B3 — the planes, by digest, from the same fresh chain; RV #6 — and ONE census snapshot of the stop they need: the
+    // floor's sessions for a touched release, the agent runs fieldd's own stop ends for one that leaves the floor alone
     const native = (await this.judgeNative(fresh.chain, version)).touched;
-    let sessions: readonly CensusSession[] = [];
-    if (native) {
-      const snapshot = await this.readCensus();
-      if (!snapshot.known) {
-        this.audit(UPDATES_AUDIT_ACTIONS.APPLY, "denied", "CENSUS_UNKNOWN", { version });
-        return { ok: false, reason: "census-unknown", words: wordsOf(censusNotice()) };
-      }
-      sessions = snapshot.sessions;
+    const snapshot = await this.readCensus(native);
+    if (!snapshot.known) {
+      this.audit(UPDATES_AUDIT_ACTIONS.APPLY, "denied", "CENSUS_UNKNOWN", { version });
+      return { ok: false, reason: "census-unknown", words: wordsOf(censusNotice(native)) };
     }
+    const sessions = snapshot.sessions;
     const token = `${randomUUID()}${randomUUID()}`.replace(/-/g, "");
     const expiresAt = this.now() + PREPARE_TTL_MS;
     this.prepared = { token, version, native, sessions, expiresAt };
@@ -1191,13 +1194,14 @@ export class UpdateController {
       sessions,
       expiresAt,
       // L3c-ii — the consent's words travel with the snapshot, so the card says what the tray's box says
-      ...(sessions.length > 0 ? { consent: consentWords(version, sessions) } : {}),
+      ...(sessions.length > 0 ? { consent: consentWords(version, sessions, native) } : {}),
     };
   }
 
   /** B4 (EDP-34, §11.3) — apply a staged update ON ITS OWN when the safe window holds: windowless ∧ tray-resident ∧ the
-   * display not held awake (read fresh) ∧ the plane gate (field-native untouched, or a FRESH census at zero — checked
-   * inside the apply). The policy's `requireUserConfirmation` and the person's off switch keep it a person's act.
+   * display not held awake (read fresh) ∧ the plane gate (a FRESH census of the release's stop at zero — checked
+   * inside the apply; RV #6: a release that leaves the floor alone counts the agent runs fieldd's own stop ends). The
+   * policy's `requireUserConfirmation` and the person's off switch keep it a person's act.
    * Evaluated on staged, on the last window's close, on resume, and on the timer that lives only while staged. */
   async considerSilentApply(
     trigger: "staged" | "window-closed" | "resume" | "timer",
@@ -1224,7 +1228,6 @@ export class UpdateController {
       const window = safeWindow({
         ...windowContext(),
         displayHeldAwake: this.display,
-        planes: this.planes(),
         census: 0,
       });
       if (!window.open) return no(window.clause);
@@ -1532,13 +1535,6 @@ export class UpdateController {
     return verdict;
   }
 
-  /** EDP-34's planes for the staged release: every plane, minus field-native when B3 found it untouched. */
-  private planes(): readonly UpdatePlane[] {
-    return this.native.touched
-      ? UPDATE_PLANES
-      : UPDATE_PLANES.filter((plane) => plane !== "field-native");
-  }
-
   /** The quit flow's plan for one apply. `prepare` is the only place the daemons stop. */
   private updatePlan(
     apply: ApplyPort,
@@ -1613,11 +1609,13 @@ export class UpdateController {
     };
   }
 
-  /** WP12c — the census, ONE snapshot, through the port (bounded there); also refreshes the tray's count. */
-  private async readCensus(): Promise<CensusSnapshot> {
+  /** WP12c — the census, ONE snapshot, through the port (bounded there); also refreshes the tray's count. RV #6 — of
+   * the stop the verdict needs (`native`: the current one, unless the caller holds the verdict it just judged): the
+   * floor's sessions for a release that touches field-native, the agent runs fieldd's own stop ends otherwise. */
+  private async readCensus(native: boolean = this.native.touched): Promise<CensusSnapshot> {
     const apply = this.options.apply;
     if (apply === undefined || !apply.wired) return { known: true, sessions: [] };
-    const snapshot = await apply.census().catch((): CensusSnapshot => ({ known: false }));
+    const snapshot = await apply.census(native).catch((): CensusSnapshot => ({ known: false }));
     this.censusCount = snapshot.known ? snapshot.sessions.length : "unknown";
     this.settleStaged();
     return snapshot;
@@ -2057,6 +2055,12 @@ function notesState(chain: VerifiedChain): string {
     return `present (${notes.kind}, ${count} line${count === 1 ? "" : "s"})`;
   }
   return chain.notesDropped !== null ? `dropped (${chain.notesDropped})` : "absent";
+}
+
+/** Item 192 (RV #6) — doctor's word on what fieldd's own stop ends, for a release that leaves the floor alone. */
+function agentRunsEnd(count: CensusCount): string {
+  if (count === "unknown") return "the agent runs it ends are unread, so the apply holds";
+  return `${count} agent run${count === 1 ? " ends" : "s end"} (their agents don't re-attach)`;
 }
 
 /** The verified feed's top-level `sha512:` (electron-builder writes it unquoted or quoted), the payload's checked hash. */

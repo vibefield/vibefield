@@ -474,6 +474,8 @@ const CONSENT: UpdateConsentWords = {
   more: 2,
   confirm: "End 7 sessions and update",
 };
+/** the question as the controller stands it: main's words, the list named by the stop (Item 192) */
+const ASKED = { words: CONSENT, listLabel: "The sessions it ends" } as const;
 const WAITING: AccountPerson[] = OTHERS.map((person, index) =>
   index === 0 ? { ...person, waiting: 2 } : person,
 );
@@ -686,7 +688,7 @@ describe("MeMenuView — the update row, the dot and the question (AU-2)", () =>
   it("grows into main's question at 320: Cancel first and focused, Esc and Tab keep the menu (AU-D6, LC-9)", async () => {
     const ends = updateOf({ ...STAGED, sessions: 7 });
     const spies = await mountUpdating(ends, { open: true });
-    await rerender({ update: { ...ends, ask: { words: CONSENT, busy: false } } });
+    await rerender({ update: { ...ends, ask: { ...ASKED, busy: false } } });
     // §6 — the panel grows at once, and the rows fade for one beat before the question is drawn
     const list = container?.querySelector<HTMLElement>(".vf-me-list");
     const panel = container?.querySelector<HTMLElement>(".vf-me-panel");
@@ -703,6 +705,8 @@ describe("MeMenuView — the update row, the dot and the question (AU-2)", () =>
       ...CONSENT.listed,
       "and 2 more",
     ]);
+    // the list is named by what the stop ends, as the controller says it
+    expect(dialog?.querySelector("ul")?.getAttribute("aria-label")).toBe(ASKED.listLabel);
     const acts = Array.from(dialog?.querySelectorAll("button") ?? []);
     expect(acts.map((button) => button.textContent)).toEqual([
       "Cancel",
@@ -742,7 +746,7 @@ describe("MeMenuView — the update row, the dot and the question (AU-2)", () =>
   it("holds the question while its confirm is in flight: nothing to press, Esc does nothing", async () => {
     const ends = updateOf({ ...STAGED, sessions: 7 });
     const spies = await mountUpdating(ends, { open: true });
-    await rerender({ update: { ...ends, ask: { words: CONSENT, busy: true } } });
+    await rerender({ update: { ...ends, ask: { ...ASKED, busy: true } } });
     await beat();
     const acts = Array.from(
       container?.querySelectorAll<HTMLButtonElement>('[role="alertdialog"] button') ?? [],

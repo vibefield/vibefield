@@ -3,8 +3,10 @@
 // failing clause. L2b-ii computed it and said it; L3b-ii (B4) applies a staged update SILENTLY when it holds, and
 // builds the display clause's reader (`display-awake.ts`: `pmset -g assertions` on macOS; `unknown` anywhere else, which
 // fails closed).
+// Item 192 (RV #6, gap3-1): the plane gate is the census at zero, since the census is already of the stop the
+// release's planes need (the floor's sessions, or the agent runs fieldd's own stop ends); B3's "field-native untouched
+// opens it" is retired with the planes it read.
 
-import type { UpdatePlane } from "@vibefield/contracts";
 import type { CensusCount } from "./decide";
 
 export interface SafeWindowContext {
@@ -14,9 +16,8 @@ export interface SafeWindowContext {
   readonly trayResident: boolean;
   /** some process holds the display awake — a presentation, a call, a screen share; `"unknown"` = unreadable (closed) */
   readonly displayHeldAwake: boolean | "unknown";
-  /** the planes the release touches: every plane, minus field-native when its signed digest is unchanged (L3b-i, B3) */
-  readonly planes: readonly UpdatePlane[];
-  /** the live sessions a field-native-touching release would end (EDP-33: it applies only at census zero) */
+  /** what the release's stop would end — the floor's sessions, or the agent runs fieldd's own stop ends (RV #6) —
+   * EDP-33: it applies only at census zero */
   readonly census: CensusCount;
 }
 
@@ -35,9 +36,7 @@ export function safeWindow(context: SafeWindowContext): SafeWindow {
   if (!context.windowless) return { open: false, clause: "windowless" };
   if (!context.trayResident) return { open: false, clause: "tray-resident" };
   if (context.displayHeldAwake !== false) return { open: false, clause: "display-awake-unheld" };
-  if (context.planes.includes("field-native") && context.census !== 0) {
-    return { open: false, clause: "plane-gate" };
-  }
+  if (context.census !== 0) return { open: false, clause: "plane-gate" };
   return { open: true };
 }
 

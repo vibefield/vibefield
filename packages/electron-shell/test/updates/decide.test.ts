@@ -244,24 +244,17 @@ describe("the levers (B1) and the native plane (B3)", () => {
   });
 
   // Item 192 (RV #6, gap3-1) — the census is of THE stop the release needs (the floor's sessions, or the agent runs
-  // fieldd's own stop ends), so it gates every release: a release that leaves the floor alone is no exemption
+  // fieldd's own stop ends), so it gates every release: a release that leaves the floor alone is no exemption, and
+  // the context carries no verdict on the planes any more (the controller picks which census to read)
   it("the census gates every release: what its stop ends, live or unread, holds it", () => {
     expect(at("downloaded", { policy: open }, staged, 2)).toEqual({
       kind: "hold",
       version: V,
       reason: "sessions",
     });
-    expect(at("downloaded", { policy: open, nativeTouched: false }, staged, 2)).toEqual({
+    expect(at("downloaded", { policy: open }, staged, "unknown")).toEqual({
       kind: "hold",
       version: V,
-      reason: "sessions",
-    });
-    expect(at("downloaded", { policy: open, nativeTouched: false }, staged, "unknown")).toEqual({
-      kind: "hold",
-      version: V,
-      reason: "census-unknown",
-    });
-    expect(at("downloaded", { policy: open }, staged, "unknown")).toMatchObject({
       reason: "census-unknown",
     });
     // a stop that ends nothing offers the restart

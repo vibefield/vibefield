@@ -21,7 +21,8 @@ export type TrayUpdateState =
       readonly version: string;
       /** WP12c — the live sessions the census read: the verb says them (EDP-35); `"unknown"` holds the verb */
       readonly sessions?: number | "unknown";
-      /** L3b-i (B3) — the release leaves the floor alone, so the verb ends no session whatever the count */
+      /** L3b-i (B3) — the release leaves the floor alone: it ends no terminal session, and (Item 192, RV #6) its count
+       * is the agent runs fieldd's own stop ends, which the verb names */
       readonly keepsSessions?: boolean;
       /** AU-4 (AU-G14) — an apply exists on this platform, so the install waits on the person: the status item wears
        * the update image. Absent or false (no apply here) wears the base image. */
@@ -192,13 +193,11 @@ export function updateMenuEntry(
       // The verb renders only when an apply exists (WP12c's gate) and the census could be read; otherwise the update
       // is downloaded and the item says so instead of offering a restart that would do nothing. With live sessions
       // the verb IS the consequence (EDP-35): "Update Ends N Sessions…" — the plain verb never renders beside it.
+      // Item 192 (RV #6): a release that leaves the floor alone is no exception — its stop's census is fieldd's own,
+      // "Update Ends N Agent Runs…", and an unread one holds the verb as any does.
       const sessions = update.sessions;
       const keepsSessions = update.keepsSessions === true;
-      if (
-        acts.restart === undefined ||
-        sessions === undefined ||
-        (sessions === "unknown" && !keepsSessions)
-      ) {
+      if (acts.restart === undefined || sessions === undefined || sessions === "unknown") {
         return menuEntry(stagedTrayLabel(undefined));
       }
       return menuEntry(

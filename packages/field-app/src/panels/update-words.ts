@@ -153,11 +153,22 @@ export function updateWaits(view: UpdateView | null | undefined): boolean {
 }
 
 /** AU-3 (AU-L2) — Restart to update asks first ("…"): it ends sessions, or must read them before it can (the census
- * unknown, or not read yet). A release that leaves the floor alone, or ends nothing, restarts on the one click. */
+ * unknown, or not read yet). A restart that ends nothing goes on the one click. Item 192 (RV #6): a release that leaves
+ * the floor alone keeps its terminal sessions, and its count is the agent runs fieldd's own stop ends — no
+ * exemption. */
 export function restartAsks(view: UpdateView): boolean {
-  if (view.keepsSessions === true) return false;
   const sessions = view.sessions;
   return sessions === undefined || sessions === "unknown" || sessions > 0;
+}
+
+/** Item 192 (RV #6) — the consent's list, by what the release's stop ends (its accessible name on the page and in the
+ * Me menu): the agent runs fieldd's own stop ends for a release that keeps the floor, the floor's sessions
+ * otherwise. The page and the menu ask it of the consent's own snapshot (the flow's `keepsSessions`, L3c-ii: the
+ * words and what they name travel together), never of a view published apart from it. */
+export function consentListLabel(
+  stop: { readonly keepsSessions?: boolean | undefined } | null | undefined,
+): string {
+  return stop?.keepsSessions === true ? "The agent runs it ends" : "The sessions it ends";
 }
 
 /** AU-3 (AU-D3 A) — time grows the words, never the mark: from a ready update's 7th day. */
@@ -353,6 +364,8 @@ export interface MeUpdateRow {
 }
 
 const sessionsNoun = (n: number): string => (n === 1 ? "terminal session" : "terminal sessions");
+/** Item 192 (RV #6) — what fieldd's own stop ends, for a release that keeps the floor's sessions */
+const runsNoun = (n: number): string => (n === 1 ? "agent run" : "agent runs");
 
 /** AU-3 (LC-31) — the check found no release on the chosen channel (`channel-unresolved`): nothing is published there
  * yet, which is no failure — quiet on every surface, never the danger line. */
@@ -409,9 +422,15 @@ export function updateStateWords(view: UpdateView, now: number): UpdateStateWord
           tone: "neutral",
         };
       const sessions = view.sessions;
+      // Item 192 (RV #6; rv-update-census at its lean, option A's words) — a release that keeps the floor's terminal
+      // sessions still restarts the field service, which ends the agent runs whose agents don't re-attach
       const cost =
         view.keepsSessions === true
-          ? "Your terminal sessions keep running."
+          ? typeof sessions === "number" && sessions > 0
+            ? `Restarting ends ${sessions} ${runsNoun(sessions)}. Your terminal sessions keep running. You choose when.`
+            : sessions === "unknown"
+              ? "VibeField couldn't read which agent runs are working; it asks again when you restart."
+              : "Your terminal sessions keep running."
           : sessions === "unknown"
             ? "VibeField couldn't read which terminal sessions are running; it asks again when you restart."
             : typeof sessions === "number" && sessions > 0
@@ -630,15 +649,17 @@ function restingRow(view: UpdateView, now: number): MeUpdateRowBody {
           detail: "Your sessions keep running",
           act: "restart",
         };
-      // R9, R10 — the cost before the click (AU-L2), or the census main reads first
+      // R9, R10 — the cost before the click (AU-L2), or the census main reads first. Item 192 (RV #6): a release that
+      // keeps the floor's sessions says the agent runs its stop ends
       const sessions = view.sessions;
+      const noun = view.keepsSessions === true ? runsNoun : sessionsNoun;
       return {
         glyph: "reset",
         turn: 0,
         label: "Restart to update…",
         detail:
           typeof sessions === "number"
-            ? `Ends ${sessions} ${sessionsNoun(sessions)}`
+            ? `Ends ${sessions} ${noun(sessions)}`
             : "Checks your sessions first",
         act: "ask",
       };

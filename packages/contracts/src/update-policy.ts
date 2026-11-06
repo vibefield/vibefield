@@ -527,6 +527,10 @@ export type RestartScheduled = z.infer<typeof RestartScheduled>;
 
 /** `system.shutdown` params (scope `native.admin`, local only). Absent `native` = fieldd stops alone and field-native
  * and its sessions keep running — the two-planes law (EL1), unchanged.
+ * *Corrected 2026-11-06 (Item 192, RV #6, gap3-1):* the floor's TERMINAL sessions keep running; fieldd's stop still
+ * ends every live run whose agent's helper lives in fieldd's own process tree (its adapter cannot release). `agents`
+ * is that stop's consent, below; with neither, the plain stop asks no one (the supervisor's replacement of a stale
+ * build, the dev runner).
  *
  * `native` = WP12 L2b's ONE consented exception (design-00 EL1's 2026-10-15 note; §9 R2): an update that touches
  * field-native stops the floor too. `sessions` is the set the person consented to end — `[]` at census zero. fieldd
@@ -534,6 +538,14 @@ export type RestartScheduled = z.infer<typeof RestartScheduled>;
  * born and not yet observed) with `sessions`: any difference, a birth in flight, or an unobserved inventory refuses
  * (`PRECONDITION_FAILED {live}` / `UNAVAILABLE {service: "terminal", state: "unobserved"}`) and reopens births; only
  * an exact match stops the floor (`native.lifecycle.prepareRestart` → `native.lifecycle.shutdown`), then fieldd.
+ *
+ * `agents` (Item 192, RV #6) — the consent of fieldd's OWN stop, when field-native stays: `runs` is the set of agent
+ * runs the person consented to end (`[]` at census zero), as `system.shutdown.census` named them. fieldd closes its
+ * launches, then compares its own census (`AgentRuntimeService.plainStopCensus`) with `runs`: any difference or a
+ * birth in flight refuses `PRECONDITION_FAILED {live, births}` (the native stop's own shape), an unsettled re-attach
+ * `UNAVAILABLE {service: "agents", state: "reattaching"}`, and every refusal reopens the launches; only an exact match
+ * stops fieldd. `native` and `agents` together are malformed: the floor's census already covers every PTY that holds
+ * an agent.
  *
  * `reason` (AL-2, 2026-10-27) — why the shell asks: `update`, or a person's `quit`, or the OS's `logout`. It rides into
  * the floor's intent and the logs; absent = `update`, the only caller before it (the apply port, `replaceStaleBuild`'s
@@ -550,9 +562,41 @@ export const SystemShutdownParams = z
       })
       .passthrough()
       .optional(),
+    agents: z
+      .object({ runs: z.array(z.string().min(1).max(256)).max(4096) })
+      .passthrough()
+      .optional(),
+  })
+  .passthrough()
+  .refine(
+    (params) => params.native === undefined || params.agents === undefined,
+    "a stop names one census: the floor's sessions (native) or fieldd's own runs (agents)",
+  );
+export type SystemShutdownParams = z.infer<typeof SystemShutdownParams>;
+
+/** Item 192 (RV #6) — one run fieldd's own stop ends, as `system.shutdown.census` names it: `runId` is what the
+ * person consents to and fieldd re-checks; the pane's `sessionId`, `title` and `cwd` (the floor's row, as it carries
+ * them) and the agent's label are only for the person to recognise it. */
+export const SystemShutdownCensusRun = z
+  .object({
+    runId: z.string().min(1).max(256),
+    sessionId: z.string().min(1).max(256).optional(),
+    title: z.string().optional(),
+    cwd: z.string().optional(),
+    /** the catalog row's label ("Codex"), never its id (AR-L1) */
+    agent: z.string().min(1).max(128),
   })
   .passthrough();
-export type SystemShutdownParams = z.infer<typeof SystemShutdownParams>;
+export type SystemShutdownCensusRun = z.infer<typeof SystemShutdownCensusRun>;
+
+/** `system.shutdown.census` (scope `native.admin`, local, the local shell's alone) — what fieldd's OWN stop ends: every
+ * live managed run of this boot whose catalog row claims no re-attach (an agent whose helper lives in fieldd's process
+ * tree dies with it), from the catalog's claim with no vendor named. Refused `UNAVAILABLE {service: "agents", state:
+ * "reattaching"}` until the boot's re-attach has settled: a run it may still hold is never read as none. */
+export const SystemShutdownCensusResult = z
+  .object({ runs: z.array(SystemShutdownCensusRun).max(4096) })
+  .passthrough();
+export type SystemShutdownCensusResult = z.infer<typeof SystemShutdownCensusResult>;
 
 export const SystemShutdownResult = z
   .object({
@@ -621,9 +665,12 @@ export const UpdateView = z
     declined: z.boolean().optional(),
     /** downloading: coarse, 0–100 */
     percent: z.number().min(0).max(100).optional(),
-    /** staged: the live sessions the last census read, or `unknown` (the verb holds) */
+    /** staged: what THE stop the release needs ends, as the last census read it — the floor's sessions, or the agent
+     * runs fieldd's own stop ends when `keepsSessions` (Item 192, RV #6) — or `unknown` (the verb holds) */
     sessions: z.union([z.number().int().nonnegative(), z.literal("unknown")]).optional(),
-    /** staged: the release leaves the floor's bytes alone, so its apply ends no session (L3b-i, B3) */
+    /** staged: the release leaves the floor's bytes alone, so its apply ends no TERMINAL session (L3b-i, B3);
+     * *corrected 2026-11-06 (Item 192, RV #6):* its stop is fieldd's own, and `sessions` counts the agent runs that
+     * stop ends (their agents don't re-attach) */
     keepsSessions: z.boolean().optional(),
     /** staged: what holds the apply, named (`sessions`, `census-unknown`, `policy-unreachable`, …) */
     blockedBy: z.string().min(1).max(64).optional(),
@@ -660,12 +707,15 @@ export const UpdateSetChannelRequest = z.object({ channel: UpdateChannel }).stri
 export const UpdateDeclineRequest = z.object({ version: z.string().min(1).max(64) }).strict();
 export const UpdateConfirmRequest = z.object({ token: z.string().min(16).max(128) }).strict();
 
-/** One live session in the apply's census, as the consent names it (`title — cwd`); the id is what fieldd re-checks. */
+/** One live session in the apply's census, as the consent names it (`title — cwd`); the id is what fieldd re-checks.
+ * Item 192 (RV #6): for fieldd's own stop it is an agent run — the id is the run's, and `agent` is the label the
+ * consent lists it by (`Codex — title — cwd`). */
 export const UpdateConsentSession = z
   .object({
     sessionId: z.string().min(1).max(256),
     title: z.string().max(512).optional(),
     cwd: z.string().max(4096).optional(),
+    agent: z.string().min(1).max(128).optional(),
   })
   .passthrough();
 
@@ -678,12 +728,13 @@ export const UpdateWords = z
  * card lays them out — the same sentence either way. Present only when the apply would end sessions. */
 export const UpdateConsentWords = z
   .object({
-    /** "Updating ends 2 terminal sessions" */
+    /** "Updating ends 2 terminal sessions" (fieldd's own stop: "Updating ends 2 agent runs") */
     message: z.string().min(1).max(256),
-    /** "VibeField 1.2.0 replaces the terminal service, which ends:" */
+    /** "VibeField 1.2.0 replaces the terminal service, which ends:" (fieldd's own: "…restarts the field service, …") */
     lead: z.string().min(1).max(512),
-    /** up to five sessions as `title — cwd` */
-    listed: z.array(z.string().min(1).max(4700)).max(16),
+    /** up to five sessions as `title — cwd`; Item 192 (RV #6): an agent run as `agent — title — cwd`, so a line holds
+     * the label's 128 more */
+    listed: z.array(z.string().min(1).max(4850)).max(16),
     /** the sessions past the listed ones ("and K more") */
     more: z.number().int().nonnegative(),
     /** the destructive act's own words: "End 2 sessions and update" */
@@ -701,7 +752,8 @@ export const UpdatePrepareResult = z.discriminatedUnion("ok", [
       ok: z.literal(true),
       token: z.string().min(16).max(128),
       version: z.string().min(1).max(64),
-      /** the release leaves the floor alone: no session ends, no consent */
+      /** the release leaves the floor alone: no TERMINAL session ends. Item 192 (RV #6): `sessions` are then the agent
+       * runs fieldd's own stop ends, and a consent is asked when there are any */
       keepsSessions: z.boolean(),
       sessions: z.array(UpdateConsentSession).max(4096),
       expiresAt: z.number().int().nonnegative(),

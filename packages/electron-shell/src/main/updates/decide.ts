@@ -13,6 +13,9 @@
 // cache GC (B6) deletes its payload, so a kill no longer holds it: after a later policy lifts the kill, the next check
 // downloads it again. And the census gates only a release
 // that touches the native plane (B3): one that leaves the floor's bytes alone keeps its sessions, so it needs neither.
+// *Corrected 2026-11-06 (Item 192, RV #6, gap3-1):* it keeps the floor's TERMINAL sessions, and fieldd's own stop ends
+// every live run whose agent doesn't re-attach. The census is of THE stop the release needs (the controller reads the
+// floor's, or fieldd's own), so it gates every release; the `nativeTouched` exemption is retired.
 // AU-3a (X24): the two version orders moved to @vibefield/contracts, so the window compares by the same ones.
 // AU-7 (AU-G8; LC-10; main-process.md §8.2): a copy macOS won't let replace itself (`read-only`: App Translocation, a
 // mounted image, an unwritable folder) checks only when a person asks, downloads nothing, and holds what it staged
@@ -58,8 +61,6 @@ export interface DecideContext {
   readonly policy?: PolicyLevers | null;
   /** the host OS's own version (macOS: `process.getSystemVersion()`); null = unreadable, so an OS floor reads unmet */
   readonly hostOs?: string | null;
-  /** L3b-i (B3) — the staged release touches the native plane; absent = touched (the fail-safe) */
-  readonly nativeTouched?: boolean;
   /** AU-7 — where the bundle runs (macOS; `location.ts`); absent = it can replace itself */
   readonly location?: UpdateAppLocation;
 }
@@ -94,7 +95,8 @@ export type UpdateAction =
 
 /** VibeField-hosted live sessions (EDP-33/35), read from the floor's own inventory; `"unknown"` when it cannot be read
  * (the inventory unobserved, the link down, no answer in its bound) or a cell's rows are older than the inventory's
- * bound (IL-D5 (a), `censusOf`) — which HOLDS, never reads as zero (§10 S1). */
+ * bound (IL-D5 (a), `censusOf`) — which HOLDS, never reads as zero (§10 S1). Item 192 (RV #6): for a release that
+ * leaves the floor alone, the agent runs fieldd's own stop ends (`plainCensusOf`), held the same way. */
 export type CensusCount = number | "unknown";
 
 /** B1 — what the policy says of one version on this host: the first lever that refuses it, or null. */
@@ -153,12 +155,11 @@ export function decideUpdate(
   if (lever !== null) return { kind: "discard", version: state.version, reason: lever };
   // AU-7 — a payload staged before the bundle landed where it cannot replace itself stays held, never installed
   if (readOnly) return { kind: "hold", version: state.version, reason: "location" };
-  // the census gates only a release that touches the floor: an untouched one keeps its sessions (B3)
-  if (context.nativeTouched !== false) {
-    if (census === "unknown")
-      return { kind: "hold", version: state.version, reason: "census-unknown" };
-    if (census > 0) return { kind: "hold", version: state.version, reason: "sessions" };
-  }
+  // the census of THE stop the release needs gates every release (RV #6): the floor's sessions, or the agent runs
+  // fieldd's own stop ends when the release leaves the floor alone (B3 keeps only its terminal sessions)
+  if (census === "unknown")
+    return { kind: "hold", version: state.version, reason: "census-unknown" };
+  if (census > 0) return { kind: "hold", version: state.version, reason: "sessions" };
   if (!context.applyWired) return { kind: "hold", version: state.version, reason: "apply-unbuilt" };
   return { kind: "offer-restart", version: state.version };
 }

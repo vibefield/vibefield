@@ -37,6 +37,7 @@ import {
   cannotUpdateHere,
   channelUnresolved,
   checkedLabel,
+  consentListLabel,
   downgradeWords,
   downloadRefusalFallback,
   isDowngrade,
@@ -383,6 +384,7 @@ export function UpdatesSectionView({
         {flow.kind === "consent" && (
           <RestartConsent
             words={flow.words}
+            listLabel={consentListLabel(flow)}
             busy={busy}
             onConfirm={onConfirmRestart}
             onCancel={onCancelRestart}
@@ -457,11 +459,14 @@ export function UpdatesSectionView({
  * by accident, and the act trails. */
 function RestartConsent({
   words,
+  listLabel,
   busy,
   onConfirm,
   onCancel,
 }: {
   words: UpdateConsentWords;
+  /** What the list names, by the stop the release needs: the sessions it ends, or the agent runs (Item 192). */
+  listLabel: string;
   busy: boolean;
   onConfirm?: (() => void) | undefined;
   onCancel?: (() => void) | undefined;
@@ -488,7 +493,7 @@ function RestartConsent({
         {words.message}
       </p>
       <p className={`vf-profiles-confirm-what ${labelCls}`}>{words.lead}</p>
-      <ul className={`mt-1 space-y-0.5 ${labelCls}`} aria-label="The sessions it ends">
+      <ul className={`mt-1 space-y-0.5 ${labelCls}`} aria-label={listLabel}>
         {words.listed.map((line) => (
           <li key={line} className="truncate">
             {line}

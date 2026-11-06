@@ -2517,8 +2517,8 @@ async function main(
           log: logger,
           ...(applyPort !== undefined ? { apply: applyPort } : {}),
           currentVersion: app.getVersion(),
-          // EDP-34's context; the planes (L3b-i, B3) and the display clause (L3b-ii, B4: `pmset`, read fresh by each
-          // silent evaluation) are the controller's
+          // EDP-34's context; the census (of the stop B3's verdict needs, RV #6) and the display clause (L3b-ii, B4:
+          // `pmset`, read fresh by each silent evaluation) are the controller's
           safeWindowContext: () => ({
             windowless: registry.primary() === null,
             trayResident: trayController?.keepsAliveWithoutWindows() ?? false,

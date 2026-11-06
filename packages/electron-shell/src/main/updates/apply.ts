@@ -7,15 +7,18 @@
 // (`electron.d.ts:2103-2104`), so Squirrel is staged only AFTER the daemons have stopped — the one state where an
 // armed install is safe — and from that stop on, the flow always ends in exit and nothing may start a daemon.
 
-import { releaseName, TerminalListResult } from "@vibefield/contracts";
+import { releaseName, SystemShutdownCensusResult, TerminalListResult } from "@vibefield/contracts";
 import type { UpdateQuitPlan } from "../quit-flow";
 
-/** One session the floor holds, as the census read it: the id is what the person consents to and what fieldd
- * re-checks, byte for byte; the title and cwd are only for the person to recognise it. */
+/** One session the census read: the id is what the person consents to and what fieldd re-checks, byte for byte — a
+ * terminal session id for the floor's stop (`terminal.list`), a RUN id for fieldd's own (`system.shutdown.census`,
+ * Item 192, RV #6); the title, cwd and agent are only for the person to recognise it. */
 export interface CensusSession {
   readonly sessionId: string;
   readonly title?: string;
   readonly cwd?: string;
+  /** fieldd's own stop: the agent's label, which the consent lists the run by */
+  readonly agent?: string;
 }
 
 /** ONE census snapshot (the PM's ruling 13:31Z): the consent box lists it and the daemon's re-check compares its ids,
@@ -45,6 +48,24 @@ export function censusOf(answer: unknown): CensusSnapshot {
   };
 }
 
+/** Item 192 (RV #6, gap3-1) — `system.shutdown.census`'s answer as ONE census snapshot of fieldd's OWN stop: each run
+ * it ends, by the run id fieldd re-checks at `system.shutdown {agents}`. Anything but a parsed answer is `known: false`
+ * — an older fieldd's METHOD_NOT_FOUND, a fieldd still re-attaching (`UNAVAILABLE`), no answer — which holds the apply
+ * (§10 S1), never reads as zero. */
+export function plainCensusOf(answer: unknown): CensusSnapshot {
+  const counted = SystemShutdownCensusResult.safeParse(answer);
+  if (!counted.success) return { known: false };
+  return {
+    known: true,
+    sessions: counted.data.runs.map((run) => ({
+      sessionId: run.runId,
+      ...(run.title !== undefined ? { title: run.title } : {}),
+      ...(run.cwd !== undefined ? { cwd: run.cwd } : {}),
+      agent: run.agent,
+    })),
+  };
+}
+
 /** Squirrel's staging, after the daemon stop: `staged` (armed — the install is next), `refused` (its `error`: nothing
  * armed), `timeout` (no answer in the bound: it MAY still arm, so the app exits without relaunch). */
 export type StageOutcome =
@@ -68,16 +89,19 @@ export interface BoxContent {
 export interface ApplyPort {
   /** The apply exists on this platform: macOS's Squirrel (§10 S5). Elsewhere a staged update stays `apply-unbuilt`. */
   readonly wired: boolean;
-  /** `terminal.list` over the live fieldd, bounded (2 s), read by `censusOf`: anything but a current list is
-   * `known: false`. */
-  census(): Promise<CensusSnapshot>;
-  /** The consent box (only when sessions live): true = "End N sessions and update". */
+  /** ONE census of the stop the release needs, bounded (2 s): `native` — the floor's, `terminal.list` read by
+   * `censusOf`; otherwise fieldd's own (Item 192, RV #6), `system.shutdown.census` read by `plainCensusOf`, the agent
+   * runs a fieldd-only stop ends. Anything but a current answer is `known: false`. */
+  census(native: boolean): Promise<CensusSnapshot>;
+  /** The consent box (only when the stop ends something): true = "End N sessions and update". */
   confirm(content: BoxContent): Promise<boolean>;
   /** Arm the quit flow's update mode with this plan, then quit; false = a quit is already underway. */
   quitForUpdate(plan: UpdateQuitPlan): boolean;
   /** Hold fieldd (nothing may start it from here), then its consented stop: `system.shutdown {native: {stop, sessions,
    * toVersion}}`. A refusal stops nothing and RELEASES the hold. `native: false` (L3b-i, B3: the release leaves the
-   * floor's bytes alone) asks fieldd's plain stop, and the floor and its sessions live on. */
+   * floor's bytes alone) asks fieldd's own stop, and the floor and its terminal sessions live on; Item 192 (RV #6):
+   * `sessions` are then the agent runs the person consented to end (`system.shutdown {agents: {runs}}`), which fieldd
+   * re-checks. */
   stopDaemons(sessions: readonly string[], version: string, native: boolean): Promise<StopOutcome>;
   /** Squirrel's staging, bounded. */
   stage(boundMs: number): Promise<StageOutcome>;
@@ -108,24 +132,53 @@ export type ConsentWords = {
   readonly confirm: string;
 };
 
-export function consentWords(version: string, sessions: readonly CensusSession[]): ConsentWords {
+/** A session as the floor's stop's consent lists it: what the person named it, and where it runs. */
+const sessionLine = (session: CensusSession): string => {
+  const title = session.title?.trim() || "untitled session";
+  return session.cwd ? `${title} — ${session.cwd}` : title;
+};
+
+/** Item 192 (RV #6) — a run as fieldd's own stop's consent lists it: its agent first, then its title and folder. */
+const runLine = (run: CensusSession): string =>
+  [run.agent?.trim() || "Agent", run.title?.trim(), run.cwd]
+    .filter((part): part is string => part !== undefined && part !== "")
+    .join(" — ");
+
+/** Item 192 (RV #6; rv-update-census at its lean, option A's words) — `native` names the stop: the floor's (its
+ * terminal sessions end) or fieldd's own (the release keeps the floor, and ends the agent runs whose agents don't
+ * re-attach). */
+export function consentWords(
+  version: string,
+  sessions: readonly CensusSession[],
+  native = true,
+): ConsentWords {
   const n = sessions.length;
-  const listed = sessions.slice(0, CONSENT_LISTED_MAX).map((session) => {
-    const title = session.title?.trim() || "untitled session";
-    return session.cwd ? `${title} — ${session.cwd}` : title;
-  });
-  return {
-    message: `Updating ends ${n} ${plural(n, "terminal session", "terminal sessions")}`,
-    lead: `${releaseName(version, { start: true })} replaces the terminal service, which ends:`,
-    listed,
-    more: n - listed.length,
-    confirm: `End ${n} ${plural(n, "session", "sessions")} and update`,
-  };
+  const listed = sessions.slice(0, CONSENT_LISTED_MAX).map(native ? sessionLine : runLine);
+  const release = releaseName(version, { start: true });
+  return native
+    ? {
+        message: `Updating ends ${n} ${plural(n, "terminal session", "terminal sessions")}`,
+        lead: `${release} replaces the terminal service, which ends:`,
+        listed,
+        more: n - listed.length,
+        confirm: `End ${n} ${plural(n, "session", "sessions")} and update`,
+      }
+    : {
+        message: `Updating ends ${n} ${plural(n, "agent run", "agent runs")}`,
+        lead: `${release} restarts the field service, which ends:`,
+        listed,
+        more: n - listed.length,
+        confirm: `End ${n} ${plural(n, "agent run", "agent runs")} and update`,
+      };
 }
 
 /** EDP-35's consent box: `consentWords`, joined for a native dialog. */
-export function consentBox(version: string, sessions: readonly CensusSession[]): BoxContent {
-  const words = consentWords(version, sessions);
+export function consentBox(
+  version: string,
+  sessions: readonly CensusSession[],
+  native = true,
+): BoxContent {
+  const words = consentWords(version, sessions, native);
   const lines = [
     words.lead,
     ...words.listed,
@@ -223,12 +276,14 @@ export function downloadNotice(why: LeverWhy): BoxContent {
 }
 
 /** L3c-ii — the census could not be read when the person chose to update: VibeField ends no session it cannot name, and
- * says so (before, the tray's click did nothing visible here: an act with no sentence, which EDP-35 forbids). */
-export function censusNotice(): BoxContent {
+ * says so (before, the tray's click did nothing visible here: an act with no sentence, which EDP-35 forbids). Item 192
+ * (RV #6): `native` names the census — the floor's sessions, or the agent runs fieldd's own stop ends. */
+export function censusNotice(native = true): BoxContent {
   return {
     message: "VibeField didn't install the update",
-    detail:
-      "VibeField couldn't read which terminal sessions are running, so it ended none. Nothing changed; try again in a moment.",
+    detail: native
+      ? "VibeField couldn't read which terminal sessions are running, so it ended none. Nothing changed; try again in a moment."
+      : "VibeField couldn't read which agent runs are working, so it ended none. Nothing changed; try again in a moment.",
     buttons: ["OK"],
     defaultId: 0,
     cancelId: 0,
@@ -263,14 +318,16 @@ export function expiredNotice(): BoxContent {
 }
 
 /** The tray's verb for a staged update (the macOS menu convention the tray already uses: Title Case, an ellipsis for
- * a verb that asks). `undefined` sessions = not wired here; `"unknown"` = the census could not be read. A release that
- * leaves the floor alone (`keepsSessions`, L3b-i B3) ends no session, so its verb is the plain one whatever the count. */
+ * a verb that asks). `undefined` sessions = not wired here; `"unknown"` = the census could not be read, which holds
+ * the verb for every release. Item 192 (RV #6): a release that leaves the floor alone (`keepsSessions`, L3b-i B3)
+ * ends no terminal session, and its count is the agent runs fieldd's own stop ends — `keepsSessions` picks the noun. */
 export function stagedTrayLabel(
   sessions: number | "unknown" | undefined,
   keepsSessions = false,
 ): string {
-  if (keepsSessions && sessions !== undefined) return "Restart to Update";
   if (sessions === undefined || sessions === "unknown") return "Update Downloaded";
   if (sessions === 0) return "Restart to Update";
-  return `Update Ends ${sessions} ${plural(sessions, "Session", "Sessions")}…`;
+  return keepsSessions
+    ? `Update Ends ${sessions} ${plural(sessions, "Agent Run", "Agent Runs")}…`
+    : `Update Ends ${sessions} ${plural(sessions, "Session", "Sessions")}…`;
 }

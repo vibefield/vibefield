@@ -307,6 +307,16 @@ export const METHODS: MethodDef[] = [
     idempotent: true,
     locality: "local",
   }),
+  // Item 192 (RV #6, gap3-1) — the census of fieldd's OWN stop (`SystemShutdownCensusResult`): the agent runs a stop
+  // that leaves field-native ends, read before the person consents and re-checked by `system.shutdown {agents}`. The
+  // stop verb's posture, and fieldd answers it for a `shell-main` principal on loopback alone, as the lease's verbs.
+  defineMethod({
+    surface: "product",
+    method: "system.shutdown.census",
+    scope: "native.admin",
+    idempotent: true,
+    locality: "local",
+  }),
   // AL-7 (`thinking-app-lifecycle.md` §8.1) — the shell lease's two verbs, the stop verb's posture: native.admin,
   // local only, and fieldd answers them for a `shell-main` principal alone (the shell token). `attach` claims the
   // lease (a probe's hello never does) and hands over the record of how the last holder left, once; `leave` states

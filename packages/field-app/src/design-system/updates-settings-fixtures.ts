@@ -10,7 +10,7 @@ import {
 import type { UpdatesDevicesState } from "../panels/UpdatesDevicesSection";
 import type { UpdatesDoctorState, UpdatesFlow } from "../panels/UpdatesSection";
 import { updateDeviceRows } from "../panels/update-devices";
-import { type MeUpdateLocal, refusalLine } from "../panels/update-words";
+import { consentListLabel, type MeUpdateLocal, refusalLine } from "../panels/update-words";
 
 // Settings → Updates and Settings › Diagnostics' updater block in the catalog (WP12d L3c-ii, build-wp12-updater.md
 // §13 C5; AU-3): the projections main publishes in `desktopState.update`, the answers its doors give, the roster fieldd
@@ -21,8 +21,9 @@ import { type MeUpdateLocal, refusalLine } from "../panels/update-words";
 // replace itself. AU-6 (AU-D10 A; LC-7, LC-18) — the build's day on every head, and the release's notes as main
 // projects them: a ready nightly's log (before), an install's (after, What's new), a found release's written lines.
 
-/** The update's own path: up to date, found, fetched, ready (and long ready, and ready with its notes), the consent
- * its Restart opens, a refusal, and a day after an install with and without notes. */
+/** The update's own path: up to date, found, fetched, ready (and long ready, and ready with its notes, and ready to
+ * end agent runs while the terminal sessions keep running), the consent its Restart opens, a refusal, and a day after
+ * an install with and without notes. */
 export const UPDATES_PATH_STATES = [
   "current",
   "updated",
@@ -32,6 +33,7 @@ export const UPDATES_PATH_STATES = [
   "ready",
   "ready-notes",
   "ready-long",
+  "ready-agent-runs",
   "consent",
   "refused",
 ] as const;
@@ -177,6 +179,29 @@ const CONSENT: UpdateConsentWords = {
   confirm: "End 7 sessions and update",
 };
 
+/** Item 192 (RV #6; rv-update-census at its lean, option A's words) — a release that keeps the floor: main's words
+ * (`consentWords(…, native false)`) for the two agent runs fieldd's own stop ends, each its agent, title and folder. */
+const CONSENT_RUNS: UpdateConsentWords = {
+  message: "Updating ends 2 agent runs",
+  lead: `${releaseName(NEXT, { start: true })} restarts the field service, which ends:`,
+  listed: [
+    "Codex — fix the flaky test — ~/Projects/puppeteer",
+    "OpenCode — review the walls — ~/Projects/vibe-field",
+  ],
+  more: 0,
+  confirm: "End 2 agent runs and update",
+};
+
+/** Ready, and the release keeps the floor (`keepsSessions`): `sessions` counts the agent runs its restart ends. */
+const RUNS: UpdateView = {
+  ...BASE,
+  phase: "staged",
+  version: NEXT,
+  sessions: 2,
+  keepsSessions: true,
+  blockedBy: "sessions",
+};
+
 /** The fresh policy at the click was out of reach (main's `policyNotice({kind: "unreachable"})`). */
 const UNREACHABLE = {
   message: "VibeField didn't install the update",
@@ -256,10 +281,13 @@ function fixtureOf(state: UpdatesFixtureState): UpdatesFixture {
           stagedAt: UPDATES_FIXTURE_NOW - 8 * DAY,
         },
       };
+    case "ready-agent-runs":
+      // Item 192 (RV #6) — ready, and the release keeps the floor: its restart ends two agent runs, never a session
+      return { view: RUNS };
     case "consent":
       return {
         view: { ...BASE, phase: "staged", version: NEXT, sessions: 7, blockedBy: "sessions" },
-        flow: { kind: "consent", version: NEXT, words: CONSENT },
+        flow: { kind: "consent", version: NEXT, words: CONSENT, keepsSessions: false },
       };
     case "refused":
       return {
@@ -457,6 +485,7 @@ export const UPDATE_CORNER_GROUPS = {
     "downloading",
     "ready",
     "ends",
+    "ends-runs",
     "census",
     "updated",
     "updated-notes",
@@ -483,7 +512,7 @@ export const UPDATE_CORNER_GROUPS = {
     "checked-unsupported",
     "unreachable",
   ],
-  acts: ["preparing", "ask", "confirming", "restarting", "requested", "refused"],
+  acts: ["preparing", "ask", "ask-runs", "confirming", "restarting", "requested", "refused"],
 } as const;
 export type UpdateCornerGroup = keyof typeof UPDATE_CORNER_GROUPS;
 export type UpdateCornerState = (typeof UPDATE_CORNER_GROUPS)[UpdateCornerGroup][number];
@@ -493,13 +522,20 @@ export interface UpdateCornerFixture {
   view: UpdateView | null;
   /** the row's flow inside this open: its own check, a restart's phase, a Download asked */
   local: MeUpdateLocal;
-  /** main's question standing in the menu (busy while its confirm is in flight) */
-  ask?: { words: UpdateConsentWords; busy: boolean };
+  /** main's question standing in the menu (busy while its confirm is in flight), its list named by the shipping
+   * `consentListLabel` */
+  ask?: { words: UpdateConsentWords; busy: boolean; listLabel: string };
   /** a refusal at the menu's top, as the controller says it */
   refusal?: string;
 }
 
 const AT_REST: MeUpdateLocal = { kind: "rest" };
+/** main's question as the controller stands it in the menu: its words, its list named by the stop the view needs. */
+const asked = (words: UpdateConsentWords, view: UpdateView, busy: boolean) => ({
+  words,
+  busy,
+  listLabel: consentListLabel(view),
+});
 const READY: UpdateView = { ...BASE, phase: "staged", version: NEXT, sessions: 0 };
 const ENDS: UpdateView = {
   ...BASE,
@@ -527,6 +563,9 @@ export function updateCornerFixture(state: UpdateCornerState): UpdateCornerFixtu
       return { view: READY, local: AT_REST };
     case "ends":
       return { view: { ...ENDS, sessions: 3 }, local: AT_REST };
+    case "ends-runs":
+      // R9 (Item 192) — the release keeps the floor: the row counts the agent runs its restart ends
+      return { view: RUNS, local: AT_REST };
     case "census":
       // R10 — the census unread: main reads it, then asks or says why not
       return { view: { ...READY, sessions: "unknown" }, local: AT_REST };
@@ -598,9 +637,12 @@ export function updateCornerFixture(state: UpdateCornerState): UpdateCornerFixtu
       return { view: ENDS, local: { kind: "preparing" } };
     case "ask":
       // AU-D6 — the panel at 320, in main's words
-      return { view: ENDS, local: AT_REST, ask: { words: CONSENT, busy: false } };
+      return { view: ENDS, local: AT_REST, ask: asked(CONSENT, ENDS, false) };
+    case "ask-runs":
+      // Item 192 (RV #6) — the question for fieldd's own stop: the agent runs it ends, the sessions kept
+      return { view: RUNS, local: AT_REST, ask: asked(CONSENT_RUNS, RUNS, false) };
     case "confirming":
-      return { view: ENDS, local: { kind: "confirming" }, ask: { words: CONSENT, busy: true } };
+      return { view: ENDS, local: { kind: "confirming" }, ask: asked(CONSENT, ENDS, true) };
     case "restarting":
       return { view: ENDS, local: { kind: "restarting" } };
     case "requested":

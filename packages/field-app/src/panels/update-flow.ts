@@ -12,12 +12,21 @@ import { refusalFallback } from "./update-words";
 export type UpdatesFlow =
   | { readonly kind: "none" }
   | { readonly kind: "preparing" }
-  | { readonly kind: "consent"; readonly version: string; readonly words: UpdateConsentWords }
+  | {
+      readonly kind: "consent";
+      readonly version: string;
+      readonly words: UpdateConsentWords;
+      /** Item 192 (RV #6) — the snapshot's own stop: true, the release keeps the floor and the list holds the agent
+       * runs fieldd's stop ends. It travels with the words (L3c-ii), never read from a view published apart */
+      readonly keepsSessions: boolean;
+    }
   | {
       readonly kind: "confirming";
       /** AU-2 — the question being confirmed, so the Me menu keeps it drawn (busy) until main answers; absent when
        * nothing ends and nothing was asked */
       readonly words?: UpdateConsentWords;
+      /** Item 192 — the question's stop, with its words */
+      readonly keepsSessions?: boolean;
     }
   | { readonly kind: "restarting" }
   /** AU-7 — Move to Applications asked; the quit gate answers (a Cancel brings the page back to rest) */
@@ -28,6 +37,12 @@ export type UpdatesFlow =
     };
 
 export const NO_FLOW: UpdatesFlow = { kind: "none" };
+
+/** A consent's question beside its token: main's words, and the stop they name (the snapshot's `keepsSessions`). */
+interface AskedConsent {
+  readonly words: UpdateConsentWords;
+  readonly keepsSessions: boolean;
+}
 
 export const errorText = (error: unknown): string =>
   error instanceof Error ? error.message : String(error);
@@ -59,8 +74,8 @@ export function useUpdateRestart(
   const [flow, setFlow] = useState<UpdatesFlow>(NO_FLOW);
   const [error, setError] = useState<string | null>(null);
   const token = useRef<string | null>(null);
-  /** the consent's words, beside its token: what a confirm is confirming */
-  const asked = useRef<UpdateConsentWords | null>(null);
+  /** the consent's words and its stop, beside its token: what a confirm is confirming */
+  const asked = useRef<AskedConsent | null>(null);
 
   // A consent and a refusal belong to the staged version they were about: when that version goes (declined, replaced,
   // applied elsewhere), so do they — main would answer `expired` anyway, but the page never shows a stale list.
@@ -76,9 +91,11 @@ export function useUpdateRestart(
   }, [stagedVersion]);
 
   const confirmWith = useCallback(
-    async (prepared: string, words?: UpdateConsentWords): Promise<void> => {
+    async (prepared: string, question?: AskedConsent): Promise<void> => {
       if (host === undefined) return;
-      setFlow(words === undefined ? { kind: "confirming" } : { kind: "confirming", words });
+      setFlow(
+        question === undefined ? { kind: "confirming" } : { kind: "confirming", ...question },
+      );
       try {
         const result = await host.confirmRestart(prepared);
         setFlow(
@@ -112,9 +129,11 @@ export function useUpdateRestart(
         await confirmWith(prepared.token);
         return;
       }
+      // Item 192 (RV #6) — the question carries the snapshot's stop: what its list names is the snapshot's to say
+      const question = { words: prepared.consent, keepsSessions: prepared.keepsSessions };
       token.current = prepared.token;
-      asked.current = prepared.consent;
-      setFlow({ kind: "consent", version: prepared.version, words: prepared.consent });
+      asked.current = question;
+      setFlow({ kind: "consent", version: prepared.version, ...question });
     } catch (failure) {
       setFlow(NO_FLOW);
       setError(errorText(failure));

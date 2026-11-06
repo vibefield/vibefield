@@ -185,6 +185,7 @@ import {
   type SystemShellAttachResult,
   SystemShellLeaveParams,
   type SystemShellLeaveResult,
+  type SystemShutdownCensusResult,
   SystemShutdownParams,
   TERMINAL_INVENTORY_REFUSALS,
   type TerminalConfigDocument,
@@ -2375,16 +2376,22 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // shutdown → the socket closing; the ladder only for a floor this fieldd spawned), and fieldd follows. Without
     // `native`, unchanged: fieldd alone, the floor lives on.
     let nativeStopping: NativeRestartReason | null = null;
+    // Item 192 (RV #6) — fieldd's own consented stop (`agents`, below), under the same one-stop-at-a-time rule
+    let plainStopping: NativeRestartReason | null = null;
+    const oneStopAtATime = (): void => {
+      const underway = nativeStopping ?? plainStopping;
+      if (underway !== null)
+        throw new RpcCallError(
+          "PRECONDITION_FAILED",
+          `a stop (${underway}) is already underway`,
+          false,
+        );
+    };
     const stopNativeConsented = async (
       asked: NonNullable<SystemShutdownParams["native"]>,
       reason: NativeRestartReason,
     ): Promise<"closed" | "forced" | "lingering"> => {
-      if (nativeStopping !== null)
-        throw new RpcCallError(
-          "PRECONDITION_FAILED",
-          `a stop (${nativeStopping}) is already underway`,
-          false,
-        );
+      oneStopAtATime();
       const census = terminals.closeToBirthsForStop();
       if (census === undefined) {
         terminals.reopenToBirths();
@@ -2455,6 +2462,60 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         reason,
         ...(asked.toVersion !== undefined ? { toVersion: asked.toVersion } : {}),
       });
+    };
+    // Item 192 (RV #6, gap3-1) — `agents` is the consent of fieldd's OWN stop, the one a release that leaves
+    // field-native alone needs: the floor's terminal sessions live on, and every live run whose agent does not
+    // re-attach ends with this process (its helper is in this tree; the adapter cannot release). Re-verified HERE, at
+    // the point of effect, as the floor's stop is: the launches closed, then fieldd's own census (`plainStopCensus`)
+    // against the runs the person consented to end (`[]` at census zero). An unsettled re-attach, any difference or a
+    // birth in flight refuses, in the floor's stop's own shape, and reopens the launches; an exact match goes on into
+    // the plain stop with the launches kept closed.
+    const stillReattaching = (): RpcCallError =>
+      new RpcCallError(
+        "UNAVAILABLE",
+        "this fieldd is still re-attaching its agent runs, so the ones its stop ends cannot be counted yet",
+        true,
+        { service: "agents", state: "reattaching" },
+      );
+    const stopPlainConsented = (
+      asked: NonNullable<SystemShutdownParams["agents"]>,
+      reason: NativeRestartReason,
+    ): void => {
+      oneStopAtATime();
+      agents.closeLaunchesForStop();
+      const census = agents.plainStopCensus();
+      if (!census.settled) {
+        agents.reopenLaunches();
+        throw stillReattaching();
+      }
+      const live = census.runs.map((run) => run.runtimeRunId);
+      const consented = new Set(asked.runs);
+      const exact =
+        census.births === 0 &&
+        live.length === consented.size &&
+        live.every((runtimeRunId) => consented.has(runtimeRunId));
+      if (!exact) {
+        agents.reopenLaunches();
+        logger.info(
+          "fieldd.lifecycle.plain_stop_refused",
+          "A consented stop was refused: the agent runs it ends are not the consented set",
+          { reason, live: live.length, consented: consented.size, births: census.births },
+        );
+        throw new RpcCallError(
+          "PRECONDITION_FAILED",
+          census.births > 0
+            ? "an agent run is being born that the consent does not name; ask again"
+            : "the agent runs this stop ends differ from the set consented to end; ask again",
+          false,
+          { live, births: census.births },
+        );
+      }
+      plainStopping = reason;
+      logger.info(
+        "fieldd.lifecycle.plain_stop_consented",
+        "Stopping fieldd alone: the agent runs it ends are exactly the consented set",
+        { reason, runs: live.length },
+      );
     };
     // AL-5 (`thinking-app-lifecycle.md` §8.2) — the orphan bound: while no shell holds the lease, an empty pair ends
     // itself after the idle span (the consented stop with nothing to end, then the process owner's exit), and an
@@ -2551,7 +2612,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       if (!parsed.success)
         throw new RpcCallError(
           "PRECONDITION_FAILED",
-          "expected { reason?: update|quit|logout, native?: { stop: true, sessions: string[], toVersion? } }",
+          "expected { reason?: update|quit|logout, native?: { stop: true, sessions: string[], toVersion? } } or { reason?, agents: { runs: string[] } }, never both",
           false,
         );
       const reason = parsed.data.reason ?? "update";
@@ -2559,6 +2620,10 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         parsed.data.native === undefined
           ? undefined
           : await stopNativeConsented(parsed.data.native, reason);
+      // Item 192 (RV #6) — fieldd's own consented stop; with neither, the plain stop asks no one (the supervisor's
+      // replacement of a stale build, the dev runner)
+      if (parsed.data.native === undefined && parsed.data.agents !== undefined)
+        stopPlainConsented(parsed.data.agents, reason);
       logger.info("fieldd.lifecycle.shutdown_requested", "system.shutdown received", {
         reason,
         native: nativeStop ?? null,
@@ -2576,6 +2641,31 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       const callback = shutdownRequested;
       setImmediate(() => callback());
       return { stopping: true, ...(nativeStop === undefined ? {} : { native: nativeStop }) };
+    });
+    // Item 192 (RV #6, gap3-1) — the census of fieldd's own stop, for the local shell alone (the lease's check): the
+    // runs `system.shutdown {agents}` will compare, each joined with its pane's title and cwd from the floor's rows so
+    // the person can recognise it. Until the boot's re-attach has settled it refuses, retryably: a run fieldd may
+    // still hold is never read as none.
+    api.register("system.shutdown.census", (ctx) => {
+      leaseConnection(ctx);
+      const census = agents.plainStopCensus();
+      if (!census.settled) {
+        throw stillReattaching();
+      }
+      const observed = terminals.observation() !== undefined;
+      const result: SystemShutdownCensusResult = {
+        runs: census.runs.map((run) => {
+          const pane = observed ? terminals.get(run.terminalSessionId) : undefined;
+          return {
+            runId: run.runtimeRunId,
+            sessionId: run.terminalSessionId,
+            ...(pane?.title !== undefined ? { title: pane.title } : {}),
+            ...(pane?.cwd !== undefined ? { cwd: pane.cwd } : {}),
+            agent: run.agent,
+          };
+        }),
+      };
+      return result;
     });
     // TC-D1 and WG-D5 — the person's restart of the floor, under `agents.manage`
     // (the window holds it; local only; never plugin-eligible). On a floor that

@@ -235,11 +235,48 @@ describe("Settings → Updates", () => {
       },
     });
     host(updates);
-    await mount({ ...STAGED, keepsSessions: true });
+    // Item 192 (RV #6) — a release that keeps the floor ends nothing only when its own stop's census is zero: the count
+    // is the agent runs fieldd's stop ends, never excused by `keepsSessions`
+    await mount({ ...STAGED, sessions: 0, keepsSessions: true });
     expect(text()).toContain("Your terminal sessions keep running.");
     await click("Restart to update");
     expect(updates.confirmRestart).toHaveBeenCalledWith(TOKEN);
     expect(container?.querySelector("[data-updates-consent]")).toBeNull();
+  });
+
+  it("Item 192 (RV #6) — a release that keeps the floor asks for the agent runs its stop ends, its list named so", async () => {
+    const runsConsent = {
+      message: "Updating ends 2 agent runs",
+      lead: `VibeField ${VERSION} restarts the field service, which ends:`,
+      listed: ["Codex — fix it — ~/Projects/vibe-field", "Agent — ~/Projects/rosetta"],
+      more: 0,
+      confirm: "End 2 agent runs and update",
+    };
+    const updates = fakeUpdates({
+      prepare: {
+        ok: true,
+        token: TOKEN,
+        version: VERSION,
+        keepsSessions: true,
+        sessions: [
+          { sessionId: "run-1", title: "fix it", cwd: "~/Projects/vibe-field", agent: "Codex" },
+          { sessionId: "run-2", cwd: "~/Projects/rosetta", agent: "Agent" },
+        ],
+        expiresAt: 1,
+        consent: runsConsent,
+      },
+    });
+    host(updates);
+    await mount({ ...STAGED, keepsSessions: true });
+    expect(text()).toContain(
+      "Restarting ends 2 agent runs. Your terminal sessions keep running. You choose when.",
+    );
+    await click("Restart to update…");
+    const list = container?.querySelector("[data-updates-consent] ul");
+    expect(list?.getAttribute("aria-label")).toBe("The agent runs it ends");
+    expect(list?.textContent).toContain("Codex — fix it — ~/Projects/vibe-field");
+    expect(button("End 2 agent runs and update").dataset.variant).toBe("danger");
+    expect(updates.confirmRestart).not.toHaveBeenCalled();
   });
 
   it("says main's own words when the apply does not start — at prepare, and an expired snapshot at confirm", async () => {

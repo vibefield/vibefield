@@ -24,6 +24,7 @@ import { roundButtonCls } from "../field/theme-constants";
 import { getHost } from "../host";
 import { errorText, NO_FLOW, type UpdatesFlow, useUpdateRestart } from "../panels/update-flow";
 import {
+  consentListLabel,
   downloadRefusalFallback,
   type MeUpdateAct,
   type MeUpdateLocal,
@@ -85,8 +86,13 @@ export interface MeMenuUpdate {
   /** the install that didn't take, said once (shown only while no refusal is) */
   readonly notice?: string | null;
   /** AU-D6 — the question, in main's words, while it stands; `busy` while the
-   * confirm is in flight */
-  readonly ask?: { readonly words: UpdateConsentWords; readonly busy: boolean } | null;
+   * confirm is in flight; `listLabel` names what the list holds, by the stop
+   * the release needs (the sessions it ends, or the agent runs; Item 192) */
+  readonly ask?: {
+    readonly words: UpdateConsentWords;
+    readonly busy: boolean;
+    readonly listLabel: string;
+  } | null;
   /** said to assistive tech when an in-place check answers */
   readonly announce?: string | null;
 }
@@ -798,7 +804,7 @@ export function MeMenuView({
                 </p>
                 <ul
                   className="vf-me-ask-list"
-                  aria-label="The sessions it ends"
+                  aria-label={drawn.listLabel}
                   style={{ "--vf-me-delay": `${riseDelay(1)}ms` } as CSSProperties}
                 >
                   {drawn.words.listed.map((line) => (
@@ -1100,14 +1106,15 @@ export function MeMenu({
           // AU-D6 — main's question while it stands, in the open that asked it:
           // a menu reopened inside the fold draws its rows, never the last
           // open's question (AU-D5); busy while its confirm is in flight (a
-          // restart that asked nothing confirms on the row, P12)
+          // restart that asked nothing confirms on the row, P12). Item 192 —
+          // its list named by the question's own snapshot, never the view
           ask:
             open && askedGen.current !== openGen.current
               ? null
               : flow.kind === "consent"
-                ? { words: flow.words, busy: false }
+                ? { words: flow.words, busy: false, listLabel: consentListLabel(flow) }
                 : flow.kind === "confirming" && flow.words !== undefined
-                  ? { words: flow.words, busy: true }
+                  ? { words: flow.words, busy: true, listLabel: consentListLabel(flow) }
                   : null,
           announce: local.kind === "answered" || local.kind === "unreachable" ? row.label : null,
         };

@@ -372,6 +372,22 @@ export interface AgentAdoptionInput {
   launched: LaunchedIdentity;
 }
 
+/** Item 192 (RV #6, gap3-1) — one run fieldd's OWN stop ends (`plainStopCensus`): its id, its pane, and the label the
+ * person's consent lists it by. */
+export interface PlainStopRun {
+  runtimeRunId: string;
+  terminalSessionId: string;
+  /** the catalog row's label; the adapter's own where no row decides the agent */
+  agent: string;
+}
+
+/** What fieldd's own stop ends, or that it cannot say yet: until the boot's re-attach has settled, a run it may
+ * still hold is never read as none. `births` are what may become a run the census does not name: creations in
+ * flight and replacements in flight (an old PTY terminated, its successor not yet born). */
+export type PlainStopCensus =
+  | { settled: false }
+  | { settled: true; runs: PlainStopRun[]; births: number };
+
 /** AR-4 — what a birth was given and what its adapter reported before the
  * process launched: the creation request (puppeteer's durable claim), the
  * ingress it bound, and (RA-D3) its attach record, the latest one reported */
@@ -755,6 +771,9 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
   private readonly runEnteredListeners = new Set<(entered: RunEntered) => void>();
   private publishTimer: NodeJS.Timeout | null = null;
   private disposed = false;
+  /** Item 192 (RV #6) — a consented stop of fieldd's own holds the launches closed while it compares its census
+   * (`closeLaunchesForStop`): the doors and an automatic replacement's start refuse, never a birth already under way */
+  private launchesClosed = false;
 
   constructor(private readonly opts: AgentRuntimeServiceOptions) {
     this.logger = opts.logger ?? createNoopLogger();
@@ -1048,6 +1067,55 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     return this.reattachDone && this.awaitingBoot.size === 0;
   }
 
+  /** Item 192 (RV #6, gap3-1) — what fieldd's OWN stop ends, the one authority on it (`system.shutdown.census`, and
+   * the re-check at `system.shutdown {agents}`). fieldd's stop releases every run (`dispose`), and a run survives the
+   * release only where its agent re-attaches: an agent whose helper lives in this process tree dies with it. So the
+   * census is every live managed run of this boot — born, re-attached or adopted, sparks and typed runs included,
+   * none exiting (`liveUnder`'s rule) — whose catalog row does not claim `reattach` (a provider with no row counts),
+   * read from the catalog's own claim with no vendor named (AR-L1, R23b). Not counted: a pending row from an earlier
+   * boot (this stop ends nothing more of it), an exited run, a login pane. */
+  plainStopCensus(): PlainStopCensus {
+    if (!this.reattachSettled()) return { settled: false };
+    const runs: PlainStopRun[] = [];
+    for (const entry of this.managed.values()) {
+      if (entry.exiting) continue;
+      const row = this.catalog.entry(entry.info.provider.id);
+      if (row?.offers.reattach === true) continue;
+      runs.push({
+        runtimeRunId: entry.info.runtimeRunId,
+        terminalSessionId: entry.info.terminalSessionId,
+        agent: row?.label ?? entry.info.provider.label,
+      });
+    }
+    return { settled: true, runs, births: this.creating.size + this.replacements.size };
+  }
+
+  /** Item 192 (RV #6) — a consented stop of fieldd's own closes the launches before it reads `plainStopCensus`, so no
+   * run is born between the census and the stop: spawn, resume and adopt, and an automatic replacement's start,
+   * refuse `UNAVAILABLE {service: "agents", state: "stopping"}` (retryable). A birth already under way finishes — it
+   * is counted in `births`, which refuses the stop. Every refusal of the stop reopens them (`reopenLaunches`); a stop
+   * that goes keeps them closed. */
+  closeLaunchesForStop(): void {
+    this.launchesClosed = true;
+  }
+
+  reopenLaunches(): void {
+    this.launchesClosed = false;
+  }
+
+  /** The launch gate at a door's entry (spawn, resume), and again right before a resume's birth where its door awaited
+   * on the way (`resumeNativeClaimed`, `resumeRun`): a resume waiting there is not yet in `creating`, so the census
+   * counts no birth for it, and the stop that closed the launches meanwhile must refuse it. Never inside `creation`,
+   * whose births a replacement past its point of no return still needs (AR-4b). */
+  private requireLaunchesOpen(): void {
+    if (this.launchesClosed) {
+      throw new RpcCallError("UNAVAILABLE", "the agent service is stopping", true, {
+        service: "agents",
+        state: "stopping",
+      });
+    }
+  }
+
   /** LR — whether `agent.resume {runtimeRunId}` could continue this run: its
    * record exists, verifies, and was not already continued into another run
    * (AR-4b's one-run law). What the door would still refuse — a signed-out
@@ -1273,6 +1341,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
      * spark it is the own session of. Both go on the record, under its signature. */
     compose?: { readonly origin?: AgentSessionOrigin; readonly spark?: SparkId },
   ): Promise<AgentSpawnResult> {
+    this.requireLaunchesOpen();
     this.requireOffered(params.provider, "spawn");
     // PJ-7 — a place by ref is resolved here, before the floor is asked
     const place =
@@ -1407,6 +1476,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     principal: GrantPrincipal,
     forwardedFor?: ForwardedFor,
   ): Promise<AgentSpawnResult> {
+    this.requireLaunchesOpen();
     return isAgentResumeRun(params)
       ? await this.resumeRun(params, principal, forwardedFor)
       : await this.resumeNative(params, principal, forwardedFor);
@@ -1540,6 +1610,9 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       profileId,
     );
     const selection = this.resumeSelection(params.provider, launched);
+    // Item 192 (RV #6) — the gate again, at the birth: the awaits above (the persona, the index's round trip) are
+    // outside `creating`, so a consented stop that closed the launches meanwhile counted no birth for this resume
+    this.requireLaunchesOpen();
     const entry = await this.creation(profileId ?? null, async () => {
       const briefing = await this.briefingFor(previous?.spark, params.provider);
       const { result, identity, withheld } = await this.briefedBirth(
@@ -1776,6 +1849,9 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     );
     let entry: ManagedEntry;
     try {
+      // Item 192 (RV #6) — the gate again, at the birth: `awaitExitCleanup` above is outside `creating`, so a
+      // consented stop that closed the launches meanwhile counted no birth for this resume
+      this.requireLaunchesOpen();
       entry = await this.resumeFromRecord(record, params.cwd, husk);
     } finally {
       release();
@@ -3116,7 +3192,8 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
    * puppeteer and refuses the person in words. */
   async adopt(input: AgentAdoptionInput): Promise<void> {
     const { info } = input;
-    if (this.disposed) {
+    // Item 192 (RV #6) — a consented stop of fieldd's own holds the launches closed: the same refusal as a stop's
+    if (this.disposed || this.launchesClosed) {
       throw new RpcCallError("UNAVAILABLE", "the agent service is stopping", true, {
         service: "agents",
         state: "stopping",
@@ -4230,7 +4307,11 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
         { runtimeRunId: record.runtimeRunId, state: "attaching" },
       );
     }
-    if (this.disposed) {
+    // Item 192 (RV #6) — and a consented stop of fieldd's own, which holds the launches closed: refused before the
+    // old PTY is touched. The idle poll asks again (a door's resume is the caller's to retry), so the reopening
+    // admits it; the replacement's own birth, past its point of no return, is never gated (`creation`).
+    if (this.disposed || this.launchesClosed) {
+      if (!this.disposed && how === "idle") this.armPending(entry);
       throw new RpcCallError("UNAVAILABLE", "the agent service is stopping", true, {
         service: "agents",
         state: "stopping",
