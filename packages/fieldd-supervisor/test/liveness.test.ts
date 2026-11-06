@@ -13,13 +13,20 @@ import {
 // REPLIES, by the floor's rules (fieldd's native-supervisor.ts; WG-D1, WG-E1 to E3). Deterministic: fake timers move
 // the asks, and the watch's clock is the fake clock plus a `stall` the test adds, which is how a stalled Electron main
 // looks to it: its own tick fired late. The turn of I/O a verdict waits for (`afterIoTurn`, whose phase order
-// io-turn.test.ts proves on real timers) is the package's own helper, passed through to the faked setImmediate; one row
-// holds that turn open to put an answer in it, as a reply already waiting in the socket is read there.
+// io-turn.test.ts proves on real timers) runs on the REAL setImmediate, taken before the fake timers are installed; one
+// row holds that turn open to put an answer in it, as a reply already waiting in the socket is read there.
+// Why the real one (a9's rows, 2026-11-06, on the old mini): the fake clock dates a zero-delay timer made while a
+// timer fires 1 ms later (fake-timers' `duringTick ? 1 : 0`), so a faked setImmediate queued by the tick ran only in
+// the NEXT step, and every verdict landed one interval late. The async tick yields through the real setImmediate
+// after each timer it fires, so a real one queued inside the tick runs first, at that tick's own fake time.
 
-const ioTurn = vi.hoisted(() => ({ held: null as Array<() => void> | null }));
+const ioTurn = vi.hoisted(() => ({
+  held: null as Array<() => void> | null,
+  setImmediate: globalThis.setImmediate,
+}));
 vi.mock("../src/io-turn", () => ({
   afterIoTurn: (fn: () => void) => {
-    if (ioTurn.held === null) setImmediate(fn);
+    if (ioTurn.held === null) ioTurn.setImmediate(fn);
     else ioTurn.held.push(fn);
   },
 }));
