@@ -407,21 +407,44 @@ public enum PhoneSearch {
     return nil
   }
 
-  /// Live now's foot (§9 "The phone's feet"). `feed` and `asked`: STUB (SE-2i red), read by nothing yet.
+  /// Live now's foot (§9 "The phone's feet"), honest about its world (§8 "Search — the Peek"): "Asking what runs…"
+  /// until the home's board answers, its refusal in its own words, the home asleep by name; with words, the matches
+  /// and what is still unanswered (`unanswered`).
   public static func liveFoot(
     _ rows: [LiveRow], total: Int, query: String, narrowed: Bool, feed: Feed, asked: Asked
   ) -> String {
+    switch feed {
+    case .live: break
+    case .asking: return "Asking what runs…"
+    case .refused(let reason): return "What runs could not be read — \(reason)"
+    case .asleep(let desk): return "\(desk) is asleep"
+    }
     if !words(query).isEmpty {
       let lines = rows.reduce(0) { $0 + $1.lines.count }
-      return "\(plural(rows.count, "session")) · \(plural(lines, "line")) matched"
+      return "\(plural(rows.count, "session")) · \(plural(lines, "line")) matched" + unanswered(asked)
     }
     if narrowed { return "\(rows.count) of \(plural(total, "live session")), waiting first" }
     return "\(plural(rows.count, "live session")), waiting first"
   }
 
+  /// What a foot adds with words not answered yet (§8 "Search — the Peek", Live now's foot): " · searching" while the
+  /// newest ask is out, " · the words were not searched" once it came back unanswered (the last answer's lines
+  /// stand); nothing once every desktop asked has answered.
+  static func unanswered(_ asked: Asked) -> String {
+    guard !asked.answered else { return "" }
+    return asked.asking ? " · searching" : " · the words were not searched"
+  }
+
   /// Live now's empty list (§9 "The phone's empty lists"): a filter and no words, with Clear the filters; words, with
-  /// Search everything; else nothing runs. `feed` and `asked`: STUB (SE-2i red), read by nothing yet.
+  /// Search everything; else nothing runs. Never a claim nobody answered (§8 "Search — the Peek"): nothing while what
+  /// runs is asked or the home sleeps (the foot says which), the refusal's short sentence (`peek-live.ts` `liveNone`),
+  /// and no "holds every word" until the words are answered.
   public static func liveEmpty(query: String, profile: String?, desk: String?, feed: Feed, asked: Asked) -> Empty? {
+    switch feed {
+    case .live: break
+    case .asking, .asleep: return nil
+    case .refused: return Empty(sentence: "What runs could not be read.", act: nil)
+    }
     let words = query.trimmingCharacters(in: .whitespaces)
     if words.isEmpty, profile != nil || desk != nil {
       let under = profile.map { " in \($0)" } ?? ""
@@ -429,6 +452,7 @@ public enum PhoneSearch {
       return Empty(sentence: "No live session\(under) runs \(on).", act: .clearFilters)
     }
     if !words.isEmpty {
+      guard asked.answered else { return nil }
       return Empty(sentence: "No live session holds every word of “\(words)”.", act: .searchEverything)
     }
     return Empty(sentence: "Nothing runs right now.", act: nil)
@@ -537,8 +561,9 @@ public enum PhoneSearch {
 
   /// Everything's foot (§9 "The phone's feet"; UM-D28): the sessions matched, or **Your latest sessions**; " in
   /// ‹folder›" while a project is chosen; with words and a kind, ", in your prompts" or ", in their replies"; and
-  /// while the lens stands, " · every profile; ‹profile› comes back on Field". `asked`: STUB (SE-2i red), read by
-  /// nothing yet.
+  /// while the lens stands, " · every profile; ‹profile› comes back on Field". With words it is honest as Live now's
+  /// is: what is still unanswered (`unanswered`), then each desktop that could not be asked, " · ‹desktop› is asleep"
+  /// (History's search said "‹desktop› is asleep" for one; the list keeps what the cache matched).
   public static func pastFoot(
     rows: Int, query: String, project: Project?, kind: FieldHistoryModel.SearchKind, lens: String?, asked: Asked
   ) -> String {
@@ -551,16 +576,19 @@ public enum PhoneSearch {
       case .replies: foot += ", in their replies"
       case .any: break
       }
+      foot += unanswered(asked)
+      for desk in asked.asleep { foot += " · \(desk) is asleep" }
     }
     if let lens { foot += " · every profile; \(lens) comes back on Field" }
     return foot
   }
 
-  /// Everything's empty list with words; before a word its words are James's (§9), so none is said here. `asked`:
-  /// STUB (SE-2i red), read by nothing yet.
+  /// Everything's empty list with words, only once they are answered: never "no matches" for a question nobody
+  /// answered (§8 "Search — the Peek"; the foot says why). Before a word its words are James's (§9), so none is said
+  /// here.
   public static func pastEmpty(query: String, asked: Asked) -> Empty? {
     let words = query.trimmingCharacters(in: .whitespaces)
-    guard !words.isEmpty else { return nil }
+    guard !words.isEmpty, asked.answered else { return nil }
     return Empty(sentence: "Nothing in your past holds every word of “\(words)”. Try fewer words.", act: nil)
   }
 

@@ -111,29 +111,56 @@ enum PhoneSearchWorld {
     var answered: String?
   }
 
-  /// Live now's world as it stands: the home's live board, or why there is none yet. STUB (SE-2i red): always live.
+  /// Live now's world as it stands: the home's live board (`FieldLink.fieldIsLive`); else the home's refusal of its
+  /// board in its own words (`fieldRefusal`, or its door's), the home asleep by its name while nothing answers at its
+  /// door, or asking while it connects (and while there is no home yet).
   static func feed(isLive: Bool, home: FieldDesktop?) -> PhoneSearch.Feed {
-    .live
+    if isLive { return .live }
+    guard let home else { return .asking }
+    if let refusal = home.fieldRefusal { return .refused(refusal) }
+    switch home.state {
+    case .failed(let reason), .refusedDoor(let reason): return .refused(reason)
+    case .noDoor: return .asleep(home.name)
+    case .connecting, .ready, .reconnecting: return .asking
+    }
   }
 
-  /// Everything's answer to `query`. STUB (SE-2i red): always settled.
+  /// Everything's answer to `query`: answered when every desktop awake answered these words and at least one is
+  /// awake (none awake, nobody could answer); a desktop with no door is matched on the phone; the asleep, by name.
   static func pastAsked(_ answerers: [Answerer], query: String, asking: Bool) -> PhoneSearch.Asked {
-    .settled
+    let words = query.trimmingCharacters(in: .whitespaces)
+    let awake = answerers.filter { $0.awake }
+    return PhoneSearch.Asked(
+      asking: asking, answered: !awake.isEmpty && awake.allSatisfy { !$0.asks || $0.answered == words },
+      asleep: answerers.filter { !$0.awake }.map { $0.name })
   }
 
-  /// Live now's answer to `query`. STUB (SE-2i red): always settled.
+  /// Live now's answer to `query`: answered when every desktop awake that it asks answered these words. With none to
+  /// ask, the runs match on their facts alone, which is the whole answer; an asleep desktop is not asked (its runs
+  /// match on their facts, and its chip says it sleeps).
   static func liveAsked(_ answerers: [Answerer], query: String, asking: Bool) -> PhoneSearch.Asked {
-    .settled
+    let words = query.trimmingCharacters(in: .whitespaces)
+    return PhoneSearch.Asked(
+      asking: asking, answered: answerers.allSatisfy { !$0.awake || !$0.asks || $0.answered == words })
   }
 
-  /// Every desktop as Everything's answer reads it. STUB (SE-2i red): none.
+  /// Every desktop as Everything's answer reads it: awake while its standing is, asked while it has a door that
+  /// answers (`isReplaying` is false), and the words its index last answered (`corpus.searchedQuery`).
   @MainActor static func pastAnswerers(_ readers: [HistoryDesktopReader]) -> [Answerer] {
-    []
+    readers.map { reader in
+      Answerer(
+        name: reader.name, awake: reader.standing.isAwake, asks: !reader.isReplaying,
+        answered: reader.corpus.searchedQuery)
+    }
   }
 
-  /// The desktops Live now asks (those that own a run with a conversation). STUB (SE-2i red): none.
+  /// The desktops Live now asks — those that own a run with a conversation (`runs`, `HistoryDesktops.searchLive`'s
+  /// own rule) — with the words their index last answered over those runs (`live.query`).
   @MainActor static func liveAnswerers(_ readers: [HistoryDesktopReader], runs: [String: [String]]) -> [Answerer] {
-    []
+    readers.filter { !(runs[$0.deviceId] ?? []).isEmpty }.map { reader in
+      Answerer(
+        name: reader.name, awake: reader.standing.isAwake, asks: !reader.isReplaying, answered: reader.live?.query)
+    }
   }
 
   /// The sheet's content. Live now: the lens's profile and desktop narrow the rows and stand as tokens. Everything:

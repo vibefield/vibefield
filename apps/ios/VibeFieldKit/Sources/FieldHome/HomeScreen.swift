@@ -157,6 +157,8 @@ public struct HomeScreen: View {
   @State private var searchOpen = false
   @State private var searchQuery = ""
   @State private var search = SearchState()
+  /// SE-2i — the newest words are out: from a word typed until its ask comes back (the pause in typing included).
+  @State private var searchAsking = false
   @FocusState private var searchFocused: Bool
   /// SE-2 (SE-D2 on the phone, UM-D27 A) — the phone's ONE lens (UM-4's seam): the profile the field shows and
   /// search's profile token, and the desktop search keeps to; and whether the token's menu is open.
@@ -1165,17 +1167,41 @@ public struct HomeScreen: View {
       lines: historyDesktops.liveLines(searchQuery))
   }
 
-  /// What the sheet draws, from the lens, search's state, Live now's world, each desktop's answer and the ledger.
+  /// What the sheet draws, from the lens, search's state, Live now's world, each desktop's answer and the ledger, and
+  /// how far each is answered (SE-2i).
   private var searchContent: SearchSheetContent {
-    PhoneSearchWorld.content(
-      search, query: searchQuery, lens: lens, live: searchLive,
+    let live = searchLive
+    return PhoneSearchWorld.content(
+      search, query: searchQuery, lens: lens, live: live,
       answers: historyDesktops.readers.map { reader in
         let groups = FieldHistoryModel.visibleHits(query: searchQuery, kind: .any, in: reader.corpus)
         return (corpus: reader.corpus, groups: groups)
       },
-      latest: historyDesktops.projects.corpus, agentLabel: { $0 },
-      // STUB (SE-2i red): the world as it stands and what was answered are wired at the green
-      feed: .live, asked: .settled)
+      latest: historyDesktops.projects.corpus, agentLabel: { $0 }, feed: searchFeed, asked: searchAsked(live))
+  }
+
+  /// SE-2i — Live now's world as it stands: the home's live board, or why none answers yet. The mock's rows are its
+  /// world, so they are live.
+  private var searchFeed: PhoneSearch.Feed {
+    #if DEBUG
+      if mock != nil { return .live }
+    #endif
+    return PhoneSearchWorld.feed(
+      isLive: link?.fieldIsLive ?? false, home: linkDesktops.first { $0.deviceId == linkHome })
+  }
+
+  /// SE-2i — how far the words are answered, for the scope that stands: Live now by the desktops that own its runs,
+  /// Everything by every desktop's index.
+  private func searchAsked(_ live: PhoneSearch.Live) -> PhoneSearch.Asked {
+    switch search.scope {
+    case .live:
+      PhoneSearchWorld.liveAsked(
+        PhoneSearchWorld.liveAnswerers(historyDesktops.readers, runs: PhoneSearchWorld.runs(live)),
+        query: searchQuery, asking: searchAsking)
+    case .everything:
+      PhoneSearchWorld.pastAsked(
+        PhoneSearchWorld.pastAnswerers(historyDesktops.readers), query: searchQuery, asking: searchAsking)
+    }
   }
 
   /// Where the search field's top stands from the screen's top: at rest on the bar's row, typing above the keys.
@@ -1208,9 +1234,12 @@ public struct HomeScreen: View {
   }
 
   /// The words, asked after a pause in typing (the record's own debounce for a question that crosses a radio): Live
-  /// now's of each desktop over its own live runs, Everything's of every desktop's index.
+  /// now's of each desktop over its own live runs, Everything's of every desktop's index. The words are out (SE-2i,
+  /// `searchAsking`) from the moment they are typed until this ask comes back; a newer ask that cancels it says when
+  /// it is done itself.
   private func askSearch() async {
     let words = searchQuery.trimmingCharacters(in: .whitespaces)
+    searchAsking = !words.isEmpty
     guard !words.isEmpty else { return }
     try? await Task.sleep(for: SearchSheet.askAfter)
     guard !Task.isCancelled else { return }
@@ -1218,6 +1247,8 @@ public struct HomeScreen: View {
     case .live: await historyDesktops.searchLive(words, runs: PhoneSearchWorld.runs(searchLive))
     case .everything: await historyDesktops.search(words, kind: search.kind)
     }
+    guard !Task.isCancelled else { return }
+    searchAsking = false
   }
 
   /// A chip's or an offer's filter, named as the chip names it (a project's token keeps the name).
@@ -1239,10 +1270,11 @@ public struct HomeScreen: View {
   }
 
   /// Search closes: only the profile outlives it (the lead's ruling 21) — the desktop's token, the kind and the
-  /// project clear.
+  /// project clear. Its ask goes with the sheet (the sheet's task is cancelled), so nothing is out.
   private func closeSearch() {
     searchFocused = false
     searchOpen = false
+    searchAsking = false
     search = SearchState()
     lens.searchClosed()
   }
