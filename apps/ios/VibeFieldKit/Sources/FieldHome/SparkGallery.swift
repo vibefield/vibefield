@@ -102,6 +102,7 @@
           .font(ChromeType.sans(13))
           .foregroundStyle(ChromePalette.inkSecondary)
           .fixedSize(horizontal: false, vertical: true)
+        SparkStageReadout()
       }
       .padding(.horizontal, 16)
       .padding(.top, 8)
@@ -169,5 +170,31 @@
       .padding(.horizontal, 16)
       .frame(height: Self.row)
     }
+  }
+
+  /// IOS-12e (§4's second stills, 2026-11-06) — what the stage measures, in words, so a still proves it beside its
+  /// pixels: the layer's corner in the window (UIKit's) and its size, and where Hello's live face at 48 is laid out in
+  /// the window's space. Read twice a second; inside the stage's host, where its stage is in the environment.
+  struct SparkStageReadout: View {
+    @Environment(\.sparkStage) private var stage
+
+    var body: some View {
+      TimelineView(.periodic(from: .now, by: 0.5)) { _ in
+        Text(Self.words(stage))
+          .font(ChromeType.mono(11))
+          .foregroundStyle(ChromePalette.inkTertiary)
+          .fixedSize(horizontal: false, vertical: true)
+      }
+    }
+
+    static func words(_ stage: SparkStage?) -> String {
+      guard let stage else { return "stage: none (the flat star)" }
+      let read = stage.readout(status: SparkStatus.hello.rawValue, size: Double(ChatRow.face))
+      let laid = read.laid.map { "Hello \(Int(ChatRow.face)) live laid at (\(f($0.minX)), \(f($0.minY)))" }
+      return "layer at (\(f(read.corner.x)), \(f(read.corner.y))), \(f(read.layer.width)) × \(f(read.layer.height))"
+        + " · " + (laid ?? "Hello not on the stage")
+    }
+
+    private static func f(_ value: CGFloat) -> String { String(format: "%.1f", Double(value)) }
   }
 #endif

@@ -23,8 +23,8 @@ public struct SparkFaceView: View {
   @State private var id = UUID().uuidString
   @State private var placement: Placement?
 
-  /// Where a live face is, in its stage's space: its box, and the visible rect of the scroll view it sits in (the
-  /// stage's own bounds where there is none).
+  /// Where a live face is, in the window's space: its box, and the visible rect of the scroll view it sits in (no
+  /// bound where there is none: the layer's own edges cut it).
   struct Placement: Equatable, Sendable {
     let frame: CGRect
     let clip: CGRect
@@ -86,10 +86,11 @@ public struct SparkFaceView: View {
       clip: placement.clip)
   }
 
-  /// The face's box in the stage's space, and its port: the nearest scroll view's visible rect, else the stage.
+  /// The face's box in the window's space (`.global`, where the stage's layer measures its own corner), and its port:
+  /// the nearest scroll view's visible rect, else none.
   private nonisolated static func placement(of proxy: GeometryProxy) -> Placement {
-    let frame = proxy.frame(in: .named(SparkStage.space))
-    let port = proxy.bounds(of: .scrollView) ?? proxy.bounds(of: .named(SparkStage.space)) ?? .infinite
+    let frame = proxy.frame(in: .global)
+    let port = proxy.bounds(of: .scrollView) ?? .infinite
     // the bounds are in the face's own space, whose origin is its box's corner
     let clip = port.isInfinite ? port : port.offsetBy(dx: frame.minX, dy: frame.minY)
     return Placement(frame: frame, clip: clip)

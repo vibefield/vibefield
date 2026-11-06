@@ -4,7 +4,8 @@ import os
 
 // IOS-12e (PC-D6 A; DESIGN.md §2.10, amended 2026-11-06) — A STAGE: the Mac kit's `StageLayer` (`stage.tsx`) on the
 // phone. A screen that shows live faces is one stage: a transparent Metal layer over its content and under whatever
-// covers it. Each live face says where its box is and its scroll view's visible rect, both in the stage's space.
+// covers it. Each live face says where its box is and its scroll view's visible rect, both in the window's space
+// (SwiftUI's `.global`), and the layer says where its own corner is in the window, as UIKit places it.
 // - A face whose box meets that rect is on screen, and the rect clips it (row 29, which the shader discards outside).
 // - A face with no part in it is dropped from the draw and keeps moving.
 // - Every live face steps each frame, as `Engine.render` updates them all.
@@ -13,7 +14,7 @@ import os
 // The model is here; the Metal layer that draws it is `SparkStageLayer`, and the rows of these suites are
 // SparkStageTests.
 
-/// One live face on a stage, in the stage's space (points, y down).
+/// One live face on a stage, in the window's space (points, y down).
 public struct SparkStageFace: Equatable, Sendable {
   public let id: String
   public var seed: UInt32
@@ -56,8 +57,6 @@ public protocol SparkStageDrawer: AnyObject {
 
 @MainActor
 public final class SparkStage {
-  /// The coordinate space a stage's faces report their boxes and clips in.
-  public nonisolated static let space = "vf-spark-stage"
   /// The Mac kit's STAGE_MAX: past it a face is a still.
   public nonisolated static let most = 32
   /// The stage's clock: the engine steps at 60 frames a second, and dt is clamped as `Engine.render` clamps it.
@@ -71,9 +70,14 @@ public final class SparkStage {
   public weak var drawer: (any SparkStageDrawer)?
   /// The stage's size in points (`uView`).
   public var view: CGSize = .zero
-  /// Where the layer's top-left corner sits in the stage's space. The faces report their boxes and clips in that space,
-  /// and the layer draws from its own corner, so each is moved by it when drawn. A layer over the whole screen, above a
-  /// content that stops at the bars, sits at (0, −the top inset).
+  /// Where the layer's top-left corner sits in the window, as UIKit places it (`SparkStageLayer` says so each frame).
+  /// The faces report their boxes and clips in the window's space, and the layer draws from its own corner, so each is
+  /// moved by it when drawn.
+  /// *Corrected 2026-11-06 (§4's second stills):* 68521e930 read this corner from a SwiftUI proxy over the layer, in a
+  /// space named after the overlay, and the faces reported their boxes in that space. SwiftUI reports (0, 0) for the
+  /// ignoring overlay's corner while UIKit places the MTKView 62 pt higher; measured 2026-11-06 at 68428ef36, the
+  /// stills byte-identical to r1's. Both ends are the window's now: the layer's corner from UIKit, where the layer is,
+  /// and the faces' boxes in `.global`.
   public var origin: CGPoint = .zero
   /// The app is active: a stage draws only then.
   public var active = true {
@@ -152,20 +156,29 @@ public final class SparkStage {
     if active { draw(at: time) }
   }
 
-  /// A face's box and clip in the layer's own space: from the stage's, by the layer's corner (`origin`).
+  /// A face's box and clip in the layer's own space: from the window's, by the layer's corner (`origin`).
   func inLayer(_ face: SparkStageFace) -> (box: CGRect, clip: CGRect) {
     let box = face.frame.offsetBy(dx: -origin.x, dy: -origin.y)
     let clip = face.clip.isInfinite ? face.clip : face.clip.offsetBy(dx: -origin.x, dy: -origin.y)
     return (box, clip)
   }
 
-  /// Each face on screen, as the next frame draws it: the face, and its box in the layer.
+  /// Each face on screen, as the next frame draws it: its box in the window and in the layer.
   func placements() -> [(face: SparkStageFace, box: CGRect)] {
     order.compactMap { id in
       guard let face = movers[id]?.face, face.onScreen else { return nil }
       return (face, inLayer(face).box)
     }
   }
+
+  #if DEBUG
+    /// The §4 gallery's readout, checked against the stills' pixels: the layer's corner in the window (UIKit's), its
+    /// size, and where the first face of `status` at `size` is laid out (the window's space, `.global`).
+    public func readout(status: String, size: Double) -> (corner: CGPoint, layer: CGSize, laid: CGRect?) {
+      let first = placements().first { $0.face.status == status && $0.face.size == size }
+      return (origin, view, first?.face.frame)
+    }
+  #endif
 
   /// At most 60 frames a second, and 30 in Low Power Mode: a face's motion and blink say nothing more at 120.
   public nonisolated static func frameRate(lowPower: Bool) -> Int { lowPower ? 30 : 60 }

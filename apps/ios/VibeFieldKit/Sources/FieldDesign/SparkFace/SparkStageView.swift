@@ -71,6 +71,16 @@ public final class SparkStageLayer: MTKView, MTKViewDelegate, SparkStageDrawer {
   override public func layoutSubviews() {
     super.layoutSubviews()
     stage?.view = bounds.size
+    tellCorner()
+  }
+
+  /// Where this layer's top-left corner sits in its window, told to the stage: the faces report their boxes in the
+  /// window's space, and this is where the pixels go, read from UIKit, never from a SwiftUI proxy over the layer.
+  /// Read again each frame, so a layer that moves without a resize (a push) is followed.
+  private func tellCorner() {
+    guard window != nil, let stage else { return }
+    let corner = convert(CGPoint.zero, to: nil)
+    if stage.origin != corner { stage.origin = corner }
   }
 
   override public func didMoveToWindow() {
@@ -78,6 +88,7 @@ public final class SparkStageLayer: MTKView, MTKViewDelegate, SparkStageDrawer {
     guard let window else { return }
     let scale = traitCollection.displayScale > 0 ? traitCollection.displayScale : window.screen.scale
     if scale > 0, contentScaleFactor != scale { contentScaleFactor = scale }
+    tellCorner()
   }
 
   /// Posted on any thread: the rate is set back on the main one.
@@ -96,6 +107,7 @@ public final class SparkStageLayer: MTKView, MTKViewDelegate, SparkStageDrawer {
   }
 
   public func draw(in view: MTKView) {
+    tellCorner()
     stage?.frame(at: CACurrentMediaTime() - start)
   }
 
@@ -154,21 +166,14 @@ public struct SparkStageHost<Content: View>: View {
       .overlay {
         if let layer = holder?.layer {
           // over the content's whole frame and any safe area it stops short of, so a face under the bars can still be
-          // drawn. Its corner need not be the content's: it tells the stage where it sits in the faces' space, and the
-          // stage draws each face from there (a content that stops at the bars puts it at (0, −the top inset)).
+          // drawn. Its corner need not be the content's: the layer tells the stage where it sits in the window, and
+          // the stage draws each face, reported in the window's space, from there.
           SparkStageLayerView(layer: layer)
             .ignoresSafeArea()
-            .onGeometryChange(for: CGPoint.self) { proxy in
-              SparkStageLayerView.corner(of: proxy)
-            } action: { corner in
-              holder?.stage?.origin = corner
-            }
             .allowsHitTesting(false)
             .accessibilityHidden(true)
         }
       }
-      // after the overlay, so the layer is in the space the faces report their boxes in
-      .coordinateSpace(.named(SparkStage.space))
       .onAppear {
         if holder == nil { holder = SparkStageHolder() }
         holder?.stage?.reducedMotion = reduceMotion
@@ -207,11 +212,6 @@ final class SparkStageHolder {
 
 struct SparkStageLayerView: UIViewRepresentable {
   let layer: SparkStageLayer
-
-  /// Where the layer's top-left corner sits in the stage's space (`SparkStage.origin`).
-  nonisolated static func corner(of proxy: GeometryProxy) -> CGPoint {
-    proxy.frame(in: .named(SparkStage.space)).origin
-  }
 
   func makeUIView(context: Context) -> SparkStageLayer { layer }
 
