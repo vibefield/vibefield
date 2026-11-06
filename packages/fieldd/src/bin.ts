@@ -296,7 +296,8 @@ if (role === "files-host") {
 } else if (role === "flows-host") {
   // CP-4a2a (4A2-Q1 (a)) — a run's flow host's ROLE, the transcript worker's pattern: fieldd starts one per run as ITSELF
   // with this argument (flows/launch.ts), and the role loads its bundle staged beside the executable. Its environment
-  // is PATH alone, its script runs locked down in a worker of its own, and it speaks only on its pipe (fd 3).
+  // is PATH and, under a smoke, its run mark (VF_SMOKE_RUN; CP-4a2b, Q-B5 (a)), its script runs
+  // locked down in a worker of its own, and it speaks only on its pipe (fd 3).
   refuseInspectorSignal();
   const script = join(sealedDirectory(), FLOWS_HOST_BUNDLE);
   createRequire(script)(script);

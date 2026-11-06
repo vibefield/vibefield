@@ -19,7 +19,8 @@ import { evaluateFlow, type FlowApi } from "./compartment";
 //
 // The life of a worker:
 //   1. `lockdown()` FIRST, before the script is read: this isolate's intrinsics frozen and tamed, with every option
-//      named here so no environment variable chooses one (and the environment is PATH alone);
+//      named here so no environment variable chooses one (and the environment holds only PATH
+//      and, under a smoke, its run mark);
 //   2. evaluate the script in its compartment (compartment.ts), call its default export with the run's input, and say
 //      how it ended (`done`, `threw`), or `fatal` when lockdown failed;
 //   3. each `agent(…)` and `ask(…)` is a `call`, bounded here before it is posted, and its `answer` resolves or throws

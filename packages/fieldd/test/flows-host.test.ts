@@ -306,7 +306,7 @@ describe("CP-4a2a — the flow host: lockdown, the compartment, the environment"
   );
 
   it(
-    "H4: the child's environment is PATH alone (4A2-Q6 (b)): no FIELD_*, no FIELDD_*, nothing else of fieldd's",
+    "H4: with no smoke mark, the child's environment is PATH alone (4A2-Q6 (b)): no FIELD_*, no FIELDD_*, nothing else of fieldd's",
     async () => {
       const { handler, logs } = scripted();
       await host(flow("return 1;"), {

@@ -1,5 +1,6 @@
 // CP-4a2a (the review's findings 5, 6, 10 and H2b) — a run on the REAL flow host for the rows that need its far end:
-// fieldd's own build of `flows-host.cjs` (flows-host-bundle.ts), started by the supervisor with PATH alone, its calls
+// fieldd's own build of `flows-host.cjs` (flows-host-bundle.ts), started by the supervisor from
+// PATH_ONLY (PATH and no smoke's run mark, so the child holds PATH alone), its calls
 // answered by a scripted handler that keeps what it heard. Test-local, beside flows-host.test.ts's own harness, which
 // stays that suite's.
 import { afterEach } from "vitest";

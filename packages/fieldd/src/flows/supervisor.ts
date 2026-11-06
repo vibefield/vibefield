@@ -26,8 +26,9 @@ import {
 // CP-4a2a (CP-D8, CP-D9; 4A2-Q1 (a), 4A2-Q5 (a), 4A2-Q6 (b), 4A2-Q7 (a), ruled by VF-PM 2026-11-05 08:51Z) — ONE
 // run's flow host: fieldd starts a child for the run (launch.ts), hands it the approved bytes rewritten into one script
 // (module-script.ts), answers each call the script makes through a FlowCallHandler, pings it, and ends it. The child's
-// environment is PATH alone. A run's calls reach the world only through the handler: in CP-4a2a a scripted one in the
-// tests, behind the journal's replay (replay.ts); the runs (CP-4a2b) implement it.
+// environment is PATH and, under a smoke, its run mark (flowsHostEnvironment). A run's calls reach
+// the world only through the handler: in CP-4a2a a scripted one in the tests, behind the journal's
+// replay (replay.ts); the runs (CP-4a2b) implement it.
 //
 // - Before any child: bytes past FLOW_LIMITS.SCRIPT_MAX_BYTES, and bytes the rewrite refuses, are `refused`; a copy that
 //   cannot start a host is `unconfigured`. Nothing is spawned for either.
@@ -112,7 +113,7 @@ export interface FlowHostOptions {
   readonly heapMb?: number;
   /** the host's resident memory cap, MB (FLOW_LIMITS.HOST_RSS_MB by default; tests lower it) */
   readonly rssMb?: number;
-  /** the environment the child's PATH is read from; fieldd's own by default */
+  /** the environment the child's PATH and smoke run mark are read from; fieldd's own by default */
   readonly environment?: NodeJS.ProcessEnv;
   readonly logger?: Logger;
   /** how the child is started: Node's own spawn; a test hands its own to reach the child it started */

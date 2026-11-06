@@ -15,8 +15,9 @@ import type { FlowWorkerData, FromFlowWorker, ToFlowWorker } from "./worker";
 // CP-4a2a (CP-D8, CP-D9; 4A2-Q1 (a), 4A2-Q5 (a), 4A2-Q6 (b), 4A2-Q7 (b) as re-ruled by VF-PM 2026-11-05 11:46Z) — a
 // run's flow host, the child's ENTRY (`flows-host` role) and its own thread. fieldd starts one per run, as its OWN
 // executable re-run in this role: the development bundle `flows-host.cjs` under the runtime fieldd runs under, or the
-// packaged single executable with `--vibefield-role=flows-host` (bin.ts). Its environment is PATH alone and its one door
-// is its fd 3, a plain pipe of one JSON message a line (protocol.ts).
+// packaged single executable with `--vibefield-role=flows-host` (bin.ts). Its environment is PATH
+// and, under a smoke, its run mark (VF_SMOKE_RUN; CP-4a2b, Q-B5 (a)), and its one door is its fd 3,
+// a plain pipe of one JSON message a line (protocol.ts).
 //
 // This thread runs no script. It holds the pipe, and starts the run's script in a worker_threads Worker from this same
 // bundle (worker.ts), under V8's cap on the worker's old generation (`heapMb`), so:
