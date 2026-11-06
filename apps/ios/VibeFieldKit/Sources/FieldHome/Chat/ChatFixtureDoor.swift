@@ -10,10 +10,11 @@
   /// IOS-12c — a thread under `-vf-mock` reads the Mac fold's own golden inputs (`chat-flow.<case>.golden.json`, copies
   /// under `Fixtures/chat-flow/` the gate keeps identical to field-app's), read as the reader reads a line frame. The
   /// case is `-vf-chat-case=<case>` (at-rest by default); `reading` and `unreadable` are said as themselves.
-  /// IOS-12d — the queue's cards under `-vf-needs-case=<cards|away>` (the merged list, with a held spawn and an agent's
-  /// ask of Vela's from the contracts' own items, on studio; or with the spawn on mini, asleep), an answer as
-  /// `-vf-needs-answer=<done|failed|unheard|refused|held>` says (done by default; held never returns), and the home's
-  /// catalog from the contracts' own copy. The stills press an act with `-vf-needs-press=<item>:<choice>`.
+  /// IOS-12d — the queue's cards under `-vf-needs-case=<cards|agents|away>` (the merged list with a held spawn and an
+  /// agent's ask of Vela's from the contracts' own items, on studio; those two alone; or the spawn alone on mini,
+  /// which answers the first ask and sleeps from the second, so its item is carried as a sleeping desktop's are), an
+  /// answer as `-vf-needs-answer=<done|failed|unheard|refused|held>` says (done by default; held never returns), the
+  /// home's catalog from the contracts' own copy. The stills press an act with `-vf-needs-press=<item>:<choice>`.
   @MainActor
   final class ChatFixtureDoor: ChatDoor {
     /// The goldens' desktops, by the names the mock account says.
@@ -25,6 +26,8 @@
     static let home = "dev-01HQ9S7UD1"
     /// One door for the app's life: the feed keeps a door it already holds.
     static let shared = ChatFixtureDoor()
+    /// IOS-12d — the queue's asks so far, for `-vf-needs-case=away` (mini answers the first, then sleeps).
+    private var needsAsked = 0
 
     private final class Watch: ChatWatch {
       func cancel() {}
@@ -48,7 +51,9 @@
     func call(_ method: String, params: JSONValue?) async throws -> JSONValue {
       switch method {
       case "compose.sparks.list": return try answer("compose-sparks-list.merged")
-      case "needs.list": return try needsList()
+      case "needs.list":
+        needsAsked += 1
+        return try needsList()
       case NeedsAnswerParams.method: return try await answerNeeds(params)
       case "agent.catalog": return try answer("agent-catalog.valid")
       case "compose.sparks.open":
@@ -70,21 +75,44 @@
       }
     }
 
-    /// The queue under `-vf-needs-case=`: the merged list, or with the contracts' held spawn and agent's ask of Vela's
-    /// on studio (`cards`), or with the spawn on mini, which the merge says is asleep (`away`).
+    /// The queue under `-vf-needs-case=`: the merged list; with the contracts' held spawn and agent's ask of Vela's on
+    /// studio beside it (`cards`) or alone (`agents`); or the spawn alone on mini (`away`). A sleeping desktop's items
+    /// only ever arrive carried (`ChatReading.carry`), so under `away` mini answers the first ask with its item, and
+    /// from the second the merge says it is asleep and lists none (d4c, S4: served fresh from an asleep mini, the feed
+    /// rightly dropped it).
     private func needsList() throws -> JSONValue {
       let merged = try answer("needs-list.merged")
       guard let extra = Self.needsCase, case .object(var fields) = merged,
-        var items = fields["items"]?.arrayValue
+        let items = fields["items"]?.arrayValue
       else { return merged }
-      let spawnOn = extra == "away" ? "dev-01HQ9S7Y44" : Self.home
-      for (name, device) in [("needs-item.held-spawn", spawnOn), ("needs-item.agent-ask", Self.home)] {
-        guard case .object(var item)? = Self.fixture(name) else { continue }
-        item["device"] = .string(device)
-        items.append(.object(item))
+      let mini = "dev-01HQ9S7Y44"
+      let spawn = Self.item("needs-item.held-spawn", on: Self.home)
+      let ask = Self.item("needs-item.agent-ask", on: Self.home)
+      switch extra {
+      case "agents":
+        fields["items"] = .array([spawn, ask].compactMap { $0 })
+      case "away":
+        let first = needsAsked <= 1
+        fields["items"] = .array(first ? [Self.item("needs-item.held-spawn", on: mini)].compactMap { $0 } : [])
+        if first, let desktops = fields["desktops"]?.arrayValue {
+          fields["desktops"] = .array(
+            desktops.map { desktop in
+              guard case .object(var each) = desktop, each["device"]?.stringValue == mini else { return desktop }
+              each["state"] = .string("answered")
+              return .object(each)
+            })
+        }
+      default:
+        fields["items"] = .array(items + [spawn, ask].compactMap { $0 })
       }
-      fields["items"] = .array(items)
       return .object(fields)
+    }
+
+    /// One of the contracts' own items, on `device`.
+    private static func item(_ name: String, on device: String) -> JSONValue? {
+      guard case .object(var item)? = fixture(name) else { return nil }
+      item["device"] = .string(device)
+      return .object(item)
     }
 
     /// An answer, as `-vf-needs-answer=` says it came out: the item answered, or refused in fieldd's words, or held.
@@ -120,7 +148,7 @@
       return .object(["item": .object(item)])
     }
 
-    /// The queue's case: `-vf-needs-case=<cards|away>`, else the merged list alone.
+    /// The queue's case: `-vf-needs-case=<cards|agents|away>`, else the merged list alone.
     static var needsCase: String? { flag("-vf-needs-case=") }
 
     /// How an answer comes out: `-vf-needs-answer=<…>`, else done.

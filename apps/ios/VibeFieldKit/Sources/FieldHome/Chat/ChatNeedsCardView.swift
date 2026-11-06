@@ -138,7 +138,7 @@ struct ChatNeedsCardView: View {
     } else if away == nil {
       if words.show {
         VStack(alignment: .leading, spacing: 6) {
-          act(ChatNeedsWords.answerInPane, primary: false, dim: false) {
+          act(ChatNeedsWords.answerInPane, primary: false) {
             paneMissed = !onPane()
           }
           if paneMissed {
@@ -158,8 +158,14 @@ struct ChatNeedsCardView: View {
         let acts = ChatActsLayout(spacing: 8)
         acts {
           ForEach(words.acts) { each in
-            act(word(each), primary: each.primary, dim: dims(each)) { onAct(each.choice) }
-              .disabled(!answers)
+            let pressed = card.act.pressed == each.choice
+            act(word(each), primary: each.primary) {
+              if answers { onAct(each.choice) }
+            }
+            // §8: while its answer runs the pressed act keeps its look and says "…"; the others dim as the kit's
+            // disabled buttons do, and none answers (d4c, S1: `.disabled` on the pressed act greyed it)
+            .disabled(!answers && !pressed)
+            .allowsHitTesting(answers)
           }
         }
         .padding(.top, 8)
@@ -181,13 +187,7 @@ struct ChatNeedsCardView: View {
     }
   }
 
-  /// While an answer runs the others dim; once the item waits no longer, all do.
-  private func dims(_ act: NeedsCardAct) -> Bool {
-    if case .busy(let choice) = card.act { return choice != act.choice }
-    return !card.waits
-  }
-
-  private func act(_ word: String, primary: Bool, dim: Bool, _ press: @escaping () -> Void) -> some View {
+  private func act(_ word: String, primary: Bool, _ press: @escaping () -> Void) -> some View {
     Button(action: press) {
       Text(word)
         .font(ChromeType.sans(15, .medium))
@@ -200,7 +200,6 @@ struct ChatNeedsCardView: View {
         .overlay {
           if !primary { Capsule().strokeBorder(ChromePalette.cardHairline, lineWidth: 1) }
         }
-        .opacity(dim ? 0.4 : 1)
     }
     .buttonStyle(.plain)
   }
