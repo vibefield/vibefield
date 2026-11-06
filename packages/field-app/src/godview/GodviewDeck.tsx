@@ -384,6 +384,15 @@ export function GodviewDeck({
    * pool had nothing to rejoin and no shell policy yet (the first connection,
    * below). Ghosttea's own opening birth it knows itself (`sessionCreatedHere`). */
   const openingBirth = useRef<string | null>(null);
+  /** GT-D5 (item 186) — THE DECK'S OWN BIRTH RECEIPTS: every shell this deck birthed (its door's
+   * `bornSession` — a new terminal, a split, a rehydrated pane, the last pane's fresh shell — and
+   * the opening shell it asked fieldd for). The unused-shell reaper may release only these and
+   * ghosttea's own opening birth (`sessionCreatedHere`): "records that shell's birth for the
+   * launcher and unused-shell reaper. There is no second birth authority" (docs/LANDED.md). A
+   * pane this deck never birthed — restored after a reload, adopted, claimed — closes to a detach
+   * even when the floor says its shell was never used. Kept for the deck's life, so a pool retry's
+   * replacement runtime (which forgets the per-runtime `unusedPanes` above) re-grants these. */
+  const deckBirths = useRef(new Set<string>());
   /** N16 — read when ghosttea asks, so the platform object (keyed on the shell
    * policy alone: a new one re-initializes the workspace) never rebuilds. */
   const lastPaneClose = useRef(onLastPaneClose);
@@ -595,6 +604,7 @@ export function GodviewDeck({
           { opening: true },
         );
         openingBirth.current = opened.sessionId;
+        deckBirths.current.add(opened.sessionId);
       } catch (cause) {
         // The pool has already published the fault and the deck is already
         // drawing its face; this only says so in the log with the deck's voice.
@@ -879,7 +889,9 @@ export function GodviewDeck({
       // shell announces one of its own (PU-14b).
       if (cwd !== undefined && cwd !== "") bornCwd.current.set(created.sessionId, cwd);
       // The join: fieldd answers an id, the workspace mounts a summary, and the
-      // floor is the one authority both read.
+      // floor is the one authority both read. The birth receipt is minted HERE,
+      // at the birth (GT-D5, item 186).
+      deckBirths.current.add(created.sessionId);
       unusedPanes.created(created.sessionId);
       return terminalSessionSummary(created.sessionId);
     },
@@ -1716,7 +1728,11 @@ export function GodviewDeck({
       if (!workspace.panes.some((pane) => pane.session.id === sessionId))
         endedSessions.delete(sessionId);
     }
-    const bornHere = (id: string) => isUnusedShell(runtime, id);
+    // A receipt is the deck's own birth record (or ghosttea's, for its opening shell), never the
+    // floor's lifetime fact alone: `isUnusedShell` only says whether a receipted shell is STILL
+    // unused. A restored, adopted or claimed pane gets none, so its close detaches (GT-D5, item 186).
+    const bornHere = (id: string) =>
+      (deckBirths.current.has(id) || runtime.sessionCreatedHere(id)) && isUnusedShell(runtime, id);
     for (const { session } of workspace.panes) {
       if (bornHere(session.id)) unusedPanes.created(session.id);
     }
