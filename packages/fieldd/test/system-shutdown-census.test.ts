@@ -48,6 +48,7 @@ import {
   listedRow,
   poll,
   quiet,
+  readRecord,
   rowOf,
   teardownFloors,
 } from "./agent-gateway-floor";
@@ -516,7 +517,20 @@ describe("plainStopCensus — this boot's live runs, and the births in flight (R
         FLOOR_WAIT_MS,
         "the successor born under closed launches",
       );
-      expect(listedRow(box, kept.sessionId)).toBeUndefined();
+      // it is born past the point of no return, where the old run's record was written first: its PTY replaced and its
+      // conversation resumed
+      expect(readRecord(box.dataDir, kept.runId)).toMatchObject({
+        exited: { reason: "replaced" },
+        reattach: { state: "resumed", replaced: kept.sessionId },
+      });
+      // Item 216 — the old PTY leaving fieldd's copy of the floor's inventory has no order with the successor's birth:
+      // that inventory comes over the floor's mgmt subscription, and the exit the replacement waits for (item 201,
+      // RV #43) over the cell's own client: two connections, no order between them. So it is awaited, never read once
+      await poll(
+        () => (listedRow(box, kept.sessionId) === undefined ? true : undefined),
+        FLOOR_WAIT_MS,
+        "the replaced PTY gone from fieldd's inventory",
+      );
       // the successor is a live run this boot: fieldd's stop would end it, and nothing is in flight now
       const settled = await poll(
         () => {
