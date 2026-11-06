@@ -43,6 +43,7 @@ import {
   NO_FOLDER,
   sendRepair,
   startStep,
+  stepFailed,
 } from "./steps";
 import {
   boundedAnswer,
@@ -574,10 +575,7 @@ export class FlowRuns {
     // held on the person: the step's words wait for their act
     if (step.state === "holding") return;
     if (end.outcome === "failed") {
-      this.#answer(live, end.call, waiter, {
-        ok: false,
-        refused: `${labelWords(step.label)} failed.`,
-      });
+      this.#answer(live, end.call, waiter, { ok: false, refused: stepFailed(step.label) });
       return;
     }
     const text = end.text ?? "";

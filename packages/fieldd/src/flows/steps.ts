@@ -219,6 +219,10 @@ export function labelWords(label: string | undefined): string {
   return words === "" ? "this step" : words;
 }
 
+/** DESIGN.md §9's "‹label› failed." (A step's call refused): a step whose turn failed, or whose handed session the
+ * step listener cannot hear (review F3). */
+export const stepFailed = (label: string | undefined): string => `${labelWords(label)} failed.`;
+
 /** The ONE road a step's agent starts by (CL-H5): D5's steps 3–7 for call `call` of `run`, whose entry the runs have
  * written. Answers the refusal the script's `await` throws with, or the session the step works in. */
 export async function startStep(
@@ -264,12 +268,14 @@ export async function startStep(
         refused: `VibeField didn't send ${labelWords(label)}: that session is outside this run's Agent Profiles, isn't running, is a spark's or another flow's, or is waiting on a permission.`,
       };
     // 9b: the session is no flow's run, so the step listener is told of the hand before the line is queued, and so
-    // before it can be delivered or its turn start; the runs let it go at the answer
+    // before it can be delivered or its turn start; the runs let it go at the answer. A session it cannot hear would
+    // answer nothing, so the step is refused here, its line never queued (review F3)
     const unhand = ports.stepEnds.hand(handed, { run: run.run, call });
+    if (unhand === undefined) return { ok: false, refused: stepFailed(label) };
     try {
       return { ...sent(ports, write, call, handed, "in", prompt, from), form, unhand };
     } catch (error) {
-      unhand?.();
+      unhand();
       throw error;
     }
   }

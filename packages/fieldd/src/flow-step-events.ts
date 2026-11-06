@@ -67,7 +67,9 @@ export class FlowStepEvents {
    * is called or the session ends. The step's turn is the first whose turn:started this listener hears after the hand:
    * a turn whose turn:started was heard before the hand is never the step's, but one begun before the hand whose
    * turn:started arrives after it is (review F2), until slice 15 arms the hand at its line's paste. The same step
-   * handed again is listened to once (CL-H6). A session this fieldd never heard enter holds nothing, and says so. */
+   * handed again is listened to once (CL-H6). A session this fieldd never heard enter (or heard end) is not heard: it
+   * answers none and holds nothing, and fieldd's warn says why, so the runs refuse the step before its line is queued
+   * (review F3). */
   hand(
     runtimeRunId: string,
     step: { readonly run: string; readonly call: number },
@@ -80,10 +82,10 @@ export class FlowStepEvents {
     if (agent === undefined) {
       this.logger.warn(
         "fieldd.flows.step_hand_unheard",
-        "A flow step was handed a session this fieldd has not heard enter",
-        { runtimeRunId },
+        "A flow step was handed a session this fieldd has not heard enter; the step is refused, its line never queued",
+        { runtimeRunId, run: step.run, call: step.call },
       );
-      return () => undefined;
+      return undefined;
     }
     const offs = this.#listen(agent, { run: step.run, call: step.call, runtimeRunId }, true);
     let gone = false;
