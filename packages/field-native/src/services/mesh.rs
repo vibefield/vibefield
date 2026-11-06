@@ -100,7 +100,11 @@ struct Shared {
     sidecar: Option<PathBuf>,
     searched: Vec<String>,
     /// UA-P-0a — the posture, `None` while there is no node. Read by the mgmt
-    /// facade's capture-mode refusal; written only by `start`/`stop`/`retire`.
+    /// facade's capture-mode refusal; written only by `start`/`stop`/`retire`,
+    /// and by `MeshHandle::record_gate_for_tests`, which nothing in the product
+    /// calls.
+    /// *Corrected 2026-11-06 (DR-3a, the review of stack B): it said "written
+    /// only by `start`/`stop`/`retire`", false since that test seam writes it.*
     mode: Mutex<Option<(MeshMode, Option<String>)>>,
     /// UA-P-4 (RFC 025 §3.1) — the login allow-list the current bring-up hands
     /// truffle, and therefore the one the INSTALLED node was built with. A
@@ -109,12 +113,21 @@ struct Shared {
     /// the posture already says "linked" while the node still running is the
     /// ungated capture one. Written only by `spawn_bring_up` (the one place a
     /// node is constructed) and cleared by `teardown_node` with the node, so it
-    /// is never a stale list describing a node that is gone.
+    /// is never a stale list describing a node that is gone. The one other
+    /// writer is `MeshHandle::record_gate_for_tests`, which nothing in the
+    /// product calls: it records the gate of a node no test can build.
     ///
-    /// Two readers, and both need the BUILT value rather than the intended
-    /// one: `start` decides whether a posture change has to rebuild, and
+    /// Every reader needs the BUILT value rather than the intended one:
+    /// `start` decides whether a posture change has to rebuild,
     /// `native.mesh.self` answers `loginAllow` — "is this node gated?" — which
-    /// would be a lie told from the posture.
+    /// would be a lie told from the posture, `peers.list` and its stream read
+    /// the gate (mgmt/mesh.rs), and the file transfer's facade (`roots`) and
+    /// install hook (`on_node_installed`) serve a named root only from a node
+    /// built gated (contracts mgmt.ts `NativeFileTransferRootsParams`).
+    /// *Corrected 2026-11-06 (DR-3a, the review of stack B): it said "written
+    /// only by `spawn_bring_up`", false since that test seam writes it, and
+    /// "two readers", `start` and `native.mesh.self`, while the peers verbs
+    /// and now the file transfer read it too.*
     login_allow: Mutex<Vec<String>>,
     /// UA-P-0a — the in-flight bring-up, on Shared for the same reason as the
     /// sidecar: `stop` has to abort it, and `stop` arrives through the handle.
@@ -728,9 +741,9 @@ impl MeshHandle {
         // the arm forgets the roots and ends the pulls `failed` NODE_DOWN on
         // the stream it keeps across rebuilds, BEFORE the node stops; a stop or
         // an unlink also drops the held set, which no other teardown does (the
-        // critic's finding 0). It takes its pulls out and drops its lock before
-        // it aborts and joins them, so a stalled pull cannot hold this teardown
-        // (finding 3).
+        // critic's finding 0). It takes its pulls' tasks out and drops its lock
+        // before it aborts and joins them, so a stalled pull cannot hold this
+        // teardown (finding 3), and it lists each pull until its files are gone.
         self.file_transfer().detach(reason).await;
         // Item 79 (2026-10-27) — STOP the node, then drop it. This line used to
         // read `drop(had); // node drop kills the sidecar (kill_on_drop)`, and

@@ -44,7 +44,7 @@
 use crate::contracts::{
     MeshMode, NativeFileTransferPullParams, NativeFileTransferRootsParams, NativeFileTransferRow,
 };
-use crate::registries::{drive_limits, mesh_file_transfer};
+use crate::registries::mesh_file_transfer;
 use crate::services::file_transfer::{FileTransferBackend, FileTransferError, PullEvent};
 use crate::state::{DaemonState, MgmtOutbox, Offered};
 use serde_json::{json, Value};
@@ -199,8 +199,11 @@ fn unsupported(id: Option<Value>) -> Value {
 /// An arm's refusal on the wire. CONFLICT is the
 /// `error-data.file-transfer-conflict` golden: no details, retryable false
 /// (DR-2a's review nit 9: fieldd's own table keeps both cases from the floor,
-/// so this is a belt). RESOURCE_EXHAUSTED is retryable: a slot frees when a
-/// running pull ends.
+/// so this is a belt). RESOURCE_EXHAUSTED is retryable, because a slot frees
+/// when a running pull ends, and carries no details: C1 names no shape for it
+/// beyond its kind (contracts mgmt.ts, `NativeFileTransferPullParams`), and no
+/// golden pins one, so the floor answers the plain shape VF-RELAY's mock
+/// answers until one is ruled.
 fn refusal(state: &Arc<DaemonState>, id: Option<Value>, e: FileTransferError) -> Value {
     match e {
         FileTransferError::Unsupported => unsupported(id),
@@ -212,9 +215,8 @@ fn refusal(state: &Arc<DaemonState>, id: Option<Value>, e: FileTransferError) ->
             -32010,
             "as many pulls as the floor runs at once are running",
             true,
-            Some(json!({ "limit": drive_limits::PULLS_IN_FLIGHT })),
+            None,
         ),
-        FileTransferError::Internal(message) => err(id, "INTERNAL", -32000, &message, false, None),
     }
 }
 

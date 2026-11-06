@@ -33,9 +33,9 @@ use serde_json::{json, Value};
 use std::collections::{BTreeMap, VecDeque};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
-use tokio::time::timeout;
+use tokio::time::{timeout, timeout_at, Instant};
 
 const LOGIN: &str = "me@example.com";
 const OTHER_LOGIN: &str = "someone@example.org";
@@ -48,6 +48,11 @@ const PULL: &str = "native.mesh.fileTransfer.pull";
 const SUBSCRIBE: &str = "native.mesh.fileTransfer.subscribe";
 const DELTA: &str = "native.mesh.fileTransfer.delta";
 const SNAPSHOT: &str = "native.mesh.fileTransfer.snapshot";
+/// One wait's budget: a reply, a note, a pull's end or a teardown that has not
+/// come by then reds its row rather than hanging it. The floor ticks every
+/// second, so a deadline per line would restart for ever: the budget is the
+/// whole wait's (`tests/mgmt_server.rs`'s `recv`).
+const BUDGET: Duration = Duration::from_secs(10);
 
 struct Mgmt {
     reader: tokio::io::Lines<BufReader<tokio::io::ReadHalf<local_ipc::ClientStream>>>,
@@ -91,12 +96,13 @@ impl Mgmt {
         me
     }
 
-    /// The next line that is not the floor's liveness tick.
-    async fn next_line(&mut self) -> Value {
+    /// The next line by `deadline` that is not the floor's liveness tick; a
+    /// wait for `what` past it panics.
+    async fn next_line(&mut self, deadline: Instant, what: &str) -> Value {
         loop {
-            let line = timeout(Duration::from_secs(5), self.reader.next_line())
+            let line = timeout_at(deadline, self.reader.next_line())
                 .await
-                .expect("mgmt reply deadline")
+                .unwrap_or_else(|_| panic!("no {what} within {BUDGET:?}"))
                 .expect("mgmt read error")
                 .expect("mgmt connection closed");
             let msg: Value = serde_json::from_str(&line).expect("json line");
@@ -106,8 +112,8 @@ impl Mgmt {
         }
     }
 
-    /// Send a request and return ITS response; notifications that arrive
-    /// first are kept.
+    /// Send a request and return ITS response within the budget;
+    /// notifications that arrive first are kept.
     async fn call(&mut self, method: &str, params: Value) -> Value {
         let id = self.next_id;
         self.next_id += 1;
@@ -116,8 +122,9 @@ impl Mgmt {
             json!({"jsonrpc":"2.0","id":id,"method":method,"params":params})
         );
         self.writer.write_all(line.as_bytes()).await.unwrap();
+        let deadline = Instant::now() + BUDGET;
         loop {
-            let msg = self.next_line().await;
+            let msg = self.next_line(deadline, method).await;
             if msg.get("id") == Some(&json!(id)) {
                 return msg;
             }
@@ -125,13 +132,19 @@ impl Mgmt {
         }
     }
 
-    /// The next notification `wanted` accepts; the others are kept, in order.
-    async fn note_where(&mut self, wanted: impl Fn(&Value) -> bool) -> Value {
+    /// The next notification `wanted` accepts, by `deadline`; the others are
+    /// kept, in order.
+    async fn note_where(
+        &mut self,
+        deadline: Instant,
+        what: &str,
+        wanted: impl Fn(&Value) -> bool,
+    ) -> Value {
         if let Some(i) = self.notes.iter().position(&wanted) {
             return self.notes.remove(i).unwrap();
         }
         loop {
-            let msg = self.next_line().await;
+            let msg = self.next_line(deadline, what).await;
             if wanted(&msg) {
                 return msg;
             }
@@ -139,17 +152,20 @@ impl Mgmt {
         }
     }
 
-    /// The next notification named `method`.
+    /// The next notification named `method`, within the budget.
     async fn note(&mut self, method: &str) -> Value {
-        self.note_where(|n| n["method"] == method).await
+        self.note_where(Instant::now() + BUDGET, method, |n| n["method"] == method)
+            .await
     }
 
-    /// The END of the pull `transfer_id`: its first delta that is not a
-    /// progress, the note it rode with it.
+    /// The END of the pull `transfer_id` within ONE budget, its progress
+    /// aside: its first delta that is not a progress, the note it rode with it.
     async fn end_of(&mut self, transfer_id: &str) -> (Value, NativeFileTransferDelta) {
+        let deadline = Instant::now() + BUDGET;
+        let what = format!("end of {transfer_id}");
         loop {
             let note = self
-                .note_where(|n| {
+                .note_where(deadline, &what, |n| {
                     n["method"] == DELTA && n["params"]["payload"]["transferId"] == transfer_id
                 })
                 .await;
@@ -362,13 +378,14 @@ fn set_mode(path: &Path, mode: u32) {
     std::fs::set_permissions(path, std::fs::Permissions::from_mode(mode)).unwrap();
 }
 
-/// 1. Rider A, steps 2 and 3: with no node, `roots` and `pull` answer the node
-/// gate's UNAVAILABLE (`MeshNotUpDetails`, retryable: a state, never a
-/// capability), and `subscribe` is answered all the same, with an empty
-/// snapshot, because its stream outlives nodes (rider B).
+/// Row 1 — rider A, steps 2 and 3: with no node, `roots` and `pull` answer the
+/// node gate's UNAVAILABLE (`MeshNotUpDetails`, retryable: a state, never a
+/// capability), even for params the floor cannot read (step 3 before step 5),
+/// and `subscribe` is answered all the same, with an empty snapshot, because
+/// its stream outlives nodes (rider B).
 /// Probe: gate `subscribe` on the node in `mgmt/file_transfer.rs` → the
-/// subscribe asserts red; drop the node gate → `roots` answers MeshDown's
-/// shape no longer.
+/// subscribe asserts red; read the params before the facade's node gate → the
+/// unreadable `{}` answers PRECONDITION_FAILED -32005, not the gate's -32006.
 #[tokio::test]
 async fn with_no_node_roots_and_pull_answer_the_node_gate_and_subscribe_answers() {
     let (dir, daemon) = boot().await;
@@ -382,6 +399,8 @@ async fn with_no_node_roots_and_pull_answer_the_node_gate_and_subscribe_answers(
     for (method, params) in [
         (ROOTS, json!({"roots": [DRIVE_OBJECTS]})),
         (PULL, pull_params(1)),
+        (ROOTS, json!({})),
+        (PULL, json!({})),
     ] {
         let reply = mgmt.call(method, params).await;
         assert_eq!(reply["error"]["code"], -32006, "{method}: {reply}");
@@ -399,26 +418,39 @@ async fn with_no_node_roots_and_pull_answer_the_node_gate_and_subscribe_answers(
     daemon.shutdown().await;
 }
 
-/// 2. Rider A, step 4: while the login is captured, `roots` and `pull` are
-/// refused MESH_CAPTURING, as `serve.add` is; `subscribe` passes.
+/// Row 2 — rider A, step 4: while the login is captured, `roots` and `pull`
+/// are refused MESH_CAPTURING, as `serve.add` is, even for params the floor
+/// cannot read (step 4 before step 5), and with no node they answer the node
+/// gate first (step 3 before step 4); `subscribe` passes.
 /// Probe: drop the capture check in `mgmt/file_transfer.rs` → `roots` answers
-/// a result.
+/// a result; read the params before it → the unreadable pull's -32005 carries
+/// no MESH_CAPTURING; check the capture before the node gate → the no-node
+/// `roots` answers -32005.
 #[tokio::test]
 async fn in_capture_mode_roots_and_pull_are_refused_and_subscribe_passes() {
     let (dir, daemon) = boot().await;
     install(dir.path(), &daemon, |arm| arm);
-    daemon.state.mesh.force_node_presence_for_tests(true);
     daemon
         .state
         .mesh
         .start(MeshMode::Capture, None)
         .await
         .expect("start");
-    let pulls = attach(&daemon).await;
     let mut mgmt = Mgmt::connect(&daemon).await;
+    let gate = mgmt.call(ROOTS, json!({"roots": [DRIVE_OBJECTS]})).await;
+    assert_eq!(gate["error"]["code"], -32006, "no node, captured: {gate}");
+    let data = error_data(&gate);
+    assert_eq!(data.kind, ErrorKind::Unavailable);
+    let _: MeshNotUpDetails = parse(data.details.as_ref().expect("the gate's details"));
+
+    daemon.state.mesh.force_node_presence_for_tests(true);
+    let pulls = attach(&daemon).await;
+    let mut unreadable = pull_params(1);
+    unreadable["path"] = json!("/Users/james/vf/users/1/drive/objects/01");
     for (method, params) in [
         (ROOTS, json!({"roots": [DRIVE_OBJECTS]})),
         (PULL, pull_params(1)),
+        (PULL, unreadable),
     ] {
         let reply = mgmt.call(method, params).await;
         assert_eq!(reply["error"]["code"], -32005, "{method}: {reply}");
@@ -445,7 +477,7 @@ async fn in_capture_mode_roots_and_pull_are_refused_and_subscribe_passes() {
     daemon.shutdown().await;
 }
 
-/// 3. Rider A, step 5: params the floor cannot read are PRECONDITION_FAILED,
+/// Row 3 — rider A, step 5: params the floor cannot read are PRECONDITION_FAILED,
 /// read through the generated types: an absolute path, a `..` segment, a root
 /// that is not a named root, a lower-case id. None reaches the substrate.
 /// Probe: read the params with `Value::get` instead of the generated types →
@@ -492,7 +524,7 @@ async fn a_request_the_floor_cannot_read_is_a_precondition_failure() {
     daemon.shutdown().await;
 }
 
-/// 4. Rider A, step 6, on a node built UNGATED: each root answers
+/// Row 4 — rider A, step 6, on a node built UNGATED: each root answers
 /// `registered: false` with ROOT_UNGATED (the golden), no folder is made, and
 /// the set is HELD: the next node built gated for the same login serves it with
 /// no declaration (nit 8, as the critic's finding 0 rewrote it).
@@ -536,7 +568,7 @@ async fn an_ungated_node_holds_the_roots_and_serves_them_from_the_next_gated_nod
     daemon.shutdown().await;
 }
 
-/// 5. A node built GATED: the root registers (the golden), both folders exist
+/// Row 5 — a node built GATED: the root registers (the golden), both folders exist
 /// at 0700, the `serves` folder is served under the name and the `lands` one
 /// never; the node is capped at OBJECT_MAX_BYTES and refuses pushes once; a
 /// repeat serves nothing again; `[]` unserves.
@@ -585,15 +617,20 @@ async fn a_gated_node_serves_objects_never_what_lands_and_a_repeat_is_a_no_op() 
     daemon.shutdown().await;
 }
 
-/// 6. The critic's finding 11: a `drive/` the floor makes is 0700, a leaf that
-/// exists wider is set to 0700, and a `drive/` the floor did not make (mille's
-/// root) is left as it is: never `harden_state_dir`'s recursion.
+/// Row 6 — the critic's finding 11: a `drive/` the floor makes is 0700, a
+/// leaf that exists wider is set to 0700, and a `drive/` the floor did not
+/// make (mille's root) is left as it is: never `harden_state_dir`'s recursion.
+/// EL7: a link where a leaf belongs (a same-uid agent's, to a folder it chose)
+/// is refused FAILED_IO, and the folder it names is neither narrowed nor
+/// served.
 /// Probe: set the mode only on a folder the floor creates → the 0755 leaf
-/// stays 0755; set it on every ancestor → mille's `drive/` reads 0700.
+/// stays 0755; set it on every ancestor → mille's `drive/` reads 0700; accept
+/// an entry that exists without reading what it is → the link registers and
+/// `elsewhere` reads 0700.
 #[cfg(unix)]
 #[tokio::test]
 async fn the_leaves_are_0700_always_and_a_drive_folder_the_floor_makes_is_0700() {
-    let (dir, daemon, _pulls) = gated_floor().await;
+    let (dir, daemon, pulls) = gated_floor().await;
     let drive = join(dir.path(), layout::DRIVE_DIR);
     let (serves, lands) = (serves(dir.path()), lands(dir.path()));
     assert!(!drive.exists());
@@ -622,11 +659,34 @@ async fn the_leaves_are_0700_always_and_a_drive_folder_the_floor_makes_is_0700()
         0o755,
         "a drive/ the floor did not make is not the floor's to narrow"
     );
+
+    // a link where the `serves` leaf belongs, to a folder elsewhere
+    let none: NativeFileTransferRootsResult =
+        parse(&mgmt.call(ROOTS, json!({"roots": []})).await["result"]);
+    assert!(none.roots.is_empty());
+    let elsewhere = dir.path().join("elsewhere");
+    std::fs::create_dir(&elsewhere).unwrap();
+    set_mode(&elsewhere, 0o755);
+    std::fs::remove_dir(&serves).unwrap();
+    std::os::unix::fs::symlink(&elsewhere, &serves).unwrap();
+    let linked: NativeFileTransferRootsResult =
+        parse(&mgmt.call(ROOTS, json!({"roots": [DRIVE_OBJECTS]})).await["result"]);
+    assert!(!linked.roots[0].registered);
+    assert_eq!(
+        linked.roots[0].reason.as_deref(),
+        Some(mesh_file_transfer::FAILED_IO)
+    );
+    assert_eq!(mode(&elsewhere), 0o755, "what a link names is not narrowed");
+    assert!(
+        pulls.served().is_empty(),
+        "nor served: {:?}",
+        pulls.served()
+    );
     drop(mgmt);
     daemon.shutdown().await;
 }
 
-/// 7. Registering a root sweeps every `*.truffle-tmp` in its `lands` folder
+/// Row 7 — registering a root sweeps every `*.truffle-tmp` in its `lands` folder
 /// that no running pull owns, keeps a running pull's, and never touches a
 /// landed name (fieldd's to adopt or sweep).
 /// Probe: sweep every temporary → the running pull's is gone; skip the sweep
@@ -673,27 +733,27 @@ async fn registering_sweeps_orphan_temporaries_and_keeps_a_running_pulls() {
     daemon.shutdown().await;
 }
 
-/// 8. A pull is answered `{transferId}` at once and runs on its own: the serial
-/// mesh worker answers `serve.list` and `roots` while it is held open, and the
-/// stream's snapshot lists it. The floor names its own landing path to the
-/// substrate, `<lands>/<digest>.<transferId>`, never the holder's.
-/// Probe: await the pull in the handler → the 2 s deadline reds.
+/// Row 8 — a pull is answered `{transferId}` at once and runs on its own: the
+/// serial mesh worker answers `serve.list` and `roots` while it is held open,
+/// and the stream's snapshot lists it. The floor names its own landing path
+/// to the substrate, `<lands>/<digest>.<transferId>`, never the holder's.
+/// `serve.list` answers the mesh facade's node gate: the forced presence is
+/// no node (`MeshHandle::node` is `None`), so -32006 is its answer.
+/// Probe: await the pull in the handler → the pull's call reds at BUDGET.
 #[tokio::test]
 async fn a_pull_is_answered_at_once_and_the_worker_answers_while_it_runs() {
     let (dir, daemon, pulls) = gated_floor().await;
     let mut mgmt = Mgmt::connect(&daemon).await;
     pulls.script(&path_of(&digest(1)), Scripted::Hold);
-    let reply = timeout(Duration::from_secs(2), mgmt.call(PULL, pull_params(1)))
-        .await
-        .expect("a pull is answered at once, never when it ends");
+    let reply = mgmt.call(PULL, pull_params(1)).await;
     let answered: NativeFileTransferPullResult = parse(&reply["result"]);
     assert_eq!(answered.transfer_id.as_str(), transfer_id(1));
 
     let listed = mgmt.call("native.mesh.serve.list", json!({})).await;
-    assert!(
-        listed.get("result").is_some() || listed.get("error").is_some(),
-        "the mesh worker answers while the pull runs: {listed}"
-    );
+    assert_eq!(listed["error"]["code"], -32006, "{listed}");
+    let data = error_data(&listed);
+    assert_eq!(data.kind, ErrorKind::Unavailable);
+    let _: MeshNotUpDetails = parse(data.details.as_ref().expect("the gate's details"));
     let roots: NativeFileTransferRootsResult =
         parse(&mgmt.call(ROOTS, json!({"roots": [DRIVE_OBJECTS]})).await["result"]);
     assert!(roots.roots[0].registered);
@@ -721,7 +781,7 @@ async fn a_pull_is_answered_at_once_and_the_worker_answers_while_it_runs() {
     daemon.shutdown().await;
 }
 
-/// 9. Nit 9: a second pull under a live transferId, or of a digest a running
+/// Row 9 — nit 9: a second pull under a live transferId, or of a digest a running
 /// pull holds under any transferId, is refused CONFLICT -32004, retryable
 /// false, the golden key for key; neither reaches the substrate, and a pull
 /// fresh in both still runs.
@@ -764,9 +824,12 @@ async fn a_live_transfer_id_or_a_running_digest_is_a_conflict() {
     daemon.shutdown().await;
 }
 
-/// 10. Past DRIVE_LIMITS.PULLS_IN_FLIGHT the next pull is RESOURCE_EXHAUSTED
-/// -32010, and CONFLICT comes first (the header's step 6).
-/// Probe: check the bound before CONFLICT → the live id answers -32010.
+/// Row 10 — past DRIVE_LIMITS.PULLS_IN_FLIGHT the next pull is
+/// RESOURCE_EXHAUSTED -32010, retryable (a slot frees when a pull ends), with
+/// no details, since C1 names none; and CONFLICT comes first (the header's
+/// step 6).
+/// Probe: check the bound before CONFLICT → the live id answers -32010; answer
+/// it retryable false, or with details → the shape asserts red.
 #[tokio::test]
 async fn a_pull_past_the_bound_is_resource_exhausted() {
     let (_dir, daemon, pulls) = gated_floor().await;
@@ -779,7 +842,10 @@ async fn a_pull_past_the_bound_is_resource_exhausted() {
     }
     let past = mgmt.call(PULL, pull_params(bound + 1)).await;
     assert_eq!(past["error"]["code"], -32010, "{past}");
-    assert_eq!(error_data(&past).kind, ErrorKind::ResourceExhausted);
+    let data = error_data(&past);
+    assert_eq!(data.kind, ErrorKind::ResourceExhausted);
+    assert!(data.retryable, "{past}");
+    assert!(data.details.is_none(), "{past}");
     let mut live = pull_params(bound + 2);
     live["transferId"] = json!(transfer_id(1));
     let reply = mgmt.call(PULL, live).await;
@@ -796,7 +862,7 @@ async fn a_pull_past_the_bound_is_resource_exhausted() {
     daemon.shutdown().await;
 }
 
-/// 11. Progress reaches the stream at most once per
+/// Row 11 — progress reaches the stream at most once per
 /// PROGRESS_MIN_INTERVAL_MS a pull; `completed` carries the transferId, the
 /// digest, the landed name, the bytes and the substrate's SHA-256, and the file
 /// is in place when it is read. A completed pull leaves the snapshot.
@@ -877,12 +943,16 @@ async fn progress_is_throttled_and_completed_comes_with_its_file_in_place() {
     daemon.shutdown().await;
 }
 
-/// 12. `failed` says its MESH_FILE_TRANSFER word, and is sent only after the
-/// landed file (placed, then the pull failed) and the pull's temporaries are
-/// gone: NO_SPACE for a disk that refused, IO for a read that broke (its
-/// temporary left behind), REJECTED for a file the holder does not serve.
-/// Probe: send `failed` before removing `<landed>` → the exists assert reds;
-/// map NoSpace to `io` → the word reds.
+/// Row 12 — `failed` says its MESH_FILE_TRANSFER word, and nothing of its pull
+/// is left when it is read: not the landed file (placed, then the pull
+/// failed), not the pull's temporaries. NO_SPACE for a disk that refused, IO
+/// for a read that broke (its temporary left behind), REJECTED for a file the
+/// holder does not serve. That the send comes after the removal is held by
+/// `finish`'s structure (one synchronous fn, files first), which no reader on
+/// this runtime can see between.
+/// Probe: skip `remove_landed` on an Err in `finish` → the exists assert reds;
+/// skip `remove_temps` → the temporaries assert reds; map NoSpace to `io` →
+/// the word reds.
 #[tokio::test]
 async fn failed_says_its_word_after_the_landed_file_and_temporaries_are_gone() {
     let (dir, daemon, pulls) = gated_floor().await;
@@ -926,17 +996,21 @@ async fn failed_says_its_word_after_the_landed_file_and_temporaries_are_gone() {
     daemon.shutdown().await;
 }
 
-/// 13. W3-4: a pull no byte reaches within the floor's idle bound fails
-/// TIMEOUT, its temporary gone; a pull that keeps reporting outlives the bound,
-/// because progress resets it.
-/// Probe: never fire the idle bound → the note deadline reds; skip the reset
+/// Row 13 — W3-4: a pull no byte reaches within the floor's idle bound fails
+/// TIMEOUT, its temporary gone; a pull that keeps reporting outlives the
+/// bound, because progress resets it. The bound is 2 s and the reporting pull
+/// runs 4 s, 40 reports 100 ms apart, so only a stall of 1.9 s between two
+/// reports on a loaded host could end it early.
+/// Probe: never fire the idle bound → `end_of` reds at BUDGET; skip the reset
 /// on progress → pull 2 fails `timeout`.
 #[tokio::test]
 async fn a_stalled_pull_fails_timeout_at_the_idle_bound_and_progress_resets_it() {
     let (dir, daemon, pulls) =
-        gated_floor_with(|arm| arm.with_idle_bound(Duration::from_millis(500))).await;
+        gated_floor_with(|arm| arm.with_idle_bound(Duration::from_secs(2))).await;
     let mut mgmt = Mgmt::connect(&daemon).await;
-    mgmt.call(SUBSCRIBE, json!({})).await;
+    let sub = mgmt.call(SUBSCRIBE, json!({})).await;
+    assert!(sub["result"]["subId"].is_string(), "{sub}");
+    let _: NativeFileTransferSnapshot = parse(&sub["result"]["snapshot"]);
     let lands = lands(dir.path());
     pulls.script(&path_of(&digest(1)), Scripted::Stall);
     let reply = mgmt.call(PULL, pull_params(1)).await;
@@ -951,7 +1025,7 @@ async fn a_stalled_pull_fails_timeout_at_the_idle_bound_and_progress_resets_it()
         Scripted::Land {
             body: vec![1u8; 1_000],
             sha256: SHA256.into(),
-            progress: (1..=10).map(|i| i * 100).collect(),
+            progress: (1..=40).map(|i| i * 25).collect(),
             every: Duration::from_millis(100),
         },
     );
@@ -966,12 +1040,17 @@ async fn a_stalled_pull_fails_timeout_at_the_idle_bound_and_progress_resets_it()
     daemon.shutdown().await;
 }
 
-/// 14. Rider B and the critic's finding 1: a teardown mid-pull sends `failed`
-/// NODE_DOWN on the SAME subscription, its files gone; the held roots return at
-/// the next node built gated for the same login, through the one install hook,
-/// with no declaration; and the stream carries the next node's pulls.
+/// Row 14 — rider B and the critic's finding 1: a teardown mid-pull sends
+/// `failed` NODE_DOWN on the SAME subscription, its files gone; the held roots
+/// return at the next node built gated for the same login, through the one
+/// install hook, with no declaration; and the stream carries the next node's
+/// pulls. That a teardown's pull leaves the table only after its files is
+/// services/file_transfer.rs's in-crate teardown row, on a multi-thread
+/// runtime: this one runs `detach` whole inside `rebuild`, so no reader here
+/// can see between its steps.
 /// Probe: clear the held set on every detach → the second node serves
-/// nothing; gate the stream on the node → the second end never arrives.
+/// nothing; gate the stream on the node → the second end reds at BUDGET; skip
+/// `detach`'s cleanup → the temporaries assert reds.
 #[tokio::test]
 async fn a_teardown_fails_a_running_pull_node_down_on_the_same_stream_and_the_roots_return() {
     let (dir, daemon, first) = gated_floor().await;
@@ -1024,7 +1103,7 @@ async fn a_teardown_fails_a_running_pull_node_down_on_the_same_stream_and_the_ro
     daemon.shutdown().await;
 }
 
-/// 15. The critic's finding 0: a retire (an unlink) drops the held set, and so
+/// Row 15 — the critic's finding 0: a retire (an unlink) drops the held set, and so
 /// does a stop; the next node, gated for the same login, serves nothing until
 /// fieldd declares.
 /// Probe: keep the held set across a `retired` detach → the second node
@@ -1063,7 +1142,7 @@ async fn a_retire_or_a_stop_drops_the_held_roots() {
     daemon.shutdown().await;
 }
 
-/// 16. The critic's finding 0: a node gated for ANOTHER login serves nothing
+/// Row 16 — the critic's finding 0: a node gated for ANOTHER login serves nothing
 /// from the held set until fieldd declares; the declaration binds the set to
 /// that login, whose next node serves it.
 /// Probe: serve the held set on any gated attach, whatever its login → the
@@ -1102,10 +1181,15 @@ async fn a_node_gated_for_another_login_serves_nothing_until_fieldd_declares() {
     daemon.shutdown().await;
 }
 
-/// 17. A reader that lags the stream is sent a `.snapshot`, never a gap: the
-/// pulls running when it was sent, so a pull it does not list ended, and its
-/// landed file says completed (the contract's resync rule).
-/// Probe: forward past a Lagged as if nothing were lost → no snapshot comes.
+/// Row 17 — a reader that lags the stream is sent a `.snapshot`, never a gap:
+/// the pulls running when it was sent, so a pull it does not list ended, and
+/// its landed file says completed (the contract's resync rule).
+/// It relies on `#[tokio::test]`'s current-thread runtime and its FIFO run
+/// queue: the three released pulls each end in one poll, before the forwarder
+/// their first end wakes, so the one-event stream lags, and the snapshot lists
+/// pull 4 alone. A multi-thread flavor could forward between the ends.
+/// Probe: forward past a Lagged as if nothing were lost → no snapshot comes
+/// and `note` reds at BUDGET.
 #[tokio::test]
 async fn a_lagging_reader_is_sent_a_snapshot() {
     let (dir, daemon, pulls) = gated_floor_with(|arm| arm.with_stream_capacity(1)).await;
@@ -1133,38 +1217,40 @@ async fn a_lagging_reader_is_sent_a_snapshot() {
         .iter()
         .map(|row| row.transfer_id.as_str().to_owned())
         .collect();
-    assert!(
-        listed.contains(&transfer_id(4)),
-        "the pull still running is listed: {listed:?}"
+    assert_eq!(
+        listed,
+        vec![transfer_id(4)],
+        "only the pull still running is listed"
     );
     for n in 1..=3 {
-        if !listed.contains(&transfer_id(n)) {
-            assert!(
-                lands.join(landed(n)).exists(),
-                "pull {n} is not listed, so it ended, and its landed file says completed"
-            );
-        }
+        assert!(
+            lands.join(landed(n)).exists(),
+            "pull {n} is not listed, so it ended, and its landed file says completed"
+        );
     }
     drop(mgmt);
     daemon.shutdown().await;
 }
 
-/// 18. The critic's finding 3: a teardown with a stalled pull returns within a
-/// bound (the handles are taken and the lock dropped, the tasks aborted, then
-/// joined), and the pull ends `failed` NODE_DOWN with its temporary gone.
-/// Probe: join the stalled task before aborting it → the 5 s deadline reds.
+/// Row 18 — the critic's finding 3: a teardown with a stalled pull returns
+/// within a bound (the tasks are taken and the lock dropped, the tasks
+/// aborted, then joined), and the pull ends `failed` NODE_DOWN with its
+/// temporary gone.
+/// Probe: join the stalled task before aborting it → the BUDGET deadline reds.
 #[tokio::test]
 async fn a_teardown_with_a_stalled_pull_returns_within_its_bound() {
     let (dir, daemon, pulls) = gated_floor().await;
     let mut mgmt = Mgmt::connect(&daemon).await;
-    mgmt.call(SUBSCRIBE, json!({})).await;
+    let sub = mgmt.call(SUBSCRIBE, json!({})).await;
+    assert!(sub["result"]["subId"].is_string(), "{sub}");
+    let _: NativeFileTransferSnapshot = parse(&sub["result"]["snapshot"]);
     let lands = lands(dir.path());
     pulls.script(&path_of(&digest(1)), Scripted::Stall);
     let reply = mgmt.call(PULL, pull_params(1)).await;
     let _: NativeFileTransferPullResult = parse(&reply["result"]);
     wait_until("the stalled pull's temporary", || temps(&lands).len() == 1).await;
 
-    let torn = timeout(Duration::from_secs(5), rebuild(&daemon, LOGIN)).await;
+    let torn = timeout(BUDGET, rebuild(&daemon, LOGIN)).await;
     assert!(torn.is_ok(), "a teardown never waits on a stalled pull");
     let (_, end) = mgmt.end_of(&transfer_id(1)).await;
     assert_eq!(failed_reason(end), mesh_file_transfer::FAILED_NODE_DOWN);
@@ -1174,7 +1260,7 @@ async fn a_teardown_with_a_stalled_pull_returns_within_its_bound() {
     daemon.shutdown().await;
 }
 
-/// 19. Item 196: the floor's shutdown with a pull running ends the pull's task
+/// Row 19 — item 196: the floor's shutdown with a pull running ends the pull's task
 /// and leaves no temporary and no landed file behind.
 /// Probe: drop the detach from `teardown_node` → the pull stays in flight and
 /// its temporary stays.

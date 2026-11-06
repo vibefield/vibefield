@@ -95,8 +95,6 @@ pub enum FileTransferError {
     Conflict(&'static str),
     /// DRIVE_LIMITS.PULLS_IN_FLIGHT pulls are running.
     Exhausted,
-    /// Anything else, verbatim.
-    Internal(String),
 }
 
 /// One event on the stream, as the facade writes it to
@@ -189,6 +187,13 @@ pub trait PullSubstrate: Send + Sync {
     /// Pull `path`, below the peer's root `root`, into `into` (the floor's own
     /// path, never the holder's). The bytes are checked against the holder's
     /// SHA-256 before the file is placed.
+    ///
+    /// A [`PullFailure`]'s message reaches fieldd as the `failed` delta's
+    /// `message`, which the contract calls the floor's own (contracts mgmt.ts
+    /// `NativeFileTransferDelta`). So an implementation writes it in the
+    /// floor's words and names no path, the holder's or this desktop's (EL7):
+    /// EL8-TRUFFLE's adapter maps each truffle error to a fixed sentence of
+    /// its word, and logs truffle's own text locally, never on the wire.
     async fn pull(
         &self,
         peer: &str,
@@ -209,7 +214,8 @@ pub struct Landed {
 }
 
 /// Why a pull ended without its file, one arm per MESH_FILE_TRANSFER.FAILED_*
-/// word (contracts mgmt.ts), each with the substrate's own message.
+/// word (contracts mgmt.ts), each with a message in the floor's words that
+/// names no path (EL7; [`PullSubstrate::pull`] says why).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum PullFailure {
     /// The holder refused: no such root, a path outside it, no such file.
@@ -245,7 +251,7 @@ impl PullFailure {
         }
     }
 
-    /// The substrate's own words, the delta's `message`.
+    /// The delta's `message`: the floor's words, naming no path.
     pub fn message(&self) -> &str {
         match self {
             Self::Rejected(message)
@@ -315,8 +321,11 @@ const PROGRESS_MIN_INTERVAL: Duration =
 /// that file is in place, and `failed` only after the file and its
 /// temporaries are removed, so a reader never meets half a pull. Its row and
 /// its end leave the table and reach the stream under one lock, so a progress
-/// never follows its pull's end. A teardown ends every pull `failed` NODE_DOWN
-/// (`detach`, the critic's finding 3).
+/// never follows its pull's end, and a row leaves the table only once its
+/// end is final: a reader resynced from a snapshot reads a pull the snapshot
+/// does not list as completed when its landed file is there (contracts mgmt.ts
+/// `NativeFileTransferSnapshot`). A teardown ends every pull `failed`
+/// NODE_DOWN (`detach`, the critic's finding 3).
 pub struct NamedRootsFileTransfer {
     core: Arc<Core>,
 }
@@ -372,8 +381,39 @@ struct Running {
     activity: Arc<Mutex<Instant>>,
     /// when the stream last carried its progress
     last_sent: Option<Instant>,
-    /// `None` once `detach` took it to abort
+    /// `None` once `detach` took it to abort: from then on the pull's end is
+    /// `detach`'s, and `finish` leaves its row alone
     task: Option<JoinHandle<()>>,
+}
+
+impl Running {
+    fn new(
+        params: &NativeFileTransferPullParams,
+        landed: PathBuf,
+        activity: Arc<Mutex<Instant>>,
+        task: JoinHandle<()>,
+    ) -> Self {
+        Self {
+            row: NativeFileTransferRow {
+                bytes: 0,
+                digest: params.digest.clone(),
+                peer: params.peer.clone(),
+                root: params.root,
+                total: None,
+                transfer_id: params.transfer_id.clone(),
+            },
+            file_name: params
+                .path
+                .rsplit('/')
+                .next()
+                .unwrap_or_default()
+                .to_owned(),
+            landed,
+            activity,
+            last_sent: None,
+            task: Some(task),
+        }
+    }
 }
 
 impl NamedRootsFileTransfer {
@@ -466,45 +506,63 @@ impl FileTransferBackend for NamedRootsFileTransfer {
     /// unlink drops the held set too (finding 0). The critic's finding 3 fixes
     /// the order, so a stalled pull can neither hang the teardown nor deadlock
     /// it:
-    ///  1. take the pulls out of the table, and drop the lock;
-    ///  2. abort each pull's task, then await the joins;
+    ///  1. take the node and each pull's TASK, and drop the lock;
+    ///  2. abort each task, then await the joins;
     ///  3. remove each `<landed>` and its temporaries;
-    ///  4. offer each `failed` NODE_DOWN, on the stream the mesh unit keeps.
+    ///  4. under the lock, take each row out and offer its `failed` NODE_DOWN.
+    ///
+    /// The ROWS stay in the table until step 4, after their files are gone, so
+    /// a snapshot taken meanwhile still lists every pull whose landed file may
+    /// be in place: a reader never reads a pull this teardown ends as
+    /// completed (contracts mgmt.ts `NativeFileTransferSnapshot`). A task that
+    /// reaches `finish` before its abort lands finds its task taken and leaves
+    /// its row and its end to step 4 (`finish`).
     async fn detach(&self, reason: &str) {
-        let (node, mut taken) = {
+        let (node, taken) = {
             let mut inner = lock(&self.core.inner);
             if reason == TEARDOWN_STOPPED || reason == TEARDOWN_RETIRED {
                 inner.held = None;
             }
-            inner.digests.clear();
-            let taken: Vec<Running> = std::mem::take(&mut inner.pulls).into_values().collect();
+            let taken: Vec<(FileTransferId, PathBuf, JoinHandle<()>)> = inner
+                .pulls
+                .iter_mut()
+                .filter_map(|(transfer_id, run)| {
+                    let task = run.task.take()?;
+                    Some((transfer_id.clone(), run.landed.clone(), task))
+                })
+                .collect();
             (inner.node.take(), taken)
         };
         if let Some(node) = node {
             node.progress.abort();
         }
-        let tasks: Vec<JoinHandle<()>> =
-            taken.iter_mut().filter_map(|run| run.task.take()).collect();
-        for task in &tasks {
+        for (_, _, task) in &taken {
             task.abort();
         }
-        for task in tasks {
+        let mut ended = Vec::with_capacity(taken.len());
+        for (transfer_id, landed, task) in taken {
             let _ = task.await;
+            ended.push((transfer_id, landed));
         }
-        for run in &taken {
-            remove_landed(&run.landed);
-            remove_temps(&run.landed);
+        for (_, landed) in &ended {
+            remove_landed(landed);
+            remove_temps(landed);
         }
-        for run in taken {
+        let mut inner = lock(&self.core.inner);
+        for (transfer_id, _) in ended {
+            let Some(run) = inner.pulls.remove(&transfer_id) else {
+                continue;
+            };
+            inner.digests.remove(&run.row.digest);
             tracing::info!(
                 event = "field_native.mesh.file_transfer.pull_ended",
                 component = "mesh",
-                transfer_id = %run.row.transfer_id.as_str(),
+                transfer_id = %transfer_id.as_str(),
                 reason = mesh_file_transfer::FAILED_NODE_DOWN,
                 "A pull ended with its node"
             );
             let _ = self.core.events.send(PullEvent::Failed {
-                transfer_id: run.row.transfer_id,
+                transfer_id,
                 reason: mesh_file_transfer::FAILED_NODE_DOWN,
                 message: "the node went down while the pull ran".into(),
             });
@@ -584,16 +642,14 @@ impl FileTransferBackend for NamedRootsFileTransfer {
         if inner.pulls.len() as u64 >= drive_limits::PULLS_IN_FLIGHT {
             return Err(FileTransferError::Exhausted);
         }
-        let dirs = self.core.config.file_transfer_root(params.root);
-        let landed = dirs
-            .lands
-            .join(landed_name(&params.digest, &params.transfer_id));
+        let lands = self.core.config.file_transfer_root(params.root).lands;
+        let landed = lands.join(landed_name(&params.digest, &params.transfer_id));
         let activity = Arc::new(Mutex::new(Instant::now()));
         let task = tokio::spawn(run_pull(
             self.core.clone(),
             substrate,
             params.clone(),
-            dirs,
+            lands,
             landed.clone(),
             activity.clone(),
         ));
@@ -609,26 +665,7 @@ impl FileTransferBackend for NamedRootsFileTransfer {
             .insert(params.digest.clone(), params.transfer_id.clone());
         inner.pulls.insert(
             params.transfer_id.clone(),
-            Running {
-                row: NativeFileTransferRow {
-                    bytes: 0,
-                    digest: params.digest.clone(),
-                    peer: params.peer.clone(),
-                    root: params.root,
-                    total: None,
-                    transfer_id: params.transfer_id.clone(),
-                },
-                file_name: params
-                    .path
-                    .rsplit('/')
-                    .next()
-                    .unwrap_or_default()
-                    .to_owned(),
-                landed,
-                activity,
-                last_sent: None,
-                task: Some(task),
-            },
+            Running::new(&params, landed, activity, task),
         );
         Ok(())
     }
@@ -683,6 +720,10 @@ impl Core {
                     error = %message,
                     "The node refused to serve a named root"
                 );
+                // The contract's reason list names FAILED_IO for a folder that
+                // could not be made (mgmt.ts `NativeFileTransferRoot`); the
+                // node's refusal shares the word, and no word of its own is in
+                // the registry. Only EL8-TRUFFLE's substrate can refuse.
                 return refused(name, mesh_file_transfer::FAILED_IO);
             }
             if let Some(attached) = lock(&self.inner)
@@ -708,6 +749,11 @@ impl Core {
     /// Make `leaf` under the user root: every folder on the way that the floor
     /// creates is 0700, and the leaf is set to 0700 whether it was made now or
     /// before. A folder that exists on the way is left as it is.
+    ///
+    /// EL7: an entry that exists on the way, or at the leaf, must BE a folder.
+    /// A link (to a folder elsewhere a same-uid agent chose) or a file is
+    /// refused, so the floor never narrows, serves or sweeps what it names:
+    /// a root answers `registered: false` with FAILED_IO, and a pull fails IO.
     fn make_private_dir(&self, leaf: &Path) -> std::io::Result<()> {
         let root = &self.config.data_dir;
         let below = leaf.strip_prefix(root).map_err(|_| {
@@ -718,7 +764,13 @@ impl Core {
             path.push(part);
             match std::fs::create_dir(&path) {
                 Ok(()) => set_private(&path)?,
-                Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
+                Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
+                    if !std::fs::symlink_metadata(&path)?.file_type().is_dir() {
+                        return Err(std::io::Error::other(
+                            "a named root's folder is a link or a file, not a folder",
+                        ));
+                    }
+                }
                 Err(e) => return Err(e),
             }
         }
@@ -760,7 +812,9 @@ impl Core {
     /// A pull's task ended with `outcome`: settle its files, then its row and
     /// its end under one lock. `completed` only once its file is in place;
     /// `failed` only after the file and its temporaries are gone. Nothing is
-    /// sent when `detach` took the pull first: its end is `detach`'s.
+    /// sent, and the row is left, when `detach` took the pull's task first:
+    /// `detach` removes the file this sent no `completed` for, then the row,
+    /// and sends its end.
     fn finish(
         &self,
         params: &NativeFileTransferPullParams,
@@ -799,10 +853,15 @@ impl Core {
             },
         };
         let mut inner = lock(&self.inner);
-        let Some(run) = inner.pulls.remove(&params.transfer_id) else {
+        if inner
+            .pulls
+            .get(&params.transfer_id)
+            .is_none_or(|run| run.task.is_none())
+        {
             return;
-        };
-        inner.digests.remove(&run.row.digest);
+        }
+        inner.pulls.remove(&params.transfer_id);
+        inner.digests.remove(&params.digest);
         let reason = match &event {
             PullEvent::Failed { reason, .. } => *reason,
             _ => "completed",
@@ -819,21 +878,29 @@ impl Core {
 
     /// A progress report: the pull it names moved, so its row says how far and
     /// its idle bound restarts; the stream carries it at most once per
-    /// PROGRESS_MIN_INTERVAL_MS. A name two running pulls share names neither
-    /// (the drive's names are digests, which CONFLICT keeps unique).
+    /// PROGRESS_MIN_INTERVAL_MS.
+    ///
+    /// A report names a pull by the path's last segment, which only fieldd's
+    /// convention keeps unique (its paths are `<shard>/<digest>`, and CONFLICT
+    /// refuses a running DIGEST, not a running name). A name two running pulls
+    /// share cannot say which moved: every pull it could be is kept from the
+    /// idle bound, and neither row nor stream says how far.
     fn note_progress(&self, report: &PullProgress) {
         let now = Instant::now();
         let mut inner = lock(&self.inner);
-        let mut named = inner
+        let mut named: Vec<&mut Running> = inner
             .pulls
             .values_mut()
-            .filter(|run| run.file_name == report.file_name);
-        let (Some(run), None) = (named.next(), named.next()) else {
+            .filter(|run| run.file_name == report.file_name)
+            .collect();
+        for run in &named {
+            *lock(&run.activity) = now;
+        }
+        let [run] = named.as_mut_slice() else {
             return;
         };
         run.row.bytes = report.bytes;
         run.row.total = Some(report.total);
-        *lock(&run.activity) = now;
         if !progress_due(run.last_sent, now) {
             return;
         }
@@ -856,17 +923,18 @@ impl Core {
     }
 }
 
-/// One pull's task: its folders, then the substrate's pull raced against the
-/// idle bound, then its end.
+/// One pull's task: its `lands` folder (only: making a root's two folders is
+/// the declaration's, contracts mgmt.ts `NativeFileTransferRootsParams`), then
+/// the substrate's pull raced against the idle bound, then its end.
 async fn run_pull(
     core: Arc<Core>,
     substrate: Arc<dyn PullSubstrate>,
     params: NativeFileTransferPullParams,
-    dirs: FileTransferRootDirs,
+    lands: PathBuf,
     landed: PathBuf,
     activity: Arc<Mutex<Instant>>,
 ) {
-    let outcome = match core.make_root_dirs(&dirs) {
+    let outcome = match core.make_private_dir(&lands) {
         Err(e) => Err(io_failure(&e)),
         Ok(()) => {
             let pulled = substrate.pull(&params.peer, params.root, &params.path, &landed);
@@ -1157,8 +1225,10 @@ impl ScriptedPulls {
         lock(&self.scripts).insert(path.to_owned(), entry);
     }
 
-    /// Release the held pull of `path` to do `step` (a `Hold` here stalls).
-    /// `false` when no pull of `path` was held.
+    /// Hand the `Hold` scripted for `path` its `step` (a `Hold` here stalls),
+    /// whether or not its pull has started: `true` says the step was handed
+    /// over, never that a pull was held. `false` when no `Hold` of `path` is
+    /// scripted, or its pull is gone (it ended, or another script replaced it).
     pub fn release(&self, path: &str, step: Scripted) -> bool {
         lock(&self.releases)
             .remove(path)
@@ -1407,5 +1477,271 @@ mod tests {
             start + interval - Duration::from_millis(1)
         ));
         assert!(progress_due(Some(start), start + interval));
+    }
+
+    const LOGIN: &str = "me@example.com";
+    const SHA256: &str = "075eeb056ba8f587858fe88dd968e5d29207d6537944d88d8826a56cb8e89a42";
+
+    /// A pull of the drive's root at `path`, under the `n`th transferId and
+    /// digest, read through the generated type as the facade reads it.
+    fn pull_at(n: u8, path: &str) -> NativeFileTransferPullParams {
+        serde_json::from_value(serde_json::json!({
+            "transferId": format!("01JC8ZK4W2MX7N3Q5R9T6V0B{n:02}"),
+            "peer": "n4Kd8xQ2pLmR",
+            "root": crate::registries::file_transfer_roots::DRIVE_OBJECTS,
+            "path": path,
+            "digest": format!("{n:02x}").repeat(32),
+        }))
+        .unwrap()
+    }
+
+    /// The drive's pull of its `n`th object, at `<shard>/<digest>`.
+    fn pull_of(n: u8) -> NativeFileTransferPullParams {
+        let digest = format!("{n:02x}").repeat(32);
+        pull_at(n, &format!("{}/{digest}", &digest[..2]))
+    }
+
+    fn arm_in(dir: &Path) -> NamedRootsFileTransfer {
+        NamedRootsFileTransfer::new(&NativeConfig::for_data_dir(dir.to_path_buf()))
+    }
+
+    /// Put `params` in the arm's table as `pull` does, with a task that has
+    /// nothing to do: its landed path and its activity stamp.
+    fn running(
+        arm: &NamedRootsFileTransfer,
+        params: &NativeFileTransferPullParams,
+    ) -> (PathBuf, Arc<Mutex<Instant>>) {
+        let landed = arm
+            .core
+            .config
+            .file_transfer_root(params.root)
+            .lands
+            .join(landed_name(&params.digest, &params.transfer_id));
+        let activity = Arc::new(Mutex::new(Instant::now()));
+        let task = tokio::spawn(async {});
+        let mut inner = lock(&arm.core.inner);
+        inner
+            .digests
+            .insert(params.digest.clone(), params.transfer_id.clone());
+        inner.pulls.insert(
+            params.transfer_id.clone(),
+            Running::new(params, landed.clone(), activity.clone(), task),
+        );
+        (landed, activity)
+    }
+
+    /// `finish` reads a substrate's `landed` before it believes it: with no
+    /// file in place, or with a SHA-256 off the contract's pattern, the pull
+    /// fails IO, nothing is left landed, and its row is gone.
+    /// Probe: drop either guard in `finish` → that pull sends `completed`.
+    #[tokio::test]
+    async fn a_landed_answer_with_no_file_or_a_bad_sha256_fails_io() {
+        let dir = tempfile::tempdir().unwrap();
+        let arm = arm_in(dir.path());
+        let mut events = arm.subscribe();
+        for (n, placed, sha256) in [(1, false, SHA256), (2, true, "not a sha-256")] {
+            let params = pull_of(n);
+            let (landed, _) = running(&arm, &params);
+            if placed {
+                std::fs::create_dir_all(landed.parent().unwrap()).unwrap();
+                std::fs::write(&landed, b"landed").unwrap();
+            }
+            let answer = Landed {
+                bytes: 6,
+                sha256: sha256.to_owned(),
+            };
+            arm.core.finish(&params, &landed, Ok(answer));
+            match events.try_recv() {
+                Ok(PullEvent::Failed { reason, .. }) => {
+                    assert_eq!(reason, mesh_file_transfer::FAILED_IO, "pull {n}");
+                }
+                other => panic!("pull {n}: expected failed, got {other:?}"),
+            }
+            assert!(!landed.exists(), "pull {n}: nothing is left landed");
+        }
+        assert!(arm.snapshot().is_empty());
+    }
+
+    /// A report that cannot name ONE pull still keeps the idle bound off every
+    /// pull it could be: a name two running pulls share moves both stamps and
+    /// says how far for neither, and reports lost to a lag in the substrate's
+    /// stream move every stamp (the plan's C6: reset on progress and on a
+    /// broadcast Lagged).
+    /// Probe: skip a shared name's pulls → their stamps stay; map a Lagged to
+    /// nothing in the reader → the deadline reds.
+    #[tokio::test]
+    async fn a_report_that_names_no_single_pull_keeps_every_pull_it_could_be_alive() {
+        let dir = tempfile::tempdir().unwrap();
+        let arm = arm_in(dir.path());
+        let mut events = arm.subscribe();
+        let name = "ab".repeat(32);
+        let stamps: Vec<Arc<Mutex<Instant>>> = [
+            pull_at(1, &format!("01/{name}")),
+            pull_at(2, &format!("02/{name}")),
+        ]
+        .iter()
+        .map(|params| running(&arm, params).1)
+        .collect();
+        let before = Instant::now().checked_sub(Duration::from_secs(1)).unwrap();
+        let moved = || stamps.iter().all(|stamp| *lock(stamp) > before);
+
+        for stamp in &stamps {
+            *lock(stamp) = before;
+        }
+        arm.core.note_progress(&PullProgress {
+            file_name: name,
+            bytes: 5,
+            total: 10,
+        });
+        assert!(moved(), "a shared name keeps both pulls alive");
+        assert!(
+            arm.snapshot()
+                .iter()
+                .all(|row| row.bytes == 0 && row.total.is_none()),
+            "a shared name says how far for neither"
+        );
+        assert!(matches!(
+            events.try_recv(),
+            Err(broadcast::error::TryRecvError::Empty)
+        ));
+
+        for stamp in &stamps {
+            *lock(stamp) = before;
+        }
+        let (reports, lagging) = broadcast::channel(1);
+        let reader = spawn_progress_reader(Arc::downgrade(&arm.core), lagging);
+        for _ in 0..3 {
+            let _ = reports.send(PullProgress {
+                file_name: "no pull's name".into(),
+                bytes: 1,
+                total: 2,
+            });
+        }
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while !moved() {
+            assert!(Instant::now() < deadline, "a lag kept no pull alive");
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+        reader.abort();
+    }
+
+    /// A node whose pull places its file, as truffle does before it writes its
+    /// ACK, then holds its worker thread until the test lets go: the window in
+    /// which `detach` has aborted the pull and cannot join it yet. Let go, it
+    /// answers `landed` when `answers`, and never otherwise.
+    struct PlacedThenHeld {
+        answers: bool,
+        release: Mutex<std::sync::mpsc::Receiver<()>>,
+        progress: broadcast::Sender<PullProgress>,
+    }
+
+    #[async_trait::async_trait]
+    impl PullSubstrate for PlacedThenHeld {
+        async fn set_cap(&self, _: u64) {}
+
+        async fn refuse_pushes(&self) {}
+
+        async fn serve_root(&self, _: FileTransferRootName, _: &Path) -> Result<(), String> {
+            Ok(())
+        }
+
+        async fn unserve_root(&self, _: FileTransferRootName) {}
+
+        async fn pull(
+            &self,
+            _: &str,
+            _: FileTransferRootName,
+            _: &str,
+            into: &Path,
+        ) -> Result<Landed, PullFailure> {
+            std::fs::write(into, b"placed").map_err(|e| PullFailure::Io(e.to_string()))?;
+            {
+                let release = lock(&self.release);
+                let _ = release.recv_timeout(Duration::from_secs(10));
+            }
+            if self.answers {
+                return Ok(Landed {
+                    bytes: 6,
+                    sha256: SHA256.to_owned(),
+                });
+            }
+            std::future::pending().await
+        }
+
+        fn progress(&self) -> broadcast::Receiver<PullProgress> {
+            self.progress.subscribe()
+        }
+    }
+
+    /// The critic's finding 3 under the contract's resync rule: a teardown
+    /// keeps a pull's row in the table until its landed file is gone, so a
+    /// snapshot taken while the abort cannot land yet still lists the pull
+    /// whose file is in place; and a pull that answers `landed` after its task
+    /// was taken ends only `failed` NODE_DOWN, its file removed, never
+    /// `completed`. Multi-thread, so the held pull holds one worker while the
+    /// teardown runs on the other.
+    /// Probe: take the rows out at step 1 → pull 1's snapshot mid-teardown is
+    /// empty; let `finish` end a pull whose task was taken → pull 2 sends
+    /// `completed` for a file the teardown then removes.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn a_teardown_lists_its_pulls_until_their_files_are_gone_and_ends_them_failed() {
+        let dir = tempfile::tempdir().unwrap();
+        let arm = Arc::new(arm_in(dir.path()));
+        for (n, answers) in [(1, false), (2, true)] {
+            let (let_go, held) = std::sync::mpsc::channel();
+            let substrate = Arc::new(PlacedThenHeld {
+                answers,
+                release: Mutex::new(held),
+                progress: broadcast::channel(1).0,
+            });
+            arm.attach(substrate, true, Some(LOGIN.to_owned())).await;
+            let mut events = arm.subscribe();
+            let params = pull_of(n);
+            arm.pull(params.clone()).unwrap();
+            let landed = arm
+                .core
+                .config
+                .file_transfer_root(params.root)
+                .lands
+                .join(landed_name(&params.digest, &params.transfer_id));
+            let deadline = Instant::now() + Duration::from_secs(10);
+            while !landed.is_file() {
+                assert!(Instant::now() < deadline, "pull {n}: no file was placed");
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+            let teardown = tokio::spawn({
+                let arm = arm.clone();
+                async move { arm.detach("gate_changed").await }
+            });
+            // step 1 has run once a declaration finds no node
+            while !matches!(
+                arm.roots(Vec::new(), true, None).await,
+                Err(FileTransferError::MeshDown)
+            ) {
+                assert!(Instant::now() < deadline, "pull {n}: the node stayed");
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+            assert_eq!(
+                arm.snapshot().len(),
+                1,
+                "pull {n}: listed while its landed file is in place"
+            );
+            assert!(landed.is_file(), "pull {n}");
+            let_go.send(()).unwrap();
+            tokio::time::timeout(Duration::from_secs(10), teardown)
+                .await
+                .expect("the teardown returns once the pull lets go")
+                .expect("the teardown ran");
+            assert!(arm.snapshot().is_empty(), "pull {n}");
+            assert!(!landed.exists(), "pull {n}: its landed file is gone");
+            let mut ends = Vec::new();
+            while let Ok(event) = events.try_recv() {
+                ends.push(event);
+            }
+            let [PullEvent::Failed { reason, .. }] = ends.as_slice() else {
+                panic!("pull {n}: one end, `failed`, and nothing else: {ends:?}");
+            };
+            assert_eq!(*reason, mesh_file_transfer::FAILED_NODE_DOWN, "pull {n}");
+        }
     }
 }
