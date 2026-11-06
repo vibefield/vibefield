@@ -41,6 +41,11 @@ export const noSpark = (): string => "VibeField can't find that spark; nothing w
 export const neverBegan = (flow: string): string =>
   `VibeField couldn't begin ${flow}: it couldn't keep the run's record. Nothing was started.`;
 
+/** A run whose host left twice on its own with no new journal line between (D1, CL-H13): never started a third
+ * time, it fails in DESIGN.md §9's words ("A run that can't go on"). */
+export const leftTwice = (flow: string): string =>
+  `VibeField ended ${flow}: its script stopped twice before it could go on.`;
+
 /** A copy of VibeField that can't start a flow's host (its file is not beside fieldd; FLOW_HOST.STATE_UNCONFIGURED):
  * a run is refused at its start in §9's host sentence ("When a run's script cannot go on"), the agents' sentence for
  * the same loss (Q-b). */

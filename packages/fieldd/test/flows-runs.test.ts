@@ -3077,6 +3077,16 @@ const seqB = () => ({
   agent: "claude",
 });
 
+/** A flow that says one line, then waits on nothing: its host has no call out. */
+const STUCK = [
+  'export const meta = { name: "Stuck" };',
+  "export default async function () {",
+  '  log("waiting on nothing");',
+  "  await new Promise(() => {});",
+  "}",
+  "",
+].join("\n");
+
 describe("CP-4a2b — the host's life: parked and woken, and D2's lookup at a wake (§13a slice 10a)", () => {
   /** Whether host `i` the runs started has left. */
   const left = (h: Harness, i: number): boolean => h.hosts[i]?.leftAt !== undefined;
@@ -3301,5 +3311,61 @@ describe("CP-4a2b — the host's life: parked and woken, and D2's lookup at a wa
     await within(PARK_MS, () => again.enqueued.length === 2);
     const counted = { spawned: again.spawned.length, agents: again.records.runRecord(seq)?.agents };
     expect(counted).toEqual({ spawned: 2, agents: 2 });
+  });
+
+  it("R29 (D1, CL-K-d): of the runs ready at once, HOSTS_LIVE_MAX hosts start; the runs past it read waiting, their records kept, and each starts its host when one leaves, in the order they began", async () => {
+    const max = FLOW_LIMITS.HOSTS_LIVE_MAX;
+    const h = await harness();
+    h.approved("review", ANSWERED);
+    const started: RunSummary[] = [];
+    for (let i = 0; i < max + 2; i += 1)
+      started.push(startedRun(await h.start({ flow: "review" })));
+    const runs = started.map(({ run }) => run);
+    /** the run step `i`'s prompt was queued for */
+    const runOf = (i: number) => {
+      const from = h.enqueued[i]?.from;
+      return from?.kind === "flow" ? from.run : undefined;
+    };
+    await within(PARK_MS, () => h.enqueued.length >= max);
+    expect({ hosts: h.hosts.length, states: started.map(({ state }) => state) }).toEqual({
+      hosts: max,
+      states: [...Array.from({ length: max }, () => "running"), "waiting", "waiting"],
+    });
+    // the first run's step answers and its run ends: its host's place goes to the first run that waits
+    answerStep(h, runs[0] ?? "", 1, "one");
+    await within(PARK_MS, () => h.enqueued.length > max);
+    const lastRun = runs[max + 1] ?? "";
+    const freed = { hosts: h.hosts.length, next: runOf(max), last: stateOf(h, lastRun) };
+    expect(freed).toEqual({ hosts: max + 1, next: runs[max], last: "waiting" });
+    answerStep(h, runs[1] ?? "", 1, "two");
+    await within(PARK_MS, () => h.enqueued.length > max + 1);
+    expect({ hosts: h.hosts.length, next: runOf(max + 1) }).toEqual({
+      hosts: max + 2,
+      next: runs[max + 1],
+    });
+  });
+
+  it("R30 (CL-H13): a host that left on its own with no call out is started again at once; one that leaves twice with no new journal line between is not started a third time, and its run fails in DESIGN.md §9's words", async () => {
+    const h = await harness();
+    h.approved("stuck", STUCK);
+    const run = startedRun(await h.start({ flow: "stuck" })).run;
+    await within(PARK_MS, () => h.kinds(run).includes("log"));
+    h.hosts[0]?.child.kill("SIGKILL");
+    await within(PARK_MS, () => h.hosts.length === 2);
+    // the host started again holds its log line in the journal, so it writes nothing new before it leaves too
+    h.hosts[1]?.child.kill("SIGKILL");
+    await within(PARK_MS, () => stateOf(h, run) === "failed");
+    const ended = h.runs.read(run)?.summary;
+    expect({ state: ended?.state, log: ended?.log, hosts: h.hosts.length }).toEqual({
+      state: "failed",
+      log: "VibeField ended Stuck: its script stopped twice before it could go on.",
+      hosts: 2,
+    });
+    expect(h.kinds(run)).toEqual(["head", "log", "end"]);
+    const design = readFileSync(join(import.meta.dirname, "../../../DESIGN.md"), "utf8").replace(
+      /\s+/g,
+      " ",
+    );
+    expect(design).toContain(`"${words.leftTwice("‹flow›")}"`);
   });
 });
