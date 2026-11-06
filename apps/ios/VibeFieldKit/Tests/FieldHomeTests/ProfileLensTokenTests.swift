@@ -1,4 +1,5 @@
 import CoreGraphics
+import FieldDesign
 import FieldHistory
 import FieldProduct
 import Foundation
@@ -144,5 +145,43 @@ struct ProfileLensTokenTests {
     #expect(LensToken.eyebrow == "Show")
     #expect(LensToken.everyWord == "Every profile")
     #expect(LensToken.pageWord == "Agent Profiles…")
+  }
+
+  /// SE-P5b (§8 "The phone's profile token": **Agent Profiles…**, its glyph a Bands circle at 26 of every plan) — the
+  /// token's menu leads its page row with the Me menu's own row (UM-D25 A, `AgentProfilesMenuRow`): one value, so the
+  /// two menus draw one circle. Its act folding the menu and opening the page is HomeScreen's wiring, which no row
+  /// reaches: the build and the stills witness it.
+  @MainActor
+  @Test("Agent Profiles… leads with the Me menu's circle: 26 across, every plan, nothing in its middle")
+  func pageRowIsTheMeMenus() throws {
+    let reading = try AgentProfilesPageTests.reading()
+    let now = AgentProfilesPageTests.now
+    let row = AgentProfilesMenuRow(reading: reading, now: now, open: {})
+    let size = row.geometry.size
+    #expect(size == Double(LensToken.viewLead))
+    let middle = row.geometry.centre.items
+    #expect(middle.isEmpty)
+    let every = reading.meters(of: nil, now: now)
+    let drawn = BandsLayout.geometry(AgentProfilesMenuRow.size, every.entries, .menuRow(every: true))
+    #expect(row.geometry == drawn)
+  }
+
+  /// SE-P5b (ruling 20; the S2 review's finding 10) — search's leads (a chip, a token, an offer, a pill, the token's
+  /// menu) draw a profile through the phone's ONE glyph table, as the bloom's buds do (`SpawnBloomOverlay.symbol`):
+  /// This Mac the laptop, a token the vocabulary's symbol, outlined as the bloom draws it, and one this build does not
+  /// draw — or none — the star (puppeteer's `profileMarkName`), never a person. `SearchLeadGlyph` is a view, so the row
+  /// runs on the main actor.
+  @MainActor
+  @Test("search's leads draw a profile through the one glyph table: the laptop, the vocabulary's symbol, else the star")
+  func leadsDrawTheOneTable() {
+    let tokens: [String?] = ProfileGlyphSymbols.symbols.keys.sorted().map { Optional($0) } + [nil, "no-such-glyph"]
+    for token in tokens {
+      let drawn = SearchLeadGlyph.profileSymbol(glyph: token, native: false)
+      let table = ProfileGlyphSymbols.symbol(glyph: token, native: false, filled: false)
+      let name = token ?? "no glyph"
+      #expect(drawn == table, "\(name)")
+    }
+    let native = SearchLeadGlyph.profileSymbol(glyph: "briefcase", native: true)
+    #expect(native == ProfileGlyphSymbols.laptop)
   }
 }

@@ -343,14 +343,20 @@ struct PhoneSearchWorldTests {
   #if DEBUG
     /// The mock is the main actor's (`MockAccount`), so its statics are too: the row runs there.
     @MainActor
-    @Test("the mock's world: the witness's drawn rows from the kit's mirror, and the contracts' golden profiles")
+    @Test("the mock's world: the witness's drawn rows from the kit's mirror, and the meters' profiles on a circle")
     func mockWorld() {
       let rows = MockAccount.searchRows()
       #expect(rows.count == 11)
       let desks = PhoneSearchWorld.desks(rows: rows).map { $0.name }
       #expect(desks == ["Studio", "Loft", "Attic"])
-      let profiles = MockAccount.searchProfiles().map { $0.label }
-      #expect(profiles == ["This Mac", "Work"])
+      // SE-P5b (ruling 7) — the lens's one list is the meters': the mock home's profiles as its meters' fixture door
+      // answers them (`agents-profile-sets.meters`), through `MeterModel.hasCircle`, so the hold's buds, the page's
+      // rows and the token's menu name the same profiles; the draft ("New profile") stands on none
+      let sets = MockAccount.searchProfiles()
+      let profiles = sets.map { $0.label }
+      #expect(profiles == ["This Mac", "Work", "Side"])
+      let circles = sets.map(MeterModel.hasCircle)
+      #expect(circles == [true, true, true])
     }
   #endif
 }
