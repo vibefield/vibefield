@@ -25,7 +25,9 @@ import {
 //     (PJ-6: the agent's own stream-json `initialize`, answered with
 //     `TYPED_AGENT_MODELS`), records every run of itself (its arguments and
 //     its environment's NAMES — never a value) and, run as a managed session,
-//     waits at its prompt until `exit` or the end of its input;
+//     waits at its prompt until `exit` or the end of its input, telling each
+//     prompt to the UserPromptSubmit hook its `--settings` name, as the agent
+//     does (item 185: puppeteer confirms a paste-and-submit by that hook alone);
 //   · the MACHINE RECORD naming the stub as that agent's ACTIVE install — the
 //     choice Settings → Agents records (`machine/agents/distribution.json`,
 //     AR-D16), so the launch recipe, the launch's probe and the gateway's
@@ -167,10 +169,10 @@ export function typedAgentStubSource(
     records.lines === undefined
       ? ""
       : `
-      appendFileSync(
-        ${JSON.stringify(records.lines)},
-        JSON.stringify({ pid: process.pid, cwd: process.cwd(), line }) + "\\n",
-      );`;
+    appendFileSync(
+      ${JSON.stringify(records.lines)},
+      JSON.stringify({ pid: process.pid, cwd: process.cwd(), line, ...told }) + "\\n",
+    );`;
   const notASession =
     atATerminal === "stands"
       ? `  // Not a session. A sign-in's status or a usage read (no terminal) has
@@ -186,8 +188,9 @@ export function typedAgentStubSource(
 // A smoke's typed-agent stub: a stand-in written by the smoke, never an agent.
 // It records every run of itself — its arguments, its folder and the NAMES of
 // its environment, never a value — and, run as a managed session, waits at its
-// prompt until \`exit\` or the end of its input.
-const { appendFileSync } = require("node:fs");
+// prompt until \`exit\` or the end of its input, telling each prompt to the
+// UserPromptSubmit hook its settings name before it takes the line.
+const { appendFileSync, readFileSync } = require("node:fs");
 const { isatty } = require("node:tty");
 const argv = process.argv.slice(2);
 appendFileSync(
@@ -233,16 +236,96 @@ ${signedIn}if (argv.includes("--print") && argv.includes("stream-json")) {
 } else if (!argv.includes("--session-id") && !argv.includes("--resume")) {
 ${notASession}
 } else {
+  // A flag's value, when the flag has one.
+  const valueOf = (flag) => {
+    const at = argv.indexOf(flag);
+    const value = at < 0 ? undefined : argv[at + 1];
+    return value === undefined || value.startsWith("-") ? undefined : value;
+  };
+  const sessionId = valueOf("--session-id") ?? valueOf("--resume");
+  // The UserPromptSubmit http hooks the session's settings name, read as the
+  // agent reads \`--settings\`: a file, or the JSON itself. Settings that cannot
+  // be read say so on every line's record, by the failure's code alone.
+  const prompted = (() => {
+    const settings = valueOf("--settings");
+    if (settings === undefined) return { hooks: [] };
+    let parsed;
+    try {
+      parsed = JSON.parse(settings.trimStart().startsWith("{") ? settings : readFileSync(settings, "utf8"));
+    } catch (error) {
+      return { hooks: [], unread: String(error?.code ?? error?.name ?? "unread") };
+    }
+    const hooks = [];
+    const groups = parsed?.hooks?.UserPromptSubmit;
+    for (const group of Array.isArray(groups) ? groups : []) {
+      for (const hook of Array.isArray(group?.hooks) ? group.hooks : []) {
+        if (hook?.type === "http" && typeof hook.url === "string") hooks.push(hook);
+      }
+    }
+    return { hooks };
+  })();
+  // A hook's headers as the agent sends them: \`$VAR\` and \`\${VAR}\` resolved
+  // from the environment for a variable its \`allowedEnvVars\` lists, and empty
+  // for any other.
+  const headersOf = (hook) => {
+    const allowed = new Set(Array.isArray(hook.allowedEnvVars) ? hook.allowedEnvVars : []);
+    const headers = { "content-type": "application/json" };
+    for (const [name, value] of Object.entries(hook.headers ?? {})) {
+      if (typeof value !== "string") continue;
+      headers[name] = value.replace(/\\$\\{(\\w+)\\}|\\$(\\w+)/g, (_, braced, bare) =>
+        allowed.has(braced ?? bare) ? (process.env[braced ?? bare] ?? "") : "",
+      );
+    }
+    return headers;
+  };
+  // What the agent does as it takes a prompt: each hook POSTed the prompt,
+  // verbatim, and its answer awaited. What is kept of a hook is its status,
+  // or the code it failed on: never its URL, a header or a token (EL7).
+  const tell = async (prompt) => {
+    if (prompted.unread !== undefined) return { settings: prompted.unread };
+    if (prompted.hooks.length === 0) return {};
+    const body = JSON.stringify({
+      session_id: sessionId,
+      cwd: process.cwd(),
+      hook_event_name: "UserPromptSubmit",
+      prompt,
+    });
+    const hooks = await Promise.all(
+      prompted.hooks.map(async (hook) => {
+        try {
+          const answer = await fetch(hook.url, {
+            method: "POST",
+            headers: headersOf(hook),
+            body,
+            signal: AbortSignal.timeout((typeof hook.timeout === "number" ? hook.timeout : 60) * 1000),
+          });
+          await answer.arrayBuffer();
+          return answer.status;
+        } catch (error) {
+          return String(error?.cause?.code ?? error?.name ?? "failed");
+        }
+      }),
+    );
+    return { hooks };
+  };
+  // One line taken: told first (a prompt; \`exit\` is the stub's way out), then
+  // recorded. Lines are taken in the order they came.
+  const take = async (typed) => {
+    const line = typed.trim();
+    const told = line === "" || line === "exit" ? {} : await tell(typed);${recordLine}
+    if (line === "exit") process.exit(0);
+  };
+  let taken = Promise.resolve();
   process.stdout.write("typed-agent stub: a managed session. Type exit to leave.\\n");
   process.stdin.on("data", (chunk) => {
     pending += chunk;
     for (let at = pending.indexOf("\\n"); at >= 0; at = pending.indexOf("\\n")) {
-      const line = pending.slice(0, at).trim();
-      pending = pending.slice(at + 1);${recordLine}
-      if (line === "exit") process.exit(0);
+      const typed = pending.slice(0, at).replace(/\\r$/, "");
+      pending = pending.slice(at + 1);
+      taken = taken.then(() => take(typed));
     }
   });
-  process.stdin.on("end", () => process.exit(0));
+  process.stdin.on("end", () => taken.then(() => process.exit(0)));
 }
 `;
 }
@@ -289,6 +372,13 @@ export interface TypedAgentLine {
   cwd: string;
   /** the line as submitted, its ends trimmed */
   line: string;
+  /** item 185: each UserPromptSubmit http hook the session's settings name, as it answered the line before the
+   * line was recorded: its status, or the code it failed on. Absent for a line that is no prompt (empty, or
+   * `exit`) and for settings that name no such hook. Never the hook's URL, a header or a token (EL7). */
+  hooks?: (number | string)[];
+  /** the code the session's `--settings` could not be read on (e.g. `ENOENT`), when they could not: no hook was
+   * told the line */
+  settings?: string;
 }
 
 /** Every line the stub's sessions were given so far, oldest first. A line still being written is left for the
