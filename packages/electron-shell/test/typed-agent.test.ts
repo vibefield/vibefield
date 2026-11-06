@@ -20,6 +20,7 @@ import {
   leakedVariables,
   personEnvironment,
   readTypedAgentCalls,
+  readTypedAgentForwards,
   readTypedAgentLines,
   STUB_STANDING,
   stageFirstRun,
@@ -630,6 +631,83 @@ describe("the stub — the smoke's own stand-in, run as the program it is", () =
     } finally {
       await new Promise((closed) => bridge.close(closed));
     }
+  });
+
+  // RV #1 (item 203): a packaged agent's command hooks and status line run VibeField's own executable in its
+  // forwarder role, and no row saw them run while the stub ran none. So the stub, as it starts, runs what the agent
+  // runs: each SessionStart command hook in exec form (`command` and `args`, no shell, as puppeteer writes them,
+  // launch/settings.ts `handlerFor`), the hook's document on its input, then its status line once, through the
+  // shell. desk-gates row 34 reads the packaged run's half; this row reads the stub's own.
+  it("runs each SessionStart command hook its settings name in exec form, then its status line, as the agent does as it starts, recording each exit and output and never the command, an argument or a variable (RV #1, item 203)", async () => {
+    const staged = stageTypedAgent({
+      vibefieldRoot: root(),
+      source: {},
+      ownerHome: "/Users/owner",
+    });
+    const forwards = staged.forwards;
+    if (forwards === undefined) throw new Error("the godview smoke's stub records no forwards");
+    const base = dirname(staged.calls);
+    const sessionId = "0c9b8a7d-6e5f-4a3b-8c2d-1e0f9a8b7c6d";
+    // the hook's program: what it was handed, and its input, said into a file of the row's; then one word printed
+    const said = join(base, "hook-said.json");
+    const program = join(base, "hook-program.cjs");
+    writeFileSync(
+      program,
+      `const { readFileSync, writeFileSync } = require("node:fs");
+writeFileSync(${JSON.stringify(said)}, JSON.stringify({ argv: process.argv.slice(2), input: readFileSync(0, "utf8") }));
+process.stdout.write("hooked");
+`,
+    );
+    const settings = join(base, "settings.json");
+    writeFileSync(
+      settings,
+      JSON.stringify({
+        hooks: {
+          SessionStart: [
+            {
+              hooks: [
+                {
+                  type: "command",
+                  command: process.execPath,
+                  args: [program, "two words", "$NOT_A_SHELL"],
+                  timeout: 30,
+                },
+              ],
+            },
+          ],
+        },
+        statusLine: { type: "command", command: "printf line" },
+      }),
+    );
+    const child = spawn(staged.stub, ["--session-id", sessionId, "--settings", settings], {
+      cwd: staged.work,
+      env: { ...process.env },
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+    const left = exited(child);
+    const deadline = Date.now() + 30_000;
+    while (readTypedAgentForwards(forwards).length < 2 && Date.now() < deadline)
+      await new Promise((tick) => setTimeout(tick, 50));
+    child.stdin?.write("exit\n");
+    expect(await left).toBe(0);
+    // exec form: the arguments exactly as written, one word with its space, nothing a shell would expand
+    const heard = JSON.parse(readFileSync(said, "utf8")) as { argv: string[]; input: string };
+    expect(heard.argv).toEqual(["two words", "$NOT_A_SHELL"]);
+    expect(JSON.parse(heard.input)).toEqual({
+      session_id: sessionId,
+      cwd: realpathSync(staged.work),
+      hook_event_name: "SessionStart",
+      source: "startup",
+    });
+    // each run recorded, the hook first: how it left and what it printed
+    expect(readTypedAgentForwards(forwards)).toEqual([
+      { pid: child.pid, what: "SessionStart", code: 0, signal: null, stdout: "hooked", stderr: "" },
+      { pid: child.pid, what: "statusLine", code: 0, signal: null, stdout: "line", stderr: "" },
+    ]);
+    // never the command, an argument or the document's place in the record
+    const record = readFileSync(forwards, "utf8");
+    for (const unsaid of [program, "two words", "$NOT_A_SHELL", "printf"])
+      expect(record).not.toContain(unsaid);
   });
 });
 

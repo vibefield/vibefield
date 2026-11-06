@@ -27,8 +27,11 @@ function constants(text, suffix) {
 const roleArgs = constants(ROLES, "ROLE_ARG");
 const bundles = constants(ROLES, "BUNDLE");
 
-test("roles.ts names the four roles, each with its argument and its bundle", () => {
+// RV #1 (item 203; rv-forwarder-role at its lean A): the agents' forwarder is the fifth role, its bundle sealed beside
+// the executable as the shim's is. It takes no SIGUSR1 guard (it lives for one hook), so the row below counts it out.
+test("roles.ts names the five roles, each with its argument and its bundle", () => {
   assert.deepEqual([...roleArgs.keys()].sort(), [
+    "AGENT_FORWARDER",
     "AGENT_SHIM",
     "FILES_HOST",
     "FLOWS_HOST",
@@ -42,6 +45,15 @@ test("roles.ts names the four roles, each with its argument and its bundle", () 
 test("the SEA builder spells every role's argument exactly as roles.ts does, and no other", () => {
   const spelled = constants(SEA, "ROLE_ARG");
   assert.deepEqual(new Map([...spelled].sort()), new Map([...roleArgs].sort()));
+});
+
+test("the agents' forwarder is a role like the others: its probe's argument and bundle are roles.ts's", () => {
+  assert.equal(roleArgs.get("AGENT_FORWARDER"), "--vibefield-role=agent-forwarder");
+  assert.equal(bundles.get("AGENT_FORWARDER"), "agent-forwarder.cjs");
+  assert.ok(
+    SEA.includes("spawn(exe, [AGENT_FORWARDER_ROLE_ARG, ...words]"),
+    "the SEA builder has no forwarder probe (probe G)",
+  );
 });
 
 test("a run's flow host is a role like the others: its probe's argument is roles.ts's", () => {

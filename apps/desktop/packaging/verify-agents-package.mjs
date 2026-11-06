@@ -22,7 +22,11 @@
 //  - the signed executable's own hardening, which nothing else runs on the artifact
 //    (`build-fieldd-sea.mjs --verify` is by hand): the role ignores NODE_OPTIONS and
 //    hands the agent SIGUSR1 as a real Node does, and SIGUSR1 to the packaged daemon
-//    opens no inspector.
+//    opens no inspector;
+//  - the forwarders (RV #1, item 203): a managed agent's command hooks and status
+//    line run the executable in its agent-forwarder role, which runs the forwarder
+//    sealed beside it (`agent-forwarder.cjs`); the run is observed by its hooks, and
+//    the role's start per status-line refresh is MEASURED and said, never a red.
 // Every row is opt-in, so a skip would read as a pass: the run writes a JSON report,
 // and every row in it must have PASSED. Modelled on verify-history-package.mjs.
 import { spawn } from "node:child_process";
@@ -58,7 +62,9 @@ const fieldd = join(nativeRoot, exe("fieldd"));
 const floor = floorBinaryNames().map((name) => join(nativeRoot, name));
 // the sealed shim the role runs, beside the executable
 const shim = join(nativeRoot, "agent-shim.cjs");
-for (const file of [fieldd, ...floor, shim]) {
+// RV #1 (item 203) — the sealed forwarder the agent-forwarder role runs, beside it too
+const forwarder = join(nativeRoot, "agent-forwarder.cjs");
+for (const file of [fieldd, ...floor, shim, forwarder]) {
   if (!lstatSync(file).isFile())
     throw new Error(`packaged Agents input is not a regular file: ${file}`);
 }
@@ -118,6 +124,11 @@ console.log(
     `to a typed agent's start over the bare program — role ${cost.roleMedianMs} ms, bare ${cost.bareMedianMs} ms, ` +
     `a real Node on the same shim ${cost.nodeMedianMs} ms, the first (cold) role run ${cost.coldRoleMs} ms; ` +
     `budget ${cost.budgetMs} ms: ${cost.withinBudget ? "within" : "OVER BUDGET (reported, not failed — re-measure on a quiet host before it is called)"}`,
+);
+// RV #1 (item 203): reported, never failed
+console.log(
+  `Agents package: each status-line refresh runs the forwarder role in ${cost.forwarderMedianMs} ms ` +
+    `(median of ${cost.runs} runs; a real Node on the same sealed forwarder ${cost.forwarderNodeMedianMs} ms)`,
 );
 const publish = measured("publish.json");
 console.log(

@@ -20,7 +20,13 @@
 //    measurements are written to as JSON, for the verifier's verdict lines;
 //  - the signed executable's own hardening: the role ignores NODE_OPTIONS and
 //    hands the agent SIGUSR1 as a real Node does, and SIGUSR1 to the packaged
-//    daemon opens no inspector.
+//    daemon opens no inspector;
+//  - the forwarders (RV #1, item 203; since puppeteer 0.4.0, #65): the managed run's command
+//    hooks and status line run the packaged executable in its agent-forwarder
+//    role, never a script it is handed; the stub runs its SessionStart hook and
+//    its status line as it starts, as the agent does, and the run is observed
+//    by its hooks with its status line's context on its row. The role's start
+//    per status-line refresh is measured and reported, never a red.
 // The pair and the person are spawned on an explicit environment (`personSource`),
 // never this process's: the release runner holds its credentials in its own.
 import { type ChildProcess, spawn } from "node:child_process";
@@ -46,13 +52,15 @@ import {
   spawnThroughLayout,
 } from "@vibefield/puppeteer-runtime/spawn-through";
 import { afterEach, describe, expect, it } from "vitest";
+import { sealedAgentForwarder } from "../src/agent-forwarder";
 import {
   AGENT_GATEWAY_HOST_LABEL,
   AGENT_GATEWAY_STRICT,
   agentShimHome,
   sealedAgentShim,
 } from "../src/agent-gateway";
-import { AGENT_SHIM_ROLE_ARG } from "../src/roles";
+import { defaultDataRoot } from "../src/boot-env";
+import { AGENT_FORWARDER_ROLE_ARG, AGENT_SHIM_ROLE_ARG } from "../src/roles";
 import { readRecord, teardownFloors, windowAt } from "./agent-gateway-floor";
 import {
   killDaemonTree,
@@ -87,6 +95,8 @@ interface StagedPerson {
   stub: string;
   /** one JSON line per run of the stub */
   calls: string;
+  /** RV #1 — one JSON line per command a managed session of the stub ran as it started */
+  forwards: string;
   person: string;
   work: string;
   /** the environment the pair is spawned with: the person's */
@@ -99,6 +109,20 @@ interface StubCall {
   pid: number;
   ppid: number;
 }
+/** RV #1 — one command a managed session of the stub ran as it started */
+interface StubForward {
+  pid: number;
+  what: "SessionStart" | "statusLine";
+  code?: number | null;
+  stdout?: string;
+  stderr?: string;
+  failed?: string;
+}
+/** The two members of the run's settings this witness reads (puppeteer writes them; the bearer is a `$VAR` there). */
+interface ForwardedSettings {
+  hooks?: { SessionStart?: { hooks?: { type?: string; command?: string; args?: string[] }[] }[] };
+  statusLine?: { type?: string; command?: string };
+}
 interface TypedAgentStaging {
   /** an argument the typed agent's adapter refuses for an interactive session */
   TYPED_AGENT_REFUSED_ARGUMENT: string;
@@ -108,6 +132,10 @@ interface TypedAgentStaging {
     source: Readonly<Record<string, string | undefined>>;
   }): StagedPerson;
   readTypedAgentCalls(calls: string): StubCall[];
+  /** RV #1 — what the stub's managed sessions ran as they started */
+  readTypedAgentForwards(forwards: string): StubForward[];
+  /** RV #1 — the context window the stub's status line reports */
+  TYPED_AGENT_STATUS_CONTEXT: { usedTokens: number; capacityTokens: number };
   /** the kit's and VibeField's private variables a run was handed */
   leakedVariables(call: Pick<StubCall, "envKeys">): string[];
 }
@@ -122,6 +150,8 @@ async function staging(): Promise<TypedAgentStaging> {
   if (
     typeof loaded.stageTypedAgent !== "function" ||
     typeof loaded.readTypedAgentCalls !== "function" ||
+    typeof loaded.readTypedAgentForwards !== "function" ||
+    typeof loaded.TYPED_AGENT_STATUS_CONTEXT !== "object" ||
     typeof loaded.leakedVariables !== "function" ||
     typeof loaded.TYPED_AGENT_REFUSED_ARGUMENT !== "string"
   ) {
@@ -484,6 +514,45 @@ describe.skipIf(PACKAGE === undefined || PACKAGE === "")(
           `PACKAGED_TYPED_RUN ${JSON.stringify({ run: row.runtimeRunId, pid: call.pid, flags: call.argv.filter((argument) => argument.startsWith("-")) })}`,
         );
 
+        // ── RV #1 (item 203): its hooks and status line run the executable in its forwarder role ──
+        // the run's settings, as the stub was handed them: every command hook and the status line
+        // name the packaged executable in its role, and no script beside them is named at all
+        const settingsPath = call.argv[call.argv.indexOf("--settings") + 1];
+        if (settingsPath === undefined) throw new Error("the managed run was handed no --settings");
+        const settings = JSON.parse(readFileSync(settingsPath, "utf8")) as ForwardedSettings;
+        const sessionStart = settings.hooks?.SessionStart?.[0]?.hooks?.[0];
+        expect(sessionStart).toMatchObject({ type: "command", command: pair.sea });
+        expect(sessionStart?.args?.[0]).toBe(AGENT_FORWARDER_ROLE_ARG);
+        expect(settings.statusLine?.type).toBe("command");
+        const roleLine = `${sh(pair.sea)} ${sh(AGENT_FORWARDER_ROLE_ARG)} `;
+        expect(settings.statusLine?.command?.startsWith(roleLine)).toBe(true);
+        expect(existsSync(sealedAgentForwarder(pair.sea))).toBe(true);
+        // the stub ran them as it started, as the agent does: each left 0 and said nothing
+        const forwarded = await until(() => {
+          const runs = typed.readTypedAgentForwards(pair.staged.forwards);
+          const ours = runs.filter((each) => each.pid === call.pid);
+          return ours.length >= 2 ? ours : undefined;
+        }, "the stub's SessionStart hook and status line, run as it started");
+        const ran = forwarded.map((each) => [each.what, each.code, each.stdout, each.stderr]);
+        expect(ran).toEqual([
+          ["SessionStart", 0, "", ""],
+          ["statusLine", 0, "", ""],
+        ]);
+        // the run is observed by its hooks, and its status line's context reached its row
+        const observed = await until(async () => {
+          const listed = (await win.call("agent.list", {})) as AgentListResult;
+          const found = listed.sessions.find((each) => each.runtimeRunId === row.runtimeRunId);
+          return found?.observationLevel === "native-hooks" && found.monitor?.context !== undefined
+            ? found
+            : undefined;
+        }, "the typed run observed by its hooks, its status line's context on its row");
+        expect(observed.monitor?.context).toMatchObject(typed.TYPED_AGENT_STATUS_CONTEXT);
+        // no daemon started in the agent's tree: the person's own default root was never made
+        expect(existsSync(defaultDataRoot(process.platform, {}, pair.staged.person))).toBe(false);
+        console.log(
+          `PACKAGED_FORWARDERS ${JSON.stringify(forwarded.map(({ what, code }) => ({ what, code })))}`,
+        );
+
         // the agent ends; the row leaves, and the pane's shell goes on to its next line
         process.kill(call.pid, "SIGTERM");
         await until(async () => {
@@ -519,6 +588,8 @@ describe.skipIf(PACKAGE === undefined || PACKAGE === "")(
         const sea = realpathSync(join(PACKAGE as string, exe("fieldd")));
         const sealed = sealedAgentShim(sea);
         expect(existsSync(sealed)).toBe(true);
+        const sealedForwarder = sealedAgentForwarder(sea);
+        expect(existsSync(sealedForwarder)).toBe(true);
 
         // ── the role's start cost ──
         // three arms, interleaved so a host's drift lands on all of them: the bare
@@ -567,6 +638,22 @@ describe.skipIf(PACKAGE === undefined || PACKAGE === "")(
           }
         }
         const added = samples.role.map((ms, i) => ms - (samples.bare[i] as number));
+        // RV #1 (item 203) — what each status-line refresh of a packaged agent costs: the forwarder role
+        // on the line's word, with no endpoint and no delegate (it reads its input and leaves 0), beside a
+        // real Node on the same sealed entry, for scale. Reported, never a red (LP-D2's posture).
+        const forwarderArms = {
+          forwarder: () => timed(sea, [AGENT_FORWARDER_ROLE_ARG, "claude.statusline.v1"], env),
+          forwarderNode: () =>
+            timed(process.execPath, [sealedForwarder, "claude.statusline.v1"], env),
+        };
+        const forwarderSamples = { forwarder: [] as number[], forwarderNode: [] as number[] };
+        for (let run = 0; run < COST_RUNS; run += 1) {
+          for (const arm of ["forwarder", "forwarderNode"] as const) {
+            const result = await forwarderArms[arm]();
+            if (result.code !== 0) failures.push(`${arm} run ${run} left ${result.code}`);
+            forwarderSamples[arm].push(result.ms);
+          }
+        }
         const cost = {
           runs: COST_RUNS,
           bareMedianMs: round(median(samples.bare)),
@@ -577,6 +664,8 @@ describe.skipIf(PACKAGE === undefined || PACKAGE === "")(
           coldRoleMs: round(cold.ms),
           budgetMs: ROLE_COST_BUDGET_MS,
           withinBudget: median(added) <= ROLE_COST_BUDGET_MS,
+          forwarderMedianMs: round(median(forwarderSamples.forwarder)),
+          forwarderNodeMedianMs: round(median(forwarderSamples.forwarderNode)),
         };
         console.log(`PACKAGED_ROLE_COST ${JSON.stringify(cost)}`);
         if (REPORT !== undefined && REPORT !== "")

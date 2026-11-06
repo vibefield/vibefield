@@ -107,9 +107,9 @@ test("item 178: dropping any one row of any of the three tables reads red, namin
     );
     dropped.push(s.name);
   }
-  // nine notices rows, the nine stage rows that carry or embed them, seven sidecars (CP-4a2a, 2026-11-05: the flow
-  // host's bundle, flows-host.cjs, joins each table)
-  assert.equal(dropped.length, 9 + 9 + 7, `rows dropped one at a time: ${dropped.length}`);
+  // ten notices rows, the ten stage rows that carry or embed them, eight sidecars (CP-4a2a, 2026-11-05: the flow
+  // host's bundle, flows-host.cjs, joins each table; RV #1, item 203: the agents' forwarder, agent-forwarder.cjs)
+  assert.equal(dropped.length, 10 + 10 + 8, `rows dropped one at a time: ${dropped.length}`);
 });
 
 test("item 178: each sidecar declares ONE source for its notices, and only JavaScript can be a bundle", () => {

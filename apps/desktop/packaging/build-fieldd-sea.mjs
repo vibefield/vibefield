@@ -34,6 +34,7 @@ import {
   statSync,
   writeFileSync,
 } from "node:fs";
+import { createServer } from "node:http";
 import { createRequire } from "node:module";
 import { constants as osConstants, tmpdir } from "node:os";
 import { basename, dirname, join, relative, resolve, sep } from "node:path";
@@ -67,6 +68,9 @@ const FILES_HOST_ROLE_ARG = "--vibefield-role=files-host";
 const TRANSCRIPT_HOST_ROLE_ARG = "--vibefield-role=transcript-host";
 const FLOWS_HOST_ROLE_ARG = "--vibefield-role=flows-host";
 const AGENT_SHIM_ROLE_ARG = "--vibefield-role=agent-shim";
+// RV #1 (item 203; rv-forwarder-role at its lean A) — the agents' forwarder: what a packaged agent's command hooks and
+// status lines run (fieldd agent-forwarder.ts lends it to puppeteer). Probe G runs it.
+const AGENT_FORWARDER_ROLE_ARG = "--vibefield-role=agent-forwarder";
 
 // AR-7j (electron-security-packaging.md §9.3, fuse-matrix.mjs's RunAsNode row) — the role makes
 // this executable the program every typed agent's launcher runs, in a pane whose environment a
@@ -694,6 +698,111 @@ function strayArgumentProbe({ exe, root, deadlineMs = 30_000 }) {
   });
 }
 
+/** RV #1 (item 203) — run the executable as a packaged agent's hooks and status lines run it: `<exe>
+ * --vibefield-role=agent-forwarder <word> <word's arguments…>`, the agent's document on its input. The role runs the
+ * forwarder sealed beside it (puppeteer's builtin entry), which relays the document to a loopback sink standing in
+ * for the session's bridge, with the bearer its variable names: (i) a SessionStart hook (`claude.hook.v1`), and (ii)
+ * a status line (`claude.statusline.v1`) whose delegate prints a word. The words are puppeteer's protocol, spelled
+ * here only to drive it. fieldd's own variables name a data directory that must not appear; what the sink heard is
+ * kept as facts (the path, whether the bearer and the document arrived whole), never the token. */
+async function agentForwarderProbe({ exe, root, deadlineMs = 30_000 }) {
+  mkdirSync(root, { recursive: true });
+  const data = join(root, "data");
+  const token = randomBytes(16).toString("hex");
+  const heard = [];
+  const server = createServer((request, response) => {
+    let body = "";
+    request.setEncoding("utf8");
+    request.on("data", (chunk) => {
+      body += chunk;
+    });
+    request.on("end", () => {
+      heard.push({ path: request.url, bearer: request.headers.authorization, body });
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end("{}");
+    });
+  });
+  await new Promise((listening) => server.listen(0, "127.0.0.1", listening));
+  const origin = `http://127.0.0.1:${server.address().port}`;
+  const once = (words, variables, input) =>
+    new Promise((done) => {
+      const from = heard.length;
+      const child = spawn(exe, [AGENT_FORWARDER_ROLE_ARG, ...words], {
+        cwd: "/",
+        env: {
+          PATH: "/usr/bin:/bin",
+          HOME: root,
+          FIELDD_DATA_DIR: data,
+          FIELDD_CONTROL_PORT: "0",
+          VF_PROBE_TOKEN: token,
+          ...variables,
+        },
+        stdio: ["pipe", "pipe", "pipe"],
+      });
+      let stdout = "";
+      let stderr = "";
+      child.stdout.on("data", (chunk) => {
+        stdout += chunk;
+      });
+      child.stderr.on("data", (chunk) => {
+        stderr += chunk;
+      });
+      const started = Date.now();
+      const timer = setTimeout(() => child.kill("SIGKILL"), deadlineMs);
+      const report = (code, signal, error) => {
+        clearTimeout(timer);
+        const got = heard.slice(from);
+        done({
+          error,
+          code,
+          signal,
+          ms: Date.now() - started,
+          stdout,
+          stderr,
+          heard: got.map((each) => ({
+            path: each.path,
+            bearer: each.bearer === `Bearer ${token}`,
+            whole: each.body === input,
+          })),
+        });
+      };
+      child.once("error", (e) => report(null, null, e.message));
+      // `close`, not `exit`: what the program said is all read only once its stdio has closed
+      child.once("close", (code, signal) => report(code, signal));
+      // a role that leaves without reading its input closes the pipe under the write
+      child.stdin.on("error", () => undefined);
+      child.stdin.end(input);
+    });
+  const sessionStart = JSON.stringify({
+    session_id: "probe-g",
+    cwd: root,
+    hook_event_name: "SessionStart",
+    source: "startup",
+  });
+  try {
+    const hook = await once(
+      ["claude.hook.v1", `${origin}/hooks`, "VF_PROBE_TOKEN", "5000"],
+      {},
+      sessionStart,
+    );
+    const status = await once(
+      ["claude.statusline.v1"],
+      {
+        PUPPETEER_STATUSLINE_ENDPOINT: `${origin}/statusline`,
+        PUPPETEER_STATUSLINE_DELEGATE: "printf hi",
+        PUPPETEER_STATUSLINE_TOKEN_ENV_VAR: "VF_PROBE_TOKEN",
+        // the relay's own bound, at the most the forwarder takes, as (i) hands its own: its 250 ms
+        // default is a loaded build host's to miss, and a late relay is dropped in silence
+        PUPPETEER_STATUSLINE_TIMEOUT_MS: "5000",
+      },
+      JSON.stringify({ session_id: "probe-g", cwd: root }),
+    );
+    return { hook, status, dataTouched: existsSync(data) };
+  } finally {
+    await new Promise((closed) => server.close(closed));
+  }
+}
+
 /** TH-1 — run the executable as fieldd runs its transcript worker: the role argument, an IPC pipe, the folder and
  * its key on the pipe (never the environment), then one ticket registered and a shutdown. */
 function transcriptHostProbe({ exe, folder, deadlineMs = 30_000 }) {
@@ -1296,6 +1405,42 @@ async function verify({ exe, manifest }) {
       f2.error !== undefined
         ? `an argument it does not take: spawn failed: ${f2.error}`
         : `an argument it does not take (a forwarder's script): one line, the cannot-run status, no daemon (${f2.signal ?? f2.code}, want 127; data directory ${f2.dataTouched ? "MADE" : "untouched"}; the script ${f2.scriptRan ? "RAN" : "never ran"}) — ${JSON.stringify(f2.stderr.trim())}`,
+    );
+
+    // Probe G (RV #1, item 203) — the executable in its agent-forwarder ROLE, as a packaged agent's command hooks and
+    // status lines run it: the forwarder sealed beside it relays (i) a SessionStart hook's document and (ii) a status
+    // line's, each with its bearer, to the probe's own loopback sink, and the status line's delegate is printed. No
+    // daemon, no readiness line, no data directory.
+    const g = await agentForwarderProbe({ exe: cleanExe, root: join(sandbox, "forwarder-run") });
+    const relayed = (run, path) =>
+      run.heard.length === 1 &&
+      run.heard[0].path === path &&
+      run.heard[0].bearer &&
+      run.heard[0].whole;
+    const gTail = (run) =>
+      run.stderr ? ` — stderr: ${run.stderr.trim().split("\n").slice(-3).join(" / ")}` : "";
+    say(
+      g.hook.error === undefined &&
+        g.hook.code === 0 &&
+        g.hook.stdout === "" &&
+        g.hook.stderr === "" &&
+        relayed(g.hook, "/hooks"),
+      g.hook.error !== undefined
+        ? `agent-forwarder role, a hook: spawn failed: ${g.hook.error}`
+        : `agent-forwarder role, a hook: ${g.hook.signal ?? g.hook.code} in ${g.hook.ms} ms (want 0), the sink heard ${JSON.stringify(g.hook.heard)} (want one /hooks, its bearer and its document whole), stdout ${JSON.stringify(g.hook.stdout.slice(0, 200))}${gTail(g.hook)}`,
+    );
+    say(
+      g.status.error === undefined &&
+        g.status.code === 0 &&
+        g.status.stdout === "hi" &&
+        relayed(g.status, "/statusline"),
+      g.status.error !== undefined
+        ? `agent-forwarder role, a status line: spawn failed: ${g.status.error}`
+        : `agent-forwarder role, a status line: ${g.status.signal ?? g.status.code} in ${g.status.ms} ms (want 0), printed ${JSON.stringify(g.status.stdout.slice(0, 200))} (want "hi", its delegate's), the sink heard ${JSON.stringify(g.status.heard)}${gTail(g.status)}`,
+    );
+    say(
+      !g.dataTouched,
+      "agent-forwarder role: no daemon ran — the FIELDD_* data directory was never made",
     );
 
     // Probe B — the same files, plus a node_modules that would break the daemon if it

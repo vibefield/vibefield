@@ -162,7 +162,18 @@ export interface StubRecords {
    * MessageDisplay hook, and the turn it started ends with them on the Stop
    * hook (item 227) */
   readonly answers?: string;
+  /** RV #1 (item 203) — where a managed session records each command it runs
+   * as it starts, as the agent does: its SessionStart command hooks, then its
+   * status line, one JSON line each (`readTypedAgentForwards`). Each run's exit
+   * and what it printed; never its command, an argument, a URL or a variable.
+   * Absent: the stub runs none of them. */
+  readonly forwards?: string;
 }
+
+/** RV #1 (item 203) — the context window the stub's status line reports, in the
+ * agent's own status-line document (`context_window`): what a witness reads back
+ * from the run's row once the line has reached the session's observer. */
+export const TYPED_AGENT_STATUS_CONTEXT = { usedTokens: 14_000, capacityTokens: 200_000 } as const;
 
 /** The stub, as a Node program: `#!/usr/bin/env node`, so a shell, the
  * shim's exec and fieldd's probes all run the same file the same way. */
@@ -197,6 +208,93 @@ export function typedAgentStubSource(
   process.stdin.on("end", () => process.exit(0));`
       : `  // Not a session (a sign-in's status, a usage read): nothing to answer.
   process.exit(1);`;
+  const { usedTokens, capacityTokens } = TYPED_AGENT_STATUS_CONTEXT;
+  const contextWindow = {
+    context_window_size: capacityTokens,
+    total_input_tokens: usedTokens,
+    used_percentage: (usedTokens * 100) / capacityTokens,
+    current_usage: {
+      input_tokens: usedTokens,
+      output_tokens: 0,
+      cache_creation_input_tokens: 0,
+      cache_read_input_tokens: 0,
+    },
+  };
+  const atBoot =
+    records.forwards === undefined
+      ? ""
+      : `
+  // RV #1 (item 203) — what the agent runs as it starts, as it does: each
+  // SessionStart command hook its settings name, in exec form (no shell) when
+  // the hook carries an argument list and through the shell when not, with the
+  // hook's document on its input; then its status line (a shell command) once,
+  // with the line's document. Each run's exit and what it printed are recorded,
+  // never its command, an argument, a URL or a variable.
+  const forward = (what, command, args, input, seconds) =>
+    new Promise((settle) => {
+      const options = { cwd: process.cwd(), env: process.env, stdio: ["pipe", "pipe", "pipe"] };
+      let child;
+      try {
+        child = Array.isArray(args)
+          ? spawn(command, args.map(String), options)
+          : spawn(command, { ...options, shell: true });
+      } catch (error) {
+        settle({ what, failed: String(error?.code ?? error?.name ?? "failed") });
+        return;
+      }
+      let stdout = "";
+      let stderr = "";
+      child.stdout.setEncoding("utf8");
+      child.stderr.setEncoding("utf8");
+      child.stdout.on("data", (chunk) => {
+        stdout += chunk;
+      });
+      child.stderr.on("data", (chunk) => {
+        stderr += chunk;
+      });
+      const timer = setTimeout(() => child.kill("SIGKILL"), seconds * 1000);
+      child.once("error", (error) => {
+        clearTimeout(timer);
+        settle({ what, failed: String(error?.code ?? error?.name ?? "failed") });
+      });
+      child.once("close", (code, signal) => {
+        clearTimeout(timer);
+        settle({ what, code, signal, stdout: stdout.slice(0, 400), stderr: stderr.slice(0, 400) });
+      });
+      // a command that leaves without reading its input closes the pipe under the write
+      child.stdin.on("error", () => {});
+      child.stdin.end(input);
+    });
+  const recordForward = (ran) =>
+    appendFileSync(${JSON.stringify(records.forwards)}, JSON.stringify({ pid: process.pid, ...ran }) + "\\n");
+  const boot = async () => {
+    const parsed = read.parsed;
+    const groups = parsed?.hooks?.SessionStart;
+    for (const group of Array.isArray(groups) ? groups : []) {
+      for (const hook of Array.isArray(group?.hooks) ? group.hooks : []) {
+        if (hook?.type !== "command" || typeof hook.command !== "string") continue;
+        const document = JSON.stringify({
+          session_id: sessionId,
+          cwd: process.cwd(),
+          hook_event_name: "SessionStart",
+          source: "startup",
+        });
+        const seconds = typeof hook.timeout === "number" ? hook.timeout : 60;
+        recordForward(await forward("SessionStart", hook.command, hook.args, document, seconds));
+      }
+    }
+    const line = parsed?.statusLine;
+    if (line?.type === "command" && typeof line.command === "string") {
+      const document = JSON.stringify({
+        session_id: sessionId,
+        cwd: process.cwd(),
+        workspace: { current_dir: process.cwd() },
+        context_window: ${JSON.stringify(contextWindow)},
+      });
+      recordForward(await forward("statusLine", line.command, undefined, document, 10));
+    }
+  };
+`;
   return `#!/usr/bin/env node
 "use strict";
 // A smoke's typed-agent stub: a stand-in written by the smoke, never an agent.
@@ -205,6 +303,7 @@ export function typedAgentStubSource(
 // prompt until \`exit\` or the end of its input, telling each prompt to the
 // UserPromptSubmit hook its settings name before it takes the line, and ending
 // the turn of a line it answers through the MessageDisplay and Stop hooks.
+const { spawn } = require("node:child_process");
 const { appendFileSync, readFileSync } = require("node:fs");
 const { isatty } = require("node:tty");
 const argv = process.argv.slice(2);
@@ -259,20 +358,25 @@ ${notASession}
   };
   const sessionId = valueOf("--session-id") ?? valueOf("--resume");
   const answers = ${records.answers === undefined ? "undefined" : JSON.stringify(records.answers)};
-  // An event's http hooks as the session's settings name them, read as the
-  // agent reads \`--settings\`: a file, or the JSON itself. Settings that cannot
-  // be read say so on every line's record, by the failure's code alone.
-  const hooksOf = (event) => {
+  // The session's settings, read as the agent reads \`--settings\`: a file, or
+  // the JSON itself — or the code they could not be read on.
+  const read = (() => {
     const settings = valueOf("--settings");
-    if (settings === undefined) return { hooks: [] };
-    let parsed;
+    if (settings === undefined) return {};
     try {
-      parsed = JSON.parse(settings.trimStart().startsWith("{") ? settings : readFileSync(settings, "utf8"));
+      return {
+        parsed: JSON.parse(settings.trimStart().startsWith("{") ? settings : readFileSync(settings, "utf8")),
+      };
     } catch (error) {
-      return { hooks: [], unread: String(error?.code ?? error?.name ?? "unread") };
+      return { unread: String(error?.code ?? error?.name ?? "unread") };
     }
+  })();
+  // An event's http hooks as the session's settings name them. Settings that
+  // cannot be read say so on every line's record, by the failure's code alone.
+  const hooksOf = (event) => {
+    if (read.unread !== undefined) return { hooks: [], unread: read.unread };
     const hooks = [];
-    const groups = parsed?.hooks?.[event];
+    const groups = read.parsed?.hooks?.[event];
     for (const group of Array.isArray(groups) ? groups : []) {
       for (const hook of Array.isArray(group?.hooks) ? group.hooks : []) {
         if (hook?.type === "http" && typeof hook.url === "string") hooks.push(hook);
@@ -348,7 +452,8 @@ ${notASession}
     const answered = prompt && answers !== undefined && line.includes(answers) ? await answer(line) : {};${recordLine}
     if (line === "exit") process.exit(0);
   };
-  let taken = Promise.resolve();
+${atBoot}  // What it runs as it starts comes before any line it takes (RV #1, item 203).
+  let taken = ${records.forwards === undefined ? "Promise.resolve()" : "boot().catch(() => {})"};
   process.stdout.write("typed-agent stub: a managed session. Type exit to leave.\\n");
   process.stdin.on("data", (chunk) => {
     pending += chunk;
@@ -431,6 +536,43 @@ export function readTypedAgentLines(lines: string): TypedAgentLine[] {
     if (entry.trim() === "") continue;
     try {
       seen.push(JSON.parse(entry) as TypedAgentLine);
+    } catch {
+      // half a line: the stub is writing it
+    }
+  }
+  return seen;
+}
+
+/** RV #1 (item 203) — one command a managed session of the stub ran as it
+ * started, as it recorded it (`StubRecords.forwards`). */
+export interface TypedAgentForward {
+  pid: number;
+  /** which of the agent's commands: a SessionStart command hook, or its status line */
+  what: "SessionStart" | "statusLine";
+  /** how it left — absent when it could not be started (`failed`) */
+  code?: number | null;
+  signal?: string | null;
+  /** what it printed, cut at 400 characters (a forwarder prints no variable, URL or argument) */
+  stdout?: string;
+  stderr?: string;
+  /** the code it could not be started on */
+  failed?: string;
+}
+
+/** Every command the stub's sessions ran as they started, oldest first. A line still being written is left for the
+ * next read. */
+export function readTypedAgentForwards(forwards: string): TypedAgentForward[] {
+  let text: string;
+  try {
+    text = readFileSync(forwards, "utf8");
+  } catch {
+    return [];
+  }
+  const seen: TypedAgentForward[] = [];
+  for (const entry of text.split("\n")) {
+    if (entry.trim() === "") continue;
+    try {
+      seen.push(JSON.parse(entry) as TypedAgentForward);
     } catch {
       // half a line: the stub is writing it
     }
@@ -639,6 +781,9 @@ export interface StagedTypedAgent {
   /** what its managed sessions are given, one JSON line per line (`readTypedAgentLines`): the godview smoke's
    * alone (11m), absent for the first-run smoke */
   lines?: string;
+  /** RV #1 (item 203) — what its managed sessions ran as they started, one JSON line each
+   * (`readTypedAgentForwards`): the godview smoke's alone, absent for the first-run smoke */
+  forwards?: string;
   /** the person's HOME */
   person: string;
   /** one line per startup file a shell of theirs read: `<file> <pid>` */
@@ -674,8 +819,9 @@ export function stageTypedAgent(opts: StagePersonOptions): StagedTypedAgent {
     atATerminal: "refuses",
     standsFor: (entry) => entry.id === TYPED_AGENT_ID,
     // 11m (SP-1d): This Mac signed in, so a spark hatches; each line its session is given, recorded, and its own
-    // line answered (item 227)
-    records: { signedIn: true, lines: true, answers: TYPED_AGENT_ANSWERED },
+    // line answered (item 227); and (RV #1, item 203) its SessionStart command hooks and its status line run as it
+    // starts, as the agent's do
+    records: { signedIn: true, lines: true, answers: TYPED_AGENT_ANSWERED, forwards: true },
   });
 }
 
@@ -702,7 +848,7 @@ function stagePerson(
     /** whether the machine record names the stub for this launchable row */
     standsFor: (entry: (typeof AGENT_CATALOG)[number]) => boolean;
     /** what the stub does beyond its probes (`StubRecords`): none unless named */
-    records?: { signedIn: boolean; lines: boolean; answers?: string };
+    records?: { signedIn: boolean; lines: boolean; answers?: string; forwards: boolean };
   },
 ): StagedTypedAgent {
   const row = AGENT_CATALOG.find((entry) => entry.id === TYPED_AGENT_ID);
@@ -728,12 +874,14 @@ function stagePerson(
     mkdirSync(directory, { recursive: true });
   }
   const lines = shape.records?.lines === true ? join(base, "lines.jsonl") : undefined;
+  const forwards = shape.records?.forwards === true ? join(base, "forwards.jsonl") : undefined;
   writeFileSync(
     stub,
     typedAgentStubSource(calls, shape.atATerminal, {
       ...(shape.records?.signedIn === true ? { signedIn: true } : {}),
       ...(lines === undefined ? {} : { lines }),
       ...(shape.records?.answers === undefined ? {} : { answers: shape.records.answers }),
+      ...(forwards === undefined ? {} : { forwards }),
     }),
   );
   chmodSync(stub, 0o755);
@@ -762,6 +910,7 @@ function stagePerson(
     stub,
     calls,
     ...(lines === undefined ? {} : { lines }),
+    ...(forwards === undefined ? {} : { forwards }),
     person,
     ran,
     work,
