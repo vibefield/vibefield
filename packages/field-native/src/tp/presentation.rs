@@ -54,8 +54,10 @@ pub trait PumpHost: Send + Sync + 'static {
         bytes: u64,
         class: UnitClass,
     ) -> Admission;
-    /// Would `bytes` of `class` be admissible right now? (non-mutating — the pump
-    /// asks before forcing the engine to render a full frame nobody can receive)
+    /// Would `bytes` of `class` be admissible right now? It charges nothing (the
+    /// pump asks before forcing the engine to render a full frame nobody can
+    /// receive), but it records a refusal, so the credit that returns wakes this
+    /// pump: a credit move wakes only a refused account's pump.
     fn can_admit(
         &self,
         connection_id: u64,
@@ -422,8 +424,8 @@ impl<H: PumpHost> Pump<H> {
     }
 
     /// Block until `bytes` of BULK WOULD be admissible (past the bound the pump
-    /// says overload and waits on — `starved`). Non-mutating: the real charge
-    /// happens when the unit is sent.
+    /// says overload and waits on — `starved`). It charges nothing: the real
+    /// charge happens when the unit is sent.
     async fn wait_for_credit(&self, bytes: u64) -> Result<(), ()> {
         let mut deadline = Some(tokio::time::Instant::now() + self.start.catchup_bound);
         loop {

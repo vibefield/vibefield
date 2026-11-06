@@ -695,7 +695,8 @@ impl PumpHost for DoorState {
         bytes: u64,
         class: UnitClass,
     ) -> Admission {
-        let reg = self.registry.lock().unwrap();
+        // mutable: a refusal is recorded (the account's starved mark), never charged
+        let mut reg = self.registry.lock().unwrap();
         match reg
             .activations
             .can_admit(connection_id, activation_id, bytes, class)

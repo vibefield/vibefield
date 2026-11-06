@@ -482,6 +482,34 @@ impl Window {
     }
 }
 
+/// One activation's credit account: the contracts' CREDIT_ACCOUNT machine as
+/// the cell holds it (`open` → `draining` → `closed`, where closed is the
+/// account's removal from the ledger).
+/// - `draining`: the activation was invalidated with bytes in flight (law 3).
+///   It admits nothing (law 2), still takes its returns (law 1), and closes
+///   once `admitted == returned`.
+/// - `starved`: the last admission asked for it was refused, so its pump
+///   waits on credit. A credit move wakes only starved live accounts and takes
+///   the mark; an admission clears it.
+#[derive(Debug, Clone, Copy)]
+pub struct Account {
+    pub window: Window,
+    pub draining: bool,
+    pub starved: bool,
+}
+
+impl Account {
+    /// Take the starved mark of a live account: true = its pump waits on
+    /// credit and is woken now. It asks again, and a refusal marks it again.
+    fn take_wake(&mut self) -> bool {
+        if self.draining || !self.starved {
+            return false;
+        }
+        self.starved = false;
+        true
+    }
+}
+
 /// The frames leg's credit ledger (§8, TP-D11): the connection window and one
 /// account per activation; every total CUMULATIVE within the credit epoch;
 /// returns applied with max() and ignored when their sequence was seen.
@@ -494,7 +522,7 @@ pub struct CreditLedger {
     /// bulk may consume connection credit only down to `connection.limit −
     /// urgent_reserve` (§8, TP-S3d); urgent draws the full window.
     pub urgent_reserve: u64,
-    pub accounts: HashMap<String, Window>,
+    pub accounts: HashMap<String, Account>,
 }
 
 impl CreditLedger {
@@ -545,53 +573,80 @@ impl CreditLedger {
         }
     }
 
+    /// Open a live account, or keep the one already open (a frames re-attach
+    /// on the same leg). A DRAINING account of the same id (only a client
+    /// reusing an id after its invalidation: the table refuses only a live
+    /// duplicate) is revived with its totals, because returns are cumulative
+    /// per `activationId` within the epoch (law 1).
     fn open_account(&mut self, activation_id: &str) {
-        self.accounts
+        let account = self
+            .accounts
             .entry(activation_id.to_string())
-            .or_insert(Window {
-                admitted: 0,
-                returned: 0,
-                limit: self.per_activation_limit,
+            .or_insert(Account {
+                window: Window {
+                    admitted: 0,
+                    returned: 0,
+                    limit: self.per_activation_limit,
+                },
+                draining: false,
+                starved: false,
             });
+        account.draining = false;
     }
 
-    /// Law (1)/(3): a closed activation's account stays until the cell sees
-    /// admitted == returned; the worker returns what it already admitted.
+    /// `activation-invalidated` (laws 2 and 3): an account with nothing in
+    /// flight closes at once; one with bytes in flight goes DRAINING. It admits
+    /// nothing more, and closes when the worker has returned what it admitted.
     fn close_account(&mut self, activation_id: &str) {
-        if let Some(w) = self.accounts.get(activation_id) {
-            if w.in_flight() == 0 {
-                self.accounts.remove(activation_id);
-            }
-            // else: DRAINING — kept until the returns arrive
+        let Some(account) = self.accounts.get_mut(activation_id) else {
+            return;
+        };
+        if account.window.in_flight() > 0 {
+            account.draining = true;
+            return;
         }
+        self.accounts.remove(activation_id);
     }
 
-    /// Non-mutating: would `bytes` of `class` be admissible now? `None` = no such
-    /// account. Bulk is bounded by the window minus the urgent reserve.
-    pub fn can_admit(&self, activation_id: &str, bytes: u64, class: UnitClass) -> Option<bool> {
-        let account = self.accounts.get(activation_id)?;
-        Some(
-            self.connection
-                .can_admit_within(bytes, self.connection_limit_for(class))
-                && account.can_admit(bytes),
-        )
-    }
-
-    pub fn try_admit(&mut self, activation_id: &str, bytes: u64, class: UnitClass) -> bool {
+    /// Would `bytes` of `class` be admissible now? `None` = no such account,
+    /// or a DRAINING one (law 2: invalidation stops new admission), which the
+    /// pump reads as `Gone`. Bulk is bounded by the window minus the urgent
+    /// reserve. It charges nothing, but it records the answer: a refusal marks
+    /// the account starved (its pump is about to wait on credit, and only a
+    /// starved account is woken when credit moves), an admission clears it.
+    pub fn can_admit(&mut self, activation_id: &str, bytes: u64, class: UnitClass) -> Option<bool> {
         let effective = self.connection_limit_for(class);
-        let Some(account) = self.accounts.get(activation_id) else {
+        let connection_admits = self.connection.can_admit_within(bytes, effective);
+        let account = self.accounts.get_mut(activation_id)?;
+        if account.draining {
+            return None;
+        }
+        let admits = connection_admits && account.window.can_admit(bytes);
+        account.starved = !admits;
+        Some(admits)
+    }
+
+    /// Admit `bytes` of `class`, charged to the connection and the account.
+    /// False when `can_admit` would not answer `Some(true)`, with its marks.
+    pub fn try_admit(&mut self, activation_id: &str, bytes: u64, class: UnitClass) -> bool {
+        if self.can_admit(activation_id, bytes, class) != Some(true) {
+            return false;
+        }
+        let Some(account) = self.accounts.get_mut(activation_id) else {
             return false;
         };
-        if !self.connection.can_admit_within(bytes, effective) || !account.can_admit(bytes) {
-            return false;
-        }
+        account.window.admitted += bytes;
         self.connection.admitted += bytes;
-        self.accounts.get_mut(activation_id).unwrap().admitted += bytes;
         true
     }
 
-    /// Apply a `TransportCredit`; returns the activation ids whose accounts
-    /// moved (to wake their pumps). Old epochs and seen sequences are ignored.
+    /// Apply a `TransportCredit`; returns the activation ids whose pumps wait
+    /// on the credit that moved. Old epochs and seen sequences are ignored.
+    /// - Every named return applies, a draining account's too (law 1).
+    /// - A draining account whose returns reached `admitted` closes (law 3).
+    /// - A starved live account wakes when its own return or the connection's
+    ///   moved, and the wake takes its mark. An account never refused has no
+    ///   pump waiting on credit, so it is not woken.
     pub fn returned(&mut self, credit: &TransportCredit) -> Vec<String> {
         if credit.credit_epoch != self.credit_epoch {
             return Vec::new();
@@ -610,21 +665,25 @@ impl CreditLedger {
             .max(credit.connection_bytes_returned);
         let connection_moved = self.connection.returned > before;
         let mut woke = Vec::new();
-        for account in &credit.accounts {
-            if let Some(w) = self.accounts.get_mut(&account.activation_id) {
-                if account.bytes_returned > w.returned {
-                    w.returned = account.bytes_returned;
-                    woke.push(account.activation_id.clone());
+        for named in &credit.accounts {
+            let Some(account) = self.accounts.get_mut(&named.activation_id) else {
+                continue;
+            };
+            if named.bytes_returned > account.window.returned {
+                account.window.returned = named.bytes_returned;
+                if account.take_wake() {
+                    woke.push(named.activation_id.clone());
                 }
             }
         }
-        // a drained closed account closes for good
+        // law (3): a draining account closes once every admitted byte is back
         self.accounts
-            .retain(|_, w| w.limit != 0 || w.in_flight() > 0);
+            .retain(|_, account| !account.draining || account.window.in_flight() > 0);
         if connection_moved {
-            // connection credit frees every starved pump, not only the named ones
-            for id in self.accounts.keys() {
-                if !woke.contains(id) {
+            // connection credit frees every starved pump, not only the named
+            // ones; a named one woken above has no mark left to take
+            for (id, account) in &mut self.accounts {
+                if account.take_wake() {
                     woke.push(id.clone());
                 }
             }
@@ -2091,7 +2150,8 @@ impl ActivationTable {
         ids
     }
 
-    /// Credit returned on a frames connection: wake the pumps whose windows moved.
+    /// Credit returned on a frames connection: wake the pumps a refusal left
+    /// waiting, once the credit they wait on moves (`CreditLedger::returned`).
     pub fn credit_returned(&mut self, connection_id: u64, credit: &TransportCredit) -> Vec<Effect> {
         let Some(ledger) = self.credit.get_mut(&connection_id) else {
             return Vec::new();
@@ -2116,16 +2176,18 @@ impl ActivationTable {
             .is_some_and(|l| l.try_admit(activation_id, bytes, class))
     }
 
-    /// Non-mutating twin: `None` when the connection's ledger or the account is gone.
+    /// The twin that charges nothing (`CreditLedger::can_admit`: it records a
+    /// refusal, so the returning credit wakes the pump). `None` when the
+    /// connection's ledger or the account is gone, or the account is draining.
     pub fn can_admit(
-        &self,
+        &mut self,
         connection_id: u64,
         activation_id: &str,
         bytes: u64,
         class: UnitClass,
     ) -> Option<bool> {
         self.credit
-            .get(&connection_id)
+            .get_mut(&connection_id)
             .and_then(|l| l.can_admit(activation_id, bytes, class))
     }
 
@@ -3172,7 +3234,8 @@ mod tests {
         };
         // wrong epoch: ignored
         assert!(l.returned(&credit(2, 1, 100, vec![("a", 60)])).is_empty());
-        // a's 60 back: a wakes; connection moved so b wakes too
+        // a's 60 back: a wakes; the connection moved, so b wakes too (both were
+        // refused above, so both are starved)
         let woke = l.returned(&credit(3, 1, 60, vec![("a", 60)]));
         assert!(woke.contains(&"a".to_string()) && woke.contains(&"b".to_string()));
         assert!(l.try_admit("a", 60, UnitClass::Urgent));
@@ -3182,7 +3245,7 @@ mod tests {
         // cumulative totals never go down
         l.returned(&credit(3, 2, 30, vec![("a", 10)]));
         assert_eq!(l.connection.returned, 60);
-        assert_eq!(l.accounts["a"].returned, 60);
+        assert_eq!(l.accounts["a"].window.returned, 60);
     }
 
     #[test]
@@ -3433,6 +3496,38 @@ mod tests {
             woke.is_empty(),
             "no pump of an invalidated activation waits"
         );
+    }
+
+    /// RV #96 (native-tp-6), a guard on `open_account`'s revival: a client that
+    /// reuses an id after its invalidation (the table refuses only a live
+    /// duplicate) gets its DRAINING account back with its totals, because the
+    /// worker's returns are cumulative per `activationId` within the epoch.
+    #[test]
+    fn a_reused_id_revives_its_draining_account_with_its_totals() {
+        let mut l = CreditLedger::new(1, credit_windows(1_000, 500), 0);
+        l.open_account("a");
+        assert!(l.try_admit("a", 100, UnitClass::Urgent));
+        l.close_account("a");
+        assert_eq!(l.can_admit("a", 1, UnitClass::Urgent), None);
+
+        l.open_account("a");
+        assert_eq!(
+            l.can_admit("a", 401, UnitClass::Urgent),
+            Some(false),
+            "its 100 bytes are still in flight: the totals were kept"
+        );
+        assert_eq!(
+            l.can_admit("a", 400, UnitClass::Urgent),
+            Some(true),
+            "revived: the account admits again"
+        );
+
+        // a live account takes its returns; closed with nothing in flight, it
+        // closes at once
+        let woke = l.returned(&credit_return(1, 1, 100, &[("a", 100)]));
+        assert!(woke.is_empty(), "the admission cleared the mark");
+        l.close_account("a");
+        assert!(!l.accounts.contains_key("a"));
     }
 
     // --- Geometry lease (S3c) --------------------------------------------
