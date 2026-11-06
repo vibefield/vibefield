@@ -7296,6 +7296,14 @@ field gives them, and “q” what was typed.
   the filters**. With words: "No live session holds every word of “q”.", with **Search everything**. With nothing at
   all: "Nothing runs right now." Everything: "Nothing in your past holds every word of “q”. Try fewer words." Before
   a word, with no desktop's sessions on the phone yet: ‹for James›.
+  *(Added 2026-11-06, as SE-2i built them; ‹for James›: the phone says what was answered in the Peek's own words,
+  §8 "Search — the Peek".)* Live now's foot says "Asking what runs…" until the home's board answers, "What runs
+  could not be read — ‹fieldd's words›" when it refuses, and "‹desktop› is asleep" while the home sleeps; its empty
+  list then says "What runs could not be read." or nothing. With words, either foot adds " · searching" while the
+  newest ask is out and " · the words were not searched" once it came back unanswered, and no empty words stand
+  until the words are answered; Everything's foot then adds " · ‹desktop› is asleep" for each desktop that could not
+  be asked. Before a word, with no desktop's sessions on the phone yet, Everything's list says nothing over its foot,
+  "Your latest sessions" (the ‹for James› above).
 - **The phone's chips and offers.** A chip's count is its sessions, or "asleep". An offer is "Show only ‹profile›'s
   sessions", "Show only what runs on ‹desktop›" or "Only in ‹folder›", over "a filter · 4 sessions", "a filter ·
   asleep" or "a filter", with **Filter**. A token's × is said "Remove ‹name›". The placeholder is **Search** (§9
