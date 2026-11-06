@@ -4998,21 +4998,19 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // sentence for a refusal (EL7). Before the first reading lands the answer
     // is an honest empty batch, never a wait and never a throw.
     // UM-D8 (A), 2026-11-06 — the phone reads its home's batch and runs no poll
-    // of its own. A caller that crossed the tailnet (the phone's `tailnet`
-    // principal; a guest by SP-D13's habit, though its empty preset admits it
-    // to neither door) never makes this desktop spend a reading for it: its
+    // of its own. Only this desktop's own windows (`ownWindow`) spend a reading
+    // or run the poll; every other caller (the phone) is answered from the
+    // cache and watches. The rule is the house allow-list, so a caller of a
+    // kind not named there spends nothing (EL7 fails closed). A phone's
     // `refresh: true` is answered from the cache, as a door clamps a tailnet
-    // ask rather than refusing it (the batch's stamps say how old it is, so the
-    // answer claims no fresh reading), and its subscription watches. The one
-    // reading a phone can still cause is the one any read kicks while nothing
-    // is cached yet (`snapshot`).
-    const spendsReadings = (ctx: CallerContext): boolean =>
-      ctx.principal.kind !== "tailnet" && ctx.principal.kind !== "tailnet-guest";
+    // ask rather than refusing it: the batch's stamps say how old it is, so the
+    // answer claims no fresh reading. The one reading a phone can still cause
+    // is the one any read kicks while nothing is cached yet (`snapshot`).
     api.register("agents.usage", (ctx, params) => {
       const parsed = AgentsUsageParams.safeParse(params ?? {});
       if (!parsed.success)
         throw new RpcCallError("PRECONDITION_FAILED", "expected { refresh?, profileIds? }", false);
-      return parsed.data.refresh === true && spendsReadings(ctx)
+      return parsed.data.refresh === true && ownWindow(ctx)
         ? agentUsage.refresh({
             force: true,
             ...(parsed.data.profileIds !== undefined ? { profileIds: parsed.data.profileIds } : {}),
@@ -5022,12 +5020,13 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // Whole batches at the stream floor for every subscriber (`wholeValueDoor`).
     // The service's own subscription comes FIRST, so a window's poll is running
     // before the open reads the batch: a cold read with no poll running kicks a
-    // reading of its own (`snapshot`), which would race the poll's first. A
-    // phone's is a passive watcher (`watch`), which never begins the poll.
+    // reading of its own (`snapshot`), which would race the poll's first. Any
+    // other caller's (a phone's) is a passive watcher (`watch`), which never
+    // begins the poll.
     api.registerSubscription("agents.usage.subscribe", (ctx, _params, emit) => {
       let moved = (): void => undefined;
       const notice = (): void => moved();
-      const leave = spendsReadings(ctx) ? agentUsage.subscribe(notice) : agentUsage.watch(notice);
+      const leave = ownWindow(ctx) ? agentUsage.subscribe(notice) : agentUsage.watch(notice);
       return wholeValueDoor(
         {
           read: () => agentUsage.snapshot(),
