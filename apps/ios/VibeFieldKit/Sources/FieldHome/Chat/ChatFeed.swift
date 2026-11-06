@@ -21,6 +21,9 @@ protocol ChatDoor: AnyObject {
   func watch(
     _ method: String, params: JSONValue?, onFrame: @escaping @MainActor (JSONValue) -> Void
   ) async throws -> any ChatWatch
+  /// IOS-12c — a reader of a spark's record through this door (SP-7a's, on the client's own transport). `device`: the
+  /// desktop that keeps the spark; `held`: a reading already drawn, kept drawn while it reads again.
+  func reader(spark: String, device: String?, whole: Bool, held: SparkTranscriptReading) -> any ChatThreadReader
 }
 
 /// A subscription Chat holds.
@@ -36,6 +39,10 @@ extension FieldProductClient: ChatDoor {
     _ method: String, params: JSONValue?, onFrame: @escaping @MainActor (JSONValue) -> Void
   ) async throws -> any ChatWatch {
     try await subscribe(method, params: params, shape: .stream, onSnapshot: onFrame, onDelta: onFrame)
+  }
+
+  func reader(spark: String, device: String?, whole: Bool, held: SparkTranscriptReading) -> any ChatThreadReader {
+    transcriptReader(spark: spark, device: device, whole: whole, held: held)
   }
 }
 
@@ -72,6 +79,11 @@ struct ChatReading: Equatable {
 @Observable
 final class ChatFeed {
   private(set) var reading = ChatReading()
+  /// IOS-12c — your sends the record does not show yet, per spark: the app's life, so a thread left and opened again
+  /// finds them standing (the Mac's `pending-says.ts`).
+  private(set) var sends = ChatSends()
+  /// Moves each time a different door is handed over (or none): an open thread reads again on the new one.
+  private(set) var doorTurn = 0
 
   @ObservationIgnored private var door: (any ChatDoor)?
   @ObservationIgnored private var home: String?
@@ -121,6 +133,34 @@ final class ChatFeed {
     defer { refresh() }
     _ = try await door.call(
       "compose.sparks.open", params: ComposeSparksOpenParams(spark: spark.id, device: spark.device).json)
+  }
+
+  /// IOS-12c — your words to a spark, through the home (`compose.sparks.say`, carried to its desktop): the receipt, or
+  /// fieldd's refusal thrown (`retryable` when the connection closed under it).
+  func say(_ params: SparkSayParams) async throws -> SparkSayResult {
+    _ = params
+    throw FieldProductError(kind: "UNIMPLEMENTED", message: "r1's skeleton")
+  }
+
+  /// IOS-12c — a reader of a spark's record through the home's door; none with no door.
+  func reader(
+    spark: String, device: String?, whole: Bool, held: SparkTranscriptReading
+  ) -> (any ChatThreadReader)? {
+    _ = (spark, device, whole, held)
+    return nil
+  }
+
+  /// A send passed the phone's checks: its bubble stands.
+  func stand(_ spark: String, _ say: ChatPendingSay) { sends.stand(spark, say) }
+
+  /// A send's answer: its receipt's state, or nil for a send not taken.
+  func settle(_ spark: String, _ requestId: String, state: String?) {
+    sends.settle(spark, requestId, state: state)
+  }
+
+  /// The record shows these sends: their bubbles are the record's now. Nothing is written when nothing moves.
+  func letGo(_ spark: String, said: Set<String>) {
+    sends.letGo(spark, said: said)
   }
 
   /// The sparks on the board with a live run, as one key (the Mac's `boardSparksKey`, without TU-1's mark).

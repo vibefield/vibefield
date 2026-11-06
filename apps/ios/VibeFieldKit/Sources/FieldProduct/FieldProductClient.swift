@@ -200,7 +200,9 @@ public final class FieldProductClient {
   /// somewhere ask `targets(_:)`.
   private let url: URL
 
-  @ObservationIgnored private let transport: any ProductTransport
+  /// The transport this client dials on: the mesh's on the phone. Internal, so a transcript reader made for this
+  /// client's home dials its worker on the same network (IOS-12c, `transcriptReader`); never public.
+  @ObservationIgnored let transport: any ProductTransport
   @ObservationIgnored private let options: Options
 
   @ObservationIgnored private var connection: (any ProductConnection)?

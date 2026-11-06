@@ -27,7 +27,15 @@ public protocol SparkTranscriptDoor: AnyObject {
   func call(_ method: String, params: JSONValue?) async throws -> JSONValue
 }
 
-extension FieldProductClient: SparkTranscriptDoor {}
+extension FieldProductClient: SparkTranscriptDoor {
+  /// IOS-12c — a reader of `spark`'s record through this client: its ticket asked of this client's home (which
+  /// carries the ask to `device`), its worker dialled on this client's own transport, the mesh's on the phone.
+  public func transcriptReader(
+    spark: String, device: String?, whole: Bool, held: SparkTranscriptReading
+  ) -> SparkTranscriptReader {
+    SparkTranscriptReader(spark: spark, device: device, door: self, transport: transport, whole: whole, held: held)
+  }
+}
 
 /// What the thread reads of the spark's record (the Mac's `TranscriptReading`).
 public enum SparkTranscriptReading: Equatable, Sendable {

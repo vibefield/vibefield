@@ -44,6 +44,10 @@ struct ChatFeedTests {
     }
 
     func count(_ method: String) -> Int { calls.filter { $0.method == method }.count }
+
+    func reader(spark: String, device: String?, whole: Bool, held: SparkTranscriptReading) -> any ChatThreadReader {
+      ChatThreadTests.Reader(held)
+    }
   }
 
   /// Until `done` holds, or two seconds.
@@ -323,5 +327,64 @@ struct ChatFeedTests {
     // a cold start with the home asleep, the common case: nothing heard, so never "as it last said", and never a blank
     let cold = ChatAway.lines(ChatReading(), home: ChatFixtureDoor.home, homeListed: false, name: Self.name)
     #expect(cold == [ChatAway(device: ChatFixtureDoor.home, name: "studio", standing: .asleep, carried: false)])
+  }
+
+  // MARK: - IOS-12c: the thread's half of the feed
+
+  static func say(_ n: Int) -> ChatPendingSay {
+    ChatPendingSay(
+      requestId: "say-test-\(String(format: "%08d", n))", text: "words \(n)", chips: [], at: "2026-11-06T09:00:00.000Z")
+  }
+
+  @Test("your sends stand until the record has them: newest last, 32 kept, and a send not taken leaves none")
+  func sends() {
+    let feed = ChatFeed()
+    let vela = "sp-7k2m9q4x"
+    for n in 1...33 { feed.stand(vela, Self.say(n)) }
+    let held = feed.sends.of(vela).map { $0.requestId }
+    #expect(held.count == ChatSends.kept)
+    #expect(held.first == "say-test-00000002")
+    #expect(held.last == "say-test-00000033")
+    // a send stood again moves last, never twice
+    feed.stand(vela, Self.say(5))
+    let again = feed.sends.of(vela).map { $0.requestId }
+    #expect(again.count == ChatSends.kept)
+    #expect(again.last == "say-test-00000005")
+    // answered: its receipt's state; not taken: gone
+    feed.settle(vela, "say-test-00000033", state: "queued")
+    let answered = feed.sends.of(vela).filter { $0.requestId == "say-test-00000033" }.map { $0.state }
+    #expect(answered == ["queued"])
+    feed.settle(vela, "say-test-00000033", state: nil)
+    let left = feed.sends.of(vela).map { $0.requestId }
+    #expect(!left.contains("say-test-00000033"))
+    // the record shows two: they go, and another spark's sends are its own
+    feed.stand("sp-9q2wloft1", Self.say(1))
+    feed.letGo(vela, said: ["say-test-00000005", "say-test-00000006"])
+    let after = feed.sends.of(vela).map { $0.requestId }
+    #expect(!after.contains("say-test-00000005") && !after.contains("say-test-00000006"))
+    #expect(after.count == ChatSends.kept - 3)
+    #expect(feed.sends.of("sp-9q2wloft1").count == 1)
+  }
+
+  @Test("your words go through the home's door, and a different door is a new turn for an open thread")
+  func sayAndTurn() async throws {
+    let feed = ChatFeed()
+    let door = Door()
+    feed.attach(door, home: "dev-01HQ9S7UD1")
+    let turn = feed.doorTurn
+    feed.attach(door, home: "dev-01HQ9S7UD1")
+    #expect(feed.doorTurn == turn)
+    let params = try SparkSayParams(
+      spark: "sp-7k2m9q4x", text: "Look at the composer test", requestId: "say-test-00000001", device: "dev-01HQ9S7UD1")
+    _ = try? await feed.say(params)
+    let said = door.calls.first { $0.method == SparkSay.method }?.params
+    #expect(said == params.json)
+    let reader = feed.reader(spark: "sp-7k2m9q4x", device: "dev-01HQ9S7UD1", whole: false, held: .reading)
+    #expect(reader != nil)
+    feed.attach(nil, home: nil)
+    #expect(feed.doorTurn == turn + 1)
+    let none = feed.reader(spark: "sp-7k2m9q4x", device: "dev-01HQ9S7UD1", whole: false, held: .reading)
+    #expect(none == nil)
+    await #expect(throws: FieldProductError.self) { _ = try await feed.say(params) }
   }
 }
