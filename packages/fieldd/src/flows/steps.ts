@@ -189,6 +189,11 @@ const said = (value: unknown): string | undefined =>
 export const labelOf = (args: readonly unknown[]): string | undefined =>
   said(optionsOf(args)["label"]);
 
+/** The session a step's `in:` names, as its call wrote it: the one reader, so a step the runs' call line reads as
+ * handed (it takes no slot, F9) is the step its start hands. */
+export const handedOf = (args: readonly unknown[]): string | undefined =>
+  said(optionsOf(args)["in"]);
+
 /** The keys an `agent()` call may set (D9): any other is refused in words. */
 const STEP_KEYS: ReadonlySet<string> = new Set([
   "agent",
@@ -278,7 +283,7 @@ export async function startStep(
     call,
     ...(run.ran !== undefined ? { ran: run.ran } : {}),
   };
-  const handed = said(options["in"]);
+  const handed = handedOf(args);
   if (handed !== undefined) {
     // A3: a handed session is no spawn, so it sets none of a spawn's keys
     const spawnKey = SPAWN_KEYS.find((option) => options[option] !== undefined);

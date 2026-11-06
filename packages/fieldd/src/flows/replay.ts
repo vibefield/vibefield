@@ -41,8 +41,9 @@ export function flowCallKey(what: string, args: readonly unknown[]): FlowCallKey
 export interface FlowReplayOptions {
   /** the run's journal as it stood when this host started (FlowRecords.readRun's `kept` lines) */
   readonly prior: readonly FlowJournalKnownLine[];
-  /** append a line to the run's journal: throws when the disk does not take it (nothing is then handed on) */
-  readonly append: (entry: FlowJournalEntry) => void;
+  /** append a line to the run's journal: throws when the disk does not take it (nothing is then handed on). A call's
+   * line comes with the call's own arguments, which the runs read its `in:` from (F9) */
+  readonly append: (entry: FlowJournalEntry, args?: readonly unknown[]) => void;
   /** what does a new call: the runs (CP-4a2b); a scripted one in the tests */
   readonly inner: FlowCallHandler;
 }
@@ -133,14 +134,10 @@ export class FlowReplay implements FlowCallHandler {
     }
     const number = this.#nextCall++;
     try {
-      this.#opts.append({
-        kind: "call",
-        call: number,
-        what: call.what,
-        key,
-        n,
-        ...cardOf(call.args),
-      });
+      this.#opts.append(
+        { kind: "call", call: number, what: call.what, key, n, ...cardOf(call.args) },
+        call.args,
+      );
     } catch {
       return { ok: false, refused: JOURNAL_REFUSED };
     }

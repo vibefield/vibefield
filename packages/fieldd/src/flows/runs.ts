@@ -45,6 +45,7 @@ import {
   FlowStepOrphaned,
   type FlowStepPorts,
   type FlowStepWrite,
+  handedOf,
   labelOf,
   labelWords,
   NO_FOLDER,
@@ -677,9 +678,9 @@ export class FlowRuns {
     live.inputs = { values: read.head.input ?? {}, kinds: readFlow(bytes).meta?.input ?? {} };
     const replay = new FlowReplay({
       prior: read.lines,
-      append: (entry) => {
+      append: (entry, args) => {
         records.appendRun(run, entry);
-        this.#journaled(run, entry);
+        this.#journaled(run, entry, args);
       },
       inner: this.#inner(run, live),
     });
@@ -825,7 +826,8 @@ export class FlowRuns {
     );
   }
 
-  /** A slot freed (CP4-S7): the first step waiting for one, in call order, starts. */
+  /** A slot freed (CP4-S7): the first step waiting for one, in call order, starts. Only a spawned step waits, so the
+   * one slot an answer frees is a spawn's (F9). */
   #unslot(run: FlowRunId, live: LiveRun): void {
     const record = this.ports.records.runRecord(run);
     if (record === undefined) return;
@@ -979,8 +981,12 @@ export class FlowRuns {
   }
 
   /** A line the run's journal took, as its record follows it (D18's cadence): a call counts (D10), and an agent's
-   * call opens its step, `starting` (D5 step 2); an answer settles its step, `failed` for a refusal. */
-  #journaled(run: FlowRunId, entry: FlowJournalEntry): void {
+   * call opens its step, `starting` (D5 step 2); an answer settles its step, `failed` for a refusal. A call's `args`
+   * are its own, as its host sent them. */
+  #journaled(run: FlowRunId, entry: FlowJournalEntry, args?: readonly unknown[]): void {
+    // F9 (slices 7–9 review): a step handed a session by `in:` is no spawn, so it never waits for a slot; that is
+    // decided here, at its call line, so no "waiting" reaches its record and it is never put in line
+    const hands = args !== undefined && handedOf(args) !== undefined;
     if (entry.kind === "call")
       this.#rewriteWith(run, (record) => ({
         calls: record.calls + 1,
@@ -993,8 +999,9 @@ export class FlowRuns {
                   ...(entry.label !== undefined ? { label: entry.label } : {}),
                   ...(entry.agent !== undefined ? { agent: entry.agent } : {}),
                   ...(entry.phase !== undefined ? { phase: entry.phase } : {}),
-                  // CP4-S7: past the run's LIVE_STEPS_MAX live steps, it waits for a slot
+                  // CP4-S7: past the run's LIVE_STEPS_MAX live steps, a spawned step waits for a slot
                   state:
+                    !hands &&
                     record.open.filter(
                       (step) => SLOT_STATES.has(step.state) && step.handed !== true,
                     ).length >= FLOW_LIMITS.LIVE_STEPS_MAX
