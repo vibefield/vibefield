@@ -3674,18 +3674,43 @@ describe("CP-4a2b — the host's life: parked and woken, D2's lookup at a wake, 
         throw new Error("ENOSPC: no space left on device, write");
       });
       const run = startedRun(await h.start({ flow: "review" })).run;
-      await within(PARK_MS, () => h.enqueued.length === 1);
+      // XX3 (the 10b read): the first boot waits as every row's does
+      await waitFor(() => expect(h.enqueued).toHaveLength(1));
       answerStep(h, run, 1, "all clean");
       await within(PARK_MS, () => stateOf(h, run) === "done");
       const ended = h.runs.read(run)?.summary;
       const spawned = h.spawned.length;
-      return { state: ended?.state, log: ended?.log, spawned, kinds: h.kinds(run) };
+      // XX4: the record never keeps an answered call's step working past the run's next record write
+      const working = (h.records.runRecord(run)?.open ?? [])
+        .filter((step) => step.call === 1 && step.state === "working")
+        .map((step) => step.call);
+      return { state: ended?.state, log: ended?.log, spawned, kinds: h.kinds(run), working };
     };
     const kinds = ["head", "call", "answer", "log", "end"];
-    const heard = { state: "done", log: "all clean", spawned: 1, kinds };
+    const heard = { state: "done", log: "all clean", spawned: 1, kinds, working: [] };
     // the call line landed and its record's write threw: the call goes on, never refused
     expect(await lagging("call")).toEqual(heard);
-    // the answer line landed and its record's settle threw: the script hears the answer the journal holds
+    // the answer line landed and its record's settle threw: the script hears the answer the journal holds, and the
+    // run's next record write settles the step its settle missed (XX4)
     expect(await lagging("answer")).toEqual(heard);
+  });
+
+  it("P8r (XX1(b), the 10b read; slice 10b): through the runs, a step's answer nested past ARGS_DEPTH_MAX is refused to its script and journaled as that refusal, so its journal reads back", async () => {
+    const h = await harness();
+    h.approved("review", FORMED_CATCHES);
+    const run = startedRun(await h.start({ flow: "review" })).run;
+    await waitFor(() => expect(h.enqueued).toHaveLength(1));
+    // the form names its verdict alone, so a field it does not name passes, however deep (form-check.ts)
+    let deep = '"x"';
+    for (let i = 0; i < FLOW_LIMITS.ARGS_DEPTH_MAX + 1; i += 1) deep = `[${deep}]`;
+    const text = fenced(`{"verdict":"clean","deep":${deep}}`);
+    h.endTurn({ run, call: 1, runtimeRunId: "rt-step1", turn: "t1", outcome: "completed", text });
+    const said = `VibeField can't hand this agent's answer on: it nests deeper than ${FLOW_LIMITS.ARGS_DEPTH_MAX}`;
+    expect((await settled(h.runs, run, "done")).log).toBe(said);
+    const read = h.records.readRun(run);
+    expect({ kept: read.kind, answers: answersOf(h, run) }).toMatchObject({
+      kept: "kept",
+      answers: [{ kind: "answer", call: 1, refused: said }],
+    });
   });
 });
