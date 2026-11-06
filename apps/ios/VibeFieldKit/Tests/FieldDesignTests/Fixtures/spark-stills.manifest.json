@@ -1,0 +1,1008 @@
+{
+  "//": "IOS-12e (PC-D6 A). The vendored spark engine's own pixels for the rows golden's still cases: WebGL2, render(0, { frozen: true }), toDataURL (straight-alpha RGBA PNGs), at the phone's @3x. Host-bound: redraw on purpose with node packages/design-kit/scripts/spark-stills-golden.mjs, after the rows golden; --check holds every byte.",
+  "engine": {
+    "file": "src/spark-face/vendor/sparks.js",
+    "sha256": "baa846eecc702dc4f7bcf3d1f7da20d1eb01051c87ce20685a29de1de6e67716"
+  },
+  "rows": {
+    "file": "fixtures/spark-rows.golden.json",
+    "sha256": "47f211e737c5a376dbd84e376048b53f51c00462cfa4a125984fccc355ca0461"
+  },
+  "scale": 3,
+  "host": {
+    "name": "Mac-mini",
+    "os": "darwin 27.2.0",
+    "cpu": "Apple M4",
+    "electron": "43.1.1",
+    "chrome": "150.0.7871.114",
+    "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4, Unspecified Version)"
+  },
+  "cases": [
+    {
+      "id": "48-framed-light-hello-4211",
+      "seed": 4211,
+      "status": "hello",
+      "size": 48,
+      "framed": true,
+      "theme": "light",
+      "cut": [
+        1,
+        1,
+        1
+      ],
+      "file": "fixtures/spark-stills/48-framed-light-hello-4211.png",
+      "width": 144,
+      "height": 144,
+      "sha256": "a8bbabda8aa26164d84b01997283000b4d042c7595033d6cbfa5527b31928c23"
+    },
+    {
+      "id": "48-framed-light-ready-4211",
+      "seed": 4211,
+      "status": "ready",
+      "size": 48,
+      "framed": true,
+      "theme": "light",
+      "cut": [
+        1,
+        1,
+        1
+      ],
+      "file": "fixtures/spark-stills/48-framed-light-ready-4211.png",
+      "width": 144,
+      "height": 144,
+      "sha256": "2e775b8bf766588014e57889401d11a9137d2dc71e0c6498e41554cfd2ef4f73"
+    },
+    {
+      "id": "48-framed-light-listening-4211",
+      "seed": 4211,
+      "status": "listening",
+      "size": 48,
+      "framed": true,
+      "theme": "light",
+      "cut": [
+        1,
+        1,
+        1
+      ],
+      "file": "fixtures/spark-stills/48-framed-light-listening-4211.png",
+      "width": 144,
+      "height": 144,
+      "sha256": "0c66ad89fcfade1b72e28858891f3baefebf07f679169b07c7822fdce87226d9"
+    },
+    {
+      "id": "48-framed-light-thinking-4211",
+      "seed": 4211,
+      "status": "thinking",
+      "size": 48,
+      "framed": true,
+      "theme": "light",
+      "cut": [
+        1,
+        1,
+        1
+      ],
+      "file": "fixtures/spark-stills/48-framed-light-thinking-4211.png",
+      "width": 144,
+      "height": 144,
+      "sha256": "3a486d31b5a02375a6a6816b54a31fb403324cca7719d4bd4975048512afea51"
+    },
+    {
+      "id": "48-framed-light-planning-4211",
+      "seed": 4211,
+      "status": "planning",
+      "size": 48,
+      "framed": true,
+      "theme": "light",
+      "cut": [
+        1,
+        1,
+        1
+      ],
+      "file": "fixtures/spark-stills/48-framed-light-planning-4211.png",
+      "width": 144,
+      "height": 144,
+      "sha256": "803e056773532408d984f2e555bd96cdc2f6d1dcac47c7bbaa4ad1c2d6a3e283"
+    },
+    {
+      "id": "48-framed-light-searching-4211",
+      "seed": 4211,
+      "status": "searching",
+      "size": 48,
+      "framed": true,
+      "theme": "light",
+      "cut": [
+        1,
+        1,
+        1
+      ],
+      "file": "fixtures/spark-stills/48-framed-light-searching-4211.png",
+      "width": 144,
+      "height": 144,
+      "sha256": "1e4a40ddce3cfeb376c144f6de674eaf89806f8e1a9b3851fe7443230218fb03"
+    },
+    {
+      "id": "48-framed-light-reviewing-4211",
+      "seed": 4211,
+      "status": "reviewing",
+      "size": 48,
+      "framed": true,
+      "theme": "light",
+      "cut": [
+        1,
+        1,
+        1
+      ],
+      "file": "fixtures/spark-stills/48-framed-light-reviewing-4211.png",
+      "width": 144,
+      "height": 144,
+      "sha256": "6ab6c3c8fa4b985cdaa12a30ce3bdb45e43be8ca198b6bfcb5c769ef72f34183"
+    },
+    {
+      "id": "48-framed-light-running-4211",
+      "seed": 4211,
+      "status": "running",
+      "size": 48,
+      "framed": true,
+      "theme": "light",
+      "cut": [
+        1,
+        1,
+        1
+      ],
+      "file": "fixtures/spark-stills/48-framed-light-running-4211.png",
+      "width": 144,
+      "height": 144,
+      "sha256": "8ef6f99db27083791131462505b0693fe16164774f1680aa1234d1bbb8f51d05"
+    },
+    {
+      "id": "48-framed-light-focus-4211",
+      "seed": 4211,
+      "status": "focus",
+      "size": 48,
+      "framed": true,
+      "theme": "light",
+      "cut": [
+        1,
+        1,
+        1
+      ],
+      "file": "fixtures/spark-stills/48-framed-light-focus-4211.png",
+      "width": 144,
+      "height": 144,
+      "sha256": "1c2f037f65d922f71b8fa7aa4d99f5b048f1e067042287092d5fa9543d808caa"
+    },
+    {
+      "id": "48-framed-light-asking-4211",
+      "seed": 4211,
+      "status": "asking",
+      "size": 48,
+      "framed": true,
+      "theme": "light",
+      "cut": [
+        1,
+        1,
+        1
+      ],
+      "file": "fixtures/spark-stills/48-framed-light-asking-4211.png",
+      "width": 144,
+      "height": 144,
+      "sha256": "5a83022fcc41388855efa7ba1276f991ad0859c200c8c941d2cfd5c1de938d6c"
+    },
+    {
+      "id": "48-framed-light-approval-4211",
+      "seed": 4211,
+      "status": "approval",
+      "size": 48,
+      "framed": true,
+      "theme": "light",
+      "cut": [
+        1,
+        1,
+        1
+      ],
+      "file": "fixtures/spark-stills/48-framed-light-approval-4211.png",
+      "width": 144,
+      "height": 144,
+      "sha256": "ad2922d852f1d565f210598cae0eae3cd3807ef651ef30fae26a800a1493bd35"
+    },
+    {
+      "id": "48-framed-light-stuck-4211",
+      "seed": 4211,
+      "status": "stuck",
+      "size": 48,
+      "framed": true,
+      "theme": "light",
+      "cut": [
+        1,
+        1,
+        1
+      ],
+      "file": "fixtures/spark-stills/48-framed-light-stuck-4211.png",
+      "width": 144,
+      "height": 144,
+      "sha256": "f80186f2d34519f040c6acc0190762a5d3f1b961295ff2cab2720e175646339b"
+    },
+    {
+      "id": "48-framed-light-limited-4211",
+      "seed": 4211,
+      "status": "limited",
+      "size": 48,
+      "framed": true,
+      "theme": "light",
+      "cut": [
+        1,
+        1,
+        1
+      ],
+      "file": "fixtures/spark-stills/48-framed-light-limited-4211.png",
+      "width": 144,
+      "height": 144,
+      "sha256": "50cda21f879ca635dea503a8e0cf7a49da9c5e45a4bb0c0139037e5659282134"
+    },
+    {
+      "id": "48-framed-light-success-4211",
+      "seed": 4211,
+      "status": "success",
+      "size": 48,
+      "framed": true,
+      "theme": "light",
+      "cut": [
+        1,
+        1,
+        1
+      ],
+      "file": "fixtures/spark-stills/48-framed-light-success-4211.png",
+      "width": 144,
+      "height": 144,
+      "sha256": "7211edcb992aae9de5a0f85a85a40e4a957acdaa2ad9a25556feb4d0fb5fe4af"
+    },
+    {
+      "id": "48-framed-light-shipped-4211",
+      "seed": 4211,
+      "status": "shipped",
+      "size": 48,
+      "framed": true,
+      "theme": "light",
+      "cut": [
+        1,
+        1,
+        1
+      ],
+      "file": "fixtures/spark-stills/48-framed-light-shipped-4211.png",
+      "width": 144,
+      "height": 144,
+      "sha256": "e5653329605459ac7865490581701a9540319c9a647105ce4390809168605560"
+    },
+    {
+      "id": "48-framed-light-failed-4211",
+      "seed": 4211,
+      "status": "failed",
+      "size": 48,
+      "framed": true,
+      "theme": "light",
+      "cut": [
+        1,
+        1,
+        1
+      ],
+      "file": "fixtures/spark-stills/48-framed-light-failed-4211.png",
+      "width": 144,
+      "height": 144,
+      "sha256": "308801693ab06c65fa8cf23d6258c1a64a842c1a138ff1d29169ca5810613d6d"
+    },
+    {
+      "id": "48-framed-light-thanked-4211",
+      "seed": 4211,
+      "status": "thanked",
+      "size": 48,
+      "framed": true,
+      "theme": "light",
+      "cut": [
+        1,
+        1,
+        1
+      ],
+      "file": "fixtures/spark-stills/48-framed-light-thanked-4211.png",
+      "width": 144,
+      "height": 144,
+      "sha256": "f4751b9ec6c638b9f24d928beab364e8bb648f448668fb2a45458a6384096b86"
+    },
+    {
+      "id": "48-framed-light-sleeping-4211",
+      "seed": 4211,
+      "status": "sleeping",
+      "size": 48,
+      "framed": true,
+      "theme": "light",
+      "cut": [
+        1,
+        1,
+        1
+      ],
+      "file": "fixtures/spark-stills/48-framed-light-sleeping-4211.png",
+      "width": 144,
+      "height": 144,
+      "sha256": "7eecd7b32f6188ac25910fe17cad0dfe2ce24dd56bfbb0055b3a86a4e3952fbb"
+    },
+    {
+      "id": "48-framed-light-offline-4211",
+      "seed": 4211,
+      "status": "offline",
+      "size": 48,
+      "framed": true,
+      "theme": "light",
+      "cut": [
+        1,
+        1,
+        1
+      ],
+      "file": "fixtures/spark-stills/48-framed-light-offline-4211.png",
+      "width": 144,
+      "height": 144,
+      "sha256": "31ad76a5b26ee5e56a647fc3f5e55eede38e27e7edeb7b3623d75cea0d0fa11a"
+    },
+    {
+      "id": "30-framed-light-ready-7",
+      "seed": 7,
+      "status": "ready",
+      "size": 30,
+      "framed": true,
+      "theme": "light",
+      "cut": [
+        1,
+        1,
+        1
+      ],
+      "file": "fixtures/spark-stills/30-framed-light-ready-7.png",
+      "width": 90,
+      "height": 90,
+      "sha256": "06514aa7b47a004595576a4d09deaf904fe9139b56ffcadad8d2198a2c8ed58d"
+    },
+    {
+      "id": "30-framed-dark-ready-7",
+      "seed": 7,
+      "status": "ready",
+      "size": 30,
+      "framed": true,
+      "theme": "dark",
+      "cut": [
+        0.10980392156862745,
+        0.10980392156862745,
+        0.11764705882352941
+      ],
+      "file": "fixtures/spark-stills/30-framed-dark-ready-7.png",
+      "width": 90,
+      "height": 90,
+      "sha256": "06514aa7b47a004595576a4d09deaf904fe9139b56ffcadad8d2198a2c8ed58d"
+    },
+    {
+      "id": "28-framed-light-ready-7",
+      "seed": 7,
+      "status": "ready",
+      "size": 28,
+      "framed": true,
+      "theme": "light",
+      "cut": [
+        1,
+        1,
+        1
+      ],
+      "file": "fixtures/spark-stills/28-framed-light-ready-7.png",
+      "width": 84,
+      "height": 84,
+      "sha256": "ca5f2d616650372a53559246494d38f16d95bc7a6c98dfa75206ed5d4a2852f4"
+    },
+    {
+      "id": "28-framed-dark-ready-7",
+      "seed": 7,
+      "status": "ready",
+      "size": 28,
+      "framed": true,
+      "theme": "dark",
+      "cut": [
+        0.10980392156862745,
+        0.10980392156862745,
+        0.11764705882352941
+      ],
+      "file": "fixtures/spark-stills/28-framed-dark-ready-7.png",
+      "width": 84,
+      "height": 84,
+      "sha256": "ca5f2d616650372a53559246494d38f16d95bc7a6c98dfa75206ed5d4a2852f4"
+    },
+    {
+      "id": "22-framed-light-ready-7",
+      "seed": 7,
+      "status": "ready",
+      "size": 22,
+      "framed": true,
+      "theme": "light",
+      "cut": [
+        1,
+        1,
+        1
+      ],
+      "file": "fixtures/spark-stills/22-framed-light-ready-7.png",
+      "width": 66,
+      "height": 66,
+      "sha256": "c201e2723de6c31c982be148036a6da6ddc0fc78460625d2eb331ef1a6fed3de"
+    },
+    {
+      "id": "22-framed-dark-ready-7",
+      "seed": 7,
+      "status": "ready",
+      "size": 22,
+      "framed": true,
+      "theme": "dark",
+      "cut": [
+        0.10980392156862745,
+        0.10980392156862745,
+        0.11764705882352941
+      ],
+      "file": "fixtures/spark-stills/22-framed-dark-ready-7.png",
+      "width": 66,
+      "height": 66,
+      "sha256": "c201e2723de6c31c982be148036a6da6ddc0fc78460625d2eb331ef1a6fed3de"
+    },
+    {
+      "id": "30-framed-light-thinking-4211",
+      "seed": 4211,
+      "status": "thinking",
+      "size": 30,
+      "framed": true,
+      "theme": "light",
+      "cut": [
+        1,
+        1,
+        1
+      ],
+      "file": "fixtures/spark-stills/30-framed-light-thinking-4211.png",
+      "width": 90,
+      "height": 90,
+      "sha256": "96f6d84d434066457a2f30cda07cf69bd623270c0851109cb61226c1a2c598a4"
+    },
+    {
+      "id": "30-framed-dark-thinking-4211",
+      "seed": 4211,
+      "status": "thinking",
+      "size": 30,
+      "framed": true,
+      "theme": "dark",
+      "cut": [
+        0.10980392156862745,
+        0.10980392156862745,
+        0.11764705882352941
+      ],
+      "file": "fixtures/spark-stills/30-framed-dark-thinking-4211.png",
+      "width": 90,
+      "height": 90,
+      "sha256": "96f6d84d434066457a2f30cda07cf69bd623270c0851109cb61226c1a2c598a4"
+    },
+    {
+      "id": "28-framed-light-thinking-4211",
+      "seed": 4211,
+      "status": "thinking",
+      "size": 28,
+      "framed": true,
+      "theme": "light",
+      "cut": [
+        1,
+        1,
+        1
+      ],
+      "file": "fixtures/spark-stills/28-framed-light-thinking-4211.png",
+      "width": 84,
+      "height": 84,
+      "sha256": "6da52364a7e2509feda3b235caa5bec3f9e9859ad5d6c82bd91778411a1587d1"
+    },
+    {
+      "id": "28-framed-dark-thinking-4211",
+      "seed": 4211,
+      "status": "thinking",
+      "size": 28,
+      "framed": true,
+      "theme": "dark",
+      "cut": [
+        0.10980392156862745,
+        0.10980392156862745,
+        0.11764705882352941
+      ],
+      "file": "fixtures/spark-stills/28-framed-dark-thinking-4211.png",
+      "width": 84,
+      "height": 84,
+      "sha256": "6da52364a7e2509feda3b235caa5bec3f9e9859ad5d6c82bd91778411a1587d1"
+    },
+    {
+      "id": "22-framed-light-thinking-4211",
+      "seed": 4211,
+      "status": "thinking",
+      "size": 22,
+      "framed": true,
+      "theme": "light",
+      "cut": [
+        1,
+        1,
+        1
+      ],
+      "file": "fixtures/spark-stills/22-framed-light-thinking-4211.png",
+      "width": 66,
+      "height": 66,
+      "sha256": "2141301b08828eb508f64411882dfd16fc46b22783998f9722dde371b513d33b"
+    },
+    {
+      "id": "22-framed-dark-thinking-4211",
+      "seed": 4211,
+      "status": "thinking",
+      "size": 22,
+      "framed": true,
+      "theme": "dark",
+      "cut": [
+        0.10980392156862745,
+        0.10980392156862745,
+        0.11764705882352941
+      ],
+      "file": "fixtures/spark-stills/22-framed-dark-thinking-4211.png",
+      "width": 66,
+      "height": 66,
+      "sha256": "2141301b08828eb508f64411882dfd16fc46b22783998f9722dde371b513d33b"
+    },
+    {
+      "id": "30-framed-light-asking-1",
+      "seed": 1,
+      "status": "asking",
+      "size": 30,
+      "framed": true,
+      "theme": "light",
+      "cut": [
+        1,
+        1,
+        1
+      ],
+      "file": "fixtures/spark-stills/30-framed-light-asking-1.png",
+      "width": 90,
+      "height": 90,
+      "sha256": "7257c0d77f6466e33a02cc0bd19fbef96703ac076edda486bf16730098f45e63"
+    },
+    {
+      "id": "30-framed-dark-asking-1",
+      "seed": 1,
+      "status": "asking",
+      "size": 30,
+      "framed": true,
+      "theme": "dark",
+      "cut": [
+        0.10980392156862745,
+        0.10980392156862745,
+        0.11764705882352941
+      ],
+      "file": "fixtures/spark-stills/30-framed-dark-asking-1.png",
+      "width": 90,
+      "height": 90,
+      "sha256": "cebabbf86281bae592cc2834544c3ce8abb04d9ae1c20071eeeb9c503a760083"
+    },
+    {
+      "id": "28-framed-light-asking-1",
+      "seed": 1,
+      "status": "asking",
+      "size": 28,
+      "framed": true,
+      "theme": "light",
+      "cut": [
+        1,
+        1,
+        1
+      ],
+      "file": "fixtures/spark-stills/28-framed-light-asking-1.png",
+      "width": 84,
+      "height": 84,
+      "sha256": "421f591292be8bed121a856f8d11ea0c96a306b938afd9d4ca6835074b3c3819"
+    },
+    {
+      "id": "28-framed-dark-asking-1",
+      "seed": 1,
+      "status": "asking",
+      "size": 28,
+      "framed": true,
+      "theme": "dark",
+      "cut": [
+        0.10980392156862745,
+        0.10980392156862745,
+        0.11764705882352941
+      ],
+      "file": "fixtures/spark-stills/28-framed-dark-asking-1.png",
+      "width": 84,
+      "height": 84,
+      "sha256": "d2072ccac819c63647918fdb692ee1fc8529576d148831cfcc9d5dc902ecf8df"
+    },
+    {
+      "id": "22-framed-light-asking-1",
+      "seed": 1,
+      "status": "asking",
+      "size": 22,
+      "framed": true,
+      "theme": "light",
+      "cut": [
+        1,
+        1,
+        1
+      ],
+      "file": "fixtures/spark-stills/22-framed-light-asking-1.png",
+      "width": 66,
+      "height": 66,
+      "sha256": "1a16991c38f6095260ac51ec3e1cd9d052b9a86a8e0e36f32c23da32d7ee4eea"
+    },
+    {
+      "id": "22-framed-dark-asking-1",
+      "seed": 1,
+      "status": "asking",
+      "size": 22,
+      "framed": true,
+      "theme": "dark",
+      "cut": [
+        0.10980392156862745,
+        0.10980392156862745,
+        0.11764705882352941
+      ],
+      "file": "fixtures/spark-stills/22-framed-dark-asking-1.png",
+      "width": 66,
+      "height": 66,
+      "sha256": "19f335aefd23e06fec71fd1c3670fdfb2e9ee21ebd1253f77bc5e59f877f6684"
+    },
+    {
+      "id": "30-framed-light-success-7",
+      "seed": 7,
+      "status": "success",
+      "size": 30,
+      "framed": true,
+      "theme": "light",
+      "cut": [
+        1,
+        1,
+        1
+      ],
+      "file": "fixtures/spark-stills/30-framed-light-success-7.png",
+      "width": 90,
+      "height": 90,
+      "sha256": "739597c668167a515e59f6e3bc63091fce5f7fcdebd86dafb38a69533fea9978"
+    },
+    {
+      "id": "30-framed-dark-success-7",
+      "seed": 7,
+      "status": "success",
+      "size": 30,
+      "framed": true,
+      "theme": "dark",
+      "cut": [
+        0.10980392156862745,
+        0.10980392156862745,
+        0.11764705882352941
+      ],
+      "file": "fixtures/spark-stills/30-framed-dark-success-7.png",
+      "width": 90,
+      "height": 90,
+      "sha256": "f8d16f04f7bbabe5eedba7564f97ad944c5ed4420325539eac8ed4689bb6d799"
+    },
+    {
+      "id": "28-framed-light-success-7",
+      "seed": 7,
+      "status": "success",
+      "size": 28,
+      "framed": true,
+      "theme": "light",
+      "cut": [
+        1,
+        1,
+        1
+      ],
+      "file": "fixtures/spark-stills/28-framed-light-success-7.png",
+      "width": 84,
+      "height": 84,
+      "sha256": "c127e42f6a5c8b97064a880c9c9aea448673c772c08408061cf0f73c207ad160"
+    },
+    {
+      "id": "28-framed-dark-success-7",
+      "seed": 7,
+      "status": "success",
+      "size": 28,
+      "framed": true,
+      "theme": "dark",
+      "cut": [
+        0.10980392156862745,
+        0.10980392156862745,
+        0.11764705882352941
+      ],
+      "file": "fixtures/spark-stills/28-framed-dark-success-7.png",
+      "width": 84,
+      "height": 84,
+      "sha256": "2c7ebc1e4943b269e29e4980a2311ba0a80152017c96a9b9f12843b6d7890b9a"
+    },
+    {
+      "id": "22-framed-light-success-7",
+      "seed": 7,
+      "status": "success",
+      "size": 22,
+      "framed": true,
+      "theme": "light",
+      "cut": [
+        1,
+        1,
+        1
+      ],
+      "file": "fixtures/spark-stills/22-framed-light-success-7.png",
+      "width": 66,
+      "height": 66,
+      "sha256": "7c8a02e76cd94fa5b33c5ec60a2e7c04f2a32c50d8671d3251bb6caa4883def6"
+    },
+    {
+      "id": "22-framed-dark-success-7",
+      "seed": 7,
+      "status": "success",
+      "size": 22,
+      "framed": true,
+      "theme": "dark",
+      "cut": [
+        0.10980392156862745,
+        0.10980392156862745,
+        0.11764705882352941
+      ],
+      "file": "fixtures/spark-stills/22-framed-dark-success-7.png",
+      "width": 66,
+      "height": 66,
+      "sha256": "31cadcbc96dbdb7ba7cfd6be619e3fab64413ca44138cad721c4489f96c4ee05"
+    },
+    {
+      "id": "30-framed-light-sleeping-4211",
+      "seed": 4211,
+      "status": "sleeping",
+      "size": 30,
+      "framed": true,
+      "theme": "light",
+      "cut": [
+        1,
+        1,
+        1
+      ],
+      "file": "fixtures/spark-stills/30-framed-light-sleeping-4211.png",
+      "width": 90,
+      "height": 90,
+      "sha256": "a42f122950211357e19b0d72f3780b55e833ccd1d6472b554e7eb0a8fbe9c8b1"
+    },
+    {
+      "id": "30-framed-dark-sleeping-4211",
+      "seed": 4211,
+      "status": "sleeping",
+      "size": 30,
+      "framed": true,
+      "theme": "dark",
+      "cut": [
+        0.10980392156862745,
+        0.10980392156862745,
+        0.11764705882352941
+      ],
+      "file": "fixtures/spark-stills/30-framed-dark-sleeping-4211.png",
+      "width": 90,
+      "height": 90,
+      "sha256": "dd2a682fec338037add47a0f4d756b028875885186a611432f81c3eec9302068"
+    },
+    {
+      "id": "28-framed-light-sleeping-4211",
+      "seed": 4211,
+      "status": "sleeping",
+      "size": 28,
+      "framed": true,
+      "theme": "light",
+      "cut": [
+        1,
+        1,
+        1
+      ],
+      "file": "fixtures/spark-stills/28-framed-light-sleeping-4211.png",
+      "width": 84,
+      "height": 84,
+      "sha256": "23befe40b5d47ed0f4ceaec55681e2cba40f17335fd13c42b84e88ffcf38cdfb"
+    },
+    {
+      "id": "28-framed-dark-sleeping-4211",
+      "seed": 4211,
+      "status": "sleeping",
+      "size": 28,
+      "framed": true,
+      "theme": "dark",
+      "cut": [
+        0.10980392156862745,
+        0.10980392156862745,
+        0.11764705882352941
+      ],
+      "file": "fixtures/spark-stills/28-framed-dark-sleeping-4211.png",
+      "width": 84,
+      "height": 84,
+      "sha256": "e1dc2c6d3acf61f82e2924163228f5177adf9495fd0c9109d1b30aea9f49deee"
+    },
+    {
+      "id": "22-framed-light-sleeping-4211",
+      "seed": 4211,
+      "status": "sleeping",
+      "size": 22,
+      "framed": true,
+      "theme": "light",
+      "cut": [
+        1,
+        1,
+        1
+      ],
+      "file": "fixtures/spark-stills/22-framed-light-sleeping-4211.png",
+      "width": 66,
+      "height": 66,
+      "sha256": "d21006b91883d03bcd200d395c77c30ce19b8877fde5ddc05a2cb9773c851270"
+    },
+    {
+      "id": "22-framed-dark-sleeping-4211",
+      "seed": 4211,
+      "status": "sleeping",
+      "size": 22,
+      "framed": true,
+      "theme": "dark",
+      "cut": [
+        0.10980392156862745,
+        0.10980392156862745,
+        0.11764705882352941
+      ],
+      "file": "fixtures/spark-stills/22-framed-dark-sleeping-4211.png",
+      "width": 66,
+      "height": 66,
+      "sha256": "ad88e9b4ecce645791cd95de384ac2469a894c61404f3446bbb382b8999d8eb0"
+    },
+    {
+      "id": "30-framed-light-offline-1",
+      "seed": 1,
+      "status": "offline",
+      "size": 30,
+      "framed": true,
+      "theme": "light",
+      "cut": [
+        1,
+        1,
+        1
+      ],
+      "file": "fixtures/spark-stills/30-framed-light-offline-1.png",
+      "width": 90,
+      "height": 90,
+      "sha256": "a0aa62d469986b80801e03d9fa452f9d51fa11697ca17714557a4694c48c7397"
+    },
+    {
+      "id": "30-framed-dark-offline-1",
+      "seed": 1,
+      "status": "offline",
+      "size": 30,
+      "framed": true,
+      "theme": "dark",
+      "cut": [
+        0.10980392156862745,
+        0.10980392156862745,
+        0.11764705882352941
+      ],
+      "file": "fixtures/spark-stills/30-framed-dark-offline-1.png",
+      "width": 90,
+      "height": 90,
+      "sha256": "a0aa62d469986b80801e03d9fa452f9d51fa11697ca17714557a4694c48c7397"
+    },
+    {
+      "id": "28-framed-light-offline-1",
+      "seed": 1,
+      "status": "offline",
+      "size": 28,
+      "framed": true,
+      "theme": "light",
+      "cut": [
+        1,
+        1,
+        1
+      ],
+      "file": "fixtures/spark-stills/28-framed-light-offline-1.png",
+      "width": 84,
+      "height": 84,
+      "sha256": "cd7b6102fcb2e65d2729d3aaa5312837d1324b9b3e65c8227e60b65bcf6f9c30"
+    },
+    {
+      "id": "28-framed-dark-offline-1",
+      "seed": 1,
+      "status": "offline",
+      "size": 28,
+      "framed": true,
+      "theme": "dark",
+      "cut": [
+        0.10980392156862745,
+        0.10980392156862745,
+        0.11764705882352941
+      ],
+      "file": "fixtures/spark-stills/28-framed-dark-offline-1.png",
+      "width": 84,
+      "height": 84,
+      "sha256": "cd7b6102fcb2e65d2729d3aaa5312837d1324b9b3e65c8227e60b65bcf6f9c30"
+    },
+    {
+      "id": "22-framed-light-offline-1",
+      "seed": 1,
+      "status": "offline",
+      "size": 22,
+      "framed": true,
+      "theme": "light",
+      "cut": [
+        1,
+        1,
+        1
+      ],
+      "file": "fixtures/spark-stills/22-framed-light-offline-1.png",
+      "width": 66,
+      "height": 66,
+      "sha256": "d42d8fb0eba019596b7a489977bec9a95cd799304bde9843a587ee36028974cd"
+    },
+    {
+      "id": "22-framed-dark-offline-1",
+      "seed": 1,
+      "status": "offline",
+      "size": 22,
+      "framed": true,
+      "theme": "dark",
+      "cut": [
+        0.10980392156862745,
+        0.10980392156862745,
+        0.11764705882352941
+      ],
+      "file": "fixtures/spark-stills/22-framed-dark-offline-1.png",
+      "width": 66,
+      "height": 66,
+      "sha256": "d42d8fb0eba019596b7a489977bec9a95cd799304bde9843a587ee36028974cd"
+    },
+    {
+      "id": "120-free-night-hello-7",
+      "seed": 7,
+      "status": "hello",
+      "size": 120,
+      "framed": false,
+      "theme": "night",
+      "cut": [
+        0,
+        0,
+        0
+      ],
+      "file": "fixtures/spark-stills/120-free-night-hello-7.png",
+      "width": 540,
+      "height": 540,
+      "sha256": "39c694cf2afe72c21f4427485fbc385e535cd8d794a2af12a16721a61c42a7d9"
+    },
+    {
+      "id": "120-free-night-ready-4211",
+      "seed": 4211,
+      "status": "ready",
+      "size": 120,
+      "framed": false,
+      "theme": "night",
+      "cut": [
+        0,
+        0,
+        0
+      ],
+      "file": "fixtures/spark-stills/120-free-night-ready-4211.png",
+      "width": 540,
+      "height": 540,
+      "sha256": "b4e1376284462e2d1f8ee3760fe25bbc301213c61f39c6dd5f3a12f071202dd2"
+    },
+    {
+      "id": "120-free-night-success-1",
+      "seed": 1,
+      "status": "success",
+      "size": 120,
+      "framed": false,
+      "theme": "night",
+      "cut": [
+        0,
+        0,
+        0
+      ],
+      "file": "fixtures/spark-stills/120-free-night-success-1.png",
+      "width": 540,
+      "height": 540,
+      "sha256": "a3d6d1abfa584583f708f8256dbf0fd9b3deab77b57062ecdc35dbcf6836f00d"
+    }
+  ]
+}
