@@ -94,8 +94,10 @@ function link(opts: Omit<MeshLaneLinkOptions, "bootId">): MeshLaneLink {
 }
 
 /** A bridge that speaks the frame protocol and lets the test push inbound
- * DATA whenever it likes — including BEFORE the consumer subscribes. */
-async function fakeBridge(): Promise<{
+ * DATA whenever it likes — including BEFORE the consumer subscribes. Item 206's
+ * boot half: `late` binds no endpoint until `listen()`, as a floor whose mesh
+ * comes on after fieldd booted. */
+async function fakeBridge(opts: { late?: boolean } = {}): Promise<{
   socketPath: string;
   pairingFile: string;
   sendData: (laneId: number, payload: Uint8Array) => void;
@@ -108,6 +110,8 @@ async function fakeBridge(): Promise<{
   dropAtAccept: (n: number) => void;
   /** every connection that reached the bridge, the dropped ones included */
   accepted: () => number;
+  /** bind the endpoint now (a `late` bridge's; a no-op for one already listening) */
+  listen: () => Promise<void>;
 }> {
   const dir = tmp("fake");
   // The fake binds the endpoint the real bridge would, by the same law (WIN-D1):
@@ -167,7 +171,11 @@ async function fakeBridge(): Promise<{
       }
     });
   });
-  await new Promise<void>((resolve) => server.listen(endpoint, resolve));
+  const listen = async (): Promise<void> => {
+    if (server.listening) return;
+    await new Promise<void>((resolve) => server.listen(endpoint, resolve));
+  };
+  if (opts.late !== true) await listen();
   closers.push(() => {
     client?.destroy();
     server.close();
@@ -184,6 +192,7 @@ async function fakeBridge(): Promise<{
       toDrop = n;
     },
     accepted: () => accepts,
+    listen,
   };
 }
 
@@ -424,6 +433,44 @@ describe("item 206 — a dropped accept costs the lane link one back-off step, n
     expect({ dialed: bridge.accepted() - before, closed: l.closed }).toEqual({
       dialed: 0,
       closed: true,
+    });
+  }, 20_000);
+});
+
+// Item 206's boot half — `meshdata-boot-redial` (a), James 2026-11-06 22:56Z: a boot whose first dial fails is not
+// terminal. CP-1b's "a link this boot closed stays closed" is superseded for the boot; `close()` still ends a link.
+describe("item 206's boot half — a first dial that fails is not terminal", () => {
+  it("R5: with redial, dialLater() after a failed first dial dials on the back-off, and the link comes up once the bridge listens", async () => {
+    const bridge = await fakeBridge({ late: true });
+    const l = link({
+      socketPath: bridge.socketPath,
+      pairingFile: bridge.pairingFile,
+      redial: true,
+    });
+    const first = await l.connect().then(
+      () => "connected",
+      (error: unknown) => String(error),
+    );
+    expect(first).not.toBe("connected");
+    expect(typeof (l as { dialLater?: unknown }).dialLater, "the link has dialLater()").toBe(
+      "function",
+    );
+    const delays: number[] = [];
+    let ups = 0;
+    l.on("reconnecting", (delay: number) => delays.push(delay));
+    l.on("connected", () => {
+      ups += 1;
+    });
+    (l as unknown as { dialLater: () => void }).dialLater();
+    // the 500 ms dial meets no bridge and arms 1000; the bridge listens, and the 1000 ms dial is served
+    const armed = await until(() => delays.length >= 2, 3_000);
+    await bridge.listen();
+    const up = await until(() => l.connected, 4_000);
+    expect({ armed, up, ups, delays: delays.slice(0, 2) }).toEqual({
+      armed: true,
+      up: true,
+      ups: 1,
+      delays: [500, 1_000],
     });
   }, 20_000);
 });

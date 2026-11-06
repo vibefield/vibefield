@@ -1,5 +1,6 @@
 import { MESHDATA_INBOUND_LANE_ID_BASE } from "@vibefield/contracts";
 import { describe, expect, it } from "vitest";
+import type { DocumentPresenceRooms } from "../src/doc-lane";
 import type { LaneInfo } from "../src/doc-sync";
 import {
   type PresenceLaneBytes,
@@ -264,6 +265,32 @@ describe("UA-P-0f — presence admits only this account's peers", () => {
     bytes.deliver(lane, new Uint8Array([7]));
     expect(received).toEqual([7]);
     expect(control.closed).not.toContain(lane);
+    await room.close();
+  });
+});
+
+// Item 206's boot half (`meshdata-boot-redial` (a), James 2026-11-06): the daemon builds the router at boot and
+// starts it on the lane link's first HELLO_OK, which may come late. A doc lane that authenticates before then must not
+// meet `attach`'s "not started" throw: it gets an inert handle, and its room at its next open.
+describe("item 206's boot half — a doc lane attaches to presence only once it has started", () => {
+  it("R8: before start() an attach is an inert handle that never throws; after it, the router's own room", async () => {
+    const mod = await import("../src/presence-room");
+    const once = (mod as { presenceRoomsOnceStarted?: unknown }).presenceRoomsOnceStarted;
+    expect(typeof once, "presence-room exports presenceRoomsOnceStarted").toBe("function");
+    const { router, control } = harness();
+    const rooms = (once as (router: PresenceRoomRouter) => DocumentPresenceRooms)(router);
+    const early = rooms.attach("doc-a", () => {});
+    early.publish(new Uint8Array([1]));
+    await early.close();
+    expect({ rooms: router.state().rooms, opened: control.opened.length }).toEqual({
+      rooms: 0,
+      opened: 0,
+    });
+    await router.start();
+    const room = rooms.attach("doc-a", () => {});
+    room.publish(new Uint8Array([2]));
+    await until(() => control.opened.length === 1, "the room's lane");
+    expect(router.state().rooms).toBe(1);
     await room.close();
   });
 });

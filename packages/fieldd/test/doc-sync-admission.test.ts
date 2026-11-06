@@ -159,3 +159,33 @@ describe("D3 — the daemon refuses a phone's doc lane, inbound (UA-P-D5)", () =
     );
   }, 30_000);
 });
+
+// Item 206's boot half — `meshdata-boot-redial` (a), James 2026-11-06 22:56Z: a boot whose first dial of the lane link
+// fails is not terminal. The link dials on the back-off, and doc sync and presence start on its first HELLO_OK, so a
+// mesh that comes on after fieldd booted needs no fieldd restart.
+describe("item 206's boot half — a boot with no MeshData bridge starts doc sync once the bridge comes", () => {
+  it("R6: fieldd boots with no bridge, so nothing subscribes to the lane table; the bridge comes, and doc sync and presence subscribe within 6 s", async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), "vf-doc-boot-"));
+    cleanup.push(() => rmSync(dataDir, { recursive: true, force: true }));
+    writeLinkFixture(dataDir);
+    mkdirSync(join(dataDir, "native", "run"), { recursive: true });
+    writeFileSync(join(dataDir, "native", "pairing"), "ab".repeat(32));
+    const mock = new MockMgmtServer(nativeEndpoint(dataDir, SOCKETS.MGMT));
+    mock.meshDeviceId = "dev-a";
+    await mock.start();
+    cleanup.push(() => mock.stop());
+    const daemon = await bootstrap({ dataDir, controlPort: 0, dataPort: 0 });
+    cleanup.push(() => daemon.stop());
+    const laneSubscriptions = (): number =>
+      mock.meshCalls.filter((method) => method === "native.mesh.lane.subscribe").length;
+    // a beat for the boot's dial to fail and the first redial (500 ms) to meet no bridge either
+    await new Promise((resolve) => setTimeout(resolve, 700));
+    const before = laneSubscriptions();
+    await meshDataBridge(dataDir);
+    const subscribed = await until(() => laneSubscriptions() >= 2, 6_000).then(
+      () => true,
+      () => false,
+    );
+    expect({ before, subscribed }).toEqual({ before: 0, subscribed: true });
+  }, 30_000);
+});

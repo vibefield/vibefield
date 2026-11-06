@@ -329,6 +329,20 @@ describe("broadcasting what we commit", () => {
     expect(digest.records).toEqual([]);
   });
 
+  it("item 206's boot half: a commit before start() asks for no lane — the start's own replication says it once the link is up", async () => {
+    // the daemon builds the service at boot and starts it on the lane link's first HELLO_OK, which may come late
+    const { docs, control, sync } = harness(["peer-a"]);
+    const docId = await seeded(docs);
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    expect(control.opened).toHaveLength(0);
+    await sync.start();
+    // (a system document may open its own lane beside it)
+    await until(
+      () => control.opened.some((o) => o.docId === docId),
+      "the doc's lane, once started",
+    );
+  });
+
   it("answers a HAVE with only what the peer lacks", async () => {
     const { docs, control, bytes, sync } = harness();
     const docId = await seeded(docs);
