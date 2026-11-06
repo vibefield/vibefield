@@ -2361,7 +2361,8 @@ describe("CP-4a2b — a changed flow's acts begin the asked-for run (§13a slice
       vi.spyOn(h.records, "bytes").mockReturnValue(undefined);
       return head;
     });
-    // the read after the wake, the first to find it lost, is the disk's to refuse
+    // the read after the wake, the first to find it lost, is the disk's to refuse. This holds only while nothing
+    // subscribes: a subscriber's list() would take the spied throw into #finish's catch (1h review DD2)
     const read = h.records.runRecord.bind(h.records);
     let refused = false;
     vi.spyOn(h.records, "runRecord").mockImplementation((run) => {

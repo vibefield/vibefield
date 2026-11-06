@@ -140,22 +140,76 @@ describe("CP-4a2b — a flow step's turn end (CP4-S2)", () => {
     expect(heard.map((end) => [end.turn, end.text])).toEqual([["t1", "done"]]);
   });
 
-  it("SE8 (slices 7–9 review F3): an end with no turn id told again, nothing of the run's own heard since, is told once; a turn:started or an assistant message since makes the next one an end", () => {
-    const { heard, emit } = entered();
-    emit("turn:started", {});
-    emit("turn:completed", { lastAssistantMessage: "no json here" });
-    emit("turn:completed", { lastAssistantMessage: "no json here" });
-    expect(heard.map((end) => end.text)).toEqual(["no json here"]);
-    // the repair's turn, heard starting: its end is told
-    emit("turn:started", {});
-    emit("turn:completed", { lastAssistantMessage: "the repaired answer" });
-    // a turn whose start is not said: its own words are heard before its end
-    emit("conversation:assistant-message", said("and once more", { turnId: undefined }));
-    emit("turn:failed", {});
-    expect(heard.map((end) => [end.outcome, end.text])).toEqual([
-      ["completed", "no json here"],
-      ["completed", "the repaired answer"],
-      ["failed", undefined],
+  it("SE8 (slices 7–9 review F3; DD1): the same end told again, nothing of the run's own heard since, is told once whatever its id, unless both carry ids that differ; a failure after a completion, the next turn, or an end after the run's own words is told", () => {
+    /** One run's events, from a fresh listener: each end it told, as its outcome, its turn and its text. */
+    const leg = (...events: readonly (readonly [string, Record<string, unknown>])[]) => {
+      const { heard, emit } = entered();
+      for (const [type, event] of events) emit(type, event);
+      return heard.map((end) => [end.outcome, end.turn, end.text]);
+    };
+    const missed = { lastAssistantMessage: "no json here" };
+    // 1: an end with an id, then the same end with none
+    expect(
+      leg(
+        ["turn:started", { turnId: "t1" }],
+        ["turn:completed", { turnId: "t1", ...missed }],
+        ["turn:completed", missed],
+      ),
+    ).toEqual([["completed", "t1", "no json here"]]);
+    // 2: the mirror, an end with no id and then the same end with one
+    expect(
+      leg(
+        ["turn:started", {}],
+        ["turn:completed", missed],
+        ["turn:completed", { turnId: "t1", ...missed }],
+      ),
+    ).toEqual([["completed", undefined, "no json here"]]);
+    // 3: the declared gap: an own message between the two, even one only shown, makes the second an end
+    expect(
+      leg(
+        ["turn:started", {}],
+        ["turn:completed", missed],
+        ["conversation:assistant-message", said("shown", { turnId: undefined, displayOnly: true })],
+        ["turn:completed", missed],
+      ),
+    ).toEqual([
+      ["completed", undefined, "no json here"],
+      ["completed", undefined, "no json here"],
+    ]);
+    // 4: a failure after a completion, nothing between: another outcome is another end, and it is heard
+    expect(leg(["turn:started", {}], ["turn:completed", missed], ["turn:failed", {}])).toEqual([
+      ["completed", undefined, "no json here"],
+      ["failed", undefined, undefined],
+    ]);
+    // 5: the same end said by two sources, the second without its text
+    expect(
+      leg(
+        ["turn:started", {}],
+        ["turn:completed", { lastAssistantMessage: "X" }],
+        ["turn:completed", {}],
+      ),
+    ).toEqual([["completed", undefined, "X"]]);
+    // the repair's turn, heard starting, is its own end; so is one after the run's own words
+    expect(
+      leg(
+        ["turn:started", {}],
+        ["turn:completed", missed],
+        ["turn:completed", missed],
+        ["turn:started", {}],
+        ["turn:completed", { lastAssistantMessage: "the repaired answer" }],
+        ["conversation:assistant-message", said("and once more", { turnId: undefined })],
+        ["turn:failed", {}],
+      ),
+    ).toEqual([
+      ["completed", undefined, "no json here"],
+      ["completed", undefined, "the repaired answer"],
+      ["failed", undefined, undefined],
+    ]);
+    // distinct ids are distinct turns (CL-H6), though nothing was heard between them
+    const ids = leg(["turn:completed", { turnId: "t1" }], ["turn:completed", { turnId: "t2" }]);
+    expect(ids).toEqual([
+      ["completed", "t1", undefined],
+      ["completed", "t2", undefined],
     ]);
   });
 });
