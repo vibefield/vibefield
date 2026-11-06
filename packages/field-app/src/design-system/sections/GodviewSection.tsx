@@ -1,6 +1,5 @@
 import { type ReactElement, useMemo } from "react";
 import { ApprovalWaitCard } from "../../godview/ApprovalWaitMoment";
-import { LimitMomentCard } from "../../godview/LimitMoment";
 import { FIXTURE_APPROVAL_WAIT } from "../approval-wait-fixtures";
 import { Section, Specimen } from "../catalog-ui";
 import { GodviewPreview } from "../GodviewPreview";
@@ -8,7 +7,6 @@ import { meshBoardDoor } from "../godview-mesh-fixtures";
 import { profileTabsDoor } from "../godview-profiles-fixtures";
 import { spendDoor } from "../godview-spend-fixtures";
 import { timelineDoor } from "../godview-timeline-fixtures";
-import { FIXTURE_LIMIT_MOMENT } from "../limit-moment-fixtures";
 import { PaneFrameDeck, PaneFramePreview } from "../PaneFramePreview";
 import { PaneLauncherPreview } from "../PaneLauncherPreview";
 import { PeekPlate } from "../PeekPreview";
@@ -85,28 +83,6 @@ export function GodviewSection({ dark = false }: { dark?: boolean } = {}): React
         bleed
       >
         <ProfilesColumnPreview theme={theme} />
-      </Specimen>
-      <Specimen
-        title="The limit moment — once, beside the profiles column's add: a plan at 90% or more of a window while This Mac is the only profile (AO-6b, UM-D23)"
-        source="godview/LimitMoment.tsx"
-        bleed
-      >
-        <div data-godview-limit-catalog="">
-          <GodviewPreview
-            door={profilesDoor}
-            theme={theme}
-            limitMoment={
-              // the shipping card over the shipping rule's fixture; a catalog acts on no one
-              FIXTURE_LIMIT_MOMENT === null ? null : (
-                <LimitMomentCard
-                  fact={FIXTURE_LIMIT_MOMENT}
-                  onAddProfile={() => undefined}
-                  onNotNow={() => undefined}
-                />
-              )
-            }
-          />
-        </div>
       </Specimen>
       <Specimen
         title="The approval line — once, on the claims strip: an approval that waited more than ten minutes, as it clears, while this Mac is not connected (TS-4b)"

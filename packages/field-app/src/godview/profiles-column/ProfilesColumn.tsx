@@ -44,6 +44,26 @@ export const ColumnAddPresses = createContext(0);
 /** How often the column's words read the clock again: a reset and a forecast move by the minute. */
 const CLOCK_MS = 60_000;
 
+/** THE COLUMN'S READING: each profile that stands on a circle (ruling 7), in the feed's order, with its meters read at
+ * `now` — This Mac alone, dashed, while there are no sets to read. Every circle that would read draws dashed while the
+ * usage cannot be read (ruling 10), and This Mac's lists the installed agents (ruling 8). The controller's, and the
+ * catalog's over its fixtures (`ProfilesColumnPreview.tsx`). */
+export function columnCircles(
+  sets: readonly AgentProfileSet[] | null,
+  rows: readonly AgentAccountUsageEntry[] | null,
+  now: Date,
+  options: { installed?: ReadonlySet<string> | undefined; usageUnavailable: boolean },
+): ColumnCircle[] {
+  const shown = sets === null ? [THIS_MAC] : sets.filter(hasCircle);
+  return shown.map((set) => ({
+    set,
+    meters: planMeters(set, rows ?? [], now, {
+      ...(options.installed !== undefined ? { installed: options.installed } : {}),
+      usage: options.usageUnavailable ? "unavailable" : "available",
+    }),
+  }));
+}
+
 export interface ProfilesColumnProps {
   /** the profile filter's sets; null until the feed has answered, or with no profiles door */
   sets: readonly AgentProfileSet[] | null;
@@ -101,16 +121,10 @@ function ProfilesColumnController({
     const timer = window.setInterval(() => setClock(new Date()), CLOCK_MS);
     return () => window.clearInterval(timer);
   }, [now]);
-  const circles = useMemo<ColumnCircle[]>(() => {
-    const shown = sets === null ? [THIS_MAC] : sets.filter(hasCircle);
-    return shown.map((set) => ({
-      set,
-      meters: planMeters(set, rows ?? [], clock, {
-        ...(installed !== undefined ? { installed } : {}),
-        usage: usageUnavailable ? "unavailable" : "available",
-      }),
-    }));
-  }, [sets, rows, clock, installed, usageUnavailable]);
+  const circles = useMemo<ColumnCircle[]>(
+    () => columnCircles(sets, rows, clock, { installed, usageUnavailable }),
+    [sets, rows, clock, installed, usageUnavailable],
+  );
   // UM-D19: several profiles make each circle the lens; one (UM-D12) has none to choose
   const lens = circles.length > 1;
   const [pointed, setPointed] = useState<string | null>(null);

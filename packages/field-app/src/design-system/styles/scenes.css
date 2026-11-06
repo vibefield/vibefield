@@ -717,8 +717,10 @@
 /* The swarm's bodies (AR-5): the views package's lab fixtures on the SHIPPING
    view, inside a Godview root of the catalog's own so the instrument tokens
    scope to it. The root is the product's class; these rules only undo the
-   overlay geometry (fixed, full-window, hidden until open) for a page. */
-.vf-ds-swarm-bodies-catalog.vf-godview {
+   overlay geometry (fixed, full-window, hidden until open) for a page. The
+   profiles column's plates (UM-3) are such roots too, one per state. */
+.vf-ds-swarm-bodies-catalog.vf-godview,
+.vf-ds-profiles-plate.vf-godview {
   position: relative;
   z-index: auto;
   width: 100%;
@@ -821,6 +823,38 @@
   height: 560px;
   min-height: 0;
   flex: none;
+}
+
+/* UM-3 — the profiles column on fixtures (DESIGN.md §8 "Godview's profiles
+   column"): the column stands at each plate's top left as the chrome slot
+   stands it on the stage (13 in), with room on its right for what opens beside
+   it; a popover's plate takes the row. The column's own rules are the
+   product's (profiles-column.css): these lay out the plates and their words. */
+.vf-ds-profiles-plates {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+  gap: 12px;
+}
+
+.vf-ds-profiles-plate.vf-godview {
+  display: block;
+  min-height: 300px;
+  margin: 0;
+  padding: 36px 13px 13px;
+}
+
+.vf-ds-profiles-plate.vf-godview.is-wide {
+  grid-column: 1 / -1;
+  min-height: 420px;
+}
+
+.vf-ds-profiles-caption {
+  position: absolute;
+  top: 10px;
+  left: 12px;
+  color: var(--vf-ds-muted);
+  font-size: 10px;
+  font-weight: 550;
 }
 
 .vf-ds-inventory-grid {

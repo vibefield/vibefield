@@ -1,14 +1,16 @@
 import type { SessionSummary } from "@vibecook/ghosttea-protocol";
 import {
   AGENT_CATALOG,
+  type AgentAccountUsageEntry,
   type AgentPersona,
   type AgentProfileSet,
   type AgentSessionSummary,
 } from "@vibefield/contracts";
 import type { AccountUsagePort, HistoryPort } from "@vibefield/puppeteer-views";
-import type { MonitorDoor } from "../godview/monitor/remote-door";
+import type { MonitorDoor, MonitorUsagePort } from "../godview/monitor/remote-door";
 import type { MonitorPaneFacts } from "../godview/monitor/useMonitorAgents";
 import { type CatalogDesktop, catalogModelBoard } from "./godview-model-fixture";
+import { FIXTURE_PROFILES_CONTEXT, FIXTURE_PROFILES_NOW } from "./profiles-fixtures";
 
 /** This desktop, as the catalog's roster names it (`godview-mesh-fixtures.ts`). */
 export const THIS_MAC: CatalogDesktop = { id: "this-mac", name: "MacBook Pro", platform: "darwin" };
@@ -212,12 +214,41 @@ export const NO_USAGE: AccountUsagePort = {
   subscribe: () => () => undefined,
 };
 
+/** UM-3 — the profiles' usage as the stage's column reads it through the port's one feed (`subscribeRows`): the
+ * Agent Profiles catalog's own rows (`FIXTURE_PROFILES_CONTEXT.usage`, so no agent is named here, R23b), every time
+ * in them moved as far as `now` is from that catalog's clock, as the sessions above are moved to it. A reading is
+ * then as old, and a reset as near, on the stage as on Settings' page. This Mac's installs are that catalog's, and a
+ * Retry reads nothing new. */
+function profilesUsage(now: Date): MonitorUsagePort {
+  const shift = now.getTime() - FIXTURE_PROFILES_NOW.getTime();
+  const moved = (iso: string): string => new Date(Date.parse(iso) + shift).toISOString();
+  const rows: AgentAccountUsageEntry[] = FIXTURE_PROFILES_CONTEXT.usage.map((entry) => ({
+    ...entry,
+    fetchedAt: moved(entry.fetchedAt),
+    metrics: entry.metrics.map((metric) =>
+      metric.resetsAt === undefined ? metric : { ...metric, resetsAt: moved(metric.resetsAt) },
+    ),
+  }));
+  const installs = new Set(FIXTURE_PROFILES_CONTEXT.installs.map((install) => install.provider));
+  return {
+    ...NO_USAGE,
+    subscribeRows: (listener) => {
+      listener(rows);
+      return () => undefined;
+    },
+    refresh: async () => undefined,
+    installs: async () => installs,
+  };
+}
+
 /** A door with the fold, the profiles and the model board in it, and no deck:
  * every verb that would need a pane says there is none, as the live door says
  * it. MV-3b: the monitor draws the board (`godview-model-fixture.ts`); the fold
- * stays for the marker and the find sheet, as in the product. */
+ * stays for the marker and the find sheet, as in the product. UM-3: the
+ * profiles' usage too, which the stage's column reads. */
 export function profileTabsDoor(): MonitorDoor {
-  const rows = profileTabRows(new Date().toISOString());
+  const now = new Date();
+  const rows = profileTabRows(now.toISOString());
   const board = catalogModelBoard({ device: THIS_MAC, rows, profiles: PROFILE_TAB_SETS });
   return {
     model: board.port,
@@ -225,7 +256,7 @@ export function profileTabsDoor(): MonitorDoor {
     createTerminal: async () => ({ state: "no-pane" }),
     mountLocal: async () => ({ state: "no-pane" }),
     transcripts: NO_HISTORY,
-    usage: NO_USAGE,
+    usage: profilesUsage(now),
     profiles: {
       subscribe: (listener) => {
         listener(PROFILE_TAB_SETS);

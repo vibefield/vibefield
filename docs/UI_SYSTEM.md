@@ -83,6 +83,21 @@ The catalog currently mounts these shipping views directly:
   `GodviewHeadView`, which the shipping monitor mounts, so every Godview specimen wears it and no
   catalog module names it. The stage specimen stages the catalog's own button for the System
   control panel, which the product reaches from the palette
+- *added 2026-11-06 (UM-3):* Godview's profiles column (DESIGN.md §8 "Godview's profiles column").
+  Every stage wears it, since the shipping monitor mounts it, and the profile tabs' fixture door
+  serves it usage: the Agent Profiles fixture's rows, moved to the stage's clock. So the profile
+  filter's specimen shows the lens on Work, reading. Its plates (`ProfilesColumnPreview.tsx`) are
+  the shipping `ProfilesColumnView`, its circles read by the controller's own `columnCircles`, over
+  the Agent Profiles fixtures at their own clock, each state a Godview root of its own in the
+  page's theme:
+  - one profile and three, each typical, near the limit and at its first read
+  - a popover pinned by the lens
+  - the add's card, and the limit moment in its place (AO-6b's plate, off the claims strip)
+  - usage unavailable, and no profiles door
+  - a first read held still (Godview's animations off, as under Reduce Motion)
+
+  Only what the controller keeps (what is open, pinned or pointed at) is stood in. The catalog's
+  CSS may not own a `.vf-profiles-*` or `.vf-bands-*` rule (`ui-system-boundaries.test.ts`)
 - the command palette (re-cut by One Frame FR-3: the frame's acts and the plugins' commands, each
   key at its row's end), settings dialog and loading veil (the side-panel frame retired into the
   right edge's drawer at FR-4, and the drawer into the pill's Artifacts shelf at HN-8)
