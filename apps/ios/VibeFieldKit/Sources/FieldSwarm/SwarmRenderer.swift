@@ -50,6 +50,16 @@ public struct RenderBody {
   }
 }
 
+extension RenderBody {
+  /// What the stale treatment multiplies a stale body's paint by, over `opacity`: the stale weight; 1 for a body
+  /// that is not stale.
+  public var staleDim: Double { model.stale ? SwarmWeight.stale : 1 }
+
+  /// The weight this body's paint stands at: its opacity (the arrival and the lens's recede), and a stale body's
+  /// treatment over it.
+  public var paintWeight: Double { opacity * staleDim }
+}
+
 public struct SwarmGlow: Equatable, Sendable {
   public var reach: Double
   public var strength: Double

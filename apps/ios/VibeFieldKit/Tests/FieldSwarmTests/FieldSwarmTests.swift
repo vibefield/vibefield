@@ -497,6 +497,36 @@ private func catalogGolden() throws -> [CatalogMarkRow] {
     let plain = stage.frame(time: 0.03, motion: false).bodies.map(\.opacity)
     #expect(plain == [1, 1])
   }
+
+  /// One recede rule across Field's views (the UM lead's ruling for M-phone, 2026-11-06): a stale body under the
+  /// lens weighs the recede's weight, as a stale row does in the list (`ListPaint.weight`: the recede's rule comes
+  /// after the stale one's, so a row both stale and receded weighs the recede's) — never the stale weight times it.
+  /// Shown, a stale body keeps the stale weight; stepping back, its weight follows the recede's until that passes the
+  /// stale weight, so it never jumps. The pace is the row above's (a hundredth a millisecond).
+  @Test func aStaleBodyUnderTheLensWeighsTheRecedesWeightNotBothMultiplied() {
+    let stage = stage()
+    stage.update(bubbles: [bubble(id: "a", stale: true), bubble(id: "b", stale: true), bubble(id: "c")], time: 0)
+    stage.pump(time: 0)
+    let pace: (Double, Double, Double) -> Double = { current, target, deltaMs in
+      let rate = deltaMs / 100
+      if abs(target - current) <= rate { return target }
+      return current + (target > current ? rate : -rate)
+    }
+    stage.recede = SwarmRecede(targets: ["b": 0.22, "c": 0.22], approach: pace)
+    let first = stage.frame(time: 0.01, motion: false).bodies
+    let shown = first.first { $0.model.id == "a" }?.paintWeight ?? 0
+    let staleReceded = first.first { $0.model.id == "b" }?.paintWeight ?? 0
+    let receded = first.first { $0.model.id == "c" }?.paintWeight ?? 0
+    #expect(abs(shown - SwarmWeight.stale) < 1e-9)
+    #expect(abs(staleReceded - 0.22) < 1e-9)
+    #expect(abs(receded - 0.22) < 1e-9)
+    // the lens let go: the stale body steps back at the pace, the frame's 10 ms from 0.22 to 0.32, below the stale
+    // weight, so it stands there
+    stage.recede = SwarmRecede(targets: [:], approach: pace)
+    let next = stage.frame(time: 0.02, motion: false).bodies
+    let stepped = next.first { $0.model.id == "b" }?.paintWeight ?? 0
+    #expect(abs(stepped - 0.32) < 1e-9)
+  }
 }
 
 @Suite @MainActor struct ShaderCompileTests {

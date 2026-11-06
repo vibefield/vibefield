@@ -29,6 +29,9 @@ public enum SwarmWeight {
   public static let secondary = 0.64
   /// The centred title: the project's name, or what the body needs from you.
   public static let title = 1.0
+  /// Evidence went quiet: the weight a stale body's whole paint stands at — its body (the stale treatment in
+  /// `body.metal`) and its copy (`SwarmRenderer`).
+  public static let stale = 0.58
 }
 
 /// The climb the context gauge and the burn ladder share. A short arc or a lone
