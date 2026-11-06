@@ -38116,6 +38116,15 @@ import walls (root `package.json`, one line, pin-class).
     tempdirs), `tests/mgmt_server.rs` (8), `tests/door_bridge.rs` (8) and `src/services/mesh.rs` (6), and one each
     in `door.rs`, `mesh_bridge.rs` and `mesh_egress.rs`. On unix, `cell_lifecycle.rs` and the route probe make
     named roots under `/tmp`, so they are not it.
+  > *Answered and corrected 2026-11-06 (item 196, LANDED "Item 196"):* both classes were item 196's. The second:
+  > the reading held for the order and missed the cells. The roots went first, while their floors still ran, and
+  > on unix `killDaemonTree` reaches the floor's one pid while its cells outlive it. The fix ends each floor and
+  > awaits it, ends whatever still runs under its root, and only then removes the root. The third, corrected:
+  > the list held the files and missed the cause. a9's attribution (45 runs) found one root in
+  > `src/services/mesh.rs`'s tests, and all three of their boots await `shutdown()`. The gap was the daemon's
+  > own `stop()`: it returned inside a cell's start window, and the cell lived on to panic. r2's `lane` witness
+  > then found `tests/mgmt_server.rs`'s: nine rows that never stopped their floors. Instances 1 and 2 are the
+  > two classes' cells, not a respawn.
 - The roots already left on the hosts are James's reap: 33,561 entries on the old mini, 1,003 on vf-m1 at a9's
   count.
 
@@ -38668,3 +38677,120 @@ no body: its 25 are pre-light #1–#25 before the restack, and `um/2-desk` (`59f
 
 Three inserts into older entries: AR-S2d's and AR-S5's Owed, answered in part, and M-U1's Owed, answered, with its
 Found's "Settings and the meter differ until UM-3 adopts the leaf" answered in part in the same block.
+
+## Item 196 — a test's child outlived its temp root, in both languages: the kill matrix removed its roots before it ended their floors, and a stop inside a cell's start window left the cell running (2026-11-06)
+(2026-11-06; four commits, `ce7f52766`, `0d966e5f3` (red), `a05216c49` and `8c900366c`, on lane `item196` (branch
+`item196-on-1fcbf0963`) over main `1fcbf0963`, fd's, in `/Volumes/SamsungRed/lanes/item190`. The first three were
+cut on `856c47aac` as `1841d4437` → `380857433` → `8aa820412`. They were re-cut onto `6095a9bb8` as `ee0a6ce80`,
+the fourth (`0653ab586`) followed r2's `lane` red, and all four were re-cut onto VF-DRC's `1fcbf0963`. M189 is
+`8c900366c` itself, a fast-forward of main `1fcbf0963` by the fixer, run 189, landed 2026-11-06T12:13:50Z.)
+Filed by VF-PM at 09:33Z for the kill matrix, and widened at 09:44Z to the class in both languages (run184's three
+`.tmp*` roots). It answers item 195's two Owed classes.
+
+**What.** A daemon fix with real reach, and a test fix.
+- **The daemon.** `TerminalService::stop()` waited for the routes snapshot to empty, and a cell has a route row
+  only after its hello. So a stop inside a cell's start window returned at once, and the unit's teardown dropped
+  the start in flight. Nothing killed the child (no `kill_on_drop`), so the cell lived on with its pipes closed.
+  It panicked on its way out (EPIPE on stderr) and left its crumb and its sockets in the run dir. A quit during
+  the floor's boot did that. No session is lost: a cell that has not said hello holds none.
+- **The tests.**
+  - The kill matrix's `afterEach` removed each row's data root while its floor still ran, and SIGKILLed the floor
+    only afterwards, awaiting nothing. A removal raced by a live writer left `vf-km-` roots.
+  - Nine of mgmt_server's rows booted a floor and never stopped it. Each ended inside its cells' start window, so
+    the cells bound their sockets inside the TempDir's removal and the root stayed.
+
+**The attribution.** One frozen script (`item196-attribution.sh`, `faef21ed…`), 15 rows × 3 = 45 runs on the old
+mini, a9's, 10:33–10:41Z. Each run had a TMPDIR of its own. It counted `/private/tmp` births by `stat %B`, and the
+new cell and field-native pids at 0, +5 and +30 s.
+- The one Rust root came from lib `services::mesh::`, 1 of 3: `native/run/` holding `termcell.1.crumb`,
+  `termcell.2.crumb` and `termframe.1.sock`. Both crumbs read "failed printing to stderr: Broken pipe (os error
+  32)".
+- Every other row read 0 of 3, and no cell was alive at +30 s anywhere. km left no `vf-km-`: f31's two were real,
+  and the race is intermittent.
+- The hypothesis, written before the tally (`lanes/item190/item196-notes/hypothesis.md`), was a floor that is
+  never stopped. It fell to its own first falsifier: the leaking row's three booting tests all await `shutdown()`.
+  Read in code, the gap was `stop()`'s wait. The file carries its dated correction.
+- The two crumbs are the Agent and Interactive classes' cells, which start together at boot, not a respawn.
+- The rows predicted exposed (door, door_bridge, mgmt_server) read 0 of 3 here. mgmt_server's turn came at r2.
+
+**The fix.**
+- `ce7f52766`, the TS half. The kill matrix's cleanups run first, as before. Then:
+  - each floor is ended through `killDaemonTree` and awaited;
+  - `endProcessesUnder(root)` ends whatever still runs under the root: its cells, found by their own
+    `--control`, `--frame` and `--crumb` paths, SIGKILLed and awaited;
+  - only then does `removeTempRoot` remove the root.
+  - The helper refuses anything but a harness temp root, `/tmp/vf-<prefix><6>` (VF-PM's guard). Its row is in
+    `native-harness.test.ts` (14 → 15).
+- `0d966e5f3` (red):
+  - `tests/terminal_stop_starting_cells.rs`, one test, five rounds. Each boots a floor in-process, stops it the
+    moment a cell process exists, and asserts no cell child, no crumb, and no root once the TempDir drops.
+  - `cell_lifecycle.rs`'s new row (9 → 10): the real cell binary on a stderr nobody reads must exit 2, not 101.
+- `a05216c49`:
+  - (a) `stop()` awaits the supervisor tree's own stop path, which already collected every cell task's ending, a
+    starting cell's included. `stop_budget()` is HELLO_DEADLINE + DRAIN + EXIT_GRACE + 1 s (24 s), and the class
+    supervisors' deadline uses it too.
+  - (b) The cell's three stderr writes ignore a broken pipe, so a cell whose floor is gone exits with its own
+    code. It does not cover every site: r2's crumbs, at a tip with (b), still panicked inside std's `print_to`,
+    which only an `eprint!` reaches. That site is item 200's.
+- `8c900366c`, by VF-PM's ruling (11:30Z: r3 is (c), and (b) stays as it was): the nine mgmt_server rows each end
+  with `daemon.shutdown().await`, and `boot()`'s doc comment says why. Test-only. Their red is the race itself:
+  r2's `lane` witness at `8aa820412` left a mgmt_server root in 2 of 3 runs, where r1 at `856c47aac` left none in
+  3. The race is intermittent and no deterministic row holds it, so the commit has no red of its own; the proof is
+  the `lane` ×3 at the tip.
+
+**The lights.**
+- The re-cut onto `1fcbf0963`, in recut-ma.sh's proof form: 4 of 4 "=", and the own range's patch-id `0208b5fe…`
+  is equal before and after. The tip's tree `1eedca5d1c52` equals the merge-tree. VF-DRC's 76 files share none of
+  the eight.
+- Run 189 on the old mini, a9's, packet `lanes/item190/item196-m188/`:
+  - green at 12:10:42Z: verify exit 0, nested rows 0, missing [] / extra [] against the expected;
+  - vitest 13,867 | 0 | 21 over 953 files. The one per-file change against run188 is `native-harness.test.ts`
+    14 → 15, and the kill matrix stays 20 | 1 skipped;
+  - cargo 548 passed in 35 results (from 546 in 34): terminal_stop_starting_cells 1, cell_lifecycle 10,
+    mgmt_server 31. door 8 and door_bridge 9 were green in this run;
+  - births in the run's window: none of the class (no `vf-km-`, no `vf-stop-`, no `.tmp` state root). run188, at
+    a tip without the fix, left 5.
+- The witnesses, a9's, each frozen in a packet under `lanes/item190/`:
+  - `ts` at `1841d4437` (old mini): km and harness ×3, no `vf-km-` root, no births. It is consistent with the
+    fix, not proof (VF-PM, 11:12Z): the race is intermittent, and f31's two roots were real.
+  - r2 on vf-m1: the check rows showed the red and the green, and fmt, clippy at `-D warnings`, biome and tsc
+    were clean. `red` ×3 was RED on "cells outlived the awaited stop".
+  - r2's `lane` ×3 at `8aa820412` was RED BY NAME on mgmt_server: 2 of 3 runs left a `.tmp` root holding both
+    cells' sockets and EPIPE crumbs. The mint packet (`ee0a6ce80`) went void before any GO, and r3 followed.
+  - r3 on vf-m1: the rows as r2. `red` ×3 was RED. `lane` ×3 at `0653ab586` was green: mgmt_server 31 with 0
+    roots in every run, and no births on any row. This is the proof. door's reds were item 198's.
+- The landing gates: `smoke:terminal-door` and `smoke:terminal-direct` are owed for this tip, because the
+  terminal service and the cell host binary moved. a9 runs them on a mini.
+- No test ran on the MacBook (the pressure HOLD). Every script took a `bash -n` parse there under the light-row
+  door, and biome and rustfmt took hand passes.
+
+**Found.**
+- **Node's `node-compile-cache`.** One appears under each run's own TMPDIR: Node 26's module compile cache, one
+  reused dir per TMPDIR. It is harmless, and not item 195's class.
+- **macOS `pgrep` has no `-c`.** It exits 2 with its usage line, so a count is `pgrep -f … | wc -l`.
+- **door.rs's fd ceiling, item 198** (filed on fd's reading). The floors boot inside the test process, the
+  RLIMIT_NOFILE raise runs only in `main.rs`, and eight parallel floors plus the two socket-heavy rows pass
+  launchd's 256. Not a regression. Its two faces:
+  - `EMFILE` at the rows' own connects;
+  - `ECONNREFUSED` at the burst row. The door's accept loop breaks on its first error (`services/door/mod.rs`,
+    "The door stopped accepting connections"), so one `EMFILE` at accept ends the floor's door, and the next
+    connects are refused once the backlog fills. That reach is the product's.
+
+**Owed.**
+- **`smoke:terminal-door` and `smoke:terminal-direct` at this tip** (the landing gates above), a9's on a mini.
+  Their verdicts go in this entry when they land.
+- **Item 200** (filed by VF-PM 11:30Z): the cells' EPIPE panic on a stderr whose floor is gone. Its site is
+  unproven: the crumb's location is inside std's `print_to`. tracing-subscriber 0.3.23 drops a failed write, and
+  every `eprintln!` ghosttea 0.14.0 runs is on a session path. The first step is the crumb carrying a backtrace
+  (VF-PM, 11:33Z: a test-only panic probe is item 200's, not this lane's). Then the lean is a ghosttea petition:
+  its `eprintln!` sites become `let _ = writeln!(io::stderr(), …)`.
+- `field-freeway-host.rs`'s three stderr writes have (b)'s shape. They are the freeway host's, when its track next
+  touches that file.
+- **Item 198, both halves**, fd's next lane, on `8c900366c` or later:
+  - the product half: the door's accept loop ends on its first error, so one `EMFILE` stops a floor's door until
+    it restarts. A transient error must not end the loop. The management listener and the MeshData bridge end
+    the same way, and VF-PM widened the item to all three (12:26Z).
+  - the test half: `door.rs`'s `boot()` raises the soft limit with the product's own
+    `field_native::rlimit::raise_file_limit()`.
+
+Item 196 closes in this entry.
