@@ -46,6 +46,7 @@ import {
   FILES_HOST_ROLE_ARG,
   ROLE_ARG_PREFIX,
   roleOf,
+  strayArgumentLine,
   unknownRoleLine,
 } from "../src/roles";
 import {
@@ -148,15 +149,16 @@ describe("the roles are closed, and picked by the FIRST argument alone (AR-7j)",
     expect(roleOf([exe, exe, AGENT_SHIM_ROLE_ARG, "/home/lib/agent-shim.cjs"])).toBe("agent-shim");
     expect(roleOf([exe, exe, FILES_HOST_ROLE_ARG])).toBe("files-host");
     expect(roleOf(["/usr/bin/node", "/dist/bin.cjs", AGENT_SHIM_ROLE_ARG])).toBe("agent-shim");
-    // the daemon: no argument at all
+    // the daemon: no argument at all — and a role's word where the script stands is no argument
     expect(roleOf([exe, exe])).toBeUndefined();
-    // a typed agent's own arguments, which carry a role's word further along
+    expect(roleOf([exe, AGENT_SHIM_ROLE_ARG])).toBeUndefined();
+    // a typed agent's own arguments, which carry a role's word further along: never a role, and
+    // never the daemon either, which takes no argument (RV #1, item 203)
     for (const argv of [
       [exe, exe, "--model", FILES_HOST_ROLE_ARG],
       [exe, exe, AGENT_SHIM_ROLE_ARG.toUpperCase()],
-      [exe, AGENT_SHIM_ROLE_ARG],
     ])
-      expect(roleOf(argv), JSON.stringify(argv)).toBeUndefined();
+      expect(roleOf(argv), JSON.stringify(argv)).toBe("stray");
   });
 
   it("a first argument that ASKS for a role this build does not have is `unknown` — refused, never the daemon — and its line names the launcher, never the role's word or a path", () => {
@@ -171,8 +173,8 @@ describe("the roles are closed, and picked by the FIRST argument alone (AR-7j)",
       ROLE_ARG_PREFIX,
     ])
       expect(roleOf([exe, exe, first, "/home/lib/agent-shim.cjs"]), first).toBe("unknown");
-    // only the first argument asks: further along, it is the agent's
-    expect(roleOf([exe, exe, "--model", "--vibefield-role=agent-shim-2"])).toBeUndefined();
+    // only the first argument asks: further along, it is the agent's, and the first is `stray`
+    expect(roleOf([exe, exe, "--model", "--vibefield-role=agent-shim-2"])).toBe("stray");
     expect(unknownRoleLine(TYPED_COMMAND)).toBe(
       `VibeField: ${TYPED_COMMAND} was not started: it was set up by another version of VibeField. Open VibeField, then try again.`,
     );
@@ -180,6 +182,32 @@ describe("the roles are closed, and picked by the FIRST argument alone (AR-7j)",
       expect(unknownRoleLine(name), String(name)).toContain(
         "VibeField: the agent was not started:",
       );
+  });
+
+  it("a first argument that is no role and asks for none is `stray` — refused, never the daemon, which takes no argument at all — and its line is DESIGN.md's, naming no path, no argument and no agent (RV #1, item 203)", () => {
+    const exe = "/App/Contents/Resources/bin/fieldd";
+    // what puppeteer 0.3's Claude settings hand the program they take for Node: the hook's
+    // staged forwarder with its arguments, and the two status lines'
+    const staged = "/tmp/puppeteer-claude-ab/X";
+    const endpoint = "http://127.0.0.1:1/hooks";
+    for (const argv of [
+      [exe, exe, `${staged}.hooks.mjs`, endpoint, "PUPPETEER_HOOK_TOKEN", "5000"],
+      [exe, exe, `${staged}.statusline.mjs`],
+      [exe, exe, `${staged}.statusline.mjs`, "subagent"],
+      ["/usr/bin/node", "/dist/bin.cjs", `${staged}.hooks.mjs`],
+      // and whatever else a person or a program hands it, an empty argument included
+      [exe, exe, "--version"],
+      [exe, exe, ""],
+    ])
+      expect(roleOf(argv), JSON.stringify(argv)).toBe("stray");
+    // the daemon is the one with no argument: what every spawn of it hands it
+    expect(roleOf([exe, exe])).toBeUndefined();
+    expect(roleOf(["/usr/bin/node", "/dist/bin.cjs"])).toBeUndefined();
+    // the words are DESIGN.md §9's ("When VibeField's own program starts nothing"), quoted whole,
+    // on one line that names no path
+    const design = readFileSync(join(PACKAGE_ROOT, "..", "..", "DESIGN.md"), "utf8");
+    expect(design).toContain(`- "${strayArgumentLine()}"`);
+    expect(strayArgumentLine()).toMatch(/^VibeField: [^\n/]+\.$/u);
   });
 
   it("the shim's argv is `node <sealed> <the agent's arguments…>`: the home's copy at argv[3] is dropped, and every argument after it is passed on exactly", () => {
@@ -359,6 +387,45 @@ process.exit(99);
       });
       expect(existsSync(poisoned)).toBe(false);
       expect(existsSync(data)).toBe(false);
+    },
+    PROCESS_BUDGET_MS,
+  );
+
+  it(
+    "an argument it does not take — the forwarder puppeteer 0.3 stages for Claude Code's hooks, handed over as if the executable were Node — is refused in one line with the kit's cannot-run status: no daemon, no readiness line, no data directory, the script never run (RV #1, item 203)",
+    async () => {
+      const dir = scratch("vf-role-");
+      copyBundle(dir);
+      // the staged forwarder, poisoned: run, it would say so and leave 99
+      const poisoned = join(dir, "POISONED");
+      const script = join(dir, "X.hooks.mjs");
+      writeFileSync(
+        script,
+        `import { writeFileSync } from "node:fs";
+writeFileSync(${JSON.stringify(poisoned)}, "ran");
+process.exit(99);
+`,
+      );
+      // a daemon would make its data directory first: it must not exist after
+      const data = join(dir, "data");
+      const ran = await run(
+        process.execPath,
+        [join(dir, "bin.cjs"), script, "http://127.0.0.1:1/hooks", "PUPPETEER_HOOK_TOKEN", "5000"],
+        {
+          PATH: process.env["PATH"] ?? "/usr/bin:/bin",
+          HOME: dir,
+          FIELDD_DATA_DIR: data,
+          FIELDD_CONTROL_PORT: "0",
+        },
+      );
+      // the daemon's own mark first: the boot this refusal exists to prevent
+      expect(existsSync(data), "no daemon made its data directory").toBe(false);
+      expect(existsSync(poisoned), "the staged script never ran").toBe(false);
+      expect(ran).toEqual({
+        code: SPAWN_THROUGH_EXIT_UNAVAILABLE,
+        stdout: "",
+        stderr: `${strayArgumentLine()}\n`,
+      });
     },
     PROCESS_BUDGET_MS,
   );

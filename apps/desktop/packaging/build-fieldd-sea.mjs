@@ -636,6 +636,64 @@ function agentShimMissingProbe({ exe, root, roleArg = AGENT_SHIM_ROLE_ARG, deadl
   });
 }
 
+/** RV #1 (item 203) — an argument the executable does not take, handed over as Claude Code's hook
+ * command hands puppeteer 0.3's staged forwarder to the program it takes for Node: `<exe>
+ * <dir>/<id>.hooks.mjs <endpoint> <variable> <ms>`. The daemon takes no argument, so one line and
+ * the cannot-run status; the script, poisoned, never runs, and no daemon makes the data directory
+ * fieldd's variables name. */
+function strayArgumentProbe({ exe, root, deadlineMs = 30_000 }) {
+  mkdirSync(root, { recursive: true });
+  const ran = join(root, "SCRIPT-RAN");
+  const data = join(root, "data");
+  const script = join(root, "X.hooks.mjs");
+  writeFileSync(
+    script,
+    [
+      'import { writeFileSync } from "node:fs";',
+      `writeFileSync(${JSON.stringify(ran)}, "ran");`,
+      "process.exit(99);",
+      "",
+    ].join("\n"),
+  );
+  const endpoint = "http://127.0.0.1:1/hooks";
+  return new Promise((done) => {
+    const child = spawn(exe, [script, endpoint, "PUPPETEER_HOOK_TOKEN", "5000"], {
+      cwd: "/",
+      env: {
+        PATH: "/usr/bin:/bin",
+        HOME: root,
+        FIELDD_DATA_DIR: data,
+        FIELDD_CONTROL_PORT: "0",
+      },
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.on("data", (chunk) => {
+      stdout += chunk;
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr += chunk;
+    });
+    const timer = setTimeout(() => child.kill("SIGKILL"), deadlineMs);
+    const report = (code, signal, error) => {
+      clearTimeout(timer);
+      done({
+        error,
+        code,
+        signal,
+        stdout,
+        stderr,
+        scriptRan: existsSync(ran),
+        dataTouched: existsSync(data),
+      });
+    };
+    child.once("error", (e) => report(null, null, e.message));
+    // `close`, not `exit`: what the program said is all read only once its stdio has closed
+    child.once("close", (code, signal) => report(code, signal));
+  });
+}
+
 /** TH-1 — run the executable as fieldd runs its transcript worker: the role argument, an IPC pipe, the folder and
  * its key on the pipe (never the environment), then one ticket registered and a shutdown. */
 function transcriptHostProbe({ exe, folder, deadlineMs = 30_000 }) {
@@ -1221,6 +1279,23 @@ async function verify({ exe, manifest }) {
       f.error !== undefined
         ? `a role this build does not have: spawn failed: ${f.error}`
         : `a role this build does not have: one line, the kit's cannot-run status, no daemon (${f.signal ?? f.code}, want 127; data directory ${f.dataTouched ? "MADE" : "untouched"}) — ${JSON.stringify(f.stderr.trim())}`,
+    );
+
+    // Probe F2 (RV #1, item 203) — an argument the executable does not take: a script's path, as
+    // Claude Code's hook command hands puppeteer 0.3's staged forwarder to the program it takes for
+    // Node. The daemon takes none, so it is refused in one line with the cannot-run status: never
+    // the daemon, and the script never run.
+    const f2 = await strayArgumentProbe({ exe: cleanExe, root: join(sandbox, "stray-run") });
+    say(
+      f2.error === undefined &&
+        f2.code === 127 &&
+        f2.stdout === "" &&
+        /^VibeField: this program takes no arguments; nothing was started\.\n$/u.test(f2.stderr) &&
+        !f2.scriptRan &&
+        !f2.dataTouched,
+      f2.error !== undefined
+        ? `an argument it does not take: spawn failed: ${f2.error}`
+        : `an argument it does not take (a forwarder's script): one line, the cannot-run status, no daemon (${f2.signal ?? f2.code}, want 127; data directory ${f2.dataTouched ? "MADE" : "untouched"}; the script ${f2.scriptRan ? "RAN" : "never ran"}) — ${JSON.stringify(f2.stderr.trim())}`,
     );
 
     // Probe B — the same files, plus a node_modules that would break the daemon if it

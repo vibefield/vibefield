@@ -1267,7 +1267,8 @@ describe("CP-4a2a — fieldd's side of the host: the rewrite, the role, the laun
 
   it("H12: the role is the first argument's alone: an agent's own argument never picks `flows-host`", () => {
     expect(roleOf(["node", "fieldd", "--vibefield-role=flows-host"])).toBe("flows-host");
-    expect(roleOf(["node", "fieldd", "--model", "--vibefield-role=flows-host"])).toBeUndefined();
+    // and a first argument that is no role is no daemon either: refused (RV #1, item 203)
+    expect(roleOf(["node", "fieldd", "--model", "--vibefield-role=flows-host"])).toBe("stray");
     expect(roleOf(["node", "fieldd", "--vibefield-role=flows-hosts"])).toBe("unknown");
   });
 

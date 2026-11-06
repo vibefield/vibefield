@@ -323,8 +323,9 @@ describe("the transcript worker's role and launch (TH-1; roles.ts, transcripts/l
     expect(TRANSCRIPT_HOST_ROLE_ARG).toBe("--vibefield-role=transcript-host");
     expect(TRANSCRIPT_HOST_BUNDLE).toBe("transcript-host.cjs");
     expect(roleOf([exe, exe, TRANSCRIPT_HOST_ROLE_ARG])).toBe("transcript-host");
-    // an agent's own argument never picks a role of ours
-    expect(roleOf([exe, exe, "--model", TRANSCRIPT_HOST_ROLE_ARG])).toBeUndefined();
+    // an agent's own argument never picks a role of ours, and a first argument that is no role is
+    // no daemon either: refused (RV #1, item 203)
+    expect(roleOf([exe, exe, "--model", TRANSCRIPT_HOST_ROLE_ARG])).toBe("stray");
   });
 
   it("runs the packaged executable in its role, a development bundle under fieldd's runtime, and says a source run has none", () => {
