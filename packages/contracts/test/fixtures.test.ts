@@ -298,6 +298,7 @@ import {
 import { SetupAnswerParams, SetupLedger, SetupMomentParams } from "../src/setup";
 import {
   AppPreferences,
+  FielddLinkUnavailable,
   ShellWebContentsCaptureArtifactPreviewParams,
   ShellWebContentsCaptureArtifactPreviewResult,
 } from "../src/shell";
@@ -597,6 +598,10 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "update-check-result": UpdateCheckResult,
   // AU-7: the Move door's answer (`update-view.read-only` / `.elsewhere` ride the view's prefix above).
   "update-move-result": UpdateMoveResult,
+  // Item 212 (RV #29): the field service as main holds it for the attached pair (`desktopState.fieldd`, TS-only) —
+  // written by main's link model (electron-shell fieldd-link.test.ts) and read by the window's status-line teller
+  // (field-app field-service-notice.test.ts) and the preload's desktop-state bridge.
+  "fieldd-link-unavailable": FielddLinkUnavailable,
   // WP8a: the packaged app's signed bundled-plugin index (refusals in plugin-distribution.test.ts).
   "bundled-plugin-index": BundledPluginIndex,
   // WP8b: the stage's public identity (Resources/identity/release-identity.json).

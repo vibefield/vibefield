@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { ARTIFACT_LIMITS, ArtifactId, ArtifactTitle, MadeAppReach, Sha256Hex } from "./artifacts";
 import { ClientKind, SemverString } from "./envelope";
-import { ErrorKind } from "./errors";
+import { ErrorKind, UnavailableDetails } from "./errors";
 import {
   CoreSimulatorRuntimeIdV1,
   LiveSurfaceAttachTicketV1,
@@ -252,10 +252,14 @@ export const WindowLightsState = z
   .passthrough();
 export type WindowLightsState = z.infer<typeof WindowLightsState>;
 
-/** Why a window asks main to replace its renderer (DK-9), by name. One reason today:
- * a plugin's KINDS changed in a way this realm cannot take — an update's new code or
- * schema, or a type a board's ghost stub defined faceless (field-app window-kinds.ts). */
-export const RendererReplaceReason = z.enum(["plugin-kinds"]);
+/** Why a window asks main to replace its renderer (DK-9), by name:
+ *  · `plugin-kinds` — a plugin's KINDS changed in a way this realm cannot take: an update's
+ *    new code or schema, or a type a board's ghost stub defined faceless (field-app
+ *    window-kinds.ts);
+ *  · `field-service` — the person's Try again on the status line's field-service notice
+ *    (item 212, RV #29): the reloaded window's bootstrap is the person's ask, which starts
+ *    fieldd again after main stopped trying (`FIELDD_LINK.STATE_CRASH_LOOP`). */
+export const RendererReplaceReason = z.enum(["plugin-kinds", "field-service"]);
 export type RendererReplaceReason = z.infer<typeof RendererReplaceReason>;
 
 /** renderer → main: replace THIS window's renderer (`IPC_CHANNELS.rendererReplace`). */
@@ -406,6 +410,45 @@ export type ShellPlatform = z.infer<typeof ShellPlatform>;
 export const DesktopBrowserSignIns = z.enum(["kept", "until-quit"]);
 export type DesktopBrowserSignIns = z.infer<typeof DesktopBrowserSignIns>;
 
+/** Item 212 (RV #29) — the field service as Electron main holds it for the ATTACHED pair (`main/fieldd-link.ts`):
+ * `UnavailableDetails.service` and `.state` on the window's status line and the status item's service row. Main
+ * starts fieldd again after it goes away, at most `max` automatic attempts in its intensity window (the house rule:
+ * NATIVE_SUPERVISION's RESPAWN_MAX, WG-D1's restart intensity), and past that stops until a person asks. TS-only:
+ * main writes it, the window reads it (`DesktopShellState.fieldd`). */
+export const FIELDD_LINK = {
+  SERVICE: "fieldd",
+  /** fieldd went away and an automatic attempt to start it again failed: the next one waits its spacing.
+   * `attempt` is how many automatic attempts the window holds, `of` how many it allows */
+  STATE_RECOVERING: "recovering",
+  /** the intensity tripped: `failures` automatic attempts inside the window did not keep fieldd up, and nothing
+   * starts it again until a person asks (the status line's Try again, the status item's Try Again, a window
+   * opening). Its terminal sessions keep running: the floor outlives fieldd */
+  STATE_CRASH_LOOP: "crash-loop",
+  /** RV #67 — fieldd is up and stopped answering: main measures its reply silence */
+  STATE_UNRESPONSIVE: "unresponsive",
+} as const;
+
+export const FielddLinkState = z.enum([
+  FIELDD_LINK.STATE_RECOVERING,
+  FIELDD_LINK.STATE_CRASH_LOOP,
+  FIELDD_LINK.STATE_UNRESPONSIVE,
+]);
+export type FielddLinkState = z.infer<typeof FielddLinkState>;
+
+/** The field service not there for the attached pair, by name (`FIELDD_LINK`); `progress` keeps its 0..1 meaning and
+ * is never set here. */
+export const FielddLinkUnavailable = UnavailableDetails.extend({
+  service: z.literal(FIELDD_LINK.SERVICE),
+  state: FielddLinkState,
+  /** `recovering`: the automatic attempts inside the intensity window so far */
+  attempt: z.number().int().nonnegative().optional(),
+  /** `crash-loop`: the automatic attempts inside the window that did not keep fieldd up */
+  failures: z.number().int().positive().optional(),
+  /** `recovering`: the most automatic attempts the window allows */
+  of: z.number().int().positive().optional(),
+}).passthrough();
+export type FielddLinkUnavailable = z.infer<typeof FielddLinkUnavailable>;
+
 /** Main-owned desktop capability truth. Preferences describe user intent;
  * this state describes whether the native shell actually realized it. */
 export const DesktopShellState = z
@@ -438,6 +481,10 @@ export const DesktopShellState = z
     /** BP-1c — the desk browser, as Settings › General's Browsing data card says it (`DesktopBrowserSignIns`); absent
      * from a shell older than BP-1c, where the card says nothing of it. Never a path: the log names the folders. */
     browser: z.object({ signIns: DesktopBrowserSignIns }).passthrough().optional(),
+    /** Item 212 (RV #29) — the field service for the attached pair (`FielddLinkUnavailable`), said on the window's
+     * status line: null while it is up or coming up; absent from a shell older than item 212, which the window reads
+     * as unknown and says nothing of. */
+    fieldd: FielddLinkUnavailable.nullable().optional(),
   })
   .passthrough();
 export type DesktopShellState = z.infer<typeof DesktopShellState>;

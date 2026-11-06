@@ -1,0 +1,5 @@
+{
+  "service": "fieldd",
+  "state": "crash-loop",
+  "failures": 3
+}

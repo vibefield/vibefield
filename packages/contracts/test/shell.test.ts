@@ -25,6 +25,8 @@ import {
   CloseResult,
   DesktopBrowserSignIns,
   DesktopShellState,
+  FIELDD_LINK,
+  FielddLinkState,
   FrameView,
   FrameViewSetRequest,
   FrameViewState,
@@ -340,6 +342,10 @@ describe("IPC_CHANNELS — the CLOSED contextBridge surface (ESR §6.2)", () => 
   it("the renderer replacement door (DK-9) names its reason and nothing else does", () => {
     expect(RendererReplaceRequest.parse({ reason: "plugin-kinds" })).toEqual({
       reason: "plugin-kinds",
+    });
+    // item 212 (RV #29) — the person's Try again on the field service's notice: the reload's bootstrap is their ask
+    expect(RendererReplaceRequest.parse({ reason: "field-service" })).toEqual({
+      reason: "field-service",
     });
     expect(() => RendererReplaceRequest.parse({})).toThrow();
     expect(() => RendererReplaceRequest.parse({ reason: "because" })).toThrow();
@@ -668,6 +674,40 @@ describe("tray shell commands and app preferences", () => {
     for (const f of views) {
       const raw: unknown = JSON.parse(readFileSync(join(fixtures, f), "utf8"));
       const parsed = DesktopShellState.shape.update.safeParse(raw);
+      const issues = parsed.success ? "" : JSON.stringify(parsed.error.issues);
+      expect(parsed.success, `${f}: ${issues}`).toBe(true);
+    }
+  });
+
+  it("item 212 (RV #29) — the field service rides the desktop state typed, never as a passthrough blob", () => {
+    const tray = {
+      availability: "available",
+      placement: "visible",
+      backgroundShellEffective: false,
+      issue: null,
+    };
+    const withFieldd = (fieldd: unknown) => DesktopShellState.safeParse({ tray, fieldd });
+    // a state the shell has no name for is not the desktop's truth (the preload drops the whole state)
+    expect(withFieldd({ service: "fieldd", state: "imaginary" }).success).toBe(false);
+    expect(withFieldd({ service: "updates", state: "crash-loop" }).success).toBe(false);
+    expect(withFieldd({ service: "fieldd", state: "crash-loop", failures: 0 }).success).toBe(false);
+    expect(withFieldd({ service: "fieldd", state: "recovering", attempt: -1 }).success).toBe(false);
+    const crashLoop = { service: "fieldd", state: "crash-loop", failures: 3 };
+    expect(withFieldd(crashLoop).data?.fieldd).toEqual(crashLoop);
+    // null: up, or coming up; absent: a shell older than item 212, which the window reads as unknown
+    expect(DesktopShellState.parse({ tray, fieldd: null }).fieldd).toBeNull();
+    expect(DesktopShellState.parse({ tray }).fieldd).toBeUndefined();
+    expect(FIELDD_LINK.SERVICE).toBe("fieldd");
+    expect(FielddLinkState.options).toEqual(["recovering", "crash-loop", "unresponsive"]);
+  });
+
+  it("item 212 (RV #29) — every fieldd-link fixture parses as the desktop state's fieldd", () => {
+    const fixtures = join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures");
+    const links = readdirSync(fixtures).filter((f) => f.startsWith("fieldd-link-unavailable."));
+    expect(links.length).toBeGreaterThanOrEqual(2);
+    for (const f of links) {
+      const raw: unknown = JSON.parse(readFileSync(join(fixtures, f), "utf8"));
+      const parsed = DesktopShellState.shape.fieldd.safeParse(raw);
       const issues = parsed.success ? "" : JSON.stringify(parsed.error.issues);
       expect(parsed.success, `${f}: ${issues}`).toBe(true);
     }
