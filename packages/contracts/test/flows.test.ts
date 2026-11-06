@@ -160,6 +160,8 @@ describe("CP-4a1 — the library and fieldd's records on disk (CP4-Q18 (a))", ()
       FORM_ENUM_MAX: 64,
       // the slices 7–9 review's F5 (Q2, ruled at the lean): the lines a step's record keeps
       STEP_LINES_MAX: 16,
+      // the slices 7–9 review's F6 (1k, ruled 2026-11-06): a run's held folder, the flows' own bound
+      FOLDER_CHARS: 4_096,
     });
   });
 
@@ -402,6 +404,12 @@ describe("CP-4a2a — a run's journal (CP4-S15, CP-D9; the fixtures' MACs are re
     expect(held).toMatchObject({ run: "fr-k3v9q2m7x1", folder: "/Users/someone/work/release" });
     expect((held as { mac?: unknown }).mac).toMatch(HEX_64);
     expect(FlowJournalHead.safeParse({ ...held, folder: "" }).success).toBe(false);
+    // the held folder's bound is FLOW_LIMITS.FOLDER_CHARS (1k): that many characters parse, one more does not
+    const folderOf = (chars: number) => `/${"f".repeat(chars - 1)}`;
+    const holds = (chars: number) =>
+      FlowJournalHead.safeParse({ ...held, folder: folderOf(chars) }).success;
+    expect(holds(FLOW_LIMITS.FOLDER_CHARS)).toBe(true);
+    expect(holds(FLOW_LIMITS.FOLDER_CHARS + 1)).toBe(false);
     expect(flowJournalLineOf(head)?.kind).toBe("head");
     for (const bad of [
       { ...head, seq: 2 },

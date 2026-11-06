@@ -621,7 +621,11 @@ export const AGENT_STOP = {
  *    (ruled 2026-11-06);
  *  - STEP_LINES_MAX: the lines a step's record keeps (D5: each recorded before it is queued; its prompt, an `in:`'s
  *    line, each repair). Ask once more at it fails the step, "‹label› failed." (DESIGN.md §9 "A step's call
- *    refused"), and nothing is written past it (the slices 7–9 review's F5; Q2, ruled at the lean). */
+ *    refused"), and nothing is written past it (the slices 7–9 review's F5; Q2, ruled at the lean);
+ *  - FOLDER_CHARS: the flows' own bound on a run's held folder (FlowJournalHead's `folder`, the slices 7–9 review's
+ *    F6), at Linux's PATH_MAX; macOS's is 1,024. The flows' domain bound, never a borrowed WORKSPACE_LIMITS.PATH_CHARS
+ *    (each domain keeps its own: WORKSPACE_LIMITS.PATH_CHARS, ARTIFACT_LIMITS.PATH_CHARS, screenshot's MAX_PATH_CHARS;
+ *    ruled 2026-11-06). */
 export const FLOW_LIMITS = {
   SCRIPT_MAX_BYTES: 64 * 1024,
   RESULT_MAX_BYTES: 64 * 1024,
@@ -642,6 +646,7 @@ export const FLOW_LIMITS = {
   FORM_DEPTH_MAX: 8,
   FORM_ENUM_MAX: 64,
   STEP_LINES_MAX: 16,
+  FOLDER_CHARS: 4_096,
 } as const;
 
 /** CP-4a2a (DESIGN.md §9 "When a run's script cannot go on") — the flow host's honest refusal. SERVICE is
