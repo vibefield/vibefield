@@ -38794,6 +38794,9 @@ new cell and field-native pids at 0, +5 and +30 s.
   > WebGPU adapter, so the desk drew on canvas2d. Each row ran with the console unlocked and HID idle ≥ 600 s
   > re-read before it. Logs: `smk-terminal-door-0d1d66f05/` (c4b67b4b) and `smk-terminal-direct-0d1d66f05/`
   > (3ded8afe) under the old mini's `~/vf-lanes/verify/logs/`.
+  > *Corrected 2026-11-06 (item 198, LANDED "Item 198"):* the Found's "the next connects are refused once the
+  > backlog fills" was false. The door's loop owns its listener, and its `break` drops it, so the next connect is
+  > refused at once (item 198's r4 on vf-m1: "refused at connect (no listener bound)" after a single trigger).
 - **Item 200** (filed by VF-PM 11:30Z): the cells' EPIPE panic on a stderr whose floor is gone. Its site is
   unproven: the crumb's location is inside std's `print_to`. tracing-subscriber 0.3.23 drops a failed write, and
   every `eprintln!` ghosttea 0.14.0 runs is on a session path. The first step is the crumb carrying a backtrace
@@ -39450,3 +39453,104 @@ feed. #48's re-ask is built at rv-s9-records' lean B, which James has not ruled.
   first, then `agent-runtime.ts`.
 - No draft correction: the design names no draft claim for these ranks, and `agent-monitor.ts`'s Q06 comment, the one
   place that stated #50's defect, is corrected in place.
+
+## Item 198 — a failed accept loses that one connection, never the listener: the door, the management listener and the MeshData bridge each ended on their first failed accept, and in-process floors never raised their descriptor limit
+(2026-11-06; four commits, `58785fa18`, `010c1fbd6` (red), `b3e231ee3` and `9dd5bb309`, on branch `item198-mint` over
+main `db181a008`, fd's, in `/Volumes/SamsungRed/lanes/item190`. They were cut on `8c900366c` as r1 to r4, and r4's four
+(`28db691d6` → `4c471dd04` → `b11643825` → `388174911`) were re-cut onto `db181a008` in proof form. M195 is `9dd5bb309`
+itself, a fast-forward of main `db181a008` by the fixer, run 195, landed 2026-11-06T19:11:17Z.)
+Filed by VF-PM from item 196's Found (door.rs's fd ceiling, on fd's reading), and widened at 12:26Z to all three
+listeners. It answers item 196's Owed "Item 198, both halves".
+
+**What.** A daemon fix with real reach, and a test fix.
+- **The daemon.** Three of the floor's listeners ended on their FIRST failed accept (a `break`), while their units
+  still read Up. So one transient `EMFILE` stopped that listener for the floor's life:
+  - the door (`services/door/mod.rs`): no new door for any spark;
+  - the management listener (`mgmt/mod.rs`, an unwatched task): no fieldd could re-adopt the floor;
+  - the MeshData bridge (`services/mesh_bridge.rs`): no byte plane to attach.
+  - `tp/door.rs` and the freeway host already retried (`ACCEPT_BREATH`, 50 ms).
+- **The tests.** The descriptor-limit raise ran only in `main.rs`. The floors that `door.rs` boots inside the
+  test process ran at launchd's 256, and eight of them beside the socket-heavy rows passed it.
+
+**The fix.**
+- `58785fa18`: the low-limit floor moves to `tests/support/native_child.rs` (the real binary as a child, at a soft limit
+  the test names), shared by `resource_governance.rs` and the new row. Test-only.
+- `010c1fbd6` (red): `tests/listener_accept_pressure.rs`, one test.
+  - The real binary runs at a soft limit of 64, with the boot raise skipped. Doors open one at a time until the
+    floor's own count (`resource_pressure::open_fd_count_for`) reads 64.
+  - Then ONE trigger per listener: its failed accept is the run. The doors close, and ONE fresh connection per
+    listener must be served within 5 s, while door and mesh-bridge read degraded during the run and up after.
+  - A connect after the ceiling that fails is that leg's outcome, never the row's end. The row prints the
+    triggers' fates, each listener's failed and recovered accepts from the floor's own log, and the descriptor
+    samples, and it KEEPS its root on any failure.
+- `b3e231ee3`: `local_ipc::accept(listener, component, on_run)` returns the next connection and never an error.
+  - A failed accept breathes 50 ms, doubling to 1 s, and the breath resets on success.
+  - The first failure of a run logs `field_native.local_ipc.accept_failing` (warn); the first success after it
+    logs `accept_recovered` (info, with the failures and the span).
+  - The door and the bridge read Degraded ("… accepts are failing and are retried") while a run lasts, and Up at
+    its end. mgmt logs only.
+  - It retires `field_native.{door,mgmt,mesh_bridge}.accept_failed`, which nothing on main reads.
+  - What it rests on: tokio 1.53.3's `Registration::async_io` clears readiness only on `WouldBlock`, so after an
+    `EMFILE` the next accept tries `accept(2)` at once, and the breath is the only pacing.
+- `9dd5bb309`: `rlimit::raise_file_limit()` moves to the top of `bootstrap_with_logging` (TC-D6(a)), so every floor
+  raises its limit at boot, the in-process test floors included. `main.rs`'s call goes.
+
+**The kernel.** On macOS a failed accept loses the connection it was for. XNU's `accept_nocancel`
+(`bsd/kern/uipc_syscalls.c`, apple-oss-distributions/xnu `main`, re-read 2026-11-06) takes the connection off
+`so_comp` BEFORE `falloc`. When `falloc` fails, it runs `soclose(so)` under "<rdar://problem/8554930> Don't put this
+back on the socket like we used to, that just causes the client to spin. Drop the socket." Linux allocates first
+and leaves the connection queued. So the claim is about the NEXT connection, and that is what the row asks.
+
+**The rounds.** Each is frozen in a packet under `lanes/item190/item198-r{1,2,3,4}/`, run by a9.
+- r1 (the old mini, 17:43Z) was NOT AS BRIEFED: at the tip no queued probe was served.
+- r2 (vf-m1, 18:07Z) was NOT AS BRIEFED, and its samples named the cause.
+  - The count read 64 at ~619 ms; the release came at ~870 ms; it read 24 at ~929 ms and stayed flat for 29 s.
+  - `accept_failing` read 1 per listener and `accept_recovered` 0: the probes WERE the dropped connections.
+  - fd's 17:52Z reading ("XNU puts it back on the queue") was false, and was corrected at its source. The leading
+    read (a door backlog re-holding the freed descriptors) fell too, and item 204's reach was corrected with it.
+- r3 (vf-m1, 18:23Z): the TIP was GREEN, tip-b and the lane ×3 at ~1.7 s each.
+  - Its red panicked at the fresh door's `expect` with `ECONNREFUSED`, before the row's verdict line.
+  - VF-PM ruled that it is not a red of record.
+- r4 (vf-m1, 18:38Z) was ALL AS BRIEFED.
+  - The red was RED 4 of 4 at the row's own verdict line: door and mgmt "fresh refused at connect (no listener
+    bound)", both units degraded false, the roots KEPT ×4.
+  - The tip was green, with tip-ipc 1, fmt 0 and clippy 0 at `-D warnings`. The lane ×3 was green: door 8 with no
+    `EMFILE` line, door_bridge 9, mesh_bridge 31, mgmt_server 31, resource_governance 2, terminal_stop 1, lib mesh
+    5. No root, and nothing alive at +30 s.
+- **"Refused at connect"** (the brief had predicted "not within 30 s"). At `8c900366c` the door's loop owns its
+  listener inside its spawned task (`services/door/mod.rs` 659, 662), and its `break` (675) ends the task and drops
+  the listener. mgmt's `break` (`mgmt/mod.rs` 269) returns from the function that owns its listener. The socket
+  file stays, with no listener bound to it.
+- **The bridge at the red** (a reading, not a measurement). Its trigger read "waiting", with
+  `mesh_bridge.accept_failed` 0: its accept succeeded. The triggers come door, mgmt, bridge, and each dead loop
+  frees its listener's descriptor. That is why the bridge was served at every red, r2's included. The 100 ms
+  samples never show the count below 64 between the triggers and the release.
+
+**The lights.**
+- The re-cut onto `db181a008`, by `recut-198.sh`: 4 of 4 "=", and the range patch-id (`-U0 --stable`) equal before
+  and after. The head's tree equals the merge-tree. Main has moved none of the nine files since `8c900366c`.
+- Run 195 on the old mini, a9's, packet `lanes/item190/item198-mint/`: green at 19:07:47Z, verify exit 0 (its log
+  `verify.log` `9227dbfe…`, read at source). cargo 550 passed in 36 results (from 548 in 35): the lib 327 → 328 (the
+  `local_ipc` row) and the new `listener_accept_pressure`, 1 passed in 1.12 s. Every TS count is run194's (vitest
+  13,950 | 0 | 21 over 956 files). No `EMFILE` line in the whole log, and no birth in the run's window.
+- No test ran on the MacBook (the pressure HOLD). rustfmt's `--check` and `bash -n` ran there as light rows. The
+  compiler's first word on each row was vf-m1's clippy.
+
+**Found.**
+- **Who retries a dropped accept** (VF-PM's question, read at `09940c201`'s blobs):
+  - mgmt: a dropped accept costs one reconnect delay (100 ms at boot, 500 ms → 10 s on an established link;
+    `native-link.ts` 433–461, 971–1002), never a re-adopt.
+  - door: a spark's door bridge dials again at 250 ms doubling within 60 s (`door_bridge.rs` 152–189). A line
+    written into the dropped connection is lost and re-asked on the agent's own timeout.
+  - meshdata: the lane link waits out its 5 s hello and is not dialed again (`mesh-lane.ts` 111–129, 378–385;
+    `daemon.ts` 1709–1732): item 206.
+- **Item 206** (filed by VF-PM 18:19Z, no lane): fieldd's MeshData lane link never dials again after a dropped
+  accept. Its boot half ("a link this boot closed stays closed", CP-1b) is James's board ask.
+- **Item 204** stays filed as a measured-nothing question: a hung-up door caller costs a descriptor for the 2 s
+  census wait. Its premise comes from reading code alone, and r2's samples showed no re-holding.
+
+**Owed.**
+- **Item 206**: settle the hello on close, and re-arm a failed redial on NativeLink's back-off. James rules the
+  boot half.
+
+Item 198 closes in this entry.
