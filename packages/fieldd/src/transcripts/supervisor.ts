@@ -35,6 +35,9 @@ export interface TranscriptHostHealth {
   pid: number | null;
   /** generations spawned so far; a restart moves it */
   generation: number;
+  /** SP-7a (D1 (B)) — the ready generation's loopback port, which the routed serve aims at (`serve.ts`); null in
+   * every other phase */
+  port: number | null;
 }
 
 export const TRANSCRIPT_HOST_SUPERVISION = {
@@ -146,6 +149,7 @@ export class TranscriptHostSupervisor extends EventEmitter {
             : null,
       pid: null,
       generation: 0,
+      port: null,
     };
   }
 
@@ -236,6 +240,8 @@ export class TranscriptHostSupervisor extends EventEmitter {
 
   #publish(patch: Partial<TranscriptHostHealth>): void {
     const next = { ...this.#health, ...patch };
+    // a port is the READY generation's: any other phase has none to aim at
+    if (next.phase !== "ready") next.port = null;
     const changed = (Object.keys(next) as Array<keyof TranscriptHostHealth>).some(
       (key) => next[key] !== this.#health[key],
     );
@@ -246,6 +252,7 @@ export class TranscriptHostSupervisor extends EventEmitter {
       detail: next.detail,
       pid: next.pid,
       generation: next.generation,
+      port: next.port,
     });
     this.emit("transition", this.health());
   }
@@ -469,7 +476,7 @@ export class TranscriptHostSupervisor extends EventEmitter {
         if (generation.ready || generation.terminating) return;
         if (generation.startupTimer) clearTimeout(generation.startupTimer);
         generation.ready = true;
-        this.#publish({ phase: "ready", detail: null });
+        this.#publish({ phase: "ready", detail: null, port: message.port });
         generation.stableTimer = setTimeout(() => {
           if (this.#current === generation) {
             this.#attempts = 0;

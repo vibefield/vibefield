@@ -57,6 +57,10 @@ import { RpcCallError } from "./native-link";
 // hour under one floor boot's key, so a day-long receipt would replay one the host refuses. A
 // second mint doubles nothing (the first, lost in flight, lapses unused; each mint is its own audit
 // row), so its same-key retry mints afresh. The set is named for what it holds now: credentials.
+//
+// SP-7a (2026-11-06) — `compose.sparks.transcript.openTicket` joins: forwarded for a phone it is a keyed mutation, and
+// its answer is a single-use credential the transcript worker redeems once. A replayed receipt would hand the phone a
+// ticket already used or lapsed; a second mint doubles nothing, so its same-key retry mints afresh.
 
 const RECEIPT_MESSAGE_CHARS = 1024;
 
@@ -73,6 +77,7 @@ const CREDENTIAL_MINTS: ReadonlySet<string> = new Set([
   "terminal.openTicket",
   "freeway.approve",
   "index.openTicket",
+  "compose.sparks.transcript.openTicket",
 ]);
 
 function isObject(value: unknown): value is Record<string, unknown> {

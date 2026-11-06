@@ -27,16 +27,14 @@ const PHONE = ctxOf(
   { kind: "tailnet", login: "me@example.com", self: true, tailscaleId: "n-phone" },
   { transport: "ws-tailnet", clientKind: "ios" },
 );
+const WINDOW = ctxOf({
+  kind: "local-token",
+  tokenId: "tok-window",
+  scopes: ["sparks.use"],
+  rendererParticipant: { participantId: "renderer:w1", incarnation: "renderer:w1:doc-1" },
+});
 const REFUSED: Array<[string, CallerContext]> = [
-  [
-    "a window here",
-    ctxOf({
-      kind: "local-token",
-      tokenId: "tok-window",
-      scopes: ["sparks.use"],
-      rendererParticipant: { participantId: "renderer:w1", incarnation: "renderer:w1:doc-1" },
-    }),
-  ],
+  ["a window here", WINDOW],
   ["shell-main", ctxOf({ kind: "shell-main" })],
   ["a plugin", ctxOf({ kind: "plugin", pluginId: "p", scopes: [] })],
   ["an MCP agent", ctxOf({ kind: "mcp-agent", sessionId: "run-1", scopes: [] })],
@@ -93,7 +91,7 @@ describe("SP-7a — the home carries a phone's transcript ticket (D3)", () => {
   it("passes every other method through as it was", async () => {
     const inner = owner({ ok: true });
     const forward = sparkTranscriptForwardVia(inner);
-    const other = await forward(OWNER, "compose.sparks.open", { spark: SPARK }, REFUSED[0]![1]);
+    const other = await forward(OWNER, "compose.sparks.open", { spark: SPARK }, WINDOW);
     expect(other).toEqual({ ok: true });
     expect(inner.calls).toEqual([`${OWNER} compose.sparks.open`]);
   });
