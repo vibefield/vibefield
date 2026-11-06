@@ -258,7 +258,8 @@ export function dealSparkRows(sparklings, adapter, statuses) {
       sha256: createHash("sha256").update(readFileSync(ENGINE)).digest("hex"),
     },
     random: "Math.random is mulberry32(the face's seed), dealt anew for each case",
-    clock: "t = n / 60; dt = clamp(t - the previous t, 0, 0.05), 0 at the first frame; update(t, dt), then write",
+    clock:
+      "t = n / 60; dt = clamp(t - the previous t, 0, 0.05), 0 at the first frame; update(t, dt), then write",
     fps: SPARK_ROWS_FPS,
     seeds: SPARK_ROWS_SEEDS,
     times: SPARK_ROWS_TIMES,
@@ -275,7 +276,14 @@ export function dealSparkRows(sparklings, adapter, statuses) {
 export function renderSparkRows(golden) {
   const text = JSON.stringify(JSON.parse(JSON.stringify(golden)), null, 2);
   const numbers = /\[\n(\s+-?[\d.e+-]+(?:,\n\s+-?[\d.e+-]+)*)\n\s+\]/g;
-  return `${text.replace(numbers, (_, body) => `[${body.trim().split(/,\n\s+/).join(", ")}]`)}\n`;
+  return `${text.replace(
+    numbers,
+    (_, body) =>
+      `[${body
+        .trim()
+        .split(/,\n\s+/)
+        .join(", ")}]`,
+  )}\n`;
 }
 
 const isMain = process.argv[1] !== undefined && fileURLToPath(import.meta.url) === process.argv[1];
