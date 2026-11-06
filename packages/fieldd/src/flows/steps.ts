@@ -2,13 +2,16 @@ import { basename, isAbsolute, relative, resolve } from "node:path";
 import {
   type AgentInputSender,
   type AgentModelSelection,
+  FLOW_LIMITS,
   FLOW_LOG_MAX,
+  type FlowRunRecord,
   type FlowRunRecordStep,
   nameWords,
   oneLineWords,
 } from "@vibefield/contracts";
 import type { Logger } from "@vibefield/logging";
 import { checkForm, type FlowForm, type FormRefusal } from "./form-check";
+import * as words from "./words";
 
 // CP-4a2b (§13a slice 8; D5, D9) — a flow's steps: `startStep` is the ONE road a step's agent is started by
 // (CL-H5), in D5's order, each fact on the run's record before the next act:
@@ -23,7 +26,8 @@ import { checkForm, type FlowForm, type FormRefusal } from "./form-check";
 // D9's checks are held here, before any spawn or send, each in §9's words: the keys, the agent (the catalog's door),
 // its Agent Profile (named, or the spark's thinksUnder in its own run or one from its thread, or your default; held to
 // the run's scope, a default outside it none to give), its folder (the run's, or a project's, or inside one), its
-// model (a name the runtime discovered), its prompt, and an `in:`.
+// model (a name the runtime discovered), its prompt, an `in:`, and the run's agents (RUN_AGENTS_MAX on its record,
+// reserved before the spawn and given back by a spawn the runtime refused; F4).
 // An `in:` hands a live session the step's line instead of a spawn (D5 4–7 the same), and the step listener is told of
 // the hand first (slice 9b), since that session is no flow's run.
 // Built later in M-r2: D2's lookup at a wake (10a), the answer and a freed slot (9).
@@ -134,10 +138,12 @@ export interface FlowStepRun {
   readonly spark?: string | undefined;
 }
 
-/** The run's record of its open step `call`, written through the runs (the one writer of a run's record). */
+/** The run's record of its open step `call`, written through the runs (the one writer of a run's record). `run`
+ * changes the run's own count of its agents in the same write, from the record as that write reads it (F4). */
 export type FlowStepWrite = (
   call: number,
   patch: (step: FlowRunRecordStep) => FlowRunRecordStep,
+  run?: (record: FlowRunRecord) => Pick<FlowRunRecord, "agents">,
 ) => void;
 
 /** How a step's start went: refused, in the script's words, or working in its session; a handed session's `unhand`
@@ -353,6 +359,20 @@ export async function startStep(
         `it names a model ${offered.label} doesn't offer (${nameWords(model)}).`,
       );
   }
+  // F4 (the slices 7–9 review; ruled 2026-11-06): a run keeps RUN_AGENTS_MAX agents at most,
+  // alive until its end or a Stop (CP4-Q10), so one more is refused here, never made to wait. The count is the
+  // record's, reserved after the last await before the spawn, in the one write that reads it: two starts at once
+  // never both pass, and a run woken on its record counts as it did
+  let agents = 0;
+  write(
+    call,
+    (step) => step,
+    (record) => {
+      agents = record.agents ?? 0;
+      return agents < FLOW_LIMITS.RUN_AGENTS_MAX ? { agents: agents + 1 } : {};
+    },
+  );
+  if (agents >= FLOW_LIMITS.RUN_AGENTS_MAX) return didntStart(label, words.agentsKept());
   const launch: FlowStepLaunch = {
     agent,
     cwd,
@@ -364,6 +384,12 @@ export async function startStep(
   try {
     ({ runtimeRunId } = await ports.agents.spawn(launch, { by: "flow", run: run.run, call }));
   } catch (error) {
+    // F4: a spawn the runtime refused started no agent, so it gives back the one it reserved
+    write(
+      call,
+      (step) => step,
+      (record) => ({ agents: Math.max(0, (record.agents ?? 0) - 1) }),
+    );
     const why = oneLineWords(error instanceof Error ? error.message : String(error), FLOW_LOG_MAX);
     return { ok: false, refused: `VibeField couldn't start ${labelWords(label)}: ${why}` };
   }

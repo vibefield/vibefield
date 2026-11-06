@@ -255,6 +255,8 @@ function startOf(record: FlowRunRecord): FlowRunStart {
     ...(record.host !== undefined ? { host: record.host } : {}),
     ...(record.endedAt !== undefined ? { endedAt: record.endedAt } : {}),
     ...(record.ended !== undefined ? { ended: record.ended } : {}),
+    // F4: the agents its steps started, which every write keeps (steps.ts reserves and gives them back)
+    ...(record.agents !== undefined ? { agents: record.agents } : {}),
   };
 }
 
@@ -1033,23 +1035,26 @@ export class FlowRuns {
     return undefined;
   }
 
-  /** The record's open step, written through the one writer of a run's record. */
+  /** The record's open step, written through the one writer of a run's record, with the run's count of its agents
+   * (`fields`, F4) in the same write. */
   #stepWrite(run: FlowRunId): FlowStepWrite {
-    return (call, patch) =>
+    return (call, patch, fields) =>
       this.#rewriteWith(run, (record) => ({
         open: record.open.map((step) => (step.call === call ? patch(step) : step)),
+        ...fields?.(record),
       }));
   }
 
   /** The record's open step, written as `#stepWrite` writes it, with the run's hold dropped in the same write: the
    * person's answer to a hold is acted on in the write that acts on it (F5). */
   #releasing(run: FlowRunId): FlowStepWrite {
-    return (call, patch) =>
+    return (call, patch, fields) =>
       this.#replace(run, (start, record) => {
         const { held: _held, ...rest } = start;
         return {
           ...rest,
           open: record.open.map((step) => (step.call === call ? patch(step) : step)),
+          ...fields?.(record),
         };
       });
   }
