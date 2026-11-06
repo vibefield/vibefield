@@ -314,7 +314,7 @@ import {
   MeshBoard,
 } from "./mesh-board";
 import { MESH_BUS_CARRIES_CONTENT } from "./mesh-bus";
-import { MeshClient, meshNodeUp, type ServeSpec } from "./mesh-client";
+import { MeshClient, meshNodeUp, type ServeSpec, type ServeState } from "./mesh-client";
 import { MeshLaneLink } from "./mesh-lane";
 import { NativeLink, RpcCallError } from "./native-link";
 import {
@@ -410,7 +410,9 @@ import {
 } from "./tool-plane/spark-doors";
 import { SparkKeptStore } from "./tool-plane/spark-kept";
 import { SparkService, SparkStore } from "./tool-plane/sparks";
+import { sparkTranscriptForwardVia } from "./transcripts/forward";
 import { type TranscriptHostLaunch, transcriptHostLaunchSpec } from "./transcripts/launch";
+import { TRANSCRIPT_SERVE_ID, TranscriptServeDriver } from "./transcripts/serve";
 import { TranscriptHostSupervisor, type TranscriptHostTimings } from "./transcripts/supervisor";
 import { SparkTranscriptTickets } from "./transcripts/tickets";
 import { userMe } from "./user-me";
@@ -1307,10 +1309,21 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     logger: logger.child({ component: "transcript_host" }),
   });
   sparkTranscripts.onAppend((spark, run) => transcriptHost.appended(spark, run));
+  // SP-7a (D2) — a phone's road reads the roster, the mesh's live serves and this device's id, which the boot builds
+  // below (`transcriptRoad`, assigned beside the worker's routed serve). Until it is, no phone is minted: there is no
+  // serve to name, and a forward naming any device reads as a desktop's.
+  let transcriptRoad: {
+    deviceId: () => string;
+    serves: () => readonly ServeState[];
+    isDesktop: (deviceId: string) => boolean;
+  } | null = null;
   const transcriptTickets = new SparkTranscriptTickets({
     store: sparkTranscripts,
     supervisor: transcriptHost,
     hasSpark: (id) => sparkStore.get(id) !== undefined,
+    deviceId: () => transcriptRoad?.deviceId() ?? "",
+    serves: () => transcriptRoad?.serves() ?? [],
+    isDesktop: (device) => transcriptRoad?.isDesktop(device) ?? true,
   });
   const briefings: AgentBriefings = new AgentBriefings({
     spark: (id) => sparkStore.get(id),
@@ -7477,9 +7490,13 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       // and a forwarded ticket's doors are adopted for the caller on the way back
       // (`TerminalService.forwardVia`); every other forward passes through.
       // DS-7 — the index ticket's the same way, around it (`IndexTicketForwarding`).
-      indexForwarding.forwardVia(
-        terminals.forwardVia((device, method, params, _ctx, envelope) =>
-          peers.request(device, method, params, envelope),
+      // SP-7a (D3) — and a phone's transcript ticket, carried for the phone alone and its answer untouched
+      // (`transcripts/forward.ts`).
+      sparkTranscriptForwardVia(
+        indexForwarding.forwardVia(
+          terminals.forwardVia((device, method, params, _ctx, envelope) =>
+            peers.request(device, method, params, envelope),
+          ),
         ),
       ),
       // S2 (the landing review, 2026-10-01) — a routed board ask is judged for
@@ -7655,6 +7672,8 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     let lastIndexServeSpec: ServeSpec | null = null;
     // F1 — the freeway host's serve, held for the same reason (freeway.ts)
     let lastFreewayServeSpec: ServeSpec | null = null;
+    // SP-7a — the transcript worker's routed serve, held for the same reason (transcripts/serve.ts)
+    let lastTranscriptServeSpec: ServeSpec | null = null;
     const desiredServes = (): ServeSpec[] => {
       const product = productServeSpec();
       return [
@@ -7662,6 +7681,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         ...(lastTerminalServeSpec === null ? [] : [lastTerminalServeSpec]),
         ...(lastIndexServeSpec === null ? [] : [lastIndexServeSpec]),
         ...(lastFreewayServeSpec === null ? [] : [lastFreewayServeSpec]),
+        ...(lastTranscriptServeSpec === null ? [] : [lastTranscriptServeSpec]),
         ...(lastArtifactServeSpecs ?? []),
         // MA-3e — the made apps' serves and their one previews serve, as the
         // made-app service last declared them (made-app-service.ts)
@@ -7792,6 +7812,46 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       mesh.on("node-up", () => void indexServe.refresh());
       void indexServe.refresh();
     }
+    // SP-7a (D1 (B); transcripts/serve.ts) — THE TRANSCRIPT WORKER'S ROUTED SERVE: its own tailnet listener onto the
+    // ready generation's loopback port, re-aimed at each generation and withdrawn while none is ready, so a phone's
+    // node dials the worker directly (EL2) with a ticket its first frame redeems (DS-L6). Always declared for a linked
+    // desktop; a window never needs it.
+    const transcriptServe = new TranscriptServeDriver({
+      port: () => transcriptHost.health().port ?? undefined,
+      linkedLogin,
+      declare: async (spec) => {
+        try {
+          await mesh.removeServe(TRANSCRIPT_SERVE_ID);
+        } catch (error) {
+          serveLog.warn(
+            "fieldd.transcripts.serve.remove_deferred",
+            "The transcript listener could not be taken down; the previous target stays declared",
+            { error: String(error) },
+          );
+          return false;
+        }
+        lastTranscriptServeSpec = spec;
+        const states = await mesh.setServes(desiredServes());
+        if (spec === null) return true;
+        const placed = states.find(
+          (state) => (state.serveId ?? state.name) === TRANSCRIPT_SERVE_ID,
+        );
+        return placed?.status === "active";
+      },
+      serves: () => mesh.serves(),
+      logger: logger.child({ component: "transcripts.serve" }),
+    });
+    transcriptHost.on("transition", () => void transcriptServe.refresh());
+    links.on("changed", () => void transcriptServe.refresh());
+    mesh.on("node-up", () => void transcriptServe.refresh());
+    void transcriptServe.refresh();
+    // SP-7a (D2) — the phone's road, for the ticket door above: this device, the live serves, and the roster's word
+    // on whether a forward names a desktop (F1b's test: the self row, or a row hosting documents)
+    transcriptRoad = {
+      deviceId: () => devices.currentDeviceId(),
+      serves: () => mesh.serves(),
+      isDesktop: (device) => devices.get(device)?.self === true || devices.isDocHost(device),
+    };
     // F1 (thinking-freeway.md v0.3 §3, §4.3) — THE FREEWAY: fieldd's one declaration to the floor
     // (who the host admits and with which hello, and the owner's word on off-device terminals),
     // the floor's state back, and the serve that puts the host on the tailnet. The declaration is
@@ -8145,6 +8205,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         federatedSubs.dispose(); // before peers: a dying link must not trigger recovery
         peers.dispose();
         indexServe?.dispose(); // SP-3 — stop re-aiming rosettad's serve before the mesh goes
+        transcriptServe.dispose(); // SP-7a — and the transcript worker's
         freewayServe.dispose(); // F1 — the floor keeps the serve: FW-L10
         freewayFloor.dispose();
         // DS-1b — a superseded daemon KEEPS its egress routes: the floor answers
@@ -8212,6 +8273,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       federatedSubs.dispose();
       peers.dispose();
       indexServe?.dispose(); // SP-3 — stop re-aiming rosettad's serve before the mesh goes
+      transcriptServe.dispose(); // SP-7a — and the transcript worker's
       freewayServe.dispose(); // F1 — the floor keeps the serve: FW-L10
       freewayFloor.dispose();
       egressCellRewriter?.dispose(); // DS-1b — the last release takes each route off the floor
@@ -8803,6 +8865,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           federatedSubs.dispose(); // before peers: a dying link must not trigger recovery
           peers.dispose();
           indexServe?.dispose(); // SP-3 — stop re-aiming rosettad's serve before the mesh goes
+          transcriptServe.dispose(); // SP-7a — and the transcript worker's
           freewayServe.dispose(); // F1 — the floor keeps the serve: FW-L10
           freewayFloor.dispose();
           // DS-1b — the egress routes this daemon placed come off the floor
