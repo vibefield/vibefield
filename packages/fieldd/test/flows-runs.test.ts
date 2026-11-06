@@ -217,6 +217,8 @@ async function harness(
    * it (Q5: the hold-wake's witness) */
   const raisedAs: FlowItemRaised[] = [];
   const needs = opts.needsQueue === true ? needsQueueIn(root) : undefined;
+  /** slice 11b (Q10) — each fact the runs told a spark through their `waker` port, in order: the recording fake */
+  const facts: { readonly spark: string; readonly fact: string }[] = [];
   const turnListeners = new Set<(end: FlowStepTurnEnd) => void>();
   /** how many times a step asked the runtime for its models */
   let modelAsks = 0;
@@ -262,6 +264,7 @@ async function harness(
         return answered;
       },
     },
+    waker: { flowFact: (spark, fact) => void facts.push({ spark, fact }) },
     stepEnds: opts.stepEvents ?? {
       onTurnEnd: (listener) => {
         turnListeners.add(listener);
@@ -370,6 +373,8 @@ async function harness(
     raisedAs,
     /** slice 11a: the row's real needs queue, when it asked for one (`needsQueue`) */
     needs,
+    /** slice 11b: whom the runs told, and what, through their `waker` port (Q10) */
+    facts,
     endTurn,
     spawned,
     enqueued,
@@ -2921,6 +2926,203 @@ describe("CP-4a2b — a changed flow's acts begin the asked-for run (§13a slice
   });
 });
 
+// CP-4a2b (§13a slice 11b; Q9, Q10, Q5; the slice 11 rulings, ruled 2026-11-06, and its rulings for red-a's
+// revision, 2026-11-06) — the spark's facts: a run a spark started (its starter `by: "spark"`) tells that spark when the
+// run holds on you, once for each hold the needs queue MINTED (Q5: a hold made again, at a wake or a restart, is
+// re-bound, and tells nothing more), and when it ends, once its `end` line is kept: done, failed or lost. Your answer
+// to a hold tells nothing (the run goes on), a spark that is gone is told nothing, and a Run you start in a spark's
+// thread (`{by: "you", spark}`) is yours, and tells the spark nothing (T3b). The runs tell through their `waker` port
+// (Q10), which the harness records; these rows read whom it told and how often, never what: the facts' words are
+// red-b's, once §9 holds them. A hold row runs on the real needs queue (`needsQueue`), whose `minted` decides its
+// tell, and reads that tell once told (`within`); the counts across a wake are the host's life's rows, on R13d's and
+// R13e-ask's roads.
+
+/** Vela's own run, from its thread, as its flow_run starts one (slice 11b). */
+const VELAS: Partial<FlowRunStartParams> = {
+  starter: { by: "spark", spark: VELA },
+  from: VELA_FROM,
+};
+
+/** The sparks the runs told (slice 11b), one per fact, in order, from the `from`th fact on: whom, never what. */
+const toldOf = (h: Harness, from = 0): string[] => h.facts.slice(from).map(({ spark }) => spark);
+
+describe("CP-4a2b — the spark's facts: a run a spark started tells it when the run holds on you, and when it ends (§13a slice 11b)", () => {
+  /** A gate whose refusal its script catches and logs: until ask() is built (slice 11a) its run ends done; once it
+   * is, the run holds on you. */
+  const GATE_CAUGHT = [
+    'export const meta = { name: "Gate" };',
+    "export default async function () {",
+    '  try { log(await ask("Ship it?", ["Ship", "Hold"])); } catch (e) { log(e.message); }',
+    "}",
+    "",
+  ].join("\n");
+  /** A script that throws: its run ends failed. */
+  const THROWS = [
+    'export const meta = { name: "Throws" };',
+    "export default async function () {",
+    '  throw new Error("no");',
+    "}",
+    "",
+  ].join("\n");
+  /** a Run you start in Vela's thread: yours, Vela beside it (T3b) */
+  const THREAD: Partial<FlowRunStartParams> = { starter: { by: "you", spark: VELA } };
+  /** Whether `run` raised its gate's item. */
+  const gated = (h: Harness, run: string): boolean =>
+    h.items.some((item) => item.kind === "flow-gate" && item.run.run === run);
+  /** Whether `run` has ended, in any way (every end writes its `endedAt`). */
+  const ended = (h: Harness, run: string): boolean =>
+    h.runs.read(run)?.summary.endedAt !== undefined;
+  /** Whether fieldd's log said a run's end was not kept (#finish's catch, R6k). */
+  const notKept = (h: Harness): boolean =>
+    h.errored.some(({ event }) => event === "fieldd.flows.run.end");
+
+  it("R35 (Q9 (a) and (3), Q5, Q2; slice 11b): a gate a spark's run holds tells that spark once, at its raise on the needs queue; your answer to it tells nothing, the run going on to its step, and the run's end then tells it once", async () => {
+    const h = await harness({ needsQueue: true });
+    h.approved("ship", GATE_THEN_STEP);
+    const run = startedRun(await h.start({ flow: "ship", ...VELAS })).run;
+    // its hold, read once told. At this red its ask is refused at its call, and the script's throw ends the run
+    // failed: nothing raised, nothing told
+    await within(WAIT_MS, () => h.facts.length > 0 || ended(h, run));
+    expect({ raised: h.raisedAs.map(({ minted }) => minted), told: toldOf(h) }).toEqual({
+      raised: [true],
+      told: [VELA],
+    });
+    // your answer, on the needs queue as a window gives it: the run goes on to its step A, and tells nothing
+    const held = h.facts.length;
+    await needsOf(h).answer(h.raisedAs[0]?.id ?? "", 0, PRINCIPAL);
+    await within(WAIT_MS, () => h.enqueued.length > 0 || ended(h, run));
+    const answered = toldOf(h, held);
+    // A's answer ends the run, and its end tells once
+    h.endTurn({
+      run,
+      call: 2,
+      runtimeRunId: "rt-step1",
+      turn: "t1",
+      outcome: "completed",
+      text: "a",
+    });
+    await within(WAIT_MS, () => ended(h, run));
+    expect({ answered, end: toldOf(h, held), state: h.runs.read(run)?.summary.state }).toEqual({
+      answered: [],
+      end: [VELA],
+      state: "done",
+    });
+  });
+
+  it("R35 (Q9 (a), Q5; slice 11b): a step's second miss, held on you on the needs queue, tells the spark that started its run once; your Ask once more tells nothing, the run going on", async () => {
+    // heldOnRepair's road, the run Vela's
+    const h = await harness({ needsQueue: true });
+    h.approved("review", FORMED_CATCHES);
+    const run = startedRun(await h.start({ flow: "review", ...VELAS })).run;
+    await waitFor(() => expect(h.enqueued).toHaveLength(1));
+    const at = { run, call: 1, runtimeRunId: "rt-step1", outcome: "completed" } as const;
+    h.endTurn({ ...at, turn: "t1", text: "no json here" });
+    await waitFor(() => expect(h.enqueued).toHaveLength(2));
+    h.endTurn({ ...at, turn: "t2", text: "still none" });
+    await waitFor(() => expect(h.items).toHaveLength(1));
+    // its hold, read once told: the wake rides the raise's own road (Q3 (b)), so PARK_MS is ample, and at this red,
+    // where nothing tells, the row reads its value inside vitest's budget, never past it
+    await within(PARK_MS, () => h.facts.length > 0 || ended(h, run));
+    const held = toldOf(h);
+    // your Ask once more: the run goes on, and tells nothing
+    expect(await askOnceMore(h, run)).toEqual({ outcome: "done" });
+    expect({
+      raised: h.raisedAs.map(({ minted }) => minted),
+      held,
+      answered: toldOf(h, held.length),
+    }).toEqual({ raised: [true], held: [VELA], answered: [] });
+  });
+
+  it("R35 (Q9 (b), D18; slice 11b): a run a spark started tells that spark once when it ends, once its `end` line is kept, whether or not the record's write after it lands: done, failed (its script threw), and lost (its bytes gone by its wake); an `end` line the disk refuses tells nothing, nor an end whose spark is gone", async () => {
+    const h = await harness();
+    h.approved("hello", HELLO);
+    h.approved("throws", THROWS);
+    /** the sparks told from the start of a run of `flow`, Vela's own, to its end in `state` */
+    const toldAtEnd = async (flow: string, state: string): Promise<string[]> => {
+      const from = h.facts.length;
+      const run = startedRun(await h.start({ flow, ...VELAS })).run;
+      await settled(h.runs, run, state);
+      return toldOf(h, from);
+    };
+    const done = await toldAtEnd("hello", "done");
+    const failed = await toldAtEnd("throws", "failed");
+    // R6i's road, last in this harness (its bytes stay gone): its begin reads the approved bytes, and by its wake
+    // they are gone
+    const begin = h.records.beginRun.bind(h.records);
+    vi.spyOn(h.records, "beginRun").mockImplementationOnce((entry, start) => {
+      const head = begin(entry, start);
+      vi.spyOn(h.records, "bytes").mockReturnValue(undefined);
+      return head;
+    });
+    const lost = await toldAtEnd("hello", "lost");
+    /** whom Vela's run of HELLO told, its store refusing its `end` line (`line`, R6k's road) or the record's write
+     * after that line (`record`): read once fieldd's log says its end was not kept */
+    const refused = async (what: "line" | "record"): Promise<string[]> => {
+      const r = await harness();
+      r.approved("hello", HELLO);
+      const full = new Error("ENOSPC: no space left on device, write");
+      const append = r.records.appendRun.bind(r.records);
+      const write = r.records.writeRunRecord.bind(r.records);
+      vi.spyOn(r.records, "appendRun").mockImplementation((run, entry) => {
+        if (what === "line" && entry.kind === "end") throw full;
+        return append(run, entry);
+      });
+      vi.spyOn(r.records, "writeRunRecord").mockImplementation((run, fields) => {
+        if (what === "record" && fields.endedAt !== undefined) throw full;
+        write(run, fields);
+      });
+      startedRun(await r.start({ flow: "hello", ...VELAS }));
+      await within(WAIT_MS, () => notKept(r));
+      return toldOf(r);
+    };
+    // the record's write after the `end` line refused: the line is kept, so the end is told
+    const unrecorded = await refused("record");
+    // a pin: the `end` line refused tells nothing. It reddens a tell made before the line is kept
+    const unkept = await refused("line");
+    // a pin: Vela gone by its run's end, so sparkOf finds no one to tell. It reddens a wake with no sparkOf check
+    const g = await harness();
+    g.approved("review", ANSWERED);
+    const run = startedRun(await g.start({ flow: "review", ...VELAS })).run;
+    await within(WAIT_MS, () => g.enqueued.length > 0 || ended(g, run));
+    g.setSparkScope(VELA, undefined);
+    g.endTurn({
+      run,
+      call: 1,
+      runtimeRunId: "rt-step1",
+      turn: "t1",
+      outcome: "completed",
+      text: "ok",
+    });
+    await within(WAIT_MS, () => ended(g, run));
+    const gone = { state: g.runs.read(run)?.summary.state, told: toldOf(g) };
+    expect({ done, failed, lost, unrecorded, unkept, gone }).toEqual({
+      done: [VELA],
+      failed: [VELA],
+      lost: [VELA],
+      unrecorded: [VELA],
+      unkept: [],
+      gone: { state: "done", told: [] },
+    });
+  });
+
+  it("R35c (Q9 (1), T3b; slice 11b): a Run you start in a spark's thread is yours: its gate and its end tell that spark nothing", async () => {
+    // two runs, as ruled (2026-11-06): a gate's run ends only through your answer, which this pin can't give
+    // at the red (nothing is raised), so the gate is GATE_CAUGHT's run and the end HELLO's. The mutation it catches,
+    // a wake on `starter.spark` alone, reddens both halves at 11b's green: the end's, and the gate's, which 11a's
+    // green holds
+    const h = await harness();
+    h.approved("gate", GATE_CAUGHT);
+    h.approved("hello", HELLO);
+    // its gate: held on you once ask() is built (until then refused, caught, and its run ends)
+    const gate = startedRun(await h.start({ flow: "gate", ...THREAD })).run;
+    await within(WAIT_MS, () => gated(h, gate) || ended(h, gate));
+    // its end
+    const run = startedRun(await h.start({ flow: "hello", ...THREAD })).run;
+    await settled(h.runs, run, "done");
+    expect(toldOf(h)).toEqual([]);
+  });
+});
+
 // CP-4a2b (the slices 7–9 review's F4; Q1 (b), ruled 2026-11-06; the record's count at the refined (A),
 // 2026-11-06; LL1's words, 2026-11-06) — a run starts FLOW_LIMITS.RUN_AGENTS_MAX agents at most, counted until its end
 // whatever becomes of them: a step that would start one more is refused at its spawn, in DESIGN.md §9's PROPOSED words,
@@ -4446,6 +4648,68 @@ describe("CP-4a2b — the host's life: parked and woken, D2's lookup at a wake, 
       log: stepFailed("Diff"),
       raises: [["flow-repair", 1]],
       queued: 2,
+    });
+  });
+
+  // slice 11b (Q5, Q9 (a); the rulings for red-a's revision, 2026-11-06): the wake counts. A spark's own run tells
+  // it once for each hold the needs queue MINTED: a gate made again at a wake is re-bound (D2) and tells nothing more.
+  // Vela's runs, on the real queue; each row reads whom the runs told (`toldOf`) and how often, never what, once parked
+  // and once parked again, so a park or a wake that told shows in its reads too. At this red an ask is still refused
+  // and nothing tells: each row reads red on its counts.
+
+  it("R35 (Q5, Q9 (a): the wake counts on R13d's road; slice 11b): a gate a spark's run holds across a wake tells that spark once, at its mint, and nothing more at its re-bind; two gates beside a step tell it twice in all", async () => {
+    /** Vela's run of `text` on the real queue, its `gates` held beside step `call` and parked; then that step's answer
+     * wakes it, and its gates, made again, are re-bound. Its raises, and whom it told by the park and after the wake */
+    const acrossWake = async (flow: string, text: string, gates: number, call: number) => {
+      const h = await harness({ hostIdleMs: IDLE_MS, needsQueue: true });
+      h.approved(flow, text);
+      const run = startedRun(await h.start({ flow, ...VELAS })).run;
+      const parked = () => h.items.length >= gates && h.enqueued.length > 0 && left(h, 0);
+      // parked, its holds' tells read once told
+      await within(PARK_MS, () => (parked() && h.facts.length >= gates) || over(h, run));
+      const held = toldOf(h);
+      answerStep(h, run, call, "ok");
+      await within(PARK_MS, () => (h.items.length >= 2 * gates && left(h, 1)) || over(h, run));
+      return { raises: h.items.length, held, woken: toldOf(h, held.length) };
+    };
+    expect({
+      one: await acrossWake("gate", GATE_AND_STEP, 1, 2),
+      two: await acrossWake("gates", TWO_GATES_AND_STEP, 2, 3),
+    }).toEqual({
+      one: { raises: 2, held: [VELA], woken: [] },
+      two: { raises: 4, held: [VELA, VELA], woken: [] },
+    });
+  });
+
+  it("R35 (Q5 §5, Q9 (a): the wake counts on R13e-ask's roads; slice 11b): an ask journaled with no item tells the spark whose run it is once, at the wake that mints its item; one whose item the needs queue kept is re-bound there, and tells nothing", async () => {
+    /** Vela's run of SEQ_ASK killed between its ask's call line and its item (R13e-ask's road), the item `kept` by the
+     * needs queue before the kill or not. Its raises, and whom it told once its woken run is parked again */
+    const woken = async (kept: boolean) => {
+      const h = await harness({
+        hostIdleMs: IDLE_MS,
+        timings: { stopGraceMs: KILL_GRACE_MS },
+        needsQueue: true,
+      });
+      h.approved("seq-ask", SEQ_ASK);
+      const run = startedRun(await h.start({ flow: "seq-ask", ...VELAS })).run;
+      await waitFor(() => expect(h.enqueued).toHaveLength(1));
+      if (kept)
+        needsOf(h).flowItem({
+          kind: "flow-gate",
+          run: { run, flow: "seq-ask", call: 2 },
+          name: "Seq ask",
+          spark: VELA,
+          words: "Ship it?",
+          acts: ["Ship", "Hold"],
+        });
+      await killedBeforeEntry(h, run, seqAsk(), () => h.items.length > 0 || over(h, run));
+      // parked again: a mint's tell read once told, and a re-bind's, were there one, told by then
+      await within(PARK_MS, () => (left(h, 1) && (kept || h.facts.length > 0)) || over(h, run));
+      return { raises: h.items.length, told: toldOf(h) };
+    };
+    expect({ minted: await woken(false), kept: await woken(true) }).toEqual({
+      minted: { raises: 1, told: [VELA] },
+      kept: { raises: 1, told: [] },
     });
   });
 });

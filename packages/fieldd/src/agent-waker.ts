@@ -1,3 +1,4 @@
+import type { AgentSessionOrigin } from "@vibefield/contracts";
 import { createNoopLogger, type Logger } from "@vibefield/logging";
 import type { AgentInputQueues } from "./agent-input-queue";
 
@@ -29,6 +30,14 @@ export const stateOf = (row: MonitorRow): RunState =>
 /** The monitor's idle: the turn has ended and nothing waits on the person (CP-L5). */
 export const isIdleRow = (row: MonitorRow | undefined): boolean =>
   row !== undefined && row.status === "idle" && row.blockers.length === 0;
+
+/** CP-4a2b slice 11 (Q11, R35b; D6) — the spark a run's origin says started it (CP-D15): a spark's own `agent_spawn`
+ * (`by: "spark"`) alone. A flow's step is the flow's (`by: "flow"`), though its origin names the spark whose run made
+ * it (E5), and a spark's own session is yours (`by: "you"`), its spark beside the origin, never in it. So a step's
+ * state change never wakes a spark as its spawner; a spark that watches the step is woken as any watcher (T5). Its
+ * expression is daemon.ts's spawnerOf's, verbatim: daemon.ts reads it from slice 15, and its own lambda goes then. */
+export const sparkOfOrigin = (origin: AgentSessionOrigin | undefined): string | undefined =>
+  origin?.by === "spark" ? origin.spark : undefined;
 
 export interface WakerOptions {
   readonly queues: AgentInputQueues;
@@ -103,6 +112,11 @@ export class AgentWaker {
       `VibeField restarted while your words to ${this.opts.label(runtimeRunId)} were being sent, and cannot tell whether they arrived (read the session to see); they will not be sent again`,
     );
   }
+
+  /** CP-4a2b slice 11 (Q9, Q10) — a fact a flow run tells the spark that started it, worded by the runs
+   * (flows/words.ts): no watcher, no spawner and no item; it lands in the spark's live session, or is held until one
+   * opens (`onSparkLive`). The runs' `waker` port. Declared in slice 11b's red, a no-op; its green wakes. */
+  flowFact(_spark: string, _fact: string): void {}
 
   /** A spark's own session came alive: the wakes held for it land there. */
   onSparkLive(spark: string, runtimeRunId: string): void {

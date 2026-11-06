@@ -1,6 +1,7 @@
+import type { AgentSessionOrigin } from "@vibefield/contracts";
 import { describe, expect, it } from "vitest";
 import type { AgentInputQueues } from "../src/agent-input-queue";
-import { AgentWaker, isIdleRow, stateOf } from "../src/agent-waker";
+import { AgentWaker, isIdleRow, sparkOfOrigin, stateOf } from "../src/agent-waker";
 
 // CP-2 — the waker (CP-D4, CP2-D6 A; `draft/compose-plane/cp2-talk-room.md`, ruled 2026-10-31): it reads the monitor
 // rows fieldd already hears, wakes a spark for the runs it started and the ones it watches, says the run's state and
@@ -11,7 +12,11 @@ const row = (status: string, ...kinds: string[]) => ({
   blockers: kinds.map((kind) => ({ kind })),
 });
 
-function harness(live: Record<string, string> = { "sp-vela": "run-vela" }) {
+function harness(
+  live: Record<string, string> = { "sp-vela": "run-vela" },
+  /** each run's origin (R35b): spawnerOf then reads it through sparkOfOrigin, as daemon.ts's does from slice 15 */
+  origins?: Readonly<Record<string, AgentSessionOrigin>>,
+) {
   const woken: { run: string; fact: string }[] = [];
   const queues = {
     wake: (run: string, fact: string) => woken.push({ run, fact }),
@@ -19,7 +24,7 @@ function harness(live: Record<string, string> = { "sp-vela": "run-vela" }) {
   const spawned: Record<string, string> = { "run-ada": "sp-vela" };
   const waker = new AgentWaker({
     queues,
-    spawnerOf: (run) => spawned[run],
+    spawnerOf: (run) => (origins !== undefined ? sparkOfOrigin(origins[run]) : spawned[run]),
     sparkSession: (spark) => live[spark],
     label: (run) => ({ "run-ada": "Ada", "run-ben": "Ben" })[run] ?? run,
   });
@@ -94,6 +99,73 @@ describe("the waker (CP-D4, CP2-D6)", () => {
         run: "run-vela",
         fact: "VibeField restarted while your words to Ada were being sent, and cannot tell whether they arrived (read the session to see); they will not be sent again",
       },
+    ]);
+  });
+});
+
+// CP-4a2b (§13a slice 11b; Q10, Q11; the slice 11 rulings, ruled 2026-11-06) — a flow run's spark. A run's
+// spawner is the spark its origin says started it, by `agent_spawn` alone (`sparkOfOrigin`, R35b): a flow's step is
+// the flow's, so its state change wakes no spark as its spawner, and a spark that watches it is woken as any watcher
+// (T5). The run a spark started tells it its facts through `flowFact`, in the runs' words: these rows hand it opaque
+// ones, and read where they land, never their words.
+
+/** A flow run's id, as a step's origin names it (steps.ts). */
+const FLOW_RUN = "fr-0123456789abcdef";
+
+describe("a flow run's spark: its step wakes no spark as its spawner, and its facts land in its spark's session (§13a slice 11b)", () => {
+  it("R35b (D6, Q11, E5; slice 11b): a run's spawner is the spark its origin names by agent_spawn alone: never a step's, though its origin names the spark whose run made it, nor a spark's own session's", () => {
+    expect({
+      // a spark's own session: yours, its spark beside the origin, never in it (daemon.ts's own-session spawn)
+      you: sparkOfOrigin({ by: "you" }),
+      step: sparkOfOrigin({ by: "flow", run: FLOW_RUN, call: 1 }),
+      // E5's shape, a step of a spark's own run: the leg that "origin.spark, whatever its `by`" reddens
+      sparksStep: sparkOfOrigin({ by: "flow", run: FLOW_RUN, call: 1, spark: "sp-vela" }),
+      spawn: sparkOfOrigin({ by: "spark", spark: "sp-vela" }),
+      // a record from before CO names no origin
+      none: sparkOfOrigin(undefined),
+    }).toStrictEqual({
+      you: undefined,
+      step: undefined,
+      sparksStep: undefined,
+      spawn: "sp-vela",
+      none: undefined,
+    });
+  });
+
+  it("R35b (D6, Q11, T5; slice 11b): with spawnerOf read through sparkOfOrigin, a step's working → idle wakes no spark as its spawner, a step a spark watches wakes that watcher, and a spark's own agent wakes it", () => {
+    const h = harness(
+      { "sp-vela": "run-vela", "sp-orin": "run-orin" },
+      {
+        "run-step1": { by: "flow", run: FLOW_RUN, call: 1, spark: "sp-vela" },
+        "run-step2": { by: "flow", run: FLOW_RUN, call: 2, spark: "sp-vela" },
+        "run-ada": { by: "spark", spark: "sp-vela" },
+      },
+    );
+    // a step no spark watches
+    h.waker.onMonitor("run-step1", row("working"));
+    h.waker.onMonitor("run-step1", row("idle"));
+    // a step Orin watches (agent_watch)
+    h.waker.watch("sp-orin", "run-step2", true);
+    h.waker.onMonitor("run-step2", row("working"));
+    h.waker.onMonitor("run-step2", row("idle"));
+    // a positive control, a third leg beyond Q11's two: Vela's own agent_spawn wakes Vela, so the steps above wake no
+    // spawner because sparkOfOrigin finds none, never because this waker wakes no one
+    h.waker.onMonitor("run-ada", row("working"));
+    h.waker.onMonitor("run-ada", row("idle"));
+    expect(h.woken.map(({ run }) => run)).toEqual(["run-orin", "run-vela"]);
+  });
+
+  // R35w (ruled 2026-11-06): the waker's own leg of Q10, not R35's fact-is-its-words, and the one row that holds
+  // Q10's green to `flowFact` being the waker's #wake: flows-runs' rows tell a recording fake
+  it("R35w (Q10, the waker's leg; slice 11b): a run's fact lands in its spark's live session as the runs worded it, or is held until that spark's session opens", () => {
+    const h = harness({ "sp-vela": "run-vela" });
+    h.waker.flowFact("sp-vela", "fact-1");
+    // Wren has no live session: its fact waits for one
+    h.waker.flowFact("sp-wren", "fact-2");
+    h.waker.onSparkLive("sp-wren", "run-wren");
+    expect(h.woken).toEqual([
+      { run: "run-vela", fact: "fact-1" },
+      { run: "run-wren", fact: "fact-2" },
     ]);
   });
 });

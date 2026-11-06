@@ -21,6 +21,7 @@ import {
   oneLineWords,
   RECORD_STORES,
   type RunSummary,
+  type SparkId,
 } from "@vibefield/contracts";
 import { createNoopLogger, type Logger } from "@vibefield/logging";
 import type { FlowStepTurnEnd } from "../flow-step-events";
@@ -160,6 +161,14 @@ export interface FlowRunPorts {
   /** G2 (CP-L4, TL-D5): a spark as it is now, or none for a spark that is gone: a spark's kept start is narrowed
    * again to its Agent Profiles at its act, as an Allow is, and a start left with none is said in its name (V5) */
   sparkOf(spark: string): FlowRunSpark | undefined;
+  /** CP-4a2b slice 11 (Q9, Q10): the spark that started a run (its starter, `by: "spark"`), told what the run did: a
+   * hold the needs queue minted, and its end once its `end` line is kept. Declared inline, as `needs` is, so flows/
+   * never depends on the waker's class; slice 15 binds it to daemon.ts's AgentWaker. Declared in slice 11b's red, and
+   * called nowhere until its green. */
+  readonly waker: {
+    /** a fact for `spark`, in the runs' words (flows/words.ts): its live session takes it, or it waits for one */
+    flowFact(spark: SparkId, fact: string): void;
+  };
   /** how a run's host is started (`spawn`: a test's own, to reach the child it started) */
   readonly host: Pick<
     FlowHostOptions,
