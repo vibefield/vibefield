@@ -2979,7 +2979,7 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   profile's usage is drawn: Godview's profiles column and its popover, and on the phone the held face, the Me menu's
   row, the Agent Profiles page and the token's menu (below). It is Settings → Agent Profiles' usage line (AR-D27's
   C1, `UsageLineView`) bent round, and it reads every plan as Settings reads it, so the two never say different
-  things (UM-D3). Nothing is drawn yet: UM-1 writes its model and geometry, and UM-2 (the desktop) and UM-3 (the
+  things (UM-D3). Nothing is drawn yet: UM-1 writes its model and geometry, and UM-3 (the desktop) and UM-4 (the
   phone) draw it.
   - **What it carries.** One arc per plan the profile holds that meters or needs you, every arc the same length,
     clockwise from the top, in a stable order (UM-D15): the plans with a reading, then those that need you, each
@@ -3065,7 +3065,7 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   drawing is `draft/profile-meters/round4/src/p4f-frames.js` and `round4.css`). Your meters stand at the stage's top
   left, one Bands circle per Agent Profile, and the column is the profile lens. It is VibeField's chrome, drawn by
   field-app. It replaces puppeteer-views' usage column (`UsageColumn`: 46 wide, a 36 ring tile per account, orange at
-  a flat 80%), whose mount and rule retire with it (UM-D3). Nothing is drawn yet: UM-2 draws it, and until then the
+  a flat 80%), whose mount and rule retire with it (UM-D3). Nothing is drawn yet: UM-3 draws it, and until then the
   usage column stands where it will stand.
   - **The pill** is Chat's composer turned upright: **52** wide, padded **6**, corners **26**, so each 40 circle is
     concentric with its ends, with **4** between circles. It hugs its circles and is never the stage's height. It
@@ -3118,14 +3118,14 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       `refresh: true` and its `profileIds`). No act is inert. An agent with no meter says so in a line of its own,
       its mark at 12.
     - **A plan's row** shows only that plan's sessions when clicked (UM-D14, carried A). That is the next wave's,
-      after the desktop's and the phone's slices land (UM-4); until then a row takes no click.
+      after the desktop's and the phone's slices land (UM-5); until then a row takes no click.
     - **The foot**, over a hairline, at 11/400 in the tertiary ink: the lens's words (§9 "The meters' words"), and
       **Agent Profiles…** at its end (600, the secondary ink), which opens Settings → Agent Profiles on that
       profile's page.
-    - *Wave 1, until UM-4 (2026-11-06, UM-D14's interim, the lead's ruling 23; ‹for James›):* the one-profile
+    - *Wave 1, until UM-5 (2026-11-06, UM-D14's interim, the lead's ruling 23; ‹for James›):* the one-profile
       popover's foot says only **Agent Profiles…**; a plan's row takes no click and is not pressable (no
       `aria-pressed`); partner lighting (a plan lighting the bodies that spend it, and a body its plan) waits for
-      UM-4, which brings the session-to-plan join.
+      UM-5, which brings the session-to-plan join.
     - **Pinned**, it holds Godview's keys, so **Esc** closes it before a pane hears it; a click outside closes it
       too.
   - **The add** (UM-D21, UM-D22) is a 40 round at the column's foot in the ready fill: the ink at 8%, and 14% under
@@ -3558,7 +3558,7 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     filling to the window's use in the attention fill. The strip widened to its content and wrapped only while the
     row showed, and the row ended above the deck's fill line, moving the views in flow down by at most the row and
     a gap. The strip keeps its widening and wrapping, and the row's skin, for the approval line alone, which no
-    longer stands aside for the limit moment (§8 "Asking again", amended the same day). The code moves at UM-2;
+    longer stands aside for the limit moment (§8 "Asking again", amended the same day). The code moves at UM-3;
     until then it draws the row this amendment describes.
 - **The desk's chrome** (Chrome on the Mat MC-1…MC-6, 2026-09-28; MC-D1 ruled through One Frame's
   lock and MC-D10 with DK-D23, 2026-10-02; the orchestrator's Phase 4 rulings R1–R25, 2026-10-03,
@@ -5148,7 +5148,7 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   the monitor and its view stay mounted, and it is tried again only for a fact it is handed, at
   most once a window (1 s, doubling to 30 s while it keeps failing). *(Amended 2026-11-06, UM-D21:
   this said "the usage column", whose boundary, "Usage", becomes the profiles column's, "Profiles", at
-  UM-2.)* (Find stood in this list until
+  UM-3.)* (Find stood in this list until
   P2, 2026-10-09: the sheet left VibeField for the frame's Peek — whose Live now rows, live peek and
   filters (the field's tokens and + Filter since SE-D1, 2026-11-06; the scope row's until then) each
   stand behind a boundary of their own, tried again for the rows, the run
@@ -6071,7 +6071,7 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   now (only while the lock is on), Sign in (only while the tailnet asks) and Sign out, farthest. UM adds the meters,
   read from your home desktop: the phone reads the home's cached batch (`agents.usage` and `agents.usage.subscribe`;
   UM-D8 A) and runs no poll of its own, and the home's profiles (`agents.profileSets.list`) name them. Nothing is
-  drawn yet: UM-3 draws it.
+  drawn yet: UM-4 draws it.
   - **At rest the face is plain** (UM-D24 A): no ring, no meter's dot and no lens glyph. A tap is still the menu.
   - **Hold it** for **520ms**, the spawn bloom's own hold (`FieldMotion.longPressDuration`, puppeteer-views'
     `holdMs`), with 10 of slop before it opens; a short tap stays the menu's. ‹for James: the page said 450 "as the
@@ -6131,14 +6131,14 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     - **Plans**, or **Every plan** with several profiles, or **Plans in Work** while the lens is on. Per plan: its
       agent's mark (18), its title, the age of a kept reading ("as of 5m ago"), every window as Settings' C1 line,
       and "Runs out in ~35m at this pace" while it would (UM-D4). A plan's sessions line ("3 sessions · 1 working ·
-      1 waiting for you") and its **Show** and **Showing** are UM-D14's, the next wave's (UM-4). A plan that needs
+      1 waiting for you") and its **Show** and **Showing** are UM-D14's, the next wave's (UM-5). A plan that needs
       you says where it is fixed, "Not signed in · sign in on studio" or "Couldn't read · retry", and the phone draws
       no act for either: it signs in on no desktop, and a phone's refresh spends no call (UM-D8). An agent with no
       meter is a line of its own, "Codex shows no meter";
     - **the foot:** "Manage profiles in Settings → Agent Profiles. New profiles are made on a desktop."
-    - *Wave 1, until UM-4 (2026-11-06, UM-D14's interim, the lead's ruling 23; ‹for James›):* the page draws no
+    - *Wave 1, until UM-5 (2026-11-06, UM-D14's interim, the lead's ruling 23; ‹for James›):* the page draws no
       **Show** or **Showing** and no per-plan sessions line, and a plan's row takes no tap (it is not a button);
-      partner lighting waits for UM-4.
+      partner lighting waits for UM-5.
   - The drawing's first-use hint, "Hold your face for your agents' usage", is not drawn: it was not a ruled mark
     ‹for James›.
   - The desktop's half is §8 "Godview's profiles column".
@@ -6370,7 +6370,7 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
 - **The phone's profile token** (track UM, ruled 2026-11-06 from the page *The Bands Meter*: UM-D27 A, after James's
   note that the face's small glyph was not intuitive; the drawing is `round4.css` `.ltok` and `p4f-frames.js`
   `lensMark` and `lensMenu`). A chosen profile stands beside search, as the desktop's token does, and never touches
-  the search circle's glass. Nothing is drawn yet: UM-3 and SE-2 draw it.
+  the search circle's glass. Nothing is drawn yet: UM-4 and SE-2 draw it.
   - **Where:** its right edge on the search circle's (21 in), its foot 10 above the circle, at the bar's band
     (`AppBar.band`: 93 on a phone with a 34 home inset).
   - **The shape:** 40 tall, corners 20, at most 250 wide, padded 0 7 0 4, its parts 2 apart, in the bar's glass,
@@ -7020,8 +7020,8 @@ here.
   the default profile's name while there are several. The bands key says "5 hours · 7 days · a model's week" (said
   "Inside, the next five hours; outside, the week; a hairline, a model's own week"). Its foot, with several
   profiles: "Click it to show only ‹profile›'s sessions", or "Showing only ‹profile›'s sessions · click it again for
-  all". Then **Agent Profiles…**. With one profile, until UM-4, the foot says only **Agent Profiles…** (§8
-  "Godview's profiles column", wave 1; ‹for James›). *With UM-4* (UM-D14's plan filter) it says "Click a plan to
+  all". Then **Agent Profiles…**. With one profile, until UM-5, the foot says only **Agent Profiles…** (§8
+  "Godview's profiles column", wave 1; ‹for James›). *With UM-5* (UM-D14's plan filter) it says "Click a plan to
   show only its sessions", and "Showing one plan's sessions · click it again for all".
 - **The add.** **Add a profile…**; AO-5's offer and fact, "Keep work, personal, or client accounts separate. Use
   accounts side by side without signing each other out."; and "Opens Settings → Agent Profiles on New profile…".
@@ -7031,7 +7031,7 @@ here.
   says "Profiles unavailable".
 - **The profile notice** (amended 2026-11-06, UM-D21 and SE-D2: the column's circle now toggles the lens): **No
   sessions on ‹profile›**, over "Only its sessions show. Click it again, or the × on search, to show them all.", the
-  drawing's words. The code moves at UM-2. *(Until then, as built: **No sessions under ‹profile›**, over "Only this
+  drawing's words. The code moves at UM-3. *(Until then, as built: **No sessions under ‹profile›**, over "Only this
   profile's sessions show — the search button's × shows them all again.")*
 - **The phone's hold.** With one profile, **Usage** over "3 read · none need you" ("· 1 needs you", "· 2 need
   you"). With several, **Show all** over "8 sessions · every profile"; **Show ‹profile›** over its sessions ("3
@@ -7042,7 +7042,7 @@ here.
 - **The page** is **Agent Profiles**: "Read a minute ago, from ‹home›" or "Reading usage…"; **Profiles**, with **All
   profiles** ("3 profiles · 5 plans") and each profile's line ("default · the agents' own sign-ins · 2 plans");
   **Plans**, **Every plan** or **Plans in ‹profile›**; and its foot, "Manage profiles in Settings → Agent Profiles.
-  New profiles are made on a desktop." *With UM-4* each plan adds its sessions as the hold says them, or "no
+  New profiles are made on a desktop." *With UM-5* each plan adds its sessions as the hold says them, or "no
   sessions", with **Show** and **Showing** (wave 1 draws neither; ‹for James›). A
   home that does not share usage yet says "‹home› doesn't share usage yet" on the page and the hold (the lead's
   words; never a blank), and the Me menu row's word then is ‹for James›.
@@ -7641,7 +7641,7 @@ add's card wears `gear`; a reset is led by `reset`; Everything's projects wear `
 **Every profile** keeps `person`. The phone's corner, sheet and token wear SF Symbols, as the corner's rows already
 do (an × is the system's `xmark`, as the bar's search field draws it), and a profile's glyph there is the same
 `ProfileGlyph` vocabulary drawn as SF Symbols, through one presentation table that is tested against the
-vocabulary's list (`ProfileGlyphSymbols`, UM-3). Nothing joins the picks.
+vocabulary's list (`ProfileGlyphSymbols`, UM-4). Nothing joins the picks.
 
 **`missing`** (2026-10-03, R2) is the desk's missing face as a mark — a card with two of its 45°
 hatches — for a name the set does not hold; an act that declares no glyph at all shows its label
