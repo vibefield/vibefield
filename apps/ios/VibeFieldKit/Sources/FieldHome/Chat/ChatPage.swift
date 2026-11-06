@@ -136,6 +136,8 @@ struct ChatPage: View {
   @Binding var thread: String?
   /// Open its pane: the spark's own run's session card, which is the attach (FW-D2).
   let onOpenPane: (AgentRemoteRow) -> Void
+  /// IOS-12d — the field has a pane for this run key (HomeScreen's session cards, d5); until it says, every run has.
+  var paneOpens: (String) -> Bool = { _ in true }
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   #if DEBUG
     /// The stills' thread has been opened once (`ChatFixtureDoor.openThread`); back then stays back.
@@ -162,7 +164,7 @@ struct ChatPage: View {
           ChatThreadView(
             entry: entry, feed: feed,
             away: ChatThreads.away(of: entry.spark, in: away, connected: feed.reading.connected),
-            onOpenPane: onOpenPane)
+            onOpenPane: onOpenPane, paneOpens: paneOpens)
         } else {
           // the spark left the list while its thread stood: the list again
           Color.clear.onAppear { thread = nil }
@@ -274,9 +276,9 @@ struct ChatPage: View {
     }
   }
 
-  /// Answer in its pane (Q5): the asking run's session card on Field, found on the board at the press.
+  /// Answer in its pane (Q5): the asking run's session card on Field, found at the press; else the card says so.
   private func openPane(of item: NeedsItem) -> Bool {
-    guard let session = item.from.session, let run = feed.run(session) else { return false }
+    guard let run = feed.pane(of: item, opens: paneOpens) else { return false }
     onOpenPane(run)
     return true
   }

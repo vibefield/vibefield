@@ -197,9 +197,8 @@ final class ChatFeed {
   /// Answer in its pane (Q5): the run an item's asker names, when the board has it AND the field can open its pane
   /// (`opens`, by run key: HomeScreen's session cards). Nil: the card says it cannot open, never silence (Found 5).
   func pane(of item: NeedsItem, opens: (String) -> Bool) -> AgentRemoteRow? {
-    // d4b's red: d4's rule, the board's row alone; `opens` is not asked yet
-    guard let session = item.from.session else { return nil }
-    return run(session)
+    guard let session = item.from.session, let row = run(session), opens(row.runtimeRunId) else { return nil }
+    return row
   }
 
   /// The catalog's label for an agent, else nil (the card says its id until the home answers).

@@ -15,6 +15,8 @@ struct ChatThreadView: View {
   /// The spark's desktop, when it is away: its line stands at the top, and the draft waits under its own (Q7).
   let away: ChatAway?
   let onOpenPane: (AgentRemoteRow) -> Void
+  /// IOS-12d — the field has a pane for this run key (HomeScreen's, through ChatPage); until it says, every run has.
+  let paneOpens: (String) -> Bool
 
   @State private var model: ChatThread
   @State private var arrival = ChatArrival()
@@ -36,11 +38,15 @@ struct ChatThreadView: View {
   /// Your words at most this share of the column (§8).
   static let bubbleShare: CGFloat = 0.82
 
-  init(entry: SparkEntry, feed: ChatFeed, away: ChatAway?, onOpenPane: @escaping (AgentRemoteRow) -> Void) {
+  init(
+    entry: SparkEntry, feed: ChatFeed, away: ChatAway?, onOpenPane: @escaping (AgentRemoteRow) -> Void,
+    paneOpens: @escaping (String) -> Bool = { _ in true }
+  ) {
     self.entry = entry
     self.feed = feed
     self.away = away
     self.onOpenPane = onOpenPane
+    self.paneOpens = paneOpens
     _model = State(initialValue: ChatThread(spark: entry.spark.id, feed: feed))
     _scroll = State(initialValue: ScrollPosition(edge: Self.opensAt == .top ? .top : .bottom))
   }
@@ -158,9 +164,9 @@ struct ChatThreadView: View {
     }
   }
 
-  /// Answer in its pane (Q5): the asking run's session card on Field, found on the board at the press.
+  /// Answer in its pane (Q5): the asking run's session card on Field, found at the press; else the card says so.
   private func openPane(of item: NeedsItem) -> Bool {
-    guard let session = item.from.session, let run = feed.run(session) else { return false }
+    guard let run = feed.pane(of: item, opens: paneOpens) else { return false }
     onOpenPane(run)
     return true
   }

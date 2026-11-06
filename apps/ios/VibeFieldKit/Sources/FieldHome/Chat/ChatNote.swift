@@ -36,6 +36,9 @@ struct ChatNotes: Equatable {
 /// The note over the bar: a glass capsule, the spark's face at 22, its words in the attention ink, a chevron.
 struct ChatNoteView: View {
   let spark: SparkSummary
+  /// IOS-12d (Q4) — an answer given off screen that did not go as asked says its line here, in the card's words; nil:
+  /// the need's own note ("‹name› needs you").
+  var text: String? = nil
   let onOpen: () -> Void
 
   static let height: CGFloat = 44
@@ -47,10 +50,10 @@ struct ChatNoteView: View {
     Button(action: onOpen) {
       HStack(spacing: 8) {
         SparkFlatFace(seed: spark.seed, size: 22)
-        Text(ChatWords.note(spark.name))
+        Text(words)
           .font(ChromeType.sans(15, .semibold))
           .foregroundStyle(ChromePalette.attention)
-          .lineLimit(1)
+          .lineLimit(text == nil ? 1 : 2)
         Image(systemName: "chevron.right")
           .font(.system(size: 12, weight: .semibold))
           .foregroundStyle(ChromePalette.attention)
@@ -62,7 +65,9 @@ struct ChatNoteView: View {
     }
     .buttonStyle(.plain)
     .liquidGlassCapsule()
-    .accessibilityLabel(ChatWords.note(spark.name))
+    .accessibilityLabel(words)
     .accessibilityHint("Opens Chat")
   }
+
+  private var words: String { text ?? ChatWords.note(spark.name) }
 }
