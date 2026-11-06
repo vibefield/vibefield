@@ -48,8 +48,9 @@ const pidOf = () => {
 };
 
 describe("the happy path", () => {
-  it("answers ok with the helper's still, minus the wire version", async () => {
-    const t = tool("ok");
+  // The still rides stdout and the helper's argv line rides stderr: two pipes, so a loaded runner
+  // can hand the parent the still first (item 188, push 103's CI). Both orders must hold.
+  async function answersOkWithTheStill(t: ScreenshotTool): Promise<void> {
     const result = await t.capture();
     expect(result.status).toBe("ok");
     if (result.status !== "ok") throw new Error("unreachable");
@@ -67,6 +68,15 @@ describe("the happy path", () => {
         "screenshot.capture.finished",
       ]),
     );
+  }
+
+  it("answers ok with the helper's still, minus the wire version", async () => {
+    await answersOkWithTheStill(tool("ok"));
+  });
+
+  it("answers the same when the helper's stderr lands after its still (item 188)", async () => {
+    const late = fake.spawnFor("ok", { FAKE_HELPER_LATE_ARGS: "1" });
+    await answersOkWithTheStill(tool("ok", { spawn: late }));
   });
 
   it("carries the helper's unknown fields through to the caller (tolerant reader)", async () => {

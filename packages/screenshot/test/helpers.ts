@@ -39,7 +39,11 @@ const okLine = (extra = {}) => JSON.stringify({
   bounds: { x: 10, y: 20, width: 320, height: 240 }, ...extra,
 });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-process.stderr.write("fake helper args=" + JSON.stringify(args) + "\\n");
+const argsLine = "fake helper args=" + JSON.stringify(args) + "\\n";
+// FAKE_HELPER_LATE_ARGS: "ok" writes its argv line to stderr only after the still, the order in
+// which a loaded runner can hand the parent the two pipes (item 188).
+const lateArgs = process.env.FAKE_HELPER_LATE_ARGS === "1";
+if (!lateArgs) process.stderr.write(argsLine);
 if (mode.startsWith("service")) {
   if (mode === "service-hang-boot") {
     setInterval(() => {}, 1e6);
@@ -70,7 +74,7 @@ if (mode.startsWith("service")) {
     });
   }
 } else switch (mode) {
-  case "ok": out(JSON.stringify({ v: 1, status: "ready" })); await sleep(20); out(okLine()); process.exit(0);
+  case "ok": out(JSON.stringify({ v: 1, status: "ready" })); await sleep(20); out(okLine()); if (lateArgs) { await sleep(50); process.stderr.write(argsLine); } process.exit(0);
   case "unknown-field": out(JSON.stringify({ v: 1, status: "ready" })); out(okLine({ pinned: false, futureField: { carried: true } })); process.exit(0);
   case "cancel": out(JSON.stringify({ v: 1, status: "ready" })); await sleep(10); out(JSON.stringify({ v: 1, status: "cancel" })); process.exit(0);
   case "error": out(JSON.stringify({ v: 1, status: "error", code: "permission-denied", message: "Screen Recording permission is required" })); process.exit(1);
