@@ -597,8 +597,9 @@ export class NeedsQueue implements TalkHolds {
    * tells no one. Its acts: Run this version, Run the one you approved (only while one is), Not now last; See the
    * change is the card's, drawn from `script`. The same teller asking to run the same bytes while it is open is that
    * item, never a second. Q4: the start as it was asked is kept on the record, never on the item, and handed back to
-   * the runs with the act. Asked again with another start, the item's start is replaced by the latest, so its act
-   * begins what was asked last (RULED "replace", 2026-11-06); the same start again changes nothing. */
+   * the runs with the act. Asked again with another start, the item's start and its teller's session are replaced by
+   * the latest ask's, so its act begins what was asked last and tells the session that asked it (RULED "replace",
+   * 2026-11-06; H4); the same start again writes nothing. */
   flowChanged(raise: FlowChangedRaise): NeedsItemId {
     const { script, from } = raise;
     for (const record of this.#records.values()) {
@@ -611,8 +612,11 @@ export class NeedsQueue implements TalkHolds {
         item.from.spark === from?.spark
       ) {
         const { start } = raise;
-        if (record.start === undefined || canonicalJson(record.start) !== canonicalJson(start))
-          this.#keep({ ...record, start });
+        if (record.start === undefined || canonicalJson(record.start) !== canonicalJson(start)) {
+          const asked = from !== undefined ? { ...item, from: this.#fromOf(from) } : item;
+          this.#keep({ ...record, item: asked, start });
+          this.#emit();
+        }
         return item.id;
       }
     }

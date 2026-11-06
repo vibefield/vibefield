@@ -22,6 +22,7 @@ import {
 import { createNoopLogger, type Logger } from "@vibefield/logging";
 import type { FlowStepTurnEnd } from "../flow-step-events";
 import { RpcCallError } from "../native-link";
+import { UNREADABLE_WORDS } from "../signed-record";
 import type { HoldSender } from "../tool-plane/rooms/talk/verbs";
 import type {
   FlowChangedRaise,
@@ -121,8 +122,9 @@ export interface FlowRunPorts {
   defaultProfile: FlowStepPorts["defaultProfile"];
   /** the Agent Profiles that exist now, by id: a run's frozen scope narrows to them (D8) */
   profiles(): readonly string[];
-  /** G2 (CP-L4, TL-D5): a spark's Agent Profiles now, or none for a spark that is gone. Not read yet */
-  sparkScope?(spark: string): readonly string[] | undefined;
+  /** G2 (CP-L4, TL-D5): a spark's Agent Profiles now, or none for a spark that is gone: a spark's kept start is
+   * narrowed again to them at its act, as an Allow is */
+  sparkScope(spark: string): readonly string[] | undefined;
   /** how a run's host is started */
   readonly host: Pick<FlowHostOptions, "launch" | "environment" | "timings" | "heapMb" | "rssMb">;
   readonly logger?: Logger | undefined;
@@ -357,14 +359,21 @@ export class FlowRuns {
    * is the act's `failed`, in the start's words, with nothing approved and nothing begun. */
   #acted(act: FlowItemStart): FlowItemStarted {
     const { start } = act;
-    const params: FlowRunStartParams = {
-      flow: act.flow,
-      input: start.input,
-      starter: start.starter,
-      scope: start.scope,
-      ...(act.from !== undefined ? { from: act.from } : {}),
-    };
     try {
+      // G2 (CP-L4, TL-D5): a spark's start, its own or a Run in its thread (CP4-Q20 (a)), narrows again to the spark's
+      // Agent Profiles now, as an Allow does; a spark that is gone starts nothing
+      const spark = start.starter.spark;
+      const now = spark !== undefined ? this.ports.sparkScope(spark) : undefined;
+      if (spark !== undefined && now === undefined) throw refused("no-spark", words.noSpark());
+      const scope =
+        now !== undefined ? start.scope.filter((profile) => now.includes(profile)) : start.scope;
+      const params: FlowRunStartParams = {
+        flow: act.flow,
+        input: start.input,
+        starter: start.starter,
+        scope,
+        ...(act.from !== undefined ? { from: act.from } : {}),
+      };
       if (act.version === "approved")
         return { outcome: "done", run: this.#begin(params, act.hash).run };
       // Run this version: the library's bytes, while they are still the version the item asked about
@@ -379,9 +388,9 @@ export class FlowRuns {
     }
   }
 
-  /** Begin a run of the version `hash`: its refusals, then (`approving`, Run this version's bytes) its approval as
-   * yours, then its record and its head (D18), then its host. Without `approving` the bytes are the ones fieldd kept
-   * under an approval's hash (D8). */
+  /** Begin a run of the version `hash`: its refusals, then the run's begin checked (`checkBegin`), then (`approving`,
+   * Run this version's bytes) its approval as yours, then its record and its head (D18), then its host. Without
+   * `approving` the bytes are the ones fieldd kept under an approval's hash (D8). */
   #begin(params: FlowRunStartParams, hash: string, approving?: Uint8Array): RunSummary {
     const { records } = this.ports;
     const bytes = approving ?? records.bytes(hash);
@@ -429,12 +438,20 @@ export class FlowRuns {
     const run = `fr-${randomBytes(8).toString("hex")}` as FlowRunId;
     const profiles = new Set(this.ports.profiles());
     const scope = [...new Set(params.scope)].filter((profile) => profiles.has(profile));
-    // Run this version (approves it): past every refusal, so an act that can't begin approves nothing; the approval
-    // keeps its bytes, which the run's host is woken on
-    if (approving !== undefined) records.approve(params.flow, approving);
-    records.beginRun(
-      { run, flow: params.flow, name, n, hash, starter: params.starter, input: params.input },
-      { scope, state: "running", calls: 0, allowed: FLOW_LIMITS.CALLS_MAX, open: [], steps: [] },
+    // H2 (R4–R6 review): the run's begin is checked before anything is written, so the store's refusal leaves no
+    // approval with no run. Run this version (approves it) is approved past every refusal and that check; the approval
+    // keeps its bytes, which the run's host is woken on. A failure that is not the store's own (a disk that refuses a
+    // write, a run already kept under the id) is said in §9's words, never its own: until the run's record nothing was
+    // changed (the store's sentence); at the record, the run never began, and an approval written before it stands
+    this.#written(run, UNREADABLE_WORDS.flows, () => {
+      records.checkBegin(run);
+      if (approving !== undefined) records.approve(params.flow, approving);
+    });
+    this.#written(run, words.neverBegan(name), () =>
+      records.beginRun(
+        { run, flow: params.flow, name, n, hash, starter: params.starter, input: params.input },
+        { scope, state: "running", calls: 0, allowed: FLOW_LIMITS.CALLS_MAX, open: [], steps: [] },
+      ),
     );
     this.#live.set(run, {
       waiting: new Map(),
@@ -451,6 +468,21 @@ export class FlowRuns {
     this.#wake(run, begun);
     this.#changed();
     return summaryOf(begun, this.#live.get(run));
+  }
+
+  /** H2 — a write of the records at a run's begin: the store's own refusal passed on as it is, and any other failure
+   * logged with its own words and refused in `said`, so no raw error reaches a person. */
+  #written(run: FlowRunId, said: string, write: () => void): void {
+    try {
+      write();
+    } catch (error) {
+      if (error instanceof RpcCallError) throw error;
+      this.#logger.warn("fieldd.flows.run.write", "A flow run's begin was not kept", {
+        run,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw refused("records", said);
+    }
   }
 
   /** The one way a run's host starts: its journal replayed from the top (CP-D9) under the bytes kept for its hash
