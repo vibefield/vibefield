@@ -1102,9 +1102,40 @@ const FORMED = [
   "}",
   "",
 ].join("\n");
+/** FORMED, its step's refusal caught and said as the run's log line. */
+const FORMED_CATCHES = [
+  'export const meta = { name: "Review" };',
+  "export default async function () {",
+  `  try { await agent("Review the diff", { ...${STEP_AT}, schema: ${FORM} }); } catch (e) { log(e.message); }`,
+  "}",
+  "",
+].join("\n");
 const fenced = (json: string) => `\`\`\`json\n${json}\n\`\`\``;
 const repairLine = (check: string) =>
   `your last message did not match this step's form (${check}). Answer once more in that form.`;
+
+/** A FORMED_CATCHES run whose step missed its form twice, so the run is held on the person (CP4-Q7 (a)). */
+async function heldOnRepair(h: Harness): Promise<string> {
+  h.approved("review", FORMED_CATCHES);
+  const run = startedRun(await h.start({ flow: "review" })).run;
+  await waitFor(() => expect(h.enqueued).toHaveLength(1));
+  const at = { run, call: 1, runtimeRunId: "rt-step1", outcome: "completed" } as const;
+  h.endTurn({ ...at, turn: "t1", text: "no json here" });
+  await waitFor(() => expect(h.enqueued).toHaveLength(2));
+  h.endTurn({ ...at, turn: "t2", text: "still none" });
+  await waitFor(() => expect(h.items).toHaveLength(1));
+  return run;
+}
+
+/** The person's Ask once more on a held run's first item. */
+const askOnceMore = (h: Harness, run: string) =>
+  h.runs.acts.answer({
+    id: "ny-item1aaaaaa" as NeedsItemId,
+    kind: "flow-repair",
+    run: { run, flow: "review", call: 1, label: "Diff" },
+    choice: 0,
+    stop: false,
+  });
 
 /** The run's journal's answer lines, in order. */
 function answersOf(h: Harness, run: string) {
@@ -1344,6 +1375,67 @@ describe("CP-4a2b — a step's answer: heard once, bounded whole, checked agains
     expect(h.records.runRecord(run)?.open[0]?.state).toBe("repairing");
     h.endTurn({ ...at, turn: "t3", text: fenced('{"verdict":"clean"}') });
     expect((await settled(h.runs, run, "done")).log).toBe("clean true");
+  });
+
+  it("R22c (slices 7–9 review F5): Ask once more whose repair line can't be recorded fails its step in §9's words, its hold dropped with it: no item held, no line queued, never a silent wait", async () => {
+    const h = await harness();
+    const run = await heldOnRepair(h);
+    // the record refuses the write that would say Ask once more's line is being sent
+    const write = h.records.writeRunRecord.bind(h.records);
+    let refused = false;
+    vi.spyOn(h.records, "writeRunRecord").mockImplementation((kept, fields) => {
+      const again = fields.open.some((step) =>
+        step.lines?.some((line) => line.line === "repair" && line.n === 2),
+      );
+      if (!refused && again) {
+        refused = true;
+        throw new Error("ENOSPC: no space left on device, write");
+      }
+      write(kept, fields);
+    });
+    expect(await askOnceMore(h, run)).toEqual({ outcome: "failed", reason: stepFailed("Diff") });
+    expect(refused).toBe(true);
+    expect((await settled(h.runs, run, "done")).log).toBe(stepFailed("Diff"));
+    expect(h.enqueued).toHaveLength(2);
+    expect(h.items).toHaveLength(1);
+    const record = h.records.runRecord(run);
+    expect(record?.held).toBeUndefined();
+    expect(record?.steps).toMatchObject([{ call: 1, label: "Diff", state: "failed" }]);
+  });
+
+  it("R22d (slices 7–9 review F5, Q2): Ask once more at FLOW_LIMITS.STEP_LINES_MAX lines fails its step in §9's words, its hold dropped with it, and nothing is written or queued past the bound", async () => {
+    const h = await harness();
+    const run = await heldOnRepair(h);
+    // the step's record at the bound: its prompt and STEP_LINES_MAX − 1 repair lines, as Ask once more said again
+    const kept = h.records.runRecord(run);
+    if (kept === undefined) throw new Error("the run's record was not kept");
+    const lines = [
+      { line: "prompt", n: 1, sent: "queued" },
+      ...Array.from({ length: FLOW_LIMITS.STEP_LINES_MAX - 1 }, (_, i) => ({
+        line: "repair",
+        n: i + 1,
+        sent: "queued",
+      })),
+    ];
+    h.records.writeRunRecord(kept.run, {
+      ...kept,
+      open: kept.open.map((step) => ({ ...step, lines })),
+    });
+    // every write from here on: none holds a line past the bound
+    const write = h.records.writeRunRecord.bind(h.records);
+    const most: number[] = [];
+    vi.spyOn(h.records, "writeRunRecord").mockImplementation((at, fields) => {
+      most.push(Math.max(0, ...fields.open.map((step) => step.lines?.length ?? 0)));
+      write(at, fields);
+    });
+    expect(await askOnceMore(h, run)).toEqual({ outcome: "failed", reason: stepFailed("Diff") });
+    expect((await settled(h.runs, run, "done")).log).toBe(stepFailed("Diff"));
+    expect(Math.max(0, ...most)).toBeLessThanOrEqual(FLOW_LIMITS.STEP_LINES_MAX);
+    expect(h.enqueued).toHaveLength(2);
+    expect(h.kinds(run)).toEqual(["head", "call", "answer", "log", "end"]);
+    const record = h.records.runRecord(run);
+    expect(record?.held).toBeUndefined();
+    expect(record?.steps).toMatchObject([{ call: 1, label: "Diff", state: "failed" }]);
   });
 
   it("R23 (D11): an answer is bounded whole: its text is cut to what its fields leave, marked cut; fields alone past the bound are a miss, never a truncation", async () => {
