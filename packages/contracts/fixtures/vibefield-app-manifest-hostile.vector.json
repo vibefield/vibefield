@@ -1,5 +1,5 @@
 {
-  "//": "DR-1a (thinking-drive.md v0.2, RULED: DR-D3 (a)) — what VibefieldAppManifest (made-app-network.ts) makes of a hostile `vibefield.app.json`. A reader STRIPS a `network` entry it cannot read as a policy host (MadeAppNetworkHost: a scheme, a port, a wildcard, an IP literal, a tailnet name, a name that resolves to this device or its network, a host past MADE_APP_SERVE_POLICY.HOST_BYTES, a name not in canonical form, anything not a string), drops a repeat, keeps the first UNION_HOSTS readable hosts in the manifest's order, and costs the whole field only when `network` is not a list or is longer than MANIFEST_ENTRIES. It never refuses the manifest, and every other field passes through. Each row's `manifest` reads as `network` (null: the field is gone). A `repeat` row's manifest gains a `network` of `host` repeated `count` times.",
+  "//": "DR-1a (thinking-drive.md v0.2, RULED: DR-D3 (a)) — what VibefieldAppManifest (made-app-network.ts) makes of a hostile `vibefield.app.json`. A reader STRIPS a `network` entry it cannot read as a policy host (MadeAppNetworkHost: a scheme, a port, a wildcard, an IP literal, a tailnet name, a name that resolves to this device or its network, a host past MADE_APP_SERVE_POLICY.HOST_BYTES, a name not in canonical form, anything not a string), drops a repeat, keeps the first UNION_HOSTS readable hosts in the manifest's order, and costs the whole field only when `network` is not a list or is longer than MANIFEST_ENTRIES. It never refuses the manifest, and every other field passes through. Each row's `manifest` reads as `network` (null: the field is gone). `readVibefieldAppManifest` reads it the same and says what it stripped, in the manifest's order: `stripped`, each entry's `field`, the `entry` as written (null for one that is not a string, and for the whole field) and `why` (MADE_APP_STRIP_REASONS: unreadable, private, long, repeat, over-cap). A `repeat` row's manifest gains a `network` of `host` repeated `count` times; with no `stripped` of its own, every entry after the first is stripped as a repeat.",
   "rows": [
     {
       "case": "strips what it cannot read and keeps what it can, once each, in order",
@@ -47,6 +47,42 @@
         "xn--bcher-kva.example",
         "fonts.example.org",
         "api.example.com"
+      ],
+      "stripped": [
+        { "field": "network", "entry": "https://cdn.example.com", "why": "unreadable" },
+        { "field": "network", "entry": "cdn.example.com:443", "why": "unreadable" },
+        { "field": "network", "entry": "*.example.com", "why": "unreadable" },
+        { "field": "network", "entry": "192.168.1.10", "why": "unreadable" },
+        { "field": "network", "entry": "10.0.0.1", "why": "unreadable" },
+        { "field": "network", "entry": "[::1]", "why": "unreadable" },
+        { "field": "network", "entry": "studio.tail1234.ts.net", "why": "unreadable" },
+        { "field": "network", "entry": "ts.net", "why": "unreadable" },
+        { "field": "network", "entry": "localhost", "why": "unreadable" },
+        { "field": "network", "entry": "app.localhost", "why": "private" },
+        { "field": "network", "entry": "printer.local", "why": "private" },
+        { "field": "network", "entry": "svc.internal", "why": "private" },
+        { "field": "network", "entry": "nas.home.arpa", "why": "private" },
+        { "field": "network", "entry": "home.arpa", "why": "private" },
+        { "field": "network", "entry": "CDN.Example.com", "why": "unreadable" },
+        { "field": "network", "entry": "cdn.example.com.", "why": "unreadable" },
+        { "field": "network", "entry": "", "why": "unreadable" },
+        { "field": "network", "entry": " cdn.example.com", "why": "unreadable" },
+        { "field": "network", "entry": "cdn.example.com/x", "why": "unreadable" },
+        { "field": "network", "entry": "-bad.example.com", "why": "unreadable" },
+        { "field": "network", "entry": "bad-.example.com", "why": "unreadable" },
+        { "field": "network", "entry": "a..example.com", "why": "unreadable" },
+        { "field": "network", "entry": "bücher.example", "why": "unreadable" },
+        {
+          "field": "network",
+          "entry": "h00xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.example.com",
+          "why": "long"
+        },
+        { "field": "network", "entry": null, "why": "unreadable" },
+        { "field": "network", "entry": null, "why": "unreadable" },
+        { "field": "network", "entry": null, "why": "unreadable" },
+        { "field": "network", "entry": null, "why": "unreadable" },
+        { "field": "network", "entry": null, "why": "unreadable" },
+        { "field": "network", "entry": "cdn.example.com", "why": "repeat" }
       ]
     },
     {
@@ -90,22 +126,32 @@
         "n13.example.com",
         "n14.example.com",
         "n15.example.com"
+      ],
+      "stripped": [
+        { "field": "network", "entry": "n16.example.com", "why": "over-cap" },
+        { "field": "network", "entry": "n17.example.com", "why": "over-cap" }
       ]
     },
     {
       "case": "nothing readable is an empty list, and the manifest stands",
       "manifest": { "name": "Ledger", "network": ["https://cdn.example.com", 7] },
-      "network": []
+      "network": [],
+      "stripped": [
+        { "field": "network", "entry": "https://cdn.example.com", "why": "unreadable" },
+        { "field": "network", "entry": null, "why": "unreadable" }
+      ]
     },
     {
       "case": "a network that is not a list costs the field",
       "manifest": { "name": "Ledger", "network": "cdn.example.com" },
-      "network": null
+      "network": null,
+      "stripped": [{ "field": "network", "entry": null, "why": "unreadable" }]
     },
     {
       "case": "a network of another shape costs the field",
       "manifest": { "name": "Ledger", "network": { "script": ["cdn.example.com"] } },
-      "network": null
+      "network": null,
+      "stripped": [{ "field": "network", "entry": null, "why": "unreadable" }]
     },
     {
       "case": "MANIFEST_ENTRIES entries are read",
@@ -117,12 +163,14 @@
       "case": "one entry past MANIFEST_ENTRIES costs the field",
       "manifest": { "name": "Ledger" },
       "repeat": { "host": "cdn.example.com", "count": 257 },
-      "network": null
+      "network": null,
+      "stripped": [{ "field": "network", "entry": null, "why": "over-cap" }]
     },
     {
       "case": "no network",
       "manifest": { "name": "Ledger", "entry": "index.html" },
-      "network": null
+      "network": null,
+      "stripped": []
     }
   ]
 }

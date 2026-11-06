@@ -1,5 +1,5 @@
 {
-  "//": "DR-1a (thinking-drive.md v0.2, RULED: DR-D11 (a)) — a made app's VIEW, built on each desktop from the stored page and never synced: `madeAppViewHead(theme)`, then the page's bytes, then `tail` (MADE_APP_VIEW_TAIL, made-app-network.ts). Each `views` row's theme composes exactly `head`. `embed` is one whole view, byte for byte, the bytes the files worker writes (VF-VIEW). Its page carries its own `<meta http-equiv=\"Content-Security-Policy\">`, and in the view that meta sits inside `<body>`, where the browser ignores it: the serve's header is the page's one policy (the wave-0 critic). Every `refusedVariables` row is a theme of `light` with that one variable, and it and every `refusedThemes` row is refused `theme-unreadable`, so no value reaches the bytes unless it cannot leave its declaration. The theme is the view's INPUT, never VibeField's for any platform: these values are examples. The expected strings were written by hand from the head's text, not by the code.",
+  "//": "DR-1a (thinking-drive.md v0.2, RULED: DR-D11 (a)) — a made app's VIEW, built on each desktop from the stored page and never synced: `madeAppViewHead(theme)`, then the page's bytes, then `tail` (MADE_APP_VIEW_TAIL, made-app-network.ts). Each `views` row's theme composes exactly `head`. `embed` is one whole view, byte for byte, the bytes the files worker writes (VF-VIEW). Its page carries its own `<meta http-equiv=\"Content-Security-Policy\">`, and in the view that meta sits inside `<body>`, where the browser ignores it: the serve's header is the page's one policy (the wave-0 critic). Every `refusedVariables` row is a theme of `light` with that one variable, and it and every `refusedThemes` row is refused `theme-unreadable`, so no value reaches the bytes unless it cannot leave its declaration or name a load. A closed family name in double quotes is a value's (`\"Segoe UI\"`), and nothing inside it can end its string. A url needs no colon (`url(x.png)`), so a function that loads is refused by its name. The theme is the view's INPUT, never VibeField's for any platform: these values are examples. The expected strings were written by hand from the head's text, not by the code.",
   "tail": "</body></html>",
   "views": [
     {
@@ -31,6 +31,17 @@
         ]
       },
       "head": "<!doctype html><html><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><style>:root{color-scheme:dark;--shade:rgb(0 0 0 / 50%);--gap:calc(100% - 8px);--mix:color-mix(in srgb, #fff 20%, #000)}</style></head><body>"
+    },
+    {
+      "case": "font stacks with closed family names in double quotes",
+      "theme": {
+        "colorScheme": "light",
+        "variables": [
+          ["--font-sans", "-apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif"],
+          ["--font-mono", "ui-monospace, \"SF Mono\", monospace"]
+        ]
+      },
+      "head": "<!doctype html><html><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><style>:root{color-scheme:light;--font-sans:-apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif;--font-mono:ui-monospace, \"SF Mono\", monospace}</style></head><body>"
     }
   ],
   "embed": {
@@ -56,16 +67,64 @@
       "variable": ["--x", "\\3c"]
     },
     {
-      "case": "a double quote",
-      "variable": ["--x", "\"Inter\""]
+      "case": "a double quote left open",
+      "variable": ["--x", "\"Inter"]
+    },
+    {
+      "case": "an empty quoted name",
+      "variable": ["--x", "\"\""]
+    },
+    {
+      "case": "a quoted name that ends its declaration",
+      "variable": ["--x", "\"a;b\""]
+    },
+    {
+      "case": "a quoted name that escapes its closing quote",
+      "variable": ["--x", "\"a\\\""]
+    },
+    {
+      "case": "a quoted name that closes the style",
+      "variable": ["--x", "\"</style>\""]
     },
     {
       "case": "a single quote",
       "variable": ["--x", "'Inter'"]
     },
     {
-      "case": "a colon, so never a url()",
+      "case": "a url with a scheme",
       "variable": ["--x", "url(https://example.com/x.png)"]
+    },
+    {
+      "case": "a url with no colon",
+      "variable": ["--x", "url(x.png)"]
+    },
+    {
+      "case": "a protocol-relative url",
+      "variable": ["--x", "url(//evil.example.com/x.png)"]
+    },
+    {
+      "case": "a url in capitals",
+      "variable": ["--x", "URL(x.png)"]
+    },
+    {
+      "case": "a url of a quoted name",
+      "variable": ["--x", "url(\"x.png\")"]
+    },
+    {
+      "case": "an image-set",
+      "variable": ["--x", "image-set(//evil.example.com/a.png 1x)"]
+    },
+    {
+      "case": "a prefixed image-set",
+      "variable": ["--x", "-webkit-image-set(x.png 1x)"]
+    },
+    {
+      "case": "a src()",
+      "variable": ["--x", "src(\"x.png\")"]
+    },
+    {
+      "case": "a protocol-relative path outside any function",
+      "variable": ["--x", "//evil.example.com"]
     },
     {
       "case": "a comment's opening",

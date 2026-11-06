@@ -1,5 +1,5 @@
 {
-  "//": "DR-1a (thinking-drive.md v0.2, RULED: DR-D2 (a), DR-D3 (a), DR-D11 (a)) — a made app's serve headers from its network policy (`madeAppServeHeaders`, made-app-network.ts; the policy as data in MADE_APP_SERVE_POLICY, registries.ts), and the header rules truffle's serve holds a list to (T-1; ServeHeaderName, ServeHeaderValue, ServeHeaders, SERVE_HEADER_FORBIDDEN, SERVE_HEADER_LIMITS). Each accepted policy composes exactly `csp` (or, at the cap, a CSP of `cspBytes` bytes whose sha256 is `cspSha256`), then `fixedHeaders`, in that order, and its `reach` is `madeAppReachOf`. Every CSP's directives are `directives`, in order, and never one of `neverDirectives`: a sandbox makes the origin opaque. A host is the policy's INPUT, never VibeField's: these are example names. A `manifest` row reads `manifest` with VibefieldAppManifest, then `madeAppPolicyFromManifest`, and that policy is `policy`. The expected strings were built by hand from the policy's text in a shell (printf, wc, shasum), not by the code. Header list entries: `value`, or `fill` repeated to `bytes`; a `count` row is that many headers `X-H00`, `X-H01`, … with value `1`.",
+  "//": "DR-1a (thinking-drive.md v0.2, RULED: DR-D2 (a), DR-D3 (a), DR-D11 (a)) — a made app's serve headers from its network policy (`madeAppServeHeaders`, made-app-network.ts; the policy as data in MADE_APP_SERVE_POLICY, registries.ts), and the header rules truffle's serve holds a list to (T-1; ServeHeaderName, ServeHeaderValue, ServeHeaders, SERVE_HEADER_FORBIDDEN, SERVE_HEADER_LIMITS). Each accepted policy composes exactly `csp` (or, at the cap, a CSP of `cspBytes` bytes whose sha256 is `cspSha256`), then `fixedHeaders`, in that order, and its `reach` is `madeAppReachOf`. Every CSP's directives are `directives`, in order, and never one of `neverDirectives`: a sandbox makes the origin opaque. The fixed directives let an app frame its own pages and run its own and blob workers (`frame-ancestors 'self'`, `worker-src 'self' blob:`), and no other origin may frame it. Hosts keyed by a directive's CSP name (`script-src`) are a captured page's environment, which `readMadeAppEnvironment` reads (made-app-environment.vector.json); handed to a policy as they are, they refuse it. A host is the policy's INPUT, never VibeField's: these are example names. A `manifest` row reads `manifest` with VibefieldAppManifest, then `madeAppPolicyFromManifest`, and that policy is `policy`. The expected strings were built by hand from the policy's text in a shell (printf, wc, shasum), not by the code. Header list entries: `value`, or `fill` repeated to `bytes`; a `count` row is that many headers `X-H00`, `X-H01`, … with value `1`.",
   "directives": [
     "default-src",
     "script-src",
@@ -8,6 +8,7 @@
     "font-src",
     "media-src",
     "connect-src",
+    "worker-src",
     "object-src",
     "base-uri",
     "form-action",
@@ -20,9 +21,9 @@
   ],
   "policies": [
     {
-      "case": "an empty policy admits only its own origin, and data and blob where named",
+      "case": "an empty policy admits only its own origin (its own frames, its own and blob workers), and data and blob where named",
       "policy": { "source": "captured", "hosts": {} },
-      "csp": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; media-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'",
+      "csp": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; media-src 'self' data: blob:; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'",
       "reach": []
     },
     {
@@ -35,7 +36,7 @@
           "font": ["static.example.org"]
         }
       },
-      "csp": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.example.com https://js.example.net; style-src 'self' 'unsafe-inline' https://cdn.example.com https://fonts.example.org; img-src 'self' data: blob:; font-src 'self' data: https://static.example.org; media-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'",
+      "csp": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.example.com https://js.example.net; style-src 'self' 'unsafe-inline' https://cdn.example.com https://fonts.example.org; img-src 'self' data: blob:; font-src 'self' data: https://static.example.org; media-src 'self' data: blob:; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'",
       "reach": ["cdn.example.com", "fonts.example.org", "js.example.net", "static.example.org"]
     },
     {
@@ -48,7 +49,7 @@
           "script": ["js.example.net", "cdn.example.com", "js.example.net"]
         }
       },
-      "csp": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.example.com https://js.example.net; style-src 'self' 'unsafe-inline' https://cdn.example.com https://fonts.example.org; img-src 'self' data: blob:; font-src 'self' data: https://static.example.org; media-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'",
+      "csp": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.example.com https://js.example.net; style-src 'self' 'unsafe-inline' https://cdn.example.com https://fonts.example.org; img-src 'self' data: blob:; font-src 'self' data: https://static.example.org; media-src 'self' data: blob:; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'",
       "reach": ["cdn.example.com", "fonts.example.org", "js.example.net", "static.example.org"]
     },
     {
@@ -65,14 +66,14 @@
           "connect": ["cdn.example.com", "api.example.com"]
         }
       },
-      "csp": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://api.example.com https://cdn.example.com; style-src 'self' 'unsafe-inline' https://api.example.com https://cdn.example.com; img-src 'self' data: blob: https://api.example.com https://cdn.example.com; font-src 'self' data: https://api.example.com https://cdn.example.com; media-src 'self' data: blob: https://api.example.com https://cdn.example.com; connect-src 'self' https://api.example.com wss://api.example.com https://cdn.example.com wss://cdn.example.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'",
+      "csp": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://api.example.com https://cdn.example.com; style-src 'self' 'unsafe-inline' https://api.example.com https://cdn.example.com; img-src 'self' data: blob: https://api.example.com https://cdn.example.com; font-src 'self' data: https://api.example.com https://cdn.example.com; media-src 'self' data: blob: https://api.example.com https://cdn.example.com; connect-src 'self' https://api.example.com wss://api.example.com https://cdn.example.com wss://cdn.example.com; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'",
       "reach": ["api.example.com", "cdn.example.com"]
     },
     {
       "case": "a manifest with no network admits no outside host",
       "manifest": { "name": "Ledger" },
       "policy": { "source": "manifest", "hosts": {} },
-      "csp": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; media-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'",
+      "csp": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; media-src 'self' data: blob:; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'",
       "reach": []
     },
     {
@@ -81,7 +82,7 @@
         "source": "captured",
         "hosts": { "script": ["cdn.example.com"], "frame": ["frames.example.com"] }
       },
-      "csp": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.example.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; media-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'",
+      "csp": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.example.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; media-src 'self' data: blob:; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'",
       "reach": ["cdn.example.com"]
     },
     {
@@ -90,7 +91,7 @@
         "source": "captured",
         "hosts": { "script": ["sandbox.example.com"], "connect": ["sandbox.example.com"] }
       },
-      "csp": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://sandbox.example.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; media-src 'self' data: blob:; connect-src 'self' https://sandbox.example.com wss://sandbox.example.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'",
+      "csp": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://sandbox.example.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; media-src 'self' data: blob:; connect-src 'self' https://sandbox.example.com wss://sandbox.example.com; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'",
       "reach": ["sandbox.example.com"]
     },
     {
@@ -120,7 +121,7 @@
           ]
         }
       },
-      "csp": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://u00.example.com https://u01.example.com https://u02.example.com https://u03.example.com https://u04.example.com https://u05.example.com https://u06.example.com https://u07.example.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; media-src 'self' data: blob:; connect-src 'self' https://u08.example.com wss://u08.example.com https://u09.example.com wss://u09.example.com https://u10.example.com wss://u10.example.com https://u11.example.com wss://u11.example.com https://u12.example.com wss://u12.example.com https://u13.example.com wss://u13.example.com https://u14.example.com wss://u14.example.com https://u15.example.com wss://u15.example.com; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'",
+      "csp": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://u00.example.com https://u01.example.com https://u02.example.com https://u03.example.com https://u04.example.com https://u05.example.com https://u06.example.com https://u07.example.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; media-src 'self' data: blob:; connect-src 'self' https://u08.example.com wss://u08.example.com https://u09.example.com wss://u09.example.com https://u10.example.com wss://u10.example.com https://u11.example.com wss://u11.example.com https://u12.example.com wss://u12.example.com https://u13.example.com wss://u13.example.com https://u14.example.com wss://u14.example.com https://u15.example.com wss://u15.example.com; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'",
       "reach": [
         "u00.example.com",
         "u01.example.com",
@@ -162,9 +163,9 @@
           "h15xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.example.com"
         ]
       },
-      "cspBytes": 7978,
-      "cspSha256": "0ad5827a406d4f60fdfad5c47162b3b44631bd082113c0eabacfd3977abccf74",
-      "listBytes": 8056
+      "cspBytes": 8003,
+      "cspSha256": "e6d6b2cd3b866855338269926ae7cccab3825a822729a6f470e96ac6caa0cfe4",
+      "listBytes": 8081
     },
     {
       "case": "one host past UNION_HOSTS across two directives is refused, honestly and whole",
@@ -222,6 +223,14 @@
     {
       "case": "the person's own source joins at DR-2, not before",
       "policy": { "source": "person", "hosts": {} },
+      "refused": "policy-unreadable"
+    },
+    {
+      "case": "hosts keyed by a directive's CSP name are an environment's: refused, never composed into a policy that admits nothing",
+      "policy": {
+        "source": "captured",
+        "hosts": { "script-src": ["cdn.example.com"], "style-src": ["cdn.example.com"] }
+      },
       "refused": "policy-unreadable"
     }
   ],

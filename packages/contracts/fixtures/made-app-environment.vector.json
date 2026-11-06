@@ -1,0 +1,236 @@
+{
+  "//": "DR-1a (thinking-drive.md v0.3: DR-D3 (a); DR-D13 (a) at its lean, open on the page) — what `readMadeAppEnvironment` (made-app-network.ts) makes of a captured page's environment, as rosetta's export answer carries it (`environment`, R-1): `hosts` keyed by each directive's CSP name (`script-src`), and `variables` a map of name to value. Each row's `environment` reads as `policy` (source `captured`, a policy's keys, each list in the environment's order, a directive with no readable host left out), whose serve CSP is `csp` where a row gives one and whose reach is `reach`; as `variables`, a view's ordered pairs by name in byte order; and as `stripped`, what the reader dropped, in its order: the hosts in FETCH's order, then each directive the policy does not compose, then the variables. The first row is R-1's golden, transcribed from rosetta's lane (lanes/dr/rosetta 7ee41e7, crates/protocol/tests/golden/wire.json, `artifact_export_response.environment`): rosetta's data, which VibeField reads and never holds (AR-L1, MA-L9). The other hosts and values are examples. The expected strings were built by hand from the policy's text in a shell (printf, wc), not by the code.",
+  "rows": [
+    {
+      "case": "R-1's golden environment: five hosts across three directives, and 21 variables",
+      "environment": {
+        "hosts": {
+          "font-src": ["fonts.gstatic.com"],
+          "script-src": ["cdn.jsdelivr.net", "cdnjs.cloudflare.com", "unpkg.com"],
+          "style-src": ["fonts.googleapis.com", "cdn.jsdelivr.net"]
+        },
+        "variables": {
+          "--border-radius-lg": "12px",
+          "--border-radius-md": "8px",
+          "--color-background-danger": "#fdecea",
+          "--color-background-info": "#eaf1ff",
+          "--color-background-primary": "#fff",
+          "--color-background-secondary": "#f5f5f3",
+          "--color-background-success": "#edf6e8",
+          "--color-background-tertiary": "#eeede9",
+          "--color-background-warning": "#fff3d6",
+          "--color-border-primary": "#d5d5ce",
+          "--color-border-secondary": "#e5e5df",
+          "--color-border-tertiary": "#efefea",
+          "--color-text-danger": "#9a3830",
+          "--color-text-info": "#2e5b99",
+          "--color-text-primary": "#252521",
+          "--color-text-secondary": "#62625c",
+          "--color-text-success": "#3c6530",
+          "--color-text-tertiary": "#85857e",
+          "--color-text-warning": "#855c12",
+          "--font-mono": "ui-monospace,monospace",
+          "--font-sans": "system-ui,sans-serif"
+        }
+      },
+      "policy": {
+        "source": "captured",
+        "hosts": {
+          "script": ["cdn.jsdelivr.net", "cdnjs.cloudflare.com", "unpkg.com"],
+          "style": ["fonts.googleapis.com", "cdn.jsdelivr.net"],
+          "font": ["fonts.gstatic.com"]
+        }
+      },
+      "csp": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://unpkg.com; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://fonts.googleapis.com; img-src 'self' data: blob:; font-src 'self' data: https://fonts.gstatic.com; media-src 'self' data: blob:; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'",
+      "reach": [
+        "cdn.jsdelivr.net",
+        "cdnjs.cloudflare.com",
+        "fonts.googleapis.com",
+        "fonts.gstatic.com",
+        "unpkg.com"
+      ],
+      "variables": [
+        ["--border-radius-lg", "12px"],
+        ["--border-radius-md", "8px"],
+        ["--color-background-danger", "#fdecea"],
+        ["--color-background-info", "#eaf1ff"],
+        ["--color-background-primary", "#fff"],
+        ["--color-background-secondary", "#f5f5f3"],
+        ["--color-background-success", "#edf6e8"],
+        ["--color-background-tertiary", "#eeede9"],
+        ["--color-background-warning", "#fff3d6"],
+        ["--color-border-primary", "#d5d5ce"],
+        ["--color-border-secondary", "#e5e5df"],
+        ["--color-border-tertiary", "#efefea"],
+        ["--color-text-danger", "#9a3830"],
+        ["--color-text-info", "#2e5b99"],
+        ["--color-text-primary", "#252521"],
+        ["--color-text-secondary", "#62625c"],
+        ["--color-text-success", "#3c6530"],
+        ["--color-text-tertiary", "#85857e"],
+        ["--color-text-warning", "#855c12"],
+        ["--font-mono", "ui-monospace,monospace"],
+        ["--font-sans", "system-ui,sans-serif"]
+      ],
+      "stripped": []
+    },
+    {
+      "case": "strips per directive what a policy cannot hold, each directive it does not compose, and each variable the view refuses",
+      "environment": {
+        "hosts": {
+          "script-src": ["cdn.example.com", "https://cdn.example.com", "cdn.example.com", 7],
+          "style-src": "cdn.example.com",
+          "connect-src": [
+            "api.example.com",
+            "printer.local",
+            "h00xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.example.com"
+          ],
+          "frame-src": ["frames.example.com"],
+          "script": ["js.example.net"]
+        },
+        "variables": {
+          "--surface": "#fff",
+          "--Ink": "#000",
+          "--x": "</style><script>alert(1)</script>",
+          "--n": 7,
+          "--font": "url(x.png)"
+        },
+        "shell": { "version": "1" }
+      },
+      "policy": {
+        "source": "captured",
+        "hosts": { "script": ["cdn.example.com"], "connect": ["api.example.com"] }
+      },
+      "csp": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.example.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; media-src 'self' data: blob:; connect-src 'self' https://api.example.com wss://api.example.com; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'",
+      "reach": ["api.example.com", "cdn.example.com"],
+      "variables": [["--surface", "#fff"]],
+      "stripped": [
+        { "field": "script-src", "entry": "https://cdn.example.com", "why": "unreadable" },
+        { "field": "script-src", "entry": "cdn.example.com", "why": "repeat" },
+        { "field": "script-src", "entry": null, "why": "unreadable" },
+        { "field": "style-src", "entry": null, "why": "unreadable" },
+        { "field": "connect-src", "entry": "printer.local", "why": "private" },
+        {
+          "field": "connect-src",
+          "entry": "h00xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.example.com",
+          "why": "long"
+        },
+        { "field": "frame-src", "entry": null, "why": "unreadable" },
+        { "field": "script", "entry": null, "why": "unreadable" },
+        { "field": "variables", "entry": "--Ink", "why": "unreadable" },
+        { "field": "variables", "entry": "--font", "why": "unreadable" },
+        { "field": "variables", "entry": "--n", "why": "unreadable" },
+        { "field": "variables", "entry": "--x", "why": "unreadable" }
+      ]
+    },
+    {
+      "case": "the union fills in FETCH's order, whatever the map's, and stops at UNION_HOSTS; a host it holds still joins another directive",
+      "environment": {
+        "hosts": {
+          "connect-src": ["u17.example.com", "u03.example.com"],
+          "style-src": [
+            "u00.example.com",
+            "u12.example.com",
+            "u13.example.com",
+            "u14.example.com",
+            "u15.example.com",
+            "u16.example.com"
+          ],
+          "script-src": [
+            "u00.example.com",
+            "u01.example.com",
+            "u02.example.com",
+            "u03.example.com",
+            "u04.example.com",
+            "u05.example.com",
+            "u06.example.com",
+            "u07.example.com",
+            "u08.example.com",
+            "u09.example.com",
+            "u10.example.com",
+            "u11.example.com"
+          ]
+        }
+      },
+      "policy": {
+        "source": "captured",
+        "hosts": {
+          "script": [
+            "u00.example.com",
+            "u01.example.com",
+            "u02.example.com",
+            "u03.example.com",
+            "u04.example.com",
+            "u05.example.com",
+            "u06.example.com",
+            "u07.example.com",
+            "u08.example.com",
+            "u09.example.com",
+            "u10.example.com",
+            "u11.example.com"
+          ],
+          "style": [
+            "u00.example.com",
+            "u12.example.com",
+            "u13.example.com",
+            "u14.example.com",
+            "u15.example.com"
+          ],
+          "connect": ["u03.example.com"]
+        }
+      },
+      "csp": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://u00.example.com https://u01.example.com https://u02.example.com https://u03.example.com https://u04.example.com https://u05.example.com https://u06.example.com https://u07.example.com https://u08.example.com https://u09.example.com https://u10.example.com https://u11.example.com; style-src 'self' 'unsafe-inline' https://u00.example.com https://u12.example.com https://u13.example.com https://u14.example.com https://u15.example.com; img-src 'self' data: blob:; font-src 'self' data:; media-src 'self' data: blob:; connect-src 'self' https://u03.example.com wss://u03.example.com; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'",
+      "reach": [
+        "u00.example.com",
+        "u01.example.com",
+        "u02.example.com",
+        "u03.example.com",
+        "u04.example.com",
+        "u05.example.com",
+        "u06.example.com",
+        "u07.example.com",
+        "u08.example.com",
+        "u09.example.com",
+        "u10.example.com",
+        "u11.example.com",
+        "u12.example.com",
+        "u13.example.com",
+        "u14.example.com",
+        "u15.example.com"
+      ],
+      "variables": [],
+      "stripped": [
+        { "field": "style-src", "entry": "u16.example.com", "why": "over-cap" },
+        { "field": "connect-src", "entry": "u17.example.com", "why": "over-cap" }
+      ]
+    },
+    {
+      "case": "hosts or variables that are not maps cost those fields",
+      "environment": { "hosts": ["cdn.example.com"], "variables": [["--a", "#fff"]] },
+      "policy": { "source": "captured", "hosts": {} },
+      "reach": [],
+      "variables": [],
+      "stripped": [
+        { "field": "hosts", "entry": null, "why": "unreadable" },
+        { "field": "variables", "entry": null, "why": "unreadable" }
+      ]
+    },
+    {
+      "case": "a value that is not an environment reads as an empty one, stripped whole",
+      "environment": "cdn.example.com",
+      "policy": { "source": "captured", "hosts": {} },
+      "reach": [],
+      "variables": [],
+      "stripped": [{ "field": "environment", "entry": null, "why": "unreadable" }]
+    },
+    {
+      "case": "an environment that names nothing admits only the page's own origin",
+      "environment": {},
+      "policy": { "source": "captured", "hosts": {} },
+      "csp": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; media-src 'self' data: blob:; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'",
+      "reach": [],
+      "variables": [],
+      "stripped": []
+    }
+  ]
+}

@@ -674,11 +674,18 @@ export const MADE_APP_OPEN = {
  * they are each app's (DR-D3 (a)), an INPUT from where its page was captured or from its own manifest, so VibeField
  * names no platform's list (AR-L1, MA-L9).
  *  - CSP_HEADER, DEFAULT_SRC: the policy's header, and its first directive: whatever no directive below names (a
- *    worker, a frame, a manifest) loads from the app's own origin and nowhere else.
+ *    frame, a manifest) loads from the app's own origin and nowhere else.
  *  - FETCH: the six fetch directives a policy widens, in the header's order. Each is its own sources, then each of the
  *    policy's hosts for it, sorted and once, in each of its schemes. connect-src names `wss://` beside `https://`,
  *    because a host source that names https matches no wss URL.
  *  - FIXED_DIRECTIVES: the directives no policy widens.
+ *    - worker-src is the app's own origin and `blob:`. Without it a worker follows script-src (CSP3: worker-src, then
+ *      child-src, then script-src), which names no `blob:`, so a built app's inline worker (Vite's, Monaco's,
+ *      PDF.js's) would be refused. script-src already holds 'unsafe-eval', so a blob worker runs nothing the page
+ *      could not.
+ *    - frame-ancestors is 'self'. No other origin may frame the app (the clickjacking defence), and the app may frame
+ *      its own pages. 'none' refused those too, because the framed response refuses every ancestor, its own origin
+ *      included (the review of 2026-11-06).
  *  - FIXED_HEADERS: the headers every made app's serve sets after its CSP, the same for every policy.
  *  - It never names `sandbox`. Without allow-same-origin, sandbox makes the origin opaque: no `localStorage`, no
  *    cookies, no 'self', and DR-D12's one address per app rests on an origin's own storage. With allow-same-origin
@@ -687,16 +694,18 @@ export const MADE_APP_OPEN = {
  *    correction at the record is the lead's.*
  *  - UNION_HOSTS, HOST_BYTES: one policy names at most UNION_HOSTS distinct hosts across all its directives (=
  *    MADE_APP_LIMITS.REACH_HOSTS, so the union is always an open answer's `reach`), each at most HOST_BYTES. Together
- *    they bound the WORST policy, every host HOST_BYTES long in all six directives, to a CSP of 7,978 bytes:
- *    282 + 16 × (61 + 7 × 60), inside SERVE_HEADER_LIMITS.VALUE_BYTES (8,192). The vector holds a row at the cap and
+ *    they bound the WORST policy, every host HOST_BYTES long in all six directives, to a CSP of 8,003 bytes:
+ *    307 + 16 × (61 + 7 × 60), inside SERVE_HEADER_LIMITS.VALUE_BYTES (8,192). The vector holds a row at the cap and
  *    the refusal one past it. A longer host would cost the union: at MadeAppReachHost's 253 bytes, four hosts fill the
  *    value, and a captured page names five. PROVISIONAL, as MADE_APP_LIMITS' are.
  *  - HOST_PRIVATE_SUFFIXES: names a policy never admits, each with every name below it, because they resolve to this
  *    device or its own network (`localhost`, mDNS's `local`, `internal`, `home.arpa`). MadeAppReachHost already keeps
  *    out IP literals and every `*.ts.net` name (MA-L7).
- *  - MANIFEST_ENTRIES: the most `network` entries a manifest's reader reads. A longer list costs the field, never the
- *    manifest (`VibefieldAppManifest`).
- *  - REFUSED_*: `madeAppServeHeaders`' refusals. POLICY: a host or a directive it cannot read. HOSTS_OVER_CAP: past
+ *  - MANIFEST_ENTRIES: the most entries a reader reads in one host list: a manifest's `network`, or one directive of a
+ *    captured page's environment. A longer list costs that field, never what holds it (`readVibefieldAppManifest`,
+ *    `readMadeAppEnvironment`).
+ *  - REFUSED_*: `madeAppServeHeaders`' refusals. POLICY: a host or a directive it cannot read, or hosts keyed by a
+ *    directive's CSP name (`script-src`), which only an environment's reader takes. HOSTS_OVER_CAP: past
  *    UNION_HOSTS. HEADERS: a composed list SERVE_HEADER_LIMITS or SERVE_HEADER_FORBIDDEN refuses, which the two bounds
  *    above keep from happening; it is the belt, so truffle is never handed a list it refuses.
  * TS-only: no native reader. field-native carries the composed headers to truffle (DR-1 (B), at T-1's EL8) and reads
@@ -743,10 +752,11 @@ export const MADE_APP_SERVE_POLICY = {
     },
   ],
   FIXED_DIRECTIVES: [
+    "worker-src 'self' blob:",
     "object-src 'none'",
     "base-uri 'self'",
     "form-action 'self'",
-    "frame-ancestors 'none'",
+    "frame-ancestors 'self'",
   ],
   FIXED_HEADERS: [
     { name: "Referrer-Policy", value: "no-referrer" },
@@ -810,12 +820,15 @@ export const SERVE_HEADER_LIMITS = {
  * (DR-L4).
  *  - FILE: the view's name in the served folder. The stored page itself lives elsewhere (the wave-0 critic: an export
  *    folder apart from the served one, so a rebuild never writes through rosetta's link).
- *  - VERSION: the view's shape; a new one rebuilds every view, as a new theme does (DR-1 (B)'s `viewKey`).
+ *  - VERSION: the view's shape; a new one rebuilds every view, as a new theme does (DR-1 (B)'s `viewKey`). Version 1
+ *    holds ONE scheme's values (`MadeAppViewTheme`). DR-D14's lean (a), both schemes in one view, is open on the page.
+ *    If it is ruled, it is VERSION 2: a dark list beside the light one, written by a fixed template as a
+ *    `@media (prefers-color-scheme: dark)` block (the review of 2026-11-06).
  *  - PAGE_MAX_BYTES: the largest page a view embeds, rosetta's own bound on a captured page.
  *  - VARIABLES, VARIABLE_NAME_BYTES, VALUE_BYTES: one theme's variables, a name (with its `--`) and a value.
  *  - REFUSED_THEME: `madeAppViewHead`'s refusal of a theme it cannot read.
  * The theme's values are an INPUT, never VibeField's for any platform (AR-L1, MA-L9). Whose values a view carries is
- * still James's call (the critic's second gap). TS-only. */
+ * DR-D14, open on the page (the critic's second gap). TS-only. */
 export const MADE_APP_VIEW = {
   FILE: "index.html",
   VERSION: 1,

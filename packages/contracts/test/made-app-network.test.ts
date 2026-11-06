@@ -14,6 +14,8 @@ import {
   madeAppReachOf,
   madeAppServeHeaders,
   madeAppViewHead,
+  readMadeAppEnvironment,
+  readVibefieldAppManifest,
   ServeHeaderName,
   ServeHeaders,
   ServeHeaderValue,
@@ -28,9 +30,10 @@ import {
   SERVE_HEADER_LIMITS,
 } from "../src/registries";
 
-// DR-1a (`draft/thinking-drive.md` v0.2, RULED 2026-11-06: DR-D2 (a), DR-D3 (a), DR-D11 (a)) —
-// a made app's network policy, its serve's headers and its view, held to three vectors and a
-// wire fixture. The hosts and the theme are INPUTS throughout: nothing here is a platform's.
+// DR-1a (`draft/thinking-drive.md` v0.2, RULED 2026-11-06: DR-D2 (a), DR-D3 (a), DR-D11 (a);
+// DR-D13 (a) at its lean) — a made app's network policy, its serve's headers, its view and a
+// captured page's environment, held to four vectors and a wire fixture. The hosts and the theme
+// are INPUTS throughout: nothing here is a platform's.
 
 const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures");
 const vector = <T>(name: string): T =>
@@ -90,11 +93,23 @@ interface ManifestRow {
   manifest: Record<string, unknown>;
   repeat?: { host: string; count: number };
   network: string[] | null;
+  stripped?: unknown[];
+}
+
+interface EnvironmentRow {
+  case: string;
+  environment: unknown;
+  policy: MadeAppNetworkPolicy;
+  csp?: string;
+  reach: string[];
+  variables: [string, string][];
+  stripped: unknown[];
 }
 
 const HEADERS = vector<HeadersVector>("made-app-headers.vector");
 const VIEWS = vector<ViewVector>("made-app-view.vector");
 const MANIFESTS = vector<{ rows: ManifestRow[] }>("vibefield-app-manifest-hostile.vector");
+const ENVIRONMENTS = vector<{ rows: EnvironmentRow[] }>("made-app-environment.vector");
 
 const sha256 = (text: string) => createHash("sha256").update(text).digest("hex");
 const pad = (i: number) => String(i).padStart(2, "0");
@@ -130,6 +145,15 @@ function listOf(row: HeaderList): { name: string; value: string }[] {
 /** A host of exactly `bytes` bytes: `h` and two digits, `x`s, then `.example.com`. */
 function host(i: number, bytes: number): string {
   return `h${pad(i)}${"x".repeat(bytes - 15)}.example.com`;
+}
+
+/** A manifest row's `stripped`, or, for a `repeat` row with none of its own, every entry after
+ * the first as a repeat. */
+function strippedOf(row: ManifestRow): unknown[] {
+  if (row.stripped !== undefined) return row.stripped;
+  const { host: entry, count } = row.repeat ?? { host: "", count: 1 };
+  const repeat = { field: "network", entry, why: "repeat" };
+  return Array.from({ length: count - 1 }, () => repeat);
 }
 
 type Source = MadeAppNetworkPolicy["source"];
@@ -302,15 +326,66 @@ describe("vibefield.app.json: a reader strips what it cannot read, never the man
       for (const { key } of MADE_APP_SERVE_POLICY.FETCH) {
         expect(policy.hosts[key] ?? [], key).toEqual(row.network ?? []);
       }
+      const { manifest, stripped } = readVibefieldAppManifest(input);
+      expect(manifest).toEqual(read);
+      expect(stripped).toEqual(strippedOf(row));
     });
   }
 
   it("reads the valid fixture's hosts into every fetch directive, in its order", () => {
-    const manifest = VibefieldAppManifest.parse(vector("vibefield-app-manifest.valid"));
+    const raw = vector("vibefield-app-manifest.valid");
+    const manifest = VibefieldAppManifest.parse(raw);
     expect(manifest.name).toBe("Ledger");
     const network = ["cdn.example.com", "api.example.com", "fonts.example.org"];
     expect(manifest.network).toEqual(network);
     expect(madeAppPolicyFromManifest(manifest)).toEqual(everywhere(network, "manifest"));
+    expect(readVibefieldAppManifest(raw)).toEqual({ manifest, stripped: [] });
+  });
+
+  it("reads a value that is not a JSON object as an empty manifest, and says so", () => {
+    const whole = [{ field: "manifest", entry: null, why: "unreadable" }];
+    for (const raw of [null, "Ledger", 7, ["cdn.example.com"]]) {
+      const read = readVibefieldAppManifest(raw);
+      expect(read, JSON.stringify(raw)).toEqual({ manifest: {}, stripped: whole });
+    }
+  });
+});
+
+describe("a captured page's environment: read into a policy and a view's variables", () => {
+  for (const row of ENVIRONMENTS.rows) {
+    it(row.case, () => {
+      const read = readMadeAppEnvironment(row.environment);
+      expect(read.policy).toEqual(row.policy);
+      expect(read.variables).toEqual(row.variables);
+      expect(read.stripped).toEqual(row.stripped);
+      expect(MadeAppNetworkPolicy.safeParse(read.policy).success).toBe(true);
+      expect(madeAppReachOf(read.policy)).toEqual(row.reach);
+      const answer = madeAppServeHeaders(read.policy);
+      if (!answer.ok) throw new Error(`refused ${answer.refused}`);
+      if (row.csp !== undefined) expect(answer.headers[0]?.value).toBe(row.csp);
+      expect(madeAppViewHead({ colorScheme: "light", variables: read.variables }).ok).toBe(true);
+    });
+  }
+
+  it("is its hosts' one door: R-1's map handed to a policy as it is refuses the policy", () => {
+    const golden = ENVIRONMENTS.rows[0]?.environment as { hosts: unknown };
+    const policy = { source: "captured", hosts: golden.hosts } as MadeAppNetworkPolicy;
+    expect(MadeAppNetworkPolicy.safeParse(policy).success).toBe(false);
+    expect(madeAppServeHeaders(policy)).toEqual({
+      ok: false,
+      refused: MADE_APP_SERVE_POLICY.REFUSED_POLICY,
+    });
+  });
+
+  it("keeps the first VARIABLES readable variables by name, and strips the rest", () => {
+    const { VARIABLES } = MADE_APP_VIEW;
+    const names = Array.from({ length: VARIABLES + 1 }, (_, i) => `--v${pad(i)}`);
+    const variables = Object.fromEntries(names.map((name) => [name, "#fff"]));
+    const read = readMadeAppEnvironment({ variables });
+    expect(read.variables.map(([name]) => name)).toEqual(names.slice(0, VARIABLES));
+    expect(read.stripped).toEqual([
+      { field: "variables", entry: names[VARIABLES], why: "over-cap" },
+    ]);
   });
 });
 
