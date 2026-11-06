@@ -1257,6 +1257,45 @@ describe("CP-4a2b — a step's answer: heard once, bounded whole, checked agains
     expect((await settled(h.runs, run, "done")).log).toBe("clean true");
   });
 
+  it("R22b (1c review Y2): Ask once more whose repair line is queued, and whose record can't say so, is done: the refusal is logged, never thrown, and the agent's answer settles the step", async () => {
+    const h = await harness();
+    h.approved("review", FORMED);
+    const run = startedRun(await h.start({ flow: "review" })).run;
+    await waitFor(() => expect(h.enqueued).toHaveLength(1));
+    const at = { run, call: 1, runtimeRunId: "rt-step1", outcome: "completed" } as const;
+    h.endTurn({ ...at, turn: "t1", text: "no json here" });
+    await waitFor(() => expect(h.enqueued).toHaveLength(2));
+    h.endTurn({ ...at, turn: "t2", text: "still none" });
+    await waitFor(() => expect(h.items).toHaveLength(1));
+    // the record refuses the write that marks Ask once more's line queued
+    const write = h.records.writeRunRecord.bind(h.records);
+    let refused = false;
+    vi.spyOn(h.records, "writeRunRecord").mockImplementation((kept, fields) => {
+      const again = (line: { line: string; n: number; sent: string }) =>
+        line.line === "repair" && line.n === 2 && line.sent === "queued";
+      const queued = fields.open.some((step) => step.lines?.some(again));
+      if (!refused && queued) {
+        refused = true;
+        throw new Error("ENOSPC: no space left on device, write");
+      }
+      write(kept, fields);
+    });
+    expect(
+      await h.runs.acts.answer({
+        id: "ny-item1aaaaaa" as NeedsItemId,
+        kind: "flow-repair",
+        run: { run, flow: "review", call: 1, label: "Diff" },
+        choice: 0,
+        stop: false,
+      }),
+    ).toEqual({ outcome: "done" });
+    expect(h.enqueued).toHaveLength(3);
+    expect(h.warned.map((said) => said.event)).toContain("fieldd.flows.step.queued");
+    expect(h.records.runRecord(run)?.open[0]?.state).toBe("repairing");
+    h.endTurn({ ...at, turn: "t3", text: fenced('{"verdict":"clean"}') });
+    expect((await settled(h.runs, run, "done")).log).toBe("clean true");
+  });
+
   it("R23 (D11): an answer is bounded whole: its text is cut to what its fields leave, marked cut; fields alone past the bound are a miss, never a truncation", async () => {
     const h = await harness();
     h.approved("review", FORMED);
@@ -1384,16 +1423,20 @@ describe("CP-4a2b — a step's answer: heard once, bounded whole, checked agains
     expect(unhandled).toEqual([]);
   });
 
-  it("R14e (F2 review T5): a read that throws on a step's own road, before its waiter, settles the step failed: no rejection escapes, and its entry never holds a slot", async () => {
+  it("R14e (F2 review T5; 1c review Y3): a read that throws on a step's own road, before its waiter, settles the step failed: no rejection escapes, and its entry never holds a slot", async () => {
     const h = await harness();
     const good = { agent: "claude", label: "Good", cwd: "/work/app", profile: "work" };
     const look = { agent: "claude", label: "Look", profile: "work", cwd: "/work/app" };
     h.approved("unread", callsEach([look], good));
-    // the step's entry is on the record; the read the step's road takes next is the disk's to refuse
+    // a subscriber, so each write's list is read too (Y3): it never takes the refusal meant for the step's road
+    h.runs.onChange(() => undefined);
+    // the step's entry is on the record; the step's own read, the next one no list makes, is the disk's to refuse
     const read = h.records.runRecord.bind(h.records);
     const write = h.records.writeRunRecord.bind(h.records);
+    const listed = h.records.runRecords.bind(h.records);
     let entered = false;
     let refusing = false;
+    let listing = false;
     vi.spyOn(h.records, "writeRunRecord").mockImplementation((run, fields) => {
       write(run, fields);
       if (!entered && fields.open.some((step) => step.call === 1)) {
@@ -1401,8 +1444,16 @@ describe("CP-4a2b — a step's answer: heard once, bounded whole, checked agains
         refusing = true;
       }
     });
+    vi.spyOn(h.records, "runRecords").mockImplementation(() => {
+      listing = true;
+      try {
+        return listed();
+      } finally {
+        listing = false;
+      }
+    });
     vi.spyOn(h.records, "runRecord").mockImplementation((run) => {
-      if (!refusing) return read(run);
+      if (!refusing || listing) return read(run);
       refusing = false;
       throw recordsUnreadable(RECORD_STORES.SERVICE_FLOWS, UNREADABLE_WORDS.flows, true);
     });
@@ -1423,6 +1474,32 @@ describe("CP-4a2b — a step's answer: heard once, bounded whole, checked agains
     const run = startedRun(await h.start({ flow: "review" })).run;
     expect((await settled(h.runs, run, "done")).log).toBe(stepFailed("Diff"));
     expect(h.spawned.map((spawn) => spawn.origin.call)).toEqual([1]);
+    expect(h.records.runRecord(run)?.steps).toMatchObject([
+      { call: 1, session: "rt-step1", state: "failed" },
+    ]);
+    expect(h.warned.filter((said) => said.event === "fieldd.flows.step.orphan")).toEqual([
+      {
+        event: "fieldd.flows.step.orphan",
+        fields: expect.objectContaining({ run, call: 1, runtimeRunId: "rt-step1" }),
+      },
+    ]);
+  });
+
+  it("R14h (1c review Y1): a step whose session never reached its record, the write that names it refused after its spawn, settles failed naming that session in the settle's own write, and fieldd keeps it for the run's end", async () => {
+    const h = await harness();
+    h.approved("review", REVIEW_CATCHES);
+    const write = h.records.writeRunRecord.bind(h.records);
+    let refused = false;
+    vi.spyOn(h.records, "writeRunRecord").mockImplementation((run, fields) => {
+      const working = fields.open.some((step) => step.call === 1 && step.state === "working");
+      if (!refused && working) {
+        refused = true;
+        throw new Error("ENOSPC: no space left on device, write");
+      }
+      write(run, fields);
+    });
+    const run = startedRun(await h.start({ flow: "review" })).run;
+    expect((await settled(h.runs, run, "done")).log).toBe(stepFailed("Diff"));
     expect(h.records.runRecord(run)?.steps).toMatchObject([
       { call: 1, session: "rt-step1", state: "failed" },
     ]);
