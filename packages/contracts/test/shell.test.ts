@@ -701,16 +701,19 @@ describe("tray shell commands and app preferences", () => {
     expect(FielddLinkState.options).toEqual(["recovering", "crash-loop", "unresponsive"]);
   });
 
-  it("item 212 (RV #29) — every fieldd-link fixture parses as the desktop state's fieldd", () => {
+  it("item 212 (RV #29, RV #67) — every fieldd-link fixture parses as the desktop state's fieldd, one per state", () => {
     const fixtures = join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures");
     const links = readdirSync(fixtures).filter((f) => f.startsWith("fieldd-link-unavailable."));
-    expect(links.length).toBeGreaterThanOrEqual(2);
+    const states = new Set<string>();
     for (const f of links) {
       const raw: unknown = JSON.parse(readFileSync(join(fixtures, f), "utf8"));
       const parsed = DesktopShellState.shape.fieldd.safeParse(raw);
       const issues = parsed.success ? "" : JSON.stringify(parsed.error.issues);
       expect(parsed.success, `${f}: ${issues}`).toBe(true);
+      if (parsed.data) states.add(parsed.data.state);
     }
+    // EL9: main writes every state and the window reads every one, so each has its fixture for both sides
+    expect([...states].sort()).toEqual([...FielddLinkState.options].sort());
   });
 
   it("keeps the renderer command set closed", () => {
