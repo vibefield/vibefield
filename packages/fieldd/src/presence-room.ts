@@ -74,6 +74,19 @@ interface Room {
  * identity-bound to a concrete Room/Lane record so a late close cannot erase a
  * successor generation.
  */
+/** Item 206's boot half — the handle an attach gets before the router has started. */
+const INERT_ROOM: DocumentPresenceRoomHandle = { publish: () => {}, close: () => {} };
+
+/** Item 206's boot half (`meshdata-boot-redial` (a), James 2026-11-06) — what a doc lane attaches to when the router
+ * may not have started yet: the daemon builds it at boot and starts it on the lane link's first HELLO_OK, which may
+ * come late. Before then an attach is an inert handle (nothing is published, nothing to close), and the doc gets its
+ * room at its next open; after it, the router's own room. */
+export function presenceRoomsOnceStarted(router: PresenceRoomRouter): DocumentPresenceRooms {
+  return {
+    attach: (docId, sink) => (router.started ? router.attach(docId, sink) : INERT_ROOM),
+  };
+}
+
 export class PresenceRoomRouter implements DocumentPresenceRooms {
   readonly #control: PresenceLaneControl;
   readonly #bytes: PresenceLaneBytes;
@@ -105,6 +118,11 @@ export class PresenceRoomRouter implements DocumentPresenceRooms {
       if (this.#started) this.#onLaneEvent(payload, kind);
     });
     for (const lane of lanes ?? []) this.#claim(lane);
+  }
+
+  /** Item 206's boot half — whether `start()` has run (and `stop()` has not since). */
+  get started(): boolean {
+    return this.#started;
   }
 
   attach(docId: string, sink: (payload: Uint8Array) => void): DocumentPresenceRoomHandle {

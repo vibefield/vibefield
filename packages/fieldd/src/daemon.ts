@@ -335,7 +335,7 @@ import { PluginKvStore } from "./plugin-storage";
 import type { PluginUpdateDeadlines } from "./plugin-update-coordinator";
 import { PluginUpdateManager } from "./plugin-update-manager";
 import { PluginUpdateTransport } from "./plugin-update-transport";
-import { PresenceRoomRouter } from "./presence-room";
+import { PresenceRoomRouter, presenceRoomsOnceStarted } from "./presence-room";
 import { ProcessService, spawnMcpStdio } from "./process-service";
 import { ProductApi } from "./product-api";
 import { ProfileDraftsStore } from "./profile-drafts";
@@ -1639,6 +1639,9 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // exactly the same without it, which is the whole point of the two-plane
     // split. The next daemon start retries; nothing degrades silently because
     // `lane.open` already answers UNAVAILABLE with the mesh unit's real state.
+    // *Corrected 2026-11-06 (item 206's boot half): the next start no longer
+    // waits for a daemon restart — the lane link dials on the back-off, and these
+    // start on its first HELLO_OK (below).*
     docSync = new DocSyncService({
       docs,
       control: laneControl,
@@ -1680,37 +1683,69 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       allocateLaneId: laneIds.allocate,
       logger: logger.child({ component: "presence.room" }),
     });
-    try {
-      await laneLink.connect();
-      await docSync.start();
-      logger.info("fieldd.doc_sync.started", "Cross-device document sync is live");
+    // Item 206's boot half (`meshdata-boot-redial` (a), James 2026-11-06 22:56Z; the plan's D-b1 (A), VF-PM 23:20Z) —
+    // both services are built above as before and STARTED on the lane link's first HELLO_OK: at once when the boot's
+    // dial succeeds, or later, when a dial on the back-off does (the mesh turned on, the floor's bridge back). Their
+    // start subscribes over mgmt; only their bytes ride the link. A START that fails with the link up is still terminal
+    // for the boot, as before: each failed service is stopped, so nothing half-started answers for it.
+    const sync = docSync;
+    const rooms = presenceRooms;
+    let lanesStarting = false;
+    const startLanes = async (): Promise<void> => {
+      if (lanesStarting) return;
+      lanesStarting = true;
       try {
-        await presenceRooms.start();
-        logger.info("fieldd.presence.started", "Document-room presence routing is live");
+        await sync.start();
+        logger.info("fieldd.doc_sync.started", "Cross-device document sync is live");
+        try {
+          await rooms.start();
+          logger.info("fieldd.presence.started", "Document-room presence routing is live");
+        } catch (error) {
+          presenceRooms = null;
+          void rooms.stop();
+          logger.info(
+            "fieldd.presence.unavailable",
+            "Document-room presence is not available on this boot",
+            { error: String(error) },
+          );
+        }
       } catch (error) {
+        docSync = null;
         presenceRooms = null;
+        sync.stop();
+        void rooms.stop();
+        laneLink.close();
         logger.info(
-          "fieldd.presence.unavailable",
-          "Document-room presence is not available on this boot",
+          "fieldd.doc_sync.unavailable",
+          "Cross-device document sync is not available on this boot",
           { error: String(error) },
         );
       }
+    };
+    try {
+      await laneLink.connect();
     } catch (error) {
-      docSync = null;
-      presenceRooms = null;
-      laneLink.close();
+      // D-b2 (A): with the mesh off the socket is absent, so the link dials on the back-off for the boot's life —
+      // one failed connect every 10 s at most, its warn said once per run (item 206's policy) — and a mesh turned on
+      // later needs no fieldd restart
       logger.info(
-        "fieldd.doc_sync.unavailable",
-        "Cross-device document sync is not available on this boot",
+        "fieldd.mesh_lane.boot_dial_failed",
+        "The MeshData lane link did not connect at boot; it is dialed again on the back-off",
         { error: String(error) },
       );
+      laneLink.once("connected", () => void startLanes());
+      laneLink.dialLater();
     }
+    if (laneLink.connected) await startLanes();
     // CP-1b — the lane link redials. It was dialed once per boot, so after a floor restart (NativeLink's "connected")
     // or a dropped socket every lane's bytes went nowhere until fieldd restarted: doc sync's, and now the compose
     // plane's doors, whose bridges redial a restarted floor on their own (CP-1a). Item 206 — the link owns its redial
     // (`redial: true` above: a drop or a failed redial dials again on fieldd's one back-off, 500 ms doubling to 10 s),
     // so a dropped accept costs it one step and never the link; the floor coming back dials it at once. A link this
     // boot closed (doc sync's boot failure above, a shutdown) stays closed.
+    // *Corrected 2026-11-06 (item 206's boot half; James ruled `meshdata-boot-redial` (a) at 22:56Z): a failed boot
+    // DIAL no longer closes the link — it is dialed again on the back-off, and doc sync and presence start on its
+    // first HELLO_OK. "Stays closed" now holds for a shutdown and for a START that failed with the link up.*
     native.on("connected", () => laneLink.dialNow());
     // P7 §5.3.1 — fetch/verify/install (user-initiated only; no phone-home)
     const installer = new RegistryInstallService({
@@ -5346,7 +5381,8 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     const docLane = new DocLane({
       dataPort: config.dataPort ?? 0,
       docs,
-      ...(presenceRooms === null ? {} : { rooms: presenceRooms }),
+      // item 206's boot half — the router may start after this lane is built: attach once it has
+      ...(presenceRooms === null ? {} : { rooms: presenceRoomsOnceStarted(presenceRooms) }),
       logger: logger.child({ component: "docs.lane" }),
     });
     const dataPort = await docLane.listen();

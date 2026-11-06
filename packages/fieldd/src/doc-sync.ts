@@ -455,6 +455,9 @@ export class DocSyncService {
    * never throws into the write path, because a sync fault must not be able to
    * turn a committed revision into a failed one. */
   onCommit(commit: DocCommit): void {
+    // item 206's boot half — the daemon builds this service at boot and starts it on the lane link's first HELLO_OK,
+    // which may come late; until then a commit asks for no lane, and the start's own replication says it
+    if (!this.#started) return;
     if (commit.origin === "peer") return; // never echo a peer's own record back
     // UA-D7 gate (c) — the fan-out. #ensureLane below would refuse every peer
     // anyway; returning here means a local doc's saves never even queue work,

@@ -49,7 +49,10 @@ export interface MeshLaneLinkOptions {
   /** Item 206 — dial again after an established link drops, or after a redial fails, on fieldd's one back-off
    * (`reconnectDelayMs`: 500 ms doubling to 10 s), one timer at a time, "reconnecting" emitted with each delay. A
    * success resets it; `dialNow()` is the floor's trigger; a link `close()` ended never dials again (CP-1b). Off by
-   * default: the daemon turns it on. A failed FIRST `connect()` arms nothing, so the boot keeps CP-1b's rule. */
+   * default: the daemon turns it on. A failed FIRST `connect()` arms nothing, so the boot keeps CP-1b's rule.
+   * *Corrected 2026-11-06 (item 206's boot half; James ruled `meshdata-boot-redial` (a) at 22:56Z): a failed first
+   * dial is not terminal for the boot. `dialLater()` arms the same back-off for a link that has never connected, and
+   * the daemon calls it when its boot dial fails. A failed first `connect()` on its own still arms nothing.* */
   redial?: boolean;
 }
 
@@ -160,6 +163,9 @@ export class MeshLaneLink extends EventEmitter {
       throw error;
     }
     this.connected = true;
+    // item 206's boot half — every HELLO_OK says so, the first and each redial's: the daemon starts what its boot
+    // skipped on the first one
+    this.emit("connected");
   }
 
   /** Write opaque bytes to a lane. The lane must already be open (NativeLink's
@@ -262,6 +268,13 @@ export class MeshLaneLink extends EventEmitter {
     this.#redialTimer = null;
     this.#redialAttempts = 0;
     this.#redial("floor");
+  }
+
+  /** Item 206's boot half — a first dial that failed is not terminal: arm the back-off for a link that has never
+   * connected, as a drop arms it for one that had. Nothing for a link without `redial`, a closed one, a connected
+   * one, or one already waiting or dialing. */
+  dialLater(): void {
+    this.#scheduleRedial();
   }
 
   close(): void {
