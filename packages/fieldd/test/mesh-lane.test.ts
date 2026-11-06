@@ -8,7 +8,7 @@
 //     and there is no mesh node in tests. The fake is not a shortcut around the
 //     real thing; it is the only way to drive bytes INTO fieldd today.
 import { type ChildProcess, spawn } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { createServer, type Server, type Socket } from "node:net";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -102,6 +102,12 @@ async function fakeBridge(): Promise<{
   received: () => { laneId: number; payload: Uint8Array }[];
   /** drop the connected client's socket, as a floor going away would */
   drop: () => void;
+  /** item 206 — destroy the next `n` connections as they arrive: the client's connect succeeded and it sees EOF,
+   * which is what macOS's failed accept leaves a caller (XNU drops the connection whose descriptor it could not
+   * allocate; item 198) */
+  dropAtAccept: (n: number) => void;
+  /** every connection that reached the bridge, the dropped ones included */
+  accepted: () => number;
 }> {
   const dir = tmp("fake");
   // The fake binds the endpoint the real bridge would, by the same law (WIN-D1):
@@ -118,8 +124,16 @@ async function fakeBridge(): Promise<{
   let client: Socket | null = null;
   const received: { laneId: number; payload: Uint8Array }[] = [];
   const reader = new MeshDataFrameReader();
+  let toDrop = 0;
+  let accepts = 0;
 
   const server: Server = createServer((sock) => {
+    accepts += 1;
+    if (toDrop > 0) {
+      toDrop -= 1;
+      sock.destroy();
+      return;
+    }
     client = sock;
     sock.on("data", (chunk: Buffer) => {
       for (const f of reader.push(new Uint8Array(chunk))) {
@@ -166,6 +180,10 @@ async function fakeBridge(): Promise<{
       client?.write(encodeMeshDataFrame(MESHDATA_FRAME.DATA, laneId, payload)),
     received: () => received,
     drop: () => client?.destroy(),
+    dropAtAccept: (n) => {
+      toDrop = n;
+    },
+    accepted: () => accepts,
   };
 }
 
@@ -210,6 +228,16 @@ async function squatterBridge(mode: "silent" | "forged"): Promise<{
 const text = (u: Uint8Array) => new TextDecoder().decode(u);
 const bytes = (s: string) => new TextEncoder().encode(s);
 const tick = () => new Promise((r) => setTimeout(r, 60));
+
+/** Polls `holds` every 25 ms until it is true or `withinMs` passes, and says which. */
+async function until(holds: () => boolean, withinMs: number): Promise<boolean> {
+  const deadline = Date.now() + withinMs;
+  while (!holds()) {
+    if (Date.now() >= deadline) return false;
+    await new Promise((r) => setTimeout(r, 25));
+  }
+  return true;
+}
 
 describe("MeshLaneLink ⇄ the real Rust bridge", () => {
   it("authenticates with the mgmt channel's own pairing scheme", async () => {
@@ -312,6 +340,92 @@ describe("CP-1b — a dropped link dials again; a closed one stays closed", () =
     l.close();
     expect(l.closed).toBe(true);
   }, 30_000);
+});
+
+// Item 206 — a connection the bridge drops at its accept (macOS's failed accept: the caller's connect succeeded, then
+// EOF) cost the link its hello's whole 5 s, and a redial that met one was never dialed again: under floor descriptor
+// pressure, doc sync, presence and the tool plane's lanes stayed down while mgmt stayed up. The link now settles its
+// hello on the socket's close and, with `redial`, dials itself again on NativeLink's back-off (500 ms doubling to
+// 10 s); the daemon's floor trigger is `dialNow()`.
+describe("item 206 — a dropped accept costs the lane link one back-off step, never the link", () => {
+  const redialing = (bridge: { socketPath: string; pairingFile: string }) =>
+    link({ socketPath: bridge.socketPath, pairingFile: bridge.pairingFile, redial: true });
+
+  it("R1: a connection closed before HELLO_OK fails connect() at once, not at the 5 s hello timer", async () => {
+    const bridge = await fakeBridge();
+    bridge.dropAtAccept(1);
+    const l = link(bridge);
+    const started = Date.now();
+    const outcome = await l.connect().then(
+      () => "connected",
+      (error: unknown) => String(error),
+    );
+    const tookMs = Date.now() - started;
+    const why = `connect() settled after ${tookMs} ms`;
+    expect(outcome, why).toMatch(/closed the connection before HELLO_OK/);
+    expect(tookMs).toBeLessThan(1_000);
+  }, 20_000);
+
+  it("R2: with redial, a dropped link dials itself again on the back-off until the bridge serves it", async () => {
+    const bridge = await fakeBridge();
+    const l = redialing(bridge);
+    await l.connect();
+    const delays: number[] = [];
+    l.on("reconnecting", (delay: number) => delays.push(delay));
+    // the drop, then two dropped accepts: 500 → dropped → 1000 → dropped → 2000 → served. drop() ends the bridge's
+    // side, and the link sees the EOF a turn later, so the row waits for the drop before it waits for the return.
+    bridge.dropAtAccept(2);
+    bridge.drop();
+    const dropped = await until(() => !l.connected, 1_000);
+    const back = await until(() => l.connected, 6_000);
+    expect({ dropped, back, delays }).toEqual({
+      dropped: true,
+      back: true,
+      delays: [500, 1_000, 2_000],
+    });
+  }, 20_000);
+
+  it("R3: dialNow() mid-back-off dials at once, and the next drop starts the back-off again at 500", async () => {
+    const bridge = await fakeBridge();
+    const l = redialing(bridge);
+    // the floor's trigger (native "connected") is dialNow(), NativeLink's twin
+    expect(typeof (l as { dialNow?: unknown }).dialNow, "the link has dialNow()").toBe("function");
+    await l.connect();
+    const delays: number[] = [];
+    l.on("reconnecting", (delay: number) => delays.push(delay));
+    bridge.dropAtAccept(2);
+    bridge.drop();
+    const waiting = await until(() => delays.length === 3, 4_000); // inside the 2 s wait
+    const asked = Date.now();
+    l.dialNow();
+    const back = await until(() => l.connected, 1_000);
+    const tookMs = Date.now() - asked;
+    delays.length = 0;
+    bridge.drop();
+    const rearmed = await until(() => delays.length === 1, 2_000);
+    expect({ waiting, back, quick: tookMs < 1_000, rearmed, next: delays }).toEqual({
+      waiting: true,
+      back: true,
+      quick: true,
+      rearmed: true,
+      next: [500],
+    });
+  }, 20_000);
+
+  it("R4: close() mid-back-off ends it, and the link stays closed (CP-1b's law; holds at the red too)", async () => {
+    const bridge = await fakeBridge();
+    const l = redialing(bridge);
+    await l.connect();
+    const before = bridge.accepted();
+    bridge.drop();
+    await until(() => !l.connected, 1_000);
+    l.close();
+    await new Promise((r) => setTimeout(r, 1_500));
+    expect({ dialed: bridge.accepted() - before, closed: l.closed }).toEqual({
+      dialed: 0,
+      closed: true,
+    });
+  }, 20_000);
 });
 
 describe("inbound lanes — the ordering hazard", () => {
