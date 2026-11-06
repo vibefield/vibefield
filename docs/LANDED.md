@@ -37191,7 +37191,62 @@ and IOS-12b's, each noted in its entry.
 **Owed.**
 - M-b2: the kit's remote endpoint, `device`, the two copies and the 9426 pin. Then IOS-12c draws the thread.
 - Item 190's mint, re-cut onto this main.
+  > *Answered 2026-11-06:* item 190 landed (`7c123c19e`, run 176; LANDED "Item 190").
 - The phone reading another desktop's spark on a real device, after M-b2 (James's hand).
 - FW-L12's fold under the freeway host, when FW-R5, R7 and R8 land.
 
 Three inserts into older entries: M-b's Owed, and IOS-12a's and IOS-12b's.
+
+## Item 190 — the swarm replay plays its held frame again when the roster moves this desktop's id: a slow floor's mesh identity reaches every row the phone holds (2026-11-06)
+(2026-11-06; two commits, `1f8fed4e2` (red) and `7c123c19e`, on lane `item190` over main `e1a416f96`, fd's, in
+`/Volumes/SamsungRed/lanes/item190`; first cut on `b639fa044` as `5e16341f1` and `0b7aad4d8`, kept as
+`item190-0b7aad4d8-on-b639fa044`. Landed 2026-11-06T08:32:34Z by the fixer, a fast-forward of main `e1a416f96` to
+`7c123c19e` itself; run 176.)
+Filed by VF-PM at 07:12Z from run173 (LANDED "SP-7a's M-a", its run173 bullet).
+
+**The finding.** PG-9 S4c's replay (`debug/swarm-replay.ts`) stamps each frame's rows with `opts.deviceId()` as the
+frame plays, and plays its 2 s corpus from boot, then holds the last frame. The daemon hands it
+`currentDeviceId()`, and DeviceService adopts the mesh identity only at its first sync (`getSlice(DEVICES)`). Until
+then the id is `local-<uuid>`. On a slow floor the identity came after the span, so the rows it held kept the local id
+and nothing stamped them again: the phone would have read the swarm under the local id. Run173 (the old mini, load
+15) read it at `swarm-replay.e2e.test.ts:271`. The file alone passed on the same host, so the red forces the order.
+
+**The red.** `1f8fed4e2`: 3 files +74 −3.
+- `swarm-replay.e2e.test.ts`: `bootSwarmDesktop` takes `{ identity }` and returns its mock. The new row withholds
+  the identity (`meshDeviceId` ""), waits past the span, sees the local id, then hands the identity over (a peers
+  delta) and waits for `currentDeviceId()` to move. A phone subscribes {remote, mesh}: every held row must read
+  "dev-swarm".
+- `swarm-replay.test.ts`: past the span, `restamp()` with the id unmoved plays nothing; moved, it plays the held
+  frame once under the new id; a second call plays nothing.
+- `swarm-replay.ts`: `SwarmReplay.restamp()`, a skeleton that plays nothing.
+
+**The fix.** `7c123c19e`: 2 files +17 −1.
+- `swarm-replay.ts`: the replay keeps the id the standing frame was stamped with (`stampedAs`). `restamp()` plays
+  that frame again when `opts.deviceId()` has moved, and does nothing otherwise. The frame's states keep their
+  revision, so the runtime hears nothing new. A dated correction stands at the file's header.
+- `daemon.ts`: `devices.on("changed", () => swarm.restamp())` after the roster is built, when a swarm is configured.
+- No contract, wire or kit change. Pin-class: none.
+
+**The lights.**
+- The red/green on the old mini at the first cut, on `b639fa044` (07:27:41Z–07:28:15Z, load 2.48;
+  `lanes/ts6/logs/oldmini/item190/`, `k-190.out` `11c51838c8c9a75b363c3710ae85b8100133a14ce5981566f7581c0aba3588e0`):
+  - RED at `5e16341f1` (`RED-5e16341f1.log` `abdf11cddfcd33a28d1bca55edbe1b6b6ed11da31f132c8d866a433f47997124`):
+    "Tests  2 failed | 16 passed (18)". The unit row at `swarm-replay.test.ts:384` ("expected [] to deeply equal
+    [ 'dev-1' ]"), the e2e row at `swarm-replay.e2e.test.ts:365` (`Set{ 'local-93aa0f88-…' }` against
+    `Set{ 'dev-swarm' }`).
+  - GREEN at `0b7aad4d8` (`GREEN-0b7aad4d8.log`
+    `c434d332e1ee01c3b1e1f52880d720a93e7de66e431a640953fc38f57cc991c1`): "Tests  18 passed (18)".
+- Re-cut onto `e1a416f96`: 2 of 2 "=" in the range-diff, the patch-ids equal, and the tip's tree (`8274c630539e`)
+  equals `git merge-tree --write-tree e1a416f96 0b7aad4d8`.
+- Run 176, `pnpm verify` at `7c123c19e` on vf-m1, alone: exit 0 at 08:25:09Z, armed 08:19:59Z
+  (`lanes/ts6/logs/m1/run176/`, `verify.log` `dcf9e6ebd132f00166acc2f6f0888ca0f3c9d6591312867c52b8b28df34f7af9`,
+  `run176.out` `a5aba5c4570edfefadffee28d5f07da453bcabec0ae80b666b8ba31851ccfa27`; the fieldd stage began at a 1-min
+  load of 5.08).
+  - fieldd "3506 passed | 15 skipped (3521)", run175's + 2; vitest 13,522 | 0 | 21; contracts 1780; cargo 34
+    results, 545 passed; "275 copies identical", "92 contract values identical"; biome "Checked 3408 files";
+    typecheck 29; gen fresh; tree clean after.
+  - Per file against run175: missing [] / extra [], `swarm-replay.e2e` 2 → 3 (9,818 ms) and `swarm-replay` 14 → 15.
+  - "nested rows: 0" (`run176-nested-rows.log`, at the mint).
+- No test ran on the MacBook (the pressure HOLD).
+
+Item 190 closes in this entry.
