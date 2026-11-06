@@ -1314,6 +1314,10 @@ describe("CP-4a2b — a flow run's items: the runs' acts, then Stop the run; an 
   // the item's teller, told what you chose by the queue's own owed fact (item 158's road); yours owes nothing.
   const CHANGED = { flow: "release-check", hash: "a".repeat(64), approved: "b".repeat(64) };
   const CHANGED_ACTS = ["Run this version", "Run the one you approved", "Not now"];
+  // Q4 (ruled 2026-11-06): every raise hands the start it was asked with, a spark's or yours
+  const SPARK_START = { input: {}, starter: { by: "spark", spark: VELA }, scope: ["work"] };
+  const YOUR_START = { input: {}, starter: { by: "you" }, scope: ["work"] };
+  const RAISED = { script: CHANGED, name: "Release check", from: VELA_FROM, start: SPARK_START };
   const startsInto = (started: FlowItemStart[], result?: (n: number) => FlowItemStarted) => ({
     answer: noAnswer,
     start: async (start: FlowItemStart): Promise<FlowItemStarted> => {
@@ -1326,7 +1330,7 @@ describe("CP-4a2b — a flow run's items: the runs' acts, then Stop the run; an 
     const h = harness();
     const started: FlowItemStart[] = [];
     h.queue.bindFlowActs(startsInto(started));
-    const id = h.queue.flowChanged({ script: CHANGED, name: "Release check", from: VELA_FROM });
+    const id = h.queue.flowChanged(RAISED);
     expect(listed(h.queue)).toEqual([
       expect.objectContaining({
         id,
@@ -1341,15 +1345,20 @@ describe("CP-4a2b — a flow run's items: the runs' acts, then Stop the run; an 
     ]);
     expect(h.queue.list()[0]).not.toHaveProperty("run");
     // the same spark's flow_run of the same bytes asks no second time
-    expect(h.queue.flowChanged({ script: CHANGED, name: "Release check", from: VELA_FROM })).toBe(
-      id,
-    );
+    expect(h.queue.flowChanged(RAISED)).toBe(id);
     expect(h.queue.list()).toHaveLength(1);
 
     // Run this version: the bytes it would run start, and the spark hears the run it started
     const { item } = await h.queue.answer(id, 0, principal);
     expect(started).toEqual([
-      { id, flow: "release-check", hash: CHANGED.hash, version: "this", from: VELA_FROM },
+      {
+        id,
+        flow: "release-check",
+        hash: CHANGED.hash,
+        version: "this",
+        from: VELA_FROM,
+        start: SPARK_START,
+      },
     ]);
     expect(item.answer).toMatchObject({ choice: 0, outcome: "done", told: true });
     expect(h.woken).toEqual([
@@ -1362,6 +1371,7 @@ describe("CP-4a2b — a flow run's items: the runs' acts, then Stop the run; an 
       script: { ...CHANGED, hash: "c".repeat(64) },
       name: "Release check",
       from: VELA_FROM,
+      start: SPARK_START,
     });
     await h.queue.answer(two, 1, principal);
     expect(started.at(-1)).toEqual({
@@ -1370,6 +1380,7 @@ describe("CP-4a2b — a flow run's items: the runs' acts, then Stop the run; an 
       hash: CHANGED.approved,
       version: "approved",
       from: VELA_FROM,
+      start: SPARK_START,
     });
     expect(h.woken.at(-1)?.[1]).toBe(
       "you ran Release check as you approved it, for Vela: it started as fr-started2x",
@@ -1380,6 +1391,7 @@ describe("CP-4a2b — a flow run's items: the runs' acts, then Stop the run; an 
       script: { ...CHANGED, hash: "d".repeat(64) },
       name: "Release check",
       from: VELA_FROM,
+      start: SPARK_START,
     });
     expect((await h.queue.answer(three, 2, principal)).item.answer?.outcome).toBe("done");
     expect(started).toHaveLength(2);
@@ -1391,6 +1403,7 @@ describe("CP-4a2b — a flow run's items: the runs' acts, then Stop the run; an 
       script: { flow: "nightly", hash: "e".repeat(64) },
       name: "Nightly",
       from: VELA_FROM,
+      start: SPARK_START,
     });
     expect(h.queue.list().find((open) => open.id === fresh)?.choices).toEqual([
       "Run this version",
@@ -1409,6 +1422,7 @@ describe("CP-4a2b — a flow run's items: the runs' acts, then Stop the run; an 
       script: { ...CHANGED, hash: "f".repeat(64) },
       name: "Release check",
       from: VELA_FROM,
+      start: SPARK_START,
     });
     expect((await h.queue.answer(four, 0, principal)).item.answer).toMatchObject({
       outcome: "failed",
@@ -1424,6 +1438,7 @@ describe("CP-4a2b — a flow run's items: the runs' acts, then Stop the run; an 
     const yours = h.queue.flowChanged({
       script: { flow: "nightly-sweep", hash: "1".repeat(64), approved: "2".repeat(64) },
       name: "Nightly sweep",
+      start: YOUR_START,
     });
     const mine = listed(h.queue).find((open) => open.id === yours);
     expect(mine).toMatchObject({ from: { name: "Nightly sweep" }, choices: CHANGED_ACTS });
@@ -1438,6 +1453,7 @@ describe("CP-4a2b — a flow run's items: the runs' acts, then Stop the run; an 
       flow: "nightly-sweep",
       hash: "1".repeat(64),
       version: "this",
+      start: YOUR_START,
     });
     expect(h.woken).toHaveLength(heard);
     expect(h.kept().some((record) => record.item.id === yours)).toBe(false);
@@ -1445,10 +1461,11 @@ describe("CP-4a2b — a flow run's items: the runs' acts, then Stop the run; an 
 
   it("N5b (D): a restart that broke into a changed flow's start never starts it again: answered uncertain, its spark told; a start before the runs bind is refused, nothing begun", async () => {
     const h = harness();
-    const id = h.queue.flowChanged({ script: CHANGED, name: "Release check", from: VELA_FROM });
+    const id = h.queue.flowChanged(RAISED);
     const yours = h.queue.flowChanged({
       script: { flow: "nightly-sweep", hash: "1".repeat(64) },
       name: "Nightly sweep",
+      start: YOUR_START,
     });
     // before the runs bind: refused retryably, and no act is begun
     expect(await refusal(h.queue.answer(id, 0, principal))).toBe("flows-unbound");

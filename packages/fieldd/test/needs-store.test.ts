@@ -154,6 +154,41 @@ describe("the needs-you store", () => {
     ).toEqual([good]);
   });
 
+  it("sets aside as unreadable, and never serves, a changed flow's record that keeps no start: no act of it can begin the run it asked for (ruled 2026-11-06)", () => {
+    const h = store();
+    const kept = NeedsStore.mintId();
+    const startless = NeedsStore.mintId();
+    const changed = (id: string): NeedsRecord => ({
+      format: NEEDS_RECORD_FORMAT,
+      item: {
+        id,
+        kind: "flow-changed",
+        state: "open",
+        from: { name: "Nightly sweep" },
+        asked: "2026-11-06T07:00:00.000Z",
+        choices: ["Run this version", "Not now"],
+        script: { flow: "nightly-sweep", hash: "1".repeat(64) },
+      },
+    });
+    const start = { input: {}, starter: { by: "you" }, scope: ["work"] };
+    h.store.write({ ...changed(kept), start });
+    // contracts' tolerant reader takes a record with no start, so it is signed as any record is; VibeField's own
+    // raise always hands one (Q4), so a record without it is one VibeField did not write that way
+    h.store.write(changed(startless));
+    expect(
+      h
+        .open()
+        .list()
+        .map((r) => r.item.id),
+    ).toEqual([kept]);
+    expect(
+      h.events.filter((e) => e.event === "fieldd.needs.set_aside").map((e) => e.attrs?.why),
+    ).toEqual(["unreadable"]);
+    expect(existsSync(join(h.dir, `${startless}.json`))).toBe(false);
+    const aside = readdirSync(h.dir).filter((f) => f.startsWith(`${startless}.json.unreadable-`));
+    expect(aside).toHaveLength(1);
+  });
+
   it("refuses to keep a record its contract does not take", () => {
     const h = store();
     const bad = question(NeedsStore.mintId(), "2026-10-31T16:00:00.000Z");
