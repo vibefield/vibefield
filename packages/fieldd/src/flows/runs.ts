@@ -76,11 +76,11 @@ import * as words from "./words";
 //   bytes fieldd kept. Its refusals are the start's words, answered as the act's `failed`.
 // - Its refusals (DESIGN.md §9 "When a run can't start", words.ts) are PRECONDITION_FAILED with a `reason`, before
 //   anything is written: no flow, a file past SCRIPT_MAX_BYTES, an input the flow does not name, a version not kept,
-//   an input naming a session or a project VibeField can't find, or one whose folder it can't run in (empty, or past
-//   FLOW_LIMITS.FOLDER_CHARS, which its journal's head can't hold), a step that names no folder in a run whose input
-//   names none (CP4-Q20 (a), from the static read's `cwd`), and the bounds (D3): RUNS_LIVE_MAX live runs, or
-//   RUNS_PER_SPARK_MAX of a spark's own. Nothing between the bounds' read and the run's begin awaits, so two starts
-//   never pass one bound together.
+//   an input naming a session or a project VibeField can't find, or the first one, whose folder the run holds, with a
+//   folder it can't run in (empty, or past FLOW_LIMITS.FOLDER_CHARS, which its journal's head can't hold; JJ1), a
+//   step that names no folder in a run whose input names none (CP4-Q20 (a), from the static read's `cwd`), and the
+//   bounds (D3): RUNS_LIVE_MAX live runs, or RUNS_PER_SPARK_MAX of a spark's own. Nothing between the bounds' read and
+//   the run's begin awaits, so two starts never pass one bound together.
 // - The run's record is written first (D18, `FlowRecords.beginRun`), its scope frozen there: the start's profiles
 //   that exist then. A read narrows it to the profiles that exist now; it never widens (D8).
 // - A host is started only through `#wake`, which replays the run's journal from the top (CP-D9) under the kept
@@ -461,11 +461,15 @@ export class FlowRuns {
         continue;
       const found = this.ports.folderOf(kind, value);
       if (found === undefined) throw refused(`input-${kind}`, words.inputNotFound(kind));
-      // GG1 (the F6 review): a folder its head can't hold, empty or past FLOW_LIMITS.FOLDER_CHARS, is the input's
-      // refusal here, before the begin is checked and any approval kept, never the store's words from inside its begin
-      if (found === "" || found.length > FLOW_LIMITS.FOLDER_CHARS)
-        throw refused(`input-${kind}`, words.folderUnusable(kind));
-      folder ??= found;
+      // GG1 (the F6 review), JJ1 (its 1l review): the folder the run holds, its first input's, is checked: one its
+      // head can't hold, empty or past FLOW_LIMITS.FOLDER_CHARS, is the input's refusal here, before the begin is
+      // checked and any approval kept, never passed over for the next input's. A later input's folder, which nothing
+      // of the run's uses, is not checked
+      if (folder === undefined) {
+        if (found === "" || found.length > FLOW_LIMITS.FOLDER_CHARS)
+          throw refused(`input-${kind}`, words.folderUnusable(kind));
+        folder = found;
+      }
     }
     if (
       folder === undefined &&
