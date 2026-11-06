@@ -728,6 +728,20 @@ const fanOut = (n: number): string =>
     "",
   ].join("\n");
 
+/** LIVE_STEPS_MAX spawned steps at once, then one handed your session by `in:`, then one more spawned (F9). */
+const SLOTS_AND_A_HAND = [
+  'export const meta = { name: "Slots" };',
+  "export default async function () {",
+  "  const steps = [];",
+  `  for (let i = 1; i <= ${FLOW_LIMITS.LIVE_STEPS_MAX}; i += 1)`,
+  '    steps.push(agent("look at part " + i, { agent: "claude", label: "Part " + i, profile: "work", cwd: "/work/app" }));',
+  '  steps.push(agent("Review this", { in: "run-yours", label: "Yours" }));',
+  '  steps.push(agent("one more", { agent: "claude", label: "More", profile: "work", cwd: "/work/app" }));',
+  "  return await Promise.all(steps);",
+  "}",
+  "",
+].join("\n");
+
 describe("CP-4a2b — a run's live steps, LIVE_STEPS_MAX at once (§13a slice 8b)", () => {
   it("R14 (CP4-S7): of 9 steps at once, 8 are spawned and the 9th waits for a slot on the record, never spawned; another run's steps are its own", async () => {
     const h = await harness();
@@ -1386,6 +1400,42 @@ describe("CP-4a2b — a step's answer: heard once, bounded whole, checked agains
     );
     expect(record?.open.map((step) => [step.call, step.state])).toEqual([[stuck + 1, "working"]]);
     expect(h.spawned.map((spawn) => spawn.origin.call)).toEqual([stuck + 1]);
+  });
+
+  it("R14i (slices 7–9 review F9): an in: step never waits for a slot: past LIVE_STEPS_MAX spawned steps it is handed at once, and the next answer starts the first spawned step waiting", async () => {
+    const h = await harness({ sessions: { "run-yours": HANDED_YOURS } });
+    h.approved("slots", SLOTS_AND_A_HAND);
+    const max = FLOW_LIMITS.LIVE_STEPS_MAX;
+    // every state the in: step's record is written with, from its call line on
+    const states: string[] = [];
+    const write = h.records.writeRunRecord.bind(h.records);
+    vi.spyOn(h.records, "writeRunRecord").mockImplementation((kept, fields) => {
+      const state = fields.open.find((step) => step.call === max + 1)?.state;
+      if (state !== undefined) states.push(state);
+      write(kept, fields);
+    });
+    const run = startedRun(await h.start({ flow: "slots" })).run;
+    await waitFor(() => expect(h.records.runRecord(run)?.open).toHaveLength(max + 2));
+    // decided at its call line: no "waiting" ever reaches its record, and its hand is at once
+    expect(states).not.toContain("waiting");
+    expect(h.hands).toMatchObject([{ runtimeRunId: "run-yours", run, call: max + 1, gone: false }]);
+    const open = h.records.runRecord(run)?.open ?? [];
+    expect(open.find((step) => step.call === max + 1)).toMatchObject({ handed: true });
+    // the spawned step after it waits: the in: step holds no slot
+    expect(open.find((step) => step.call === max + 2)?.state).toBe("waiting");
+    await waitFor(() => expect(h.enqueued).toHaveLength(max + 1));
+    expect(h.spawned).toHaveLength(max);
+    // an answer's one slot starts the first SPAWNED step waiting
+    h.endTurn({
+      run,
+      call: 3,
+      runtimeRunId: "rt-step3",
+      turn: "t1",
+      outcome: "completed",
+      text: "part 3",
+    });
+    await waitFor(() => expect(h.spawned).toHaveLength(max + 1));
+    expect(h.spawned.at(-1)?.origin).toEqual({ by: "flow", run, call: max + 2 });
   });
 
   it("R14d (F2 review T1, T3, T6): a start that throws while the runs store does not answer settles its step with no read on the failure road: no rejection escapes, its call's own label names it, and its slot frees", async () => {
