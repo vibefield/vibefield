@@ -73,7 +73,8 @@ public struct HistoryLedgerView: View {
           index: FieldHistoryModel.indexSentence(projects.index, desktop: projects.sourceName),
           indexPlatform: projects.sourcePlatform, router: router, onNeed: onNeed)
       } else {
-        QuietNote(title: "This project is not in the ledger", text: "Nothing was read for it on this phone.")
+        let note = FieldHistoryModel.projectNotRead(device: DeviceWord.current)
+        QuietNote(title: note.title, text: note.text)
           .onAppear { onNeed(.project(id: id)) }
       }
     case .session(let device, let id):
@@ -85,9 +86,8 @@ public struct HistoryLedgerView: View {
         QuietNote(title: "Reading the session on \(reader.name)", text: "Its header, its newest rows and its tail arrive over the desktop's door.")
           .onAppear { onNeed(.session(device: device, id: id)) }
       } else {
-        QuietNote(
-          title: "This session has no document here",
-          text: "Its desktop does not answer, and this phone has not read its turns before.")
+        let note = FieldHistoryModel.sessionNotRead(device: DeviceWord.current)
+        QuietNote(title: note.title, text: note.text)
           .onAppear { onNeed(.session(device: device, id: id)) }
       }
     }
@@ -106,7 +106,7 @@ public struct HistoryLedgerView: View {
       if corpus.projects.isEmpty {
         // fix7 — never "no project" while the door's index is not ready
         let empty = FieldHistoryModel.emptyLedger(
-          standing: standing, index: projects.index, desktop: projects.sourceName)
+          standing: standing, index: projects.index, desktop: projects.sourceName, device: DeviceWord.current)
         QuietNote(title: empty.title, text: empty.text)
       } else {
         GroupHead(live.label, count: live.count)
@@ -139,13 +139,16 @@ public struct HistoryLedgerView: View {
   private func scope(_ corpus: HistoryCorpus, standing: FieldHistoryModel.DesktopStanding) -> some View {
     VStack(alignment: .leading, spacing: 5) {
       if corpus.desktops.isEmpty {
-        Text(FieldHistoryModel.scopeLine(corpus, standing: standing))
+        Text(FieldHistoryModel.scopeLine(corpus, standing: standing, device: DeviceWord.current))
           .font(ChromeType.sans(13))
           .monospacedDigit()
           .foregroundStyle(ChromePalette.inkTertiary)
       } else {
         HStack(spacing: 6) {
-          Text(standing.isAwake ? FieldHistoryModel.ledgerScope(corpus) : FieldHistoryModel.scopeLine(corpus, standing: standing))
+          Text(
+            standing.isAwake
+              ? FieldHistoryModel.ledgerScope(corpus)
+              : FieldHistoryModel.scopeLine(corpus, standing: standing, device: DeviceWord.current))
             .font(ChromeType.sans(13))
             .monospacedDigit()
             .foregroundStyle(ChromePalette.inkTertiary)
@@ -347,10 +350,8 @@ public struct HistoryLedgerView: View {
         .foregroundStyle(ChromePalette.inkTertiary)
         .padding(.horizontal, HistoryParts.sidePadding)
         .padding(.top, 2)
-      QuietNote(
-        title: "History reads your desktops' index over their doors",
-        text:
-          "No desktop of this account answers right now, and this phone has read none before. The ledger, a project and a session's document arrive from the first desktop whose door answers.")
+      let note = FieldHistoryModel.noDesktopRead(device: DeviceWord.current)
+      QuietNote(title: note.title, text: note.text)
     }
     .padding(.bottom, 40)
   }

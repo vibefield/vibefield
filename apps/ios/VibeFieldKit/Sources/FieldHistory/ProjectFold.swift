@@ -1,3 +1,4 @@
+import FieldDesign
 import FieldProduct
 import Foundation
 
@@ -132,14 +133,15 @@ extension FieldHistoryModel {
 
   /// What an EMPTY ledger says, in this order: nothing read and no door
   /// answering; the index not ready, in its own words (never "no project"
-  /// while it is not); then the index's honest emptiness.
+  /// while it is not); then the index's honest emptiness. The device is named
+  /// as its platform names it (`DeviceWord`; L4's word pass).
   public static func emptyLedger(
-    standing: DesktopStanding, index: IndexStanding?, desktop: String
+    standing: DesktopStanding, index: IndexStanding?, desktop: String, device: DeviceWord
   ) -> (title: String, text: String) {
     if !standing.isAwake {
       return (
         "Your projects have not been read yet",
-        "Nothing of your history is on this phone; the ledger arrives when a desktop's door answers."
+        "Nothing of your history is on \(device.this); the ledger arrives when a desktop's door answers."
       )
     }
     switch index {
@@ -158,7 +160,8 @@ extension FieldHistoryModel {
     case .failed(let reason)?:
       return (
         "\(desktop)'s index has stopped",
-        "\(sentence(reason)) History on this phone reads nothing from it until it runs again; its restart is in History on \(desktop).")
+        "\(sentence(reason)) History on \(device.this) reads nothing from it until it runs again; its restart is in "
+          + "History on \(desktop).")
     case .unconfigured(let reason)?:
       return ("\(desktop) runs no history index", reason.map(sentence) ?? "Its desktop was started without one.")
     case .stopped?:
@@ -169,6 +172,31 @@ extension FieldHistoryModel {
         "The index lists no project. Choose whose history it reads on a desktop (Settings → Agents)."
       )
     }
+  }
+
+  // History's three missing notes, each where nothing was read for it on this device (L4's word pass, 2026-11-06:
+  // HistoryLedgerView said them by hand). The device is named as its platform names it (`DeviceWord`).
+
+  /// A project the ledger does not hold.
+  public static func projectNotRead(device: DeviceWord) -> (title: String, text: String) {
+    ("This project is not in the ledger", "Nothing was read for it on \(device.this).")
+  }
+
+  /// A session whose desktop does not answer and whose document was never read here.
+  public static func sessionNotRead(device: DeviceWord) -> (title: String, text: String) {
+    (
+      "This session has no document here",
+      "Its desktop does not answer, and \(device.this) has not read its turns before."
+    )
+  }
+
+  /// No desktop's door answers and nothing is cached.
+  public static func noDesktopRead(device: DeviceWord) -> (title: String, text: String) {
+    (
+      "History reads your desktops' index over their doors",
+      "No desktop of this account answers right now, and \(device.this) has read none before. The ledger, a project "
+        + "and a session's document arrive from the first desktop whose door answers."
+    )
   }
 
   /// fieldd's words as a sentence: the first letter up, a full stop at the end.

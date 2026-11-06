@@ -1,3 +1,4 @@
+import FieldDesign
 import Foundation
 
 /// Everything on the History tab that is a DECISION rather than a layout
@@ -52,8 +53,8 @@ public enum FieldHistoryModel {
     return project.spend / max
   }
 
-  /// The line under the title.
-  public static func scopeLine(_ corpus: HistoryCorpus, standing: DesktopStanding) -> String {
+  /// The line under the title. The device is named as its platform names it (`DeviceWord`; L4's word pass).
+  public static func scopeLine(_ corpus: HistoryCorpus, standing: DesktopStanding, device: DeviceWord) -> String {
     switch standing {
     case .connected:
       return "\(corpus.projects.count) projects · \(figure(corpus.sessionCount)) sessions across \(corpus.agentCount) agents"
@@ -62,7 +63,7 @@ public enum FieldHistoryModel {
     case .indexing(let percent, _, _):
       return "\(corpus.desktop) is indexing · \(percent)%"
     case .incompatible(let theirs, let ours):
-      return "\(corpus.desktop) speaks contracts \(theirs) · this phone \(ours)"
+      return "\(corpus.desktop) speaks contracts \(theirs) · \(device.this) \(ours)"
     }
   }
 
