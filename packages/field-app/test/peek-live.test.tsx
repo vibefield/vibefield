@@ -624,7 +624,7 @@ describe("Live now's chrome pieces each stand alone (MV-8b)", () => {
       tokens: peekFieldTokens(state),
       filterMenu: filterMenu(state),
       filterOpen: false,
-      here: "This Mac",
+      here: "on this Mac",
       rows: [row],
       hot: 0,
       foot: "1 live session, waiting first",

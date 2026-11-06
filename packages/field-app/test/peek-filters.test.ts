@@ -403,11 +403,12 @@ describe("a live run's words (SE-D1, UM-D28)", () => {
 
   it("the live peek's head: folder, agent, profile as its row says one, where it runs, its state", () => {
     const own = live({ profile: "work" });
-    expect(liveHeadWords(own, rowProfile(own, LIVE), "This Mac")).toBe(
+    // where this desktop's run runs is said as handed (`onThisDeviceWords`), never re-cased
+    expect(liveHeadWords(own, rowProfile(own, LIVE), "on this Mac")).toBe(
       `billing-api · ${AGENT_LABEL} · Work · on this Mac · working`,
     );
     // off the Mac, the device's own word
-    expect(liveHeadWords(own, rowProfile(own, LIVE), "This PC")).toBe(
+    expect(liveHeadWords(own, rowProfile(own, LIVE), "on this PC")).toBe(
       `billing-api · ${AGENT_LABEL} · Work · on this PC · working`,
     );
     // a peer's run says its desktop and no profile
@@ -416,12 +417,12 @@ describe("a live run's words (SE-D1, UM-D28)", () => {
       state: "blocked",
       when: "waiting",
     });
-    expect(liveHeadWords(away, rowProfile(away, LIVE), "This Mac")).toBe(
+    expect(liveHeadWords(away, rowProfile(away, LIVE), "on this Mac")).toBe(
       `billing-api · ${AGENT_LABEL} · on studio · waiting`,
     );
     // a shell with no folder says what it has
     const shell = live({ folder: null, agent: "shell", state: "shell", when: "a shell" });
-    expect(liveHeadWords(shell, null, "This Mac")).toBe("shell · on this Mac · a shell");
+    expect(liveHeadWords(shell, null, "on this Mac")).toBe("shell · on this Mac · a shell");
   });
 
   it("a row says its profile only while a profile besides This Mac is offered (UM-D12), and only one the lists hold", () => {

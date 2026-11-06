@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import {
   hasLink,
   linkFace,
+  onThisDeviceWords,
   RENEWAL_WARN_DAYS,
   renewalDays,
   thisDeviceWord,
@@ -342,6 +343,14 @@ describe("the link's words (TS-2; DESIGN.md §9)", () => {
     expect(unlinkedWord(undefined)).toBe("This Mac only");
     const line = linkLine(linkFace("live", wire()), "darwin", NOW);
     expect(line).toEqual({ detail: "This Mac only", isLogin: false, tone: "plain", canLink: true });
+  });
+
+  it("says where a run of this desktop's runs, inside a sentence, in the same platform's word (SE-1)", () => {
+    // the live peek's head: "… · on this Mac · working"
+    expect(onThisDeviceWords("darwin")).toBe("on this Mac");
+    expect(onThisDeviceWords("win32")).toBe("on this PC");
+    expect(onThisDeviceWords("linux")).toBe("on this computer");
+    expect(onThisDeviceWords(undefined)).toBe("on this Mac");
   });
 
   it("says where the link is while it moves", () => {

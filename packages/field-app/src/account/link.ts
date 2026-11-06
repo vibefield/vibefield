@@ -220,6 +220,11 @@ export function thisDeviceWord(platform: string | undefined): string {
   return "This computer";
 }
 
+/** SE-1 — where a run of this desktop's runs, inside a sentence ("on this Mac"). */
+export function onThisDeviceWords(platform: string | undefined): string {
+  return thisDeviceWord(platform);
+}
+
 /** TS-D2 — a desktop that is not connected, in its own platform's words: the
  * ordinary first-run state, never "offline" (which reads as no internet). */
 export function unlinkedWord(platform: string | undefined): string {
