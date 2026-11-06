@@ -290,8 +290,9 @@ export class NeedsQueue implements TalkHolds {
   restore(): number {
     // item 172: a store that cannot be read answers nothing here, and refuses after (`readable`)
     for (const record of this.opts.store.boot()) {
-      const kept = record.acting === undefined ? record : this.#uncertain(record);
-      this.#records.set(kept.item.id, kept);
+      // an act begun is held by `#uncertain` while it holds something (a changed flow of yours owes no one: N5)
+      if (record.acting === undefined) this.#records.set(record.item.id, record);
+      else this.#uncertain(record);
     }
     this.#shown = JSON.stringify(this.list());
     return this.#records.size;
@@ -577,9 +578,47 @@ export class NeedsQueue implements TalkHolds {
     this.#stand({ ...record, item: { ...record.item, state: "ended" satisfies NeedsItemState } });
   }
 
-  /** RED skeleton: keeps nothing. */
-  flowChanged(_raise: FlowChangedRaise): NeedsItemId {
-    return NeedsStore.mintId();
+  /** N5 (CP4-Q5 (a)) — a flow that changed since you approved it, or never approved, asked before its run starts. A
+   * spark's flow_run that waits on it is its teller (`from`, `spark`, and ‹flow› in `words`, as a proposal's item
+   * names its flow): it is told what you chose, and its open items' watermark counts it. Yours names the flow, and
+   * tells no one. Its acts: Run this version, Run the one you approved (only while one is), Not now last; See the
+   * change is the card's, drawn from `script`. The same teller asking to run the same bytes while it is open is that
+   * item, never a second. */
+  flowChanged(raise: FlowChangedRaise): NeedsItemId {
+    const { script, from } = raise;
+    for (const record of this.#records.values()) {
+      const { item } = record;
+      if (
+        needsKindOf(item) === "flow-changed" &&
+        needsStateOf(item) === "open" &&
+        item.script?.flow === script.flow &&
+        item.script.hash === script.hash &&
+        item.from.spark === from?.spark
+      )
+        return item.id;
+    }
+    if (from !== undefined) this.#bound(from.spark);
+    const id = NeedsStore.mintId();
+    this.#keep({
+      format: NEEDS_RECORD_FORMAT,
+      item: {
+        id,
+        kind: "flow-changed" satisfies NeedsItemKind,
+        state: "open" satisfies NeedsItemState,
+        ...(from !== undefined
+          ? { from: this.#fromOf(from), spark: from.spark, words: words.nameWords(raise.name) }
+          : { from: { name: words.nameWords(raise.name) } }),
+        asked: this.#now().toISOString(),
+        choices: [
+          NEEDS_CHOICE_WORDS.runThisVersion,
+          ...(script.approved !== undefined ? [NEEDS_CHOICE_WORDS.runApproved] : []),
+          NEEDS_CHOICE_WORDS.notNow,
+        ],
+        script,
+      },
+    });
+    this.#emit();
+    return id;
   }
 
   // ── the window's answer ──
@@ -762,6 +801,8 @@ export class NeedsQueue implements TalkHolds {
       case "flow-repair":
       case "flow-lost":
         return this.#flowAct(record, kind, choice);
+      case "flow-changed":
+        return this.#flowStart(record, choice, at);
       default:
         throw refuseAnswer(`fieldd cannot answer a ${item.kind} here`, "unknown-kind");
     }
@@ -783,6 +824,62 @@ export class NeedsQueue implements TalkHolds {
     return acted.outcome === "done"
       ? { outcome: "done" }
       : { outcome: "failed", reason: acted.reason };
+  }
+
+  /** N5 — a changed flow's answer. Run this version or Run the one you approved is kept begun first (`acting`), as a
+   * held spawn's Allow is, then handed to the runs: the start has no journal of its own before its run, so a restart
+   * that finds it begun makes it uncertain (`#uncertain`) and it is never started again (CP2-D2; cp-landing's D). Not
+   * now starts nothing. Before the runs have bound their acts it is refused, and nothing is begun. A spark's item owes
+   * that spark what came of it; yours owes no one. */
+  async #flowStart(record: NeedsRecord, choice: number, at: string): Promise<Act> {
+    const { item } = record;
+    const acts = this.#flowActs;
+    const script = item.script;
+    if (acts === undefined)
+      throw new RpcCallError("PRECONDITION_FAILED", FLOWS_UNBOUND, true, {
+        reason: "flows-unbound",
+      });
+    if (script === undefined) throw refuseAnswer(`${item.id} names no flow`, "unknown-kind");
+    const told = this.#flowTeller(item);
+    const owed = (fact: (spark: string, flow: string) => string) =>
+      told !== undefined ? { owed: fact(told.spark, told.flow) } : {};
+    if (choice === (item.choices?.length ?? 0) - 1)
+      return {
+        outcome: "done",
+        ...owed((spark, flow) => words.flowNotNowFact(spark, flow, script.approved !== undefined)),
+      };
+    const approved = choice === 1 && script.approved !== undefined ? script.approved : undefined;
+    this.#keep({ ...record, acting: { choice, at } });
+    let started: FlowItemStarted;
+    try {
+      started = await acts.start({ id: item.id, flow: script.flow, hash: approved ?? script.hash });
+    } catch (err) {
+      started = { outcome: "failed", reason: (err as Error).message };
+    }
+    if (started.outcome === "failed") {
+      const { reason } = started;
+      return {
+        outcome: "failed",
+        reason,
+        ...owed((spark, flow) => words.flowStartFailedFact(spark, flow, reason)),
+      };
+    }
+    const { run } = started;
+    return {
+      outcome: "done",
+      ...owed((spark, flow) =>
+        approved !== undefined
+          ? words.flowRanApprovedFact(spark, flow, run)
+          : words.flowRanFact(spark, flow, run),
+      ),
+    };
+  }
+
+  /** The spark a changed flow's item tells, by its name, and ‹flow›: none for yours. */
+  #flowTeller(item: NeedsItem): { readonly spark: string; readonly flow: string } | undefined {
+    if (item.from.spark === undefined) return undefined;
+    if (item.words === undefined) throw refuseAnswer(`${item.id} names no flow`, "unknown-kind");
+    return { spark: item.from.name, flow: item.words };
   }
 
   /** Allow: re-checked first (the run is live, the spark's record and its profiles stand, CP-L4 and TL-D5), then each
@@ -978,10 +1075,17 @@ export class NeedsQueue implements TalkHolds {
     const { acting, texts: _texts, launch: _launch, sender: _sender, ...rest } = record;
     const { item } = record;
     const spark = item.from.name;
+    const kind = needsKindOf(item);
+    // a changed flow's start tells its spark, by ‹flow› in its words (never thrown here: a boot reads every record)
+    const flow = item.from.spark !== undefined ? item.words : undefined;
     const owed =
-      needsKindOf(item) === "held-spawn"
-        ? words.spawnUncertainFact(spark)
-        : words.actUncertainFact(spark, item.to?.name ?? "");
+      kind === "flow-changed"
+        ? flow !== undefined
+          ? words.flowStartUncertainFact(spark, flow)
+          : undefined
+        : kind === "held-spawn"
+          ? words.spawnUncertainFact(spark)
+          : words.actUncertainFact(spark, item.to?.name ?? "");
     const next: NeedsRecord = {
       ...rest,
       item: {
@@ -995,7 +1099,7 @@ export class NeedsQueue implements TalkHolds {
           told: false,
         },
       },
-      owed,
+      ...(owed !== undefined ? { owed } : {}),
     };
     this.#logger.warn(
       "fieldd.needs.act_uncertain",

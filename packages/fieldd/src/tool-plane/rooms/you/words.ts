@@ -83,9 +83,25 @@ export const spawnUncertainFact = (spark: string): string =>
 /** The answer's own reason for such an act (`outcome: "failed"`, as an act not recorded done). */
 export const UNCERTAIN_REASON = "VibeField restarted, and cannot tell how the act ended";
 
-// RED skeletons — CP-4a2b (§13a slice 6's N5): what a spark that ran a changed flow is told.
-export const flowRanFact = (_spark: string, _flow: string, _run: string): string => "";
-export const flowRanApprovedFact = (_spark: string, _flow: string, _run: string): string => "";
-export const flowNotNowFact = (_spark: string, _flow: string, _approved: boolean): string => "";
-export const flowStartFailedFact = (_spark: string, _flow: string, _reason: string): string => "";
-export const flowStartUncertainFact = (_spark: string, _flow: string): string => "";
+// CP-4a2b (§13a slice 6's N5; CP4-Q5 (a)) — what a spark that ran a changed flow is told of your answer, in the held
+// spawn's voice (DESIGN.md §9, amended 2026-11-06). ‹flow› is the flow's name as its mark says it; ‹run› the run's id.
+
+/** Run this version: the bytes it would run started. */
+export const flowRanFact = (spark: string, flow: string, run: string): string =>
+  `you ran ${n(flow)} for ${n(spark)} as it is now: it started as ${n(run)}`;
+
+/** Run the one you approved: the approved bytes started. */
+export const flowRanApprovedFact = (spark: string, flow: string, run: string): string =>
+  `you ran ${n(flow)} as you approved it, for ${n(spark)}: it started as ${n(run)}`;
+
+/** Not now: nothing started; why it asked, as the item's bytes say (a version approved, or none). */
+export const flowNotNowFact = (spark: string, flow: string, approved: boolean): string =>
+  `you said Not now to ${n(spark)}'s run of ${n(flow)}: ${approved ? "it changed since you approved it" : "you haven't approved it"}, so it did not run`;
+
+/** A start the runs could not make. */
+export const flowStartFailedFact = (spark: string, flow: string, reason: string): string =>
+  `the run of ${n(flow)} you allowed ${n(spark)} could not start: ${reasonWords(reason)}`;
+
+/** A start a restart found begun (CP2-D2): never made again. */
+export const flowStartUncertainFact = (spark: string, flow: string): string =>
+  `VibeField restarted, and cannot tell whether the run of ${n(flow)} you allowed ${n(spark)} started; list ${n(spark)}'s flows to see`;
