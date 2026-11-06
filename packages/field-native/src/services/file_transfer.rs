@@ -80,15 +80,18 @@ pub trait FileTransferBackend: Send + Sync {
     fn pull(&self, params: NativeFileTransferPullParams) -> Result<(), FileTransferError>;
     /// The stream's snapshot: the pulls running now, ordered by transferId,
     /// handed to `write` ONCE while the table that `pull` inserts into is
-    /// held. `write` is where the facade queues the snapshot's line
-    /// (`mgmt/file_transfer.rs`), so a pull enters the table either before
-    /// the rows are built (and they list it) or after the line is queued
-    /// (and its answer, written once `pull` returns, follows it): the
-    /// snapshot write-order rule (W3-16, pending), "a snapshot never omits a
-    /// pull whose answer was written before it", for every pull still
-    /// running. `write` must not block, await, or call back into the arm.
-    /// There is no other way to read the rows, so no caller can build a
-    /// snapshot in one step and queue it in another.
+    /// held. A caller queues the snapshot's line INSIDE `write`, as the
+    /// facade does (`mgmt/file_transfer.rs`, `answer_subscribe` and
+    /// `offer_snapshot`, whose rows hold it to that). Then a pull enters the
+    /// table either before the rows are built (and they list it) or after the
+    /// line is queued (and its answer, written once `pull` returns, follows
+    /// it on the same connection). That is the snapshot write-order rule
+    /// (W3-16, pending): on one connection, a snapshot never omits a pull
+    /// still running whose answer was written before it. The API does not
+    /// enforce it: rows carried out of `write` and queued after it returns,
+    /// as the tests' `snapshot()` carries them for a row that queues no line,
+    /// re-open the race this method closes. `write` must not block, await, or
+    /// call back into the arm.
     fn write_snapshot(&self, write: &mut dyn FnMut(Vec<NativeFileTransferRow>));
     /// The stream of the pulls' progress and ends. It is the arm's, so it is
     /// the mesh unit's, held across node rebuilds (W3-2).
@@ -337,10 +340,10 @@ const PROGRESS_MIN_INTERVAL: Duration =
 /// end is final: a reader resynced from a snapshot reads a pull the snapshot
 /// does not list as completed when its landed file is there (contracts mgmt.ts
 /// `NativeFileTransferSnapshot`). A snapshot is built and queued under the
-/// same lock a pull's row enters under (`write_snapshot`), so it never omits
-/// a running pull whose answer was written before it (the snapshot
-/// write-order rule (W3-16, pending)). A teardown ends every pull `failed`
-/// NODE_DOWN (`detach`, the critic's finding 3).
+/// same lock a pull's row enters under (`write_snapshot`), so on one
+/// connection it never omits a pull still running whose answer was written
+/// before it (the snapshot write-order rule (W3-16, pending)). A teardown ends
+/// every pull `failed` NODE_DOWN (`detach`, the critic's finding 3).
 pub struct NamedRootsFileTransfer {
     core: Arc<Core>,
 }
@@ -686,9 +689,10 @@ impl FileTransferBackend for NamedRootsFileTransfer {
     }
 
     /// The rows are built and handed to `write` under ONE hold of the table's
-    /// lock, the lock `pull` inserts under (the trait's word). `write` queues
-    /// without blocking (`MgmtOutbox::send` and `offer_rebuildable` end in a
-    /// `try_send`, `state.rs:58-92, 119-161`), so the hold stays short.
+    /// lock, the lock `pull` inserts under (the trait's word). The facade's
+    /// `write` never blocks: `MgmtOutbox::send` and
+    /// `MgmtOutbox::offer_rebuildable` end in a `try_send` (`state.rs`), and
+    /// `offer_snapshot`'s drain is a `try_recv`. So the hold stays short.
     fn write_snapshot(&self, write: &mut dyn FnMut(Vec<NativeFileTransferRow>)) {
         let inner = lock(&self.core.inner);
         let mut rows: Vec<NativeFileTransferRow> =
@@ -1395,7 +1399,10 @@ mod tests {
     use std::sync::TryLockError;
 
     impl NamedRootsFileTransfer {
-        /// The rows a snapshot written now lists, for rows that queue nothing.
+        /// TESTS ONLY — the rows a snapshot written now lists, copied out of
+        /// `write` for a row that queues no line: the two-step read no line
+        /// may ever be queued from (the snapshot write-order rule (W3-16,
+        /// pending)).
         fn snapshot(&self) -> Vec<NativeFileTransferRow> {
             let mut rows = Vec::new();
             self.write_snapshot(&mut |listed| rows = listed);
@@ -1777,24 +1784,33 @@ mod tests {
         }
     }
 
-    /// The snapshot write-order rule (W3-16, pending), on a real outbox: a
-    /// pull started while a snapshot is being written, from another thread
-    /// (the serial mesh worker beside a stream's forwarder), cannot enter the
-    /// table or answer until the snapshot's line is queued. So the outbox
-    /// reads [the snapshot, without the pull; the pull's answer], never the
-    /// answer first, and the next snapshot lists the pull.
+    /// The snapshot write-order rule (W3-16, pending), at the arm, on a real
+    /// outbox: a pull started while a snapshot is being written, from another
+    /// thread (the serial mesh worker beside a stream's forwarder), cannot
+    /// enter the table or answer until the snapshot's line is queued. So the
+    /// outbox reads [the snapshot, without the pull; the pull's answer], never
+    /// the answer first, the next snapshot lists the pull, and the teardown
+    /// leaves no temporary of it. The two lines carry the facade's payload
+    /// shapes, written by the test and read through the generated types; the
+    /// facade's own frames are `mgmt/file_transfer.rs`'s rows. This `write`
+    /// breaks the trait's "must not block" on purpose: it holds the window
+    /// open for 200 ms from the moment the pull's thread is about to pull, and
+    /// it only `try_lock`s the arm.
     /// Probe: build the rows under the lock and hand them to `write` after
-    /// dropping it (two steps) → the table is free inside `write`, and the pull
-    /// answers inside the 200 ms.
+    /// dropping it (two steps) → the `try_lock` assert reds (the table is free
+    /// inside `write`); were it skipped, the pull would answer inside the
+    /// 200 ms.
     #[tokio::test]
     async fn a_pull_started_while_a_snapshot_is_written_answers_after_it() {
         let dir = tempfile::tempdir().unwrap();
         let arm = Arc::new(arm_in(dir.path()));
         let pulls = Arc::new(ScriptedPulls::new());
         let params = pull_of(1);
+        let lands = arm.core.config.file_transfer_root(params.root).lands;
         pulls.script(&params.path, Scripted::Stall);
         arm.attach(pulls, true, Some(LOGIN.to_owned())).await;
         let (tx, mut rx, _close) = MgmtOutbox::channel();
+        let (about_to_pull, at_pull) = std::sync::mpsc::channel();
         let (answered, answer) = std::sync::mpsc::channel();
         let mut started = None;
         arm.write_snapshot(&mut |rows| {
@@ -1802,15 +1818,25 @@ mod tests {
                 matches!(arm.core.inner.try_lock(), Err(TryLockError::WouldBlock)),
                 "the rows are written while the table is held"
             );
-            let worker = (arm.clone(), tx.clone(), params.clone(), answered.clone());
+            let worker = (
+                arm.clone(),
+                tx.clone(),
+                params.clone(),
+                about_to_pull.clone(),
+                answered.clone(),
+            );
             started = Some(tokio::task::spawn_blocking(move || {
-                let (arm, tx, params, answered) = worker;
+                let (arm, tx, params, about_to_pull, answered) = worker;
                 let transfer_id = params.transfer_id.clone();
+                about_to_pull.send(()).unwrap();
                 arm.pull(params).unwrap();
                 let result = serde_json::json!({ "transferId": transfer_id });
                 tx.send(OutMsg::Line(result.to_string())).unwrap();
                 answered.send(()).unwrap();
             }));
+            at_pull
+                .recv_timeout(Duration::from_secs(10))
+                .expect("the pull's thread is about to pull");
             assert!(
                 answer.recv_timeout(Duration::from_millis(200)).is_err(),
                 "no pull answers while a snapshot is written"
@@ -1841,12 +1867,27 @@ mod tests {
             .into_iter()
             .map(|row| row.transfer_id)
             .collect();
-        assert_eq!(
-            listed,
-            [params.transfer_id.clone()],
-            "the next snapshot lists it"
-        );
+        assert_eq!(listed, [params.transfer_id], "the next snapshot lists it");
+        let temps = || -> Vec<String> {
+            let Ok(entries) = std::fs::read_dir(&lands) else {
+                return Vec::new();
+            };
+            entries
+                .flatten()
+                .filter_map(|entry| entry.file_name().to_str().map(str::to_owned))
+                .filter(|name| name.ends_with(TEMP_SUFFIX))
+                .collect()
+        };
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while temps().is_empty() {
+            assert!(
+                Instant::now() < deadline,
+                "the stalled pull wrote no temporary"
+            );
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
         arm.detach(TEARDOWN_STOPPED).await;
         assert!(arm.snapshot().is_empty());
+        assert!(temps().is_empty(), "the teardown leaves no temporary");
     }
 }

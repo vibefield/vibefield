@@ -42,8 +42,11 @@
 //! A snapshot, the subscribe answer's included, is built and queued in one
 //! hold of the arm's lock (`FileTransferBackend::write_snapshot`), the lock a
 //! pull's row enters under, and a pull is answered only once its row is in:
-//! so a snapshot never omits a running pull whose answer was written before
-//! it (the snapshot write-order rule (W3-16, pending)).
+//! so on one connection a snapshot never omits a pull still running whose
+//! answer was written before it (the snapshot write-order rule (W3-16,
+//! pending)). The rule holds because the line is queued INSIDE `write`
+//! (`answer_subscribe`, `offer_snapshot`); rows carried out of `write` and
+//! queued after it would re-open the race, and this file's rows go red on it.
 //!
 //! CONTROL ONLY (EL2): no byte of an object crosses this channel.
 
@@ -172,26 +175,55 @@ fn subscribe(
     state: &Arc<DaemonState>,
     tx: &Tx,
     arm: &Arc<dyn FileTransferBackend>,
-    mut id: Option<Value>,
+    id: Option<Value>,
 ) {
     // Subscribe BEFORE the snapshot, answer BEFORE forwarding (the door
     // stream's order): an end in between is a delta for a row the snapshot may
     // still list, never a miss.
     let events = arm.subscribe();
     let sub_id = state.sub_id();
-    // The answer carries a snapshot, so it is written as the forwarder's are,
-    // inside `write_snapshot` (the snapshot write-order rule (W3-16,
-    // pending)). The one mesh worker (`mgmt/mod.rs:224-256`) already runs this
-    // and every pull one at a time; the arm's lock keeps the rule true
-    // without leaning on that.
+    if answer_subscribe(&**arm, tx, id, &sub_id) {
+        // The arm the stream subscribed to, never a fresh read of the mesh
+        // unit's: its snapshots and its events are one arm's.
+        spawn_forwarder(arm.clone(), tx.clone(), events, sub_id);
+    }
+}
+
+/// The subscribe answer. It carries a snapshot, so it is queued as the
+/// forwarder's is, INSIDE `write` (the snapshot write-order rule (W3-16,
+/// pending)). The one mesh worker (`mgmt/mod.rs`, `serve`'s one worker)
+/// already runs this and every pull one at a time; the arm's lock keeps the
+/// rule true without leaning on that. An arm that never calls `write` would
+/// leave the request unanswered, so it is answered INTERNAL instead, and no
+/// stream starts: `false`. A second call writes nothing.
+fn answer_subscribe(
+    arm: &dyn FileTransferBackend,
+    tx: &Tx,
+    id: Option<Value>,
+    sub_id: &str,
+) -> bool {
+    let mut unanswered = Some(id);
     arm.write_snapshot(&mut |rows| {
-        let snapshot = snapshot_json(&rows);
-        send(
-            tx,
-            ok(id.take(), json!({ "subId": sub_id, "snapshot": snapshot })),
-        );
+        if let Some(id) = unanswered.take() {
+            let snapshot = snapshot_json(&rows);
+            send(tx, ok(id, json!({ "subId": sub_id, "snapshot": snapshot })));
+        }
     });
-    spawn_forwarder(state.clone(), tx.clone(), events, sub_id);
+    let Some(id) = unanswered else {
+        return true;
+    };
+    send(
+        tx,
+        err(
+            id,
+            "INTERNAL",
+            -32000,
+            "the file transfer wrote no snapshot",
+            false,
+            None,
+        ),
+    );
+    false
 }
 
 /// Step 1's answer, the `error-data.file-transfer-unsupported` golden key for
@@ -299,12 +331,50 @@ fn note(method: &str, sub_id: &str, payload: Value) -> String {
         .to_string()
 }
 
+/// Why a stream's forwarder stops: its connection closed, or the arm's
+/// stream did.
+#[derive(Debug, PartialEq, Eq)]
+struct StreamEnded;
+
+/// A stream's owed snapshot, offered as rebuildable. `write` drains what the
+/// snapshot covers, then queues its line, all in ONE hold of the arm's lock,
+/// never in steps. The serial mesh worker's pull enters the table before the
+/// rows are built (they list it) or after the line is queued (its answer
+/// follows it): the snapshot write-order rule (W3-16, pending). And the arm
+/// sends every event under that lock (`NamedRootsFileTransfer`'s `finish`,
+/// `note_progress` and `detach`), so an event sent before the hold is drained,
+/// never sent again as a delta, and every delta after the snapshot reports a
+/// state newer than it. An arm that never calls `write` ends the stream.
+fn offer_snapshot(
+    arm: &dyn FileTransferBackend,
+    tx: &Tx,
+    sub_id: &str,
+    events: &mut broadcast::Receiver<PullEvent>,
+) -> Result<Offered, StreamEnded> {
+    let mut offered = Err(StreamEnded);
+    arm.write_snapshot(&mut |rows| {
+        loop {
+            match events.try_recv() {
+                Ok(_) | Err(TryRecvError::Lagged(_)) => {}
+                Err(TryRecvError::Empty) => break,
+                Err(TryRecvError::Closed) => return,
+            }
+        }
+        offered = tx
+            .offer_rebuildable(note(SNAPSHOT, sub_id, snapshot_json(&rows)))
+            .map_err(|_| StreamEnded);
+    });
+    offered
+}
+
 /// The stream's forwarder, the door stream's shape (`mgmt/door.rs`): every
 /// line is offered as rebuildable, and a line the outbox has no headroom for,
 /// or a lag past the arm's event buffer, owes the reader one `.snapshot`,
-/// offered until it fits. It ends with its connection.
+/// offered until it fits (`offer_snapshot`). It reads the arm `subscribe` was
+/// handed, the one its events come from; production never swaps the arm
+/// (`services/mesh.rs`, `Shared.file_transfer`). It ends with its connection.
 fn spawn_forwarder(
-    state: Arc<DaemonState>,
+    arm: Arc<dyn FileTransferBackend>,
     tx: Tx,
     mut events: broadcast::Receiver<PullEvent>,
     sub_id: String,
@@ -313,28 +383,7 @@ fn spawn_forwarder(
         let mut owed = false;
         loop {
             if owed {
-                // What the snapshot covers is drained first, so it is not then
-                // sent again as deltas. An event the arm sends between the
-                // drain and the build is sent after the snapshot as well, and
-                // reports a state no newer than the snapshot's: the arm sends
-                // each event under the lock its row changes under.
-                loop {
-                    match events.try_recv() {
-                        Ok(_) | Err(TryRecvError::Lagged(_)) => {}
-                        Err(TryRecvError::Empty) => break,
-                        Err(TryRecvError::Closed) => return,
-                    }
-                }
-                // Built and queued in ONE hold of the arm's lock, never in two
-                // steps: the serial mesh worker's pull enters the table before
-                // the rows are built (they list it) or after this line is
-                // queued (its answer follows it). The snapshot write-order
-                // rule (W3-16, pending).
-                let mut offered = Ok(Offered::Skipped);
-                state.mesh.file_transfer().write_snapshot(&mut |rows| {
-                    offered = tx.offer_rebuildable(note(SNAPSHOT, &sub_id, snapshot_json(&rows)));
-                });
-                match offered {
+                match offer_snapshot(&*arm, &tx, &sub_id, &mut events) {
                     Ok(Offered::Queued) => owed = false,
                     Ok(Offered::Skipped) => {
                         tokio::select! {
@@ -342,7 +391,7 @@ fn spawn_forwarder(
                             _ = tx.closed() => return,
                         }
                     }
-                    Err(_) => return,
+                    Err(StreamEnded) => return,
                 }
                 continue;
             }
@@ -370,7 +419,187 @@ fn spawn_forwarder(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::contracts::{Blake3Hex, FileTransferId, FileTransferRootName};
+    use crate::contracts::{
+        Blake3Hex, ErrorData, ErrorKind, FileTransferId, FileTransferRootName,
+        NativeFileTransferPullResult, NativeFileTransferRoot, NativeFileTransferSnapshot,
+    };
+    use crate::services::file_transfer::PullSubstrate;
+    use crate::state::OutMsg;
+    use tokio::sync::mpsc;
+
+    const TRANSFER_ID: &str = "01JC8ZK4W2MX7N3Q5R9T6V0B1D";
+    const DIGEST: &str = "b02750d32042f3e5061f34a1d35dd4c03cf03266de5063222e68afeca8b4b201";
+
+    fn progress(bytes: u64) -> PullEvent {
+        PullEvent::Progress {
+            transfer_id: FileTransferId::try_from(TRANSFER_ID).unwrap(),
+            bytes,
+            total: 48_213,
+        }
+    }
+
+    /// An arm whose lock the test sees the edges of. Inside `write_snapshot`
+    /// it sends `progress(16_384)` on its stream, then calls `write` with its
+    /// one row; once `write` returns, it sends `progress(32_768)` and queues
+    /// `answer` on the connection. That is what the serial mesh worker does
+    /// the moment a real arm's lock is free: a pull's event, and that pull's
+    /// answer. With `writes` false it calls nothing and queues nothing.
+    struct EdgesArm {
+        writes: bool,
+        events: broadcast::Sender<PullEvent>,
+        tx: MgmtOutbox,
+        /// a pull's answer, as `pull` writes it
+        answer: String,
+    }
+
+    impl EdgesArm {
+        fn new(writes: bool, tx: &MgmtOutbox) -> Self {
+            Self {
+                writes,
+                events: broadcast::channel(8).0,
+                tx: tx.clone(),
+                answer: ok(Some(json!(9)), json!({ "transferId": TRANSFER_ID })).to_string(),
+            }
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl FileTransferBackend for EdgesArm {
+        fn arm(&self) -> &'static str {
+            "edges"
+        }
+        fn supported(&self) -> bool {
+            true
+        }
+        async fn attach(&self, _: Arc<dyn PullSubstrate>, _: bool, _: Option<String>) {}
+        async fn detach(&self, _: &str) {}
+        async fn roots(
+            &self,
+            _: Vec<FileTransferRootName>,
+            _: bool,
+            _: Option<String>,
+        ) -> Result<Vec<NativeFileTransferRoot>, FileTransferError> {
+            Err(FileTransferError::Unsupported)
+        }
+        fn pull(&self, _: NativeFileTransferPullParams) -> Result<(), FileTransferError> {
+            Err(FileTransferError::Unsupported)
+        }
+        fn write_snapshot(&self, write: &mut dyn FnMut(Vec<NativeFileTransferRow>)) {
+            if !self.writes {
+                return;
+            }
+            let _ = self.events.send(progress(16_384));
+            write(vec![NativeFileTransferRow {
+                bytes: 16_384,
+                digest: Blake3Hex::try_from(DIGEST).unwrap(),
+                peer: "n4Kd8xQ2pLmR".into(),
+                root: FileTransferRootName::DriveObjects,
+                total: Some(48_213),
+                transfer_id: FileTransferId::try_from(TRANSFER_ID).unwrap(),
+            }]);
+            let _ = self.events.send(progress(32_768));
+            self.tx.send(OutMsg::Line(self.answer.clone())).unwrap();
+        }
+        fn subscribe(&self) -> broadcast::Receiver<PullEvent> {
+            self.events.subscribe()
+        }
+    }
+
+    /// Every line the connection holds now, in order.
+    fn lines(rx: &mut mpsc::Receiver<OutMsg>) -> Vec<Value> {
+        let mut lines = Vec::new();
+        while let Ok(OutMsg::Line(line)) = rx.try_recv() {
+            lines.push(serde_json::from_str(&line).unwrap());
+        }
+        lines
+    }
+
+    /// The transferIds a snapshot lists, read through the generated type.
+    fn listed(snapshot: &Value) -> Vec<String> {
+        let snapshot: NativeFileTransferSnapshot =
+            serde_json::from_value(snapshot.clone()).unwrap();
+        snapshot
+            .transfers
+            .into_iter()
+            .map(|row| row.transfer_id.as_str().to_owned())
+            .collect()
+    }
+
+    /// The snapshot write-order rule (W3-16, pending), at the facade: the
+    /// subscribe answer and an owed snapshot are queued INSIDE `write`, so
+    /// the pull's answer the arm queues the moment its lock is free follows
+    /// each of them and never comes first. The owed snapshot's drain runs
+    /// inside the hold too: the event sent just before `write` is drained,
+    /// and the one sent after it waits to be forwarded. The frames are the
+    /// facade's own, read through the generated types (EL9).
+    /// Probe: carry the rows out of `write` and queue the line once
+    /// `write_snapshot` returns (two steps) → the pull's answer is the first
+    /// line; drain before `write_snapshot` → the first event left is
+    /// `progress(16_384)`.
+    #[test]
+    fn a_snapshot_line_is_queued_before_the_arms_lock_is_free() {
+        let (tx, mut rx, _close) = MgmtOutbox::channel();
+        let arm = EdgesArm::new(true, &tx);
+        let pull_answer: Value = serde_json::from_str(&arm.answer).unwrap();
+
+        assert!(answer_subscribe(&arm, &tx, Some(json!(7)), "s1"));
+        let queued = lines(&mut rx);
+        let [subscribed, answer] = queued.as_slice() else {
+            panic!("the subscribe answer, then the pull's, and nothing else: {queued:?}");
+        };
+        assert_eq!(subscribed["id"], 7);
+        assert_eq!(subscribed["result"]["subId"], "s1");
+        assert_eq!(listed(&subscribed["result"]["snapshot"]), [TRANSFER_ID]);
+        assert_eq!(*answer, pull_answer);
+        let _: NativeFileTransferPullResult =
+            serde_json::from_value(answer["result"].clone()).unwrap();
+
+        let mut events = arm.subscribe();
+        assert_eq!(
+            offer_snapshot(&arm, &tx, "s1", &mut events),
+            Ok(Offered::Queued)
+        );
+        let queued = lines(&mut rx);
+        let [owed, answer] = queued.as_slice() else {
+            panic!("the snapshot, then the pull's answer, and nothing else: {queued:?}");
+        };
+        assert_eq!(owed["method"], SNAPSHOT);
+        assert_eq!(owed["params"]["subId"], "s1");
+        assert_eq!(listed(&owed["params"]["payload"]), [TRANSFER_ID]);
+        assert_eq!(*answer, pull_answer);
+        assert_eq!(
+            events.try_recv(),
+            Ok(progress(32_768)),
+            "the event sent after the hold waits to be forwarded"
+        );
+        assert_eq!(events.try_recv(), Err(TryRecvError::Empty));
+    }
+
+    /// An arm that never calls `write` leaves no request unanswered: the
+    /// subscribe is answered INTERNAL and starts no stream, and an owed
+    /// snapshot ends the stream rather than owe it forever.
+    /// Probe: answer only inside `write` → no line comes, and a stream is
+    /// said to start.
+    #[test]
+    fn an_arm_that_writes_no_snapshot_is_answered_and_streams_nothing() {
+        let (tx, mut rx, _close) = MgmtOutbox::channel();
+        let arm = EdgesArm::new(false, &tx);
+        assert!(!answer_subscribe(&arm, &tx, Some(json!(7)), "s1"));
+        let queued = lines(&mut rx);
+        let [refused] = queued.as_slice() else {
+            panic!("one refusal and nothing else: {queued:?}");
+        };
+        assert_eq!(refused["id"], 7);
+        let data: ErrorData = serde_json::from_value(refused["error"]["data"].clone()).unwrap();
+        assert_eq!(data.kind, ErrorKind::Internal);
+        assert!(!data.retryable);
+        let mut events = arm.subscribe();
+        assert_eq!(
+            offer_snapshot(&arm, &tx, "s1", &mut events),
+            Err(StreamEnded)
+        );
+        assert!(lines(&mut rx).is_empty());
+    }
 
     fn golden(name: &str) -> Value {
         let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
