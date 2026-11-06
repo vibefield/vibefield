@@ -32,17 +32,17 @@ public struct SparkFlatFace: View {
   }
 
   /// `SPARK_FRAME`: the disc's radius, and how far the star sits below its centre.
-  static let frameRadius = 1.26
-  static let frameDrop = 0.06
+  nonisolated static let frameRadius = 1.26
+  nonisolated static let frameDrop = 0.06
 
   /// The SVG's viewBox in the star's radii, y down: the disc's box when framed, else the star's.
-  public static func viewBox(framed: Bool) -> CGRect {
+  public nonisolated static func viewBox(framed: Bool) -> CGRect {
     let top = framed ? -frameRadius - frameDrop : -frameRadius
     return CGRect(x: -frameRadius, y: top, width: frameRadius * 2, height: frameRadius * 2)
   }
 
   /// The palette a seed's face is drawn in.
-  public static func palette(of seed: UInt32) -> SparkPalette {
+  public nonisolated static func palette(of seed: UInt32) -> SparkPalette {
     let palettes = SparkEngine.palettes
     return palettes[SparkEngine.agentDNA(seed).palette % palettes.count]
   }
