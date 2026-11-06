@@ -155,6 +155,17 @@ async function run(data: FlowWorkerData): Promise<void> {
   }
 }
 
+/** A cut answer as the script hears it: the mark after a bare text, or after a step's `text` (`{text, …fields}`, 13a's
+ * D11), its fields as they came. */
+function marked(value: unknown): unknown {
+  if (typeof value === "string") return `${value}${FLOW_CUT_MARK}`;
+  if (typeof value === "object" && value !== null && !Array.isArray(value)) {
+    const step = value as { readonly text?: unknown };
+    if (typeof step.text === "string") return { ...step, text: `${step.text}${FLOW_CUT_MARK}` };
+  }
+  return value;
+}
+
 function hear(message: ToFlowWorker): void {
   switch (message.t) {
     case "answer": {
@@ -162,13 +173,8 @@ function hear(message: ToFlowWorker): void {
       if (waiting === undefined) return;
       pending.delete(message.id);
       // a cut text ends in the mark, so the script hears that it was cut (finding 7, ruled (a)): fieldd's bound left
-      // room for it
-      if (message.ok)
-        waiting.resolve(
-          message.cut === true && typeof message.value === "string"
-            ? `${message.value}${FLOW_CUT_MARK}`
-            : message.value,
-        );
+      // room for it, on a bare text and on a step's `text` alike (13a's D11)
+      if (message.ok) waiting.resolve(message.cut === true ? marked(message.value) : message.value);
       else waiting.reject(new Error(String(message.refused)));
       return;
     }

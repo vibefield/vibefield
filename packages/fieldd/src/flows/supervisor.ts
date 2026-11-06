@@ -167,24 +167,52 @@ function flowsHostEnvironment(source: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   };
 }
 
+/** CP-4a2b (13a's D11) — fieldd's words for a step's answer whose fields alone pass the bound (DESIGN.md §9): a miss,
+ * for the runs' repair turn, never cut. */
+export const FLOW_FIELDS_TOO_LONG = "the answer's fields are longer than a flow may keep";
+
+/** An answer as boundedAnswer leaves it: `cut` when its text was cut to fit; `miss` on a refusal that is a step's
+ * answer whose fields alone pass the bound (the runs ask again, D11). */
+export type FlowBoundedAnswer = FlowHostAnswer & { readonly cut?: true; readonly miss?: true };
+
+/** An empty text's JSON, `""`. */
+const EMPTY_TEXT_BYTES = flowAnswerBytes("");
+
+/** A step's answer, `{text, …fields}` (Q-A1 (a)): an object whose `text` is a string. */
+const isStepAnswer = (value: unknown): value is { readonly text: string } =>
+  typeof value === "object" &&
+  value !== null &&
+  !Array.isArray(value) &&
+  typeof (value as { text?: unknown }).text === "string";
+
 /** An answer as the pipe may carry it, and as a run's journal keeps it (replay.ts): whole up to
- * FLOW_LIMITS.RESULT_MAX_BYTES; past it, text cut to fit and marked `cut`, and anything else refused. A cut text leaves
- * room for FLOW_CUT_MARK, which the script's worker adds to it (finding 7, ruled (a) 12:48Z), so the script hears at
- * most RESULT_MAX_BYTES and a replay of the journal's text hears the same, byte for byte. An answer already marked (a
- * replay's) passes as it is. */
-export function boundedAnswer(answer: FlowHostAnswer): FlowHostAnswer & { readonly cut?: true } {
+ * FLOW_LIMITS.RESULT_MAX_BYTES; past it, a text cut to fit and marked `cut`, a step's answer bounded WHOLE (13a's D11:
+ * its fields cross whole and its `text` is cut to what they leave, marked `cut`; fields that alone pass the bound are
+ * a `miss`), and anything else refused. A cut text leaves room for FLOW_CUT_MARK, which the script's worker adds to it
+ * (finding 7, ruled (a) 2026-11-05; on a step's `text` since D11), so the script hears at most RESULT_MAX_BYTES and a
+ * replay of the journal's text hears the same, byte for byte. An answer already marked (a replay's) passes as it is.
+ * This is the one cutter: the runs, replay and the pipe all bound an answer here. */
+export function boundedAnswer(answer: FlowHostAnswer): FlowBoundedAnswer {
   const max = FLOW_LIMITS.RESULT_MAX_BYTES;
   if (!answer.ok) return { ok: false, refused: cutText(answer.refused, FLOW_LOG_MAX) };
   if (flowAnswerBytes(answer.value) <= max) return answer;
-  if (typeof answer.value !== "string")
+  const room = max - Buffer.byteLength(FLOW_CUT_MARK, "utf8");
+  if (typeof answer.value === "string")
+    return { ok: true, value: longestWithin(answer.value, room), cut: true };
+  if (isStepAnswer(answer.value)) {
+    // the fields first, whole, with an empty text in its own place; the text takes the bytes they leave
+    const fields = { ...answer.value, text: "" };
+    const left = room - flowAnswerBytes(fields) + EMPTY_TEXT_BYTES;
+    if (left < EMPTY_TEXT_BYTES) return { ok: false, refused: FLOW_FIELDS_TOO_LONG, miss: true };
     return {
-      ok: false,
-      refused: `VibeField can't hand this answer on: an answer is at most ${kib(max)}`,
+      ok: true,
+      value: { ...fields, text: longestWithin(answer.value.text, left) },
+      cut: true,
     };
+  }
   return {
-    ok: true,
-    value: longestWithin(answer.value, max - Buffer.byteLength(FLOW_CUT_MARK, "utf8")),
-    cut: true,
+    ok: false,
+    refused: `VibeField can't hand this answer on: an answer is at most ${kib(max)}`,
   };
 }
 
