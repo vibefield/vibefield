@@ -106,6 +106,12 @@ export function markedText(input: QueuedInput): string {
   }
 }
 
+/** A flow run's own line in a queue (13a's W2): its `flow` lines, and VibeField's own lines to its steps. */
+const isRunsLine = (input: QueuedInput, run: string): boolean =>
+  input.from.kind === "flow"
+    ? input.from.run === run
+    : input.from.kind === "fieldd" && input.from.flow?.run === run;
+
 /** A file name a run id can be kept under; ids are fieldd's own, and anything else is refused. */
 const SAFE_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
 
@@ -325,9 +331,27 @@ export class AgentInputQueues {
     }
   }
 
-  /** CP-4a2b (13a's D4 and D19; W2) — a flow run's Stop withdraws its lines that wait (not built). */
+  /** CP-4a2b (13a's D4 and D19; W2) — a flow run's Stop: the lines it has waiting in any session's queue are
+   * withdrawn, never delivered: its `flow` lines (its steps' prompts, its `in:` lines) and VibeField's own lines to its
+   * steps (`fieldd` with `flow` naming the run). Nothing is told, since the run is their sender. A stamped line is never
+   * withdrawn: in flight it is its receipt's (D2), and one a restart broke into is said uncertain at its run's first
+   * poke (item 158). Each queue is changed in place, so a delivery in flight settles its own head once, and kept; a
+   * session that is idle moves on to its new head. Returns what was withdrawn, by session, oldest first. */
   withdraw(run: string): { readonly runtimeRunId: string; readonly input: QueuedInput }[] {
-    throw new Error(`not built: withdraw(${run})`);
+    const withdrawn: { runtimeRunId: string; input: QueuedInput }[] = [];
+    for (const [runtimeRunId, queue] of this.#queues) {
+      let stays = 0;
+      for (const input of queue) {
+        if (input.sending === undefined && isRunsLine(input, run))
+          withdrawn.push({ runtimeRunId, input });
+        else queue[stays++] = input;
+      }
+      if (stays === queue.length) continue;
+      queue.length = stays;
+      this.#keep(runtimeRunId);
+      void this.#deliver(runtimeRunId);
+    }
+    return withdrawn;
   }
 
   /** Once this boot's re-attach has settled (item 158, D3): a kept queue whose run the fold no longer holds ended while
