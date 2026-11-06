@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ScreenshotTool, type ScreenshotToolEvent } from "../src/tool";
 import {
   createFakeHelper,
@@ -59,6 +59,11 @@ describe("the happy path", () => {
     expect("v" in result).toBe(false);
     expect(existsSync(result.path)).toBe(true);
     expect(t.retainedStills).toEqual([result.path]);
+    // The capture settles on stdout's verdict, while stderr is whole only once the helper's pipes
+    // close, which the tool reports as its exit: wait for that, never for a time (item 188).
+    await vi.waitFor(() => expect(lifecycle()).toContain("screenshot.helper.exited"), {
+      timeout: 3_000,
+    });
     // the helper was asked for exactly one capture
     expect(events.some((e) => e.kind === "diagnostic" && e.line.includes('["--once"]'))).toBe(true);
     expect(lifecycle()).toEqual(
