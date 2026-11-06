@@ -186,7 +186,8 @@ interface LiveRun {
   /** each open step's latest miss, in fieldd's words: what Ask once more's repair line says again */
   readonly misses: Map<number, string>;
   /** the run's folder, a step that names none runs in (CP4-Q20 (a)), held at its start (F6; R8b): its journal's head's,
-   * or, for a head from before it, the one its input names at its wake; frozen, as its scope is */
+   * frozen as its scope is; for a head from before it, the one its input names at each wake, the same within one
+   * life, though a restart may derive another (GG2) */
   folder?: string | undefined;
   /** the steps waiting for a slot (CP4-S7), in their calls' order: started when one frees (slice 9) */
   readonly slotted: { readonly call: number; readonly args: readonly unknown[] }[];
@@ -687,7 +688,8 @@ export class FlowRuns {
       this.#finish(run, { state: "lost" });
       return true;
     }
-    // F6: the head's folder, held at the run's start; a head from before it derives one from its input, once, here
+    // F6: the head's folder, held at the run's start; a head from before it derives one from its input here, at each
+    // wake, so a restart may derive another (GG2)
     live.folder =
       read.head.folder ?? this.#folderOf(read.head.input ?? {}, readFlow(bytes).meta?.input ?? {});
     const replay = new FlowReplay({
@@ -1012,7 +1014,7 @@ export class FlowRuns {
   }
 
   /** The folder a run's input `values` name, the first of its inputs in its meta's order (`kinds`) whose kind names
-   * one (CP4-Q20 (a)); none when no input does. Read at the wake of a run whose head holds no folder (F6). */
+   * one (CP4-Q20 (a)); none when no input does. Read at each wake of a run whose head holds no folder (F6, GG2). */
   #folderOf(values: FlowInput, kinds: Readonly<Record<string, string>>): string | undefined {
     for (const [name, kind] of Object.entries(kinds)) {
       const value = values[name];
