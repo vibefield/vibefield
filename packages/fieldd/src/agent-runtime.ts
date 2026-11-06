@@ -2244,7 +2244,8 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     return () => this.runMonitorListeners.delete(listener);
   }
 
-  /** CP-2 — a managed run ended: the floor heard its PTY's exit (never a fieldd stop, which runs outlive). */
+  /** CP-2, item 201 — a run ended, managed or held: its PTY's exit, a held run's withdrawal or supersession, or its
+   * replacement (`ended`). Never a fieldd stop, which runs outlive. */
   onRunEnded(listener: (runtimeRunId: string) => void): () => void {
     this.runEndedListeners.add(listener);
     return () => this.runEndedListeners.delete(listener);
@@ -4436,8 +4437,12 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
         throw error;
       }
       // ── the point of no return: the old PTY is gone ──
-      this.pending.delete(record.runtimeRunId);
+      // Item 201 (RV #17) — and so is the held run: a late exit for its PTY finds no run, and its listeners hear the
+      // end while it is still in the fold (named as fieldd names it, CO-Q4 (b)) and before its successor is born. A
+      // resume that fails past here has still ended it, and tells nothing more.
       if (oldId !== undefined) this.byTerminal.delete(oldId);
+      this.ended(record.runtimeRunId);
+      this.pending.delete(record.runtimeRunId);
       const at = this.now().toISOString();
       this.records.write({
         ...record,
@@ -4511,9 +4516,10 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     }));
   }
 
-  /** A pending run leaves, its record stamped with `exit`. `after` says why: an `exit` of its
-   * process (the floor's, heard, or the inventory's backstop) keeps the row exited over the pane
-   * while the floor lists it (MF-1f, item 97); a withdrawal or a supersession never does. */
+  /** A pending run leaves, its record stamped with `exit`, and its listeners hear its end once
+   * (`ended`, item 201). `after` says why: an `exit` of its process (the floor's, heard, or the
+   * inventory's backstop) keeps the row exited over the pane while the floor lists it (MF-1f,
+   * item 97); a withdrawal or a supersession never does. */
   private closePending(
     runtimeRunId: string,
     exit: { exitCode: number | null; signal: string | null; reason: string },
@@ -4526,10 +4532,14 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     if (entry.retry !== undefined) clearTimeout(entry.retry);
     entry.unwatch?.();
     entry.unwatch = undefined;
-    this.pending.delete(runtimeRunId);
+    // the PTY first: an exit for it heard from here on is a late one, and finds no run
     if (entry.record.terminalSessionId !== undefined)
       this.byTerminal.delete(entry.record.terminalSessionId);
     this.records.stampExit(runtimeRunId, { at: this.now().toISOString(), ...exit });
+    // Item 201 (RV #17, gap2-6) — told while the run is still in the fold, so it is named as fieldd names it
+    // (CO-Q4 (b)); then it leaves
+    this.ended(runtimeRunId);
+    this.pending.delete(runtimeRunId);
     // MF-1f — the pane is kept (MF-1g), so the row stays over it, exited: the floor's own
     // listing is the evidence, as `holdExited` reads it for an attached run
     const pane = entry.record.terminalSessionId;
@@ -4778,7 +4788,9 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     }
   }
 
-  /** CP-2 — a managed run left this daemon: its listeners hear it once. */
+  /** CP-2, item 201 — a run left this daemon's fold for good: a managed run's exit, a held run's exit, withdrawal or
+   * supersession (`closePending`), or a held run ended by its replacement. Each listener hears it once. A G5 retry
+   * handing a held row to its own run (`releasePending`) and fieldd's own stop (`dispose`) end nothing. */
   private ended(runtimeRunId: string): void {
     for (const listener of this.runEndedListeners) {
       try {
