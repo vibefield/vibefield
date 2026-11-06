@@ -1,3 +1,4 @@
+import FieldDesign
 import FieldProduct
 import FieldRoutedTerminal
 import Foundation
@@ -49,8 +50,26 @@ import Testing
     try await AttachmentOverTheDoorTests.until(what, timeout: timeout, condition)
   }
 
-  static func stalled(_ step: RoutedTerminalClient.AttachStep) -> TerminalPhase {
-    .stalled(TerminalAttachment.stallWords(step, after: deadline))
+  /// What an attachment says when `step` stops, on the device the rows run on: `phase` names it by
+  /// `DeviceWord.current` (L4's word pass), so the slot's words are this simulator's.
+  @MainActor static func stalled(_ step: RoutedTerminalClient.AttachStep) -> TerminalPhase {
+    .stalled(TerminalAttachment.stallWords(step, after: deadline, here: DeviceWord.current))
+  }
+
+  @Test("L4's word pass: a stopped attach names the device as its platform does, never a phone")
+  func stallNamesTheDevice() {
+    for here in [DeviceWord.iPad, .unknown] {
+      for step in RoutedTerminalClient.AttachStep.allCases {
+        let words = TerminalAttachment.stallWords(step, after: .seconds(20), here: here)
+        #expect(!words.localizedCaseInsensitiveContains("phone"), "\(here) \(step): \(words)")
+      }
+    }
+    #expect(
+      TerminalAttachment.phase(for: .stalled(.slot), session: nil, here: .iPad)
+        == .stalled("this iPad's last terminal never let go of its connection — stopped after 20 s"))
+    #expect(
+      TerminalAttachment.phase(for: .stalled(.slot), session: nil, here: .iPhone)
+        == .stalled("this iPhone's last terminal never let go of its connection — stopped after 20 s"))
   }
 
   @Test("fix8: the shipping words — 20 s, and 'that desktop' when the field names none")
