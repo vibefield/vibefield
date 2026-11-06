@@ -144,13 +144,16 @@ struct AgentProfilesWords: Equatable {
     }
   }
 
-  /// A plan's row below its title.
+  /// A plan's row below its title. A window read before its reset says the reading's age in its reset's place, as
+  /// Settings' line does (`meterLines`' `ages`, 48a30767d) — a kept reading's too, under its own age above — and only
+  /// while that age can be said.
   static func body(_ entry: PlanMeter, home: String, now: Date) -> PlanRow.Body {
     switch entry.state {
     case .reading(let reading):
+      let age = MeterRules.ageWords(fetchedAt: reading.fetchedAt, now: now)
       return .reading(
         windows: reading.windows, kept: reading.stale ? entry.right?.words : nil,
-        age: nil,  // RED STUB (UM-4d, M-phone): no window read before its reset says the reading's age yet
+        age: reading.windows.contains(where: { $0.passed }) && !age.isEmpty ? age : nil,
         forecast: reading.tightest.forecast?.long, stale: reading.stale)
     case .firstRead:
       return .firstRead
@@ -429,13 +432,13 @@ private struct AgentPlanRowView: View {
   @ViewBuilder
   private var detail: some View {
     switch row.body {
-    case .reading(let windows, let kept, _, let forecast, let stale):
+    case .reading(let windows, let kept, let age, let forecast, let stale):
       if let kept {
         Text(kept)
           .font(ChromeListType.detail)
           .foregroundStyle(ChromePalette.inkTertiary)
       }
-      UsageLinesView(windows: windows, stale: stale)
+      UsageLinesView(windows: windows, stale: stale, age: age)
       if let forecast {
         Text(forecast)
           .font(ChromeListType.detail)

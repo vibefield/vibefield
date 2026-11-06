@@ -129,7 +129,8 @@ enum MeterRules {
 
   /// A reading's age as the meters say it (§9 "A reading": "as of 5m ago", "as of 3h ago"), in place of a forecast or
   /// a reset: a kept reading's, and one with a window read before its reset. Nothing when its time cannot be read,
-  /// rather than words §9 does not rule (rules.ts' `ageWords`). The meters' right words say it from here.
+  /// rather than words §9 does not rule (rules.ts' `ageWords`). The meters' right words say it from here, and so do the
+  /// Agent Profiles page's C1 lines (`AgentProfilesWords.body`).
   static func ageWords(fetchedAt: String, now: Date) -> String {
     guard let at = parseWireDate(fetchedAt) else { return "" }
     return "as of \(durationWords(max(0, (now.timeIntervalSince1970 - at.timeIntervalSince1970) / 60))) ago"

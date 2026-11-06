@@ -5,13 +5,18 @@ import SwiftUI
 // C1 line) — SETTINGS' C1 LINE ON THE PHONE: the desktop's `UsageLineView` and `usageFigurePlace`
 // (`panels/agents/ProfilesView.tsx`, `profiles-model.ts`; pass 22's Line · Glow · Halo) at the page's 12 tall. The
 // track is the window's time, the fill its use with its last 10 lit, the now line the time gone — giving way across
-// the figure where it would touch it — and the figure rides the head; the reset closes the line. A window that meters
-// part of the plan stands under its group's heading. Orange only when the window runs hot (`UsageLine.hot`).
+// the figure where it would touch it — and the figure rides the head; the reset closes the line. A window read before
+// its reset says the reading's age there instead, with no reset mark (DESIGN.md §8 "A window read before its reset";
+// Settings' `ages`, 48a30767d). A window that meters part of the plan stands under its group's heading. Orange only
+// when the window runs hot (`UsageLine.hot`), which a window read before its reset never does.
 
-/// A plan's windows, each a C1 line, under their groups' headings; a kept reading draws at 50%.
+/// A plan's windows, each a C1 line, under their groups' headings; a kept reading draws at 50%. Each window read
+/// before its reset (`MeterWindow.passed`) says `age` in its reset's place.
 struct UsageLinesView: View {
   let windows: [MeterWindow]
   var stale = false
+  /// the reading's age, "as of 3h ago"; nil when no window was read before its reset, or its time cannot be read
+  var age: String? = nil
 
   var body: some View {
     VStack(alignment: .leading, spacing: 5) {
@@ -23,7 +28,7 @@ struct UsageLinesView: View {
             .lineLimit(1)
             .accessibilityHidden(true)
         }
-        UsageLineView(line: window.line, form: window.resetForm)
+        UsageLineView(line: window.line, form: window.resetForm, age: window.passed ? age : nil)
       }
     }
     .opacity(stale ? 0.5 : 1)
@@ -49,11 +54,14 @@ struct UsageLinesView: View {
   }
 }
 
-/// One window's line: its label (26), the track, and the reset (58).
+/// One window's line: its label (26), the track, and the reset (58); or, for a window read before its reset, the
+/// reading's age in the reset's place, at its own width, the track giving way (‹for James›).
 struct UsageLineView: View {
   let line: UsageLine
   /// how its reset is said: by its length, by its day, or now
   let form: MeterRules.ResetForm?
+  /// the reading's age, said in the reset's place with no reset mark (a window read before its reset)
+  var age: String? = nil
 
   static let height: CGFloat = 12
   /// The fill's lit head (the desktop's `USAGE_GLOW`); the figure inside the fill stops 2 short of it.
@@ -76,28 +84,31 @@ struct UsageLineView: View {
       GeometryReader { geo in track(geo.size.width) }
         .frame(height: Self.height)
       HStack(spacing: 4) {
-        if line.resets, line.reset != nil {
+        if line.resets, line.reset != nil, age == nil {
           Image(systemName: "arrow.counterclockwise")
             .font(.system(size: 8, weight: .semibold))
         }
-        Text(line.reset ?? "")
+        Text(age ?? line.reset ?? "")
           .font(ChromeType.sans(10.5))
           .monospacedDigit()
           .lineLimit(1)
       }
       .foregroundStyle(line.hot ? ChromePalette.attention : ChromePalette.inkTertiary)
-      .frame(width: 58, alignment: .leading)
+      // an age is longer than a reset: it keeps its own width, so it is never cut short
+      .fixedSize(horizontal: age != nil, vertical: false)
+      .frame(width: age == nil ? 58 : nil, alignment: .leading)
     }
     .accessibilityElement()
-    .accessibilityLabel(Self.words(line, form: form))
+    .accessibilityLabel(Self.words(line, form: form, age: age))
   }
 
   /// The line in words, as the desktop says it; a reset is said "resets in 2h" by its length, and "resets Thu 09:00"
-  /// or "resets now" by its day or once it has come (the U3 review: never "resets in Thu 09:00").
+  /// or "resets now" by its day or once it has come (the U3 review: never "resets in Thu 09:00"); a window read before
+  /// its reset says the reading's age there instead, "as of 3h ago", as Settings' line does.
   static func words(_ line: UsageLine, form: MeterRules.ResetForm?, age: String? = nil) -> String {
-    // RED STUB (UM-4d, M-phone): a window read before its reset does not say the reading's age yet
     let group = line.group.map { "\($0.label), " } ?? ""
-    let reset = line.reset.map { form == .length ? ", resets in \($0)" : ", resets \($0)" } ?? ""
+    let said = line.reset.map { form == .length ? ", resets in \($0)" : ", resets \($0)" } ?? ""
+    let reset = age.map { ", \($0)" } ?? said
     return "\(group)\(line.label): \(wholeWords(line.usedPercent))% used\(reset)\(line.hot ? ", ahead of pace" : "")"
   }
 

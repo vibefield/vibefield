@@ -7203,7 +7203,11 @@ here.
   stack: a window whose reset has come was read before it, so Settings' line says the reading's age in its reset's
   place, "as of 3h ago", unlit and with no reset mark (§8 "A window read before its reset"); on the desktop "resets
   now" stands only where no age can be said — a reading whose time cannot be read — and on the popover's line, whose
-  row's right words say the age above it.)*
+  row's right words say the age above it.)* *(Corrected 2026-11-06, the M-phone stack: the phone's Agent Profiles
+  page says it as Settings does — a window whose reset has come says the reading's age in its reset's place, "as of 3h
+  ago", unlit and with no reset mark, a kept reading's too under its own age above — so on the phone "resets now"
+  stands only where no age can be said. ‹for James›: the age keeps its own width, the line's track giving way to it,
+  where a reset keeps the slot's 58.)*
 - **What needs you.** On the desktop, "not signed in" with **Sign in**, and "couldn't read" with **Retry**. On the
   phone, "Not signed in · sign in on ‹home›" and "Couldn't read · retry", with no act. A sign-in already under way
   says "signing in…" with no act, as Settings' row says "Signing in…" and offers only its cancel; it is said
