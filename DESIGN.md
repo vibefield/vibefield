@@ -3355,6 +3355,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   off** (it downloads in place — "Starting the download…" — and becomes the download row; the menu stays open) ·
   **Restart to update · Your sessions keep running** (it restarts on the one click: nothing ends, so nothing asks) ·
   **Restart to update… · Ends 3 terminal sessions** ("Ends 1 terminal session"; it asks, below) · **Restart to
+  update… · Ends 2 agent runs** ("Ends 1 agent run": a release that keeps the floor's terminal sessions still
+  restarts the field service, which ends the agent runs whose agents don't re-attach; it asks, below — item 192, RV
+  #6, the words at the lean until James rules rv-update-census) · **Restart to
   update… · Checks your sessions first** (the census unread: main reads it, then asks or says why not) · **Update
   downloaded · Installs with a later release** (where the apply isn't wired yet; it opens Settings → Updates) ·
   **Restarting… · VibeField opens again**. While a restart is prepared the line reads "Reading the running
@@ -3381,7 +3384,11 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   Updates say (`UpdateConsentWords`): "Updating ends 3 terminal sessions", "The Oct 28 nightly replaces the terminal
   service, which ends:", what ends listed (five at most, then "and 2 more"), then its two acts: **Cancel** leading
   and focused, **End 3 sessions and update** trailing, in the danger text (§8's two-step destructive confirm;
-  Settings → Updates orders its two the same way). Esc goes back to the rows, focus on the update row; a second Esc
+  Settings → Updates orders its two the same way). A release that keeps the floor asks the same way for the agent
+  runs fieldd's own stop ends (item 192, RV #6; at the lean until James rules rv-update-census): "Updating ends 2
+  agent runs", "The Oct 28 nightly restarts the field service, which ends:", each run as its agent, its title and
+  its folder ("Codex — fix the flaky test — ~/Projects/puppeteer"), then **End 2 agent runs and update**; its list
+  is named "The agent runs it ends". Esc goes back to the rows, focus on the update row; a second Esc
   folds the menu. One snapshot, valid two minutes, as the page's (C2); no apply asks twice. **The notice**
   (AU-D11): an install that didn't take is said once per window, in the notice row at the menu's top, the first time
   the menu opens on the launch right after it — "The Oct 28 nightly didn't install when VibeField restarted. It's
@@ -4580,7 +4587,10 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     - "The Oct 28 nightly is ready — restart to finish updating" (never "installed": macOS stages, EDP-34), led by
       a 6px `--vf-cyan` dot, its cost under it ("Your terminal sessions keep running." · "Restarting ends 3
       terminal sessions. You choose when." · "VibeField couldn't read which terminal sessions are running; it asks
-      again when you restart."), and from the 7th day "Ready since Oct 19." before the cost (AU-D3);
+      again when you restart."; a release that keeps the floor — item 192, RV #6, at the lean until James rules
+      rv-update-census — "Restarting ends 2 agent runs. Your terminal sessions keep running. You choose when." ·
+      "VibeField couldn't read which agent runs are working; it asks again when you restart."), and from the 7th
+      day "Ready since Oct 19." before the cost (AU-D3);
     - "The Oct 28 nightly is available" with **Download**; with automatic updates off, "Automatic updates are off,
       so it waits for you." (AU-G5);
     - "You skipped the Oct 28 nightly" · "The next one downloads on its own." with **Download anyway** (AU-G6);
@@ -7428,13 +7438,18 @@ before it completes** (the HIG): the Me row's Check for updates checks in place 
 only when it asks first, or must read the sessions before it can (the census unknown); Move to Applications… on the
 Me row because it opens Settings → Updates, and on the page because the quit gate may ask. The status item and the
 app menu say them in title case, as macOS menus do: Check for Updates… (it answers in a box), Download Update,
-Restart to Update, Update Ends 3 Sessions…. **"Installed" is said only once it is true** (macOS stages, EDP-34):
+Restart to Update, Update Ends 3 Sessions…, and for a release that keeps the floor Update Ends 2 Agent Runs… (item
+192, RV #6, at the lean until James rules rv-update-census; an unread count holds the verb for every release, which
+reads Update Downloaded). **"Installed" is said only once it is true** (macOS stages, EDP-34):
 before, an update is downloaded, ready, or ready since. **A refusal names the step that didn't happen**
 (`downloadNotice`, AU-1): a Download the publisher's policy refuses says "VibeField didn't download the update"
 (an install it refuses, "VibeField didn't install the update"), and a withdrawn version "The Oct 28 nightly was
 withdrawn, so it won't download. Nothing changed; the next update replaces it."; a pause and a newer macOS say the
 same detail either way. **The cost comes before the click** (AU-L2): "Your sessions keep running" or "Ends 3
-terminal sessions", on every way in. **Time grows the words, never the mark** (AU-L3): "Ready since Oct 19". **The
+terminal sessions" — or "Ends 2 agent runs" for a release that keeps the floor (item 192, RV #6, at the lean) — on
+every way in; a census it couldn't read ends nothing, and says which ("VibeField couldn't read which agent runs are
+working, so it ended none. Nothing changed; try again in a moment."). **Time grows the words, never the mark**
+(AU-L3): "Ready since Oct 19". **The
 quit box gains one line** (AU-D9), its last, while a ready update will install as the quit ends: "The Oct 28 nightly
 installs as you quit." ("VibeField 0.2.0 installs as you quit."). It never shows while the publisher requires a
 person's confirmation (`requireUserConfirmation`) or while a Move to Applications is pending: that quit installs
