@@ -4,7 +4,15 @@
 // protocol: hello, *.subscribe → {subId, snapshot}, everything else → {}.
 import { rmSync } from "node:fs";
 import { createServer, type Server, type Socket } from "node:net";
-import { isPipeEndpoint, LOG_STREAMS, STORES } from "@vibefield/contracts";
+import {
+  DRIVE_LIMITS,
+  isPipeEndpoint,
+  LOG_STREAMS,
+  MESH_FILE_TRANSFER,
+  NativeFileTransferPullParams,
+  NativeFileTransferRootsParams,
+  STORES,
+} from "@vibefield/contracts";
 import { computeAckMac } from "../pairing";
 
 /** DS-1 — a scripted egress floor for `MockMgmtServer.egress`. */
@@ -40,6 +48,45 @@ export function mockEgress(overrides: Partial<MockEgress> = {}): MockEgress {
     refuseTargets: new Set(),
     adds: [],
     removed: [],
+    ...overrides,
+  };
+}
+
+/** DR-3b — one pull a scripted file-transfer floor runs: its stream's snapshot row (contracts mgmt.ts
+ * `NativeFileTransferRow`). */
+export interface MockFileTransferRow {
+  transferId: string;
+  peer: string;
+  root: string;
+  digest: string;
+  bytes: number;
+  total?: number;
+}
+
+/** DR-3b — a scripted file-transfer floor for `MockMgmtServer.fileTransfer`: a floor whose truffle pulls by a named
+ * root (truffle T-3, which EL8-TRUFFLE adopts). The floor at the `=0.7.24` pin is the `"unsupported"` default. */
+export interface MockFileTransfer {
+  /** the node was built GATED (`loginAllow` non-empty): a declared root registers. Ungated, each root answers
+   * `registered: false` with MESH_FILE_TRANSFER.ROOT_UNGATED, and the floor holds it. */
+  gated: boolean;
+  /** the set the floor holds: the last `roots` declaration it answered */
+  roots: string[];
+  /** every `roots` declaration the floor answered, in order */
+  declared: string[][];
+  /** the pulls running now, by transferId: what `subscribe` and `pushFileTransferSnapshot` list. A test ends one with
+   * `pushFileTransferDelta` (completed or failed), or deletes it to model an end the stream lost. */
+  running: Map<string, MockFileTransferRow>;
+  /** every `pull`'s params as asked, in order, refused ones included */
+  pulls: Array<Record<string, unknown>>;
+}
+
+export function mockFileTransfer(overrides: Partial<MockFileTransfer> = {}): MockFileTransfer {
+  return {
+    gated: true,
+    roots: [],
+    declared: [],
+    running: new Map(),
+    pulls: [],
     ...overrides,
   };
 }
@@ -91,6 +138,12 @@ export class MockMgmtServer {
    * asserted where egress is the subject (`test/egress.test.ts`, "the default
    * build with no node"). */
   egress: "unsupported" | "mesh-down" | MockEgress = "unsupported";
+  /** DR-3b — the floor's FILE TRANSFER (`native.mesh.fileTransfer.*`), answered ahead of every mesh gate in the
+   * floor's refusal order (contracts mgmt.ts, W3-1). `"unsupported"` — the default — refuses every verb
+   * `file-transfer-unsupported`, retryable false, as the floor at the `=0.7.24` pin answers
+   * (`error-data.file-transfer-unsupported.json`). A `MockFileTransfer` answers as a floor whose truffle pulls by a
+   * named root. `pushFileTransferDelta()` / `pushFileTransferSnapshot()` drive its stream. */
+  fileTransfer: "unsupported" | MockFileTransfer = "unsupported";
   /** UA-P-0j — the floor's mesh POSTURE, modelled only for a suite that opts
    * in; `undefined` (the default) keeps the scripted node every older row
    * expects. `null` is a floor holding NO posture — the real floor's boot
@@ -157,6 +210,10 @@ export class MockMgmtServer {
   /** AH-2's independent public catalog store and writes. */
   artifactStoreSlices = new Map<string, unknown>();
   artifactStoreWrites: unknown[] = [];
+  /** DR-3b — STORES.DRIVE's own slices and writes (`field.drive.v1`), apart from DEVICES', as ARTIFACTS' are: a
+   * drive slice never shows in a devices snapshot. */
+  driveStoreSlices = new Map<string, unknown>();
+  driveStoreWrites: unknown[] = [];
   /** scripted tailnet peers answered by native.mesh.peers.list (default: none) */
   meshPeers: unknown[] = [];
   /** NF-3 — when set, the hello ack carries these terminal endpoints (NF-D8);
@@ -590,6 +647,10 @@ export class MockMgmtServer {
       this.onEgress(sock, msg);
       return;
     }
+    if (msg.method.startsWith("native.mesh.fileTransfer.")) {
+      this.onFileTransfer(sock, msg);
+      return;
+    }
     if (msg.method === "native.mesh.lane.open") {
       const p = msg.params ?? {};
       this.meshLaneOpens.push({
@@ -863,6 +924,7 @@ export class MockMgmtServer {
         this.storeFor(storeId).set(this.meshDeviceId, p["data"]);
         if (storeId === STORES.DEVICES) this.storeWrites.push(p["data"]);
         if (storeId === STORES.ARTIFACTS) this.artifactStoreWrites.push(p["data"]);
+        if (storeId === STORES.DRIVE) this.driveStoreWrites.push(p["data"]);
         // MF-1 — every agent-field slice this daemon published, in order. It was
         // the witness that the DAEMON wired its publisher; since DS-D14
         // (2026-10-01) the publisher is deleted and it is the witness that the
@@ -983,6 +1045,137 @@ export class MockMgmtServer {
       }
       default:
         refuse(-32601, "NOT_FOUND", "method not found");
+    }
+  }
+
+  /** DR-3b — the file transfer's facade, in the floor's refusal order (contracts mgmt.ts, W3-1 and W3-2):
+   *  1. `file-transfer-unsupported` first, for every verb, node or no node;
+   *  2. `subscribe` is answered with no node up: its stream outlives node rebuilds;
+   *  3. `roots` and `pull` with no node answer the node gate (`meshPosture: null`, `meshUnavailable`);
+   *  4. in capture mode they are refused MESH_CAPTURING;
+   *  5. params the floor cannot read are PRECONDITION_FAILED;
+   *  6. `roots` registers each root or answers it ROOT_UNGATED, and `pull` is refused CONFLICT (by its id, then by
+   *     its digest), then RESOURCE_EXHAUSTED past DRIVE_LIMITS.PULLS_IN_FLIGHT. */
+  private onFileTransfer(
+    sock: Socket,
+    msg: { id: number; method: string; params?: Record<string, unknown> },
+  ): void {
+    const reply = (body: object) =>
+      sock.write(`${JSON.stringify({ jsonrpc: "2.0", id: msg.id, ...body })}\n`);
+    const refuse = (
+      code: number,
+      kind: string,
+      message: string,
+      retryable: boolean,
+      details?: unknown,
+    ) =>
+      reply({
+        error: {
+          code,
+          message,
+          data: { kind, retryable, ...(details !== undefined ? { details } : {}) },
+        },
+      });
+    const transfer = this.fileTransfer;
+    if (transfer === "unsupported") {
+      refuse(-32006, "UNAVAILABLE", "this floor cannot pull by a named root", false, {
+        service: MESH_FILE_TRANSFER.SERVICE,
+        state: MESH_FILE_TRANSFER.STATE_UNSUPPORTED,
+      });
+      return;
+    }
+    if (msg.method === "native.mesh.fileTransfer.subscribe") {
+      const subId = `s${this.nextSub++}`;
+      this.issued.push({ sock, subId, method: msg.method });
+      reply({ result: { subId, snapshot: { transfers: [...transfer.running.values()] } } });
+      return;
+    }
+    const roots = msg.method === "native.mesh.fileTransfer.roots";
+    if (!roots && msg.method !== "native.mesh.fileTransfer.pull") {
+      refuse(-32601, "NOT_FOUND", "method not found", false);
+      return;
+    }
+    let down: string | undefined;
+    if (this.meshPosture === null) down = "disabled";
+    else if (this.meshUnavailable) down = "starting";
+    if (down !== undefined) {
+      refuse(-32006, "UNAVAILABLE", "mesh node not up", true, {
+        service: "mesh-gateway",
+        state: down,
+      });
+      return;
+    }
+    if (this.meshPosture?.mode === "capture") {
+      refuse(-32005, "PRECONDITION_FAILED", "the mesh is capturing a tailscale login", true, {
+        code: "MESH_CAPTURING",
+      });
+      return;
+    }
+    const p = msg.params ?? {};
+    if (roots) {
+      const asked = NativeFileTransferRootsParams.safeParse(p);
+      if (!asked.success) {
+        refuse(-32005, "PRECONDITION_FAILED", "roots outside its contract", false);
+        return;
+      }
+      transfer.roots = [...asked.data.roots];
+      transfer.declared.push([...asked.data.roots]);
+      const answered: Array<{ name: string; registered: boolean; reason?: string }> = [];
+      for (const name of asked.data.roots) {
+        if (transfer.gated) answered.push({ name, registered: true });
+        else answered.push({ name, registered: false, reason: MESH_FILE_TRANSFER.ROOT_UNGATED });
+      }
+      reply({ result: { roots: answered } });
+      return;
+    }
+    transfer.pulls.push({ ...p });
+    const asked = NativeFileTransferPullParams.safeParse(p);
+    if (!asked.success) {
+      refuse(-32005, "PRECONDITION_FAILED", "pull outside its contract", false);
+      return;
+    }
+    const { transferId, peer, root, digest } = asked.data;
+    const running = [...transfer.running.values()];
+    if (transfer.running.has(transferId) || running.some((row) => row.digest === digest)) {
+      refuse(-32004, "CONFLICT", "a pull of that id or that digest is running", false);
+      return;
+    }
+    if (running.length >= DRIVE_LIMITS.PULLS_IN_FLIGHT) {
+      refuse(-32010, "RESOURCE_EXHAUSTED", "the floor's pulls are all running", true);
+      return;
+    }
+    transfer.running.set(transferId, { transferId, peer, root, digest, bytes: 0 });
+    reply({ result: { transferId } });
+  }
+
+  /** DR-3b — push one `native.mesh.fileTransfer.delta` to every file-transfer subscription. A `completed` or `failed`
+   * ends its row in `running` first, as the floor drops a row once its end is final (mgmt.ts
+   * `NativeFileTransferSnapshot`). The payload goes as given, so a test can push one outside the contract. */
+  pushFileTransferDelta(payload: unknown): void {
+    const delta = payload as { kind?: unknown; transferId?: unknown } | null;
+    const transferId = delta?.transferId;
+    const ends = delta?.kind === "completed" || delta?.kind === "failed";
+    if (ends && typeof transferId === "string" && typeof this.fileTransfer === "object") {
+      this.fileTransfer.running.delete(transferId);
+    }
+    this.pushDelta("mesh.fileTransfer.subscribe", payload);
+  }
+
+  /** DR-3b — push a `native.mesh.fileTransfer.snapshot` (the lag resync, P5) to every file-transfer subscription:
+   * the running table, or `payload` as given. */
+  pushFileTransferSnapshot(payload?: unknown): void {
+    const transfer = this.fileTransfer;
+    const transfers = typeof transfer === "object" ? [...transfer.running.values()] : [];
+    const snapshot = payload === undefined ? { transfers } : payload;
+    for (const e of this.issued) {
+      if (e.method !== "native.mesh.fileTransfer.subscribe" || e.sock.destroyed) continue;
+      e.sock.write(
+        `${JSON.stringify({
+          jsonrpc: "2.0",
+          method: "native.mesh.fileTransfer.snapshot",
+          params: { subId: e.subId, payload: snapshot },
+        })}\n`,
+      );
     }
   }
 
@@ -1173,6 +1366,7 @@ export class MockMgmtServer {
   }
 
   private storeFor(storeId: string): Map<string, unknown> {
+    if (storeId === STORES.DRIVE) return this.driveStoreSlices;
     return storeId === STORES.ARTIFACTS ? this.artifactStoreSlices : this.storeSlices;
   }
 
