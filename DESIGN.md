@@ -651,6 +651,32 @@ held to the engine's own stills; one stage per screen, as the Mac's kit draws.
 | The Field's rim (EW-D1, *proposed*) | 20 pt | framed on the bubble |
 | New spark's sky | 120 pt | free, on the night |
 
+*Amended 2026-11-06 (IOS-12e, the star in Metal; PC-D6 A; its plan ruled by VF-PM at 05:50Z):* on the phone the star
+is drawn in Metal. The kit transcribes the engine's `Buddy` into Swift and its fragment shader into Metal
+(`SparkStar.metal`), and two goldens that the vendored engine deals hold both:
+- **The rows** (`spark-rows.golden.json`): what `Buddy.write` lays out for the GPU, 128 floats a face. They are dealt
+  live, under reduced motion, across a status change and as stills, and the kit matches them within 1e-4.
+- **The stills** (`spark-stills/`, at @3x): the engine's own WebGL2 pixels for those stills. The kit's are matched
+  within the bound VF-PM rules on the first diff report. They are host-bound, and their manifest names the host.
+
+A phone face draws its phases, blinks and glances from Mulberry32 on its own seed, the engine's own generator. The
+Mac's engine draws them from `Math.random`. The seed is what lets the goldens hold a face move for move.
+
+- **One stage per screen**, as the Mac's kit draws: a transparent Metal layer over the screen's content and under
+  whatever covers it. Chat's list is one stage and a thread another. Each live face is clipped to its scroll view's
+  visible rect and dropped once it is wholly out. Every live face on a stage costs one draw a frame.
+- **At most 60 frames a second**, and 30 in Low Power Mode. A face's motion and blink say nothing more at 120. There
+  is no frame while no live face is on screen or while the app is not active. A face outside a stage is a still:
+  drawn once offscreen and kept, the last 256, by its seed, status, size, frame, ground, scale and theme.
+- **The ground.** A framed face's cut ring takes the first mostly opaque ground behind it, as the Mac reads it
+  (`surfaceBehind`). On the glass, that is the paper under it.
+- **Never a blank.** Where Metal cannot build the star, the face is the flat star, and the log says so once.
+- **Reduced motion** is the engine's switch, as on the Mac: the motions are still, and the blinks and status changes
+  stay.
+- **A held clock for pictures.** A DEBUG launch flag, `-vf-spark-time=<seconds>`, steps every stage from 0 to that
+  time and holds it there. A screenshot of live faces is then the same picture on every run. The flag never enters a
+  release build.
+
 **Still and live.** A face that is not moving is a *still*: one small WebGL2 canvas draws it once and
 keeps the picture, cached by its seed, status, size, frame, ground and theme. A *live* face moves
 (blinks, gaze, its status's motion), drawn by one layer over the window only while a live face is
