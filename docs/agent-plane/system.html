@@ -1367,10 +1367,17 @@
                   </tr>
                   <tr>
                     <td><span class="route">agent-host.ts</span><br /><span class="native-type">236 lines</span></td>
-                    <td><p>puppeteer's two-method <code>AgentHost</code> over the floor, and the environment policy an agent PTY is born with, which also answers the optional <code>helperEnvironment</code> for a helper an adapter spawns itself.</p></td>
-                    <td><p><code>terminal-service</code></p></td>
+                    <td><p>puppeteer's two-method <code>AgentHost</code> over the floor, and the environment policy an agent PTY is born with, which also answers the optional <code>helperEnvironment</code> for a helper an adapter spawns itself, and lends the optional <code>forwarderRuntime</code> chosen once when the host is made (RV #1, item 203).</p></td>
+                    <td><p><code>terminal-service</code>, <code>agent-forwarder</code></p></td>
                     <td><p><code>AgentHost</code>, <code>TerminalSpec</code>, <code>buildAgentEnvironment</code></p></td>
-                    <td><p><code>agent-session.test.ts</code></p></td>
+                    <td><p><code>agent-session.test.ts</code>, <code>agent-host.test.ts</code></p></td>
+                  </tr>
+                  <tr>
+                    <td><span class="route">agent-forwarder.ts</span><br /><span class="native-type">67 lines</span></td>
+                    <td><p>RV #1 (item 203): which program runs puppeteer's builtin forwarder entry for a managed agent's command hooks and status lines. A single-executable fieldd whose sealed <code>agent-forwarder.cjs</code> stands beside it lends its own executable in its closed forwarder role (<code>--vibefield-role=agent-forwarder</code>); every other case lends nothing, so puppeteer's own script runner decides, or refuses the launch. No node on PATH is ever named.</p></td>
+                    <td><p><code>roles</code>, <code>agent-gateway</code> (<code>isReadableFile</code>)</p></td>
+                    <td><p><code>AgentForwarderRuntime</code></p></td>
+                    <td><p><code>agent-host.test.ts</code>, <code>agent-forwarder-role.test.ts</code></p></td>
                   </tr>
                   <tr>
                     <td><span class="route">agent-gateway.ts</span><br /><span class="native-type">1,698 lines</span></td>
@@ -1602,6 +1609,16 @@
               agent PTY is, and never inherits fieldd's own environment. Until the EL8 that brings it,
               the pinned adapters still merge their variables over fieldd's <code>process.env</code>
               (item 50's class).
+            </p>
+            <p class="section-note">
+              The host also lends <code>forwarderRuntime</code> (RV #1, item 203; optional on
+              <code>AgentHost</code> since puppeteer 0.4.0, #65 3c12ba73, PU-A as released): the program a managed
+              agent's command hooks and status lines run to reach its adapter's loopback ingress. It runs in
+              the agent's process tree, under the agent's environment, and holds nothing the agent does not
+              already hold (the bearer is the agent's, by name), so the role it names reads no
+              <code>FIELDD_*</code> variable and takes no inspector guard (EL7). A single-executable fieldd
+              lends its own executable in its closed forwarder role; under <code>pnpm dev</code> nothing is
+              lent and puppeteer's script runner runs its staged forwarder on a real Node.
             </p>
             <div class="callout">
               <strong>An agent cell PTY is also the re-attach's trust boundary.</strong> A session record
@@ -2313,6 +2330,13 @@
                   executable never falls to a node on PATH). <code>docs/desk-gates.md</code> row 34 witnesses it
                   on the signed package. The shim home's launchers and rendezvous stay writable by the same uid,
                   as under <code>pnpm dev</code>.</em>
+                  <em>Amended 2026-11-06 (RV #1, item 203; built at the lean of rv-forwarder-role, ruled with it 11-06; with puppeteer 0.4.0, #65 3c12ba73):
+                  <code>agent-forwarder.cjs</code>, puppeteer's builtin forwarder entry bundled by fieldd's build,
+                  is staged beside the executable too. A managed agent's command hooks and status lines run the
+                  executable in its closed fifth role (<code>--vibefield-role=agent-forwarder</code>), which runs
+                  only that sealed file and leaves; without it the role says DESIGN.md §9's line and leaves 127,
+                  and fieldd lends no forwarder, so puppeteer refuses the launch. <code>build-fieldd-sea.mjs
+                  --verify</code>'s probe G and <code>docs/desk-gates.md</code> row 34 witness it.</em>
                   <span class="badge tone-built">Built</span>
                 </p>
               </div>

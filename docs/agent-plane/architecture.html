@@ -1409,6 +1409,21 @@
                         adapter's process environment, which is the pin's behaviour until the EL8 that brings it.
                       </p>
                       <p>
+                        A fourth member, a value rather than a method, optional since puppeteer 0.4.0
+                        (#65, 3c12ba73; PU-A as released; item 203): <code>forwarderRuntime {command, args}</code>,
+                        the program that runs puppeteer's
+                        builtin forwarder entry in the agent's process tree, for the hooks and status lines an agent
+                        can only run as commands. A single executable runs only its own sealed entry, so a
+                        single-executable fieldd must lend it: its own executable in its closed fifth role
+                        (<code>--vibefield-role=agent-forwarder</code>), which runs only the sealed
+                        <code>agent-forwarder.cjs</code> beside it (<code>agent-forwarder.ts</code>
+                        <code>chooseForwarderRuntime</code>). Any other fieldd lends nothing, and puppeteer's script
+                        runner decides. With neither, puppeteer refuses the launch
+                        (<code>FORWARDER_RUNTIME_UNAVAILABLE</code>), never runs it unobserved. The words after the
+                        role are puppeteer's, append-only across releases; VibeField never reads them (AR-L1). The
+                        doors' side is <a href="api.html#upstream">api's upstream map</a>.
+                      </p>
+                      <p>
                         The same file carries the half that makes a <em>daemon</em> host possible:
                         <code>HostIngress {port?, token?, onBound?}</code> and <code>BoundIngress {port, token}</code>.
                         An adapter that binds a loopback endpoint mints it ephemeral by default; a host that outlives

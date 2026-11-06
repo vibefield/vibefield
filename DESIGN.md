@@ -7438,6 +7438,29 @@ it would take the person's own root. The program says one line on its error outp
 
 The line names no path, no argument and no agent, so nothing an agent's settings handed the program is said back.
 
+**When the file an agent is observed with is missing** (track RV, item 203; RV #1, pup-claude-1; built at the lean,
+A, of `rv-forwarder-role`; the words ruled with it, James 11-06). Some of what an agent says reaches
+VibeField only through a command the agent runs itself: Claude Code's command hooks and its status lines. In a
+packaged VibeField that command is VibeField's own program in its fifth role, the agents' forwarder
+(`--vibefield-role=agent-forwarder`, `roles.ts`). The role runs only the forwarder sealed beside the program
+(`agent-forwarder.cjs`): it relays what the agent wrote to the session's observer and leaves. It never runs a script it
+is handed, and the daemon never starts in its place. When that file is gone (a damaged install, a half-finished
+update), the role says one line on its error output and leaves with the shell's "cannot run" status (127). Nothing
+frames what the role says there, so its line carries "VibeField: " itself, as the agents' launcher lines do:
+- "VibeField: this copy of VibeField is missing the file it observes agents with. Reinstall VibeField."
+
+A managed launch that would need the file is refused before anything starts, in the same sentence, and each surface
+gives it the frame its other refusals have (2026-11-06, the lead's ruling rv-forwarder-door-clause; ‹for James›, who
+still owns the sentence). fieldd's launch door answers it bare, with no "VibeField: " before it: "this copy of
+VibeField is missing the file it observes agents with. Reinstall VibeField." The app says every refusal of that door
+as a clause after its own words (New agent's "Could not start — …", the launcher's "didn't launch: …";
+`refusalReason`), so a "VibeField: " there would sit inside the app's own sentence. A name typed in a pane is refused
+as every launcher's refusal is said, naming the command as typed (‹command›, the agents' launcher lines' form,
+`agentShimUnavailable`), and the kit's label is its "VibeField: ": "VibeField: ‹command› was not started: this copy
+of VibeField is missing the file it observes agents with. Reinstall VibeField." No line names a path or an argument.
+In development an agent's forwarder runs on puppeteer's own script runner (a real Node, or Electron's), and none of
+these lines can be reached.
+
 **The link's words** (track TS, TS-D1 and TS-D2 ruled 2026-10-27). The act is **Continue with
 Tailscale** on every button that starts it — the Connect pane, Settings → Devices, the phone — and
 the place that holds it says **Connect your devices**; the state is **Connected**. A desktop that
