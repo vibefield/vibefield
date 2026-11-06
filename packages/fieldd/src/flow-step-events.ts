@@ -21,9 +21,11 @@ import { ownLive, type RunEntered, type RunEnteredAgent } from "./run-entry";
 //   whatever its id, unless both carry turn ids that differ: a back-to-back duplicate, never a turn heuristic (the
 //   slices 7–9 review's F3, layer 1, as DD1 refined it). What it does not reach: an unheard, EMPTY new end with the
 //   same outcome is refused (an accepted cost); an own message between the two, displayOnly or not final among them,
-//   re-arms a duplicate (the declared gap); and a duplicate after the run's own events moved on reads as new. Both
-//   assumptions sit beside "puppeteer stamps every end's id" in the candidate petition, not filed. A
-//   later fieldd hears its runs afresh; the journal keeps one answer for one call whatever it is told (D22).
+//   re-arms a duplicate (the declared gap); a duplicate after the run's own events moved on reads as new; and the
+//   text match is exact, so a re-report whose text differs at all (a cut, trailing whitespace, a reformatted fence)
+//   reads as a new end too, though no known road does that today (the 1i review's FF2). Both assumptions sit beside
+//   "puppeteer stamps every end's id" in the candidate petition, not filed. A later fieldd hears its
+//   runs afresh; the journal keeps one answer for one call whatever it is told (D22).
 
 /** A flow step's turn end, as the runs hear it. */
 export interface FlowStepTurnEnd {

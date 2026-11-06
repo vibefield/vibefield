@@ -986,7 +986,14 @@ export class FlowRuns {
     check: string,
     write: FlowStepWrite,
   ): boolean {
-    if ((step.lines?.length ?? 0) < FLOW_LIMITS.STEP_LINES_MAX) {
+    if ((step.lines?.length ?? 0) >= FLOW_LIMITS.STEP_LINES_MAX) {
+      // EE1 (F5 review): the bound's road says its cause in fieldd's log, as the refusal's road does
+      this.#logger.warn(
+        "fieldd.flows.step.repair",
+        "A flow step's record keeps as many lines as it may; its repair line was not sent, and the step failed",
+        { run, call: step.call, n, lines: FLOW_LIMITS.STEP_LINES_MAX },
+      );
+    } else {
       try {
         sendRepair(this.ports, write, run, step.call, session, n, check);
         return true;
