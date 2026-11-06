@@ -5235,10 +5235,25 @@ describe("CP-4a2b — every run entered is told, with its origin and its own spa
   }, 120_000);
 
   it("E5 (D6): a run a spark started, and a flow's step with a spark in its origin, never enter a transcript: only a spark's OWN run does", async () => {
-    const box = await setup({ floor: "real" });
-    const win = await window(box.daemon, DECK, "e5");
-    const spark = "sp-7k2m9q4x";
+    const box = await setup({ floor: "real", profiles: true, briefing: SPARK_BRIEFING });
+    const win = await window(box.daemon, [...DECK, "agents.manage", "sparks.use"], "e5");
     await born(win, "agent.spawn", { provider: "scripted", cwd: box.envOut });
+    // the spark, hatched through the window's door as the file's spark rows hatch it (hatchVela, CP-1d): its signed
+    // record and its brief, without which the briefing refuses its own run (CP-1d, `spark-unavailable`), and its own
+    // session, as the hatch spawns it (daemon.ts): `{origin: {by: "you"}, spark}`
+    await win.call("agents.profiles.verify", { profileId: "scripted:native-default" });
+    const { spark: hatched } = (await win.call("compose.sparks.hatch", {
+      name: "Vela",
+      face: { seed: 7 },
+      agent: "scripted",
+      profiles: ["native"],
+      thinksUnder: "native",
+    })) as ComposeSparksHatchResult;
+    const spark = hatched.id;
+    const ownRun = hatched.session?.runtimeRunId;
+    const ownPane = box.sessions.at(-1)?.runtimeSessionId;
+    if (ownRun === undefined || ownPane === undefined)
+      throw new Error("the hatch started no session");
     const started = await box.daemon.agents.spawn(
       { provider: "scripted", cwd: box.envOut },
       SELF,
@@ -5251,22 +5266,15 @@ describe("CP-4a2b — every run entered is told, with its origin and its own spa
       undefined,
       { origin: { ...FLOW_ORIGIN, spark } },
     );
-    // the spark's own session, as the hatch spawns it (daemon.ts): `{origin: {by: "you"}, spark}`
-    const own = await box.daemon.agents.spawn(
-      { provider: "scripted", cwd: box.envOut },
-      SELF,
-      undefined,
-      { origin: { by: "you" }, spark },
-    );
-    const ownRun = own.session.runtimeRunId;
     // the own run's transcript opens with its run line (TH-1); the other two keep none
     expect(
       await poll(async () => transcriptOf(box.dataDir, spark, ownRun)[0], 10_000),
     ).toMatchObject({ kind: "run", runtimeRunId: ownRun, fresh: true });
     expect(transcriptOf(box.dataDir, spark, started.session.runtimeRunId)).toEqual([]);
     expect(transcriptOf(box.dataDir, spark, stepped.session.runtimeRunId)).toEqual([]);
-    for (const run of [started, stepped, own])
+    for (const run of [started, stepped])
       await win.call("terminal.terminate", { sessionId: run.terminal.sessionId });
+    await win.call("terminal.terminate", { sessionId: ownPane });
   }, 90_000);
 });
 
