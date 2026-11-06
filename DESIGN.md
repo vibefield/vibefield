@@ -5046,6 +5046,11 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       words are **Ending** and **the run** at 40%, over **it did not stop after two sends · ending
       it**. The pane colour lights it, as item 42's does: nothing is asked of the person. It holds
       until the exit, the ladder's 4 s at most.
+      *Corrected 2026-11-06 (item 191, RV #2's half A):* "a run whose status fieldd can read" was
+      too wide. A run typed in the person's own shell (AR-7) never reaches `terminating`: fieldd
+      never ends a typed run by its own act (`rv-typed-stop` Q1, at its lean), because the floor's
+      ladder would end the shell, not the agent. After two unheard sends such a run reads **Still
+      running**, and **End run** hands the act to the person.
     - **Still running** (`unheardAt`): the cancellation was not confirmed, or the legacy
       interrupt's termination ladder could not be placed. This includes a Pause sent once;
       the caption must not claim a retry. The words are
@@ -5063,7 +5068,10 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       **End run** names that act. After Pause, choosing it is a separate, explicit decision to
       end the agent; an unconfirmed Pause alone never makes that decision for the person.
       It is `terminal.terminate` on the pane's own session (idempotent, the floor's ladder), and
-      the pane then shows the exit as any exit does.
+      the pane then shows the exit as any exit does. *A gap, owed (2026-11-06, item 191's half B,
+      `rv-typed-stop` Q2):* on a run typed in the person's own shell, the pane's session is that
+      shell, so this press ends the shell with its agent until **End run** and **Stop agent** end a
+      run through fieldd's one end, which stops a typed run's process and never its terminal.
     - **Heard** (`heard`): by an exit, the pane shows the exit as any exit does (the frame's
       resume), and the record says the exit followed a Stop (`exited.stop`); by its status, the run
       reads idle and its pane stays live. Neither draws anything here: **Stopped** belongs to an
