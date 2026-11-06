@@ -116,7 +116,12 @@ interface LiveRun {
   readonly ran?: string | undefined;
   /** each step's answer, by its call, while its host waits on it (the step's result is slice 9's) */
   readonly waiting: Map<number, (answer: FlowHostAnswer) => void>;
+  /** the steps waiting for a slot (CP4-S7), in their calls' order: started when one frees (slice 9) */
+  readonly slotted: { readonly call: number; readonly args: readonly unknown[] }[];
 }
+
+/** A step's states that hold one of its run's LIVE_STEPS_MAX slots: its agent is starting or alive (CP4-S7). */
+const SLOT_STATES: ReadonlySet<string> = new Set(["starting", "working", "repairing", "holding"]);
 
 /** The states a run never leaves. */
 const ENDED_STATES: ReadonlySet<FlowRunState> = new Set(["done", "stopped", "failed", "lost"]);
@@ -306,6 +311,7 @@ export class FlowRuns {
     );
     this.#live.set(run, {
       waiting: new Map(),
+      slotted: [],
       ...(params.from !== undefined && params.starter.by === "spark"
         ? { ran: nameWords(params.from.name) }
         : {}),
@@ -378,6 +384,12 @@ export class FlowRuns {
     const record = this.ports.records.runRecord(run);
     if (number === undefined || record === undefined)
       throw new Error(`a step of ${run} with no call number or no record`);
+    const answer = new Promise<FlowHostAnswer>((resolve) => live.waiting.set(number, resolve));
+    // CP4-S7: a step its entry put past the run's slots waits, with no spawn, until one frees
+    if (record.open.find((step) => step.call === number)?.state === "waiting") {
+      live.slotted.push({ call: number, args: call.args });
+      return answer;
+    }
     const started = await startStep(
       this.ports,
       { run, flow: record.flow, name: record.name, ran: live.ran },
@@ -385,8 +397,11 @@ export class FlowRuns {
       number,
       call.args,
     );
-    if ("refused" in started) return started;
-    return new Promise((resolve) => live.waiting.set(number, resolve));
+    if ("refused" in started) {
+      live.waiting.delete(number);
+      return started;
+    }
+    return answer;
   }
 
   /** The record's open step, written through the one writer of a run's record. */
@@ -412,7 +427,12 @@ export class FlowRuns {
                   ...(entry.label !== undefined ? { label: entry.label } : {}),
                   ...(entry.agent !== undefined ? { agent: entry.agent } : {}),
                   ...(entry.phase !== undefined ? { phase: entry.phase } : {}),
-                  state: "starting",
+                  // CP4-S7: past the run's LIVE_STEPS_MAX live steps, it waits for a slot
+                  state:
+                    record.open.filter((step) => SLOT_STATES.has(step.state)).length >=
+                    FLOW_LIMITS.LIVE_STEPS_MAX
+                      ? "waiting"
+                      : "starting",
                 },
               ],
             }
