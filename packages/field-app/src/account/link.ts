@@ -212,17 +212,24 @@ export function approvalWaited(waitedMs: number): string {
   return `It waited ${span} for you.`;
 }
 
+/** What this desktop is on its platform: a Mac, a PC on Windows, a computer
+ * elsewhere — never a desktop (DESIGN.md §9). */
+function deviceNoun(platform: string | undefined): string {
+  if (platform === "win32") return "PC";
+  if (platform === "darwin" || platform === undefined) return "Mac";
+  return "computer";
+}
+
 /** This desktop in its own platform's words (DESIGN.md §9: "This Mac", "This PC"
  * on Windows; never "This desktop"). */
 export function thisDeviceWord(platform: string | undefined): string {
-  if (platform === "win32") return "This PC";
-  if (platform === "darwin" || platform === undefined) return "This Mac";
-  return "This computer";
+  return `This ${deviceNoun(platform)}`;
 }
 
-/** SE-1 — where a run of this desktop's runs, inside a sentence ("on this Mac"). */
+/** SE-1 — where a run of this desktop's runs, inside a sentence, in the same
+ * word: "on this Mac" (the live peek's head, `liveHeadWords`). */
 export function onThisDeviceWords(platform: string | undefined): string {
-  return thisDeviceWord(platform);
+  return `on this ${deviceNoun(platform)}`;
 }
 
 /** TS-D2 — a desktop that is not connected, in its own platform's words: the

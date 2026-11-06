@@ -410,18 +410,15 @@ export function rowProfile(row: PeekLiveRow, live: LiveFilters | null): LiveProf
 }
 
 /** The live peek's head (SE-D1, the past peek's recipe): its folder, its agent,
- * its profile as its row says one, where it runs — "on this Mac" in the
- * device's own word (`here`, `thisDeviceWord`'s) or "on ‹desktop›" — and its
- * state, joined by " · ". */
+ * its profile as its row says one, where it runs — `here` for this desktop's
+ * run, "on this Mac" in the device's own word (`onThisDeviceWords`), or "on
+ * ‹desktop›" for a peer's — and its state, joined by " · ". */
 export function liveHeadWords(
   row: PeekLiveRow,
   profile: LiveProfileChoice | null,
   here: string,
 ): string {
-  const where =
-    row.remote === null
-      ? `on ${here.charAt(0).toLowerCase()}${here.slice(1)}`
-      : `on ${row.remote.name}`;
+  const where = row.remote === null ? here : `on ${row.remote.name}`;
   return [row.folder, row.agent, profile?.label ?? null, where, row.when]
     .filter((part): part is string => part !== null)
     .join(" · ");

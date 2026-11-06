@@ -19,7 +19,7 @@ import {
   useSyncExternalStore,
 } from "react";
 import { createPortal } from "react-dom";
-import { thisDeviceWord } from "../account/link";
+import { onThisDeviceWords } from "../account/link";
 import { useReducedMotion } from "../field/desk/bar/bar-motion";
 import { isSearchChord, listenForProductChord } from "../field/product-chords";
 import { requestShellPresentation } from "../field/shell-presentation";
@@ -773,7 +773,7 @@ export function Peek({
             tokens={tokens}
             filterMenu={menuGroups}
             filterOpen={filterOpen}
-            here={thisDeviceWord(peekHost()?.platform)}
+            here={onThisDeviceWords(peekHost()?.platform)}
             rows={rows}
             hot={hotIndex}
             foot={foot}

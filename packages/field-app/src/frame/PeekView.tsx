@@ -333,7 +333,8 @@ export interface PeekViewProps {
   /** + Filter's menu (`filterMenu`): empty, + Filter is not drawn */
   filterMenu: readonly PeekMenuGroup[];
   filterOpen: boolean;
-  /** this device in its own word ("This Mac"): where a live run's head says it runs */
+  /** where a live run of this device's runs, in a sentence ("on this Mac",
+   * `onThisDeviceWords`): what its head says */
   here: string;
   /** the list: the sessions, a typed name's offer first while it stands */
   rows: readonly PeekListItem[];
