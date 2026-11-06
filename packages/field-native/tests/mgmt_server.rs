@@ -123,6 +123,15 @@ fn read_secret(daemon: &RunningDaemon) -> Vec<u8> {
     .unwrap()
 }
 
+/// A contracts golden, read as `tests/fixture_parity.rs`'s `load` reads one.
+fn load(name: &str) -> Value {
+    let p = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../contracts/fixtures")
+        .join(name);
+    let raw = std::fs::read_to_string(&p).unwrap_or_else(|e| panic!("read {}: {e}", p.display()));
+    serde_json::from_str(&raw).unwrap_or_else(|e| panic!("json {}: {e}", p.display()))
+}
+
 /// Every row that boots a floor ends with `daemon.shutdown().await`. A floor still running when
 /// its `TempDir` drops leaves cells it is still starting, and they bind their sockets inside the
 /// removal and leave the root behind (item 196).
@@ -469,6 +478,51 @@ async fn serve_subscribe_refused_honestly_when_mesh_down() {
     assert_eq!(resp["error"]["data"]["details"]["service"], "mesh-gateway");
     assert_eq!(resp["error"]["data"]["details"]["state"], "disabled");
     assert_eq!(resp["error"]["data"]["retryable"], true);
+    daemon.shutdown().await;
+}
+
+/// D36 (W3, DR-3a) — the three `native.mesh.fileTransfer.*` verbs are ANSWERED
+/// on the real default floor, and ahead of its node gate: the floor's truffle
+/// cannot pull by a named root, so each answers `file-transfer-unsupported`, a
+/// capability fact for the floor's life (contracts mgmt.ts, the file transfer's
+/// refusal order, step 1). The answer IS the golden, key for key, and parses as
+/// the generated `ErrorData` (EL9). Each call carries its golden params, so the
+/// answer is not a params refusal; no node is up, so the node gate's
+/// `MeshNotUpDetails` is what every verb answered before the facade.
+#[tokio::test]
+async fn the_file_transfer_verbs_answer_unsupported_ahead_of_the_node_gate() {
+    use field_native::contracts::{ErrorData, ErrorKind};
+    let (_dir, daemon) = boot().await;
+    let mut c = TestClient::connect(&daemon).await;
+    c.hello(&daemon, 1).await;
+    assert!(
+        !daemon.state.mesh.node_present(),
+        "the default floor has no node"
+    );
+    let unsupported = load("error-data.file-transfer-unsupported.json");
+    let calls = [
+        (
+            "native.mesh.fileTransfer.roots",
+            load("native-file-transfer-roots-params.valid.json"),
+        ),
+        (
+            "native.mesh.fileTransfer.pull",
+            load("native-file-transfer-pull-params.valid.json"),
+        ),
+        ("native.mesh.fileTransfer.subscribe", json!({})),
+    ];
+    for (id, (method, params)) in (2u64..).zip(calls) {
+        c.send(json!({"jsonrpc":"2.0","id":id,"method":method,"params":params}))
+            .await;
+        let resp = c.recv().await;
+        assert_eq!(resp["id"], id, "{method}: {resp}");
+        assert_eq!(resp["error"]["code"], -32006, "{method}: {resp}");
+        assert_eq!(resp["error"]["data"], unsupported, "{method}: {resp}");
+        let data: ErrorData = serde_json::from_value(resp["error"]["data"].clone())
+            .unwrap_or_else(|e| panic!("{method}: {e}"));
+        assert_eq!(data.kind, ErrorKind::Unavailable, "{method}");
+        assert!(!data.retryable, "{method}");
+    }
     daemon.shutdown().await;
 }
 

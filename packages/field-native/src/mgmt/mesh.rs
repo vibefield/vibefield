@@ -1797,6 +1797,28 @@ mod tests {
             "peer-a",
             &json!({"v": 1, "deviceId": "dev-a", "rows": [], "padding": "x".repeat(AGENT_FIELD_SLICE_BYTES)})
         ));
+        // DR-2a — the drive's holders slice (`field.drive.v1`) rides the same
+        // table (W3, DR-3a). The cap counts the ENCODED data, so the padding is
+        // sized from the golden slice's own encoding: a slice exactly AT the cap
+        // is admitted, and one byte over it is refused.
+        let drive_cap = mesh_control_limits::DRIVE_SLICE_BYTES;
+        let drive_slice = |padding: usize| {
+            let mut slice: Value = serde_json::from_str(include_str!(
+                "../../../contracts/fixtures/drive-holders-slice.valid.json"
+            ))
+            .unwrap();
+            slice["padding"] = json!("x".repeat(padding));
+            slice
+        };
+        let shell = serde_json::to_vec(&drive_slice(0)).unwrap().len();
+        let at_cap = drive_slice(drive_cap - shell);
+        assert_eq!(serde_json::to_vec(&at_cap).unwrap().len(), drive_cap);
+        assert!(store_data_allowed(stores::DRIVE, "peer-a", &at_cap));
+        assert!(!store_data_allowed(
+            stores::DRIVE,
+            "peer-a",
+            &drive_slice(drive_cap - shell + 1)
+        ));
         // The table is a CAP LIST, not an allow-list, and this row says so out
         // loud because the difference matters: a store with no row is admitted
         // UNCAPPED — any size, and (`spawn_store_forwarder`, the

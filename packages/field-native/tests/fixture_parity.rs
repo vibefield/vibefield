@@ -4,10 +4,10 @@
 // deliberate unknown fields are parse-tolerance checks only — serde's default
 // ignore-unknown IS the tolerant reader; field-native never echoes those shapes.
 use field_native::contracts::{
-    DesiredState, DiagnosticLogDeltaV1, DiagnosticLogSnapshotV1, ErrorData, FreewayDeclareParams,
-    FreewayDeclareResult, FreewayJoinsAckParams, FreewayJoinsAckResult, FreewayJoinsFrame,
-    FreewayRevokeParams, FreewayRevokeResult, FreewayState, Hello, HelloAck, LogRecordV1,
-    LoggingHealthV1, MeshEgressProxy, MeshEgressRouteAddParams, MeshEgressRouteBound,
+    DesiredState, DiagnosticLogDeltaV1, DiagnosticLogSnapshotV1, ErrorData, ErrorKind,
+    FreewayDeclareParams, FreewayDeclareResult, FreewayJoinsAckParams, FreewayJoinsAckResult,
+    FreewayJoinsFrame, FreewayRevokeParams, FreewayRevokeResult, FreewayState, Hello, HelloAck,
+    LogRecordV1, LoggingHealthV1, MeshEgressProxy, MeshEgressRouteAddParams, MeshEgressRouteBound,
     MeshEgressRouteRef, MeshEgressRouteTable, MeshLaneCloseRequest, MeshLaneClosed,
     MeshLaneOpenRequest, MeshLanePeerOpened, MeshNotUpDetails, MeshSelfIdentity,
     NativeDetachParams, NativeDetachResult, NativeDoorCloseParams, NativeDoorCloseResult,
@@ -446,6 +446,12 @@ fn mesh_file_transfer_fixtures() {
     }
     // a floor whose truffle cannot pull by a named root answers in ErrorData, whose details are opaque here
     roundtrip::<ErrorData>("error-data.file-transfer-unsupported.json", true);
+    // DR-2a's review nit 9 (W3 C1) — a second pull under a live transferId, or of a digest a running pull holds, is
+    // refused CONFLICT: no details, retryable false
+    roundtrip::<ErrorData>("error-data.file-transfer-conflict.json", true);
+    let conflict: ErrorData =
+        serde_json::from_value(load("error-data.file-transfer-conflict.json")).unwrap();
+    assert_eq!(conflict.kind, ErrorKind::Conflict);
 
     // The words are the registry's, generated from the table the TS side reads.
     let refusal = load("error-data.file-transfer-unsupported.json");
