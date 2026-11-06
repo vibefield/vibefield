@@ -6455,11 +6455,15 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     (`SearchBarRow`): 62 at rest, 21 from the sides and the foot; with the keyboard up, 48, 10 from the sides and 8
     above it. **It opens on Live now, every time.** The page under it stays, under the search scrim (§5: the dim
     alone, with no blur, fading in over 240ms), and a tap on the scrim closes search.
-  - **The sheet** grows above the field, one more shape in the bar's glass container: 10 from each side, its foot
+  - **The sheet** grows above the field, in a glass container of its own: 10 from each side, its foot
     10 above the field's top, as tall as what it holds and never higher than 56 from the screen's top, corners 34.
     Its glass is the bar's: the system's Liquid Glass where the phone has it, and elsewhere the page's recipe
     (paper at 90% over a blur of 30 and saturate 1.4, a 0.5 inner edge, a top light, and a shadow of 0 24 60 at
     18%). It rises from the middle of its foot, 24 up and from 0.94, over 420ms on the island curve.
+    *(Corrected 2026-11-06, SE-2k, the S2 review's finding 6: this said "one more shape in the bar's glass
+    container". Its foot stands 10 above the field, inside the bar's melt (12, `AppBar.meltSpacing`), so in the
+    bar's container iOS 26 would melt sheet and field into one shape, the reason "The phone's profile token" gives
+    the token a container of its own. The sheet stands in its own, outside the bar's, and its rise is its own.)*
   - **From the top:**
     - **MA-D7's Apps strip** (§8 "The phone's Apps", as amended; ‹for James: MA-D7's strip placement, agreed with
       MA's lead 2026-11-06›): before any word, the Recent row and **All apps**, above the switch, in both scopes. It
