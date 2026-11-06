@@ -633,7 +633,9 @@ export const AGENT_STOP = {
  *    Stop (CP4-Q10; the slices 7–9 review's F4, Q1 (b), ruled 2026-11-06). One past it (the 17th) is
  *    refused at its spawn, in DESIGN.md §9's words ("A step's call refused"), never made to wait: LIVE_STEPS_MAX's
  *    slots are another bound. The PTYs it allows at most: RUNS_LIVE_MAX 8 × 16 = 128 step PTYs, a ceiling against
- *    macOS's 511 (`kern.tty.ptmx_max`), which the floor's own PTYs share (its terminals, the sparks' sessions). */
+ *    macOS's 511 (`kern.tty.ptmx_max`), which the floor's own PTYs share (its terminals, the sparks' sessions).
+ * Over the whole block (ruled 2026-11-06): A bound a stored field is held to (STEP_LINES_MAX, FOLDER_CHARS,
+ * RUN_AGENTS_MAX) is only ever raised; lowering one is a migration, never an edit. */
 export const FLOW_LIMITS = {
   SCRIPT_MAX_BYTES: 64 * 1024,
   RESULT_MAX_BYTES: 64 * 1024,
