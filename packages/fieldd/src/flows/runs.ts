@@ -612,6 +612,8 @@ export class FlowRuns {
         "A flow run that never began could not be ended in its record; the bounds pass it by until fieldd restarts",
         { run, error: messageOf(error) },
       );
+      // BB1 (1f+1g review): its subscribers hear it as list() now reads it, failed, as the ended road tells them
+      this.#told();
     }
   }
 
