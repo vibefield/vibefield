@@ -1063,12 +1063,16 @@ describe("CP-4a2b — a step's agent, model, folder, prompt and profile, held at
       profiles: ["work", "review", "home"],
     });
     h.approved("unnamed", unnamed("Unnamed"));
-    /** the Agent Profile its step was spawned under, or, once its run is done, the words its step was refused in */
+    /** the Agent Profile its step was spawned under, or, once its run has ended in any way (its `endedAt`, which every
+     * end writes; the F8 review KK2), how: a done run's log, the words its step was refused in, or another end's
+     * state, so a run ended another way fails on the value, never on a timeout */
     const stepOf = (run: string) => {
       const spawn = h.spawned.find((spawned) => spawned.origin.run === run);
       if (spawn !== undefined) return spawn.launch.profileSet;
       const summary = h.runs.read(run)?.summary;
-      return summary?.state === "done" ? summary.log : undefined;
+      if (summary?.endedAt === undefined) return undefined;
+      if (summary.state === "done" && summary.log !== undefined) return summary.log;
+      return `${summary.state}: ${summary.log ?? "no log"}`;
     };
     const ran = async (params: Partial<FlowRunStartParams>) => {
       const run = startedRun(await h.start({ flow: "unnamed", ...params })).run;
