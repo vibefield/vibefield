@@ -30,8 +30,9 @@ import { flowScriptOf, type SesShape, sesShapesOf } from "./module-script";
 //   2026-11-02 13:08Z; CP4-S11), whatever it holds.
 // - Each `agent(…)` is listed with its agent, model and label where the script writes them plainly, the `phase(…)` it
 //   sits in, "in a loop" where it sits in one (a loop statement, or a callback handed to an array's iteration method),
-//   and `in` where it sends to a session the run already has. Where the script computes the agent, the model or the
-//   label, the call is "chosen as it runs" (`computed`); a template's label reads with "…" where its expressions stand.
+//   and `in` where it sends to a session the run already has, and `cwd` where it names a folder plainly (CP-4a2b, Q2
+//   (a); never the folder itself). Where the script computes the agent, the model, the folder or the label, the call
+//   is "chosen as it runs" (`computed`); a template's label reads with "…" where its expressions stand.
 //   "In a loop" is the syntax's: a call in a helper that a loop calls is not marked, and the run's call cap
 //   (FLOW_LIMITS.CALLS_MAX) is what bounds a script that loops.
 // - Each `ask(…)` is listed with its question and choices where written plainly. A gate offers at most
@@ -565,6 +566,14 @@ class Reader {
           }
           if (key === "in") {
             call.in = true;
+            continue;
+          }
+          // CP-4a2b (Q2 (a)): a folder written plainly is said as named, never as itself; one computed is chosen as
+          // it runs; an empty one names none
+          if (key === "cwd") {
+            const folder = plainString(property.value as AnyNode);
+            if (folder === undefined) computed = true;
+            else if (folder !== "") call.cwd = true;
             continue;
           }
           if (key !== "agent" && key !== "model" && key !== "label") continue;

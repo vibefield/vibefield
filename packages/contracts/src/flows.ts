@@ -111,7 +111,10 @@ export type FlowMeta = z.infer<typeof FlowMeta>;
 /** An `agent(…)` call as the bytes say it, without running them. `agent`, `model` and `label` are present only where
  * the script writes them plainly; `computed` says one of them is chosen as it runs (a template's label reads with "…"
  * where its expressions stand). `inLoop`: the call sits in a loop. `in`: it sends to a session the run already has
- * rather than starting an agent. `phase`: the `phase(…)` it sits in. `line`: where it is, from 1. */
+ * rather than starting an agent. `phase`: the `phase(…)` it sits in. `line`: where it is, from 1.
+ * CP-4a2b (Q2 (a), ruled 2026-11-06; CP4-Q20 (a)): `cwd` where its options name a folder plainly, true alone,
+ * never the folder; a computed one is `computed`, so the start's folder refusal passes it to the call. Optional, so a
+ * reader from before it passes it through. */
 export const FlowCall = z
   .object({
     line: z.number().int().positive(),
@@ -122,6 +125,7 @@ export const FlowCall = z
     computed: z.literal(true).optional(),
     inLoop: z.literal(true).optional(),
     in: z.literal(true).optional(),
+    cwd: z.literal(true).optional(),
   })
   .passthrough();
 export type FlowCall = z.infer<typeof FlowCall>;
