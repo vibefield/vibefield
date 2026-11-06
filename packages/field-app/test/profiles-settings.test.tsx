@@ -2096,6 +2096,70 @@ describe("the plans a profile runs on (pass 19)", () => {
     expect(f.calls("agents.profiles.login")).toEqual([{ profileId: "p-copilot" }]);
   });
 
+  it("says a window read before its reset by the reading's age where its reset stood, unlit — the plan's card, its badges, the agent's page and its row (DESIGN.md §8 'A window read before its reset')", async () => {
+    // read three hours ago; the five hours, spent, reset ten minutes ago: what it metered is gone
+    const read = new Date(NOW.getTime() - 3 * 60 * 60_000).toISOString();
+    const spent: AgentAccountUsageEntry = {
+      ...USAGE[0]!,
+      fetchedAt: read,
+      metrics: [
+        {
+          ...USAGE[0]!.metrics[0]!,
+          usedPercent: 100,
+          resetsAt: new Date(NOW.getTime() - 10 * 60_000).toISOString(),
+        },
+        USAGE[0]!.metrics[1]!,
+      ],
+    };
+    const batch: AgentAccountUsageBatch = { entries: [spent, PLAN_USAGE[1]!], generatedAt: read };
+    const f = fake(
+      doors({
+        "agent.providers": () => ({ providers: PLAN_PROVIDERS }),
+        "agents.installs": () => ({ installs: PLAN_INSTALLS, machineScope: true }),
+        "agents.usage": () => batch,
+      }),
+      batch,
+    );
+    const section = await mountSection(f.client, {
+      feed: plannedFeed(),
+      route: { kind: "profile", set: "work" },
+    });
+    const lines = (scope: ParentNode | null | undefined) => [
+      ...(scope?.querySelectorAll<HTMLElement>(".vf-profiles-usage-line") ?? []),
+    ];
+    // the running week keeps its reset; the spent five hours says the reading's age, as the meters say it (§9)
+    const said = [
+      "5H: 100% used, as of 3h ago",
+      `7D: 12% used, resets ${resetWords(new Date(NOW.getTime() + 3 * 24 * 60 * 60_000), NOW)}`,
+    ];
+    const card = container?.querySelector<HTMLElement>('.vf-profiles-plan[data-plan="anthropic"]');
+    expect(lines(card).map((line) => line.getAttribute("aria-label"))).toEqual(said);
+    const [fiveHours] = lines(card);
+    expect(fiveHours?.querySelector(".vf-profiles-usage-reset")?.textContent).toBe("as of 3h ago");
+    // the age is not a reset: no reset mark before it, and the line is unlit
+    expect(fiveHours?.querySelector(".vf-profiles-reset")).toBeNull();
+    expect(fiveHours?.classList.contains("is-hot")).toBe(false);
+    // nor is its plan near its limit: no badge of it wears the dot
+    const badges = [
+      ...(container?.querySelectorAll<HTMLElement>('.vf-profiles-badge[data-plan="anthropic"]') ??
+        []),
+    ];
+    expect(badges.length).toBeGreaterThan(0);
+    expect(badges.filter((badge) => badge.querySelector(".vf-profiles-badge-hot"))).toEqual([]);
+
+    // one agent's page: its subscription's lines say the same
+    await section.render({ route: { kind: "agent", set: "work", provider: "claude" } });
+    expect(lines(container).map((line) => line.getAttribute("aria-label"))).toEqual(said);
+
+    // an agent row that wears no badge carries its own lines: the same
+    await section.render({ feed: feed([NATIVE, WORK]), route: { kind: "profile", set: "work" } });
+    const row = container?.querySelector<HTMLElement>('.vf-profiles-row[data-provider="claude"]');
+    expect(lines(row).map((line) => line.getAttribute("aria-label"))).toEqual(said);
+    expect(lines(row)[0]?.querySelector(".vf-profiles-usage-reset")?.textContent).toBe(
+      "as of 3h ago",
+    );
+  });
+
   it("adds a sign-in to a harness by one of its own routes", async () => {
     const hermes = persona({
       ...P_HERMES,
