@@ -81,7 +81,7 @@ use std::net::SocketAddr;
 use std::sync::{Arc, Mutex, PoisonError, Weak};
 use std::time::Duration;
 use tokio::net::{TcpListener, TcpStream};
-use tokio::sync::{mpsc, Semaphore};
+use tokio::sync::{mpsc, OwnedSemaphorePermit, Semaphore};
 use tokio_tungstenite::tungstenite::handshake::server::{Request, Response};
 use tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode;
 use tokio_tungstenite::tungstenite::protocol::{CloseFrame, WebSocketConfig};
@@ -854,6 +854,7 @@ fn start_pump(state: &DoorState, activation_id: &str) {
             connection_id: frames.connection_id,
             credit_epoch: ledger.credit_epoch,
             frames,
+            seed_slots: ledger.seed_slots.clone(),
             scene_epoch,
             session,
             feed,
@@ -1356,9 +1357,10 @@ async fn serve_connection(state: Arc<DoorState>, stream: TcpStream, peer: Socket
 /// the bulk lane. Urgent drains fully; between bulk chunks the writer re-inspects
 /// urgent, so a background transfer yields to an urgent incremental at chunk
 /// boundaries — the bulk-induced-HOL bound. Each written bulk chunk returns its
-/// bytes to `bulk_credit` (`maxBulkBytesAdmittedAhead`); on exit the semaphore is
-/// CLOSED so a pump blocked acquiring permits ends. `Close(0, _)` = the peer
-/// already closed (no frame to send).
+/// bytes to `bulk_credit` (`maxBulkBytesAdmittedAhead`) and drops the release it
+/// carried; on exit the semaphore is CLOSED so a pump blocked acquiring permits
+/// ends, and every unit left unwritten drops its release. `Close(0, _)` = the
+/// peer already closed (no frame to send).
 async fn writer_task(
     mut sink: WsSink,
     mut rx: mpsc::UnboundedReceiver<Outbound>,
@@ -1407,11 +1409,13 @@ async fn writer_task(
                 break;
             }
             Pick::Urgent(bulk @ Outbound::Bulk(..)) => lanes.enqueue(bulk), // unreachable; keep total
-            Pick::Bulk(b) => {
+            Pick::Bulk(b, release) => {
                 // ONE chunk, then loop back to re-inspect urgent; return its bytes
-                // to the bulk-ahead window as the wire drains them.
+                // to the bulk-ahead window as the wire drains them. The unit's
+                // release is dropped only once the unit is written.
                 let n = b.len();
                 let broke = sink.send(Message::Binary(b.into())).await.is_err();
+                drop(release);
                 if let Some(sem) = &bulk_credit {
                     sem.add_permits(n);
                 }
@@ -1441,7 +1445,9 @@ async fn writer_task(
 /// without a socket (§8, TP-S3d — the bulk-induced-HOL floor).
 enum Pick {
     Urgent(Outbound),
-    Bulk(Vec<u8>),
+    /// a bulk unit and its release, handed back together: the writer drops the
+    /// release once the unit is written
+    Bulk(Vec<u8>, Option<OwnedSemaphorePermit>),
     Idle,
 }
 
@@ -1451,10 +1457,12 @@ struct Queued<T> {
     unit: T,
 }
 
-/// A bulk unit and the activation whose transfer it belongs to.
+/// A bulk unit, the activation whose transfer it belongs to, and the release
+/// it carries to the writer.
 struct BulkUnit {
     bytes: Vec<u8>,
     activation: Arc<str>,
+    release: Option<OwnedSemaphorePermit>,
 }
 
 /// The writer's two lanes. Urgent passes bulk ACROSS activations only
@@ -1476,9 +1484,13 @@ impl Lanes {
         self.arrivals += 1;
         let arrival = self.arrivals;
         match item {
-            Outbound::Bulk(bytes, activation) => self.bulk.push_back(Queued {
+            Outbound::Bulk(bytes, activation, release) => self.bulk.push_back(Queued {
                 arrival,
-                unit: BulkUnit { bytes, activation },
+                unit: BulkUnit {
+                    bytes,
+                    activation,
+                    release,
+                },
             }),
             unit => self.urgent.push_back(Queued { arrival, unit }),
         }
@@ -1505,7 +1517,7 @@ impl Lanes {
             return Pick::Urgent(queued.unit);
         }
         match self.bulk.remove(waits_on.unwrap_or(0)) {
-            Some(queued) => Pick::Bulk(queued.unit.bytes),
+            Some(queued) => Pick::Bulk(queued.unit.bytes, queued.unit.release),
             None => Pick::Idle,
         }
     }
@@ -2406,14 +2418,19 @@ mod tests {
                 Pick::Urgent(Outbound::Binary(b, _)) => order.push(b),
                 Pick::Urgent(Outbound::Text(t)) => order.push(t.into_bytes()),
                 Pick::Urgent(other) => panic!("unexpected urgent {other:?}"),
-                Pick::Bulk(b) => order.push(b),
+                Pick::Bulk(b, _) => order.push(b),
                 Pick::Idle => return order,
             }
         }
     }
 
     fn bulk(bytes: &[u8], activation: &str) -> Outbound {
-        Outbound::Bulk(bytes.to_vec(), Arc::from(activation))
+        Outbound::Bulk(bytes.to_vec(), Arc::from(activation), None)
+    }
+
+    /// A bulk unit carrying a release, as a seed's `transfer-end` carries its slot.
+    fn releasing(bytes: &[u8], activation: &str, release: OwnedSemaphorePermit) -> Outbound {
+        Outbound::Bulk(bytes.to_vec(), Arc::from(activation), Some(release))
     }
 
     fn urgent(bytes: &[u8], activation: &str) -> Outbound {
@@ -2487,5 +2504,40 @@ mod tests {
             drained(&mut lanes),
             written(&[b"a-delta-1", b"a-catchup", b"a-delta-2"]),
         );
+    }
+
+    /// RV #95 (TP-R6): a bulk unit's release rides it through the lanes and is
+    /// handed back WITH that unit, so the writer drops it only once the unit is
+    /// written: a seed's slot frees when the worker's count of open seeds
+    /// would. A unit the writer never writes (its exit) drops its release too.
+    #[test]
+    fn a_bulk_units_release_is_handed_back_with_it_and_dropped_only_after_it() {
+        let slots = Arc::new(Semaphore::new(2));
+        let slot = || slots.clone().try_acquire_owned().unwrap();
+        let mut lanes = Lanes::default();
+        lanes.enqueue(bulk(b"a-begin", "a"));
+        lanes.enqueue(releasing(b"a-end", "a", slot()));
+        lanes.enqueue(releasing(b"b-end", "b", slot()));
+        assert_eq!(slots.available_permits(), 0);
+
+        let Pick::Bulk(begin, None) = lanes.pick() else {
+            panic!("a's begin carries no release");
+        };
+        assert_eq!(begin, b"a-begin");
+        let Pick::Bulk(end, Some(release)) = lanes.pick() else {
+            panic!("a's end is handed back with its release");
+        };
+        assert_eq!(end, b"a-end");
+        assert_eq!(
+            slots.available_permits(),
+            0,
+            "the slot is held until the end is written"
+        );
+        drop(release);
+        assert_eq!(slots.available_permits(), 1, "written, the slot frees");
+
+        // The writer exits with b's end unwritten: its release goes with it.
+        drop(lanes);
+        assert_eq!(slots.available_permits(), 2);
     }
 }

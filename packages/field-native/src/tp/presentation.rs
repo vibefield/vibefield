@@ -44,7 +44,7 @@ use serde_json::{json, Value};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::Notify;
+use tokio::sync::{Notify, Semaphore};
 
 /// The door, as the pump sees it.
 pub trait PumpHost: Send + Sync + 'static {
@@ -95,6 +95,8 @@ pub struct PumpStart {
     pub connection_id: u64,
     pub credit_epoch: u64,
     pub frames: LegRef,
+    /// This frames connection's seed slots (`CreditLedger::seed_slots`).
+    pub seed_slots: Arc<Semaphore>,
     pub session: Arc<Session>,
     /// This session's frames only: least authority — the pump reaches its own
     /// session's route, never the cell's session set.
@@ -505,7 +507,7 @@ impl<H: PumpHost> Pump<H> {
         self.start
             .frames
             .out
-            .send(Outbound::Bulk(unit, self.activation.clone()))
+            .send(Outbound::Bulk(unit, self.activation.clone(), None))
             .map_err(|_| ())
     }
 }
@@ -513,6 +515,7 @@ impl<H: PumpHost> Pump<H> {
 #[cfg(all(test, unix))]
 mod tests {
     use super::*;
+    use crate::registries::terminal_pipeline::CELL_MAX_CONCURRENT_SEEDS;
     use crate::tp::frames::FrameRouter;
     use ghosttea::session::{Persistence, SpawnOptions};
     use ghosttea::FrameHub;
@@ -600,6 +603,7 @@ mod tests {
                     geometry_events: false,
                     selection_credit: None,
                 },
+                seed_slots: Arc::new(Semaphore::new(CELL_MAX_CONCURRENT_SEEDS as usize)),
                 session: session.clone(),
                 feed: self.router.feed(handle),
                 scene_epoch: SceneEpoch {
@@ -620,15 +624,28 @@ mod tests {
         }
     }
 
+    /// The next unit on the leg, whatever it is.
+    async fn next_outbound(received: &mut UnboundedReceiver<Outbound>) -> Outbound {
+        tokio::time::timeout(Duration::from_secs(10), received.recv())
+            .await
+            .expect("a unit within 10s")
+            .expect("the leg's writer is open")
+    }
+
+    /// A presentation unit's envelope header; None for any other unit.
+    fn header_of(unit: &Outbound) -> Option<Value> {
+        match unit {
+            Outbound::Binary(bytes, _) | Outbound::Bulk(bytes, ..) => {
+                Some(super::super::wire::decode_envelope(bytes).unwrap().0)
+            }
+            _ => None,
+        }
+    }
+
     /// The next presentation unit's envelope header.
     async fn next_unit(received: &mut UnboundedReceiver<Outbound>) -> Value {
         loop {
-            let unit = tokio::time::timeout(Duration::from_secs(10), received.recv())
-                .await
-                .expect("a unit within 10s")
-                .expect("the leg's writer is open");
-            if let Outbound::Binary(bytes, _) | Outbound::Bulk(bytes, _) = unit {
-                let (header, _) = super::super::wire::decode_envelope(&bytes).unwrap();
+            if let Some(header) = header_of(&next_outbound(received).await) {
                 return header;
             }
         }
@@ -1005,5 +1022,126 @@ mod tests {
             next["kind"], "trf1-frame",
             "B's burst was taken for A's loss: A repaired it with a catch-up"
         );
+    }
+
+    /// One frames connection's door for two seeds: B's units are admitted
+    /// throughout; A's seed `transfer-begin` is admitted and every unit of A's
+    /// after it starves until the test opens A's credit. It records B's
+    /// `can_admit`, the pump's last step before it forces B's seed.
+    #[derive(Default)]
+    struct TwoSeeds {
+        a_begun: AtomicBool,
+        a_open: AtomicBool,
+        b_asked: AtomicBool,
+    }
+
+    impl PumpHost for TwoSeeds {
+        fn try_admit(&self, _: u64, activation_id: &str, _: u64, _: UnitClass) -> Admission {
+            if activation_id != "seed-a"
+                || self.a_open.load(Ordering::SeqCst)
+                || !self.a_begun.swap(true, Ordering::SeqCst)
+            {
+                Admission::Admitted
+            } else {
+                Admission::Starved
+            }
+        }
+        fn can_admit(&self, _: u64, activation_id: &str, _: u64, _: UnitClass) -> Admission {
+            if activation_id == "seed-b" {
+                self.b_asked.store(true, Ordering::SeqCst);
+            }
+            Admission::Admitted
+        }
+        fn unit_sent(&self, _: &str, _: u64, _: bool) {}
+        fn presentation_stopped(&self, _: &str, reason: &'static str) {
+            panic!("unexpected stop: {reason}");
+        }
+        fn scene_generation(&self, _: &str) -> Option<(u64, u64)> {
+            Some((1, 0))
+        }
+    }
+
+    /// The unit queued on the leg right now, if any: its envelope header.
+    fn queued(received: &mut UnboundedReceiver<Outbound>) -> Option<Value> {
+        received.try_recv().ok().as_ref().and_then(header_of)
+    }
+
+    /// TP-R6 (RV #95, native-tp-2): one frames connection negotiated ONE seed
+    /// slot, and A's seed is open: its `transfer-begin` went out and its chunk
+    /// waits on credit. The worker counts a seed open from its begin to its end
+    /// in wire order and fails the whole connection past the negotiated
+    /// `maxConcurrentSeeds`, so B's seed waits until A's end is WRITTEN, and
+    /// nothing of B's is rendered or sent before. Current-thread: once the host
+    /// has seen B's `can_admit`, B runs on to its next wait before this task is
+    /// polled again, so anything of B's it could send is on `out` by then. The
+    /// test holds A's end unit as the writer holds it while it writes; dropping
+    /// it is the write.
+    #[tokio::test]
+    async fn seeds_on_one_frames_connection_never_exceed_the_negotiated_slots() {
+        let cell = SharedHub::new(2);
+        let (a, b) = (&cell.sessions[0], &cell.sessions[1]);
+        let host = Arc::new(TwoSeeds::default());
+        let (out, mut received) = tokio::sync::mpsc::unbounded_channel();
+        let slots = Arc::new(Semaphore::new(1));
+        let start = |activation_id: &str, session: &Arc<Session>| PumpStart {
+            seed_slots: slots.clone(),
+            // the waits are the test's own: the bound must never fire inside them
+            catchup_bound: Duration::from_secs(60),
+            ..cell.start(activation_id, session, 1, out.clone())
+        };
+        let pump_a = spawn_pump(host.clone(), start("seed-a", a));
+        let begin_a = until_kind(&mut received, "transfer-begin").await;
+        assert_eq!(begin_a["activationId"], "seed-a");
+
+        let pump_b = spawn_pump(host.clone(), start("seed-b", b));
+        while !host.b_asked.load(Ordering::SeqCst) {
+            tokio::task::yield_now().await;
+        }
+        assert_eq!(
+            queued(&mut received),
+            None,
+            "B's seed began while A's was open: two seeds where one was negotiated"
+        );
+
+        // A's credit opens: its chunks and its end go out, and only A's.
+        host.a_open.store(true, Ordering::SeqCst);
+        pump_a.notify.notify_one();
+        let end_a = loop {
+            let unit = next_outbound(&mut received).await;
+            let header = header_of(&unit).expect("a presentation unit");
+            assert_eq!(header["activationId"], "seed-a", "only A's seed is open");
+            if header["kind"] == "transfer-end" {
+                break unit;
+            }
+        };
+        // A's end is queued, not yet written: B still waits for its slot.
+        tokio::task::yield_now().await;
+        assert_eq!(
+            queued(&mut received),
+            None,
+            "B's seed began before A's end was written"
+        );
+
+        // The writer writes A's end: the slot frees, and B's seed follows whole.
+        drop(end_a);
+        let begin_b = next_unit(&mut received).await;
+        assert_eq!(begin_b["kind"], "transfer-begin");
+        assert_eq!(begin_b["activationId"], "seed-b");
+        assert_eq!(begin_b["transfer"]["kind"], "seed");
+        loop {
+            let unit = next_unit(&mut received).await;
+            assert_eq!(
+                unit["transfer"]["transferId"], begin_b["transfer"]["transferId"],
+                "B's seed follows whole"
+            );
+            if unit["kind"] == "transfer-end" {
+                break;
+            }
+        }
+        pump_a.stop();
+        pump_a.task.await.unwrap();
+        pump_b.stop();
+        pump_b.task.await.unwrap();
+        cell.terminate();
     }
 }

@@ -45,13 +45,17 @@ use tokio::sync::Semaphore;
 /// ordered socket", §5) — so a delta that overtook its catch-up froze the
 /// phone's scene for good. `Binary(_, None)` is a unit of no activation (a
 /// calibration echo).
+///
+/// A `Bulk` unit may carry a RELEASE, the `SelectionText` precedent: the writer
+/// drops it only once the unit is written, and a unit dropped unwritten (the
+/// writer's exit) drops its release with it.
 #[derive(Debug)]
 pub enum Outbound {
     Text(String),
     /// At most two selection responses wait on a slow control writer.
     SelectionText(String, tokio::sync::OwnedSemaphorePermit),
     Binary(Vec<u8>, Option<Arc<str>>),
-    Bulk(Vec<u8>, Arc<str>),
+    Bulk(Vec<u8>, Arc<str>, Option<tokio::sync::OwnedSemaphorePermit>),
     Close(u16, String),
 }
 
@@ -523,6 +527,11 @@ pub struct CreditLedger {
     /// urgent_reserve` (§8, TP-S3d); urgent draws the full window.
     pub urgent_reserve: u64,
     pub accounts: HashMap<String, Account>,
+    /// The connection's seed slots, one per negotiated `maxConcurrentSeeds`
+    /// (TP-R6): the worker counts a seed open from its `transfer-begin` to its
+    /// `transfer-end` in wire order and fails the whole connection past the
+    /// cap. A new leg is a new ledger (law 4), and so a new set of slots.
+    pub seed_slots: Arc<Semaphore>,
 }
 
 impl CreditLedger {
@@ -561,6 +570,7 @@ impl CreditLedger {
             // silent, permanent seed stall.
             urgent_reserve: urgent_reserve.min(connection_limit / 2),
             accounts: HashMap::new(),
+            seed_slots: Arc::new(Semaphore::new(windows.max_concurrent_seeds as usize)),
         }
     }
 
