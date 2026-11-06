@@ -5836,6 +5836,10 @@ segments and out through an RPC error on the malformed leg (`/api/search?q=…` 
 log lines and messages) — `routeOf(path)` strips the query string before either; the contract's
 "never the query" holds. A one-shot `agents.usage` before `lifecycle.ready` spent a credentialed
 call the boot meant to defer — `snapshot()` answers the honest empty until armed.
+  > *Corrected 2026-11-06 (UM-2, LANDED "UM-0…UM-2"):* "local-only forever" held for neither scope. `index.search`
+  > joined the tailnet preset at SP-D13 (`355dffd8`, 2026-10-03) and `agent.usage` at UM-D8 (`c9493b957`), each for a
+  > self phone alone. Both are still in no eligibility table, the guest preset holds neither, and both usage doors stay
+  > `local`, so a peer daemon meets D36.
 
 **fieldd (the daemon lens, three probe-witnessed majors).** The attribution walk is the ORDINARY
 path, not an edge: rosetta widens each named root to its delegated children, so hits arrive from
@@ -7997,6 +8001,11 @@ verify end 2026-10-03 13:22:30 load { 157.95 151.04 109.07 } exit=0
 **Gate.** `pnpm gen` (no generated file moved) · `gen:check` · typecheck contracts + fieldd · biome on the touched files and the pages (the six pre-existing warnings only) · contracts 37 files / 738 · the touched fieldd files 21 / 235 + 3 opt-in skips · `pnpm verify` run 1 EXIT 1 on ONE fieldd row at load ~120 — the AR-4 "re-attach across a restart" row ("the audit attempt never got an outcome record"), green alone twice (36/36 both runs) · **`pnpm verify` run 2 EXIT 0** on the same tree: fieldd 146 files / 1799 passed / 9 skipped, cargo 302 passed / 9 ignored, biome 1742 files 0 errors (Nx replayed 24 of 25 test tasks from run 1's cache; fieldd's ran fresh). Landed by a one-commit rebase onto main over two docs-only commits, then a fast-forward.
 
 **Owed, named by the builder.** The `index.sessions` lookup by native ids is not clamped (its schema caps it at 256 ids — a phone asking 256 facts is the AR-4 join, left as is) · `index-mesh.ts:436` repeats the search default as a literal 300 · three rows now tell a peer from the phone only by granted scopes, which are equal (`device-service.test.ts:931`, `guest-door.test.ts:319`, `agent-usage.test.ts:606`) and each needs a kind witness such as `index.catalog.subscribe` · the three opt-in real-rosettad rows SKIP in a lane whose sibling link is `../rosetta-pin` because they look for `../rosetta/groundtruth` — the fixture path should go through the lock's one reader (W-D10's follow-up) · `api.html`'s catalogue still says every agent-plane door is local and its index table lacks the DS-6 doors (older than this slice). Unblocked by this slice: SP-6, the phone's History reads, on the same doors AR-8 builds.
+  > *Answered in part 2026-11-06 (UM-2, LANDED "UM-0…UM-2"):* `agent-usage.test.ts`'s row, "D36: a peer-fieldd
+  > principal cannot read this device's quota at all", now has its kind witness. Since UM-D8 the peer holds
+  > `agent.usage` by derivation, so the scope wall passes it, and the D36 wall refuses both usage doors with
+  > `{method, locality: "local"}`. That wall reads the principal's kind (`peer-fieldd`, `product-api.ts`), and the
+  > phone, holding the same scope, is answered in `agent-usage-tailnet.test.ts`. The other two rows are not read here.
 
 ## EL8 — the rosetta pin moves to the RO-1 merge: `ee6724e`, then `eecae7a` (2026-10-03; lane `pin` `65111956` · `69f2b411`; the fast-forward `69f2b411`)
 
@@ -37346,3 +37355,337 @@ It answers in part IOS-12a's and IOS-12b's Owed ("12c the thread"), each noted i
 - 12d (needs you) on 12c; 12f after 12e and M-phone.
 
 Two inserts into older entries: IOS-12a's and IOS-12b's Owed.
+
+## UM-0…UM-2 — profile meters, first the law, the model and the door: DESIGN.md first for every surface of UM and SE, one profile's meters and its Bands circle as pure code held to a golden, and the phone may read its home's usage batch without a poll of its own (tracks UM and SE)
+
+(2026-11-06; `f40ec6621` → `c9493b957`, 26 commits on main `2b9b66c14`, lane `um/1-base` in
+`/Volumes/SamsungRed/lanes/um1/vibe-field`, the UM lead's (vibe-field-b7; vibe-field-88 before the ~05:45Z account
+switch); landed 2026-11-06T09:02:14Z (M180) by the fixer, a fast-forward of main `2b9b66c14` (M-c1's mint of
+record) to `c9493b957` itself.
+Built on `1c0f7b748`: `um/1-base`, tip `0c79b15d2`, stays as the pre-light's record. It was first re-cut by
+`git replay` onto `e1a416f96` as `92c990691` (08:17Z, 26 of 26 "="), the tip run178 read green, now superseded. At
+08:47Z it was rebased by hand onto `2b9b66c14` (`git rebase --onto 2b9b66c14 e1a416f96 um/1-mint`): range-diff 24 of
+26 "=" and two "!", #7 `bb0af39cb` and #8 `b51857cac`, both only in `scripts/check-ios-fixtures.mjs` and only in its
+context (`lanes/um/logs/range-diff-m-u1-c9493b957.txt`). The two conflicts there were resolved as unions: at #7 the
+branch's `PHONE_BANDS_GOLDEN` const follows M-c1's `CHAT_FLOW` block; at #8, which retires that const, M-c1's block
+is kept and the const goes. The tip's file is M-c1's plus the branch's seven `OTHER_ORIGINS` lines (+7 −0), and every
+file both sides touched kept its +/− (biome.jsonc 3/0, DESIGN.md 674/53, api.html 26/3, methods.ts 11/1,
+registries.ts 27/2, daemon.ts 37/9, check-ios-fixtures.mjs 7/0).)
+UM and SE opened on James's word, typed to the lead at 03:11Z: "good, now start implement and land this properly,
+work in parallel". The record is `draft/thinking-profile-meters.md` (v1.0, RULED; it rides draft SLOT 18). The plan is
+`/Volumes/SamsungRed/lanes/um/PLAN.md`: v0.1 accepted by VF-PM at 03:53Z, and its §4 (v0.2, the critics'
+corrections, 04:20Z) supersedes §1–§3 where they differ. M-U1 is the first of three mints and lands alone; M-desk
+(UM-3, then SE-1) and M-phone (UM-4, then SE-2) follow as stacked mints, and UM-5 comes in wave 2. **Nothing a person
+sees moves at this land:** Godview still mounts puppeteer-views' usage column, Settings' meter is as it was, the Peek
+keeps its scope row, and the phone draws no meter. What moves is the law, a pure model nothing mounts yet, and the
+phone's preset: a self phone may now read its home's usage batch.
+
+**What it rests on.**
+- **James's picks.** On the page *The Bands Meter* (round 4, `claude.ai/artifact/RyPEkD4hr2TqTzN4MSiTfE`, db
+  `decisions`), thirteen documents written 00:06:51–00:07:56Z: UM-D21…D28 and SE-D1…D5, all A. Round three's store
+  (`PUPkEJBCd24QwMumyuZam9`) carries UM-D16 E (Bands) and UM-D19 A, from his chat words of 2026-11-05 21:36Z. UM-D3,
+  D4, D8 and D12…D15 had no pick on any page; they stand at the leans (A) under his 03:11Z word, put to him on VF-PM's
+  board as one ask (03:17Z). UM-D6 and UM-D7 are puppeteer's, petitions PU-S and PU-R. DECISIONS UM.
+- **The lead's rulings inside the marks:** PLAN.md §2's 1–23 and §4's 24 (22 corrected at 06:54Z). DESIGN.md and the
+  commits cite them as "the lead's ruling N". Those that change a ruled word are on the board, ‹for James› (Owed).
+- **Settings' Agent Profiles and its C1 meter** (AR-S2, AR-D27): `profiles-model.ts`' `namedBy`, `usageOf`,
+  `usageLines`, `isHot` and `signInState`. The model reads them and edits nothing there (no export added).
+- **AR-5d's account usage service** and its two doors, `agents.usage` and `agents.usage.subscribe` (fieldd's
+  `agent-usage.ts` over puppeteer-runtime's account usage monitor), and D36's locality wall (`product-api.ts`).
+- **SP-D13** (`355dffd8`), the template for UM-D8: `index.search` admitted to the tailnet preset, with contracts,
+  fieldd and api.html in one commit, because SP-1's lint and fieldd's peer row go red if either half lands alone.
+  SP-1's `WHOLE_VALUE_STREAM` and fieldd's `wholeValueDoor` (the profileSets precedent). `ownWindow` (daemon.ts), the
+  house allow-list for this desktop's own windows.
+- AO-6b's limit moment (`setup/limit-moment.ts`), whose `windowWords` the model's leaf now owns. `AGENT_CATALOG` for
+  UM-D15's order and `isOffered(…, "usage")`.
+- The drawings, `draft/profile-meters/round4/src/` (`p3e-dials.js`, `p3a-core.js`, `p5-peek.js`), and the map's seven
+  read-only readers (`lanes/um/map/*.json`, 03:15–03:43Z).
+
+**What is real.** 30 files, +8727 −254.
+- **Pin-class: none** (the ERE over the names: 0 hits). No manifest or lock moves. **Contracts sources, by text:**
+  `registries.ts` (`"agent.usage"` joins `TAILNET_SCOPES`, its one non-comment line), `methods.ts`
+  (`agents.usage.subscribe` declares `WHOLE_VALUE_STREAM`) and `agent-usage.ts` (comments only). `pnpm gen` writes
+  nothing: `registries.rs` carries no scopes, gen:schema emits no METHODS, and `agent-usage.ts` is outside
+  gen-jsonschema's bundle. Also named, as MA-4 named its own: `packages/design-kit/src/tokens.css` (+29 −1),
+  `biome.jsonc` (+3, the golden's ignore), `scripts/check-ios-fixtures.mjs` (+7, one OTHER_ORIGINS row) and
+  `packages/electron-shell/src/main/bootstrap.ts` (+6 −1, a comment; the window's scope set is unchanged).
+- **UM-0, DESIGN.md first** (+674 −53; `f40ec6621`, `aebd08db5`, `1511f6745`, `ef8054780`, `f1ce182c0`, `a9ded68cf`,
+  `5d393750f`, `e6b633d05`):
+  - §2.7 "The app's chrome in Godview's mode": 11 roles per mode, projected into tokens.css as 22
+    `--vf-godview-{light,dark}-chrome-*` tokens in rgb(). The hot dot is the existing `--vf-orange`.
+  - §5: the Line row gains the profiles column with its 24 blur. The Search scrim row gains the phone's dim back
+    (16%/46%, no blur, 240ms; SE-D3).
+  - §8 "The Bands circle" (UM-D16 E, D3, D4, D13, D15): one equal arc per plan, the 5-hour window inside and the week
+    outside, a model's week a hairline; each band Settings' C1 bent round; the needs-you thread; the first read on §6's
+    1.1 s breath; four size levels and the sizes in use; the hot dot. The middle says its window only from about 216,
+    where the hole reaches 46. A window read before its reset is unlit, unforecast, ranked below every running
+    window, faded to half and said by its reading's age.
+  - §8 "Godview's profiles column" (UM-D21, D22, D19, D12, SE-D2): the pill, the 40 circles, the lens ring, the
+    popover, the add, the honest states; the lens is this Mac's own.
+  - §8 "The moments": the limit moment stands beside the add (UM-D23), its old row kept as a dated amendment.
+    "Asking again": the approval line and the limit moment are independent (ruling 5, ‹for James›).
+  - §8 "Search — the Peek", rewritten as Tokens and one filter (SE-D1, SE-D2, UM-D28); the scope row's retirement is
+    dated, and until SE-1 the scope row stands.
+  - §8, the phone: "The phone's corner" (the held face, UM-D24…D26), the Me menu's Agent Profiles row and its page,
+    "The phone's search — a glass sheet over the field" (SE-D3…D5, UM-D28), "The phone's profile token" (UM-D27).
+    "The phone's Apps": MA-D7's strip moves into the sheet, and recent searches retire from search (ruling 24).
+  - §9 "The meters' words" and "Search's words", beside "The agents' words"; §13 "A meter is never a glyph".
+  - The slices are named as the record names them (`ef8054780`): UM-3 the desktop, UM-4 the phone, UM-5 UM-D14.
+  - `docs/UI_SYSTEM.md` is main's, byte for byte. `f40ec6621` wrote three blocks there and `aebd08db5` took them back
+    (PLAN §4): they land with their code at UM-3 and SE-1.
+- **UM-1, the meter model and the Bands circle, pure** (field-app `src/usage/`, new; five red/green pairs:
+  `c00a81a10`/`bb0af39cb`, `b51857cac`/`300d58c61`, `e4e5f22ea`/`f96697e29`, `3815cee78`/`55631a458`,
+  `7bae42adb`/`c5b4972d4`):
+  - `rules.ts`, a leaf with no imports: `forecastOf` ("~35m", "out in ~35m", "Runs out in ~35m at this pace"; only
+    while ahead of pace on the orange it is handed, before the reset, never for a budget; rounded first, then its
+    form, so 57.5 minutes says "~1h"). `pressureOf`, `Rank` with `outranks`, and `tightestOf` (UM-D13): a window read
+    before its reset presses 0 and ranks below every running window, an empty one too. `windowWords` moved here from
+    `limit-moment.ts`, which imports it now (one import line changes in `limit-moment.test.tsx`).
+  - `meters.ts`: `planMeters(set, rows, now, {installed, title, usage})` reads every plan once, and every agent on no
+    plan as its own entry, through Settings' join. It gives four kinds (a reading, needs you, no meter, a first read)
+    in UM-D15's order from the catalog. Usage that cannot be read is said so, a sign-in under way asks nothing,
+    `everyPlan` is the every-profile union (UM-D12), and `hasCircle` is ruling 7 (a draft profile has no circle until
+    an agent signs in).
+  - `bands.ts`: `bandsLevel`, `bandsOf` and `bandsGeometry(size, entries, options)`, with no DOM and no colour; it
+    hands out tones for DESIGN.md's tokens. It also draws the hole mode around the phone's face (96 across, hole 34,
+    band 8) and the dashed No meters ring with the profile's glyph kept. `bandsLabel` says "Usage: …",
+    "‹profile›: usage unavailable", or "Usage unavailable" for every profile's circle (`options.every`).
+  - `golden.ts` and its generator `perf/usage-bands.generate.perf.ts` write the usage bands golden,
+    `test/fixtures/usage/usage-bands.golden.json` (2383 lines, 144,926 bytes, written and re-blessed only by the
+    generator). It is VibeField's own, outside the phone Godview's family: no versions key, no planTitle, and a
+    day-and-clock word refused. `check:ios-fixtures` names it as an origin only; its FieldHomeTests copy lands with
+    UM-4.
+  - Two contracts fixtures, parsed by `fixtures.test.ts`' prefix rule with no edit: `agents-profile-sets.meters.json`
+    (four profiles) and `agent-usage.budget.json` (five rows).
+  - The rows: `usage-meters.test.ts` 39 and `usage-bands.test.ts` 33, new; `limit-moment.test.tsx` 22, unchanged. No
+    agent-id literal in src (R23b `--literals` passes). Nothing mounts the model yet: UM-3 and UM-4 read it.
+- **UM-2, the phone may read usage (UM-D8)** (`c2277f3ba` red, `0cadf0e59` green; the reviews `c998afb4b`,
+  `e20935b0e`, `2d202ec2b`, `ac7b7e25c`, `f436a6f83`, `c9493b957`):
+  - **contracts:** `agent.usage` joins `TAILNET_SCOPES` after `index.search`. `PEER_FIELDD_SCOPES` gains it by
+    derivation, which grants a peer nothing: both usage doors are `local`, so D36 refuses them to a `peer-fieldd`
+    principal before any handler. The guest preset stays []; no plugin eligibility table names it.
+    `agents.usage.subscribe` declares `WHOLE_VALUE_STREAM` (250 ms), as SP-1 requires of a tailnet-reachable
+    subscription. No row bound: a batch is one row per account.
+  - **fieldd `agent-usage.ts`:** `AccountUsageService.watch(emit)`, a passive watcher. It hears every batch a
+    subscriber hears and never begins or keeps the poll. `publish()` reaches the watchers, and `stop()` clears them.
+  - **fieldd `daemon.ts`, two hunks** (at main's :4997 and :8752). At the usage doors, only this desktop's own windows
+    (`ownWindow`, the allow-list) take a reading on `refresh: true` or run the poll. Every other caller is answered
+    `snapshot()` and watches, so a principal kind nobody has named spends nothing. The subscription goes through
+    `wholeValueDoor`, so the 250 ms floor holds for a window's too, and the service subscription is taken before the
+    door opens. The second hunk is a dated clause in the boot note at `agentUsage.start()`.
+  - **The one credentialed call a phone can cause** is the reading any read kicks while nothing is cached yet
+    (`AccountUsageService.snapshot`). The contracts source, daemon.ts, api.html and usage-meters.md all say so.
+  - **Dated corrections at the source (2026-11-06):** `registries.ts` (the SCOPES line, the TAILNET_SCOPES doc, the
+    PEER_FIELDD_SCOPES doc), `methods.ts`, `agent-usage.ts` (frames per subscription at the stream floor; a refresh
+    takes a reading only from this desktop's own windows), fieldd `agent-usage.ts`, `bootstrap.ts`' comment, and
+    daemon.ts's boot note. `docs/agent-plane/api.html`: the two rows (the params named `AgentsUsageParams`), a dated
+    sentence on the agents.* scope paragraph (a phone's `refresh: true`, which it draws no Retry for, is answered
+    from the cache), an "Update 2026-11-06 (UM-D8)" caption beside SP-D13's, and a correction on "One frame per
+    tick". `usage-meters.md`: two dated lines. The umbrella, `architecture.html`, names no preset and does not move.
+  - **The rows:** contracts `registry.test.ts` 60 → 62 (a new UM-D8 describe; SP-1's reachable-subscription pin
+    gains the stream) and `agent-usage.test.ts` 7 (its subscription pin flips); fieldd `agent-usage-tailnet.test.ts`
+    (new, 5 rows, on project-doors-phone's harness over the mock floor) and `agent-usage.test.ts` 17 → 19 (D36's
+    row now meets the locality wall, `{method, locality: "local"}`, on both doors; two watcher rows). The scripted
+    adapter moved verbatim to `test/scripted-usage.ts`, so both files read one adapter.
+
+**What is stubbed or left.**
+- **Nothing draws a meter.** Godview mounts puppeteer-views' UsageColumn, with its flat 80%, until UM-3 unmounts it.
+  Settings keeps its own C1 line until UM-3 adopts the leaf. The phone draws nothing until UM-4. The Peek keeps its
+  scope row until SE-1.
+- **The phone reads no usage yet:** its preset admits `agent.usage`, and nothing in the kit asks.
+- UI_SYSTEM.md's column plates and boundary come with UM-3, and the Peek's Tokens plates with SE-1.
+
+**Validation.**
+- **The MacBook, under VF-PM's HOLD** (one light row at a time, nice 19, each right after a swap re-read; speed, not
+  proof):
+  - The reds were read red by assertion at their commits where the swap gate allowed: UM-1's first (19 of 19 and 20
+    of 20, `lanes/um/logs/um1-model-red.log`), the fixer's review (4 and 4), the assembled review (5 and 4) and the
+    rank (2 and 1); UM-2's contracts rows (3 and 1, `lanes/um/logs/um1-ud8-red.log`). `b51857cac`'s rows and every
+    fieldd row waited for the pre-light.
+  - At the tip: usage-meters 39/39 and usage-bands 33/33 (`c5b4972d4`), limit-moment 22/22 (`55631a458`),
+    `check:ios-fixtures` exit 0 (253 copies, 86 pins at the lane's base). Root biome over the branch's 27 code and
+    config names at `0c79b15d2`, 08:14:05Z: "Checked 26 files in 246ms. No fixes applied."
+    (`lanes/um/logs/biome-branch-0c79b15d2.log`, sha256 `f6e90585aa86…`). The branch's `biome.jsonc` ignores
+    `packages/field-app/test/fixtures/usage/*.golden.json` (:77–79 at `um/1-mint`, the UM-1 comment and its "!"
+    pattern), so the usage bands golden is the one name not checked: 27 names, 26 files.
+  - No fieldd row, no tsc and no verify ran on the MacBook.
+- **The pre-light** (a9, the old mini `jaspers-Mac-mini`, Apple M4, 16 GiB, macOS 26.7.2; 07:53:04–07:59:19Z, at
+  `0c79b15d2` on `1c0f7b748`). Brief `lanes/um/briefs/a9-brief-m-u1-prelight.md` (sha256 `79364a835f5d…`), bundle
+  `m-u1-prelight-0c79b15d2-on-1c0f7b748.bundle` (207,783 bytes, sha256 `9bdc29a68241…`), logs
+  `/Volumes/SamsungRed/lanes/ts6/logs/oldmini/mu1-pre/` (`mu1.out` `98ce720c5e7b…`):
+  - **Run 1, UM-1 RED at `e42ed6254`** (now `b51857cac`), the golden absent and the tree clean: usage-meters "Tests
+    11 failed | 18 passed (29)" (`R1a.log` `876036a9ee59…`) and usage-bands "Tests 11 failed | 18 passed (29)"
+    (`R1b.log` `7af8e78a58e8…`). Every failure was an AssertionError; missing [] / extra [].
+  - **Run 2, UM-2 RED at `9674ee00f`** (now `c2277f3ba`): agent-usage-tailnet "Tests 5 failed (5)" (`R2a.log`
+    `83988dd19712…`) and agent-usage "Tests 3 failed | 15 passed | 1 skipped (19)" (`R2b.log` `754e63ee89aa…`).
+    Every failure was an AssertionError; missing [] / extra [].
+  - **Run 3, `pnpm verify` at `0c79b15d2`:** exit 0, armed 07:53:29Z and done 07:59:11Z (its 1-minute load peaked at
+    55), the tree clean after (`mu1-pre-v.out` `23e24c9b2cb2…`; `verify.clean.log` `76f30af62af3…`;
+    `mu1-pre-v/verify.log` `f0d864364ffa…`). contracts 1755, fieldd 3464 | 14 skipped, field-app 4253; vitest
+    13,514 | 0 | 20. Typecheck 29; biome "Checked 3397 files"; "ios fixtures: 253 copies identical", "ios pins: 86";
+    the census and the bundle assert OK; cargo 34 results, none failed. Every row as briefed, missing [] / extra [].
+- **Run178, the superseded tip** (a9, vf-m1; armed 08:31:41Z, exit 0 at 08:36:50Z): `pnpm verify` green at
+  `92c990691` on `e1a416f96`, every count as briefed: contracts 1784, fieldd 3511 | 15, field-app 4264, vitest
+  13,603 | 0 | 21 (`lanes/ts6/logs/m1/run178/`, `verify.log` `042dedfe873d…`).
+- **The mint, run180 (M180)** (a9, vf-m1, armed on main exactly `2b9b66c14`). Brief
+  `lanes/um/briefs/a9-brief-m-u1-mint-c9493b957.md` (sha256 `2823603f5507…`), bundle
+  `m-u1-mint-c9493b957-on-2b9b66c14.bundle` (208,403 bytes, sha256 `a0b008adff93…`; both in
+  `lanes/um/briefs/SHA256SUMS-m-u1-c9493b957`), logs `lanes/ts6/logs/m1/run180/`
+  (`verify.log` `9f581424c5c5…`; runs 1–2 under `mu1/`, `mu1.out` `c39a516a…`):
+  - Briefed: UM-1 RED at `b51857cac`, 11 | 18 and 11 | 18, then GREEN at `300d58c61`, 30/30 and 29/29. UM-2 RED at
+    `c2277f3ba`, 5/5 and 3 | 15 | 1, then GREEN at `0cadf0e59`, 5/5 and 18 | 1 (the green changes no fieldd test file).
+  - Briefed: `pnpm verify` at `c9493b957` exit 0, held to main at `2b9b66c14` as the brief derives it (run178's
+    counts less the branch's 83, plus item 190's 2 rows and M-c1's 11: contracts 1780, fieldd 3506 | 15, vitest
+    13,533 | 0 | 21) plus 83 rows by syntax. contracts +4 → 1784 (registry 60 → 62, fixtures +2); field-app +72
+    (usage-meters 39, usage-bands 33); fieldd +7 → 3513 | 15 (agent-usage 17 → 19, agent-usage-tailnet 5); vitest
+    13,616 | 0 | 21. `check:ios-fixtures`: 290 copies (M-c1's; the branch adds none) and 92 pins. electron-shell,
+    node `--test` and cargo unchanged; no generated change.
+  - As printed (armed 08:53:05Z on main = `2b9b66c14`; verify 08:53:45Z, exit 0 at 08:58:58Z, tree clean after): every
+    run as briefed, missing [] / extra [] throughout, each failure an AssertionError, no field-native build line (the
+    binary was fresh) and no harness Error. verify: contracts 1784 · fieldd 3513 | 15 (3528) · field-app 4275 (+72
+    over main's 4203) · vitest 13,616 | 0 | 21 over 947 files (+3) · node `--test` 474/474 · cargo 34 results, 545/0
+    · typecheck 29 projects · `check:ios-fixtures` 290 copies, 92 pins · biome "Checked 3421 files … No fixes
+    applied", 74 warnings and 21 infos, main's own at run179 · no generated change. Per file against run179, only
+    the branch's +83 rows. The host at fieldd's vitest start: load {5.48 5.01 8.13} then {9.65 5.96 8.43}, df 54
+    GiB, swap 0.
+
+**Disclosed: temp dirs (item 195).**
+- The branch leaves behind no temp dir it creates. Its two fieldd files, `agent-usage-tailnet.test.ts` (new) and
+  `agent-usage.test.ts`, take their roots from main's `shortTmpRoot` (`./native-harness`), push them to `roots`, and
+  remove every root in `afterEach` through `removeTempRoot`, as main's other fieldd files do.
+- No contracts or field-app test of the branch touches the file system. The golden's generator writes into the repo's
+  fixture path, never `/tmp`.
+- None of the leaked prefixes (plugin-cli, users, create-plugin) is the branch's; a9 attributed them to main's
+  plugin-tooling rows (08:28Z), the same forty-odd entries per verify across run173, run174, run175 and
+  the pre-light. No read after run180 was asked.
+
+**The SHA map.** The pre-light's commits were re-cut one for one (`lanes/um/logs/sha-map-m-u1-c9493b957.tsv`, sha256
+`1fe37ec3ffe2…`, columns old, new, tree, subject; the superseded `92c990691`'s map is `sha-map-m-u1-92c990691.tsv`):
+
+| # | pre-light (`um/1-base`) | landed (`um/1-mint`) | slice |
+|---|---|---|---|
+| 1 | `2b24b66f8` | `f40ec6621` | UM-0: DESIGN.md first |
+| 2 | `b502457c2` | `aebd08db5` | UM-0: UI_SYSTEM.md leaves the doc-first commit |
+| 3 | `e605fef8f` | `1511f6745` | UM-0: DESIGN.md's corrections (PLAN §4) |
+| 4 | `0f4308519` | `ef8054780` | UM-0: the slices' names follow the record |
+| 5 | `acf1b946f` | `f1ce182c0` | UM-0: the words the model learned |
+| 6 | `51233a761` | `c00a81a10` | UM-1 (red): meters and Bands on a skeleton |
+| 7 | `a03e0b459` | `bb0af39cb` | UM-1: meters and Bands |
+| 8 | `e42ed6254` | `b51857cac` | UM-1 (red): review |
+| 9 | `a0b805154` | `300d58c61` | UM-1: review, green |
+| 10 | `b106a5666` | `e4e5f22ea` | UM-1 (red): the fixer's review |
+| 11 | `a383ad7d5` | `f96697e29` | UM-1: the fixer's review, green |
+| 12 | `9674ee00f` | `c2277f3ba` | UM-2 (red): the phone may read usage |
+| 13 | `0e98fdb5e` | `0cadf0e59` | UM-2: the phone may read usage |
+| 14 | `5b396b8b0` | `c998afb4b` | UM-2: review, `ownWindow` |
+| 15 | `c67b64f30` | `e20935b0e` | UM-2: review, errata at the contracts source |
+| 16 | `5963aab04` | `2d202ec2b` | UM-2: review, the held batch after the settle |
+| 17 | `0fc791100` | `a9ded68cf` | UM-0: DESIGN.md first for the assembled review |
+| 18 | `4c037f256` | `5d393750f` | UM-0: recent searches retire (ruling 24) |
+| 19 | `724a3f2ca` | `3815cee78` | UM-1 (red): the assembled review |
+| 20 | `6585d7d53` | `55631a458` | UM-1: the assembled review, green |
+| 21 | `6bee99c9c` | `ac7b7e25c` | UM-2: review, the cold-cache reading said |
+| 22 | `f31f8ef05` | `f436a6f83` | UM-2: review, the held batch waits for the reading |
+| 23 | `3cdb5636c` | `e6b633d05` | UM-0: a window read before its reset, as built |
+| 24 | `d5782dcd4` | `7bae42adb` | UM-1 (red): the passed window's rank |
+| 25 | `f2df906b6` | `c5b4972d4` | UM-1: the passed window's rank, green |
+| 26 | `0c79b15d2` | `c9493b957` | UM-2: review, the cold-cache reading as the exception |
+
+The model and UM-D8 were built first on two helper branches, kept and not landed: `um/1-model` (tip `5527df7dd`) and
+`um/1-ud8` (tip `56b83c720`). Their commits were cherry-picked into `um/1-base` (PLAN §4's map), and the bodies
+assembled from them cite the helpers' SHAs. Each helper SHA resolves through the pre-light to the landed one:
+
+| helper | branch | pre-light | landed | cited in |
+|---|---|---|---|---|
+| `32545b7f0` | `um/1-model` | `51233a761` | `c00a81a10` | — |
+| `ca421118e` | `um/1-model` | `a03e0b459` | `bb0af39cb` | `1511f6745`, `b51857cac` |
+| `f6ecfb6cc` | `um/1-model` | `e42ed6254` | `b51857cac` | `300d58c61`, `f96697e29` |
+| `962707e30` | `um/1-model` | `a0b805154` | `300d58c61` | `f1ce182c0`, `e4e5f22ea`, `f96697e29` |
+| `7a63b46c9` | `um/1-model` | `b106a5666` | `e4e5f22ea` | `f96697e29` |
+| `5527df7dd` | `um/1-model` | `a383ad7d5` | `f96697e29` | `f1ce182c0` |
+| `4d17f89d8` | `um/1-ud8` | `9674ee00f` | `c2277f3ba` | `0cadf0e59`, `2d202ec2b` |
+| `2a0c1d025` | `um/1-ud8` | `0e98fdb5e` | `0cadf0e59` | `c998afb4b`, `e20935b0e`, `2d202ec2b` |
+| `dbe226b09` | `um/1-ud8` | `5b396b8b0` | `c998afb4b` | `e20935b0e` |
+| `143d96670` | `um/1-ud8` | `c67b64f30` | `e20935b0e` | `2d202ec2b` |
+| `56b83c720` | `um/1-ud8` | `5963aab04` | `2d202ec2b` | — |
+
+The bodies also cite pre-light SHAs, which the first table resolves: `2b24b66f8` (in `1511f6745`, `aebd08db5`),
+`e605fef8f` (`300d58c61`), `0f4308519` (`f96697e29`), `0fc791100`, `724a3f2ca` and `4c037f256` (`e6b633d05`),
+`3cdb5636c` and `6585d7d53` (`7bae42adb`, `c5b4972d4`), `d5782dcd4` (`c5b4972d4`) and `6bee99c9c` (`c9493b957`).
+`aebd08db5`'s "`git show 2b24b66f8 -- docs/UI_SYSTEM.md`" reads the same words on main as
+`git show f40ec6621 -- docs/UI_SYSTEM.md`. "main `1c0f7b748`" in eight bodies is the base the lanes were cut on, an
+ancestor of `2b9b66c14`; `355dffd82` is SP-D13's, on main.
+
+**Errata.**
+- **`f436a6f83`'s body** (pre-light `f31f8ef05`) says "agent-usage-tailnet.test.ts (all rows, the four that call
+  `heldBatch` above all)". **Three rows call it:** "the phone is answered the batch this desktop holds …", "the
+  phone's subscription starts no poll …" and "the phone hears a window's poll in whole batches …". The first row (the
+  grant) and the fifth (a foreign device) do not. `2d202ec2b`'s body names rows 2–4 rightly.
+- **The assembled bodies cite helper SHAs and pre-light SHAs** that are not on main. The two tables above resolve
+  every one.
+- `f96697e29`'s "Words still owed to James … this lane does not commit it" was paid inside this mint: `f1ce182c0`
+  applied `lanes/um/um1-base-design-words.patch` unchanged (the words themselves stay ‹for James›). Its "NOT RUN,
+  owed to vf-m1" (field-app tsc, `pnpm verify`, phone-parity, and `f6ecfb6cc`'s red) was paid by the pre-light, all
+  but the four green-only rows below.
+
+**Found.**
+- **The door's first rule had the wrong polarity** (`c998afb4b`). It named who may NOT spend a reading (not
+  `tailnet`, not `tailnet-guest`), and so failed open. `ownWindow`, the allow-list already in that scope, is the
+  rule now. It also covers `mcp-agent`, minted with no scopes, which the review's list missed. EL7 fails closed.
+- **The held batch's race had another cause than first written** (`2d202ec2b`, then `f436a6f83`). When the registry
+  reconcile adds no account, puppeteer-runtime's account usage monitor publishes a placeholder batch
+  (`latest ?? materializeBatch(now())`, every entry `unavailable`). `AccountUsageService` keeps it as latest, so a
+  later cold `snapshot()` answers it and kicks nothing. The harness now waits for the reading itself (every entry
+  `available` with `fetchedAt === READ_AT`, bounded at 8 s).
+- **A window read before its reset is the phone's common case under UM-D8:** the phone takes no reading, so its
+  batch is as old as a window's last poll (`a9ded68cf`). The rule was written for it, and the re-review found its
+  tie at pressure 0, where a passed window listed first could win (`7bae42adb`, `c5b4972d4`).
+- **Settings and the meter differ until UM-3 adopts the leaf.** Settings paces a budget that its adapter gives a
+  length and a reset, while the meter keeps a budget pace-less (`bb0af39cb`). Settings' C1 line still says "resets
+  now" for a spent window, a difference usage-meters pins (`e6b633d05`). Settings' own loading dot and shimmer are
+  1800 ms, off §6's 1.1 s breath (`profiles-settings.css` :275 and :297; AR's, flagged in `1511f6745`).
+- **The bands golden left the phone Godview's family** (`b51857cac`). As a `phone-*.golden.json` it would have pulled
+  the held EL8 0.3.4 lane (item 171) into a re-bless. It is a VibeField golden with its own generator now, and
+  phone-parity's inputs are main's bytes.
+- **Disclosed: four rows were written green and never seen red.** `300d58c61`'s kept reading with "no age", its
+  reset said only as a length, its "usage unavailable" label, and ruling 7's row; and `e4e5f22ea`'s two assertions
+  and one changed row, green on their tree. Each is named in its commit's body. They are disclosed here, not owed.
+
+**Owed.**
+- **M-desk**, one stacked mint, verify and smoke:godview (console-gated):
+  - UM-3, U2 restacked onto `um/1-mint` as `um/2-desk`: the desk's profiles column, its popover and add, the limit
+    moment beside the add, Settings saying the same meter through the leaf, UsageColumn and its flat 80% unmounted,
+    and UI_SYSTEM.md's column plates and boundary;
+  - then SE-1 (`se/1-peek`): the Peek as Tokens, one filter, this Mac's live rows naming their profile, and the Tokens
+    plates.
+- **M-phone**, one stacked mint (the kit, stills and verify), landing before MA-6 opens HomeScreen.swift:
+  - UM-4 (`um/3-phone`): the usage shapes, Bands in Swift with the golden's FieldHomeTests copy and its required
+    mirror, the feed, the Me menu's row, the Agent Profiles page and the held face;
+  - then SE-2 (`se/2-phone-search`): the glass sheet, chips and tokens, the token above search, and the lens on Field.
+- **UM-5**, UM-D14's plan filter on the desk and the phone, in wave 2 after both.
+- **Upstream:** PU-R (UM-D7, the bloom's buds wear their fuel) and PU-S (UM-D6, an agent's body wears its profile),
+  James's to file. They ride one puppeteer release and one EL8, behind item 171's 0.3.4, and no UM slice waits on
+  them.
+- **Draft SLOT 18** (riders, named): the record `draft/thinking-profile-meters.md`. Dated corrections at their
+  sources: `thinking-godview-mobile-first.md` (G11, D9), `design-06-sync-planes.md` (§7, beside SP-D13),
+  `one-frame/design-one-frame.md` (GV-D3), `thinking-agent-onboarding.md` (AO-D11's anchor),
+  `thinking-ar-agents-settings.md` (UM-D3's reach), `thinking-mini-apps.md` (MA-D7's strip in the sheet) and
+  `thinking-tailscale-onboarding.md` (TS-D20b). The petitions `PU-R-puppeteer-bloom-fuel.md` and
+  `PU-S-puppeteer-profile-on-body.md` with their README rows; `draft/profile-meters/README.txt`; the round-4 page
+  source's hold words (450 → 520). The record's own §3.1, corrected at its source: it numbers the five items it put on
+  the board 1–5 in its own order (its 3 is PLAN's ruling 5, its 4 is PLAN's 19), while DESIGN.md and the commits cite
+  "the lead's ruling N" by PLAN.md §2's and §4's numbers; §3.1 is to cite PLAN's.
+- **To James:**
+  - The lead's rulings 1 (the hold is 520 ms), 2 (profiles five to eight on a second arc), 5 (the approval line and
+    the limit moment independent, and whether both may stand at once), 19 (no first-use hint), 22 (MA-D7's strip
+    above the sheet's switch) and 24 (recent searches retire from search).
+  - PLAN §4's UM-D14 wave-1 interim, the self-only lens across desktops, and the desk token clearing on close.
+  - The model's words: a sign-in under way, every profile's circle "Usage unavailable", a window read before its
+    reset (with the case whose reset came before its reading), and Settings' C1 line adopting it at UM-3.
+  - A deck raised to the fill line covering the limit card.
+  - The words not yet written: the phone's empty corpus, the drop's counts, and the Me menu's row when the home does
+    not share usage.
+  - UM/SE's place in 0.9 (lean: in, as MA-4).
+
+Two inserts into older entries: SP-D13's Owed, answered in part, and a dated correction under AR-5b's "local-only
+forever", at its source.

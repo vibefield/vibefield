@@ -36,10 +36,11 @@
   Since the audit's base (`bb1a2c823`): AL-9, items 82–84, TS-8a/8b, the TS-3a erratum, AO-6b3 and QW1 stack A landed;
   then HK, the EL8 to puppeteer 0.3.0 (`1469639a6`) and QW1 stack B (10-28).
 - **The live program.** §2: TS, AO, FG, AL, **AU (updates that wait)**, **PG (the phone's Godview)**, **WI (the
-  phone's way in)**, **IOS-12 (the phone's Chat, since 11-04)**, **SD (the sound identity, since 11-05)**, **HN
-  (Cards in Hand: the line, the hand, Artifacts in the head)**, QW1 (the Godview swarm's fix wave 1), PT-S (PORTALS'
-  phone, resumed 10-29), **CO (the compose plane: sparks and the tool plane, re-entered 10-28)**, the release rails,
-  the EL8 watch, the fixer, upstream. The first-beta blockers are §3 item 7. Everything valid but unscheduled is §4.
+  phone's way in)**, **IOS-12 (the phone's Chat, since 11-04)**, **SD (the sound identity, since 11-05)**, **UM + SE
+  (the profile meters and one search, since 11-06)**, **HN (Cards in Hand: the line, the hand, Artifacts in the head)**,
+  QW1 (the Godview swarm's fix wave 1), PT-S (PORTALS' phone, resumed 10-29), **CO (the compose plane: sparks and the
+  tool plane, re-entered 10-28)**, the release rails, the EL8 watch, the fixer, upstream. The first-beta blockers are §3
+  item 7. Everything valid but unscheduled is §4.
 
 ## 2 Now — the active tracks
 
@@ -432,12 +433,41 @@ DESIGN.md §2.9, §8 "The phone's Apps" and §9 "Apps"; DECISIONS MA
 - Next: **MA-3f, serving**: the copy in VibeField's files worker if James rules the Drive's DR-D1 (a)
   (`draft/thinking-drive.md`, PROPOSED 11-06, page *The Drive*), else rosetta 0.1.4 (RO-32…RO-35, drafted in
   `lanes/ma/rosetta`; James files and releases it) and its EL8 · MA-3h, Keep and Hide as intent · **MA-6, the phone's
-  shelf** (IOS-13a, ahead of it, landed 11-06) · **MA-5, the phone's host** after SP-4 and its probes P1/P2
-  (cp-landing's queue).
+  shelf** (IOS-13a, ahead of it, landed 11-06; after UM's M-phone, whose SE-2 builds the search sheet that MA-D7's strip
+  now stands in, DESIGN.md §8 "The phone's Apps" as amended at UM-0) · **MA-5, the phone's host** after SP-4 and its
+  probes P1/P2 (cp-landing's queue).
 - Owed: the 10 words marked ‹for James› in DESIGN.md §8 and §9, and §9's interim words for Live (MA-4); the
   Drive's nine marks; MA-4's witness by eye; smoke:godview on vf-m1 (items 185, 186); carried from AH: AH-4's
   review, its LANDED entry and its physical witnesses (`cce684ce3`, on main since 08-03), AH-1's two-client
   witness, AH-3's physical closeout, and device-retirement GC with TS's "forget a device".
+
+**UM + SE — the profile meters and one search** · vibe-field-b7, the UM lead (vibe-field-88 until the 11-06
+account switch; lanes `lanes/um1` and its helpers `lanes/um1-model`, `lanes/um1-ud8`) · law
+`draft/thinking-profile-meters.md` §2–§4 (the page *The Bands Meter*, RyPEkD4h; round 3 PUPkEJBC; sources
+`draft/profile-meters/`), the plan `lanes/um/PLAN.md` §4, DESIGN.md §2.7, §5, §8 ("The Bands circle", "Godview's
+profiles column", "Search — the Peek", the phone's corner, search sheet and token), §9 and §13; DECISIONS UM
+- Ruled 11-06 00:06:51–00:07:56Z (James, on the page): UM-D21…D28 and SE-D1…D5 A. UM-D16 E (Bands) and UM-D19 A were
+  his chat words of 11-05 21:36Z. UM-D3, D4, D8 and D12…D15 carried A at the leans under his "good, now start
+  implement and land this properly, work in parallel" (03:11Z). UM-D6 and D7 are puppeteer's (PU-S, PU-R).
+- Landed 11-06: **UM-0…UM-2, M-U1** (`f40ec6621` → `c9493b957`, a fast-forward of `2b9b66c14`, run180, M180; LANDED
+  "UM-0…UM-2"): DESIGN.md first for every surface of UM and SE, with tokens.css's 22 chrome tokens; the meter model
+  and the Bands geometry, pure, in field-app's `src/usage/`, held to the usage bands golden; UM-D8, the phone may read
+  its home's usage batch (`agent.usage` in the tailnet preset, its subscription a passive watcher, its refresh served
+  from the cache). Nothing draws a meter yet: Godview still mounts puppeteer-views' usage column.
+- Next:
+  - **M-desk**, one stacked mint, verify and smoke:godview: UM-3 (`um/2-desk`, U2 restacked on `um/1-mint`: the
+    profiles column, its popover and add, the limit moment beside the add, Settings saying the same meter; UsageColumn
+    unmounted), then SE-1 (`se/1-peek`: the Peek as Tokens, one filter).
+  - **M-phone**, one stacked mint, the kit, stills and verify, before MA-6 opens HomeScreen.swift: UM-4
+    (`um/3-phone`: the phone's meters, the Me menu's row, the Agent Profiles page, the held face), then SE-2
+    (`se/2-phone-search`: the glass sheet, chips and tokens, the token above search, the lens on Field).
+  - **UM-5**, UM-D14's plan filter, in wave 2.
+- Owed:
+  - to James: the ‹for James› marks in DESIGN.md §8 and §9 (the lead's rulings 1, 2, 5, 19, 22 and 24; UM-D14's
+    wave-1 interim; the self-only lens; the desk token clearing on close; the model's words; LANDED "UM-0…UM-2",
+    Owed) and UM/SE's place in 0.9 (lean: in);
+  - the petitions PU-R and PU-S (his to file; one puppeteer release and one EL8, behind item 171);
+  - SLOT 18's riders: the record, seven at-source corrections, the petitions and the page's hold words.
 
 **HN — Cards in Hand** · vibe-field-a1 (lane `lanes/hn`) · law `draft/thinking-cards-in-hand.md` §6 (page sources `draft/cards-in-hand/`), DESIGN.md §1/§5/§6/§8/§9/§10/§13
 - Ruled 10-29 10:40Z (James): all sixteen at their leans (LN-D1…D3, HN-D1…D10, PL-D1…D3); HN-D1 was his own pick on
@@ -1225,7 +1255,9 @@ Petition status lives in `draft/petitions/README.md`. Still open or owed there:
   History's Copy waits on it, HN-5).
 - **puppeteer:** 0.3.0 PUBLISHED and pinned 10-28 (`1469639a6`) · a later release for AO-7's `installRecipe`,
   item 50's env seam, item 39 and the tuck · PU-12 (verify first) · PU-19 filed as #47 (AO-8) · PU-15
-  (with AR-6).
+  (with AR-6). PU-R (UM-D7, the bloom's buds wear their fuel) and PU-S (UM-D6, an agent's body wears its profile):
+  drafted for draft SLOT 18, James's to file; one release and one EL8, behind item 171's 0.3.4, and no UM slice waits on
+  them.
 - **mille:** M11 (with WIN). **ICE:** I47, I48 (named, parked) · the remount edge (a pointer `leave` with no point; a
   candidate if presence UX needs it) · NodeNext portability. **strata:** S3/S4's residue (parked: a measured join or
   reload wall on a real desk document).
@@ -1255,7 +1287,8 @@ Petition status lives in `draft/petitions/README.md`. Still open or owed there:
 | DK — the desk migration | COMPLETE; landed 10-09 | `thinking-desk-migration.md`, `thinking-the-desk.md`, ICE design-015…018, `docs/desk-gates.md` | James's parked build rulings |
 | GT — Godview terminal | PARKED; the deck's ladder done (GT-0…GT-8) | `specs/godview-terminal.md` | G29; GT-D22; row 13b |
 | TP / TC — terminal pipeline and custody | PARKED; TC RATIFIED 10-28 (Q6) | `specs/terminal-pipeline-v3*.md`, `specs/terminal-custody.md`, `thinking-terminal-mesh-cells.md`, `thinking-floor-wedge.md`, `thinking-inventory-latency.md` | D6's cell half |
-| MA — Apps (was AH — Artifact Hub) | ACTIVE since 11-05 (MA-D1…D13 ruled; MA-4 in 0.9, James 11-06); MA-0a + MA-1a (M152), MA-3 (M157, M162) and MA-4 (M166) landed; AH-1…3 landed, AH-4 unledgered | `thinking-mini-apps.md`, `specs/artifact-hub.md`, design-06 §5; DESIGN.md §2.9/§8/§9/§13 | MA-3f serving (DR-1 if the Drive rules DR-D1 (a)), then MA-3h; MA-6 the phone's shelf |
+| MA — Apps (was AH — Artifact Hub) | ACTIVE since 11-05 (MA-D1…D13 ruled; MA-4 in 0.9, James 11-06); MA-0a + MA-1a (M152), MA-3 (M157, M162) and MA-4 (M166) landed; AH-1…3 landed, AH-4 unledgered | `thinking-mini-apps.md`, `specs/artifact-hub.md`, design-06 §5; DESIGN.md §2.9/§8/§9/§13 | MA-3f serving (DR-1 if the Drive rules DR-D1 (a)), then MA-3h; MA-6 the phone's shelf (after UM's M-phone) |
+| UM + SE — profile meters and one search | ACTIVE since 11-06 (UM-D21…D28 and SE-D1…D5 ruled on the page; UM-D16 E, D19 A; D3, D4, D8, D12…D15 at the leans); UM-0…UM-2 landed 11-06 (M-U1 `c9493b957`, run180, M180) | `thinking-profile-meters.md`; `lanes/um/PLAN.md` §4; DESIGN.md §2.7/§5/§8/§9/§13; `docs/agent-plane/usage-meters.md` | M-desk (UM-3 + SE-1, stacked), then M-phone (UM-4 + SE-2, stacked, before MA-6); UM-5 in wave 2 |
 | PLUG — shipped core | COMPLETE: P0–P7, P8b–d (P8c via WP8), PRC-4/5; later publishing/validation work is separate | `specs/plugin-architecture.md`, `thinking-p8-loadable-artifact.md` | existing product gates; no blanket 24-hour prerequisite |
 | PRC-6 — plugin runtime validation | OPEN; diagnostics in draft [PR #7](https://github.com/vibefield/vibefield/pull/7); Linux CI passed, full verification and calibration pending | `thinking-prc6c2-physical-soak.md` §9–10 | full verify → guarded 32-cycle current-desk calibration + listener control; historical failures stay open; literal 24h only for that claim |
 | PLUG — publishing | PARKED: KIT/P8e | `thinking-p8-loadable-artifact.md`, `specs/trust-and-distribution.md` | publishing scope; TD registry + R2 process host |
