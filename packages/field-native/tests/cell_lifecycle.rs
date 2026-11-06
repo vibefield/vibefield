@@ -58,6 +58,21 @@ fn spawn_cell_with_env(
     env: &[(&str, &str)],
     stderr: Stdio,
 ) -> (Child, String, String) {
+    let (mut command, control, frame) = cell_command(root, instance);
+    for (key, value) in env {
+        command.env(key, value);
+    }
+    let child = command
+        .stderr(stderr)
+        .spawn()
+        .expect("spawn field-terminal-host");
+    (child, control, frame)
+}
+
+/// The cell's `Command` before it spawns: its endpoints derived from the root and the ordinal,
+/// stdin and stdout the protocol's pipes. A row that shapes the process (its environment, a
+/// descriptor limit) finishes it.
+fn cell_command(root: &std::path::Path, instance: u32) -> (Command, String, String) {
     let control = endpoint_for(
         root,
         &field_native::endpoints::cell_socket_file("termctl.sock", instance),
@@ -67,10 +82,7 @@ fn spawn_cell_with_env(
         &field_native::endpoints::cell_socket_file("termframe.sock", instance),
     );
     let mut command = Command::new(env!("CARGO_BIN_EXE_field-terminal-host"));
-    for (key, value) in env {
-        command.env(key, value);
-    }
-    let child = command
+    command
         .args([
             "--control",
             &control,
@@ -82,11 +94,34 @@ fn spawn_cell_with_env(
             &instance.to_string(),
         ])
         .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(stderr)
-        .spawn()
-        .expect("spawn field-terminal-host");
-    (child, control, frame)
+        .stdout(Stdio::piped());
+    (command, control, frame)
+}
+
+/// RV #47 — the cell at a LOW soft descriptor limit, set in the forked child before exec, so its
+/// accept loop runs out of descriptors while this test process's own limit stays where it was.
+#[cfg(unix)]
+fn lower_the_soft_descriptor_limit(command: &mut Command, soft: libc::rlim_t) {
+    use std::os::unix::process::CommandExt;
+    // SAFETY: runs in the forked child before exec. `getrlimit`/`setrlimit` are
+    // async-signal-safe, allocate nothing, and touch only this child's own limits. Only the SOFT
+    // half is lowered, as item 198's low-limit floor lowers it.
+    unsafe {
+        command.pre_exec(move || {
+            let mut limit = libc::rlimit {
+                rlim_cur: 0,
+                rlim_max: 0,
+            };
+            if libc::getrlimit(libc::RLIMIT_NOFILE, &mut limit) != 0 {
+                return Err(std::io::Error::last_os_error());
+            }
+            limit.rlim_cur = soft.min(limit.rlim_max);
+            if libc::setrlimit(libc::RLIMIT_NOFILE, &limit) != 0 {
+                return Err(std::io::Error::last_os_error());
+            }
+            Ok(())
+        });
+    }
 }
 
 fn wait_exit(mut child: Child, budget: Duration) -> std::process::ExitStatus {
@@ -180,6 +215,74 @@ fn a_cell_whose_stderr_has_no_reader_exits_with_its_code_not_a_panic() {
         .status()
         .expect("spawn the cell");
     assert_eq!(status.code(), Some(2), "{status:?}");
+}
+
+/// RV #47 (native-terminal-1): a cell whose serve plane fails on its own exits, nonzero, while
+/// its leash is still held. The floor holds the leash for as long as it waits on the cell, and
+/// that wait is its one crash signal. The failure is a real one: at a soft limit of 64
+/// descriptors the row's 64 held dials outnumber what the cell has left, and ghosttea ends its
+/// control plane on the first accept that fails (EMFILE). The cell reports that, then it must
+/// leave. Read on the runtime (tokio's stdin), the leash is an uncancellable read on the blocking
+/// pool, and dropping the runtime waits for that read: until the floor closes stdin, which it
+/// never does while it waits.
+#[cfg(unix)]
+#[test]
+fn a_serve_plane_that_fails_on_its_own_exits_nonzero_with_the_leash_held() {
+    use std::os::unix::net::UnixStream;
+    const SOFT_LIMIT: libc::rlim_t = 64;
+
+    let root = short_root();
+    let (mut command, control, _frame) = cell_command(root.path(), 31);
+    lower_the_soft_descriptor_limit(&mut command, SOFT_LIMIT);
+    let mut child = command
+        .stderr(Stdio::inherit())
+        .spawn()
+        .expect("spawn field-terminal-host");
+    let mut stdin = child.stdin.take().expect("stdin");
+    let stdout = child.stdout.take().expect("stdout");
+    // stdout is read on a thread of the row's own, so a cell that never reports fails the row at
+    // its bound instead of hanging it.
+    let (said, heard) = std::sync::mpsc::channel::<String>();
+    std::thread::spawn(move || {
+        for line in BufReader::new(stdout).lines().map_while(Result::ok) {
+            if said.send(line).is_err() {
+                break;
+            }
+        }
+    });
+
+    writeln!(stdin, "{}", serde_json::json!({ "token": "tok-ceiling" })).expect("bootstrap");
+    let hello: field_native::cell::CellHello =
+        serde_json::from_str(&heard.recv().expect("a hello line")).expect("hello parses");
+    assert_eq!(hello.control, control, "the hello names the plane");
+
+    // As many dials as the cell has descriptors, its own stdio among them. Each one it accepts
+    // holds a descriptor until ghosttea's 10 s AUTH_TIMEOUT, so an accept fails long before any
+    // comes back. A refused dial is the one the failed accept dropped (macOS) or one after the
+    // plane closed: either way the ceiling was already reached.
+    let held: Vec<UnixStream> = (0..SOFT_LIMIT)
+        .filter_map(|_| UnixStream::connect(&control).ok())
+        .collect();
+    let line = heard
+        .recv_timeout(Duration::from_secs(10))
+        .expect("the cell reports that its serve plane ended");
+    let report: field_native::cell::CellExitReport =
+        serde_json::from_str(&line).expect("exit report parses");
+    let unknown = report.drain_unknown.as_deref().unwrap_or_default();
+    assert!(
+        report.drained.is_none() && unknown.starts_with("the serve plane failed"),
+        "the plane's own failure, said as one: {report:?}"
+    );
+
+    // THE ROW: the cell leaves, with main's own failure, while the leash is still held.
+    let status = wait_exit(child, Duration::from_secs(10));
+    assert_eq!(
+        status.code(),
+        Some(1),
+        "a serve plane that failed on its own is a crash the floor must see: {status:?}"
+    );
+    drop(held);
+    drop(stdin);
 }
 
 #[test]
