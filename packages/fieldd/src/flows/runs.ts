@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 import {
+  FLOW_HOST,
   FLOW_LIMITS,
   FLOW_LOG_MAX,
   FLOW_RUN_STEPS_MAX,
@@ -72,10 +73,14 @@ import * as words from "./words";
 //   the bytes fieldd KEPT under the approval's hash (D8), never the library's file.
 // - The item's act (R4–R6, `acts.start`) begins the run its start asked for (Q4: input, starter, scope; a spark's
 //   `from`). Run this version runs the library's bytes the item asked about, approved as yours past every refusal
-//   ("Run this version (approves it)"), so an act that can't begin approves nothing; Run the one you approved runs the
-//   bytes fieldd kept. Its refusals are the start's words, answered as the act's `failed`.
+//   ("Run this version (approves it)"), so an act that can't begin approves nothing, and one that already stands is
+//   never approved again (H3); Run the one you approved runs the approval standing at the act, the bytes fieldd kept
+//   for it (H1). Its refusals are the start's words, answered as the act's `failed`.
+// - A copy of VibeField that can't start a flow's host refuses every start and act first, UNAVAILABLE in §9's host
+//   sentence (Q-b, FLOW_HOST), before anything is raised or written.
 // - Its refusals (DESIGN.md §9 "When a run can't start", words.ts) are PRECONDITION_FAILED with a `reason`, before
-//   anything is written: no flow, a file past SCRIPT_MAX_BYTES, an input the flow does not name, a version not kept,
+//   anything is written: no flow, a file past SCRIPT_MAX_BYTES, an input the flow does not name, a version not kept
+//   (or, for the one you approved, none standing), a script its static read refuses, in the read's own words (Q-a),
 //   an input naming a session or a project VibeField can't find, or the first one, whose folder the run holds, with a
 //   folder it can't run in (empty, or past FLOW_LIMITS.FOLDER_CHARS, which its journal's head can't hold; JJ1), a
 //   step that names no folder in a run whose input names none (CP4-Q20 (a), from the static read's `cwd`), and the
@@ -232,6 +237,14 @@ interface Begun {
 const refused = (reason: string, message: string): RpcCallError =>
   new RpcCallError("PRECONDITION_FAILED", message, false, { reason });
 
+/** Q-b: a copy of VibeField that can't start a flow's host refuses every start in §9's host sentence, as the flows'
+ * doors say it (FLOW_HOST: UNAVAILABLE, never retryable), before anything is raised or written. */
+const hostless = (): RpcCallError =>
+  new RpcCallError("UNAVAILABLE", words.hostUnconfigured(), false, {
+    service: FLOW_HOST.SERVICE,
+    state: FLOW_HOST.STATE_UNCONFIGURED,
+  });
+
 /** What an ask() is answered until slice 11 builds it: the host refuses it in fieldd's own words ("VibeField could
  * not answer this call."), as it refuses any handler that fails. */
 const NO_ASK_YET = "CP-4a2b: a flow's ask() is built in M-r2's slice 11";
@@ -320,6 +333,7 @@ export class FlowRuns {
    * the approved version; refused, before anything is written, in §9's words. */
   async start(params: FlowRunStartParams): Promise<FlowRunStarted> {
     const { library, records, needs } = this.ports;
+    if (this.ports.host.launch.kind === "unconfigured") throw hostless();
     const file = library.read(params.flow);
     if (file === undefined) throw refused("not-found", words.notFound(params.flow));
     if ("tooBig" in file) throw refused("too-big", words.tooBig());
@@ -401,6 +415,7 @@ export class FlowRuns {
     const { start } = act;
     let begun: Begun;
     try {
+      if (this.ports.host.launch.kind === "unconfigured") throw hostless();
       // G2 (CP-L4, TL-D5): a spark's start, its own or a Run in its thread (CP4-Q20 (a)), narrows again to the spark's
       // Agent Profiles now, as an Allow does; a spark that is gone starts nothing
       const spark = start.starter.spark;
@@ -420,14 +435,22 @@ export class FlowRuns {
         scope,
         ...(act.from !== undefined ? { from: act.from } : {}),
       };
-      if (act.version === "approved") begun = this.#begin(params, act.hash);
-      else {
+      // H1 (R4–R6 review): the one you approved is the approval standing NOW, read at the act, never the one that
+      // stood at the ask (the item's `hash`); a flow with none standing starts nothing
+      const standing = this.ports.records.approval(act.flow);
+      if (act.version === "approved") {
+        if (standing === undefined) throw refused("version", words.notAVersion(act.flow));
+        begun = this.#begin(params, standing.hash);
+      } else {
         // Run this version: the library's bytes, while they are still the version the item asked about
         const file = this.ports.library.read(act.flow);
         if (file === undefined) throw refused("not-found", words.notFound(act.flow));
         if ("tooBig" in file) throw refused("too-big", words.tooBig());
         if (file.hash !== act.hash) throw refused("version", words.notAVersion(act.flow));
-        begun = this.#begin(params, file.hash, file.bytes);
+        // H3: a version that already stands runs as it stands, never approved again, so its approval keeps its
+        // approvedAt and the proposal it came from
+        const approving = standing?.hash === file.hash ? undefined : file.bytes;
+        begun = this.#begin(params, file.hash, approving);
       }
     } catch (error) {
       if (error instanceof RpcCallError) return { outcome: "failed", reason: error.message };
@@ -449,6 +472,10 @@ export class FlowRuns {
     const bytes = approving ?? records.bytes(hash);
     if (bytes === undefined) throw refused("version", words.notAVersion(params.flow));
     const read = readFlow(bytes);
+    // Q-a (ruled 2026-11-06): a script its static read refuses, by a rule newer than its approval, starts nothing,
+    // in the read's own words (the sentence flows.read gives it): one reader, one gate. Its approval stands
+    const unread = read.refusals[0];
+    if (unread !== undefined) throw refused("read", unread.words);
     const meta = read.meta;
     const name = words.markName(meta?.name, params.flow);
     const takes = new Set(Object.keys(meta?.input ?? {}));
