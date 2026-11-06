@@ -14,6 +14,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { meterWindows } from "../../usage/meters";
 import type { SettingsSubpage } from "../SettingsDialog";
 import { borderCls, fieldCls, labelCls, SettingsRow, SettingsSection } from "../settings-ui";
 import type { AgentsNotice } from "./AgentsView";
@@ -144,9 +145,33 @@ export function profileAgentSubpage(
 /** The track's height before it is measured (the stylesheet's 14 px). */
 const TRACK_HEIGHT = 14;
 
+/** UM-D3, UM-D4 — Settings' C1 lines as the meters read them (`usage/meters.ts`'s
+ * `meterWindows`: Settings' own lines, every window in play), with the words of
+ * each window that runs out before its reset at this pace ("out in ~35m"), said
+ * at its line's end — so Settings and Godview's popover never say different things. */
+function meterLines(
+  metrics: Parameters<typeof meterWindows>[0],
+  now: Date,
+): { lines: UsageLine[]; forecasts: Readonly<Record<string, string>> } {
+  const windows = meterWindows(metrics, now);
+  const forecasts: Record<string, string> = {};
+  for (const window of windows) {
+    if (window.forecast !== undefined) forecasts[window.line.id] = window.forecast.short;
+  }
+  return { lines: windows.map((window) => window.line), forecasts };
+}
+
 /** One window's line. The figure's place is laid out in pixels, so the
- * track and the figure are measured, and again whenever either resizes. */
-function UsageLineView({ line }: { line: UsageLine }): ReactElement {
+ * track and the figure are measured, and again whenever either resizes. A
+ * window that runs out before its reset says when at its end, in the reset's
+ * place (UM-D4). */
+function UsageLineView({
+  line,
+  forecast,
+}: {
+  line: UsageLine;
+  forecast?: string | undefined;
+}): ReactElement {
   const track = useRef<HTMLSpanElement | null>(null);
   const figure = useRef<HTMLSpanElement | null>(null);
   const [size, setSize] = useState({ track: 0, figure: 0, height: TRACK_HEIGHT });
@@ -185,7 +210,7 @@ function UsageLineView({ line }: { line: UsageLine }): ReactElement {
     line.usedPercent,
   )}% used${line.reset !== undefined ? `, resets in ${line.reset}` : ""}${
     line.hot ? ", ahead of pace" : ""
-  }`;
+  }${forecast !== undefined ? `, ${forecast}` : ""}`;
   return (
     // biome-ignore lint/a11y/useSemanticElements: a row of the timeline's grid; see UsageTimeline
     <div
@@ -221,8 +246,14 @@ function UsageLineView({ line }: { line: UsageLine }): ReactElement {
         </span>
       </span>
       <span className="vf-profiles-usage-reset tabular-nums" aria-hidden="true">
-        {line.resets && <ResetIcon />}
-        {line.reset ?? ""}
+        {forecast !== undefined ? (
+          forecast
+        ) : (
+          <>
+            {line.resets && <ResetIcon />}
+            {line.reset ?? ""}
+          </>
+        )}
       </span>
     </div>
   );
@@ -236,12 +267,14 @@ function UsageLineView({ line }: { line: UsageLine }): ReactElement {
  * (or over, or near the limit when pace is unknown). */
 export function UsageTimeline({
   lines,
+  forecasts,
   label,
   variant = "row",
 }: {
   lines: readonly UsageLine[];
-  /** UM-3 2e red: the skeleton — the windows' forecasts, not yet said */
-  forecasts?: Readonly<Record<string, string>>;
+  /** UM-D4 — the words of each window that runs out before its reset, by its
+   * line's id (`meterLines`), said at the line's end */
+  forecasts?: Readonly<Record<string, string>> | undefined;
   /** what these windows belong to, for a screen reader */
   label: string;
   /** on a plan card the lines take the card's width (pass 19: 34 · track · 66) */
@@ -259,7 +292,12 @@ export function UsageTimeline({
         const group = line.group;
         const heads = group !== undefined && group.id !== lines[index - 1]?.group?.id;
         return (
-          <UsageGroupLine key={line.id} heading={heads ? group.label : undefined} line={line} />
+          <UsageGroupLine
+            key={line.id}
+            heading={heads ? group.label : undefined}
+            line={line}
+            forecast={forecasts?.[line.id]}
+          />
         );
       })}
     </div>
@@ -268,7 +306,15 @@ export function UsageTimeline({
 
 /** A line, with its group's heading above it when it opens the group. The
  * heading is said in each line's own words, so it is hidden from the list. */
-function UsageGroupLine({ heading, line }: { heading?: string | undefined; line: UsageLine }) {
+function UsageGroupLine({
+  heading,
+  line,
+  forecast,
+}: {
+  heading?: string | undefined;
+  line: UsageLine;
+  forecast?: string | undefined;
+}) {
   return (
     <>
       {heading !== undefined && (
@@ -276,7 +322,7 @@ function UsageGroupLine({ heading, line }: { heading?: string | undefined; line:
           {heading}
         </span>
       )}
-      <UsageLineView line={line} />
+      <UsageLineView line={line} forecast={forecast} />
     </>
   );
 }
@@ -345,7 +391,7 @@ export function PlanCardView({
   refreshingUsage?: boolean;
   onAct?: ((card: PlanCard) => void) | undefined;
 }): ReactElement {
-  const lines = usageLines(card.metrics, now);
+  const { lines, forecasts } = meterLines(card.metrics, now);
   const loading =
     refreshingUsage && card.named && card.namedBy !== undefined && card.act?.kind !== "reauth";
   const titleId = useId();
@@ -393,7 +439,7 @@ export function PlanCardView({
         className={`vf-profiles-plan-usage${loading && lines.length === 0 ? " is-loading" : ""}`}
       >
         {lines.length > 0 ? (
-          <UsageTimeline lines={lines} label={card.title} variant="card" />
+          <UsageTimeline lines={lines} forecasts={forecasts} label={card.title} variant="card" />
         ) : card.sentence !== undefined ? (
           // Preserve the sentence's space while the skeleton replaces it,
           // including wrapped failure messages on narrow cards.
@@ -1131,7 +1177,10 @@ function ProfileAgentRowView({
   const badged = row.badges.length > 0 && (row.state === "signed-in" || row.state === "expired");
   // Usage may arrive before the identity that places it on a plan. Keep it
   // for that card instead of briefly moving the meters into the agent row.
-  const lines = badged || row.state === "unread" ? [] : usageLines(row.usage, now ?? new Date());
+  const { lines, forecasts } =
+    badged || row.state === "unread"
+      ? { lines: [], forecasts: {} }
+      : meterLines(row.usage, now ?? new Date());
   let action: ReactNode = null;
   if (row.state === "expired") {
     action = (
@@ -1200,7 +1249,7 @@ function ProfileAgentRowView({
             )}
           </span>
         )}
-        <UsageTimeline lines={lines} label={row.label} />
+        <UsageTimeline lines={lines} forecasts={forecasts} label={row.label} />
       </div>
       <div className="vf-agents-row-actions">{action}</div>
       <Chevron />
@@ -1320,7 +1369,7 @@ export function ProfileAgentPageView({
   extensions,
 }: ProfileAgentPageViewProps): ReactElement {
   const at = now ?? new Date();
-  const lines = usageLines(row.usage, at);
+  const { lines, forecasts } = meterLines(row.usage, at);
   const identity = row.persona.identity;
   const signedIn = row.state === "signed-in" || row.state === "expired";
   // a vendor agent's one sign-in is on its company's plan: the card says it best
@@ -1436,7 +1485,7 @@ export function ProfileAgentPageView({
       >
         <div className="vf-agents-list vf-profiles-signins">
           {signInLines(row, plans).map((line) => {
-            const windows = usageLines(line.metrics, at);
+            const { lines: windows, forecasts: windowForecasts } = meterLines(line.metrics, at);
             const plan = plans.find((candidate) => candidate.id === line.planId);
             const loading =
               refreshingUsage &&
@@ -1458,7 +1507,7 @@ export function ProfileAgentPageView({
                     {line.inUse && <span className="vf-profiles-tag">in use</span>}
                   </span>
                   <span className="vf-agents-row-fact">{line.fact}</span>
-                  <UsageTimeline lines={windows} label={line.title} />
+                  <UsageTimeline lines={windows} forecasts={windowForecasts} label={line.title} />
                   {loading && <UsageLoading label={line.title} hasReading={windows.length > 0} />}
                 </div>
               </div>
@@ -1508,7 +1557,7 @@ export function ProfileAgentPageView({
             {own !== undefined && card?.note !== undefined && (
               <p className="vf-profiles-plan-note">{card.note}</p>
             )}
-            <UsageTimeline lines={lines} label={row.label} />
+            <UsageTimeline lines={lines} forecasts={forecasts} label={row.label} />
             {refreshingUsage && row.state === "signed-in" && (
               <UsageLoading label={title} hasReading={lines.length > 0} />
             )}

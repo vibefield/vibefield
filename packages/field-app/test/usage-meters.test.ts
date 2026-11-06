@@ -470,14 +470,14 @@ describe("UM-D3 — one meter: Settings' pace rule, and a budget with no pace", 
   it("every window's orange is Settings' isHot; a budget is pace-less — no now line, orange at 80", () => {
     const metrics = [
       paced("5h", 64, 50),
-      // a budget the adapter gives a length and a reset: Settings' line would pace it
+      // a budget the adapter gives a length and a reset: Settings reads it pace-less too since UM-3e (UM-D3)
       window("credit", 50, 300, 240, { kind: "budget" }),
       window("credit-high", 85, 300, 240, { kind: "budget" }),
     ];
     const settings = usageLines(metrics, NOW);
     expect(settings.map((line) => [line.id, line.hot])).toEqual([
       ["5h", true],
-      ["credit", true],
+      ["credit", false],
       ["credit-high", true],
     ]);
     const windows = meterWindows(metrics, NOW);
@@ -486,7 +486,8 @@ describe("UM-D3 — one meter: Settings' pace rule, and a budget with no pace", 
       ["credit", true, false],
       ["credit-high", true, true],
     ]);
-    expect(windows[0]?.line).toEqual(settings[0]);
+    // one meter: the meters' lines ARE Settings' lines, a budget's included
+    expect(windows.map((each) => each.line)).toEqual(settings);
     for (const budget of windows.slice(1)) {
       expect(budget.line.elapsedPercent).toBeUndefined();
       expect(budget.resetIn).toBeUndefined();

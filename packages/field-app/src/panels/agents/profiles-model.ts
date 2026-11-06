@@ -727,6 +727,9 @@ export function usageLines(metrics: readonly AgentAccountUsageMetric[], now: Dat
         elapsed = Math.min(100, Math.max(0, (1 - left / window) * 100));
       }
       const budget = metric.kind === "budget";
+      // UM-D3 (one meter everywhere): a budget has no pace to judge, as the
+      // meters read it — no now line, and orange at 80 or more
+      if (budget) elapsed = undefined;
       const group = metric.group;
       const line: UsageLine = {
         id: metric.id,
