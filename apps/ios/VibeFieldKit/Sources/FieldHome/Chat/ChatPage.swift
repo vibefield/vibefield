@@ -37,22 +37,22 @@ enum ChatWords {
   /// unreachable — the same fact to the person); or answering with a build the phone can't read (VF-PM's ruling,
   /// 2026-11-05: never "isn't answering" about a desktop that answered and was refused). `carried`: the list holds a
   /// row of it, its last word; else the phone never heard it, and says so, never "as it last said" (§9, VF-PM
-  /// 2026-11-05 02:06Z).
-  static func away(_ desktop: String, _ standing: ChatAway.Standing, carried: Bool) -> String {
+  /// 2026-11-05 02:06Z). The device is named as its platform names it (`DeviceWord`; L4's word pass, 2026-11-06).
+  static func away(_ desktop: String, _ standing: ChatAway.Standing, carried: Bool, device: DeviceWord) -> String {
     switch (standing, carried) {
     case (.asleep, true):
       "\(desktop) is asleep. These are as it last said; your words wait here until it wakes."
     case (.silent, true):
       "\(desktop) isn't answering. These are as it last said; your words wait here until it answers."
     case (.incompatible, true):
-      "\(desktop) runs a build this phone can't read. These are as it last said; "
+      "\(desktop) runs a build \(device.this) can't read. These are as it last said; "
         + "your words wait here until it's updated."
     case (.asleep, false):
       "\(desktop) is asleep. Its sparks show here when it wakes."
     case (.silent, false):
       "\(desktop) isn't answering. Its sparks show here when it answers."
     case (.incompatible, false):
-      "\(desktop) runs a build this phone can't read. Its sparks show here when it's updated."
+      "\(desktop) runs a build \(device.this) can't read. Its sparks show here when it's updated."
     }
   }
 
@@ -191,7 +191,7 @@ struct ChatPage: View {
         HStack(alignment: .firstTextBaseline, spacing: 6) {
           Image(systemName: "moon")
             .font(.system(size: 12, weight: .medium))
-          Text(ChatWords.away(desktop.name, desktop.standing, carried: desktop.carried))
+          Text(ChatWords.away(desktop.name, desktop.standing, carried: desktop.carried, device: DeviceWord.current))
             .font(ChromeType.sans(13))
             .fixedSize(horizontal: false, vertical: true)
         }
