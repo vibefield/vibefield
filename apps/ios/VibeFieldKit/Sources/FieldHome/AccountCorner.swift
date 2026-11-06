@@ -276,18 +276,32 @@ struct AccountCornerView: View {
   }
 }
 
-/// One menu row: a glyph in the face's own 50 pt column, a label, and an
+/// One menu row: a lead in the face's own 50 pt column, a label, and an
 /// optional trailing word — orange with a dot when it is one of the things
 /// only the person can fix.
-struct AccountMenuRow: View {
-  let glyph: String
-  /// TS-7 — a desktop's row draws its OS mark in the glyph's column (§8: a
-  /// device is its operating system's mark), in the glyph's own ink.
-  var device: DeviceMark.OS? = nil
+///
+/// The lead is a view (UM-4, UM-D25 A): a glyph or a desktop's OS mark for
+/// every row the menu had (`AccountMenuGlyph`), and a drawing of its own for
+/// a row that needs one — the Agent Profiles row's Bands circle at 26, and
+/// the profile token's menu's (§8 "The phone's corner", "The phone's profile
+/// token"). It stands in the column as drawn, in its own inks.
+struct AccountMenuRow<Lead: View>: View {
+  let lead: Lead
   let label: String
   var word: String? = nil
   var wantsTheUser: Bool = false
   let action: (() -> Void)?
+
+  init(
+    label: String, word: String? = nil, wantsTheUser: Bool = false, action: (() -> Void)?,
+    @ViewBuilder lead: () -> Lead
+  ) {
+    self.lead = lead()
+    self.label = label
+    self.word = word
+    self.wantsTheUser = wantsTheUser
+    self.action = action
+  }
 
   var body: some View {
     Group {
@@ -303,16 +317,8 @@ struct AccountMenuRow: View {
 
   private var content: some View {
     HStack(spacing: 4) {
-      Group {
-        if let device {
-          DeviceMark(os: device, size: 17)
-        } else {
-          Image(systemName: glyph)
-            .font(.system(size: 17, weight: .regular))
-        }
-      }
-      .foregroundStyle(ChromePalette.inkSecondary)
-      .frame(width: AccountCornerView.circle - 12)
+      lead
+        .frame(width: AccountCornerView.circle - 12)
       Text(label)
         .font(ChromeType.sans(15, .medium))
         .foregroundStyle(ChromePalette.ink)
@@ -335,6 +341,38 @@ struct AccountMenuRow: View {
     }
     .frame(minHeight: 44)
     .contentShape(RoundedRectangle(cornerRadius: ChromeRadius.row, style: .continuous))
+  }
+}
+
+extension AccountMenuRow where Lead == AccountMenuGlyph {
+  /// A row led by an SF Symbol (`glyph`), or by a desktop's OS mark (`device`).
+  init(
+    glyph: String, device: DeviceMark.OS? = nil, label: String, word: String? = nil, wantsTheUser: Bool = false,
+    action: (() -> Void)?
+  ) {
+    self.init(label: label, word: word, wantsTheUser: wantsTheUser, action: action) {
+      AccountMenuGlyph(glyph: glyph, device: device)
+    }
+  }
+}
+
+/// The menu's glyph lead: an SF Symbol at 17 in the secondary ink, or — TS-7
+/// — a desktop's OS mark in the glyph's column (§8: a device is its operating
+/// system's mark), in the glyph's own ink.
+struct AccountMenuGlyph: View {
+  let glyph: String
+  let device: DeviceMark.OS?
+
+  var body: some View {
+    Group {
+      if let device {
+        DeviceMark(os: device, size: 17)
+      } else {
+        Image(systemName: glyph)
+          .font(.system(size: 17, weight: .regular))
+      }
+    }
+    .foregroundStyle(ChromePalette.inkSecondary)
   }
 }
 

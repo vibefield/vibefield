@@ -32,26 +32,43 @@ struct ProfileLens: Equatable, Sendable {
   }
 
   /// The chosen profile, while one is.
-  var chosen: AgentProfileSet? { nil }
+  var chosen: AgentProfileSet? { profile.flatMap { id in profiles.first { $0.id == id } } }
 
   /// UM-D12 — a profile can be chosen only while there are several.
-  var offersProfiles: Bool { false }
+  var offersProfiles: Bool { profiles.count > 1 }
 
   /// The home's profiles, read again (on attach, on open, after a sign-in changed them): a chosen profile the home no
   /// longer holds, or the last one but one, lets the lens go.
-  mutating func adopt(_ sets: [AgentProfileSet]) {}
+  mutating func adopt(_ sets: [AgentProfileSet]) {
+    profiles = sets
+    if chosen == nil || !offersProfiles { profile = nil }
+  }
 
   /// Shows one profile (`id`), or every profile (nil): the token's menu, its ×, the page's Profiles rows and the
   /// face's actions under VoiceOver. A profile the home does not hold, or a pick with one profile, changes nothing.
-  mutating func show(_ id: String?) {}
+  mutating func show(_ id: String?) {
+    guard let id else {
+      profile = nil
+      return
+    }
+    guard offersProfiles, profiles.contains(where: { $0.id == id }) else { return }
+    profile = id
+  }
 
   /// The hold's let-go (§8 "The phone's corner"): on the hub every profile, on a bud that profile, on open ground
   /// nothing. With one profile letting go only closes.
-  mutating func letGo(_ release: Release) {}
+  mutating func letGo(_ release: Release) {
+    guard offersProfiles else { return }
+    switch release {
+    case .hub: show(nil)
+    case .bud(let id): show(id)
+    case .open: break
+    }
+  }
 
   /// Keeps search to one desktop (`id`), or to none (nil).
-  mutating func keep(desk id: String?) {}
+  mutating func keep(desk id: String?) { desk = id }
 
   /// Search closed: only the profile outlives it (the lead's ruling 21) — the desktop's token clears.
-  mutating func searchClosed() {}
+  mutating func searchClosed() { desk = nil }
 }
