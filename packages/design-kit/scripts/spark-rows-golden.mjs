@@ -287,12 +287,14 @@ if (isMain) {
   const text = renderSparkRows(dealSparkRows(loadEngine(), adapter, statuses));
   if (process.argv.includes("--check")) {
     if (readFileSync(GOLDEN, "utf8") !== text) {
-      console.error(`spark rows golden: ${GOLDEN} is not what the vendored engine lays out; regenerate on purpose`);
+      const said = `${GOLDEN} is not what the vendored engine lays out; regenerate on purpose`;
+      console.error(`spark rows golden: ${said}`);
       process.exit(1);
     }
     console.log(`spark rows golden: ${statuses.length} statuses, the engine's`);
   } else {
     writeFileSync(GOLDEN, text);
-    console.log(`spark rows golden: wrote ${statuses.length} statuses × ${SPARK_ROWS_SEEDS.length} seeds`);
+    const wrote = `${statuses.length} statuses × ${SPARK_ROWS_SEEDS.length} seeds`;
+    console.log(`spark rows golden: wrote ${wrote}`);
   }
 }
