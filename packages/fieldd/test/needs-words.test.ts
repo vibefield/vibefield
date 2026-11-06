@@ -85,7 +85,7 @@ describe("the person's queue's words (DESIGN.md §9)", () => {
       "the run of Release check you allowed Vela could not start: the folder is gone",
     );
     expect(flowStartUncertainFact("Vela", "Release check")).toBe(
-      "VibeField restarted, and cannot tell whether the run of Release check you allowed Vela started; list Vela's flows to see",
+      "VibeField restarted, and cannot tell whether the run of Release check you allowed Vela started; it is not started again",
     );
   });
 

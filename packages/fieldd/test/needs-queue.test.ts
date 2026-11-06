@@ -1462,7 +1462,7 @@ describe("CP-4a2b — a flow run's items: the runs' acts, then Stop the run; an 
     again.onSparkLive(VELA, "run-vela");
     expect(h.woken.at(-1)).toEqual([
       "run-vela",
-      "VibeField restarted, and cannot tell whether the run of Release check you allowed Vela started; list Vela's flows to see",
+      "VibeField restarted, and cannot tell whether the run of Release check you allowed Vela started; it is not started again",
     ]);
   });
 });
