@@ -11,10 +11,23 @@
 // forward cut mid-flight reads "outcome unknown" and its retry applies once; a
 // window carrying the envelope is refused; the locality wall still refuses
 // guests and still keeps a `local` method on its device.
+//
+// IOS-12d (Q6; PC-L2): a needs-you answer forwarded to the item's desktop is
+// answered there once, for every window and device: B's own subscriber drops
+// it, A's merged list no longer lists it, and only B audits the answer.
 import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { CONTRACTS_VERSION, SOCKETS } from "@vibefield/contracts";
+import {
+  AGENT_CATALOG,
+  CONTRACTS_VERSION,
+  LAYOUT,
+  NEEDS_RECORD_FORMAT,
+  NeedsAnswerResult,
+  NeedsListResult,
+  type NeedsRecord,
+  SOCKETS,
+} from "@vibefield/contracts";
 import type { AuditRecordV1 } from "@vibefield/contracts/diagnostics";
 import type { WsCtor } from "@vibefield/fieldd-client";
 import { afterEach, describe, expect, it } from "vitest";
@@ -22,6 +35,8 @@ import WebSocket from "ws";
 import { verifyAuditSegment } from "../src/audit-service";
 import { bootstrap, type FielddDaemon } from "../src/index";
 import { MockMgmtServer } from "../src/testing/mock-mgmt";
+import { NeedsStore } from "../src/tool-plane/rooms/you/store";
+import { SparkStore } from "../src/tool-plane/sparks";
 import { productPathSecret, writeLinkFixture } from "./link-fixture";
 import { nativeEndpoint } from "./native-harness";
 import { desktopSlice } from "./peer-roster";
@@ -89,8 +104,49 @@ interface Pair {
   hold: () => () => void;
 }
 
-async function bootPair(): Promise<Pair> {
+const VELA = "sp-vela00000000";
+const QUESTION = "ny-0000000000c0ffee";
+
+/** IOS-12d — B's user root with Vela's record and her question kept, signed, before B boots (needs-doors' seed). */
+function seedVelaAsks(dataDir: string): void {
+  new SparkStore({
+    dir: join(dataDir, ...LAYOUT.SPARKS_DIR),
+    keyPath: join(dataDir, ...LAYOUT.SPARKS_KEY_FILE),
+  }).write({
+    format: 1,
+    id: VELA,
+    name: "Vela",
+    face: { seed: 7 },
+    agent: AGENT_CATALOG[0]!.id,
+    profiles: ["native"],
+    thinksUnder: "native",
+    folder: join(dataDir, "sparks", "vela"),
+    createdAt: "2026-10-31T15:00:00.000Z",
+    updatedAt: "2026-10-31T15:00:00.000Z",
+  });
+  const question: NeedsRecord = {
+    format: NEEDS_RECORD_FORMAT,
+    item: {
+      id: QUESTION,
+      kind: "question",
+      state: "open",
+      from: { name: "Vela", session: "run-vela", spark: VELA },
+      spark: VELA,
+      asked: "2026-10-31T16:00:00.000Z",
+      words: "Push the fix to main now, or hold it for the review?",
+      choices: ["Push", "Hold", "Not now"],
+    },
+  };
+  new NeedsStore({
+    dir: join(dataDir, ...LAYOUT.NEEDS_DIR),
+    keyPath: join(dataDir, ...LAYOUT.NEEDS_KEY_FILE),
+  }).write(question);
+}
+
+/** `seedB`: what B's user root keeps before it boots. */
+async function bootPair(seedB?: (dataDir: string) => void): Promise<Pair> {
   const dirB = makeDataDir();
+  seedB?.(dirB);
   const mockB = await startMock(dirB, "dev-b");
   // B's roster lists A, so B can correlate the node id A's sidecar names
   mockB.meshPeers = [
@@ -176,6 +232,22 @@ async function auditRecords(daemon: FielddDaemon): Promise<AuditRecordV1[]> {
 async function windowOn(daemon: FielddDaemon): Promise<WsRpc> {
   const rpc = await openRpc(`ws://127.0.0.1:${daemon.controlPort}`);
   await helloAs(rpc, daemon.shellToken, "shell-main");
+  return rpc;
+}
+
+/** IOS-12d — a renderer window on `daemon` holding `sparks.use`, minted by its shell as the Mac's window is. */
+async function sparkWindowOn(daemon: FielddDaemon, suffix: string): Promise<WsRpc> {
+  const shell = await windowOn(daemon);
+  const minted = (await shell.call("system.mintWindowToken", {
+    scopes: ["sparks.use"],
+    label: `window-${suffix}`,
+    rendererParticipant: {
+      participantId: `renderer:desktop-test:window-${suffix}`,
+      incarnation: `renderer:desktop-test:window-${suffix}:document-1`,
+    },
+  })) as { token: string };
+  const rpc = await openRpc(`ws://127.0.0.1:${daemon.controlPort}`);
+  await helloAs(rpc, minted.token, "renderer");
   return rpc;
 }
 
@@ -305,5 +377,48 @@ describe("DS-2 — forwarding between two real daemons", () => {
       kind: "FORBIDDEN_SCOPE",
       details: { locality: "local" },
     });
+  }, 40_000);
+
+  it("IOS-12d — a needs-you answer forwarded to its item's desktop is answered there once: B's own window drops it, A's merged list no longer lists it, and only B audits it", async () => {
+    const { A, B } = await bootPair(seedVelaAsks);
+    const onA = await sparkWindowOn(A, "a");
+    const onB = await sparkWindowOn(B, "b");
+    // B's own window holds B's queue, whole
+    const sub = (await onB.call("needs.subscribe", {})) as { subId: string; snapshot: unknown };
+    expect(NeedsListResult.parse(sub.snapshot).items.map((item) => item.id)).toEqual([QUESTION]);
+    // A's merge lists B's question, naming the desktop that holds it
+    const merged = NeedsListResult.parse(await onA.call("needs.list", { scope: "mesh" }));
+    expect(merged.items.map((item) => [item.id, item.device])).toEqual([[QUESTION, "dev-b"]]);
+
+    // answered on A, made on B
+    const answered = NeedsAnswerResult.parse(
+      await onA.call("needs.answer", { item: QUESTION, choice: 0, device: "dev-b" }),
+    );
+    expect(answered.item).toMatchObject({ id: QUESTION, state: "answered" });
+    expect(answered.item.answer).toMatchObject({ choice: 0, outcome: "done" });
+
+    // B's window drops it, and A's merge no longer lists it
+    await until(() =>
+      onB.notifications.some(
+        (n) =>
+          n.method === "needs.delta" &&
+          n.params.subId === sub.subId &&
+          NeedsListResult.parse(n.params.payload).items.length === 0,
+      ),
+    );
+    const after = NeedsListResult.parse(await onA.call("needs.list", { scope: "mesh" }));
+    expect(after.items).toEqual([]);
+
+    // audited once, on B, as the peer daemon carrying A's window
+    const attempts = (await auditRecords(B)).filter(
+      (r) => r.action === "needs.answer" && r.phase === "attempt",
+    );
+    expect(attempts).toHaveLength(1);
+    expect(attempts[0]?.actor).toMatchObject({
+      kind: "peer-fieldd",
+      id: "dev-a",
+      onBehalfOf: { clientKind: "renderer", deviceId: "dev-a" },
+    });
+    expect((await auditRecords(A)).filter((r) => r.action === "needs.answer")).toHaveLength(0);
   }, 40_000);
 });
