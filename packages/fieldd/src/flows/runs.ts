@@ -273,6 +273,9 @@ const slotsTaken = (open: readonly FlowRunRecordStep[]): number =>
 /** The states a run never leaves. */
 const ENDED_STATES: ReadonlySet<FlowRunState> = new Set(["done", "stopped", "failed", "lost"]);
 
+/** TT1 — the states of a run at rest, its host gone (D1): `waiting`, or `holding` while the person holds it. */
+const AT_REST: ReadonlySet<string> = new Set(["waiting", "holding"]);
+
 /** Whether a record's run is live: every state but an end, a word this VibeField does not know among them. */
 const isLive = (record: FlowRunRecord): boolean => {
   const state = flowRunStateOf(record);
@@ -1498,13 +1501,11 @@ export class FlowRuns {
     if ((calls?.out ?? 0) === 0) this.#rouse(run);
   }
 
-  /** TT1 (the 10a review) — a run at rest, its host gone: it reads `holding` while the person holds it, else
-   * `waiting`, read from its hold in the one writer's own read. The one rule every road that rests a run writes by:
-   * #park, #wake's queue road and #left. */
+  /** TT1 (the 10a review) — a run at rest, its host gone, written as a rest: `waiting`, which the one writer
+   * (#replace) writes `holding` while the person holds it. Every road that rests a run writes it here: #park, #wake's
+   * queue road and #left. */
   #rest(run: FlowRunId): void {
-    this.#rewriteWith(run, (record) => ({
-      state: record.held !== undefined ? "holding" : "waiting",
-    }));
+    this.#rewrite(run, { state: "waiting" });
   }
 
   /** A run's end: its journal's `end` line, then its record (D18), and the run no longer driven. */
@@ -1554,6 +1555,10 @@ export class FlowRuns {
   }
 
   /** A run's record written again as `whole` makes it from what it holds (a field it leaves out is gone), then told.
+   * TT1 (the 10a review; ruled 2026-11-06): a record written AT REST (`waiting` or `holding`) is written `holding`
+   * exactly while the written record holds (`held`, after the write's own fields), else `waiting`; `running` and the
+   * ends are written as they are. So a road that rests a run writes a rest (#rest), and a hold set or released while
+   * the run rests (#missed, #releasing, an answer's settle) leaves its state true to the hold.
    * MM2 (the F4b review): it is told as `#told` tells it, past the write, so the one writer throws only when its
    * write did NOT land; a list that can't be read then is said in fieldd's log, never read by a caller as its write's
    * failure (a reservation kept for an agent never started, a step failed whose record says it works). */
@@ -1564,7 +1569,9 @@ export class FlowRuns {
     const { records } = this.ports;
     const record = records.runRecord(run);
     if (record === undefined) throw new Error(`no record of ${run} to write`);
-    records.writeRunRecord(run, whole(startOf(record), record));
+    const written = whole(startOf(record), record);
+    const rest = written.held !== undefined ? "holding" : "waiting";
+    records.writeRunRecord(run, AT_REST.has(written.state) ? { ...written, state: rest } : written);
     this.#told();
   }
 
