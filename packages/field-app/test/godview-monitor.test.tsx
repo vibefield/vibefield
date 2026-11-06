@@ -2168,7 +2168,8 @@ function tabDoor(sets: readonly AgentProfileSet[] = TAB_SETS): TabDoor {
 }
 
 /** GV-D3 (P2): a profile is chosen in search's Live now, through the door the
- * stage publishes — the scope row's dropdown calls exactly this. */
+ * stage publishes — the Peek's + Filter pick, a typed name's offer and a
+ * token's × all call exactly this (SE-D1). */
 const chooseProfile = async (id: string): Promise<void> => {
   await act(async () => getGodviewFindDoor()?.setProfile(id === "all" ? null : id));
 };

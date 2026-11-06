@@ -523,9 +523,11 @@ export function GodviewMonitor({
   // mounted view whose manifest declares `history`, the backend's through this
   // window's door, read only while that view is mounted (PF6: this stage
   // unmounts with Godview). An ended lane does exactly what a live row does
-  // under each filter (the MV lead's ruling, 2026-10-10): the scope row's
-  // desktop NARROWS — lanes elsewhere leave before the past is lent — and the
-  // profile tab RECEDES, where a run whose profile is unknown recedes.
+  // under each filter (the MV lead's ruling, 2026-10-10): the chosen desktop
+  // (Live now's desktop token, SE-D1) NARROWS — lanes elsewhere leave before
+  // the past is lent — and the chosen profile (the profiles column's ring, one
+  // state with Live now's profile token, SE-D2) RECEDES, where a run whose
+  // profile is unknown recedes.
   const wantsHistory = viewWantsHistory(view.view);
   const pastReceded = useCallback(
     (lane: MonitorEndedRow): boolean =>
@@ -810,8 +812,9 @@ export function GodviewMonitor({
   // P2 — WHAT THE PEEK READS (`find-door.ts`): the live runs this stage shows
   // (its desktop and its profile, GV-D3 — they filter the view and search's
   // Live now alike), rosetta's words through the deck's door, the view's own
-  // select (what the find sheet's pick did), the two filters, which the scope
-  // row sets, and the stage's two key facts. The rows are computed ONLY while
+  // select (what the find sheet's pick did), the two filters, which the Peek's
+  // tokens stand for in its field (SE-D1: + Filter's menu and a typed name's
+  // offer set one, a token's × or ⌫ clears it), and the stage's two key facts. The rows are computed ONLY while
   // the Peek listens (open on Live now) and handed on only when their content
   // moves (MV's after-MV list: "Find re-renders on every publish"): the door
   // itself is the same object while its filters are, so a closed Peek renders

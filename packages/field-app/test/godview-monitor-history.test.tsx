@@ -263,7 +263,7 @@ describe("identity: built once per snapshot, kept while nothing moves (v2 item 5
     expect(last()!.ended.map((lane) => lane.id)).toEqual(["past:claude:nat-peer"]);
   });
 
-  it("a filter change rebuilds the lanes' receded from the same snapshot; an unknown profile recedes under a profile tab", async () => {
+  it("a filter change rebuilds the lanes' receded from the same snapshot; an unknown profile recedes under a chosen profile", async () => {
     const port = fakePort();
     const underWork = (lane: MonitorEndedRow): boolean =>
       !(lane.device.self && lane.profileSet === "work");
@@ -279,7 +279,7 @@ describe("identity: built once per snapshot, kept while nothing moves (v2 item 5
 });
 
 describe("an ended lane does what a live row does under each filter (the MV lead's ruling, 2026-10-10)", () => {
-  it("the scope row's desktop NARROWS: this desktop's ended lanes leave before the past is lent, and the object holds while the choice does", async () => {
+  it("the chosen desktop (Live now's token) NARROWS: this desktop's ended lanes leave before the past is lent, and the object holds while the choice does", async () => {
     const port = fakePort();
     await mount({ port, wants: true, rows: ROWS, desk: "01JPEER" });
     await port.answer();
@@ -315,7 +315,7 @@ describe("an ended lane does what a live row does under each filter (the MV lead
 });
 
 describe("this desktop's mark follows this desktop's id (LANDED §TL's owed row: `here` known after the answer)", () => {
-  /** the profile tab's rule, which reads the mark: only this desktop's runs under Work stay lit */
+  /** the chosen profile's rule, which reads the mark: only this desktop's runs under Work stay lit */
   const underWork = (lane: MonitorEndedRow): boolean =>
     !(lane.device.self && lane.profileSet === "work");
   const marks = () => last()!.ended.map((lane) => [lane.id, lane.device.self, lane.receded]);

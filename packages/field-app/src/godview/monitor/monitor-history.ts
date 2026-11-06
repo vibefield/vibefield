@@ -165,9 +165,11 @@ export interface MonitorHistoryOptions {
   /** this desktop's id: the rows whose `device.self` is true */
   readonly here: string | undefined;
   readonly palette: Pick<MonitorPalette, "tint" | "neutral">;
-  /** the window's rule for a lane drawn faint — the RECEDING filters (the profile tab); keep it stable */
+  /** the window's rule for a lane drawn faint — the RECEDING filters (the chosen profile: the profiles column's ring,
+   * one state with Live now's profile token, SE-D2); keep it stable */
   readonly receded: (lane: MonitorEndedRow) => boolean;
-  /** the chosen desktop (P2's scope row), which NARROWS: an ended lane elsewhere leaves, as a live row does. Null: all */
+  /** the chosen desktop (Live now's desktop token in the Peek's field, SE-D1), which NARROWS: an ended lane elsewhere
+   * leaves, as a live row does. Null: all */
   readonly desk: string | null;
   /** test seam */
   readonly now?: (() => number) | undefined;

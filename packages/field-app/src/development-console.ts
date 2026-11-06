@@ -331,8 +331,8 @@ export interface GodviewMonitorFacts {
    * (`capabilities.history`) — the lent object's own state, or `absent` while
    * nothing is lent: the view declares no `history`, the first answer has not
    * come, or this desktop keeps no record (the door's NOT_FOUND `no-record`).
-   * `endedLanes` counts the ended runs in it, after the scope row's desktop
-   * narrowed them; 0 while nothing is lent. Read off what the host lends, never
+   * `endedLanes` counts the ended runs in it, after the chosen desktop (Live
+   * now's desktop token, SE-D1) narrowed them; 0 while nothing is lent. Read off what the host lends, never
    * off the view's DOM (MV-5's rule): a view that drew nothing for a lent past
    * and a host that lent none are different failures.
    */

@@ -510,9 +510,9 @@ describe("select routes by source", () => {
   });
 });
 
-// GV-D3 (P2, 2026-10-09): the desktops are chosen in search's Live now — the
-// scope row's dropdown, which calls the door the stage publishes
-// (`find-door.ts`); the bar's chip left with the profile tabs.
+// GV-D3 (P2, 2026-10-09): the desktops are chosen in search's Live now — + Filter's
+// menu, a typed name's offer and a token's × (SE-D1), which call the door the
+// stage publishes (`find-door.ts`); the bar's chip left with the profile tabs.
 const chooseDesk = async (id: string | null): Promise<void> => {
   await act(async () => getGodviewFindDoor()?.setDesk(id));
   await settle();
