@@ -172,6 +172,8 @@ public struct HomeScreen: View {
     /// `-vf-mock`: Live now's rows and the home's profiles (`MockAccount.searchRows`, `searchProfiles`), read once.
     @State private var mockSearchRows: [RemoteFieldRow] = []
     @State private var mockProfiles: [AgentProfileSet] = []
+    /// `-vf-mock-lens=<profile>`: the lens the mock's door asks for, held until the home's profiles name it.
+    @State private var mockLens: String?
   #endif
   /// The home indicator's inset, read with the keyboard ignored: the bar
   /// rests where iOS 26 rests its own (`AppBar.bottomGap`), and rides the
@@ -916,7 +918,17 @@ public struct HomeScreen: View {
     }
     .onChange(of: selectedTab) { history.barMinimized = false }
     // SE-2 — the lens keys on the home's profiles: read again whenever the home's answer moves
-    .onChange(of: homeProfiles, initial: true) { _, sets in lens.adopt(sets) }
+    .onChange(of: homeProfiles, initial: true) { _, sets in
+      lens.adopt(sets)
+      #if DEBUG
+        // the mock's lens door stands once its profiles do: the first call can carry the profiles read before the
+        // mock set its own, and adopting those lets a lens chosen at launch go (M-phone's pre-light stills)
+        if let id = mockLens, sets.contains(where: { $0.id == id }) {
+          lens.show(id)
+          mockLens = nil
+        }
+      #endif
+    }
     // SE-2 — the token's menu goes with the token: a lens let go, a page or the Me menu opened, the face held
     .onChange(of: lensTokenShows) { _, shows in
       if !shows { lensMenuOpen = false }
@@ -1912,6 +1924,8 @@ public struct HomeScreen: View {
           lens.adopt(mockProfiles)
           let doors = PhoneSearchWorld.Doors.read(ProcessInfo.processInfo.arguments)
           lens.show(doors.lens)
+          // held too: the profiles' onChange shows it again once they stand, whichever call lands last
+          mockLens = doors.lens
           if let words = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("-vf-mock-search=") }) {
             searchQuery = String(words.dropFirst("-vf-mock-search=".count))
           }
