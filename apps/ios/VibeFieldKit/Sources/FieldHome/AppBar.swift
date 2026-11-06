@@ -88,6 +88,20 @@ enum AppBar {
   static let marginTyping: CGFloat = 10
   static let gapAboveKeyboard: CGFloat = 8
   static let fieldGap: CGFloat = 8
+  /// SE-2 (SE-D5 A; DESIGN.md §8 "The phone's search", tokens in the field) — a chosen filter stands after the field's
+  /// magnifier as a token: 30 tall, corners 15 (half its height), padded 9 before its glyph and 4 after its ×; its
+  /// glyph 13, 5 before its name; its × a 20 round holding `xmark` at 8. A second token stands 2 closer to the first.
+  /// It pops in from 0.7 on the bar's spring (`motion`).
+  /// SE-2c (red): the numbers are zero.
+  static let tokenHeight: CGFloat = 0
+  static let tokenLeading: CGFloat = 0
+  static let tokenTrailing: CGFloat = 0
+  static let tokenGlyph: CGFloat = 0
+  static let tokenGap: CGFloat = 0
+  static let tokenClose: CGFloat = 0
+  static let tokenCloseGlyph: CGFloat = 0
+  static let tokenOverlap: CGFloat = 0
+  static let tokenPopFrom: CGFloat = 0
 
   /// How far above the screen's bottom edge the row sits: where iOS 26 puts
   /// its own bar, 13 pt below the safe area's line on a phone with a home

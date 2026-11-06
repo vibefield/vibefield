@@ -761,6 +761,33 @@ const OS_MARKS_IOS = join(
     TOKENS,
     PALETTE_SWIFT,
   );
+  // SE-2 (SE-D3 A; DESIGN.md §5 *Search scrim*, returned 2026-11-06) — the phone's search dims the page under its
+  // sheet with the Peek's own scrim, its dim alone: `ChromePalette.searchScrim` is `--vf-search-scrim`'s two alphas,
+  // black on both sides. (WI-1 retired this check with the copy on 2026-11-02, 13aef47ec; it returns with it.)
+  const scrimCopy =
+    /public static let searchScrim = dynamic\(\s*light: 0x000000, lightAlpha: ([0-9.]+), dark: 0x000000, darkAlpha: ([0-9.]+)\)/.exec(
+      palette,
+    );
+  const alpha = (percent) => (percent === null ? null : (Number(percent) / 100).toFixed(2));
+  compare(
+    "search scrim (light)",
+    alpha(field(tokens, /--vf-search-scrim: rgb\(0 0 0 \/ (\d+)%\);/)),
+    scrimCopy?.[1] ?? null,
+    TOKENS,
+    PALETTE_SWIFT,
+  );
+  compare(
+    "search scrim (dark)",
+    alpha(
+      field(
+        tokens,
+        /--vf-search-scrim: rgb\(0 0 0 \/ \d+%\);[\s\S]*?--vf-search-scrim: rgb\(0 0 0 \/ (\d+)%\);/,
+      ),
+    ),
+    scrimCopy?.[2] ?? null,
+    TOKENS,
+    PALETTE_SWIFT,
+  );
   compare(
     "machines admin URL",
     field(read(ADMIN_ORIGIN), /facts\.admin_url\.as_deref\(\),\s*Some\("([^"]+)"\)/),

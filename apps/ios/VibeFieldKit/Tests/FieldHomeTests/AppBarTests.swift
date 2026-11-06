@@ -130,4 +130,66 @@ struct AppBarTests {
     #expect(AppBar.clearance(homeInset: 34, stepper: false) == 57)
     #expect(AppBar.clearance(homeInset: 34, stepper: true) == 115)
   }
+
+  /// SE-2 (SE-D3 A; DESIGN.md §8 "The phone's search") — the glass sheet over the field: 10 from each side, its foot 10
+  /// above the search field, never higher than 56 from the screen's top, corners 34. On the iPhone 17 at rest the
+  /// field's top is 874 − 21 − 62 = 791, so the sheet may stand 725 tall; typing over a 336 keyboard, the field's top
+  /// is 874 − 336 − 8 − 48 = 482, and 416.
+  @Test("the search sheet: 10 from the sides and above the field, never past 56 from the top, corners 34")
+  func searchSheet() {
+    #expect(SearchSheet.side == 10)
+    #expect(SearchSheet.gapAboveField == 10)
+    #expect(SearchSheet.topLimit == 56)
+    #expect(SearchSheet.radius == 34)
+    #expect(SearchSheet.maxHeight(fieldTop: 791) == 725)
+    #expect(SearchSheet.maxHeight(fieldTop: 482) == 416)
+    // a field too low for any sheet leaves none, never a negative one
+    #expect(SearchSheet.maxHeight(fieldTop: 40) == 0)
+    // the sheet stands where the keyboard's typing row's margin would: inside the bar's own side margin
+    #expect(SearchSheet.side == AppBar.marginTyping)
+  }
+
+  /// SE-D3 A — its motion: it rises from the middle of its foot, 24 up and from 0.94, over 420ms on the island curve;
+  /// the scrim fades in over 240ms. Reduce Motion (M6) turns the rise and the tokens' pop into 120ms fades in place.
+  @Test("the sheet rises 24 from 0.94 over 420ms, the scrim fades over 240ms, and Reduce Motion fades in 120ms")
+  func searchSheetMotion() {
+    #expect(SearchSheet.riseOffset == 24)
+    #expect(SearchSheet.riseScale == 0.94)
+    #expect(SearchSheet.rise == 0.42)
+    #expect(SearchSheet.scrimFade == 0.24)
+    #expect(SearchSheet.reducedFade == 0.12)
+  }
+
+  /// SE-D3/SE-D5 A — the sheet's parts as drawn (`search.css`): the switch, the chips, the rows, the offer, the foot.
+  @Test("the sheet's parts: the switch, the chips, the rows, the offer and the foot at the drawing's measure")
+  func searchSheetParts() {
+    #expect(SearchSheet.headInset == 14 && SearchSheet.headBelow == 6)
+    #expect(SearchSheet.switchPadding == 2 && SearchSheet.switchRadius == 10)
+    #expect(SearchSheet.switchItemHeight == 30 && SearchSheet.switchItemRadius == 8 && SearchSheet.switchText == 13.5)
+    #expect(SearchSheet.chipsTop == 2 && SearchSheet.chipsSide == 14 && SearchSheet.chipsBottom == 8)
+    #expect(SearchSheet.chipsFade == 28)
+    #expect(SearchSheet.chipHeight == 32 && SearchSheet.chipLeading == 10 && SearchSheet.chipTrailing == 12)
+    #expect(SearchSheet.chipGap == 6 && SearchSheet.chipGlyph == 13 && SearchSheet.waitingDot == 6)
+    #expect(SearchSheet.groupRule == CGSize(width: 1, height: 18))
+    #expect(SearchSheet.listVertical == 4 && SearchSheet.listSide == 6 && SearchSheet.rowGap == 1)
+    #expect(SearchSheet.rowRadius == 18 && SearchSheet.rowVertical == 11)
+    #expect(SearchSheet.rowLeading == 16 && SearchSheet.rowTrailing == 14 && SearchSheet.rowParts == 10)
+    #expect(SearchSheet.stateDot == 8)
+    #expect(SearchSheet.offerDisc == 32 && SearchSheet.offerGlyph == 16 && SearchSheet.filterHeight == 30)
+    #expect(SearchSheet.footTop == 9 && SearchSheet.footSide == 20 && SearchSheet.footBottom == 14)
+  }
+
+  /// SE-D5 A — a token in the field: 30 tall, corners 15, padded 9 and 4, its glyph 13, 5 before its name, its × a 20
+  /// round holding `xmark` at 8; a second token 2 closer; it pops from 0.7. It fits the 48 typing field with 9 to
+  /// spare above and below.
+  @Test("a token in the field: 30 tall with a 20 ×, padded 9 and 4, a second 2 closer, popping from 0.7")
+  func fieldTokens() {
+    #expect(AppBar.tokenHeight == 30)
+    #expect(AppBar.tokenLeading == 9 && AppBar.tokenTrailing == 4)
+    #expect(AppBar.tokenGlyph == 13 && AppBar.tokenGap == 5)
+    #expect(AppBar.tokenClose == 20 && AppBar.tokenCloseGlyph == 8)
+    #expect(AppBar.tokenOverlap == 2)
+    #expect(AppBar.tokenPopFrom == 0.7)
+    #expect((AppBar.fieldHeightTyping - AppBar.tokenHeight) / 2 == 9)
+  }
 }
