@@ -4,6 +4,7 @@ import {
   FLOW_LOG_MAX,
   FLOW_RUN_STEPS_MAX,
   type FlowInput,
+  type FlowJournalHead,
   type FlowRunId,
   type FlowRunRecord,
   type FlowRunRecordStep,
@@ -17,12 +18,13 @@ import {
   type NeedsItemId,
   nameWords,
   oneLineWords,
+  RECORD_STORES,
   type RunSummary,
 } from "@vibefield/contracts";
 import { createNoopLogger, type Logger } from "@vibefield/logging";
 import type { FlowStepTurnEnd } from "../flow-step-events";
 import { RpcCallError } from "../native-link";
-import { UNREADABLE_WORDS } from "../signed-record";
+import { recordsUnreadable, UNREADABLE_WORDS } from "../signed-record";
 import type { HoldSender } from "../tool-plane/rooms/talk/verbs";
 import type {
   FlowChangedRaise,
@@ -202,6 +204,18 @@ const isLive = (record: FlowRunRecord): boolean => {
   return state === undefined || !ENDED_STATES.has(state);
 };
 
+/** A thrown thing's own words, for fieldd's log alone. */
+const messageOf = (error: unknown): string =>
+  error instanceof Error ? error.message : String(error);
+
+/** A run whose record `#begin` kept: its id, its mark's name, and its summary as `#begin` wrote it, the door's answer
+ * when that record cannot be read back (W1). */
+interface Begun {
+  readonly run: FlowRunId;
+  readonly name: string;
+  readonly written: RunSummary;
+}
+
 const refused = (reason: string, message: string): RpcCallError =>
   new RpcCallError("PRECONDITION_FAILED", message, false, { reason });
 
@@ -276,6 +290,9 @@ export class FlowRuns {
   readonly #listeners = new Set<(list: FlowRunsList) => void>();
   #closing = false;
   readonly #offTurns: () => void;
+  /** V2 (1b review): the runs whose record was kept, whose begin then failed, and whose ending the disk did not take
+   * either: passed by at the bounds until D18's reader settles them at the next boot */
+  readonly #unbegun = new Set<FlowRunId>();
 
   constructor(readonly ports: FlowRunPorts) {
     this.#logger = ports.logger ?? createNoopLogger();
@@ -305,7 +322,12 @@ export class FlowRuns {
       });
       return { waits };
     }
-    return { run: this.#woken(this.#begin(params, approval.hash)) };
+    // W1 (1a review): once the run's record is kept the door answers that run, as the act does, never an error a
+    // retry would begin a second run on; one VibeField can't keep is said never to have begun (W3)
+    const begun = this.#begin(params, approval.hash);
+    const woken = this.#woken(begun);
+    if (woken === undefined) throw refused("never-began", words.neverBegan(begun.name));
+    return { run: woken };
   }
 
   /** The runs, from their records: every live run, then the latest ended, to FLOW_RUNS_LISTED_MAX (CL-E2-2). */
@@ -362,7 +384,7 @@ export class FlowRuns {
    * kept, the act is done with that run. */
   #acted(act: FlowItemStart): FlowItemStarted {
     const { start } = act;
-    let run: FlowRunId;
+    let begun: Begun;
     try {
       // G2 (CP-L4, TL-D5): a spark's start, its own or a Run in its thread (CP4-Q20 (a)), narrows again to the spark's
       // Agent Profiles now, as an Allow does; a spark that is gone starts nothing
@@ -378,39 +400,31 @@ export class FlowRuns {
         scope,
         ...(act.from !== undefined ? { from: act.from } : {}),
       };
-      if (act.version === "approved") run = this.#begin(params, act.hash);
+      if (act.version === "approved") begun = this.#begin(params, act.hash);
       else {
         // Run this version: the library's bytes, while they are still the version the item asked about
         const file = this.ports.library.read(act.flow);
         if (file === undefined) throw refused("not-found", words.notFound(act.flow));
         if ("tooBig" in file) throw refused("too-big", words.tooBig());
         if (file.hash !== act.hash) throw refused("version", words.notAVersion(act.flow));
-        run = this.#begin(params, file.hash, file.bytes);
+        begun = this.#begin(params, file.hash, file.bytes);
       }
     } catch (error) {
       if (error instanceof RpcCallError) return { outcome: "failed", reason: error.message };
       throw error;
     }
-    // window (c) (ruled 2026-11-06): once the run's record is kept the run has begun, so the act is done with it. A
-    // fault past it (the record's read-back, its host's start) is fieldd's log's: the record says the run runs, and
-    // the next boot wakes it (slice 14)
-    try {
-      this.#woken(run);
-    } catch (error) {
-      this.#logger.warn(
-        "fieldd.flows.run.wake",
-        "A flow run began, and its host did not start; the next boot wakes it",
-        { run, error: error instanceof Error ? error.message : String(error) },
-      );
-    }
-    return { outcome: "done", run };
+    // window (c) (ruled 2026-11-06): once the run's record is kept the run has begun, so the act is done with it,
+    // unless that record or its journal reads as none this VibeField keeps: then it never began (W3)
+    if (this.#woken(begun) === undefined)
+      return { outcome: "failed", reason: words.neverBegan(begun.name) };
+    return { outcome: "done", run: begun.run };
   }
 
   /** Begin a run of the version `hash`: its refusals, then the run's begin checked (`checkBegin`), then (`approving`,
    * Run this version's bytes) its approval as yours, then its record and its head (D18). Answers the run, its record
    * kept; `#woken` starts its host. Without `approving` the bytes are the ones fieldd kept under an approval's hash
    * (D8). */
-  #begin(params: FlowRunStartParams, hash: string, approving?: Uint8Array): FlowRunId {
+  #begin(params: FlowRunStartParams, hash: string, approving?: Uint8Array): Begun {
     const { records } = this.ports;
     const bytes = approving ?? records.bytes(hash);
     if (bytes === undefined) throw refused("version", words.notAVersion(params.flow));
@@ -438,7 +452,8 @@ export class FlowRuns {
       throw refused("folder", NO_FOLDER);
     // D3: the bounds, from the records, read with no await before the run begins
     const kept = records.runRecords();
-    const live = kept.filter(isLive);
+    // V2: a run that never began, its record's ending refused too, is passed by until the next boot settles it
+    const live = kept.filter((record) => isLive(record) && !this.#unbegun.has(record.run));
     if (live.length >= FLOW_LIMITS.RUNS_LIVE_MAX) throw refused("runs-live", words.runsLive(name));
     if (params.starter.by === "spark") {
       const spark = params.starter.spark;
@@ -466,12 +481,17 @@ export class FlowRuns {
       records.checkBegin(run);
       if (approving !== undefined) records.approve(params.flow, approving);
     });
-    this.#written(run, words.neverBegan(name), () =>
-      records.beginRun(
+    let head: FlowJournalHead;
+    try {
+      head = records.beginRun(
         { run, flow: params.flow, name, n, hash, starter: params.starter, input: params.input },
         { scope, state: "running", calls: 0, allowed: FLOW_LIMITS.CALLS_MAX, open: [], steps: [] },
-      ),
-    );
+      );
+    } catch (error) {
+      // V2 (1b review): a record kept before the failure (its head refused) reads as never begun in this life too
+      this.#unbegin(run, name);
+      throw this.#refusal(run, error, words.neverBegan(name));
+    }
     this.#live.set(run, {
       waiting: new Map(),
       forms: new Map(),
@@ -482,46 +502,124 @@ export class FlowRuns {
         ? { ran: nameWords(params.from.name) }
         : {}),
     });
-    return run;
+    const written: RunSummary = {
+      run,
+      flow: head.flow,
+      name: head.name,
+      n: head.n,
+      hash: head.hash,
+      state: "running",
+      calls: 0,
+      steps: [],
+      starter: head.starter,
+      startedAt: head.at,
+    };
+    return { run, name, written };
   }
 
   /** A run whose record `#begin` kept, its host started: the record read back, then woken (`#wake`), then the list
-   * told. */
-  #woken(run: FlowRunId): RunSummary {
-    const begun = this.ports.records.runRecord(run);
-    if (begun === undefined) throw new Error(`the record of ${run} did not read back`);
-    this.#wake(run, begun);
-    this.#changed();
-    return summaryOf(begun, this.#live.get(run));
+   * told. Past the record nothing throws (W1). A read the disk refuses, or a host that does not start, leaves the run
+   * running for the next boot to wake (slice 14): it is answered as its record, or `#begin`, says it, and the list is
+   * told (W2). A record that reads back as nothing (set aside, held), or a journal that reads as none VibeField keeps,
+   * is no run this VibeField can wake (W3): it answers none, and its record is ended never begun. */
+  #woken(begun: Begun): RunSummary | undefined {
+    const { run } = begun;
+    let record: FlowRunRecord | undefined;
+    let woke = false;
+    try {
+      record = this.ports.records.runRecord(run);
+      woke = record !== undefined && this.#wake(run, record);
+    } catch (error) {
+      this.#logger.warn(
+        "fieldd.flows.run.wake",
+        "A flow run began, and its host did not start; the next boot wakes it",
+        { run, error: messageOf(error) },
+      );
+      this.#told();
+      return record !== undefined ? summaryOf(record, this.#live.get(run)) : begun.written;
+    }
+    if (record === undefined || !woke) {
+      this.#logger.warn(
+        "fieldd.flows.run.unkept",
+        "A flow run's record or journal reads as none VibeField keeps; the run never began",
+        { run, record: record !== undefined },
+      );
+      const live = this.#live.get(run);
+      this.#live.delete(run);
+      if (live !== undefined) this.#letGo(live);
+      this.#unbegin(run, begun.name);
+      return undefined;
+    }
+    this.#told();
+    return summaryOf(record, this.#live.get(run));
   }
 
-  /** H2 — a write of the records at a run's begin: the store's own refusal passed on as it is, and any other failure
-   * logged with its own words and refused in `said`, so no raw error reaches a person. */
+  /** V2 (1b review) — a run whose record was kept and whose begin then failed (its head refused, or its record or
+   * journal reading as none kept) reads as never begun in this life too: its record ended `failed`, in neverBegan's
+   * words, where the disk takes it; where it does not, the bounds pass it by until D18's reader settles it at boot. */
+  #unbegin(run: FlowRunId, name: string): void {
+    try {
+      if (this.ports.records.runRecord(run) === undefined) return;
+      this.#rewrite(run, {
+        state: "failed",
+        endedAt: this.#now().toISOString(),
+        log: words.neverBegan(name),
+      });
+    } catch (error) {
+      this.#unbegun.add(run);
+      this.#logger.warn(
+        "fieldd.flows.run.unbegun",
+        "A flow run that never began could not be ended in its record; the bounds pass it by until fieldd restarts",
+        { run, error: messageOf(error) },
+      );
+    }
+  }
+
+  /** The list told, as `#changed` tells it, past a run's record, where nothing throws (W2): a list that cannot be read
+   * is said in the log. */
+  #told(): void {
+    try {
+      this.#changed();
+    } catch (error) {
+      this.#logger.warn("fieldd.flows.run.told", "The runs' list could not be told", {
+        error: messageOf(error),
+      });
+    }
+  }
+
+  /** H2 — a write of the records at a run's begin, its failure said as `#refusal` says it. */
   #written(run: FlowRunId, said: string, write: () => void): void {
     try {
       write();
     } catch (error) {
-      if (error instanceof RpcCallError) throw error;
-      this.#logger.warn("fieldd.flows.run.write", "A flow run's begin was not kept", {
-        run,
-        error: error instanceof Error ? error.message : String(error),
-      });
-      throw refused("records", said);
+      throw this.#refusal(run, error, said);
     }
   }
 
+  /** H2, V4 — a records write's failure at a run's begin, as a person hears it: the store's own refusal as it is, and
+   * any other (a disk that refuses a write, a run already kept under the id) logged with its own words and refused in
+   * the store's own shape, UNAVAILABLE for the flows (the tolerant reader's law), in `said`, never raw. */
+  #refusal(run: FlowRunId, error: unknown, said: string): RpcCallError {
+    if (error instanceof RpcCallError) return error;
+    this.#logger.warn("fieldd.flows.run.write", "A flow run's begin was not kept", {
+      run,
+      error: messageOf(error),
+    });
+    return recordsUnreadable(RECORD_STORES.SERVICE_FLOWS, said, true);
+  }
+
   /** The one way a run's host starts: its journal replayed from the top (CP-D9) under the bytes kept for its hash
-   * (D8). Bytes that no longer hash are lost, and so is the run. */
-  #wake(run: FlowRunId, record: FlowRunRecord): void {
+   * (D8). Bytes that no longer hash are lost, and so is the run. False for a journal that reads as none kept (W3). */
+  #wake(run: FlowRunId, record: FlowRunRecord): boolean {
     const { records } = this.ports;
     const live = this.#live.get(run);
     if (live === undefined) throw new Error(`${run} is not a run this fieldd drives`);
     const read = records.readRun(run);
-    if (read.kind !== "kept") throw new Error(`the journal of ${run} reads ${read.kind}`);
+    if (read.kind !== "kept") return false;
     const bytes = records.bytes(record.hash);
     if (bytes === undefined) {
       this.#finish(run, { state: "lost" });
-      return;
+      return true;
     }
     live.inputs = { values: read.head.input ?? {}, kinds: readFlow(bytes).meta?.input ?? {} };
     const replay = new FlowReplay({
@@ -548,6 +646,7 @@ export class FlowRuns {
           error: error instanceof Error ? error.message : String(error),
         });
       });
+    return true;
   }
 
   /** What a run's new calls and log lines reach, past its journal: an `agent()` by the one spawn road (D5), and a
@@ -629,7 +728,6 @@ export class FlowRuns {
   /** A step's start that threw, in fieldd's log (F2 review T2): one past its spawn names the agent it leaves running,
    * which slice 13's R42 ends; any other came before any spawn or line. */
   #startThrew(run: FlowRunId, call: number, error: unknown): void {
-    const messageOf = (said: unknown) => (said instanceof Error ? said.message : String(said));
     if (error instanceof FlowStepOrphaned)
       this.#logger.warn(
         "fieldd.flows.step.orphan",

@@ -613,12 +613,20 @@ export class NeedsQueue implements TalkHolds {
         item.from.spark === from?.spark
       ) {
         const { start } = raise;
-        const teller = from !== undefined ? this.#fromOf(from) : item.from;
+        // W4 (1a review): a teller is its name, session and spark; a field a newer build keeps on it stands, since
+        // NeedsFrom is passthrough (the tolerant reader)
+        const asked = from !== undefined ? this.#fromOf(from) : undefined;
+        const moved =
+          asked !== undefined &&
+          (asked.name !== item.from.name ||
+            asked.session !== item.from.session ||
+            asked.spark !== item.from.spark);
         if (
+          moved ||
           record.start === undefined ||
-          canonicalJson(record.start) !== canonicalJson(start) ||
-          canonicalJson(item.from) !== canonicalJson(teller)
+          canonicalJson(record.start) !== canonicalJson(start)
         ) {
+          const teller = asked !== undefined ? { ...item.from, ...asked } : item.from;
           this.#keep({ ...record, item: { ...item, from: teller }, start });
           this.#emit();
         }
@@ -869,7 +877,9 @@ export class NeedsQueue implements TalkHolds {
         reason: "flows-unbound",
       });
     if (script === undefined) throw refuseAnswer(`${item.id} names no flow`, "unknown-kind");
-    const told = this.#flowTeller(item);
+    // V5 (1b review): a spark that is gone hears nothing, so the act owes it no fact, which nothing would ever tell
+    const gone = item.from.spark !== undefined && this.opts.spark(item.from.spark) === undefined;
+    const told = gone ? undefined : this.#flowTeller(item);
     const owed = (fact: (spark: string, flow: string) => string) =>
       told !== undefined ? { owed: fact(told.spark, told.flow) } : {};
     if (choice === (item.choices?.length ?? 0) - 1)
