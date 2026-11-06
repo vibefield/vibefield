@@ -1,9 +1,10 @@
 //! FW (v0.3 §3, §5.2) — the freeway host binary. A thin shell over `freeway::host::run`: take the
-//! floor-held listener off argv, hand the library stdin and stdout, exit 0 on the leash (stdin's
-//! EOF) and nonzero when the bootstrap failed. All policy lives in the library, so the lifecycle
-//! is testable without this file.
+//! floor-held listener off argv, hand the library stdin (as its `Leash`) and stdout, exit 0 on the
+//! leash (stdin's EOF) and nonzero when the bootstrap failed. All policy lives in the library, so
+//! the lifecycle is testable without this file.
 
 use field_native::freeway::host;
+use field_native::leash::Leash;
 use std::process::ExitCode;
 
 /// The listening socket the floor holds for every host generation of its boot, so a dialer's
@@ -121,12 +122,14 @@ fn main() -> ExitCode {
             return ExitCode::from(1);
         }
     };
+    // RV #47: the leash is read on a thread of its own, never the runtime's, so whatever ends the
+    // host, returning from here drops a runtime with no read pending, and the process exits.
+    let leash = Leash::stdin();
     let served = runtime.block_on(async {
         let listener = tokio::net::TcpListener::from_std(listener)?;
-        let stdin = tokio::io::BufReader::new(tokio::io::stdin());
         host::run(
             listener,
-            stdin,
+            leash,
             tokio::io::stdout(),
             field_native::tp::unix_ms,
         )

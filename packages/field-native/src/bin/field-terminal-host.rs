@@ -4,6 +4,7 @@
 //! lives in the library so the lifecycle is testable without this file.
 
 use field_native::cell::{run_cell, CellArgs};
+use field_native::leash::Leash;
 use std::io::{self, Write};
 use std::path::PathBuf;
 use std::process::ExitCode;
@@ -102,7 +103,11 @@ fn main() -> ExitCode {
         }
     };
 
-    match runtime.block_on(run_cell(args)) {
+    // RV #47: the leash is read on a thread of its own, built only now (so `--version`, `--help`
+    // and a refused flag never touch stdin) and never the runtime's. Whatever ends the cell,
+    // returning from here drops a runtime with no read pending, and the process exits.
+    let leash = Leash::stdin();
+    match runtime.block_on(run_cell(args, leash)) {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {
             let _ = writeln!(io::stderr(), "field-terminal-host: {error:#}");

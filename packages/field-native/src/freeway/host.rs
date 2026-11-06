@@ -8,7 +8,9 @@
 //!   sessions. The rest of line 1 is FD1's (the `/l/` secret, the E3 egress) and is not read
 //!   here. Each later line is a `HostUpdate`: a part replaced whole, or an order, a `revoke` or a
 //!   `restart`. EOF is the leash: every link closes 1001, the host waits for them (the floor's
-//!   drain budget bounds the wait) and returns.
+//!   drain budget bounds the wait) and returns. stdin is read as a `leash::Leash`, on a std thread
+//!   no runtime owns (RV #47), so a host whose run ends any other way (a panic, today) still
+//!   exits while the floor holds the leash.
 //! - stdout line 1 is `HostHello {hostBootId, pid}`; each later line is a `HostReport`: a link up
 //!   or down, a join or a leave, a revoke's `revokeClient` for the floor to hand every cell.
 //! - One link per node (§5.1): a newer link from a node supersedes its older one (4409). A node
@@ -22,6 +24,7 @@ use super::hello::{decide, Admit, Host, Identity, PeerRole};
 use super::keyring::{CellRoute, Placement, SessionRoute};
 use super::link::{self, FloorState, LinkCommand, Shared};
 use crate::contracts::{FreewayAdmitRowRole, FreewayDeclareParams};
+use crate::leash::Leash;
 use crate::registries::freeway_codes as codes;
 use crate::tp::grant::{AttachRight, GrantKey};
 use anyhow::{anyhow, Context, Result};
@@ -30,7 +33,7 @@ use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use tokio::io::{AsyncBufRead, AsyncBufReadExt, AsyncWrite, AsyncWriteExt};
+use tokio::io::{AsyncWrite, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::mpsc;
 use tokio::task::JoinSet;
@@ -219,16 +222,20 @@ struct Entry {
     commands: mpsc::UnboundedSender<LinkCommand>,
 }
 
-/// Run the host until the leash: stdin line 1 first, then the listener and the update lines.
-pub async fn run<R, W>(listener: TcpListener, stdin: R, stdout: W, now: fn() -> u64) -> Result<()>
+/// Run the host until the leash: its line 1 first, then the listener and the update lines.
+pub async fn run<W>(
+    listener: TcpListener,
+    mut leash: Leash,
+    stdout: W,
+    now: fn() -> u64,
+) -> Result<()>
 where
-    R: AsyncBufRead + Unpin,
     W: AsyncWrite + Unpin + Send + 'static,
 {
-    let mut lines = stdin.lines();
-    let first = (lines.next_line().await)
-        .context("read the bootstrap line")?
-        .context("stdin closed before the bootstrap line")?;
+    let first = leash
+        .next_line()
+        .await
+        .context("the leash ended before the bootstrap line")?;
     let bootstrap: HostBootstrap = serde_json::from_str(&first).map_err(|error| {
         let (class, column) = (error.classify(), error.column());
         anyhow!("the bootstrap line did not parse ({class:?} at column {column})")
@@ -260,18 +267,10 @@ where
                     tokio::time::sleep(ACCEPT_BREATH).await;
                 }
             },
-            line = lines.next_line() => match line {
-                Ok(Some(line)) => core.apply(&line),
-                Ok(None) => break,
-                Err(error) => {
-                    tracing::warn!(
-                        event = "field_native.freeway.stdin_error",
-                        component = "freeway",
-                        error = %error,
-                        "freeway stdin failed; draining"
-                    );
-                    break;
-                }
+            // Its end, or a read that failed (said once, on the leash's thread): the drain.
+            line = leash.next_line() => match line {
+                Some(line) => core.apply(&line),
+                None => break,
             },
             Some(_) = tasks.join_next(), if !tasks.is_empty() => {}
         }
@@ -604,16 +603,17 @@ mod tests {
     use super::super::frame::FrameType;
     use super::super::testing::*;
     use super::*;
-    use tokio::io::{BufReader, DuplexStream, Lines};
+    use tokio::io::{AsyncBufReadExt, BufReader, DuplexStream, Lines};
     use tokio::task::JoinHandle;
 
     const TICKETS: &[u8] = br#"{"kind":"terminal-tickets","sessionIds":["sess-a"]}"#;
 
-    /// A host on a loopback listener, its stdin and stdout pipes in the test's hands.
+    /// A host on a loopback listener, its leash and its stdout pipe in the test's hands.
     struct Rig {
         port: u16,
         hello: HostHello,
-        stdin: DuplexStream,
+        /// The leash's writer: each line sent is a stdin line, and dropping it is stdin's EOF.
+        stdin: mpsc::Sender<String>,
         stdout: Lines<BufReader<DuplexStream>>,
         host: JoinHandle<Result<()>>,
     }
@@ -621,18 +621,10 @@ mod tests {
     async fn rig(bootstrap: Value) -> Rig {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let port = listener.local_addr().unwrap().port();
-        let (mut stdin, host_stdin) = tokio::io::duplex(1 << 16);
+        let (stdin, leash) = Leash::channel();
         let (host_stdout, stdout) = tokio::io::duplex(1 << 16);
-        let host = tokio::spawn(run(
-            listener,
-            BufReader::new(host_stdin),
-            host_stdout,
-            fixed,
-        ));
-        stdin
-            .write_all(format!("{bootstrap}\n").as_bytes())
-            .await
-            .unwrap();
+        let host = tokio::spawn(run(listener, leash, host_stdout, fixed));
+        stdin.send(bootstrap.to_string()).await.unwrap();
         let mut stdout = BufReader::new(stdout).lines();
         let first = stdout.next_line().await.unwrap().expect("the hello");
         let hello = serde_json::from_str(&first).expect("line 1 is the hello");
@@ -646,11 +638,8 @@ mod tests {
     }
 
     impl Rig {
-        async fn say(&mut self, line: Value) {
-            self.stdin
-                .write_all(format!("{line}\n").as_bytes())
-                .await
-                .unwrap();
+        async fn say(&self, line: Value) {
+            self.stdin.send(line.to_string()).await.unwrap();
         }
 
         /// Pull the leash, and read every report until the host has left; it returns `Ok`.

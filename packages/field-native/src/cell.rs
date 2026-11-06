@@ -18,7 +18,13 @@
 //!   open as the LIFETIME LEASH: EOF means the parent is gone or asked us to
 //!   stop, and either way the answer is drain-and-exit. One portable signal,
 //!   no SIGTERM story to duplicate on win32, and a parent crash reaps the
-//!   cell for free (TC-D14's bootstrap-pipe pattern at S2 scale).
+//!   cell for free (TC-D14's bootstrap-pipe pattern at S2 scale). The leash
+//!   is read on a std thread of its own (`leash::Leash`), never on the
+//!   runtime (RV #47): tokio's stdin is an uncancellable read on the blocking
+//!   pool, dropping the runtime waits for it, and so a cell whose serve plane
+//!   ended on its own said so and then never exited while the floor held the
+//!   leash. Off the runtime, every ending returns from main and the process
+//!   exits, so the floor's wait sees it.
 //! - stdout line 1 is the hello `{cellBootId, pid, control, frame}` — printed
 //!   only after `serve_managed` returned a handle, so a hello means the
 //!   endpoints are dialable. stdout's LAST line is the drain report (or its
@@ -29,6 +35,7 @@
 //! serve plane ended on its own or the bootstrap failed — the parent's
 //! supervisor classifies and applies restart intensity.
 
+use crate::leash::Leash;
 use crate::registries;
 use crate::tp::door::{Door, DoorConfig};
 use crate::tp::grant::{GrantKey, GrantValidityLimits, GrantVerifier};
@@ -38,7 +45,6 @@ use ghosttea::{ipc, TerminalService, TerminalServiceConfig, TerminalServiceListe
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::time::Duration;
-use tokio::io::{AsyncBufReadExt, BufReader};
 
 /// The non-secret half of the bootstrap, straight off argv.
 #[derive(Debug, Clone)]
@@ -142,16 +148,16 @@ pub struct CellCrumb {
 }
 
 /// Run the cell to completion. Ok(()) is the requested-drain ending; any Err
-/// is a crash the supervisor classifies.
-pub async fn run_cell(args: CellArgs) -> Result<()> {
+/// is a crash the supervisor classifies. `leash` is the cell's stdin as
+/// `Leash::stdin` reads it: line 1 the bootstrap, each later line an update,
+/// its end the ask to drain.
+pub async fn run_cell(args: CellArgs, mut leash: Leash) -> Result<()> {
     // The token FIRST — before any slow work, so a parent that dies mid-spawn
     // costs nothing and a malformed bootstrap fails loudly and immediately.
-    let mut stdin = BufReader::new(tokio::io::stdin());
-    let mut first = String::new();
-    stdin
-        .read_line(&mut first)
+    let first = leash
+        .next_line()
         .await
-        .context("read the bootstrap line from stdin")?;
+        .context("the leash ended before the bootstrap line")?;
     let bootstrap: CellBootstrap =
         serde_json::from_str(first.trim()).context("parse the bootstrap line")?;
 
@@ -310,11 +316,10 @@ pub async fn run_cell(args: CellArgs) -> Result<()> {
     write_stdout_line(&serde_json::to_string(&hello).context("serialize hello")?)
         .context("write hello — is the parent still listening?")?;
 
-    // The leash: every later stdin line is an update (F1's `revokeClient`), and EOF asks for
-    // the drain.
-    let mut updates = stdin.lines();
-    let leash = async {
-        while let Ok(Some(line)) = updates.next_line().await {
+    // The leash: every later stdin line is an update (F1's `revokeClient`), and its end asks for
+    // the drain. Read off the runtime, so the serve arm winning leaves no read behind (RV #47).
+    let leash_ended = async {
+        while let Some(line) = leash.next_line().await {
             apply_update(door.as_ref(), &line);
         }
     };
@@ -327,7 +332,7 @@ pub async fn run_cell(args: CellArgs) -> Result<()> {
     // keeps it alive through the shutdown, exactly as the in-process unit's
     // serve task always did.
     tokio::select! {
-        _ = leash => {
+        _ = leash_ended => {
             // Requested (or orphaned — same answer): the T1 doors close every
             // leg 1001 FIRST (a renderer learns the cell is going away before
             // its sessions drain), then drain within the shared budget, report,

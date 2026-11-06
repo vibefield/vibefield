@@ -14,6 +14,9 @@ pub mod door_bridge;
 pub mod endpoints;
 /// FW — the freeway host's library (`field-freeway-host`): the link's frame codec first.
 pub mod freeway;
+/// RV #47 — the lifetime leash a supervised child (a cell, the freeway host) reads: stdin, on a
+/// std thread no runtime owns, so every ending of `main` ends the process.
+pub mod leash;
 pub mod local_ipc;
 pub mod logging;
 pub mod manager;
