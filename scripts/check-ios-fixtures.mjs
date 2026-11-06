@@ -265,7 +265,8 @@ const sparkFixtures = [
 ];
 // SP-7a — the spark's transcript on the phone: every line kind, the worker's five frames, the window's one open, and
 // the ticket's answer and ask, which the kit's own `SparkTranscriptWire` and `SparkTranscriptReader` read
-// (FieldProductTests, the contracts' and the Mac reader's rows).
+// (FieldProductTests, the contracts' and the Mac reader's rows). M-b2 adds the phone's: the routed serve's answer and
+// the ask that names the desktop.
 const transcriptFixtures = [
   "spark-transcript-frame.caught-up.json",
   "spark-transcript-frame.line.json",
@@ -287,7 +288,9 @@ const transcriptFixtures = [
   "spark-transcript-line.you-terminal.json",
   "spark-transcript-line.you.json",
   "spark-transcript-open.valid.json",
+  "spark-transcript-ticket-params.device.json",
   "spark-transcript-ticket-params.valid.json",
+  "spark-transcript-ticket.remote.json",
   "spark-transcript-ticket.valid.json",
 ];
 // IOS-12c (M-c1) — the say door's params and its three receipts, which the kit's SparkSay encodes and reads
@@ -1160,6 +1163,22 @@ pins.push(
       file: SPARK_TRANSCRIPT_SWIFT,
       pattern: new RegExp(`^ {2}public static let format: Int64 = (${NUMBER})$`, "m"),
       label: "SparkTranscriptLimits.format",
+    },
+  },
+  // M-b2 — the port a phone's ticket names: the worker's routed serve (SP-7a D1, D5)
+  {
+    name: "PORTS.SPARK_TRANSCRIPT_SERVE",
+    origin: {
+      file: REGISTRIES,
+      pattern: new RegExp(
+        `export const PORTS = \\{(?:(?!\\n\\} as const;)[\\s\\S])*?\\n {2}SPARK_TRANSCRIPT_SERVE: (${NUMBER}),\\n`,
+      ),
+      label: "PORTS.SPARK_TRANSCRIPT_SERVE",
+    },
+    copy: {
+      file: SPARK_TRANSCRIPT_SWIFT,
+      pattern: new RegExp(`^ {2}public static let servePort = (${NUMBER})$`, "m"),
+      label: "SparkTranscriptLimits.servePort",
     },
   },
 );
