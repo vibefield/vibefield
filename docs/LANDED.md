@@ -39200,3 +39200,77 @@ Owed ("12c the thread"), M-c1's and IOS-12e's ("M-c2, the thread"), each noted i
 - For James's eye: §9's draft lines for a desktop that does not answer and one that needs an update.
 
 Four inserts into older entries: IOS-12a's, IOS-12b's, M-c1's and IOS-12e's Owed.
+
+## Item 191 — a typed run's Stop never ends the person's shell: fieldd ends a run one way, a spawned run by its own PTY and a typed run by its proved process, and the ladder leaves an unheard typed run to the person (RV #2, half A) (2026-11-06)
+(2026-11-06; three commits, `103addfb4` (red), `12ac1a3e7` and `d66b38aae`, on lane `rv/stop-typed` over main
+`3b8611ec4`, RV's (vibe-field-06, vibe-field-62 since the 17:16Z restart), in
+`/Volumes/SamsungRed/lanes/au/vibe-field`; re-cut by `git replay` onto `eda440d58` as `1dab59bcb`, `a25f0c962` and
+`0d1d66f05`. M192 is `0d1d66f05` itself, a fast-forward of main `eda440d58` by the fixer, run 192, landed
+2026-11-06T17:35:05Z.)
+RV's first landing. Track RV fixes the 118 findings of the 2026-11-06 review of Godview's agent monitor, the terminal
+stack and puppeteer, for Claude Code, Codex and Grok (James, 06:21Z: "now i want you to plan and fix them all properly
+in waves and in parallel"; VF-PM opened the track at 06:24Z). The plan and its rulings are `draft/rv/` (plan.md,
+james-asks.md, lead-rulings.md); the review is `/Volumes/SamsungRed/lanes/rv/review/`; item 191 is the plan's lane
+rv/stop-typed, wave 1.
+
+**The finding.** RV #2 (`app-godview-ui-1` + `vf-runtime-1`, high, confirmed four times): Stop on a typed run ended
+the person's own shell.
+- A run typed in the person's shell (AR-7) lives in the pane's own PTY. Two authorities ended a run, and neither knew
+  typed runs: the ST ladder's terminate step (stopBound, ST-D2/D3) and CP's endRun (talk's agent_stop). Both ended
+  `entry.info.terminalSessionId`, which for a typed run is the person's shell, its jobs and its scrollback.
+- AR-7 §5.3 says a typed run's terminal is never ended. Its process-only end, `endTypedProcess`, was never wired.
+
+**What landed (half A: fieldd, no wire change), at rv-typed-stop Q1's lean (a), which James has not ruled.**
+- `agent-stop.ts`: `StopFacts.typed`. At `resent`, a typed run answers `unheard`, so fieldd never ends a typed run by
+  its own act. If James rules Q1 (b), this one rule flips and stopBound's guard goes.
+- `agent-typed-run.ts`: `TYPED_END` (`termGraceMs` 2 000, the floor's own TERMINATE_GRACE) and `endTypedRun`, the one
+  ladder for a typed run's process:
+  - the shell's pid is `not-it` before any read (B1); one table read proves pid and start;
+  - SIGTERM, then the pid watch or the grace, whichever comes first (no fixed sleep);
+  - at the grace, a second read: unread is `unknown` (no end placed), the pid gone or handed on is `signalled`, the
+    same pid and start still running is SIGKILLed with the descendants that read proves, walking only downward, so
+    never the shell or another of the person's jobs. `endTypedProcess` is absorbed and retired.
+- `agent-runtime.ts`, only the functions named: `stopFacts` sets `typed`; stopBound's terminate branch goes through a
+  private `endLive` and refuses a typed entry whatever the rule says (a broken rule shows as TERMINATE_NOT_PLACED);
+  `endLive` ends a spawned run by `terminateLive` and a typed run by `endTypedRun`, logging
+  `fieldd.agents.typed_run_end` in honest words; `endRun` goes through `endLive`; the stopUnder B4 comment corrected.
+- DESIGN.md §8, at its source: a dated correction to **Ending** (a run typed in the person's shell never reaches it),
+  and the gap half B closes named under **End run**.
+
+**The lights.**
+- Written unrun on the MacBook under the pressure HOLD; every row ran on vf-m1 through a9 (w1p1, 11:03–11:34Z, brief
+  `lanes/rv/a9/w1p1/a9-rows-rv-w1p1.md` `fe6d9ba1…`, logs `/Volumes/SamsungRed/lanes/ts6/logs/m1/rv-w1p1/`, `rv.out`
+  `2d50b87a…`): S1–S15 all as briefed.
+  - The reds at `103addfb4`: S1, 1 failed | 17 passed (agent-stop's new row, "expected 'terminate' to be 'unheard'" at
+    :88); S3, 6 failed | 6 passed (the five endTypedRun unit rows and the REAL-process witness, "endTypedRun is not a
+    function"); S5, the REAL-floor ladder row at :3571 (`toMatchObject({ stage: 'resent' })` failed); S7, the
+    REAL-floor End row, red by the brief's second branch: the floor's terminate ended the shell, so the row's
+    typed-input hold at :3630 timed out after 60 000 ms (accepted by the lead).
+  - The greens at `12ac1a3e7`: S2 18/18; S4 12 passed; S6 and S8 the two REAL-floor rows; S9, S10 (agent-session's
+    end and durable Stop rows, 8 passed); S11 agent-gateway whole, 102/102; S12 tsc 0; S13 biome "No fixes applied".
+    At the docs tip, S14–S15 every DESIGN.md reader in field-app and electron-shell.
+- The re-cut onto `eda440d58` (M-c2's tip): 3 of 3 "=", patch-id `072ce1f8…` equal, the tip's tree `ef91ecb3d843`
+  equal to the merge-tree; DESIGN.md the one shared file, merged clean by hunk (item 191's two at old :5008/:5026,
+  then-main's nearest at :3595 and :5599); packet `lanes/rv/mint/item191/0d1d66f05-on-eda440d58/` (SUMS `4fee0b9b…`).
+- Run 192, a9's, on the old mini: GREEN, every count as briefed, missing [] / extra [] (a9 = vibe-field-31,
+  `lanes/ts6/logs/mini/run192/`, `verify.log` `541fbd5b…`; verify exit 0 at 17:33:40Z, tree clean, stubs 0). Nested
+  rows 0 over the two test files. fieldd 3536 | 15 (+8: agent-gateway 95 → 102, agent-stop 17 → 18); vitest 13,889
+  passed, 0 failed and 21 skipped over the same 954 files; contracts 1929, field-app 4364, node 474, cargo 35 / 548,
+  typecheck 29, biome 3464, census, bundle and gen as run191's. Births by prefix: none in `/private/tmp`, no new `vf-`
+  prefix; the REAL-floor rows left no root. Host: load 1.77 at arm, peak 51.25; df 13 before and after; swap 1,751 MB.
+- At LAND, owed: gate:landing's smoke:godview row 14 (R1's typed-run witness); the old mini's console is locked, so it
+  joins item 196's owed smokes on James's list.
+
+**Found.**
+- endLive's typed branch is reachable today only through endRun (talk's agent_stop). The person's own Stop and End run
+  reach fieldd as `terminal.terminate`, which half B replaces.
+
+**Owed.**
+- **Half B, so item 191 is only partly closed.** The deck half (`app-godview-ui-1`) stays OPEN: a typed pane's
+  "Still running · End run" (GodviewDeck `frameVerbs.stop`) still sends `terminal.terminate` and ends the person's
+  shell. Half B is the `agent.end` door (contracts first, then daemon.ts, the pool's `endAgentRun`, the deck, api.html
+  and DESIGN.md's half-B words). It waits on James's rv-typed-stop Q2.
+- James's rv-typed-stop Q1: built at the lean (a). Under (b), the one rule in `nextStopStep` flips.
+- `draft/thinking-ar7-typed-agents.md` §5.3, a dated correction at the source (through the draft queue): it says
+  stopUnder "interrupts and signals a typed run's PROCESS"; the code (B4) leaves the process running, and the process
+  is ended only through endLive/endTypedRun (item 191).
