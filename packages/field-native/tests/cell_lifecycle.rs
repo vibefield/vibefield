@@ -162,6 +162,26 @@ fn a_malformed_bootstrap_fails_loudly_before_any_slow_work() {
     );
 }
 
+/// Item 196 (b): a cell whose floor is gone exits with its own code, never a
+/// panic. Its stderr is the floor's pipe, and once the floor is gone the pipe
+/// has no reader: `eprint!` panics on that EPIPE, and the panic hook's crumb
+/// then reads as a crash. An unknown flag is the cell's first stderr write, so
+/// it is the row: exit 2 with its usage, on a stderr nobody reads.
+#[cfg(unix)]
+#[test]
+fn a_cell_whose_stderr_has_no_reader_exits_with_its_code_not_a_panic() {
+    let (reader, writer) = std::io::pipe().expect("pipe");
+    drop(reader);
+    let status = Command::new(env!("CARGO_BIN_EXE_field-terminal-host"))
+        .arg("--no-such-flag")
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(writer)
+        .status()
+        .expect("spawn the cell");
+    assert_eq!(status.code(), Some(2), "{status:?}");
+}
+
 #[test]
 fn two_instances_bind_disjoint_names_side_by_side() {
     // The per-instance name scheme's whole point: instance 3 and 4 coexist
