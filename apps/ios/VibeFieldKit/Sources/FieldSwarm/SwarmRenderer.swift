@@ -19,9 +19,12 @@ public struct RenderBody {
   public var y: Double
   /// The eased visual radius, points.
   public var radius: Double
-  /// The arrival curve's scale and opacity; 1 once landed.
+  /// The arrival curve's scale and opacity; 1 once landed. The opacity carries the lens's recede too.
   public var scale: Double
   public var opacity: Double
+  /// SE-2 — the lens's recede weight alone (1: not receded), already in `opacity`: the stale treatment reads it
+  /// (`staleDim`), so a stale body under the lens weighs the recede's weight, never the two multiplied.
+  public var weight: Double
   public var focus: Bool
   /// A stable per-body phase so breathing bodies do not breathe in unison.
   public var seed: Double
@@ -34,7 +37,8 @@ public struct RenderBody {
 
   public init(
     model: SwarmBodyModel, x: Double, y: Double, radius: Double, scale: Double = 1, opacity: Double = 1,
-    focus: Bool = false, seed: Double = 0, accent: SwarmColor, mounted: Bool = false, glow: SwarmGlow? = nil
+    weight: Double = 1, focus: Bool = false, seed: Double = 0, accent: SwarmColor, mounted: Bool = false,
+    glow: SwarmGlow? = nil
   ) {
     self.model = model
     self.x = x
@@ -42,6 +46,7 @@ public struct RenderBody {
     self.radius = radius
     self.scale = scale
     self.opacity = opacity
+    self.weight = weight
     self.focus = focus
     self.seed = seed
     self.accent = accent
@@ -51,9 +56,17 @@ public struct RenderBody {
 }
 
 extension RenderBody {
-  /// What the stale treatment multiplies a stale body's paint by, over `opacity`: the stale weight; 1 for a body
-  /// that is not stale.
-  public var staleDim: Double { model.stale ? SwarmWeight.stale : 1 }
+  /// What the stale treatment multiplies a stale body's paint by, over `opacity` (`body.metal` reads it, and the
+  /// copy's dim): one recede rule across Field's views, the list's (`ListPaint.weight`: a row both stale and
+  /// receded weighs the recede's). Shown, the stale weight; under the lens, whichever is lower of the stale weight and
+  /// the recede's, so the recede's weight replaces the stale one once it is lower, and a weight stepping back never
+  /// jumps. 1 for a body that is not stale. *(Until SE-2q, 2026-11-06, the stale weight whatever the recede: the
+  /// two multiplied.)*
+  public var staleDim: Double {
+    guard model.stale else { return 1 }
+    guard weight > 0 else { return SwarmWeight.stale }
+    return min(SwarmWeight.stale, weight) / weight
+  }
 
   /// The weight this body's paint stands at: its opacity (the arrival and the lens's recede), and a stale body's
   /// treatment over it.
@@ -300,7 +313,8 @@ func packedBody(_ body: RenderBody, frameGlow: SwarmGlow, theme: SwarmTheme) -> 
   data[31] = Float(body.seed)
   data[32] = 0
   data[33] = Float(body.seed)
-  data[34] = model.stale ? 1 : 0
+  // what the stale treatment multiplies the paint by (`body.metal`, under F_STALE); it was a 0/1 mix nothing read
+  data[34] = Float(body.staleDim)
   data[35] = Float(body.opacity)
   // The band and the light are the theme's ink: with one pane, a pane colour
   // would tell nothing (James, 2026-10-18).
@@ -549,7 +563,8 @@ public final class SwarmRenderer {
     let model = body.model
     let ink = theme.ink
     let radius = body.radius * body.scale
-    let dim = body.opacity * (model.stale ? 0.58 : 1)
+    // the copy weighs what the body weighs: its opacity, and a stale body's treatment over it (SE-2q)
+    let dim = body.paintWeight
     // A coloured ground gives the ink less room, so the ladder starts higher on it.
     let onGround = stateGround(theme, model.light) != nil
     let rung: (Double) -> Double = { weight in onGround ? onField(weight) : weight }

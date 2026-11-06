@@ -140,10 +140,11 @@ fragment float4 fs(BodyVertex in [[stage_in]], constant Frame& frame [[buffer(0)
     out = over(out, premul(float4(frame.holdInk.rgb, 1.0)) * cov(abs(d - edge - 5.0) - 1.0, frame));
   }
 
-  // Evidence went quiet: dim and desaturate, never recolour.
+  // Evidence went quiet: dim and desaturate, never recolour. The dim is the host's (`RenderBody.staleDim`): the stale
+  // weight, 0.58, or under the lens what leaves the body at the recede's weight once that is lower (SE-2q).
   if (has(flags, F_STALE)) {
     float3 grey = float3(luma(out.rgb));
-    out = float4(mix(out.rgb, grey, 0.75), out.a) * 0.58;
+    out = float4(mix(out.rgb, grey, 0.75), out.a) * body.motion.z;
   }
 
   return out;

@@ -47,7 +47,7 @@ struct Body {
   float4 ring;
   // the outer light: reach (points), strength, breath (0..1), phase seed
   float4 glow;
-  // spawn time (s), phase seed, stale mix (0/1), opacity
+  // spawn time (s), phase seed, the stale treatment's dim (1 for a body that is not stale), opacity
   float4 motion;
   float4 link;
 };

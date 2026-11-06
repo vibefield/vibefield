@@ -295,9 +295,12 @@ private func catalogGolden() throws -> [CatalogMarkRow] {
   @Test func staleAndFocusPackTheirBits() {
     let stale = packedBody(render(bubble(stale: true)), frameGlow: glow, theme: lightTheme)
     #expect(flags(stale) & BodyFlags.stale != 0)
-    #expect(stale[34] == 1)
+    // slot 34 is the dim `body.metal` multiplies a stale body by (`RenderBody.staleDim`, SE-2q): shown, the stale
+    // weight; a body that is not stale packs 1
+    #expect(stale[34] == Float(SwarmWeight.stale))
     let focused = packedBody(render(bubble(), focus: true), frameGlow: glow, theme: lightTheme)
     #expect(flags(focused) & BodyFlags.focus != 0)
+    #expect(focused[34] == 1)
   }
 
   @Test func theFramePacksTheHoldTheThemesGroundAndTheStateGlow() {

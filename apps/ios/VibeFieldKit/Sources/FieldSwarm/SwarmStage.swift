@@ -42,7 +42,8 @@ public func arrivalCurve(elapsed: Double) -> (scale: Double, opacity: Double) {
 /// decides it: the weight each receded body settles at, and the step a weight takes toward its target each frame.
 /// FieldSwarm holds no rule and no number of its own: the home screen hands in its Godview toolkit's
 /// (`GodviewRecede.swarm`, FieldHome), the recede the list, the rain and the timeline read, so a body recedes as their
-/// rows do. The weight multiplies the body's paint.
+/// rows do. The weight multiplies the body's paint; a stale body's stale weight gives way to it once it is lower, as a
+/// stale row's does in the list, never multiplied by it (`RenderBody.staleDim`, SE-2q).
 public struct SwarmRecede {
   /// The weight each receded body settles at, by bubble id; a body not named stands at 1.
   public var targets: [String: Double]
@@ -286,8 +287,8 @@ public final class SwarmStage {
       bodies.append(
         RenderBody(
           model: model, x: position.x, y: position.y, radius: visual.visualRadius,
-          scale: landing.scale, opacity: landing.opacity * weight, focus: focusedID == id, seed: visual.seed,
-          accent: model.accent ?? .transparent, mounted: model.mounted))
+          scale: landing.scale, opacity: landing.opacity * weight, weight: weight, focus: focusedID == id,
+          seed: visual.seed, accent: model.accent ?? .transparent, mounted: model.mounted))
     }
     bodies.sort { left, right in
       let rank = statusRank(left.model.appearance) - statusRank(right.model.appearance)
