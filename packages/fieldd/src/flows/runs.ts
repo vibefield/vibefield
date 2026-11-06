@@ -179,10 +179,9 @@ interface LiveRun {
   readonly hands: Map<number, () => void>;
 }
 
-/** A step's answer, while its host waits on it: given once (D22), or the call's handler failing. */
+/** A step's answer, while its host waits on it: given once (D22); a start that throws gives its refusal (F2). */
 interface StepWaiter {
   readonly resolve: (answer: FlowHostAnswer) => void;
-  readonly reject: (error: unknown) => void;
 }
 
 /** A step's states that hold one of its run's LIVE_STEPS_MAX slots: its agent is starting or alive (CP4-S7). */
@@ -515,9 +514,7 @@ export class FlowRuns {
     const record = this.ports.records.runRecord(run);
     if (number === undefined || record === undefined)
       throw new Error(`a step of ${run} with no call number or no record`);
-    const answer = new Promise<FlowHostAnswer>((resolve, reject) =>
-      live.waiting.set(number, { resolve, reject }),
-    );
+    const answer = new Promise<FlowHostAnswer>((resolve) => live.waiting.set(number, { resolve }));
     // CP4-S7: a step its entry put past the run's slots waits, with no spawn, until one frees
     if (record.open.find((step) => step.call === number)?.state === "waiting")
       live.slotted.push({ call: number, args: call.args });
@@ -551,9 +548,17 @@ export class FlowRuns {
         else started.unhand();
       }
     } catch (error) {
-      // a handler that fails: the host refuses the call in fieldd's own words
+      // F2 (slices 7–9 review): a start that throws is the step's refusal, "‹label› failed.", never the call's
+      // rejection, so its answer is journaled, its step settles `failed` and frees its slot (`#unslot`), and the script
+      // hears the same on a replay; a rejection would journal nothing and hold the slot forever
+      this.#logger.warn("fieldd.flows.step.start", "A flow step's start threw; the step failed", {
+        run,
+        call: number,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      const step = this.ports.records.runRecord(run)?.open.find((open) => open.call === number);
       live.waiting.delete(number);
-      waiter?.reject(error);
+      waiter?.resolve({ ok: false, refused: stepFailed(step?.label) });
     }
   }
 
