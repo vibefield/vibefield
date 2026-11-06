@@ -96,6 +96,21 @@
       return ProcessInfo.processInfo.arguments.first { $0.hasPrefix(flag) }.map { String($0.dropFirst(flag.count)) }
     }
 
+    /// The stills' facts of their case's spark: under `-vf-chat-case=`, the golden's `facts`, what its spark was when
+    /// the Mac's fold drew the case (new, awake, blocked, waiting, working, turnedAt), with the mock spark's name, seed
+    /// and status kept, so the head and the flow's faces agree. The mock list's Vela has worked and its session is
+    /// live, so without them the hello's case draws no hello. Without the flag, nil: the entry's own facts stand.
+    static func caseFacts(over spark: ChatFlowSpark) -> ChatFlowSpark? {
+      guard ProcessInfo.processInfo.arguments.contains(where: { $0.hasPrefix("-vf-chat-case=") }),
+        let facts = fixture("chat-flow.\(threadCase).golden", in: "Fixtures/chat-flow")?["facts"]
+      else { return nil }
+      return ChatFlowSpark(
+        name: spark.name, seed: spark.seed, status: spark.status, turnedAt: facts["turnedAt"]?.stringValue,
+        isNew: facts["new"]?.boolValue ?? spark.isNew, awake: facts["awake"]?.boolValue ?? spark.awake,
+        blocked: facts["blocked"]?.boolValue ?? spark.blocked, waiting: facts["waiting"]?.boolValue ?? spark.waiting,
+        working: facts["working"]?.boolValue ?? spark.working)
+    }
+
     /// The case's reading: the golden's input read as the reader reads it, or the two states said as themselves.
     static func threadReading(_ name: String) -> SparkTranscriptReading {
       switch name {

@@ -347,6 +347,12 @@ const requiredMirrors = [
   ["chat", sayFixtures, ["Tests/FieldProductTests"]],
   // and the two merged lists Chat's demo door answers under `-vf-mock` (ChatFixtureDoor, DEBUG)
   ["sparks", ["compose-sparks-list.merged.json", "needs-list.merged.json"], ["Sources/FieldHome"]],
+  // IOS-12c (M-c2) — the thread cases Chat's demo door draws under `-vf-mock` (ChatFixtureDoor)
+  [
+    "chat",
+    ["at-rest", "earlier", "hello", "receipts"].map((c) => `chat-flow/chat-flow.${c}.golden.json`),
+    ["Sources/FieldHome"],
+  ],
   // SP-7a — the spark's transcript, read on the phone as the Mac reads it
   ["spark-transcript", transcriptFixtures, ["Tests/FieldProductTests"]],
   // the fold's parity golden and its inputs; the field cut's project-key collapse beside the remote cut's;

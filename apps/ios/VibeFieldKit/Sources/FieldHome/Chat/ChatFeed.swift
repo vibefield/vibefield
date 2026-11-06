@@ -97,6 +97,7 @@ final class ChatFeed {
   /// The home's door, handed over when it changes (nil: none, the last word stands).
   func attach(_ door: (any ChatDoor)?, home: String?) {
     if door === self.door, home == self.home { return }
+    if door !== self.door { doorTurn += 1 }
     for watch in watches.values { watch.cancel() }
     watches = [:]
     self.door = door
@@ -138,16 +139,17 @@ final class ChatFeed {
   /// IOS-12c — your words to a spark, through the home (`compose.sparks.say`, carried to its desktop): the receipt, or
   /// fieldd's refusal thrown (`retryable` when the connection closed under it).
   func say(_ params: SparkSayParams) async throws -> SparkSayResult {
-    _ = params
-    throw FieldProductError(kind: "UNIMPLEMENTED", message: "r1's skeleton")
+    guard let door else {
+      throw FieldProductError(kind: "UNAVAILABLE", message: "no home answers for Chat", retryable: true)
+    }
+    return try SparkSayResult(json: try await door.call(SparkSay.method, params: params.json))
   }
 
   /// IOS-12c — a reader of a spark's record through the home's door; none with no door.
   func reader(
     spark: String, device: String?, whole: Bool, held: SparkTranscriptReading
   ) -> (any ChatThreadReader)? {
-    _ = (spark, device, whole, held)
-    return nil
+    door?.reader(spark: spark, device: device, whole: whole, held: held)
   }
 
   /// A send passed the phone's checks: its bubble stands.
@@ -160,7 +162,9 @@ final class ChatFeed {
 
   /// The record shows these sends: their bubbles are the record's now. Nothing is written when nothing moves.
   func letGo(_ spark: String, said: Set<String>) {
-    sends.letGo(spark, said: said)
+    var next = sends
+    next.letGo(spark, said: said)
+    if next != sends { sends = next }
   }
 
   /// The sparks on the board with a live run, as one key (the Mac's `boardSparksKey`, without TU-1's mark).

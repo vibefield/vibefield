@@ -34,6 +34,12 @@
     "package",
     "outward",
     "document",
-    "tape"
+    "tape",
+    "code",
+    "message",
+    "agents",
+    "chevron",
+    "panes",
+    "duplicate"
   ]
 }

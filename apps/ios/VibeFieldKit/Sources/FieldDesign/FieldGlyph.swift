@@ -36,6 +36,15 @@ public enum FieldGlyphName: String, CaseIterable, Sendable {
   /// WI-3 — Settings › This phone › Lock: the desk's shut padlock, `tape` (DESIGN.md §13; ICE's `lock` is drawn by
   /// it too).
   case lock = "tape"
+  /// IOS-12c — the phone's thread (DESIGN.md §8 "The phone's Chat", §13's drawings): a turn's tools (`code`),
+  /// VibeField's notify (`message`) and a crew's start (`agents`); the earlier conversations' `chevron`; and the
+  /// hello's three starters (`agents`, `panes`, `duplicate`).
+  case code
+  case message
+  case agents
+  case chevron
+  case panes
+  case duplicate
 
   var assetName: String { "glyph-\(rawValue)" }
 }
