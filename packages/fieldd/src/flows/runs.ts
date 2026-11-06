@@ -403,6 +403,7 @@ export class FlowRuns {
       const now = known?.profiles;
       const scope =
         now !== undefined ? start.scope.filter((profile) => now.includes(profile)) : start.scope;
+      if (start.scope.length > 0 && scope.length === 0) throw this.#noProfiles(start.starter);
       const params: FlowRunStartParams = {
         flow: act.flow,
         input: start.input,
@@ -428,6 +429,17 @@ export class FlowRuns {
     if (this.#woken(begun) === undefined)
       return { outcome: "failed", reason: words.neverBegan(begun.name) };
     return { outcome: "done", run: begun.run };
+  }
+
+  /** V5 (the 1b review): a start whose asked Agent Profiles, narrowed as it starts (G2 at the act, D8 at `#begin`),
+   * leave none starts nothing, refused before any approval as an Allow refuses its spawn. A spark's, or one from its
+   * thread, is said in the spark's words; yours, in the words that none it asked for exists now. */
+  #noProfiles(starter: FlowRunStartParams["starter"]): RpcCallError {
+    const spark = starter.spark;
+    if (spark === undefined) return refused("no-profiles", words.noProfiles());
+    const known = this.ports.sparkOf(spark);
+    if (known === undefined) return refused("no-spark", words.noSpark());
+    return refused("no-profiles", words.noSparkProfiles(nameWords(known.name)));
   }
 
   /** Begin a run of the version `hash`: its refusals, then the run's begin checked (`checkBegin`), then (`approving`,
@@ -482,6 +494,7 @@ export class FlowRuns {
     const run = `fr-${randomBytes(8).toString("hex")}` as FlowRunId;
     const profiles = new Set(this.ports.profiles());
     const scope = [...new Set(params.scope)].filter((profile) => profiles.has(profile));
+    if (params.scope.length > 0 && scope.length === 0) throw this.#noProfiles(params.starter);
     // H2 (R4–R6 review): the run's begin is checked before anything is written, so the store's refusal leaves no
     // approval with no run. Run this version (approves it) is approved past every refusal and that check; the approval
     // keeps its bytes, which the run's host is woken on. A failure that is not the store's own (a disk that refuses a
