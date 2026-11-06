@@ -10,6 +10,7 @@ import {
   channelLabel,
   channelUnresolved,
   checkedLabel,
+  consentListLabel,
   downgradeWords,
   downloadRefusalFallback,
   isDowngrade,
@@ -117,10 +118,27 @@ describe("the card's state line", () => {
       "VibeField 1.2.0 is ready — restart to finish updating",
       "Restarting ends 1 terminal session. You choose when.",
     ],
+    // Item 192 (RV #6; rv-update-census at its lean, option A's words) — a release that keeps the floor's terminal
+    // sessions still restarts the field service, which ends the agent runs whose agents don't re-attach
     [
       { phase: "staged", version: "1.2.0", sessions: 3, keepsSessions: true },
       "VibeField 1.2.0 is ready — restart to finish updating",
+      "Restarting ends 3 agent runs. Your terminal sessions keep running. You choose when.",
+    ],
+    [
+      { phase: "staged", version: "1.2.0", sessions: 1, keepsSessions: true },
+      "VibeField 1.2.0 is ready — restart to finish updating",
+      "Restarting ends 1 agent run. Your terminal sessions keep running. You choose when.",
+    ],
+    [
+      { phase: "staged", version: "1.2.0", sessions: 0, keepsSessions: true },
+      "VibeField 1.2.0 is ready — restart to finish updating",
       "Your terminal sessions keep running.",
+    ],
+    [
+      { phase: "staged", version: "1.2.0", sessions: "unknown", keepsSessions: true },
+      "VibeField 1.2.0 is ready — restart to finish updating",
+      "VibeField couldn't read which agent runs are working; it asks again when you restart.",
     ],
     [
       { phase: "staged", version: "1.2.0", sessions: "unknown" },
@@ -228,7 +246,19 @@ describe("the ready update — the dot's one reading, and the words time grows (
     expect(restartAsks({ ...staged, sessions: "unknown" })).toBe(true);
     expect(restartAsks(staged)).toBe(true);
     expect(restartAsks({ ...staged, sessions: 0 })).toBe(false);
-    expect(restartAsks({ ...staged, sessions: 4, keepsSessions: true })).toBe(false);
+    // Item 192 (RV #6) — keeping the floor's sessions is no exemption: fieldd's own stop ends agent runs
+    expect(restartAsks({ ...staged, sessions: 4, keepsSessions: true })).toBe(true);
+    expect(restartAsks({ ...staged, sessions: "unknown", keepsSessions: true })).toBe(true);
+    expect(restartAsks({ ...staged, sessions: 0, keepsSessions: true })).toBe(false);
+    expect(restartAsks(viewFixture("update-view.staged-agent-runs"))).toBe(true);
+  });
+
+  it("names the consent's list by what the stop ends: agent runs for a release that keeps the floor (RV #6)", () => {
+    expect(consentListLabel(viewFixture("update-view.staged-agent-runs"))).toBe(
+      "The agent runs it ends",
+    );
+    expect(consentListLabel(viewFixture("update-view.staged-since"))).toBe("The sessions it ends");
+    expect(consentListLabel(null)).toBe("The sessions it ends");
   });
 
   it("names the ready day from the 7th day, and leads the cost with it", () => {
@@ -752,6 +782,25 @@ describe("the Me menu's update row — at rest, in place, and the hold in its in
       { ...STAGED, sessions: 1 },
       REST,
       { label: "Restart to update…", detail: "Ends 1 terminal session", act: "ask" },
+    ],
+    // Item 192 (RV #6) — a release that keeps the floor's terminal sessions: its stop's own cost, agent runs
+    [
+      "R9 — the agent runs fieldd's own stop ends",
+      { ...STAGED, sessions: 2, keepsSessions: true },
+      REST,
+      { label: "Restart to update…", detail: "Ends 2 agent runs", act: "ask", dot: true },
+    ],
+    [
+      "R9 — one agent run",
+      { ...STAGED, sessions: 1, keepsSessions: true },
+      REST,
+      { label: "Restart to update…", detail: "Ends 1 agent run", act: "ask" },
+    ],
+    [
+      "R8 — a release that keeps the floor's sessions and ends no run",
+      { ...STAGED, keepsSessions: true },
+      REST,
+      { label: "Restart to update", detail: "Your sessions keep running", act: "restart" },
     ],
     [
       "R10 — the census unread",

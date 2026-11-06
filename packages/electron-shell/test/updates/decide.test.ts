@@ -243,23 +243,31 @@ describe("the levers (B1) and the native plane (B3)", () => {
     });
   });
 
-  it("the census gates only a release that touches the floor", () => {
+  // Item 192 (RV #6, gap3-1) — the census is of THE stop the release needs (the floor's sessions, or the agent runs
+  // fieldd's own stop ends), so it gates every release: a release that leaves the floor alone is no exemption
+  it("the census gates every release: what its stop ends, live or unread, holds it", () => {
     expect(at("downloaded", { policy: open }, staged, 2)).toEqual({
       kind: "hold",
       version: V,
       reason: "sessions",
     });
     expect(at("downloaded", { policy: open, nativeTouched: false }, staged, 2)).toEqual({
-      kind: "offer-restart",
+      kind: "hold",
       version: V,
+      reason: "sessions",
     });
     expect(at("downloaded", { policy: open, nativeTouched: false }, staged, "unknown")).toEqual({
-      kind: "offer-restart",
+      kind: "hold",
       version: V,
+      reason: "census-unknown",
     });
-    // absent = touched (the fail-safe)
     expect(at("downloaded", { policy: open }, staged, "unknown")).toMatchObject({
       reason: "census-unknown",
+    });
+    // a stop that ends nothing offers the restart
+    expect(at("downloaded", { policy: open }, staged, 0)).toEqual({
+      kind: "offer-restart",
+      version: V,
     });
   });
   // AU-3a (X24): the version orders' rows moved with them, to contracts' update-view.test.ts.

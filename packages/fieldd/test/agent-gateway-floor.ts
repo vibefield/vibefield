@@ -31,6 +31,7 @@ import { userInfo } from "node:os";
 import { basename, delimiter, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  type AgentCatalogEntry,
   AgentSessionRecord,
   type AgentSessionSummary,
   LAYOUT,
@@ -209,6 +210,9 @@ export interface FloorConfig {
    * `AGENT_STOP.HEARD_WITHIN_MS`): a row waits its own bound, not the
    * product's */
   stopHeardWithinMs?: number;
+  /** Item 192 (RV #6) — the catalog the doors answer from (default `TYPED_CATALOG`, whose scripted row claims
+   * re-attach): a row that does not claim it is what a fieldd-only stop counts */
+  catalog?: readonly AgentCatalogEntry[];
 }
 
 async function openRpc(port: number): Promise<WsRpc> {
@@ -331,7 +335,7 @@ export async function floor(config: FloorConfig): Promise<Floor> {
     ...(config.stopHeardWithinMs !== undefined
       ? { agentStopHeardWithinMs: config.stopHeardWithinMs }
       : {}),
-    agentCatalog: TYPED_CATALOG,
+    agentCatalog: config.catalog ?? TYPED_CATALOG,
     // the scripted agent and no other: nothing of any vendor's is composed
     agentProviders: () => [
       typedProvider(script, { attach: config.attach === true, ...config.provider }),

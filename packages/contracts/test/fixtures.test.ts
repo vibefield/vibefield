@@ -363,6 +363,7 @@ import {
   ChannelHeads,
   ReleaseManifest,
   RestartScheduled,
+  SystemShutdownCensusResult,
   SystemShutdownParams,
   SystemShutdownResult,
   UpdateCheckResult,
@@ -426,6 +427,9 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "shell-last-exit": ShellLastExit,
   "diagnostics-last-exit-result": DiagnosticsLastExitResult,
   "system-shutdown-result": SystemShutdownResult,
+  // Item 192 (RV #6) — fieldd's own stop counted by fieldd: the census the shell reads before a fieldd-only update
+  // (`system.shutdown.census`, TS-only). The consented runs ride `system-shutdown-params.fieldd-only-consented`.
+  "system-shutdown-census-result": SystemShutdownCensusResult,
   "restart-scheduled": RestartScheduled,
   // WG-D1…D6 (draft/thinking-floor-wedge.md §7) — the wedge ladder. The floor's half is
   // generated for field-native and parity-checked in fixture_parity.rs: the pong, the tick (the
@@ -1202,6 +1206,43 @@ describe("TM-2 (F-H3) — the mgmt wire's THIRD serve target, and the routes it 
       true,
     );
     expect(ServeConfig.safeParse({ name: "a", target: { kind: "nope" } }).success).toBe(false);
+  });
+});
+
+describe("Item 192 (RV #6) — a stop names ONE census: the floor's sessions or fieldd's own runs", () => {
+  it("refuses a stop that carries both: the floor's census already covers every PTY that holds an agent", () => {
+    const both = SystemShutdownParams.safeParse({
+      reason: "update",
+      native: { stop: true, sessions: ["01JA7SESSIONAAAAAAAAAAAAAA"] },
+      agents: { runs: ["01JA7RUNAAAAAAAAAAAAAAAAAA"] },
+    });
+    expect(both.success).toBe(false);
+  });
+
+  it("takes each alone, and a run list at census zero; a run id is never empty", () => {
+    const plain = SystemShutdownParams.safeParse({ reason: "update", agents: { runs: [] } });
+    expect(plain.success).toBe(true);
+    const native = SystemShutdownParams.safeParse({ native: { stop: true, sessions: [] } });
+    expect(native.success).toBe(true);
+    expect(SystemShutdownParams.safeParse({ agents: { runs: [""] } }).success).toBe(false);
+  });
+
+  it("the census names each run by the id fieldd re-checks, with the agent's label the box lists", () => {
+    const raw = JSON.parse(
+      readFileSync(join(FIXTURES, "system-shutdown-census-result.valid.json"), "utf8"),
+    );
+    expect(SystemShutdownCensusResult.parse(raw).runs).toEqual([
+      {
+        runId: "01JA7RUNAAAAAAAAAAAAAAAAAA",
+        sessionId: "01JA7SESSIONAAAAAAAAAAAAAA",
+        title: "codex",
+        cwd: "/Users/me/Projects/vibe-field",
+        agent: "Codex",
+      },
+    ]);
+    // a run without its agent's label is no row the box can name
+    const unnamed = { runs: [{ runId: "01JA7RUNAAAAAAAAAAAAAAAAAA" }] };
+    expect(SystemShutdownCensusResult.safeParse(unnamed).success).toBe(false);
   });
 });
 

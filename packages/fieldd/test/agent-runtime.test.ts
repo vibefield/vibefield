@@ -2326,3 +2326,48 @@ describe("PJ-6 — agent.models: each agent's own picker, held per Agent Profile
     expect((await win.callErr("agent.models", {})).data?.kind).toBe("PRECONDITION_FAILED");
   });
 });
+
+describe("Item 192 (RV #6) — fieldd's own stop before this boot's re-attach has settled", () => {
+  it("the census is unsettled until the first inventory: its door and the consented stop refuse retryably, nothing stops, and the refusal reopens the launches", async () => {
+    // the mock floor answers no ObservedState, so this boot never reads a first inventory and never settles
+    const { daemon } = await setup();
+    let stops = 0;
+    daemon.onShutdownRequest(() => {
+      stops += 1;
+    });
+    expect(daemon.agents.plainStopCensus()).toEqual({ settled: false });
+
+    const shell = await openRpc(daemon.controlPort);
+    await helloAs(shell, daemon.shellToken, "shell-main");
+    const reattaching = {
+      kind: "UNAVAILABLE",
+      retryable: true,
+      details: { service: "agents", state: "reattaching" },
+    };
+    expect((await shell.callErr("system.shutdown.census", {})).data).toMatchObject(reattaching);
+    const refused = await shell.callErr("system.shutdown", {
+      reason: "update",
+      agents: { runs: [] },
+    });
+    expect(refused.data).toMatchObject(reattaching);
+    expect(stops).toBe(0);
+
+    // reopened: a resume passes the launch gate and is refused for its own reason (an id that reads as a flag) …
+    const win = await window(daemon, ["agent.spawn"], "c192");
+    const malformed = { provider: "claude", nativeSessionId: "-flag" };
+    expect((await win.callErr("agent.resume", malformed)).data?.details).toMatchObject({
+      reason: "malformed-native-id",
+    });
+    // … which the gate answers first while a stop holds the launches closed, and reopened the resume reaches it again
+    daemon.agents.closeLaunchesForStop();
+    expect((await win.callErr("agent.resume", malformed)).data).toMatchObject({
+      kind: "UNAVAILABLE",
+      retryable: true,
+      details: { service: "agents", state: "stopping" },
+    });
+    daemon.agents.reopenLaunches();
+    expect((await win.callErr("agent.resume", malformed)).data?.details).toMatchObject({
+      reason: "malformed-native-id",
+    });
+  });
+});

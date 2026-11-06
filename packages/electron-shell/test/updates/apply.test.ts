@@ -7,6 +7,7 @@ import {
   consentBox,
   consentWords,
   downloadNotice,
+  plainCensusOf,
   policyNotice,
   quitNotice,
   stagedTrayLabel,
@@ -47,6 +48,15 @@ const sessions = (n: number) =>
     sessionId: `s-${i}`,
     title: `zsh ${i}`,
     cwd: `/Users/me/p${i}`,
+  }));
+
+/** Item 192 (RV #6) — runs as fieldd's own census names them: the id is the run's, the agent its catalog label. */
+const runs = (n: number) =>
+  Array.from({ length: n }, (_, i) => ({
+    sessionId: `run-${i}`,
+    title: `task ${i}`,
+    cwd: `/Users/me/p${i}`,
+    agent: "Scripted",
   }));
 
 describe("the consent box (EDP-35, DESIGN.md §9)", () => {
@@ -104,6 +114,49 @@ describe("the consent box (EDP-35, DESIGN.md §9)", () => {
   });
 });
 
+// Item 192 (RV #6, gap3-1; rv-update-census at its lean, option A's words) — a release that leaves field-native's bytes
+// alone keeps the terminal sessions, and fieldd's own stop ends the agent runs whose agents don't re-attach: the box
+// says THAT stop's cost, in the same voice.
+describe("the consent for fieldd's own stop: the agent runs it ends (RV #6)", () => {
+  it("says the runs it ends with their number, lists each by its agent, and its act says so", () => {
+    const box = consentBox("0.9.0", runs(2), false);
+    speaksInSection9(box);
+    expect(box.message).toBe("Updating ends 2 agent runs");
+    expect(box.detail.split("\n")).toEqual([
+      "VibeField 0.9.0 restarts the field service, which ends:",
+      "Scripted — task 0 — /Users/me/p0",
+      "Scripted — task 1 — /Users/me/p1",
+    ]);
+    expect(box.buttons).toEqual(["Cancel", "End 2 agent runs and update"]);
+    expect(box.defaultId).toBe(0);
+    expect(box.cancelId).toBe(0);
+  });
+
+  it("is singular for one run, counts the runs past the listed few, and names a run by its agent alone", () => {
+    const one = consentBox("0.9.0", [{ sessionId: "run-0", agent: "Scripted" }], false);
+    expect(one.message).toBe("Updating ends 1 agent run");
+    expect(one.buttons[1]).toBe("End 1 agent run and update");
+    expect(one.detail.split("\n")[1]).toBe("Scripted");
+    const many = consentWords("0.9.0", runs(CONSENT_LISTED_MAX + 1), false);
+    expect(many.listed).toHaveLength(CONSENT_LISTED_MAX);
+    expect(many.more).toBe(1);
+  });
+
+  it("the floor's stop keeps its own words", () => {
+    expect(consentBox("0.9.0", sessions(2), true)).toEqual(consentBox("0.9.0", sessions(2)));
+    expect(censusNotice(true)).toEqual(censusNotice());
+  });
+
+  it("an unread census of the runs ends none, and says so", () => {
+    const box = censusNotice(false);
+    expect(box.message).toBe("VibeField didn't install the update");
+    expect(box.detail).toBe(
+      "VibeField couldn't read which agent runs are working, so it ended none. Nothing changed; try again in a moment.",
+    );
+    expect(box.buttons).toEqual(["OK"]);
+  });
+});
+
 describe("the quit notices (the PM's ruling 13:37Z: the person is told before the window goes)", () => {
   it.each(["squirrel-timeout", "install-failed"] as const)(
     "%s says what happened and what to do next",
@@ -132,9 +185,13 @@ describe("the tray's staged verb (the macOS menu convention: Title Case, an elli
     expect(stagedTrayLabel(count)).toBe(label);
   });
 
-  it("a release that keeps the floor's sessions (B3) is the plain verb, whatever the count", () => {
-    expect(stagedTrayLabel(3, true)).toBe("Restart to Update");
-    expect(stagedTrayLabel("unknown", true)).toBe("Restart to Update");
+  // Item 192 (RV #6) — `keepsSessions` picks the noun, never the silence: fieldd's own stop ends agent runs
+  it("a release that keeps the floor's sessions (B3) names the agent runs its stop ends", () => {
+    expect(stagedTrayLabel(0, true)).toBe("Restart to Update");
+    expect(stagedTrayLabel(1, true)).toBe("Update Ends 1 Agent Run…");
+    expect(stagedTrayLabel(3, true)).toBe("Update Ends 3 Agent Runs…");
+    // an unread count holds the verb for every release
+    expect(stagedTrayLabel("unknown", true)).toBe("Update Downloaded");
     // not wired here: still no verb
     expect(stagedTrayLabel(undefined, true)).toBe("Update Downloaded");
   });
@@ -224,6 +281,25 @@ describe("the census reads how old the list is (IL-D5 (a), `draft/thinking-inven
   });
 });
 
+describe("fieldd's own census, as the shell reads it (Item 192, RV #6)", () => {
+  it("an answer is the census: each run by the id fieldd re-checks, with its agent's label", () => {
+    const answer = {
+      runs: [{ runId: "run-1", sessionId: "s-1", title: "task", cwd: "/w", agent: "Scripted" }],
+    };
+    expect(plainCensusOf(answer)).toEqual({
+      known: true,
+      sessions: [{ sessionId: "run-1", title: "task", cwd: "/w", agent: "Scripted" }],
+    });
+    expect(plainCensusOf({ runs: [] })).toEqual({ known: true, sessions: [] });
+  });
+
+  it("anything but an answer is unknown, never zero", () => {
+    expect(plainCensusOf(undefined)).toEqual({ known: false });
+    expect(plainCensusOf({ runs: "none" })).toEqual({ known: false });
+    expect(plainCensusOf({ runs: [{ runId: "run-1" }] })).toEqual({ known: false });
+  });
+});
+
 describe("EDP-34's safe window — the predicate, as a truth table", () => {
   const open: SafeWindowContext = {
     windowless: true,
@@ -256,7 +332,13 @@ describe("EDP-34's safe window — the predicate, as a truth table", () => {
       { census: "unknown" },
       { open: false, clause: "plane-gate" },
     ],
-    ["a shell-only release ignores the census", { planes: ["shell"], census: 2 }, { open: true }],
+    // Item 192 (RV #6) — the census is already of the stop the planes need: a release that leaves field-native
+    // alone is gated by the agent runs fieldd's own stop ends
+    [
+      "a release that leaves field-native alone, with runs its stop ends",
+      { planes: ["shell", "fieldd"], census: 2 },
+      { open: false, clause: "plane-gate" },
+    ],
     [
       "the first failing clause is the one named",
       { windowless: false, census: 2 },

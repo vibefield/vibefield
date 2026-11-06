@@ -8,6 +8,7 @@ import {
   type CensusSnapshot,
   censusNotice,
   censusOf,
+  consentBox,
   consentWords,
   locationNotice,
   quitInstallWords,
@@ -100,6 +101,11 @@ class FakeApply implements ApplyPort {
   wired = true;
   readonly timeline: string[];
   snapshot: CensusSnapshot = { known: true, sessions: [] };
+  /** Item 192 (RV #6) — fieldd's census of its OWN stop (`system.shutdown.census`): the agent runs a stop that leaves
+   * the floor ends. `snapshot` is the floor's (`terminal.list`). */
+  plain: CensusSnapshot = { known: true, sessions: [] };
+  /** which census each read asked: true = the floor's, false = fieldd's own */
+  censusAsked: boolean[] = [];
   consent = true;
   stop: StopOutcome = { ok: true };
   stageOutcome: StageOutcome = { kind: "staged" };
@@ -111,9 +117,10 @@ class FakeApply implements ApplyPort {
   constructor(timeline: string[]) {
     this.timeline = timeline;
   }
-  async census(): Promise<CensusSnapshot> {
+  async census(native: boolean): Promise<CensusSnapshot> {
     this.timeline.push("fieldd:census");
-    return this.snapshot;
+    this.censusAsked.push(native);
+    return native === false ? this.plain : this.snapshot;
   }
   async confirm(box: BoxContent): Promise<boolean> {
     this.timeline.push("confirm");
@@ -302,6 +309,19 @@ const LIVE = {
   sessions: [
     { sessionId: "01SESSIONAAAAAAAAAAAAAAAAA", title: "zsh", cwd: "/Users/me/a" },
     { sessionId: "01SESSIONBBBBBBBBBBBBBBBBB", title: "claude", cwd: "/Users/me/b" },
+  ],
+} as const satisfies CensusSnapshot;
+
+/** Item 192 (RV #6) — one live run fieldd's own stop ends (its agent does not re-attach), as fieldd's census names it */
+const RUN = {
+  known: true,
+  sessions: [
+    {
+      sessionId: "01RUNAAAAAAAAAAAAAAAAAAAAA",
+      title: "task",
+      cwd: "/Users/me/a",
+      agent: "Scripted",
+    },
   ],
 } as const satisfies CensusSnapshot;
 
@@ -1094,9 +1114,11 @@ describe("restartToInstall — L3b-i: the fresh policy (B2) and the planes by di
   async function stagedWith(
     opts: Parameters<typeof stagedController>[0],
     sessions: CensusSnapshot = { known: true, sessions: [] },
+    plain: CensusSnapshot = { known: true, sessions: [] },
   ) {
     const rig = await stagedController(opts);
     rig.apply.snapshot = sessions;
+    rig.apply.plain = plain;
     await rig.controller.check("manual");
     rig.timeline.length = 0;
     rig.audits.length = 0;
@@ -1206,20 +1228,74 @@ describe("restartToInstall — L3b-i: the fresh policy (B2) and the planes by di
     expect(rig.apply.plan).toBeNull();
   });
 
-  it("B3 untouched: live sessions, yet no census, no box — fieldd stops alone and the floor keeps them", async () => {
-    const rig = await stagedWith({ nativePlane: LOCAL, manifestNative: LOCAL }, LIVE);
-    expect(rig.controller.state).toMatchObject({ kind: "staged", keepsSessions: true });
-    expect(rig.controller.state).not.toHaveProperty("blockedBy");
+  // Item 192 (RV #6, gap3-1) — B3 keeps the floor's TERMINAL sessions, and fieldd's own stop ends the agent runs whose
+  // agents don't re-attach: the census, the consent and fieldd's re-check are of THAT stop.
+  it("B3 untouched with a live run the fieldd-only stop ends: its census, its box, and fieldd stops alone naming the run", async () => {
+    const rig = await stagedWith({ nativePlane: LOCAL, manifestNative: LOCAL }, LIVE, RUN);
+    expect(rig.controller.state).toMatchObject({
+      kind: "staged",
+      keepsSessions: true,
+      sessions: 1,
+      blockedBy: "sessions",
+    });
     expect(rig.controller.doctorLines()).toContain(
-      `native plane: untouched by ${STAGED_VERSION} — its sessions keep running`,
+      `native plane: untouched by ${STAGED_VERSION} — its terminal sessions keep running; 1 agent run ends (their agents don't re-attach)`,
     );
     expect(await rig.controller.restartToInstall()).toEqual({ ok: true });
+    // the box says fieldd's own stop's cost (its words are pinned in apply.test.ts)
+    expect(rig.apply.boxes).toEqual([consentBox(STAGED_VERSION, RUN.sessions, false)]);
+    expect(rig.apply.boxes[0]?.message).toBe("Updating ends 1 agent run");
+    expect(rig.apply.boxes[0]?.detail).toContain("Scripted — task — /Users/me/a");
+    // ONE snapshot, and it is fieldd's own: the floor's sessions are not what this stop ends
+    expect(rig.timeline).toEqual(["fieldd:census", "confirm", "fieldd:audit:attempt", "quit"]);
+    expect(rig.apply.censusAsked.at(-1)).toBe(false);
+    await rig.apply.plan!.prepare();
+    expect(rig.apply.stoppedNative).toBe(false);
+    // the stop carries exactly the consented run for fieldd to re-check
+    expect(rig.apply.stoppedWith).toEqual([RUN.sessions[0].sessionId]);
+    noFielddAfterTheStop(rig.timeline);
+  });
+
+  it("B3 untouched with no run its stop ends: one click, no box — fieldd stops alone and the terminal sessions keep", async () => {
+    const rig = await stagedWith({ nativePlane: LOCAL, manifestNative: LOCAL }, LIVE);
+    expect(rig.controller.state).toMatchObject({
+      kind: "staged",
+      keepsSessions: true,
+      sessions: 0,
+    });
+    expect(rig.controller.state).not.toHaveProperty("blockedBy");
+    expect(rig.controller.doctorLines()).toContain(
+      `native plane: untouched by ${STAGED_VERSION} — its terminal sessions keep running; 0 agent runs end (their agents don't re-attach)`,
+    );
+    const prepared = await rig.controller.prepareRestart();
+    expect(prepared).toMatchObject({ ok: true, keepsSessions: true, sessions: [] });
+    expect(prepared.ok && prepared.consent).toBeUndefined();
+    rig.timeline.length = 0;
+    expect(await rig.controller.restartToInstall()).toEqual({ ok: true });
     expect(rig.apply.boxes).toEqual([]);
-    expect(rig.timeline).toEqual(["fieldd:audit:attempt", "quit"]);
+    expect(rig.timeline).toEqual(["fieldd:census", "fieldd:audit:attempt", "quit"]);
     await rig.apply.plan!.prepare();
     expect(rig.apply.stoppedNative).toBe(false);
     expect(rig.apply.stoppedWith).toEqual([]);
     noFielddAfterTheStop(rig.timeline);
+  });
+
+  it("B3 untouched with fieldd's census unread: it holds census-unknown, said in the agent runs' words, nothing torn down", async () => {
+    const unread: CensusSnapshot = { known: false };
+    const rig = await stagedWith({ nativePlane: LOCAL, manifestNative: LOCAL }, LIVE, unread);
+    expect(rig.controller.state).toMatchObject({
+      kind: "staged",
+      keepsSessions: true,
+      sessions: "unknown",
+      blockedBy: "census-unknown",
+    });
+    expect(await rig.controller.restartToInstall()).toEqual({
+      ok: false,
+      reason: "census-unknown",
+    });
+    expect(rig.apply.notices.map((notice) => notice.detail)).toEqual([censusNotice(false).detail]);
+    expect(rig.audits[0]).toMatchObject({ reasonCode: "CENSUS_UNKNOWN" });
+    expect(rig.apply.plan).toBeNull();
   });
 
   it("B3 touched — another digest, an extra member, or no manifest: the census, the box, the floor stopped", async () => {
@@ -1428,6 +1504,20 @@ describe("the silent self-apply (B4) and the staged cache (B6)", () => {
     expect(r.apply.boxes).toEqual([]);
     await r.apply.plan!.prepare();
     expect(r.apply.stoppedNative).toBe(false);
+  });
+
+  // Item 192 (RV #6) — the silent path asks no one, and fieldd's own stop would end the run: it waits for a person
+  it("a release that leaves the floor alone waits while its stop would end an agent run — nobody is asked", async () => {
+    const r = await rig({ window: {}, nativePlane: LOCAL, manifestNative: LOCAL }, LIVE);
+    r.apply.plain = RUN;
+    await r.controller.check("manual");
+    expect(r.apply.plan).toBeNull();
+    expect(r.apply.boxes).toEqual([]);
+    expect(await r.controller.considerSilentApply("timer")).toEqual({
+      applying: false,
+      reason: "sessions",
+    });
+    expect(r.apply.plan).toBeNull();
   });
 
   it("offline, the silent path holds without a box", async () => {

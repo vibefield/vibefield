@@ -297,6 +297,34 @@ describe("Settings → Updates", () => {
     expect(container?.querySelector("[data-updates-consent]")).toBeNull();
   });
 
+  it("Item 192 (RV #6) — the consent's list is named by the snapshot it stands on, never by the view published apart", async () => {
+    // main judged the release again at the click: its snapshot keeps the floor, while the view still counts sessions
+    const updates = fakeUpdates({
+      prepare: {
+        ok: true,
+        token: TOKEN,
+        version: VERSION,
+        keepsSessions: true,
+        sessions: [{ sessionId: "run-1", cwd: "~/Projects/vibe-field" }],
+        expiresAt: 1,
+        consent: {
+          message: "Updating ends 1 agent run",
+          lead: `VibeField ${VERSION} restarts the field service, which ends:`,
+          listed: ["Agent — ~/Projects/vibe-field"],
+          more: 0,
+          confirm: "End 1 agent run and update",
+        },
+      },
+    });
+    host(updates);
+    await mount(STAGED);
+    await click("Restart to update…");
+    const list = container?.querySelector("[data-updates-consent] ul");
+    expect(list?.getAttribute("aria-label")).toBe("The agent runs it ends");
+    expect(list?.textContent).toContain("Agent — ~/Projects/vibe-field");
+    expect(updates.confirmRestart).not.toHaveBeenCalled();
+  });
+
   it("asks through the doors: Check for updates while up to date", async () => {
     const updates = fakeUpdates();
     host(updates);

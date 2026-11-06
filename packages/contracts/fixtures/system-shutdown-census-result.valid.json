@@ -1,0 +1,11 @@
+{
+  "runs": [
+    {
+      "runId": "01JA7RUNAAAAAAAAAAAAAAAAAA",
+      "sessionId": "01JA7SESSIONAAAAAAAAAAAAAA",
+      "title": "codex",
+      "cwd": "/Users/me/Projects/vibe-field",
+      "agent": "Codex"
+    }
+  ]
+}

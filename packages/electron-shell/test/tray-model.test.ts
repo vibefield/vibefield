@@ -138,16 +138,27 @@ describe("buildTrayMenu", () => {
     [{ kind: "staged", version: "2.0.0", sessions: 0 }, "Restart to Update", true],
     [{ kind: "staged", version: "2.0.0", sessions: 1 }, "Update Ends 1 Session…", true],
     [{ kind: "staged", version: "2.0.0", sessions: 3 }, "Update Ends 3 Sessions…", true],
-    // L3b-i (B3) — a release that leaves the floor alone ends no session: the plain verb, whatever the count
+    // L3b-i (B3) — a release that leaves the floor alone keeps its sessions. Item 192 (RV #6): its stop is fieldd's
+    // own, which ends the agent runs whose agents don't re-attach — the verb names them, and an unread count holds it
     [
-      { kind: "staged", version: "2.0.0", sessions: 3, keepsSessions: true },
+      { kind: "staged", version: "2.0.0", sessions: 0, keepsSessions: true },
       "Restart to Update",
       true,
     ],
     [
-      { kind: "staged", version: "2.0.0", sessions: "unknown", keepsSessions: true },
-      "Restart to Update",
+      { kind: "staged", version: "2.0.0", sessions: 1, keepsSessions: true },
+      "Update Ends 1 Agent Run…",
       true,
+    ],
+    [
+      { kind: "staged", version: "2.0.0", sessions: 3, keepsSessions: true },
+      "Update Ends 3 Agent Runs…",
+      true,
+    ],
+    [
+      { kind: "staged", version: "2.0.0", sessions: "unknown", keepsSessions: true },
+      "Update Downloaded",
+      false,
     ],
     // L3b-i (B1) — the policy's answers are not failures
     [{ kind: "paused" }, "Updates Paused", false],
