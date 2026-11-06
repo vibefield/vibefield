@@ -3096,7 +3096,8 @@ describe("CP-4a2b — the spark's facts: a run a spark started tells it when the
     const unrecorded = await refused("record");
     // a pin: the `end` line refused tells nothing. It reddens a tell made before the line is kept
     const unkept = await refused("line");
-    // a pin: Vela gone by its run's end, so sparkOf finds no one to tell. It reddens a wake with no sparkOf check
+    // a pin: Vela gone by its run's end, so sparkOf finds no one to tell. It reddens a wake with no sparkOf check; and
+    // Q9 (1): the spark not told is logged, once (ruled 2026-11-06, from 11b's green skeptic)
     const g = await harness();
     g.approved("review", ANSWERED);
     const run = startedRun(await g.start({ flow: "review", ...VELAS })).run;
@@ -3111,7 +3112,11 @@ describe("CP-4a2b — the spark's facts: a run a spark started tells it when the
       text: "ok",
     });
     await within(WAIT_MS, () => ended(g, run));
-    const gone = { state: g.runs.read(run)?.summary.state, told: factsOf(g) };
+    const gone = {
+      state: g.runs.read(run)?.summary.state,
+      told: factsOf(g),
+      logged: g.warned.filter(({ event }) => event === "fieldd.flows.run.fact").length,
+    };
     expect({
       done: done.told,
       failed: failed.told,
@@ -3125,7 +3130,7 @@ describe("CP-4a2b — the spark's facts: a run a spark started tells it when the
       lost: [toVela(words.factSetAside, "Hello", "hello", lost.run)],
       unrecorded: [toVela(words.factDone, "Hello", "hello", unrecorded.run)],
       unkept: [],
-      gone: { state: "done", told: [] },
+      gone: { state: "done", told: [], logged: 1 },
     });
   });
 
@@ -4725,6 +4730,79 @@ describe("CP-4a2b — the host's life: parked and woken, D2's lookup at a wake, 
     });
   });
 
+  it("R22h (Q8's repair rider, F-a's second half, F5; ruled 2026-11-06, MED-2; slice 11a): a step's second miss whose hold its run's record refuses after the needs queue raised its item still holds on you: Ask once more on it sends the repair line again, the hold released in that act's own write, and fieldd's log says the refused write at warn", async () => {
+    // the turn ends go through the step listener itself (R22g's precedent), so what the runs' listener throws is caught
+    // there, never thrown into the row
+    const events = new FlowStepEvents();
+    const h = await harness({ stepEvents: events });
+    h.approved("review", FORMED);
+    const run = startedRun(await h.start({ flow: "review" })).run;
+    await waitFor(() => expect(h.enqueued).toHaveLength(1));
+    const step = fakeAgent();
+    events.entered({
+      agent: step.agent,
+      runtimeRunId: "rt-step1",
+      begun: "spawn",
+      origin: { by: "flow", run, call: 1 },
+    });
+    /** the step's next turn, its answer `text` */
+    const turn = (text: string) => {
+      step.emit("turn:started", {});
+      step.emit("turn:completed", { lastAssistantMessage: text });
+    };
+    turn("no json here");
+    await waitFor(() => expect(h.enqueued).toHaveLength(2));
+    // T4's arm at the raise: the run's record write just after the needs port raised the repair's item throws once, as
+    // a full disk at that moment refuses it
+    const { needs } = h.runs.ports;
+    const raise = needs.flowItem.bind(needs);
+    const write = h.records.writeRunRecord.bind(h.records);
+    let armed = false;
+    let refused = false;
+    vi.spyOn(needs, "flowItem").mockImplementation((item) => {
+      const raised = raise(item);
+      armed = true;
+      return raised;
+    });
+    vi.spyOn(h.records, "writeRunRecord").mockImplementation((at, fields) => {
+      if (!armed) return write(at, fields);
+      armed = false;
+      refused = true;
+      throw new Error("ENOSPC: no space left on device, write");
+    });
+    turn("still none");
+    await waitFor(() => expect(h.items).toHaveLength(1));
+    // its item raised and its hold's write refused, the record still says the step repairs (its `holding` rode that
+    // write): green v1's Ask once more, reading `step.state !== "holding"`, acted on nothing, the agent left waiting
+    const before = h.records.runRecord(run);
+    expect({ refused, step: before?.open[0]?.state, held: before?.held }).toEqual({
+      refused: true,
+      step: "repairing",
+      held: undefined,
+    });
+    const acted = await askOnceMore(h, run);
+    const repair = repairLine("the answer holds no JSON the form can read");
+    expect({
+      acted,
+      sent: h.enqueued.slice(2).map(({ text, from }) => ({ text, from })),
+      held: h.records.runRecord(run)?.held,
+      logged: {
+        warn: h.warned.filter(({ event }) => event === "fieldd.flows.run.hold").length,
+        error: h.errored.filter(({ event }) => event === "fieldd.flows.run.hold").length,
+      },
+    }).toEqual({
+      acted: { outcome: "done" },
+      sent: [
+        { text: repair, from: { kind: "fieldd", flow: { run, call: 1, line: "repair", n: 2 } } },
+      ],
+      held: undefined,
+      logged: { warn: 1, error: 0 },
+    });
+    // the agent answers the line sent again, and the run goes on to its end
+    turn(fenced('{"verdict":"clean"}'));
+    expect((await settled(h.runs, run, "done")).log).toBe("clean true");
+  });
+
   // slice 11a's red-b (Q6–Q8, Q13; the slice 11 rulings, ruled 2026-11-06; §9's Proposed words, bafdcd544): an ask
   // is held at its call to the gate's one rule, the read's rules and the needs queue's two (Q6). One the rule refuses,
   // or whose item the needs queue can't raise (Q8), is answered refused through the one writer, in §9's "An ask
@@ -4960,6 +5038,103 @@ describe("CP-4a2b — the host's life: parked and woken, D2's lookup at a wake, 
       kinds: ["head", "call"],
       raised: [true],
     });
+  });
+
+  it("R34c (Q8, Q5; ruled 2026-11-06, MED-1, its fix (a); slice 11a): a gate open across a wake, its run's record unreadable once as the woken ask is made again, keeps waiting on its open item: never answered unkept, the run rests holding on it, and the person's later answer reaches the script", async () => {
+    // the woken host's ask, made again (the second ask any host makes), finds its run's record unreadable once in that
+    // call's own turn, as a disk refuses a read (the store's own refusal): a raise reads nothing before the needs queue
+    // (the run's flow, name and starter are its LiveRun's, kept at its begin), so a read that throws past the raise is
+    // the record lagging, never the ask unkept, and its item, open in what waits on you, holds the run still
+    const make = FlowReplay.prototype.call;
+    let asks = 0;
+    let armed = false;
+    let threw = false;
+    const made = vi.spyOn(FlowReplay.prototype, "call");
+    made.mockImplementation(function (this: unknown, asked) {
+      if (asked.what !== "ask") return make.call(this as FlowReplay, asked);
+      asks += 1;
+      armed = asks === 2;
+      try {
+        return make.call(this as FlowReplay, asked);
+      } finally {
+        armed = false;
+      }
+    });
+    try {
+      const h = await harness({ hostIdleMs: IDLE_MS, needsQueue: true });
+      const needs = needsOf(h);
+      const read = h.records.runRecord.bind(h.records);
+      vi.spyOn(h.records, "runRecord").mockImplementation((at) => {
+        if (!armed) return read(at);
+        armed = false;
+        threw = true;
+        throw recordsUnreadable(RECORD_STORES.SERVICE_FLOWS, UNREADABLE_WORDS.flows, true);
+      });
+      h.approved("gate", GATE_AND_STEP);
+      const run = startedRun(await h.start({ flow: "gate" })).run;
+      const parked = () => h.items.length > 0 && h.enqueued.length > 0 && left(h, 0);
+      await within(PARK_MS, () => parked() || over(h, run));
+      // the step's answer wakes the run, and its gate, made again as the read throws, is re-bound to its item
+      answerStep(h, run, 2, "a");
+      await within(PARK_MS, () => (h.items.length > 1 && left(h, 1)) || over(h, run));
+      const gate = h.raisedAs[0]?.id ?? "";
+      expect({
+        threw,
+        ...heldOf(h, run),
+        refused: refusalsOf(h, run),
+        raised: h.raisedAs.map(({ id, minted }) => [id, minted]),
+        open: openOf(h),
+      }).toEqual({
+        threw: true,
+        state: "holding",
+        held: { item: gate, kind: "flow-gate" },
+        refused: [],
+        raised: [
+          [gate, true],
+          [gate, false],
+        ],
+        open: [gate],
+      });
+      // the person's answer reaches the script: it wakes the run, whose ask resolves to the act, and the run ends done
+      await needs.answer(gate, 0, PRINCIPAL);
+      await within(PARK_MS, () => over(h, run));
+      expect({
+        state: stateOf(h, run),
+        log: h.runs.read(run)?.summary.log,
+        answers: answersOf(h, run).map(({ call, value }) => [call, value]),
+        open: openOf(h),
+      }).toEqual({
+        state: "done",
+        log: "Ship a",
+        answers: [
+          [2, { text: "a" }],
+          [1, "Ship"],
+        ],
+        open: [],
+      });
+    } finally {
+      made.mockRestore();
+    }
+  });
+
+  // §9's literal pins (ruled 2026-11-06), as the step refusals' are: a seed that drifts from §9 reads red here
+  it("says an ask's refusals and a spark's facts in DESIGN.md's own words (§9's An ask refused, and What VibeField tells a spark)", () => {
+    const design = readFileSync(join(import.meta.dirname, "../../../DESIGN.md"), "utf8").replace(
+      /\s+/g,
+      " ",
+    );
+    // the two frames, each said whole as §9 quotes it
+    for (const said of [words.askRefused("‹the read's words›"), words.askUnkept()]) {
+      expect(said).not.toBe("");
+      expect(design, said).toContain(`"${said}"`);
+    }
+    // each fact, said of §9's Vela, ‹flow› and ‹run›, is §9's quoted sentence past its "VibeField: ", which the input
+    // queue's mark adds (markedText), and with no closing stop: a fact that says "VibeField: " itself, or ends in a
+    // stop, reads red
+    for (const fact of [words.factAsking, words.factDone, words.factFailed, words.factSetAside]) {
+      const said = fact("Vela", "‹flow›", "‹run›");
+      expect(design, said).toContain(`"VibeField: ${said}"`);
+    }
   });
 
   // slice 11b (Q5, Q9 (a); the rulings for red-a's revision, 2026-11-06): the wake counts. A spark's own run tells

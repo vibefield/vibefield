@@ -247,6 +247,19 @@ describe("what the read refuses, and what it never does", () => {
       ["choices", "an ask offers 5 choices; a gate takes at most 4", 3],
     ]);
   });
+
+  it("S9 (slice 11a, green v1's skeptics, LOW; two pins): a spread hides only the arguments at it and after it, as a run reads only the first two: an ask whose choices are spread still lists its plain question, and one whose plain choices repeat, a spread after them, is still refused as the same choice twice", () => {
+    // their mutation: a spread anywhere hides every argument (green v1's read), so the first lists no question, and
+    // the second, which its run refuses (host/worker.ts hands on only the question and the choices), is refused nothing
+    const spread = readFlow(flow('await ask("Q", ...rest);'));
+    expect({ gates: spread.gates, refusals: refusalsOf(spread) }).toEqual({
+      gates: [{ line: 3, question: "Q", computed: true }],
+      refusals: [],
+    });
+    expect(refusalsOf(readFlow(flow('await ask("Q", ["a", "a"], ...x);')))).toEqual([
+      ["choices", "an ask offers the same choice twice", 3],
+    ]);
+  });
 });
 
 describe("unlisted, computed, loops and phases", () => {
