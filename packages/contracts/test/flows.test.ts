@@ -162,6 +162,8 @@ describe("CP-4a1 — the library and fieldd's records on disk (CP4-Q18 (a))", ()
       STEP_LINES_MAX: 16,
       // the slices 7–9 review's F6 (1k, ruled 2026-11-06): a run's held folder, the flows' own bound
       FOLDER_CHARS: 4_096,
+      // the slices 7–9 review's F4 (Q1 (b), ruled 2026-11-06): a run's agents kept alive, its steps' spawns; 8 × 16 PTYs
+      RUN_AGENTS_MAX: 16,
     });
   });
 

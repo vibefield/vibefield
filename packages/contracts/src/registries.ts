@@ -625,7 +625,13 @@ export const AGENT_STOP = {
  *  - FOLDER_CHARS: the flows' own bound on a run's held folder (FlowJournalHead's `folder`, the slices 7–9 review's
  *    F6), at Linux's PATH_MAX; macOS's is 1,024. The flows' domain bound, never a borrowed WORKSPACE_LIMITS.PATH_CHARS
  *    (each domain keeps its own: WORKSPACE_LIMITS.PATH_CHARS, ARTIFACT_LIMITS.PATH_CHARS, screenshot's MAX_PATH_CHARS;
- *    ruled 2026-11-06). */
+ *    ruled 2026-11-06);
+ *  - RUN_AGENTS_MAX: the agents a run's steps started that are still alive. An `in:` hand starts none, and nothing
+ *    ends a step's agent before the run's end or a Stop (CP4-Q10; the slices 7–9 review's F4, Q1 (b), ruled
+ *    2026-11-06), so it counts every agent the run's steps started. One past it (the 17th) is refused at its
+ *    spawn, in DESIGN.md §9's words ("A step's call refused"), never made to wait: LIVE_STEPS_MAX's slots are another
+ *    bound. The PTYs it holds: RUNS_LIVE_MAX 8 × 16 = 128 step PTYs, against macOS's 511 (`kern.tty.ptmx_max`), which
+ *    the floor's own PTYs share (its terminals, the sparks' sessions). */
 export const FLOW_LIMITS = {
   SCRIPT_MAX_BYTES: 64 * 1024,
   RESULT_MAX_BYTES: 64 * 1024,
@@ -647,6 +653,7 @@ export const FLOW_LIMITS = {
   FORM_ENUM_MAX: 64,
   STEP_LINES_MAX: 16,
   FOLDER_CHARS: 4_096,
+  RUN_AGENTS_MAX: 16,
 } as const;
 
 /** CP-4a2a (DESIGN.md §9 "When a run's script cannot go on") — the flow host's honest refusal. SERVICE is
