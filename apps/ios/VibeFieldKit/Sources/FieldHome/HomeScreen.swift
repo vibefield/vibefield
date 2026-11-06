@@ -962,7 +962,9 @@ public struct HomeScreen: View {
     return ChatPage(
       entries: entries, ledger: chatLedger, desktops: chatDesktopNames(entries), away: chatAway,
       heard: chat.reading.heard, onWake: { spark in Task { try? await chat.wake(spark) } },
-      feed: chat, thread: $chatThread, onOpenPane: openSparkPane
+      feed: chat, thread: $chatThread, onOpenPane: openSparkPane,
+      // IOS-12d (Q5) — Answer in its pane opens only a run with a session card on the field, else the card says so
+      paneOpens: { key in bubbles.contains { $0.runKey == key } }
     )
     .safeAreaInset(edge: .bottom, spacing: 0) {
       // a thread's composer takes the bar's place: no clearance under it
@@ -1010,10 +1012,14 @@ public struct HomeScreen: View {
       .onChange(of: selectedTab) { _, tab in
         if tab == .chat { chatNote = nil }
         chatLedger.show(ChatThreads.onScreen(tab: tab, thread: chatThread), chatEntries)
+        chat.show(page: tab == .chat, thread: chatThread)
       }
       .onChange(of: chatThread) { _, thread in
         chatLedger.show(ChatThreads.onScreen(tab: selectedTab, thread: thread), chatEntries)
+        chat.show(page: selectedTab == .chat, thread: thread)
       }
+      // IOS-12d — where Chat's cards stand: an answer that returns while its card is off screen goes to the note
+      .onAppear { chat.show(page: selectedTab == .chat, thread: chatThread) }
       .onChange(of: scenePhase) { _, phase in
         if phase == .active { chat.refresh() }
       }
@@ -1036,13 +1042,39 @@ public struct HomeScreen: View {
 
   /// The note, 12 above the bar's row, while another page stands and search is closed (it keeps the bar's place);
   /// above the profile token while the token stands (§8 "The phone's profile token": Chat's note stacks above it).
+  /// IOS-12d (Q4) — an answer given in Chat that came back while its card was off screen, and did not go as asked,
+  /// says its line here first, in the card's words, for the note's time; a press opens its spark's thread.
   @ViewBuilder
   private var chatNoteOverlay: some View {
-    if let spark = chatNote, selectedTab != .chat, !searchOpen, !accountMenuOpen, faceHold.held == nil {
-      ChatNoteView(spark: spark) {
-        chatNote = nil
-        selectedTab = .chat
+    ZStack(alignment: .bottom) {
+      if selectedTab != .chat, !searchOpen, !accountMenuOpen, faceHold.held == nil {
+        if let said = chatSaid {
+          chatNoteFrame(
+            ChatNoteView(spark: said.spark, text: said.note.text) {
+              chat.heard(said.note)
+              chatThread = said.spark.id
+              selectedTab = .chat
+            }
+          )
+          .task(id: said.note.id) {
+            try? await Task.sleep(for: chatSaidLasts)
+            if !Task.isCancelled { chat.heard(said.note) }
+          }
+        } else if let spark = chatNote {
+          chatNoteFrame(
+            ChatNoteView(spark: spark) {
+              chatNote = nil
+              selectedTab = .chat
+            })
+        }
       }
+    }
+    .animation(reduceMotion ? .easeInOut(duration: 0.2) : FieldMotion.island(0.42), value: chatSaid?.note.id)
+  }
+
+  /// The note's place: 12 above the bar's row, or above the profile token while it stands.
+  private func chatNoteFrame(_ note: some View) -> some View {
+    note
       .padding(
         .bottom,
         (lensTokenShows
@@ -1051,7 +1083,22 @@ public struct HomeScreen: View {
       .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
       .ignoresSafeArea(.container, edges: .bottom)
       .transition(.move(edge: .bottom).combined(with: .opacity))
+  }
+
+  /// IOS-12d (Q4) — the oldest answer that came back off screen and did not go as asked, with its spark's face.
+  private var chatSaid: (note: ChatOffScreen, spark: SparkSummary)? {
+    for note in chat.offScreen {
+      if let spark = chat.reading.sparks.first(where: { $0.id == note.spark }) { return (note, spark) }
     }
+    return nil
+  }
+
+  /// The answer's note stands for the note's time; the stills hold it under `-vf-chat-note-holds` (DEBUG, still 8).
+  private var chatSaidLasts: Duration {
+    #if DEBUG
+      if ProcessInfo.processInfo.arguments.contains("-vf-chat-note-holds") { return .seconds(3600) }
+    #endif
+    return ChatNoteView.lasts
   }
 
   /// Chat's door: the home's own client while the home answers; none while
