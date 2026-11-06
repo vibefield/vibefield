@@ -1009,16 +1009,18 @@ describe("CP-4a2b — a step's agent, model, folder, prompt and profile, held at
     expect(h.spawned).toEqual([]);
   });
 
+  /** A flow whose one step names no Agent Profile, its refusal logged (A2, A2b). */
+  const unnamed = (name: string) =>
+    [
+      `export const meta = { name: "${name}" };`,
+      "export default async function () {",
+      '  try { await agent("go", { agent: "claude", label: "Go", cwd: "/work/app" }); }',
+      "  catch (e) { log(e.message); }",
+      "}",
+      "",
+    ].join("\n");
+
   it("A2 (W-g): a step that names no Agent Profile takes your default, or the spark's own for its run, each held to the run's scope; with none to give it, it is refused, never the runtime's own default", async () => {
-    const unnamed = (name: string) =>
-      [
-        `export const meta = { name: "${name}" };`,
-        "export default async function () {",
-        '  try { await agent("go", { agent: "claude", label: "Go", cwd: "/work/app" }); }',
-        "  catch (e) { log(e.message); }",
-        "}",
-        "",
-      ].join("\n");
     // yours takes your default, and the spark's run its own
     const h = await harness({ sparkProfiles: { [VELA]: "review" } });
     h.approved("unnamed", unnamed("Unnamed"));
@@ -1036,12 +1038,12 @@ describe("CP-4a2b — a step's agent, model, folder, prompt and profile, held at
       h.spawned.find((spawn) => spawn.origin.run === run)?.launch.profileSet;
     expect(profileOf(yours)).toBe("work");
     expect(profileOf(velas)).toBe("review");
-    // a default outside the run's scope is refused as a named one is
+    // a default outside the run's scope is none to give it: the step named none, so it is never said to name one (F8)
     const outside = await harness({ defaultProfile: "home", profiles: ["work", "home"] });
     outside.approved("unnamed", unnamed("Unnamed"));
     const homeless = startedRun(await outside.start({ flow: "unnamed", scope: ["work"] })).run;
     expect((await settled(outside.runs, homeless, "done")).log).toBe(
-      W("Go", "it names an Agent Profile this run can't use (home)."),
+      W("Go", "it names no Agent Profile, and this run has none to give it."),
     );
     // no default at all: refused, never the runtime's own
     const none = await harness({ defaultProfile: null });
@@ -1051,6 +1053,47 @@ describe("CP-4a2b — a step's agent, model, folder, prompt and profile, held at
       W("Go", "it names no Agent Profile, and this run has none to give it."),
     );
     expect([...outside.spawned, ...none.spawned]).toEqual([]);
+  });
+
+  it("A2b (slices 7–9 review F8, Q3): a step that names no Agent Profile, in a Run from a spark's thread, takes the spark's thinksUnder, as the spark's own run does, and yours takes your default; a thinksUnder outside the run's scope is none to give it", async () => {
+    // Vela thinks under review, and your default is home
+    const h = await harness({
+      sparkProfiles: { [VELA]: "review" },
+      defaultProfile: "home",
+      profiles: ["work", "review", "home"],
+    });
+    h.approved("unnamed", unnamed("Unnamed"));
+    /** the Agent Profile its step was spawned under, or, once its run is done, the words its step was refused in */
+    const stepOf = (run: string) => {
+      const spawn = h.spawned.find((spawned) => spawned.origin.run === run);
+      if (spawn !== undefined) return spawn.launch.profileSet;
+      const summary = h.runs.read(run)?.summary;
+      return summary?.state === "done" ? summary.log : undefined;
+    };
+    const ran = async (params: Partial<FlowRunStartParams>) => {
+      const run = startedRun(await h.start({ flow: "unnamed", ...params })).run;
+      await waitFor(() => expect(stepOf(run)).toBeDefined());
+      return stepOf(run);
+    };
+    const thread: Partial<FlowRunStartParams> = {
+      starter: { by: "you", spark: VELA },
+      scope: ["work", "review"],
+    };
+    // a Run in Vela's thread, under Vela's Agent Profiles: Vela's thinksUnder, never your default
+    expect(await ran(thread)).toBe("review");
+    // the guards: Vela's own run takes its thinksUnder, and yours your default
+    const own: Partial<FlowRunStartParams> = {
+      starter: { by: "spark", spark: VELA },
+      from: VELA_FROM,
+      scope: ["work", "review"],
+    };
+    expect(await ran(own)).toBe("review");
+    expect(await ran({ scope: ["work", "home"] })).toBe("home");
+    // review since removed: the thread's run is narrowed to work, so Vela's thinksUnder is none to give it
+    h.setProfiles(["work", "home"]);
+    expect(await ran(thread)).toBe(
+      W("Go", "it names no Agent Profile, and this run has none to give it."),
+    );
   });
 
   it("says each step refusal in DESIGN.md's own words (§9 \"A step's call refused\")", () => {
