@@ -35460,6 +35460,18 @@ One LOW, O3, goes to Owed 4a2b; it predates `c07039551`.
     (`unconfigured`)
   - and §9's amendment on a run's journal, with its cut-tail sentence.
 - The records beyond LANDED, ROADMAP and DECISIONS: architecture.html's flow host row reads Built, at `c07039551`.
+  > *Corrected 2026-11-06 (M-r1's records):* the host's "Its environment is PATH alone." Since CP-4a2b's M-h (M163
+  > `aebd6a80b`; P5, Q-B5 (a), amending 4A2-Q6 (b)), it is PATH and, under a smoke, its run mark `VF_SMOKE_RUN`.
+  > *Corrected 2026-11-06 (M-r1's records):* the review's clean areas, "the environment (PATH alone; …)": since M-h
+  > (M163 `aebd6a80b`, P5), PATH and, under a smoke, its run mark `VF_SMOKE_RUN`.
+  > *Corrected 2026-11-06 (M-r1's records):* the preload door's "with the environment PATH alone": since M-h (M163
+  > `aebd6a80b`, P5), PATH and, under a smoke, its run mark `VF_SMOKE_RUN`.
+  > *Corrected 2026-11-06 (M-r1's records):* Found 4's "The child's environment is PATH alone plus that key": since
+  > M-h (M163 `aebd6a80b`, P5), PATH and, under a smoke, its run mark `VF_SMOKE_RUN`, beside that key.
+  > *Answered 2026-11-06:* the Owed JournalTail, by CP-4a2b's M-r1 (M168 `c92b33692`; 13a's slice 5,
+  > `1cb93144a`): a run's own signed record anchors its journal, written first, so a fieldd started again
+  > reads a cut tail `lost`, never `kept` (D18; J8 reads `lost`), and DESIGN.md §9's sentence is corrected at its
+  > source (`8b0ec22a7`).
 
 ## Item 183 — the catalog's composer plates are a row per state: one `it` drew all 39 of Chat's states and crossed vitest's 5 s bound on CI's push 99; now each state is its own row, and a red names it (2026-11-05)
 (2026-11-05; one commit `382e5f564` on lane `fix/183-chat-composer` over main `8aea8fe58`, b5a's, in
@@ -35810,6 +35822,8 @@ pnpm-workspace, package.json or field-native path):
   `packages/fieldd/src/bin.ts:299`, `flows/host/main.ts:18`, `flows/host/worker.ts:22`, `flows/supervisor.ts:29` and
   `test/flows-run-harness.ts:2` (`git grep` at T; supervisor.ts's doc at `flowsHostEnvironment` names the mark).
   Fixed in M-r1 (VF-PM 22:51Z): one comment-only commit of bsp's.
+  > *Answered 2026-11-06:* `90e9877a5` in M-r1 (M168), bsp's: the five sites, a sixth (supervisor.ts's
+  > `FlowHostOptions.environment` doc) and H4's title (LANDED "CP-4a2b's M-r1").
 - **M-r1, M-r2 and M-d**, in Q-A0 (a)'s order: the seams other owners hold (13a's slices 3–6, JournalTail among
   them); the flow's own engine (slices 7–15); CP4-S18's refusal, the doors, the verbs (unserved until CP-4b) and the
   kill matrix (slice 16).
@@ -36380,3 +36394,169 @@ change.
 - The land (the fixer's, 2026-11-06T04:48:13Z): main fast-forwarded from `c92b33692`, 2 files +24 −5.
 
 Item 188 closes in this entry.
+
+## CP-4a2b's M-r1 — the seams other owners hold: every run that enters is told, a flow step's turn end is heard from puppeteer's own events, a run's own record anchors its journal, and the needs queue takes a flow run's items, on 13b's contracts (track CO) (2026-11-06; `8b0ec22a7` → `c92b33692`, 26 commits on main `e46fd6d6c`, built by bsp and bcp4, stacked as M168 `c92b33692`, run 168)
+
+**What it rests on.**
+- CP-4a2b's M-h (M163 `aebd6a80b`, run 163; LANDED "CP-4a2b's M-h"), the host's tail, and CP-4a2a's host before it.
+- The plan of record, `lanes/co-plan/plans/step0-cp4a2b.md`, RULED by VF-PM at 2026-11-05 16:24Z: Q-A0 (a)'s four
+  mints, of which M-r1 is the second, the seams other owners hold (13a's slices 3–6), with 13b's contracts under
+  them, complete before slice 3.
+- The rulings it carries, word for word:
+  - VF-PM 22:48Z: beginRun REQUIRES the record; D18 flips J8 to `lost`; FlowRunRecordStep gains `cut`.
+  - VF-PM 03:33Z: N5 in slice 6, with the owed fact on item 158's road; and "the cap is the bound": no seventh
+    FLOW_LIMITS row; past 40, each 20 more asks need the person's Allow under D10, up to HOST_CALLS_WAITING_MAX 256
+    per run. RULED, not a question.
+- `cut` on the record: ruled (b) by VF-PM 22:49Z on bsp's finding 1 (on `4d1ad7e0c`), which asked (a) read it
+  from the journal at projection, or (b) a `cut?` field on the step.
+
+**Who built it.**
+- bsp: §13b.2's run words and 13b.3–4's contracts (`8b0ec22a7` … `4d1ad7e0c`), then P5's erratum
+  (`90e9877a5`).
+- bcp4, on top: 13a's slices 3–6 from `bb51ca430`, the record helper, `cut` on the record, N5 and E5's setup.
+
+**What** (42 files, +2,798 −107 against main `e46fd6d6c`):
+- **DESIGN.md first** (`8b0ec22a7`; all PROPOSED until James reads them on a run, CL-S4):
+  - §9 gains "When a run can't go on, or waits": the mark (Q-B1 (a), Q-B2 (a)), a step's call refused, a form the
+    run can't check (J4 (a)'s three bounds), the cap and its hold (J3, J7), the card's states, a run that can't go
+    on (`fatal`, O2's word, placed here since M-h carried no DESIGN.md edit; D18; D7), the seven acts, and the key's
+    posture (J2 (b)).
+  - §8's Stop (D19): a dated amendment, it pauses only a turn that is the run's own.
+  - §9's kept-kinds sentence: a dated correction at its source, since JournalTail (D18) makes a cut journal and a
+    missing record visible to a fieldd started again.
+- **13b's contracts** (bsp; red `d96024b3a`, green `c24c410a1`; red `655ae7ba8`, green `4d1ad7e0c`):
+  - C6, C7, C9, C12: `FlowRunRecord` and `FlowRunRecordStep` verbatim from §13a.0b; FLOW_RUN_STATES gains
+    `stopping` (D4); FLOW_LIMITS gains RUNS_LIVE_MAX 8, RUNS_PER_SPARK_MAX 2, HOSTS_LIVE_MAX 4, FORM_BYTES_MAX 4,096,
+    FORM_DEPTH_MAX 8 and FORM_ENUM_MAX 64, provisional (no FORM_NODES_MAX, J4 (a)); NEEDS_CHOICE_WORDS gains the
+    seven acts, its Allow `Allow ${FLOW_LIMITS.CALLS_MORE} more`; the N2 sentence gets its 16:24Z ruling in place.
+  - C1–C4, C8, C10, C11: the `fieldd` sender's optional `flow` line (repair, resume, unheard; OPEN) and the closed
+    `flow` sender (Q-B1 (a), Q-B2 (a)); FlowRunStep's `cut`; FlowsListResult's `earlier` and `flowsListOf` (to 64);
+    the spark's verbs' shapes, unserved and unwired until CP-4b (Q-B6 (a)); methods.ts's doors' notes.
+  - C3, a pin: an older build sets aside the whole file a `flow` input is in, while a `fieldd` line with `flow`
+    still reads.
+  - Gen: gen-jsonschema, gen-catalog, gen-tools and gen-registries-rs write no change. No Rust moves.
+- **P5's erratum** (bsp, `90e9877a5`, comments and one test title): the five "PATH alone" sites M-h's Owed
+  named, a sixth (`FlowHostOptions.environment`'s doc) and H4's title ("with no smoke mark, …"), so M-h's Owed line
+  closes here.
+- **13a's slice 3** (bcp4, `bb51ca430`, one behaviour-neutral rename; D6): `onSparkRunEntered` → `onRunEntered`, so
+  every run that enters is told, with its origin and its own spark (`src/run-entry.ts`). The transcript's listener
+  filters on the run's own-session `spark`, never on `origin` (D6), so what it records is unchanged. E1, E2, E3 and
+  E5 are new rows in `agent-session.test.ts`, on its harness unchanged (Q-A5 (a)).
+- **13a's slice 4** (bcp4; red `585609d50`, green `3e293907d`; CP4-S2): `src/flow-step-events.ts` hears a flow
+  step's turn end from puppeteer's own events, its result by CP4-S2's road, the run's own conversation alone, told
+  once by its turn id (CL-H6). The runs import no puppeteer (R29/R31); nothing wires it yet (slice 15, M-r2).
+- **13a's slice 5** (bcp4; the helper `796571022`, red `8f80d2626`, green `1cb93144a`; D18, D13, D5):
+  - `run-records/<run>.json`, each run's own signed record, written FIRST; `beginRun(entry, start)` requires it,
+    with no product default.
+  - `readRun` reads the journal against it by five rules: no record is lost; a record with no journal is
+    `unbegun`, never replayed; short of the tail, or another MAC at it, is lost; at or past the anchor is kept; a
+    head whose MAC is not `record.head` is lost.
+  - J8 is a meaning change ruled by D18, not a test fix: a journal cut short reads `lost` after a restart too.
+  - The limit, said in the header: a same-uid writer that rolls back BOTH files to an earlier pair reads as that
+    pair, the approvals' posture.
+- **`cut` on the record** (bcp4; red `f24f45a17`, green `f44d473bf`): FlowRunRecordStep gains `cut`, so
+  RunSummary's `cut` projects from the record alone.
+- **13a's slice 6** (bcp4; red `940afdb1d`, green `dbb73d2f7`; D2, D22, CP-D12's one queue): the needs queue
+  takes a flow run's items (flow-gate, flow-cap, flow-repair, flow-lost), the runs' acts then Stop the run, an answer
+  handed to the runs once; before the runs bind their acts an answer is refused retryably (`flows-unbound`).
+  - `endFlowItem(id)` (red `146c8279b`, green `7f37d674f`): the runs end ONE item, the boot case of R13d/R36.
+  - N5 (VF-PM 03:33Z): flow-changed as a run-less raise, its asking spark told by the queue's `owed` fact, on item
+    158's road. Its words first (`e67b69fe1`, `9a3988bdf`; cp-landing 03:43Z): a changed flow's acts, Run this
+    version, Run the one you approved and Not now, with See the change drawn before them and answering nothing;
+    what the spark that ran it is told; and a restart that broke into its start. Then red `f8e5c1fdb`, green
+    `ce2ba4fc9`: a restart never starts it twice.
+  - The restart fact's tail (cp-landing 03:50Z): §9 first (`52d6e57e8`), then red `4d924c7c6` and green
+    `c92b33692` in words.ts. It says "…started; it is not started again" and names no act a spark lacks,
+    since the flow verbs are unserved until CP-4b.
+  - The cap is the bound (VF-PM 03:33Z): no new constant; a run's calls are bounded by its cap (D10).
+- **E5's setup** (`9d5214e82`, test only): the vf-m1 gap job at `5ef2b1637` (03:36Z) read E5 red in its own setup,
+  since the row never made its spark's record and the briefing refused it (`agent-briefing.ts:50`,
+  `spark-unavailable`). The refusal is right (CP-1d), so the row now hatches its spark through the window's door; its
+  assertions are unchanged.
+
+**Validation.**
+- **This Mac, light runs, one named file each** (each commit's body; fieldd's are speed, not proof):
+  - contracts: flows 33/33, compose 53/53, fixtures 683/683, and the whole suite through the slot, 60 files, 1774
+    passed (`4d1ad7e0c`); flows and fixtures 717/717 with `cut` (`f44d473bf`);
+  - fieldd: flow-step-events 7/7 with spark-transcripts 15/15; flows-records 21, record-stores 43, flows-journal 13,
+    flows-replay 10 (87/87); needs-queue 49/49, its neighbours record-stores 43 and tool-plane-service 12, then
+    50/50 with `endFlowItem`;
+  - tsc, the walls and biome clean at each. E1, E2, E3 and E5 need the real floor: they are the mint's.
+- **Every red failed on its assertion on this Mac** (each red commit's body names its lines): contracts' C6/C9/C12
+  and C7, then C1, C2, C4, C8, C10, C11 and the new fixtures; flow-step-events 7 of 7; flows-records' JT1–JT10, J8's
+  meaning change and record-stores' `runRecordsCase`, 15 in all; C6b; needs-queue N1–N4; N3b.
+- **Red by the doc-first order, as expected, not a defect** (bth): needs-words' DESIGN.md row ("says each fact in
+  DESIGN.md's own words") fails from §9's docs commit `52d6e57e8` until the green `c92b33692`,
+  since §9 is ahead of words.ts there.
+- **The mint, run 168, and the full light**, at `af7c58cb2` on `b286a617c`; carried to `c92b33692` on
+  `e46fd6d6c` by a docs-only base move (docs/LANDED.md, docs/ROADMAP.md; cp-landing's carry-check: shared none,
+  26/26 patch-ids equal, 42/42 unshared files byte-identical; the range-diff 26 "="):
+  - `lanes/ts6/logs/m1/run168/run168.out` (sha256
+    `fa015d39e13f99d5cd5b48bc3330b2d657c3ed4f5e7d86ea8c47df18c82291b4`): "ts6-mini verify ARMED 04:20:49Z";
+    "verify exit 0 04:25:54Z"; "test target:  NX   Successfully ran target test for 29 projects"; "cargo test
+    results: ok 34, FAILED 0"; "tree clean after verify"; "stubs left: 0".
+  - `verify.log` (sha256 `a1edd41104b2ffd910f6a0edbab1456f4ff31b1fa9b21c4d9905ba4319c850ab`; its clean copy
+    `verify.clean.log`, `4d21779904e4b52d1268c8d8098e0458ec20fff6998a2e22e193514ce945693b`):
+    - fieldd "Tests  3488 passed | 14 skipped (3502)"; contracts "Tests  1775 passed (1775)"; electron-shell "Tests
+      2670 passed | 3 skipped (2673)"; field-app "Tests  4181 passed (4181)"; plugins/browser "Tests  15 passed
+      (15)";
+    - by file: agent-session 87 (2 skipped), compose 53, fixtures 683, flow-step-events 7 (a new file),
+      flows-records 21, flows 34, needs-queue 52, record-stores 43; unchanged: flows-host 41, flows-journal 13,
+      flows-replay 10, needs-words 7;
+    - vitest 13,486 | 0 | 21 over 940 files run (4 skipped whole); node "ℹ tests 473", "ℹ fail 0"; biome "Checked
+      3399 files"; cargo 545 passed in 34 suites ("test result: ok" each), clippy at `-D warnings` clean;
+    - "bundle assert OK"; the census "TOTAL 106 files across 9 packages: 44,123,498 bytes", "no drift", "census
+      assert OK — no §7.3 violation"; `gen:check` last, its `git diff --exit-code` clean;
+    - every count equals the brief's (a9's report, read by VF-PM, relayed by cp-landing 04:33Z).
+  - `run168-next.out` (`428d010aeaf942e04d69033422d5f05d160f0ccec6194df3124bacfee156ca8d`): "the locks stand: no
+    re-install"; "preflight exit 0 · 1 WARN/FAIL lines", R23's `acp` candidate (the standing warning).
+  - `run168-hid.log` (`0f5af414bc0904277f630d07d296613af1081f33594c4f573d103f3b30bef827`): "locked No", HID idle,
+    from 04:20:48Z to 04:25:54Z.
+  - The host: vf-m1 (Mac-mini, Apple M4, 16 GiB, macOS 27.2 (26B123), node v26.5.0, pnpm 11.13.1, rustc 1.99.1).
+- **The witness** (the targeted reds at their own shas, and E1, E2, E3, E5 on the real floor with D6's mutation):
+  - The reds, each at its own sha, then every filter green at T (`q11.log`, sha256
+    `0c4640290f638d0e21b594cb73783a23c1aa5f0290064b38e1fb9fe9a377e247`; each run's own log in `reds/`). a9 ran
+    them at T `af7c58cb2`; each sha here is its twin at `c92b33692` by subject (26/26 patch-ids equal):
+    - #1 `d96024b3a` (contracts): flows 5 failed, compose 2, fixtures 2; at T 6, 2 and 2 passed (T's flows filter
+      also takes C6b);
+    - #2 `655ae7ba8` (contracts): compose 2 failed and 1 passed, flows 4 failed, fixtures 6 failed and 2 passed;
+      at T 3, 4 and 8 passed;
+    - #3 `585609d50` (fieldd): flow-step-events "Tests  7 failed (7)"; at T 7 passed;
+    - #4 `8f80d2626` (fieldd): flows-records' JT1–JT10 10 failed and flows-journal's J8 1 failed; at T 10 and 1
+      passed. record-stores' U1–U4, a witnessed red (`w4.log`, `7d8289aca135…`, 04:32:09Z → 04:32:11Z), by
+      `-t "FlowRecords, run-.*U[1-4] · "`, which `vitest list` at T names as exactly U1–U4 (`list-T.log`): 4 failed
+      at the red, U1 "expected 'ok' to deeply equal { kind: 'UNAVAILABLE', …(3) }" and U2–U4 "the store wrote the
+      run's record: expected false to be true"; 4 passed at T. The first filter selected none, as vitest truncates
+      `$name`;
+    - #5 `f24f45a17` (contracts): C6b 1 failed, the fixtures pins 2 passed at the red; at T 1 and 2 passed;
+    - #6 `940afdb1d` (fieldd): needs-queue's N1–N4 4 failed; at T 4 passed;
+    - #7 `146c8279b` (fieldd): N3b 1 failed; at T 1 passed;
+    - #8 `f8e5c1fdb` (fieldd): needs-queue's N5 and N5b 2 failed, needs-words 2 failed; at T 2 and 2 passed;
+    - #9 `4d924c7c6` (fieldd): N5b 1 failed, needs-words 2 failed (words.ts still says "…; list Vela's flows to
+      see"); at T 1 and 2 passed.
+  - The E rows (agent-session's "CP-4a2b — every run entered"): 3 passed in verify, and at T "Tests  3 passed |
+    84 skipped (87)". Their reds are the gap jobs' named mutations on vf-m1 (bth's reds.md §E): E1/E3 and E2 at
+    `5ef2b1637` (`gapE-5ef2b1637/`), and E5 under D6 at `14ffd220b` (`gapE5-14ffd220b/`).
+  - `smoke:godview` at T, report-only, one try (`run168-row.out`, `18d8a32dae19…`; `smoke:godview.log`,
+    `1adc0ca60554…`): ARMED 04:26:40Z, exit 2 at 04:28:08Z. Rung 11m's send is confirmed (`SMOKE_CHAT_SEND`:
+    `hello: true`, `receipts: [null, "Delivered"]`, `waitedMs {ready: 1, given: 150, delivered: 151}`), then red
+    at Jump to, "Could not jump — its terminal is not on this desktop's floor": item 187's (diagnosed). No GT-D5
+    red.
+- **Landed:** The fixer's ff `e46fd6d6c` → `c92b33692` at 2026-11-06T04:35:24Z
+
+**Owed.**
+- **tools.ts's money words:** fixed on M-d's branch (V8, "…rounds and spend" and "…what it may spend"), so they land
+  with M-d.
+- **api.html :2358/:2360** still quote the old words (13b.1, M-d).
+- **The dated notes at the plan's two sources** (`f44d473bf`'s body, the errata rule): v2.7's verbatim
+  FlowRunRecordStep (§13a.0b) and bsp's C6 copy in §13b had no `cut`.
+- **M-r2 and M-d**, in Q-A0 (a)'s order: the flow's own engine (13a's slices 7–15, its daemon wiring cut last), then
+  CP4-S18's refusal, the doors, the verbs and the kill matrix. Until M-r2, fieldd's `markedText` reads the `flow`
+  sender as "VibeField:", and nothing makes a `flow` input.
+- **Closes no item.** It closes M-h's Owed "PATH alone" line and CP-4a2a's Owed JournalTail, each noted in its entry.
+- **For James's eye** (draft words; not a hold): DESIGN.md §9's "When a run can't go on, or waits": the mark
+  ("‹flow› (a flow you ran) on your behalf:"), the cap's hold, the seven acts and a run that can't go on; and N5's
+  words in "The person's queue's words", such as "VibeField: you ran ‹flow› for Vela as it is now: it started as
+  ‹run›".
+- The records beyond LANDED, ROADMAP and DECISIONS: none. The flow host's environment, said as PATH alone in
+  CP-4a2a's entry, gains a dated correction at each of its four lines.
