@@ -143,8 +143,13 @@ export interface FlowRunPorts {
   /** G2 (CP-L4, TL-D5): a spark as it is now, or none for a spark that is gone: a spark's kept start is narrowed
    * again to its Agent Profiles at its act, as an Allow is, and a start left with none is said in its name (V5) */
   sparkOf(spark: string): FlowRunSpark | undefined;
-  /** how a run's host is started */
-  readonly host: Pick<FlowHostOptions, "launch" | "environment" | "timings" | "heapMb" | "rssMb">;
+  /** how a run's host is started (`spawn`: a test's own, to reach the child it started) */
+  readonly host: Pick<
+    FlowHostOptions,
+    "launch" | "environment" | "timings" | "heapMb" | "rssMb" | "spawn"
+  >;
+  /** D1's idle before a waiting host is parked, ms: HOST_IDLE_MS by default; tests lower it */
+  readonly hostIdleMs?: number | undefined;
   readonly logger?: Logger | undefined;
   readonly now?: (() => Date) | undefined;
 }

@@ -1,3 +1,4 @@
+import { type ChildProcess, spawn as spawnChild } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -32,6 +33,7 @@ import {
   type FlowStepSession,
   stepFailed,
 } from "../src/flows/steps";
+import type { FlowHostTimings } from "../src/flows/supervisor";
 import * as words from "../src/flows/words";
 import type { RpcCallError } from "../src/native-link";
 import { recordsUnreadable, UNREADABLE_WORDS } from "../src/signed-record";
@@ -103,6 +105,12 @@ interface Enqueued {
   readonly from: AgentInputSender;
   readonly step: FlowRunRecordStep | undefined;
 }
+/** A host child the runs started (slice 10a): when it started, and when it left. */
+interface Host {
+  readonly child: ChildProcess;
+  readonly at: number;
+  leftAt?: number;
+}
 /** A session an `in:` handed a step, as the runs told the step listener (9b): how many lines were queued at the hand,
  * and whether the runs let it go. */
 interface Handed {
@@ -132,6 +140,10 @@ async function harness(
     readonly models?: Readonly<Record<string, readonly string[]>>;
     /** the runtime's models held until this settles, each ask counted (RA2: both starts parked at their await) */
     readonly modelsHeld?: Promise<unknown>;
+    /** D1's idle before a waiting host is parked, lowered (slice 10a); fieldd's own HOST_IDLE_MS by default */
+    readonly hostIdleMs?: number;
+    /** the host's clock, a `shutdown`'s grace among it (R27d) */
+    readonly timings?: Partial<FlowHostTimings>;
     /** the project folders this desktop knows */
     readonly projectFolders?: readonly string[];
     /** each spark's own Agent Profile */
@@ -167,6 +179,10 @@ async function harness(
   const turnListeners = new Set<(end: FlowStepTurnEnd) => void>();
   /** how many times a step asked the runtime for its models */
   let modelAsks = 0;
+  /** each host child the runs started, in order, with when it started and when it left (slice 10a) */
+  const hosts: Host[] = [];
+  /** the spawned sessions a row ended: the runtime holds them no longer live */
+  const exited = new Set<string>();
   /** what fieldd's log was told at warn, in order */
   const warned: { event: string; fields: LogFields | undefined }[] = [];
   /** what fieldd's log was told at error, in order, its third argument as given */
@@ -239,7 +255,14 @@ async function harness(
         return { id: `in-${enqueued.length}`, position: 1 };
       },
     },
-    sessions: { of: (runtimeRunId) => opts.sessions?.[runtimeRunId] },
+    sessions: {
+      // a step's session the runtime spawned is live until a row ends it (D2's lookup reads it at a wake)
+      of: (runtimeRunId) =>
+        opts.sessions?.[runtimeRunId] ??
+        (spawned.some((_, i) => `rt-step${i + 1}` === runtimeRunId)
+          ? { live: !exited.has(runtimeRunId), onPermission: false }
+          : undefined),
+    },
     folderOf: (kind, value) => opts.folders?.[`${kind}:${value}`],
     projectFolders: () => opts.projectFolders ?? ["/work"],
     sparkProfile: (spark) => (opts.sparkProfiles ?? { [VELA]: "work" })[spark],
@@ -251,7 +274,18 @@ async function harness(
           ? { kind: "unconfigured", reason: opts.unconfigured }
           : { kind: "launch", launch: opts.launch ?? (await flowsHostLaunch()) },
       environment: PATH_ONLY,
+      ...(opts.timings !== undefined ? { timings: opts.timings } : {}),
+      spawn: (command, args, options) => {
+        const child = spawnChild(command, args, options);
+        const host: Host = { child, at: Date.now() };
+        child.once("exit", () => {
+          host.leftAt = Date.now();
+        });
+        hosts.push(host);
+        return child;
+      },
     },
+    ...(opts.hostIdleMs !== undefined ? { hostIdleMs: opts.hostIdleMs } : {}),
     logger,
   });
   opened.push(runs);
@@ -298,6 +332,9 @@ async function harness(
     warned,
     errored,
     modelAsks: () => modelAsks,
+    hosts,
+    /** the runtime's session `runtimeRunId` ends: D2's lookup reads it exited */
+    exit: (runtimeRunId: string) => void exited.add(runtimeRunId),
   };
 }
 
@@ -2978,5 +3015,115 @@ describe("CP-4a2b — a run's agents, RUN_AGENTS_MAX started, counted until its 
     expect(h.records.runRecord(run)).toMatchObject({ agents: 1 });
     expect(events).toContain("fieldd.flows.run.told");
     expect(events).not.toContain("fieldd.flows.step.start");
+  });
+});
+
+// CP-4a2b (§13a slice 10a; D1, D2, CL-L5a, CL-L5c, CL-H13, CL-H14, CL-K-d) — the host's life: a run that waits has no
+// process. A host with a call out and no frame but pongs for HOST_IDLE_MS (lowered here) is parked: its `stop()` is
+// the runs' own, read as `waiting`, never `stopped`, and its journal gains no line. A step's answer journaled wakes
+// it: a host started again replays the journal from the top, on the bytes its record names (D8), and a call it makes
+// again is looked up first (D2): the record's state for that call, then its session, never spawned again while it
+// lives. Moved on (ruled 2026-11-06): R27b and R13e's `ask` leg to slice 11, R27c to 12, R32's wake
+// and the exited session's item to 14.
+
+/** D1's idle, lowered for these rows, and the longest a row waits for a park, an end or a host's leaving. */
+const IDLE_MS = 250;
+const PARK_MS = 5_000;
+
+/** Resolves once `ready()` holds, or after `ms` whatever it reads: a row then fails on what it reads, never on a
+ * wait's own timeout. */
+const within = async (ms: number, ready: () => boolean): Promise<void> => {
+  const until = Date.now() + ms;
+  while (!ready() && Date.now() < until) await new Promise((resolve) => setTimeout(resolve, 20));
+};
+
+describe("CP-4a2b — the host's life: parked and woken, and D2's lookup at a wake (§13a slice 10a)", () => {
+  /** Whether host `i` the runs started has left. */
+  const left = (h: Harness, i: number): boolean => h.hosts[i]?.leftAt !== undefined;
+  /** The run's state, as its summary reads it now. */
+  const stateOf = (h: Harness, run: string) => h.runs.read(run)?.summary.state;
+  /** The session step `call`'s record names, or none. */
+  const sessionOf = (h: Harness, run: string, call: number): string =>
+    h.records.runRecord(run)?.open.find((step) => step.call === call)?.session ?? "";
+  /** Step `call`'s turn ends with `text`, in the session its record names. */
+  const answerStep = (h: Harness, run: string, call: number, text: string) =>
+    h.endTurn({
+      run,
+      call,
+      runtimeRunId: sessionOf(h, run, call),
+      turn: `t${call}`,
+      outcome: "completed",
+      text,
+    });
+  /** The run parked: host `i` gone and the run reading `waiting`, or what it reads after PARK_MS. */
+  const parkedAt = async (h: Harness, run: string, i = 0) => {
+    await within(PARK_MS, () => left(h, i) && stateOf(h, run) === "waiting");
+    return { state: stateOf(h, run), left: left(h, i) };
+  };
+  const PARKED = { state: "waiting", left: true };
+
+  it("R27 (D1): a run whose step waits past HOST_IDLE_MS with no frame is parked: its host has left, it reads waiting, never stopped, and its journal gains no line; the step's answer wakes it, and it ends done", async () => {
+    const h = await harness({ hostIdleMs: IDLE_MS });
+    h.approved("review", ANSWERED);
+    const run = startedRun(await h.start({ flow: "review" })).run;
+    await waitFor(() => expect(h.enqueued).toHaveLength(1));
+    expect(await parkedAt(h, run)).toEqual(PARKED);
+    expect(h.kinds(run)).toEqual(["head", "call"]);
+    answerStep(h, run, 1, "all clean");
+    expect((await settled(h.runs, run, "done")).log).toBe("all clean");
+    expect(h.hosts).toHaveLength(2);
+  });
+
+  it("R10 (L7a): a run parked on the version it began on wakes on that version's bytes, though another was approved while it waited", async () => {
+    const h = await harness({ hostIdleMs: IDLE_MS });
+    const first = h.approved("review", ANSWERED);
+    const run = startedRun(await h.start({ flow: "review" })).run;
+    await waitFor(() => expect(h.enqueued).toHaveLength(1));
+    expect(await parkedAt(h, run)).toEqual(PARKED);
+    h.approved("review", ANSWERED.replace("log(said.text);", 'log("v2: " + said.text);'));
+    answerStep(h, run, 1, "all clean");
+    const ended = await settled(h.runs, run, "done");
+    expect({ hosts: h.hosts.length, log: ended.log, hash: ended.hash }).toEqual({
+      hosts: 2,
+      log: "all clean",
+      hash: first.hash,
+    });
+  });
+
+  it("R27d (D1): a wake inside the parked host's leave grace starts its new host only once the old one has left", async () => {
+    const grace = 1_000;
+    const h = await harness({ hostIdleMs: IDLE_MS, timings: { stopGraceMs: grace } });
+    h.approved("review", ANSWERED);
+    const run = startedRun(await h.start({ flow: "review" })).run;
+    await waitFor(() => expect(h.enqueued).toHaveLength(1));
+    // the old host can't hear its shutdown, so it leaves only at the grace's SIGKILL
+    h.hosts[0]?.child.kill("SIGSTOP");
+    await within(PARK_MS, () => stateOf(h, run) === "waiting");
+    answerStep(h, run, 1, "all clean");
+    await within(PARK_MS, () => stateOf(h, run) === "done");
+    const [old, next] = h.hosts;
+    expect({
+      state: stateOf(h, run),
+      left: old?.leftAt !== undefined,
+      after: (next?.at ?? 0) >= (old?.leftAt ?? Number.POSITIVE_INFINITY),
+    }).toEqual({ state: "done", left: true, after: true });
+  });
+
+  it("R32a (R32 as 10a pins it; its wake is slice 14's boot): a parked run is found where it was by the runs fieldd starts again: waiting, its step working in its session, its journal as it was, and no host started", async () => {
+    const h = await harness({ hostIdleMs: IDLE_MS });
+    h.approved("review", ANSWERED);
+    const run = startedRun(await h.start({ flow: "review" })).run;
+    await waitFor(() => expect(h.enqueued).toHaveLength(1));
+    await within(PARK_MS, () => left(h, 0) && stateOf(h, run) === "waiting");
+    await h.runs.close();
+    const again = new FlowRuns(h.runs.ports);
+    opened.push(again);
+    const found = again.read(run)?.summary;
+    expect({
+      state: found?.state,
+      steps: found?.steps.map((step) => [step.call, step.session, step.state]),
+      hosts: h.hosts.length,
+    }).toEqual({ state: "waiting", steps: [[1, "rt-step1", "working"]], hosts: 1 });
+    expect(h.kinds(run)).toEqual(["head", "call"]);
   });
 });
