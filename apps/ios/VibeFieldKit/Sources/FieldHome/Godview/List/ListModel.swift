@@ -121,14 +121,16 @@ struct ListModel: Equatable {
 
   // MARK: - The join: the phone's AgentView
 
-  /// The window's drawn rows, joined as the phone's host joins them. SE-2f (red): `lens` is not read yet.
+  /// The window's drawn rows, joined as the phone's host joins them; under the phone's lens (SE-2) a row recedes
+  /// unless it is the home's under the chosen profile (`GodviewRecede.byLens`).
   static func inputs(
     rows: [RemoteFieldRow], activeId: String?, fieldIsLive: Bool, lens: String? = nil
   ) -> [ListRowInput] {
     rows.map { row in
       ListRowInput(
         monitor: row.row.monitor, isSelf: row.isSelf, stale: row.stale || !fieldIsLive,
-        active: lightsOpenCard && activeId != nil && row.id == activeId)
+        active: lightsOpenCard && activeId != nil && row.id == activeId,
+        receded: GodviewRecede.byLens(isSelf: row.isSelf, profileSet: row.row.monitor.profileSet, lens: lens))
     }
   }
 
@@ -210,8 +212,8 @@ struct ListModel: Equatable {
 }
 
 extension ListModel {
-  /// The list over the stage's input: its drawn rows, the open card and the home's answer.
+  /// The list over the stage's input: its drawn rows, the open card, the home's answer and the lens.
   @MainActor static func of(input: GodviewStageInput) -> ListModel {
-    of(inputs(rows: input.rows, activeId: input.activeId, fieldIsLive: input.fieldIsLive))
+    of(inputs(rows: input.rows, activeId: input.activeId, fieldIsLive: input.fieldIsLive, lens: input.lens))
   }
 }

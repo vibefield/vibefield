@@ -129,6 +129,10 @@ struct GodviewStageInput {
   /// PG-4t — the stage dissolves under the row (always in Release; DEBUG's `-vf-godview-dissolve=off` turns it off for
   /// a frame meter's run). Defaulted, so a view lane's input needs no new argument.
   var dissolves: Bool = true
+  /// SE-2 (SE-P6) — the phone's lens, the chosen profile's id (`ProfileLens.profile`): a view recedes every row but
+  /// the home's under it (`GodviewRecede.byLens`). nil shows every profile. Defaulted, so a view lane's input needs no
+  /// new argument.
+  var lens: String? = nil
   /// A row tapped: the card on its body.
   var onOpen: @MainActor (RemoteFieldRow) -> Void
 

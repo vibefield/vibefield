@@ -493,6 +493,7 @@ public struct HomeScreen: View {
       skin: GodviewSkin(scheme: colorScheme),
       isStill: godviewStill,
       dissolves: godviewDissolves,
+      lens: lens.chosen?.id,
       onOpen: { row in
         if let bubble = bubbles.first(where: { $0.id == row.visualId }) { openCard(on: bubble) }
       })

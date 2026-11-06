@@ -2,15 +2,20 @@ import Foundation
 
 // PG-4s — RECEDING, transcribed from puppeteer-view-sdk 0.3.2 at the pin `95a70aa7`, `src/toolkit/state-words.ts`
 // (`5abe8f75`): the constants :106-110, `everyReceded` :113, `recedeTarget` :123, `approachRecede` :129. On the
-// phone nothing is receded (the host joins `receded` false), so every row's target is 1; the family is here for
-// parity, and a list's opacities read the two constants.
+// phone a row recedes only under the lens (SE-2, `byLens`); with none, every row's target is 1, and a list's
+// opacities read the two constants.
 
 enum GodviewRecede {
   /// `RECEDED_OPACITY`: a receded row's weight while the shown ones are on the stage.
   static let receded = 0.22
 
-  /// SE-2 (SE-P6) — a row receded by the phone's lens. SE-2f (red): nothing recedes.
-  static func byLens(isSelf: Bool, profileSet: String?, lens: String?) -> Bool { false }
+  /// SE-2 (SE-P6; DESIGN.md §8 "The phone's profile token") — a row receded by the phone's lens, the desktop's profile
+  /// filter's rule (`useMonitorAgents.ts` :550-555, `!(row.device.self && row.profileSet === chosenProfile)`): under a
+  /// lens, everything but the home's own rows under the chosen profile; with none, nothing.
+  static func byLens(isSelf: Bool, profileSet: String?, lens: String?) -> Bool {
+    guard let lens else { return false }
+    return !(isSelf && profileSet == lens)
+  }
   /// `RECEDED_EMPTY_OPACITY`: every row receded.
   static let recededEmpty = 0.07
   /// `RECEDE_MS`: how long a row takes to recede, or to come back.

@@ -57,6 +57,9 @@ public func fieldBubble(
   // agent-field.ts), and a run with no known pane carries it PRESENT as `{hosted: "none"}`; the two are told apart
   // here.
   let paneWithheld = board.terminal == nil
+  // SE-2 — the home's profile the run is under, which the phone's lens keys on: a peer's is its own desktop's, so it
+  // carries none (the lead's ruling 17).
+  let profileSet = row.isSelf ? monitor.profileSet : nil
 
   guard monitor.kind == .agent else {
     // A bare terminal carries no facet: the body draws it hollow, running while its job works. Item 154: its pane join
@@ -67,7 +70,8 @@ public func fieldBubble(
       runtimeSessionID: board.terminal?.runtimeSessionId, deviceLive: deviceLive, paneWithheld: paneWithheld)
     return FieldBubble(
       id: row.visualId, project: project, detail: detail, status: status, identityKey: identityKey,
-      createdAt: createdAt, stale: stale, host: host, modelId: row.id, runKey: row.key, terminalJoin: join)
+      createdAt: createdAt, stale: stale, host: host, modelId: row.id, runKey: row.key, terminalJoin: join,
+      profileSet: profileSet)
   }
 
   let provider = AgentProvider(rawValue: monitor.provider?.id ?? "")
@@ -128,5 +132,5 @@ public func fieldBubble(
   return FieldBubble(
     id: row.visualId, project: project, detail: detail, status: status, identityKey: identityKey,
     createdAt: createdAt, agent: facet, stale: stale, unread: monitor.unread && !suppressUnread, host: host,
-    modelId: row.id, runKey: row.key, ofSpark: board.ofSpark)
+    modelId: row.id, runKey: row.key, ofSpark: board.ofSpark, profileSet: profileSet)
 }
