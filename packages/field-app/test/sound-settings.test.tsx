@@ -117,12 +117,15 @@ describe("Quiet (SD-D22)", () => {
 });
 
 describe("the foot", () => {
-  it("says what the sounds follow, and that for now they need a window in front", () => {
+  it("says what the sounds follow, and that away a notice says it too, as macOS decides (SD-3)", () => {
     const m = mount();
     expect(m.text()).toContain(
       "Sounds follow your Mac's alert volume and the output chosen for sound effects in System Settings → Sound.",
     );
-    expect(m.text()).toContain("For now they play only while a VibeField window is in front.");
+    expect(m.text()).toContain(
+      "While VibeField is in the background, a notice says what happened too, and System Settings → Notifications decides whether it shows.",
+    );
+    expect(m.text()).not.toContain("For now they play only");
   });
 });
 

@@ -104,7 +104,8 @@ export function SoundSettingsView({
       </SettingsRow>
       <p className={`mt-3 max-w-[60ch] ${labelCls}`}>
         Sounds follow your Mac's alert volume and the output chosen for sound effects in System
-        Settings → Sound. For now they play only while a VibeField window is in front.
+        Settings → Sound. While VibeField is in the background, a notice says what happened too, and
+        System Settings → Notifications decides whether it shows.
       </p>
     </SettingsSection>
   );
