@@ -46,6 +46,10 @@ export interface ProfilePopoverViewProps {
   focus: string | null;
   /** the head's words for the reading's age (`readWords`) */
   read: string;
+  /** Settings can be opened on this profile's page (it is not open already): Sign in and Agent Profiles… */
+  canOpen: boolean;
+  /** the usage door can read a sign-in again: Retry */
+  canRetry: boolean;
   onClose: () => void;
   onFocusPlan: (key: string | null) => void;
   /** Settings → Agent Profiles on this profile's page (Sign in, Agent Profiles…) */

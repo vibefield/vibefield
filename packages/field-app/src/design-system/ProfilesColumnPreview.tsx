@@ -137,6 +137,8 @@ function Plate({ plate, theme }: { plate: ColumnPlate; theme: GodviewTheme }): R
         read={open === undefined ? "" : readWords(open.meters, FIXTURE_PROFILES_NOW)}
         addOpen={plate.addOpen === true}
         canAdd
+        canOpen
+        canRetry
         moment={
           // the shipping card over the shipping rule's fixture
           plate.limit === true && FIXTURE_LIMIT_MOMENT !== null ? (

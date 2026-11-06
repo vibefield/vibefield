@@ -105,6 +105,8 @@ function column(over: Partial<ProfilesColumnViewProps> = {}): ProfilesColumnView
     read: "",
     addOpen: false,
     canAdd: true,
+    canOpen: true,
+    canRetry: true,
     onPoint: vi.fn(),
     onCircle: vi.fn(),
     onClose: vi.fn(),
@@ -356,6 +358,8 @@ describe("the popover (DESIGN.md §8 'Godview's profiles column')", () => {
       chosen: false,
       focus: null,
       read: "Read a minute ago",
+      canOpen: true,
+      canRetry: true,
       onClose: vi.fn(),
       onFocusPlan: vi.fn(),
       onOpenProfile: vi.fn(),
@@ -448,6 +452,44 @@ describe("the popover (DESIGN.md §8 'Godview's profiles column')", () => {
       row2?.querySelector<HTMLButtonElement>(".vf-profiles-pop-row-act")?.click();
     });
     expect(asks.onOpenProfile).toHaveBeenCalledWith("work");
+  });
+
+  it("offers no act it cannot take: Sign in and Agent Profiles… draw disabled while Settings is open, and no Retry stands without a door that reads again (§8 'No act is inert')", () => {
+    // the review: both stayed enabled and did nothing while Settings was open, as Retry did with no door to ask
+    const signing = metersOf(
+      FIXTURE_WORK,
+      withNamer(FIXTURE_WORK, (each) => ({ ...each, state: "unauthenticated", metrics: [] })),
+    );
+    const shut = popover({ set: FIXTURE_WORK, meters: signing }, { canOpen: false });
+    const page = mount(<ProfilePopoverView {...shut} />);
+    const opens = [
+      page.querySelector<HTMLButtonElement>(".vf-profiles-pop-row-act"),
+      page.querySelector<HTMLButtonElement>(".vf-profiles-pop-open"),
+    ];
+    expect(opens.map((button) => button?.textContent)).toEqual(["Sign in", "Agent Profiles…"]);
+    for (const button of opens) {
+      expect(button?.disabled).toBe(true);
+      act(() => button?.click());
+    }
+    expect(shut.onOpenProfile).not.toHaveBeenCalled();
+    // off, their words wear t4 at full opacity (§2.4 "Off"), as the add's `plus` does
+    for (const off of [".vf-profiles-pop-row-act:disabled", ".vf-profiles-pop-open:disabled"]) {
+      expect(CSS).toContain(`\n${off} {\n  color: var(--vf-text-faint);\n  cursor: default;\n}`);
+    }
+
+    const retrying = metersOf(
+      FIXTURE_WORK,
+      withNamer(FIXTURE_WORK, (row) => ({ ...row, state: "unavailable", metrics: [] })),
+    );
+    const retry = retrying.entries.find((entry) => entry.kind === "needs-you");
+    const blind = mount(
+      <ProfilePopoverView
+        {...popover({ set: FIXTURE_WORK, meters: retrying }, { canRetry: false })}
+      />,
+    );
+    const row = blind.querySelector(`.vf-profiles-pop-row[data-plan="${retry?.key}"]`);
+    expect(row?.querySelector(".vf-profiles-pop-row-right")?.textContent).toBe("couldn't read");
+    expect(row?.querySelector(".vf-profiles-pop-row-act")).toBeNull();
   });
 
   it("says an agent with no meter in a line of its own", () => {

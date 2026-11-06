@@ -1972,6 +1972,14 @@ describe("the monitor stage", () => {
     expect(host.querySelector<HTMLButtonElement>(".vf-profiles-add")?.disabled).toBe(true);
   });
 
+  it("draws a popover's Agent Profiles… disabled while there is no route to Settings, as the add (no act is inert)", async () => {
+    const host = await mountRouted(tabDoor(), {});
+    await act(async () =>
+      host.querySelector<HTMLButtonElement>('[data-profile="work"] .vf-profiles-circle')?.click(),
+    );
+    expect(host.querySelector<HTMLButtonElement>(".vf-profiles-pop-open")?.disabled).toBe(true);
+  });
+
   it("stands the limit moment beside the column's add, lent the stage's account facts; the strip holds only its own (UM-D23)", async () => {
     const Facts = () => {
       const { sets } = useMonitorAccountFacts();

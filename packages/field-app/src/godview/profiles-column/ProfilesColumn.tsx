@@ -173,6 +173,8 @@ function ProfilesColumnController({
       read={openCircle === undefined ? "" : readWords(openCircle.meters, clock)}
       addOpen={pointed === ADD_TARGET}
       canAdd={openNewProfile !== undefined}
+      canOpen={openProfile !== undefined}
+      canRetry={port?.refresh !== undefined}
       moment={
         moment === undefined ? undefined : (
           <ColumnAddPresses.Provider value={addPresses}>{moment}</ColumnAddPresses.Provider>

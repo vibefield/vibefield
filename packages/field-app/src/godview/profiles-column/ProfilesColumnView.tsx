@@ -43,6 +43,10 @@ export interface ProfilesColumnViewProps {
   addOpen: boolean;
   /** Settings can be opened from here (it is not open already) */
   canAdd: boolean;
+  /** Settings can be opened on one profile's page (it is not open already): a popover's Sign in and Agent Profiles… */
+  canOpen: boolean;
+  /** the usage door can read a sign-in again: a popover's Retry */
+  canRetry: boolean;
   /** the limit moment (UM-D23), beside the add while it is due; it says nothing when it is not */
   moment?: ReactNode;
   /** the pointer came onto a circle (its profile's id) or the add (`ADD_TARGET`), or left them (null) */
@@ -91,6 +95,8 @@ export function ProfilesColumnView({
   read,
   addOpen,
   canAdd,
+  canOpen,
+  canRetry,
   moment,
   onPoint,
   onCircle,
@@ -140,6 +146,8 @@ export function ProfilesColumnView({
                 chosen={isChosen}
                 focus={focus}
                 read={read}
+                canOpen={canOpen}
+                canRetry={canRetry}
                 onClose={onClose}
                 onFocusPlan={onFocusPlan}
                 onOpenProfile={onOpenProfile}
