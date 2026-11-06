@@ -18,21 +18,26 @@ import {
 
 // CP-4a2a (CP-D9; CP4-S15) — replay: a run's calls answered from its journal by their key and `#n`. A host started
 // again runs the script from the top; each call the journal already answered is answered from it again and never
-// handed on, and each new call is journaled BEFORE it is handed on, then its answer, so a restart finds both.
+// handed on, and each new call is journaled BEFORE it is handed on, so a restart finds it.
 // - A call's key is what it is and every argument the script passed it (`flowCallKey`); `#n` counts the calls with that
 //   key in this host's life, so a loop that asks the same thing twice asks it as #1 and #2. Steps that finished out of
 //   order (a `Promise.all`) replay the same: each call finds its own answer by its key and n, never by its place.
 // - A call journaled and never answered (the host left mid-call) is handed on again under its own number: what its
 //   step then is (resumed, or lost to a Quit, CP4-Q11 (a)) is the runs' to say (CP-4a2b), by `call`.
-// - The answer journaled is the one the pipe carries: JSON's own value (an undefined in a list is null, as the pipe
-//   says it), then `boundedAnswer` (a text past RESULT_MAX_BYTES cut and marked `cut`). The script hears what is
-//   journaled, and a cut text with FLOW_CUT_MARK after it, added by its worker; a replay hands on the same `cut`.
+// - CP-4a2b slice 10b (D21, D22, D7). The answers are released to the script in JOURNAL order, in ONE queue: an answer
+//   is held until every call line before it has been made again in this host's life, and an answer the runs hand on
+//   after the host started (`answered`) waits behind every one still held. So a race replayed takes the answer its
+//   first life took. The RUNS are the one writer of an answer line (D22): `flowAnswerLine` is the one road from an
+//   answer to its line and to what the script hears, a cut text marked `cut` for its worker's FLOW_CUT_MARK; this
+//   replay journals call and log lines alone, and hears an answer only through `answered`, never through what the
+//   runs' `call` returns. A new call is held, never journaled, while calls the journal holds are not made again (D7);
+//   `stuck` says so, for the runs to set the run aside at D1's park.
 // - A log line the journal holds is not said again; the next is journaled, then heard.
-// - A journal that does not take a line (the disk refused it) hands nothing on: the call is refused to the script.
+// - A journal that does not take a call line (the disk refused it) hands nothing on: the script's call is refused.
 // - `call` never throws at fieldd's pipe (bth's review P1/P3): arguments nested past FLOW_LIMITS.ARGS_DEPTH_MAX, or
-//   that no canonical JSON keys, are refused to the script, and so is a call or an answer its journal did not take.
-//   An answer nested past it is refused and journaled as that refusal, so the journal's read (journal.ts) never
-//   meets a line it would set aside.
+//   that no canonical JSON keys, are refused to the script, and so is a call its journal did not take. An answer
+//   nested past it is refused and journaled as that refusal (`flowAnswerLine`), so the journal's read (journal.ts)
+//   never meets a line it would set aside.
 
 /** A call's replay key: SHA-256 over the canonical JSON of what it is and the arguments the script passed it. */
 export function flowCallKey(what: string, args: readonly unknown[]): FlowCallKey {
@@ -49,16 +54,16 @@ export interface FlowReplayOptions {
   readonly inner: FlowCallStarter;
 }
 
-/** What starts a run's calls past its journal (D22, slice 10b): the runs; a scripted one in the tests. A call's answer
- * reaches its replay through `FlowReplay.answered`, never through what `call` returns; until 10b's green, the replay
- * still reads what it returns. Its `log` hears each new log line. */
+/** What starts a run's calls past its journal (D22): the runs; a scripted one in the tests. A call's answer reaches
+ * its replay through `FlowReplay.answered`, never through what `call` returns. A starter that throws as it is called
+ * has failed: the script's call is refused in fieldd's words (supervisor.ts). Its `log` hears each new log line. */
 export interface FlowCallStarter {
-  call(call: FlowHostCall & { readonly call: number }): unknown;
+  call(call: FlowHostCall & { readonly call: number }): void;
   log(text: string): void;
 }
 
 /** The words a script hears when its run's journal did not take a call or its answer. */
-const JOURNAL_REFUSED = "VibeField could not keep this step in the run's journal.";
+export const JOURNAL_REFUSED = "VibeField could not keep this step in the run's journal.";
 
 /** A value as JSON carries it: undefined (and a function) is null, in a list and alone. Throws on what JSON cannot
  * carry (a bigint, a cycle). */
@@ -130,13 +135,43 @@ function cardOf(args: readonly unknown[]): { label?: string; agent?: string; pha
   };
 }
 
-/** The handler a run's host is given: its journal's answers first, the inner handler for what is new. */
+/** A script's call waiting for what its replay releases. */
+interface Waiter {
+  readonly resolve: (answer: FlowHostAnswer) => void;
+  readonly reject: (error: unknown) => void;
+}
+
+/** A line of D21's one queue: a call the journal holds, or an answer, in journal order; an answer the runs hand on
+ * after the host started joins it at its end. */
+type Queued =
+  | { readonly kind: "call"; readonly call: number }
+  | { readonly kind: "answer"; readonly call: number; readonly answer: FlowHostAnswer };
+
+/** D7 — a new call made while calls the journal holds are not made again: held, never journaled while it is. */
+interface Held {
+  readonly what: string;
+  readonly args: readonly unknown[];
+  readonly key: FlowCallKey;
+  readonly n: number;
+  readonly waiter: Waiter;
+}
+
+/** The handler a run's host is given: its journal's answers in journal order, the runs for what is new. */
 export class FlowReplay implements FlowCallHandler {
   readonly #opts: FlowReplayOptions;
   /** the journal's calls by `<key>#<n>`, to their numbers */
   readonly #journaled = new Map<string, number>();
-  /** the journal's answers by their call's number */
-  readonly #answers = new Map<number, FlowHostAnswer>();
+  /** D21's one queue, and how much of it is released */
+  readonly #queue: Queued[] = [];
+  #released = 0;
+  /** the calls whose answer is in the queue: the journal's, and each the runs handed on since (D22) */
+  readonly #answered = new Set<number>();
+  /** the journal's calls this host's script has not made again */
+  readonly #unmade = new Set<number>();
+  /** the script's calls waiting for their answer, by number */
+  readonly #waiting = new Map<number, Waiter>();
+  /** D7: the new calls held, in the order the script made them */
+  readonly #held: Held[] = [];
   /** the calls with each key this host has made */
   readonly #seen = new Map<string, number>();
   readonly #priorLogs: number;
@@ -150,53 +185,61 @@ export class FlowReplay implements FlowCallHandler {
     for (const line of opts.prior) {
       if (line.kind === "call") {
         this.#journaled.set(`${line.key}#${line.n}`, line.call);
+        this.#unmade.add(line.call);
+        this.#queue.push({ kind: "call", call: line.call });
         last = Math.max(last, line.call);
       } else if (line.kind === "answer") {
-        this.#answers.set(
-          line.call,
-          line.refused !== undefined
-            ? { ok: false, refused: line.refused }
-            : { ok: true, value: line.value, ...(line.cut === true ? { cut: true as const } : {}) },
-        );
+        this.#answered.add(line.call);
+        this.#queue.push({
+          kind: "answer",
+          call: line.call,
+          answer:
+            line.refused !== undefined
+              ? { ok: false, refused: line.refused }
+              : {
+                  ok: true,
+                  value: line.value,
+                  ...(line.cut === true ? { cut: true as const } : {}),
+                },
+        });
       } else if (line.kind === "log") logs += 1;
     }
     this.#priorLogs = logs;
     this.#nextCall = last + 1;
   }
 
-  async call(call: FlowHostCall): Promise<FlowHostAnswer> {
+  call(call: FlowHostCall): Promise<FlowHostAnswer> {
     if (!call.args.every((arg) => nestsWithin(arg, FLOW_LIMITS.ARGS_DEPTH_MAX)))
-      return {
+      return Promise.resolve({
         ok: false,
         refused: `VibeField can't send this ${call.what}: its arguments nest deeper than ${FLOW_LIMITS.ARGS_DEPTH_MAX}`,
-      };
+      });
     let key: FlowCallKey;
     try {
       key = flowCallKey(call.what, call.args);
     } catch {
-      return {
+      return Promise.resolve({
         ok: false,
         refused: `VibeField can't send this ${call.what}: its arguments are not plain JSON`,
-      };
+      });
     }
     const n = (this.#seen.get(key) ?? 0) + 1;
     this.#seen.set(key, n);
     const journaled = this.#journaled.get(`${key}#${n}`);
-    if (journaled !== undefined) {
-      const answered = this.#answers.get(journaled);
-      if (answered !== undefined) return answered;
-      return this.#handOn({ what: call.what, args: call.args, call: journaled });
-    }
-    const number = this.#nextCall++;
-    try {
-      this.#opts.append(
-        { kind: "call", call: number, what: call.what, key, n, ...cardOf(call.args) },
-        call.args,
-      );
-    } catch {
-      return { ok: false, refused: JOURNAL_REFUSED };
-    }
-    return this.#handOn({ what: call.what, args: call.args, call: number });
+    return new Promise<FlowHostAnswer>((resolve, reject) => {
+      const waiter: Waiter = { resolve, reject };
+      if (journaled === undefined)
+        this.#held.push({ what: call.what, args: call.args, key, n, waiter });
+      else {
+        // XX2: the waiter is set before the hand-on, so an answer the runs hand on at once (`answered`, re-entrant)
+        // finds it; a call the queue answers is never handed on again (D22)
+        this.#waiting.set(journaled, waiter);
+        this.#unmade.delete(journaled);
+        if (!this.#answered.has(journaled))
+          this.#handOn({ what: call.what, args: call.args, call: journaled });
+      }
+      this.#release();
+    });
   }
 
   log(text: string): void {
@@ -211,26 +254,76 @@ export class FlowReplay implements FlowCallHandler {
     this.#opts.inner.log(text);
   }
 
-  /** D22, D21 (slice 10b) — a call's answer as the runs journaled it, handed to this host's replay, to be released to
-   * its script in journal order. Declared in 10b's red; its green builds it. */
-  answered(_call: number, _answer: FlowHostAnswer): void {}
-
-  /** D7 (slice 10b) — what keeps this replay's quiet host from going on, read at D1's park; none when it only waits.
-   * Declared in 10b's red; its green builds it. */
-  stuck(): FlowReplayStuck | undefined {
-    return undefined;
+  /** D22, D21 — a call's answer as the runs journaled it, handed to this host's replay: queued at the end of D21's one
+   * queue, behind every answer still held, and released in journal order. Safe to call from within the runs' `call`
+   * (XX2). An answer this replay already holds is nothing (at most once). */
+  answered(call: number, answer: FlowHostAnswer): void {
+    if (this.#answered.has(call)) return;
+    this.#answered.add(call);
+    this.#queue.push({ kind: "answer", call, answer });
+    this.#release();
   }
 
-  async #handOn(call: FlowHostCall & { readonly call: number }): Promise<FlowHostAnswer> {
-    // until 10b's green, the runs' answer is what their call resolves to
-    const said = (await this.#opts.inner.call(call)) as FlowHostAnswer;
-    const line = flowAnswerLine(call.call, call.what, said);
-    try {
-      this.#opts.append(line.entry);
-    } catch {
-      // the step's answer is not kept, so the script does not hear it: a restart asks the step again
-      return { ok: false, refused: JOURNAL_REFUSED };
+  /** D7 — what keeps this replay's quiet host from going on, read at D1's park: a new call held (`new`), or calls the
+   * journal holds that its script has not made again (`unmatched`: no answer behind them is released); none when it
+   * only waits. */
+  stuck(): FlowReplayStuck | undefined {
+    if (this.#held.length > 0) return "new";
+    return this.#unmade.size > 0 ? "unmatched" : undefined;
+  }
+
+  /** D21 — the queue released as far as it goes: up to a call line not yet made again, each answer to its waiter. Once
+   * every call the journal holds is made again, D7's held calls go on (`#unhold`). */
+  #release(): void {
+    while (this.#released < this.#queue.length) {
+      const line = this.#queue[this.#released] as Queued;
+      if (line.kind === "call") {
+        if (this.#unmade.has(line.call)) break;
+      } else {
+        const waiter = this.#waiting.get(line.call);
+        this.#waiting.delete(line.call);
+        waiter?.resolve(line.answer);
+      }
+      this.#released += 1;
     }
-    return line.heard;
+    if (this.#unmade.size === 0) this.#unhold();
+  }
+
+  /** D7 — the held new calls, in the order they were made, each journaled BEFORE it is handed on (its waiter set
+   * first, XX2); one its journal does not take is refused to the script, and nothing is handed on. */
+  #unhold(): void {
+    for (let held = this.#held.shift(); held !== undefined; held = this.#held.shift()) {
+      const number = this.#nextCall++;
+      try {
+        this.#opts.append(
+          {
+            kind: "call",
+            call: number,
+            what: held.what,
+            key: held.key,
+            n: held.n,
+            ...cardOf(held.args),
+          },
+          held.args,
+        );
+      } catch {
+        held.waiter.resolve({ ok: false, refused: JOURNAL_REFUSED });
+        continue;
+      }
+      this.#waiting.set(number, held.waiter);
+      this.#handOn({ what: held.what, args: held.args, call: number });
+    }
+  }
+
+  /** A call handed to the runs (D22): they journal its answer and hand it back through `answered`. A starter that
+   * throws as it is called refuses the script's call, in fieldd's words, through the supervisor. */
+  #handOn(call: FlowHostCall & { readonly call: number }): void {
+    try {
+      this.#opts.inner.call(call);
+    } catch (error) {
+      const waiter = this.#waiting.get(call.call);
+      this.#waiting.delete(call.call);
+      waiter?.reject(error);
+    }
   }
 }
