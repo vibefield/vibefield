@@ -3115,6 +3115,15 @@ const CUT_TWO = [
   "",
 ].join("\n");
 
+/** One step: its answer's text said as the run's one log line, or the words of its refusal when it is refused. */
+const CATCHES = [
+  'export const meta = { name: "Review" };',
+  "export default async function () {",
+  `  try { log((await agent("Review the diff", ${STEP_AT})).text); } catch (e) { log(e.message); }`,
+  "}",
+  "",
+].join("\n");
+
 /** A call line no flow here makes, as its host would journal it: what a journal its script, run again, can't match
  * holds (D7's rows, slice 10b). */
 const unmade = (call: number) => ({
@@ -3489,10 +3498,10 @@ describe("CP-4a2b — the host's life: parked and woken, D2's lookup at a wake, 
   // writer, the runs, each journaled once and handed to the host whose replay is current; a script that, run again,
   // can't match its journal is set aside lost at D1's park, in §9's words, on its record and in fieldd's log
 
-  /** The words fieldd's log said `run` ended in, or none. */
-  const toldEnd = (h: Harness, run: string): unknown => {
+  /** The words fieldd's log said `run` was set aside in (`fieldd.flows.run.aside`, ruled 2026-11-06), or none. */
+  const toldAside = (h: Harness, run: string): unknown => {
     const told = h.warned.find(({ event, fields }) => {
-      return event === "fieldd.flows.run.ended" && fields?.["run"] === run;
+      return event === "fieldd.flows.run.aside" && fields?.["run"] === run;
     });
     return told?.fields?.["log"];
   };
@@ -3512,7 +3521,7 @@ describe("CP-4a2b — the host's life: parked and woken, D2's lookup at a wake, 
     await within(PARK_MS, () => stateOf(h, run) === "lost");
     const said = words.asideUnmatched("Review");
     const ended = h.runs.read(run)?.summary;
-    const aside = { state: ended?.state, log: ended?.log, told: toldEnd(h, run) };
+    const aside = { state: ended?.state, log: ended?.log, told: toldAside(h, run) };
     expect({ ...aside, spawned: h.spawned.length }).toEqual({
       state: "lost",
       log: said,
@@ -3539,7 +3548,7 @@ describe("CP-4a2b — the host's life: parked and woken, D2's lookup at a wake, 
     await within(PARK_MS + grace, () => stateOf(h, run) === "lost");
     const said = words.asideNew("Seq");
     const ended = h.runs.read(run)?.summary;
-    const aside = { state: ended?.state, log: ended?.log, told: toldEnd(h, run) };
+    const aside = { state: ended?.state, log: ended?.log, told: toldAside(h, run) };
     const counted = { calls: h.records.runRecord(run)?.calls, spawned: h.spawned.length };
     expect({ ...aside, ...counted }).toEqual({
       state: "lost",
@@ -3644,5 +3653,39 @@ describe("CP-4a2b — the host's life: parked and woken, D2's lookup at a wake, 
     } finally {
       made.mockRestore();
     }
+  });
+
+  it("T4 (the F2 review; ruled 2026-11-06; slice 10b): a record write that throws after its journal line landed is the record lagging, never the line refused: the call goes on and its answer is heard, as a replay of that journal hears them", async () => {
+    /** A CATCHES run whose record write throws once, just after its journal takes a line of `kind`. */
+    const lagging = async (kind: "call" | "answer") => {
+      const h = await harness();
+      h.approved("review", CATCHES);
+      const append = h.records.appendRun.bind(h.records);
+      const write = h.records.writeRunRecord.bind(h.records);
+      let armed = false;
+      vi.spyOn(h.records, "appendRun").mockImplementation((run, entry) => {
+        const kept = append(run, entry);
+        if (entry.kind === kind) armed = true;
+        return kept;
+      });
+      vi.spyOn(h.records, "writeRunRecord").mockImplementation((run, fields) => {
+        if (!armed) return write(run, fields);
+        armed = false;
+        throw new Error("ENOSPC: no space left on device, write");
+      });
+      const run = startedRun(await h.start({ flow: "review" })).run;
+      await within(PARK_MS, () => h.enqueued.length === 1);
+      answerStep(h, run, 1, "all clean");
+      await within(PARK_MS, () => stateOf(h, run) === "done");
+      const ended = h.runs.read(run)?.summary;
+      const spawned = h.spawned.length;
+      return { state: ended?.state, log: ended?.log, spawned, kinds: h.kinds(run) };
+    };
+    const kinds = ["head", "call", "answer", "log", "end"];
+    const heard = { state: "done", log: "all clean", spawned: 1, kinds };
+    // the call line landed and its record's write threw: the call goes on, never refused
+    expect(await lagging("call")).toEqual(heard);
+    // the answer line landed and its record's settle threw: the script hears the answer the journal holds
+    expect(await lagging("answer")).toEqual(heard);
   });
 });
