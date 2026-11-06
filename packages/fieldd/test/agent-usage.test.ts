@@ -9,7 +9,8 @@
 // developer's own credentials. Its readings come from a JSON file named by an
 // env var and re-read per request (the `FAKE_ROSETTAD_SESSIONS` pattern in
 // test/fixtures/fake-rosettad.mjs), so a test flips an account's state between
-// two polls by writing a file.
+// two polls by writing a file. The adapter lives in `scripted-usage.ts` since
+// UM-D8, which the phone's rows (agent-usage-tailnet.test.ts) read too.
 //
 // The last block asks the REAL claude adapter, only when FIELDD_TEST_REAL_AGENT
 // names it, and asserts a STATE, never a number: someone's quota is not a
@@ -17,7 +18,7 @@
 // usage service reads the OAuth credential from the user's own root and asks
 // the vendor's endpoint, so a fieldd that polled at boot would have every
 // daemon in this test graph reach the network with a real token.
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   AgentAccountUsageBatch,
@@ -28,16 +29,7 @@ import {
   SOCKETS,
 } from "@vibefield/contracts";
 import type { Logger } from "@vibefield/logging";
-import type {
-  AccountUsageFetchResult,
-  AgentProfile,
-  AccountUsageService as CoreAccountUsageService,
-  ProfileFailure,
-  ProfileIdentity,
-  ProfileService,
-  TerminalSpec,
-} from "@vibefield/puppeteer-core";
-import type { AgentProvider } from "@vibefield/puppeteer-runtime";
+import type { AccountUsageFetchResult, AgentProfile } from "@vibefield/puppeteer-core";
 import { afterEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
 import type { FielddDaemon } from "../src/index";
@@ -47,10 +39,18 @@ import { SCRIPTED_CATALOG } from "./agent-catalog-fixture";
 import { productPathSecret, TEST_LOGIN, writeLinkFixture } from "./link-fixture";
 import { nativeEndpoint, removeTempRoot, shortTmpRoot } from "./native-harness";
 import { desktopSlice, registryPeer } from "./peer-roster";
+import {
+  available,
+  rateLimited,
+  refused,
+  type ScriptedProvider,
+  scriptedProvider,
+  USAGE_FILE,
+  type UsageScript,
+  unauthenticated,
+} from "./scripted-usage";
 import { helloAs, type RpcErrorShape, until, WsRpc } from "./ws-rpc";
 
-/** The env var naming the scripted provider's readings file. */
-const USAGE_FILE = "FAKE_ACCOUNT_USAGE_FILE";
 /** Small on purpose: the poller must be observable inside a test's patience. */
 const REFRESH_MS = 60;
 const TICK_MS = 25;
@@ -72,151 +72,6 @@ afterEach(async () => {
   for (const root of roots) removeTempRoot(root);
   roots = [];
 });
-
-// ── the scripted provider ─────────────────────────────────────────────────
-
-/** One reading per account, as the file spells them. `"throw"` is an adapter
- * that blew up rather than answering — the runtime folds that into an
- * `unavailable` result, which is a different path from a typed refusal. */
-type UsageScript = Record<string, AccountUsageFetchResult | "throw">;
-
-const available = (provider: string, at: string, usedPercent = 42): AccountUsageFetchResult => ({
-  status: "available",
-  snapshot: {
-    provider,
-    fetchedAt: at,
-    scope: "subscription",
-    source: { kind: "native-protocol", stability: "experimental" },
-    metrics: [
-      {
-        id: "five-hour",
-        label: "5H",
-        description: "Rolling five-hour window",
-        kind: "window",
-        usedPercent,
-        durationMinutes: 300,
-        resetsAt: "2026-09-13T14:00:00.000Z",
-      },
-      {
-        id: "seven-day",
-        label: "7D",
-        kind: "window",
-        usedPercent: 12,
-        durationMinutes: 10_080,
-        group: { id: "reserve", label: "Luna Reserve", standby: true },
-      },
-    ],
-    credits: { balance: "$12.40", hasCredits: true },
-  },
-});
-
-/** A quota refusal. `retryAt` is the provider's own authorization to ask
- * again, and the monitor obeys it — a far-future one would park the row, so a
- * test that flips the account afterwards passes a near one. */
-const rateLimited = (provider: string, retryAt: string): AccountUsageFetchResult => ({
-  status: "unavailable",
-  provider,
-  message: "the account is rate limited",
-  retryable: true,
-  code: "rate-limited",
-  retryAt,
-});
-
-/** A retryable refusal with no provider-authorized retry time: the backoff
- * LADDER's input (a `retryAt` outranks the ladder — its own row below). */
-const refused = (provider: string): AccountUsageFetchResult => ({
-  status: "unavailable",
-  provider,
-  message: "the account could not be read",
-  retryable: true,
-});
-
-const unauthenticated = (provider: string): AccountUsageFetchResult => ({
-  status: "unauthenticated",
-  provider,
-  message: "no account is signed in",
-  retryable: false,
-});
-
-interface ScriptedProvider {
-  provider: AgentProvider;
-  /** a provider PUSH (the runtime's `onAccountUsage` path), on demand */
-  push(result: AccountUsageFetchResult): void;
-  /** how many readings the adapter has been asked for, per account key */
-  fetches(): Record<string, number>;
-}
-
-/** An adapter that owns nothing but a quota (and, when asked, accounts). */
-function scriptedProvider(options: {
-  id: string;
-  label: string;
-  profiles?: boolean;
-  pollIntervalMs?: number;
-}): ScriptedProvider {
-  const counts: Record<string, number> = {};
-  let pushTo: ((result: AccountUsageFetchResult) => void) | undefined;
-  const read = (key: string): AccountUsageFetchResult | "throw" => {
-    const path = process.env[USAGE_FILE];
-    if (path === undefined) throw new Error(`${USAGE_FILE} is not set`);
-    // re-read per request: the test rewrites this file between polls
-    const script = JSON.parse(readFileSync(path, "utf8")) as UsageScript;
-    return script[key] ?? script["default"] ?? "throw";
-  };
-  const accountUsage: CoreAccountUsageService = {
-    provider: {
-      id: options.id,
-      label: options.label,
-      refresh: { pollIntervalMs: options.pollIntervalMs ?? 60_000 },
-    },
-    async fetch(fetchOptions?: { profile?: AgentProfile }) {
-      const key = fetchOptions?.profile?.id ?? "default";
-      counts[key] = (counts[key] ?? 0) + 1;
-      const answer = read(key);
-      if (answer === "throw") throw new Error("scripted account usage failure");
-      return answer;
-    },
-    subscribe(listener) {
-      pushTo = listener;
-      return () => {
-        pushTo = undefined;
-      };
-    },
-  };
-  const profiles: ProfileService = {
-    provider: {
-      id: options.id,
-      label: options.label,
-      support: { supported: true, identity: "none", sharedSurfaces: [] },
-    },
-    bindingEnvironment: () => ({}),
-    observationRoot: (profile: AgentProfile) => profile.dataRoot,
-    loginInvocation: (_profile: AgentProfile, opts: { cwd: string }): TerminalSpec => ({
-      command: "/bin/sh",
-      args: ["-c", "exit 0"],
-      cwd: opts.cwd,
-    }),
-    async verify(): Promise<ProfileIdentity | ProfileFailure> {
-      return {
-        status: "unsupported",
-        message: "the scripted provider has no identity to read",
-        retryable: false,
-      };
-    },
-  };
-  return {
-    provider: {
-      descriptor: { id: options.id, label: options.label },
-      createSession() {
-        // this adapter exists to be ASKED about a quota; it spawns nothing
-        return Promise.reject(new Error("the usage provider spawns no sessions"));
-      },
-      accountUsage,
-      ...(options.profiles === true ? { profiles } : {}),
-    },
-    push: (result) => pushTo?.(result),
-    fetches: () => ({ ...counts }),
-  };
-}
 
 // ── the harness ───────────────────────────────────────────────────────────
 
@@ -606,11 +461,18 @@ describe("the account usage doors (AR-5d)", () => {
     expect(ack.grantedScopes).toEqual([...PEER_FIELDD_SCOPES]);
     const refused = (await peer.callErr("agents.usage", {})) as RpcErrorShape;
     expect(refused.data?.kind).toBe("FORBIDDEN_SCOPE");
-    // AR-5b: the tailnet preset carries no agent.usage, so the scope wall fires
-    // before the locality wall for a peer; either way the quota never leaves
-    expect(refused.data?.details).toMatchObject({ required: "agent.usage" });
+    // AR-5b: the tailnet preset carried no agent.usage, so the scope wall fired
+    // before the locality wall for a peer; either way the quota never leaves.
+    // *Flipped 2026-11-06 (UM-D8 A): the phone's preset holds agent.usage, so
+    // the peer's does by derivation and the scope wall passes it. The D36 wall
+    // refuses it now: both doors are `local`, this device's quota.*
+    expect(refused.data?.details).toEqual({ method: "agents.usage", locality: "local" });
     const refusedSub = (await peer.callErr("agents.usage.subscribe", {})) as RpcErrorShape;
     expect(refusedSub.data?.kind).toBe("FORBIDDEN_SCOPE");
+    expect(refusedSub.data?.details).toEqual({
+      method: "agents.usage.subscribe",
+      locality: "local",
+    });
   }, 30_000);
 });
 
@@ -884,6 +746,51 @@ describe("the reading's own rules (AR-5d)", () => {
     const atRelease = runtime.asked;
     await new Promise((resolve) => setTimeout(resolve, 150));
     expect(runtime.asked).toBe(atRelease); // the last watcher left; so did the poll
+  });
+
+  // UM-D8 (A), 2026-11-06 — the phone runs no poll of its own: its subscription
+  // is a PASSIVE watcher (`watch`), which hears every batch a subscriber hears
+  // and never begins, nor keeps, the poll. The door's half (who watches and who
+  // subscribes) is agent-usage-tailnet.test.ts.
+  it("UM-D8 — a passive watcher asks nothing alone, hears a subscriber's poll, and keeps none alive", async () => {
+    const runtime = fakeRuntime(1_000);
+    for (let i = 0; i < 400; i += 1) {
+      runtime.answers.push(available("scripted", "2026-09-13T12:00:00.000Z"));
+    }
+    const service = new AccountUsageService({ runtime, poll: { refreshMs: 40, tickMs: 40 } });
+    cleanup.push(() => service.stop());
+    service.start();
+    const heard: AgentAccountUsageBatch[] = [];
+    const leaveWatch = service.watch((batch) => heard.push(batch));
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    expect(runtime.asked).toBe(0); // armed, watched only passively, asking nothing
+
+    const leave = service.subscribe(() => undefined);
+    await until(() => runtime.asked > 1, 2_000);
+    await new Promise((resolve) => setTimeout(resolve, 60)); // past the publish tick
+    expect(heard.length).toBeGreaterThan(0); // the subscriber's poll reached the watcher
+    expect(heard[heard.length - 1]?.entries[0]?.state).toBe("available");
+
+    leave(); // the last SUBSCRIBER leaves; the watcher stays
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    const atRelease = runtime.asked;
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    expect(runtime.asked).toBe(atRelease); // a watcher keeps no poll alive
+    leaveWatch();
+  });
+
+  it("UM-D8 — a reading taken with no poll running still reaches a passive watcher (a window's Retry)", async () => {
+    const runtime = fakeRuntime(1_000);
+    runtime.answers.push(available("scripted", "2026-09-13T12:00:00.000Z", 33));
+    const service = new AccountUsageService({ runtime, poll: { refreshMs: 1_000, tickMs: 1_000 } });
+    cleanup.push(() => service.stop());
+    service.start();
+    const heard: AgentAccountUsageBatch[] = [];
+    service.watch((batch) => heard.push(batch));
+    await service.refresh({ force: true }); // nobody subscribed: the one reading asked for
+    await new Promise((resolve) => setTimeout(resolve, 60)); // past the publish tick
+    expect(runtime.asked).toBe(1);
+    expect(heard[heard.length - 1]?.entries[0]?.metrics[0]?.usedPercent).toBe(33);
   });
 
   it("a provider's own retryAt outranks the ladder, and an adapter that throws is an honest unavailable", async () => {

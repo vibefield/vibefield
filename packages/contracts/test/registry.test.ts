@@ -45,6 +45,7 @@ import {
   SCOPES,
   SOCKETS,
   STORES,
+  TAILNET_GUEST_SCOPES,
   TAILNET_SCOPES,
   USER_ME,
 } from "../src/registries";
@@ -297,6 +298,8 @@ describe("SP-1 — the subscription descriptor (SP-L4)", () => {
       "device.subscribe": stream,
       "services.subscribe": stream,
       "agents.profileSets.subscribe": stream,
+      // UM-D8 (A) — the phone reads its home's usage: whole batches, a window's too
+      "agents.usage.subscribe": stream,
       "index.catalog.subscribe": { shape: "rows", cadenceFloorMs: ROWS.MIN_INTERVAL_MS },
       // IOS-12a (PC-D4 A) — one desktop's needs-you queue, whole lists through the home
       "needs.subscribe": stream,
@@ -1019,6 +1022,50 @@ describe("IOS-8f — user.me, the desktop's own person", () => {
 
   it("names its honest UNAVAILABLE: a daemon with no user id has no person to answer", () => {
     expect(USER_ME).toEqual({ SERVICE: "user", STATE_NO_USER: "no-user" });
+  });
+});
+
+// UM-D8 (A; the Profile Meters page, round 4, ruled 2026-11-06) — the phone may
+// read usage: the batch its home desktop holds, with no poll of its own.
+// `agent.usage` joins the tailnet preset as SP-D13 admitted `index.search`; the
+// rule that a phone spends no reading is fieldd's, at the door (daemon.ts; the
+// fieldd half: `test/agent-usage-tailnet.test.ts`).
+describe("UM-D8 — the phone may read usage", () => {
+  it("agent.usage joins the phone's preset after index.search, the peer's by derivation; a guest holds nothing, a plugin never", () => {
+    expect(SCOPES).toContain("agent.usage");
+    expect(TAILNET_SCOPES[TAILNET_SCOPES.indexOf("index.search") + 1]).toBe("agent.usage");
+    expect(PEER_FIELDD_SCOPES).toContain("agent.usage");
+    // derived, never a copy: the two presets stay equal, scope for scope
+    expect([...PEER_FIELDD_SCOPES]).toEqual([...new Set([...TAILNET_SCOPES, "index.search"])]);
+    expect(TAILNET_GUEST_SCOPES).toEqual([]);
+    // a reading is the account's billing state and a credentialed call (AR-5b)
+    expect(PLUGIN_CAPABILITY_ELIGIBILITY).not.toHaveProperty(["agent.usage"]);
+    for (const source of ["bundled", "dev-linked", "registry", "sideload"] as const) {
+      const grants = computeEffectiveGrants({
+        requested: ["agent.usage"],
+        hasRenderer: true,
+        hasService: true,
+        source,
+      });
+      expect(grants.granted, source).toEqual([]);
+      expect(grants.denied, source).toEqual([{ capability: "agent.usage", reason: "entry-kind" }]);
+    }
+  });
+
+  it("both usage doors stay local and reach the phone from its own preset; the subscription declares whole batches at the stream floor", () => {
+    const doors = METHODS.filter((m) => m.scope === "agent.usage");
+    expect(doors.map((m) => m.method)).toEqual(["agents.usage", "agents.usage.subscribe"]);
+    for (const m of doors) {
+      // the quota is THIS desktop's: the phone asks its home, and a peer
+      // daemon meets the D36 wall
+      expect(m.locality, m.method).toBe("local");
+      expect(reachableFromTailnet(m), m.method).toBe(true);
+      expect(m.guestOk ?? false, m.method).toBe(false);
+    }
+    expect(doors[1]?.subscription).toEqual({
+      shape: "stream",
+      cadenceFloorMs: PRODUCT_API_LIMITS.STREAM_MIN_INTERVAL_MS,
+    });
   });
 });
 

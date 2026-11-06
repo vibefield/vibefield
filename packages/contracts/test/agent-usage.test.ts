@@ -9,6 +9,7 @@ import {
   AgentsUsageParams,
 } from "../src/agent-usage";
 import { METHODS } from "../src/methods";
+import { PRODUCT_API_LIMITS } from "../src/registries";
 
 // AR-5d — account usage (thinking-ar-views-port.md §6.2). The batch is a
 // PROJECTION of puppeteer's fetch result, so the fixtures are what fieldd
@@ -58,7 +59,12 @@ describe("the agents.usage rows (AR-5d)", () => {
         scope: "agent.usage",
         idempotent: true,
         locality: "local",
-        subscription: true,
+        // UM-D8 (A), 2026-11-06 — reachable from the phone's preset now, so it
+        // declares its frames (SP-1's lint): whole batches at the stream floor
+        subscription: {
+          shape: "stream",
+          cadenceFloorMs: PRODUCT_API_LIMITS.STREAM_MIN_INTERVAL_MS,
+        },
       },
     ]);
   });

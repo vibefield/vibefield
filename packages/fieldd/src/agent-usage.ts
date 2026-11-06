@@ -335,6 +335,11 @@ export class AccountUsageService {
     };
   }
 
+  /** UM-D8 red stub: a watcher that hears nothing (its rule lands with the door). */
+  watch(_emit: (batch: AgentAccountUsageBatch) => void): () => void {
+    return () => undefined;
+  }
+
   /** Poll while somebody is watching (see `start`). The first act is a
    * registry reconcile, so the first batch has one row per ACCOUNT rather
    * than one unkeyed row per provider (the reference's note, and the
