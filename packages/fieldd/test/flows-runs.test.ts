@@ -20,6 +20,7 @@ import { RUNS_DIR } from "../src/flows/journal";
 import type { FlowsHostLaunch } from "../src/flows/launch";
 import { FlowLibrary } from "../src/flows/library";
 import { FlowRecords, flowHashOf } from "../src/flows/records";
+import { flowCallKey } from "../src/flows/replay";
 import {
   type FlowRunSpark,
   type FlowRunStarted,
@@ -3037,6 +3038,45 @@ const within = async (ms: number, ready: () => boolean): Promise<void> => {
   while (!ready() && Date.now() < until) await new Promise((resolve) => setTimeout(resolve, 20));
 };
 
+/** A step's options, labelled `label`, as STEP_AT's are. */
+const stepAt = (label: string): string =>
+  `{ agent: "claude", label: "${label}", profile: "work", cwd: "/work/app" }`;
+
+/** Two steps at once, A and B, their answers' texts said as the run's one log line. */
+const TWO = [
+  'export const meta = { name: "Two" };',
+  "export default async function () {",
+  `  const [a, b] = await Promise.all([agent("look at a", ${stepAt("A")}), agent("look at b", ${stepAt("B")})]);`,
+  "  log(a.text + b.text);",
+  "}",
+  "",
+].join("\n");
+
+/** Two steps, A then B, their answers' texts said as the run's one log line. */
+const SEQ = [
+  'export const meta = { name: "Seq" };',
+  "export default async function () {",
+  `  const a = await agent("look at a", ${stepAt("A")});`,
+  `  const b = await agent("look at b", ${stepAt("B")});`,
+  "  log(a.text + b.text);",
+  "}",
+  "",
+].join("\n");
+
+/** B's call in SEQ, as its host journals it: what a kill between D5's first two steps leaves with no record entry. */
+const seqB = () => ({
+  kind: "call" as const,
+  call: 2,
+  what: "agent",
+  key: flowCallKey("agent", [
+    "look at b",
+    { agent: "claude", label: "B", profile: "work", cwd: "/work/app" },
+  ]),
+  n: 1,
+  label: "B",
+  agent: "claude",
+});
+
 describe("CP-4a2b — the host's life: parked and woken, and D2's lookup at a wake (§13a slice 10a)", () => {
   /** Whether host `i` the runs started has left. */
   const left = (h: Harness, i: number): boolean => h.hosts[i]?.leftAt !== undefined;
@@ -3125,5 +3165,141 @@ describe("CP-4a2b — the host's life: parked and woken, and D2's lookup at a wa
       hosts: h.hosts.length,
     }).toEqual({ state: "waiting", steps: [[1, "rt-step1", "working"]], hosts: 1 });
     expect(h.kinds(run)).toEqual(["head", "call"]);
+  });
+
+  it("R13 (D2): at a wake, a call made again whose step's session lives binds to it, never spawned again; one whose start is in flight spawns once, and the next wake binds it; one whose session exited fails the step in §9's words, nothing spawned", async () => {
+    // a live session binds: B's answer wakes the run, and A, made again, is bound to its session
+    const live = await harness({ hostIdleMs: IDLE_MS });
+    live.approved("two", TWO);
+    const bound = startedRun(await live.start({ flow: "two" })).run;
+    await waitFor(() => expect(live.enqueued).toHaveLength(2));
+    expect(await parkedAt(live, bound)).toEqual(PARKED);
+    answerStep(live, bound, 2, "b");
+    await within(PARK_MS, () => live.hosts.length === 2);
+    answerStep(live, bound, 1, "a");
+    await within(PARK_MS, () => stateOf(live, bound) === "done");
+    expect({
+      state: stateOf(live, bound),
+      log: live.runs.read(bound)?.summary.log,
+      spawned: live.spawned.length,
+      hosts: live.hosts.length,
+    }).toEqual({ state: "done", log: "ab", spawned: 2, hosts: 2 });
+    // starting with no session: A's start waits on the runtime's models through the park and the wake, so it is made
+    // again while it starts; it spawns once, and the next wake binds it
+    let free: () => void = () => {};
+    const held = new Promise<void>((resolve) => {
+      free = resolve;
+    });
+    const starting = await harness({ hostIdleMs: IDLE_MS, modelsHeld: held });
+    const modelled = TWO.replace(stepAt("A"), stepAt("A").replace(" }", ', model: "opus" }'));
+    starting.approved("two", modelled);
+    const once = startedRun(await starting.start({ flow: "two" })).run;
+    try {
+      await waitFor(() => expect(starting.enqueued).toHaveLength(1));
+      expect(await parkedAt(starting, once)).toEqual(PARKED);
+      answerStep(starting, once, 2, "b");
+      await within(PARK_MS, () => starting.hosts.length === 2);
+    } finally {
+      free();
+    }
+    await within(PARK_MS, () => starting.enqueued.length === 2);
+    expect(await parkedAt(starting, once, 1)).toEqual(PARKED);
+    answerStep(starting, once, 1, "a");
+    await within(PARK_MS, () => stateOf(starting, once) === "done");
+    expect({
+      state: stateOf(starting, once),
+      spawned: starting.spawned.map(({ origin }) => origin.call),
+      hosts: starting.hosts.length,
+    }).toEqual({ state: "done", spawned: [2, 1], hosts: 3 });
+    // an exited one (ruled 2026-11-06, its item slice 14's): A's session ends while the run is parked, so A made again
+    // fails in "‹label› failed.", and nothing spawns and no item is raised
+    const gone = await harness({ hostIdleMs: IDLE_MS });
+    gone.approved("two", TWO);
+    const lost = startedRun(await gone.start({ flow: "two" })).run;
+    await waitFor(() => expect(gone.enqueued).toHaveLength(2));
+    expect(await parkedAt(gone, lost)).toEqual(PARKED);
+    gone.exit(sessionOf(gone, lost, 1));
+    answerStep(gone, lost, 2, "b");
+    await within(PARK_MS, () => refusalsOf(gone, lost).length > 0);
+    expect({
+      refused: refusalsOf(gone, lost),
+      spawned: gone.spawned.length,
+      items: gone.items,
+      hosts: gone.hosts.length,
+    }).toEqual({ refused: [stepFailed("A")], spawned: 2, items: [], hosts: 2 });
+  });
+
+  it("R13b (D2): a wake while a step waits for a slot makes its 9 sessions in all, never more than LIVE_STEPS_MAX live, and the waiting step's prompt is queued once", async () => {
+    const h = await harness({ hostIdleMs: IDLE_MS });
+    const slots = FLOW_LIMITS.LIVE_STEPS_MAX;
+    h.approved("fan", fanOut(slots + 1));
+    const run = startedRun(await h.start({ flow: "fan" })).run;
+    await waitFor(() => expect(h.enqueued).toHaveLength(slots));
+    expect(await parkedAt(h, run)).toEqual(PARKED);
+    // the first step's answer frees its slot for the 9th, and wakes the run
+    answerStep(h, run, 1, "one");
+    await within(PARK_MS, () => h.hosts.length === 2 && h.enqueued.length === slots + 1);
+    const lines = h.enqueued.filter(({ from }) => from.kind === "flow" && from.call === slots + 1);
+    const live = h.spawned.map(
+      ({ open }) =>
+        open.filter((step) => ["starting", "working"].includes(step.state) && step.handed !== true)
+          .length,
+    );
+    expect({ hosts: h.hosts.length, spawned: h.spawned.length, lines: lines.length }).toEqual({
+      hosts: 2,
+      spawned: slots + 1,
+      lines: 1,
+    });
+    expect(Math.max(...live)).toBeLessThanOrEqual(slots);
+  });
+
+  it("R13e (D2, [BR] MED): a journal call line with no record entry, as a kill between D5's first two steps leaves it, reads starting at the wake: its agent spawns once, the record counts its call, and the run is never lost", async () => {
+    const h = await harness({ hostIdleMs: IDLE_MS });
+    h.approved("seq", SEQ);
+    const run = startedRun(await h.start({ flow: "seq" })).run;
+    await waitFor(() => expect(h.enqueued).toHaveLength(1));
+    expect(await parkedAt(h, run)).toEqual(PARKED);
+    // B's call, journaled as the first life would have before its record entry, and no entry written
+    h.records.appendRun(run, seqB());
+    answerStep(h, run, 1, "a");
+    await within(PARK_MS, () => h.enqueued.length === 2);
+    const woken = h.records.runRecord(run);
+    expect({
+      spawned: h.spawned.map(({ origin }) => origin.call),
+      calls: woken?.calls,
+      open: woken?.open.map((step) => [step.call, step.state]),
+      state: woken?.state,
+    }).toEqual({ spawned: [1, 2], calls: 2, open: [[2, "working"]], state: "running" });
+    answerStep(h, run, 2, "b");
+    expect((await settled(h.runs, run, "done")).log).toBe("ab");
+  });
+
+  it("MM3 (the F4 logic review; ruled 2026-11-06): D2's lookup that binds a step's live agent at a wake reserves no agent, and a respawn of a step with no session reserves one, as LL1 counts a start", async () => {
+    // the bind: two agents started, and a wake that binds A keeps the count at 2
+    const bound = await harness({ hostIdleMs: IDLE_MS });
+    bound.approved("two", TWO);
+    const two = startedRun(await bound.start({ flow: "two" })).run;
+    await waitFor(() => expect(bound.enqueued).toHaveLength(2));
+    expect(await parkedAt(bound, two)).toEqual(PARKED);
+    answerStep(bound, two, 2, "b");
+    await within(PARK_MS, () => bound.hosts.length === 2);
+    answerStep(bound, two, 1, "a");
+    await within(PARK_MS, () => stateOf(bound, two) === "done");
+    expect({
+      state: stateOf(bound, two),
+      hosts: bound.hosts.length,
+      agents: bound.records.runRecord(two)?.agents,
+    }).toEqual({ state: "done", hosts: 2, agents: 2 });
+    // the respawn: R13e's journaled call with no entry spawns, and counts one more
+    const again = await harness({ hostIdleMs: IDLE_MS });
+    again.approved("seq", SEQ);
+    const seq = startedRun(await again.start({ flow: "seq" })).run;
+    await waitFor(() => expect(again.enqueued).toHaveLength(1));
+    expect(await parkedAt(again, seq)).toEqual(PARKED);
+    again.records.appendRun(seq, seqB());
+    answerStep(again, seq, 1, "a");
+    await within(PARK_MS, () => again.enqueued.length === 2);
+    const counted = { spawned: again.spawned.length, agents: again.records.runRecord(seq)?.agents };
+    expect(counted).toEqual({ spawned: 2, agents: 2 });
   });
 });
