@@ -25,7 +25,12 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { AgentProfileSet, DeviceInfo } from "@vibefield/contracts";
+import {
+  AgentAccountUsageBatch,
+  type AgentAccountUsageEntry,
+  type AgentProfileSet,
+  type DeviceInfo,
+} from "@vibefield/contracts";
 import type { AccountUsageBatch } from "@vibefield/puppeteer-core";
 import { describe, expect, it, vi } from "vitest";
 import {
@@ -668,6 +673,127 @@ describe("the usage port's subscription", () => {
     // The dispose is still safe to call: there is nothing to unsubscribe.
     expect(() => dispose()).not.toThrow();
     expect(door.unsubscribes).toBe(0);
+  });
+});
+
+describe("the usage port owns its subscription (UM-3 2a: the profiles column reads rows, never a views batch)", () => {
+  const VALID = fixture("agent-usage.valid.json");
+  const EMPTY = fixture("agent-usage.empty.json");
+  const providers = (rows: readonly AgentAccountUsageEntry[] | undefined): string[] =>
+    (rows ?? []).map((row) => row.provider);
+
+  it("opens agents.usage.subscribe for its first rows reader, with no views reader at all", async () => {
+    const door = subscribingClient();
+    const subscribe = vi.spyOn(door.client, "subscribe");
+    const seen: (readonly AgentAccountUsageEntry[])[] = [];
+    const dispose = usagePortOver(door.client).subscribeRows?.((rows) => seen.push(rows));
+    expect(subscribe).toHaveBeenCalledOnce();
+    expect(subscribe.mock.calls[0]?.[0]).toBe("agents.usage.subscribe");
+    door.resolve(VALID);
+    await settle();
+    expect(seen.map(providers)).toEqual([providers(AgentAccountUsageBatch.parse(VALID).entries)]);
+    door.frame(EMPTY);
+    expect(seen.at(-1)).toEqual([]);
+    dispose?.();
+    expect(door.unsubscribes).toBe(1);
+  });
+
+  it("is ONE subscription however many read it, closed by the last to leave and opened again by the next", async () => {
+    const door = subscribingClient();
+    const subscribe = vi.spyOn(door.client, "subscribe");
+    const port = usagePortOver(door.client);
+    const first = port.subscribeRows?.(() => undefined);
+    const second = port.subscribeRows?.(() => undefined);
+    const views = port.subscribe(() => undefined);
+    expect(subscribe).toHaveBeenCalledOnce();
+    door.resolve(VALID);
+    await settle();
+    first?.();
+    views();
+    expect(door.unsubscribes).toBe(0);
+    second?.();
+    expect(door.unsubscribes).toBe(1);
+    const again = port.subscribeRows?.(() => undefined);
+    expect(subscribe).toHaveBeenCalledTimes(2);
+    again?.();
+  });
+
+  it("hands a later reader the rows at once, and a later views reader the feed's last batch", async () => {
+    const door = subscribingClient();
+    const port = usagePortOver(door.client);
+    const held = port.subscribeRows?.(() => undefined);
+    door.resolve(VALID);
+    await settle();
+    const rows: (readonly AgentAccountUsageEntry[])[] = [];
+    const batches: AccountUsageBatch[] = [];
+    const late = port.subscribeRows?.((next) => rows.push(next));
+    const views = port.subscribe((batch) => batches.push(batch));
+    expect(rows).toHaveLength(1);
+    expect(batches.map((batch) => batch.entries.length)).toEqual([3]);
+    late?.();
+    views();
+    held?.();
+  });
+
+  it("opens a refused subscription again for the next reader, never for one already waiting on it", async () => {
+    // the strip's Retry is the reader leaving and coming back (`GodviewMonitor`)
+    const door = subscribingClient();
+    const subscribe = vi.spyOn(door.client, "subscribe");
+    const port = usagePortOver(door.client);
+    const states: string[] = [];
+    port.subscribeState?.((state) => states.push(state.state));
+    const dispose = port.subscribeRows?.(() => undefined);
+    door.reject(new Error("FORBIDDEN_SCOPE: agents.usage.subscribe"));
+    await settle();
+    expect(states.at(-1)).toBe("unavailable");
+    expect(subscribe).toHaveBeenCalledOnce();
+    dispose?.();
+    const retry = port.subscribeRows?.(() => undefined);
+    expect(subscribe).toHaveBeenCalledTimes(2);
+    retry?.();
+  });
+
+  it("refreshes the profiles it names (agents.usage, refresh: true) and hands the batch to the rows readers", async () => {
+    const { client, request } = requestingClient({ "agents.usage": VALID });
+    const port = usagePortOver(client);
+    const seen: (readonly AgentAccountUsageEntry[])[] = [];
+    port.subscribeRows?.((rows) => seen.push(rows));
+    await port.refresh?.(["claude:native-default"]);
+    expect(request).toHaveBeenCalledWith("agents.usage", {
+      refresh: true,
+      profileIds: ["claude:native-default"],
+    });
+    expect(seen.map(providers).at(-1)).toEqual(
+      providers(AgentAccountUsageBatch.parse(VALID).entries),
+    );
+    const refusing = requestingClient({
+      "agents.usage": async () => {
+        throw new Error("PRECONDITION_FAILED: refresh");
+      },
+    });
+    await expect(usagePortOver(refusing.client).refresh?.(["work:claude"])).rejects.toThrow(
+      "PRECONDITION_FAILED",
+    );
+  });
+
+  it("names This Mac's installed agents (agents.installs), and nothing when the door refuses", async () => {
+    // ruling 8: This Mac's circle lists the agents Settings lists there, the installed ones
+    const installs = fixture("agents-installs.valid.json") as {
+      installs: { provider: string }[];
+    };
+    const { client, request } = requestingClient({ "agents.installs": installs });
+    await expect(usagePortOver(client).installs?.()).resolves.toEqual(
+      new Set(installs.installs.map((install) => install.provider)),
+    );
+    expect(request).toHaveBeenCalledWith("agents.installs", {});
+    const refusing = requestingClient({
+      "agents.installs": async () => {
+        throw new Error("FORBIDDEN_SCOPE: agents.installs");
+      },
+    });
+    await expect(usagePortOver(refusing.client).installs?.()).resolves.toBeUndefined();
+    const unreadable = requestingClient({ "agents.installs": { installs: "not a list" } });
+    await expect(usagePortOver(unreadable.client).installs?.()).resolves.toBeUndefined();
   });
 });
 

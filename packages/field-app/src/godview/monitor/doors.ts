@@ -314,6 +314,9 @@ export function usagePortOver(client: DoorClient): MonitorUsagePort {
     for (const listener of listeners) listener(state);
   };
   return {
+    // UM-3 2a red: the skeleton — the rows port's own verbs answer nothing yet
+    refresh: async () => undefined,
+    installs: async () => undefined,
     subscribeState: (listener) => {
       listeners.add(listener);
       listener(state);

@@ -15,6 +15,14 @@ export interface MonitorUsagePort extends AccountUsagePort {
    * limit moment reads the readings the column draws, through the column's
    * one subscription, and opens none of its own. The latest rows at once. */
   subscribeRows?(listener: (rows: readonly AgentAccountUsageEntry[]) => void): () => void;
+  /** UM-3 (DESIGN.md §8 "Godview's profiles column": a popover's Retry) —
+   * read these profiles' usage again (`agents.usage` with `refresh: true` and
+   * their ids); the batch reaches the rows readers. A refusal rejects. */
+  refresh?(profileIds: readonly string[]): Promise<void>;
+  /** UM-3 (the lead's ruling 8) — This Mac's installed agents, which its
+   * circle lists as Settings' This Mac page does (`agents.installs`), or
+   * nothing when the door cannot say: then every agent is listed. */
+  installs?(): Promise<ReadonlySet<string> | undefined>;
 }
 
 /**
