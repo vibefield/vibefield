@@ -89,6 +89,8 @@ public final class SwarmStage {
     var seed: Double
     /// Arrival order, for a stable draw order within one status.
     var arrival: Int
+    /// SE-2 — the lens's recede weight as last drawn; nil before the body's first frame.
+    var weight: Double?
   }
 
   private struct Drag {
@@ -123,7 +125,6 @@ public final class SwarmStage {
   /// drives it.
   public var now: () -> Date = { .now }
   /// SE-2 — the lens's recede (`SwarmRecede`); nil: nothing recedes, every body at 1.
-  /// RED STUB (SE-2n): the stage does not read it yet, so every body draws at 1.
   public var recede: SwarmRecede?
 
   private var models: [String: SwarmBodyModel] = [:]
@@ -269,13 +270,23 @@ public final class SwarmStage {
         current: visual.visualRadius, velocity: visual.visualVelocity, target: model.radius, dt: delta)
       visual.visualRadius = sprung.radius
       visual.visualVelocity = sprung.velocity
+      // SE-2 — the lens's recede: a body stands at its target on its first frame, then steps toward it at the host's
+      // pace every frame. It is a fade, which reduced motion keeps (DESIGN.md M6); with no recede, every body at 1.
+      let target = recede?.targets[id] ?? 1
+      let weight: Double
+      if let current = visual.weight, let recede {
+        weight = recede.approach(current, target, delta * 1000)
+      } else {
+        weight = target
+      }
+      visual.weight = weight
       visuals[id] = visual
       let landing = motion ? arrivalCurve(elapsed: time - visual.spawnedAt) : (scale: 1.0, opacity: 1.0)
       let position = state.previousPosition + (state.position - state.previousPosition) * alpha
       bodies.append(
         RenderBody(
           model: model, x: position.x, y: position.y, radius: visual.visualRadius,
-          scale: landing.scale, opacity: landing.opacity, focus: focusedID == id, seed: visual.seed,
+          scale: landing.scale, opacity: landing.opacity * weight, focus: focusedID == id, seed: visual.seed,
           accent: model.accent ?? .transparent, mounted: model.mounted))
     }
     bodies.sort { left, right in

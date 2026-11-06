@@ -460,7 +460,7 @@ public struct HomeScreen: View {
 
   /// The swarm's arm of the stage, its own function so the stage's builder stays inside what the type-checker
   /// solves in reasonable time (the design check's S6). The stage's former SwarmField call, unchanged but for
-  /// `isActive`, which the stage computes once.
+  /// `isActive`, which the stage computes once, and the lens's recede (SE-2n), as the other views take it.
   private func swarmField(active: Bool) -> some View {
     // WI-1 — the field stands only signed in, so no page stands on it: the
     // way in has the splash's field to itself (TS-7c and TS-D22 retired).
@@ -473,7 +473,8 @@ public struct HomeScreen: View {
       onBloom: { choice in
         // Q4 (a): the bloom opens the launch sheet on that desktop and profile
         beginCreate(fieldContext(desktop: choice.desktop, profileSet: choice.profile))
-      }
+      },
+      recede: GodviewRecede.swarm(bubbles, lens: lens.chosen?.id)
     ) {
       chrome
     }
@@ -550,8 +551,10 @@ public struct HomeScreen: View {
 
   /// SE-2 (UM-D27 A; DESIGN.md §8 "The phone's profile token") — the chosen profile above the search circle, its right
   /// edge on the circle's and its foot at the bar's band, growing out of the circle. It stands on Field at rest
-  /// (`lensTokenShows`) whichever view the stage stands on: the lens recedes the rows of the views that are not the
-  /// swarm (`GodviewStageInput.lens`), so a filtered field shows what filters it, and its ×, on every one.
+  /// (`lensTokenShows`) whichever view the stage stands on: the lens recedes the swarm's bodies (`GodviewRecede.swarm`)
+  /// and the other views' rows (`GodviewStageInput.lens`), so a filtered field shows what filters it, and its ×, on
+  /// every one. *(Corrected 2026-11-06, SE-2n: this said the lens recedes the rows of the views that are not the
+  /// swarm.)*
   private var lensToken: some View {
     Color.clear
       .overlay(alignment: .bottomTrailing) {

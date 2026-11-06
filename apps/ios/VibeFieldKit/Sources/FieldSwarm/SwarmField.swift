@@ -18,6 +18,9 @@ import UIKit
 /// the finger reaches a desktop, then a profile, and letting go hands the
 /// choice to `onBloom` — the launch sheet opens on it, never a terminal (Q4).
 /// No real choice: the hold creates through `onCreate`, as before.
+///
+/// SE-2 — `recede` is the lens's (DESIGN.md §8 "The phone's profile token"): the bodies the host recedes draw at its
+/// weights, stepping there at its pace (`SwarmRecede`); nil, every body at 1.
 public struct SwarmField<Chrome: View>: View {
   private let bubbles: [FieldBubble]
   private let parameters: SwarmParameters
@@ -26,6 +29,7 @@ public struct SwarmField<Chrome: View>: View {
   private let onCreate: ((SIMD2<Double>) -> String?)?
   private let bloom: BloomMenu?
   private let onBloom: ((BloomChoice) -> Void)?
+  private let recede: SwarmRecede?
   private let chrome: Chrome
 
   @State private var stage = SwarmStage()
@@ -43,6 +47,7 @@ public struct SwarmField<Chrome: View>: View {
     onCreate: ((SIMD2<Double>) -> String?)? = nil,
     bloom: BloomMenu? = nil,
     onBloom: ((BloomChoice) -> Void)? = nil,
+    recede: SwarmRecede? = nil,
     @ViewBuilder chrome: () -> Chrome
   ) {
     self.bubbles = bubbles
@@ -52,6 +57,7 @@ public struct SwarmField<Chrome: View>: View {
     self.onCreate = onCreate
     self.bloom = bloom
     self.onBloom = onBloom
+    self.recede = recede
     self.chrome = chrome()
   }
 
@@ -97,6 +103,7 @@ public struct SwarmField<Chrome: View>: View {
         stage.onSelect = onSelect
         stage.onCreate = holdCompleted
         stage.reducedMotion = reduceMotion
+        stage.recede = recede
         stage.setBounds(proxy.size)
         bloomHost.field = BloomSize(w: proxy.size.width, h: proxy.size.height)
         bloomHost.menu = bloom
@@ -115,6 +122,8 @@ public struct SwarmField<Chrome: View>: View {
     .onChange(of: bubbles) { stage.update(bubbles: bubbles, time: CACurrentMediaTime()) }
     .onChange(of: parameters) { stage.parameters = parameters }
     .onChange(of: reduceMotion) { stage.reducedMotion = reduceMotion }
+    // SE-2 — the lens moved, or the bodies it recedes: the stage takes the host's weights (its pace never changes)
+    .onChange(of: recede?.targets) { stage.recede = recede }
   }
 
   /// The hold ran its course: the bloom opens when there is a real choice,

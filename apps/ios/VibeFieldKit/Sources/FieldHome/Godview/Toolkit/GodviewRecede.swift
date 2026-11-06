@@ -53,8 +53,13 @@ enum GodviewRecede {
   /// `recededEmpty` while every body does; with none, nothing recedes, and a body receded before comes back. A body
   /// carries the home's profile only on the home's own rows (`FieldBubble.profileSet`), so its profile decides alone.
   /// Each frame's step is `approach`, the toolkit's pace.
-  /// RED STUB (SE-2n): no body recedes.
   static func swarm(_ bubbles: [FieldBubble], lens: String?) -> SwarmRecede {
-    SwarmRecede(targets: [:], approach: { _, target, _ in target })
+    let flags = bubbles.map { byLens(isSelf: $0.profileSet != nil, profileSet: $0.profileSet, lens: lens) }
+    let all = every(flags)
+    var targets: [String: Double] = [:]
+    for (bubble, recedes) in zip(bubbles, flags) where recedes {
+      targets[bubble.id] = target(receded: true, every: all)
+    }
+    return SwarmRecede(targets: targets, approach: { GodviewRecede.approach($0, toward: $1, deltaMs: $2) })
   }
 }

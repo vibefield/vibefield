@@ -131,9 +131,10 @@ struct GodviewStageInput {
   var dissolves: Bool = true
   /// SE-2 (SE-P6) — the phone's lens, the chosen profile's id (`ProfileLens.profile`): the list, the rain and the
   /// timeline recede every row but the home's under it (`GodviewRecede.byLens`). nil shows every profile. Defaulted,
-  /// so a view lane's input needs no new argument. NOT YET the swarm (the S2 review's finding 2, owed): its bodies
-  /// carry no recede weight in FieldSwarm's renderer, so under a lens the swarm still draws every body; Spend draws
-  /// spend, not rows to recede.
+  /// so a view lane's input needs no new argument. The swarm takes the same lens through its own arm, which HS
+  /// builds (`GodviewRecede.swarm`, a recede weight in FieldSwarm's stage); Spend draws spend, not rows to recede.
+  /// *(Corrected 2026-11-06, SE-2n: this said "NOT YET the swarm (the S2 review's finding 2, owed): its bodies carry
+  /// no recede weight in FieldSwarm's renderer, so under a lens the swarm still draws every body".)*
   var lens: String? = nil
   /// A row tapped: the card on its body.
   var onOpen: @MainActor (RemoteFieldRow) -> Void
