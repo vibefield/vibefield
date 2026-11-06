@@ -37,8 +37,10 @@ import type {
   FlowItemRaised,
   FlowItemStart,
   FlowItemStarted,
+  FlowRunItemKind,
 } from "../tool-plane/rooms/you/queue";
 import { type FlowForm, matchAnswer } from "./form-check";
+import { checkGate } from "./gate-check";
 import type { FlowJournalEntry } from "./journal";
 import type { FlowLibrary } from "./library";
 import type { FlowRecords, FlowRunStart } from "./records";
@@ -114,9 +116,23 @@ import * as words from "./words";
 //   no new journal line between is never started a third time. A call made again at a wake is looked up first (D2):
 //   its step's state on the record, then its session, so a step whose agent lives is bound to it, never started (or
 //   counted) again, and one whose agent exited fails.
-// Built later in M-r2: ask() (slice 11; until then it is refused in fieldd's words), the one answer writer (10b), the
-// cap (12), Stop (13) and boot (14): its wake, a session read by its origin once the runtime has re-attached, and a
-// step lost to a Quit (`flow-lost`, Resume the step).
+// - A gate (slice 11a; Q1–Q8): `ask(question, choices)` is held at its call to the one rule the static read holds
+//   (gate-check.ts, Q6), and one it refuses is answered by the one writer, journaled and counted, in "An ask refused"'s
+//   words (DESIGN.md §9: "VibeField didn't ask you: ‹the read's words›."). Else its item is raised on the one raise
+//   road (`#hold`), where every hold of any kind is raised: the run held on you, `running` while its host is up and
+//   `holding` once D1's idle parks it (UU2), its `held` the first of its holds still open (EE3). Your answer is
+//   journaled as the act's own words, byte for byte, and `await ask()` resolves to that string (Q1): the script's
+//   `=== "Push"` reads it as written. A gate made again at a wake is re-bound by the needs queue to its item, never
+//   minted again (D2, Q5), and one the journal answers is answered from it at every later wake, never raised (R36). A
+//   raise that throws is the ask's answer, "VibeField couldn't ask you: it couldn't keep the question." (Q8).
+// - The spark's facts (slice 11b; Q9, Q10): a run a spark started (its starter `by: "spark"`, the spark named) tells
+//   that spark, through the `waker` port, in DESIGN.md §9's words ("What VibeField tells a spark", words.ts), when it
+//   holds on you, once for each hold the needs queue MINTED (a gate or a step's second miss; a hold re-bound at a wake
+//   tells nothing, nor your answer to it), and when it ends, once its `end` line is kept: done, failed or set aside.
+//   A fact is built from the spark's name, ‹flow› and the run's id alone. A spark `sparkOf` no longer finds is told
+//   nothing, and a Run you start in a spark's thread is yours, and tells it nothing (T3b).
+// Built later in M-r2: the cap (12), Stop (13) and boot (14): its wake, a session read by its origin once the runtime
+// has re-attached, and a step lost to a Quit (`flow-lost`, Resume the step).
 
 /** A spark as a run's start reads it at its act (G2): its name, and its Agent Profiles now. */
 export interface FlowRunSpark {
@@ -163,8 +179,7 @@ export interface FlowRunPorts {
   sparkOf(spark: string): FlowRunSpark | undefined;
   /** CP-4a2b slice 11 (Q9, Q10): the spark that started a run (its starter, `by: "spark"`), told what the run did: a
    * hold the needs queue minted, and its end once its `end` line is kept. Declared inline, as `needs` is, so flows/
-   * never depends on the waker's class; slice 15 binds it to daemon.ts's AgentWaker. Declared in slice 11b's red, and
-   * called nowhere until its green. */
+   * never depends on the waker's class; slice 15 binds it to daemon.ts's AgentWaker. Called by `#tell` alone. */
   readonly waker: {
     /** a fact for `spark`, in the runs' words (flows/words.ts): its live session takes it, or it waits for one */
     flowFact(spark: SparkId, fact: string): void;
@@ -259,6 +274,67 @@ interface LiveRun {
   replay?: FlowReplay | undefined;
   /** D7 — the words its run is set aside in, while its host, stopped at D1's park, leaves */
   aside?: string | undefined;
+  /** Q3 (a), VV1 — every hold of the run, of any kind, by the call it holds at, in raise order (a hold raised again
+   * keeps its place): the run's `held` is the first still open, projected by the one writer (#replace) */
+  readonly holds: Map<number, Hold>;
+  /** Slice 11a (its green's review, MED-1) — the run's flow, its mark's name and its starter, as its journal's head
+   * keeps them: set at #begin, and again at each wake from the head the wake reads, so a raise (#hold) and the fact it
+   * tells (#tell) read no record before the item */
+  head: RunHead;
+}
+
+/** A run's own facts, fixed for the run (MED-1): its flow, its mark's name (markName's) and who started it. */
+interface RunHead {
+  readonly flow: FlowRunRecord["flow"];
+  readonly name: string;
+  readonly starter: FlowStarter;
+}
+
+/** The facts a LiveRun keeps of its journal's head, read at #begin and again at each wake, and nothing more of it. */
+const headOf = (head: RunHead): RunHead => ({
+  flow: head.flow,
+  name: head.name,
+  starter: head.starter,
+});
+
+/** A run's hold on you (Q3): the needs queue's item, and its kind. */
+interface Hold {
+  readonly item: NeedsItemId;
+  readonly kind: FlowRunItemKind;
+}
+
+/** Q3 (b), Q8 — a hold as the one raise road (`#hold`) raises it: its item, the call it holds at, and what that call
+ * hears when its item can't be raised. */
+interface Raising {
+  readonly call: number;
+  /** the call's own kind (`ask`, `agent`), as its answer is journaled */
+  readonly what: string;
+  readonly kind: FlowRunItemKind;
+  /** the step's label, as the item shows it */
+  readonly label?: string | undefined;
+  /** what it asks: a gate's question, the script's own string as written (Q1; the queue's `shown()` cuts it) */
+  readonly words?: string | undefined;
+  /** the acts before Stop the run */
+  readonly acts: readonly string[];
+  /** the call's answer when its item can't be raised, refused in its kind's words (§9) */
+  readonly unkept: string;
+  /** fieldd's log, when its item can't be raised: its event and its sentence */
+  readonly event: string;
+  readonly said: string;
+  /** what the hold's record write sets beside the hold (a repair's step `holding`), over what the record holds */
+  readonly fields?: (record: FlowRunRecord) => Partial<FlowRunStart>;
+}
+
+/** What the one writer did with an answer (Q2): journaled (`kept`); journaled already (`had`, P14); refused by the
+ * disk (`refused`); or nothing, for a run no longer driven or set aside (`undriven`). */
+type Wrote = "kept" | "had" | "refused" | "undriven";
+
+/** What a run's record write reads beside its `whole` (#replace): the LiveRun whose answers it settles and whose holds
+ * it projects, the driven run's when none is named (#finish names the one it no longer drives); and the call whose
+ * hold this write releases (#releasing, Q3 (d)). */
+interface Replacing {
+  readonly live?: LiveRun | undefined;
+  readonly releases?: number | undefined;
 }
 
 /** An answer's settle on its record (D18): `failed` for a refusal, `cut` for a text cut to fit. */
@@ -278,8 +354,8 @@ const answeredOf = (line: {
 });
 
 /** An open step settled on the record by its answer (D18's cadence): moved to `steps`, `failed` for a refusal, `cut`
- * for a text cut short; a step its failed start left an agent running for names that session (Y1); a step held on its
- * repair takes the run's hold with it (F5), so no item is held for a step that is gone. None open: as it was. */
+ * for a text cut short; a step its failed start left an agent running for names that session (Y1). None open: as it
+ * was. A step held on its repair takes its hold with it in the same write, by #replace's projection (Q3 (e); F5). */
 function settleStep(
   start: FlowRunStart,
   call: number,
@@ -297,10 +373,8 @@ function settleStep(
   const steps = [...start.steps, settled];
   const shown = steps.slice(-FLOW_RUN_STEPS_MAX);
   const earlier = (start.earlier ?? 0) + steps.length - shown.length;
-  const { held: _held, ...rest } = start;
-  const releases = step.state === "holding" && start.held?.kind === "flow-repair";
   return {
-    ...(releases ? rest : start),
+    ...start,
     open: start.open.filter((open) => open.call !== call),
     steps: shown,
     ...(earlier > 0 ? { earlier } : {}),
@@ -339,6 +413,48 @@ const isLive = (record: FlowRunRecord): boolean => {
 const messageOf = (error: unknown): string =>
   error instanceof Error ? error.message : String(error);
 
+/** A thrown thing's code, for fieldd's log alone: a refusal's own reason where it carries one (the needs queue's
+ * `fact`, as `bad-input`), else its kind; a system error's (`ENOSPC`). */
+const codeOf = (error: unknown): string | undefined => {
+  if (error instanceof RpcCallError) {
+    const { details } = error;
+    const fact =
+      typeof details === "object" && details !== null && "fact" in details
+        ? details.fact
+        : undefined;
+    return typeof fact === "string" ? fact : error.kind;
+  }
+  return typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    typeof error.code === "string"
+    ? error.code
+    : undefined;
+};
+
+/** Q3 (c), VV1, EE3 — a write's `held`, projected from its run's holds: the first, in raise order, whose call the
+ * journal has not answered and that this write does not release (`releases`); none when there is none. Written by
+ * the one writer (#replace) alone. */
+function withHeld(start: FlowRunStart, live: LiveRun, releases: number | undefined): FlowRunStart {
+  const { held: _held, ...rest } = start;
+  for (const [call, hold] of live.holds)
+    if (call !== releases && !live.answered.has(call))
+      return { ...rest, held: { item: hold.item, kind: hold.kind } };
+  return rest;
+}
+
+/** Q9, R35 — a fact a run tells the spark that started it, in words.ts's words: built from the spark's name, ‹flow›
+ * (the record's, `markName`'s) and the run's id alone. */
+type SparkFact = (spark: string, flow: string, run: string) => string;
+
+/** Q9 (b) — the fact a run's end tells the spark that started it, by the end's state: none yet for `stopped`, whose
+ * words are slice 13's (its Stop); a run's other states are no end. */
+const END_FACTS: Readonly<Partial<Record<FlowRunState, SparkFact>>> = {
+  done: words.factDone,
+  failed: words.factFailed,
+  lost: words.factSetAside,
+};
+
 /** A run whose record `#begin` kept: its id, its mark's name, and its summary as `#begin` wrote it, the door's answer
  * when that record cannot be read back (W1). */
 interface Begun {
@@ -357,10 +473,6 @@ const hostless = (): RpcCallError =>
     service: FLOW_HOST.SERVICE,
     state: FLOW_HOST.STATE_UNCONFIGURED,
   });
-
-/** What an ask() is answered until slice 11 builds it: the host refuses it in fieldd's own words ("VibeField could
- * not answer this call."), as it refuses any handler that fails. */
-const NO_ASK_YET = "CP-4a2b: a flow's ask() is built in M-r2's slice 11";
 
 /** A call no flow makes (only a host that is not VibeField's sends one), refused in replay.ts's own form (D9). */
 const noSuchCall = (what: string): string =>
@@ -385,6 +497,11 @@ function startOf(record: FlowRunRecord): FlowRunStart {
     ...(record.agents !== undefined ? { agents: record.agents } : {}),
   };
 }
+
+/** A step held on you (Q8; MED-2, R22h, R22i): its record says `holding`, or its run keeps the hold of its repair
+ * whose write the record refused, the step still `repairing` there. The one rule #turnEnded and #answered ask. */
+const heldOnYou = (live: LiveRun, step: FlowRunRecordStep): boolean =>
+  step.state === "holding" || live.holds.get(step.call)?.kind === "flow-repair";
 
 /** A record's step as a summary's card row carries it. */
 function stepOf(step: FlowRunRecordStep): FlowRunStep {
@@ -695,6 +812,8 @@ export class FlowRuns {
       starting: new Set(),
       lines: 0,
       answered: new Map(),
+      holds: new Map(),
+      head: headOf(head),
       ...(params.from !== undefined && params.starter.by === "spark"
         ? { ran: nameWords(params.from.name) }
         : {}),
@@ -852,6 +971,8 @@ export class FlowRuns {
     if (live === undefined) throw new Error(`${run} is not a run this fieldd drives`);
     const read = records.readRun(run);
     if (read.kind !== "kept") return false;
+    // MED-1: the run's own facts again, from the head this wake read, for its raises (#hold)
+    live.head = headOf(read.head);
     // P14 (D22): the calls the journal answers, read from it at every wake: the one writer journals none of them again,
     // and the wake's own record write settles a step its journal answers (XX4)
     live.answered = new Map(
@@ -1040,14 +1161,14 @@ export class FlowRuns {
     }
   }
 
-  /** What a run's new calls and log lines reach, past its journal: an `agent()` by the one spawn road (D5), and a
-   * `what` no flow calls refused (D9), its refusal journaled by the one writer. Each answer reaches the host's replay
-   * through `#answer` (D22), never through what `call` returns. */
+  /** What a run's new calls and log lines reach, past its journal: an `agent()` by the one spawn road (D5), an `ask()`
+   * by its gate (`#gate`, slice 11a), and a `what` no flow calls refused (D9), its refusal journaled by the one writer.
+   * Each answer reaches the host's replay through `#answer` (D22), never through what `call` returns. */
   #inner(run: FlowRunId, live: LiveRun): FlowCallStarter {
     return {
       call: (call) => {
         if (call.what === "agent") this.#step(run, live, call);
-        else if (call.what === "ask") throw new Error(NO_ASK_YET);
+        else if (call.what === "ask") this.#gate(run, live, call);
         else
           this.#answer(run, live, call.call, call.what, {
             ok: false,
@@ -1059,6 +1180,100 @@ export class FlowRuns {
         this.#changed();
       },
     };
+  }
+
+  /** Slice 11a (Q1, Q6–Q8) — a gate, `ask(question, choices)`: waited on from its call, and held to its one rule
+   * (gate-check.ts, Q6), the static read's own. One it refuses is answered by the one writer in "An ask refused"'s
+   * words, the read's unchanged inside them (§9: journaled, counted, and heard at every later wake). Else its item is
+   * raised on the one raise road (`#hold`), its question and its choices exactly as the script passed them (Q1); an
+   * item that can't be raised is "VibeField couldn't ask you: …" (Q8). It never throws: a rejection would journal
+   * nothing, and the next life would raise the gate this one refused. */
+  #gate(run: FlowRunId, live: LiveRun, call: FlowHostCall & { readonly call: number }): void {
+    live.waiting.add(call.call);
+    const gate = checkGate(call.args[0], call.args[1]);
+    if ("refused" in gate) {
+      this.#answer(run, live, call.call, call.what, {
+        ok: false,
+        refused: words.askRefused(gate.refused),
+      });
+      return;
+    }
+    this.#hold(run, live, {
+      call: call.call,
+      what: call.what,
+      kind: "flow-gate",
+      words: gate.question,
+      acts: gate.choices,
+      unkept: words.askUnkept(),
+      event: "fieldd.flows.gate.raise",
+      said: "A flow run's ask could not be put in what waits on you; its script hears it was not asked",
+    });
+  }
+
+  /** Q3 (b), Q8 — THE ONE RAISE ROAD: a run held on you, for every kind of hold (a gate, a step's second miss; the cap
+   * and a lost step are slices 12 and 14's). In order:
+   * 1. its item, raised by the needs queue (`flowItem`), named from the run's head as its LiveRun keeps it (MED-1), so
+   *    nothing is read before it. The queue answers whether this raise MINTED it: a call already held, made again at a
+   *    wake, is re-bound to its item, never minted again (D2, Q5);
+   * 2. the hold, set in the run's holds by its call (Q3 (a)): `held` names it while it is the first still open;
+   * 3. the spark that started the run told it holds on you (`#tell`, slice 11b), from the same head, only for a hold
+   *    this raise MINTED (`raised.minted`), the one place that knows it: a hold re-bound at a wake tells nothing
+   *    (Q9 (a), Q5);
+   * 4. the record, through the one writer, with `fields` (a repair's step `holding`) and `held` projected. A write that
+   *    throws is logged (`fieldd.flows.run.hold`) and nothing else: the hold stays in the run's holds, the call waits
+   *    on, and the run's next write projects `held` from it. A repair's step stays `repairing` on its record, and its
+   *    Ask once more reads the hold from the run's holds (#answered, MED-2).
+   * `flowItem` is the only thing in the raise's try. One that throws kept nothing (`bad-input` throws before the queue
+   * keeps, a store that refuses before it holds): nothing is held, and the call is answered by the one writer in
+   * `unkept`, journaled and counted, never a silent wait (Q8, and its repair rider). It is logged at error for a cause
+   * the gate's rule keeps from the queue (`bad-input`, a ZodError: an invariant broken), else at warn; nothing else
+   * branches on what threw. */
+  #hold(run: FlowRunId, live: LiveRun, raising: Raising): void {
+    const { head } = live;
+    let raised: FlowItemRaised;
+    try {
+      raised = this.ports.needs.flowItem({
+        kind: raising.kind,
+        run: {
+          run,
+          flow: head.flow,
+          call: raising.call,
+          ...(raising.label !== undefined ? { label: raising.label } : {}),
+        },
+        name: head.name,
+        ...(head.starter.by === "spark" && head.starter.spark !== undefined
+          ? { spark: head.starter.spark }
+          : {}),
+        ...(raising.words !== undefined ? { words: raising.words } : {}),
+        acts: raising.acts,
+      });
+    } catch (error) {
+      const code = codeOf(error);
+      const fields = {
+        run,
+        call: raising.call,
+        error: messageOf(error),
+        ...(code !== undefined ? { code } : {}),
+      };
+      if (code === "bad-input" || (error instanceof Error && error.name === "ZodError"))
+        this.#logger.error(raising.event, raising.said, fields);
+      else this.#logger.warn(raising.event, raising.said, fields);
+      this.#answer(run, live, raising.call, raising.what, { ok: false, refused: raising.unkept });
+      return;
+    }
+    live.holds.set(raising.call, { item: raised.id, kind: raising.kind });
+    // slice 11b (Q9 (a), Q3 (b) step 3): HERE, and only here, a hold is known MINTED (`raised.minted`), so its run's
+    // spark is told here, before the record follows; a hold re-bound at a wake (minted false) tells nothing
+    if (raised.minted) this.#tell(run, "asking", words.factAsking, head);
+    try {
+      this.#rewriteWith(run, raising.fields ?? (() => ({})));
+    } catch (error) {
+      this.#logger.warn(
+        "fieldd.flows.run.hold",
+        "A flow run's record could not say it holds on you; its next write says so",
+        { run, call: raising.call, error: messageOf(error) },
+      );
+    }
   }
 
   /** A step: its agent started by `startStep`, or kept for a slot, and its answer journaled by the one writer when it
@@ -1267,8 +1482,8 @@ export class FlowRuns {
     const record = this.ports.records.runRecord(run);
     const step = record?.open.find((open) => open.call === end.call);
     if (record === undefined || step?.session !== end.runtimeRunId) return;
-    // held on the person: the step's words wait for their act
-    if (step.state === "holding") return;
+    // held on you: the step's words wait for their act
+    if (heldOnYou(live, step)) return;
     if (end.outcome === "failed") {
       this.#answer(run, live, end.call, "agent", { ok: false, refused: stepFailed(step.label) });
       return;
@@ -1279,7 +1494,7 @@ export class FlowRuns {
     if (form !== undefined) {
       const match = matchAnswer(form, text);
       if (!match.ok) {
-        this.#missed(run, live, record, step, end.runtimeRunId, match.miss);
+        this.#missed(run, live, step, end.runtimeRunId, match.miss);
         return;
       }
       value = { ...(match.value as Readonly<Record<string, unknown>>), text };
@@ -1288,7 +1503,7 @@ export class FlowRuns {
     // journals it (`#answer` → `flowAnswerLine`, D22), which marks it `cut` for the journal and the script's worker
     const bounded = boundedAnswer({ ok: true, value });
     if (!bounded.ok && bounded.miss === true) {
-      this.#missed(run, live, record, step, end.runtimeRunId, bounded.refused);
+      this.#missed(run, live, step, end.runtimeRunId, bounded.refused);
       return;
     }
     this.#answer(run, live, end.call, "agent", { ok: true, value });
@@ -1312,16 +1527,29 @@ export class FlowRuns {
    *   journal (D18), said in fieldd's log, and the next record write settles it (XX4, `#replace`). The line's own
    *   consequences, the slot it frees and D1's wake, never wait on that write (T4c). A line the disk
    *   refuses is not kept, so the script hears JOURNAL_REFUSED and a restart asks the step again.
-   * - A run no longer driven, or set aside (D7), journals nothing: no answer lands past its decided end. */
-  #answer(run: FlowRunId, live: LiveRun, call: number, what: string, said: FlowHostAnswer): void {
-    if (this.#live.get(run) !== live || live.aside !== undefined) return;
+   * - A run no longer driven, or set aside (D7), journals nothing: no answer lands past its decided end.
+   * - Q2, Q3 (slice 11a): it answers what it did (`Wrote`). A line the disk refuses for an answer you can give again
+   *   (`again`: a gate's, its item standing open) is no JOURNAL_REFUSED: it is handed to no replay, and its call is put
+   *   back among those waiting, so the script never hears a refusal a later life would answer otherwise (D21).
+   * - A kept line releases its call's hold, if it held one. The record write that follows the line (`#lagging`)
+   *   projects `held` past it, since #replace skips a call the journal answers; a write that lags leaves that to the
+   *   next (T4). The hold's entry then leaves the run's holds, whether or not that write landed. */
+  #answer(
+    run: FlowRunId,
+    live: LiveRun,
+    call: number,
+    what: string,
+    said: FlowHostAnswer,
+    { again = false }: { readonly again?: boolean } = {},
+  ): Wrote {
+    if (this.#live.get(run) !== live || live.aside !== undefined) return "undriven";
     live.waiting.delete(call);
     live.forms.delete(call);
     live.misses.delete(call);
     // 9b: a handed session's later turns are never this step's
     live.hands.get(call)?.();
     live.hands.delete(call);
-    if (live.answered.has(call)) return;
+    if (live.answered.has(call)) return "had";
     const line = flowAnswerLine(call, what, said);
     try {
       this.ports.records.appendRun(run, line.entry);
@@ -1331,13 +1559,16 @@ export class FlowRuns {
         "A flow step's answer was not kept in its journal",
         { run, call, error: messageOf(error) },
       );
-      live.replay?.answered(call, { ok: false, refused: JOURNAL_REFUSED });
-      return;
+      if (again) live.waiting.add(call);
+      else live.replay?.answered(call, { ok: false, refused: JOURNAL_REFUSED });
+      return "refused";
     }
     live.answered.set(call, answeredOf(line.entry));
     live.lines += 1;
     live.replay?.answered(call, line.heard);
     this.#lagging(run, line.entry);
+    live.holds.delete(call);
+    return "kept";
   }
 
   /** T4 (the F2 review) — a line the journal took, followed by its record: a record write that throws there is the
@@ -1388,11 +1619,12 @@ export class FlowRuns {
   }
 
   /** A step's answer missed its form (CP4-Q7 (a)): the repair line once; a miss after it holds the run on the person
-   * (`flow-repair`), whose Ask once more sends the line again. Nothing is journaled. */
+   * (`flow-repair`) on the one raise road (`#hold`), its step `holding` in the hold's own write, and its Ask once more
+   * sends the line again. Nothing is journaled, but for an item that can't be raised: the step fails in §9's words
+   * ("‹label› failed."), as F5's repair that can't be sent fails it, never a silent wait (Q8's repair rider). */
   #missed(
     run: FlowRunId,
     live: LiveRun,
-    record: FlowRunRecord,
     step: FlowRunRecordStep,
     session: string,
     check: string,
@@ -1402,41 +1634,40 @@ export class FlowRuns {
       this.#repair(run, live, step, session, 1, check, this.#stepWrite(run));
       return;
     }
-    const { id: item } = this.ports.needs.flowItem({
+    this.#hold(run, live, {
+      call: step.call,
+      what: "agent",
       kind: "flow-repair",
-      run: {
-        run,
-        flow: record.flow,
-        call: step.call,
-        ...(step.label !== undefined ? { label: labelWords(step.label) } : {}),
-      },
-      name: record.name,
-      ...(record.starter.by === "spark" && record.starter.spark !== undefined
-        ? { spark: record.starter.spark }
-        : {}),
+      ...(step.label !== undefined ? { label: labelWords(step.label) } : {}),
       acts: [NEEDS_CHOICE_WORDS.askOnceMore],
+      unkept: stepFailed(step.label),
+      event: "fieldd.flows.step.raise",
+      said: "A flow step's second miss could not be put in what waits on you; the step failed",
+      fields: (kept) => ({
+        open: kept.open.map((open) =>
+          open.call === step.call ? { ...open, state: "holding" } : open,
+        ),
+      }),
     });
-    this.#rewriteWith(run, (kept) => ({
-      open: kept.open.map((open) =>
-        open.call === step.call ? { ...open, state: "holding" } : open,
-      ),
-      held: { item, kind: "flow-repair" },
-    }));
   }
 
-  /** The person's answer to a run's item, handed on once by the needs queue (D22). Slice 9 answers `flow-repair`'s Ask
-   * once more: the repair line again, its next `n`. An answer handed on again, its step no longer holding, was acted
-   * on, and is answered as done. The gate, the cap and a lost step are slices 11, 12 and 14's; Stop the run is 13's. */
+  /** The person's answer to a run's item, handed on once by the needs queue (D22). A gate's is its act's own words
+   * (slice 11a, `#gateAnswered`). Slice 9 answers `flow-repair`'s Ask once more: the repair line again, its next `n`.
+   * A step holds while its record says `holding`, or while the run's holds keep its repair (MED-2, Q8's second F-a
+   * half): a repair whose hold write failed after its item was minted is still `repairing` on its record, and its Ask
+   * once more acts on it, releasing it as any other. An answer handed on again, its step holding neither way, was acted
+   * on, and is answered as done. The cap and a lost step are slices 12 and 14's; Stop the run is 13's. */
   async #answered(answer: FlowItemAnswer): Promise<FlowItemActed> {
-    if (answer.kind !== "flow-repair" || answer.stop)
+    if (answer.stop || (answer.kind !== "flow-repair" && answer.kind !== "flow-gate"))
       throw new Error(`CP-4a2b: a run's ${answer.stop ? "Stop" : answer.kind} is a later slice's`);
     const run = answer.run.run as FlowRunId;
     const live = this.#live.get(run);
+    if (answer.kind === "flow-gate") return this.#gateAnswered(run, live, answer);
     const record = this.ports.records.runRecord(run);
     const step = record?.open.find((open) => open.call === answer.run.call);
     if (live === undefined || record === undefined || step === undefined)
       return { outcome: "failed", reason: words.noSuchRun(run) };
-    if (step.state !== "holding") return { outcome: "done" };
+    if (!heldOnYou(live, step)) return { outcome: "done" };
     const n =
       Math.max(0, ...(step.lines ?? []).filter((l) => l.line === "repair").map((l) => l.n)) + 1;
     const check = live.misses.get(step.call);
@@ -1447,6 +1678,28 @@ export class FlowRuns {
     if (!this.#repair(run, live, step, step.session, n, check, this.#releasing(run)))
       return { outcome: "failed", reason: stepFailed(step.label) };
     return { outcome: "done" };
+  }
+
+  /** Q1, Q2 (slice 11a) — your answer to a gate: its act's own words, byte for byte, journaled by the one writer as the
+   * ask's answer, so the script's `await ask()` resolves to them (R33), and every later wake hears them from the
+   * journal, never raising the gate again (R36). Its hold is released in that answer's own record write (#replace). A
+   * run this fieldd does not drive fails in noSuchRun's words, and one set aside (D7) in its own; an answer its journal
+   * holds already (P14) is done, writing nothing; one the disk refuses hands nothing on, and is refused in the store's
+   * words, retryably, so its item waits on and your next answer journals cleanly. */
+  #gateAnswered(run: FlowRunId, live: LiveRun | undefined, answer: FlowItemAnswer): FlowItemActed {
+    if (live === undefined || answer.run.call === undefined)
+      return { outcome: "failed", reason: words.noSuchRun(run) };
+    if (live.aside !== undefined) return { outcome: "failed", reason: live.aside };
+    const said: FlowHostAnswer = { ok: true, value: answer.act };
+    switch (this.#answer(run, live, answer.run.call, "ask", said, { again: true })) {
+      case "kept":
+      case "had":
+        return { outcome: "done" };
+      case "refused":
+        throw recordsUnreadable(RECORD_STORES.SERVICE_FLOWS, UNREADABLE_WORDS.flows, true);
+      case "undriven":
+        return { outcome: "failed", reason: words.noSuchRun(run) };
+    }
   }
 
   /** A step's repair line, sent by `sendRepair` through `write`; or, where it can't be, the step failed in §9's words
@@ -1507,18 +1760,22 @@ export class FlowRuns {
       }));
   }
 
-  /** The record's open step, written as `#stepWrite` writes it, with the run's hold dropped in the same write: the
-   * person's answer to a hold is acted on in the write that acts on it (F5). */
+  /** The record's open step, written as `#stepWrite` writes it, with its call's hold released in the same write: the
+   * person's answer to a hold is acted on in the write that acts on it, never before it (F5). Its entry in the run's
+   * holds goes once that write is made (Q3 (d)), and `held` moves to the first hold still open (EE3). */
   #releasing(run: FlowRunId): FlowStepWrite {
-    return (call, patch, fields) =>
-      this.#replace(run, (start, record) => {
-        const { held: _held, ...rest } = start;
-        return {
-          ...rest,
+    return (call, patch, fields) => {
+      this.#replace(
+        run,
+        (start, record) => ({
+          ...start,
           open: record.open.map((step) => (step.call === call ? patch(step) : step)),
           ...fields?.(record),
-        };
-      });
+        }),
+        { releases: call },
+      );
+      this.#live.get(run)?.holds.delete(call);
+    };
   }
 
   /** A line the run's journal took, as its record follows it (D18's cadence): a call counts (D10), and an agent's
@@ -1651,7 +1908,11 @@ export class FlowRuns {
     this.#rewrite(run, { state: "waiting" });
   }
 
-  /** A run's end: its journal's `end` line, then its record (D18), and the run no longer driven. */
+  /** A run's end: its journal's `end` line, then its record (D18), and the run no longer driven. Once the line is kept,
+   * the spark that started the run is told (`#tell`, slice 11b; Q9 (b)), after the record's write, whether or not that
+   * write lands: the journal is the truth. An `end` line the disk refuses tells nothing. The tell reads the run's head
+   * from the LiveRun the end took (MED-1), never its record, so a kept line tells though its record then reads as none
+   * or can't be read; an end of a run this fieldd no longer drives (no LiveRun) tells nothing. */
   #finish(run: FlowRunId, end: RunEnd): void {
     const live = this.#live.get(run);
     this.#live.delete(run);
@@ -1662,6 +1923,7 @@ export class FlowRuns {
     const queued = this.#hostQueue.indexOf(run);
     if (queued >= 0) this.#hostQueue.splice(queued, 1);
     const log = end.log ?? live?.log;
+    let kept = false;
     try {
       this.ports.records.appendRun(run, {
         kind: "end",
@@ -1669,6 +1931,7 @@ export class FlowRuns {
         ...(end.host !== undefined ? { host: end.host } : {}),
         ...(end.threw !== undefined ? { threw: end.threw } : {}),
       });
+      kept = true;
       // XX4: the run it no longer drives still settles, in this last write, a step its journal answers
       this.#replace(
         run,
@@ -1679,7 +1942,7 @@ export class FlowRuns {
           ...(log !== undefined ? { log } : {}),
           ...(end.host !== undefined ? { host: end.host } : {}),
         }),
-        live,
+        { live },
       );
     } catch (error) {
       this.#logger.error("fieldd.flows.run.end", "A flow run's end was not kept", {
@@ -1690,6 +1953,52 @@ export class FlowRuns {
       // 1o (the F4b fix review): told as every write is (#told), so a list that can't be read here is said as a
       // tell's, never thrown out of the end in place of the end's own failure
       this.#told();
+    }
+    if (kept && live !== undefined) this.#tell(run, end.state, END_FACTS[end.state], live.head);
+  }
+
+  /** Slice 11b (Q9, Q10) — a fact for the spark that started `run` (its starter `by: "spark"`, the spark named),
+   * through the `waker` port: `fact`'s words, from the spark's name as `sparkOf` reads it now, the run's ‹flow› and
+   * the run's id alone. `what` is the hold (`asking`) or the end's state, for fieldd's log; `head` the run's starter
+   * and name as its LiveRun keeps them (MED-1), so a tell reads no record. A run you start, in a spark's thread or not,
+   * tells no one (T3b). A spark `sparkOf` no longer finds is told nothing, and an end with no words yet (`stopped`,
+   * slice 13's) tells nothing: each is said in fieldd's log (`fieldd.flows.run.fact`). It never throws: a fact is told
+   * past what the run kept (an item minted, an `end` line), which nothing may then refuse, so one that can't be told
+   * is said in that log and lost. */
+  #tell(
+    run: FlowRunId,
+    what: "asking" | FlowRunState,
+    fact: SparkFact | undefined,
+    head: RunHead,
+  ): void {
+    if (head.starter.by !== "spark") return;
+    const { spark } = head.starter;
+    if (spark === undefined) return;
+    try {
+      if (fact === undefined) {
+        this.#logger.warn("fieldd.flows.run.fact", "A flow run's end tells its spark nothing yet", {
+          run,
+          spark,
+          what,
+        });
+        return;
+      }
+      const known = this.ports.sparkOf(spark);
+      if (known === undefined) {
+        this.#logger.warn(
+          "fieldd.flows.run.fact",
+          "A flow run's spark is gone; it was not told what its run did",
+          { run, spark, what },
+        );
+        return;
+      }
+      this.ports.waker.flowFact(spark, fact(known.name, head.name, run));
+    } catch (error) {
+      this.#logger.warn(
+        "fieldd.flows.run.fact",
+        "A flow run's spark could not be told what its run did",
+        { run, spark, what, error: messageOf(error) },
+      );
     }
   }
 
@@ -1713,11 +2022,16 @@ export class FlowRuns {
    * failure (a reservation kept for an agent never started, a step failed whose record says it works).
    * XX4 (the 10b read), by invariant: the record never keeps an answered call's step open past the run's next write.
    * Each write settles every open step the journal answers (`live.answered`, the one writer's), so a settle that
-   * lagged (T4) is carried by the next write, #finish's among them. */
+   * lagged (T4) is carried by the next write, #finish's among them.
+   * Q3 (slice 11a; VV1, EE3): every hold, of any kind, is an entry of the run's holds (`live.holds`, by its call);
+   * `held` names the first still open, released only by its own item's act (`releases`, #releasing) or its call's
+   * answer (`live.answered`), and is written HERE alone, after the settle, projected from the holds (`withHeld`); with
+   * no LiveRun it stays as the record has it. UU2 (Q4): a held run whose host is up reads `running` until D1's idle
+   * parks it, then `holding`: the rest words are the park's. */
   #replace(
     run: FlowRunId,
     whole: (start: FlowRunStart, record: FlowRunRecord) => FlowRunStart,
-    live: LiveRun | undefined = this.#live.get(run),
+    { live = this.#live.get(run), releases }: Replacing = {},
   ): void {
     const { records } = this.ports;
     const record = records.runRecord(run);
@@ -1728,6 +2042,7 @@ export class FlowRuns {
       if (answered !== undefined)
         written = settleStep(written, step.call, answered, live?.orphans.get(step.call));
     }
+    if (live !== undefined) written = withHeld(written, live, releases);
     const rest = written.held !== undefined ? "holding" : "waiting";
     records.writeRunRecord(run, AT_REST.has(written.state) ? { ...written, state: rest } : written);
     this.#told();

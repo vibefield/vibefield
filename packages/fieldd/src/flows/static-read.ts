@@ -13,13 +13,12 @@ import {
   FlowRead,
   type FlowReadRefusalReason,
   type FlowRefusal,
-  NEEDS_CHOICE_MAX,
-  NEEDS_CHOICES_MAX,
   NEEDS_NAME_MAX,
   NEEDS_QUESTION_MAX,
   NEEDS_REASON_MAX,
 } from "@vibefield/contracts";
 import { type Node, parse } from "acorn";
+import { choicesRefusal, questionRefusal, UNSEEN } from "./gate-check";
 import { flowScriptOf, type SesShape, sesShapesOf } from "./module-script";
 
 // CP-4a1 (step0-cp4.md §5.1 commit 5; CP4-Q3 (a), ruled 2026-11-04 at the lean; CP4-S4) — the static read: what a
@@ -35,15 +34,18 @@ import { flowScriptOf, type SesShape, sesShapesOf } from "./module-script";
 //   is "chosen as it runs" (`computed`); a template's label reads with "…" where its expressions stand.
 //   "In a loop" is the syntax's: a call in a helper that a loop calls is not marked, and the run's call cap
 //   (FLOW_LIMITS.CALLS_MAX) is what bounds a script that loops.
-// - Each `ask(…)` is listed with its question and choices where written plainly. A gate offers at most
-//   NEEDS_CHOICES_MAX choices of the script's own, since Stop the run takes the item's last place (CP4-Q6 (a)), each at
-//   most NEEDS_CHOICE_MAX characters on one line and no two the same; any other gate is refused, in words.
+// - Each `ask(…)` is listed with its question and choices where written plainly. CP-4a2b (slice 11a, Q6): a gate is
+//   held to ONE rule, the run's (gate-check.ts), wherever its script writes it plainly, so the read refuses what the
+//   run would at its call: a question in words, and one to NEEDS_CHOICES_MAX choices of the script's own (Stop the run
+//   takes the item's last place, CP4-Q6 (a)), each one line of at most NEEDS_CHOICE_MAX characters, none of them Stop
+//   the run, and no two the same, whatever their case or the spaces around them. A part it can't see (a spread, an
+//   identifier, a call) is chosen as it runs; a list's length is counted all the same.
 // - `unlisted`: the script reaches agents or asks the read cannot list — `agent` or `ask` handed on as a value rather
 //   than called, either reached through `globalThis` (or `this`, `self`), a computed member of those, `eval` or
 //   `Function`, or more calls than the read lists. The card then says it starts agents it cannot list.
 // - Refused, never run: bytes past SCRIPT_MAX_BYTES (`size`), a file that does not parse as a module (`syntax`), a meta
-//   missing or not plain where it is read (`meta`), no default function to run (`default`), a gate as above
-//   (`choices`). Each refusal is in fieldd's own words, with the line it is on.
+//   missing or not plain where it is read (`meta`), no default function to run (`default`), a gate as above (its
+//   question, `question`; its choices, `choices`). Each refusal is in fieldd's own words, with the line it is on.
 // - CP-4a2b (Q-B3 (a)): and the three shapes the run's sandbox refuses in a script's code, a dynamic `import(`
 //   (`import`), a direct-looking `eval(` (`eval`), `<!--` or `-->` (`html-comment`). They are read by SES's own tests
 //   over the script the run evaluates (module-script.ts, `sesShapesOf`), so the read refuses exactly what the sandbox
@@ -227,6 +229,28 @@ function plainValue(node: unknown): Plain {
     default:
       return { not: true };
   }
+}
+
+/** CP-4a2b (slice 11a, Q6 §4) — an argument as the read sees it: one the script leaves out is plainly none
+ * (`undefined`, as the run receives it), one written plainly is its value, and any other is chosen as it runs. */
+function argumentSeen(arg: AnyNode | undefined): Plain {
+  return arg === undefined ? { value: undefined } : plainValue(arg);
+}
+
+/** CP-4a2b (slice 11a, Q6 §1) — a gate's choices as the read sees them: a list literal is its elements, each its plain
+ * value or UNSEEN where it is not written plainly, so the rule still counts it; a list with a spread or a hole is
+ * chosen as it runs, as is any argument not written plainly. */
+function choicesSeen(arg: AnyNode | undefined): Plain {
+  if (arg?.type !== "ArrayExpression") return argumentSeen(arg);
+  const elements = arg.elements as (AnyNode | null)[];
+  if (elements.some((element) => element === null || element.type === "SpreadElement"))
+    return { not: true };
+  return {
+    value: elements.map((element) => {
+      const plain = plainValue(element);
+      return "not" in plain ? UNSEEN : plain.value;
+    }),
+  };
 }
 
 /** A property's name where the script writes it plainly (`name:`, `"name":`), else undefined (computed, a spread). */
@@ -597,48 +621,43 @@ class Reader {
     this.#calls.push(call as FlowCall);
   }
 
+  /** CP-4a2b (slice 11a, Q6 §4): a gate, held to the run's one rule (gate-check.ts) where its script writes it plainly,
+   * so the read refuses what the run would: its first refusal, in the rule's order, on the gate's line. A part it can't
+   * see (an identifier, a call, a spread and every argument from the spread's place on) is chosen as it runs
+   * (`computed`), and the rules that read it pass it by; an argument before the first spread is read as written. */
   #ask(node: AnyNode, args: AnyNode[], place: Place): void {
     const line = lineOf(node);
     const gate: Record<string, unknown> = { line };
     if (place.phase !== undefined) gate.phase = place.phase;
     if (place.inLoop) gate.inLoop = true;
-    let computed = args.some((arg) => arg.type === "SpreadElement");
-    const question = plainString(args[0]);
-    if (question !== undefined && question.trim() !== "")
-      gate.question = cut(question, NEEDS_QUESTION_MAX);
-    else computed = true;
-    const choices = args[1];
-    if (choices?.type === "ArrayExpression") {
-      const elements = choices.elements as (AnyNode | null)[];
-      const words = elements.map((element) => plainString(element));
-      const spread = elements.some(
-        (element) => element === null || element.type === "SpreadElement",
-      );
-      if (!spread && elements.length > NEEDS_CHOICES_MAX) {
-        this.#refuse(
-          "choices",
-          `an ask offers ${elements.length} choices; a gate takes at most ${NEEDS_CHOICES_MAX}`,
-          line,
-        );
-      } else if (!spread && elements.length === 0) {
-        this.#refuse("choices", "an ask offers no choice", line);
-      } else if (spread || words.some((word) => word === undefined)) {
-        computed = true;
-      } else {
-        const plain = words as string[];
-        if (plain.some((word) => word.trim() === "" || /[\r\n]/.test(word)))
-          this.#refuse("choices", "an ask's choice is not one line of words", line);
-        else if (plain.some((word) => word.length > NEEDS_CHOICE_MAX))
-          this.#refuse(
-            "choices",
-            `an ask's choice is longer than ${NEEDS_CHOICE_MAX} characters`,
-            line,
-          );
-        else if (new Set(plain).size !== plain.length)
-          this.#refuse("choices", "an ask offers the same choice twice", line);
-        else gate.choices = plain;
+    // a spread may carry any argument from its own place on, so the gate is chosen as it runs; it hides only those
+    // arguments (a spread first hides both), and the run reads only the first two (host/worker.ts)
+    const spread = args.findIndex((arg) => arg.type === "SpreadElement");
+    const seen = (index: number): boolean => spread === -1 || index < spread;
+    let computed = spread !== -1;
+    let refused: { reason: FlowReadRefusalReason; words: string } | undefined;
+    if (seen(0)) {
+      const question = argumentSeen(args[0]);
+      if ("not" in question) computed = true;
+      else {
+        const words = questionRefusal(question.value);
+        if (words !== undefined) refused = { reason: "question", words };
+        else gate.question = cut(String(question.value), NEEDS_QUESTION_MAX);
       }
-    } else computed = true;
+    }
+    if (seen(1)) {
+      const choices = choicesSeen(args[1]);
+      if ("not" in choices) computed = true;
+      else {
+        const words = choicesRefusal(choices.value);
+        const list = choices.value;
+        if (words !== undefined) refused ??= { reason: "choices", words };
+        // the rule holds a list it sees whole: its choices are shown; one it can't see is chosen as it runs
+        else if (Array.isArray(list) && !list.includes(UNSEEN)) gate.choices = list;
+        else computed = true;
+      }
+    }
+    if (refused !== undefined) this.#refuse(refused.reason, refused.words, line);
     if (computed) gate.computed = true;
     if (this.#gates.length >= FLOW_READ_GATES_MAX) {
       this.#unlisted = true;

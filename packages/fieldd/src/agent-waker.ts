@@ -115,8 +115,11 @@ export class AgentWaker {
 
   /** CP-4a2b slice 11 (Q9, Q10) — a fact a flow run tells the spark that started it, worded by the runs
    * (flows/words.ts): no watcher, no spawner and no item; it lands in the spark's live session, or is held until one
-   * opens (`onSparkLive`). The runs' `waker` port. Declared in slice 11b's red, a no-op; its green wakes. */
-  flowFact(_spark: string, _fact: string): void {}
+   * opens (`onSparkLive`). The runs' `waker` port: a wake as any, and the runs check `sparkOf` before it, so a spark
+   * that is gone holds none here. */
+  flowFact(spark: string, fact: string): void {
+    this.#wake(spark, fact);
+  }
 
   /** A spark's own session came alive: the wakes held for it land there. */
   onSparkLive(spark: string, runtimeRunId: string): void {

@@ -78,9 +78,10 @@ import * as words from "./words";
 // - CP-4a2b (§13a slice 6; 13a's D2, D22) — a flow run's items (`flowItem`): the runs raise them, each holding its run
 //   and the call it waits at, with the runs' acts and then Stop the run. The person's answer is handed to the runs once
 //   (the FlowItemActs port), who write it, keyed by its call, at most once: their journal is the act's record, so a
-//   flow item carries no `acting` mark and is never uncertain. A run's end ends its items. Nothing is owed a spark
-//   here: the runs tell the run's spark by their own wakes. No spark's watermark counts a flow item (its teller is the
-//   flow); a run's calls are bounded by its cap (D10).
+//   flow item carries no `acting` mark and is never uncertain, and its answer, once they acted, stands whatever the
+//   disk does (`#stand`, slice 11a's Q2 rider). A run's end ends its items. Nothing is owed a spark here: the runs tell
+//   the run's spark by their own wakes, for an item a raise MINTED (`FlowItemRaised`). No spark's watermark counts a
+//   flow item (its teller is the flow); a run's calls are bounded by its cap (D10).
 
 const NOTIFY_WINDOW_MS = 60_000;
 /** The answered items remembered for an answer that comes again (the record of each is the audit line). */
@@ -178,8 +179,8 @@ export interface FlowItemRaise {
 
 /** CP-4a2b (§13a slice 11a, Q5) — what a raise answers the runs: the item, and whether this raise minted it. A raise of
  * a {kind, run, call} already open is that item (D2's re-bind), never minted again, in one life or after a restart: the
- * runs wake a run's spark for a hold only when its item was minted (Q9). Slice 11a's seam: until its green, `minted`
- * is true on both roads. */
+ * runs wake a run's spark for a hold only when its item was minted (Q9). Slice 6's seam, moved in slice 11a (ruled
+ * 2026-11-06 (a)). */
 export interface FlowItemRaised {
   readonly id: NeedsItemId;
   readonly minted: boolean;
@@ -194,8 +195,8 @@ export interface FlowItemAnswer {
   readonly choice: number;
   readonly stop: boolean;
   /** CP-4a2b (§13a slice 11a, Q2) — the act's words, as the item keeps them (item.choices[choice]): what the person
-   * chose, byte for byte (Q1). Slice 11a's seam: its green hands it on, and makes it required */
-  readonly act?: string;
+   * chose, byte for byte (Q1), Stop the run's own among them. The runs read Stop from `stop` alone */
+  readonly act: string;
 }
 
 /** What the runs did with an answer: done, or failed in fieldd's words. */
@@ -264,6 +265,9 @@ interface Act {
   readonly outcome: NeedsAnswerOutcome;
   readonly reason?: string;
   readonly owed?: string;
+  /** CP-4a2b (slice 11a, Q2's rider) — the act's record is another's, kept before it returned (a flow run's journal,
+   * D22): its answer stands whatever the disk does, so the item never waits on with its act spent (`#stand`) */
+  readonly stands?: true;
 }
 
 const isAllowance = (record: NeedsRecord): boolean =>
@@ -539,10 +543,10 @@ export class NeedsQueue implements TalkHolds {
    * same kind raised again for the same run and call while it is open (a restart restored it, or a wake asks again) is
    * that item, never a second (D2's re-bind). Refused `bad-input`: more than NEEDS_CHOICES_MAX acts before Stop the
    * run, an act that is empty or past NEEDS_CHOICE_MAX, or one said twice (Stop the run is never a gate's own).
-   * Answers the item, and whether this raise minted it (`FlowItemRaised`, slice 11a's seam). */
+   * Answers the item, and whether this raise minted it (`FlowItemRaised`, slice 11a's Q5): a re-bind never is. */
   flowItem(raise: FlowItemRaise): FlowItemRaised {
     const open = this.#openFlowItem(raise.kind, raise.run);
-    if (open !== undefined) return { id: open.item.id, minted: true };
+    if (open !== undefined) return { id: open.item.id, minted: false };
     if (raise.acts.length > NEEDS_CHOICES_MAX)
       throw refuse("bad-input", `acts: at most ${NEEDS_CHOICES_MAX} before Stop the run`);
     const choices = [...raise.acts, NEEDS_CHOICE_WORDS.stopRun];
@@ -809,10 +813,11 @@ export class NeedsQueue implements TalkHolds {
       item: { ...item, state: "answered" satisfies NeedsItemState, answer },
       ...(act.owed !== undefined ? { owed: act.owed } : {}),
     };
-    // an act that began (its mark kept) is done: what it did stands whatever the disk does now, so the item never
-    // waits on with its act spent (CP2-D2); an answer that began none is written through, and its item waits on when
-    // the disk does not take it
-    if (this.#records.get(item.id)?.acting !== undefined) this.#stand(answered);
+    // an act that began (its mark kept), or one whose record is another's (a flow run's journal, Q2's rider), is done:
+    // what it did stands whatever the disk does now, so the item never waits on with its act spent (CP2-D2); an answer
+    // that began none is written through, and its item waits on when the disk does not take it
+    if (act.stands === true || this.#records.get(item.id)?.acting !== undefined)
+      this.#stand(answered);
     else this.#keep(answered);
     this.#emit();
     // TH-1 — your answer, in the asking spark's own transcript, by the act's words
@@ -858,9 +863,10 @@ export class NeedsQueue implements TalkHolds {
     }
   }
 
-  /** CP-4a2b (13a's D22) — a flow run's item: handed to the runs, Stop the run as `stop` (its last act). Their journal
-   * is the act's record, so it takes no `acting` mark and is never uncertain (CP2-D2). One handed on before the runs
-   * have bound their acts, or that throws, acted on nothing: the item waits on. */
+  /** CP-4a2b (13a's D22) — a flow run's item: handed to the runs, Stop the run as `stop` (its last act), with the act's
+   * own words as the item keeps them (`act`, slice 11a's Q2). Their journal is the act's record, so it takes no
+   * `acting` mark and is never uncertain (CP2-D2), and once they return, its answer stands (`stands`, Q2's rider). One
+   * handed on before the runs have bound their acts, or that throws, acted on nothing: the item waits on. */
   async #flowAct(record: NeedsRecord, kind: FlowRunItemKind, choice: number): Promise<Act> {
     const { item } = record;
     const acts = this.#flowActs;
@@ -869,11 +875,14 @@ export class NeedsQueue implements TalkHolds {
         reason: "flows-unbound",
       });
     if (item.run === undefined) throw refuseAnswer(`${item.id} names no flow run`, "unknown-kind");
-    const stop = choice === (item.choices?.length ?? 0) - 1;
-    const acted = await acts.answer({ id: item.id, kind, run: item.run, choice, stop });
+    const choices = item.choices ?? [];
+    const act = choices[choice];
+    if (act === undefined) throw refuseAnswer(`${item.id} has no act ${choice}`, "no-such-act");
+    const stop = choice === choices.length - 1;
+    const acted = await acts.answer({ id: item.id, kind, run: item.run, choice, stop, act });
     return acted.outcome === "done"
-      ? { outcome: "done" }
-      : { outcome: "failed", reason: acted.reason };
+      ? { outcome: "done", stands: true }
+      : { outcome: "failed", reason: acted.reason, stands: true };
   }
 
   /** N5 — a changed flow's answer. Run this version or Run the one you approved is kept begun first (`acting`), as a
