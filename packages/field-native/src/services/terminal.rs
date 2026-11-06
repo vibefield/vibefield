@@ -798,6 +798,9 @@ impl TerminalHandle {
 
 pub struct TerminalUnit {
     shared: Arc<Shared>,
+    /// The cell supervisor's task, apart from `tasks` because stop() awaits it:
+    /// its end is every cell's end (item 196).
+    supervisor: Mutex<Option<TaskGuard>>,
     tasks: Mutex<Vec<TaskGuard>>,
     /// TC-S2 — held for the cell supervisor: per-instance endpoint resolution
     /// and the cell binary's location both come from the ONE derivation
@@ -854,6 +857,7 @@ impl TerminalUnit {
                 pty_pressure: Mutex::new(None),
                 fd_gauge: Mutex::new(FdPressureGauge::new()),
             }),
+            supervisor: Mutex::new(None),
             tasks: Mutex::new(Vec::new()),
             config: config.clone(),
         }
@@ -883,7 +887,7 @@ impl NativeService for TerminalUnit {
             Some("spawning the terminal cell".into()),
         );
         let task = tokio::spawn(supervise_cells(self.shared.clone(), self.config.clone()));
-        self.tasks.lock().unwrap().push(TaskGuard(task));
+        *self.supervisor.lock().unwrap() = Some(TaskGuard(task));
         // TC-D6(e): started with the unit and torn down with it. It watches this
         // PROCESS's descriptors, which is what every PTY on this floor is spent
         // from, so it is the unit's own news rather than the pump's.
@@ -899,26 +903,24 @@ impl NativeService for TerminalUnit {
     /// Stop = the cells' drain, then teardown. No PTY survives field-native —
     /// the honest ceiling the product promises and nothing more.
     async fn stop(&self) -> anyhow::Result<()> {
-        // Ask, then wait bounded: the supervisor drops each cell's leash (stdin
-        // EOF — the portable drain trigger) and publishes the empty snapshot
-        // once they have exited; past DRAIN + EXIT_GRACE the supervisor kills.
-        // The empty snapshot doubles as the completion signal here, and the
-        // TaskGuard clear beneath reaps whatever a pathological hang leaves.
+        // Ask, then wait bounded for the supervisor tree to end. Each class
+        // supervisor drops its cells' leashes (stdin EOF — the portable drain
+        // trigger) and collects every cell task's ending, a cell still starting
+        // included: it says hello, sees the stop and drains. Past DRAIN +
+        // EXIT_GRACE a cell is killed. The guard drop and the clear beneath reap
+        // whatever a pathological hang leaves.
+        //
+        // Item 196 (2026-11-06): this waited for the routes snapshot to empty.
+        // A cell has a route row only after its hello, so a stop inside a cell's
+        // start window returned at once, and the clear dropped the start in
+        // flight with nothing to kill the child: the cell lived on with its
+        // pipes closed and panicked on its way out, leaving its crumb and its
+        // sockets in the run dir. A quit during the floor's boot did that.
         let _ = self.shared.stopping.send(true);
-        let budget = Duration::from_millis(
-            registries::cell_supervision::DRAIN_BUDGET_MS
-                + registries::cell_supervision::EXIT_GRACE_MS
-                + 1_000,
-        );
-        let mut rx = self.shared.routes.subscribe();
-        let _ = tokio::time::timeout(budget, async {
-            while !rx.borrow().cells.is_empty() {
-                if rx.changed().await.is_err() {
-                    break;
-                }
-            }
-        })
-        .await;
+        let supervisor = self.supervisor.lock().unwrap().take();
+        if let Some(mut supervisor) = supervisor {
+            let _ = tokio::time::timeout(stop_budget(), &mut supervisor.0).await;
+        }
         self.tasks.lock().unwrap().clear();
         Ok(())
     }
@@ -1239,13 +1241,10 @@ async fn supervise_class(shared: Arc<Shared>, config: NativeConfig, class: Termi
     }
     // The stop path: every cell task watches the same stopping watch and
     // drains itself; collect their endings (bounded) so each row is removed
-    // by its owner — which is what stop()'s routes-empty wait observes.
-    let deadline = tokio::time::Instant::now()
-        + Duration::from_millis(
-            registries::cell_supervision::DRAIN_BUDGET_MS
-                + registries::cell_supervision::EXIT_GRACE_MS
-                + 1_000,
-        );
+    // by its owner. A cell still starting is collected too: it says hello,
+    // sees the stop and drains, so the bound carries its hello deadline
+    // (item 196). stop() awaits this whole tree.
+    let deadline = tokio::time::Instant::now() + stop_budget();
     while shared_cell.is_some() || !cells.is_empty() {
         match tokio::time::timeout_at(deadline, report_rx.recv()).await {
             Ok(Some(report)) => {
@@ -1257,6 +1256,19 @@ async fn supervise_class(shared: Arc<Shared>, config: NativeConfig, class: Termi
             Ok(None) | Err(_) => break,
         }
     }
+}
+
+/// How long a stop waits for the cells to end: a cell still starting may take
+/// its whole hello deadline before it can see the stop, then its drain and its
+/// exit grace (item 196). stop() and each class supervisor's stop path wait
+/// this long.
+fn stop_budget() -> Duration {
+    Duration::from_millis(
+        registries::cell_supervision::HELLO_DEADLINE_MS
+            + registries::cell_supervision::DRAIN_BUDGET_MS
+            + registries::cell_supervision::EXIT_GRACE_MS
+            + 1_000,
+    )
 }
 
 /// Why an isolation episode ended.

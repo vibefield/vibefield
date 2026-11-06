@@ -4,6 +4,7 @@
 //! lives in the library so the lifecycle is testable without this file.
 
 use field_native::cell::{run_cell, CellArgs};
+use std::io::{self, Write};
 use std::path::PathBuf;
 use std::process::ExitCode;
 
@@ -71,6 +72,12 @@ fn main() -> ExitCode {
     // (hello, then the exit report) and nothing else may write to it. Plain
     // fmt at INFO (no env-filter feature in this crate's subscriber build;
     // the parent owns real log routing and forwards stderr).
+    //
+    // Item 196 (b): the three writes below never `eprint!`. stderr is the
+    // floor's pipe, and a cell whose floor is gone has no reader on it:
+    // `eprint!` panics on that EPIPE, and the panic hook's crumb would then
+    // call a refused start a crash. The write is best-effort; the exit code
+    // says the rest.
     tracing_subscriber::fmt()
         .with_writer(std::io::stderr)
         .with_max_level(tracing::Level::INFO)
@@ -79,7 +86,7 @@ fn main() -> ExitCode {
     let args = match parse_args() {
         Ok(args) => args,
         Err(error) => {
-            eprint!("field-terminal-host: {error}\n\n{USAGE}");
+            let _ = write!(io::stderr(), "field-terminal-host: {error}\n\n{USAGE}");
             return ExitCode::from(2);
         }
     };
@@ -90,7 +97,7 @@ fn main() -> ExitCode {
     {
         Ok(runtime) => runtime,
         Err(error) => {
-            eprintln!("field-terminal-host: tokio runtime: {error}");
+            let _ = writeln!(io::stderr(), "field-terminal-host: tokio runtime: {error}");
             return ExitCode::from(2);
         }
     };
@@ -98,7 +105,7 @@ fn main() -> ExitCode {
     match runtime.block_on(run_cell(args)) {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {
-            eprintln!("field-terminal-host: {error:#}");
+            let _ = writeln!(io::stderr(), "field-terminal-host: {error:#}");
             ExitCode::FAILURE
         }
     }
