@@ -37,6 +37,7 @@ import {
 import type { LineViewDoor } from "../src/frame/line-door";
 import { LIVE_OPEN_WAIT_MS, type LiveOpenDoors, openLiveRow } from "../src/frame/live-open";
 import { PeekView } from "../src/frame/PeekView";
+import { filterMenu, type PeekFilterState, peekFieldTokens } from "../src/frame/peek-filters";
 import {
   liveFoot,
   liveIndexWords,
@@ -575,6 +576,41 @@ describe("Live now's chrome pieces each stand alone (MV-8b)", () => {
     host = document.createElement("div");
     document.body.appendChild(host);
     root = createRoot(host, { onCaughtError: () => undefined });
+    const liveFilters: LiveFilters = {
+      desks: [
+        {
+          id: "a",
+          name: "here",
+          os: "macos",
+          here: true,
+          note: "1 agent",
+          quiet: false,
+          agents: 1,
+          sessions: 1,
+        },
+        {
+          id: "b",
+          name: "studio",
+          os: "linux",
+          here: false,
+          note: "0 agents",
+          quiet: false,
+          agents: 0,
+          sessions: 0,
+        },
+      ],
+      desk: "b",
+      profiles: [],
+      profile: null,
+      sessions: 1,
+    };
+    const state: PeekFilterState = {
+      scope: "live",
+      live: liveFilters,
+      filters: NO_PEEK_FILTERS,
+      projects: [],
+      agents: [],
+    };
     const props = {
       open: true,
       keys: "mac" as const,
@@ -582,46 +618,20 @@ describe("Live now's chrome pieces each stand alone (MV-8b)", () => {
       layout: { width: 900, height: 560, folded: false },
       query: "",
       scope: "live" as const,
-      filters: NO_PEEK_FILTERS,
-      projects: [],
-      agents: [],
-      liveFilters: {
-        desks: [
-          {
-            id: "a",
-            name: "here",
-            os: "macos" as const,
-            here: true,
-            note: "1 agent",
-            quiet: false,
-            agents: 1,
-            sessions: 1,
-          },
-          {
-            id: "b",
-            name: "studio",
-            os: "linux" as const,
-            here: false,
-            note: "0 agents",
-            quiet: false,
-            agents: 0,
-            sessions: 0,
-          },
-        ],
-        desk: null,
-        profiles: [],
-        profile: null,
-        sessions: 1,
-      },
+      liveFilters,
+      tokens: peekFieldTokens(state),
+      filterMenu: filterMenu(state),
+      filterOpen: false,
+      here: "This Mac",
       rows: [row],
       hot: 0,
       foot: "1 live session, waiting first",
       none: null,
-      menu: null,
       onQuery: () => undefined,
       onScope: () => undefined,
-      onMenu: () => undefined,
-      onFilters: () => undefined,
+      onFilterOpen: () => undefined,
+      onPick: () => undefined,
+      onRemoveToken: () => undefined,
       onOpen: () => undefined,
       onClose: () => undefined,
     };
@@ -640,6 +650,10 @@ describe("Live now's chrome pieces each stand alone (MV-8b)", () => {
     );
     expect(said).toContain("Live peek unavailable");
     expect(host.querySelectorAll('.vf-peek-row[data-kind="live"]')).toHaveLength(1);
-    expect(host.querySelector('[data-peek-dd="desk"]')).not.toBeNull();
+    // the field's token and + Filter (SE-D1) stand beside the peek that threw
+    expect(
+      [...host.querySelectorAll(".vf-peek-field-token-label")].map((label) => label.textContent),
+    ).toEqual(["studio"]);
+    expect(host.querySelector('[data-peek-dd="filter"] .vf-peek-filter')).not.toBeNull();
   });
 });

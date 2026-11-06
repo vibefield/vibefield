@@ -19,6 +19,7 @@ import {
   useSyncExternalStore,
 } from "react";
 import { createPortal } from "react-dom";
+import { thisDeviceWord } from "../account/link";
 import { useReducedMotion } from "../field/desk/bar/bar-motion";
 import { isSearchChord, listenForProductChord } from "../field/product-chords";
 import { requestShellPresentation } from "../field/shell-presentation";
@@ -26,6 +27,7 @@ import { DECK_TRAVEL_GRACE_MS } from "../godview/deck-state";
 import { openHistoryAt } from "../history/open-at";
 import { PeekReaderMount } from "../history/room-chunk";
 import { productHistoryPorts } from "../history/window-ports";
+import { peekHost } from "../host";
 import { getRendererLogger } from "../logging";
 import { useGodviewDeckMaximized } from "./deck-door";
 import {
@@ -40,13 +42,27 @@ import {
 import { type FrameSurface, foldSurface } from "./frame-surface";
 import { jumpNote, sayOnLine } from "./line-door";
 import { openLiveRow } from "./live-open";
-import { PeekButtonView, type PeekMenu, PeekPastLines, type PeekStep, PeekView } from "./PeekView";
+import { PeekButtonView, PeekPastLines, type PeekStep, PeekView } from "./PeekView";
+import {
+  backspaceTakes,
+  clearPick,
+  everythingLensWords,
+  filterMenu,
+  isOffer,
+  type PeekAgentChoice,
+  type PeekFieldToken,
+  type PeekListItem,
+  type PeekOffer,
+  type PeekPick,
+  peekFieldTokens,
+  peekOffer,
+  withoutLastWord,
+} from "./peek-filters";
 import {
   isLiveRow,
   type LiveFeedState,
   liveFoot,
   liveNone,
-  type PeekListRow,
   type PeekLiveRow,
   peekLiveRows,
 } from "./peek-live";
@@ -254,7 +270,8 @@ export function Peek({
   const [query, setQuery] = useState(initialQuery);
   const [scope, setScope] = useState<PeekScope>(() => ownScope(view));
   const [filters, setFilters] = useState<PeekFilters>(NO_PEEK_FILTERS);
-  const [menu, setMenu] = useState<PeekMenu | null>(null);
+  /** + Filter's menu (SE-D1): the Peek's one menu */
+  const [filterOpen, setFilterOpen] = useState(false);
   const [hot, setHot] = useState(0);
   const [hits, setHits] = useState<readonly IndexSearchHit[]>([]);
   const [latest, setLatest] = useState<readonly IndexRecentSession[]>([]);
@@ -284,13 +301,13 @@ export function Peek({
 
   // Each open starts on the view's own scope — Live now in Godview, Everything
   // in History (GV-D9) — at the first row; Everything asks for what its list
-  // shows before a word is typed and for the projects its dropdown names.
+  // shows before a word is typed and for the projects its Filter menu names.
   const [wasOpen, setWasOpen] = useState(open);
   if (wasOpen !== open) {
     setWasOpen(open);
     if (open) {
       setScope(ownScope(view));
-      setMenu(null);
+      setFilterOpen(false);
       setHot(0);
       setBox(boxOf(container));
       // where the keyboard was, read BEFORE this render commits: the field
@@ -324,7 +341,7 @@ export function Peek({
       (answer) => {
         if (current) setProjects(answer);
       },
-      // the dropdown keeps Every project: a list it cannot read narrows nothing
+      // the menu keeps Every project: a list it cannot read narrows nothing
       () => undefined,
     );
     return () => {
@@ -420,20 +437,37 @@ export function Peek({
     () => peekLiveRows(live.found, liveRuns, query),
     [live.found, liveRuns, query],
   );
-  const rows: readonly PeekListRow[] = scope === "live" ? liveRows : pastRows;
 
-  const filtered =
-    scope === "live"
-      ? liveFilters !== null && (liveFilters.desk !== null || liveFilters.profile !== null)
-      : filters.project !== null || filters.agent !== null;
+  // SE-D1 — THE FILTERS AS TOKENS (`peek-filters.ts`): the field's tokens, +
+  // Filter's one menu, and a typed name's offer, first in Live now's list
+  const agents = useMemo<readonly PeekAgentChoice[]>(
+    () => peekAgents().map((row) => ({ id: row.id, label: row.label })),
+    [],
+  );
+  const filterState = useMemo(
+    () => ({ scope, live: liveFilters, filters, projects, agents }),
+    [scope, liveFilters, filters, projects, agents],
+  );
+  const tokens = useMemo(() => peekFieldTokens(filterState), [filterState]);
+  const menuGroups = useMemo(() => filterMenu(filterState), [filterState]);
+  const offer = useMemo(() => peekOffer(query, scope, liveFilters), [query, scope, liveFilters]);
+  const rows = useMemo<readonly PeekListItem[]>(
+    () => (scope === "live" ? (offer === null ? liveRows : [offer, ...liveRows]) : pastRows),
+    [scope, offer, liveRows, pastRows],
+  );
+
+  // a token standing narrows what is listed
+  const filtered = tokens.length > 0;
   let none: string | null = null;
   if (rows.length === 0 && scope === "live") {
     none = liveNone(liveFeed, query, filtered);
   } else if (rows.length === 0) {
     if (phase.kind === "latest" && phase.answered) {
+      // what was said narrows what the index answers, never your latest sessions
+      const narrowed = filters.project !== null || filters.agent !== null;
       none =
         phase.failed === undefined
-          ? filtered
+          ? narrowed
             ? "None of your latest sessions is in what the filters keep."
             : "Nothing to show yet — your latest sessions appear here once the index has read them."
           : "Your latest sessions could not be read.";
@@ -456,32 +490,88 @@ export function Peek({
           answered: live.answered,
           clipped: live.clipped,
         })
-      : peekFoot(phase, pastRows);
+      : // UM-D28: Everything looks through every profile, and says so while the lens is on
+        `${peekFoot(phase, pastRows)}${everythingLensWords(liveFilters)}`;
   const hotIndex = rows.length === 0 ? -1 : Math.min(hot, rows.length - 1);
 
   // A new list starts at its first row (React's state-from-the-previous-render
   // pattern: no effect, no extra frame with a stale row hot). Live now's list
   // is rebuilt as the runs move (a state, a clock), so it is new only when its
-  // rows are — the find sheet's rule — and never under a walking cursor.
+  // rows are — the find sheet's rule — and never under a walking cursor. An
+  // offer that comes or goes makes it new.
   const listSeen =
-    scope === "live" ? `live\n${liveRows.map((row) => row.id).join("\n")}` : pastRows;
+    scope === "live"
+      ? `live\n${offer?.id ?? ""}\n${liveRows.map((row) => row.id).join("\n")}`
+      : pastRows;
   const [rowsSeen, setRowsSeen] = useState<unknown>(listSeen);
   if (rowsSeen !== listSeen) {
     setRowsSeen(listSeen);
     setHot(0);
   }
 
+  // A filter set — Live now's through Godview's door, so the stage, the
+  // button and the column's ring hold it too (SE-D2); Everything's the popup's
+  // — puts the hot row back to the first.
+  const applyPick = useCallback(
+    (pick: PeekPick) => {
+      if (pick.filter === "kind") {
+        const kind = pick.value;
+        setFilters((at) => ({ ...at, kind }));
+      } else {
+        const { filter, value } = pick;
+        if (filter === "desk") godview?.setDesk(value);
+        else if (filter === "profile") godview?.setProfile(value);
+        else if (filter === "project") setFilters((at) => ({ ...at, project: value }));
+        else setFilters((at) => ({ ...at, agent: value }));
+      }
+      setHot(0);
+    },
+    [godview],
+  );
+  // A token's × (and ⌫): its one filter back to every one, the caret back in the field.
+  const removeToken = useCallback(
+    (token: PeekFieldToken) => {
+      applyPick(clearPick(token));
+      focusField();
+    },
+    [applyPick, focusField],
+  );
+  // A typed name's offer taken (⇥, ↵ or a click): the filter set, its word
+  // out of the words, the caret staying in the field.
+  const takeOffer = useCallback(
+    (taken: PeekOffer) => {
+      applyPick(taken.pick);
+      setQuery((at) => withoutLastWord(at));
+      focusField();
+    },
+    [applyPick, focusField],
+  );
+  // + Filter's pick: the filter set and the menu folded; TS-4's Connect… opens
+  // the Connect door, as the status item's Connect Your Devices… does.
+  const pick = useCallback(
+    (choice: PeekPick | "connect") => {
+      setFilterOpen(false);
+      if (choice === "connect") requestShellPresentation("open-connect");
+      else applyPick(choice);
+    },
+    [applyPick],
+  );
+
   const openRow = useCallback(
     (index: number) => {
       const row = rows[index];
       if (row === undefined) return;
+      if (isOffer(row)) {
+        takeOffer(row);
+        return;
+      }
       // a row opened is its view's to focus: the room's, or the pane's
       returnFocus.current = null;
       fold();
       if (isLiveRow(row)) onOpenLive?.(row);
       else onOpenPast(row.target);
     },
-    [rows, fold, onOpenPast, onOpenLive],
+    [rows, fold, onOpenPast, onOpenLive, takeOffer],
   );
 
   // ⌘F (Ctrl+F) — a product chord on the window's capture phase while a view
@@ -504,57 +594,71 @@ export function Peek({
     );
   }, [bindKeys, searches, keys, open, focusField, onSurfaceChange]);
 
-  // While open, Esc is the Peek's before anything else hears it: an open
-  // dropdown's menu first, then the popup. A press outside an open menu folds
-  // the menu.
+  // While open, Esc is the Peek's before anything else hears it: + Filter's
+  // open menu first, then the popup. A press outside the open menu folds it.
   useEffect(() => {
     if (!open || !bindKeys) return;
     const onKey = (event: globalThis.KeyboardEvent): void => {
       if (event.key !== "Escape") return;
       event.preventDefault();
       event.stopPropagation();
-      if (menu !== null) setMenu(null);
+      if (filterOpen) setFilterOpen(false);
       else fold();
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
-  }, [open, bindKeys, menu, fold]);
+  }, [open, bindKeys, filterOpen, fold]);
   useEffect(() => {
-    if (menu === null) return;
+    if (!filterOpen) return;
     const onPress = (event: PointerEvent): void => {
       const place = (event.target as Element | null)?.closest?.("[data-peek-dd]");
-      if (place?.getAttribute("data-peek-dd") === menu) return;
-      setMenu(null);
+      if (place?.getAttribute("data-peek-dd") === "filter") return;
+      setFilterOpen(false);
     };
     window.addEventListener("pointerdown", onPress, true);
     return () => window.removeEventListener("pointerdown", onPress, true);
-  }, [menu]);
+  }, [filterOpen]);
 
   // ↑ ↓ walk the rows and ↵ opens the hot one — from the field, which holds
   // the keyboard while the popup is open (a button keeps its own Return). Esc
   // inside the popup is heard here too: the catalog's Peek binds nothing on
   // its page's window, and in the product the window's listener above has
-  // already taken it.
+  // already taken it. SE-D1: ⇥ takes the hot offer (↵ does too, as a row's
+  // open), and ⌫ with the caret at the field's start and nothing selected
+  // takes the last token back.
   const onKeyDown = useCallback(
     (event: KeyboardEvent<HTMLDivElement>) => {
       if (event.key === "Escape") {
         event.preventDefault();
         event.stopPropagation();
-        if (menu !== null) setMenu(null);
+        if (filterOpen) setFilterOpen(false);
         else fold();
         return;
       }
-      if (event.target !== inputRef.current) return;
+      const input = inputRef.current;
+      if (input === null || event.target !== input) return;
+      const composing = event.nativeEvent.isComposing;
       if (event.key === "ArrowDown" || event.key === "ArrowUp") {
         event.preventDefault();
         const key = event.key as CursorKey;
         setHot((at) => Math.max(0, moveCursor(at, key, rows.length)));
-      } else if (event.key === "Enter" && !event.nativeEvent.isComposing) {
+      } else if (event.key === "Enter" && !composing) {
         event.preventDefault();
         openRow(hotIndex);
+      } else if (event.key === "Tab" && !event.shiftKey && !composing) {
+        const row = rows[hotIndex];
+        if (row === undefined || !isOffer(row)) return;
+        event.preventDefault();
+        takeOffer(row);
+      } else if (event.key === "Backspace" && !composing) {
+        const caret = { start: input.selectionStart, end: input.selectionEnd };
+        const taken = backspaceTakes(tokens, caret);
+        if (taken === null) return;
+        event.preventDefault();
+        removeToken(taken);
       }
     },
-    [rows.length, openRow, hotIndex, menu, fold],
+    [rows, openRow, hotIndex, filterOpen, fold, takeOffer, tokens, removeToken],
   );
 
   // The keyboard: the field on open (the caret at its end), and back where it
@@ -590,15 +694,10 @@ export function Peek({
   }, [open, container]);
   const layout: PeekLayout = useMemo(() => peekLayout(box.width, box.height), [box]);
 
-  const agents = useMemo(() => peekAgents().map((row) => ({ id: row.id, label: row.label })), []);
-  const changeFilters = useCallback((next: PeekFilters) => {
-    setFilters(next);
-    setMenu(null);
-  }, []);
   const changeScope = useCallback(
     (next: PeekScope) => {
       setScope(next);
-      setMenu(null);
+      setFilterOpen(false);
       focusField();
     },
     [focusField],
@@ -631,32 +730,13 @@ export function Peek({
     return holdKeys();
   }, [holdKeys]);
 
-  // GV-D3: in Godview the button wears the filter that is on, and its × clears it
+  // GV-D3: in Godview the button wears the filter that is on, and its × clears
+  // it — the field's tokens with it (SE-D2: one state)
   const token = inGodview && godview !== null ? filterToken(godview.filters) : null;
   const clearToken = useCallback(() => {
     godview?.setDesk(null);
     godview?.setProfile(null);
   }, [godview]);
-  const pickDesk = useCallback(
-    (id: string | null) => {
-      godview?.setDesk(id);
-      setMenu(null);
-    },
-    [godview],
-  );
-  const pickProfile = useCallback(
-    (id: string | null) => {
-      godview?.setProfile(id);
-      setMenu(null);
-    },
-    [godview],
-  );
-  // TS-4 — the ghost row's Connect…: the chrome opens the Connect door, as for
-  // the status item's Connect Your Devices…
-  const connect = useCallback(() => {
-    setMenu(null);
-    requestShellPresentation("open-connect");
-  }, []);
 
   const target = container === undefined ? document.body : container;
   return (
@@ -683,25 +763,23 @@ export function Peek({
             layout={layout}
             query={query}
             scope={scope}
-            filters={filters}
-            projects={projects}
-            agents={agents}
             liveFilters={liveFilters}
-            onLiveDesk={pickDesk}
-            onConnect={connect}
-            onLiveProfile={pickProfile}
+            tokens={tokens}
+            filterMenu={menuGroups}
+            filterOpen={filterOpen}
+            here={thisDeviceWord(peekHost()?.platform)}
             rows={rows}
             hot={hotIndex}
             foot={foot}
             none={none}
-            menu={menu}
             {...(renderLive !== undefined ? { renderLive } : {})}
             inputRef={inputRef}
             listRef={listRef}
             onQuery={setQuery}
             onScope={changeScope}
-            onMenu={setMenu}
-            onFilters={changeFilters}
+            onFilterOpen={setFilterOpen}
+            onPick={pick}
+            onRemoveToken={removeToken}
             onOpen={openRow}
             onClose={fold}
             onKeyDown={onKeyDown}

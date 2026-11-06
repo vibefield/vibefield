@@ -660,7 +660,8 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
     expect(history("peek-closed")?.querySelector(".vf-peek-button kbd")?.textContent).toBe("⌘F");
     expect(history("peek-closed")?.querySelector(".vf-peek-pop")).toBeNull();
     // P2 — Godview's Live now, the same controller over the monitor's door as a
-    // fixture holds it: waiting first, a shell last, the scope row's filters
+    // fixture holds it: waiting first, a shell last; SE-D1 — no filter on, so no
+    // token, and + Filter at the field's end
     const live = history("peek-live");
     expect(
       [...(live?.querySelectorAll('.vf-peek-row[data-kind="live"] .vf-peek-dot') ?? [])].map(
@@ -668,18 +669,17 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
       ),
     ).toEqual(["blocked", "working", "shell"]);
     expect(live?.querySelector(".vf-peek-row .vf-peek-os")?.textContent).toBe("studio");
-    expect(
-      [...(live?.querySelectorAll(".vf-peek-dd-label") ?? [])].map((label) => label.textContent),
-    ).toEqual(["All desktops", "Every profile"]);
-    // TS-4 — this Mac not connected: its runs alone, This Mac wears the filter,
-    // and the filter's menu ends on the ghost row
+    expect(live?.querySelector(".vf-peek-field-token")).toBeNull();
+    expect(live?.querySelector('[data-peek-dd="filter"] .vf-peek-filter')).not.toBeNull();
+    // TS-4 — this Mac not connected: its runs alone, This Mac alone draws no
+    // token, and + Filter's Desktops end on the ghost row
     const unconnected = history("peek-unconnected");
     expect(unconnected?.querySelector(".vf-peek-row .vf-peek-os")).toBeNull();
-    expect(unconnected?.querySelector('[data-peek-dd="desk"] .vf-peek-dd-label')?.textContent).toBe(
-      "MacBook Pro",
-    );
+    expect(unconnected?.querySelector(".vf-peek-field-token")).toBeNull();
     act(() =>
-      unconnected?.querySelector<HTMLButtonElement>('[data-peek-dd="desk"] .vf-peek-dd')?.click(),
+      unconnected
+        ?.querySelector<HTMLButtonElement>('[data-peek-dd="filter"] .vf-peek-filter')
+        ?.click(),
     );
     expect(unconnected?.querySelector(".vf-peek-menu [data-ghost]")?.textContent).toBe(
       "Your other devicesConnect…",

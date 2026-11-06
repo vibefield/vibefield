@@ -25,6 +25,13 @@
  * the scope row and on the button, a pick doing the view's own select — and,
  * in History, Live now on a feed of the Peek's own, open only while it shows
  * (docket PK5), a pick taking Jump to's path.
+ *
+ * SE-D1 A "Tokens" (2026-11-06): the scope row retired — the filters that are
+ * on are tokens in the field (a × or ⌫ at its start takes one back), + Filter
+ * and the small switch stand at the field's end, a typed name offers its
+ * filter first in Live now, a run of this Mac's says its profile, and
+ * Everything looks through every profile (UM-D28); Live now's tokens, the
+ * button's and the stage's filters are one state (SE-D2).
  */
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -365,6 +372,30 @@ const options = (): HTMLElement[] => [
   ...(pop()?.querySelectorAll<HTMLElement>('[role="option"]') ?? []),
 ];
 const foot = (): string => pop()?.querySelector(".vf-peek-said")?.textContent ?? "";
+/** SE-D1 — the field's tokens by name, a token's ×, + Filter, and its menu. */
+const tokens = (): string[] =>
+  [...(pop()?.querySelectorAll(".vf-peek-field-token-label") ?? [])].map(
+    (label) => label.textContent ?? "",
+  );
+const tokenClear = (name: string): HTMLButtonElement | null =>
+  pop()?.querySelector<HTMLButtonElement>(
+    `.vf-peek-field-token-clear[aria-label="Remove ${name}"]`,
+  ) ?? null;
+const filterButton = (): HTMLButtonElement | null =>
+  pop()?.querySelector<HTMLButtonElement>('[data-peek-dd="filter"] .vf-peek-filter') ?? null;
+const eyebrows = (): string[] =>
+  [...(pop()?.querySelectorAll(".vf-peek-menu .vf-menu-eye") ?? [])].map(
+    (eye) => eye.textContent ?? "",
+  );
+const menuRows = (): HTMLButtonElement[] => [
+  ...(pop()?.querySelectorAll<HTMLButtonElement>(".vf-peek-menu .vf-menu-row") ?? []),
+];
+const menuRow = (label: string): HTMLButtonElement | undefined =>
+  menuRows().find(
+    (row) =>
+      row.getAttribute("role") === "menuitemradio" &&
+      row.querySelector(".vf-menu-label")?.textContent === label,
+  );
 
 /** A key as a person presses it, aimed at `target`; answers the event. */
 function press(target: EventTarget, init: KeyboardEventInit): KeyboardEvent {
@@ -662,38 +693,45 @@ describe("Search — the Peek, in History (GV-D8/D9/D10)", () => {
     );
   });
 
-  it("the dropdowns narrow Everything — a project, a side (asked of the index), an agent — and Esc closes a menu before the popup", async () => {
+  it("+ Filter narrows Everything — a project, a side (asked of the index), an agent — each a token in the field that its × or ⌫ takes back, and Esc closes the menu before the popup (SE-D1)", async () => {
     const client = fieldd();
     mount(client);
     await openHistory();
     const input = await openPeek();
     await searchCatalog(input);
-    const dropdown = (which: string) =>
-      pop()?.querySelector<HTMLButtonElement>(`[data-peek-dd="${which}"] .vf-peek-dd`);
+    // the field's end: + Filter, then the small switch; no token, and no scope row
+    expect(pop()?.querySelector(".vf-peek-fend")?.textContent).toBe("FilterLive nowEverything");
+    expect(pop()?.querySelector(".vf-peek-scope")).toBeNull();
+    expect(tokens()).toEqual([]);
+    act(() => filterButton()?.click());
+    expect(filterButton()?.getAttribute("aria-expanded")).toBe("true");
+    expect(pop()?.querySelector('[role="menu"]')?.getAttribute("aria-label")).toBe("Filter");
+    expect(eyebrows()).toEqual(["Projects", "Said by", "Agents"]);
     expect(
-      [...(pop()?.querySelectorAll(".vf-peek-dd-label") ?? [])].map((label) => label.textContent),
-    ).toEqual(["Every project", "Prompts and replies", "Any agent"]);
-    // the project: rows outside it leave
-    act(() => dropdown("project")?.click());
-    const menu = await until(() => pop()?.querySelector('[role="menu"]'), "the project menu");
-    expect(
-      [...menu.querySelectorAll('[role="menuitemradio"]')].map((row) => row.textContent),
-    ).toEqual(["Every project", "vibe-field"]);
+      menuRows()
+        .slice(0, 5)
+        .map((row) => [row.textContent, row.getAttribute("aria-checked")]),
+    ).toEqual([
+      ["Every project", "true"],
+      ["vibe-field", "false"],
+      ["Prompts and replies", "true"],
+      ["Prompts only", "false"],
+      ["Replies only", "false"],
+    ]);
+    expect(menuRows()[5]?.textContent).toBe("Any agent");
     // Esc folds the menu first, and the popup stays
     press(input, { key: "Escape" });
     expect(pop()?.querySelector('[role="menu"]')).toBeNull();
     expect(surfaceNow).toBe("search");
-    act(() => dropdown("project")?.click());
-    act(() => pop()?.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]')[1]?.click());
-    expect(dropdown("project")?.textContent).toBe("vibe-field");
+    // the project: rows outside it leave, and the field wears it
+    act(() => filterButton()?.click());
+    act(() => menuRow("vibe-field")?.click());
+    expect(pop()?.querySelector('[role="menu"]')).toBeNull();
+    expect(tokens()).toEqual(["vibe-field"]);
     expect(options()).toHaveLength(1);
     // the side: asked of the index
-    act(() => dropdown("kind")?.click());
-    act(() =>
-      [...(pop()?.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]') ?? [])]
-        .find((row) => row.textContent === "Prompts only")
-        ?.click(),
-    );
+    act(() => filterButton()?.click());
+    act(() => menuRow("Prompts only")?.click());
     await until(
       () =>
         client.calls.some(
@@ -701,19 +739,29 @@ describe("Search — the Peek, in History (GV-D8/D9/D10)", () => {
         ),
       "the side asked of the index",
     );
-    expect(dropdown("kind")?.textContent).toBe("Prompts only");
-    // the agent: Codex holds none of these rows
-    act(() => dropdown("agent")?.click());
-    act(() =>
-      [...(pop()?.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]') ?? [])]
-        .find((row) => row.textContent === "Codex")
-        ?.click(),
-    );
-    expect(dropdown("agent")?.textContent).toBe("Codex");
+    expect(tokens()).toEqual(["vibe-field", "Prompts only"]);
+    // the agent: Codex holds none of these rows, and the empty body names the filters
+    act(() => filterButton()?.click());
+    act(() => menuRow("Codex")?.click());
+    expect(tokens()).toEqual(["vibe-field", "Prompts only", "Codex"]);
     await until(() => (options().length === 0 ? true : null), "no row left");
     expect(pop()?.querySelector(".vf-peek-none")?.textContent).toMatch(
       /^Nothing the filters keep holds every word of “catalog”/u,
     );
+    // ⌫ with the caret at the field's start and nothing selected takes the last token back
+    act(() => input.setSelectionRange(0, 0));
+    expect(press(input, { key: "Backspace" }).defaultPrevented).toBe(true);
+    expect(tokens()).toEqual(["vibe-field", "Prompts only"]);
+    expect(input.value).toBe("catalog");
+    // anywhere else in the words, ⌫ is the words'
+    act(() => input.setSelectionRange(7, 7));
+    expect(press(input, { key: "Backspace" }).defaultPrevented).toBe(false);
+    expect(tokens()).toEqual(["vibe-field", "Prompts only"]);
+    // a token's × takes its one filter back, and the caret goes back to the field
+    act(() => tokenClear("vibe-field")?.click());
+    expect(tokens()).toEqual(["Prompts only"]);
+    expect(document.activeElement).toBe(input);
+    await until(() => (options().length === 2 ? true : null), "both rows again");
   });
 
   it("Live now, in History, is live while it shows (PK5): the feed opens with the tab and closes on a change of scope, the popup's close, a change of view and unmount", async () => {
@@ -730,14 +778,17 @@ describe("Search — the Peek, in History (GV-D8/D9/D10)", () => {
     feed.push({ runs: LIVE_RUNS, state: { kind: "live" } });
     await until(() => (options().length === 2 ? true : null), "two live rows");
     expect(foot()).toBe("2 live sessions, waiting first");
-    // waiting first; where a peer's run runs (K10); no dropdowns in History
+    // waiting first; where a peer's run runs (K10); in History the filters are
+    // Godview's, so Live now draws no token, no + Filter and no profile (SE-D2)
     expect(options().map((row) => row.querySelector(".vf-peek-title")?.textContent)).toEqual([
       "deploy",
       "vibe-field",
     ]);
     expect(options()[0]?.querySelector(".vf-peek-when")?.textContent).toBe("waiting");
     expect(options()[0]?.querySelector(".vf-peek-os")?.textContent).toBe("studio");
-    expect(pop()?.querySelector(".vf-peek-dds")).toBeNull();
+    expect(filterButton()).toBeNull();
+    expect(tokens()).toEqual([]);
+    expect(pop()?.querySelector(".vf-peek-prof")).toBeNull();
     // K9's words retired with the feed
     expect(pop()?.textContent).not.toContain("searched in Godview");
     // a change of scope closes it, Live now opens it again
@@ -861,6 +912,30 @@ describe("Search — the Peek, in History (GV-D8/D9/D10)", () => {
     expect(pop()?.querySelector(".vf-peek-past")).not.toBeNull();
   });
 
+  it("the field's tokens ellipsize in a narrow popup while the words keep 120, and the tokens, + Filter, the small switch and the offer carry no motion of their own — reduced motion has nothing to take (SE-D1; DESIGN.md §6, §8)", () => {
+    const css = readFileSync(join(HERE, "..", "src", "frame", "peek.css"), "utf8");
+    const rule = (selector: string): string =>
+      css.match(new RegExp(`^${selector.replace(/[[\]".]/g, "\\$&")} \\{([^}]*)\\}`, "m"))?.[1] ??
+      "";
+    // a token gives way before the words do: its name ellipsizes, its mark and × stay
+    expect(rule(".vf-peek-field-token")).toContain("min-width: 0;");
+    expect(rule(".vf-peek-field-token")).toContain("flex: 0 1 auto;");
+    expect(rule(".vf-peek-field-token-label")).toContain("text-overflow: ellipsis;");
+    expect(rule(".vf-peek-field input")).toContain("min-width: 120px;");
+    // a pick, a × and ⌫ change the field at once: no rule of theirs moves
+    const drawn = [...css.matchAll(/^([^\s@}/][^{]*)\{([^}]*)\}/gmu)].filter(([, selector]) =>
+      /\.vf-peek-(?:tokens|field-token|fend|filter|seg|offer|tab|prof|agent-mark)/u.test(
+        selector ?? "",
+      ),
+    );
+    expect(drawn.length).toBeGreaterThan(10);
+    for (const [, selector, body] of drawn) {
+      expect(body, selector).not.toMatch(/transition|animation/u);
+    }
+    // the scope row's rules retired with it (SE-D1)
+    expect(css).not.toMatch(/\.vf-peek-(?:scope|dds?|dd-[a-z]+)\b/u);
+  });
+
   it("the empty transcript names the key the button prints (K2), and nothing walks a stepper any more (K3)", async () => {
     mount(fieldd());
     await openHistory();
@@ -895,13 +970,15 @@ function liveRun(id: string, extra: Partial<LiveFindAgent>): LiveFindAgent {
   };
 }
 
-/** This desktop's Claude in vibe-field, on floor session pty-local; a peer's
- * Codex in deploy on studio, waiting. */
+/** This desktop's Claude in vibe-field, on floor session pty-local, under the
+ * Work profile (SE-D1: only this desktop's rows say one); a peer's Codex in
+ * deploy on studio, waiting. */
 const LIVE_RUNS: readonly LiveFindAgent[] = [
   liveRun("row-local", {
     project: "vibe-field",
     floorSessionId: "pty-local",
     agent: { provider: { id: "claude", label: "Claude Code" }, nativeSessionId: "native-local" },
+    profileSet: "work",
   }),
   liveRun("row-peer", {
     project: "deploy",
@@ -1088,12 +1165,11 @@ function godviewDoor(patch: Partial<LiveFilters> = {}): {
   };
 }
 
-const liveDropdown = (id: string): HTMLButtonElement | null =>
-  pop()?.querySelector<HTMLButtonElement>(`[data-peek-dd="${id}"] .vf-peek-dd`) ?? null;
-const menuRow = (label: string): HTMLButtonElement | undefined =>
-  [
-    ...(pop()?.querySelectorAll<HTMLButtonElement>('.vf-peek-menu [role="menuitemradio"]') ?? []),
-  ].find((row) => row.querySelector(".vf-menu-label")?.textContent === label);
+/** The live peek's head (SE-D1): its title, then where and how it runs. */
+const liveHead = (): string[] =>
+  [...(pop()?.querySelectorAll(".vf-peek-live .vf-peek-past-head > *") ?? [])].map(
+    (part) => part.textContent ?? "",
+  );
 
 describe("Search — the Peek, in Godview: Live now (P2)", () => {
   it("opens on Live now over the monitor's rows, waiting first, a peer's run saying where it runs (K10), Open in the terminals", async () => {
@@ -1117,18 +1193,25 @@ describe("Search — the Peek, in Godview: Live now (P2)", () => {
       ]),
     ).toEqual([
       ["live", "deploy", "blocked", "waiting", "deploy · Codexstudio"],
-      ["live", "vibe-field", "working", "working", "vibe-field · Claude Code"],
+      // a run of this Mac's says its profile; a peer's its desktop alone (SE-D1)
+      ["live", "vibe-field", "working", "working", "vibe-field · Claude CodeWork"],
     ]);
     expect(foot()).toBe("2 live sessions, waiting first");
     // the peer's run cannot be watched from here: the peek says where it runs
     expect(pop()?.querySelector(".vf-peek-live-words")?.textContent).toContain(
       "It runs on studio.",
     );
+    // the head, as the past peek's: folder, agent, its profile, where, its state
+    expect(liveHead()).toEqual(["deploy", "deploy · Codex · on studio · waiting"]);
     // this desktop's run: its own pane (the watch-only pane; this window has no pool)
     press(input, { key: "ArrowDown" });
     expect(pop()?.querySelector("[data-live-peek]")?.getAttribute("data-live-peek")).toBe(
       "unavailable",
     );
+    expect(liveHead()).toEqual([
+      "vibe-field",
+      "vibe-field · Claude Code · Work · on this Mac · working",
+    ]);
     expect(pop()?.querySelector(".vf-peek-open")?.textContent).toBe("Open in the terminals↵");
     // the words: asked of rosetta through the monitor's port, scoped to the live runs
     typeInto(input, "catalog");
@@ -1144,30 +1227,43 @@ describe("Search — the Peek, in Godview: Live now (P2)", () => {
     expect(viewAsked).toEqual([]);
   });
 
-  it("carries the view's filters in the scope row (GV-D3), and the button wears the one that is on — its × clears it", async () => {
+  it("+ Filter carries the view's filters (GV-D3) — Profiles before Desktops, each count every session's — and a pick is a token in the field and on the button, one state (SE-D2): either × lets the stage go of it", async () => {
     const godview = godviewDoor();
     mount(fieldd());
     to("godview");
     // at rest: no token, the plain circle
     expect(host?.querySelector(".vf-peek-token")).toBeNull();
     await openPeek();
-    expect(liveDropdown("desk")?.textContent).toBe("All desktops");
-    expect(liveDropdown("profile")?.textContent).toBe("Every profile");
-    act(() => liveDropdown("desk")?.click());
-    expect(
-      [...(pop()?.querySelectorAll(".vf-peek-menu [role='menuitemradio']") ?? [])].map((row) =>
-        row.textContent?.trim(),
-      ),
-    ).toEqual(["All desktops", "MacBook Pro · here1 agent", "studio1 agent"]);
+    expect(tokens()).toEqual([]);
+    act(() => filterButton()?.click());
+    expect(eyebrows()).toEqual(["Profiles", "Desktops"]);
+    expect(menuRows().map((row) => [row.textContent, row.getAttribute("aria-checked")])).toEqual([
+      ["Every profile2 sessions", "true"],
+      ["This Mac0 sessions", "false"],
+      ["Workwaiting", "false"],
+      ["All desktops2 agents", "true"],
+      ["MacBook Pro · here1 agent", "false"],
+      ["studio1 agent", "false"],
+    ]);
     // connected: no ghost row (TS-4)
     expect(pop()?.querySelector(".vf-peek-menu [data-ghost]")).toBeNull();
+    // a pick sets Godview's filter and closes the menu
     act(() => menuRow("studio")?.click());
     expect(godview.door().filters.desk).toBe("studio");
-    expect(liveDropdown("desk")?.textContent).toBe("studio");
-    act(() => liveDropdown("profile")?.click());
-    expect(menuRow("Work")?.textContent).toBe("Workwaiting");
+    expect(pop()?.querySelector('[role="menu"]')).toBeNull();
+    expect(tokens()).toEqual(["studio"]);
+    act(() => filterButton()?.click());
     act(() => menuRow("Work")?.click());
     expect(godview.door().filters.profile).toBe("work");
+    // the desktop's first, as the button reads them
+    expect(tokens()).toEqual(["studio", "Work"]);
+    // the field's × lets the stage go of its one filter
+    act(() => tokenClear("Work")?.click());
+    expect(godview.door().filters.profile).toBeNull();
+    expect(godview.door().filters.desk).toBe("studio");
+    expect(tokens()).toEqual(["studio"]);
+    act(() => filterButton()?.click());
+    act(() => menuRow("Work")?.click());
     // the button says so at rest, with the popup closed too
     press(field() ?? document.body, { key: "Escape" });
     const parts = [...(host?.querySelectorAll(".vf-peek-token-part") ?? [])].map(
@@ -1193,14 +1289,13 @@ describe("Search — the Peek, in Godview: Live now (P2)", () => {
       mount(fieldd());
       to("godview");
       await openPeek();
-      // This Mac alone is every desktop: it wears the filter, and no token
-      expect(liveDropdown("desk")?.textContent).toBe("MacBook Pro");
+      // This Mac alone is every desktop: no token, in the field or on the button
+      expect(tokens()).toEqual([]);
       expect(host?.querySelector(".vf-peek-token")).toBeNull();
-      act(() => liveDropdown("desk")?.click());
-      const rows = [
-        ...(pop()?.querySelectorAll<HTMLButtonElement>(".vf-peek-menu .vf-menu-row") ?? []),
-      ];
-      expect(rows.map((row) => [row.getAttribute("role"), row.textContent?.trim()])).toEqual([
+      act(() => filterButton()?.click());
+      expect(eyebrows()).toEqual(["Profiles", "Desktops"]);
+      const rows = menuRows().slice(3);
+      expect(rows.map((row) => [row.getAttribute("role"), row.textContent])).toEqual([
         ["menuitemradio", "MacBook Pro · here1 agent"],
         ["menuitem", "Your other devicesConnect…"],
       ]);
@@ -1208,6 +1303,7 @@ describe("Search — the Peek, in Godview: Live now (P2)", () => {
       expect(pop()?.querySelector(".vf-peek-menu hr.vf-peek-menu-rule")).not.toBeNull();
       // its one act opens the Connect door, as the status item's row does
       act(() => rows[1]?.click());
+      expect(pop()?.querySelector('[role="menu"]')).toBeNull();
       expect(asked).toEqual(["open-connect"]);
       expect(godview.door().filters.desk).toBeNull();
     } finally {
@@ -1267,9 +1363,11 @@ describe("Search — the Peek, in Godview: Live now (P2)", () => {
       mount(fieldd(), { godview: <Godview /> });
       to("godview");
       await openPeek();
-      await until(() => liveDropdown("profile"), "the profile dropdown");
-      act(() => liveDropdown("profile")?.click());
+      // + Filter is drawn once the monitor offers a profile besides This Mac
+      await until(filterButton, "+ Filter");
+      act(() => filterButton()?.click());
       act(() => menuRow("Work")?.click());
+      expect(tokens()).toEqual(["Work"]);
       press(field() ?? document.body, { key: "Escape" });
       const tokenParts = (): string[] =>
         [...(host?.querySelectorAll(".vf-peek-token-part") ?? [])].map(
@@ -1279,16 +1377,129 @@ describe("Search — the Peek, in Godview: Live now (P2)", () => {
       // closed: the stage and its door are gone, and the button wears nothing
       act(() => showGodview(false));
       expect(host?.querySelector(".vf-peek-token")).toBeNull();
-      // open again: the same filter, on the button and in the scope row
+      // open again: the same filter, on the button and in the field
       act(() => showGodview(true));
       await until(() => host?.querySelector(".vf-peek-token"), "the token again", 2_000);
       expect(tokenParts()).toEqual(["Work"]);
       await openPeek();
-      expect(liveDropdown("profile")?.textContent).toBe("Work");
+      expect(tokens()).toEqual(["Work"]);
     } finally {
       act(() => showGodview(false));
       board.dispose();
     }
+  });
+
+  it("offers a typed name's filter first in Live now (SE-D1): a profile's, then a desktop's — ⇥ or ↵ takes it, its word leaves the field — never inside quotes, for one letter, for a filter already chosen, or in Everything", async () => {
+    const godview = godviewDoor();
+    mount(fieldd());
+    to("godview");
+    const input = await openPeek();
+    await until(() => (options().length === 2 ? true : null), "the live rows");
+    const offered = (): boolean =>
+      options().some((row) => row.getAttribute("data-kind") === "offer");
+    // one letter, and a word inside an open quote, offer nothing
+    typeInto(input, "w");
+    expect(offered()).toBe(false);
+    typeInto(input, '"deploy wo');
+    expect(offered()).toBe(false);
+    // two letters beginning a word of Work's name: the list's first row, and hot
+    typeInto(input, "wo");
+    const offer = options()[0];
+    expect(offer?.getAttribute("data-kind")).toBe("offer");
+    expect(offer?.querySelector(".vf-peek-title")?.textContent).toBe("Show only Work's sessions");
+    expect(offer?.querySelector(".vf-peek-when")?.textContent).toBe("1 session");
+    expect(offer?.querySelector(".vf-peek-tab")?.textContent).toBe("⇥");
+    expect(offer?.getAttribute("aria-selected")).toBe("true");
+    // its peek says what taking it does; Open says so, with ⇥ printed
+    expect(pop()?.querySelector('[aria-label="What taking it does"]')?.textContent).toBe(
+      "Show only Work's sessions. The field, the button and the stage keep it until you remove it.",
+    );
+    expect(pop()?.querySelector(".vf-peek-open")?.textContent).toBe("Add the filter⇥");
+    // ⇥ takes it: Godview's filter set, the token drawn, its word gone
+    expect(press(input, { key: "Tab" }).defaultPrevented).toBe(true);
+    expect(godview.door().filters.profile).toBe("work");
+    expect(tokens()).toEqual(["Work"]);
+    expect(input.value).toBe("");
+    expect(offered()).toBe(false);
+    // a desktop's name after words; ↵ takes it too, and the popup stays
+    typeInto(input, "deploy stu");
+    expect(options()[0]?.getAttribute("data-kind")).toBe("offer");
+    expect(options()[0]?.querySelector(".vf-peek-title")?.textContent).toBe(
+      "Show only what runs on studio",
+    );
+    press(input, { key: "Enter" });
+    expect(godview.door().filters.desk).toBe("studio");
+    expect(surfaceNow).toBe("search");
+    expect(input.value).toBe("deploy ");
+    expect(tokens()).toEqual(["studio", "Work"]);
+    // both chosen: a name offers nothing, and ⇥ is the page's again
+    typeInto(input, "wo");
+    expect(offered()).toBe(false);
+    expect(press(input, { key: "Tab" }).defaultPrevented).toBe(false);
+    // Everything offers none: its filters are the popup's
+    everythingTab();
+    typeInto(input, "stu");
+    expect(offered()).toBe(false);
+  });
+
+  it("⌫ at the field's start takes Live now's last token back — the profile's, then the desktop's — and lets Godview's filter go with it (SE-D2)", async () => {
+    const godview = godviewDoor({ desk: "studio", profile: "work" });
+    mount(fieldd());
+    to("godview");
+    const input = await openPeek();
+    expect(tokens()).toEqual(["studio", "Work"]);
+    act(() => input.setSelectionRange(0, 0));
+    expect(press(input, { key: "Backspace" }).defaultPrevented).toBe(true);
+    expect(godview.door().filters.profile).toBeNull();
+    expect(tokens()).toEqual(["studio"]);
+    expect(press(input, { key: "Backspace" }).defaultPrevented).toBe(true);
+    expect(godview.door().filters.desk).toBeNull();
+    expect(tokens()).toEqual([]);
+    // with no token left, ⌫ is the words' again
+    expect(press(input, { key: "Backspace" }).defaultPrevented).toBe(false);
+  });
+
+  it("Everything looks through every profile (UM-D28): it draws no profile token, and while Godview's is on its foot says so and where it comes back", async () => {
+    godviewDoor({ profile: "work" });
+    mount(fieldd());
+    to("godview");
+    await openPeek();
+    expect(tokens()).toEqual(["Work"]);
+    everythingTab();
+    await until(
+      () => (foot().startsWith("Your latest sessions") ? true : null),
+      "your latest sessions",
+    );
+    expect(foot()).toBe(
+      "Your latest sessions · every word you type must match · every profile; Work comes back on Live now",
+    );
+    expect(tokens()).toEqual([]);
+    // + Filter offers Everything's own
+    act(() => filterButton()?.click());
+    expect(eyebrows()).toEqual(["Projects", "Said by", "Agents"]);
+    press(field() ?? document.body, { key: "Escape" });
+    // back on Live now, the profile's token stands; cleared, the foot says no lens
+    liveNowTab();
+    expect(tokens()).toEqual(["Work"]);
+    act(() => tokenClear("Work")?.click());
+    everythingTab();
+    await until(
+      () => (foot() === "Your latest sessions · every word you type must match" ? true : null),
+      "the foot with no lens",
+    );
+  });
+
+  it("draws no + Filter while Live now has nothing to filter — this Mac alone, connected, and one profile — only the small switch at the field's end", async () => {
+    godviewDoor({ desks: [], profiles: [] });
+    mount(fieldd());
+    to("godview");
+    await openPeek();
+    expect(filterButton()).toBeNull();
+    expect(tokens()).toEqual([]);
+    expect(pop()?.querySelector(".vf-peek-fend")?.textContent).toBe("Live nowEverything");
+    // Everything's filters are the popup's own, and stand
+    everythingTab();
+    expect(filterButton()).not.toBeNull();
   });
 
   it("listens for the monitor's rows only while Live now shows, holds the stage's keys while open (QL-D2), and yields ⌘F to a view that holds them (SB-3)", async () => {

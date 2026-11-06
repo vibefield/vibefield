@@ -7026,10 +7026,11 @@ async function spawnBloomRows(ctx: {
     if (typeof id !== "string") {
       throw new Error(`agents.profileSets.create answered no set: ${JSON.stringify(answer)}`);
     }
-    // P2 (GV-D3): the profiles are offered in search's Live now — the
-    // scope row's dropdown, the bar's tabs retired (PK4). ⌘F opens it, the
-    // dropdown lists the new profile, and two Escapes fold the menu and the
-    // popup (the keyboard goes back to the pane the next items type in).
+    // P2 (GV-D3): the profiles are offered in search's Live now — + Filter's
+    // Profiles (SE-D1; the scope row's dropdown retired with the row, the
+    // bar's tabs at PK4). ⌘F opens it, the menu lists the new profile, and two
+    // Escapes fold the menu and the popup (the keyboard goes back to the pane
+    // the next items type in).
     pressChord(win, "f");
     await waitForRendererFact(
       win,
@@ -7041,9 +7042,9 @@ async function spawnBloomRows(ctx: {
     const deadline = Date.now() + 30_000;
     let offered: string[] = [];
     while (Date.now() < deadline) {
-      // the dropdown is drawn once a profile besides This Mac exists; opened, it lists them
+      // + Filter is drawn once there is a choice to make; opened, its Profiles list them
       await evaluate(`(() => {
-        const dd = document.querySelector('.vf-peek-pop [data-peek-dd="profile"] .vf-peek-dd');
+        const dd = document.querySelector('.vf-peek-pop [data-peek-dd="filter"] .vf-peek-filter');
         if (dd && dd.getAttribute("aria-expanded") !== "true") dd.click();
         return "ok";
       })()`);

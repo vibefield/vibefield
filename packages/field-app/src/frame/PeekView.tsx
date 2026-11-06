@@ -11,31 +11,35 @@ import {
   type Ref,
   useId,
 } from "react";
-import { GHOST_ROW_ACT, GHOST_ROW_LABEL } from "../account/link";
 import { OS_LABEL, OsMark } from "../godview/os-marks";
 import type { LiveDeskChoice, LiveFilters, LiveProfileChoice } from "./find-door";
-import { KIND_WORDS } from "./peek-filters";
+import {
+  isOffer,
+  type PeekFieldToken,
+  type PeekListItem,
+  type PeekMenuGroup,
+  type PeekPick,
+} from "./peek-filters";
 import { isLiveRow, type PeekListRow, type PeekLiveRow } from "./peek-live";
 import {
   PEEK_ROW_LINES,
-  type PeekFilters,
   type PeekLayout,
   type PeekLine,
   type PeekRow,
   type PeekScope,
 } from "./peek-model";
-import type { PeekProject } from "./peek-port";
 import type { ViewKeys } from "./views";
 import "./menu.css";
 import "./peek.css";
 
 // SEARCH — THE PEEK (DESIGN.md §8 "Search — the Peek", §5, §6, §10; One
-// Frame §23, GV-D8/D9/D10/D3) — controller-free, so the catalog mounts this
-// exact markup over a fixture port. The frame's button with its key printed
-// under it (and, in Godview, the filter it wears), and the layer: the scrim
-// that blurs and dims the window, and the popup — the field, the scope row,
-// the list beside the peek, the foot. What the Peek DOES lives in `Peek.tsx`;
-// what it shows is all props.
+// Frame §23, GV-D8/D9/D10/D3; SE-D1 A "Tokens", 2026-11-06) — controller-free,
+// so the catalog mounts this exact markup over a fixture port. The frame's
+// button with its key printed under it (and, in Godview, the filter it wears),
+// and the layer: the scrim that blurs and dims the window, and the popup — the
+// field with its tokens and its end (+ Filter and the small switch), the list
+// beside the peek, the foot. What the Peek DOES lives in `Peek.tsx`, and what
+// its filters say in `peek-filters.ts`; what it shows is all props.
 
 /** The filter a search button wears (GV-D3): the chosen desktop, the chosen
  * profile, or both. */
@@ -52,7 +56,8 @@ export type PeekStep = "out" | "in";
 /** The frame's search button at the head's right end, ⌘F printed under its
  * glyph (Ctrl F off the Mac). With a filter on, the glass grows a token
  * naming it — "studio · Work" — and an × that clears it (GV-D3): a filtered
- * view never looks unfiltered. */
+ * view never looks unfiltered. It is one state with the field's tokens (SE-D2):
+ * this × clears them too. */
 export function PeekButtonView({
   keys,
   open,
@@ -192,7 +197,8 @@ export function PeekPast({ row, reader }: { row: PeekRow; reader?: ReactNode }):
 /** THE LIVE PEEK (GV-D8): what opening a live row would show — the run's own
  * pane, resting, which the controller draws (`renderLive`, the watch-only
  * pane); a run on another desktop says where it runs, as nothing here can
- * watch another desktop's terminal yet (K10, until DS-4's mirror). */
+ * watch another desktop's terminal yet (K10, until DS-4's mirror). SKELETON
+ * (SE-1c red): no head yet. */
 export function PeekLive({
   row,
   renderLive,
@@ -275,102 +281,6 @@ function RowLine({ line }: { line: PeekLine }): ReactElement {
   );
 }
 
-/** Which dropdown's menu is open: Everything's three, Live now's two. */
-export type PeekMenu = "project" | "kind" | "agent" | "desk" | "profile";
-
-interface MenuChoice {
-  readonly key: string;
-  readonly label: string;
-  readonly on: boolean;
-  readonly pick: () => void;
-  /** a mark before the name (a desktop's OS, a profile's glyph) */
-  readonly lead?: ReactNode;
-  /** a word after it (a desktop's agents or its standing) */
-  readonly note?: string;
-  /** a desktop that is not answering: drawn quiet */
-  readonly quiet?: boolean;
-  /** TS-4 — not a choice but an offer, under a hairline: the ghost row */
-  readonly ghost?: boolean;
-}
-
-function Dropdown({
-  id,
-  lead,
-  label,
-  open,
-  onToggle,
-  choices,
-}: {
-  id: PeekMenu;
-  /** the mark before the name: a glyph, or the chosen desktop's or profile's */
-  lead: ReactNode;
-  label: string;
-  open: boolean;
-  onToggle: () => void;
-  choices: readonly MenuChoice[];
-}): ReactElement {
-  const menuId = useId();
-  return (
-    <span className="vf-peek-dd-place" data-peek-dd={id}>
-      <button
-        type="button"
-        className="vf-peek-dd"
-        aria-haspopup="menu"
-        aria-expanded={open}
-        aria-controls={open ? menuId : undefined}
-        onClick={onToggle}
-      >
-        <span className="vf-peek-dd-lead">{lead}</span>
-        <span className="vf-peek-dd-label">{label}</span>
-        <FieldGlyph name="chevron" size={11} turn={90} className="vf-peek-dd-turn" />
-      </button>
-      {open && (
-        <div id={menuId} className="vf-menu vf-peek-menu" role="menu" aria-label={label}>
-          {choices.map((choice) =>
-            choice.ghost === true ? (
-              <Fragment key={choice.key}>
-                <hr className="vf-peek-menu-rule" />
-                <button
-                  type="button"
-                  role="menuitem"
-                  className="vf-menu-row"
-                  data-ghost=""
-                  onClick={choice.pick}
-                >
-                  {choice.lead !== undefined && (
-                    <span className="vf-peek-menu-lead">{choice.lead}</span>
-                  )}
-                  <span className="vf-menu-label">{choice.label}</span>
-                  {choice.note !== undefined && (
-                    <em className="vf-peek-menu-note">{choice.note}</em>
-                  )}
-                </button>
-              </Fragment>
-            ) : (
-              <button
-                key={choice.key}
-                type="button"
-                role="menuitemradio"
-                aria-checked={choice.on}
-                className="vf-menu-row"
-                data-hot={choice.on ? "" : undefined}
-                data-quiet={choice.quiet === true ? "" : undefined}
-                onClick={choice.pick}
-              >
-                {choice.lead !== undefined && (
-                  <span className="vf-peek-menu-lead">{choice.lead}</span>
-                )}
-                <span className="vf-menu-label">{choice.label}</span>
-                {choice.note !== undefined && <em className="vf-peek-menu-note">{choice.note}</em>}
-              </button>
-            ),
-          )}
-        </div>
-      )}
-    </span>
-  );
-}
-
 export interface PeekViewProps {
   open: boolean;
   keys: ViewKeys;
@@ -379,31 +289,35 @@ export interface PeekViewProps {
   layout: PeekLayout;
   query: string;
   scope: PeekScope;
-  filters: PeekFilters;
-  projects: readonly PeekProject[];
-  agents: readonly { readonly id: string; readonly label: string }[];
-  /** Live now's dropdowns (GV-D3, Godview's): null where the view has none */
+  /** Godview's filters (GV-D3), null where the view lends none: what a live
+   * row's profile is named by, and what Live now's filters are tried again for */
   liveFilters?: LiveFilters | null;
-  onLiveDesk?: (id: string | null) => void;
-  /** TS-4 — the ghost row's Connect…: the Connect door, as the status item's */
-  onConnect?: () => void;
-  onLiveProfile?: (id: string | null) => void;
-  rows: readonly PeekListRow[];
+  /** the filters that are on, as the field's tokens (`peekFieldTokens`) */
+  tokens: readonly PeekFieldToken[];
+  /** + Filter's menu (`filterMenu`): empty, + Filter is not drawn */
+  filterMenu: readonly PeekMenuGroup[];
+  filterOpen: boolean;
+  /** this device in its own word ("This Mac"): where a live run's head says it runs */
+  here: string;
+  /** the list: the sessions, a typed name's offer first while it stands */
+  rows: readonly PeekListItem[];
   /** the hot row's index (−1 for none) */
   hot: number;
   /** the foot's one sentence */
   foot: string;
   /** the empty body's sentence when there are no rows, or null for none */
   none: string | null;
-  menu: PeekMenu | null;
   /** the live peek's picture: the run's own pane, watched */
   renderLive?: (row: PeekLiveRow) => ReactNode;
   inputRef?: Ref<HTMLInputElement>;
   listRef?: Ref<HTMLDivElement>;
   onQuery: (query: string) => void;
   onScope: (scope: PeekScope) => void;
-  onMenu: (menu: PeekMenu | null) => void;
-  onFilters: (filters: PeekFilters) => void;
+  onFilterOpen: (open: boolean) => void;
+  /** a menu row picked: a filter set, or TS-4's Connect… */
+  onPick: (pick: PeekPick | "connect") => void;
+  /** a token's ×: its one filter back to every one */
+  onRemoveToken: (token: PeekFieldToken) => void;
   onOpen: (index: number) => void;
   onClose: () => void;
   onKeyDown?: (event: KeyboardEvent<HTMLDivElement>) => void;
@@ -412,8 +326,10 @@ export interface PeekViewProps {
   pastReader?: ((row: PeekRow, query: string) => ReactNode) | undefined;
 }
 
-/** What Open says for a row (the kit's `openLabel`). */
-export function openWords(row: PeekListRow, view: FrameView | undefined): string {
+/** What Open says for a row (the kit's `openLabel`), and for the offer what
+ * taking it does (SE-D1). */
+export function openWords(row: PeekListItem, view: FrameView | undefined): string {
+  if (isOffer(row)) return "Add the filter";
   if (isLiveRow(row)) return "Open in the terminals";
   if (view !== undefined && view !== "history") return "Open in History";
   return row.lines.length > 0 ? "Open at the line" : "Open the session";
@@ -422,7 +338,11 @@ export function openWords(row: PeekListRow, view: FrameView | undefined): string
 /** MV-8b: Live now's rows are a chrome piece of their own, tried again for
  * the rows they list (the same array while their content is); Everything's
  * are the past's, drawn as they were. */
-function liveBoundary(scope: PeekScope, rows: readonly PeekListRow[], items: ReactNode): ReactNode {
+function liveBoundary(
+  scope: PeekScope,
+  rows: readonly PeekListItem[],
+  items: ReactNode,
+): ReactNode {
   return scope === "live" ? (
     <ChromeBoundary name="Live now" retryKey={rows}>
       {items}
@@ -432,15 +352,56 @@ function liveBoundary(scope: PeekScope, rows: readonly PeekListRow[], items: Rea
   );
 }
 
-/** The distinct OS marks of every desktop: what "All desktops" wears. */
-function deskMarks(desks: readonly LiveDeskChoice[]): ReactNode {
-  const seen = [...new Set(desks.map((desk) => desk.os))];
+/** A session's row, live or past: its head, then folder · agent — a peer's
+ * saying where it runs (K10) — and its matched lines. SKELETON (SE-1c red): no
+ * profile yet. */
+function SessionRow({
+  row,
+  id,
+  hot,
+  onOpen,
+}: {
+  row: PeekListRow;
+  id: string;
+  hot: boolean;
+  onOpen: () => void;
+}): ReactElement {
+  const where = whereWords(row);
+  const live = isLiveRow(row);
+  const remote = live ? row.remote : null;
   return (
-    <span className="vf-peek-marks">
-      {seen.map((os) => (
-        <OsMark key={os} os={os} size={11} />
+    // biome-ignore lint/a11y/useKeyWithClickEvents: the field holds the keys (↑ ↓ ↵), as a combobox's listbox does
+    <div
+      id={id}
+      role="option"
+      tabIndex={-1}
+      aria-selected={hot}
+      className="vf-peek-row"
+      data-hot={hot ? "true" : undefined}
+      data-kind={live ? "live" : "past"}
+      data-floor-session={live ? (row.floorSessionId ?? undefined) : undefined}
+      onClick={onOpen}
+    >
+      <span className="vf-peek-row-head">
+        <i className="vf-peek-dot" data-state={live ? row.state : undefined} aria-hidden="true" />
+        <b className="vf-peek-title">{row.title}</b>
+        <span className="vf-peek-when">{row.when}</span>
+      </span>
+      {(where !== null || remote !== null) && (
+        <span className="vf-peek-sub">
+          {where}
+          {remote !== null && (
+            <span className="vf-peek-os" title={OS_LABEL[remote.os]}>
+              <OsMark os={remote.os} size={11} />
+              {remote.name}
+            </span>
+          )}
+        </span>
+      )}
+      {row.lines.slice(0, PEEK_ROW_LINES).map((line) => (
+        <RowLine key={line.id} line={line} />
       ))}
-    </span>
+    </div>
   );
 }
 
@@ -453,25 +414,15 @@ export function PeekView(props: PeekViewProps): ReactElement {
     layout,
     query,
     scope,
-    filters,
-    projects,
-    agents,
-    liveFilters = null,
-    onLiveDesk,
-    onConnect,
-    onLiveProfile,
     rows,
     hot,
     foot,
     none,
-    menu,
     renderLive,
     inputRef,
     listRef,
     onQuery,
     onScope,
-    onMenu,
-    onFilters,
     onOpen,
     onClose,
     onKeyDown,
@@ -480,9 +431,6 @@ export function PeekView(props: PeekViewProps): ReactElement {
   const listId = useId();
   const optionId = (index: number): string => `${listId}-row-${index}`;
   const hotRow = hot >= 0 ? rows[hot] : undefined;
-  const toggle = (which: PeekMenu) => () => onMenu(menu === which ? null : which);
-  const project = projects.find((entry) => entry.id === filters.project);
-  const agent = agents.find((entry) => entry.id === filters.agent);
   const words = query.trim();
   let body: ReactNode;
   if (rows.length === 0) {
@@ -502,6 +450,20 @@ export function PeekView(props: PeekViewProps): ReactElement {
       </div>
     );
   } else {
+    let peek: ReactNode = null;
+    // SKELETON (SE-1c red): an offer's peek is not drawn yet
+    if (!layout.folded && hotRow !== undefined && !isOffer(hotRow)) {
+      if (isLiveRow(hotRow)) {
+        // MV-8b: the live peek is a chrome piece of its own, tried again for the run it shows
+        peek = (
+          <ChromeBoundary name="Live peek" retryKey={hotRow.floorSessionId ?? hotRow.id}>
+            <PeekLive row={hotRow} renderLive={renderLive} />
+          </ChromeBoundary>
+        );
+      } else {
+        peek = <PeekPast row={hotRow} reader={pastReader?.(hotRow, query)} />;
+      }
+    }
     body = (
       <div className="vf-peek-split" data-folded={layout.folded ? "true" : undefined}>
         <div
@@ -514,225 +476,22 @@ export function PeekView(props: PeekViewProps): ReactElement {
           {liveBoundary(
             scope,
             rows,
-            rows.map((row, index) => {
-              const where = whereWords(row);
-              const live = isLiveRow(row);
-              return (
-                // biome-ignore lint/a11y/useKeyWithClickEvents: the field holds the keys (↑ ↓ ↵), as a combobox's listbox does
-                <div
+            // SKELETON (SE-1c red): an offer's row is not drawn yet
+            rows.map((row, index) =>
+              isOffer(row) ? null : (
+                <SessionRow
                   key={row.id}
+                  row={row}
                   id={optionId(index)}
-                  role="option"
-                  tabIndex={-1}
-                  aria-selected={index === hot}
-                  className="vf-peek-row"
-                  data-hot={index === hot ? "true" : undefined}
-                  data-kind={live ? "live" : "past"}
-                  data-floor-session={live ? (row.floorSessionId ?? undefined) : undefined}
-                  onClick={() => onOpen(index)}
-                >
-                  <span className="vf-peek-row-head">
-                    <i
-                      className="vf-peek-dot"
-                      data-state={live ? row.state : undefined}
-                      aria-hidden="true"
-                    />
-                    <b className="vf-peek-title">{row.title}</b>
-                    <span className="vf-peek-when">{row.when}</span>
-                  </span>
-                  {(where !== null || (live && row.remote !== null)) && (
-                    <span className="vf-peek-sub">
-                      {where}
-                      {live && row.remote !== null && (
-                        <span className="vf-peek-os" title={OS_LABEL[row.remote.os]}>
-                          <OsMark os={row.remote.os} size={11} />
-                          {row.remote.name}
-                        </span>
-                      )}
-                    </span>
-                  )}
-                  {row.lines.slice(0, PEEK_ROW_LINES).map((line) => (
-                    <RowLine key={line.id} line={line} />
-                  ))}
-                </div>
-              );
-            }),
+                  hot={index === hot}
+                  onOpen={() => onOpen(index)}
+                />
+              ),
+            ),
           )}
         </div>
-        {!layout.folded &&
-          hotRow !== undefined &&
-          (isLiveRow(hotRow) ? (
-            // MV-8b: the live peek is a chrome piece of its own, tried again
-            // for the run it shows
-            <ChromeBoundary name="Live peek" retryKey={hotRow.floorSessionId ?? hotRow.id}>
-              <PeekLive row={hotRow} renderLive={renderLive} />
-            </ChromeBoundary>
-          ) : (
-            <PeekPast row={hotRow} reader={pastReader?.(hotRow, query)} />
-          ))}
+        {peek}
       </div>
-    );
-  }
-  let dropdowns: ReactNode = null;
-  if (scope === "everything") {
-    dropdowns = (
-      <div className="vf-peek-dds">
-        <Dropdown
-          id="project"
-          lead={<FieldGlyph name="folder" size={13} />}
-          label={project?.name ?? "Every project"}
-          open={menu === "project"}
-          onToggle={toggle("project")}
-          choices={[
-            { id: null, name: "Every project" },
-            ...projects.map((entry) => ({ id: entry.id, name: entry.name })),
-          ].map((entry) => ({
-            key: entry.id ?? "every",
-            label: entry.name,
-            on: filters.project === entry.id,
-            pick: () => onFilters({ ...filters, project: entry.id }),
-          }))}
-        />
-        <Dropdown
-          id="kind"
-          lead={<FieldGlyph name="message" size={13} />}
-          label={KIND_WORDS[filters.kind]}
-          open={menu === "kind"}
-          onToggle={toggle("kind")}
-          choices={(["any", "user", "agent"] as const).map((kind) => ({
-            key: kind,
-            label: KIND_WORDS[kind],
-            on: filters.kind === kind,
-            pick: () => onFilters({ ...filters, kind }),
-          }))}
-        />
-        <Dropdown
-          id="agent"
-          lead={<FieldGlyph name="agents" size={13} />}
-          label={agent?.label ?? "Any agent"}
-          open={menu === "agent"}
-          onToggle={toggle("agent")}
-          choices={[{ id: null, label: "Any agent" }, ...agents].map((entry) => ({
-            key: entry.id ?? "any",
-            label: entry.label,
-            on: filters.agent === entry.id,
-            pick: () => onFilters({ ...filters, agent: entry.id }),
-          }))}
-        />
-      </div>
-    );
-  } else if (
-    liveFilters !== null &&
-    (liveFilters.desks.length > 0 || liveFilters.profiles.length > 0)
-  ) {
-    // GV-D3: the desktops and the profiles — the view's own filters, which
-    // filter the view too; each offered only when there is a choice to make
-    const desk = liveFilters.desks.find((entry) => entry.id === liveFilters.desk);
-    const profile = liveFilters.profiles.find((entry) => entry.id === liveFilters.profile);
-    // TS-4 — not connected, the filter holds This Mac alone (all of them), then
-    // the ghost row that offers the rest
-    const offer = liveFilters.connect === true && onConnect !== undefined;
-    const only = offer && liveFilters.desks.length === 1 ? liveFilters.desks[0] : undefined;
-    const shown = desk ?? only;
-    dropdowns = (
-      // MV-8b: the scope row's filters are a chrome piece of their own, tried
-      // again for the filters they draw (held by content by the monitor)
-      <ChromeBoundary name="Live filters" retryKey={liveFilters}>
-        <div className="vf-peek-dds">
-          {liveFilters.desks.length > 0 && (
-            <Dropdown
-              id="desk"
-              lead={
-                shown === undefined ? (
-                  deskMarks(liveFilters.desks)
-                ) : (
-                  <OsMark os={shown.os} size={12} />
-                )
-              }
-              label={shown?.name ?? "All desktops"}
-              open={menu === "desk"}
-              onToggle={toggle("desk")}
-              choices={[
-                ...(only === undefined
-                  ? [
-                      {
-                        key: "all",
-                        label: "All desktops",
-                        on: liveFilters.desk === null,
-                        pick: () => onLiveDesk?.(null),
-                      },
-                    ]
-                  : []),
-                ...liveFilters.desks.map((entry) => ({
-                  key: entry.id,
-                  label: entry.here ? `${entry.name} · here` : entry.name,
-                  on: liveFilters.desk === entry.id || entry === only,
-                  pick: () => onLiveDesk?.(entry === only ? null : entry.id),
-                  lead: <OsMark os={entry.os} size={11} />,
-                  note: entry.note,
-                  quiet: entry.quiet,
-                })),
-                ...(offer
-                  ? [
-                      {
-                        key: "connect",
-                        label: GHOST_ROW_LABEL,
-                        on: false,
-                        pick: () => onConnect?.(),
-                        lead: <FieldGlyph name="plus" size={11} />,
-                        note: GHOST_ROW_ACT,
-                        ghost: true,
-                      },
-                    ]
-                  : []),
-              ]}
-            />
-          )}
-          {liveFilters.profiles.length > 0 && (
-            <Dropdown
-              id="profile"
-              lead={
-                profile === undefined ? (
-                  <FieldGlyph name="person" size={13} />
-                ) : (
-                  <ProfileGlyph
-                    glyph={profile.glyph}
-                    kind={profile.kind}
-                    filled={profile.isDefault === true}
-                    size={13}
-                  />
-                )
-              }
-              label={profile?.label ?? "Every profile"}
-              open={menu === "profile"}
-              onToggle={toggle("profile")}
-              choices={[
-                {
-                  key: "every",
-                  label: "Every profile",
-                  on: liveFilters.profile === null,
-                  pick: () => onLiveProfile?.(null),
-                },
-                ...liveFilters.profiles.map((entry) => ({
-                  key: entry.id,
-                  label: entry.label,
-                  on: liveFilters.profile === entry.id,
-                  pick: () => onLiveProfile?.(entry.id),
-                  lead: (
-                    <ProfileGlyph
-                      glyph={entry.glyph}
-                      kind={entry.kind}
-                      filled={entry.isDefault === true}
-                      size={12}
-                    />
-                  ),
-                  ...(entry.blocked === true ? { note: "waiting" } : {}),
-                })),
-              ]}
-            />
-          )}
-        </div>
-      </ChromeBoundary>
     );
   }
   return (
@@ -752,6 +511,7 @@ export function PeekView(props: PeekViewProps): ReactElement {
         >
           <div className="vf-peek-field">
             <FieldGlyph name="search" size={18} />
+            {/* SKELETON (SE-1c red): the tokens are not drawn yet */}
             <input
               ref={inputRef}
               type="text"
@@ -771,6 +531,24 @@ export function PeekView(props: PeekViewProps): ReactElement {
               value={query}
               onChange={(event) => onQuery(event.target.value)}
             />
+            {/* SE-D1: the field's end — SKELETON (SE-1c red): the small switch
+                alone, + Filter not drawn yet */}
+            <div className="vf-peek-fend">
+              <div className="vf-peek-seg" role="radiogroup" aria-label="What to search">
+                {(["live", "everything"] as const).map((which) => (
+                  // biome-ignore lint/a11y/useSemanticElements: a segment, as the kit's primitives draw it
+                  <button
+                    key={which}
+                    type="button"
+                    role="radio"
+                    aria-checked={scope === which}
+                    onClick={() => onScope(which)}
+                  >
+                    {which === "live" ? "Live now" : "Everything"}
+                  </button>
+                ))}
+              </div>
+            </div>
             <button
               type="button"
               className="vf-peek-esc"
@@ -780,23 +558,6 @@ export function PeekView(props: PeekViewProps): ReactElement {
               <FieldGlyph name="close" size={12} />
               <kbd className="vf-peek-key">esc</kbd>
             </button>
-          </div>
-          <div className="vf-peek-scope">
-            <div className="vf-peek-seg" role="radiogroup" aria-label="What to search">
-              {(["live", "everything"] as const).map((which) => (
-                // biome-ignore lint/a11y/useSemanticElements: a segment, as the kit's primitives draw it
-                <button
-                  key={which}
-                  type="button"
-                  role="radio"
-                  aria-checked={scope === which}
-                  onClick={() => onScope(which)}
-                >
-                  {which === "live" ? "Live now" : "Everything"}
-                </button>
-              ))}
-            </div>
-            {dropdowns}
           </div>
           <div className="vf-peek-body">{body}</div>
           <div className="vf-peek-foot">
@@ -808,11 +569,12 @@ export function PeekView(props: PeekViewProps): ReactElement {
                 type="button"
                 className="vf-peek-open"
                 aria-label={openWords(hotRow, view)}
-                aria-keyshortcuts="Enter"
+                aria-keyshortcuts={isOffer(hotRow) ? "Tab" : "Enter"}
                 onClick={() => onOpen(hot)}
               >
                 {openWords(hotRow, view)}
-                <kbd className="vf-peek-open-key">↵</kbd>
+                {/* the key that takes it, printed on it: ⇥ for the offer, ↵ for a row */}
+                <kbd className="vf-peek-open-key">{isOffer(hotRow) ? "⇥" : "↵"}</kbd>
               </button>
             )}
           </div>

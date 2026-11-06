@@ -5,7 +5,7 @@ import {
   type LiveFilters,
   type LiveProfileChoice,
 } from "./find-door";
-import { type PeekLiveRow, plural } from "./peek-live";
+import { type PeekListRow, type PeekLiveRow, plural } from "./peek-live";
 import { hasOpenQuote, type PeekFilters, type PeekKind, type PeekScope } from "./peek-model";
 import type { PeekProject } from "./peek-port";
 
@@ -155,6 +155,14 @@ export interface PeekOffer {
   readonly title: string;
   /** its sessions, every one's ("4 sessions") */
   readonly note: string;
+}
+
+/** A row of the list: a session, live or past, or a typed name's offer, which
+ * stands first. */
+export type PeekListItem = PeekListRow | PeekOffer;
+
+export function isOffer(row: PeekListItem): row is PeekOffer {
+  return (row as PeekOffer).kind === "offer";
 }
 
 /** The last word typed (the space after it kept out), and where it starts. */
