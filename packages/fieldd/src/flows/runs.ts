@@ -22,13 +22,16 @@ import { createNoopLogger, type Logger } from "@vibefield/logging";
 import { RpcCallError } from "../native-link";
 import type { HoldSender } from "../tool-plane/rooms/talk/verbs";
 import type { FlowChangedRaise } from "../tool-plane/rooms/you/queue";
+import type { FlowJournalEntry } from "./journal";
 import type { FlowLibrary } from "./library";
 import type { FlowRecords, FlowRunStart } from "./records";
 import { FlowReplay } from "./replay";
 import { readFlow } from "./static-read";
-import type { FlowStepPorts } from "./steps";
+import { type FlowStepPorts, type FlowStepWrite, startStep } from "./steps";
 import {
   type FlowCallHandler,
+  type FlowHostAnswer,
+  type FlowHostCall,
   type FlowHostEnd,
   type FlowHostOptions,
   type FlowHostRun,
@@ -109,6 +112,10 @@ interface RunEnd {
 interface LiveRun {
   host?: FlowHostRun;
   log?: string;
+  /** the spark that started it, by the name its steps' words are marked with (Q-B2 (a)); none for yours */
+  readonly ran?: string | undefined;
+  /** each step's answer, by its call, while its host waits on it (the step's result is slice 9's) */
+  readonly waiting: Map<number, (answer: FlowHostAnswer) => void>;
 }
 
 /** The states a run never leaves. */
@@ -123,9 +130,13 @@ const isLive = (record: FlowRunRecord): boolean => {
 const refused = (reason: string, message: string): RpcCallError =>
   new RpcCallError("PRECONDITION_FAILED", message, false, { reason });
 
-/** What a call is answered until slice 8 (agent) and slice 11 (ask) build them: the host refuses it in fieldd's own
- * words ("VibeField could not answer this call."), as it refuses any handler that fails. */
-const NO_CALLS_YET = "CP-4a2b: a flow's agent() and ask() are built in M-r2's slices 8 and 11";
+/** What an ask() is answered until slice 11 builds it: the host refuses it in fieldd's own words ("VibeField could
+ * not answer this call."), as it refuses any handler that fails. */
+const NO_ASK_YET = "CP-4a2b: a flow's ask() is built in M-r2's slice 11";
+
+/** A call no flow makes (only a host that is not VibeField's sends one), refused in replay.ts's own form (D9). */
+const noSuchCall = (what: string): string =>
+  `VibeField can't send this ${oneLineWords(what, 32)}: a flow's calls are agent() and ask()`;
 
 /** A record's fields as `writeRunRecord` takes them whole. */
 function startOf(record: FlowRunRecord): FlowRunStart {
@@ -293,7 +304,12 @@ export class FlowRuns {
       { run, flow: params.flow, name, n, hash, starter: params.starter, input: params.input },
       { scope, state: "running", calls: 0, allowed: FLOW_LIMITS.CALLS_MAX, open: [], steps: [] },
     );
-    this.#live.set(run, {});
+    this.#live.set(run, {
+      waiting: new Map(),
+      ...(params.from !== undefined && params.starter.by === "spark"
+        ? { ran: nameWords(params.from.name) }
+        : {}),
+    });
     const begun = records.runRecord(run);
     if (begun === undefined) throw new Error(`the record of ${run} did not read back`);
     this.#wake(run, begun);
@@ -316,8 +332,11 @@ export class FlowRuns {
     }
     const replay = new FlowReplay({
       prior: read.lines,
-      append: (entry) => records.appendRun(run, entry),
-      inner: this.#inner(live),
+      append: (entry) => {
+        records.appendRun(run, entry);
+        this.#journaled(run, entry);
+      },
+      inner: this.#inner(run, live),
     });
     const host = startFlowHost({
       ...this.ports.host,
@@ -337,15 +356,86 @@ export class FlowRuns {
       });
   }
 
-  /** What a run's new calls and log lines reach, past its journal. */
-  #inner(live: LiveRun): FlowCallHandler {
+  /** What a run's new calls and log lines reach, past its journal: an `agent()` by the one spawn road (D5), and a
+   * `what` no flow calls refused (D9). */
+  #inner(run: FlowRunId, live: LiveRun): FlowCallHandler {
     return {
-      call: () => Promise.reject(new Error(NO_CALLS_YET)),
+      call: (call) => {
+        if (call.what === "agent") return this.#step(run, live, call);
+        if (call.what === "ask") return Promise.reject(new Error(NO_ASK_YET));
+        return Promise.resolve({ ok: false, refused: noSuchCall(call.what) });
+      },
       log: (text) => {
         live.log = text;
         this.#changed();
       },
     };
+  }
+
+  /** A step: its agent started by `startStep`, then its answer awaited (slice 9's). */
+  async #step(run: FlowRunId, live: LiveRun, call: FlowHostCall): Promise<FlowHostAnswer> {
+    const number = call.call;
+    const record = this.ports.records.runRecord(run);
+    if (number === undefined || record === undefined)
+      throw new Error(`a step of ${run} with no call number or no record`);
+    const started = await startStep(
+      this.ports,
+      { run, flow: record.flow, name: record.name, ran: live.ran },
+      this.#stepWrite(run),
+      number,
+      call.args,
+    );
+    if ("refused" in started) return started;
+    return new Promise((resolve) => live.waiting.set(number, resolve));
+  }
+
+  /** The record's open step, written through the one writer of a run's record. */
+  #stepWrite(run: FlowRunId): FlowStepWrite {
+    return (call, patch) =>
+      this.#rewriteWith(run, (record) => ({
+        open: record.open.map((step) => (step.call === call ? patch(step) : step)),
+      }));
+  }
+
+  /** A line the run's journal took, as its record follows it (D18's cadence): a call counts (D10), and an agent's
+   * call opens its step, `starting` (D5 step 2); an answer settles its step, `failed` for a refusal. */
+  #journaled(run: FlowRunId, entry: FlowJournalEntry): void {
+    if (entry.kind === "call")
+      this.#rewriteWith(run, (record) => ({
+        calls: record.calls + 1,
+        ...(entry.what === "agent"
+          ? {
+              open: [
+                ...record.open,
+                {
+                  call: entry.call,
+                  ...(entry.label !== undefined ? { label: entry.label } : {}),
+                  ...(entry.agent !== undefined ? { agent: entry.agent } : {}),
+                  ...(entry.phase !== undefined ? { phase: entry.phase } : {}),
+                  state: "starting",
+                },
+              ],
+            }
+          : {}),
+      }));
+    else if (entry.kind === "answer")
+      this.#rewriteWith(run, (record) => {
+        const step = record.open.find((open) => open.call === entry.call);
+        if (step === undefined) return {};
+        const settled: FlowRunRecordStep = {
+          ...step,
+          state: entry.refused !== undefined ? "failed" : "answered",
+          ...(entry.cut === true ? { cut: true as const } : {}),
+        };
+        const steps = [...record.steps, settled];
+        const shown = steps.slice(-FLOW_RUN_STEPS_MAX);
+        const earlier = (record.earlier ?? 0) + steps.length - shown.length;
+        return {
+          open: record.open.filter((open) => open.call !== entry.call),
+          steps: shown,
+          ...(earlier > 0 ? { earlier } : {}),
+        };
+      });
   }
 
   /** A host's end, as its run ends (or, for a host that left, waits for its next wake: DESIGN.md §9). fieldd's own stop
@@ -414,10 +504,15 @@ export class FlowRuns {
 
   /** A run's record written again with `fields` over what it holds, then told. */
   #rewrite(run: FlowRunId, fields: Partial<FlowRunStart>): void {
+    this.#rewriteWith(run, () => fields);
+  }
+
+  /** A run's record written again with what `fields` makes of it over what it holds, then told: the one writer. */
+  #rewriteWith(run: FlowRunId, fields: (record: FlowRunRecord) => Partial<FlowRunStart>): void {
     const { records } = this.ports;
     const record = records.runRecord(run);
     if (record === undefined) throw new Error(`no record of ${run} to write`);
-    records.writeRunRecord(run, { ...startOf(record), ...fields });
+    records.writeRunRecord(run, { ...startOf(record), ...fields(record) });
     this.#changed();
   }
 

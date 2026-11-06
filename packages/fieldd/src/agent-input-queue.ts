@@ -88,13 +88,23 @@ export interface InputQueueOptions {
   readonly readFile?: ((path: string) => string) | undefined;
 }
 
-/** The text an input lands as (CP2-D1): a spark's and fieldd's marked, yours as you wrote it (IOS-12a). */
-export const markedText = (input: QueuedInput): string =>
-  input.from.kind === "spark"
-    ? `${input.from.name} (your spark) on your behalf:\n${input.text}`
-    : input.from.kind === "you"
-      ? input.text
-      : `VibeField: ${input.text}`;
+/** The text an input lands as (CP2-D1): a spark's and fieldd's marked, yours as you wrote it (IOS-12a). CP-4a2b
+ * (Q-B1 (a), Q-B2 (a); MT-L6): a flow's own words, its steps' prompts and `in:` lines, under the flow's mark, whose
+ * name the runs gave it (never one that reads as VibeField, R18), and never "VibeField:", which is VibeField's own
+ * lines alone (DESIGN.md §9 "The flow's mark"). */
+export function markedText(input: QueuedInput): string {
+  const from = input.from;
+  switch (from.kind) {
+    case "spark":
+      return `${from.name} (your spark) on your behalf:\n${input.text}`;
+    case "you":
+      return input.text;
+    case "flow":
+      return `${from.name} (a flow ${from.ran ?? "you"} ran) on your behalf:\n${input.text}`;
+    case "fieldd":
+      return `VibeField: ${input.text}`;
+  }
+}
 
 /** A file name a run id can be kept under; ids are fieldd's own, and anything else is refused. */
 const SAFE_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
@@ -213,9 +223,11 @@ export class AgentInputQueues {
     const queue = this.#queueOf(runtimeRunId);
     const last = queue.at(-1);
     const items = joined(last?.items, item);
+    // CP-4a2b: never onto VibeField's own line to a flow's step (`fieldd` with a `flow`), whose step answers it
     if (
       last !== undefined &&
       last.from.kind === "fieldd" &&
+      last.from.flow === undefined &&
       last.sending === undefined &&
       !this.#busy.has(runtimeRunId) &&
       (items?.length ?? 0) <= NEEDS_JOINED_ITEMS_MAX
