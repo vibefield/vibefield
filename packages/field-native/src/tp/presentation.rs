@@ -513,17 +513,19 @@ mod tests {
     use std::collections::HashMap;
     use std::sync::atomic::AtomicUsize;
     use std::sync::Mutex;
+    use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
     struct ReadyHost {
-        seeds: AtomicUsize,
         view_epoch: AtomicUsize,
+        /// Every `scene_generation` read: in the door, the registry lock.
+        scene_reads: AtomicUsize,
     }
 
     impl Default for ReadyHost {
         fn default() -> Self {
             Self {
-                seeds: AtomicUsize::new(0),
                 view_epoch: AtomicUsize::new(1),
+                scene_reads: AtomicUsize::new(0),
             }
         }
     }
@@ -535,17 +537,96 @@ mod tests {
         fn can_admit(&self, _: u64, _: &str, _: u64, _: UnitClass) -> Admission {
             Admission::Admitted
         }
-        fn unit_sent(&self, _: &str, _: u64, seed: bool) {
-            if seed {
-                self.seeds.fetch_add(1, Ordering::SeqCst);
-            }
-        }
+        fn unit_sent(&self, _: &str, _: u64, _: bool) {}
         fn presentation_stopped(&self, _: &str, reason: &'static str) {
             panic!("unexpected stop: {reason}");
         }
         fn scene_generation(&self, _: &str) -> Option<(u64, u64)> {
+            self.scene_reads.fetch_add(1, Ordering::SeqCst);
             let epoch = self.view_epoch.load(Ordering::SeqCst) as u64;
             (epoch != 0).then_some((epoch, 0))
+        }
+    }
+
+    /// The cell's shape (RV #93): idle sessions publishing on ONE hub, as G22's
+    /// service publishes every session's frames on its one hub. Every pump in
+    /// these rows starts through `start`, so the frame seam is spelled once.
+    struct SharedHub {
+        hub: FrameHub,
+        sessions: Vec<Arc<Session>>,
+    }
+
+    impl SharedHub {
+        fn new(count: usize) -> Self {
+            let hub = FrameHub::new(32);
+            let sessions = (0..count).map(|_| idle_session(&hub)).collect();
+            Self { hub, sessions }
+        }
+
+        /// A pump of `session` whose units go to `out`, on `connection_id`.
+        fn start(
+            &self,
+            activation_id: &str,
+            session: &Arc<Session>,
+            connection_id: u64,
+            out: UnboundedSender<Outbound>,
+        ) -> PumpStart {
+            PumpStart {
+                activation_id: activation_id.into(),
+                session_id: session.id(),
+                lease_epoch: 0,
+                connection_id,
+                credit_epoch: 1,
+                frames: LegRef {
+                    connection_id,
+                    leg_generation: 1,
+                    out,
+                    bulk_credit: None,
+                    geometry_events: false,
+                    selection_credit: None,
+                },
+                session: session.clone(),
+                hub: self.hub.clone(),
+                session_handle: session.summary().handle.parse().unwrap(),
+                scene_epoch: SceneEpoch {
+                    cell_boot_id: "shared-hub-test".into(),
+                    model_generation: 1,
+                },
+                max_chunk_bytes: 1024,
+                max_urgent_unit_bytes: 1 << 20,
+                seed_wait: Duration::from_secs(5),
+                catchup_bound: Duration::from_secs(5),
+            }
+        }
+
+        fn terminate(&self) {
+            for session in &self.sessions {
+                session.terminate(TerminationSource::User).unwrap();
+            }
+        }
+    }
+
+    /// The next presentation unit's envelope header.
+    async fn next_unit(received: &mut UnboundedReceiver<Outbound>) -> Value {
+        loop {
+            let unit = tokio::time::timeout(Duration::from_secs(10), received.recv())
+                .await
+                .expect("a unit within 10s")
+                .expect("the leg's writer is open");
+            if let Outbound::Binary(bytes, _) | Outbound::Bulk(bytes, _) = unit {
+                let (header, _) = super::super::wire::decode_envelope(&bytes).unwrap();
+                return header;
+            }
+        }
+    }
+
+    /// Read `received` up to the next unit of `kind`; its envelope header.
+    async fn until_kind(received: &mut UnboundedReceiver<Outbound>, kind: &str) -> Value {
+        loop {
+            let header = next_unit(received).await;
+            if header["kind"] == kind {
+                return header;
+            }
         }
     }
 
@@ -554,53 +635,14 @@ mod tests {
     /// repair needed by the new consumer, which no longer holds the old base.
     #[tokio::test]
     async fn a_coalesced_park_and_reattach_sends_a_catchup_before_any_delta() {
-        let hub = FrameHub::new(32);
-        let session = idle_session(&hub);
+        let cell = SharedHub::new(1);
+        let session = &cell.sessions[0];
         let host = Arc::new(ReadyHost::default());
         let (out, mut received) = tokio::sync::mpsc::unbounded_channel();
-        let pump = spawn_pump(
-            host.clone(),
-            PumpStart {
-                activation_id: "coalesced-reattach".into(),
-                session_id: session.id(),
-                lease_epoch: 0,
-                connection_id: 1,
-                credit_epoch: 1,
-                frames: LegRef {
-                    connection_id: 1,
-                    leg_generation: 1,
-                    out,
-                    bulk_credit: None,
-                    geometry_events: false,
-                    selection_credit: None,
-                },
-                session: session.clone(),
-                hub: hub.clone(),
-                session_handle: session.summary().handle.parse().unwrap(),
-                scene_epoch: SceneEpoch {
-                    cell_boot_id: "coalesced-reattach-test".into(),
-                    model_generation: 1,
-                },
-                max_chunk_bytes: 1024,
-                max_urgent_unit_bytes: 1 << 20,
-                seed_wait: Duration::from_secs(5),
-                catchup_bound: Duration::from_secs(5),
-            },
-        );
-        let seed_end = tokio::time::timeout(Duration::from_secs(10), async {
-            loop {
-                if let Outbound::Binary(bytes, _) | Outbound::Bulk(bytes, _) =
-                    received.recv().await.unwrap()
-                {
-                    let (header, _) = super::super::wire::decode_envelope(&bytes).unwrap();
-                    if header["kind"] == "transfer-end" {
-                        break header["activationSequence"].as_u64().unwrap();
-                    }
-                }
-            }
-        })
-        .await
-        .unwrap();
+        let start = cell.start("coalesced-reattach", session, 1, out);
+        let pump = spawn_pump(host.clone(), start);
+        let seed = until_kind(&mut received, "transfer-end").await;
+        let seed_end = seed["activationSequence"].as_u64().unwrap();
 
         // No await between the two edges: the current-thread pump cannot see
         // the parked state. A reattach refresh competes with the coalesced wake.
@@ -609,114 +651,147 @@ mod tests {
         host.view_epoch.store(2, Ordering::SeqCst);
         pump.notify.notify_one();
         session.refresh().unwrap();
-        let next = tokio::time::timeout(Duration::from_secs(10), received.recv())
-            .await
-            .unwrap()
-            .unwrap();
+        let next = next_unit(&mut received).await;
         pump.stop();
         pump.task.await.unwrap();
-        session.terminate(TerminationSource::User).unwrap();
+        cell.terminate();
 
-        let bytes = match next {
-            Outbound::Binary(bytes, _) | Outbound::Bulk(bytes, _) => bytes,
-            _ => panic!("expected a presentation unit"),
-        };
-        let (header, _) = super::super::wire::decode_envelope(&bytes).unwrap();
         assert_eq!(
-            header["kind"], "transfer-begin",
+            next["kind"], "transfer-begin",
             "a new consumer needs a whole scene"
         );
-        assert_eq!(header["transfer"]["kind"], "catchup");
-        assert_eq!(header["activationSequence"].as_u64(), Some(seed_end + 1));
+        assert_eq!(next["transfer"]["kind"], "catchup");
+        assert_eq!(next["activationSequence"].as_u64(), Some(seed_end + 1));
     }
 
+    /// RV #114's guard (the 09-27 defect 2), synced on events rather than on a
+    /// quiet window: two idle viewers of one session, every frame oversized.
+    /// A refresh one viewer forced is a full catalog-reset frame, already
+    /// self-contained, so the other carries it as a transfer and never
+    /// refreshes in turn. Each marker below is one engine frame every viewer
+    /// carries. A viewer that refreshed in response instead (the reuse branch
+    /// reverted) refreshes before its next transfer, and the two refresh each
+    /// other forever: the hub's ordinal moves past the markers.
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn two_viewers_reuse_oversized_refreshes_without_feedback() {
-        let hub = FrameHub::new(32);
-        let session = Session::spawn(
-            SpawnOptions {
-                creation_id: None,
-                executable: "/bin/sh".into(),
-                args: vec!["-c".into(), "exec sleep 30".into()],
-                cwd: None,
-                env: HashMap::new(),
-                environment: Some(SessionEnvironment::Clean {
-                    variables: HashMap::from([("PATH".into(), "/usr/bin:/bin".into())]),
-                }),
-                cols: 120,
-                rows: 40,
-                persistence: Persistence::KeepUntilExit,
-                program_kind: SessionProgramKind::Application,
-                owner_id: None,
-                scrollback_bytes: None,
-            },
-            hub.clone(),
-            Arc::new(Mutex::new(TextEngine::discover().unwrap())),
-            Arc::new(|_, _| {}),
-        )
-        .unwrap();
-        let (mut frames, _) = hub.subscribe();
-        session.refresh().unwrap();
-        let header = Trf1Header::parse(&frames.recv().await.unwrap()).unwrap();
+        const MARKERS: u64 = 3;
+        let cell = SharedHub::new(1);
+        let session = &cell.sessions[0];
         let host = Arc::new(ReadyHost::default());
-        let (out, mut received) = tokio::sync::mpsc::unbounded_channel();
-        let drain = tokio::spawn(async move { while received.recv().await.is_some() {} });
-        let mut pumps = Vec::new();
+        let mut viewers = Vec::new();
         for viewer in 1..=2 {
-            pumps.push(spawn_pump(
-                host.clone(),
-                PumpStart {
-                    activation_id: format!("viewer-{viewer}"),
-                    session_id: session.id(),
-                    lease_epoch: 0,
-                    connection_id: viewer,
-                    credit_epoch: 1,
-                    frames: LegRef {
-                        connection_id: viewer,
-                        leg_generation: 1,
-                        out: out.clone(),
-                        bulk_credit: None,
-                        geometry_events: false,
-                        selection_credit: None,
-                    },
-                    session: session.clone(),
-                    hub: hub.clone(),
-                    session_handle: header.session_handle,
-                    scene_epoch: SceneEpoch {
-                        cell_boot_id: "oversize-test".into(),
-                        model_generation: header.session_epoch,
-                    },
-                    max_chunk_bytes: 1024,
-                    // Force the oversized path independently of fonts/frame size.
-                    max_urgent_unit_bytes: 1,
-                    seed_wait: Duration::from_secs(5),
-                    catchup_bound: Duration::from_secs(5),
-                },
-            ));
+            let (out, received) = tokio::sync::mpsc::unbounded_channel();
+            let start = PumpStart {
+                // Force the oversized path independently of fonts/frame size.
+                max_urgent_unit_bytes: 1,
+                ..cell.start(&format!("viewer-{viewer}"), session, viewer, out)
+            };
+            viewers.push((spawn_pump(host.clone(), start), received));
         }
-        tokio::time::timeout(Duration::from_secs(10), async {
-            while host.seeds.load(Ordering::SeqCst) < 2 {
-                tokio::time::sleep(Duration::from_millis(10)).await;
+        // A viewer's first transfer is its seed, and the refresh it forced came
+        // before it: past both seeds, nothing but a marker moves the ordinal.
+        for (_, received) in &mut viewers {
+            until_kind(received, "transfer-end").await;
+        }
+        let baseline = cell.hub.current_ordinal();
+        for _ in 0..MARKERS {
+            session.refresh().unwrap();
+            for (_, received) in &mut viewers {
+                until_kind(received, "transfer-end").await;
             }
-        })
-        .await
-        .unwrap();
-        let before = hub.current_ordinal();
-        tokio::time::sleep(Duration::from_millis(200)).await;
-        let after = hub.current_ordinal();
-        for pump in pumps {
+        }
+        let advanced = cell.hub.current_ordinal() - baseline;
+        for (pump, _) in viewers {
             pump.stop();
             pump.task.await.unwrap();
         }
-        drain.abort();
-        session.terminate(TerminationSource::User).unwrap();
+        cell.terminate();
         assert_eq!(
-            after, before,
+            advanced, MARKERS,
             "idle viewers must not manufacture engine frames"
         );
     }
 
-    /// An idle `/bin/sh` on its own hub — nothing prints unless asked.
+    /// RV #93 (native-tp-4): a live pump wakes for its own session's frames
+    /// only. On the cell's one shared hub every packet of every session woke
+    /// it, and it read the registry (`scene_generation`, the door's lock)
+    /// before it filtered by handle. Sixteen of B's frames go first, then one
+    /// of A's: the pump reads in order, so A's delta for its marker is out only
+    /// after every B packet was seen. Its own frame owes one pre-send re-check,
+    /// plus the loop-head reads around it.
+    #[tokio::test]
+    async fn a_live_pump_never_wakes_for_another_sessions_frames() {
+        let cell = SharedHub::new(2);
+        let (a, b) = (&cell.sessions[0], &cell.sessions[1]);
+        let host = Arc::new(ReadyHost::default());
+        let (out, mut received) = tokio::sync::mpsc::unbounded_channel();
+        let pump = spawn_pump(host.clone(), cell.start("live-a", a, 1, out));
+        until_kind(&mut received, "transfer-end").await;
+        host.scene_reads.store(0, Ordering::SeqCst);
+
+        for _ in 0..16 {
+            b.refresh().unwrap();
+        }
+        a.refresh().unwrap();
+        until_kind(&mut received, "trf1-frame").await;
+        let reads = host.scene_reads.load(Ordering::SeqCst);
+        pump.stop();
+        pump.task.await.unwrap();
+        cell.terminate();
+
+        assert!(
+            reads <= 3,
+            "A read the registry {reads} times for one frame of its own: B's frames woke it"
+        );
+    }
+
+    /// RV #93 (native-tp-4): a parked pump (demand none) holds no subscription,
+    /// so no frame wakes it. On the shared hub it woke for every packet of
+    /// every session, only to read the registry and park again. Going live
+    /// subscribes before the forced refresh, so the catch-up it owes goes out.
+    #[tokio::test]
+    async fn a_parked_pump_holds_no_subscription_and_never_wakes() {
+        let cell = SharedHub::new(2);
+        let (a, b) = (&cell.sessions[0], &cell.sessions[1]);
+        let host = Arc::new(ReadyHost::default());
+        let (out, mut received) = tokio::sync::mpsc::unbounded_channel();
+        let pump = spawn_pump(host.clone(), cell.start("parked-a", a, 1, out));
+        until_kind(&mut received, "transfer-end").await;
+
+        // Park. Current-thread: once the pump has read `None` it runs on to
+        // its wait before this task is polled again.
+        let live_reads = host.scene_reads.load(Ordering::SeqCst);
+        host.view_epoch.store(0, Ordering::SeqCst);
+        pump.notify.notify_one();
+        while host.scene_reads.load(Ordering::SeqCst) == live_reads {
+            tokio::task::yield_now().await;
+        }
+        host.scene_reads.store(0, Ordering::SeqCst);
+
+        for _ in 0..2 {
+            for _ in 0..8 {
+                b.refresh().unwrap();
+            }
+            tokio::task::yield_now().await;
+        }
+        let parked_reads = host.scene_reads.load(Ordering::SeqCst);
+
+        host.view_epoch.store(2, Ordering::SeqCst);
+        pump.notify.notify_one();
+        let begin = until_kind(&mut received, "transfer-begin").await;
+        until_kind(&mut received, "transfer-end").await;
+        pump.stop();
+        pump.task.await.unwrap();
+        cell.terminate();
+
+        assert_eq!(
+            parked_reads, 0,
+            "B's frames woke a parked pump: it held a subscription"
+        );
+        assert_eq!(begin["transfer"]["kind"], "catchup");
+    }
+
+    /// An idle `/bin/sh` publishing on `hub`: nothing prints unless asked.
     fn idle_session(hub: &FrameHub) -> Arc<Session> {
         Session::spawn(
             SpawnOptions {
@@ -798,40 +873,16 @@ mod tests {
     /// was holding goes out.
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
     async fn an_overload_stop_is_said_once_and_the_returning_credit_recovers_the_pump() {
-        let hub = FrameHub::new(32);
-        let session = idle_session(&hub);
+        let cell = SharedHub::new(1);
+        let session = &cell.sessions[0];
         let host = Arc::new(WithheldCredit::default());
         let (out, mut received) = tokio::sync::mpsc::unbounded_channel();
         let drain = tokio::spawn(async move { while received.recv().await.is_some() {} });
-        let pump = spawn_pump(
-            host.clone(),
-            PumpStart {
-                activation_id: "starved".into(),
-                session_id: session.id(),
-                lease_epoch: 0,
-                connection_id: 1,
-                credit_epoch: 1,
-                frames: LegRef {
-                    connection_id: 1,
-                    leg_generation: 1,
-                    out,
-                    bulk_credit: None,
-                    geometry_events: false,
-                    selection_credit: None,
-                },
-                session: session.clone(),
-                hub: hub.clone(),
-                session_handle: session.summary().handle.parse().unwrap(),
-                scene_epoch: SceneEpoch {
-                    cell_boot_id: "overload-test".into(),
-                    model_generation: 1,
-                },
-                max_chunk_bytes: 1024,
-                max_urgent_unit_bytes: 1 << 20,
-                seed_wait: Duration::from_secs(5),
-                catchup_bound: Duration::from_millis(100),
-            },
-        );
+        let start = PumpStart {
+            catchup_bound: Duration::from_millis(100),
+            ..cell.start("starved", session, 1, out)
+        };
+        let pump = spawn_pump(host.clone(), start);
 
         // Past the bound with nothing admissible: the stop is SAID…
         wait_until("the overload stop", || {
@@ -864,6 +915,75 @@ mod tests {
         pump.stop();
         pump.task.await.unwrap();
         drain.abort();
-        session.terminate(TerminationSource::User).unwrap();
+        cell.terminate();
+    }
+
+    /// The seed's door: it admits the seed's `transfer-begin`, then starves
+    /// every unit until the test opens it.
+    #[derive(Default)]
+    struct GatedCredit {
+        begun: AtomicBool,
+        open: AtomicBool,
+    }
+
+    impl PumpHost for GatedCredit {
+        fn try_admit(&self, _: u64, _: &str, _: u64, _: UnitClass) -> Admission {
+            if self.open.load(Ordering::SeqCst) || !self.begun.swap(true, Ordering::SeqCst) {
+                Admission::Admitted
+            } else {
+                Admission::Starved
+            }
+        }
+        fn can_admit(&self, _: u64, _: &str, _: u64, _: UnitClass) -> Admission {
+            Admission::Admitted
+        }
+        fn unit_sent(&self, _: &str, _: u64, _: bool) {}
+        fn presentation_stopped(&self, _: &str, reason: &'static str) {
+            panic!("unexpected stop: {reason}");
+        }
+        fn scene_generation(&self, _: &str) -> Option<(u64, u64)> {
+            Some((1, 0))
+        }
+    }
+
+    /// RV #116 (native-tp-1, rv-hub-lag A): while A's seed waits on credit, a
+    /// neighbour's burst is not A's loss. On the shared hub A's receiver lagged
+    /// past its 32 slots on B's frames alone, and the lag forced a catch-up: a
+    /// refresh and a catalog reset for every viewer of A. Routed, A's feed holds
+    /// only A's frames, and the router drains each batch of B's as it comes.
+    #[tokio::test]
+    async fn a_neighbours_burst_while_a_transfer_waits_on_credit_is_not_this_sessions_loss() {
+        let cell = SharedHub::new(2);
+        let (a, b) = (&cell.sessions[0], &cell.sessions[1]);
+        let host = Arc::new(GatedCredit::default());
+        let (out, mut received) = tokio::sync::mpsc::unbounded_channel();
+        let start = PumpStart {
+            // the wait is the test's own: the bound must never fire inside it
+            catchup_bound: Duration::from_secs(60),
+            ..cell.start("waiting-a", a, 1, out)
+        };
+        let pump = spawn_pump(host.clone(), start);
+        // The seed's begin is admitted, and its first chunk waits on credit.
+        until_kind(&mut received, "transfer-begin").await;
+
+        for _ in 0..8 {
+            for _ in 0..8 {
+                b.refresh().unwrap();
+            }
+            tokio::task::yield_now().await;
+        }
+        host.open.store(true, Ordering::SeqCst);
+        pump.notify.notify_one();
+        until_kind(&mut received, "transfer-end").await;
+        a.refresh().unwrap();
+        let next = next_unit(&mut received).await;
+        pump.stop();
+        pump.task.await.unwrap();
+        cell.terminate();
+
+        assert_eq!(
+            next["kind"], "trf1-frame",
+            "B's burst was taken for A's loss: A repaired it with a catch-up"
+        );
     }
 }
