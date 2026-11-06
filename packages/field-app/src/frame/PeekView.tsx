@@ -4,6 +4,7 @@ import { AgentIcon, ProfileGlyph } from "@vibefield/puppeteer-view-sdk/react";
 import { keyLegend } from "@vibefield/puppeteer-view-sdk/toolkit";
 import { ChromeBoundary, type SnippetSegment } from "@vibefield/puppeteer-views";
 import {
+  type CSSProperties,
   Fragment,
   type KeyboardEvent,
   type ReactElement,
@@ -494,7 +495,9 @@ function FilterMenuRow({
 }
 
 /** SE-D1: + Filter and its one menu — a solid menu, right-aligned 4 under it,
- * every choice under the menus' eyebrow. */
+ * every choice under the menus' eyebrow. Each group is a radio set of its own,
+ * so assistive tech hears it by its eyebrow and checks one row in it: Every
+ * profile and All desktops are two sets' choices, never one's. */
 function FilterButton({
   groups,
   open,
@@ -523,14 +526,20 @@ function FilterButton({
       {open && (
         <div id={menuId} className="vf-menu vf-peek-menu" role="menu" aria-label="Filter">
           {groups.map((group) => (
-            <Fragment key={group.eyebrow}>
+            // biome-ignore lint/a11y/useSemanticElements: a menu's group of radio rows (ARIA's group inside a menu), not a fieldset of form inputs
+            <div
+              key={group.eyebrow}
+              role="group"
+              aria-label={group.eyebrow}
+              className="vf-peek-menu-group"
+            >
               <div className="vf-menu-eye" aria-hidden>
                 {group.eyebrow}
               </div>
               {group.rows.map((row) => (
                 <FilterMenuRow key={row.key} row={row} onPick={onPick} />
               ))}
-            </Fragment>
+            </div>
           ))}
         </div>
       )}
@@ -768,6 +777,8 @@ export function PeekView(props: PeekViewProps): ReactElement {
       {/* the scrim is a pointer's way out; Esc is the keyboard's */}
       <div className="vf-peek-scrim" aria-hidden="true" onClick={onClose} />
       {open && (
+        // its size is the controller's (K6); its height is lent to + Filter's
+        // menu as `--vf-peek-h`, so the menu stays inside it (peek.css)
         <div
           className="vf-peek-pop"
           role="dialog"
@@ -775,7 +786,13 @@ export function PeekView(props: PeekViewProps): ReactElement {
           aria-label="Search"
           data-folded={layout.folded ? "true" : undefined}
           data-scope={scope}
-          style={{ width: layout.width, height: layout.height }}
+          style={
+            {
+              width: layout.width,
+              height: layout.height,
+              "--vf-peek-h": `${layout.height}px`,
+            } as CSSProperties
+          }
           onKeyDown={onKeyDown}
         >
           <div className="vf-peek-field">

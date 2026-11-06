@@ -456,6 +456,10 @@ export function Peek({
   );
   const tokens = useMemo(() => peekFieldTokens(filterState), [filterState]);
   const menuGroups = useMemo(() => filterMenu(filterState), [filterState]);
+  // + Filter's menu goes with its choices: when the scope has nothing left to
+  // filter (a desktop gone, the profiles with it) the button is not drawn, so
+  // the menu is shut — no Esc spent on it, and it never comes back on its own
+  if (filterOpen && menuGroups.length === 0) setFilterOpen(false);
   const offer = useMemo(() => peekOffer(query, scope, liveFilters), [query, scope, liveFilters]);
   const rows = useMemo<readonly PeekListItem[]>(
     () => (scope === "live" ? (offer === null ? liveRows : [offer, ...liveRows]) : pastRows),
@@ -534,7 +538,7 @@ export function Peek({
     },
     [godview],
   );
-  // A token's × (and ⌫): its one filter back to every one, the caret back in the field.
+  // A token's ×: its one filter back to every one, the caret back in the field.
   const removeToken = useCallback(
     (token: PeekFieldToken) => {
       applyPick(clearPick(token));
@@ -552,15 +556,20 @@ export function Peek({
     },
     [applyPick, focusField],
   );
-  // + Filter's pick: the filter set and the menu folded; TS-4's Connect… opens
-  // the Connect door, as the status item's Connect Your Devices… does.
+  // + Filter's pick: the filter set, the menu folded and the keyboard back in
+  // the field (the row that held it is gone); TS-4's Connect… opens the
+  // Connect door, as the status item's Connect Your Devices… does.
   const pick = useCallback(
     (choice: PeekPick | "connect") => {
       setFilterOpen(false);
-      if (choice === "connect") requestShellPresentation("open-connect");
-      else applyPick(choice);
+      if (choice === "connect") {
+        requestShellPresentation("open-connect");
+        return;
+      }
+      applyPick(choice);
+      focusField();
     },
-    [applyPick],
+    [applyPick, focusField],
   );
 
   const openRow = useCallback(
@@ -631,7 +640,8 @@ export function Peek({
   // its page's window, and in the product the window's listener above has
   // already taken it. SE-D1: ⇥ takes the hot offer (↵ does too, as a row's
   // open), and ⌫ with the caret at the field's start and nothing selected
-  // takes the last token back.
+  // takes the last token back — the caret staying there, so the next ⌫ takes
+  // the next token (the field already holds the keyboard).
   const onKeyDown = useCallback(
     (event: KeyboardEvent<HTMLDivElement>) => {
       if (event.key === "Escape") {
@@ -661,10 +671,10 @@ export function Peek({
         const taken = backspaceTakes(tokens, caret);
         if (taken === null) return;
         event.preventDefault();
-        removeToken(taken);
+        applyPick(clearPick(taken));
       }
     },
-    [rows, openRow, hotIndex, filterOpen, fold, takeOffer, tokens, removeToken],
+    [rows, openRow, hotIndex, filterOpen, fold, takeOffer, tokens, applyPick],
   );
 
   // The keyboard: the field on open (the caret at its end), and back where it

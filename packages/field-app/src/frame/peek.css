@@ -569,16 +569,28 @@
 
 /* + Filter's menu: solid (§5), right-aligned 4 under the button, at least 240
    wide and at most 430 tall, scrolling past that; its groups under the menus'
-   eyebrow (menu.css) */
+   eyebrow (menu.css). In a short window it stays inside the popup, whose
+   overflow would cut it: it starts 50 under the popup's top (the field's 64,
+   + Filter's 28 centred in it, then 4) and stops 30 short of its bottom, clear
+   of the 24 corners — the popup lends its height as `--vf-peek-h` (PeekView) */
 .vf-peek-menu {
   position: absolute;
   z-index: 2;
   top: calc(100% + 4px);
   right: 0;
   min-width: 240px;
-  max-height: 430px;
+  max-height: min(430px, calc(var(--vf-peek-h) - 80px));
   overflow: auto;
   scrollbar-width: thin;
+}
+
+/* a group: one radio set under its eyebrow, a box of its own (never display:
+   contents, which can drop its role), its rows 1 apart as the menu's are */
+.vf-peek-menu-group {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: 1px;
 }
 
 /* ── the body: the list (380) and the peek beside it ── */
