@@ -312,6 +312,29 @@ describe("UM-1 — each plan's segment", () => {
     expect(say).toMatchObject({ text: "as of 3h 1m ago", paint: { tone: "ink", percent: 62 } });
   });
 
+  it("a window read before its reset gives way to a running one at 0%, outside and in the middle: the running one wins a tie of 0", () => {
+    // the passed week first, ahead of a month just begun: the outside band is the month's
+    const [claude] = meters([
+      ["claude", [paced("5h", 20, 50), paced("7d", 64, 101, 10_080), paced("30d", 0, 50, 43_200)]],
+    ]);
+    expect(bandsOf(only(claude, "claude")).long?.line.id).toBe("30d");
+    // Claude, first by the catalog, holds only the passed five hours; Codex's run, nothing used yet
+    const entries = meters([
+      ["claude", [paced("5h", 64, 110)]],
+      ["codex", [paced("5h", 0, 50)]],
+    ]);
+    expect(bandsGeometry(40, entries).centre.items).toEqual([
+      expect.objectContaining({ kind: "text", role: "figure", text: "0" }),
+    ]);
+    const full = bandsGeometry(232, entries).centre.items;
+    expect(full.slice(0, 3).map((item) => (item.kind === "text" ? item.text : item.kind))).toEqual([
+      "mark",
+      "0",
+      "of 5 hours",
+    ]);
+    expect(full[0]).toMatchObject({ provider: "codex" });
+  });
+
   it("a budget fills both bands, with no notch", () => {
     const plan = planAt(bandsGeometry(212, meters([["grok", [budget(30)]]])), 0);
     const { both, band, gap } = radii(212);

@@ -645,6 +645,40 @@ describe('the assembled review — a window read before its reset (DESIGN.md §8
     expect(windows[1]?.line).toEqual(settings[1]);
   });
 
+  it("ranks below every running window, an empty one too: at a tie of pressure 0 the running one wins", () => {
+    // the passed five hours first, as the adapters list it, ahead of a week at 0%
+    const windows = meterWindows([window("5h", 64, 300, -30), window("7d", 0, 10_080, 540)], NOW);
+    expect(windows.map((each) => [each.line.id, each.passed, each.pressure])).toEqual([
+      ["5h", true, 0],
+      ["7d", false, 0],
+    ]);
+    expect(tightestWindow(windows)?.line.id).toBe("7d");
+    // the leaf's own rank, as Settings will read it; equals of one kind keep the first
+    const lines = [
+      { id: "passed", hot: false, usedPercent: 64, passed: true },
+      { id: "passed too", hot: false, usedPercent: 12, passed: true },
+      { id: "empty", hot: false, usedPercent: 0 },
+      { id: "empty too", hot: false, usedPercent: 0 },
+    ];
+    expect(tightestOf(lines)?.id).toBe("empty");
+    expect(tightestOf(lines.slice(0, 2))?.id).toBe("passed");
+  });
+
+  it("a plan whose tightest was read before its reset ranks below a plan still running at 0%", () => {
+    // Claude, first by the catalog, holds only the passed five hours; Codex's five hours run, nothing used yet
+    const meters = planMeters(
+      profile(
+        [own("claude"), own("codex")],
+        [ownPlan("anthropic", "claude"), ownPlan("openai", "codex")],
+      ),
+      [row("claude", [window("5h", 64, 300, -30)]), row("codex", [paced("5h", 0, 50)])],
+      NOW,
+    );
+    expect(meters.entries.map((entry) => entry.key)).toEqual(["plan:anthropic", "plan:openai"]);
+    expect(reading(entryOf(meters, "plan:anthropic")).tightest.passed).toBe(true);
+    expect(meters.tightest?.key).toBe("plan:openai");
+  });
+
   it("leaves its plan unlit, the profile's tightest plan one still running, and says the reading's age at its right", () => {
     const meters = planMeters(
       profile(
