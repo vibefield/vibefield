@@ -22,6 +22,7 @@ import {
   type MonitorAccountFacts,
   MonitorAccountFactsContext,
 } from "../src/godview/monitor/account-facts";
+import { ColumnAddPresses } from "../src/godview/profiles-column/ProfilesColumn";
 import { type FieldHost, setHost } from "../src/host";
 import {
   type LimitMomentFact,
@@ -247,15 +248,19 @@ describe("whether the limit moment speaks (the rule)", () => {
 const PACKAGE_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const read = (path: string): string => readFileSync(join(PACKAGE_ROOT, path), "utf8");
 const sheet = read("src/godview/godview.css");
+/** UM-D23 — the card's own sheet, beside the column's add since UM-3 */
+const column = read("src/godview/profiles-column/profiles-column.css");
 /** One rule's declarations, by its exact selector at a line's start. */
-const rule = (selector: string): string => {
+const rule = (selector: string, from: string = sheet): string => {
   const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return sheet.match(new RegExp(`^${escaped} \\{([^}]*)\\}`, "m"))?.[1] ?? "";
+  return from.match(new RegExp(`^${escaped} \\{([^}]*)\\}`, "m"))?.[1] ?? "";
 };
 
-describe("the row's stylesheet, held to DESIGN.md §8 and §2.7 (AO-6b3)", () => {
+describe("the card's stylesheet, held to DESIGN.md §8 and §2.7 (AO-6b3; beside the column's add since UM-D23)", () => {
   it("reads its number in Godview's attention ink, per Godview's own mode, from the tokens DESIGN.md names", () => {
-    expect(rule(".vf-monitor-moment-use")).toContain("color: var(--vf-monitor-ink-attention)");
+    expect(rule(".vf-profiles-limit-use", column)).toContain(
+      "color: var(--vf-monitor-ink-attention)",
+    );
     expect(rule(".vf-godview-tweak-panel.theme-light")).toContain(
       "--vf-monitor-ink-attention: var(--vf-godview-light-ink-attention)",
     );
@@ -287,7 +292,41 @@ describe("the row's stylesheet, held to DESIGN.md §8 and §2.7 (AO-6b3)", () =>
     expect(holding).toContain("width: max-content");
   });
 
+  it("is a menu's solid in Godview's mode: 284 wide, corners 16, padded 12 14 13, its lines 9 apart, a pointer at the add", () => {
+    const card = rule(".vf-profiles-limit", column);
+    expect(card).toContain("width: 284px");
+    expect(card).toContain("border-radius: 16px");
+    expect(card).toContain("padding: 12px 14px 13px");
+    expect(card).toContain("gap: 9px");
+    expect(card).toContain("background: var(--vf-profiles-solid)");
+    const pointer = rule(".vf-profiles-limit::before", column);
+    expect(pointer).toContain("left: -6px");
+    expect(pointer).toContain("top: 28px");
+    expect(pointer).toContain("width: 12px");
+    expect(pointer).toContain("transform: rotate(45deg)");
+    const acts = rule(".vf-profiles-limit-act", column);
+    expect(acts).toContain("height: 26px");
+    expect(acts).toContain("border-radius: 13px");
+    expect(acts).toContain("padding: 0 11px");
+  });
+
   it("enters with the profile notice's fade, and none under Reduce Motion or with Godview's animations off", () => {
+    expect(rule(".vf-profiles-limit", column)).toContain("transition: opacity 300ms ease-out");
+    expect(column).toMatch(/@starting-style \{\s*\.vf-profiles-limit \{\s*opacity: 0;/u);
+    expect(rule('.vf-godview[data-godview-animations="off"] .vf-profiles-limit', column)).toContain(
+      "transition: none",
+    );
+    expect(column).toMatch(
+      /@media \(prefers-reduced-motion: reduce\) \{[^@]*\.vf-profiles-limit \{\s*transition: none;/u,
+    );
+  });
+
+  it("left the strip: the strip's row rules stay the approval line's, and the limit's own number and bar are gone", () => {
+    expect(sheet).not.toContain(".vf-monitor-moment-use");
+    expect(sheet).not.toContain(".vf-monitor-moment-bar");
+  });
+
+  it("the approval line's row keeps the strip's fade (§8 \"Asking again\")", () => {
     expect(rule(".vf-monitor-moment")).toContain("transition: opacity 300ms ease-out");
     expect(sheet).toMatch(
       /@media \(prefers-reduced-motion: reduce\) \{\s*\.vf-monitor-moment \{\s*transition: none;/,
@@ -309,6 +348,13 @@ describe("where Add a profile… opens Settings", () => {
     expect(settingsOpening("whats-new")).toEqual({ page: "updates", atNotes: true });
     expect(settingsOpening("general")).toEqual({ page: "general" });
     expect(settingsOpening("diagnostics")).toEqual({ page: "general" });
+  });
+
+  it("opens one profile's page for the column's Sign in and Agent Profiles… (UM-3, ruling 9)", () => {
+    expect(settingsOpening({ profile: "work" })).toEqual({
+      page: "profiles",
+      profiles: { kind: "profile", set: "work" },
+    });
   });
 });
 
@@ -354,18 +400,26 @@ const button = (label: string): HTMLButtonElement => {
 
 const AT_92 = raised(0, windowAt(10_080, 92));
 
-describe("the row (the shipping face the catalog mounts)", () => {
-  it("says the plan, the window's use and the question in one row with its two acts; the voice is the primary's description", async () => {
+describe("the card (the shipping face the catalog mounts; round 4's, UM-D23)", () => {
+  it("asks first, then says the plan and the window's use, then its two acts; said as a group, the voice the primary's description", async () => {
     const fact = speaks([FIXTURE_NATIVE], AT_92);
     if (fact === null) throw new Error("the fixture should speak");
     const onAddProfile = vi.fn();
     await mount(createElement(LimitMomentCard, { fact, onAddProfile, onNotNow: () => undefined }));
-    const row = container?.querySelector("section.vf-monitor-moment");
-    expect(row?.querySelector(".vf-monitor-moment-plan")?.textContent).toBe("Claude Max");
-    expect(row?.querySelector(".vf-monitor-moment-use")?.textContent).toBe("92% · 7 days");
-    const title = row?.querySelector(".vf-monitor-moment-title");
-    expect(title?.textContent).toBe("Another subscription?");
-    expect(row?.getAttribute("aria-labelledby")).toBe(title?.id);
+    const card = container?.querySelector('.vf-profiles-limit[role="group"]');
+    expect(card?.getAttribute("aria-label")).toBe("Another subscription?");
+    expect([...(card?.children ?? [])].map((child) => child.className)).toEqual([
+      "vf-profiles-limit-title",
+      "vf-profiles-limit-plan",
+      "vf-profiles-limit-acts",
+    ]);
+    expect(card?.querySelector(".vf-profiles-limit-title")?.textContent).toBe(
+      "Another subscription?",
+    );
+    expect(card?.querySelector(".vf-profiles-limit-plan-name")?.textContent).toBe("Claude Max");
+    expect(card?.querySelector(".vf-profiles-limit-use")?.textContent).toBe("92% · 7 days");
+    // no foot bar: the use is said, in the attention ink
+    expect(card?.querySelector(".vf-monitor-moment-bar")).toBeNull();
     // the voice: not drawn, said as Add a profile…'s description
     const add = button("Add a profile…");
     const voice = document.getElementById(add.getAttribute("aria-describedby") ?? "");
@@ -454,12 +508,38 @@ function mountStrip(
 
 const STAGE: MonitorAccountFacts = { sets: [FIXTURE_NATIVE], usage: AT_92 };
 
-describe("the claims strip's moment (the controller)", () => {
+describe("the moment beside the column's add (the controller)", () => {
+  it("retires as Add a profile… does when the column's add is pressed while it shows (ruling 6)", async () => {
+    const { client, request } = fieldd({});
+    const facts = STAGE;
+    const tree = (presses: number) =>
+      createElement(
+        FielddProvider,
+        { client },
+        createElement(
+          MonitorAccountFactsContext.Provider,
+          { value: facts },
+          createElement(
+            ColumnAddPresses.Provider,
+            { value: presses },
+            createElement(LimitMoment, { openNewProfile: () => undefined, now: NOW }),
+          ),
+        ),
+      );
+    await mount(tree(0));
+    await settled();
+    expect(container?.querySelector(".vf-profiles-limit")).not.toBeNull();
+    await act(async () => root?.render(tree(1)));
+    await settled();
+    expect(request).toHaveBeenCalledWith("setup.moment", { moment: "limit", state: "retired" });
+    expect(container?.querySelector(".vf-profiles-limit")).toBeNull();
+  });
+
   it("speaks from the stage's own facts and opens no feed of its own: the ledger, then the inventory once", async () => {
     const { client, subscribe, request } = fieldd({});
     await mountStrip(client, STAGE, () => undefined);
     await settled();
-    expect(container?.querySelector(".vf-monitor-moment-use")?.textContent).toBe("92% · 7 days");
+    expect(container?.querySelector(".vf-profiles-limit-use")?.textContent).toBe("92% · 7 days");
     expect(subscribe.mock.calls.map(([method]) => method)).toEqual(["setup.subscribe"]);
     expect(request.mock.calls.filter(([method]) => method === "agents.installs")).toHaveLength(1);
   });
@@ -474,7 +554,7 @@ describe("the claims strip's moment (the controller)", () => {
     await act(async () => add.click());
     expect(open).toHaveBeenCalledTimes(1);
     expect(request).toHaveBeenCalledWith("setup.moment", { moment: "limit", state: "retired" });
-    expect(container?.querySelector(".vf-monitor-moment")).toBeNull();
+    expect(container?.querySelector(".vf-profiles-limit")).toBeNull();
     expect(document.activeElement?.textContent).toBe("List");
   });
 
@@ -489,7 +569,7 @@ describe("the claims strip's moment (the controller)", () => {
     await settled();
     expect(request).toHaveBeenCalledWith("setup.moment", { moment: "limit", state: "retired" });
     expect(open).not.toHaveBeenCalled();
-    expect(container?.querySelector(".vf-monitor-moment")).toBeNull();
+    expect(container?.querySelector(".vf-profiles-limit")).toBeNull();
     expect(document.activeElement?.textContent).toBe("List");
   });
 
@@ -508,7 +588,7 @@ describe("the claims strip's moment (the controller)", () => {
     ): Promise<void> => {
       await mountStrip(setup.client, facts, () => undefined);
       await settled();
-      expect(container?.querySelector(".vf-monitor-moment")).toBeNull();
+      expect(container?.querySelector(".vf-profiles-limit")).toBeNull();
       await act(async () => root?.unmount());
       container?.remove();
     };
@@ -530,7 +610,7 @@ describe("the claims strip's moment (the controller)", () => {
     const { client, request } = fieldd({});
     await mountStrip(client, { sets: [unplanned], usage: AT_92 }, () => undefined);
     await settled();
-    expect(container?.querySelector(".vf-monitor-moment")).toBeNull();
+    expect(container?.querySelector(".vf-profiles-limit")).toBeNull();
     const asks = request.mock.calls.filter(([method]) => method === "agents.profileSets.list");
     expect(asks).toEqual([["agents.profileSets.list", { refresh: true }]]);
   });

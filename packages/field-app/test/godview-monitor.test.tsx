@@ -1924,6 +1924,66 @@ describe("the monitor stage", () => {
     expect(host.textContent).toContain("Usage unavailable · Retry");
   });
 
+  /** The stage as the overlay mounts it, with the routes to Settings and the column's moment. */
+  async function mountRouted(
+    door: MonitorDoor,
+    extra: Partial<Parameters<typeof GodviewMonitor>[0]>,
+  ): Promise<HTMLElement> {
+    const view = monitorViewFor("list");
+    syncBoard(PANES);
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+    await act(async () =>
+      root?.render(
+        <GodviewAgentsProvider door={door}>
+          <GodviewMonitor
+            view={view}
+            parameters={monitorParameterDefaults(view.parameterGroups)}
+            door={door}
+            panes={PANES}
+            {...extra}
+          />
+        </GodviewAgentsProvider>,
+      ),
+    );
+    await settle();
+    return container;
+  }
+
+  it("hands the column's add New profile…, and a popover's Agent Profiles… its profile's page (UM-D22; ruling 9)", async () => {
+    const openNewProfile = vi.fn();
+    const openProfile = vi.fn();
+    const host = await mountRouted(tabDoor(), { openNewProfile, openProfile });
+    await act(async () => host.querySelector<HTMLButtonElement>(".vf-profiles-add")?.click());
+    expect(openNewProfile).toHaveBeenCalledOnce();
+    await act(async () =>
+      host.querySelector<HTMLButtonElement>('[data-profile="work"] .vf-profiles-circle')?.click(),
+    );
+    await act(async () => host.querySelector<HTMLButtonElement>(".vf-profiles-pop-open")?.click());
+    expect(openProfile).toHaveBeenCalledWith("work");
+  });
+
+  it("draws the add disabled while there is no route to Settings (Settings is open)", async () => {
+    const host = await mountRouted(tabDoor(), {});
+    expect(host.querySelector<HTMLButtonElement>(".vf-profiles-add")?.disabled).toBe(true);
+  });
+
+  it("stands the limit moment beside the column's add, lent the stage's account facts; the strip holds only its own (UM-D23)", async () => {
+    const Facts = () => {
+      const { sets } = useMonitorAccountFacts();
+      return <p data-moment="">{sets?.map((set) => set.label).join(", ") ?? "unread"}</p>;
+    };
+    const host = await mountRouted(tabDoor(), {
+      limitMoment: <Facts />,
+      moment: <p data-strip-moment="">approval</p>,
+    });
+    const beside = host.querySelector(".vf-profiles-add-item > .vf-profiles-moment [data-moment]");
+    expect(beside?.textContent).toBe(TAB_SETS.map((set) => set.label).join(", "));
+    expect(host.querySelector(".vf-monitor-claims [data-moment]")).toBeNull();
+    expect(host.querySelector(".vf-monitor-claims [data-strip-moment]")).not.toBeNull();
+  });
+
   it("chooses the view with the head's circles; there is no theme switch (FC-D7)", async () => {
     const selected: string[] = [];
     const view = monitorViewFor("swarm");

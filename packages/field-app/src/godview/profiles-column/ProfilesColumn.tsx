@@ -3,7 +3,15 @@ import {
   type AgentProfileSet,
   NATIVE_PROFILE_SET_ID,
 } from "@vibefield/contracts";
-import { memo, type ReactElement, type ReactNode, useEffect, useMemo, useState } from "react";
+import {
+  createContext,
+  memo,
+  type ReactElement,
+  type ReactNode,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import { hasCircle, planMeters } from "../../usage/meters";
 import { setMonitorHoldsKeys } from "../monitor/launcher-keys";
 import type { MonitorUsagePort } from "../monitor/remote-door";
@@ -27,6 +35,9 @@ const THIS_MAC: AgentProfileSet = {
   default: true,
   personas: [],
 };
+
+/** UM-3 2d red: the skeleton — the column's add presses, not yet provided. */
+export const ColumnAddPresses = createContext(0);
 
 /** How often the column's words read the clock again: a reset and a forecast move by the minute. */
 const CLOCK_MS = 60_000;

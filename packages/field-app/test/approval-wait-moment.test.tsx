@@ -28,8 +28,11 @@ import { type FieldHost, setHost } from "../src/host";
 // TS-4b (TS-D20 ruled A, TS-D20b ruled A, by James 2026-10-29; DESIGN.md §8
 // "Asking again") — the line said once as a long approval clears, written
 // asked before it shows, and gone at ×, at its act, or at the agent's next
-// state change; on the claims strip, one moment at a time, the limit moment
-// first.
+// state change. *Amended 2026-11-06 (UM-D23; the lead's ruling 5, ‹for
+// James›):* the limit moment left the claims strip for the profiles column's
+// add, so the strip holds this line alone and neither stands aside for the
+// other (TS-4b `257af5f6f`'s "one moment at a time, the limit moment first"
+// rows changed with it).
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -219,12 +222,8 @@ describe("the approval line (the controller)", () => {
   });
 });
 
-describe("the strip's one moment, the limit moment first (TS-D20b)", () => {
+describe("the strip holds the approval line alone (TS-D20b, amended by UM-D23 and the lead's ruling 5)", () => {
   const AT_THE_LINE: MonitorAccountFacts = { sets: [FIXTURE_NATIVE], usage: FIXTURE_LIMIT_USAGE };
-  const UNDER: MonitorAccountFacts = {
-    sets: [FIXTURE_NATIVE],
-    usage: FIXTURE_PROFILES_CONTEXT.usage,
-  };
 
   beforeEach(() => {
     // the profiles' fixture reads its windows' resets at its own clock
@@ -249,10 +248,7 @@ describe("the strip's one moment, the limit moment first (TS-D20b)", () => {
               createElement(
                 MonitorMomentRowsContext.Provider,
                 { value: rows as unknown as readonly MonitorAgent[] },
-                createElement(ClaimsStripMoment, {
-                  openNewProfile: () => undefined,
-                  offersConnect: true,
-                }),
+                createElement(ClaimsStripMoment, { offersConnect: true }),
               ),
             ),
           ),
@@ -261,53 +257,21 @@ describe("the strip's one moment, the limit moment first (TS-D20b)", () => {
       await settled();
     };
   }
-  const limitRow = (): Element | null =>
-    container?.querySelector("section.vf-monitor-moment:not([data-moment])") ?? null;
-  const notNowOnTheLimit = async (): Promise<void> => {
-    const notNow = Array.from(limitRow()?.querySelectorAll("button") ?? []).find(
-      (button) => button.textContent === "Not now",
-    );
-    await act(async () => notNow?.click());
-    await settled();
-  };
 
-  it("does not say the line while the limit moment shows, and says the next once it leaves", async () => {
+  it("says the line while This Mac is at the limit's line: the limit card is the column's now, and nothing stands aside", async () => {
     const { client, request } = fieldd({});
     const show = await claims(client);
     await show(AT_THE_LINE, [agent()]);
-    expect(limitRow()).not.toBeNull();
+    // the strip says no limit moment of its own
+    expect(container?.querySelector(".vf-profiles-limit")).toBeNull();
+    expect(container?.querySelector("section.vf-monitor-moment:not([data-moment])")).toBeNull();
     await show(AT_THE_LINE, [answered(T0 + 14 * MIN)]);
-    expect(row()).toBeNull();
-    expect(momentWrites(request)).toEqual([]);
-    await notNowOnTheLimit();
-    expect(limitRow()).toBeNull();
-    const later = T0 + 20 * MIN;
-    await show(AT_THE_LINE, [
-      agent({ statusSince: later, wait: { kind: "permission", since: later } }),
-    ]);
-    await show(AT_THE_LINE, [answered(later + 12 * MIN)]);
     expect(row()?.querySelector(".vf-monitor-moment-title")?.textContent).toBe(
-      "It waited 12m for you.",
+      "It waited 14m for you.",
     );
     expect(momentWrites(request)).toEqual([
-      { moment: "limit", state: "retired" },
       { moment: "connect-ask:approval-wait", state: "asked" },
     ]);
-  });
-
-  it("stands a said line aside while the limit moment comes, and back once it leaves", async () => {
-    const { client } = fieldd({});
-    const show = await claims(client);
-    await show(UNDER, [agent()]);
-    const cleared = [answered(T0 + 14 * MIN)];
-    await show(UNDER, cleared);
-    expect(row()).not.toBeNull();
-    await show(AT_THE_LINE, cleared);
-    expect(limitRow()).not.toBeNull();
-    expect(row()).toBeNull();
-    await notNowOnTheLimit();
-    expect(limitRow()).toBeNull();
-    expect(row()).not.toBeNull();
   });
 });
 

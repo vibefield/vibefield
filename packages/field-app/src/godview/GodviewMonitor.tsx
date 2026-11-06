@@ -327,6 +327,10 @@ export interface GodviewMonitorProps {
    * overlay's `useOffersConnect`): the desktop filter is offered on This Mac
    * alone and ends on the ghost row. Default false: a catalog's stage. */
   offersConnect?: boolean;
+  /** UM-3 2d red: the skeleton — the column's routes and its moment, not yet read. */
+  openNewProfile?: (() => void) | undefined;
+  openProfile?: ((setId: string) => void) | undefined;
+  limitMoment?: ReactNode;
 }
 
 /** LR — a still stage's verbs: nothing is selected or born on a picture. The

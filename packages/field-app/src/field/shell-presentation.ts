@@ -17,7 +17,9 @@ export interface ShellPresentationState {
     | "devices"
     | "new-profile"
     | "updates"
-    | "whats-new";
+    | "whats-new"
+    /** UM-3 2d red: the skeleton — one profile's page, not yet opened */
+    | { readonly profile: string };
   /** TS-4 (TS-D7) — the status item's Connect Your Devices… and the away
    * notice's Connect…: Settings → Devices begins the link once it can read it,
    * as its own Connect does, and says it has (`connect` back to false). */
