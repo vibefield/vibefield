@@ -35901,3 +35901,215 @@ backward from the head as rosetta pages, whose tail answers the newest 100:
   turn a non-zero exit red. Each record is a hand tally from the test log; the script's next copy fixes both.
 
 Item 109 closes in this entry. Item 110 stays on the shed.
+
+## IOS-13a — Settings for App Review: Privacy Policy and Support on About and the welcome, the acknowledgements read from L5's bundled file, the non-affiliation line, and the device named as its platform names it (track IOS) (2026-11-06; `a9d63e7cd` → `7a7f22623`, 23 commits on main `a6ab8f5ce`, lane `ios/13a` in `/Volumes/SamsungRed/lanes/ios12b/vibe-field`; M165 is `7a7f22623` itself, a fast-forward of main `a6ab8f5ce`, run 165, landed 2026-11-06T00:32:51Z)
+
+From the 0.9 launch's Phase 3, "what App Review would reject". It covers LP-4's owed lines (LANDED "LP-4"): About
+reading the acknowledgements' full texts, the privacy and support links where a signed-out person can reach them, and
+iPad's words after a device word. The plan is `lanes/ios12b/IOS-13a-plan.md`, RULED by VF-PM 2026-11-05 02:29Z:
+- Q1: the bible is the yardstick (§7's platform label, with LP-4's "this device");
+- Q2: the way in's lines are 13a's;
+- Q3: the foot stands on the welcome only, and WI-L4's three places stand;
+- Q4: "Privacy Policy" and "Support";
+- Q5: the absent state keeps today's hand list;
+- Q6: the bible and LP-4, as Q1.
+James's words, relayed by VF-PM: "Better CRT on the phone: keep" (2026-11-05 06:02Z) and "attribution no" (06:18Z).
+The phone's Acknowledgements page and About's effects credit stay as they are, and 13a changes nothing for either.
+
+**What landed,** by slice (T's shas):
+- **S0, DESIGN.md first** (`a9d63e7cd`): §8 "The phone's Settings" and "The phone's way in" gain the links, the foot
+  and the device word. §9 gains "The phone's legal words".
+- **S1** (`4fb1ea787` red, `caffdb70e`): `VibeFieldSite` (FieldSettings), the site's addresses in one place:
+  `https://vibefield.dev`, `/privacy` and `/support`. FieldHome's `vibeFieldSite` folds into it.
+- **S2** (`0ff3c2919` red, `c8c98508a`): About's **Privacy Policy** and **Support** rows open Safari, with the
+  `outward` mark. Its foot is two lines: Tailscale's trademark line, then "VibeField names agents such as Claude Code
+  and Codex to tell sessions apart. It isn’t affiliated with or endorsed by Anthropic or OpenAI."
+- **S3** (`0bed757fa` red, `b60d975b4`): the welcome's acts end with `WayInScreen.Act.legal`, drawn at 12 in
+  `inkTertiary`, so the way in reaches the site signed out. No other screen gains it (Q3).
+- **S3b** (`db87bfa86` red, `7a7f22623`; VF-PM RULED 2026-11-05 23:38Z): `WayInView.Glass` and its pure
+  `glass(_:)` split a screen's acts into the glass's three slots and its foot. `actsGlass` draws the foot under the
+  third slot (18 + 50 + 10 + 50 + 14 + 22 = 164, then 10 and a 12 pt line, inside WI-L4's 210), with no DESIGN
+  change. The red's sweep holds every way-in screen to "no act is ever dropped". Found 10 is why.
+- **S4** (`9c0f40202` DESIGN, `6b1605612`, `d96380dfd` red, `602307806`, `73295c749` red, `5c2f794ad`):
+  - `Acknowledgements` reads L5's `acknowledgements.json` from the app's own bundle in three states: absent (§9's line
+    over the short hand list, Q5), unreadable (§9's line with its reason; never a blank page) and bundled (L5's parts
+    in DESIGN §8's groups, a row's name, version and licence, each part's texts by id on its own page by the
+    `.acknowledgement(id)` route; a text the file lacks is named, never dropped).
+  - L5's optional `note` and `own` are known, kept and not drawn.
+  - The new said words take the phone's ’.
+- **S5 and S5b** (`d3d767d9b` red, `5b0545de6`, `e09d7dc37`, `1e55deb8a`, `3c4350c4a` red, `255ec1811`):
+  - `DeviceWord`: "this iPhone", "this iPad", and "this device" where the idiom is neither. Every Settings and
+    way-in word takes it as a REQUIRED `device:`.
+  - It lives in FieldDesign (VF-PM 2026-11-05 03:59Z, ruled (a); a deviation from Q1's "in FieldSettings", dated at
+    the plan's source), so Settings › Terminal's two tags and foot reach it through `TerminalSettingsWords`.
+- `30c8173df`: §9's owed words wait for L4's word pass, after 13a lands. `2d6f4791a`: `check:ios-fixtures` holds
+  the phone's trimmed fixture (`acknowledgements-l5.lane.json`, in LANE_AUTHORED) to L5's committed
+  `apps/ios/App/Resources/acknowledgements.json`, entry for entry. It names the two deliberate differences (OpenSSL's
+  `homepage`; the note's TRIMMED line). Its draft, the same hunk, went red under 8 mutations in its dry run, each red
+  naming its cause. 253 copies, 86 pins.
+- 26 files, +1,313 −138, a6ab8f5ce..T. **Pin-class: `apps/ios/VibeFieldKit/Package.swift` alone, 4/1**
+  (FieldSettingsTests gains `resources: [.copy("Fixtures")]`). Named, not pin-class: `scripts/check-ios-fixtures.mjs`
+  100/1 and `DESIGN.md` 38/0.
+
+**The witnesses before the mint,** on vf-m1 (a9; Xcode 27.3 BETA 27C5020n; the iPhone 17 simulator
+`67E36A30-7FA2-4942-BD50-84786D2A57ED`, runtime iOS 27.2; a9's copies of the frozen scripts, with `U=` and the host
+paths adapted, nothing else, as ruled 2026-11-05 22:12Z). The first mini went offline at James's account switch, and
+13a never ran there.
+- At `ea3e37465` (the pre-cut; its apps/ios is the real cut `fe0cbe075`'s): the kit was GREEN at 23:27Z (3 runs,
+  73 tests, 7 suites, 17 rows). The stills (a9's v2, 23:33:44Z, 10 of 10) were **RED on the welcome**, light and dark:
+  the glass ended at "New to VibeField? See how it works". That run is **the first witness that could see it**
+  (VF-PM, 23:38Z), and the tree is superseded.
+- At `996eaa839` (S3b on `fe9270152`): the kit was GREEN, 23:44:29Z→23:46:04Z (3 runs, 74 tests, 7 suites, 18 rows).
+  The stills were 10 of 10 at 23:48:57Z, and the welcome gate passed in both looks.
+
+**The re-cuts.**
+1. The real cut, `fe0cbe075`, onto L4's records `fe9270152` (2026-11-05 08:45Z), carried the two commits drafted for
+   it.
+2. S3b on top made it `996eaa839`.
+3. Onto `f445b3b80` as `306224906` (23:54Z), with apps/ios and VibeFieldKit unchanged.
+4. VF-PM ruled at 23:57Z that a disjoint union does not carry, since the kit rule is the apps/ios tree, not its
+   files. Item 109 landed first (M164) and its records followed. 13a was then cut onto them (00:10Z) as `7a7f22623`:
+   - `git range-diff`: all 23 patches `=`;
+   - tree `6bc6adb0ff20`, apps/ios `f72912b6e7f5`, VibeFieldKit `f13dab298a46`, each as `merge-tree` predicted;
+   - against `306224906`, only item 109's two FieldHistory files and its records' two docs differ;
+   - a new tar, `apps-ios-7a7f22623.tar`, from `git archive` of T's apps/ios (sha256
+     `d5fe6e2ea13edb6f3ead45468b0545f8187495a877d1c051da0a77bc7ff231f4`, 923 entries, re-hashed to T's apps/ios).
+- The frozen pair moved through every cut unchanged:
+  - `run-13a-996eaa839.sh` (sha256 `fe572d72e5d419edaf623172ad8cb1744e1d89c104a9f7d7866e0e147176c030`; a9's copy
+    `51581331`, its ONLY, SUITES and ROWS script-checked equal);
+  - `run-stills-13a-996eaa839.sh` (`015f4bf0efdc0c5737e09ade111d6cbe1b12bdd000978959b4d51a0c92939cd6`; a9's copy
+    `ae731c18`).
+  - The kit takes TIP as its argument and asks only that `fe9270152` be under it, so its "on fe9270152: N commits" line
+    counts main's commits too: cosmetic, named once (VF-PM 23:58Z).
+- The lights at T, in the lane, direct (no `pnpm <script>`, VF-PM 2026-11-05 06:24Z), nice 19:
+  - `node scripts/check-ios-fixtures.mjs`: 253 copies, 86 pins;
+  - biome: no fixes;
+  - `check-import-boundaries.mjs --enforce`: clean;
+  - sound's §14 reader: 23/23;
+  - field-app's 60 DESIGN.md readers: 60/60 files, 1,409 tests.
+
+**The mint, run 165** on vf-m1 (a9's `mint/ios-13a` = T on `a6ab8f5ce`; logs `lanes/ts6/logs/m1/run165-13a/` and
+`lanes/ts6/logs/m1/run165/`):
+- **The kit** (`kit-165.out.try1`, sha256 `42a4f287643d847c965da237a1b6872a632e0d6a526d7e7b324c817ae884e09d`):
+  - start 00:14:47Z. "TIP 7a7f2262375d…: tree 6bc6adb0ff20, apps/ios f72912b6e7f5 (from the tar, sha256
+    d5fe6e2ea13edb6f)";
+  - build EXIT 0 in 69 s, `TEST BUILD SUCCEEDED`; test EXIT 0 in 23 s, `TEST EXECUTE SUCCEEDED`;
+  - "runs: 3, tests: 74, red runs: 0", errors 0, issues 0;
+  - the run was `-only-testing:FieldSettingsTests`, `FieldHomeTests/WayInScreenTests`, `/SettingsAccountTests`,
+    `/MockAccountTests` and `FieldTerminalTests/TerminalSettingsWordsTests`: all 7 suites passed and each of the 18
+    rows has its passed line, S3b's "IOS-13a: the acts' glass draws three slots and the welcome's legal line under
+    them; no act is ever dropped" among them;
+  - "simulator 67E36A30-… shut down 00:16:29Z".
+- **The stills** (`stills-165.out.try1`, `05b3d4a2fa373ef8b09a1ae830eb58dd6577e12098a179d2af4feb92ce4d0a4f`):
+  - app-debug EXIT 0 at 00:17:03Z; the provenance grep under `LC_ALL=C`: the app "carries 13a's literals, and L5's
+    acknowledgements.json byte for byte";
+  - "10 of 10 stills (0 failed)" at 00:19:21Z; shut down 00:19:22Z, with the status bar cleared and the appearance
+    restored to light;
+  - the welcome (`-vf-demo-account=firstrun`), and About, Acknowledgements, Account and Terminal
+    (`-vf-mock -vf-open-settings=…`), light then dark;
+  - `stills.sha256` (`8aa8ffb1a801b0af384229e8329b413a0082029b91c7a0e072095bfcc8e11ce3`) reads all ten OK on the
+    MacBook.
+
+  | still `tree-6bc6adb0ff20-…` | sha256 |
+  |---|---|
+  | light-welcome | `f40addfa0da4bf8aa064a80b450e6eeedb6d5b370ea55388d2daa89351c531e3` |
+  | light-about | `08c0045d1f54aa93a08e5d8c305c0f5cb7c3220e0060c3aa6247d5966c7b2e3a` |
+  | light-acknowledgements | `ad8cbf65735f3dfe1c46d8a12b091800fb6ddb16e9aba4a2ec3bf8589f29c1a0` |
+  | light-account | `421a58e705e87afe11e95de175cf4c60dc098151c5526f60bc45e3ec153c5b73` |
+  | light-terminal | `1a9f1f2732d86bf3f2a02301043a09ee13f232f73c1210353744bcc6d9c6e0e4` |
+  | dark-welcome | `6ed8e29c54a7a072621c6b6b5158a1023e20ea8cbeadb6bf89643e9561af962a` |
+  | dark-about | `c917944d96adfefd314a6295aed73c6f54590dc7135642ff4acae77e769d53ee` |
+  | dark-acknowledgements | `8c094b630eaacf847abf962bd3ba2f7121062966e4a1b07caaeefecd74a0201a` |
+  | dark-account | `54a2e1c6c2fa678114255abeb034b167fda723f6e701fe4ea9567685133aeda0` |
+  | dark-terminal | `2a59c6e350c4459c97fe351ffcebf7bd27674f6fbc00a4333cb8e7f995ac5a2a` |
+
+- **As read** (a9 by eye; the IOS session on the MacBook, all ten at 996eaa839 and the two foot crops at T):
+  - **The welcome gate PASSES in both looks.** The glass holds "Continue with Tailscale" (the filled primary), "Scan
+    the code on your computer" and "New to VibeField? See how it works", and under the link the foot **"Privacy
+    Policy · Support"**, centred inside the glass's rounded bottom. Nothing is dropped or clipped.
+  - The 1180 × 300 foot crops are `foot1180-light-welcome.png` (`0545df9d4edaa0a8`) and `foot1180-dark-welcome.png`
+    (`e8a3aeaae54505a6`). The welcome's bytes differ from 996eaa839's, as a fresh build's do; its layout and words do
+    not.
+  - About: "THIS IPHONE · READ-ONLY", Version, Your desktops, Acknowledgements, then Privacy Policy and Support with
+    the outward mark. The foot is below the fold (not stilled; there is no OS input).
+  - Acknowledgements, **bundled**: ghosttea 0.14.0 MIT, truffle 0.7.26 MIT, then The terminal's fonts. The four
+    JetBrainsMonoNerdFont-*.ttf rows show a 40-hex blob sha as their version over three lines, and their names carry
+    `.ttf`. That is L5's asset shape, item 184 (filed by VF-PM 2026-11-05 23:36Z, James's eye). **Carried, not
+    right**, and not a 13a blocker.
+  - Account: the FROM STUDIO and THIS IPHONE tags, "this iPhone wears the face…", "…this iPhone stays connected by
+    itself", and This iPhone with Copy.
+  - Terminal: "THIS IPHONE · LIVE"; the foot, "…the ground this iPhone draws under it."
+  - Each dark still is its light twin by night, with the same words.
+- **`pnpm verify` at T** (`run165.out`, `76d84cdcc6ab74bb1afe6d44e66a7ff45dfed8666d9eb9a78ddd0678c74a2551`):
+  "ts6-mini verify ARMED 00:20:36Z"; "verify exit 0 00:25:44Z"; "tree clean after verify"; "stubs left: 0".
+  - `verify.log` (`b46159b3cd0721aab17851db3e6811159622225be1897dde5f5825adacd3fc14`; its clean copy
+    `5527c8d0c26343b58810f4e82bd6d94eb67d49fa56013b6a55cd864bd15a8e16`):
+    - fieldd "Tests  3457 passed | 14 skipped (3471)", contracts "Tests  1751 passed (1751)", field-app "Tests  4069
+      passed (4069)" and electron-shell "Tests  2668 passed | 3 skipped (2671)", each as at run 164;
+    - node "ℹ tests 473", "ℹ fail 0"; biome "Checked 3379 files"; cargo 545 passed in 34 results;
+    - Nx typecheck and test "for 29 projects"; the census "no drift" and "census assert OK — no §7.3 violation".
+  - `run165.files` (`046cc74893a86345b84b5be5f22b2a0eab2c802771256ec99dbd24fa89ba2bad`) equals run 164's (937 lines).
+    `run165-next.out` (`807bbf83fa61067f7c3b8f393dc5daf5e8b19a158cd1846bf07b4864e573810d`): "the locks stand: no
+    re-install"; "preflight exit 0 · 1 WARN/FAIL lines".
+  - `run165-hid.log` (`0608ef14e48882de43cc42e440b9ca44914cff2b234ceed04efa3749c0795449`): the console was unlocked;
+    HID idle ran from 3594 s to 3751 s through the kit and stills, and to 3882 s at the verify's start. James's
+    console woke during the verify (220 s at its end); the verify has no gate, and the simulator was already down.
+- The land (the fixer's `land-stack5`, VF-PM's GO 00:31Z, 2026-11-06T00:32:51Z): main fast-forwarded from
+  `a6ab8f5ce` to `7a7f22623`.
+
+**Not witnessed:**
+- iPad and the unknown idiom on a device. The words are proved by the sweeps, the idiom by `DeviceWord(_:)`.
+- Safari opening the two links.
+- A part's texts page as a still (no launch flag opens one; the kit's `texts` row proves it).
+- About's foot below the fold.
+
+**Found:**
+1. The fixture had to be named `*.lane.json`. `check:ios-fixtures` refuses any JSON under the kit's Tests with no
+   origin (the T-H2 orphan rule), so L5's trimmed copy joins LANE_AUTHORED.
+2. No part carries a `note` at L5's committed file, so the unknown field the fixture proves is a `homepage` added to
+   OpenSSL.
+3. S0 quoted the new lines with ASCII '. Every word the phone says uses ’, so they were corrected before any code read
+   them (`6b1605612`).
+4. The texts page's file names are not FactTags (§8 "Fact labels" say scope and timing), so they go in mono above the
+   body, and DESIGN.md says so.
+5. `DeviceWord` is a REQUIRED parameter on every word function. A default would say "iPhone" on an iPad unseen.
+6. Two compile risks were read out by eye before the first kit slot (`e09d7dc37`): an `AttributedString(… + …)`, and
+   an `if case` expression in a test closure.
+7. Settings › Terminal was in 13a's reach, and S5's list missed it. It said "This phone" (:48, :52, :237), and
+   FieldSettings depends on FieldTerminal, so the word moved to FieldDesign: one word, one home.
+8. L5's schema has two optional part fields the reader did not know, `note` and `own: true` (vibe-field-42,
+   2026-11-05 03:39Z). Neither is set in L5's file. Both are now known and kept (`Part.note`, `Part.own`) and not
+   drawn, since DESIGN words neither.
+9. **The stills' provenance grep wants a C locale on a UTF-8 host** (a9 on vf-m1, 2026-11-05 23:30Z). `grep -rqaF`
+   missed the literal "Acknowledgements aren’t in this build." under vf-m1's UTF-8 shell, though the app was fine.
+   `LC_ALL=C` matches bytes; the 996eaa839 stills script sets it from the start.
+10. **The welcome's legal line was in the model and not on the screen** (the stills at `ea3e37465`).
+    - `actsGlass` drew `screen.acts.prefix(3)`, and S3 made the welcome's acts four, so the fourth was cut off.
+    - WayInScreenTests' legal rows passed, because they read the model's acts and could not see the view's cap. A
+      row that tests what a view shows needs the view's own decision under test, as S3b's `glass(_:)` is.
+    - "Shipping without the line is refused" (VF-PM, 23:38Z).
+
+**Owed:**
+- **L4's word pass** (vibe-field-42), with `DeviceWord` from FieldDesign, after 13a, as the plan read the lines:
+  - LockWords :32, :43, :54, :69 (iOS's prompt reason, :46, is done: LANDED "LP-4");
+  - Chat's away lines (ChatPage :48, :55);
+  - History's (HistoryLedgerView :76, :90, :353; ProjectFold :142, :161; FieldHistoryModel :65);
+  - the freeway's refusals (FreewayApproval :52, :58, :61, :64, :66);
+  - TerminalAttachment :1382, and the mesh's reasons that may surface.
+  - §9's "Owed to L4's word pass" line names the lock's two.
+- The Mac's About has no non-affiliation line: a Mac lane's row.
+- Item 184, James's eye.
+- The iPad pass on 11- and 13-inch iPads (Phase 3).
+
+- **Closes IOS-12b's owed: the dark three.** a9 took them on the mini at 05:46Z, at 12b's pre-rebase tip `eb7aeb69f`
+  (tree e3a2eb04057d; `mini-stills-dark-eb7aeb69f.sh`, adapted from the frozen `run-stills-eb7aeb69f.sh`; iPhone 17
+  `1F155533`, 1206 × 2622). They are under `lanes/ios/stills/ios12b/tree-e3a2eb04057d-`, looked at beside their
+  light twins, and whole:
+  - `dark-field` (`757fc6ab6adcc006`): by night; Field 2, its two waiting sparks drawn amber, and Chat 1. The mock
+    field re-rolls its sparks every 0.7 s, so the Field count is each frame's own.
+  - `dark-chat` (`b0b7fbd5b2350fe0`): by night; mini said as never heard; Kiwi asleep, then Vela asking you, in
+    amber with its dot.
+  - `dark-away` (`41fc98af9d6b650d`): by night; with no door, the home's last word.
+  Chat's count is 1 in all six of 12b's stills.
+
+IOS-13a closes in this entry.
