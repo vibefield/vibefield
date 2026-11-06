@@ -327,6 +327,28 @@ describe("the owner's journal", () => {
     expect(journal.size()).toBe(0);
   });
 
+  // SP-7a (D3) — a phone's transcript ticket is carried by its home to the desktop that keeps the
+  // spark, a keyed forward like the index ticket. Its answer is a single-use credential the worker
+  // redeems once, so a receipt must never keep one, and a same-key retry mints afresh.
+  it("SP-7a — a transcript ticket mint is never journaled either: the retry mints afresh", async () => {
+    const { journal } = ownerJournal();
+    let minted = 0;
+    const mint = async () => {
+      minted += 1;
+      return { spark: "sp-vela00000000", ticket: `t-${minted}`, expiresAt: 61_000 };
+    };
+    const ticket = call({
+      method: "compose.sparks.transcript.openTicket",
+      digest: forwardDigest({ spark: "sp-vela00000000" }),
+    });
+    const first = await journal.run(ticket, mint);
+    const retry = await journal.run(ticket, mint);
+    expect(minted).toBe(2);
+    expect(retry).not.toEqual(first);
+    expect(journal.receipt("dev-a", KEY)).toBeUndefined();
+    expect(journal.size()).toBe(0);
+  });
+
   it("an answer carrying a transport grant replays only while the grant lives — past its own expiry the retry answers the receipt, never the stale ticket, and the act never runs twice", async () => {
     const { journal, tick } = ownerJournal(); // the journal's clock starts at 1_000
     let born = 0;

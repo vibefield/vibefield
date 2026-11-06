@@ -10,6 +10,7 @@ import {
   SparkTranscriptOpenTicketResult,
 } from "@vibefield/contracts";
 import { afterEach, describe, expect, it } from "vitest";
+import type { ServeState } from "../src/mesh-client";
 import { RpcCallError } from "../src/native-link";
 import { UNREADABLE_WORDS } from "../src/signed-record";
 import { SparkTranscripts } from "../src/spark-transcripts";
@@ -22,6 +23,11 @@ import { SparkTranscriptTickets } from "../src/transcripts/tickets";
 // socket and the spark's runs, oldest first; shell-main, a plugin, an MCP agent, a plain local token, a phone and a
 // peer daemon are refused; a worker that cannot answer, and a folder the disk will not hand over, are the honest
 // UNAVAILABLE, never an empty list. The worker itself is spark-transcript-host.test.ts's.
+// *SP-7a (D2, 2026-11-06): the phone is served too. A self `tailnet` principal, and a peer daemon whose
+// `onBehalfOf.clientDeviceId` names the phone behind it, are minted a ticket beside the worker's routed serve, read
+// off the live serve aimed at the generation answering now (`transcripts/serve.ts`), keyed by the phone
+// (`clientIdFor`). No such serve is UNAVAILABLE `doors_not_published`, naming this desktop. Every other refusal
+// stands.*
 
 const VELA = "sp-vela00000000";
 
@@ -62,16 +68,58 @@ const REFUSED: Array<[string, CallerContext]> = [
     }),
   ],
   [
-    "the phone",
-    ctx({ kind: "tailnet", login: "me@example.com", self: true } as Principal, {
+    "a guest",
+    ctx({ kind: "tailnet-guest", login: "them@example.com" } as Principal, {
       transport: "ws-tailnet",
-      clientKind: "ios",
     }),
   ],
-  ["a peer daemon", ctx({ kind: "peer-fieldd", deviceId: "dev-b" } as Principal)],
+  [
+    "another login's node",
+    ctx({ kind: "tailnet", login: "them@example.com", self: false } as Principal, {
+      transport: "ws-tailnet",
+    }),
+  ],
+  ["a peer daemon for no one", ctx({ kind: "peer-fieldd", deviceId: "dev-b" } as Principal)],
+  [
+    "a peer daemon for its window",
+    ctx({ kind: "peer-fieldd", deviceId: "dev-b" } as Principal, {
+      onBehalfOf: { clientKind: "renderer", deviceId: "dev-b", windowId: "renderer:b:1" },
+    }),
+  ],
+  [
+    "a peer daemon naming a desktop",
+    ctx({ kind: "peer-fieldd", deviceId: "dev-b" } as Principal, {
+      onBehalfOf: { clientKind: "ios", deviceId: "dev-b", clientDeviceId: "dev-desk" },
+    }),
+  ],
 ];
 
-function world(opts: { refuse?: Error } = {}) {
+/** SP-7a — this person's own phone, over the tailnet. */
+const PHONE = ctx(
+  { kind: "tailnet", login: "me@example.com", self: true, tailscaleId: "n-phone" } as Principal,
+  { transport: "ws-tailnet", clientKind: "ios" },
+);
+/** SP-7a — the phone behind its home: the home's daemon, forwarding for it. */
+const HOME_FOR_PHONE = ctx({ kind: "peer-fieldd", deviceId: "dev-home" } as Principal, {
+  onBehalfOf: {
+    clientKind: "ios",
+    deviceId: "dev-home",
+    windowId: "conn-7",
+    clientDeviceId: "dev-phone",
+  },
+});
+/** The worker's ready generation listens here, and the live serve is aimed at it. */
+const WORKER_PORT = 53817;
+const LIVE_SERVE: ServeState = {
+  serveId: "spark-transcripts",
+  name: "spark-transcripts",
+  listenPort: 9426,
+  target: { kind: "port", port: WORKER_PORT },
+  status: "active",
+  url: "http://desk.tail1234.ts.net:9426",
+};
+
+function world(opts: { refuse?: Error; serves?: ServeState[] } = {}) {
   const root = mkdtempSync(join(tmpdir(), "vf-transcript-ticket-"));
   dirs.push(root);
   /** when each line is written, in order; then now */
@@ -83,14 +131,20 @@ function world(opts: { refuse?: Error } = {}) {
   });
   const registered: TicketRegistration[] = [];
   const supervisor = {
-    health: () => ({ phase: "ready" as const, detail: null, pid: 7, generation: 2 }),
+    health: () => ({
+      phase: "ready" as const,
+      detail: null,
+      pid: 7,
+      generation: 2,
+      port: WORKER_PORT,
+    }),
     request: async <Op extends keyof HostOps>(
       op: Op,
       args: HostOps[Op]["args"],
     ): Promise<HostOps[Op]["value"]> => {
       if (opts.refuse !== undefined) throw opts.refuse;
       if (op === "registerTicket") registered.push(args as TicketRegistration);
-      return (op === "registerTicket" ? { port: 53817 } : null) as HostOps[Op]["value"];
+      return (op === "registerTicket" ? { port: WORKER_PORT } : null) as HostOps[Op]["value"];
     },
   };
   const now = Date.parse("2026-11-05T04:00:00.000Z");
@@ -99,6 +153,9 @@ function world(opts: { refuse?: Error } = {}) {
     supervisor,
     hasSpark: (id) => id === VELA,
     now: () => now,
+    deviceId: () => "dev-studio",
+    serves: () => opts.serves ?? [LIVE_SERVE],
+    isDesktop: (device) => device === "dev-desk" || device === "dev-home",
   });
   return { root, store, tickets, registered, now, times };
 }
@@ -158,13 +215,64 @@ describe("compose.sparks.transcript.openTicket, fieldd's gate and answer (TH-1)"
     expect(w.registered).toHaveLength(2);
   });
 
-  it("refuses shell-main, a plugin, an MCP agent, a plain local token, the phone and a peer daemon, and mints nothing for them", async () => {
+  it("refuses shell-main, a plugin, an MCP agent, a plain local token, a guest and a peer daemon with no phone behind it, and mints nothing for them", async () => {
     const w = world();
     for (const [who, caller] of REFUSED) {
       const error = await refused(w.tickets.open(caller, { spark: VELA }));
       expect(error instanceof RpcCallError ? error.kind : error, who).toBe("FORBIDDEN_SCOPE");
     }
     expect(w.registered).toEqual([]);
+  });
+
+  it("SP-7a — mints this person's phone a ticket at the worker's routed serve, keyed by its own node", async () => {
+    const w = world();
+    w.store.append(VELA, "run-vela-1", { kind: "run", runtimeRunId: "run-vela-1", fresh: true });
+    const answer = await answered(w.tickets.open(PHONE, { spark: VELA }));
+    expect(answer, "the door's answer to the phone").toMatchObject({
+      spark: VELA,
+      endpoint: "ws://desk.tail1234.ts.net:9426/transcripts",
+      generation: 2,
+    });
+    expect(w.registered.map((r) => r.clientId)).toEqual(["tailnet:me@example.com#n-phone"]);
+    // a window here is still answered the loopback listener, the live serve beside it notwithstanding
+    const window = await answered(w.tickets.open(WINDOW, { spark: VELA }));
+    expect(window).toMatchObject({ endpoint: `ws://127.0.0.1:${WORKER_PORT}/transcripts` });
+  });
+
+  it("SP-7a — mints the phone behind its home the same, keyed by the connection behind the forward", async () => {
+    const w = world();
+    // the home forwards the ask whole, naming this desktop
+    const ask = { spark: VELA, device: "dev-studio" };
+    const answer = await answered(w.tickets.open(HOME_FOR_PHONE, ask));
+    expect(answer, "the door's answer to the home, for its phone").toMatchObject({
+      spark: VELA,
+      endpoint: "ws://desk.tail1234.ts.net:9426/transcripts",
+    });
+    expect(w.registered.map((r) => r.clientId)).toEqual(["peer-fieldd:dev-home#conn-7"]);
+  });
+
+  it("SP-7a — says doors_not_published, naming this desktop, while no live serve is aimed at the generation answering now", async () => {
+    const aimedElsewhere: ServeState = { ...LIVE_SERVE, target: { kind: "port", port: 53900 } };
+    for (const serves of [[], [{ ...LIVE_SERVE, status: "pending" as const }], [aimedElsewhere]]) {
+      const w = world({ serves });
+      const down = await refused(w.tickets.open(PHONE, { spark: VELA }));
+      expect(
+        down instanceof RpcCallError && [down.kind, down.retryable, down.details],
+        JSON.stringify(serves),
+      ).toEqual([
+        "UNAVAILABLE",
+        true,
+        {
+          service: SPARK_TRANSCRIPT_SERVICE.SERVICE,
+          state: SPARK_TRANSCRIPT_SERVICE.STATE_DOORS_NOT_PUBLISHED,
+          device: "dev-studio",
+        },
+      ]);
+      expect(w.registered).toEqual([]);
+      // the window's own road is not the serve's
+      const window = await answered(w.tickets.open(WINDOW, { spark: VELA }));
+      expect(window).toHaveProperty("ticket");
+    }
   });
 
   it("says a spark this desktop does not keep is not found, and a malformed ask is refused", async () => {

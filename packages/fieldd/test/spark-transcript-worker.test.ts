@@ -154,6 +154,8 @@ describe("the transcript worker, a real child of fieldd's (TH-1)", () => {
       clientId: "tok-window",
       expiresAt: Date.now() + 60_000,
     });
+    // SP-7a (D1 (B)) — the ready generation's port is in its health: the routed serve aims at it
+    expect(supervisor.health().port).toBe(port);
     const window = await read(`ws://127.0.0.1:${port}/transcripts`, ticket, [RUN]);
     expect(window.frames[0]).toEqual({ type: "ready", generation: 1 });
     expect(window.frames.flatMap((fr) => (fr.type === "line" ? [fr.line.kind] : []))).toEqual([
@@ -215,6 +217,8 @@ describe("the transcript worker, a real child of fieldd's (TH-1)", () => {
       clientId: "tok-window",
       expiresAt: Date.now() + 60_000,
     });
+    // a new generation, a new port in its health, and the serve re-aims at it
+    expect(supervisor.health().port).toBe(next.port);
     const reopened = await read(`ws://127.0.0.1:${next.port}/transcripts`, again, [RUN]);
     expect(reopened.frames[0]).toEqual({ type: "ready", generation: 2 });
   }, 60_000);
