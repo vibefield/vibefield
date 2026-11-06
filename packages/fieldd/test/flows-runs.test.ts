@@ -11,6 +11,7 @@ import {
   RunSummary,
 } from "@vibefield/contracts";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { FlowStepTurnEnd } from "../src/flow-step-events";
 import type { FlowsHostLaunch } from "../src/flows/launch";
 import { FlowLibrary } from "../src/flows/library";
 import { FlowRecords, flowHashOf } from "../src/flows/records";
@@ -23,7 +24,6 @@ import {
 import type { FlowStepLaunch, FlowStepOrigin, FlowStepSession } from "../src/flows/steps";
 import * as words from "../src/flows/words";
 import type { RpcCallError } from "../src/native-link";
-import type { FlowStepTurnEnd } from "../src/flow-step-events";
 import type { FlowChangedRaise, FlowItemRaise } from "../src/tool-plane/rooms/you/queue";
 import { flowsHostLaunch, standInSource } from "./flows-host-bundle";
 import { beganRun } from "./flows-run-records";
@@ -995,7 +995,8 @@ describe("CP-4a2b — a step's agent, model, folder, prompt and profile, held at
 // again. A late turn end journals nothing; a failed turn is "‹label› failed."; an answer frees its slot (R14b).
 
 const STEP_AT = '{ agent: "claude", label: "Diff", profile: "work", cwd: "/work/app" }';
-const FORM = '{ type: "object", properties: { verdict: { type: "string" } }, required: ["verdict"] }';
+const FORM =
+  '{ type: "object", properties: { verdict: { type: "string" } }, required: ["verdict"] }';
 /** One step, its answer's text said as the run's log line, and returned. */
 const ANSWERED = [
   'export const meta = { name: "Review" };',
@@ -1032,7 +1033,13 @@ describe("CP-4a2b — a step's answer: heard once, bounded whole, checked agains
     h.approved("review", ANSWERED);
     const run = startedRun(await h.start({ flow: "review" })).run;
     await waitFor(() => expect(h.enqueued).toHaveLength(1));
-    const end = { run, call: 1, runtimeRunId: "rt-step1", turn: "t1", outcome: "completed" } as const;
+    const end = {
+      run,
+      call: 1,
+      runtimeRunId: "rt-step1",
+      turn: "t1",
+      outcome: "completed",
+    } as const;
     h.endTurn({ ...end, text: "all clean" });
     h.endTurn({ ...end, text: "all clean" });
     expect((await settled(h.runs, run, "done")).log).toBe("all clean");
@@ -1060,12 +1067,36 @@ describe("CP-4a2b — a step's answer: heard once, bounded whole, checked agains
     );
     const run = startedRun(await h.start({ flow: "two" })).run;
     await waitFor(() => expect(h.enqueued).toHaveLength(1));
-    h.endTurn({ run, call: 1, runtimeRunId: "rt-step1", turn: "t1", outcome: "completed", text: "first" });
+    h.endTurn({
+      run,
+      call: 1,
+      runtimeRunId: "rt-step1",
+      turn: "t1",
+      outcome: "completed",
+      text: "first",
+    });
     await waitFor(() => expect(h.enqueued).toHaveLength(2));
-    h.endTurn({ run, call: 1, runtimeRunId: "rt-step1", turn: "t2", outcome: "completed", text: "late" });
-    h.endTurn({ run, call: 2, runtimeRunId: "rt-step2", turn: "t1", outcome: "completed", text: "second" });
+    h.endTurn({
+      run,
+      call: 1,
+      runtimeRunId: "rt-step1",
+      turn: "t2",
+      outcome: "completed",
+      text: "late",
+    });
+    h.endTurn({
+      run,
+      call: 2,
+      runtimeRunId: "rt-step2",
+      turn: "t1",
+      outcome: "completed",
+      text: "second",
+    });
     expect((await settled(h.runs, run, "done")).log).toBe("first second");
-    expect(answersOf(h, run).map((line) => line.value)).toEqual([{ text: "first" }, { text: "second" }]);
+    expect(answersOf(h, run).map((line) => line.value)).toEqual([
+      { text: "first" },
+      { text: "second" },
+    ]);
   });
 
   it("R20 (Q-A1 (a)): a step with a form answers its fields beside its text, the form's JSON read from the last fenced block", async () => {
@@ -1084,8 +1115,20 @@ describe("CP-4a2b — a step's answer: heard once, bounded whole, checked agains
     h.approved(
       "forms",
       callsEach([
-        { agent: "claude", label: "Pattern", profile: "work", cwd: "/work/app", schema: { type: "object", pattern: "x" } },
-        { agent: "claude", label: "Top", profile: "work", cwd: "/work/app", schema: { type: "string" } },
+        {
+          agent: "claude",
+          label: "Pattern",
+          profile: "work",
+          cwd: "/work/app",
+          schema: { type: "object", pattern: "x" },
+        },
+        {
+          agent: "claude",
+          label: "Top",
+          profile: "work",
+          cwd: "/work/app",
+          schema: { type: "string" },
+        },
       ]),
     );
     const run = startedRun(await h.start({ flow: "forms" })).run;
@@ -1160,7 +1203,14 @@ describe("CP-4a2b — a step's answer: heard once, bounded whole, checked agains
     const long = startedRun(await h.start({ flow: "review" })).run;
     await waitFor(() => expect(h.enqueued).toHaveLength(1));
     const text = `${fenced('{"verdict":"clean"}')}\n${"x".repeat(70 * 1024)}`;
-    h.endTurn({ run: long, call: 1, runtimeRunId: "rt-step1", turn: "t1", outcome: "completed", text });
+    h.endTurn({
+      run: long,
+      call: 1,
+      runtimeRunId: "rt-step1",
+      turn: "t1",
+      outcome: "completed",
+      text,
+    });
     expect((await settled(h.runs, long, "done")).log).toBe("clean true");
     expect(answersOf(h, long)[0]).toMatchObject({ cut: true, value: { verdict: "clean" } });
     expect(h.records.runRecord(long)?.steps[0]).toMatchObject({ state: "answered", cut: true });
@@ -1168,13 +1218,22 @@ describe("CP-4a2b — a step's answer: heard once, bounded whole, checked agains
     const wide = startedRun(await h.start({ flow: "review" })).run;
     await waitFor(() => expect(h.enqueued).toHaveLength(2));
     const fields = `{"verdict":"${"y".repeat(FLOW_LIMITS.RESULT_MAX_BYTES - 20)}"}`;
-    h.endTurn({ run: wide, call: 1, runtimeRunId: "rt-step2", turn: "t1", outcome: "completed", text: fields });
+    h.endTurn({
+      run: wide,
+      call: 1,
+      runtimeRunId: "rt-step2",
+      turn: "t1",
+      outcome: "completed",
+      text: fields,
+    });
     await waitFor(() => expect(h.enqueued).toHaveLength(3));
-    expect(h.enqueued[2]?.text).toBe(repairLine("the answer's fields are longer than a flow may keep"));
+    expect(h.enqueued[2]?.text).toBe(
+      repairLine("the answer's fields are longer than a flow may keep"),
+    );
     expect(h.kinds(wide)).toEqual(["head", "call"]);
   });
 
-  it("R25: a failed turn is the step's refusal, \"‹label› failed.\"", async () => {
+  it('R25: a failed turn is the step\'s refusal, "‹label› failed."', async () => {
     const h = await harness();
     h.approved("review", REVIEW_CATCHES);
     const run = startedRun(await h.start({ flow: "review" })).run;
@@ -1189,7 +1248,14 @@ describe("CP-4a2b — a step's answer: heard once, bounded whole, checked agains
     h.approved("fan", fanOut(FLOW_LIMITS.LIVE_STEPS_MAX + 1));
     const run = startedRun(await h.start({ flow: "fan" })).run;
     await waitFor(() => expect(h.enqueued).toHaveLength(FLOW_LIMITS.LIVE_STEPS_MAX));
-    h.endTurn({ run, call: 3, runtimeRunId: "rt-step3", turn: "t1", outcome: "completed", text: "part 3" });
+    h.endTurn({
+      run,
+      call: 3,
+      runtimeRunId: "rt-step3",
+      turn: "t1",
+      outcome: "completed",
+      text: "part 3",
+    });
     await waitFor(() => expect(h.enqueued).toHaveLength(FLOW_LIMITS.LIVE_STEPS_MAX + 1));
     expect(h.spawned.at(-1)?.origin).toEqual({ by: "flow", run, call: 9 });
     expect(h.records.runRecord(run)?.open.find((step) => step.call === 9)).toMatchObject({

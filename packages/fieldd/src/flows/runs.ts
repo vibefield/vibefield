@@ -12,8 +12,8 @@ import {
   type FlowStarter,
   type FlowsListResult,
   flowRunStateOf,
-  NEEDS_CHOICE_WORDS,
   flowsListOf,
+  NEEDS_CHOICE_WORDS,
   type NeedsItemId,
   nameWords,
   oneLineWords,
@@ -30,12 +30,12 @@ import type {
   FlowItemAnswer,
   FlowItemRaise,
 } from "../tool-plane/rooms/you/queue";
+import { type FlowForm, matchAnswer } from "./form-check";
 import type { FlowJournalEntry } from "./journal";
 import type { FlowLibrary } from "./library";
 import type { FlowRecords, FlowRunStart } from "./records";
 import { FlowReplay } from "./replay";
 import { readFlow } from "./static-read";
-import { type FlowForm, matchAnswer } from "./form-check";
 import {
   type FlowStepPorts,
   type FlowStepWrite,
@@ -552,7 +552,10 @@ export class FlowRuns {
     // held on the person: the step's words wait for their act
     if (step.state === "holding") return;
     if (end.outcome === "failed") {
-      this.#answer(live, end.call, waiter, { ok: false, refused: `${labelWords(step.label)} failed.` });
+      this.#answer(live, end.call, waiter, {
+        ok: false,
+        refused: `${labelWords(step.label)} failed.`,
+      });
       return;
     }
     const text = end.text ?? "";
@@ -614,7 +617,9 @@ export class FlowRuns {
       acts: [NEEDS_CHOICE_WORDS.askOnceMore],
     });
     this.#rewriteWith(run, (kept) => ({
-      open: kept.open.map((open) => (open.call === step.call ? { ...open, state: "holding" } : open)),
+      open: kept.open.map((open) =>
+        open.call === step.call ? { ...open, state: "holding" } : open,
+      ),
       held: { item, kind: "flow-repair" },
     }));
   }
