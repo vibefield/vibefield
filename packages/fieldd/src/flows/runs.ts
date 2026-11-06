@@ -185,6 +185,9 @@ interface LiveRun {
   readonly slotted: { readonly call: number; readonly args: readonly unknown[] }[];
   /** each open step's handed session, by its call: how to let the step listener go (9b) */
   readonly hands: Map<number, () => void>;
+  /** 1c review Y1 — each step's agent left running when its line was never queued, by its call: its session, for
+   * slice 13's R42 to end in this fieldd's life (after a restart it is the person's to end) */
+  readonly orphans: Map<number, string>;
 }
 
 /** A step's answer, while its host waits on it: given once (D22); a start that throws gives its refusal (F2). */
@@ -498,6 +501,7 @@ export class FlowRuns {
       misses: new Map(),
       slotted: [],
       hands: new Map(),
+      orphans: new Map(),
       ...(params.from !== undefined && params.starter.by === "spark"
         ? { ran: nameWords(params.from.name) }
         : {}),
@@ -719,6 +723,9 @@ export class FlowRuns {
       // hears the same on a replay; a rejection would journal nothing and hold the slot forever. Its review's T1: this
       // road does no I/O before the waiter is answered (a store that does not answer is the commonest throw here), and
       // its label is the call's own (T3)
+      // Y1: an agent its failed start leaves running is kept, in memory, before the answer settles the step, so the
+      // settle's own write names its session even when the write that would have did not take
+      if (error instanceof FlowStepOrphaned) live.orphans.set(number, error.runtimeRunId);
       live.waiting.delete(number);
       waiter?.resolve({ ok: false, refused: stepFailed(labelOf(args)) });
       this.#startThrew(run, number, error);
@@ -731,7 +738,7 @@ export class FlowRuns {
     if (error instanceof FlowStepOrphaned)
       this.#logger.warn(
         "fieldd.flows.step.orphan",
-        "A flow step's agent started, and its line was not queued; the step failed, and its agent is left running",
+        "A flow step's agent started, and its line was not queued; the step failed, and its agent is left running, kept for its run's end in this fieldd's life, and the person's to end after a restart",
         { run, call, runtimeRunId: error.runtimeRunId, error: messageOf(error.cause) },
       );
     else
@@ -953,8 +960,11 @@ export class FlowRuns {
       this.#rewriteWith(run, (record) => {
         const step = record.open.find((open) => open.call === entry.call);
         if (step === undefined) return {};
+        // Y1: a step whose agent was left running names its session, in this same write, though its own did not take
+        const orphan = this.#live.get(run)?.orphans.get(entry.call);
         const settled: FlowRunRecordStep = {
           ...step,
+          ...(step.session === undefined && orphan !== undefined ? { session: orphan } : {}),
           state: entry.refused !== undefined ? "failed" : "answered",
           ...(entry.cut === true ? { cut: true as const } : {}),
         };

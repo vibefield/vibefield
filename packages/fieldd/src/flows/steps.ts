@@ -389,30 +389,42 @@ function sent(
     lines: [{ line, n: 1, sent: "sending" }],
   }));
   ports.inputs.enqueue(session, text, from);
-  // F2 review T2: the line is queued, so the step works and its agent's answer settles it; a record that cannot say
-  // so is logged, never thrown, and reads `sending` (D5's window: never a line it lacks)
+  queuedMark(ports, write, call, session, line, 1);
+  return { working: session };
+}
+
+/** D5 7: a line `sent: "queued"` on the record, in the tick the queue took it. F2 review T2 (and Y2 for a repair): the
+ * line is queued, so the step works and its agent's answer settles it; a record that cannot say so is logged, never
+ * thrown, and reads `sending` (D5's window: never a line it lacks). */
+function queuedMark(
+  ports: Pick<FlowStepPorts, "logger">,
+  write: FlowStepWrite,
+  call: number,
+  session: string,
+  line: string,
+  n: number,
+): void {
   try {
     write(call, (step) => ({
       ...step,
       lines: (step.lines ?? []).map((kept) =>
-        kept.line === line && kept.n === 1 ? { ...kept, sent: "queued" } : kept,
+        kept.line === line && kept.n === n ? { ...kept, sent: "queued" } : kept,
       ),
     }));
   } catch (error) {
     ports.logger?.warn(
       "fieldd.flows.step.queued",
       "A flow step's line was queued, and its record could not say so; its answer settles the step",
-      { call, session, error: error instanceof Error ? error.message : String(error) },
+      { call, session, line, n, error: error instanceof Error ? error.message : String(error) },
     );
   }
-  return { working: session };
 }
 
 /** VibeField's repair line (D5's way, as a step's first line): its intent on the record, `repairing`, the queue as
  * VibeField's own line to the step (`fieldd` with its `flow`, never joined by a wake, W1), then `queued` in the tick
  * the queue took it. `n` counts the step's repair lines: Ask once more's is the 2nd. */
 export function sendRepair(
-  ports: Pick<FlowStepPorts, "inputs">,
+  ports: Pick<FlowStepPorts, "inputs" | "logger">,
   write: FlowStepWrite,
   run: string,
   call: number,
@@ -429,10 +441,6 @@ export function sendRepair(
     kind: "fieldd",
     flow: { run, call, line: "repair", n },
   });
-  write(call, (step) => ({
-    ...step,
-    lines: (step.lines ?? []).map((kept) =>
-      kept.line === "repair" && kept.n === n ? { ...kept, sent: "queued" } : kept,
-    ),
-  }));
+  // 1c review Y2: as `sent`'s: the repair line is queued, so the step repairs and its answer settles it
+  queuedMark(ports, write, call, session, "repair", n);
 }
