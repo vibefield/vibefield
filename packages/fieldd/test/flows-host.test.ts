@@ -1102,6 +1102,95 @@ describe("CP-4a2a — the flow host: its pipe (4A2-Q5 (a)) and its life", () => 
     }
   });
 
+  // CP-4a2b (13a's D11, slice 9; Q-A1 (a)) — a step's answer is `{text, …fields}`, bounded WHOLE by the one cutter: the
+  // fields cross whole and `text` takes what they leave, with the mark's bytes kept back; fields that alone pass the
+  // bound are a miss in fieldd's words (DESIGN.md §9), for the runs' repair turn, never cut.
+  it(
+    "H14c: a step's answer past RESULT_MAX_BYTES keeps its fields whole, and the worker puts the mark on value.text (D11)",
+    async () => {
+      const long = "x".repeat(FLOW_LIMITS.RESULT_MAX_BYTES + 4_000);
+      const { handler } = scripted(() => ({
+        ok: true,
+        value: { text: long, n: 1, notes: "kept" },
+      }));
+      const run = await host(
+        flow(
+          [
+            "let said;",
+            'try { said = await agent("step"); } catch (error) { return ["refused", error.message]; }',
+            'return [said.n, said.notes, said.text.endsWith("…"), said.text.length, Object.keys(said)];',
+          ].join("\n"),
+        ),
+        { handler },
+      );
+      const ended = await within(run.ended);
+      expect(ended).toMatchObject({ kind: "done" });
+      const said = (ended as { value?: unknown[] }).value;
+      // the whole answer, its mark in its text, is within the bound: {"text":"…","n":1,"notes":"kept"}
+      const fields = flowAnswerBytes({ text: "", n: 1, notes: "kept" }) - 2;
+      expect(said).toEqual([
+        1,
+        "kept",
+        true,
+        FLOW_LIMITS.RESULT_MAX_BYTES - fields - 2 - Buffer.byteLength(FLOW_CUT_MARK) + 1,
+        ["text", "n", "notes"],
+      ]);
+    },
+    ROW_MS,
+  );
+
+  it("H14d: boundedAnswer bounds a step's answer whole: text cut to what the fields leave, the longest that fits, and fields alone past the bound a miss (D11)", () => {
+    const max = FLOW_LIMITS.RESULT_MAX_BYTES;
+    const room = max - Buffer.byteLength(FLOW_CUT_MARK);
+    // within the bound: as it is
+    const small = { ok: true as const, value: { text: "short", verdict: "pass" } };
+    expect(boundedAnswer(small)).toEqual(small);
+    // past it: the fields whole, the text cut, the whole within room for the mark, and the longest such
+    const fields = { verdict: "pass", items: Array.from({ length: 50 }, (_, i) => `item ${i}`) };
+    for (const unit of ["x", "é", "\u0001", "😀"]) {
+      const text = unit.repeat(max);
+      const said = boundedAnswer({ ok: true, value: { text, ...fields } });
+      expect(said, JSON.stringify(unit)).toMatchObject({ ok: true, cut: true });
+      const value = (said as { value: { text: string } & typeof fields }).value;
+      expect(value).toEqual({ text: value.text, ...fields });
+      expect(text.startsWith(value.text)).toBe(true);
+      expect(value.text.length).toBeGreaterThan(0);
+      expect(flowAnswerBytes(value), JSON.stringify(unit)).toBeLessThanOrEqual(room);
+      const next = value.text.length + (unit.length === 2 ? 2 : 1);
+      expect(flowAnswerBytes({ ...value, text: text.slice(0, next) })).toBeGreaterThan(room);
+    }
+    // fields that alone leave no room for an empty text and its mark: a miss, in fieldd's words, never cut
+    const wide = (bytes: number) => {
+      const base = flowAnswerBytes({ text: "", notes: "" });
+      return { text: "x".repeat(max), notes: "y".repeat(bytes - base) };
+    };
+    expect(flowAnswerBytes({ ...wide(room), text: "" })).toBe(room);
+    expect(boundedAnswer({ ok: true, value: wide(room) })).toEqual({
+      ok: true,
+      value: { text: "", notes: wide(room).notes },
+      cut: true,
+    });
+    expect(boundedAnswer({ ok: true, value: wide(room + 1) })).toEqual({
+      ok: false,
+      refused: "the answer's fields are longer than a flow may keep",
+      miss: true,
+    });
+    // an answer already cut (a replay's) passes as it is
+    const cut = boundedAnswer({ ok: true, value: { text: "x".repeat(max), n: 2 } });
+    expect(boundedAnswer(cut)).toEqual(cut);
+    // an object with no text, and a list, past the bound: refused as before, and no miss
+    for (const value of [
+      { notes: "x".repeat(max) },
+      ["x".repeat(max)],
+      { text: 1, notes: "x".repeat(max) },
+    ]) {
+      const refused = boundedAnswer({ ok: true, value });
+      expect(refused).toMatchObject({ ok: false });
+      expect((refused as { refused: string }).refused).toMatch(/at most 64 KiB/);
+      expect(refused).not.toHaveProperty("miss");
+    }
+  });
+
   it(
     "H18: an 'error' from a child that started never settles its run: fieldd logs it and waits for the child to leave (finding 8)",
     async () => {
