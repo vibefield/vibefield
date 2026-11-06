@@ -83,7 +83,10 @@ describe("DR-2a — the drive's registry rows", () => {
       // no other row names the same place
       const path = LAYOUT[key].join("/");
       const spelled = Object.entries(LAYOUT).filter(([, segs]) => segs.join("/") === path);
-      expect(spelled.map(([name]) => name), key).toEqual([key]);
+      expect(
+        spelled.map(([name]) => name),
+        key,
+      ).toEqual([key]);
     }
   });
 
