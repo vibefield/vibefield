@@ -1084,6 +1084,49 @@ pins.push(
   ),
 );
 
+// SP-7a — the transcript reader's numbers (`SparkTranscriptLimits`, SparkTranscriptWire.swift), each read from
+// SPARK_TRANSCRIPT's own block of registries.ts (never SPARK_TRANSCRIPT_SERVICE's), and the line format from
+// spark-transcript.ts. The phone's backoff, its open timeout and the format it reads a body of are the window's.
+const SPARK_TRANSCRIPT_SWIFT =
+  "apps/ios/VibeFieldKit/Sources/FieldProduct/SparkTranscriptWire.swift";
+function sparkTranscriptPin(key, swiftName, type = ": Int64") {
+  return {
+    name: `SPARK_TRANSCRIPT.${key}`,
+    origin: {
+      file: REGISTRIES,
+      pattern: new RegExp(
+        `export const SPARK_TRANSCRIPT = \\{(?:(?!\\n\\} as const;)[\\s\\S])*?\\n {2}${key}: (${NUMBER}),\\n`,
+      ),
+      label: `SPARK_TRANSCRIPT.${key}`,
+    },
+    copy: {
+      file: SPARK_TRANSCRIPT_SWIFT,
+      pattern: new RegExp(`^ {2}public static let ${swiftName}${type} = (${NUMBER})$`, "m"),
+      label: `SparkTranscriptLimits.${swiftName}`,
+    },
+  };
+}
+pins.push(
+  sparkTranscriptPin("TICKET_TTL_MS", "ticketTTLMs"),
+  sparkTranscriptPin("RUNS_MAX", "runsMax", ""),
+  sparkTranscriptPin("OPEN_TIMEOUT_MS", "openTimeoutMs"),
+  sparkTranscriptPin("RETRY_MIN_MS", "retryMinMs"),
+  sparkTranscriptPin("RETRY_MAX_MS", "retryMaxMs"),
+  {
+    name: "SPARK_TRANSCRIPT_FORMAT",
+    origin: {
+      file: "packages/contracts/src/spark-transcript.ts",
+      pattern: new RegExp(`^export const SPARK_TRANSCRIPT_FORMAT = (${NUMBER});$`, "m"),
+      label: "SPARK_TRANSCRIPT_FORMAT",
+    },
+    copy: {
+      file: SPARK_TRANSCRIPT_SWIFT,
+      pattern: new RegExp(`^ {2}public static let format: Int64 = (${NUMBER})$`, "m"),
+      label: "SparkTranscriptLimits.format",
+    },
+  },
+);
+
 // IOS-12b — a spark's words (DESIGN.md §2.10): Chat's list on the phone says design-kit's own. The ids are read
 // from `statuses.ts`, so a status added there with no word on the phone is a pin nobody can read: red.
 const SPARK_STATUSES_TS = "packages/design-kit/src/spark-face/statuses.ts";
