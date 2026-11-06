@@ -78,8 +78,8 @@ const lines: string[] = [
   "}",
   "",
   "/// DR-2a — the file transfer's registry (contracts mgmt.ts `MESH_FILE_TRANSFER`): the",
-  "/// floor's refusal, a pull's failure words, the path bound and the progress cadence, one",
-  "/// vocabulary for the floor's writer and fieldd's reader.",
+  "/// floor's refusal, a root's ungated word, a pull's failure words, the path bound and",
+  "/// the progress cadence, one vocabulary for the floor's writer and fieldd's reader.",
   "pub mod mesh_file_transfer {",
   ...Object.entries(MESH_FILE_TRANSFER).map(([k, v]) =>
     typeof v === "number"

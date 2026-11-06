@@ -12,12 +12,14 @@ use field_native::contracts::{
     MeshLaneOpenRequest, MeshLanePeerOpened, MeshNotUpDetails, MeshSelfIdentity,
     NativeDetachParams, NativeDetachResult, NativeDoorCloseParams, NativeDoorCloseResult,
     NativeDoorClosed, NativeDoorInfoResult, NativeDoorOpen, NativeDoorSnapshot,
-    NativeDoorSubscribeResult, NativeHealth, NativePrepareRestartParams,
+    NativeDoorSubscribeResult, NativeFileTransferDelta, NativeFileTransferPullParams,
+    NativeFileTransferPullResult, NativeFileTransferRootsParams, NativeFileTransferRootsResult,
+    NativeFileTransferSnapshot, NativeHealth, NativePrepareRestartParams,
     NativePrepareRestartResult, NativeShutdownParams, NativeShutdownResult, NativeTickParams,
     ObservedState, PeerInfo, PingAck, RpcNotification, RpcRequest, RpcResponse, ServeConfig,
     ServeEntry, StoreSnapshot, TerminalRouteSnapshot, TerminalRoutesStreamPayload,
 };
-use field_native::registries::{native_refusals, terminal_inventory};
+use field_native::registries::{mesh_file_transfer, native_refusals, terminal_inventory};
 use serde_json::Value;
 use std::{fs, path::PathBuf};
 
@@ -334,6 +336,8 @@ fn mesh_lane_fixtures() {
     // the whole obligation. The two notifications field-native EMITS are
     // strict: it must produce exactly the shape the fixture pins.
     roundtrip::<MeshLaneOpenRequest>("mesh-lane-open-request.valid.json", true);
+    // DR-2a — the drive's lane: reliable, with no docId (an account has one drive)
+    roundtrip::<MeshLaneOpenRequest>("mesh-lane-open-request.drive.json", true);
     roundtrip::<MeshLaneCloseRequest>("mesh-lane-close-request.valid.json", true);
     roundtrip::<MeshLanePeerOpened>("mesh-lane-peer-opened.valid.json", true);
     roundtrip::<MeshLaneClosed>("mesh-lane-closed.valid.json", true);
@@ -419,6 +423,68 @@ fn mesh_egress_fixtures() {
     let mut id = load("mesh-egress-route-ref.valid.json");
     id["id"] = Value::String("a/b".into());
     assert!(serde_json::from_value::<MeshEgressRouteRef>(id).is_err());
+}
+
+/// DR-2a (`thinking-drive.md` v0.3, DR-D7 (a); truffle T-3, RFC 032) — the file transfer's floor seam, held here
+/// ahead of the floor's facade (VF-FLOOR) so the generated twin meets the goldens before anything builds on it. The
+/// floor EMITS the roots answer, the pull's answer, the stream's snapshots and its deltas, and READS the two params,
+/// so every row is strict (inbound, strict costs nothing and pins every field). typify makes the delta an UNTAGGED
+/// enum whose `kind` is a free string (ServeTarget's precedent): a variant is told apart by its required fields, so
+/// the floor writes `kind` with the contract's word, and fieldd's zod is the reader that discriminates.
+#[test]
+fn mesh_file_transfer_fixtures() {
+    let file = |name: &str| format!("native-file-transfer-{name}.json");
+    roundtrip::<NativeFileTransferRootsParams>(&file("roots-params.valid"), true);
+    roundtrip::<NativeFileTransferRootsResult>(&file("roots-result.valid"), true);
+    roundtrip::<NativeFileTransferRootsResult>(&file("roots-result.ungated"), true);
+    roundtrip::<NativeFileTransferPullParams>(&file("pull-params.valid"), true);
+    roundtrip::<NativeFileTransferPullResult>(&file("pull-result.valid"), true);
+    roundtrip::<NativeFileTransferSnapshot>(&file("snapshot.valid"), true);
+    roundtrip::<NativeFileTransferSnapshot>(&file("snapshot.empty"), true);
+    for kind in ["progress", "completed", "failed"] {
+        roundtrip::<NativeFileTransferDelta>(&file(&format!("delta.{kind}")), true);
+    }
+    // a floor whose truffle cannot pull by a named root answers in ErrorData, whose details are opaque here
+    roundtrip::<ErrorData>("error-data.file-transfer-unsupported.json", true);
+
+    // The words are the registry's, generated from the table the TS side reads.
+    let refusal = load("error-data.file-transfer-unsupported.json");
+    assert_eq!(refusal["details"]["service"], mesh_file_transfer::SERVICE);
+    assert_eq!(
+        refusal["details"]["state"],
+        mesh_file_transfer::STATE_UNSUPPORTED
+    );
+    let held = load(&file("roots-result.ungated"));
+    assert_eq!(held["roots"][0]["reason"], mesh_file_transfer::ROOT_UNGATED);
+    let failed = load(&file("delta.failed"));
+    assert_eq!(failed["reason"], mesh_file_transfer::FAILED_REJECTED);
+
+    // The patterns and the closed root list are the contract's, carried by typify: the Rust twin refuses what zod
+    // refuses, so a pull the floor reads names a served root and a path below it, never the holder's own path.
+    let mut absolute = load(&file("pull-params.valid"));
+    absolute["path"] = Value::String("/Users/james/vf/users/1/drive/objects/b0".into());
+    assert!(
+        serde_json::from_value::<NativeFileTransferPullParams>(absolute).is_err(),
+        "a pull names a path relative to its root"
+    );
+    let mut climbing = load(&file("pull-params.valid"));
+    climbing["path"] = Value::String("b0/../../keys".into());
+    assert!(
+        serde_json::from_value::<NativeFileTransferPullParams>(climbing).is_err(),
+        "a pull's path never leaves its root"
+    );
+    let mut unserved = load(&file("pull-params.valid"));
+    unserved["root"] = Value::String("drive-incoming".into());
+    assert!(
+        serde_json::from_value::<NativeFileTransferPullParams>(unserved).is_err(),
+        "a root is a closed name, and what lands is never served"
+    );
+    let mut id = load(&file("pull-params.valid"));
+    id["transferId"] = Value::String("01jc8zk4w2mx7n3q5r9t6v0b1d".into());
+    assert!(
+        serde_json::from_value::<NativeFileTransferPullParams>(id).is_err(),
+        "a pull's id is an upper-case ULID, the landed name's grammar"
+    );
 }
 
 #[test]

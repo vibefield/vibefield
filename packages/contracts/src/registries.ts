@@ -2488,11 +2488,17 @@ interface FileTransferRootRow {
   lands: keyof typeof LAYOUT;
 }
 
-/** DR-2a (DR-D7 (a) as v0.3 reads it; truffle T-3, RFC 032 "named pull roots") — the folders another desktop of the
- * account may PULL from this one, as a CLOSED map: each root's name, the LAYOUT row it serves, and the LAYOUT row a
- * pull from it lands in. Never a path (EL7): fieldd declares names (`native.mesh.fileTransfer.roots`), the floor joins
- * the rows under its own user root, and a pull names `{root, path}` with the path RELATIVE to the root, so no desktop
- * learns another's layout.
+/** DR-2a (DR-D7 (a) as v0.3 reads it; truffle T-3, RFC 032 "named pull roots") — the folders this desktop serves to
+ * pulls from the account's other nodes, as a CLOSED map: each root's name, the LAYOUT row it serves, and the LAYOUT
+ * row a pull from it lands in. Never a path (EL7): fieldd declares names (`native.mesh.fileTransfer.roots`), the floor
+ * joins the rows under its own user root, and a pull names `{root, path}` with the path RELATIVE to the root, so no
+ * desktop learns another's layout.
+ * WHO may pull is the node's gate, never the pull's. truffle serves a named pull to any peer of the node that names a
+ * path below the root (T-3 checks the root and the path, never who asks): for the drive, a capability by digest. The
+ * account is the gate around it: a linked node admits only its account's login (UA-P-4, RFC 025 §3.3–§3.4: no other
+ * login is a peer, and its hello is refused), so a peer that can ask is one of the account's own desktops or its phone
+ * (DR-L1, DR-L6), never a guest's device (UA-D5) or another account's desktop on a shared tailnet. The floor therefore
+ * serves a root only from a node built gated (mgmt.ts `NativeFileTransferRootsParams`).
  *  - name: in truffle's root grammar (`[a-z0-9][a-z0-9._-]{0,63}`), the same on every desktop.
  *  - serves, lands: LAYOUT keys, never segments, so the map moves with the layout. A root never lands in a folder any
  *    root serves: what lands is unverified until its reader checks it, and a served file is passed on to any peer that

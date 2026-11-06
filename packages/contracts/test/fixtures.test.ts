@@ -507,10 +507,11 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "mesh-egress-route-ref": MeshEgressRouteRef,
   "mesh-egress-route-table": MeshEgressRouteTable,
   // DR-2a — the drive's file transfer (mgmt.ts `NativeFileTransfer*`): the roots asked for and as
-  // the floor holds them, a pull and its answer, the stream's snapshot (one running pull, and the
-  // EMPTY one a fresh floor answers) and one delta per kind. Its lane is `mesh-lane-open-request`'s
-  // `.drive` and its refusals are `error-data.*`'s; the holders' slice is drive.ts's, TS-only.
-  // Their own rows: drive.test.ts. field-native parses the floor's half at the facade's slice.
+  // the floor holds them (served, and held unregistered on an ungated node), a pull and its answer,
+  // the stream's snapshot (one running pull, and the EMPTY one a fresh floor answers) and one delta
+  // per kind. Its lane is `mesh-lane-open-request`'s `.drive` and its refusals are
+  // `error-data.*`'s; the holders' slice is drive.ts's, TS-only. Their own rows: drive.test.ts.
+  // field-native parses the floor's half (fixture_parity.rs `mesh_file_transfer_fixtures`).
   "native-file-transfer-roots-params": NativeFileTransferRootsParams,
   "native-file-transfer-roots-result": NativeFileTransferRootsResult,
   "native-file-transfer-pull-params": NativeFileTransferPullParams,

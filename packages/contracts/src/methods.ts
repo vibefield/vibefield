@@ -857,7 +857,8 @@ export const METHODS: MethodDef[] = [
   // mgmt.ts `NativeFileTransfer*`): the named roots this desktop serves, a pull from a peer's root, and the stream of
   // pulls. CONTROL only, like lanes: the bytes go Rust to Rust through the node (EL2). `offer` (a push) stays reserved
   // and undeclared. Declared ahead of the floor's facade (the critic's VF-FLOOR, wave 3): until it lands a node answers
-  // these NOT_FOUND, and fieldd calls none of them.
+  // these NOT_FOUND, and fieldd calls none of them. That is an exception to declared == shipped (D36), as AR-1's
+  // `agents.*` rows were until AR-2's handlers (below), and it closes when VF-FLOOR lands.
   defineMethod({
     surface: "mgmt",
     method: "native.mesh.fileTransfer.roots",

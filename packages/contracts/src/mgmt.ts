@@ -2,13 +2,7 @@ import { z } from "zod";
 import { Blake3Hex, Sha256Hex } from "./artifacts";
 import { TerminalCellRole, TerminalRouteCell, TerminalWorkloadClass } from "./envelope";
 import { UnavailableDetails } from "./errors";
-import {
-  CELL_SUPERVISION,
-  DRIVE_LIMITS,
-  FILE_TRANSFER_ROOTS,
-  NATIVE_FLOOR_TICK,
-  PORTS,
-} from "./registries";
+import { CELL_SUPERVISION, FILE_TRANSFER_ROOTS, NATIVE_FLOOR_TICK, PORTS } from "./registries";
 
 // Management channel (design-01 §5.2, M2 subset): native.lifecycle.* + the mesh
 // facade P0 subset (peers / store / serve). Laws honored here:
@@ -1391,6 +1385,10 @@ export type MeshEgressUnavailableDetails = z.infer<typeof MeshEgressUnavailableD
 // A pull lands UNVERIFIED in its root's `lands` folder as `<digest>.<transferId>`: truffle checks a SHA-256 over the
 // wire, and the blake3 the object is named by is its reader's to check (mille-drive's, at adopt; DR-L3).
 //
+// WHO may pull is the node's gate, never the pull's (FILE_TRANSFER_ROOTS): truffle serves a named pull to any peer that
+// names a path, and a linked node's only peers are its account's own nodes (UA-P-4), so the floor serves a root only
+// from a node built gated (`NativeFileTransferRootsParams`).
+//
 // A pull is answered at once and runs on its own: the floor's mesh worker is serial, so a pull it awaited (up to 30 s
 // to negotiate, then the bytes) would hold every serve, store and lane call behind it. Its progress and its end ride
 // `native.mesh.fileTransfer.delta`, ONE method with a `kind`, because fieldd's NativeLink routes only `.delta` and
@@ -1405,6 +1403,8 @@ export type MeshEgressUnavailableDetails = z.infer<typeof MeshEgressUnavailableD
  * fieldd's reader share one vocabulary.
  *  - SERVICE, STATE_UNSUPPORTED: `UNAVAILABLE {service, state}` from a floor whose truffle cannot pull by a named root
  *    (before truffle T-3's release, which its EL8 adopts). A capability fact for the floor's life, as egress's is.
+ *  - ROOT_UNGATED: a declared root's `reason` (`registered: false`) while the node was built UNGATED: the floor holds
+ *    the declaration and serves the root from the next node it builds gated (`NativeFileTransferRootsParams`).
  *  - FAILED_*: a pull's end, `kind: "failed"`'s `reason`. Open on the wire: a reader treats a word it does not know as
  *    FAILED_IO.
  *    - REJECTED: the holder refused: no such root, a path outside it, no such file. RFC 032 answers one word whatever
@@ -1412,7 +1412,10 @@ export type MeshEgressUnavailableDetails = z.infer<typeof MeshEgressUnavailableD
  *    - UNSUPPORTED: the holder's truffle predates named roots (T-3's `Unsupported`).
  *    - TIMEOUT: no offer came, or the bytes stopped coming.
  *    - INTEGRITY: the bytes did not match the holder's SHA-256.
- *    - TOO_LARGE: the offer was past DRIVE_LIMITS.OBJECT_MAX_BYTES, or past the size the pull named.
+ *    - TOO_LARGE: the holder offered more than this node's cap, DRIVE_LIMITS.OBJECT_MAX_BYTES, and truffle refused the
+ *      offer before a byte moved. truffle says so as an untyped protocol error, so a floor that cannot tell it apart
+ *      says IO. A holder refuses to serve past ITS OWN cap with RFC 032's one word, so between two desktops at one cap
+ *      an oversize object reads REJECTED.
  *    - NO_SPACE: this desktop's disk refused the landing (DR-L8's "out of room").
  *    - IO: any other local failure.
  *    - NODE_DOWN: the node went down, or was rebuilt, while the pull ran.
@@ -1421,6 +1424,7 @@ export type MeshEgressUnavailableDetails = z.infer<typeof MeshEgressUnavailableD
 export const MESH_FILE_TRANSFER = {
   SERVICE: "mesh",
   STATE_UNSUPPORTED: "file-transfer-unsupported",
+  ROOT_UNGATED: "ungated",
   FAILED_REJECTED: "rejected",
   FAILED_UNSUPPORTED: "unsupported",
   FAILED_TIMEOUT: "timeout",
@@ -1457,7 +1461,10 @@ export type FileTransferPath = z.infer<typeof FileTransferPath>;
 
 /** A landed file's name in its root's `lands` folder, `<digest>.<transferId>`: a name, never a path. fieldd joins it
  * under its own LAYOUT row, and the name says which object it claims to be and which pull wrote it, so a fieldd that
- * restarts mid-pull can adopt or sweep what it finds there. */
+ * restarts mid-pull can adopt or sweep what it finds there. fieldd reads ONLY the names this pattern matches. Beside
+ * them truffle writes a pull's temporary, `<landed>.<token>.truffle-tmp`, and only the floor removes those:
+ * field-native outlives fieldd, so a fieldd that boots while a pull runs would cut that pull's file
+ * (`NativeFileTransferDelta`). */
 export const FILE_TRANSFER_LANDED_PATTERN = "^[0-9a-f]{64}\\.[0-9A-HJKMNP-TV-Z]{26}$";
 export const FileTransferLanded = z.string().regex(new RegExp(FILE_TRANSFER_LANDED_PATTERN));
 export type FileTransferLanded = z.infer<typeof FileTransferLanded>;
@@ -1467,7 +1474,17 @@ export type FileTransferLanded = z.infer<typeof FileTransferLanded>;
  * (facade state is rebuilt, never persisted), and the floor applies it again at every node it builds, because a
  * capture's promotion rebuilds the node and its roots with it. For each name the floor makes the root's two folders
  * (0700), serves the `serves` one under the name and never the `lands` one, and caps every transfer of the node at
- * DRIVE_LIMITS.OBJECT_MAX_BYTES. */
+ * DRIVE_LIMITS.OBJECT_MAX_BYTES.
+ *
+ * The floor serves a root only from a node built GATED (`MeshSelfIdentity.loginAllow` non-empty, the gate the floor
+ * reads per request). truffle serves a named pull to any peer that names a path, with no check on who asks, so the
+ * account's gate is the node's: a linked node's peers are its account's own desktops and phone, and every other
+ * login's hello is refused (UA-P-4, FILE_TRANSFER_ROOTS). On a node built ungated (a promotion's capture node until its
+ * rebuild, the development override's) each root answers `registered: false` with MESH_FILE_TRANSFER.ROOT_UNGATED,
+ * and the floor serves it from the next node it builds gated.
+ *
+ * When it registers a root the floor also removes every `*.truffle-tmp` in its `lands` folder that no running pull
+ * owns: what pulls that failed, or ran on an earlier node or floor, left behind (`NativeFileTransferDelta`). */
 export const NativeFileTransferRootsParams = z
   .object({
     roots: z.array(FileTransferRootName),
@@ -1476,7 +1493,8 @@ export const NativeFileTransferRootsParams = z
 export type NativeFileTransferRootsParams = z.infer<typeof NativeFileTransferRootsParams>;
 
 /** One declared root, as the floor holds it. `registered: false` says why in `reason`, a MESH_FILE_TRANSFER word
- * (FAILED_IO when a folder could not be made, FAILED_NO_SPACE when the disk refused it). */
+ * (ROOT_UNGATED on a node built ungated, FAILED_IO when a folder could not be made, FAILED_NO_SPACE when the disk
+ * refused it). */
 export const NativeFileTransferRoot = z
   .object({
     name: FileTransferRootName,
@@ -1500,7 +1518,9 @@ export type NativeFileTransferRootsResult = z.infer<typeof NativeFileTransferRoo
  *  - root, path: where the holder serves the file; never the holder's own path.
  *  - digest: the blake3 the object is named by. It names the landed file, and the floor never checks it (DR-L3 is
  *    the reader's check).
- *  - bytes: the size the asker expects, when it knows; an offer past it fails FAILED_TOO_LARGE.
+ * It names no size. T-3's pull takes none (`pull_named_file(peer, root, path, local_path)`), and mille-drive's
+ * transport asks none (`pull(from, digest, into)`): the two nodes' caps bound what can land (MESH_FILE_TRANSFER's
+ * TOO_LARGE), and the blake3 check refuses a wrong file of any size.
  * The answer comes at once (`NativeFileTransferPullResult`), or a refusal: PRECONDITION_FAILED for a request the
  * floor cannot read, RESOURCE_EXHAUSTED past DRIVE_LIMITS.PULLS_IN_FLIGHT. */
 export const NativeFileTransferPullParams = z
@@ -1510,7 +1530,6 @@ export const NativeFileTransferPullParams = z
     root: FileTransferRootName,
     path: FileTransferPath,
     digest: Blake3Hex,
-    bytes: z.number().int().nonnegative().max(DRIVE_LIMITS.OBJECT_MAX_BYTES).optional(),
   })
   .passthrough();
 export type NativeFileTransferPullParams = z.infer<typeof NativeFileTransferPullParams>;
@@ -1538,8 +1557,11 @@ export const NativeFileTransferRow = z
 export type NativeFileTransferRow = z.infer<typeof NativeFileTransferRow>;
 
 /** `native.mesh.fileTransfer.subscribe`'s snapshot, and `native.mesh.fileTransfer.snapshot`'s payload when a lagging
- * reader is resynced (P5): the pulls running now. A pull that ended is gone from it, so a fieldd that restarts
- * mid-pull learns what it missed from the `lands` folder, never from here. */
+ * reader is resynced (P5): the pulls running now. A pull that ended is gone from it, and the floor drops a pull's row
+ * only once its end is final (a completed pull's file is in place first). So after a resync, a pull fieldd started
+ * that the snapshot does not list ended while the reader lagged: completed when its `<digest>.<transferId>` is in the
+ * `lands` folder, and failed otherwise, read as FAILED_IO (its own word was in the delta the lag lost). A fieldd that
+ * restarts has no pull of its own left to settle: it adopts or sweeps the landed names it finds there. */
 export const NativeFileTransferSnapshot = z
   .object({
     transfers: z.array(NativeFileTransferRow),
@@ -1551,7 +1573,10 @@ export type NativeFileTransferSnapshot = z.infer<typeof NativeFileTransferSnapsh
  *  - progress: `bytes` of `total` have landed, at most once per MESH_FILE_TRANSFER.PROGRESS_MIN_INTERVAL_MS a pull.
  *  - completed: the file is in its root's `lands` folder, named `incoming`, with the SHA-256 truffle checked. It is
  *    UNVERIFIED by blake3: its reader adopts it or removes it.
- *  - failed: `reason` is a MESH_FILE_TRANSFER.FAILED_* word and `message` the floor's own; nothing is left landed. */
+ *  - failed: `reason` is a MESH_FILE_TRANSFER.FAILED_* word and `message` the floor's own; nothing is left landed.
+ *    truffle removes its temporary (`<landed>.<token>.truffle-tmp`) itself only on a short stream and an integrity
+ *    failure, and leaves it on a read or write error (ENOSPC among them) and on a pull the floor drops (the node going
+ *    down), so the floor removes its pull's `<landed>.*.truffle-tmp` before it sends `failed`. */
 export const NativeFileTransferDelta = z.discriminatedUnion("kind", [
   z
     .object({

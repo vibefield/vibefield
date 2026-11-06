@@ -1,8 +1,8 @@
 // DR-2a (`draft/thinking-drive.md` v0.3: DR-D7 (a), DR-L1, DR-L3, DR-L8; the wave-0 plan's DR-2/DR-3 map and its
 // critic's VF-DRC line) — the drive's contracts: its registry rows, its lane, the file transfer that moves its objects
-// between desktops, and its holders' slice. The fixtures pin the shapes (fixtures.test.ts here, field-native's
-// fixture_parity.rs once the floor's facade lands); these rows pin the refusals, which a golden cannot show, and the
-// registry facts the floor's belt and fieldd's suspenders both read.
+// between desktops, and its holders' slice. The fixtures pin the shapes (fixtures.test.ts here, and field-native's
+// fixture_parity.rs for the floor's half); these rows pin the refusals, which a golden cannot show, and the registry
+// facts the floor's belt and fieldd's suspenders both read.
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -26,6 +26,7 @@ import {
   MeshLaneProtocol,
   NativeFileTransferDelta,
   NativeFileTransferPullParams,
+  NativeFileTransferRootsResult,
   NativeFileTransferSnapshot,
 } from "../src/mgmt";
 import {
@@ -148,6 +149,20 @@ describe("DR-2a — a pull root is a closed name, never a path (EL7)", () => {
     }
   });
 
+  it("serves a root only from a node built gated: an ungated node holds the declaration, unregistered", () => {
+    const answer = fixture("native-file-transfer-roots-result.ungated.json");
+    const { roots: held } = NativeFileTransferRootsResult.parse(answer);
+    expect(held).toEqual([
+      {
+        name: FILE_TRANSFER_ROOTS.DRIVE_OBJECTS.name,
+        registered: false,
+        reason: MESH_FILE_TRANSFER.ROOT_UNGATED,
+      },
+    ]);
+    // the floor's own word: the declaration stands, and the next node built gated serves it
+    expect(MESH_FILE_TRANSFER.ROOT_UNGATED).toBe("ungated");
+  });
+
   it("refuses a name outside the closed list, and a path above all", () => {
     for (const bad of [
       "drive",
@@ -199,28 +214,32 @@ describe("DR-2a — a pull names a root and a path RELATIVE to it (truffle T-3, 
     expect(FileTransferPath.safeParse(`${atCap}b`).success).toBe(false);
   });
 
-  it("parses the golden pull, and refuses a holder's absolute path, a digest that is not blake3 hex and a size past the cap", () => {
+  it("parses the golden pull, which names no size, and refuses a holder's absolute path and a digest that is not blake3 hex", () => {
     const golden = record("native-file-transfer-pull-params.valid.json");
     const pull = NativeFileTransferPullParams.parse(golden);
     expect(pull.root).toBe(FILE_TRANSFER_ROOTS.DRIVE_OBJECTS.name);
     expect(pull.digest).toBe(DIGEST);
     expect(pull.transferId).toBe(TRANSFER);
+    // T-3's pull takes no size, so the contract promises no check the floor makes only mid-stream
+    expect(Object.keys(NativeFileTransferPullParams.shape)).toEqual([
+      "transferId",
+      "peer",
+      "root",
+      "path",
+      "digest",
+    ]);
     for (const change of [
       { path: `/Users/james/vf/users/1/drive/objects/b0/${DIGEST}` },
       { digest: DIGEST.toUpperCase() },
       { digest: DIGEST.slice(1) },
       { transferId: TRANSFER.toLowerCase() },
       { root: "drive-incoming" },
-      { bytes: DRIVE_LIMITS.OBJECT_MAX_BYTES + 1 },
-      { bytes: -1 },
     ]) {
       expect(
         NativeFileTransferPullParams.safeParse({ ...golden, ...change }).success,
         JSON.stringify(change),
       ).toBe(false);
     }
-    const atCap = { ...golden, bytes: DRIVE_LIMITS.OBJECT_MAX_BYTES };
-    expect(NativeFileTransferPullParams.safeParse(atCap).success).toBe(true);
   });
 
   it("keeps a pull's unknown fields (tolerant reader)", () => {

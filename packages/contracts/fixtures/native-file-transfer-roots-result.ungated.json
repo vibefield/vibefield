@@ -1,0 +1,9 @@
+{
+  "roots": [
+    {
+      "name": "drive-objects",
+      "registered": false,
+      "reason": "ungated"
+    }
+  ]
+}
