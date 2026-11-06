@@ -285,6 +285,19 @@ describe("the card's stylesheet, held to DESIGN.md §8 and §2.7 (AO-6b3; beside
     );
   });
 
+  it("keeps the card's primary label on hover, beside the add: its ink comes with the hover's ground (UM-D23)", () => {
+    // the review: the card's hover (0,3,0) set only the ground, so Add a profile… kept the primary's label — the
+    // card's own solid — on the pale hover fill, AO-6b3's fixed bug come back at the new anchor
+    const hover = rule(".vf-profiles-limit-act:hover:not(:disabled)", column);
+    expect(hover).toContain(
+      "background: color-mix(in srgb, var(--vf-foreground) 14%, transparent)",
+    );
+    expect(hover).toContain("color: var(--vf-text-primary)");
+    expect(rule('.vf-profiles-limit-act[data-variant="primary"]', column)).toContain(
+      "color: var(--vf-profiles-solid)",
+    );
+  });
+
   it("wraps and widens the strip only while the row shows; otherwise its chips shrink on one line", () => {
     expect(rule(".vf-monitor-claims")).not.toContain("flex-wrap");
     const holding = rule(".vf-monitor-claims:has(> .vf-monitor-moment)");
