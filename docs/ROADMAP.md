@@ -476,18 +476,31 @@ page *The Drive*, KB33dCAP, where it moved 11-06 05:45Z from LB8rzJYV; sources `
     - `native.mesh.fileTransfer.{roots,pull,subscribe}` over T-3's named roots, a root served only from a node built
       gated (ROOT_UNGATED, ratified 11:01Z);
     - the drive's honest states, generated into Rust.
-    - The three mgmt rows are declared ahead of VF-FLOOR (the D36 exception).
+    - The three mgmt rows were declared ahead of VF-FLOOR (the D36 exception, which DR-3a closed: below).
   - **DR-1b, a made app's view in the files worker** (`e1283cb59` → `dd74abc85`, M190, run 190;
     LANDED "DR-1b"): written by rename into the served folder, never through the export's link.
-- Wave 1's sibling lanes are GREEN on vf-m1 and wait for James's hand, the filings and releases. Their
-  `open-*-pr.sh` scripts are on the PM dashboard:
+- Landed 11-07: **DR-3a, W3's VF-FLOOR, stacks A and B** (`207a6f778` → `cb4ec2a4f`, 15 commits, M203,
+  run203; LANDED "DR-3a"):
+  - in production, the three `native.mesh.fileTransfer.*` verbs answer `file-transfer-unsupported` ahead of the
+    node gate, so D36's exception is closed, and a `field.drive.v1` slice over 64 KiB is refused;
+  - the named-root arm over a VibeField `PullSubstrate`, held to its rows over `ScriptedPulls` and unreachable
+    until the substrate slice after EL8-TRUFFLE; W3-14, W3-15, W3-16, W3-17 and W3-20 ruled (VF-PM 11-06), W3-21's
+    floor half in it.
+- Wave 1's sibling lanes, filed, merged and released by James on 11-06 (truffle 0.7.27, rosetta 0.1.4 with its
+  daemon-archive release still a draft, mille 0.3.5):
   - R-1, rosetta: RO-32 by digest, after DR-D13;
   - T-1 and T-3, truffle;
   - M-D1 and M-D2, mille;
   - RDST, rosetta's transcript day key across daylight saving.
 - Next:
-  - W3: VF-FLOOR (the facade and the file transfer's floor half; its brief opens with the CONFLICT rule for a second
-    running pull of one digest) and VF-RELAY (the relay, the holders and the pulls).
+  - W3's VF-RELAY (DR-3b: the relay, the holders and the pulls), after its fold 3 (W3-21's relay half), re-stacked
+    on DR-3a's landed tip and landed under its own verify (W3-18: A, then B, then the relay).
+  - The EL8s, each one commit cut on DR-3a's tip with its own filler: rosetta 0.1.4 (its two required publication
+    fields carried to the History door), then truffle 0.7.27 (the pin, the proxy `headers` literals and
+    `SERVE_HEADER_FORBIDDEN`'s two names; VF-PM's T1), then mille 0.3.5 in its dev shape (`siblings:pin` to the
+    tag; VF-PM's M1: the npm exit waits on a mille 0.3.6 that remaps its release builds and ships its notices).
+  - The substrate slice after EL8-TRUFFLE: `impl PullSubstrate for MeshNode`, the install hook in bring-up, the
+    `truffle-named-pull` default feature and the `#[ignore]` probe, the first live named pull.
   - DR-1 (B), the open wired at R-1's and T-1's EL8s: the two roots made and named, the view's caller, and
     `ServeConfig.headers`.
   - Then DR-2 (the drive in the files worker, at mille's release), DR-3 (the sync, over T-3), DR-4 (one address,
@@ -496,7 +509,8 @@ page *The Drive*, KB33dCAP, where it moved 11-06 05:45Z from LB8rzJYV; sources `
   - James's marks DR-D13, D14 and D15. R-1's filing waits on D13, and T-2 on D15, which reopens D12.
   - James's rulings before DR-1 (B) wires a caller: DR-L3's re-check at the view (`dr-l3-blake3-recheck`, lean (a):
     R-1's verified placement until DR-2), and the serve policy's `'unsafe-eval'` (`dr-serve-csp-unsafe-eval`).
-  - The reviews' nits: DR-2a's 8–11 ride VF-FLOOR; DR-1b's 5, 7 and 9 ride DR-1 (B).
+  - DR-3a's `gate:landing` (W3-10 (b)).
+  - The reviews' nits: DR-1b's 5, 7 and 9 ride DR-1 (B). DR-2a's 8–11 landed in DR-3a's C1.
   - The drive's disk budget (the record's §10, risk 5).
   - Findings for James: rosetta-main's seven stripped ts-rs outputs, and the heatmap's daylight saving (a protocol
     change).
@@ -1407,7 +1421,7 @@ Petition status lives in `draft/petitions/README.md`. Still open or owed there:
 | GT — Godview terminal | PARKED; the deck's ladder done (GT-0…GT-8) | `specs/godview-terminal.md` | G29; GT-D22; row 13b |
 | TP / TC — terminal pipeline and custody | PARKED; TC RATIFIED 10-28 (Q6) | `specs/terminal-pipeline-v3*.md`, `specs/terminal-custody.md`, `thinking-terminal-mesh-cells.md`, `thinking-floor-wedge.md`, `thinking-inventory-latency.md` | D6's cell half |
 | MA — Apps (was AH — Artifact Hub) | ACTIVE since 11-05 (MA-D1…D13 ruled; MA-4 in 0.9, James 11-06); MA-0a + MA-1a (M152), MA-3 (M157, M162) and MA-4 (M166) landed; AH-1…3 landed, AH-4 unledgered | `thinking-mini-apps.md`, `specs/artifact-hub.md`, design-06 §5; DESIGN.md §2.9/§8/§9/§13 | MA-3f serving, which is the Drive's DR-1 (DR-D1 ruled (b): rosetta 0.1.4's export), then MA-3h; MA-6 the phone's shelf (unblocked: UM's M-phone landed 11-06, its sheet naming the strip's slots) |
-| DR — the Drive | ACTIVE since 11-06 (DR-D1…D12 ruled; D13…D15 open); DR-1a, DR-2a and DR-1b landed (M183, M188, M190); wave 1's sibling lanes green, unfiled | `thinking-drive.md` v0.3 (page sources `draft/drive/page/`); `thinking-mini-apps.md` | D13…D15 and DR-L3 (James); W3 (VF-FLOOR, VF-RELAY); DR-1 (B); the sibling releases and their EL8s |
+| DR — the Drive | ACTIVE since 11-06 (DR-D1…D12 ruled; D13…D15 open); DR-1a, DR-2a, DR-1b and DR-3a (W3's VF-FLOOR) landed (M183, M188, M190, M203); wave 1's sibling PRs merged and released 11-06 | `thinking-drive.md` v0.3 (page sources `draft/drive/page/`); `thinking-mini-apps.md` | D13…D15 and DR-L3 (James); W3's VF-RELAY; the EL8s (rosetta → truffle → mille) and the substrate slice; DR-1 (B) |
 | RV — the review fixes (Godview, terminal, puppeteer) | ACTIVE since 11-06; items 191 (RV #2 half A, M192), 192 (RV #6, M193), 201 (RV #17, #43, #49, #48, #50, M194), 203's VF-W1 (RV #1's pin-free half, M196), 211 (RV #97, #96, #93, #116, #95, #47, M199) and 212 (RV #30, #29, #67, M201) landed; W1–W2 building, the sibling lanes local | `draft/rv/` (plan.md, james-asks.md, lead-rulings.md); `lanes/rv/review/` | puppeteer R1 → EL8-1 with item 203; ghosttea 0.15.0 → EL8-g |
 | UM + SE — profile meters and one search | ACTIVE since 11-06 (UM-D21…D28 and SE-D1…D5 ruled on the page; UM-D16 E, D19 A; D3, D4, D8, D12…D15 at the leans); UM-0…UM-2 landed 11-06 (M-U1 `c9493b957`, run180, M180); UM-3 and SE-1 landed 11-06 (M-desk `ed8099c1e`, run187, M187); UM-4 and SE-2 landed 11-06 (M-phone `d6d76d079`, run198, M198) | `thinking-profile-meters.md`; `lanes/um/PLAN.md` §4; DESIGN.md §2.7/§5/§8/§9/§13; `docs/agent-plane/usage-meters.md` | UM-5 (UM-D14, the plan filter) in wave 2 |
 | PLUG — shipped core | COMPLETE: P0–P7, P8b–d (P8c via WP8), PRC-4/5; later publishing/validation work is separate | `specs/plugin-architecture.md`, `thinking-p8-loadable-artifact.md` | existing product gates; no blanket 24-hour prerequisite |

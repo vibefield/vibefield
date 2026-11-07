@@ -40551,3 +40551,215 @@ of its own at 23:53Z.
 - James's eye on the camera words and on both project.pbxproj diffs.
 - At the cut: the desktop's 0.9.0 in `apps/desktop/package.json`. Before the stable:
   `apps/desktop/packaging/notes/0.9.0.txt`.
+
+## DR-3a (W3's VF-FLOOR, stacks A and B) — the floor answers the drive's file transfer honestly: its three verbs say `file-transfer-unsupported` ahead of the node gate, a drive slice over 64 KiB is refused, and the named-root arm that will pull by a name is built and held to its rows over scripted pulls, unreachable until the substrate slice that follows truffle 0.7.27's EL8 (track DR) (2026-11-07)
+(2026-11-07; fifteen commits on VF-FLOOR's lanes `dr/w3-floor-a` (stack A, five) and `dr/w3-floor-b` (stack B, ten),
+the DR lead's, built in `/Volumes/SamsungRed/lanes/ma-4/vibe-field`: cut on main `ef6b7a05b`, re-cut onto
+`d6fa5e31a` (20:44Z), first frozen on `5d58c8731`, re-cut by `git rebase --onto` onto `14ac3b7d5` (23:35Z), where
+a9's rows proved A at `6fb6b2743` and B at `e9db44b22`, then by `git replay` onto `d300ad0e0`, onto `84193fcab` (the
+verify's base) and, after the verify, onto `433505fd0` (main's docs-only move, the M196 pattern); each of those last
+four re-cuts reads range-diff `=` at all fifteen. As landed, stack A: `207a6f778` (C1, the lead's contracts),
+`09a124706` (C2, red), `607823d5a` (C3), `eae3e76ae` (the review fold) and `3bde5f77a` (the lead's W3-14). Stack B:
+`d338db9af` (C4, red), `6f1d41c6f` (C5), `78212da7b` (C6), `31caf9a9e` (the review fold), `bd1cd68d0` (the race
+fold), `791f6ca9e` (its review fix), `aea5f2461` (the lead's contracts), `58459a3d5` (W3-20), `ebd448334` (its review
+fix) and `cb4ec2a4f` (the lead's clause, W3-21's floor half). Verified at `9e6a455e0` on `84193fcab` (run203,
+a9's, on the old mini), M203; landed as `cb4ec2a4f`, a fast-forward of main `433505fd0`,
+2026-11-07T00:42:48Z. The replay's proof (`lanes/dr/records/w3ab/land-proof.txt`): main's delta shares no file with W3,
+range-diff `=` at all fifteen, W3's 18 files byte-identical to `9e6a455e0`'s, both patch-id forms equal (the whole
+range and per commit), and the trial merge's tree equal to the tip's.)
+The Drive's fourth landing: W3's floor lane, VF-FLOOR (DR-3a), its two stacks on one M number (VF-PM 23:46Z and
+23:57Z: "A + B land together on its M number"). It builds `lanes/dr/plan/w3-plan.md` as VF-PM ruled it at 18:27Z, all
+13 asks at the lean (ask 11's split superseded: VF-PM 23:46Z and 23:57Z, A + B on one M number): the truffle fork is
+(c), SEAM-FIRST at the truffle-core `=0.7.24` pin, so nothing calls a truffle file-transfer API. Stack A changes
+production; stack B changes nothing reachable.
+
+**What landed.** 18 files, +4663 −51 (stack A alone: 14 files, +392 −43): seven in `packages/contracts`, two of them
+new goldens, and eleven in `packages/field-native`, three of them new (`mgmt/file_transfer.rs`,
+`services/file_transfer.rs`, `tests/mesh_file_transfer.rs`). No schema shape moves (`gen:check` no diff at both
+mints), and no manifest or lock.
+- **Contracts first.** The lead's C1 (frozen into both W3 briefs before any build), W3-14's step and the lead's second
+  contracts commit, in `mgmt.ts`, `methods.ts`, `drive.ts` and `registries.ts`:
+  - ONE refusal order, egress's (rider A, W3-1): `file-transfer-unsupported` to every verb first, node or no node;
+    `subscribe` answered with no node; the node gate for `roots` and `pull`; MESH_CAPTURING; PRECONDITION_FAILED; then
+    ROOT_UNGATED, or for a pull CONFLICT (by id, then by digest) and RESOURCE_EXHAUSTED. Ahead of it, step 0 (W3-14
+    (a), VF-PM 20:46Z): a name under `native.mesh.fileTransfer.` that the contract does not declare (`offer`, still
+    reserved, or a typo) answers NOT_FOUND on every arm.
+  - `subscribe`'s stream is the mesh unit's and outlives node rebuilds, and a pull a teardown ends is sent `failed`
+    NODE_DOWN on it (rider B, W3-2). A `subscribe` on a connection that already holds a file-transfer stream REPLACES
+    it (W3-20, VF-PM 21:51Z): NativeLink's dispose tells the floor nothing, so a re-subscribe leaves one stream behind
+    it, never two.
+  - The held roots are BOUND TO THE LOGIN they were declared under: served again from every node built gated for that
+    login, and dropped at a stop or an unlink (nit 8 as the critic's finding 0 rewrote it, W3-8).
+  - A second pull under a live transferId, or of a digest a running pull holds, is CONFLICT -32004, retryable false
+    (nit 9; golden `error-data.file-transfer-conflict.json`). RESOURCE_EXHAUSTED past `PULLS_IN_FLIGHT` is retryable
+    with no details, because a pull may be asked again once a running one ends (W3-15, VF-PM 20:46Z; golden
+    `error-data.file-transfer-exhausted.json`).
+  - The write order at `NativeFileTransferSnapshot` (W3-16, VF-PM 20:46Z, worded 21:50Z): a snapshot never omits a
+    RUNNING pull whose answer was written before it. A reader that cannot order the two re-subscribes once, and with no
+    fresh snapshot the pull ends FAILED_TIMEOUT at the idle bound (race#0 (b)).
+  - `DriveUnavailableDetails` extends `UnavailableDetails` (nit 10); the drive lane's row says what it reads (nit 11);
+    STATE_UNBUILT covers a floor that cannot move an object by a named root (rider D, W3-5); TIMEOUT names the floor's
+    own idle bound, floor-local and PROVISIONAL (W3-4).
+  - Rows: `drive.test.ts` 26 → 29; `fixtures.test.ts` +2 by its per-file loop; `fixture_parity.rs` round-trips both
+    goldens with their kinds and flags (EL9).
+- **Stack A, production** (C2 red, C3 green, the review fold):
+  - `native.mesh.fileTransfer.roots`, `.pull` and `.subscribe` each answer UNAVAILABLE -32006, retryable false,
+    `{service: "mesh", state: "file-transfer-unsupported"}`, built from `registries::mesh_file_transfer` and EQUAL to
+    the golden, ahead of retire, start, stop and the node gate (the prefix arm after egress's in `mgmt/mesh.rs`).
+    Before, the node gate answered them (`mesh-gateway`, retryable true), or a node answered NOT_FOUND. D36's
+    exception closes at its source: rider C corrects `mgmt.ts`'s header and `methods.ts`' DR-2a comment, dated.
+  - `services/file_transfer.rs`: `trait FileTransferBackend` and `UnsupportedFileTransfer`, the only arm production
+    builds (`default_backend()`), held in `Shared.file_transfer` beside egress's; the boot log names it
+    (`field_native.mesh.file_transfer.backend`).
+  - `field.drive.v1` is capped at `DRIVE_SLICE_BYTES` (65,536): a slice one byte over is refused, and the in-crate
+    asserts pad the golden slice to exactly the cap. A capped store's readers also bound its remote owners at
+    REMOTE_ORIGINS (256) and filter oversize slices from the snapshot and the forwarder (`store_snapshot`,
+    `spawn_store_forwarder`), so the drive's table inherits both; no row covers that bound for any store (item 207's).
+  - The D36 row (`tests/mgmt_server.rs` 31 → 32): each verb's `error.data` equals the golden, parsed through the
+    generated `ErrorData`; the arm reads `unsupported`; `offer` answers NOT_FOUND -32601.
+  - Egress's own field doc said "the unsupported arm in production today", false since TB-E: corrected at its source,
+    dated, and not copied (the critic's finding 12).
+- **Stack B, unreachable in production.** Production still builds `UnsupportedFileTransfer`, whose answer comes before
+  any of this runs; the named-root arm is reachable only at the substrate slice after EL8-TRUFFLE (VF-PM's T1,
+  11-07 00:36Z), and every row drives it over `ScriptedPulls`.
+  - The seam: `trait PullSubstrate` in VibeField types only (`set_cap`, `refuse_pushes`, `serve_root`,
+    `unserve_root`, `pull`, `progress`). `ScriptedPulls` (`#[doc(hidden)]`) scripts pulls over REAL files, each
+    temporary named as truffle names its own (`<into>.<token>.truffle-tmp`, read at truffle-core 0.7.24) and placed by
+    rename. It is scripted from read facts; the substrate slice's probe is the first live evidence.
+  - `MeshHandle::on_node_installed`, the ONE install hook (the critic's finding 1): it reads the built gate and the
+    posture's login and attaches the arm. In W3 only the test seam reaches it. `teardown_node` calls `detach` before
+    `node.stop()`, wired in C5, not in C6 where the plan put it (stack B's contract #6).
+  - `NamedRootsFileTransfer` serves its roots: the held set bound to its login and cleared only for `stopped` and
+    `retired`; `roots` serves only from a gated node and answers ROOT_UNGATED, with no folder, from an ungated one;
+    each folder made, then always 0700 (a `drive/` the floor makes, too), never `harden_state_dir`, and a link or a
+    file where a folder belongs is refused (EL7); the sweep removes every `*.truffle-tmp` that no running pull owns.
+  - It pulls: one table by transferId and by digest (CONFLICT, then RESOURCE_EXHAUSTED past 4); each pull answered at
+    once and run on its own task, because the mesh worker is serial, landing as `<lands>/<digest>.<transferId>`;
+    progress at most once per `PROGRESS_MIN_INTERVAL_MS`; `PULL_IDLE_BOUND` 60 s, floor-local and PROVISIONAL
+    (W3-4); `completed` only once the file is in place, `failed` only after the landed file and its temporaries are
+    gone.
+  - `detach` in the critic's order (finding 3): the node and each pull's task are taken and the lock dropped, the
+    tasks aborted and joined, the files removed, and each row leaves with `failed` NODE_DOWN under one lock. A
+    snapshot mid-teardown still lists a pull whose file may be in place, and a pull that answers `landed` after its
+    task was taken ends only `failed`.
+  - The write order, the floor half of the W3 audit's finding 1: `snapshot()` is gone, and `write_snapshot` hands the
+    rows to `write` ONCE inside the hold of `Core.inner`, the lock a pull's row enters under. The facade queues the
+    subscribe answer and the owed snapshot INSIDE `write`, and the owed snapshot's drain moved into the hold. An arm
+    that writes no snapshot is answered INTERNAL and starts no stream.
+  - One stream per connection (W3-20): `FileTransferStreams` keeps each management connection's stream by its
+    `conn_id`. A second `subscribe` on one connection stops the old forwarder and awaits its end before it answers, so
+    every line the old one queued is queued first. Row 10 compares RESOURCE_EXHAUSTED with its golden (W3-15).
+  - W3-21's floor half, the lead's clause: `Stream::end`'s doc names the reader's TIMEOUT path. fieldd's reader, when a
+    re-subscribe reads TIMEOUT, drops the old subscription before the late answer; the old forwarder's last line then
+    has no route, and the plain subscribe that follows answers a snapshot built after it, which settles its pull by
+    the resync rule. It converges; comment only.
+  - `record_gate_for_tests(login, gated)`, a seam the plan named with one argument, is RATIFIED in its two-argument
+    form (W3-17, VF-PM 20:46Z).
+  - Rows from the syntax: `tests/mesh_file_transfer.rs` 20 (row 6 is `cfg(unix)`), each booting its own floor,
+    awaiting its shutdown and dropping its temp root (item 196); in-crate +14: `config.rs` +1,
+    `mgmt/file_transfer.rs` +5, `services/file_transfer.rs` +8 (one `multi_thread`).
+
+**The lights.**
+- Written on the MacBook under the HOLD, whose one-row door admitted only `rustfmt --edition 2021 --check` at nice
+  19 (each builder's over its own files, and the lead's) and C1's light rows (biome over six files, contracts
+  `tsc --noEmit`, vitest `drive.test.ts` 28/28 and `fixtures.test.ts` 710/710, 18:30–18:31Z): none of record.
+- Reviewed by three reviewers per stack (api, contract, tests), then the W3 audit (read-only, nine findings). Every
+  first-round finding is accounted per index in `lanes/dr/records/w3-accounting.md`: A 27 (14 applied, 10 carried,
+  3 declined), B 26 (22 applied, 4 carried). The race fold's review gave 18 (16 applied; race 2 and race 8 carried to
+  the lead), and fold 2's floor review gave 12 (11 applied in `3fb8156ad`; tests 6, the relay's re-stack, carried
+  to the lead).
+- a9's A mint on the old mini, the first compile of W3 anywhere (`lanes/dr/a9-w3-A-6fb6b2743-results`, SUMS-a9
+  `a1767098…`): armed 23:39:06Z at a 1-min load of 3.65 and df 14 GiB; all 13 rows as briefed by 23:40:42Z, read GREEN
+  at 23:46Z (VF-PM). `gen:check` no diff; contracts tsc; `drive.test.ts` 28 and `fixtures.test.ts` 713 (main's 712 + 1);
+  biome over the six contracts files; build, clippy `--all-targets -D warnings` and fmt; `--lib` 346 passed and 1
+  ignored; mgmt_server 32; fixture_parity 20; layout_vector 1; mesh_egress 9; `check:walls`. It cost 2 GiB (df 14 →
+  12). The red read of C2 failed by assertion at both rows: the D36 row at `tests/mgmt_server.rs:520` (the node gate's
+  `mesh-gateway` data, retryable true, against the golden) and the slice row at `src/mgmt/mesh.rs:1817` (the over-cap
+  DRIVE slice admitted).
+- B's first mint at `1c272e1c8` (`lanes/dr/a9-w3-B-1c272e1c8-results`, SUMS-a9 `5cb0877c…`) read NOTGREEN (VF-PM
+  23:52Z): field-native did not compile, E0277 at `mgmt/file_transfer.rs:231` and `:570` (Found, below). B1–B4, B7 and
+  B13 were as briefed (`drive.test.ts` 29, `fixtures.test.ts` 714). B-RED read C4 (`512aaa8b1`, now `8a434b979`): it
+  compiled, and read 0 passed and 19 failed by panic, never a compile error.
+- The fix passes `&**arm` and `&*arm`, folded into the commit that introduced the calls with a dated addendum
+  (`7cd38b25c` → `f2bc233d3`, now `d45fd5943`). The commits after it were cherry-picked unchanged (range-diff's other
+  "!" were context only), and the tree moved by exactly those two lines.
+- B's re-run at `e9db44b22` (`lanes/dr/a9-w3-B-e9db44b22-results`, SUMS-a9 `89d9d918…`): armed 00:00:41Z at a 1-min
+  load of 3.70 and df 10 GiB, GREEN at 00:02:02Z, all 13 rows as briefed. Build, clippy and fmt; `--lib` 360 passed
+  and 1 ignored (A's + 14); mesh_file_transfer 20, twenty floors in one binary under item 198's descriptor raise;
+  mgmt_server 32; fixture_parity 20; layout_vector 1; mesh_egress 9. B1–B4 and B13 were CARRIED from `5cb0877c`
+  (VF-PM 23:57Z: the tree differed only in one `.rs` file none of them reads); B-RED is the 23:52Z witness.
+- The re-cuts after the mints: `git replay` from `14ac3b7d5` onto `d300ad0e0`, then onto `84193fcab`. Range-diff
+  reads `=` at all fifteen, W3's 18 files are byte-identical to `e9db44b22`, main's delta `14ac3b7d5..84193fcab`
+  shares no file with W3 and moves no manifest, and the trial merge is clean.
+- The commit form was `SKIP_SHAPE=1` (the hook's node shape check cannot run under the HOLD). Seven bodies say so and
+  eight do not; git cannot show how a commit was made (the audit's finding), and `d7e16db80` was cut with plumbing, no
+  hook run. The hook checks only `pnpm-workspace.yaml` and `Cargo.toml` rows, which W3 does not touch.
+- The verify, run203 (a9's, on the old mini), the one `pnpm verify` that lands A and B: GREEN at `9e6a455e0`
+  on `84193fcab`, W3's 18 files byte-identical to `e9db44b22`'s, guard (1) no lock, Cargo or toolchain move.
+  (`lanes/dr/a9-w3-AB-9e6a455e0-run203/`, SUMS-a9 `eea9b68f…`): armed 00:31:16Z at df 17 GiB, a 1-min
+  load of 2.42 and swap 1,679 MB; `verify 0` at 00:37:53Z, 6 min, tree clean, stubs 0, stripped FAIL/× 0, births 0.
+  Typecheck 29 projects; vitest 14,034 passed, 0 failed, 21 skipped over 961 files (run201's + 5: `drive.test.ts`
+  26 → 29, `fixtures.test.ts` 712 → 714); node:test 474/474; cargo 606 passed, 0 failed over 37 binaries (`--lib`
+  360 and 1 ignored, mgmt_server 32, mesh_file_transfer 20); biome 3,484 files (+2, the goldens), 73 warnings (=).
+  Every move W3's own (VF-PM, read at source); item 213's and item 216's signatures absent, no rerun; df 16 at the end.
+
+**Found.**
+- **The E0277 class.** A `&Arc<dyn Trait>` handed to a `&dyn Trait` parameter is not a deref coercion: rustc tries it
+  as an UNSIZING coercion (`Arc<dyn FileTransferBackend>: FileTransferBackend`) and refuses it, E0277. Pass `&**arm`
+  (`&*arm` for an owned `Arc`). The uncompiled fold called it a deref coercion, the mint brief carried it as
+  UNVERIFIED, and the old mini's `cargo build` was the compiler's first word on it. A coercion an uncompiled brief
+  names is a compile row's to settle.
+- **A8's count, an erratum.** Its source is the A brief's A8 line (`lanes/dr/briefs/w3/a9-mint-brief-w3-A-6fb6b2743.md`
+  line 67), which said "the syntax counts 352 attributes at both main and A, with 4 Windows-gated". On macOS 347 test
+  functions run: 346 passed and 1 ignored, logging's LOG-L2 reference benchmark. B8's +14 held (360 = 346 + 14). The
+  brief is a frozen packet, so its dated correction is the note beside it
+  (`ERRATA-2026-11-07-a9-mint-brief-w3-A-6fb6b2743.md`), its sums unchanged.
+- **The write order, the W3 audit's finding 1 (major).** The owed snapshot was built and offered in two statements
+  with no lock spanning them, on a multi-thread runtime, so the serial mesh worker could insert a pull and queue its
+  answer between them: the wire read [answer P, snapshot without P], and fieldd would settle the running pull
+  FAILED_IO. The obligation, as the records quote it: a snapshot's line is queued INSIDE `write`, and the API does not
+  enforce it (the race fold's body claimed no caller could do otherwise; the tests' `snapshot()` helper does, TESTS
+  ONLY). The relay fixer's decline of the one-write row was unsound for the order [snapshot, answer]; the race fold
+  reversed it (the audit's errata).
+- W3-16's bare form ("a snapshot never omits a pull") is false for a pull that has ended; the ruled sentence says
+  RUNNING.
+- W3-20's replace has two named windows (fold 2, no code change). An event the old forwarder had not received when it
+  stopped, or one sent between its return and the arm's new subscription, reaches neither stream: the answer's
+  snapshot settles that pull by the resync rule, so a failed pull can read FAILED_IO. A subscribe answered INTERNAL
+  leaves its connection with no stream; no production arm gets there.
+- False claims corrected at their sources, dated: egress's "unsupported arm in production today" (finding 12); the
+  CONFLICT rule's analogy to a second `lane.open` (a duplicate lane id is PRECONDITION_FAILED); `drive.ts`'s "Every
+  refusal names DriveUnavailableDetails" (every UNAVAILABLE refusal does); the D36 sentences (rider C); and
+  `services/mesh.rs`'s writer lists for `Shared.mode` and `Shared.login_allow`, which `record_gate_for_tests` writes.
+- The plan's counts, corrected in the plan (20:48Z, from the audit): `drive.test.ts` 26 → 28 at C1, not 27; stack B's
+  in-crate rows +9 at the first fold, not about +5. The three fixers' summary totals were wrong; the record is the
+  per-index table (the audit's errata).
+- Step 1 is witnessed with no node only: a headless row cannot install a real `node()`
+  (`force_node_presence_for_tests` flips `node_present()`, never `node()`), so its with-node half is the substrate
+  slice's probe's (stack A's contract #8).
+- Until the relay lands, fieldd's mock-mgmt answers these verbs `{result: {}}` (its default arm), and no fieldd file
+  names `fileTransfer`: nothing reads the window (stack A's tests #6).
+
+**Owed.**
+- `gate:landing` at this landing (W3-10 (b), VF-PM's word).
+- The relay, DR-3b (VF-RELAY): after its fold 3 (W3-21's relay half), re-stacked onto this tip by the lead, under its
+  own verify (W3-18: A, then B, then the relay). It brings the relay's half of the audit's finding 1, with the
+  drive-pulls row that W3-16's sentence at `NativeFileTransferSnapshot` already names (no fieldd file holds it yet),
+  the mock's `"unsupported"` default, and the CONFLICT golden on the relay's side.
+- EL8-TRUFFLE, the pin event, now that truffle 0.7.27 is released (11-06 23:04Z), cut on this tip behind EL8-rosetta
+  (rosetta → truffle → mille). As VF-PM ruled it (T1, 11-07 00:36Z), the one commit carries the pin, the fifteen
+  `headers: vec![]` literals 0.7.27's proxy structs require, `SERVE_HEADER_FORBIDDEN`'s `etag` and `last-modified`,
+  the LP-5 notices refresh, and the dated corrections of the prose the release falsifies: among them the floor's
+  file-transfer wire message and the six `=0.7.24` doc lines (stack A's api #4).
+- The substrate slice after it, with its own review and rows (`lanes/dr/records/el8-notes-2026-11-06.md` §1):
+  `impl PullSubstrate for MeshNode`; `on_node_installed` in `spawn_bring_up`'s `Ok(node)` branch and in
+  `install_node_for_tests`; the `truffle-named-pull` default feature, egress's shape; `tests/drive_pull_probe.rs`
+  (`#[ignore]`; a tailnet auth key in `.env`, James's, at that slice only), quoting
+  `record_gate_for_tests(login, gated)` and step 1's with-node witness (stack A's contract #8). W3's comments that
+  call this "EL8-TRUFFLE's" read as EL8-TRUFFLE's code, this slice.
+- A dated contract line that FAILED_IO also covers a node's refusal to serve (stack B's api #4, carried to the lead;
+  only the substrate can refuse), and the symlink check-then-chmod race, for the substrate slice (the audit).
+- `methods.ts`' D36 comment (its rider C correction) says "VF-FLOOR is two landings, and the first (stack A) closes
+  it": A and B landed as one (VF-PM 23:46Z and 23:57Z). Its dated correction rides EL8-TRUFFLE's contracts edits.
+- The integration lane, DR-2 + DR-3 after the substrate slice: fieldd's caller, the correction of "fieldd calls none
+  of them" at its sources, and the first run of the real floor against the real relay (no row has witnessed it).
