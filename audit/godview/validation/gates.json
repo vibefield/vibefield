@@ -1,0 +1,23 @@
+{
+  "cli": "node audit/godview/validation/validate.mjs",
+  "test": "node --test audit/godview/validation/validate.test.mjs",
+  "gates": [
+    "gate.json-parse",
+    "gate.schema-subset",
+    "gate.pins",
+    "gate.ids",
+    "gate.adapter-halves",
+    "gate.matrix-coverage",
+    "gate.no-competing-model",
+    "gate.model-schema",
+    "gate.trace-paths",
+    "gate.provenance-envelope",
+    "gate.absence-not-zero",
+    "gate.synthetic-labels",
+    "gate.fixtures",
+    "gate.flows-reach-ingestion",
+    "gate.line-ranges",
+    "gate.baseline-not-shipped",
+    "gate.model-slice-ref"
+  ]
+}

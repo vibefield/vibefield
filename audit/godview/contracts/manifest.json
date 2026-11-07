@@ -1,0 +1,92 @@
+{
+  "audit": "godview",
+  "slice": "GV-AUDIT1",
+  "foundationBranch": "cursor/godview-audit-foundation-a7cd",
+  "auditBaseline": {
+    "decision": "single-baseline",
+    "label": "Audit Puppeteer source 748d015, clearly labeled as newer than the package Vibefield ships.",
+    "puppeteer": "748d015a7e393112e0a91dad80111fdf5abe6583",
+    "vibefield": "433505fd0f224f4cda540d642661b13848c0ef82"
+  },
+  "notShippedPackage": {
+    "warning": "NOT SHIPPED 0.3.3. Audit evidence is Puppeteer source 748d015a7e393112e0a91dad80111fdf5abe6583, which is newer than npm @vibefield/puppeteer-* 0.3.3 that Vibefield 433505fd ships. Do not mix the two baselines.",
+    "shippedVersion": "0.3.3",
+    "shippedTag": "v0.3.3",
+    "shippedTagCommit": "52d09c8e84951b9a355a6700eac2dfc1290a9fa0",
+    "equivalentToAuditPin": false
+  },
+  "packageComparison": {
+    "role": "context-not-a-second-audit",
+    "owner": "GV-AUDIT2",
+    "commit": "d53a0fa24ca7341fe5858329c9399eac6baf6b53",
+    "path": "audit/godview/validation/package-pin-check.md",
+    "thisSliceVerified": false,
+    "teammateSummary": "Teammate evidence, not re-checked here: seventeen @vibefield/puppeteer-* 0.3.3 packages have compiled JS byte-identical to tag v0.3.3 commit 52d09c8e (691 files). Source pin 748d015a is four commits later, with 88 changed compiled files."
+  },
+  "modelSlice": {
+    "owner": "GV-AUDIT2",
+    "branch": "audit/godview-model",
+    "commit": "49fc12da0fadc34e25c227fa2f03dcce2e09dbaa",
+    "base": "433505fd0f224f4cda540d642661b13848c0ef82",
+    "paths": [
+      "audit/godview/contracts/model.schema.json",
+      "audit/godview/contracts/model.md",
+      "audit/godview/contracts/model.validation.json"
+    ],
+    "cherryPickedHere": false,
+    "integrator": "GV-AUDIT6"
+  },
+  "pins": {
+    "vibefield": {
+      "repository": "https://github.com/vibefield/vibefield",
+      "branch": "main",
+      "sha": "433505fd0f224f4cda540d642661b13848c0ef82",
+      "committedAt": "2026-11-07T00:08:41Z",
+      "subject": "docs: LANDED — LP's 0.9.0, the phone is 0.9.0 ahead of build 6's archive and its camera prompt says \"this device\"",
+      "access": "Local checkout HEAD matched this SHA. GitHub commits API confirmed the same commit on 2026-11-07."
+    },
+    "puppeteer": {
+      "repository": "https://github.com/vibefield/puppeteer",
+      "branch": "main",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "committedAt": "2026-11-06T23:05:29Z",
+      "subject": "fix(views): a held-still swarm draws every change, its list and tooltip follow the input, a renderer that fails to build says so, the shader clock wraps, and the rain stops blinking (#66)",
+      "access": "GitHub branches/main and commits API both returned this SHA. This run had no local puppeteer checkout. No access failure."
+    }
+  },
+  "notTheAuditPin": {
+    "siblingsLockSha": "52d09c8e84951b9a355a6700eac2dfc1290a9fa0",
+    "npmRelease": "0.3.3",
+    "note": "siblings.lock.json records puppeteer release 0.3.3 at 52d09c8e. That is the shipped lock coordinate, not the audit source pin 748d015a."
+  },
+  "canonicalModel": "audit/godview/contracts/model.schema.json",
+  "canonicalModelOwner": "GV-AUDIT2",
+  "canonicalModelStatus": "on-model-slice-not-this-branch",
+  "canonicalTraces": "audit/godview/evidence/<adapterSuffix>/<fieldPath>.json",
+  "roles": [
+    {
+      "id": "GV-AUDIT1",
+      "owns": "Foundation, pins, id registry, provenance envelope, matrix seed, validation gate."
+    },
+    {
+      "id": "GV-AUDIT2",
+      "owns": "Canonical model.schema.json only, plus this role's matrix fragment."
+    },
+    {
+      "id": "GV-AUDIT3",
+      "owns": "First alphabetic half of adapter packages and their evidence traces."
+    },
+    {
+      "id": "GV-AUDIT4",
+      "owns": "Second alphabetic half of adapter packages and their evidence traces."
+    },
+    {
+      "id": "GV-AUDIT05",
+      "owns": "Real monitor view components and labeled deterministic fixtures."
+    },
+    {
+      "id": "GV-AUDIT6",
+      "owns": "Provenance flowcharts, the final QA page, and independent coverage checks."
+    }
+  ]
+}

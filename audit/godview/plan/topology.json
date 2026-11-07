@@ -1,0 +1,229 @@
+{
+  "pins": {
+    "vibefield": "433505fd0f224f4cda540d642661b13848c0ef82",
+    "puppeteer": "748d015a7e393112e0a91dad80111fdf5abe6583"
+  },
+  "notTheAuditPin": {
+    "siblingsLockSha": "52d09c8e84951b9a355a6700eac2dfc1290a9fa0",
+    "npmRelease": "0.3.3"
+  },
+  "depth": "light",
+  "fieldInventory": "not-copied",
+  "auditBaseline": {
+    "puppeteer": "748d015a7e393112e0a91dad80111fdf5abe6583",
+    "vibefield": "433505fd0f224f4cda540d642661b13848c0ef82",
+    "warning": "NOT SHIPPED 0.3.3"
+  },
+  "notShippedPackage": {
+    "version": "0.3.3",
+    "tagCommit": "52d09c8e84951b9a355a6700eac2dfc1290a9fa0"
+  },
+  "modelSlice": "49fc12da0fadc34e25c227fa2f03dcce2e09dbaa",
+  "hostOverlay": {
+    "path": "packages/field-app/src/godview/monitor/window-rows.ts",
+    "fields": ["field.stale", "field.profileSet"],
+    "note": "Display patch. Peer stale follows desktop standing. Peer profileSet is dropped. Model commit already records this; do not re-catalog it here."
+  },
+  "adapters": [
+    {
+      "id": "adapter.acp",
+      "package": "packages/adapter-acp",
+      "catalogId": "acp",
+      "owner": "GV-AUDIT3"
+    },
+    {
+      "id": "adapter.antigravity",
+      "package": "packages/adapter-antigravity",
+      "catalogId": "antigravity",
+      "owner": "GV-AUDIT3"
+    },
+    {
+      "id": "adapter.claude",
+      "package": "packages/adapter-claude",
+      "catalogId": "claude",
+      "owner": "GV-AUDIT3"
+    },
+    {
+      "id": "adapter.codex",
+      "package": "packages/adapter-codex",
+      "catalogId": "codex",
+      "owner": "GV-AUDIT3"
+    },
+    {
+      "id": "adapter.copilot",
+      "package": "packages/adapter-copilot",
+      "catalogId": "copilot",
+      "owner": "GV-AUDIT3"
+    },
+    {
+      "id": "adapter.grok",
+      "package": "packages/adapter-grok",
+      "catalogId": "grok",
+      "owner": "GV-AUDIT4"
+    },
+    {
+      "id": "adapter.hermes",
+      "package": "packages/adapter-hermes",
+      "catalogId": "hermes",
+      "owner": "GV-AUDIT4"
+    },
+    {
+      "id": "adapter.kimi",
+      "package": "packages/adapter-kimi",
+      "catalogId": "kimi",
+      "owner": "GV-AUDIT4"
+    },
+    {
+      "id": "adapter.opencode",
+      "package": "packages/adapter-opencode",
+      "catalogId": "opencode",
+      "owner": "GV-AUDIT4"
+    },
+    {
+      "id": "adapter.pi",
+      "package": "packages/adapter-pi",
+      "catalogId": "pi",
+      "owner": "GV-AUDIT4"
+    }
+  ],
+  "notAdapters": [
+    {
+      "path": "packages/imposter/personas/synthetic",
+      "reason": "Imposter persona for labeled synthetic runs. Not a packages/adapter-* provider."
+    },
+    {
+      "path": "packages/builtin-providers",
+      "reason": "Provider registry beside the adapters. Not one of the ten adapter packages."
+    }
+  ],
+  "views": [
+    {
+      "id": "view.swarm",
+      "registryOrder": 0,
+      "source": "packages/views/src/views/swarm/index.ts",
+      "symbol": "swarmMonitorView",
+      "idLine": 15
+    },
+    {
+      "id": "view.list",
+      "registryOrder": 1,
+      "source": "packages/views/src/views/list/index.ts",
+      "symbol": "listMonitorView",
+      "idLine": 14
+    },
+    {
+      "id": "view.rain",
+      "registryOrder": 2,
+      "source": "packages/views/src/views/rain/index.ts",
+      "symbol": "rainMonitorView",
+      "idLine": 14
+    },
+    {
+      "id": "view.timeline",
+      "registryOrder": 3,
+      "source": "packages/views/src/views/timeline/index.ts",
+      "symbol": "timelineMonitorView",
+      "idLine": 14
+    },
+    {
+      "id": "view.spend",
+      "registryOrder": 4,
+      "source": "packages/views/src/views/spend/index.ts",
+      "symbol": "spendMonitorView",
+      "idLine": 14
+    }
+  ],
+  "viewRegistry": {
+    "repo": "puppeteer",
+    "path": "packages/views/src/monitor/registry.ts",
+    "symbol": "MONITOR_VIEWS",
+    "order": ["swarm", "list", "rain", "timeline", "spend"]
+  },
+  "states": {
+    "lifecycle": {
+      "repo": "puppeteer",
+      "path": "packages/core/src/monitor/types.ts",
+      "symbol": "AgentMonitorStatus",
+      "line": 51,
+      "values": ["idle", "working", "blocked"]
+    },
+    "wireStatus": {
+      "repo": "vibefield",
+      "path": "packages/contracts/src/agent-session.ts",
+      "symbol": "AgentStatus",
+      "lineStart": 48,
+      "lineEnd": 49,
+      "values": ["idle", "working", "blocked", "unknown"]
+    },
+    "feed": {
+      "repo": "vibefield",
+      "path": "packages/field-app/src/godview/monitor/model-replica.ts",
+      "symbol": "MonitorFeedState",
+      "lineStart": 49,
+      "lineEnd": 53,
+      "sourceWords": ["no-door", "connecting", "live", "unavailable"],
+      "modelIds": [
+        "state.feed_no_door",
+        "state.feed_connecting",
+        "state.feed_live",
+        "state.feed_unavailable"
+      ]
+    },
+    "frameCollapse": {
+      "repo": "vibefield",
+      "path": "packages/field-app/src/godview/monitor/pane-frame-facts.ts",
+      "symbol": "paneFrameStatus",
+      "lineStart": 54,
+      "lineEnd": 62,
+      "note": "paneFrameStatus maps non-blocked non-working wire status to idle. That is a host transform on field.status. State ids stay the model slice's. This foundation does not mint state.unknown."
+    },
+    "adjacentFiniteVocabularies": [
+      {
+        "symbol": "EvidenceQuality",
+        "line": 19,
+        "path": "packages/core/src/monitor/types.ts",
+        "values": ["exact", "strong", "derived", "estimated", "inferred", "unknown"]
+      },
+      {
+        "symbol": "EvidenceCompleteness",
+        "line": 20,
+        "path": "packages/core/src/monitor/types.ts",
+        "values": ["complete", "partial", "unavailable"]
+      }
+    ]
+  },
+  "chromeCandidates": [
+    "packages/field-app/src/godview/GodviewMonitor.tsx",
+    "packages/field-app/src/godview/GodviewHeadView.tsx",
+    "packages/field-app/src/godview/GodviewOverlay.tsx",
+    "packages/field-app/src/godview/GodviewStage.tsx",
+    "packages/field-app/src/godview/profiles-column/ProfilesColumn.tsx",
+    "packages/views/src/find/FindSheet.tsx",
+    "packages/views/src/bar/InstrumentBar.tsx",
+    "packages/views/src/usage/UsageColumn.tsx",
+    "packages/views/src/deck"
+  ],
+  "catalog": {
+    "repo": "vibefield",
+    "path": "packages/contracts/src/agent-catalog.ts",
+    "symbol": "AGENT_CATALOG",
+    "ids": [
+      "claude",
+      "codex",
+      "grok",
+      "kimi",
+      "opencode",
+      "hermes",
+      "antigravity",
+      "copilot",
+      "pi",
+      "acp"
+    ]
+  },
+  "hostFold": {
+    "repo": "vibefield",
+    "path": "packages/field-app/src/godview/monitor/model-replica.ts",
+    "symbol": "createGodviewMonitorFeed",
+    "note": "Window subscription and fold. Not a vendor adapter id."
+  }
+}

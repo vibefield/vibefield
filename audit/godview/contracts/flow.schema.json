@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "audit/godview/contracts/flow.schema.json",
+  "title": "GodviewProvenanceFlow",
+  "description": "A flowchart from renderer back to ingestion for one field or one view. GV-AUDIT6 writes instances. The gate requires an ingestion node.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["flowId", "pins", "subject", "nodes", "edges"],
+  "properties": {
+    "flowId": { "type": "string", "pattern": "^flow\\.[a-zA-Z][a-zA-Z0-9.-]*$" },
+    "pins": { "$ref": "provenance.schema.json#/$defs/pins" },
+    "subject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["adapterId"],
+      "properties": {
+        "adapterId": { "$ref": "provenance.schema.json#/$defs/adapterId" },
+        "fieldId": { "$ref": "provenance.schema.json#/$defs/fieldId" },
+        "viewId": { "$ref": "provenance.schema.json#/$defs/viewId" }
+      }
+    },
+    "nodes": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/node" }
+    },
+    "edges": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/edge" }
+    }
+  },
+  "$defs": {
+    "node": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "layer", "label"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+        "layer": {
+          "enum": [
+            "ingestion",
+            "adapter",
+            "core-reducer",
+            "contract",
+            "fieldd",
+            "transport",
+            "replica",
+            "renderer",
+            "absence"
+          ]
+        },
+        "label": { "type": "string", "minLength": 1 },
+        "source": { "$ref": "provenance.schema.json#/$defs/source" },
+        "provenanceRecordId": {
+          "type": "string",
+          "pattern": "^prov\\.[a-z][a-z0-9-]*(\\.[A-Za-z][A-Za-z0-9]*)+$"
+        }
+      }
+    },
+    "edge": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["from", "to", "kind"],
+      "properties": {
+        "from": { "type": "string", "minLength": 1 },
+        "to": { "type": "string", "minLength": 1 },
+        "kind": {
+          "enum": ["ingest", "transform", "merge", "default", "transport", "render", "absence"]
+        }
+      }
+    }
+  }
+}

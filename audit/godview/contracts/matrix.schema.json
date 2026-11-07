@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "audit/godview/contracts/matrix.schema.json",
+  "title": "GodviewCompletenessMatrix",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["pins", "rows"],
+  "properties": {
+    "pins": { "$ref": "provenance.schema.json#/$defs/pins" },
+    "rows": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/row" }
+    }
+  },
+  "$defs": {
+    "row": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "owner", "status", "notes"],
+      "properties": {
+        "id": { "type": "string", "minLength": 3 },
+        "kind": {
+          "enum": [
+            "pin",
+            "adapter",
+            "view",
+            "lifecycle-state",
+            "wire-status",
+            "feed-state",
+            "presence-word",
+            "field-registry",
+            "scenario-registry",
+            "ui-coverage",
+            "baseline",
+            "context",
+            "model-catalog",
+            "gate"
+          ]
+        },
+        "owner": {
+          "enum": ["GV-AUDIT1", "GV-AUDIT2", "GV-AUDIT3", "GV-AUDIT4", "GV-AUDIT05", "GV-AUDIT6"]
+        },
+        "status": { "enum": ["pending", "in-progress", "satisfied", "waived"] },
+        "evidence": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "notes": { "type": "string", "minLength": 3 }
+      }
+    }
+  }
+}

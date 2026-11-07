@@ -1,0 +1,351 @@
+{
+  "pins": {
+    "vibefield": "433505fd0f224f4cda540d642661b13848c0ef82",
+    "puppeteer": "748d015a7e393112e0a91dad80111fdf5abe6583"
+  },
+  "rows": [
+    {
+      "id": "pin.vibefield",
+      "kind": "pin",
+      "owner": "GV-AUDIT1",
+      "status": "satisfied",
+      "notes": "main 433505fd0f224f4cda540d642661b13848c0ef82. Do not follow a later main."
+    },
+    {
+      "id": "pin.puppeteer",
+      "kind": "pin",
+      "owner": "GV-AUDIT1",
+      "status": "satisfied",
+      "notes": "Authoritative Puppeteer source 748d015a7e393112e0a91dad80111fdf5abe6583. Newer than shipped 0.3.3."
+    },
+    {
+      "id": "baseline.single",
+      "kind": "baseline",
+      "owner": "GV-AUDIT1",
+      "status": "satisfied",
+      "notes": "Owner decision: audit Puppeteer source 748d015 only, labeled newer than the package Vibefield ships."
+    },
+    {
+      "id": "warning.not-shipped-0.3.3",
+      "kind": "baseline",
+      "owner": "GV-AUDIT1",
+      "status": "satisfied",
+      "notes": "NOT SHIPPED 0.3.3. npm 0.3.3 and tag commit 52d09c8e are the shipped coordinate, not the audit pin."
+    },
+    {
+      "id": "context.package-0.3.3",
+      "kind": "context",
+      "owner": "GV-AUDIT2",
+      "status": "waived",
+      "notes": "Context only, not a second audit. Teammate commit d53a0fa24ca7341fe5858329c9399eac6baf6b53. This slice did not re-verify it."
+    },
+    {
+      "id": "model.catalog",
+      "kind": "model-catalog",
+      "owner": "GV-AUDIT2",
+      "status": "pending",
+      "notes": "IDs live at 49fc12da0fadc34e25c227fa2f03dcce2e09dbaa. Not copied onto this branch. GV-AUDIT6 combines."
+    },
+    {
+      "id": "adapter.acp",
+      "kind": "adapter",
+      "owner": "GV-AUDIT3",
+      "status": "pending",
+      "notes": "packages/adapter-acp. First alphabetic half."
+    },
+    {
+      "id": "adapter.antigravity",
+      "kind": "adapter",
+      "owner": "GV-AUDIT3",
+      "status": "pending",
+      "notes": "packages/adapter-antigravity. First alphabetic half."
+    },
+    {
+      "id": "adapter.claude",
+      "kind": "adapter",
+      "owner": "GV-AUDIT3",
+      "status": "pending",
+      "notes": "packages/adapter-claude. First alphabetic half."
+    },
+    {
+      "id": "adapter.codex",
+      "kind": "adapter",
+      "owner": "GV-AUDIT3",
+      "status": "pending",
+      "notes": "packages/adapter-codex. First alphabetic half."
+    },
+    {
+      "id": "adapter.copilot",
+      "kind": "adapter",
+      "owner": "GV-AUDIT3",
+      "status": "pending",
+      "notes": "packages/adapter-copilot. First alphabetic half."
+    },
+    {
+      "id": "adapter.grok",
+      "kind": "adapter",
+      "owner": "GV-AUDIT4",
+      "status": "pending",
+      "notes": "packages/adapter-grok. Second alphabetic half."
+    },
+    {
+      "id": "adapter.hermes",
+      "kind": "adapter",
+      "owner": "GV-AUDIT4",
+      "status": "pending",
+      "notes": "packages/adapter-hermes. Second alphabetic half."
+    },
+    {
+      "id": "adapter.kimi",
+      "kind": "adapter",
+      "owner": "GV-AUDIT4",
+      "status": "pending",
+      "notes": "packages/adapter-kimi. Second alphabetic half."
+    },
+    {
+      "id": "adapter.opencode",
+      "kind": "adapter",
+      "owner": "GV-AUDIT4",
+      "status": "pending",
+      "notes": "packages/adapter-opencode. Second alphabetic half."
+    },
+    {
+      "id": "adapter.pi",
+      "kind": "adapter",
+      "owner": "GV-AUDIT4",
+      "status": "pending",
+      "notes": "packages/adapter-pi. Second alphabetic half."
+    },
+    {
+      "id": "view.swarm",
+      "kind": "view",
+      "owner": "GV-AUDIT05",
+      "status": "pending",
+      "notes": "MONITOR_VIEWS entry. Manifest id swarm."
+    },
+    {
+      "id": "view.list",
+      "kind": "view",
+      "owner": "GV-AUDIT05",
+      "status": "pending",
+      "notes": "MONITOR_VIEWS entry. Manifest id list."
+    },
+    {
+      "id": "view.rain",
+      "kind": "view",
+      "owner": "GV-AUDIT05",
+      "status": "pending",
+      "notes": "MONITOR_VIEWS entry. Manifest id rain."
+    },
+    {
+      "id": "view.timeline",
+      "kind": "view",
+      "owner": "GV-AUDIT05",
+      "status": "pending",
+      "notes": "MONITOR_VIEWS entry. Manifest id timeline."
+    },
+    {
+      "id": "view.spend",
+      "kind": "view",
+      "owner": "GV-AUDIT05",
+      "status": "pending",
+      "notes": "MONITOR_VIEWS entry. Manifest id spend."
+    },
+    {
+      "id": "state.catalog",
+      "kind": "model-catalog",
+      "owner": "GV-AUDIT2",
+      "status": "pending",
+      "notes": "Use model state ids such as state.idle and state.feed_no_door. Do not mint state.unknown or feed.* ids."
+    },
+    {
+      "id": "presence.present",
+      "kind": "presence-word",
+      "owner": "GV-AUDIT1",
+      "status": "satisfied",
+      "notes": "A value was observed. Numeric 0 is present only with zeroIsObserved true."
+    },
+    {
+      "id": "presence.absent",
+      "kind": "presence-word",
+      "owner": "GV-AUDIT1",
+      "status": "satisfied",
+      "notes": "The record has no value. Do not store 0."
+    },
+    {
+      "id": "presence.unsupported",
+      "kind": "presence-word",
+      "owner": "GV-AUDIT1",
+      "status": "satisfied",
+      "notes": "This adapter does not emit the field. Do not store 0."
+    },
+    {
+      "id": "presence.unknown",
+      "kind": "presence-word",
+      "owner": "GV-AUDIT1",
+      "status": "satisfied",
+      "notes": "Observation mark in the provenance envelope. Not a model state id, and not 0."
+    },
+    {
+      "id": "presence.stale",
+      "kind": "presence-word",
+      "owner": "GV-AUDIT1",
+      "status": "satisfied",
+      "notes": "A value exists and is past freshness. Keep the literal and mark stale."
+    },
+    {
+      "id": "field.registry",
+      "kind": "field-registry",
+      "owner": "GV-AUDIT2",
+      "status": "pending",
+      "notes": "Mint x-field-ids in model.schema.json. Do not cartesian-expand values."
+    },
+    {
+      "id": "scenario.registry",
+      "kind": "scenario-registry",
+      "owner": "GV-AUDIT2",
+      "status": "pending",
+      "notes": "Named valid tuples only: adapter, lifecycle or wire status, view, applicable fields."
+    },
+    {
+      "id": "ui.view-coverage",
+      "kind": "ui-coverage",
+      "owner": "GV-AUDIT05",
+      "status": "pending",
+      "notes": "Each finite monitor view rendered from the shipping component and a labeled fixture."
+    },
+    {
+      "id": "ui.state-coverage",
+      "kind": "ui-coverage",
+      "owner": "GV-AUDIT05",
+      "status": "pending",
+      "notes": "Cover model axes the view actually draws. Not a cartesian product and not a second state list."
+    },
+    {
+      "id": "coverage.scenarios",
+      "kind": "ui-coverage",
+      "owner": "GV-AUDIT6",
+      "status": "pending",
+      "notes": "Every scenario GV-AUDIT2 publishes has a fixture or an explicit absence record."
+    },
+    {
+      "id": "gate.json-parse",
+      "kind": "gate",
+      "owner": "GV-AUDIT1",
+      "status": "satisfied",
+      "notes": "Every JSON file under audit/godview parses."
+    },
+    {
+      "id": "gate.schema-subset",
+      "kind": "gate",
+      "owner": "GV-AUDIT1",
+      "status": "satisfied",
+      "notes": "Foundation JSON instances validate against their schemas."
+    },
+    {
+      "id": "gate.pins",
+      "kind": "gate",
+      "owner": "GV-AUDIT1",
+      "status": "satisfied",
+      "notes": "Manifest, ids, topology, and matrix carry the frozen SHAs."
+    },
+    {
+      "id": "gate.ids",
+      "kind": "gate",
+      "owner": "GV-AUDIT1",
+      "status": "satisfied",
+      "notes": "Adapter, view, lifecycle, wire, feed, and presence ids match the registry."
+    },
+    {
+      "id": "gate.adapter-halves",
+      "kind": "gate",
+      "owner": "GV-AUDIT1",
+      "status": "satisfied",
+      "notes": "Alphabetic ceil(n/2) split matches ids.json halves."
+    },
+    {
+      "id": "gate.matrix-coverage",
+      "kind": "gate",
+      "owner": "GV-AUDIT1",
+      "status": "satisfied",
+      "notes": "Every registry id has one matrix row. Fragments cannot duplicate ids."
+    },
+    {
+      "id": "gate.no-competing-model",
+      "kind": "gate",
+      "owner": "GV-AUDIT1",
+      "status": "satisfied",
+      "notes": "model.schema.json may exist only at the canonical path, and only as GV-AUDIT2's file."
+    },
+    {
+      "id": "gate.model-schema",
+      "kind": "gate",
+      "owner": "GV-AUDIT1",
+      "status": "waived",
+      "notes": "Waived on this branch. Model files stay on 49fc12da until GV-AUDIT6 combines slices."
+    },
+    {
+      "id": "gate.trace-paths",
+      "kind": "gate",
+      "owner": "GV-AUDIT1",
+      "status": "satisfied",
+      "notes": "evidence/<adapterId>/<fieldPath>.json must match the envelope ids."
+    },
+    {
+      "id": "gate.provenance-envelope",
+      "kind": "gate",
+      "owner": "GV-AUDIT1",
+      "status": "satisfied",
+      "notes": "Traces validate as provenance records. None are committed in this slice."
+    },
+    {
+      "id": "gate.absence-not-zero",
+      "kind": "gate",
+      "owner": "GV-AUDIT1",
+      "status": "satisfied",
+      "notes": "absent, unsupported, and unknown observations cannot carry a literal. 0 needs zeroIsObserved."
+    },
+    {
+      "id": "gate.synthetic-labels",
+      "kind": "gate",
+      "owner": "GV-AUDIT1",
+      "status": "satisfied",
+      "notes": "Synthetic observations and fixtures require syntheticLabel of at least 12 characters."
+    },
+    {
+      "id": "gate.fixtures",
+      "kind": "gate",
+      "owner": "GV-AUDIT1",
+      "status": "satisfied",
+      "notes": "JSON under fixtures/ validates as view fixtures. None are committed in this slice."
+    },
+    {
+      "id": "gate.flows-reach-ingestion",
+      "kind": "gate",
+      "owner": "GV-AUDIT1",
+      "status": "satisfied",
+      "notes": "Each flow has an ingestion node and edges whose endpoints exist."
+    },
+    {
+      "id": "gate.line-ranges",
+      "kind": "gate",
+      "owner": "GV-AUDIT1",
+      "status": "satisfied",
+      "notes": "Pinned source citations have lineEnd greater than or equal to lineStart, and the pin SHA."
+    },
+    {
+      "id": "gate.baseline-not-shipped",
+      "kind": "gate",
+      "owner": "GV-AUDIT1",
+      "status": "satisfied",
+      "notes": "Manifest audit pin is 748d015a, shipped tag commit is 52d09c8e, and equivalentToAuditPin is false."
+    },
+    {
+      "id": "gate.model-slice-ref",
+      "kind": "gate",
+      "owner": "GV-AUDIT1",
+      "status": "satisfied",
+      "notes": "Foundation points at model commit 49fc12da and does not vendor those three files."
+    }
+  ]
+}
