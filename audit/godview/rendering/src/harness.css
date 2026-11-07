@@ -1,0 +1,44 @@
+html,
+body,
+#root {
+  margin: 0;
+  height: 100%;
+  background: #101114;
+  color: #f4f1ea;
+  font: 13px/1.4 ui-sans-serif, sans-serif;
+}
+
+.fe-banner {
+  display: flex;
+  gap: 16px;
+  align-items: baseline;
+  padding: 8px 12px;
+  background: #1c1e24;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.fe-banner b {
+  font-weight: 650;
+}
+
+.fe-banner select {
+  margin-left: auto;
+  max-width: 360px;
+}
+
+.fe-stage {
+  width: 1200px;
+  height: 680px;
+  position: relative;
+}
+
+.fe-slot,
+.fe-slot > div {
+  width: 1200px;
+  height: 680px;
+}
+
+.fe-stage[data-godview-animations="off"] * {
+  animation: none !important;
+  transition: none !important;
+}
