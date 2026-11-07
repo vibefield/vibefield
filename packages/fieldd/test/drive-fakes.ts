@@ -47,14 +47,26 @@ const CONFLICT_FIXTURE = new URL(
  * `ErrorData` (EL9). */
 export const CONFLICT_GOLDEN = ErrorData.parse(JSON.parse(readFileSync(CONFLICT_FIXTURE, "utf8")));
 
-/** The drive's lane lifecycle, in memory: every open and close it was asked, and a stream a test announces on. */
+/** The drive's lane lifecycle, in memory: every open and close it was asked, and a stream a test announces on. A
+ * subscription is one NativeLink entry: `subscribes - disposed` is how many the link would replay, and only an entry
+ * with a route hears `announce`. */
 export class FakeDriveLaneControl implements DriveLaneControl {
   readonly opened: Array<{ laneId: number; class: string; peer: string; protocol: string }> = [];
   readonly closed: number[] = [];
   lanes: LaneInfo[] = [];
   /** when set, every open is refused with it (the floor's node gate, say) */
   refuse: Error | null = null;
-  #emit: Handler | null = null;
+  /** while set, an open waits for it before it answers */
+  openGate: Promise<void> | null = null;
+  /** every subscribe asked */
+  subscribes = 0;
+  /** every subscription let go */
+  disposed = 0;
+  /** when set, the next subscribe is refused with it */
+  refuseNextSubscribe: Error | null = null;
+  /** while set, a subscribe waits for it before it answers or is refused */
+  subscribeGate: Promise<void> | null = null;
+  readonly #routes = new Set<Handler>();
 
   async open(req: {
     laneId: number;
@@ -62,6 +74,7 @@ export class FakeDriveLaneControl implements DriveLaneControl {
     peer: string;
     protocol: "drive";
   }): Promise<void> {
+    if (this.openGate !== null) await this.openGate;
     if (this.refuse !== null) throw this.refuse;
     this.opened.push({ ...req });
   }
@@ -70,13 +83,31 @@ export class FakeDriveLaneControl implements DriveLaneControl {
     this.closed.push(laneId);
   }
 
-  async subscribe(onEvent: Handler): Promise<{ lanes: LaneInfo[] }> {
-    this.#emit = onEvent;
-    return { lanes: this.lanes };
+  async subscribe(onEvent: Handler): Promise<{ lanes: LaneInfo[]; dispose: () => void }> {
+    this.subscribes += 1;
+    if (this.subscribeGate !== null) await this.subscribeGate;
+    if (this.refuseNextSubscribe !== null) {
+      const refusal = this.refuseNextSubscribe;
+      this.refuseNextSubscribe = null;
+      throw refusal;
+    }
+    this.#routes.add(onEvent);
+    return {
+      lanes: this.lanes,
+      dispose: () => {
+        this.disposed += 1;
+        this.#routes.delete(onEvent);
+      },
+    };
   }
 
   announce(payload: unknown, kind: "snapshot" | "delta" = "delta"): void {
-    this.#emit?.(payload, kind);
+    for (const route of [...this.#routes]) route(payload, kind);
+  }
+
+  /** NativeLink's replay was refused or read TIMEOUT: every entry stays, with no route, and nothing says so. */
+  replayRefused(): void {
+    this.#routes.clear();
   }
 }
 
@@ -84,9 +115,12 @@ export class FakeDriveLaneControl implements DriveLaneControl {
 export class FakeDriveLaneBytes implements DriveLaneBytes {
   readonly sent: Array<{ laneId: number; payload: Uint8Array }> = [];
   bufferedBytes = 0;
+  /** while set, every send throws it, as a link that is down or past its cap does (mesh-lane.ts `send`) */
+  throwOnSend: Error | null = null;
   readonly #handlers = new Map<number, (payload: Uint8Array) => void>();
 
   send(laneId: number, payload: Uint8Array): boolean {
+    if (this.throwOnSend !== null) throw this.throwOnSend;
     this.sent.push({ laneId, payload });
     return true;
   }
@@ -109,7 +143,8 @@ export class FakeDriveLaneBytes implements DriveLaneBytes {
 }
 
 /** STORES.DRIVE in memory, as each member sees it: it writes its own slice and hears everyone's. A snapshot is the
- * floor's shape (`StoreSnapshot`: `{storeId, slices: {deviceId: {data, version}}}`). */
+ * floor's shape (`StoreSnapshot`: `{storeId, slices: {deviceId: {data, version}}}`). A subscription is one NativeLink
+ * entry: `subscribes - disposed` is how many the link would replay, and only an entry with a route hears the store. */
 export class FakeDriveStore {
   /** deviceId → the slice it last published */
   readonly slices = new Map<string, unknown>();
@@ -117,28 +152,51 @@ export class FakeDriveStore {
   readonly writes: Array<{ deviceId: string; storeId: string; data: unknown }> = [];
   /** the next member write fails, as a mesh that is down does */
   failNextSet = false;
+  /** the next member write lands and reads as refused: the floor ran it, and this side's deadline passed */
+  failNextSetAfterLanding = false;
+  /** while set, a member write waits for it, in the order the writes were made, as the floor's mesh queue does */
+  setGate: Promise<void> | null = null;
+  /** every subscribe a member asked */
+  subscribes = 0;
+  /** every subscription a member let go */
+  disposed = 0;
   /** the next member subscribe fails, as a store with no node up does */
   failNextSubscribe = false;
-  readonly #handlers = new Map<string, Handler>();
+  /** while set, a member subscribe waits for it before it answers or fails */
+  subscribeGate: Promise<void> | null = null;
+  readonly #routes = new Set<Handler>();
 
   member(deviceId: string): DriveHoldersMesh {
     return {
       setSlice: async (storeId: string, data: unknown) => {
+        if (this.setGate !== null) await this.setGate;
         if (this.failNextSet) {
           this.failNextSet = false;
           throw new Error("mesh down");
         }
         this.writes.push({ deviceId, storeId, data });
         this.put(deviceId, data);
+        if (this.failNextSetAfterLanding) {
+          this.failNextSetAfterLanding = false;
+          throw new Error("deadline passed");
+        }
         return { storeId, version: this.writes.length };
       },
       subscribeStoreManaged: async (storeId: string, onEvent: Handler) => {
+        this.subscribes += 1;
+        if (this.subscribeGate !== null) await this.subscribeGate;
         if (this.failNextSubscribe) {
           this.failNextSubscribe = false;
           throw new Error("mesh node not up");
         }
-        this.#handlers.set(deviceId, onEvent);
-        return { snapshot: this.snapshot(storeId), dispose: () => this.#handlers.delete(deviceId) };
+        this.#routes.add(onEvent);
+        return {
+          snapshot: this.snapshot(storeId),
+          dispose: () => {
+            this.disposed += 1;
+            this.#routes.delete(onEvent);
+          },
+        };
       },
     };
   }
@@ -166,8 +224,19 @@ export class FakeDriveStore {
     this.#emit(this.snapshot(), "snapshot");
   }
 
+  /** Every member hears this snapshot, whatever its shape. */
+  hearSnapshot(payload: unknown): void {
+    this.#emit(payload, "snapshot");
+  }
+
+  /** The node is built anew: this is a new store, and every stream that stands keeps its entry and goes quiet, its
+   * forwarder holding the old one. Only a new subscribe hears it. */
+  rebuild(): void {
+    this.#routes.clear();
+  }
+
   #emit(payload: unknown, kind: "snapshot" | "delta"): void {
-    for (const handler of [...this.#handlers.values()]) handler(payload, kind);
+    for (const route of [...this.#routes]) route(payload, kind);
   }
 }
 
@@ -238,6 +307,15 @@ export function captureLogger(events: CapturedLog[]): Logger {
 }
 
 export const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** A gate a fake's call waits on, opened by the row. */
+export function gate(): { waits: Promise<void>; open: () => void } {
+  let open = () => {};
+  const waits = new Promise<void>((resolve) => {
+    open = resolve;
+  });
+  return { waits, open: () => open() };
+}
 
 /** Wait for `predicate`, or throw naming what never came. */
 export async function until(predicate: () => boolean, label: string, ms = 4_000): Promise<void> {

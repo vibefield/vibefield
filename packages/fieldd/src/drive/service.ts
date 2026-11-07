@@ -92,24 +92,34 @@ export class DriveService implements DriveTransportPort {
   }
 
   /** Claim the drive's lanes, arm the pulls' stream and roots, hear and publish the holders slice. Only the lane
-   * table's subscribe can throw (doc-sync's start does the same); the pulls and the holders log what they could not
-   * do and never throw (pulls.ts `start`, holders.ts `start`). */
+   * table's subscribe can throw (doc-sync's start does the same), and then nothing after it runs: the next
+   * `connected` arms all three. The pulls and the holders log what they could not do and never throw (pulls.ts
+   * `start`, holders.ts `start`). */
   async start(): Promise<void> {
     await this.#relay.start();
     await this.#pulls.start();
     await this.#holders.start();
   }
 
-  /** The node came up (MeshClient's "node-up"). */
+  /** The node came up (MeshClient's "node-up"). The holders follow the pulls' subscribe and roots, each a request
+   * NativeLink ends by its deadline (NATIVE_SUPERVISION.REQUEST_DEADLINE_MS). */
   async nodeUp(): Promise<void> {
     await this.#pulls.nodeUp();
     await this.#holders.nodeUp();
   }
 
-  /** The mgmt link reconnected (NativeLink's "connected"). */
+  /** The mgmt link reconnected (NativeLink's "connected"): each part asks the floor again for what it hears. The
+   * three share nothing, so none waits behind another: a lane table or a slice held up by the pulls' subscribe is a
+   * lane unclaimed or a list stale for no reason. Each part's own wait is its requests, every one ended by NativeLink's
+   * deadline (NATIVE_SUPERVISION.REQUEST_DEADLINE_MS), and none of the three throws. */
   async connected(): Promise<void> {
-    await this.#pulls.connected();
-    await this.#holders.nodeUp();
+    await Promise.all([this.#relay.connected(), this.#pulls.connected(), this.#holders.nodeUp()]);
+  }
+
+  /** The mgmt link went down (NativeLink's "reconnecting"): nothing carries a pull's end now, so the held bound runs
+   * through the outage, however long it lasts (pulls.ts `disconnected`). */
+  disconnected(): void {
+    this.#pulls.disconnected();
   }
 
   /** The drive opened, closed, or moved what it holds: publish the slice soon and declare the roots again. */

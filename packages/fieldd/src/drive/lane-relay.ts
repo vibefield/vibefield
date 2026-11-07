@@ -34,10 +34,11 @@ import { RpcCallError } from "../native-link";
 export interface DriveLaneControl {
   open(req: { laneId: number; class: "reliable"; peer: string; protocol: "drive" }): Promise<void>;
   close(laneId: number): Promise<void>;
-  /** Snapshot-then-delta over `native.mesh.lane.subscribe`. */
+  /** Snapshot-then-delta over `native.mesh.lane.subscribe`. `dispose` lets NativeLink's entry go, so a reconnect no
+   * longer replays it; it tells the floor nothing (native-link.ts `removeSubscription`). */
   subscribe(
     onEvent: (payload: unknown, kind: "snapshot" | "delta") => void,
-  ): Promise<{ lanes: LaneInfo[] }>;
+  ): Promise<{ lanes: LaneInfo[]; dispose: () => void }>;
 }
 
 /** The byte plane, as MeshLaneLink offers it (mesh-lane.ts:175, :231, :244, :254). One `send` is one record. */
@@ -99,7 +100,10 @@ export class DriveLaneRelay {
   readonly #up = new Set<string>();
   readonly #frameListeners = new Set<(peer: string, record: Uint8Array) => void>();
   readonly #peerListeners = new Set<(peer: string, up: boolean) => void>();
-  #started = false;
+  /** lets the lane table's subscription go: set while one stands */
+  #release: (() => void) | null = null;
+  /** the subscribe in flight: one at a time, so `#release` names the only entry */
+  #arming: Promise<void> | null = null;
   #stopped = false;
 
   constructor(opts: DriveLaneRelayOptions) {
@@ -111,18 +115,33 @@ export class DriveLaneRelay {
 
   /** Subscribe to lane lifecycle and claim the `drive` lanes already open: field-native outlives fieldd, so a lane a
    * peer opened before this boot is the normal case. */
-  async start(): Promise<void> {
-    if (this.#started || this.#stopped) return;
-    this.#started = true;
-    try {
-      const { lanes } = await this.#opts.control.subscribe((payload, kind) =>
-        this.#onLaneEvent(payload, kind),
-      );
-      this.#resync(lanes ?? []);
-    } catch (error) {
-      this.#started = false;
-      throw error;
+  start(): Promise<void> {
+    if (this.#stopped || this.#release !== null) return Promise.resolve();
+    if (this.#arming === null) {
+      this.#arming = this.#arm().finally(() => {
+        this.#arming = null;
+      });
     }
+    return this.#arming;
+  }
+
+  /** The mgmt link reconnected (NativeLink's "connected"): the lane table is subscribed anew. NativeLink's replay may
+   * have been refused or read TIMEOUT (native-link.ts `replaySubscriptions`), which leaves its entry with no route and
+   * this side untold: no lane opens or closes here until the next reconnect. So, once a subscribe in flight has ended,
+   * the stream is let go and ONE subscribe is made on the new connection, as `DrivePulls.connected` does, and its
+   * snapshot re-derives every lane (`#resync`). A `start` the floor refused is armed the same way. The cost: when the
+   * replay did run, one quiet forwarder stays at the floor until the connection closes, because
+   * `native.mesh.lane.subscribe` adds one per call. Never throws: a subscribe refused here is logged, and the next
+   * reconnect asks again. */
+  async connected(): Promise<void> {
+    await this.#arming?.catch(() => undefined);
+    this.#release?.();
+    this.#release = null;
+    await this.start().catch((error: unknown) => {
+      this.#log.warn("fieldd.drive.lanes_unheard", "The drive's lane table was not heard", {
+        error: String(error),
+      });
+    });
   }
 
   /** Send one opaque record to `peer`. Resolves `true` once it is on the byte plane, `false` when it was dropped (its
@@ -173,11 +192,13 @@ export class DriveLaneRelay {
     };
   }
 
-  /** Close this relay's own lanes and drop its routing; an inbound lane is field-native's to reap. A record still
-   * queued is dropped. */
+  /** Close this relay's own lanes, let the lane table's subscription go and drop its routing; an inbound lane is
+   * field-native's to reap. A record still queued is dropped. */
   async dispose(): Promise<void> {
     if (this.#stopped) return;
     this.#stopped = true;
+    this.#release?.();
+    this.#release = null;
     for (const laneId of this.#inbound.keys()) this.#opts.bytes.offLane(laneId);
     this.#inbound.clear();
     const closing: Promise<void>[] = [];
@@ -194,6 +215,19 @@ export class DriveLaneRelay {
     this.#frameListeners.clear();
     this.#peerListeners.clear();
     await Promise.all(closing);
+  }
+
+  /** The subscribe itself. A relay disposed during its flight lets the answer go and claims nothing. */
+  async #arm(): Promise<void> {
+    const { lanes, dispose } = await this.#opts.control.subscribe((payload, kind) =>
+      this.#onLaneEvent(payload, kind),
+    );
+    if (this.#stopped) {
+      dispose();
+      return;
+    }
+    this.#release = dispose;
+    this.#resync(lanes ?? []);
   }
 
   #laneFor(peer: string): PeerLane {
@@ -306,24 +340,30 @@ export class DriveLaneRelay {
     }
   }
 
-  /** The lane table is the truth (P5): a lane it no longer lists is gone, and an inbound one it lists is claimed. */
+  /** The lane table is the truth (P5): an outbound lane it no longer lists is gone, and the inbound lanes are
+   * re-derived from it rather than patched, as doc-sync's are (doc-sync.ts `#onLaneEvent`). A floor's inbound ids
+   * restart at its boot (field-native `mesh_bridge.rs`), so a listed id may name another peer's lane, and every row
+   * meets the account gate again. A peer goes down only after every row is claimed, so one still listed never flaps. */
   #resync(rows: readonly unknown[]): void {
-    const present = new Set<number>();
+    const outbound = new Set<number>();
     const inbound: MeshLanePeerOpened[] = [];
     for (const row of rows) {
       const opened = MeshLanePeerOpened.safeParse(row);
       if (opened.success) {
-        present.add(opened.data.laneId);
         inbound.push(opened.data);
         continue;
       }
-      const outbound = MeshLaneOpenRequest.safeParse(row);
-      if (outbound.success) present.add(outbound.data.laneId);
+      const lane = MeshLaneOpenRequest.safeParse(row);
+      if (lane.success) outbound.add(lane.data.laneId);
     }
-    for (const laneId of [...this.#inbound.keys(), ...this.#outboundIds.keys()]) {
-      if (!present.has(laneId)) this.#forget(laneId);
-    }
+    const heard = new Set(this.#inbound.values());
+    for (const laneId of this.#inbound.keys()) this.#opts.bytes.offLane(laneId);
+    this.#inbound.clear();
     for (const lane of inbound) this.#claim(lane);
+    for (const laneId of [...this.#outboundIds.keys()]) {
+      if (!outbound.has(laneId)) this.#forget(laneId);
+    }
+    for (const peer of heard) this.#noteMaybeDown(peer);
   }
 
   #claim(lane: MeshLanePeerOpened): void {

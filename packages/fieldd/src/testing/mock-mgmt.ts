@@ -108,6 +108,15 @@ export interface MockFileTransfer {
    * request that finds its mesh queue full (field-native `mgmt/mod.rs`'s `mesh_queue_full`): refused before it runs,
    * so the stream the connection holds stands. Counted down as each is refused. */
   refuseSubscribes: number;
+  /** ONE-SHOT: the next `subscribe` answered is written as ONE chunk, one read, in the file's two replace orders
+   * (mgmt/file_transfer.rs's `Stream::end` and `subscribe`): each `replaced` payload as a delta on the subId this
+   * subscribe replaced, then the answer, then each `fresh` payload as a delta on the new subId. A `completed` or
+   * `failed` among them ends its row before the answer's snapshot is built, as `pushFileTransferDelta`'s does.
+   * Cleared once written. */
+  subscribeChunk: { replaced?: unknown[]; fresh?: unknown[] } | null;
+  /** root name → the word a `roots` declaration answers it `registered: false` with, ahead of the node's gate: a
+   * folder the floor could not make (services/file_transfer.rs `serve`: `io_word`'s FAILED_IO or FAILED_NO_SPACE) */
+  refuseRoots: Map<string, string>;
   /** every subId the floor answered a `subscribe` with, in order */
   subscribed: string[];
   /** every subId a later `subscribe` on the same connection replaced, in order: the floor stopped its stream, and
@@ -127,6 +136,8 @@ export function mockFileTransfer(overrides: Partial<MockFileTransfer> = {}): Moc
     holdAnswers: false,
     subscribeUnanswered: false,
     refuseSubscribes: 0,
+    subscribeChunk: null,
+    refuseRoots: new Map(),
     subscribed: [],
     replaced: [],
     ...overrides,
@@ -1165,9 +1176,11 @@ export class MockMgmtServer {
         return;
       }
       // the stream this connection held, if any, is stopped, and its subId goes quiet (W3-20, VF-PM 2026-11-06)
+      const stopped: string[] = [];
       for (const e of this.issued) {
-        if (e.sock === sock && e.method === msg.method) transfer.replaced.push(e.subId);
+        if (e.sock === sock && e.method === msg.method) stopped.push(e.subId);
       }
+      transfer.replaced.push(...stopped);
       this.issued = this.issued.filter((e) => e.sock !== sock || e.method !== msg.method);
       const subId = `s${this.nextSub++}`;
       this.issued.push({ sock, subId, method: msg.method });
@@ -1176,7 +1189,22 @@ export class MockMgmtServer {
         transfer.subscribeUnanswered = false;
         return;
       }
-      reply({ result: { subId, snapshot: { transfers: [...transfer.running.values()] } } });
+      const chunk = transfer.subscribeChunk;
+      transfer.subscribeChunk = null;
+      const replaced = chunk?.replaced ?? [];
+      const fresh = chunk?.fresh ?? [];
+      for (const payload of [...replaced, ...fresh]) this.endFileTransferRow(payload);
+      const result = { subId, snapshot: { transfers: [...transfer.running.values()] } };
+      const answer = `${JSON.stringify({ jsonrpc: "2.0", id: msg.id, result })}\n`;
+      const delta = (on: string | undefined, payload: unknown) =>
+        `${JSON.stringify({
+          jsonrpc: "2.0",
+          method: "native.mesh.fileTransfer.delta",
+          params: { subId: on, payload },
+        })}\n`;
+      const before = replaced.map((payload) => delta(stopped[0], payload)).join("");
+      const after = fresh.map((payload) => delta(subId, payload)).join("");
+      sock.write(`${before}${answer}${after}`);
       return;
     }
     let down: string | undefined;
@@ -1206,7 +1234,9 @@ export class MockMgmtServer {
       transfer.declared.push([...asked.data.roots]);
       const answered: Array<{ name: string; registered: boolean; reason?: string }> = [];
       for (const name of asked.data.roots) {
-        if (transfer.gated) answered.push({ name, registered: true });
+        const reason = transfer.refuseRoots.get(name);
+        if (reason !== undefined) answered.push({ name, registered: false, reason });
+        else if (transfer.gated) answered.push({ name, registered: true });
         else answered.push({ name, registered: false, reason: MESH_FILE_TRANSFER.ROOT_UNGATED });
       }
       reply({ result: { roots: answered } });
@@ -1285,19 +1315,24 @@ export class MockMgmtServer {
    * ends its row in `running` first, as the floor drops a row once its end is final (mgmt.ts
    * `NativeFileTransferSnapshot`). The payload goes as given, so a test can push one outside the contract. */
   pushFileTransferDelta(payload: unknown): void {
+    this.endFileTransferRow(payload);
+    this.pushDelta("mesh.fileTransfer.subscribe", payload);
+  }
+
+  /** DR-3b — a `completed` or `failed` delta's end in the table: its row leaves `running`. */
+  private endFileTransferRow(payload: unknown): void {
     const delta = payload as { kind?: unknown; transferId?: unknown } | null;
     const transferId = delta?.transferId;
     const ends = delta?.kind === "completed" || delta?.kind === "failed";
     if (ends && typeof transferId === "string" && typeof this.fileTransfer === "object") {
       this.fileTransfer.running.delete(transferId);
     }
-    this.pushDelta("mesh.fileTransfer.subscribe", payload);
   }
 
-  /** DR-3b — a pull's end that the floor's table shows before its stream forwards it (an owed `.snapshot` built
-   * while the event waits in the broadcast, or a fresh stream's, whose subscribe comes before its snapshot): its row
-   * ends in `running`, then the `.snapshot` of the table without it and the delta follow, in ONE write per
-   * file-transfer subscription, one chunk. The payload goes as given. */
+  /** DR-3b — a pull's end that the floor's table shows before its stream forwards it, as an owed `.snapshot` built
+   * while the event waits in the broadcast: its row ends in `running`, then a `.snapshot` notification of the table
+   * without it and the delta follow, in ONE write per file-transfer subscription, one chunk. A fresh stream's own
+   * shape, its answer with a delta behind it, is `MockFileTransfer.subscribeChunk`'s. The payload goes as given. */
   pushFileTransferSnapshotThenDelta(payload: unknown): void {
     const transfer = this.fileTransfer;
     if (typeof transfer !== "object") return;

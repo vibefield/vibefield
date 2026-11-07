@@ -69,7 +69,9 @@ export class DriveHolders {
   #timer: ReturnType<typeof setTimeout> | null = null;
   #dispose: (() => void) | null = null;
   #subscribing: Promise<void> | null = null;
-  /** a slice of this desktop's is in the store: the next close withdraws it */
+  /** a slice of this desktop's may be in the store: the next close withdraws it. Marked as a publish leaves, because
+   * a close during its flight must withdraw it, and one read as refused may have run at the floor all the same; a
+   * close after a publish that never ran writes one null slice, which every reader holds as nothing (`#adopt`). */
   #published = false;
   #stopped = false;
 
@@ -87,8 +89,18 @@ export class DriveHolders {
   }
 
   /** The node came up, or the link came back: hear the store if it was not heard, and publish again (a node built
-   * anew holds no slice of this desktop's). */
+   * anew holds no slice of this desktop's). A stream that stands proves nothing here. A node built anew leaves it on
+   * the old store, whose forwarder keeps that store (field-native `mgmt/mesh.rs`, `spawn_store_forwarder`). A floor
+   * that restarted has no node, so NativeLink's replay meets the node gate and its entry stays with no route, which
+   * this side is not told (native-link.ts `replaySubscriptions`). So the stream is let go (its `dispose`, which tells
+   * the floor nothing) and ONE subscribe is made, as `DrivePulls.connected` does, once a subscribe in flight has
+   * ended: it may have left before this node. The cost: each node-up over a live link leaves one quiet forwarder at
+   * the floor until the connection closes, because `native.mesh.store.subscribe` adds one per call. A subscribe
+   * refused here leaves the store unheard until the next node-up or reconnect. */
   async nodeUp(): Promise<void> {
+    await this.#subscribing;
+    this.#dispose?.();
+    this.#dispose = null;
     await this.#subscribe();
     await this.publish();
   }
@@ -104,8 +116,8 @@ export class DriveHolders {
   }
 
   /** This desktop's slice, now, into STORES.DRIVE; while the drive is closed, nothing, or the one withdrawal of a
-   * slice published before. Never throws: a slice outside its contract (an empty deviceId before the mesh identity is
-   * known, a count that is no integer) is logged and not written. */
+   * slice a publish may have written (`#published`). Never throws: a slice outside its contract (an empty deviceId
+   * before the mesh identity is known, a count that is no integer) is logged and not written. */
   async publish(): Promise<void> {
     if (this.#stopped || !this.#opts.linked()) return;
     const drive = this.#opts.drive();
@@ -126,9 +138,9 @@ export class DriveHolders {
       });
       return;
     }
+    this.#published = true;
     try {
       await this.#opts.mesh.setSlice(STORES.DRIVE, slice.data);
-      this.#published = true;
     } catch (error) {
       // the mesh is down: the slice is a fact about now, and the next change publishes it again
       this.#log.info("fieldd.drive.holders_unpublished", "The drive's slice was not published", {
@@ -157,13 +169,14 @@ export class DriveHolders {
   }
 
   /** The drive closed after it published: ONE null slice, so no reader holds it (the header). A withdrawal that fails
-   * goes again on the next change. */
+   * goes again on the next change. The mark falls as it leaves, so a publish made during its flight keeps its own. */
   async #withdraw(): Promise<void> {
     if (!this.#published) return;
+    this.#published = false;
     try {
       await this.#opts.mesh.setSlice(STORES.DRIVE, null);
-      this.#published = false;
     } catch (error) {
+      this.#published = true;
       this.#log.info("fieldd.drive.holders_unwithdrawn", "The drive's slice was not withdrawn", {
         error: String(error),
       });

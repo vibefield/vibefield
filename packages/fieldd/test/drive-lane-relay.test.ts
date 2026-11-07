@@ -3,7 +3,7 @@
 // `MeshLaneProtocol`), opaque to fieldd (DR-L4). Against fakes for the two planes, as doc-sync's routing is
 // (doc-sync-service.test.ts): who gets a lane, what crosses it, and what is refused.
 import { DRIVE_LIMITS, MESHDATA_INBOUND_LANE_ID_BASE } from "@vibefield/contracts";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { DriveLaneRelay, type DriveLaneRelayOptions } from "../src/drive/lane-relay";
 import { OutboundLaneIdAllocator } from "../src/lane-id";
 import { RpcCallError } from "../src/native-link";
@@ -12,7 +12,9 @@ import {
   captureLogger,
   FakeDriveLaneBytes,
   FakeDriveLaneControl,
+  gate,
   sleep,
+  until,
 } from "./drive-fakes";
 
 const IN = MESHDATA_INBOUND_LANE_ID_BASE;
@@ -20,6 +22,7 @@ const SELF = new Set(["peer-a", "peer-b"]);
 
 const relays: DriveLaneRelay[] = [];
 afterEach(async () => {
+  vi.restoreAllMocks();
   for (const relay of relays.splice(0)) await relay.dispose();
 });
 
@@ -44,6 +47,28 @@ function harness(extra: Partial<DriveLaneRelayOptions> = {}) {
 /** A peer opened a lane to us, as the floor announces it (`lane.peerOpened`). */
 function opened(laneId: number, peer: string, protocol = "drive", lane = "reliable") {
   return { kind: "peerOpened", laneId, inbound: true, class: lane, peer, protocol };
+}
+
+/** A row of the lane table as the floor writes it (`lane_json`): only an inbound lane carries `inbound`. */
+const inboundRow = (laneId: number, peer: string) => ({
+  laneId,
+  class: "reliable",
+  peer,
+  protocol: "drive",
+  inbound: true,
+});
+const outboundRow = (laneId: number, peer: string) => ({
+  laneId,
+  class: "reliable",
+  peer,
+  protocol: "drive",
+});
+
+/** Every peer event, in order. */
+function peersOf(relay: DriveLaneRelay): Array<[string, boolean]> {
+  const peers: Array<[string, boolean]> = [];
+  relay.onPeer((peer, up) => peers.push([peer, up]));
+  return peers;
 }
 
 const bytesOf = (...values: number[]) => new Uint8Array(values);
@@ -208,5 +233,296 @@ describe("DR-3b — the drive's lane relay", () => {
     expect(drive).toEqual([2, 5]);
     expect(docSync).toEqual([1, 3, 4, 6]);
     expect(drive.filter((laneId) => docSync.includes(laneId))).toEqual([]);
+  });
+
+  it("forgets the lanes a snapshot drops: their peers go down, and the next send opens a fresh id", async () => {
+    const { control, bytes, relay } = harness();
+    const peers = peersOf(relay);
+    await relay.start();
+    control.announce(opened(IN, "peer-b"));
+    expect(await relay.send("peer-a", bytesOf(1))).toBe(true);
+    // a floor that restarted holds neither lane: NativeLink's replay hands its empty table as a snapshot
+    control.announce({ lanes: [] }, "snapshot");
+    expect(peers).toEqual([
+      ["peer-b", true],
+      ["peer-a", true],
+      ["peer-a", false],
+      ["peer-b", false],
+    ]);
+    expect(bytes.claimed(IN)).toBe(false);
+    expect(await relay.send("peer-a", bytesOf(2))).toBe(true);
+    expect(control.opened.map((req) => req.laneId)).toEqual([1, 2]);
+    expect(bytes.sent.map((s) => s.laneId)).toEqual([1, 2]);
+    expect(peers.at(-1)).toEqual(["peer-a", true]);
+  });
+
+  it("keeps the lanes a snapshot lists: no new open, no peer event, and their records still route", async () => {
+    const { control, bytes, relay, frames } = harness();
+    const peers = peersOf(relay);
+    await relay.start();
+    control.announce(opened(IN, "peer-b"));
+    expect(await relay.send("peer-a", bytesOf(1))).toBe(true);
+    const before = [...peers];
+    // a lag snapshot: every lane still stands
+    control.announce({ lanes: [outboundRow(1, "peer-a"), inboundRow(IN, "peer-b")] }, "snapshot");
+    expect(peers).toEqual(before);
+    expect(await relay.send("peer-a", bytesOf(2))).toBe(true);
+    expect(control.opened).toHaveLength(1);
+    expect(bytes.sent.map((s) => s.laneId)).toEqual([1, 1]);
+    bytes.deliver(IN, bytesOf(3));
+    expect(frames).toEqual([{ peer: "peer-b", record: [3] }]);
+  });
+
+  it("re-derives an inbound id another peer now holds: its records carry that peer's name, and the old peer goes down", async () => {
+    const { control, bytes, relay, frames } = harness();
+    const peers = peersOf(relay);
+    await relay.start();
+    control.announce(opened(IN, "peer-a"));
+    // a floor's inbound ids restart at its boot, so the same id comes back naming another desktop
+    control.announce({ lanes: [inboundRow(IN, "peer-b")] }, "snapshot");
+    bytes.deliver(IN, bytesOf(7));
+    expect(frames).toEqual([{ peer: "peer-b", record: [7] }]);
+    expect(peers).toEqual([
+      ["peer-a", true],
+      ["peer-b", true],
+      ["peer-a", false],
+    ]);
+  });
+
+  it("holds a re-derived row to the account gate: a stranger on a reused id is closed, and hears nothing", async () => {
+    const { control, bytes, events, relay, frames } = harness();
+    const peers = peersOf(relay);
+    await relay.start();
+    control.announce(opened(IN, "peer-a"));
+    control.announce({ lanes: [inboundRow(IN, "stranger")] }, "snapshot");
+    expect(bytes.claimed(IN)).toBe(false);
+    bytes.deliver(IN, bytesOf(9));
+    expect(frames).toEqual([]);
+    expect(control.closed).toEqual([IN]);
+    expect(events.map((e) => e.event)).toEqual(["fieldd.drive.lane_refused_foreign_account"]);
+    expect(peers.at(-1)).toEqual(["peer-a", false]);
+  });
+
+  it("never flaps a peer a snapshot still lists either way: one lane going leaves it up on the other", async () => {
+    const { control, relay } = harness();
+    const peers = peersOf(relay);
+    await relay.start();
+    control.announce(opened(IN, "peer-a"));
+    expect(await relay.send("peer-a", bytesOf(1))).toBe(true);
+    // its inbound lane goes, and our outbound one keeps it up
+    control.announce({ lanes: [outboundRow(1, "peer-a")] }, "snapshot");
+    control.announce(opened(IN + 1, "peer-a"));
+    // its outbound lane goes, and the inbound one, claimed anew, keeps it up
+    control.announce({ lanes: [inboundRow(IN + 1, "peer-a")] }, "snapshot");
+    expect(peers).toEqual([["peer-a", true]]);
+  });
+
+  it("subscribes anew at a reconnect, hears what a refused replay left unheard, and keeps one entry", async () => {
+    const { control, bytes, relay } = harness();
+    await relay.start();
+    expect(await relay.send("peer-a", bytesOf(1))).toBe(true);
+    // the replay read TIMEOUT: the entry stays with no route, and nothing says so
+    control.replayRefused();
+    control.announce(opened(IN, "peer-b"));
+    expect(bytes.claimed(IN)).toBe(false);
+    control.lanes = [inboundRow(IN, "peer-b")];
+    await relay.connected();
+    // the table named peer-b's lane, and no longer named our lane 1: the next send opens a fresh one
+    expect(bytes.claimed(IN)).toBe(true);
+    expect(await relay.send("peer-a", bytesOf(2))).toBe(true);
+    expect(bytes.sent.map((s) => s.laneId)).toEqual([1, 2]);
+    // the new stream routes
+    control.announce(opened(IN + 1, "peer-b"));
+    expect(bytes.claimed(IN + 1)).toBe(true);
+    await relay.connected();
+    expect(control.subscribes).toBe(3);
+    expect(control.disposed).toBe(2);
+  });
+
+  it("arms at the next reconnect after a refused start", async () => {
+    const { control, bytes, relay } = harness();
+    control.refuseNextSubscribe = new Error("mesh queue full");
+    await expect(relay.start()).rejects.toThrow("mesh queue full");
+    control.lanes = [inboundRow(IN, "peer-a")];
+    await relay.connected();
+    expect(bytes.claimed(IN)).toBe(true);
+    // the refused start made no entry to let go
+    expect(control.subscribes).toBe(2);
+    expect(control.disposed).toBe(0);
+  });
+
+  it("logs a re-subscribe refused at a reconnect and never throws, and the next reconnect asks again", async () => {
+    const { control, bytes, events, relay } = harness();
+    await relay.start();
+    control.refuseNextSubscribe = new Error("mesh queue full");
+    await relay.connected();
+    expect(events.map((e) => e.event)).toEqual(["fieldd.drive.lanes_unheard"]);
+    expect(control.disposed).toBe(1);
+    control.lanes = [inboundRow(IN, "peer-a")];
+    await relay.connected();
+    expect(bytes.claimed(IN)).toBe(true);
+    expect(control.subscribes).toBe(3);
+    expect(control.disposed).toBe(1);
+  });
+
+  it("waits out a subscribe in flight at a reconnect, then makes its own: that one left on the old connection", async () => {
+    const { control, relay } = harness();
+    const held = gate();
+    control.subscribeGate = held.waits;
+    const started = relay.start();
+    const reconnected = relay.connected();
+    await sleep(20);
+    expect(control.subscribes).toBe(1);
+    control.subscribeGate = null;
+    held.open();
+    await Promise.all([started, reconnected]);
+    expect(control.subscribes).toBe(2);
+    expect(control.disposed).toBe(1);
+  });
+
+  it("subscribes at a reconnect behind a subscribe in flight that is refused, which `start` alone answers for", async () => {
+    const { control, bytes, events, relay } = harness();
+    const held = gate();
+    control.subscribeGate = held.waits;
+    control.refuseNextSubscribe = new Error("mesh queue full");
+    const started = relay.start();
+    const reconnected = relay.connected();
+    control.subscribeGate = null;
+    control.lanes = [inboundRow(IN, "peer-a")];
+    held.open();
+    await expect(started).rejects.toThrow("mesh queue full");
+    await reconnected;
+    expect(bytes.claimed(IN)).toBe(true);
+    expect(control.subscribes).toBe(2);
+    expect(events).toEqual([]);
+  });
+
+  it("makes one subscribe at a time, and none over a stream that stands", async () => {
+    const { control, relay } = harness();
+    const held = gate();
+    control.subscribeGate = held.waits;
+    const starts = [relay.start(), relay.start()];
+    control.subscribeGate = null;
+    held.open();
+    await Promise.all(starts);
+    await relay.start();
+    expect(control.subscribes).toBe(1);
+    expect(control.disposed).toBe(0);
+  });
+
+  it("lets the answer go when disposed during its subscribe, and claims nothing", async () => {
+    const { control, bytes, relay } = harness();
+    control.lanes = [inboundRow(IN, "peer-a")];
+    const held = gate();
+    control.subscribeGate = held.waits;
+    const started = relay.start();
+    await relay.dispose();
+    control.subscribeGate = null;
+    held.open();
+    await started;
+    expect(bytes.claimed(IN)).toBe(false);
+    expect(control.subscribes).toBe(1);
+    expect(control.disposed).toBe(1);
+  });
+
+  it("lets its subscription go at dispose, and a reconnect after it asks nothing", async () => {
+    const { control, relay } = harness();
+    await relay.start();
+    await relay.dispose();
+    expect(control.disposed).toBe(1);
+    await relay.connected();
+    expect(control.subscribes).toBe(1);
+    expect(control.disposed).toBe(1);
+  });
+
+  it("answers false with a warn when the byte plane throws, and the next record still goes", async () => {
+    const { bytes, events, relay } = harness();
+    await relay.start();
+    expect(await relay.send("peer-a", bytesOf(1))).toBe(true);
+    bytes.throwOnSend = new Error("meshdata link is not connected");
+    expect(await relay.send("peer-a", bytesOf(2))).toBe(false);
+    expect(events.map((e) => e.event)).toEqual(["fieldd.drive.lane_send_failed"]);
+    bytes.throwOnSend = null;
+    expect(await relay.send("peer-a", bytesOf(3))).toBe(true);
+    expect(bytes.sent.map((s) => s.payload[0])).toEqual([1, 3]);
+  });
+
+  it("keeps a throwing record reader from the next one, with a warn", async () => {
+    const { control, bytes, events, relay, frames } = harness();
+    relay.onFrame(() => {
+      throw new Error("the reader threw");
+    });
+    const later: number[][] = [];
+    relay.onFrame((_peer, record) => later.push([...record]));
+    await relay.start();
+    control.announce(opened(IN, "peer-a"));
+    bytes.deliver(IN, bytesOf(5));
+    expect(frames).toEqual([{ peer: "peer-a", record: [5] }]);
+    expect(later).toEqual([[5]]);
+    expect(events.map((e) => e.event)).toEqual(["fieldd.drive.frame_listener_failed"]);
+  });
+
+  it("settles every queued record false at dispose, sends none of them, and calls no socket undrained", async () => {
+    const { bytes, events, relay } = harness({ sendWatermarkBytes: 16 });
+    await relay.start();
+    // the lane is open first, so the records below wait in the pace and not behind the open
+    expect(await relay.send("peer-a", bytesOf(1))).toBe(true);
+    bytes.bufferedBytes = 16;
+    const sends = [relay.send("peer-a", filled(10, 2)), relay.send("peer-a", filled(10, 3))];
+    await relay.dispose();
+    expect(await Promise.all(sends)).toEqual([false, false]);
+    // past the pace's next look: timers in one process fire in their order, so it has woken by now
+    await sleep(50);
+    expect(bytes.sent.map((s) => s.payload[0])).toEqual([1]);
+    expect(events).toEqual([]);
+    expect(await relay.send("peer-a", bytesOf(4))).toBe(false);
+  });
+
+  it("closes a lane the floor opens after dispose, and its record settles false", async () => {
+    const { control, relay } = harness();
+    await relay.start();
+    const held = gate();
+    control.openGate = held.waits;
+    const sending = relay.send("peer-a", bytesOf(1));
+    await relay.dispose();
+    expect(await sending).toBe(false);
+    control.openGate = null;
+    held.open();
+    await until(() => control.closed.length === 1, "the late lane's close");
+    expect(control.closed).toEqual([1]);
+  });
+
+  it("opens a new lane for a record whose lane closed during its wait for the watermark", async () => {
+    const { control, bytes, relay } = harness({ sendWatermarkBytes: 16 });
+    await relay.start();
+    expect(await relay.send("peer-a", bytesOf(1))).toBe(true);
+    bytes.bufferedBytes = 16;
+    const waiting = relay.send("peer-a", filled(10, 2));
+    control.announce({ kind: "closed", laneId: 1, inbound: false, reason: "peer-closed" });
+    bytes.bufferedBytes = 0;
+    expect(await waiting).toBe(true);
+    expect(control.opened.map((req) => req.laneId)).toEqual([1, 2]);
+    expect(bytes.sent.map((s) => s.laneId)).toEqual([1, 2]);
+  });
+
+  it("drops a peer's queue with a warn once the socket misses the pace deadline, and the next record still goes", async () => {
+    const { bytes, events, relay } = harness({ sendWatermarkBytes: 16 });
+    await relay.start();
+    expect(await relay.send("peer-a", bytesOf(1))).toBe(true);
+    bytes.bufferedBytes = 16;
+    // the clock is the row's, so the deadline is met by arithmetic and no real wait: a send reads it as it is made
+    let clock = 1_000;
+    vi.spyOn(Date, "now").mockImplementation(() => clock);
+    const sends = [relay.send("peer-a", filled(10, 2)), relay.send("peer-a", filled(10, 3))];
+    clock += 30_000;
+    await sleep(50);
+    expect(events).toEqual([]);
+    clock += 1;
+    expect(await Promise.all(sends)).toEqual([false, false]);
+    const warned = events.find((e) => e.event === "fieldd.drive.lane_not_draining");
+    expect(warned?.attrs).toMatchObject({ peer: "peer-a", droppedRecords: 2 });
+    bytes.bufferedBytes = 0;
+    expect(await relay.send("peer-a", bytesOf(4))).toBe(true);
+    expect(bytes.sent.map((s) => s.payload[0])).toEqual([1, 4]);
   });
 });
