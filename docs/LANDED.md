@@ -41936,3 +41936,53 @@ fold 5 ran 62, fold 6 ran 5, fold 7 ran 2. Each was KILLED or named.
 - C5-1's likelihood rests on whether a floor's boot can stall its mgmt queue through both the replay and the
   re-subscribe. That was not read in field-native.
 - The rows have run in the full graph only once, at this verify. Every mutant ran on the MacBook only.
+
+## Item 240 — release.yml's build job fetches Electron's binary before it packages: the stager reads Electron's licences out of its dist/ (track LP, release-class)
+(2026-11-07; one commit on branch `lp/release-electron-binary`, cut by the LAUNCH lead (vibe-field-2a) with git
+plumbing over main `6bbda77d7`, so no checkout was touched. The packet is `lanes/launch/release-electron-binary/`
+(`item240.diff` sha256 `d37e6634…`). Landed as `bf33b76ef`, a fast-forward of main `6bbda77d7`,
+2026-11-07T19:35:59Z, on James's "Push" at 19:35:05Z; push 120 at 19:36:23Z, `e588849d9..bf33b76ef`.)
+Filed 2026-11-07 18:36Z by VF-PM from the LAUNCH lead's read of the red. Release-class: VF-PM took the diff to James
+before the land. Workflow only: no product file, no test, no lock. No mint: the witness is a dispatched nightly.
+
+**The red.** Nightly 42398362320, `nightly-20261107.1` at `e588849d9` (James's dispatch at 17:51:28Z, after push
+119's verify `42393671496` went green at 17:39:07Z).
+- plan, tag and the run's verify were green (verify 17:52:07Z → 18:16:44Z). James approved build's release-signing
+  gate; it cleared at 18:18:26Z.
+- build failed at "Package, signed (J4 — the Apple credentials exist)", 18:32:30Z:
+  `stage-package FAILED — required input missing: …/apps/desktop/node_modules/electron/dist/LICENSE`, the input
+  for `legal/LICENSE.electron.txt`.
+- sign, converge, attest and publish were skipped. Nothing was signed, notarized or published; the tag stands.
+
+**The finding.** A gap between two jobs, not a flake: the same step fails the same way on every run.
+- LP-5's notices (M131, `02b47ba2a`; the stager's inputs from `ef05b7405`) copy two files out of Electron's dist/
+  into the stage: `LICENSE` and `LICENSES.chromium.html` (`stageExternals`, scripts/third-party-notices.mjs:2210).
+- Electron 43 has no postinstall, so `pnpm install` leaves no dist/ (scripts/electron-binary.mjs's header,
+  2026-10-26). verify's job fetches it right after its install (verify.yml:130–131, since `98f8433bf`).
+- release.yml's build job went from "Install (frozen)" straight to prepare-mille. The one Electron postinstall in
+  the build's log (18:19:10Z) is mille-pin's own install, inside prepare-mille, not apps/desktop's.
+- No release build ran between LP-5 and this one. The last signed nightly, 41848947270 at `cefec2473` (Nov 4),
+  predates LP-5. After it: Nov 5's run red at its verify; Nov 6's and today's 13:04Z skipped ("main is red");
+  today's 07:58Z red at its verify; 17:15Z skipped, dispatched before push 119's verify was green.
+
+**What landed.** One commit, `bf33b76ef`: `.github/workflows/release.yml`, +4 −0, one hunk at :219.
+- verify.yml:130–131's step, verbatim, right after "Install (frozen)" and before prepare-mille, under a two-line
+  comment: "Electron's binary (its own install.js; path.txt and an executable binary)", which runs
+  `node scripts/electron-binary.mjs`.
+- It fetches through Electron's own install.js into apps/desktop's Electron (its realpath), then proves path.txt and
+  an executable binary, or fails that step in words.
+- dist/ carries both files the stager reads (read on this Mac: `LICENSE` and `LICENSES.chromium.html`).
+
+**Validation.**
+- The workflow parses (yaml 2.9.0); the build job's steps read Install (frozen), Electron's binary, prepare-mille.
+- No native-hold path (the hold's list reads 0 over the commit); pin-class none.
+- No local gate ran: no step of this workflow runs off CI. A rerun of 42398362320 cannot carry the fix, since a
+  rerun runs `e588849d9`'s workflow.
+
+**Found.** This is the first release build since Nov 4 to carry LP-1, TD-4, LP-6b and LP-5 through CI's build job.
+The red stopped the job at the stage, so any later step of those slices is still unread on CI.
+
+**Owed.**
+- The next dispatched nightly's build job: "Electron's binary" green, and the stage carries
+  `legal/LICENSE.electron.txt` and `legal/LICENSES.chromium.html`.
+- That build's later steps, signed and unsigned paths, read for the first time on CI since LP-1, TD-4 and LP-6b.
