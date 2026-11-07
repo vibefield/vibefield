@@ -3,8 +3,9 @@ import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { renderFlowSvg } from "../flows/render.mjs";
-import { renderShell } from "../web/markup.mjs";
+import { flowGraph, renderFlowSvg } from "../flows/render.mjs";
+import { chooseMounts, MAX_LIVE_MOUNTS } from "../web/lazy-mount.mjs";
+import { renderScroll } from "../web/markup.mjs";
 import { createAuditServer } from "../web/serve.mjs";
 import { buildCell, endedAliasMeasured, spanAliasProved } from "./cell.mjs";
 import { AUDIT_PINS, REQUIRED_COUNTS } from "./contract.mjs";
@@ -327,7 +328,14 @@ test("the page names the audit target and leaves the harness pending", () => {
       fieldId: "field.stale",
     },
   });
-  const html = renderShell(audit.index, cell);
+  const html = renderScroll(audit);
+  assert.equal((html.match(/data-matrix-cell="1"/g) ?? []).length, 410);
+  assert.equal((html.match(/data-record="row"/g) ?? []).length, audit.index.traceCount);
+  assert.equal((html.match(/data-record="sdk-leaf"/g) ?? []).length, audit.index.sdkLeafCount);
+  assert.equal((html.match(/<select\b/g) ?? []).length, 0);
+  assert.equal((html.match(/<details\b/g) ?? []).length, 0);
+  assert.match(html, /class="flow-diagram"/);
+  assert.match(html, /width="980"/);
   assert.match(html, /newer than the 0\.3\.3 package/);
   assert.match(html, /Meaningful paint: yes/);
   assert.match(html, /Selected fixture rendered: yes/);
@@ -667,8 +675,7 @@ test("flow diagrams cite envelope effects from any working directory", () => {
     assert.match(svg, /reduce\.ts:1049-1073/);
     assert.match(svg, /href="https:\/\/github.com\/vibefield\/puppeteer\/blob\/748d015/);
     assert.equal(svg.includes(">source-read<"), false);
-    const html = renderShell(audit.index, claude);
-    assert.match(html, /monitor-service\.ts:233/);
+    assert.match(svg, /monitor-service\.ts:233/);
     const acp = buildCell({
       model: audit.model,
       traces: audit.traces,
@@ -684,7 +691,10 @@ test("flow diagrams cite envelope effects from any working directory", () => {
     assert.ok(acp.mmdPath);
     const acpSvg = renderFlowSvg(acp);
     assert.match(acpSvg, /handler-omits-usage/);
-    assert.match(acpSvg, /Sibling \.mmd omits/);
+    assert.match(acpSvg, /does not state costOf/);
+    assert.doesNotMatch(acpSvg, /omits envelope steps/);
+    assert.match(svg, /Step names are not compared/);
+    assert.doesNotMatch(svg, /omits envelope steps/);
     const grok = buildCell({
       model: audit.model,
       traces: audit.traces,
@@ -706,6 +716,141 @@ test("flow diagrams cite envelope effects from any working directory", () => {
   } finally {
     process.chdir(previous);
   }
+});
+
+test("cost graphs do not sequence a step the envelope says did not run", () => {
+  const audit = loadAudit(ROOT);
+  const cellFor = (adapterId) =>
+    buildCell({
+      model: audit.model,
+      traces: audit.traces,
+      renders: audit.renders,
+      fallback: audit.overlay,
+      selection: {
+        stateId: "state.cost_missing",
+        viewId: "view.spend",
+        adapterId,
+        fieldId: "field.cost.usd",
+      },
+    });
+  const adapters = [
+    "adapter.acp",
+    "adapter.antigravity",
+    "adapter.claude",
+    "adapter.codex",
+    "adapter.copilot",
+    "adapter.grok",
+    "adapter.hermes",
+    "adapter.kimi",
+    "adapter.opencode",
+    "adapter.pi",
+  ];
+  for (const adapterId of adapters) {
+    const graph = flowGraph(cellFor(adapterId));
+    assert.equal(
+      graph.edges.some((edge) => edge.label === "then"),
+      false,
+      adapterId,
+    );
+    assert.equal(
+      graph.edges.some((edge) => {
+        const from = graph.nodes.find((node) => node.id === edge.from);
+        const to = graph.nodes.find((node) => node.id === edge.to);
+        return edge.sequences && (from?.role === "not-this-run" || to?.role === "not-this-run");
+      }),
+      false,
+      adapterId,
+    );
+    assert.equal(renderFlowSvg(cellFor(adapterId)).includes('data-label="then"'), false, adapterId);
+  }
+  const hermes = flowGraph(cellFor("adapter.hermes"));
+  assert.equal(hermes.nodes.find((node) => node.name === "priceUsage").role, "not-this-run");
+  const intoPrice = hermes.edges.find((edge) => edge.to === "priceUsage");
+  assert.equal(intoPrice.label, "not this run");
+  assert.equal(intoPrice.sequences, false);
+  assert.equal(
+    hermes.edges.some(
+      (edge) => edge.sequences && (edge.from === "priceUsage" || edge.to === "priceUsage"),
+    ),
+    false,
+  );
+  const kimi = flowGraph(cellFor("adapter.kimi"));
+  assert.equal(kimi.nodes.find((node) => node.name === "ledger-counts").role, "not-this-run");
+  assert.equal(kimi.edges.find((edge) => edge.to === "ledger-counts").sequences, false);
+  assert.equal(
+    flowGraph(cellFor("adapter.pi")).nodes.find((node) => node.name === "ledger-counts").role,
+    "not-this-run",
+  );
+  const grok = flowGraph(cellFor("adapter.grok"));
+  assert.equal(grok.nodes.find((node) => node.name === "ledger-counts").role, "path");
+  const skip = grok.nodes.find((node) => node.id === "ledger-counts#skip");
+  assert.equal(skip.role, "not-taken-arm");
+  assert.equal(grok.edges.find((edge) => edge.to === skip.id).sequences, false);
+  assert.equal(grok.nodes.find((node) => node.id === "ledger-counts#unpriced").role, "taken-arm");
+  const hosts = grok.edges.filter(
+    (edge) => edge.to === "godview-accumulate" || edge.to === "vibefield-current-epoch",
+  );
+  assert.equal(hosts.length, 2);
+  assert.equal(
+    hosts.every((edge) => edge.sequences === false && edge.label !== "then"),
+    true,
+  );
+  const claude = flowGraph(cellFor("adapter.claude"));
+  assert.equal(
+    claude.nodes.some((node) => node.role === "stated-arm"),
+    true,
+  );
+  assert.equal(
+    claude.edges.some((edge) => edge.sequences && String(edge.from).includes("#")),
+    false,
+  );
+  assert.doesNotMatch(claude.note, /omits envelope steps/);
+  const acp = flowGraph(cellFor("adapter.acp"));
+  assert.match(acp.note, /does not state costOf/);
+  assert.equal(
+    acp.edges.find((edge) => edge.to === "omission-consequence").label,
+    "no usage emitted",
+  );
+  const price = flowGraph(cellFor("adapter.codex")).nodes.find(
+    (node) => node.name === "price-before-reduce",
+  );
+  assert.equal(
+    price.links.some((link) => link.path.endsWith("monitor-service.ts") && link.lineStart === 418),
+    true,
+  );
+  assert.equal(
+    price.links.some((link) => link.path.endsWith("usage-pricing.ts") && link.lineStart === 24),
+    true,
+  );
+  const codexSvg = renderFlowSvg(cellFor("adapter.codex"));
+  assert.match(codexSvg, /monitor-service\.ts:418-425/);
+  assert.match(codexSvg, /usage-pricing\.ts:24/);
+  const review = readFileSync(join(ROOT, "audit/godview/REVIEW.md"), "utf8");
+  assert.match(review, /73 not-applicable cells/);
+  assert.doesNotMatch(review, /150 current not-applicable/);
+  assert.match(review, /godview-qa-live-a6c53d4\.tgz/);
+  assert.match(review, /67 Swarm cells stay historical environment gaps/);
+});
+
+test("live mounts stay bounded to slots near the viewport", () => {
+  const entries = [
+    { id: "a", near: true, active: false },
+    { id: "b", near: true, active: false },
+    { id: "c", near: true, active: false },
+    { id: "d", near: false, active: true },
+  ];
+  const first = chooseMounts(entries, MAX_LIVE_MOUNTS);
+  assert.equal(first.size, 2);
+  assert.equal(first.has("d"), false);
+  const next = chooseMounts(
+    [
+      { id: "a", near: true, active: true },
+      { id: "b", near: false, active: true },
+      { id: "c", near: true, active: false },
+    ],
+    MAX_LIVE_MOUNTS,
+  );
+  assert.deepEqual([...next], ["a", "c"]);
 });
 
 test("the QA server answers the page and the flow", async () => {

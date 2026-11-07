@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import { renderFlowSvg } from "../flows/render.mjs";
 import { buildCell } from "../validation/cell.mjs";
 import { loadAudit, safe } from "../validation/load.mjs";
-import { renderShell } from "./markup.mjs";
+import { renderScroll } from "./markup.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = join(here, "..", "..", "..");
@@ -27,13 +27,33 @@ export function createAuditServer(root = repoRoot) {
       renderIndex: audit.renderIndex,
       selection: selectionFrom(url),
     });
+  let pageHtml = null;
+  const page = () => {
+    pageHtml ??= renderScroll(audit);
+    return pageHtml;
+  };
   return createServer((req, res) => {
     try {
       const url = new URL(req.url ?? "/", "http://127.0.0.1");
-      if (url.pathname === "/" || url.pathname === "/index.html")
-        return send(res, 200, "text/html; charset=utf-8", readFileSync(join(here, "index.html")));
+      if (url.pathname === "/" || url.pathname === "/index.html") {
+        const shell = readFileSync(join(here, "index.html"), "utf8");
+        const html = shell
+          .replace(
+            '<main id="app" aria-busy="true">',
+            `<main id="app" aria-busy="false" class="scroll-page">`,
+          )
+          .replace("<p>Loading the model contract and foundation manifest.</p>", page());
+        return send(res, 200, "text/html; charset=utf-8", html);
+      }
       if (url.pathname === "/app.css")
         return send(res, 200, "text/css; charset=utf-8", readFileSync(join(here, "app.css")));
+      if (url.pathname === "/lazy-mount.mjs")
+        return send(
+          res,
+          200,
+          "text/javascript; charset=utf-8",
+          readFileSync(join(here, "lazy-mount.mjs")),
+        );
       if (url.pathname === "/app.mjs")
         return send(
           res,
@@ -51,8 +71,7 @@ export function createAuditServer(root = repoRoot) {
       }
       if (url.pathname === "/api/index.json")
         return send(res, 200, "application/json; charset=utf-8", JSON.stringify(audit.index));
-      if (url.pathname === "/api/page")
-        return send(res, 200, "text/html; charset=utf-8", renderShell(audit.index, cellFor(url)));
+      if (url.pathname === "/api/page") return send(res, 200, "text/html; charset=utf-8", page());
       if (url.pathname === "/api/flow.svg")
         return send(res, 200, "image/svg+xml; charset=utf-8", renderFlowSvg(cellFor(url)));
       if (url.pathname.startsWith("/traces/")) {

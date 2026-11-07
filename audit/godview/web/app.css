@@ -151,6 +151,53 @@ aside {
   padding: 14px;
 }
 
+.scroll-page,
+main {
+  max-width: 1120px;
+}
+
+nav[aria-label="Page sections"] {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 20px;
+  margin: 16px 20px 28px;
+}
+
+.entry {
+  margin: 0 0 36px;
+  padding-top: 8px;
+}
+
+.flow-diagram {
+  margin: 16px 0 20px;
+  overflow-x: auto;
+}
+
+.flow-diagram svg {
+  display: block;
+  width: 980px;
+  max-width: none;
+  height: auto;
+}
+
+.preview {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+  align-items: start;
+}
+
+.preview img,
+.live-slot {
+  width: 100%;
+}
+
+@media (min-width: 1100px) {
+  .preview {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
 iframe.component {
   width: 100%;
   height: 760px;

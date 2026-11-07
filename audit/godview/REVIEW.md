@@ -21,7 +21,7 @@ Candidate status: `static-not-live`. The owner semantic gate on the copied first
 - First-half `uiReachable`: yes 247, no 123, unknown 0. All 370 say they were not live-sampled.
 - Render: 249 rendered, 21 covered-by, 0 ordinary coverage gaps, 73 not-applicable, 67 environment gaps. Zero ordinary gaps is not a complete audit. Proved aliases are 21. The timeline span and ended cells are rendered fixtures, not aliases.
 - Covered-by does not add body coverage.
-- Prior 302 not-applicable claim: `validated` false. The 150 current not-applicable cells use an outside-view source note. Reader-absence boilerplate is rejected.
+- Prior 302 not-applicable claim: `validated` false. The 73 not-applicable cells use an outside-view source note. Reader-absence boilerplate is rejected.
 - Swarm body painted: no. Environment versus source cause is under investigation.
 
 ## Still open
@@ -36,5 +36,5 @@ Candidate status: `static-not-live`. The owner semantic gate on the copied first
 - `state.timeline_ended` is rendered by `fix.timeline.moment-ended`. `timeline-ended-evidence.json` records readout `last active 30m ago`, tone `ended`, branch `ended`, and `headAtOrAfterEnded` true. The old `fix.timeline.past-bounds` alias checked `entry.history === "bounds"` for a run that ended an hour ago, outside the visible window. That alias is not a proof. Both timeline holds are lifted only because these two evidence files match.
 - Swarm: `webgpu-doc-flags.json` records the Colab guide flags and the same flags with explicit SwiftShader (`VK_ICD_FILENAMES` on Chrome's bundled ICD). Both return `requestAdapter` null and `EGL_NOT_INITIALIZED`. This host has no hardware GPU and no system Vulkan ICD. No source defect is proven and the source is not exonerated. 67 Swarm cells stay unrendered.
 - Review of `b9ea9cf` reports the Claude and Codex order citations source-correct and all 10 account host scopes fixed. This page still does not give a blanket semantic signoff. The lead is checking ledger, epoch, reader, and graph usability.
-- The preview archive `godview-qa-preview.tgz` remains the `47e6e636` revision. It is not this render update.
+- Live archive `godview-qa-live-a6c53d4.tgz` is snapshot `a6c53d4` and is not overwritten. Recorded-only archives `godview-qa-preview.tgz` (`47e6e636`) and `godview-qa-preview-b9ea9cf.tgz` (`b9ea9cf`) are older. They are not a substitute for the live pinned-component snapshot. 67 Swarm cells stay historical environment gaps. This tree does not change the harness or the swarm runtime.
 - End-to-end proof stays false for synthetic fixtures and source-read traces. Non-cost sequences were not live-run.

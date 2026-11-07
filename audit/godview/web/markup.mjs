@@ -1,4 +1,5 @@
-import { flowAnchors } from "../flows/render.mjs";
+import { flowAnchors, renderFlowSvg } from "../flows/render.mjs";
+import { buildCell } from "../validation/cell.mjs";
 import { AUDIT_TARGET_LABEL } from "../validation/contract.mjs";
 
 export function escapeHtml(value) {
@@ -7,16 +8,6 @@ export function escapeHtml(value) {
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;");
-}
-
-function options(items, selected, labelOf) {
-  if (items.length === 0) return `<option value="">Nothing loaded</option>`;
-  return items
-    .map(
-      (item) =>
-        `<option value="${escapeHtml(item.id)}"${item.id === selected ? " selected" : ""}>${escapeHtml(labelOf(item))}</option>`,
-    )
-    .join("");
 }
 
 function timelineProof(index) {
@@ -44,49 +35,135 @@ function timelineProof(index) {
   return `Timeline holds stay. Span evidence ${spanOk ? "matches" : "does not match"}. Ended evidence ${endedOk ? "matches" : "does not match"}. Remaining holds: ${holds.join(", ") || "none"}.`;
 }
 
-function componentFrame(index, cell) {
-  const fixtureId = cell.paint?.fixtureId;
-  if (cell.paint?.disposition !== "rendered" || !fixtureId) return "";
-  if (index.rendering?.componentBundle !== true) {
-    return `<p>Pinned component bundle is absent. Build contract, from the repo root: <code>cd audit/godview/rendering &amp;&amp; npm install &amp;&amp; node ensure-pin.mjs &amp;&amp; node emit-fixtures.mjs &amp;&amp; node check.mjs &amp;&amp; npm run build</code>. The served page then loads <code>/harness/index.html?fixture=${escapeHtml(fixtureId)}</code> from that bundle. It does not use installed package 0.3.3.</p>`;
-  }
-  const src = `/harness/index.html?fixture=${encodeURIComponent(fixtureId)}`;
-  return `<iframe class="component" title="Pinned component ${escapeHtml(fixtureId)}" src="${src}"></iframe><p>Pinned component. Production bundle of Puppeteer source 748d015, mounted with <code>?fixture=${escapeHtml(fixtureId)}</code> from integration.json. Not shipped package 0.3.3. The figure below is the recorded fixture screenshot.</p>`;
+function inlineSvg(svg) {
+  return String(svg).replace(/^\s*<\?xml[^>]*>\s*/u, "");
 }
 
-function linkLine(link) {
-  const sha = link.sha ?? link.commit ?? "";
-  const path = link.path ?? link.file ?? "";
-  const line = link.line ?? link.lineStart;
-  const end = link.endLine ?? link.lineEnd;
-  const span = line ? (end && end !== line ? `:${line}-${end}` : `:${line}`) : "";
-  const href = link.url ?? "";
-  const text = `${link.repo ?? ""} ${sha.slice(0, 12)} ${path}${span}`;
-  return href
-    ? `<a href="${escapeHtml(href)}">${escapeHtml(text)}</a>`
-    : `<span>${escapeHtml(text)}</span>`;
+function coverageBlock(index) {
+  const fieldRecords = index.traceCount ?? 0;
+  const sdkLeaves = index.sdkLeafCount ?? 0;
+  return `<section id="coverage" aria-labelledby="gaps-heading">
+      <h2 id="gaps-heading">State coverage</h2>
+      <p>Delivery: incomplete. ${escapeHtml(String(fieldRecords))} canonical row records are loaded. ${escapeHtml(String(sdkLeaves))} SDK leaf records are separate. This is not an actual provider session.</p>
+      <p>Shared anchors resolved: ${escapeHtml(String(index.sharedMap?.counts?.rowJoinAnchorsResolved ?? "—"))}. The map's uiResolutionCounts resolvedUnknown ${escapeHtml(String(index.sharedMap?.uiResolutionCounts?.resolvedUnknown ?? "—"))} and remainingUnknown ${escapeHtml(String(index.sharedMap?.uiResolutionCounts?.remainingUnknown ?? "—"))} are shared-anchor bookkeeping, not adapter-specific UI resolution. The map admits sequences are not reproven.</p>
+      <p>First-half envelopes, counted from the files: uiReachable yes ${escapeHtml(String(index.partial?.blockers?.first?.ui?.yes ?? "—"))}, no ${escapeHtml(String(index.partial?.blockers?.first?.ui?.no ?? "—"))}, unknown ${escapeHtml(String(index.partial?.blockers?.first?.ui?.unknown ?? "—"))}. Candidate status: ${escapeHtml(String(index.partial?.candidateStatus ?? "static-not-live"))}. Independent signoff: ${escapeHtml(String(index.partial?.blockers?.costReview?.independentSignoff ?? "pending"))}.</p>
+      <p>Claude and Codex cost-order anchors checked: ${escapeHtml((index.partial?.blockers?.costReview?.first?.anchorsChecked ?? []).join(", ") || "none")}. Known-order defect still held: ${escapeHtml((index.partial?.blockers?.costReview?.first?.precisionPending ?? []).join(", ") || "none")}. Citation verification and independent semantic acceptance are pending. This is not accepted provenance. Second-half cost branches: ${escapeHtml(
+        Object.entries(index.partial?.blockers?.costReview?.second?.branches ?? {})
+          .map(([id, branch]) => `${id} ${branch}`)
+          .join("; ") || "none",
+      )}. Account uiReachable no scoped to the VibeField host: ${escapeHtml((index.partial?.blockers?.accountVibefieldOnly ?? []).join(", ") || "none")}. That no is not a global impossibility. The Puppeteer Godview host can still set account when profileId has a nonempty label. Independent signoff is pending.</p>
+      <p>Render denominator ${escapeHtml(String(index.rendering?.counts ? Object.values(index.rendering.counts).reduce((sum, value) => sum + value, 0) : "—"))}. Actual renders: ${escapeHtml(String(index.rendering?.bodyRendered ?? "—"))}. Matrix same-view aliases: ${escapeHtml(String(index.rendering?.coveredBy ?? "—"))}. Proved aliases: ${escapeHtml(String(index.rendering?.provedCoveredBy ?? "—"))}. Unverified aliases: ${escapeHtml((index.rendering?.unverifiedSpanAliases ?? []).join(", ") || "none")}. ${timelineProof(index)} Covered-by does not add body coverage. Coverage gaps: ${escapeHtml(String(index.rendering?.coverageGap ?? "—"))}. Zero ordinary coverage gaps is not a complete audit. Not-applicable: ${escapeHtml(String(index.rendering?.counts?.["not-applicable"] ?? "—"))}, proof ${escapeHtml(String(index.rendering?.notApplicableProof ?? "—"))}. The not-applicable cells and the same-view aliases are under lead review. Prior 302 not-applicable claim validated: no. Environment gaps: ${escapeHtml(String(index.rendering?.counts?.["environment-gap"] ?? "—"))}. Swarm body painted: no. Documented Colab guide flags and explicit SwiftShader both leave requestAdapter null, GPU EGL_NOT_INITIALIZED. This host has no hardware GPU and no system Vulkan ICD. webgpu-doc-flags.json is the record. No source defect is proven and the source is not exonerated. 67 Swarm cells stay unrendered. Overall screenshot coverage complete: no. The harness and swarm runtime in this package are not the separate swarm fix.</p>
+      ${(index.sharedMap?.openEnvelopeIssues ?? []).map((issue) => `<p>${escapeHtml(issue)}</p>`).join("")}
+    </section>`;
 }
 
-export function renderShell(index, cell) {
-  const states = index.states ?? [];
-  const grouped = new Map();
-  for (const state of states) {
-    const axis = state.axis || "unspecified";
-    if (!grouped.has(axis)) grouped.set(axis, []);
-    grouped.get(axis).push(state);
+function matrixArticle(cell, shot, bundle) {
+  const rendered = cell.disposition === "rendered" && shot?.meaningfulOutput === true;
+  const fixtureId = rendered
+    ? shot.fixturePath
+        ?.split("/")
+        .pop()
+        ?.replace(/\.json$/u, "") || cell.fixtureId
+    : cell.fixtureId;
+  const live =
+    rendered && fixtureId && bundle
+      ? `<div class="live-slot" data-fixture="${escapeHtml(fixtureId)}" data-mount="/harness/index.html?fixture=${encodeURIComponent(fixtureId)}"><p>Live synthetic fixture. It mounts when this entry is near the viewport. Not shipped package 0.3.3. Not an actual provider session.</p></div>`
+      : cell.disposition === "environment-gap"
+        ? `<p>Environment gap. No live mount and no painted swarm body.</p>`
+        : "";
+  const figure =
+    rendered && shot?.screenshotPath
+      ? `<figure><img loading="lazy" src="/shots/${escapeHtml(shot.screenshotPath.split("/").pop())}" alt="Recorded fixture screenshot" /><figcaption>Recorded fixture screenshot. Not the live component mount.</figcaption></figure>`
+      : "";
+  return `<article class="entry" data-matrix-cell="1" id="cell-${escapeHtml(cell.viewId)}-${escapeHtml(cell.stateId)}">
+      <h3>${escapeHtml(cell.viewId)} · ${escapeHtml(cell.stateId)}</h3>
+      <p>${escapeHtml(cell.disposition)}. Meaningful paint: ${rendered ? "yes" : "no"}. Selected fixture rendered: ${rendered ? "yes" : "no"}. Overall screenshot coverage complete: no.</p>
+      <p>${escapeHtml(cell.evidence ?? "")}</p>
+      <div class="preview">${figure}${live}</div>
+    </article>`;
+}
+
+function recordArticle(trace, cell) {
+  const leaf = trace.recordKind === "sdk-leaf";
+  const svg = inlineSvg(renderFlowSvg(cell));
+  const anchors = flowAnchors(cell)
+    .map(
+      (link) =>
+        `<li><a href="${escapeHtml(link.url)}">${escapeHtml(link.label)}</a> ${escapeHtml(link.path)}${link.line ? `:${escapeHtml(link.line)}` : ""}</li>`,
+    )
+    .join("");
+  const mmd = cell.mmdPath
+    ? `<p><a href="/traces/${escapeHtml(cell.mmdPath.split("/").slice(-2).join("/"))}">Sibling .mmd, alternate reference</a>. It is not this diagram.</p>`
+    : "<p>No sibling .mmd for this adapter and field.</p>";
+  return `<article class="entry" data-record="${leaf ? "sdk-leaf" : "row"}" id="record-${escapeHtml(trace.adapterId)}-${escapeHtml(trace.fieldId)}">
+      <h3>${escapeHtml(trace.adapterId)} · ${escapeHtml(trace.fieldId)}</h3>
+      <p>${leaf ? "SDK leaf. Not one of the 74 row fields." : "Row record. Not an SDK leaf."} uiReachable ${escapeHtml(cell.reading?.channels?.uiReachable ?? "unknown")}. rendererRead ${escapeHtml(cell.reading?.channels?.rendererRead ?? "unlabeled")}. Full path success: ${cell.reading?.success ? "yes" : "no"}. End-to-end proven: ${cell.endToEnd?.proven === true ? "yes" : "no"}. Independent semantic review: pending. Not an actual provider session.</p>
+      <div class="flow-diagram">${svg}</div>
+      ${mmd}
+      <ul>${anchors}</ul>
+    </article>`;
+}
+
+/** One scrollable audit. Nothing here is behind a selector, tab, or collapse. */
+export function renderScroll(audit) {
+  const index = audit.index;
+  const shots = new Map(
+    (audit.renderIndex?.fixtures ?? []).map((fixture) => [
+      `${fixture.viewId}:${fixture.stateId}`,
+      fixture,
+    ]),
+  );
+  const bundle = index.rendering?.componentBundle === true;
+  const byView = new Map();
+  for (const cell of audit.renderIndex?.cells ?? []) {
+    if (!byView.has(cell.viewId)) byView.set(cell.viewId, []);
+    byView.get(cell.viewId).push(cell);
   }
-  const stateOptions = [...grouped.entries()]
-    .map(
-      ([axis, rows]) =>
-        `<optgroup label="${escapeHtml(axis)}">${options(rows, cell.selection.stateId, (state) => state.id)}</optgroup>`,
-    )
+  const stateSections = [...byView.entries()]
+    .map(([viewId, cells]) => {
+      const articles = cells
+        .map((cell) => matrixArticle(cell, shots.get(`${cell.viewId}:${cell.stateId}`), bundle))
+        .join("");
+      return `<section><h2 id="view-${escapeHtml(viewId)}">${escapeHtml(viewId)}</h2>${articles}</section>`;
+    })
     .join("");
-  const catalog = states
-    .map(
-      (state) =>
-        `<li><button type="button" data-state="${escapeHtml(state.id)}" aria-pressed="${state.id === cell.selection.stateId ? "true" : "false"}">${escapeHtml(state.id)} <span class="quiet">${escapeHtml(state.axis)}</span></button></li>`,
-    )
-    .join("");
+  const base = {
+    model: audit.model,
+    traces: audit.traces,
+    renders: audit.renders,
+    fallback: audit.overlay,
+    renderIndex: audit.renderIndex,
+  };
+  const groups = new Map();
+  for (const trace of audit.traces ?? []) {
+    const kind = trace.recordKind === "sdk-leaf" ? "leaf" : "row";
+    if (!groups.has(trace.adapterId)) groups.set(trace.adapterId, { row: [], leaf: [] });
+    groups.get(trace.adapterId)[kind].push(trace);
+  }
+  const sectionFor = (kind) =>
+    [...groups.entries()]
+      .map(([adapterId, bucket]) => {
+        const articles = bucket[kind]
+          .map((trace) =>
+            recordArticle(
+              trace,
+              buildCell({
+                ...base,
+                selection: {
+                  stateId: "state.idle",
+                  viewId: "view.list",
+                  adapterId: trace.adapterId,
+                  fieldId: trace.fieldId,
+                },
+              }),
+            ),
+          )
+          .join("");
+        return articles
+          ? `<section><h2 id="${kind}-${escapeHtml(adapterId)}">${escapeHtml(adapterId)}</h2>${articles}</section>`
+          : "";
+      })
+      .join("");
   const checks = (index.checks ?? [])
     .map(
       (item) =>
@@ -96,23 +173,6 @@ export function renderShell(index, cell) {
   const gate = (index.foundationGate?.failures ?? [])
     .map((failure) => `<li>${escapeHtml(failure.gate)}: ${escapeHtml(failure.message)}</li>`)
     .join("");
-  const field = cell.field;
-  const evidence = (field?.evidence ?? []).map((link) => `<li>${linkLine(link)}</li>`).join("");
-  const shape = field?.shape
-    ? JSON.stringify(
-        {
-          found: field.shape.found,
-          ref: field.shape.ref,
-          type: field.shape.type,
-          enum: field.shape.enumValues,
-          xTsType: field.shape.xTsType,
-          description: field.shape.description,
-        },
-        null,
-        2,
-      )
-    : "pending";
-  const raw = cell.runtime?.raw ? JSON.stringify(cell.runtime.raw, null, 2) : "pending";
   return `<section class="banner" role="note" aria-label="Audit target">
       <p class="eyebrow">GV-AUDIT6</p>
       <h1>${escapeHtml(AUDIT_TARGET_LABEL)}</h1>
@@ -121,102 +181,44 @@ export function renderShell(index, cell) {
     </section>
     <p class="posture" role="status">${escapeHtml(index.coverageClaim.reason)} ${escapeHtml(index.partial?.note ?? "")}</p>
     <p class="gate" role="status">${escapeHtml(index.foundationGate?.note ?? "")}</p>
-    <nav aria-label="Audit selectors">
-      <div class="control"><label for="state">State</label><select id="state">${stateOptions}</select></div>
-      <div class="control"><label for="view">View</label><select id="view">${options(index.views, cell.selection.viewId, (view) => `${view.id} ${view.name}`)}</select></div>
-      <div class="control"><label for="adapter">Adapter</label><select id="adapter">${options(index.adapters, cell.selection.adapterId, (adapter) => adapter.id)}</select></div>
-      <div class="control"><label for="field">Field</label><select id="field">${options(index.fields, cell.selection.fieldId, (item) => `${item.id} ${item.path}`)}</select></div>
+    <nav aria-label="Page sections">
+      <a href="#states">State and view entries</a>
+      <a href="#records">Adapter field records</a>
+      <a href="#leaves">SDK leaves</a>
+      <a href="#coverage">Coverage</a>
     </nav>
-    <div class="layout">
-      <section aria-labelledby="catalog-heading">
-        <h2 id="catalog-heading">States</h2>
-        <ul class="catalog">${catalog || "<li>Model states are pending.</li>"}</ul>
-      </section>
-      <section id="stage" aria-labelledby="stage-heading">
-        <h2 id="stage-heading">View</h2>
-        <p>The five monitor views live in Puppeteer. VibeField consumes <code>AgentView</code>. This page does not draw a replacement monitor. A rendered cell mounts the production bundle of the pinned 748d015 checkout at <code>?fixture=</code>. The screenshot under it is the recorded fixture, separate from that mount. WebGPU swarm stays unrendered on this host.</p>
-        ${componentFrame(index, cell)}
-        <p class="stage-pending" role="status">${cell.view ? escapeHtml(`${cell.view.id} · ${cell.view.name}`) : "No view loaded."} ${escapeHtml(cell.paint?.disposition ?? "unknown")}. Meaningful paint: ${cell.paint?.meaningfulOutput ? "yes" : "no"}. Selected fixture rendered: ${cell.paint?.selectedFixtureRendered ? "yes" : "no"}. Overall screenshot coverage complete: no.</p>
-        <p>${escapeHtml(cell.paint?.note ?? "")}</p>
-        ${
-          cell.paint?.screenshotPath
-            ? `<figure><img src="/shots/${escapeHtml(cell.paint.screenshotPath.split("/").pop())}" alt="${escapeHtml(cell.paint.fallbackOnly ? "Swarm fallback: WebGPU unavailable. Not a painted body." : "Recorded fixture screenshot")}" /><figcaption>Recorded fixture screenshot. Not the live component mount.</figcaption></figure>`
-            : ""
-        }
-        <p>${escapeHtml(cell.view?.consumerCompleteness ?? cell.consumer?.note ?? "")}</p>
-      </section>
-      <aside aria-labelledby="detail-heading">
-        <h2 id="detail-heading">Field</h2>
-        <dl>
-          <dt>Declaration</dt><dd>${escapeHtml(cell.declaration?.support ?? cell.declaration?.status)} — ${escapeHtml(cell.declaration?.note ?? "")}</dd>
-          <dt>Overlay</dt><dd>${escapeHtml(cell.overlay?.applies ? cell.overlay.summary : cell.overlay?.note)}</dd>
-          <dt>Schema default</dt><dd>${escapeHtml(cell.schemaDefault ?? "none recorded")}</dd>
-          <dt>State on this record</dt><dd>${escapeHtml(cell.stateReading?.status)} — ${escapeHtml(cell.stateReading?.note ?? "")}</dd>
-          <dt>uiReachable</dt><dd>${escapeHtml(cell.reading?.channels?.uiReachable ?? "unknown")}. This is the adapter-specific value path. Full path success: ${cell.reading?.success ? "yes" : "no"}.</dd>
-          <dt>rendererRead</dt><dd>${escapeHtml(cell.reading?.channels?.rendererRead ?? "unlabeled")}. A reader is not the value path.</dd>
-          <dt>Adapter path provides value</dt><dd>${escapeHtml(cell.reading?.channels?.adapterPathProvidesValue ?? "unlabeled")}</dd>
-          <dt>Missing-state visible</dt><dd>${escapeHtml(cell.reading?.channels?.missingStateVisible ?? "unlabeled")}. This is not the selected state's painted value.</dd>
-          <dt>Adapter emission</dt><dd>${escapeHtml(cell.reading?.channels?.adapterEmission ?? cell.reading?.producerLimit)}</dd>
-          <dt>Alternate producer</dt><dd>${escapeHtml(cell.reading?.channels?.alternateProducer ?? "none-cited")}</dd>
-          <dt>Evidence kind</dt><dd>${escapeHtml(cell.reading?.channels?.evidenceKind ?? "unknown")}. Live tested: ${cell.reading?.channels?.liveTested ? "yes" : "no"}. Independent semantic review: pending.</dd>
-          <dt>Review</dt><dd>${escapeHtml(cell.reading?.readerNote ?? "")}</dd>
-          <dt>Runtime fallback</dt><dd>${escapeHtml(cell.reading?.channels?.runtimeFallback ?? "not-established")}</dd>
-          <dt>Selected-state UI value</dt><dd>${escapeHtml(cell.reading?.channels?.selectedStateUi ?? "separate")}</dd>
-          <dt>Record mismatch</dt><dd>${escapeHtml(cell.reading?.mismatch ?? "None on this field record.")}</dd>
-          <dt>Runtime trace</dt><dd>${escapeHtml(cell.runtime?.status)} ${escapeHtml(cell.runtime?.path ?? "")} ${escapeHtml(cell.endToEnd?.reason ?? "")}</dd>
-          <dt>Synthetic fixture</dt><dd>${escapeHtml(cell.synthetic?.status)} ${escapeHtml(cell.synthetic?.fixtureKind ?? "")} ${escapeHtml(cell.synthetic?.syntheticLabel ?? "")}</dd>
-          <dt>Consumer</dt><dd>${escapeHtml(cell.consumer?.status)} — ${escapeHtml(cell.consumer?.note ?? "")}</dd>
-        </dl>
-        <h3>Adapter trace sources</h3>
-        <ul>${
-          flowAnchors(cell)
-            .map(
-              (link) =>
-                `<li><a href="${escapeHtml(link.url)}">${escapeHtml(link.label)}</a> ${escapeHtml(link.path)}${link.line ? `:${escapeHtml(link.line)}` : ""}</li>`,
-            )
-            .join("") || "<li>No adapter trace is loaded for this field.</li>"
-        }</ul>
-        ${cell.mmdPath ? `<p><a href="/traces/${escapeHtml(cell.mmdPath.split("/").slice(-2).join("/"))}">Adapter graph file</a></p>` : "<p>No sibling .mmd for this adapter and field.</p>"}
-        <h3>Model contract citations</h3>
-        <ul>${evidence || "<li>No model evidence links on this field.</li>"}</ul>
-        <h3>Shape</h3>
-        <pre>${escapeHtml(shape)}</pre>
-        <h3>Raw trace</h3>
-        <pre>${escapeHtml(raw)}</pre>
-      </aside>
-    </div>
-    <section aria-labelledby="gaps-heading">
-      <h2 id="gaps-heading">State coverage</h2>
-      <p>Delivery: incomplete. ${escapeHtml(String(cell.coverage?.fieldRecords ?? 0))} canonical row records are loaded. ${escapeHtml(String(cell.coverage?.sdkLeafRecords ?? 0))} SDK leaf records are separate.</p>
-      <p>Shared anchors resolved: ${escapeHtml(String(index.sharedMap?.counts?.rowJoinAnchorsResolved ?? "—"))}. The map's uiResolutionCounts resolvedUnknown ${escapeHtml(String(index.sharedMap?.uiResolutionCounts?.resolvedUnknown ?? "—"))} and remainingUnknown ${escapeHtml(String(index.sharedMap?.uiResolutionCounts?.remainingUnknown ?? "—"))} are shared-anchor bookkeeping, not adapter-specific UI resolution. The map admits sequences are not reproven.</p>
-      <p>First-half envelopes, counted from the files: uiReachable yes ${escapeHtml(String(index.partial?.blockers?.first?.ui?.yes ?? "—"))}, no ${escapeHtml(String(index.partial?.blockers?.first?.ui?.no ?? "—"))}, unknown ${escapeHtml(String(index.partial?.blockers?.first?.ui?.unknown ?? "—"))}. Candidate status: ${escapeHtml(String(index.partial?.candidateStatus ?? "static-not-live"))}. Independent signoff: ${escapeHtml(String(index.partial?.blockers?.costReview?.independentSignoff ?? "pending"))}.</p>
-      <p>Claude and Codex cost-order anchors checked: ${escapeHtml((index.partial?.blockers?.costReview?.first?.anchorsChecked ?? []).join(", ") || "none")}. Known-order defect still held: ${escapeHtml((index.partial?.blockers?.costReview?.first?.precisionPending ?? []).join(", ") || "none")}. Citation verification and independent semantic acceptance are pending. This is not accepted provenance. Second-half cost branches: ${escapeHtml(
-        Object.entries(index.partial?.blockers?.costReview?.second?.branches ?? {})
-          .map(([id, branch]) => `${id} ${branch}`)
-          .join("; ") || "none",
-      )}. Account uiReachable no scoped to the VibeField host: ${escapeHtml((index.partial?.blockers?.accountVibefieldOnly ?? []).join(", ") || "none")}. That no is not a global impossibility. The Puppeteer Godview host can still set account when profileId has a nonempty label. Independent signoff is pending.</p>
-      <p>Render denominator ${escapeHtml(String(index.rendering?.counts ? Object.values(index.rendering.counts).reduce((sum, value) => sum + value, 0) : "—"))}. Actual renders: ${escapeHtml(String(index.rendering?.bodyRendered ?? "—"))}. Matrix same-view aliases: ${escapeHtml(String(index.rendering?.coveredBy ?? "—"))}. Proved aliases: ${escapeHtml(String(index.rendering?.provedCoveredBy ?? "—"))}. Unverified aliases: ${escapeHtml((index.rendering?.unverifiedSpanAliases ?? []).join(", ") || "none")}. ${timelineProof(index)} Covered-by does not add body coverage. Coverage gaps: ${escapeHtml(String(index.rendering?.coverageGap ?? "—"))}. Zero ordinary coverage gaps is not a complete audit. Not-applicable: ${escapeHtml(String(index.rendering?.counts?.["not-applicable"] ?? "—"))}, proof ${escapeHtml(String(index.rendering?.notApplicableProof ?? "—"))}. The not-applicable cells and the same-view aliases are under lead review. Prior 302 not-applicable claim validated: no. Environment gaps: ${escapeHtml(String(index.rendering?.counts?.["environment-gap"] ?? "—"))}. Swarm body painted: no. Documented Colab guide flags and explicit SwiftShader both leave requestAdapter null, GPU EGL_NOT_INITIALIZED. This host has no hardware GPU and no system Vulkan ICD. webgpu-doc-flags.json is the record. No source defect is proven and the source is not exonerated. 67 Swarm cells stay unrendered.</p>
-      ${(index.sharedMap?.openEnvelopeIssues ?? []).map((issue) => `<p>${escapeHtml(issue)}</p>`).join("")}
-      ${cell.graphOrder ? `<p>${escapeHtml(cell.graphOrder.note)}</p>` : ""}
-      <ul>
-        ${(cell.coverage?.adapters ?? [])
-          .filter((adapter) => adapter.records > 0)
-          .map(
-            (adapter) =>
-              `<li><strong>${escapeHtml(adapter.adapterId)}</strong> ${adapter.records} row records. Explicit non-emission notes: ${adapter.nonEmittingRecords ?? 0}. Applicability lists are not emission.</li>`,
-          )
-          .join("")}
-      </ul>
+    ${coverageBlock(index)}
+    <section id="states" aria-labelledby="states-heading">
+      <h2 id="states-heading">State and view entries</h2>
+      <p>All ${escapeHtml(String((audit.renderIndex?.cells ?? []).length))} state and view entries are on this page. A rendered entry's live mount is a synthetic fixture. The image is the recorded fixture. Neither is an actual provider session. Environment gaps are not mounts.</p>
+      ${stateSections}
     </section>
-    <section aria-labelledby="flow-heading">
-      <h2 id="flow-heading">Provenance</h2>
-      <p>End-to-end proven: ${cell.endToEnd?.proven === true ? "yes" : "no"}. ${escapeHtml(cell.endToEnd?.reason ?? "")}</p>
-      <div id="flow"></div>
+    <section id="records" aria-labelledby="records-heading">
+      <h2 id="records-heading">Adapter field records</h2>
+      <p>The ${escapeHtml(String(index.traceCount ?? 0))} row records are listed here. Each diagram is the envelope for that adapter and field. Dashed boxes are not a runtime chain.</p>
+      ${sectionFor("row")}
     </section>
-    <section aria-labelledby="checks-heading">
+    <section id="leaves" aria-labelledby="leaves-heading">
+      <h2 id="leaves-heading">SDK leaves</h2>
+      <p>These ${escapeHtml(String(index.sdkLeafCount ?? 0))} SDK leaves are not the 74 row fields.</p>
+      ${sectionFor("leaf")}
+    </section>
+    <section id="checks" aria-labelledby="checks-heading">
       <h2 id="checks-heading">Checks</h2>
       <ul>${checks}</ul>
       <h3>Foundation gate</h3>
       <ul>${gate || "<li>No foundation failures.</li>"}</ul>
     </section>`;
+}
+
+export function renderShell(index, cell) {
+  void cell;
+  return renderScroll({
+    index,
+    traces: [],
+    model: {},
+    renders: [],
+    overlay: {},
+    renderIndex: { cells: [], fixtures: [] },
+  });
 }
