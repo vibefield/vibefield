@@ -6509,6 +6509,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       *Amended 2026-11-05 (CP-4a2b; D19): a handed session's turn is paused only while it is the run's
       own, its latest input the run's `in:` line; a turn of yours there is never paused by a run's
       Stop, and the run's words still waiting are withdrawn either way.*
+      *Proposed 2026-11-07 (CP-4a2b slice 13, W2; ruled 2026-11-07): at any end of a run, not only a Stop,
+      its words still waiting are withdrawn, what it asked of you ends, and each agent it started is
+      ended. A session it was handed is never ended, and only a Stop pauses its turn.*
       Its own words, **Stopped by you · 14:02** and Run again, are the run card's (CP-4b).
 - **A launch in an empty pane is one element from the click to the first frame** (QL-2, 2026-09-29 —
   James picked look C · Cells from the Minimal Pane Frame's pass 4). The click (or ⌥n, or ↵ on a
@@ -10218,12 +10221,13 @@ below), and the spark's next session hears it; a line VibeField cannot confirm i
 - *Proposed 2026-11-06 (CP-4a2b slice 11; CP4-Q22 (a), L5b; ruled 2026-11-06; open until James reads it, as the rest are):*
   a run a spark started tells that spark when it holds on you, and when it ends: "VibeField: Vela's run of ‹flow›
   (‹run›) is asking you" (a gate, or a step whose answer missed twice); "VibeField: Vela's run of ‹flow› (‹run›) is
-  done"; "VibeField: Vela's run of ‹flow› (‹run›) failed"; "VibeField: Vela's run of ‹flow› (‹run›) was set aside". Each
-  is said at most once: a hold made again after a wake or a restart is the same hold, your answer to it tells nothing
-  (the run goes on), and a fact waiting for a sleeping spark is lost if VibeField restarts first. They are facts only,
-  never the gate's question, a step's answer, a log line or what the script threw. No act lists a spark's flows until
-  CP-4b serves the flow verbs, so the fact names only the run. A run you start in Vela's thread is yours, and tells Vela
-  nothing;
+  done"; "VibeField: Vela's run of ‹flow› (‹run›) failed"; "VibeField: Vela's run of ‹flow› (‹run›) was set aside";
+  *Proposed 2026-11-07 (CP-4a2b slice 13, W1; ruled 2026-11-07):* "VibeField: Vela's run of ‹flow› (‹run›) was stopped".
+  Each is said at most once: a hold made again after a wake or a restart is the same hold, your answer to it tells
+  nothing (the run goes on), and a fact waiting for a sleeping spark is lost if VibeField restarts first. They are facts
+  only, never the gate's question, a step's answer, a log line or what the script threw. No act lists a spark's flows
+  until CP-4b serves the flow verbs, so the fact names only the run. A run you start in Vela's thread is yours, and
+  tells Vela nothing;
 - a spark's words its session gave no echo for (as built since CP-2): "VibeField: your words to Claude Code are
   uncertain: no echo came; read the session to see";
 - a spark's words a restart broke into while they were being sent (item 158): "VibeField: VibeField restarted while
