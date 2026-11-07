@@ -472,9 +472,13 @@ describe.skipIf(PACKAGE === undefined || PACKAGE === "")(
         // one pid from the prompt to the agent: the pane's shell is its parent
         if (created.session.pid !== null) expect(call.ppid).toBe(created.session.pid);
         // EL7: nothing of the kit's or of VibeField's private classes reached the agent, and no
-        // credential of the runner's (the pair is spawned on the person's environment alone)
+        // credential of the runner's. The pair is spawned on the person's environment, so a
+        // credential-shaped name counts only when THIS process holds it: a runtime's own per-run
+        // token is not the runner's credential (the first signed run read two, nightly 42411304919)
         expect(typed.leakedVariables(call)).toEqual([]);
-        expect(call.envKeys.filter((name) => CREDENTIAL.test(name))).toEqual([]);
+        expect(
+          call.envKeys.filter((name) => CREDENTIAL.test(name) && Object.hasOwn(process.env, name)),
+        ).toEqual([]);
         expect(existsSync(homeCopyRan)).toBe(false);
         console.log(
           `PACKAGED_TYPED_RUN ${JSON.stringify({ run: row.runtimeRunId, pid: call.pid, flags: call.argv.filter((argument) => argument.startsWith("-")) })}`,
