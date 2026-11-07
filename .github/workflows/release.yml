@@ -216,6 +216,10 @@ jobs:
           rustc --version --verbose
       - name: Install (frozen)
         run: pnpm install --frozen-lockfile
+      # Electron 43 has no postinstall, so the install leaves no binary; the stager copies Electron's licences out of its
+      # dist/ (LP-5's notices), and nothing else here fetches it. verify's step, verbatim (item 240, run 42398362320).
+      - name: Electron's binary (its own install.js; path.txt and an executable binary)
+        run: node scripts/electron-binary.mjs
       - uses: ./.github/actions/prepare-mille
       - name: Build rosettad and the Ghosttea renderer from their pinned siblings
         run: pnpm siblings:build
