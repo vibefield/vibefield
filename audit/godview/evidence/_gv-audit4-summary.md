@@ -40,6 +40,14 @@ Unreachable on the full VibeField path for all five, not only because the adapte
 
 `projectBranch` (`packages/monitor/src/backend/derive.ts:101-107`) returns null only when `environment.git` is defined and neither `git.branch` nor `host.fallbackBranch` is set. These adapters write cwd and never git. `recordWorkspaceEvidence` publishes cwd and worktrees with no git (`packages/runtime/src/runtime.ts:1325-1340`). Provenance git stays off the public environment (`packages/core/src/monitor/reduce.ts:625-631`). `hostRunFromSummary` copies `summary.workspace.branch` when present and does not set `fallbackBranch` (`packages/fieldd/src/agent-monitor.ts:248-256`; `packages/monitor/src/backend/ports.ts:53-58` says VibeField supplies none). A missing observation stays absent (`state.branch_unknown`) or becomes that host string (`state.branch_named`).
 
+## Account and profileSet
+
+Source: `audit/godview/contracts/account-trace.md` at `08b5d849177685662b43e0e3a4e6bd7d32ac2cdf` on `audit/godview-model`, checked against the pins.
+
+`field.account` is not an adapter field. `deriveAgentRow` copies `host.account` only (`packages/monitor/src/backend/derive.ts:273`). The VibeField host `hostRunFromSummary` (`packages/fieldd/src/agent-monitor.ts:223-266`) copies `profileId` and `profileSet` and never `account`, so under this product the field is unreachable for grok, hermes, kimi, opencode, and pi. The Puppeteer Godview host is a different host: `monitorHostRun` (`apps/godview/src/main/monitor-host.ts:62,79`) fills `account` from the profile label for these five, because each has a profiles service. ACP is the exception and is outside this slice. `accountUsage` (grok at `providers.ts:671`, kimi at `providers.ts:751`; hermes, opencode, and pi have none) feeds the usage column (`packages/views/src/usage/account-usage.ts:63-82`), not `field.account`.
+
+`field.profileSet` is always present on an agent row. `resolveProfileSet` (`derive.ts:62-66`), applied at `backend.ts:433`, takes the host value, then the set that lists `profileId`, then `native`. A run with no profile is native. `window-rows.ts:119-134` removes `profileSet` from rows whose device is not this one.
+
 ## Cost and burn
 
 Shared path, not re-derived here: `audit/godview/contracts/cost-burn-trace.md` at `25c215a2a53f363e1076210b3f6fce2155dfdc0b` on `audit/godview-model`.

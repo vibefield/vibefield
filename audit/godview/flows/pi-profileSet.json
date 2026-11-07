@@ -1,0 +1,111 @@
+{
+  "flowId": "flow.pi.profileSet",
+  "pins": {
+    "vibefield": "433505fd0f224f4cda540d642661b13848c0ef82",
+    "puppeteer": "748d015a7e393112e0a91dad80111fdf5abe6583"
+  },
+  "subject": {
+    "adapterId": "adapter.pi",
+    "fieldId": "field.profileSet"
+  },
+  "nodes": [
+    {
+      "id": "adapter",
+      "layer": "adapter",
+      "label": "The adapter does not choose the row profile set",
+      "provenanceRecordId": "prov.pi.profileSet"
+    },
+    {
+      "id": "ingestion",
+      "layer": "ingestion",
+      "label": "Host summary supplies profileId and profileSet",
+      "source": {
+        "repo": "vibefield",
+        "sha": "433505fd0f224f4cda540d642661b13848c0ef82",
+        "path": "packages/fieldd/src/agent-monitor.ts",
+        "lineStart": 223,
+        "lineEnd": 266,
+        "symbol": "hostRunFromSummary"
+      }
+    },
+    {
+      "id": "resolve",
+      "layer": "core-reducer",
+      "label": "resolveProfileSet: host, then persona set, else native",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/monitor/src/backend/derive.ts",
+        "lineStart": 62,
+        "lineEnd": 66,
+        "symbol": "resolveProfileSet"
+      }
+    },
+    {
+      "id": "apply",
+      "layer": "core-reducer",
+      "label": "Backend applies that set on every agent row",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/monitor/src/backend/backend.ts",
+        "lineStart": 433,
+        "lineEnd": 433,
+        "symbol": "resolveProfileSet"
+      }
+    },
+    {
+      "id": "window",
+      "layer": "replica",
+      "label": "window-rows drops profileSet on rows from other devices",
+      "source": {
+        "repo": "vibefield",
+        "sha": "433505fd0f224f4cda540d642661b13848c0ef82",
+        "path": "packages/field-app/src/godview/monitor/window-rows.ts",
+        "lineStart": 119,
+        "lineEnd": 134,
+        "symbol": "profileSet"
+      }
+    },
+    {
+      "id": "swarm",
+      "layer": "renderer",
+      "label": "Swarm reads profileSet on the row it receives",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/views/src/views/swarm/bloom/model.ts",
+        "lineStart": 372,
+        "lineEnd": 381,
+        "symbol": "profileSet"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": "adapter",
+      "to": "ingestion",
+      "kind": "ingest"
+    },
+    {
+      "from": "ingestion",
+      "to": "resolve",
+      "kind": "transform"
+    },
+    {
+      "from": "resolve",
+      "to": "apply",
+      "kind": "transform"
+    },
+    {
+      "from": "apply",
+      "to": "window",
+      "kind": "transform"
+    },
+    {
+      "from": "window",
+      "to": "swarm",
+      "kind": "render"
+    }
+  ]
+}
