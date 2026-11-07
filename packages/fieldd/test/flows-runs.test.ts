@@ -5,6 +5,7 @@ import { join } from "node:path";
 import {
   type AgentInputSender,
   ErrorData,
+  FLOW_HOST_ENDINGS,
   FLOW_LABEL_MAX,
   FLOW_LIMITS,
   FLOW_RUNS_LISTED_MAX,
@@ -47,6 +48,7 @@ import {
   type FlowItemRaise,
   type FlowItemRaised,
   type FlowItemStarted,
+  type NeedsAnswered,
   NeedsQueue,
 } from "../src/tool-plane/rooms/you/queue";
 import { NeedsStore } from "../src/tool-plane/rooms/you/store";
@@ -194,6 +196,16 @@ async function harness(
     /** slice 11a (Q8's repair rider): what the needs port's flowItem throws at every raise, once `items` counts it, as
      * a needs queue whose store refuses the item throws its refusal; nothing is minted */
     readonly flowItemThrows?: Error;
+    /** slice 13 (R41 (i), R40e): every agent's end held until this settles, each asked counted first (`ends`) */
+    readonly endHeld?: Promise<unknown>;
+    /** slice 13 (R40f): the session whose end the floor refuses: its `agents.end` rejects, and it lives on */
+    readonly endRejects?: string;
+    /** slice 13 (R42d, on modelsHeld's precedent): every spawn held, once asked and counted, until this settles */
+    readonly spawnHeld?: Promise<unknown>;
+    /** slice 13 (R42b, AA3): the sessions `sessions.ofRun` leaves out, as a fold read that lags */
+    readonly ofRunOmits?: readonly string[];
+    /** slice 13 (R40, D19): the sessions whose working turn a run's own line began (`began` answers true) */
+    readonly beganIn?: readonly string[];
   } = {},
 ) {
   const root = mkdtempSync(join(tmpdir(), "vf-flow-runs-"));
@@ -228,6 +240,18 @@ async function harness(
   const hosts: Host[] = [];
   /** the spawned sessions a row ended: the runtime holds them no longer live */
   const exited = new Set<string>();
+  /** slice 13 — the sessions each spawn that returned started, by their origin (K24: a refused spawn started none) */
+  const started: { readonly runtimeRunId: string; readonly run: string; readonly call: number }[] =
+    [];
+  /** slice 13 — what the runs' new ports were asked, in order: each agent's end and each pause, by session; each run
+   * whose lines were withdrawn, and whose items were ended */
+  const ends: string[] = [];
+  const paused: string[] = [];
+  const withdrawn: string[] = [];
+  const itemsEnded: string[] = [];
+  /** slice 13 (R40, D4) — the ports' asks in one ordered log, `withdraw:‹run›`, `items:‹run›`, `pause:‹session›`,
+   * `end:‹session›`; a row adds what it reads beside them (its record's states, the `end` line) */
+  const order: string[] = [];
   /** what fieldd's log was told at warn, in order */
   const warned: { event: string; fields: LogFields | undefined }[] = [];
   /** what fieldd's log was told at error, in order, its third argument as given */
@@ -265,8 +289,14 @@ async function harness(
         raisedAs.push(answered);
         return answered;
       },
+      onFlowRunEnded: (run) => {
+        itemsEnded.push(run);
+        order.push(`items:${run}`);
+        needs?.onFlowRunEnded(run);
+      },
     },
     waker: { flowFact: (spark, fact) => void facts.push({ spark, fact }) },
+    began: (runtimeRunId) => opts.beganIn?.includes(runtimeRunId) === true,
     stepEnds: opts.stepEvents ?? {
       onTurnEnd: (listener) => {
         turnListeners.add(listener);
@@ -286,8 +316,24 @@ async function harness(
     agents: {
       spawn: async (launch, origin) => {
         spawned.push({ launch, origin, open: openOf(origin.run) });
+        const runtimeRunId = `rt-step${spawned.length}`;
         if (opts.spawnRefuses !== undefined) throw new Error(opts.spawnRefuses);
-        return { runtimeRunId: `rt-step${spawned.length}` };
+        if (opts.spawnHeld !== undefined) await opts.spawnHeld;
+        started.push({ runtimeRunId, run: origin.run, call: origin.call });
+        return { runtimeRunId };
+      },
+      end: async (runtimeRunId) => {
+        ends.push(runtimeRunId);
+        order.push(`end:${runtimeRunId}`);
+        if (opts.endHeld !== undefined) await opts.endHeld;
+        if (runtimeRunId === opts.endRejects)
+          throw new Error(`the floor could not be asked to end ${runtimeRunId}`);
+        exited.add(runtimeRunId);
+      },
+      pause: async (runtimeRunId) => {
+        paused.push(runtimeRunId);
+        order.push(`pause:${runtimeRunId}`);
+        return { accepted: true };
       },
       offers: (agent) => {
         const label = (opts.offers ?? { claude: "Claude Code" })[agent];
@@ -306,6 +352,11 @@ async function harness(
         enqueued.push({ runtimeRunId, text, from, step });
         return { id: `in-${enqueued.length}`, position: 1 };
       },
+      withdraw: (run) => {
+        withdrawn.push(run);
+        order.push(`withdraw:${run}`);
+        return [];
+      },
     },
     sessions: {
       // a step's session the runtime spawned is live until a row ends it (D2's lookup reads it at a wake)
@@ -314,6 +365,15 @@ async function harness(
         (spawned.some((_, i) => `rt-step${i + 1}` === runtimeRunId)
           ? { live: !exited.has(runtimeRunId), onPermission: false }
           : undefined),
+      // slice 13 (Q4 (a)): the sessions the run's spawns started, by origin, live until ended; never a handed one
+      ofRun: (run) =>
+        started
+          .filter((at) => at.run === run && opts.ofRunOmits?.includes(at.runtimeRunId) !== true)
+          .map(({ runtimeRunId, call }) => ({
+            runtimeRunId,
+            call,
+            live: !exited.has(runtimeRunId),
+          })),
     },
     folderOf: (kind, value) => opts.folders?.[`${kind}:${value}`],
     projectFolders: () => opts.projectFolders ?? ["/work"],
@@ -393,6 +453,13 @@ async function harness(
     hosts,
     /** the runtime's session `runtimeRunId` ends: D2's lookup reads it exited */
     exit: (runtimeRunId: string) => void exited.add(runtimeRunId),
+    /** slice 13: what the runs' new ports were asked (agents ended and paused, lines withdrawn, items ended), and in
+     * what order */
+    ends,
+    paused,
+    withdrawn,
+    itemsEnded,
+    order,
   };
 }
 
@@ -2039,6 +2106,41 @@ describe("CP-4a2b — a step's answer: heard once, bounded whole, checked agains
     ]);
   });
 
+  it("R42b (slice 13, AA3; Q4 (a), Q6): the run's end ends the agents its failed starts left running, R14f's and R14h's write-#1 orphan, though `sessions.ofRun` omits both: `live.orphans` is read beside it, and each counts in `ended`", async () => {
+    // red-a: no end ends an agent yet, so `ends` is empty and the record has no `ended`. Each run ends done by itself
+    // (REVIEW_CATCHES logs its step's refusal), so `settled(…, "done")` is its wait
+    /** A REVIEW_CATCHES run whose start throws past its spawn by `refuse`, read at its end. */
+    const orphaned = async (refuse: (h: Harness) => void) => {
+      const h = await harness({ ofRunOmits: ["rt-step1"] });
+      h.approved("review", REVIEW_CATCHES);
+      refuse(h);
+      const run = startedRun(await h.start({ flow: "review" })).run;
+      const done = await settled(h.runs, run, "done");
+      return { state: done.state, ends: h.ends, ended: h.records.runRecord(run)?.ended };
+    };
+    // R14f's road: the queue refuses the step's line, its agent started
+    const queueRefused = await orphaned((h) => {
+      vi.spyOn(h.runs.ports.inputs, "enqueue").mockImplementationOnce(() => {
+        throw new Error("the input queue refused it");
+      });
+    });
+    // R14h's road: the write that names the step's session (write #1 past its spawn) refused
+    const writeRefused = await orphaned((h) => {
+      const write = h.records.writeRunRecord.bind(h.records);
+      let refused = false;
+      vi.spyOn(h.records, "writeRunRecord").mockImplementation((at, fields) => {
+        const working = fields.open.some((step) => step.call === 1 && step.state === "working");
+        if (!refused && working) {
+          refused = true;
+          throw new Error("ENOSPC: no space left on device, write");
+        }
+        write(at, fields);
+      });
+    });
+    const each = { state: "done", ends: ["rt-step1"], ended: 1 };
+    expect({ queueRefused, writeRefused }).toEqual({ queueRefused: each, writeRefused: each });
+  });
+
   it("R14g (F2 review T2): a record that can't say a queued line was queued is logged, never thrown: the step works on, and its agent's answer settles it", async () => {
     const h = await harness();
     h.approved("review", ANSWERED);
@@ -2927,6 +3029,93 @@ describe("CP-4a2b — a changed flow's acts begin the asked-for run (§13a slice
       { event: "fieldd.flows.run.told", fields: { error: UNREADABLE_WORDS.flows } },
     ]);
   });
+
+  // slice 13 (Q1, Q14; BB6: "flows.stop judges 'ended' by #isLive or the summary, never by record.state"): Stop of a
+  // run that has ended answers it as it is, and a run whose end the disk refused, live on its record with no LiveRun,
+  // is healed by its Stop (`#finishStop`)
+
+  it("R44 (a pin, green at red-a; slice 13, Q1, BB6): Stop of a done, failed, stopped or lost run, and of one that never began, answers it as it is: it writes nothing and journals nothing", async () => {
+    // the pin's mutation: Stop writes on an ended run (a `stopping`, or an `end` line), as a stub that writes would
+    const h = await harness();
+    const states = ["done", "failed", "stopped", "lost"];
+    states.forEach((state, i) => void seeded(h, i, state));
+    const runs = states.map((_, i) => `fr-seed${String(i).padStart(4, "0")}x`);
+    const kindsBefore = runs.map((run) => h.kinds(run));
+    const writes = vi.spyOn(h.records, "writeRunRecord");
+    const appends = vi.spyOn(h.records, "appendRun");
+    const answered: string[] = [];
+    for (const run of runs) answered.push((await h.runs.stop(run)).run.state);
+    // R6g's road: a run that never began, its ending refused too, reads failed in this life, in §9's words
+    const never = await harness();
+    never.approved("hello", HELLO);
+    const journals = join(never.root, "fieldd", "flows", RUNS_DIR);
+    writeFileSync(journals, "not a folder");
+    vi.spyOn(never.records, "endUnbegun").mockImplementationOnce(() => {
+      throw new Error("ENOSPC: no space left on device, write");
+    });
+    await expect(never.start()).rejects.toMatchObject({ message: words.neverBegan("Hello") });
+    const unbegun = never.records.runRecords()[0]?.run ?? "";
+    const neverWrites = vi.spyOn(never.records, "writeRunRecord");
+    const neverAppends = vi.spyOn(never.records, "appendRun");
+    const stopped = (await never.runs.stop(unbegun)).run;
+    expect({
+      answered,
+      kinds: runs.map((run) => h.kinds(run)),
+      written: writes.mock.calls.length + appends.mock.calls.length,
+      never: { state: stopped.state, log: stopped.log },
+      neverWritten: neverWrites.mock.calls.length + neverAppends.mock.calls.length,
+    }).toEqual({
+      answered: states,
+      kinds: kindsBefore,
+      written: 0,
+      never: { state: "failed", log: words.neverBegan("Hello") },
+      neverWritten: 0,
+    });
+  });
+
+  it("R44's BB6 leg (slice 13, Q14 (b)): a run whose `end` line the disk refused is live on its record with no LiveRun, and its Stop ends it stopped with one `end`; one whose record's write was refused after a kept `done` line is answered done from that line, with one `end`", async () => {
+    // red-a: the stub answers each run as its record stands, `running`
+    /** A HELLO run whose end `refuse` refuses once, then Stopped once fieldd's log says the end was not kept. */
+    const refusedThenStopped = async (refuse: (h: Harness) => void) => {
+      const h = await harness();
+      h.approved("hello", HELLO);
+      refuse(h);
+      const run = startedRun(await h.start()).run;
+      await waitFor(() =>
+        expect(h.errored.map(({ event }) => event)).toContain("fieldd.flows.run.end"),
+      );
+      const stopped = (await h.runs.stop(run)).run;
+      return {
+        state: stopped.state,
+        record: h.records.runRecord(run)?.state,
+        ends: h.kinds(run).filter((kind) => kind === "end").length,
+      };
+    };
+    // the end's `end` line refused once: no line, and the record still reads running
+    const lineRefused = await refusedThenStopped((h) => {
+      const append = h.records.appendRun.bind(h.records);
+      let refused = false;
+      vi.spyOn(h.records, "appendRun").mockImplementation((at, entry) => {
+        if (refused || entry.kind !== "end") return append(at, entry);
+        refused = true;
+        throw new Error("ENOSPC: no space left on device, write");
+      });
+    });
+    // the record's write after a kept `done` line refused once: the line stands, the record reads running
+    const recordRefused = await refusedThenStopped((h) => {
+      const write = h.records.writeRunRecord.bind(h.records);
+      let refused = false;
+      vi.spyOn(h.records, "writeRunRecord").mockImplementation((at, fields) => {
+        if (refused || fields.state !== "done") return write(at, fields);
+        refused = true;
+        throw new Error("ENOSPC: no space left on device, write");
+      });
+    });
+    expect({ lineRefused, recordRefused }).toEqual({
+      lineRefused: { state: "stopped", record: "stopped", ends: 1 },
+      recordRefused: { state: "done", record: "done", ends: 1 },
+    });
+  });
 });
 
 // CP-4a2b (§13a slice 11b; Q9, Q10, Q5; the slice 11 rulings, ruled 2026-11-06, and its rulings for red-a's
@@ -3288,6 +3477,30 @@ describe("CP-4a2b — a run's agents, RUN_AGENTS_MAX started, counted until its 
     expect(record).toMatchObject({ agents: max });
   });
 
+  it("R40f (slice 13, Q5 (b)): an end the floor can't be asked to take, one of three, counts none: `ended: 2`, that step stays open in its true state, `working`, the run still ends stopped, and fieldd's log warns once", async () => {
+    // red-a: the stub answers the run running, and nothing is ended
+    const h = await harness({ endRejects: "rt-step2" });
+    h.approved("fan", fanOut(3));
+    const run = startedRun(await h.start({ flow: "fan" })).run;
+    await waitFor(() => expect(h.enqueued).toHaveLength(3));
+    const stopped = (await h.runs.stop(run)).run;
+    expect({
+      state: stopped.state,
+      ended: stopped.ended,
+      steps: stopped.steps.map((step) => [step.call, step.state]),
+      warned: h.warned.filter(({ event }) => event === "fieldd.flows.step.end").length,
+    }).toEqual({
+      state: "stopped",
+      ended: 2,
+      steps: [
+        [1, "ended"],
+        [2, "working"],
+        [3, "ended"],
+      ],
+      warned: 1,
+    });
+  });
+
   it("RA2: two steps started together at RUN_AGENTS_MAX − 1, each awaiting the runtime's models before its spawn: exactly one is spawned, and the other refused", async () => {
     let free: () => void = () => {};
     const held = new Promise<void>((resolve) => {
@@ -3315,6 +3528,37 @@ describe("CP-4a2b — a run's agents, RUN_AGENTS_MAX started, counted until its 
     expect(outcomeOf(h, run, call)).toBe(W(`Part ${call}`, AGENTS_STARTED));
     expect(h.spawned).toHaveLength(1);
     expect(h.records.runRecord(run)).toMatchObject({ agents: max });
+  });
+
+  it("R42d (slice 13, Q8 (a)): a Stop while a step's spawn is in flight waits for it: the agent that lands past the end is found and ended (`ended: 1`), no prompt is queued, and the ended record is never written again", async () => {
+    // red-a: the stub answers before the released start settles: the step reads starting, and nothing is ended
+    let release: () => void = () => {};
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const h = await harness({ spawnHeld: held });
+    h.approved("review", ANSWERED);
+    const run = startedRun(await h.start({ flow: "review" })).run;
+    await waitFor(() => expect(h.spawned).toHaveLength(1));
+    const stopping = h.runs.stop(run);
+    release();
+    const stopped = (await stopping).run;
+    const record = h.records.runRecord(run);
+    expect({
+      state: stopped.state,
+      enqueued: h.enqueued.length,
+      ends: h.ends,
+      ended: record?.ended,
+      steps: record?.steps.map((step) => [step.call, step.state, step.session]),
+      open: record?.open,
+    }).toEqual({
+      state: "stopped",
+      enqueued: 0,
+      ends: ["rt-step1"],
+      ended: 1,
+      steps: [[1, "ended", undefined]],
+      open: [],
+    });
   });
 
   it("RA3: a run whose record counts RUN_AGENTS_MAX at its wake, as a run woken on its record does, refuses its next spawn; a step it hands your session by in: starts none, and is handed", async () => {
@@ -3685,6 +3929,52 @@ describe("CP-4a2b — the host's life: parked and woken, D2's lookup at a wake, 
       after: (next?.at ?? 0) >= (old?.leftAt ?? Number.POSITIVE_INFINITY),
     }).toEqual({ hosts: 2, left: true, after: true });
   };
+  /** DESIGN.md, its runs of white space as one space (hoisted here in slice 13, for R43 beside R30). */
+  const designText = () =>
+    readFileSync(join(import.meta.dirname, "../../../DESIGN.md"), "utf8").replace(/\s+/g, " ");
+
+  // slice 13 (Stop and the end; its read discipline, so a red-a row fails on a value, an AssertionError with no
+  // timeout): a Stop row's one wait for the end is `await h.runs.stop(run)`, which red-a's stub answers at once; it
+  // never waits on `settled(…, "stopped")` or `settled(…, "stopping")`, nor on `within` past an awaited Stop; and a
+  // row that reads what was told collects it in a listener and reads it after, since `stopping` is transient
+
+  /** Whether `run` has ended, in any way: every end writes its `endedAt`. */
+  const endedOf = (h: Harness, run: string): boolean =>
+    h.runs.read(run)?.summary.endedAt !== undefined;
+  /** The `end` lines `run`'s journal holds, each as its state and `ended` (and `host`, where fieldd ended it). */
+  const endLinesOf = (h: Harness, run: string) => {
+    const read = h.records.readRun(run);
+    return read.kind === "kept"
+      ? read.lines.flatMap((line) =>
+          line.kind === "end"
+            ? [
+                {
+                  state: line.state,
+                  ...(line.ended !== undefined ? { ended: line.ended } : {}),
+                  ...(line.host !== undefined ? { host: line.host } : {}),
+                },
+              ]
+            : [],
+        )
+      : [];
+  };
+  /** Each state `run` was told in, from now on, a state told again in a row kept once (`stopping` is transient). */
+  const toldStates = (h: Harness, run: string): string[] => {
+    const told: string[] = [];
+    h.runs.onChange((list) => {
+      const state = list.runs.find((summary) => summary.run === run)?.state;
+      if (state !== undefined && told.at(-1) !== state) told.push(state);
+    });
+    told.splice(0);
+    return told;
+  };
+  /** The run's steps, answered and open, by call, as its record holds them. */
+  const stepsOf = (h: Harness, run: string) => {
+    const record = h.records.runRecord(run);
+    return [...(record?.steps ?? []), ...(record?.open ?? [])]
+      .sort((a, b) => a.call - b.call)
+      .map((step) => [step.call, step.state]);
+  };
 
   it("R27 (D1): a run whose step waits past HOST_IDLE_MS with no frame is parked: its host has left, it reads waiting, never stopped, and its journal gains no line; the step's answer wakes it, and it ends done", async () => {
     const h = await harness({ hostIdleMs: IDLE_MS });
@@ -3696,6 +3986,56 @@ describe("CP-4a2b — the host's life: parked and woken, D2's lookup at a wake, 
     answerStep(h, run, 1, "all clean");
     expect((await settled(h.runs, run, "done")).log).toBe("all clean");
     expect(h.hosts).toHaveLength(2);
+  });
+
+  it("R40b (slice 13, Q3 step 4): a Stop with no host, the common Stop of a run waiting on its agent, ends it at once: parked, it is stopped with its agent ended and never woken; queued for a host past HOSTS_LIVE_MAX, it is stopped at once, and its place goes to the next run waiting", async () => {
+    // red-a: the stub answers each run as it stands (waiting) and acts on nothing, so the queued run takes the host
+    // (red-a skeptic F3) `#finish` leaving `#hostQueue` is held by construction, not by this row: a stale id left there
+    // is harmless (`#nextHost` shifts past it, `#rouse` returns for a run with no LiveRun), so no read of the runs'
+    // public face sees the splice, and the mutant pass lists the splice's mutation as an expected survivor
+    // parked: its host has left, and its step's agent works on
+    const parked = await harness({ hostIdleMs: IDLE_MS });
+    parked.approved("review", ANSWERED);
+    const run = startedRun(await parked.start({ flow: "review" })).run;
+    await waitFor(() => expect(parked.enqueued).toHaveLength(1));
+    expect(await parkedAt(parked, run)).toEqual(PARKED);
+    const stopped = (await parked.runs.stop(run)).run;
+    const atRest = {
+      state: stopped.state,
+      ended: stopped.ended,
+      ends: parked.ends,
+      hosts: parked.hosts.length,
+      kinds: parked.kinds(run),
+    };
+    // queued: HOSTS_LIVE_MAX runs hold every host (no park: UU3), and two more wait in #hostQueue's order
+    const max = FLOW_LIMITS.HOSTS_LIVE_MAX;
+    const h = await harness();
+    h.approved("review", ANSWERED);
+    const runs: string[] = [];
+    for (let i = 0; i < max + 2; i += 1)
+      runs.push(startedRun(await h.start({ flow: "review" })).run);
+    await within(PARK_MS, () => h.enqueued.length >= max);
+    const [first, queued, next] = [runs[0] ?? "", runs[max] ?? "", runs[max + 1] ?? ""];
+    const queuedStop = (await h.runs.stop(queued)).run.state;
+    // the first run ends, and its host's place goes to the first run still waiting
+    answerStep(h, first, 1, "one");
+    await settled(h.runs, first, "done");
+    const inQueue = {
+      stopped: queuedStop,
+      record: stateOf(h, queued),
+      next: stateOf(h, next),
+      hosts: h.hosts.length,
+    };
+    expect({ atRest, inQueue }).toEqual({
+      atRest: {
+        state: "stopped",
+        ended: 1,
+        ends: ["rt-step1"],
+        hosts: 1,
+        kinds: ["head", "call", "end"],
+      },
+      inQueue: { stopped: "stopped", record: "stopped", next: "running", hosts: max + 1 },
+    });
   });
 
   it("R10 (L7a): a run parked on the version it began on wakes on that version's bytes, though another was approved while it waited", async () => {
@@ -3749,6 +4089,145 @@ describe("CP-4a2b — the host's life: parked and woken, D2's lookup at a wake, 
       hosts: h.hosts.length,
     }).toEqual({ state: "waiting", steps: [[1, "rt-step1", "working"]], hosts: 1 });
     expect(h.kinds(run)).toEqual(["head", "call"]);
+  });
+
+  it("R41 (slice 13, K-c, D4; Q12 (b), Q17 (a)): a run fieldd stopped before its Stop's end is finished by its next Stop, read from its journal by the runs fieldd starts again: (i) one `end`, stopped, no item raised and no host, its first Stop answered `stopping` at close() and a Stop past close() writing `stopping` alone; (ii) every step gone, stopped with no `ended`; (iii) a record write refused after the `end` line, then one `end`; (iv) a step its journal answers reads answered, no `held`, `calls` the journal's", async () => {
+    // red-a: each Stop answers the run as its record stands, and the fresh runs' stub finishes nothing
+    /** The runs fieldd starts again over `h`'s ports, after its own stop (R32a's road; the reopen leg is slice 14's). */
+    const again = async (h: Harness): Promise<FlowRuns> => {
+      await h.runs.close();
+      const fresh = new FlowRuns(h.runs.ports);
+      opened.push(fresh);
+      return fresh;
+    };
+    // (i) a Stop whose agents' ends are held when fieldd stops: its Stop answers at close() as the record reads, and
+    // a second run's Stop past close() writes `stopping` and acts on nothing
+    let release: () => void = () => {};
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const h = await harness({ endHeld: held });
+    h.approved("review", ANSWERED);
+    const run = startedRun(await h.start({ flow: "review" })).run;
+    const other = startedRun(await h.start({ flow: "review" })).run;
+    await waitFor(() => expect(h.enqueued).toHaveLength(2));
+    /** run's own agent, as its step's line was queued to it */
+    const runsAgent = h.enqueued.find(
+      ({ from }) => from.kind === "flow" && from.run === run,
+    )?.runtimeRunId;
+    const pending = h.runs.stop(run);
+    await within(PARK_MS, () => h.ends.length > 0);
+    const fresh = await again(h);
+    const atClose = (await pending).run.state;
+    const hostsAtClose = h.hosts.length;
+    const past = (await h.runs.stop(other)).run.state;
+    const pastActed = [...h.withdrawn, ...h.itemsEnded].filter((at) => at === other);
+    // (red-a skeptic F4) past close(), `other`'s record reads `stopping`, its agent is never ended (run's alone, asked
+    // before close()), and nothing is paused
+    const pastRead = {
+      record: h.records.runRecord(other)?.state,
+      ends: [...h.ends],
+      paused: [...h.paused],
+    };
+    release();
+    const items = h.items.length;
+    const finished = (await fresh.stop(run)).run;
+    const first = {
+      atClose,
+      past,
+      pastActed,
+      pastRead,
+      state: finished.state,
+      ends: endLinesOf(h, run).length,
+      items: h.items.length - items,
+      hosts: h.hosts.length - hostsAtClose,
+    };
+    // (ii) every step gone before fieldd stopped: nothing to end, so no `ended`
+    const gone = await harness();
+    gone.approved("review", ANSWERED);
+    const goneRun = startedRun(await gone.start({ flow: "review" })).run;
+    await waitFor(() => expect(gone.enqueued).toHaveLength(1));
+    gone.exit("rt-step1");
+    const goneFresh = await again(gone);
+    // (red-a skeptic F5) the states `#finishStop` writes, in order: `stopping` first (Q3), then `stopped`
+    const written: string[] = [];
+    const goneWrite = gone.records.writeRunRecord.bind(gone.records);
+    const goneSpy = vi.spyOn(gone.records, "writeRunRecord").mockImplementation((at, fields) => {
+      written.push(fields.state);
+      return goneWrite(at, fields);
+    });
+    const goneStop = (await goneFresh.stop(goneRun)).run;
+    goneSpy.mockRestore();
+    const second = {
+      state: goneStop.state,
+      ended: goneStop.ended,
+      ends: gone.ends,
+      steps: stepsOf(gone, goneRun),
+      lines: endLinesOf(gone, goneRun),
+      written,
+    };
+    // (iii) the record's write after the `end` line refused once: the next Stop writes the record alone
+    const lag = await harness();
+    lag.approved("review", ANSWERED);
+    const lagRun = startedRun(await lag.start({ flow: "review" })).run;
+    await waitFor(() => expect(lag.enqueued).toHaveLength(1));
+    const lagFresh = await again(lag);
+    const write = lag.records.writeRunRecord.bind(lag.records);
+    let refused = false;
+    vi.spyOn(lag.records, "writeRunRecord").mockImplementation((at, fields) => {
+      if (refused || fields.state !== "stopped") return write(at, fields);
+      refused = true;
+      throw new Error("ENOSPC: no space left on device, write");
+    });
+    await lagFresh.stop(lagRun).catch(() => undefined);
+    const lagStop = (await lagFresh.stop(lagRun)).run;
+    // the mutation for (iii): `#finishStop` reads `record.state` alone, so a second `end` is journaled
+    const third = {
+      state: lagStop.state,
+      record: lag.records.runRecord(lagRun)?.state,
+      ends: endLinesOf(lag, lagRun).length,
+    };
+    // (iv) N6: the last call's own record write refused (ZZ3's window), so the record counts one call short; a gate
+    // holds the run; and the journal answers the step whose settle a kill took (its line kept, its record not)
+    const lags = await harness();
+    lags.approved("gate", GATE_AND_STEP);
+    lagsOnce(lags, "call", 2);
+    const lagsRun = startedRun(await lags.start({ flow: "gate" })).run;
+    await waitFor(() => expect(lags.enqueued).toHaveLength(1));
+    await within(PARK_MS, () => lags.items.length === 1);
+    const lagsFresh = await again(lags);
+    lags.records.appendRun(lagsRun, { kind: "answer", call: 2, value: { text: "a" } });
+    const lagsStop = (await lagsFresh.stop(lagsRun)).run;
+    const lagsRecord = lags.records.runRecord(lagsRun);
+    // the mutation for (iv)'s `calls`: drop `#finishStop`'s `calls` line, and the record keeps ZZ3's one short
+    const fourth = {
+      state: lagsStop.state,
+      calls: lagsRecord?.calls,
+      steps: stepsOf(lags, lagsRun),
+      held: lagsRecord?.held,
+    };
+    expect({ first, second, third, fourth }).toEqual({
+      first: {
+        atClose: "stopping",
+        past: "stopping",
+        pastActed: [],
+        pastRead: { record: "stopping", ends: [runsAgent], paused: [] },
+        state: "stopped",
+        ends: 1,
+        items: 0,
+        hosts: 0,
+      },
+      second: {
+        state: "stopped",
+        ended: undefined,
+        ends: [],
+        steps: [[1, "ended"]],
+        lines: [{ state: "stopped" }],
+        written: ["stopping", "stopped"],
+      },
+      third: { state: "stopped", record: "stopped", ends: 1 },
+      fourth: { state: "stopped", calls: 2, steps: [[2, "answered"]], held: undefined },
+    });
   });
 
   it("R13 (D2): at a wake, a call made again whose step's session lives binds to it, never spawned again; one whose start is in flight spawns once, and the next wake binds it; one whose session exited fails the step in §9's words, nothing spawned", async () => {
@@ -3855,6 +4334,34 @@ describe("CP-4a2b — the host's life: parked and woken, D2's lookup at a wake, 
     expect((await settled(h.runs, run, "done")).log).toBe("ab");
   });
 
+  it("R40c (slice 13, Q2 (a)): a Stop's leave, its host frozen as R13e's is so it leaves only at its grace's SIGKILL, past D1's idle: a step's turn end in the leave journals nothing, every tell in it reads stopping, and nothing wakes", async () => {
+    // red-a: the stub answers at once, so there is no leave: the turn end is journaled, and no tell says stopping.
+    // The mutations: drop Stop's clear of the idle timer, and the idle parks the leaving host, `#rest` telling
+    // `waiting` over `stopping`; drop the ending's guard in #turnEnded (and #answer's behind it), and an answer line
+    // appears. HOLD_IDLE_MS, not IDLE_MS: the Stop must come before the idle parks the frozen host, and the leave
+    // (KILL_GRACE_MS) still outlasts it
+    const h = await harness({ hostIdleMs: HOLD_IDLE_MS, timings: { stopGraceMs: KILL_GRACE_MS } });
+    h.approved("two", TWO);
+    const run = startedRun(await h.start({ flow: "two" })).run;
+    await waitFor(() => expect(h.enqueued).toHaveLength(2));
+    h.hosts[0]?.child.kill("SIGSTOP");
+    const told = toldStates(h, run);
+    const stopping = h.runs.stop(run);
+    answerStep(h, run, 1, "a");
+    const stopped = (await stopping).run;
+    expect({
+      state: stopped.state,
+      told,
+      kinds: h.kinds(run),
+      hosts: h.hosts.length,
+    }).toEqual({
+      state: "stopped",
+      told: ["stopping", "stopped"],
+      kinds: ["head", "call", "call", "end"],
+      hosts: 1,
+    });
+  });
+
   it("MM3 (the F4 logic review; ruled 2026-11-06): D2's lookup that binds a step's live agent at a wake reserves no agent, and a journaled call with no record entry starts once and reserves one, as LL1 counts a start", async () => {
     // the bind: two agents started, and a wake that binds A keeps the count at 2
     const bound = await harness({ hostIdleMs: IDLE_MS });
@@ -3939,6 +4446,94 @@ describe("CP-4a2b — the host's life: parked and woken, D2's lookup at a wake, 
     expect(design).toContain(`"${words.leftTwice("‹flow›")}"`);
   });
 
+  // slice 13 (Q13, R43): a host fieldd ended ends its run failed, its record's `log` §9's sentence for why, said once
+  // in place of the script's latest line; the run is never woken again
+
+  /** Two steps, A and B, and a gate, made at once; once A answers, `after` runs (a flood, or a wait forever). */
+  const hostEndsAfterA = (after: string): string =>
+    [
+      'export const meta = { name: "Hosts" };',
+      "export default async function () {",
+      `  const a = agent("look at a", ${stepAt("A")});`,
+      `  agent("look at b", ${stepAt("B")}).catch(() => undefined);`,
+      `  ask(${SHIP}).catch(() => undefined);`,
+      "  await a;",
+      `  ${after}`,
+      "}",
+      "",
+    ].join("\n");
+  /** HOST_LOG_LINES_MAX log lines and one more: the supervisor ends the host `flood` (its `log lines` bound). */
+  const FLOODS = `for (let i = 0; i <= ${FLOW_LIMITS.HOST_LOG_LINES_MAX}; i += 1) log("line " + i);`;
+  /** A `hostEndsAfterA` run whose host fieldd ended for `why`: by its log lines (`flood`), or (`unanswered`) frozen past
+   * its pings, read once it has ended. */
+  const endedByFieldd = async (why: "flood" | "unanswered") => {
+    const h = await harness({
+      ...(why === "unanswered" ? { timings: { pingMs: 250, pingMisses: 3 } } : {}),
+    });
+    h.approved("hosts", hostEndsAfterA(why === "flood" ? FLOODS : "await new Promise(() => {});"));
+    const run = startedRun(await h.start({ flow: "hosts" })).run;
+    await waitFor(() => expect(h.enqueued).toHaveLength(2));
+    await within(PARK_MS, () => h.items.length === 1);
+    if (why === "flood") answerStep(h, run, 1, "a");
+    else h.hosts[0]?.child.kill("SIGSTOP");
+    await within(WAIT_MS, () => endedOf(h, run));
+    return { h, run };
+  };
+
+  it("R43 (slice 13, Q13): a host fieldd ended, by a flood of log lines past HOST_LOG_LINES_MAX or by its missed pings (`unanswered`), ends its run failed, its record's `log` §9's sentence for why, once", async () => {
+    // red-a: `case "ended"` writes `{failed, host}` and no sentence, so `log` stays the script's latest line
+    const read = async (why: "flood" | "unanswered") => {
+      const { h, run } = await endedByFieldd(why);
+      const record = h.records.runRecord(run);
+      return {
+        state: record?.state,
+        host: record?.host,
+        log: record?.log,
+        lines: endLinesOf(h, run).length,
+      };
+    };
+    const flood = await read("flood");
+    const unanswered = await read("unanswered");
+    expect({ flood, unanswered }).toEqual({
+      flood: { state: "failed", host: "flood", log: words.hostEnded("Hosts", "flood"), lines: 1 },
+      unanswered: {
+        state: "failed",
+        host: "unanswered",
+        log: words.hostEnded("Hosts", "unanswered"),
+        lines: 1,
+      },
+    });
+  });
+
+  it("R43's never-woken leg (a pin, green at red-a; slice 13, Q13): a run whose host fieldd ended is never woken again: a later turn end and a late gate answer journal nothing, and no host starts", async () => {
+    // the pin's mutation: `#finish` keeps the LiveRun, so the late gate answer is journaled (and, while the record
+    // still holds the step open, the turn end too)
+    const { h, run } = await endedByFieldd("flood");
+    const kinds = h.kinds(run);
+    const hosts = h.hosts.length;
+    answerStep(h, run, 2, "b");
+    const late = await h.runs.acts.answer({
+      id: h.raisedAs[0]?.id ?? ("ny-item1aaaaaa" as NeedsItemId),
+      kind: "flow-gate",
+      run: { run, flow: "hosts", call: 3 },
+      choice: 0,
+      stop: false,
+      act: "Ship",
+    });
+    expect({ late: late.outcome, kinds: h.kinds(run), hosts: h.hosts.length }).toEqual({
+      late: "failed",
+      kinds,
+      hosts,
+    });
+  });
+
+  it.each(FLOW_HOST_ENDINGS)(
+    "R43's words (slice 13; green at red-a, `words.hostEnded` is real): a host fieldd ended for %s is said in DESIGN.md's own words (§9 \"When a run's script cannot go on\")",
+    (why) => {
+      expect(designText()).toContain(`"${words.hostEnded("‹flow›", why)}"`);
+    },
+  );
+
   // step 1p (the 10a review, TT1; ruled 2026-11-06): a run at rest, its host gone, reads `holding` while the person
   // holds it, on every road that rests it, as #park's road reads it
 
@@ -4021,9 +4616,6 @@ describe("CP-4a2b — the host's life: parked and woken, D2's lookup at a wake, 
     });
     return told?.fields?.["log"];
   };
-  /** DESIGN.md, its runs of white space as one space. */
-  const designText = () =>
-    readFileSync(join(import.meta.dirname, "../../../DESIGN.md"), "utf8").replace(/\s+/g, " ");
 
   it("P12 (D7, D21; slice 10b): a woken run whose journal holds a call its script never makes again is set aside lost at HOST_IDLE_MS, in §9's Proposed words, with nothing spawned", async () => {
     const h = await harness({ hostIdleMs: IDLE_MS });
@@ -4046,6 +4638,99 @@ describe("CP-4a2b — the host's life: parked and woken, D2's lookup at a wake, 
     });
     expect(h.kinds(run)).toEqual(["head", "call", "call", "answer", "end"]);
     expect(designText()).toContain(`"${words.asideUnmatched("‹flow›")}"`);
+  });
+
+  /** N1's road, P12's (D7): a woken run set aside lost, its woken host frozen once it has made its call again, so the
+   * set-aside's leave lasts its grace (KILL_GRACE_MS); answered once the set-aside is said, inside that leave. */
+  const asideInItsLeave = async (h: Harness): Promise<string> => {
+    h.approved("review", ANSWERED);
+    const run = startedRun(await h.start({ flow: "review" })).run;
+    await waitFor(() => expect(h.enqueued).toHaveLength(1));
+    expect(await parkedAt(h, run)).toEqual(PARKED);
+    h.records.appendRun(run, unmade(2));
+    const made = vi.spyOn(FlowReplay.prototype, "call");
+    try {
+      answerStep(h, run, 1, "all clean");
+      await within(PARK_MS, () => made.mock.calls.length > 0);
+    } finally {
+      made.mockRestore();
+    }
+    h.hosts[1]?.child.kill("SIGSTOP");
+    await within(PARK_MS, () => toldAside(h, run) !== undefined);
+    return run;
+  };
+
+  it("R40e (slice 13, Q1 (a), N1): a second Stop answers what the first did, with one `end` and its agent ended once; a Stop in an end's tail waits for it and answers that end, with one `end`; and a Stop in D7's leave answers lost", async () => {
+    // red-a: the stub answers each run as it stands at once: running, and done with no `ended` (no tail yet)
+    // a second Stop: the first's turn sets the ending, and the second waits on `#ends`
+    const twice = await harness();
+    twice.approved("review", ANSWERED);
+    const run = startedRun(await twice.start({ flow: "review" })).run;
+    await waitFor(() => expect(twice.enqueued).toHaveLength(1));
+    const [first, second] = await Promise.all([twice.runs.stop(run), twice.runs.stop(run)]);
+    const twiceRead = {
+      first: first.run.state,
+      second: second.run.state,
+      lines: endLinesOf(twice, run),
+      ends: twice.ends,
+    };
+    // a Stop in a tail: the run ended done by itself, and its agent's end is held, so `#finish`'s tail waits; the
+    // Stop reads `#ends` first (Fact 6: without it, #finishStop would journal a second `end`)
+    let release: () => void = () => {};
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const tail = await harness({ endHeld: held });
+    tail.approved("review", ANSWERED);
+    const tailRun = startedRun(await tail.start({ flow: "review" })).run;
+    await waitFor(() => expect(tail.enqueued).toHaveLength(1));
+    answerStep(tail, tailRun, 1, "all clean");
+    await within(PARK_MS, () => tail.ends.length > 0);
+    const inTail = tail.runs.stop(tailRun);
+    release();
+    const tailStop = (await inTail).run;
+    const tailRead = {
+      state: tailStop.state,
+      ended: tailStop.ended,
+      lines: endLinesOf(tail, tailRun),
+    };
+    // N1's leg: a Stop in D7's leave takes no end of its own, and answers the run as its end leaves it
+    const aside = await harness({ hostIdleMs: IDLE_MS, timings: { stopGraceMs: KILL_GRACE_MS } });
+    const asideRun = await asideInItsLeave(aside);
+    const asideStop = (await aside.runs.stop(asideRun)).run.state;
+    expect({ second: twiceRead, tail: tailRead, aside: asideStop }).toEqual({
+      second: {
+        first: "stopped",
+        second: "stopped",
+        lines: [{ state: "stopped", ended: 1 }],
+        ends: ["rt-step1"],
+      },
+      tail: { state: "done", ended: 1, lines: [{ state: "done", ended: 1 }] },
+      aside: "lost",
+    });
+  });
+
+  it("R40e's N1 leg (a pin, green at red-a; slice 13, N1, J1's F8): a Stop on a run whose ending is already set, D7's set-aside in its leave, takes no end of its own: its record never reads stopping, it ends lost in its set-aside's words, and its journal holds one `end`", async () => {
+    // the pin's mutation: `stop()` sets its own ending over the one set, and the run reads stopping, then stopped.
+    // What the Stop answers, `lost`, is R40e's red leg: red-a's stub answers at once, as the run stands mid-leave
+    const h = await harness({ hostIdleMs: IDLE_MS, timings: { stopGraceMs: KILL_GRACE_MS } });
+    const run = await asideInItsLeave(h);
+    const told = toldStates(h, run);
+    const stopping = h.runs.stop(run);
+    await within(PARK_MS + KILL_GRACE_MS, () => endedOf(h, run));
+    await stopping;
+    const ended = h.runs.read(run)?.summary;
+    expect({
+      told,
+      state: ended?.state,
+      log: ended?.log,
+      lines: endLinesOf(h, run).map((line) => line.state),
+    }).toEqual({
+      told: ["lost"],
+      state: "lost",
+      log: words.asideUnmatched("Review"),
+      lines: ["lost"],
+    });
   });
 
   it("R31 (D7; slice 10b): a woken script's new call, made while a call its journal holds is never made again, is never journaled, counted or spawned, and the run is set aside lost in §9's words", async () => {
@@ -4074,6 +4759,132 @@ describe("CP-4a2b — the host's life: parked and woken, D2's lookup at a wake, 
     });
     expect(h.kinds(run)).toEqual(["head", "call", "answer", "call", "end"]);
     expect(designText()).toContain(`"${words.asideNew("‹flow›")}"`);
+  });
+
+  // slice 13 (Q4–Q7, Q9, Q10, Q16; 9b F6, ZZ2): every end of a run, not only a Stop, ends each agent its steps started
+  // (an answered step's among them, D3's erratum), never a session it was handed; moves its open steps to `ended`;
+  // ends its items and withdraws its lines; and journals one `end`. One fixture for every class (Q16): step A
+  // answered, step B open, step H handed your session, its line waiting, and a gate open
+
+  /** Slice 13's common end (Q16): A, B, H and a gate made at once (calls 1–4); once A answers, `end` ends the run. */
+  const endsAs = (end: string): string =>
+    [
+      'export const meta = { name: "Ends" };',
+      "export default async function () {",
+      `  const a = agent("look at a", ${stepAt("A")});`,
+      `  agent("look at b", ${stepAt("B")}).catch(() => undefined);`,
+      '  agent("Review this", { in: "run-yours", label: "Yours" }).catch(() => undefined);',
+      `  ask(${SHIP}).catch(() => undefined);`,
+      "  await a;",
+      `  ${end}`,
+      "}",
+      "",
+    ].join("\n");
+  /** Each class of end (9b F6: a row for each kind; N4 (a): the flood by log lines, on this same fixture): how its
+   * script ends once A answers, or (`parks`) how its run ends at the wake A's answer, kept while it waits, starts. */
+  const END_CLASSES: readonly {
+    readonly name: string;
+    readonly end: string;
+    readonly parks?: "aside" | "bytes";
+    readonly ended: { readonly state: string; readonly host?: string };
+  }[] = [
+    {
+      name: "done, its other calls left open (a race's losers)",
+      end: 'return "done";',
+      ended: { state: "done" },
+    },
+    { name: "failed, its script threw", end: 'throw new Error("no");', ended: { state: "failed" } },
+    {
+      name: "failed, a flood of log lines past HOST_LOG_LINES_MAX (N4 (a))",
+      end: FLOODS,
+      ended: { state: "failed", host: "flood" },
+    },
+    {
+      name: "lost, D7's set-aside (ZZ2 by name): its woken script never makes a call its journal holds",
+      end: 'return "done";',
+      parks: "aside",
+      ended: { state: "lost" },
+    },
+    {
+      name: "lost, its bytes gone by its wake",
+      end: 'return "done";',
+      parks: "bytes",
+      ended: { state: "lost" },
+    },
+  ];
+  /** A run of `endsAs(cls.end)` driven to its end its class's way, by itself (no Stop), read once its `endedAt` is;
+   * `beganIn` the handed sessions whose working turn the run's own line began (D19), and `handed` H's state just
+   * before the end. */
+  const endedAs = async (cls: (typeof END_CLASSES)[number], beganIn: readonly string[] = []) => {
+    const h = await harness({
+      sessions: { "run-yours": HANDED_YOURS },
+      beganIn,
+      ...(cls.parks !== undefined ? { hostIdleMs: IDLE_MS } : {}),
+    });
+    h.approved("ends", endsAs(cls.end));
+    const run = startedRun(await h.start({ flow: "ends" })).run;
+    await waitFor(() => expect(h.enqueued).toHaveLength(3));
+    await within(PARK_MS, () => h.items.length === 1);
+    if (cls.parks !== undefined) {
+      // parked held on its gate (UU2), then woken by A's answer, kept while it waits
+      await within(PARK_MS, () => left(h, 0) && stateOf(h, run) === "holding");
+      if (cls.parks === "aside") h.records.appendRun(run, unmade(5));
+      else vi.spyOn(h.records, "bytes").mockReturnValue(undefined);
+    }
+    const handed = h.records.runRecord(run)?.open.find((step) => step.session === "run-yours");
+    answerStep(h, run, 1, "a");
+    await within(WAIT_MS, () => endedOf(h, run));
+    return { h, run, handed: handed?.state };
+  };
+
+  it.each(END_CLASSES)(
+    "R42 (slice 13, Q4–Q7, Q9, Q10, Q16), every end class, $name: its started agents ended, the answered one's among them (`ended: 2`), never the handed one; its open steps `ended`; no `held`; its items ended and its lines withdrawn; one `end` line",
+    async (cls) => {
+      // red-a: `#finish` ends no agent, keeps `open` (ZZ2's phantom) and `held`, and ends no item or line
+      const { h, run } = await endedAs(cls);
+      const record = h.records.runRecord(run);
+      expect({
+        state: record?.state,
+        host: record?.host,
+        ends: [...h.ends].sort(),
+        ended: record?.ended,
+        lines: endLinesOf(h, run),
+        steps: stepsOf(h, run),
+        open: record?.open.length,
+        held: record?.held,
+        items: h.itemsEnded.includes(run),
+        withdrawn: h.withdrawn.includes(run),
+      }).toEqual({
+        state: cls.ended.state,
+        host: cls.ended.host,
+        ends: ["rt-step1", "rt-step2"],
+        ended: 2,
+        lines: [{ ...cls.ended, ended: 2 }],
+        steps: [
+          [1, "answered"],
+          [2, "ended"],
+          [3, "ended"],
+        ],
+        open: 0,
+        held: undefined,
+        items: true,
+        withdrawn: true,
+      });
+    },
+  );
+
+  it("R42's never-a-handed-one leg (a pin, green at red-a; slice 13, Q4 (a), K8): an end never ends, nor pauses, a session the run was handed: its origin is not the run's", async () => {
+    // the pin's mutation: `sessions.ofRun` admits it (or the end ends every open step's session), and the end ends
+    // your session; or (Q11 (a′), K31: the pause is at Stop alone) the end pauses the handed turn the run's own line
+    // began, which it reads working here (`beganIn`), and your session is paused
+    const [done] = END_CLASSES;
+    if (done === undefined) throw new Error("R42's table has no class");
+    const { h, handed } = await endedAs(done, ["run-yours"]);
+    expect({ handed, ends: h.ends.includes("run-yours"), paused: h.paused }).toEqual({
+      handed: "working",
+      ends: false,
+      paused: [],
+    });
   });
 
   it("P13 (D22; slice 10b): an answer journaled after a woken host read its journal is handed to that host's replay alone; the parked host's replay hears nothing after its park", async () => {
@@ -4218,6 +5029,56 @@ describe("CP-4a2b — the host's life: parked and woken, D2's lookup at a wake, 
     expect(await lagging("answer")).toEqual(heard);
   });
 
+  it("R40d (slice 13, Q3 step 1): a Stop whose `stopping` the disk refuses acts on nothing: it is refused retryably in the store's words, nothing is ended, the host is up, and a second Stop works", async () => {
+    // red-a: the stub writes no `stopping`, so the refusal never comes, and neither Stop stops the run
+    const h = await harness();
+    h.approved("review", ANSWERED);
+    const run = startedRun(await h.start({ flow: "review" })).run;
+    await waitFor(() => expect(h.enqueued).toHaveLength(1));
+    const write = h.records.writeRunRecord.bind(h.records);
+    let refused = false;
+    vi.spyOn(h.records, "writeRunRecord").mockImplementation((at, fields) => {
+      if (refused || fields.state !== "stopping") return write(at, fields);
+      refused = true;
+      throw new Error("ENOSPC: no space left on device, write");
+    });
+    const said = await h.runs.stop(run).then(
+      (stopped) => ({ answered: stopped.run.state }),
+      (error: unknown) => {
+        const e = error as RpcCallError;
+        return { kind: e.kind, message: e.message, retryable: e.retryable };
+      },
+    );
+    // (red-a skeptic F6) acting on nothing also reads no line withdrawn, no item ended and no turn paused
+    const after = {
+      ends: [...h.ends],
+      withdrawn: [...h.withdrawn],
+      items: [...h.itemsEnded],
+      paused: [...h.paused],
+      up: !left(h, 0),
+      state: stateOf(h, run),
+      kinds: h.kinds(run),
+    };
+    const again = (await h.runs.stop(run)).run;
+    expect({
+      said,
+      after,
+      again: { state: again.state, ended: again.ended, kinds: h.kinds(run) },
+    }).toEqual({
+      said: { kind: "UNAVAILABLE", message: UNREADABLE_WORDS.flows, retryable: true },
+      after: {
+        ends: [],
+        withdrawn: [],
+        items: [],
+        paused: [],
+        up: true,
+        state: "running",
+        kinds: ["head", "call"],
+      },
+      again: { state: "stopped", ended: 1, kinds: ["head", "call", "end"] },
+    });
+  });
+
   it("T4c (D1, T4; the 10b fix's delta review, #2): an answer whose record settle throws still wakes its run, parked or its host still leaving: the woken host hears the answer its journal holds, the run ends done, and the wake's own write settles the step (XX4)", async () => {
     /** An ANSWERED run, parked or (`leaving`) its host stopped inside its leave grace, whose answer's settle throws. */
     const lagged = async (leaving: boolean) => {
@@ -4251,6 +5112,30 @@ describe("CP-4a2b — the host's life: parked and woken, D2's lookup at a wake, 
     expect(await lagged(false)).toEqual(woken);
     // still leaving: the answer owes the wake, which the old host's end pays (R27d)
     expect(await lagged(true)).toEqual(woken);
+  });
+
+  it("R42c (slice 13, Q7, XX4): an end's write moves every open step to `ended` but one its journal answers, whose own settle lagged: that one reads answered, never ended", async () => {
+    // red-a: the end's write settles A (XX4, as built) and keeps B open, working. The mutation (Q7's trap): the end's
+    // `whole` marks every open step `ended` with no skip of the calls its journal answers, and A reads ended
+    const h = await harness();
+    h.approved("race", RACE);
+    lagsOnce(h, "answer");
+    const run = startedRun(await h.start({ flow: "race" })).run;
+    await waitFor(() => expect(h.enqueued).toHaveLength(2));
+    answerStep(h, run, 1, "a");
+    await within(PARK_MS, () => endedOf(h, run));
+    expect({
+      state: stateOf(h, run),
+      steps: stepsOf(h, run),
+      open: h.records.runRecord(run)?.open.length,
+    }).toEqual({
+      state: "done",
+      steps: [
+        [1, "answered"],
+        [2, "ended"],
+      ],
+      open: 0,
+    });
   });
 
   it("P8r (XX1(b), the 10b read; slice 10b): through the runs, a step's answer nested past ARGS_DEPTH_MAX is refused to its script and journaled as that refusal, so its journal reads back", async () => {
@@ -4345,6 +5230,66 @@ describe("CP-4a2b — the host's life: parked and woken, D2's lookup at a wake, 
       ],
       log: "[ Push]",
       answers: [[1, " Push"]],
+    });
+  });
+
+  it("R40g (slice 13, Q9, N8; board `co-flow-asks-fan-out` (a), 2026-11-07: \"256 is the limit, Stop clears them\"): Stop through any of a run's items stops the run: through one of two gates, both end; through a repair's, it ends; and through an item whose run no record keeps, done, its items ended", async () => {
+    // red-a: a run's item's Stop still throws (`#answered`, "a later slice's"), so each answer is read through its
+    // refusal, and fails on that value (M1)
+    /** An answer's outcome as the item keeps it (Q9: the Stop answers `done`, never `failed`), or the words it was
+     * refused in. */
+    const outcomeOf = (answer: Promise<NeedsAnswered>) =>
+      answer.then(
+        (answered) => answered.item.answer?.outcome,
+        (error: unknown) => (error instanceof Error ? error.message : String(error)),
+      );
+    // N8's leg: two gates open at once, on the real needs queue; Stop through the first ends both
+    const gates = await harness({ needsQueue: true });
+    const needs = needsOf(gates);
+    gates.approved("gates", TWO_GATES);
+    const run = startedRun(await gates.start({ flow: "gates" })).run;
+    await within(PARK_MS, () => gates.raisedAs.length === 2);
+    const [one = "", two = ""] = gates.raisedAs.map(({ id }) => id);
+    // each gate's acts are its choices, then Stop the run (the queue's last)
+    const stopped = await outcomeOf(needs.answer(one as NeedsItemId, 2, PRINCIPAL));
+    const sibling = await refusalOf(needs.answer(two as NeedsItemId, 0, PRINCIPAL));
+    const gateLeg = {
+      stopped,
+      state: stateOf(gates, run),
+      open: needs.list().filter((item) => item.run?.run === run).length,
+      sibling: sibling === "started" ? sibling : sibling.reason,
+    };
+    // a repair's item: a step whose answer missed its form twice holds the run on you; Stop through it
+    const repair = await harness({ needsQueue: true });
+    const repairRun = await heldOnRepair(repair);
+    const repairId = repair.raisedAs[0]?.id ?? ("" as NeedsItemId);
+    const repairLeg = {
+      stopped: await outcomeOf(needsOf(repair).answer(repairId, 1, PRINCIPAL)),
+      state: stateOf(repair, repairRun),
+      open: needsOf(repair).list().length,
+    };
+    // no record: a forged run's item, whose one act is Stop (s14 Q12): done, never noSuchRun, its items ended
+    const gone = "fr-0000000000000000";
+    const noRecordLeg = {
+      acted: await repair.runs.acts
+        .answer({
+          id: "ny-item9aaaaaa" as NeedsItemId,
+          kind: "flow-gate",
+          run: { run: gone, flow: "gates", call: 1 },
+          choice: 2,
+          stop: true,
+          act: NEEDS_CHOICE_WORDS.stopRun,
+        })
+        .then(
+          (acted) => acted.outcome,
+          (error: unknown) => (error instanceof Error ? error.message : String(error)),
+        ),
+      items: repair.itemsEnded.includes(gone),
+    };
+    expect({ gateLeg, repairLeg, noRecordLeg }).toEqual({
+      gateLeg: { stopped: "done", state: "stopped", open: 0, sibling: "ended" },
+      repairLeg: { stopped: "done", state: "stopped", open: 0 },
+      noRecordLeg: { acted: "done", items: true },
     });
   });
 
@@ -5408,5 +6353,97 @@ describe("CP-4a2b — the host's life: parked and woken, D2's lookup at a wake, 
       held: undefined,
       hosts: 1,
     });
+  });
+
+  // slice 13 (D4, D19; Q1–Q3, Q11 (a′)): a person's Stop, in D4's order: the record's `stopping` first; the run's lines
+  // withdrawn, its items ended, and a handed session's turn the run's own line began paused (`agents.pause`, never
+  // `interrupt`); then each agent its steps started ended; then the `end` line with `ended`; then the record's
+  // `stopped`. The person's own working turn is never paused
+
+  /** Three steps the run starts, and two it hands: `run-began`, whose turn its line began, and `run-yours`. */
+  const STOPS = [
+    'export const meta = { name: "Stops" };',
+    "export default async function () {",
+    "  await Promise.all([",
+    `    agent("look at a", ${stepAt("A")}),`,
+    `    agent("look at b", ${stepAt("B")}),`,
+    `    agent("look at c", ${stepAt("C")}),`,
+    '    agent("Review this", { in: "run-began", label: "Began" }),',
+    '    agent("Review that", { in: "run-yours", label: "Yours" }),',
+    "  ]);",
+    "}",
+    "",
+  ].join("\n");
+
+  it("R40 (slice 13, D4, D19; Q1 (a), Q3, Q11 (a′)): Stop answers once the run has ended stopped, in D4's order: stopping, then its lines withdrawn, its items ended and the turn its line began paused, then its three agents ended, then `end {stopped, ended: 3}`, then the record's stopped", async () => {
+    // red-a: the stub answers the run running at once, and nothing is told, withdrawn, paused or ended
+    const h = await harness({
+      sessions: { "run-began": HANDED_YOURS, "run-yours": HANDED_YOURS },
+      beganIn: ["run-began"],
+    });
+    h.approved("stops", STOPS);
+    const run = startedRun(await h.start({ flow: "stops" })).run;
+    await waitFor(() => expect(h.enqueued).toHaveLength(5));
+    // one ordered log: the ports' asks (the harness's), the record's states as told, and the `end` line
+    let last: string | undefined;
+    h.runs.onChange((list) => {
+      const state = list.runs.find((summary) => summary.run === run)?.state;
+      if (state === undefined || state === last) return;
+      last = state;
+      h.order.push(`record:${state}`);
+    });
+    const append = h.records.appendRun.bind(h.records);
+    vi.spyOn(h.records, "appendRun").mockImplementation((at, entry) => {
+      const kept = append(at, entry);
+      if (entry.kind === "end") h.order.push("end-line");
+      return kept;
+    });
+    const stopped = (await h.runs.stop(run)).run;
+    /** each entry's step in D4's order; a step asked again in a row is one (the ends' sync part withdraws again) */
+    const phase = (entry: string): string =>
+      entry === "record:stopping"
+        ? "stopping"
+        : /^(withdraw|items|pause):/.test(entry)
+          ? "lines, items, the pause"
+          : entry.startsWith("end:")
+            ? "ends"
+            : entry === "end-line"
+              ? "end line"
+              : entry === "record:stopped"
+                ? "stopped"
+                : "";
+    const phases = h.order.map(phase).filter((at) => at !== "");
+    expect({
+      phases: phases.filter((at, i) => at !== phases[i - 1]),
+      state: stopped.state,
+      ended: stopped.ended,
+      lines: endLinesOf(h, run),
+      ends: [...h.ends].sort(),
+      paused: h.paused,
+      withdrawn: h.withdrawn.includes(run),
+      items: h.itemsEnded.includes(run),
+    }).toEqual({
+      phases: ["stopping", "lines, items, the pause", "ends", "end line", "stopped"],
+      state: "stopped",
+      ended: 3,
+      lines: [{ state: "stopped", ended: 3 }],
+      ends: ["rt-step1", "rt-step2", "rt-step3"],
+      paused: ["run-began"],
+      withdrawn: true,
+      items: true,
+    });
+  });
+
+  it("R40's own-turn leg (a pin, green at red-a; slice 13, D19, Q11 (a′)): a Stop never pauses the person's own working turn in a session the run was handed, which no line of the run began", async () => {
+    // the pin's mutation: Stop pauses every handed step reading `working`, `began` unread, and your turn is paused
+    const h = await harness({ sessions: { "run-yours": HANDED_YOURS } });
+    h.approved("handed", handedTo());
+    const run = startedRun(await h.start({ flow: "handed" })).run;
+    await waitFor(() => expect(h.enqueued).toHaveLength(1));
+    expect(h.records.runRecord(run)?.open.map((step) => [step.session, step.state])).toEqual([
+      ["run-yours", "working"],
+    ]);
+    await h.runs.stop(run);
+    expect(h.paused).toEqual([]);
   });
 });

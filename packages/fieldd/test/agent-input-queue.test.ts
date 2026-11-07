@@ -328,6 +328,46 @@ describe("CP-4a2b — a flow run's Stop withdraws its waiting lines (13a's D4, D
     ]);
     expect(again.delivered).toEqual([]);
   });
+
+  it("W2d (slice 13, F7; Q10) · a head in flight when its run's lines are withdrawn, whose receipt then rejects it, is dropped, never put back: the next poke never delivers it again, and the line behind it moves on", async () => {
+    // red-a: a rejected receipt puts the head back (`waiting`), so the withdrawn line is delivered again at the next
+    // poke; the green keeps the withdrawn head in flight apart (#withdrawnInFlight) and drops it at its rejection
+    let reject: ((receipt: DeliveryReceipt) => void) | undefined;
+    const h = harness([], undefined, () =>
+      reject === undefined
+        ? new Promise<DeliveryReceipt>((resolve) => {
+            reject = resolve;
+          })
+        : Promise.resolve<DeliveryReceipt>({ status: "confirmed" }),
+    );
+    h.queues.enqueue("run-s1", "Read the diff.", ours(1));
+    h.queues.enqueue("run-s1", "a word", VELA);
+    h.idle.add("run-s1");
+    const delivering = h.queues.poke("run-s1");
+    await h.flush();
+    // the head is in flight, and the line behind it is not the run's: nothing is withdrawn
+    const withdrawn = h.queues.withdraw(RUN);
+    reject?.({ status: "rejected", reason: "the session was busy" });
+    await delivering;
+    const settledAs = h.outcomes.map(({ text, outcome }) => [text, outcome]);
+    await h.queues.poke("run-s1");
+    expect({
+      withdrawn,
+      settledAs,
+      delivered: h.delivered.map((d) => d.text),
+      pending: h.queues.pending("run-s1"),
+      kept: h.kept("run-s1"),
+    }).toEqual({
+      withdrawn: [],
+      settledAs: [["Read the diff.", "dropped"]],
+      delivered: [
+        "Triage (a flow you ran) on your behalf:\nRead the diff.",
+        "Vela (your spark) on your behalf:\na word",
+      ],
+      pending: [],
+      kept: [],
+    });
+  });
 });
 
 describe("the kept queue is signed: a same-uid file can no longer speak as a spark or as VibeField (CP-3, LEANS P3; EL7)", () => {

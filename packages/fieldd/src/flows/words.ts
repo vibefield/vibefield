@@ -1,4 +1,4 @@
-import { FLOW_LIMITS, nameWords } from "@vibefield/contracts";
+import { FLOW_LIMITS, type FlowHostEnding, nameWords } from "@vibefield/contracts";
 
 // CP-4a2b (§13a slices 7–11) — what VibeField says of a run, one authority: DESIGN.md §9, line for line. No sentence
 // is here before §9 holds it. The file holds:
@@ -69,6 +69,22 @@ export const asideUnmatched = (flow: string): string =>
  * the same loss (Q-b). */
 export const hostUnconfigured = (): string =>
   "VibeField can't run flows: this copy of VibeField is missing the file it runs them with. Reinstall VibeField.";
+
+/** Why fieldd ended a run's host, by FLOW_HOST_ENDINGS' word: §9's four (DESIGN.md "When a run's script cannot go
+ * on"), each said after "VibeField ended ‹flow›:". A Record over the word, so a fifth ending fails tsc here until
+ * §9 holds its sentence. */
+const HOST_ENDED: Readonly<Record<FlowHostEnding, string>> = {
+  unanswered: "it stopped answering",
+  memory: "it used more memory than a flow may",
+  protocol: "it sent something VibeField can't read",
+  flood: "it sent more than a flow may",
+};
+
+/** CP-4a2b slice 13 (Q13, R43) — a run whose host fieldd ended (`ended`, FLOW_HOST_ENDINGS' `why`): said once, in
+ * fieldd's voice, on its record in place of the script's latest log line (DESIGN.md §9 "When a run's script cannot go
+ * on"). J1's flood says it too (its F2). `fatal`'s sentence is not FLOW_HOST_ENDINGS', so not here (13b's). */
+export const hostEnded = (flow: string, why: FlowHostEnding): string =>
+  `VibeField ended ${flow}: ${HOST_ENDED[why]}.`;
 
 /** No run fieldd keeps under that id. */
 export const noSuchRun = (run: string): string => `VibeField has no run ${run}.`;

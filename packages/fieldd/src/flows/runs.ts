@@ -13,6 +13,7 @@ import {
   type FlowRunStep,
   type FlowStarter,
   type FlowsListResult,
+  type FlowsStopResult,
   flowRunStateOf,
   flowsListOf,
   NEEDS_CHOICE_WORDS,
@@ -53,6 +54,7 @@ import {
 } from "./replay";
 import { readFlow } from "./static-read";
 import {
+  type FlowStepOf,
   FlowStepOrphaned,
   type FlowStepPorts,
   type FlowStepWrite,
@@ -140,7 +142,18 @@ export interface FlowRunSpark {
   readonly profiles: readonly string[];
 }
 
-/** fieldd's own interface to the runs (R32): what daemon.ts builds them from. Slice 7's part. */
+/** CP-4a2b slice 13 (Q4 (a)) — a session a run's steps started, as `sessions.ofRun` reads it by its origin
+ * (`{by: "flow", run, call}`): its call, and whether it lives. One read for slices 13 and 14. */
+export interface FlowRunSession {
+  readonly runtimeRunId: string;
+  readonly call: number;
+  readonly live: boolean;
+}
+
+/** fieldd's own interface to the runs (R32): what daemon.ts builds them from. Slice 7's part. Slice 13's six ports
+ * (`needs.onFlowRunEnded`, `inputs.withdraw`, `agents.end`, `agents.pause`, `sessions.ofRun`, `began`) are
+ * intersected here, as `stepEnds` is (N9), so FlowStepPorts does not widen for ports only the runs call; slice 15
+ * binds them. *Red-a (slice 13): declared, with no caller yet.* */
 export interface FlowRunPorts {
   /** the person's library: a run's flow is read here against its approval */
   readonly library: Pick<FlowLibrary, "read">;
@@ -152,6 +165,9 @@ export interface FlowRunPorts {
     /** a run's own item (slice 6's `flowItem`): a repair miss, a gate, a lost step; its id, and whether the
      * raise minted it (slice 11a's seam, Q5: a hold wakes the run's spark only for an item minted) */
     flowItem(raise: FlowItemRaise): FlowItemRaised;
+    /** slice 13 (Q9): a run ended, so its open items end, and an answer after is refused `ended` (queue.ts's
+     * `onFlowRunEnded`, built); idempotent */
+    onFlowRunEnded(run: string): void;
   };
   /** each step's turn end (flow-step-events.ts, CP4-S2's road): a step's answer reaches the runs here; a session an
    * `in:` hands a step is told to it at the hand (9b) */
@@ -159,11 +175,29 @@ export interface FlowRunPorts {
     onTurnEnd(listener: (end: FlowStepTurnEnd) => void): () => void;
   };
   /** the runtime's spawn, for a step's agent (slice 8; steps.ts `startStep` is its one road) */
-  readonly agents: FlowStepPorts["agents"];
+  readonly agents: FlowStepPorts["agents"] & {
+    /** slice 13 (Q5 (b)): a session the run started, ended: `endRun` as built, so a resolve is "taken, or already
+     * gone" and counts, and a rejection is "could not ask" and does not */
+    end(runtimeRunId: string): Promise<void>;
+    /** slice 13 (Q11 (a′), D19): a handed session's working turn the run began, paused at Stop alone:
+     * AgentRuntimeService.pause, NEVER `interrupt`, which escalates to an end (ruled 2026-11-07) */
+    pause(runtimeRunId: string): Promise<unknown>;
+  };
   /** each session's input queue, for a step's prompt (D5) */
-  readonly inputs: FlowStepPorts["inputs"];
+  readonly inputs: FlowStepPorts["inputs"] & {
+    /** slice 13 (Q10): a run's lines still waiting in any session's queue, withdrawn at every end (aiq.ts's
+     * `withdraw`, built for W2) */
+    withdraw(run: string): readonly { readonly runtimeRunId: string }[];
+  };
   /** the sessions an `in:` may name (D9) */
-  readonly sessions: FlowStepPorts["sessions"];
+  readonly sessions: FlowStepPorts["sessions"] & {
+    /** slice 13 (Q4 (a)): the sessions the run's steps started, by their origin, live or exited; never one it was
+     * handed, whose origin is not this run's (K8) */
+    ofRun(run: string): readonly FlowRunSession[];
+  };
+  /** slice 13 (Q11 (a′)): whether `runtimeRunId`'s turn working now is one this step's own line began (slice 15's
+   * accessor, beside Q9's `started`); top-level, never in `stepEnds`, which tests bind to the real FlowStepEvents */
+  began(runtimeRunId: string, step: FlowStepOf): boolean;
   /** the folder a run's input names (CP4-Q20 (a)) */
   folderOf: FlowStepPorts["folderOf"];
   /** the project folders this desktop knows (D9's `cwd`) */
@@ -621,6 +655,16 @@ export class FlowRuns {
       starter: record.starter,
       scope: record.scope.filter((profile) => profiles.has(profile)),
     };
+  }
+
+  /** CP-4a2b slice 13 (Q1; M-d's seam, `stop(run): Promise<FlowsStopResult>`) — a person's Stop of a run.
+   * *Red-a's stub (slice 13): it answers the run as its record stands, and acts on nothing; Stop's turn, `#ends`,
+   * `#finishStop` and the end's agents are the green's.* A run no record keeps is NOT_FOUND, in noSuchRun's words. */
+  async stop(run: string): Promise<FlowsStopResult> {
+    const record = this.ports.records.runRecord(run);
+    if (record === undefined)
+      throw new RpcCallError("NOT_FOUND", words.noSuchRun(run), false, { run });
+    return { run: this.#summaryOf(record) };
   }
 
   /** The runs' side of their items (the needs queue's FlowItemActs, bound in slice 15), an answer handed on once. */
