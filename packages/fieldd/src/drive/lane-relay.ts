@@ -123,23 +123,28 @@ export class DriveLaneRelay {
     return this.#subscribe(false);
   }
 
-  /** The node came up (MeshClient's "node-up", `DriveService.nodeUp`): a `start` the floor refused is armed now, and
-   * so is a reconnect whose re-subscribe the floor refused (`#renewOwed`), since the stream kept then may be the
-   * replay's entry with no route. So a link that never reconnects again still hears the lane table. The table is the
+  /** The node came up (MeshClient's "node-up", `DriveService.nodeUp`): a `start` that was refused is armed now, and so
+   * is a reconnect whose re-subscribe was refused (`#renewOwed`: by the floor, by NativeLink's door gate, or read
+   * TIMEOUT here), since the stream kept then may be the replay's entry with no route. Every subscribe in flight is
+   * waited out first, one after another, so a refusal this node-up waited on is renewed here. A node-up that came
+   * before the refusal does not count: the table then waits for the next node-up or reconnect. The table is the
    * floor's bridge's, not the node's (field-native `mgmt/mesh.rs`: `lane.subscribe` is answered ahead of the node
-   * gate), so any other stream that stands is kept, and one in flight is shared. Never throws: a subscribe refused
-   * here is logged, and the next node-up or reconnect asks again. */
+   * gate), so any other stream that stands is kept. Never throws: a subscribe refused here is logged, and the next
+   * node-up or reconnect asks again. */
   async nodeUp(): Promise<void> {
+    while (this.#arming !== null) await this.#arming.catch(() => undefined);
     await this.#subscribe(this.#renewOwed).catch((error: unknown) => this.#unheard(error));
   }
 
   /** The mgmt link reconnected (NativeLink's "connected"): the lane table is subscribed anew. NativeLink's replay may
    * have been refused or read TIMEOUT (native-link.ts `replaySubscriptions`), which leaves its entry with no route and
-   * this side untold: no lane opens or closes here until the next reconnect. So, once a subscribe in flight has ended,
-   * ONE subscribe is made on the new connection, as `DrivePulls.connected` does, and its snapshot re-derives every
-   * lane (`#resync`). The stream that stood is let go only once that one is answered (`#arm`), so a subscribe refused
-   * here leaves the lane table heard as it was, the live table when the replay ran, and the next node-up or reconnect
-   * asks again (`#renewOwed`). A `start` the floor refused is armed the same way. The cost: a stream let go keeps its
+   * this side untold: no lane opens or closes here until the next reconnect. The replay goes by `rawRequest`, past
+   * NativeLink's door gate, so it is the floor that refuses it or answers it late; the subscribe made here can also
+   * meet the door gate. So, once a subscribe in flight has ended, ONE subscribe is made on the new connection, as
+   * `DrivePulls.connected` does, and its snapshot re-derives every lane (`#resync`). The stream that stood is let go
+   * only once that one is answered (`#arm`), so a subscribe refused here leaves the lane table heard as it was, the
+   * live table when the replay ran, and the next node-up or reconnect asks again (`#renewOwed`; a node-up that came
+   * before the refusal does not count, `nodeUp`). A `start` that was refused is armed the same way. The cost: a stream let go keeps its
    * forwarder writing to the connection until it closes, every lane event of every protocol on the floor's one bridge
    * (field-native `mgmt/mesh.rs`, `spawn_lane_forwarder`), and fieldd drops those lines; so does a subscribe the floor
    * ran that read TIMEOUT here, the replay included, because no route is made for an answer read late.

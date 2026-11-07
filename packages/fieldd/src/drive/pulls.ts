@@ -396,8 +396,8 @@ export class DrivePulls {
   #saidUnsupported: string | null = null;
   #subscription: { dispose: () => void } | null = null;
   #subscribing: Promise<void> | null = null;
-  /** a pull read refused may have run (`#askIfRan`), or the confirm timer fired for such a row (`#confirmLater`), and
-   * no subscribe has left since: one is owed, and `#serve` clears this as it leaves */
+  /** a pull read refused may have run (`#askIfRan`), or the confirm timer fired for such a row with no subscribe in
+   * flight (`#confirmLater`), and no subscribe has left since: one is owed, and `#serve` clears this as it leaves */
   #rowUnconfirmed = false;
   /** the plain subscribe's next attempt while no stream stands (`#follow`, `#askForForeign`): set only while none is
    * in flight */
@@ -737,7 +737,8 @@ export class DrivePulls {
   }
 
   /** Whether a subscribe is owed: a pull is held with none left since its hold began, or a pull read refused has none
-   * left since that refusal (`#askIfRan`) or since the confirm timer fired for its row (`#confirmLater`). */
+   * left since that refusal (`#askIfRan`) or since the confirm timer fired for its row with no subscribe in flight
+   * (`#confirmLater`). */
   #owesFresh(): boolean {
     if (this.#rowUnconfirmed) return true;
     for (const own of this.#own.values()) if (own.held !== null && !own.asked) return true;
@@ -837,8 +838,9 @@ export class DrivePulls {
    * RESOURCE_EXHAUSTED; or UNAVAILABLE from NativeLink's door gate while the floor is held unresponsive,
    * native-link.ts:1173-1183, a missing socket or a stopped mesh worker), and the stream stood, so no end will come
    * for a row that never ran, and no other ask is made over a standing stream (`#askForForeign`). So
-   * ONE timer is set at the first of `#retryDelaysMs`, with no subscribe in flight and none set, and as it fires the
-   * row's ask is owed again (`#rowUnconfirmed`): one re-subscribe, whose snapshot lists the row or forgets it. Its
+   * ONE timer is set at the first of `#retryDelaysMs`, with no subscribe in flight and none set, and as it fires with
+   * none in flight the row's ask is owed again (`#rowUnconfirmed`): one re-subscribe, whose snapshot lists the row or
+   * forgets it (a subscribe in flight then is one that left after the refusal, and its snapshot says, `#confirm`). Its
    * asks come at least that delay apart however fast a caller is refused, each one delay after a refusal, and end
    * as the last such row is confirmed or forgotten (`#confirmed`); with no stream, the series asks
    * (`#askForForeign`). */

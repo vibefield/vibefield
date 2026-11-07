@@ -104,9 +104,9 @@ export class DriveService implements DriveTransportPort {
 
   /** The node came up (MeshClient's "node-up"). The holders follow the pulls' subscribe and roots, each a request
    * NativeLink ends by its deadline (NATIVE_SUPERVISION.REQUEST_DEADLINE_MS). The lane table is asked beside them,
-   * neither behind nor ahead (`connected`'s reason), and only while no lane-table stream stands (a `start` refused,
-   * or not yet run) or a reconnect's re-subscribe was refused: it is not the node's (lane-relay.ts `nodeUp`). None of
-   * the three throws. */
+   * neither behind nor ahead (`connected`'s reason), once its own subscribes in flight have ended, and only while no
+   * lane-table stream stands (a `start` refused, or not yet run) or a reconnect's re-subscribe was refused: it is not
+   * the node's (lane-relay.ts `nodeUp`). None of the three throws. */
   async nodeUp(): Promise<void> {
     const pullsThenHolders = this.#pulls.nodeUp().then(() => this.#holders.nodeUp());
     await Promise.all([this.#relay.nodeUp(), pullsThenHolders]);
