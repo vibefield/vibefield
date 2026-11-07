@@ -41849,3 +41849,84 @@ no product item.
 **Owed.**
 - **The first CI verify of main that carries the land** (push 119's) is the first proof under CI's load, where
   resume-when-idle bit. Read `agent-session.test.ts`'s two rows there; a red now names the record, not a clock.
+
+## DR-3b (W3's VF-RELAY) — fieldd's half of the drive's transfer: pulls over the floor's file transfer, this desktop's holders slice and opaque drive records on one lane per peer, held to their rows over a mock floor and unwired until the integration lane; a floor restart no longer freezes the holders list (track DR) (2026-11-07)
+(2026-11-07; nineteen commits on `dr/w3-relay`, the DR lead's, built in `/Volumes/SamsungRed/lanes/ma/1/vibe-field`
+on main `b833d4116` (W3 A + B, their records, item 216): R1 to R6, the snapshot write order, race#0 (b), W3-21, four
+review folds, fold 3b and its execution, and folds 4 to 7 (source tip `df508fbbf`).
+- Re-cut by `git replay` onto `75adb9a06` as `2d925008e` (the packet VF-PM verified at 14:32:41Z).
+- Then onto `80562394e` (item 233, M216) as `3c5c4937b` (VF-PM 15:11Z: so the run carries 233's fix).
+- Each re-cut reads range-diff `=` at all nineteen, with both patch-id forms equal (`f350d4548cf1` -U0, `a8b9a87b3f9a`)
+  and the trial merge's tree equal to the tip's (`805237ab8`). `lanes/dr/briefs/w3-relay-3c5c4937b/`, SUMS `b042ab6d…`.
+- Verified at `3c5c4937b` on `80562394e` (run 217, a9's, on the old mini; armed 16:55:35Z at a 1-min load of 1.67),
+  M217. The combination is named at the arm: main `e588849d9` = `80562394e` plus two docs-only records commits.
+- Landed as `0e61d7f0a`, the M196 replay of the nineteen onto `e588849d9`, fast-forwarded at 17:11:00Z by the fixer
+  (`lanes/dr/records/w3-relay/land-proof.txt`).)
+The Drive's fifth landing: W3's relay lane, VF-RELAY (DR-3b), after the floor's (DR-3a, M203). Nothing constructs a
+`DriveService` yet: the daemon's wiring of NativeLink's "reconnecting" and "connected" and MeshClient's "node-up" is
+the integration lane's, after EL8-TRUFFLE (`w3-plan.md` §5.8). So nothing here is reachable in production.
+
+**The headline: F1, an ordinary-path defect, found by review and fixed before the land.** At `4bd43afa6`,
+`DriveHolders.nodeUp()` returned while a stream stood, so the holders list froze until a later reconnect. The review
+(wf_7616f14e-80c) found it. Its skeptic, by reading on 2026-11-07, showed it happens on EVERY floor restart of a linked
+desktop: "A fresh floor boots with no node … So the replay of native.mesh.store.subscribe always meets the node gate …
+The refused entry stays in subs with no route … #slices stays frozen until a later reconnect's replay is answered."
+Fold 4 (`6c95bafac`) fixed it. `nodeUp` makes ONE subscribe once any in flight has ended, and fold 5 lets the stream
+that stood go only once the new one is answered. The review also names the same shape in DeviceService and
+DocHoldersService (G1's defect; item 238); that claim is not re-read here.
+
+**What landed.** 9 files, +7108 −2, all under `packages/fieldd`: eight new files, and `src/testing/mock-mgmt.ts`,
+which gains additive knobs only. No contract, manifest, lock or native input moves (path check empty, no pin-class hit).
+- `drive/pulls.ts`, `DrivePulls`: a ULID per pull, the floor's refusal order, the stream with its snapshot write order
+  (W3-16), held pulls bound by `HELD_PULL_BOUND_MS` through a reconnect and an outage (W3-21, F3), adopt candidates from
+  three sources, and a pull read refused that may have run kept as a row until a snapshot says (F2). Over a standing
+  stream, such a row asks again by one paced confirm timer (L1). The header states the invariants: one flight; at most
+  the series' timer and the confirm timer, one each; held implies one live bound. The doc at `#doSubscribe` names the
+  one replay order it does not close (F9).
+- `drive/holders.ts`, `DriveHolders`: this desktop's `field.drive.v1` slice, in DocHoldersService's shape, and every
+  other desktop's as the store last said it. A closed drive withdraws with one null slice, and `#published` is marked
+  as a write leaves (F7).
+- `drive/lane-relay.ts`, `DriveLaneRelay`: opaque records on one reliable `drive` lane per peer. The lane table is
+  re-derived from each snapshot (F5) and subscribed anew at each reconnect (F4, F8). A node-up renews it after a
+  refused re-subscribe, once every subscribe in flight has ended (C5-1, R6-1). A throwing peer listener is guarded
+  (B5).
+- `drive/service.ts`, `DriveService`: the transport port the files worker will adapt. `connected` runs its three parts
+  together (T17), `nodeUp` asks the lane table beside the pulls-then-holders chain (L2), and `disconnected` hands the
+  outage to the pulls.
+- Rows: drive-pulls 82, drive-holders 31, drive-lane-relay 37 (150). They were 58 at `4bd43afa6`.
+
+**The verify (run 217, M217).** Green: "verify done (verify 0)" at 17:02:14Z (`run217.out:9`), with
+the strict FAIL count 0 (`lanes/dr/a9-w3-relay-3c5c4937b-results/`, SUMS-a9 `67a9dc3e`).
+- fieldd: Test Files 266 passed | 5 skipped (271) and Tests 3758 passed | 15 skipped (3773),
+  against run 216's 268 and 3623.
+- The three drive files: `drive-pulls.test.ts` 82 (29.6 s), `drive-holders.test.ts` 31,
+  `drive-lane-relay.test.ts` 37.
+- biome: 3499 files checked, 73 warnings and 21 infos, against 3491 files, 73 warnings and 21 infos.
+- Every other vitest project reads run 216's Tests line (27 of the 28, compared as a set): field-app
+  4392, electron-shell 2746 | 2 skipped, contracts 1948. typecheck 29 projects, node:test 474 (fail 0), cargo
+  606 over 37 binaries.
+- The named timing rows: none went red, at a 1-min load peak of 48.3 (`run217-load.log`);
+  drive-pulls ran 29.6 s, against about 31 s on the MacBook.
+
+**Mutants, and one with no red-row kill.** On the MacBook under the HOLD's door, none of record: fold 4 ran 102,
+fold 5 ran 62, fold 6 ran 5, fold 7 ran 2. Each was KILLED or named.
+- Fold 4's `f2-serve-clear` (deleting `#serve`'s clear of the owed-subscribe flag) had no red-row kill. It hung the
+  file in a microtask spin for 8m40s. Its bounded variant on the same line, `f2-serve-clear-late`, was killed by 5
+  rows (VF-PM 12:37Z: a finding, not a pass).
+- Fold 5 added a subscribe budget to the rows' memory floor and a row that reds on the count. The same mutant, run
+  unchanged, is KILLED by 12 rows in 46 s. The budget line itself survives on correct code, by design.
+
+**Owed and carried.**
+- The six claims EL8-TRUFFLE falsifies stay as they are, and truffle corrects them at its replay (VF-PM 07:42Z):
+  `drive/service.ts:24`, `testing/mock-mgmt.ts:69` and `:202`, `test/drive-fakes.ts:22` and `:259`,
+  `test/drive-pulls.test.ts:3`.
+- The integration lane wires `DriveService` to the daemon.
+- One order stays uncured, and the relay's docs name it: a node-up that comes before a reconnect's refused
+  re-subscribe (it can land during NativeLink's replays) keeps the stream it saw, so the lane table waits for the next
+  node-up or reconnect, as the holders document for a refused renewal. The root is NativeLink's: a replay that is
+  refused or reads TIMEOUT leaves its entry with no route and tells no one. Item 237, carried by VF-PM's ruling of
+  14:33Z.
+- Fold 7 was not reviewed on its own: its code is the fold-6 skeptic's fix, its rows that skeptic's probes.
+- C5-1's likelihood rests on whether a floor's boot can stall its mgmt queue through both the replay and the
+  re-subscribe. That was not read in field-native.
+- The rows have run in the full graph only once, at this verify. Every mutant ran on the MacBook only.
