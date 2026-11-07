@@ -992,7 +992,9 @@ export const NeedsItem = z
     ask: z.string().min(1).max(32).optional(),
     tool: z.string().min(1).max(128).optional(),
     /** CP-4 — a flow's item: its run (absent while none has started: a proposal, a flow that changed before its run),
-     * and the step it holds at (`call`, counted from 1 in the run's journal, with the script's `label`) */
+     * and the step it holds at (`call`, counted from 1 in the run's journal, with the script's `label`)
+     * *Corrected 2026-11-07 (CP-4a2b slice 12, Q16; ruled 2026-11-07):* `label` is a step's, when the item holds at one;
+     * the cap holds the run, not a step, and its item carries no `label`. */
     run: NeedsRun.optional(),
     /** CP-4 — the bytes a proposal or a changed flow is about, for Read the script and See the change
      * (`flows.script` by hash): `hash` is the version the item would approve or run, `approved` the one approved */
