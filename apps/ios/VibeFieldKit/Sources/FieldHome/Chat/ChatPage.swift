@@ -188,6 +188,13 @@ struct ChatPage: View {
         pressedForStills = true
         feed.press(item, choice: press.choice, spark: item.spark ?? "", names: NeedsCards.names(of: item))
       }
+      // IOS-12d — `-vf-needs-case=away`: both lists heard with mini awake, it sleeps and they are asked again, so what
+      // it said arrives carried. On "heard", never a timer: a reading has to stand before there is anything to carry.
+      .onChange(of: feed.reading.heard && feed.reading.needsHeard, initial: true) { _, both in
+        guard both, ChatFixtureDoor.needsCase == "away" else { return }
+        ChatFixtureDoor.shared.miniSleeps()
+        feed.refresh()
+      }
     #endif
   }
 

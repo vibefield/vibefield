@@ -34,6 +34,7 @@ struct ChatNeedsTests {
 
     var calls: [(method: String, params: JSONValue?)] = []
     var needs: JSONValue? = ChatFixtureDoor.fixture("needs-list.merged")
+    var sparks: JSONValue? = ChatFixtureDoor.fixture("compose-sparks-list.merged")
     var outcome: Outcome = .done(told: true)
     private var waiting: [CheckedContinuation<Void, Never>] = []
 
@@ -44,7 +45,7 @@ struct ChatNeedsTests {
     func call(_ method: String, params: JSONValue?) async throws -> JSONValue {
       calls.append((method, params))
       switch method {
-      case "compose.sparks.list": return ChatFixtureDoor.fixture("compose-sparks-list.merged") ?? .null
+      case "compose.sparks.list": return sparks ?? .null
       case "needs.list": return needs ?? .null
       case "agent.catalog": return ChatFixtureDoor.fixture("agent-catalog.valid") ?? .null
       case "needs.answer": return try await answer(params)
@@ -335,6 +336,35 @@ struct ChatNeedsTests {
     #expect(ChatNeedsWords.away("studio", .silent, device: phone) == "studio isn't answering · answer when it answers")
     let build = ChatNeedsWords.away("studio", .incompatible, device: phone)
     #expect(build == "studio runs a build \(phone.this) can't read · answer when it's updated")
+  }
+
+  @Test("a sleeping desktop's item is carried to the group: it still waits under its spark, its card stands away (Q8)")
+  func carried() async throws {
+    let door = Door()
+    door.sparks = try ChatFixtureDoor.awaySparks(awake: true)
+    door.needs = try ChatFixtureDoor.awayNeeds(awake: true)
+    let feed = await makeFeed(door)
+    // mini sleeps: it lists neither Vela nor her spawn, so what stands from here on can only have been carried
+    door.sparks = try ChatFixtureDoor.awaySparks(awake: false)
+    door.needs = try ChatFixtureDoor.awayNeeds(awake: false)
+    // the queue's asks never overlap, so the second is made only once the first's answer is read
+    let asked = door.count("needs.list")
+    feed.refresh()
+    feed.refresh()
+    await settle { door.count("needs.list") >= asked + 2 && feed.reading.desktops.contains { $0.known == .asleep } }
+    let entries = SparkEntries.entries(sparks: feed.reading.sparks, rows: [], items: feed.reading.items)
+    let vela = entries.first { $0.spark.id == ChatFixtureDoor.vela }
+    #expect(vela?.needsYou == true)
+    #expect(SparkEntries.needing(entries) == 1)
+    let cards = ChatNeeds.group(items: feed.reading.items, entries: entries, answering: feed.answering, reduced: false)
+    #expect(cards.count == 1)
+    let card = try #require(cards.first)
+    #expect(card.waits)
+    let lines = ChatAway.lines(feed.reading, home: Self.home, homeListed: true, name: { _ in "mini" })
+    let away = ChatNeeds.away(of: card.item, in: lines, connected: true)
+    #expect(away?.device == ChatFixtureDoor.mini)
+    #expect(away?.standing == .asleep)
+    #expect(away?.carried == true)
   }
 
   @Test("an answer that comes back off screen is said on the note, only when it did not go as asked (Q4)")

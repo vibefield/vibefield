@@ -92,6 +92,8 @@ struct ChatNeedsCardView: View {
     .padding(.horizontal, 16)
     .frame(maxWidth: .infinity, alignment: .leading)
     .background(RoundedRectangle(cornerRadius: Self.corner, style: .continuous).fill(ChromePalette.fill))
+    // the fill is 8% white at night and a thread holds this card over its flow: paper under it, so none shows through
+    .background(RoundedRectangle(cornerRadius: Self.corner, style: .continuous).fill(ChromePalette.paper))
     .overlay(
       RoundedRectangle(cornerRadius: Self.corner, style: .continuous)
         .strokeBorder(
