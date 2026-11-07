@@ -1,0 +1,281 @@
+{
+  "recordId": "prov.hermes.context.usedPercent",
+  "pins": {
+    "vibefield": "433505fd0f224f4cda540d642661b13848c0ef82",
+    "puppeteer": "748d015a7e393112e0a91dad80111fdf5abe6583"
+  },
+  "adapterId": "adapter.hermes",
+  "fieldId": "field.context.usedPercent",
+  "sources": [
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/adapter-hermes/src/normalization/monitor-capabilities.ts",
+      "lineStart": 40,
+      "lineEnd": 51,
+      "symbol": "context"
+    },
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/adapter-hermes/src/normalization/monitor.ts",
+      "lineStart": 325,
+      "lineEnd": 343,
+      "symbol": "percentageSource"
+    },
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/adapter-hermes/src/normalization/context-window.ts",
+      "lineStart": 4,
+      "lineEnd": 37,
+      "symbol": "normalizeHermesContextWindow"
+    },
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/views/src/views/swarm/bubble-model.ts",
+      "lineStart": 328,
+      "lineEnd": 331,
+      "symbol": "contextPercent"
+    }
+  ],
+  "producer": {
+    "kind": "adapter",
+    "name": "context.usedPercent",
+    "ingestedFrom": "context_percent"
+  },
+  "transforms": [
+    {
+      "order": 0,
+      "name": "context_percent",
+      "effect": "Usage context_used, context_max, and context_percent become a root context claim. [post-0.3.3]",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/adapter-hermes/src/normalization/monitor.ts",
+        "lineStart": 325,
+        "lineEnd": 343,
+        "symbol": "percentageSource"
+      }
+    },
+    {
+      "order": 1,
+      "name": "pipeline-context",
+      "effect": "The same session.info usage also becomes context-window:updated when used and capacity are finite.",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/adapter-hermes/src/normalization/context-window.ts",
+        "lineStart": 4,
+        "lineEnd": 37,
+        "symbol": "normalizeHermesContextWindow"
+      }
+    },
+    {
+      "order": 2,
+      "name": "translateAgentEventEnvelope",
+      "effect": "Maps the AgentEvent into monitor family updates. [post-0.3.3]",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/core/src/monitor/reduce.ts",
+        "lineStart": 817,
+        "lineEnd": 1148,
+        "symbol": "translateAgentEventEnvelope"
+      }
+    },
+    {
+      "order": 3,
+      "name": "acceptAgentEvent",
+      "effect": "Admits the runtime-plane input. session:exited and process:exited do not clear liveness without host process evidence. [post-0.3.3]",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/runtime/src/services/monitor-service.ts",
+        "lineStart": 227,
+        "lineEnd": 269,
+        "symbol": "acceptAgentEvent"
+      }
+    },
+    {
+      "order": 4,
+      "name": "acceptSemantic",
+      "effect": "Parses the adapter batch and stores it on the semantic plane. [post-0.3.3]",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/runtime/src/services/monitor-service.ts",
+        "lineStart": 256,
+        "lineEnd": 269,
+        "symbol": "acceptSemantic"
+      }
+    },
+    {
+      "order": 5,
+      "name": "selectClaims",
+      "effect": "Keeps one current claim per family key across the runtime and semantic planes. [post-0.3.3]",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/core/src/monitor/selection.ts",
+        "lineStart": 130,
+        "lineEnd": 141,
+        "symbol": "selectClaims"
+      }
+    },
+    {
+      "order": 6,
+      "name": "projectAgentMonitorState",
+      "effect": "Projects AgentMonitorState from the transition basis, context, model, effort, reply, and usage. [post-0.3.3]",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/core/src/monitor/project.ts",
+        "lineStart": 325,
+        "lineEnd": 449,
+        "symbol": "projectAgentMonitorState"
+      }
+    },
+    {
+      "order": 7,
+      "name": "deriveAgentRow",
+      "effect": "Copies the projected runtime state onto the host row, applying host defaults.",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/monitor/src/backend/derive.ts",
+        "lineStart": 240,
+        "lineEnd": 286,
+        "symbol": "deriveAgentRow"
+      }
+    },
+    {
+      "order": 8,
+      "name": "projectContext",
+      "effect": "usedPercent comes from a provider percentage or from used divided by a positive capacity. Unavailable occupancy alone does not set it. [post-0.3.3]",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/core/src/monitor/project.ts",
+        "lineStart": 90,
+        "lineEnd": 116,
+        "symbol": "projectContext"
+      }
+    },
+    {
+      "order": 9,
+      "name": "createMonitorBackend",
+      "effect": "fieldd hosts the monitor backend on the runtime source and passes the current-epoch cost reading.",
+      "source": {
+        "repo": "vibefield",
+        "sha": "433505fd0f224f4cda540d642661b13848c0ef82",
+        "path": "packages/fieldd/src/agent-monitor.ts",
+        "lineStart": 461,
+        "lineEnd": 493,
+        "symbol": "createMonitorBackend"
+      }
+    },
+    {
+      "order": 10,
+      "name": "wireMonitorRow",
+      "effect": "The model wire drops device.self. This desktop's window otherwise reads the row whole.",
+      "source": {
+        "repo": "vibefield",
+        "sha": "433505fd0f224f4cda540d642661b13848c0ef82",
+        "path": "packages/fieldd/src/agent-field.ts",
+        "lineStart": 586,
+        "lineEnd": 596,
+        "symbol": "wireMonitorRow"
+      }
+    },
+    {
+      "order": 11,
+      "name": "peerMonitorRow",
+      "effect": "A peer loses project.seq and has detail, activity line, wait text, and reply text bounded.",
+      "source": {
+        "repo": "vibefield",
+        "sha": "433505fd0f224f4cda540d642661b13848c0ef82",
+        "path": "packages/fieldd/src/agent-field.ts",
+        "lineStart": 664,
+        "lineEnd": 700,
+        "symbol": "peerMonitorRow"
+      }
+    },
+    {
+      "order": 12,
+      "name": "modelRowFrom",
+      "effect": "The reader restores device.self and fills a missing writable from attachable.",
+      "source": {
+        "repo": "vibefield",
+        "sha": "433505fd0f224f4cda540d642661b13848c0ef82",
+        "path": "packages/field-app/src/godview/monitor/model-board.ts",
+        "lineStart": 112,
+        "lineEnd": 123,
+        "symbol": "modelRowFrom"
+      }
+    },
+    {
+      "order": 13,
+      "name": "window-rows",
+      "effect": "No display rewrite for this field. The row is spread through, aside from peer stale and peer profileSet.",
+      "source": {
+        "repo": "vibefield",
+        "sha": "433505fd0f224f4cda540d642661b13848c0ef82",
+        "path": "packages/field-app/src/godview/monitor/window-rows.ts",
+        "lineStart": 67,
+        "lineEnd": 139,
+        "symbol": "createWindowRows"
+      }
+    }
+  ],
+  "merge": {
+    "strategy": "fold",
+    "defaults": []
+  },
+  "transport": {
+    "channel": "model-port",
+    "name": "agent.subscribe projection model scope mesh",
+    "contract": "MonitorAgentRow"
+  },
+  "renderer": {
+    "viewIds": [
+      "view.list",
+      "view.rain",
+      "view.swarm"
+    ],
+    "component": "contextPercent",
+    "symbol": "contextPercent"
+  },
+  "applicability": {
+    "states": [
+      "state.context_missing",
+      "state.context_hot"
+    ],
+    "views": [
+      "view.list",
+      "view.rain",
+      "view.swarm"
+    ],
+    "notes": "Views listed are confirmed consumers. An unlisted view is unknown, not a proof it ignores the field."
+  },
+  "absence": {
+    "onMissing": "omit-field",
+    "onStale": "keep-and-mark-stale",
+    "zeroPolicy": "unknown-unsupported-and-absent-are-not-zero"
+  },
+  "observation": {
+    "presence": "present",
+    "synthetic": false
+  },
+  "classification": {
+    "modelSupported": "yes",
+    "adapterEmittable": "yes",
+    "uiReachable": "yes"
+  },
+  "verification": {
+    "status": "source-read",
+    "owner": "GV-AUDIT4",
+    "notes": "Declared context=degraded. Current occupancy and capacity are emitted only after the context engine has a real prompt measurement. The pinned 0.21.5 fake-provider census carried them only on session.info and message.complete usage. Hermes refreshes the gateway gauge at response boundaries rather than continuously during a turn. Audit pin is puppeteer 748d015, newer than the 0.3.3 package vibefield ships (tag v0.3.3, commit 52d09c8e). This record does not compare 0.3.3 behavior. A transform effect ending in [post-0.3.3] cites a puppeteer file whose text differs from 52d09c8e."
+  }
+}

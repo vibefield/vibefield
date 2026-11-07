@@ -1,0 +1,228 @@
+{
+  "recordId": "prov.grok.tokens.total",
+  "pins": {
+    "vibefield": "433505fd0f224f4cda540d642661b13848c0ef82",
+    "puppeteer": "748d015a7e393112e0a91dad80111fdf5abe6583"
+  },
+  "adapterId": "adapter.grok",
+  "fieldId": "field.tokens.total",
+  "sources": [
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/adapter-grok/src/normalization/monitor-capabilities.ts",
+      "lineStart": 26,
+      "lineEnd": 41,
+      "symbol": "usage"
+    },
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/adapter-grok/src/normalization/usage.ts",
+      "lineStart": 41,
+      "lineEnd": 55,
+      "symbol": "contribution"
+    }
+  ],
+  "producer": {
+    "kind": "adapter",
+    "name": "tokens.total",
+    "ingestedFrom": "GrokUsageEvidence"
+  },
+  "transforms": [
+    {
+      "order": 0,
+      "name": "GrokUsageEvidence",
+      "effect": "Live response_completed and turn_completed usage become canonical token contributions. No costUsd is set.",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/adapter-grok/src/normalization/usage.ts",
+        "lineStart": 41,
+        "lineEnd": 55,
+        "symbol": "contribution"
+      }
+    },
+    {
+      "order": 1,
+      "name": "acceptSemantic",
+      "effect": "Parses the adapter batch and stores it on the semantic plane. [post-0.3.3]",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/runtime/src/services/monitor-service.ts",
+        "lineStart": 256,
+        "lineEnd": 269,
+        "symbol": "acceptSemantic"
+      }
+    },
+    {
+      "order": 2,
+      "name": "selectClaims",
+      "effect": "Keeps one current claim per family key across the runtime and semantic planes. [post-0.3.3]",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/core/src/monitor/selection.ts",
+        "lineStart": 130,
+        "lineEnd": 141,
+        "symbol": "selectClaims"
+      }
+    },
+    {
+      "order": 3,
+      "name": "projectAgentMonitorState",
+      "effect": "Projects AgentMonitorState from the transition basis, context, model, effort, reply, and usage. [post-0.3.3]",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/core/src/monitor/project.ts",
+        "lineStart": 325,
+        "lineEnd": 449,
+        "symbol": "projectAgentMonitorState"
+      }
+    },
+    {
+      "order": 4,
+      "name": "deriveAgentRow",
+      "effect": "Copies the projected runtime state onto the host row, applying host defaults.",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/monitor/src/backend/derive.ts",
+        "lineStart": 240,
+        "lineEnd": 286,
+        "symbol": "deriveAgentRow"
+      }
+    },
+    {
+      "order": 5,
+      "name": "queryUsageIndex",
+      "effect": "Canonical deltas and cumulative samples become tokens.total and tokens.perMinute. [post-0.3.3]",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/core/src/monitor/usage-index.ts",
+        "lineStart": 511,
+        "lineEnd": 556,
+        "symbol": "queryUsageIndex"
+      }
+    },
+    {
+      "order": 6,
+      "name": "agentTokens",
+      "effect": "The row tokens object is omitted when both total and perMinute are absent.",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/monitor/src/backend/derive.ts",
+        "lineStart": 198,
+        "lineEnd": 208,
+        "symbol": "agentTokens"
+      }
+    },
+    {
+      "order": 7,
+      "name": "createMonitorBackend",
+      "effect": "fieldd hosts the monitor backend on the runtime source and passes the current-epoch cost reading.",
+      "source": {
+        "repo": "vibefield",
+        "sha": "433505fd0f224f4cda540d642661b13848c0ef82",
+        "path": "packages/fieldd/src/agent-monitor.ts",
+        "lineStart": 461,
+        "lineEnd": 493,
+        "symbol": "createMonitorBackend"
+      }
+    },
+    {
+      "order": 8,
+      "name": "wireMonitorRow",
+      "effect": "The model wire drops device.self. This desktop's window otherwise reads the row whole.",
+      "source": {
+        "repo": "vibefield",
+        "sha": "433505fd0f224f4cda540d642661b13848c0ef82",
+        "path": "packages/fieldd/src/agent-field.ts",
+        "lineStart": 586,
+        "lineEnd": 596,
+        "symbol": "wireMonitorRow"
+      }
+    },
+    {
+      "order": 9,
+      "name": "peerMonitorRow",
+      "effect": "A peer loses project.seq and has detail, activity line, wait text, and reply text bounded.",
+      "source": {
+        "repo": "vibefield",
+        "sha": "433505fd0f224f4cda540d642661b13848c0ef82",
+        "path": "packages/fieldd/src/agent-field.ts",
+        "lineStart": 664,
+        "lineEnd": 700,
+        "symbol": "peerMonitorRow"
+      }
+    },
+    {
+      "order": 10,
+      "name": "modelRowFrom",
+      "effect": "The reader restores device.self and fills a missing writable from attachable.",
+      "source": {
+        "repo": "vibefield",
+        "sha": "433505fd0f224f4cda540d642661b13848c0ef82",
+        "path": "packages/field-app/src/godview/monitor/model-board.ts",
+        "lineStart": 112,
+        "lineEnd": 123,
+        "symbol": "modelRowFrom"
+      }
+    },
+    {
+      "order": 11,
+      "name": "window-rows",
+      "effect": "No display rewrite for this field. The row is spread through, aside from peer stale and peer profileSet.",
+      "source": {
+        "repo": "vibefield",
+        "sha": "433505fd0f224f4cda540d642661b13848c0ef82",
+        "path": "packages/field-app/src/godview/monitor/window-rows.ts",
+        "lineStart": 67,
+        "lineEnd": 139,
+        "symbol": "createWindowRows"
+      }
+    }
+  ],
+  "merge": {
+    "strategy": "fold",
+    "defaults": []
+  },
+  "transport": {
+    "channel": "model-port",
+    "name": "agent.subscribe projection model scope mesh",
+    "contract": "MonitorAgentRow"
+  },
+  "renderer": {
+    "viewIds": [],
+    "component": "none-proven",
+    "symbol": "none-proven"
+  },
+  "applicability": {
+    "states": "model-axes",
+    "views": "all-monitor-views",
+    "notes": "Views listed are confirmed consumers. An unlisted view is unknown, not a proof it ignores the field. No builtin consumer was proven for this field."
+  },
+  "absence": {
+    "onMissing": "omit-field",
+    "onStale": "keep-and-mark-stale",
+    "zeroPolicy": "unknown-unsupported-and-absent-are-not-zero"
+  },
+  "observation": {
+    "presence": "present",
+    "synthetic": false
+  },
+  "classification": {
+    "modelSupported": "yes",
+    "adapterEmittable": "yes",
+    "uiReachable": "unknown"
+  },
+  "verification": {
+    "status": "source-read",
+    "owner": "GV-AUDIT4",
+    "notes": "Declared usage=degraded. Usage requires direct ACP response/turn notifications. Journal records are excluded. signals.json and subagent progress are context occupancy, never billed burn. A subagent child\u2019s response and turn usage, forwarded under the child sessionId, is attributed to the actor subagent_spawned names for that child_session_id. Frames a child sends before its subagent_spawned are not projected; its later turn_completed still reconciles the turn total. Captured live response_completed carries no signature or eventId; a response is identified by its session, the running native prompt (queue/changed runningPromptId or the turn\u2019s _meta.promptId), and its ordinal within that prompt, and turn_completed reconciles the turn total. A response whose native prompt is unknown, signed or not (the 1.0.0 live shape), is not counted on its own; its turn_completed carries the whole turn total. A turn total Grok flags usageIsIncomplete is not reconciled; its response contributions stand. Turns cancelled mid-turn (session/cancel) carry no turn_completed usage; only responses completed before the cancel count. Audit pin is puppeteer 748d015, newer than the 0.3.3 package vibefield ships (tag v0.3.3, commit 52d09c8e). This record does not compare 0.3.3 behavior. A transform effect ending in [post-0.3.3] cites a puppeteer file whose text differs from 52d09c8e."
+  }
+}

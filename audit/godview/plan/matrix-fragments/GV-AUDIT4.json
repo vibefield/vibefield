@@ -1,0 +1,46 @@
+{
+  "owner": "GV-AUDIT4",
+  "rows": [],
+  "updates": [
+    {
+      "id": "adapter.grok",
+      "status": "satisfied",
+      "evidence": [
+        "audit/godview/evidence/grok/"
+      ],
+      "notes": "Source-read traces for every model row field at puppeteer 748d015. Newer than shipped 0.3.3; behavior of 52d09c8e was not compared."
+    },
+    {
+      "id": "adapter.hermes",
+      "status": "satisfied",
+      "evidence": [
+        "audit/godview/evidence/hermes/"
+      ],
+      "notes": "Source-read traces for every model row field at puppeteer 748d015. Newer than shipped 0.3.3; behavior of 52d09c8e was not compared."
+    },
+    {
+      "id": "adapter.kimi",
+      "status": "satisfied",
+      "evidence": [
+        "audit/godview/evidence/kimi/"
+      ],
+      "notes": "Source-read traces for every model row field at puppeteer 748d015. Newer than shipped 0.3.3; behavior of 52d09c8e was not compared."
+    },
+    {
+      "id": "adapter.opencode",
+      "status": "satisfied",
+      "evidence": [
+        "audit/godview/evidence/opencode/"
+      ],
+      "notes": "Source-read traces for every model row field at puppeteer 748d015. Newer than shipped 0.3.3; behavior of 52d09c8e was not compared."
+    },
+    {
+      "id": "adapter.pi",
+      "status": "satisfied",
+      "evidence": [
+        "audit/godview/evidence/pi/"
+      ],
+      "notes": "Source-read traces for every model row field at puppeteer 748d015. Newer than shipped 0.3.3; behavior of 52d09c8e was not compared."
+    }
+  ]
+}
