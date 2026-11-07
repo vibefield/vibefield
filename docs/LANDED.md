@@ -40837,3 +40837,91 @@ fieldd test-only, no RV rank. Built on the lead's shape, which VF-PM GO'd at 23:
 - The next verify of main that includes `339d0a26e`: the first to run item 216's row on W3's floor.
 - Item 217's measuring lane: that one row twenty times under a parallel load, the floor's log flushed before its
   terminate, on the old mini.
+
+## EL8 — Rosetta 0.1.4: the pin, protocol and store schema 30, and the History door carrying a made app's description and dropped files (2026-11-07)
+(2026-11-07; one commit, the DR lead's, on `dr/el8-rosetta`. Its first cut, `9b54d8d5e`, read F5 red at a9's filler; the
+one commit at `bc0353541` on main `cb4ec2a4f` holds the manifests, that run's lock and the wiring. Verified at
+`bc0353541` (run205, a9's, on the old mini), M205; landed as `8c03c4c5a`, a fast-forward of main
+`b833d4116`, 2026-11-07T07:17:02Z. The replay's proof (`lanes/dr/records/el8r/land-proof.txt`, sha256 `62526827…`):
+main's delta shares no file with the EL8, range-diff `=`, its 23 files byte-identical to `bc0353541`'s, both patch-id
+forms equal, and the trial merge's tree equal to the tip's.)
+The first of the Drive's three EL8s (VF-PM 11-07: rosetta, then truffle, then mille, each one commit with its own
+filler). Rosetta 0.1.4 carries R-1's export by digest, so this is the release DR-1 (B) stands on. Nothing calls that
+door yet: every open that reaches it still answers `export-unbuilt`.
+
+**What landed.** 23 files, +280 −58: no Rust, and one new file, the protocol-30 golden.
+- **The pin, one EL8 event** (RD-5a's recipe). `pnpm-workspace.yaml`'s two rows go 0.1.3 → 0.1.4, with the lock
+  regenerated on the old mini. `siblings.lock.json`'s rosetta `sha` goes `8e8f496` → `a8ab1f13f` and `release.npm`
+  moves with it, as do `PIN_EXPECTATIONS`' two rows, so rosettad and the client name one revision.
+- **What 0.1.4 brings.** It is 3 commits past `8e8f496`: #41, a test; #44, RO-32's export door by digest, RO-33,
+  RO-34a, RO-35 and DR-D13 (a)'s `environment`; #43, a transcript day key in the stamp's own UTC offset.
+  - Protocol 29 → 30, store schema 29 → 30, and Claude Code's normalizer 38 → 39.
+  - fieldd's expected protocol IS the package's `PROTOCOL_VERSION`, and `rosettad-supervisor.ts` reads a schema
+    mismatch and runs `rosettad rebuild` itself. Neither needed a change.
+- **The History door.** 0.1.4's `HtmlArtifactPublication` makes `description` and `dropped_files` required. They travel
+  as values from fieldd's index, never invented:
+  - contracts `IndexArtifactPublicationRow` reads both, nullish (a tolerant reader);
+  - `IndexArtifactEntry` gains `description` (at most `MADE_APP_LIMITS.DESCRIPTION_CHARS`) and `droppedFiles`, each
+    optional with `.catch(undefined)`, so a bad one costs the fact, never the entry;
+  - fieldd's `madeEntryOf` projects them, leaving out an empty description;
+  - field-app's `artifactEntryOf` maps `?? null`, so an absent fact is rosetta's own null.
+- **Rows.** Four new, and seven test literals supply both members: `made-apps.test.ts` 34 → 35,
+  `index-apps.e2e.test.ts` 7 → 8, `history-doors.test.ts` 57 → 58 and `fixtures.test.ts` 714 → 715. The last parses
+  the golden `index-artifacts-response.rosetta-30.json`, rosetta's `artifact_page` from its `wire.json` at the tag,
+  verbatim, beside the 29 one, which stays as a pre-0.1.4 page.
+- **Dated corrections, in the commit:** the present-tense "rosetta has no export door" statements
+  (`registries.ts` STATE_EXPORT_UNBUILT, `daemon.ts` ×3, `index-apps-mesh.ts`, `made-app-service.ts`, `made-apps.ts`).
+- **Dated corrections, in these records:** the seam's own pages said the export was petitioned and that opens answer
+  `export-unbuilt` until the release is pinned. `api.html`, `architecture.html`, `system.html`, `UI_SYSTEM.md` and
+  `AGENT_PLANE.md` now say what stands (found below).
+
+**The proof.**
+- The first filler, at `9b54d8d5e` (`lanes/dr/a9-el8r-9b54d8d5e-results`, SUMS-a9 `ea1308db`): F1–F4 green and F5 red.
+  Five fieldd test literals and `history/doors.ts:633` did not supply the two required members.
+- The second, at `bc0353541` (`lanes/dr/a9-el8r2-bc0353541-run205`, SUMS-a9 `bcc12511`), F1–F3 and F5–F8 as briefed:
+  `siblings:pin rosetta` exit 0 with the lock's values as cut; render, preflight and `check:deps` 0/0/0; the rows
+  green (contracts 750, fieldd 194 and 6 skipped, field-app 155 and 3 skipped); F8's patch 0 bytes.
+- run205 (`lanes/dr/a9-el8r2-bc0353541-run205/`, SUMS-a9 `bcc12511…`): armed 01:28:06Z at df 14 GiB, a 1-min load
+  of 4.87 and swap 1,663 MB; `verify 0` at 01:34:30Z, 6 min, tree clean, stubs 0, stripped FAIL/× 0, one birth (Found).
+  Typecheck 29 projects; vitest 14,038 passed, 0 failed, 21 skipped (run203's + 4, the four rows above); node:test
+  474/474; cargo 606 passed, 0 failed over 37 binaries; biome 3,485 files (+1, the golden), 73 warnings (=). The
+  1-min load peaked at 48.23; df 14 at the end.
+- RESTORE read back clean: the lane at `5a7654dc7`, `rosetta-pin` at `8e8f49688`.
+
+**Found.**
+- **The export's designed answer is not the one rosetta shipped (item 220).** `api.html` and fieldd's `MadeAppExport`
+  (`made-app-service.ts`) hold `{written, digest, shellVersion, hosts}`, the shape asked for before R-1 amended RO-32.
+  0.1.4 takes `{into, shell?}` and answers `{page, members, captured_at, method, environment, shell?}`: no `written`,
+  the digest is `page.blake3`, a shell version exists only when `shell: "room"` was asked, and the hosts are
+  `environment.hosts`, per CSP directive. No answer reaches the port today: production's `unbuiltExporter` throws
+  `export-unbuilt`, so rosetta is never called. `index-apps.e2e.test.ts` and `made-app-service.test.ts` fake the old
+  shape, so no row would catch it. Read
+  against rosetta's `crates/protocol/src/lib.rs` at the tag while cutting these records; the page is corrected here,
+  and the port is owed below.
+- **One birth.** run205 left `/private/tmp/.tmpvEADb6`, a `native/run` of four sockets and two crumbs, stamped
+  01:32:36Z, mid-verify, with no process alive from it (0 read 06:45Z). What made it is not read. This EL8 moves no
+  field-native Rust (rosettad moved; `native/run` is field-native's), so it is not likely the commit's; run203 left
+  none, and this run's 1-minute load peaked at 48.23. Kept as found.
+
+**Owed.**
+- `gate:landing` at this landing, beside DR-3a's.
+- EL8-TRUFFLE rebases onto this tip, EL8-MILLE after it, and the relay, DR-3b, re-cuts onto this tip; its frozen packet
+  at `4bd43afa6` stops as briefed.
+- Item 220, no lane, DR-1 (B)'s decision before it calls the export: `MadeAppExport` and its two fakes move to rosetta's
+  answer, and `artifact.open`'s `reach` is decided against `environment.hosts`. `hosts` also feeds the capture's
+  `allowHosts`, so that moves too, with the shell-hosts wording in `artifacts.ts`, `registries.ts` and
+  `made-app-service.ts`. fieldd must also start rosettad with `--export-root`, which it does not yet.
+- Five code comments still say rosetta 0.1.3 of the export as the present and cannot ride a docs commit:
+  `made-app-service.ts:9` and `:270`, `index-apps-mesh.ts:109`, `made-apps.ts:38` and `design-system.tsx:20`. They go
+  with item 220's port. `doors.ts:531` and `:545` name 0.1.3's room and entry the same way, and 0.1.4 leaves both as
+  they are.
+- `DESIGN.md:7167` still gives rosetta 0.1.3 as the condition, inside a ‹for James› mark: its words are his.
+- The draft slot: RO-32…RO-35 in the petitions' README, shipped in 0.1.4 (RO-33 and RO-34a adopted, RO-32 and RO-35 at
+  the pin with no caller), and `thinking-mini-apps.md`'s `{written, digest, shell_version, hosts}` (item 220).
+- To MA-3f, as the commit carried them: the catalog row (`index-apps.ts` `#rowOf`) does not fill
+  `IndexCatalogApp.description` or `droppedFiles` yet, and the test comments describing the scripted rosettad stand.
+- To MA: whether a description past the 512-character door bound is dropped, as built, or clipped.
+- RO-35 has no reader: `artifacts_changed` is on `/ws/meta` at this pin, and the walk's provisional `REREAD_*` timers
+  stay until the re-read follows it.
+- James: the GitHub release's daemon archives are still a draft. This host builds rosettad from `../rosetta-pin`, so
+  nothing here waits on them (RD-D7).

@@ -73,7 +73,8 @@ The catalog currently mounts these shipping views directly:
   `frame/apps/design-system.tsx` (the Hub's `/design-system` door's shape, beside the shipping
   group), in the Hub's 504 stage: populated with its days and a desktop asleep, the fallback
   squircles before a preview (§2.9's one exception), a library still reading, the apps a desktop
-  cannot write out yet with Open in ‹host› (rosetta 0.1.3, MA-4's witness), and empty. Only the
+  cannot write out yet with Open in ‹host› (until MA-3f, MA-4's witness; *2026-11-07:*
+  it said rosetta 0.1.3), and empty. Only the
   client's answers, the clock and the image transport are replaced (the catalog has no tailnet, so
   its stills are its own); its fieldd acts (open, keep, hide, Versions' read) never settle, and its
   "Open in ‹host›" is the shipping link, to the fixture's hosted address. The catalog's CSS may not

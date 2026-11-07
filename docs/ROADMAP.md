@@ -443,14 +443,14 @@ DESIGN.md §2.9, §8 "The phone's Apps" and §9 "Apps"; DECISIONS MA
   Electron's capture of a made app. They are tested modules with nothing wired, so the six doors still answer
   method-not-found.
 - Landed 11-05: **MA-3e, M-B** (`d8afd7a6e` → `ac2fc574f`, stacked as M162, run 162; LANDED "MA-3e (M-B)"): the
-  six doors answer. `artifact.open` is `export-unbuilt` until rosetta 0.1.4, and `artifact.mark` is `intent-unbuilt`
-  until 3h.
+  six doors answer. `artifact.open` is `export-unbuilt` until MA-3f calls rosetta 0.1.4's export, and `artifact.mark`
+  is `intent-unbuilt` until 3h.
 - Landed 11-06: **MA-4, the desk** (`a16205d5c` → `2cccfb168`, stacked as M166, run 166; LANDED "MA-4"), in 0.9 by
   James's "MA-4 in" (00:30Z): From your agents under Live on the Apps shelf, History's `artifacts` port (dormant
   until RO-37), and the screen's word Apps. Every open is still `export-unbuilt`.
 - Next: **MA-3f, serving, is the Drive's DR-1** (the DR track, below). James ruled DR-D1 (b) on 11-06, so the copy
-  is rosetta 0.1.4's export by digest (R-1, amending RO-32; built in `lanes/ma/rosetta`; James files and releases it)
-  and its EL8, served under VibeField's headers (DR-1a, LANDED 11-06) · MA-3h, Keep and Hide, now intents in the
+  is rosetta 0.1.4's export by digest (R-1, amending RO-32; released 11-06, its EL8 landed 11-07), served under
+  VibeField's headers (DR-1a, LANDED 11-06) · MA-3h, Keep and Hide, now intents in the
   drive's document (DR-2) · **MA-6, the phone's shelf**, unblocked: IOS-13a and UM's M-phone, ahead of it, both
   landed 11-06 (M-phone M198). SE-2's sheet, in which MA-D7's strip now stands (DESIGN.md §8 "The phone's Apps" as
   amended at UM-0), names its two slots and fills neither: `appsStrip` above the switch before any word, and
@@ -486,6 +486,10 @@ page *The Drive*, KB33dCAP, where it moved 11-06 05:45Z from LB8rzJYV; sources `
   - the named-root arm over a VibeField `PullSubstrate`, held to its rows over `ScriptedPulls` and unreachable
     until the substrate slice after EL8-TRUFFLE; W3-14, W3-15, W3-16, W3-17 and W3-20 ruled (VF-PM 11-06), W3-21's
     floor half in it.
+- Landed 11-07: **the EL8 to rosetta 0.1.4** (`8c03c4c5a`, one commit, M205, run205; LANDED
+  "EL8 — Rosetta 0.1.4"): protocol and store schema 30, and a publication's `description` and `dropped_files`
+  carried to the History door. The export door is at the pin with no caller: every open that reaches it is
+  `export-unbuilt`.
 - Wave 1's sibling lanes, filed, merged and released by James on 11-06 (truffle 0.7.27, rosetta 0.1.4 with its
   daemon-archive release still a draft, mille 0.3.5):
   - R-1, rosetta: RO-32 by digest, after DR-D13;
@@ -493,10 +497,9 @@ page *The Drive*, KB33dCAP, where it moved 11-06 05:45Z from LB8rzJYV; sources `
   - M-D1 and M-D2, mille;
   - RDST, rosetta's transcript day key across daylight saving.
 - Next:
-  - W3's VF-RELAY (DR-3b: the relay, the holders and the pulls), after its fold 3 (W3-21's relay half), re-stacked
-    on DR-3a's landed tip and landed under its own verify (W3-18: A, then B, then the relay).
-  - The EL8s, each one commit cut on DR-3a's tip with its own filler: rosetta 0.1.4 (its two required publication
-    fields carried to the History door), then truffle 0.7.27 (the pin, the proxy `headers` literals and
+  - W3's VF-RELAY (DR-3b: the relay, the holders and the pulls), re-cut onto rosetta's EL8 after its reviews and landed
+    under its own verify (W3-18: A, then B, then the relay).
+  - The other two EL8s, each one commit with its own filler: truffle 0.7.27 (the pin, the proxy `headers` literals and
     `SERVE_HEADER_FORBIDDEN`'s two names; VF-PM's T1), then mille 0.3.5 in its dev shape (`siblings:pin` to the
     tag; VF-PM's M1: the npm exit waits on a mille 0.3.6 that remaps its release builds and ships its notices).
   - The substrate slice after EL8-TRUFFLE: `impl PullSubstrate for MeshNode`, the install hook in bring-up, the
@@ -506,16 +509,19 @@ page *The Drive*, KB33dCAP, where it moved 11-06 05:45Z from LB8rzJYV; sources `
   - Then DR-2 (the drive in the files worker, at mille's release), DR-3 (the sync, over T-3), DR-4 (one address,
     T-2) and DR-5 (a folder or a build published as a version).
 - Owed:
-  - James's marks DR-D13, D14 and D15. R-1's filing waits on D13, and T-2 on D15, which reopens D12.
+  - James's marks DR-D14 and D15. T-2 waits on D15, which reopens D12.
   - James's rulings before DR-1 (B) wires a caller: DR-L3's re-check at the view (`dr-l3-blake3-recheck`, lean (a):
     R-1's verified placement until DR-2), and the serve policy's `'unsafe-eval'` (`dr-serve-csp-unsafe-eval`).
-  - DR-3a's `gate:landing` (W3-10 (b)).
+  - DR-3a's `gate:landing` (W3-10 (b)), and rosetta's EL8's.
+  - Item 220, DR-1 (B)'s decision before it calls the export: fieldd's `MadeAppExport` moves to the answer rosetta
+    shipped, and `artifact.open`'s `reach` is decided against `environment.hosts` (LANDED "EL8 — Rosetta 0.1.4", Found).
   - The reviews' nits: DR-1b's 5, 7 and 9 ride DR-1 (B). DR-2a's 8–11 landed in DR-3a's C1.
   - The drive's disk budget (the record's §10, risk 5).
   - Findings for James: rosetta-main's seven stripped ts-rs outputs, and the heatmap's daylight saving (a protocol
     change).
   - The draft slot: the record's v0.3 errata and the four loro pins; design-01 §5.2's opened verbs and DR-L1's note on
-    pulls, each with DR-2a's sha.
+    pulls, each with DR-2a's sha; RO-32…RO-35 in the petitions' README, shipped in 0.1.4; `thinking-mini-apps.md`'s
+    export answer (item 220).
 
 **UM + SE — the profile meters and one search** · vibe-field-e0, the UM lead (vibe-field-88 until the 11-06
 account switch, then vibe-field-b7 until the second; lanes `lanes/um1` (M-U1), `lanes/um1-ud8` (M-desk's stack),
@@ -1374,7 +1380,7 @@ its rulings (`draft/rv/james-asks.md`, `draft/rv/lead-rulings.md`); the review `
 | ghosttea | 0.13.7 on cargo (`=0.13.7`), npm and Swift | `5ba36785b`; no checkout needed; `../ghosttea-0.11.2` is only the overlay's coordinate |
 | ICE | `@vibecook/ice` 0.16.0 exact (overrides row) · strata 0.13.0 via ICE · `loro-crdt` ^1.13.8, one resolution | EL8 |
 | puppeteer | `@vibefield/puppeteer-*` 0.3.0 exact (tag v0.3.0 = `d0aa1224`) | the EL8 `1469639a6` (10-28; RD-5a-2 `a04850e29` took it exact at 0.2.3); `../puppeteer` is the overlay's coordinate |
-| rosetta | `@vibefield/rosetta-protocol` / `-room` 0.1.3 exact · rosettad built from `../rosetta-pin` at `8e8f496` (protocol and store schema 29) | EL8 11-04 (0.1.2 at `3948bcf`, 10-29); matching npm and daemon releases; adopting daemon archives remains RD-D7 |
+| rosetta | `@vibefield/rosetta-protocol` / `-room` 0.1.4 exact · rosettad built from `../rosetta-pin` at `a8ab1f13f` (protocol and store schema 30) | EL8 11-07 (0.1.3 at `8e8f496`, 11-04); npm released, the daemon archives a draft (James's publish); adopting them remains RD-D7 |
 | mille | `link:../mille-pin` at `c8160d5` (`@vibecook/mille`, `mille-ui`) | FS-1b; no release past v0.3.4; exit RD-6 |
 | rustc | 1.99.1 (`rust-toolchain.toml`) | EL8 |
 
@@ -1388,7 +1394,9 @@ Petition status lives in `draft/petitions/README.md`. Still open or owed there:
   James says) · T13, the one T row for T7's route-name pinning (Q22; owed, not drafted); T7's other follow-ups (the per-direction idle reap, a held
   route id's refusal, loopback pages) are recorded as accepted.
 - **rosetta:** RO-24…RO-27 (#23–#26) shipped in 0.1.2; VibeField RPC/UI adoption remains follow-on work. RO-28 (#27,
-  AO-8) shipped in 0.1.3 and is adopted (the face's titles). Still filed: RO-8 (retire/forget a runtime), RO-11 (`/ws/meta`'s removal event and resumable stamp,
+  AO-8) shipped in 0.1.3 and is adopted (the face's titles). RO-32 (by digest), RO-33, RO-34a and RO-35 shipped in
+  0.1.4: RO-33 and RO-34a are adopted at the History door, and the export and RO-35's signal have no caller yet. Still
+  filed: RO-8 (retire/forget a runtime), RO-11 (`/ws/meta`'s removal event and resumable stamp,
   DS-6's follower's ask; DS-7 landed without it, the follower still diffs snapshots), RO-17…RO-23, and RO-10's
   follow-ups. RO-4's remainder is adopting the released daemon archives (RD-D7). RO-31 (a copy port in rosetta's room;
   History's Copy waits on it, HN-5).
@@ -1427,7 +1435,7 @@ Petition status lives in `draft/petitions/README.md`. Still open or owed there:
 | GT — Godview terminal | PARKED; the deck's ladder done (GT-0…GT-8) | `specs/godview-terminal.md` | G29; GT-D22; row 13b |
 | TP / TC — terminal pipeline and custody | PARKED; TC RATIFIED 10-28 (Q6) | `specs/terminal-pipeline-v3*.md`, `specs/terminal-custody.md`, `thinking-terminal-mesh-cells.md`, `thinking-floor-wedge.md`, `thinking-inventory-latency.md` | D6's cell half |
 | MA — Apps (was AH — Artifact Hub) | ACTIVE since 11-05 (MA-D1…D13 ruled; MA-4 in 0.9, James 11-06); MA-0a + MA-1a (M152), MA-3 (M157, M162) and MA-4 (M166) landed; AH-1…3 landed, AH-4 unledgered | `thinking-mini-apps.md`, `specs/artifact-hub.md`, design-06 §5; DESIGN.md §2.9/§8/§9/§13 | MA-3f serving, which is the Drive's DR-1 (DR-D1 ruled (b): rosetta 0.1.4's export), then MA-3h; MA-6 the phone's shelf (unblocked: UM's M-phone landed 11-06, its sheet naming the strip's slots) |
-| DR — the Drive | ACTIVE since 11-06 (DR-D1…D12 ruled; D13…D15 open); DR-1a, DR-2a, DR-1b and DR-3a (W3's VF-FLOOR) landed (M183, M188, M190, M203); wave 1's sibling PRs merged and released 11-06 | `thinking-drive.md` v0.3 (page sources `draft/drive/page/`); `thinking-mini-apps.md` | D13…D15 and DR-L3 (James); W3's VF-RELAY; the EL8s (rosetta → truffle → mille) and the substrate slice; DR-1 (B) |
+| DR — the Drive | ACTIVE since 11-06 (DR-D1…D13 ruled; D14, D15 open); DR-1a, DR-2a, DR-1b, DR-3a (W3's VF-FLOOR) and the EL8 to rosetta landed (M183, M188, M190, M203, M205); wave 1's sibling PRs merged and released 11-06 | `thinking-drive.md` v0.3 (page sources `draft/drive/page/`); `thinking-mini-apps.md` | D14, D15 and DR-L3 (James); W3's VF-RELAY; the EL8s (truffle → mille) and the substrate slice; DR-1 (B) |
 | RV — the review fixes (Godview, terminal, puppeteer) | ACTIVE since 11-06; items 191 (RV #2 half A, M192), 192 (RV #6, M193), 201 (RV #17, #43, #49, #48, #50, M194), 203's VF-W1 (RV #1's pin-free half, M196), 211 (RV #97, #96, #93, #116, #95, #47, M199), 212 (RV #30, #29, #67, M201) and 216 (item 192's census row, M204) landed; W1–W2 building, the sibling lanes local | `draft/rv/` (plan.md, james-asks.md, lead-rulings.md); `lanes/rv/review/` | puppeteer R1 → EL8-1 with item 203; ghosttea 0.15.0 → EL8-g |
 | UM + SE — profile meters and one search | ACTIVE since 11-06 (UM-D21…D28 and SE-D1…D5 ruled on the page; UM-D16 E, D19 A; D3, D4, D8, D12…D15 at the leans); UM-0…UM-2 landed 11-06 (M-U1 `c9493b957`, run180, M180); UM-3 and SE-1 landed 11-06 (M-desk `ed8099c1e`, run187, M187); UM-4 and SE-2 landed 11-06 (M-phone `d6d76d079`, run198, M198) | `thinking-profile-meters.md`; `lanes/um/PLAN.md` §4; DESIGN.md §2.7/§5/§8/§9/§13; `docs/agent-plane/usage-meters.md` | UM-5 (UM-D14, the plan filter) in wave 2 |
 | PLUG — shipped core | COMPLETE: P0–P7, P8b–d (P8c via WP8), PRC-4/5; later publishing/validation work is separate | `specs/plugin-architecture.md`, `thinking-p8-loadable-artifact.md` | existing product gates; no blanket 24-hour prerequisite |

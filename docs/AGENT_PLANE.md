@@ -115,7 +115,7 @@ Design corpus (`draft/`, tracked on the local-only `dev-local` branch, never on 
   [upstream map](agent-plane/api.html#upstream), its six doors in api's catalogue, four under
   [index.*](agent-plane/api.html#cat-index) and two under [artifact.*](agent-plane/api.html#cat-artifact).
   **RULED 2026-11-05** (MA-D1…D13; D10 (b)); MA-1a declares the contracts; MA-3 reads the library and answers the
-  six doors, the export waiting on rosetta 0.1.4
+  six doors, the export waiting on MA-3f (*2026-11-07:* rosetta 0.1.4 is pinned and has it)
 - `draft/design-00…design-04` — the governing specification in authority order. The agent plane defers to these for
   mechanics. **current, with fold-backs owed** (ROADMAP's records): the D1–D4 name fold-back (chopsticks and
   spaghetti → puppeteer and rosetta) and design-03's desk fold
