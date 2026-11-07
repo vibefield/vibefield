@@ -41986,3 +41986,287 @@ The red stopped the job at the stage, so any later step of those slices is still
 - The next dispatched nightly's build job: "Electron's binary" green, and the stage carries
   `legal/LICENSE.electron.txt` and `legal/LICENSES.chromium.html`.
 - That build's later steps, signed and unsigned paths, read for the first time on CI since LP-1, TD-4 and LP-6b.
+
+## IOS-12f's M-f1 — New spark on the phone: the Mac's sheet at touch pitch, its sky the star engine's hatch in Metal held to the engine's rows and frames, and the face flown to its row (track IOS)
+
+(2026-11-07; `74599daac` → `01bdd52d7`, 32 commits on main `78fc8baf8`, lane `ios/12f` in
+`/Volumes/SamsungRed/lanes/ios12b/vibe-field` (12b's landed worktree), the IOS session's; minted as M218, run218, at T
+`3ed4e77e0` on main `6bbda77d7`, and landed 20:35:25Z by the fixer as `27c75681f`, rehearsed onto main
+`a5f5ed26b`. That landing is a proof-form re-cut of the lane by `git replay`, on the branch
+`rehearsal/12f-mf1-on-a5f5ed26b` (local, never pushed):
+- its tree is `git merge-tree`'s of `a5f5ed26b` and T;
+- range-diff reads 32 `=` against the lane and against T;
+- the messages, authors and author dates are identical;
+- it differs from T only in main's own three files (release.yml, DECISIONS and LANDED, item 240's).
+
+The range's `--full-index` patch-id is `b2971db2c1220c6b64e32942ee314ee9fdcf758b` at the cut, at T and at `27c75681f`.)
+The lane's shas, which the source's dated lines and the commit messages name, are main's as follows: f0 `74599daac`
+= `876daac00`; f4's red `41c3b7aab` = `53b55d024`; f5c `f952df093` = `bd986ff8e`; f5e's red `d847dd584` =
+`764cc974c`; f5f `77fe07d6d` = `57b4d20e7` and `4fc8c94e9` = `d08663dcd`; the names `915fcd5a5` = `fedada084`; f5f
+4/4 `f285101ec` = `575e866bd`; f6's red `940ebe1a2` = `724281042`; f6b `c2f3400fb` = `5f503a22a`; f6c `01bdd52d7` =
+`27c75681f`. All 32 pairs are in `lanes/ios12/12f/mint/M-f1-sha-map-a5f5ed26b.tsv`.
+The plan (`lanes/ios12/12f/plan-12f.md`, `9f16826e`) was ruled by VF-PM at every lean at 12:35:44Z, and corrected at
+its source twice (12:47Z: M-f1 is A alone, f0–f6; 13:15Z: the door premise). f5's plan (`f5/plan-f5.md`, `d8e21383`)
+was ruled at 13:58:40Z, f6's at 17:10:10Z. James answered the board ask `ios12f-new-spark-words` at 14:32:49Z, Q1–Q5
+each (a). M-f1 carries A of the plan; B (@'s list on the phone and the handle in the card) and C are M-f2's (f7a–f7).
+
+**What it rests on.**
+- PC-D8 A (New spark on the phone) and DESIGN.md §8 ("The New spark sheet", the Mac's; "The phone's Chat"), §2.10
+  ("The hatch") and §9.
+- The Mac's own code: `field-app/src/chat/new-spark.ts` (pure, the five goldens' source) and `NewSparkSheet.tsx`;
+  `hatch.tsx`'s deal (:199–238), `fly` (:240–269) and frame (`#draw`, :290–323); the vendored engines,
+  `star-spark.js` (sha256 `e4c142f2…`) and `sparks.js`.
+- IOS-12e's star in Metal (`SparkBuddy`, `SparkStarRenderer`, `SparkStage`, the Q2 bound ruled 2026-11-06 07:51Z),
+  12d's goldens method, and 12b's `-vf-mock` door and `-vf-mock-chat-away`.
+
+**What is real.**
+- **DESIGN.md first** (f0 `74599daac`, f0 2/2 `f6818604a`): §8's phone amendment (the door, the sheet at its large
+  detent, the sky 300 at corners 30 on the night, the name, ↻, the pill, the agent menu, "Runs on studio, your home",
+  the chips, the foot, the refusals, the home away, the flight), the Mac sheet's "On the phone" line, §2.10's hatch
+  amendment and §9's lines for James's eye. **The keyboard is the phone's one difference** (VF-PM 12:48:21Z): it
+  rises when the name is pressed, where the Mac's name takes the keys at open.
+- **The sheet's goldens** (f1 `2f85f0ca3`, its rider `e8f543c4d`): `new-spark-goldens.test.ts` writes five goldens
+  from `new-spark.ts` (names, agents, menu, profiles, refusals; "That profile is gone" among them), and the kit's
+  copies are pinned byte for byte (check-ios-fixtures 393).
+- **The reads and the hatch on Chat's door** (f2 red `23ac276a9`, f3 red `1754cd42d`, f3 `7ffd4ae69`): `ChatFeed`
+  asks `agent.providers`, `agents.profileSets.list`, `agent.models` and `compose.sparks.hatch` through Chat's own
+  home door, as the Mac's `newSparkPortOver` does. **Zero door changes** (VF-PM 13:11:45Z): no FieldMesh file and no
+  `packages/contracts` file. `SparkHatch`'s wire is held to the contracts' `compose-sparks-hatch-params.valid`.
+  `-vf-mock` answers from the contracts' own copies, and `-vf-hatch-answer=<made|taken|no-sign-in>` says how a hatch
+  comes out (396 copies).
+- **The sheet** (f4 `37673ff78`, `602d8c95b`, red `41c3b7aab`, `722aea47c`): the model ported rule for rule;
+  `sparkle` and `reset` from the rail's drawings (`picks.json`, `build.mjs --check` "65 names, 10 hardware, 29 on
+  iOS"); `ChromePalette.sparkNight` with its pin (397: check-ios-fixtures' solids gain `sparkNight`, and their
+  comment the sky solid `--vf-spark-night`, `602d8c95b`); the sessions it sees (VF-PM 13:37:20Z, (a)); and
+  `NewSparkSheetView`, the Mac's sheet at touch pitch in the system's sheet, its door at Chat's title.
+- **The hatch** (f5):
+  - DESIGN.md's misquote of 12e corrected at its source (f5a `2964a6b59`), and two dated erratum notes under §2.10's
+    reduced-motion sentences (f5a 2/2 `fe1a5624a`).
+  - **The engine's goldens:** the rows golden (f5b `c7774a66e`: the stars from the engine's own `add` and `_write` in
+    `node:vm`, the deal restated from hatch.tsx, its sha256 pinned beside both engines'; 398), and the frames golden
+    (f5c `f952df093`, `bcbea8b5a`): 19 PNGs of the engine's own WebGL2 pixels drawn by a9 on the old mini (ANGLE Metal
+    Renderer: Apple M4, half floats), 18 motion frames at 764 × 600 and the grain's at 240 × 180 (418). Their rider,
+    `e90890bb1`, lands ahead of them.
+  - **The transcription** (red `d847dd584`; `77fe07d6d`, `4fc8c94e9`, `915fcd5a5`, red `0996e0fa4`, `af1a1e1b7`,
+    `f285101ec`, red `0ce5ca7cd`, `07157e08d`): `StarSpark` and `HatchSky` (the deal, the two engines' clocks, the
+    slots), `SparkBuddy`'s birth, hold and leave, `HatchSky.metal` (the ground, trail, burst, particles, bloom and
+    composite), `HatchSkyRenderer`, and `HatchSkyView`, two MTKViews on one clock. ↻ deals again.
+  - **The hatch's hash input is the engine's own form** (f5h, below).
+  - **Every face golden is fresh** (f5g `e9bd59fdb`): `spark-face-goldens.test.ts` holds each pin the rows, hatch,
+    stills and frames goldens record, hatch.tsx's among them, in every verify.
+- **The flight** (f6 red `940ebe1a2`, f6 `8bd84b8b4`): `SparkFlight` (u over 0.66 s, the island curve's
+  `e = 1 − (1 − u)³`, the lift, the disc past 0.45), `SparkFlightWindow` (a clear window at `.normal + 1`, under the
+  lock curtain, one MTKView drawing one `SparkBuddy` on its own clock), and `NewSparkLanding`: made, the new row's own
+  face waits unseen; once the row says where its face is (within 1,500 ms) the hero leaves the sky and the sheet folds;
+  landed, Chat opens the thread. With no row, nothing flies; under reduced motion or where nothing can fly, the row's
+  face fades in. DESIGN.md §8 gains one dated line: the phone draws one face, never two.
+- **The stills' seed** (f6b red `45fdeecb3`, f6b `c2f3400fb`; VF-PM 17:52:10Z (a)): under DEBUG alone,
+  `-vf-new-spark-seed=<n>` deals face n, so a still repeats. The seed is 4211, 12e's gallery face; DESIGN.md names no
+  seed.
+- **§2.10's reduced-motion words** (f6c `01bdd52d7`, docs only; VF-PM 18:56:50Z): both sentences read "the face is
+  born where it lands", James's Q4 (a) at 14:32:49Z, and each erratum note closes with his ruling; §8's phone line
+  follows; `SparkHatch.metal` is corrected to `HatchSky.metal` at its source.
+
+**Departures, each named** (the rulings that took them):
+- **The hatch on the phone** (f5 plan Q3, 13:58:40Z): the engine's dprCap 2 kept (the sky at @2x, scaled to @3x); no
+  pointer; the system's random in the product and Mulberry32 of the face's seed under `-vf-spark-time`; only what the
+  hatch draws transcribed (BURST alone: the body's fill, rim, halo, aura, echo, orbs, glint and debug views are named
+  dead in the shader's head); reduced motion as the engine's (no star, the face born at once with hello); 12e's 60/30
+  fps; the flat star on `sparkNight` where Metal fails. That fallback, f4's stand-in kept at f5f 3/3, fades each new
+  seed's face in over 0.32 s (HatchSkyView.swift :60); it is not reduced motion's birth, which f6c's words name.
+- **The one kernel that is not the engine's:** `hatch_sky_hin_probe`, a probe nothing draws (VF-PM 17:38:20Z).
+- **Create** (f6 plan, 17:10:10Z, and 17:28Z): the landing adds no second "refresh" ask, since the feed's `hatch`
+  asks the list again itself (the departure from Q2's wording, ACCEPTED 17:28Z); the phone draws one face where the
+  Mac draws both for the 660 ms (Q3).
+- **The sessions:** a remote row carries the monitor's resolved set and no persona, so a retired sign-in counts as
+  Default on the phone, where `profileSetOfRun` places it nowhere (agent-index.ts :2826, "the one place the two
+  differ").
+- **The sheet** (f4): the chosen agent's picker is read once the agent and profile are known (a system menu says
+  nothing as it opens); a progress mark holds the pill until the reads return; the foot is the phone's one wide pill,
+  50, so §8's "capsules 48 tall" is corrected at its source, dated.
+- **The plan's deltas:** the file list gains `AgentProviders.swift` and `ProfilePlacement.swift` (taken 13:10:45Z);
+  the plan's third mock answer, asleep, is 12b's `-vf-mock-chat-away`; f5's rider lands ahead of its goldens, in f1's
+  shape; two frame moments are renamed in the script's head (mid-fall is four fifths of the flight; the star's death
+  is the last glitter, 2.2 s after impact).
+- **DEBUG only:** `-vf-open-new-spark`, `-vf-new-spark-create`, `-vf-new-spark-hold` and `-vf-new-spark-seed`, the
+  stills' doors, with no OS input.
+
+**What is stubbed or left.**
+- **The flight itself is witnessed by no row:** the kit draws no window and no OS input drives the app. Its stated
+  limit is a device read, owed on James's phone: whether a row's `.global` box follows the presenting view's scale
+  while a large sheet folds. The flight reads the box each frame, so it lands where the row stands once the fold ends.
+- **No device has drawn it:** the kit, the frames and the stills are the old mini's (iPhone 17 simulator).
+- **The stills' three limits:** the agent Menu open (a system menu needs a press); the flight (660 ms); "That profile
+  is gone" (the fixture door has no such answer).
+- **A disabled Create looks live** (the stills' finding, item 241): away, waiting on the reads, or on an empty name,
+  Create does nothing and says nothing, because the kit's pill draws no Off look (DESIGN.md §2.4).
+- **As observed, not proven:** a-landing's 51 px (max 22 at G4, 1 at G5′), never a hash site's; and a-glitter's one
+  row (max 11 at G5′), 12 px on one pixel row 10.9 pt below glitter j23's centre, read as a quad's edge row
+  rasterising on the other side. Both are inside the bound.
+- **Latent, not shown to bite:** SparkStar.metal (12e's face) hashes the same shape, `h11(fi * 3.1 + seed * 7.)`
+  (:217, :251). Its stills pass 12e's bound.
+- B and C are M-f2's.
+
+**Validation.**
+- **Where:** every kit row is a9's on the OLD MINI, Xcode 27.2 (27B52), the iPhone 17 simulator `1F155533`, results
+  under `lanes/ios12/12f/<row>/a9-results-*`, one STAGEGATE at each stage edge from kit-f6 on. The Mac has no Swift
+  and no Metal compiler: its door rows (co-plan/HOLD, nice 19, START and END quoted) are no verdict of record.
+- **kit-red** at `23ac276a9` (13:18:36Z → 13:20:46Z, end load 65.92): RED AS EXPECTED, 24 tests in 3 suites, the
+  brief's 13 red and ChatFeedTests' 11 green.
+- **kit-f3** at `1754cd42d`/`7ffd4ae69` (13:35:15Z → 13:40:34Z): R ✘ 13 tests in 1 suite (8 issues); G ✔ 43 in 3.
+- **kit-f4** at `41c3b7aab`/`31eaa630f`: R ✘ 6 in 1 (2 issues), RED AS EXPECTED (13:59:00Z). G SLOT RED at the build
+  (Found 7); folded, and **kit-f4g** at `722aea47c` GREEN, ✔ 56 in 5 (14:11:40Z).
+- **draw-f5c** at `f952df093` (14:27:48Z → 14:27:49Z): 19 frames, rows 1–4 AS EXPECTED.
+- **kit-f5ef** at `d847dd584`/`77fe07d6d`: R ✘ 9 in 2 (64 issues; 19 black frames OUT), RED AS EXPECTED (14:57Z);
+  G1 ✔ 57 in 14 (14:58:24Z), the CPU transcription matching its golden at the first run.
+- **kit-f5f2** at `4fc8c94e9` (→ 15:11:04Z): G2 SLOT RED, ✘ 58 in 14 with 4 issues: a-burst, a-debris, b-burst and
+  b-debris OUT (within6 0.9835, 0.9878, 0.9700, 0.9782), the other 15 IN. The bound stands (VF-PM).
+- **kit-f5f3** at `0996e0fa4`/`af1a1e1b7` (17:07:17Z → 17:12:58Z): R ✘ 3 in 1 (12 issues); G3 ✔ 56 in 5 and ✘ 61 in 15
+  with G2's four frames, as expected before f5f 4/4. Its two Test run lines are the source of VF-PM's 17:14Z rule:
+  a selection over two bundles prints one line per bundle, and each is checked alone.
+- **kit-f5f4** at `f285101ec` (17:13:08Z → 17:17:33Z): G4 ✔ 61 in 15, all 19 IN.
+- **kit-f6** at `940ebe1a2`…`9e3d41633` (→ 18:12:17Z): R6 RED AS EXPECTED, 12 of 12 by name and by first issue. G6,
+  R5h and G5 BUILD RED on one error (Found 7).
+- **kit-f6r** at `8bd84b8b4`…`c2f3400fb` (→ 18:46:42Z, results SUMS-a9 `00b16697`), all five as briefed:
+  - G6′ ✔ 65 in 16 and ✔ 64 in 6, 129 of 129 by name, R6's twelve among them; the 19 byte-equal to G4's; the Chat
+    folder's diagnostics 0 on a full build;
+  - R5h′ ✘ 1 in 1, all four counts as predicted (rays 10/130 and 4/130, particles 52/336 and 30/336), and the first
+    four off inputs of each the prediction's own;
+  - G5′ ✔ 66 in 17, the probe's four cases green, 19 IN (below);
+  - R6b ✘ 7 in 1 with 5 issues, :391 four times (seeds 1, 4211, 2846113027, 4294967295) and :395 once;
+  - G6b ✔ 65 in 6, the seed row green.
+- **The three-way witness of form B** (`hin = fma(b, k2, round(a · k1))`):
+  - the probe, input for input (R5h′);
+  - **the 13 placements G4 still had off are gone at G5′**, each lit at its form-B place in G4's diff (96–255) and 0
+    in G5′'s: a's glitter j22 and j28 (a-glitter); b's dust j30 (b-falling through b-debris), j34 (b-landing through
+    b-debris) and glitter j24 (b-debris, b-glitter);
+  - **the frames:** all 19 IN, every one at within6 1.0000 and past32 0; max 1 on 17, 0 on the grain's and 11 on
+    a-glitter. G4's worst were b-flash 171 (past32 296), b-landing 142 (239), b-falling 158 (220) and a-glitter 121
+    (96). The five frames that draw no ray or particle have diff PNGs byte-equal to G4's; a-falling reads as G4's by
+    its line and differs by its bytes.
+  - Read by `g5_read.py` (`3f555135`) over `hatch-report-g5p` (report.json `0c43dcea`), its output
+    `kit-f6r/g5p-read.txt` (`0cbee384`).
+- **The stills** at `c2f3400fb`, the stills' tip, beside the mint's tip `01bdd52d7` (f6c is DESIGN.md alone, which
+  nothing the app or the stills draw reads; the M196 form): a9's row done 19:12:50Z, 20 of 20, 0 failed (results
+  SUMS-a9 `2d15fe02`). IOS's read of record (`stills-f1/IOS-stills-read-c2f3400fb.md`, `57c4d6e1`):
+  - all 20 show what the brief names;
+  - measured by `read-stills.py` (`1f1248b6`): the sky inside the card is byte-identical light vs dark in all eight
+    sheet stills; taken, no-sign-in and away, three more launches at t 2.85, draw at-rest's sky exactly;
+  - **one finding:** away's Create draws exactly as a live one (max 0 over the pill, both looks), though `.disabled`
+    holds it (`NewSparkSheetView.swift:641`). The kit's `ChromePillStyle` (WI-1) never reads `isEnabled`. Filed as
+    item 241, its fix the primitive's own slice;
+  - after-flight's Field badge, 2 in light and 3 in dark, is the mock fleet's unseeded random walk, outside M-f1;
+  - "IOSurfaceClientSetSurfaceNotify failed e00002c7", in all 20 consoles, is the simulator's standing line (12d's
+    three stills runs on that host: 110 of 110 consoles).
+- **The Mac's door rows at T:** check-ios-fixtures 418 copies and 93 pins (at `c2f3400fb` 18:19:35Z, load 3.70; at
+  `01bdd52d7` 18:58:40Z, load 5.08).
+- **Run218** at T `3ed4e77e0` (on main `6bbda77d7`), the old mini, R2 (`k-mf1r2.sh` `7557afae`): the mint's three
+  stages, each its own edge (brief `5b2fd712`, VF-PM's GO 19:26:34Z; refs/pm/ios12f/mf1-T and mf1-tip):
+  - **V**, `pnpm verify`: **GREEN**, armed 19:51:26Z (df 11,021 MiB, 781 over the floor; load 1.57), "== ts6-mini
+    verify done (verify 0)" at 19:58:04Z, HEAD `3ed4e77e0`. Every briefed row AS BRIEFED:
+    - "ios fixtures: 418 copies identical"; "ios pins: 93 contract values identical";
+    - field-app "Test Files 316 passed (316)" and "Tests 4401 passed (4401)", with new-spark-goldens (5) and
+      spark-face-goldens (4) among them;
+    - the glyphs: verify's own row is glyphs.test.tsx's 10 tests (verify.log:12441), and "glyphs fresh: 65 names,
+      10 hardware, 29 on iOS" is the runner's check after V (`build.mjs --check` at T; k-mf1r2.log:51, AS BRIEFED);
+    - biome "Checked 3504 files", "No fixes applied", 73 warnings and 21 infos. That is run217's 3,499 plus M-f1's
+      five newly checked files: the three design-kit scripts and the two field-app tests;
+    - "cargo test results: ok 37, FAILED 0"; typecheck over 29 projects; strict FAIL lines 0;
+    - after: 0 field-native/fieldd processes, 0 /private/tmp births; df's least 10,669 MiB, V used 259 MiB; the
+      1-min load's peak 56.40, in flight (the gates read at the edges).
+  - **K1**, FieldDesignTests at T, on kit-f6r's derived dir (an incremental build): "✔ Test run with 66 tests in 17
+    suites passed after 11.127 seconds.", its one Test run line; 66 of 66 by name, 0 failing, 0 issues, 0 crash lines.
+    - The 19 frames are all IN, and their lines are byte-equal to G5′'s (`d9bd8f4f`). The report folder
+      `hatch-report-k1` (20 files) is byte-equal to G5′'s `hatch-report-g5p`, file for file.
+    - IOS's read, `g5_read.py` (`3f555135`) over it, is byte-equal to G5′'s `g5p-read.txt` (`0cbee384`).
+    - The frames row passed. In M-f1's Chat files the build printed 0 diagnostics, and its first error is none.
+    - df: 10,734 → 10,660 MiB.
+  - **K2**, FieldHome's six at T, on K1's build: "✔ Test run with 65 tests in 6 suites passed after 1.921 seconds.",
+    its one Test run line; 65 of 65 by name, 0 failing; the seed row passed. df: 10,650 → 10,279 MiB.
+  - **The kit's sum** (VF-PM's 17:14Z rule, by script): 66 in 17 + 65 in 6 = 131 tests in 23 suites. **Nothing is
+    OWED:** the carry from kit-f6r is confirmed at T, not leaned on.
+  - The run's end: `mf1r2.done` (`27b16d21`) at 20:02:20Z, "the mint ran", df 10,342 MiB (102 over the floor). The
+    results are `mint/a9-results-mf1r2-3ed4e77e0` (SUMS-a9 `3f68ffbc`, 53 rows).
+  - **V's expected field-app line, derived:** run217 (at `3c5c4937b`, whose tree differs from B in four docs files
+    alone) printed 314 files and 4,392 tests. M-f1 adds two files and nine tests (`new-spark-goldens` 5,
+    `spark-face-goldens` 4, neither with `.each`, `.skip` or `.only`), so 316 and 4,401. No data-driven field-app test
+    reads a file M-f1 changes, and M-f1 changes no field-app source (IOS, 19:46Z).
+  - **The carry, by subtree hash** (computed by IOS at 19:46Z, and checked by the host's setup at K):
+    - at T and at `c2f3400fb` alike: apps/ios `fbb624f59d64`, the kit `0df86d540fb6`, FieldDesign `92860b24da8a`,
+      FieldDesignTests `bc3772810336`, FieldHomeTests `b82b422de1d7`;
+    - at `07157e08d` (G5′'s): FieldDesign and FieldDesignTests the same, and FieldHomeTests `9c0b09404a90`. So G6b's
+      line is K2's reference.
+  - *The draft left the host packet* (2026-11-07, VF-PM 19:39:48Z, option (ii)): it is no host input, and it moves
+    until its slots fill. The host's SUMS is `mint/SHA256SUMS-M-f1-host` (`aea736ff`), seven rows. The brief's own
+    `SHA256SUMS-M-f1-brief` (`edbdb9f3`) stays beside it as the record's; its draft row was stale from 19:27:16Z.
+  - *An absolute patch-id does not cross hosts* (2026-11-07; the mint's first placement, `k-mf1.sh`, STOPPED at
+    19:46:07Z before V's edge, exit 6, so nothing ran). The range's patch-id reads
+    `b3c29a9e46932d4da3a16be8621e0e3843d55e33` at both ends in the ios12b lane (git 2.50.1) and
+    `32265a16ce8e85d06c846e23c9453ac9fa747a9f` at both ends on the old mini (git 2.54.0). The 38 PNG diffs hash their
+    `index` lines, which are abbreviated to 9 characters in the lane (git's automatic length over 157,270 objects) and
+    to 8 on the mini.
+    - The brief's proof stays true as an equality within one lane, and R2 (`k-mf1r2.sh` `7557afae`, VF-PM's take
+      19:50:39Z) asserts exactly that. V's number is R2's.
+    - With `--full-index`, the range reads `b2971db2c1220c6b64e32942ee314ee9fdcf758b` at both ends, in the lane (git
+      2.50.1) and on the mini (git 2.54.0; VF-PM's read, a9 20:03Z). That diff carries no abbreviated line, so the two
+      object stores agree. It is the value briefs name from now on (VF-PM's rule, 19:51:53Z).
+
+**Found.**
+1. **The hatch's hash form took three reads, and the second claim was false** (errata at the source):
+   - G2's four frames OUT: Metal's compiler fused `seed * k1` into the sum at the two sites that hash a sum of two
+     products (the rays, star-spark.js :200; the particles, :378), and h11 turns one ulp into its whole range.
+   - `f285101ec` rounded both products, its subject saying "as WebGL's do". **That was false.** WebGL fixes no
+     rounding, and the engine's frames were drawn by ANGLE's Metal on the goldens' host, which computes
+     fma(fj, k2, round(seed · k1)) (form B): b's dust j31 sits on its plain place and j30 on its fused one, in one frame
+     from one GLSL line; per hash only form B fits both; every placement where the kit's place differs from form B's
+     lights its diff, 13 of 13 at G4 and 65 of 67 at G3.
+   - The correction is dated at the source, the head's `hin` bullet (`07157e08d`; VF-PM 17:34:30Z). `f285101ec`'s
+     message stands as written in git. The rays tell P from B nowhere in either deal's frames.
+   - **A count was said wrong and corrected the same hour:** IOS's 17:34Z message summed the placements by hand as 15
+     of 15 and 82 of 84; the script's own lines sum to 13 of 13 and 65 of 67 (corrected 17:43Z).
+   - The scripts, outside the tree: `lanes/ios12/12f/f5/f5f4/` (G2's read: `hash_model.py` `ce900148`, `mine.py`
+     `fa737765`, `rays.py` `60cdaa64`, `which_side.py` `5d8d9760`) and `f5/f5f4-read/` (G4's: `dust.py` `99cca512`,
+     `clusters.py` `9d61c9ef`, `per_hash.py` `6b2271cf`, `form_b.py` `472e9215`, `g4_left.py` `b8fa3e79`, `rays_b.py`
+     `589190b2`, `hin_bits.py` `bcade7e5`, `g5_read.py` `3f555135`).
+2. **No pragma is relied on.** `#pragma METAL fp math_mode(safe)` stays with a comment that nothing shows it in
+   effect (MSL 3.2, the kit at iOS 17, and 12e silenced the unknown-pragma warning); even in effect it allows fusing
+   within one expression. The zero the compiler cannot see (`Sky.c`) is what holds the rounding.
+3. **Freshness was by convention until f5g:** no verify step ran the rows, hatch, stills or frames goldens'
+   `--check`, and hatch.tsx was pinned nowhere. **Correction:** IOS's 14:18:45Z message counted the DNA golden among
+   them; it never was (`spark-face.test.tsx` recomputes it and the flat star in every verify, :108, :140).
+4. **The door premise was false** (f2 re-cut, VF-PM 13:11:45Z): the plan's "one door change" (`agent.providers` into
+   FieldLink's `workspaceMethods`) came from the launch sheet's road. Chat already holds the home's client
+   (ChatFeed.swift :41). The erratum is at the plan's source.
+5. **The frames' weight** was a stop and ask over the plan's 3 MB line, ruled (a) at 14:32:41Z, as drawn: 9,338,476 B
+   on disk, 8,356,039 B in git's objects (17 distinct blobs of 19; the kit's copies add none). The bare night ground
+   alone is 490,991 B of noise; each moment adds at most 73,427 B. Every re-bless is an engine change of about 8 MB.
+   James's Q5 (a) kept it. a-deal = b-deal and a-ground = b-ground byte for byte, by the engine's own arithmetic.
+6. **The sheet's closure held a stale page** (f6): a `.sheet`'s content captures the ChatPage it was built from, so
+   the thread opens from the page as it stands (an `opening` state read by two onChange), never from the press's copy.
+7. **The HOLD's cost: two build reds only the kit could see.** The Mac compiles no Swift.
+   - kit-f4's G: `FieldType.plainEase` and `popCurve` are FieldMotion's (NewSparkSheetView :292, :520), folded into
+     the owning commit (VF-PM 14:02:45Z): `31eaa630f` → `722aea47c`, f5a `27af9bd8e` → `2964a6b59`.
+   - kit-f6's G6, R5h and G5: NewSparkSheetView.swift:645:89, "converting non-Sendable function value to
+     '@MainActor @Sendable (String) -> Void' may introduce data races". Xcode 27.2 reads a `@MainActor` function type
+     as Sendable, and the view's `onOpen` was a plain `(String) -> Void`. Re-cut (VF-PM 18:13:50Z): `onOpen` takes
+     Steps' own type and ChatPage hands it a closure, `fa76053bb` → `8bd84b8b4`; the f5h pair replayed with patch-ids
+     equal, `2723630cf` → `0ce5ca7cd`, `9e3d41633` → `07157e08d`.
+8. **Biome's rules met two names:** it read `useRandom` as a React hook, so the door is `handRandom`; a key named
+   `then` made a case a thenable, so the keys are `open`/`next`.
+9. **swift-testing prints an issue's comment before its expansion** (`↳ seed 1`, then `↳ dealt == seed → false`):
+   IOS's 18:31Z review of kit-f6r said the reverse, corrected 18:44Z; the verdict stood.
+10. **Superseded, each kept as a branch or a PM ref:** `3220249ec` → `23ac276a9` (the door); `31eaa630f` →
+    `722aea47c` and `27af9bd8e` → `2964a6b59` (the fold); `ae53f58ed` → `0996e0fa4`; `fa76053bb` → `8bd84b8b4`,
+    `2723630cf` → `0ce5ca7cd` and `9e3d41633` → `07157e08d` (the re-cut). `3128e566e` was amended into `2723630cf`
+    before it was sent.
+11. **The HOLD door shut** at several rows (13:35:03Z at 12.91, 14:09:07Z at 8.40, 17:04:59Z, 17:43:48Z at 9.64,
+    and f5g's at 15:10Z and 16:52Z). Each was recorded NOT RUN and run at the next open read.
+
+**Owed.**
+- The device read on James's phone: the flight's `.global` box under a folding large sheet.
+- SparkStar.metal's hash shape, latent (Found 1's class), for 12e's owner to read.
+- **Item 241** (VF-PM 19:22:45Z; the record `lanes/ios12/12f/stills-f1/IOS-stills-read-c2f3400fb.md`): its own slice
+  after M-f1. DESIGN.md rules the Off look first (0.4, or §2.4's t4 words); then `ChromePillStyle` draws it from
+  `isEnabled` and WorkspaceSheets' call-site opacity retires in the same commit, with its own kit rows and the away
+  pair re-shot. A call-site opacity on Create alone is refused as the ad-hoc copy.
+- **M-f2** (f7a–f7), the IOS session's: B's DESIGN.md text, the at-rows goldens, @'s red rows and @'s list.
