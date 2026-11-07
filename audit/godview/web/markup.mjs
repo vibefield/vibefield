@@ -100,7 +100,7 @@ export function renderShell(index, cell) {
       <p>Puppeteer pin <code>${escapeHtml(index.auditTarget.sourceRevision.puppeteer)}</code>. Vibefield overlay pin <code>${escapeHtml(index.auditTarget.sourceRevision.vibefield)}</code>.</p>
       <p>${escapeHtml(index.boundary?.summary ?? "")}</p>
     </section>
-    <p class="posture" role="status">${escapeHtml(index.coverageClaim.reason)} ${escapeHtml(index.partial?.note ?? "")} Swarm environment gaps stay at 35 until owner evidence changes.</p>
+    <p class="posture" role="status">${escapeHtml(index.coverageClaim.reason)} ${escapeHtml(index.partial?.note ?? "")}</p>
     <p class="gate" role="status">${escapeHtml(index.foundationGate?.note ?? "")}</p>
     <nav aria-label="Audit selectors">
       <div class="control"><label for="state">State</label><select id="state">${stateOptions}</select></div>
@@ -163,7 +163,11 @@ export function renderShell(index, cell) {
       <p>Delivery: incomplete. ${escapeHtml(String(cell.coverage?.fieldRecords ?? 0))} canonical row records are loaded. ${escapeHtml(String(cell.coverage?.sdkLeafRecords ?? 0))} SDK leaf records are separate.</p>
       <p>Shared anchors resolved: ${escapeHtml(String(index.sharedMap?.counts?.rowJoinAnchorsResolved ?? "—"))}. The map's uiResolutionCounts resolvedUnknown ${escapeHtml(String(index.sharedMap?.uiResolutionCounts?.resolvedUnknown ?? "—"))} and remainingUnknown ${escapeHtml(String(index.sharedMap?.uiResolutionCounts?.remainingUnknown ?? "—"))} are shared-anchor bookkeeping, not adapter-specific UI resolution. The map admits sequences are not reproven.</p>
       <p>First-half envelopes, counted from the files: uiReachable yes ${escapeHtml(String(index.partial?.blockers?.first?.ui?.yes ?? "—"))}, no ${escapeHtml(String(index.partial?.blockers?.first?.ui?.no ?? "—"))}, unknown ${escapeHtml(String(index.partial?.blockers?.first?.ui?.unknown ?? "—"))}. Candidate status: ${escapeHtml(String(index.partial?.candidateStatus ?? "static-not-live"))}. Independent signoff: ${escapeHtml(String(index.partial?.blockers?.costReview?.independentSignoff ?? "pending"))}.</p>
-      <p>Priced first-half cost records that state the guard, ledger-before-project, and epochs: ${escapeHtml((index.partial?.blockers?.costReview?.first?.ownerStated ?? []).join(", ") || "none")}. Second-half cost flows pending correction: ${escapeHtml((index.partial?.blockers?.costReview?.second?.pendingCorrection ?? []).join(", ") || "none")}. Those pending flows are not semantically verified. Other fields on those adapters stay usable.</p>
+      <p>Claude and Codex cost graphs held from acceptance: ${escapeHtml((index.partial?.blockers?.costReview?.first?.precisionPending ?? []).join(", ") || "none")}. That is not accepted provenance. Second-half cost branches: ${escapeHtml(
+        Object.entries(index.partial?.blockers?.costReview?.second?.branches ?? {})
+          .map(([id, branch]) => `${id} ${branch}`)
+          .join("; ") || "none",
+      )}. Second-half account host scope still pending: ${escapeHtml((index.partial?.blockers?.accountHostPending ?? []).join(", ") || "none")}. Independent signoff is pending.</p>
       <p>Render denominator ${escapeHtml(String(index.rendering?.counts ? Object.values(index.rendering.counts).reduce((sum, value) => sum + value, 0) : "—"))}. Actual renders: ${escapeHtml(String(index.rendering?.bodyRendered ?? "—"))}. Exercised same-view covered-by: ${escapeHtml(String(index.rendering?.coveredBy ?? "—"))}. Covered-by does not add body coverage. Coverage gaps: ${escapeHtml(String(index.rendering?.coverageGap ?? "—"))}. Not-applicable: ${escapeHtml(String(index.rendering?.counts?.["not-applicable"] ?? "—"))}, proof ${escapeHtml(String(index.rendering?.notApplicableProof ?? "—"))}. Prior 302 not-applicable claim validated: no. Environment gaps: ${escapeHtml(String(index.rendering?.counts?.["environment-gap"] ?? "—"))}. Swarm body painted: no. Environment versus source cause is under investigation.</p>
       ${(index.sharedMap?.openEnvelopeIssues ?? []).map((issue) => `<p>${escapeHtml(issue)}</p>`).join("")}
       ${cell.graphOrder ? `<p>${escapeHtml(cell.graphOrder.note)}</p>` : ""}

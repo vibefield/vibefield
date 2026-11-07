@@ -26,18 +26,130 @@
     {
       "repo": "puppeteer",
       "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/runtime/src/services/monitor-service.ts",
+      "lineStart": 418,
+      "lineEnd": 425,
+      "symbol": "priceUsageUpdates"
+    },
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/runtime/src/services/usage-pricing.ts",
+      "lineStart": 69,
+      "lineEnd": 78,
+      "symbol": "priceUsageUpdates"
+    },
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
       "path": "packages/runtime/src/services/usage-pricing.ts",
       "lineStart": 19,
-      "lineEnd": 78,
+      "lineEnd": 28,
       "symbol": "priceUsage"
+    },
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/core/src/monitor/reduce.ts",
+      "lineStart": 672,
+      "lineEnd": 686,
+      "symbol": "reduceMonitorAccumulator"
+    },
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/core/src/monitor/usage-index.ts",
+      "lineStart": 210,
+      "lineEnd": 223,
+      "symbol": "buildUsageCostLedger"
+    },
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/core/src/monitor/usage-index.ts",
+      "lineStart": 321,
+      "lineEnd": 438,
+      "symbol": "buildUsageIndex"
     },
     {
       "repo": "puppeteer",
       "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
       "path": "packages/core/src/monitor/cost.ts",
       "lineStart": 21,
-      "lineEnd": 41,
+      "lineEnd": 40,
       "symbol": "buildUsageCostLedger"
+    },
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/core/src/monitor/usage-index.ts",
+      "lineStart": 511,
+      "lineEnd": 559,
+      "symbol": "projectUsageCost"
+    },
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/core/src/monitor/cost.ts",
+      "lineStart": 59,
+      "lineEnd": 101,
+      "symbol": "projectUsageCost"
+    },
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/core/src/monitor/project.ts",
+      "lineStart": 346,
+      "lineEnd": 417,
+      "symbol": "usageProjection"
+    },
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/monitor/src/backend/backend.ts",
+      "lineStart": 404,
+      "lineEnd": 435,
+      "symbol": "observe"
+    },
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "apps/godview/src/main/main.ts",
+      "lineStart": 744,
+      "lineEnd": 744,
+      "symbol": "acrossEpochs"
+    },
+    {
+      "repo": "vibefield",
+      "sha": "433505fd0f224f4cda540d642661b13848c0ef82",
+      "path": "packages/fieldd/src/agent-monitor.ts",
+      "lineStart": 478,
+      "lineEnd": 480,
+      "symbol": "acrossEpochs"
+    },
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/monitor/src/backend/usage-ledger.ts",
+      "lineStart": 62,
+      "lineEnd": 82,
+      "symbol": "historyOf"
+    },
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/monitor/src/backend/backend.ts",
+      "lineStart": 189,
+      "lineEnd": 207,
+      "symbol": "costOf"
+    },
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/monitor/src/backend/derive.ts",
+      "lineStart": 277,
+      "lineEnd": 277,
+      "symbol": "input.cost"
     },
     {
       "repo": "puppeteer",
@@ -82,8 +194,8 @@
     },
     {
       "order": 2,
-      "name": "priceUsageUpdates",
-      "effect": "accept() prices usage upserts before reduceMonitorAccumulator. priceUsage keeps a reported nonnegative costUsd, including zero. Otherwise it requires this upsert's own pricing metadata and the exact catalog key providerId/modelId. These adapters set neither, so no costUsd is written and the row model is not used as a substitute. [post-0.3.3]",
+      "name": "price-before-reduce",
+      "effect": "accept() runs priceUsageUpdates on runtime and semantic updates before reduceMonitorAccumulator. Reported nonnegative costUsd, including zero, wins. Otherwise pricing needs this upsert's own pricing metadata. [post-0.3.3]",
       "source": {
         "repo": "puppeteer",
         "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
@@ -95,8 +207,34 @@
     },
     {
       "order": 3,
-      "name": "reduceMonitorAccumulator",
-      "effect": "Stores the updates after pricing. A missing costUsd stays missing. [post-0.3.3]",
+      "name": "priceUsageUpdates",
+      "effect": "The selector prices a usage upsert only when canonical, pricing, or costUsd is set. None of these adapters set pricing or costUsd. opencode takes the guarded increment. monitor.ts:136-153 sets canonical true and sets no pricing, cost, or costUsd. priceUsageUpdates selects that upsert because canonical is true (usage-pricing.ts:75). priceUsage finds no pricing metadata and sets cost to source unavailable without costUsd (usage-pricing.ts:27-28). cost.ts:31-33 then increments unpriced, because canonical and the unavailable cost are both truthy. It does not take the skip branch. priced stays 0, so coverage is unavailable rather than partial.",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/runtime/src/services/usage-pricing.ts",
+        "lineStart": 69,
+        "lineEnd": 78,
+        "symbol": "priceUsageUpdates"
+      }
+    },
+    {
+      "order": 4,
+      "name": "priceUsage",
+      "effect": "With no reported costUsd and no pricing metadata, priceUsage returns cost source unavailable and leaves costUsd unset. It does not read the row model, and the catalog is not consulted.",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/runtime/src/services/usage-pricing.ts",
+        "lineStart": 19,
+        "lineEnd": 28,
+        "symbol": "priceUsage"
+      }
+    },
+    {
+      "order": 5,
+      "name": "reduce-after-price",
+      "effect": "reduceMonitorAccumulator stores the updates priceUsageUpdates already rewrote. These adapters do not pass through translateAgentEventEnvelope's usage:tokens-used case, which copies an event's own costUsd before pricing. [post-0.3.3]",
       "source": {
         "repo": "puppeteer",
         "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
@@ -107,61 +245,139 @@
       }
     },
     {
-      "order": 4,
-      "name": "selectClaims",
-      "effect": "Keeps one current claim per family key across the runtime and semantic planes. [post-0.3.3]",
-      "source": {
-        "repo": "puppeteer",
-        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
-        "path": "packages/core/src/monitor/selection.ts",
-        "lineStart": 130,
-        "lineEnd": 141,
-        "symbol": "selectClaims"
-      }
-    },
-    {
-      "order": 5,
-      "name": "projectAgentMonitorState",
-      "effect": "Projects AgentMonitorState. Usage cost is folded here, before the backend builds the row. [post-0.3.3]",
-      "source": {
-        "repo": "puppeteer",
-        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
-        "path": "packages/core/src/monitor/project.ts",
-        "lineStart": 325,
-        "lineEnd": 449,
-        "symbol": "projectAgentMonitorState"
-      }
-    },
-    {
       "order": 6,
-      "name": "queryUsageIndex",
-      "effect": "The projection folds selected usage through buildUsageCostLedger. Only a finite nonnegative costUsd is priced. Token counts without it add no USD total. [post-0.3.3]",
+      "name": "usage-index-stream",
+      "effect": "usageIndexOf builds the index before any cost projection. buildUsageIndex folds selected usage into the run stream, and stream calls buildUsageCostLedger there. This ledger is clock-free and runs before project.ts copies a usage result. [post-0.3.3]",
       "source": {
         "repo": "puppeteer",
         "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
-        "path": "packages/core/src/monitor/project.ts",
-        "lineStart": 347,
-        "lineEnd": 351,
-        "symbol": "queryUsageIndex"
+        "path": "packages/core/src/monitor/usage-index.ts",
+        "lineStart": 210,
+        "lineEnd": 223,
+        "symbol": "buildUsageCostLedger"
       }
     },
     {
       "order": 7,
-      "name": "ledger.observe",
-      "effect": "The backend copies that projected usage into the row ledger before it derives the row.",
+      "name": "buildUsageIndex",
+      "effect": "The run stream at usage-index.ts:427 passes every selected usage entry into that ledger. queryUsageIndex has not run yet. [post-0.3.3]",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/core/src/monitor/usage-index.ts",
+        "lineStart": 321,
+        "lineEnd": 438,
+        "symbol": "buildUsageIndex"
+      }
+    },
+    {
+      "order": 8,
+      "name": "ledger-counts",
+      "effect": "A finite nonnegative costUsd, including 0, increments priced and adds to the total. A missing, invalid, or negative costUsd increments unpriced only when canonical, pricing, or cost is truthy. A sample with none of those is skipped and does not increment unpriced. opencode takes the guarded increment. monitor.ts:136-153 sets canonical true and sets no pricing, cost, or costUsd. priceUsageUpdates selects that upsert because canonical is true (usage-pricing.ts:75). priceUsage finds no pricing metadata and sets cost to source unavailable without costUsd (usage-pricing.ts:27-28). cost.ts:31-33 then increments unpriced, because canonical and the unavailable cost are both truthy. It does not take the skip branch. priced stays 0, so coverage is unavailable rather than partial. [post-0.3.3]",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/core/src/monitor/cost.ts",
+        "lineStart": 21,
+        "lineEnd": 40,
+        "symbol": "buildUsageCostLedger"
+      }
+    },
+    {
+      "order": 9,
+      "name": "coverage-decision",
+      "effect": "queryUsageIndex calls projectUsageCost only after the ledger exists. priced greater than 0 and unpriced 0 is complete, and the USD total may be 0. priced greater than 0 and unpriced greater than 0 is partial. priced 0 omits this run's costUsd and costRatePerMin and sets coverage unavailable. These adapters stay on priced 0. An unpriced increment does not by itself make coverage partial. [post-0.3.3]",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/core/src/monitor/usage-index.ts",
+        "lineStart": 511,
+        "lineEnd": 559,
+        "symbol": "projectUsageCost"
+      }
+    },
+    {
+      "order": 10,
+      "name": "projectUsageCost",
+      "effect": "projectUsageCost reads the ledger counts. It does not rebuild them, and it does not turn priced 0 into a USD total. [post-0.3.3]",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/core/src/monitor/cost.ts",
+        "lineStart": 59,
+        "lineEnd": 101,
+        "symbol": "projectUsageCost"
+      }
+    },
+    {
+      "order": 11,
+      "name": "project-copy",
+      "effect": "project.ts:346-351 runs usageIndexOf and queryUsageIndex. Line 417 then copies that usage result onto AgentMonitorState. The copy does not build the cost ledger. [post-0.3.3]",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/core/src/monitor/project.ts",
+        "lineStart": 346,
+        "lineEnd": 417,
+        "symbol": "usageProjection"
+      }
+    },
+    {
+      "order": 12,
+      "name": "epoch-observe",
+      "effect": "The backend observes the projected usage before costOf. The backend default at backend.ts:132 is accumulate when a host omits the option. Godview sets accumulate and keeps a prior epoch's costUsd when the current run has priced 0. VibeField sets current and replaces that one run. burnPerHour is the current costRatePerMin times 60, not the retained sum, and that rate is omitted when priced is 0.",
       "source": {
         "repo": "puppeteer",
         "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
         "path": "packages/monitor/src/backend/backend.ts",
         "lineStart": 404,
         "lineEnd": 435,
-        "symbol": "ledger.observe"
+        "symbol": "observe"
       }
     },
     {
-      "order": 8,
-      "name": "costOf",
-      "effect": "A ledger history with no priced total returns no cost object. That is state.cost_missing. It is not a present field.cost with coverage unavailable.",
+      "order": 13,
+      "name": "godview-accumulate",
+      "effect": "The Puppeteer Godview host sets acrossEpochs accumulate. That can retain an earlier epoch's costUsd. These adapters never write costUsd on any epoch, so there is no retained total to keep.",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "apps/godview/src/main/main.ts",
+        "lineStart": 744,
+        "lineEnd": 744,
+        "symbol": "acrossEpochs"
+      }
+    },
+    {
+      "order": 14,
+      "name": "vibefield-current-epoch",
+      "effect": "VibeField createMonitorBackend sets acrossEpochs current. A new epoch replaces the run instead of adding its costUsd to earlier epochs.",
+      "source": {
+        "repo": "vibefield",
+        "sha": "433505fd0f224f4cda540d642661b13848c0ef82",
+        "path": "packages/fieldd/src/agent-monitor.ts",
+        "lineStart": 478,
+        "lineEnd": 480,
+        "symbol": "acrossEpochs"
+      }
+    },
+    {
+      "order": 15,
+      "name": "history-aggregate",
+      "effect": "historyOf sums costUsd across the runs observe retained. history.total is absent only when no retained run has costUsd. That is this path: current mode replaces the run, and the run's priced count is 0.",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/monitor/src/backend/usage-ledger.ts",
+        "lineStart": 62,
+        "lineEnd": 82,
+        "symbol": "historyOf"
+      }
+    },
+    {
+      "order": 16,
+      "name": "row-cost",
+      "effect": "costOf returns undefined when history.total is undefined, and the row omits field.cost. That is state.cost_missing. A present field.cost with coverage unavailable, state.cost_unavailable, is not emitted. When a retained total exists, usd is that sum and burnPerHour is the current rate times 60.",
       "source": {
         "repo": "puppeteer",
         "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
@@ -172,20 +388,20 @@
       }
     },
     {
-      "order": 9,
-      "name": "deriveAgentRow",
-      "effect": "The row is derived with the cost input from costOf. Here that input is absent.",
+      "order": 17,
+      "name": "derive-cost",
+      "effect": "deriveAgentRow copies input.cost when costOf returned an object, including a USD total of 0. Here costOf returned undefined, so cost is omitted.",
       "source": {
         "repo": "puppeteer",
         "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
         "path": "packages/monitor/src/backend/derive.ts",
-        "lineStart": 240,
-        "lineEnd": 286,
-        "symbol": "deriveAgentRow"
+        "lineStart": 277,
+        "lineEnd": 277,
+        "symbol": "input.cost"
       }
     },
     {
-      "order": 10,
+      "order": 18,
       "name": "createMonitorBackend",
       "effect": "fieldd hosts the monitor backend on the runtime source and passes the current-epoch cost reading.",
       "source": {
@@ -198,7 +414,7 @@
       }
     },
     {
-      "order": 11,
+      "order": 19,
       "name": "wireMonitorRow",
       "effect": "The model wire drops device.self. This desktop's window otherwise reads the row whole.",
       "source": {
@@ -211,7 +427,7 @@
       }
     },
     {
-      "order": 12,
+      "order": 20,
       "name": "peerMonitorRow",
       "effect": "A peer loses project.seq and has detail, activity line, wait text, and reply text bounded.",
       "source": {
@@ -224,7 +440,7 @@
       }
     },
     {
-      "order": 13,
+      "order": 21,
       "name": "modelRowFrom",
       "effect": "The reader restores device.self and fills a missing writable from attachable.",
       "source": {
@@ -237,16 +453,42 @@
       }
     },
     {
-      "order": 14,
+      "order": 22,
+      "name": "replica.join",
+      "effect": "The replica join spreads the agent row. It does not recompute cost.",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/monitor/src/replica/replica.ts",
+        "lineStart": 337,
+        "lineEnd": 372,
+        "symbol": "join"
+      }
+    },
+    {
+      "order": 23,
       "name": "window-rows",
-      "effect": "No display rewrite for this field. The row is spread through, aside from peer stale and peer profileSet.",
+      "effect": "window-rows rewrites peer stale and drops peer profileSet. It spreads the rest of the row and does not recompute cost.",
       "source": {
         "repo": "vibefield",
         "sha": "433505fd0f224f4cda540d642661b13848c0ef82",
         "path": "packages/field-app/src/godview/monitor/window-rows.ts",
-        "lineStart": 67,
-        "lineEnd": 139,
-        "symbol": "createWindowRows"
+        "lineStart": 116,
+        "lineEnd": 134,
+        "symbol": "profileSet"
+      }
+    },
+    {
+      "order": 24,
+      "name": "swarm-reader",
+      "effect": "A working observed body treats cost as priced only when coverage is complete or partial. These rows omit cost, so the body is the unpriced flame, state.burn_unpriced, not a priced flame.",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/views/src/views/swarm/bubble-model.ts",
+        "lineStart": 469,
+        "lineEnd": 523,
+        "symbol": "priced"
       }
     }
   ],
@@ -306,6 +548,6 @@
   "verification": {
     "status": "source-read",
     "owner": "GV-AUDIT4",
-    "notes": "Declared usage=supported. Canonical burn is emitted at native step/assistant response boundaries, not estimated from context occupancy. Child usage is available after native parent/child identity is established. Shared path: audit/godview/contracts/cost-burn-trace.md at 25c215a2a53f363e1076210b3f6fce2155dfdc0b on audit/godview-model. Token counts without costUsd normally end in state.cost_missing, not state.cost_unavailable. The backend omits field.cost when no priced total exists. priceUsage (packages/runtime/src/services/usage-pricing.ts:19-36, 69-78) prices an upsert only from its own pricing metadata or an existing costUsd, and only looks up catalog key providerId/modelId. USAGE_PRICES (packages/runtime/src/services/usage-prices.ts:39) has 60 keys, providers anthropic and openai only. None of grok, hermes, opencode, kimi, or pi set pricing or costUsd, so the catalog is never consulted for their tokens. Grok and OpenCode are canonical, so ingress still calls priceUsage and records an unavailable estimate with no costUsd, which counts as unpriced and still yields no row total. Hermes samples are noncanonical and are not selected for pricing. Kimi writes journal usage as context, not a usage upsert. Pi emits no live usage. Priced burn flames are reachable only for claude and codex. Settled: state.cost_missing and state.burn_unpriced can occur. state.cost_complete, state.cost_partial, state.cost_unavailable, and state.burn_flames_0 through state.burn_flames_4 cannot. state.cost_unavailable is not emitted for these producers. Audit pin is puppeteer 748d015, newer than the 0.3.3 package vibefield ships (tag v0.3.3, commit 52d09c8e). This record does not compare 0.3.3 behavior. A transform effect ending in [post-0.3.3] cites a puppeteer file whose text differs from 52d09c8e."
+    "notes": "Declared usage=supported. Canonical burn is emitted at native step/assistant response boundaries, not estimated from context occupancy. Child usage is available after native parent/child identity is established. Corrected cost chain from puppeteer 68dde825266e63ba63a1b07f7fcfd1e85f868b1f, checked at pins vibefield 433505fd and puppeteer 748d015. Order: priceUsageUpdates before reduce; buildUsageCostLedger inside buildUsageIndex before queryUsageIndex; project.ts copies the usage result only after that projection; observe then splits acrossEpochs accumulate from current; historyOf; costOf; derive. opencode takes the guarded increment. monitor.ts:136-153 sets canonical true and sets no pricing, cost, or costUsd. priceUsageUpdates selects that upsert because canonical is true (usage-pricing.ts:75). priceUsage finds no pricing metadata and sets cost to source unavailable without costUsd (usage-pricing.ts:27-28). cost.ts:31-33 then increments unpriced, because canonical and the unavailable cost are both truthy. It does not take the skip branch. priced stays 0, so coverage is unavailable rather than partial. VibeField uses acrossEpochs current (agent-monitor.ts:480), so a new epoch replaces the run. Godview uses accumulate (main.ts:744), which could keep an earlier epoch's costUsd, but no epoch of these adapters has one. priced 0 omits costUsd, so history.total stays absent and costOf omits field.cost. That is state.cost_missing. state.cost_unavailable is not emitted. A working observed swarm body with no complete or partial cost is state.burn_unpriced. state.cost_complete, state.cost_partial, and state.burn_flames_0 through state.burn_flames_4 cannot occur. Disagree with the Claude graph's reduce.ts:1049-1073 step: that case copies the event's costUsd inside acceptAgentEvent before accept() prices updates, and these adapters do not go through it. Audit pin is puppeteer 748d015, newer than the 0.3.3 package vibefield ships (tag v0.3.3, commit 52d09c8e). This record does not compare 0.3.3 behavior. A transform effect ending in [post-0.3.3] cites a puppeteer file whose text differs from 52d09c8e."
   }
 }

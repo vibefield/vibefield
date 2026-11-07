@@ -570,8 +570,8 @@ function sharedMapSummary(root) {
       "Shared-map uiResolutionCounts.resolvedUnknown 265 and remainingUnknown 0 are shared-anchor bookkeeping. They are not adapter-specific UI resolution. Envelope uiReachable counts are computed from the files.",
       "The map says non-cost sequences are not reproven. That admission stays open.",
       "First-half 68dde825 states the pricing guard, ledger-before-project chronology, and current versus retained epochs on the priced cost records. Independent signoff is pending. Those records are static, not live.",
-      "Second-half cost flows from 69b4c9c8 still observe the ledger after project and do not state the guard or the epoch split. They are pending correction and are not semantically verified. Other second-half fields stay usable.",
-      "AUDIT4 69b4c9c8 adds account and profileSet. Account is host-scoped. The VibeField host omits it. The Puppeteer Godview host can set a profile label. accountUsage is the usage column, not field.account. First-half account envelopes are not rewritten from that trace yet.",
+      "Second-half 4d86127a cost records name the guard per adapter. Grok and OpenCode increment unpriced. Hermes is skipped. Kimi and Pi never enter the ledger. No epoch has costUsd, so the row is cost_missing and burn_unpriced. Independent signoff is pending.",
+      "Claude and Codex cost graphs stay precision-pending. Confirmed: reduce.ts:1049-1073 copies event costUsd before pricing. The post-price reducer is reduce.ts:672-686. The evidence files are not rewritten. Not accepted provenance.",
       "Delivery stays incomplete.",
     ],
   };
@@ -613,14 +613,14 @@ function partialCensus(traces, join) {
     evidenceKind: "source-read",
     firstHalfCommit: "68dde825266e63ba63a1b07f7fcfd1e85f868b1f",
     candidateStatus: "static-not-live",
-    secondHalfCommit: "69b4c9c8b078571f42302c920f3c5e8e279e37c9",
+    secondHalfCommit: "4d86127a767f382fbfe5ec7969b2c9572b47b9b3",
     accountTraceCommit: "08b5d849177685662b43e0e3a4e6bd7d32ac2cdf",
     independentSemanticReview: "pending",
     blockers: semanticBlockers(traces),
     delivery: "incomplete",
     provenanceComplete: join?.provenanceComplete === true,
     downstreamVerdict: typeof join?.downstreamVerdict === "string" ? join.downstreamVerdict : null,
-    note: "Delivery is incomplete. First-half 68dde825 is static-not-live. Independent semantic signoff is pending. Second-half cost flows are pending correction where the ledger is observed after project or the pricing guard and epoch split are absent. Other second-half fields stay usable. Account status is counted from the envelopes. Shared-map anchor totals are not envelope UI resolution. Render 863f44ac splits 410 into 103 rendered, 21 covered-by, 77 coverage gaps, 150 outside-view not-applicable, and 59 environment gaps. The prior 302 not-applicable count is not validated. Swarm body was not painted.",
+    note: "Delivery is incomplete. Independent semantic signoff is pending. Claude and Codex cost graphs are precision-pending and are not accepted provenance. Second-half 4d86127a cost records are scoped and static: grok and opencode increment unpriced, hermes is skipped, kimi and pi never enter the ledger, and no epoch has costUsd. Account status is counted from the envelopes. Render 863f44ac splits 410 into 103 rendered, 21 covered-by, 77 coverage gaps, 150 outside-view not-applicable, and 59 environment gaps. The prior 302 not-applicable count is not validated. Swarm body was not painted.",
   };
 }
 

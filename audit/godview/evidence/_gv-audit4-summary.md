@@ -50,25 +50,39 @@ Source: `audit/godview/contracts/account-trace.md` at `08b5d849177685662b43e0e3a
 
 ## Cost and burn
 
-Shared path, not re-derived here: `audit/godview/contracts/cost-burn-trace.md` at `25c215a2a53f363e1076210b3f6fce2155dfdc0b` on `audit/godview-model`.
+Corrected against puppeteer `68dde825266e63ba63a1b07f7fcfd1e85f868b1f` (the Claude cost graph) and re-read at vibefield `433505fd` and puppeteer `748d015`.
 
-Token counts without `costUsd` normally end in `state.cost_missing`, not `state.cost_unavailable`. Core coverage can be unavailable while the backend omits `field.cost` entirely. An observed working swarm body with no complete or partial cost is `state.burn_unpriced`. Priced flames (`state.burn_flames_0` through `state.burn_flames_4`) are reachable only for claude and codex. `field.tokens.perMinute` and those USD flames are independent.
+The ledger guard is `buildUsageCostLedger` (`packages/core/src/monitor/cost.ts:31-33`). A finite nonnegative `costUsd`, including 0, increments `priced` and adds to the total. A missing, invalid, or negative `costUsd` increments `unpriced` only when `canonical`, `pricing`, or `cost` is truthy. A sample with none of those is skipped. `projectUsageCost` (`cost.ts:96-97`) omits `costUsd` and `costRatePerMin` whenever `priced` is 0, and sets coverage `unavailable`. An unpriced increment does not make that coverage partial. Partial needs `priced > 0` as well.
 
-Checked `packages/runtime/src/services/usage-pricing.ts:19-36` and `:69-78`, and `packages/runtime/src/services/usage-prices.ts:39`. The catalog has 60 keys and only the providers `anthropic` and `openai`. Pricing reads the usage upsert's own `pricing` object. It does not use the row model. Grok (`usage.ts:41-54`, canonical, no pricing or costUsd), Hermes (`monitor.ts:311-321` and `:700-711`, noncanonical, no pricing or costUsd), and OpenCode (`monitor.ts:145-153`, canonical, no pricing or costUsd) never attach that object, so the catalog cannot price them. Kimi (`monitor.ts:372-396`) stores journal usage as context, not a usage upsert. Pi emits no live usage. Ingress still selects Grok and OpenCode because they are canonical, then records an unavailable estimate and no `costUsd`. That raises the unpriced count and still leaves no priced total, so the row stays `state.cost_missing`. `state.cost_unavailable` is settled: the normal backend does not emit a cost object for that case.
+Chronology: `accept` prices updates before `reduceMonitorAccumulator` (`monitor-service.ts:418-425`). `usageIndexOf` (`usage-index.ts:578-584`) calls `buildUsageIndex`, whose run stream (`usage-index.ts:427`) calls `buildUsageCostLedger` from `stream` (`usage-index.ts:210-223`). `queryUsageIndex` calls `projectUsageCost` later (`usage-index.ts:549`). `project.ts:346-351` runs that projection, and `project.ts:417` only then copies the usage result.
 
-Order, from `audit/godview/contracts/shared-downstream-map.md` at `07e71c9bcb9532fc181e3f667f2d0ed2e7c9afaf`: price at ingress, reduce, project the usage fold, observe the backend ledger, `costOf`, then `deriveAgentRow`. Flowcharts: `audit/godview/flows/<adapter>-cost.json`.
+Epochs are separate. The backend default is `accumulate` when a host omits the option (`backend.ts:132`). Godview sets `acrossEpochs` `accumulate` (`apps/godview/src/main/main.ts:744`), so `backend.ts:410-425` can keep a prior epoch's `costUsd` when the current run has `priced` 0. VibeField sets `acrossEpochs` `current` (`packages/fieldd/src/agent-monitor.ts:478-480`), so a new epoch replaces that run. `historyOf` (`usage-ledger.ts:62-82`) leaves `history.total` absent unless a retained run has `costUsd`. `costOf` (`backend.ts:197-207`) then omits `field.cost`. `burnPerHour` is the current `costRatePerMin` times 60, and that rate is omitted when `priced` is 0.
+
+Guard branch for these five, all of which have no price:
+
+- grok: guarded increment. `usage.ts:41-55` is canonical and has no pricing, cost, or costUsd. `priceUsageUpdates` selects it (`usage-pricing.ts:75`) and `priceUsage` sets cost source unavailable with no costUsd (`usage-pricing.ts:27-28`). `cost.ts:31-33` increments `unpriced`. `priced` stays 0.
+- opencode: the same guarded increment. `monitor.ts:136-153` is canonical and has no pricing, cost, or costUsd.
+- hermes: skip. `monitor.ts:311-321` and `monitor.ts:699-711` are canonical false, with no pricing, cost, or costUsd. `priceUsageUpdates` does not call `priceUsage` (`usage-pricing.ts:72-76`). `cost.ts:31-33` does not increment `unpriced`. `priced` stays 0.
+- kimi: neither arm. `monitor.ts:372-396` stores `usage.record` as context and emits no usage upsert, so the ledger loop does not run. `priced` and `unpriced` stay 0.
+- pi: neither arm. The pipeline emits no `usage:tokens-used`, and `monitor.ts` publishes an empty update list. `priced` and `unpriced` stay 0.
+
+No epoch has `costUsd`, so Godview's accumulate mode also retains nothing. Under VibeField the row omits `field.cost` (`state.cost_missing`). A working observed swarm body is `state.burn_unpriced` (`bubble-model.ts:469-523`). `state.cost_complete`, `state.cost_partial`, `state.cost_unavailable`, and `state.burn_flames_0` through `state.burn_flames_4` do not occur. `state.cost_unavailable` would be a present `field.cost` with coverage unavailable; `costOf` does not build that object when `history.total` is absent.
+
+Disagreement with `68dde825`: its Claude graph places `reduce.ts:1049-1073` after `priceUsageUpdates` and says that range copies the already priced `costUsd`. At `748d015`, `acceptAgentEvent` (`monitor-service.ts:233-253`) calls `translateAgentEventEnvelope` first, and that case copies the event's own `costUsd` before `accept` prices the updates (`monitor-service.ts:418-425`). The store after pricing is `reduceMonitorAccumulator` (`reduce.ts:672-686`). grok, hermes, kimi, opencode, and pi do not go through the event case. Their usage, when they emit it, is already a semantic update.
 
 ```mermaid
 flowchart TD
-  A[Adapter usage claim or no live usage] --> I[acceptSemantic]
+  A[Adapter usage or no usage upsert] --> I[acceptSemantic]
   I --> P[priceUsageUpdates before reduce]
   P --> R[reduceMonitorAccumulator]
-  R --> S[selectClaims]
-  S --> J[projectAgentMonitorState and buildUsageCostLedger]
-  J --> L[ledger.observe]
-  L --> C[costOf omits the object when no priced total]
-  C --> D[deriveAgentRow]
-  D --> M[state.cost_missing and state.burn_unpriced]
+  R --> X[buildUsageIndex stream buildUsageCostLedger]
+  X --> G[guard: priced, unpriced increment, or skip]
+  G --> Q[queryUsageIndex projectUsageCost]
+  Q --> C[project.ts copies the usage result]
+  C --> E[current epoch replaces; accumulate would retain]
+  E --> H[historyOf]
+  H --> O[costOf omits field.cost]
+  O --> M[state.cost_missing and state.burn_unpriced]
 ```
 
 ## States
@@ -158,8 +172,8 @@ Full path for a run of this adapter cannot produce it:
 
 - `state.blocked_unknown_kind` — core blockers are only permission, question, and failure (`packages/core/src/monitor/transitions.ts:93-170`).
 - `state.branch_none` — see the branch section. The runtime type allows a null git answer; this host path never writes one.
-- `state.cost_complete`, `state.cost_partial`, `state.cost_unavailable` — settled. No priced total, so the backend omits field.cost. state.cost_unavailable is not emitted. See the cost section, cost-burn-trace.md at 25c215a, and shared-downstream-map.md at 07e71c9.
-- `state.burn_flames_0`, `state.burn_flames_1`, `state.burn_flames_2`, `state.burn_flames_3`, `state.burn_flames_4` — priced USD flames. The shared trace finds them only for claude and codex. The pinned catalog cannot price these five.
+- `state.cost_complete`, `state.cost_partial`, `state.cost_unavailable` — full path. grok takes the guarded increment. usage.ts:41-55 sets canonical true and sets no pricing, cost, or costUsd. priceUsageUpdates selects that upsert because canonical is true (usage-pricing.ts:75). priceUsage finds no pricing metadata and sets cost to source unavailable without costUsd (usage-pricing.ts:27-28). cost.ts:31-33 then increments unpriced, because canonical and the unavailable cost are both truthy. It does not take the skip branch. priced stays 0, so coverage is unavailable rather than partial. priced stays 0, so projectUsageCost omits costUsd. VibeField acrossEpochs current replaces the run, and no epoch has costUsd for Godview accumulate to retain. costOf omits field.cost. state.cost_unavailable is not a present cost object on this path.
+- `state.burn_flames_0`, `state.burn_flames_1`, `state.burn_flames_2`, `state.burn_flames_3`, `state.burn_flames_4` — full path. Those flames need coverage complete or partial (bubble-model.ts:476-477). These rows omit cost, so a working body is state.burn_unpriced.
 - `state.effort_configured` — this adapter never emits the evidence, and no host or window-rows path invents it.
 
 ### adapter.hermes
@@ -245,8 +259,8 @@ Full path for a run of this adapter cannot produce it:
 
 - `state.blocked_unknown_kind` — core blockers are only permission, question, and failure (`packages/core/src/monitor/transitions.ts:93-170`).
 - `state.branch_none` — see the branch section. The runtime type allows a null git answer; this host path never writes one.
-- `state.cost_complete`, `state.cost_partial`, `state.cost_unavailable` — settled. No priced total, so the backend omits field.cost. state.cost_unavailable is not emitted. See the cost section, cost-burn-trace.md at 25c215a, and shared-downstream-map.md at 07e71c9.
-- `state.burn_flames_0`, `state.burn_flames_1`, `state.burn_flames_2`, `state.burn_flames_3`, `state.burn_flames_4` — priced USD flames. The shared trace finds them only for claude and codex. The pinned catalog cannot price these five.
+- `state.cost_complete`, `state.cost_partial`, `state.cost_unavailable` — full path. hermes takes the skip branch. monitor.ts:311-321 and monitor.ts:699-711 emit usage samples with canonical false and no pricing, cost, or costUsd. priceUsageUpdates does not call priceUsage (usage-pricing.ts:72-76), so cost stays unset. cost.ts:31-33 sees a missing costUsd and none of canonical, pricing, or cost, and does not increment unpriced. priced stays 0. priced stays 0, so projectUsageCost omits costUsd. VibeField acrossEpochs current replaces the run, and no epoch has costUsd for Godview accumulate to retain. costOf omits field.cost. state.cost_unavailable is not a present cost object on this path.
+- `state.burn_flames_0`, `state.burn_flames_1`, `state.burn_flames_2`, `state.burn_flames_3`, `state.burn_flames_4` — full path. Those flames need coverage complete or partial (bubble-model.ts:476-477). These rows omit cost, so a working body is state.burn_unpriced.
 - `state.activity_reasoning` — this adapter never emits the evidence, and no host or window-rows path invents it.
 
 ### adapter.kimi
@@ -332,8 +346,8 @@ Full path for a run of this adapter cannot produce it:
 
 - `state.blocked_unknown_kind` — core blockers are only permission, question, and failure (`packages/core/src/monitor/transitions.ts:93-170`).
 - `state.branch_none` — see the branch section. The runtime type allows a null git answer; this host path never writes one.
-- `state.cost_complete`, `state.cost_partial`, `state.cost_unavailable` — settled. No priced total, so the backend omits field.cost. state.cost_unavailable is not emitted. See the cost section, cost-burn-trace.md at 25c215a, and shared-downstream-map.md at 07e71c9.
-- `state.burn_flames_0`, `state.burn_flames_1`, `state.burn_flames_2`, `state.burn_flames_3`, `state.burn_flames_4` — priced USD flames. The shared trace finds them only for claude and codex. The pinned catalog cannot price these five.
+- `state.cost_complete`, `state.cost_partial`, `state.cost_unavailable` — full path. kimi reaches neither arm. monitor.ts:372-396 stores usage.record as context and never emits a usage upsert. buildUsageCostLedger's loop does not run, so neither the guarded increment nor the skip branch is taken. priced and unpriced stay 0. priced stays 0, so projectUsageCost omits costUsd. VibeField acrossEpochs current replaces the run, and no epoch has costUsd for Godview accumulate to retain. costOf omits field.cost. state.cost_unavailable is not a present cost object on this path.
+- `state.burn_flames_0`, `state.burn_flames_1`, `state.burn_flames_2`, `state.burn_flames_3`, `state.burn_flames_4` — full path. Those flames need coverage complete or partial (bubble-model.ts:476-477). These rows omit cost, so a working body is state.burn_unpriced.
 - `state.context_hot` — this adapter never emits the evidence, and no host or window-rows path invents it.
 
 ### adapter.opencode
@@ -420,8 +434,8 @@ Full path for a run of this adapter cannot produce it:
 
 - `state.blocked_unknown_kind` — core blockers are only permission, question, and failure (`packages/core/src/monitor/transitions.ts:93-170`).
 - `state.branch_none` — see the branch section. The runtime type allows a null git answer; this host path never writes one.
-- `state.cost_complete`, `state.cost_partial`, `state.cost_unavailable` — settled. No priced total, so the backend omits field.cost. state.cost_unavailable is not emitted. See the cost section, cost-burn-trace.md at 25c215a, and shared-downstream-map.md at 07e71c9.
-- `state.burn_flames_0`, `state.burn_flames_1`, `state.burn_flames_2`, `state.burn_flames_3`, `state.burn_flames_4` — priced USD flames. The shared trace finds them only for claude and codex. The pinned catalog cannot price these five.
+- `state.cost_complete`, `state.cost_partial`, `state.cost_unavailable` — full path. opencode takes the guarded increment. monitor.ts:136-153 sets canonical true and sets no pricing, cost, or costUsd. priceUsageUpdates selects that upsert because canonical is true (usage-pricing.ts:75). priceUsage finds no pricing metadata and sets cost to source unavailable without costUsd (usage-pricing.ts:27-28). cost.ts:31-33 then increments unpriced, because canonical and the unavailable cost are both truthy. It does not take the skip branch. priced stays 0, so coverage is unavailable rather than partial. priced stays 0, so projectUsageCost omits costUsd. VibeField acrossEpochs current replaces the run, and no epoch has costUsd for Godview accumulate to retain. costOf omits field.cost. state.cost_unavailable is not a present cost object on this path.
+- `state.burn_flames_0`, `state.burn_flames_1`, `state.burn_flames_2`, `state.burn_flames_3`, `state.burn_flames_4` — full path. Those flames need coverage complete or partial (bubble-model.ts:476-477). These rows omit cost, so a working body is state.burn_unpriced.
 
 ### adapter.pi
 
@@ -496,8 +510,8 @@ Full path for a run of this adapter cannot produce it:
 
 - `state.blocked_unknown_kind` — core blockers are only permission, question, and failure (`packages/core/src/monitor/transitions.ts:93-170`).
 - `state.branch_none` — see the branch section. The runtime type allows a null git answer; this host path never writes one.
-- `state.cost_complete`, `state.cost_partial`, `state.cost_unavailable` — settled. No priced total, so the backend omits field.cost. state.cost_unavailable is not emitted. See the cost section, cost-burn-trace.md at 25c215a, and shared-downstream-map.md at 07e71c9.
-- `state.burn_flames_0`, `state.burn_flames_1`, `state.burn_flames_2`, `state.burn_flames_3`, `state.burn_flames_4` — priced USD flames. The shared trace finds them only for claude and codex. The pinned catalog cannot price these five.
+- `state.cost_complete`, `state.cost_partial`, `state.cost_unavailable` — full path. pi reaches neither arm. pipeline.ts does not emit usage:tokens-used, and monitor.ts publishes an empty update list. buildUsageCostLedger's loop does not run, so neither the guarded increment nor the skip branch is taken. priced and unpriced stay 0. priced stays 0, so projectUsageCost omits costUsd. VibeField acrossEpochs current replaces the run, and no epoch has costUsd for Godview accumulate to retain. costOf omits field.cost. state.cost_unavailable is not a present cost object on this path.
+- `state.burn_flames_0`, `state.burn_flames_1`, `state.burn_flames_2`, `state.burn_flames_3`, `state.burn_flames_4` — full path. Those flames need coverage complete or partial (bubble-model.ts:476-477). These rows omit cost, so a working body is state.burn_unpriced.
 - `state.activity_compacting` — this adapter never emits the evidence, and no host or window-rows path invents it.
 - `state.activity_delegating` — this adapter never emits the evidence, and no host or window-rows path invents it.
 - `state.activity_reasoning` — this adapter never emits the evidence, and no host or window-rows path invents it.

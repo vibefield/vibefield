@@ -39,7 +39,7 @@ test("pinned source inventory matches the model contract counts", () => {
   assert.equal(index.partial.provenanceComplete, false);
   assert.equal(index.partial.firstHalfCommit, "68dde825266e63ba63a1b07f7fcfd1e85f868b1f");
   assert.equal(index.partial.candidateStatus, "static-not-live");
-  assert.equal(index.partial.secondHalfCommit, "69b4c9c8b078571f42302c920f3c5e8e279e37c9");
+  assert.equal(index.partial.secondHalfCommit, "4d86127a767f382fbfe5ec7969b2c9572b47b9b3");
   assert.equal(index.partial.accountTraceCommit, "08b5d849177685662b43e0e3a4e6bd7d32ac2cdf");
   assert.equal(index.partial.delivery, "incomplete");
   assert.equal(index.partial.blockers.first.directNoYes, 0);
@@ -48,23 +48,22 @@ test("pinned source inventory matches the model contract counts", () => {
   assert.equal(index.partial.blockers.first.ui.yes, 247);
   assert.equal(index.partial.blockers.first.ui.no, 123);
   assert.equal(index.partial.blockers.first.ui.unknown, 0);
-  assert.deepEqual(index.partial.blockers.costReview.first.ownerStated.sort(), [
+  assert.deepEqual(index.partial.blockers.costReview.first.precisionPending.sort(), [
     "adapter.claude",
     "adapter.codex",
   ]);
-  assert.deepEqual(index.partial.blockers.costReview.second.pendingCorrection.sort(), [
-    "adapter.grok",
-    "adapter.hermes",
-    "adapter.kimi",
-    "adapter.opencode",
-    "adapter.pi",
-  ]);
-  assert.deepEqual(index.partial.blockers.costReview.second.defects["adapter.grok"], [
-    "pricing-guard",
-    "ledger-after-project",
-    "retained-epochs",
-  ]);
+  assert.deepEqual(index.partial.blockers.costReview.first.ownerStated, []);
+  assert.deepEqual(index.partial.blockers.costReview.second.pendingCorrection, []);
+  assert.deepEqual(index.partial.blockers.costReview.second.branches, {
+    "adapter.grok": "unpriced-increment",
+    "adapter.hermes": "noncanonical-skip",
+    "adapter.kimi": "never-ledger",
+    "adapter.opencode": "unpriced-increment",
+    "adapter.pi": "never-ledger",
+  });
   assert.equal(index.partial.blockers.costReview.independentSignoff, "pending");
+  assert.ok(index.partial.blockers.accountHostPending.includes("adapter.grok"));
+  assert.equal(index.partial.blockers.accountHostPending.includes("adapter.claude"), false);
   assert.equal(index.sharedMap.adapterSpecificUiResolved, false);
   assert.equal(index.sharedMap.uiResolutionMeaning, "shared-anchor-bookkeeping");
   assert.equal(index.sharedMap.uiResolutionCounts.resolvedUnknown, 265);
@@ -206,9 +205,44 @@ test("a priced-cost absence is not a runtime impossibility", () => {
   assert.match(cell.reading.mismatch, /cost_missing/);
   assert.match(cell.reading.mismatch, /anthropic and openai only/);
   assert.equal(/unreachable/i.test(cell.reading.mismatch), false);
-  assert.equal(cell.graphOrder.status, "pending-correction");
-  assert.ok(cell.graphOrder.defects.includes("ledger-after-project"));
-  assert.match(cell.graphOrder.note, /semantically verified/);
+  assert.equal(cell.graphOrder.status, "scoped-static");
+  assert.equal(cell.graphOrder.branch, "unpriced-increment");
+  assert.match(cell.graphOrder.note, /cost_missing/);
+  assert.match(cell.graphOrder.note, /burn_unpriced/);
+  const claudeCost = buildCell({
+    model: audit.model,
+    traces: audit.traces,
+    renders: audit.renders,
+    fallback: audit.overlay,
+    selection: {
+      stateId: "state.cost_missing",
+      viewId: "view.spend",
+      adapterId: "adapter.claude",
+      fieldId: "field.cost.usd",
+    },
+  });
+  const codexCost = buildCell({
+    model: audit.model,
+    traces: audit.traces,
+    renders: audit.renders,
+    fallback: audit.overlay,
+    selection: {
+      stateId: "state.cost_missing",
+      viewId: "view.spend",
+      adapterId: "adapter.codex",
+      fieldId: "field.cost.usd",
+    },
+  });
+  assert.equal(claudeCost.graphOrder.status, "precision-pending");
+  assert.equal(codexCost.graphOrder.status, "precision-pending");
+  assert.match(claudeCost.graphOrder.note, /reduce\.ts:1049-1073/);
+  assert.match(claudeCost.graphOrder.note, /672-686/);
+  assert.match(claudeCost.reading.mismatch, /before pricing/);
+  assert.equal(/mapping is still pending/i.test(claudeCost.reading.mismatch ?? ""), false);
+  assert.equal(/row mapping/i.test(claudeCost.reading.mismatch ?? ""), false);
+  assert.match(codexCost.reading.mismatch, /672-686/);
+  assert.equal(/mapping is still pending/i.test(codexCost.reading.mismatch ?? ""), false);
+  assert.match(codexCost.graphOrder.note, /not rewritten/);
   assert.equal(cell.stateReading.status, "host-claim");
   const reply = buildCell({
     model: audit.model,
@@ -285,6 +319,9 @@ test("the page names the audit target and leaves the harness pending", () => {
   assert.match(html, /not adapter-specific UI resolution/);
   assert.match(html, /Delivery: incomplete/);
   assert.match(html, /Prior 302 not-applicable claim validated: no/);
+  assert.match(html, /Coverage gaps: 77/);
+  assert.match(html, /Environment gaps: 59/);
+  assert.equal(/stay at 35/.test(html), false);
   assert.match(html, /does not add body coverage/);
   assert.equal(cell.reading.success, false);
   assert.equal(cell.reading.channels.rendererRead, "direct");
@@ -393,6 +430,7 @@ test("ACP cost stops at omission and status names the decision path", () => {
   assert.equal(grokAccount.reading.provesRuntimeUnreachable, false);
   assert.match(grokAccount.reading.readerNote, /VibeField host omits/);
   assert.match(grokAccount.reading.readerNote, /Puppeteer Godview host/);
+  assert.match(grokAccount.reading.readerNote, /not accepted/);
   const profile = buildCell({
     model: audit.model,
     traces: audit.traces,

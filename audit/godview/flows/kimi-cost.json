@@ -31,14 +31,14 @@
     {
       "id": "pricing",
       "layer": "core-reducer",
-      "label": "priceUsageUpdates then priceUsage, before reduce",
+      "label": "priceUsageUpdates before reduce; selector is canonical or pricing or costUsd",
       "source": {
         "repo": "puppeteer",
         "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
         "path": "packages/runtime/src/services/usage-pricing.ts",
-        "lineStart": 19,
+        "lineStart": 69,
         "lineEnd": 78,
-        "symbol": "priceUsage"
+        "symbol": "priceUsageUpdates"
       }
     },
     {
@@ -55,22 +55,87 @@
       }
     },
     {
+      "id": "index",
+      "layer": "core-reducer",
+      "label": "buildUsageIndex stream calls buildUsageCostLedger before projection",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/core/src/monitor/usage-index.ts",
+        "lineStart": 210,
+        "lineEnd": 223,
+        "symbol": "buildUsageCostLedger"
+      }
+    },
+    {
+      "id": "guard",
+      "layer": "core-reducer",
+      "label": "neither branch: no usage upsert enters the ledger, priced and unpriced stay 0",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/core/src/monitor/cost.ts",
+        "lineStart": 21,
+        "lineEnd": 40,
+        "symbol": "buildUsageCostLedger"
+      }
+    },
+    {
+      "id": "decide",
+      "layer": "core-reducer",
+      "label": "projectUsageCost: priced 0 omits costUsd and costRatePerMin",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/core/src/monitor/cost.ts",
+        "lineStart": 59,
+        "lineEnd": 101,
+        "symbol": "projectUsageCost"
+      }
+    },
+    {
       "id": "project",
       "layer": "core-reducer",
-      "label": "projectAgentMonitorState folds usage through buildUsageCostLedger",
+      "label": "project.ts copies the usage result after queryUsageIndex",
       "source": {
         "repo": "puppeteer",
         "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
         "path": "packages/core/src/monitor/project.ts",
-        "lineStart": 347,
-        "lineEnd": 351,
-        "symbol": "queryUsageIndex"
+        "lineStart": 346,
+        "lineEnd": 417,
+        "symbol": "usageProjection"
       }
     },
     {
-      "id": "ledger",
+      "id": "epochs",
+      "layer": "fieldd",
+      "label": "VibeField current replaces the run; Godview accumulate would retain a prior costUsd",
+      "source": {
+        "repo": "vibefield",
+        "sha": "433505fd0f224f4cda540d642661b13848c0ef82",
+        "path": "packages/fieldd/src/agent-monitor.ts",
+        "lineStart": 478,
+        "lineEnd": 480,
+        "symbol": "acrossEpochs"
+      }
+    },
+    {
+      "id": "history",
       "layer": "core-reducer",
-      "label": "ledger.observe then costOf omits field.cost when no priced total",
+      "label": "historyOf total is absent when no retained run has costUsd",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/monitor/src/backend/usage-ledger.ts",
+        "lineStart": 62,
+        "lineEnd": 82,
+        "symbol": "historyOf"
+      }
+    },
+    {
+      "id": "costof",
+      "layer": "core-reducer",
+      "label": "costOf omits field.cost when history.total is absent",
       "source": {
         "repo": "puppeteer",
         "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
@@ -82,21 +147,21 @@
     },
     {
       "id": "row",
-      "layer": "fieldd",
-      "label": "deriveAgentRow receives that absent cost",
+      "layer": "core-reducer",
+      "label": "deriveAgentRow omits cost",
       "source": {
         "repo": "puppeteer",
         "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
         "path": "packages/monitor/src/backend/derive.ts",
-        "lineStart": 240,
-        "lineEnd": 286,
-        "symbol": "deriveAgentRow"
+        "lineStart": 277,
+        "lineEnd": 277,
+        "symbol": "input.cost"
       }
     },
     {
       "id": "missing",
       "layer": "absence",
-      "label": "state.cost_missing, not state.cost_unavailable"
+      "label": "state.cost_missing and state.burn_unpriced, not state.cost_unavailable"
     }
   ],
   "edges": [
@@ -117,18 +182,43 @@
     },
     {
       "from": "reduce",
+      "to": "index",
+      "kind": "transform"
+    },
+    {
+      "from": "index",
+      "to": "guard",
+      "kind": "transform"
+    },
+    {
+      "from": "guard",
+      "to": "decide",
+      "kind": "transform"
+    },
+    {
+      "from": "decide",
       "to": "project",
       "kind": "transform"
     },
     {
       "from": "project",
-      "to": "ledger",
+      "to": "epochs",
       "kind": "transform"
     },
     {
-      "from": "ledger",
+      "from": "epochs",
+      "to": "history",
+      "kind": "transform"
+    },
+    {
+      "from": "history",
+      "to": "costof",
+      "kind": "transform"
+    },
+    {
+      "from": "costof",
       "to": "row",
-      "kind": "merge"
+      "kind": "transform"
     },
     {
       "from": "row",

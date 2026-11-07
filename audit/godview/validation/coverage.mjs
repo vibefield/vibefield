@@ -85,8 +85,13 @@ export function readField(envelope) {
     envelope.renderer?.component === "none-proven" ||
     (Array.isArray(envelope.renderer?.viewIds) && envelope.renderer.viewIds.length === 0) ||
     notes.includes("No builtin consumer was proven");
+  const costReview = String(envelope.fieldId ?? "").startsWith("field.cost")
+    ? costSemantics(envelope)
+    : null;
   let mismatch = null;
-  if (/costUsd/i.test(text) && String(envelope.fieldId ?? "").startsWith("field.cost")) {
+  if (costReview?.verification === "precision-pending") {
+    mismatch = costReview.note;
+  } else if (costReview && /costUsd/i.test(text)) {
     mismatch = sharedCostNote(envelope.adapterId);
   } else if (/copies no questions array/i.test(text)) {
     mismatch =
@@ -149,8 +154,10 @@ export function readField(envelope) {
     "Reader presence, adapter emission, runtime fallback, and the selected state's painted value stay separate.";
   if (accountField) {
     adapterPathReader = "host-scoped";
-    readerNote =
-      "No adapter emits account. derive copies host.account. The VibeField host omits it for all 10 adapters. The Puppeteer Godview host can set a profile label for adapters with a profiles service, and omits it for ACP. Envelope uiReachable follows the VibeField consumer and is not a global impossibility. accountUsage feeds the usage column, not field.account. Static source-read, not a live sample.";
+    const hostYes = accountHostConflict(envelope);
+    readerNote = hostYes
+      ? "Envelope uiReachable is yes while the note says a VibeField row never fills account. Host scope is pending the owner's correction. This yes is not accepted. No adapter emits account. The VibeField host omits it. The Puppeteer Godview host can set a profile label when a profiles service exists, and omits it for ACP. accountUsage feeds the usage column, not field.account."
+      : "No adapter emits account. derive copies host.account. The VibeField host omits it for all 10 adapters. The Puppeteer Godview host can set a profile label for adapters with a profiles service, and omits it for ACP. Envelope uiReachable follows the VibeField consumer and is not a global impossibility. accountUsage feeds the usage column, not field.account. Static source-read, not a live sample.";
   } else if (profileField) {
     adapterPathReader = "host-then-native";
     readerNote =
@@ -287,7 +294,17 @@ function tallyRows(list) {
   return { rows: list.length, ui, directNoYes, modelAxes, costStops };
 }
 
-const PRICING_GUARD = /unpricedCount only when canonical or pricing or cost is truthy/i;
+export function accountHostConflict(envelope) {
+  if (envelope?.fieldId !== "field.account") return false;
+  const notes = envelopeNotes(envelope);
+  return (
+    envelope.classification?.uiReachable === "yes" &&
+    /never fills|unreachable and always absent/i.test(notes)
+  );
+}
+
+const ORDER_HOLD =
+  "Held from acceptance. Confirmed order: translateAgentEventEnvelope at reduce.ts:1049-1073 copies event costUsd before pricing. Pricing is monitor-service.ts:418-425. The reducer after pricing is reduceMonitorAccumulator at reduce.ts:672-686. This graph cites 1049-1073 as the post-price copy. The evidence file is not rewritten. Owner correction is incoming. This is not absent runtime mapping, and it is not accepted provenance.";
 
 /** Derived from transform names and effects. Not a sign-off. */
 export function costSemantics(envelope) {
@@ -296,61 +313,96 @@ export function costSemantics(envelope) {
   const names = steps.map((step) => step.name ?? "");
   const effects = steps.map((step) => step.effect ?? "").join("\n");
   const at = (name) => names.indexOf(name);
+  const base = { independentSignoff: "pending", liveRun: false };
   if (
     names.includes("handler-omits-usage") &&
     at("ledger-counts") === -1 &&
     at("ledger.observe") === -1
   ) {
     return {
+      ...base,
       kind: "omission",
       verification: "stops-at-omission",
-      independentSignoff: "pending",
-      liveRun: false,
       defects: [],
+      branch: null,
     };
   }
-  const pricingGuard = PRICING_GUARD.test(effects);
-  const ledger = at("ledger-counts");
-  const project = at("project-usage");
-  const ledgerBeforeProject = ledger !== -1 && project !== -1 && ledger < project;
+  const reduceStep = steps.find((step) => step.name === "reduce-after-price");
+  const reducePath = String(reduceStep?.source?.path ?? "");
+  const heldForOrder =
+    (envelope.adapterId === "adapter.claude" || envelope.adapterId === "adapter.codex") &&
+    /reduce\.ts$/.test(reducePath) &&
+    reduceStep?.source?.lineStart === 1049;
+  if (heldForOrder) {
+    return {
+      ...base,
+      kind: "priced-path",
+      verification: "precision-pending",
+      defects: ["source-order"],
+      branch: null,
+      note: ORDER_HOLD,
+    };
+  }
+  const projectAt = at("project-copy") !== -1 ? at("project-copy") : at("project-usage");
+  const ledgerAt = at("ledger-counts");
+  const ledgerBeforeProject = ledgerAt !== -1 && projectAt !== -1 && ledgerAt < projectAt;
   const oldProject = at("projectAgentMonitorState");
   const oldLedger = at("ledger.observe");
-  const ledgerAfterProject = oldProject !== -1 && oldLedger !== -1 && oldProject < oldLedger;
-  const epochs = at("epoch-retention") !== -1 && at("vibefield-current-epoch") !== -1;
+  const ledgerAfterProject =
+    at("ledger-counts") === -1 && oldProject !== -1 && oldLedger !== -1 && oldProject < oldLedger;
+  const pricingGuard = /canonical, pricing, or cost/i.test(effects);
+  const epochsNamed = at("vibefield-current-epoch") !== -1 || at("epoch-retention") !== -1;
+  const noRetainedTotal = /never write costUsd|never writes costUsd|no retained total/i.test(
+    effects,
+  );
   const defects = [];
-  if (!pricingGuard) defects.push("pricing-guard");
-  if (ledgerAfterProject || (ledger !== -1 && project !== -1 && !ledgerBeforeProject)) {
-    defects.push("ledger-after-project");
-  }
-  if (!epochs) defects.push("retained-epochs");
+  if (ledgerAfterProject) defects.push("ledger-after-project");
+  if (ledgerAt !== -1 && !pricingGuard) defects.push("pricing-guard");
+  if (ledgerAt !== -1 && !epochsNamed) defects.push("retained-epochs");
+  let branch = null;
+  if (/reaches neither arm|loop does not run/i.test(effects)) branch = "never-ledger";
+  else if (/takes the skip branch/i.test(effects)) branch = "noncanonical-skip";
+  else if (/takes the guarded increment/i.test(effects)) branch = "unpriced-increment";
+  const verification =
+    defects.length === 0 && ledgerBeforeProject ? "scoped-static" : "pending-correction";
   return {
+    ...base,
     kind: "priced-path",
-    verification: defects.length === 0 ? "owner-stated" : "pending-correction",
-    independentSignoff: "pending",
-    liveRun: false,
+    verification,
     defects,
-    pricingGuard,
+    branch,
     ledgerBeforeProject,
-    epochs,
+    epochsNamed,
+    noRetainedTotal,
+    row: /state\.cost_missing/.test(effects) ? "cost_missing" : null,
   };
 }
 
 function costReviewFor(rows) {
   const ownerStated = [];
+  const precisionPending = [];
+  const scoped = [];
   const pendingCorrection = [];
   const omission = [];
   const defects = {};
+  const branches = {};
   for (const trace of rows) {
     if (trace.fieldId !== "field.cost.usd") continue;
     const review = costSemantics(trace.envelope);
     if (!review) continue;
     if (review.verification === "owner-stated") ownerStated.push(trace.adapterId);
-    else if (review.verification === "pending-correction") {
+    else if (review.verification === "precision-pending") {
+      precisionPending.push(trace.adapterId);
+      defects[trace.adapterId] = review.defects;
+    } else if (review.verification === "scoped-static") {
+      scoped.push(trace.adapterId);
+      if (review.branch) branches[trace.adapterId] = review.branch;
+    } else if (review.verification === "pending-correction") {
       pendingCorrection.push(trace.adapterId);
       defects[trace.adapterId] = review.defects;
     } else omission.push(trace.adapterId);
   }
-  return { ownerStated, pendingCorrection, omission, defects };
+  return { ownerStated, precisionPending, scoped, pendingCorrection, omission, defects, branches };
 }
 
 /** Envelope counts and cost-graph checks read from the files. */
@@ -366,6 +418,9 @@ export function semanticBlockers(traces) {
       second: costReviewFor(second),
       independentSignoff: "pending",
     },
+    accountHostPending: rows
+      .filter((trace) => accountHostConflict(trace.envelope))
+      .map((trace) => trace.adapterId),
     delivery: "incomplete",
     candidateStatus: "static-not-live",
   };
@@ -390,10 +445,10 @@ function sharedCostNote(adapterId) {
       : adapterId === "adapter.kimi" || adapterId === "adapter.pi"
         ? "Its tokens.perMinute observation is unsupported: no live usage."
         : "Its tokens.perMinute observation is absent, not unsupported.";
-    return `Field records for this adapter name state.cost_missing and state.burn_unpriced on the normal path. They cite cost-burn-trace.md: the catalog is anthropic and openai only, and pricing needs the upsert's own pricing or costUsd. This adapter does not set those, so the catalog does not price its tokens. The normal backend omits field.cost without a priced total, so state.cost_unavailable is not emitted here. Priced flames are not produced from this producer. ${rate} Token/min and USD flames stay independent. The shared downstream join is still open.`;
+    return `Field records for this adapter name state.cost_missing and state.burn_unpriced on the normal path. They cite cost-burn-trace.md: the catalog is anthropic and openai only, and pricing needs the upsert's own pricing or costUsd. This adapter does not set those, so the catalog does not price its tokens. The normal backend omits field.cost without a priced total, so state.cost_unavailable is not emitted here. Priced flames are not produced from this producer. ${rate} Token/min and USD flames stay independent.`;
   }
   if (PRICED.has(adapterId)) {
-    return "The shared cost trace says runtime usage-pricing.ts can price Codex before the reducer, and Claude has native costUsd plus a catalog fallback. First-half row mapping is still pending, so that source permission is not a finished join.";
+    return "Claude and Codex have a priced path in the shared cost trace. Mentioning costUsd does not mean runtime mapping is absent. Their cost-graph order is a separate hold and is not accepted provenance.";
   }
   return "Shared cost/burn trace: token-only usage normally becomes state.cost_missing because the projector omits field.cost without a priced total. No normal adapter emits unavailable. Missing costUsd alone does not close priced cost. This is static source analysis, not a live run.";
 }

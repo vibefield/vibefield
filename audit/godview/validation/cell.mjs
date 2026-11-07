@@ -213,16 +213,32 @@ function costGraphOrder(envelope) {
       note: "This cost path stops where the adapter omits usage. It does not invent a pricing hop. The record is source-read, not a live sample.",
     };
   }
+  if (review.verification === "precision-pending") {
+    return {
+      status: "precision-pending",
+      defects: review.defects,
+      note: review.note,
+    };
+  }
   if (review.verification === "pending-correction") {
     return {
       status: "pending-correction",
       defects: review.defects,
-      note: `Not semantically verified. Pending correction: ${review.defects.join(", ")}. ledger.observe after project, a missing pricing guard, or missing current versus retained epochs keeps this cost flow off the verified set. Other fields on this adapter stay usable. A corrected commit is incoming.`,
+      note: `Not semantically verified. Pending correction: ${review.defects.join(", ")}. Other fields on this adapter stay usable.`,
     };
   }
+  const branch =
+    review.branch === "unpriced-increment"
+      ? "Canonical usage with cost source unavailable increments unpriced. priced stays 0."
+      : review.branch === "noncanonical-skip"
+        ? "Noncanonical sample with no pricing, cost, or costUsd is skipped. unpriced does not increment."
+        : review.branch === "never-ledger"
+          ? "No usage upsert enters the ledger. priced and unpriced stay 0."
+          : "Ledger counts precede the project copy.";
   return {
-    status: "owner-stated-static",
-    note: "This candidate states the pricing guard, ledger counts before the project copy, and current versus retained epochs. Independent signoff is pending. This is not a live run and not a complete audit.",
+    status: "scoped-static",
+    branch: review.branch,
+    note: `${branch} No epoch writes costUsd, so there is no retained total. The row is cost_missing and a working body is burn_unpriced. Independent signoff is pending. This is not a live run.`,
   };
 }
 
