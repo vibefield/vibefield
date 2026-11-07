@@ -23,9 +23,15 @@
 //   place for its own sake (the ground's gradient and star grid, the grain, the dither), it reads `glFrag`, the GL
 //   coordinate (x, height − y). The bloom's samples and the composite's are symmetric about the pixel and read their
 //   source in Metal's own orientation, which is the same texel;
-// - where a hash reads a sum of two products (the burst's rays, :200, and the particles, :378), `hin` rounds each
-//   product to its own float, as WebGL does. Metal's compiler fuses one of them into an FMA with the sum, and h11
-//   makes that one ulp whole pixels: kit-f5f2's G2 had a ray recoloured and a chip moved 74 px (f5f 4/4).
+// - where a hash reads a sum of two products, `seed * k1 + fj * k2` (the burst's rays, :200, and the particles,
+//   :378), `hin` computes it as the engine's frames were drawn on their host, ANGLE's Metal on an M4:
+//   fma(fj, k2, seed * k1), the first product rounded to its own float and the second fused with the sum. Left to
+//   itself the kit's compiler fuses the first product instead, and h11 makes that one ulp whole pixels: kit-f5f2's
+//   G2 had a ray recoloured and a chip moved 74 px (f5f 4/4). HatchSkyHinTests holds `hin` to that form bit for bit.
+//   *Corrected 2026-11-07 (IOS-12f's f5h; VF-PM's ruling 17:34:30Z): this said "`hin` rounds each product to its own
+//   float, as WebGL does". WebGL fixes no rounding. The engine's host fused the second product, as kit-f5f4's read
+//   measured: b's dust j31 sits on its plain place and j30 on its fused one, in one frame. At G4, rounding both left
+//   13 of 13 placements off this form. The rays cannot tell the two forms apart in either deal's frames.*
 //
 // Only what the hatch draws is transcribed (VF-PM's Q3 ruling, 2026-11-07 13:58:40Z). The hatch's sky is the night,
 // and its star draws its burst alone (`mask: LAYERS.BURST`, :231). So these are not here, and nothing the hatch draws
@@ -95,10 +101,11 @@ struct Pass {
 // ---- HEAD (:72–93)
 inline float4 D(texture2d<float, access::read> uData, int k, int id) { return uData.read(uint2(uint(k), uint(id))); }
 inline float h11(float p) { p = fract(p * .1031); p *= p + 33.33; p *= p + p; return fract(p); }
-/// A hash's input `a * k1 + b * k2` as WebGL computes it: each product rounded to its own float, then the sum. ORing
-/// each product's bits with `zero` (`Sky.c`, 0 from the renderer) keeps the compiler from fusing it into the sum.
+/// A hash's input `a * k1 + b * k2` as the engine's frames computed it (the head's bullet): `a * k1` rounded to its
+/// own float, then `b * k2` fused with the sum by an explicit `fma`, so no compiler's choice is left. ORing the first
+/// product's bits with `zero` (`Sky.c`, 0 from the renderer) keeps the compiler from fusing it.
 inline float hin(float a, float k1, float b, float k2, uint zero) {
-  return as_type<float>(as_type<uint>(a * k1) | zero) + as_type<float>(as_type<uint>(b * k2) | zero);
+  return fma(b, k2, as_type<float>(as_type<uint>(a * k1) | zero));
 }
 inline float h12(float2 p) { float3 p3 = fract(float3(p.xyx) * .1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
 inline float vnoise(float2 p) { float2 i = floor(p), f = fract(p); float2 u = f * f * (3. - 2. * f);
