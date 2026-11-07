@@ -5,8 +5,7 @@ import UIKit
 import os
 
 // IOS-12f's f5 (PC-D8 A; DESIGN.md §2.10, amended 2026-11-07) — NEW SPARK'S SKY ON SCREEN: hatch.tsx's `Live` (:155)
-// on the phone. f5f 3/3's red: `deal` is a skeleton that deals nothing yet; the rest stands as it will ship.
-// The Mac draws two canvases, one over the other: the star engine's sky and the face engine's faces.
+// on the phone. The Mac draws two canvases, one over the other: the star engine's sky and the face engine's faces.
 // Here they are two Metal layers in one view, on one clock:
 // - the sky, opaque, at the screen's scale capped at the star engine's 2 (`HatchSkyRenderer`, VF-PM's Q3 ruling);
 // - the faces over it, transparent, at the screen's scale, as 12e's stage draws them (`SparkStarRenderer`);
@@ -203,8 +202,28 @@ final class HatchSkyLayer: UIView, MTKViewDelegate {
     run()
   }
 
-  /// `deal(seed)`: f5f 3/3's red, a skeleton that deals nothing yet.
-  func deal(_ seed: UInt32) {}
+  /// `deal(seed)`: at the clock's time, or, held, a fresh sky stepped to the held time.
+  func deal(_ seed: UInt32) {
+    guard seed != dealt else { return }
+    guard bounds.width > 0, bounds.height > 0 else {
+      pending = seed
+      return
+    }
+    dealt = seed
+    if let held {
+      live = HatchSky.Live()
+      live.deal(seed: seed, draws: .seeded(seed), sky: bounds.size, size: faceSize, reducedMotion: reducedMotion)
+      let frames = Int((held * 60).rounded())
+      if frames > 0 {
+        for frame in 1...frames { live.frame(at: Double(frame) / 60) }
+      }
+      clock = held
+      drawBoth()
+      return
+    }
+    live.deal(seed: seed, draws: .system(), sky: bounds.size, size: faceSize, reducedMotion: reducedMotion)
+    run()
+  }
 
   /// Runs while the sky is in a window, the app is active and the clock is not held.
   private func run() {

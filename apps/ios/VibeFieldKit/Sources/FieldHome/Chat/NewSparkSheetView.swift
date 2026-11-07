@@ -8,7 +8,8 @@ import SwiftUI
 // the system's sheet at its large detent, on the paper. The sky deals the face; the name holds a free star; the agent
 // pill pulls down the system's menu; "Runs on studio, your home" is said, not asked; the profiles' chips stand once
 // the home has more than Default; Cancel and Create stand at the foot. Every ask is the home's, on Chat's door (VF-PM
-// 13:11:45Z), and every word is §9's. The face fades in where it lands until f5's hatch (the reduced-motion path).
+// 13:11:45Z), and every word is §9's. The sky is the hatch (FieldDesign's `HatchSkyView`, f5): a star falls at an
+// angle and the face is born where it lands; ↻ deals again.
 
 /// The sheet's controller (the Mac's `NewSparkSheet.tsx`): what it read as it opened, what the person chose, the
 /// picker of the agent it thinks with, and the refusal said where it asked. Its choices are `NewSpark`'s.
@@ -280,18 +281,11 @@ struct NewSparkSheetView: View {
   // MARK: - The sky
 
   private var sky: some View {
-    ZStack {
-      RoundedRectangle(cornerRadius: Self.skyCorners, style: .continuous)
-        .fill(ChromePalette.sparkNight)
-      // until f5's hatch, the face fades in where it lands (the reduced-motion path), never a blank
-      SparkFaceView(seed: sheet.seed, status: SparkStatus.hello.rawValue, size: Self.face, framed: false)
-        .id(sheet.seed)
-        .transition(.opacity)
-    }
-    .frame(height: Self.skyHeight)
-    .animation(FieldMotion.plainEase(0.32), value: sheet.seed)
-    .padding([.top, .horizontal], Self.skyInset)
-    .accessibilityHidden(true)
+    // the hatch: the night, the star that falls, and the face born where it lands (the flat star where Metal fails)
+    HatchSkyView(seed: sheet.seed, faceSize: Self.face)
+      .frame(height: Self.skyHeight)
+      .clipShape(RoundedRectangle(cornerRadius: Self.skyCorners, style: .continuous))
+      .padding([.top, .horizontal], Self.skyInset)
   }
 
   // MARK: - The name
