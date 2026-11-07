@@ -41849,6 +41849,11 @@ no product item.
 **Owed.**
 - **The first CI verify of main that carries the land** (push 119's) is the first proof under CI's load, where
   resume-when-idle bit. Read `agent-session.test.ts`'s two rows there; a red now names the record, not a clock.
+  > **Paid (2026-11-07; push 119's verify `42393671496`, attempt 1, green at 17:39:07Z on `e588849d9`):** both rows
+  > green under CI's load, the resume by hand in 971 ms and resume-when-idle in 7,369 ms. The file ran 87 tests, 2
+  > skipped, in 240,104 ms. vitest 14,087 passed, 0 failed and 21 skipped over 963 files, with 5 files skipped,
+  > summed by ec from the job's log: run 216's counts. That is one green run under the load where the old assertion
+  > bit, not a rate.
 
 ## DR-3b (W3's VF-RELAY) — fieldd's half of the drive's transfer: pulls over the floor's file transfer, this desktop's holders slice and opaque drive records on one lane per peer, held to their rows over a mock floor and unwired until the integration lane; a floor restart no longer freezes the holders list (track DR) (2026-11-07)
 (2026-11-07; nineteen commits on `dr/w3-relay`, the DR lead's, built in `/Volumes/SamsungRed/lanes/ma/1/vibe-field`
