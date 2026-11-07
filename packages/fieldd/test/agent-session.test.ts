@@ -186,10 +186,6 @@ interface ScriptedSession {
   host: AgentHost;
   /** the loopback pair this run reported before its process launched */
   ingress: BoundIngress;
-  /** the instant `createSession` was ENTERED — the earliest moment this run
-   * can be said to exist. A replacement's claim ("the old PTY is gone before
-   * the new run is born") is measured against this. */
-  bornAt: number;
   /** where this run's `cat` writes whatever is typed into its PTY */
   typedOut: string;
   briefing: AgentRunBriefing;
@@ -463,6 +459,9 @@ function scriptedProvider(
     models?: ScriptedModels;
     /** item 72 — held here after the PTY is born, before the spawn returns (and the runtime registers the run) */
     afterBirth?: (runtimeSessionId: string) => Promise<void>;
+    /** item 233 — called first in `createSession`, before anything of the new run exists: what a row reads here is
+     * the daemon's state at the birth */
+    beforeBirth?: () => void;
     /** item 81 — the PTY's own `sh -c` program (default: the environment written, then the PTY held by `cat`) */
     program?: string;
     /** Q08 — each binding names a turn stop, and each press lands here (absent: none named) */
@@ -502,7 +501,7 @@ function scriptedProvider(
     ...(extra.signInMark !== undefined ? { extensions: scriptedExtensions(extra.signInMark) } : {}),
     ...(extra.models !== undefined ? { models: scriptedModels(extra.models) } : {}),
     async createSession(options: AgentProviderSessionOptions): Promise<AgentAdapterBinding> {
-      const bornAt = Date.now();
+      extra.beforeBirth?.();
       const n = ++counter;
       // AR-S2 — the account a spawn was bound to, as the runtime resolved it
       extra.seen?.push(options.profile);
@@ -571,7 +570,6 @@ function scriptedProvider(
         resume: options.resume,
         host: options.host,
         ingress,
-        bornAt,
         typedOut,
         briefing: {
           ...(options.mcpServers === undefined ? {} : { mcpServers: options.mcpServers }),
@@ -693,6 +691,8 @@ interface SetupConfig {
   resumeSelection?: boolean;
   /** item 72 — the scripted agent waits here once its PTY is born, before its spawn returns */
   afterBirth?: (runtimeSessionId: string) => Promise<void>;
+  /** item 233 — called first in the scripted agent's `createSession`, before anything of the new run exists */
+  beforeBirth?: () => void;
   /** item 81 — the scripted agent's own `sh -c` program */
   program?: string;
   /** Q08 — the scripted adapter names a turn stop (default: it names none) */
@@ -830,6 +830,7 @@ async function setup(config: SetupConfig): Promise<Box> {
             ...(config.extensions === true ? { signInMark: join(root, "scripted-signed-in") } : {}),
             models,
             ...(config.afterBirth !== undefined ? { afterBirth: config.afterBirth } : {}),
+            ...(config.beforeBirth !== undefined ? { beforeBirth: config.beforeBirth } : {}),
             ...(config.program !== undefined ? { program: config.program } : {}),
             ...(config.turnStop === true ? { turnStops } : {}),
             ...(config.observed === true ? { observed } : {}),
@@ -2452,37 +2453,6 @@ const listed = async (win: WsRpc, sessionId: string): Promise<boolean> => {
 /** the inventory trails a birth and an exit by a beat (TC): wait for the listing to say `expected` */
 const untilListed = (win: WsRpc, sessionId: string, expected: boolean): Promise<true> =>
   poll(async () => ((await listed(win, sessionId)) === expected ? true : undefined), 10_000);
-
-/** Watch the floor's listing for one session's DISAPPEARANCE, from the call
- * until `stop()`, and answer the instant it was first missing (undefined if it
- * never was). The reading is the product door, so the time is never earlier
- * than the truth — which is the direction that keeps "gone BEFORE the new run
- * was born" an honest claim rather than a generous one. Give it its own
- * window: it runs concurrently with the call it is watching. */
-function watchForGone(win: WsRpc, sessionId: string): { stop: () => Promise<number | undefined> } {
-  let goneAt: number | undefined;
-  let watching = true;
-  const loop = (async () => {
-    while (watching && goneAt === undefined) {
-      try {
-        if (!(await listed(win, sessionId))) {
-          goneAt = Date.now();
-          return;
-        }
-      } catch {
-        /* the floor can refuse mid-replacement; the next reading answers */
-      }
-      await new Promise((resolve) => setTimeout(resolve, 5));
-    }
-  })();
-  return {
-    stop: async () => {
-      watching = false;
-      await loop;
-      return goneAt;
-    },
-  };
-}
 
 /** rosetta's row for a native session whose conversation last moved
  * `stillForMs` ago — or, with `null`, one rosetta knows and has no timestamped
@@ -5512,7 +5482,14 @@ describe("stable ingress — a managed session outlives fieldd (AR-4)", () => {
     await first.daemon.stop();
     const spark = keepLegacySpark(first, runId);
 
-    const second = await setup({ floor: "real", restartOf: first, briefing: SPARK_BRIEFING });
+    // item 233 — the old run's record as the daemon has it when the new run is born (below)
+    const atBirth: ReturnType<typeof readRecord>[] = [];
+    const second = await setup({
+      floor: "real",
+      restartOf: first,
+      briefing: SPARK_BRIEFING,
+      beforeBirth: () => atBirth.push(readRecord(first.dataDir, runId)),
+    });
     const win2 = await window(second.daemon, DECK, "pe2");
     const pending = await poll(async () => {
       const { sessions } = (await win2.call("agent.list", {})) as AgentListResult;
@@ -5572,19 +5549,20 @@ describe("stable ingress — a managed session outlives fieldd (AR-4)", () => {
     writeFileSync(join(spark.folder, "CLAUDE.md"), "Ready for the pending replacement.");
 
     // ── the replacement by hand ──
-    // A second window watches the floor's listing for the whole of the resume:
-    // the claim ("the old PTY leaves FIRST, and is gone before the new run is
-    // born") is an ORDER, and an end state cannot tell it from the reverse.
-    const watcher = await window(second.daemon, DECK, "pe3");
-    const gone = watchForGone(watcher, ptyId);
+    // The claim is an ORDER: the old PTY has EXITED, by the floor's word, before the new run is born (agent-runtime.ts,
+    // item 201), and an end state cannot tell it from the reverse. It is read at the birth itself, from the daemon's
+    // own record: fieldd writes the old run `exited` (replaced) only past the replacement's point of no return, once
+    // the floor has told the exit, and the scripted provider's `beforeBirth` reads that record before anything of the
+    // new run exists. That the floor's exit comes before that write is item 201's row (agent-inventory-age.test.ts,
+    // "a replacement waits for the floor's exit, not the inventory's absence"). Item 233: the listing's departure, as
+    // a watcher saw it on its own clock, is not that word, and it raced the birth to the millisecond.
     const resumed = (await born(win2, "agent.resume", { runtimeRunId: runId })) as AgentSpawnResult;
-    const goneAt = await gone.stop();
-    const bornAt = first.sessions[1]?.bornAt ?? Number.NEGATIVE_INFINITY;
-    expect(goneAt, "the watcher never saw the old PTY leave the listing").toBeDefined();
+    expect(atBirth, "the resume was not one birth").toHaveLength(1);
     expect(
-      (goneAt ?? Number.POSITIVE_INFINITY) < bornAt,
-      `the old PTY was still listed when the new run was born (gone at ${goneAt}, born at ${bornAt})`,
-    ).toBe(true);
+      atBirth[0]?.exited?.reason,
+      "at the new run's birth, fieldd's record of the old run did not yet say its PTY had exited (replaced): the new run was born before the replacement passed its point of no return",
+    ).toBe("replaced");
+    expect(atBirth[0]?.reattach).toMatchObject({ state: "resumed", replaced: ptyId });
     expect(resumed.session.runtimeRunId).not.toBe(runId);
     expect(resumed.session.sessionId).toBe(nativeId);
     expect(resumed.session.title).toBe("held");
@@ -5599,7 +5577,7 @@ describe("stable ingress — a managed session outlives fieldd (AR-4)", () => {
     expect(first.sessions[1]?.resume).toBe(nativeId);
     expect(first.sessions[1]?.briefing.instructions).toBe("Ready for the pending replacement.");
     expect(readRecord(first.dataDir, resumed.session.runtimeRunId).spark).toBe(spark.id);
-    // the old PTY is gone before the new run was born; the records say what happened
+    // the old PTY leaves the listing too (the inventory trails its exit by a beat); the records say what happened
     await untilListed(win2, ptyId, false);
     const old = readRecord(first.dataDir, runId);
     expect(old.exited?.reason).toBe("replaced");
@@ -5706,11 +5684,14 @@ describe("stable ingress — a managed session outlives fieldd (AR-4)", () => {
     await joinedRow(win1, runId);
     await first.daemon.stop();
 
-    // the fake index serves NO rows yet: no evidence, no resume
+    // the fake index serves NO rows yet: no evidence, no resume. Item 233 — `atBirth` keeps the old run's record as the
+    // daemon has it when the new run is born (⑤)
+    const atBirth: ReturnType<typeof readRecord>[] = [];
     const second = await setup({
       floor: "real",
       restartOf: first,
       resumeWhenIdle: { afterMs: 30_000, pollMs: 200 },
+      beforeBirth: () => atBirth.push(readRecord(first.dataDir, runId)),
     });
     const win2 = await window(second.daemon, DECK, "ri2");
     await poll(async () => {
@@ -5764,8 +5745,6 @@ describe("stable ingress — a managed session outlives fieldd (AR-4)", () => {
 
     // ⑤ the same pair the other way about: the canonical row has been still
     //    for a minute, and an ACTIVE subagent row ahead of it changes nothing
-    const watcher = await window(second.daemon, DECK, "ri3");
-    const gone = watchForGone(watcher, ptyId);
     writeFileSync(
       first.sessionsFile,
       JSON.stringify([rosettaRow(nativeId, 1_000, true), rosettaRow(nativeId, 60_000)]),
@@ -5774,13 +5753,15 @@ describe("stable ingress — a managed session outlives fieldd (AR-4)", () => {
       const { sessions } = (await win2.call("agent.list", {})) as AgentListResult;
       return sessions.find((r) => r.terminal?.replaced === ptyId);
     }, 30_000);
-    const goneAt = await gone.stop();
-    const bornAt = first.sessions.at(-1)?.bornAt ?? Number.NEGATIVE_INFINITY;
-    expect(goneAt, "the watcher never saw the old PTY leave the listing").toBeDefined();
+    // the ORDER, read as the replacement by hand reads it: at the new run's birth, the daemon's own record of the old
+    // run already says its PTY exited (replaced), which fieldd writes only once the floor has told that exit. The
+    // floor's-exit half is item 201's row (agent-inventory-age.test.ts); item 233 retired the watcher's clock here.
+    expect(atBirth, "the idle resume was not one birth").toHaveLength(1);
     expect(
-      (goneAt ?? Number.POSITIVE_INFINITY) < bornAt,
-      `the old PTY was still listed when the new run was born (gone at ${goneAt}, born at ${bornAt})`,
-    ).toBe(true);
+      atBirth[0]?.exited?.reason,
+      "at the new run's birth, fieldd's record of the old run did not yet say its PTY had exited (replaced): the new run was born before the replacement passed its point of no return",
+    ).toBe("replaced");
+    expect(atBirth[0]?.reattach).toMatchObject({ state: "resumed", replaced: ptyId });
     expect(replaced.runtimeRunId).not.toBe(runId);
     expect(replaced.sessionId).toBe(nativeId);
     expect(replaced.continuation?.pending).toBeUndefined();
