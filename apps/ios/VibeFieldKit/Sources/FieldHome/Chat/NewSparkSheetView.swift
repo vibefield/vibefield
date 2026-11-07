@@ -361,7 +361,18 @@ struct NewSparkSheetView: View {
     self.sessions = sessions
     self.landing = landing
     self.onOpen = onOpen
-    _sheet = State(initialValue: NewSparkSheet(taken: taken))
+    _sheet = State(initialValue: Self.sheet(taken: taken))
+  }
+
+  /// The sheet's controller, dealing its first face at random as it ships. Under DEBUG, `-vf-new-spark-seed=<n>`
+  /// deals face n instead, for the stills (f6b).
+  private static func sheet(taken: [String]) -> NewSparkSheet {
+    #if DEBUG
+      if let seed = ChatFixtureDoor.newSparkSeed {
+        return NewSparkSheet(taken: taken, random: { NewSpark.draw(dealing: seed) })
+      }
+    #endif
+    return NewSparkSheet(taken: taken)
   }
 
   var body: some View {

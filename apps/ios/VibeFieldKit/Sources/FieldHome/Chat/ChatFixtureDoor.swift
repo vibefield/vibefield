@@ -258,6 +258,9 @@
     /// IOS-12f's f6 — the stills' row after the flight: `-vf-new-spark-hold` holds Chat's list once the face has
     /// landed, its thread unopened (no OS input on the stills' host).
     static var holdLanding: Bool { ProcessInfo.processInfo.arguments.contains("-vf-new-spark-hold") }
+    /// IOS-12f's f6b — the stills' seed: `-vf-new-spark-seed=<n>` deals face n in New spark's sheet, the same every
+    /// run, as 12e's stills were seeded (4211). Without it the sheet deals at random, as it ships.
+    static var newSparkSeed: UInt32? { flag("-vf-new-spark-seed=").flatMap { UInt32($0) } }
 
     /// The queue's case: `-vf-needs-case=<cards|agents|away>`, else the merged list alone.
     static var needsCase: String? { flag("-vf-needs-case=") }
