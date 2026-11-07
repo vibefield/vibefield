@@ -41557,3 +41557,191 @@ checkout.
 - The two `smoke:godview` rows at rung 11m, the red at `cda6ee15e` and the green at `7a95c0789`: owed on the old
   mini's console lock. They are the first smoke over this land's smoke code.
 - `docs/desk-gates.md`: rung 11m's row gains the reply read.
+
+## Item 213 — the worker's late ack to a progress report is not a red: field-app's suite runs under a runner that drops vitest's `onTaskUpdate` timeout and nothing else (test-config only)
+(2026-11-07; one commit on lane `fix/item213-late-ack-runner`, prod-builder's, built in
+`/Volumes/SamsungRed/lanes/item213/vibe-field` over main `6e4cb7b68` (`c3750321e`, the packet VF-PM audited at
+12:31:59Z, `lanes/item213/packet/`, SUMS `284abd45…`); re-cut onto `7a95c0789` as `a705e0ffe`, the mint
+(`lanes/item213/packet-recut/`, SUMS `b0709da5…`). Verified at `a705e0ffe` on `7a95c0789` (run 215, a9's, on the old
+mini), M215; landed as `f222f7162`, a proof-form re-cut onto `50bfac13e` (item 227's records, docs only;
+`lanes/item213/packet-land/`, SUMS `2b164b58…`), a fast-forward of main `50bfac13e`, 2026-11-07T13:03:13Z.)
+Filed 2026-11-06 19:58Z from push 110's verify (`42276105115`). prod-builder has owned it since VF-PM's 08:45:40Z word
+on 2026-11-07: the diagnosis came first, then VF-PM's ruling at 11:52Z. It is test-config only: no lock, no
+package.json, no digest path, and the path check prints nothing.
+
+**The finding.**
+- vitest 3.2.7's worker gives every call to the main process 60 s for its reply. That is birpc's
+  `DEFAULT_TIMEOUT = 6e4`, vendored in vitest's dist; `createRuntimeRpc(worker.getRpcOptions(ctx))` passes no timeout,
+  and nothing in config or the CLI reaches it. The timer runs in the WORKER.
+- `packages/field-app/test/design-system.test.tsx` renders the whole catalog in every row's beforeEach: 8 rows, 13
+  sections, and GodviewSection's 11 previews. The render is one synchronous stretch of 2–4 s a row on a Mac, and
+  20–111 s on a loaded CI runner (the macos-26-arm64 image, where Nx's parallel 3 runs field-app beside fieldd).
+- How the stretch reds a passing run:
+  - While the stretch runs, the reply to the worker's `onTaskUpdate` progress report waits unread.
+  - When the stretch ends, the timers phase fires first, so the call times out.
+  - The kept rejection fails the file's `finishSendTasksUpdate`, and the pool reports it as "Unhandled Error". The run
+    reds with every test passed.
+- The report itself is posted in the same step that arms the timer, so the main process has it and every result
+  arrives. Its reply carries nothing.
+- **Six verifies, none of them a failure:**
+  - `41059344901`, the nightly of 10-30 at `e23fa8a1f`;
+  - `41761589502`, push 76;
+  - `42276105115`, push 110;
+  - `42306272877`, push 112;
+  - `42353483517`, the nightly of 11-07 at `8c03c4c5a` (the tag nightly-20261107's own verify, so its build and sign
+    were skipped);
+  - `42370021110`, push 118 at `6e4cb7b68`, attempt 1.
+- **The scan: 244/200/23/6.** There are 244 unexpired verify-log artifacts from 10-26 to 11-07, and 200 of them carry
+  design-system's rows (44 carry none).
+  - Where the slowest row was under 60 s: 177 runs, 0 timeouts.
+  - Where a row took 60 s or more: 23 runs, and 6 of them timed out. Those 6 are the six above.
+  - Between 10-30 and 11-07 the median slowest row rose from 10–28 s to 52–57 s, and the median file from 67–135 s to
+    232–256 s.
+  - On this Mac each row is one fork stall of 1.6–3.2 s, and the main process never stalled past 200 ms.
+- Item 85 (LANDED "FN — item 85", 2026-10-28) raised the page's budget to `PAGE_BUDGET_MS = 120_000`, and that raise
+  uncovered birpc's 60 s beneath it. Before it, the same stretch read "Hook timed out in 60000ms" (`40728506315`).
+- **The probe arms** (vitest 3.2.7 in scratch, run through the door). They are kept in `lanes/item213/evidence/`
+  (SUMS `405e8a75…`, with the scan's `scan.csv` and `scan.py`).
+
+  | Arm | Shape | Result |
+  |---|---|---|
+  | A | forks, a 65 s stall with an update in flight | the byte-identical red |
+  | B | the same, 50 s | clean |
+  | C | a 250 ms yield first | clean |
+  | D | threads, in A's shape | clean, but only because of where it is entered |
+  | E3 | entered from a setImmediate after the 100 ms throttle, an update in flight | red on forks AND threads |
+  | F1, F3 | the shim | clean |
+  | G | the shim and a real unhandled rejection | exit 1 |
+
+  E3 shows that changing the pool is no fix.
+
+**The 120 s sentence, corrected.**
+- The diagnosis (sent 11:51Z) said "a row past 120 s is a real red". That was false.
+- `PAGE_BUDGET_MS` binds the beforeEach, the body and the afterEach EACH on its own. Push 118's "theme" row took
+  121.5 s as a whole and passed ("states" took 71.9 s). A red needs one part past 120 s, so the cliff is close but not
+  crossed.
+- It was corrected at its source (item 213's note, and to VF-PM, 12:39Z) before the commit's message stated it.
+
+**What landed.** One commit, `a705e0ffe`: 6 files, +254 −0, all under `packages/field-app`.
+- `test/late-ack-runner.ts` (+52): `LateAckRunner` extends the public `VitestTestRunner` (`vitest/runners`).
+  - vitest assigns its RPC-calling `onTaskUpdate` to the instance after constructing it. It then calls
+    `onBeforeCollect` before any task reports, and the runner wraps the call there with `dropLateAck`.
+  - `dropLateAck` resolves exactly the rejection `[vitest-worker]: Timeout calling "onTaskUpdate"` and rethrows every
+    other rejection of the call. It checks for an Error by tag, not by `instanceof`, so it also catches the outer
+    realm's Error under a vm pool.
+  - Other calls' timeouts never pass through it, and neither do a test's own unhandled errors, which go through
+    `rpc.onUnhandledError`.
+  - Its header names item 213, the six verifies, the one lost case and the retire condition.
+- `vitest.config.ts` (+4): `test.runner: "./test/late-ack-runner.ts"`, with a three-line why.
+- `test/late-ack-runner.test.ts` (+121) has five rows:
+  1. the config line, anchored;
+  2. the filter drops the one message and nothing else (another call's timeout, a longer message, a real error and a
+     bare string are all rethrown);
+  3. a child vitest under the probe's inject runner, with the late ack injected on every update, stays green (exit 0,
+     and the message is never shown);
+  4. `…Timeout calling "onQueued"`, injected the same way, reds it (exit 1);
+  5. the G shape: a real unhandled rejection still reds a child run (exit 1, "Errors 1 error").
+
+  Each child row budgets 120 s (item 202's class). Its child is killed at 115 s, and the parent's `VITEST_*` and any
+  `LATE_ACK_*` are removed from its env.
+- `test/fixtures/late-ack/{vitest.config.ts +28, probe.fixture.ts +30, inject-runner.ts +19}`: the committed probe,
+  which the suite never collects.
+  - Its modes are `pass`, `reject`, `LATE_ACK_INJECT`, and `stall`, a 65 s hand run in the red's own shape.
+  - `LATE_ACK_RUNNER=off` runs any mode without a runner; there, `stall` reproduces item 213's red exactly.
+
+**The one lost case.** Sometimes the main process's reporter throws on that same `onTaskUpdate`. Its error comes back
+only as the late reply, and by then birpc has already dropped the call, so no code in the worker can recover it.
+- Before the shim, such a run redded on the timeout's message, never on the reporter's own error.
+- Under the shim, it is green.
+- The runner's header says so.
+
+**The lights.**
+- **The red has no commit of its own.** It is the probe's `stall`, a 65 s row, so it is a hand run and not a suite
+  row.
+  - With `LATE_ACK_RUNNER=off`, `stall` reds exactly as the six did, with Errors 1 and exit 1:
+    `Error: [vitest-worker]: Timeout calling "onTaskUpdate"`.
+  - With the runner, it is green (2/2, exit 0).
+- **This Mac, at `c3750321e`, through the HOLD door** (one row at a time, nice 19, swap 0.00M at every read, every
+  START at a 1-min load under 8). The rows at `c3750321e`, step 1's byte-identical cut, are in
+  `lanes/item213/packet/rows.txt`:
+  - biome 0, field-app's tsc exit 0, check:walls exit 0, and the test file 5/5;
+  - the real `design-system.test.tsx` under the runner, 8/8 in 26.10 s;
+  - `stall`, exit 0 with the runner and exit 1 without it.
+- **Mutations M1–M4:** each is red by a suite row, and each was restored to its pre-mutation sha256.
+  - M1, the config line removed.
+  - M2, the filter drops every rejection.
+  - M3, the runner never wraps: item 213's exact error, caught in 0.7 s.
+  - M4, the filter drops nothing.
+- **The final tip:** biome 0 and the test file 5/5 (12:43:04–12:43:08Z).
+- **The first cut, `2c156f23b`, never sent the G row through the filter.** A test's unhandled rejection goes through
+  `rpc.onUnhandledError`, not `onTaskUpdate`. That was the independent read's finding 1, confirmed by the builder.
+  Before the packet it was amended as `c3750321e`, with `inject-runner.ts` and two child rows.
+- **The independent read** (a fresh agent, read-only against vitest's dist; `packet-recut/independent-read.md`): 13
+  findings, with no bug in the runner, 2 risks and 11 nits.
+  - 11 were applied.
+  - 2 were declined: the child runs' small load, and the perf config, which is outside verify.
+  - VF-PM audited the packet at 12:31:59Z.
+- **The re-cut is proof-form, in two steps** (`packet-recut/recut-proof.txt`). Main's 21 commits since `6e4cb7b68`
+  (item 206's boot half, IOS-12d, item 227) touch none of the lane's six paths, no vitest config, no package.json and
+  no lock.
+  - Step 1, `fd4c4b22b`: range-diff `=`; the tree equals git's merge-tree (`54904be650d0`); the message is identical;
+    the patch-id is equal in both forms:
+    - `963b9ddb…` by `git diff -U0 <base> <tip> | git patch-id --stable`;
+    - `d6539784…` by `git diff <base> <tip> | git patch-id --stable`.
+  - Step 2, `a705e0ffe` (tree `8e5d49ace46a`): one comment line, the header's "five verifies" → "six" (VF-PM
+    12:38:47Z). The message now carries the six ids, the scan and the corrected 120 s sentence. The final patch-ids
+    are `0943882a…` (-U0) and `495b82d3…` (default).
+- **The land is proof-form too** (`lanes/item213/packet-land/land-recut-proof.txt`, SUMS `2b164b58…`):
+  - `a705e0ffe` was replayed onto `50bfac13e` as `f222f7162` with `git replay`. `50bfac13e` is item 227's records,
+    `docs/DECISIONS.md` and `docs/LANDED.md` only, so it shares no file with the lane.
+  - range-diff `=`. The tree, `a85cb42144fb`, equals git's merge-tree. The message and the author are identical.
+  - Both patch-ids equal `a705e0ffe`'s, and the path check prints 0 lines.
+  - The proof's second line labels `a705e0ffe` "(run214)": it was written at 12:52:11Z, before run 215. Run 214 is
+    the red, and run 215 is the land record. The proof stands unedited, because it is SUMS'd and the land's record.
+- **Run 214, a9's, on the old mini, at `a705e0ffe` on `7a95c0789`: the shim's first evidence, and RED on one fieldd row
+  outside the six files** (`lanes/item213/a9-results-run214-a705e0ffe/`, SUMS-a9 `b4b9d742…`; armed at a 1-min load of
+  1.84).
+  - field-app's section came out exactly as briefed: 314 files and 4,392 tests, no `Errors` line, and
+    `Timeout calling "onTaskUpdate"` 0 times in verify.log.
+  - `late-ack-runner.test.ts` ran 5/5 in 3,631 ms. Its child rows took 1,066, 1,489 and 1,073 ms.
+  - Biome checked 3,491 files: run 213's 3,486 and the five new ones.
+  - The red is item 233's race (in Found). Cargo and gen were not reached, so run 214 is no land record, and its one
+    rerun is run 215.
+  - Births: 1 `vf-seam`, an existing fieldd prefix.
+- **Run 215, a9's, on the old mini, the same packet: GREEN** at `a705e0ffe` on `7a95c0789`, the land record
+  (`lanes/item213/a9-results-run215-a705e0ffe/`, SUMS-a9 `30e1cadb…`). It was armed at 12:52:21Z at a 1-min load of
+  3.90, and verify exited 0 at 12:58:30Z; the tree was clean after, with 0 stubs left.
+  - Every count is run 213's, plus field-app's one file and five tests:
+    - vitest 14,087 over 963 files, 0 failed, 21 skipped, with the per-file list equal to run 214's;
+    - field-app 314 files, 4,392 tests;
+    - cargo 606 over all 37 binaries, 0 failed;
+    - node 474 of 474, and typecheck over 29 projects;
+    - biome 3,491 files.
+  - field-app's section shows no `Errors`, and `Timeout calling "onTaskUpdate"` appears 0 times in verify.log.
+  - `late-ack-runner.test.ts` ran 5/5 in 5,332 ms. Its child rows took 1,511, 1,897 and 1,922 ms.
+  - fieldd's `agent-session.test.ts`, item 233's file, was green: 87 tests, 2 skipped.
+  - Births: 0. Daemons left: 0.
+
+**Found.**
+- **Run 214's one red, filed as item 233 (VF-PM, the lottery class).** The row is fieldd's `test/agent-session.test.ts`
+  › "stable ingress — a managed session outlives fieldd (AR-4)" › "a provider that cannot attach: the run is held
+  PENDING across the restart (live, unobserved, resumable), and agent.resume replaces its PTY by hand — the new row
+  names the PTY it replaced".
+  - It read "the old PTY was still listed when the new run was born (gone at 1794055710014, born at 1794055710012)": a
+    2 ms ordering race.
+  - Nx flagged `@vibefield/fieldd:test` as flaky.
+  - None of the lane's files is on its path.
+- Six of main's last 14 verifies needed a second attempt (VF-PM's docket has the split): item 213 twice, item 202 twice
+  (phone-parity's 5 s rows), item 188's class once (the screenshot), and the Electron fetch once.
+
+**Owed.**
+- **Ruling (2), the restructure: its own lane, after beta.1 or beside it, never folded into (1). Not started.**
+  - `design-system.test.tsx` stops rendering the whole catalog in every row. The diagnosis's shape: rows 5–8 mount
+    their one exported preview, rows 1–2 render the page over stub sections, and only rows 3–4 render the whole page.
+  - This is the root. The shim only stops the late ack, and the rows still sit near the 120 s budget per part.
+- **The retire condition** (the runner's header): retire `late-ack-runner.ts`, its config line, its test and its
+  fixtures when vitest makes the worker's RPC timeout configurable, or when ruling (2) lands, whichever comes first.
+- **The first CI verify of main that includes the land** is the first real proof that the shim drops the late ack. The
+  minis are not loaded enough to bite, so runs 214 and 215 prove only that the shim moves nothing else.
+  - Read its field-app section: `Errors` should be absent.
+  - Note any design-system row of 60 s or more: under such a row, the late ack was dropped.
