@@ -40832,11 +40832,19 @@ fieldd test-only, no RV rank. Built on the lead's shape, which VF-PM GO'd at 23:
   `accept_failing 1, accept_recovered 0` for 30 s while descriptors were free, where mgmt and meshdata (the same
   `local_ipc::accept`, its breath capped at 1 s) were served in 16 ms. Filed as item 217
   (`lanes/rv/a9/i216-r2-run202/`, SUMS-a9 `88c6ddc6…`), to be measured beside item 204's door backlog.
+  > **Correction (2026-11-07, item 217's diagnosis; the lead):** "under a 1-min load of 43–53" is false of this row.
+  > Those readings end about 40 s before it, and it ran near 33 and falling (`lanes/rv/mint/item217/diagnosis.md`,
+  > established point 7). Green runs are estimated in the same band, so load is not shown to be the cause. The NO
+  > VERDICT stands: VF-PM ruled that day that this row's red is read by its signature, never its load
+  > (`docs/desk-gates.md`).
 
 **Owed.**
 - The next verify of main that includes `339d0a26e`: the first to run item 216's row on W3's floor.
 - Item 217's measuring lane: that one row twenty times under a parallel load, the floor's log flushed before its
   terminate, on the old mini.
+  > **Correction (2026-11-07; the lead):** superseded. Twenty plain runs could not tell a dropped connection from a
+  > queued one, because the row never reads it. The lane is `lanes/rv/mint/item217/rows.md` (SUMS `ea1f9c9e…`):
+  > test-only probes read the fresh connection's fate, at idle and under load, on the old mini.
 
 ## EL8 — Rosetta 0.1.4: the pin, protocol and store schema 30, and the History door carrying a made app's description and dropped files (2026-11-07)
 (2026-11-07; one commit, the DR lead's, on `dr/el8-rosetta`. Its first cut, `9b54d8d5e`, read F5 red at a9's filler; the

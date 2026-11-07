@@ -609,8 +609,8 @@ its rulings (`draft/rv/james-asks.md`, `draft/rv/lead-rulings.md`); the review `
   0.15.0 → EL8-g → rv/vf-ghosttea-tail; waves 3–8 by the plan.
 - Owed: James's hand on every sibling PR and release;
   smoke:plugin-restart and the plugin-runtime soak for item 212; item 215 (freeway's link door), item 217 (item 198's
-  door did not take a fresh connection for 30 s after fd pressure under load; measured beside item 204) and petition
-  G36 (ghosttea's accept loops).
+  door did not take a fresh connection for 30 s after fd pressure; load not shown to be the cause, corrected
+  2026-11-07; measured beside item 204) and petition G36 (ghosttea's accept loops).
 
 **HN — Cards in Hand** · vibe-field-a1 (lane `lanes/hn`) · law `draft/thinking-cards-in-hand.md` §6 (page sources `draft/cards-in-hand/`), DESIGN.md §1/§5/§6/§8/§9/§10/§13
 - Ruled 10-29 10:40Z (James): all sixteen at their leans (LN-D1…D3, HN-D1…D10, PL-D1…D3); HN-D1 was his own pick on
