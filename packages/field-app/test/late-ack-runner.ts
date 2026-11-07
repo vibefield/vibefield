@@ -9,6 +9,9 @@ import { type VitestRunner, VitestTestRunner } from "vitest/runners";
 // progress report the worker posts in the same step that arms the timer, so the main process has it and every result
 // arrives; its reply carries nothing. Yet the rejection is kept until the file's end and reds the run with every test
 // passed — six verifies from 2026-10-30 to 11-07, none of them a failure.
+// *Corrected 2026-11-07 (item 213 (2)):* the whole catalog renders in two of design-system.test.tsx's rows now, the
+// inventory and the theme; the others mount one preview each, or the page over stubbed sections
+// (design-system-shell.test.tsx).
 //
 // This runner drops exactly that rejection and passes every other rejection of `onTaskUpdate` through, so the run still
 // reds on it. Other calls' timeouts and a test's own unhandled errors never pass through here and are untouched.
@@ -16,8 +19,11 @@ import { type VitestRunner, VitestTestRunner } from "vitest/runners";
 // One case is lost, and no code here can recover it: when the main process's reporter throws on that same update, its
 // error arrives only as the late reply, which birpc has already dropped.
 //
-// RETIRE IT when vitest makes the worker's RPC timeout configurable, or when design-system.test.tsx stops rendering the
-// whole catalog in every row (item 213's second half), whichever comes first.
+// RETIRE IT when vitest makes the worker's RPC timeout configurable, or when item 213's per-row read
+// (lanes/item213/plan-2/per-row-v2.py --main --last 20) over 20 consecutive CI verifies of main after item 213 (2)
+// shows no design-system row at 60 s or more, whichever comes first.
+// *Amended 2026-11-07 (item 213 (2); VF-PM's Q7):* it read "or when design-system.test.tsx stops rendering the
+// whole catalog in every row". (2) made that true, but its two whole-page rows had reached 90.3 s and 121.5 s on CI.
 
 /** The one message this runner drops: birpc's timeout for the worker's `onTaskUpdate` call, exactly. */
 export const LATE_ACK = '[vitest-worker]: Timeout calling "onTaskUpdate"';

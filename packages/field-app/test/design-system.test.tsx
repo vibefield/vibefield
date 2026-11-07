@@ -3,13 +3,12 @@
 import { stateStages } from "@vibefield/puppeteer-views";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { defaultProductAppearance } from "../src/appearance/product-appearance";
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 import { DesignSystemPage } from "../src/design-system/DesignSystemPage";
-import type {
-  DesignSystemStudioController,
-  DesignSystemStudioState,
-} from "../src/design-system/studio-controller";
+import { OnboardingPreview } from "../src/design-system/OnboardingPreview";
+import { PaneLauncherPreview } from "../src/design-system/PaneLauncherPreview";
+import { SpawnBloomPreview } from "../src/design-system/SpawnBloomPreview";
+import { SwarmBodiesPreview } from "../src/design-system/SwarmBodiesPreview";
 import { CHAT_REACH, HAND_REACH } from "../src/frame/cards/cards-model";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -40,9 +39,14 @@ let container: HTMLDivElement | null = null;
 // 4.6–47.6 s in nine green runs of 10-27/28 and 22–84 s on that attempt. The page had not grown: alone on this Mac a row
 // took 1.5–2.8 s at load 15–18 (×3, 24 rows), against 10-05's 1.3–1.7 s render and 0.9 s body. 120 s is twice the 60 s
 // that render passed.
+// *Item 213 (2), 2026-11-07:* only the two rows whose subject is the page — the inventory, and the theme with the
+// component states — render it now. The four specimen rows mount their one preview each, and the Studio's two rows
+// are design-system-shell.test.tsx's, over the shipping page with its other sections stubbed. On CI the whole render
+// had been most of every row's time: the launcher's row, one read, reached 107.8 s, where its preview alone has
+// never taken 2.2 s (lanes/item213/plan-2/plan.md §1).
 const PAGE_BUDGET_MS = 120_000;
 
-beforeEach(async () => {
+beforeEach(() => {
   window.localStorage.clear();
   document.documentElement.classList.remove("dark");
   document.documentElement.removeAttribute("data-theme");
@@ -51,10 +55,7 @@ beforeEach(async () => {
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
-  await act(async () => root?.render(<DesignSystemPage />));
-  // Rendering the whole catalog takes seconds alone and passes vitest's 10 s hook default
-  // under a loaded gate (2026-10-08: red in most loaded gates since 10-07).
-}, PAGE_BUDGET_MS);
+});
 
 afterEach(() => {
   if (root !== null) act(() => root?.unmount());
@@ -73,70 +74,11 @@ function button(label: string): HTMLButtonElement {
 }
 
 describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
-  it("exposes explicit Studio live and product-focus controls only when hosted", async () => {
-    const state: DesignSystemStudioState = {
-      appearance: defaultProductAppearance(),
-      live: false,
-      productConnection: "connected",
-      productContext: { theme: "dark", zoom: 1.25 },
-      transportError: null,
-      requestedSection: null,
-      navigationRevision: 0,
-      revision: null,
-      appliedRevision: null,
-      rejection: null,
-    };
-    const setLive = vi.fn();
-    const focusProduct = vi.fn();
-    const studio: DesignSystemStudioController = {
-      snapshot: () => state,
-      subscribe: () => () => undefined,
-      setAppearance: vi.fn(),
-      setLive,
-      focusProduct,
-    };
-    await act(async () => root?.render(<DesignSystemPage studio={studio} />));
-
-    expect(container?.textContent).toContain("VibeField Studio · Design System");
-    expect(container?.textContent).toContain("Local changes");
-    expect(container?.textContent).toContain("Connected");
-    expect(container?.textContent).toContain("Dark · 125%");
-    await act(async () => button("Go live").click());
-    await act(async () => button("Bring App Forward").click());
-    expect(setLive).toHaveBeenCalledWith(true);
-    expect(focusProduct).toHaveBeenCalledOnce();
-  });
-
-  it("reports catalog-only, reconnecting, protocol-error, and navigation states honestly", async () => {
-    expect(container?.textContent).toContain("Catalog-only browser mode");
-    const state: DesignSystemStudioState = {
-      appearance: defaultProductAppearance(),
-      live: true,
-      productConnection: "reconnecting",
-      productContext: null,
-      transportError: null,
-      requestedSection: "appearance",
-      navigationRevision: 1,
-      revision: 4,
-      appliedRevision: null,
-      rejection: null,
-    };
-    const studio: DesignSystemStudioController = {
-      snapshot: () => state,
-      subscribe: () => () => undefined,
-      setAppearance: vi.fn(),
-      setLive: vi.fn(),
-      focusProduct: vi.fn(),
-    };
-    await act(async () => root?.render(<DesignSystemPage studio={studio} />));
-    expect(container?.textContent).toContain("Reconnecting");
-    expect(HTMLElement.prototype.scrollIntoView).toHaveBeenCalled();
-
-    state.transportError = "version-mismatch";
-    await act(async () => root?.render(<DesignSystemPage studio={studio} />));
-    expect(container?.textContent).toContain("Studio disconnected");
-    expect(container?.textContent).toContain("different preview protocol versions");
-  });
+  beforeEach(async () => {
+    await act(async () => root?.render(<DesignSystemPage />));
+    // Rendering the whole catalog takes seconds alone and passes vitest's 10 s hook default
+    // under a loaded gate (2026-10-08: red in most loaded gates since 10-07).
+  }, PAGE_BUDGET_MS);
 
   it("renders the complete single-page inventory", () => {
     const links = container!.querySelectorAll<HTMLAnchorElement>(".vf-ds-sidebar nav a");
@@ -889,6 +831,14 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
     expect(copyPicture?.textContent).toBe("2 objects");
     const facts = faceRows[4]?.querySelector('[data-kind="file"] [data-facts]');
     expect(facts?.textContent).toBe("PDF · 2.4 MB");
+    // *Item 213 (2), 2026-11-07:* rows 6 and 7 mount their specimens alone now, so the page's own mounting of them —
+    // which their old lookups of the two bloom wrappers and their page-wide caption count held — is held here
+    // (the independent read's F1).
+    expect(container?.querySelector("[data-spawn-bloom-catalog] .vf-monitor-swarm")).not.toBeNull();
+    expect(
+      container?.querySelector("[data-spawn-bloom-list-catalog] .vf-monitor-list-new"),
+    ).not.toBeNull();
+    expect(container?.querySelectorAll(".vf-pane-launcher-cap-under")).toHaveLength(4);
   });
 
   it("exposes theme and representative component-state controls", async () => {
@@ -1046,8 +996,15 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
     expect(shelf?.firstElementChild?.className).toBe("vf-artifact-panel");
     expect(shelf?.querySelector(".vf-artifact-list > li")?.className).toBe("vf-artifact-publish");
   });
+});
 
+// The same describe's name, on purpose: each row keeps its full name ("design system page > …"), so its CI times
+// read on across this change (item 213 (2)'s per-row watch).
+describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
   it("keeps every onboarding state lab interactive", async () => {
+    await act(async () =>
+      root?.render(<OnboardingPreview dark={false} onToggleTheme={() => undefined} />),
+    );
     const frame = (state: string): HTMLElement => {
       const match = container?.querySelector<HTMLElement>(`[data-onboarding-preview="${state}"]`);
       if (match === null || match === undefined) {
@@ -1186,8 +1143,11 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
   });
 
   it("mounts the spawn bloom on the shipping monitor with its fixture door, and a create lands as a new terminal (SB-3)", async () => {
-    const bloom = container?.querySelector<HTMLElement>("[data-spawn-bloom-catalog]");
-    if (!bloom) throw new Error("Spawn bloom catalog not found");
+    // GodviewSection mounts these two specimens in catalog wrappers of its own (:165, :174); here each is mounted
+    // alone, the swarm in this row's container and the list in a second one beside it.
+    await act(async () => root?.render(<SpawnBloomPreview view="swarm" />));
+    const bloom = container;
+    if (!bloom) throw new Error("This row's container is not mounted");
     // The SHIPPING swarm view: happy-dom has no WebGPU, so it draws its honest
     // line and its keyboard list — the fixture's three agents; the profiles
     // its managed profiles call for are chosen in search's Live now (GV-D3,
@@ -1208,8 +1168,17 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
     // the bloom's order (the feed's) with the keys landing on the default;
     // choosing Work asks the fixture door, which answers `mounted` under it,
     // and the catalog keeps the birth as a deck would — a new terminal row.
-    const list = container?.querySelector<HTMLElement>("[data-spawn-bloom-list-catalog]");
-    if (!list) throw new Error("Spawn bloom list catalog not found");
+    const list = document.createElement("div");
+    document.body.appendChild(list);
+    const listRoot = createRoot(list);
+    onTestFinished(() => {
+      try {
+        act(() => listRoot.unmount());
+      } finally {
+        list.remove();
+      }
+    }, PAGE_BUDGET_MS);
+    await act(async () => listRoot.render(<SpawnBloomPreview view="list" />));
     const before = list.querySelectorAll(".vf-monitor-list-row").length;
     await act(async () => list.querySelector<HTMLButtonElement>(".vf-monitor-list-new")?.click());
     const menu = list.querySelector('[role="menu"][aria-label="New terminal"]');
@@ -1226,7 +1195,8 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
     );
   });
 
-  it("shows the launcher of a pane born under a profile — New · Under Work, and an agent with no sign-in (SB-3)", () => {
+  it("shows the launcher of a pane born under a profile — New · Under Work, and an agent with no sign-in (SB-3)", async () => {
+    await act(async () => root?.render(<PaneLauncherPreview />));
     const captions = Array.from(container?.querySelectorAll(".vf-pane-launcher-cap-under") ?? []);
     // two specimens, each in the light and the dark deck
     expect(captions).toHaveLength(4);
@@ -1241,6 +1211,7 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
   });
 
   it("keeps the swarm's state matrix live and inspectable", async () => {
+    await act(async () => root?.render(<SwarmBodiesPreview />));
     const catalog = container?.querySelector<HTMLElement>("[data-swarm-bodies-catalog]");
     if (!catalog) throw new Error("Swarm bodies catalog not found");
 
