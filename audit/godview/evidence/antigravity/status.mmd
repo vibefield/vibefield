@@ -1,11 +1,19 @@
-%% graph_ref: shared.status
-%% adapter: antigravity
 %% field: field.status
-%% forensic: source-read at 748d015; not a live sample
-flowchart LR
-  src["packages/adapter-antigravity/src/normalization/monitor.ts:25-66"]
-  raw["adapter signal, see transforms"]
-  shared["shared.status"]
-  row["field.status yes"]
-  ui["UI yes"]
-  src --> raw --> shared --> row --> ui
+%% adapter: antigravity
+%% sourceScope: adapter-provided
+%% forensic: source-read; liveObserved false
+flowchart TD
+  signal["packages/adapter-antigravity/src/normalization/pipeline.ts:49-97\nsynthesized turns"]
+  
+  signal --> reduce["reduce.ts:864-912 turn and tool activity"]
+  reduce --> choose["transitions.ts:370-371"]
+  choose --> child["runnable child: working"]
+  choose --> blocked["blockers and no child: blocked"]
+  choose --> active["activity remains: working"]
+  choose --> idle["otherwise: idle"]
+  choose --> derive["derive.ts:68-72"]
+  derive --> pending["host.pending: idle"]
+  derive --> starting["no runtime state: working"]
+  derive --> replica["replica.ts:315-321 agent status copied"]
+  replica --> window["window-rows.ts:130-134 pass-through; status is not rewritten"]
+  window --> readers["AgentList.tsx:144-199 RainView.tsx:217 bubble-model.ts:298-345 spend-words.ts:145 timeline-lanes.ts:94-97"]

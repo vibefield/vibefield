@@ -10,105 +10,77 @@
     {
       "repo": "puppeteer",
       "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
-      "path": "packages/adapter-antigravity/src/normalization/monitor-capabilities.ts",
-      "lineStart": 15,
-      "lineEnd": 23,
-      "symbol": "usage capability"
-    },
-    {
-      "repo": "puppeteer",
-      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
       "path": "packages/adapter-antigravity/src/normalization/pipeline.ts",
       "lineStart": 21,
-      "lineEnd": 36,
-      "symbol": "transcript normalizer"
-    },
-    {
-      "repo": "puppeteer",
-      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
-      "path": "packages/monitor/src/backend/derive.ts",
-      "lineStart": 240,
-      "lineEnd": 286,
-      "symbol": "deriveAgentRow"
-    },
-    {
-      "repo": "puppeteer",
-      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
-      "path": "packages/view-sdk/src/model.ts",
-      "lineStart": 27,
-      "lineEnd": 27,
-      "symbol": "model.ts"
+      "lineEnd": 107,
+      "symbol": "no usage or costUsd"
     },
     {
       "repo": "puppeteer",
       "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
       "path": "packages/monitor/src/backend/backend.ts",
-      "lineStart": 189,
-      "lineEnd": 207,
-      "symbol": "backend.ts"
-    },
-    {
-      "repo": "puppeteer",
-      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
-      "path": "packages/monitor/src/backend/usage-ledger.ts",
-      "lineStart": 62,
-      "lineEnd": 82,
-      "symbol": "usage-ledger.ts"
+      "lineStart": 197,
+      "lineEnd": 205,
+      "symbol": "costOf"
     }
   ],
   "producer": {
-    "kind": "unknown",
-    "name": "not-adapter-produced",
-    "ingestedFrom": "not adapter-produced; PENDING DOWNSTREAM MAPPING into the row"
+    "kind": "adapter",
+    "name": "no usage or costUsd",
+    "ingestedFrom": "no usage or costUsd"
   },
   "transforms": [
     {
       "order": 0,
-      "name": "no-adapter-producer-0",
-      "effect": "No costUsd, cost_usd, or cost property is read or written. A repository search of this adapter finds no such symbol.",
+      "name": "handler-omits-usage",
+      "effect": "The executing handler does not emit usage or costUsd. Capability text is not this step. The trace stops.",
       "source": {
         "repo": "puppeteer",
         "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
-        "path": "packages/adapter-antigravity/src/normalization/monitor-capabilities.ts",
-        "lineStart": 15,
-        "lineEnd": 23,
-        "symbol": "usage capability"
+        "path": "packages/adapter-antigravity/src/normalization/pipeline.ts",
+        "lineStart": 21,
+        "lineEnd": 107,
+        "symbol": "no usage or costUsd"
+      }
+    },
+    {
+      "order": 1,
+      "name": "omission-consequence",
+      "effect": "With no priced sample, costOf returns undefined and the row omits field.cost. A working observed body can still show the unpriced flame.",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/monitor/src/backend/backend.ts",
+        "lineStart": 197,
+        "lineEnd": 205,
+        "symbol": "costOf"
       }
     }
   ],
   "merge": {
-    "strategy": "unknown",
+    "strategy": "none",
     "defaults": []
   },
   "transport": {
-    "channel": "unknown",
-    "name": "not-adapter-produced"
+    "channel": "in-process",
+    "name": "not-applicable",
+    "contract": "No usage event is emitted. priceUsageUpdates is not on this path."
   },
   "renderer": {
     "viewIds": [
-      "view.swarm",
       "view.spend"
     ],
-    "component": "bubble-model",
-    "symbol": "burn_unpriced"
+    "component": "direct reader",
+    "symbol": "direct"
   },
   "applicability": {
     "states": [
-      "state.cost_complete",
-      "state.cost_partial",
-      "state.cost_unavailable",
-      "state.cost_missing",
-      "state.burn_flames_0",
-      "state.burn_flames_1",
-      "state.burn_flames_2",
-      "state.burn_flames_3",
-      "state.burn_flames_4"
+      "state.cost_missing"
     ],
     "views": [
-      "view.swarm",
       "view.spend"
     ],
-    "notes": "Current producers supply no priced total, so the normal backend omits field.cost. The row state is state.cost_missing, and an observed working Swarm body is state.burn_unpriced. This is not state.cost_unavailable, and it is not an impossibility if another producer later supplies costUsd. Not live-observed. Attribution: Vibefield audit/godview-model 25c215a2a53f363e1076210b3f6fce2155dfdc0b. ROW FIELD field.cost.series.stepMs. PENDING DOWNSTREAM MAPPING into MonitorAgentRow. This is one of 74 canonical row fields. It is not an SDK contract leaf. PENDING DOWNSTREAM MAPPING: GV-AUDIT2 owns adapter output to row predicates, including cost, burn rate, history, timeline, and git branch. This audit does not give that verdict. Schema acceptance is not complete provenance. verification.status source-read is a static reading. observation.presence unknown means no live sample was taken. It does not mean the row value is missing. classification.adapterEmittable and uiReachable stay unknown. A raw adapter property is not the row field, and a catalog consumer is not a proven UI path.  This record does not emit state.cost_complete, state.cost_partial, state.cost_unavailable, state.cost_missing, state.burn_flames_0, state.burn_flames_1, state.burn_flames_2, state.burn_flames_3, state.burn_flames_4, or state.burn_unpriced. Those predicates stay downstream. PENDING DOWNSTREAM MAPPING. costUsd is absent. No burn rate is written either. Declared usage unsupported matches the search. That does not create state.cost_missing and does not forbid a later ledger. The adapter does not write this MonitorAgentRow property. That is the architecture, not a conclusion that the row predicate is unreachable. This trace is Puppeteer 748d015a7e393112e0a91dad80111fdf5abe6583 only. It is newer than shipped Vibefield 0.3.3 and does not describe that install. Package comparison was not re-run. Declaration unsupported from none-in-antigravity-transcript. declaration only; supported does not guarantee availability/value; degraded is not unreachable No raw adapter signal does not rule out the row value from host, runtime, history, or another producer. Raw source literals, not live samples: adapter.antigravity.upstream.costUsd.absent=\"absent\" (adapter sources) Graph: evidence/antigravity/cost.series.stepMs.mmd. Continuation anchors, not a reachability verdict: MonitorService.consume, core reduce and project, deriveAgentRow. Vibefield AgentView and window-rows are not traced."
+    "notes": "sourceScope=absent. sourceRef=packages/adapter-antigravity/src/normalization/pipeline.ts:21-107 no usage. staticPresence=omitted. liveObserved=false. observation.presence=unknown because this audit did not live-sample the value. staticPresence is the source result and is independent of that. rendererRead=direct. adapterEmittable=no. uiReachable=no. A global reader does not make this value reachable. Field domain: state.cost_complete, state.cost_partial, state.cost_unavailable, state.cost_missing, state.burn_flames_0, state.burn_flames_1, state.burn_flames_2, state.burn_flames_3, state.burn_flames_4. Reachable subset: state.cost_missing. In the domain but not reachable on this path: state.cost_complete, state.cost_partial, state.cost_unavailable, state.burn_flames_0, state.burn_flames_1, state.burn_flames_2, state.burn_flames_3, state.burn_flames_4."
   },
   "absence": {
     "onMissing": "record-unknown",
@@ -116,7 +88,7 @@
     "zeroPolicy": "unknown-unsupported-and-absent-are-not-zero"
   },
   "observation": {
-    "presence": "absent",
+    "presence": "unknown",
     "synthetic": false
   },
   "classification": {
@@ -127,6 +99,6 @@
   "verification": {
     "status": "source-read",
     "owner": "GV-AUDIT3",
-    "notes": "Current producers supply no priced total, so the normal backend omits field.cost. The row state is state.cost_missing, and an observed working Swarm body is state.burn_unpriced. This is not state.cost_unavailable, and it is not an impossibility if another producer later supplies costUsd. Not live-observed. Attribution: Vibefield audit/godview-model 25c215a2a53f363e1076210b3f6fce2155dfdc0b. ROW FIELD field.cost.series.stepMs. PENDING DOWNSTREAM MAPPING into MonitorAgentRow. This is one of 74 canonical row fields. It is not an SDK contract leaf. PENDING DOWNSTREAM MAPPING: GV-AUDIT2 owns adapter output to row predicates, including cost, burn rate, history, timeline, and git branch. This audit does not give that verdict. Schema acceptance is not complete provenance. verification.status source-read is a static reading. observation.presence unknown means no live sample was taken. It does not mean the row value is missing. classification.adapterEmittable and uiReachable stay unknown. A raw adapter property is not the row field, and a catalog consumer is not a proven UI path.  This record does not emit state.cost_complete, state.cost_partial, state.cost_unavailable, state.cost_missing, state.burn_flames_0, state.burn_flames_1, state.burn_flames_2, state.burn_flames_3, state.burn_flames_4, or state.burn_unpriced. Those predicates stay downstream. PENDING DOWNSTREAM MAPPING. costUsd is absent. No burn rate is written either. Declared usage unsupported matches the search. That does not create state.cost_missing and does not forbid a later ledger. The adapter does not write this MonitorAgentRow property. That is the architecture, not a conclusion that the row predicate is unreachable. This trace is Puppeteer 748d015a7e393112e0a91dad80111fdf5abe6583 only. It is newer than shipped Vibefield 0.3.3 and does not describe that install. Package comparison was not re-run. Declaration unsupported from none-in-antigravity-transcript. declaration only; supported does not guarantee availability/value; degraded is not unreachable No raw adapter signal does not rule out the row value from host, runtime, history, or another producer. Raw source literals, not live samples: adapter.antigravity.upstream.costUsd.absent=\"absent\" (adapter sources) Graph: evidence/antigravity/cost.series.stepMs.mmd. Continuation anchors, not a reachability verdict: MonitorService.consume, core reduce and project, deriveAgentRow. Vibefield AgentView and window-rows are not traced."
+    "notes": "sourceScope=absent. sourceRef=packages/adapter-antigravity/src/normalization/pipeline.ts:21-107 no usage. staticPresence=omitted. liveObserved=false. observation.presence=unknown because this audit did not live-sample the value. staticPresence is the source result and is independent of that. rendererRead=direct. adapterEmittable=no. uiReachable=no. A global reader does not make this value reachable. Field domain: state.cost_complete, state.cost_partial, state.cost_unavailable, state.cost_missing, state.burn_flames_0, state.burn_flames_1, state.burn_flames_2, state.burn_flames_3, state.burn_flames_4. Reachable subset: state.cost_missing. In the domain but not reachable on this path: state.cost_complete, state.cost_partial, state.cost_unavailable, state.burn_flames_0, state.burn_flames_1, state.burn_flames_2, state.burn_flames_3, state.burn_flames_4."
   }
 }

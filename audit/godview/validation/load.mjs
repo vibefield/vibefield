@@ -1,6 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative, sep } from "node:path";
+import { matrixSummary, matrix as renderMatrix } from "../rendering/matrix.mjs";
 import { boundaryNotice } from "./boundary.mjs";
 import {
   AUDIT_PINS,
@@ -11,12 +12,13 @@ import {
   SLICE,
   SOURCE_LAYOUT,
 } from "./contract.mjs";
+import { semanticBlockers, uiUnresolved } from "./coverage.mjs";
 import { verifyOverlay } from "./fallback.mjs";
 import { evaluateMatrix } from "./matrix.mjs";
 import { normalizeModel, walkCitations } from "./schema-index.mjs";
 import { run as runFoundationGate } from "./validate.mjs";
 
-const MAX_BYTES = 2_000_000;
+const MAX_BYTES = 8_000_000;
 
 function isObject(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
@@ -126,53 +128,82 @@ function loadRenderIndex(root) {
     vibefield: typeof index.vibefieldSha === "string" ? index.vibefieldSha : "",
     puppeteer: typeof index.sourceSha === "string" ? index.sourceSha : "",
   };
-  const fixtures = (Array.isArray(index.fixtures) ? index.fixtures : []).map((entry) => {
-    const screenshot = typeof entry.screenshot === "string" ? entry.screenshot : null;
-    const fallbackShot = screenshot?.endsWith("environment-swarm.png") === true;
-    const meaningfulOutput =
-      entry.renderStatus === "rendered" &&
-      (entry.paint === "dom" || entry.paint === "canvas") &&
-      Boolean(screenshot) &&
-      !fallbackShot;
-    return {
-      viewId: String(entry.viewId ?? ""),
-      stateId: Array.isArray(entry.lifecycleStates) ? (entry.lifecycleStates[0] ?? "") : "",
-      lifecycleStates: Array.isArray(entry.lifecycleStates) ? entry.lifecycleStates : [],
-      fixtureKind: "synthetic",
-      syntheticLabel: "Synthetic AgentView input. Not a captured adapter session.",
-      fixturePath: typeof entry.file === "string" ? entry.file : null,
-      screenshotPath: screenshot,
-      paint: entry.paint ?? null,
-      renderStatus: entry.renderStatus ?? null,
-      mounted: true,
-      meaningfulOutput,
-      screenshotCoverageComplete: meaningfulOutput,
-      sourceRevision,
-      channel: "synthetic-fixture",
-    };
-  });
-  const holes = (Array.isArray(index.holes) ? index.holes : []).map((hole) => {
-    const reason = String(hole.reason ?? "");
-    const webgpu = /WEBGPU UNAVAILABLE/i.test(reason);
-    return {
-      stateId: String(hole.stateId ?? ""),
-      reason,
-      viewId: webgpu ? "view.swarm" : null,
-      mounted: webgpu,
-      meaningfulOutput: false,
-      screenshotCoverageComplete: false,
-      fallbackOnly: webgpu,
-      screenshotPath: webgpu ? "audit/godview/rendering/screenshots/environment-swarm.png" : null,
-    };
-  });
+  const cells = renderMatrix().map((cell) => ({
+    ...cell,
+    evidence: cell.evidence ?? "",
+    diagnostic: cell.diagnostic ?? null,
+  }));
+  const counts = {
+    rendered: 0,
+    "covered-by": 0,
+    "coverage-gap": 0,
+    "not-applicable": 0,
+    "environment-gap": 0,
+  };
+  for (const cell of cells) counts[cell.disposition] = (counts[cell.disposition] ?? 0) + 1;
+  const summary = matrixSummary(cells);
+  const boilerplate =
+    /no read of this predicate|do not read|does not read|none of the five views read/i;
+  const naUnproven = cells.filter(
+    (cell) =>
+      cell.disposition === "not-applicable" &&
+      (!String(cell.evidence ?? "").startsWith("Outside this view:") ||
+        boilerplate.test(cell.evidence ?? "")),
+  ).length;
+  const fixtures = cells
+    .filter((cell) => cell.disposition === "rendered")
+    .map((cell) => {
+      const screenshot = `audit/godview/rendering/screenshots/${cell.fixtureId}.png`;
+      const exists = existsSync(join(root, screenshot));
+      return {
+        viewId: cell.viewId,
+        stateId: cell.stateId,
+        lifecycleStates: [cell.stateId],
+        fixtureKind: "synthetic",
+        syntheticLabel: "Synthetic AgentView input. Not a captured adapter session.",
+        fixturePath: `audit/godview/fixtures/${cell.fixtureId}.json`,
+        screenshotPath: exists ? screenshot : null,
+        evidence: cell.evidence,
+        renderStatus: "rendered",
+        mounted: true,
+        meaningfulOutput: exists,
+        selectedFixtureRendered: exists,
+        sourceRevision,
+        channel: "synthetic-fixture",
+      };
+    });
   return {
     sourceSha: sourceRevision.puppeteer,
     vibefieldSha: sourceRevision.vibefield,
-    swarmBodyPaint: index.swarmBodyPaint ?? null,
+    foundationCommit: index.foundationCommit ?? null,
+    integratedFoundationCommit: "12c7b06ac17263b1f9125391e66242db7e085755",
+    cells,
+    counts,
+    countsMatch:
+      cells.length === 410 &&
+      counts.rendered === 103 &&
+      counts["covered-by"] === 21 &&
+      counts["coverage-gap"] === 77 &&
+      counts["not-applicable"] === 150 &&
+      counts["environment-gap"] === 59 &&
+      summary.priorClaim.validated === false &&
+      summary.priorClaim.notApplicable === 302 &&
+      naUnproven === 0,
+    priorClaim: summary.priorClaim,
+    priorClaimValidated: false,
+    notApplicableProof: naUnproven === 0 ? "outside-view" : "missing",
+    naUnproven,
+    coveredBy: counts["covered-by"],
+    coverageGap: counts["coverage-gap"],
+    bodyRendered: counts.rendered,
+    bodyCoverageIncludesCoveredBy: false,
+    swarmBodyPaint: "not-painted",
+    swarmCause: "under-investigation",
+    diagnostic: "audit/godview/rendering/webgpu-diagnostic.json",
+    renderSliceCommit: index.renderSliceCommit ?? "863f44ac1fe2b91bddc5306070761e43636d25c6",
     fixtureCount: fixtures.length,
-    holeCount: holes.length,
+    holeCount: counts["coverage-gap"] + counts["environment-gap"],
     fixtures,
-    holes,
     screenshotCoverageComplete: false,
     meaningfulFixtureCount: fixtures.filter((entry) => entry.meaningfulOutput).length,
   };
@@ -410,7 +441,7 @@ function publicIndex({
       schema: model.status ?? "missing",
       evidence: traces.length === 0 ? "pending" : "loaded",
       rendering: renderIndex ? "partial" : renders.length === 0 ? "pending" : "loaded",
-      firstHalfAdapters: "pending",
+      firstHalfAdapters: "partial",
       packagePinReport: notice.status,
       foundationCatalog: "pending",
     },
@@ -483,10 +514,22 @@ function publicIndex({
           fixtureCount: renderIndex.fixtureCount,
           meaningfulFixtureCount: renderIndex.meaningfulFixtureCount,
           holeCount: renderIndex.holeCount,
+          counts: renderIndex.counts,
+          countsMatch: renderIndex.countsMatch,
+          priorClaim: renderIndex.priorClaim,
+          priorClaimValidated: false,
+          notApplicableProof: renderIndex.notApplicableProof,
+          naUnproven: renderIndex.naUnproven,
+          coveredBy: renderIndex.coveredBy,
+          coverageGap: renderIndex.coverageGap,
+          bodyRendered: renderIndex.bodyRendered,
+          bodyCoverageIncludesCoveredBy: false,
           swarmBodyPaint: renderIndex.swarmBodyPaint,
+          swarmCause: renderIndex.swarmCause,
+          renderSliceCommit: renderIndex.renderSliceCommit,
           screenshotCoverageComplete: false,
           sourceSha: renderIndex.sourceSha,
-          note: "Synthetic fixtures are not captured sessions. A mount is not meaningful paint. Swarm body paint is webgpu-unavailable: environment-swarm.png is the fallback message, not complete screenshot coverage. GV-AUDIT3 evidence is not loaded; that half is correcting a uiReachable mapping.",
+          note: "Denominator 410: 103 rendered, 21 exercised same-view covered-by, 77 coverage gaps, 150 outside-view not-applicable, 59 environment gaps. Covered-by is not body coverage. The prior 302 not-applicable claim is not validated. Swarm body was not painted. Environment versus source cause is under investigation. Delivery is incomplete.",
         }
       : null,
     foundationGate: {
@@ -520,10 +563,15 @@ function sharedMapSummary(root) {
     filledJoinVerdict:
       typeof filled?.downstreamVerdict === "string" ? filled.downstreamVerdict : null,
     filledProvenanceComplete: filled?.provenanceComplete === true,
+    uiResolutionCounts: map?.uiResolutionCounts ?? null,
+    uiResolutionMeaning: "shared-anchor-bookkeeping",
+    adapterSpecificUiResolved: false,
     openEnvelopeIssues: [
-      "comparison.cost-pricing-hop: current cost envelopes omit priceUsageUpdates before reduction",
-      "comparison.cost-transform-order: current cost envelopes list deriveAgentRow before buildUsageCostLedger",
-      "comparison.core-unavailable-vs-row: shared path says normal backend omits field.cost; a further AUDIT4 rewrite of the envelopes is still expected",
+      "Shared-map uiResolutionCounts.resolvedUnknown 265 and remainingUnknown 0 are shared-anchor bookkeeping. They are not adapter-specific UI resolution. Envelope uiReachable counts are computed from the files.",
+      "The map says non-cost sequences are not reproven. That admission stays open.",
+      "First-half 355e720 is a static candidate, not a live sample and not final. It states priced coverage as pricedCount > 0 and unpricedCount = 0, so a zero USD total can still be complete. Lead is still reviewing the unpriced guard, ledger/project ordering, and retained epochs.",
+      "AUDIT4 69b4c9c8 adds account and profileSet. Account is host-scoped. The VibeField host omits it. The Puppeteer Godview host can set a profile label. accountUsage is the usage column, not field.account. First-half account envelopes are not rewritten from that trace yet.",
+      "Delivery stays incomplete.",
     ],
   };
 }
@@ -539,17 +587,39 @@ function partialCensus(traces, join) {
   const rows = traces.filter(
     (trace) => trace.recordKind !== "sdk-leaf" && first.has(trace.adapterId),
   );
-  const uiUnchecked = rows.filter(
-    (trace) => trace.envelope?.classification?.uiReachable === "unknown",
-  ).length;
+  const uiUnchecked = rows.filter((trace) => uiUnresolved(trace.envelope)).length;
   const states = Array.isArray(join?.stateReachability) ? join.stateReachability : [];
   const stateUnchecked = states.filter((row) => row?.verdict === "unknown").length;
+  const notesOf = (trace) => String(trace.envelope?.verification?.notes ?? "");
   return {
     uiUnchecked,
     stateUnchecked,
+    liveUnobserved: states.filter((row) => row?.liveObserved === false).length,
+    accountUnknown: rows.filter(
+      (trace) =>
+        trace.fieldId === "field.account" &&
+        trace.envelope?.classification?.uiReachable === "unknown",
+    ).length,
+    conditionalStatic: rows.filter((trace) =>
+      notesOf(trace).includes("not observed in a live session"),
+    ).length,
+    staticNotLive: rows.filter((trace) => {
+      const notes = notesOf(trace);
+      return (
+        notes.includes("did not live-sample") || notes.includes("not observed in a live session")
+      );
+    }).length,
+    evidenceKind: "source-read",
+    firstHalfCommit: "355e720327b4aa047336a1823e9b43c84e836220",
+    candidateStatus: "static-not-live",
+    secondHalfCommit: "69b4c9c8b078571f42302c920f3c5e8e279e37c9",
+    accountTraceCommit: "08b5d849177685662b43e0e3a4e6bd7d32ac2cdf",
+    independentSemanticReview: "pending",
+    blockers: semanticBlockers(traces),
+    delivery: "incomplete",
     provenanceComplete: join?.provenanceComplete === true,
     downstreamVerdict: typeof join?.downstreamVerdict === "string" ? join.downstreamVerdict : null,
-    note: "First-half row mapping is partial. UI paths and state predicates still marked unknown are unchecked. SDK leaves are not row coverage. Envelope completion is still incoming.",
+    note: "Delivery is incomplete. First-half 355e720 is static-not-live, not final. Lead is still reviewing the unpriced guard, ledger/project ordering, and retained epochs. Shared-map anchor totals are not envelope UI resolution. Account is host-scoped. Render 863f44ac splits 410 into 103 rendered, 21 covered-by, 77 coverage gaps, 150 outside-view not-applicable, and 59 environment gaps. The prior 302 not-applicable count is not validated. Swarm body was not painted.",
   };
 }
 

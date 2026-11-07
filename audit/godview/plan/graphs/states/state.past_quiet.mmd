@@ -1,0 +1,8 @@
+%% graph_ref: path.history
+%% state: state.past_quiet
+%% shared_map: 07e71c9bcb9532fc181e3f667f2d0ed2e7c9afaf
+flowchart LR
+  pred["past.span.kind=quiet"]
+  src["path.history"]
+  verdict["conditional shared predicate; adapter-specific satisfying sequence not asserted"]
+  src --> pred --> verdict

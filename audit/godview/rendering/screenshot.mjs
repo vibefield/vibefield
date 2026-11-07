@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import puppeteer from "puppeteer-core";
 
@@ -38,11 +38,13 @@ try {
   browser = await puppeteer.launch({
     executablePath: chrome,
     headless: true,
+    ignoreDefaultArgs: ["--disable-gpu"],
     args: [
       "--no-sandbox",
       "--disable-dev-shm-usage",
+      "--disable-gpu-sandbox",
       "--enable-unsafe-webgpu",
-      "--use-angle=swiftshader",
+      "--enable-unsafe-swiftshader",
       "--lang=en-US",
     ],
   });
@@ -58,6 +60,15 @@ try {
         renderStatus: "hole",
         hole: "Swarm body paint needs WebGPU. This host mounted the 748d015 swarm and it reported WEBGPU UNAVAILABLE.",
         screenshot: "audit/godview/rendering/screenshots/environment-swarm.png",
+      });
+      continue;
+    }
+    const shot = join(outDir, `${fixture.fixtureId}.png`);
+    if (process.env.SKIP_EXISTING === "1" && existsSync(shot) && fixture.requiresBodyPaint !== true) {
+      results.push({
+        ...fixture,
+        renderStatus: "rendered",
+        screenshot: `audit/godview/rendering/screenshots/${fixture.fixtureId}.png`,
       });
       continue;
     }

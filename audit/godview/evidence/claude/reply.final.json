@@ -13,91 +13,93 @@
       "path": "packages/adapter-claude/src/normalization/conversation.ts",
       "lineStart": 1,
       "lineEnd": 9,
-      "symbol": "normalizeClaudeAssistantMessage"
-    },
-    {
-      "repo": "puppeteer",
-      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
-      "path": "packages/adapter-claude/src/normalization/pipeline.ts",
-      "lineStart": 5,
-      "lineEnd": 9,
-      "symbol": "MessageDisplay streaming note"
-    },
-    {
-      "repo": "puppeteer",
-      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
-      "path": "packages/runtime/src/services/monitor-service.ts",
-      "lineStart": 176,
-      "lineEnd": 187,
-      "symbol": "MonitorService.consume"
+      "symbol": "assistant message displayOnly"
     },
     {
       "repo": "puppeteer",
       "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
       "path": "packages/core/src/monitor/reduce.ts",
-      "lineStart": 864,
+      "lineStart": 913,
       "lineEnd": 938,
-      "symbol": "turn and conversation cases"
-    },
-    {
-      "repo": "puppeteer",
-      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
-      "path": "packages/view-sdk/src/model.ts",
-      "lineStart": 81,
-      "lineEnd": 81,
-      "symbol": "model.ts"
+      "symbol": "assistant message and responding"
     },
     {
       "repo": "puppeteer",
       "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
       "path": "packages/monitor/src/backend/derive.ts",
       "lineStart": 188,
-      "lineEnd": 196,
-      "symbol": "derive.ts"
+      "lineEnd": 195,
+      "symbol": "agentReply"
     }
   ],
   "producer": {
     "kind": "adapter",
-    "name": "claude normalization",
-    "ingestedFrom": "conversation:assistant-message displayOnly true"
+    "name": "assistant message displayOnly",
+    "ingestedFrom": "assistant message displayOnly"
   },
   "transforms": [
     {
       "order": 0,
-      "name": "adapter-step-0",
-      "effect": "MessageDisplay deltas become conversation:assistant-message. The helper always sets displayOnly true. final is the caller flag.",
+      "name": "assistant-text",
+      "effect": "An assistant message event carries text and a final flag.",
       "source": {
         "repo": "puppeteer",
         "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
         "path": "packages/adapter-claude/src/normalization/conversation.ts",
         "lineStart": 1,
         "lineEnd": 9,
-        "symbol": "normalizeClaudeAssistantMessage"
+        "symbol": "assistant message displayOnly"
+      }
+    },
+    {
+      "order": 1,
+      "name": "reduce-message",
+      "effect": "Nonblank text replaces the actor reply. final false also marks responding.",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/core/src/monitor/reduce.ts",
+        "lineStart": 913,
+        "lineEnd": 938,
+        "symbol": "assistant message and responding"
+      }
+    },
+    {
+      "order": 2,
+      "name": "derive-reply",
+      "effect": "Blank text is omitted. Otherwise text, optional at, and final are copied.",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/monitor/src/backend/derive.ts",
+        "lineStart": 188,
+        "lineEnd": 195,
+        "symbol": "agentReply"
       }
     }
   ],
   "merge": {
-    "strategy": "unknown",
+    "strategy": "replace",
     "defaults": []
   },
   "transport": {
     "channel": "in-process",
-    "name": "MonitorService.consume",
-    "contract": "AgentEvent or monitor:batch"
+    "name": "AgentMonitorService.consume",
+    "contract": "normalized event or monitor batch"
   },
   "renderer": {
-    "viewIds": [
-      "view.swarm"
-    ],
-    "component": "bubble-model",
-    "symbol": "latestMessage"
+    "viewIds": [],
+    "component": "no reader",
+    "symbol": "none"
   },
   "applicability": {
-    "states": "model-axes",
-    "views": [
-      "view.swarm"
+    "states": [
+      "state.reply_streaming",
+      "state.reply_final",
+      "state.reply_missing"
     ],
-    "notes": "Assistant messages reduce to lastAssistantMessage and derive.ts:188-195 copies non-blank text. Conditional. Swarm reads a message. List and rain were not verified for field.reply. Not live-observed. ROW FIELD field.reply.final. PENDING DOWNSTREAM MAPPING into MonitorAgentRow. This is one of 74 canonical row fields. It is not an SDK contract leaf. PENDING DOWNSTREAM MAPPING: GV-AUDIT2 owns adapter output to row predicates, including cost, burn rate, history, timeline, and git branch. This audit does not give that verdict. Schema acceptance is not complete provenance. verification.status source-read is a static reading. observation.presence unknown means no live sample was taken. It does not mean the row value is missing. classification.adapterEmittable and uiReachable stay unknown. A raw adapter property is not the row field, and a catalog consumer is not a proven UI path.   conversation is undeclared. displayOnly true is an adapter constant on this helper. Whether the row keeps display-only text is pending. The adapter does not write this MonitorAgentRow property. That is the architecture, not a conclusion that the row predicate is unreachable. This trace is Puppeteer 748d015a7e393112e0a91dad80111fdf5abe6583 only. It is newer than shipped Vibefield 0.3.3 and does not describe that install. Package comparison was not re-run. Declaration unknown from no capability cell.  Declared support does not match the producer channel. That mismatch is not a runtime impossibility. Raw source literals, not live samples: adapter.claude.upstream.reply.displayOnly=true (every assistant message from this helper); adapter.claude.upstream.reply.final=\"caller boolean\" (final argument) Graph: evidence/claude/reply.final.mmd. Continuation anchors, not a reachability verdict: MonitorService.consume, core reduce and project, deriveAgentRow. Vibefield AgentView and window-rows are not traced."
+    "views": "all-monitor-views",
+    "notes": "sourceScope=adapter-provided. sourceRef=packages/adapter-claude/src/normalization/conversation.ts:1-9 assistant message. staticPresence=emitted-when-condition. liveObserved=false. observation.presence=unknown because this audit did not live-sample the value. staticPresence is the source result and is independent of that. rendererRead=none. adapterEmittable=yes. uiReachable=no. A global reader does not make this value reachable. Field domain: state.reply_streaming, state.reply_final, state.reply_missing. Reachable subset: state.reply_streaming, state.reply_final, state.reply_missing."
   },
   "absence": {
     "onMissing": "record-unknown",
@@ -111,11 +113,11 @@
   "classification": {
     "modelSupported": "yes",
     "adapterEmittable": "yes",
-    "uiReachable": "unknown"
+    "uiReachable": "no"
   },
   "verification": {
     "status": "source-read",
     "owner": "GV-AUDIT3",
-    "notes": "Assistant messages reduce to lastAssistantMessage and derive.ts:188-195 copies non-blank text. Conditional. Swarm reads a message. List and rain were not verified for field.reply. Not live-observed. ROW FIELD field.reply.final. PENDING DOWNSTREAM MAPPING into MonitorAgentRow. This is one of 74 canonical row fields. It is not an SDK contract leaf. PENDING DOWNSTREAM MAPPING: GV-AUDIT2 owns adapter output to row predicates, including cost, burn rate, history, timeline, and git branch. This audit does not give that verdict. Schema acceptance is not complete provenance. verification.status source-read is a static reading. observation.presence unknown means no live sample was taken. It does not mean the row value is missing. classification.adapterEmittable and uiReachable stay unknown. A raw adapter property is not the row field, and a catalog consumer is not a proven UI path.   conversation is undeclared. displayOnly true is an adapter constant on this helper. Whether the row keeps display-only text is pending. The adapter does not write this MonitorAgentRow property. That is the architecture, not a conclusion that the row predicate is unreachable. This trace is Puppeteer 748d015a7e393112e0a91dad80111fdf5abe6583 only. It is newer than shipped Vibefield 0.3.3 and does not describe that install. Package comparison was not re-run. Declaration unknown from no capability cell.  Declared support does not match the producer channel. That mismatch is not a runtime impossibility. Raw source literals, not live samples: adapter.claude.upstream.reply.displayOnly=true (every assistant message from this helper); adapter.claude.upstream.reply.final=\"caller boolean\" (final argument) Graph: evidence/claude/reply.final.mmd. Continuation anchors, not a reachability verdict: MonitorService.consume, core reduce and project, deriveAgentRow. Vibefield AgentView and window-rows are not traced."
+    "notes": "sourceScope=adapter-provided. sourceRef=packages/adapter-claude/src/normalization/conversation.ts:1-9 assistant message. staticPresence=emitted-when-condition. liveObserved=false. observation.presence=unknown because this audit did not live-sample the value. staticPresence is the source result and is independent of that. rendererRead=none. adapterEmittable=yes. uiReachable=no. A global reader does not make this value reachable. Field domain: state.reply_streaming, state.reply_final, state.reply_missing. Reachable subset: state.reply_streaming, state.reply_final, state.reply_missing."
   }
 }

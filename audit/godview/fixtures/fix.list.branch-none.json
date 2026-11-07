@@ -29,5 +29,5 @@
     "symbol": "AgentList",
     "lineStart": 37
   },
-  "notes": "project.branch null. List treats it as falsy and prints no branch small. adapterIds list the ten audit adapters as classification context only. They are not a claim that any adapter emitted this row. Mounted from Puppeteer source 748d015 via MonitorViewHost. Not shipped package 0.3.3."
+  "notes": "project.branch null. List treats it as falsy and prints no branch small. adapterIds list the ten audit adapters as classification context only. They are not a claim that any adapter emitted this row. Mounted from Puppeteer source 748d015 via MonitorViewHost. Not shipped package 0.3.3. Synthetic defensive fixture. The Vibefield overlay reaches unknown or named branches, not a null branch. The list's small label uses truthiness, so null and absent draw the same."
 }

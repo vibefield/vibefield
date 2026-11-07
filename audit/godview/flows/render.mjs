@@ -27,42 +27,44 @@ function sectionText(runtime, key) {
   return "stated";
 }
 
-/** SVG for one cell. Pending sections stay pending. Arrows appear only for an admitted trace. */
+/** SVG for one cell. Named transforms stay source-read. They are not an execution log. */
 export function renderFlowSvg(cell) {
   const runtime = cell?.runtime;
   const admitted = runtime?.status === "loaded";
   const title = cell?.field
     ? `${cell.field.id} · ${cell.adapter?.id ?? "adapter"} · ${cell.state?.id ?? "state"}`
     : "No field selected";
-  const width = 980;
-  const height = 220;
-  const boxW = 150;
-  const gap = 36;
-  const boxes = SECTIONS.map(([key, label], index) => {
-    const x = 24 + index * (boxW + gap);
-    return { key, label, x, text: sectionText(runtime, key) };
-  });
-  const rects = boxes
+  const named = (runtime?.transforms ?? []).map((step) => step?.name).filter(Boolean);
+  const boxW = named.length > 0 ? 150 : 150;
+  const gap = named.length > 5 ? 18 : 36;
+  const boxes =
+    named.length > 0
+      ? named.map((name) => ({ label: name, text: "source-read" }))
+      : SECTIONS.map(([key, label]) => ({ label, text: sectionText(runtime, key) }));
+  const width = Math.max(980, 48 + boxes.length * (boxW + gap));
+  const height = 240;
+  const placed = boxes.map((box, index) => ({ ...box, x: 24 + index * (boxW + gap) }));
+  const rects = placed
     .map(
       (box) => `<g>
         <rect x="${box.x}" y="78" width="${boxW}" height="78" rx="9" fill="var(--vf-godview-dark-panel-bg)" stroke="var(--vf-godview-dark-panel-border)" stroke-dasharray="${admitted ? "0" : "4 3"}"/>
-        <text x="${box.x + 12}" y="104" fill="var(--vf-godview-dark-chrome-text-secondary)" font-size="11">${escapeXml(box.label)}</text>
-        <text x="${box.x + 12}" y="128" fill="var(--vf-godview-dark-text-main)" font-size="13">${escapeXml(box.text)}</text>
+        <text x="${box.x + 8}" y="112" fill="var(--vf-godview-dark-text-main)" font-size="11">${escapeXml(box.label)}</text>
+        <text x="${box.x + 8}" y="134" fill="var(--vf-godview-dark-chrome-text-secondary)" font-size="11">${escapeXml(box.text)}</text>
       </g>`,
     )
     .join("");
   const arrows = admitted
-    ? boxes
+    ? placed
         .slice(0, -1)
         .map((box, index) => {
           const x1 = box.x + boxW;
-          const x2 = boxes[index + 1].x;
+          const x2 = placed[index + 1].x;
           return `<line x1="${x1 + 4}" y1="117" x2="${x2 - 4}" y2="117" stroke="var(--vf-godview-dark-text-muted)" />`;
         })
         .join("")
     : "";
   const caption = admitted
-    ? "Section order from the trace file. This is not an execution log."
+    ? "Named transforms from the trace. Static source-read, not an execution log and not a live session."
     : "No trace file. The five names are the envelope's sections, shown pending.";
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img">

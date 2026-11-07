@@ -10,203 +10,106 @@
     {
       "repo": "puppeteer",
       "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
-      "path": "packages/adapter-claude/src/observation/status-channel.ts",
-      "lineStart": 124,
-      "lineEnd": 148,
-      "symbol": "claudeEnvironmentEvents"
-    },
-    {
-      "repo": "puppeteer",
-      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
       "path": "packages/adapter-claude/src/normalization/monitor.ts",
       "lineStart": 239,
       "lineEnd": 252,
-      "symbol": "rootStatusBatch model replace"
-    },
-    {
-      "repo": "puppeteer",
-      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
-      "path": "packages/adapter-claude/src/normalization/model.ts",
-      "lineStart": 5,
-      "lineEnd": 55,
-      "symbol": "hook model and ClaudeRootModelGate"
-    },
-    {
-      "repo": "puppeteer",
-      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
-      "path": "packages/adapter-claude/src/observation/otel/model.ts",
-      "lineStart": 11,
-      "lineEnd": 16,
-      "symbol": "normalizeClaudeOtelModel"
-    },
-    {
-      "repo": "puppeteer",
-      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
-      "path": "packages/adapter-claude/src/driver.ts",
-      "lineStart": 634,
-      "lineEnd": 638,
-      "symbol": "launch configured model"
-    },
-    {
-      "repo": "puppeteer",
-      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
-      "path": "packages/adapter-claude/src/normalization/monitor.ts",
-      "lineStart": 368,
-      "lineEnd": 378,
-      "symbol": "child task model"
-    },
-    {
-      "repo": "puppeteer",
-      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
-      "path": "packages/runtime/src/services/monitor-service.ts",
-      "lineStart": 176,
-      "lineEnd": 187,
-      "symbol": "MonitorService.consume"
+      "symbol": "root status model replace"
     },
     {
       "repo": "puppeteer",
       "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
       "path": "packages/core/src/monitor/reduce.ts",
-      "lineStart": 1117,
-      "lineEnd": 1127,
-      "symbol": "environment model effort mode cases"
-    },
-    {
-      "repo": "puppeteer",
-      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
-      "path": "packages/view-sdk/src/model.ts",
-      "lineStart": 154,
-      "lineEnd": 154,
-      "symbol": "model.ts"
+      "lineStart": 1120,
+      "lineEnd": 1125,
+      "symbol": "model and effort upsert"
     },
     {
       "repo": "puppeteer",
       "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
       "path": "packages/monitor/src/backend/derive.ts",
-      "lineStart": 244,
-      "lineEnd": 244,
-      "symbol": "derive.ts"
-    },
-    {
-      "repo": "puppeteer",
-      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
-      "path": "packages/monitor/src/backend/derive.ts",
-      "lineStart": 271,
-      "lineEnd": 271,
-      "symbol": "derive.ts"
+      "lineStart": 240,
+      "lineEnd": 286,
+      "symbol": "deriveAgentRow"
     }
   ],
   "producer": {
     "kind": "adapter",
-    "name": "claude normalization",
-    "ingestedFrom": "model id and optional display name"
+    "name": "root status model replace",
+    "ingestedFrom": "root status model replace"
   },
   "transforms": [
     {
       "order": 0,
-      "name": "adapter-step-0",
-      "effect": "Status line model.id becomes a monitor replace of key observed, intent observed, plus display name when present. That monitor write is not passed through ClaudeRootModelGate.",
-      "source": {
-        "repo": "puppeteer",
-        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
-        "path": "packages/adapter-claude/src/observation/status-channel.ts",
-        "lineStart": 124,
-        "lineEnd": 148,
-        "symbol": "claudeEnvironmentEvents"
-      }
-    },
-    {
-      "order": 1,
-      "name": "adapter-step-1",
-      "effect": "The parallel model:updated event is published only when admitStatusLine says the card changed. admitHook drops a root hook model whose id is unchanged, and drops PostModelSwitch when from_model is not the card currently reported.",
+      "name": "normalized-card",
+      "effect": "model is emitted as an event or monitor upsert. Antigravity does this only from launch options.",
       "source": {
         "repo": "puppeteer",
         "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
         "path": "packages/adapter-claude/src/normalization/monitor.ts",
         "lineStart": 239,
         "lineEnd": 252,
-        "symbol": "rootStatusBatch model replace"
+        "symbol": "root status model replace"
+      }
+    },
+    {
+      "order": 1,
+      "name": "reduce-card",
+      "effect": "model:updated and effort:updated upsert or retract. Null retracts. Configured and observed stay distinct.",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/core/src/monitor/reduce.ts",
+        "lineStart": 1120,
+        "lineEnd": 1125,
+        "symbol": "model and effort upsert"
       }
     },
     {
       "order": 2,
-      "name": "adapter-step-2",
-      "effect": "SessionStart model omits intent. PostModelSwitch to_model sets intent observed. OTLP api_request model sets intent observed and is fingerprinted per actor key.",
+      "name": "derive-card",
+      "effect": "derive copies model displayName or id, and effort value plus intent when present.",
       "source": {
         "repo": "puppeteer",
         "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
-        "path": "packages/adapter-claude/src/normalization/model.ts",
-        "lineStart": 5,
-        "lineEnd": 55,
-        "symbol": "hook model and ClaudeRootModelGate"
-      }
-    },
-    {
-      "order": 3,
-      "name": "adapter-step-3",
-      "effect": "Launch options.model emits intent configured with provider anthropic.",
-      "source": {
-        "repo": "puppeteer",
-        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
-        "path": "packages/adapter-claude/src/observation/otel/model.ts",
-        "lineStart": 11,
-        "lineEnd": 16,
-        "symbol": "normalizeClaudeOtelModel"
-      }
-    },
-    {
-      "order": 4,
-      "name": "adapter-step-4",
-      "effect": "Child tasks copy task.model with intent observed. The child batch replaces the whole model family, so a task that omits model drops the previous child row.",
-      "source": {
-        "repo": "puppeteer",
-        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
-        "path": "packages/adapter-claude/src/driver.ts",
-        "lineStart": 634,
-        "lineEnd": 638,
-        "symbol": "launch configured model"
-      }
-    },
-    {
-      "order": 5,
-      "name": "adapter-step-5",
-      "effect": "Transcript onBatch listeners are registered and never invoked. No transcript model:updated was found.",
-      "source": {
-        "repo": "puppeteer",
-        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
-        "path": "packages/adapter-claude/src/normalization/monitor.ts",
-        "lineStart": 368,
-        "lineEnd": 378,
-        "symbol": "child task model"
+        "path": "packages/monitor/src/backend/derive.ts",
+        "lineStart": 240,
+        "lineEnd": 286,
+        "symbol": "deriveAgentRow"
       }
     }
   ],
   "merge": {
-    "strategy": "unknown",
+    "strategy": "replace",
     "defaults": []
   },
   "transport": {
     "channel": "in-process",
-    "name": "MonitorService.consume",
-    "contract": "AgentEvent or monitor:batch"
+    "name": "AgentMonitorService.consume",
+    "contract": "normalized event or monitor batch"
   },
   "renderer": {
     "viewIds": [
+      "view.list",
+      "view.rain",
       "view.swarm",
-      "view.spend"
+      "view.spend",
+      "view.timeline"
     ],
-    "component": "bubble-model / spend-words",
-    "symbol": "model displayName or id"
+    "component": "direct reader",
+    "symbol": "direct"
   },
   "applicability": {
     "states": [
       "state.model_missing"
     ],
     "views": [
+      "view.list",
+      "view.rain",
       "view.swarm",
-      "view.spend"
+      "view.spend",
+      "view.timeline"
     ],
-    "notes": "Model events or monitor model upserts are projected by project.ts and copied by derive.ts:244. Conditional on a model actually being present. Not live-observed. Timeline consumption was not verified. ROW FIELD field.model. PENDING DOWNSTREAM MAPPING into MonitorAgentRow. This is one of 74 canonical row fields. It is not an SDK contract leaf. PENDING DOWNSTREAM MAPPING: GV-AUDIT2 owns adapter output to row predicates, including cost, burn rate, history, timeline, and git branch. This audit does not give that verdict. Schema acceptance is not complete provenance. verification.status source-read is a static reading. observation.presence unknown means no live sample was taken. It does not mean the row value is missing. classification.adapterEmittable and uiReachable stay unknown. A raw adapter property is not the row field, and a catalog consumer is not a proven UI path.   Declared model support is degraded. Historical transcript models are not imported, matching the limitation. The gate applies to agent events, not to the monitor replace. Child models without a joined hook agent id still emit on an unverified status-task actor. The adapter does not write this MonitorAgentRow property. That is the architecture, not a conclusion that the row predicate is unreachable. This trace is Puppeteer 748d015a7e393112e0a91dad80111fdf5abe6583 only. It is newer than shipped Vibefield 0.3.3 and does not describe that install. Package comparison was not re-run. Declaration degraded from claude-hooks-status-and-otlp. declaration only; supported does not guarantee availability/value; degraded is not unreachable Declared support does not match the producer channel. That mismatch is not a runtime impossibility. Raw source literals, not live samples: adapter.claude.upstream.model.observed=\"observed\" (status line, PostModelSwitch, OTLP, child task); adapter.claude.upstream.model.configured=\"configured\" (launch options.model); adapter.claude.upstream.model.hook-omits-intent=\"intent omitted\" (normalizeClaudeSessionModel); adapter.claude.upstream.model.display=\"display_name or omitted\" (status line) Graph: evidence/claude/model.mmd. Continuation anchors, not a reachability verdict: MonitorService.consume, core reduce and project, deriveAgentRow. Vibefield AgentView and window-rows are not traced."
+    "notes": "sourceScope=adapter-provided. sourceRef=packages/adapter-claude/src/normalization/monitor.ts:239-252 root model. staticPresence=emitted-when-condition. liveObserved=false. observation.presence=unknown because this audit did not live-sample the value. staticPresence is the source result and is independent of that. rendererRead=direct. adapterEmittable=yes. uiReachable=yes. The value reaches a direct reader from this adapter-provided producer. Field domain: state.model_missing. Reachable subset: state.model_missing."
   },
   "absence": {
     "onMissing": "record-unknown",
@@ -225,6 +128,6 @@
   "verification": {
     "status": "source-read",
     "owner": "GV-AUDIT3",
-    "notes": "Model events or monitor model upserts are projected by project.ts and copied by derive.ts:244. Conditional on a model actually being present. Not live-observed. Timeline consumption was not verified. ROW FIELD field.model. PENDING DOWNSTREAM MAPPING into MonitorAgentRow. This is one of 74 canonical row fields. It is not an SDK contract leaf. PENDING DOWNSTREAM MAPPING: GV-AUDIT2 owns adapter output to row predicates, including cost, burn rate, history, timeline, and git branch. This audit does not give that verdict. Schema acceptance is not complete provenance. verification.status source-read is a static reading. observation.presence unknown means no live sample was taken. It does not mean the row value is missing. classification.adapterEmittable and uiReachable stay unknown. A raw adapter property is not the row field, and a catalog consumer is not a proven UI path.   Declared model support is degraded. Historical transcript models are not imported, matching the limitation. The gate applies to agent events, not to the monitor replace. Child models without a joined hook agent id still emit on an unverified status-task actor. The adapter does not write this MonitorAgentRow property. That is the architecture, not a conclusion that the row predicate is unreachable. This trace is Puppeteer 748d015a7e393112e0a91dad80111fdf5abe6583 only. It is newer than shipped Vibefield 0.3.3 and does not describe that install. Package comparison was not re-run. Declaration degraded from claude-hooks-status-and-otlp. declaration only; supported does not guarantee availability/value; degraded is not unreachable Declared support does not match the producer channel. That mismatch is not a runtime impossibility. Raw source literals, not live samples: adapter.claude.upstream.model.observed=\"observed\" (status line, PostModelSwitch, OTLP, child task); adapter.claude.upstream.model.configured=\"configured\" (launch options.model); adapter.claude.upstream.model.hook-omits-intent=\"intent omitted\" (normalizeClaudeSessionModel); adapter.claude.upstream.model.display=\"display_name or omitted\" (status line) Graph: evidence/claude/model.mmd. Continuation anchors, not a reachability verdict: MonitorService.consume, core reduce and project, deriveAgentRow. Vibefield AgentView and window-rows are not traced."
+    "notes": "sourceScope=adapter-provided. sourceRef=packages/adapter-claude/src/normalization/monitor.ts:239-252 root model. staticPresence=emitted-when-condition. liveObserved=false. observation.presence=unknown because this audit did not live-sample the value. staticPresence is the source result and is independent of that. rendererRead=direct. adapterEmittable=yes. uiReachable=yes. The value reaches a direct reader from this adapter-provided producer. Field domain: state.model_missing. Reachable subset: state.model_missing."
   }
 }

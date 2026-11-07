@@ -1,13 +1,9 @@
-%% graph_ref: shared.status
-%% adapter: claude
 %% field: field.activity.since
-%% forensic: source-read at 748d015; not a live sample
-flowchart LR
-  src["packages/view-sdk/src/model.ts:67-67"]
-  raw["no raw adapter write found"]
-  shared["shared.status"]
-  row["field.activity.since yes"]
-  ui["UI unknown"]
-  src --> raw --> shared --> row --> ui
-  open["UNRESOLVED where this verdict is unknown"]
-  row --> open
+%% adapter: claude
+%% forensic: source-read 748d015a7e393112e0a91dad80111fdf5abe6583; not a live sample
+flowchart TD
+  n0["normalized-activity\npackages/adapter-claude/src/normalization/monitor.ts:328-367\nclaude turn, tool, or child activity is stored as a status-family activity claim."]
+  n1["reduce-activity\npackages/core/src/monitor/reduce.ts:864-912\nThe reducer upserts or retracts the activity claim. Completion clears it."]
+  n0 --> n1
+  n2["derive-activity\npackages/monitor/src/backend/derive.ts:163-174\nagentActivity copies kind, a bounded line, and since when the timestamp parses. No activity object means the row omits it."]
+  n1 --> n2

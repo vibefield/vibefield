@@ -8,6 +8,7 @@ import { renderShell } from "../web/markup.mjs";
 import { createAuditServer } from "../web/serve.mjs";
 import { buildCell } from "./cell.mjs";
 import { AUDIT_PINS, REQUIRED_COUNTS } from "./contract.mjs";
+import { readField } from "./coverage.mjs";
 import { loadAudit } from "./load.mjs";
 import { revisionGate } from "./revision.mjs";
 import { run } from "./validate.mjs";
@@ -28,8 +29,36 @@ test("pinned source inventory matches the model contract counts", () => {
   assert.equal(index.sources.evidence, "loaded");
   assert.equal(index.traceCount, 740);
   assert.equal(index.sdkLeafCount, 430);
-  assert.equal(index.partial.uiUnchecked, 265);
-  assert.equal(index.partial.stateUnchecked, 35);
+  assert.equal(index.partial.uiUnchecked, 0);
+  assert.equal(index.partial.staticNotLive, 370);
+  assert.equal(index.partial.stateUnchecked, 0);
+  assert.equal(index.partial.liveUnobserved, 410);
+  assert.equal(index.partial.accountUnknown, 0);
+  assert.equal(index.partial.evidenceKind, "source-read");
+  assert.equal(index.partial.independentSemanticReview, "pending");
+  assert.equal(index.partial.provenanceComplete, false);
+  assert.equal(index.partial.firstHalfCommit, "355e720327b4aa047336a1823e9b43c84e836220");
+  assert.equal(index.partial.candidateStatus, "static-not-live");
+  assert.equal(index.partial.secondHalfCommit, "69b4c9c8b078571f42302c920f3c5e8e279e37c9");
+  assert.equal(index.partial.accountTraceCommit, "08b5d849177685662b43e0e3a4e6bd7d32ac2cdf");
+  assert.equal(index.partial.delivery, "incomplete");
+  assert.equal(index.partial.blockers.first.directNoYes, 0);
+  assert.equal(index.partial.blockers.first.modelAxes, 0);
+  assert.equal(index.partial.blockers.first.costStops, 24);
+  assert.equal(index.partial.blockers.first.ui.yes, 247);
+  assert.equal(index.partial.blockers.first.ui.no, 123);
+  assert.equal(index.partial.blockers.first.ui.unknown, 0);
+  assert.deepEqual(
+    index.partial.blockers.openGraphReview.map((item) => item.id),
+    ["unpriced-guard", "ledger-project-ordering", "retained-epochs"],
+  );
+  assert.ok(
+    index.partial.blockers.openGraphReview.every((item) => item.status === "lead-reviewing"),
+  );
+  assert.equal(index.sharedMap.adapterSpecificUiResolved, false);
+  assert.equal(index.sharedMap.uiResolutionMeaning, "shared-anchor-bookkeeping");
+  assert.equal(index.sharedMap.uiResolutionCounts.resolvedUnknown, 265);
+  assert.equal(index.sharedMap.uiResolutionCounts.remainingUnknown, 0);
   assert.equal(index.partial.provenanceComplete, false);
   assert.equal(index.sharedMap.kind, "static-code-trace");
   assert.equal(index.sharedMap.liveRuns, false);
@@ -39,10 +68,26 @@ test("pinned source inventory matches the model contract counts", () => {
   assert.equal(index.sharedMap.counts.statePredicates, 82);
   assert.equal(index.sharedMap.counts.rowJoinAnchorsResolved, 370);
   assert.equal(index.sources.rendering, "partial");
-  assert.equal(index.rendering.fixtureCount, 42);
-  assert.equal(index.rendering.holeCount, 43);
+  assert.equal(index.rendering.fixtureCount, 103);
+  assert.equal(index.rendering.countsMatch, true);
+  assert.equal(index.rendering.bodyRendered, 103);
+  assert.equal(index.rendering.coveredBy, 21);
+  assert.equal(index.rendering.coverageGap, 77);
+  assert.equal(index.rendering.counts.rendered, 103);
+  assert.equal(index.rendering.counts["covered-by"], 21);
+  assert.equal(index.rendering.counts["coverage-gap"], 77);
+  assert.equal(index.rendering.counts["not-applicable"], 150);
+  assert.equal(index.rendering.counts["environment-gap"], 59);
+  assert.equal(index.rendering.priorClaimValidated, false);
+  assert.equal(index.rendering.priorClaim.notApplicable, 302);
+  assert.equal(index.rendering.priorClaim.validated, false);
+  assert.equal(index.rendering.notApplicableProof, "outside-view");
+  assert.equal(index.rendering.naUnproven, 0);
+  assert.equal(index.rendering.bodyCoverageIncludesCoveredBy, false);
+  assert.equal(index.rendering.swarmBodyPaint, "not-painted");
+  assert.equal(index.rendering.swarmCause, "under-investigation");
+  assert.equal(index.partial.conditionalStatic, 0);
   assert.equal(index.rendering.screenshotCoverageComplete, false);
-  assert.equal(index.rendering.swarmBodyPaint, "webgpu-unavailable");
   const renderer = index.checks.find((item) => item.id === "renderer-coverage");
   assert.equal(renderer.status, "fail");
   assert.ok(renderer.findings.some((item) => item.code === "swarm-fallback"));
@@ -51,7 +96,7 @@ test("pinned source inventory matches the model contract counts", () => {
   assert.match(gaps.summary, /not the 74 row fields/);
   assert.ok(gaps.findings.some((item) => item.code === "history-states-not-traced"));
   assert.ok(gaps.findings.some((item) => item.code === "branch-none-unknown"));
-  assert.ok(gaps.findings.some((item) => item.code === "row-join-pending"));
+  assert.ok(gaps.findings.some((item) => item.code === "first-half-static"));
   const joins = index.checks.find((item) => item.id === "stable-id-joins");
   assert.equal(joins.status, "pass");
 });
@@ -145,11 +190,13 @@ test("a priced-cost absence is not a runtime impossibility", () => {
   });
   assert.equal(cell.endToEnd.proven, false);
   assert.equal(cell.reading.provesRuntimeUnreachable, false);
-  assert.equal(cell.reading.producerLimit, "adapter-not-direct");
+  assert.equal(cell.reading.producerLimit, "absent");
+  assert.equal(cell.reading.success, false);
+  assert.equal(cell.reading.falseFullSuccess, true);
   assert.match(cell.reading.mismatch, /cost_missing/);
   assert.match(cell.reading.mismatch, /anthropic and openai only/);
   assert.equal(/unreachable/i.test(cell.reading.mismatch), false);
-  assert.equal(cell.graphOrder.status, "stale-envelope-order");
+  assert.equal(cell.graphOrder.status, "shared-order");
   assert.equal(cell.stateReading.status, "host-claim");
   const reply = buildCell({
     model: audit.model,
@@ -211,15 +258,161 @@ test("the page names the audit target and leaves the harness pending", () => {
   const html = renderShell(audit.index, cell);
   assert.match(html, /newer than the 0\.3\.3 package/);
   assert.match(html, /Meaningful paint: yes/);
-  assert.match(html, /Screenshot coverage complete: yes/);
+  assert.match(html, /Selected fixture rendered: yes/);
+  assert.match(html, /Overall screenshot coverage complete: no/);
   assert.match(html, /End-to-end proven: no/);
   assert.match(html, /field\.stale/);
   assert.equal(html.includes("produces a shipped 0.3.3 inventory"), false);
   const svg = renderFlowSvg(cell);
   assert.match(svg, /<title>/);
-  assert.match(svg, /catalog-consumer-unproven/);
+  assert.match(svg, /is-stale/);
   assert.match(svg, /not an execution log/);
   assert.match(svg, /748d015/);
+  assert.match(html, /rendererRead/);
+  assert.match(html, /Independent semantic review: pending/);
+  assert.match(html, /not adapter-specific UI resolution/);
+  assert.match(html, /Delivery: incomplete/);
+  assert.match(html, /Prior 302 not-applicable claim validated: no/);
+  assert.match(html, /does not add body coverage/);
+  assert.equal(cell.reading.success, false);
+  assert.equal(cell.reading.channels.rendererRead, "direct");
+  assert.equal(cell.reading.channels.sourceScope, "common-runtime");
+  assert.equal(cell.reading.channels.uiReachable, "yes");
+  assert.equal(cell.reading.channels.adapterPathReader, "not-adapter-emission");
+  assert.equal(cell.reading.success, false);
+});
+
+test("ACP cost stops at omission and status names the decision path", () => {
+  const audit = loadAudit(ROOT);
+  const cost = buildCell({
+    model: audit.model,
+    traces: audit.traces,
+    renders: audit.renders,
+    fallback: audit.overlay,
+    selection: {
+      stateId: "state.cost_missing",
+      viewId: "view.spend",
+      adapterId: "adapter.acp",
+      fieldId: "field.cost.usd",
+    },
+  });
+  assert.equal(cost.reading.channels.uiReachable, "no");
+  assert.equal(cost.reading.channels.rendererRead, "direct");
+  assert.equal(cost.reading.channels.sourceScope, "absent");
+  assert.equal(cost.reading.channels.staticPresence, "omitted");
+  assert.equal(cost.reading.channels.evidenceKind, "source-read");
+  assert.equal(cost.reading.channels.liveTested, false);
+  assert.equal(cost.reading.success, false);
+  assert.equal(cost.reading.falseFullSuccess, false);
+  assert.equal(cost.graphOrder.status, "stops-at-omission");
+  const status = buildCell({
+    model: audit.model,
+    traces: audit.traces,
+    renders: audit.renders,
+    fallback: audit.overlay,
+    selection: {
+      stateId: "state.idle",
+      viewId: "view.list",
+      adapterId: "adapter.acp",
+      fieldId: "field.status",
+    },
+  });
+  const names = status.runtime.transforms.map((step) => step.name);
+  assert.deepEqual(names, [
+    "normalized-status-signal",
+    "reduce-activity",
+    "project-status",
+    "derive-status-default",
+    "replica-passthrough",
+    "readers",
+    "window-passthrough",
+  ]);
+  const statusSvg = renderFlowSvg(status);
+  assert.match(statusSvg, /normalized-status-signal/);
+  assert.match(statusSvg, /derive-status-default/);
+  assert.match(statusSvg, /replica-passthrough/);
+  assert.equal(/priceUsageUpdates|usage-pricing/.test(statusSvg), false);
+  assert.equal(status.reading.channels.liveTested, false);
+  const accounts = [
+    "adapter.acp",
+    "adapter.antigravity",
+    "adapter.claude",
+    "adapter.codex",
+    "adapter.copilot",
+  ].map((adapterId) =>
+    buildCell({
+      model: audit.model,
+      traces: audit.traces,
+      renders: audit.renders,
+      fallback: audit.overlay,
+      selection: {
+        stateId: "state.idle",
+        viewId: "view.list",
+        adapterId,
+        fieldId: "field.account",
+      },
+    }),
+  );
+  assert.equal(accounts.length, 5);
+  for (const account of accounts) {
+    assert.equal(account.reading.channels.uiReachable, "no");
+    assert.equal(account.reading.channels.runtimeFallback, "host-scoped");
+    assert.equal(account.reading.success, false);
+    assert.equal(account.reading.provesRuntimeUnreachable, false);
+    assert.match(account.reading.readerNote, /not a global impossibility/);
+    assert.match(account.reading.readerNote, /usage column/);
+  }
+  const grokAccount = buildCell({
+    model: audit.model,
+    traces: audit.traces,
+    renders: audit.renders,
+    fallback: audit.overlay,
+    selection: {
+      stateId: "state.idle",
+      viewId: "view.list",
+      adapterId: "adapter.grok",
+      fieldId: "field.account",
+    },
+  });
+  assert.equal(grokAccount.reading.channels.runtimeFallback, "host-scoped");
+  assert.equal(grokAccount.reading.channels.accountUsage, "usage-column-not-account");
+  assert.equal(grokAccount.reading.success, false);
+  assert.equal(grokAccount.reading.falseFullSuccess, false);
+  assert.equal(grokAccount.reading.provesRuntimeUnreachable, false);
+  assert.match(grokAccount.reading.readerNote, /VibeField host omits/);
+  assert.match(grokAccount.reading.readerNote, /Puppeteer Godview host/);
+  const profile = buildCell({
+    model: audit.model,
+    traces: audit.traces,
+    renders: audit.renders,
+    fallback: audit.overlay,
+    selection: {
+      stateId: "state.idle",
+      viewId: "view.list",
+      adapterId: "adapter.grok",
+      fieldId: "field.profileSet",
+    },
+  });
+  assert.match(profile.reading.readerNote, /window-rows.ts:119-134/);
+  assert.match(profile.reading.readerNote, /native/);
+});
+
+test("a generic cost reader is not ACP producer-to-UI success", () => {
+  const reading = readField({
+    adapterId: "adapter.acp",
+    fieldId: "field.cost.usd",
+    observation: { presence: "absent", synthetic: false },
+    classification: { modelSupported: "yes", adapterEmittable: "no", uiReachable: "yes" },
+    applicability: { notes: "" },
+    verification: { notes: "A shared spend view can read cost from another adapter." },
+    transforms: [],
+  });
+  assert.equal(reading.channels.genericReader, "present");
+  assert.equal(reading.channels.adapterEmission, "absent");
+  assert.equal(reading.channels.adapterPathReader, "not-applicable");
+  assert.equal(reading.channels.runtimeFallback, "not-established");
+  assert.equal(reading.success, false);
+  assert.equal(reading.falseFullSuccess, true);
 });
 
 test("swarm fallback is a mount, not painted coverage", () => {
@@ -242,6 +435,42 @@ test("swarm fallback is a mount, not painted coverage", () => {
   assert.equal(cell.paint.screenshotCoverageComplete, false);
   assert.equal(cell.paint.fallbackOnly, true);
   assert.match(cell.paint.note, /WEBGPU UNAVAILABLE/);
+  assert.match(cell.paint.note, /not an unreachable state/);
+  assert.match(cell.paint.note, /under investigation/);
+  assert.equal(cell.paint.meaningfulOutput, false);
+  const listActivity = buildCell({
+    model: audit.model,
+    traces: audit.traces,
+    renders: audit.renders,
+    fallback: audit.overlay,
+    renderIndex: audit.renderIndex,
+    selection: {
+      stateId: "state.activity_starting",
+      viewId: "view.list",
+      adapterId: "adapter.acp",
+      fieldId: "field.activity.kind",
+    },
+  });
+  assert.equal(listActivity.paint.disposition, "coverage-gap");
+  assert.equal(listActivity.paint.validatedExclusion, false);
+  assert.equal(listActivity.paint.meaningfulOutput, false);
+  const rainBlock = buildCell({
+    model: audit.model,
+    traces: audit.traces,
+    renders: audit.renders,
+    fallback: audit.overlay,
+    renderIndex: audit.renderIndex,
+    selection: {
+      stateId: "state.blocked_permission",
+      viewId: "view.rain",
+      adapterId: "adapter.acp",
+      fieldId: "field.status",
+    },
+  });
+  assert.equal(rainBlock.paint.disposition, "rendered");
+  assert.equal(rainBlock.paint.meaningfulOutput, true);
+  assert.equal(listActivity.paint.fallbackOnly, false);
+  assert.ok(listActivity.paint.evidence.length > 12);
   const list = buildCell({
     model: audit.model,
     traces: audit.traces,
@@ -256,7 +485,7 @@ test("swarm fallback is a mount, not painted coverage", () => {
     },
   });
   assert.equal(list.paint.meaningfulOutput, true);
-  assert.equal(list.paint.screenshotCoverageComplete, true);
+  assert.equal(list.paint.screenshotCoverageComplete, false);
   assert.equal(list.synthetic.fixtureKind, "synthetic");
   assert.equal(list.endToEnd.proven, false);
 });

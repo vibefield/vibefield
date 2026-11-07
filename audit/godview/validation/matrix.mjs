@@ -228,14 +228,18 @@ function rendererCheck(renders, renderIndex) {
     findings.push(
       finding(
         "render-holes",
-        `${renderIndex.holeCount} contract states have no meaningful paint in this slice.`,
+        `${renderIndex.coverageGap ?? 0} coverage gaps are unverified and ${renderIndex.counts?.["environment-gap"] ?? 0} environment gaps have no swarm body. Covered-by cells are exercised equivalents, not additional body renders.`,
       ),
     );
-    if (renderIndex.swarmBodyPaint === "webgpu-unavailable") {
+    if (
+      renderIndex.swarmBodyPaint === "webgpu-unavailable" ||
+      renderIndex.swarmBodyPaint === "environment-blocked" ||
+      renderIndex.swarmBodyPaint === "not-painted"
+    ) {
       findings.push(
         finding(
           "swarm-fallback",
-          "AgentSwarm from 748d015 mounted and reported WEBGPU UNAVAILABLE. environment-swarm.png is that fallback message, not complete swarm screenshot coverage.",
+          "No swarm body was painted. 59 environment gaps stay open. WEBGPU UNAVAILABLE is host text. Environment versus source cause is under investigation, and this is not body coverage.",
         ),
       );
     }
@@ -279,30 +283,43 @@ function gapCheck(model, traces) {
         ),
       );
     }
-    if (adapter.pastAndTimeline.length > 0) {
+    if (
+      [
+        "adapter.acp",
+        "adapter.antigravity",
+        "adapter.claude",
+        "adapter.codex",
+        "adapter.copilot",
+      ].includes(adapter.adapterId)
+    ) {
+      findings.push(
+        finding(
+          "first-half-static",
+          `${adapter.adapterId} records are source-read. Conditional non-cost sequences were not live-tested. field.account stays unknown where host.account supply is unproven. The owner semantic gate's zero is a claim. Independent review is pending. This is not complete.`,
+        ),
+      );
+    }
+    if (adapter.records > 0 && adapter.pastAndTimeline.length > 0) {
       findings.push(
         finding(
           "history-states-not-traced",
-          `${adapter.adapterId} does not name ${adapter.pastAndTimeline.join(" ")}`,
+          `${adapter.adapterId} past and timeline states are a host claim, not an adapter emission. An applicability list is not emission.`,
         ),
       );
     }
-    if (adapter.branchNone) {
+    if (adapter.records > 0 && adapter.branchNone) {
       findings.push(
         finding(
           "branch-none-unknown",
-          `${adapter.adapterId} does not name state.branch_none. Runtime git for a null branch stays unknown.`,
+          `${adapter.adapterId} does not prove state.branch_none unreachable. Runtime git for a null branch stays unknown.`,
         ),
       );
     }
-    const other = adapter.unnamed.filter(
-      (id) => !adapter.pastAndTimeline.includes(id) && id !== "state.branch_none",
-    );
-    if (other.length > 0) {
+    if (adapter.nonEmittingRecords > 0) {
       findings.push(
         finding(
-          "state-not-named",
-          `${adapter.adapterId} field records do not name ${other.join(" ")}. That is missing state coverage, not a proof those states are unreachable.`,
+          "listed-not-emitted",
+          `${adapter.adapterId} has ${adapter.nonEmittingRecords} records that say they do not emit listed states. That list is not a reachable set.`,
         ),
       );
     }

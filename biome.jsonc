@@ -127,7 +127,9 @@
       "!audit/godview/contracts/model.md",
       "!audit/godview/contracts/model.validation.json",
       "!audit/godview/contracts/model-slice-pin.json",
-      "!audit/godview/validation/package-pin-check.md"
+      "!audit/godview/validation/package-pin-check.md",
+      // Copied from puppeteer GV-AUDIT3. The owner semantic gate is re-run as copied.
+      "!audit/godview/tools"
     ]
   },
   "formatter": {

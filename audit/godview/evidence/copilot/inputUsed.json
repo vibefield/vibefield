@@ -10,57 +10,50 @@
     {
       "repo": "puppeteer",
       "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
-      "path": "packages/view-sdk/src/model.ts",
-      "lineStart": 124,
-      "lineEnd": 124,
-      "symbol": "model.ts"
-    },
-    {
-      "repo": "puppeteer",
-      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
       "path": "packages/monitor/src/backend/derive.ts",
-      "lineStart": 298,
-      "lineEnd": 305,
-      "symbol": "derive.ts"
+      "lineStart": 240,
+      "lineEnd": 286,
+      "symbol": "deriveAgentRow"
     }
   ],
   "producer": {
-    "kind": "unknown",
-    "name": "not-adapter-produced",
-    "ingestedFrom": "not adapter-produced; PENDING DOWNSTREAM MAPPING into the row"
+    "kind": "adapter",
+    "name": "other",
+    "ingestedFrom": "unproven"
   },
   "transforms": [
     {
       "order": 0,
-      "name": "no-adapter-producer-0",
-      "effect": "No adapter write of this contract property was found in the reviewed producers.",
+      "name": "omitted-on-agent-row",
+      "effect": "deriveAgentRow does not copy inputUsed. The terminal copier is a different row and is not this adapter value path.",
       "source": {
         "repo": "puppeteer",
         "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
-        "path": "packages/view-sdk/src/model.ts",
-        "lineStart": 124,
-        "lineEnd": 124,
-        "symbol": "model.ts"
+        "path": "packages/monitor/src/backend/derive.ts",
+        "lineStart": 240,
+        "lineEnd": 286,
+        "symbol": "deriveAgentRow"
       }
     }
   ],
   "merge": {
-    "strategy": "unknown",
+    "strategy": "none",
     "defaults": []
   },
   "transport": {
-    "channel": "unknown",
-    "name": "not-adapter-produced"
+    "channel": "in-process",
+    "name": "not-applicable",
+    "contract": "deriveAgentRow does not copy inputUsed. The terminal copier is a different row and is not this adapter value path."
   },
   "renderer": {
     "viewIds": [],
-    "component": "not-established",
-    "symbol": "no-consumer-recorded"
+    "component": "indirect only",
+    "symbol": "indirect"
   },
   "applicability": {
     "states": "model-axes",
     "views": "all-monitor-views",
-    "notes": "Filled by the host, replica, or window fold, not by this adapter. List reads field.active. The other window and device fields were not each re-verified as drawn. Not unreachable, and not live-observed. ROW FIELD field.inputUsed. PENDING DOWNSTREAM MAPPING into MonitorAgentRow. This is one of 74 canonical row fields. It is not an SDK contract leaf. PENDING DOWNSTREAM MAPPING: GV-AUDIT2 owns adapter output to row predicates, including cost, burn rate, history, timeline, and git branch. This audit does not give that verdict. Schema acceptance is not complete provenance. verification.status source-read is a static reading. observation.presence unknown means no live sample was taken. It does not mean the row value is missing. classification.adapterEmittable and uiReachable stay unknown. A raw adapter property is not the row field, and a catalog consumer is not a proven UI path.   field.inputUsed has no raw adapter write in the producers reviewed for copilot. The adapter does not write this MonitorAgentRow property. That is the architecture, not a conclusion that the row predicate is unreachable. This trace is Puppeteer 748d015a7e393112e0a91dad80111fdf5abe6583 only. It is newer than shipped Vibefield 0.3.3 and does not describe that install. Package comparison was not re-run. No capability cell for this field. No raw adapter signal does not rule out the row value from host, runtime, history, or another producer. No raw adapter literal was found for this field. Graph: evidence/copilot/inputUsed.mmd. Continuation anchors, not a reachability verdict: MonitorService.consume, core reduce and project, deriveAgentRow. Vibefield AgentView and window-rows are not traced."
+    "notes": "sourceScope=absent. sourceRef=packages/monitor/src/backend/derive.ts:240-286 deriveAgentRow. staticPresence=omitted. liveObserved=false. observation.presence=unknown because this audit did not live-sample the value. staticPresence is the source result and is independent of that. rendererRead=indirect. adapterEmittable=no. uiReachable=no. A global reader does not make this value reachable. Field domain is empty. applicability.states=model-axes is the envelope token for a field with no state predicates. It is not a reachable set and it does not claim any other field's states."
   },
   "absence": {
     "onMissing": "record-unknown",
@@ -74,11 +67,11 @@
   "classification": {
     "modelSupported": "yes",
     "adapterEmittable": "no",
-    "uiReachable": "unknown"
+    "uiReachable": "no"
   },
   "verification": {
     "status": "source-read",
     "owner": "GV-AUDIT3",
-    "notes": "Filled by the host, replica, or window fold, not by this adapter. List reads field.active. The other window and device fields were not each re-verified as drawn. Not unreachable, and not live-observed. ROW FIELD field.inputUsed. PENDING DOWNSTREAM MAPPING into MonitorAgentRow. This is one of 74 canonical row fields. It is not an SDK contract leaf. PENDING DOWNSTREAM MAPPING: GV-AUDIT2 owns adapter output to row predicates, including cost, burn rate, history, timeline, and git branch. This audit does not give that verdict. Schema acceptance is not complete provenance. verification.status source-read is a static reading. observation.presence unknown means no live sample was taken. It does not mean the row value is missing. classification.adapterEmittable and uiReachable stay unknown. A raw adapter property is not the row field, and a catalog consumer is not a proven UI path.   field.inputUsed has no raw adapter write in the producers reviewed for copilot. The adapter does not write this MonitorAgentRow property. That is the architecture, not a conclusion that the row predicate is unreachable. This trace is Puppeteer 748d015a7e393112e0a91dad80111fdf5abe6583 only. It is newer than shipped Vibefield 0.3.3 and does not describe that install. Package comparison was not re-run. No capability cell for this field. No raw adapter signal does not rule out the row value from host, runtime, history, or another producer. No raw adapter literal was found for this field. Graph: evidence/copilot/inputUsed.mmd. Continuation anchors, not a reachability verdict: MonitorService.consume, core reduce and project, deriveAgentRow. Vibefield AgentView and window-rows are not traced."
+    "notes": "sourceScope=absent. sourceRef=packages/monitor/src/backend/derive.ts:240-286 deriveAgentRow. staticPresence=omitted. liveObserved=false. observation.presence=unknown because this audit did not live-sample the value. staticPresence is the source result and is independent of that. rendererRead=indirect. adapterEmittable=no. uiReachable=no. A global reader does not make this value reachable. Field domain is empty. applicability.states=model-axes is the envelope token for a field with no state predicates. It is not a reachable set and it does not claim any other field's states."
   }
 }

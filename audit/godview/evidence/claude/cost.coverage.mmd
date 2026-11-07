@@ -1,11 +1,27 @@
-%% graph_ref: shared.cost.priced
+%% field: field.cost.usd
 %% adapter: claude
-%% field: field.cost.coverage
-%% forensic: source-read at 748d015; not a live sample
-flowchart LR
-  src["packages/adapter-claude/src/observation/otel/usage.ts:37-69"]
-  raw["usage:tokens-used.costUsd"]
-  shared["shared.cost.priced"]
-  row["field.cost.coverage yes"]
-  ui["UI yes"]
-  src --> raw --> shared --> row --> ui
+%% forensic: source-read; liveObserved false
+flowchart TD
+  signal["packages/adapter-claude/src/observation/otel/usage.ts:37-69\ncostUsd"]
+  signal --> price["monitor-service.ts:418-425 priceUsageUpdates before reduce"]
+  price --> reduce["reduce.ts:1049-1073 copies the priced costUsd"]
+  reduce --> project["project.ts:407-417 publishes usage"]
+  project --> counts["cost.ts:21-40 buildUsageCostLedger: finite nonnegative costUsd, including 0, increments pricedCount; otherwise unpricedCount"]
+  counts --> decide["cost.ts:59-101 projectUsageCost"]
+  decide --> complete["pricedCount > 0 and unpricedCount = 0: costCoverage complete. USD total may be 0"]
+  decide --> partial["pricedCount > 0 and unpricedCount > 0: costCoverage partial"]
+  decide --> none["pricedCount = 0: costUsd omitted and costCoverage unavailable"]
+  complete --> agg["usage-ledger.ts:62-82 historyOf sums defined costUsd before costOf"]
+  partial --> agg
+  none --> agg
+  agg --> costOf["backend.ts:197-205 costOf after ledger.observe at backend.ts:410-435"]
+  costOf --> missing["pricedCount = 0 leaves history.total undefined: omit field.cost, state.cost_missing"]
+  costOf --> kept["pricedCount > 0: row keeps usd, which may be 0, and complete or partial coverage"]
+  kept --> derive["derive.ts:277 copies cost or omits it"]
+  derive --> replica["replica.ts:337-372 spreads the row; cost unchanged"]
+  replica --> window["window-rows.ts:116-134 does not recompute cost"]
+  window --> swarm["bubble-model.ts:469-477 priced flame or unpriced flame"]
+  window --> spend["spend-series.ts:34-38 spendOf"]
+  complete --> swarm
+  partial --> swarm
+  missing --> unpricedFlame["working observed body: burn_unpriced"]

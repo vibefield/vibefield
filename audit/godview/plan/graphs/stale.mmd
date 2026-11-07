@@ -1,0 +1,13 @@
+%% field: field.stale
+%% adapter: claude
+%% sourceScope: common-runtime
+%% forensic: source-read; liveObserved false
+flowchart TD
+  clock["freshness.ts:32-42 age against staleAfterMs"] --> fn["derive.ts:215-225 isStale"]
+  fn --> fresh["false: state.fresh"]
+  fn --> stale["true: state.stale"]
+  fn --> row["deriveAgentRow always sets stale"]
+  row --> self["window-rows.ts:116 self row keeps isStale"]
+  row --> peer["window-rows.ts:116 other device: stale when standing is not live"]
+  peer --> device["state.device_stale"]
+  self --> list["AgentList and swarm read stale"]

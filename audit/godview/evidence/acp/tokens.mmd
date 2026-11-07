@@ -1,13 +1,9 @@
-%% graph_ref: shared.tokens.absent
-%% adapter: acp
 %% field: field.tokens
-%% forensic: source-read at 748d015; not a live sample
-flowchart LR
-  src["packages/adapter-acp/src/normalization/monitor-capabilities.ts:24-35"]
-  raw["no raw adapter write found"]
-  shared["shared.tokens.absent"]
-  row["field.tokens no"]
-  ui["UI unknown"]
-  src --> raw --> shared --> row --> ui
-  open["UNRESOLVED where this verdict is unknown"]
-  row --> open
+%% sourceScope: absent
+%% staticPresence: omitted
+%% liveObserved: false
+flowchart TD
+  producer["packages/adapter-acp/src/normalization/monitor.ts:216-228\nno usage:tokens-used"]
+  producer --> row["row property from that producer"]
+  row --> window["window-rows.ts:116-134 pass-through unless this field is stale or profileSet"]
+  window --> reader["rendererRead none"]

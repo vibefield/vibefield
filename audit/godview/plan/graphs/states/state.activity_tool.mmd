@@ -1,0 +1,8 @@
+%% graph_ref: path.status
+%% state: state.activity_tool
+%% shared_map: 07e71c9bcb9532fc181e3f667f2d0ed2e7c9afaf
+flowchart LR
+  pred["activity.kind === 'tool'"]
+  src["path.status"]
+  verdict["conditional shared predicate; adapter-specific satisfying sequence not asserted"]
+  src --> pred --> verdict

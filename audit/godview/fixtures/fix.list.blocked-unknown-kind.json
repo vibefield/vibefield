@@ -29,5 +29,5 @@
     "symbol": "AgentList",
     "lineStart": 37
   },
-  "notes": "blocked and a wait kind outside permission/question/failure. The list prints the kind as itself. adapterIds list the ten audit adapters as classification context only. They are not a claim that any adapter emitted this row. Mounted from Puppeteer source 748d015 via MonitorViewHost. Not shipped package 0.3.3."
+  "notes": "blocked and a wait kind outside permission/question/failure. The list prints the kind as itself. adapterIds list the ten audit adapters as classification context only. They are not a claim that any adapter emitted this row. Mounted from Puppeteer source 748d015 via MonitorViewHost. Not shipped package 0.3.3. Synthetic defensive fixture. Typed core blocker producers emit permission, question, or failure, not an open kind. The list still prints an unknown kind as itself."
 }

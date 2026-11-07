@@ -10,81 +10,87 @@
     {
       "repo": "puppeteer",
       "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
-      "path": "packages/view-sdk/src/model.ts",
-      "lineStart": 106,
+      "path": "packages/adapter-antigravity/src/driver.ts",
+      "lineStart": 162,
+      "lineEnd": 165,
+      "symbol": "cwd only, no git"
+    },
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/monitor/src/backend/derive.ts",
+      "lineStart": 101,
       "lineEnd": 106,
-      "symbol": "model.ts"
-    },
-    {
-      "repo": "puppeteer",
-      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
-      "path": "packages/monitor/src/backend/derive.ts",
-      "lineStart": 91,
-      "lineEnd": 113,
-      "symbol": "derive.ts"
-    },
-    {
-      "repo": "puppeteer",
-      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
-      "path": "packages/monitor/src/backend/derive.ts",
-      "lineStart": 265,
-      "lineEnd": 269,
-      "symbol": "derive.ts"
-    },
-    {
-      "repo": "puppeteer",
-      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
-      "path": "packages/monitor/src/backend/derive.ts",
-      "lineStart": 314,
-      "lineEnd": 314,
-      "symbol": "derive.ts"
+      "symbol": "projectBranch"
     }
   ],
   "producer": {
-    "kind": "unknown",
-    "name": "not-adapter-produced",
-    "ingestedFrom": "not adapter-produced; PENDING DOWNSTREAM MAPPING into the row"
+    "kind": "core-reducer",
+    "name": "host fallback or workspace branch",
+    "ingestedFrom": "alternate producer packages/monitor/src/backend/derive.ts:101"
   },
   "transforms": [
     {
       "order": 0,
-      "name": "no-adapter-producer-0",
-      "effect": "No adapter write of this contract property was found in the reviewed producers.",
+      "name": "no-git",
+      "effect": "This adapter publishes cwd and does not publish git. The trace of the adapter signal stops here.",
       "source": {
         "repo": "puppeteer",
         "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
-        "path": "packages/view-sdk/src/model.ts",
-        "lineStart": 106,
+        "path": "packages/adapter-antigravity/src/driver.ts",
+        "lineStart": 162,
+        "lineEnd": 165,
+        "symbol": "cwd only, no git"
+      }
+    },
+    {
+      "order": 1,
+      "name": "host-branch",
+      "effect": "derive can still show host.fallbackBranch or workspace.branch. That is not this adapter emitting git.",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/monitor/src/backend/derive.ts",
+        "lineStart": 101,
         "lineEnd": 106,
-        "symbol": "model.ts"
+        "symbol": "projectBranch"
       }
     }
   ],
   "merge": {
-    "strategy": "unknown",
+    "strategy": "defaulted",
     "defaults": []
   },
   "transport": {
-    "channel": "unknown",
-    "name": "not-adapter-produced"
+    "channel": "in-process",
+    "name": "host fallback or workspace branch",
+    "contract": "host or replica supplies the row property"
   },
   "renderer": {
     "viewIds": [
       "view.list",
       "view.rain",
-      "view.swarm"
+      "view.swarm",
+      "view.spend",
+      "view.timeline"
     ],
-    "component": "AgentList / rain-streams / bubble-model",
-    "symbol": "project.branch"
+    "component": "direct reader",
+    "symbol": "direct"
   },
   "applicability": {
-    "states": "model-axes",
+    "states": [
+      "state.branch_unknown",
+      "state.branch_none",
+      "state.branch_named"
+    ],
     "views": [
       "view.list",
       "view.rain",
-      "view.swarm"
+      "view.swarm",
+      "view.spend",
+      "view.timeline"
     ],
-    "notes": "This adapter does not write git. derive.ts:101-106 can still show a host fallbackBranch or workspace.branch. That is runtime-supplied, not an unreachable branch. state.branch_none is not claimed from this adapter. ROW FIELD field.project.branch. PENDING DOWNSTREAM MAPPING into MonitorAgentRow. This is one of 74 canonical row fields. It is not an SDK contract leaf. PENDING DOWNSTREAM MAPPING: GV-AUDIT2 owns adapter output to row predicates, including cost, burn rate, history, timeline, and git branch. This audit does not give that verdict. Schema acceptance is not complete provenance. verification.status source-read is a static reading. observation.presence unknown means no live sample was taken. It does not mean the row value is missing. classification.adapterEmittable and uiReachable stay unknown. A raw adapter property is not the row field, and a catalog consumer is not a proven UI path.   field.project.branch has no raw adapter write in the producers reviewed for antigravity. The adapter does not write this MonitorAgentRow property. That is the architecture, not a conclusion that the row predicate is unreachable. This trace is Puppeteer 748d015a7e393112e0a91dad80111fdf5abe6583 only. It is newer than shipped Vibefield 0.3.3 and does not describe that install. Package comparison was not re-run. Declaration degraded from launch-intent-only. declaration only; supported does not guarantee availability/value; degraded is not unreachable No raw adapter signal does not rule out the row value from host, runtime, history, or another producer. No raw adapter literal was found for this field. Graph: evidence/antigravity/project.branch.mmd. Continuation anchors, not a reachability verdict: MonitorService.consume, core reduce and project, deriveAgentRow. Vibefield AgentView and window-rows are not traced."
+    "notes": "sourceScope=host-supplied. sourceRef=packages/monitor/src/backend/derive.ts:101-106 projectBranch. staticPresence=host-dependent. liveObserved=false. observation.presence=unknown because this audit did not live-sample the value. staticPresence is the source result and is independent of that. rendererRead=direct. adapterEmittable=no. uiReachable=yes. The value reaches a direct reader from this host-supplied producer. Field domain: state.branch_unknown, state.branch_none, state.branch_named. Reachable subset: state.branch_unknown, state.branch_none, state.branch_named."
   },
   "absence": {
     "onMissing": "record-unknown",
@@ -97,12 +103,12 @@
   },
   "classification": {
     "modelSupported": "yes",
-    "adapterEmittable": "unknown",
+    "adapterEmittable": "no",
     "uiReachable": "yes"
   },
   "verification": {
     "status": "source-read",
     "owner": "GV-AUDIT3",
-    "notes": "This adapter does not write git. derive.ts:101-106 can still show a host fallbackBranch or workspace.branch. That is runtime-supplied, not an unreachable branch. state.branch_none is not claimed from this adapter. ROW FIELD field.project.branch. PENDING DOWNSTREAM MAPPING into MonitorAgentRow. This is one of 74 canonical row fields. It is not an SDK contract leaf. PENDING DOWNSTREAM MAPPING: GV-AUDIT2 owns adapter output to row predicates, including cost, burn rate, history, timeline, and git branch. This audit does not give that verdict. Schema acceptance is not complete provenance. verification.status source-read is a static reading. observation.presence unknown means no live sample was taken. It does not mean the row value is missing. classification.adapterEmittable and uiReachable stay unknown. A raw adapter property is not the row field, and a catalog consumer is not a proven UI path.   field.project.branch has no raw adapter write in the producers reviewed for antigravity. The adapter does not write this MonitorAgentRow property. That is the architecture, not a conclusion that the row predicate is unreachable. This trace is Puppeteer 748d015a7e393112e0a91dad80111fdf5abe6583 only. It is newer than shipped Vibefield 0.3.3 and does not describe that install. Package comparison was not re-run. Declaration degraded from launch-intent-only. declaration only; supported does not guarantee availability/value; degraded is not unreachable No raw adapter signal does not rule out the row value from host, runtime, history, or another producer. No raw adapter literal was found for this field. Graph: evidence/antigravity/project.branch.mmd. Continuation anchors, not a reachability verdict: MonitorService.consume, core reduce and project, deriveAgentRow. Vibefield AgentView and window-rows are not traced."
+    "notes": "sourceScope=host-supplied. sourceRef=packages/monitor/src/backend/derive.ts:101-106 projectBranch. staticPresence=host-dependent. liveObserved=false. observation.presence=unknown because this audit did not live-sample the value. staticPresence is the source result and is independent of that. rendererRead=direct. adapterEmittable=no. uiReachable=yes. The value reaches a direct reader from this host-supplied producer. Field domain: state.branch_unknown, state.branch_none, state.branch_named. Reachable subset: state.branch_unknown, state.branch_none, state.branch_named."
   }
 }

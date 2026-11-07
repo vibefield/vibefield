@@ -74,10 +74,12 @@ function paint(id, viewId, stateId, row, extra = {}) {
     viewId,
     stateId,
     row,
+    rows: extra.rows ?? null,
     spawn: extra.spawn ?? null,
     history: extra.history ?? null,
     interact: extra.interact ?? null,
     requiresBodyPaint: extra.requiresBodyPaint === true,
+    adapterIds: extra.adapterIds,
     predicate: extra.predicate,
     envelope: {
       fixtureId: `fix.${id}`,
@@ -86,7 +88,7 @@ function paint(id, viewId, stateId, row, extra = {}) {
       pins: PINS,
       viewId,
       lifecycleStates: [stateId],
-      adapterIds: ADAPTERS,
+      adapterIds: extra.adapterIds ?? ADAPTERS,
       component: {
         repo: "puppeteer",
         sha: PINS.puppeteer,
@@ -99,8 +101,9 @@ function paint(id, viewId, stateId, row, extra = {}) {
         "adapterIds list the ten audit adapters as classification context only.",
         "They are not a claim that any adapter emitted this row.",
         "Mounted from Puppeteer source 748d015 via MonitorViewHost. Not shipped package 0.3.3.",
+        extra.label ?? "",
         extra.requiresBodyPaint
-          ? "Body paint is the swarm WebGPU canvas. A host without WebGPU does not show this predicate."
+          ? "Body paint is the swarm WebGPU canvas."
           : "",
       ]
         .filter(Boolean)
@@ -194,7 +197,11 @@ const ALL_ENTRIES = [
     "view.list",
     "state.blocked_unknown_kind",
     agent({ status: "blocked", wait: { kind: "quota", since: EPOCH } }),
-    { predicate: "blocked and a wait kind outside permission/question/failure. The list prints the kind as itself." },
+    {
+      predicate: "blocked and a wait kind outside permission/question/failure. The list prints the kind as itself.",
+      label:
+        "Synthetic defensive fixture. Typed core blocker producers emit permission, question, or failure, not an open kind. The list still prints an unknown kind as itself.",
+    },
   ),
   paint(
     "list.starting-unobserved",
@@ -244,7 +251,11 @@ const ALL_ENTRIES = [
     predicate: "active true. List row class is-active.",
   }),
   paint("list.receded", "view.list", "state.receded", agent({ status: "idle", receded: true }), {
-    predicate: "receded true. List row class is-receded.",
+    rows: [
+      agent({ id: "shown", status: "working", project: { name: "shown", seq: 1 } }),
+      agent({ id: "back", status: "idle", receded: true, project: { name: "back", seq: 2 } }),
+    ],
+    predicate: "One row receded beside one shown row, so the list uses the 0.22 weight rather than the all-receded weight.",
   }),
   paint(
     "list.attached",
@@ -271,7 +282,11 @@ const ALL_ENTRIES = [
     "view.list",
     "state.branch_none",
     agent({ status: "idle", project: { name: "billing-api", seq: 1, branch: null } }),
-    { predicate: "project.branch null. List treats it as falsy and prints no branch small." },
+    {
+      predicate: "project.branch null. List treats it as falsy and prints no branch small.",
+      label:
+        "Synthetic defensive fixture. The Vibefield overlay reaches unknown or named branches, not a null branch. The list's small label uses truthiness, so null and absent draw the same.",
+    },
   ),
   paint(
     "list.branch-named",
@@ -325,24 +340,40 @@ const ALL_ENTRIES = [
     "view.spend",
     "state.cost_complete",
     agent({ status: "working", cost: cost("complete", 2.5, 12) }),
-    { predicate: "cost.coverage complete. Spend meters the total." },
+    {
+      predicate: "cost.coverage complete. Spend meters the total.",
+      adapterIds: ["adapter.claude", "adapter.codex"],
+      label:
+        "Source permits Claude and Codex to reach a priced total after runtime pricing. Not a live session. Token-only adapters do not produce this row. USD burn is not the token per-minute meter.",
+    },
   ),
   paint(
     "spend.cost-partial",
     "view.spend",
     "state.cost_partial",
     agent({ status: "working", cost: cost("partial", 1.25, 6) }),
-    { predicate: "cost.coverage partial. Spend marks the total partial." },
+    {
+      predicate: "cost.coverage partial. Spend marks the total partial.",
+      adapterIds: ["adapter.claude", "adapter.codex"],
+      label:
+        "Source permits Claude and Codex to mix priced and unpriced observations. Not a live session. Not a normal emission of the token-only adapters.",
+    },
   ),
   paint(
     "spend.cost-unavailable",
     "view.spend",
     "state.cost_unavailable",
     agent({ status: "working", cost: { usd: 1, coverage: "unavailable" } }),
-    { predicate: "cost.coverage unavailable. Spend names the agent apart and does not meter it." },
+    {
+      predicate: "cost.coverage unavailable. Spend names the agent apart and does not meter it.",
+      label:
+        "Synthetic view of an explicit unavailable cost object. The normal backend omits field.cost instead, which is state.cost_missing. Not a normal adapter emission.",
+    },
   ),
   paint("spend.cost-missing", "view.spend", "state.cost_missing", agent({ status: "working" }), {
     predicate: "cost absent. Spend names the agent apart.",
+    label:
+      "Normal row when no priced total exists, including token-only adapters. Claude and Codex can also be missing before a price lands. Not state.cost_unavailable.",
   }),
   paint(
     "spend.before",
@@ -372,6 +403,382 @@ const ALL_ENTRIES = [
   paint("timeline.past-bounds", "view.timeline", "state.past_bounds", agent({ status: "idle" }), {
     history: "bounds",
     predicate: "ended lane span kind bounds.",
+  }),
+  paint("spend.idle", "view.spend", "state.idle", agent({ status: "idle" }), {
+    predicate: "Spend state word idle. Terminals are omitted; this is an agent with no price.",
+  }),
+  paint("spend.working", "view.spend", "state.working", agent({ status: "working" }), {
+    predicate: "Spend state word working.",
+  }),
+  paint("spend.blocked", "view.spend", "state.blocked", agent({ status: "blocked" }), {
+    predicate: "Spend state word blocked, with no wait object.",
+  }),
+  paint(
+    "spend.blocked-permission",
+    "view.spend",
+    "state.blocked_permission",
+    agent({ status: "blocked", wait: { kind: "permission", since: EPOCH, tool: "Bash" } }),
+    { predicate: "Spend blocked glyph and the permission word." },
+  ),
+  paint(
+    "spend.blocked-question",
+    "view.spend",
+    "state.blocked_question",
+    agent({ status: "blocked", wait: { kind: "question", since: EPOCH, header: "Which branch?" } }),
+    { predicate: "Spend blocked glyph. spend-words names a question." },
+  ),
+  paint(
+    "spend.blocked-failure",
+    "view.spend",
+    "state.blocked_failure",
+    agent({ status: "blocked", wait: { kind: "failure", since: EPOCH, code: "E_RATE_LIMIT" } }),
+    { predicate: "Spend blocked glyph. spend-words names a failure." },
+  ),
+  paint("spend.unread", "view.spend", "state.unread", agent({ status: "idle", unread: true }), {
+    predicate: "Idle and unread. Spend calls the state unseen.",
+  }),
+  paint(
+    "spend.remote",
+    "view.spend",
+    "state.remote",
+    agent({
+      status: "working",
+      device: { id: "studio", name: "Studio", os: "mac", self: false },
+      cost: { usd: 1.5, coverage: "complete" },
+    }),
+    {
+      predicate: "Peer mark beside the name. A peer's series is not drawn; the total still is.",
+      adapterIds: ["adapter.claude", "adapter.codex"],
+      label: "The priced total is supporting data so the row is metered. The branch under test is device.self false.",
+    },
+  ),
+  paint(
+    "spend.branch-named",
+    "view.spend",
+    "state.branch_named",
+    agent({ status: "idle", project: { name: "billing-api", seq: 1, branch: "main" } }),
+    { predicate: "No task line, so the model line keeps the branch." },
+  ),
+  paint(
+    "spend.attached",
+    "view.spend",
+    "state.attached",
+    agent({ status: "working", attachment: { panes: 1, colour: "#4c8dff" } }),
+    { predicate: "Attachment is named in the row's accessible label." },
+  ),
+  paint("timeline.idle", "view.timeline", "state.idle", agent({ status: "idle" }), {
+    predicate: "Timeline lane for an idle agent.",
+  }),
+  paint("timeline.working", "view.timeline", "state.working", agent({ status: "working" }), {
+    predicate: "Timeline lane painted as working.",
+  }),
+  paint("timeline.blocked", "view.timeline", "state.blocked", agent({ status: "blocked" }), {
+    predicate: "Timeline lane painted blocked.",
+  }),
+  paint(
+    "timeline.blocked-permission",
+    "view.timeline",
+    "state.blocked_permission",
+    agent({ status: "blocked", wait: { kind: "permission", since: EPOCH, tool: "Bash" } }),
+    { predicate: "Blocked lane whose wait words name the permission." },
+  ),
+  paint(
+    "timeline.blocked-question",
+    "view.timeline",
+    "state.blocked_question",
+    agent({ status: "blocked", wait: { kind: "question", since: EPOCH, question: "Keep the lane open?" } }),
+    { predicate: "Blocked lane whose wait words name the question." },
+  ),
+  paint(
+    "timeline.blocked-failure",
+    "view.timeline",
+    "state.blocked_failure",
+    agent({ status: "blocked", wait: { kind: "failure", since: EPOCH, code: "E_RATE_LIMIT" } }),
+    { predicate: "Blocked lane whose wait words name the failure." },
+  ),
+  paint(
+    "timeline.remote",
+    "view.timeline",
+    "state.remote",
+    agent({ status: "working", device: { id: "studio", name: "Studio", os: "mac", self: false } }),
+    { predicate: "Peer mark on the timeline name." },
+  ),
+  paint("timeline.receded", "view.timeline", "state.receded", agent({ status: "working", receded: true }), {
+    rows: [
+      agent({ id: "shown", status: "working", project: { name: "shown", seq: 1 } }),
+      agent({ id: "back", status: "working", receded: true, project: { name: "back", seq: 2 } }),
+    ],
+    predicate: "Timeline name and head take is-receded beside a shown lane.",
+  }),
+  paint("timeline.active", "view.timeline", "state.active", agent({ status: "working", active: true }), {
+    predicate: "Timeline name takes is-active.",
+  }),
+  paint(
+    "timeline.attached",
+    "view.timeline",
+    "state.attached",
+    agent({ status: "working", attachment: { panes: 1, colour: "#4c8dff" } }),
+    { predicate: "Timeline name shows the pane mark." },
+  ),
+  paint(
+    "timeline.terminal-running",
+    "view.timeline",
+    "state.terminal_running",
+    { kind: "terminal", status: "working", project: { name: "" }, detail: "running" },
+    { predicate: "Terminal lane, running." },
+  ),
+  paint(
+    "timeline.terminal-quiet",
+    "view.timeline",
+    "state.terminal_quiet",
+    { kind: "terminal", status: "idle", project: { name: "" }, detail: "quiet" },
+    { predicate: "Terminal lane, quiet." },
+  ),
+  paint(
+    "timeline.branch-named",
+    "view.timeline",
+    "state.branch_named",
+    agent({ status: "working", model: "fixture-model", project: { name: "billing-api", seq: 1, branch: "main" } }),
+    { predicate: "Name line joins the model and the branch." },
+  ),
+  paint(
+    "rain.remote",
+    "view.rain",
+    "state.remote",
+    { kind: "terminal", status: "working", project: { name: "notes" }, detail: "running", device: { id: "studio", name: "Studio", os: "mac", self: false } },
+    { predicate: "A remote terminal's column leads with the desktop name." },
+  ),
+  paint("rain.receded", "view.rain", "state.receded", agent({ status: "working", receded: true }), {
+    rows: [
+      agent({ id: "shown", status: "working", project: { name: "shown", seq: 1 } }),
+      agent({ id: "back", status: "working", receded: true, project: { name: "back", seq: 2 } }),
+    ],
+    predicate: "Receded column beside a shown column, at the 0.22 weight.",
+  }),
+  paint("rain.active", "view.rain", "state.active", agent({ status: "working", active: true }), {
+    predicate: "Active column uses the active head colour.",
+  }),
+  paint(
+    "rain.attached",
+    "view.rain",
+    "state.attached",
+    agent({ status: "working", attachment: { panes: 2, colour: "#4c8dff" } }),
+    { predicate: "Attachment paints the column tint and a mirror." },
+  ),
+  paint(
+    "rain.terminal-running",
+    "view.rain",
+    "state.terminal_running",
+    { kind: "terminal", status: "working", project: { name: "shell" }, detail: "running" },
+    { predicate: "Local terminal column spells terminal, working head on." },
+  ),
+  paint(
+    "rain.terminal-quiet",
+    "view.rain",
+    "state.terminal_quiet",
+    { kind: "terminal", status: "idle", project: { name: "shell" }, detail: "quiet" },
+    { predicate: "Local terminal column, idle, head hidden." },
+  ),
+  paint("rain.context-missing", "view.rain", "state.context_missing", agent({ status: "working" }), {
+    predicate: "No context percent. rainTailLength uses the mid-scale default instead of a measured share.",
+  }),
+  paint(
+    "rain.branch-named",
+    "view.rain",
+    "state.branch_named",
+    agent({ status: "working", project: { name: "billing-api", seq: 1, branch: "main" } }),
+    { predicate: "The falling glyphs include the branch." },
+  ),
+  paint("list.unread", "view.list", "state.unread", agent({
+    status: "idle",
+    unread: true,
+    reply: { text: "Tests pass.", at: EPOCH, final: true },
+  }), {
+    predicate:
+      "Idle agent with unread true and a reply. AgentList has no unread class. detailLine prints the reply text. The input is mounted; unread is not inferred from a row whose default unread is false.",
+  }),
+  paint("list.context-hot", "view.list", "state.context_hot", agent({
+    status: "working",
+    context: { usedPercent: 80 },
+  }), {
+    predicate: "context.usedPercent 80. The list percent cell prints 80. Hot is not a list threshold.",
+  }),
+  paint("list.reply-streaming", "view.list", "state.reply_streaming", agent({
+    status: "idle",
+    reply: { text: "Suite is green.", at: EPOCH, final: false },
+  }), {
+    predicate: "reply.final false. detailLine prints the text and does not branch on final.",
+  }),
+  paint("list.reply-final", "view.list", "state.reply_final", agent({
+    status: "idle",
+    reply: { text: "Suite is green.", at: EPOCH, final: true },
+  }), {
+    predicate: "reply.final true. detailLine prints the text and does not branch on final.",
+  }),
+  paint("list.working-with-blockers", "view.list", "state.working_with_blockers", agent({
+    status: "working",
+    wait: { kind: "permission", since: EPOCH, tool: "Bash" },
+  }), {
+    predicate: "status working with a wait object. detailLine uses the wait only when status is blocked, so the line is the status word.",
+  }),
+  paint("list.wait-multiple", "view.list", "state.wait_multiple", agent({
+    status: "blocked",
+    wait: { kind: "question", since: EPOCH, count: 3, header: "Which branch?" },
+  }), {
+    predicate: "wait.count is 3. The list wait line prints the kind and does not print the count.",
+  }),
+  paint("rain.unread", "view.rain", "state.unread", agent({
+    status: "idle",
+    unread: true,
+    reply: { text: "Tests pass.", at: EPOCH, final: true },
+  }), {
+    predicate: "Idle column with unread true. statusPresentation keys status only. The tooltip's detailLine prints the reply.",
+  }),
+  paint("rain.blocked-permission", "view.rain", "state.blocked_permission", agent({
+    status: "blocked",
+    wait: { kind: "permission", since: EPOCH, tool: "Bash", detail: "pnpm test" },
+  }), {
+    predicate: "Blocked column. The aria label and tooltip use detailLine, which prints permission · Bash. The head speed is the blocked speed.",
+  }),
+  paint("rain.blocked-question", "view.rain", "state.blocked_question", agent({
+    status: "blocked",
+    wait: { kind: "question", since: EPOCH, header: "Which branch?", question: "Keep the lane open?" },
+  }), {
+    predicate: "Blocked column. detailLine prints the question kind. The head speed is the blocked speed.",
+  }),
+  paint("rain.blocked-failure", "view.rain", "state.blocked_failure", agent({
+    status: "blocked",
+    wait: { kind: "failure", since: EPOCH, code: "E_RATE_LIMIT", detail: "Rate limited" },
+  }), {
+    predicate: "Blocked column. detailLine prints the failure kind. The head speed is the blocked speed.",
+  }),
+  paint("rain.blocked-unknown-kind", "view.rain", "state.blocked_unknown_kind", agent({
+    status: "blocked",
+    wait: { kind: "quota", since: EPOCH },
+  }), {
+    predicate: "Blocked column whose wait.kind is quota. detailLine prints quota. The head speed is the blocked speed.",
+    label:
+      "Synthetic defensive fixture. Typed core blocker producers emit permission, question, or failure. Rain's detail line still prints another kind.",
+  }),
+  paint("rain.stale", "view.rain", "state.stale", agent({ status: "idle", stale: true }), {
+    predicate: "stale true on an idle column. RainView does not read stale. The mounted input is stale, not the fresh default.",
+  }),
+  paint("rain.starting-unobserved", "view.rain", "state.starting_unobserved", agent({
+    status: "working",
+    observed: false,
+    pending: false,
+  }), {
+    predicate: "Working column, not observed. detailLine says starting. The head is the working head.",
+  }),
+  paint("rain.pending-unobserved", "view.rain", "state.pending_unobserved", agent({
+    status: "idle",
+    observed: false,
+    pending: true,
+  }), {
+    predicate: "Idle column, pending. detailLine says unobserved · resumes when idle. The idle head stays hidden.",
+  }),
+  paint("rain.branch-none", "view.rain", "state.branch_none", agent({
+    status: "working",
+    project: { name: "billing-api", seq: 1, branch: null },
+  }), {
+    predicate: "project.branch null. rainDataString drops a falsy branch.",
+    label:
+      "Synthetic defensive fixture. The Vibefield overlay reaches unknown or named branches, not a null branch. The glyph string uses truthiness, so null and absent drop alike.",
+  }),
+  paint("rain.context-hot", "view.rain", "state.context_hot", agent({
+    status: "working",
+    context: { usedPercent: 80 },
+  }), {
+    predicate: "usedPercent 80. rainTailLength grows with the percent. Rain has no hot threshold.",
+  }),
+  paint("spend.active", "view.spend", "state.active", agent({ status: "working", active: true }), {
+    predicate: "active true. SpendView adds is-active on the row.",
+  }),
+  paint("spend.stale", "view.spend", "state.stale", agent({ status: "idle", stale: true }), {
+    predicate: "stale true. SpendView does not read stale. The mounted row is stale rather than the fixture default.",
+  }),
+  paint("spend.blocked-unknown-kind", "view.spend", "state.blocked_unknown_kind", agent({
+    status: "blocked",
+    wait: { kind: "quota", since: EPOCH },
+  }), {
+    predicate: "Wait kind quota. spend glyphOf maps any other kind to the permission glyph.",
+    label:
+      "Synthetic defensive fixture. Typed core blocker producers emit permission, question, or failure. Spend still maps another kind onto the permission glyph.",
+  }),
+  paint("spend.starting-unobserved", "view.spend", "state.starting_unobserved", agent({
+    status: "working",
+    observed: false,
+    pending: false,
+  }), {
+    predicate: "Not observed. detailLine says starting, and taskOf keeps that line.",
+  }),
+  paint("spend.pending-unobserved", "view.spend", "state.pending_unobserved", agent({
+    status: "idle",
+    observed: false,
+    pending: true,
+  }), {
+    predicate: "Pending. detailLine says unobserved · resumes when idle.",
+  }),
+  paint("spend.branch-none", "view.spend", "state.branch_none", agent({
+    status: "idle",
+    project: { name: "billing-api", seq: 1, branch: null },
+  }), {
+    predicate: "project.branch null. modelOf drops a falsy branch.",
+    label:
+      "Synthetic defensive fixture. The Vibefield overlay reaches unknown or named branches, not a null branch.",
+  }),
+  paint("spend.receded", "view.spend", "state.receded", agent({ status: "idle", receded: true }), {
+    rows: [
+      agent({ id: "shown", status: "working", project: { name: "shown", seq: 1 } }),
+      agent({ id: "back", status: "idle", receded: true, project: { name: "back", seq: 2 } }),
+    ],
+    predicate: "One receded agent beside a shown agent. SpendView does not read receded; both rows are still named.",
+  }),
+  paint("spend.context-hot", "view.spend", "state.context_hot", agent({
+    status: "working",
+    context: { usedPercent: 80 },
+  }), {
+    predicate: "usedPercent 80. SpendView does not read context. The row is the working row with that input mounted.",
+  }),
+  paint("timeline.stale", "view.timeline", "state.stale", agent({ status: "idle", stale: true }), {
+    predicate: "stale true. TimelineView does not add an is-stale class. The mounted lane is the stale row.",
+  }),
+  paint("timeline.starting-unobserved", "view.timeline", "state.starting_unobserved", agent({
+    status: "working",
+    observed: false,
+    pending: false,
+  }), {
+    predicate: "Not observed. laneStatus follows status, so the lane is working. detail words are not the list's starting line.",
+  }),
+  paint("timeline.pending-unobserved", "view.timeline", "state.pending_unobserved", agent({
+    status: "idle",
+    observed: false,
+    pending: true,
+  }), {
+    predicate: "Pending and idle. laneStatus is idle. The pending line is not a timeline status.",
+  }),
+  paint("timeline.branch-none", "view.timeline", "state.branch_none", agent({
+    status: "working",
+    model: "fixture-model",
+    project: { name: "billing-api", seq: 1, branch: null },
+  }), {
+    predicate: "project.branch null. laneSubLine drops a falsy branch and keeps the model.",
+    label:
+      "Synthetic defensive fixture. The Vibefield overlay reaches unknown or named branches, not a null branch.",
+  }),
+  paint("timeline.blocked-unknown-kind", "view.timeline", "state.blocked_unknown_kind", agent({
+    status: "blocked",
+    wait: { kind: "quota", since: EPOCH },
+  }), {
+    predicate: "Blocked lane whose wait.kind is quota. laneFor copies that kind. It is not limited to permission, question, and failure.",
+    label:
+      "Synthetic defensive fixture. Typed core blocker producers emit permission, question, or failure. The lane still carries another kind.",
+  }),
+  paint("timeline.context-hot", "view.timeline", "state.context_hot", agent({
+    status: "working",
+    context: { usedPercent: 80 },
+  }), {
+    predicate: "usedPercent 80. The timeline lane does not read context. The working lane is that input.",
   }),
   paint(
     "swarm.context-hot",
@@ -431,16 +838,6 @@ const ALL_ENTRIES = [
 
 const BASE_HOLES = [
   {
-    stateId: "state.wait_multiple",
-    reason:
-      "No view reads wait.count. The five views' field lists and a search of packages/views/src at 748d015 find no wait.count read.",
-  },
-  {
-    stateId: "state.working_with_blockers",
-    reason:
-      "bubble-model.ts draws a wait only when appearance is blocked (line 536). detailLine uses the wait only when status is blocked. A working row with a wait paints as working.",
-  },
-  {
     stateId: "state.activity_starting",
     reason:
       "AgentSwarm.tsx reads activity.kind only to keep a terminal clock across kind unknown. It does not paint a distinct branch per activity kind.",
@@ -492,15 +889,6 @@ const BASE_HOLES = [
   {
     stateId: "state.attachable",
     reason: "None of the five views read attachable. It is not in their contract field lists.",
-  },
-  {
-    stateId: "state.reply_streaming",
-    reason:
-      "No view reads reply.final. detailLine uses reply.text and does not branch on final, so streaming and final are not separate paint.",
-  },
-  {
-    stateId: "state.reply_final",
-    reason: "Same as state.reply_streaming. reply.final is not read.",
   },
   {
     stateId: "state.timeline_unborn",
@@ -575,9 +963,10 @@ const BASE_HOLES = [
 ];
 
 export const ENTRIES = ALL_ENTRIES.filter((entry) => !entry.requiresBodyPaint);
+const DOM_STATES = new Set(ENTRIES.map((entry) => entry.stateId));
 export const HOLES = [
   ...BASE_HOLES,
-  ...ALL_ENTRIES.filter((entry) => entry.requiresBodyPaint).map((entry) => ({
+  ...ALL_ENTRIES.filter((entry) => entry.requiresBodyPaint && !DOM_STATES.has(entry.stateId)).map((entry) => ({
     stateId: entry.stateId,
     reason: `${entry.predicate} AgentSwarm from Puppeteer 748d015 mounted in this host and reported WEBGPU UNAVAILABLE, so the body was not painted. See audit/godview/rendering/screenshots/environment-swarm.png.`,
   })),
@@ -681,6 +1070,24 @@ export function assertCoverage() {
   for (const id of holed) if (!MODEL_STATE_IDS.includes(id)) problems.push(`extra hole ${id}`);
   if (MODEL_STATE_IDS.length !== 82) problems.push(`state count ${MODEL_STATE_IDS.length}`);
   if (problems.length) throw new Error(problems.join("\n"));
+}
+
+/** The row the harness mounts: agentViewFixture defaults, then the fixture partial. */
+export function mountRow(entry) {
+  const partial = (entry.rows ?? [entry.row])[0];
+  const project = { name: "project", seq: 0, ...(partial.project ?? {}) };
+  return {
+    stale: false,
+    unread: false,
+    observed: true,
+    alive: true,
+    active: false,
+    receded: false,
+    attachable: true,
+    kind: "agent",
+    ...partial,
+    project,
+  };
 }
 
 export const CONTRACT_MISMATCHES = [

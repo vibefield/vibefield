@@ -29,5 +29,5 @@
     "symbol": "AgentList",
     "lineStart": 37
   },
-  "notes": "receded true. List row class is-receded. adapterIds list the ten audit adapters as classification context only. They are not a claim that any adapter emitted this row. Mounted from Puppeteer source 748d015 via MonitorViewHost. Not shipped package 0.3.3."
+  "notes": "One row receded beside one shown row, so the list uses the 0.22 weight rather than the all-receded weight. adapterIds list the ten audit adapters as classification context only. They are not a claim that any adapter emitted this row. Mounted from Puppeteer source 748d015 via MonitorViewHost. Not shipped package 0.3.3."
 }

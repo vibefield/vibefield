@@ -1,0 +1,423 @@
+{
+  "kind": "swarm-lifecycle-repro",
+  "sourceSha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+  "flags": [
+    "--no-sandbox",
+    "--disable-dev-shm-usage",
+    "--disable-gpu-sandbox",
+    "--enable-unsafe-webgpu",
+    "--enable-unsafe-swiftshader"
+  ],
+  "note": "Instrumentation wraps requestAdapter, requestDevice, destroy, and lost, then calls the original. createSwarmRenderer and AgentSwarm are unmodified.",
+  "runs": [
+    {
+      "phase": "production-bare-hold",
+      "search": "phase=bare-hold",
+      "chrome": "Chrome/156.0.8078.47",
+      "traces": [
+        {
+          "t": 0,
+          "event": "phase",
+          "detail": {
+            "phase": "bare-hold",
+            "dev": false,
+            "mode": "production"
+          }
+        },
+        {
+          "t": 1,
+          "event": "requestAdapter:start",
+          "detail": {
+            "powerPreference": "high-performance"
+          }
+        },
+        {
+          "t": 3,
+          "event": "requestAdapter:null",
+          "detail": null
+        }
+      ],
+      "pageConsole": [
+        {
+          "type": "warn",
+          "text": "Failed to create WebGPU Context Provider"
+        },
+        {
+          "type": "error",
+          "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+        }
+      ],
+      "gpuProcess": [
+        "vk_renderer.cpp:282 (VerifyExtensionsPresent): Extension not supported: VK_KHR_surface",
+        "ERR: vk_renderer.cpp:282 (VerifyExtensionsPresent): Extension not supported: VK_KHR_surface",
+        "vk_renderer.cpp:282 (VerifyExtensionsPresent): Extension not supported: VK_KHR_xcb_surface",
+        "ERR: vk_renderer.cpp:282 (VerifyExtensionsPresent): Extension not supported: VK_KHR_xcb_surface",
+        "EGL Driver message (Critical) eglInitialize: Internal Vulkan error (-7): A requested extension is not supported, in ../../third_party/angle/src/libANGLE/renderer/vulkan/vk_renderer.cpp, enableInstanceExtensions:2499.",
+        "eglInitialize SwANGLE failed with error EGL_NOT_INITIALIZED",
+        "Exiting GPU process due to errors during initialization"
+      ]
+    },
+    {
+      "phase": "production-bare-destroy",
+      "search": "phase=bare-destroy",
+      "chrome": "Chrome/156.0.8078.47",
+      "traces": [
+        {
+          "t": 0,
+          "event": "phase",
+          "detail": {
+            "phase": "bare-destroy",
+            "dev": false,
+            "mode": "production"
+          }
+        },
+        {
+          "t": 0,
+          "event": "requestAdapter:start",
+          "detail": {
+            "powerPreference": "high-performance"
+          }
+        },
+        {
+          "t": 7,
+          "event": "requestAdapter:null",
+          "detail": null
+        }
+      ],
+      "pageConsole": [
+        {
+          "type": "warn",
+          "text": "Failed to create WebGPU Context Provider"
+        },
+        {
+          "type": "error",
+          "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+        }
+      ],
+      "gpuProcess": [
+        "vk_renderer.cpp:282 (VerifyExtensionsPresent): Extension not supported: VK_KHR_surface",
+        "ERR: vk_renderer.cpp:282 (VerifyExtensionsPresent): Extension not supported: VK_KHR_surface",
+        "vk_renderer.cpp:282 (VerifyExtensionsPresent): Extension not supported: VK_KHR_xcb_surface",
+        "ERR: vk_renderer.cpp:282 (VerifyExtensionsPresent): Extension not supported: VK_KHR_xcb_surface",
+        "EGL Driver message (Critical) eglInitialize: Internal Vulkan error (-7): A requested extension is not supported, in ../../third_party/angle/src/libANGLE/renderer/vulkan/vk_renderer.cpp, enableInstanceExtensions:2499.",
+        "eglInitialize SwANGLE failed with error EGL_NOT_INITIALIZED",
+        "Exiting GPU process due to errors during initialization"
+      ]
+    },
+    {
+      "phase": "production-bare-renderer",
+      "search": "phase=bare-renderer",
+      "chrome": "Chrome/156.0.8078.47",
+      "traces": [
+        {
+          "t": 0,
+          "event": "phase",
+          "detail": {
+            "phase": "bare-renderer",
+            "dev": false,
+            "mode": "production"
+          }
+        },
+        {
+          "t": 1,
+          "event": "requestAdapter:start",
+          "detail": {
+            "powerPreference": "high-performance"
+          }
+        },
+        {
+          "t": 2,
+          "event": "requestAdapter:null",
+          "detail": null
+        },
+        {
+          "t": 2,
+          "event": "createSwarmRenderer",
+          "detail": {
+            "ok": false,
+            "reason": "No WebGPU adapter on this GPU"
+          }
+        }
+      ],
+      "pageConsole": [
+        {
+          "type": "warn",
+          "text": "Failed to create WebGPU Context Provider"
+        },
+        {
+          "type": "error",
+          "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+        }
+      ],
+      "gpuProcess": []
+    },
+    {
+      "phase": "production-bare-renderer-destroy",
+      "search": "phase=bare-renderer-destroy",
+      "chrome": "Chrome/156.0.8078.47",
+      "traces": [
+        {
+          "t": 0,
+          "event": "phase",
+          "detail": {
+            "phase": "bare-renderer-destroy",
+            "dev": false,
+            "mode": "production"
+          }
+        },
+        {
+          "t": 0,
+          "event": "requestAdapter:start",
+          "detail": {
+            "powerPreference": "high-performance"
+          }
+        },
+        {
+          "t": 2,
+          "event": "requestAdapter:null",
+          "detail": null
+        },
+        {
+          "t": 2,
+          "event": "createSwarmRenderer",
+          "detail": {
+            "ok": false,
+            "reason": "No WebGPU adapter on this GPU"
+          }
+        }
+      ],
+      "pageConsole": [
+        {
+          "type": "warn",
+          "text": "Failed to create WebGPU Context Provider"
+        },
+        {
+          "type": "error",
+          "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+        }
+      ],
+      "gpuProcess": []
+    },
+    {
+      "phase": "production-react",
+      "search": "phase=react",
+      "chrome": "Chrome/156.0.8078.47",
+      "traces": [
+        {
+          "t": 0,
+          "event": "phase",
+          "detail": {
+            "phase": "react",
+            "dev": false,
+            "mode": "production"
+          }
+        },
+        {
+          "t": 1,
+          "event": "react-mounted",
+          "detail": {
+            "strict": false,
+            "dev": false,
+            "mode": "production"
+          }
+        },
+        {
+          "t": 15,
+          "event": "requestAdapter:start",
+          "detail": {
+            "powerPreference": "high-performance"
+          }
+        },
+        {
+          "t": 22,
+          "event": "requestAdapter:null",
+          "detail": null
+        },
+        {
+          "t": 2501,
+          "event": "react-settled",
+          "detail": {
+            "empty": "WEBGPU UNAVAILABLENo WebGPU adapter on this GPU"
+          }
+        }
+      ],
+      "pageConsole": [
+        {
+          "type": "warn",
+          "text": "Failed to create WebGPU Context Provider"
+        },
+        {
+          "type": "error",
+          "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+        }
+      ],
+      "gpuProcess": [
+        "Exiting GPU process due to errors during initialization",
+        "vk_renderer.cpp:282 (VerifyExtensionsPresent): Extension not supported: VK_KHR_surface",
+        "ERR: vk_renderer.cpp:282 (VerifyExtensionsPresent): Extension not supported: VK_KHR_surface",
+        "vk_renderer.cpp:282 (VerifyExtensionsPresent): Extension not supported: VK_KHR_xcb_surface",
+        "ERR: vk_renderer.cpp:282 (VerifyExtensionsPresent): Extension not supported: VK_KHR_xcb_surface",
+        "EGL Driver message (Critical) eglInitialize: Internal Vulkan error (-7): A requested extension is not supported, in ../../third_party/angle/src/libANGLE/renderer/vulkan/vk_renderer.cpp, enableInstanceExtensions:2499.",
+        "eglInitialize SwANGLE failed with error EGL_NOT_INITIALIZED"
+      ]
+    },
+    {
+      "phase": "development-react-strict",
+      "search": "phase=react&strict=1",
+      "chrome": "Chrome/156.0.8078.47",
+      "traces": [
+        {
+          "t": 0,
+          "event": "phase",
+          "detail": {
+            "phase": "react",
+            "dev": true,
+            "mode": "development"
+          }
+        },
+        {
+          "t": 2,
+          "event": "react-mounted",
+          "detail": {
+            "strict": true,
+            "dev": true,
+            "mode": "development"
+          }
+        },
+        {
+          "t": 22,
+          "event": "requestAdapter:start",
+          "detail": {
+            "powerPreference": "high-performance"
+          }
+        },
+        {
+          "t": 25,
+          "event": "requestAdapter:null",
+          "detail": null
+        },
+        {
+          "t": 29,
+          "event": "requestAdapter:start",
+          "detail": {
+            "powerPreference": "high-performance"
+          }
+        },
+        {
+          "t": 34,
+          "event": "requestAdapter:null",
+          "detail": null
+        },
+        {
+          "t": 2502,
+          "event": "react-settled",
+          "detail": {
+            "empty": "WEBGPU UNAVAILABLENo WebGPU adapter on this GPU"
+          }
+        }
+      ],
+      "pageConsole": [
+        {
+          "type": "debug",
+          "text": "[vite] connecting..."
+        },
+        {
+          "type": "debug",
+          "text": "[vite] connected."
+        },
+        {
+          "type": "info",
+          "text": "%cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold"
+        },
+        {
+          "type": "warn",
+          "text": "Failed to create WebGPU Context Provider"
+        },
+        {
+          "type": "warn",
+          "text": "Failed to create WebGPU Context Provider"
+        },
+        {
+          "type": "error",
+          "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+        }
+      ],
+      "gpuProcess": []
+    },
+    {
+      "phase": "development-react",
+      "search": "phase=react",
+      "chrome": "Chrome/156.0.8078.47",
+      "traces": [
+        {
+          "t": 0,
+          "event": "phase",
+          "detail": {
+            "phase": "react",
+            "dev": true,
+            "mode": "development"
+          }
+        },
+        {
+          "t": 2,
+          "event": "react-mounted",
+          "detail": {
+            "strict": false,
+            "dev": true,
+            "mode": "development"
+          }
+        },
+        {
+          "t": 19,
+          "event": "requestAdapter:start",
+          "detail": {
+            "powerPreference": "high-performance"
+          }
+        },
+        {
+          "t": 25,
+          "event": "requestAdapter:null",
+          "detail": null
+        },
+        {
+          "t": 2502,
+          "event": "react-settled",
+          "detail": {
+            "empty": "WEBGPU UNAVAILABLENo WebGPU adapter on this GPU"
+          }
+        }
+      ],
+      "pageConsole": [
+        {
+          "type": "debug",
+          "text": "[vite] connecting..."
+        },
+        {
+          "type": "debug",
+          "text": "[vite] connected."
+        },
+        {
+          "type": "info",
+          "text": "%cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold"
+        },
+        {
+          "type": "warn",
+          "text": "Failed to create WebGPU Context Provider"
+        },
+        {
+          "type": "error",
+          "text": "Failed to load resource: the server responded with a status of 404 (Not Found)"
+        }
+      ],
+      "gpuProcess": [
+        "Exiting GPU process due to errors during initialization",
+        "vk_renderer.cpp:282 (VerifyExtensionsPresent): Extension not supported: VK_KHR_surface",
+        "ERR: vk_renderer.cpp:282 (VerifyExtensionsPresent): Extension not supported: VK_KHR_surface",
+        "vk_renderer.cpp:282 (VerifyExtensionsPresent): Extension not supported: VK_KHR_xcb_surface",
+        "ERR: vk_renderer.cpp:282 (VerifyExtensionsPresent): Extension not supported: VK_KHR_xcb_surface",
+        "EGL Driver message (Critical) eglInitialize: Internal Vulkan error (-7): A requested extension is not supported, in ../../third_party/angle/src/libANGLE/renderer/vulkan/vk_renderer.cpp, enableInstanceExtensions:2499.",
+        "eglInitialize SwANGLE failed with error EGL_NOT_INITIALIZED"
+      ]
+    }
+  ]
+}

@@ -46,7 +46,7 @@
     {
       "order": 1,
       "name": "projectAgentMonitorState",
-      "effect": "Projects AgentMonitorState from the transition basis, context, model, effort, reply, and usage. [post-0.3.3]",
+      "effect": "Projects AgentMonitorState. Usage cost is folded here, before the backend builds the row. [post-0.3.3]",
       "source": {
         "repo": "puppeteer",
         "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",

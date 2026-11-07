@@ -113,16 +113,20 @@ function FixtureView({
   const viewKey = entry.viewId.slice("view.".length);
   const registered = MONITOR_VIEWS.find((view) => view.id === viewKey);
   if (!registered) throw new Error(`missing view ${entry.viewId}`);
-  const row = useMemo(() => {
-    const made = agentViewFixture({
-      id: "row-1",
-      createdAt: FIXTURE_EPOCH,
-      ...entry.row,
-    } as Parameters<typeof agentViewFixture>[0]);
-    return made;
+  const rows = useMemo(() => {
+    const partials = (entry.rows as Array<Record<string, unknown>> | null) ?? [entry.row];
+    return partials.map((partial, index) =>
+      agentViewFixture({
+        id: `row-${index + 1}`,
+        createdAt: FIXTURE_EPOCH + index,
+        ...partial,
+      } as Parameters<typeof agentViewFixture>[0]),
+    );
   }, [entry]);
-  const history = entry.history ? historyFor(entry.history as MonitorPastSpanKind | "bounds", row.id) : undefined;
-  const replica = useMemo(() => createFixtureReplica([row as AgentView]), [row]);
+  const history = entry.history
+    ? historyFor(entry.history as MonitorPastSpanKind | "bounds", rows[0]?.id ?? "row-1")
+    : undefined;
+  const replica = useMemo(() => createFixtureReplica(rows as AgentView[]), [rows]);
   const parameters = useMemo(
     () => monitorParameterDefaults(registered.parameterGroups),
     [registered],

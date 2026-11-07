@@ -1,13 +1,9 @@
-%% graph_ref: shared.reply
-%% adapter: antigravity
 %% field: field.reply.at
-%% forensic: source-read at 748d015; not a live sample
-flowchart LR
-  src["packages/adapter-antigravity/src/normalization/conversation.ts:1-3"]
-  raw["conversation:assistant-message final true"]
-  shared["shared.reply"]
-  row["field.reply.at yes"]
-  ui["UI unknown"]
-  src --> raw --> shared --> row --> ui
-  open["UNRESOLVED where this verdict is unknown"]
-  row --> open
+%% adapter: antigravity
+%% forensic: source-read 748d015a7e393112e0a91dad80111fdf5abe6583; not a live sample
+flowchart TD
+  n0["assistant-text\npackages/adapter-antigravity/src/normalization/conversation.ts:1-3\nAn assistant message event carries text and a final flag."]
+  n1["reduce-message\npackages/core/src/monitor/reduce.ts:913-938\nNonblank text replaces the actor reply. final false also marks responding."]
+  n0 --> n1
+  n2["derive-reply\npackages/monitor/src/backend/derive.ts:188-195\nBlank text is omitted. Otherwise text, optional at, and final are copied."]
+  n1 --> n2

@@ -10,91 +10,50 @@
     {
       "repo": "puppeteer",
       "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
-      "path": "packages/adapter-acp/src/normalization/monitor-capabilities.ts",
-      "lineStart": 24,
-      "lineEnd": 35,
-      "symbol": "usage capability"
-    },
-    {
-      "repo": "puppeteer",
-      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
       "path": "packages/adapter-acp/src/normalization/monitor.ts",
       "lineStart": 216,
       "lineEnd": 228,
-      "symbol": "usage_update routed to context"
-    },
-    {
-      "repo": "puppeteer",
-      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
-      "path": "packages/runtime/src/services/monitor-service.ts",
-      "lineStart": 176,
-      "lineEnd": 187,
-      "symbol": "MonitorService.consume"
-    },
-    {
-      "repo": "puppeteer",
-      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
-      "path": "packages/view-sdk/src/model.ts",
-      "lineStart": 98,
-      "lineEnd": 98,
-      "symbol": "model.ts"
-    },
-    {
-      "repo": "puppeteer",
-      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
-      "path": "packages/monitor/src/backend/derive.ts",
-      "lineStart": 198,
-      "lineEnd": 208,
-      "symbol": "derive.ts"
+      "symbol": "no usage:tokens-used"
     }
   ],
   "producer": {
-    "kind": "unknown",
-    "name": "not-adapter-produced",
-    "ingestedFrom": "not adapter-produced; PENDING DOWNSTREAM MAPPING into the row"
+    "kind": "adapter",
+    "name": "no usage:tokens-used",
+    "ingestedFrom": "no usage:tokens-used"
   },
   "transforms": [
     {
       "order": 0,
-      "name": "no-adapter-producer-0",
-      "effect": "No usage family update and no usage:tokens-used event. used is context occupancy.",
+      "name": "no-usage",
+      "effect": "This adapter does not emit usage:tokens-used or a usage-family sample. The trace stops. field.tokens is omitted.",
       "source": {
         "repo": "puppeteer",
         "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
-        "path": "packages/adapter-acp/src/normalization/monitor-capabilities.ts",
-        "lineStart": 24,
-        "lineEnd": 35,
-        "symbol": "usage capability"
+        "path": "packages/adapter-acp/src/normalization/monitor.ts",
+        "lineStart": 216,
+        "lineEnd": 228,
+        "symbol": "no usage:tokens-used"
       }
     }
   ],
   "merge": {
-    "strategy": "unknown",
+    "strategy": "none",
     "defaults": []
   },
   "transport": {
-    "channel": "unknown",
-    "name": "not-adapter-produced"
+    "channel": "in-process",
+    "name": "not-applicable",
+    "contract": "This adapter does not emit usage:tokens-used or a usage-family sample. The trace stops. field.tokens is omitted."
   },
   "renderer": {
     "viewIds": [],
-    "component": "not-established",
-    "symbol": "no-consumer-recorded"
+    "component": "no reader",
+    "symbol": "none"
   },
   "applicability": {
-    "states": [
-      "state.cost_complete",
-      "state.cost_partial",
-      "state.cost_unavailable",
-      "state.cost_missing",
-      "state.burn_flames_0",
-      "state.burn_flames_1",
-      "state.burn_flames_2",
-      "state.burn_flames_3",
-      "state.burn_flames_4"
-    ],
+    "states": "model-axes",
     "views": "all-monitor-views",
-    "notes": "No live usage producer in the current sources, so derive.ts:198-207 omits field.tokens. Not impossible if a later usage sample appears. Not live-observed. ROW FIELD field.tokens.total. PENDING DOWNSTREAM MAPPING into MonitorAgentRow. This is one of 74 canonical row fields. It is not an SDK contract leaf. PENDING DOWNSTREAM MAPPING: GV-AUDIT2 owns adapter output to row predicates, including cost, burn rate, history, timeline, and git branch. This audit does not give that verdict. Schema acceptance is not complete provenance. verification.status source-read is a static reading. observation.presence unknown means no live sample was taken. It does not mean the row value is missing. classification.adapterEmittable and uiReachable stay unknown. A raw adapter property is not the row field, and a catalog consumer is not a proven UI path.   Aligned with the unsupported declaration. That does not forbid field.tokens from another host or runtime source. The adapter does not write this MonitorAgentRow property. That is the architecture, not a conclusion that the row predicate is unreachable. This trace is Puppeteer 748d015a7e393112e0a91dad80111fdf5abe6583 only. It is newer than shipped Vibefield 0.3.3 and does not describe that install. Package comparison was not re-run. Declaration unsupported from none-in-acp-1.2.1. declaration only; supported does not guarantee availability/value; degraded is not unreachable No raw adapter signal does not rule out the row value from host, runtime, history, or another producer. Raw source literals, not live samples: adapter.acp.upstream.tokens.absent=\"absent\" (usage family) Graph: evidence/acp/tokens.total.mmd. Continuation anchors, not a reachability verdict: MonitorService.consume, core reduce and project, deriveAgentRow. Vibefield AgentView and window-rows are not traced."
+    "notes": "sourceScope=absent. sourceRef=packages/adapter-acp/src/normalization/monitor.ts:216-228 no usage:tokens-used. staticPresence=omitted. liveObserved=false. observation.presence=unknown because this audit did not live-sample the value. staticPresence is the source result and is independent of that. rendererRead=none. adapterEmittable=no. uiReachable=no. A global reader does not make this value reachable. Field domain is empty. applicability.states=model-axes is the envelope token for a field with no state predicates. It is not a reachable set and it does not claim any other field's states."
   },
   "absence": {
     "onMissing": "record-unknown",
@@ -102,17 +61,17 @@
     "zeroPolicy": "unknown-unsupported-and-absent-are-not-zero"
   },
   "observation": {
-    "presence": "absent",
+    "presence": "unknown",
     "synthetic": false
   },
   "classification": {
     "modelSupported": "yes",
     "adapterEmittable": "no",
-    "uiReachable": "unknown"
+    "uiReachable": "no"
   },
   "verification": {
     "status": "source-read",
     "owner": "GV-AUDIT3",
-    "notes": "No live usage producer in the current sources, so derive.ts:198-207 omits field.tokens. Not impossible if a later usage sample appears. Not live-observed. ROW FIELD field.tokens.total. PENDING DOWNSTREAM MAPPING into MonitorAgentRow. This is one of 74 canonical row fields. It is not an SDK contract leaf. PENDING DOWNSTREAM MAPPING: GV-AUDIT2 owns adapter output to row predicates, including cost, burn rate, history, timeline, and git branch. This audit does not give that verdict. Schema acceptance is not complete provenance. verification.status source-read is a static reading. observation.presence unknown means no live sample was taken. It does not mean the row value is missing. classification.adapterEmittable and uiReachable stay unknown. A raw adapter property is not the row field, and a catalog consumer is not a proven UI path.   Aligned with the unsupported declaration. That does not forbid field.tokens from another host or runtime source. The adapter does not write this MonitorAgentRow property. That is the architecture, not a conclusion that the row predicate is unreachable. This trace is Puppeteer 748d015a7e393112e0a91dad80111fdf5abe6583 only. It is newer than shipped Vibefield 0.3.3 and does not describe that install. Package comparison was not re-run. Declaration unsupported from none-in-acp-1.2.1. declaration only; supported does not guarantee availability/value; degraded is not unreachable No raw adapter signal does not rule out the row value from host, runtime, history, or another producer. Raw source literals, not live samples: adapter.acp.upstream.tokens.absent=\"absent\" (usage family) Graph: evidence/acp/tokens.total.mmd. Continuation anchors, not a reachability verdict: MonitorService.consume, core reduce and project, deriveAgentRow. Vibefield AgentView and window-rows are not traced."
+    "notes": "sourceScope=absent. sourceRef=packages/adapter-acp/src/normalization/monitor.ts:216-228 no usage:tokens-used. staticPresence=omitted. liveObserved=false. observation.presence=unknown because this audit did not live-sample the value. staticPresence is the source result and is independent of that. rendererRead=none. adapterEmittable=no. uiReachable=no. A global reader does not make this value reachable. Field domain is empty. applicability.states=model-axes is the envelope token for a field with no state predicates. It is not a reachable set and it does not claim any other field's states."
   }
 }

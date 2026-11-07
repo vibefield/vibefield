@@ -29,5 +29,5 @@
     "symbol": "SpendView",
     "lineStart": 255
   },
-  "notes": "cost absent. Spend names the agent apart. adapterIds list the ten audit adapters as classification context only. They are not a claim that any adapter emitted this row. Mounted from Puppeteer source 748d015 via MonitorViewHost. Not shipped package 0.3.3."
+  "notes": "cost absent. Spend names the agent apart. adapterIds list the ten audit adapters as classification context only. They are not a claim that any adapter emitted this row. Mounted from Puppeteer source 748d015 via MonitorViewHost. Not shipped package 0.3.3. Normal row when no priced total exists, including token-only adapters. Claude and Codex can also be missing before a price lands. Not state.cost_unavailable."
 }

@@ -11,25 +11,17 @@
       "repo": "puppeteer",
       "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
       "path": "packages/adapter-acp/src/normalization/monitor.ts",
-      "lineStart": 222,
-      "lineEnd": 227,
-      "symbol": "percentageSource without usedPercentage"
-    },
-    {
-      "repo": "puppeteer",
-      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
-      "path": "packages/adapter-acp/src/normalization/context-window.ts",
-      "lineStart": 17,
-      "lineEnd": 17,
-      "symbol": "context-window event fields"
+      "lineStart": 216,
+      "lineEnd": 228,
+      "symbol": "usage_update context only"
     },
     {
       "repo": "puppeteer",
       "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
       "path": "packages/core/src/monitor/reduce.ts",
       "lineStart": 1075,
-      "lineEnd": 1103,
-      "symbol": "context-window cases"
+      "lineEnd": 1104,
+      "symbol": "context upsert or retract"
     },
     {
       "repo": "puppeteer",
@@ -38,75 +30,62 @@
       "lineStart": 240,
       "lineEnd": 286,
       "symbol": "deriveAgentRow"
-    },
-    {
-      "repo": "puppeteer",
-      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
-      "path": "packages/view-sdk/src/model.ts",
-      "lineStart": 157,
-      "lineEnd": 157,
-      "symbol": "model.ts"
-    },
-    {
-      "repo": "puppeteer",
-      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
-      "path": "packages/monitor/src/backend/derive.ts",
-      "lineStart": 247,
-      "lineEnd": 247,
-      "symbol": "derive.ts"
-    },
-    {
-      "repo": "puppeteer",
-      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
-      "path": "packages/monitor/src/backend/derive.ts",
-      "lineStart": 274,
-      "lineEnd": 274,
-      "symbol": "derive.ts"
-    },
-    {
-      "repo": "puppeteer",
-      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
-      "path": "packages/views/src/views/swarm/bubble-model.ts",
-      "lineStart": 328,
-      "lineEnd": 330,
-      "symbol": "bubble-model.ts"
-    },
-    {
-      "repo": "puppeteer",
-      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
-      "path": "packages/views/src/views/rain/rain-streams.ts",
-      "lineStart": 89,
-      "lineEnd": 117,
-      "symbol": "rain-streams.ts"
     }
   ],
   "producer": {
-    "kind": "unknown",
-    "name": "not-adapter-produced",
-    "ingestedFrom": "not adapter-produced; PENDING DOWNSTREAM MAPPING into the row"
+    "kind": "adapter",
+    "name": "usage_update context only",
+    "ingestedFrom": "usage_update context only"
   },
   "transforms": [
     {
       "order": 0,
-      "name": "no-adapter-producer-0",
-      "effect": "Neither producer assigns usedPercentage. percentageSource derived does not mean a percent was calculated here.",
+      "name": "normalized-context",
+      "effect": "The adapter writes used and capacity tokens, and a percentage only when it actually has one.",
       "source": {
         "repo": "puppeteer",
         "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
         "path": "packages/adapter-acp/src/normalization/monitor.ts",
-        "lineStart": 222,
-        "lineEnd": 227,
-        "symbol": "percentageSource without usedPercentage"
+        "lineStart": 216,
+        "lineEnd": 228,
+        "symbol": "usage_update context only"
+      }
+    },
+    {
+      "order": 1,
+      "name": "reduce-percent",
+      "effect": "A positive capacity stores context. A missing provider percentage becomes a clamped ratio. Invalidation retracts that claim.",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/core/src/monitor/reduce.ts",
+        "lineStart": 1075,
+        "lineEnd": 1104,
+        "symbol": "context upsert or retract"
+      }
+    },
+    {
+      "order": 2,
+      "name": "derive-percent",
+      "effect": "A finite usedPercent is copied. Otherwise field.context is omitted.",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/monitor/src/backend/derive.ts",
+        "lineStart": 240,
+        "lineEnd": 286,
+        "symbol": "deriveAgentRow"
       }
     }
   ],
   "merge": {
-    "strategy": "unknown",
+    "strategy": "replace",
     "defaults": []
   },
   "transport": {
-    "channel": "unknown",
-    "name": "not-adapter-produced"
+    "channel": "in-process",
+    "name": "AgentMonitorService.consume",
+    "contract": "normalized event or monitor batch"
   },
   "renderer": {
     "viewIds": [
@@ -114,8 +93,8 @@
       "view.rain",
       "view.swarm"
     ],
-    "component": "bubble-model / AgentList / rain-streams",
-    "symbol": "usedPercent"
+    "component": "direct reader",
+    "symbol": "direct"
   },
   "applicability": {
     "states": [
@@ -127,7 +106,7 @@
       "view.rain",
       "view.swarm"
     ],
-    "notes": "Context tokens reach reduce.ts:1075-1100, which can derive a percentage, then derive.ts:247-274 copies a finite usedPercent. Conditional on a positive capacity. Source-permitted. Not live-observed. The hot-at-80 swarm ring is a renderer rule, not an adapter state. ROW FIELD field.context.usedPercent. PENDING DOWNSTREAM MAPPING into MonitorAgentRow. This is one of 74 canonical row fields. It is not an SDK contract leaf. PENDING DOWNSTREAM MAPPING: GV-AUDIT2 owns adapter output to row predicates, including cost, burn rate, history, timeline, and git branch. This audit does not give that verdict. Schema acceptance is not complete provenance. verification.status source-read is a static reading. observation.presence unknown means no live sample was taken. It does not mean the row value is missing. classification.adapterEmittable and uiReachable stay unknown. A raw adapter property is not the row field, and a catalog consumer is not a proven UI path.   Context is declared supported. The percentage number is not an adapter emission. A shared reducer case can derive one from tokens; that formula is not restated here and is not field.context.usedPercent until GV2 maps it. The adapter does not write this MonitorAgentRow property. That is the architecture, not a conclusion that the row predicate is unreachable. This trace is Puppeteer 748d015a7e393112e0a91dad80111fdf5abe6583 only. It is newer than shipped Vibefield 0.3.3 and does not describe that install. Package comparison was not re-run. Declaration supported from acp-usage-update. declaration only; supported does not guarantee availability/value; degraded is not unreachable Declared support does not match the producer channel. That mismatch is not a runtime impossibility. Raw source literals, not live samples: adapter.acp.upstream.usedPercentage.absent=\"absent\" (usage_update handlers) Graph: evidence/acp/context.usedPercent.mmd. Continuation anchors, not a reachability verdict: MonitorService.consume, core reduce and project, deriveAgentRow. Vibefield AgentView and window-rows are not traced."
+    "notes": "sourceScope=adapter-provided. sourceRef=packages/adapter-acp/src/normalization/monitor.ts:216-228 usage_update context only. staticPresence=emitted-when-condition. liveObserved=false. observation.presence=unknown because this audit did not live-sample the value. staticPresence is the source result and is independent of that. rendererRead=direct. adapterEmittable=yes. uiReachable=yes. The value reaches a direct reader from this adapter-provided producer. Field domain: state.context_missing, state.context_hot. Reachable subset: state.context_missing, state.context_hot."
   },
   "absence": {
     "onMissing": "record-unknown",
@@ -146,6 +125,6 @@
   "verification": {
     "status": "source-read",
     "owner": "GV-AUDIT3",
-    "notes": "Context tokens reach reduce.ts:1075-1100, which can derive a percentage, then derive.ts:247-274 copies a finite usedPercent. Conditional on a positive capacity. Source-permitted. Not live-observed. The hot-at-80 swarm ring is a renderer rule, not an adapter state. ROW FIELD field.context.usedPercent. PENDING DOWNSTREAM MAPPING into MonitorAgentRow. This is one of 74 canonical row fields. It is not an SDK contract leaf. PENDING DOWNSTREAM MAPPING: GV-AUDIT2 owns adapter output to row predicates, including cost, burn rate, history, timeline, and git branch. This audit does not give that verdict. Schema acceptance is not complete provenance. verification.status source-read is a static reading. observation.presence unknown means no live sample was taken. It does not mean the row value is missing. classification.adapterEmittable and uiReachable stay unknown. A raw adapter property is not the row field, and a catalog consumer is not a proven UI path.   Context is declared supported. The percentage number is not an adapter emission. A shared reducer case can derive one from tokens; that formula is not restated here and is not field.context.usedPercent until GV2 maps it. The adapter does not write this MonitorAgentRow property. That is the architecture, not a conclusion that the row predicate is unreachable. This trace is Puppeteer 748d015a7e393112e0a91dad80111fdf5abe6583 only. It is newer than shipped Vibefield 0.3.3 and does not describe that install. Package comparison was not re-run. Declaration supported from acp-usage-update. declaration only; supported does not guarantee availability/value; degraded is not unreachable Declared support does not match the producer channel. That mismatch is not a runtime impossibility. Raw source literals, not live samples: adapter.acp.upstream.usedPercentage.absent=\"absent\" (usage_update handlers) Graph: evidence/acp/context.usedPercent.mmd. Continuation anchors, not a reachability verdict: MonitorService.consume, core reduce and project, deriveAgentRow. Vibefield AgentView and window-rows are not traced."
+    "notes": "sourceScope=adapter-provided. sourceRef=packages/adapter-acp/src/normalization/monitor.ts:216-228 usage_update context only. staticPresence=emitted-when-condition. liveObserved=false. observation.presence=unknown because this audit did not live-sample the value. staticPresence is the source result and is independent of that. rendererRead=direct. adapterEmittable=yes. uiReachable=yes. The value reaches a direct reader from this adapter-provided producer. Field domain: state.context_missing, state.context_hot. Reachable subset: state.context_missing, state.context_hot."
   }
 }

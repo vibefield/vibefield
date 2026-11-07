@@ -1,0 +1,12 @@
+%% field: field.account
+%% adapter: claude
+%% sourceScope: host-supplied
+%% envelope uiReachable is the Vibefield consumer, not every host
+flowchart TD
+  none["No adapter emits account"] --> copy["derive.ts:273 copies host.account or omits it"]
+  vf["Vibefield hostRunFromSummary agent-monitor.ts:223-266 never sets account"] --> copy
+  ph["Puppeteer Godview host"] --> copy
+  ph --> pp["monitor-host.ts:62-79 sets account from the registered profile label"]
+  copy --> vfRow["consumer 433505fd: account unreachable"]
+  pp --> readers["AgentList.tsx:151,185 only when the string is present"]
+  usage["accountUsage feeds the usage column only. It does not write field.account"]

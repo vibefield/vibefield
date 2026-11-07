@@ -1,11 +1,9 @@
-%% graph_ref: shared.project
-%% adapter: antigravity
 %% field: field.project.name
-%% forensic: source-read at 748d015; not a live sample
-flowchart LR
-  src["packages/adapter-antigravity/src/driver.ts:162-165"]
-  raw["currentCwd"]
-  shared["shared.project"]
-  row["field.project.name yes"]
-  ui["UI yes"]
-  src --> raw --> shared --> row --> ui
+%% sourceScope: common-runtime
+%% staticPresence: always-on-row
+%% liveObserved: false
+flowchart TD
+  producer["packages/monitor/src/backend/derive.ts:91-95\nprojectName"]
+  producer --> row["row property from that producer"]
+  row --> window["window-rows.ts:116-134 pass-through unless this field is stale or profileSet"]
+  window --> reader["rendererRead direct"]

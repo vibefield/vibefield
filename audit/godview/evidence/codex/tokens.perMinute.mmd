@@ -1,13 +1,9 @@
-%% graph_ref: shared.tokens
-%% adapter: codex
 %% field: field.tokens.perMinute
-%% forensic: source-read at 748d015; not a live sample
-flowchart LR
-  src["packages/adapter-codex/src/normalization/monitor.ts:391-391"]
-  raw["no raw adapter write found"]
-  shared["shared.tokens"]
-  row["field.tokens.perMinute yes"]
-  ui["UI unknown"]
-  src --> raw --> shared --> row --> ui
-  open["UNRESOLVED where this verdict is unknown"]
-  row --> open
+%% adapter: codex
+%% forensic: source-read 748d015a7e393112e0a91dad80111fdf5abe6583; not a live sample
+flowchart TD
+  n0["cumulative-sample\npackages/adapter-codex/src/normalization/monitor.ts:503-527\nLive non-duplicate samples carry cumulativeTokens. Bootstrap samples are not usage upserts."]
+  n1["reduce-copy\npackages/core/src/monitor/reduce.ts:1049-1073\nThe reducer copies cumulativeTokens. Pricing may add costUsd and does not erase the counter."]
+  n0 --> n1
+  n2["row-tokens\npackages/monitor/src/backend/derive.ts:198-207\nderive maps cumulativeTokens to tokens.total and burnRatePerMin to tokens.perMinute when the index produces a rate."]
+  n1 --> n2

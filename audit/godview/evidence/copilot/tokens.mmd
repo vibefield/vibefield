@@ -1,13 +1,9 @@
-%% graph_ref: shared.tokens.absent
-%% adapter: copilot
 %% field: field.tokens
-%% forensic: source-read at 748d015; not a live sample
-flowchart LR
-  src["packages/adapter-copilot/src/normalization/monitor-capabilities.ts:15-23"]
-  raw["no raw adapter write found"]
-  shared["shared.tokens.absent"]
-  row["field.tokens no"]
-  ui["UI unknown"]
-  src --> raw --> shared --> row --> ui
-  open["UNRESOLVED where this verdict is unknown"]
-  row --> open
+%% sourceScope: absent
+%% staticPresence: omitted
+%% liveObserved: false
+flowchart TD
+  producer["packages/adapter-copilot/src/normalization/compaction.ts:4-25\nno usage:tokens-used"]
+  producer --> row["row property from that producer"]
+  row --> window["window-rows.ts:116-134 pass-through unless this field is stale or profileSet"]
+  window --> reader["rendererRead none"]

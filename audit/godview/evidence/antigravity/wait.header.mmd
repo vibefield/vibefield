@@ -1,13 +1,9 @@
-%% graph_ref: shared.status
-%% adapter: antigravity
 %% field: field.wait.header
-%% forensic: source-read at 748d015; not a live sample
-flowchart LR
-  src["packages/view-sdk/src/model.ts:57-57"]
-  raw["no raw adapter write found"]
-  shared["shared.status"]
-  row["field.wait.header yes"]
-  ui["UI unknown"]
-  src --> raw --> shared --> row --> ui
-  open["UNRESOLVED where this verdict is unknown"]
-  row --> open
+%% sourceScope: absent
+%% staticPresence: omitted
+%% liveObserved: false
+flowchart TD
+  producer["packages/adapter-antigravity/src/normalization/pipeline.ts:21-107\nno interaction"]
+  producer --> row["row property from that producer"]
+  row --> window["window-rows.ts:116-134 pass-through unless this field is stale or profileSet"]
+  window --> reader["rendererRead direct"]

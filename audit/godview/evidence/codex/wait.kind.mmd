@@ -1,13 +1,9 @@
-%% graph_ref: shared.status
-%% adapter: codex
 %% field: field.wait.kind
-%% forensic: source-read at 748d015; not a live sample
-flowchart LR
-  src["packages/adapter-codex/src/services/approvals.ts:198-293"]
-  raw["adapter signal, see transforms"]
-  shared["shared.status"]
-  row["field.wait.kind yes"]
-  ui["UI unknown"]
-  src --> raw --> shared --> row --> ui
-  open["UNRESOLVED where this verdict is unknown"]
-  row --> open
+%% adapter: codex
+%% forensic: source-read 748d015a7e393112e0a91dad80111fdf5abe6583; not a live sample
+flowchart TD
+  n0["normalized-interaction\npackages/adapter-codex/src/services/approvals.ts:198-293\nPermission or question events are published from the adapter handler."]
+  n1["reduce-blocker\npackages/core/src/monitor/reduce.ts:974-1025\nA pending interaction becomes a blocker. Resolution removes it. Outcome text is not a row wait by itself."]
+  n0 --> n1
+  n2["derive-wait\npackages/monitor/src/backend/derive.ts:136-161\nagentWait copies the first blocker kind, since, and optional tool, question, or detail."]
+  n1 --> n2

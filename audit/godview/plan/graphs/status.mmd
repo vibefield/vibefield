@@ -1,4 +1,19 @@
-flowchart LR
-  events[turn tool permission events] --> transitions[transitions.ts status]
-  transitions --> derive[derive.ts agentStatus]
-  derive --> views[list rain swarm spend]
+%% field: field.status
+%% adapter: claude
+%% sourceScope: adapter-provided
+%% forensic: source-read; liveObserved false
+flowchart TD
+  signal["packages/adapter-claude/src/normalization/monitor.ts:328-367\nchildStatusBatch"]
+  also["turn.ts:5-18 hook turns and tool.ts:46-52 tool requested"] --> reduce
+  signal --> reduce["reduce.ts:864-912 turn and tool activity"]
+  reduce --> choose["transitions.ts:370-371"]
+  choose --> child["runnable child: working"]
+  choose --> blocked["blockers and no child: blocked"]
+  choose --> active["activity remains: working"]
+  choose --> idle["otherwise: idle"]
+  choose --> derive["derive.ts:68-72"]
+  derive --> pending["host.pending: idle"]
+  derive --> starting["no runtime state: working"]
+  derive --> replica["replica.ts:315-321 agent status copied"]
+  replica --> window["window-rows.ts:130-134 pass-through; status is not rewritten"]
+  window --> readers["AgentList.tsx:144-199 RainView.tsx:217 bubble-model.ts:298-345 spend-words.ts:145 timeline-lanes.ts:94-97"]

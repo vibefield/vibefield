@@ -1,13 +1,11 @@
-%% graph_ref: shared.host-row
-%% adapter: codex
 %% field: field.profileSet
-%% forensic: source-read at 748d015; not a live sample
-flowchart LR
-  src["packages/view-sdk/src/model.ts:167-167"]
-  raw["no raw adapter write found"]
-  shared["shared.host-row"]
-  row["field.profileSet no"]
-  ui["UI unknown"]
-  src --> raw --> shared --> row --> ui
-  open["UNRESOLVED where this verdict is unknown"]
-  row --> open
+%% adapter: codex
+%% sourceScope: common-runtime
+flowchart TD
+  inputs["host profileSet or profileId"] --> resolve["derive.ts:62-66 host value, else persona set, else native"]
+  resolve --> apply["backend.ts:433"]
+  apply --> row["derive.ts:282 always copies profileSet onto an agent row"]
+  row --> self["self row keeps it"]
+  row --> peer["window-rows.ts:130-134 drops other-device profileSet"]
+  self --> tabs["profile-tabs.ts:26-28"]
+  self --> bloom["swarm bloom model.ts:381"]

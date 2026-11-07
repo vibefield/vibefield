@@ -1,11 +1,9 @@
-%% graph_ref: shared.cost.missing
-%% adapter: acp
 %% field: field.cost.usd
-%% forensic: source-read at 748d015; not a live sample
-flowchart LR
-  src["packages/adapter-acp/src/normalization/monitor-capabilities.ts:31-34"]
-  raw["no raw adapter write found"]
-  shared["shared.cost.missing"]
-  row["field.cost.usd no"]
-  ui["UI no"]
-  src --> raw --> shared --> row --> ui
+%% sourceScope: absent
+%% staticPresence: omitted
+%% liveObserved: false
+flowchart TD
+  producer["packages/adapter-acp/src/normalization/monitor.ts:216-228\nusage_update omits usage"]
+  producer --> row["row property from that producer"]
+  row --> window["window-rows.ts:116-134 pass-through unless this field is stale or profileSet"]
+  window --> reader["rendererRead direct"]

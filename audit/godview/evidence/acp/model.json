@@ -10,14 +10,6 @@
     {
       "repo": "puppeteer",
       "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
-      "path": "packages/adapter-acp/src/normalization/model.ts",
-      "lineStart": 8,
-      "lineEnd": 25,
-      "symbol": "acpModelIdentity / normalizeAcpModel"
-    },
-    {
-      "repo": "puppeteer",
-      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
       "path": "packages/adapter-acp/src/normalization/monitor.ts",
       "lineStart": 62,
       "lineEnd": 78,
@@ -26,67 +18,30 @@
     {
       "repo": "puppeteer",
       "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
-      "path": "packages/runtime/src/services/monitor-service.ts",
-      "lineStart": 176,
-      "lineEnd": 187,
-      "symbol": "MonitorService.consume"
-    },
-    {
-      "repo": "puppeteer",
-      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
       "path": "packages/core/src/monitor/reduce.ts",
-      "lineStart": 1117,
-      "lineEnd": 1127,
-      "symbol": "environment model effort mode cases"
-    },
-    {
-      "repo": "puppeteer",
-      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
-      "path": "packages/view-sdk/src/model.ts",
-      "lineStart": 154,
-      "lineEnd": 154,
-      "symbol": "model.ts"
+      "lineStart": 1120,
+      "lineEnd": 1125,
+      "symbol": "model and effort upsert"
     },
     {
       "repo": "puppeteer",
       "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
       "path": "packages/monitor/src/backend/derive.ts",
-      "lineStart": 244,
-      "lineEnd": 244,
-      "symbol": "derive.ts"
-    },
-    {
-      "repo": "puppeteer",
-      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
-      "path": "packages/monitor/src/backend/derive.ts",
-      "lineStart": 271,
-      "lineEnd": 271,
-      "symbol": "derive.ts"
+      "lineStart": 240,
+      "lineEnd": 286,
+      "symbol": "deriveAgentRow"
     }
   ],
   "producer": {
     "kind": "adapter",
-    "name": "acp normalization",
-    "ingestedFrom": "model:updated.model.id"
+    "name": "configUpdates model",
+    "ingestedFrom": "configUpdates model"
   },
   "transforms": [
     {
       "order": 0,
-      "name": "adapter-step-0",
-      "effect": "Identity is the select config option with category model. providerModelId is currentValue. displayName is the matching choice name when present.",
-      "source": {
-        "repo": "puppeteer",
-        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
-        "path": "packages/adapter-acp/src/normalization/model.ts",
-        "lineStart": 8,
-        "lineEnd": 25,
-        "symbol": "acpModelIdentity / normalizeAcpModel"
-      }
-    },
-    {
-      "order": 1,
-      "name": "adapter-step-1",
-      "effect": "A config_option_update with no model selector retracts monitor key observed. The pipeline instead emits adapter:native-event and does not retract.",
+      "name": "normalized-card",
+      "effect": "model is emitted as an event or monitor upsert. Antigravity does this only from launch options.",
       "source": {
         "repo": "puppeteer",
         "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
@@ -97,45 +52,64 @@
       }
     },
     {
-      "order": 2,
-      "name": "adapter-step-2",
-      "effect": "Monitor intent is always the literal observed. The pipeline model:updated omits intent.",
+      "order": 1,
+      "name": "reduce-card",
+      "effect": "model:updated and effort:updated upsert or retract. Null retracts. Configured and observed stay distinct.",
       "source": {
         "repo": "puppeteer",
         "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
-        "path": "packages/runtime/src/services/monitor-service.ts",
-        "lineStart": 176,
-        "lineEnd": 187,
-        "symbol": "MonitorService.consume"
+        "path": "packages/core/src/monitor/reduce.ts",
+        "lineStart": 1120,
+        "lineEnd": 1125,
+        "symbol": "model and effort upsert"
+      }
+    },
+    {
+      "order": 2,
+      "name": "derive-card",
+      "effect": "derive copies model displayName or id, and effort value plus intent when present.",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/monitor/src/backend/derive.ts",
+        "lineStart": 240,
+        "lineEnd": 286,
+        "symbol": "deriveAgentRow"
       }
     }
   ],
   "merge": {
-    "strategy": "unknown",
+    "strategy": "replace",
     "defaults": []
   },
   "transport": {
     "channel": "in-process",
-    "name": "MonitorService.consume",
-    "contract": "AgentEvent or monitor:batch"
+    "name": "AgentMonitorService.consume",
+    "contract": "normalized event or monitor batch"
   },
   "renderer": {
     "viewIds": [
+      "view.list",
+      "view.rain",
       "view.swarm",
-      "view.spend"
+      "view.spend",
+      "view.timeline"
     ],
-    "component": "bubble-model / spend-words",
-    "symbol": "model displayName or id"
+    "component": "direct reader",
+    "symbol": "direct"
   },
   "applicability": {
     "states": [
       "state.model_missing"
     ],
     "views": [
+      "view.list",
+      "view.rain",
       "view.swarm",
-      "view.spend"
+      "view.spend",
+      "view.timeline"
     ],
-    "notes": "Model events or monitor model upserts are projected by project.ts and copied by derive.ts:244. Conditional on a model actually being present. Not live-observed. Timeline consumption was not verified. ROW FIELD field.model. PENDING DOWNSTREAM MAPPING into MonitorAgentRow. This is one of 74 canonical row fields. It is not an SDK contract leaf. PENDING DOWNSTREAM MAPPING: GV-AUDIT2 owns adapter output to row predicates, including cost, burn rate, history, timeline, and git branch. This audit does not give that verdict. Schema acceptance is not complete provenance. verification.status source-read is a static reading. observation.presence unknown means no live sample was taken. It does not mean the row value is missing. classification.adapterEmittable and uiReachable stay unknown. A raw adapter property is not the row field, and a catalog consumer is not a proven UI path.   field.model is a single string chosen downstream. This adapter emits id and an optional display name on two channels that do not agree about retract or intent. The row choice is pending. The adapter does not write this MonitorAgentRow property. That is the architecture, not a conclusion that the row predicate is unreachable. This trace is Puppeteer 748d015a7e393112e0a91dad80111fdf5abe6583 only. It is newer than shipped Vibefield 0.3.3 and does not describe that install. Package comparison was not re-run. Declaration supported from acp-model-config-option. declaration only; supported does not guarantee availability/value; degraded is not unreachable Declared support does not match the producer channel. That mismatch is not a runtime impossibility. Raw source literals, not live samples: adapter.acp.upstream.model.present=\"currentValue\" (model select has currentValue); adapter.acp.upstream.model.retract=\"retract observed\" (full config set has no model selector); adapter.acp.upstream.model.intent=\"observed\" (monitor upsert only); adapter.acp.upstream.model.display.omitted=\"displayName omitted\" (no matching choice name) Graph: evidence/acp/model.mmd. Continuation anchors, not a reachability verdict: MonitorService.consume, core reduce and project, deriveAgentRow. Vibefield AgentView and window-rows are not traced."
+    "notes": "sourceScope=adapter-provided. sourceRef=packages/adapter-acp/src/normalization/monitor.ts:62-78 config model. staticPresence=emitted-when-condition. liveObserved=false. observation.presence=unknown because this audit did not live-sample the value. staticPresence is the source result and is independent of that. rendererRead=direct. adapterEmittable=yes. uiReachable=yes. The value reaches a direct reader from this adapter-provided producer. Field domain: state.model_missing. Reachable subset: state.model_missing."
   },
   "absence": {
     "onMissing": "record-unknown",
@@ -154,6 +128,6 @@
   "verification": {
     "status": "source-read",
     "owner": "GV-AUDIT3",
-    "notes": "Model events or monitor model upserts are projected by project.ts and copied by derive.ts:244. Conditional on a model actually being present. Not live-observed. Timeline consumption was not verified. ROW FIELD field.model. PENDING DOWNSTREAM MAPPING into MonitorAgentRow. This is one of 74 canonical row fields. It is not an SDK contract leaf. PENDING DOWNSTREAM MAPPING: GV-AUDIT2 owns adapter output to row predicates, including cost, burn rate, history, timeline, and git branch. This audit does not give that verdict. Schema acceptance is not complete provenance. verification.status source-read is a static reading. observation.presence unknown means no live sample was taken. It does not mean the row value is missing. classification.adapterEmittable and uiReachable stay unknown. A raw adapter property is not the row field, and a catalog consumer is not a proven UI path.   field.model is a single string chosen downstream. This adapter emits id and an optional display name on two channels that do not agree about retract or intent. The row choice is pending. The adapter does not write this MonitorAgentRow property. That is the architecture, not a conclusion that the row predicate is unreachable. This trace is Puppeteer 748d015a7e393112e0a91dad80111fdf5abe6583 only. It is newer than shipped Vibefield 0.3.3 and does not describe that install. Package comparison was not re-run. Declaration supported from acp-model-config-option. declaration only; supported does not guarantee availability/value; degraded is not unreachable Declared support does not match the producer channel. That mismatch is not a runtime impossibility. Raw source literals, not live samples: adapter.acp.upstream.model.present=\"currentValue\" (model select has currentValue); adapter.acp.upstream.model.retract=\"retract observed\" (full config set has no model selector); adapter.acp.upstream.model.intent=\"observed\" (monitor upsert only); adapter.acp.upstream.model.display.omitted=\"displayName omitted\" (no matching choice name) Graph: evidence/acp/model.mmd. Continuation anchors, not a reachability verdict: MonitorService.consume, core reduce and project, deriveAgentRow. Vibefield AgentView and window-rows are not traced."
+    "notes": "sourceScope=adapter-provided. sourceRef=packages/adapter-acp/src/normalization/monitor.ts:62-78 config model. staticPresence=emitted-when-condition. liveObserved=false. observation.presence=unknown because this audit did not live-sample the value. staticPresence is the source result and is independent of that. rendererRead=direct. adapterEmittable=yes. uiReachable=yes. The value reaches a direct reader from this adapter-provided producer. Field domain: state.model_missing. Reachable subset: state.model_missing."
   }
 }

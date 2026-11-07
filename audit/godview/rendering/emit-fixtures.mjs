@@ -1,4 +1,4 @@
-import { mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   CONTRACT_MISMATCHES,
@@ -11,6 +11,7 @@ import {
   SHIPPED_TAG_COMMIT,
   assertCoverage,
 } from "./inputs.mjs";
+import { matrix, matrixSummary } from "./matrix.mjs";
 
 assertCoverage();
 const root = join(import.meta.dirname, "..", "fixtures");
@@ -35,15 +36,29 @@ const integration = {
   mount:
     "MonitorViewHost plus the registry view from Puppeteer source packages/views at sourceSha. The checkout is audit/godview/rendering/.pin/puppeteer and is not the installed npm package.",
   contractMismatches: CONTRACT_MISMATCHES,
-  fixtures: ENTRIES.map((entry) => ({
-    fixtureId: entry.fixtureId,
-    viewId: entry.viewId,
-    lifecycleStates: [entry.stateId],
-    file: `audit/godview/fixtures/${entry.fixtureId}.json`,
-    requiresBodyPaint: entry.requiresBodyPaint,
-    interact: entry.interact,
-  })),
+  fixtures: ENTRIES.map((entry) => {
+    const screenshot = `audit/godview/rendering/screenshots/${entry.fixtureId}.png`;
+    const painted = existsSync(join(import.meta.dirname, "screenshots", `${entry.fixtureId}.png`));
+    return {
+      fixtureId: entry.fixtureId,
+      viewId: entry.viewId,
+      lifecycleStates: [entry.stateId],
+      file: `audit/godview/fixtures/${entry.fixtureId}.json`,
+      requiresBodyPaint: entry.requiresBodyPaint,
+      interact: entry.interact,
+      ...(painted ? { renderStatus: "rendered", screenshot } : { renderStatus: "pending-screenshot" }),
+    };
+  }),
   holes: HOLES,
+  matrixSummary: matrixSummary(),
+  matrix: matrix().map((cell) => ({
+    stateId: cell.stateId,
+    viewId: cell.viewId,
+    disposition: cell.disposition,
+    ...(cell.fixtureId ? { fixtureId: cell.fixtureId } : {}),
+    ...(cell.exercise ? { exercise: cell.exercise } : {}),
+    evidence: cell.evidence,
+  })),
 };
 writeFileSync(join(import.meta.dirname, "integration.json"), `${JSON.stringify(integration, null, 2)}\n`);
 process.stdout.write(`wrote ${ENTRIES.length} fixtures\n`);

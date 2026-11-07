@@ -1,13 +1,13 @@
-%% graph_ref: shared.runtime-supplied
-%% adapter: codex
 %% field: field.stale
-%% forensic: source-read at 748d015; not a live sample
-flowchart LR
-  src["packages/view-sdk/src/model.ts:137-137"]
-  raw["no raw adapter write found"]
-  shared["shared.runtime-supplied"]
-  row["field.stale no"]
-  ui["UI unknown"]
-  src --> raw --> shared --> row --> ui
-  open["UNRESOLVED where this verdict is unknown"]
-  row --> open
+%% adapter: codex
+%% sourceScope: common-runtime
+%% forensic: source-read; liveObserved false
+flowchart TD
+  clock["freshness.ts:32-42 age against staleAfterMs"] --> fn["derive.ts:215-225 isStale"]
+  fn --> fresh["false: state.fresh"]
+  fn --> stale["true: state.stale"]
+  fn --> row["deriveAgentRow always sets stale"]
+  row --> self["window-rows.ts:116 self row keeps isStale"]
+  row --> peer["window-rows.ts:116 other device: stale when standing is not live"]
+  peer --> device["state.device_stale"]
+  self --> list["AgentList and swarm read stale"]

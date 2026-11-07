@@ -1,11 +1,9 @@
-%% graph_ref: shared.cost.missing
-%% adapter: copilot
 %% field: field.cost.series
-%% forensic: source-read at 748d015; not a live sample
-flowchart LR
-  src["packages/adapter-copilot/src/normalization/monitor-capabilities.ts:15-23"]
-  raw["no raw adapter write found"]
-  shared["shared.cost.missing"]
-  row["field.cost.series no"]
-  ui["UI no"]
-  src --> raw --> shared --> row --> ui
+%% sourceScope: absent
+%% staticPresence: omitted
+%% liveObserved: false
+flowchart TD
+  producer["packages/adapter-copilot/src/normalization/compaction.ts:4-25\ncontext tokens are not cost"]
+  producer --> row["row property from that producer"]
+  row --> window["window-rows.ts:116-134 pass-through unless this field is stale or profileSet"]
+  window --> reader["rendererRead direct"]

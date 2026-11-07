@@ -48,7 +48,11 @@ function envelope(patch) {
 }
 
 test("foundation absence is incomplete and still valid", () => {
-  const report = run(ROOT);
+  const dir = mkdtempSync(join(tmpdir(), "gv-foundation-only-"));
+  cpSync(join(ROOT, "audit/godview"), join(dir, "audit/godview"), { recursive: true });
+  stripOwned(dir);
+  const report = run(dir);
+  rmSync(dir, { recursive: true, force: true });
   assert.equal(report.ok, true, JSON.stringify(report.failures, null, 2));
   assert.equal(report.pins.puppeteer, PINS.puppeteer);
   assert.equal(report.notShipped, "0.3.3");
@@ -115,11 +119,25 @@ test("partial model file presence is rejected", () => {
   assert.match(failure.message, /contracts\/model\.validation\.json/u);
 });
 
+const OWNED_SLICE_FILES = [
+  "contracts/model.schema.json",
+  "contracts/model.md",
+  "contracts/model.validation.json",
+  "validation/package-pin-check.md",
+];
+
+function stripOwned(dir) {
+  for (const rel of OWNED_SLICE_FILES) {
+    rmSync(join(dir, "audit/godview", rel), { force: true });
+  }
+}
+
 function withSlice(paths, mutate) {
   ensureCommit(MODEL_COMMIT);
   ensureCommit(PACKAGE_CHECK_COMMIT);
   const dir = mkdtempSync(join(tmpdir(), "gv-model-slice-"));
   cpSync(join(ROOT, "audit/godview"), join(dir, "audit/godview"), { recursive: true });
+  stripOwned(dir);
   try {
     for (const rel of paths) {
       const commit = rel.endsWith("package-pin-check.md") ? PACKAGE_CHECK_COMMIT : MODEL_COMMIT;

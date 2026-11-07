@@ -1,0 +1,8 @@
+%% graph_ref: path.usage
+%% state: state.cost_unavailable
+%% shared_map: 07e71c9bcb9532fc181e3f667f2d0ed2e7c9afaf
+flowchart LR
+  pred["cost.coverage=unavailable"]
+  src["path.usage"]
+  verdict["not emitted by normal backend costOf for any adapter; representable in schema/remote input/synthetic fixture only"]
+  src --> pred --> verdict

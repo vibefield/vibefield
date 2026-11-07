@@ -1,11 +1,7 @@
-%% graph_ref: shared.status
-%% adapter: copilot
 %% field: field.statusSince
-%% forensic: source-read at 748d015; not a live sample
-flowchart LR
-  src["packages/view-sdk/src/model.ts:135-135"]
-  raw["no raw adapter write found"]
-  shared["shared.status"]
-  row["field.statusSince yes"]
-  ui["UI yes"]
-  src --> raw --> shared --> row --> ui
+%% adapter: copilot
+%% forensic: source-read 748d015a7e393112e0a91dad80111fdf5abe6583; not a live sample
+flowchart TD
+  n0["normalized-status-signal\npackages/adapter-copilot/src/normalization/pipeline.ts:100-165\ncopilot status changes are projected with statusSince retained by the runtime."]
+  n1["derive-since\npackages/monitor/src/backend/derive.ts:74-76\nagentStatusSince uses the projected statusSince, else host.createdAt."]
+  n0 --> n1

@@ -1,0 +1,103 @@
+{
+  "flowId": "flow.opencode.account",
+  "pins": {
+    "vibefield": "433505fd0f224f4cda540d642661b13848c0ef82",
+    "puppeteer": "748d015a7e393112e0a91dad80111fdf5abe6583"
+  },
+  "subject": {
+    "adapterId": "adapter.opencode",
+    "fieldId": "field.account"
+  },
+  "nodes": [
+    {
+      "id": "adapter",
+      "layer": "adapter",
+      "label": "The adapter emits no account",
+      "provenanceRecordId": "prov.opencode.account"
+    },
+    {
+      "id": "ingestion",
+      "layer": "ingestion",
+      "label": "VibeField hostRunFromSummary copies profileId and profileSet and never account",
+      "source": {
+        "repo": "vibefield",
+        "sha": "433505fd0f224f4cda540d642661b13848c0ef82",
+        "path": "packages/fieldd/src/agent-monitor.ts",
+        "lineStart": 223,
+        "lineEnd": 266,
+        "symbol": "hostRunFromSummary"
+      }
+    },
+    {
+      "id": "godview",
+      "layer": "adapter",
+      "label": "Puppeteer Godview host sets account from the profile label",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "apps/godview/src/main/monitor-host.ts",
+        "lineStart": 54,
+        "lineEnd": 83,
+        "symbol": "monitorHostRun"
+      }
+    },
+    {
+      "id": "derive",
+      "layer": "core-reducer",
+      "label": "deriveAgentRow copies host.account only when set",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/monitor/src/backend/derive.ts",
+        "lineStart": 273,
+        "lineEnd": 273,
+        "symbol": "host.account"
+      }
+    },
+    {
+      "id": "usage",
+      "layer": "renderer",
+      "label": "accountUsageView is a separate usage column",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/views/src/usage/account-usage.ts",
+        "lineStart": 63,
+        "lineEnd": 82,
+        "symbol": "accountUsageView"
+      }
+    },
+    {
+      "id": "absent",
+      "layer": "absence",
+      "label": "Under the VibeField host field.account is always absent"
+    }
+  ],
+  "edges": [
+    {
+      "from": "adapter",
+      "to": "ingestion",
+      "kind": "ingest"
+    },
+    {
+      "from": "ingestion",
+      "to": "derive",
+      "kind": "transform"
+    },
+    {
+      "from": "godview",
+      "to": "derive",
+      "kind": "transform"
+    },
+    {
+      "from": "derive",
+      "to": "absent",
+      "kind": "absence"
+    },
+    {
+      "from": "usage",
+      "to": "absent",
+      "kind": "absence"
+    }
+  ]
+}

@@ -1,3 +1,5 @@
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 import { AUDIT_PINS, AUDIT_TARGET_LABEL, PROVENANCE_STAGES } from "./contract.mjs";
 import {
   coverageReport,
@@ -109,28 +111,133 @@ function overlayFor(field, fallback) {
   };
 }
 
-function costGraphOrder(envelope) {
-  const names = (envelope?.transforms ?? []).map((step) => step.name);
-  if (names.length === 0) return null;
-  const derive = names.indexOf("deriveAgentRow");
-  const ledger = names.indexOf("buildUsageCostLedger");
-  const pricing = names.indexOf("priceUsageUpdates");
-  if (derive === -1 || ledger === -1) return null;
-  if (pricing !== -1 && pricing < derive && derive < ledger) return null;
+function paintFor(matrixCell, render) {
+  if (!matrixCell) {
+    return {
+      disposition: "unknown",
+      mounted: false,
+      meaningfulOutput: false,
+      selectedFixtureRendered: false,
+      screenshotCoverageComplete: false,
+      fallbackOnly: false,
+      screenshotPath: null,
+      evidence: "",
+      note: "No matrix cell for this view and state.",
+    };
+  }
+  if (matrixCell.disposition === "rendered") {
+    const painted = render?.meaningfulOutput === true;
+    return {
+      disposition: "rendered",
+      mounted: true,
+      meaningfulOutput: painted,
+      selectedFixtureRendered: painted,
+      screenshotCoverageComplete: false,
+      fallbackOnly: false,
+      evidence: matrixCell.evidence ?? "",
+      screenshotPath: painted ? (render.screenshotPath ?? null) : null,
+      note: painted
+        ? "Selected fixture rendered. Synthetic paint of this view and state only. Overall screenshot coverage is not complete."
+        : "The matrix marks this cell rendered, but the screenshot file is not in the tree.",
+    };
+  }
+  if (matrixCell.disposition === "covered-by") {
+    return {
+      disposition: "covered-by",
+      mounted: false,
+      meaningfulOutput: false,
+      selectedFixtureRendered: false,
+      exercisedEquivalent: true,
+      screenshotCoverageComplete: false,
+      fallbackOnly: false,
+      evidence: matrixCell.evidence ?? "",
+      fixtureId: matrixCell.fixtureId ?? null,
+      screenshotPath: null,
+      note: `Exercised equivalent of ${matrixCell.fixtureId ?? "another fixture"} on the same view. This is not a dedicated render of ${matrixCell.stateId} and it does not add body coverage. ${matrixCell.evidence ?? ""}`,
+    };
+  }
+  if (matrixCell.disposition === "coverage-gap") {
+    return {
+      disposition: "coverage-gap",
+      mounted: false,
+      meaningfulOutput: false,
+      selectedFixtureRendered: false,
+      screenshotCoverageComplete: false,
+      fallbackOnly: false,
+      validatedExclusion: false,
+      evidence: matrixCell.evidence ?? "",
+      screenshotPath: null,
+      note: `Coverage gap, not a render and not an outside-view exclusion. ${matrixCell.evidence ?? ""}`,
+    };
+  }
+  if (matrixCell.disposition === "environment-gap") {
+    return {
+      disposition: "environment-gap",
+      mounted: true,
+      meaningfulOutput: false,
+      selectedFixtureRendered: false,
+      screenshotCoverageComplete: false,
+      fallbackOnly: true,
+      evidence: matrixCell.evidence ?? "",
+      diagnostic: matrixCell.diagnostic ?? "audit/godview/rendering/webgpu-diagnostic.json",
+      screenshotPath: null,
+      note: "No swarm body was painted. WEBGPU UNAVAILABLE is visible text from this host. Environment versus source cause is under investigation. This is not an unreachable state and not body coverage.",
+    };
+  }
+  const outside = String(matrixCell.evidence ?? "").startsWith("Outside this view:");
   return {
-    status: "stale-envelope-order",
-    note: "This envelope still omits priceUsageUpdates and lists deriveAgentRow before buildUsageCostLedger. The shared map order is priceUsageUpdates, then reduce, then project, then the usage ledger and costOf, then derive. The envelope has not been rewritten to that order.",
+    disposition: "not-applicable",
+    mounted: false,
+    meaningfulOutput: false,
+    selectedFixtureRendered: false,
+    screenshotCoverageComplete: false,
+    fallbackOnly: false,
+    evidence: matrixCell.evidence ?? "",
+    screenshotPath: null,
+    applicabilityStatus: outside ? "outside-view" : "unproven",
+    validatedExclusion: false,
+    priorClaimValidated: false,
+    note: outside
+      ? `Outside this view, with a source note. The prior 302 not-applicable count is not a validated exclusion. ${matrixCell.evidence}`
+      : `Not-applicable without an outside-view proof. Not a validated exclusion. ${matrixCell.evidence ?? ""}`,
   };
 }
 
-function holeFor(renderIndex, selection) {
-  return (
-    (renderIndex?.holes ?? []).find((hole) => {
-      if (hole.stateId !== selection.stateId) return false;
-      if (hole.viewId && hole.viewId !== selection.viewId) return false;
-      return true;
-    }) ?? null
-  );
+function costGraphOrder(envelope) {
+  const names = (envelope?.transforms ?? []).map((step) => step.name);
+  const pricing = names.indexOf("priceUsageUpdates");
+  const reduce = names.indexOf("reduceMonitorAccumulator");
+  const costOf = names.indexOf("costOf");
+  const derive = names.indexOf("deriveAgentRow");
+  if (
+    names.includes("handler-omits-usage") &&
+    pricing === -1 &&
+    !names.includes("price-before-reduce")
+  ) {
+    return {
+      status: "stops-at-omission",
+      note: "This cost path stops where the adapter omits usage. It does not invent a pricing hop. The record is source-read, not a live sample.",
+    };
+  }
+  const priced = names.indexOf("price-before-reduce");
+  const reduced = names.indexOf("reduce-after-price");
+  if (priced !== -1 && reduced !== -1 && priced < reduced) {
+    return {
+      status: "priced-before-reduce",
+      note: "This record places price-before-reduce before reduce-after-price. That is a static source order, not a live run.",
+    };
+  }
+  if (derive === -1 || costOf === -1) return null;
+  if (pricing !== -1 && pricing < reduce && costOf < derive) {
+    return {
+      status: "shared-order",
+      note: "This envelope includes priceUsageUpdates before reduce and costOf before deriveAgentRow. That matches the shared map. It is a static source order, not a live run, and it does not complete the audit.",
+    };
+  }
+  return {
+    status: "stale-envelope-order",
+    note: "This envelope omits priceUsageUpdates before reduction or lists derive before costOf. The shared map order is priceUsageUpdates, then reduce, then project, then costOf, then derive.",
+  };
 }
 
 export function buildCell({ model, traces, renders, fallback, selection, renderIndex = null }) {
@@ -199,25 +306,14 @@ export function buildCell({ model, traces, renders, fallback, selection, renderI
     endToEnd.proven = true;
   }
 
-  const hole = render?.meaningfulOutput ? null : holeFor(renderIndex, selection);
-  const paint = {
-    mounted: Boolean(render?.mounted || hole?.mounted),
-    meaningfulOutput: render?.meaningfulOutput === true && hole == null,
-    screenshotCoverageComplete: render?.screenshotCoverageComplete === true && hole == null,
-    fallbackOnly: hole?.fallbackOnly === true,
-    hole,
-    screenshotPath: render?.meaningfulOutput
-      ? render.screenshotPath
-      : (hole?.screenshotPath ?? null),
-    paint: render?.paint ?? null,
-    note: render?.meaningfulOutput
-      ? "Synthetic fixture. The Puppeteer 748d015 component painted this input. The screenshot is that synthetic paint, not a captured adapter session."
-      : hole?.fallbackOnly
-        ? "The component mounted. The body was not painted. WEBGPU UNAVAILABLE. The environment screenshot is the fallback message, not complete swarm coverage."
-        : hole
-          ? hole.reason
-          : "No meaningful render is loaded for this view and state.",
-  };
+  const matrixCell =
+    (renderIndex?.cells ?? []).find(
+      (item) => item.stateId === selection.stateId && item.viewId === selection.viewId,
+    ) ?? null;
+  const suffix = String(selection.adapterId ?? "").replace(/^adapter\./, "");
+  const fieldPath = String(selection.fieldId ?? "").replace(/^field\./, "");
+  const mmdRel = suffix && fieldPath ? `audit/godview/evidence/${suffix}/${fieldPath}.mmd` : "";
+  const paint = paintFor(matrixCell, render);
   const graphOrder = costGraphOrder(envelope);
   const reading = readField(envelope);
   if (
@@ -225,9 +321,13 @@ export function buildCell({ model, traces, renders, fallback, selection, renderI
     selection.fieldId === "field.tokens.total" &&
     selection.adapterId === "adapter.claude"
   ) {
-    reading.reader = "no-direct-reader";
-    reading.readerNote =
-      "Shared static map: Claude totalTokens can reach tokens.total through usage-index and derive. No built-in view directly reads tokens.total. USD flames read cost, not this total. The first-half envelope is not rewritten from the filled join, and this is not a live run.";
+    if (reading.channels?.rendererRead === "none") {
+      reading.readerNote = `${reading.readerNote} Review: no built-in view directly reads tokens.total. A derive hop is not a view read, and this record was not live-tested.`;
+    } else {
+      reading.reader = "no-direct-reader";
+      reading.readerNote =
+        "Shared static map: Claude totalTokens can reach tokens.total through usage-index and derive. No built-in view directly reads tokens.total. USD flames read cost, not this total. This is not a live run.";
+    }
   }
   const named = namedStatesFor(traces, selection.adapterId);
   const stateReading = stateOnRecord(envelope, selection.stateId, named, selection.adapterId);
@@ -292,6 +392,7 @@ export function buildCell({ model, traces, renders, fallback, selection, renderI
     endToEnd,
     paint,
     graphOrder,
+    mmdPath: mmdRel && existsSync(join(process.cwd(), mmdRel)) ? mmdRel : null,
     reading,
     stateReading,
     coverage,

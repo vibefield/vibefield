@@ -1,11 +1,9 @@
-%% graph_ref: shared.effort
-%% adapter: copilot
 %% field: field.effort
-%% forensic: source-read at 748d015; not a live sample
-flowchart LR
-  src["packages/adapter-copilot/src/normalization/effort.ts:4-8"]
-  raw["effort:updated"]
-  shared["shared.effort"]
-  row["field.effort yes"]
-  ui["UI yes"]
-  src --> raw --> shared --> row --> ui
+%% adapter: copilot
+%% forensic: source-read 748d015a7e393112e0a91dad80111fdf5abe6583; not a live sample
+flowchart TD
+  n0["normalized-card\npackages/adapter-copilot/src/normalization/effort.ts:4-8\neffort is emitted as an event or monitor upsert. Antigravity does this only from launch options."]
+  n1["reduce-card\npackages/core/src/monitor/reduce.ts:1120-1125\nmodel:updated and effort:updated upsert or retract. Null retracts. Configured and observed stay distinct."]
+  n0 --> n1
+  n2["derive-card\npackages/monitor/src/backend/derive.ts:240-286\nderive copies model displayName or id, and effort value plus intent when present."]
+  n1 --> n2

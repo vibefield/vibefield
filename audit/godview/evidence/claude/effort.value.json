@@ -10,166 +10,89 @@
     {
       "repo": "puppeteer",
       "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
-      "path": "packages/adapter-claude/src/observation/status-channel.ts",
-      "lineStart": 131,
-      "lineEnd": 147,
-      "symbol": "effort snapshot"
-    },
-    {
-      "repo": "puppeteer",
-      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
       "path": "packages/adapter-claude/src/normalization/monitor.ts",
       "lineStart": 254,
       "lineEnd": 267,
-      "symbol": "root effort replace"
-    },
-    {
-      "repo": "puppeteer",
-      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
-      "path": "packages/adapter-claude/src/normalization/effort.ts",
-      "lineStart": 4,
-      "lineEnd": 16,
-      "symbol": "ClaudeEffortNormalizer"
-    },
-    {
-      "repo": "puppeteer",
-      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
-      "path": "packages/adapter-claude/src/normalization/monitor.ts",
-      "lineStart": 379,
-      "lineEnd": 388,
-      "symbol": "child effort intent configured"
-    },
-    {
-      "repo": "puppeteer",
-      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
-      "path": "packages/adapter-claude/src/driver.ts",
-      "lineStart": 640,
-      "lineEnd": 642,
-      "symbol": "launch configured effort"
-    },
-    {
-      "repo": "puppeteer",
-      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
-      "path": "packages/adapter-claude/src/normalization/wire.ts",
-      "lineStart": 79,
-      "lineEnd": 81,
-      "symbol": "claudeEffortLevel"
-    },
-    {
-      "repo": "puppeteer",
-      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
-      "path": "packages/runtime/src/services/monitor-service.ts",
-      "lineStart": 176,
-      "lineEnd": 187,
-      "symbol": "MonitorService.consume"
+      "symbol": "root status effort replace"
     },
     {
       "repo": "puppeteer",
       "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
       "path": "packages/core/src/monitor/reduce.ts",
-      "lineStart": 1117,
-      "lineEnd": 1127,
-      "symbol": "environment model effort mode cases"
-    },
-    {
-      "repo": "puppeteer",
-      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
-      "path": "packages/view-sdk/src/model.ts",
-      "lineStart": 72,
-      "lineEnd": 72,
-      "symbol": "model.ts"
+      "lineStart": 1120,
+      "lineEnd": 1125,
+      "symbol": "model and effort upsert"
     },
     {
       "repo": "puppeteer",
       "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
       "path": "packages/monitor/src/backend/derive.ts",
-      "lineStart": 176,
-      "lineEnd": 181,
-      "symbol": "derive.ts"
-    },
-    {
-      "repo": "puppeteer",
-      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
-      "path": "packages/views/src/views/swarm/bubble-model.ts",
-      "lineStart": 320,
-      "lineEnd": 325,
-      "symbol": "bubble-model.ts"
+      "lineStart": 240,
+      "lineEnd": 286,
+      "symbol": "deriveAgentRow"
     }
   ],
   "producer": {
     "kind": "adapter",
-    "name": "claude normalization",
-    "ingestedFrom": "effort string and intent"
+    "name": "root status effort replace",
+    "ingestedFrom": "root status effort replace"
   },
   "transforms": [
     {
       "order": 0,
-      "name": "adapter-step-0",
-      "effect": "Status line effort.level accepts a non-empty string or a non-negative finite number rendered with String. If a model id is present and effort is omitted, the snapshot is null and the monitor replace clears effort. The agent event is effort:updated with effort null.",
-      "source": {
-        "repo": "puppeteer",
-        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
-        "path": "packages/adapter-claude/src/observation/status-channel.ts",
-        "lineStart": 131,
-        "lineEnd": 147,
-        "symbol": "effort snapshot"
-      }
-    },
-    {
-      "order": 1,
-      "name": "adapter-step-1",
-      "effect": "Hook effort is a string or record.level, deduped, intent observed.",
+      "name": "normalized-card",
+      "effect": "effort is emitted as an event or monitor upsert. Antigravity does this only from launch options.",
       "source": {
         "repo": "puppeteer",
         "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
         "path": "packages/adapter-claude/src/normalization/monitor.ts",
         "lineStart": 254,
         "lineEnd": 267,
-        "symbol": "root effort replace"
+        "symbol": "root status effort replace"
+      }
+    },
+    {
+      "order": 1,
+      "name": "reduce-card",
+      "effect": "model:updated and effort:updated upsert or retract. Null retracts. Configured and observed stay distinct.",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/core/src/monitor/reduce.ts",
+        "lineStart": 1120,
+        "lineEnd": 1125,
+        "symbol": "model and effort upsert"
       }
     },
     {
       "order": 2,
-      "name": "adapter-step-2",
-      "effect": "Child task.effort is emitted with intent configured, which matches the capability limitation that child status is configured effort.",
+      "name": "derive-card",
+      "effect": "derive copies model displayName or id, and effort value plus intent when present.",
       "source": {
         "repo": "puppeteer",
         "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
-        "path": "packages/adapter-claude/src/normalization/effort.ts",
-        "lineStart": 4,
-        "lineEnd": 16,
-        "symbol": "ClaudeEffortNormalizer"
-      }
-    },
-    {
-      "order": 3,
-      "name": "adapter-step-3",
-      "effect": "Launch options.effort is intent configured. Omitted launch effort emits nothing.",
-      "source": {
-        "repo": "puppeteer",
-        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
-        "path": "packages/adapter-claude/src/normalization/monitor.ts",
-        "lineStart": 379,
-        "lineEnd": 388,
-        "symbol": "child effort intent configured"
+        "path": "packages/monitor/src/backend/derive.ts",
+        "lineStart": 240,
+        "lineEnd": 286,
+        "symbol": "deriveAgentRow"
       }
     }
   ],
   "merge": {
-    "strategy": "unknown",
+    "strategy": "replace",
     "defaults": []
   },
   "transport": {
     "channel": "in-process",
-    "name": "MonitorService.consume",
-    "contract": "AgentEvent or monitor:batch"
+    "name": "AgentMonitorService.consume",
+    "contract": "normalized event or monitor batch"
   },
   "renderer": {
     "viewIds": [
       "view.swarm"
     ],
-    "component": "bubble-model",
-    "symbol": "agent.effort"
+    "component": "direct reader",
+    "symbol": "direct"
   },
   "applicability": {
     "states": [
@@ -180,7 +103,7 @@
     "views": [
       "view.swarm"
     ],
-    "notes": "Effort events or monitor effort upserts reach derive.ts:176-180. Conditional. Swarm italics a configured intent. Other views were not verified. Not live-observed. ROW FIELD field.effort.value. PENDING DOWNSTREAM MAPPING into MonitorAgentRow. This is one of 74 canonical row fields. It is not an SDK contract leaf. PENDING DOWNSTREAM MAPPING: GV-AUDIT2 owns adapter output to row predicates, including cost, burn rate, history, timeline, and git branch. This audit does not give that verdict. Schema acceptance is not complete provenance. verification.status source-read is a static reading. observation.presence unknown means no live sample was taken. It does not mean the row value is missing. classification.adapterEmittable and uiReachable stay unknown. A raw adapter property is not the row field, and a catalog consumer is not a proven UI path.   Values are open strings, including a numeric budget rendered as text. field.effort.intent downstream must not assume one intent: this adapter emits both observed and configured. The adapter does not write this MonitorAgentRow property. That is the architecture, not a conclusion that the row predicate is unreachable. This trace is Puppeteer 748d015a7e393112e0a91dad80111fdf5abe6583 only. It is newer than shipped Vibefield 0.3.3 and does not describe that install. Package comparison was not re-run. Declaration degraded from claude-hooks-and-status. declaration only; supported does not guarantee availability/value; degraded is not unreachable No raw adapter signal does not rule out the row value from host, runtime, history, or another producer. Raw source literals, not live samples: adapter.claude.upstream.effort.observed=\"observed\" (status line and hooks); adapter.claude.upstream.effort.configured=\"configured\" (launch option and child task); adapter.claude.upstream.effort.cleared=\"replace empty or effort null\" (model present and status line omits effort); adapter.claude.upstream.effort.open=\"open string\" (no closed enum) Graph: evidence/claude/effort.value.mmd. Continuation anchors, not a reachability verdict: MonitorService.consume, core reduce and project, deriveAgentRow. Vibefield AgentView and window-rows are not traced."
+    "notes": "sourceScope=adapter-provided. sourceRef=packages/adapter-claude/src/normalization/monitor.ts:254-267 root effort. staticPresence=emitted-when-condition. liveObserved=false. observation.presence=unknown because this audit did not live-sample the value. staticPresence is the source result and is independent of that. rendererRead=direct. adapterEmittable=yes. uiReachable=yes. The value reaches a direct reader from this adapter-provided producer. Field domain: state.effort_configured, state.effort_observed, state.effort_absent. Reachable subset: state.effort_configured, state.effort_observed, state.effort_absent."
   },
   "absence": {
     "onMissing": "record-unknown",
@@ -199,6 +122,6 @@
   "verification": {
     "status": "source-read",
     "owner": "GV-AUDIT3",
-    "notes": "Effort events or monitor effort upserts reach derive.ts:176-180. Conditional. Swarm italics a configured intent. Other views were not verified. Not live-observed. ROW FIELD field.effort.value. PENDING DOWNSTREAM MAPPING into MonitorAgentRow. This is one of 74 canonical row fields. It is not an SDK contract leaf. PENDING DOWNSTREAM MAPPING: GV-AUDIT2 owns adapter output to row predicates, including cost, burn rate, history, timeline, and git branch. This audit does not give that verdict. Schema acceptance is not complete provenance. verification.status source-read is a static reading. observation.presence unknown means no live sample was taken. It does not mean the row value is missing. classification.adapterEmittable and uiReachable stay unknown. A raw adapter property is not the row field, and a catalog consumer is not a proven UI path.   Values are open strings, including a numeric budget rendered as text. field.effort.intent downstream must not assume one intent: this adapter emits both observed and configured. The adapter does not write this MonitorAgentRow property. That is the architecture, not a conclusion that the row predicate is unreachable. This trace is Puppeteer 748d015a7e393112e0a91dad80111fdf5abe6583 only. It is newer than shipped Vibefield 0.3.3 and does not describe that install. Package comparison was not re-run. Declaration degraded from claude-hooks-and-status. declaration only; supported does not guarantee availability/value; degraded is not unreachable No raw adapter signal does not rule out the row value from host, runtime, history, or another producer. Raw source literals, not live samples: adapter.claude.upstream.effort.observed=\"observed\" (status line and hooks); adapter.claude.upstream.effort.configured=\"configured\" (launch option and child task); adapter.claude.upstream.effort.cleared=\"replace empty or effort null\" (model present and status line omits effort); adapter.claude.upstream.effort.open=\"open string\" (no closed enum) Graph: evidence/claude/effort.value.mmd. Continuation anchors, not a reachability verdict: MonitorService.consume, core reduce and project, deriveAgentRow. Vibefield AgentView and window-rows are not traced."
+    "notes": "sourceScope=adapter-provided. sourceRef=packages/adapter-claude/src/normalization/monitor.ts:254-267 root effort. staticPresence=emitted-when-condition. liveObserved=false. observation.presence=unknown because this audit did not live-sample the value. staticPresence is the source result and is independent of that. rendererRead=direct. adapterEmittable=yes. uiReachable=yes. The value reaches a direct reader from this adapter-provided producer. Field domain: state.effort_configured, state.effort_observed, state.effort_absent. Reachable subset: state.effort_configured, state.effort_observed, state.effort_absent."
   }
 }

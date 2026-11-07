@@ -1,13 +1,9 @@
-%% graph_ref: shared.branch
-%% adapter: antigravity
 %% field: field.project.branch
-%% forensic: source-read at 748d015; not a live sample
-flowchart LR
-  src["packages/view-sdk/src/model.ts:106-106"]
-  raw["no raw adapter write found"]
-  shared["shared.branch"]
-  row["field.project.branch unknown"]
-  ui["UI yes"]
-  src --> raw --> shared --> row --> ui
-  open["UNRESOLVED where this verdict is unknown"]
-  row --> open
+%% sourceScope: host-supplied
+%% staticPresence: host-dependent
+%% liveObserved: false
+flowchart TD
+  producer["packages/monitor/src/backend/derive.ts:101-106\nprojectBranch"]
+  producer --> row["row property from that producer"]
+  row --> window["window-rows.ts:116-134 pass-through unless this field is stale or profileSet"]
+  window --> reader["rendererRead direct"]

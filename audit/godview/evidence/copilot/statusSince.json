@@ -10,10 +10,10 @@
     {
       "repo": "puppeteer",
       "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
-      "path": "packages/view-sdk/src/model.ts",
-      "lineStart": 135,
-      "lineEnd": 135,
-      "symbol": "model.ts"
+      "path": "packages/adapter-copilot/src/normalization/pipeline.ts",
+      "lineStart": 100,
+      "lineEnd": 165,
+      "symbol": "interactionId turn correlation"
     },
     {
       "repo": "puppeteer",
@@ -21,88 +21,93 @@
       "path": "packages/monitor/src/backend/derive.ts",
       "lineStart": 74,
       "lineEnd": 76,
-      "symbol": "derive.ts"
-    },
-    {
-      "repo": "puppeteer",
-      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
-      "path": "packages/monitor/src/replica/replica.ts",
-      "lineStart": 310,
-      "lineEnd": 333,
-      "symbol": "replica.ts"
-    },
-    {
-      "repo": "puppeteer",
-      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
-      "path": "packages/core/src/monitor/project.ts",
-      "lineStart": 398,
-      "lineEnd": 404,
-      "symbol": "project.ts"
+      "symbol": "agentStatusSince"
     }
   ],
   "producer": {
-    "kind": "unknown",
-    "name": "not-adapter-produced",
-    "ingestedFrom": "not adapter-produced; PENDING DOWNSTREAM MAPPING into the row"
+    "kind": "adapter",
+    "name": "interactionId turn correlation",
+    "ingestedFrom": "interactionId turn correlation"
   },
   "transforms": [
     {
       "order": 0,
-      "name": "no-adapter-producer-0",
-      "effect": "No adapter write of this contract property was found in the reviewed producers.",
+      "name": "normalized-status-signal",
+      "effect": "copilot status changes are projected with statusSince retained by the runtime.",
       "source": {
         "repo": "puppeteer",
         "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
-        "path": "packages/view-sdk/src/model.ts",
-        "lineStart": 135,
-        "lineEnd": 135,
-        "symbol": "model.ts"
+        "path": "packages/adapter-copilot/src/normalization/pipeline.ts",
+        "lineStart": 100,
+        "lineEnd": 165,
+        "symbol": "interactionId turn correlation"
+      }
+    },
+    {
+      "order": 1,
+      "name": "derive-since",
+      "effect": "agentStatusSince uses the projected statusSince, else host.createdAt.",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/monitor/src/backend/derive.ts",
+        "lineStart": 74,
+        "lineEnd": 76,
+        "symbol": "agentStatusSince"
       }
     }
   ],
   "merge": {
-    "strategy": "unknown",
-    "defaults": []
+    "strategy": "defaulted",
+    "defaults": [
+      {
+        "when": "host.pending is set",
+        "presence": "present",
+        "literal": "idle",
+        "source": {
+          "repo": "puppeteer",
+          "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+          "path": "packages/monitor/src/backend/derive.ts",
+          "lineStart": 68,
+          "lineEnd": 72,
+          "symbol": "agentStatus defaults"
+        }
+      },
+      {
+        "when": "runtime state is absent and the host run is not pending",
+        "presence": "present",
+        "literal": "working",
+        "source": {
+          "repo": "puppeteer",
+          "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+          "path": "packages/monitor/src/backend/derive.ts",
+          "lineStart": 68,
+          "lineEnd": 72,
+          "symbol": "agentStatus defaults"
+        }
+      }
+    ]
   },
   "transport": {
-    "channel": "unknown",
-    "name": "not-adapter-produced"
+    "channel": "in-process",
+    "name": "AgentMonitorService.consume",
+    "contract": "turn, tool, or monitor activity to deriveAgentRow"
   },
   "renderer": {
     "viewIds": [
-      "view.list",
-      "view.rain",
-      "view.swarm",
-      "view.spend"
+      "view.spend",
+      "view.timeline"
     ],
-    "component": "AgentList / RainView / bubble-model",
-    "symbol": "agent.status"
+    "component": "direct reader",
+    "symbol": "direct"
   },
   "applicability": {
-    "states": [
-      "state.idle",
-      "state.working",
-      "state.blocked",
-      "state.blocked_permission",
-      "state.blocked_question",
-      "state.blocked_failure",
-      "state.wait_multiple",
-      "state.activity_starting",
-      "state.activity_responding",
-      "state.activity_reasoning",
-      "state.activity_tool",
-      "state.activity_other",
-      "state.stale",
-      "state.fresh",
-      "state.failed_retained"
-    ],
+    "states": "model-axes",
     "views": [
-      "view.list",
-      "view.rain",
-      "view.swarm",
-      "view.spend"
+      "view.spend",
+      "view.timeline"
     ],
-    "notes": "Turn, tool, and permission events reduce through core transitions.ts:370-371 into idle, working, or blocked. derive.ts:68-71 then applies host pending as idle and a missing runtime state as working. Source-permitted. Not a live sample. Which blocker wins is not re-derived here. ROW FIELD field.statusSince. PENDING DOWNSTREAM MAPPING into MonitorAgentRow. This is one of 74 canonical row fields. It is not an SDK contract leaf. PENDING DOWNSTREAM MAPPING: GV-AUDIT2 owns adapter output to row predicates, including cost, burn rate, history, timeline, and git branch. This audit does not give that verdict. Schema acceptance is not complete provenance. verification.status source-read is a static reading. observation.presence unknown means no live sample was taken. It does not mean the row value is missing. classification.adapterEmittable and uiReachable stay unknown. A raw adapter property is not the row field, and a catalog consumer is not a proven UI path. No adapter code writes activity.since or statusSince. Batch observedAt and event envelope timestamps are different clocks.  field.statusSince has no raw adapter write in the producers reviewed for copilot. The adapter does not write this MonitorAgentRow property. That is the architecture, not a conclusion that the row predicate is unreachable. This trace is Puppeteer 748d015a7e393112e0a91dad80111fdf5abe6583 only. It is newer than shipped Vibefield 0.3.3 and does not describe that install. Package comparison was not re-run. Declaration supported from copilot-events-jsonl. declaration only; supported does not guarantee availability/value; degraded is not unreachable No raw adapter signal does not rule out the row value from host, runtime, history, or another producer. No raw adapter literal was found for this field. Graph: evidence/copilot/statusSince.mmd. Continuation anchors, not a reachability verdict: MonitorService.consume, core reduce and project, deriveAgentRow. Vibefield AgentView and window-rows are not traced."
+    "notes": "sourceScope=adapter-provided. sourceRef=packages/adapter-copilot/src/normalization/pipeline.ts:100-165 interaction turn. staticPresence=emitted-when-condition. liveObserved=false. observation.presence=unknown because this audit did not live-sample the value. staticPresence is the source result and is independent of that. rendererRead=direct. adapterEmittable=yes. uiReachable=yes. The value reaches a direct reader from this adapter-provided producer. Field domain is empty. applicability.states=model-axes is the envelope token for a field with no state predicates. It is not a reachable set and it does not claim any other field's states."
   },
   "absence": {
     "onMissing": "record-unknown",
@@ -121,6 +126,6 @@
   "verification": {
     "status": "source-read",
     "owner": "GV-AUDIT3",
-    "notes": "Turn, tool, and permission events reduce through core transitions.ts:370-371 into idle, working, or blocked. derive.ts:68-71 then applies host pending as idle and a missing runtime state as working. Source-permitted. Not a live sample. Which blocker wins is not re-derived here. ROW FIELD field.statusSince. PENDING DOWNSTREAM MAPPING into MonitorAgentRow. This is one of 74 canonical row fields. It is not an SDK contract leaf. PENDING DOWNSTREAM MAPPING: GV-AUDIT2 owns adapter output to row predicates, including cost, burn rate, history, timeline, and git branch. This audit does not give that verdict. Schema acceptance is not complete provenance. verification.status source-read is a static reading. observation.presence unknown means no live sample was taken. It does not mean the row value is missing. classification.adapterEmittable and uiReachable stay unknown. A raw adapter property is not the row field, and a catalog consumer is not a proven UI path. No adapter code writes activity.since or statusSince. Batch observedAt and event envelope timestamps are different clocks.  field.statusSince has no raw adapter write in the producers reviewed for copilot. The adapter does not write this MonitorAgentRow property. That is the architecture, not a conclusion that the row predicate is unreachable. This trace is Puppeteer 748d015a7e393112e0a91dad80111fdf5abe6583 only. It is newer than shipped Vibefield 0.3.3 and does not describe that install. Package comparison was not re-run. Declaration supported from copilot-events-jsonl. declaration only; supported does not guarantee availability/value; degraded is not unreachable No raw adapter signal does not rule out the row value from host, runtime, history, or another producer. No raw adapter literal was found for this field. Graph: evidence/copilot/statusSince.mmd. Continuation anchors, not a reachability verdict: MonitorService.consume, core reduce and project, deriveAgentRow. Vibefield AgentView and window-rows are not traced."
+    "notes": "sourceScope=adapter-provided. sourceRef=packages/adapter-copilot/src/normalization/pipeline.ts:100-165 interaction turn. staticPresence=emitted-when-condition. liveObserved=false. observation.presence=unknown because this audit did not live-sample the value. staticPresence is the source result and is independent of that. rendererRead=direct. adapterEmittable=yes. uiReachable=yes. The value reaches a direct reader from this adapter-provided producer. Field domain is empty. applicability.states=model-axes is the envelope token for a field with no state predicates. It is not a reachable set and it does not claim any other field's states."
   }
 }

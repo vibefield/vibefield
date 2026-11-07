@@ -13,153 +13,105 @@
       "path": "packages/adapter-copilot/src/normalization/environment.ts",
       "lineStart": 4,
       "lineEnd": 18,
-      "symbol": "normalizeCopilotEnvironment"
+      "symbol": "git.branch string or null"
     },
     {
       "repo": "puppeteer",
       "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
-      "path": "packages/adapter-copilot/src/normalization/session.ts",
-      "lineStart": 4,
-      "lineEnd": 13,
-      "symbol": "session cwd"
-    },
-    {
-      "repo": "puppeteer",
-      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
-      "path": "packages/adapter-copilot/src/driver.ts",
-      "lineStart": 134,
-      "lineEnd": 137,
-      "symbol": "launch cwd"
-    },
-    {
-      "repo": "puppeteer",
-      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
-      "path": "packages/adapter-copilot/src/driver.ts",
-      "lineStart": 43,
-      "lineEnd": 54,
-      "symbol": "title argv"
-    },
-    {
-      "repo": "puppeteer",
-      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
-      "path": "packages/runtime/src/services/monitor-service.ts",
-      "lineStart": 176,
-      "lineEnd": 187,
-      "symbol": "MonitorService.consume"
+      "path": "packages/core/src/monitor/reduce.ts",
+      "lineStart": 1117,
+      "lineEnd": 1119,
+      "symbol": "environment upsert"
     },
     {
       "repo": "puppeteer",
       "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
       "path": "packages/monitor/src/backend/derive.ts",
-      "lineStart": 240,
-      "lineEnd": 286,
-      "symbol": "deriveAgentRow"
-    },
-    {
-      "repo": "puppeteer",
-      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
-      "path": "packages/view-sdk/src/model.ts",
-      "lineStart": 106,
+      "lineStart": 101,
       "lineEnd": 106,
-      "symbol": "model.ts"
-    },
-    {
-      "repo": "puppeteer",
-      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
-      "path": "packages/monitor/src/backend/derive.ts",
-      "lineStart": 91,
-      "lineEnd": 113,
-      "symbol": "derive.ts"
-    },
-    {
-      "repo": "puppeteer",
-      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
-      "path": "packages/monitor/src/backend/derive.ts",
-      "lineStart": 265,
-      "lineEnd": 269,
-      "symbol": "derive.ts"
-    },
-    {
-      "repo": "puppeteer",
-      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
-      "path": "packages/monitor/src/backend/derive.ts",
-      "lineStart": 314,
-      "lineEnd": 314,
-      "symbol": "derive.ts"
+      "symbol": "projectBranch"
     }
   ],
   "producer": {
     "kind": "adapter",
-    "name": "copilot normalization",
-    "ingestedFrom": "currentCwd and optional git.branch"
+    "name": "git.branch string or null",
+    "ingestedFrom": "git.branch string or null"
   },
   "transforms": [
     {
       "order": 0,
-      "name": "adapter-step-0",
-      "effect": "Launch publishes options.cwd. session.start and session.resume publish context.cwd when it is a non-empty string.",
+      "name": "observed-git",
+      "effect": "context_changed with a git root sets branch to a string or null, and detached when a head exists without a branch.",
       "source": {
         "repo": "puppeteer",
         "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
         "path": "packages/adapter-copilot/src/normalization/environment.ts",
         "lineStart": 4,
         "lineEnd": 18,
-        "symbol": "normalizeCopilotEnvironment"
+        "symbol": "git.branch string or null"
       }
     },
     {
       "order": 1,
-      "name": "adapter-step-1",
-      "effect": "session.context_changed publishes cwd when present and, when gitRoot is present, git.root, git.branch (string or null), git.headSha (string or null), and detached when a head exists and branch does not.",
+      "name": "reduce-env",
+      "effect": "environment:updated upserts cwd and git. Partial merge keeps an omitted git when cwd alone changes.",
       "source": {
         "repo": "puppeteer",
         "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
-        "path": "packages/adapter-copilot/src/normalization/session.ts",
-        "lineStart": 4,
-        "lineEnd": 13,
-        "symbol": "session cwd"
+        "path": "packages/core/src/monitor/reduce.ts",
+        "lineStart": 1117,
+        "lineEnd": 1119,
+        "symbol": "environment upsert"
       }
     },
     {
       "order": 2,
-      "name": "adapter-step-2",
-      "effect": "options.title is passed as --name and is not an event. It is not field.project.name.",
+      "name": "derive-branch",
+      "effect": "A nonempty observed branch wins, else host fallback, else observed null, else workspace branch.",
       "source": {
         "repo": "puppeteer",
         "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
-        "path": "packages/adapter-copilot/src/driver.ts",
-        "lineStart": 134,
-        "lineEnd": 137,
-        "symbol": "launch cwd"
+        "path": "packages/monitor/src/backend/derive.ts",
+        "lineStart": 101,
+        "lineEnd": 106,
+        "symbol": "projectBranch"
       }
     }
   ],
   "merge": {
-    "strategy": "unknown",
+    "strategy": "defaulted",
     "defaults": []
   },
   "transport": {
     "channel": "in-process",
-    "name": "MonitorService.consume",
-    "contract": "AgentEvent or monitor:batch"
+    "name": "AgentMonitorService.consume",
+    "contract": "normalized event or monitor batch"
   },
   "renderer": {
     "viewIds": [
       "view.list",
       "view.rain",
-      "view.swarm"
+      "view.swarm",
+      "view.spend",
+      "view.timeline"
     ],
-    "component": "AgentList / rain-streams / bubble-model",
-    "symbol": "project.branch"
+    "component": "direct reader",
+    "symbol": "direct"
   },
   "applicability": {
-    "states": "model-axes",
+    "states": [
+      "state.branch_unknown",
+      "state.branch_none",
+      "state.branch_named"
+    ],
     "views": [
       "view.list",
       "view.rain",
-      "view.swarm"
+      "view.swarm",
+      "view.spend",
+      "view.timeline"
     ],
-    "notes": "session.context_changed can set git.branch to a string or null. derive.ts:101-106 returns that branch, including null when git was observed without one. state.branch_none is source-permitted for that case, not a live sample. A named branch is also source-permitted. ROW FIELD field.project.branch. PENDING DOWNSTREAM MAPPING into MonitorAgentRow. This is one of 74 canonical row fields. It is not an SDK contract leaf. PENDING DOWNSTREAM MAPPING: GV-AUDIT2 owns adapter output to row predicates, including cost, burn rate, history, timeline, and git branch. This audit does not give that verdict. Schema acceptance is not complete provenance. verification.status source-read is a static reading. observation.presence unknown means no live sample was taken. It does not mean the row value is missing. classification.adapterEmittable and uiReachable stay unknown. A raw adapter property is not the row field, and a catalog consumer is not a proven UI path.   field.project.branch can be fed by git.branch, including null. The row merge is pending. A null branch is nullable evidence, not the row state.branch_none, until that mapping exists. --name is not a project title. The adapter does not write this MonitorAgentRow property. That is the architecture, not a conclusion that the row predicate is unreachable. This trace is Puppeteer 748d015a7e393112e0a91dad80111fdf5abe6583 only. It is newer than shipped Vibefield 0.3.3 and does not describe that install. Package comparison was not re-run. Declaration supported from copilot-session-context. declaration only; supported does not guarantee availability/value; degraded is not unreachable No raw adapter signal does not rule out the row value from host, runtime, history, or another producer. Raw source literals, not live samples: adapter.copilot.upstream.cwd=\"non-empty cwd\" (launch, session context, or context_changed); adapter.copilot.upstream.branch.named=\"non-empty branch string\" (context_changed branch); adapter.copilot.upstream.branch.null=null (gitRoot present and branch missing) Graph: evidence/copilot/project.branch.mmd. Continuation anchors, not a reachability verdict: MonitorService.consume, core reduce and project, deriveAgentRow. Vibefield AgentView and window-rows are not traced."
+    "notes": "sourceScope=adapter-provided. sourceRef=packages/adapter-copilot/src/normalization/environment.ts:4-18 git.branch. staticPresence=emitted-when-condition. liveObserved=false. observation.presence=unknown because this audit did not live-sample the value. staticPresence is the source result and is independent of that. rendererRead=direct. adapterEmittable=yes. uiReachable=yes. The value reaches a direct reader from this adapter-provided producer. Field domain: state.branch_unknown, state.branch_none, state.branch_named. Reachable subset: state.branch_unknown, state.branch_none, state.branch_named."
   },
   "absence": {
     "onMissing": "record-unknown",
@@ -178,6 +130,6 @@
   "verification": {
     "status": "source-read",
     "owner": "GV-AUDIT3",
-    "notes": "session.context_changed can set git.branch to a string or null. derive.ts:101-106 returns that branch, including null when git was observed without one. state.branch_none is source-permitted for that case, not a live sample. A named branch is also source-permitted. ROW FIELD field.project.branch. PENDING DOWNSTREAM MAPPING into MonitorAgentRow. This is one of 74 canonical row fields. It is not an SDK contract leaf. PENDING DOWNSTREAM MAPPING: GV-AUDIT2 owns adapter output to row predicates, including cost, burn rate, history, timeline, and git branch. This audit does not give that verdict. Schema acceptance is not complete provenance. verification.status source-read is a static reading. observation.presence unknown means no live sample was taken. It does not mean the row value is missing. classification.adapterEmittable and uiReachable stay unknown. A raw adapter property is not the row field, and a catalog consumer is not a proven UI path.   field.project.branch can be fed by git.branch, including null. The row merge is pending. A null branch is nullable evidence, not the row state.branch_none, until that mapping exists. --name is not a project title. The adapter does not write this MonitorAgentRow property. That is the architecture, not a conclusion that the row predicate is unreachable. This trace is Puppeteer 748d015a7e393112e0a91dad80111fdf5abe6583 only. It is newer than shipped Vibefield 0.3.3 and does not describe that install. Package comparison was not re-run. Declaration supported from copilot-session-context. declaration only; supported does not guarantee availability/value; degraded is not unreachable No raw adapter signal does not rule out the row value from host, runtime, history, or another producer. Raw source literals, not live samples: adapter.copilot.upstream.cwd=\"non-empty cwd\" (launch, session context, or context_changed); adapter.copilot.upstream.branch.named=\"non-empty branch string\" (context_changed branch); adapter.copilot.upstream.branch.null=null (gitRoot present and branch missing) Graph: evidence/copilot/project.branch.mmd. Continuation anchors, not a reachability verdict: MonitorService.consume, core reduce and project, deriveAgentRow. Vibefield AgentView and window-rows are not traced."
+    "notes": "sourceScope=adapter-provided. sourceRef=packages/adapter-copilot/src/normalization/environment.ts:4-18 git.branch. staticPresence=emitted-when-condition. liveObserved=false. observation.presence=unknown because this audit did not live-sample the value. staticPresence is the source result and is independent of that. rendererRead=direct. adapterEmittable=yes. uiReachable=yes. The value reaches a direct reader from this adapter-provided producer. Field domain: state.branch_unknown, state.branch_none, state.branch_named. Reachable subset: state.branch_unknown, state.branch_none, state.branch_named."
   }
 }

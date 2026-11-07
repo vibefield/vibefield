@@ -10,18 +10,10 @@
     {
       "repo": "puppeteer",
       "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
-      "path": "packages/adapter-codex/src/normalization/monitor-capabilities.ts",
-      "lineStart": 30,
-      "lineEnd": 34,
-      "symbol": "USD limitation"
-    },
-    {
-      "repo": "puppeteer",
-      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
-      "path": "packages/adapter-codex/src/normalization/usage.ts",
-      "lineStart": 28,
-      "lineEnd": 64,
-      "symbol": "codexUsagePricing returns tokens and gap"
+      "path": "packages/runtime/src/services/monitor-service.ts",
+      "lineStart": 418,
+      "lineEnd": 425,
+      "symbol": "priceUsageUpdates before reduce"
     },
     {
       "repo": "puppeteer",
@@ -29,31 +21,55 @@
       "path": "packages/adapter-codex/src/normalization/monitor.ts",
       "lineStart": 503,
       "lineEnd": 527,
-      "symbol": "usage value fields"
+      "symbol": "usage upsert writes pricing, never costUsd"
     },
     {
       "repo": "puppeteer",
       "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
-      "path": "packages/monitor/src/backend/derive.ts",
-      "lineStart": 240,
-      "lineEnd": 286,
-      "symbol": "deriveAgentRow"
+      "path": "packages/runtime/src/services/usage-pricing.ts",
+      "lineStart": 19,
+      "lineEnd": 78,
+      "symbol": "priceUsageUpdates"
     },
     {
       "repo": "puppeteer",
       "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
-      "path": "packages/view-sdk/src/model.ts",
-      "lineStart": 90,
-      "lineEnd": 90,
-      "symbol": "model.ts"
+      "path": "packages/core/src/monitor/reduce.ts",
+      "lineStart": 1049,
+      "lineEnd": 1073,
+      "symbol": "usage:tokens-used"
     },
     {
       "repo": "puppeteer",
       "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
       "path": "packages/monitor/src/backend/backend.ts",
-      "lineStart": 189,
-      "lineEnd": 207,
-      "symbol": "backend.ts"
+      "lineStart": 197,
+      "lineEnd": 205,
+      "symbol": "costOf"
+    },
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/core/src/monitor/project.ts",
+      "lineStart": 407,
+      "lineEnd": 417,
+      "symbol": "projectAgentMonitorState usage"
+    },
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/core/src/monitor/cost.ts",
+      "lineStart": 21,
+      "lineEnd": 40,
+      "symbol": "buildUsageCostLedger"
+    },
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/core/src/monitor/cost.ts",
+      "lineStart": 59,
+      "lineEnd": 101,
+      "symbol": "projectUsageCost"
     },
     {
       "repo": "puppeteer",
@@ -61,50 +77,246 @@
       "path": "packages/monitor/src/backend/usage-ledger.ts",
       "lineStart": 62,
       "lineEnd": 82,
-      "symbol": "usage-ledger.ts"
+      "symbol": "historyOf"
+    },
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/monitor/src/backend/derive.ts",
+      "lineStart": 277,
+      "lineEnd": 277,
+      "symbol": "row cost copy"
+    },
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/monitor/src/replica/replica.ts",
+      "lineStart": 337,
+      "lineEnd": 372,
+      "symbol": "replica join"
+    },
+    {
+      "repo": "vibefield",
+      "sha": "433505fd0f224f4cda540d642661b13848c0ef82",
+      "path": "packages/field-app/src/godview/monitor/window-rows.ts",
+      "lineStart": 116,
+      "lineEnd": 134,
+      "symbol": "window row patch"
+    },
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/views/src/views/swarm/bubble-model.ts",
+      "lineStart": 469,
+      "lineEnd": 477,
+      "symbol": "working body cost"
+    },
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/views/src/views/spend/spend-series.ts",
+      "lineStart": 34,
+      "lineEnd": 38,
+      "symbol": "spendOf"
     }
   ],
   "producer": {
-    "kind": "unknown",
-    "name": "not-adapter-produced",
-    "ingestedFrom": "not adapter-produced; PENDING DOWNSTREAM MAPPING into the row"
+    "kind": "adapter",
+    "name": "usage upsert writes pricing, never costUsd",
+    "ingestedFrom": "usage upsert writes pricing, never costUsd"
   },
   "transforms": [
     {
       "order": 0,
-      "name": "no-adapter-producer-0",
-      "effect": "The pricing helper returns token deltas or a gap. The usage upsert does not set costUsd or cost.",
+      "name": "pricing-deltas-not-usd",
+      "effect": "The usage upsert carries cumulativeTokens and a pricing object from codexUsagePricing. It never writes costUsd.",
       "source": {
         "repo": "puppeteer",
         "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
-        "path": "packages/adapter-codex/src/normalization/monitor-capabilities.ts",
-        "lineStart": 30,
-        "lineEnd": 34,
-        "symbol": "USD limitation"
+        "path": "packages/adapter-codex/src/normalization/monitor.ts",
+        "lineStart": 503,
+        "lineEnd": 527,
+        "symbol": "usage upsert writes pricing, never costUsd"
+      }
+    },
+    {
+      "order": 1,
+      "name": "price-before-reduce",
+      "effect": "priceUsageUpdates catalog-prices a complete same-model delta and rejects gaps. This runs before reduce.",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/runtime/src/services/usage-pricing.ts",
+        "lineStart": 19,
+        "lineEnd": 78,
+        "symbol": "priceUsageUpdates"
+      }
+    },
+    {
+      "order": 2,
+      "name": "reduce-after-price",
+      "effect": "The reducer stores the priced costUsd or the unpriced metadata. It does not price.",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/core/src/monitor/reduce.ts",
+        "lineStart": 1049,
+        "lineEnd": 1073,
+        "symbol": "usage:tokens-used"
+      }
+    },
+    {
+      "order": 3,
+      "name": "project-usage",
+      "effect": "projectAgentMonitorState publishes usage from the priced index. This is the monitor usage object, not yet field.cost.",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/core/src/monitor/project.ts",
+        "lineStart": 407,
+        "lineEnd": 417,
+        "symbol": "projectAgentMonitorState usage"
+      }
+    },
+    {
+      "name": "ledger-counts",
+      "effect": "buildUsageCostLedger increments pricedCount for each finite nonnegative costUsd, including 0. A missing or invalid costUsd increments unpricedCount when canonical, pricing, or cost is present.",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/core/src/monitor/cost.ts",
+        "lineStart": 21,
+        "lineEnd": 40,
+        "symbol": "buildUsageCostLedger"
+      },
+      "order": 4
+    },
+    {
+      "name": "coverage-decision",
+      "effect": "projectUsageCost: pricedCount > 0 and unpricedCount = 0 is complete, and the USD total may be 0. pricedCount > 0 and unpricedCount > 0 is partial. pricedCount = 0 omits costUsd and sets coverage unavailable.",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/core/src/monitor/cost.ts",
+        "lineStart": 59,
+        "lineEnd": 101,
+        "symbol": "projectUsageCost"
+      },
+      "order": 5
+    },
+    {
+      "name": "history-aggregate",
+      "effect": "historyOf sums defined costUsd across runs before costOf. pricedCount = 0 leaves history.total undefined, so the row omits field.cost (state.cost_missing).",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/monitor/src/backend/usage-ledger.ts",
+        "lineStart": 62,
+        "lineEnd": 82,
+        "symbol": "historyOf"
+      },
+      "order": 6
+    },
+    {
+      "order": 7,
+      "name": "row-cost",
+      "effect": "costOf copies usd and coverage when history.total is defined. pricedCount > 0 and unpricedCount = 0 is complete, including a USD total of 0. pricedCount > 0 and unpricedCount > 0 is partial. pricedCount = 0 leaves history.total undefined and omits field.cost (state.cost_missing).",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/monitor/src/backend/backend.ts",
+        "lineStart": 197,
+        "lineEnd": 205,
+        "symbol": "costOf"
+      }
+    },
+    {
+      "order": 8,
+      "name": "derive-cost",
+      "effect": "deriveAgentRow copies input.cost when costOf returned an object, including a USD total of 0. It omits cost when history.total is undefined.",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/monitor/src/backend/derive.ts",
+        "lineStart": 277,
+        "lineEnd": 277,
+        "symbol": "row cost copy"
+      }
+    },
+    {
+      "order": 9,
+      "name": "replica-passthrough",
+      "effect": "The replica join spreads the agent row. It does not recompute cost.",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/monitor/src/replica/replica.ts",
+        "lineStart": 337,
+        "lineEnd": 372,
+        "symbol": "replica join"
+      }
+    },
+    {
+      "order": 10,
+      "name": "window-passthrough",
+      "effect": "window-rows spreads the row. It rewrites peer stale and drops peer profileSet. It does not recompute cost.",
+      "source": {
+        "repo": "vibefield",
+        "sha": "433505fd0f224f4cda540d642661b13848c0ef82",
+        "path": "packages/field-app/src/godview/monitor/window-rows.ts",
+        "lineStart": 116,
+        "lineEnd": 134,
+        "symbol": "window row patch"
+      }
+    },
+    {
+      "order": 11,
+      "name": "swarm-reader",
+      "effect": "A working observed body reads cost coverage and burn to choose a priced flame or the unpriced flame.",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/views/src/views/swarm/bubble-model.ts",
+        "lineStart": 469,
+        "lineEnd": 477,
+        "symbol": "working body cost"
+      }
+    },
+    {
+      "order": 12,
+      "name": "spend-reader",
+      "effect": "spendOf reads cost.usd unless coverage is unavailable or the total is missing.",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/views/src/views/spend/spend-series.ts",
+        "lineStart": 34,
+        "lineEnd": 38,
+        "symbol": "spendOf"
       }
     }
   ],
   "merge": {
-    "strategy": "unknown",
+    "strategy": "fold",
     "defaults": []
   },
   "transport": {
-    "channel": "unknown",
-    "name": "not-adapter-produced"
+    "channel": "in-process",
+    "name": "AgentMonitorService.accept",
+    "contract": "priceUsageUpdates then reduceMonitorAccumulator"
   },
   "renderer": {
     "viewIds": [
       "view.swarm",
       "view.spend"
     ],
-    "component": "bubble-model / SpendView",
-    "symbol": "priced working body and spend series"
+    "component": "direct reader",
+    "symbol": "direct"
   },
   "applicability": {
     "states": [
       "state.cost_complete",
       "state.cost_partial",
-      "state.cost_unavailable",
       "state.cost_missing",
       "state.burn_flames_0",
       "state.burn_flames_1",
@@ -116,7 +328,7 @@
       "view.swarm",
       "view.spend"
     ],
-    "notes": "Source-permitted, conditional, not live-observed. Codex does not write costUsd. Runtime priceUsageUpdates can catalog-price a complete same-model delta. A zero first counter is not an unpriced sample. A positive baseline or a gap leaves coverage partial once a later delta is priced. Normal backend emits field.cost only for complete or partial. state.cost_unavailable is not produced by that mapping. state.cost_missing remains possible before any priced total. Priced flames 0-4 are possible on an observed working body; the tier is not chosen here. Attribution: Vibefield audit/godview-model 25c215a2a53f363e1076210b3f6fce2155dfdc0b contracts/cost-burn-trace.md, re-read at Puppeteer 748d015. ROW FIELD field.cost.coverage. PENDING DOWNSTREAM MAPPING into MonitorAgentRow. This is one of 74 canonical row fields. It is not an SDK contract leaf. PENDING DOWNSTREAM MAPPING: GV-AUDIT2 owns adapter output to row predicates, including cost, burn rate, history, timeline, and git branch. This audit does not give that verdict. Schema acceptance is not complete provenance. verification.status source-read is a static reading. observation.presence unknown means no live sample was taken. It does not mean the row value is missing. classification.adapterEmittable and uiReachable stay unknown. A raw adapter property is not the row field, and a catalog consumer is not a proven UI path.  This record does not emit state.cost_complete, state.cost_partial, state.cost_unavailable, state.cost_missing, state.burn_flames_0, state.burn_flames_1, state.burn_flames_2, state.burn_flames_3, state.burn_flames_4, or state.burn_unpriced. Those predicates stay downstream. PENDING DOWNSTREAM MAPPING. The declaration says USD uses counter deltas and model metadata, but the producer never writes a USD field. Token pricing is emitted and is recorded on field.tokens. Do not treat a gap as a zero cost. Absence of cost here does not forbid field.cost from a catalog step this adapter does not perform. The adapter does not write this MonitorAgentRow property. That is the architecture, not a conclusion that the row predicate is unreachable. This trace is Puppeteer 748d015a7e393112e0a91dad80111fdf5abe6583 only. It is newer than shipped Vibefield 0.3.3 and does not describe that install. Package comparison was not re-run. Declaration supported from codex-thread-token-usage. declaration only; supported does not guarantee availability/value; degraded is not unreachable Declared support does not match the producer channel. That mismatch is not a runtime impossibility. Raw source literals, not live samples: adapter.codex.upstream.cost.absent=\"absent\" (usage upsert) Graph: evidence/codex/cost.coverage.mmd. Continuation anchors, not a reachability verdict: MonitorService.consume, core reduce and project, deriveAgentRow. Vibefield AgentView and window-rows are not traced."
+    "notes": "sourceScope=common-runtime. sourceRef=packages/runtime/src/services/monitor-service.ts:418-425 priceUsageUpdates before reduce. staticPresence=emitted-when-condition. liveObserved=false. observation.presence=unknown because this audit did not live-sample the value. staticPresence is the source result and is independent of that. rendererRead=direct. adapterEmittable=no. uiReachable=yes. The value reaches a direct reader from this common-runtime producer. Field domain: state.cost_complete, state.cost_partial, state.cost_unavailable, state.cost_missing, state.burn_flames_0, state.burn_flames_1, state.burn_flames_2, state.burn_flames_3, state.burn_flames_4. Reachable subset: state.cost_complete, state.cost_partial, state.cost_missing, state.burn_flames_0, state.burn_flames_1, state.burn_flames_2, state.burn_flames_3, state.burn_flames_4. In the domain but not reachable on this path: state.cost_unavailable."
   },
   "absence": {
     "onMissing": "record-unknown",
@@ -129,12 +341,12 @@
   },
   "classification": {
     "modelSupported": "yes",
-    "adapterEmittable": "yes",
+    "adapterEmittable": "no",
     "uiReachable": "yes"
   },
   "verification": {
     "status": "source-read",
     "owner": "GV-AUDIT3",
-    "notes": "Source-permitted, conditional, not live-observed. Codex does not write costUsd. Runtime priceUsageUpdates can catalog-price a complete same-model delta. A zero first counter is not an unpriced sample. A positive baseline or a gap leaves coverage partial once a later delta is priced. Normal backend emits field.cost only for complete or partial. state.cost_unavailable is not produced by that mapping. state.cost_missing remains possible before any priced total. Priced flames 0-4 are possible on an observed working body; the tier is not chosen here. Attribution: Vibefield audit/godview-model 25c215a2a53f363e1076210b3f6fce2155dfdc0b contracts/cost-burn-trace.md, re-read at Puppeteer 748d015. ROW FIELD field.cost.coverage. PENDING DOWNSTREAM MAPPING into MonitorAgentRow. This is one of 74 canonical row fields. It is not an SDK contract leaf. PENDING DOWNSTREAM MAPPING: GV-AUDIT2 owns adapter output to row predicates, including cost, burn rate, history, timeline, and git branch. This audit does not give that verdict. Schema acceptance is not complete provenance. verification.status source-read is a static reading. observation.presence unknown means no live sample was taken. It does not mean the row value is missing. classification.adapterEmittable and uiReachable stay unknown. A raw adapter property is not the row field, and a catalog consumer is not a proven UI path.  This record does not emit state.cost_complete, state.cost_partial, state.cost_unavailable, state.cost_missing, state.burn_flames_0, state.burn_flames_1, state.burn_flames_2, state.burn_flames_3, state.burn_flames_4, or state.burn_unpriced. Those predicates stay downstream. PENDING DOWNSTREAM MAPPING. The declaration says USD uses counter deltas and model metadata, but the producer never writes a USD field. Token pricing is emitted and is recorded on field.tokens. Do not treat a gap as a zero cost. Absence of cost here does not forbid field.cost from a catalog step this adapter does not perform. The adapter does not write this MonitorAgentRow property. That is the architecture, not a conclusion that the row predicate is unreachable. This trace is Puppeteer 748d015a7e393112e0a91dad80111fdf5abe6583 only. It is newer than shipped Vibefield 0.3.3 and does not describe that install. Package comparison was not re-run. Declaration supported from codex-thread-token-usage. declaration only; supported does not guarantee availability/value; degraded is not unreachable Declared support does not match the producer channel. That mismatch is not a runtime impossibility. Raw source literals, not live samples: adapter.codex.upstream.cost.absent=\"absent\" (usage upsert) Graph: evidence/codex/cost.coverage.mmd. Continuation anchors, not a reachability verdict: MonitorService.consume, core reduce and project, deriveAgentRow. Vibefield AgentView and window-rows are not traced."
+    "notes": "sourceScope=common-runtime. sourceRef=packages/runtime/src/services/monitor-service.ts:418-425 priceUsageUpdates before reduce. staticPresence=emitted-when-condition. liveObserved=false. observation.presence=unknown because this audit did not live-sample the value. staticPresence is the source result and is independent of that. rendererRead=direct. adapterEmittable=no. uiReachable=yes. The value reaches a direct reader from this common-runtime producer. Field domain: state.cost_complete, state.cost_partial, state.cost_unavailable, state.cost_missing, state.burn_flames_0, state.burn_flames_1, state.burn_flames_2, state.burn_flames_3, state.burn_flames_4. Reachable subset: state.cost_complete, state.cost_partial, state.cost_missing, state.burn_flames_0, state.burn_flames_1, state.burn_flames_2, state.burn_flames_3, state.burn_flames_4. In the domain but not reachable on this path: state.cost_unavailable."
   }
 }

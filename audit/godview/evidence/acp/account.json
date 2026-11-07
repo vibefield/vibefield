@@ -10,64 +10,96 @@
     {
       "repo": "puppeteer",
       "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
-      "path": "packages/view-sdk/src/model.ts",
-      "lineStart": 156,
-      "lineEnd": 156,
-      "symbol": "model.ts"
-    },
-    {
-      "repo": "puppeteer",
-      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
       "path": "packages/monitor/src/backend/derive.ts",
       "lineStart": 273,
       "lineEnd": 273,
-      "symbol": "derive.ts"
+      "symbol": "host.account copy"
     }
   ],
   "producer": {
-    "kind": "unknown",
-    "name": "not-adapter-produced",
-    "ingestedFrom": "not adapter-produced; PENDING DOWNSTREAM MAPPING into the row"
+    "kind": "core-reducer",
+    "name": "host.account copy",
+    "ingestedFrom": "derive.ts:273 only host.account"
   },
   "transforms": [
     {
       "order": 0,
-      "name": "no-adapter-producer-0",
-      "effect": "No adapter write of this contract property was found in the reviewed producers.",
+      "name": "no-adapter",
+      "effect": "No adapter emits account.",
       "source": {
         "repo": "puppeteer",
         "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
-        "path": "packages/view-sdk/src/model.ts",
-        "lineStart": 156,
-        "lineEnd": 156,
-        "symbol": "model.ts"
+        "path": "packages/builtin-providers/src/providers.ts",
+        "lineStart": 642,
+        "lineEnd": 659,
+        "symbol": "ACP has no profiles service"
+      }
+    },
+    {
+      "order": 1,
+      "name": "copy",
+      "effect": "derive copies host.account and otherwise omits the property.",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/monitor/src/backend/derive.ts",
+        "lineStart": 273,
+        "lineEnd": 273,
+        "symbol": "host.account copy"
+      }
+    },
+    {
+      "order": 2,
+      "name": "vibefield-host",
+      "effect": "hostRunFromSummary copies profileId and profileSet and never sets account.",
+      "source": {
+        "repo": "vibefield",
+        "sha": "433505fd0f224f4cda540d642661b13848c0ef82",
+        "path": "packages/fieldd/src/agent-monitor.ts",
+        "lineStart": 223,
+        "lineEnd": 266,
+        "symbol": "hostRunFromSummary"
+      }
+    },
+    {
+      "order": 3,
+      "name": "puppeteer-host",
+      "effect": "ACP has no profiles service, so this host also omits account.",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "apps/godview/src/main/monitor-host.ts",
+        "lineStart": 62,
+        "lineEnd": 79,
+        "symbol": "Puppeteer host account"
       }
     }
   ],
   "merge": {
-    "strategy": "unknown",
+    "strategy": "none",
     "defaults": []
   },
   "transport": {
-    "channel": "unknown",
-    "name": "not-adapter-produced"
+    "channel": "in-process",
+    "name": "not-applicable",
+    "contract": "Neither audited host sets account for ACP."
   },
   "renderer": {
     "viewIds": [
       "view.list"
     ],
-    "component": "catalog-consumer-unproven",
-    "symbol": "view.list"
+    "component": "direct reader",
+    "symbol": "direct"
   },
   "applicability": {
     "states": "model-axes",
     "views": [
       "view.list"
     ],
-    "notes": "Filled by the host, replica, or window fold, not by this adapter. List reads field.active. The other window and device fields were not each re-verified as drawn. Not unreachable, and not live-observed. ROW FIELD field.account. PENDING DOWNSTREAM MAPPING into MonitorAgentRow. This is one of 74 canonical row fields. It is not an SDK contract leaf. PENDING DOWNSTREAM MAPPING: GV-AUDIT2 owns adapter output to row predicates, including cost, burn rate, history, timeline, and git branch. This audit does not give that verdict. Schema acceptance is not complete provenance. verification.status source-read is a static reading. observation.presence unknown means no live sample was taken. It does not mean the row value is missing. classification.adapterEmittable and uiReachable stay unknown. A raw adapter property is not the row field, and a catalog consumer is not a proven UI path.   field.account has no raw adapter write in the producers reviewed for acp. The adapter does not write this MonitorAgentRow property. That is the architecture, not a conclusion that the row predicate is unreachable. This trace is Puppeteer 748d015a7e393112e0a91dad80111fdf5abe6583 only. It is newer than shipped Vibefield 0.3.3 and does not describe that install. Package comparison was not re-run. No capability cell for this field. No raw adapter signal does not rule out the row value from host, runtime, history, or another producer. No raw adapter literal was found for this field. Graph: evidence/acp/account.mmd. Continuation anchors, not a reachability verdict: MonitorService.consume, core reduce and project, deriveAgentRow. Vibefield AgentView and window-rows are not traced."
+    "notes": "sourceScope=host-supplied. sourceRef=packages/monitor/src/backend/derive.ts:273-273 host.account copy. staticPresence=host-dependent. liveObserved=false. observation.presence=unknown because this audit did not live-sample the value. staticPresence is the source result and is independent of that. rendererRead=direct. adapterEmittable=no. uiReachable=no. A global reader does not make this value reachable. HOST SCOPES. Envelope uiReachable=no is the Vibefield consumer 433505fd only: hostRunFromSummary never sets account. This is not a global absence. Puppeteer Godview host also omits account because ACP has no profiles service. accountUsage feeds the usage column only. It does not write field.account. GV2 trace 08b5d849177685662b43e0e3a4e6bd7d32ac2cdf. Field domain is empty. applicability.states=model-axes is the envelope token for a field with no state predicates. It is not a reachable set and it does not claim any other field's states."
   },
   "absence": {
-    "onMissing": "record-unknown",
+    "onMissing": "omit-field",
     "onStale": "unknown",
     "zeroPolicy": "unknown-unsupported-and-absent-are-not-zero"
   },
@@ -78,11 +110,11 @@
   "classification": {
     "modelSupported": "yes",
     "adapterEmittable": "no",
-    "uiReachable": "unknown"
+    "uiReachable": "no"
   },
   "verification": {
     "status": "source-read",
     "owner": "GV-AUDIT3",
-    "notes": "Filled by the host, replica, or window fold, not by this adapter. List reads field.active. The other window and device fields were not each re-verified as drawn. Not unreachable, and not live-observed. ROW FIELD field.account. PENDING DOWNSTREAM MAPPING into MonitorAgentRow. This is one of 74 canonical row fields. It is not an SDK contract leaf. PENDING DOWNSTREAM MAPPING: GV-AUDIT2 owns adapter output to row predicates, including cost, burn rate, history, timeline, and git branch. This audit does not give that verdict. Schema acceptance is not complete provenance. verification.status source-read is a static reading. observation.presence unknown means no live sample was taken. It does not mean the row value is missing. classification.adapterEmittable and uiReachable stay unknown. A raw adapter property is not the row field, and a catalog consumer is not a proven UI path.   field.account has no raw adapter write in the producers reviewed for acp. The adapter does not write this MonitorAgentRow property. That is the architecture, not a conclusion that the row predicate is unreachable. This trace is Puppeteer 748d015a7e393112e0a91dad80111fdf5abe6583 only. It is newer than shipped Vibefield 0.3.3 and does not describe that install. Package comparison was not re-run. No capability cell for this field. No raw adapter signal does not rule out the row value from host, runtime, history, or another producer. No raw adapter literal was found for this field. Graph: evidence/acp/account.mmd. Continuation anchors, not a reachability verdict: MonitorService.consume, core reduce and project, deriveAgentRow. Vibefield AgentView and window-rows are not traced."
+    "notes": "sourceScope=host-supplied. sourceRef=packages/monitor/src/backend/derive.ts:273-273 host.account copy. staticPresence=host-dependent. liveObserved=false. observation.presence=unknown because this audit did not live-sample the value. staticPresence is the source result and is independent of that. rendererRead=direct. adapterEmittable=no. uiReachable=no. A global reader does not make this value reachable. HOST SCOPES. Envelope uiReachable=no is the Vibefield consumer 433505fd only: hostRunFromSummary never sets account. This is not a global absence. Puppeteer Godview host also omits account because ACP has no profiles service. accountUsage feeds the usage column only. It does not write field.account. GV2 trace 08b5d849177685662b43e0e3a4e6bd7d32ac2cdf. Field domain is empty. applicability.states=model-axes is the envelope token for a field with no state predicates. It is not a reachable set and it does not claim any other field's states."
   }
 }

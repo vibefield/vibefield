@@ -1,11 +1,12 @@
-%% graph_ref: shared.context.percent
-%% adapter: acp
 %% field: field.context
-%% forensic: source-read at 748d015; not a live sample
-flowchart LR
-  src["packages/adapter-acp/src/normalization/monitor.ts:216-228"]
-  raw["context-window:updated usedTokens and capacityTokens"]
-  shared["shared.context.percent"]
-  row["field.context yes"]
-  ui["UI yes"]
-  src --> raw --> shared --> row --> ui
+%% adapter: acp
+%% forensic: source-read 748d015a7e393112e0a91dad80111fdf5abe6583; not a live sample
+flowchart TD
+  n0["normalized-context\npackages/adapter-acp/src/normalization/monitor.ts:216-228\nThe adapter writes used and capacity tokens, and a percentage only when it actually has one."]
+  n1["reduce-percent\npackages/core/src/monitor/reduce.ts:1075-1104\nA positive capacity stores context. A missing provider percentage becomes a clamped ratio. Invalidation retracts that claim."]
+  n0 --> n1
+  n2["derive-percent\npackages/monitor/src/backend/derive.ts:240-286\nA finite usedPercent is copied. Otherwise field.context is omitted."]
+  n1 --> n2
+  n1 --> copied["provider percent present: copy it"]
+  n1 --> derived["percent absent and capacity positive: clamped ratio"]
+  n1 --> retracted["invalidation: retract the claim"]

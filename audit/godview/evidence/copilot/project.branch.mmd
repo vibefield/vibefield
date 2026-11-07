@@ -1,11 +1,9 @@
-%% graph_ref: shared.branch
-%% adapter: copilot
 %% field: field.project.branch
-%% forensic: source-read at 748d015; not a live sample
-flowchart LR
-  src["packages/adapter-copilot/src/normalization/environment.ts:4-18"]
-  raw["currentCwd and optional git.branch"]
-  shared["shared.branch"]
-  row["field.project.branch yes"]
-  ui["UI yes"]
-  src --> raw --> shared --> row --> ui
+%% adapter: copilot
+%% forensic: source-read 748d015a7e393112e0a91dad80111fdf5abe6583; not a live sample
+flowchart TD
+  n0["observed-git\npackages/adapter-copilot/src/normalization/environment.ts:4-18\ncontext_changed with a git root sets branch to a string or null, and detached when a head exists without a branch."]
+  n1["reduce-env\npackages/core/src/monitor/reduce.ts:1117-1119\nenvironment:updated upserts cwd and git. Partial merge keeps an omitted git when cwd alone changes."]
+  n0 --> n1
+  n2["derive-branch\npackages/monitor/src/backend/derive.ts:101-106\nA nonempty observed branch wins, else host fallback, else observed null, else workspace branch."]
+  n1 --> n2

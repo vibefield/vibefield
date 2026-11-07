@@ -40,14 +40,36 @@ Unreachable on the full VibeField path for all five, not only because the adapte
 
 `projectBranch` (`packages/monitor/src/backend/derive.ts:101-107`) returns null only when `environment.git` is defined and neither `git.branch` nor `host.fallbackBranch` is set. These adapters write cwd and never git. `recordWorkspaceEvidence` publishes cwd and worktrees with no git (`packages/runtime/src/runtime.ts:1325-1340`). Provenance git stays off the public environment (`packages/core/src/monitor/reduce.ts:625-631`). `hostRunFromSummary` copies `summary.workspace.branch` when present and does not set `fallbackBranch` (`packages/fieldd/src/agent-monitor.ts:248-256`; `packages/monitor/src/backend/ports.ts:53-58` says VibeField supplies none). A missing observation stays absent (`state.branch_unknown`) or becomes that host string (`state.branch_named`).
 
+## Account and profileSet
+
+Source: `audit/godview/contracts/account-trace.md` at `08b5d849177685662b43e0e3a4e6bd7d32ac2cdf` on `audit/godview-model`, checked against the pins.
+
+`field.account` is not an adapter field. `deriveAgentRow` copies `host.account` only (`packages/monitor/src/backend/derive.ts:273`). The VibeField host `hostRunFromSummary` (`packages/fieldd/src/agent-monitor.ts:223-266`) copies `profileId` and `profileSet` and never `account`, so under this product the field is unreachable for grok, hermes, kimi, opencode, and pi. The Puppeteer Godview host is a different host: `monitorHostRun` (`apps/godview/src/main/monitor-host.ts:62,79`) fills `account` from the profile label for these five, because each has a profiles service. ACP is the exception and is outside this slice. `accountUsage` (grok at `providers.ts:671`, kimi at `providers.ts:751`; hermes, opencode, and pi have none) feeds the usage column (`packages/views/src/usage/account-usage.ts:63-82`), not `field.account`.
+
+`field.profileSet` is always present on an agent row. `resolveProfileSet` (`derive.ts:62-66`), applied at `backend.ts:433`, takes the host value, then the set that lists `profileId`, then `native`. A run with no profile is native. `window-rows.ts:119-134` removes `profileSet` from rows whose device is not this one.
+
 ## Cost and burn
 
 Shared path, not re-derived here: `audit/godview/contracts/cost-burn-trace.md` at `25c215a2a53f363e1076210b3f6fce2155dfdc0b` on `audit/godview-model`.
 
 Token counts without `costUsd` normally end in `state.cost_missing`, not `state.cost_unavailable`. Core coverage can be unavailable while the backend omits `field.cost` entirely. An observed working swarm body with no complete or partial cost is `state.burn_unpriced`. Priced flames (`state.burn_flames_0` through `state.burn_flames_4`) are reachable only for claude and codex. `field.tokens.perMinute` and those USD flames are independent.
 
-Checked `packages/runtime/src/services/usage-pricing.ts:19-36` and `:69-78`, and `packages/runtime/src/services/usage-prices.ts:39`. The catalog has 60 keys and only the providers `anthropic` and `openai`. Pricing reads the usage upsert's own `pricing` object. It does not use the row model. Grok (`usage.ts:41-54`, canonical, no pricing or costUsd), Hermes (`monitor.ts:311-321` and `:700-711`, noncanonical, no pricing or costUsd), and OpenCode (`monitor.ts:145-153`, canonical, no pricing or costUsd) never attach that object, so the catalog cannot price them. Kimi (`monitor.ts:372-396`) stores journal usage as context, not a usage upsert. Pi emits no live usage. Ingress still selects Grok and OpenCode because they are canonical, then records an unavailable estimate and no `costUsd`. That raises the unpriced count and still leaves no priced total, so the row stays `state.cost_missing`.
+Checked `packages/runtime/src/services/usage-pricing.ts:19-36` and `:69-78`, and `packages/runtime/src/services/usage-prices.ts:39`. The catalog has 60 keys and only the providers `anthropic` and `openai`. Pricing reads the usage upsert's own `pricing` object. It does not use the row model. Grok (`usage.ts:41-54`, canonical, no pricing or costUsd), Hermes (`monitor.ts:311-321` and `:700-711`, noncanonical, no pricing or costUsd), and OpenCode (`monitor.ts:145-153`, canonical, no pricing or costUsd) never attach that object, so the catalog cannot price them. Kimi (`monitor.ts:372-396`) stores journal usage as context, not a usage upsert. Pi emits no live usage. Ingress still selects Grok and OpenCode because they are canonical, then records an unavailable estimate and no `costUsd`. That raises the unpriced count and still leaves no priced total, so the row stays `state.cost_missing`. `state.cost_unavailable` is settled: the normal backend does not emit a cost object for that case.
 
+Order, from `audit/godview/contracts/shared-downstream-map.md` at `07e71c9bcb9532fc181e3f667f2d0ed2e7c9afaf`: price at ingress, reduce, project the usage fold, observe the backend ledger, `costOf`, then `deriveAgentRow`. Flowcharts: `audit/godview/flows/<adapter>-cost.json`.
+
+```mermaid
+flowchart TD
+  A[Adapter usage claim or no live usage] --> I[acceptSemantic]
+  I --> P[priceUsageUpdates before reduce]
+  P --> R[reduceMonitorAccumulator]
+  R --> S[selectClaims]
+  S --> J[projectAgentMonitorState and buildUsageCostLedger]
+  J --> L[ledger.observe]
+  L --> C[costOf omits the object when no priced total]
+  C --> D[deriveAgentRow]
+  D --> M[state.cost_missing and state.burn_unpriced]
+```
 
 ## States
 
@@ -136,7 +158,7 @@ Full path for a run of this adapter cannot produce it:
 
 - `state.blocked_unknown_kind` — core blockers are only permission, question, and failure (`packages/core/src/monitor/transitions.ts:93-170`).
 - `state.branch_none` — see the branch section. The runtime type allows a null git answer; this host path never writes one.
-- `state.cost_complete`, `state.cost_partial`, `state.cost_unavailable` — no priced total from these producers. `state.cost_unavailable` would require a present cost object; the normal backend omits it. See the cost section and cost-burn-trace.md at 25c215a.
+- `state.cost_complete`, `state.cost_partial`, `state.cost_unavailable` — settled. No priced total, so the backend omits field.cost. state.cost_unavailable is not emitted. See the cost section, cost-burn-trace.md at 25c215a, and shared-downstream-map.md at 07e71c9.
 - `state.burn_flames_0`, `state.burn_flames_1`, `state.burn_flames_2`, `state.burn_flames_3`, `state.burn_flames_4` — priced USD flames. The shared trace finds them only for claude and codex. The pinned catalog cannot price these five.
 - `state.effort_configured` — this adapter never emits the evidence, and no host or window-rows path invents it.
 
@@ -223,7 +245,7 @@ Full path for a run of this adapter cannot produce it:
 
 - `state.blocked_unknown_kind` — core blockers are only permission, question, and failure (`packages/core/src/monitor/transitions.ts:93-170`).
 - `state.branch_none` — see the branch section. The runtime type allows a null git answer; this host path never writes one.
-- `state.cost_complete`, `state.cost_partial`, `state.cost_unavailable` — no priced total from these producers. `state.cost_unavailable` would require a present cost object; the normal backend omits it. See the cost section and cost-burn-trace.md at 25c215a.
+- `state.cost_complete`, `state.cost_partial`, `state.cost_unavailable` — settled. No priced total, so the backend omits field.cost. state.cost_unavailable is not emitted. See the cost section, cost-burn-trace.md at 25c215a, and shared-downstream-map.md at 07e71c9.
 - `state.burn_flames_0`, `state.burn_flames_1`, `state.burn_flames_2`, `state.burn_flames_3`, `state.burn_flames_4` — priced USD flames. The shared trace finds them only for claude and codex. The pinned catalog cannot price these five.
 - `state.activity_reasoning` — this adapter never emits the evidence, and no host or window-rows path invents it.
 
@@ -310,7 +332,7 @@ Full path for a run of this adapter cannot produce it:
 
 - `state.blocked_unknown_kind` — core blockers are only permission, question, and failure (`packages/core/src/monitor/transitions.ts:93-170`).
 - `state.branch_none` — see the branch section. The runtime type allows a null git answer; this host path never writes one.
-- `state.cost_complete`, `state.cost_partial`, `state.cost_unavailable` — no priced total from these producers. `state.cost_unavailable` would require a present cost object; the normal backend omits it. See the cost section and cost-burn-trace.md at 25c215a.
+- `state.cost_complete`, `state.cost_partial`, `state.cost_unavailable` — settled. No priced total, so the backend omits field.cost. state.cost_unavailable is not emitted. See the cost section, cost-burn-trace.md at 25c215a, and shared-downstream-map.md at 07e71c9.
 - `state.burn_flames_0`, `state.burn_flames_1`, `state.burn_flames_2`, `state.burn_flames_3`, `state.burn_flames_4` — priced USD flames. The shared trace finds them only for claude and codex. The pinned catalog cannot price these five.
 - `state.context_hot` — this adapter never emits the evidence, and no host or window-rows path invents it.
 
@@ -398,7 +420,7 @@ Full path for a run of this adapter cannot produce it:
 
 - `state.blocked_unknown_kind` — core blockers are only permission, question, and failure (`packages/core/src/monitor/transitions.ts:93-170`).
 - `state.branch_none` — see the branch section. The runtime type allows a null git answer; this host path never writes one.
-- `state.cost_complete`, `state.cost_partial`, `state.cost_unavailable` — no priced total from these producers. `state.cost_unavailable` would require a present cost object; the normal backend omits it. See the cost section and cost-burn-trace.md at 25c215a.
+- `state.cost_complete`, `state.cost_partial`, `state.cost_unavailable` — settled. No priced total, so the backend omits field.cost. state.cost_unavailable is not emitted. See the cost section, cost-burn-trace.md at 25c215a, and shared-downstream-map.md at 07e71c9.
 - `state.burn_flames_0`, `state.burn_flames_1`, `state.burn_flames_2`, `state.burn_flames_3`, `state.burn_flames_4` — priced USD flames. The shared trace finds them only for claude and codex. The pinned catalog cannot price these five.
 
 ### adapter.pi
@@ -474,7 +496,7 @@ Full path for a run of this adapter cannot produce it:
 
 - `state.blocked_unknown_kind` — core blockers are only permission, question, and failure (`packages/core/src/monitor/transitions.ts:93-170`).
 - `state.branch_none` — see the branch section. The runtime type allows a null git answer; this host path never writes one.
-- `state.cost_complete`, `state.cost_partial`, `state.cost_unavailable` — no priced total from these producers. `state.cost_unavailable` would require a present cost object; the normal backend omits it. See the cost section and cost-burn-trace.md at 25c215a.
+- `state.cost_complete`, `state.cost_partial`, `state.cost_unavailable` — settled. No priced total, so the backend omits field.cost. state.cost_unavailable is not emitted. See the cost section, cost-burn-trace.md at 25c215a, and shared-downstream-map.md at 07e71c9.
 - `state.burn_flames_0`, `state.burn_flames_1`, `state.burn_flames_2`, `state.burn_flames_3`, `state.burn_flames_4` — priced USD flames. The shared trace finds them only for claude and codex. The pinned catalog cannot price these five.
 - `state.activity_compacting` — this adapter never emits the evidence, and no host or window-rows path invents it.
 - `state.activity_delegating` — this adapter never emits the evidence, and no host or window-rows path invents it.
@@ -488,4 +510,4 @@ Full path for a run of this adapter cannot produce it:
 - `state.wait_multiple` — this adapter never emits the evidence, and no host or window-rows path invents it.
 - `state.working_with_blockers` — this adapter never emits the evidence, and no host or window-rows path invents it.
 
-No classified state in this inventory remains unknown, and no cost or burn state remains pending.
+No classified state in this inventory is unknown. state.cost_unavailable is settled: the normal backend does not emit it for these five adapters.

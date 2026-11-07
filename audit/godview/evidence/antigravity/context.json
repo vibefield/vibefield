@@ -10,95 +10,40 @@
     {
       "repo": "puppeteer",
       "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
-      "path": "packages/adapter-antigravity/src/normalization/monitor-capabilities.ts",
-      "lineStart": 24,
-      "lineEnd": 32,
-      "symbol": "context capability"
-    },
-    {
-      "repo": "puppeteer",
-      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
       "path": "packages/adapter-antigravity/src/normalization/pipeline.ts",
       "lineStart": 86,
       "lineEnd": 88,
-      "symbol": "CHECKPOINT retained"
-    },
-    {
-      "repo": "puppeteer",
-      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
-      "path": "packages/monitor/src/backend/derive.ts",
-      "lineStart": 240,
-      "lineEnd": 286,
-      "symbol": "deriveAgentRow"
-    },
-    {
-      "repo": "puppeteer",
-      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
-      "path": "packages/view-sdk/src/model.ts",
-      "lineStart": 157,
-      "lineEnd": 157,
-      "symbol": "model.ts"
-    },
-    {
-      "repo": "puppeteer",
-      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
-      "path": "packages/monitor/src/backend/derive.ts",
-      "lineStart": 247,
-      "lineEnd": 247,
-      "symbol": "derive.ts"
-    },
-    {
-      "repo": "puppeteer",
-      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
-      "path": "packages/monitor/src/backend/derive.ts",
-      "lineStart": 274,
-      "lineEnd": 274,
-      "symbol": "derive.ts"
-    },
-    {
-      "repo": "puppeteer",
-      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
-      "path": "packages/views/src/views/swarm/bubble-model.ts",
-      "lineStart": 328,
-      "lineEnd": 330,
-      "symbol": "bubble-model.ts"
-    },
-    {
-      "repo": "puppeteer",
-      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
-      "path": "packages/views/src/views/rain/rain-streams.ts",
-      "lineStart": 89,
-      "lineEnd": 117,
-      "symbol": "rain-streams.ts"
+      "symbol": "CHECKPOINT is not context"
     }
   ],
   "producer": {
-    "kind": "unknown",
-    "name": "not-adapter-produced",
-    "ingestedFrom": "not adapter-produced; PENDING DOWNSTREAM MAPPING into the row"
+    "kind": "adapter",
+    "name": "CHECKPOINT is not context",
+    "ingestedFrom": "CHECKPOINT is not context"
   },
   "transforms": [
     {
       "order": 0,
-      "name": "no-adapter-producer-0",
-      "effect": "No context-window event. CHECKPOINT is retained-native and is not context evidence.",
+      "name": "no-context",
+      "effect": "CHECKPOINT is retained native and is not a context-window event. No occupancy sample is emitted.",
       "source": {
         "repo": "puppeteer",
         "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
-        "path": "packages/adapter-antigravity/src/normalization/monitor-capabilities.ts",
-        "lineStart": 24,
-        "lineEnd": 32,
-        "symbol": "context capability"
+        "path": "packages/adapter-antigravity/src/normalization/pipeline.ts",
+        "lineStart": 86,
+        "lineEnd": 88,
+        "symbol": "CHECKPOINT is not context"
       }
     }
   ],
   "merge": {
-    "strategy": "unknown",
+    "strategy": "none",
     "defaults": []
   },
   "transport": {
-    "channel": "unknown",
-    "name": "not-adapter-produced"
+    "channel": "in-process",
+    "name": "not-applicable",
+    "contract": "CHECKPOINT is retained native and is not a context-window event. No occupancy sample is emitted."
   },
   "renderer": {
     "viewIds": [
@@ -106,20 +51,19 @@
       "view.rain",
       "view.swarm"
     ],
-    "component": "bubble-model / AgentList / rain-streams",
-    "symbol": "usedPercent"
+    "component": "direct reader",
+    "symbol": "direct"
   },
   "applicability": {
     "states": [
-      "state.context_missing",
-      "state.context_hot"
+      "state.context_missing"
     ],
     "views": [
       "view.list",
       "view.rain",
       "view.swarm"
     ],
-    "notes": "No context occupancy producer in the current antigravity sources. The row omits field.context. Readers exist. Not impossible if a later producer appears. Not live-observed. ROW FIELD field.context. PENDING DOWNSTREAM MAPPING into MonitorAgentRow. This is one of 74 canonical row fields. It is not an SDK contract leaf. PENDING DOWNSTREAM MAPPING: GV-AUDIT2 owns adapter output to row predicates, including cost, burn rate, history, timeline, and git branch. This audit does not give that verdict. Schema acceptance is not complete provenance. verification.status source-read is a static reading. observation.presence unknown means no live sample was taken. It does not mean the row value is missing. classification.adapterEmittable and uiReachable stay unknown. A raw adapter property is not the row field, and a catalog consumer is not a proven UI path.   Declared unsupported. That does not forbid field.context from another producer. The adapter does not write this MonitorAgentRow property. That is the architecture, not a conclusion that the row predicate is unreachable. This trace is Puppeteer 748d015a7e393112e0a91dad80111fdf5abe6583 only. It is newer than shipped Vibefield 0.3.3 and does not describe that install. Package comparison was not re-run. Declaration unsupported from none-in-antigravity-transcript. declaration only; supported does not guarantee availability/value; degraded is not unreachable No raw adapter signal does not rule out the row value from host, runtime, history, or another producer. Raw source literals, not live samples: adapter.antigravity.upstream.context.absent=\"absent\" (transcript normalizer) Graph: evidence/antigravity/context.mmd. Continuation anchors, not a reachability verdict: MonitorService.consume, core reduce and project, deriveAgentRow. Vibefield AgentView and window-rows are not traced."
+    "notes": "sourceScope=absent. sourceRef=packages/adapter-antigravity/src/normalization/pipeline.ts:86-88 CHECKPOINT is not context. staticPresence=omitted. liveObserved=false. observation.presence=unknown because this audit did not live-sample the value. staticPresence is the source result and is independent of that. rendererRead=direct. adapterEmittable=no. uiReachable=no. A global reader does not make this value reachable. Field domain: state.context_missing, state.context_hot. Reachable subset: state.context_missing. In the domain but not reachable on this path: state.context_hot."
   },
   "absence": {
     "onMissing": "record-unknown",
@@ -127,17 +71,17 @@
     "zeroPolicy": "unknown-unsupported-and-absent-are-not-zero"
   },
   "observation": {
-    "presence": "absent",
+    "presence": "unknown",
     "synthetic": false
   },
   "classification": {
     "modelSupported": "yes",
     "adapterEmittable": "no",
-    "uiReachable": "yes"
+    "uiReachable": "no"
   },
   "verification": {
     "status": "source-read",
     "owner": "GV-AUDIT3",
-    "notes": "No context occupancy producer in the current antigravity sources. The row omits field.context. Readers exist. Not impossible if a later producer appears. Not live-observed. ROW FIELD field.context. PENDING DOWNSTREAM MAPPING into MonitorAgentRow. This is one of 74 canonical row fields. It is not an SDK contract leaf. PENDING DOWNSTREAM MAPPING: GV-AUDIT2 owns adapter output to row predicates, including cost, burn rate, history, timeline, and git branch. This audit does not give that verdict. Schema acceptance is not complete provenance. verification.status source-read is a static reading. observation.presence unknown means no live sample was taken. It does not mean the row value is missing. classification.adapterEmittable and uiReachable stay unknown. A raw adapter property is not the row field, and a catalog consumer is not a proven UI path.   Declared unsupported. That does not forbid field.context from another producer. The adapter does not write this MonitorAgentRow property. That is the architecture, not a conclusion that the row predicate is unreachable. This trace is Puppeteer 748d015a7e393112e0a91dad80111fdf5abe6583 only. It is newer than shipped Vibefield 0.3.3 and does not describe that install. Package comparison was not re-run. Declaration unsupported from none-in-antigravity-transcript. declaration only; supported does not guarantee availability/value; degraded is not unreachable No raw adapter signal does not rule out the row value from host, runtime, history, or another producer. Raw source literals, not live samples: adapter.antigravity.upstream.context.absent=\"absent\" (transcript normalizer) Graph: evidence/antigravity/context.mmd. Continuation anchors, not a reachability verdict: MonitorService.consume, core reduce and project, deriveAgentRow. Vibefield AgentView and window-rows are not traced."
+    "notes": "sourceScope=absent. sourceRef=packages/adapter-antigravity/src/normalization/pipeline.ts:86-88 CHECKPOINT is not context. staticPresence=omitted. liveObserved=false. observation.presence=unknown because this audit did not live-sample the value. staticPresence is the source result and is independent of that. rendererRead=direct. adapterEmittable=no. uiReachable=no. A global reader does not make this value reachable. Field domain: state.context_missing, state.context_hot. Reachable subset: state.context_missing. In the domain but not reachable on this path: state.context_hot."
   }
 }

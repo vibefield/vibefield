@@ -1,6 +1,9 @@
+%% field: field.cost.usd
+%% sourceScope: absent
+%% staticPresence: omitted
+%% liveObserved: false
 flowchart TD
-  raw[No priced costUsd] --> core[Core coverage unavailable]
-  core --> omit[backend.ts omits field.cost]
-  omit --> missing[state.cost_missing]
-  omit --> hollow[state.burn_unpriced on observed working body]
-  not[state.cost_unavailable is not this row] --> omit
+  producer["packages/adapter-acp/src/normalization/monitor.ts:216-228\nusage_update omits usage"]
+  producer --> row["row property from that producer"]
+  row --> window["window-rows.ts:116-134 pass-through unless this field is stale or profileSet"]
+  window --> reader["rendererRead direct"]

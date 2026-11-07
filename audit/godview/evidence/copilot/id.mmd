@@ -1,13 +1,9 @@
-%% graph_ref: shared.host-row
-%% adapter: copilot
 %% field: field.id
-%% forensic: source-read at 748d015; not a live sample
-flowchart LR
-  src["packages/view-sdk/src/model.ts:129-129"]
-  raw["no raw adapter write found"]
-  shared["shared.host-row"]
-  row["field.id no"]
-  ui["UI unknown"]
-  src --> raw --> shared --> row --> ui
-  open["UNRESOLVED where this verdict is unknown"]
-  row --> open
+%% sourceScope: host-supplied
+%% staticPresence: always-on-row
+%% liveObserved: false
+flowchart TD
+  producer["packages/monitor/src/backend/derive.ts:253-253\nrow id"]
+  producer --> row["row property from that producer"]
+  row --> window["window-rows.ts:116-134 pass-through unless this field is stale or profileSet"]
+  window --> reader["rendererRead direct"]

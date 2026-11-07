@@ -5,42 +5,32 @@
     {
       "id": "adapter.acp",
       "status": "in-progress",
-      "evidence": [
-        "evidence/acp/"
-      ],
-      "notes": "74 row-field envelopes plus 86 SDK leaves. Row classifications stay unknown for adapterEmittable and uiReachability. Raw signals are in plan/gv-audit3-join.json. Graphs are sibling .mmd files with unresolved row, UI, and state nodes. Puppeteer 748d015 only. Schema acceptance is not complete provenance. PENDING DOWNSTREAM MAPPING. Declaration mismatches: field.status, field.detail, field.activity, field.activity.kind, field.activity.line, field.model, field.effort, field.effort.value, field.effort.intent, field.context.usedPercent, field.wait, field.wait.kind, field.wait.since, field.wait.count, field.wait.tool, field.wait.code, field.wait.header, field.wait.question, field.wait.detail, field.reply, field.reply.text, field.reply.at, field.reply.final, field.cost, field.cost.usd, field.cost.coverage, field.cost.burnPerHour, field.cost.series, field.cost.series.stepMs, field.cost.series.steps, field.cost.series.lastStepAt."
+      "evidence": ["evidence/acp/"],
+      "notes": "74 row envelopes plus 86 SDK leaves at Puppeteer 748d015. uiReachable follows sourceScope plus a direct reader. ACP cost stops at usage_update. Account is host-scoped: Vibefield hostRunFromSummary never sets it, and ACP also has no profiles service on the Puppeteer host. profileSet resolves to native when unbound. Not a live sample."
     },
     {
       "id": "adapter.antigravity",
       "status": "in-progress",
-      "evidence": [
-        "evidence/antigravity/"
-      ],
-      "notes": "74 row-field envelopes plus 86 SDK leaves. Row classifications stay unknown for adapterEmittable and uiReachability. Raw signals are in plan/gv-audit3-join.json. Graphs are sibling .mmd files with unresolved row, UI, and state nodes. Puppeteer 748d015 only. Schema acceptance is not complete provenance. PENDING DOWNSTREAM MAPPING. Declaration mismatches: field.status, field.detail, field.activity, field.activity.kind, field.activity.line, field.project, field.project.name, field.model, field.effort, field.effort.value, field.effort.intent, field.reply, field.reply.text, field.reply.at, field.reply.final."
+      "evidence": ["evidence/antigravity/"],
+      "notes": "74 row envelopes plus 86 SDK leaves at Puppeteer 748d015. Transcript turns are synthesized. No interaction, context, usage, or cost signal is invented past the normalizer. Launch options can supply model, effort, mode, and cwd. Not a live sample."
     },
     {
       "id": "adapter.claude",
       "status": "in-progress",
-      "evidence": [
-        "evidence/claude/"
-      ],
-      "notes": "74 row-field envelopes plus 86 SDK leaves. Row classifications stay unknown for adapterEmittable and uiReachability. Raw signals are in plan/gv-audit3-join.json. Graphs are sibling .mmd files with unresolved row, UI, and state nodes. Puppeteer 748d015 only. Schema acceptance is not complete provenance. PENDING DOWNSTREAM MAPPING. Declaration mismatches: field.status, field.detail, field.activity, field.activity.kind, field.activity.line, field.model, field.reply, field.reply.text, field.reply.at, field.reply.final, field.tokens, field.tokens.total."
+      "evidence": ["evidence/claude/"],
+      "notes": "74 row envelopes plus 86 SDK leaves at Puppeteer 748d015. Status is child activity plus hook turn and tool events, then transitions and derive defaults, with no pricing step. costUsd is conditional. tokens.total can be on the row and has no direct builtin reader, so uiReachable is no. Not a live sample."
     },
     {
       "id": "adapter.codex",
       "status": "in-progress",
-      "evidence": [
-        "evidence/codex/"
-      ],
-      "notes": "74 row-field envelopes plus 86 SDK leaves. Row classifications stay unknown for adapterEmittable and uiReachability. Raw signals are in plan/gv-audit3-join.json. Graphs are sibling .mmd files with unresolved row, UI, and state nodes. Puppeteer 748d015 only. Schema acceptance is not complete provenance. PENDING DOWNSTREAM MAPPING. Declaration mismatches: field.status, field.detail, field.activity, field.activity.kind, field.activity.line, field.reply, field.reply.text, field.reply.at, field.reply.final, field.cost, field.cost.usd, field.cost.coverage, field.cost.burnPerHour, field.cost.series, field.cost.series.stepMs, field.cost.series.steps, field.cost.series.lastStepAt."
+      "evidence": ["evidence/codex/"],
+      "notes": "74 row envelopes plus 86 SDK leaves at Puppeteer 748d015. Usage upserts carry pricing deltas and never costUsd. Runtime catalog pricing runs before reduce and can yield conditional complete, partial, and flames. Not a live sample."
     },
     {
       "id": "adapter.copilot",
       "status": "in-progress",
-      "evidence": [
-        "evidence/copilot/"
-      ],
-      "notes": "74 row-field envelopes plus 86 SDK leaves. Row classifications stay unknown for adapterEmittable and uiReachability. Raw signals are in plan/gv-audit3-join.json. Graphs are sibling .mmd files with unresolved row, UI, and state nodes. Puppeteer 748d015 only. Schema acceptance is not complete provenance. PENDING DOWNSTREAM MAPPING. Declaration mismatches: field.status, field.detail, field.activity, field.activity.kind, field.activity.line, field.reply, field.reply.text, field.reply.at, field.reply.final."
+      "evidence": ["evidence/copilot/"],
+      "notes": "74 row envelopes plus 86 SDK leaves at Puppeteer 748d015. Compaction tokens are context, not cost or usage. git.branch is the only adapter branch string. Cost and token totals stop at the omission. Not a live sample."
     }
   ]
 }

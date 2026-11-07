@@ -13,158 +13,103 @@
       "path": "packages/adapter-codex/src/normalization/monitor.ts",
       "lineStart": 292,
       "lineEnd": 331,
-      "symbol": "bootstrap model"
-    },
-    {
-      "repo": "puppeteer",
-      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
-      "path": "packages/adapter-codex/src/normalization/monitor.ts",
-      "lineStart": 546,
-      "lineEnd": 640,
-      "symbol": "settings and reroute model"
-    },
-    {
-      "repo": "puppeteer",
-      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
-      "path": "packages/adapter-codex/src/normalization/monitor.ts",
-      "lineStart": 715,
-      "lineEnd": 727,
-      "symbol": "spawnAgent model"
-    },
-    {
-      "repo": "puppeteer",
-      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
-      "path": "packages/adapter-codex/src/normalization/monitor.ts",
-      "lineStart": 246,
-      "lineEnd": 261,
-      "symbol": "modelCatalogBatch"
-    },
-    {
-      "repo": "puppeteer",
-      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
-      "path": "packages/runtime/src/services/monitor-service.ts",
-      "lineStart": 176,
-      "lineEnd": 187,
-      "symbol": "MonitorService.consume"
+      "symbol": "thread model upsert"
     },
     {
       "repo": "puppeteer",
       "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
       "path": "packages/core/src/monitor/reduce.ts",
-      "lineStart": 1117,
-      "lineEnd": 1127,
-      "symbol": "environment model effort mode cases"
-    },
-    {
-      "repo": "puppeteer",
-      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
-      "path": "packages/view-sdk/src/model.ts",
-      "lineStart": 154,
-      "lineEnd": 154,
-      "symbol": "model.ts"
+      "lineStart": 1120,
+      "lineEnd": 1125,
+      "symbol": "model and effort upsert"
     },
     {
       "repo": "puppeteer",
       "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
       "path": "packages/monitor/src/backend/derive.ts",
-      "lineStart": 244,
-      "lineEnd": 244,
-      "symbol": "derive.ts"
-    },
-    {
-      "repo": "puppeteer",
-      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
-      "path": "packages/monitor/src/backend/derive.ts",
-      "lineStart": 271,
-      "lineEnd": 271,
-      "symbol": "derive.ts"
+      "lineStart": 240,
+      "lineEnd": 286,
+      "symbol": "deriveAgentRow"
     }
   ],
   "producer": {
     "kind": "adapter",
-    "name": "codex normalization",
-    "ingestedFrom": "model providerModelId, optional displayName, intent"
+    "name": "thread model upsert",
+    "ingestedFrom": "thread model upsert"
   },
   "transforms": [
     {
       "order": 0,
-      "name": "adapter-step-0",
-      "effect": "Root launch model is intent configured when configured.model is set. Response, settings, and reroute model ids are intent observed.",
+      "name": "normalized-card",
+      "effect": "model is emitted as an event or monitor upsert. Antigravity does this only from launch options.",
       "source": {
         "repo": "puppeteer",
         "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
         "path": "packages/adapter-codex/src/normalization/monitor.ts",
         "lineStart": 292,
         "lineEnd": 331,
-        "symbol": "bootstrap model"
+        "symbol": "thread model upsert"
       }
     },
     {
       "order": 1,
-      "name": "adapter-step-1",
-      "effect": "displayName is added only when the optional modelDisplayName callback returns a name. modelCatalogBatch later corrects display names and does not replay other families.",
+      "name": "reduce-card",
+      "effect": "model:updated and effort:updated upsert or retract. Null retracts. Configured and observed stay distinct.",
       "source": {
         "repo": "puppeteer",
         "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
-        "path": "packages/adapter-codex/src/normalization/monitor.ts",
-        "lineStart": 546,
-        "lineEnd": 640,
-        "symbol": "settings and reroute model"
+        "path": "packages/core/src/monitor/reduce.ts",
+        "lineStart": 1120,
+        "lineEnd": 1125,
+        "symbol": "model and effort upsert"
       }
     },
     {
       "order": 2,
-      "name": "adapter-step-2",
-      "effect": "A spawnAgent collaboration item with a model id emits intent configured on the child actor.",
+      "name": "derive-card",
+      "effect": "derive copies model displayName or id, and effort value plus intent when present.",
       "source": {
         "repo": "puppeteer",
         "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
-        "path": "packages/adapter-codex/src/normalization/monitor.ts",
-        "lineStart": 715,
-        "lineEnd": 727,
-        "symbol": "spawnAgent model"
-      }
-    },
-    {
-      "order": 3,
-      "name": "adapter-step-3",
-      "effect": "model/rerouted also retracts context for that actor.",
-      "source": {
-        "repo": "puppeteer",
-        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
-        "path": "packages/adapter-codex/src/normalization/monitor.ts",
-        "lineStart": 246,
-        "lineEnd": 261,
-        "symbol": "modelCatalogBatch"
+        "path": "packages/monitor/src/backend/derive.ts",
+        "lineStart": 240,
+        "lineEnd": 286,
+        "symbol": "deriveAgentRow"
       }
     }
   ],
   "merge": {
-    "strategy": "unknown",
+    "strategy": "replace",
     "defaults": []
   },
   "transport": {
     "channel": "in-process",
-    "name": "MonitorService.consume",
-    "contract": "AgentEvent or monitor:batch"
+    "name": "AgentMonitorService.consume",
+    "contract": "normalized event or monitor batch"
   },
   "renderer": {
     "viewIds": [
+      "view.list",
+      "view.rain",
       "view.swarm",
-      "view.spend"
+      "view.spend",
+      "view.timeline"
     ],
-    "component": "bubble-model / spend-words",
-    "symbol": "model displayName or id"
+    "component": "direct reader",
+    "symbol": "direct"
   },
   "applicability": {
     "states": [
       "state.model_missing"
     ],
     "views": [
+      "view.list",
+      "view.rain",
       "view.swarm",
-      "view.spend"
+      "view.spend",
+      "view.timeline"
     ],
-    "notes": "Model events or monitor model upserts are projected by project.ts and copied by derive.ts:244. Conditional on a model actually being present. Not live-observed. Timeline consumption was not verified. ROW FIELD field.model. PENDING DOWNSTREAM MAPPING into MonitorAgentRow. This is one of 74 canonical row fields. It is not an SDK contract leaf. PENDING DOWNSTREAM MAPPING: GV-AUDIT2 owns adapter output to row predicates, including cost, burn rate, history, timeline, and git branch. This audit does not give that verdict. Schema acceptance is not complete provenance. verification.status source-read is a static reading. observation.presence unknown means no live sample was taken. It does not mean the row value is missing. classification.adapterEmittable and uiReachable stay unknown. A raw adapter property is not the row field, and a catalog consumer is not a proven UI path.   The pipeline also has a model normalizer. This record traces the monitor batch, which is the semantic monitor write. Per-child model requires a child thread or a spawn item, matching the declaration. These monitor files are in the set GV2 reported as different from shipped 0.3.3; the trace is still 748d015 only. The adapter does not write this MonitorAgentRow property. That is the architecture, not a conclusion that the row predicate is unreachable. This trace is Puppeteer 748d015a7e393112e0a91dad80111fdf5abe6583 only. It is newer than shipped Vibefield 0.3.3 and does not describe that install. Package comparison was not re-run. Declaration supported from codex-thread-response-settings-and-reroute. declaration only; supported does not guarantee availability/value; degraded is not unreachable No raw adapter signal does not rule out the row value from host, runtime, history, or another producer. Raw source literals, not live samples: adapter.codex.upstream.model.configured=\"configured\" (root launch model and spawnAgent model); adapter.codex.upstream.model.observed=\"observed\" (thread response, settings, reroute); adapter.codex.upstream.model.display.omitted=\"displayName omitted\" (callback missing or returns nothing) Graph: evidence/codex/model.mmd. Continuation anchors, not a reachability verdict: MonitorService.consume, core reduce and project, deriveAgentRow. Vibefield AgentView and window-rows are not traced."
+    "notes": "sourceScope=adapter-provided. sourceRef=packages/adapter-codex/src/normalization/monitor.ts:292-331 thread model. staticPresence=emitted-when-condition. liveObserved=false. observation.presence=unknown because this audit did not live-sample the value. staticPresence is the source result and is independent of that. rendererRead=direct. adapterEmittable=yes. uiReachable=yes. The value reaches a direct reader from this adapter-provided producer. Field domain: state.model_missing. Reachable subset: state.model_missing."
   },
   "absence": {
     "onMissing": "record-unknown",
@@ -183,6 +128,6 @@
   "verification": {
     "status": "source-read",
     "owner": "GV-AUDIT3",
-    "notes": "Model events or monitor model upserts are projected by project.ts and copied by derive.ts:244. Conditional on a model actually being present. Not live-observed. Timeline consumption was not verified. ROW FIELD field.model. PENDING DOWNSTREAM MAPPING into MonitorAgentRow. This is one of 74 canonical row fields. It is not an SDK contract leaf. PENDING DOWNSTREAM MAPPING: GV-AUDIT2 owns adapter output to row predicates, including cost, burn rate, history, timeline, and git branch. This audit does not give that verdict. Schema acceptance is not complete provenance. verification.status source-read is a static reading. observation.presence unknown means no live sample was taken. It does not mean the row value is missing. classification.adapterEmittable and uiReachable stay unknown. A raw adapter property is not the row field, and a catalog consumer is not a proven UI path.   The pipeline also has a model normalizer. This record traces the monitor batch, which is the semantic monitor write. Per-child model requires a child thread or a spawn item, matching the declaration. These monitor files are in the set GV2 reported as different from shipped 0.3.3; the trace is still 748d015 only. The adapter does not write this MonitorAgentRow property. That is the architecture, not a conclusion that the row predicate is unreachable. This trace is Puppeteer 748d015a7e393112e0a91dad80111fdf5abe6583 only. It is newer than shipped Vibefield 0.3.3 and does not describe that install. Package comparison was not re-run. Declaration supported from codex-thread-response-settings-and-reroute. declaration only; supported does not guarantee availability/value; degraded is not unreachable No raw adapter signal does not rule out the row value from host, runtime, history, or another producer. Raw source literals, not live samples: adapter.codex.upstream.model.configured=\"configured\" (root launch model and spawnAgent model); adapter.codex.upstream.model.observed=\"observed\" (thread response, settings, reroute); adapter.codex.upstream.model.display.omitted=\"displayName omitted\" (callback missing or returns nothing) Graph: evidence/codex/model.mmd. Continuation anchors, not a reachability verdict: MonitorService.consume, core reduce and project, deriveAgentRow. Vibefield AgentView and window-rows are not traced."
+    "notes": "sourceScope=adapter-provided. sourceRef=packages/adapter-codex/src/normalization/monitor.ts:292-331 thread model. staticPresence=emitted-when-condition. liveObserved=false. observation.presence=unknown because this audit did not live-sample the value. staticPresence is the source result and is independent of that. rendererRead=direct. adapterEmittable=yes. uiReachable=yes. The value reaches a direct reader from this adapter-provided producer. Field domain: state.model_missing. Reachable subset: state.model_missing."
   }
 }

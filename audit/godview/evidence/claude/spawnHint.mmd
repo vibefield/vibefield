@@ -1,13 +1,9 @@
-%% graph_ref: shared.runtime-supplied
-%% adapter: claude
 %% field: field.spawnHint
-%% forensic: source-read at 748d015; not a live sample
-flowchart LR
-  src["packages/view-sdk/src/model.ts:371-371"]
-  raw["no raw adapter write found"]
-  shared["shared.runtime-supplied"]
-  row["field.spawnHint no"]
-  ui["UI unknown"]
-  src --> raw --> shared --> row --> ui
-  open["UNRESOLVED where this verdict is unknown"]
-  row --> open
+%% sourceScope: replica-derived
+%% staticPresence: host-dependent
+%% liveObserved: false
+flowchart TD
+  producer["packages/monitor/src/replica/replica.ts:290-295\nspawnHintOf"]
+  producer --> row["row property from that producer"]
+  row --> window["window-rows.ts:116-134 pass-through unless this field is stale or profileSet"]
+  window --> reader["rendererRead direct"]

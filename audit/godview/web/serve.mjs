@@ -55,6 +55,15 @@ export function createAuditServer(root = repoRoot) {
         return send(res, 200, "text/html; charset=utf-8", renderShell(audit.index, cellFor(url)));
       if (url.pathname === "/api/flow.svg")
         return send(res, 200, "image/svg+xml; charset=utf-8", renderFlowSvg(cellFor(url)));
+      if (url.pathname.startsWith("/traces/")) {
+        const rel = url.pathname.slice("/traces/".length);
+        if (!/^[a-z0-9-]+\/[A-Za-z0-9._-]+\.mmd$/u.test(rel)) {
+          return send(res, 404, "text/plain; charset=utf-8", "Not found");
+        }
+        const graph = safe(root, `audit/godview/evidence/${rel}`);
+        if (!existsSync(graph)) return send(res, 404, "text/plain; charset=utf-8", "Not found");
+        return send(res, 200, "text/plain; charset=utf-8", readFileSync(graph));
+      }
       if (url.pathname.startsWith("/shots/")) {
         const name = url.pathname.slice("/shots/".length);
         if (!/^[A-Za-z0-9.-]+$/u.test(name))

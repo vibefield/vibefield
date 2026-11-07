@@ -1,0 +1,102 @@
+{
+  "kind": "webgpu-environment-diagnostic",
+  "fidelity": "puppeteer-source",
+  "sourceSha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+  "component": "packages/views/src/views/swarm/gpu/swarm-renderer.ts",
+  "symbol": "createSwarmRenderer",
+  "chrome": "Google Chrome 156.0.8078.47",
+  "matrixCounts": {
+    "rendered": 73,
+    "notApplicable": 302,
+    "environmentGap": 35,
+    "changed": false,
+    "reason": "No phase produced a swarm body. These three numbers are the count at the time of this swarm note. They are not a validated not-applicable judgment. The matrix reclassification is a separate correction and lives in integration.json matrixSummary."
+  },
+  "instrumentation": "audit/godview/rendering/src/swarm-repro.ts wraps navigator.gpu.requestAdapter, requestDevice, device.destroy, device.lost, and uncapturederror, then calls the original. createSwarmRenderer and AgentSwarm are the unmodified 748d015 sources. The React phase mounts MonitorViewHost with the same palette, parameters, theme, and godview-open host as the integration harness.",
+  "trace": "audit/godview/rendering/swarm-lifecycle.json",
+  "probes": [
+    {
+      "args": ["--enable-unsafe-webgpu", "--enable-unsafe-swiftshader"],
+      "request": "navigator.gpu.requestAdapter({ powerPreference: 'high-performance' })",
+      "result": "adapter true, device true",
+      "when": "Recorded before the createSwarmRenderer teardown. A bare page, no canvas context."
+    },
+    {
+      "args": ["--enable-unsafe-webgpu", "--enable-unsafe-swiftshader", "--enable-features=Vulkan", "--use-vulkan=swiftshader"],
+      "env": "VK_ICD_FILENAMES=/opt/google/chrome/vk_swiftshader_icd.json",
+      "result": "Failed to create WebGPU Context Provider. Swarm text: No WebGPU adapter on this GPU."
+    }
+  ],
+  "swarmLaunch": {
+    "ignoreDefaultArgs": ["--disable-gpu"],
+    "args": ["--no-sandbox", "--disable-gpu-sandbox", "--enable-unsafe-webgpu", "--enable-unsafe-swiftshader"],
+    "console": [
+      "[swarm] WebGPU device lost, rebuilding Device was destroyed.",
+      "A valid external Instance reference no longer exists."
+    ],
+    "absentFromThatConsole": [
+      "[swarm] the renderer could not be built",
+      "[swarm] no WebGPU device"
+    ],
+    "visibleText": "WEBGPU UNAVAILABLE\nNo WebGPU adapter on this GPU"
+  },
+  "priorConclusion": "Chrome's SwiftShader can create a high-performance WebGPU device in a bare page. AgentSwarm's renderer then loses that device and the rebuild is told there is no adapter. The body was not painted. No component code was changed and the unavailable screenshot was not copied onto other states.",
+  "reinvestigation": {
+    "chrome": "Chrome/156.0.8078.47",
+    "display": "Xvfb :1 (X.Org 21.1.11) was up. Headed Chrome on that display failed the same way as headless.",
+    "swiftshader": "/opt/google/chrome/libvk_swiftshader.so contains the strings VK_KHR_surface and VK_KHR_xcb_surface. The instance ANGLE initialized did not advertise them.",
+    "flagsTriedWithoutAnAdapter": [
+      "--enable-unsafe-webgpu --enable-unsafe-swiftshader",
+      "--use-gl=angle --use-angle=swiftshader --disable-features=Vulkan",
+      "--use-gl=swiftshader --disable-features=Vulkan",
+      "--enable-features=Vulkan --use-vulkan=swiftshader --disable-vulkan-surface",
+      "--use-webgpu-adapter=swiftshader",
+      "--use-angle=swiftshader-webgl",
+      "headed on DISPLAY=:1 with the unsafe WebGPU flags"
+    ],
+    "thisSessionBareAndRenderer": {
+      "requestAdapter": "null in 1–2 ms, powerPreference high-performance, before requestDevice",
+      "requestDevice": "not called",
+      "deviceDestroy": "not called",
+      "deviceLost": "not fired",
+      "uncapturederror": "none",
+      "shaderCompile": "not reached",
+      "pageConsole": "Failed to create WebGPU Context Provider",
+      "gpuProcess": [
+        "Extension not supported: VK_KHR_surface",
+        "Extension not supported: VK_KHR_xcb_surface",
+        "eglInitialize SwANGLE failed with error EGL_NOT_INITIALIZED",
+        "Exiting GPU process due to errors during initialization"
+      ],
+      "createSwarmRenderer": {
+        "ok": false,
+        "reason": "No WebGPU adapter on this GPU"
+      }
+    },
+    "reactHost": {
+      "production": "one requestAdapter, null. Empty text WEBGPU UNAVAILABLENo WebGPU adapter on this GPU",
+      "development": "one requestAdapter, null. Same empty text.",
+      "developmentStrictMode": "two requestAdapter calls (effect invoked twice), both null, two context-provider warnings. No device, so the destroy race in the renderer comment was not exercised."
+    },
+    "classification": "The failure reproduced in this session is the host GPU process dying before any device exists. It is not a shader validation error and not a cleanup race. The earlier recorded launch is a different, narrower event: a device had been created and was then destroyed while an AgentSwarm effect was still alive."
+  },
+  "sourceAnchors": {
+    "nullAdapterReason": "swarm-renderer.ts:293-294 returns ok false, reason 'No WebGPU adapter on this GPU'. This is the only source of that sentence.",
+    "shaderFailureReason": "swarm-renderer.ts:213-222 throws on compilation errors. The catch at 321-328 console.warns '[swarm] the renderer could not be built' and returns RENDERER_UNBUILT ('The swarm\\'s renderer could not be built on this GPU', line 145). That warning was absent from the recorded swarm console.",
+    "noContextDestroy": "swarm-renderer.ts:309-312. getContext('webgpu') null destroys the device and returns 'The canvas has no WebGPU context'. That sentence was not the recorded visible text.",
+    "buildFailureDestroy": "swarm-renderer.ts:327 device.destroy() after the build-failure warning.",
+    "ownerDestroy": "swarm-renderer.ts:961-972. renderer.destroy() always device.destroy(). The comment records that React development double-mount makes two renderers and leaves the canvas configured.",
+    "rebuildLog": "AgentSwarm.tsx:509-513. '[swarm] WebGPU device lost, rebuilding' plus info.message runs only after createSwarmRenderer returned ok, and only while alive and rendererRef still points at that renderer.",
+    "cleanupOrder": "AgentSwarm.tsx:525-528 sets alive false and clears rendererRef before current.destroy(). A lost resolution after that cleanup does not log the rebuild line and does not call build().",
+    "visibleOverwrite": "AgentSwarm.tsx:500-501 sets the stage text from result.reason. A later null adapter replaces whatever the first build showed."
+  },
+  "recordedLaunchReading": "The preserved console line '[swarm] WebGPU device lost, rebuilding Device was destroyed.' is AgentSwarm.tsx:511 with GPUDeviceLostInfo.message 'Device was destroyed'. Reaching that line requires a successful createSwarmRenderer in a still-mounted effect. The following requestAdapter returned null, which is the only way the stage text becomes 'No WebGPU adapter on this GPU'. The second preserved line, 'A valid external Instance reference no longer exists.', is the Dawn instance dying with that device. Effect cleanup cannot emit the rebuild line, because it clears alive first. This session could not capture a destroy stack: requestAdapter never returned an adapter, so device.destroy was not called.",
+  "untested": [
+    "Shader compilation and pipeline validation on a live device. compile() was not entered.",
+    "Resize and unmount against a live renderer. renderer.resize (swarm-renderer.ts:856) and the effect cleanup were not reached with a device.",
+    "Whether destroying one device makes the next requestAdapter null. The bare-destroy and bare-renderer-destroy phases returned at the first null adapter.",
+    "A hardware GPU. This host has SwiftShader and Xvfb only.",
+    "The destroy stack of the earlier recorded launch. Its console is preserved; the process is gone."
+  ],
+  "conclusion": "Two distinct failures. This session: Chrome 156's GPU process exits because ANGLE's Vulkan backend does not get VK_KHR_surface or VK_KHR_xcb_surface, the page is told 'Failed to create WebGPU Context Provider', and requestAdapter returns null before createSwarmRenderer can build a device. Same React host, production and StrictMode development, bare comparison included. No swarm body was drawn. The 73/302/35 figures above are the matrix as it stood for this note, not a validated not-applicable count. Earlier on the same flags: a bare high-performance device was created, then the integration swarm logged a device-lost rebuild whose message is the explicit destroy string and whose visible reason is the null-adapter sentence, not the shader sentence. That destroy site was not re-caught. Production AgentSwarm and createSwarmRenderer were not modified."
+}

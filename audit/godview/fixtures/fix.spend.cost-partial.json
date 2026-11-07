@@ -11,16 +11,8 @@
     "state.cost_partial"
   ],
   "adapterIds": [
-    "adapter.acp",
-    "adapter.antigravity",
     "adapter.claude",
-    "adapter.codex",
-    "adapter.copilot",
-    "adapter.grok",
-    "adapter.hermes",
-    "adapter.kimi",
-    "adapter.opencode",
-    "adapter.pi"
+    "adapter.codex"
   ],
   "component": {
     "repo": "puppeteer",
@@ -29,5 +21,5 @@
     "symbol": "SpendView",
     "lineStart": 255
   },
-  "notes": "cost.coverage partial. Spend marks the total partial. adapterIds list the ten audit adapters as classification context only. They are not a claim that any adapter emitted this row. Mounted from Puppeteer source 748d015 via MonitorViewHost. Not shipped package 0.3.3."
+  "notes": "cost.coverage partial. Spend marks the total partial. adapterIds list the ten audit adapters as classification context only. They are not a claim that any adapter emitted this row. Mounted from Puppeteer source 748d015 via MonitorViewHost. Not shipped package 0.3.3. Source permits Claude and Codex to mix priced and unpriced observations. Not a live session. Not a normal emission of the token-only adapters."
 }
