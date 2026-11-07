@@ -181,11 +181,11 @@ function loadRenderIndex(root) {
     counts,
     countsMatch:
       cells.length === 410 &&
-      counts.rendered === 103 &&
-      counts["covered-by"] === 21 &&
-      counts["coverage-gap"] === 77 &&
-      counts["not-applicable"] === 150 &&
-      counts["environment-gap"] === 59 &&
+      counts.rendered === 247 &&
+      counts["covered-by"] === 23 &&
+      counts["coverage-gap"] === 0 &&
+      counts["not-applicable"] === 73 &&
+      counts["environment-gap"] === 67 &&
       summary.priorClaim.validated === false &&
       summary.priorClaim.notApplicable === 302 &&
       naUnproven === 0,
@@ -200,7 +200,10 @@ function loadRenderIndex(root) {
     swarmBodyPaint: "not-painted",
     swarmCause: "under-investigation",
     diagnostic: "audit/godview/rendering/webgpu-diagnostic.json",
-    renderSliceCommit: index.renderSliceCommit ?? "863f44ac1fe2b91bddc5306070761e43636d25c6",
+    renderSliceCommit: index.renderSliceCommit ?? "08429e06ed86cd9f5617c61fa769793a563e8446",
+    ordinaryGapsAreNotComplete: true,
+    notApplicableUnderLeadReview: true,
+    aliasesUnderLeadReview: true,
     fixtureCount: fixtures.length,
     holeCount: counts["coverage-gap"] + counts["environment-gap"],
     fixtures,
@@ -520,6 +523,9 @@ function publicIndex({
           priorClaimValidated: false,
           notApplicableProof: renderIndex.notApplicableProof,
           naUnproven: renderIndex.naUnproven,
+          ordinaryGapsAreNotComplete: true,
+          notApplicableUnderLeadReview: true,
+          aliasesUnderLeadReview: true,
           coveredBy: renderIndex.coveredBy,
           coverageGap: renderIndex.coverageGap,
           bodyRendered: renderIndex.bodyRendered,
@@ -529,7 +535,7 @@ function publicIndex({
           renderSliceCommit: renderIndex.renderSliceCommit,
           screenshotCoverageComplete: false,
           sourceSha: renderIndex.sourceSha,
-          note: "Denominator 410: 103 rendered, 21 exercised same-view covered-by, 77 coverage gaps, 150 outside-view not-applicable, 59 environment gaps. Covered-by is not body coverage. The prior 302 not-applicable claim is not validated. Swarm body was not painted. Environment versus source cause is under investigation. Delivery is incomplete.",
+          note: "Matrix counts are live. Zero ordinary coverage gaps is not a complete audit. Not-applicable cells and same-view aliases are under lead review. Covered-by is not body coverage. The prior 302 not-applicable claim is not validated. Swarm cells stay environment gaps: this host's Chrome 156 GPU process exits without VK_KHR_surface or VK_KHR_xcb_surface, so the adapter is null. No source defect is proven and the source is not exonerated. Delivery is incomplete.",
         }
       : null,
     foundationGate: {

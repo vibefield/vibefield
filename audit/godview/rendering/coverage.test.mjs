@@ -92,10 +92,42 @@ test("the previous 302 not-applicable count is not treated as validated", () => 
   assert.equal(summary.cells, 82 * 5);
   assert.equal(summary.priorClaim.notApplicable, 302);
   assert.equal(summary.priorClaim.validated, false);
-  assert.ok(summary.notApplicable < 302);
+  assert.equal(summary.coverageGap, 0);
+  assert.equal(summary.rendered, 247);
+  assert.equal(summary.coveredBy, 23);
+  assert.equal(summary.notApplicable, 73);
+  assert.equal(summary.environmentGap, 67);
   const total =
     summary.rendered + summary.coveredBy + summary.coverageGap + summary.notApplicable + summary.environmentGap;
   assert.equal(total, 410);
+});
+
+test("not-applicable is only a scenario that cannot be mounted", () => {
+  const allowed = new Set([
+    "state.feed_no_door",
+    "state.feed_connecting",
+    "state.feed_live",
+    "state.feed_unavailable",
+    "state.device_live",
+    "state.device_stale",
+    "state.device_asleep",
+    "state.device_incompatible",
+    "state.dead_hidden",
+    "state.terminal_opening",
+    "state.timeline_unborn",
+    "state.timeline_unrecorded",
+    "state.timeline_past",
+    "state.timeline_ended",
+    "state.timeline_span",
+    "state.spend_unknown",
+  ]);
+  for (const cell of matrix()) {
+    if (cell.disposition !== "not-applicable") continue;
+    assert.ok(allowed.has(cell.stateId), cell.stateId);
+    if (cell.stateId.startsWith("state.timeline_")) assert.notEqual(cell.viewId, "view.timeline");
+    if (cell.stateId === "state.spend_unknown") assert.notEqual(cell.viewId, "view.spend");
+    if (cell.stateId === "state.terminal_opening") assert.notEqual(cell.viewId, "view.swarm");
+  }
 });
 
 test("hole reasons stay source-backed and swarm gaps point at the diagnostic", () => {

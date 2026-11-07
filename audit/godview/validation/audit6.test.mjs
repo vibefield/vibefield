@@ -83,16 +83,18 @@ test("pinned source inventory matches the model contract counts", () => {
   assert.equal(index.sharedMap.counts.statePredicates, 82);
   assert.equal(index.sharedMap.counts.rowJoinAnchorsResolved, 370);
   assert.equal(index.sources.rendering, "partial");
-  assert.equal(index.rendering.fixtureCount, 103);
+  assert.equal(index.rendering.fixtureCount, 247);
   assert.equal(index.rendering.countsMatch, true);
-  assert.equal(index.rendering.bodyRendered, 103);
-  assert.equal(index.rendering.coveredBy, 21);
-  assert.equal(index.rendering.coverageGap, 77);
-  assert.equal(index.rendering.counts.rendered, 103);
-  assert.equal(index.rendering.counts["covered-by"], 21);
-  assert.equal(index.rendering.counts["coverage-gap"], 77);
-  assert.equal(index.rendering.counts["not-applicable"], 150);
-  assert.equal(index.rendering.counts["environment-gap"], 59);
+  assert.equal(index.rendering.bodyRendered, 247);
+  assert.equal(index.rendering.coveredBy, 23);
+  assert.equal(index.rendering.coverageGap, 0);
+  assert.equal(index.rendering.ordinaryGapsAreNotComplete, true);
+  assert.equal(index.rendering.counts.rendered, 247);
+  assert.equal(index.rendering.counts["covered-by"], 23);
+  assert.equal(index.rendering.counts["coverage-gap"], 0);
+  assert.equal(index.rendering.counts["not-applicable"], 73);
+  assert.equal(index.rendering.counts["environment-gap"], 67);
+  assert.equal(index.rendering.renderSliceCommit, "08429e06ed86cd9f5617c61fa769793a563e8446");
   assert.equal(index.rendering.priorClaimValidated, false);
   assert.equal(index.rendering.priorClaim.notApplicable, 302);
   assert.equal(index.rendering.priorClaim.validated, false);
@@ -325,8 +327,10 @@ test("the page names the audit target and leaves the harness pending", () => {
   assert.match(html, /not adapter-specific UI resolution/);
   assert.match(html, /Delivery: incomplete/);
   assert.match(html, /Prior 302 not-applicable claim validated: no/);
-  assert.match(html, /Coverage gaps: 77/);
-  assert.match(html, /Environment gaps: 59/);
+  assert.match(html, /Coverage gaps: 0/);
+  assert.match(html, /Environment gaps: 67/);
+  assert.match(html, /not a complete audit/);
+  assert.match(html, /under lead review/);
   assert.equal(/stay at 35/.test(html), false);
   assert.match(html, /does not add body coverage/);
   assert.equal(cell.reading.success, false);
@@ -496,6 +500,9 @@ test("swarm fallback is a mount, not painted coverage", () => {
   assert.match(cell.paint.note, /WEBGPU UNAVAILABLE/);
   assert.match(cell.paint.note, /not an unreachable state/);
   assert.match(cell.paint.note, /under investigation/);
+  assert.match(cell.paint.note, /VK_KHR_surface/);
+  assert.match(cell.paint.note, /no source defect is proven/i);
+  assert.match(cell.paint.note, /not exonerated/);
   assert.equal(cell.paint.meaningfulOutput, false);
   const listActivity = buildCell({
     model: audit.model,
@@ -510,9 +517,8 @@ test("swarm fallback is a mount, not painted coverage", () => {
       fieldId: "field.activity.kind",
     },
   });
-  assert.equal(listActivity.paint.disposition, "coverage-gap");
-  assert.equal(listActivity.paint.validatedExclusion, false);
-  assert.equal(listActivity.paint.meaningfulOutput, false);
+  assert.equal(listActivity.paint.disposition, "rendered");
+  assert.equal(listActivity.paint.meaningfulOutput, true);
   const rainBlock = buildCell({
     model: audit.model,
     traces: audit.traces,

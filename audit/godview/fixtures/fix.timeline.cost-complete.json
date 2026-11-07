@@ -1,0 +1,25 @@
+{
+  "fixtureId": "fix.timeline.cost-complete",
+  "origin": "synthetic",
+  "syntheticLabel": "Synthetic AgentView input for a view predicate. Not a captured adapter session.",
+  "pins": {
+    "vibefield": "433505fd0f224f4cda540d642661b13848c0ef82",
+    "puppeteer": "748d015a7e393112e0a91dad80111fdf5abe6583"
+  },
+  "viewId": "view.timeline",
+  "lifecycleStates": [
+    "state.cost_complete"
+  ],
+  "adapterIds": [
+    "adapter.claude",
+    "adapter.codex"
+  ],
+  "component": {
+    "repo": "puppeteer",
+    "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+    "path": "packages/views/src/views/timeline/TimelineView.tsx",
+    "symbol": "TimelineView",
+    "lineStart": 263
+  },
+  "notes": "cost.coverage complete on this view. Spend meters it. List, rain, and timeline mount the object and do not print USD. Claude and Codex only. Not a live session. adapterIds list the ten audit adapters as classification context only. They are not a claim that any adapter emitted this row. Mounted from Puppeteer source 748d015 via MonitorViewHost. Not shipped package 0.3.3. Source permits Claude and Codex to price. Not a live session. Token-only adapters do not produce this row."
+}

@@ -27,6 +27,8 @@ export const EXERCISES = {
   "model-absent": (row) => row.model == null || row.model === "",
   "context-absent": (row) => row.context == null,
   "attachable-true": (row) => row.attachable === true,
+  "live-head-span": (_row, entry) => entry?.history == null && entry?.stateId === "state.working",
+  "ended-lane": (_row, entry) => entry?.history === "bounds",
 };
 
 const rendered = (entry) => ({
@@ -42,11 +44,6 @@ const alias = (fixtureId, exercise, evidence) => ({
   evidence: `Same branch as ${fixtureId}. ${evidence}`,
 });
 
-const unverified = (evidence) => ({
-  disposition: "coverage-gap",
-  evidence: `Unverified: ${evidence}`,
-});
-
 const outside = (evidence) => ({
   disposition: "not-applicable",
   evidence: `Outside this view: ${evidence}`,
@@ -59,7 +56,7 @@ const env = (evidence) => ({
 });
 
 const SWARM_BODY =
-  "AgentSwarm / bubble-model.ts draws this on the WebGPU canvas. This host's GPU process exits before requestAdapter returns, so the body was not painted. See webgpu-diagnostic.json. The swarm diagnosis is separate from the matrix reclassification.";
+  "The swarm view would mount this row. This host's GPU process exits before requestAdapter returns, so no body was painted. See webgpu-diagnostic.json. That diagnosis is separate from whether a DOM view draws the field.";
 
 function swarm() {
   return env(SWARM_BODY);
@@ -72,105 +69,51 @@ function own(stateId, viewId) {
 }
 
 function decide(stateId, viewId) {
-  const dom = viewId !== "view.swarm";
   if (stateId.startsWith("state.feed_")) {
     return outside(
-      "MonitorFeedState is the host's door chrome. These five views take agent rows, not the feed door.",
+      "There is no AgentView field or view capability for the feed door. Nothing can be mounted on these five views for that scenario.",
     );
   }
   if (stateId.startsWith("state.device_")) {
     return outside(
-      "Desktop standing is applied by the host's window-rows overlay before a view sees a row. This harness mounts the view directly. The row flag the views can paint is state.stale, which is a different cell.",
+      "Asleep, incompatible, and live standing are not AgentView fields. The host's window-rows overlay may later copy standing onto the stale boolean, which is state.stale. There is no standing value to mount.",
     );
-  }
-  if (stateId.startsWith("state.tier_")) {
-    return outside("Tier is a host classification. It is not a field on the AgentView these views mount.");
   }
   if (stateId === "state.dead_hidden") {
     return outside(
-      "A dead-hidden row is removed by VibeField useMonitorAgents before a view is given its model. The view has no dead-hidden paint because the row is not in the model.",
-    );
-  }
-  if (stateId.startsWith("state.past_") && viewId !== "view.timeline") {
-    return outside(
-      "A past span is the timeline's history lane. List, rain, spend, and swarm paint the live row and have no history surface.",
+      "The scenario is that useMonitorAgents omits the row before the view's model is built. Mounting the row would be a different scenario, a visible agent.",
     );
   }
   if (stateId.startsWith("state.timeline_") && viewId !== "view.timeline") {
     return outside(
-      "unborn, unrecorded, past, ended, and span are TimelineView's scrub cursor. The other views have no scrub cursor.",
+      "This is the timeline scrub head's moment. List, rain, spend, and swarm have no scrub head, so the moment cannot be mounted there.",
     );
   }
-  if (stateId.startsWith("state.timeline_") && viewId === "view.timeline") {
-    return unverified(
-      "TimelineView can show this cursor moment while scrubbing. The harness has no control that sets moment.kind, so the cursor was not exercised.",
+  if (stateId === "state.timeline_span" && viewId === "view.timeline") {
+    return alias(
+      "fix.timeline.working",
+      "live-head-span",
+      "stateAt at the live head is span for a lane that has begun its current status (timeline-lanes.ts). fix.timeline.working was shot at the frozen now with no history, which is that head.",
+    );
+  }
+  if (stateId === "state.timeline_ended" && viewId === "view.timeline") {
+    return alias(
+      "fix.timeline.past-bounds",
+      "ended-lane",
+      "history bounds includes an ended run whose endedAt is before the frozen now. At the live head, stateAt for that lane is ended (timeline-lanes.ts). The screenshot contains that lane.",
     );
   }
   if (stateId === "state.spend_unknown" && viewId !== "view.spend") {
     return outside(
-      "spend_unknown is spendStateAt for a scrubbed time before statusSince. The other views have no spend scrub.",
-    );
-  }
-  if (stateId === "state.spend_unknown") {
-    return unverified(
-      "SpendView can show unknown when the scrub is before statusSince. The harness does not drive that scrub, so the branch was not exercised.",
-    );
-  }
-  if (stateId === "state.spend_before" && viewId !== "view.spend") {
-    return outside(
-      "spend_before is spendStateAt for a row whose birth is still in the future. The other views have no spend time cursor.",
-    );
-  }
-  if (stateId.startsWith("state.spawn_") && (viewId === "view.rain" || viewId === "view.spend" || viewId === "view.timeline")) {
-    return outside(
-      "The spawn menu is ListSpawnMenu and the swarm bloom. Rain, spend, and timeline have no spawn surface.",
-    );
-  }
-  if (stateId.startsWith("state.spawn_") && viewId === "view.swarm") return swarm();
-  if ((stateId === "state.terminal_running" || stateId === "state.terminal_quiet") && viewId === "view.spend") {
-    return outside(
-      "spendMeters skips kind terminal (spend-series.ts). A terminal is not a spend row. Running and quiet terminals are outside the spend meter.",
+      "unknown is spendStateAt for a scrubbed time before statusSince. List, rain, timeline, and swarm have no spend scrub.",
     );
   }
   if (stateId === "state.terminal_opening" && viewId !== "view.swarm") {
     return outside(
-      "opening is a swarm-local word. It is not an AgentView field, and MonitorViewHost cannot pass it to list, rain, spend, or timeline.",
+      "opening is not an AgentView field. MonitorViewHost cannot be given it, so list, rain, spend, and timeline have nothing to mount.",
     );
   }
   if (stateId === "state.terminal_opening") return swarm();
-  if (stateId === "state.terminal_empty" && viewId === "view.spend") {
-    return outside("spendMeters skips terminals, so an empty terminal is not a spend row.");
-  }
-  if (stateId === "state.terminal_empty" && viewId === "view.swarm") return swarm();
-  if (stateId === "state.terminal_empty") {
-    return unverified(
-      "empty is a quiet terminal with nothing opening. The rendered quiet fixtures set detail to quiet, so they do not exercise an empty terminal. List, rain, and timeline would still show the row.",
-    );
-  }
-  if (stateId.startsWith("state.burn_") && viewId !== "view.swarm") {
-    return outside(
-      "This state is one rung of the swarm flame ladder in bubble-model.ts burnFlames. List, rain, spend, and timeline have no flame ladder. Spend's own rate is state.cost_* and the working row, not this rung.",
-    );
-  }
-  if (stateId.startsWith("state.burn_") && viewId === "view.swarm") return swarm();
-  if (stateId.startsWith("state.effort_") && viewId === "view.swarm") return swarm();
-  if (stateId.startsWith("state.effort_")) {
-    return unverified(
-      "An agent with this effort can sit in the view. Only bubble-model.ts effortLines paints effort. No list, rain, spend, or timeline fixture mounts an effort object, so the shared row branch is not exercised.",
-    );
-  }
-  if (stateId.startsWith("state.activity_") && viewId === "view.swarm") return swarm();
-  if (stateId.startsWith("state.activity_")) {
-    return unverified(
-      "The row can carry activity.kind. No mounted fixture sets it. List, rain, spend, and timeline do not draw a per-kind branch; that is not the same as the scenario being out of scope.",
-    );
-  }
-  if (stateId.startsWith("state.cost_") && viewId === "view.swarm") return swarm();
-  if (stateId.startsWith("state.cost_") && viewId !== "view.spend") {
-    return unverified(
-      "A row can carry this cost object in the view. No mounted list, rain, or timeline fixture includes that coverage. The list's contract test says the list does not print cost; the cost input itself was not exercised.",
-    );
-  }
   if (viewId === "view.swarm") return swarm();
 
   if (stateId === "state.fresh") {
@@ -234,22 +177,6 @@ function decide(stateId, viewId) {
       "agentViewFixture sets attachable true. The idle screenshot mounted that value. None of these views add a class from attachable, so the idle paint is the branch.",
     );
   }
-  if (stateId === "state.wait_multiple" || stateId === "state.working_with_blockers") {
-    return unverified(
-      "The list fixture mounts this input. Rain, spend, and timeline can show the same row, and no fixture for this view mounts it.",
-    );
-  }
-  if (stateId === "state.reply_streaming" || stateId === "state.reply_final") {
-    return unverified(
-      "The list fixtures mount reply.final false and true. detailLine prints the text and ignores final. Rain, spend, and timeline were not mounted with that reply.",
-    );
-  }
-  if (stateId === "state.failed_retained") {
-    return unverified(
-      "Retention is the host's keepsFailure. A row that still reaches the view would paint as its status. No fixture mounts alive false.",
-    );
-  }
-  if (!dom) return swarm();
   throw new Error(`unclassified ${stateId} ${viewId}`);
 }
 
@@ -316,7 +243,7 @@ export function assertMatrix(cells) {
       const entry = entries.get(cell.fixtureId);
       if (!entry || entry.viewId !== cell.viewId) problems.push(`alias view ${key}`);
       const exercise = EXERCISES[cell.exercise];
-      if (!exercise || !exercise(mountRow(entry))) problems.push(`alias exercise ${key}`);
+      if (!exercise || !exercise(mountRow(entry), entry)) problems.push(`alias exercise ${key}`);
     }
     if (cell.disposition === "not-applicable") {
       if (!cell.evidence.startsWith("Outside this view:")) problems.push(`scope wording ${key}`);

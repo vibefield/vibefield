@@ -182,7 +182,7 @@ function paintFor(matrixCell, render) {
       evidence: matrixCell.evidence ?? "",
       diagnostic: matrixCell.diagnostic ?? "audit/godview/rendering/webgpu-diagnostic.json",
       screenshotPath: null,
-      note: "No swarm body was painted. WEBGPU UNAVAILABLE is visible text from this host. Environment versus source cause is under investigation. This is not an unreachable state and not body coverage.",
+      note: "No swarm body was painted. WEBGPU UNAVAILABLE. This host's Chrome 156 GPU process exits without VK_KHR_surface or VK_KHR_xcb_surface, headed and headless, so the adapter is null. An earlier device create/destroy log is inconclusive. No source defect is proven and the source is not exonerated. The cause stays under investigation. This is not an unreachable state and not body coverage.",
     };
   }
   const outside = String(matrixCell.evidence ?? "").startsWith("Outside this view:");
