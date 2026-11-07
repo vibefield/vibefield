@@ -41124,3 +41124,173 @@ The 7c READ in the SP-7b plan (`lanes/sp7/SP-7b-plan.md`, 23:16Z) found the gap.
 - RO-38, rosetta's `clients/swift` (its PR is James's, by hand), then the EL8 to its release, then 7b-2, the kit's
   direct History read (W1 on the old mini).
 - History's Resume moves to the home with FW-R6's last half.
+
+## Item 206's boot half — a boot whose first dial of the MeshData lane link fails dials again on the back-off: doc sync and presence start once the link has said HELLO_OK and mgmt is up, and a START is terminal only when the floor answers no
+(2026-11-07; four commits on main `6e4cb7b68`, fd's, in `/Volumes/SamsungRed/lanes/item190`: `9b01c90c6` (red) and
+`d5410d0eb`, then `9e881bdef` (red) and `298893037`. The first two were cut on `5d58c8731` as `b10d7393c` →
+`f08dd2402` (branch `item206-boot`), and again on `b833d4116` as `2c5a040db` → `5365279a7` (branch `item206-boot-mint`),
+the tip the first read read. The second two answer the reads, cut on `8c03c4c5a` as `6e4bbd201` → `bb4903f97` (branch
+`item206-boot-r3c`), where a9's rows ran, and folded as `6e4bbd201` → `832799080` (branch `item206-boot-r3`) once
+tip-biome read red on one import line: fd's, a hand sort that read biome's order as blind to case, where it puts the
+capital first (`RpcCallError, reconnectDelayMs`). The second read read `d7a1cac49` → `63ced29de` (branch
+`item206-boot-r2`) and the third read `c12b224b2` → `fd805661d` (branch `item206-boot-r3b`); neither ran. All four were
+re-cut onto `6e4cb7b68` (`lanes/item190/item206-boot/r4/recut-proof.txt`: range-diff `=`, both patch-ids equal, the
+tree equal to the merge-tree).
+M210 is `298893037`, landed 2026-11-07T12:03:33Z, run 210.)
+James ruled `meshdata-boot-redial` (a) on the board at 22:56Z ("all leans"), and VF-PM gave fd the build at 22:59Z. Plan
+v0.1 (`lanes/item190/item206-boot/plan.md`); D-b1 (A) and D-b2 (A) ruled by VF-PM at 23:20Z.
+
+**What.** Item 206 (LANDED "Item 206 —") left the boot out.
+- A failed FIRST dial of the lane link closed it for the boot (CP-1b's "a link this boot closed stays closed"), and
+  doc sync and presence went with it: the boot set both to null.
+- That first dial fails on an unhealthy floor: a dropped accept, a failed bind, a floor dying. Such a boot had no doc
+  sync or presence until fieldd restarted. A healthy floor answers it with the mesh on or off, because the bridge binds
+  whatever the mesh unit reads (`mesh_bridge.rs`; the mesh unit returns Ok as Disabled, `services/mesh.rs`).
+- *Corrected 2026-11-07 (206-boot's independent read, F8): the plan and the question James ruled said a mesh-off boot
+  had no socket, so this was the normal boot. That was false: main's comments said it, and fd's plan repeated them
+  without reading the floor. James's (a) stands on the reason above (VF-PM 07:18:24Z, a dated note on the board).*
+- The two services need the link only for BYTES. Their `start()` subscribes to the lane table over mgmt.
+
+**The fix, as first cut.**
+- `9b01c90c6` (red), test-only, four rows, each failing on an assertion at the red:
+  - R5 (`mesh-lane.test.ts`, a `fakeBridge({ late: true })` that binds only at `listen()`): `dialLater()` after a
+    failed first dial brings the link up once the bridge listens, with "reconnecting" at 500 and 1000 ms;
+  - R6 (`doc-sync-admission.test.ts`, a booted daemon): with no bridge nothing subscribes to the lane table; the
+    bridge comes, and doc sync and presence subscribe;
+  - R7 (`doc-sync-service.test.ts`): a commit before `start()` asks for no lane;
+  - R8 (`presence-room.test.ts`): the presence adapter, deleted below.
+- `d5410d0eb`, the fix:
+  - the link (`mesh-lane.ts`) emits `connected` at every HELLO_OK and gains `dialLater()`, which arms the back-off
+    for a link that has never connected, as a drop arms it for one that had;
+  - the daemon (`daemon.ts`), D-b1 (A): both services are built at boot as before and started late. A failed boot
+    dial logs `fieldd.mesh_lane.boot_dial_failed` (info) and calls `dialLater()`;
+  - doc sync's `onCommit` returns early before `start()`, as `#replicateNow` already did.
+- D-b2 (A), the cost, said in the code and here: while the floor does not answer, the link makes one failed connect
+  every 10 s at most, its warn said once per run (item 206's policy). A healthy floor costs nothing: the first dial
+  connects, mesh on or off.
+- Dated corrections at their sources: CP-1b's "stays closed" (`daemon.ts`), the services' "the next daemon start
+  retries", and `mesh-lane.ts`'s `redial` doc ("a failed FIRST connect arms nothing").
+
+**The first independent read.** VF-PM held the land for one read of the bootstrap change (06:54:12Z). Opus, read-only,
+at `5365279a7`: 17 findings, 1 major, 7 minor and 9 nits, no blocker. fd read each against the code: 13 applied, 3
+declined, 1 carried (VF-PM accepted the accounting at 07:22:03Z).
+- F1, the major: a respawned floor binds MeshData inside `start_all` and mgmt after it, so a back-off dial could say
+  HELLO_OK with mgmt down. `native.subscribe` threw UNAVAILABLE, and the catch closed the link for the boot: the
+  terminal state the ruling removed. No row covered it.
+- F8 is the correction under **What**.
+- Declined: F13 (`lanesStarting` is load-bearing once F1 is fixed), F14 (no "connected" listener throws, and a guard
+  would hide one that did) and F16 (no fix asked: a failed START's steps differ from main's, harmlessly).
+  *Corrected at the second read (G5): F16's reason first said the code stops each failed service, and F1's fix took
+  that away with `rooms.stop()`. The delta from main's failed START, stated: doc sync's catch also calls `sync.stop()`,
+  so the liveness goes and `onCommit` drops what comes after it. Presence's router has nothing to stop, as at main.*
+- Carried: F17, item 224. Two redialing fieldds can trade the socket during supersession, bounded by
+  `stopForSupersession` closing the link. It predates this slice.
+
+**The second independent read.** VF-PM held the land for one more, of `63ced29de`: G1–G15, 1 major, 7 minor and 7 nits,
+no blocker. It had no shell, so fd re-read G1 and G2 at the sha. 13 applied or in part, 1 declined, G2 ruled (VF-PM,
+08:02:08Z). r2 ran nowhere: G1 made its brief wrong.
+- G1, the major and fd's error: R15 blocked the control port, whose failure `api.listen`'s own rollback takes, so the
+  row never reached the line it guarded. It blocks the data port now.
+- G2, ruled (b): `native.connected` means paired, not answering. With both planes up, a door refusing while the floor
+  is held unresponsive, or a request past its deadline, still closed the link for the boot.
+- G4, fd's regression: taking out `rooms.stop()` left a room attached during a failed start beyond `stop()`'s reach.
+- Applied in part: G7 (a row kills m08; the guard stays as it is, since presence's lanes need the link anyway), G11
+  (mutants for three lines, the rest stated below) and G12 (one log line; "sync is live" repeating on a retry is left).
+- Declined: G9 (m02 and m03 kill R14 through the boot's own start, and the verdicts stand).
+
+**The third independent read.** VF-PM asked for one of r3's delta alone, by sha, with a shell (08:02:08Z). At
+`fd805661d`: H1–H7, 1 major, 2 minor and 4 nits, no blocker. 3 applied (H4, H6, H7), 2 declined, H1 ruled, H2 closed by
+it (VF-PM, 08:41:09Z). It traced every row, count and mutant verdict as briefed.
+- H1, the major: a retryable answer with both planes up could park the start for the boot, wider than G2's cost line
+  said (below).
+- H2: a wake-up that landed during a start in flight was swallowed, and the ask then timed out with nothing to run it.
+- Declined: H3 (a throw in `#claim` with a plane down leaves a service unstarted and logging "live"; fd read both
+  `#claim`s and `onLane` and found no reachable throw, so G14's narrowing stands) and H5 (G12's repeat, left).
+- It tried to break the claim that the supervisor's `up` covers mgmt's "connected" and could not, but corrected it: for
+  a floor held unresponsive a redial pairs with no `up`, and its door is already open, so `up` comes on two clean pongs,
+  about 200 ms later than a call there would run. No wake-up is lost. fd had told VF-PM the door refused there.
+
+**The fix, after the reads.**
+- `9e881bdef` (red), test-only, with one mock seam, `laneSubscribeGate` with `releaseLaneSubscribes()`, in the `case`
+  that answers the lane subscribe. Fifteen rows fail on an assertion at the red:
+  - R9 (VF-PM's ruled row): HELLO_OK lands with mgmt down, nothing is asked of it, nothing is terminal, and both
+    services start when mgmt answers;
+  - R10, R11: the floor dies with doc sync's, then presence's, subscribe unanswered, and the start runs again;
+  - R15: a boot that fails past the lane stage, outside `api.listen`'s own rollback, closes the link;
+  - R16, R17: a close() during the open ends the dial, and an unreadable pairing file opens no socket;
+  - R18, R20: a stop() during start() ends it. R19, R21: a failed subscribe leaves the service startable;
+  - R23: the link goes with doc sync's answer owed, and presence waits for the link;
+  - R24: doc sync's stream claims nothing after a stop(). R25: no room exists until the lane table has answered;
+  - R26: a subscribe past its deadline with both planes up is not terminal, and the start runs again on the back-off
+    with nothing reconnecting. R27: nor is the door refusing while the floor is held unresponsive.
+- Four rows pass at the red and guard the fix's mutants: R12 (a START the floor answers no stays terminal), R13
+  (presence answered no costs presence alone, once), R14 (mgmt returning with no bridge starts nothing) and R22 (the
+  catch below, which had no row). R6's bound moved past the back-off's 10 s cap (F7).
+- `298893037`, the fix:
+  - F1: one gate, `startLanes` runs only with `laneLink.connected && native.connected`, and persistent listeners on the
+    link's `connected` and the supervisor's `up`, which is mgmt paired and answering. `up` is said inside mgmt's own
+    "connected", ahead of the daemon's listeners, or on two clean pongs for a floor held unresponsive, so
+    `native.on("connected")` stays main's line (VF-PM, 08:16Z);
+  - G2: with both planes up, a START is terminal only when the floor answered no, a refusal that is not retryable or a
+    throw that is not an RPC's. A retryable `RpcCallError` re-arms, which also closes the mid-start half, the floor
+    dying between HELLO_OK and the reply. With a plane gone even a refusal waits, and the re-run gets the same answer;
+  - H1, ruled (a), replacing G2's cost line: with both planes up nothing need wake a waiting start. `native.mesh.*`
+    rides the floor's one serial queue, which answers `RESOURCE_EXHAUSTED` when full and needs no wedge, and the
+    heartbeat is deliberately not behind it, so the supervisor stays `up`. A retryable failure there runs the start
+    again on fieldd's one back-off. **The cost:** one ask per 10 s at most, only after a failure, and
+    `fieldd.mesh_lane.start_waits` logs each wait. After a shutdown the timer stops at the gate;
+  - each service's `start()` clears its own `#started` on a failed subscribe. `stop()` could not: it lets go of the
+    liveness attached once at boot;
+  - G4: `attach` refuses until the lane table has answered (`#ready`), so a start that fails leaves no room behind;
+  - F2, F10, F15: the presence adapter D-b1 (A) named is deleted, with R8 (re-ruled, VF-PM 07:41:51Z). `doc-lane.ts`,
+    `attach`'s only caller, already caught its throw, warned and opened the document, so the adapter only silenced that
+    warning. A document opened before presence starts has no room until it attaches again, and the warn says so;
+  - F3, G3: a stop() during either start() ends it. Nothing is claimed then or on the stream after it, and the "live"
+    lines come after that check. G14: both `try` blocks hold the subscribe alone;
+  - F4: a close() during the open ends the dial. F5: the boot's rollback closes the link. F9: the secret is read before
+    the socket opens. F11: a first dial's log says so.
+- CP-1b's correction now reads: "stays closed" holds for a shutdown and a START the floor answered no.
+- Uncovered, and stated (VF-PM 08:16Z): four mutants survive by design, m10 (the terminal's `sync.stop()`: `docSync` is
+  already null and no row does read the liveness), m28 (the guard after presence's start, past which only a word in the
+  log differs), and m22 and m23 (words in a log). Stated without a mutant (G11, H4): `docSync = null`, both
+  `presenceRooms = null`, `await` against `void startLanes()`, the presence catch's `return`, the wait's log line, and
+  the timer's `if (planesUp())`, which saves a timer that stops at the gate. No row or mutant holds G14's narrowing.
+
+**The lights.**
+- a9's r3 set on the old mini, at `bb4903f97` and its red `6e4bbd201` on `8c03c4c5a`
+  (`lanes/item190/item206-boot/r3/a9-results/i206r3/`, SUMS-a9 `bd7d5299`, 105 files), a main before 7b-1 and 7c.
+  The four commits are `298893037`'s but for the one import line (`lanes/item190/item206-boot/r4/range-diff-r3-r4.txt`:
+  three `=`, and `!` at the last).
+  - The rows (`rows/summary.txt`, sha256 `a66950db8bb8bc52`): red-b 15 failed | 84 passed (99), each of the 15 on an
+    `AssertionError`; tip-b 98 passed (98); tsc exit 0; biome exit 1, one `organizeImports` at `daemon.ts:320`, the
+    finding the fold answers.
+  - The witness red (`red/summary.txt`, `cc3578314d5da881`): 3 of 3 runs 15 failed | 84 passed (99), 15 assertions
+    each, 92–93 s; no birth under `/private/tmp`, and one `node-compile-cache` root a run.
+  - The lane (`lane/summary.txt`, `e4540e9e4fe458a7`): 14 files × 3, 42 of 42 exit 0. mesh-lane 24,
+    doc-sync-service 48, presence-room 9, doc-sync-admission 12, doc-lane-push 5, doc-sync-host 8, tool-plane-door 9,
+    native-link 46, doc-service 28, doc-sync-convergence 6, doc-held-elsewhere 2, doc-library 9, doc-compaction-mesh 4
+    and project-records-witness 6; no cell and no field-native left behind.
+  - The mutants (`mutants/summary.txt`, `3980f1d4da13116e`): 35 of 35 as expected, 0 miss. 29 killed on an
+    assertion, 2 by a throw as briefed (m21, m33), and the four stated above survive (m10, m22, m23, m28).
+- a9's r4 rows on the old mini at `298893037` on `6e4cb7b68`, armed at 1-min load 1.91
+  (`lanes/item190/item206-boot/r4/a9-results/i206r4/rows/summary.txt`, sha256 `e15be29d2532328d`; SUMS-a9
+  `6f757345`): tip-b 98 passed (98); biome exit 0 over the ten files, the import order biome's own. Its 1 warning
+  (`noUnusedVariables` on `control`, `doc-sync-service.test.ts`) and 13 infos (`useTemplate` in `mock-mgmt.ts`)
+  are on lines main carries, none of them this slice's.
+- Run 210, a9's, on the old mini: GREEN at `298893037` on `6e4cb7b68`, armed at 1-min load 1.96, verify 0 at
+  11:59:11Z: vitest 14,068 passed, 0 failed, 21 skipped over 961 files, node 474, cargo 606/0 over 37 binaries,
+  typecheck 29, biome 3,485 files and 73 warnings, no FAIL line. Against run 208's 14,038, by file: this slice's five
+  +22 (doc-sync-admission 1 → 12, doc-sync-service 44 → 48, mesh-lane 21 → 24, presence-room 6 → 9, doc-lane-push
+  4 → 5), the EL8 to rosetta 0.1.4's four +4 and 7b-1's two +4, missing [] and extra [] (`lanes/ts6/logs/mini/run210`,
+  SUMS-a9 `9e826cc9`). No birth in the window, and no daemon after it. The 1-min load peaked at 49.03, with no red.
+- The run's HEAD is the land's own tip, so it is a true mint: the first verify over this slice with 7b-1, 7c and
+  rosetta 0.1.4 together. The base move shares no file with these four commits.
+- No test ran on the MacBook (the HOLD). One biome row ran there through the door at `298893037` (VF-PM's 09:09:42Z
+  ruling; `lanes/co-plan/HOLD`'s 09:13Z line): exit 0, 1 warning and 13 infos over the ten files.
+
+**Owed.** Item 206's second owed line, the tool plane's behaviour with a closed lane link, now matters only after a
+START the floor answered no. It stays unread. Item 224 is filed, with no lane. Item 206 closes with its boot half.
+
+**Met since.** SP-7b's 7b-1 (`41331646e`) and 7c (`c8c580fcb`) each owed the next verify of main that includes it.
+Push 117's verify `42357208632`, at `c8c580fcb` and green at 09:30:56Z, was the first to contain both, with rosetta
+0.1.4, so it meets both owed lines together.
