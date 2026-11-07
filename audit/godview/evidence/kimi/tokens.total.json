@@ -236,6 +236,6 @@
   "verification": {
     "status": "source-read",
     "owner": "GV-AUDIT4",
-    "notes": "Declared usage=unsupported. Wire journal usage is excluded. No independent live usage rail is integrated. No shipping monitor view reads tokens.total. Audit pin is puppeteer 748d015, newer than the 0.3.3 package vibefield ships (tag v0.3.3, commit 52d09c8e). This record does not compare 0.3.3 behavior. A transform effect ending in [post-0.3.3] cites a puppeteer file whose text differs from 52d09c8e."
+    "notes": "Declared usage=unsupported. Wire journal usage is excluded. No independent live usage rail is integrated. Token burn per minute is independent of USD flames. cost-burn-trace.md at 25c215a2a53f363e1076210b3f6fce2155dfdc0b: field.tokens.perMinute does not light priced flames, and priced flames do not require a token rate. No shipping monitor view reads tokens.total. Audit pin is puppeteer 748d015, newer than the 0.3.3 package vibefield ships (tag v0.3.3, commit 52d09c8e). This record does not compare 0.3.3 behavior. A transform effect ending in [post-0.3.3] cites a puppeteer file whose text differs from 52d09c8e."
   }
 }

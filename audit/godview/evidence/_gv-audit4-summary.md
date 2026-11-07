@@ -10,11 +10,11 @@ Traces: `audit/godview/evidence/<suffix>/<fieldPath>.json` for grok, hermes, kim
 
 | adapter | present | absent | unsupported | unknown |
 | --- | --- | --- | --- | --- |
-| adapter.grok | 62 | 4 | 0 | 8 |
-| adapter.hermes | 64 | 2 | 0 | 8 |
-| adapter.kimi | 59 | 4 | 3 | 8 |
-| adapter.opencode | 64 | 2 | 0 | 8 |
-| adapter.pi | 55 | 4 | 7 | 8 |
+| adapter.grok | 62 | 12 | 0 | 0 |
+| adapter.hermes | 64 | 10 | 0 | 0 |
+| adapter.kimi | 59 | 12 | 3 | 0 |
+| adapter.opencode | 64 | 10 | 0 | 0 |
+| adapter.pi | 55 | 12 | 7 | 0 |
 
 ## Mismatches
 
@@ -40,13 +40,14 @@ Unreachable on the full VibeField path for all five, not only because the adapte
 
 `projectBranch` (`packages/monitor/src/backend/derive.ts:101-107`) returns null only when `environment.git` is defined and neither `git.branch` nor `host.fallbackBranch` is set. These adapters write cwd and never git. `recordWorkspaceEvidence` publishes cwd and worktrees with no git (`packages/runtime/src/runtime.ts:1325-1340`). Provenance git stays off the public environment (`packages/core/src/monitor/reduce.ts:625-631`). `hostRunFromSummary` copies `summary.workspace.branch` when present and does not set `fallbackBranch` (`packages/fieldd/src/agent-monitor.ts:248-256`; `packages/monitor/src/backend/ports.ts:53-58` says VibeField supplies none). A missing observation stays absent (`state.branch_unknown`) or becomes that host string (`state.branch_named`).
 
-## Cost and burn, pending
+## Cost and burn
 
-Not closed in this slice. Another trace owns the shared usage-to-cost path (ledger, rate, usage-index, projector, price table). This slice does not follow it.
+Shared path, not re-derived here: `audit/godview/contracts/cost-burn-trace.md` at `25c215a2a53f363e1076210b3f6fce2155dfdc0b` on `audit/godview-model`.
 
-Pending for every adapter here: `state.cost_complete`, `state.cost_partial`, `state.cost_unavailable`, `state.cost_missing`, `state.burn_flames_0`, `state.burn_flames_1`, `state.burn_flames_2`, `state.burn_flames_3`, `state.burn_flames_4`, `state.burn_unpriced`.
+Token counts without `costUsd` normally end in `state.cost_missing`, not `state.cost_unavailable`. Core coverage can be unavailable while the backend omits `field.cost` entirely. An observed working swarm body with no complete or partial cost is `state.burn_unpriced`. Priced flames (`state.burn_flames_0` through `state.burn_flames_4`) are reachable only for claude and codex. `field.tokens.perMinute` and those USD flames are independent.
 
-`state.cost_unavailable` is not ruled out when tokens are present and `costUsd` is absent. Grok, Hermes, and OpenCode do emit token claims without setting `costUsd` on those claims. Kimi and Pi declare usage unsupported and do not emit those claims. Neither fact closes the burn states.
+Checked `packages/runtime/src/services/usage-pricing.ts:19-36` and `:69-78`, and `packages/runtime/src/services/usage-prices.ts:39`. The catalog has 60 keys and only the providers `anthropic` and `openai`. Pricing reads the usage upsert's own `pricing` object. It does not use the row model. Grok (`usage.ts:41-54`, canonical, no pricing or costUsd), Hermes (`monitor.ts:311-321` and `:700-711`, noncanonical, no pricing or costUsd), and OpenCode (`monitor.ts:145-153`, canonical, no pricing or costUsd) never attach that object, so the catalog cannot price them. Kimi (`monitor.ts:372-396`) stores journal usage as context, not a usage upsert. Pi emits no live usage. Ingress still selects Grok and OpenCode because they are canonical, then records an unavailable estimate and no `costUsd`. That raises the unpriced count and still leaves no priced total, so the row stays `state.cost_missing`.
+
 
 ## States
 
@@ -71,8 +72,10 @@ Reachable for a run of this adapter, including host and window layers:
 - `state.blocked_question`
 - `state.branch_named`
 - `state.branch_unknown`
+- `state.burn_unpriced`
 - `state.context_hot`
 - `state.context_missing`
+- `state.cost_missing`
 - `state.dead_hidden`
 - `state.detached`
 - `state.effort_absent`
@@ -133,6 +136,8 @@ Full path for a run of this adapter cannot produce it:
 
 - `state.blocked_unknown_kind` — core blockers are only permission, question, and failure (`packages/core/src/monitor/transitions.ts:93-170`).
 - `state.branch_none` — see the branch section. The runtime type allows a null git answer; this host path never writes one.
+- `state.cost_complete`, `state.cost_partial`, `state.cost_unavailable` — no priced total from these producers. `state.cost_unavailable` would require a present cost object; the normal backend omits it. See the cost section and cost-burn-trace.md at 25c215a.
+- `state.burn_flames_0`, `state.burn_flames_1`, `state.burn_flames_2`, `state.burn_flames_3`, `state.burn_flames_4` — priced USD flames. The shared trace finds them only for claude and codex. The pinned catalog cannot price these five.
 - `state.effort_configured` — this adapter never emits the evidence, and no host or window-rows path invents it.
 
 ### adapter.hermes
@@ -153,8 +158,10 @@ Reachable for a run of this adapter, including host and window layers:
 - `state.blocked_question`
 - `state.branch_named`
 - `state.branch_unknown`
+- `state.burn_unpriced`
 - `state.context_hot`
 - `state.context_missing`
+- `state.cost_missing`
 - `state.dead_hidden`
 - `state.detached`
 - `state.effort_absent`
@@ -216,6 +223,8 @@ Full path for a run of this adapter cannot produce it:
 
 - `state.blocked_unknown_kind` — core blockers are only permission, question, and failure (`packages/core/src/monitor/transitions.ts:93-170`).
 - `state.branch_none` — see the branch section. The runtime type allows a null git answer; this host path never writes one.
+- `state.cost_complete`, `state.cost_partial`, `state.cost_unavailable` — no priced total from these producers. `state.cost_unavailable` would require a present cost object; the normal backend omits it. See the cost section and cost-burn-trace.md at 25c215a.
+- `state.burn_flames_0`, `state.burn_flames_1`, `state.burn_flames_2`, `state.burn_flames_3`, `state.burn_flames_4` — priced USD flames. The shared trace finds them only for claude and codex. The pinned catalog cannot price these five.
 - `state.activity_reasoning` — this adapter never emits the evidence, and no host or window-rows path invents it.
 
 ### adapter.kimi
@@ -237,7 +246,9 @@ Reachable for a run of this adapter, including host and window layers:
 - `state.blocked_question`
 - `state.branch_named`
 - `state.branch_unknown`
+- `state.burn_unpriced`
 - `state.context_missing`
+- `state.cost_missing`
 - `state.dead_hidden`
 - `state.detached`
 - `state.effort_absent`
@@ -299,6 +310,8 @@ Full path for a run of this adapter cannot produce it:
 
 - `state.blocked_unknown_kind` — core blockers are only permission, question, and failure (`packages/core/src/monitor/transitions.ts:93-170`).
 - `state.branch_none` — see the branch section. The runtime type allows a null git answer; this host path never writes one.
+- `state.cost_complete`, `state.cost_partial`, `state.cost_unavailable` — no priced total from these producers. `state.cost_unavailable` would require a present cost object; the normal backend omits it. See the cost section and cost-burn-trace.md at 25c215a.
+- `state.burn_flames_0`, `state.burn_flames_1`, `state.burn_flames_2`, `state.burn_flames_3`, `state.burn_flames_4` — priced USD flames. The shared trace finds them only for claude and codex. The pinned catalog cannot price these five.
 - `state.context_hot` — this adapter never emits the evidence, and no host or window-rows path invents it.
 
 ### adapter.opencode
@@ -320,8 +333,10 @@ Reachable for a run of this adapter, including host and window layers:
 - `state.blocked_question`
 - `state.branch_named`
 - `state.branch_unknown`
+- `state.burn_unpriced`
 - `state.context_hot`
 - `state.context_missing`
+- `state.cost_missing`
 - `state.dead_hidden`
 - `state.detached`
 - `state.effort_absent`
@@ -383,6 +398,8 @@ Full path for a run of this adapter cannot produce it:
 
 - `state.blocked_unknown_kind` — core blockers are only permission, question, and failure (`packages/core/src/monitor/transitions.ts:93-170`).
 - `state.branch_none` — see the branch section. The runtime type allows a null git answer; this host path never writes one.
+- `state.cost_complete`, `state.cost_partial`, `state.cost_unavailable` — no priced total from these producers. `state.cost_unavailable` would require a present cost object; the normal backend omits it. See the cost section and cost-burn-trace.md at 25c215a.
+- `state.burn_flames_0`, `state.burn_flames_1`, `state.burn_flames_2`, `state.burn_flames_3`, `state.burn_flames_4` — priced USD flames. The shared trace finds them only for claude and codex. The pinned catalog cannot price these five.
 
 ### adapter.pi
 
@@ -397,7 +414,9 @@ Reachable for a run of this adapter, including host and window layers:
 - `state.blocked_failure`
 - `state.branch_named`
 - `state.branch_unknown`
+- `state.burn_unpriced`
 - `state.context_missing`
+- `state.cost_missing`
 - `state.dead_hidden`
 - `state.detached`
 - `state.effort_absent`
@@ -455,6 +474,8 @@ Full path for a run of this adapter cannot produce it:
 
 - `state.blocked_unknown_kind` — core blockers are only permission, question, and failure (`packages/core/src/monitor/transitions.ts:93-170`).
 - `state.branch_none` — see the branch section. The runtime type allows a null git answer; this host path never writes one.
+- `state.cost_complete`, `state.cost_partial`, `state.cost_unavailable` — no priced total from these producers. `state.cost_unavailable` would require a present cost object; the normal backend omits it. See the cost section and cost-burn-trace.md at 25c215a.
+- `state.burn_flames_0`, `state.burn_flames_1`, `state.burn_flames_2`, `state.burn_flames_3`, `state.burn_flames_4` — priced USD flames. The shared trace finds them only for claude and codex. The pinned catalog cannot price these five.
 - `state.activity_compacting` — this adapter never emits the evidence, and no host or window-rows path invents it.
 - `state.activity_delegating` — this adapter never emits the evidence, and no host or window-rows path invents it.
 - `state.activity_reasoning` — this adapter never emits the evidence, and no host or window-rows path invents it.
@@ -467,4 +488,4 @@ Full path for a run of this adapter cannot produce it:
 - `state.wait_multiple` — this adapter never emits the evidence, and no host or window-rows path invents it.
 - `state.working_with_blockers` — this adapter never emits the evidence, and no host or window-rows path invents it.
 
-No classified state in this inventory remains unknown. Cost and burn states are pending, not unknown and not closed.
+No classified state in this inventory remains unknown, and no cost or burn state remains pending.
