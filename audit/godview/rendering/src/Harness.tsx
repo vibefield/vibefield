@@ -8,7 +8,7 @@ import { createFixtureReplica } from "@puppeteer-pin/sdk/testing/replica";
 import type { AgentView, MonitorHistory, MonitorPastSpanKind } from "@vibefield/puppeteer-view-sdk";
 import { useEffect, useRef } from "react";
 import { PIN_STAMP } from "virtual:pin-stamp";
-import { ENTRIES, NOW } from "../inputs.mjs";
+import { ENTRIES, NOW, SWARM_RUNTIME_ENTRIES } from "../inputs.mjs";
 
 const STAGE = Object.freeze({
   width: 1200,
@@ -78,8 +78,12 @@ function selectedId(): string | null {
   return new URLSearchParams(location.search).get("fixture");
 }
 
+function embedded(): boolean {
+  return new URLSearchParams(location.search).get("embed") === "1";
+}
+
 export function Harness() {
-  const entries = ENTRIES as Array<{
+  const entries = [...ENTRIES, ...SWARM_RUNTIME_ENTRIES] as Array<{
     fixtureId: string;
     viewId: string;
     stateId: string;
@@ -97,22 +101,24 @@ export function Harness() {
         <b>Puppeteer source {PIN_STAMP.sourceSha.slice(0, 12)}</b>
         <span>post-0.3.3. Not shipped package 0.3.3.</span>
         <span data-fe-fidelity={PIN_STAMP.fidelity} data-source-sha={PIN_STAMP.sourceSha} hidden />
-        <select
-          aria-label="Fixture"
-          value={fixtureId ?? ""}
-          onChange={(event) => {
-            const url = new URL(location.href);
-            url.searchParams.set("fixture", event.target.value);
-            location.assign(url);
-          }}
-        >
-          <option value="">Choose a fixture</option>
-          {entries.map((item) => (
-            <option key={item.fixtureId} value={item.fixtureId}>
-              {item.fixtureId}
-            </option>
-          ))}
-        </select>
+        {embedded() ? null : (
+          <select
+            aria-label="Fixture"
+            value={fixtureId ?? ""}
+            onChange={(event) => {
+              const url = new URL(location.href);
+              url.searchParams.set("fixture", event.target.value);
+              location.assign(url);
+            }}
+          >
+            <option value="">Choose a fixture</option>
+            {entries.map((item) => (
+              <option key={item.fixtureId} value={item.fixtureId}>
+                {item.fixtureId}
+              </option>
+            ))}
+          </select>
+        )}
       </header>
       {entry ? <FixtureView entry={entry} /> : <p>Choose a fixture. The integration page uses ?fixture=fix.…</p>}
     </>

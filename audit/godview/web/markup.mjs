@@ -1,6 +1,7 @@
 import { flowAnchors, renderFlowSvg } from "../flows/render.mjs";
 import { buildCell } from "../validation/cell.mjs";
 import { AUDIT_TARGET_LABEL } from "../validation/contract.mjs";
+import { swarmRuntimeMount } from "./swarm-mount.mjs";
 
 export function escapeHtml(value) {
   return String(value ?? "")
@@ -65,12 +66,24 @@ function matrixArticle(cell, shot, bundle) {
         .pop()
         ?.replace(/\.json$/u, "") || cell.fixtureId
     : cell.fixtureId;
+  const swarm =
+    cell.disposition === "environment-gap"
+      ? swarmRuntimeMount({
+          selection: { viewId: cell.viewId, stateId: cell.stateId },
+          paint: { disposition: "environment-gap" },
+        })
+      : null;
+  const src = (id) => `/harness/index.html?fixture=${encodeURIComponent(id)}&embed=1`;
   const live =
     rendered && fixtureId && bundle
-      ? `<div class="live-slot" data-fixture="${escapeHtml(fixtureId)}" data-mount="/harness/index.html?fixture=${encodeURIComponent(fixtureId)}"><p>Live synthetic fixture. It mounts when this entry is near the viewport. Not shipped package 0.3.3. Not an actual provider session.</p></div>`
-      : cell.disposition === "environment-gap"
-        ? `<p>Environment gap. No live mount and no painted swarm body.</p>`
-        : "";
+      ? `<div class="live-slot" data-live-slot data-kind="fixture" data-slot="fixture-${escapeHtml(cell.viewId)}-${escapeHtml(cell.stateId)}" data-fixture="${escapeHtml(fixtureId)}" data-src="${src(fixtureId)}" data-mount="${src(fixtureId)}"><p>Live synthetic fixture. It mounts when this entry is near the viewport and unmounts when it leaves. Not shipped package 0.3.3. Not an actual provider session.</p></div>`
+      : swarm?.attempt && bundle
+        ? `<div class="live-slot" data-live-slot data-kind="swarm" data-swarm-mount="${escapeHtml(swarm.fixtureId)}" data-slot="swarm-${escapeHtml(cell.stateId)}" data-fixture="${escapeHtml(swarm.fixtureId)}" data-src="${src(swarm.fixtureId)}"><p>${escapeHtml(swarm.reason)}</p></div>`
+        : swarm
+          ? `<p>${escapeHtml(swarm.reason)}</p>`
+          : cell.disposition === "environment-gap"
+            ? `<p>Environment gap. No live mount and no painted swarm body.</p>`
+            : "";
   const figure =
     rendered && shot?.screenshotPath
       ? `<figure><img loading="lazy" src="/shots/${escapeHtml(shot.screenshotPath.split("/").pop())}" alt="Recorded fixture screenshot" /><figcaption>Recorded fixture screenshot. Not the live component mount.</figcaption></figure>`

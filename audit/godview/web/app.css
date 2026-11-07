@@ -153,7 +153,7 @@ aside {
 
 .scroll-page,
 main {
-  max-width: 1120px;
+  max-width: 1480px;
 }
 
 nav[aria-label="Page sections"] {
@@ -175,7 +175,7 @@ nav[aria-label="Page sections"] {
 
 .flow-diagram svg {
   display: block;
-  width: 980px;
+  width: 1280px;
   max-width: none;
   height: auto;
 }
@@ -192,9 +192,9 @@ nav[aria-label="Page sections"] {
   width: 100%;
 }
 
-@media (min-width: 1100px) {
+@media (min-width: 1400px) {
   .preview {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: minmax(760px, 1.2fr) minmax(420px, 0.8fr);
   }
 }
 

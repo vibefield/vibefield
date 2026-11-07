@@ -20,3 +20,11 @@ export function chooseMounts(entries, max = MAX_LIVE_MOUNTS) {
   for (const entry of entries) take(entry);
   return new Set(chosen);
 }
+
+/** One decision for fixture slots and swarm slots. Exit unmounts the iframe. */
+export function slotAction(hasFrame, currentSrc, plannedSrc, mount) {
+  if (!mount) return hasFrame ? "unmount" : "idle";
+  if (!plannedSrc) return "idle";
+  if (!hasFrame || currentSrc !== plannedSrc) return "mount";
+  return "kept";
+}

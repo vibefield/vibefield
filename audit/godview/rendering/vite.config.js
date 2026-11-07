@@ -63,6 +63,7 @@ const views = join(pin, "packages/views/src");
 const modules = join(import.meta.dirname, "node_modules");
 
 export default defineConfig({
+  base: "./",
   plugins: [react(), pinStamp(), refuseInstalledPuppeteer(), swarmWorker()],
   resolve: {
     alias: {

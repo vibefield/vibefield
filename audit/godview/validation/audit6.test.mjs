@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { flowGraph, renderFlowSvg } from "../flows/render.mjs";
-import { chooseMounts, MAX_LIVE_MOUNTS } from "../web/lazy-mount.mjs";
+import { chooseMounts, MAX_LIVE_MOUNTS, slotAction } from "../web/lazy-mount.mjs";
 import { renderScroll } from "../web/markup.mjs";
 import { createAuditServer } from "../web/serve.mjs";
 import { buildCell, endedAliasMeasured, spanAliasProved } from "./cell.mjs";
@@ -335,7 +335,12 @@ test("the page names the audit target and leaves the harness pending", () => {
   assert.equal((html.match(/<select\b/g) ?? []).length, 0);
   assert.equal((html.match(/<details\b/g) ?? []).length, 0);
   assert.match(html, /class="flow-diagram"/);
-  assert.match(html, /width="980"/);
+  assert.match(html, /width="1280"/);
+  assert.match(html, /font-size="15"/);
+  assert.match(html, /font-size="14"/);
+  assert.match(html, /data-swarm-mount="fix\.swarm\.runtime\.working"/);
+  assert.match(html, /embed=1/);
+  assert.match(html, /not a historical capture/);
   assert.match(html, /newer than the 0\.3\.3 package/);
   assert.match(html, /Meaningful paint: yes/);
   assert.match(html, /Selected fixture rendered: yes/);
@@ -851,6 +856,19 @@ test("live mounts stay bounded to slots near the viewport", () => {
     MAX_LIVE_MOUNTS,
   );
   assert.deepEqual([...next], ["a", "c"]);
+  const mixed = chooseMounts(
+    [
+      { id: "fixture", near: true, active: false },
+      { id: "swarm", near: true, active: false },
+      { id: "other", near: true, active: false },
+    ],
+    MAX_LIVE_MOUNTS,
+  );
+  assert.equal(mixed.size, 2);
+  assert.equal(mixed.has("other"), false);
+  assert.equal(slotAction(true, "/harness/x", "/harness/x", false), "unmount");
+  assert.equal(slotAction(false, "", "/harness/x", true), "mount");
+  assert.equal(slotAction(true, "/harness/x", "/harness/x", true), "kept");
 });
 
 test("the QA server answers the page and the flow", async () => {

@@ -411,15 +411,15 @@ export function renderFlowSvg(cell) {
   const note = graph?.note ?? "No trace file. Nothing is drawn as a completed path.";
   const path = graph?.nodes.filter((node) => node.role === "path") ?? [];
   if (!admitted || path.length === 0) return emptySvg(title, note, cell);
-  const width = 980;
-  const noteLines = wrap(note, 118, 3);
-  let y = 36 + noteLines.length * 16;
+  const width = 1280;
+  const noteLines = wrap(note, 108, 3);
+  let y = 40 + noteLines.length * 22;
   const placed = new Map();
   const rows = [];
   for (const node of path) {
-    const effectLines = wrap(node.effect, 78, 4);
+    const effectLines = wrap(node.effect, 96, 5);
     const links = (node.links ?? []).slice(0, 4);
-    const height = 36 + effectLines.length * 16 + links.length * 16 + 8;
+    const boxHeight = 48 + effectLines.length * 22 + links.length * 20 + 8;
     const sides = (graph?.nodes ?? []).filter(
       (item) =>
         item.parent === node.id ||
@@ -429,18 +429,25 @@ export function renderFlowSvg(cell) {
         ),
     );
     const sideNodes = [];
-    let sideY = y;
+    let sideX = 32;
+    let sideY = y + boxHeight + 36;
+    let sideBottom = sideY;
     for (const side of sides) {
-      const lines = wrap(side.text || side.effect, 42, 3);
-      const sideHeight = 32 + lines.length * 14;
-      sideNodes.push({ ...side, y: sideY, height: sideHeight, lines });
-      sideY += sideHeight + 8;
+      const lines = wrap(side.text || side.effect, 36, 3);
+      const sideHeight = 64 + lines.length * 20;
+      if (sideX + 400 > width - 24) {
+        sideX = 32;
+        sideY = sideBottom + 16;
+      }
+      sideNodes.push({ ...side, x: sideX, y: sideY, height: sideHeight, lines });
+      sideBottom = Math.max(sideBottom, sideY + sideHeight);
+      sideX += 416;
     }
-    const rowHeight = Math.max(height, sideY - y);
-    placed.set(node.id, { ...node, y, height, effectLines, links, rowHeight });
+    const rowHeight = Math.max(boxHeight, sideBottom - y);
+    placed.set(node.id, { ...node, y, height: boxHeight, effectLines, links, rowHeight });
     for (const side of sideNodes) placed.set(side.id, side);
     rows.push({ node, sideNodes });
-    y += rowHeight + 26;
+    y += rowHeight + 36;
   }
   const height = y + 24;
   const bodies = rows
@@ -449,16 +456,16 @@ export function renderFlowSvg(cell) {
       const texts = box.effectLines
         .map(
           (line, index) =>
-            `<text x="36" y="${box.y + 40 + index * 16}" fill="var(--vf-godview-dark-text-main)" font-size="12">${escapeXml(line)}</text>`,
+            `<text x="48" y="${box.y + 48 + index * 22}" fill="var(--vf-godview-dark-text-main)" font-size="15">${escapeXml(line)}</text>`,
         )
         .join("");
       const links = box.links
         .map((link, index) => {
           const href = sourceUrl(link);
-          const textY = box.y + 40 + box.effectLines.length * 16 + index * 16;
+          const textY = box.y + 48 + box.effectLines.length * 22 + index * 20;
           const label = linkLabel(link);
           return href
-            ? `<a href="${escapeXml(href)}" target="_blank"><text x="36" y="${textY}" fill="var(--vf-godview-dark-chrome-text-secondary)" font-size="11" text-decoration="underline">${escapeXml(label)}</text></a>`
+            ? `<a href="${escapeXml(href)}" target="_blank"><text x="48" y="${textY}" fill="var(--vf-godview-dark-chrome-text-secondary)" font-size="14" text-decoration="underline">${escapeXml(label)}</text></a>`
             : "";
         })
         .join("");
@@ -467,19 +474,21 @@ export function renderFlowSvg(cell) {
           const lines = side.lines
             .map(
               (line, index) =>
-                `<text x="612" y="${side.y + 36 + index * 14}" fill="var(--vf-godview-dark-text-main)" font-size="11">${escapeXml(line)}</text>`,
+                `<text x="${side.x + 36}" y="${side.y + 46 + index * 20}" fill="var(--vf-godview-dark-text-main)" font-size="14">${escapeXml(line)}</text>`,
             )
             .join("");
+          const mid = side.y + side.height / 2;
+          const points = `${side.x + 18},${mid} ${side.x + 36},${side.y + 8} ${side.x + 364},${side.y + 8} ${side.x + 382},${mid} ${side.x + 364},${side.y + side.height - 8} ${side.x + 36},${side.y + side.height - 8}`;
           return `<g data-role="${escapeXml(side.role)}" data-step="${escapeXml(side.id)}">
-            <rect x="600" y="${side.y}" width="356" height="${side.height}" rx="8" fill="var(--vf-godview-dark-panel-bg)" stroke="var(--vf-godview-dark-text-muted)" stroke-dasharray="5 4"/>
-            <text x="612" y="${side.y + 18}" fill="var(--vf-godview-dark-chrome-text-secondary)" font-size="12">${escapeXml(roleTitle(side))}</text>
+            <polygon points="${points}" fill="var(--vf-godview-dark-panel-bg)" stroke="var(--vf-godview-dark-working-text)" stroke-width="2" stroke-dasharray="6 4"/>
+            <text x="${side.x + 36}" y="${side.y + 28}" fill="var(--vf-godview-dark-chrome-text-secondary)" font-size="14">${escapeXml(roleTitle(side))}</text>
             ${lines}
           </g>`;
         })
         .join("");
       return `<g data-role="path" data-step="${escapeXml(node.id)}">
-        <rect x="24" y="${box.y}" width="540" height="${box.height}" rx="9" fill="var(--vf-godview-dark-panel-bg)" stroke="var(--vf-godview-dark-panel-border)"/>
-        <text x="36" y="${box.y + 22}" fill="var(--vf-godview-dark-text-main)" font-size="13">${escapeXml(node.name)}</text>
+        <rect x="32" y="${box.y}" width="1216" height="${box.height}" rx="12" fill="var(--vf-godview-dark-panel-bg)" stroke="var(--vf-godview-dark-panel-border)"/>
+        <text x="48" y="${box.y + 28}" fill="var(--vf-godview-dark-text-main)" font-size="18">${escapeXml(node.name)}</text>
         ${texts}
         ${links}
       </g>${sides}`;
@@ -492,25 +501,26 @@ export function renderFlowSvg(cell) {
       if (!from || !to) return "";
       const dashed = edge.sequences ? "" : ' stroke-dasharray="4 3"';
       if (to.role && to.role !== "path") {
-        const y1 = from.y + 20;
+        const y1 = from.y + from.height;
+        const x2 = (to.x ?? 32) + 191;
         return `<g data-edge="${escapeXml(`${edge.from} ${edge.to}`)}" data-label="${escapeXml(edge.label)}" data-sequences="false">
-          <line x1="564" y1="${y1}" x2="600" y2="${to.y + 16}" stroke="var(--vf-godview-dark-text-muted)"${dashed}/>
-          <text x="568" y="${y1 - 2}" fill="var(--vf-godview-dark-chrome-text-secondary)" font-size="10">${escapeXml(edge.label)}</text>
+          <line x1="640" y1="${y1}" x2="${x2}" y2="${to.y}" stroke="var(--vf-godview-dark-working-text)" stroke-width="1.5"${dashed}/>
+          <text x="${Math.min(x2, 900)}" y="${to.y - 6}" fill="var(--vf-godview-dark-chrome-text-secondary)" font-size="14">${escapeXml(edge.label)}</text>
         </g>`;
       }
       const y1 = from.y + from.rowHeight;
       const y2 = to.y;
       const mid = (y1 + y2) / 2;
       return `<g data-edge="${escapeXml(`${edge.from} ${edge.to}`)}" data-label="${escapeXml(edge.label)}" data-sequences="${edge.sequences ? "true" : "false"}">
-        <line x1="294" y1="${y1}" x2="294" y2="${y2}" stroke="var(--vf-godview-dark-text-muted)"${dashed}/>
-        <text x="302" y="${mid}" fill="var(--vf-godview-dark-chrome-text-secondary)" font-size="11">${escapeXml(edge.label)}</text>
+        <line x1="640" y1="${y1}" x2="640" y2="${y2}" stroke="var(--vf-godview-dark-text-muted)" stroke-width="1.5"${dashed}/>
+        <text x="652" y="${mid}" fill="var(--vf-godview-dark-chrome-text-secondary)" font-size="14">${escapeXml(edge.label)}</text>
       </g>`;
     })
     .join("");
   const caption = noteLines
     .map(
       (line, index) =>
-        `<text x="24" y="${28 + index * 16}" fill="var(--vf-godview-dark-chrome-text-secondary)" font-size="12">${escapeXml(line)}</text>`,
+        `<text x="32" y="${28 + index * 22}" fill="var(--vf-godview-dark-chrome-text-secondary)" font-size="15">${escapeXml(line)}</text>`,
     )
     .join("");
   return `<?xml version="1.0" encoding="UTF-8"?>

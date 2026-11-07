@@ -1,9 +1,16 @@
 import assert from "node:assert/strict";
-import { readFileSync, readdirSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import test from "node:test";
-import { ENTRIES, HOLES, MODEL_STATE_IDS, PINS, assertCoverage } from "./inputs.mjs";
-import { VIEWS, assertMatrix, matrix, matrixSummary } from "./matrix.mjs";
+import {
+  assertCoverage,
+  ENTRIES,
+  HOLES,
+  MODEL_STATE_IDS,
+  PINS,
+  SWARM_RUNTIME_ENTRIES,
+} from "./inputs.mjs";
+import { assertMatrix, matrix, matrixSummary, VIEWS } from "./matrix.mjs";
 
 const fixtureDir = join(import.meta.dirname, "..", "fixtures");
 
@@ -50,18 +57,53 @@ test("priced cost fixtures name claude and codex only", () => {
 });
 
 test("unavailable cost is labeled synthetic and not a normal emission", () => {
-  const envelope = JSON.parse(readFileSync(join(fixtureDir, "fix.spend.cost-unavailable.json"), "utf8"));
+  const envelope = JSON.parse(
+    readFileSync(join(fixtureDir, "fix.spend.cost-unavailable.json"), "utf8"),
+  );
   assert.match(envelope.notes, /Not a normal adapter emission/);
   assert.match(envelope.notes, /state.cost_missing/);
 });
 
 test("defensive branch and unknown-kind fixtures stay synthetic", () => {
   const branch = JSON.parse(readFileSync(join(fixtureDir, "fix.list.branch-none.json"), "utf8"));
-  const kind = JSON.parse(readFileSync(join(fixtureDir, "fix.list.blocked-unknown-kind.json"), "utf8"));
+  const kind = JSON.parse(
+    readFileSync(join(fixtureDir, "fix.list.blocked-unknown-kind.json"), "utf8"),
+  );
   assert.match(branch.notes, /Synthetic defensive fixture/);
   assert.match(branch.notes, /null and absent/);
   assert.match(kind.notes, /Synthetic defensive fixture/);
   assert.match(kind.notes, /permission, question, or failure/);
+});
+
+test("swarm runtime rows stay out of the rendered catalog", () => {
+  const cells = matrix();
+  const gaps = cells.filter((cell) => cell.disposition === "environment-gap");
+  assert.equal(gaps.length, 67);
+  assert.equal(new Set(gaps.map((cell) => cell.viewId)).size, 1);
+  const runtimeStates = new Set(SWARM_RUNTIME_ENTRIES.map((entry) => entry.stateId));
+  const unmountable = gaps
+    .filter((cell) => !runtimeStates.has(cell.stateId))
+    .map((cell) => cell.stateId)
+    .sort();
+  assert.deepEqual(unmountable, ["state.attachable", "state.terminal_opening"]);
+  for (const entry of SWARM_RUNTIME_ENTRIES) {
+    assert.equal(entry.viewId, "view.swarm");
+    assert.equal(
+      ENTRIES.some((item) => item.fixtureId === entry.fixtureId),
+      false,
+    );
+    const cell = gaps.find((item) => item.stateId === entry.stateId);
+    assert.equal(cell.disposition, "environment-gap");
+    assert.equal(cell.fixtureId, undefined);
+  }
+  assert.equal(
+    SWARM_RUNTIME_ENTRIES.find((entry) => entry.stateId === "state.context_hot").fixtureId,
+    "fix.swarm.context-hot",
+  );
+  assert.equal(
+    SWARM_RUNTIME_ENTRIES.find((entry) => entry.stateId === "state.working").fixtureId,
+    "fix.swarm.runtime.working",
+  );
 });
 
 test("statuses are rendered on every view that paints them without WebGPU", () => {
@@ -78,7 +120,12 @@ test("statuses are rendered on every view that paints them without WebGPU", () =
 
 test("subtype cells are not dismissed as not-applicable", () => {
   const cells = matrix();
-  for (const stateId of ["state.blocked_permission", "state.blocked_question", "state.blocked_failure", "state.unread"]) {
+  for (const stateId of [
+    "state.blocked_permission",
+    "state.blocked_question",
+    "state.blocked_failure",
+    "state.unread",
+  ]) {
     for (const viewId of ["view.list", "view.rain"]) {
       const cell = cells.find((item) => item.stateId === stateId && item.viewId === viewId);
       assert.notEqual(cell.disposition, "not-applicable", `${stateId} ${viewId}`);
@@ -98,7 +145,11 @@ test("the previous 302 not-applicable count is not treated as validated", () => 
   assert.equal(summary.notApplicable, 73);
   assert.equal(summary.environmentGap, 67);
   const total =
-    summary.rendered + summary.coveredBy + summary.coverageGap + summary.notApplicable + summary.environmentGap;
+    summary.rendered +
+    summary.coveredBy +
+    summary.coverageGap +
+    summary.notApplicable +
+    summary.environmentGap;
   assert.equal(total, 410);
 });
 
@@ -136,11 +187,15 @@ test("timeline span is a measured live head, not a history check", () => {
   assert.doesNotMatch(source, /ended-lane/);
   assert.doesNotMatch(source, /history == null && entry\?\.stateId === "state\.working"/);
   assert.doesNotMatch(source, /entry\?\.history === "bounds"/);
-  const span = matrix().find((cell) => cell.stateId === "state.timeline_span" && cell.viewId === "view.timeline");
+  const span = matrix().find(
+    (cell) => cell.stateId === "state.timeline_span" && cell.viewId === "view.timeline",
+  );
   assert.equal(span.disposition, "rendered");
   assert.equal(span.fixtureId, "fix.timeline.moment-span");
   assert.equal(span.exercise, undefined);
-  const evidence = JSON.parse(readFileSync(join(import.meta.dirname, "timeline-span-evidence.json"), "utf8"));
+  const evidence = JSON.parse(
+    readFileSync(join(import.meta.dirname, "timeline-span-evidence.json"), "utf8"),
+  );
   assert.equal(evidence.branch, "span");
   assert.equal(evidence.fixtureId, "fix.timeline.moment-span");
   assert.equal(evidence.tone, "working");
@@ -149,22 +204,30 @@ test("timeline span is a measured live head, not a history check", () => {
   assert.match(evidence.valueText, /^Now/);
   assert.match(evidence.readout, /working/);
   assert.doesNotMatch(evidence.readout, /not recorded|not started/);
-  const integration = JSON.parse(readFileSync(join(import.meta.dirname, "integration.json"), "utf8"));
+  const integration = JSON.parse(
+    readFileSync(join(import.meta.dirname, "integration.json"), "utf8"),
+  );
   assert.deepEqual(integration.timelineSpanEvidence, evidence);
 });
 
 test("timeline ended is a measured live head, not a history check", () => {
-  const ended = matrix().find((cell) => cell.stateId === "state.timeline_ended" && cell.viewId === "view.timeline");
+  const ended = matrix().find(
+    (cell) => cell.stateId === "state.timeline_ended" && cell.viewId === "view.timeline",
+  );
   assert.equal(ended.disposition, "rendered");
   assert.equal(ended.fixtureId, "fix.timeline.moment-ended");
   assert.equal(ended.exercise, undefined);
-  const evidence = JSON.parse(readFileSync(join(import.meta.dirname, "timeline-ended-evidence.json"), "utf8"));
+  const evidence = JSON.parse(
+    readFileSync(join(import.meta.dirname, "timeline-ended-evidence.json"), "utf8"),
+  );
   assert.equal(evidence.branch, "ended");
   assert.equal(evidence.tone, "ended");
   assert.ok(evidence.headMs >= evidence.endedAt);
   assert.match(evidence.valueText, /^Now/);
   assert.match(evidence.readout, /last active/);
-  const integration = JSON.parse(readFileSync(join(import.meta.dirname, "integration.json"), "utf8"));
+  const integration = JSON.parse(
+    readFileSync(join(import.meta.dirname, "integration.json"), "utf8"),
+  );
   assert.deepEqual(integration.timelineEndedEvidence, evidence);
 });
 

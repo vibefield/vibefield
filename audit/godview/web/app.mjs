@@ -1,16 +1,16 @@
-import { chooseMounts, MAX_LIVE_MOUNTS } from "./lazy-mount.mjs";
+import { chooseMounts, MAX_LIVE_MOUNTS, slotAction } from "./lazy-mount.mjs";
 
 const app = document.querySelector("#app");
 const live = document.querySelector("#live");
 const near = new Map();
 
 function slots() {
-  return [...app.querySelectorAll("[data-mount]")];
+  return [...app.querySelectorAll("[data-live-slot]")];
 }
 
 function apply() {
   const entries = slots().map((element) => ({
-    id: element.dataset.mount,
+    id: element.dataset.slot,
     near: near.get(element) === true,
     active: element.querySelector("iframe") != null,
     element,
@@ -18,19 +18,27 @@ function apply() {
   const chosen = chooseMounts(entries, MAX_LIVE_MOUNTS);
   for (const entry of entries) {
     const frame = entry.element.querySelector("iframe");
-    if (chosen.has(entry.id)) {
-      if (!frame) {
-        const iframe = document.createElement("iframe");
-        iframe.className = "component";
-        iframe.title = `Pinned synthetic fixture ${entry.element.dataset.fixture ?? ""}`;
-        iframe.src = entry.id;
-        entry.element.append(iframe);
-      }
-    } else if (frame) {
-      frame.remove();
+    const planned = entry.element.dataset.src || "";
+    const action = slotAction(
+      frame != null,
+      frame?.getAttribute("src") || "",
+      planned,
+      chosen.has(entry.id),
+    );
+    if (action === "unmount" && frame) frame.remove();
+    if (action === "mount") {
+      frame?.remove();
+      const iframe = document.createElement("iframe");
+      iframe.className = "component";
+      iframe.title = `Pinned synthetic fixture ${entry.element.dataset.fixture ?? ""}`;
+      iframe.src = planned;
+      entry.element.append(iframe);
     }
   }
-  live.textContent = `${chosen.size} of at most ${MAX_LIVE_MOUNTS} live synthetic fixtures are mounted.`;
+  const swarm = entries.filter(
+    (entry) => entry.element.dataset.kind === "swarm" && chosen.has(entry.id),
+  ).length;
+  live.textContent = `${chosen.size} of at most ${MAX_LIVE_MOUNTS} live mounts, ${swarm} swarm runtime attempts. Historical swarm gaps stay unpainted.`;
 }
 
 const observer = new IntersectionObserver(
