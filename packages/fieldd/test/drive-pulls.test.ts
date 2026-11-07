@@ -888,6 +888,38 @@ describe("DR-3b — the drive's pulls over the floor's file transfer", () => {
     await expect(second).resolves.toEqual({ path: join(landsDir, `${later}.${secondId}`) });
   });
 
+  it("holds every accepted pull at a reconnect whose replay and own subscribe are both refused, so the series asks on with nothing else to ask it, and its snapshot settles the pull", async () => {
+    const transfer = mockFileTransfer();
+    const { mock, link, root, landsDir } = await floor(transfer);
+    const id = idFor(1);
+    const drive = pulls(link, root, { mintId: () => id, heldBoundMs: 6_000, retryDelaysMs: [150] });
+    let reconnects = 0;
+    link.on("connected", () => {
+      void drive.connected().then(() => {
+        reconnects += 1;
+      });
+    });
+    await drive.start();
+    const digest = digestOf(1);
+    const landed = drive.pull(ask(digest));
+    const state = settled(landed);
+    await until(() => transfer.running.size === 1, "the pull runs");
+    await roundTrip(link);
+    // it ends at the floor, its file in place, and the link drops before its delta is sent
+    const path = join(landsDir, `${digest}.${id}`);
+    writeFileSync(path, "object bytes");
+    transfer.running.delete(id);
+    // the replay and the reconnect's own subscribe both meet a full mesh queue: refused, never run
+    transfer.refuseSubscribes = 2;
+    mock.killClients();
+    await until(() => reconnects === 1, "the reconnect, handed to the pulls", 8_000);
+    // no later pull and no node-up: only the series can ask again, and it asks because the reconnect held the pull
+    await until(() => state() !== "pending", "the pull, settled by the series' retry", 5_000);
+    await expect(landed).resolves.toEqual({ path });
+    // at the start, the replay and the reconnect's own (both refused), and the retry
+    expect(asked(mock, SUBSCRIBE)).toBe(4);
+  });
+
   it("clears the series' timer at a node-up, which asks at once and opens the series again, and at a stop, which asks nothing more", async () => {
     const transfer = mockFileTransfer();
     // the stream is refused three times, its mesh queue full: at the start, at the pull's own ask, at the node-up

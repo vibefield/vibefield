@@ -183,7 +183,12 @@ describe("DR-3b — the drive's holders slice", () => {
     const store = new FakeDriveStore();
     let open = false;
     let linked = true;
-    const studio = holders(store, "studio", () => (open ? READY : null), () => linked);
+    const studio = holders(
+      store,
+      "studio",
+      () => (open ? READY : null),
+      () => linked,
+    );
     const pulls = new DrivePulls({
       floor: unsupportedFloor(),
       userRoot: UNUSED_ROOT,
