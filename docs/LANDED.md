@@ -41573,6 +41573,7 @@ checkout.
   >   rule, the same at both shas: a red run keeps its HOME and names it (`testing/smoke-daemons.ts`
   >   `removeSmokeRoot`). It is evidence, not a fault.
 - `docs/desk-gates.md`: rung 11m's row gains the reply read.
+  > **Paid (2026-11-07):** row 23's 11m clause now reads the reply, with the red and green rows in its Verdict.
 
 ## Item 213 — the worker's late ack to a progress report is not a red: field-app's suite runs under a runner that drops vitest's `onTaskUpdate` timeout and nothing else (test-config only)
 (2026-11-07; one commit on lane `fix/item213-late-ack-runner`, prod-builder's, built in
