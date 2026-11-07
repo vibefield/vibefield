@@ -343,6 +343,44 @@ struct NewSparkSheetTests {
     #expect(refused == SheetRefusal(at: .agent, words: "Default has no Claude Code sign-in"))
   }
 
+  /// The witness's home agent (`run-h-turn`), edited: its key, its desktop, its spark, whether it lives, its profile.
+  static func run(
+    _ key: String, device: String = "dev-01HQ9S7UD1", spark: String? = nil, alive: Bool = true,
+    profileSet: String? = nil
+  ) throws -> AgentRemoteRow {
+    let open = try HomeFixture.json("agent-remote-mesh-open.witness")
+    let rows = open["devices"]?.arrayValue?.first?["snapshot"]?["rows"]?.arrayValue ?? []
+    let turn = try #require(rows.first { $0["runtimeRunId"]?.stringValue == "run-h-turn" })
+    guard case .object(var fields) = turn, case .object(var monitor)? = fields["monitorRow"] else {
+      throw HomeFixture.MissingFixture(name: "run-h-turn")
+    }
+    fields["runtimeRunId"] = .string(key)
+    fields["device"] = .string(device)
+    if let spark { fields["spark"] = .string(spark) }
+    monitor["alive"] = .bool(alive)
+    monitor["profileSet"] = profileSet.map { JSONValue.string($0) }
+    fields["monitorRow"] = .object(monitor)
+    return try AgentRemoteRow(json: .object(fields))
+  }
+
+  @Test("the sessions it sees are the home's live runs that are no spark's own, under the profile the board says")
+  func sessions() throws {
+    let rows = [
+      try Self.run("run-work", profileSet: "work"),
+      try Self.run("run-unfiled"),
+      try Self.run("run-spark", spark: "sp-7k2m9q4x", profileSet: "work"),
+      try Self.run("run-gone", alive: false, profileSet: "work"),
+      try Self.run("run-loft", device: "dev-01HQ9S7XZ2", profileSet: "work"),
+    ]
+    let counted = NewSpark.sessions(rows, home: "dev-01HQ9S7UD1")
+    #expect(counted == [RunProfileFacts(profileSet: "work"), RunProfileFacts()])
+    let noHome = NewSpark.sessions(rows, home: nil)
+    #expect(noHome == [])
+    let sets = try Self.sets()
+    let seen = NewSpark.sessionsSeen(counted, sets: sets, chosen: ["work"])
+    #expect(seen == 1)
+  }
+
   @Test("§9: Runs on studio, your home; the home away in its three facts; Create and its name")
   func words() {
     #expect(NewSparkWords.runsOn("studio") == "Runs on studio, your home")

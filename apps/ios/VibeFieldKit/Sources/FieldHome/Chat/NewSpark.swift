@@ -254,6 +254,14 @@ enum NewSpark {
     }.count
   }
 
+  /// The person's live sessions on the home, as the phone's board holds them (VF-PM 2026-11-07 13:37:20Z, ruled (a)):
+  /// the home's rows that live and are no spark's own session, each under the profile the board says. The Mac reads
+  /// its own field board's `{profileSet, profileId}` (`personSessionsOf`); a remote row carries the monitor's resolved
+  /// set and no persona, so a retired sign-in counts as Default here, where the rule places it nowhere
+  /// (agent-index.ts's "the one place the two differ"). The caller says nil until the board is read.
+  /// SKELETON (f4 3/3's red): counts nothing yet.
+  static func sessions(_ rows: [AgentRemoteRow], home: String?) -> [RunProfileFacts] { [] }
+
   /// The line under the chips: how many sessions it sees, then what it can start.
   static func reach(_ sessions: Int?, starts: [String]) -> String {
     let start =
