@@ -395,9 +395,19 @@ export class DocSyncService {
   async start(): Promise<void> {
     if (this.#started) return;
     this.#started = true;
-    const { lanes } = await this.#control.subscribe((payload, kind) =>
-      this.#onLaneEvent(payload, kind),
-    );
+    let lanes: LaneInfo[] | undefined;
+    try {
+      ({ lanes } = await this.#control.subscribe((payload, kind) => {
+        if (this.#started) this.#onLaneEvent(payload, kind);
+      }));
+    } catch (error) {
+      // item 206's boot half — a start that failed leaves the service startable: the daemon runs it again when the
+      // floor is back, and `stop()` could not, since it lets go of the liveness the boot attached
+      this.#started = false;
+      throw error;
+    }
+    // item 206's boot half — the daemon starts this late, so a stop() can land during the subscribe, and ends it
+    if (!this.#started) return;
     for (const lane of lanes ?? []) this.#claim(lane);
     // DS-5c — the beat starts only once the lane table is ours: a start that
     // failed above leaves no timer behind.
@@ -455,8 +465,8 @@ export class DocSyncService {
    * never throws into the write path, because a sync fault must not be able to
    * turn a committed revision into a failed one. */
   onCommit(commit: DocCommit): void {
-    // item 206's boot half — the daemon builds this service at boot and starts it on the lane link's first HELLO_OK,
-    // which may come late; until then a commit asks for no lane, and the start's own replication says it
+    // item 206's boot half — the daemon builds this service at boot and starts it once the lane link has said HELLO_OK
+    // and mgmt is up, which may come late; until then a commit asks for no lane, and the start's replication says it
     if (!this.#started) return;
     if (commit.origin === "peer") return; // never echo a peer's own record back
     // UA-D7 gate (c) — the fan-out. #ensureLane below would refuse every peer

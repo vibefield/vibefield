@@ -93,6 +93,8 @@ export class MeshLaneLink extends EventEmitter {
   #redialAttempts = 0;
   #redialing: Promise<void> | null = null;
   #redialFailing = false;
+  /** Item 206's boot half — whether any HELLO_OK has landed, so a log can tell a first dial from a redial. */
+  #everConnected = false;
 
   connected = false;
 
@@ -105,7 +107,16 @@ export class MeshLaneLink extends EventEmitter {
    * lanes may be written only after that, so callers cannot race the handshake. */
   async connect(): Promise<void> {
     if (this.connected) return;
+    // item 206's boot half — read before any socket opens: a read that throws would leave one behind, and a dial on
+    // the back-off would leave one per attempt
+    const secretHex = readFileSync(this.opts.pairingFile, "utf8").trim();
     const sock = await this.#open();
+    // item 206's boot half — a close() during the open ends this dial, as NativeLink's does: a closed link never says
+    // "connected"
+    if (this.#closed) {
+      sock.destroy();
+      throw new Error("meshdata link closed");
+    }
     this.#sock = sock;
     sock.on("data", (chunk: Buffer) => this.#onData(chunk));
     sock.on("close", () => this.#onClose(sock));
@@ -115,7 +126,6 @@ export class MeshLaneLink extends EventEmitter {
       });
     });
 
-    const secretHex = readFileSync(this.opts.pairingFile, "utf8").trim();
     const ts = Math.floor(Date.now() / 1000);
     const mac = computePairingMac(secretHex, this.opts.bootId, ts);
     const nonce = newPairingNonce();
@@ -163,8 +173,9 @@ export class MeshLaneLink extends EventEmitter {
       throw error;
     }
     this.connected = true;
+    this.#everConnected = true;
     // item 206's boot half — every HELLO_OK says so, the first and each redial's: the daemon starts what its boot
-    // skipped on the first one
+    // skipped once mgmt is up as well
     this.emit("connected");
   }
 
@@ -446,18 +457,18 @@ export class MeshLaneLink extends EventEmitter {
     this.emit("reconnecting", delay);
     this.#redialTimer = setTimeout(() => {
       this.#redialTimer = null;
-      this.#redial("dropped");
+      this.#redial(this.#everConnected ? "dropped" : "first-dial");
     }, delay);
     this.#redialTimer.unref?.();
   }
 
   /** Item 206 — one redial dial; its failure arms the next, and a run of failures warns once (item 198's policy). */
-  #redial(why: "floor" | "dropped"): void {
+  #redial(why: "floor" | "dropped" | "first-dial"): void {
     if (this.#closed || this.connected || this.#redialing !== null) return;
     this.#redialing = this.connect()
       .then(
         () => {
-          this.#logger.info("fieldd.mesh_lane.redialed", "The MeshData link is back", {
+          this.#logger.info("fieldd.mesh_lane.redialed", "The MeshData link is up", {
             why,
             attempts: this.#redialAttempts,
           });
@@ -465,11 +476,11 @@ export class MeshLaneLink extends EventEmitter {
           this.#redialFailing = false;
         },
         (error: unknown) => {
-          if (this.#redialFailing) return;
+          if (this.#closed || this.#redialFailing) return;
           this.#redialFailing = true;
           this.#logger.warn(
             "fieldd.mesh_lane.redial_failed",
-            "The MeshData link could not be dialed again; it is retried on the back-off",
+            "The MeshData link could not be dialed; it is retried on the back-off",
             { why, error: String(error) },
           );
         },

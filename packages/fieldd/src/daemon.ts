@@ -317,7 +317,7 @@ import {
 import { MESH_BUS_CARRIES_CONTENT } from "./mesh-bus";
 import { MeshClient, meshNodeUp, type ServeSpec, type ServeState } from "./mesh-client";
 import { MeshLaneLink } from "./mesh-lane";
-import { NativeLink, RpcCallError } from "./native-link";
+import { NativeLink, RpcCallError, reconnectDelayMs } from "./native-link";
 import {
   type FloorCensus,
   type FloorOfRecord,
@@ -335,7 +335,7 @@ import { PluginKvStore } from "./plugin-storage";
 import type { PluginUpdateDeadlines } from "./plugin-update-coordinator";
 import { PluginUpdateManager } from "./plugin-update-manager";
 import { PluginUpdateTransport } from "./plugin-update-transport";
-import { PresenceRoomRouter, presenceRoomsOnceStarted } from "./presence-room";
+import { PresenceRoomRouter } from "./presence-room";
 import { ProcessService, spawnMcpStdio } from "./process-service";
 import { ProductApi } from "./product-api";
 import { ProfileDraftsStore } from "./profile-drafts";
@@ -1435,6 +1435,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
   }
   let diagnostics: DiagnosticsService | null = null;
   let pluginUpdatesForCleanup: PluginUpdateManager | null = null;
+  let laneLinkForCleanup: MeshLaneLink | null = null;
   /** Set once supersession has ALREADY been reported through `onFatal`, so the
    * boot rollback can report the window only it can see without calling the
    * spawner's fatal hook twice. */
@@ -1496,6 +1497,8 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // commit hook, so the hook reads a binding that is filled in below. It is
     // optional the whole way down — with the mesh off (the default) `docSync`
     // stays null and every commit takes the same path it always did.
+    // *Corrected 2026-11-07 (item 206's boot half, F8): the mesh being off does not leave `docSync` null. The floor's
+    // bridge binds with the mesh on or off, so doc sync starts; `docSync` is null after a START the floor answered no.*
     let docSync: DocSyncService | null = null;
     let toolPlane: ToolPlaneService | null = null;
     // CP-3 — the needs-you queue, bound with the tool plane below; its one timer (the re-attach's settle) stops with it
@@ -1561,6 +1564,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       // CP-1b, item 206 — the link dials itself again after a drop or a failed redial, on fieldd's one back-off
       redial: true,
     });
+    laneLinkForCleanup = laneLink;
     const laneIds = new OutboundLaneIdAllocator();
     const laneControl = {
       open: async (req: {
@@ -1641,7 +1645,9 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // `lane.open` already answers UNAVAILABLE with the mesh unit's real state.
     // *Corrected 2026-11-06 (item 206's boot half): the next start no longer
     // waits for a daemon restart — the lane link dials on the back-off, and these
-    // start on its first HELLO_OK (below).*
+    // start once it has said HELLO_OK and mgmt is up (below).*
+    // *Corrected 2026-11-07 (item 206's boot half, F8): "the byte socket usually is not there" was false. The floor's
+    // bridge binds it with the mesh on or off, so a healthy floor answers the first dial.*
     docSync = new DocSyncService({
       docs,
       control: laneControl,
@@ -1684,59 +1690,87 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       logger: logger.child({ component: "presence.room" }),
     });
     // Item 206's boot half (`meshdata-boot-redial` (a), James 2026-11-06 22:56Z; the plan's D-b1 (A), VF-PM 23:20Z) —
-    // both services are built above as before and STARTED on the lane link's first HELLO_OK: at once when the boot's
-    // dial succeeds, or later, when a dial on the back-off does (the mesh turned on, the floor's bridge back). Their
-    // start subscribes over mgmt; only their bytes ride the link. A START that fails with the link up is still terminal
-    // for the boot, as before: each failed service is stopped, so nothing half-started answers for it.
+    // both services are built above as before and STARTED once the link has said HELLO_OK and mgmt is up: at once when
+    // the boot's dial succeeds, or later, on whichever plane comes second. It can be mgmt: a respawned floor binds
+    // MeshData inside `start_all` and mgmt after it (`field-native/src/lib.rs`), and their start subscribes over mgmt;
+    // only their bytes ride the link.
+    // With both planes up, a START is terminal for the boot only when the floor answered no: a refusal that is not
+    // retryable, or a throw that is not an RPC's (VF-PM's G2 ruling, 2026-11-07). Anything else waits and runs again: a
+    // plane gone, the door refusing while the floor is held unresponsive, a full mesh queue, a request past its
+    // deadline. Each service's `start()` leaves it startable; `stop()` could not, since it lets go of the liveness the
+    // boot attached. A plane's return runs it again: the link's next `connected`, the supervisor's next `up`. With both
+    // up neither need come, because the heartbeat is not behind the mesh queue (H1, ruled (a)), so a retryable failure
+    // runs it again on fieldd's one back-off: one ask per 10 s at most, only after a failure. After a shutdown that
+    // timer stops at the gate.
     const sync = docSync;
     const rooms = presenceRooms;
+    const planesUp = (): boolean => laneLink.connected && native.connected;
     let lanesStarting = false;
+    let startFailures = 0;
+    // whether the start waits for something to run it again; when it does, it re-arms
+    const startWaits = (error?: unknown): boolean => {
+      if (planesUp() && !(error instanceof RpcCallError && error.retryable)) return false;
+      lanesStarting = false;
+      logger.info(
+        "fieldd.mesh_lane.start_waits",
+        "Doc sync and presence have not started; their start runs again",
+        error === undefined ? {} : { error: String(error) },
+      );
+      if (planesUp())
+        setTimeout(() => void startLanes(), reconnectDelayMs(startFailures++)).unref();
+      return true;
+    };
     const startLanes = async (): Promise<void> => {
-      if (lanesStarting) return;
+      if (lanesStarting || !planesUp()) return;
       lanesStarting = true;
       try {
         await sync.start();
-        logger.info("fieldd.doc_sync.started", "Cross-device document sync is live");
-        try {
-          await rooms.start();
-          logger.info("fieldd.presence.started", "Document-room presence routing is live");
-        } catch (error) {
-          presenceRooms = null;
-          void rooms.stop();
-          logger.info(
-            "fieldd.presence.unavailable",
-            "Document-room presence is not available on this boot",
-            { error: String(error) },
-          );
-        }
       } catch (error) {
+        if (startWaits(error)) return;
         docSync = null;
         presenceRooms = null;
         sync.stop();
-        void rooms.stop();
         laneLink.close();
         logger.info(
           "fieldd.doc_sync.unavailable",
           "Cross-device document sync is not available on this boot",
           { error: String(error) },
         );
+        return;
       }
+      // a shutdown or a plane going here: nothing is live yet, and presence does not start on a plane that has gone
+      if (startWaits()) return;
+      logger.info("fieldd.doc_sync.started", "Cross-device document sync is live");
+      try {
+        await rooms.start();
+      } catch (error) {
+        if (startWaits(error)) return;
+        presenceRooms = null;
+        logger.info(
+          "fieldd.presence.unavailable",
+          "Document-room presence is not available on this boot",
+          { error: String(error) },
+        );
+        return;
+      }
+      if (startWaits()) return;
+      logger.info("fieldd.presence.started", "Document-room presence routing is live");
     };
     try {
       await laneLink.connect();
     } catch (error) {
-      // D-b2 (A): with the mesh off the socket is absent, so the link dials on the back-off for the boot's life —
-      // one failed connect every 10 s at most, its warn said once per run (item 206's policy) — and a mesh turned on
-      // later needs no fieldd restart
+      // D-b2 (A): a floor that does not answer the first dial is dialed on the back-off for as long as it stays that
+      // way — one failed connect every 10 s at most, its warn said once per run (item 206's policy). A healthy floor
+      // binds MeshData with the mesh on or off, so this is a dropped accept, a failed bind or a dying floor.
       logger.info(
         "fieldd.mesh_lane.boot_dial_failed",
         "The MeshData lane link did not connect at boot; it is dialed again on the back-off",
         { error: String(error) },
       );
-      laneLink.once("connected", () => void startLanes());
       laneLink.dialLater();
     }
-    if (laneLink.connected) await startLanes();
+    laneLink.on("connected", () => void startLanes());
+    await startLanes();
     // CP-1b — the lane link redials. It was dialed once per boot, so after a floor restart (NativeLink's "connected")
     // or a dropped socket every lane's bytes went nowhere until fieldd restarted: doc sync's, and now the compose
     // plane's doors, whose bridges redial a restarted floor on their own (CP-1a). Item 206 — the link owns its redial
@@ -1744,9 +1778,14 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // so a dropped accept costs it one step and never the link; the floor coming back dials it at once. A link this
     // boot closed (doc sync's boot failure above, a shutdown) stays closed.
     // *Corrected 2026-11-06 (item 206's boot half; James ruled `meshdata-boot-redial` (a) at 22:56Z): a failed boot
-    // DIAL no longer closes the link — it is dialed again on the back-off, and doc sync and presence start on its
-    // first HELLO_OK. "Stays closed" now holds for a shutdown and for a START that failed with the link up.*
+    // DIAL no longer closes the link — it is dialed again on the back-off, and doc sync and presence start once it has
+    // said HELLO_OK and mgmt is up. "Stays closed" now holds for a shutdown and for a START the floor answered no.*
     native.on("connected", () => laneLink.dialNow());
+    // mgmt's half of the gate: `up` is mgmt paired and answering. It is said inside that "connected", or, for a floor
+    // held unresponsive, on its two clean pongs
+    supervisor.on("transition", (state: NativeLinkState) => {
+      if (state === "up") void startLanes();
+    });
     // P7 §5.3.1 — fetch/verify/install (user-initiated only; no phone-home)
     const installer = new RegistryInstallService({
       dataDir: config.dataDir,
@@ -5381,8 +5420,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     const docLane = new DocLane({
       dataPort: config.dataPort ?? 0,
       docs,
-      // item 206's boot half — the router may start after this lane is built: attach once it has
-      ...(presenceRooms === null ? {} : { rooms: presenceRoomsOnceStarted(presenceRooms) }),
+      ...(presenceRooms === null ? {} : { rooms: presenceRooms }),
       logger: logger.child({ component: "docs.lane" }),
     });
     const dataPort = await docLane.listen();
@@ -5491,6 +5529,8 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // C6-4 — per-doc sync standing. Registered even with sync unavailable
     // (mesh off, the default): the empty list is the honest snapshot then, and
     // the renderer reads it as "sync does not apply" rather than an error.
+    // *Corrected 2026-11-07 (item 206's boot half, F8): the mesh being off does not make sync unavailable. Doc sync
+    // starts either way, and its list is simply empty; unavailable is an unhealthy floor's boot.*
     api.registerSubscription("doc.sync.subscribe", (ctx, _params, emit) => {
       requireLocalDocumentCaller(ctx);
       if (docSync === null) return { snapshot: [], dispose: () => {} };
@@ -9111,6 +9151,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     diagnostics?.dispose();
     await pluginUpdatesForCleanup?.dispose();
     native.close(); // rollback: release the mgmt client slot
+    laneLinkForCleanup?.close(); // item 206's boot half — nor a link dialing on its back-off
     // AR-0 — no index daemon outlives a failed boot. It is started only after
     // `fieldd.lifecycle.ready`, so this never has a child to stop today; the
     // guard is stated so a later start-before-ready cannot leave an orphan.

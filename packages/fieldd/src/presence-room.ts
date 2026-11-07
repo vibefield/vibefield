@@ -74,19 +74,6 @@ interface Room {
  * identity-bound to a concrete Room/Lane record so a late close cannot erase a
  * successor generation.
  */
-/** Item 206's boot half — the handle an attach gets before the router has started. */
-const INERT_ROOM: DocumentPresenceRoomHandle = { publish: () => {}, close: () => {} };
-
-/** Item 206's boot half (`meshdata-boot-redial` (a), James 2026-11-06) — what a doc lane attaches to when the router
- * may not have started yet: the daemon builds it at boot and starts it on the lane link's first HELLO_OK, which may
- * come late. Before then an attach is an inert handle (nothing is published, nothing to close), and the doc gets its
- * room at its next open; after it, the router's own room. */
-export function presenceRoomsOnceStarted(router: PresenceRoomRouter): DocumentPresenceRooms {
-  return {
-    attach: (docId, sink) => (router.started ? router.attach(docId, sink) : INERT_ROOM),
-  };
-}
-
 export class PresenceRoomRouter implements DocumentPresenceRooms {
   readonly #control: PresenceLaneControl;
   readonly #bytes: PresenceLaneBytes;
@@ -100,6 +87,9 @@ export class PresenceRoomRouter implements DocumentPresenceRooms {
   readonly #inboundByLane = new Map<number, InboundLane>();
   #generation = 0;
   #started = false;
+  /** Item 206's boot half — the lane table has answered. A room exists only after this, so a start that fails leaves
+   * none behind: `attach` refuses until then, and the doc lane's catch opens the document without one. */
+  #ready = false;
 
   constructor(opts: PresenceRoomRouterOptions) {
     this.#control = opts.control;
@@ -114,19 +104,25 @@ export class PresenceRoomRouter implements DocumentPresenceRooms {
   async start(): Promise<void> {
     if (this.#started) return;
     this.#started = true;
-    const { lanes } = await this.#control.subscribe((payload, kind) => {
-      if (this.#started) this.#onLaneEvent(payload, kind);
-    });
+    let lanes: LaneInfo[] | undefined;
+    try {
+      ({ lanes } = await this.#control.subscribe((payload, kind) => {
+        if (this.#started) this.#onLaneEvent(payload, kind);
+      }));
+    } catch (error) {
+      // item 206's boot half — a start that failed leaves the router startable: the daemon runs it again when the
+      // floor is back
+      this.#started = false;
+      throw error;
+    }
+    // item 206's boot half — the daemon starts this late, so a stop() can land during the subscribe, and ends it
+    if (!this.#started) return;
     for (const lane of lanes ?? []) this.#claim(lane);
-  }
-
-  /** Item 206's boot half — whether `start()` has run (and `stop()` has not since). */
-  get started(): boolean {
-    return this.#started;
+    this.#ready = true;
   }
 
   attach(docId: string, sink: (payload: Uint8Array) => void): DocumentPresenceRoomHandle {
-    if (!this.#started) throw new Error("presence room router is not started");
+    if (!this.#ready) throw new Error("presence room router is not started");
     const previous = this.#rooms.get(docId);
     const room: Room = {
       docId,
@@ -161,6 +157,7 @@ export class PresenceRoomRouter implements DocumentPresenceRooms {
   async stop(): Promise<void> {
     if (!this.#started) return;
     this.#started = false;
+    this.#ready = false;
     await Promise.all([...this.#rooms.values()].map((room) => this.#closeRoom(room)));
     for (const lane of this.#inboundByLane.values()) this.#bytes.offLane(lane.laneId);
     this.#rooms.clear();
