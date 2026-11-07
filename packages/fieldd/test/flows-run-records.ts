@@ -1,4 +1,4 @@
-import { FLOW_LIMITS, type FlowJournalHead } from "@vibefield/contracts";
+import type { FlowJournalHead } from "@vibefield/contracts";
 import type { FlowJournalHeadEntry } from "../src/flows/journal";
 import type { FlowRecords, FlowRunStart } from "../src/flows/records";
 
@@ -12,7 +12,6 @@ export const RUN_START: FlowRunStart = {
   scope: [],
   state: "starting",
   calls: 0,
-  allowed: FLOW_LIMITS.CALLS_MAX,
   open: [],
   steps: [],
 };

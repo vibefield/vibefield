@@ -32,8 +32,7 @@ import { flowScriptOf, type SesShape, sesShapesOf } from "./module-script";
 //   and `in` where it sends to a session the run already has, and `cwd` where it names a folder plainly (CP-4a2b, Q2
 //   (a); never the folder itself). Where the script computes the agent, the model, the folder or the label, the call
 //   is "chosen as it runs" (`computed`); a template's label reads with "…" where its expressions stand.
-//   "In a loop" is the syntax's: a call in a helper that a loop calls is not marked, and the run's call cap
-//   (FLOW_LIMITS.CALLS_MAX) is what bounds a script that loops.
+//   "In a loop" is the syntax's: a call in a helper that a loop calls is not marked.
 // - Each `ask(…)` is listed with its question and choices where written plainly. CP-4a2b (slice 11a, Q6): a gate is
 //   held to ONE rule, the run's (gate-check.ts), wherever its script writes it plainly, so the read refuses what the
 //   run would at its call: a question in words, and one to NEEDS_CHOICES_MAX choices of the script's own (Stop the run

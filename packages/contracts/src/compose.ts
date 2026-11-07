@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { AgentProfileSetId, AgentProviderId } from "./agent-index";
 import { AgentModelSelection, AgentSessionOrigin, CrewId, SparkId } from "./agent-session";
-import { FLOW_LIMITS, SPARK_CREW_MEMBERS_MAX, SPARK_CREWS_KEPT } from "./registries";
+import { SPARK_CREW_MEMBERS_MAX, SPARK_CREWS_KEPT } from "./registries";
 
 // The compose plane, version 2 (track CO; `draft/compose-plane/v2/`, ruled by James on its page 2026-10-29
 // 09:42–09:57Z; the study's §15 and §16). A spark is an agent session VibeField starts in a folder of its own, under
@@ -828,14 +828,13 @@ export const NEEDS_OPEN_PER_SPARK = 8;
 
 /** The acts' words (DESIGN.md §9 "The person's queue's words"): one authority for fieldd, the window and tests. A
  * question's own choices come first and Not now is always last; a held item's yes is always first. CP-4a2b (13b.3's
- * C7; DESIGN.md §9 "When a run can't go on, or waits"): and a flow's seven, its items' acts. Stop the run is a run's
- * every item's last; the cap's Allow lets FLOW_LIMITS.CALLS_MORE more calls through, and says so. */
+ * C7; DESIGN.md §9 "When a run can't go on, or waits"): and a flow's six, its items' acts. Stop the run is a run's
+ * every item's last. */
 export const NEEDS_CHOICE_WORDS = {
   allow: "Allow",
   allowOneMore: "Allow one more",
   notNow: "Not now",
   stopRun: "Stop the run",
-  allowMore: `Allow ${FLOW_LIMITS.CALLS_MORE} more`,
   askOnceMore: "Ask once more",
   resumeStep: "Resume the step",
   seeChange: "See the change",
@@ -845,11 +844,10 @@ export const NEEDS_CHOICE_WORDS = {
 
 /** The kinds and states, OPEN on the wire like COMPOSE_SESSION_STATES: a word this build never heard of must not refuse
  * an item. `ended`: what it waited on ended before an answer (a held send's session), or an allowance's run ended.
- * CP-4 (step0-cp4.md §5.1; CP-D12, one queue) adds a flow run's six, each naming its run (`run`): a spark's proposal
+ * CP-4 (step0-cp4.md §5.1; CP-D12, one queue) adds a flow run's five, each naming its run (`run`): a spark's proposal
  * (`flow-proposal`, CP4-Q3 (a)), a script's `ask` (`flow-gate`, CP4-Q6 (a)), a flow changed since its approval or never
- * approved (`flow-changed`, CP4-Q5 (a)), a step's second answer out of its form (`flow-repair`, CP4-Q7 (a)), the call
- * cap (`flow-cap`, CP4-Q8 (a)) and a step lost to a Quit (`flow-lost`, CP4-Q11 (a)). Their acts' words are DESIGN.md
- * §9's when the window draws them (CP-4b). */
+ * approved (`flow-changed`, CP4-Q5 (a)), a step's second answer out of its form (`flow-repair`, CP4-Q7 (a)) and a step
+ * lost to a Quit (`flow-lost`, CP4-Q11 (a)). Their acts' words are DESIGN.md §9's when the window draws them (CP-4b). */
 export const NEEDS_ITEM_KINDS = [
   "question",
   "held-send",
@@ -859,7 +857,6 @@ export const NEEDS_ITEM_KINDS = [
   "flow-gate",
   "flow-changed",
   "flow-repair",
-  "flow-cap",
   "flow-lost",
 ] as const;
 export type NeedsItemKind = (typeof NEEDS_ITEM_KINDS)[number];
@@ -992,7 +989,9 @@ export const NeedsItem = z
     ask: z.string().min(1).max(32).optional(),
     tool: z.string().min(1).max(128).optional(),
     /** CP-4 — a flow's item: its run (absent while none has started: a proposal, a flow that changed before its run),
-     * and the step it holds at (`call`, counted from 1 in the run's journal, with the script's `label`) */
+     * and the step it holds at (`call`, counted from 1 in the run's journal, with the script's `label`).
+     * *Corrected 2026-11-07 (Q16, V6; ruled 2026-11-07):* the label is a step's, when the item holds at one; a gate's
+     * carries none. */
     run: NeedsRun.optional(),
     /** CP-4 — the bytes a proposal or a changed flow is about, for Read the script and See the change
      * (`flows.script` by hash): `hash` is the version the item would approve or run, `approved` the one approved */

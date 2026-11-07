@@ -17,7 +17,6 @@
     "mac": "aa829de05db4d9e970355cd60e543f06f2fb93e910ed42144f83bf1d51060445"
   },
   "calls": 41,
-  "allowed": 40,
   "log": "review round 3 of 3",
   "open": [
     {
@@ -25,7 +24,20 @@
       "label": "ship",
       "agent": "codex",
       "phase": "Ship",
-      "state": "holding"
+      "session": "run-5c3e8a1d",
+      "state": "holding",
+      "lines": [
+        {
+          "line": "prompt",
+          "n": 1,
+          "sent": "queued"
+        },
+        {
+          "line": "repair",
+          "n": 1,
+          "sent": "queued"
+        }
+      ]
     }
   ],
   "steps": [
@@ -70,7 +82,7 @@
   "earlier": 37,
   "held": {
     "item": "ny-0f2e4d6c8b0a1928",
-    "kind": "flow-cap"
+    "kind": "flow-repair"
   },
   "startedAt": "2026-11-05T02:51:10.000Z"
 }

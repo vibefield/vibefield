@@ -16,7 +16,7 @@ import { FLOW_LIMITS } from "./registries";
 // and its default export runs its steps through the flow API, `agent(prompt, opts)`, `ask(question, choices)` and
 // `log(text)`, with `phase(name, fn)` and plain JavaScript for its lanes and loops. fieldd runs only the bytes the
 // person approved (CP-D10), kept by their SHA-256 (CP4-Q18 (a)), in a child of its own (CP-D8; CP-4a2), and a run's
-// gates, its changed flow, its repair miss, its cap and its lost step wait in the person's one queue (compose.ts's
+// gates, its changed flow, its repair miss and its lost step wait in the person's one queue (compose.ts's
 // NEEDS_ITEM_KINDS, CP-D12). No budget and no money (James, 2026-11-02 13:08Z): `meta.budget` is not read, shown or
 // refused (CP4-S11), so FlowMeta has no field for it.
 //
@@ -290,7 +290,7 @@ export const FlowStarter = z
 export type FlowStarter = z.infer<typeof FlowStarter>;
 
 /** A run's state, OPEN: `running` (its script moves), `waiting` (on a step's agent), `holding` (on the person: a gate,
- * the cap, a repair miss, a changed flow, a lost step), `stopping` (CP-4a2b, 13a's D4: a Stop sent, its step agents not
+ * a repair miss, a changed flow, a lost step), `stopping` (CP-4a2b, 13a's D4: a Stop sent, its step agents not
  * yet heard ending), then `done`, `stopped` (by a Stop), `failed` (the script threw) or `lost` (its journal or its
  * record did not verify, set aside and never replayed; CP4-S15, 13a's D18).
  * *Corrected 2026-11-06 (CP-4a2b slice 11, UU2; `waiting` read so since step 1p, TT1):* `waiting` and `holding` are a
@@ -356,7 +356,7 @@ export function flowStepCutOf(step: FlowRunStep): boolean {
 }
 
 /** A run as `flows.list` and `flows.subscribe` carry it. `n` counts the flow's runs on this desktop, from 1; `hash` is
- * the version it runs; `calls` the calls it has made (the cap's count); `steps` the latest FLOW_RUN_STEPS_MAX agent
+ * the version it runs; `calls` the calls it has made; `steps` the latest FLOW_RUN_STEPS_MAX agent
  * calls and `earlier` how many came before them; `log` its latest `log` line; `ended` the step agents its end or Stop
  * ended (CP4-Q10 (a): "Ended its 5 agents"). No spend (James, 2026-11-02 13:08Z). */
 export const RunSummary = z
@@ -420,8 +420,7 @@ export type FlowRunRecordStep = z.infer<typeof FlowRunRecordStep>;
 
 /** A run's record: `open` holds every step not yet answered (to the host's own ceiling, HOST_CALLS_WAITING_MAX: a
  * 257th ends the host `flood`), `steps` the latest answered or ended (FLOW_RUN_STEPS_MAX), and `earlier` the answered
- * steps before them. `calls` counts the journaled call lines toward the cap and `allowed` is where the cap holds next
- * (CALLS_MAX, and CALLS_MORE per Allow; D10, J7); `held` names the item a held run waits in; `host` is
+ * steps before them. `calls` counts the journaled call lines (D10); `held` names the item a held run waits in; `host` is
  * FLOW_HOST_ENDINGS' word when fieldd ended its host. CP-4a2b (the slices 7–9 review's F4, ruled
  * 2026-11-06; LL1's words, 2026-11-06): `agents`, the agents its steps started, counted until the run's end, whatever
  * becomes of them, against FLOW_LIMITS.RUN_AGENTS_MAX. The record keeps it because `steps` folds the oldest into
@@ -443,7 +442,6 @@ export const FlowRunRecord = z
       .object({ seq: z.number().int().positive(), mac: z.string().regex(/^[0-9a-f]{64}$/) })
       .passthrough(),
     calls: z.number().int().min(0), // journaled call lines (D10)
-    allowed: z.number().int().positive(), // CALLS_MAX + 20 per Allow
     log: z.string().min(1).max(FLOW_LOG_MAX).optional(),
     open: z.array(FlowRunRecordStep).max(FLOW_LIMITS.HOST_CALLS_WAITING_MAX), // every step not yet answered
     steps: z.array(FlowRunRecordStep).max(FLOW_RUN_STEPS_MAX), // the latest answered or ended steps

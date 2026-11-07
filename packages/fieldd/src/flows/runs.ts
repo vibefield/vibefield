@@ -131,7 +131,7 @@ import * as words from "./words";
 //   tells nothing, nor your answer to it), and when it ends, once its `end` line is kept: done, failed or set aside.
 //   A fact is built from the spark's name, ‹flow› and the run's id alone. A spark `sparkOf` no longer finds is told
 //   nothing, and a Run you start in a spark's thread is yours, and tells it nothing (T3b).
-// Built later in M-r2: the cap (12), Stop (13) and boot (14): its wake, a session read by its origin once the runtime
+// Built later in M-r2: Stop (13) and boot (14): its wake, a session read by its origin once the runtime
 // has re-attached, and a step lost to a Quit (`flow-lost`, Resume the step).
 
 /** A spark as a run's start reads it at its act (G2): its name, and its Agent Profiles now. */
@@ -149,7 +149,7 @@ export interface FlowRunPorts {
   /** the needs queue's changed-flow item (N5) */
   readonly needs: {
     flowChanged(raise: FlowChangedRaise): NeedsItemId;
-    /** a run's own item (slice 6's `flowItem`): a repair miss, a gate, the cap, a lost step; its id, and whether the
+    /** a run's own item (slice 6's `flowItem`): a repair miss, a gate, a lost step; its id, and whether the
      * raise minted it (slice 11a's seam, Q5: a hold wakes the run's spark only for an item minted) */
     flowItem(raise: FlowItemRaise): FlowItemRaised;
   };
@@ -484,7 +484,6 @@ function startOf(record: FlowRunRecord): FlowRunStart {
     scope: record.scope,
     state: record.state,
     calls: record.calls,
-    allowed: record.allowed,
     open: record.open,
     steps: record.steps,
     ...(record.log !== undefined ? { log: record.log } : {}),
@@ -795,7 +794,7 @@ export class FlowRuns {
           // F6 (slices 7–9 review): the folder its input names, found above, held on its head for its steps
           ...(folder !== undefined ? { folder } : {}),
         },
-        { scope, state: "running", calls: 0, allowed: FLOW_LIMITS.CALLS_MAX, open: [], steps: [] },
+        { scope, state: "running", calls: 0, open: [], steps: [] },
       );
     } catch (error) {
       // V2 (1b review): a record kept before the failure (its head refused) reads as never begun in this life too
@@ -1210,8 +1209,8 @@ export class FlowRuns {
     });
   }
 
-  /** Q3 (b), Q8 — THE ONE RAISE ROAD: a run held on you, for every kind of hold (a gate, a step's second miss; the cap
-   * and a lost step are slices 12 and 14's). In order:
+  /** Q3 (b), Q8 — THE ONE RAISE ROAD: a run held on you, for every kind of hold (a gate, a step's second miss; a lost
+   * step is slice 14's). In order:
    * 1. its item, raised by the needs queue (`flowItem`), named from the run's head as its LiveRun keeps it (MED-1), so
    *    nothing is read before it. The queue answers whether this raise MINTED it: a call already held, made again at a
    *    wake, is re-bound to its item, never minted again (D2, Q5);
@@ -1656,7 +1655,7 @@ export class FlowRuns {
    * A step holds while its record says `holding`, or while the run's holds keep its repair (MED-2, Q8's second F-a
    * half): a repair whose hold write failed after its item was minted is still `repairing` on its record, and its Ask
    * once more acts on it, releasing it as any other. An answer handed on again, its step holding neither way, was acted
-   * on, and is answered as done. The cap and a lost step are slices 12 and 14's; Stop the run is 13's. */
+   * on, and is answered as done. A lost step is slice 14's; Stop the run is 13's. */
   async #answered(answer: FlowItemAnswer): Promise<FlowItemActed> {
     if (answer.stop || (answer.kind !== "flow-repair" && answer.kind !== "flow-gate"))
       throw new Error(`CP-4a2b: a run's ${answer.stop ? "Stop" : answer.kind} is a later slice's`);

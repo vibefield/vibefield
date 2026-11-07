@@ -81,7 +81,8 @@ import * as words from "./words";
 //   flow item carries no `acting` mark and is never uncertain, and its answer, once they acted, stands whatever the
 //   disk does (`#stand`, slice 11a's Q2 rider). A run's end ends its items. Nothing is owed a spark here: the runs tell
 //   the run's spark by their own wakes, for an item a raise MINTED (`FlowItemRaised`). No spark's watermark counts a
-//   flow item (its teller is the flow); a run's calls are bounded by its cap (D10).
+//   flow item (its teller is the flow); a run's items each hold a call that waits, so HOST_CALLS_WAITING_MAX bounds
+//   them per run (V9).
 
 const NOTIFY_WINDOW_MS = 60_000;
 /** The answered items remembered for an answer that comes again (the record of each is the audit line). */
@@ -154,17 +155,16 @@ export interface NeedsAnswered {
   readonly woke?: string;
 }
 
-/** CP-4a2b (§13a slice 6) — a flow run's items, each holding its run: a script's `ask` (`flow-gate`), the call cap
- * (`flow-cap`), a step's second miss (`flow-repair`) and a step lost to a Quit, or a run set aside (`flow-lost`). */
-export type FlowRunItemKind = Extract<
-  NeedsItemKind,
-  "flow-gate" | "flow-cap" | "flow-repair" | "flow-lost"
->;
+/** CP-4a2b (§13a slice 6) — a flow run's items, each holding its run: a script's `ask` (`flow-gate`), a step's second
+ * miss (`flow-repair`) and a step lost to a Quit, or a run set aside (`flow-lost`). */
+export type FlowRunItemKind = Extract<NeedsItemKind, "flow-gate" | "flow-repair" | "flow-lost">;
 
 /** A flow run's item as the runs raise it (13a's D2, D22). */
 export interface FlowItemRaise {
   readonly kind: FlowRunItemKind;
-  /** the run, and the call it holds at (counted from 1 in the run's journal) with the script's label */
+  /** the run, and the call it holds at (counted from 1 in the run's journal) with the script's label.
+   * *Corrected 2026-11-07 (Q16, V6; ruled 2026-11-07):* the label is a step's, when the item holds at one; a gate's
+   * carries none. */
   readonly run: NeedsFlowRun;
   /** the flow as its mark names it (‹flow›: the runs choose the words, DESIGN.md §9, R18) */
   readonly name: string;
@@ -852,7 +852,6 @@ export class NeedsQueue implements TalkHolds {
           ? { outcome: "done", owed: words.spawnNotNowFact(spark, SPARK_LIVE_AGENTS_MAX) }
           : this.#allowSpawn(record, choice, at);
       case "flow-gate":
-      case "flow-cap":
       case "flow-repair":
       case "flow-lost":
         return this.#flowAct(record, kind, choice);

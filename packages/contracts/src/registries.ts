@@ -571,9 +571,6 @@ export const AGENT_STOP = {
  *    (`flows.script`, CP4-S10). A library file past it is listed `too-big` and never read (CP4-Q18 (a));
  *  - RESULT_MAX_BYTES: a step's answer, its agent's last final message, kept whole up to here and marked `cut` past it
  *    (CP4-Q17 (a) as re-ruled, CP4-S2);
- *  - CALLS_MAX: the calls a run makes before it holds and asks the person (CP4-Q8 (a), part 2): the 41st holds the run
- *    (`flow-cap`), and each Allow lets CALLS_MORE more through. With no budget (James, 2026-11-02 13:08Z), this is a
- *    looping script's one bound;
  *  - LIVE_STEPS_MAX: a run's step agents alive at once; one more waits for a slot, visibly (CP4-S7). They do not count
  *    against a spark's 8 (fieldd's `SPARK_LIVE_AGENTS_MAX`, `talk/verbs.ts`), and they bound how many PTYs one
  *    `parallel` can take. *Corrected 2026-11-06 (the slices 7–9 review's F4; ruled 2026-11-06): it counts a run's steps
@@ -606,12 +603,12 @@ export const AGENT_STOP = {
  *    says in its life (bth's review P1, ruled 11:46Z). A script that yields each turn answers its pings, so the ping
  *    never bounds it: past either, fieldd ends the host as `flood` (FLOW_HOST_ENDINGS). Both are a flow's own
  *    ceilings (bth's re-read N2, 13:22Z). A `parallel` is `Promise.all`, which sends every call before any answer
- *    or hold reaches it, so a fan-out of more than 256 at once ends `flood` at its 257th call, before CALLS_MAX's
- *    hold (CP-4a2b's) could ask at the 41st; and a run that logs once an item ends `flood` at its 10,001st line.
- *    Whether a held run refuses its calls fast, or DESIGN.md says the ceiling, is CP-4a2b's. *Ruled 2026-11-05
- *    16:24Z (N2 re-ruled, J3 = Q-A3 = 13a's D1): neither refuses fast. A held run's host is parked at the cap's hold,
- *    so a call past it is never heard, and it is made again after an Allow; DESIGN.md §9 says both ceilings ("When a
- *    run can't go on, or waits").*
+ *    or hold reaches it, so a fan-out of more than 256 at once ends `flood` at its 257th call; and a run that logs
+ *    once an item ends `flood` at its 10,001st line. Whether a held run refuses its calls fast, or DESIGN.md says the
+ *    ceiling, is CP-4a2b's. *Ruled 2026-11-05 (N2 re-ruled, J3 = Q-A3 = 13a's D1): neither refuses fast.
+ *    DESIGN.md §9 says both ceilings ("When a run can't go on, or waits").* *Corrected 2026-11-07 (ruling
+ *    C): there is no call cap, and N2's park at its hold went with it. No row here bounds a script that loops one
+ *    call at a time: a Stop ends it.*
  * CP-4a2b (13a's D3 and D12, Q-A7; J4 (a); each as provisional):
  *  - RUNS_LIVE_MAX, RUNS_PER_SPARK_MAX: the runs alive on one desktop at once, and a spark's own share of them. One
  *    more is refused at its start, in DESIGN.md §9's words, and nothing is started;
@@ -643,8 +640,6 @@ export const AGENT_STOP = {
 export const FLOW_LIMITS = {
   SCRIPT_MAX_BYTES: 64 * 1024,
   RESULT_MAX_BYTES: 64 * 1024,
-  CALLS_MAX: 40,
-  CALLS_MORE: 20,
   LIVE_STEPS_MAX: 8,
   HOST_HEAP_MB: 128,
   HOST_RSS_MB: 512,

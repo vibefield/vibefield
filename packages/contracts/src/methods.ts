@@ -3440,8 +3440,8 @@ export const METHODS: MethodDef[] = [
   // CP-4 (step0-cp4.md §5.1; flows.ts) — the window's doors to flows and their runs: the library against fieldd's
   // signed approvals, a run started and stopped as the person, and a script's text (CP4-S10). `agents.manage` and
   // `local` (VF-PM, 2026-11-05 01:22Z), as the window's agent doors are: no phone or peer reaches a run, and main reads
-  // the list for the quit box with its own client. A run's gates, a proposal, a changed flow, a repair miss, the cap
-  // and a lost step are needs-you items answered through needs.answer (CP-D12), never a door here. Declared in
+  // the list for the quit box with its own client. A run's gates, a proposal, a changed flow, a repair miss and a lost
+  // step are needs-you items answered through needs.answer (CP-D12), never a door here. Declared in
   // CP-4a1; registered in CP-4a2b, in fieldd's `flows/doors.ts` (Q-B8 (a)).
   defineMethod({
     surface: "product",

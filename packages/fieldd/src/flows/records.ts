@@ -116,10 +116,7 @@ export const RUN_RECORDS_DIR = "run-records";
 
 /** CP-4a2b (D18) — what the runs choose of a run's record. The store adds the rest: the run's own facts from its
  * head, the head's MAC and the journal's last synced line. A run's start passes it whole, with no default. */
-export type FlowRunStart = Pick<
-  FlowRunRecord,
-  "scope" | "state" | "calls" | "allowed" | "open" | "steps"
-> &
+export type FlowRunStart = Pick<FlowRunRecord, "scope" | "state" | "calls" | "open" | "steps"> &
   Partial<
     Pick<FlowRunRecord, "log" | "earlier" | "held" | "host" | "endedAt" | "ended" | "agents">
   >;
