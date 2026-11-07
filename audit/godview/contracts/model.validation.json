@@ -1,0 +1,23 @@
+{
+  "schema": "PASS Draft202012 check_schema",
+  "examples": "PASS null branch/absent branch accepted; fourth status/null model rejected; schema-only terminal blocked accepted (semantic constraint separate)",
+  "stableIds": "PASS no duplicate IDs",
+  "evidence": "PASS file existence/ranges",
+  "evidenceReferencesChecked": 1614,
+  "definitionReferences": "PASS all local defs resolve",
+  "repositories": {
+    "vibefield": {
+      "head": "433505fd0f224f4cda540d642661b13848c0ef82",
+      "workingTreeClean": true
+    },
+    "puppeteer": {
+      "head": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "workingTreeClean": true
+    }
+  },
+  "limitations": "No live adapter/provider sessions or UI renders executed by this slice; lexical evidence existence is not a proof of semantic correctness of every prose inference.",
+  "sha256": {
+    "model.schema.json": "b916788b60dfc3c5637641cb7f4f296b17e0bf1c391aba8cb83a563e21e7c274",
+    "model.md": "b7ce5ae9db6c50e3012f5ad84c0dd6fa735362b7536732756620672d292f2bb0"
+  }
+}

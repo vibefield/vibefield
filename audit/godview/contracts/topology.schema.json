@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "audit/godview/contracts/topology.schema.json",
+  "title": "GodviewAuditTopology",
+  "description": "Light inventory at the frozen pins. Not a field catalog and not a model.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "pins",
+    "notTheAuditPin",
+    "depth",
+    "adapters",
+    "views",
+    "states",
+    "chromeCandidates"
+  ],
+  "properties": {
+    "pins": { "$ref": "provenance.schema.json#/$defs/pins" },
+    "notTheAuditPin": { "type": "object" },
+    "depth": { "const": "light" },
+    "adapters": { "type": "array", "minItems": 10 },
+    "notAdapters": { "type": "array" },
+    "views": { "type": "array", "minItems": 5 },
+    "viewRegistry": { "type": "object" },
+    "states": { "type": "object" },
+    "chromeCandidates": { "type": "array" },
+    "fieldInventory": { "const": "not-copied" },
+    "auditBaseline": { "type": "object" },
+    "notShippedPackage": { "type": "object" },
+    "modelSlice": { "type": "string" },
+    "hostOverlay": { "type": "object" },
+    "catalog": { "type": "object" },
+    "hostFold": { "type": "object" }
+  }
+}

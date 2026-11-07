@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "audit/godview/contracts/ids.schema.json",
+  "title": "GodviewAuditIds",
+  "description": "Pointers and patterns aligned to the model slice. This file is not a second state or field catalog.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["pins", "modelSlice", "patterns", "doNotMint", "adapters", "views", "halves"],
+  "properties": {
+    "pins": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["vibefield", "puppeteer"],
+      "properties": {
+        "vibefield": { "const": "433505fd0f224f4cda540d642661b13848c0ef82" },
+        "puppeteer": { "const": "748d015a7e393112e0a91dad80111fdf5abe6583" }
+      }
+    },
+    "modelSlice": { "const": "49fc12da0fadc34e25c227fa2f03dcce2e09dbaa" },
+    "patterns": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state", "field", "view", "adapter"],
+      "properties": {
+        "state": { "const": "^state\\.[a-z][a-z0-9_]*$" },
+        "field": { "const": "^field\\.[A-Za-z][A-Za-z0-9]*(\\.[A-Za-z][A-Za-z0-9]*)*$" },
+        "view": { "const": "^view\\.[a-z][a-z0-9-]*$" },
+        "adapter": { "const": "^adapter\\.[a-z][a-z0-9-]*$" }
+      }
+    },
+    "doNotMint": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "adapters": {
+      "type": "array",
+      "minItems": 10,
+      "items": { "$ref": "#/$defs/adapter" }
+    },
+    "views": {
+      "type": "array",
+      "minItems": 5,
+      "maxItems": 5,
+      "items": { "$ref": "#/$defs/view" }
+    },
+    "halves": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["rule", "GV-AUDIT3", "GV-AUDIT4"],
+      "properties": {
+        "rule": { "type": "string", "minLength": 20 },
+        "GV-AUDIT3": { "type": "array", "items": { "type": "string" } },
+        "GV-AUDIT4": { "type": "array", "items": { "type": "string" } }
+      }
+    }
+  },
+  "$defs": {
+    "adapter": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "suffix", "package", "owner"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^adapter\\.[a-z][a-z0-9-]*$" },
+        "suffix": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+        "package": { "type": "string", "minLength": 8 },
+        "owner": { "enum": ["GV-AUDIT3", "GV-AUDIT4"] }
+      }
+    },
+    "view": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "manifestId", "label", "source"],
+      "properties": {
+        "id": {
+          "enum": ["view.list", "view.rain", "view.swarm", "view.spend", "view.timeline"]
+        },
+        "manifestId": { "type": "string" },
+        "label": { "type": "string", "minLength": 2 },
+        "source": { "type": "string", "minLength": 8 }
+      }
+    }
+  }
+}

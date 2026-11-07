@@ -1,0 +1,332 @@
+{
+  "recordId": "prov.opencode.wait.count",
+  "pins": {
+    "vibefield": "433505fd0f224f4cda540d642661b13848c0ef82",
+    "puppeteer": "748d015a7e393112e0a91dad80111fdf5abe6583"
+  },
+  "adapterId": "adapter.opencode",
+  "fieldId": "field.wait.count",
+  "sources": [
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/adapter-opencode/src/normalization/monitor-capabilities.ts",
+      "lineStart": 12,
+      "lineEnd": 22,
+      "symbol": "status"
+    },
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/adapter-opencode/src/normalization/pipeline.ts",
+      "lineStart": 1,
+      "lineEnd": 37,
+      "symbol": "OpenCode"
+    },
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/adapter-opencode/src/normalization/monitor.ts",
+      "lineStart": 590,
+      "lineEnd": 676,
+      "symbol": "activityKind"
+    },
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/adapter-opencode/src/normalization/monitor.ts",
+      "lineStart": 704,
+      "lineEnd": 725,
+      "symbol": "permission:"
+    },
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/adapter-opencode/src/normalization/monitor.ts",
+      "lineStart": 743,
+      "lineEnd": 762,
+      "symbol": "question:"
+    },
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/adapter-opencode/src/normalization/turn.ts",
+      "lineStart": 1,
+      "lineEnd": 21,
+      "symbol": "turn:failed"
+    }
+  ],
+  "producer": {
+    "kind": "adapter",
+    "name": "wait.count",
+    "ingestedFrom": "pipeline"
+  },
+  "transforms": [
+    {
+      "order": 0,
+      "name": "pipeline",
+      "effect": "SSE and REST records become session, turn, tool, reasoning, message, and interaction events.",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/adapter-opencode/src/normalization/pipeline.ts",
+        "lineStart": 1,
+        "lineEnd": 37,
+        "symbol": "OpenCode"
+      }
+    },
+    {
+      "order": 1,
+      "name": "recordBatch",
+      "effect": "Session and message records also write semantic status activity. [post-0.3.3]",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/adapter-opencode/src/normalization/monitor.ts",
+        "lineStart": 590,
+        "lineEnd": 676,
+        "symbol": "activityKind"
+      }
+    },
+    {
+      "order": 2,
+      "name": "permission",
+      "effect": "Permission requests are semantic status interactions. [post-0.3.3]",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/adapter-opencode/src/normalization/monitor.ts",
+        "lineStart": 704,
+        "lineEnd": 725,
+        "symbol": "permission:"
+      }
+    },
+    {
+      "order": 3,
+      "name": "question",
+      "effect": "Question requests are semantic status interactions. [post-0.3.3]",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/adapter-opencode/src/normalization/monitor.ts",
+        "lineStart": 743,
+        "lineEnd": 762,
+        "symbol": "question:"
+      }
+    },
+    {
+      "order": 4,
+      "name": "turn:failed",
+      "effect": "A failed turn becomes turn:failed.",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/adapter-opencode/src/normalization/turn.ts",
+        "lineStart": 1,
+        "lineEnd": 21,
+        "symbol": "turn:failed"
+      }
+    },
+    {
+      "order": 5,
+      "name": "translateAgentEventEnvelope",
+      "effect": "Maps the AgentEvent into monitor family updates. [post-0.3.3]",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/core/src/monitor/reduce.ts",
+        "lineStart": 817,
+        "lineEnd": 1148,
+        "symbol": "translateAgentEventEnvelope"
+      }
+    },
+    {
+      "order": 6,
+      "name": "acceptAgentEvent",
+      "effect": "Admits the runtime-plane input. session:exited and process:exited do not clear liveness without host process evidence. [post-0.3.3]",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/runtime/src/services/monitor-service.ts",
+        "lineStart": 227,
+        "lineEnd": 269,
+        "symbol": "acceptAgentEvent"
+      }
+    },
+    {
+      "order": 7,
+      "name": "acceptSemantic",
+      "effect": "Parses the adapter batch and stores it on the semantic plane. [post-0.3.3]",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/runtime/src/services/monitor-service.ts",
+        "lineStart": 256,
+        "lineEnd": 269,
+        "symbol": "acceptSemantic"
+      }
+    },
+    {
+      "order": 8,
+      "name": "selectClaims",
+      "effect": "Keeps one current claim per family key across the runtime and semantic planes. [post-0.3.3]",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/core/src/monitor/selection.ts",
+        "lineStart": 130,
+        "lineEnd": 141,
+        "symbol": "selectClaims"
+      }
+    },
+    {
+      "order": 9,
+      "name": "projectAgentMonitorState",
+      "effect": "Projects AgentMonitorState from the transition basis, context, model, effort, reply, and usage. [post-0.3.3]",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/core/src/monitor/project.ts",
+        "lineStart": 325,
+        "lineEnd": 449,
+        "symbol": "projectAgentMonitorState"
+      }
+    },
+    {
+      "order": 10,
+      "name": "deriveAgentRow",
+      "effect": "Copies the projected runtime state onto the host row, applying host defaults.",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/monitor/src/backend/derive.ts",
+        "lineStart": 240,
+        "lineEnd": 286,
+        "symbol": "deriveAgentRow"
+      }
+    },
+    {
+      "order": 11,
+      "name": "projectBlockers",
+      "effect": "Pending interactions and active failures become blockers, failure before question before permission. [post-0.3.3]",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/core/src/monitor/transitions.ts",
+        "lineStart": 93,
+        "lineEnd": 170,
+        "symbol": "projectBlockers"
+      }
+    },
+    {
+      "order": 12,
+      "name": "createMonitorBackend",
+      "effect": "fieldd hosts the monitor backend on the runtime source and passes the current-epoch cost reading.",
+      "source": {
+        "repo": "vibefield",
+        "sha": "433505fd0f224f4cda540d642661b13848c0ef82",
+        "path": "packages/fieldd/src/agent-monitor.ts",
+        "lineStart": 461,
+        "lineEnd": 493,
+        "symbol": "createMonitorBackend"
+      }
+    },
+    {
+      "order": 13,
+      "name": "wireMonitorRow",
+      "effect": "The model wire drops device.self. This desktop's window otherwise reads the row whole.",
+      "source": {
+        "repo": "vibefield",
+        "sha": "433505fd0f224f4cda540d642661b13848c0ef82",
+        "path": "packages/fieldd/src/agent-field.ts",
+        "lineStart": 586,
+        "lineEnd": 596,
+        "symbol": "wireMonitorRow"
+      }
+    },
+    {
+      "order": 14,
+      "name": "peerMonitorRow",
+      "effect": "A peer loses project.seq and has detail, activity line, wait text, and reply text bounded.",
+      "source": {
+        "repo": "vibefield",
+        "sha": "433505fd0f224f4cda540d642661b13848c0ef82",
+        "path": "packages/fieldd/src/agent-field.ts",
+        "lineStart": 664,
+        "lineEnd": 700,
+        "symbol": "peerMonitorRow"
+      }
+    },
+    {
+      "order": 15,
+      "name": "modelRowFrom",
+      "effect": "The reader restores device.self and fills a missing writable from attachable.",
+      "source": {
+        "repo": "vibefield",
+        "sha": "433505fd0f224f4cda540d642661b13848c0ef82",
+        "path": "packages/field-app/src/godview/monitor/model-board.ts",
+        "lineStart": 112,
+        "lineEnd": 123,
+        "symbol": "modelRowFrom"
+      }
+    },
+    {
+      "order": 16,
+      "name": "window-rows",
+      "effect": "No display rewrite for this field. The row is spread through, aside from peer stale and peer profileSet.",
+      "source": {
+        "repo": "vibefield",
+        "sha": "433505fd0f224f4cda540d642661b13848c0ef82",
+        "path": "packages/field-app/src/godview/monitor/window-rows.ts",
+        "lineStart": 67,
+        "lineEnd": 139,
+        "symbol": "createWindowRows"
+      }
+    }
+  ],
+  "merge": {
+    "strategy": "fold",
+    "defaults": []
+  },
+  "transport": {
+    "channel": "model-port",
+    "name": "agent.subscribe projection model scope mesh",
+    "contract": "MonitorAgentRow"
+  },
+  "renderer": {
+    "viewIds": [],
+    "component": "none-proven",
+    "symbol": "none-proven"
+  },
+  "applicability": {
+    "states": [
+      "state.blocked",
+      "state.blocked_permission",
+      "state.blocked_question",
+      "state.blocked_failure",
+      "state.wait_multiple",
+      "state.working_with_blockers"
+    ],
+    "views": "all-monitor-views",
+    "notes": "Views listed are confirmed consumers. An unlisted view is unknown, not a proof it ignores the field. No builtin consumer was proven for this field."
+  },
+  "absence": {
+    "onMissing": "omit-field",
+    "onStale": "keep-and-mark-stale",
+    "zeroPolicy": "unknown-unsupported-and-absent-are-not-zero"
+  },
+  "observation": {
+    "presence": "present",
+    "synthetic": false
+  },
+  "classification": {
+    "modelSupported": "yes",
+    "adapterEmittable": "yes",
+    "uiReachable": "unknown"
+  },
+  "verification": {
+    "status": "source-read",
+    "owner": "GV-AUDIT4",
+    "notes": "Declared status=supported. The workspace SSE stream and durable REST reconciliation cover the root and known child sessions. A disconnected SSE rail degrades observation; it never proves that the attached TUI process exited. Audit pin is puppeteer 748d015, newer than the 0.3.3 package vibefield ships (tag v0.3.3, commit 52d09c8e). This record does not compare 0.3.3 behavior. A transform effect ending in [post-0.3.3] cites a puppeteer file whose text differs from 52d09c8e."
+  }
+}

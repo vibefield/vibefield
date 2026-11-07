@@ -1,0 +1,300 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "audit/godview/contracts/provenance.schema.json",
+  "title": "GodviewProvenanceRecord",
+  "description": "One adapter-by-field envelope. Unknown, unsupported, and absent are presence words. They are never the number 0, false, or an empty string.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "recordId",
+    "pins",
+    "adapterId",
+    "fieldId",
+    "sources",
+    "producer",
+    "transforms",
+    "merge",
+    "transport",
+    "renderer",
+    "applicability",
+    "absence",
+    "observation",
+    "classification",
+    "verification"
+  ],
+  "properties": {
+    "recordId": {
+      "type": "string",
+      "pattern": "^prov\\.[a-z][a-z0-9-]*(\\.[A-Za-z][A-Za-z0-9]*)+$"
+    },
+    "pins": { "$ref": "#/$defs/pins" },
+    "adapterId": { "$ref": "#/$defs/adapterId" },
+    "fieldId": { "$ref": "#/$defs/fieldId" },
+    "sources": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/source" }
+    },
+    "producer": { "$ref": "#/$defs/producer" },
+    "transforms": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/transform" }
+    },
+    "merge": { "$ref": "#/$defs/merge" },
+    "transport": { "$ref": "#/$defs/transport" },
+    "renderer": { "$ref": "#/$defs/renderer" },
+    "applicability": { "$ref": "#/$defs/applicability" },
+    "absence": { "$ref": "#/$defs/absence" },
+    "observation": { "$ref": "#/$defs/observation" },
+    "classification": { "$ref": "#/$defs/classification" },
+    "verification": { "$ref": "#/$defs/verification" }
+  },
+  "$defs": {
+    "sha": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "adapterId": { "type": "string", "pattern": "^adapter\\.[a-z][a-z0-9-]*$" },
+    "fieldId": {
+      "type": "string",
+      "pattern": "^field\\.[A-Za-z][A-Za-z0-9]*(\\.[A-Za-z][A-Za-z0-9]*)*$"
+    },
+    "stateId": { "type": "string", "pattern": "^state\\.[a-z][a-z0-9_]*$" },
+    "viewId": {
+      "enum": ["view.swarm", "view.list", "view.rain", "view.timeline", "view.spend"]
+    },
+    "presence": {
+      "enum": ["present", "absent", "unsupported", "unknown", "stale"]
+    },
+    "auditRole": {
+      "enum": ["GV-AUDIT1", "GV-AUDIT2", "GV-AUDIT3", "GV-AUDIT4", "GV-AUDIT05", "GV-AUDIT6"]
+    },
+    "pins": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["vibefield", "puppeteer"],
+      "properties": {
+        "vibefield": { "const": "433505fd0f224f4cda540d642661b13848c0ef82" },
+        "puppeteer": { "const": "748d015a7e393112e0a91dad80111fdf5abe6583" }
+      }
+    },
+    "source": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["repo", "sha", "path", "lineStart", "lineEnd", "symbol"],
+          "properties": {
+            "repo": { "enum": ["vibefield", "puppeteer"] },
+            "sha": { "$ref": "#/$defs/sha" },
+            "path": { "type": "string", "minLength": 3 },
+            "lineStart": { "type": "integer", "minimum": 1 },
+            "lineEnd": { "type": "integer", "minimum": 1 },
+            "symbol": { "type": "string", "minLength": 1 }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["repo", "name", "path", "symbol", "unavailable", "reason"],
+          "properties": {
+            "repo": { "const": "external" },
+            "name": { "type": "string", "minLength": 2 },
+            "path": { "type": "string", "minLength": 1 },
+            "symbol": { "type": "string", "minLength": 1 },
+            "unavailable": { "const": true },
+            "reason": { "type": "string", "minLength": 12 }
+          }
+        }
+      ]
+    },
+    "producer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "name", "ingestedFrom"],
+      "properties": {
+        "kind": {
+          "enum": ["adapter", "core-reducer", "fieldd-fold", "contract", "renderer", "unknown"]
+        },
+        "name": { "type": "string", "minLength": 1 },
+        "ingestedFrom": { "type": "string", "minLength": 1 }
+      }
+    },
+    "transform": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["order", "name", "effect", "source"],
+      "properties": {
+        "order": { "type": "integer", "minimum": 0 },
+        "name": { "type": "string", "minLength": 1 },
+        "effect": { "type": "string", "minLength": 1 },
+        "source": { "$ref": "#/$defs/source" }
+      }
+    },
+    "merge": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["strategy", "defaults"],
+      "properties": {
+        "strategy": {
+          "enum": ["none", "replace", "structural-share", "fold", "defaulted", "unknown"]
+        },
+        "defaults": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/defaultValue" }
+        }
+      }
+    },
+    "defaultValue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["when", "presence", "source"],
+      "properties": {
+        "when": { "type": "string", "minLength": 1 },
+        "presence": { "$ref": "#/$defs/presence" },
+        "literal": {},
+        "zeroIsObserved": { "type": "boolean" },
+        "source": { "$ref": "#/$defs/source" }
+      },
+      "allOf": [{ "$ref": "#/$defs/noSentinelLiteral" }]
+    },
+    "transport": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["channel", "name"],
+      "properties": {
+        "channel": {
+          "enum": [
+            "in-process",
+            "json-rpc",
+            "ticketed-socket",
+            "model-port",
+            "replica",
+            "react-props",
+            "unknown"
+          ]
+        },
+        "name": { "type": "string", "minLength": 1 },
+        "contract": { "type": "string", "minLength": 1 }
+      }
+    },
+    "renderer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["viewIds", "component", "symbol"],
+      "properties": {
+        "viewIds": { "type": "array", "items": { "$ref": "#/$defs/viewId" } },
+        "component": { "type": "string", "minLength": 1 },
+        "symbol": { "type": "string", "minLength": 1 }
+      }
+    },
+    "applicability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["states", "views"],
+      "properties": {
+        "states": {
+          "oneOf": [
+            { "const": "model-axes" },
+            {
+              "type": "array",
+              "minItems": 1,
+              "items": { "$ref": "#/$defs/stateId" }
+            }
+          ]
+        },
+        "views": {
+          "oneOf": [
+            { "const": "all-monitor-views" },
+            {
+              "type": "array",
+              "minItems": 1,
+              "items": { "$ref": "#/$defs/viewId" }
+            }
+          ]
+        },
+        "notes": { "type": "string" }
+      }
+    },
+    "absence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["onMissing", "onStale", "zeroPolicy"],
+      "properties": {
+        "onMissing": {
+          "enum": ["record-absent", "record-unknown", "record-unsupported", "omit-field"]
+        },
+        "onStale": { "enum": ["keep-and-mark-stale", "drop", "unknown"] },
+        "zeroPolicy": { "const": "unknown-unsupported-and-absent-are-not-zero" }
+      }
+    },
+    "observation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["presence", "synthetic"],
+      "properties": {
+        "presence": { "$ref": "#/$defs/presence" },
+        "literal": {},
+        "zeroIsObserved": { "type": "boolean" },
+        "synthetic": { "type": "boolean" },
+        "syntheticLabel": { "type": "string", "minLength": 12 }
+      },
+      "allOf": [
+        { "$ref": "#/$defs/noSentinelLiteral" },
+        {
+          "if": {
+            "type": "object",
+            "required": ["synthetic"],
+            "properties": { "synthetic": { "const": true } }
+          },
+          "then": { "required": ["syntheticLabel"] }
+        }
+      ]
+    },
+    "noSentinelLiteral": {
+      "allOf": [
+        {
+          "if": {
+            "type": "object",
+            "required": ["presence"],
+            "properties": { "presence": { "enum": ["absent", "unsupported", "unknown"] } }
+          },
+          "then": { "not": { "required": ["literal"] } }
+        },
+        {
+          "if": {
+            "type": "object",
+            "required": ["literal"],
+            "properties": { "literal": { "const": 0 } }
+          },
+          "then": {
+            "required": ["presence", "zeroIsObserved"],
+            "properties": {
+              "presence": { "const": "present" },
+              "zeroIsObserved": { "const": true }
+            }
+          }
+        }
+      ]
+    },
+    "classification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["modelSupported", "adapterEmittable", "uiReachable"],
+      "properties": {
+        "modelSupported": { "enum": ["yes", "no", "unknown"] },
+        "adapterEmittable": { "enum": ["yes", "no", "unknown"] },
+        "uiReachable": { "enum": ["yes", "no", "unknown"] }
+      }
+    },
+    "verification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "owner"],
+      "properties": {
+        "status": {
+          "enum": ["unverified", "source-read", "fixture-rendered", "contradicted"]
+        },
+        "owner": { "$ref": "#/$defs/auditRole" },
+        "notes": { "type": "string" }
+      }
+    }
+  }
+}

@@ -1,0 +1,131 @@
+{
+  "pins": {
+    "vibefield": "433505fd0f224f4cda540d642661b13848c0ef82",
+    "puppeteer": "748d015a7e393112e0a91dad80111fdf5abe6583"
+  },
+  "modelSlice": "49fc12da0fadc34e25c227fa2f03dcce2e09dbaa",
+  "patterns": {
+    "state": "^state\\.[a-z][a-z0-9_]*$",
+    "field": "^field\\.[A-Za-z][A-Za-z0-9]*(\\.[A-Za-z][A-Za-z0-9]*)*$",
+    "view": "^view\\.[a-z][a-z0-9-]*$",
+    "adapter": "^adapter\\.[a-z][a-z0-9-]*$"
+  },
+  "doNotMint": [
+    "state.unknown",
+    "feed.no-door",
+    "feed.connecting",
+    "feed.live",
+    "feed.unavailable"
+  ],
+  "adapters": [
+    {
+      "id": "adapter.acp",
+      "suffix": "acp",
+      "package": "packages/adapter-acp",
+      "owner": "GV-AUDIT3"
+    },
+    {
+      "id": "adapter.antigravity",
+      "suffix": "antigravity",
+      "package": "packages/adapter-antigravity",
+      "owner": "GV-AUDIT3"
+    },
+    {
+      "id": "adapter.claude",
+      "suffix": "claude",
+      "package": "packages/adapter-claude",
+      "owner": "GV-AUDIT3"
+    },
+    {
+      "id": "adapter.codex",
+      "suffix": "codex",
+      "package": "packages/adapter-codex",
+      "owner": "GV-AUDIT3"
+    },
+    {
+      "id": "adapter.copilot",
+      "suffix": "copilot",
+      "package": "packages/adapter-copilot",
+      "owner": "GV-AUDIT3"
+    },
+    {
+      "id": "adapter.grok",
+      "suffix": "grok",
+      "package": "packages/adapter-grok",
+      "owner": "GV-AUDIT4"
+    },
+    {
+      "id": "adapter.hermes",
+      "suffix": "hermes",
+      "package": "packages/adapter-hermes",
+      "owner": "GV-AUDIT4"
+    },
+    {
+      "id": "adapter.kimi",
+      "suffix": "kimi",
+      "package": "packages/adapter-kimi",
+      "owner": "GV-AUDIT4"
+    },
+    {
+      "id": "adapter.opencode",
+      "suffix": "opencode",
+      "package": "packages/adapter-opencode",
+      "owner": "GV-AUDIT4"
+    },
+    {
+      "id": "adapter.pi",
+      "suffix": "pi",
+      "package": "packages/adapter-pi",
+      "owner": "GV-AUDIT4"
+    }
+  ],
+  "views": [
+    {
+      "id": "view.list",
+      "manifestId": "list",
+      "label": "LIST",
+      "source": "packages/views/src/views/list/index.ts"
+    },
+    {
+      "id": "view.rain",
+      "manifestId": "rain",
+      "label": "RAIN",
+      "source": "packages/views/src/views/rain/index.ts"
+    },
+    {
+      "id": "view.swarm",
+      "manifestId": "swarm",
+      "label": "SWARM",
+      "source": "packages/views/src/views/swarm/index.ts"
+    },
+    {
+      "id": "view.spend",
+      "manifestId": "spend",
+      "label": "SPEND",
+      "source": "packages/views/src/views/spend/index.ts"
+    },
+    {
+      "id": "view.timeline",
+      "manifestId": "timeline",
+      "label": "TIMELINE",
+      "source": "packages/views/src/views/timeline/index.ts"
+    }
+  ],
+  "halves": {
+    "rule": "Sort adapter suffixes by UTF-8 bytes. GV-AUDIT3 owns the first ceil(n/2). GV-AUDIT4 owns the rest. At this pin n=10.",
+    "GV-AUDIT3": [
+      "adapter.acp",
+      "adapter.antigravity",
+      "adapter.claude",
+      "adapter.codex",
+      "adapter.copilot"
+    ],
+    "GV-AUDIT4": [
+      "adapter.grok",
+      "adapter.hermes",
+      "adapter.kimi",
+      "adapter.opencode",
+      "adapter.pi"
+    ]
+  }
+}

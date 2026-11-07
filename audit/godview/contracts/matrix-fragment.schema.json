@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "audit/godview/contracts/matrix-fragment.schema.json",
+  "title": "GodviewMatrixFragment",
+  "description": "One role's additions and status updates. The filename stem is the owner id.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["owner", "rows", "updates"],
+  "properties": {
+    "owner": {
+      "enum": ["GV-AUDIT2", "GV-AUDIT3", "GV-AUDIT4", "GV-AUDIT05", "GV-AUDIT6"]
+    },
+    "rows": {
+      "type": "array",
+      "items": { "$ref": "matrix.schema.json#/$defs/row" }
+    },
+    "updates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "status"],
+        "properties": {
+          "id": { "type": "string", "minLength": 3 },
+          "status": { "enum": ["pending", "in-progress", "satisfied", "waived"] },
+          "evidence": { "type": "array", "items": { "type": "string" } },
+          "notes": { "type": "string" }
+        }
+      }
+    }
+  }
+}

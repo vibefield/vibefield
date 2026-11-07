@@ -1,0 +1,148 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "audit/godview/contracts/manifest.schema.json",
+  "title": "GodviewAuditManifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "audit",
+    "slice",
+    "foundationBranch",
+    "auditBaseline",
+    "notShippedPackage",
+    "packageComparison",
+    "modelSlice",
+    "pins",
+    "notTheAuditPin",
+    "canonicalModel",
+    "canonicalModelOwner",
+    "canonicalModelStatus",
+    "canonicalTraces",
+    "roles"
+  ],
+  "properties": {
+    "audit": { "const": "godview" },
+    "slice": { "const": "GV-AUDIT1" },
+    "foundationBranch": { "const": "cursor/godview-audit-foundation-a7cd" },
+    "auditBaseline": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["decision", "label", "puppeteer", "vibefield"],
+      "properties": {
+        "decision": { "const": "single-baseline" },
+        "label": { "type": "string", "minLength": 20 },
+        "puppeteer": { "const": "748d015a7e393112e0a91dad80111fdf5abe6583" },
+        "vibefield": { "const": "433505fd0f224f4cda540d642661b13848c0ef82" }
+      }
+    },
+    "notShippedPackage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "warning",
+        "shippedVersion",
+        "shippedTag",
+        "shippedTagCommit",
+        "equivalentToAuditPin"
+      ],
+      "properties": {
+        "warning": { "type": "string", "minLength": 40 },
+        "shippedVersion": { "const": "0.3.3" },
+        "shippedTag": { "const": "v0.3.3" },
+        "shippedTagCommit": { "const": "52d09c8e84951b9a355a6700eac2dfc1290a9fa0" },
+        "equivalentToAuditPin": { "const": false }
+      }
+    },
+    "packageComparison": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["role", "owner", "commit", "path", "thisSliceVerified", "teammateSummary"],
+      "properties": {
+        "role": { "const": "context-not-a-second-audit" },
+        "owner": { "const": "GV-AUDIT2" },
+        "commit": { "const": "d53a0fa24ca7341fe5858329c9399eac6baf6b53" },
+        "path": { "const": "audit/godview/validation/package-pin-check.md" },
+        "thisSliceVerified": { "const": false },
+        "teammateSummary": { "type": "string", "minLength": 40 }
+      }
+    },
+    "modelSlice": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["owner", "branch", "commit", "base", "paths", "cherryPickedHere", "integrator"],
+      "properties": {
+        "owner": { "const": "GV-AUDIT2" },
+        "branch": { "const": "audit/godview-model" },
+        "commit": { "const": "49fc12da0fadc34e25c227fa2f03dcce2e09dbaa" },
+        "base": { "const": "433505fd0f224f4cda540d642661b13848c0ef82" },
+        "paths": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 3,
+          "items": { "type": "string" }
+        },
+        "cherryPickedHere": { "const": false },
+        "integrator": { "const": "GV-AUDIT6" }
+      }
+    },
+    "pins": { "$ref": "#/$defs/pins" },
+    "notTheAuditPin": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["siblingsLockSha", "npmRelease", "note"],
+      "properties": {
+        "siblingsLockSha": { "const": "52d09c8e84951b9a355a6700eac2dfc1290a9fa0" },
+        "npmRelease": { "const": "0.3.3" },
+        "note": { "type": "string", "minLength": 20 }
+      }
+    },
+    "canonicalModel": { "const": "audit/godview/contracts/model.schema.json" },
+    "canonicalModelOwner": { "const": "GV-AUDIT2" },
+    "canonicalModelStatus": { "const": "on-model-slice-not-this-branch" },
+    "canonicalTraces": {
+      "const": "audit/godview/evidence/<adapterSuffix>/<fieldPath>.json"
+    },
+    "roles": {
+      "type": "array",
+      "minItems": 6,
+      "maxItems": 6,
+      "items": { "$ref": "#/$defs/role" }
+    }
+  },
+  "$defs": {
+    "sha": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "pins": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["vibefield", "puppeteer"],
+      "properties": {
+        "vibefield": { "$ref": "#/$defs/pin" },
+        "puppeteer": { "$ref": "#/$defs/pin" }
+      }
+    },
+    "pin": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "branch", "sha", "committedAt", "subject", "access"],
+      "properties": {
+        "repository": { "type": "string", "minLength": 8 },
+        "branch": { "const": "main" },
+        "sha": { "$ref": "#/$defs/sha" },
+        "committedAt": { "type": "string", "minLength": 20 },
+        "subject": { "type": "string", "minLength": 8 },
+        "access": { "type": "string", "minLength": 8 }
+      }
+    },
+    "role": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "owns"],
+      "properties": {
+        "id": {
+          "enum": ["GV-AUDIT1", "GV-AUDIT2", "GV-AUDIT3", "GV-AUDIT4", "GV-AUDIT05", "GV-AUDIT6"]
+        },
+        "owns": { "type": "string", "minLength": 8 }
+      }
+    }
+  }
+}
