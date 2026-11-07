@@ -1,5 +1,6 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
+import { EXERCISES } from "../rendering/matrix.mjs";
 import { AUDIT_PINS, AUDIT_TARGET_LABEL, PROVENANCE_STAGES } from "./contract.mjs";
 import {
   costSemantics,
@@ -112,6 +113,14 @@ function overlayFor(field, fallback) {
   };
 }
 
+/** A timeline_span alias counts only when its exercise calls stateAt at or after lane.sinceMs. */
+export function spanAliasProved(cell) {
+  if (cell?.stateId !== "state.timeline_span" || cell?.disposition !== "covered-by") return null;
+  const fn = EXERCISES[cell.exercise];
+  const src = typeof fn === "function" ? Function.prototype.toString.call(fn) : "";
+  return /stateAt\s*\(/.test(src) && /sinceMs/.test(src) && />=/.test(src);
+}
+
 function paintFor(matrixCell, render) {
   if (!matrixCell) {
     return {
@@ -143,18 +152,22 @@ function paintFor(matrixCell, render) {
     };
   }
   if (matrixCell.disposition === "covered-by") {
+    const spanUnverified = spanAliasProved(matrixCell) === false;
     return {
       disposition: "covered-by",
       mounted: false,
       meaningfulOutput: false,
       selectedFixtureRendered: false,
-      exercisedEquivalent: true,
+      exercisedEquivalent: !spanUnverified,
+      aliasProved: !spanUnverified,
       screenshotCoverageComplete: false,
       fallbackOnly: false,
       evidence: matrixCell.evidence ?? "",
       fixtureId: matrixCell.fixtureId ?? null,
       screenshotPath: null,
-      note: `Exercised equivalent of ${matrixCell.fixtureId ?? "another fixture"} on the same view. This is not a dedicated render of ${matrixCell.stateId} and it does not add body coverage. ${matrixCell.evidence ?? ""}`,
+      note: spanUnverified
+        ? `Unverified alias. ${matrixCell.fixtureId ?? "the fixture"} exercise ${matrixCell.exercise ?? "unknown"} checks no history and never invokes stateAt(t >= lane.sinceMs), so it does not establish state.timeline_span. Not counted as proved. A real exercise or a downgrade is incoming. ${matrixCell.evidence ?? ""}`
+        : `Exercised equivalent of ${matrixCell.fixtureId ?? "another fixture"} on the same view. This is not a dedicated render of ${matrixCell.stateId} and it does not add body coverage. ${matrixCell.evidence ?? ""}`,
     };
   }
   if (matrixCell.disposition === "coverage-gap") {

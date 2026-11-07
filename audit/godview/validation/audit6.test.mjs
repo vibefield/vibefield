@@ -6,7 +6,7 @@ import test from "node:test";
 import { renderFlowSvg } from "../flows/render.mjs";
 import { renderShell } from "../web/markup.mjs";
 import { createAuditServer } from "../web/serve.mjs";
-import { buildCell } from "./cell.mjs";
+import { buildCell, spanAliasProved } from "./cell.mjs";
 import { AUDIT_PINS, REQUIRED_COUNTS } from "./contract.mjs";
 import { readField } from "./coverage.mjs";
 import { loadAudit } from "./load.mjs";
@@ -88,6 +88,8 @@ test("pinned source inventory matches the model contract counts", () => {
   assert.equal(index.rendering.countsMatch, true);
   assert.equal(index.rendering.bodyRendered, 247);
   assert.equal(index.rendering.coveredBy, 23);
+  assert.equal(index.rendering.provedCoveredBy, 22);
+  assert.deepEqual(index.rendering.unverifiedSpanAliases, ["view.timeline:state.timeline_span"]);
   assert.equal(index.rendering.coverageGap, 0);
   assert.equal(index.rendering.ordinaryGapsAreNotComplete, true);
   assert.equal(index.rendering.counts.rendered, 247);
@@ -536,6 +538,27 @@ test("swarm fallback is a mount, not painted coverage", () => {
       fieldId: "field.status",
     },
   });
+  const span = buildCell({
+    model: audit.model,
+    traces: audit.traces,
+    renders: audit.renders,
+    fallback: audit.overlay,
+    renderIndex: audit.renderIndex,
+    selection: {
+      stateId: "state.timeline_span",
+      viewId: "view.timeline",
+      adapterId: "adapter.claude",
+      fieldId: "field.status",
+    },
+  });
+  assert.equal(span.paint.disposition, "covered-by");
+  assert.equal(span.paint.aliasProved, false);
+  assert.equal(span.paint.fixtureId, "fix.timeline.working");
+  assert.match(span.paint.note, /stateAt\(t >= lane\.sinceMs\)/);
+  const spanCell = audit.renderIndex.cells.find(
+    (item) => item.stateId === "state.timeline_span" && item.viewId === "view.timeline",
+  );
+  assert.equal(spanAliasProved(spanCell), false);
   assert.equal(rainBlock.paint.disposition, "rendered");
   assert.equal(rainBlock.paint.meaningfulOutput, true);
   assert.equal(listActivity.paint.fallbackOnly, false);

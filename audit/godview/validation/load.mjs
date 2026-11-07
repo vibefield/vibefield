@@ -3,6 +3,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative, sep } from "node:path";
 import { matrixSummary, matrix as renderMatrix } from "../rendering/matrix.mjs";
 import { boundaryNotice } from "./boundary.mjs";
+import { spanAliasProved } from "./cell.mjs";
 import {
   AUDIT_PINS,
   AUDIT_TARGET_LABEL,
@@ -197,6 +198,11 @@ function loadRenderIndex(root) {
     coverageGap: counts["coverage-gap"],
     bodyRendered: counts.rendered,
     bodyCoverageIncludesCoveredBy: false,
+    unverifiedSpanAliases: cells
+      .filter((cell) => spanAliasProved(cell) === false)
+      .map((cell) => `${cell.viewId}:${cell.stateId}`),
+    provedCoveredBy:
+      counts["covered-by"] - cells.filter((cell) => spanAliasProved(cell) === false).length,
     swarmBodyPaint: "not-painted",
     swarmCause: "under-investigation",
     diagnostic: "audit/godview/rendering/webgpu-diagnostic.json",
@@ -530,6 +536,8 @@ function publicIndex({
           coverageGap: renderIndex.coverageGap,
           bodyRendered: renderIndex.bodyRendered,
           bodyCoverageIncludesCoveredBy: false,
+          provedCoveredBy: renderIndex.provedCoveredBy,
+          unverifiedSpanAliases: renderIndex.unverifiedSpanAliases,
           swarmBodyPaint: renderIndex.swarmBodyPaint,
           swarmCause: renderIndex.swarmCause,
           renderSliceCommit: renderIndex.renderSliceCommit,
