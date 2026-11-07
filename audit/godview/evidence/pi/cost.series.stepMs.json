@@ -26,6 +26,22 @@
     {
       "repo": "puppeteer",
       "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/runtime/src/services/usage-pricing.ts",
+      "lineStart": 19,
+      "lineEnd": 78,
+      "symbol": "priceUsage"
+    },
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/core/src/monitor/cost.ts",
+      "lineStart": 21,
+      "lineEnd": 41,
+      "symbol": "buildUsageCostLedger"
+    },
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
       "path": "packages/views/src/views/spend/spend-series.ts",
       "lineStart": 102,
       "lineEnd": 150,
@@ -79,6 +95,32 @@
     },
     {
       "order": 3,
+      "name": "priceUsageUpdates",
+      "effect": "accept() prices usage upserts before reduceMonitorAccumulator. priceUsage keeps a reported nonnegative costUsd, including zero. Otherwise it requires this upsert's own pricing metadata and the exact catalog key providerId/modelId. These adapters set neither, so no costUsd is written and the row model is not used as a substitute. [post-0.3.3]",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/runtime/src/services/monitor-service.ts",
+        "lineStart": 418,
+        "lineEnd": 425,
+        "symbol": "priceUsageUpdates"
+      }
+    },
+    {
+      "order": 4,
+      "name": "reduceMonitorAccumulator",
+      "effect": "Stores the updates after pricing. A missing costUsd stays missing. [post-0.3.3]",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/core/src/monitor/reduce.ts",
+        "lineStart": 672,
+        "lineEnd": 686,
+        "symbol": "reduceMonitorAccumulator"
+      }
+    },
+    {
+      "order": 5,
       "name": "selectClaims",
       "effect": "Keeps one current claim per family key across the runtime and semantic planes. [post-0.3.3]",
       "source": {
@@ -91,9 +133,9 @@
       }
     },
     {
-      "order": 4,
+      "order": 6,
       "name": "projectAgentMonitorState",
-      "effect": "Projects AgentMonitorState from the transition basis, context, model, effort, reply, and usage. [post-0.3.3]",
+      "effect": "Projects AgentMonitorState. Usage cost is folded here, before the backend builds the row. [post-0.3.3]",
       "source": {
         "repo": "puppeteer",
         "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
@@ -104,35 +146,35 @@
       }
     },
     {
-      "order": 5,
-      "name": "deriveAgentRow",
-      "effect": "Copies the projected runtime state onto the host row, applying host defaults.",
-      "source": {
-        "repo": "puppeteer",
-        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
-        "path": "packages/monitor/src/backend/derive.ts",
-        "lineStart": 240,
-        "lineEnd": 286,
-        "symbol": "deriveAgentRow"
-      }
-    },
-    {
-      "order": 6,
-      "name": "buildUsageCostLedger",
-      "effect": "Only a finite non-negative costUsd adds to the priced total. Token-only claims are skipped. [post-0.3.3]",
-      "source": {
-        "repo": "puppeteer",
-        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
-        "path": "packages/core/src/monitor/cost.ts",
-        "lineStart": 21,
-        "lineEnd": 41,
-        "symbol": "buildUsageCostLedger"
-      }
-    },
-    {
       "order": 7,
+      "name": "queryUsageIndex",
+      "effect": "The projection folds selected usage through buildUsageCostLedger. Only a finite nonnegative costUsd is priced. Token counts without it add no USD total. [post-0.3.3]",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/core/src/monitor/project.ts",
+        "lineStart": 347,
+        "lineEnd": 351,
+        "symbol": "queryUsageIndex"
+      }
+    },
+    {
+      "order": 8,
+      "name": "ledger.observe",
+      "effect": "The backend copies that projected usage into the row ledger before it derives the row.",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/monitor/src/backend/backend.ts",
+        "lineStart": 404,
+        "lineEnd": 435,
+        "symbol": "ledger.observe"
+      }
+    },
+    {
+      "order": 9,
       "name": "costOf",
-      "effect": "The row cost object is omitted when the ledger has no priced total.",
+      "effect": "A ledger history with no priced total returns no cost object. That is state.cost_missing. It is not a present field.cost with coverage unavailable.",
       "source": {
         "repo": "puppeteer",
         "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
@@ -143,7 +185,20 @@
       }
     },
     {
-      "order": 8,
+      "order": 10,
+      "name": "deriveAgentRow",
+      "effect": "The row is derived with the cost input from costOf. Here that input is absent.",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/monitor/src/backend/derive.ts",
+        "lineStart": 240,
+        "lineEnd": 286,
+        "symbol": "deriveAgentRow"
+      }
+    },
+    {
+      "order": 11,
       "name": "createMonitorBackend",
       "effect": "fieldd hosts the monitor backend on the runtime source and passes the current-epoch cost reading.",
       "source": {
@@ -156,7 +211,7 @@
       }
     },
     {
-      "order": 9,
+      "order": 12,
       "name": "wireMonitorRow",
       "effect": "The model wire drops device.self. This desktop's window otherwise reads the row whole.",
       "source": {
@@ -169,7 +224,7 @@
       }
     },
     {
-      "order": 10,
+      "order": 13,
       "name": "peerMonitorRow",
       "effect": "A peer loses project.seq and has detail, activity line, wait text, and reply text bounded.",
       "source": {
@@ -182,7 +237,7 @@
       }
     },
     {
-      "order": 11,
+      "order": 14,
       "name": "modelRowFrom",
       "effect": "The reader restores device.self and fills a missing writable from attachable.",
       "source": {
@@ -195,7 +250,7 @@
       }
     },
     {
-      "order": 12,
+      "order": 15,
       "name": "window-rows",
       "effect": "No display rewrite for this field. The row is spread through, aside from peer stale and peer profileSet.",
       "source": {
@@ -264,6 +319,6 @@
   "verification": {
     "status": "source-read",
     "owner": "GV-AUDIT4",
-    "notes": "Declared usage=unsupported. Session JSONL usage is excluded. No independent live usage rail is integrated. Shared path: audit/godview/contracts/cost-burn-trace.md at 25c215a2a53f363e1076210b3f6fce2155dfdc0b on audit/godview-model. Token counts without costUsd normally end in state.cost_missing, not state.cost_unavailable. The backend omits field.cost when no priced total exists. priceUsage (packages/runtime/src/services/usage-pricing.ts:19-36, 69-78) prices an upsert only from its own pricing metadata or an existing costUsd, and only looks up catalog key providerId/modelId. USAGE_PRICES (packages/runtime/src/services/usage-prices.ts:39) has 60 keys, providers anthropic and openai only. None of grok, hermes, opencode, kimi, or pi set pricing or costUsd, so the catalog is never consulted for their tokens. Grok and OpenCode are canonical, so ingress still calls priceUsage and records an unavailable estimate with no costUsd, which counts as unpriced and still yields no row total. Hermes samples are noncanonical and are not selected for pricing. Kimi writes journal usage as context, not a usage upsert. Pi emits no live usage. Priced burn flames are reachable only for claude and codex. state.cost_missing and state.burn_unpriced can occur here. state.cost_complete, state.cost_partial, state.cost_unavailable, and state.burn_flames_0 through state.burn_flames_4 cannot from these producers. Audit pin is puppeteer 748d015, newer than the 0.3.3 package vibefield ships (tag v0.3.3, commit 52d09c8e). This record does not compare 0.3.3 behavior. A transform effect ending in [post-0.3.3] cites a puppeteer file whose text differs from 52d09c8e."
+    "notes": "Declared usage=unsupported. Session JSONL usage is excluded. No independent live usage rail is integrated. Shared path: audit/godview/contracts/cost-burn-trace.md at 25c215a2a53f363e1076210b3f6fce2155dfdc0b on audit/godview-model. Token counts without costUsd normally end in state.cost_missing, not state.cost_unavailable. The backend omits field.cost when no priced total exists. priceUsage (packages/runtime/src/services/usage-pricing.ts:19-36, 69-78) prices an upsert only from its own pricing metadata or an existing costUsd, and only looks up catalog key providerId/modelId. USAGE_PRICES (packages/runtime/src/services/usage-prices.ts:39) has 60 keys, providers anthropic and openai only. None of grok, hermes, opencode, kimi, or pi set pricing or costUsd, so the catalog is never consulted for their tokens. Grok and OpenCode are canonical, so ingress still calls priceUsage and records an unavailable estimate with no costUsd, which counts as unpriced and still yields no row total. Hermes samples are noncanonical and are not selected for pricing. Kimi writes journal usage as context, not a usage upsert. Pi emits no live usage. Priced burn flames are reachable only for claude and codex. Settled: state.cost_missing and state.burn_unpriced can occur. state.cost_complete, state.cost_partial, state.cost_unavailable, and state.burn_flames_0 through state.burn_flames_4 cannot. state.cost_unavailable is not emitted for these producers. Audit pin is puppeteer 748d015, newer than the 0.3.3 package vibefield ships (tag v0.3.3, commit 52d09c8e). This record does not compare 0.3.3 behavior. A transform effect ending in [post-0.3.3] cites a puppeteer file whose text differs from 52d09c8e."
   }
 }

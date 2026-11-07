@@ -1,0 +1,139 @@
+{
+  "flowId": "flow.kimi.cost",
+  "pins": {
+    "vibefield": "433505fd0f224f4cda540d642661b13848c0ef82",
+    "puppeteer": "748d015a7e393112e0a91dad80111fdf5abe6583"
+  },
+  "subject": {
+    "adapterId": "adapter.kimi",
+    "fieldId": "field.cost"
+  },
+  "nodes": [
+    {
+      "id": "adapter",
+      "layer": "adapter",
+      "label": "adapter.kimi usage claim, or no live usage",
+      "provenanceRecordId": "prov.kimi.cost"
+    },
+    {
+      "id": "ingestion",
+      "layer": "ingestion",
+      "label": "acceptSemantic validates the batch and attaches the run",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/runtime/src/services/monitor-service.ts",
+        "lineStart": 256,
+        "lineEnd": 269,
+        "symbol": "acceptSemantic"
+      }
+    },
+    {
+      "id": "pricing",
+      "layer": "core-reducer",
+      "label": "priceUsageUpdates then priceUsage, before reduce",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/runtime/src/services/usage-pricing.ts",
+        "lineStart": 19,
+        "lineEnd": 78,
+        "symbol": "priceUsage"
+      }
+    },
+    {
+      "id": "reduce",
+      "layer": "core-reducer",
+      "label": "reduceMonitorAccumulator stores the priced updates",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/core/src/monitor/reduce.ts",
+        "lineStart": 672,
+        "lineEnd": 686,
+        "symbol": "reduceMonitorAccumulator"
+      }
+    },
+    {
+      "id": "project",
+      "layer": "core-reducer",
+      "label": "projectAgentMonitorState folds usage through buildUsageCostLedger",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/core/src/monitor/project.ts",
+        "lineStart": 347,
+        "lineEnd": 351,
+        "symbol": "queryUsageIndex"
+      }
+    },
+    {
+      "id": "ledger",
+      "layer": "core-reducer",
+      "label": "ledger.observe then costOf omits field.cost when no priced total",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/monitor/src/backend/backend.ts",
+        "lineStart": 189,
+        "lineEnd": 207,
+        "symbol": "costOf"
+      }
+    },
+    {
+      "id": "row",
+      "layer": "fieldd",
+      "label": "deriveAgentRow receives that absent cost",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/monitor/src/backend/derive.ts",
+        "lineStart": 240,
+        "lineEnd": 286,
+        "symbol": "deriveAgentRow"
+      }
+    },
+    {
+      "id": "missing",
+      "layer": "absence",
+      "label": "state.cost_missing, not state.cost_unavailable"
+    }
+  ],
+  "edges": [
+    {
+      "from": "adapter",
+      "to": "ingestion",
+      "kind": "ingest"
+    },
+    {
+      "from": "ingestion",
+      "to": "pricing",
+      "kind": "transform"
+    },
+    {
+      "from": "pricing",
+      "to": "reduce",
+      "kind": "transform"
+    },
+    {
+      "from": "reduce",
+      "to": "project",
+      "kind": "transform"
+    },
+    {
+      "from": "project",
+      "to": "ledger",
+      "kind": "transform"
+    },
+    {
+      "from": "ledger",
+      "to": "row",
+      "kind": "merge"
+    },
+    {
+      "from": "row",
+      "to": "missing",
+      "kind": "absence"
+    }
+  ]
+}
