@@ -15,6 +15,11 @@
   /// which answers until both lists are heard and then sleeps, so both are carried as a sleeping desktop's are), an
   /// answer as `-vf-needs-answer=<done|failed|unheard|refused|held>` says (done by default; held never returns), the
   /// home's catalog from the contracts' own copy. The stills press an act with `-vf-needs-press=<item>:<choice>`.
+  /// IOS-12f — New spark's reads answer the contracts' own copies (`agent-providers.valid`, `agent-models.valid` for
+  /// the agent it reads, under any profile, and the meters' `agents-profile-sets.meters`, so the sheet and the meters
+  /// read one home). A hatch comes out as `-vf-hatch-answer=<made|taken|no-sign-in>` says (made by default). Made, the
+  /// spark is the home's, hatched now and never worked, the list holds it from then on, and its thread reads an empty
+  /// record. The home asleep is `-vf-mock-chat-away`'s (12b): the door is gone, so no ask reaches here.
   @MainActor
   final class ChatFixtureDoor: ChatDoor {
     /// The goldens' desktops, by the names the mock account says.
@@ -32,6 +37,8 @@
     /// A state, never a count of asks: the board can ask for the sparks again before their first answer lands, and the
     /// feed keeps only the last one, so a count would put mini to sleep unheard.
     private var miniAwake = true
+    /// IOS-12f — the sparks this door has hatched, in their order, listed after the merge's own.
+    private var hatched: [JSONValue] = []
 
     private final class Watch: ChatWatch {
       func cancel() {}
@@ -55,13 +62,17 @@
     func call(_ method: String, params: JSONValue?) async throws -> JSONValue {
       switch method {
       case "compose.sparks.list":
-        if Self.needsCase == "away" { return try Self.awaySparks(awake: miniAwake) }
-        return try answer("compose-sparks-list.merged")
+        if Self.needsCase == "away" { return withHatched(try Self.awaySparks(awake: miniAwake)) }
+        return withHatched(try answer("compose-sparks-list.merged"))
       case "needs.list": return try needsList()
       case NeedsAnswerParams.method: return try await answerNeeds(params)
       case "agent.catalog": return try answer("agent-catalog.valid")
+      case "agent.providers": return try answer("agent-providers.valid")
+      case "agents.profileSets.list": return try answer("agents-profile-sets.meters")
+      case "agent.models": return try models(params)
+      case SparkHatch.method: return try hatch(params)
       case "compose.sparks.open":
-        let sparks = try answer("compose-sparks-list.merged")["sparks"]?.arrayValue ?? []
+        let sparks = (try answer("compose-sparks-list.merged")["sparks"]?.arrayValue ?? []) + hatched
         let asked = params?["spark"]?.stringValue
         guard let spark = sparks.first(where: { $0["id"]?.stringValue == asked }) else {
           throw FieldProductError(kind: "NOT_FOUND", message: "no such spark")
@@ -185,6 +196,61 @@
       return .object(["item": .object(item)])
     }
 
+    /// IOS-12f — the contracts' own picker, for the agent it is of; asked under any profile, as the sheet keys a
+    /// picker by what it asked (the Mac's `NewSparkSheet.tsx`), never by the answer's `profileSet`.
+    private func models(_ params: JSONValue?) throws -> JSONValue {
+      let picker = try answer("agent-models.valid")
+      guard let asked = params?["provider"]?.stringValue, asked == picker["provider"]?.stringValue else {
+        throw FieldProductError(kind: "NOT_FOUND", message: "the fixture door holds no models for that agent")
+      }
+      return picker
+    }
+
+    /// IOS-12f — a hatch as `-vf-hatch-answer=` says it came out: made, or refused as fieldd refuses it
+    /// (`SparkService.hatch`: PRECONDITION_FAILED, its reason in the details, in fieldd's words). Made, it is the
+    /// spark the params name, on the home, hatched now and never worked (fieldd's `turnedAt: null`), its session live.
+    private func hatch(_ params: JSONValue?) throws -> JSONValue {
+      guard case .object(let asked)? = params, let name = asked["name"]?.stringValue,
+        let thinksUnder = asked["thinksUnder"]?.stringValue
+      else { throw FieldProductError(kind: "NOT_FOUND", message: "a hatch names its spark and its profile") }
+      switch Self.hatchAnswer {
+      case "taken":
+        throw FieldProductError(
+          kind: "PRECONDITION_FAILED", message: "another spark has that name",
+          details: .object(["reason": .string("name-taken")]))
+      case "no-sign-in":
+        throw FieldProductError(
+          kind: "PRECONDITION_FAILED", message: "\(thinksUnder) has no sign-in for that agent",
+          details: .object([
+            "reason": .string("no-sign-in"), "agent": asked["agent"] ?? .null, "profile": .string(thinksUnder),
+          ]))
+      default: break
+      }
+      let count = hatched.count + 1
+      let now = Date.now.formatted(Date.ISO8601FormatStyle(includingFractionalSeconds: true))
+      let slug = String(name.lowercased().map { $0.isLetter || $0.isNumber ? $0 : "-" })
+      var spark = asked
+      spark["id"] = .string("sp-hatched\(count)")
+      spark["folder"] = .string("/Users/you/Library/Application Support/VibeField/users/u-1f3a/sparks/\(slug)")
+      spark["createdAt"] = .string(now)
+      spark["updatedAt"] = .string(now)
+      spark["turnedAt"] = .null
+      spark["session"] = .object(["runtimeRunId": .string("run-hatched\(count)"), "live": .bool(true)])
+      spark["device"] = .string(Self.home)
+      hatched.append(.object(spark))
+      return .object(["spark": .object(spark)])
+    }
+
+    /// A list with this door's hatched sparks after its own.
+    private func withHatched(_ list: JSONValue) -> JSONValue {
+      guard !hatched.isEmpty, case .object(var fields) = list else { return list }
+      fields["sparks"] = .array((fields["sparks"]?.arrayValue ?? []) + hatched)
+      return .object(fields)
+    }
+
+    /// IOS-12f — how a hatch comes out: `-vf-hatch-answer=<made|taken|no-sign-in>`, else made.
+    static var hatchAnswer: String { flag("-vf-hatch-answer=") ?? "made" }
+
     /// The queue's case: `-vf-needs-case=<cards|agents|away>`, else the merged list alone.
     static var needsCase: String? { flag("-vf-needs-case=") }
 
@@ -206,7 +272,11 @@
     func reader(
       spark: String, device: String?, whole: Bool, held: SparkTranscriptReading
     ) -> any ChatThreadReader {
-      ChatFixtureReader(Self.threadReading(ChatFixtureDoor.threadCase))
+      // IOS-12f — a spark this door hatched has no record yet: its thread reads an empty one, never another's case
+      if hatched.contains(where: { $0["id"]?.stringValue == spark }) {
+        return ChatFixtureReader(SparkTranscriptReading.of(runs: [], raw: [:], dropped: 0, whole: true))
+      }
+      return ChatFixtureReader(Self.threadReading(ChatFixtureDoor.threadCase))
     }
 
     /// The thread's case: `-vf-chat-case=<case>`, else at rest.

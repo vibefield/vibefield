@@ -166,22 +166,40 @@ final class ChatFeed {
   }
 
   // MARK: IOS-12f — New spark, on the home (VF-PM 2026-11-07 13:11:45Z: zero door changes, the sheet rides Chat's door)
-  // SKELETON (f2): the four asks are f3's; the row in ChatFeedTests is red until then.
+  // The four asks are the Mac's sheet's port (`newSparkPortOver`, field-app/src/chat/new-spark.ts), asked of the home
+  // the phone already holds. Each throws what the home answered; with no door, that no home answers.
 
   /// The home's agents, for the sheet's menu (`agent.providers`).
-  func providers() async throws -> [AgentProviderSummary] { [] }
+  func providers() async throws -> [AgentProviderSummary] {
+    try AgentProvidersResult(json: try await homeDoor().call("agent.providers", params: .object([:]))).providers
+  }
 
   /// The home's Agent Profiles (`agents.profileSets.list`).
-  func profileSets() async throws -> [AgentProfileSet] { [] }
+  func profileSets() async throws -> [AgentProfileSet] {
+    try AgentProfileSetsResult(json: try await homeDoor().call("agents.profileSets.list", params: .object([:]))).sets
+  }
 
   /// An agent's own picker under one of the home's profiles (`agent.models`).
   func models(provider: String, profileSet: String) async throws -> AgentModelsResult {
-    throw FieldProductError(kind: "UNAVAILABLE", message: "New spark's reads are f3's", retryable: false)
+    let params = AgentModelsParams(provider: provider, profileSet: profileSet)
+    return try AgentModelsResult(json: try await homeDoor().call("agent.models", params: params.json))
   }
 
-  /// Make the spark on the home (`compose.sparks.hatch`, `local`: no device, nothing forwarded).
+  /// Make the spark on the home (`compose.sparks.hatch`, `local`: no device, nothing forwarded). Made, the list is
+  /// asked again so its row is there, as the Mac's sheet asks its list; refused, fieldd's refusal is thrown whole (its
+  /// `details.reason` says where the sheet says it).
   func hatch(_ params: SparkHatchParams) async throws -> SparkSummary {
-    throw FieldProductError(kind: "UNAVAILABLE", message: "New spark's hatch is f3's", retryable: false)
+    let made = try SparkHatchResult(json: try await homeDoor().call(SparkHatch.method, params: params.json)).spark
+    askSparks()
+    return made
+  }
+
+  /// The home's door, or that no home answers.
+  private func homeDoor() throws -> any ChatDoor {
+    guard let door else {
+      throw FieldProductError(kind: "UNAVAILABLE", message: "no home answers for Chat", retryable: true)
+    }
+    return door
   }
 
   // MARK: IOS-12d — what waits on you

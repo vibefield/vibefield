@@ -5,8 +5,8 @@ import Foundation
 // `ComposeSparksHatchResult`, packages/contracts/src/compose.ts). The method is `local`: the home the phone asks
 // answers it itself, so the params carry no device and nothing is forwarded. A spark lives on the desktop that hatched
 // it (PC-L2), and a phone's sparks on its home. Asked on Chat's door, the home's own client (VF-PM 2026-11-07 13:11:45Z:
-// zero door changes).
-// SKELETON (f2): the params' wire is f3's; the row in ChatFeedTests is red until then.
+// zero door changes). The params are the Mac's (`newSparkPortOver`, field-app/src/chat/new-spark.ts), held byte for
+// byte to the contracts' own `compose-sparks-hatch-params.valid` by ChatFeedTests.
 
 public enum SparkHatch {
   public static let method = "compose.sparks.hatch"
@@ -35,7 +35,17 @@ public struct SparkHatchParams: Sendable, Equatable {
   }
 
   /// The params as they ride: a key only where it has a value.
-  public var json: JSONValue { .object([:]) }
+  public var json: JSONValue {
+    var fields: [String: JSONValue] = [
+      "name": .string(name),
+      "face": .object(["seed": .int(Int64(seed))]),
+      "agent": .string(agent),
+      "profiles": .array(profiles.map(JSONValue.string)),
+      "thinksUnder": .string(thinksUnder),
+    ]
+    if let modelSelection { fields["modelSelection"] = modelSelection.json }
+    return .object(fields)
+  }
 }
 
 /// `compose.sparks.hatch`'s answer: the spark made.
