@@ -3,9 +3,10 @@
 %% forensic: source-read; liveObserved false
 flowchart TD
   signal["packages/adapter-codex/src/normalization/monitor.ts:503-527\npricing deltas, no costUsd"]
-  signal --> price["monitor-service.ts:418-425 priceUsageUpdates before reduce"]
-  price --> reduce["reduce.ts:1049-1073 copies costUsd onto the usage observation"]
-  reduce --> index["usage-index.ts:321-330 and 427 buildUsageIndex folds selected usage into stream"]
+  signal --> semantic["monitor-service.ts:176-184 consume routes monitor:batch to acceptSemantic. This path does not call translateAgentEventEnvelope"]
+  semantic --> price["monitor-service.ts:418-425 priceUsageUpdates. usage-pricing.ts:24-26 keeps a finite nonnegative costUsd. A missing cost can be filled from the catalog"]
+  price --> accum["reduce.ts:672-686 reduceMonitorAccumulator stores the priced update at reduce.ts:239-259"]
+  accum --> index["usage-index.ts:321-330 and 427 buildUsageIndex folds selected usage into stream"]
   index --> counts["usage-index.ts:210-223 stream calls cost.ts:21-40 buildUsageCostLedger"]
   counts --> pricedObs["finite nonnegative costUsd, including 0: pricedCount += 1 and total += amount"]
   counts --> guarded["missing, invalid, or negative costUsd increments unpricedCount only when canonical or pricing or cost is truthy"]

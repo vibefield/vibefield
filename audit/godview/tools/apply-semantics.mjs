@@ -350,9 +350,12 @@ function costGraph(adapter, signal) {
 %% forensic: source-read; liveObserved false
 flowchart TD
   signal["${signal.path}:${signal.lineStart}-${signal.lineEnd}\\n${signal.symbol}"]
-  signal --> price["monitor-service.ts:418-425 priceUsageUpdates before reduce"]
-  price --> reduce["reduce.ts:1049-1073 copies the priced costUsd"]
-  reduce --> index["usage-index.ts:321-330 and 427 buildUsageIndex folds selected usage into stream"]
+  ${adapter === 'claude' ? `signal --> accept["monitor-service.ts:233-253 acceptAgentEvent calls translateAgentEventEnvelope at reduce.ts:817"]
+  accept --> translate["reduce.ts:1049-1073 usage arm copies raw event.costUsd at 1070 before pricing"]
+  translate --> price["monitor-service.ts:418-425 priceUsageUpdates. usage-pricing.ts:24-26 keeps a finite nonnegative costUsd. A missing cost can be filled from the catalog"]` : `signal --> semantic["monitor-service.ts:176-184 consume routes monitor:batch to acceptSemantic. This path does not call translateAgentEventEnvelope"]
+  semantic --> price["monitor-service.ts:418-425 priceUsageUpdates. usage-pricing.ts:24-26 keeps a finite nonnegative costUsd. A missing cost can be filled from the catalog"]`}
+  price --> accum["reduce.ts:672-686 reduceMonitorAccumulator stores the priced update at reduce.ts:239-259"]
+  accum --> index["usage-index.ts:321-330 and 427 buildUsageIndex folds selected usage into stream"]
   index --> counts["usage-index.ts:210-223 stream calls cost.ts:21-40 buildUsageCostLedger"]
   counts --> pricedObs["finite nonnegative costUsd, including 0: pricedCount += 1 and total += amount"]
   counts --> guarded["missing, invalid, or negative costUsd increments unpricedCount only when canonical or pricing or cost is truthy"]

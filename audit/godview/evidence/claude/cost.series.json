@@ -26,14 +26,6 @@
     {
       "repo": "puppeteer",
       "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
-      "path": "packages/core/src/monitor/reduce.ts",
-      "lineStart": 1049,
-      "lineEnd": 1073,
-      "symbol": "usage:tokens-used"
-    },
-    {
-      "repo": "puppeteer",
-      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
       "path": "packages/monitor/src/backend/backend.ts",
       "lineStart": 197,
       "lineEnd": 205,
@@ -142,6 +134,14 @@
       "lineStart": 478,
       "lineEnd": 480,
       "symbol": "acrossEpochs current"
+    },
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/core/src/monitor/reduce.ts",
+      "lineStart": 672,
+      "lineEnd": 686,
+      "symbol": "reduceMonitorAccumulator"
     }
   ],
   "producer": {
@@ -164,9 +164,22 @@
       }
     },
     {
-      "order": 1,
+      "name": "envelope-translation",
+      "effect": "acceptAgentEvent at monitor-service.ts:233-253 calls translateAgentEventEnvelope at reduce.ts:817 before accept prices anything. The usage:tokens-used arm at reduce.ts:1049-1073 copies raw event.costUsd at 1070. That copy is before pricing.",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/core/src/monitor/reduce.ts",
+        "lineStart": 1049,
+        "lineEnd": 1073,
+        "symbol": "usage arm copies event.costUsd"
+      },
+      "order": 1
+    },
+    {
+      "order": 2,
       "name": "price-before-reduce",
-      "effect": "Reported costUsd wins. Otherwise complete Anthropic buckets can be catalog-priced. This runs before reduce.",
+      "effect": "accept at monitor-service.ts:418-425 calls priceUsageUpdates. usage-pricing.ts:24-26 returns a finite nonnegative costUsd unchanged, including 0. If costUsd is missing, the rest of priceUsage can fill it from the catalog.",
       "source": {
         "repo": "puppeteer",
         "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
@@ -177,16 +190,16 @@
       }
     },
     {
-      "order": 2,
+      "order": 3,
       "name": "reduce-after-price",
-      "effect": "The reducer copies the already priced costUsd. It does not consult the catalog.",
+      "effect": "reduceMonitorAccumulator at reduce.ts:672-686 runs after priceUsageUpdates. applyUpdates at reduce.ts:239-259 stores that already priced usage update. It does not copy event.costUsd.",
       "source": {
         "repo": "puppeteer",
         "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
         "path": "packages/core/src/monitor/reduce.ts",
-        "lineStart": 1049,
-        "lineEnd": 1073,
-        "symbol": "usage:tokens-used"
+        "lineStart": 672,
+        "lineEnd": 686,
+        "symbol": "reduceMonitorAccumulator"
       }
     },
     {
@@ -200,7 +213,7 @@
         "lineEnd": 223,
         "symbol": "stream"
       },
-      "order": 3
+      "order": 4
     },
     {
       "name": "ledger-counts",
@@ -213,7 +226,7 @@
         "lineEnd": 40,
         "symbol": "buildUsageCostLedger"
       },
-      "order": 4
+      "order": 5
     },
     {
       "name": "coverage-decision",
@@ -226,7 +239,7 @@
         "lineEnd": 101,
         "symbol": "projectUsageCost"
       },
-      "order": 5
+      "order": 6
     },
     {
       "name": "project-usage",
@@ -239,7 +252,7 @@
         "lineEnd": 417,
         "symbol": "usage projection then copy"
       },
-      "order": 6
+      "order": 7
     },
     {
       "name": "epoch-retention",
@@ -252,7 +265,7 @@
         "lineEnd": 435,
         "symbol": "observe then costOf"
       },
-      "order": 7
+      "order": 8
     },
     {
       "name": "vibefield-current-epoch",
@@ -265,7 +278,7 @@
         "lineEnd": 480,
         "symbol": "acrossEpochs current"
       },
-      "order": 8
+      "order": 9
     },
     {
       "name": "history-aggregate",
@@ -278,7 +291,7 @@
         "lineEnd": 82,
         "symbol": "historyOf"
       },
-      "order": 9
+      "order": 10
     },
     {
       "name": "row-cost",
@@ -291,7 +304,7 @@
         "lineEnd": 205,
         "symbol": "costOf"
       },
-      "order": 10
+      "order": 11
     },
     {
       "name": "derive-cost",
@@ -304,10 +317,10 @@
         "lineEnd": 277,
         "symbol": "row cost copy"
       },
-      "order": 11
+      "order": 12
     },
     {
-      "order": 12,
+      "order": 13,
       "name": "replica-passthrough",
       "effect": "The replica join spreads the agent row. It does not recompute cost.",
       "source": {
@@ -320,7 +333,7 @@
       }
     },
     {
-      "order": 13,
+      "order": 14,
       "name": "window-passthrough",
       "effect": "window-rows spreads the row. It rewrites peer stale and drops peer profileSet. It does not recompute cost.",
       "source": {
@@ -333,7 +346,7 @@
       }
     },
     {
-      "order": 14,
+      "order": 15,
       "name": "swarm-reader",
       "effect": "A working observed body reads cost coverage and burn to choose a priced flame or the unpriced flame.",
       "source": {
@@ -346,7 +359,7 @@
       }
     },
     {
-      "order": 15,
+      "order": 16,
       "name": "spend-reader",
       "effect": "spendOf reads cost.usd unless coverage is unavailable or the total is missing.",
       "source": {

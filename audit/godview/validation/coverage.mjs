@@ -89,7 +89,7 @@ export function readField(envelope) {
     ? costSemantics(envelope)
     : null;
   let mismatch = null;
-  if (costReview?.verification === "precision-pending") {
+  if (costReview?.verification === "precision-pending" || costReview?.verification === "anchors-checked") {
     mismatch = costReview.note;
   } else if (costReview && /costUsd/i.test(text)) {
     mismatch = sharedCostNote(envelope.adapterId);
@@ -331,6 +331,8 @@ export function costSemantics(envelope) {
     };
   }
   const reduceStep = steps.find((step) => step.name === "reduce-after-price");
+  const translation = steps.find((step) => step.name === "envelope-translation");
+  const priceStep = steps.find((step) => step.name === "price-before-reduce");
   const reducePath = String(reduceStep?.source?.path ?? "");
   const heldForOrder =
     (envelope.adapterId === "adapter.claude" || envelope.adapterId === "adapter.codex") &&
@@ -344,6 +346,35 @@ export function costSemantics(envelope) {
       defects: ["source-order"],
       branch: null,
       note: ORDER_HOLD,
+    };
+  }
+  const claudeAnchors =
+    envelope.adapterId === "adapter.claude" &&
+    translation?.source?.lineStart === 1049 &&
+    at("envelope-translation") < at("price-before-reduce") &&
+    at("price-before-reduce") < at("reduce-after-price") &&
+    reduceStep?.source?.lineStart === 672 &&
+    /239-259/.test(reduceStep?.effect ?? "") &&
+    /before pricing/i.test(translation?.effect ?? "") &&
+    priceStep?.source?.lineStart === 418;
+  const codexAnchors =
+    envelope.adapterId === "adapter.codex" &&
+    !translation &&
+    at("price-before-reduce") < at("reduce-after-price") &&
+    reduceStep?.source?.lineStart === 672 &&
+    /239-259/.test(reduceStep?.effect ?? "") &&
+    /semantic monitor:batch/i.test(reduceStep?.effect ?? "") &&
+    /418-425/.test(priceStep?.effect ?? "");
+  if (claudeAnchors || codexAnchors) {
+    return {
+      ...base,
+      kind: "priced-path",
+      verification: "anchors-checked",
+      defects: [],
+      branch: claudeAnchors ? "raw-translation-before-pricing" : "semantic-batch-at-pricing",
+      note: claudeAnchors
+        ? "Imported anchors match the reported order. Raw translation at reduce.ts:1049-1073 copies event.costUsd before pricing at monitor-service.ts:418-425. reduceMonitorAccumulator at reduce.ts:672-686 then stores that update at reduce.ts:239-259. Citation verification and independent semantic acceptance are still pending. This is not accepted provenance."
+        : "Imported anchors match the reported order. Codex joins as a semantic batch at pricing, monitor-service.ts:418-425, and does not use the raw usage arm. reduceMonitorAccumulator at reduce.ts:672-686 then stores that update at reduce.ts:239-259. Citation verification and independent semantic acceptance are still pending. This is not accepted provenance.",
     };
   }
   const projectAt = at("project-copy") !== -1 ? at("project-copy") : at("project-usage");
@@ -384,6 +415,7 @@ export function costSemantics(envelope) {
 function costReviewFor(rows) {
   const ownerStated = [];
   const precisionPending = [];
+  const anchorsChecked = [];
   const scoped = [];
   const pendingCorrection = [];
   const omission = [];
@@ -397,6 +429,9 @@ function costReviewFor(rows) {
     else if (review.verification === "precision-pending") {
       precisionPending.push(trace.adapterId);
       defects[trace.adapterId] = review.defects;
+    } else if (review.verification === "anchors-checked") {
+      anchorsChecked.push(trace.adapterId);
+      if (review.branch) branches[trace.adapterId] = review.branch;
     } else if (review.verification === "scoped-static") {
       scoped.push(trace.adapterId);
       if (review.branch) branches[trace.adapterId] = review.branch;
@@ -405,7 +440,16 @@ function costReviewFor(rows) {
       defects[trace.adapterId] = review.defects;
     } else omission.push(trace.adapterId);
   }
-  return { ownerStated, precisionPending, scoped, pendingCorrection, omission, defects, branches };
+  return {
+    ownerStated,
+    precisionPending,
+    anchorsChecked,
+    scoped,
+    pendingCorrection,
+    omission,
+    defects,
+    branches,
+  };
 }
 
 /** Envelope counts and cost-graph checks read from the files. */

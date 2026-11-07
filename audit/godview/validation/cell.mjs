@@ -213,6 +213,13 @@ function costGraphOrder(envelope) {
       note: "This cost path stops where the adapter omits usage. It does not invent a pricing hop. The record is source-read, not a live sample.",
     };
   }
+  if (review.verification === "anchors-checked") {
+    return {
+      status: "anchors-checked",
+      defects: review.defects,
+      note: review.note,
+    };
+  }
   if (review.verification === "precision-pending") {
     return {
       status: "precision-pending",

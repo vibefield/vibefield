@@ -149,12 +149,19 @@ for (const row of filled.rowJoins) {
     failures.push(`${record.recordId} status graph omits window-rows`);
   }
   if (row.fieldId.startsWith('field.cost') && ['adapter.claude', 'adapter.codex'].includes(row.adapterId)) {
-    assertPricedCostGraph(record.recordId, graph);
+    assertPricedCostGraph(
+      record.recordId,
+      graph,
+      row.adapterId === 'adapter.claude'
+        ? ['monitor-service.ts:233-253', 'reduce.ts:1049-1073']
+        : ['monitor-service.ts:176-184'],
+    );
+    if (row.adapterId === 'adapter.codex' && graph.includes('reduce.ts:1049-1073')) {
+      failures.push(`${record.recordId} Codex semantic usage is not translated at reduce.ts:1049-1073`);
+    }
     const counts = record.transforms.find((item) => item.name === 'ledger-counts');
     const decision = record.transforms.find((item) => item.name === 'coverage-decision');
     const history = record.transforms.find((item) => item.name === 'history-aggregate');
-    const names = record.transforms.map((item) => item.name);
-    const at = (name) => names.indexOf(name);
     if (!counts || !/only when canonical or pricing or cost is truthy/.test(counts.effect) || !/does not increment unpricedCount/.test(counts.effect)) {
       failures.push(`${record.recordId} ledger transform lacks the guarded unpriced branch`);
     }
@@ -164,12 +171,23 @@ for (const row of filled.rowJoins) {
     if (!history || !/no retained run has costUsd/.test(history.effect)) {
       failures.push(`${record.recordId} history transform omits the retained-total rule`);
     }
-    const order = ['reduce-after-price', 'usage-index-stream', 'ledger-counts', 'coverage-decision', 'project-usage', 'history-aggregate', 'row-cost', 'derive-cost'];
-    let previous = -1;
-    for (const name of order) {
-      const index = at(name);
-      if (index < 0 || index < previous) failures.push(`${record.recordId} transform order breaks at ${name}`);
-      previous = index;
+    const price = record.transforms.find((item) => item.name === 'price-before-reduce');
+    const stored = record.transforms.find((item) => item.source.path.endsWith('reduce.ts') && item.source.lineStart === 672);
+    if (!price || !/usage-pricing\.ts:24-26/.test(price.effect)) {
+      failures.push(`${record.recordId} price transform does not cite the raw-cost preserve`);
+    }
+    if (!stored || !/239-259/.test(stored.effect) || stored.order <= price.order) {
+      failures.push(`${record.recordId} priced update is not stored after pricing`);
+    }
+    if (row.adapterId === 'adapter.claude') {
+      const translation = record.transforms.find((item) => item.source.lineStart === 1049 && item.source.lineEnd === 1073);
+      if (!translation || translation.order >= price.order || !/1070/.test(translation.effect) || !/before pricing/.test(translation.effect)) {
+        failures.push(`${record.recordId} translation is not the pre-price raw costUsd copy`);
+      }
+      if (stored && stored.source.lineStart === 1049) failures.push(`${record.recordId} store transform still cites the translation arm`);
+    }
+    if (row.adapterId === 'adapter.codex' && record.transforms.some((item) => item.source.lineStart === 1049)) {
+      failures.push(`${record.recordId} Codex transform still cites the usage:tokens-used arm`);
     }
   }
   if (row.fieldId.startsWith('field.cost') && ['adapter.acp', 'adapter.antigravity', 'adapter.copilot'].includes(row.adapterId)) {
@@ -177,9 +195,11 @@ for (const row of filled.rowJoins) {
   }
 }
 
-function assertPricedCostGraph(label, graph) {
+function assertPricedCostGraph(label, graph, ingress) {
   const order = [
-    'reduce.ts:1049-1073',
+    ...ingress,
+    'monitor-service.ts:418-425',
+    'reduce.ts:672-686',
     'usage-index.ts:210-223',
     'cost.ts:21-40',
     'cost.ts:59-101',
@@ -196,6 +216,9 @@ function assertPricedCostGraph(label, graph) {
     if (next < 0 || next < at) failures.push(`${label} chronological order missing or early: ${needle}`);
     at = Math.max(at, next);
   }
+  if (/1049-1073 copies the priced|copies the priced costUsd/u.test(graph)) {
+    failures.push(`${label} treats reduce.ts:1049-1073 as the post-price accumulator`);
+  }
   if (!graph.includes('only when canonical or pricing or cost is truthy')) failures.push(`${label} lacks the guarded unpriced branch`);
   if (!graph.includes('does not increment unpricedCount')) failures.push(`${label} lacks the skipped noncanonical sample`);
   if (!graph.includes('no retained run has costUsd')) failures.push(`${label} omits the retained-total rule`);
@@ -207,6 +230,14 @@ function assertPricedCostGraph(label, graph) {
   }
 }
 
-assertPricedCostGraph('cost-priced.mmd', readFileSync(join(root, 'audit/godview/plan/graphs/cost-priced.mmd'), 'utf8'));
-console.log(JSON.stringify({ contradictions: failures.length, failures: failures.slice(0, 20) }, null, 2));
+const sharedCost = readFileSync(join(root, 'audit/godview/plan/graphs/cost-priced.mmd'), 'utf8');
+assertPricedCostGraph('cost-priced.mmd', sharedCost, ['monitor-service.ts:233-253', 'reduce.ts:1049-1073']);
+if (sharedCost.indexOf('monitor-service.ts:176-184') < 0 || sharedCost.indexOf('monitor-service.ts:176-184') > sharedCost.indexOf('monitor-service.ts:418-425')) {
+  failures.push('cost-priced.mmd omits the Codex semantic ingress before pricing');
+}
+console.log(JSON.stringify({
+  contradictions: failures.length,
+  failures: failures.slice(0, 20),
+  citationCheck: 'This gate compares artifact text only. It does not open the cited source files, so a zero here does not prove the anchors.',
+}, null, 2));
 process.exit(failures.length === 0 ? 0 : 1);

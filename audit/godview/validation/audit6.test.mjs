@@ -37,7 +37,7 @@ test("pinned source inventory matches the model contract counts", () => {
   assert.equal(index.partial.evidenceKind, "source-read");
   assert.equal(index.partial.independentSemanticReview, "pending");
   assert.equal(index.partial.provenanceComplete, false);
-  assert.equal(index.partial.firstHalfCommit, "68dde825266e63ba63a1b07f7fcfd1e85f868b1f");
+  assert.equal(index.partial.firstHalfCommit, "918932531febecf58acbef95a1bd11defb082ab2");
   assert.equal(index.partial.candidateStatus, "static-not-live");
   assert.equal(index.partial.secondHalfCommit, "d29658187de7a765837d01c20b456b74c857185f");
   assert.equal(index.partial.accountTraceCommit, "08b5d849177685662b43e0e3a4e6bd7d32ac2cdf");
@@ -48,7 +48,8 @@ test("pinned source inventory matches the model contract counts", () => {
   assert.equal(index.partial.blockers.first.ui.yes, 247);
   assert.equal(index.partial.blockers.first.ui.no, 123);
   assert.equal(index.partial.blockers.first.ui.unknown, 0);
-  assert.deepEqual(index.partial.blockers.costReview.first.precisionPending.sort(), [
+  assert.deepEqual(index.partial.blockers.costReview.first.precisionPending, []);
+  assert.deepEqual(index.partial.blockers.costReview.first.anchorsChecked.sort(), [
     "adapter.claude",
     "adapter.codex",
   ]);
@@ -241,16 +242,19 @@ test("a priced-cost absence is not a runtime impossibility", () => {
       fieldId: "field.cost.usd",
     },
   });
-  assert.equal(claudeCost.graphOrder.status, "precision-pending");
-  assert.equal(codexCost.graphOrder.status, "precision-pending");
-  assert.match(claudeCost.graphOrder.note, /reduce\.ts:1049-1073/);
+  assert.equal(claudeCost.graphOrder.status, "anchors-checked");
+  assert.equal(codexCost.graphOrder.status, "anchors-checked");
+  assert.match(claudeCost.graphOrder.note, /1049-1073/);
   assert.match(claudeCost.graphOrder.note, /672-686/);
+  assert.match(claudeCost.graphOrder.note, /239-259/);
   assert.match(claudeCost.reading.mismatch, /before pricing/);
+  assert.match(claudeCost.reading.mismatch, /not accepted provenance/);
   assert.equal(/mapping is still pending/i.test(claudeCost.reading.mismatch ?? ""), false);
   assert.equal(/row mapping/i.test(claudeCost.reading.mismatch ?? ""), false);
+  assert.match(codexCost.reading.mismatch, /semantic batch/);
   assert.match(codexCost.reading.mismatch, /672-686/);
+  assert.match(codexCost.reading.mismatch, /239-259/);
   assert.equal(/mapping is still pending/i.test(codexCost.reading.mismatch ?? ""), false);
-  assert.match(codexCost.graphOrder.note, /not rewritten/);
   assert.equal(cell.stateReading.status, "host-claim");
   const reply = buildCell({
     model: audit.model,

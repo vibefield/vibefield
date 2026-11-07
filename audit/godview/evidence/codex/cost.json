@@ -34,14 +34,6 @@
     {
       "repo": "puppeteer",
       "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
-      "path": "packages/core/src/monitor/reduce.ts",
-      "lineStart": 1049,
-      "lineEnd": 1073,
-      "symbol": "usage:tokens-used"
-    },
-    {
-      "repo": "puppeteer",
-      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
       "path": "packages/monitor/src/backend/backend.ts",
       "lineStart": 197,
       "lineEnd": 205,
@@ -150,6 +142,22 @@
       "lineStart": 478,
       "lineEnd": 480,
       "symbol": "acrossEpochs current"
+    },
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/runtime/src/services/usage-pricing.ts",
+      "lineStart": 24,
+      "lineEnd": 66,
+      "symbol": "preserve raw costUsd, else catalog fill"
+    },
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/core/src/monitor/reduce.ts",
+      "lineStart": 672,
+      "lineEnd": 686,
+      "symbol": "reduceMonitorAccumulator"
     }
   ],
   "producer": {
@@ -174,27 +182,27 @@
     {
       "order": 1,
       "name": "price-before-reduce",
-      "effect": "priceUsageUpdates catalog-prices a complete same-model delta and rejects gaps. This runs before reduce.",
+      "effect": "accept at monitor-service.ts:418-425 calls priceUsageUpdates. usage-pricing.ts:24-26 returns a finite nonnegative costUsd unchanged, including 0. If costUsd is missing, the rest of priceUsage can fill it from the catalog.",
       "source": {
         "repo": "puppeteer",
         "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
         "path": "packages/runtime/src/services/usage-pricing.ts",
-        "lineStart": 19,
-        "lineEnd": 78,
-        "symbol": "priceUsageUpdates"
+        "lineStart": 24,
+        "lineEnd": 66,
+        "symbol": "preserve raw costUsd, else catalog fill"
       }
     },
     {
       "order": 2,
       "name": "reduce-after-price",
-      "effect": "The reducer stores the priced costUsd or the unpriced metadata. It does not price.",
+      "effect": "reduceMonitorAccumulator at reduce.ts:672-686 runs after priceUsageUpdates. applyUpdates at reduce.ts:239-259 stores that already priced usage update. It does not copy event.costUsd. Codex usage arrives as a semantic monitor:batch through acceptSemantic, not through this usage arm.",
       "source": {
         "repo": "puppeteer",
         "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
         "path": "packages/core/src/monitor/reduce.ts",
-        "lineStart": 1049,
-        "lineEnd": 1073,
-        "symbol": "usage:tokens-used"
+        "lineStart": 672,
+        "lineEnd": 686,
+        "symbol": "reduceMonitorAccumulator"
       }
     },
     {
