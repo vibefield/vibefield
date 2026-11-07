@@ -1148,11 +1148,11 @@ describe("CP-4a2b — a flow run's items: the runs' acts, then Stop the run; an 
     expect(h.woken).toEqual([]);
     expect(h.acts).toEqual([]);
     // each kind's acts come first, and a run whose one act is Stop the run has that alone
-    const { id: cap } = h.queue.flowItem({
-      kind: "flow-cap",
+    const { id: repair } = h.queue.flowItem({
+      kind: "flow-repair",
       run: { ...RUN, call: 41 },
       name: "Release check",
-      acts: [NEEDS_CHOICE_WORDS.allowMore],
+      acts: [NEEDS_CHOICE_WORDS.askOnceMore],
     });
     const { id: lost } = h.queue.flowItem({
       kind: "flow-lost",
@@ -1162,7 +1162,7 @@ describe("CP-4a2b — a flow run's items: the runs' acts, then Stop the run; an 
       acts: [],
     });
     const choices = new Map(h.queue.list().map((open) => [open.id, open.choices]));
-    expect(choices.get(cap)).toEqual(["Allow 20 more", "Stop the run"]);
+    expect(choices.get(repair)).toEqual(["Ask once more", "Stop the run"]);
     expect(choices.get(lost)).toEqual(["Stop the run"]);
     // Stop the run is never a gate's own, and an item holds at most NEEDS_CHOICES_MAX acts before it
     expect(await refusal(() => h.queue.flowItem({ ...GATE, acts: ["Ship", "stop the run"] }))).toBe(

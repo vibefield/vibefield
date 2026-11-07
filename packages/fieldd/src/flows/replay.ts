@@ -279,6 +279,13 @@ export class FlowReplay implements FlowCallHandler {
     return this.#unmade.size > 0 ? "unmatched" : undefined;
   }
 
+  /** F3 (slice 12) — how many lines of D21's one queue this replay keeps, a read for a row as `stuck` is D1's park's:
+   * every line its journal held and every answer handed on since, released or not. It counts D21's queue, never D7's
+   * held new calls (`#held`). */
+  held(): number {
+    return this.#queue.length;
+  }
+
   /** D21 — the queue released as far as it goes: up to a call line not yet made again, each answer to its waiter. Once
    * every call the journal holds is made again, D7's held calls go on (`#unhold`). */
   #release(): void {

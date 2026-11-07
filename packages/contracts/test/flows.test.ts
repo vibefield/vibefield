@@ -79,7 +79,6 @@ const FLOW_KINDS = [
   "flow-gate",
   "flow-changed",
   "flow-repair",
-  "flow-cap",
   "flow-lost",
 ] as const;
 
@@ -94,7 +93,7 @@ describe("CP-4a1 — the window's flow doors (agents.manage, local; VF-PM 2026-1
       expect(row(m)?.locality, m).toBe("local");
       expect(reachableFromTailnet(row(m)!), m).toBe(false);
     }
-    // gates, proposals, changed flows, repairs, the cap and a lost step are needs-you items (CP-D12), no door here
+    // gates, proposals, changed flows, repairs and a lost step are needs-you items (CP-D12), no door here
     expect(METHODS.filter((m) => m.method.startsWith("flows.")).map((m) => m.method)).toEqual(
       doors,
     );
@@ -132,12 +131,10 @@ describe("CP-4a1 — the library and fieldd's records on disk (CP4-Q18 (a))", ()
     expect(FLOW_FILE_SUFFIX).toBe(".flow.js");
   });
 
-  it("F4: a run's bounds, provisional until measured (CP4-Q8 (a), CP4-S7, CP4-Q17 (a))", () => {
+  it("F4: a run's bounds, provisional until measured, and no call cap (CP4-S7, CP4-Q17 (a); the C ruling, 2026-11-07)", () => {
     expect(FLOW_LIMITS).toEqual({
       SCRIPT_MAX_BYTES: 65_536,
       RESULT_MAX_BYTES: 65_536,
-      CALLS_MAX: 40,
-      CALLS_MORE: 20,
       LIVE_STEPS_MAX: 8,
       // CP-4a2a (4A2-Q7 (b)): the run's host, provisional likewise
       HOST_HEAP_MB: 128,
@@ -350,7 +347,7 @@ describe("CP-4a1 — the library and its runs on the wire", () => {
 });
 
 describe("CP-4a1 — a flow's items in the person's one queue (CP-D12)", () => {
-  it("F14: six new kinds, the four of CP-3 kept first", () => {
+  it("F14: five new kinds, the four of CP-3 kept first", () => {
     expect(NEEDS_ITEM_KINDS).toEqual([
       "question",
       "held-send",
@@ -555,13 +552,27 @@ describe("CP-4a2b — a run's record, its states and its bounds (13b.3's C6, C9,
       run: "fr-k3v9q2m7x1",
       starter: { by: "spark", spark: "sp-7k2m9q4x" },
       calls: 41,
-      allowed: 40,
       open: [{ call: 41, state: "holding" }],
       steps: [{ call: 39 }, { call: 40, handed: true }],
-      held: { kind: "flow-cap" },
+      held: { kind: "flow-repair" },
     });
     // a forged tail is still a record's shape: a forgery is the store's to find, by the journal's MACs (13a's T-rows)
     expect(FlowRunRecord.safeParse(fixture("flow-run-record.forged-tail")).success).toBe(true);
+    // slice 12, the cap out (the C ruling, 2026-11-07): no EL9 record keeps an allowance, and each holds a repair
+    // at call 41, its one open step. Read whole after the parse: `.passthrough()` keeps a key the schema dropped
+    for (const name of [
+      "flow-run-record.valid",
+      "flow-run-record.agents",
+      "flow-run-record.forged-tail",
+    ]) {
+      const kept = FlowRunRecord.parse(fixture(name));
+      expect(kept, name).not.toHaveProperty("allowed");
+      expect(kept.held?.kind, name).toBe("flow-repair");
+      expect(
+        kept.open.map(({ call }) => call),
+        name,
+      ).toEqual([41]);
+    }
   });
 
   it("C6: `open` holds every step not yet answered, to the host's own ceiling; `steps` the latest answered, to 64", () => {

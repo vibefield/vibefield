@@ -60,7 +60,6 @@ import {
 } from "../src/flows";
 import { METHODS, reachableFromTailnet } from "../src/methods";
 import {
-  FLOW_LIMITS,
   LAYOUT,
   LAYOUT_ROOT_LEVEL,
   PEER_FIELDD_SCOPES,
@@ -768,10 +767,9 @@ describe("a session's name where no handle is said (SP-1e2, SR-Q4 (a): one rule 
   });
 });
 
-describe("CP-4a2b — a flow's seven acts, one authority (13b.3's C7; DESIGN.md §9 \"When a run can't go on, or waits\")", () => {
+describe("CP-4a2b — a flow's six acts, one authority (13b.3's C7; DESIGN.md §9 \"When a run can't go on, or waits\")", () => {
   const ACTS = {
     stopRun: "Stop the run",
-    allowMore: "Allow 20 more",
     askOnceMore: "Ask once more",
     resumeStep: "Resume the step",
     seeChange: "See the change",
@@ -780,20 +778,25 @@ describe("CP-4a2b — a flow's seven acts, one authority (13b.3's C7; DESIGN.md 
   } as const;
   const words = NEEDS_CHOICE_WORDS as Record<string, string | undefined>;
 
-  it("C7: NEEDS_CHOICE_WORDS holds the seven acts, each one line within NEEDS_CHOICE_MAX", () => {
+  it("C7: NEEDS_CHOICE_WORDS holds the six acts, each one line within NEEDS_CHOICE_MAX", () => {
     for (const [key, act] of Object.entries(ACTS)) {
       expect(words[key], key).toBe(act);
       expect(act.length, key).toBeLessThanOrEqual(NEEDS_CHOICE_MAX);
       expect(act, key).not.toMatch(/[\r\n]/);
     }
-    // the Allow's number is the cap's own (FLOW_LIMITS.CALLS_MORE), so the two never drift
-    expect(words["allowMore"]).toBe(`Allow ${FLOW_LIMITS.CALLS_MORE} more`);
+    // slice 12, the cap out (the C ruling, 2026-11-07): CP-3's three, then the six, and nothing more, so an act
+    // left behind reads red here
+    expect(Object.keys(NEEDS_CHOICE_WORDS)).toEqual([
+      "allow",
+      "allowOneMore",
+      "notNow",
+      ...Object.keys(ACTS),
+    ]);
   });
 
-  it("C7: every VibeField act a flow's item fixture offers is one of the seven, or Not now", () => {
+  it("C7: every VibeField act a flow's item fixture offers is one of the six, or Not now", () => {
     const own = new Set<string>(Object.values(NEEDS_CHOICE_WORDS));
     const offered = [
-      ["needs-item.flow-cap", ["Allow 20 more", "Stop the run"]],
       ["needs-item.flow-changed", ["Run this version", "Run the one you approved", "Not now"]],
       ["needs-item.flow-gate", ["Stop the run"]],
       ["needs-item.flow-lost", ["Resume the step", "Stop the run"]],

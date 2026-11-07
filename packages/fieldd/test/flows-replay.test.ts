@@ -5,7 +5,7 @@ import { FLOW_LIMITS, FLOW_RECORD_FORMAT, type FlowJournalKnownLine } from "@vib
 import { afterEach, describe, expect, inject, it } from "vitest";
 import type { FlowJournalEntry } from "../src/flows/journal";
 import { FlowRecords } from "../src/flows/records";
-import { FlowReplay, flowAnswerLine, flowCallKey } from "../src/flows/replay";
+import { FlowReplay, flowAnswerLine, flowCallKey, JOURNAL_REFUSED } from "../src/flows/replay";
 import {
   type FlowCallHandler,
   type FlowHostAnswer,
@@ -636,6 +636,89 @@ describe("CP-4a2b — replay's order, and the one answer writer (§13a slice 10b
       stuck: "new",
       handed: [],
       appended: [],
+    });
+  });
+
+  it("P15 (Q3 (a), F21; slice 12): a call line the journal refuses takes no number: its script hears the refusal, and the next kept call is numbered as the journal counts it, so a call's number and the run's count stay one measure", async () => {
+    // F21: the number is safe to use again within one life, since appendRun drops a refused line's leftover bytes
+    // before the next append, and a refused append leaves its tail as it was. The mutation: take the number before the
+    // append, the form before slice 12's green, and the kept call reads 2
+    const appended: FlowJournalEntry[] = [];
+    let refuses = 1;
+    const append = (entry: FlowJournalEntry) => {
+      if (entry.kind === "call" && refuses > 0) {
+        refuses -= 1;
+        throw Object.assign(new Error("no space left on device"), { code: "ENOSPC" });
+      }
+      appended.push(entry);
+    };
+    const w = writer(append, () => ({ ok: true, value: "kept" }));
+    const replay = w.bind(new FlowReplay({ prior: [], append, inner: w.handler }));
+    const refused = await replay.call(ask("a"));
+    const kept = await replay.call(ask("b"));
+    expect({ refused, kept, handed: w.calls, appended }).toEqual({
+      refused: { ok: false, refused: JOURNAL_REFUSED },
+      kept: { ok: true, value: "kept" },
+      handed: [{ ...ask("b"), call: 1 }],
+      appended: [made(1, "b"), answer(1, "kept")],
+    });
+  });
+
+  it("F3 (D21; slice 12): a line D21's one queue has released leaves it, so a replay keeps only its unreleased tail for its host's life, never the journal it was started on", async () => {
+    // its first life: A, B and C answered, then D made and never answered (its host left mid-call). V11: that the
+    // journal it was started on (`prior`) is let go is shown by read, not by a row; a GC witness would need --expose-gc
+    const { replay, append, handed } = replayOf([
+      made(1, "a"),
+      answer(1, "A"),
+      made(2, "b"),
+      answer(2, "B"),
+      made(3, "c"),
+      answer(3, "C"),
+      made(4, "d"),
+    ]);
+    const started = replay.held();
+    for (const prompt of ["a", "b", "c"]) await replay.call(ask(prompt));
+    // six lines released; D's call line waits for the script to make D again
+    const tail = replay.held();
+    const d = replay.call(ask("d"));
+    journalAnswer(replay, append, 4, { ok: true, value: "D" });
+    const heard = await d;
+    expect({ started, tail, done: replay.held(), heard, handed }).toEqual({
+      started: 7,
+      tail: 1,
+      done: 0,
+      heard: { ok: true, value: "D" },
+      handed: [{ ...ask("d"), call: 4 }],
+    });
+  });
+
+  it("F3b (D21; slice 12): a queue compacted past its threshold drops only lines it has released: calls made two at a time, each pair's second first, are heard in journal order across both compactions, and the one call not made again is its tail", async () => {
+    // its first life: 1,100 calls answered, then one made and never answered: 2,201 lines. At the green D21's queue
+    // compacts (QUEUE_COMPACT_AT, 1024) after call 551 (head 1104 of 2,201) and after call 1063 (head 1024 of 1,097).
+    // The pairs made second first are a race replayed (D21), so a compaction that drops the next pair's first call
+    // line loses that call's answer
+    const CALLS = 1100;
+    const body: FlowJournalEntry[] = [];
+    for (let i = 1; i <= CALLS; i += 1) body.push(made(i, `p${i}`), answer(i, `A${i}`));
+    body.push(made(CALLS + 1, "last"));
+    const { replay, append, handed } = replayOf(body);
+    // two at a time, each pair's second first (2, 1, 4, 3 …), with no await between; then one flush
+    const heard: FlowHostAnswer[] = [];
+    for (let k = 1; k < CALLS; k += 2) {
+      void replay.call(ask(`p${k + 1}`)).then((said) => heard.push(said));
+      void replay.call(ask(`p${k}`)).then((said) => heard.push(said));
+    }
+    await settle();
+    const tail = replay.held();
+    const last = hearing(replay.call(ask("last")));
+    journalAnswer(replay, append, CALLS + 1, { ok: true, value: "L" });
+    await settle();
+    expect({ heard, tail, done: replay.held(), last: last.answer, handed }).toEqual({
+      heard: Array.from({ length: CALLS }, (_, i) => ({ ok: true, value: `A${i + 1}` })),
+      tail: 1,
+      done: 0,
+      last: { ok: true, value: "L" },
+      handed: [{ ...ask("last"), call: CALLS + 1 }],
     });
   });
 });

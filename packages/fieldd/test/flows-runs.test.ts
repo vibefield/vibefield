@@ -5,6 +5,7 @@ import { join } from "node:path";
 import {
   type AgentInputSender,
   ErrorData,
+  FLOW_LABEL_MAX,
   FLOW_LIMITS,
   FLOW_RUNS_LISTED_MAX,
   type FlowRunRecordStep,
@@ -490,10 +491,11 @@ describe("CP-4a2b — a run starts from the bytes fieldd kept, or asks first; it
     expect(h.records.runRecord(summary.run)).toMatchObject({
       scope: ["work"],
       calls: 0,
-      allowed: FLOW_LIMITS.CALLS_MAX,
       open: [],
       steps: [],
     });
+    // slice 12, the cap out (the C ruling, 2026-11-07): the record keeps no allowance
+    expect(h.records.runRecord(summary.run)).not.toHaveProperty("allowed");
     // the host runs it: its log line is journaled, the run ends done, and its last log line is its summary's
     const done = await settled(h.runs, summary.run, "done");
     expect(done.log).toBe("hi");
@@ -3606,7 +3608,7 @@ const FORM_THEN_GATE = [
   "",
 ].join("\n");
 
-describe("CP-4a2b — the host's life: parked and woken, D2's lookup at a wake, replay's order, and a gate's hold (§13a slices 10a, 10b, 11a)", () => {
+describe("CP-4a2b — the host's life: parked and woken, D2's lookup at a wake, replay's order, and a gate's hold (§13a slices 10a, 10b, 11a, 12)", () => {
   /** Whether host `i` the runs started has left. */
   const left = (h: Harness, i: number): boolean => h.hosts[i]?.leftAt !== undefined;
   /** The run's state, as its summary reads it now. */
@@ -3636,14 +3638,16 @@ describe("CP-4a2b — the host's life: parked and woken, D2's lookup at a wake, 
    * both once the host has left. B's call journaled BEFORE A's answer is no journal SEQ can write: D21 holds A's
    * answer behind a call its script makes only once it hears A, and D7 sets that run aside (P12's journal). */
   const KILL_GRACE_MS = 2_000;
-  /** T4's arm: `h`'s next record write throws once, just after its journal takes a line of `kind`. */
-  const lagsOnce = (h: Harness, kind: "call" | "answer") => {
+  /** T4's arm: `h`'s next record write throws once, just after its journal takes a line of `kind`; of call `at` alone,
+   * when one is named (slice 12, F12: in a fan-out the first line of a kind is call 1's). */
+  const lagsOnce = (h: Harness, kind: "call" | "answer", at?: number) => {
     const append = h.records.appendRun.bind(h.records);
     const write = h.records.writeRunRecord.bind(h.records);
     let armed = false;
     vi.spyOn(h.records, "appendRun").mockImplementation((run, entry) => {
       const kept = append(run, entry);
-      if (entry.kind === kind) armed = true;
+      if (entry.kind === kind && (at === undefined || ("call" in entry && entry.call === at)))
+        armed = true;
       return kept;
     });
     vi.spyOn(h.records, "writeRunRecord").mockImplementation((run, fields) => {
@@ -5271,6 +5275,138 @@ describe("CP-4a2b — the host's life: parked and woken, D2's lookup at a wake, 
     expect({ minted: fresh.read, kept: rebound.read }).toEqual({
       minted: { raises: 1, told: [toVela(words.factAsking, "Seq ask", "seq-ask", fresh.run)] },
       kept: { raises: 1, told: [] },
+    });
+  });
+
+  // slice 12, the cap out (the C ruling, 2026-11-07; the orders over the adopted draft, with the
+  // rulings): there is no call cap, so no row here holds a run at a count. What slice 12 keeps that was never the
+  // cap's: the record's `calls` is the journal's count, even past a record write the disk refused (ZZ3, C2 (b)), and
+  // two pins no row held before, an answer heard in the journal's order across a slot's start that throws (R28d) and
+  // a 300-wide fan-out that ends `flood` with its record whole (R39b). Before slice 12's green, runs.ts counted `calls`
+  // as the record's count plus one at each call line's write: ZZ3 read red on its count, and the two pins read green.
+
+  const SLOTS = FLOW_LIMITS.LIVE_STEPS_MAX;
+  /** A step's options in a script's loop, labelled by its `i`. */
+  const PART = '{ agent: "claude", label: "Part " + i, profile: "work", cwd: "/work/app" }';
+  /** `n` steps at once: each answer it hears, a refusal among them (F20), says the calls heard so far as a log line. */
+  const heardInOrder = (n: number): string =>
+    [
+      'export const meta = { name: "Heard" };',
+      "export default async function () {",
+      "  const heard = [];",
+      "  const said = (i) => () => {",
+      "    heard.push(i);",
+      '    log(heard.join(" "));',
+      "  };",
+      "  const steps = [];",
+      `  for (let i = 1; i <= ${n}; i += 1)`,
+      `    steps.push(agent("look at part " + i, ${PART}).then(said(i), said(i)));`,
+      "  await Promise.all(steps);",
+      "}",
+      "",
+    ].join("\n");
+  /** `n` steps at once, each label and phase at FLOW_LABEL_MAX (F15: what bounds an open step's size). */
+  const wideFan = (n: number): string =>
+    [
+      'export const meta = { name: "Wide" };',
+      "export default async function () {",
+      `  const label = "L".repeat(${FLOW_LABEL_MAX - 3});`,
+      `  const phase = "P".repeat(${FLOW_LABEL_MAX});`,
+      "  const steps = [];",
+      `  for (let i = 1; i <= ${n}; i += 1)`,
+      '    steps.push(agent("look at part " + i, { agent: "claude", label: label + String(1000 + i).slice(1), phase, profile: "work", cwd: "/work/app" }));',
+      "  return await Promise.all(steps);",
+      "}",
+      "",
+    ].join("\n");
+  /** The calls the run's journal holds, in order. */
+  const callsOf = (h: Harness, run: string): number[] => {
+    const read = h.records.readRun(run);
+    return read.kind === "kept"
+      ? read.lines.flatMap((line) => (line.kind === "call" ? [line.call] : []))
+      : [];
+  };
+  /** Each distinct width in `open`, as "‹label› ‹phase›" (F15). */
+  const widthsOf = (open: readonly FlowRunRecordStep[] = []): string[] => [
+    ...new Set(open.map(({ label, phase }) => `${label?.length} ${phase?.length}`)),
+  ];
+
+  it("ZZ3 (C2 (b), Q3 (a); slice 12): a call whose own record write the disk refused is counted at the next call's write, as the journal counts it: `calls` is the journal's count, never one short of it", async () => {
+    const h = await harness();
+    h.approved("fan", fanOut(2));
+    // call 1's record write throws once, just after its line lands (T4's arm, of call 1 alone); call 2's write follows.
+    // The stated window: a run's LAST call whose write is refused stays one short until the next wake, or for good on
+    // an ended run
+    lagsOnce(h, "call", 1);
+    const run = startedRun(await h.start({ flow: "fan" })).run;
+    await waitFor(() => expect(h.enqueued).toHaveLength(2));
+    expect({ calls: h.records.runRecord(run)?.calls, journaled: callsOf(h, run) }).toEqual({
+      calls: 2,
+      journaled: [1, 2],
+    });
+  });
+
+  it("R28d (D21; #3 of the 10b fix's delta review, Q12; slice 12; a pin, green here): an answer journaled inside another's own record follow-up, a slot's start that throws, is heard after it, in the journal's order", async () => {
+    const h = await harness();
+    h.approved("heard", heardInOrder(SLOTS + 1));
+    const run = startedRun(await h.start({ flow: "heard" })).run;
+    await within(PARK_MS, () => h.enqueued.length === SLOTS);
+    // profiles() alone (F20): the records read that heads #launch comes after #unslot's own, whose throw would land in
+    // the lag log and never start step 9, and #startStep's read is the first thing past it that throws synchronously
+    vi.spyOn(h.runs.ports, "profiles").mockImplementationOnce(() => {
+      throw new Error("the Agent Profiles can't be read");
+    });
+    answerStep(h, run, 1, "one");
+    await within(PARK_MS, () => logsOf(h, run).length >= 2);
+    // the pin's mutation: swap the hand-on and #lagging in #answer, and the script hears 9 first
+    expect({
+      journal: answersOf(h, run).map(({ call }) => call),
+      heard: logsOf(h, run),
+    }).toEqual({
+      journal: [1, SLOTS + 1],
+      heard: ["1", `1 ${SLOTS + 1}`],
+    });
+  });
+
+  it("R39b (§13a.0b, [BR] MED, Q14, F4, F15; slice 12; a pin, green here): a run with 256 steps open makes a 257th call: its host ends flood, its record held all 256 in `open`, none lost, each at its full label and phase, and it reads back whole with no `held`", async () => {
+    const most = FLOW_LIMITS.HOST_CALLS_WAITING_MAX;
+    const h = await harness();
+    // `open` as it reads back at the write that takes it to 256: #finish keeps `open`, ZZ2's phantom, slice 13's. Set
+    // before the start, so its first life's writes are all read. The pin's mutation: FlowRunRecord's `open` bound
+    // (HOST_CALLS_WAITING_MAX) lowered by one, so the write at 256 throws and `full` reads empty. It reds in about the
+    // green's time, not WAIT_MS (measured 2026-11-07: 2,244 ms, the green 2,191 ms): the run still ends `flood`, and
+    // the record's `calls` stays 255, ZZ3's window on an ended run
+    const write = h.records.writeRunRecord.bind(h.records);
+    const full: { open: number; lost: number; widths: string[] }[] = [];
+    vi.spyOn(h.records, "writeRunRecord").mockImplementation((at, fields) => {
+      write(at, fields);
+      if (fields.open.length !== most || full.length > 0) return;
+      const open = h.records.runRecord(at)?.open ?? [];
+      const lost = open.filter((step) => step.state === "lost").length;
+      full.push({ open: open.length, lost, widths: widthsOf(open) });
+    });
+    h.approved("wide", wideFan(300));
+    const run = startedRun(await h.start({ flow: "wide" })).run;
+    await within(WAIT_MS, () => over(h, run));
+    const ended = h.records.runRecord(run);
+    expect({
+      full,
+      state: ended?.state,
+      host: ended?.host,
+      calls: ended?.calls,
+      journaled: callsOf(h, run).length,
+      lost: ended?.open.filter((step) => step.state === "lost").length,
+      held: ended?.held,
+      hosts: h.hosts.length,
+    }).toEqual({
+      full: [{ open: most, lost: 0, widths: [`${FLOW_LABEL_MAX} ${FLOW_LABEL_MAX}`] }],
+      state: "failed",
+      host: "flood",
+      calls: most,
+      journaled: most,
+      lost: 0,
+      held: undefined,
+      hosts: 1,
     });
   });
 });
