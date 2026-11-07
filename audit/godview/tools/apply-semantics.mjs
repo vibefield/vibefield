@@ -302,15 +302,17 @@ function step(order, name, effect, source) {
 
 function costTail() {
   return [
-    step(4, 'project-usage', 'projectAgentMonitorState publishes usage from the priced index. This is the monitor usage object, not yet field.cost.', REF.projectUsage),
-    step(5, 'ledger-counts', 'buildUsageCostLedger increments pricedCount for each finite nonnegative costUsd, including 0. A missing or invalid costUsd increments unpricedCount when canonical, pricing, or cost is present.', pup('packages/core/src/monitor/cost.ts', 21, 40, 'buildUsageCostLedger')),
-    step(6, 'coverage-decision', 'projectUsageCost: pricedCount > 0 and unpricedCount = 0 is complete, and the USD total may be 0. pricedCount > 0 and unpricedCount > 0 is partial. pricedCount = 0 omits costUsd and sets coverage unavailable.', pup('packages/core/src/monitor/cost.ts', 59, 101, 'projectUsageCost')),
-    step(7, 'history-aggregate', 'historyOf sums defined costUsd across runs before costOf. A pricedCount of 0 leaves history.total undefined.', pup('packages/monitor/src/backend/usage-ledger.ts', 62, 82, 'historyOf')),
-    step(8, 'derive-cost', 'deriveAgentRow copies input.cost when costOf returned an object, including a USD total of 0. It omits cost when history.total is undefined.', REF.costCopy),
-    step(9, 'replica-passthrough', 'The replica join spreads the agent row. It does not recompute cost.', REF.replica),
-    step(10, 'window-passthrough', 'window-rows spreads the row. It rewrites peer stale and drops peer profileSet. It does not recompute cost.', REF.window),
-    step(11, 'swarm-reader', 'A working observed body reads cost coverage and burn to choose a priced flame or the unpriced flame.', REF.swarmCost),
-    step(12, 'spend-reader', 'spendOf reads cost.usd unless coverage is unavailable or the total is missing.', REF.spend),
+    step(4, 'usage-index-stream', 'buildUsageIndex folds selected usage and stream calls buildUsageCostLedger before project.ts copies a usage result.', pup('packages/core/src/monitor/usage-index.ts', 210, 223, 'stream')),
+    step(5, 'ledger-counts', 'A finite nonnegative costUsd, including 0, increments pricedCount. Missing, invalid, or negative costUsd increments unpricedCount only when canonical or pricing or cost is truthy. A plain noncanonical sample with none of those is skipped and does not increment unpricedCount.', pup('packages/core/src/monitor/cost.ts', 21, 40, 'buildUsageCostLedger')),
+    step(6, 'coverage-decision', 'queryUsageIndex calls projectUsageCost. pricedCount > 0 and unpricedCount = 0 is complete, and the USD total may be 0. pricedCount > 0 and unpricedCount > 0 is partial. pricedCount = 0 omits this run costUsd and costRatePerMin.', pup('packages/core/src/monitor/cost.ts', 59, 101, 'projectUsageCost')),
+    step(7, 'project-usage', 'project.ts:346-351 already ran the index and the query. Line 417 copies that usage result onto monitor state.', pup('packages/core/src/monitor/project.ts', 417, 417, 'usage copy')),
+    step(8, 'epoch-retention', 'Godview main.ts:744 uses acrossEpochs accumulate, so a prior epoch costUsd can remain. Vibefield agent-monitor.ts:480 uses acrossEpochs current and replaces that one run. history.total is absent only when no retained run has costUsd. burnPerHour is the current costRatePerMin times 60, not the retained sum.', pup('packages/monitor/src/backend/backend.ts', 410, 435, 'observe then costOf')),
+    step(9, 'history-aggregate', 'historyOf sums retained costUsd. Coverage is partial when any retained run is not complete. No retained run with costUsd leaves history.total undefined.', pup('packages/monitor/src/backend/usage-ledger.ts', 62, 82, 'historyOf')),
+    step(10, 'derive-cost', 'deriveAgentRow copies input.cost when costOf returned an object, including a USD total of 0. It omits cost when no retained priced total exists.', REF.costCopy),
+    step(11, 'replica-passthrough', 'The replica join spreads the agent row. It does not recompute cost.', REF.replica),
+    step(12, 'window-passthrough', 'window-rows spreads the row. It rewrites peer stale and drops peer profileSet. It does not recompute cost.', REF.window),
+    step(13, 'swarm-reader', 'A working observed body reads cost coverage and burn to choose a priced flame or the unpriced flame.', REF.swarmCost),
+    step(14, 'spend-reader', 'spendOf reads cost.usd unless coverage is unavailable or the total is missing.', REF.spend),
   ];
 }
 
@@ -350,26 +352,31 @@ flowchart TD
   signal["${signal.path}:${signal.lineStart}-${signal.lineEnd}\\n${signal.symbol}"]
   signal --> price["monitor-service.ts:418-425 priceUsageUpdates before reduce"]
   price --> reduce["reduce.ts:1049-1073 copies the priced costUsd"]
-  reduce --> project["project.ts:407-417 publishes usage"]
-  project --> counts["cost.ts:21-40 buildUsageCostLedger: finite nonnegative costUsd, including 0, increments pricedCount; otherwise unpricedCount"]
-  counts --> decide["cost.ts:59-101 projectUsageCost"]
-  decide --> complete["pricedCount > 0 and unpricedCount = 0: costCoverage complete. USD total may be 0"]
-  decide --> partial["pricedCount > 0 and unpricedCount > 0: costCoverage partial"]
-  decide --> none["pricedCount = 0: costUsd omitted and costCoverage unavailable"]
-  complete --> agg["usage-ledger.ts:62-82 historyOf sums defined costUsd before costOf"]
-  partial --> agg
-  none --> agg
-  agg --> costOf["backend.ts:197-205 costOf after ledger.observe at backend.ts:410-435"]
-  costOf --> missing["pricedCount = 0 leaves history.total undefined: omit field.cost, state.cost_missing"]
-  costOf --> kept["pricedCount > 0: row keeps usd, which may be 0, and complete or partial coverage"]
+  reduce --> index["usage-index.ts:321-330 and 427 buildUsageIndex folds selected usage into stream"]
+  index --> counts["usage-index.ts:210-223 stream calls cost.ts:21-40 buildUsageCostLedger"]
+  counts --> pricedObs["finite nonnegative costUsd, including 0: pricedCount += 1 and total += amount"]
+  counts --> guarded["missing, invalid, or negative costUsd increments unpricedCount only when canonical or pricing or cost is truthy"]
+  counts --> skipped["plain noncanonical sample with none of those is skipped and does not increment unpricedCount"]
+  counts --> decide["usage-index.ts:531-550 queryUsageIndex calls cost.ts:59-101 projectUsageCost"]
+  decide --> complete["pricedCount > 0 and unpricedCount = 0: core coverage complete. USD total may be 0"]
+  decide --> partialCore["pricedCount > 0 and unpricedCount > 0: core coverage partial, sum of the priced subset"]
+  decide --> coreNone["pricedCount = 0: core omits costUsd and costRatePerMin. coverage unavailable"]
+  complete --> project["project.ts:417 copies the usage result. queryUsageIndex already ran at project.ts:346-351"]
+  partialCore --> project
+  coreNone --> project
+  project --> epochs["backend.ts:410-422 observe. Godview main.ts:744 acrossEpochs accumulate retains prior epoch costUsd. Vibefield agent-monitor.ts:480 acrossEpochs current replaces that one run"]
+  epochs --> agg["usage-ledger.ts:62-82 historyOf. history.total is absent only when no retained run has costUsd"]
+  agg --> costOf["backend.ts:197-205 costOf"]
+  costOf --> missing["no retained priced total: omit field.cost, state.cost_missing"]
+  costOf --> kept["retained costUsd: usd is the acrossEpochs sum. burnPerHour is current costRatePerMin times 60, not that sum"]
   kept --> derive["derive.ts:277 copies cost or omits it"]
   derive --> replica["replica.ts:337-372 spreads the row; cost unchanged"]
   replica --> window["window-rows.ts:116-134 does not recompute cost"]
   window --> swarm["bubble-model.ts:469-477 priced flame or unpriced flame"]
   window --> spend["spend-series.ts:34-38 spendOf"]
   complete --> swarm
-  partial --> swarm
-  missing --> unpriced["working observed body: burn_unpriced"]
+  partialCore --> swarm
+  missing --> unpricedFlame["working observed body: burn_unpriced"]
 `;
 }
 

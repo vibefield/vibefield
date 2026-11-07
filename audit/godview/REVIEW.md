@@ -6,7 +6,7 @@ Delivery: incomplete. This file is the review manifest for one integrated tree. 
 
 | Slice | Commit | What this tree holds |
 | --- | --- | --- |
-| First half | `355e720327b4aa047336a1823e9b43c84e836220` | Evidence for acp, antigravity, claude, codex, copilot, plus plan, tools, and graphs. Supersedes `5bc7fbc`. Copied as files. No puppeteer history. |
+| First half | `68dde825266e63ba63a1b07f7fcfd1e85f868b1f` | Evidence for acp, antigravity, claude, codex, copilot, plus plan, tools, and graphs. Supersedes `355e720`. Copied as files. No puppeteer history. |
 | Account trace | `08b5d849177685662b43e0e3a4e6bd7d32ac2cdf` | `contracts/account-trace.md`. Host-scoped. |
 | Second half | `69b4c9c8b078571f42302c920f3c5e8e279e37c9` | grok, hermes, kimi, opencode, pi, including account and profileSet flows. |
 | Render | `863f44ac1fe2b91bddc5306070761e43636d25c6` | Matrix denominator 410. |
@@ -26,8 +26,10 @@ Candidate status: `static-not-live`. The owner semantic gate on the copied first
 
 ## Still open
 
-- Lead is still reviewing graph precision: unpriced guard, ledger versus project ordering, retained epochs.
-- 24 first-half cost graphs still stop before a reader or overlay. Those are the adapters whose handlers omit usage. Claude and Codex graphs now name ledger counts, a coverage decision, and spend and swarm readers. Zero USD can be complete when pricedCount is positive and unpricedCount is 0. That is the candidate's static claim.
+- Claude and Codex `field.cost.usd` state the pricing guard, ledger counts before the project copy, and current versus retained epochs. Independent semantic signoff is pending. Those records were not live-run.
+- ACP, Antigravity, and Copilot cost records stop where the handler omits usage.
+- Second-half cost flows from `69b4c9c8` still observe the ledger after project and do not state the guard or the epoch split. They are pending correction and are not semantically verified. Other fields on those five adapters stay usable. A corrected commit is incoming.
+- 24 first-half cost field records have no reader or overlay hop. Those are the omission paths, not the Claude and Codex priced graphs.
 - Account is not an adapter field. The VibeField host omits it. The Puppeteer Godview host can set a profile label except for ACP. `accountUsage` feeds the usage column, not `field.account`.
 - Shared-map `uiResolutionCounts.resolvedUnknown` 265 and `remainingUnknown` 0 are shared-anchor bookkeeping, not envelope UI resolution.
 - 77 coverage gaps and 59 environment gaps remain. More render updates may arrive.

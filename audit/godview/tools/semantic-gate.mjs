@@ -149,35 +149,27 @@ for (const row of filled.rowJoins) {
     failures.push(`${record.recordId} status graph omits window-rows`);
   }
   if (row.fieldId.startsWith('field.cost') && ['adapter.claude', 'adapter.codex'].includes(row.adapterId)) {
-    for (const needle of [
-      'pricedCount > 0 and unpricedCount = 0',
-      'pricedCount > 0 and unpricedCount > 0',
-      'pricedCount = 0',
-      'cost.ts:21-40',
-      'cost.ts:59-101',
-      'usage-ledger.ts:62-82',
-      'project.ts',
-      'derive.ts',
-      'replica.ts',
-      'window-rows.ts',
-      'bubble-model.ts',
-      'spend-series.ts',
-    ]) {
-      if (!graph.includes(needle)) failures.push(`${record.recordId} cost graph omits ${needle}`);
+    assertPricedCostGraph(record.recordId, graph);
+    const counts = record.transforms.find((item) => item.name === 'ledger-counts');
+    const decision = record.transforms.find((item) => item.name === 'coverage-decision');
+    const history = record.transforms.find((item) => item.name === 'history-aggregate');
+    const names = record.transforms.map((item) => item.name);
+    const at = (name) => names.indexOf(name);
+    if (!counts || !/only when canonical or pricing or cost is truthy/.test(counts.effect) || !/does not increment unpricedCount/.test(counts.effect)) {
+      failures.push(`${record.recordId} ledger transform lacks the guarded unpriced branch`);
     }
-    const counts = graph.indexOf('cost.ts:21-40');
-    const decision = graph.indexOf('cost.ts:59-101');
-    const aggregate = graph.indexOf('usage-ledger.ts:62-82');
-    const costOf = graph.indexOf('backend.ts:197-205');
-    if (!(counts >= 0 && counts < decision && decision < aggregate && aggregate < costOf)) {
-      failures.push(`${record.recordId} ledger decision is not before costOf`);
-    }
-    if (/unpriced zero|both positive|no priced total/u.test(graph)) {
-      failures.push(`${record.recordId} cost graph confuses a zero USD total with unpriced count`);
-    }
-    const decisionStep = record.transforms.find((item) => item.name === 'coverage-decision');
-    if (!decisionStep || !/pricedCount > 0 and unpricedCount = 0/.test(decisionStep.effect) || !/pricedCount = 0/.test(decisionStep.effect)) {
+    if (!decision || !/pricedCount > 0 and unpricedCount = 0/.test(decision.effect) || !/pricedCount > 0 and unpricedCount > 0/.test(decision.effect)) {
       failures.push(`${record.recordId} coverage transform lacks the count predicate`);
+    }
+    if (!history || !/no retained run has costUsd/.test(history.effect)) {
+      failures.push(`${record.recordId} history transform omits the retained-total rule`);
+    }
+    const order = ['reduce-after-price', 'usage-index-stream', 'ledger-counts', 'coverage-decision', 'project-usage', 'history-aggregate', 'row-cost', 'derive-cost'];
+    let previous = -1;
+    for (const name of order) {
+      const index = at(name);
+      if (index < 0 || index < previous) failures.push(`${record.recordId} transform order breaks at ${name}`);
+      previous = index;
     }
   }
   if (row.fieldId.startsWith('field.cost') && ['adapter.acp', 'adapter.antigravity', 'adapter.copilot'].includes(row.adapterId)) {
@@ -185,10 +177,36 @@ for (const row of filled.rowJoins) {
   }
 }
 
-const pricedGraph = readFileSync(join(root, 'audit/godview/plan/graphs/cost-priced.mmd'), 'utf8');
-for (const needle of ['pricedCount > 0 and unpricedCount = 0', 'pricedCount > 0 and unpricedCount > 0', 'pricedCount = 0', 'cost.ts:21-40', 'usage-ledger.ts:62-82']) {
-  if (!pricedGraph.includes(needle)) failures.push(`cost-priced.mmd omits ${needle}`);
+function assertPricedCostGraph(label, graph) {
+  const order = [
+    'reduce.ts:1049-1073',
+    'usage-index.ts:210-223',
+    'cost.ts:21-40',
+    'cost.ts:59-101',
+    'project.ts:417',
+    'usage-ledger.ts:62-82',
+    'backend.ts:197-205',
+    'derive.ts:277',
+    'replica.ts',
+    'window-rows.ts',
+  ];
+  let at = -1;
+  for (const needle of order) {
+    const next = graph.indexOf(needle);
+    if (next < 0 || next < at) failures.push(`${label} chronological order missing or early: ${needle}`);
+    at = Math.max(at, next);
+  }
+  if (!graph.includes('only when canonical or pricing or cost is truthy')) failures.push(`${label} lacks the guarded unpriced branch`);
+  if (!graph.includes('does not increment unpricedCount')) failures.push(`${label} lacks the skipped noncanonical sample`);
+  if (!graph.includes('no retained run has costUsd')) failures.push(`${label} omits the retained-total rule`);
+  if (!graph.includes('costRatePerMin') || !graph.includes('acrossEpochs accumulate') || !graph.includes('acrossEpochs current')) {
+    failures.push(`${label} does not separate current costRate from the acrossEpochs sum`);
+  }
+  if (/otherwise unpricedCount|unpriced zero|both positive|no priced total/u.test(graph)) {
+    failures.push(`${label} still uses an unconditional unpriced or zero-total predicate`);
+  }
 }
-if (/unpriced zero|both positive|no priced total/u.test(pricedGraph)) failures.push('cost-priced.mmd confuses a zero USD total with unpriced count');
+
+assertPricedCostGraph('cost-priced.mmd', readFileSync(join(root, 'audit/godview/plan/graphs/cost-priced.mmd'), 'utf8'));
 console.log(JSON.stringify({ contradictions: failures.length, failures: failures.slice(0, 20) }, null, 2));
 process.exit(failures.length === 0 ? 0 : 1);

@@ -37,7 +37,7 @@ test("pinned source inventory matches the model contract counts", () => {
   assert.equal(index.partial.evidenceKind, "source-read");
   assert.equal(index.partial.independentSemanticReview, "pending");
   assert.equal(index.partial.provenanceComplete, false);
-  assert.equal(index.partial.firstHalfCommit, "355e720327b4aa047336a1823e9b43c84e836220");
+  assert.equal(index.partial.firstHalfCommit, "68dde825266e63ba63a1b07f7fcfd1e85f868b1f");
   assert.equal(index.partial.candidateStatus, "static-not-live");
   assert.equal(index.partial.secondHalfCommit, "69b4c9c8b078571f42302c920f3c5e8e279e37c9");
   assert.equal(index.partial.accountTraceCommit, "08b5d849177685662b43e0e3a4e6bd7d32ac2cdf");
@@ -48,13 +48,23 @@ test("pinned source inventory matches the model contract counts", () => {
   assert.equal(index.partial.blockers.first.ui.yes, 247);
   assert.equal(index.partial.blockers.first.ui.no, 123);
   assert.equal(index.partial.blockers.first.ui.unknown, 0);
-  assert.deepEqual(
-    index.partial.blockers.openGraphReview.map((item) => item.id),
-    ["unpriced-guard", "ledger-project-ordering", "retained-epochs"],
-  );
-  assert.ok(
-    index.partial.blockers.openGraphReview.every((item) => item.status === "lead-reviewing"),
-  );
+  assert.deepEqual(index.partial.blockers.costReview.first.ownerStated.sort(), [
+    "adapter.claude",
+    "adapter.codex",
+  ]);
+  assert.deepEqual(index.partial.blockers.costReview.second.pendingCorrection.sort(), [
+    "adapter.grok",
+    "adapter.hermes",
+    "adapter.kimi",
+    "adapter.opencode",
+    "adapter.pi",
+  ]);
+  assert.deepEqual(index.partial.blockers.costReview.second.defects["adapter.grok"], [
+    "pricing-guard",
+    "ledger-after-project",
+    "retained-epochs",
+  ]);
+  assert.equal(index.partial.blockers.costReview.independentSignoff, "pending");
   assert.equal(index.sharedMap.adapterSpecificUiResolved, false);
   assert.equal(index.sharedMap.uiResolutionMeaning, "shared-anchor-bookkeeping");
   assert.equal(index.sharedMap.uiResolutionCounts.resolvedUnknown, 265);
@@ -196,7 +206,9 @@ test("a priced-cost absence is not a runtime impossibility", () => {
   assert.match(cell.reading.mismatch, /cost_missing/);
   assert.match(cell.reading.mismatch, /anthropic and openai only/);
   assert.equal(/unreachable/i.test(cell.reading.mismatch), false);
-  assert.equal(cell.graphOrder.status, "shared-order");
+  assert.equal(cell.graphOrder.status, "pending-correction");
+  assert.ok(cell.graphOrder.defects.includes("ledger-after-project"));
+  assert.match(cell.graphOrder.note, /semantically verified/);
   assert.equal(cell.stateReading.status, "host-claim");
   const reply = buildCell({
     model: audit.model,

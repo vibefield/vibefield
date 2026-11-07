@@ -287,19 +287,87 @@ function tallyRows(list) {
   return { rows: list.length, ui, directNoYes, modelAxes, costStops };
 }
 
-/** Envelope counts and the 5bc7 blockers. These are not the shared map's anchor totals. */
+const PRICING_GUARD = /unpricedCount only when canonical or pricing or cost is truthy/i;
+
+/** Derived from transform names and effects. Not a sign-off. */
+export function costSemantics(envelope) {
+  if (!envelope || !String(envelope.fieldId ?? "").startsWith("field.cost")) return null;
+  const steps = envelope.transforms ?? [];
+  const names = steps.map((step) => step.name ?? "");
+  const effects = steps.map((step) => step.effect ?? "").join("\n");
+  const at = (name) => names.indexOf(name);
+  if (
+    names.includes("handler-omits-usage") &&
+    at("ledger-counts") === -1 &&
+    at("ledger.observe") === -1
+  ) {
+    return {
+      kind: "omission",
+      verification: "stops-at-omission",
+      independentSignoff: "pending",
+      liveRun: false,
+      defects: [],
+    };
+  }
+  const pricingGuard = PRICING_GUARD.test(effects);
+  const ledger = at("ledger-counts");
+  const project = at("project-usage");
+  const ledgerBeforeProject = ledger !== -1 && project !== -1 && ledger < project;
+  const oldProject = at("projectAgentMonitorState");
+  const oldLedger = at("ledger.observe");
+  const ledgerAfterProject = oldProject !== -1 && oldLedger !== -1 && oldProject < oldLedger;
+  const epochs = at("epoch-retention") !== -1 && at("vibefield-current-epoch") !== -1;
+  const defects = [];
+  if (!pricingGuard) defects.push("pricing-guard");
+  if (ledgerAfterProject || (ledger !== -1 && project !== -1 && !ledgerBeforeProject)) {
+    defects.push("ledger-after-project");
+  }
+  if (!epochs) defects.push("retained-epochs");
+  return {
+    kind: "priced-path",
+    verification: defects.length === 0 ? "owner-stated" : "pending-correction",
+    independentSignoff: "pending",
+    liveRun: false,
+    defects,
+    pricingGuard,
+    ledgerBeforeProject,
+    epochs,
+  };
+}
+
+function costReviewFor(rows) {
+  const ownerStated = [];
+  const pendingCorrection = [];
+  const omission = [];
+  const defects = {};
+  for (const trace of rows) {
+    if (trace.fieldId !== "field.cost.usd") continue;
+    const review = costSemantics(trace.envelope);
+    if (!review) continue;
+    if (review.verification === "owner-stated") ownerStated.push(trace.adapterId);
+    else if (review.verification === "pending-correction") {
+      pendingCorrection.push(trace.adapterId);
+      defects[trace.adapterId] = review.defects;
+    } else omission.push(trace.adapterId);
+  }
+  return { ownerStated, pendingCorrection, omission, defects };
+}
+
+/** Envelope counts and cost-graph checks read from the files. */
 export function semanticBlockers(traces) {
   const rows = traces.filter(isRowTrace);
+  const first = rows.filter((trace) => FIRST_HALF.has(trace.adapterId));
+  const second = rows.filter((trace) => SECOND_HALF.has(trace.adapterId));
   return {
-    first: tallyRows(rows.filter((trace) => FIRST_HALF.has(trace.adapterId))),
-    second: tallyRows(rows.filter((trace) => SECOND_HALF.has(trace.adapterId))),
+    first: tallyRows(first),
+    second: tallyRows(second),
+    costReview: {
+      first: costReviewFor(first),
+      second: costReviewFor(second),
+      independentSignoff: "pending",
+    },
     delivery: "incomplete",
     candidateStatus: "static-not-live",
-    openGraphReview: [
-      { id: "unpriced-guard", status: "lead-reviewing" },
-      { id: "ledger-project-ordering", status: "lead-reviewing" },
-      { id: "retained-epochs", status: "lead-reviewing" },
-    ],
   };
 }
 

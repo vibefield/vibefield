@@ -4,24 +4,29 @@
 flowchart TD
   signal["packages/adapter-codex/src/normalization/monitor.ts:503-527\npricing deltas, no costUsd"]
   signal --> price["monitor-service.ts:418-425 priceUsageUpdates before reduce"]
-  price --> reduce["reduce.ts:1049-1073 copies the priced costUsd"]
-  reduce --> project["project.ts:407-417 publishes usage"]
-  project --> counts["cost.ts:21-40 buildUsageCostLedger: finite nonnegative costUsd, including 0, increments pricedCount; otherwise unpricedCount"]
-  counts --> decide["cost.ts:59-101 projectUsageCost"]
-  decide --> complete["pricedCount > 0 and unpricedCount = 0: costCoverage complete. USD total may be 0"]
-  decide --> partial["pricedCount > 0 and unpricedCount > 0: costCoverage partial"]
-  decide --> none["pricedCount = 0: costUsd omitted and costCoverage unavailable"]
-  complete --> agg["usage-ledger.ts:62-82 historyOf sums defined costUsd before costOf"]
-  partial --> agg
-  none --> agg
-  agg --> costOf["backend.ts:197-205 costOf after ledger.observe at backend.ts:410-435"]
-  costOf --> missing["pricedCount = 0 leaves history.total undefined: omit field.cost, state.cost_missing"]
-  costOf --> kept["pricedCount > 0: row keeps usd, which may be 0, and complete or partial coverage"]
+  price --> reduce["reduce.ts:1049-1073 copies costUsd onto the usage observation"]
+  reduce --> index["usage-index.ts:321-330 and 427 buildUsageIndex folds selected usage into stream"]
+  index --> counts["usage-index.ts:210-223 stream calls cost.ts:21-40 buildUsageCostLedger"]
+  counts --> pricedObs["finite nonnegative costUsd, including 0: pricedCount += 1 and total += amount"]
+  counts --> guarded["missing, invalid, or negative costUsd increments unpricedCount only when canonical or pricing or cost is truthy"]
+  counts --> skipped["plain noncanonical sample with none of those is skipped and does not increment unpricedCount"]
+  counts --> decide["usage-index.ts:531-550 queryUsageIndex calls cost.ts:59-101 projectUsageCost"]
+  decide --> complete["pricedCount > 0 and unpricedCount = 0: core coverage complete. USD total may be 0"]
+  decide --> partialCore["pricedCount > 0 and unpricedCount > 0: core coverage partial, sum of the priced subset"]
+  decide --> coreNone["pricedCount = 0: core omits costUsd and costRatePerMin. coverage unavailable"]
+  complete --> project["project.ts:417 copies the usage result. queryUsageIndex already ran at project.ts:346-351"]
+  partialCore --> project
+  coreNone --> project
+  project --> epochs["backend.ts:410-422 observe. Godview main.ts:744 acrossEpochs accumulate retains prior epoch costUsd. Vibefield agent-monitor.ts:480 acrossEpochs current replaces that one run"]
+  epochs --> agg["usage-ledger.ts:62-82 historyOf. history.total is absent only when no retained run has costUsd"]
+  agg --> costOf["backend.ts:197-205 costOf"]
+  costOf --> missing["no retained priced total: omit field.cost, state.cost_missing"]
+  costOf --> kept["retained costUsd: usd is the acrossEpochs sum. burnPerHour is current costRatePerMin times 60, not that sum"]
   kept --> derive["derive.ts:277 copies cost or omits it"]
   derive --> replica["replica.ts:337-372 spreads the row; cost unchanged"]
   replica --> window["window-rows.ts:116-134 does not recompute cost"]
   window --> swarm["bubble-model.ts:469-477 priced flame or unpriced flame"]
   window --> spend["spend-series.ts:34-38 spendOf"]
   complete --> swarm
-  partial --> swarm
+  partialCore --> swarm
   missing --> unpricedFlame["working observed body: burn_unpriced"]

@@ -2,7 +2,7 @@
 %% state: state.cost_complete
 %% shared_map: 07e71c9bcb9532fc181e3f667f2d0ed2e7c9afaf
 flowchart LR
-  pred["pricedCount > 0 and unpricedCount = 0: costCoverage complete. USD total may be 0"]
+  pred["pricedCount > 0 and unpricedCount = 0: core coverage complete. USD total may be 0. unpricedCount increments only when canonical or pricing or cost is truthy"]
   src["path.usage"]
   verdict["conditional shared predicate; adapter-specific satisfying sequence not asserted"]
   src --> pred --> verdict

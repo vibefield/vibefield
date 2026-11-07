@@ -2,7 +2,7 @@
 %% state: state.cost_missing
 %% shared_map: 07e71c9bcb9532fc181e3f667f2d0ed2e7c9afaf
 flowchart LR
-  pred["pricedCount = 0: history.total undefined, omit field.cost"]
+  pred["omit field.cost only when no retained run has costUsd. Current-run pricedCount = 0 does not erase an acrossEpochs accumulate total"]
   src["path.usage"]
   verdict["conditional shared predicate; adapter-specific satisfying sequence not asserted"]
   src --> pred --> verdict

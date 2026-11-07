@@ -110,6 +110,38 @@
       "lineStart": 34,
       "lineEnd": 38,
       "symbol": "spendOf"
+    },
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/core/src/monitor/usage-index.ts",
+      "lineStart": 210,
+      "lineEnd": 223,
+      "symbol": "stream"
+    },
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/core/src/monitor/project.ts",
+      "lineStart": 346,
+      "lineEnd": 417,
+      "symbol": "usage projection then copy"
+    },
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/monitor/src/backend/backend.ts",
+      "lineStart": 410,
+      "lineEnd": 435,
+      "symbol": "observe then costOf"
+    },
+    {
+      "repo": "vibefield",
+      "sha": "433505fd0f224f4cda540d642661b13848c0ef82",
+      "path": "packages/fieldd/src/agent-monitor.ts",
+      "lineStart": 478,
+      "lineEnd": 480,
+      "symbol": "acrossEpochs current"
     }
   ],
   "producer": {
@@ -158,21 +190,21 @@
       }
     },
     {
-      "order": 3,
-      "name": "project-usage",
-      "effect": "projectAgentMonitorState publishes usage from the priced index. This is the monitor usage object, not yet field.cost.",
+      "name": "usage-index-stream",
+      "effect": "buildUsageIndex at usage-index.ts:427 folds selected usage. stream at usage-index.ts:210-223 calls buildUsageCostLedger before project.ts copies a usage result.",
       "source": {
         "repo": "puppeteer",
         "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
-        "path": "packages/core/src/monitor/project.ts",
-        "lineStart": 407,
-        "lineEnd": 417,
-        "symbol": "projectAgentMonitorState usage"
-      }
+        "path": "packages/core/src/monitor/usage-index.ts",
+        "lineStart": 210,
+        "lineEnd": 223,
+        "symbol": "stream"
+      },
+      "order": 3
     },
     {
       "name": "ledger-counts",
-      "effect": "buildUsageCostLedger increments pricedCount for each finite nonnegative costUsd, including 0. A missing or invalid costUsd increments unpricedCount when canonical, pricing, or cost is present.",
+      "effect": "cost.ts:21-40: a finite nonnegative costUsd, including 0, increments pricedCount and adds to the total. Missing, invalid, or negative costUsd increments unpricedCount only when canonical or pricing or cost is truthy. A plain noncanonical sample with none of those is skipped and does not increment unpricedCount.",
       "source": {
         "repo": "puppeteer",
         "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
@@ -185,7 +217,7 @@
     },
     {
       "name": "coverage-decision",
-      "effect": "projectUsageCost: pricedCount > 0 and unpricedCount = 0 is complete, and the USD total may be 0. pricedCount > 0 and unpricedCount > 0 is partial. pricedCount = 0 omits costUsd and sets coverage unavailable.",
+      "effect": "queryUsageIndex at usage-index.ts:549 calls projectUsageCost. pricedCount > 0 and unpricedCount = 0 is complete, and the USD total may be 0. pricedCount > 0 and unpricedCount > 0 is partial. pricedCount = 0 omits this run costUsd and costRatePerMin.",
       "source": {
         "repo": "puppeteer",
         "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
@@ -197,8 +229,47 @@
       "order": 5
     },
     {
+      "name": "project-usage",
+      "effect": "project.ts:346-351 runs usageIndexOf and queryUsageIndex. project.ts:417 then copies that usage result. The copy does not build the cost ledger.",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/core/src/monitor/project.ts",
+        "lineStart": 346,
+        "lineEnd": 417,
+        "symbol": "usage projection then copy"
+      },
+      "order": 6
+    },
+    {
+      "name": "epoch-retention",
+      "effect": "backend.ts:410-422 observes the projected usage before costOf. Godview main.ts:744 sets acrossEpochs accumulate, so a prior epoch costUsd can remain when the current run has pricedCount = 0. Vibefield agent-monitor.ts:480 sets acrossEpochs current and replaces that one run. burnPerHour is the current costRatePerMin times 60, not the retained sum.",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/monitor/src/backend/backend.ts",
+        "lineStart": 410,
+        "lineEnd": 435,
+        "symbol": "observe then costOf"
+      },
+      "order": 7
+    },
+    {
+      "name": "vibefield-current-epoch",
+      "effect": "Vibefield createMonitorBackend passes cost acrossEpochs current, so the backend does not sum earlier epochs.",
+      "source": {
+        "repo": "vibefield",
+        "sha": "433505fd0f224f4cda540d642661b13848c0ef82",
+        "path": "packages/fieldd/src/agent-monitor.ts",
+        "lineStart": 478,
+        "lineEnd": 480,
+        "symbol": "acrossEpochs current"
+      },
+      "order": 8
+    },
+    {
       "name": "history-aggregate",
-      "effect": "historyOf sums defined costUsd across runs before costOf. pricedCount = 0 leaves history.total undefined, so the row omits field.cost (state.cost_missing).",
+      "effect": "historyOf sums costUsd from retained runs and marks coverage partial when any retained run is not complete. history.total is absent only when no retained run has costUsd.",
       "source": {
         "repo": "puppeteer",
         "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
@@ -207,12 +278,11 @@
         "lineEnd": 82,
         "symbol": "historyOf"
       },
-      "order": 6
+      "order": 9
     },
     {
-      "order": 7,
       "name": "row-cost",
-      "effect": "costOf copies usd and coverage when history.total is defined. pricedCount > 0 and unpricedCount = 0 is complete, including a USD total of 0. pricedCount > 0 and unpricedCount > 0 is partial. pricedCount = 0 leaves history.total undefined and omits field.cost (state.cost_missing).",
+      "effect": "costOf returns undefined when history.total is undefined, which is no retained priced total, and the row omits field.cost. Otherwise usd is the retained sum, coverage is the history coverage, and burnPerHour is the current costRatePerMin times 60 when that rate is defined.",
       "source": {
         "repo": "puppeteer",
         "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
@@ -220,12 +290,12 @@
         "lineStart": 197,
         "lineEnd": 205,
         "symbol": "costOf"
-      }
+      },
+      "order": 10
     },
     {
-      "order": 8,
       "name": "derive-cost",
-      "effect": "deriveAgentRow copies input.cost when costOf returned an object, including a USD total of 0. It omits cost when history.total is undefined.",
+      "effect": "deriveAgentRow copies input.cost when costOf returned an object, including a USD total of 0. It omits cost when no retained priced total exists.",
       "source": {
         "repo": "puppeteer",
         "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
@@ -233,10 +303,11 @@
         "lineStart": 277,
         "lineEnd": 277,
         "symbol": "row cost copy"
-      }
+      },
+      "order": 11
     },
     {
-      "order": 9,
+      "order": 12,
       "name": "replica-passthrough",
       "effect": "The replica join spreads the agent row. It does not recompute cost.",
       "source": {
@@ -249,7 +320,7 @@
       }
     },
     {
-      "order": 10,
+      "order": 13,
       "name": "window-passthrough",
       "effect": "window-rows spreads the row. It rewrites peer stale and drops peer profileSet. It does not recompute cost.",
       "source": {
@@ -262,7 +333,7 @@
       }
     },
     {
-      "order": 11,
+      "order": 14,
       "name": "swarm-reader",
       "effect": "A working observed body reads cost coverage and burn to choose a priced flame or the unpriced flame.",
       "source": {
@@ -275,7 +346,7 @@
       }
     },
     {
-      "order": 12,
+      "order": 15,
       "name": "spend-reader",
       "effect": "spendOf reads cost.usd unless coverage is unavailable or the total is missing.",
       "source": {

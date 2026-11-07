@@ -569,7 +569,8 @@ function sharedMapSummary(root) {
     openEnvelopeIssues: [
       "Shared-map uiResolutionCounts.resolvedUnknown 265 and remainingUnknown 0 are shared-anchor bookkeeping. They are not adapter-specific UI resolution. Envelope uiReachable counts are computed from the files.",
       "The map says non-cost sequences are not reproven. That admission stays open.",
-      "First-half 355e720 is a static candidate, not a live sample and not final. It states priced coverage as pricedCount > 0 and unpricedCount = 0, so a zero USD total can still be complete. Lead is still reviewing the unpriced guard, ledger/project ordering, and retained epochs.",
+      "First-half 68dde825 states the pricing guard, ledger-before-project chronology, and current versus retained epochs on the priced cost records. Independent signoff is pending. Those records are static, not live.",
+      "Second-half cost flows from 69b4c9c8 still observe the ledger after project and do not state the guard or the epoch split. They are pending correction and are not semantically verified. Other second-half fields stay usable.",
       "AUDIT4 69b4c9c8 adds account and profileSet. Account is host-scoped. The VibeField host omits it. The Puppeteer Godview host can set a profile label. accountUsage is the usage column, not field.account. First-half account envelopes are not rewritten from that trace yet.",
       "Delivery stays incomplete.",
     ],
@@ -610,7 +611,7 @@ function partialCensus(traces, join) {
       );
     }).length,
     evidenceKind: "source-read",
-    firstHalfCommit: "355e720327b4aa047336a1823e9b43c84e836220",
+    firstHalfCommit: "68dde825266e63ba63a1b07f7fcfd1e85f868b1f",
     candidateStatus: "static-not-live",
     secondHalfCommit: "69b4c9c8b078571f42302c920f3c5e8e279e37c9",
     accountTraceCommit: "08b5d849177685662b43e0e3a4e6bd7d32ac2cdf",
@@ -619,7 +620,7 @@ function partialCensus(traces, join) {
     delivery: "incomplete",
     provenanceComplete: join?.provenanceComplete === true,
     downstreamVerdict: typeof join?.downstreamVerdict === "string" ? join.downstreamVerdict : null,
-    note: "Delivery is incomplete. First-half 355e720 is static-not-live, not final. Lead is still reviewing the unpriced guard, ledger/project ordering, and retained epochs. Shared-map anchor totals are not envelope UI resolution. Account is host-scoped. Render 863f44ac splits 410 into 103 rendered, 21 covered-by, 77 coverage gaps, 150 outside-view not-applicable, and 59 environment gaps. The prior 302 not-applicable count is not validated. Swarm body was not painted.",
+    note: "Delivery is incomplete. First-half 68dde825 is static-not-live. Independent semantic signoff is pending. Second-half cost flows are pending correction where the ledger is observed after project or the pricing guard and epoch split are absent. Other second-half fields stay usable. Account status is counted from the envelopes. Shared-map anchor totals are not envelope UI resolution. Render 863f44ac splits 410 into 103 rendered, 21 covered-by, 77 coverage gaps, 150 outside-view not-applicable, and 59 environment gaps. The prior 302 not-applicable count is not validated. Swarm body was not painted.",
   };
 }
 

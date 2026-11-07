@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { AUDIT_PINS, AUDIT_TARGET_LABEL, PROVENANCE_STAGES } from "./contract.mjs";
 import {
+  costSemantics,
   coverageReport,
   isRowTrace,
   namedStatesFor,
@@ -204,39 +205,24 @@ function paintFor(matrixCell, render) {
 }
 
 function costGraphOrder(envelope) {
-  const names = (envelope?.transforms ?? []).map((step) => step.name);
-  const pricing = names.indexOf("priceUsageUpdates");
-  const reduce = names.indexOf("reduceMonitorAccumulator");
-  const costOf = names.indexOf("costOf");
-  const derive = names.indexOf("deriveAgentRow");
-  if (
-    names.includes("handler-omits-usage") &&
-    pricing === -1 &&
-    !names.includes("price-before-reduce")
-  ) {
+  const review = costSemantics(envelope);
+  if (!review) return null;
+  if (review.verification === "stops-at-omission") {
     return {
       status: "stops-at-omission",
       note: "This cost path stops where the adapter omits usage. It does not invent a pricing hop. The record is source-read, not a live sample.",
     };
   }
-  const priced = names.indexOf("price-before-reduce");
-  const reduced = names.indexOf("reduce-after-price");
-  if (priced !== -1 && reduced !== -1 && priced < reduced) {
+  if (review.verification === "pending-correction") {
     return {
-      status: "priced-before-reduce",
-      note: "This record places price-before-reduce before reduce-after-price. That is a static source order, not a live run.",
-    };
-  }
-  if (derive === -1 || costOf === -1) return null;
-  if (pricing !== -1 && pricing < reduce && costOf < derive) {
-    return {
-      status: "shared-order",
-      note: "This envelope includes priceUsageUpdates before reduce and costOf before deriveAgentRow. That matches the shared map. It is a static source order, not a live run, and it does not complete the audit.",
+      status: "pending-correction",
+      defects: review.defects,
+      note: `Not semantically verified. Pending correction: ${review.defects.join(", ")}. ledger.observe after project, a missing pricing guard, or missing current versus retained epochs keeps this cost flow off the verified set. Other fields on this adapter stay usable. A corrected commit is incoming.`,
     };
   }
   return {
-    status: "stale-envelope-order",
-    note: "This envelope omits priceUsageUpdates before reduction or lists derive before costOf. The shared map order is priceUsageUpdates, then reduce, then project, then costOf, then derive.",
+    status: "owner-stated-static",
+    note: "This candidate states the pricing guard, ledger counts before the project copy, and current versus retained epochs. Independent signoff is pending. This is not a live run and not a complete audit.",
   };
 }
 
