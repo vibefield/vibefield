@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en-US">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Godview view render</title>
+    <script>
+      (function () {
+        var fixed = Date.UTC(2026, 0, 1, 12, 0, 0);
+        var Native = Date;
+        function Frozen() {
+          if (!new.target) return new Native(fixed).toString();
+          if (arguments.length === 0) return new Native(fixed);
+          return new Native(...arguments);
+        }
+        Frozen.now = function () {
+          return fixed;
+        };
+        Frozen.parse = Native.parse;
+        Frozen.UTC = Native.UTC;
+        Frozen.prototype = Native.prototype;
+        Object.setPrototypeOf(Frozen, Native);
+        globalThis.Date = Frozen;
+        var seed = 1;
+        Math.random = function () {
+          seed = (seed * 16807) % 2147483647;
+          return (seed - 1) / 2147483646;
+        };
+      })();
+    </script>
+    <script type="module" crossorigin src="./assets/main-DoNQlIIQ.js"></script>
+    <link rel="modulepreload" crossorigin href="./assets/views-BNDRww3d.js">
+    <link rel="stylesheet" crossorigin href="./assets/views-BGlGEda8.css">
+    <link rel="stylesheet" crossorigin href="./assets/main-B2sSQt8e.css">
+  </head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>

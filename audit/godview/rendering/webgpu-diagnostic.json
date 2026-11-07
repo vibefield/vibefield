@@ -98,5 +98,6 @@
     "A hardware GPU. This host has SwiftShader and Xvfb only.",
     "The destroy stack of the earlier recorded launch. Its console is preserved; the process is gone."
   ],
+  "documentedFlagAttempts": "audit/godview/rendering/webgpu-doc-flags.json",
   "conclusion": "Two distinct failures. This session: Chrome 156's GPU process exits because ANGLE's Vulkan backend does not get VK_KHR_surface or VK_KHR_xcb_surface, the page is told 'Failed to create WebGPU Context Provider', and requestAdapter returns null before createSwarmRenderer can build a device. Same React host, production and StrictMode development, bare comparison included. No swarm body was drawn. The 73/302/35 figures above are the matrix as it stood for this note, not a validated not-applicable count. Earlier on the same flags: a bare high-performance device was created, then the integration swarm logged a device-lost rebuild whose message is the explicit destroy string and whose visible reason is the null-adapter sentence, not the shader sentence. That destroy site was not re-caught. Production AgentSwarm and createSwarmRenderer were not modified."
 }

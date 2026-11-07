@@ -1,6 +1,10 @@
 import { existsSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { EXERCISES } from "../rendering/matrix.mjs";
+
+const AUDIT_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
+
 import { AUDIT_PINS, AUDIT_TARGET_LABEL, PROVENANCE_STAGES } from "./contract.mjs";
 import {
   costSemantics,
@@ -113,12 +117,22 @@ function overlayFor(field, fallback) {
   };
 }
 
+function exerciseSource(cell) {
+  const fn = EXERCISES[cell?.exercise];
+  return typeof fn === "function" ? Function.prototype.toString.call(fn) : "";
+}
+
 /** A timeline_span alias counts only when its exercise calls stateAt at or after lane.sinceMs. */
 export function spanAliasProved(cell) {
   if (cell?.stateId !== "state.timeline_span" || cell?.disposition !== "covered-by") return null;
-  const fn = EXERCISES[cell.exercise];
-  const src = typeof fn === "function" ? Function.prototype.toString.call(fn) : "";
+  const src = exerciseSource(cell);
   return /stateAt\s*\(/.test(src) && /sinceMs/.test(src) && />=/.test(src);
+}
+
+/** timeline_ended alias is weaker unless the exercise itself calls stateAt. */
+export function endedAliasMeasured(cell) {
+  if (cell?.stateId !== "state.timeline_ended" || cell?.disposition !== "covered-by") return null;
+  return /stateAt\s*\(/.test(exerciseSource(cell));
 }
 
 function paintFor(matrixCell, render) {
@@ -145,6 +159,7 @@ function paintFor(matrixCell, render) {
       screenshotCoverageComplete: false,
       fallbackOnly: false,
       evidence: matrixCell.evidence ?? "",
+      fixtureId: matrixCell.fixtureId ?? null,
       screenshotPath: painted ? (render.screenshotPath ?? null) : null,
       note: painted
         ? "Selected fixture rendered. Synthetic paint of this view and state only. Overall screenshot coverage is not complete."
@@ -153,13 +168,19 @@ function paintFor(matrixCell, render) {
   }
   if (matrixCell.disposition === "covered-by") {
     const spanUnverified = spanAliasProved(matrixCell) === false;
+    const endedWeaker = endedAliasMeasured(matrixCell) === false;
     return {
       disposition: "covered-by",
       mounted: false,
       meaningfulOutput: false,
       selectedFixtureRendered: false,
-      exercisedEquivalent: !spanUnverified,
-      aliasProved: !spanUnverified,
+      exercisedEquivalent: !spanUnverified && !endedWeaker,
+      aliasProved: !spanUnverified && !endedWeaker,
+      aliasStrength: endedWeaker
+        ? "lane-present-not-stateAt"
+        : spanUnverified
+          ? "unverified"
+          : "exercise",
       screenshotCoverageComplete: false,
       fallbackOnly: false,
       evidence: matrixCell.evidence ?? "",
@@ -167,7 +188,9 @@ function paintFor(matrixCell, render) {
       screenshotPath: null,
       note: spanUnverified
         ? `Unverified alias. ${matrixCell.fixtureId ?? "the fixture"} exercise ${matrixCell.exercise ?? "unknown"} checks no history and never invokes stateAt(t >= lane.sinceMs), so it does not establish state.timeline_span. Not counted as proved. A real exercise or a downgrade is incoming. ${matrixCell.evidence ?? ""}`
-        : `Exercised equivalent of ${matrixCell.fixtureId ?? "another fixture"} on the same view. This is not a dedicated render of ${matrixCell.stateId} and it does not add body coverage. ${matrixCell.evidence ?? ""}`,
+        : endedWeaker
+          ? `Weaker alias of ${matrixCell.fixtureId ?? "another fixture"}. The screenshot can contain an ended lane. This exercise does not measure stateAt at the cursor, so it is not the span proof. ${matrixCell.evidence ?? ""}`
+          : `Exercised equivalent of ${matrixCell.fixtureId ?? "another fixture"} on the same view. This is not a dedicated render of ${matrixCell.stateId} and it does not add body coverage. ${matrixCell.evidence ?? ""}`,
     };
   }
   if (matrixCell.disposition === "coverage-gap") {
@@ -195,7 +218,7 @@ function paintFor(matrixCell, render) {
       evidence: matrixCell.evidence ?? "",
       diagnostic: matrixCell.diagnostic ?? "audit/godview/rendering/webgpu-diagnostic.json",
       screenshotPath: null,
-      note: "No swarm body was painted. WEBGPU UNAVAILABLE. This host's Chrome 156 GPU process exits without VK_KHR_surface or VK_KHR_xcb_surface, headed and headless, so the adapter is null. An earlier device create/destroy log is inconclusive. No source defect is proven and the source is not exonerated. The cause stays under investigation. This is not an unreachable state and not body coverage.",
+      note: "No swarm body was painted. WEBGPU UNAVAILABLE. Chrome 156 exits its GPU process without VK_KHR_surface or VK_KHR_xcb_surface. The documented Colab guide flags and those flags plus explicit SwiftShader (VK_ICD_FILENAMES on Chrome's bundled ICD) both return adapter null: eglInitialize Vulkan failed with EGL_NOT_INITIALIZED, and the SwiftShader attempt also reports eglInitialize SwANGLE EGL_NOT_INITIALIZED. This host has no hardware GPU and no system Vulkan ICD. An earlier device create/destroy log is inconclusive. The cause stays under investigation. No source defect is proven and the source is not exonerated. 67 Swarm cells stay unrendered. This is not an unreachable state and not body coverage.",
     };
   }
   const outside = String(matrixCell.evidence ?? "").startsWith("Outside this view:");
@@ -414,7 +437,10 @@ export function buildCell({ model, traces, renders, fallback, selection, renderI
     endToEnd,
     paint,
     graphOrder,
-    mmdPath: mmdRel && existsSync(join(process.cwd(), mmdRel)) ? mmdRel : null,
+    mmdPath:
+      mmdRel && existsSync(join(AUDIT_ROOT, "evidence", suffix, `${fieldPath}.mmd`))
+        ? mmdRel
+        : null,
     reading,
     stateReading,
     coverage,

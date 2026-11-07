@@ -32,6 +32,19 @@ An earlier run on the same Chrome and the same flags, recorded in `webgpu-diagno
 
 So the recorded line means a renderer had been handed to a live effect and then its device was destroyed, and the rebuild's `requestAdapter` returned null. This session could not take a destroy stack: no adapter is created, so `device.destroy` is not called. It is not established whether that earlier destroy was the pinned source calling `device.destroy()` or the GPU process dying with the same message. That question is inconclusive.
 
+## Documented flag attempts, 2026-11-07
+
+The Colab headless guide (`--use-angle=vulkan --enable-features=Vulkan --disable-vulkan-surface --enable-unsafe-webgpu`) had not been tried. It is a real-GPU recipe. This machine has no NVIDIA driver (`nvidia-smi` is absent), no `/dev/dri`, and an empty `/etc/vulkan/icd.d`. The Vulkan loader is `libvulkan.so.1.3.275`. The only ICD is Chrome's bundled SwiftShader, `/opt/google/chrome/vk_swiftshader_icd.json`.
+
+Two fresh Chrome 156 processes loaded the production pinned page `swarm-repro.html?phase=react`. Default Chromium arguments were not used, so a default `--enable-features` could not replace `Vulkan`. Manifest: `webgpu-doc-flags.json`.
+
+Both attempts returned `requestAdapter` null. No `requestDevice`. The stage text was `WEBGPU UNAVAILABLE` / `No WebGPU adapter on this GPU`. The page console was `Failed to create WebGPU Context Provider`. `--disable-vulkan-surface` did not stop ANGLE from requiring `VK_KHR_surface` and `VK_KHR_xcb_surface`.
+
+- `colab-guide`: `eglInitialize Vulkan failed with error EGL_NOT_INITIALIZED`, then `Exiting GPU process due to errors during initialization`.
+- `colab-guide-swiftshader-icd`: the same guide flags plus `--use-vulkan=swiftshader`, `--enable-unsafe-swiftshader`, and `VK_ICD_FILENAMES` pointed at the bundled ICD. `eglInitialize Vulkan failed with error EGL_NOT_INITIALIZED`, and `eglInitialize SwANGLE failed with error EGL_NOT_INITIALIZED`.
+
+No swarm body was drawn. The matrix was not moved off the environment gap. The earlier device-loss attribution stays inconclusive. These two sets are not run again.
+
 ## Untested
 
 Shader and pipeline validation, resize (`swarm-renderer.ts:856`), and unmount against a live device. Whether an explicit `device.destroy()` makes the next `requestAdapter` null. A hardware GPU.

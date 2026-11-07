@@ -151,6 +151,14 @@ aside {
   padding: 14px;
 }
 
+iframe.component {
+  width: 100%;
+  height: 760px;
+  border: 1px solid var(--vf-godview-dark-panel-border);
+  border-radius: var(--vf-radius-control);
+  background: var(--vf-godview-dark-monitor-bg);
+}
+
 .stage-pending {
   min-height: 160px;
   display: grid;

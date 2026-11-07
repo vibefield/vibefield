@@ -64,6 +64,12 @@ export function createAuditServer(root = repoRoot) {
         if (!existsSync(graph)) return send(res, 404, "text/plain; charset=utf-8", "Not found");
         return send(res, 200, "text/plain; charset=utf-8", readFileSync(graph));
       }
+      if (url.pathname === "/harness" || url.pathname.startsWith("/harness/")) {
+        const rel = decodeURIComponent(url.pathname.slice("/harness/".length)) || "index.html";
+        const file = safe(root, `audit/godview/web/harness/${rel}`);
+        if (!existsSync(file)) return send(res, 404, "text/plain; charset=utf-8", "Not found");
+        return send(res, 200, harnessType(rel), readFileSync(file));
+      }
       if (url.pathname.startsWith("/shots/")) {
         const name = url.pathname.slice("/shots/".length);
         if (!/^[A-Za-z0-9.-]+$/u.test(name))
@@ -77,6 +83,16 @@ export function createAuditServer(root = repoRoot) {
       send(res, 400, "text/plain; charset=utf-8", "path refused");
     }
   });
+}
+
+function harnessType(rel) {
+  if (rel.endsWith(".css")) return "text/css; charset=utf-8";
+  if (rel.endsWith(".js")) return "text/javascript; charset=utf-8";
+  if (rel.endsWith(".svg")) return "image/svg+xml";
+  if (rel.endsWith(".png")) return "image/png";
+  if (rel.endsWith(".woff2")) return "font/woff2";
+  if (rel.endsWith(".html")) return "text/html; charset=utf-8";
+  return "application/octet-stream";
 }
 
 function send(res, status, type, body) {

@@ -27,9 +27,7 @@ export const EXERCISES = {
   "model-absent": (row) => row.model == null || row.model === "",
   "context-absent": (row) => row.context == null,
   "attachable-true": (row) => row.attachable === true,
-  "live-head-span": (_row, entry) => entry?.history == null && entry?.stateId === "state.working",
-  "ended-lane": (_row, entry) => entry?.history === "bounds",
-};
+  };
 
 const rendered = (entry) => ({
   disposition: "rendered",
@@ -87,20 +85,6 @@ function decide(stateId, viewId) {
   if (stateId.startsWith("state.timeline_") && viewId !== "view.timeline") {
     return outside(
       "This is the timeline scrub head's moment. List, rain, spend, and swarm have no scrub head, so the moment cannot be mounted there.",
-    );
-  }
-  if (stateId === "state.timeline_span" && viewId === "view.timeline") {
-    return alias(
-      "fix.timeline.working",
-      "live-head-span",
-      "stateAt at the live head is span for a lane that has begun its current status (timeline-lanes.ts). fix.timeline.working was shot at the frozen now with no history, which is that head.",
-    );
-  }
-  if (stateId === "state.timeline_ended" && viewId === "view.timeline") {
-    return alias(
-      "fix.timeline.past-bounds",
-      "ended-lane",
-      "history bounds includes an ended run whose endedAt is before the frozen now. At the live head, stateAt for that lane is ended (timeline-lanes.ts). The screenshot contains that lane.",
     );
   }
   if (stateId === "state.spend_unknown" && viewId !== "view.spend") {

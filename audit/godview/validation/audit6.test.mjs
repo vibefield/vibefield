@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { renderFlowSvg } from "../flows/render.mjs";
 import { renderShell } from "../web/markup.mjs";
 import { createAuditServer } from "../web/serve.mjs";
-import { buildCell, spanAliasProved } from "./cell.mjs";
+import { buildCell, endedAliasMeasured, spanAliasProved } from "./cell.mjs";
 import { AUDIT_PINS, REQUIRED_COUNTS } from "./contract.mjs";
 import { readField } from "./coverage.mjs";
 import { loadAudit } from "./load.mjs";
@@ -84,20 +84,32 @@ test("pinned source inventory matches the model contract counts", () => {
   assert.equal(index.sharedMap.counts.statePredicates, 82);
   assert.equal(index.sharedMap.counts.rowJoinAnchorsResolved, 370);
   assert.equal(index.sources.rendering, "partial");
-  assert.equal(index.rendering.fixtureCount, 247);
+  assert.equal(index.rendering.fixtureCount, 249);
   assert.equal(index.rendering.countsMatch, true);
-  assert.equal(index.rendering.bodyRendered, 247);
-  assert.equal(index.rendering.coveredBy, 23);
-  assert.equal(index.rendering.provedCoveredBy, 22);
-  assert.deepEqual(index.rendering.unverifiedSpanAliases, ["view.timeline:state.timeline_span"]);
+  assert.equal(index.rendering.bodyRendered, 249);
+  assert.equal(index.rendering.coveredBy, 21);
+  assert.equal(index.rendering.provedCoveredBy, 21);
+  assert.deepEqual(index.rendering.unverifiedSpanAliases, []);
+  assert.deepEqual(index.rendering.weakerEndedAliases, []);
+  assert.equal(index.rendering.timelineSpanEvidence.fixtureId, "fix.timeline.moment-span");
+  assert.equal(index.rendering.timelineSpanEvidence.readout, "30:00working");
+  assert.equal(index.rendering.timelineSpanEvidence.headAtOrAfterSince, true);
+  assert.equal(index.rendering.timelineEndedEvidence.fixtureId, "fix.timeline.moment-ended");
+  assert.equal(index.rendering.timelineEndedEvidence.readout, "last active 30m ago");
+  assert.equal(index.rendering.timelineEndedEvidence.tone, "ended");
+  assert.equal(index.rendering.timelineEndedEvidence.headAtOrAfterEnded, true);
+  assert.equal(index.rendering.webgpuDocFlags.adapterNull, true);
+  assert.equal(index.rendering.webgpuDocFlags.bodyPainted, false);
+  assert.equal(index.rendering.webgpuDocFlags.eglNotInitialized, true);
+  assert.equal(index.rendering.webgpuDocFlags.swiftShaderIcd, true);
   assert.equal(index.rendering.coverageGap, 0);
   assert.equal(index.rendering.ordinaryGapsAreNotComplete, true);
-  assert.equal(index.rendering.counts.rendered, 247);
-  assert.equal(index.rendering.counts["covered-by"], 23);
+  assert.equal(index.rendering.counts.rendered, 249);
+  assert.equal(index.rendering.counts["covered-by"], 21);
   assert.equal(index.rendering.counts["coverage-gap"], 0);
   assert.equal(index.rendering.counts["not-applicable"], 73);
   assert.equal(index.rendering.counts["environment-gap"], 67);
-  assert.equal(index.rendering.renderSliceCommit, "08429e06ed86cd9f5617c61fa769793a563e8446");
+  assert.equal(index.rendering.renderSliceCommit, "0a73bb598b5007619f28fd80d1578662cdcb9c0b");
   assert.equal(index.rendering.priorClaimValidated, false);
   assert.equal(index.rendering.priorClaim.notApplicable, 302);
   assert.equal(index.rendering.priorClaim.validated, false);
@@ -326,13 +338,25 @@ test("the page names the audit target and leaves the harness pending", () => {
   const svg = renderFlowSvg(cell);
   assert.match(svg, /<title>/);
   assert.match(svg, /is-stale/);
-  assert.match(svg, /not an execution log/);
+  assert.match(svg, /execution log/);
   assert.match(svg, /748d015/);
   assert.match(html, /rendererRead/);
   assert.match(html, /Independent semantic review: pending/);
   assert.match(html, /not adapter-specific UI resolution/);
   assert.match(html, /Delivery: incomplete/);
   assert.match(html, /Prior 302 not-applicable claim validated: no/);
+  assert.match(html, /fix\.timeline\.moment-span/);
+  assert.match(html, /fix\.timeline\.moment-ended/);
+  assert.match(html, /last active 30m ago/);
+  assert.equal(audit.index.rendering.componentBundle, true);
+  assert.match(html, /\/harness\/index\.html\?fixture=fix\.list\.idle/);
+  assert.match(html, /Not shipped package 0\.3\.3/);
+  assert.match(html, /Recorded fixture screenshot/);
+  assert.match(html, /Both timeline holds are lifted only because those evidence files match/);
+  assert.match(html, /EGL_NOT_INITIALIZED/);
+  assert.match(html, /SwiftShader/);
+  assert.doesNotMatch(html, /fix\.timeline\.working is unverified/);
+  assert.doesNotMatch(html, /past-bounds alias is a measured/);
   assert.match(html, /Coverage gaps: 0/);
   assert.match(html, /Environment gaps: 67/);
   assert.match(html, /not a complete audit/);
@@ -551,14 +575,52 @@ test("swarm fallback is a mount, not painted coverage", () => {
       fieldId: "field.status",
     },
   });
-  assert.equal(span.paint.disposition, "covered-by");
-  assert.equal(span.paint.aliasProved, false);
-  assert.equal(span.paint.fixtureId, "fix.timeline.working");
-  assert.match(span.paint.note, /stateAt\(t >= lane\.sinceMs\)/);
+  assert.equal(span.paint.disposition, "rendered");
+  assert.equal(span.paint.meaningfulOutput, true);
+  const spanEvidence = JSON.parse(
+    readFileSync(join(ROOT, "audit/godview/rendering/timeline-span-evidence.json"), "utf8"),
+  );
+  assert.equal(spanEvidence.fixtureId, "fix.timeline.moment-span");
+  assert.equal(spanEvidence.headAtOrAfterSince, true);
+  assert.equal(spanEvidence.readout, "30:00working");
+  assert.equal(spanEvidence.branch, "span");
   const spanCell = audit.renderIndex.cells.find(
     (item) => item.stateId === "state.timeline_span" && item.viewId === "view.timeline",
   );
-  assert.equal(spanAliasProved(spanCell), false);
+  assert.equal(spanCell.disposition, "rendered");
+  assert.equal(spanAliasProved(spanCell), null);
+  const ended = buildCell({
+    model: audit.model,
+    traces: audit.traces,
+    renders: audit.renders,
+    fallback: audit.overlay,
+    renderIndex: audit.renderIndex,
+    selection: {
+      stateId: "state.timeline_ended",
+      viewId: "view.timeline",
+      adapterId: "adapter.claude",
+      fieldId: "field.status",
+    },
+  });
+  assert.equal(ended.paint.disposition, "rendered");
+  assert.equal(ended.paint.fixtureId, "fix.timeline.moment-ended");
+  assert.equal(ended.paint.meaningfulOutput, true);
+  const endedEvidence = JSON.parse(
+    readFileSync(join(ROOT, "audit/godview/rendering/timeline-ended-evidence.json"), "utf8"),
+  );
+  assert.equal(endedEvidence.readout, "last active 30m ago");
+  assert.equal(endedEvidence.tone, "ended");
+  assert.equal(endedEvidence.branch, "ended");
+  assert.equal(endedEvidence.headAtOrAfterEnded, true);
+  assert.ok(endedEvidence.headMs >= endedEvidence.endedAt);
+  assert.equal(
+    endedAliasMeasured({
+      stateId: "state.timeline_ended",
+      disposition: "covered-by",
+      exercise: "ended-lane",
+    }),
+    false,
+  );
   assert.equal(rainBlock.paint.disposition, "rendered");
   assert.equal(rainBlock.paint.meaningfulOutput, true);
   assert.equal(listActivity.paint.fallbackOnly, false);
@@ -582,6 +644,70 @@ test("swarm fallback is a mount, not painted coverage", () => {
   assert.equal(list.endToEnd.proven, false);
 });
 
+test("flow diagrams cite envelope effects from any working directory", () => {
+  const previous = process.cwd();
+  process.chdir("/tmp");
+  try {
+    const audit = loadAudit(ROOT);
+    const claude = buildCell({
+      model: audit.model,
+      traces: audit.traces,
+      renders: audit.renders,
+      fallback: audit.overlay,
+      selection: {
+        stateId: "state.cost_missing",
+        viewId: "view.spend",
+        adapterId: "adapter.claude",
+        fieldId: "field.cost.usd",
+      },
+    });
+    const svg = renderFlowSvg(claude);
+    assert.match(svg, /envelope-translation/);
+    assert.match(svg, /before pricing/);
+    assert.match(svg, /reduce\.ts:1049-1073/);
+    assert.match(svg, /href="https:\/\/github.com\/vibefield\/puppeteer\/blob\/748d015/);
+    assert.equal(svg.includes(">source-read<"), false);
+    const html = renderShell(audit.index, claude);
+    assert.match(html, /monitor-service\.ts:233/);
+    const acp = buildCell({
+      model: audit.model,
+      traces: audit.traces,
+      renders: audit.renders,
+      fallback: audit.overlay,
+      selection: {
+        stateId: "state.cost_missing",
+        viewId: "view.spend",
+        adapterId: "adapter.acp",
+        fieldId: "field.cost.usd",
+      },
+    });
+    assert.ok(acp.mmdPath);
+    const acpSvg = renderFlowSvg(acp);
+    assert.match(acpSvg, /handler-omits-usage/);
+    assert.match(acpSvg, /Sibling \.mmd omits/);
+    const grok = buildCell({
+      model: audit.model,
+      traces: audit.traces,
+      renders: audit.renders,
+      fallback: audit.overlay,
+      selection: {
+        stateId: "state.cost_missing",
+        viewId: "view.spend",
+        adapterId: "adapter.grok",
+        fieldId: "field.cost.usd",
+      },
+    });
+    assert.equal(grok.mmdPath, null);
+    const grokSvg = renderFlowSvg(grok);
+    assert.match(grokSvg, /No sibling \.mmd/);
+    assert.match(grokSvg, /unpriced/);
+    assert.match(grokSvg, /guarded increment/);
+    assert.match(acpSvg, /no usage emitted/);
+  } finally {
+    process.chdir(previous);
+  }
+});
+
 test("the QA server answers the page and the flow", async () => {
   const server = createAuditServer(ROOT);
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
@@ -591,6 +717,16 @@ test("the QA server answers the page and the flow", async () => {
   assert.equal(page.status, 200);
   assert.match(body, /Skip to audit/);
   assert.match(body, /748d015/);
+  const harness = await fetch(
+    `http://127.0.0.1:${port}/harness/index.html?fixture=fix.timeline.moment-ended`,
+  );
+  const harnessBody = await harness.text();
+  assert.equal(harness.status, 200);
+  assert.match(harnessBody, /\.\/assets\/main-/);
+  const asset = harnessBody.match(/\.\/assets\/(main-[^"]+\.js)/)?.[1];
+  const bundled = await fetch(`http://127.0.0.1:${port}/harness/assets/${asset}`);
+  assert.equal(bundled.status, 200);
+  assert.match(await bundled.text(), /748d015a7e393112e0a91dad80111fdf5abe6583/);
   const fragment = await fetch(
     `http://127.0.0.1:${port}/api/page?state=state.working&view=view.swarm&adapter=adapter.pi&field=field.status`,
   );

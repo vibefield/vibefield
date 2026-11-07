@@ -495,6 +495,7 @@ function walk(dir) {
   if (!statSafe(dir)?.isDirectory()) return [];
   const out = [];
   for (const name of readdirSync(dir)) {
+    if (name === "node_modules" || name === ".pin" || name === "dist") continue;
     const path = join(dir, name);
     if (statSync(path).isDirectory()) out.push(...walk(path));
     else out.push(path);

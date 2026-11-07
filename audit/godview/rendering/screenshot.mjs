@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { ENTRIES, NOW } from "./inputs.mjs";
 import { join } from "node:path";
 import puppeteer from "puppeteer-core";
 
@@ -103,6 +104,84 @@ try {
         needle,
       );
     }
+    if (fixture.interact === "timeline-span") {
+      const entry = ENTRIES.find((item) => item.fixtureId === fixture.fixtureId);
+      const row = entry?.row ?? {};
+      const observed = await page.evaluate(() => {
+        const map = document.querySelector("[aria-label^='The head']");
+        const head = document.querySelector(".vf-monitor-timeline-head");
+        const readout = head?.querySelector(".vf-monitor-timeline-readout");
+        return {
+          pageNow: Date.now(),
+          headMs: Number(map?.getAttribute("aria-valuenow")),
+          valueText: map?.getAttribute("aria-valuetext") ?? "",
+          tone: head?.getAttribute("data-tone") ?? null,
+          recorded: head?.getAttribute("data-recorded") ?? null,
+          readout: readout?.textContent ?? "",
+        };
+      });
+      const horizon = 24 * 60 * 60 * 1000;
+      const createdAt = row.createdAt ?? NOW;
+      const statusSince = row.statusSince ?? createdAt;
+      const sinceMs = Math.min(observed.pageNow, Math.max(createdAt, statusSince, observed.pageNow - horizon));
+      const spanReadout = observed.tone === "working"
+        && observed.recorded == null
+        && observed.readout.includes("working")
+        && !observed.readout.includes("not recorded")
+        && !observed.readout.includes("not started");
+      const evidence = {
+        fixtureId: fixture.fixtureId,
+        source: "TimelineView head dataset and readout, written from readoutAt(stateAt(lane, head))",
+        pageNow: observed.pageNow,
+        headMs: observed.headMs,
+        sinceMs,
+        valueText: observed.valueText,
+        tone: observed.tone,
+        recorded: observed.recorded,
+        readout: observed.readout,
+        headAtOrAfterSince: observed.headMs >= sinceMs,
+        branch: spanReadout && observed.headMs >= sinceMs && observed.valueText.startsWith("Now") ? "span" : "not-span",
+      };
+      writeFileSync(join(root, "timeline-span-evidence.json"), `${JSON.stringify(evidence, null, 2)}\n`);
+      if (evidence.branch !== "span") {
+        throw new Error(`timeline span was not established: ${JSON.stringify(evidence)}`);
+      }
+    }
+    if (fixture.interact === "timeline-ended") {
+      const observed = await page.evaluate(() => {
+        const map = document.querySelector("[aria-label^='The head']");
+        const heads = [...document.querySelectorAll(".vf-monitor-timeline-head")];
+        const ended = heads.find((head) => head.getAttribute("data-tone") === "ended") ?? null;
+        const readout = ended?.querySelector(".vf-monitor-timeline-readout");
+        return {
+          pageNow: Date.now(),
+          headMs: Number(map?.getAttribute("aria-valuenow")),
+          valueText: map?.getAttribute("aria-valuetext") ?? "",
+          tone: ended?.getAttribute("data-tone") ?? null,
+          recorded: ended?.getAttribute("data-recorded") ?? null,
+          readout: readout?.textContent ?? "",
+        };
+      });
+      const endedAt = NOW - 30 * 60_000;
+      const endedReadout = observed.tone === "ended" && observed.readout.includes("last active");
+      const evidence = {
+        fixtureId: fixture.fixtureId,
+        source: "TimelineView ended-lane head, written from readoutAt(stateAt(lane, head))",
+        pageNow: observed.pageNow,
+        headMs: observed.headMs,
+        endedAt,
+        valueText: observed.valueText,
+        tone: observed.tone,
+        recorded: observed.recorded,
+        readout: observed.readout,
+        headAtOrAfterEnded: observed.headMs >= endedAt,
+        branch: endedReadout && observed.headMs >= endedAt && observed.valueText.startsWith("Now") ? "ended" : "not-ended",
+      };
+      writeFileSync(join(root, "timeline-ended-evidence.json"), `${JSON.stringify(evidence, null, 2)}\n`);
+      if (evidence.branch !== "ended") {
+        throw new Error(`timeline ended was not established: ${JSON.stringify(evidence)}`);
+      }
+    }
     if (fixture.interact === "spend-unknown") {
       const hit = await page.$(".vf-monitor-spend-hit");
       const box = await hit.boundingBox();
@@ -134,6 +213,14 @@ try {
   }
   integration.fixtures = results;
   integration.swarmBodyPaint = swarmPaint;
+  const spanEvidencePath = join(root, "timeline-span-evidence.json");
+  if (existsSync(spanEvidencePath)) {
+    integration.timelineSpanEvidence = JSON.parse(readFileSync(spanEvidencePath, "utf8"));
+  }
+  const endedEvidencePath = join(root, "timeline-ended-evidence.json");
+  if (existsSync(endedEvidencePath)) {
+    integration.timelineEndedEvidence = JSON.parse(readFileSync(endedEvidencePath, "utf8"));
+  }
   writeFileSync(integrationPath, `${JSON.stringify(integration, null, 2)}\n`);
   const rendered = results.filter((item) => item.renderStatus === "rendered").length;
   process.stdout.write(`rendered ${rendered} of ${results.length}\n`);

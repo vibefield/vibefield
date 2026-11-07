@@ -1,6 +1,7 @@
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import {
+  assertCoverage,
   CONTRACT_MISMATCHES,
   ENTRIES,
   FOUNDATION_COMMIT,
@@ -9,11 +10,23 @@ import {
   PACKAGE_CONTEXT_COMMIT,
   PINS,
   SHIPPED_TAG_COMMIT,
-  assertCoverage,
 } from "./inputs.mjs";
 import { matrix, matrixSummary } from "./matrix.mjs";
 
 assertCoverage();
+const integrationPath = join(import.meta.dirname, "integration.json");
+const previous = existsSync(integrationPath)
+  ? JSON.parse(readFileSync(integrationPath, "utf8"))
+  : {};
+const previousPaint = new Map(
+  (previous.fixtures ?? [])
+    .filter((item) => item.paint)
+    .map((item) => [item.fixtureId, item.paint]),
+);
+function evidence(name) {
+  const file = join(import.meta.dirname, name);
+  return existsSync(file) ? JSON.parse(readFileSync(file, "utf8")) : null;
+}
 const root = join(import.meta.dirname, "..", "fixtures");
 mkdirSync(root, { recursive: true });
 for (const entry of ENTRIES) {
@@ -46,7 +59,15 @@ const integration = {
       file: `audit/godview/fixtures/${entry.fixtureId}.json`,
       requiresBodyPaint: entry.requiresBodyPaint,
       interact: entry.interact,
-      ...(painted ? { renderStatus: "rendered", screenshot } : { renderStatus: "pending-screenshot" }),
+      ...(painted
+        ? {
+            renderStatus: "rendered",
+            ...(previousPaint.has(entry.fixtureId)
+              ? { paint: previousPaint.get(entry.fixtureId) }
+              : {}),
+            screenshot,
+          }
+        : { renderStatus: "pending-screenshot" }),
     };
   }),
   holes: HOLES,
@@ -60,5 +81,10 @@ const integration = {
     evidence: cell.evidence,
   })),
 };
-writeFileSync(join(import.meta.dirname, "integration.json"), `${JSON.stringify(integration, null, 2)}\n`);
+if ("swarmBodyPaint" in previous) integration.swarmBodyPaint = previous.swarmBodyPaint;
+const spanEvidence = evidence("timeline-span-evidence.json");
+const endedEvidence = evidence("timeline-ended-evidence.json");
+if (spanEvidence) integration.timelineSpanEvidence = spanEvidence;
+if (endedEvidence) integration.timelineEndedEvidence = endedEvidence;
+writeFileSync(integrationPath, `${JSON.stringify(integration, null, 2)}\n`);
 process.stdout.write(`wrote ${ENTRIES.length} fixtures\n`);

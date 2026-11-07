@@ -1,3 +1,4 @@
+import { flowAnchors } from "../flows/render.mjs";
 import { AUDIT_TARGET_LABEL } from "../validation/contract.mjs";
 
 export function escapeHtml(value) {
@@ -18,21 +19,39 @@ function options(items, selected, labelOf) {
     .join("");
 }
 
-function sourceHref(link) {
-  const sha = link.sha ?? link.commit ?? "";
-  const path = link.path ?? link.file ?? "";
-  const line = link.line ?? link.lineStart;
-  const end = link.endLine ?? link.lineEnd;
-  if (!sha || !path) return "";
-  const base =
-    link.repo === "puppeteer"
-      ? "https://github.com/vibefield/puppeteer"
-      : link.repo === "vibefield"
-        ? "https://github.com/vibefield/vibefield"
-        : "";
-  if (!base) return "";
-  const hash = line ? (end && end !== line ? `#L${line}-L${end}` : `#L${line}`) : "";
-  return `${base}/blob/${sha}/${path}${hash}`;
+function timelineProof(index) {
+  const span = index.rendering?.timelineSpanEvidence;
+  const ended = index.rendering?.timelineEndedEvidence;
+  const spanOk =
+    span?.fixtureId === "fix.timeline.moment-span" &&
+    span?.branch === "span" &&
+    span?.tone === "working" &&
+    span?.readout === "30:00working" &&
+    span?.headAtOrAfterSince === true;
+  const endedOk =
+    ended?.fixtureId === "fix.timeline.moment-ended" &&
+    ended?.branch === "ended" &&
+    ended?.tone === "ended" &&
+    ended?.readout === "last active 30m ago" &&
+    ended?.headAtOrAfterEnded === true;
+  const holds = [
+    ...(index.rendering?.unverifiedSpanAliases ?? []),
+    ...(index.rendering?.weakerEndedAliases ?? []),
+  ];
+  if (spanOk && endedOk && holds.length === 0) {
+    return "state.timeline_span is fix.timeline.moment-span: readout 30:00working, tone working, head at or after sinceMs. state.timeline_ended is fix.timeline.moment-ended: readout last active 30m ago, tone ended, head at or after endedAt. The past-bounds alias is not a proof. Both timeline holds are lifted only because those evidence files match.";
+  }
+  return `Timeline holds stay. Span evidence ${spanOk ? "matches" : "does not match"}. Ended evidence ${endedOk ? "matches" : "does not match"}. Remaining holds: ${holds.join(", ") || "none"}.`;
+}
+
+function componentFrame(index, cell) {
+  const fixtureId = cell.paint?.fixtureId;
+  if (cell.paint?.disposition !== "rendered" || !fixtureId) return "";
+  if (index.rendering?.componentBundle !== true) {
+    return `<p>Pinned component bundle is absent. Build contract, from the repo root: <code>cd audit/godview/rendering &amp;&amp; npm install &amp;&amp; node ensure-pin.mjs &amp;&amp; node emit-fixtures.mjs &amp;&amp; node check.mjs &amp;&amp; npm run build</code>. The served page then loads <code>/harness/index.html?fixture=${escapeHtml(fixtureId)}</code> from that bundle. It does not use installed package 0.3.3.</p>`;
+  }
+  const src = `/harness/index.html?fixture=${encodeURIComponent(fixtureId)}`;
+  return `<iframe class="component" title="Pinned component ${escapeHtml(fixtureId)}" src="${src}"></iframe><p>Pinned component. Production bundle of Puppeteer source 748d015, mounted with <code>?fixture=${escapeHtml(fixtureId)}</code> from integration.json. Not shipped package 0.3.3. The figure below is the recorded fixture screenshot.</p>`;
 }
 
 function linkLine(link) {
@@ -115,12 +134,13 @@ export function renderShell(index, cell) {
       </section>
       <section id="stage" aria-labelledby="stage-heading">
         <h2 id="stage-heading">View</h2>
-        <p>The five monitor views live in Puppeteer. VibeField consumes <code>AgentView</code>. This page mounts GV-AUDIT05's harness and does not draw a replacement monitor.</p>
+        <p>The five monitor views live in Puppeteer. VibeField consumes <code>AgentView</code>. This page does not draw a replacement monitor. A rendered cell mounts the production bundle of the pinned 748d015 checkout at <code>?fixture=</code>. The screenshot under it is the recorded fixture, separate from that mount. WebGPU swarm stays unrendered on this host.</p>
+        ${componentFrame(index, cell)}
         <p class="stage-pending" role="status">${cell.view ? escapeHtml(`${cell.view.id} · ${cell.view.name}`) : "No view loaded."} ${escapeHtml(cell.paint?.disposition ?? "unknown")}. Meaningful paint: ${cell.paint?.meaningfulOutput ? "yes" : "no"}. Selected fixture rendered: ${cell.paint?.selectedFixtureRendered ? "yes" : "no"}. Overall screenshot coverage complete: no.</p>
         <p>${escapeHtml(cell.paint?.note ?? "")}</p>
         ${
           cell.paint?.screenshotPath
-            ? `<figure><img src="/shots/${escapeHtml(cell.paint.screenshotPath.split("/").pop())}" alt="${escapeHtml(cell.paint.fallbackOnly ? "Swarm fallback: WebGPU unavailable. Not a painted body." : "Synthetic view screenshot")}" /><figcaption>${escapeHtml(cell.paint.fallbackOnly ? "Fallback message only." : "Synthetic paint.")}</figcaption></figure>`
+            ? `<figure><img src="/shots/${escapeHtml(cell.paint.screenshotPath.split("/").pop())}" alt="${escapeHtml(cell.paint.fallbackOnly ? "Swarm fallback: WebGPU unavailable. Not a painted body." : "Recorded fixture screenshot")}" /><figcaption>Recorded fixture screenshot. Not the live component mount.</figcaption></figure>`
             : ""
         }
         <p>${escapeHtml(cell.view?.consumerCompleteness ?? cell.consumer?.note ?? "")}</p>
@@ -148,7 +168,14 @@ export function renderShell(index, cell) {
           <dt>Consumer</dt><dd>${escapeHtml(cell.consumer?.status)} — ${escapeHtml(cell.consumer?.note ?? "")}</dd>
         </dl>
         <h3>Adapter trace sources</h3>
-        <ul>${(cell.runtime?.sources ?? []).map((link) => `<li>${linkLine({ ...link, url: link.url || sourceHref(link) })}</li>`).join("") || "<li>No adapter trace is loaded for this field.</li>"}</ul>
+        <ul>${
+          flowAnchors(cell)
+            .map(
+              (link) =>
+                `<li><a href="${escapeHtml(link.url)}">${escapeHtml(link.label)}</a> ${escapeHtml(link.path)}${link.line ? `:${escapeHtml(link.line)}` : ""}</li>`,
+            )
+            .join("") || "<li>No adapter trace is loaded for this field.</li>"
+        }</ul>
         ${cell.mmdPath ? `<p><a href="/traces/${escapeHtml(cell.mmdPath.split("/").slice(-2).join("/"))}">Adapter graph file</a></p>` : "<p>No sibling .mmd for this adapter and field.</p>"}
         <h3>Model contract citations</h3>
         <ul>${evidence || "<li>No model evidence links on this field.</li>"}</ul>
@@ -168,7 +195,7 @@ export function renderShell(index, cell) {
           .map(([id, branch]) => `${id} ${branch}`)
           .join("; ") || "none",
       )}. Account uiReachable no scoped to the VibeField host: ${escapeHtml((index.partial?.blockers?.accountVibefieldOnly ?? []).join(", ") || "none")}. That no is not a global impossibility. The Puppeteer Godview host can still set account when profileId has a nonempty label. Independent signoff is pending.</p>
-      <p>Render denominator ${escapeHtml(String(index.rendering?.counts ? Object.values(index.rendering.counts).reduce((sum, value) => sum + value, 0) : "—"))}. Actual renders: ${escapeHtml(String(index.rendering?.bodyRendered ?? "—"))}. Matrix same-view aliases: ${escapeHtml(String(index.rendering?.coveredBy ?? "—"))}. Proved aliases: ${escapeHtml(String(index.rendering?.provedCoveredBy ?? "—"))}. Unverified aliases: ${escapeHtml((index.rendering?.unverifiedSpanAliases ?? []).join(", ") || "none")}. state.timeline_span via fix.timeline.working is unverified until its exercise invokes stateAt(t >= lane.sinceMs). Covered-by does not add body coverage. Coverage gaps: ${escapeHtml(String(index.rendering?.coverageGap ?? "—"))}. Zero ordinary coverage gaps is not a complete audit. Not-applicable: ${escapeHtml(String(index.rendering?.counts?.["not-applicable"] ?? "—"))}, proof ${escapeHtml(String(index.rendering?.notApplicableProof ?? "—"))}. The not-applicable cells and the same-view aliases are under lead review. Prior 302 not-applicable claim validated: no. Environment gaps: ${escapeHtml(String(index.rendering?.counts?.["environment-gap"] ?? "—"))}. Swarm body painted: no. Chrome 156 on this host exits its GPU process without VK_KHR_surface or VK_KHR_xcb_surface. No source defect is proven and the source is not exonerated.</p>
+      <p>Render denominator ${escapeHtml(String(index.rendering?.counts ? Object.values(index.rendering.counts).reduce((sum, value) => sum + value, 0) : "—"))}. Actual renders: ${escapeHtml(String(index.rendering?.bodyRendered ?? "—"))}. Matrix same-view aliases: ${escapeHtml(String(index.rendering?.coveredBy ?? "—"))}. Proved aliases: ${escapeHtml(String(index.rendering?.provedCoveredBy ?? "—"))}. Unverified aliases: ${escapeHtml((index.rendering?.unverifiedSpanAliases ?? []).join(", ") || "none")}. ${timelineProof(index)} Covered-by does not add body coverage. Coverage gaps: ${escapeHtml(String(index.rendering?.coverageGap ?? "—"))}. Zero ordinary coverage gaps is not a complete audit. Not-applicable: ${escapeHtml(String(index.rendering?.counts?.["not-applicable"] ?? "—"))}, proof ${escapeHtml(String(index.rendering?.notApplicableProof ?? "—"))}. The not-applicable cells and the same-view aliases are under lead review. Prior 302 not-applicable claim validated: no. Environment gaps: ${escapeHtml(String(index.rendering?.counts?.["environment-gap"] ?? "—"))}. Swarm body painted: no. Documented Colab guide flags and explicit SwiftShader both leave requestAdapter null, GPU EGL_NOT_INITIALIZED. This host has no hardware GPU and no system Vulkan ICD. webgpu-doc-flags.json is the record. No source defect is proven and the source is not exonerated. 67 Swarm cells stay unrendered.</p>
       ${(index.sharedMap?.openEnvelopeIssues ?? []).map((issue) => `<p>${escapeHtml(issue)}</p>`).join("")}
       ${cell.graphOrder ? `<p>${escapeHtml(cell.graphOrder.note)}</p>` : ""}
       <ul>

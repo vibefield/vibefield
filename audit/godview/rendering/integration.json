@@ -2953,7 +2953,6 @@
       "requiresBodyPaint": false,
       "interact": "timeline-unborn",
       "renderStatus": "rendered",
-      "paint": "canvas",
       "screenshot": "audit/godview/rendering/screenshots/fix.timeline.moment-unborn.png"
     },
     {
@@ -2966,8 +2965,32 @@
       "requiresBodyPaint": false,
       "interact": "timeline-unrecorded",
       "renderStatus": "rendered",
-      "paint": "canvas",
       "screenshot": "audit/godview/rendering/screenshots/fix.timeline.moment-unrecorded.png"
+    },
+    {
+      "fixtureId": "fix.timeline.moment-ended",
+      "viewId": "view.timeline",
+      "lifecycleStates": [
+        "state.timeline_ended"
+      ],
+      "file": "audit/godview/fixtures/fix.timeline.moment-ended.json",
+      "requiresBodyPaint": false,
+      "interact": "timeline-ended",
+      "renderStatus": "rendered",
+      "paint": "canvas",
+      "screenshot": "audit/godview/rendering/screenshots/fix.timeline.moment-ended.png"
+    },
+    {
+      "fixtureId": "fix.timeline.moment-span",
+      "viewId": "view.timeline",
+      "lifecycleStates": [
+        "state.timeline_span"
+      ],
+      "file": "audit/godview/fixtures/fix.timeline.moment-span.json",
+      "requiresBodyPaint": false,
+      "interact": "timeline-span",
+      "renderStatus": "rendered",
+      "screenshot": "audit/godview/rendering/screenshots/fix.timeline.moment-span.png"
     },
     {
       "fixtureId": "fix.timeline.moment-past",
@@ -2979,7 +3002,6 @@
       "requiresBodyPaint": false,
       "interact": "timeline-past",
       "renderStatus": "rendered",
-      "paint": "canvas",
       "screenshot": "audit/godview/rendering/screenshots/fix.timeline.moment-past.png"
     },
     {
@@ -2992,7 +3014,6 @@
       "requiresBodyPaint": false,
       "interact": "spend-unknown",
       "renderStatus": "rendered",
-      "paint": "canvas",
       "screenshot": "audit/godview/rendering/screenshots/fix.spend.unknown.png"
     }
   ],
@@ -3008,14 +3029,6 @@
     {
       "stateId": "state.attachable",
       "reason": "None of the five views read attachable. It is not in their contract field lists."
-    },
-    {
-      "stateId": "state.timeline_ended",
-      "reason": "No fixture is keyed state.timeline_ended. The live head of fix.timeline.past-bounds is that moment for the ended lane. See the matrix covered-by cell."
-    },
-    {
-      "stateId": "state.timeline_span",
-      "reason": "No fixture is keyed state.timeline_span. The live head of fix.timeline.working is that moment. See the matrix covered-by cell."
     },
     {
       "stateId": "state.feed_no_door",
@@ -3056,11 +3069,11 @@
       "notApplicable": 302,
       "environmentGap": 35,
       "validated": false,
-      "note": "d21cde9a reported 302 not-applicable cells. That figure is not a validated judgment that those scenarios are outside the views. Fifty-nine used a boilerplate 'no read' sentence. This matrix replaces that classification. The denominator stays 82 states \u00d7 5 views."
+      "note": "d21cde9a reported 302 not-applicable cells. That figure is not a validated judgment that those scenarios are outside the views. Fifty-nine used a boilerplate 'no read' sentence. This matrix replaces that classification. The denominator stays 82 states × 5 views."
     },
     "cells": 410,
-    "rendered": 247,
-    "coveredBy": 23,
+    "rendered": 249,
+    "coveredBy": 21,
     "coverageGap": 0,
     "notApplicable": 73,
     "environmentGap": 67
@@ -3173,14 +3186,14 @@
       "viewId": "view.list",
       "disposition": "rendered",
       "fixtureId": "fix.list.blocked-permission",
-      "evidence": "blocked and wait.kind permission. List line is permission \u00b7 Bash."
+      "evidence": "blocked and wait.kind permission. List line is permission · Bash."
     },
     {
       "stateId": "state.blocked_permission",
       "viewId": "view.rain",
       "disposition": "rendered",
       "fixtureId": "fix.rain.blocked-permission",
-      "evidence": "Blocked column. The aria label and tooltip use detailLine, which prints permission \u00b7 Bash. The head speed is the blocked speed."
+      "evidence": "Blocked column. The aria label and tooltip use detailLine, which prints permission · Bash. The head speed is the blocked speed."
     },
     {
       "stateId": "state.blocked_permission",
@@ -3615,21 +3628,21 @@
       "viewId": "view.list",
       "disposition": "rendered",
       "fixtureId": "fix.list.pending-unobserved",
-      "evidence": "pending and not observed. detailLine says unobserved \u00b7 resumes when idle."
+      "evidence": "pending and not observed. detailLine says unobserved · resumes when idle."
     },
     {
       "stateId": "state.pending_unobserved",
       "viewId": "view.rain",
       "disposition": "rendered",
       "fixtureId": "fix.rain.pending-unobserved",
-      "evidence": "Idle column, pending. detailLine says unobserved \u00b7 resumes when idle. The idle head stays hidden."
+      "evidence": "Idle column, pending. detailLine says unobserved · resumes when idle. The idle head stays hidden."
     },
     {
       "stateId": "state.pending_unobserved",
       "viewId": "view.spend",
       "disposition": "rendered",
       "fixtureId": "fix.spend.pending-unobserved",
-      "evidence": "Pending. detailLine says unobserved \u00b7 resumes when idle."
+      "evidence": "Pending. detailLine says unobserved · resumes when idle."
     },
     {
       "stateId": "state.pending_unobserved",
@@ -4680,10 +4693,9 @@
     {
       "stateId": "state.timeline_ended",
       "viewId": "view.timeline",
-      "disposition": "covered-by",
-      "fixtureId": "fix.timeline.past-bounds",
-      "exercise": "ended-lane",
-      "evidence": "Same branch as fix.timeline.past-bounds. history bounds includes an ended run whose endedAt is before the frozen now. At the live head, stateAt for that lane is ended (timeline-lanes.ts). The screenshot contains that lane."
+      "disposition": "rendered",
+      "fixtureId": "fix.timeline.moment-ended",
+      "evidence": "An ended run that finished thirty minutes before the frozen now, still inside the timeline window. The pinned TimelineView writes that lane from stateAt. Ended is the branch only when the head is at or after endedAt. The shot records the head time and that readout."
     },
     {
       "stateId": "state.timeline_ended",
@@ -4712,10 +4724,9 @@
     {
       "stateId": "state.timeline_span",
       "viewId": "view.timeline",
-      "disposition": "covered-by",
-      "fixtureId": "fix.timeline.working",
-      "exercise": "live-head-span",
-      "evidence": "Same branch as fix.timeline.working. stateAt at the live head is span for a lane that has begun its current status (timeline-lanes.ts). fix.timeline.working was shot at the frozen now with no history, which is that head."
+      "disposition": "rendered",
+      "fixtureId": "fix.timeline.moment-span",
+      "evidence": "Live head, no history, statusSince thirty minutes before the frozen now. The pinned TimelineView writes the readout from stateAt. Span is the branch only when the head is at or after sinceMs. The shot records that head time and the readout."
     },
     {
       "stateId": "state.timeline_span",
@@ -5821,8 +5832,30 @@
     }
   ],
   "swarmBodyPaint": null,
-  "renderSliceCommit": "08429e06ed86cd9f5617c61fa769793a563e8446",
-  "renderSliceSupersedes": "863f44ac1fe2b91bddc5306070761e43636d25c6",
-  "integratedFoundationCommit": "12c7b06ac17263b1f9125391e66242db7e085755",
-  "renderSliceAuthoredAgainst": "b9397f8dc93d5f784bb69f01f8b0778a14f02882"
+  "timelineSpanEvidence": {
+    "fixtureId": "fix.timeline.moment-span",
+    "source": "TimelineView head dataset and readout, written from readoutAt(stateAt(lane, head))",
+    "pageNow": 1767268800000,
+    "headMs": 1767268800000,
+    "sinceMs": 1767267000000,
+    "valueText": "Now, 12:00",
+    "tone": "working",
+    "recorded": null,
+    "readout": "30:00working",
+    "headAtOrAfterSince": true,
+    "branch": "span"
+  },
+  "timelineEndedEvidence": {
+    "fixtureId": "fix.timeline.moment-ended",
+    "source": "TimelineView ended-lane head, written from readoutAt(stateAt(lane, head))",
+    "pageNow": 1767268800000,
+    "headMs": 1767268800000,
+    "endedAt": 1767267000000,
+    "valueText": "Now, 12:00",
+    "tone": "ended",
+    "recorded": "true",
+    "readout": "last active 30m ago",
+    "headAtOrAfterEnded": true,
+    "branch": "ended"
+  }
 }

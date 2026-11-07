@@ -3,7 +3,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative, sep } from "node:path";
 import { matrixSummary, matrix as renderMatrix } from "../rendering/matrix.mjs";
 import { boundaryNotice } from "./boundary.mjs";
-import { spanAliasProved } from "./cell.mjs";
+import { endedAliasMeasured, spanAliasProved } from "./cell.mjs";
 import {
   AUDIT_PINS,
   AUDIT_TARGET_LABEL,
@@ -121,6 +121,29 @@ function loadTraces(root, problems) {
   return traces;
 }
 
+function evidenceFile(root, name) {
+  const file = readJson(root, `audit/godview/rendering/${name}`);
+  return isObject(file.json) ? file.json : null;
+}
+
+function docFlags(root) {
+  const file = readJson(root, "audit/godview/rendering/webgpu-doc-flags.json");
+  const attempts = Array.isArray(file.json?.attempts) ? file.json.attempts : [];
+  if (attempts.length === 0) return null;
+  return {
+    kind: file.json.kind ?? null,
+    attemptIds: attempts.map((attempt) => attempt.id).filter(Boolean),
+    adapterNull: attempts.every((attempt) =>
+      (attempt.traces ?? []).some((trace) => trace.event === "requestAdapter:null"),
+    ),
+    bodyPainted: attempts.some((attempt) => attempt.bodyPainted === true),
+    eglNotInitialized: attempts.every((attempt) =>
+      (attempt.gpuProcess ?? []).some((line) => String(line).includes("EGL_NOT_INITIALIZED")),
+    ),
+    swiftShaderIcd: attempts.some((attempt) => attempt.id === "colab-guide-swiftshader-icd"),
+  };
+}
+
 function loadRenderIndex(root) {
   const file = readJson(root, "audit/godview/rendering/integration.json");
   if (!file.present || file.error || !isObject(file.json)) return null;
@@ -182,8 +205,8 @@ function loadRenderIndex(root) {
     counts,
     countsMatch:
       cells.length === 410 &&
-      counts.rendered === 247 &&
-      counts["covered-by"] === 23 &&
+      counts.rendered === 249 &&
+      counts["covered-by"] === 21 &&
       counts["coverage-gap"] === 0 &&
       counts["not-applicable"] === 73 &&
       counts["environment-gap"] === 67 &&
@@ -201,12 +224,22 @@ function loadRenderIndex(root) {
     unverifiedSpanAliases: cells
       .filter((cell) => spanAliasProved(cell) === false)
       .map((cell) => `${cell.viewId}:${cell.stateId}`),
+    weakerEndedAliases: cells
+      .filter((cell) => endedAliasMeasured(cell) === false)
+      .map((cell) => `${cell.viewId}:${cell.stateId}`),
     provedCoveredBy:
-      counts["covered-by"] - cells.filter((cell) => spanAliasProved(cell) === false).length,
+      counts["covered-by"] -
+      cells.filter((cell) => spanAliasProved(cell) === false || endedAliasMeasured(cell) === false)
+        .length,
     swarmBodyPaint: "not-painted",
     swarmCause: "under-investigation",
     diagnostic: "audit/godview/rendering/webgpu-diagnostic.json",
-    renderSliceCommit: index.renderSliceCommit ?? "08429e06ed86cd9f5617c61fa769793a563e8446",
+    renderSliceCommit: index.renderSliceCommit ?? "0a73bb598b5007619f28fd80d1578662cdcb9c0b",
+    renderSliceSupersedes: "b214620625d9367d5f33e07360aa6a33842982ad",
+    timelineSpanEvidence: evidenceFile(root, "timeline-span-evidence.json"),
+    timelineEndedEvidence: evidenceFile(root, "timeline-ended-evidence.json"),
+    webgpuDocFlags: docFlags(root),
+    componentBundle: existsSync(join(root, "audit/godview/web/harness/index.html")),
     ordinaryGapsAreNotComplete: true,
     notApplicableUnderLeadReview: true,
     aliasesUnderLeadReview: true,
@@ -538,12 +571,18 @@ function publicIndex({
           bodyCoverageIncludesCoveredBy: false,
           provedCoveredBy: renderIndex.provedCoveredBy,
           unverifiedSpanAliases: renderIndex.unverifiedSpanAliases,
+          weakerEndedAliases: renderIndex.weakerEndedAliases,
           swarmBodyPaint: renderIndex.swarmBodyPaint,
           swarmCause: renderIndex.swarmCause,
           renderSliceCommit: renderIndex.renderSliceCommit,
+          renderSliceSupersedes: renderIndex.renderSliceSupersedes,
+          timelineSpanEvidence: renderIndex.timelineSpanEvidence,
+          timelineEndedEvidence: renderIndex.timelineEndedEvidence,
+          webgpuDocFlags: renderIndex.webgpuDocFlags,
+          componentBundle: renderIndex.componentBundle,
           screenshotCoverageComplete: false,
           sourceSha: renderIndex.sourceSha,
-          note: "Matrix counts are live. Zero ordinary coverage gaps is not a complete audit. Not-applicable cells and same-view aliases are under lead review. Covered-by is not body coverage. The prior 302 not-applicable claim is not validated. Swarm cells stay environment gaps: this host's Chrome 156 GPU process exits without VK_KHR_surface or VK_KHR_xcb_surface, so the adapter is null. No source defect is proven and the source is not exonerated. Delivery is incomplete.",
+          note: "Matrix counts are live. Zero ordinary coverage gaps is not a complete audit. Not-applicable cells and same-view aliases are under lead review. Covered-by is not body coverage. The prior 302 not-applicable claim is not validated. Timeline span and ended holds are lifted only while timeline-span-evidence.json and timeline-ended-evidence.json match the measured fixtures. Swarm cells stay environment gaps. Documented Colab flags and explicit SwiftShader both leave the adapter null, with EGL_NOT_INITIALIZED. This host has no hardware GPU and no system Vulkan ICD. No source defect is proven and the source is not exonerated. Delivery is incomplete.",
         }
       : null,
     foundationGate: {
@@ -634,7 +673,7 @@ function partialCensus(traces, join) {
     delivery: "incomplete",
     provenanceComplete: join?.provenanceComplete === true,
     downstreamVerdict: typeof join?.downstreamVerdict === "string" ? join.downstreamVerdict : null,
-    note: "Delivery is incomplete. Independent semantic acceptance is pending. First-half 9189325 cost-order anchors are in the imported graphs and the old defect hold is lifted only for that check. Second-half d2965818 account uiReachable no is the VibeField host only, not a global impossibility. Render 08429e06 still has 67 Swarm environment gaps. Zero ordinary coverage gaps is not a complete audit.",
+    note: "Delivery is incomplete. Independent semantic acceptance is pending. First-half 9189325 cost-order anchors are in the imported graphs and the old defect hold is lifted only for that check. Second-half d2965818 account uiReachable no is the VibeField host only, not a global impossibility. Render 0a73bb59 is 249 rendered, 21 aliases, 0 ordinary gaps, 73 not-applicable, 67 Swarm environment gaps. state.timeline_span and state.timeline_ended are measured fixtures. The past-bounds alias is not a proof. Zero ordinary coverage gaps is not a complete audit.",
   };
 }
 

@@ -1,0 +1,13 @@
+{
+  "fixtureId": "fix.timeline.moment-ended",
+  "source": "TimelineView ended-lane head, written from readoutAt(stateAt(lane, head))",
+  "pageNow": 1767268800000,
+  "headMs": 1767268800000,
+  "endedAt": 1767267000000,
+  "valueText": "Now, 12:00",
+  "tone": "ended",
+  "recorded": "true",
+  "readout": "last active 30m ago",
+  "headAtOrAfterEnded": true,
+  "branch": "ended"
+}
