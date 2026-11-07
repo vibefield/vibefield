@@ -42324,3 +42324,147 @@ this file; tsc's file list read the worktree's test and the checkout's contracts
 **Owed.**
 - Row 34 on the next release build, green, and the steps after it in "Package, signed": they have not run on CI
   since LP-1, TD-4 and LP-6b landed.
+
+## Item 241 (241a) — a pill that is off draws §7's Off on the phone: the quiet fill and its hairline, its words in t4 at full opacity, from the pill itself; Start's call-site fade retires and the Needs card's acts wear the same Off (track IOS)
+
+(2026-11-07; four commits on branch `ios/241a` in the ios12b lane, cut by IOS on main `8e3662a0d` (origin since
+push 122): `092026d0b` (d0, DESIGN.md), `dcd598077` (red), `6943f2512` (d0b, DESIGN.md) and `13d7f058c` (green, the
+re-cut of `9d37fbe79`, which did not compile). Witnessed by kit-241a (R, 21:30Z) and kit-241a′ (G′ then S,
+22:37Z → 22:53Z) on the old mini. Rehearsed onto main `a08b28f5d` as T `fba72f50d` (the four replayed, each tree its
+merge-tree's) and minted by run 219 at T.
+Landed 23:25:30Z by the fixer as `fba72f50d` (M219), a fast-forward of main `a08b28f5d`.)
+Filed 2026-11-07 19:22Z by VF-PM from IOS's stills read of M-f1 at `c2f3400fb`. Ruled at the leans by James,
+2026-11-07T20:53:00Z ("I picked the leans, go ahead"), his picks on the Off Pill page (`Qc8dvHdrANESurW7DmX7v7`):
+q1 (b) 20:52:05Z, q2 (a) 20:52:09Z, q3 (a) 20:52:16Z, q4 (a) 20:52:23Z.
+
+**The finding.** New spark's away sheet offered a black Create Polaris that did nothing.
+- The code disabled it (`NewSparkSheetView.swift:641`), so a press did nothing, as §8 says. The look was wrong:
+  `ChromePillStyle` (FieldDesign `ChromeControls.swift`, WI-1 `128a3f5ae`) never read `isEnabled`, and SwiftUI dims
+  no custom style by itself. M-f1's away stills read max 0 against at-rest over the pill's 540 × 148 px, both looks.
+- The kit had three Off looks:
+  - the pill: none;
+  - Start (`WorkspaceSheets.swift`): the whole pill at 0.4, at its call site;
+  - the Needs card's acts: a capsule drawn by hand under `.buttonStyle(.plain)`, SwiftUI's own dim.
+- The Mac's `.vf-ui-button:disabled` dims the whole button to 0.4 (design-kit `primitives.css:110`).
+- DESIGN.md §7's Off row (2026-11-01) already asked for an off control's words in t4 at full opacity, 3:1 or more.
+  A whole pill at 0.4 falls under it in 5 of 8 cases, every daytime one among them, the Mac's shipping button
+  included; t4 on the quiet fill holds 3.2–3.9:1 in all 8 (`lanes/ios12/241/off-ratios.py`).
+
+**The ruling (Q1–Q4, each at its lean).**
+- **Q1 (b):** a pill that is off takes the quiet fill and its hairline, so a primary loses its inversion, and its
+  words wear t4 at full opacity, on both platforms. The phone draws it here; the Mac's primitive follows as 241b.
+- **Q2 (a):** a pill whose word says its own press is running ("Starting…", "Allow…") keeps its look, its hits off.
+  Every other pill that cannot be pressed is off, Create while its hatch runs among them.
+- **Q3 (a):** while New spark's hatch runs, the phone's Cancel waits too, off, and the sheet holds; the Mac's stays
+  live. That writes down what the phone already did.
+- **Q4 (a):** one Off look in the kit, through the one treatment FieldDesign exports. Whether the Needs acts move
+  onto the pill itself is not 241's.
+
+**What landed.**
+- **d0, `092026d0b`, DESIGN.md +7 −3:**
+  - §7's Off row gains the pill, with its t4 named there first (black at 50% by day, white at 38% by night);
+  - §4's pill row points at it;
+  - §8's phone Needs acts are off, not "dim", with a dated note;
+  - §8's phone New spark foot gains the Cancel line.
+  - :2100 and :2110 ("dim as the kit's disabled buttons do") stay: they are the Mac's card, whose `UiButton` is
+    still 0.4 until 241b.
+- **d0b, `6943f2512`, DESIGN.md +1 −1:** §7's row names the phone's t4 `ChromePalette.inkT4`, and says the kit's
+  older `inkFaint` is another ink (item 242). d0 had named it `inkFaint`, a name the kit already held. It is a commit
+  of its own by VF-PM's ruling (21:46Z): the false sentence is corrected at its source, and DESIGN.md moves before the
+  code that follows it.
+- **red, `dcd598077`:** FieldDesignTests `ChromePillOffTests.swift`, +165, three rows over the pill's own pixels
+  (ImageRenderer at 2× on the paper, through `SparkStarStillTests.pixels`):
+  - `thePaper`, a harness guard: the paper beyond the corner is the paper's own in each look;
+  - `live`: each kind keeps its look;
+  - `off`: each kind disabled takes the quiet fill, the hairline and t4 words, held to DESIGN.md's numbers.
+- **green, `13d7f058c`, five files:**
+  - `ChromePillPaint`, a ViewModifier that reads `isEnabled` (a style is no view: `ChromeSwitch`'s reason), is how
+    every pill is painted. `ChromePillStyle` paints through it; its public API and live look do not move;
+  - `ChromePillLook` (`.primary`, `.quiet`) and `ChromeCapsuleStyle(live:off:)`, the same paint for a capsule drawn
+    by hand;
+  - `ChromePalette.inkT4`, §2.4's t4;
+  - Start: the call-site `.opacity(… 0.4)` retires; it is `.disabled(!canSpawn && !spawning)` with
+    `.allowsHitTesting(canSpawn)`, and its action returns early while spawning, so "Starting…" keeps its look;
+  - the Needs acts move from `.buttonStyle(.plain)` to `ChromeCapsuleStyle`: live as before, off as the card's quiet
+    act (the menu's surface, the 1-pt card hairline) with t4 words;
+  - two more rows: `theT4Ink` (`inkT4` is DESIGN.md's) and `theCapsule` (the hand-drawn capsule's Off).
+- **One look moves beyond Off, named:** a pressed Needs act now shows the kit's pressed fill, as every pill does,
+  where `.plain` dimmed it. It shows only while a finger is down.
+
+**Validation.**
+- **On the Mac, under the HOLD (nothing of record):** `check-ios-fixtures` at the first green's tree, "418
+  copies identical" and "93 contract values identical", exit 0 (load 3.93, swap 0). G′ changes no fixture. No Swift
+  ran on the Mac.
+- **kit-241a,** the old mini, brief `a9-brief-kit-241a-9d37fbe79.md` (SUMS `d10d0d9a`, VF-PM's verify
+  21:08:58Z), bundle `bd164a29`, the full-index patch-id `6c423cf8…` EQUAL in the runner's checkout:
+  - **R** at `dcd598077` (21:30:22Z → 21:31:23Z): "✘ Test run with 69 tests in 18 suites failed after 9.932 seconds
+    with 8 issues.", once; one failing row, `off`; 68 of 68 by name. The 8 issues are at the brief's lines in its
+    order, each value IOS's prediction to the integer (`lanes/ios12/241/kit/IOS-R-read-dcd598077.md`). The runner's
+    look-parse printed NOT AS BRIEFED: a Swift Testing `Comment` renders an enum case with its dot (".primary
+    .light"), and IOS's review had told a9 it prints the bare name. The row is as briefed;
+  - **G** at `9d37fbe79` (21:37Z), SLOT RED at the build: "ChromePalette.swift:234:21: error: invalid
+    redeclaration of 'inkFaint'". S stopped on the same error, "ChromeControls.swift:130:61: error: ambiguous use of
+    'inkFaint'". There was no test run and no still (`a9-results-k241a-GS-9d37fbe79`, SUMS `e1ebdc19`). The re-cut
+    is d0b and G′;
+- **kit-241a′,** armed 22:37:46Z, brief `a9-brief-kit-241a-13d7f058c.md` (SUMS `02680ba1`, VF-PM's GO 21:46Z),
+  bundle `584ccf4b`, the full-index patch-id `463e38ba…` EQUAL in the runner's checkout (results SUMS-a9
+  `c1479ba5`):
+  - **G′** at `13d7f058c` (22:37:48Z → 22:39:28Z): "✔ Test run with 71 tests in 18 suites passed", "✔ Test run with
+    508 tests in 61 suites passed" and "✔ Test run with 21 tests in 7 suites passed", each once, 600 in 86 summed by
+    script.
+    - It had 0 failing rows. `off`, `theT4Ink` and `theCapsule` passed by name. There were 0 warnings in the five
+      files.
+    - The 19 frames are IN, each K1's line byte for byte, and the report's 20 files are SAME as K1's.
+    - FieldHomeTests' first whole run since kit-rc and FieldWorkspaceTests' first whole run are both green. The read
+      of record is `IOS-G-read-13d7f058c.md` (`e8748ce1`).
+  - **S** at `13d7f058c`: 24 of 24, the app carrying the brief's eight literals (`IOS-S-read-13d7f058c.md`,
+    `969d470e`).
+    - away's Create pill draws §7's Off in both looks, every channel 0 from the predicted values: (240, 240, 240)
+      with words (120, 120, 120) by day, 3.87:1, and (47, 47, 49) with (126, 126, 127) by night, 3.29:1.
+    - needs-answering's Not now draws the card's quiet act in Off: (255, 255, 255) with words (127, 127, 127) by
+      day, 4.00:1, and (58, 58, 62) with (133, 133, 135) by night, 3.07:1.
+    - "Allow…" and every live act are unchanged.
+    - The other 18 New spark stills are max 0, except the Field badge and the door's glass (max 2, below).
+- **The mint,** V alone at T, since T's apps/ios and DESIGN.md are G′'s (brief `a9-brief-mint-241a-fba72f50d.md`):
+  run 219, armed 23:15:11Z, verify 0 at 23:21:45Z (results SUMS-a9 `c437f2c7`, the log `013c1840`). In the
+  runner's checkout: the full-index patch-id `463e38ba…` in all three forms, range-diff 4 `=`, and the carry's two
+  trees G′'s. Every row is as briefed and equal to run218's:
+  - "ios fixtures: 418 copies identical …" and "ios pins: 93 contract values identical …"; "icons current: 51
+    files …";
+  - typecheck and test on 29 projects each; biome "Checked 3504 files … No fixes applied."; "census assert OK";
+  - field-app 316 files and 4401 tests; fieldd 266 passed and 5 skipped (271) files, 3758 passed and 15 skipped
+    (3773) tests, item 243's file among the skipped with its 3 tests; electron-shell 180 files and 2746 passed and
+    2 skipped tests;
+  - cargo "ok 37, FAILED 0"; the tree clean after verify; stubs 0.
+  - V used 670 MiB of the disk (free min 10,435 MiB), where run218's used 259.
+- **The harness risk, named before the run:** if ImageRenderer had not resolved the kit's dynamic colours under a
+  dark `colorScheme`, `thePaper` would have read red in dark, a harness red to re-cut. It passed in both looks, and
+  the dark rows' wanted colours are the kit's dark values: the risk is retired.
+
+**Found.**
+- The kit drew three Off looks and the design named none of them. One paint now draws every one.
+- **By night, the card's off act sits at 3.07:1,** above §7's floor but under the 3.2–3.9:1 the plan read on the
+  pill's quiet fill. The act stands on the menu's surface (`#3A3A3E`), which is lighter. SwiftUI's old `.plain` dim
+  read 4.41:1 there. It is the ruled look, measured, and named for James's eye. §7 holds as written (VF-PM, 23:03Z):
+  its floor is 3:1, and the plan's band was read on the pill's fill. A darker Off for the card would be James's word
+  and a slice of its own.
+- **The door still's tab-bar glass differs by up to 2 levels between launches,** over a row's spark face (63 px,
+  light; `lanes/ios12/241/kit/IOS-reads-13d7f058c/crops/light-door-diff.png`). The stills' "max 0 at one base"
+  holds everywhere but there. It belongs to the stills harness, not to 241a: item 244, filed by VF-PM at 23:03Z.
+- **The kit's `inkFaint` is not §2.4's t4** (item 242, filed by VF-PM 21:40Z). It is the History ramp's last step,
+  `--vf-text-faint`, at 30% by day and 32% by night, where §2.4's t4 is 50% and 38%. It inks words across History,
+  Home, Settings and `ChromeList`: 40 uses in 8 files at `13d7f058c`, by
+  `git grep -c 'ChromePalette\.inkFaint' 13d7f058c -- apps/ios`, none of them 241a's. 241a's first green declared a
+  second `inkFaint`, and the old mini's compile was the first to see it (the Mac runs no Swift).
+- A lane rule from it (VF-PM, 21:40Z): before a kit brief, grep the base for every identifier a slice adds. A clash
+  is then caught at the brief, never on the mini (`lanes/ios12/241/kit/names-241a-g2.txt`).
+- The Mac's own primitive sits under §7's floor by day (2.49:1 primary, 1.79:1 quiet). Row 32 prints an off
+  control's ratio and never judges it, by its rule, so no gate held it to the floor.
+
+**Owed.**
+- **241b**, the Mac's half: design-kit's `.vf-ui-button:disabled` takes §7's Off (the quiet fill, t4 words), with
+  its own stills and row 32's pass-over list, after this lands. Until then :2100 and :2110 read the Mac's 0.4 truly.
+- **Never stilled:** Start's "Starting…" (the workspace sheet has no still door), and a pressed act's new pressed
+  fill (a press is OS input).
+- The Needs acts drawn as a second pill (their own size and fill), and whether they move onto `ChromePillStyle`:
+  a question, not 241's.
