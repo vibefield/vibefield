@@ -88,20 +88,20 @@ export class DriveHolders {
     await this.publish();
   }
 
-  /** The node came up, or the link came back: hear the store if it was not heard, and publish again (a node built
-   * anew holds no slice of this desktop's). A stream that stands proves nothing here. A node built anew leaves it on
-   * the old store, whose forwarder keeps that store (field-native `mgmt/mesh.rs`, `spawn_store_forwarder`). A floor
-   * that restarted has no node, so NativeLink's replay meets the node gate and its entry stays with no route, which
-   * this side is not told (native-link.ts `replaySubscriptions`). So the stream is let go (its `dispose`, which tells
-   * the floor nothing) and ONE subscribe is made, as `DrivePulls.connected` does, once a subscribe in flight has
-   * ended: it may have left before this node. The cost: each node-up over a live link leaves one quiet forwarder at
-   * the floor until the connection closes, because `native.mesh.store.subscribe` adds one per call. A subscribe
-   * refused here leaves the store unheard until the next node-up or reconnect. */
+  /** The node came up, or the link came back: hear the store anew, and publish again (a node built anew holds no
+   * slice of this desktop's). A stream that stands proves nothing here. A node built anew leaves it on the old store,
+   * whose forwarder keeps that store (field-native `mgmt/mesh.rs`, `spawn_store_forwarder`). A floor that restarted
+   * has no node, so NativeLink's replay meets the node gate and its entry stays with no route, which this side is not
+   * told (native-link.ts `replaySubscriptions`). So ONE subscribe is made, as `DrivePulls.connected` does, once a
+   * subscribe in flight has ended: it may have left before this node. The stream that stood is let go (its `dispose`,
+   * which tells the floor nothing) only once that one is answered (`#doSubscribe`), so a subscribe refused here leaves
+   * the store heard as it was, the live store when the node was not built anew, and the next node-up or reconnect
+   * asks again. The cost: a stream let go keeps its forwarder writing to the connection until it closes, every change
+   * of the drive store it opened (the old store, when the node was built anew), and fieldd drops those lines. At most
+   * one stays per answered re-subscribe, because `native.mesh.store.subscribe` adds one per call. */
   async nodeUp(): Promise<void> {
     await this.#subscribing;
-    this.#dispose?.();
-    this.#dispose = null;
-    await this.#subscribe();
+    await this.#subscribe(true);
     await this.publish();
   }
 
@@ -183,7 +183,10 @@ export class DriveHolders {
     }
   }
 
-  #subscribe(): Promise<void> {
+  /** One subscribe at a time, shared by a caller while it is in flight. While a stream stands, only a renewal makes
+   * one (`nodeUp`), so a flight is always a subscribe made. */
+  #subscribe(renew = false): Promise<void> {
+    if (this.#stopped || (this.#dispose !== null && !renew)) return Promise.resolve();
     if (this.#subscribing === null) {
       this.#subscribing = this.#doSubscribe().finally(() => {
         this.#subscribing = null;
@@ -192,8 +195,9 @@ export class DriveHolders {
     return this.#subscribing;
   }
 
+  /** Answered, the new stream replaces the one that stood, which is let go only then; refused, that one stays and
+   * still hears. Stopped during the flight, the answer is let go, as `stop` let the one that stood go. */
   async #doSubscribe(): Promise<void> {
-    if (this.#stopped || this.#dispose !== null) return;
     let subscribed: { snapshot: unknown; dispose: () => void };
     try {
       subscribed = await this.#opts.mesh.subscribeStoreManaged(STORES.DRIVE, (payload, kind) =>
@@ -209,6 +213,7 @@ export class DriveHolders {
       subscribed.dispose();
       return;
     }
+    this.#dispose?.();
     this.#dispose = subscribed.dispose;
     this.#onStoreEvent(subscribed.snapshot, "snapshot");
   }

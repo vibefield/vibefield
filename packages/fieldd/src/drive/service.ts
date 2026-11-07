@@ -43,7 +43,8 @@ export interface DriveTransportPort {
   onPeer(listener: (peer: string, up: boolean) => void): () => void;
   /** Pull one object from a peer's served root; resolves with where it landed, unverified. */
   pull(request: DrivePullRequest): Promise<DriveLanded>;
-  /** A landed file a previous fieldd's pull left, to adopt or sweep. Returns a detach. */
+  /** A landed file no pull of this fieldd's waits for, to adopt or sweep: a previous fieldd's pull's, or one of this
+   * fieldd's whose held bound ended, or one it read refused that may have run. Returns a detach. */
   onAdoptCandidate(listener: (candidate: DriveAdoptCandidate) => void): () => void;
 }
 
@@ -92,8 +93,8 @@ export class DriveService implements DriveTransportPort {
   }
 
   /** Claim the drive's lanes, arm the pulls' stream and roots, hear and publish the holders slice. Only the lane
-   * table's subscribe can throw (doc-sync's start does the same), and then nothing after it runs: the next
-   * `connected` arms all three. The pulls and the holders log what they could not do and never throw (pulls.ts
+   * table's subscribe can throw (doc-sync's start does the same), and then nothing after it runs: the next node-up
+   * or `connected` arms all three. The pulls and the holders log what they could not do and never throw (pulls.ts
    * `start`, holders.ts `start`). */
   async start(): Promise<void> {
     await this.#relay.start();
@@ -102,10 +103,12 @@ export class DriveService implements DriveTransportPort {
   }
 
   /** The node came up (MeshClient's "node-up"). The holders follow the pulls' subscribe and roots, each a request
-   * NativeLink ends by its deadline (NATIVE_SUPERVISION.REQUEST_DEADLINE_MS). */
+   * NativeLink ends by its deadline (NATIVE_SUPERVISION.REQUEST_DEADLINE_MS). The lane table is asked beside them,
+   * neither behind nor ahead (`connected`'s reason), and only when `start` was refused: it is not the node's
+   * (lane-relay.ts `nodeUp`). None of the three throws. */
   async nodeUp(): Promise<void> {
-    await this.#pulls.nodeUp();
-    await this.#holders.nodeUp();
+    const pullsThenHolders = this.#pulls.nodeUp().then(() => this.#holders.nodeUp());
+    await Promise.all([this.#relay.nodeUp(), pullsThenHolders]);
   }
 
   /** The mgmt link reconnected (NativeLink's "connected"): each part asks the floor again for what it hears. The

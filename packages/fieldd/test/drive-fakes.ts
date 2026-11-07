@@ -1,7 +1,7 @@
 // DR-3b (W3, VF-RELAY) — the drive's test fakes: its two lane planes (doc-sync-service.test.ts's FakeControl and
 // FakeBytes, with `drive` admitted), its holders store (holders-store.ts's, with the store's own snapshot shape),
-// floors that refuse file-transfer verbs, the pin's unsupported golden, the exhausted and the conflict ones, and a
-// logger that keeps every event.
+// floors that refuse file-transfer verbs and one that answers them, the pin's unsupported golden, the exhausted and the
+// conflict ones, and a logger that keeps every event.
 // Test-local; never shipped.
 import { readFileSync } from "node:fs";
 import { ErrorData, RPC_ERROR_CODES, STORES } from "@vibefield/contracts";
@@ -263,6 +263,28 @@ export function unsupportedFloor(): DrivePullsFloor & { asked: string[] } {
   return refusingFloor(new RpcCallError(kind, "unsupported", retryable, details, code));
 }
 
+/** A floor that answers every verb with no pull running and no root registered; `asked` is every method that reached
+ * it, and while `subscribeGate` is set a subscribe waits for it before it answers (one no deadline has ended yet). */
+export function answeringFloor(): DrivePullsFloor & {
+  asked: string[];
+  subscribeGate: Promise<void> | null;
+} {
+  const floor = {
+    asked: [] as string[],
+    subscribeGate: null as Promise<void> | null,
+    request: async (method: string) => {
+      floor.asked.push(method);
+      return { roots: [] };
+    },
+    subscribe: async (method: string) => {
+      floor.asked.push(method);
+      if (floor.subscribeGate !== null) await floor.subscribeGate;
+      return { snapshot: { transfers: [] }, dispose: () => undefined };
+    },
+  };
+  return floor;
+}
+
 /** A floor whose stream is refused ONCE with `error` (a node gate, say), then answered with no pull running; every
  * declared root registers. `asked` is every method that reached it. */
 export function streamRefusedOnce(error: RpcCallError): DrivePullsFloor & { asked: string[] } {
@@ -315,6 +337,13 @@ export function gate(): { waits: Promise<void>; open: () => void } {
     open = resolve;
   });
   return { waits, open: () => open() };
+}
+
+/** Run `fn` once `turns` microtask turns have passed: a call landed between two steps of a promise chain. */
+export function afterTurns(turns: number, fn: () => void): void {
+  let chain = Promise.resolve();
+  for (let turn = 0; turn < turns; turn++) chain = chain.then(() => undefined);
+  void chain.then(fn);
 }
 
 /** Wait for `predicate`, or throw naming what never came. */

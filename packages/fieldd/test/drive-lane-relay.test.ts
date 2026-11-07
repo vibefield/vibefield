@@ -8,6 +8,7 @@ import { DriveLaneRelay, type DriveLaneRelayOptions } from "../src/drive/lane-re
 import { OutboundLaneIdAllocator } from "../src/lane-id";
 import { RpcCallError } from "../src/native-link";
 import {
+  afterTurns,
   type CapturedLog,
   captureLogger,
   FakeDriveLaneBytes,
@@ -357,12 +358,82 @@ describe("DR-3b — the drive's lane relay", () => {
     control.refuseNextSubscribe = new Error("mesh queue full");
     await relay.connected();
     expect(events.map((e) => e.event)).toEqual(["fieldd.drive.lanes_unheard"]);
-    expect(control.disposed).toBe(1);
+    // the stream that stood is kept until a subscribe is answered
+    expect(control.disposed).toBe(0);
     control.lanes = [inboundRow(IN, "peer-a")];
     await relay.connected();
     expect(bytes.claimed(IN)).toBe(true);
     expect(control.subscribes).toBe(3);
     expect(control.disposed).toBe(1);
+  });
+
+  it("keeps the stream it had when a re-subscribe at a reconnect is refused, and a lane it then announces is claimed", async () => {
+    const { control, bytes, relay } = harness();
+    await relay.start();
+    // the replay ran: the stream that stands hears the live table
+    control.refuseNextSubscribe = new Error("mesh queue full");
+    await relay.connected();
+    control.announce(opened(IN, "peer-a"));
+    expect(bytes.claimed(IN)).toBe(true);
+    expect(control.subscribes).toBe(2);
+    expect(control.disposed).toBe(0);
+  });
+
+  it("lets both streams go when disposed during a reconnect's subscribe, and claims nothing", async () => {
+    const { control, bytes, relay } = harness();
+    await relay.start();
+    const held = gate();
+    control.subscribeGate = held.waits;
+    control.lanes = [inboundRow(IN, "peer-a")];
+    const reconnected = relay.connected();
+    await until(() => control.subscribes === 2, "the reconnect's subscribe");
+    // dispose lets the stream that stood go at once, and the answer goes as it comes
+    await relay.dispose();
+    expect(control.disposed).toBe(1);
+    held.open();
+    await reconnected;
+    expect(control.disposed).toBe(2);
+    expect(bytes.claimed(IN)).toBe(false);
+  });
+
+  it("arms a refused start at a node-up and keeps a stream that stands; one refused there is logged, never thrown", async () => {
+    const { control, bytes, events, relay } = harness();
+    control.refuseNextSubscribe = new Error("mesh queue full");
+    await expect(relay.start()).rejects.toThrow("mesh queue full");
+    control.refuseNextSubscribe = new Error("mesh queue full");
+    await relay.nodeUp();
+    expect(events.map((e) => e.event)).toEqual(["fieldd.drive.lanes_unheard"]);
+    control.lanes = [inboundRow(IN, "peer-a")];
+    await relay.nodeUp();
+    expect(bytes.claimed(IN)).toBe(true);
+    // the table is the floor's bridge's, not the node's: a node-up makes no subscribe over a stream that stands
+    await relay.nodeUp();
+    expect(control.subscribes).toBe(3);
+    expect(control.disposed).toBe(0);
+  });
+
+  it("keeps one entry when a node-up lands at any turn after a reconnect's refused subscribe", async () => {
+    for (let turns = 0; turns < 16; turns++) {
+      const { control, relay } = harness();
+      const subscribe = control.subscribe.bind(control);
+      let race = false;
+      control.subscribe = (onEvent) => {
+        const answer = subscribe(onEvent);
+        if (race) {
+          race = false;
+          answer.catch(() => afterTurns(turns, () => void relay.nodeUp()));
+        }
+        return answer;
+      };
+      await relay.start();
+      control.refuseNextSubscribe = new Error("mesh queue full");
+      race = true;
+      await relay.connected();
+      // the fakes answer in microtasks, so every turn has run by the next timer
+      await sleep(5);
+      const entries = control.subscribes - 1 - control.disposed;
+      expect(entries, `the refused one is no entry; a node-up ${turns} turns on`).toBe(1);
+    }
   });
 
   it("waits out a subscribe in flight at a reconnect, then makes its own: that one left on the old connection", async () => {
@@ -460,6 +531,33 @@ describe("DR-3b — the drive's lane relay", () => {
     expect(frames).toEqual([{ peer: "peer-a", record: [5] }]);
     expect(later).toEqual([[5]]);
     expect(events.map((e) => e.event)).toEqual(["fieldd.drive.frame_listener_failed"]);
+  });
+
+  it("keeps a throwing peer listener from the lanes after it and from a queued record, with a warn", async () => {
+    const { control, bytes, events, relay } = harness();
+    relay.onPeer(() => {
+      throw new Error("the listener threw");
+    });
+    const peers = peersOf(relay);
+    await relay.start();
+    // the lane's open says its peer is up: the record settles all the same
+    let sent: boolean | undefined;
+    void relay.send("peer-a", bytesOf(1)).then((ok) => {
+      sent = ok;
+    });
+    await until(() => sent !== undefined, "the record, past a throwing listener");
+    expect(sent).toBe(true);
+    // a snapshot claims every lane it lists, the one after a throw included
+    const rows = [outboundRow(1, "peer-a"), inboundRow(IN, "peer-b"), inboundRow(IN + 1, "peer-a")];
+    control.announce({ lanes: rows }, "snapshot");
+    expect([bytes.claimed(IN), bytes.claimed(IN + 1)]).toEqual([true, true]);
+    expect(peers).toEqual([
+      ["peer-a", true],
+      ["peer-b", true],
+    ]);
+    const failed = events.filter((e) => e.event === "fieldd.drive.peer_listener_failed");
+    expect(failed.map((e) => e.attrs?.peer)).toEqual(["peer-a", "peer-b"]);
+    expect(events).toHaveLength(2);
   });
 
   it("settles every queued record false at dispose, sends none of them, and calls no socket undrained", async () => {

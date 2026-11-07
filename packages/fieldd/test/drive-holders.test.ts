@@ -17,7 +17,12 @@ import {
   STORES,
 } from "@vibefield/contracts";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { DriveHolders, type DriveHoldersOptions, type DriveHolding } from "../src/drive/holders";
+import {
+  DriveHolders,
+  type DriveHoldersMesh,
+  type DriveHoldersOptions,
+  type DriveHolding,
+} from "../src/drive/holders";
 import { DriveLaneRelay } from "../src/drive/lane-relay";
 import { DrivePulls, type DrivePullsFloor } from "../src/drive/pulls";
 import { DriveService } from "../src/drive/service";
@@ -26,6 +31,8 @@ import { MeshClient } from "../src/mesh-client";
 import { NativeLink, RpcCallError } from "../src/native-link";
 import { MockMgmtServer } from "../src/testing/mock-mgmt";
 import {
+  afterTurns,
+  answeringFloor,
   type CapturedLog,
   captureLogger,
   FakeDriveLaneBytes,
@@ -366,7 +373,24 @@ describe("DR-3b — the drive's holders slice", () => {
     expect(store.disposed).toBe(2);
   });
 
-  it("subscribes behind a subscribe in flight at a node-up: that one may have left before the node", async () => {
+  it("lets go the stream a subscribe in flight at a node-up got, and makes its own: that one may have left before the node", async () => {
+    const store = new FakeDriveStore();
+    store.put("laptop", slice("laptop"));
+    const studio = holders(store, "studio");
+    const held = gate();
+    store.subscribeGate = held.waits;
+    const started = studio.start();
+    const up = studio.nodeUp();
+    await sleep(20);
+    expect(store.subscribes).toBe(1);
+    held.open();
+    await Promise.all([started, up]);
+    expect(store.subscribes).toBe(2);
+    expect(store.disposed).toBe(1);
+    expect(ids(studio)).toEqual(["laptop"]);
+  });
+
+  it("makes its own subscribe at a node-up behind a subscribe in flight that is refused", async () => {
     const store = new FakeDriveStore();
     store.put("laptop", slice("laptop"));
     const studio = holders(store, "studio");
@@ -382,6 +406,74 @@ describe("DR-3b — the drive's holders slice", () => {
     await Promise.all([started, up]);
     expect(store.subscribes).toBe(2);
     expect(ids(studio)).toEqual(["laptop"]);
+  });
+
+  it("keeps hearing the stream it had when a node-up's subscribe is refused, and lets it go once one is answered", async () => {
+    const store = new FakeDriveStore();
+    store.put("laptop", slice("laptop"));
+    const studio = holders(store, "studio");
+    await studio.start();
+    // a node that was not built anew: the stream that stands hears the live store
+    store.failNextSubscribe = true;
+    await studio.nodeUp();
+    store.put("attic", slice("attic"));
+    store.leave("laptop");
+    expect(ids(studio)).toEqual(["attic"]);
+    expect(store.subscribes).toBe(2);
+    expect(store.disposed).toBe(0);
+    await studio.nodeUp();
+    expect(store.subscribes).toBe(3);
+    expect(store.disposed).toBe(1);
+    store.put("den", slice("den"));
+    expect(ids(studio)).toEqual(["attic", "den"]);
+  });
+
+  it("lets both streams go when stopped during a node-up's subscribe, and subscribes no more", async () => {
+    const store = new FakeDriveStore();
+    const studio = holders(store, "studio");
+    await studio.start();
+    const held = gate();
+    store.subscribeGate = held.waits;
+    const up = studio.nodeUp();
+    await until(() => store.subscribes === 2, "the node-up's subscribe");
+    // stop lets the stream that stood go at once, and the answer goes as it comes
+    studio.stop();
+    expect(store.disposed).toBe(1);
+    held.open();
+    await up;
+    expect(store.disposed).toBe(2);
+    await studio.nodeUp();
+    await studio.start();
+    expect(store.subscribes).toBe(2);
+    expect(store.writes).toHaveLength(1);
+  });
+
+  it("keeps one entry when a start lands at any turn after a node-up's refused subscribe", async () => {
+    for (let turns = 0; turns < 16; turns++) {
+      const store = new FakeDriveStore();
+      const member = store.member("studio");
+      let race = false;
+      const mesh: DriveHoldersMesh = {
+        setSlice: (storeId, data) => member.setSlice(storeId, data),
+        subscribeStoreManaged: (storeId, onEvent) => {
+          const answer = member.subscribeStoreManaged(storeId, onEvent);
+          if (race) {
+            race = false;
+            answer.catch(() => afterTurns(turns, () => void studio.start()));
+          }
+          return answer;
+        },
+      };
+      const studio = holders(store, "studio", undefined, undefined, { mesh });
+      await studio.start();
+      store.failNextSubscribe = true;
+      race = true;
+      await studio.nodeUp();
+      // the fakes answer in microtasks, so every turn has run by the next timer
+      await sleep(5);
+      const entries = store.subscribes - 1 - store.disposed;
+      expect(entries, `the refused one is no entry; a start ${turns} turns on`).toBe(1);
+    }
   });
 
   it("makes no second subscribe at a repeated start, while a stream stands", async () => {
@@ -551,7 +643,7 @@ describe("DR-3b — the drive's holders slice", () => {
     await reconnected;
   });
 
-  it("hands a link that went down to the pulls, whose held bound runs through the outage", async () => {
+  it("hands a link that went down to the pulls", async () => {
     const { pulls, service } = composed(new FakeDriveStore());
     const held = vi.spyOn(pulls, "disconnected");
     service.disconnected();
@@ -583,5 +675,71 @@ describe("DR-3b — the drive's holders slice", () => {
     expect(asked).toContain(SUBSCRIBE);
     expect(store.subscribes).toBe(1);
     expect(store.writes).toHaveLength(1);
+  });
+
+  it("arms the lane table at the next node-up after it refused start, with no reconnect", async () => {
+    const store = new FakeDriveStore();
+    const pullsFloor = answeringFloor();
+    const { control, bytes, service } = composed(store, pullsFloor);
+    control.refuseNextSubscribe = new Error("mesh queue full");
+    await expect(service.start()).rejects.toThrow("mesh queue full");
+    control.lanes = [INBOUND];
+    await service.nodeUp();
+    expect(bytes.claimed(IN)).toBe(true);
+    expect(control.subscribes).toBe(2);
+    expect(pullsFloor.asked).toContain(SUBSCRIBE);
+    expect(store.subscribes).toBe(1);
+    expect(store.writes).toHaveLength(1);
+    // the table is the bridge's, not the node's: the next node-up keeps the stream that stands
+    await service.nodeUp();
+    expect(control.subscribes).toBe(2);
+    expect(control.disposed).toBe(0);
+  });
+
+  it("holds up no lane table behind the pulls' unanswered subscribe at a node-up", async () => {
+    const store = new FakeDriveStore();
+    const pullsFloor = answeringFloor();
+    const { control, bytes, service } = composed(store, pullsFloor);
+    control.refuseNextSubscribe = new Error("mesh queue full");
+    await expect(service.start()).rejects.toThrow("mesh queue full");
+    const held = gate();
+    pullsFloor.subscribeGate = held.waits;
+    control.lanes = [INBOUND];
+    let ended = false;
+    const up = service.nodeUp().then(() => {
+      ended = true;
+    });
+    await until(() => bytes.claimed(IN), "the lane table, past the pulls' silent subscribe");
+    expect(pullsFloor.asked).toEqual([SUBSCRIBE]);
+    expect(store.subscribes).toBe(0);
+    expect(ended).toBe(false);
+    // NativeLink's deadline ends that subscribe, and the holders follow it
+    held.open();
+    await up;
+    expect(store.subscribes).toBe(1);
+    expect(store.writes).toHaveLength(1);
+  });
+
+  it("holds up neither the pulls nor the slice behind the lane table's unanswered subscribe at a node-up", async () => {
+    const store = new FakeDriveStore();
+    const pullsFloor = answeringFloor();
+    const { control, bytes, service } = composed(store, pullsFloor);
+    control.refuseNextSubscribe = new Error("mesh queue full");
+    await expect(service.start()).rejects.toThrow("mesh queue full");
+    const held = gate();
+    control.subscribeGate = held.waits;
+    control.lanes = [INBOUND];
+    let ended = false;
+    const up = service.nodeUp().then(() => {
+      ended = true;
+    });
+    await until(() => store.writes.length === 1, "the slice, past the lane table's subscribe");
+    expect(pullsFloor.asked).toContain(SUBSCRIBE);
+    expect(control.subscribes).toBe(2);
+    expect(bytes.claimed(IN)).toBe(false);
+    expect(ended).toBe(false);
+    held.open();
+    await up;
+    expect(bytes.claimed(IN)).toBe(true);
   });
 });

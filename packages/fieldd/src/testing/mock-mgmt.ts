@@ -112,10 +112,13 @@ export interface MockFileTransfer {
    * (mgmt/file_transfer.rs's `Stream::end` and `subscribe`): each `replaced` payload as a delta on the subId this
    * subscribe replaced, then the answer, then each `fresh` payload as a delta on the new subId. A `completed` or
    * `failed` among them ends its row before the answer's snapshot is built, as `pushFileTransferDelta`'s does.
-   * Cleared once written. */
+   * Cleared once written. A `replaced` payload on a subscribe that replaced no stream (a connection's first, the
+   * replay on a new socket included) has no subId to ride, and NativeLink drops such a line unread, so the mock
+   * throws there, naming the misuse, and writes nothing. */
   subscribeChunk: { replaced?: unknown[]; fresh?: unknown[] } | null;
-  /** root name → the word a `roots` declaration answers it `registered: false` with, ahead of the node's gate: a
-   * folder the floor could not make (services/file_transfer.rs `serve`: `io_word`'s FAILED_IO or FAILED_NO_SPACE) */
+  /** root name → the word a `roots` declaration answers it `registered: false` with on a gated node, as the floor's
+   * serve refuses a folder it could not make (services/file_transfer.rs `serve`: `io_word`'s FAILED_IO or
+   * FAILED_NO_SPACE); an ungated node answers every root ROOT_UNGATED and never reaches it */
   refuseRoots: Map<string, string>;
   /** every subId the floor answered a `subscribe` with, in order */
   subscribed: string[];
@@ -1192,6 +1195,12 @@ export class MockMgmtServer {
       const chunk = transfer.subscribeChunk;
       transfer.subscribeChunk = null;
       const replaced = chunk?.replaced ?? [];
+      if (replaced.length > 0 && stopped.length === 0) {
+        throw new Error(
+          "MockFileTransfer.subscribeChunk.replaced was set for a subscribe that replaced no stream: its deltas " +
+            "would carry no subId, and NativeLink drops them unread",
+        );
+      }
       const fresh = chunk?.fresh ?? [];
       for (const payload of [...replaced, ...fresh]) this.endFileTransferRow(payload);
       const result = { subId, snapshot: { transfers: [...transfer.running.values()] } };
@@ -1234,10 +1243,11 @@ export class MockMgmtServer {
       transfer.declared.push([...asked.data.roots]);
       const answered: Array<{ name: string; registered: boolean; reason?: string }> = [];
       for (const name of asked.data.roots) {
-        const reason = transfer.refuseRoots.get(name);
+        // the gate first: an ungated node never reaches the folder a gated one could not make
+        const ungated = MESH_FILE_TRANSFER.ROOT_UNGATED;
+        const reason = transfer.gated ? transfer.refuseRoots.get(name) : ungated;
         if (reason !== undefined) answered.push({ name, registered: false, reason });
-        else if (transfer.gated) answered.push({ name, registered: true });
-        else answered.push({ name, registered: false, reason: MESH_FILE_TRANSFER.ROOT_UNGATED });
+        else answered.push({ name, registered: true });
       }
       reply({ result: { roots: answered } });
       return;

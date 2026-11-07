@@ -102,7 +102,8 @@ export class DriveLaneRelay {
   readonly #peerListeners = new Set<(peer: string, up: boolean) => void>();
   /** lets the lane table's subscription go: set while one stands */
   #release: (() => void) | null = null;
-  /** the subscribe in flight: one at a time, so `#release` names the only entry */
+  /** the subscribe in flight: one at a time, and answered it replaces `#release`'s entry and lets that one go
+   * (`#arm`), so one entry stands once it ends */
   #arming: Promise<void> | null = null;
   #stopped = false;
 
@@ -116,32 +117,31 @@ export class DriveLaneRelay {
   /** Subscribe to lane lifecycle and claim the `drive` lanes already open: field-native outlives fieldd, so a lane a
    * peer opened before this boot is the normal case. */
   start(): Promise<void> {
-    if (this.#stopped || this.#release !== null) return Promise.resolve();
-    if (this.#arming === null) {
-      this.#arming = this.#arm().finally(() => {
-        this.#arming = null;
-      });
-    }
-    return this.#arming;
+    return this.#subscribe(false);
+  }
+
+  /** The node came up (MeshClient's "node-up", `DriveService.nodeUp`): a `start` the floor refused is armed now, so a
+   * link that never reconnects still hears the lane table. The table is the floor's bridge's, not the node's
+   * (field-native `mgmt/mesh.rs`: `lane.subscribe` is answered ahead of the node gate), so a stream that stands is
+   * kept and one in flight is shared. Never throws: a subscribe refused here is logged, and the next node-up or
+   * reconnect asks again. */
+  async nodeUp(): Promise<void> {
+    await this.#subscribe(false).catch((error: unknown) => this.#unheard(error));
   }
 
   /** The mgmt link reconnected (NativeLink's "connected"): the lane table is subscribed anew. NativeLink's replay may
    * have been refused or read TIMEOUT (native-link.ts `replaySubscriptions`), which leaves its entry with no route and
    * this side untold: no lane opens or closes here until the next reconnect. So, once a subscribe in flight has ended,
-   * the stream is let go and ONE subscribe is made on the new connection, as `DrivePulls.connected` does, and its
-   * snapshot re-derives every lane (`#resync`). A `start` the floor refused is armed the same way. The cost: when the
-   * replay did run, one quiet forwarder stays at the floor until the connection closes, because
-   * `native.mesh.lane.subscribe` adds one per call. Never throws: a subscribe refused here is logged, and the next
-   * reconnect asks again. */
+   * ONE subscribe is made on the new connection, as `DrivePulls.connected` does, and its snapshot re-derives every
+   * lane (`#resync`). The stream that stood is let go only once that one is answered (`#arm`), so a subscribe refused
+   * here leaves the lane table heard as it was, the live table when the replay ran. A `start` the floor refused is
+   * armed the same way. The cost: a stream let go keeps its forwarder writing to the connection until it closes, every
+   * lane event of every protocol on the floor's one bridge (field-native `mgmt/mesh.rs`, `spawn_lane_forwarder`), and
+   * fieldd drops those lines. At most one stays per answered re-subscribe, because `native.mesh.lane.subscribe` adds
+   * one per call. Never throws: a subscribe refused here is logged, and the next reconnect asks again. */
   async connected(): Promise<void> {
     await this.#arming?.catch(() => undefined);
-    this.#release?.();
-    this.#release = null;
-    await this.start().catch((error: unknown) => {
-      this.#log.warn("fieldd.drive.lanes_unheard", "The drive's lane table was not heard", {
-        error: String(error),
-      });
-    });
+    await this.#subscribe(true).catch((error: unknown) => this.#unheard(error));
   }
 
   /** Send one opaque record to `peer`. Resolves `true` once it is on the byte plane, `false` when it was dropped (its
@@ -217,7 +217,21 @@ export class DriveLaneRelay {
     await Promise.all(closing);
   }
 
-  /** The subscribe itself. A relay disposed during its flight lets the answer go and claims nothing. */
+  /** One subscribe at a time, shared by a caller while it is in flight. While a stream stands, only a renewal makes
+   * one (`connected`), and a `start` returns at once. */
+  #subscribe(renew: boolean): Promise<void> {
+    if (this.#stopped || (this.#release !== null && !renew)) return Promise.resolve();
+    if (this.#arming === null) {
+      this.#arming = this.#arm().finally(() => {
+        this.#arming = null;
+      });
+    }
+    return this.#arming;
+  }
+
+  /** The subscribe itself. Answered, the new stream replaces the one that stood, which is let go only then; refused,
+   * that one stays and still hears. A relay disposed during its flight lets the answer go and claims nothing, as
+   * `dispose` let the one that stood go. */
   async #arm(): Promise<void> {
     const { lanes, dispose } = await this.#opts.control.subscribe((payload, kind) =>
       this.#onLaneEvent(payload, kind),
@@ -226,8 +240,15 @@ export class DriveLaneRelay {
       dispose();
       return;
     }
+    this.#release?.();
     this.#release = dispose;
     this.#resync(lanes ?? []);
+  }
+
+  #unheard(error: unknown): void {
+    this.#log.warn("fieldd.drive.lanes_unheard", "The drive's lane table was not heard", {
+      error: String(error),
+    });
   }
 
   #laneFor(peer: string): PeerLane {
@@ -439,7 +460,19 @@ export class DriveLaneRelay {
     this.#emitPeer(peer, false);
   }
 
+  /** Each listener hears it, one that throws included: a throw here would stop `#resync` claiming the lanes after it,
+   * or leave a queued record unsettled (`#open`). */
   #emitPeer(peer: string, up: boolean): void {
-    for (const listener of [...this.#peerListeners]) listener(peer, up);
+    for (const listener of [...this.#peerListeners]) {
+      try {
+        listener(peer, up);
+      } catch (error) {
+        this.#log.warn("fieldd.drive.peer_listener_failed", "A drive peer's listener threw", {
+          peer,
+          up,
+          error: String(error),
+        });
+      }
+    }
   }
 }

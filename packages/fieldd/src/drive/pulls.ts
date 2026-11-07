@@ -34,7 +34,8 @@ import { RpcCallError } from "../native-link";
 //  - field-native outlives fieldd, so the stream's first snapshot can list pulls a PREVIOUS fieldd started (the W3
 //    critic's finding 4). Their digests are refused here like any running one, and their completions surface as
 //    adopt candidates (`onAdoptCandidate`), never as an answer to a pull of this boot. A pull of this boot read
-//    refused that may have run is read the same way until a snapshot says (`DrivePulls.#askIfRan`).
+//    refused that may have run is read the same way until a snapshot says (`DrivePulls.#askIfRan`); while a stream
+//    stands and none has, a pull its row refuses asks for one, one retry delay later (`DrivePulls.#confirmLater`).
 //  - A pull the stream's snapshot no longer lists ended while the reader lagged: completed when its landed name is in
 //    the folder, failed FAILED_IO otherwise (mgmt.ts `NativeFileTransferSnapshot`). Only a snapshot written AFTER the
 //    pull's answer says so (the snapshot write order, W3-16, VF-PM 2026-11-06). One that may have been written before
@@ -48,6 +49,10 @@ import { RpcCallError } from "../native-link";
 //    Only names matching that rule are read; a `*.truffle-tmp` beside them is the floor's.
 //  - `file-transfer-unsupported` is a fact of the floor's boot (mgmt.ts `MESH_FILE_TRANSFER`): cached for that boot,
 //    asked again at a reconnect, as `FloorEgress` keeps `egress-unsupported` (egress.ts:143-158).
+//
+// One subscribe is in flight at a time (`DrivePulls.#subscribe`), and two timers at most ask for the next: the
+// series' (`#retry`, set only while no stream stands) and the confirm timer (`#confirm`, set only while one stands
+// and a row read refused is unconfirmed), each one at a time. Every other timer is a held pull's own bound.
 //
 // Every payload from the floor is held to its contract (`safeParse`); one outside it is dropped and logged.
 
@@ -88,8 +93,9 @@ export interface DriveLanded {
   path: string;
 }
 
-/** A file a pull this fieldd did not start left in the `lands` folder (a previous fieldd's), for the drive to adopt
- * or sweep (mgmt.ts `NativeFileTransferSnapshot`). */
+/** A file left in the `lands` folder by a pull no caller here waits on, for the drive to adopt or sweep (mgmt.ts
+ * `NativeFileTransferSnapshot`): a previous fieldd's pull, one of this fieldd's whose held bound ended, or one of
+ * this fieldd's read refused that may have run (`DrivePulls.#foreign`). */
 export interface DriveAdoptCandidate {
   transferId: string;
   digest: string;
@@ -144,8 +150,8 @@ export interface DrivePullsOptions {
   heldBoundMs?: number;
   /** The plain subscribe's retries while no stream stands and a pull is held (`DrivePulls.#follow`), in ms, each
    * counted from the refusal before it, the last repeated while a pull is held; and the wait before each ask a
-   * foreign row's refusal makes (`DrivePulls.#askForForeign`). Default: `retryDelays(heldBoundMs)`. A test shortens
-   * them. */
+   * foreign row's refusal makes (`DrivePulls.#askForForeign`), the first of them over a standing stream
+   * (`DrivePulls.#confirmLater`). Default: `retryDelays(heldBoundMs)`. A test shortens them. */
   retryDelaysMs?: readonly number[];
   logger?: Logger;
 }
@@ -220,8 +226,9 @@ const HELD_PULL_BOUND_MS = 60_000;
  *    no stream a refusal of it opens no retries.
  * A pull a foreign row refuses (`#askForForeign`) makes no subscribe at once: it sets the series' timer when none is
  * set and none is in flight, so its asks each wait one of these delays and come at least the shortest apart (2 s at
- * 60 s), however fast a caller is refused. An attempt answered after a pull's bound settles nothing of that pull,
- * and forgets its row if it ended (`#hold`). */
+ * 60 s), however fast a caller is refused. Over a standing stream only a row read refused and not yet confirmed
+ * asks, by the confirm timer at the first of these delays, set the same way (`#confirmLater`). An attempt answered
+ * after a pull's bound settles nothing of that pull, and forgets its row if it ended (`#hold`). */
 function retryDelays(boundMs: number): number[] {
   return [boundMs / 30, boundMs / 15, (boundMs * 2) / 15];
 }
@@ -374,9 +381,14 @@ export class DrivePulls {
    * row whose pull the floor still runs: a pull held because a snapshot it could not order omitted it, whose end
    * the stream had already lost, gets no delta, and its row waits for the next snapshot this side reads (a lag's,
    * a hold's re-subscribe, a reconnect's subscribe). A pull read refused that never ran has no end to hear at all,
-   * so its row asks for that snapshot once (`#askIfRan`). With no stream, a pull such a row refuses asks for one
+   * so its row asks for that snapshot at once (`#askIfRan`), and until a snapshot lists or omits it, a pull it
+   * refuses asks again one delay later (`#confirmLater`). With no stream, a pull any such row refuses asks for one
    * (`#askForForeign`). */
   readonly #foreign = new Map<string, string>();
+  /** transferIds of the rows `#askIfRan` left in `#foreign` that no snapshot has listed or omitted yet: each may
+   * never have run, so nothing will end it but a snapshot. A snapshot that lists one confirms it (it runs, and its end
+   * comes on the stream), and one that omits it, or its `completed` or `failed`, forgets it (`#confirmed`). */
+  readonly #unconfirmed = new Set<string>();
   /** digest → transferId: every pull running that this fieldd knows of, its own and the foreign ones */
   readonly #running = new Map<string, string>();
   /** the floor boot that answered `file-transfer-unsupported` */
@@ -384,12 +396,15 @@ export class DrivePulls {
   #saidUnsupported: string | null = null;
   #subscription: { dispose: () => void } | null = null;
   #subscribing: Promise<void> | null = null;
-  /** a pull read refused may have run, and no subscribe has left since (`#askIfRan`): one is owed, and `#serve` clears
-   * this as it leaves */
+  /** a pull read refused may have run (`#askIfRan`), or the confirm timer fired for such a row (`#confirmLater`), and
+   * no subscribe has left since: one is owed, and `#serve` clears this as it leaves */
   #rowUnconfirmed = false;
   /** the plain subscribe's next attempt while no stream stands (`#follow`, `#askForForeign`): set only while none is
    * in flight */
   #retry: ReturnType<typeof setTimeout> | null = null;
+  /** the next ask for a row in `#unconfirmed` while a stream stands (`#confirmLater`): set only while none is in
+   * flight, and cleared as the last such row goes (`#confirmed`) and at `stop` */
+  #confirm: ReturnType<typeof setTimeout> | null = null;
   /** the attempts of the series under way (`#follow`): back to 0 at a re-arm (`#arm`), as what is owed opens a series
    * (`#follow`), and as a subscription is made (`#doSubscribe`). Only a timer set while no stream stands counts it up
    * (`#schedule`), so it is 0 whenever a stream stands. */
@@ -518,6 +533,7 @@ export class DrivePulls {
     const blocker = this.#running.get(params.digest);
     if (blocker !== undefined) {
       if (this.#foreign.has(blocker)) this.#askForForeign();
+      if (this.#unconfirmed.has(blocker)) this.#confirmLater();
       throw new RpcCallError(
         "CONFLICT",
         "a pull of this digest is running",
@@ -528,6 +544,8 @@ export class DrivePulls {
     }
     if (this.#running.size >= DRIVE_LIMITS.PULLS_IN_FLIGHT) {
       if (this.#foreign.size > 0) this.#askForForeign();
+      // an unconfirmed row holds one of the slots, with nothing but a snapshot to free it
+      if (this.#unconfirmed.size > 0) this.#confirmLater();
       // its golden, `error-data.file-transfer-exhausted.json` (W3-15, VF-PM 2026-11-06): retryable true and no
       // details, because a pull may be asked again once a running one ends; drive-pulls.test.ts holds this to it
       throw new RpcCallError(
@@ -563,7 +581,9 @@ export class DrivePulls {
     return await own.landed;
   }
 
-  /** Every landed file a previous fieldd's pull left. One surfaced before any listener goes to the first. */
+  /** Every landed file a pull no caller here waits on left: a previous fieldd's, one of this fieldd's whose held
+   * bound ended, or one of this fieldd's read refused that may have run. One surfaced before any listener goes to the
+   * first. */
   onAdoptCandidate(listener: (candidate: DriveAdoptCandidate) => void): () => void {
     this.#adoptListeners.add(listener);
     for (const candidate of this.#unclaimed.splice(0)) listener(candidate);
@@ -574,13 +594,14 @@ export class DrivePulls {
 
   /** Close the stream. A pull still running goes on at the floor (it outlives fieldd), and the next boot adopts what
    * it lands; its caller here is told so. Every pull is untracked first, so no held pull's timer outlives this
-   * (`#untrack`), and the retry's timer is cleared (item 196). */
+   * (`#untrack`), and the retry's and the confirm's timers are cleared (item 196). */
   stop(): void {
     if (this.#stopped) return;
     this.#stopped = true;
     this.#subscription?.dispose();
     this.#subscription = null;
     this.#clearRetry();
+    this.#clearConfirm();
     if (this.#drain !== null) clearImmediate(this.#drain);
     this.#drain = null;
     this.#events = [];
@@ -715,7 +736,7 @@ export class DrivePulls {
   }
 
   /** Whether a subscribe is owed: a pull is held with none left since its hold began, or a pull read refused has none
-   * left since that refusal (`#askIfRan`). */
+   * left since that refusal (`#askIfRan`) or since the confirm timer fired for its row (`#confirmLater`). */
   #owesFresh(): boolean {
     if (this.#rowUnconfirmed) return true;
     for (const own of this.#own.values()) if (own.held !== null && !own.asked) return true;
@@ -745,7 +766,8 @@ export class DrivePulls {
    *    pull held nothing is asked, and the bound that ends the last hold clears the timer: the next node-up or
    *    reconnect (`#arm`), the next pull accepted (`#accept`), or a pull a foreign row refuses (`#askForForeign`, at
    *    the series' next delay), asks again.
-   * So one attempt is in flight at most and one timer is set at most, and a series opens only at a hold (the stream
+   * So one attempt is in flight at most and one series timer is set at most (the confirm timer, `#confirmLater`, is
+   * the only other that asks, one at a time), and a series opens only at a hold (the stream
    * going, `#doSubscribe`; a pull accepted with none, `#accept`; one held while a subscribe was in flight; every
    * accepted pull at a reconnect, `connected`), a pull read refused, or a re-arm, and ends within one bound of its
    * opener (`retryDelays`). */
@@ -802,10 +824,44 @@ export class DrivePulls {
    * apart (`retryDelays`), the first one delay after the refusal, however fast a caller is refused. It holds
    * nothing, so a refused one opens no series and the next refusal asks again; an answered one's snapshot forgets
    * every such row whose pull has ended (the floor ends one no byte reaches at its idle bound, W3-4). Over a
-   * standing stream it asks nothing (`#foreign`). */
+   * standing stream it asks nothing (`#foreign`): there only a row read refused that no snapshot has confirmed asks
+   * (`#confirmLater`). */
   #askForForeign(): void {
     if (this.#subscription !== null || this.#subscribing !== null || this.#retry !== null) return;
     this.#schedule();
+  }
+
+  /** A pull refused here by a row in `#unconfirmed` while a stream stands (CONFLICT by its digest, or
+   * RESOURCE_EXHAUSTED while such a row holds a slot): `#askIfRan`'s one ask was refused unrun (a full mesh queue,
+   * RESOURCE_EXHAUSTED; or UNAVAILABLE from NativeLink's door gate while the floor is held unresponsive,
+   * native-link.ts:1173-1183, a missing socket or a stopped mesh worker), and the stream stood, so no end will come
+   * for a row that never ran, and no other ask is made over a standing stream (`#askForForeign`). So
+   * ONE timer is set at the first of `#retryDelaysMs`, with no subscribe in flight and none set, and as it fires the
+   * row's ask is owed again (`#rowUnconfirmed`): one re-subscribe, whose snapshot lists the row or forgets it. Its
+   * asks come at least that delay apart however fast a caller is refused, each one delay after a refusal, and end
+   * as the last such row is confirmed or forgotten (`#confirmed`); with no stream, the series asks
+   * (`#askForForeign`). */
+  #confirmLater(): void {
+    if (this.#subscription === null || this.#subscribing !== null || this.#confirm !== null) return;
+    const timer = setTimeout(() => {
+      this.#confirm = null;
+      this.#rowUnconfirmed = true;
+      this.#follow();
+    }, this.#retryDelaysMs[0]);
+    timer.unref?.();
+    this.#confirm = timer;
+  }
+
+  /** A row `#askIfRan` left is listed by a snapshot, or forgotten: it leaves `#unconfirmed`, and the confirm timer
+   * goes with the last one. */
+  #confirmed(transferId: string): void {
+    this.#unconfirmed.delete(transferId);
+    if (this.#unconfirmed.size === 0) this.#clearConfirm();
+  }
+
+  #clearConfirm(): void {
+    clearTimeout(this.#confirm ?? undefined);
+    this.#confirm = null;
   }
 
   /** A pull read refused may have run (`mayHaveRun`): fieldd's own TIMEOUT over a request the floor dequeued in its
@@ -816,11 +872,13 @@ export class DrivePulls {
    * may also never have run, and such a row has no end to hear, so over a standing stream it would pin its digest.
    * So ONE subscribe is owed (`#rowUnconfirmed`): made after this refusal, it enters the floor's one queue behind the
    * pull's request (`#serve`), and its snapshot lists the row or forgets it. One already in flight may have left
-   * before the pull, so one more follows it (`#subscribe`). With no stream that subscribe is a plain one. Refused
-   * unrun, the row waits for the next snapshot this side reads, as any foreign row does (`#foreign`). It holds
-   * nothing, so its refusal opens no retries. */
+   * before the pull, so one more follows it (`#subscribe`). With no stream that subscribe is a plain one. It holds
+   * nothing, so its refusal opens no retries. Refused unrun, the row stays unconfirmed (`#unconfirmed`) until a
+   * snapshot lists or omits it: a pull it refuses asks again, one delay later over a standing stream
+   * (`#confirmLater`), and at the series' next delay with no stream (`#askForForeign`). */
   #askIfRan(own: OwnPull): void {
     this.#leaveForeign(own);
+    this.#unconfirmed.add(own.transferId);
     this.#rowUnconfirmed = true;
     this.#follow();
   }
@@ -1012,7 +1070,11 @@ export class DrivePulls {
       void this.#settleUnlisted(own);
     }
     for (const [transferId, digest] of [...this.#foreign]) {
-      if (listed.has(transferId)) continue;
+      if (listed.has(transferId)) {
+        // it runs, so its end comes on the stream: an unconfirmed row needs no more asks
+        this.#confirmed(transferId);
+        continue;
+      }
       this.#forgetForeign(transferId);
       void this.#adoptIfLanded(transferId, digest);
     }
@@ -1162,6 +1224,7 @@ export class DrivePulls {
     if (digest === undefined) return;
     this.#foreign.delete(transferId);
     if (this.#running.get(digest) === transferId) this.#running.delete(digest);
+    this.#confirmed(transferId);
   }
 
   #dropped(what: "snapshot" | "delta", count: number): void {
