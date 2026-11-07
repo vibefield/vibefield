@@ -16,7 +16,7 @@ GV-AUDIT2's model contract is commit `49fc12da0fadc34e25c227fa2f03dcce2e09dbaa` 
 - `audit/godview/contracts/model.md`
 - `audit/godview/contracts/model.validation.json`
 
-This foundation does not cherry-pick them. GV-AUDIT6 combines slice commits. State and field ids in later traces must be ids from that contract (`state.idle`, `state.feed_no_door`, `field.status`, `field.stale`, `field.profileSet`, `view.swarm`, `adapter.claude`). Orthogonal axes are not a cartesian product of every metadata value. Unbounded values (model ids, paths, token counts, prompts) are not finite enums.
+This foundation commit does not contain them. A combined tree is valid when the three files match that commit byte for byte (`contracts/model-slice-pin.json`). `d53a0fa24ca7341fe5858329c9399eac6baf6b53` has the same model blobs and adds `validation/package-pin-check.md`. GV-AUDIT6 combines slice commits. See `integration.md`. State and field ids in later traces must be ids from that contract (`state.idle`, `state.feed_no_door`, `field.status`, `field.stale`, `field.profileSet`, `view.swarm`, `adapter.claude`). Orthogonal axes are not a cartesian product of every metadata value. Unbounded values (model ids, paths, token counts, prompts) are not finite enums.
 
 VibeField consumes `AgentView` from the Puppeteer SDK. `packages/field-app/src/godview/monitor/window-rows.ts` is a display patch: peer `field.stale` follows desktop standing, and peer `field.profileSet` is dropped. The model slice already records that. Do not open a second field catalog for it.
 

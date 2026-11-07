@@ -345,7 +345,7 @@
       "kind": "gate",
       "owner": "GV-AUDIT1",
       "status": "satisfied",
-      "notes": "Foundation points at model commit 49fc12da and does not vendor those three files."
+      "notes": "Absent model files are foundation-only incompleteness. Present files must match 49fc12da byte for byte. d53a0fa has the same model blobs plus package-pin-check.md."
     }
   ]
 }

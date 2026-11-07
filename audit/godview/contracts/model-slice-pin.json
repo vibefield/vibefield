@@ -1,0 +1,32 @@
+{
+  "canonicalCommit": "49fc12da0fadc34e25c227fa2f03dcce2e09dbaa",
+  "branch": "audit/godview-model",
+  "packageCheckCommit": "d53a0fa24ca7341fe5858329c9399eac6baf6b53",
+  "modelBytesIdenticalAtPackageCheckCommit": true,
+  "files": [
+    {
+      "path": "contracts/model.schema.json",
+      "role": "model",
+      "sha256": "b916788b60dfc3c5637641cb7f4f296b17e0bf1c391aba8cb83a563e21e7c274",
+      "gitBlob": "6d34dc323a5c57801ed96116f7bae170a13bb3e4"
+    },
+    {
+      "path": "contracts/model.md",
+      "role": "model",
+      "sha256": "b7ce5ae9db6c50e3012f5ad84c0dd6fa735362b7536732756620672d292f2bb0",
+      "gitBlob": "e122f3ab84bc859ab66e095fa21cfe0b96038740"
+    },
+    {
+      "path": "contracts/model.validation.json",
+      "role": "model",
+      "sha256": "667ee67cff30f3bb8f6ba36aaafcb935592556545b23bcf45dd49a6e184b03c3",
+      "gitBlob": "a32909933c6139a8df13f803ab72ceee4702880b"
+    },
+    {
+      "path": "validation/package-pin-check.md",
+      "role": "package-context",
+      "sha256": "b137caf756c4c78aedcb064c2d92fefcf7035f2967908814fa4bbc9414ecfa91",
+      "gitBlob": "de04ce6b171ba7e38837f2edccfa93da2b7f8be6"
+    }
+  ]
+}

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
-// GV-AUDIT1 gate. Checks the foundation contracts. Does not vendor the model
-// slice or re-run the package comparison.
+// GV-AUDIT1 gate. Foundation-only trees may omit the model trio. A combined
+// tree is accepted only when those bytes match the canonical commit.
+import { createHash } from "node:crypto";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -13,12 +14,13 @@ export const SHIPPED_TAG_COMMIT = "52d09c8e84951b9a355a6700eac2dfc1290a9fa0";
 export const MODEL_COMMIT = "49fc12da0fadc34e25c227fa2f03dcce2e09dbaa";
 export const PACKAGE_CHECK_COMMIT = "d53a0fa24ca7341fe5858329c9399eac6baf6b53";
 
-const OWNED_ELSEWHERE = [
+const MODEL_PATHS = [
   "contracts/model.schema.json",
   "contracts/model.md",
   "contracts/model.validation.json",
-  "validation/package-pin-check.md",
 ];
+const PACKAGE_PATH = "validation/package-pin-check.md";
+const CANONICAL_MODEL_PATHS = new Set(MODEL_PATHS);
 
 const COMPETING_NAMES = new Set([
   "unified-model.json",
@@ -58,6 +60,7 @@ export function run(repoRoot) {
   check("contracts/ids.json", "contracts/ids.schema.json");
   check("plan/topology.json", "contracts/topology.schema.json");
   check("plan/completeness-matrix.json", "contracts/matrix.schema.json");
+  check("contracts/model-slice-pin.json", "contracts/model-slice-pin.schema.json");
 
   const manifest = docs.get("contracts/manifest.json");
   const ids = docs.get("contracts/ids.json");
@@ -68,7 +71,12 @@ export function run(repoRoot) {
   if (manifest) checkBaseline(manifest, fail);
   if (ids && matrix) checkIds(ids, matrix, fail);
   if (matrix && gatesDoc && ids) checkMatrix(matrix, gatesDoc, ids, root, fail);
-  checkOwnedElsewhere(root, fail, waivers);
+  const modelIntegration = checkModelSlice(
+    root,
+    docs.get("contracts/model-slice-pin.json"),
+    fail,
+    waivers,
+  );
   checkTraces(root, docs, ids, cache, fail);
   checkFixtures(root, docs, cache, fail);
   checkFlows(root, docs, cache, fail);
@@ -81,6 +89,7 @@ export function run(repoRoot) {
     modelCommit: MODEL_COMMIT,
     packageCheckCommit: PACKAGE_CHECK_COMMIT,
     packageCheckVerifiedByThisSlice: false,
+    modelIntegration,
     waivers,
     counts: {
       jsonFiles: docs.size,
@@ -187,25 +196,88 @@ function checkMatrix(matrix, gatesDoc, ids, root, fail) {
   }
 }
 
-function checkOwnedElsewhere(root, fail, waivers) {
-  for (const rel of OWNED_ELSEWHERE) {
-    if (statSafe(join(root, rel))) {
-      fail(
-        "gate.model-slice-ref",
-        `${rel} is owned by another slice and must not be vendored here`,
-      );
+function checkModelSlice(root, pin, fail, waivers) {
+  const info = {
+    status: "rejected",
+    present: [],
+    missing: [...MODEL_PATHS],
+    packageCheck: "absent",
+    canonicalCommit: MODEL_COMMIT,
+    packageCheckCommit: PACKAGE_CHECK_COMMIT,
+    modelBytesIdenticalAtPackageCheckCommit: pin?.modelBytesIdenticalAtPackageCheckCommit === true,
+  };
+  if (!pin?.files) {
+    fail("gate.model-slice-ref", "contracts/model-slice-pin.json is missing or invalid");
+    return info;
+  }
+  const byPath = new Map(pin.files.map((file) => [file.path, file]));
+  let hashFailed = false;
+  for (const rel of MODEL_PATHS) {
+    const full = join(root, rel);
+    if (!statSafe(full)) continue;
+    info.present.push(rel);
+    info.missing = info.missing.filter((item) => item !== rel);
+    const actual = sha256File(full);
+    const expected = byPath.get(rel);
+    if (!expected || actual !== expected.sha256) {
+      hashFailed = true;
+      fail("gate.model-slice-ref", mismatchMessage(rel, actual, expected, pin));
     }
   }
-  waivers.push("model files and package-pin-check.md are absent here by ownership");
-  const files = walk(root);
-  for (const file of files) {
+  if (info.present.length === 0) {
+    info.status = "incomplete";
+    waivers.push(
+      `model-slice incomplete: 0/3 canonical model files absent. Foundation-only is valid. Integration needs ${MODEL_PATHS.join(", ")} matching ${pin.canonicalCommit}.`,
+    );
+  } else if (info.missing.length > 0) {
+    info.status = "rejected";
+    fail(
+      "gate.model-slice-ref",
+      `partial model slice: present ${info.present.join(", ")}; missing ${info.missing.join(", ")}. All three must match ${pin.canonicalCommit} (git blobs also identical at ${pin.packageCheckCommit}).`,
+    );
+  } else if (hashFailed) {
+    info.status = "rejected";
+  } else {
+    info.status = "matched";
+  }
+  const packageFile = join(root, PACKAGE_PATH);
+  const packagePin = byPath.get(PACKAGE_PATH);
+  if (!statSafe(packageFile)) {
+    waivers.push(
+      `package-pin-check.md absent. Context from ${pin.packageCheckCommit} is not in this tree and is not a second audit.`,
+    );
+  } else {
+    const actual = sha256File(packageFile);
+    if (!packagePin || actual !== packagePin.sha256) {
+      info.packageCheck = "mismatched";
+      fail("gate.model-slice-ref", mismatchMessage(PACKAGE_PATH, actual, packagePin, pin));
+    } else {
+      info.packageCheck = "matched";
+    }
+  }
+  for (const file of walk(root)) {
     const base = file.split("/").at(-1);
     const rel = relative(root, file);
-    if (base === "model.schema.json" || base === "model.md" || base === "model.validation.json") {
-      if (!OWNED_ELSEWHERE.includes(rel)) fail("gate.no-competing-model", rel);
+    if (
+      (base === "model.schema.json" || base === "model.md" || base === "model.validation.json") &&
+      !CANONICAL_MODEL_PATHS.has(rel)
+    ) {
+      fail("gate.no-competing-model", rel);
     }
     if (COMPETING_NAMES.has(base)) fail("gate.no-competing-model", rel);
   }
+  return info;
+}
+
+function mismatchMessage(rel, actual, expected, pin) {
+  const commit = rel === PACKAGE_PATH ? pin.packageCheckCommit : pin.canonicalCommit;
+  const wanted = expected?.sha256 ?? "missing pin";
+  const blob = expected?.gitBlob ?? "missing blob";
+  return `${rel} sha256 ${actual} does not match ${commit} sha256 ${wanted} (git blob ${blob}).`;
+}
+
+function sha256File(path) {
+  return createHash("sha256").update(readFileSync(path)).digest("hex");
 }
 
 function checkTraces(root, docs, ids, cache, fail) {

@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "audit/godview/contracts/model-slice-pin.schema.json",
+  "title": "GodviewModelSlicePin",
+  "description": "Byte provenance for the model trio and the package-context file. The gate hashes working-tree bytes. It does not execute them.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "canonicalCommit",
+    "branch",
+    "packageCheckCommit",
+    "modelBytesIdenticalAtPackageCheckCommit",
+    "files"
+  ],
+  "properties": {
+    "canonicalCommit": { "const": "49fc12da0fadc34e25c227fa2f03dcce2e09dbaa" },
+    "branch": { "const": "audit/godview-model" },
+    "packageCheckCommit": { "const": "d53a0fa24ca7341fe5858329c9399eac6baf6b53" },
+    "modelBytesIdenticalAtPackageCheckCommit": { "const": true },
+    "files": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "items": { "$ref": "#/$defs/file" }
+    }
+  },
+  "$defs": {
+    "file": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "role", "sha256", "gitBlob"],
+      "properties": {
+        "path": { "type": "string", "minLength": 8 },
+        "role": { "enum": ["model", "package-context"] },
+        "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "gitBlob": { "type": "string", "pattern": "^[0-9a-f]{40}$" }
+      }
+    }
+  }
+}
