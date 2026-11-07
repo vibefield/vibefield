@@ -426,12 +426,7 @@ export type FlowRunRecordStep = z.infer<typeof FlowRunRecordStep>;
  * 2026-11-06; LL1's words, 2026-11-06): `agents`, the agents its steps started, counted until the run's end, whatever
  * becomes of them, against FLOW_LIMITS.RUN_AGENTS_MAX. The record keeps it because `steps` folds the oldest into
  * `earlier`, a bare count, and a step's `session` is written only once its spawn answers. Optional, so a record kept
- * before it parses, as none started.
- * *Corrected 2026-11-07 (CP-4a2b slice 12, S14 and Q4 (a); ruled 2026-11-07):* the cap holds at the first call past
- * `allowed` (the 41st, and the 61st after an Allow), never at `allowed` itself. From slice 12's green, a call past
- * `allowed` is journaled and counted in `calls`, and opens no step until an Allow lets it through: a record the cap
- * holds reads `calls` past `allowed`, and its `open` has no entry past `allowed` (the cap's item names its call,
- * `run.call`). */
+ * before it parses, as none started. */
 export const FlowRunRecord = z
   .object({
     format: z.literal(1),

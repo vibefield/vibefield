@@ -21,20 +21,11 @@
   "log": "review round 3 of 3",
   "open": [
     {
-      "call": 40,
-      "label": "notes",
+      "call": 41,
+      "label": "ship",
       "agent": "codex",
-      "phase": "Review",
-      "session": "run-2b9f4c61",
-      "handed": true,
-      "state": "working",
-      "lines": [
-        {
-          "line": "in",
-          "n": 1,
-          "sent": "uncertain"
-        }
-      ]
+      "phase": "Ship",
+      "state": "holding"
     }
   ],
   "steps": [
@@ -56,6 +47,22 @@
           "line": "repair",
           "n": 1,
           "sent": "queued"
+        }
+      ]
+    },
+    {
+      "call": 40,
+      "label": "notes",
+      "agent": "codex",
+      "phase": "Review",
+      "session": "run-2b9f4c61",
+      "handed": true,
+      "state": "answered",
+      "lines": [
+        {
+          "line": "in",
+          "n": 1,
+          "sent": "uncertain"
         }
       ]
     }

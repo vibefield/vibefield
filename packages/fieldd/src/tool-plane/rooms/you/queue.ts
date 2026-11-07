@@ -164,9 +164,7 @@ export type FlowRunItemKind = Extract<
 /** A flow run's item as the runs raise it (13a's D2, D22). */
 export interface FlowItemRaise {
   readonly kind: FlowRunItemKind;
-  /** the run, and the call it holds at (counted from 1 in the run's journal) with the script's label
-   * *Corrected 2026-11-07 (CP-4a2b slice 12, Q16; ruled 2026-11-07):* the label is a step's, when the item holds at one;
-   * the cap holds the run, not a step, and its item carries no label. */
+  /** the run, and the call it holds at (counted from 1 in the run's journal) with the script's label */
   readonly run: NeedsFlowRun;
   /** the flow as its mark names it (‹flow›: the runs choose the words, DESIGN.md §9, R18) */
   readonly name: string;

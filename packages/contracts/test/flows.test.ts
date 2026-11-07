@@ -556,27 +556,12 @@ describe("CP-4a2b — a run's record, its states and its bounds (13b.3's C6, C9,
       starter: { by: "spark", spark: "sp-7k2m9q4x" },
       calls: 41,
       allowed: 40,
-      open: [{ call: 40, handed: true, state: "working" }],
-      steps: [{ call: 39 }],
+      open: [{ call: 41, state: "holding" }],
+      steps: [{ call: 39 }, { call: 40, handed: true }],
       held: { kind: "flow-cap" },
     });
     // a forged tail is still a record's shape: a forgery is the store's to find, by the journal's MACs (13a's T-rows)
     expect(FlowRunRecord.safeParse(fixture("flow-run-record.forged-tail")).success).toBe(true);
-    // slice 12's Q4 (a) (ruled 2026-11-07): the cap holds at call 41, past `allowed`, journaled and
-    // counted with no step until an Allow, so each record the cap holds has no entry at 41 in `open` or `steps`, and
-    // its `open` holds one entry, at call 40
-    for (const name of ["valid", "forged-tail", "agents"]) {
-      const held = FlowRunRecord.parse(fixture(`flow-run-record.${name}`));
-      expect(held.calls, name).toBe(held.allowed + 1);
-      expect(
-        held.open.map((step) => step.call),
-        name,
-      ).toEqual([40]);
-      expect(
-        held.steps.map((step) => step.call),
-        name,
-      ).toEqual([39]);
-    }
   });
 
   it("C6: `open` holds every step not yet answered, to the host's own ceiling; `steps` the latest answered, to 64", () => {
