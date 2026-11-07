@@ -2388,6 +2388,26 @@ const handedTo = (more = "") =>
     "}",
     "",
   ].join("\n");
+/** Slice 13's fold 1 (R19h-6; shared since fold 2, R19h-7 and R19h-8) — the harness's hand, its let-go throwing the
+ * first time it is called, as a listener that throws would. */
+const letGoThrows = (h: Harness) => {
+  const { stepEnds } = h.runs.ports;
+  const hand = stepEnds.hand.bind(stepEnds);
+  vi.spyOn(stepEnds, "hand").mockImplementation((runtimeRunId, step) => {
+    const unhand = hand(runtimeRunId, step);
+    if (unhand === undefined) return undefined;
+    let thrown = false;
+    return () => {
+      unhand();
+      if (thrown) return;
+      thrown = true;
+      throw new Error("the step listener could not let go");
+    };
+  });
+};
+/** How many times fieldd's log said a handed session could not be let go (slice 13's fold 1). */
+const unhandWarns = (h: Harness) =>
+  h.warned.filter((said) => said.event === "fieldd.flows.step.unhand").length;
 
 describe("CP-4a2b — a step handed a session: heard from the hand, let go at the answer (§13a slice 9b)", () => {
   it("R19h (9b): the runs hand the step listener your session before the step's line is queued; its turn's end answers, and the hand is let go at the answer", async () => {
@@ -2502,22 +2522,6 @@ describe("CP-4a2b — a step handed a session: heard from the hand, let go at th
     // red at the unfixed green: #letGo calls each unhand() uncaught, so the throw leaves #finish past its
     // `#live.delete` and skips #closeEnd: the host's end is "not kept" in fieldd's log, the record stays `stopping`, no
     // `end` is journaled, and the Stop never answers; and close() rejects with the throw
-    /** The harness's hand, its let-go throwing the first time it is called, as a listener that throws would. */
-    const letGoThrows = (h: Harness) => {
-      const { stepEnds } = h.runs.ports;
-      const hand = stepEnds.hand.bind(stepEnds);
-      vi.spyOn(stepEnds, "hand").mockImplementation((runtimeRunId, step) => {
-        const unhand = hand(runtimeRunId, step);
-        if (unhand === undefined) return undefined;
-        let thrown = false;
-        return () => {
-          unhand();
-          if (thrown) return;
-          thrown = true;
-          throw new Error("the step listener could not let go");
-        };
-      });
-    };
     /** "not kept", once fieldd's log says a host's end of `h`'s runs was not kept: what a throw out of #finish reads as. */
     const notKept = (h: Harness) =>
       new Promise<string>((resolve) => {
@@ -2529,8 +2533,6 @@ describe("CP-4a2b — a step handed a session: heard from the hand, let go at th
           if (args[0] === "fieldd.flows.run.ended") resolve("not kept");
         });
       });
-    const unhandWarns = (h: Harness) =>
-      h.warned.filter((said) => said.event === "fieldd.flows.step.unhand").length;
     // the Stop's road: the end's own #letGo meets the throw
     const h = await harness({ sessions: { "run-yours": HANDED_YOURS } });
     h.approved("handed", handedTo());
@@ -2566,6 +2568,75 @@ describe("CP-4a2b — a step handed a session: heard from the hand, let go at th
       stopLeg: { stopped: "stopped", record: "stopped", hands: [true], ends: 1, warned: 1 },
       closeLeg: { closed: "closed", record: "running", hands: [true], warned: 1 },
     });
+  });
+
+  it("R19h-7 (slice 13's fold 2; the builder's #14): a hand whose let-go throws at its step's answer is said once in fieldd's log: the answer is journaled, the turn end that answered it returns, and the run ends done", async () => {
+    // red at fold 1: #answer called the let-go uncaught, after the call left `waiting` and before its line, so the
+    // throw left the turn end, nothing was journaled, and the run waited on an answer no turn would give again
+    const h = await harness({ sessions: { "run-yours": HANDED_YOURS } });
+    h.approved("handed", handedTo());
+    letGoThrows(h);
+    const run = startedRun(await h.start({ flow: "handed" })).run;
+    await waitFor(() => expect(h.enqueued).toHaveLength(1));
+    let turn = "returned";
+    try {
+      h.endTurn({
+        run,
+        call: 1,
+        runtimeRunId: "run-yours",
+        turn: "t1",
+        outcome: "completed",
+        text: "looks good",
+      });
+    } catch (error) {
+      turn = error instanceof Error ? error.message : String(error);
+    }
+    // read in the turn end's own tick: the answer's line is appended there, and the host has heard nothing back yet
+    expect({
+      turn,
+      kinds: h.kinds(run),
+      hands: h.hands.map((hand) => hand.gone),
+      warned: unhandWarns(h),
+    }).toEqual({ turn: "returned", kinds: ["head", "call", "answer"], hands: [true], warned: 1 });
+    expect((await settled(h.runs, run, "done")).log).toBe("looks good");
+    expect(unhandWarns(h)).toBe(1);
+  });
+
+  it("R19h-8 (slice 13's fold 2; the builder's #14): a handed start that settles on a step its run no longer waits on lets the hand go through the one caught let-go: a let-go that throws is said once as a let-go, never as a start that threw, and lands no \"‹label› failed.\"", async () => {
+    // red at fold 1: #launched's `else started.unhand()` sat uncaught inside its `try`, so the throw reached the
+    // catch and fieldd's log said "A flow step's start threw; the step failed" (`fieldd.flows.step.start`) of a step
+    // whose agent answered it. The catch's own answer was already undriven on this road (the call no longer waits),
+    // so no "Yours failed." line landed then either; that half is pinned green at both.
+    // The road, seen deterministically: a handed start awaits nothing, so its run can stop waiting on the step only in
+    // the start's own turn. Here the queue's take of the line ends the step's turn in that turn, as a port that
+    // re-enters would: the turn's answer lands before the start settles, and the start then lets the hand go itself.
+    const h = await harness({ sessions: { "run-yours": HANDED_YOURS } });
+    h.approved("handed", handedTo());
+    letGoThrows(h);
+    const { inputs } = h.runs.ports;
+    const enqueue = inputs.enqueue.bind(inputs);
+    vi.spyOn(inputs, "enqueue").mockImplementation((runtimeRunId, text, from) => {
+      const queued = enqueue(runtimeRunId, text, from);
+      if (from.kind === "flow")
+        h.endTurn({
+          run: from.run,
+          call: from.call,
+          runtimeRunId,
+          turn: "t1",
+          outcome: "completed",
+          text: "looks good",
+        });
+      return queued;
+    });
+    const run = startedRun(await h.start({ flow: "handed" })).run;
+    const log = (await settled(h.runs, run, "done")).log;
+    expect({
+      log,
+      refusals: refusalsOf(h, run),
+      hands: h.hands.map((hand) => hand.gone),
+      unhand: unhandWarns(h),
+      threw: h.warned.filter((said) => said.event === "fieldd.flows.step.start").length,
+    }).toEqual({ log: "looks good", refusals: [], hands: [true], unhand: 1, threw: 0 });
   });
 });
 
@@ -3724,6 +3795,40 @@ describe("CP-4a2b — a run's agents, RUN_AGENTS_MAX started, counted until its 
       ended: 1,
       steps: [[1, "ended", undefined]],
       open: [],
+    });
+  });
+
+  it("R42d-3 (slice 13's fold 2; the fold skeptic's #1): R42d-2's road with the landed agent's end refused by the floor: its step, which has no session, stays open in its true state, `starting`, never `ended`, and `ended` counts none, as R40f has it for a step with a session", async () => {
+    // red at fold 1: endSteps matched a step's own session alone against the refused ends, and a landed agent's step
+    // has none (Q8 (a)), so the step read `ended` while its agent worked on
+    let release: () => void = () => {};
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const h = await harness({ spawnHeld: held, ofRunOmits: ["rt-step1"], endRejects: "rt-step1" });
+    h.approved("review", ANSWERED);
+    const run = startedRun(await h.start({ flow: "review" })).run;
+    await waitFor(() => expect(h.spawned).toHaveLength(1));
+    const stopping = h.runs.stop(run);
+    release();
+    const stopped = (await stopping).run;
+    const record = h.records.runRecord(run);
+    expect({
+      state: stopped.state,
+      enqueued: h.enqueued.length,
+      ends: h.ends,
+      ended: record?.ended,
+      steps: record?.steps.map((step) => [step.call, step.state, step.session]),
+      open: record?.open.map((step) => [step.call, step.state, step.session]),
+      warned: h.warned.filter(({ event }) => event === "fieldd.flows.step.end").length,
+    }).toEqual({
+      state: "stopped",
+      enqueued: 0,
+      ends: ["rt-step1"],
+      ended: undefined,
+      steps: [],
+      open: [[1, "starting", undefined]],
+      warned: 1,
     });
   });
 
@@ -5465,6 +5570,11 @@ describe("CP-4a2b — the host's life: parked and woken, D2's lookup at a wake, 
     const h = await harness();
     await h.runs.close();
     const gone = "fr-0000000000000000";
+    // fold 2 (the fold skeptic's #2): the forged run lists one live agent, so a refusal that ended its agents first
+    // would read `ends: ["rt-forged"]`; with none listed, `ends: []` could not go red
+    vi.spyOn(h.runs.ports.sessions, "ofRun").mockReturnValue([
+      { runtimeRunId: "rt-forged", call: 1, live: true },
+    ]);
     const acted = await h.runs.acts
       .answer({
         id: "ny-item9aaaaaa" as NeedsItemId,
