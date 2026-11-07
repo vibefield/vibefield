@@ -41508,6 +41508,7 @@ filed as item 227 at 08:29Z; the lane is VF-PM's of 08:30Z.
 - The smoke: this land moves the smoke's code (`smoke.ts`, `typed-agent.ts`, `smoke-shell-marker.ts`), and that code
   ran in no smoke here, only in its unit rows (`typed-agent.test.ts` 21, `smoke-shell-marker.test.ts` 13). The two
   `smoke:godview` rows, the red and the green, are owed on the console lock, and they will be the first smoke over it.
+  > **Paid (2026-11-07, 14:39Z–14:43Z):** both rows ran on the old mini after James's unlock, as briefed; see Owed.
 
 **The review.** One independent opus read of the first cut, by reading only (`review-opus-34c9d0c22.md`, sha256
 `f040a335b5a126009304c6279d3636326853d6c0342c7734b7d277db81035960`). 14 findings: 6 minor, 8 nits, no major. 12
@@ -41556,6 +41557,21 @@ checkout.
   and opencode sends it on the part's `time.end`.
 - The two `smoke:godview` rows at rung 11m, the red at `cda6ee15e` and the green at `7a95c0789`: owed on the old
   mini's console lock. They are the first smoke over this land's smoke code.
+  > **Paid (2026-11-07; a9 on the old mini, after James's unlock click at 14:32:24Z and VF-PM's GO at 14:37:16Z):**
+  > both rows ran as briefed (`lanes/item227/rungs/a9-brief-item227-rungs.md`, sha256 `a1225332…`). Each was the
+  > whole `smoke:godview`, with the console unlocked at its arm.
+  > - The red at `cda6ee15e`, 14:39:07Z → 14:40:52Z: exit 2. Rung 11m's `SMOKE_CHAT_SEND` failed at the reply wait
+  >   after Delivered (`waitedMs.delivered` 362, `replied` null, `reply` null). `SMOKE_GODVIEW` ok false, with no
+  >   `chatThread`.
+  > - The green at `7a95c0789`, 14:40:52Z → 14:43:03Z: exit 0. `failed` null, `reply` "The stub answered
+  >   sp1dssjr32jx @", `waitedMs.replied` 362. `SMOKE_GODVIEW` ok true; `chatThread`'s Send ends "the reply was
+  >   drawn after 362ms", then "the card" and "Jump to", so the rung's re-read of the reply count passed.
+  > - `SMOKE_DAEMONS` `"left":[]` on both. The results are
+  >   `lanes/item227/rungs/a9-results-rungs-cda6ee15e-7a95c0789/`, SUMS-a9 `43220f26…`, 16 of 16 (re-checked by ec).
+  > - Observed, no item: the red row's smoke HOME stayed under /tmp (`SMOKE_HOME` removed false,
+  >   `/private/tmp/vf-smoke-gKQaAq`, which a9 left in place), where the green's reads removed true. That is DK-18's
+  >   rule, the same at both shas: a red run keeps its HOME and names it (`testing/smoke-daemons.ts`
+  >   `removeSmokeRoot`). It is evidence, not a fault.
 - `docs/desk-gates.md`: rung 11m's row gains the reply read.
 
 ## Item 213 — the worker's late ack to a progress report is not a red: field-app's suite runs under a runner that drops vitest's `onTaskUpdate` timeout and nothing else (test-config only)
