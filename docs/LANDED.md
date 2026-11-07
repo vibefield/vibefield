@@ -41419,3 +41419,141 @@ and its re-cut onto r4 at 12:07Z.
   moving them now would void kit3 (VF-PM 22:59Z).
 - The device witness on the road: James's run, as 12c's.
 - 12f: New spark on the phone, and @'s handles in the eyebrow.
+
+## Item 227 — a Claude spark's reply reaches Chat: a turn's end writes the reply when no copy of the message could be kept, unless the turn's last reply already says it (track CO, TH-1)
+(2026-11-07; two commits on lane `co/item227`, ec's (vibe-field-ec), built in
+`/Volumes/SamsungRed/lanes/item227/vibe-field`. The first cut was `3daadf55f` → `34c9d0c22` on `2334fe3b8`; it is kept
+as `co/item227-r0` and was never run. The review's fold followed, then a re-cut each time main moved: onto `6e4cb7b68`
+as `f3a492217` → `51a4ebf1d` (run 211, old-packet evidence), onto `298893037` as `cc402f43a` → `2fd457194` (never
+run), onto `781cfb7d0` as `3401aed88` → `32dc3b760` (run 212, the prior proof), and onto `78fc8baf8` as `cda6ee15e` →
+`7a95c0789`, the land record. Verified at `7a95c0789` on `78fc8baf8` (run 213, a9's, on the old mini), M213; landed
+as `7a95c0789`, a fast-forward of main to the lane's tip and a true mint (run 213 verified HEAD == the tip on main as
+it stood, `78fc8baf8`), 12:41:40Z.)
+Found 2026-11-07 by James in his own `pnpm dev` (main `b833d4116`/`8c03c4c5a`, rosetta 0.1.3): a spark sent "hi" from
+Chat answered in its Godview pane and never in Chat. Diagnosed read-only by ec from his dev root's logs and records,
+filed as item 227 at 08:29Z; the lane is VF-PM's of 08:30Z.
+
+**The finding.**
+- Spark `sp-1b3a2d370be01d88`, run `df9db341-f4ff-40ef-9ac3-fe34854f2602`. Its transcript held run, you, turn start,
+  outcome delivered and turn end (04:46:54Z–04:47:07Z), and no `reply` line. Claude's own session file held the reply
+  (126 chars, `end_turn`, 04:47:07.480Z).
+- A Claude run sends two copies of a message, and neither reached the recorder's file:
+  - puppeteer's runtime withholds the transcript's copy from `agent.on` once the run's level is `native-hooks`, which
+    any hook sets (`packages/runtime/src/runtime.ts:285`, `:2368`, `publish: false`, at the pin 0.3.3);
+  - the hook's copy (MessageDisplay) is `displayOnly`, which the recorder refused.
+- It held on every Claude spark, and today only Claude offers sparks (`agent-catalog.ts:231`). Not a gap: TH-1/TH-2
+  (`d5c6995fb`, M147) built Chat to draw replies, but nothing reached it from a live Claude run.
+- Why nothing caught it: the recorder's row fed a fake run a message a live Claude run never delivers, and rung 11m
+  stopped at Delivered and Jump to.
+- VF-PM's three states were ruled out from the logs: TU-1 Q4 (one fieldd boot spanned the turn), item 169 (the say
+  came two hours before the first restart), and a crew run with no transcript (it was the spark's own run).
+
+**What landed.**
+- `packages/fieldd/src/spark-transcripts.ts`: on `turn:completed` the recorder writes `reply` from
+  `lastAssistantMessage`, after the tools the end flushes and before the `turn end` line.
+  - It skips the words only when, trimmed, they equal the last reply kept since the turn started. This is VF-PM's
+    09:07Z ruling on review findings J1 and J2. It replaces the 08:30Z wording "unless that turn already has one",
+    which lost a turn's real last words in a re-attach window and at a second end.
+  - `Recording.said` is set only when the store keeps the line, and reset at `turn:started`. It is not keyed by turn
+    id, because the hook's and the transcript's ids differ (James's run: `5d082c61-…` against `198e140c-…`).
+  - flow-step-events.ts reads the same field with the opposite precedence: there the end's words come first, here the
+    heard message does.
+- `packages/fieldd/test/spark-transcripts.test.ts`, nine rows, 15 → 24:
+  - three run a fake binding under puppeteer's REAL runtime (`liveRun`): the red at `native-hooks`, the no-double
+    control at `native-log`, and a re-attached run whose level moves under it;
+  - six run on the fake agent: two ends of one turn, an end with no live start, equal words trimmed either way, a heard
+    reply the store did not keep, each turn's own reply, and the end's words after flushed tools (none for a blank end,
+    a failed turn, a subagent's or a replay).
+- Rung 11m (`packages/electron-shell/src/testing/smoke.ts`): after Delivered it waits for exactly one
+  `.vf-chat-flow [data-row="reply"] .vf-chat-reply-text` carrying its nonce, starting with the stub's words, and reads
+  the count again after the card steps. SMOKE_CHAT_SEND gains `reply` and `waitedMs.replied`.
+- The smoke's stub (`typed-agent.ts`): a line carrying `TYPED_AGENT_ANSWERED` (`sp1d`, 11m's nonce alone) gets, 200 ms
+  on, its words on MessageDisplay (display-only) and then on Stop's `last_assistant_message`.
+  - Only `stageTypedAgent` passes the mark, so no other rung's turn ends, and the first-run stub is unchanged.
+  - It sends no `prompt_id`, `transcript_path` or `SessionStart`. So the rung proves the road from a turn's end to the
+    drawn row, and that the display's copy is refused. The recorder's rows hold the transcript copy's withholding.
+- 7 files, +497 −42. fieldd and the smoke only: no contracts move, no EL8, pin-class 0.
+
+**The lights.**
+- Mac reads through the door, nice 19, not of record, swap used 0.00M at every reading (the lane's `logs/`):
+  - the first red, on the first cut's four rows, 08:35:10Z:
+    `expected [ 'turn', 'turn' ] to deeply equal [ 'turn', 'reply', 'turn' ]`;
+  - the land record's red at `cda6ee15e`, 12:27:26Z: 7 failed, each by assertion, 17 passed; the green at
+    `7a95c0789`, 12:27:28Z: 24 of 24. Each earlier cut read the same (`f3a492217`/`51a4ebf1d` 11:54Z,
+    `cc402f43a`/`2fd457194` 12:06Z, `3401aed88`/`32dc3b760` 12:08Z);
+  - on the fold's tree, the seven files byte for byte: 17 mutants over each line of the fix, 17 killed; 5 stub mutants,
+    4 killed, the survivor being the 200 ms pacing, named before the run;
+  - on the same tree: biome clean over the seven files, tsc clean for fieldd and electron-shell, typed-agent 21 of 21,
+    smoke-shell-marker 13 of 13.
+- The re-cut is proof-form (`recut-proof-7a95c0789.txt`, by `pid2.sh`):
+  - `git diff 2334fe3b8 a957e86f0` (the first cut plus the fold, a lane-only commit) and `git diff 78fc8baf8 7a95c0789`
+    are byte-identical, and both patch-id forms match (`e42e03c7…` by −U0, `741d7a8f…` in full);
+  - the range-diff reads `!` on both commits, as a fold must;
+  - main's 27 commits since `2334fe3b8` share none of the seven files.
+- a9's rows on the old mini, run 213's set (`lanes/item227/a9-results-run213-7a95c0789`, SUMS-a9 `e1d75eed…`): the
+  red at `cda6ee15e`, 7 failed and 17 passed, 7 AssertionErrors; the rung's red there exit 75, NOT ARMED (the console
+  locked) and owed; the green at `7a95c0789`, 24, 21 and 13.
+- Run 213, a9's, on the old mini: GREEN at `7a95c0789` on `78fc8baf8`, verify 0 at 12:39:33Z. vitest 14,082 passed,
+  0 failed and 21 skipped over 962 files, summed by ec from a9's log; node 474 of 474, cargo 606 passed and 0 failed
+  over 37, typecheck 29, biome 3,486 files. That is VF-PM's expected count: run 212's measured 14,078 over 961 plus
+  M-d's rows, 4 `it(` rows with 3 of them in its one new file.
+- Run 212, a9's, at `32dc3b760` on `781cfb7d0`, the prior proof on that base: GREEN, verify 0 at 12:19:59Z. 14,078
+  passed, 0 failed and 21 skipped over 961 files, summed by ec from a9's log (SUMS-a9 `ee3f03e3…`). That is run 210's
+  measured 14,068 plus this lane's +10 (fieldd +9, electron-shell +1). Its rows: the red 7 failed and 17 passed, the
+  green 24, 21 and 13, and both rung rows NOT ARMED (exit 75).
+- Run 211, a9's, at `51a4ebf1d` on `6e4cb7b68`, fired before VF-PM's stop reached it, so it is old-packet evidence and
+  not this record (VF-PM 12:06:31Z). a9's rows (12:07:20Z): the red 7 failed and 17 passed, the rung's red NOT ARMED
+  (exit 75), the green 24, 21 and 13; its verify GREEN, 14,056 / 0 / 21 over 961 files (summed by ec, SUMS-a9
+  `09adb8be…`).
+- The smoke: this land moves the smoke's code (`smoke.ts`, `typed-agent.ts`, `smoke-shell-marker.ts`), and that code
+  ran in no smoke here, only in its unit rows (`typed-agent.test.ts` 21, `smoke-shell-marker.test.ts` 13). The two
+  `smoke:godview` rows, the red and the green, are owed on the console lock, and they will be the first smoke over it.
+
+**The review.** One independent opus read of the first cut, by reading only (`review-opus-34c9d0c22.md`, sha256
+`f040a335b5a126009304c6279d3636326853d6c0342c7734b7d277db81035960`). 14 findings: 6 minor, 8 nits, no major. 12
+applied, 2 declined, each by index:
+
+| id | sev | finding | disposition |
+|---|---|---|---|
+| J1 | minor | narration heard in a re-attach window drops the turn's final words | applied: the `said` compare (VF-PM 09:07Z), its re-attach row on the real runtime |
+| J2 | minor | a second end in one turn loses its words | applied: the same change, its two-ends row |
+| J3 | minor | no rows for re-attach, a second end, an end with no start | applied: those three, plus the equal-trimmed-words row VF-PM required |
+| J4 | minor | the commit's ACP and opencode claims were false | applied: reworded. ACP's live path sends only unfinished chunks, so its end's words are its whole reply |
+| J5 | minor | "one difference" was false; 11m had one copy, so "exactly one" refused nothing | applied: the stub POSTs MessageDisplay too, 11m re-reads the count, the differences are listed |
+| J6 | minor | a failed turn's words have no road to Chat | applied: named as a limit; filed as item 230 |
+| J7 | nit | a row emitted `turn:failed` with a key the schema refuses | applied: the key dropped, mutant m12 retired |
+| J8 | nit | "the road flow-step-events takes" was inaccurate | applied: "the same field, the opposite precedence" |
+| J9 | nit | "Stubbed: nothing" was false | applied: which rows run on what is said |
+| J10 | nit | "3 of 3" stub mutants | applied: "4 of 5", after the MessageDisplay mutant |
+| J11 | nit | the contracts comment at `spark-transcript.ts:90` is stale | declined, VF-PM 08:45Z: see Owed |
+| J12 | nit | the reply state was set though `append` kept nothing | applied: set only on a kept line, with its row |
+| J13 | nit | two shadowings | applied by renaming (`state`; the stub's `response`), not the suggested closure, which would change behaviour after `forget()` |
+| J14 | nit | the stub doc said "starts with", the code `includes` | declined for the code: 11m finds its own line by `includes`, and what the paste delivers is unread. The doc says "carries" |
+
+The review wrote one path list (`sp7b.txt`) to ec's own session scratchpad, which VF-PM ruled fine. It touched no
+checkout.
+
+**Found.**
+- Item 230 (J6): a failed Claude turn's words never reach Chat. StopFailure carries `last_assistant_message`, the
+  normalizer drops it, and `turn:failed` has no such field. It needs an upstream field first; no lane.
+- ec's diagnosis ran ten read-only `node` witness scripts on the MacBook with no door read, 04:26Z–08:27Z. They are
+  VOID, disclosed in co-plan/HOLD at 08:34Z. The gate witness among them was re-measured through the door by the red
+  row; the staged-provider replay was not re-run (VF-PM 08:35Z).
+- a9's at the mint: one `/private/tmp` birth during run 213, `.tmpAMVjVy` (12:37:38Z), kept and unattributed. Runs 211
+  and 212 had none. And the two rung rows, exit 75, NOT ARMED (the console locked), owed.
+
+**Owed.**
+- The contracts comment at `packages/contracts/src/spark-transcript.ts:90` says a reply line is
+  "`conversation:assistant-message`, neither display-only nor unfinished". A turn's end now writes one too. It is
+  corrected by the next slice that touches contracts (VF-PM 2026-11-07 08:45Z; J11).
+- A turn that wrote no text: what `last_assistant_message` carries there is not measured, because puppeteer's
+  captures redact it. If it repeats the previous message, Chat draws a repeat. Named, nothing filed (VF-PM 09:07Z).
+- **Mid-turn narration is James's ruling, pending.** Chat gets a Claude turn's last message only. Carrying more needs
+  either puppeteer publishing the transcript's copy (a petition, then EL8) or the recorder keeping the final
+  display-only copy.
+- No longer owed: the adapters' message-before-completion order. pi and antigravity send their final message first, in
+  the same batch, checked at the pin (pi `pipeline.ts:69`, antigravity `:79-80`). grok, hermes and kimi do the same,
+  and opencode sends it on the part's `time.end`.
+- The two `smoke:godview` rows at rung 11m, the red at `cda6ee15e` and the green at `7a95c0789`: owed on the old
+  mini's console lock. They are the first smoke over this land's smoke code.
+- `docs/desk-gates.md`: rung 11m's row gains the reply read.
