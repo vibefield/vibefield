@@ -88,6 +88,18 @@ try {
 } catch {
   // said with the problems, below
 }
+// IOS-12f (f1; VF-PM 2026-11-07 12:35:44Z) — the New spark sheet's goldens, written by field-app's own model
+// (packages/field-app/test/new-spark-goldens.test.ts, `VF_WRITE_GOLDENS=1`), which the kit's NewSpark is held to
+// (FieldHomeTests). Read from their folder, as the card's are.
+const NEW_SPARK = join(root, "packages/field-app/test/fixtures/new-spark");
+let newSparkGoldens = [];
+try {
+  newSparkGoldens = readdirSync(NEW_SPARK)
+    .filter((name) => name.endsWith(".golden.json"))
+    .sort();
+} catch {
+  // said with the problems, below
+}
 // Goldens whose origin is another package than the contracts — a design
 // decision both apps compute, not a wire shape — compared byte for byte all
 // the same. PJ-7: the project ink's table (DESIGN.md §2.9), which the design
@@ -137,6 +149,7 @@ const OTHER_ORIGINS = new Map([
   ...phoneViewGoldens.map((name) => [name, join(PHONE_GODVIEW, name)]),
   ...chatFlowGoldens.map((name) => [name, join(CHAT_FLOW, name)]),
   ...needsCardGoldens.map((name) => [name, join(NEEDS_CARD, name)]),
+  ...newSparkGoldens.map((name) => [name, join(NEW_SPARK, name)]),
 ]);
 // Goldens VENDORED from a sibling project outside this workspace, so there is no origin here to
 // compare with: each is pinned by its sha256 beside the files it tests, and the vendoring script's
@@ -390,6 +403,8 @@ const requiredMirrors = [
   // IOS-12d — the needs-you card's goldens (in their own folder), and the items and the catalog Chat's demo door
   // answers its cards with under `-vf-mock` (ChatFixtureDoor's `-vf-needs-case=`)
   ["needs-card", needsCardGoldens.map((name) => `needs-card/${name}`), ["Tests/FieldProductTests"]],
+  // IOS-12f (f1) — the New spark sheet's goldens (in their own folder), which the kit's NewSpark is held to
+  ["new-spark", newSparkGoldens.map((name) => `new-spark/${name}`), ["Tests/FieldHomeTests"]],
   [
     "chat",
     ["needs-item.held-spawn.json", "needs-item.agent-ask.json", "agent-catalog.valid.json"],
@@ -457,6 +472,11 @@ if (chatFlowGoldens.length === 0) {
 if (needsCardGoldens.length === 0) {
   problems.push(
     `the needs-you card's goldens are missing: ${relative(root, NEEDS_CARD)} holds no *.golden.json`,
+  );
+}
+if (newSparkGoldens.length === 0) {
+  problems.push(
+    `the New spark sheet's goldens are missing: ${relative(root, NEW_SPARK)} holds no *.golden.json`,
   );
 }
 for (const [set, fixtures, folders] of requiredMirrors) {
