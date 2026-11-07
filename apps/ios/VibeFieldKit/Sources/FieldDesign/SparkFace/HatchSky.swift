@@ -172,6 +172,9 @@ public enum HatchSky {
       return Dealt(deal: deal, ticket: tickets, slot: slot)
     }
 
+    /// `fly`'s first step (hatch.tsx :257–266, IOS-12f's f6). The red's skeleton: no hero leaves yet.
+    public mutating func takeHero() -> SparkFlight.Start? { nil }
+
     /// The star engine's `add`: the first empty slot, else the slot whose star landed first; its rows written once.
     mutating func add(_ star: StarSpark.Star) -> Int {
       var slot = slots.firstIndex(where: { $0 == nil })

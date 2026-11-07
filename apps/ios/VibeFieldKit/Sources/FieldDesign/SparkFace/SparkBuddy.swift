@@ -185,6 +185,9 @@ public struct SparkBuddy: Sendable {
     faceScale = Self.faceScale(size: size)
   }
 
+  /// IOS-12f's f6 — a frame of its flight (hatch.tsx :304–316). The red's skeleton: it does nothing yet.
+  public mutating func fly(_ pose: SparkFlight.Pose) {}
+
   /// `sparkFaceScale`: at 32 and below a face's eyes are drawn 1.25× larger, and up to 48 1.12×.
   public static func faceScale(size: Double) -> Double { size <= 32 ? 1.25 : size <= 48 ? 1.12 : 1 }
 

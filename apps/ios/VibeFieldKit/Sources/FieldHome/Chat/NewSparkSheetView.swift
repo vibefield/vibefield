@@ -167,6 +167,52 @@ final class NewSparkSheet {
   }
 }
 
+/// IOS-12f's f6 (PC-D8 A, Q2, Q3, Q5; DESIGN.md §8 "The phone's Chat", Created) — CREATE'S ORDER, the Mac's `create`
+/// (NewSparkSheet.tsx :218–250) where the phone allows:
+/// - made, Chat's list reads again (the feed's hatch asks it), and the new row's own face waits, unseen;
+/// - the new spark's row says where its face is, within 1,500 ms (the Mac's ROW_WAIT_MS);
+/// - in that tick the hero leaves the sky for the flight window and the sheet folds, and the face flies 660 ms;
+/// - landed, the face is the row's: the phone draws one face, never two (Q3). Then Chat opens the thread.
+/// No row within the wait: nothing flies, the sheet folds, and the thread opens on the row. Under reduced motion, or
+/// where nothing can fly: the sheet folds, the row's face fades in on plainEase(0.32), then the thread opens.
+@MainActor
+@Observable
+final class NewSparkLanding {
+  /// The new row's own face while its spark lands.
+  enum Face: Equatable {
+    /// Unseen: its row is awaited, or the face flies to it.
+    case waits
+    /// Fading in, where nothing flies.
+    case fades
+  }
+
+  /// What the sheet and Chat do as a spark lands.
+  struct Steps {
+    /// The hero leaves the sky (`HatchSkyHero.take`): its place in the window, or nil with no face to give.
+    let hero: @MainActor () -> SparkFlight.Start?
+    /// The sheet folds.
+    let fold: @MainActor () -> Void
+    /// Chat opens the spark's thread.
+    let open: @MainActor (String) -> Void
+  }
+
+  let flying: (any SparkFlying)?
+  let rowWait: Duration
+  let fadeWait: Duration
+
+  init(flying: (any SparkFlying)?, rowWait: Duration = .milliseconds(1_500), fadeWait: Duration = .milliseconds(320)) {
+    self.flying = flying
+    self.rowWait = rowWait
+    self.fadeWait = fadeWait
+  }
+
+  // the red's skeleton: nothing waits, nothing flies, nothing lands
+  func face(of spark: String) -> Face? { nil }
+  func row(_ spark: String, box: CGRect) {}
+  func create(_ sheet: NewSparkSheet, on feed: ChatFeed, reducedMotion: Bool, cut: SIMD3<Double>, steps: Steps) async {}
+  func land(_ made: SparkSummary, reducedMotion: Bool, cut: SIMD3<Double>, steps: Steps) async {}
+}
+
 /// The agent menu's sections (§8): each agent its own, the chosen one holding its rows under its head.
 struct NewSparkMenuSection: Identifiable {
   let agent: SparkAgent
