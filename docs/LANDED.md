@@ -41745,3 +41745,91 @@ only as the late reply, and by then birpc has already dropped the call, so no co
   minis are not loaded enough to bite, so runs 214 and 215 prove only that the shim moves nothing else.
   - Read its field-app section: `Errors` should be absent.
   - Note any design-system row of 60 s or more: under such a row, the late ack was dropped.
+
+## Item 233 — a replacement's order is read at the birth from fieldd's own record, not from a watcher's clock: the two PENDING replacement rows in `agent-session.test.ts` (test-only)
+(2026-11-07; one commit on lane `co/item233`, ec's, built in `/Volumes/SamsungRed/lanes/item233/vibe-field` over main
+`75adb9a06` (`80562394e`, the packet VF-PM verified at 13:24:30Z, `lanes/item233/packet/`, SUMS `332e6b72…`). Verified
+at `80562394e` on `75adb9a06` (run 216, a9's, on the old mini), M216; landed as `80562394e`, a fast-forward of main
+`75adb9a06`, 2026-11-07T15:10:27Z.)
+Filed 2026-11-07 12:52Z by VF-PM, from run 214's one red. ec has owned it since VF-PM's 13:13:30Z word: the read came
+first, then VF-PM's ruling at 13:17:00Z ("CUT AS WRITTEN", with one scoped door row). The packet was held for "main
+open" until James's click at 14:34:53Z (board `push118-third-attempt`, (a)): no third attempt of push 118; 233 lands,
+and push 119 carries 213 and 233. Test-only: one test file, no product file, no config, no lock.
+No DECISIONS row: the cut is a test witness under item 201's rule (VF-PM 14:52:48Z).
+
+**The bites.** Two, the same assertion in two rows, `goneAt < bornAt`:
+- Run 214, a9's, on the old mini (item 213's first mint, `a705e0ffe` on `7a95c0789`; the 1-min load peaked at
+  50.49): the resume by hand at `agent-session.test.ts:5586`. "the old PTY was still listed when the new run was born
+  (gone at 1794055710014, born at 1794055710012)": gone 2 ms AFTER born.
+- CI verify `42370021110`, attempt 2 (push 118, `6e4cb7b68`), 13:11:18Z: resume-when-idle at `:5783`. "gone at
+  1794056218381, born at 1794056218381": equal ms. With attempt 1's item 213 red, it is why push 118 is held.
+
+**The finding: a test defect** (`lanes/item233/packet/read.md`). The product keeps its order by its code, so there is
+no product item.
+- `goneAt` was the first instant a watcher (`watchForGone`) SAW fieldd's `terminal.list` without the old PTY, polled
+  every 5 ms through the product door. That listing trails a birth and an exit by a beat, so `goneAt` was an upper
+  bound, late by the poll, the RPC and the listing's trail, all three growing with load.
+- `bornAt` was `Date.now()` at the fake provider's `createSession` entry, the earliest instant the new run exists.
+- So `goneAt < bornAt` was sufficient for "left before born" but not necessary. It failed on equal ms, and whenever
+  the watcher's lag passed the real gap of a few ms.
+- What the product promises is another claim, and not about the listing: the replaced PTY has EXITED, by the floor's
+  word, before the new run is born (`agent-runtime.ts`, the resume-when-idle law and the replacement's step 1). Item
+  201 (RV #43) says leaving the inventory is not that word.
+- The daemon keeps that order (`work()`): `terminals.terminate`; `awaitPendingExit`, true only on the floor's own
+  `session-exited`; then, past the point of no return, a SYNCHRONOUS `records.write` of the old record with `exited`
+  (replaced) and `reattach` resumed (`writeFileSync` and `durableRenameSync`); then `publish` and `resumeFromRecord`,
+  which reaches `createSession`. The provider runs in fieldd's process, so a read of the old record at the birth sees
+  exactly what the daemon wrote before it.
+
+**What landed.** One commit, `80562394e`: `packages/fieldd/test/agent-session.test.ts`, +40 −59, 17 hunks.
+- The scripted provider gains `beforeBirth?: () => void`, wired through `SetupConfig` as `afterBirth` is and called
+  FIRST in `createSession`.
+- Both rows pass `beforeBirth: () => atBirth.push(readRecord(first.dataDir, runId))` to the second `setup`, and assert:
+  - one birth (`atBirth` has length 1: "the resume was not one birth", "the idle resume was not one birth");
+  - `atBirth[0].exited?.reason` is "replaced", whose message says what a red means: "at the new run's birth, fieldd's
+    record of the old run did not yet say its PTY had exited (replaced): the new run was born before the replacement
+    passed its point of no return";
+  - `atBirth[0].reattach` matches `{ state: "resumed", replaced: ptyId }`.
+- The witness is clock-free: a birth moved ahead of the replacement's point of no return reads a record with no
+  `exited`, every time, at any load.
+- Removed: `watchForGone` and `ScriptedSession.bornAt`; nothing else read them. `untilListed` still proves the old PTY
+  leaves the listing. Both sites' comments say what is measured, and cite item 201's row for the other half.
+- Not proved by these rows alone: that the floor's exit came before that write. Item 201's row holds it on the mock
+  floor (`agent-inventory-age.test.ts`, "a replacement waits for the floor's exit, not the inventory's absence: nothing
+  is born while the asked exit is owed, and the birth follows the exit"), beside the husk row.
+
+**The lights.**
+- **This Mac, at `80562394e`, through the HOLD door** (`co-plan/HOLD` 13:21Z; one row at a time, nice 19, swap used
+  0.00M at every read, every START at a 1-min load under 8; the logs in `lanes/item233/packet/logs/`). Not of record:
+  - biome check of the file, exit 0, no fixes (13:21:52Z → 13:21:53Z, 7.23 → 7.23);
+  - fieldd `tsc --noEmit`, exit 0, 0 errors (13:21:53Z → 13:22:05Z, 7.23 → 6.32);
+  - VF-PM's one scoped vitest door (`pair.sh`), the two rows by `-t`, as cut: 2 passed | 85 skipped (13:22:14Z →
+    13:22:27Z, 5.65 → 5.50);
+  - the same door with `packet/mutation.diff` applied (the old record written AFTER the birth, lane-local, never
+    committed): 2 failed, each an AssertionError on the new message (13:22:27Z → 13:22:38Z). Reverted; src porcelain
+    0.
+  - The binary was the shared target's `field-native`, built 04:03Z at `b833d4116`, with no Rust change from there to
+    `75adb9a06`. The file's load runs `cargo metadata --no-deps`, a manifest read; no cargo build ran.
+- **Run 216, a9's, on the old mini: GREEN** at `80562394e` on `75adb9a06`, the land record
+  (`lanes/item233/a9-results-run216-80562394e/`, SUMS-a9 `612aa4ff…`; the brief
+  `packet/a9-brief-item233-80562394e.md`, sha256 `37b75826…`). It was armed at 15:00:17Z at a 1-min load of 5.80 (the
+  verify itself at 15:00:35Z, 4.84), and verify exited 0 at 15:06:54Z.
+  - Every count is run 215's, as briefed: `75adb9a06`'s code and test tree equal `a705e0ffe`'s (the diff between them
+    is `docs/` only), and the cut changes two rows and adds none:
+    - vitest 14,087 over 963 files, 0 failed, 21 skipped;
+    - fieldd's `agent-session.test.ts` 87 tests, 2 skipped, both rows green;
+    - cargo 606 over all 37 binaries, 0 failed; node 474 of 474; typecheck over 29 projects; biome 3,491 files.
+  - Both rows green by name: the resume by hand in 1,590 ms, resume-when-idle in 7,316 ms. The file ran 87 tests, 2
+    skipped, in 142,914 ms.
+  - The run's 30 s load samples peaked at a 1-min load of 62.20 (15:04:17Z, `run216-load.log`), above run 214's
+    50.49, under which the first bite came.
+  - Preflight 0, with the standing R23 WARN (`acp` could offer `spawn`). Births 0, daemons after 0, stubs 0, and the
+    tree clean after. ec summed the counts again from a9's `verify.clean.log`: 28 Tests lines, and 968 files with 5
+    skipped.
+
+**Found.** Nothing new. The read found no product defect. At `80562394e` no other file under `packages/` names
+`goneAt` or `bornAt`.
+
+**Owed.**
+- **The first CI verify of main that carries the land** (push 119's) is the first proof under CI's load, where
+  resume-when-idle bit. Read `agent-session.test.ts`'s two rows there; a red now names the record, not a clock.
