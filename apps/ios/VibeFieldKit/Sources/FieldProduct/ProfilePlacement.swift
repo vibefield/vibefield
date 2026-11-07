@@ -5,7 +5,6 @@ import Foundation
 // profile it was filed under; else the native set's for a run that names no persona; else the profile listing its
 // persona; else none (a retired sign-in, or the profiles not read yet). The New spark sheet's reach counts by it, and
 // @'s list (IOS-12f's M-f2) places its sessions by it.
-// SKELETON (f2): the rule's answers are f4's; the rows in NewSparkTests are red until then.
 
 /// What a run says of its profile: the one it was filed under, and the persona it runs as.
 public struct RunProfileFacts: Sendable, Equatable {
@@ -24,11 +23,17 @@ public enum ProfilePlacement {
 
   /// Each persona to the profile listing it, over one frame of sets (a persona two sets list is the later set's).
   public static func personaSets(_ sets: [AgentProfileSet]) -> [String: String] {
-    [:]
+    var placed: [String: String] = [:]
+    for set in sets {
+      for persona in set.personas { placed[persona.profileId] = set.id }
+    }
+    return placed
   }
 
   /// The profile a run is placed in, or nil. `personaSets` nil: the profiles not read yet.
   public static func setOf(_ run: RunProfileFacts, personaSets: [String: String]?) -> String? {
-    nil
+    if let filed = run.profileSet { return filed }
+    guard let persona = run.profileId else { return nativeSet }
+    return personaSets?[persona]
   }
 }
