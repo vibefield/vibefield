@@ -19,7 +19,32 @@ const STAGE = Object.freeze({
 
 const DEVICE = Object.freeze({ id: "desk", name: "Desk", os: "mac" as const, self: true });
 
-function historyFor(kind: MonitorPastSpanKind | "bounds", agentId: string): MonitorHistory {
+function historyFor(kind: MonitorPastSpanKind | "bounds" | "ended", agentId: string): MonitorHistory {
+  if (kind === "ended") {
+    const endedAt = NOW - 30 * 60_000;
+    const startedAt = NOW - 50 * 60_000;
+    return {
+      sinceMs: NOW - 86_400_000,
+      untilMs: NOW,
+      readAt: NOW,
+      fidelity: "turns",
+      state: "complete",
+      live: [],
+      ended: [
+        {
+          id: "past:fixture:ended",
+          title: "Ended session",
+          project: { name: "billing-api", seq: 0 },
+          device: DEVICE,
+          startedAt,
+          endedAt,
+          spans: [{ kind: "worked", from: startedAt, to: endedAt }],
+          colour: "#4c8dff",
+          receded: false,
+        },
+      ],
+    };
+  }
   const seam = NOW - 60_000;
   const span = { kind: kind === "bounds" ? "bounds" : kind, from: NOW - 3_600_000, to: seam };
   const ended =

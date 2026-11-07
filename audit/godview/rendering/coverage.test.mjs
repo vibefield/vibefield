@@ -93,8 +93,8 @@ test("the previous 302 not-applicable count is not treated as validated", () => 
   assert.equal(summary.priorClaim.notApplicable, 302);
   assert.equal(summary.priorClaim.validated, false);
   assert.equal(summary.coverageGap, 0);
-  assert.equal(summary.rendered, 248);
-  assert.equal(summary.coveredBy, 22);
+  assert.equal(summary.rendered, 249);
+  assert.equal(summary.coveredBy, 21);
   assert.equal(summary.notApplicable, 73);
   assert.equal(summary.environmentGap, 67);
   const total =
@@ -133,7 +133,9 @@ test("not-applicable is only a scenario that cannot be mounted", () => {
 test("timeline span is a measured live head, not a history check", () => {
   const source = readFileSync(new URL("./matrix.mjs", import.meta.url), "utf8");
   assert.doesNotMatch(source, /live-head-span/);
+  assert.doesNotMatch(source, /ended-lane/);
   assert.doesNotMatch(source, /history == null && entry\?\.stateId === "state\.working"/);
+  assert.doesNotMatch(source, /entry\?\.history === "bounds"/);
   const span = matrix().find((cell) => cell.stateId === "state.timeline_span" && cell.viewId === "view.timeline");
   assert.equal(span.disposition, "rendered");
   assert.equal(span.fixtureId, "fix.timeline.moment-span");
@@ -149,6 +151,21 @@ test("timeline span is a measured live head, not a history check", () => {
   assert.doesNotMatch(evidence.readout, /not recorded|not started/);
   const integration = JSON.parse(readFileSync(join(import.meta.dirname, "integration.json"), "utf8"));
   assert.deepEqual(integration.timelineSpanEvidence, evidence);
+});
+
+test("timeline ended is a measured live head, not a history check", () => {
+  const ended = matrix().find((cell) => cell.stateId === "state.timeline_ended" && cell.viewId === "view.timeline");
+  assert.equal(ended.disposition, "rendered");
+  assert.equal(ended.fixtureId, "fix.timeline.moment-ended");
+  assert.equal(ended.exercise, undefined);
+  const evidence = JSON.parse(readFileSync(join(import.meta.dirname, "timeline-ended-evidence.json"), "utf8"));
+  assert.equal(evidence.branch, "ended");
+  assert.equal(evidence.tone, "ended");
+  assert.ok(evidence.headMs >= evidence.endedAt);
+  assert.match(evidence.valueText, /^Now/);
+  assert.match(evidence.readout, /last active/);
+  const integration = JSON.parse(readFileSync(join(import.meta.dirname, "integration.json"), "utf8"));
+  assert.deepEqual(integration.timelineEndedEvidence, evidence);
 });
 
 test("hole reasons stay source-backed and swarm gaps point at the diagnostic", () => {

@@ -2968,6 +2968,19 @@
       "screenshot": "audit/godview/rendering/screenshots/fix.timeline.moment-unrecorded.png"
     },
     {
+      "fixtureId": "fix.timeline.moment-ended",
+      "viewId": "view.timeline",
+      "lifecycleStates": [
+        "state.timeline_ended"
+      ],
+      "file": "audit/godview/fixtures/fix.timeline.moment-ended.json",
+      "requiresBodyPaint": false,
+      "interact": "timeline-ended",
+      "renderStatus": "rendered",
+      "paint": "canvas",
+      "screenshot": "audit/godview/rendering/screenshots/fix.timeline.moment-ended.png"
+    },
+    {
       "fixtureId": "fix.timeline.moment-span",
       "viewId": "view.timeline",
       "lifecycleStates": [
@@ -2977,7 +2990,6 @@
       "requiresBodyPaint": false,
       "interact": "timeline-span",
       "renderStatus": "rendered",
-      "paint": "canvas",
       "screenshot": "audit/godview/rendering/screenshots/fix.timeline.moment-span.png"
     },
     {
@@ -3017,10 +3029,6 @@
     {
       "stateId": "state.attachable",
       "reason": "None of the five views read attachable. It is not in their contract field lists."
-    },
-    {
-      "stateId": "state.timeline_ended",
-      "reason": "No fixture is keyed state.timeline_ended. The live head of fix.timeline.past-bounds is that moment for the ended lane. See the matrix covered-by cell."
     },
     {
       "stateId": "state.feed_no_door",
@@ -3064,8 +3072,8 @@
       "note": "d21cde9a reported 302 not-applicable cells. That figure is not a validated judgment that those scenarios are outside the views. Fifty-nine used a boilerplate 'no read' sentence. This matrix replaces that classification. The denominator stays 82 states × 5 views."
     },
     "cells": 410,
-    "rendered": 248,
-    "coveredBy": 22,
+    "rendered": 249,
+    "coveredBy": 21,
     "coverageGap": 0,
     "notApplicable": 73,
     "environmentGap": 67
@@ -4685,10 +4693,9 @@
     {
       "stateId": "state.timeline_ended",
       "viewId": "view.timeline",
-      "disposition": "covered-by",
-      "fixtureId": "fix.timeline.past-bounds",
-      "exercise": "ended-lane",
-      "evidence": "Same branch as fix.timeline.past-bounds. history bounds includes an ended run whose endedAt is before the frozen now. At the live head, stateAt for that lane is ended (timeline-lanes.ts). The screenshot contains that lane."
+      "disposition": "rendered",
+      "fixtureId": "fix.timeline.moment-ended",
+      "evidence": "An ended run that finished thirty minutes before the frozen now, still inside the timeline window. The pinned TimelineView writes that lane from stateAt. Ended is the branch only when the head is at or after endedAt. The shot records the head time and that readout."
     },
     {
       "stateId": "state.timeline_ended",
@@ -5837,5 +5844,18 @@
     "readout": "30:00working",
     "headAtOrAfterSince": true,
     "branch": "span"
+  },
+  "timelineEndedEvidence": {
+    "fixtureId": "fix.timeline.moment-ended",
+    "source": "TimelineView ended-lane head, written from readoutAt(stateAt(lane, head))",
+    "pageNow": 1767268800000,
+    "headMs": 1767268800000,
+    "endedAt": 1767267000000,
+    "valueText": "Now, 12:00",
+    "tone": "ended",
+    "recorded": "true",
+    "readout": "last active 30m ago",
+    "headAtOrAfterEnded": true,
+    "branch": "ended"
   }
 }

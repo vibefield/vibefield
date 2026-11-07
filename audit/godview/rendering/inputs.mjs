@@ -1049,6 +1049,12 @@ function mountGaps() {
     predicate:
       "No history. The head is scrubbed to after birth and before statusSince. stateAt returns unrecorded. readoutAt says not recorded.",
   });
+  put("timeline", "moment-ended", "state.timeline_ended", agent({ status: "idle" }), {
+    history: "ended",
+    interact: "timeline-ended",
+    predicate:
+      "An ended run that finished thirty minutes before the frozen now, still inside the timeline window. The pinned TimelineView writes that lane from stateAt. Ended is the branch only when the head is at or after endedAt. The shot records the head time and that readout.",
+  });
   put("timeline", "moment-span", "state.timeline_span", agent({
     status: "working",
     createdAt: NOW - 2 * hour,
@@ -1094,11 +1100,6 @@ const BASE_HOLES = [
   {
     stateId: "state.attachable",
     reason: "None of the five views read attachable. It is not in their contract field lists.",
-  },
-  {
-    stateId: "state.timeline_ended",
-    reason:
-      "No fixture is keyed state.timeline_ended. The live head of fix.timeline.past-bounds is that moment for the ended lane. See the matrix covered-by cell.",
   },
   {
     stateId: "state.feed_no_door",
