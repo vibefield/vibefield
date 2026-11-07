@@ -1,0 +1,9 @@
+flowchart LR
+  src["antigravity source packages/view-sdk/src/model.ts:164-164"]
+  raw["no raw adapter write found"]
+  row["UNRESOLVED field.device row mapping"]
+  ui["UNRESOLVED UI reachability"]
+  states["UNRESOLVED downstream state predicates"]
+  src --> raw --> row
+  row --> ui
+  row --> states

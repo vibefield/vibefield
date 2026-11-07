@@ -1,0 +1,752 @@
+{
+  "kind": "frontend-render-index",
+  "fidelity": "puppeteer-source",
+  "sourceSha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+  "newerThanShippedPackage": "0.3.3",
+  "shippedTagCommit": "52d09c8e84951b9a355a6700eac2dfc1290a9fa0",
+  "shippedPackageRendered": false,
+  "modelCommit": "49fc12da0fadc34e25c227fa2f03dcce2e09dbaa",
+  "packageContextCommit": "d53a0fa24ca7341fe5858329c9399eac6baf6b53",
+  "foundationCommit": "b9397f8dc93d5f784bb69f01f8b0778a14f02882",
+  "vibefieldSha": "433505fd0f224f4cda540d642661b13848c0ef82",
+  "entry": "audit/godview/rendering/index.html",
+  "query": "fixture=<fixtureId>",
+  "mount": "MonitorViewHost plus the registry view from Puppeteer source packages/views at sourceSha. The checkout is audit/godview/rendering/.pin/puppeteer and is not the installed npm package.",
+  "contractMismatches": [
+    {
+      "contract": "audit/godview/contracts/fixture.schema.json",
+      "issue": "additionalProperties is false and there is no AgentView or input property. Row payloads live in audit/godview/rendering/inputs.mjs, keyed by fixtureId. The fixture JSON is only the envelope."
+    },
+    {
+      "contract": "audit/godview/contracts/ids.md",
+      "issue": "The foundation lists views as list, rain, swarm, spend, timeline. MONITOR_VIEWS at 748d015 is swarm, list, rain, timeline, spend. This harness keys by view id."
+    },
+    {
+      "contract": "audit/godview/contracts/ids.json doNotMint",
+      "issue": "doNotMint lists feed.no-door and siblings. The model state ids are state.feed_no_door and siblings. This slice does not mint the doNotMint ids. Those states are coverage holes because they are not Puppeteer view inputs."
+    }
+  ],
+  "fixtures": [
+    {
+      "fixtureId": "fix.list.idle",
+      "viewId": "view.list",
+      "lifecycleStates": [
+        "state.idle"
+      ],
+      "file": "audit/godview/fixtures/fix.list.idle.json",
+      "requiresBodyPaint": false,
+      "interact": null,
+      "renderStatus": "rendered",
+      "paint": "dom",
+      "screenshot": "audit/godview/rendering/screenshots/fix.list.idle.png"
+    },
+    {
+      "fixtureId": "fix.list.working",
+      "viewId": "view.list",
+      "lifecycleStates": [
+        "state.working"
+      ],
+      "file": "audit/godview/fixtures/fix.list.working.json",
+      "requiresBodyPaint": false,
+      "interact": null,
+      "renderStatus": "rendered",
+      "paint": "dom",
+      "screenshot": "audit/godview/rendering/screenshots/fix.list.working.png"
+    },
+    {
+      "fixtureId": "fix.list.blocked",
+      "viewId": "view.list",
+      "lifecycleStates": [
+        "state.blocked"
+      ],
+      "file": "audit/godview/fixtures/fix.list.blocked.json",
+      "requiresBodyPaint": false,
+      "interact": null,
+      "renderStatus": "rendered",
+      "paint": "dom",
+      "screenshot": "audit/godview/rendering/screenshots/fix.list.blocked.png"
+    },
+    {
+      "fixtureId": "fix.list.blocked-permission",
+      "viewId": "view.list",
+      "lifecycleStates": [
+        "state.blocked_permission"
+      ],
+      "file": "audit/godview/fixtures/fix.list.blocked-permission.json",
+      "requiresBodyPaint": false,
+      "interact": null,
+      "renderStatus": "rendered",
+      "paint": "dom",
+      "screenshot": "audit/godview/rendering/screenshots/fix.list.blocked-permission.png"
+    },
+    {
+      "fixtureId": "fix.list.blocked-question",
+      "viewId": "view.list",
+      "lifecycleStates": [
+        "state.blocked_question"
+      ],
+      "file": "audit/godview/fixtures/fix.list.blocked-question.json",
+      "requiresBodyPaint": false,
+      "interact": null,
+      "renderStatus": "rendered",
+      "paint": "dom",
+      "screenshot": "audit/godview/rendering/screenshots/fix.list.blocked-question.png"
+    },
+    {
+      "fixtureId": "fix.list.blocked-failure",
+      "viewId": "view.list",
+      "lifecycleStates": [
+        "state.blocked_failure"
+      ],
+      "file": "audit/godview/fixtures/fix.list.blocked-failure.json",
+      "requiresBodyPaint": false,
+      "interact": null,
+      "renderStatus": "rendered",
+      "paint": "dom",
+      "screenshot": "audit/godview/rendering/screenshots/fix.list.blocked-failure.png"
+    },
+    {
+      "fixtureId": "fix.list.blocked-unknown-kind",
+      "viewId": "view.list",
+      "lifecycleStates": [
+        "state.blocked_unknown_kind"
+      ],
+      "file": "audit/godview/fixtures/fix.list.blocked-unknown-kind.json",
+      "requiresBodyPaint": false,
+      "interact": null,
+      "renderStatus": "rendered",
+      "paint": "dom",
+      "screenshot": "audit/godview/rendering/screenshots/fix.list.blocked-unknown-kind.png"
+    },
+    {
+      "fixtureId": "fix.list.starting-unobserved",
+      "viewId": "view.list",
+      "lifecycleStates": [
+        "state.starting_unobserved"
+      ],
+      "file": "audit/godview/fixtures/fix.list.starting-unobserved.json",
+      "requiresBodyPaint": false,
+      "interact": null,
+      "renderStatus": "rendered",
+      "paint": "dom",
+      "screenshot": "audit/godview/rendering/screenshots/fix.list.starting-unobserved.png"
+    },
+    {
+      "fixtureId": "fix.list.pending-unobserved",
+      "viewId": "view.list",
+      "lifecycleStates": [
+        "state.pending_unobserved"
+      ],
+      "file": "audit/godview/fixtures/fix.list.pending-unobserved.json",
+      "requiresBodyPaint": false,
+      "interact": null,
+      "renderStatus": "rendered",
+      "paint": "dom",
+      "screenshot": "audit/godview/rendering/screenshots/fix.list.pending-unobserved.png"
+    },
+    {
+      "fixtureId": "fix.list.stale",
+      "viewId": "view.list",
+      "lifecycleStates": [
+        "state.stale"
+      ],
+      "file": "audit/godview/fixtures/fix.list.stale.json",
+      "requiresBodyPaint": false,
+      "interact": null,
+      "renderStatus": "rendered",
+      "paint": "dom",
+      "screenshot": "audit/godview/rendering/screenshots/fix.list.stale.png"
+    },
+    {
+      "fixtureId": "fix.list.fresh",
+      "viewId": "view.list",
+      "lifecycleStates": [
+        "state.fresh"
+      ],
+      "file": "audit/godview/fixtures/fix.list.fresh.json",
+      "requiresBodyPaint": false,
+      "interact": null,
+      "renderStatus": "rendered",
+      "paint": "dom",
+      "screenshot": "audit/godview/rendering/screenshots/fix.list.fresh.png"
+    },
+    {
+      "fixtureId": "fix.list.terminal-running",
+      "viewId": "view.list",
+      "lifecycleStates": [
+        "state.terminal_running"
+      ],
+      "file": "audit/godview/fixtures/fix.list.terminal-running.json",
+      "requiresBodyPaint": false,
+      "interact": null,
+      "renderStatus": "rendered",
+      "paint": "dom",
+      "screenshot": "audit/godview/rendering/screenshots/fix.list.terminal-running.png"
+    },
+    {
+      "fixtureId": "fix.list.terminal-quiet",
+      "viewId": "view.list",
+      "lifecycleStates": [
+        "state.terminal_quiet"
+      ],
+      "file": "audit/godview/fixtures/fix.list.terminal-quiet.json",
+      "requiresBodyPaint": false,
+      "interact": null,
+      "renderStatus": "rendered",
+      "paint": "dom",
+      "screenshot": "audit/godview/rendering/screenshots/fix.list.terminal-quiet.png"
+    },
+    {
+      "fixtureId": "fix.list.remote",
+      "viewId": "view.list",
+      "lifecycleStates": [
+        "state.remote"
+      ],
+      "file": "audit/godview/fixtures/fix.list.remote.json",
+      "requiresBodyPaint": false,
+      "interact": null,
+      "renderStatus": "rendered",
+      "paint": "dom",
+      "screenshot": "audit/godview/rendering/screenshots/fix.list.remote.png"
+    },
+    {
+      "fixtureId": "fix.list.active",
+      "viewId": "view.list",
+      "lifecycleStates": [
+        "state.active"
+      ],
+      "file": "audit/godview/fixtures/fix.list.active.json",
+      "requiresBodyPaint": false,
+      "interact": null,
+      "renderStatus": "rendered",
+      "paint": "dom",
+      "screenshot": "audit/godview/rendering/screenshots/fix.list.active.png"
+    },
+    {
+      "fixtureId": "fix.list.receded",
+      "viewId": "view.list",
+      "lifecycleStates": [
+        "state.receded"
+      ],
+      "file": "audit/godview/fixtures/fix.list.receded.json",
+      "requiresBodyPaint": false,
+      "interact": null,
+      "renderStatus": "rendered",
+      "paint": "dom",
+      "screenshot": "audit/godview/rendering/screenshots/fix.list.receded.png"
+    },
+    {
+      "fixtureId": "fix.list.attached",
+      "viewId": "view.list",
+      "lifecycleStates": [
+        "state.attached"
+      ],
+      "file": "audit/godview/fixtures/fix.list.attached.json",
+      "requiresBodyPaint": false,
+      "interact": null,
+      "renderStatus": "rendered",
+      "paint": "dom",
+      "screenshot": "audit/godview/rendering/screenshots/fix.list.attached.png"
+    },
+    {
+      "fixtureId": "fix.list.detached",
+      "viewId": "view.list",
+      "lifecycleStates": [
+        "state.detached"
+      ],
+      "file": "audit/godview/fixtures/fix.list.detached.json",
+      "requiresBodyPaint": false,
+      "interact": null,
+      "renderStatus": "rendered",
+      "paint": "dom",
+      "screenshot": "audit/godview/rendering/screenshots/fix.list.detached.png"
+    },
+    {
+      "fixtureId": "fix.list.context-missing",
+      "viewId": "view.list",
+      "lifecycleStates": [
+        "state.context_missing"
+      ],
+      "file": "audit/godview/fixtures/fix.list.context-missing.json",
+      "requiresBodyPaint": false,
+      "interact": null,
+      "renderStatus": "rendered",
+      "paint": "dom",
+      "screenshot": "audit/godview/rendering/screenshots/fix.list.context-missing.png"
+    },
+    {
+      "fixtureId": "fix.list.branch-unknown",
+      "viewId": "view.list",
+      "lifecycleStates": [
+        "state.branch_unknown"
+      ],
+      "file": "audit/godview/fixtures/fix.list.branch-unknown.json",
+      "requiresBodyPaint": false,
+      "interact": null,
+      "renderStatus": "rendered",
+      "paint": "dom",
+      "screenshot": "audit/godview/rendering/screenshots/fix.list.branch-unknown.png"
+    },
+    {
+      "fixtureId": "fix.list.branch-none",
+      "viewId": "view.list",
+      "lifecycleStates": [
+        "state.branch_none"
+      ],
+      "file": "audit/godview/fixtures/fix.list.branch-none.json",
+      "requiresBodyPaint": false,
+      "interact": null,
+      "renderStatus": "rendered",
+      "paint": "dom",
+      "screenshot": "audit/godview/rendering/screenshots/fix.list.branch-none.png"
+    },
+    {
+      "fixtureId": "fix.list.branch-named",
+      "viewId": "view.list",
+      "lifecycleStates": [
+        "state.branch_named"
+      ],
+      "file": "audit/godview/fixtures/fix.list.branch-named.json",
+      "requiresBodyPaint": false,
+      "interact": null,
+      "renderStatus": "rendered",
+      "paint": "dom",
+      "screenshot": "audit/godview/rendering/screenshots/fix.list.branch-named.png"
+    },
+    {
+      "fixtureId": "fix.list.reply-missing",
+      "viewId": "view.list",
+      "lifecycleStates": [
+        "state.reply_missing"
+      ],
+      "file": "audit/godview/fixtures/fix.list.reply-missing.json",
+      "requiresBodyPaint": false,
+      "interact": null,
+      "renderStatus": "rendered",
+      "paint": "dom",
+      "screenshot": "audit/godview/rendering/screenshots/fix.list.reply-missing.png"
+    },
+    {
+      "fixtureId": "fix.list.model-missing",
+      "viewId": "view.list",
+      "lifecycleStates": [
+        "state.model_missing"
+      ],
+      "file": "audit/godview/fixtures/fix.list.model-missing.json",
+      "requiresBodyPaint": false,
+      "interact": null,
+      "renderStatus": "rendered",
+      "paint": "dom",
+      "screenshot": "audit/godview/rendering/screenshots/fix.list.model-missing.png"
+    },
+    {
+      "fixtureId": "fix.list.spawn-ready",
+      "viewId": "view.list",
+      "lifecycleStates": [
+        "state.spawn_ready"
+      ],
+      "file": "audit/godview/fixtures/fix.list.spawn-ready.json",
+      "requiresBodyPaint": false,
+      "interact": "open-spawn",
+      "renderStatus": "rendered",
+      "paint": "dom",
+      "screenshot": "audit/godview/rendering/screenshots/fix.list.spawn-ready.png"
+    },
+    {
+      "fixtureId": "fix.list.spawn-asleep",
+      "viewId": "view.list",
+      "lifecycleStates": [
+        "state.spawn_asleep"
+      ],
+      "file": "audit/godview/fixtures/fix.list.spawn-asleep.json",
+      "requiresBodyPaint": false,
+      "interact": "open-spawn",
+      "renderStatus": "rendered",
+      "paint": "dom",
+      "screenshot": "audit/godview/rendering/screenshots/fix.list.spawn-asleep.png"
+    },
+    {
+      "fixtureId": "fix.list.spawn-silent",
+      "viewId": "view.list",
+      "lifecycleStates": [
+        "state.spawn_silent"
+      ],
+      "file": "audit/godview/fixtures/fix.list.spawn-silent.json",
+      "requiresBodyPaint": false,
+      "interact": "open-spawn",
+      "renderStatus": "rendered",
+      "paint": "dom",
+      "screenshot": "audit/godview/rendering/screenshots/fix.list.spawn-silent.png"
+    },
+    {
+      "fixtureId": "fix.list.spawn-incompatible",
+      "viewId": "view.list",
+      "lifecycleStates": [
+        "state.spawn_incompatible"
+      ],
+      "file": "audit/godview/fixtures/fix.list.spawn-incompatible.json",
+      "requiresBodyPaint": false,
+      "interact": "open-spawn",
+      "renderStatus": "rendered",
+      "paint": "dom",
+      "screenshot": "audit/godview/rendering/screenshots/fix.list.spawn-incompatible.png"
+    },
+    {
+      "fixtureId": "fix.list.spawn-reading",
+      "viewId": "view.list",
+      "lifecycleStates": [
+        "state.spawn_reading"
+      ],
+      "file": "audit/godview/fixtures/fix.list.spawn-reading.json",
+      "requiresBodyPaint": false,
+      "interact": "open-spawn",
+      "renderStatus": "rendered",
+      "paint": "dom",
+      "screenshot": "audit/godview/rendering/screenshots/fix.list.spawn-reading.png"
+    },
+    {
+      "fixtureId": "fix.rain.idle",
+      "viewId": "view.rain",
+      "lifecycleStates": [
+        "state.idle"
+      ],
+      "file": "audit/godview/fixtures/fix.rain.idle.json",
+      "requiresBodyPaint": false,
+      "interact": null,
+      "renderStatus": "rendered",
+      "paint": "canvas",
+      "screenshot": "audit/godview/rendering/screenshots/fix.rain.idle.png"
+    },
+    {
+      "fixtureId": "fix.rain.working",
+      "viewId": "view.rain",
+      "lifecycleStates": [
+        "state.working"
+      ],
+      "file": "audit/godview/fixtures/fix.rain.working.json",
+      "requiresBodyPaint": false,
+      "interact": null,
+      "renderStatus": "rendered",
+      "paint": "canvas",
+      "screenshot": "audit/godview/rendering/screenshots/fix.rain.working.png"
+    },
+    {
+      "fixtureId": "fix.rain.blocked",
+      "viewId": "view.rain",
+      "lifecycleStates": [
+        "state.blocked"
+      ],
+      "file": "audit/godview/fixtures/fix.rain.blocked.json",
+      "requiresBodyPaint": false,
+      "interact": null,
+      "renderStatus": "rendered",
+      "paint": "canvas",
+      "screenshot": "audit/godview/rendering/screenshots/fix.rain.blocked.png"
+    },
+    {
+      "fixtureId": "fix.spend.cost-complete",
+      "viewId": "view.spend",
+      "lifecycleStates": [
+        "state.cost_complete"
+      ],
+      "file": "audit/godview/fixtures/fix.spend.cost-complete.json",
+      "requiresBodyPaint": false,
+      "interact": null,
+      "renderStatus": "rendered",
+      "paint": "canvas",
+      "screenshot": "audit/godview/rendering/screenshots/fix.spend.cost-complete.png"
+    },
+    {
+      "fixtureId": "fix.spend.cost-partial",
+      "viewId": "view.spend",
+      "lifecycleStates": [
+        "state.cost_partial"
+      ],
+      "file": "audit/godview/fixtures/fix.spend.cost-partial.json",
+      "requiresBodyPaint": false,
+      "interact": null,
+      "renderStatus": "rendered",
+      "paint": "canvas",
+      "screenshot": "audit/godview/rendering/screenshots/fix.spend.cost-partial.png"
+    },
+    {
+      "fixtureId": "fix.spend.cost-unavailable",
+      "viewId": "view.spend",
+      "lifecycleStates": [
+        "state.cost_unavailable"
+      ],
+      "file": "audit/godview/fixtures/fix.spend.cost-unavailable.json",
+      "requiresBodyPaint": false,
+      "interact": null,
+      "renderStatus": "rendered",
+      "paint": "canvas",
+      "screenshot": "audit/godview/rendering/screenshots/fix.spend.cost-unavailable.png"
+    },
+    {
+      "fixtureId": "fix.spend.cost-missing",
+      "viewId": "view.spend",
+      "lifecycleStates": [
+        "state.cost_missing"
+      ],
+      "file": "audit/godview/fixtures/fix.spend.cost-missing.json",
+      "requiresBodyPaint": false,
+      "interact": null,
+      "renderStatus": "rendered",
+      "paint": "canvas",
+      "screenshot": "audit/godview/rendering/screenshots/fix.spend.cost-missing.png"
+    },
+    {
+      "fixtureId": "fix.spend.before",
+      "viewId": "view.spend",
+      "lifecycleStates": [
+        "state.spend_before"
+      ],
+      "file": "audit/godview/fixtures/fix.spend.before.json",
+      "requiresBodyPaint": false,
+      "interact": null,
+      "renderStatus": "rendered",
+      "paint": "canvas",
+      "screenshot": "audit/godview/rendering/screenshots/fix.spend.before.png"
+    },
+    {
+      "fixtureId": "fix.timeline.unread",
+      "viewId": "view.timeline",
+      "lifecycleStates": [
+        "state.unread"
+      ],
+      "file": "audit/godview/fixtures/fix.timeline.unread.json",
+      "requiresBodyPaint": false,
+      "interact": null,
+      "renderStatus": "rendered",
+      "paint": "canvas",
+      "screenshot": "audit/godview/rendering/screenshots/fix.timeline.unread.png"
+    },
+    {
+      "fixtureId": "fix.timeline.past-worked",
+      "viewId": "view.timeline",
+      "lifecycleStates": [
+        "state.past_worked"
+      ],
+      "file": "audit/godview/fixtures/fix.timeline.past-worked.json",
+      "requiresBodyPaint": false,
+      "interact": null,
+      "renderStatus": "rendered",
+      "paint": "canvas",
+      "screenshot": "audit/godview/rendering/screenshots/fix.timeline.past-worked.png"
+    },
+    {
+      "fixtureId": "fix.timeline.past-quiet",
+      "viewId": "view.timeline",
+      "lifecycleStates": [
+        "state.past_quiet"
+      ],
+      "file": "audit/godview/fixtures/fix.timeline.past-quiet.json",
+      "requiresBodyPaint": false,
+      "interact": null,
+      "renderStatus": "rendered",
+      "paint": "canvas",
+      "screenshot": "audit/godview/rendering/screenshots/fix.timeline.past-quiet.png"
+    },
+    {
+      "fixtureId": "fix.timeline.past-unrecorded",
+      "viewId": "view.timeline",
+      "lifecycleStates": [
+        "state.past_unrecorded"
+      ],
+      "file": "audit/godview/fixtures/fix.timeline.past-unrecorded.json",
+      "requiresBodyPaint": false,
+      "interact": null,
+      "renderStatus": "rendered",
+      "paint": "canvas",
+      "screenshot": "audit/godview/rendering/screenshots/fix.timeline.past-unrecorded.png"
+    },
+    {
+      "fixtureId": "fix.timeline.past-bounds",
+      "viewId": "view.timeline",
+      "lifecycleStates": [
+        "state.past_bounds"
+      ],
+      "file": "audit/godview/fixtures/fix.timeline.past-bounds.json",
+      "requiresBodyPaint": false,
+      "interact": null,
+      "renderStatus": "rendered",
+      "paint": "canvas",
+      "screenshot": "audit/godview/rendering/screenshots/fix.timeline.past-bounds.png"
+    }
+  ],
+  "holes": [
+    {
+      "stateId": "state.wait_multiple",
+      "reason": "No view reads wait.count. The five views' field lists and a search of packages/views/src at 748d015 find no wait.count read."
+    },
+    {
+      "stateId": "state.working_with_blockers",
+      "reason": "bubble-model.ts draws a wait only when appearance is blocked (line 536). detailLine uses the wait only when status is blocked. A working row with a wait paints as working."
+    },
+    {
+      "stateId": "state.activity_starting",
+      "reason": "AgentSwarm.tsx reads activity.kind only to keep a terminal clock across kind unknown. It does not paint a distinct branch per activity kind."
+    },
+    {
+      "stateId": "state.activity_responding",
+      "reason": "Same as state.activity_starting. No per-kind paint."
+    },
+    {
+      "stateId": "state.activity_reasoning",
+      "reason": "Same as state.activity_starting. No per-kind paint."
+    },
+    {
+      "stateId": "state.activity_tool",
+      "reason": "Same as state.activity_starting. No per-kind paint."
+    },
+    {
+      "stateId": "state.activity_delegating",
+      "reason": "Same as state.activity_starting. No per-kind paint."
+    },
+    {
+      "stateId": "state.activity_compacting",
+      "reason": "Same as state.activity_starting. No per-kind paint."
+    },
+    {
+      "stateId": "state.activity_other",
+      "reason": "Same as state.activity_starting. No per-kind paint."
+    },
+    {
+      "stateId": "state.failed_retained",
+      "reason": "alive is not read by the five views. Retention is VibeField keepsFailure in field-app, outside this Puppeteer view render. Passing the row paints as state.blocked_failure."
+    },
+    {
+      "stateId": "state.dead_hidden",
+      "reason": "The row is omitted before the view. The views have no dead-hidden paint. Membership is VibeField useMonitorAgents, not a 748d015 view branch."
+    },
+    {
+      "stateId": "state.terminal_empty",
+      "reason": "empty is a swarm body word for a quiet terminal with no opening, not a list status. List paints that row as state.terminal_quiet. Swarm body paint is the WebGPU canvas."
+    },
+    {
+      "stateId": "state.terminal_opening",
+      "reason": "opening is swarm-local input, not an AgentView field. MonitorViewHost does not accept it."
+    },
+    {
+      "stateId": "state.attachable",
+      "reason": "None of the five views read attachable. It is not in their contract field lists."
+    },
+    {
+      "stateId": "state.reply_streaming",
+      "reason": "No view reads reply.final. detailLine uses reply.text and does not branch on final, so streaming and final are not separate paint."
+    },
+    {
+      "stateId": "state.reply_final",
+      "reason": "Same as state.reply_streaming. reply.final is not read."
+    },
+    {
+      "stateId": "state.timeline_unborn",
+      "reason": "timeline moment.kind is the scrub cursor inside TimelineView. There is no public prop to set it."
+    },
+    {
+      "stateId": "state.timeline_unrecorded",
+      "reason": "Same as state.timeline_unborn. Cursor moment, not the live head."
+    },
+    {
+      "stateId": "state.timeline_past",
+      "reason": "Same as state.timeline_unborn. Cursor moment, not the live head."
+    },
+    {
+      "stateId": "state.timeline_ended",
+      "reason": "Same as state.timeline_unborn. Cursor moment, not the live head."
+    },
+    {
+      "stateId": "state.timeline_span",
+      "reason": "Same as state.timeline_unborn. Cursor moment, not the live head."
+    },
+    {
+      "stateId": "state.spend_unknown",
+      "reason": "spendStateAt returns unknown only for a scrubbed t before statusSince. The live head at now does not."
+    },
+    {
+      "stateId": "state.feed_no_door",
+      "reason": "MonitorFeedState is VibeField door chrome, not a Puppeteer view input."
+    },
+    {
+      "stateId": "state.feed_connecting",
+      "reason": "MonitorFeedState is VibeField door chrome, not a Puppeteer view input."
+    },
+    {
+      "stateId": "state.feed_live",
+      "reason": "MonitorFeedState is VibeField door chrome, not a Puppeteer view input."
+    },
+    {
+      "stateId": "state.feed_unavailable",
+      "reason": "MonitorFeedState is VibeField door chrome, not a Puppeteer view input."
+    },
+    {
+      "stateId": "state.tier_managed",
+      "reason": "None of the five views read tier."
+    },
+    {
+      "stateId": "state.tier_ingested",
+      "reason": "None of the five views read tier."
+    },
+    {
+      "stateId": "state.tier_remote",
+      "reason": "None of the five views read tier."
+    },
+    {
+      "stateId": "state.device_live",
+      "reason": "Desktop standing is VibeField window-rows at the consumer pin, which overwrites a peer's stale. It is not a field the 748d015 views read."
+    },
+    {
+      "stateId": "state.device_stale",
+      "reason": "Same as state.device_live. Standing is not a view field."
+    },
+    {
+      "stateId": "state.device_asleep",
+      "reason": "Same as state.device_live. Standing is not a view field."
+    },
+    {
+      "stateId": "state.device_incompatible",
+      "reason": "Same as state.device_live. Standing is not a view field."
+    },
+    {
+      "stateId": "state.context_hot",
+      "reason": "swarm context ring is hot at floor(usedPercent) >= 80. bubble-model.ts. AgentSwarm from Puppeteer 748d015 mounted in this host and reported WEBGPU UNAVAILABLE, so the body was not painted. See audit/godview/rendering/screenshots/environment-swarm.png."
+    },
+    {
+      "stateId": "state.effort_configured",
+      "reason": "effort.intent configured is the italic model line. AgentSwarm from Puppeteer 748d015 mounted in this host and reported WEBGPU UNAVAILABLE, so the body was not painted. See audit/godview/rendering/screenshots/environment-swarm.png."
+    },
+    {
+      "stateId": "state.effort_observed",
+      "reason": "effort.intent observed is the model line without italic intent. AgentSwarm from Puppeteer 748d015 mounted in this host and reported WEBGPU UNAVAILABLE, so the body was not painted. See audit/godview/rendering/screenshots/environment-swarm.png."
+    },
+    {
+      "stateId": "state.effort_absent",
+      "reason": "effort absent. The model line has no effort suffix. AgentSwarm from Puppeteer 748d015 mounted in this host and reported WEBGPU UNAVAILABLE, so the body was not painted. See audit/godview/rendering/screenshots/environment-swarm.png."
+    },
+    {
+      "stateId": "state.burn_flames_0",
+      "reason": "burnFlames(0/min) === 0. burnPerHour is 0. AgentSwarm from Puppeteer 748d015 mounted in this host and reported WEBGPU UNAVAILABLE, so the body was not painted. See audit/godview/rendering/screenshots/environment-swarm.png."
+    },
+    {
+      "stateId": "state.burn_flames_1",
+      "reason": "burnFlames(0.05/min) === 1. burnPerHour is 3. AgentSwarm from Puppeteer 748d015 mounted in this host and reported WEBGPU UNAVAILABLE, so the body was not painted. See audit/godview/rendering/screenshots/environment-swarm.png."
+    },
+    {
+      "stateId": "state.burn_flames_2",
+      "reason": "burnFlames(0.15/min) === 2. burnPerHour is 9. AgentSwarm from Puppeteer 748d015 mounted in this host and reported WEBGPU UNAVAILABLE, so the body was not painted. See audit/godview/rendering/screenshots/environment-swarm.png."
+    },
+    {
+      "stateId": "state.burn_flames_3",
+      "reason": "burnFlames(0.4/min) === 3. burnPerHour is 24. AgentSwarm from Puppeteer 748d015 mounted in this host and reported WEBGPU UNAVAILABLE, so the body was not painted. See audit/godview/rendering/screenshots/environment-swarm.png."
+    },
+    {
+      "stateId": "state.burn_flames_4",
+      "reason": "burnFlames(1/min) === 4. burnPerHour is 60. AgentSwarm from Puppeteer 748d015 mounted in this host and reported WEBGPU UNAVAILABLE, so the body was not painted. See audit/godview/rendering/screenshots/environment-swarm.png."
+    },
+    {
+      "stateId": "state.burn_unpriced",
+      "reason": "coverage unavailable. The burn ladder is drawn unpriced. AgentSwarm from Puppeteer 748d015 mounted in this host and reported WEBGPU UNAVAILABLE, so the body was not painted. See audit/godview/rendering/screenshots/environment-swarm.png."
+    }
+  ],
+  "swarmBodyPaint": "webgpu-unavailable"
+}

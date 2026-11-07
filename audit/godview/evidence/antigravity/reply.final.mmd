@@ -1,0 +1,9 @@
+flowchart LR
+  src["antigravity source packages/adapter-antigravity/src/normalization/conversation.ts:1-3"]
+  raw["conversation:assistant-message final true"]
+  row["UNRESOLVED field.reply.final row mapping"]
+  ui["UNRESOLVED UI reachability"]
+  states["UNRESOLVED downstream state predicates"]
+  src --> raw --> row
+  row --> ui
+  row --> states

@@ -1,0 +1,138 @@
+{
+  "recordId": "prov.codex.cost.series.steps",
+  "pins": {
+    "vibefield": "433505fd0f224f4cda540d642661b13848c0ef82",
+    "puppeteer": "748d015a7e393112e0a91dad80111fdf5abe6583"
+  },
+  "adapterId": "adapter.codex",
+  "fieldId": "field.cost.series.steps",
+  "sources": [
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/adapter-codex/src/normalization/monitor-capabilities.ts",
+      "lineStart": 30,
+      "lineEnd": 34,
+      "symbol": "USD limitation"
+    },
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/adapter-codex/src/normalization/usage.ts",
+      "lineStart": 28,
+      "lineEnd": 64,
+      "symbol": "codexUsagePricing returns tokens and gap"
+    },
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/adapter-codex/src/normalization/monitor.ts",
+      "lineStart": 503,
+      "lineEnd": 527,
+      "symbol": "usage value fields"
+    },
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/monitor/src/backend/derive.ts",
+      "lineStart": 240,
+      "lineEnd": 286,
+      "symbol": "deriveAgentRow"
+    },
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/view-sdk/src/model.ts",
+      "lineStart": 29,
+      "lineEnd": 29,
+      "symbol": "model.ts"
+    },
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/monitor/src/backend/backend.ts",
+      "lineStart": 189,
+      "lineEnd": 207,
+      "symbol": "backend.ts"
+    },
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/monitor/src/backend/usage-ledger.ts",
+      "lineStart": 62,
+      "lineEnd": 82,
+      "symbol": "usage-ledger.ts"
+    }
+  ],
+  "producer": {
+    "kind": "unknown",
+    "name": "not-adapter-produced",
+    "ingestedFrom": "not adapter-produced; PENDING DOWNSTREAM MAPPING into the row"
+  },
+  "transforms": [
+    {
+      "order": 0,
+      "name": "no-adapter-producer-0",
+      "effect": "The pricing helper returns token deltas or a gap. The usage upsert does not set costUsd or cost.",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/adapter-codex/src/normalization/monitor-capabilities.ts",
+        "lineStart": 30,
+        "lineEnd": 34,
+        "symbol": "USD limitation"
+      }
+    }
+  ],
+  "merge": {
+    "strategy": "unknown",
+    "defaults": []
+  },
+  "transport": {
+    "channel": "unknown",
+    "name": "not-adapter-produced"
+  },
+  "renderer": {
+    "viewIds": [
+      "view.spend"
+    ],
+    "component": "catalog-consumer-unproven",
+    "symbol": "view.spend"
+  },
+  "applicability": {
+    "states": [
+      "state.cost_complete",
+      "state.cost_partial",
+      "state.cost_unavailable",
+      "state.cost_missing",
+      "state.burn_flames_0",
+      "state.burn_flames_1",
+      "state.burn_flames_2",
+      "state.burn_flames_3",
+      "state.burn_flames_4"
+    ],
+    "views": [
+      "view.spend"
+    ],
+    "notes": "ROW FIELD field.cost.series.steps. PENDING DOWNSTREAM MAPPING into MonitorAgentRow. This is one of 74 canonical row fields. It is not an SDK contract leaf. PENDING DOWNSTREAM MAPPING: GV-AUDIT2 owns adapter output to row predicates, including cost, burn rate, history, timeline, and git branch. This audit does not give that verdict. Schema acceptance is not complete provenance. verification.status source-read is a static reading. observation.presence unknown means no live sample was taken. It does not mean the row value is missing. classification.adapterEmittable and uiReachable stay unknown. A raw adapter property is not the row field, and a catalog consumer is not a proven UI path.  This record does not emit state.cost_complete, state.cost_partial, state.cost_unavailable, state.cost_missing, state.burn_flames_0, state.burn_flames_1, state.burn_flames_2, state.burn_flames_3, state.burn_flames_4, or state.burn_unpriced. Those predicates stay downstream. PENDING DOWNSTREAM MAPPING. The declaration says USD uses counter deltas and model metadata, but the producer never writes a USD field. Token pricing is emitted and is recorded on field.tokens. Do not treat a gap as a zero cost. Absence of cost here does not forbid field.cost from a catalog step this adapter does not perform. The adapter does not write this MonitorAgentRow property. That is the architecture, not a conclusion that the row predicate is unreachable. This trace is Puppeteer 748d015a7e393112e0a91dad80111fdf5abe6583 only. It is newer than shipped Vibefield 0.3.3 and does not describe that install. Package comparison was not re-run. Declaration supported from codex-thread-token-usage. declaration only; supported does not guarantee availability/value; degraded is not unreachable Declared support does not match the producer channel. That mismatch is not a runtime impossibility. Raw source literals, not live samples: adapter.codex.upstream.cost.absent=\"absent\" (usage upsert) Graph: evidence/codex/cost.series.steps.mmd. Continuation anchors, not a reachability verdict: MonitorService.consume, core reduce and project, deriveAgentRow. Vibefield AgentView and window-rows are not traced."
+  },
+  "absence": {
+    "onMissing": "record-unknown",
+    "onStale": "unknown",
+    "zeroPolicy": "unknown-unsupported-and-absent-are-not-zero"
+  },
+  "observation": {
+    "presence": "unknown",
+    "synthetic": false
+  },
+  "classification": {
+    "modelSupported": "yes",
+    "adapterEmittable": "unknown",
+    "uiReachable": "unknown"
+  },
+  "verification": {
+    "status": "source-read",
+    "owner": "GV-AUDIT3",
+    "notes": "ROW FIELD field.cost.series.steps. PENDING DOWNSTREAM MAPPING into MonitorAgentRow. This is one of 74 canonical row fields. It is not an SDK contract leaf. PENDING DOWNSTREAM MAPPING: GV-AUDIT2 owns adapter output to row predicates, including cost, burn rate, history, timeline, and git branch. This audit does not give that verdict. Schema acceptance is not complete provenance. verification.status source-read is a static reading. observation.presence unknown means no live sample was taken. It does not mean the row value is missing. classification.adapterEmittable and uiReachable stay unknown. A raw adapter property is not the row field, and a catalog consumer is not a proven UI path.  This record does not emit state.cost_complete, state.cost_partial, state.cost_unavailable, state.cost_missing, state.burn_flames_0, state.burn_flames_1, state.burn_flames_2, state.burn_flames_3, state.burn_flames_4, or state.burn_unpriced. Those predicates stay downstream. PENDING DOWNSTREAM MAPPING. The declaration says USD uses counter deltas and model metadata, but the producer never writes a USD field. Token pricing is emitted and is recorded on field.tokens. Do not treat a gap as a zero cost. Absence of cost here does not forbid field.cost from a catalog step this adapter does not perform. The adapter does not write this MonitorAgentRow property. That is the architecture, not a conclusion that the row predicate is unreachable. This trace is Puppeteer 748d015a7e393112e0a91dad80111fdf5abe6583 only. It is newer than shipped Vibefield 0.3.3 and does not describe that install. Package comparison was not re-run. Declaration supported from codex-thread-token-usage. declaration only; supported does not guarantee availability/value; degraded is not unreachable Declared support does not match the producer channel. That mismatch is not a runtime impossibility. Raw source literals, not live samples: adapter.codex.upstream.cost.absent=\"absent\" (usage upsert) Graph: evidence/codex/cost.series.steps.mmd. Continuation anchors, not a reachability verdict: MonitorService.consume, core reduce and project, deriveAgentRow. Vibefield AgentView and window-rows are not traced."
+  }
+}

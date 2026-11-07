@@ -1,0 +1,9 @@
+flowchart LR
+  src["acp source packages/adapter-acp/src/normalization/monitor.ts:57-98"]
+  raw["effort value, intent observed, or retract"]
+  row["UNRESOLVED field.effort row mapping"]
+  ui["UNRESOLVED UI reachability"]
+  states["UNRESOLVED downstream state predicates"]
+  src --> raw --> row
+  row --> ui
+  row --> states

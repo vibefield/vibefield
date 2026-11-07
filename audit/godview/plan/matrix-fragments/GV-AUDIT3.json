@@ -1,0 +1,46 @@
+{
+  "owner": "GV-AUDIT3",
+  "rows": [],
+  "updates": [
+    {
+      "id": "adapter.acp",
+      "status": "in-progress",
+      "evidence": [
+        "evidence/acp/"
+      ],
+      "notes": "74 row-field envelopes plus 86 SDK leaves. Row classifications stay unknown for adapterEmittable and uiReachability. Raw signals are in plan/gv-audit3-join.json. Graphs are sibling .mmd files with unresolved row, UI, and state nodes. Puppeteer 748d015 only. Schema acceptance is not complete provenance. PENDING DOWNSTREAM MAPPING. Declaration mismatches: field.status, field.detail, field.activity, field.activity.kind, field.activity.line, field.model, field.effort, field.effort.value, field.effort.intent, field.context.usedPercent, field.wait, field.wait.kind, field.wait.since, field.wait.count, field.wait.tool, field.wait.code, field.wait.header, field.wait.question, field.wait.detail, field.reply, field.reply.text, field.reply.at, field.reply.final, field.cost, field.cost.usd, field.cost.coverage, field.cost.burnPerHour, field.cost.series, field.cost.series.stepMs, field.cost.series.steps, field.cost.series.lastStepAt."
+    },
+    {
+      "id": "adapter.antigravity",
+      "status": "in-progress",
+      "evidence": [
+        "evidence/antigravity/"
+      ],
+      "notes": "74 row-field envelopes plus 86 SDK leaves. Row classifications stay unknown for adapterEmittable and uiReachability. Raw signals are in plan/gv-audit3-join.json. Graphs are sibling .mmd files with unresolved row, UI, and state nodes. Puppeteer 748d015 only. Schema acceptance is not complete provenance. PENDING DOWNSTREAM MAPPING. Declaration mismatches: field.status, field.detail, field.activity, field.activity.kind, field.activity.line, field.project, field.project.name, field.model, field.effort, field.effort.value, field.effort.intent, field.reply, field.reply.text, field.reply.at, field.reply.final."
+    },
+    {
+      "id": "adapter.claude",
+      "status": "in-progress",
+      "evidence": [
+        "evidence/claude/"
+      ],
+      "notes": "74 row-field envelopes plus 86 SDK leaves. Row classifications stay unknown for adapterEmittable and uiReachability. Raw signals are in plan/gv-audit3-join.json. Graphs are sibling .mmd files with unresolved row, UI, and state nodes. Puppeteer 748d015 only. Schema acceptance is not complete provenance. PENDING DOWNSTREAM MAPPING. Declaration mismatches: field.status, field.detail, field.activity, field.activity.kind, field.activity.line, field.model, field.reply, field.reply.text, field.reply.at, field.reply.final, field.tokens, field.tokens.total."
+    },
+    {
+      "id": "adapter.codex",
+      "status": "in-progress",
+      "evidence": [
+        "evidence/codex/"
+      ],
+      "notes": "74 row-field envelopes plus 86 SDK leaves. Row classifications stay unknown for adapterEmittable and uiReachability. Raw signals are in plan/gv-audit3-join.json. Graphs are sibling .mmd files with unresolved row, UI, and state nodes. Puppeteer 748d015 only. Schema acceptance is not complete provenance. PENDING DOWNSTREAM MAPPING. Declaration mismatches: field.status, field.detail, field.activity, field.activity.kind, field.activity.line, field.reply, field.reply.text, field.reply.at, field.reply.final, field.cost, field.cost.usd, field.cost.coverage, field.cost.burnPerHour, field.cost.series, field.cost.series.stepMs, field.cost.series.steps, field.cost.series.lastStepAt."
+    },
+    {
+      "id": "adapter.copilot",
+      "status": "in-progress",
+      "evidence": [
+        "evidence/copilot/"
+      ],
+      "notes": "74 row-field envelopes plus 86 SDK leaves. Row classifications stay unknown for adapterEmittable and uiReachability. Raw signals are in plan/gv-audit3-join.json. Graphs are sibling .mmd files with unresolved row, UI, and state nodes. Puppeteer 748d015 only. Schema acceptance is not complete provenance. PENDING DOWNSTREAM MAPPING. Declaration mismatches: field.status, field.detail, field.activity, field.activity.kind, field.activity.line, field.reply, field.reply.text, field.reply.at, field.reply.final."
+    }
+  ]
+}

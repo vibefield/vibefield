@@ -1,0 +1,9 @@
+flowchart LR
+  src["codex source packages/adapter-codex/src/normalization/monitor.ts:391-391"]
+  raw["no raw adapter write found"]
+  row["UNRESOLVED field.tokens.perMinute row mapping"]
+  ui["UNRESOLVED UI reachability"]
+  states["UNRESOLVED downstream state predicates"]
+  src --> raw --> row
+  row --> ui
+  row --> states

@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -24,6 +24,7 @@ export function createAuditServer(root = repoRoot) {
       traces: audit.traces,
       renders: audit.renders,
       fallback: audit.overlay,
+      renderIndex: audit.renderIndex,
       selection: selectionFrom(url),
     });
   return createServer((req, res) => {
@@ -54,6 +55,14 @@ export function createAuditServer(root = repoRoot) {
         return send(res, 200, "text/html; charset=utf-8", renderShell(audit.index, cellFor(url)));
       if (url.pathname === "/api/flow.svg")
         return send(res, 200, "image/svg+xml; charset=utf-8", renderFlowSvg(cellFor(url)));
+      if (url.pathname.startsWith("/shots/")) {
+        const name = url.pathname.slice("/shots/".length);
+        if (!/^[A-Za-z0-9.-]+$/u.test(name))
+          return send(res, 404, "text/plain; charset=utf-8", "Not found");
+        const shot = safe(root, `audit/godview/rendering/screenshots/${name}`);
+        if (!existsSync(shot)) return send(res, 404, "text/plain; charset=utf-8", "Not found");
+        return send(res, 200, "image/png", readFileSync(shot));
+      }
       send(res, 404, "text/plain; charset=utf-8", "Not found");
     } catch {
       send(res, 400, "text/plain; charset=utf-8", "path refused");

@@ -1,0 +1,9 @@
+flowchart LR
+  src["acp source packages/adapter-acp/src/normalization/model.ts:8-25"]
+  raw["model:updated.model.id"]
+  row["UNRESOLVED field.model row mapping"]
+  ui["UNRESOLVED UI reachability"]
+  states["UNRESOLVED downstream state predicates"]
+  src --> raw --> row
+  row --> ui
+  row --> states

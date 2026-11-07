@@ -1,0 +1,9 @@
+flowchart LR
+  src["copilot source packages/adapter-copilot/src/normalization/monitor-capabilities.ts:15-23"]
+  raw["no raw adapter write found"]
+  row["UNRESOLVED field.tokens row mapping"]
+  ui["UNRESOLVED UI reachability"]
+  states["UNRESOLVED downstream state predicates"]
+  src --> raw --> row
+  row --> ui
+  row --> states

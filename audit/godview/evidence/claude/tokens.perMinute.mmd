@@ -1,0 +1,9 @@
+flowchart LR
+  src["claude source packages/adapter-claude/src/observation/otel/usage.ts:42-68"]
+  raw["no raw adapter write found"]
+  row["UNRESOLVED field.tokens.perMinute row mapping"]
+  ui["UNRESOLVED UI reachability"]
+  states["UNRESOLVED downstream state predicates"]
+  src --> raw --> row
+  row --> ui
+  row --> states

@@ -1,0 +1,183 @@
+{
+  "recordId": "prov.codex.wait.since",
+  "pins": {
+    "vibefield": "433505fd0f224f4cda540d642661b13848c0ef82",
+    "puppeteer": "748d015a7e393112e0a91dad80111fdf5abe6583"
+  },
+  "adapterId": "adapter.codex",
+  "fieldId": "field.wait.since",
+  "sources": [
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/adapter-codex/src/services/approvals.ts",
+      "lineStart": 198,
+      "lineEnd": 293,
+      "symbol": "CodexApprovalService"
+    },
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/adapter-codex/src/observation/observer.ts",
+      "lineStart": 469,
+      "lineEnd": 469,
+      "symbol": "transport close settleAll unknown"
+    },
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/runtime/src/services/monitor-service.ts",
+      "lineStart": 176,
+      "lineEnd": 187,
+      "symbol": "MonitorService.consume"
+    },
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/core/src/monitor/reduce.ts",
+      "lineStart": 974,
+      "lineEnd": 995,
+      "symbol": "permission cases"
+    },
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/view-sdk/src/model.ts",
+      "lineStart": 49,
+      "lineEnd": 49,
+      "symbol": "model.ts"
+    },
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/monitor/src/backend/derive.ts",
+      "lineStart": 130,
+      "lineEnd": 161,
+      "symbol": "derive.ts"
+    },
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/core/src/monitor/transitions.ts",
+      "lineStart": 71,
+      "lineEnd": 71,
+      "symbol": "transitions.ts"
+    },
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/core/src/monitor/transitions.ts",
+      "lineStart": 159,
+      "lineEnd": 170,
+      "symbol": "transitions.ts"
+    },
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/core/src/monitor/transitions.ts",
+      "lineStart": 369,
+      "lineEnd": 371,
+      "symbol": "transitions.ts"
+    }
+  ],
+  "producer": {
+    "kind": "adapter",
+    "name": "codex normalization",
+    "ingestedFrom": "adapter event or monitor batch"
+  },
+  "transforms": [
+    {
+      "order": 0,
+      "name": "adapter-step-0",
+      "effect": "Server approval requests publish interaction:permission-requested. tool is a method table name or the method string. presentation is native-tui when there is no decide handler and the method is shared; otherwise host-ui.",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/adapter-codex/src/services/approvals.ts",
+        "lineStart": 198,
+        "lineEnd": 293,
+        "symbol": "CodexApprovalService"
+      }
+    },
+    {
+      "order": 1,
+      "name": "adapter-step-1",
+      "effect": "A host decision publishes allowed or denied. serverRequest/resolved settles unknown and does not carry the decision. Transport close and dispose also settle unknown.",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/adapter-codex/src/observation/observer.ts",
+        "lineStart": 469,
+        "lineEnd": 469,
+        "symbol": "transport close settleAll unknown"
+      }
+    },
+    {
+      "order": 2,
+      "name": "adapter-step-2",
+      "effect": "A non-shared request with no decide handler resolves denied.",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/runtime/src/services/monitor-service.ts",
+        "lineStart": 176,
+        "lineEnd": 187,
+        "symbol": "MonitorService.consume"
+      }
+    }
+  ],
+  "merge": {
+    "strategy": "unknown",
+    "defaults": []
+  },
+  "transport": {
+    "channel": "in-process",
+    "name": "MonitorService.consume",
+    "contract": "AgentEvent or monitor:batch"
+  },
+  "renderer": {
+    "viewIds": [],
+    "component": "not-established",
+    "symbol": "no-consumer-recorded"
+  },
+  "applicability": {
+    "states": [
+      "state.idle",
+      "state.working",
+      "state.blocked",
+      "state.blocked_permission",
+      "state.blocked_question",
+      "state.blocked_failure",
+      "state.wait_multiple",
+      "state.activity_starting",
+      "state.activity_responding",
+      "state.activity_reasoning",
+      "state.activity_tool",
+      "state.activity_other",
+      "state.stale",
+      "state.fresh",
+      "state.failed_retained"
+    ],
+    "views": "all-monitor-views",
+    "notes": "ROW FIELD field.wait.since. PENDING DOWNSTREAM MAPPING into MonitorAgentRow. This is one of 74 canonical row fields. It is not an SDK contract leaf. PENDING DOWNSTREAM MAPPING: GV-AUDIT2 owns adapter output to row predicates, including cost, burn rate, history, timeline, and git branch. This audit does not give that verdict. Schema acceptance is not complete provenance. verification.status source-read is a static reading. observation.presence unknown means no live sample was taken. It does not mean the row value is missing. classification.adapterEmittable and uiReachable stay unknown. A raw adapter property is not the row field, and a catalog consumer is not a proven UI path.   The capability text matches the unknown settlement: Codex names the request and not the decision. field.wait is still not written here. The adapter does not write this MonitorAgentRow property. That is the architecture, not a conclusion that the row predicate is unreachable. This trace is Puppeteer 748d015a7e393112e0a91dad80111fdf5abe6583 only. It is newer than shipped Vibefield 0.3.3 and does not describe that install. Package comparison was not re-run. Declaration supported from codex-app-server. declaration only; supported does not guarantee availability/value; degraded is not unreachable No raw adapter signal does not rule out the row value from host, runtime, history, or another producer. Raw source literals, not live samples: adapter.codex.upstream.permission.allowed=\"allowed\" (approved host decision); adapter.codex.upstream.permission.denied=\"denied\" (denied decision, or non-shared request with no handler); adapter.codex.upstream.permission.unknown=\"unknown\" (serverRequest/resolved, transport close, dispose); adapter.codex.upstream.permission.native-tui=\"native-tui\" (shared and no decide handler); adapter.codex.upstream.permission.host-ui=\"host-ui\" (a decide handler will answer) Graph: evidence/codex/wait.since.mmd. Continuation anchors, not a reachability verdict: MonitorService.consume, core reduce and project, deriveAgentRow. Vibefield AgentView and window-rows are not traced."
+  },
+  "absence": {
+    "onMissing": "record-unknown",
+    "onStale": "unknown",
+    "zeroPolicy": "unknown-unsupported-and-absent-are-not-zero"
+  },
+  "observation": {
+    "presence": "unknown",
+    "synthetic": false
+  },
+  "classification": {
+    "modelSupported": "yes",
+    "adapterEmittable": "unknown",
+    "uiReachable": "unknown"
+  },
+  "verification": {
+    "status": "source-read",
+    "owner": "GV-AUDIT3",
+    "notes": "ROW FIELD field.wait.since. PENDING DOWNSTREAM MAPPING into MonitorAgentRow. This is one of 74 canonical row fields. It is not an SDK contract leaf. PENDING DOWNSTREAM MAPPING: GV-AUDIT2 owns adapter output to row predicates, including cost, burn rate, history, timeline, and git branch. This audit does not give that verdict. Schema acceptance is not complete provenance. verification.status source-read is a static reading. observation.presence unknown means no live sample was taken. It does not mean the row value is missing. classification.adapterEmittable and uiReachable stay unknown. A raw adapter property is not the row field, and a catalog consumer is not a proven UI path.   The capability text matches the unknown settlement: Codex names the request and not the decision. field.wait is still not written here. The adapter does not write this MonitorAgentRow property. That is the architecture, not a conclusion that the row predicate is unreachable. This trace is Puppeteer 748d015a7e393112e0a91dad80111fdf5abe6583 only. It is newer than shipped Vibefield 0.3.3 and does not describe that install. Package comparison was not re-run. Declaration supported from codex-app-server. declaration only; supported does not guarantee availability/value; degraded is not unreachable No raw adapter signal does not rule out the row value from host, runtime, history, or another producer. Raw source literals, not live samples: adapter.codex.upstream.permission.allowed=\"allowed\" (approved host decision); adapter.codex.upstream.permission.denied=\"denied\" (denied decision, or non-shared request with no handler); adapter.codex.upstream.permission.unknown=\"unknown\" (serverRequest/resolved, transport close, dispose); adapter.codex.upstream.permission.native-tui=\"native-tui\" (shared and no decide handler); adapter.codex.upstream.permission.host-ui=\"host-ui\" (a decide handler will answer) Graph: evidence/codex/wait.since.mmd. Continuation anchors, not a reachability verdict: MonitorService.consume, core reduce and project, deriveAgentRow. Vibefield AgentView and window-rows are not traced."
+  }
+}

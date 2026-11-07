@@ -1,0 +1,9 @@
+flowchart LR
+  src["copilot source packages/adapter-copilot/src/normalization/model.ts:4-14"]
+  raw["model:updated"]
+  row["UNRESOLVED field.model row mapping"]
+  ui["UNRESOLVED UI reachability"]
+  states["UNRESOLVED downstream state predicates"]
+  src --> raw --> row
+  row --> ui
+  row --> states

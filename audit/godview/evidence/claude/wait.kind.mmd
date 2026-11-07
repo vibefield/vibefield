@@ -1,0 +1,9 @@
+flowchart LR
+  src["claude source packages/adapter-claude/src/normalization/interaction.ts:51-83"]
+  raw["adapter signal, see transforms"]
+  row["UNRESOLVED field.wait.kind row mapping"]
+  ui["UNRESOLVED UI reachability"]
+  states["UNRESOLVED downstream state predicates"]
+  src --> raw --> row
+  row --> ui
+  row --> states

@@ -1,0 +1,185 @@
+{
+  "recordId": "prov.acp.detail",
+  "pins": {
+    "vibefield": "433505fd0f224f4cda540d642661b13848c0ef82",
+    "puppeteer": "748d015a7e393112e0a91dad80111fdf5abe6583"
+  },
+  "adapterId": "adapter.acp",
+  "fieldId": "field.detail",
+  "sources": [
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/adapter-acp/src/normalization/monitor-capabilities.ts",
+      "lineStart": 11,
+      "lineEnd": 23,
+      "symbol": "status capability"
+    },
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/adapter-acp/src/normalization/monitor.ts",
+      "lineStart": 207,
+      "lineEnd": 256,
+      "symbol": "AcpMonitorEvidence.sessionUpdateBatch"
+    },
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/adapter-acp/src/services/prompt.ts",
+      "lineStart": 50,
+      "lineEnd": 84,
+      "symbol": "AcpPromptService.submit"
+    },
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/adapter-acp/src/normalization/tool.ts",
+      "lineStart": 39,
+      "lineEnd": 75,
+      "symbol": "normalizeAcpTool"
+    },
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/runtime/src/services/monitor-service.ts",
+      "lineStart": 176,
+      "lineEnd": 187,
+      "symbol": "MonitorService.consume"
+    },
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/core/src/monitor/reduce.ts",
+      "lineStart": 864,
+      "lineEnd": 938,
+      "symbol": "turn and conversation cases"
+    },
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/view-sdk/src/model.ts",
+      "lineStart": 146,
+      "lineEnd": 146,
+      "symbol": "model.ts"
+    },
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/monitor/src/backend/derive.ts",
+      "lineStart": 84,
+      "lineEnd": 89,
+      "symbol": "derive.ts"
+    },
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/monitor/src/backend/derive.ts",
+      "lineStart": 312,
+      "lineEnd": 312,
+      "symbol": "derive.ts"
+    },
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/view-sdk/src/toolkit/words.ts",
+      "lineStart": 64,
+      "lineEnd": 84,
+      "symbol": "words.ts"
+    }
+  ],
+  "producer": {
+    "kind": "adapter",
+    "name": "acp normalization",
+    "ingestedFrom": "adapter event or monitor batch"
+  },
+  "transforms": [
+    {
+      "order": 0,
+      "name": "adapter-step-0",
+      "effect": "monitor.ts writes context, model, effort, and mode only. It never writes a status family update.",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/adapter-acp/src/normalization/monitor-capabilities.ts",
+        "lineStart": 11,
+        "lineEnd": 23,
+        "symbol": "status capability"
+      }
+    },
+    {
+      "order": 1,
+      "name": "adapter-step-1",
+      "effect": "AcpPromptService mints turn id acp-turn-N and emits turn:started, turn:completed copying stopReason, outcome interrupted only when stopReason is cancelled, or turn:failed with the error string.",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/adapter-acp/src/normalization/monitor.ts",
+        "lineStart": 207,
+        "lineEnd": 256,
+        "symbol": "AcpMonitorEvidence.sessionUpdateBatch"
+      }
+    },
+    {
+      "order": 2,
+      "name": "adapter-step-2",
+      "effect": "normalizeAcpTool emits tool:started for tool_call, plus completed or failed when that status is set. tool_call_update emits only completed or failed. in_progress emits no tool event.",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/adapter-acp/src/services/prompt.ts",
+        "lineStart": 50,
+        "lineEnd": 84,
+        "symbol": "AcpPromptService.submit"
+      }
+    }
+  ],
+  "merge": {
+    "strategy": "unknown",
+    "defaults": []
+  },
+  "transport": {
+    "channel": "in-process",
+    "name": "MonitorService.consume",
+    "contract": "AgentEvent or monitor:batch"
+  },
+  "renderer": {
+    "viewIds": [
+      "view.list",
+      "view.rain",
+      "view.swarm",
+      "view.spend"
+    ],
+    "component": "catalog-consumer-unproven",
+    "symbol": "view.list,view.rain,view.swarm,view.spend"
+  },
+  "applicability": {
+    "states": "model-axes",
+    "views": [
+      "view.list",
+      "view.rain",
+      "view.swarm",
+      "view.spend"
+    ],
+    "notes": "ROW FIELD field.detail. PENDING DOWNSTREAM MAPPING into MonitorAgentRow. This is one of 74 canonical row fields. It is not an SDK contract leaf. PENDING DOWNSTREAM MAPPING: GV-AUDIT2 owns adapter output to row predicates, including cost, burn rate, history, timeline, and git branch. This audit does not give that verdict. Schema acceptance is not complete provenance. verification.status source-read is a static reading. observation.presence unknown means no live sample was taken. It does not mean the row value is missing. classification.adapterEmittable and uiReachable stay unknown. A raw adapter property is not the row field, and a catalog consumer is not a proven UI path.   Status is declared supported, but the monitor batch never carries a status update. Turn and tool events are the live signals. field.status, field.activity, and field.detail are still backend rows. Mapping is pending. Declared unsupported families do not make idle, working, or blocked impossible. The adapter does not write this MonitorAgentRow property. That is the architecture, not a conclusion that the row predicate is unreachable. This trace is Puppeteer 748d015a7e393112e0a91dad80111fdf5abe6583 only. It is newer than shipped Vibefield 0.3.3 and does not describe that install. Package comparison was not re-run. No capability cell for this field. Declared support does not match the producer channel. That mismatch is not a runtime impossibility. Raw source literals, not live samples: adapter.acp.upstream.turn.started=\"turn:started\" (prompt submit); adapter.acp.upstream.turn.completed=\"turn:completed\" (session/prompt resolves); adapter.acp.upstream.turn.interrupted=\"interrupted\" (stopReason === 'cancelled'); adapter.acp.upstream.turn.failed=\"turn:failed\" (session/prompt rejects); adapter.acp.upstream.tool.started=\"tool:started\" (tool_call); adapter.acp.upstream.tool.completed=\"tool:completed\" (status completed); adapter.acp.upstream.tool.failed=\"tool:failed\" (status failed); adapter.acp.upstream.tool.in_progress=\"no event\" (tool_call_update status in_progress) Graph: evidence/acp/detail.mmd. Continuation anchors, not a reachability verdict: MonitorService.consume, core reduce and project, deriveAgentRow. Vibefield AgentView and window-rows are not traced."
+  },
+  "absence": {
+    "onMissing": "record-unknown",
+    "onStale": "unknown",
+    "zeroPolicy": "unknown-unsupported-and-absent-are-not-zero"
+  },
+  "observation": {
+    "presence": "unknown",
+    "synthetic": false
+  },
+  "classification": {
+    "modelSupported": "yes",
+    "adapterEmittable": "unknown",
+    "uiReachable": "unknown"
+  },
+  "verification": {
+    "status": "source-read",
+    "owner": "GV-AUDIT3",
+    "notes": "ROW FIELD field.detail. PENDING DOWNSTREAM MAPPING into MonitorAgentRow. This is one of 74 canonical row fields. It is not an SDK contract leaf. PENDING DOWNSTREAM MAPPING: GV-AUDIT2 owns adapter output to row predicates, including cost, burn rate, history, timeline, and git branch. This audit does not give that verdict. Schema acceptance is not complete provenance. verification.status source-read is a static reading. observation.presence unknown means no live sample was taken. It does not mean the row value is missing. classification.adapterEmittable and uiReachable stay unknown. A raw adapter property is not the row field, and a catalog consumer is not a proven UI path.   Status is declared supported, but the monitor batch never carries a status update. Turn and tool events are the live signals. field.status, field.activity, and field.detail are still backend rows. Mapping is pending. Declared unsupported families do not make idle, working, or blocked impossible. The adapter does not write this MonitorAgentRow property. That is the architecture, not a conclusion that the row predicate is unreachable. This trace is Puppeteer 748d015a7e393112e0a91dad80111fdf5abe6583 only. It is newer than shipped Vibefield 0.3.3 and does not describe that install. Package comparison was not re-run. No capability cell for this field. Declared support does not match the producer channel. That mismatch is not a runtime impossibility. Raw source literals, not live samples: adapter.acp.upstream.turn.started=\"turn:started\" (prompt submit); adapter.acp.upstream.turn.completed=\"turn:completed\" (session/prompt resolves); adapter.acp.upstream.turn.interrupted=\"interrupted\" (stopReason === 'cancelled'); adapter.acp.upstream.turn.failed=\"turn:failed\" (session/prompt rejects); adapter.acp.upstream.tool.started=\"tool:started\" (tool_call); adapter.acp.upstream.tool.completed=\"tool:completed\" (status completed); adapter.acp.upstream.tool.failed=\"tool:failed\" (status failed); adapter.acp.upstream.tool.in_progress=\"no event\" (tool_call_update status in_progress) Graph: evidence/acp/detail.mmd. Continuation anchors, not a reachability verdict: MonitorService.consume, core reduce and project, deriveAgentRow. Vibefield AgentView and window-rows are not traced."
+  }
+}

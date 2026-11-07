@@ -1,0 +1,9 @@
+flowchart LR
+  src["antigravity source packages/adapter-antigravity/src/driver.ts:166-170"]
+  raw["model:updated intent configured"]
+  row["UNRESOLVED field.model row mapping"]
+  ui["UNRESOLVED UI reachability"]
+  states["UNRESOLVED downstream state predicates"]
+  src --> raw --> row
+  row --> ui
+  row --> states

@@ -201,7 +201,7 @@
       "view.spend",
       "view.timeline"
     ],
-    "notes": "Views listed are confirmed consumers. An unlisted view is unknown, not a proof it ignores the field."
+    "notes": "Views listed are confirmed readers in the five shipping monitor views."
   },
   "absence": {
     "onMissing": "omit-field",
@@ -220,6 +220,6 @@
   "verification": {
     "status": "source-read",
     "owner": "GV-AUDIT4",
-    "notes": "Declared environment=supported. The provider proves cwd; Git and worktree topology remain runtime-owned. These adapters write cwd only. Git branch stays runtime-owned. A named branch still arrives from host.workspace.branch or host.fallbackBranch. An explicit null branch was not found in these adapters. Audit pin is puppeteer 748d015, newer than the 0.3.3 package vibefield ships (tag v0.3.3, commit 52d09c8e). This record does not compare 0.3.3 behavior. A transform effect ending in [post-0.3.3] cites a puppeteer file whose text differs from 52d09c8e."
+    "notes": "Declared environment=supported. The provider proves cwd; Git and worktree topology remain runtime-owned. state.branch_none (project.branch === null) is unreachable on this VibeField path. projectBranch returns null only when environment.git is defined and neither git.branch nor host.fallbackBranch is set (derive.ts:101-107). These adapters' environment claims set cwd and never git. recordWorkspaceEvidence writes an environment claim with cwd and worktrees and no git (runtime.ts:1325-1340). Workspace provenance keeps its own git observation off the public environment (reduce.ts:625-631). hostRunFromSummary copies summary.workspace.branch when present and never sets fallbackBranch (agent-monitor.ts:248-256; ports.ts:53-58). A missing git observation therefore stays absent (state.branch_unknown) or becomes the host workspace string (state.branch_named). It does not become null. Audit pin is puppeteer 748d015, newer than the 0.3.3 package vibefield ships (tag v0.3.3, commit 52d09c8e). This record does not compare 0.3.3 behavior. A transform effect ending in [post-0.3.3] cites a puppeteer file whose text differs from 52d09c8e."
   }
 }

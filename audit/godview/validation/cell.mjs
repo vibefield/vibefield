@@ -1,5 +1,11 @@
 import { AUDIT_PINS, AUDIT_TARGET_LABEL, PROVENANCE_STAGES } from "./contract.mjs";
-import { coverageReport, namedStatesFor, readField, stateOnRecord } from "./coverage.mjs";
+import {
+  coverageReport,
+  isRowTrace,
+  namedStatesFor,
+  readField,
+  stateOnRecord,
+} from "./coverage.mjs";
 import { validateProvenance } from "./graph.mjs";
 import { revisionGate } from "./revision.mjs";
 
@@ -103,14 +109,27 @@ function overlayFor(field, fallback) {
   };
 }
 
-export function buildCell({ model, traces, renders, fallback, selection }) {
+function holeFor(renderIndex, selection) {
+  return (
+    (renderIndex?.holes ?? []).find((hole) => {
+      if (hole.stateId !== selection.stateId) return false;
+      if (hole.viewId && hole.viewId !== selection.viewId) return false;
+      return true;
+    }) ?? null
+  );
+}
+
+export function buildCell({ model, traces, renders, fallback, selection, renderIndex = null }) {
   const state = findById(model.states, selection.stateId);
   const view = findById(model.views, selection.viewId);
   const adapter = findById(model.adapters, selection.adapterId);
   const field = findById(model.fields, selection.fieldId);
   const trace =
     traces.find(
-      (entry) => entry.adapterId === selection.adapterId && entry.fieldId === selection.fieldId,
+      (entry) =>
+        isRowTrace(entry) &&
+        entry.adapterId === selection.adapterId &&
+        entry.fieldId === selection.fieldId,
     ) ?? null;
   const traceGate = trace ? revisionGate(trace) : null;
   const render =
@@ -166,9 +185,28 @@ export function buildCell({ model, traces, renders, fallback, selection }) {
     endToEnd.proven = true;
   }
 
+  const hole = render?.meaningfulOutput ? null : holeFor(renderIndex, selection);
+  const paint = {
+    mounted: Boolean(render?.mounted || hole?.mounted),
+    meaningfulOutput: render?.meaningfulOutput === true && hole == null,
+    screenshotCoverageComplete: render?.screenshotCoverageComplete === true && hole == null,
+    fallbackOnly: hole?.fallbackOnly === true,
+    hole,
+    screenshotPath: render?.meaningfulOutput
+      ? render.screenshotPath
+      : (hole?.screenshotPath ?? null),
+    paint: render?.paint ?? null,
+    note: render?.meaningfulOutput
+      ? "Synthetic fixture. The Puppeteer 748d015 component painted this input. The screenshot is that synthetic paint, not a captured adapter session."
+      : hole?.fallbackOnly
+        ? "The component mounted. The body was not painted. WEBGPU UNAVAILABLE. The environment screenshot is the fallback message, not complete swarm coverage."
+        : hole
+          ? hole.reason
+          : "No meaningful render is loaded for this view and state.",
+  };
   const reading = readField(envelope);
   const named = namedStatesFor(traces, selection.adapterId);
-  const stateReading = stateOnRecord(envelope, selection.stateId, named);
+  const stateReading = stateOnRecord(envelope, selection.stateId, named, selection.adapterId);
   const coverage = coverageReport(model, traces);
   const restrictions = model.restrictions.filter(
     (entry) =>
@@ -228,6 +266,7 @@ export function buildCell({ model, traces, renders, fallback, selection }) {
         }
       : { status: "pending", fixtureKind: null },
     endToEnd,
+    paint,
     reading,
     stateReading,
     coverage,

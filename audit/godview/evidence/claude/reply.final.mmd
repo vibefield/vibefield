@@ -1,0 +1,9 @@
+flowchart LR
+  src["claude source packages/adapter-claude/src/normalization/conversation.ts:1-9"]
+  raw["conversation:assistant-message displayOnly true"]
+  row["UNRESOLVED field.reply.final row mapping"]
+  ui["UNRESOLVED UI reachability"]
+  states["UNRESOLVED downstream state predicates"]
+  src --> raw --> row
+  row --> ui
+  row --> states

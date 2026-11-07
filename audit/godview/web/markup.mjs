@@ -99,7 +99,13 @@ export function renderShell(index, cell) {
       <section id="stage" aria-labelledby="stage-heading">
         <h2 id="stage-heading">View</h2>
         <p>The five monitor views live in Puppeteer. VibeField consumes <code>AgentView</code>. This page mounts GV-AUDIT05's harness and does not draw a replacement monitor.</p>
-        <p class="stage-pending" role="status">${cell.view ? escapeHtml(`${cell.view.id} · ${cell.view.name}`) : "No view loaded."} Harness: pending. Fixture channel: ${escapeHtml(cell.synthetic?.status ?? "pending")}.</p>
+        <p class="stage-pending" role="status">${cell.view ? escapeHtml(`${cell.view.id} · ${cell.view.name}`) : "No view loaded."} Mounted: ${cell.paint?.mounted ? "yes" : "no"}. Meaningful paint: ${cell.paint?.meaningfulOutput ? "yes" : "no"}. Screenshot coverage complete: ${cell.paint?.screenshotCoverageComplete ? "yes" : "no"}.</p>
+        <p>${escapeHtml(cell.paint?.note ?? "")}</p>
+        ${
+          cell.paint?.screenshotPath
+            ? `<figure><img src="/shots/${escapeHtml(cell.paint.screenshotPath.split("/").pop())}" alt="${escapeHtml(cell.paint.fallbackOnly ? "Swarm fallback: WebGPU unavailable. Not a painted body." : "Synthetic view screenshot")}" /><figcaption>${escapeHtml(cell.paint.fallbackOnly ? "Fallback message only." : "Synthetic paint.")}</figcaption></figure>`
+            : ""
+        }
         <p>${escapeHtml(cell.view?.consumerCompleteness ?? cell.consumer?.note ?? "")}</p>
       </section>
       <aside aria-labelledby="detail-heading">

@@ -228,7 +228,7 @@
       "state.dead_hidden"
     ],
     "views": "all-monitor-views",
-    "notes": "Views listed are confirmed consumers. An unlisted view is unknown, not a proof it ignores the field. No builtin consumer was proven for this field."
+    "notes": "No reader in list, rain, swarm, spend, timeline, or the shared toolkit words. See verification notes. No builtin consumer was proven for this field."
   },
   "absence": {
     "onMissing": "omit-field",
@@ -242,11 +242,11 @@
   "classification": {
     "modelSupported": "yes",
     "adapterEmittable": "yes",
-    "uiReachable": "unknown"
+    "uiReachable": "no"
   },
   "verification": {
     "status": "source-read",
     "owner": "GV-AUDIT4",
-    "notes": "Declared status=supported. Root turn and tool activity, and the frame shape of the server\u2192client approval request, are runtime verified; the approval shape was captured by a census client that advertises server_requests. Delivery of approval, clarify, and request.cancel to this non-advertising observer beside the attached native TUI is exact-release-source-backed (server.write_json \u2192 FanoutTransport.write; session_transports._session_client_answers_requests) but not runtime captured. Structured clarify choices and subagent activity are exact-release-contract-backed but not pinned-runtime captured. The native TUI answers approvals and clarifications and the answer never reaches this observer; an approval settles on its tool's or turn's completion, or on a request.cancel withdrawal. Loss of the gateway rail degrades observation and never proves that the attached native TUI exited. Audit pin is puppeteer 748d015, newer than the 0.3.3 package vibefield ships (tag v0.3.3, commit 52d09c8e). This record does not compare 0.3.3 behavior. A transform effect ending in [post-0.3.3] cites a puppeteer file whose text differs from 52d09c8e."
+    "notes": "Declared status=supported. Root turn and tool activity, and the frame shape of the server\u2192client approval request, are runtime verified; the approval shape was captured by a census client that advertises server_requests. Delivery of approval, clarify, and request.cancel to this non-advertising observer beside the attached native TUI is exact-release-source-backed (server.write_json \u2192 FanoutTransport.write; session_transports._session_client_answers_requests) but not runtime captured. Structured clarify choices and subagent activity are exact-release-contract-backed but not pinned-runtime captured. The native TUI answers approvals and clarifications and the answer never reaches this observer; an approval settles on its tool's or turn's completion, or on a request.cancel withdrawal. Loss of the gateway rail degrades observation and never proves that the attached native TUI exited. The five monitor views and toolkit words do not read alive. pane-frame.ts is outside those views. Audit pin is puppeteer 748d015, newer than the 0.3.3 package vibefield ships (tag v0.3.3, commit 52d09c8e). This record does not compare 0.3.3 behavior. A transform effect ending in [post-0.3.3] cites a puppeteer file whose text differs from 52d09c8e."
   }
 }

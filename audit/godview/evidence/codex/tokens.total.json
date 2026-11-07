@@ -1,0 +1,179 @@
+{
+  "recordId": "prov.codex.tokens.total",
+  "pins": {
+    "vibefield": "433505fd0f224f4cda540d642661b13848c0ef82",
+    "puppeteer": "748d015a7e393112e0a91dad80111fdf5abe6583"
+  },
+  "adapterId": "adapter.codex",
+  "fieldId": "field.tokens.total",
+  "sources": [
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/adapter-codex/src/normalization/monitor.ts",
+      "lineStart": 477,
+      "lineEnd": 528,
+      "symbol": "usage upsert"
+    },
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/adapter-codex/src/normalization/usage.ts",
+      "lineStart": 11,
+      "lineEnd": 64,
+      "symbol": "codexUsageCounter and codexUsagePricing"
+    },
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/runtime/src/services/monitor-service.ts",
+      "lineStart": 176,
+      "lineEnd": 187,
+      "symbol": "MonitorService.consume"
+    },
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/core/src/monitor/reduce.ts",
+      "lineStart": 1049,
+      "lineEnd": 1073,
+      "symbol": "usage:tokens-used case"
+    },
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/view-sdk/src/model.ts",
+      "lineStart": 98,
+      "lineEnd": 98,
+      "symbol": "model.ts"
+    },
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/monitor/src/backend/derive.ts",
+      "lineStart": 198,
+      "lineEnd": 208,
+      "symbol": "derive.ts"
+    }
+  ],
+  "producer": {
+    "kind": "adapter",
+    "name": "codex normalization",
+    "ingestedFrom": "usage.cumulativeTokens and usage.pricing"
+  },
+  "transforms": [
+    {
+      "order": 0,
+      "name": "adapter-step-0",
+      "effect": "cumulativeTokens is total.totalTokens when it is a non-negative safe integer. The usage upsert is live phase only, and a duplicate counter is not upserted again.",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/adapter-codex/src/normalization/monitor.ts",
+        "lineStart": 477,
+        "lineEnd": 528,
+        "symbol": "usage upsert"
+      }
+    },
+    {
+      "order": 1,
+      "name": "adapter-step-1",
+      "effect": "Bootstrap phase stores a counter when usageStartsAtZero but does not emit the usage update. The monitor test shows bootstrap history is not burned.",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/adapter-codex/src/normalization/usage.ts",
+        "lineStart": 11,
+        "lineEnd": 64,
+        "symbol": "codexUsageCounter and codexUsagePricing"
+      }
+    },
+    {
+      "order": 2,
+      "name": "adapter-step-2",
+      "effect": "pricing is attached when the counter total is > 0 or a previous counter exists. The first sample is gap baseline. A decreasing total is gap counter-reset. A model change is gap model-change. Incomplete or inconsistent buckets are gap incomplete-buckets.",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/runtime/src/services/monitor-service.ts",
+        "lineStart": 176,
+        "lineEnd": 187,
+        "symbol": "MonitorService.consume"
+      }
+    },
+    {
+      "order": 3,
+      "name": "adapter-step-3",
+      "effect": "A complete interval sets inputTokens to input minus cached, cacheReadTokens to cached, cacheCreationTokens to the literal 0, and outputTokens to the output delta. contextTokens is the input delta only when it equals the last request.",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/core/src/monitor/reduce.ts",
+        "lineStart": 1049,
+        "lineEnd": 1073,
+        "symbol": "usage:tokens-used case"
+      }
+    },
+    {
+      "order": 4,
+      "name": "adapter-step-4",
+      "effect": "The usage value sets boundary sample and canonical false. It does not set totalTokens, deltaTokens, or costUsd.",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/view-sdk/src/model.ts",
+        "lineStart": 98,
+        "lineEnd": 98,
+        "symbol": "model.ts"
+      }
+    }
+  ],
+  "merge": {
+    "strategy": "unknown",
+    "defaults": []
+  },
+  "transport": {
+    "channel": "in-process",
+    "name": "MonitorService.consume",
+    "contract": "AgentEvent or monitor:batch"
+  },
+  "renderer": {
+    "viewIds": [],
+    "component": "not-established",
+    "symbol": "no-consumer-recorded"
+  },
+  "applicability": {
+    "states": [
+      "state.cost_complete",
+      "state.cost_partial",
+      "state.cost_unavailable",
+      "state.cost_missing",
+      "state.burn_flames_0",
+      "state.burn_flames_1",
+      "state.burn_flames_2",
+      "state.burn_flames_3",
+      "state.burn_flames_4"
+    ],
+    "views": "all-monitor-views",
+    "notes": "ROW FIELD field.tokens.total. PENDING DOWNSTREAM MAPPING into MonitorAgentRow. This is one of 74 canonical row fields. It is not an SDK contract leaf. PENDING DOWNSTREAM MAPPING: GV-AUDIT2 owns adapter output to row predicates, including cost, burn rate, history, timeline, and git branch. This audit does not give that verdict. Schema acceptance is not complete provenance. verification.status source-read is a static reading. observation.presence unknown means no live sample was taken. It does not mean the row value is missing. classification.adapterEmittable and uiReachable stay unknown. A raw adapter property is not the row field, and a catalog consumer is not a proven UI path.   field.tokens.total would need the downstream cumulative mapping. This record stops at cumulativeTokens. Child threads emit their own usage samples. Duplicate live counters update memory and do not emit another usage row. The adapter does not write this MonitorAgentRow property. That is the architecture, not a conclusion that the row predicate is unreachable. This trace is Puppeteer 748d015a7e393112e0a91dad80111fdf5abe6583 only. It is newer than shipped Vibefield 0.3.3 and does not describe that install. Package comparison was not re-run. Declaration supported from codex-thread-token-usage. declaration only; supported does not guarantee availability/value; degraded is not unreachable No raw adapter signal does not rule out the row value from host, runtime, history, or another producer. Raw source literals, not live samples: adapter.codex.upstream.usage.cumulative=\"non-negative totalTokens\" (live non-duplicate sample); adapter.codex.upstream.usage.gap.baseline=\"baseline\" (no previous counter); adapter.codex.upstream.usage.gap.reset=\"counter-reset\" (total decreased); adapter.codex.upstream.usage.gap.model=\"model-change\" (model key changed); adapter.codex.upstream.usage.gap.incomplete=\"incomplete-buckets\" (bucket delta is missing or inconsistent); adapter.codex.upstream.usage.cacheCreation.zero=0 (complete bucket interval only); adapter.codex.upstream.usage.bootstrap=\"not emitted\" (phase bootstrap) Graph: evidence/codex/tokens.total.mmd. Continuation anchors, not a reachability verdict: MonitorService.consume, core reduce and project, deriveAgentRow. Vibefield AgentView and window-rows are not traced."
+  },
+  "absence": {
+    "onMissing": "record-unknown",
+    "onStale": "unknown",
+    "zeroPolicy": "unknown-unsupported-and-absent-are-not-zero"
+  },
+  "observation": {
+    "presence": "unknown",
+    "synthetic": false
+  },
+  "classification": {
+    "modelSupported": "yes",
+    "adapterEmittable": "unknown",
+    "uiReachable": "unknown"
+  },
+  "verification": {
+    "status": "source-read",
+    "owner": "GV-AUDIT3",
+    "notes": "ROW FIELD field.tokens.total. PENDING DOWNSTREAM MAPPING into MonitorAgentRow. This is one of 74 canonical row fields. It is not an SDK contract leaf. PENDING DOWNSTREAM MAPPING: GV-AUDIT2 owns adapter output to row predicates, including cost, burn rate, history, timeline, and git branch. This audit does not give that verdict. Schema acceptance is not complete provenance. verification.status source-read is a static reading. observation.presence unknown means no live sample was taken. It does not mean the row value is missing. classification.adapterEmittable and uiReachable stay unknown. A raw adapter property is not the row field, and a catalog consumer is not a proven UI path.   field.tokens.total would need the downstream cumulative mapping. This record stops at cumulativeTokens. Child threads emit their own usage samples. Duplicate live counters update memory and do not emit another usage row. The adapter does not write this MonitorAgentRow property. That is the architecture, not a conclusion that the row predicate is unreachable. This trace is Puppeteer 748d015a7e393112e0a91dad80111fdf5abe6583 only. It is newer than shipped Vibefield 0.3.3 and does not describe that install. Package comparison was not re-run. Declaration supported from codex-thread-token-usage. declaration only; supported does not guarantee availability/value; degraded is not unreachable No raw adapter signal does not rule out the row value from host, runtime, history, or another producer. Raw source literals, not live samples: adapter.codex.upstream.usage.cumulative=\"non-negative totalTokens\" (live non-duplicate sample); adapter.codex.upstream.usage.gap.baseline=\"baseline\" (no previous counter); adapter.codex.upstream.usage.gap.reset=\"counter-reset\" (total decreased); adapter.codex.upstream.usage.gap.model=\"model-change\" (model key changed); adapter.codex.upstream.usage.gap.incomplete=\"incomplete-buckets\" (bucket delta is missing or inconsistent); adapter.codex.upstream.usage.cacheCreation.zero=0 (complete bucket interval only); adapter.codex.upstream.usage.bootstrap=\"not emitted\" (phase bootstrap) Graph: evidence/codex/tokens.total.mmd. Continuation anchors, not a reachability verdict: MonitorService.consume, core reduce and project, deriveAgentRow. Vibefield AgentView and window-rows are not traced."
+  }
+}

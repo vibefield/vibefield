@@ -1,0 +1,132 @@
+{
+  "recordId": "prov.acp.cost.coverage",
+  "pins": {
+    "vibefield": "433505fd0f224f4cda540d642661b13848c0ef82",
+    "puppeteer": "748d015a7e393112e0a91dad80111fdf5abe6583"
+  },
+  "adapterId": "adapter.acp",
+  "fieldId": "field.cost.coverage",
+  "sources": [
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/adapter-acp/src/normalization/monitor-capabilities.ts",
+      "lineStart": 31,
+      "lineEnd": 34,
+      "symbol": "cost mentioned, not parsed"
+    },
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/adapter-acp/src/normalization/monitor.ts",
+      "lineStart": 216,
+      "lineEnd": 228,
+      "symbol": "usage_update reads used and size only"
+    },
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/monitor/src/backend/derive.ts",
+      "lineStart": 240,
+      "lineEnd": 286,
+      "symbol": "deriveAgentRow"
+    },
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/view-sdk/src/model.ts",
+      "lineStart": 90,
+      "lineEnd": 90,
+      "symbol": "model.ts"
+    },
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/monitor/src/backend/backend.ts",
+      "lineStart": 189,
+      "lineEnd": 207,
+      "symbol": "backend.ts"
+    },
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/monitor/src/backend/usage-ledger.ts",
+      "lineStart": 62,
+      "lineEnd": 82,
+      "symbol": "usage-ledger.ts"
+    }
+  ],
+  "producer": {
+    "kind": "unknown",
+    "name": "not-adapter-produced",
+    "ingestedFrom": "not adapter-produced; PENDING DOWNSTREAM MAPPING into the row"
+  },
+  "transforms": [
+    {
+      "order": 0,
+      "name": "no-adapter-producer-0",
+      "effect": "The usage_update handler reads used and size only. No cost property is copied.",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/adapter-acp/src/normalization/monitor-capabilities.ts",
+        "lineStart": 31,
+        "lineEnd": 34,
+        "symbol": "cost mentioned, not parsed"
+      }
+    }
+  ],
+  "merge": {
+    "strategy": "unknown",
+    "defaults": []
+  },
+  "transport": {
+    "channel": "unknown",
+    "name": "not-adapter-produced"
+  },
+  "renderer": {
+    "viewIds": [
+      "view.swarm",
+      "view.spend"
+    ],
+    "component": "catalog-consumer-unproven",
+    "symbol": "view.swarm,view.spend"
+  },
+  "applicability": {
+    "states": [
+      "state.cost_complete",
+      "state.cost_partial",
+      "state.cost_unavailable",
+      "state.cost_missing",
+      "state.burn_flames_0",
+      "state.burn_flames_1",
+      "state.burn_flames_2",
+      "state.burn_flames_3",
+      "state.burn_flames_4"
+    ],
+    "views": [
+      "view.swarm",
+      "view.spend"
+    ],
+    "notes": "ROW FIELD field.cost.coverage. PENDING DOWNSTREAM MAPPING into MonitorAgentRow. This is one of 74 canonical row fields. It is not an SDK contract leaf. PENDING DOWNSTREAM MAPPING: GV-AUDIT2 owns adapter output to row predicates, including cost, burn rate, history, timeline, and git branch. This audit does not give that verdict. Schema acceptance is not complete provenance. verification.status source-read is a static reading. observation.presence unknown means no live sample was taken. It does not mean the row value is missing. classification.adapterEmittable and uiReachable stay unknown. A raw adapter property is not the row field, and a catalog consumer is not a proven UI path.  This record does not emit state.cost_complete, state.cost_partial, state.cost_unavailable, state.cost_missing, state.burn_flames_0, state.burn_flames_1, state.burn_flames_2, state.burn_flames_3, state.burn_flames_4, or state.burn_unpriced. Those predicates stay downstream. PENDING DOWNSTREAM MAPPING. The capability limitation says ACP 1.2.1 exposes cumulative monetary cost, but this package never reads a cost field. No SDK typings were installed in this checkout, so the wire name stays unverified. Absence here is not a ban on field.cost from elsewhere. The adapter does not write this MonitorAgentRow property. That is the architecture, not a conclusion that the row predicate is unreachable. This trace is Puppeteer 748d015a7e393112e0a91dad80111fdf5abe6583 only. It is newer than shipped Vibefield 0.3.3 and does not describe that install. Package comparison was not re-run. Declaration unsupported from none-in-acp-1.2.1. declaration only; supported does not guarantee availability/value; degraded is not unreachable Declared support does not match the producer channel. That mismatch is not a runtime impossibility. Raw source literals, not live samples: adapter.acp.upstream.cost.absent=\"absent\" (parser) Graph: evidence/acp/cost.coverage.mmd. Continuation anchors, not a reachability verdict: MonitorService.consume, core reduce and project, deriveAgentRow. Vibefield AgentView and window-rows are not traced."
+  },
+  "absence": {
+    "onMissing": "record-unknown",
+    "onStale": "unknown",
+    "zeroPolicy": "unknown-unsupported-and-absent-are-not-zero"
+  },
+  "observation": {
+    "presence": "unknown",
+    "synthetic": false
+  },
+  "classification": {
+    "modelSupported": "yes",
+    "adapterEmittable": "unknown",
+    "uiReachable": "unknown"
+  },
+  "verification": {
+    "status": "source-read",
+    "owner": "GV-AUDIT3",
+    "notes": "ROW FIELD field.cost.coverage. PENDING DOWNSTREAM MAPPING into MonitorAgentRow. This is one of 74 canonical row fields. It is not an SDK contract leaf. PENDING DOWNSTREAM MAPPING: GV-AUDIT2 owns adapter output to row predicates, including cost, burn rate, history, timeline, and git branch. This audit does not give that verdict. Schema acceptance is not complete provenance. verification.status source-read is a static reading. observation.presence unknown means no live sample was taken. It does not mean the row value is missing. classification.adapterEmittable and uiReachable stay unknown. A raw adapter property is not the row field, and a catalog consumer is not a proven UI path.  This record does not emit state.cost_complete, state.cost_partial, state.cost_unavailable, state.cost_missing, state.burn_flames_0, state.burn_flames_1, state.burn_flames_2, state.burn_flames_3, state.burn_flames_4, or state.burn_unpriced. Those predicates stay downstream. PENDING DOWNSTREAM MAPPING. The capability limitation says ACP 1.2.1 exposes cumulative monetary cost, but this package never reads a cost field. No SDK typings were installed in this checkout, so the wire name stays unverified. Absence here is not a ban on field.cost from elsewhere. The adapter does not write this MonitorAgentRow property. That is the architecture, not a conclusion that the row predicate is unreachable. This trace is Puppeteer 748d015a7e393112e0a91dad80111fdf5abe6583 only. It is newer than shipped Vibefield 0.3.3 and does not describe that install. Package comparison was not re-run. Declaration unsupported from none-in-acp-1.2.1. declaration only; supported does not guarantee availability/value; degraded is not unreachable Declared support does not match the producer channel. That mismatch is not a runtime impossibility. Raw source literals, not live samples: adapter.acp.upstream.cost.absent=\"absent\" (parser) Graph: evidence/acp/cost.coverage.mmd. Continuation anchors, not a reachability verdict: MonitorService.consume, core reduce and project, deriveAgentRow. Vibefield AgentView and window-rows are not traced."
+  }
+}

@@ -1,0 +1,9 @@
+flowchart LR
+  src["codex source packages/adapter-codex/src/normalization/monitor-capabilities.ts:30-34"]
+  raw["no raw adapter write found"]
+  row["UNRESOLVED field.cost row mapping"]
+  ui["UNRESOLVED UI reachability"]
+  states["UNRESOLVED downstream state predicates"]
+  src --> raw --> row
+  row --> ui
+  row --> states

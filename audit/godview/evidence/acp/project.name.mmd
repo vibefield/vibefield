@@ -1,0 +1,9 @@
+flowchart LR
+  src["acp source packages/adapter-acp/src/driver.ts:242-244"]
+  raw["cwd string"]
+  row["UNRESOLVED field.project.name row mapping"]
+  ui["UNRESOLVED UI reachability"]
+  states["UNRESOLVED downstream state predicates"]
+  src --> raw --> row
+  row --> ui
+  row --> states

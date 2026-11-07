@@ -1,0 +1,203 @@
+{
+  "recordId": "prov.claude.wait",
+  "pins": {
+    "vibefield": "433505fd0f224f4cda540d642661b13848c0ef82",
+    "puppeteer": "748d015a7e393112e0a91dad80111fdf5abe6583"
+  },
+  "adapterId": "adapter.claude",
+  "fieldId": "field.wait",
+  "sources": [
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/adapter-claude/src/normalization/interaction.ts",
+      "lineStart": 51,
+      "lineEnd": 83,
+      "symbol": "question and permission event builders"
+    },
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/adapter-claude/src/normalization/pipeline.ts",
+      "lineStart": 248,
+      "lineEnd": 270,
+      "symbol": "question and compaction close outcomes"
+    },
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/adapter-claude/src/observation/otel/decision.ts",
+      "lineStart": 15,
+      "lineEnd": 30,
+      "symbol": "normalizeClaudeOtelToolDecision"
+    },
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/runtime/src/services/monitor-service.ts",
+      "lineStart": 176,
+      "lineEnd": 187,
+      "symbol": "MonitorService.consume"
+    },
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/core/src/monitor/reduce.ts",
+      "lineStart": 974,
+      "lineEnd": 1024,
+      "symbol": "interaction cases"
+    },
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/view-sdk/src/model.ts",
+      "lineStart": 158,
+      "lineEnd": 158,
+      "symbol": "model.ts"
+    },
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/monitor/src/backend/derive.ts",
+      "lineStart": 130,
+      "lineEnd": 161,
+      "symbol": "derive.ts"
+    },
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/core/src/monitor/transitions.ts",
+      "lineStart": 71,
+      "lineEnd": 71,
+      "symbol": "transitions.ts"
+    },
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/core/src/monitor/transitions.ts",
+      "lineStart": 159,
+      "lineEnd": 170,
+      "symbol": "transitions.ts"
+    },
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/core/src/monitor/transitions.ts",
+      "lineStart": 369,
+      "lineEnd": 371,
+      "symbol": "transitions.ts"
+    }
+  ],
+  "producer": {
+    "kind": "adapter",
+    "name": "claude normalization",
+    "ingestedFrom": "adapter event or monitor batch"
+  },
+  "transforms": [
+    {
+      "order": 0,
+      "name": "adapter-step-0",
+      "effect": "Permission requests from hooks use presentation native-tui.",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/adapter-claude/src/normalization/interaction.ts",
+        "lineStart": 51,
+        "lineEnd": 83,
+        "symbol": "question and permission event builders"
+      }
+    },
+    {
+      "order": 1,
+      "name": "adapter-step-1",
+      "effect": "Question outcomes this pipeline passes include answered, failed, cancelled, and superseded. claudeQuestionOutcome itself returns answered or cancelled from a cancelled flag.",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/adapter-claude/src/normalization/pipeline.ts",
+        "lineStart": 248,
+        "lineEnd": 270,
+        "symbol": "question and compaction close outcomes"
+      }
+    },
+    {
+      "order": 2,
+      "name": "adapter-step-2",
+      "effect": "Permission outcomes the builders accept are allowed, denied, dismissed, and unknown. OTLP tool_decision maps reject plus source user_abort to dismissed, and other rejects to denied.",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/adapter-claude/src/observation/otel/decision.ts",
+        "lineStart": 15,
+        "lineEnd": 30,
+        "symbol": "normalizeClaudeOtelToolDecision"
+      }
+    }
+  ],
+  "merge": {
+    "strategy": "unknown",
+    "defaults": []
+  },
+  "transport": {
+    "channel": "in-process",
+    "name": "MonitorService.consume",
+    "contract": "AgentEvent or monitor:batch"
+  },
+  "renderer": {
+    "viewIds": [
+      "view.list",
+      "view.rain",
+      "view.swarm",
+      "view.spend",
+      "view.timeline"
+    ],
+    "component": "catalog-consumer-unproven",
+    "symbol": "view.list,view.rain,view.swarm,view.spend,view.timeline"
+  },
+  "applicability": {
+    "states": [
+      "state.idle",
+      "state.working",
+      "state.blocked",
+      "state.blocked_permission",
+      "state.blocked_question",
+      "state.blocked_failure",
+      "state.wait_multiple",
+      "state.activity_starting",
+      "state.activity_responding",
+      "state.activity_reasoning",
+      "state.activity_tool",
+      "state.activity_other",
+      "state.stale",
+      "state.fresh",
+      "state.failed_retained"
+    ],
+    "views": [
+      "view.list",
+      "view.rain",
+      "view.swarm",
+      "view.spend",
+      "view.timeline"
+    ],
+    "notes": "ROW FIELD field.wait. PENDING DOWNSTREAM MAPPING into MonitorAgentRow. This is one of 74 canonical row fields. It is not an SDK contract leaf. PENDING DOWNSTREAM MAPPING: GV-AUDIT2 owns adapter output to row predicates, including cost, burn rate, history, timeline, and git branch. This audit does not give that verdict. Schema acceptance is not complete provenance. verification.status source-read is a static reading. observation.presence unknown means no live sample was taken. It does not mean the row value is missing. classification.adapterEmittable and uiReachable stay unknown. A raw adapter property is not the row field, and a catalog consumer is not a proven UI path.   field.wait.tool can be fed by the permission tool string. The row object, count, and since are not written here. OTLP is live only when the usage policy leaves the log endpoint enabled; a decision record is parsed in that same callback. The adapter does not write this MonitorAgentRow property. That is the architecture, not a conclusion that the row predicate is unreachable. This trace is Puppeteer 748d015a7e393112e0a91dad80111fdf5abe6583 only. It is newer than shipped Vibefield 0.3.3 and does not describe that install. Package comparison was not re-run. Declaration supported from claude-hooks. declaration only; supported does not guarantee availability/value; degraded is not unreachable No raw adapter signal does not rule out the row value from host, runtime, history, or another producer. Raw source literals, not live samples: adapter.claude.upstream.permission.outcomes=\"allowed|denied|dismissed|unknown\" (permission resolved builder); adapter.claude.upstream.question.outcomes=\"answered|failed|cancelled|superseded\" (question resolved builder and pipeline closes); adapter.claude.upstream.permission.presentation=\"native-tui\" (hook permission request) Graph: evidence/claude/wait.mmd. Continuation anchors, not a reachability verdict: MonitorService.consume, core reduce and project, deriveAgentRow. Vibefield AgentView and window-rows are not traced."
+  },
+  "absence": {
+    "onMissing": "record-unknown",
+    "onStale": "unknown",
+    "zeroPolicy": "unknown-unsupported-and-absent-are-not-zero"
+  },
+  "observation": {
+    "presence": "unknown",
+    "synthetic": false
+  },
+  "classification": {
+    "modelSupported": "yes",
+    "adapterEmittable": "unknown",
+    "uiReachable": "unknown"
+  },
+  "verification": {
+    "status": "source-read",
+    "owner": "GV-AUDIT3",
+    "notes": "ROW FIELD field.wait. PENDING DOWNSTREAM MAPPING into MonitorAgentRow. This is one of 74 canonical row fields. It is not an SDK contract leaf. PENDING DOWNSTREAM MAPPING: GV-AUDIT2 owns adapter output to row predicates, including cost, burn rate, history, timeline, and git branch. This audit does not give that verdict. Schema acceptance is not complete provenance. verification.status source-read is a static reading. observation.presence unknown means no live sample was taken. It does not mean the row value is missing. classification.adapterEmittable and uiReachable stay unknown. A raw adapter property is not the row field, and a catalog consumer is not a proven UI path.   field.wait.tool can be fed by the permission tool string. The row object, count, and since are not written here. OTLP is live only when the usage policy leaves the log endpoint enabled; a decision record is parsed in that same callback. The adapter does not write this MonitorAgentRow property. That is the architecture, not a conclusion that the row predicate is unreachable. This trace is Puppeteer 748d015a7e393112e0a91dad80111fdf5abe6583 only. It is newer than shipped Vibefield 0.3.3 and does not describe that install. Package comparison was not re-run. Declaration supported from claude-hooks. declaration only; supported does not guarantee availability/value; degraded is not unreachable No raw adapter signal does not rule out the row value from host, runtime, history, or another producer. Raw source literals, not live samples: adapter.claude.upstream.permission.outcomes=\"allowed|denied|dismissed|unknown\" (permission resolved builder); adapter.claude.upstream.question.outcomes=\"answered|failed|cancelled|superseded\" (question resolved builder and pipeline closes); adapter.claude.upstream.permission.presentation=\"native-tui\" (hook permission request) Graph: evidence/claude/wait.mmd. Continuation anchors, not a reachability verdict: MonitorService.consume, core reduce and project, deriveAgentRow. Vibefield AgentView and window-rows are not traced."
+  }
+}

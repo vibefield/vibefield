@@ -1,0 +1,9 @@
+flowchart LR
+  src["claude source packages/adapter-claude/src/observation/otel/usage.ts:37-69"]
+  raw["usage:tokens-used.costUsd"]
+  row["UNRESOLVED field.cost.series row mapping"]
+  ui["UNRESOLVED UI reachability"]
+  states["UNRESOLVED downstream state predicates"]
+  src --> raw --> row
+  row --> ui
+  row --> states

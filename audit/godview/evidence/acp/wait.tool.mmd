@@ -1,0 +1,9 @@
+flowchart LR
+  src["acp source packages/adapter-acp/src/services/approvals.ts:135-257"]
+  raw["adapter signal, see transforms"]
+  row["UNRESOLVED field.wait.tool row mapping"]
+  ui["UNRESOLVED UI reachability"]
+  states["UNRESOLVED downstream state predicates"]
+  src --> raw --> row
+  row --> ui
+  row --> states

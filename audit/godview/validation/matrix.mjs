@@ -31,13 +31,21 @@ function check(id, title, status, summary, findings = []) {
   };
 }
 
-export function evaluateMatrix({ model, traces, renders, validation, lexical, overlay }) {
+export function evaluateMatrix({
+  model,
+  traces,
+  renders,
+  validation,
+  lexical,
+  overlay,
+  renderIndex,
+}) {
   const checks = [
     countCheck(model),
     stableIdCheck(model),
     pinCheck(model),
     revisionGateCheck(traces, renders),
-    rendererCheck(renders),
+    rendererCheck(renders, renderIndex),
     gapCheck(model, traces),
     duplicateCheck(model, traces, renders),
     graphCheck(traces),
@@ -196,13 +204,13 @@ function revisionGateCheck(traces, renders) {
   return check("revision-gate", "Source revision gate", status, summary, findings);
 }
 
-function rendererCheck(renders) {
-  if (renders.length === 0) {
+function rendererCheck(renders, renderIndex) {
+  if (!renderIndex && renders.length === 0) {
     return check(
       "renderer-coverage",
       "Renderer coverage",
       "blocked",
-      "Five views are declared on pinned source. The team-5 harness and its fixtures are absent, so renderer coverage is not computed and is not claimed.",
+      "Five views are declared on pinned source. The render harness and its fixtures are absent, so renderer coverage is not computed and is not claimed.",
     );
   }
   const findings = [];
@@ -210,11 +218,33 @@ function rendererCheck(renders) {
     const gate = revisionGate(render);
     if (!gate.admit) findings.push(finding(gate.code, `${render.viewId} ${render.stateId}`));
   }
+  if (renderIndex) {
+    findings.push(
+      finding(
+        "synthetic-fixtures",
+        `${renderIndex.meaningfulFixtureCount} synthetic fixtures have DOM or canvas screenshots. They are not captured adapter sessions.`,
+      ),
+    );
+    findings.push(
+      finding(
+        "render-holes",
+        `${renderIndex.holeCount} contract states have no meaningful paint in this slice.`,
+      ),
+    );
+    if (renderIndex.swarmBodyPaint === "webgpu-unavailable") {
+      findings.push(
+        finding(
+          "swarm-fallback",
+          "AgentSwarm from 748d015 mounted and reported WEBGPU UNAVAILABLE. environment-swarm.png is that fallback message, not complete swarm screenshot coverage.",
+        ),
+      );
+    }
+  }
   return check(
     "renderer-coverage",
     "Renderer coverage",
-    findings.length === 0 ? "pass" : "fail",
-    "Coverage is only the render entries that were loaded and admitted. It is not a Cartesian view × state matrix.",
+    "fail",
+    "Mount and meaningful paint are separate. Synthetic screenshots and the swarm fallback do not close the view.",
     findings,
   );
 }
@@ -234,6 +264,20 @@ function gapCheck(model, traces) {
     if (adapter.records === 0) {
       findings.push(finding("adapter-half-pending", `${adapter.adapterId} has no field records`));
       continue;
+    }
+    const partial = traces.some(
+      (trace) =>
+        trace.recordKind !== "sdk-leaf" &&
+        trace.adapterId === adapter.adapterId &&
+        String(trace.envelope?.verification?.notes ?? "").includes("PENDING DOWNSTREAM"),
+    );
+    if (partial) {
+      findings.push(
+        finding(
+          "row-join-pending",
+          `${adapter.adapterId} row envelopes keep mapping and UI reachability unknown. SDK contract leaves are not the 74 row fields, and the join is not complete.`,
+        ),
+      );
     }
     if (adapter.pastAndTimeline.length > 0) {
       findings.push(
@@ -267,7 +311,7 @@ function gapCheck(model, traces) {
     "gaps",
     "Evidence gaps",
     findings.length === 0 ? "pass" : "fail",
-    `${report.fieldRecords} field records are loaded. They are not state paths. Unnamed states stay open. An adapter that does not emit a field does not make the runtime unable to supply it.`,
+    `${report.fieldRecords} canonical row records are loaded. ${report.sdkLeafRecords} SDK leaf records are separate and are not the 74 row fields. Unnamed states stay open. A finished join is not claimed.`,
     findings,
   );
 }

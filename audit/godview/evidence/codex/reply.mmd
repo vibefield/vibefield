@@ -1,0 +1,9 @@
+flowchart LR
+  src["codex source packages/adapter-codex/src/normalization/conversation.ts:12-42"]
+  raw["conversation:assistant-message"]
+  row["UNRESOLVED field.reply row mapping"]
+  ui["UNRESOLVED UI reachability"]
+  states["UNRESOLVED downstream state predicates"]
+  src --> raw --> row
+  row --> ui
+  row --> states

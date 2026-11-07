@@ -1,0 +1,9 @@
+flowchart LR
+  src["codex source packages/adapter-codex/src/normalization/monitor.ts:477-542"]
+  raw["context usedTokens and capacityTokens"]
+  row["UNRESOLVED field.context row mapping"]
+  ui["UNRESOLVED UI reachability"]
+  states["UNRESOLVED downstream state predicates"]
+  src --> raw --> row
+  row --> ui
+  row --> states

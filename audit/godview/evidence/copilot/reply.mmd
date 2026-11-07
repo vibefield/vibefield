@@ -1,0 +1,9 @@
+flowchart LR
+  src["copilot source packages/adapter-copilot/src/normalization/conversation.ts:4-19"]
+  raw["conversation:assistant-message final true"]
+  row["UNRESOLVED field.reply row mapping"]
+  ui["UNRESOLVED UI reachability"]
+  states["UNRESOLVED downstream state predicates"]
+  src --> raw --> row
+  row --> ui
+  row --> states

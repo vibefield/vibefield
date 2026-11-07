@@ -26,14 +26,22 @@ test("pinned source inventory matches the model contract counts", () => {
   }
   assert.equal(overlay.verified, true);
   assert.equal(index.sources.evidence, "loaded");
-  assert.equal(index.traceCount, 370);
-  assert.equal(index.sources.rendering, "pending");
+  assert.equal(index.traceCount, 740);
+  assert.equal(index.sdkLeafCount, 430);
+  assert.equal(index.sources.rendering, "partial");
+  assert.equal(index.rendering.fixtureCount, 42);
+  assert.equal(index.rendering.holeCount, 43);
+  assert.equal(index.rendering.screenshotCoverageComplete, false);
+  assert.equal(index.rendering.swarmBodyPaint, "webgpu-unavailable");
+  const renderer = index.checks.find((item) => item.id === "renderer-coverage");
+  assert.equal(renderer.status, "fail");
+  assert.ok(renderer.findings.some((item) => item.code === "swarm-fallback"));
   const gaps = index.checks.find((item) => item.id === "gaps");
   assert.equal(gaps.status, "fail");
-  assert.match(gaps.summary, /not state paths/);
+  assert.match(gaps.summary, /not the 74 row fields/);
   assert.ok(gaps.findings.some((item) => item.code === "history-states-not-traced"));
   assert.ok(gaps.findings.some((item) => item.code === "branch-none-unknown"));
-  assert.ok(gaps.findings.some((item) => item.code === "adapter-half-pending"));
+  assert.ok(gaps.findings.some((item) => item.code === "row-join-pending"));
   const joins = index.checks.find((item) => item.id === "stable-id-joins");
   assert.equal(joins.status, "pass");
 });
@@ -128,8 +136,10 @@ test("a priced-cost absence is not a runtime impossibility", () => {
   assert.equal(cell.endToEnd.proven, false);
   assert.equal(cell.reading.provesRuntimeUnreachable, false);
   assert.equal(cell.reading.producerLimit, "adapter-not-direct");
-  assert.match(cell.reading.mismatch, /costUsd/);
-  assert.equal(cell.stateReading.status, "not-traced");
+  assert.match(cell.reading.mismatch, /cost_missing/);
+  assert.match(cell.reading.mismatch, /anthropic and openai only/);
+  assert.equal(/unreachable/i.test(cell.reading.mismatch), false);
+  assert.equal(cell.stateReading.status, "host-claim");
   const reply = buildCell({
     model: audit.model,
     traces: audit.traces,
@@ -179,6 +189,7 @@ test("the page names the audit target and leaves the harness pending", () => {
     traces: audit.traces,
     renders: audit.renders,
     fallback: audit.overlay,
+    renderIndex: audit.renderIndex,
     selection: {
       stateId: "state.idle",
       viewId: "view.list",
@@ -188,14 +199,55 @@ test("the page names the audit target and leaves the harness pending", () => {
   });
   const html = renderShell(audit.index, cell);
   assert.match(html, /newer than the 0\.3\.3 package/);
-  assert.match(html, /Harness: pending/);
+  assert.match(html, /Meaningful paint: yes/);
+  assert.match(html, /Screenshot coverage complete: yes/);
   assert.match(html, /End-to-end proven: no/);
   assert.match(html, /field\.stale/);
   assert.equal(html.includes("produces a shipped 0.3.3 inventory"), false);
   const svg = renderFlowSvg(cell);
   assert.match(svg, /<title>/);
-  assert.match(svg, /pending/);
+  assert.match(svg, /catalog-consumer-unproven/);
+  assert.match(svg, /not an execution log/);
   assert.match(svg, /748d015/);
+});
+
+test("swarm fallback is a mount, not painted coverage", () => {
+  const audit = loadAudit(ROOT);
+  const cell = buildCell({
+    model: audit.model,
+    traces: audit.traces,
+    renders: audit.renders,
+    fallback: audit.overlay,
+    renderIndex: audit.renderIndex,
+    selection: {
+      stateId: "state.context_hot",
+      viewId: "view.swarm",
+      adapterId: "adapter.grok",
+      fieldId: "field.context.usedPercent",
+    },
+  });
+  assert.equal(cell.paint.mounted, true);
+  assert.equal(cell.paint.meaningfulOutput, false);
+  assert.equal(cell.paint.screenshotCoverageComplete, false);
+  assert.equal(cell.paint.fallbackOnly, true);
+  assert.match(cell.paint.note, /WEBGPU UNAVAILABLE/);
+  const list = buildCell({
+    model: audit.model,
+    traces: audit.traces,
+    renders: audit.renders,
+    fallback: audit.overlay,
+    renderIndex: audit.renderIndex,
+    selection: {
+      stateId: "state.idle",
+      viewId: "view.list",
+      adapterId: "adapter.acp",
+      fieldId: "field.status",
+    },
+  });
+  assert.equal(list.paint.meaningfulOutput, true);
+  assert.equal(list.paint.screenshotCoverageComplete, true);
+  assert.equal(list.synthetic.fixtureKind, "synthetic");
+  assert.equal(list.endToEnd.proven, false);
 });
 
 test("the QA server answers the page and the flow", async () => {

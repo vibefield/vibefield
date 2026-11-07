@@ -1,0 +1,9 @@
+flowchart LR
+  src["codex source packages/adapter-codex/src/normalization/monitor.ts:292-331"]
+  raw["model providerModelId, optional displayName, intent"]
+  row["UNRESOLVED field.model row mapping"]
+  ui["UNRESOLVED UI reachability"]
+  states["UNRESOLVED downstream state predicates"]
+  src --> raw --> row
+  row --> ui
+  row --> states

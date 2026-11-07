@@ -1,0 +1,11 @@
+flowchart LR
+  src["antigravity source packages/view-sdk/src/model.ts:31-31"]
+  raw["no raw adapter write found"]
+  row["UNRESOLVED field.contract.MonitorSeries.lastStepAt row mapping"]
+  ui["UNRESOLVED UI reachability"]
+  states["UNRESOLVED downstream state predicates"]
+  src --> raw --> row
+  row --> ui
+  row --> states
+  leaf["SDK contract leaf, not a row field"]
+  raw --> leaf

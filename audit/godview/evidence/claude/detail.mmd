@@ -1,0 +1,9 @@
+flowchart LR
+  src["claude source packages/adapter-claude/src/normalization/monitor.ts:328-367"]
+  raw["status activity kind delegating for child tasks"]
+  row["UNRESOLVED field.detail row mapping"]
+  ui["UNRESOLVED UI reachability"]
+  states["UNRESOLVED downstream state predicates"]
+  src --> raw --> row
+  row --> ui
+  row --> states

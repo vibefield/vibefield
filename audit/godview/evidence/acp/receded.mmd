@@ -1,0 +1,9 @@
+flowchart LR
+  src["acp source packages/view-sdk/src/model.ts:367-367"]
+  raw["no raw adapter write found"]
+  row["UNRESOLVED field.receded row mapping"]
+  ui["UNRESOLVED UI reachability"]
+  states["UNRESOLVED downstream state predicates"]
+  src --> raw --> row
+  row --> ui
+  row --> states

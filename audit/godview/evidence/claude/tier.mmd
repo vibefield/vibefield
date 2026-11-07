@@ -1,0 +1,9 @@
+flowchart LR
+  src["claude source packages/view-sdk/src/model.ts:165-165"]
+  raw["no raw adapter write found"]
+  row["UNRESOLVED field.tier row mapping"]
+  ui["UNRESOLVED UI reachability"]
+  states["UNRESOLVED downstream state predicates"]
+  src --> raw --> row
+  row --> ui
+  row --> states

@@ -1,0 +1,187 @@
+{
+  "recordId": "prov.copilot.wait.kind",
+  "pins": {
+    "vibefield": "433505fd0f224f4cda540d642661b13848c0ef82",
+    "puppeteer": "748d015a7e393112e0a91dad80111fdf5abe6583"
+  },
+  "adapterId": "adapter.copilot",
+  "fieldId": "field.wait.kind",
+  "sources": [
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/adapter-copilot/src/normalization/interaction.ts",
+      "lineStart": 4,
+      "lineEnd": 45,
+      "symbol": "normalizeCopilotInteraction"
+    },
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/runtime/src/services/monitor-service.ts",
+      "lineStart": 176,
+      "lineEnd": 187,
+      "symbol": "MonitorService.consume"
+    },
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/core/src/monitor/reduce.ts",
+      "lineStart": 974,
+      "lineEnd": 995,
+      "symbol": "permission cases"
+    },
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/view-sdk/src/model.ts",
+      "lineStart": 48,
+      "lineEnd": 48,
+      "symbol": "model.ts"
+    },
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/monitor/src/backend/derive.ts",
+      "lineStart": 130,
+      "lineEnd": 161,
+      "symbol": "derive.ts"
+    },
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/core/src/monitor/transitions.ts",
+      "lineStart": 71,
+      "lineEnd": 71,
+      "symbol": "transitions.ts"
+    },
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/core/src/monitor/transitions.ts",
+      "lineStart": 159,
+      "lineEnd": 170,
+      "symbol": "transitions.ts"
+    },
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/core/src/monitor/transitions.ts",
+      "lineStart": 369,
+      "lineEnd": 371,
+      "symbol": "transitions.ts"
+    }
+  ],
+  "producer": {
+    "kind": "adapter",
+    "name": "copilot normalization",
+    "ingestedFrom": "adapter event or monitor batch"
+  },
+  "transforms": [
+    {
+      "order": 0,
+      "name": "adapter-step-0",
+      "effect": "permission.requested emits interaction:permission-requested with presentation native-tui. tool is permissionRequest.kind or promptRequest.kind.",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/adapter-copilot/src/normalization/interaction.ts",
+        "lineStart": 4,
+        "lineEnd": 45,
+        "symbol": "normalizeCopilotInteraction"
+      }
+    },
+    {
+      "order": 1,
+      "name": "adapter-step-1",
+      "effect": "permission.completed lowercases result.kind, else approval.kind. den or reject becomes denied. allow or approv becomes allowed. dismiss or cancel becomes dismissed. Any other non-empty or empty string becomes unknown.",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/runtime/src/services/monitor-service.ts",
+        "lineStart": 176,
+        "lineEnd": 187,
+        "symbol": "MonitorService.consume"
+      }
+    },
+    {
+      "order": 2,
+      "name": "adapter-step-2",
+      "effect": "A completed record with no requestId emits nothing.",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/core/src/monitor/reduce.ts",
+        "lineStart": 974,
+        "lineEnd": 995,
+        "symbol": "permission cases"
+      }
+    }
+  ],
+  "merge": {
+    "strategy": "unknown",
+    "defaults": []
+  },
+  "transport": {
+    "channel": "in-process",
+    "name": "MonitorService.consume",
+    "contract": "AgentEvent or monitor:batch"
+  },
+  "renderer": {
+    "viewIds": [
+      "view.list",
+      "view.rain",
+      "view.swarm",
+      "view.spend",
+      "view.timeline"
+    ],
+    "component": "catalog-consumer-unproven",
+    "symbol": "view.list,view.rain,view.swarm,view.spend,view.timeline"
+  },
+  "applicability": {
+    "states": [
+      "state.idle",
+      "state.working",
+      "state.blocked",
+      "state.blocked_permission",
+      "state.blocked_question",
+      "state.blocked_failure",
+      "state.wait_multiple",
+      "state.activity_starting",
+      "state.activity_responding",
+      "state.activity_reasoning",
+      "state.activity_tool",
+      "state.activity_other",
+      "state.stale",
+      "state.fresh",
+      "state.failed_retained"
+    ],
+    "views": [
+      "view.list",
+      "view.rain",
+      "view.swarm",
+      "view.spend",
+      "view.timeline"
+    ],
+    "notes": "ROW FIELD field.wait.kind. PENDING DOWNSTREAM MAPPING into MonitorAgentRow. This is one of 74 canonical row fields. It is not an SDK contract leaf. PENDING DOWNSTREAM MAPPING: GV-AUDIT2 owns adapter output to row predicates, including cost, burn rate, history, timeline, and git branch. This audit does not give that verdict. Schema acceptance is not complete provenance. verification.status source-read is a static reading. observation.presence unknown means no live sample was taken. It does not mean the row value is missing. classification.adapterEmittable and uiReachable stay unknown. A raw adapter property is not the row field, and a catalog consumer is not a proven UI path.   The outcome is inferred from substrings, so an unforeseen kind is unknown rather than dropped. field.wait is not written. The adapter does not write this MonitorAgentRow property. That is the architecture, not a conclusion that the row predicate is unreachable. This trace is Puppeteer 748d015a7e393112e0a91dad80111fdf5abe6583 only. It is newer than shipped Vibefield 0.3.3 and does not describe that install. Package comparison was not re-run. Declaration supported from copilot-events-jsonl. declaration only; supported does not guarantee availability/value; degraded is not unreachable No raw adapter signal does not rule out the row value from host, runtime, history, or another producer. Raw source literals, not live samples: adapter.copilot.upstream.permission.allowed=\"allowed\" (kind contains allow or approv); adapter.copilot.upstream.permission.denied=\"denied\" (kind contains den or reject); adapter.copilot.upstream.permission.dismissed=\"dismissed\" (kind contains dismiss or cancel); adapter.copilot.upstream.permission.unknown=\"unknown\" (any other kind text); adapter.copilot.upstream.permission.presentation=\"native-tui\" (requested) Graph: evidence/copilot/wait.kind.mmd. Continuation anchors, not a reachability verdict: MonitorService.consume, core reduce and project, deriveAgentRow. Vibefield AgentView and window-rows are not traced."
+  },
+  "absence": {
+    "onMissing": "record-unknown",
+    "onStale": "unknown",
+    "zeroPolicy": "unknown-unsupported-and-absent-are-not-zero"
+  },
+  "observation": {
+    "presence": "unknown",
+    "synthetic": false
+  },
+  "classification": {
+    "modelSupported": "yes",
+    "adapterEmittable": "unknown",
+    "uiReachable": "unknown"
+  },
+  "verification": {
+    "status": "source-read",
+    "owner": "GV-AUDIT3",
+    "notes": "ROW FIELD field.wait.kind. PENDING DOWNSTREAM MAPPING into MonitorAgentRow. This is one of 74 canonical row fields. It is not an SDK contract leaf. PENDING DOWNSTREAM MAPPING: GV-AUDIT2 owns adapter output to row predicates, including cost, burn rate, history, timeline, and git branch. This audit does not give that verdict. Schema acceptance is not complete provenance. verification.status source-read is a static reading. observation.presence unknown means no live sample was taken. It does not mean the row value is missing. classification.adapterEmittable and uiReachable stay unknown. A raw adapter property is not the row field, and a catalog consumer is not a proven UI path.   The outcome is inferred from substrings, so an unforeseen kind is unknown rather than dropped. field.wait is not written. The adapter does not write this MonitorAgentRow property. That is the architecture, not a conclusion that the row predicate is unreachable. This trace is Puppeteer 748d015a7e393112e0a91dad80111fdf5abe6583 only. It is newer than shipped Vibefield 0.3.3 and does not describe that install. Package comparison was not re-run. Declaration supported from copilot-events-jsonl. declaration only; supported does not guarantee availability/value; degraded is not unreachable No raw adapter signal does not rule out the row value from host, runtime, history, or another producer. Raw source literals, not live samples: adapter.copilot.upstream.permission.allowed=\"allowed\" (kind contains allow or approv); adapter.copilot.upstream.permission.denied=\"denied\" (kind contains den or reject); adapter.copilot.upstream.permission.dismissed=\"dismissed\" (kind contains dismiss or cancel); adapter.copilot.upstream.permission.unknown=\"unknown\" (any other kind text); adapter.copilot.upstream.permission.presentation=\"native-tui\" (requested) Graph: evidence/copilot/wait.kind.mmd. Continuation anchors, not a reachability verdict: MonitorService.consume, core reduce and project, deriveAgentRow. Vibefield AgentView and window-rows are not traced."
+  }
+}

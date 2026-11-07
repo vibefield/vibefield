@@ -1,0 +1,11 @@
+flowchart LR
+  src["copilot source packages/view-sdk/src/model.ts:246-246"]
+  raw["no raw adapter write found"]
+  row["UNRESOLVED field.contract.MonitorModelChange.spawn row mapping"]
+  ui["UNRESOLVED UI reachability"]
+  states["UNRESOLVED downstream state predicates"]
+  src --> raw --> row
+  row --> ui
+  row --> states
+  leaf["SDK contract leaf, not a row field"]
+  raw --> leaf

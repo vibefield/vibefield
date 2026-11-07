@@ -185,7 +185,7 @@
       "state.reply_final"
     ],
     "views": "all-monitor-views",
-    "notes": "Views listed are confirmed consumers. An unlisted view is unknown, not a proof it ignores the field. No builtin consumer was proven for this field."
+    "notes": "No reader in list, rain, swarm, spend, timeline, or the shared toolkit words. See verification notes. No builtin consumer was proven for this field."
   },
   "absence": {
     "onMissing": "omit-field",
@@ -199,11 +199,11 @@
   "classification": {
     "modelSupported": "yes",
     "adapterEmittable": "yes",
-    "uiReachable": "unknown"
+    "uiReachable": "no"
   },
   "verification": {
     "status": "source-read",
     "owner": "GV-AUDIT4",
-    "notes": "monitor-capabilities.ts declares no conversation family. The reply is still produced by conversation:assistant-message or turn:completed. Declared support for conversation is unknown; the row field is traced. Pi assistant messages are emitted with final true only, so reply_streaming is not produced. reply.final true is. Audit pin is puppeteer 748d015, newer than the 0.3.3 package vibefield ships (tag v0.3.3, commit 52d09c8e). This record does not compare 0.3.3 behavior. A transform effect ending in [post-0.3.3] cites a puppeteer file whose text differs from 52d09c8e."
+    "notes": "monitor-capabilities.ts declares no conversation family. The reply is still produced by conversation:assistant-message or turn:completed. Declared support for conversation is unknown; the row field is traced. Pi assistant messages are emitted with final true only, so reply_streaming is not produced. reply.final true is. detailLine reads reply.text only. No shipping view reads reply.final. Audit pin is puppeteer 748d015, newer than the 0.3.3 package vibefield ships (tag v0.3.3, commit 52d09c8e). This record does not compare 0.3.3 behavior. A transform effect ending in [post-0.3.3] cites a puppeteer file whose text differs from 52d09c8e."
   }
 }

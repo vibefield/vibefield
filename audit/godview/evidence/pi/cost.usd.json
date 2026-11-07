@@ -212,8 +212,8 @@
     "strategy": "none",
     "defaults": [
       {
-        "when": "the capability family is unsupported and no fallback in this adapter fills the field",
-        "presence": "unsupported",
+        "when": "this adapter's traced producers do not supply the row field",
+        "presence": "absent",
         "source": {
           "repo": "puppeteer",
           "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
@@ -247,15 +247,15 @@
       "view.swarm",
       "view.spend"
     ],
-    "notes": "Views listed are confirmed consumers. An unlisted view is unknown, not a proof it ignores the field."
+    "notes": "Views listed are confirmed readers in the five shipping monitor views."
   },
   "absence": {
-    "onMissing": "record-unsupported",
+    "onMissing": "record-absent",
     "onStale": "keep-and-mark-stale",
     "zeroPolicy": "unknown-unsupported-and-absent-are-not-zero"
   },
   "observation": {
-    "presence": "unsupported",
+    "presence": "absent",
     "synthetic": false
   },
   "classification": {
@@ -266,6 +266,6 @@
   "verification": {
     "status": "source-read",
     "owner": "GV-AUDIT4",
-    "notes": "Declared usage=unsupported. Session JSONL usage is excluded. No independent live usage rail is integrated. Audit pin is puppeteer 748d015, newer than the 0.3.3 package vibefield ships (tag v0.3.3, commit 52d09c8e). This record does not compare 0.3.3 behavior. A transform effect ending in [post-0.3.3] cites a puppeteer file whose text differs from 52d09c8e."
+    "notes": "Declared usage=unsupported. Session JSONL usage is excluded. No independent live usage rail is integrated. Shared path: audit/godview/contracts/cost-burn-trace.md at 25c215a2a53f363e1076210b3f6fce2155dfdc0b on audit/godview-model. Token counts without costUsd normally end in state.cost_missing, not state.cost_unavailable. The backend omits field.cost when no priced total exists. priceUsage (packages/runtime/src/services/usage-pricing.ts:19-36, 69-78) prices an upsert only from its own pricing metadata or an existing costUsd, and only looks up catalog key providerId/modelId. USAGE_PRICES (packages/runtime/src/services/usage-prices.ts:39) has 60 keys, providers anthropic and openai only. None of grok, hermes, opencode, kimi, or pi set pricing or costUsd, so the catalog is never consulted for their tokens. Grok and OpenCode are canonical, so ingress still calls priceUsage and records an unavailable estimate with no costUsd, which counts as unpriced and still yields no row total. Hermes samples are noncanonical and are not selected for pricing. Kimi writes journal usage as context, not a usage upsert. Pi emits no live usage. Priced burn flames are reachable only for claude and codex. state.cost_missing and state.burn_unpriced can occur here. state.cost_complete, state.cost_partial, state.cost_unavailable, and state.burn_flames_0 through state.burn_flames_4 cannot from these producers. Audit pin is puppeteer 748d015, newer than the 0.3.3 package vibefield ships (tag v0.3.3, commit 52d09c8e). This record does not compare 0.3.3 behavior. A transform effect ending in [post-0.3.3] cites a puppeteer file whose text differs from 52d09c8e."
   }
 }

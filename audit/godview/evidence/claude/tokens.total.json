@@ -1,0 +1,208 @@
+{
+  "recordId": "prov.claude.tokens.total",
+  "pins": {
+    "vibefield": "433505fd0f224f4cda540d642661b13848c0ef82",
+    "puppeteer": "748d015a7e393112e0a91dad80111fdf5abe6583"
+  },
+  "adapterId": "adapter.claude",
+  "fieldId": "field.tokens.total",
+  "sources": [
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/adapter-claude/src/observation/otel/usage.ts",
+      "lineStart": 28,
+      "lineEnd": 87,
+      "symbol": "normalizeClaudeOtelUsage"
+    },
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/adapter-claude/src/driver.ts",
+      "lineStart": 407,
+      "lineEnd": 425,
+      "symbol": "otelUsagePolicy"
+    },
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/adapter-claude/src/driver.ts",
+      "lineStart": 678,
+      "lineEnd": 756,
+      "symbol": "onOtelLogs usage publish"
+    },
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/adapter-claude/src/normalization/monitor-capabilities.ts",
+      "lineStart": 87,
+      "lineEnd": 125,
+      "symbol": "claudeMonitorCapabilities"
+    },
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/runtime/src/services/monitor-service.ts",
+      "lineStart": 176,
+      "lineEnd": 187,
+      "symbol": "MonitorService.consume"
+    },
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/core/src/monitor/reduce.ts",
+      "lineStart": 1049,
+      "lineEnd": 1073,
+      "symbol": "usage:tokens-used case"
+    },
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/view-sdk/src/model.ts",
+      "lineStart": 98,
+      "lineEnd": 98,
+      "symbol": "model.ts"
+    },
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/monitor/src/backend/derive.ts",
+      "lineStart": 198,
+      "lineEnd": 208,
+      "symbol": "derive.ts"
+    }
+  ],
+  "producer": {
+    "kind": "adapter",
+    "name": "claude normalization",
+    "ingestedFrom": "usage:tokens-used"
+  },
+  "transforms": [
+    {
+      "order": 0,
+      "name": "adapter-step-0",
+      "effect": "A record counts only when event.name is api_request or body is claude_code.api_request, session.id is present, and at least one token bucket or cost_usd parses.",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/adapter-claude/src/observation/otel/usage.ts",
+        "lineStart": 28,
+        "lineEnd": 87,
+        "symbol": "normalizeClaudeOtelUsage"
+      }
+    },
+    {
+      "order": 1,
+      "name": "adapter-step-1",
+      "effect": "totalTokens sums the present buckets, treating a missing bucket as 0, and is omitted when the only metric is cost. meterTokens is input plus output with the same zero fill, and only when some token bucket exists.",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/adapter-claude/src/driver.ts",
+        "lineStart": 407,
+        "lineEnd": 425,
+        "symbol": "otelUsagePolicy"
+      }
+    },
+    {
+      "order": 2,
+      "name": "adapter-step-2",
+      "effect": "freshInputTokens is a copy of inputTokens, not a separate measurement. pricing.contextTokens is set only when input, cache read, and cache creation are all present.",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/adapter-claude/src/driver.ts",
+        "lineStart": 678,
+        "lineEnd": 756,
+        "symbol": "onOtelLogs usage publish"
+      }
+    },
+    {
+      "order": 3,
+      "name": "adapter-step-3",
+      "effect": "The driver drops a repeated fingerprint and drops records whose session.id is not the native session. It emits usage:tokens-used when otelUsageEnabled is true, including when the version is unverified.",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/adapter-claude/src/normalization/monitor-capabilities.ts",
+        "lineStart": 87,
+        "lineEnd": 125,
+        "symbol": "claudeMonitorCapabilities"
+      }
+    },
+    {
+      "order": 4,
+      "name": "adapter-step-4",
+      "effect": "Capabilities mark usage degraded unless OTLP is both enabled and version-verified. Events can therefore flow while the declaration says degraded.",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/runtime/src/services/monitor-service.ts",
+        "lineStart": 176,
+        "lineEnd": 187,
+        "symbol": "MonitorService.consume"
+      }
+    },
+    {
+      "order": 5,
+      "name": "adapter-step-5",
+      "effect": "Transcript batch listeners are never called. Historical transcript usage is not imported.",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/core/src/monitor/reduce.ts",
+        "lineStart": 1049,
+        "lineEnd": 1073,
+        "symbol": "usage:tokens-used case"
+      }
+    }
+  ],
+  "merge": {
+    "strategy": "unknown",
+    "defaults": []
+  },
+  "transport": {
+    "channel": "in-process",
+    "name": "MonitorService.consume",
+    "contract": "AgentEvent or monitor:batch"
+  },
+  "renderer": {
+    "viewIds": [],
+    "component": "not-established",
+    "symbol": "no-consumer-recorded"
+  },
+  "applicability": {
+    "states": [
+      "state.cost_complete",
+      "state.cost_partial",
+      "state.cost_unavailable",
+      "state.cost_missing",
+      "state.burn_flames_0",
+      "state.burn_flames_1",
+      "state.burn_flames_2",
+      "state.burn_flames_3",
+      "state.burn_flames_4"
+    ],
+    "views": "all-monitor-views",
+    "notes": "ROW FIELD field.tokens.total. PENDING DOWNSTREAM MAPPING into MonitorAgentRow. This is one of 74 canonical row fields. It is not an SDK contract leaf. PENDING DOWNSTREAM MAPPING: GV-AUDIT2 owns adapter output to row predicates, including cost, burn rate, history, timeline, and git branch. This audit does not give that verdict. Schema acceptance is not complete provenance. verification.status source-read is a static reading. observation.presence unknown means no live sample was taken. It does not mean the row value is missing. classification.adapterEmittable and uiReachable stay unknown. A raw adapter property is not the row field, and a catalog consumer is not a proven UI path.   Reduce keeps the event only for a live usage origin and drops replay. That gate is shared pipeline, not an adapter branch. Child status token samples are not this event. The adapter does not write this MonitorAgentRow property. That is the architecture, not a conclusion that the row predicate is unreachable. This trace is Puppeteer 748d015a7e393112e0a91dad80111fdf5abe6583 only. It is newer than shipped Vibefield 0.3.3 and does not describe that install. Package comparison was not re-run. Declaration supported from claude-otlp-logs. declaration only; supported does not guarantee availability/value; degraded is not unreachable Declared support does not match the producer channel. That mismatch is not a runtime impossibility. Raw source literals, not live samples: adapter.claude.upstream.tokens.present=\"non-negative integers\" (at least one bucket parses); adapter.claude.upstream.tokens.absent=\"token properties omitted\" (cost only); adapter.claude.upstream.tokens.zero-fill=0 (a missing bucket inside a present set is added as 0); adapter.claude.upstream.usage.origin=\"telemetry\" (event origin); adapter.claude.upstream.usage.boundary=\"response\" (canonical true) Graph: evidence/claude/tokens.total.mmd. Continuation anchors, not a reachability verdict: MonitorService.consume, core reduce and project, deriveAgentRow. Vibefield AgentView and window-rows are not traced."
+  },
+  "absence": {
+    "onMissing": "record-unknown",
+    "onStale": "unknown",
+    "zeroPolicy": "unknown-unsupported-and-absent-are-not-zero"
+  },
+  "observation": {
+    "presence": "unknown",
+    "synthetic": false
+  },
+  "classification": {
+    "modelSupported": "yes",
+    "adapterEmittable": "unknown",
+    "uiReachable": "unknown"
+  },
+  "verification": {
+    "status": "source-read",
+    "owner": "GV-AUDIT3",
+    "notes": "ROW FIELD field.tokens.total. PENDING DOWNSTREAM MAPPING into MonitorAgentRow. This is one of 74 canonical row fields. It is not an SDK contract leaf. PENDING DOWNSTREAM MAPPING: GV-AUDIT2 owns adapter output to row predicates, including cost, burn rate, history, timeline, and git branch. This audit does not give that verdict. Schema acceptance is not complete provenance. verification.status source-read is a static reading. observation.presence unknown means no live sample was taken. It does not mean the row value is missing. classification.adapterEmittable and uiReachable stay unknown. A raw adapter property is not the row field, and a catalog consumer is not a proven UI path.   Reduce keeps the event only for a live usage origin and drops replay. That gate is shared pipeline, not an adapter branch. Child status token samples are not this event. The adapter does not write this MonitorAgentRow property. That is the architecture, not a conclusion that the row predicate is unreachable. This trace is Puppeteer 748d015a7e393112e0a91dad80111fdf5abe6583 only. It is newer than shipped Vibefield 0.3.3 and does not describe that install. Package comparison was not re-run. Declaration supported from claude-otlp-logs. declaration only; supported does not guarantee availability/value; degraded is not unreachable Declared support does not match the producer channel. That mismatch is not a runtime impossibility. Raw source literals, not live samples: adapter.claude.upstream.tokens.present=\"non-negative integers\" (at least one bucket parses); adapter.claude.upstream.tokens.absent=\"token properties omitted\" (cost only); adapter.claude.upstream.tokens.zero-fill=0 (a missing bucket inside a present set is added as 0); adapter.claude.upstream.usage.origin=\"telemetry\" (event origin); adapter.claude.upstream.usage.boundary=\"response\" (canonical true) Graph: evidence/claude/tokens.total.mmd. Continuation anchors, not a reachability verdict: MonitorService.consume, core reduce and project, deriveAgentRow. Vibefield AgentView and window-rows are not traced."
+  }
+}

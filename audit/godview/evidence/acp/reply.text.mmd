@@ -1,0 +1,9 @@
+flowchart LR
+  src["acp source packages/adapter-acp/src/normalization/conversation.ts:12-26"]
+  raw["conversation:assistant-message"]
+  row["UNRESOLVED field.reply.text row mapping"]
+  ui["UNRESOLVED UI reachability"]
+  states["UNRESOLVED downstream state predicates"]
+  src --> raw --> row
+  row --> ui
+  row --> states

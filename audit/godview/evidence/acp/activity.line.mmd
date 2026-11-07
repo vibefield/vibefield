@@ -1,0 +1,9 @@
+flowchart LR
+  src["acp source packages/adapter-acp/src/normalization/monitor-capabilities.ts:11-23"]
+  raw["adapter signal, see transforms"]
+  row["UNRESOLVED field.activity.line row mapping"]
+  ui["UNRESOLVED UI reachability"]
+  states["UNRESOLVED downstream state predicates"]
+  src --> raw --> row
+  row --> ui
+  row --> states

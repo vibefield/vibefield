@@ -1,0 +1,9 @@
+flowchart LR
+  src["claude source packages/adapter-claude/src/observation/status-channel.ts:131-147"]
+  raw["effort string and intent"]
+  row["UNRESOLVED field.effort row mapping"]
+  ui["UNRESOLVED UI reachability"]
+  states["UNRESOLVED downstream state predicates"]
+  src --> raw --> row
+  row --> ui
+  row --> states

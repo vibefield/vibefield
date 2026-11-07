@@ -1,0 +1,9 @@
+flowchart LR
+  src["codex source packages/view-sdk/src/model.ts:377-377"]
+  raw["no raw adapter write found"]
+  row["UNRESOLVED field.visualId row mapping"]
+  ui["UNRESOLVED UI reachability"]
+  states["UNRESOLVED downstream state predicates"]
+  src --> raw --> row
+  row --> ui
+  row --> states

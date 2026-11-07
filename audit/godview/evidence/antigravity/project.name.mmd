@@ -1,0 +1,9 @@
+flowchart LR
+  src["antigravity source packages/adapter-antigravity/src/driver.ts:162-165"]
+  raw["currentCwd"]
+  row["UNRESOLVED field.project.name row mapping"]
+  ui["UNRESOLVED UI reachability"]
+  states["UNRESOLVED downstream state predicates"]
+  src --> raw --> row
+  row --> ui
+  row --> states

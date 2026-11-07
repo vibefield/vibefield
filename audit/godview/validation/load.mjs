@@ -102,9 +102,11 @@ function loadTraces(root, problems) {
           message: `path implies ${expectedAdapter} ${expectedField}`,
         });
       }
+      const fieldId = typeof file.json.fieldId === "string" ? file.json.fieldId : expectedField;
       traces.push({
         adapterId: typeof file.json.adapterId === "string" ? file.json.adapterId : expectedAdapter,
-        fieldId: typeof file.json.fieldId === "string" ? file.json.fieldId : expectedField,
+        fieldId,
+        recordKind: fieldId.startsWith("field.contract.") ? "sdk-leaf" : "row",
         path: rel,
         pins: isObject(file.json.pins) ? file.json.pins : null,
         sourceRevision: isObject(file.json.pins) ? file.json.pins : null,
@@ -114,6 +116,66 @@ function loadTraces(root, problems) {
     }
   }
   return traces;
+}
+
+function loadRenderIndex(root) {
+  const file = readJson(root, "audit/godview/rendering/integration.json");
+  if (!file.present || file.error || !isObject(file.json)) return null;
+  const index = file.json;
+  const sourceRevision = {
+    vibefield: typeof index.vibefieldSha === "string" ? index.vibefieldSha : "",
+    puppeteer: typeof index.sourceSha === "string" ? index.sourceSha : "",
+  };
+  const fixtures = (Array.isArray(index.fixtures) ? index.fixtures : []).map((entry) => {
+    const screenshot = typeof entry.screenshot === "string" ? entry.screenshot : null;
+    const fallbackShot = screenshot?.endsWith("environment-swarm.png") === true;
+    const meaningfulOutput =
+      entry.renderStatus === "rendered" &&
+      (entry.paint === "dom" || entry.paint === "canvas") &&
+      Boolean(screenshot) &&
+      !fallbackShot;
+    return {
+      viewId: String(entry.viewId ?? ""),
+      stateId: Array.isArray(entry.lifecycleStates) ? (entry.lifecycleStates[0] ?? "") : "",
+      lifecycleStates: Array.isArray(entry.lifecycleStates) ? entry.lifecycleStates : [],
+      fixtureKind: "synthetic",
+      syntheticLabel: "Synthetic AgentView input. Not a captured adapter session.",
+      fixturePath: typeof entry.file === "string" ? entry.file : null,
+      screenshotPath: screenshot,
+      paint: entry.paint ?? null,
+      renderStatus: entry.renderStatus ?? null,
+      mounted: true,
+      meaningfulOutput,
+      screenshotCoverageComplete: meaningfulOutput,
+      sourceRevision,
+      channel: "synthetic-fixture",
+    };
+  });
+  const holes = (Array.isArray(index.holes) ? index.holes : []).map((hole) => {
+    const reason = String(hole.reason ?? "");
+    const webgpu = /WEBGPU UNAVAILABLE/i.test(reason);
+    return {
+      stateId: String(hole.stateId ?? ""),
+      reason,
+      viewId: webgpu ? "view.swarm" : null,
+      mounted: webgpu,
+      meaningfulOutput: false,
+      screenshotCoverageComplete: false,
+      fallbackOnly: webgpu,
+      screenshotPath: webgpu ? "audit/godview/rendering/screenshots/environment-swarm.png" : null,
+    };
+  });
+  return {
+    sourceSha: sourceRevision.puppeteer,
+    vibefieldSha: sourceRevision.vibefield,
+    swarmBodyPaint: index.swarmBodyPaint ?? null,
+    fixtureCount: fixtures.length,
+    holeCount: holes.length,
+    fixtures,
+    holes,
+    screenshotCoverageComplete: false,
+    meaningfulFixtureCount: fixtures.filter((entry) => entry.meaningfulOutput).length,
+  };
 }
 
 function loadFixtures(root, problems) {
@@ -261,7 +323,8 @@ export function loadAudit(root) {
     ? normalizeModel(schemaFile.json)
     : { status: "missing", problems: ["schema-missing"] };
   const traces = loadTraces(root, problems);
-  const renders = loadRenders(root, problems);
+  const renderIndex = loadRenderIndex(root);
+  const renders = renderIndex?.fixtures ?? loadRenders(root, problems);
   const overlay = verifyOverlay(root);
   const lexical = model.states
     ? lexicalVibefield(root, model)
@@ -275,7 +338,7 @@ export function loadAudit(root) {
       }
     : null;
   const checks = model.states
-    ? evaluateMatrix({ model, traces, renders, validation, lexical, overlay })
+    ? evaluateMatrix({ model, traces, renders, validation, lexical, overlay, renderIndex })
     : [];
   let foundationGate = null;
   try {
@@ -304,12 +367,14 @@ export function loadAudit(root) {
     problems,
     root,
     foundationGate,
+    renderIndex,
   });
   return {
     index,
     model,
     traces,
     renders,
+    renderIndex,
     overlay,
     notice,
     problems,
@@ -328,6 +393,7 @@ function publicIndex({
   problems,
   root,
   foundationGate,
+  renderIndex,
 }) {
   return {
     contract: INDEX_CONTRACT,
@@ -343,7 +409,8 @@ function publicIndex({
     sources: {
       schema: model.status ?? "missing",
       evidence: traces.length === 0 ? "pending" : "loaded",
-      rendering: renders.length === 0 ? "pending" : "loaded",
+      rendering: renderIndex ? "partial" : renders.length === 0 ? "pending" : "loaded",
+      firstHalfAdapters: "pending",
       packagePinReport: notice.status,
       foundationCatalog: "pending",
     },
@@ -406,8 +473,20 @@ function publicIndex({
     checks,
     problems,
     completeness: model.completeness ?? "",
-    traceCount: traces.length,
+    traceCount: traces.filter((trace) => trace.recordKind !== "sdk-leaf").length,
+    sdkLeafCount: traces.filter((trace) => trace.recordKind === "sdk-leaf").length,
     renderCount: renders.length,
+    rendering: renderIndex
+      ? {
+          fixtureCount: renderIndex.fixtureCount,
+          meaningfulFixtureCount: renderIndex.meaningfulFixtureCount,
+          holeCount: renderIndex.holeCount,
+          swarmBodyPaint: renderIndex.swarmBodyPaint,
+          screenshotCoverageComplete: false,
+          sourceSha: renderIndex.sourceSha,
+          note: "Synthetic fixtures are not captured sessions. A mount is not meaningful paint. Swarm body paint is webgpu-unavailable: environment-swarm.png is the fallback message, not complete screenshot coverage. GV-AUDIT3 evidence is not loaded; that half is correcting a uiReachable mapping.",
+        }
+      : null,
     foundationGate: {
       ok: foundationGate?.ok === true,
       modelIntegration: foundationGate?.modelIntegration ?? null,

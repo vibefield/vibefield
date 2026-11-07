@@ -1,0 +1,9 @@
+flowchart LR
+  src["claude source packages/adapter-claude/src/observation/status-channel.ts:124-148"]
+  raw["model id and optional display name"]
+  row["UNRESOLVED field.model row mapping"]
+  ui["UNRESOLVED UI reachability"]
+  states["UNRESOLVED downstream state predicates"]
+  src --> raw --> row
+  row --> ui
+  row --> states

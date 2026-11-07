@@ -1,0 +1,190 @@
+{
+  "recordId": "prov.codex.detail",
+  "pins": {
+    "vibefield": "433505fd0f224f4cda540d642661b13848c0ef82",
+    "puppeteer": "748d015a7e393112e0a91dad80111fdf5abe6583"
+  },
+  "adapterId": "adapter.codex",
+  "fieldId": "field.detail",
+  "sources": [
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/adapter-codex/src/normalization/monitor.ts",
+      "lineStart": 74,
+      "lineEnd": 101,
+      "symbol": "actorState and childActivity"
+    },
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/adapter-codex/src/normalization/monitor.ts",
+      "lineStart": 643,
+      "lineEnd": 783,
+      "symbol": "child turn and item status"
+    },
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/adapter-codex/src/normalization/pipeline.ts",
+      "lineStart": 60,
+      "lineEnd": 64,
+      "symbol": "CodexTurnNormalizer in the pipeline"
+    },
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/runtime/src/services/monitor-service.ts",
+      "lineStart": 176,
+      "lineEnd": 187,
+      "symbol": "MonitorService.consume"
+    },
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/core/src/monitor/reduce.ts",
+      "lineStart": 864,
+      "lineEnd": 938,
+      "symbol": "turn and conversation cases"
+    },
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/view-sdk/src/model.ts",
+      "lineStart": 146,
+      "lineEnd": 146,
+      "symbol": "model.ts"
+    },
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/monitor/src/backend/derive.ts",
+      "lineStart": 84,
+      "lineEnd": 89,
+      "symbol": "derive.ts"
+    },
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/monitor/src/backend/derive.ts",
+      "lineStart": 312,
+      "lineEnd": 312,
+      "symbol": "derive.ts"
+    },
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/view-sdk/src/toolkit/words.ts",
+      "lineStart": 64,
+      "lineEnd": 84,
+      "symbol": "words.ts"
+    }
+  ],
+  "producer": {
+    "kind": "adapter",
+    "name": "codex normalization",
+    "ingestedFrom": "child status activity"
+  },
+  "transforms": [
+    {
+      "order": 0,
+      "name": "adapter-step-0",
+      "effect": "Monitor status activity is written for child threads only. turn/started sets activityKind responding, active true, line Subagent turn running. turn/completed sets active false and omits the line.",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/adapter-codex/src/normalization/monitor.ts",
+        "lineStart": 74,
+        "lineEnd": 101,
+        "symbol": "actorState and childActivity"
+      }
+    },
+    {
+      "order": 1,
+      "name": "adapter-step-1",
+      "effect": "Child items use reasoning for reasoning, responding for agentMessage or userMessage, and tool for every other item type. Lines are fixed strings.",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/adapter-codex/src/normalization/monitor.ts",
+        "lineStart": 643,
+        "lineEnd": 783,
+        "symbol": "child turn and item status"
+      }
+    },
+    {
+      "order": 2,
+      "name": "adapter-step-2",
+      "effect": "Root turn status is not a monitor status upsert. The pipeline turn normalizer emits turn events on the agent-event channel.",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/adapter-codex/src/normalization/pipeline.ts",
+        "lineStart": 60,
+        "lineEnd": 64,
+        "symbol": "CodexTurnNormalizer in the pipeline"
+      }
+    },
+    {
+      "order": 3,
+      "name": "adapter-step-3",
+      "effect": "actorState maps pendingInit, running, active, and inProgress to active; idle to idle; interrupted, completed, errored, shutdown, notFound, and closed to stopped; anything else to unknown.",
+      "source": {
+        "repo": "puppeteer",
+        "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+        "path": "packages/runtime/src/services/monitor-service.ts",
+        "lineStart": 176,
+        "lineEnd": 187,
+        "symbol": "MonitorService.consume"
+      }
+    }
+  ],
+  "merge": {
+    "strategy": "unknown",
+    "defaults": []
+  },
+  "transport": {
+    "channel": "in-process",
+    "name": "MonitorService.consume",
+    "contract": "AgentEvent or monitor:batch"
+  },
+  "renderer": {
+    "viewIds": [
+      "view.list",
+      "view.rain",
+      "view.swarm",
+      "view.spend"
+    ],
+    "component": "catalog-consumer-unproven",
+    "symbol": "view.list,view.rain,view.swarm,view.spend"
+  },
+  "applicability": {
+    "states": "model-axes",
+    "views": [
+      "view.list",
+      "view.rain",
+      "view.swarm",
+      "view.spend"
+    ],
+    "notes": "ROW FIELD field.detail. PENDING DOWNSTREAM MAPPING into MonitorAgentRow. This is one of 74 canonical row fields. It is not an SDK contract leaf. PENDING DOWNSTREAM MAPPING: GV-AUDIT2 owns adapter output to row predicates, including cost, burn rate, history, timeline, and git branch. This audit does not give that verdict. Schema acceptance is not complete provenance. verification.status source-read is a static reading. observation.presence unknown means no live sample was taken. It does not mean the row value is missing. classification.adapterEmittable and uiReachable stay unknown. A raw adapter property is not the row field, and a catalog consumer is not a proven UI path.   Root monitor status is absent even though status is declared supported. Child activity lines are fixed English strings, not the provider item text. Bootstrap collaboration does not keep an active child as active. The adapter does not write this MonitorAgentRow property. That is the architecture, not a conclusion that the row predicate is unreachable. This trace is Puppeteer 748d015a7e393112e0a91dad80111fdf5abe6583 only. It is newer than shipped Vibefield 0.3.3 and does not describe that install. Package comparison was not re-run. No capability cell for this field. Declared support does not match the producer channel. That mismatch is not a runtime impossibility. Raw source literals, not live samples: adapter.codex.upstream.activity.responding=\"responding\" (child turn, or agentMessage or userMessage item); adapter.codex.upstream.activity.reasoning=\"reasoning\" (child reasoning item); adapter.codex.upstream.activity.tool=\"tool\" (any other child item type); adapter.codex.upstream.actor.active=\"active\" (pendingInit, running, active, inProgress); adapter.codex.upstream.actor.idle=\"idle\" (idle); adapter.codex.upstream.actor.stopped=\"stopped\" (interrupted, completed, errored, shutdown, notFound, closed, thread/closed); adapter.codex.upstream.actor.unknown=\"unknown\" (any other status string, and bootstrap collab active is forced unknown) Graph: evidence/codex/detail.mmd. Continuation anchors, not a reachability verdict: MonitorService.consume, core reduce and project, deriveAgentRow. Vibefield AgentView and window-rows are not traced."
+  },
+  "absence": {
+    "onMissing": "record-unknown",
+    "onStale": "unknown",
+    "zeroPolicy": "unknown-unsupported-and-absent-are-not-zero"
+  },
+  "observation": {
+    "presence": "unknown",
+    "synthetic": false
+  },
+  "classification": {
+    "modelSupported": "yes",
+    "adapterEmittable": "unknown",
+    "uiReachable": "unknown"
+  },
+  "verification": {
+    "status": "source-read",
+    "owner": "GV-AUDIT3",
+    "notes": "ROW FIELD field.detail. PENDING DOWNSTREAM MAPPING into MonitorAgentRow. This is one of 74 canonical row fields. It is not an SDK contract leaf. PENDING DOWNSTREAM MAPPING: GV-AUDIT2 owns adapter output to row predicates, including cost, burn rate, history, timeline, and git branch. This audit does not give that verdict. Schema acceptance is not complete provenance. verification.status source-read is a static reading. observation.presence unknown means no live sample was taken. It does not mean the row value is missing. classification.adapterEmittable and uiReachable stay unknown. A raw adapter property is not the row field, and a catalog consumer is not a proven UI path.   Root monitor status is absent even though status is declared supported. Child activity lines are fixed English strings, not the provider item text. Bootstrap collaboration does not keep an active child as active. The adapter does not write this MonitorAgentRow property. That is the architecture, not a conclusion that the row predicate is unreachable. This trace is Puppeteer 748d015a7e393112e0a91dad80111fdf5abe6583 only. It is newer than shipped Vibefield 0.3.3 and does not describe that install. Package comparison was not re-run. No capability cell for this field. Declared support does not match the producer channel. That mismatch is not a runtime impossibility. Raw source literals, not live samples: adapter.codex.upstream.activity.responding=\"responding\" (child turn, or agentMessage or userMessage item); adapter.codex.upstream.activity.reasoning=\"reasoning\" (child reasoning item); adapter.codex.upstream.activity.tool=\"tool\" (any other child item type); adapter.codex.upstream.actor.active=\"active\" (pendingInit, running, active, inProgress); adapter.codex.upstream.actor.idle=\"idle\" (idle); adapter.codex.upstream.actor.stopped=\"stopped\" (interrupted, completed, errored, shutdown, notFound, closed, thread/closed); adapter.codex.upstream.actor.unknown=\"unknown\" (any other status string, and bootstrap collab active is forced unknown) Graph: evidence/codex/detail.mmd. Continuation anchors, not a reachability verdict: MonitorService.consume, core reduce and project, deriveAgentRow. Vibefield AgentView and window-rows are not traced."
+  }
+}

@@ -1,0 +1,9 @@
+flowchart LR
+  src["codex source packages/adapter-codex/src/services/approvals.ts:198-293"]
+  raw["adapter signal, see transforms"]
+  row["UNRESOLVED field.wait.code row mapping"]
+  ui["UNRESOLVED UI reachability"]
+  states["UNRESOLVED downstream state predicates"]
+  src --> raw --> row
+  row --> ui
+  row --> states

@@ -1,0 +1,9 @@
+flowchart LR
+  src["copilot source packages/adapter-copilot/src/normalization/compaction.ts:13-22"]
+  raw["context-window:updated.usedPercentage"]
+  row["UNRESOLVED field.context.usedPercent row mapping"]
+  ui["UNRESOLVED UI reachability"]
+  states["UNRESOLVED downstream state predicates"]
+  src --> raw --> row
+  row --> ui
+  row --> states
