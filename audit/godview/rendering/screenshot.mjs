@@ -86,6 +86,30 @@ try {
       await page.$eval("[data-list-spawn-button]", (button) => button.click());
       await page.waitForSelector("[role='menu']", { timeout: 5000 });
     }
+    if (fixture.interact === "timeline-unborn" || fixture.interact === "timeline-unrecorded" || fixture.interact === "timeline-past") {
+      const fraction = fixture.interact === "timeline-past" ? 0.9 : 0.17;
+      const map = await page.$("[aria-label^='The head']");
+      const box = await map.boundingBox();
+      if (!box) throw new Error(`${fixture.fixtureId} has no timeline map`);
+      await page.mouse.click(box.x + box.width * fraction, box.y + box.height / 2);
+      const needle = fixture.interact === "timeline-unborn"
+        ? "not started yet"
+        : fixture.interact === "timeline-unrecorded"
+          ? "not recorded"
+          : "of ";
+      await page.waitForFunction(
+        (expected) => [...document.querySelectorAll(".vf-monitor-timeline-readout")].some((node) => (node.textContent ?? "").includes(expected)),
+        { timeout: 5000 },
+        needle,
+      );
+    }
+    if (fixture.interact === "spend-unknown") {
+      const hit = await page.$(".vf-monitor-spend-hit");
+      const box = await hit.boundingBox();
+      if (!box) throw new Error(`${fixture.fixtureId} has no spend chart`);
+      await page.mouse.click(box.x + box.width * 0.25, box.y + box.height * 0.5);
+      await page.waitForSelector("[data-state='unknown']", { timeout: 5000 });
+    }
     const paint = await page.$eval(".fe-stage", (node) => node.getAttribute("data-fe-paint"));
     if (fixture.viewId === "view.swarm") swarmPaint = paint;
     const file = fixture.requiresBodyPaint && paint === "webgpu-unavailable"

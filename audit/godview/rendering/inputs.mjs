@@ -834,52 +834,248 @@ const ALL_ENTRIES = [
     agent({ status: "working", cost: { usd: 1, coverage: "unavailable" } }),
     { requiresBodyPaint: true, predicate: "coverage unavailable. The burn ladder is drawn unpriced." },
   ),
+  ...mountGaps(),
 ];
 
+function mountGaps() {
+  const out = [];
+  const put = (view, slug, stateId, row, extra = {}) => {
+    out.push(paint(`${view}.${slug}`, `view.${view}`, stateId, row, extra));
+  };
+  const dom = ["list", "rain", "spend", "timeline"];
+  const except = (views, slug, stateId, row, extra) => {
+    for (const view of views) put(view, slug, stateId, row, extra);
+  };
+  const hour = 3_600_000;
+  const reply = (final) => ({ text: "Suite is green.", at: EPOCH, final });
+  const wait = { kind: "permission", since: EPOCH, tool: "Bash", detail: "pnpm test" };
+  const many = { kind: "question", since: EPOCH, count: 3, header: "Which branch?" };
+
+  except(["rain", "spend", "timeline"], "working-with-blockers", "state.working_with_blockers", agent({
+    status: "working",
+    wait,
+  }), {
+    predicate:
+      "status working and a permission wait. detailLine and spendStateAt use the wait only when status is blocked, so this row takes the working branch. The wait is on the mounted input.",
+  });
+  except(["rain", "spend", "timeline"], "wait-multiple", "state.wait_multiple", agent({
+    status: "blocked",
+    wait: many,
+  }), {
+    predicate:
+      "wait.count is 3. The mounted line prints the kind. No view paints the count. The count is on the input.",
+  });
+  for (const kind of ["starting", "responding", "reasoning", "tool", "delegating", "compacting", "other"]) {
+    except(dom, `activity-${kind}`, `state.activity_${kind}`, agent({
+      status: "working",
+      activity: { kind, line: kind, since: EPOCH },
+    }), {
+      predicate: `activity.kind ${kind} on a working row. List, rain, spend, and timeline do not paint a per-kind branch. AgentSwarm.tsx:1031 reads kind only to keep a terminal clock across unknown. The kind is mounted here.`,
+    });
+  }
+  except(dom, "failed-retained", "state.failed_retained", agent({
+    status: "blocked",
+    alive: false,
+    wait: { kind: "failure", since: EPOCH, code: "E_RATE_LIMIT", detail: "Rate limited" },
+  }), {
+    predicate:
+      "alive false with a failure wait. The five views do not read alive. The mounted row takes the blocked failure branch. Retention itself is the host's keepsFailure and is not a view paint.",
+  });
+  except(["list", "rain", "timeline", "spend"], "terminal-empty", "state.terminal_empty", {
+    kind: "terminal",
+    status: "idle",
+    project: { name: "" },
+    detail: "",
+  }, {
+    predicate:
+      "Idle terminal with an empty detail. List and timeline word an idle terminal quiet. spendMeters skips terminals, so the spend mount shows no terminal row. Rain spells the local terminal column.",
+  });
+  except(["spend"], "terminal-running", "state.terminal_running", {
+    kind: "terminal",
+    status: "working",
+    project: { name: "" },
+    detail: "running",
+  }, {
+    predicate: "Working terminal passed to SpendView. spendMeters skips kind terminal, so the row is not in the meter.",
+  });
+  except(["spend"], "terminal-quiet", "state.terminal_quiet", {
+    kind: "terminal",
+    status: "idle",
+    project: { name: "" },
+    detail: "quiet",
+  }, {
+    predicate: "Idle terminal passed to SpendView. spendMeters skips kind terminal, so the row is not in the meter.",
+  });
+  const priced = {
+    predicate:
+      "cost.coverage complete on this view. Spend meters it. List, rain, and timeline mount the object and do not print USD. Claude and Codex only. Not a live session.",
+    adapterIds: ["adapter.claude", "adapter.codex"],
+    label: "Source permits Claude and Codex to price. Not a live session. Token-only adapters do not produce this row.",
+  };
+  const partial = {
+    predicate:
+      "cost.coverage partial on this view. Spend marks the total partial. List, rain, and timeline mount the object and do not print USD.",
+    adapterIds: ["adapter.claude", "adapter.codex"],
+    label: "Source permits Claude and Codex to mix priced and unpriced observations. Not a live session.",
+  };
+  except(["list", "rain", "timeline"], "cost-complete", "state.cost_complete", agent({
+    status: "working",
+    cost: cost("complete", 2.5, 12),
+  }), priced);
+  except(["list", "rain", "timeline"], "cost-partial", "state.cost_partial", agent({
+    status: "working",
+    cost: cost("partial", 1.25, 6),
+  }), partial);
+  except(["list", "rain", "timeline"], "cost-unavailable", "state.cost_unavailable", agent({
+    status: "working",
+    cost: { usd: 1, coverage: "unavailable" },
+  }), {
+    predicate:
+      "Explicit unavailable cost mounted on this view. The normal backend omits field.cost. List, rain, and timeline do not print the coverage.",
+    label: "Synthetic view of an explicit unavailable cost object. Not a normal adapter emission.",
+  });
+  except(["list", "rain", "timeline"], "cost-missing", "state.cost_missing", agent({ status: "working" }), {
+    predicate: "cost absent. This is the normal missing total, including token-only adapters. The mounted row has no cost object.",
+  });
+  except(dom, "effort-configured", "state.effort_configured", agent({
+    status: "working",
+    model: "fixture-model",
+    effort: { value: "high", intent: "configured" },
+  }), {
+    predicate:
+      "effort.intent configured. bubble-model.ts effortLines is the italic swarm line. List, rain, spend, and timeline mount the object and do not paint effort.",
+  });
+  except(dom, "effort-observed", "state.effort_observed", agent({
+    status: "working",
+    model: "fixture-model",
+    effort: { value: "high", intent: "observed" },
+  }), {
+    predicate:
+      "effort.intent observed. The swarm model line is not italic. List, rain, spend, and timeline mount the object and do not paint effort.",
+  });
+  except(dom, "effort-absent", "state.effort_absent", agent({ status: "working", model: "fixture-model" }), {
+    predicate: "effort absent. The mounted row has no effort object. These views do not paint an effort suffix.",
+  });
+  except(["rain", "spend", "timeline"], "reply-streaming", "state.reply_streaming", agent({
+    status: "idle",
+    reply: reply(false),
+  }), {
+    predicate: "reply.final false. detailLine prints the text and does not branch on final. The final flag is mounted.",
+  });
+  except(["rain", "spend", "timeline"], "reply-final", "state.reply_final", agent({
+    status: "idle",
+    reply: reply(true),
+  }), {
+    predicate: "reply.final true. detailLine prints the text and does not branch on final. The final flag is mounted.",
+  });
+  for (const [lit, perMinute] of [[0, 0], [1, 0.05], [2, 0.15], [3, 0.4], [4, 1]]) {
+    except(dom, `burn-flames-${lit}`, `state.burn_flames_${lit}`, agent({
+      status: "working",
+      cost: cost("complete", 2, perMinute * 60),
+    }), {
+      predicate: `burnPerHour ${perMinute * 60}, the swarm rung burnFlames === ${lit}. List, rain, and timeline mount that cost and have no flame ladder. Spend may print its own rate. The rung input is mounted.`,
+      adapterIds: ["adapter.claude", "adapter.codex"],
+      label: "The flame rung is the swarm ladder. This mount is the same priced cost on a view without that ladder. Not a live session.",
+    });
+  }
+  except(dom, "burn-unpriced", "state.burn_unpriced", agent({
+    status: "working",
+    cost: { usd: 1, coverage: "unavailable" },
+  }), {
+    predicate:
+      "coverage unavailable, the swarm unpriced ladder. These views mount that cost object. Spend does not meter it. Not a normal adapter emission.",
+    label: "Synthetic unavailable cost, the input of the unpriced swarm rung, mounted on a view without the flame ladder.",
+  });
+  for (const tier of ["managed", "ingested", "remote"]) {
+    except(dom, `tier-${tier}`, `state.tier_${tier}`, agent({ status: "working", tier }), {
+      predicate: `tier ${tier} on the AgentView. None of the five views paint tier. The field is mounted; the row takes the working branch.`,
+    });
+  }
+  for (const kind of ["worked", "quiet", "unrecorded", "bounds"]) {
+    except(["list", "rain", "spend"], `past-${kind}`, `state.past_${kind}`, agent({
+      status: kind === "quiet" || kind === "bounds" ? "idle" : "working",
+    }), {
+      history: kind,
+      predicate: `capabilities.history span ${kind} is passed with the row. Only TimelineView reads history. This view paints the live row. The history input is mounted.`,
+    });
+  }
+  except(["list", "rain", "timeline"], "before", "state.spend_before", agent({
+    status: "idle",
+    createdAt: NOW + hour,
+    statusSince: NOW + hour,
+  }), {
+    predicate:
+      "createdAt is after the frozen now. spendStateAt would say before. List, rain, and timeline have no spend cursor; they mount the future-born row.",
+  });
+  for (const spawnState of ["ready", "asleep", "silent", "incompatible", "reading"]) {
+    except(["rain", "spend", "timeline"], `spawn-${spawnState}`, `state.spawn_${spawnState}`, agent({ status: "idle" }), {
+      spawn: menu(spawnState),
+      predicate: `spawn device state ${spawnState} is on the view capabilities. Rain, spend, and timeline have no spawn menu, so the menu is not opened. The capability is mounted.`,
+    });
+  }
+  put("timeline", "moment-unborn", "state.timeline_unborn", agent({
+    id: "late",
+    status: "idle",
+    createdAt: NOW - 10 * 60_000,
+    statusSince: NOW - 10 * 60_000,
+    project: { name: "late", seq: 2 },
+  }), {
+    rows: [
+      agent({
+        id: "early",
+        status: "working",
+        createdAt: NOW - 6 * hour,
+        statusSince: NOW - 6 * hour,
+        project: { name: "early", seq: 1 },
+      }),
+      agent({
+        id: "late",
+        status: "idle",
+        createdAt: NOW - 10 * 60_000,
+        statusSince: NOW - 10 * 60_000,
+        project: { name: "late", seq: 2 },
+      }),
+    ],
+    interact: "timeline-unborn",
+    predicate:
+      "Two lanes. The head is scrubbed to about an hour after the early birth, which is before the late birth. readoutAt for unborn says not started yet.",
+  });
+  put("timeline", "moment-unrecorded", "state.timeline_unrecorded", agent({
+    status: "working",
+    createdAt: NOW - 6 * hour,
+    statusSince: NOW - 30 * 60_000,
+  }), {
+    interact: "timeline-unrecorded",
+    predicate:
+      "No history. The head is scrubbed to after birth and before statusSince. stateAt returns unrecorded. readoutAt says not recorded.",
+  });
+  put("timeline", "moment-past", "state.timeline_past", agent({
+    status: "working",
+    createdAt: NOW - 6 * hour,
+    statusSince: NOW,
+  }), {
+    history: "worked",
+    interact: "timeline-past",
+    predicate:
+      "A worked span from one hour ago until a minute ago. The head is scrubbed into that span, before statusSince. stateAt returns past.",
+  });
+  put("spend", "unknown", "state.spend_unknown", agent({
+    status: "working",
+    createdAt: NOW - 10 * 60_000,
+    statusSince: NOW,
+  }), {
+    interact: "spend-unknown",
+    predicate:
+      "statusSince is the frozen now and birth is ten minutes earlier. A chart click before now sets spendStateAt to unknown.",
+  });
+  return out;
+}
+
 const BASE_HOLES = [
-  {
-    stateId: "state.activity_starting",
-    reason:
-      "AgentSwarm.tsx reads activity.kind only to keep a terminal clock across kind unknown. It does not paint a distinct branch per activity kind.",
-  },
-  {
-    stateId: "state.activity_responding",
-    reason: "Same as state.activity_starting. No per-kind paint.",
-  },
-  {
-    stateId: "state.activity_reasoning",
-    reason: "Same as state.activity_starting. No per-kind paint.",
-  },
-  {
-    stateId: "state.activity_tool",
-    reason: "Same as state.activity_starting. No per-kind paint.",
-  },
-  {
-    stateId: "state.activity_delegating",
-    reason: "Same as state.activity_starting. No per-kind paint.",
-  },
-  {
-    stateId: "state.activity_compacting",
-    reason: "Same as state.activity_starting. No per-kind paint.",
-  },
-  {
-    stateId: "state.activity_other",
-    reason: "Same as state.activity_starting. No per-kind paint.",
-  },
-  {
-    stateId: "state.failed_retained",
-    reason:
-      "alive is not read by the five views. Retention is VibeField keepsFailure in field-app, outside this Puppeteer view render. Passing the row paints as state.blocked_failure.",
-  },
   {
     stateId: "state.dead_hidden",
     reason:
       "The row is omitted before the view. The views have no dead-hidden paint. Membership is VibeField useMonitorAgents, not a 748d015 view branch.",
-  },
-  {
-    stateId: "state.terminal_empty",
-    reason:
-      "empty is a swarm body word for a quiet terminal with no opening, not a list status. List paints that row as state.terminal_quiet. Swarm body paint is the WebGPU canvas.",
   },
   {
     stateId: "state.terminal_opening",
@@ -891,29 +1087,14 @@ const BASE_HOLES = [
     reason: "None of the five views read attachable. It is not in their contract field lists.",
   },
   {
-    stateId: "state.timeline_unborn",
-    reason: "timeline moment.kind is the scrub cursor inside TimelineView. There is no public prop to set it.",
-  },
-  {
-    stateId: "state.timeline_unrecorded",
-    reason: "Same as state.timeline_unborn. Cursor moment, not the live head.",
-  },
-  {
-    stateId: "state.timeline_past",
-    reason: "Same as state.timeline_unborn. Cursor moment, not the live head.",
-  },
-  {
     stateId: "state.timeline_ended",
-    reason: "Same as state.timeline_unborn. Cursor moment, not the live head.",
+    reason:
+      "No fixture is keyed state.timeline_ended. The live head of fix.timeline.past-bounds is that moment for the ended lane. See the matrix covered-by cell.",
   },
   {
     stateId: "state.timeline_span",
-    reason: "Same as state.timeline_unborn. Cursor moment, not the live head.",
-  },
-  {
-    stateId: "state.spend_unknown",
     reason:
-      "spendStateAt returns unknown only for a scrubbed t before statusSince. The live head at now does not.",
+      "No fixture is keyed state.timeline_span. The live head of fix.timeline.working is that moment. See the matrix covered-by cell.",
   },
   {
     stateId: "state.feed_no_door",
@@ -930,18 +1111,6 @@ const BASE_HOLES = [
   {
     stateId: "state.feed_unavailable",
     reason: "MonitorFeedState is VibeField door chrome, not a Puppeteer view input.",
-  },
-  {
-    stateId: "state.tier_managed",
-    reason: "None of the five views read tier.",
-  },
-  {
-    stateId: "state.tier_ingested",
-    reason: "None of the five views read tier.",
-  },
-  {
-    stateId: "state.tier_remote",
-    reason: "None of the five views read tier.",
   },
   {
     stateId: "state.device_live",
