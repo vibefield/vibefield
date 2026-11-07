@@ -1001,7 +1001,7 @@ its rulings (`draft/rv/james-asks.md`, `draft/rv/lead-rulings.md`); the review `
      (`eebb518b0`), then kept or struck at its source.
 7. **The first beta, `v0.9.0-beta.1`** (release rails; RL6 betas `v0.9.0-beta.N`). The plan is the page *VibeField 0.9
    Launch* (2rsVWUF9); James ruled its calls, LP-D1…D20, at the leans on 2026-11-05 at 01:04Z (DECISIONS LP). The target
-   is 19 Nov if the lanes land as sized, and the beta date is the one that moves. Wave 1 builds code-only, off
+   is 7 Nov: every launch date lands by 9 Nov (James, 2026-11-06 23:39Z; it was 19 Nov). Wave 1 builds code-only, off
    `f599761bc`: `lp/rails` · `lp/ar7j` · `lp/bp9` · `lp/ios-store` · `lp/notices` · `lp/harden` (with `lp/paths`,
    item 170) · `lp/feedback` · `lp/td4`. The operating drafts are in `draft/launch/`.
    - **Phase 0, unstick the nightly** (done 11-05): `nightly-20261104` published at 00:25Z (run 41848947270), and W10
@@ -1046,12 +1046,13 @@ its rulings (`draft/rv/james-asks.md`, `draft/rv/lead-rulings.md`); the review `
      - **F** testers report a problem in one place (LP-D18): LANDED 2026-11-05 (M142 `d48b6fe6d`, LANDED "LP-7"). Owed:
        James's security contact before beta.1's cohort arrives (a SECURITY.md with a private contact, or private
        vulnerability reporting turned on), and the first tester's report through the form.
-   - **Phase 3, iPhone and iPad to external TestFlight** (5–19 Nov, the iOS lane and James):
+   - **Phase 3, iPhone and iPad to external TestFlight** (by 8 Nov, was 5–19 Nov; the iOS lane and James):
      - the App Store export and uploads signed in with an App Store Connect API key (build 4's upload failed on 09-20,
        and build 5 was archived but never uploaded, so the next build is 6, carrying P0-H1 and everything since 09-13):
        LANDED 2026-11-05 (M144 `1e2023717`, LANDED "LP-4"); owed: James's `archive 6` and `upload 6 store` from his own
        account, with every agent quit for the upload;
-     - MARKETING_VERSION 0.9.0 (RL6);
+     - MARKETING_VERSION 0.9.0 (RL6), ahead of the cut so build 6 archives as 0.9.0: LANDED 2026-11-06
+       (`d300ad0e0`, LANDED "LP's 0.9.0"), with the camera prompt's "this device" (`84193fcab`);
      - what App Review would reject: Apple's logo off the Mac's mark, two vendor marks, one window and the
        acknowledgements bundled: LANDED (M144, LANDED "LP-4"). "Better CRT (legacy)" (CC BY-NC-SA upstream) stays on
        the phone by James's word (11-05, 06:02Z), and no author or licence-link line is added ("attribution no",
@@ -1067,23 +1068,24 @@ its rulings (`draft/rv/james-asks.md`, `draft/rv/lead-rulings.md`); the review `
      - the review Mac, the review identity and the filmed video (LP-D5, D6; `draft/launch/review-mac-runbook.md`);
      - external TestFlight through Beta App Review;
      - the Mac's add-phone door naming the App Store.
-   - **Phase 4, the gate and the cut** (target 19 Nov):
+   - **Phase 4, the gate and the cut** (target 7 Nov, was 19 Nov):
      - The gate: phase 1 done; A, B and D done; C measured, and fixed or said in the notes; the scope frozen; James on a
        signed nightly every day for five days (RL6); and one person who isn't James installs from vibefield.dev on a
        clean Mac and gets an agent running.
      - Owed before the cut: measure the order of `releases.atom` and of the sign job's "previous" pick on a scratch
        repository (`draft/launch/policy-only-release.md` §4.3). If they follow commit dates, F1 (carry by publish
        order) and F2 (tag on a fresh cut commit) land first, on James's call.
-     - The cut: 0.9.0 committed in `apps/desktop/package.json` and the iOS MARKETING_VERSION; `release/0.9` made
+     - The cut: 0.9.0 committed in `apps/desktop/package.json` (the iOS one landed ahead); `release/0.9` made
        (LP-D3); James pushes `v0.9.0-beta.1` and approves twice. Its rows: W10, the clean-Mac row from the website, and
        a channel row.
    - Dropped for 0.9: EDP-22's universal build (LP-D9: Apple silicon only; revisited at 1.0 if Intel users ask). Still
      owed: the build job's `macos-26` image (the Xcode 26.3 pin stands until then).
-8. **Then the soak, and stable `v0.9.0`** (target 3 Dec).
+8. **Then the soak, and stable `v0.9.0`** (target 9 Nov, was 3 Dec).
    - The soak:
      - betas from `release/0.9`, each with W10 and the beta-to-beta update on two Macs;
      - a yank drill on the beta channel through the policy-only path (LP-D19);
-     - iPhone and iPad 0.9.0 submitted by 24 Nov with manual release (LP-D10), released the same hour as the Mac stable.
+     - iPhone and iPad 0.9.0 submitted by 8 Nov (was 24 Nov) with manual release (LP-D10), released the same hour
+       as the Mac stable.
    - The exit: seven days on the newest beta with no open crash, data-loss, security or update-failure bug; a
      beta-to-beta update witnessed; clean installs passing on every supported macOS; and App Review's approval.
    - Main moves to 0.10.0 the same day.

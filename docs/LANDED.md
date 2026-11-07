@@ -36985,6 +36985,8 @@ Owed "L4's word pass", each noted in its entry.
 - The pass on 11- and 13-inch iPads (Phase 3): this pass changes words, not layout.
 - **For James's eye** (draft words; not a hold): the lock's, Chat's, History's and the freeway's sentences on iPad,
   and the composed door's guard said without the device.
+  > *Found 2026-11-06:* one word the pass missed, outside the Swift it read: iOS's camera prompt (an Info.plist
+  > string) said "so this phone signs in". It says "this device" since `84193fcab` (LANDED "LP's 0.9.0").
 
 ## SP-7a's M-b — the phone reads a spark's transcript as the Mac does: the wire, a reader on the Mac's own rows, held to the real worker by W1 and to the contracts by 22 copies and six pins (track SP)
 
@@ -40494,3 +40496,58 @@ stays as it is.
 - The draft corrections, at item 212's slot (VF-PM's baton): `design-02-daemons.md` :213; ESR §5.3, §7.1 and §7.3 (the
   busy-incumbent wait and named takeover, the bounded recovery loop, the liveness watch's child-only end, a stop-owned
   stop after a wedge kill, `hasExited`); WP12-D10; the plugin-runtime soak's own intensity.
+
+## LP's 0.9.0 — the phone is 0.9.0 ahead of build 6's archive, and its camera prompt says "this device" on an iPad (track LP)
+
+(2026-11-06; two commits on main `dc05d6ce7`: `d300ad0e0`, landed 23:55:03Z, and `84193fcab`, landed
+2026-11-07T00:07:22Z; branches `lp/version-0-9-0` and `lp/camera-word`, cut by the LAUNCH lead (vibe-field-05) with git
+plumbing, so James's checkout was never touched. Each landed under a light witness, a9's build row on the old
+mini, with no verify run of its own; the next verify of main that includes them is the first to cover them.)
+Cut on James's ruling, 2026-11-06 23:39Z, typed to the LAUNCH lead: "the dates should be no later than Nov 9, we
+should be moving very fast". VF-PM made the version commit the LAUNCH lead's at 23:43Z, and the camera word a slice
+of its own at 23:53Z.
+
+**What is real.**
+- **The version.** `MARKETING_VERSION` moves 0.1 → 0.9.0 in the App target's two configurations (project.pbxproj
+  :214 and :249). `CURRENT_PROJECT_VERSION` stays 1, since `testflight.sh archive 6` numbers the build. App Store
+  Connect files a build under its version, so build 6 archived at 0.1 could never have been submitted as 0.9.0. The
+  version moved ahead of the cut, where ROADMAP's RL6 line had it.
+- **TESTFLIGHT.md :151** said `MARKETING_VERSION` "stays `0.1` until the beta cut moves it". It carries a dated
+  correction at the source.
+- **The camera prompt.** `NSCameraUsageDescription` (project.pbxproj :202 and :237) said "…so this phone signs in to
+  the same account", and iOS shows that prompt on an iPad. It now says "so this device signs in". An Info.plist
+  string is fixed per build and can't read `DeviceWord`, so it takes DESIGN.md §9's fallback, as the Face ID string
+  does ("on this device"). VF-PM ruled the neutral word over an `~ipad` key (23:53Z).
+  - The LAUNCH lead found it at 23:51Z, reading the phone's usage strings for the App Privacy draft. LP-4's word
+    pass had read the Swift words only; its entry notes it.
+
+**What is stubbed or left.**
+- `apps/desktop/package.json` stays 0.1.0 until the cut. The release workflow refuses a `v0.9.0*` tag until it says
+  0.9.0 (`scripts/release-plan.mjs` :90), and the nightlies keep their 0.1.0-nightly versions until then.
+- PhoneCode.swift :3's doc comment still says "this phone". It is a comment, never shown.
+
+**Validation.**
+- No Swift compiled on this MacBook (the load HOLD). Pin-class: project.pbxproj in both commits (the version lines
+  and the string lines only), named for James's eye.
+- **The version row** on the old mini (a9, Xcode 27.2 27B52):
+  - Release's `-showBuildSettings` read `MARKETING_VERSION = 0.9.0` and `CURRENT_PROJECT_VERSION = 1`.
+  - The App build (Debug, the generic iOS Simulator, no signing, no simulator boot) succeeded in 46 s.
+  - The built Info.plist read CFBundleShortVersionString 0.9.0 and CFBundleVersion 1.
+  - `check-ios-fixtures` gave rc 0 (374 copies, 93 pins).
+  - The end load {21.81 7.58 5.78} was the build's own spike. VF-PM ruled the row GREEN at 23:53Z ((a), no
+    re-run): the load ceiling guards timed claims, and this row makes none. The brief's ceiling line carries a dated
+    erratum.
+  - Logs `lanes/launch/a9-v090-results/` (SUMS-a9 `8a82b43f`, `step4-build.log` `4610aeea…`).
+- **The camera row** on the old mini (a9, Xcode 27.2 27B52):
+  - The App build ran incrementally, in v090's worktree moved forward to `84193fcab` (the host had no room for a
+    second copy). It succeeded in 7 s.
+  - The built Info.plist's NSCameraUsageDescription ends "…so this device signs in to the same account.", with no
+    "phone", and CFBundleShortVersionString reads 0.9.0.
+  - `check-ios-fixtures` gave rc 0 (374 copies, 93 pins).
+  - The load is informational for a build row: {3.51 11.57 10.50} at the start, {3.36 11.27 10.40} at the end.
+  - Logs `lanes/launch/a9-vcam-84193fcab-results/` (SUMS-a9 `84ccef31`, `step3-build.log` `a76278e6…`).
+
+**Owed.**
+- James's eye on the camera words and on both project.pbxproj diffs.
+- At the cut: the desktop's 0.9.0 in `apps/desktop/package.json`. Before the stable:
+  `apps/desktop/packaging/notes/0.9.0.txt`.
