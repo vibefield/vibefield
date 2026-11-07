@@ -22,7 +22,10 @@
 // - `gl_FragCoord`'s origin is the bottom left and Metal's position the top left. Where a program reads the pixel's
 //   place for its own sake (the ground's gradient and star grid, the grain, the dither), it reads `glFrag`, the GL
 //   coordinate (x, height − y). The bloom's samples and the composite's are symmetric about the pixel and read their
-//   source in Metal's own orientation, which is the same texel.
+//   source in Metal's own orientation, which is the same texel;
+// - where a hash reads a sum of two products (the burst's rays, :200, and the particles, :378), `hin` rounds each
+//   product to its own float, as WebGL does. Metal's compiler fuses one of them into an FMA with the sum, and h11
+//   makes that one ulp whole pixels: kit-f5f2's G2 had a ray recoloured and a chip moved 74 px (f5f 4/4).
 //
 // Only what the hatch draws is transcribed (VF-PM's Q3 ruling, 2026-11-07 13:58:40Z). The hatch's sky is the night,
 // and its star draws its burst alone (`mask: LAYERS.BURST`, :231). So these are not here, and nothing the hatch draws
@@ -36,8 +39,10 @@
 
 #pragma clang diagnostic ignored "-Wunused-variable"
 #pragma clang diagnostic ignored "-Wunknown-pragmas"
-// WebGL's highp is IEEE single precision, and Metal's default is fast math. Safe math keeps the hash noise (h11, h12)
-// and the exponentials the engine's (MSL 3.2, iOS 18), as SparkStar.metal keeps them.
+// WebGL's highp is IEEE single precision, and Metal's default is fast math. Safe math keeps the exponentials the
+// engine's where it is in effect (MSL 3.2, iOS 18), as SparkStar.metal asks. Nothing shows it in effect: the kit
+// targets iOS 17 and the unknown-pragma warning above is silenced (since 12e). Nothing here relies on it; the hash
+// inputs are `hin`'s.
 #pragma METAL fp math_mode(safe)
 
 #include <metal_stdlib>
@@ -70,10 +75,12 @@ HATCH_SCALAR_FORMS(float2)
 HATCH_SCALAR_FORMS(float3)
 HATCH_SCALAR_FORMS(float4)
 
-/// The star programs' uniforms: `a` = (uRes.x, uRes.y, uTime, uDpr), `b` = (uNight, uP, uResPx.x, uResPx.y).
+/// The star programs' uniforms: `a` = (uRes.x, uRes.y, uTime, uDpr), `b` = (uNight, uP, uResPx.x, uResPx.y), and
+/// `c` zero, the zero `hin` ORs into each product: the compiler cannot see it is zero.
 struct Sky {
   float4 a;
   float4 b;
+  float4 c;
 };
 
 /// The full-screen passes' uniforms: `a` = (uTexel.x, uTexel.y, uThresh or uOff, uBloomStr), `b` = (uNight, uTime,
@@ -86,6 +93,11 @@ struct Pass {
 // ---- HEAD (:72–93)
 inline float4 D(texture2d<float, access::read> uData, int k, int id) { return uData.read(uint2(uint(k), uint(id))); }
 inline float h11(float p) { p = fract(p * .1031); p *= p + 33.33; p *= p + p; return fract(p); }
+/// A hash's input `a * k1 + b * k2` as WebGL computes it: each product rounded to its own float, then the sum. ORing
+/// each product's bits with `zero` (`Sky.c`, 0 from the renderer) keeps the compiler from fusing it into the sum.
+inline float hin(float a, float k1, float b, float k2, uint zero) {
+  return as_type<float>(as_type<uint>(a * k1) | zero) + as_type<float>(as_type<uint>(b * k2) | zero);
+}
 inline float h12(float2 p) { float3 p3 = fract(float3(p.xyx) * .1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
 inline float vnoise(float2 p) { float2 i = floor(p), f = fract(p); float2 u = f * f * (3. - 2. * f);
   return gmix(gmix(h12(i), h12(i + float2(1, 0)), u.x), gmix(h12(i + float2(0, 1)), h12(i + float2(1, 1)), u.x), u.y); }
@@ -321,6 +333,7 @@ fragment float4 hatch_sky_body_fragment(
   constant float4 *uPal [[buffer(1)]], constant float4 *uConf [[buffer(2)]]
 ) {
   float uTime = sky.a.z, uNight = sky.b.x;
+  uint zero = as_type<uint>(sky.c.x);
   float2 vP = in.vP;
   int id = in.vId;
   float4 d0 = D(uData, 0, id), d1 = D(uData, 1, id), d2 = D(uData, 2, id), d3 = D(uData, 3, id), d7 = D(uData, 7, id);
@@ -347,7 +360,7 @@ fragment float4 hatch_sky_body_fragment(
     int bm = int(d7.y + .5);
     for (int j = 0; j < 26; j++) {
       float fj = float(j); bool needle = j >= 18;
-      float hA = h11(seed * 13.7 + fj * 1.37), hB = h11(seed * 7.13 + fj * 3.11), hC = h11(seed * 3.37 + fj * 5.71), hD = h11(seed * 9.91 + fj * 7.3), hE = h11(seed * 1.93 + fj * 2.9);
+      float hA = h11(hin(seed, 13.7, fj, 1.37, zero)), hB = h11(hin(seed, 7.13, fj, 3.11, zero)), hC = h11(hin(seed, 3.37, fj, 5.71, zero)), hD = h11(hin(seed, 9.91, fj, 7.3, zero)), hE = h11(hin(seed, 1.93, fj, 2.9, zero));
       bool lead = j < n;
       float ang = needle ? (fj - 18. + hA) / 8. * TAU + seed * 5. : lead ? D(uData, 8 + j * 2, id).x + (hA - .5) * .12 : (fj + hA * .85) / 18. * TAU + seed * 2.;
       float del = needle ? hB * .03 : .015 + hB * .07;
@@ -396,11 +409,13 @@ vertex PartOut hatch_sky_part_vertex(
   float2 uRes = sky.a.xy;
   float uTime = sky.a.z, uNight = sky.b.x;
   int uP = int(sky.b.y + .5);
+  uint zero = as_type<uint>(sky.c.x);
   int sid = int(instanceID) / uP, j = int(instanceID) - sid * uP;
   float4 d0 = D(uData, 0, sid), d1 = D(uData, 1, sid), d2 = D(uData, 2, sid), d7 = D(uData, 7, sid);
   float R = d0.z, seed = d0.w, tau = uTime - d1.y, fj = float(j);
-  float h1 = h11(seed * 3.1 + fj * 1.71), h2 = h11(seed * 5.7 + fj * 2.33), h3 = h11(seed * 1.3 + fj * 3.97),
-        h4 = h11(seed * 8.9 + fj * 5.03), h5 = h11(seed * 2.2 + fj * 6.11), h6 = h11(seed * 6.6 + fj * 7.77);
+  float h1 = h11(hin(seed, 3.1, fj, 1.71, zero)), h2 = h11(hin(seed, 5.7, fj, 2.33, zero)),
+        h3 = h11(hin(seed, 1.3, fj, 3.97, zero)), h4 = h11(hin(seed, 8.9, fj, 5.03, zero)),
+        h5 = h11(hin(seed, 2.2, fj, 6.11, zero)), h6 = h11(hin(seed, 6.6, fj, 7.77, zero));
   float2 Dst = d0.xy, S = d2.xy, tdir = normalize(Dst - S + 1e-4);
   int pb = int(d2.z + .5) * 10;
   int mask = int(d7.x + .5);

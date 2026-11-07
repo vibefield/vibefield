@@ -194,10 +194,12 @@ public final class HatchSkyRenderer: @unchecked Sendable {
     let width = targets.scene.width
     let height = targets.scene.height
     let night: Float = HatchSky.night ? 1 : 0
-    // a = (uRes, uTime, uDpr), b = (uNight, uP, uResPx)
+    // a = (uRes, uTime, uDpr), b = (uNight, uP, uResPx), and c zero: the zero HatchSky.metal's `hin` ORs into each of a
+    // hash's two products, so the compiler cannot fuse one into the sum (f5f 4/4)
     let sky: [SIMD4<Float>] = [
       SIMD4(Float(view.width), Float(view.height), Float(time), Float(scale)),
       SIMD4(night, Float(Self.particles), Float(width), Float(height)),
+      SIMD4(0, 0, 0, 0),
     ]
     let skyLength = MemoryLayout<SIMD4<Float>>.stride * sky.count
     let scenePass = MTLRenderPassDescriptor()
