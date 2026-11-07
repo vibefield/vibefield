@@ -706,9 +706,16 @@ Built at SP-1c: the sky is James's star engine (`star-spark/engine.js` at `025b4
 *Amended 2026-11-07 (IOS-12f, its Q6 and Q7; VF-PM's rulings 12:35:44Z):* on the phone the hatch plays in New
 spark's sky (§8 "The phone's Chat"), free at 120. The kit transcribes the engine's trail, body and burst into Metal
 (`SparkHatch.metal`), as IOS-12e transcribed the face. The engine draws them as pure functions of the row and the
-time, so a golden the vendored engine deals holds any moment: the kit matches its rows within 1e-4 and its stills by
-eye (12e's bound). Created, the face flies from the sky to its row in Chat's list as the sheet folds, 660 ms on the
-island curve, as the Mac's kit flies it. Reduced motion: no falling star and no flight; the face fades in.
+time, so goldens the vendored engine deals hold any moment, as 12e's hold the face: the kit matches the engine's
+rows within 1e-4, and its Metal frames match the engine's own WebGL2 frames within 12e's bound (per channel ≤ 6/255
+on ≥ 99.5% of a frame's pixels, mean ≤ 1/255), which VF-PM rules for good on the hatch's first report. Created, the
+face flies from the sky to its row in Chat's list as the sheet folds, 660 ms on the island curve, as the Mac's kit
+flies it. Reduced motion: no falling star and no flight; the face fades in. *Corrected 2026-11-07 (IOS-12f's f5a;
+VF-PM's ruling 13:58:40Z): this said "the kit matches its rows within 1e-4 and its stills by eye (12e's bound)",
+which misquotes 12e. 12e holds the face by its rows within 1e-4 and by the engine's own WebGL2 pixels within its Q2
+bound (ruled 2026-11-06 07:51Z, the stills above), and "stills by eye" is 12e's own name for a shader with no gate,
+its plan's Q1 (c). The misquote was 12f's plan's Q6, which kept the rows and took "by eye" from that (c), dropping
+the pixels; f0 copied it here.*
 
 **Where it lives in code.** The engine is vendored from James's `research/spark`
 (`agent-sparks/sparks.js` at `025b495`, and `star-spark.js` beside it), byte for byte: a newer version
