@@ -226,8 +226,10 @@ struct ChatNeedsCardView: View {
 }
 
 /// The card's acts, left to right, 8 apart, wrapping to a further row where the next would not fit; never shrunk.
+/// IOS-12f — `centred`: each row centred in the box, as New spark's chips wrap (the Mac's `justify-content: center`).
 struct ChatActsLayout: Layout {
   var spacing: CGFloat = 8
+  var centred = false
 
   func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
     let rows = rows(within: proposal.width ?? .infinity, subviews)
@@ -239,7 +241,7 @@ struct ChatActsLayout: Layout {
   func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
     var y = bounds.minY
     for row in rows(within: bounds.width, subviews) {
-      var x = bounds.minX
+      var x = centred ? bounds.minX + Swift.max(bounds.width - row.width, 0) / 2 : bounds.minX
       for index in row.indices {
         let size = subviews[index].sizeThatFits(.unspecified)
         subviews[index].place(at: CGPoint(x: x, y: y), anchor: .topLeading, proposal: ProposedViewSize(size))

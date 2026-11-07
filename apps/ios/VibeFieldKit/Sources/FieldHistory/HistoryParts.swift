@@ -67,12 +67,19 @@ struct DeviceName: View {
 /// An agent's mark at 13 pt: the vendor's letter in a rounded square, the
 /// reference's own fallback for a mark that is not drawn — and here every
 /// mark is a letter, because the History tab draws no vendor glyphs yet.
-struct AgentMark: View {
-  let agent: String
-  var opacity: Double = 0.55
-  var size: CGFloat = 13
+/// IOS-12f — public for New spark's agent pill, at 20 (DESIGN.md §8 "The phone's Chat"): one mark on the phone.
+public struct AgentMark: View {
+  public let agent: String
+  public var opacity: Double = 0.55
+  public var size: CGFloat = 13
 
-  var body: some View {
+  public init(agent: String, opacity: Double = 0.55, size: CGFloat = 13) {
+    self.agent = agent
+    self.opacity = opacity
+    self.size = size
+  }
+
+  public var body: some View {
     Text(agent.prefix(1).uppercased())
       .font(.system(size: size * 0.62, weight: .bold, design: .rounded))
       .foregroundStyle(ChromePalette.ink)

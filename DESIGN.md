@@ -6462,10 +6462,12 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       corners 16, 14 medium, wrapping. A checked chip takes the fill and a 1.5 inset ring. Default comes checked.
       The one it thinks under is always checked and can't be unchecked. Under them, 13 tertiary, what the spark
       will reach: "Sees 3 sessions · starts Claude Code and Codex".
-    - **The foot:** Cancel (quiet) and **Create Polaris** (primary), capsules 48 tall and 8 apart, side by side
-      across the sheet less 16 at each side, 16 above the safe area; while the name is typed, it stands over the
-      keys. Create waits on a name. It also waits, disabled, on the agent and the profile the sheet reads as it
-      opens, and while its hatch runs.
+    - **The foot:** Cancel (quiet) and **Create Polaris** (primary), the phone's wide pills, 50 tall and 8 apart, side
+      by side across the sheet less 16 at each side, 16 above the safe area; while the name is typed, it stands over
+      the keys. Create waits on a name. It also waits, disabled, on the agent and the profile the sheet reads as it
+      opens, and while its hatch runs. *Corrected 2026-11-07 (IOS-12f's f4): this said "capsules 48 tall". The
+      phone draws one pill (`ChromePillStyle`, §4), and its wide size is the way in's 50 (WI-2); a 48 would be a
+      second copy of it.*
     - **A read that fails** is said at the foot, 13 in the attention ink, centred, never a Create left waiting in
       silence: "VibeField can't list its agents right now", or "VibeField can't list your Agent Profiles right
       now".

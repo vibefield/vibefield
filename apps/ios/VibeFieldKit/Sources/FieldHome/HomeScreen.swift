@@ -961,7 +961,8 @@ public struct HomeScreen: View {
     let entries = chatEntries
     return ChatPage(
       entries: entries, ledger: chatLedger, desktops: chatDesktopNames(entries), away: chatAway,
-      heard: chat.reading.heard, onWake: { spark in Task { try? await chat.wake(spark) } },
+      heard: chat.reading.heard, homeName: chatName(nil), sessions: chatSessions,
+      onWake: { spark in Task { try? await chat.wake(spark) } },
       feed: chat, thread: $chatThread, onOpenPane: openSparkPane,
       // IOS-12d (Q5) — Answer in its pane opens only a run with a session card on the field, else the card says so
       paneOpens: { key in bubbles.contains { $0.runKey == key } }
@@ -985,6 +986,13 @@ public struct HomeScreen: View {
   private var chatEntries: [SparkEntry] {
     SparkEntries.entries(
       sparks: chat.reading.sparks, rows: (link?.rows ?? []).map(\.board), items: chat.reading.items)
+  }
+
+  /// IOS-12f (VF-PM 2026-11-07 13:37:20Z, ruled (a)) — the person's live sessions on the home, for New spark's reach:
+  /// nil until a live home answers for the board.
+  private var chatSessions: [RunProfileFacts]? {
+    guard let link, link.fieldIsLive else { return nil }
+    return NewSpark.sessions(link.rows.map(\.board), home: linkHome)
   }
 
   /// Chat's mark on the bar (PC-D5 A): the sparks that need you, else the

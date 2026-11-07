@@ -91,6 +91,12 @@ enum NewSparkWords {
   /// The Agent Profiles could not be read: said at the foot, since Create waits on the profile it thinks under and
   /// never waits in silence (item 149; the Mac's `CANNOT_LIST_PROFILES`).
   static let cannotListProfiles = "VibeField can't list your Agent Profiles right now"
+  /// The door and the sheet's name (the Mac's create, `sparkle`); the name field, ↻ and Cancel, as the Mac's sheet
+  /// labels them.
+  static let title = "New spark"
+  static let nameLabel = "Name"
+  static let anotherFace = "Another face"
+  static let cancel = "Cancel"
 
   /// "Runs on studio, your home" (§9, PC-D8 A).
   static func runsOn(_ desktop: String) -> String { "Runs on \(desktop), your home" }
@@ -259,8 +265,11 @@ enum NewSpark {
   /// its own field board's `{profileSet, profileId}` (`personSessionsOf`); a remote row carries the monitor's resolved
   /// set and no persona, so a retired sign-in counts as Default here, where the rule places it nowhere
   /// (agent-index.ts's "the one place the two differ"). The caller says nil until the board is read.
-  /// SKELETON (f4 3/3's red): counts nothing yet.
-  static func sessions(_ rows: [AgentRemoteRow], home: String?) -> [RunProfileFacts] { [] }
+  static func sessions(_ rows: [AgentRemoteRow], home: String?) -> [RunProfileFacts] {
+    rows
+      .filter { $0.device == home && $0.monitorRow.alive && $0.spark == nil }
+      .map { RunProfileFacts(profileSet: $0.monitorRow.profileSet) }
+  }
 
   /// The line under the chips: how many sessions it sees, then what it can start.
   static func reach(_ sessions: Int?, starts: [String]) -> String {

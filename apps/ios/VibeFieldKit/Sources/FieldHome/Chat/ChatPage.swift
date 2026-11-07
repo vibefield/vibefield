@@ -8,6 +8,7 @@ import SwiftUI
 // spark's status and its dot; pressed, it opens the spark's thread (IOS-12c), pushed in this page's own stack; held,
 // its menu offers Open its pane while its own run is live, and Wake while it sleeps. IOS-12d (PC-D4 A, Q7): Needs you
 // heads the list while anything waits, one card per spark's item of the home's merged queue, answered in place.
+// IOS-12f (PC-D8 A, Q1): New spark's door, `sparkle` at the title's right, opens its sheet (`NewSparkSheetView`).
 
 /// Chat's words (§9 "Chat on the phone"), pure.
 enum ChatWords {
@@ -129,6 +130,10 @@ struct ChatPage: View {
   let away: [ChatAway]
   /// The home has answered the list at least once (else nothing is claimed, not even "No sparks yet.").
   let heard: Bool
+  /// IOS-12f — the home's name, for New spark's "Runs on studio, your home".
+  let homeName: String
+  /// IOS-12f — the person's live sessions on the home, for New spark's reach; nil until the board is read.
+  let sessions: [RunProfileFacts]?
   let onWake: (SparkSummary) -> Void
   /// IOS-12c — the threads' reads and sends go through Chat's feed, and the thread shown is the screen's (the bar
   /// steps aside for it, and the ledger reads it).
@@ -139,11 +144,15 @@ struct ChatPage: View {
   /// IOS-12d — the field has a pane for this run key (HomeScreen's session cards, d5); until it says, every run has.
   var paneOpens: (String) -> Bool = { _ in true }
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  /// IOS-12f — the New spark sheet stands.
+  @State private var newSpark = false
   #if DEBUG
     /// The stills' thread has been opened once (`ChatFixtureDoor.openThread`); back then stays back.
     @State private var openedForStills = false
     /// IOS-12d — the stills' act has been pressed once (`ChatFixtureDoor.needsPress`).
     @State private var pressedForStills = false
+    /// IOS-12f — the stills' New spark has been opened once (`ChatFixtureDoor.openNewSpark`).
+    @State private var newSparkForStills = false
   #endif
 
   /// The stack's path: the shown thread, or none.
@@ -159,6 +168,19 @@ struct ChatPage: View {
           .background(ChromePalette.paper.ignoresSafeArea())
       }
       .navigationTitle(ChatWords.title)
+      // IOS-12f (Q1) — New spark's door at the title's right, as the Mac's create stands in Chat's line
+      .toolbar {
+        ToolbarItem(placement: .topBarTrailing) {
+          Button {
+            newSpark = true
+          } label: {
+            FieldGlyph(.sparkle, size: 22)
+              .frame(width: 44, height: 44)
+              .contentShape(Rectangle())
+          }
+          .accessibilityLabel(NewSparkWords.title)
+        }
+      }
       .navigationDestination(for: String.self) { spark in
         if let entry = entries.first(where: { $0.spark.id == spark }) {
           ChatThreadView(
@@ -172,7 +194,19 @@ struct ChatPage: View {
       }
     }
     .tint(ChromePalette.ink)
+    // IOS-12f — the sheet: a spark made on the home, its words §9's (Cancel or pulled down, nothing is made)
+    .sheet(isPresented: $newSpark) {
+      NewSparkSheetView(
+        feed: feed, taken: feed.reading.sparks.map(\.name), homeName: homeName,
+        away: feed.reading.connected ? nil : away.first, sessions: sessions)
+    }
     #if DEBUG
+      // IOS-12f — the stills' sheet, once the list is heard (no OS input on the stills' host)
+      .onChange(of: heard, initial: true) { _, heard in
+        guard heard, !newSparkForStills, ChatFixtureDoor.openNewSpark else { return }
+        newSparkForStills = true
+        newSpark = true
+      }
       // the stills, under `-vf-mock`: the named thread opens once the list holds its spark (set before then, the
       // destination would find no spark and stand the list again)
       .onChange(of: entries.map(\.spark.id), initial: true) { _, ids in
