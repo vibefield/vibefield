@@ -3325,6 +3325,33 @@ describe("CP-4a2b — the spark's facts: a run a spark started tells it when the
     });
   });
 
+  it("R35's Stop leg (slice 13, Q15, W1; red-b): a run a spark started that a Stop ends tells that spark once, in §9's words, \"VibeField: Vela's run of ‹flow› (‹run›) was stopped\"; a second Stop of the ended run tells nothing more", async () => {
+    // §9's sentence (W1, DESIGN.md at 48f3216ac), said of §9's Vela, ‹flow› and ‹run›, past its "VibeField: ", which
+    // the input queue's mark adds, and with no closing stop: green at red-b, whose words.ts declares it unsaid
+    const design = readFileSync(join(import.meta.dirname, "../../../DESIGN.md"), "utf8").replace(
+      /\s+/g,
+      " ",
+    );
+    const said = words.factStopped("Vela", "‹flow›", "‹run›");
+    expect(design, said).toContain(`"VibeField: ${said}"`);
+    // Vela's run, its step's agent at work and its host live, stopped: a Stop row's one wait is the Stop itself, and
+    // what was told is the harness's recording, read after
+    const h = await harness();
+    h.approved("review", ANSWERED);
+    const run = startedRun(await h.start({ flow: "review", ...VELAS })).run;
+    await within(WAIT_MS, () => h.enqueued.length > 0 || ended(h, run));
+    const from = h.facts.length;
+    const stopped = (await h.runs.stop(run)).run.state;
+    const again = (await h.runs.stop(run)).run.state;
+    // red-b: the stub answers the run as it stands (running) and acts on nothing, so nothing ends and nothing is told.
+    // Its mutation at the green: END_FACTS without `stopped` (#tell's warn), and the run tells Vela nothing
+    expect({ stopped, again, told: factsOf(h, from) }).toEqual({
+      stopped: "stopped",
+      again: "stopped",
+      told: [toVela(words.factStopped, "Review", "review", run)],
+    });
+  });
+
   it("R35 (Q9; slice 11b's red-b): a fact is built from the spark's name, ‹flow› and the run's id alone: none holds the gate's question, a step's answer, a log line or what the script threw", async () => {
     // a gate raced against a step: the step's answer wins the race, and the script logs a line and throws, its gate
     // still waiting, so the run tells Vela it holds on you, then that it failed. At this red its ask is refused at its
@@ -3390,6 +3417,18 @@ describe("CP-4a2b — the spark's facts: a run a spark started tells it when the
     const run = startedRun(await h.start({ flow: "hello", ...THREAD })).run;
     await settled(h.runs, run, "done");
     expect(toldOf(h)).toEqual([]);
+  });
+
+  it("R35c's Stop leg (slice 13, Q15, T3b; red-b): a Run you start in a spark's thread is yours: a Stop that ends it tells that spark nothing", async () => {
+    // your run in Vela's thread, its step's agent at work and its host live, stopped
+    const h = await harness();
+    h.approved("review", ANSWERED);
+    const run = startedRun(await h.start({ flow: "review", ...THREAD })).run;
+    await within(WAIT_MS, () => h.enqueued.length > 0 || ended(h, run));
+    const stopped = (await h.runs.stop(run)).run.state;
+    // red-b: the stub answers the run as it stands (running) and acts on nothing, so it reds on `stopped` alone; its
+    // `told` is green here by construction, and its mutation at the green is a tell on `starter.spark` alone
+    expect({ stopped, told: toldOf(h) }).toEqual({ stopped: "stopped", told: [] });
   });
 });
 
