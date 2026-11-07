@@ -130,6 +130,12 @@ const OTHER_ORIGINS = new Map([
   // IOS-12f (f5) — the hatch's rows (spark-hatch-golden.mjs): New spark's sky as the star engine lays it out, and
   // the face born where its star lands, which the phone's StarSpark and SparkBuddy are held to
   ["spark-hatch.golden.json", join(root, "packages/design-kit/fixtures/spark-hatch.golden.json")],
+  // and its frames' manifest (spark-hatch-frames-golden.mjs), which names each PNG the Metal hatch is held to; the PNGs
+  // are held below
+  [
+    "spark-hatch-frames.manifest.json",
+    join(root, "packages/design-kit/fixtures/spark-hatch-frames.manifest.json"),
+  ],
   [
     "phone-fold.golden.json",
     join(root, "packages/field-app/test/fixtures/phone-godview/phone-fold.golden.json"),
@@ -389,6 +395,7 @@ const requiredMirrors = [
       "spark-rows.golden.json",
       "spark-stills.manifest.json",
       "spark-hatch.golden.json",
+      "spark-hatch-frames.manifest.json",
     ],
     ["Tests/FieldDesignTests"],
   ],
@@ -643,10 +650,11 @@ for (const searchRoot of searchRoots) {
 // named with their sha256 in its manifest (mirrored above as JSON). The kit's copies in FieldDesignTests'
 // Fixtures/spark-stills must be the same set of files, byte for byte, and the set the manifest names: a PNG copied
 // by hand, one left behind by a redraw, or a case the copy lacks is red here before it is a kit slot's.
-{
-  const ORIGIN = join(root, "packages/design-kit/fixtures/spark-stills");
-  const COPY = join(root, "apps/ios/VibeFieldKit/Tests/FieldDesignTests/Fixtures/spark-stills");
-  const MANIFEST = join(root, "packages/design-kit/fixtures/spark-stills.manifest.json");
+// IOS-12f (f5) — the hatch's frames, drawn by spark-hatch-frames-golden.mjs, are held the same way, by the same rule.
+function holdPictureSet({ folder, manifestFile, said }) {
+  const ORIGIN = join(root, "packages/design-kit/fixtures", folder);
+  const COPY = join(root, "apps/ios/VibeFieldKit/Tests/FieldDesignTests/Fixtures", folder);
+  const MANIFEST = join(root, "packages/design-kit/fixtures", manifestFile);
   const pngs = (dir) => {
     let names;
     try {
@@ -663,9 +671,9 @@ for (const searchRoot of searchRoots) {
     const manifest = JSON.parse(readFileSync(MANIFEST, "utf8"));
     named = manifest.cases.map(({ file }) => file.slice(file.lastIndexOf("/") + 1)).sort();
   } catch {
-    problems.push(`the stills' manifest is unreadable: ${relative(root, MANIFEST)}`);
+    problems.push(`the ${said.manifest} is unreadable: ${relative(root, MANIFEST)}`);
   }
-  if (origin === null) problems.push(`the stills golden is missing: ${relative(root, ORIGIN)}`);
+  if (origin === null) problems.push(`the ${said.golden} is missing: ${relative(root, ORIGIN)}`);
   if (copy === null)
     problems.push(`required spark-face mirror is missing: ${relative(root, COPY)}`);
   if (origin !== null && named !== null && origin.join("\n") !== named.join("\n"))
@@ -687,6 +695,16 @@ for (const searchRoot of searchRoots) {
     }
   }
 }
+holdPictureSet({
+  folder: "spark-stills",
+  manifestFile: "spark-stills.manifest.json",
+  said: { golden: "stills golden", manifest: "stills' manifest" },
+});
+holdPictureSet({
+  folder: "spark-hatch-frames",
+  manifestFile: "spark-hatch-frames.manifest.json",
+  said: { golden: "hatch's frames golden", manifest: "hatch frames' manifest" },
+});
 
 // The vendored files, each held to its pin by the script that vendored it (VENDORED, above), and
 // the assets edited in place, each held by the script that edited it (EDITED_IN_PLACE, above).

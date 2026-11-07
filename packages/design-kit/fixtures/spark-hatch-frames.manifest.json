@@ -1,0 +1,336 @@
+{
+  "//": "IOS-12f's f5 (PC-D8 A). The vendored star engine's own pixels for moments of the hatch's rows golden: WebGL2, the hatch's options with preserve, render(t), toDataURL (opaque RGBA PNGs), at the engine's own @2x cap; the motion frames with grain 0 and one frame with the engine's grain. Host-bound: redraw on purpose with node packages/design-kit/scripts/spark-hatch-frames-golden.mjs, after the rows golden; --check holds every byte.",
+  "engine": {
+    "file": "src/spark-face/vendor/star-spark.js",
+    "sha256": "e4c142f2b52e8b52f4cda371232bda9aaa211c7c9535e07f18a63a19b0d9ead6"
+  },
+  "rows": {
+    "file": "fixtures/spark-hatch.golden.json",
+    "sha256": "e47b1add6d4f03f82b71db5d73bb4fe9e35accd274cff081382ccba5ad65a984"
+  },
+  "scale": 2,
+  "options": {
+    "bloom": true,
+    "night": true,
+    "max": 8,
+    "dprCap": 2,
+    "bloomStr": 0.45,
+    "grain": 0.035
+  },
+  "host": {
+    "name": "jaspers-Mac-mini.local",
+    "os": "darwin 25.6.0",
+    "cpu": "Apple M4",
+    "electron": "43.1.1",
+    "chrome": "150.0.7871.114",
+    "renderer": "ANGLE (Apple, ANGLE Metal Renderer: Apple M4, Unspecified Version)",
+    "halfFloat": true
+  },
+  "bytes": 9338476,
+  "cases": [
+    {
+      "id": "a-deal",
+      "deal": "a",
+      "moment": "deal",
+      "t": 0.016666666666666666,
+      "grain": 0,
+      "width": 382,
+      "height": 300,
+      "file": "fixtures/spark-hatch-frames/a-deal.png",
+      "pixels": {
+        "width": 764,
+        "height": 600
+      },
+      "bytes": 491446,
+      "sha256": "0fee36b3a7ed3c57ed6686bc7661292d8b3562171038c247a245264ce249d792"
+    },
+    {
+      "id": "a-falling",
+      "deal": "a",
+      "moment": "falling",
+      "t": 0.5166666666666667,
+      "grain": 0,
+      "width": 382,
+      "height": 300,
+      "file": "fixtures/spark-hatch-frames/a-falling.png",
+      "pixels": {
+        "width": 764,
+        "height": 600
+      },
+      "bytes": 510822,
+      "sha256": "f4224966db7b7e0f8a2a6daac85448c4f4d9e2aa1514eb87dbe35c0b07dad533"
+    },
+    {
+      "id": "a-landing",
+      "deal": "a",
+      "moment": "landing",
+      "t": 0.65,
+      "grain": 0,
+      "width": 382,
+      "height": 300,
+      "file": "fixtures/spark-hatch-frames/a-landing.png",
+      "pixels": {
+        "width": 764,
+        "height": 600
+      },
+      "bytes": 525694,
+      "sha256": "d7a1d782f1e9db6edda1fc02b1a4e5de53ce8b3c88e1cee719c54d09b11a2a9f"
+    },
+    {
+      "id": "a-flash",
+      "deal": "a",
+      "moment": "flash",
+      "t": 0.6666666666666666,
+      "grain": 0,
+      "width": 382,
+      "height": 300,
+      "file": "fixtures/spark-hatch-frames/a-flash.png",
+      "pixels": {
+        "width": 764,
+        "height": 600
+      },
+      "bytes": 526625,
+      "sha256": "bcde12bbd8c209c4a9c96a063c9e9141a518312f80bbbb199454e7135cfb8084"
+    },
+    {
+      "id": "a-burst",
+      "deal": "a",
+      "moment": "burst",
+      "t": 0.85,
+      "grain": 0,
+      "width": 382,
+      "height": 300,
+      "file": "fixtures/spark-hatch-frames/a-burst.png",
+      "pixels": {
+        "width": 764,
+        "height": 600
+      },
+      "bytes": 564418,
+      "sha256": "aa28a5b2120e93e0dd9e673124651966b225529dfe6495e8ee2971f641f625c0"
+    },
+    {
+      "id": "a-debris",
+      "deal": "a",
+      "moment": "debris",
+      "t": 1.1,
+      "grain": 0,
+      "width": 382,
+      "height": 300,
+      "file": "fixtures/spark-hatch-frames/a-debris.png",
+      "pixels": {
+        "width": 764,
+        "height": 600
+      },
+      "bytes": 540460,
+      "sha256": "b6ecc6e53b30aff294ca0936c2bc1957ba7a85c7679e9f2d6912684f025d1425"
+    },
+    {
+      "id": "a-glitter",
+      "deal": "a",
+      "moment": "glitter",
+      "t": 1.85,
+      "grain": 0,
+      "width": 382,
+      "height": 300,
+      "file": "fixtures/spark-hatch-frames/a-glitter.png",
+      "pixels": {
+        "width": 764,
+        "height": 600
+      },
+      "bytes": 499260,
+      "sha256": "fafa5ba0f0a8129d75c2ed6c882c7df57d71fa3bfd99ba47b305049ee22e36fb"
+    },
+    {
+      "id": "a-late",
+      "deal": "a",
+      "moment": "late",
+      "t": 2.85,
+      "grain": 0,
+      "width": 382,
+      "height": 300,
+      "file": "fixtures/spark-hatch-frames/a-late.png",
+      "pixels": {
+        "width": 764,
+        "height": 600
+      },
+      "bytes": 492716,
+      "sha256": "e47fdf0f67ebe6ad00d249a235b2db10401db80215e3ae2f1eb767a3678ea5a8"
+    },
+    {
+      "id": "a-ground",
+      "deal": "a",
+      "moment": "ground",
+      "t": 6.05,
+      "grain": 0,
+      "width": 382,
+      "height": 300,
+      "file": "fixtures/spark-hatch-frames/a-ground.png",
+      "pixels": {
+        "width": 764,
+        "height": 600
+      },
+      "bytes": 490991,
+      "sha256": "f0bc930cd4e6dcb97ab69f2b7bccc706cf6511beb6253b72d2175295099c4c1e"
+    },
+    {
+      "id": "b-deal",
+      "deal": "b",
+      "moment": "deal",
+      "t": 0.016666666666666666,
+      "grain": 0,
+      "width": 382,
+      "height": 300,
+      "file": "fixtures/spark-hatch-frames/b-deal.png",
+      "pixels": {
+        "width": 764,
+        "height": 600
+      },
+      "bytes": 491446,
+      "sha256": "0fee36b3a7ed3c57ed6686bc7661292d8b3562171038c247a245264ce249d792"
+    },
+    {
+      "id": "b-falling",
+      "deal": "b",
+      "moment": "falling",
+      "t": 0.5166666666666667,
+      "grain": 0,
+      "width": 382,
+      "height": 300,
+      "file": "fixtures/spark-hatch-frames/b-falling.png",
+      "pixels": {
+        "width": 764,
+        "height": 600
+      },
+      "bytes": 510634,
+      "sha256": "b4db0eac878461d77362152cda11d4dba6a226eb8695999f6d1fa0dffd646758"
+    },
+    {
+      "id": "b-landing",
+      "deal": "b",
+      "moment": "landing",
+      "t": 0.6333333333333333,
+      "grain": 0,
+      "width": 382,
+      "height": 300,
+      "file": "fixtures/spark-hatch-frames/b-landing.png",
+      "pixels": {
+        "width": 764,
+        "height": 600
+      },
+      "bytes": 519183,
+      "sha256": "cb5c515c23d46ee1dafde48a297e194cca596807fc9d2d9a9ad46d4d46753d19"
+    },
+    {
+      "id": "b-flash",
+      "deal": "b",
+      "moment": "flash",
+      "t": 0.65,
+      "grain": 0,
+      "width": 382,
+      "height": 300,
+      "file": "fixtures/spark-hatch-frames/b-flash.png",
+      "pixels": {
+        "width": 764,
+        "height": 600
+      },
+      "bytes": 522026,
+      "sha256": "e23605bf9d28c4d06c0c7b1fc6f38ead05b07cafd890638d0eecc61c9cd0811d"
+    },
+    {
+      "id": "b-burst",
+      "deal": "b",
+      "moment": "burst",
+      "t": 0.85,
+      "grain": 0,
+      "width": 382,
+      "height": 300,
+      "file": "fixtures/spark-hatch-frames/b-burst.png",
+      "pixels": {
+        "width": 764,
+        "height": 600
+      },
+      "bytes": 560427,
+      "sha256": "0e96812d835ad32093713fc3c895e82f81fa5848f9d7238248031ac4021ad8b0"
+    },
+    {
+      "id": "b-debris",
+      "deal": "b",
+      "moment": "debris",
+      "t": 1.1,
+      "grain": 0,
+      "width": 382,
+      "height": 300,
+      "file": "fixtures/spark-hatch-frames/b-debris.png",
+      "pixels": {
+        "width": 764,
+        "height": 600
+      },
+      "bytes": 531266,
+      "sha256": "d5c977a8b182682d040f1d14e153692b64fb8d55edc6084b958f18c7f714fae1"
+    },
+    {
+      "id": "b-glitter",
+      "deal": "b",
+      "moment": "glitter",
+      "t": 1.85,
+      "grain": 0,
+      "width": 382,
+      "height": 300,
+      "file": "fixtures/spark-hatch-frames/b-glitter.png",
+      "pixels": {
+        "width": 764,
+        "height": 600
+      },
+      "bytes": 497604,
+      "sha256": "2c9604e8eea0b71aa48c1508b8fc7fc06e945d04297a0639ba67d012e78fa691"
+    },
+    {
+      "id": "b-late",
+      "deal": "b",
+      "moment": "late",
+      "t": 2.85,
+      "grain": 0,
+      "width": 382,
+      "height": 300,
+      "file": "fixtures/spark-hatch-frames/b-late.png",
+      "pixels": {
+        "width": 764,
+        "height": 600
+      },
+      "bytes": 495730,
+      "sha256": "0367a3c5cbb9a9c01e5cccb82b71499892d907b1615d48d5f1c684e5ed49550e"
+    },
+    {
+      "id": "b-ground",
+      "deal": "b",
+      "moment": "ground",
+      "t": 6.05,
+      "grain": 0,
+      "width": 382,
+      "height": 300,
+      "file": "fixtures/spark-hatch-frames/b-ground.png",
+      "pixels": {
+        "width": 764,
+        "height": 600
+      },
+      "bytes": 490991,
+      "sha256": "f0bc930cd4e6dcb97ab69f2b7bccc706cf6511beb6253b72d2175295099c4c1e"
+    },
+    {
+      "id": "ground-grain",
+      "deal": null,
+      "moment": "ground",
+      "t": 6,
+      "grain": 0.035,
+      "width": 120,
+      "height": 90,
+      "file": "fixtures/spark-hatch-frames/ground-grain.png",
+      "pixels": {
+        "width": 240,
+        "height": 180
+      },
+      "bytes": 76737,
+      "sha256": "66188bf1ee2b1fa21b201f399f2dbd43a0b9902387131fa72ca8f7c902b976d0"
+    }
+  ]
+}
