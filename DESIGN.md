@@ -792,7 +792,7 @@ everywhere except eyebrows.
 | `--vf-radius-island` | `32px` | the Setup Assistant's glass (the wizard's shell); it named the closed HUD pill until FR-2 |
 | `--vf-radius-sheet` | `40px` | a sheet's far corners — the fields explorer's lower two (`22 22 40 40`, §8 the head, drawn by value); it named the open island's top corners until DK-13. No CSS reads the token today |
 | `--vf-radius-control` | `6–10px` | inline controls (`rounded` ≈ 4–6 for tiny) |
-| pills/buttons | fully round (`999px`) | chips, round icon buttons |
+| pills/buttons | fully round (`999px`) | chips, round icon buttons; a pill that is off wears §7's "Off" (2026-11-07, item 241) |
 | `--vf-scroll-fade` | `20px` | a list that can outgrow what holds it scrolls within itself (2026-10-31, FG-4a): no scrollbar; its last 20 masked from whole to clear (`linear-gradient(to bottom, black calc(100% - 20px), transparent)`) and 20 of padding under its end, so while there is more the next row peeks under the fade and at the end the last row clears it; a scroll into view (a focus, a login) stops 20 short of its foot. Padded 4 on its other sides, so a focus ring stays inside its clip. The face deck's rule (§2.8), which wears it; the Setup Assistant's Agents, History and Profiles lists on the glass (§8 "The Setup Assistant's glass") |
 | `--vf-glass-signin-height` | `170px` | a login's terminal in a pane on the Setup Assistant's glass (2026-10-31, FG-4a; Settings' sign-in keeps its 240). Its card is the terminal and 79.5 of chrome — the head's 33.5 (8, 11px at 1.5, 8 and its hairline), two borders, the gap of 8 and the Cancel row's 36 — and opened in Add a profile… it stands in the add's own padding of 10 above and below, so at 170 the add holding it is 269.5 and stands whole in the 278.2 that Profiles' cards keep above their fade (the body's 322.2 less the fact's one line of 18 and its gap of 10, the 4 given back, less the fade's 20): its head 8.7 under the cards' top, Cancel 10 above the fade, in view without a scroll. At 240 the add would be 339.5, and Cancel a scroll away. Four lines of terminal are the cheaper loss (ruled by James 2026-10-31 15:07Z (VF-PM's lean 14:57Z), on row 32 at run53b; 190 had been ruled at the lean, VF-PM 05:12Z). (Corrected 2026-10-31, row 32 at run53b: this row said 190, and that at 190 the card is 269.5 and stands whole in the 278.2. That sum counted the login's card and left out the add's padding of 10 above and below. On run53b's stills the cards measure 298.2 by their mask's gradient, the fade's top at 524.9, and the add at 190 was 289.2, so a scroll into view by `nearest` set its head on the cards' top and left Cancel's foot 1.3 under the fade, against the row's half-px slack.) |
 
@@ -1354,7 +1354,7 @@ arc. It is worn nowhere else.
 | **Selection, sole** | `1.5px` inside ring, `--vf-select`, drawn *inside* the element so any transform carries it; 120ms fade — the fields explorer's current tile, the file tree's focused row (§8). |
 | **Selection, multi** | never N rings: a set is one union, or, in a list with no union, N fills and one ring (§8 "The file tree"). |
 | **Drag** (a chrome drag source) | opacity `0.75` for the whole hold and drag — a file row carried toward a chip (§8 "The file tree"). |
-| **Off** (a control that is off) | it says so the way assistive tech reads it, never by a styling hook alone: `disabled` on a control, and on a group of them `role="group"` with `aria-disabled="true"` (or a disabled `fieldset`). Its words wear t4 at full opacity, 3:1 or more on their ground (§2.4); its pictures (an emoji, a tile, a swatch) may dim further. Row 32 passes an off control's words over, says so and prints each one's ratio, never judging it (§8 "Its words read"). *Added 2026-11-01 (track FG, the catalog judged's follow-up 1; VF-PM's ruling at 03:00Z on row 32's red at run69b: the face deck dimmed whole while saving, its two head words at 2.1–2.6:1).* |
+| **Off** (a control that is off) | it says so the way assistive tech reads it, never by a styling hook alone: `disabled` on a control, and on a group of them `role="group"` with `aria-disabled="true"` (or a disabled `fieldset`). Its words wear t4 at full opacity, 3:1 or more on their ground (§2.4); its pictures (an emoji, a tile, a swatch) may dim further. Row 32 passes an off control's words over, says so and prints each one's ratio, never judging it (§8 "Its words read"). *Added 2026-11-01 (track FG, the catalog judged's follow-up 1; VF-PM's ruling at 03:00Z on row 32's red at run69b: the face deck dimmed whole while saving, its two head words at 2.1–2.6:1).* *Ruled 2026-11-07 (James, 20:53:00Z, item 241's leans); his picks on the Off Pill page 20:52:05–20:52:23Z):* **a pill that is off** gives up its own look for the quiet pill's, the quiet fill and its hairline, so a primary loses its inversion, and its words wear t4 at full opacity (`ChromePalette.inkFaint` on the phone: black at 50% by day, white at 38% by night): 3.2–3.9:1 on that fill, in both themes, on both platforms. A whole pill faded to 0.4 is not an off pill, since its words fall to 1.8–2.9:1 by day. A pill whose word says its own press is running ("Starting…", "Allow…") keeps its look, with its hits off (§8 "Needs you"); every other pill that cannot be pressed is off, Create while its hatch runs among them. The phone's `ChromePillStyle` draws it from the enabled state its view is given (241a); the Mac's `.vf-ui-button:disabled` stays the whole button at 0.4 until its own slice (241b). |
 | **Keyboard focus** | visible ring, always (quality floor); Esc = close/cancel, consistently. |
 
 *History (renamed 2026-10-28; James, the housekeeping page (Q18)):* this section was "Interactive
@@ -6352,7 +6352,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       - the sub, 13 regular in tertiary ink;
       - the acts, 13 under the row above them: capsules 36 tall and 8 apart, the first inverted, wrapping to a
         second row and never shrinking. While the answer runs, the pressed one says its word with "…" and the rest
-        dim.
+        are off, as §7's pill that is off. *Amended 2026-11-07 (item 241, James 20:53:00Z): this said the rest
+        "dim", which on the phone was SwiftUI's own plain-button dim, a third look.*
     - **Answered,** the acts give way to one line: `check` 14, then "You said Allow" at 13/500 in tertiary ink. An
       act that did not go as asked says so after it, with `exclaim` in the attention ink, in the Mac's words (§8
       "Chat's thread"). Refused, "Couldn't answer: ‹fieldd's words›" stands under its words, and its acts stay
@@ -6482,6 +6483,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       opens, and while its hatch runs. *Corrected 2026-11-07 (IOS-12f's f4): this said "capsules 48 tall". The
       phone draws one pill (`ChromePillStyle`, §4), and its wide size is the way in's 50 (WI-2); a 48 would be a
       second copy of it.*
+      *Ruled 2026-11-07 (James, 20:53:00Z, item 241's leans):* while its hatch runs, Cancel waits too, off, and
+      the sheet cannot be pulled down. The phone's sheet holds until the home answers; the Mac's Cancel stays
+      live. Both pills wear §7's "Off" while they wait.
     - **A read that fails** is said at the foot, 13 in the attention ink, centred, never a Create left waiting in
       silence: "VibeField can't list its agents right now", or "VibeField can't list your Agent Profiles right
       now".
