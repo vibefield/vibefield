@@ -1,3 +1,5 @@
+import { bindSwarmMounts } from "./swarm-frame.mjs";
+
 const app = document.querySelector("#app");
 const live = document.querySelector("#live");
 
@@ -15,6 +17,7 @@ async function show() {
   if (flow) {
     flow.innerHTML = await fetch(`/api/flow.svg${suffix}`).then((response) => response.text());
   }
+  bindSwarmMounts(app);
   app.setAttribute("aria-busy", "false");
   const state = app.querySelector("#state")?.value ?? "";
   const view = app.querySelector("#view")?.value ?? "";

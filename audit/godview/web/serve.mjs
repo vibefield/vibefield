@@ -34,13 +34,10 @@ export function createAuditServer(root = repoRoot) {
         return send(res, 200, "text/html; charset=utf-8", readFileSync(join(here, "index.html")));
       if (url.pathname === "/app.css")
         return send(res, 200, "text/css; charset=utf-8", readFileSync(join(here, "app.css")));
-      if (url.pathname === "/app.mjs")
-        return send(
-          res,
-          200,
-          "text/javascript; charset=utf-8",
-          readFileSync(join(here, "app.mjs")),
-        );
+      if (url.pathname === "/app.mjs" || url.pathname === "/swarm-frame.mjs") {
+        const name = url.pathname.slice(1);
+        return send(res, 200, "text/javascript; charset=utf-8", readFileSync(join(here, name)));
+      }
       if (url.pathname === "/tokens.css") {
         return send(
           res,

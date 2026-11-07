@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import test from "node:test";
-import { ENTRIES, HOLES, MODEL_STATE_IDS, PINS, assertCoverage } from "./inputs.mjs";
+import { ENTRIES, HOLES, MODEL_STATE_IDS, PINS, SWARM_RUNTIME_ENTRIES, assertCoverage } from "./inputs.mjs";
 import { VIEWS, assertMatrix, matrix, matrixSummary } from "./matrix.mjs";
 
 const fixtureDir = join(import.meta.dirname, "..", "fixtures");
@@ -62,6 +62,25 @@ test("defensive branch and unknown-kind fixtures stay synthetic", () => {
   assert.match(branch.notes, /null and absent/);
   assert.match(kind.notes, /Synthetic defensive fixture/);
   assert.match(kind.notes, /permission, question, or failure/);
+});
+
+test("swarm runtime rows stay out of the rendered catalog", () => {
+  const cells = matrix();
+  const gaps = cells.filter((cell) => cell.disposition === "environment-gap");
+  assert.equal(gaps.length, 67);
+  assert.equal(new Set(gaps.map((cell) => cell.viewId)).size, 1);
+  const runtimeStates = new Set(SWARM_RUNTIME_ENTRIES.map((entry) => entry.stateId));
+  const unmountable = gaps.filter((cell) => !runtimeStates.has(cell.stateId)).map((cell) => cell.stateId).sort();
+  assert.deepEqual(unmountable, ["state.attachable", "state.terminal_opening"]);
+  for (const entry of SWARM_RUNTIME_ENTRIES) {
+    assert.equal(entry.viewId, "view.swarm");
+    assert.equal(ENTRIES.some((item) => item.fixtureId === entry.fixtureId), false);
+    const cell = gaps.find((item) => item.stateId === entry.stateId);
+    assert.equal(cell.disposition, "environment-gap");
+    assert.equal(cell.fixtureId, undefined);
+  }
+  assert.equal(SWARM_RUNTIME_ENTRIES.find((entry) => entry.stateId === "state.context_hot").fixtureId, "fix.swarm.context-hot");
+  assert.equal(SWARM_RUNTIME_ENTRIES.find((entry) => entry.stateId === "state.working").fixtureId, "fix.swarm.runtime.working");
 });
 
 test("statuses are rendered on every view that paints them without WebGPU", () => {

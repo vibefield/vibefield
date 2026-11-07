@@ -1137,7 +1137,55 @@ const BASE_HOLES = [
 ];
 
 export const ENTRIES = ALL_ENTRIES.filter((entry) => !entry.requiresBodyPaint);
+export const BODY_ENTRIES = ALL_ENTRIES.filter((entry) => entry.requiresBodyPaint);
 const DOM_STATES = new Set(ENTRIES.map((entry) => entry.stateId));
+
+const DONOR_VIEWS = ["view.list", "view.rain", "view.spend", "view.timeline"];
+
+function swarmHasNoRow(stateId) {
+  return (
+    stateId.startsWith("state.feed_") ||
+    stateId.startsWith("state.device_") ||
+    stateId.startsWith("state.timeline_") ||
+    stateId === "state.spend_unknown" ||
+    stateId === "state.dead_hidden" ||
+    stateId === "state.terminal_opening" ||
+    stateId === "state.attachable"
+  );
+}
+
+// Rows the pinned AgentSwarm can mount. Kept out of ENTRIES so the 67
+// environment gaps stay unpainted audit records and fixture files do not
+// grow. Dedicated body fixtures win over a donor row for the same state.
+const swarmByState = new Map();
+for (const viewId of DONOR_VIEWS) {
+  for (const entry of ENTRIES) {
+    if (entry.viewId !== viewId || swarmByState.has(entry.stateId) || swarmHasNoRow(entry.stateId)) continue;
+    const slug = entry.stateId.slice("state.".length).replaceAll("_", "-");
+    const fixtureId = `fix.swarm.runtime.${slug}`;
+    swarmByState.set(entry.stateId, {
+      ...entry,
+      fixtureId,
+      viewId: "view.swarm",
+      requiresBodyPaint: true,
+      envelope: {
+        ...entry.envelope,
+        fixtureId,
+        viewId: "view.swarm",
+        component: {
+          repo: "puppeteer",
+          sha: PINS.puppeteer,
+          path: COMPONENTS["view.swarm"].path,
+          symbol: COMPONENTS["view.swarm"].symbol,
+          lineStart: COMPONENTS["view.swarm"].lineStart,
+        },
+        notes: `${entry.envelope.notes} Runtime swarm mount of this row on pinned AgentSwarm. The capture-host environment gap stays unpainted. This is not body coverage.`,
+      },
+    });
+  }
+}
+for (const entry of BODY_ENTRIES) swarmByState.set(entry.stateId, entry);
+export const SWARM_RUNTIME_ENTRIES = [...swarmByState.values()];
 export const HOLES = [
   ...BASE_HOLES,
   ...ALL_ENTRIES.filter((entry) => entry.requiresBodyPaint && !DOM_STATES.has(entry.stateId)).map((entry) => ({

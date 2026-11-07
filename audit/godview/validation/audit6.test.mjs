@@ -6,6 +6,7 @@ import test from "node:test";
 import { renderFlowSvg } from "../flows/render.mjs";
 import { renderShell } from "../web/markup.mjs";
 import { createAuditServer } from "../web/serve.mjs";
+import { applySwarmVisibility } from "../web/swarm-frame.mjs";
 import { buildCell, endedAliasMeasured, spanAliasProved } from "./cell.mjs";
 import { AUDIT_PINS, REQUIRED_COUNTS } from "./contract.mjs";
 import { readField } from "./coverage.mjs";
@@ -534,6 +535,48 @@ test("swarm fallback is a mount, not painted coverage", () => {
   assert.match(cell.paint.note, /no source defect is proven/i);
   assert.match(cell.paint.note, /not exonerated/);
   assert.equal(cell.paint.meaningfulOutput, false);
+  assert.equal(cell.paint.disposition, "environment-gap");
+  const html = renderShell(audit.index, cell);
+  assert.match(html, /data-swarm-mount/);
+  assert.match(html, /data-src="\/harness\/index\.html\?fixture=fix\.swarm\.context-hot"/);
+  assert.match(html, /allow="webgpu"/);
+  assert.doesNotMatch(html, /<iframe class="component" data-swarm-frame[^>]* src=/);
+  assert.match(html, /not a painted body/);
+  assert.match(html, /67/);
+  assert.equal(cell.paint.screenshotCoverageComplete, false);
+  const working = buildCell({
+    model: audit.model,
+    traces: audit.traces,
+    renders: audit.renders,
+    fallback: audit.overlay,
+    renderIndex: audit.renderIndex,
+    selection: {
+      stateId: "state.working",
+      viewId: "view.swarm",
+      adapterId: "adapter.claude",
+      fieldId: "field.status",
+    },
+  });
+  assert.equal(working.paint.disposition, "environment-gap");
+  assert.equal(working.paint.meaningfulOutput, false);
+  const workingHtml = renderShell(audit.index, working);
+  assert.match(workingHtml, /data-src="\/harness\/index\.html\?fixture=fix\.swarm\.runtime\.working"/);
+  const opening = buildCell({
+    model: audit.model,
+    traces: audit.traces,
+    renders: audit.renders,
+    fallback: audit.overlay,
+    renderIndex: audit.renderIndex,
+    selection: {
+      stateId: "state.terminal_opening",
+      viewId: "view.swarm",
+      adapterId: "adapter.claude",
+      fieldId: "field.status",
+    },
+  });
+  const openingHtml = renderShell(audit.index, opening);
+  assert.match(openingHtml, /MonitorViewHost cannot mount it/);
+  assert.doesNotMatch(openingHtml, /data-swarm-mount/);
   const listActivity = buildCell({
     model: audit.model,
     traces: audit.traces,
@@ -549,6 +592,9 @@ test("swarm fallback is a mount, not painted coverage", () => {
   });
   assert.equal(listActivity.paint.disposition, "rendered");
   assert.equal(listActivity.paint.meaningfulOutput, true);
+  const listHtml = renderShell(audit.index, listActivity);
+  assert.match(listHtml, /src="\/harness\/index\.html\?fixture=fix\.list\.activity-starting"/);
+  assert.doesNotMatch(listHtml, /data-swarm-mount/);
   const rainBlock = buildCell({
     model: audit.model,
     traces: audit.traces,
@@ -708,6 +754,26 @@ test("flow diagrams cite envelope effects from any working directory", () => {
   }
 });
 
+test("a swarm frame loads only while its card is visible", () => {
+  const frame = {
+    attrs: {},
+    dataset: { src: "/harness/index.html?fixture=fix.swarm.runtime.working" },
+    getAttribute(name) {
+      return this.attrs[name] ?? null;
+    },
+    setAttribute(name, value) {
+      this.attrs[name] = value;
+    },
+  };
+  assert.equal(applySwarmVisibility(frame, false), "idle");
+  assert.equal(frame.getAttribute("src"), null);
+  assert.equal(applySwarmVisibility(frame, true), "load");
+  assert.equal(frame.getAttribute("src"), frame.dataset.src);
+  assert.equal(applySwarmVisibility(frame, true), "kept");
+  assert.equal(applySwarmVisibility(frame, false), "release");
+  assert.equal(frame.getAttribute("src"), "about:blank");
+});
+
 test("the QA server answers the page and the flow", async () => {
   const server = createAuditServer(ROOT);
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
@@ -717,6 +783,10 @@ test("the QA server answers the page and the flow", async () => {
   assert.equal(page.status, 200);
   assert.match(body, /Skip to audit/);
   assert.match(body, /748d015/);
+  const frame = await fetch(`http://127.0.0.1:${port}/swarm-frame.mjs`);
+  assert.equal(frame.status, 200);
+  assert.match(frame.headers.get("content-type") ?? "", /javascript/);
+  assert.match(await frame.text(), /bindSwarmMounts/);
   const harness = await fetch(
     `http://127.0.0.1:${port}/harness/index.html?fixture=fix.timeline.moment-ended`,
   );
@@ -733,6 +803,9 @@ test("the QA server answers the page and the flow", async () => {
   const html = await fragment.text();
   assert.match(html, /state\.working/);
   assert.match(html, /view\.swarm/);
+  assert.match(html, /data-src="\/harness\/index\.html\?fixture=fix\.swarm\.runtime\.working"/);
+  assert.doesNotMatch(html, /data-swarm-frame[^>]*\ssrc=/);
+  assert.match(html, /environment-gap/);
   const svg = await fetch(`http://127.0.0.1:${port}/api/flow.svg`);
   assert.match(await svg.text(), /<svg/);
   const missing = await fetch(`http://127.0.0.1:${port}/api/raw?path=../package.json`);

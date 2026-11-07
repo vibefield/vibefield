@@ -1,5 +1,6 @@
 import { flowAnchors } from "../flows/render.mjs";
 import { AUDIT_TARGET_LABEL } from "../validation/contract.mjs";
+import { swarmRuntimeMount } from "./swarm-mount.mjs";
 
 export function escapeHtml(value) {
   return String(value ?? "")
@@ -44,12 +45,21 @@ function timelineProof(index) {
   return `Timeline holds stay. Span evidence ${spanOk ? "matches" : "does not match"}. Ended evidence ${endedOk ? "matches" : "does not match"}. Remaining holds: ${holds.join(", ") || "none"}.`;
 }
 
+function bundleMissing(fixtureId) {
+  return `<p>Pinned component bundle is absent. Build contract, from the repo root: <code>cd audit/godview/rendering &amp;&amp; npm install &amp;&amp; node ensure-pin.mjs &amp;&amp; node emit-fixtures.mjs &amp;&amp; node check.mjs &amp;&amp; npm run build</code>. The served page then loads <code>/harness/index.html?fixture=${escapeHtml(fixtureId)}</code> from that bundle. It does not use installed package 0.3.3.</p>`;
+}
+
 function componentFrame(index, cell) {
+  const runtime = swarmRuntimeMount(cell);
+  if (runtime?.attempt) {
+    if (index.rendering?.componentBundle !== true) return bundleMissing(runtime.fixtureId);
+    const src = `/harness/index.html?fixture=${encodeURIComponent(runtime.fixtureId)}`;
+    return `<div class="swarm-mount" data-swarm-mount data-fixture="${escapeHtml(runtime.fixtureId)}"><p>${escapeHtml(runtime.reason)} If this browser has no WebGPU adapter, the pinned view reports WEBGPU UNAVAILABLE. That sentence is the diagnostic, not a painted body and not screenshot success. WebGPU needs a secure context; this page serves one on 127.0.0.1.</p><iframe class="component" data-swarm-frame title="Pinned swarm attempt ${escapeHtml(runtime.fixtureId)}" data-src="${escapeHtml(src)}" allow="webgpu"></iframe></div>`;
+  }
+  if (runtime && !runtime.attempt) return `<p>${escapeHtml(runtime.reason)}</p>`;
   const fixtureId = cell.paint?.fixtureId;
   if (cell.paint?.disposition !== "rendered" || !fixtureId) return "";
-  if (index.rendering?.componentBundle !== true) {
-    return `<p>Pinned component bundle is absent. Build contract, from the repo root: <code>cd audit/godview/rendering &amp;&amp; npm install &amp;&amp; node ensure-pin.mjs &amp;&amp; node emit-fixtures.mjs &amp;&amp; node check.mjs &amp;&amp; npm run build</code>. The served page then loads <code>/harness/index.html?fixture=${escapeHtml(fixtureId)}</code> from that bundle. It does not use installed package 0.3.3.</p>`;
-  }
+  if (index.rendering?.componentBundle !== true) return bundleMissing(fixtureId);
   const src = `/harness/index.html?fixture=${encodeURIComponent(fixtureId)}`;
   return `<iframe class="component" title="Pinned component ${escapeHtml(fixtureId)}" src="${src}"></iframe><p>Pinned component. Production bundle of Puppeteer source 748d015, mounted with <code>?fixture=${escapeHtml(fixtureId)}</code> from integration.json. Not shipped package 0.3.3. The figure below is the recorded fixture screenshot.</p>`;
 }
@@ -134,7 +144,7 @@ export function renderShell(index, cell) {
       </section>
       <section id="stage" aria-labelledby="stage-heading">
         <h2 id="stage-heading">View</h2>
-        <p>The five monitor views live in Puppeteer. VibeField consumes <code>AgentView</code>. This page does not draw a replacement monitor. A rendered cell mounts the production bundle of the pinned 748d015 checkout at <code>?fixture=</code>. The screenshot under it is the recorded fixture, separate from that mount. WebGPU swarm stays unrendered on this host.</p>
+        <p>The five monitor views live in Puppeteer. VibeField consumes <code>AgentView</code>. This page does not draw a replacement monitor. A rendered cell mounts the production bundle of the pinned 748d015 checkout at <code>?fixture=</code>. The screenshot under it is the recorded fixture, separate from that mount. Swarm cards still attempt pinned AgentSwarm when they are in view. The 67 capture-host environment gaps stay unpainted.</p>
         ${componentFrame(index, cell)}
         <p class="stage-pending" role="status">${cell.view ? escapeHtml(`${cell.view.id} · ${cell.view.name}`) : "No view loaded."} ${escapeHtml(cell.paint?.disposition ?? "unknown")}. Meaningful paint: ${cell.paint?.meaningfulOutput ? "yes" : "no"}. Selected fixture rendered: ${cell.paint?.selectedFixtureRendered ? "yes" : "no"}. Overall screenshot coverage complete: no.</p>
         <p>${escapeHtml(cell.paint?.note ?? "")}</p>

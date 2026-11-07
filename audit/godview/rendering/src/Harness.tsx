@@ -8,7 +8,7 @@ import { createFixtureReplica } from "@puppeteer-pin/sdk/testing/replica";
 import type { AgentView, MonitorHistory, MonitorPastSpanKind } from "@vibefield/puppeteer-view-sdk";
 import { useEffect, useRef } from "react";
 import { PIN_STAMP } from "virtual:pin-stamp";
-import { ENTRIES, NOW } from "../inputs.mjs";
+import { ENTRIES, NOW, SWARM_RUNTIME_ENTRIES } from "../inputs.mjs";
 
 const STAGE = Object.freeze({
   width: 1200,
@@ -79,7 +79,7 @@ function selectedId(): string | null {
 }
 
 export function Harness() {
-  const entries = ENTRIES as Array<{
+  const entries = [...ENTRIES, ...SWARM_RUNTIME_ENTRIES] as Array<{
     fixtureId: string;
     viewId: string;
     stateId: string;
