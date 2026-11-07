@@ -109,6 +109,20 @@ function overlayFor(field, fallback) {
   };
 }
 
+function costGraphOrder(envelope) {
+  const names = (envelope?.transforms ?? []).map((step) => step.name);
+  if (names.length === 0) return null;
+  const derive = names.indexOf("deriveAgentRow");
+  const ledger = names.indexOf("buildUsageCostLedger");
+  const pricing = names.indexOf("priceUsageUpdates");
+  if (derive === -1 || ledger === -1) return null;
+  if (pricing !== -1 && pricing < derive && derive < ledger) return null;
+  return {
+    status: "stale-envelope-order",
+    note: "This envelope still omits priceUsageUpdates and lists deriveAgentRow before buildUsageCostLedger. The shared map order is priceUsageUpdates, then reduce, then project, then the usage ledger and costOf, then derive. The envelope has not been rewritten to that order.",
+  };
+}
+
 function holeFor(renderIndex, selection) {
   return (
     (renderIndex?.holes ?? []).find((hole) => {
@@ -204,7 +218,17 @@ export function buildCell({ model, traces, renders, fallback, selection, renderI
           ? hole.reason
           : "No meaningful render is loaded for this view and state.",
   };
+  const graphOrder = costGraphOrder(envelope);
   const reading = readField(envelope);
+  if (
+    reading &&
+    selection.fieldId === "field.tokens.total" &&
+    selection.adapterId === "adapter.claude"
+  ) {
+    reading.reader = "no-direct-reader";
+    reading.readerNote =
+      "Shared static map: Claude totalTokens can reach tokens.total through usage-index and derive. No built-in view directly reads tokens.total. USD flames read cost, not this total. The first-half envelope is not rewritten from the filled join, and this is not a live run.";
+  }
   const named = namedStatesFor(traces, selection.adapterId);
   const stateReading = stateOnRecord(envelope, selection.stateId, named, selection.adapterId);
   const coverage = coverageReport(model, traces);
@@ -267,6 +291,7 @@ export function buildCell({ model, traces, renders, fallback, selection, renderI
       : { status: "pending", fixtureKind: null },
     endToEnd,
     paint,
+    graphOrder,
     reading,
     stateReading,
     coverage,

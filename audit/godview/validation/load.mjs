@@ -476,6 +476,7 @@ function publicIndex({
     traceCount: traces.filter((trace) => trace.recordKind !== "sdk-leaf").length,
     sdkLeafCount: traces.filter((trace) => trace.recordKind === "sdk-leaf").length,
     partial: partialCensus(traces, readJson(root, "audit/godview/plan/gv-audit3-join.json").json),
+    sharedMap: sharedMapSummary(root),
     renderCount: renders.length,
     rendering: renderIndex
       ? {
@@ -504,6 +505,26 @@ function publicIndex({
       adapter: "adapter.<suffix>",
       trace: "audit/godview/evidence/<suffix>/<fieldPath>.json",
     },
+  };
+}
+
+function sharedMapSummary(root) {
+  const map = readJson(root, "audit/godview/contracts/shared-downstream-map.json").json;
+  const filled = readJson(root, "audit/godview/contracts/gv-audit3-join-filled.json").json;
+  return {
+    kind: "static-code-trace",
+    liveRuns: false,
+    counts: map?.counts ?? null,
+    unresolvedGaps: Array.isArray(map?.unresolvedGaps) ? map.unresolvedGaps : [],
+    envelopesComplete: false,
+    filledJoinVerdict:
+      typeof filled?.downstreamVerdict === "string" ? filled.downstreamVerdict : null,
+    filledProvenanceComplete: filled?.provenanceComplete === true,
+    openEnvelopeIssues: [
+      "comparison.cost-pricing-hop: current cost envelopes omit priceUsageUpdates before reduction",
+      "comparison.cost-transform-order: current cost envelopes list deriveAgentRow before buildUsageCostLedger",
+      "comparison.core-unavailable-vs-row: shared path says normal backend omits field.cost; a further AUDIT4 rewrite of the envelopes is still expected",
+    ],
   };
 }
 

@@ -132,7 +132,10 @@ export function renderShell(index, cell) {
     </div>
     <section aria-labelledby="gaps-heading">
       <h2 id="gaps-heading">State coverage</h2>
-      <p>${escapeHtml(String(cell.coverage?.fieldRecords ?? 0))} canonical row records are loaded. ${escapeHtml(String(cell.coverage?.sdkLeafRecords ?? 0))} SDK leaf records are separate. ${escapeHtml(String(index.partial?.uiUnchecked ?? 0))} first-half UI paths and ${escapeHtml(String(index.partial?.stateUnchecked ?? 0))} state predicates are still unchecked. ${escapeHtml(index.partial?.note ?? "")}</p>
+      <p>${escapeHtml(String(cell.coverage?.fieldRecords ?? 0))} canonical row records are loaded. ${escapeHtml(String(cell.coverage?.sdkLeafRecords ?? 0))} SDK leaf records are separate. The envelopes still have ${escapeHtml(String(index.partial?.uiUnchecked ?? 0))} unknown UI classifications and the unfilled join still has ${escapeHtml(String(index.partial?.stateUnchecked ?? 0))} unknown state verdicts.</p>
+      <p>The shared downstream map is a static code trace: ${escapeHtml(String(index.sharedMap?.counts?.normalizedEvents ?? "—"))} events, ${escapeHtml(String(index.sharedMap?.counts?.rowFieldContinuations ?? "—"))} fields, ${escapeHtml(String(index.sharedMap?.counts?.statePredicates ?? "—"))} states, ${escapeHtml(String(index.sharedMap?.counts?.rowJoinAnchorsResolved ?? "—"))} anchors filled. It reports the earlier 265 UI unknowns and 35 state unknowns resolved on that map, with direct and indirect readers distinguished. The map does not make the current envelopes complete, and it is not a live run.</p>
+      ${(index.sharedMap?.openEnvelopeIssues ?? []).map((issue) => `<p>${escapeHtml(issue)}</p>`).join("")}
+      ${cell.graphOrder ? `<p>${escapeHtml(cell.graphOrder.note)}</p>` : ""}
       <ul>
         ${(cell.coverage?.adapters ?? [])
           .filter((adapter) => adapter.records > 0)

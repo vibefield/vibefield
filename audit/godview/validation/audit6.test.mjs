@@ -31,6 +31,13 @@ test("pinned source inventory matches the model contract counts", () => {
   assert.equal(index.partial.uiUnchecked, 265);
   assert.equal(index.partial.stateUnchecked, 35);
   assert.equal(index.partial.provenanceComplete, false);
+  assert.equal(index.sharedMap.kind, "static-code-trace");
+  assert.equal(index.sharedMap.liveRuns, false);
+  assert.equal(index.sharedMap.envelopesComplete, false);
+  assert.equal(index.sharedMap.counts.normalizedEvents, 37);
+  assert.equal(index.sharedMap.counts.rowFieldContinuations, 74);
+  assert.equal(index.sharedMap.counts.statePredicates, 82);
+  assert.equal(index.sharedMap.counts.rowJoinAnchorsResolved, 370);
   assert.equal(index.sources.rendering, "partial");
   assert.equal(index.rendering.fixtureCount, 42);
   assert.equal(index.rendering.holeCount, 43);
@@ -142,6 +149,7 @@ test("a priced-cost absence is not a runtime impossibility", () => {
   assert.match(cell.reading.mismatch, /cost_missing/);
   assert.match(cell.reading.mismatch, /anthropic and openai only/);
   assert.equal(/unreachable/i.test(cell.reading.mismatch), false);
+  assert.equal(cell.graphOrder.status, "stale-envelope-order");
   assert.equal(cell.stateReading.status, "host-claim");
   const reply = buildCell({
     model: audit.model,
