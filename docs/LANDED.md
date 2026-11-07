@@ -40763,3 +40763,77 @@ mints), and no manifest or lock.
   it": A and B landed as one (VF-PM 23:46Z and 23:57Z). Its dated correction rides EL8-TRUFFLE's contracts edits.
 - The integration lane, DR-2 + DR-3 after the substrate slice: fieldd's caller, the correction of "fieldd calls none
   of them" at its sources, and the first run of the real floor against the real relay (no row has witnessed it).
+
+## Item 216 — item 192's census row awaits the replaced PTY's leaving fieldd's inventory: the successor's birth and the inventory's drop come over two sockets with no order between them (test-only)
+(2026-11-07; one commit on lane `rv/item216-r2`, RV's (vibe-field-62), built in
+`/Volumes/SamsungRed/lanes/au/vibe-field` over main `dc05d6ce7` (`4a6cc8dca`, the sha a9's rows proved); re-cut by
+`git replay` onto `d300ad0e0` as `efe494469`, the mint. Verified at `efe494469` on `d300ad0e0` (run 204, a9's, on the
+old mini), M204; landed as `339d0a26e`, its proof-form re-cut onto `df58141c6`, a fast-forward of main `df58141c6`,
+2026-11-07T01:01:13Z.)
+Filed 2026-11-06 23:18Z by VF-PM from run 200's one red at item 212's tip (LANDED "Item 212", its run 201 line);
+fieldd test-only, no RV rank. Built on the lead's shape, which VF-PM GO'd at 23:43Z.
+
+**The finding.**
+- `packages/fieldd/test/system-shutdown-census.test.ts`, item 192's row "a replacement in flight is a birth, and once
+  past its point of no return it births its successor under closed launches", read the replaced PTY's absence from
+  fieldd's inventory once (`expect(listedRow(box, kept.sessionId)).toBeUndefined()`, :519), right after polling for
+  the successor.
+- `listedRow` is fieldd's cached copy of the floor's inventory, assigned in `terminal-service.ts`'s `apply` from the
+  floor's mgmt subscription (`native.lifecycle.observed`); the exit the replacement waits for is `session-exited` on
+  the cell's own client. Two sockets, no order between them. Since item 201's RV #43 the replacement passes its point
+  of no return once it hears that exit, and the successor's birth never waits for the inventory (the birth carries its
+  own summary), so the successor can be listed while the delta that drops the old row is still on the other socket.
+- Run 200 (a9, the old mini, 1-min load 45) received the old row, its pid and no `exited`; the control read the file
+  green 6 of 6, three at the tip and three at main (`lanes/ts6/logs/mini/ctl212/`). No production defect: the row
+  asserted an order nothing makes.
+
+**What landed.**
+- The row reads what its point of no return makes deterministic: once the successor is listed, the old run's record on
+  disk (the floor harness's `readRecord`) already says `exited.reason` "replaced" and `reattach`
+  `{state: "resumed", replaced: <the old PTY>}`, both written before `resumeFromRecord` starts the birth.
+- Then it awaits the old row's leaving fieldd's inventory in :492's form (`poll` under `FLOOR_WAIT_MS`), the comment
+  naming the two channels and RV #43.
+- One file, +15 −1: no production file, no bound widened, no sleep. :402's and :478's reads (a row that stays listed),
+  :492's poll and agent-gateway.test.ts's `listedRow` reads are unchanged.
+
+**The lights.**
+- No red commit: the order is a race between two sockets, and an in-tree red would need a production seam. The probe
+  stands in for it, never committed: P1 (`lanes/rv/mint/item216/probes/P1-inventory-apply-late.patch`) lands every
+  inventory delta 2 s late, in order (the snapshot at once, for the boot's first read; a disposed service applies
+  nothing late).
+- Written unrun on the MacBook under the HOLD; reviewed clean (one minor, folded: P1's delay raised from 500 ms, so a
+  loaded host cannot hide its red). The commit's body first said 500 ms; corrected at its source before any row ran
+  (`4a6cc8dca`, the tree unchanged). The builder's plain `git commit` ran the pre-commit hook's `siblings:render` on
+  the MacBook once; disclosed, and builders now commit with `--no-verify` under the HOLD.
+- a9's rows on the old mini (`lanes/rv/a9/i216-r2-rows/`, SUMS-a9 `27330ceb…`; armed under 8, porcelain 0 after each,
+  births 0), all as briefed: the census file 11 of 11 three times at `4a6cc8dca`; P1 at the parent `dc05d6ce7` red on
+  exactly the one row, at :519, receiving the old live row (its pid, no `exited`), run 200's red at a 1-min load of
+  4.5; P1 at `4a6cc8dca` 11 of 11; fieldd's tsc and biome clean.
+- The re-cut is proof-form: range-diff 1 `=`, the patch-id equal in both forms (`387695fe…` by
+  `git diff -U0 <base> <tip> | git patch-id --stable`, `2bff97e8…` by `git show <tip> | git patch-id --stable`), and
+  the tip's tree equal to git's merge-tree (`lanes/rv/mint/item216/`); main's own files since the lane's base are
+  `apps/ios`'s, none of the lane's. The land's re-cut onto `df58141c6` is proof-form the same way
+  (`land-recut-on-df58141c6.txt`: range-diff `=`, both patch-ids equal, the tree equal to the merge-tree); main's
+  files since `d300ad0e0` share none with the lane, but the move is not docs-only: beside the pbxproj string and the
+  docs it carries DR's W3 floor, eleven field-native files and seven contracts files (`drive.ts` shape-equal, the rest
+  comment-only). So the land is a re-cut whose base move carried W3's floor: run 203 ran this test file green on that
+  floor without item 216's lines, and the next verify of main that includes `339d0a26e` is the first to cover the
+  combination (the census row runs a real floor).
+- Run 204, a9's, on the old mini: GREEN at `efe494469` on `d300ad0e0`, every count as run 201's, missing [] / extra []
+  (`lanes/rv/a9/i216-r2-run204/`, SUMS-a9 `4d270d08…`; armed at a 1-min load of 1.25, verify exit 0 at 00:57:44Z, tree
+  clean, stubs 0): vitest 14,029 over 961 files (the per-file list's diff against run 201 empty; the census file's 11
+  rows among them), cargo 571 over all 36 binaries, node 474, typecheck 29, biome 3,482; births 0. Item 217's row read
+  green here in 1.11 s. Run 202, the first try at this mint, is in Found.
+
+**Found.**
+- Run 202 at the mint read one cargo row red (`listener_accept_pressure.rs:463`, item 198's), field-native
+  byte-identical to run 201's where it read green in 1.1 s, under a 1-min load of 43–53; VF-PM ruled it NO VERDICT for
+  this item, and one rerun was placed. Its readings: after the release, the door alone logged
+  `accept_failing 1, accept_recovered 0` for 30 s while descriptors were free, where mgmt and meshdata (the same
+  `local_ipc::accept`, its breath capped at 1 s) were served in 16 ms. Filed as item 217
+  (`lanes/rv/a9/i216-r2-run202/`, SUMS-a9 `88c6ddc6…`), to be measured beside item 204's door backlog.
+
+**Owed.**
+- The next verify of main that includes `339d0a26e`: the first to run item 216's row on W3's floor.
+- Item 217's measuring lane: that one row twenty times under a parallel load, the floor's log flushed before its
+  terminate, on the old mini.

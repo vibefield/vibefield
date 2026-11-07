@@ -567,6 +567,7 @@ its rulings (`draft/rv/james-asks.md`, `draft/rv/lead-rulings.md`); the review `
   rv-ghosttea-option-minor, rv-pup-monitor-fold, rv-ghosttea-relay-gap; `draft/rv/lead-rulings.md`). James's 15 asks
   were on the board as `rv-*`: all fifteen RULED at their leans on 11-06 (rv-service-recovery and
   rv-godview-honesty at 22:56Z, the other thirteen at 23:11Z; James's "all leans"), rv-pr58-codex-observer at (a).
+  Every mark that said "open until James rules" says the ruled lean (`dc05d6ce7`, the words commit after item 212).
 - Landed 11-06: **item 191, RV #2's half A** (M192 `0d1d66f05`; LANDED "Item 191"): fieldd ends a typed run by its
   proved process, never the person's shell. Its deck half is next (rv-typed-stop Q2 ruled at its lean). smoke:godview
   row 14 green.
@@ -575,30 +576,35 @@ its rulings (`draft/rv/james-asks.md`, `draft/rv/lead-rulings.md`); the review `
   smoke:update row 30 green.
 - Landed 11-06: **item 201, RV #17, #43, #49, #48, #50** (M194 `db181a008`; LANDED "Item 201"): a held run's end is
   told, a replacement waits for the old process's exit, the boot's grace sweeps per record, an unread re-attach
-  settles nothing and asks again (rv-s9-records' lean B), and a dead pane is no live terminal.
+  settles nothing and asks again (rv-s9-records' lean B), and a dead pane is no live terminal. smoke:godview green
+  (gv4, at `db181a008`).
 - Landed 11-06: **item 203's VF-W1, RV #1's pin-free half** (M196 `02aed7ec2`; LANDED "Item 203, VF-W1"): fieldd's
   executable is the daemon only with no argument; a script handed to it as if it were Node is refused in one line
   with 127, never a second daemon. Words at rv-forwarder-role's lean A.
 - Landed 11-06: **item 211, RV #97, #96, #93, #116, #95, #47** (M199 `c39e45518`; LANDED "Item 211"): field-native's
   terminal plane holds its own: an upgrade has a deadline, a closed credit account closes, each pump wakes for its
   own session's frames, seeds keep to their negotiated slots, and a cell whose serve plane fails exits.
+  smoke:godview and smoke:terminal-direct green (gv5, at `5d58c8731`).
 - Landed 11-06: **item 212, RV #30, #29, #67** (M201 `86d14e31b`; LANDED "Item 212"): the shell keeps its fieldd
   honestly: a busy incumbent is waited for, recovery is three tries in ten minutes then Stopped with Try again, and
   a silent fieldd is said Not responding, an owned one ended alone at the wedge bound (rv-service-recovery's leans).
+- Landed 11-07: **item 216, item 192's census row** (`system-shutdown-census.test.ts:519`; M204 `339d0a26e`; LANDED
+  "Item 216"): the row awaits the replaced PTY's leaving fieldd's inventory, which comes over a socket the successor's
+  birth does not; test-only, the probe P1 its proof (run 200's red at the parent, every time).
 - In flight:
   - item 203's VF-W3a (the closed agent-forwarder role), built and reviewed, landing in EL8-1's chain;
   - the sibling lanes, filed by James on 11-06: puppeteer #64 rv/pup-monitor (#84, #81, #9) and #65
     rv/pup-claude-a (#1, #61, #4, #3, #5a, #64, #62, #63) MERGED, #66 rv/pup-views-a (#38, #39, #106, #107, #40,
     #105) open; ghosttea #102 rv/ghosttea (#115, #37 G-A, #92, #113, #94) MERGED. Their releases and the EL8 pins
-    follow. Building: rv/pup-claude-b (#14, #111, #66, #110, #13) and rv/pup-views-b (#103, #104, #41, #101,
-    #108). Parked: rv/pup-codex (on rv-pr58-codex-observer).
+    follow. At James's hand, their PR scripts ready (`lanes/rv/pr/`): rv/pup-claude-b (#14, #111, #66, #110, #13)
+    and rv/pup-views-b (#103, #104, #41, #101, #108). Building: rv/pup-claude-usage (#70, #32, #34, #102, #109,
+    #35, #33). Parked: rv/pup-codex (on rv-pr58-codex-observer).
 - Next: puppeteer R1 (claude-a's PR and item 171's fix, James's hand) → EL8-1 with item 203 in one chain; ghosttea
   0.15.0 → EL8-g → rv/vf-ghosttea-tail; waves 3–8 by the plan.
 - Owed: James's hand on every sibling PR and release;
-  smoke:godview for item 201 (#50; the old mini's console was locked at the land), and smoke:godview and
-  smoke:terminal-direct for item 211; smoke:plugin-restart and the plugin-runtime soak for item 212; item 215
-  (freeway's link door), item 216 (item 192's census row reads fieldd's cached inventory once after a successor's
-  birth) and petition G36 (ghosttea's accept loops).
+  smoke:plugin-restart and the plugin-runtime soak for item 212; item 215 (freeway's link door), item 217 (item 198's
+  door did not take a fresh connection for 30 s after fd pressure under load; measured beside item 204) and petition
+  G36 (ghosttea's accept loops).
 
 **HN — Cards in Hand** · vibe-field-a1 (lane `lanes/hn`) · law `draft/thinking-cards-in-hand.md` §6 (page sources `draft/cards-in-hand/`), DESIGN.md §1/§5/§6/§8/§9/§10/§13
 - Ruled 10-29 10:40Z (James): all sixteen at their leans (LN-D1…D3, HN-D1…D10, PL-D1…D3); HN-D1 was his own pick on
@@ -1422,7 +1428,7 @@ Petition status lives in `draft/petitions/README.md`. Still open or owed there:
 | TP / TC — terminal pipeline and custody | PARKED; TC RATIFIED 10-28 (Q6) | `specs/terminal-pipeline-v3*.md`, `specs/terminal-custody.md`, `thinking-terminal-mesh-cells.md`, `thinking-floor-wedge.md`, `thinking-inventory-latency.md` | D6's cell half |
 | MA — Apps (was AH — Artifact Hub) | ACTIVE since 11-05 (MA-D1…D13 ruled; MA-4 in 0.9, James 11-06); MA-0a + MA-1a (M152), MA-3 (M157, M162) and MA-4 (M166) landed; AH-1…3 landed, AH-4 unledgered | `thinking-mini-apps.md`, `specs/artifact-hub.md`, design-06 §5; DESIGN.md §2.9/§8/§9/§13 | MA-3f serving, which is the Drive's DR-1 (DR-D1 ruled (b): rosetta 0.1.4's export), then MA-3h; MA-6 the phone's shelf (unblocked: UM's M-phone landed 11-06, its sheet naming the strip's slots) |
 | DR — the Drive | ACTIVE since 11-06 (DR-D1…D12 ruled; D13…D15 open); DR-1a, DR-2a, DR-1b and DR-3a (W3's VF-FLOOR) landed (M183, M188, M190, M203); wave 1's sibling PRs merged and released 11-06 | `thinking-drive.md` v0.3 (page sources `draft/drive/page/`); `thinking-mini-apps.md` | D13…D15 and DR-L3 (James); W3's VF-RELAY; the EL8s (rosetta → truffle → mille) and the substrate slice; DR-1 (B) |
-| RV — the review fixes (Godview, terminal, puppeteer) | ACTIVE since 11-06; items 191 (RV #2 half A, M192), 192 (RV #6, M193), 201 (RV #17, #43, #49, #48, #50, M194), 203's VF-W1 (RV #1's pin-free half, M196), 211 (RV #97, #96, #93, #116, #95, #47, M199) and 212 (RV #30, #29, #67, M201) landed; W1–W2 building, the sibling lanes local | `draft/rv/` (plan.md, james-asks.md, lead-rulings.md); `lanes/rv/review/` | puppeteer R1 → EL8-1 with item 203; ghosttea 0.15.0 → EL8-g |
+| RV — the review fixes (Godview, terminal, puppeteer) | ACTIVE since 11-06; items 191 (RV #2 half A, M192), 192 (RV #6, M193), 201 (RV #17, #43, #49, #48, #50, M194), 203's VF-W1 (RV #1's pin-free half, M196), 211 (RV #97, #96, #93, #116, #95, #47, M199), 212 (RV #30, #29, #67, M201) and 216 (item 192's census row, M204) landed; W1–W2 building, the sibling lanes local | `draft/rv/` (plan.md, james-asks.md, lead-rulings.md); `lanes/rv/review/` | puppeteer R1 → EL8-1 with item 203; ghosttea 0.15.0 → EL8-g |
 | UM + SE — profile meters and one search | ACTIVE since 11-06 (UM-D21…D28 and SE-D1…D5 ruled on the page; UM-D16 E, D19 A; D3, D4, D8, D12…D15 at the leans); UM-0…UM-2 landed 11-06 (M-U1 `c9493b957`, run180, M180); UM-3 and SE-1 landed 11-06 (M-desk `ed8099c1e`, run187, M187); UM-4 and SE-2 landed 11-06 (M-phone `d6d76d079`, run198, M198) | `thinking-profile-meters.md`; `lanes/um/PLAN.md` §4; DESIGN.md §2.7/§5/§8/§9/§13; `docs/agent-plane/usage-meters.md` | UM-5 (UM-D14, the plan filter) in wave 2 |
 | PLUG — shipped core | COMPLETE: P0–P7, P8b–d (P8c via WP8), PRC-4/5; later publishing/validation work is separate | `specs/plugin-architecture.md`, `thinking-p8-loadable-artifact.md` | existing product gates; no blanket 24-hour prerequisite |
 | PRC-6 — plugin runtime validation | OPEN; diagnostics in draft [PR #7](https://github.com/vibefield/vibefield/pull/7); Linux CI passed, full verification and calibration pending | `thinking-prc6c2-physical-soak.md` §9–10 | full verify → guarded 32-cycle current-desk calibration + listener control; historical failures stay open; literal 24h only for that claim |
