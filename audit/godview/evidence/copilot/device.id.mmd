@@ -1,9 +1,13 @@
+%% graph_ref: shared.runtime-supplied
+%% adapter: copilot
+%% field: field.device.id
+%% forensic: source-read at 748d015; not a live sample
 flowchart LR
-  src["copilot source packages/view-sdk/src/model.ts:35-35"]
+  src["packages/view-sdk/src/model.ts:35-35"]
   raw["no raw adapter write found"]
-  row["UNRESOLVED field.device.id row mapping"]
-  ui["UNRESOLVED UI reachability"]
-  states["UNRESOLVED downstream state predicates"]
-  src --> raw --> row
-  row --> ui
-  row --> states
+  shared["shared.runtime-supplied"]
+  row["field.device.id no"]
+  ui["UI unknown"]
+  src --> raw --> shared --> row --> ui
+  open["UNRESOLVED where this verdict is unknown"]
+  row --> open

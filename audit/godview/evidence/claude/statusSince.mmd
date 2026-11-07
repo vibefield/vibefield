@@ -1,9 +1,11 @@
+%% graph_ref: shared.status
+%% adapter: claude
+%% field: field.statusSince
+%% forensic: source-read at 748d015; not a live sample
 flowchart LR
-  src["claude source packages/view-sdk/src/model.ts:135-135"]
+  src["packages/view-sdk/src/model.ts:135-135"]
   raw["no raw adapter write found"]
-  row["UNRESOLVED field.statusSince row mapping"]
-  ui["UNRESOLVED UI reachability"]
-  states["UNRESOLVED downstream state predicates"]
-  src --> raw --> row
-  row --> ui
-  row --> states
+  shared["shared.status"]
+  row["field.statusSince yes"]
+  ui["UI yes"]
+  src --> raw --> shared --> row --> ui

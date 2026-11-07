@@ -1,9 +1,11 @@
+%% graph_ref: shared.effort
+%% adapter: copilot
+%% field: field.effort
+%% forensic: source-read at 748d015; not a live sample
 flowchart LR
-  src["copilot source packages/adapter-copilot/src/normalization/effort.ts:4-8"]
+  src["packages/adapter-copilot/src/normalization/effort.ts:4-8"]
   raw["effort:updated"]
-  row["UNRESOLVED field.effort row mapping"]
-  ui["UNRESOLVED UI reachability"]
-  states["UNRESOLVED downstream state predicates"]
-  src --> raw --> row
-  row --> ui
-  row --> states
+  shared["shared.effort"]
+  row["field.effort yes"]
+  ui["UI yes"]
+  src --> raw --> shared --> row --> ui

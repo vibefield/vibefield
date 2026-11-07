@@ -1,9 +1,11 @@
+%% graph_ref: shared.project
+%% adapter: acp
+%% field: field.project
+%% forensic: source-read at 748d015; not a live sample
 flowchart LR
-  src["acp source packages/adapter-acp/src/driver.ts:242-244"]
+  src["packages/adapter-acp/src/driver.ts:242-244"]
   raw["cwd string"]
-  row["UNRESOLVED field.project row mapping"]
-  ui["UNRESOLVED UI reachability"]
-  states["UNRESOLVED downstream state predicates"]
-  src --> raw --> row
-  row --> ui
-  row --> states
+  shared["shared.project"]
+  row["field.project yes"]
+  ui["UI yes"]
+  src --> raw --> shared --> row --> ui

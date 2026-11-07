@@ -1,9 +1,13 @@
+%% graph_ref: shared.host-row
+%% adapter: copilot
+%% field: field.profileSet
+%% forensic: source-read at 748d015; not a live sample
 flowchart LR
-  src["copilot source packages/view-sdk/src/model.ts:167-167"]
+  src["packages/view-sdk/src/model.ts:167-167"]
   raw["no raw adapter write found"]
-  row["UNRESOLVED field.profileSet row mapping"]
-  ui["UNRESOLVED UI reachability"]
-  states["UNRESOLVED downstream state predicates"]
-  src --> raw --> row
-  row --> ui
-  row --> states
+  shared["shared.host-row"]
+  row["field.profileSet no"]
+  ui["UI unknown"]
+  src --> raw --> shared --> row --> ui
+  open["UNRESOLVED where this verdict is unknown"]
+  row --> open

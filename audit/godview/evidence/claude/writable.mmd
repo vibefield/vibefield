@@ -1,9 +1,13 @@
+%% graph_ref: shared.host-row
+%% adapter: claude
+%% field: field.writable
+%% forensic: source-read at 748d015; not a live sample
 flowchart LR
-  src["claude source packages/view-sdk/src/model.ts:176-176"]
+  src["packages/view-sdk/src/model.ts:176-176"]
   raw["no raw adapter write found"]
-  row["UNRESOLVED field.writable row mapping"]
-  ui["UNRESOLVED UI reachability"]
-  states["UNRESOLVED downstream state predicates"]
-  src --> raw --> row
-  row --> ui
-  row --> states
+  shared["shared.host-row"]
+  row["field.writable no"]
+  ui["UI unknown"]
+  src --> raw --> shared --> row --> ui
+  open["UNRESOLVED where this verdict is unknown"]
+  row --> open

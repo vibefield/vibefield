@@ -1,9 +1,13 @@
+%% graph_ref: shared.runtime-supplied
+%% adapter: claude
+%% field: field.attachment.colour
+%% forensic: source-read at 748d015; not a live sample
 flowchart LR
-  src["claude source packages/view-sdk/src/model.ts:369-369"]
+  src["packages/view-sdk/src/model.ts:369-369"]
   raw["no raw adapter write found"]
-  row["UNRESOLVED field.attachment.colour row mapping"]
-  ui["UNRESOLVED UI reachability"]
-  states["UNRESOLVED downstream state predicates"]
-  src --> raw --> row
-  row --> ui
-  row --> states
+  shared["shared.runtime-supplied"]
+  row["field.attachment.colour no"]
+  ui["UI unknown"]
+  src --> raw --> shared --> row --> ui
+  open["UNRESOLVED where this verdict is unknown"]
+  row --> open

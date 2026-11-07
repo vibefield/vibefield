@@ -1,9 +1,13 @@
+%% graph_ref: shared.status
+%% adapter: acp
+%% field: field.wait.question
+%% forensic: source-read at 748d015; not a live sample
 flowchart LR
-  src["acp source packages/adapter-acp/src/services/approvals.ts:135-257"]
+  src["packages/adapter-acp/src/services/approvals.ts:135-257"]
   raw["adapter signal, see transforms"]
-  row["UNRESOLVED field.wait.question row mapping"]
-  ui["UNRESOLVED UI reachability"]
-  states["UNRESOLVED downstream state predicates"]
-  src --> raw --> row
-  row --> ui
-  row --> states
+  shared["shared.status"]
+  row["field.wait.question yes"]
+  ui["UI unknown"]
+  src --> raw --> shared --> row --> ui
+  open["UNRESOLVED where this verdict is unknown"]
+  row --> open

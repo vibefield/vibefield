@@ -132,7 +132,7 @@ export function renderShell(index, cell) {
     </div>
     <section aria-labelledby="gaps-heading">
       <h2 id="gaps-heading">State coverage</h2>
-      <p>${escapeHtml(String(cell.coverage?.fieldRecords ?? 0))} field records are loaded. A field file is not a state path. GV-AUDIT3 and view fixtures are still pending.</p>
+      <p>${escapeHtml(String(cell.coverage?.fieldRecords ?? 0))} canonical row records are loaded. ${escapeHtml(String(cell.coverage?.sdkLeafRecords ?? 0))} SDK leaf records are separate. ${escapeHtml(String(index.partial?.uiUnchecked ?? 0))} first-half UI paths and ${escapeHtml(String(index.partial?.stateUnchecked ?? 0))} state predicates are still unchecked. ${escapeHtml(index.partial?.note ?? "")}</p>
       <ul>
         ${(cell.coverage?.adapters ?? [])
           .filter((adapter) => adapter.records > 0)

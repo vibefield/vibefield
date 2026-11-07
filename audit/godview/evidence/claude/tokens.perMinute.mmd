@@ -1,9 +1,13 @@
+%% graph_ref: shared.tokens
+%% adapter: claude
+%% field: field.tokens.perMinute
+%% forensic: source-read at 748d015; not a live sample
 flowchart LR
-  src["claude source packages/adapter-claude/src/observation/otel/usage.ts:42-68"]
+  src["packages/adapter-claude/src/observation/otel/usage.ts:42-68"]
   raw["no raw adapter write found"]
-  row["UNRESOLVED field.tokens.perMinute row mapping"]
-  ui["UNRESOLVED UI reachability"]
-  states["UNRESOLVED downstream state predicates"]
-  src --> raw --> row
-  row --> ui
-  row --> states
+  shared["shared.tokens"]
+  row["field.tokens.perMinute yes"]
+  ui["UI unknown"]
+  src --> raw --> shared --> row --> ui
+  open["UNRESOLVED where this verdict is unknown"]
+  row --> open

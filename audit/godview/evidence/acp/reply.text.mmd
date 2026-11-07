@@ -1,9 +1,13 @@
+%% graph_ref: shared.reply
+%% adapter: acp
+%% field: field.reply.text
+%% forensic: source-read at 748d015; not a live sample
 flowchart LR
-  src["acp source packages/adapter-acp/src/normalization/conversation.ts:12-26"]
+  src["packages/adapter-acp/src/normalization/conversation.ts:12-26"]
   raw["conversation:assistant-message"]
-  row["UNRESOLVED field.reply.text row mapping"]
-  ui["UNRESOLVED UI reachability"]
-  states["UNRESOLVED downstream state predicates"]
-  src --> raw --> row
-  row --> ui
-  row --> states
+  shared["shared.reply"]
+  row["field.reply.text yes"]
+  ui["UI unknown"]
+  src --> raw --> shared --> row --> ui
+  open["UNRESOLVED where this verdict is unknown"]
+  row --> open

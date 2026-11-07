@@ -121,27 +121,21 @@
   },
   "renderer": {
     "viewIds": [
-      "view.list",
-      "view.rain",
       "view.swarm",
-      "view.spend",
-      "view.timeline"
+      "view.spend"
     ],
-    "component": "catalog-consumer-unproven",
-    "symbol": "view.list,view.rain,view.swarm,view.spend,view.timeline"
+    "component": "bubble-model / spend-words",
+    "symbol": "model displayName or id"
   },
   "applicability": {
     "states": [
       "state.model_missing"
     ],
     "views": [
-      "view.list",
-      "view.rain",
       "view.swarm",
-      "view.spend",
-      "view.timeline"
+      "view.spend"
     ],
-    "notes": "ROW FIELD field.model. PENDING DOWNSTREAM MAPPING into MonitorAgentRow. This is one of 74 canonical row fields. It is not an SDK contract leaf. PENDING DOWNSTREAM MAPPING: GV-AUDIT2 owns adapter output to row predicates, including cost, burn rate, history, timeline, and git branch. This audit does not give that verdict. Schema acceptance is not complete provenance. verification.status source-read is a static reading. observation.presence unknown means no live sample was taken. It does not mean the row value is missing. classification.adapterEmittable and uiReachable stay unknown. A raw adapter property is not the row field, and a catalog consumer is not a proven UI path.   field.model is a single string chosen downstream. This adapter emits id and an optional display name on two channels that do not agree about retract or intent. The row choice is pending. The adapter does not write this MonitorAgentRow property. That is the architecture, not a conclusion that the row predicate is unreachable. This trace is Puppeteer 748d015a7e393112e0a91dad80111fdf5abe6583 only. It is newer than shipped Vibefield 0.3.3 and does not describe that install. Package comparison was not re-run. Declaration supported from acp-model-config-option. declaration only; supported does not guarantee availability/value; degraded is not unreachable Declared support does not match the producer channel. That mismatch is not a runtime impossibility. Raw source literals, not live samples: adapter.acp.upstream.model.present=\"currentValue\" (model select has currentValue); adapter.acp.upstream.model.retract=\"retract observed\" (full config set has no model selector); adapter.acp.upstream.model.intent=\"observed\" (monitor upsert only); adapter.acp.upstream.model.display.omitted=\"displayName omitted\" (no matching choice name) Graph: evidence/acp/model.mmd. Continuation anchors, not a reachability verdict: MonitorService.consume, core reduce and project, deriveAgentRow. Vibefield AgentView and window-rows are not traced."
+    "notes": "Model events or monitor model upserts are projected by project.ts and copied by derive.ts:244. Conditional on a model actually being present. Not live-observed. Timeline consumption was not verified. ROW FIELD field.model. PENDING DOWNSTREAM MAPPING into MonitorAgentRow. This is one of 74 canonical row fields. It is not an SDK contract leaf. PENDING DOWNSTREAM MAPPING: GV-AUDIT2 owns adapter output to row predicates, including cost, burn rate, history, timeline, and git branch. This audit does not give that verdict. Schema acceptance is not complete provenance. verification.status source-read is a static reading. observation.presence unknown means no live sample was taken. It does not mean the row value is missing. classification.adapterEmittable and uiReachable stay unknown. A raw adapter property is not the row field, and a catalog consumer is not a proven UI path.   field.model is a single string chosen downstream. This adapter emits id and an optional display name on two channels that do not agree about retract or intent. The row choice is pending. The adapter does not write this MonitorAgentRow property. That is the architecture, not a conclusion that the row predicate is unreachable. This trace is Puppeteer 748d015a7e393112e0a91dad80111fdf5abe6583 only. It is newer than shipped Vibefield 0.3.3 and does not describe that install. Package comparison was not re-run. Declaration supported from acp-model-config-option. declaration only; supported does not guarantee availability/value; degraded is not unreachable Declared support does not match the producer channel. That mismatch is not a runtime impossibility. Raw source literals, not live samples: adapter.acp.upstream.model.present=\"currentValue\" (model select has currentValue); adapter.acp.upstream.model.retract=\"retract observed\" (full config set has no model selector); adapter.acp.upstream.model.intent=\"observed\" (monitor upsert only); adapter.acp.upstream.model.display.omitted=\"displayName omitted\" (no matching choice name) Graph: evidence/acp/model.mmd. Continuation anchors, not a reachability verdict: MonitorService.consume, core reduce and project, deriveAgentRow. Vibefield AgentView and window-rows are not traced."
   },
   "absence": {
     "onMissing": "record-unknown",
@@ -154,12 +148,12 @@
   },
   "classification": {
     "modelSupported": "yes",
-    "adapterEmittable": "unknown",
-    "uiReachable": "unknown"
+    "adapterEmittable": "yes",
+    "uiReachable": "yes"
   },
   "verification": {
     "status": "source-read",
     "owner": "GV-AUDIT3",
-    "notes": "ROW FIELD field.model. PENDING DOWNSTREAM MAPPING into MonitorAgentRow. This is one of 74 canonical row fields. It is not an SDK contract leaf. PENDING DOWNSTREAM MAPPING: GV-AUDIT2 owns adapter output to row predicates, including cost, burn rate, history, timeline, and git branch. This audit does not give that verdict. Schema acceptance is not complete provenance. verification.status source-read is a static reading. observation.presence unknown means no live sample was taken. It does not mean the row value is missing. classification.adapterEmittable and uiReachable stay unknown. A raw adapter property is not the row field, and a catalog consumer is not a proven UI path.   field.model is a single string chosen downstream. This adapter emits id and an optional display name on two channels that do not agree about retract or intent. The row choice is pending. The adapter does not write this MonitorAgentRow property. That is the architecture, not a conclusion that the row predicate is unreachable. This trace is Puppeteer 748d015a7e393112e0a91dad80111fdf5abe6583 only. It is newer than shipped Vibefield 0.3.3 and does not describe that install. Package comparison was not re-run. Declaration supported from acp-model-config-option. declaration only; supported does not guarantee availability/value; degraded is not unreachable Declared support does not match the producer channel. That mismatch is not a runtime impossibility. Raw source literals, not live samples: adapter.acp.upstream.model.present=\"currentValue\" (model select has currentValue); adapter.acp.upstream.model.retract=\"retract observed\" (full config set has no model selector); adapter.acp.upstream.model.intent=\"observed\" (monitor upsert only); adapter.acp.upstream.model.display.omitted=\"displayName omitted\" (no matching choice name) Graph: evidence/acp/model.mmd. Continuation anchors, not a reachability verdict: MonitorService.consume, core reduce and project, deriveAgentRow. Vibefield AgentView and window-rows are not traced."
+    "notes": "Model events or monitor model upserts are projected by project.ts and copied by derive.ts:244. Conditional on a model actually being present. Not live-observed. Timeline consumption was not verified. ROW FIELD field.model. PENDING DOWNSTREAM MAPPING into MonitorAgentRow. This is one of 74 canonical row fields. It is not an SDK contract leaf. PENDING DOWNSTREAM MAPPING: GV-AUDIT2 owns adapter output to row predicates, including cost, burn rate, history, timeline, and git branch. This audit does not give that verdict. Schema acceptance is not complete provenance. verification.status source-read is a static reading. observation.presence unknown means no live sample was taken. It does not mean the row value is missing. classification.adapterEmittable and uiReachable stay unknown. A raw adapter property is not the row field, and a catalog consumer is not a proven UI path.   field.model is a single string chosen downstream. This adapter emits id and an optional display name on two channels that do not agree about retract or intent. The row choice is pending. The adapter does not write this MonitorAgentRow property. That is the architecture, not a conclusion that the row predicate is unreachable. This trace is Puppeteer 748d015a7e393112e0a91dad80111fdf5abe6583 only. It is newer than shipped Vibefield 0.3.3 and does not describe that install. Package comparison was not re-run. Declaration supported from acp-model-config-option. declaration only; supported does not guarantee availability/value; degraded is not unreachable Declared support does not match the producer channel. That mismatch is not a runtime impossibility. Raw source literals, not live samples: adapter.acp.upstream.model.present=\"currentValue\" (model select has currentValue); adapter.acp.upstream.model.retract=\"retract observed\" (full config set has no model selector); adapter.acp.upstream.model.intent=\"observed\" (monitor upsert only); adapter.acp.upstream.model.display.omitted=\"displayName omitted\" (no matching choice name) Graph: evidence/acp/model.mmd. Continuation anchors, not a reachability verdict: MonitorService.consume, core reduce and project, deriveAgentRow. Vibefield AgentView and window-rows are not traced."
   }
 }

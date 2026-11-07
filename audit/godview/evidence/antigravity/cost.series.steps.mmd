@@ -1,9 +1,11 @@
+%% graph_ref: shared.cost.missing
+%% adapter: antigravity
+%% field: field.cost.series.steps
+%% forensic: source-read at 748d015; not a live sample
 flowchart LR
-  src["antigravity source packages/adapter-antigravity/src/normalization/monitor-capabilities.ts:15-23"]
+  src["packages/adapter-antigravity/src/normalization/monitor-capabilities.ts:15-23"]
   raw["no raw adapter write found"]
-  row["UNRESOLVED field.cost.series.steps row mapping"]
-  ui["UNRESOLVED UI reachability"]
-  states["UNRESOLVED downstream state predicates"]
-  src --> raw --> row
-  row --> ui
-  row --> states
+  shared["shared.cost.missing"]
+  row["field.cost.series.steps no"]
+  ui["UI no"]
+  src --> raw --> shared --> row --> ui

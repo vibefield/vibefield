@@ -1,9 +1,11 @@
+%% graph_ref: shared.context.percent
+%% adapter: acp
+%% field: field.context.usedPercent
+%% forensic: source-read at 748d015; not a live sample
 flowchart LR
-  src["acp source packages/adapter-acp/src/normalization/monitor.ts:222-227"]
+  src["packages/adapter-acp/src/normalization/monitor.ts:222-227"]
   raw["no raw adapter write found"]
-  row["UNRESOLVED field.context.usedPercent row mapping"]
-  ui["UNRESOLVED UI reachability"]
-  states["UNRESOLVED downstream state predicates"]
-  src --> raw --> row
-  row --> ui
-  row --> states
+  shared["shared.context.percent"]
+  row["field.context.usedPercent yes"]
+  ui["UI yes"]
+  src --> raw --> shared --> row --> ui

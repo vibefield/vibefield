@@ -95,27 +95,21 @@
   },
   "renderer": {
     "viewIds": [
-      "view.list",
-      "view.rain",
       "view.swarm",
-      "view.spend",
-      "view.timeline"
+      "view.spend"
     ],
-    "component": "catalog-consumer-unproven",
-    "symbol": "view.list,view.rain,view.swarm,view.spend,view.timeline"
+    "component": "bubble-model / spend-words",
+    "symbol": "model displayName or id"
   },
   "applicability": {
     "states": [
       "state.model_missing"
     ],
     "views": [
-      "view.list",
-      "view.rain",
       "view.swarm",
-      "view.spend",
-      "view.timeline"
+      "view.spend"
     ],
-    "notes": "ROW FIELD field.model. PENDING DOWNSTREAM MAPPING into MonitorAgentRow. This is one of 74 canonical row fields. It is not an SDK contract leaf. PENDING DOWNSTREAM MAPPING: GV-AUDIT2 owns adapter output to row predicates, including cost, burn rate, history, timeline, and git branch. This audit does not give that verdict. Schema acceptance is not complete provenance. verification.status source-read is a static reading. observation.presence unknown means no live sample was taken. It does not mean the row value is missing. classification.adapterEmittable and uiReachable stay unknown. A raw adapter property is not the row field, and a catalog consumer is not a proven UI path.   The declaration says the configured model is known and the transcript does not report the effective model. That matches. There is no display name and no observed intent. Refresh is once at adopt. The adapter does not write this MonitorAgentRow property. That is the architecture, not a conclusion that the row predicate is unreachable. This trace is Puppeteer 748d015a7e393112e0a91dad80111fdf5abe6583 only. It is newer than shipped Vibefield 0.3.3 and does not describe that install. Package comparison was not re-run. Declaration degraded from launch-intent-only. declaration only; supported does not guarantee availability/value; degraded is not unreachable Declared support does not match the producer channel. That mismatch is not a runtime impossibility. Raw source literals, not live samples: adapter.antigravity.upstream.model.configured=\"configured\" (options.model is truthy); adapter.antigravity.upstream.model.absent=\"no event\" (options.model omitted) Graph: evidence/antigravity/model.mmd. Continuation anchors, not a reachability verdict: MonitorService.consume, core reduce and project, deriveAgentRow. Vibefield AgentView and window-rows are not traced."
+    "notes": "Launch can emit model:updated intent configured. The transcript does not. derive.ts:244 copies displayName or id when a runtime model exists. Conditional on the launch option. Not live-observed. ROW FIELD field.model. PENDING DOWNSTREAM MAPPING into MonitorAgentRow. This is one of 74 canonical row fields. It is not an SDK contract leaf. PENDING DOWNSTREAM MAPPING: GV-AUDIT2 owns adapter output to row predicates, including cost, burn rate, history, timeline, and git branch. This audit does not give that verdict. Schema acceptance is not complete provenance. verification.status source-read is a static reading. observation.presence unknown means no live sample was taken. It does not mean the row value is missing. classification.adapterEmittable and uiReachable stay unknown. A raw adapter property is not the row field, and a catalog consumer is not a proven UI path.   The declaration says the configured model is known and the transcript does not report the effective model. That matches. There is no display name and no observed intent. Refresh is once at adopt. The adapter does not write this MonitorAgentRow property. That is the architecture, not a conclusion that the row predicate is unreachable. This trace is Puppeteer 748d015a7e393112e0a91dad80111fdf5abe6583 only. It is newer than shipped Vibefield 0.3.3 and does not describe that install. Package comparison was not re-run. Declaration degraded from launch-intent-only. declaration only; supported does not guarantee availability/value; degraded is not unreachable Declared support does not match the producer channel. That mismatch is not a runtime impossibility. Raw source literals, not live samples: adapter.antigravity.upstream.model.configured=\"configured\" (options.model is truthy); adapter.antigravity.upstream.model.absent=\"no event\" (options.model omitted) Graph: evidence/antigravity/model.mmd. Continuation anchors, not a reachability verdict: MonitorService.consume, core reduce and project, deriveAgentRow. Vibefield AgentView and window-rows are not traced."
   },
   "absence": {
     "onMissing": "record-unknown",
@@ -129,11 +123,11 @@
   "classification": {
     "modelSupported": "yes",
     "adapterEmittable": "unknown",
-    "uiReachable": "unknown"
+    "uiReachable": "yes"
   },
   "verification": {
     "status": "source-read",
     "owner": "GV-AUDIT3",
-    "notes": "ROW FIELD field.model. PENDING DOWNSTREAM MAPPING into MonitorAgentRow. This is one of 74 canonical row fields. It is not an SDK contract leaf. PENDING DOWNSTREAM MAPPING: GV-AUDIT2 owns adapter output to row predicates, including cost, burn rate, history, timeline, and git branch. This audit does not give that verdict. Schema acceptance is not complete provenance. verification.status source-read is a static reading. observation.presence unknown means no live sample was taken. It does not mean the row value is missing. classification.adapterEmittable and uiReachable stay unknown. A raw adapter property is not the row field, and a catalog consumer is not a proven UI path.   The declaration says the configured model is known and the transcript does not report the effective model. That matches. There is no display name and no observed intent. Refresh is once at adopt. The adapter does not write this MonitorAgentRow property. That is the architecture, not a conclusion that the row predicate is unreachable. This trace is Puppeteer 748d015a7e393112e0a91dad80111fdf5abe6583 only. It is newer than shipped Vibefield 0.3.3 and does not describe that install. Package comparison was not re-run. Declaration degraded from launch-intent-only. declaration only; supported does not guarantee availability/value; degraded is not unreachable Declared support does not match the producer channel. That mismatch is not a runtime impossibility. Raw source literals, not live samples: adapter.antigravity.upstream.model.configured=\"configured\" (options.model is truthy); adapter.antigravity.upstream.model.absent=\"no event\" (options.model omitted) Graph: evidence/antigravity/model.mmd. Continuation anchors, not a reachability verdict: MonitorService.consume, core reduce and project, deriveAgentRow. Vibefield AgentView and window-rows are not traced."
+    "notes": "Launch can emit model:updated intent configured. The transcript does not. derive.ts:244 copies displayName or id when a runtime model exists. Conditional on the launch option. Not live-observed. ROW FIELD field.model. PENDING DOWNSTREAM MAPPING into MonitorAgentRow. This is one of 74 canonical row fields. It is not an SDK contract leaf. PENDING DOWNSTREAM MAPPING: GV-AUDIT2 owns adapter output to row predicates, including cost, burn rate, history, timeline, and git branch. This audit does not give that verdict. Schema acceptance is not complete provenance. verification.status source-read is a static reading. observation.presence unknown means no live sample was taken. It does not mean the row value is missing. classification.adapterEmittable and uiReachable stay unknown. A raw adapter property is not the row field, and a catalog consumer is not a proven UI path.   The declaration says the configured model is known and the transcript does not report the effective model. That matches. There is no display name and no observed intent. Refresh is once at adopt. The adapter does not write this MonitorAgentRow property. That is the architecture, not a conclusion that the row predicate is unreachable. This trace is Puppeteer 748d015a7e393112e0a91dad80111fdf5abe6583 only. It is newer than shipped Vibefield 0.3.3 and does not describe that install. Package comparison was not re-run. Declaration degraded from launch-intent-only. declaration only; supported does not guarantee availability/value; degraded is not unreachable Declared support does not match the producer channel. That mismatch is not a runtime impossibility. Raw source literals, not live samples: adapter.antigravity.upstream.model.configured=\"configured\" (options.model is truthy); adapter.antigravity.upstream.model.absent=\"no event\" (options.model omitted) Graph: evidence/antigravity/model.mmd. Continuation anchors, not a reachability verdict: MonitorService.consume, core reduce and project, deriveAgentRow. Vibefield AgentView and window-rows are not traced."
   }
 }

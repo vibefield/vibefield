@@ -1,0 +1,6 @@
+flowchart TD
+  raw[Adapter usage or pricing] --> price[usage-pricing.ts priceUsageUpdates]
+  price --> ledger[cost.ts buildUsageCostLedger]
+  ledger --> row[backend.ts costOf complete or partial]
+  row --> flames[bubble-model.ts flame ladder conditional]
+  note[GV2 25c215a not a live sample] --> row

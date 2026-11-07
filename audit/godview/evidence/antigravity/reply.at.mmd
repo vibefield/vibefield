@@ -1,9 +1,13 @@
+%% graph_ref: shared.reply
+%% adapter: antigravity
+%% field: field.reply.at
+%% forensic: source-read at 748d015; not a live sample
 flowchart LR
-  src["antigravity source packages/adapter-antigravity/src/normalization/conversation.ts:1-3"]
+  src["packages/adapter-antigravity/src/normalization/conversation.ts:1-3"]
   raw["conversation:assistant-message final true"]
-  row["UNRESOLVED field.reply.at row mapping"]
-  ui["UNRESOLVED UI reachability"]
-  states["UNRESOLVED downstream state predicates"]
-  src --> raw --> row
-  row --> ui
-  row --> states
+  shared["shared.reply"]
+  row["field.reply.at yes"]
+  ui["UI unknown"]
+  src --> raw --> shared --> row --> ui
+  open["UNRESOLVED where this verdict is unknown"]
+  row --> open

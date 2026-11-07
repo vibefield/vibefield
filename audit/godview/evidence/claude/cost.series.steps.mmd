@@ -1,9 +1,11 @@
+%% graph_ref: shared.cost.priced
+%% adapter: claude
+%% field: field.cost.series.steps
+%% forensic: source-read at 748d015; not a live sample
 flowchart LR
-  src["claude source packages/adapter-claude/src/observation/otel/usage.ts:37-69"]
+  src["packages/adapter-claude/src/observation/otel/usage.ts:37-69"]
   raw["usage:tokens-used.costUsd"]
-  row["UNRESOLVED field.cost.series.steps row mapping"]
-  ui["UNRESOLVED UI reachability"]
-  states["UNRESOLVED downstream state predicates"]
-  src --> raw --> row
-  row --> ui
-  row --> states
+  shared["shared.cost.priced"]
+  row["field.cost.series.steps yes"]
+  ui["UI yes"]
+  src --> raw --> shared --> row --> ui

@@ -1,9 +1,13 @@
+%% graph_ref: shared.model
+%% adapter: antigravity
+%% field: field.model
+%% forensic: source-read at 748d015; not a live sample
 flowchart LR
-  src["antigravity source packages/adapter-antigravity/src/driver.ts:166-170"]
+  src["packages/adapter-antigravity/src/driver.ts:166-170"]
   raw["model:updated intent configured"]
-  row["UNRESOLVED field.model row mapping"]
-  ui["UNRESOLVED UI reachability"]
-  states["UNRESOLVED downstream state predicates"]
-  src --> raw --> row
-  row --> ui
-  row --> states
+  shared["shared.model"]
+  row["field.model unknown"]
+  ui["UI yes"]
+  src --> raw --> shared --> row --> ui
+  open["UNRESOLVED where this verdict is unknown"]
+  row --> open

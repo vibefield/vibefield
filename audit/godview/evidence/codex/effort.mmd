@@ -1,9 +1,11 @@
+%% graph_ref: shared.effort
+%% adapter: codex
+%% field: field.effort
+%% forensic: source-read at 748d015; not a live sample
 flowchart LR
-  src["codex source packages/adapter-codex/src/normalization/monitor.ts:304-343"]
+  src["packages/adapter-codex/src/normalization/monitor.ts:304-343"]
   raw["effort value and intent, or retract"]
-  row["UNRESOLVED field.effort row mapping"]
-  ui["UNRESOLVED UI reachability"]
-  states["UNRESOLVED downstream state predicates"]
-  src --> raw --> row
-  row --> ui
-  row --> states
+  shared["shared.effort"]
+  row["field.effort yes"]
+  ui["UI yes"]
+  src --> raw --> shared --> row --> ui

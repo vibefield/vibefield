@@ -1,9 +1,11 @@
+%% graph_ref: shared.runtime-supplied
+%% adapter: antigravity
+%% field: field.active
+%% forensic: source-read at 748d015; not a live sample
 flowchart LR
-  src["antigravity source packages/view-sdk/src/model.ts:365-365"]
+  src["packages/view-sdk/src/model.ts:365-365"]
   raw["no raw adapter write found"]
-  row["UNRESOLVED field.active row mapping"]
-  ui["UNRESOLVED UI reachability"]
-  states["UNRESOLVED downstream state predicates"]
-  src --> raw --> row
-  row --> ui
-  row --> states
+  shared["shared.runtime-supplied"]
+  row["field.active no"]
+  ui["UI yes"]
+  src --> raw --> shared --> row --> ui

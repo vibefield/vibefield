@@ -1,11 +1,13 @@
+%% graph_ref: shared.sdk-leaf
+%% adapter: antigravity
+%% field: field.contract.MonitorSpawnProfile.kind
+%% forensic: source-read at 748d015; not a live sample
 flowchart LR
-  src["antigravity source packages/view-sdk/src/model.ts:184-184"]
+  src["packages/view-sdk/src/model.ts:184-184"]
   raw["no raw adapter write found"]
-  row["UNRESOLVED field.contract.MonitorSpawnProfile.kind row mapping"]
-  ui["UNRESOLVED UI reachability"]
-  states["UNRESOLVED downstream state predicates"]
-  src --> raw --> row
-  row --> ui
-  row --> states
-  leaf["SDK contract leaf, not a row field"]
-  raw --> leaf
+  shared["shared.sdk-leaf"]
+  row["field.contract.MonitorSpawnProfile.kind unknown"]
+  ui["UI unknown"]
+  src --> raw --> shared --> row --> ui
+  open["UNRESOLVED where this verdict is unknown"]
+  row --> open

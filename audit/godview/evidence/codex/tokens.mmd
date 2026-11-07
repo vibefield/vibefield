@@ -1,9 +1,13 @@
+%% graph_ref: shared.tokens
+%% adapter: codex
+%% field: field.tokens
+%% forensic: source-read at 748d015; not a live sample
 flowchart LR
-  src["codex source packages/adapter-codex/src/normalization/monitor.ts:477-528"]
+  src["packages/adapter-codex/src/normalization/monitor.ts:477-528"]
   raw["usage.cumulativeTokens and usage.pricing"]
-  row["UNRESOLVED field.tokens row mapping"]
-  ui["UNRESOLVED UI reachability"]
-  states["UNRESOLVED downstream state predicates"]
-  src --> raw --> row
-  row --> ui
-  row --> states
+  shared["shared.tokens"]
+  row["field.tokens yes"]
+  ui["UI unknown"]
+  src --> raw --> shared --> row --> ui
+  open["UNRESOLVED where this verdict is unknown"]
+  row --> open

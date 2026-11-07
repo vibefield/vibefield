@@ -1,9 +1,11 @@
+%% graph_ref: shared.cost.priced
+%% adapter: codex
+%% field: field.cost.usd
+%% forensic: source-read at 748d015; not a live sample
 flowchart LR
-  src["codex source packages/adapter-codex/src/normalization/monitor-capabilities.ts:30-34"]
+  src["packages/adapter-codex/src/normalization/monitor-capabilities.ts:30-34"]
   raw["no raw adapter write found"]
-  row["UNRESOLVED field.cost.usd row mapping"]
-  ui["UNRESOLVED UI reachability"]
-  states["UNRESOLVED downstream state predicates"]
-  src --> raw --> row
-  row --> ui
-  row --> states
+  shared["shared.cost.priced"]
+  row["field.cost.usd yes"]
+  ui["UI yes"]
+  src --> raw --> shared --> row --> ui

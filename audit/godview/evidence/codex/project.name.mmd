@@ -1,9 +1,11 @@
+%% graph_ref: shared.project
+%% adapter: codex
+%% field: field.project.name
+%% forensic: source-read at 748d015; not a live sample
 flowchart LR
-  src["codex source packages/adapter-codex/src/normalization/monitor.ts:289-290"]
+  src["packages/adapter-codex/src/normalization/monitor.ts:289-290"]
   raw["cwd"]
-  row["UNRESOLVED field.project.name row mapping"]
-  ui["UNRESOLVED UI reachability"]
-  states["UNRESOLVED downstream state predicates"]
-  src --> raw --> row
-  row --> ui
-  row --> states
+  shared["shared.project"]
+  row["field.project.name yes"]
+  ui["UI yes"]
+  src --> raw --> shared --> row --> ui

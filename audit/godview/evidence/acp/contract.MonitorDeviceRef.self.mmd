@@ -1,11 +1,13 @@
+%% graph_ref: shared.sdk-leaf
+%% adapter: acp
+%% field: field.contract.MonitorDeviceRef.self
+%% forensic: source-read at 748d015; not a live sample
 flowchart LR
-  src["acp source packages/view-sdk/src/model.ts:39-39"]
+  src["packages/view-sdk/src/model.ts:39-39"]
   raw["no raw adapter write found"]
-  row["UNRESOLVED field.contract.MonitorDeviceRef.self row mapping"]
-  ui["UNRESOLVED UI reachability"]
-  states["UNRESOLVED downstream state predicates"]
-  src --> raw --> row
-  row --> ui
-  row --> states
-  leaf["SDK contract leaf, not a row field"]
-  raw --> leaf
+  shared["shared.sdk-leaf"]
+  row["field.contract.MonitorDeviceRef.self unknown"]
+  ui["UI unknown"]
+  src --> raw --> shared --> row --> ui
+  open["UNRESOLVED where this verdict is unknown"]
+  row --> open

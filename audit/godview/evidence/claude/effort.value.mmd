@@ -1,9 +1,11 @@
+%% graph_ref: shared.effort
+%% adapter: claude
+%% field: field.effort.value
+%% forensic: source-read at 748d015; not a live sample
 flowchart LR
-  src["claude source packages/adapter-claude/src/observation/status-channel.ts:131-147"]
+  src["packages/adapter-claude/src/observation/status-channel.ts:131-147"]
   raw["effort string and intent"]
-  row["UNRESOLVED field.effort.value row mapping"]
-  ui["UNRESOLVED UI reachability"]
-  states["UNRESOLVED downstream state predicates"]
-  src --> raw --> row
-  row --> ui
-  row --> states
+  shared["shared.effort"]
+  row["field.effort.value yes"]
+  ui["UI yes"]
+  src --> raw --> shared --> row --> ui

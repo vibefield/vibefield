@@ -1,9 +1,11 @@
+%% graph_ref: shared.context.absent
+%% adapter: antigravity
+%% field: field.context
+%% forensic: source-read at 748d015; not a live sample
 flowchart LR
-  src["antigravity source packages/adapter-antigravity/src/normalization/monitor-capabilities.ts:24-32"]
+  src["packages/adapter-antigravity/src/normalization/monitor-capabilities.ts:24-32"]
   raw["no raw adapter write found"]
-  row["UNRESOLVED field.context row mapping"]
-  ui["UNRESOLVED UI reachability"]
-  states["UNRESOLVED downstream state predicates"]
-  src --> raw --> row
-  row --> ui
-  row --> states
+  shared["shared.context.absent"]
+  row["field.context no"]
+  ui["UI yes"]
+  src --> raw --> shared --> row --> ui

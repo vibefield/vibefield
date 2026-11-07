@@ -28,6 +28,9 @@ test("pinned source inventory matches the model contract counts", () => {
   assert.equal(index.sources.evidence, "loaded");
   assert.equal(index.traceCount, 740);
   assert.equal(index.sdkLeafCount, 430);
+  assert.equal(index.partial.uiUnchecked, 265);
+  assert.equal(index.partial.stateUnchecked, 35);
+  assert.equal(index.partial.provenanceComplete, false);
   assert.equal(index.sources.rendering, "partial");
   assert.equal(index.rendering.fixtureCount, 42);
   assert.equal(index.rendering.holeCount, 43);

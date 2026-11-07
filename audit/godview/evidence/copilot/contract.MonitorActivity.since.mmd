@@ -1,11 +1,13 @@
+%% graph_ref: shared.sdk-leaf
+%% adapter: copilot
+%% field: field.contract.MonitorActivity.since
+%% forensic: source-read at 748d015; not a live sample
 flowchart LR
-  src["copilot source packages/view-sdk/src/model.ts:67-67"]
+  src["packages/view-sdk/src/model.ts:67-67"]
   raw["no raw adapter write found"]
-  row["UNRESOLVED field.contract.MonitorActivity.since row mapping"]
-  ui["UNRESOLVED UI reachability"]
-  states["UNRESOLVED downstream state predicates"]
-  src --> raw --> row
-  row --> ui
-  row --> states
-  leaf["SDK contract leaf, not a row field"]
-  raw --> leaf
+  shared["shared.sdk-leaf"]
+  row["field.contract.MonitorActivity.since unknown"]
+  ui["UI unknown"]
+  src --> raw --> shared --> row --> ui
+  open["UNRESOLVED where this verdict is unknown"]
+  row --> open

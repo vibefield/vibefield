@@ -1,0 +1,6 @@
+flowchart TD
+  raw[No priced costUsd] --> core[Core coverage unavailable]
+  core --> omit[backend.ts omits field.cost]
+  omit --> missing[state.cost_missing]
+  omit --> hollow[state.burn_unpriced on observed working body]
+  not[state.cost_unavailable is not this row] --> omit

@@ -1,9 +1,11 @@
+%% graph_ref: shared.context.percent
+%% adapter: copilot
+%% field: field.context.usedPercent
+%% forensic: source-read at 748d015; not a live sample
 flowchart LR
-  src["copilot source packages/adapter-copilot/src/normalization/compaction.ts:13-22"]
+  src["packages/adapter-copilot/src/normalization/compaction.ts:13-22"]
   raw["context-window:updated.usedPercentage"]
-  row["UNRESOLVED field.context.usedPercent row mapping"]
-  ui["UNRESOLVED UI reachability"]
-  states["UNRESOLVED downstream state predicates"]
-  src --> raw --> row
-  row --> ui
-  row --> states
+  shared["shared.context.percent"]
+  row["field.context.usedPercent yes"]
+  ui["UI yes"]
+  src --> raw --> shared --> row --> ui

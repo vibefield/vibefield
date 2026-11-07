@@ -1,9 +1,11 @@
+%% graph_ref: shared.status
+%% adapter: antigravity
+%% field: field.status
+%% forensic: source-read at 748d015; not a live sample
 flowchart LR
-  src["antigravity source packages/adapter-antigravity/src/normalization/monitor.ts:25-66"]
+  src["packages/adapter-antigravity/src/normalization/monitor.ts:25-66"]
   raw["adapter signal, see transforms"]
-  row["UNRESOLVED field.status row mapping"]
-  ui["UNRESOLVED UI reachability"]
-  states["UNRESOLVED downstream state predicates"]
-  src --> raw --> row
-  row --> ui
-  row --> states
+  shared["shared.status"]
+  row["field.status yes"]
+  ui["UI yes"]
+  src --> raw --> shared --> row --> ui

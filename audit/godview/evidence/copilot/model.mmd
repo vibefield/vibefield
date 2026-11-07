@@ -1,9 +1,11 @@
+%% graph_ref: shared.model
+%% adapter: copilot
+%% field: field.model
+%% forensic: source-read at 748d015; not a live sample
 flowchart LR
-  src["copilot source packages/adapter-copilot/src/normalization/model.ts:4-14"]
+  src["packages/adapter-copilot/src/normalization/model.ts:4-14"]
   raw["model:updated"]
-  row["UNRESOLVED field.model row mapping"]
-  ui["UNRESOLVED UI reachability"]
-  states["UNRESOLVED downstream state predicates"]
-  src --> raw --> row
-  row --> ui
-  row --> states
+  shared["shared.model"]
+  row["field.model yes"]
+  ui["UI yes"]
+  src --> raw --> shared --> row --> ui

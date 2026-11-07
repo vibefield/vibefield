@@ -1,9 +1,11 @@
+%% graph_ref: shared.project
+%% adapter: claude
+%% field: field.project
+%% forensic: source-read at 748d015; not a live sample
 flowchart LR
-  src["claude source packages/adapter-claude/src/observation/status-channel.ts:128-138"]
+  src["packages/adapter-claude/src/observation/status-channel.ts:128-138"]
   raw["currentCwd"]
-  row["UNRESOLVED field.project row mapping"]
-  ui["UNRESOLVED UI reachability"]
-  states["UNRESOLVED downstream state predicates"]
-  src --> raw --> row
-  row --> ui
-  row --> states
+  shared["shared.project"]
+  row["field.project yes"]
+  ui["UI yes"]
+  src --> raw --> shared --> row --> ui

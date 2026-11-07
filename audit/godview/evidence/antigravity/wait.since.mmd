@@ -1,9 +1,13 @@
+%% graph_ref: shared.status
+%% adapter: antigravity
+%% field: field.wait.since
+%% forensic: source-read at 748d015; not a live sample
 flowchart LR
-  src["antigravity source packages/view-sdk/src/model.ts:49-49"]
+  src["packages/view-sdk/src/model.ts:49-49"]
   raw["no raw adapter write found"]
-  row["UNRESOLVED field.wait.since row mapping"]
-  ui["UNRESOLVED UI reachability"]
-  states["UNRESOLVED downstream state predicates"]
-  src --> raw --> row
-  row --> ui
-  row --> states
+  shared["shared.status"]
+  row["field.wait.since yes"]
+  ui["UI unknown"]
+  src --> raw --> shared --> row --> ui
+  open["UNRESOLVED where this verdict is unknown"]
+  row --> open

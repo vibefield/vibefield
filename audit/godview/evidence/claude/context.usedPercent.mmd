@@ -1,9 +1,11 @@
+%% graph_ref: shared.context.percent
+%% adapter: claude
+%% field: field.context.usedPercent
+%% forensic: source-read at 748d015; not a live sample
 flowchart LR
-  src["claude source packages/adapter-claude/src/observation/status-channel.ts:188-210"]
+  src["packages/adapter-claude/src/observation/status-channel.ts:188-210"]
   raw["usedPercentage only when the provider percentage is valid"]
-  row["UNRESOLVED field.context.usedPercent row mapping"]
-  ui["UNRESOLVED UI reachability"]
-  states["UNRESOLVED downstream state predicates"]
-  src --> raw --> row
-  row --> ui
-  row --> states
+  shared["shared.context.percent"]
+  row["field.context.usedPercent yes"]
+  ui["UI yes"]
+  src --> raw --> shared --> row --> ui

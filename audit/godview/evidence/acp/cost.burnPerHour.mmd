@@ -1,9 +1,11 @@
+%% graph_ref: shared.cost.missing
+%% adapter: acp
+%% field: field.cost.burnPerHour
+%% forensic: source-read at 748d015; not a live sample
 flowchart LR
-  src["acp source packages/adapter-acp/src/normalization/monitor-capabilities.ts:31-34"]
+  src["packages/adapter-acp/src/normalization/monitor-capabilities.ts:31-34"]
   raw["no raw adapter write found"]
-  row["UNRESOLVED field.cost.burnPerHour row mapping"]
-  ui["UNRESOLVED UI reachability"]
-  states["UNRESOLVED downstream state predicates"]
-  src --> raw --> row
-  row --> ui
-  row --> states
+  shared["shared.cost.missing"]
+  row["field.cost.burnPerHour no"]
+  ui["UI no"]
+  src --> raw --> shared --> row --> ui

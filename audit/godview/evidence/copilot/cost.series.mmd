@@ -1,9 +1,11 @@
+%% graph_ref: shared.cost.missing
+%% adapter: copilot
+%% field: field.cost.series
+%% forensic: source-read at 748d015; not a live sample
 flowchart LR
-  src["copilot source packages/adapter-copilot/src/normalization/monitor-capabilities.ts:15-23"]
+  src["packages/adapter-copilot/src/normalization/monitor-capabilities.ts:15-23"]
   raw["no raw adapter write found"]
-  row["UNRESOLVED field.cost.series row mapping"]
-  ui["UNRESOLVED UI reachability"]
-  states["UNRESOLVED downstream state predicates"]
-  src --> raw --> row
-  row --> ui
-  row --> states
+  shared["shared.cost.missing"]
+  row["field.cost.series no"]
+  ui["UI no"]
+  src --> raw --> shared --> row --> ui

@@ -475,6 +475,7 @@ function publicIndex({
     completeness: model.completeness ?? "",
     traceCount: traces.filter((trace) => trace.recordKind !== "sdk-leaf").length,
     sdkLeafCount: traces.filter((trace) => trace.recordKind === "sdk-leaf").length,
+    partial: partialCensus(traces, readJson(root, "audit/godview/plan/gv-audit3-join.json").json),
     renderCount: renders.length,
     rendering: renderIndex
       ? {
@@ -503,6 +504,31 @@ function publicIndex({
       adapter: "adapter.<suffix>",
       trace: "audit/godview/evidence/<suffix>/<fieldPath>.json",
     },
+  };
+}
+
+function partialCensus(traces, join) {
+  const first = new Set([
+    "adapter.acp",
+    "adapter.antigravity",
+    "adapter.claude",
+    "adapter.codex",
+    "adapter.copilot",
+  ]);
+  const rows = traces.filter(
+    (trace) => trace.recordKind !== "sdk-leaf" && first.has(trace.adapterId),
+  );
+  const uiUnchecked = rows.filter(
+    (trace) => trace.envelope?.classification?.uiReachable === "unknown",
+  ).length;
+  const states = Array.isArray(join?.stateReachability) ? join.stateReachability : [];
+  const stateUnchecked = states.filter((row) => row?.verdict === "unknown").length;
+  return {
+    uiUnchecked,
+    stateUnchecked,
+    provenanceComplete: join?.provenanceComplete === true,
+    downstreamVerdict: typeof join?.downstreamVerdict === "string" ? join.downstreamVerdict : null,
+    note: "First-half row mapping is partial. UI paths and state predicates still marked unknown are unchecked. SDK leaves are not row coverage. Envelope completion is still incoming.",
   };
 }
 

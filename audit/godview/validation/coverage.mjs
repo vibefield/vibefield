@@ -110,7 +110,10 @@ export function readField(envelope) {
 }
 
 const TOKEN_RATE = new Set(["adapter.grok", "adapter.hermes", "adapter.opencode"]);
-const TOKEN_ONLY = new Set([
+const COST_MISSING = new Set([
+  "adapter.acp",
+  "adapter.antigravity",
+  "adapter.copilot",
   "adapter.grok",
   "adapter.hermes",
   "adapter.kimi",
@@ -119,11 +122,11 @@ const TOKEN_ONLY = new Set([
 ]);
 
 function sharedCostNote(adapterId) {
-  if (TOKEN_ONLY.has(adapterId)) {
+  if (COST_MISSING.has(adapterId)) {
     const rate = TOKEN_RATE.has(adapterId)
       ? "Its tokens.perMinute record is present."
       : "Its tokens.perMinute record is unsupported: no live usage.";
-    return `Field records for this adapter name only state.cost_missing and state.burn_unpriced. They cite cost-burn-trace.md: the catalog is anthropic and openai only, and pricing needs the upsert's own pricing or costUsd. None of these five sets either, so the catalog is not applied to their tokens. The normal backend omits field.cost without a priced total, so state.cost_unavailable is not emitted on this path. Priced flames are not produced from these five. ${rate} Token/min and USD flames stay independent. The shared downstream join is still open.`;
+    return `Field records for this adapter name state.cost_missing and state.burn_unpriced on the normal path. They cite cost-burn-trace.md: the catalog is anthropic and openai only, and pricing needs the upsert's own pricing or costUsd. This adapter does not set those, so the catalog does not price its tokens. The normal backend omits field.cost without a priced total, so state.cost_unavailable is not emitted here. Priced flames are not produced from this producer. ${rate} Token/min and USD flames stay independent. The shared downstream join is still open.`;
   }
   if (PRICED.has(adapterId)) {
     return "The shared cost trace says runtime usage-pricing.ts can price Codex before the reducer, and Claude has native costUsd plus a catalog fallback. First-half row mapping is still pending, so that source permission is not a finished join.";
