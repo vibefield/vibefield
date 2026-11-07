@@ -67,6 +67,9 @@ import {
 // agent that reads the key, which is 0600 to the same uid, as the sparks' is (EL7).
 // A write goes beside, then is renamed (durably), and throws when the disk does not take it, so nothing is acted on
 // that a restart would not find.
+// *Corrected 2026-11-07 (item 231): "durably" is false on a power loss (no fsync on POSIX, no flush on Windows).
+// `#write` is `writeFileSync` and a rename (`durableRenameSync` only retries the rename on Windows), so a record acted
+// on can be one a restart after a power loss does not find. The fix is owed.*
 // - `runs/<run>.jsonl` (CP-4a2a; 4A2-Q10 (a)): each run's journal (journal.ts), its head written beside and renamed, each
 //   line after it appended and fsynced before the call it names is handed on (a log line is synced with the next line
 //   that is, or at a park: CP-4a2b, D13). A journal is read whole at each ask; one whose line is not VibeField's is set
@@ -78,6 +81,10 @@ import {
 //   with another MAC there, or a head whose MAC is not the record's, is lost; a record with no journal is a run that
 //   never began (`unbegun`). The limit, stated: a same-uid writer that rolls back BOTH files to an earlier pair reads as
 //   that pair, the approvals' posture.
+//   *Corrected 2026-11-07 (item 231): "a record never names a line the disk lacks" does not hold while the record's
+//   tail is the head. `beginRun` writes the head by `#write`, with no fsync (no fsync on POSIX, no flush on Windows),
+//   and sets it into `#synced` as the last synced line, so a power loss in that window can leave a record naming a
+//   head the disk lacks.*
 // Item 172 (DESIGN.md §9 "What VibeField keeps, when it cannot read it"): the approvals and proposals are its fifth
 // store, read at each ask. A record the disk did not answer, or a folder it cannot list, is left where it is and refused
 // UNAVAILABLE {service: RECORD_STORES.SERVICE_FLOWS} in fieldd's words, never read as nothing; a record a newer
@@ -158,7 +165,10 @@ export class FlowRecords {
   readonly #guard: StoreGuard;
   /** each run's journal's last line, as this store last wrote or read it, and where its whole lines end (bytes) */
   readonly #tails = new Map<string, JournalTail & { readonly bytes: number }>();
-  /** CP-4a2b (D13, D18) — each run's journal's last line the disk was told to keep (fsynced): what its record names */
+  /** CP-4a2b (D13, D18) — each run's journal's last line the disk was told to keep (fsynced): what its record names.
+   * *Corrected 2026-11-07 (item 231): not for a run's head. `beginRun` sets the head here after `#write` (a write
+   * beside and a rename) with no fsync (no fsync on POSIX, no flush on Windows), so while the head is the line kept
+   * here, no fsync covered it.* */
   readonly #synced = new Map<string, JournalTail>();
   readonly #sync: (fd: number) => void;
 
@@ -453,7 +463,12 @@ export class FlowRecords {
   /** CP-4a2b (D18) — keep a run's record at an anchor, written after the journal line it follows: the runs' `fields`,
    * the run's own facts and its head's MAC as its start kept them, and the journal's last SYNCED line as its tail, so it
    * never names a line the disk may not hold. Durable when it returns; throws when the disk does not take it, and the
-   * store's refusal while the run's record cannot be read or a newer VibeField's holds it. */
+   * store's refusal while the run's record cannot be read or a newer VibeField's holds it.
+   * *Corrected 2026-11-07 (item 231): "durable when it returns" is false on a power loss (no fsync on POSIX, no flush
+   * on Windows). `#write` is `writeFileSync` and a rename (`durableRenameSync` only retries the rename on Windows),
+   * with no fsync of the file or its folder, so a record this returned from can be lost. And "never names a line the
+   * disk may not hold" does not hold while the record's tail is the head: `#synced` holds the head with no fsync (its
+   * correction). The fix is owed.* */
   writeRunRecord(run: FlowRunId, fields: FlowRunStart): void {
     this.#guard.writable(this.#key(RUNS_DIR, run));
     const read = this.#readRecord(run);
@@ -468,7 +483,9 @@ export class FlowRecords {
    * to name. Written with the runs' `fields` over the run's own facts, its head's MAC and its tail as its begin kept
    * them. Refused while a journal stands under the id (that is `writeRunRecord`'s road), and for a run lost or a newer
    * VibeField's as that road refuses them. Durable when it returns; throws when the disk does not take it. Slice 14's
-   * boot settles a running record that never began by this same write. */
+   * boot settles a running record that never began by this same write.
+   * *Corrected 2026-11-07 (item 231): "durable when it returns" is false on a power loss (no fsync on POSIX, no flush
+   * on Windows), as `writeRunRecord`'s correction says: `#write` makes neither.* */
   endUnbegun(run: FlowRunId, fields: FlowRunStart): void {
     this.#guard.writable(this.#key(RUNS_DIR, run));
     const read = this.readRun(run);
@@ -612,7 +629,10 @@ export class FlowRecords {
     });
   }
 
-  /** CP-4a2b (D18) — keep a run's record whole and signed under its run's id, durable when this returns. */
+  /** CP-4a2b (D18) — keep a run's record whole and signed under its run's id, durable when this returns.
+   * *Corrected 2026-11-07 (item 231): not on a power loss (no fsync on POSIX, no flush on Windows). `#write` is
+   * `writeFileSync` and a rename, with no fsync of the file or its folder (`durableRenameSync` only retries the rename
+   * on Windows), so what this wrote can be lost. The fix is owed.* */
   #writeRecord(record: FlowRunRecord): void {
     this.#writeSigned(RUN_RECORDS_DIR, record.run, record);
   }

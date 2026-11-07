@@ -2245,15 +2245,19 @@
               2026-11-02 13:08Z): <code>meta.budget</code> is not read, shown or refused. These five doors are the
               window's (and the quit box's, from main): <code>agents.manage</code>, <code>local</code> (VF-PM,
               2026-11-05 01:22Z), so no phone and no peer reaches a run. A run's gates, a proposal, a changed flow, a
-              second missed form, the call cap and a step lost to a Quit wait in the person's queue as needs-you items
+              second missed form and a step lost to a Quit wait in the person's queue as needs-you items
               (CP-D12, one queue) of the kinds <code>flow-proposal</code>, <code>flow-gate</code>,
-              <code>flow-changed</code>, <code>flow-repair</code>, <code>flow-cap</code> and <code>flow-lost</code>
+              <code>flow-changed</code>, <code>flow-repair</code> and <code>flow-lost</code>
               (open words), each naming its run (<code>run</code>) and, for a proposal or a changed flow, the bytes it
               is about (<code>script</code>), and are answered through <a href="#cat-needs"><code>needs.answer</code></a>,
               never a door of their own. A run's Stop ends the step agents the run started and pauses the turn of a
               session it was handed, never ending it (CP4-Q9 (a) on James's 2026-11-02 Stop/Pause ruling). The run's
-              bounds are <code>FLOW_LIMITS</code>, provisional until measured: 40 calls, then the run holds and asks
-              (20 more at a time); 8 live steps; a step's answer kept whole up to 64 KiB.
+              bounds are <code>FLOW_LIMITS</code>, provisional until measured: 8 live steps, 16 agents a run; 256 calls
+              waiting at once and 10,000 log lines, past which the run ends; a step's answer kept whole up to 64 KiB.
+              <em>Proposed 2026-11-07 (CP-4a2b slice 12, the cap out; James 08:28:07Z, C; ruled 2026-11-07, V4):</em>
+              There is no call cap: within these bounds, a script that loops runs until it is stopped.
+              <em>Corrected 2026-11-07 (the same):</em> this page named the call cap among the queue's items and its
+              kinds, and gave 40 calls, then a hold that asks for 20 more at a time, as a bound.
               <em>CP-4a1 (2026-11-05):</em> the contracts, the library's read, the signed approvals and proposals and
               the static read are built; no door is served, and fieldd registers none of them until CP-4a2 builds the
               host, the journal and the runs.

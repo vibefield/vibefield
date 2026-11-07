@@ -10327,8 +10327,9 @@ name is above; a step with no label is "this step". "In its form" is said only t
   card says **Answering again**, as the repair turn's does, and a miss after it is the repair turn's.
 
 Each is sent once for the reason it names, and a line its session did not take is never sent again (CP2-D2). A step
-hears nothing else from VibeField: a gate, the call cap, a changed flow and a Stop are the person's, and a run's
-Stop reaches a step only through §8's two acts ("A run a Stop has not stopped", its CP-4 note).
+hears nothing else from VibeField: a gate, a changed flow and a Stop are the person's, and a run's
+Stop reaches a step only through §8's two acts ("A run a Stop has not stopped", its CP-4 note). *Corrected 2026-11-07
+(CP-4a2b slice 12, the cap out; James 08:28:07Z, C):* this named the call cap among the person's. There is no call cap.
 
 **When a run's script cannot go on** (track CO, CP-4a2a; 4A2-Q7 (a), ruled by VF-PM 2026-11-05 08:51Z, re-ruled (b)
 11:46Z on the review's evidence; the words are open until James reads them on a run). A flow's script runs in a host of
@@ -10428,8 +10429,9 @@ a name that is, or starts with, "VibeField" shows the flow's slug instead, so a 
   - "VibeField couldn't start ‹label›: ‹the runtime's words›"
   - "‹label› failed."
 - *Proposed 2026-11-06 (CP-4a2b slice 11, 13a's R34 and D22; ruled 2026-11-06; open until James reads
-  them, as the rest are):* **An ask refused.** As a step's call is: the script's `await` throws with these words, the
-  run's journal keeps them, and the call counts toward the run's 40.
+  them, as the rest are):* **An ask refused.** As a step's call is: the script's `await` throws with these words, and
+  the run's journal keeps them. *Corrected 2026-11-07 (CP-4a2b slice 12, the cap out; James 08:28:07Z, C):* this said
+  the call counts toward the run's 40. There is no call cap.
   - an `ask()` its gate's rule refuses at its call, in the read's own words, unchanged ("What a flow's read refuses"):
     "VibeField didn't ask you: ‹the read's words›."
   - one VibeField could not put in what waits on you: "VibeField couldn't ask you: it couldn't keep the question."
@@ -10453,12 +10455,13 @@ a name that is, or starts with, "VibeField" shows the flow's slug instead, so a 
   - An answer that misses its form is said in fieldd's words, which name JSON types and places alone, never the
     agent's text: "the answer is missing a required field (the 2nd of 3)". An answer whose fields alone pass the
     bound: "the answer's fields are longer than a flow may keep".
-- **The cap and its hold** (CP4-Q8 part 2; J3, J7). Every call counts toward the run's 40, `agent()` and `ask()`
-  alike, a refused one too; a `log()` never does. The 41st call holds the run and asks: Allow 20 more · Stop the run.
-  A run that waits has no process: its host is set down at the hold, and after a short idle at any other wait, and
-  started again from its journal when it can go on. A fan-out past the cap waits at the hold, and its calls are made
-  again after your Allow: "‹flow› is waiting at its 40 calls for your Allow." The flow API's own ceilings, said once:
-  "a flow may wait on 256 calls at once, and say 10,000 log lines in its life".
+- *Proposed 2026-11-07 (CP-4a2b slice 12, the cap out; James 08:28:07Z, C; ruled 2026-11-07, V4; open until James reads
+  them, as the rest are):* **A run's waits and its ceilings** (J3). A run that waits has no process: its host is set
+  down after a short idle, and started again from its journal when it can go on. Its calls are counted, not capped:
+  within these ceilings, a script that loops runs until you stop it. The flow API's own ceilings, said once: "a flow
+  may wait on 256 calls at once, and say 10,000 log lines in its life". *Corrected 2026-11-07 (the same):* this bullet
+  was "The cap and its hold" (CP4-Q8 part 2; J3, J7): a run's 40 calls, its hold at the 41st and its Allow. James
+  ruled there is no call cap.
 - **A run's card's states** (CP-4b draws them): **Waiting for an agent slot**; **Answering again** (above); a line
   VibeField can't tell arrived, **Sent — not confirmed**; **Ended its ‹n› agents** (CP4-Q10 (a)); **Stopped by you ·
   ‹time›** (§8); and an answer cut short, **Answered · cut short**, whose detail says "Its answer was longer than a
@@ -10475,11 +10478,13 @@ a name that is, or starts with, "VibeField" shows the flow's slug instead, so a 
     ask what it asked before." A script that asks something new instead is said in the line above.
   - a run whose journal or record is forged or gone: its `flow-lost` item says "VibeField can't trust what ‹flow›
     kept, so it set the run aside." Its one act is Stop the run.
-- **The acts** (NEEDS_CHOICE_WORDS): Stop the run · Allow 20 more · Ask once more · Resume the step · See the change
-  · Run this version · Run the one you approved.
-- **The key's posture** (J2 (b)): a run's journal, with its gates' answers and the cap's Allow, is as strong as the
-  flows key: an agent that read that key could write an answer you never gave, as it could an approval. Nothing more
-  is claimed.
+- **The acts** (NEEDS_CHOICE_WORDS): Stop the run · Ask once more · Resume the step · See the change · Run this
+  version · Run the one you approved. *Corrected 2026-11-07 (CP-4a2b slice 12, the cap out; James 08:28:07Z, C):* the
+  call cap's act is out.
+- **The key's posture** (J2 (b)): a run's journal, with its gates' answers, is as strong as the flows key: an agent
+  that read that key could write an answer you never gave, as it could an approval. Nothing more is claimed.
+  *Corrected 2026-11-07 (CP-4a2b slice 12, the cap out; James 08:28:07Z, C):* this named the cap's Allow beside the
+  gates' answers.
 
 **When VibeField's own program starts nothing** (track RV, item 203; RV #1, pup-claude-1; built at the lean, A, of
 `rv-forwarder-role`; the words ruled with it, James 11-06). A packaged VibeField runs its daemon,
