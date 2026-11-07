@@ -85,4 +85,12 @@ export default defineConfig({
     fs: { allow: [import.meta.dirname, pin, "/tmp/puppeteer-748d015", "/workspace"] },
   },
   preview: { host: "127.0.0.1", port: 4173, strictPort: true },
+  build: {
+    rollupOptions: {
+      input: {
+        main: join(import.meta.dirname, "index.html"),
+        swarmRepro: join(import.meta.dirname, "swarm-repro.html"),
+      },
+    },
+  },
 });
