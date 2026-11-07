@@ -74,10 +74,12 @@ function paint(id, viewId, stateId, row, extra = {}) {
     viewId,
     stateId,
     row,
+    rows: extra.rows ?? null,
     spawn: extra.spawn ?? null,
     history: extra.history ?? null,
     interact: extra.interact ?? null,
     requiresBodyPaint: extra.requiresBodyPaint === true,
+    adapterIds: extra.adapterIds,
     predicate: extra.predicate,
     envelope: {
       fixtureId: `fix.${id}`,
@@ -86,7 +88,7 @@ function paint(id, viewId, stateId, row, extra = {}) {
       pins: PINS,
       viewId,
       lifecycleStates: [stateId],
-      adapterIds: ADAPTERS,
+      adapterIds: extra.adapterIds ?? ADAPTERS,
       component: {
         repo: "puppeteer",
         sha: PINS.puppeteer,
@@ -99,8 +101,9 @@ function paint(id, viewId, stateId, row, extra = {}) {
         "adapterIds list the ten audit adapters as classification context only.",
         "They are not a claim that any adapter emitted this row.",
         "Mounted from Puppeteer source 748d015 via MonitorViewHost. Not shipped package 0.3.3.",
+        extra.label ?? "",
         extra.requiresBodyPaint
-          ? "Body paint is the swarm WebGPU canvas. A host without WebGPU does not show this predicate."
+          ? "Body paint is the swarm WebGPU canvas."
           : "",
       ]
         .filter(Boolean)
@@ -194,7 +197,11 @@ const ALL_ENTRIES = [
     "view.list",
     "state.blocked_unknown_kind",
     agent({ status: "blocked", wait: { kind: "quota", since: EPOCH } }),
-    { predicate: "blocked and a wait kind outside permission/question/failure. The list prints the kind as itself." },
+    {
+      predicate: "blocked and a wait kind outside permission/question/failure. The list prints the kind as itself.",
+      label:
+        "Synthetic defensive fixture. Typed core blocker producers emit permission, question, or failure, not an open kind. The list still prints an unknown kind as itself.",
+    },
   ),
   paint(
     "list.starting-unobserved",
@@ -244,7 +251,11 @@ const ALL_ENTRIES = [
     predicate: "active true. List row class is-active.",
   }),
   paint("list.receded", "view.list", "state.receded", agent({ status: "idle", receded: true }), {
-    predicate: "receded true. List row class is-receded.",
+    rows: [
+      agent({ id: "shown", status: "working", project: { name: "shown", seq: 1 } }),
+      agent({ id: "back", status: "idle", receded: true, project: { name: "back", seq: 2 } }),
+    ],
+    predicate: "One row receded beside one shown row, so the list uses the 0.22 weight rather than the all-receded weight.",
   }),
   paint(
     "list.attached",
@@ -271,7 +282,11 @@ const ALL_ENTRIES = [
     "view.list",
     "state.branch_none",
     agent({ status: "idle", project: { name: "billing-api", seq: 1, branch: null } }),
-    { predicate: "project.branch null. List treats it as falsy and prints no branch small." },
+    {
+      predicate: "project.branch null. List treats it as falsy and prints no branch small.",
+      label:
+        "Synthetic defensive fixture. The Vibefield overlay reaches unknown or named branches, not a null branch. The list's small label uses truthiness, so null and absent draw the same.",
+    },
   ),
   paint(
     "list.branch-named",
@@ -325,24 +340,40 @@ const ALL_ENTRIES = [
     "view.spend",
     "state.cost_complete",
     agent({ status: "working", cost: cost("complete", 2.5, 12) }),
-    { predicate: "cost.coverage complete. Spend meters the total." },
+    {
+      predicate: "cost.coverage complete. Spend meters the total.",
+      adapterIds: ["adapter.claude", "adapter.codex"],
+      label:
+        "Source permits Claude and Codex to reach a priced total after runtime pricing. Not a live session. Token-only adapters do not produce this row. USD burn is not the token per-minute meter.",
+    },
   ),
   paint(
     "spend.cost-partial",
     "view.spend",
     "state.cost_partial",
     agent({ status: "working", cost: cost("partial", 1.25, 6) }),
-    { predicate: "cost.coverage partial. Spend marks the total partial." },
+    {
+      predicate: "cost.coverage partial. Spend marks the total partial.",
+      adapterIds: ["adapter.claude", "adapter.codex"],
+      label:
+        "Source permits Claude and Codex to mix priced and unpriced observations. Not a live session. Not a normal emission of the token-only adapters.",
+    },
   ),
   paint(
     "spend.cost-unavailable",
     "view.spend",
     "state.cost_unavailable",
     agent({ status: "working", cost: { usd: 1, coverage: "unavailable" } }),
-    { predicate: "cost.coverage unavailable. Spend names the agent apart and does not meter it." },
+    {
+      predicate: "cost.coverage unavailable. Spend names the agent apart and does not meter it.",
+      label:
+        "Synthetic view of an explicit unavailable cost object. The normal backend omits field.cost instead, which is state.cost_missing. Not a normal adapter emission.",
+    },
   ),
   paint("spend.cost-missing", "view.spend", "state.cost_missing", agent({ status: "working" }), {
     predicate: "cost absent. Spend names the agent apart.",
+    label:
+      "Normal row when no priced total exists, including token-only adapters. Claude and Codex can also be missing before a price lands. Not state.cost_unavailable.",
   }),
   paint(
     "spend.before",
@@ -373,6 +404,191 @@ const ALL_ENTRIES = [
     history: "bounds",
     predicate: "ended lane span kind bounds.",
   }),
+  paint("spend.idle", "view.spend", "state.idle", agent({ status: "idle" }), {
+    predicate: "Spend state word idle. Terminals are omitted; this is an agent with no price.",
+  }),
+  paint("spend.working", "view.spend", "state.working", agent({ status: "working" }), {
+    predicate: "Spend state word working.",
+  }),
+  paint("spend.blocked", "view.spend", "state.blocked", agent({ status: "blocked" }), {
+    predicate: "Spend state word blocked, with no wait object.",
+  }),
+  paint(
+    "spend.blocked-permission",
+    "view.spend",
+    "state.blocked_permission",
+    agent({ status: "blocked", wait: { kind: "permission", since: EPOCH, tool: "Bash" } }),
+    { predicate: "Spend blocked glyph and the permission word." },
+  ),
+  paint(
+    "spend.blocked-question",
+    "view.spend",
+    "state.blocked_question",
+    agent({ status: "blocked", wait: { kind: "question", since: EPOCH, header: "Which branch?" } }),
+    { predicate: "Spend blocked glyph. spend-words names a question." },
+  ),
+  paint(
+    "spend.blocked-failure",
+    "view.spend",
+    "state.blocked_failure",
+    agent({ status: "blocked", wait: { kind: "failure", since: EPOCH, code: "E_RATE_LIMIT" } }),
+    { predicate: "Spend blocked glyph. spend-words names a failure." },
+  ),
+  paint("spend.unread", "view.spend", "state.unread", agent({ status: "idle", unread: true }), {
+    predicate: "Idle and unread. Spend calls the state unseen.",
+  }),
+  paint(
+    "spend.remote",
+    "view.spend",
+    "state.remote",
+    agent({
+      status: "working",
+      device: { id: "studio", name: "Studio", os: "mac", self: false },
+      cost: { usd: 1.5, coverage: "complete" },
+    }),
+    {
+      predicate: "Peer mark beside the name. A peer's series is not drawn; the total still is.",
+      adapterIds: ["adapter.claude", "adapter.codex"],
+      label: "The priced total is supporting data so the row is metered. The branch under test is device.self false.",
+    },
+  ),
+  paint(
+    "spend.branch-named",
+    "view.spend",
+    "state.branch_named",
+    agent({ status: "idle", project: { name: "billing-api", seq: 1, branch: "main" } }),
+    { predicate: "No task line, so the model line keeps the branch." },
+  ),
+  paint(
+    "spend.attached",
+    "view.spend",
+    "state.attached",
+    agent({ status: "working", attachment: { panes: 1, colour: "#4c8dff" } }),
+    { predicate: "Attachment is named in the row's accessible label." },
+  ),
+  paint("timeline.idle", "view.timeline", "state.idle", agent({ status: "idle" }), {
+    predicate: "Timeline lane for an idle agent.",
+  }),
+  paint("timeline.working", "view.timeline", "state.working", agent({ status: "working" }), {
+    predicate: "Timeline lane painted as working.",
+  }),
+  paint("timeline.blocked", "view.timeline", "state.blocked", agent({ status: "blocked" }), {
+    predicate: "Timeline lane painted blocked.",
+  }),
+  paint(
+    "timeline.blocked-permission",
+    "view.timeline",
+    "state.blocked_permission",
+    agent({ status: "blocked", wait: { kind: "permission", since: EPOCH, tool: "Bash" } }),
+    { predicate: "Blocked lane whose wait words name the permission." },
+  ),
+  paint(
+    "timeline.blocked-question",
+    "view.timeline",
+    "state.blocked_question",
+    agent({ status: "blocked", wait: { kind: "question", since: EPOCH, question: "Keep the lane open?" } }),
+    { predicate: "Blocked lane whose wait words name the question." },
+  ),
+  paint(
+    "timeline.blocked-failure",
+    "view.timeline",
+    "state.blocked_failure",
+    agent({ status: "blocked", wait: { kind: "failure", since: EPOCH, code: "E_RATE_LIMIT" } }),
+    { predicate: "Blocked lane whose wait words name the failure." },
+  ),
+  paint(
+    "timeline.remote",
+    "view.timeline",
+    "state.remote",
+    agent({ status: "working", device: { id: "studio", name: "Studio", os: "mac", self: false } }),
+    { predicate: "Peer mark on the timeline name." },
+  ),
+  paint("timeline.receded", "view.timeline", "state.receded", agent({ status: "working", receded: true }), {
+    rows: [
+      agent({ id: "shown", status: "working", project: { name: "shown", seq: 1 } }),
+      agent({ id: "back", status: "working", receded: true, project: { name: "back", seq: 2 } }),
+    ],
+    predicate: "Timeline name and head take is-receded beside a shown lane.",
+  }),
+  paint("timeline.active", "view.timeline", "state.active", agent({ status: "working", active: true }), {
+    predicate: "Timeline name takes is-active.",
+  }),
+  paint(
+    "timeline.attached",
+    "view.timeline",
+    "state.attached",
+    agent({ status: "working", attachment: { panes: 1, colour: "#4c8dff" } }),
+    { predicate: "Timeline name shows the pane mark." },
+  ),
+  paint(
+    "timeline.terminal-running",
+    "view.timeline",
+    "state.terminal_running",
+    { kind: "terminal", status: "working", project: { name: "" }, detail: "running" },
+    { predicate: "Terminal lane, running." },
+  ),
+  paint(
+    "timeline.terminal-quiet",
+    "view.timeline",
+    "state.terminal_quiet",
+    { kind: "terminal", status: "idle", project: { name: "" }, detail: "quiet" },
+    { predicate: "Terminal lane, quiet." },
+  ),
+  paint(
+    "timeline.branch-named",
+    "view.timeline",
+    "state.branch_named",
+    agent({ status: "working", model: "fixture-model", project: { name: "billing-api", seq: 1, branch: "main" } }),
+    { predicate: "Name line joins the model and the branch." },
+  ),
+  paint(
+    "rain.remote",
+    "view.rain",
+    "state.remote",
+    { kind: "terminal", status: "working", project: { name: "notes" }, detail: "running", device: { id: "studio", name: "Studio", os: "mac", self: false } },
+    { predicate: "A remote terminal's column leads with the desktop name." },
+  ),
+  paint("rain.receded", "view.rain", "state.receded", agent({ status: "working", receded: true }), {
+    rows: [
+      agent({ id: "shown", status: "working", project: { name: "shown", seq: 1 } }),
+      agent({ id: "back", status: "working", receded: true, project: { name: "back", seq: 2 } }),
+    ],
+    predicate: "Receded column beside a shown column, at the 0.22 weight.",
+  }),
+  paint("rain.active", "view.rain", "state.active", agent({ status: "working", active: true }), {
+    predicate: "Active column uses the active head colour.",
+  }),
+  paint(
+    "rain.attached",
+    "view.rain",
+    "state.attached",
+    agent({ status: "working", attachment: { panes: 2, colour: "#4c8dff" } }),
+    { predicate: "Attachment paints the column tint and a mirror." },
+  ),
+  paint(
+    "rain.terminal-running",
+    "view.rain",
+    "state.terminal_running",
+    { kind: "terminal", status: "working", project: { name: "shell" }, detail: "running" },
+    { predicate: "Local terminal column spells terminal, working head on." },
+  ),
+  paint(
+    "rain.terminal-quiet",
+    "view.rain",
+    "state.terminal_quiet",
+    { kind: "terminal", status: "idle", project: { name: "shell" }, detail: "quiet" },
+    { predicate: "Local terminal column, idle, head hidden." },
+  ),
+  paint("rain.context-missing", "view.rain", "state.context_missing", agent({ status: "working" }), {
+    predicate: "No context percent. rainTailLength uses the mid-scale default instead of a measured share.",
+  }),
+  paint(
+    "rain.branch-named",
+    "view.rain",
+    "state.branch_named",
+    agent({ status: "working", project: { name: "billing-api", seq: 1, branch: "main" } }),
+    { predicate: "The falling glyphs include the branch." },
+  ),
   paint(
     "swarm.context-hot",
     "view.swarm",

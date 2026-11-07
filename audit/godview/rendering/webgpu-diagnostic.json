@@ -1,0 +1,30 @@
+{
+  "kind": "webgpu-environment-diagnostic",
+  "fidelity": "puppeteer-source",
+  "sourceSha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+  "component": "packages/views/src/views/swarm/gpu/swarm-renderer.ts",
+  "symbol": "createSwarmRenderer",
+  "chrome": "Google Chrome 156.0.8078.47",
+  "probes": [
+    {
+      "args": ["--enable-unsafe-webgpu", "--enable-unsafe-swiftshader"],
+      "request": "navigator.gpu.requestAdapter({ powerPreference: 'high-performance' })",
+      "result": "adapter true, device true"
+    },
+    {
+      "args": ["--enable-unsafe-webgpu", "--enable-unsafe-swiftshader", "--enable-features=Vulkan", "--use-vulkan=swiftshader"],
+      "env": "VK_ICD_FILENAMES=/opt/google/chrome/vk_swiftshader_icd.json",
+      "result": "Failed to create WebGPU Context Provider. Swarm text: No WebGPU adapter on this GPU."
+    }
+  ],
+  "swarmLaunch": {
+    "ignoreDefaultArgs": ["--disable-gpu"],
+    "args": ["--no-sandbox", "--disable-gpu-sandbox", "--enable-unsafe-webgpu", "--enable-unsafe-swiftshader"],
+    "console": [
+      "[swarm] WebGPU device lost, rebuilding Device was destroyed.",
+      "A valid external Instance reference no longer exists."
+    ],
+    "visibleText": "WEBGPU UNAVAILABLE\nNo WebGPU adapter on this GPU"
+  },
+  "conclusion": "Chrome's SwiftShader can create a high-performance WebGPU device in a bare page. AgentSwarm's renderer then loses that device and the rebuild is told there is no adapter. The body was not painted. No component code was changed and the unavailable screenshot was not copied onto other states."
+}

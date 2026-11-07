@@ -37,7 +37,6 @@
       "requiresBodyPaint": false,
       "interact": null,
       "renderStatus": "rendered",
-      "paint": "dom",
       "screenshot": "audit/godview/rendering/screenshots/fix.list.idle.png"
     },
     {
@@ -50,7 +49,6 @@
       "requiresBodyPaint": false,
       "interact": null,
       "renderStatus": "rendered",
-      "paint": "dom",
       "screenshot": "audit/godview/rendering/screenshots/fix.list.working.png"
     },
     {
@@ -63,7 +61,6 @@
       "requiresBodyPaint": false,
       "interact": null,
       "renderStatus": "rendered",
-      "paint": "dom",
       "screenshot": "audit/godview/rendering/screenshots/fix.list.blocked.png"
     },
     {
@@ -76,7 +73,6 @@
       "requiresBodyPaint": false,
       "interact": null,
       "renderStatus": "rendered",
-      "paint": "dom",
       "screenshot": "audit/godview/rendering/screenshots/fix.list.blocked-permission.png"
     },
     {
@@ -89,7 +85,6 @@
       "requiresBodyPaint": false,
       "interact": null,
       "renderStatus": "rendered",
-      "paint": "dom",
       "screenshot": "audit/godview/rendering/screenshots/fix.list.blocked-question.png"
     },
     {
@@ -102,7 +97,6 @@
       "requiresBodyPaint": false,
       "interact": null,
       "renderStatus": "rendered",
-      "paint": "dom",
       "screenshot": "audit/godview/rendering/screenshots/fix.list.blocked-failure.png"
     },
     {
@@ -115,7 +109,6 @@
       "requiresBodyPaint": false,
       "interact": null,
       "renderStatus": "rendered",
-      "paint": "dom",
       "screenshot": "audit/godview/rendering/screenshots/fix.list.blocked-unknown-kind.png"
     },
     {
@@ -128,7 +121,6 @@
       "requiresBodyPaint": false,
       "interact": null,
       "renderStatus": "rendered",
-      "paint": "dom",
       "screenshot": "audit/godview/rendering/screenshots/fix.list.starting-unobserved.png"
     },
     {
@@ -141,7 +133,6 @@
       "requiresBodyPaint": false,
       "interact": null,
       "renderStatus": "rendered",
-      "paint": "dom",
       "screenshot": "audit/godview/rendering/screenshots/fix.list.pending-unobserved.png"
     },
     {
@@ -154,7 +145,6 @@
       "requiresBodyPaint": false,
       "interact": null,
       "renderStatus": "rendered",
-      "paint": "dom",
       "screenshot": "audit/godview/rendering/screenshots/fix.list.stale.png"
     },
     {
@@ -167,7 +157,6 @@
       "requiresBodyPaint": false,
       "interact": null,
       "renderStatus": "rendered",
-      "paint": "dom",
       "screenshot": "audit/godview/rendering/screenshots/fix.list.fresh.png"
     },
     {
@@ -180,7 +169,6 @@
       "requiresBodyPaint": false,
       "interact": null,
       "renderStatus": "rendered",
-      "paint": "dom",
       "screenshot": "audit/godview/rendering/screenshots/fix.list.terminal-running.png"
     },
     {
@@ -193,7 +181,6 @@
       "requiresBodyPaint": false,
       "interact": null,
       "renderStatus": "rendered",
-      "paint": "dom",
       "screenshot": "audit/godview/rendering/screenshots/fix.list.terminal-quiet.png"
     },
     {
@@ -206,7 +193,6 @@
       "requiresBodyPaint": false,
       "interact": null,
       "renderStatus": "rendered",
-      "paint": "dom",
       "screenshot": "audit/godview/rendering/screenshots/fix.list.remote.png"
     },
     {
@@ -219,7 +205,6 @@
       "requiresBodyPaint": false,
       "interact": null,
       "renderStatus": "rendered",
-      "paint": "dom",
       "screenshot": "audit/godview/rendering/screenshots/fix.list.active.png"
     },
     {
@@ -245,7 +230,6 @@
       "requiresBodyPaint": false,
       "interact": null,
       "renderStatus": "rendered",
-      "paint": "dom",
       "screenshot": "audit/godview/rendering/screenshots/fix.list.attached.png"
     },
     {
@@ -258,7 +242,6 @@
       "requiresBodyPaint": false,
       "interact": null,
       "renderStatus": "rendered",
-      "paint": "dom",
       "screenshot": "audit/godview/rendering/screenshots/fix.list.detached.png"
     },
     {
@@ -271,7 +254,6 @@
       "requiresBodyPaint": false,
       "interact": null,
       "renderStatus": "rendered",
-      "paint": "dom",
       "screenshot": "audit/godview/rendering/screenshots/fix.list.context-missing.png"
     },
     {
@@ -284,7 +266,6 @@
       "requiresBodyPaint": false,
       "interact": null,
       "renderStatus": "rendered",
-      "paint": "dom",
       "screenshot": "audit/godview/rendering/screenshots/fix.list.branch-unknown.png"
     },
     {
@@ -297,7 +278,6 @@
       "requiresBodyPaint": false,
       "interact": null,
       "renderStatus": "rendered",
-      "paint": "dom",
       "screenshot": "audit/godview/rendering/screenshots/fix.list.branch-none.png"
     },
     {
@@ -310,7 +290,6 @@
       "requiresBodyPaint": false,
       "interact": null,
       "renderStatus": "rendered",
-      "paint": "dom",
       "screenshot": "audit/godview/rendering/screenshots/fix.list.branch-named.png"
     },
     {
@@ -323,7 +302,6 @@
       "requiresBodyPaint": false,
       "interact": null,
       "renderStatus": "rendered",
-      "paint": "dom",
       "screenshot": "audit/godview/rendering/screenshots/fix.list.reply-missing.png"
     },
     {
@@ -336,7 +314,6 @@
       "requiresBodyPaint": false,
       "interact": null,
       "renderStatus": "rendered",
-      "paint": "dom",
       "screenshot": "audit/godview/rendering/screenshots/fix.list.model-missing.png"
     },
     {
@@ -349,7 +326,6 @@
       "requiresBodyPaint": false,
       "interact": "open-spawn",
       "renderStatus": "rendered",
-      "paint": "dom",
       "screenshot": "audit/godview/rendering/screenshots/fix.list.spawn-ready.png"
     },
     {
@@ -362,7 +338,6 @@
       "requiresBodyPaint": false,
       "interact": "open-spawn",
       "renderStatus": "rendered",
-      "paint": "dom",
       "screenshot": "audit/godview/rendering/screenshots/fix.list.spawn-asleep.png"
     },
     {
@@ -375,7 +350,6 @@
       "requiresBodyPaint": false,
       "interact": "open-spawn",
       "renderStatus": "rendered",
-      "paint": "dom",
       "screenshot": "audit/godview/rendering/screenshots/fix.list.spawn-silent.png"
     },
     {
@@ -388,7 +362,6 @@
       "requiresBodyPaint": false,
       "interact": "open-spawn",
       "renderStatus": "rendered",
-      "paint": "dom",
       "screenshot": "audit/godview/rendering/screenshots/fix.list.spawn-incompatible.png"
     },
     {
@@ -401,7 +374,6 @@
       "requiresBodyPaint": false,
       "interact": "open-spawn",
       "renderStatus": "rendered",
-      "paint": "dom",
       "screenshot": "audit/godview/rendering/screenshots/fix.list.spawn-reading.png"
     },
     {
@@ -414,7 +386,6 @@
       "requiresBodyPaint": false,
       "interact": null,
       "renderStatus": "rendered",
-      "paint": "canvas",
       "screenshot": "audit/godview/rendering/screenshots/fix.rain.idle.png"
     },
     {
@@ -427,7 +398,6 @@
       "requiresBodyPaint": false,
       "interact": null,
       "renderStatus": "rendered",
-      "paint": "canvas",
       "screenshot": "audit/godview/rendering/screenshots/fix.rain.working.png"
     },
     {
@@ -440,7 +410,6 @@
       "requiresBodyPaint": false,
       "interact": null,
       "renderStatus": "rendered",
-      "paint": "canvas",
       "screenshot": "audit/godview/rendering/screenshots/fix.rain.blocked.png"
     },
     {
@@ -453,7 +422,6 @@
       "requiresBodyPaint": false,
       "interact": null,
       "renderStatus": "rendered",
-      "paint": "canvas",
       "screenshot": "audit/godview/rendering/screenshots/fix.spend.cost-complete.png"
     },
     {
@@ -466,7 +434,6 @@
       "requiresBodyPaint": false,
       "interact": null,
       "renderStatus": "rendered",
-      "paint": "canvas",
       "screenshot": "audit/godview/rendering/screenshots/fix.spend.cost-partial.png"
     },
     {
@@ -479,7 +446,6 @@
       "requiresBodyPaint": false,
       "interact": null,
       "renderStatus": "rendered",
-      "paint": "canvas",
       "screenshot": "audit/godview/rendering/screenshots/fix.spend.cost-unavailable.png"
     },
     {
@@ -492,7 +458,6 @@
       "requiresBodyPaint": false,
       "interact": null,
       "renderStatus": "rendered",
-      "paint": "canvas",
       "screenshot": "audit/godview/rendering/screenshots/fix.spend.cost-missing.png"
     },
     {
@@ -505,7 +470,6 @@
       "requiresBodyPaint": false,
       "interact": null,
       "renderStatus": "rendered",
-      "paint": "canvas",
       "screenshot": "audit/godview/rendering/screenshots/fix.spend.before.png"
     },
     {
@@ -518,7 +482,6 @@
       "requiresBodyPaint": false,
       "interact": null,
       "renderStatus": "rendered",
-      "paint": "canvas",
       "screenshot": "audit/godview/rendering/screenshots/fix.timeline.unread.png"
     },
     {
@@ -531,7 +494,6 @@
       "requiresBodyPaint": false,
       "interact": null,
       "renderStatus": "rendered",
-      "paint": "canvas",
       "screenshot": "audit/godview/rendering/screenshots/fix.timeline.past-worked.png"
     },
     {
@@ -544,7 +506,6 @@
       "requiresBodyPaint": false,
       "interact": null,
       "renderStatus": "rendered",
-      "paint": "canvas",
       "screenshot": "audit/godview/rendering/screenshots/fix.timeline.past-quiet.png"
     },
     {
@@ -557,7 +518,6 @@
       "requiresBodyPaint": false,
       "interact": null,
       "renderStatus": "rendered",
-      "paint": "canvas",
       "screenshot": "audit/godview/rendering/screenshots/fix.timeline.past-unrecorded.png"
     },
     {
@@ -570,8 +530,381 @@
       "requiresBodyPaint": false,
       "interact": null,
       "renderStatus": "rendered",
-      "paint": "canvas",
       "screenshot": "audit/godview/rendering/screenshots/fix.timeline.past-bounds.png"
+    },
+    {
+      "fixtureId": "fix.spend.idle",
+      "viewId": "view.spend",
+      "lifecycleStates": [
+        "state.idle"
+      ],
+      "file": "audit/godview/fixtures/fix.spend.idle.json",
+      "requiresBodyPaint": false,
+      "interact": null,
+      "renderStatus": "rendered",
+      "screenshot": "audit/godview/rendering/screenshots/fix.spend.idle.png"
+    },
+    {
+      "fixtureId": "fix.spend.working",
+      "viewId": "view.spend",
+      "lifecycleStates": [
+        "state.working"
+      ],
+      "file": "audit/godview/fixtures/fix.spend.working.json",
+      "requiresBodyPaint": false,
+      "interact": null,
+      "renderStatus": "rendered",
+      "screenshot": "audit/godview/rendering/screenshots/fix.spend.working.png"
+    },
+    {
+      "fixtureId": "fix.spend.blocked",
+      "viewId": "view.spend",
+      "lifecycleStates": [
+        "state.blocked"
+      ],
+      "file": "audit/godview/fixtures/fix.spend.blocked.json",
+      "requiresBodyPaint": false,
+      "interact": null,
+      "renderStatus": "rendered",
+      "screenshot": "audit/godview/rendering/screenshots/fix.spend.blocked.png"
+    },
+    {
+      "fixtureId": "fix.spend.blocked-permission",
+      "viewId": "view.spend",
+      "lifecycleStates": [
+        "state.blocked_permission"
+      ],
+      "file": "audit/godview/fixtures/fix.spend.blocked-permission.json",
+      "requiresBodyPaint": false,
+      "interact": null,
+      "renderStatus": "rendered",
+      "screenshot": "audit/godview/rendering/screenshots/fix.spend.blocked-permission.png"
+    },
+    {
+      "fixtureId": "fix.spend.blocked-question",
+      "viewId": "view.spend",
+      "lifecycleStates": [
+        "state.blocked_question"
+      ],
+      "file": "audit/godview/fixtures/fix.spend.blocked-question.json",
+      "requiresBodyPaint": false,
+      "interact": null,
+      "renderStatus": "rendered",
+      "screenshot": "audit/godview/rendering/screenshots/fix.spend.blocked-question.png"
+    },
+    {
+      "fixtureId": "fix.spend.blocked-failure",
+      "viewId": "view.spend",
+      "lifecycleStates": [
+        "state.blocked_failure"
+      ],
+      "file": "audit/godview/fixtures/fix.spend.blocked-failure.json",
+      "requiresBodyPaint": false,
+      "interact": null,
+      "renderStatus": "rendered",
+      "screenshot": "audit/godview/rendering/screenshots/fix.spend.blocked-failure.png"
+    },
+    {
+      "fixtureId": "fix.spend.unread",
+      "viewId": "view.spend",
+      "lifecycleStates": [
+        "state.unread"
+      ],
+      "file": "audit/godview/fixtures/fix.spend.unread.json",
+      "requiresBodyPaint": false,
+      "interact": null,
+      "renderStatus": "rendered",
+      "screenshot": "audit/godview/rendering/screenshots/fix.spend.unread.png"
+    },
+    {
+      "fixtureId": "fix.spend.remote",
+      "viewId": "view.spend",
+      "lifecycleStates": [
+        "state.remote"
+      ],
+      "file": "audit/godview/fixtures/fix.spend.remote.json",
+      "requiresBodyPaint": false,
+      "interact": null,
+      "renderStatus": "rendered",
+      "screenshot": "audit/godview/rendering/screenshots/fix.spend.remote.png"
+    },
+    {
+      "fixtureId": "fix.spend.branch-named",
+      "viewId": "view.spend",
+      "lifecycleStates": [
+        "state.branch_named"
+      ],
+      "file": "audit/godview/fixtures/fix.spend.branch-named.json",
+      "requiresBodyPaint": false,
+      "interact": null,
+      "renderStatus": "rendered",
+      "screenshot": "audit/godview/rendering/screenshots/fix.spend.branch-named.png"
+    },
+    {
+      "fixtureId": "fix.spend.attached",
+      "viewId": "view.spend",
+      "lifecycleStates": [
+        "state.attached"
+      ],
+      "file": "audit/godview/fixtures/fix.spend.attached.json",
+      "requiresBodyPaint": false,
+      "interact": null,
+      "renderStatus": "rendered",
+      "screenshot": "audit/godview/rendering/screenshots/fix.spend.attached.png"
+    },
+    {
+      "fixtureId": "fix.timeline.idle",
+      "viewId": "view.timeline",
+      "lifecycleStates": [
+        "state.idle"
+      ],
+      "file": "audit/godview/fixtures/fix.timeline.idle.json",
+      "requiresBodyPaint": false,
+      "interact": null,
+      "renderStatus": "rendered",
+      "screenshot": "audit/godview/rendering/screenshots/fix.timeline.idle.png"
+    },
+    {
+      "fixtureId": "fix.timeline.working",
+      "viewId": "view.timeline",
+      "lifecycleStates": [
+        "state.working"
+      ],
+      "file": "audit/godview/fixtures/fix.timeline.working.json",
+      "requiresBodyPaint": false,
+      "interact": null,
+      "renderStatus": "rendered",
+      "screenshot": "audit/godview/rendering/screenshots/fix.timeline.working.png"
+    },
+    {
+      "fixtureId": "fix.timeline.blocked",
+      "viewId": "view.timeline",
+      "lifecycleStates": [
+        "state.blocked"
+      ],
+      "file": "audit/godview/fixtures/fix.timeline.blocked.json",
+      "requiresBodyPaint": false,
+      "interact": null,
+      "renderStatus": "rendered",
+      "screenshot": "audit/godview/rendering/screenshots/fix.timeline.blocked.png"
+    },
+    {
+      "fixtureId": "fix.timeline.blocked-permission",
+      "viewId": "view.timeline",
+      "lifecycleStates": [
+        "state.blocked_permission"
+      ],
+      "file": "audit/godview/fixtures/fix.timeline.blocked-permission.json",
+      "requiresBodyPaint": false,
+      "interact": null,
+      "renderStatus": "rendered",
+      "screenshot": "audit/godview/rendering/screenshots/fix.timeline.blocked-permission.png"
+    },
+    {
+      "fixtureId": "fix.timeline.blocked-question",
+      "viewId": "view.timeline",
+      "lifecycleStates": [
+        "state.blocked_question"
+      ],
+      "file": "audit/godview/fixtures/fix.timeline.blocked-question.json",
+      "requiresBodyPaint": false,
+      "interact": null,
+      "renderStatus": "rendered",
+      "screenshot": "audit/godview/rendering/screenshots/fix.timeline.blocked-question.png"
+    },
+    {
+      "fixtureId": "fix.timeline.blocked-failure",
+      "viewId": "view.timeline",
+      "lifecycleStates": [
+        "state.blocked_failure"
+      ],
+      "file": "audit/godview/fixtures/fix.timeline.blocked-failure.json",
+      "requiresBodyPaint": false,
+      "interact": null,
+      "renderStatus": "rendered",
+      "screenshot": "audit/godview/rendering/screenshots/fix.timeline.blocked-failure.png"
+    },
+    {
+      "fixtureId": "fix.timeline.remote",
+      "viewId": "view.timeline",
+      "lifecycleStates": [
+        "state.remote"
+      ],
+      "file": "audit/godview/fixtures/fix.timeline.remote.json",
+      "requiresBodyPaint": false,
+      "interact": null,
+      "renderStatus": "rendered",
+      "screenshot": "audit/godview/rendering/screenshots/fix.timeline.remote.png"
+    },
+    {
+      "fixtureId": "fix.timeline.receded",
+      "viewId": "view.timeline",
+      "lifecycleStates": [
+        "state.receded"
+      ],
+      "file": "audit/godview/fixtures/fix.timeline.receded.json",
+      "requiresBodyPaint": false,
+      "interact": null,
+      "renderStatus": "rendered",
+      "paint": "canvas",
+      "screenshot": "audit/godview/rendering/screenshots/fix.timeline.receded.png"
+    },
+    {
+      "fixtureId": "fix.timeline.active",
+      "viewId": "view.timeline",
+      "lifecycleStates": [
+        "state.active"
+      ],
+      "file": "audit/godview/fixtures/fix.timeline.active.json",
+      "requiresBodyPaint": false,
+      "interact": null,
+      "renderStatus": "rendered",
+      "screenshot": "audit/godview/rendering/screenshots/fix.timeline.active.png"
+    },
+    {
+      "fixtureId": "fix.timeline.attached",
+      "viewId": "view.timeline",
+      "lifecycleStates": [
+        "state.attached"
+      ],
+      "file": "audit/godview/fixtures/fix.timeline.attached.json",
+      "requiresBodyPaint": false,
+      "interact": null,
+      "renderStatus": "rendered",
+      "screenshot": "audit/godview/rendering/screenshots/fix.timeline.attached.png"
+    },
+    {
+      "fixtureId": "fix.timeline.terminal-running",
+      "viewId": "view.timeline",
+      "lifecycleStates": [
+        "state.terminal_running"
+      ],
+      "file": "audit/godview/fixtures/fix.timeline.terminal-running.json",
+      "requiresBodyPaint": false,
+      "interact": null,
+      "renderStatus": "rendered",
+      "screenshot": "audit/godview/rendering/screenshots/fix.timeline.terminal-running.png"
+    },
+    {
+      "fixtureId": "fix.timeline.terminal-quiet",
+      "viewId": "view.timeline",
+      "lifecycleStates": [
+        "state.terminal_quiet"
+      ],
+      "file": "audit/godview/fixtures/fix.timeline.terminal-quiet.json",
+      "requiresBodyPaint": false,
+      "interact": null,
+      "renderStatus": "rendered",
+      "screenshot": "audit/godview/rendering/screenshots/fix.timeline.terminal-quiet.png"
+    },
+    {
+      "fixtureId": "fix.timeline.branch-named",
+      "viewId": "view.timeline",
+      "lifecycleStates": [
+        "state.branch_named"
+      ],
+      "file": "audit/godview/fixtures/fix.timeline.branch-named.json",
+      "requiresBodyPaint": false,
+      "interact": null,
+      "renderStatus": "rendered",
+      "screenshot": "audit/godview/rendering/screenshots/fix.timeline.branch-named.png"
+    },
+    {
+      "fixtureId": "fix.rain.remote",
+      "viewId": "view.rain",
+      "lifecycleStates": [
+        "state.remote"
+      ],
+      "file": "audit/godview/fixtures/fix.rain.remote.json",
+      "requiresBodyPaint": false,
+      "interact": null,
+      "renderStatus": "rendered",
+      "screenshot": "audit/godview/rendering/screenshots/fix.rain.remote.png"
+    },
+    {
+      "fixtureId": "fix.rain.receded",
+      "viewId": "view.rain",
+      "lifecycleStates": [
+        "state.receded"
+      ],
+      "file": "audit/godview/fixtures/fix.rain.receded.json",
+      "requiresBodyPaint": false,
+      "interact": null,
+      "renderStatus": "rendered",
+      "paint": "canvas",
+      "screenshot": "audit/godview/rendering/screenshots/fix.rain.receded.png"
+    },
+    {
+      "fixtureId": "fix.rain.active",
+      "viewId": "view.rain",
+      "lifecycleStates": [
+        "state.active"
+      ],
+      "file": "audit/godview/fixtures/fix.rain.active.json",
+      "requiresBodyPaint": false,
+      "interact": null,
+      "renderStatus": "rendered",
+      "screenshot": "audit/godview/rendering/screenshots/fix.rain.active.png"
+    },
+    {
+      "fixtureId": "fix.rain.attached",
+      "viewId": "view.rain",
+      "lifecycleStates": [
+        "state.attached"
+      ],
+      "file": "audit/godview/fixtures/fix.rain.attached.json",
+      "requiresBodyPaint": false,
+      "interact": null,
+      "renderStatus": "rendered",
+      "screenshot": "audit/godview/rendering/screenshots/fix.rain.attached.png"
+    },
+    {
+      "fixtureId": "fix.rain.terminal-running",
+      "viewId": "view.rain",
+      "lifecycleStates": [
+        "state.terminal_running"
+      ],
+      "file": "audit/godview/fixtures/fix.rain.terminal-running.json",
+      "requiresBodyPaint": false,
+      "interact": null,
+      "renderStatus": "rendered",
+      "screenshot": "audit/godview/rendering/screenshots/fix.rain.terminal-running.png"
+    },
+    {
+      "fixtureId": "fix.rain.terminal-quiet",
+      "viewId": "view.rain",
+      "lifecycleStates": [
+        "state.terminal_quiet"
+      ],
+      "file": "audit/godview/fixtures/fix.rain.terminal-quiet.json",
+      "requiresBodyPaint": false,
+      "interact": null,
+      "renderStatus": "rendered",
+      "screenshot": "audit/godview/rendering/screenshots/fix.rain.terminal-quiet.png"
+    },
+    {
+      "fixtureId": "fix.rain.context-missing",
+      "viewId": "view.rain",
+      "lifecycleStates": [
+        "state.context_missing"
+      ],
+      "file": "audit/godview/fixtures/fix.rain.context-missing.json",
+      "requiresBodyPaint": false,
+      "interact": null,
+      "renderStatus": "rendered",
+      "screenshot": "audit/godview/rendering/screenshots/fix.rain.context-missing.png"
+    },
+    {
+      "fixtureId": "fix.rain.branch-named",
+      "viewId": "view.rain",
+      "lifecycleStates": [
+        "state.branch_named"
+      ],
+      "file": "audit/godview/fixtures/fix.rain.branch-named.json",
+      "requiresBodyPaint": false,
+      "interact": null,
+      "renderStatus": "rendered",
+      "screenshot": "audit/godview/rendering/screenshots/fix.rain.branch-named.png"
     }
   ],
   "holes": [
@@ -748,5 +1081,2130 @@
       "reason": "coverage unavailable. The burn ladder is drawn unpriced. AgentSwarm from Puppeteer 748d015 mounted in this host and reported WEBGPU UNAVAILABLE, so the body was not painted. See audit/godview/rendering/screenshots/environment-swarm.png."
     }
   ],
-  "swarmBodyPaint": "webgpu-unavailable"
+  "matrix": [
+    {
+      "stateId": "state.idle",
+      "viewId": "view.list",
+      "disposition": "rendered",
+      "fixtureId": "fix.list.idle"
+    },
+    {
+      "stateId": "state.idle",
+      "viewId": "view.rain",
+      "disposition": "rendered",
+      "fixtureId": "fix.rain.idle"
+    },
+    {
+      "stateId": "state.idle",
+      "viewId": "view.spend",
+      "disposition": "rendered",
+      "fixtureId": "fix.spend.idle"
+    },
+    {
+      "stateId": "state.idle",
+      "viewId": "view.timeline",
+      "disposition": "rendered",
+      "fixtureId": "fix.timeline.idle"
+    },
+    {
+      "stateId": "state.idle",
+      "viewId": "view.swarm",
+      "disposition": "environment-gap"
+    },
+    {
+      "stateId": "state.working",
+      "viewId": "view.list",
+      "disposition": "rendered",
+      "fixtureId": "fix.list.working"
+    },
+    {
+      "stateId": "state.working",
+      "viewId": "view.rain",
+      "disposition": "rendered",
+      "fixtureId": "fix.rain.working"
+    },
+    {
+      "stateId": "state.working",
+      "viewId": "view.spend",
+      "disposition": "rendered",
+      "fixtureId": "fix.spend.working"
+    },
+    {
+      "stateId": "state.working",
+      "viewId": "view.timeline",
+      "disposition": "rendered",
+      "fixtureId": "fix.timeline.working"
+    },
+    {
+      "stateId": "state.working",
+      "viewId": "view.swarm",
+      "disposition": "environment-gap"
+    },
+    {
+      "stateId": "state.blocked",
+      "viewId": "view.list",
+      "disposition": "rendered",
+      "fixtureId": "fix.list.blocked"
+    },
+    {
+      "stateId": "state.blocked",
+      "viewId": "view.rain",
+      "disposition": "rendered",
+      "fixtureId": "fix.rain.blocked"
+    },
+    {
+      "stateId": "state.blocked",
+      "viewId": "view.spend",
+      "disposition": "rendered",
+      "fixtureId": "fix.spend.blocked"
+    },
+    {
+      "stateId": "state.blocked",
+      "viewId": "view.timeline",
+      "disposition": "rendered",
+      "fixtureId": "fix.timeline.blocked"
+    },
+    {
+      "stateId": "state.blocked",
+      "viewId": "view.swarm",
+      "disposition": "environment-gap"
+    },
+    {
+      "stateId": "state.blocked_permission",
+      "viewId": "view.list",
+      "disposition": "rendered",
+      "fixtureId": "fix.list.blocked-permission"
+    },
+    {
+      "stateId": "state.blocked_permission",
+      "viewId": "view.rain",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.blocked_permission",
+      "viewId": "view.spend",
+      "disposition": "rendered",
+      "fixtureId": "fix.spend.blocked-permission"
+    },
+    {
+      "stateId": "state.blocked_permission",
+      "viewId": "view.timeline",
+      "disposition": "rendered",
+      "fixtureId": "fix.timeline.blocked-permission"
+    },
+    {
+      "stateId": "state.blocked_permission",
+      "viewId": "view.swarm",
+      "disposition": "environment-gap"
+    },
+    {
+      "stateId": "state.blocked_question",
+      "viewId": "view.list",
+      "disposition": "rendered",
+      "fixtureId": "fix.list.blocked-question"
+    },
+    {
+      "stateId": "state.blocked_question",
+      "viewId": "view.rain",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.blocked_question",
+      "viewId": "view.spend",
+      "disposition": "rendered",
+      "fixtureId": "fix.spend.blocked-question"
+    },
+    {
+      "stateId": "state.blocked_question",
+      "viewId": "view.timeline",
+      "disposition": "rendered",
+      "fixtureId": "fix.timeline.blocked-question"
+    },
+    {
+      "stateId": "state.blocked_question",
+      "viewId": "view.swarm",
+      "disposition": "environment-gap"
+    },
+    {
+      "stateId": "state.blocked_failure",
+      "viewId": "view.list",
+      "disposition": "rendered",
+      "fixtureId": "fix.list.blocked-failure"
+    },
+    {
+      "stateId": "state.blocked_failure",
+      "viewId": "view.rain",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.blocked_failure",
+      "viewId": "view.spend",
+      "disposition": "rendered",
+      "fixtureId": "fix.spend.blocked-failure"
+    },
+    {
+      "stateId": "state.blocked_failure",
+      "viewId": "view.timeline",
+      "disposition": "rendered",
+      "fixtureId": "fix.timeline.blocked-failure"
+    },
+    {
+      "stateId": "state.blocked_failure",
+      "viewId": "view.swarm",
+      "disposition": "environment-gap"
+    },
+    {
+      "stateId": "state.blocked_unknown_kind",
+      "viewId": "view.list",
+      "disposition": "rendered",
+      "fixtureId": "fix.list.blocked-unknown-kind"
+    },
+    {
+      "stateId": "state.blocked_unknown_kind",
+      "viewId": "view.rain",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.blocked_unknown_kind",
+      "viewId": "view.spend",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.blocked_unknown_kind",
+      "viewId": "view.timeline",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.blocked_unknown_kind",
+      "viewId": "view.swarm",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.starting_unobserved",
+      "viewId": "view.list",
+      "disposition": "rendered",
+      "fixtureId": "fix.list.starting-unobserved"
+    },
+    {
+      "stateId": "state.starting_unobserved",
+      "viewId": "view.rain",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.starting_unobserved",
+      "viewId": "view.spend",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.starting_unobserved",
+      "viewId": "view.timeline",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.starting_unobserved",
+      "viewId": "view.swarm",
+      "disposition": "environment-gap"
+    },
+    {
+      "stateId": "state.pending_unobserved",
+      "viewId": "view.list",
+      "disposition": "rendered",
+      "fixtureId": "fix.list.pending-unobserved"
+    },
+    {
+      "stateId": "state.pending_unobserved",
+      "viewId": "view.rain",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.pending_unobserved",
+      "viewId": "view.spend",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.pending_unobserved",
+      "viewId": "view.timeline",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.pending_unobserved",
+      "viewId": "view.swarm",
+      "disposition": "environment-gap"
+    },
+    {
+      "stateId": "state.stale",
+      "viewId": "view.list",
+      "disposition": "rendered",
+      "fixtureId": "fix.list.stale"
+    },
+    {
+      "stateId": "state.stale",
+      "viewId": "view.rain",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.stale",
+      "viewId": "view.spend",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.stale",
+      "viewId": "view.timeline",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.stale",
+      "viewId": "view.swarm",
+      "disposition": "environment-gap"
+    },
+    {
+      "stateId": "state.fresh",
+      "viewId": "view.list",
+      "disposition": "rendered",
+      "fixtureId": "fix.list.fresh"
+    },
+    {
+      "stateId": "state.fresh",
+      "viewId": "view.rain",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.fresh",
+      "viewId": "view.spend",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.fresh",
+      "viewId": "view.timeline",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.fresh",
+      "viewId": "view.swarm",
+      "disposition": "environment-gap"
+    },
+    {
+      "stateId": "state.terminal_running",
+      "viewId": "view.list",
+      "disposition": "rendered",
+      "fixtureId": "fix.list.terminal-running"
+    },
+    {
+      "stateId": "state.terminal_running",
+      "viewId": "view.rain",
+      "disposition": "rendered",
+      "fixtureId": "fix.rain.terminal-running"
+    },
+    {
+      "stateId": "state.terminal_running",
+      "viewId": "view.spend",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.terminal_running",
+      "viewId": "view.timeline",
+      "disposition": "rendered",
+      "fixtureId": "fix.timeline.terminal-running"
+    },
+    {
+      "stateId": "state.terminal_running",
+      "viewId": "view.swarm",
+      "disposition": "environment-gap"
+    },
+    {
+      "stateId": "state.terminal_quiet",
+      "viewId": "view.list",
+      "disposition": "rendered",
+      "fixtureId": "fix.list.terminal-quiet"
+    },
+    {
+      "stateId": "state.terminal_quiet",
+      "viewId": "view.rain",
+      "disposition": "rendered",
+      "fixtureId": "fix.rain.terminal-quiet"
+    },
+    {
+      "stateId": "state.terminal_quiet",
+      "viewId": "view.spend",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.terminal_quiet",
+      "viewId": "view.timeline",
+      "disposition": "rendered",
+      "fixtureId": "fix.timeline.terminal-quiet"
+    },
+    {
+      "stateId": "state.terminal_quiet",
+      "viewId": "view.swarm",
+      "disposition": "environment-gap"
+    },
+    {
+      "stateId": "state.remote",
+      "viewId": "view.list",
+      "disposition": "rendered",
+      "fixtureId": "fix.list.remote"
+    },
+    {
+      "stateId": "state.remote",
+      "viewId": "view.rain",
+      "disposition": "rendered",
+      "fixtureId": "fix.rain.remote"
+    },
+    {
+      "stateId": "state.remote",
+      "viewId": "view.spend",
+      "disposition": "rendered",
+      "fixtureId": "fix.spend.remote"
+    },
+    {
+      "stateId": "state.remote",
+      "viewId": "view.timeline",
+      "disposition": "rendered",
+      "fixtureId": "fix.timeline.remote"
+    },
+    {
+      "stateId": "state.remote",
+      "viewId": "view.swarm",
+      "disposition": "environment-gap"
+    },
+    {
+      "stateId": "state.active",
+      "viewId": "view.list",
+      "disposition": "rendered",
+      "fixtureId": "fix.list.active"
+    },
+    {
+      "stateId": "state.active",
+      "viewId": "view.rain",
+      "disposition": "rendered",
+      "fixtureId": "fix.rain.active"
+    },
+    {
+      "stateId": "state.active",
+      "viewId": "view.spend",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.active",
+      "viewId": "view.timeline",
+      "disposition": "rendered",
+      "fixtureId": "fix.timeline.active"
+    },
+    {
+      "stateId": "state.active",
+      "viewId": "view.swarm",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.receded",
+      "viewId": "view.list",
+      "disposition": "rendered",
+      "fixtureId": "fix.list.receded"
+    },
+    {
+      "stateId": "state.receded",
+      "viewId": "view.rain",
+      "disposition": "rendered",
+      "fixtureId": "fix.rain.receded"
+    },
+    {
+      "stateId": "state.receded",
+      "viewId": "view.spend",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.receded",
+      "viewId": "view.timeline",
+      "disposition": "rendered",
+      "fixtureId": "fix.timeline.receded"
+    },
+    {
+      "stateId": "state.receded",
+      "viewId": "view.swarm",
+      "disposition": "environment-gap"
+    },
+    {
+      "stateId": "state.attached",
+      "viewId": "view.list",
+      "disposition": "rendered",
+      "fixtureId": "fix.list.attached"
+    },
+    {
+      "stateId": "state.attached",
+      "viewId": "view.rain",
+      "disposition": "rendered",
+      "fixtureId": "fix.rain.attached"
+    },
+    {
+      "stateId": "state.attached",
+      "viewId": "view.spend",
+      "disposition": "rendered",
+      "fixtureId": "fix.spend.attached"
+    },
+    {
+      "stateId": "state.attached",
+      "viewId": "view.timeline",
+      "disposition": "rendered",
+      "fixtureId": "fix.timeline.attached"
+    },
+    {
+      "stateId": "state.attached",
+      "viewId": "view.swarm",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.detached",
+      "viewId": "view.list",
+      "disposition": "rendered",
+      "fixtureId": "fix.list.detached"
+    },
+    {
+      "stateId": "state.detached",
+      "viewId": "view.rain",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.detached",
+      "viewId": "view.spend",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.detached",
+      "viewId": "view.timeline",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.detached",
+      "viewId": "view.swarm",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.context_missing",
+      "viewId": "view.list",
+      "disposition": "rendered",
+      "fixtureId": "fix.list.context-missing"
+    },
+    {
+      "stateId": "state.context_missing",
+      "viewId": "view.rain",
+      "disposition": "rendered",
+      "fixtureId": "fix.rain.context-missing"
+    },
+    {
+      "stateId": "state.context_missing",
+      "viewId": "view.spend",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.context_missing",
+      "viewId": "view.timeline",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.context_missing",
+      "viewId": "view.swarm",
+      "disposition": "environment-gap"
+    },
+    {
+      "stateId": "state.branch_unknown",
+      "viewId": "view.list",
+      "disposition": "rendered",
+      "fixtureId": "fix.list.branch-unknown"
+    },
+    {
+      "stateId": "state.branch_unknown",
+      "viewId": "view.rain",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.branch_unknown",
+      "viewId": "view.spend",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.branch_unknown",
+      "viewId": "view.timeline",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.branch_unknown",
+      "viewId": "view.swarm",
+      "disposition": "environment-gap"
+    },
+    {
+      "stateId": "state.branch_none",
+      "viewId": "view.list",
+      "disposition": "rendered",
+      "fixtureId": "fix.list.branch-none"
+    },
+    {
+      "stateId": "state.branch_none",
+      "viewId": "view.rain",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.branch_none",
+      "viewId": "view.spend",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.branch_none",
+      "viewId": "view.timeline",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.branch_none",
+      "viewId": "view.swarm",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.branch_named",
+      "viewId": "view.list",
+      "disposition": "rendered",
+      "fixtureId": "fix.list.branch-named"
+    },
+    {
+      "stateId": "state.branch_named",
+      "viewId": "view.rain",
+      "disposition": "rendered",
+      "fixtureId": "fix.rain.branch-named"
+    },
+    {
+      "stateId": "state.branch_named",
+      "viewId": "view.spend",
+      "disposition": "rendered",
+      "fixtureId": "fix.spend.branch-named"
+    },
+    {
+      "stateId": "state.branch_named",
+      "viewId": "view.timeline",
+      "disposition": "rendered",
+      "fixtureId": "fix.timeline.branch-named"
+    },
+    {
+      "stateId": "state.branch_named",
+      "viewId": "view.swarm",
+      "disposition": "environment-gap"
+    },
+    {
+      "stateId": "state.reply_missing",
+      "viewId": "view.list",
+      "disposition": "rendered",
+      "fixtureId": "fix.list.reply-missing"
+    },
+    {
+      "stateId": "state.reply_missing",
+      "viewId": "view.rain",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.reply_missing",
+      "viewId": "view.spend",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.reply_missing",
+      "viewId": "view.timeline",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.reply_missing",
+      "viewId": "view.swarm",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.model_missing",
+      "viewId": "view.list",
+      "disposition": "rendered",
+      "fixtureId": "fix.list.model-missing"
+    },
+    {
+      "stateId": "state.model_missing",
+      "viewId": "view.rain",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.model_missing",
+      "viewId": "view.spend",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.model_missing",
+      "viewId": "view.timeline",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.model_missing",
+      "viewId": "view.swarm",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.spawn_ready",
+      "viewId": "view.list",
+      "disposition": "rendered",
+      "fixtureId": "fix.list.spawn-ready"
+    },
+    {
+      "stateId": "state.spawn_ready",
+      "viewId": "view.rain",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.spawn_ready",
+      "viewId": "view.spend",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.spawn_ready",
+      "viewId": "view.timeline",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.spawn_ready",
+      "viewId": "view.swarm",
+      "disposition": "environment-gap"
+    },
+    {
+      "stateId": "state.spawn_asleep",
+      "viewId": "view.list",
+      "disposition": "rendered",
+      "fixtureId": "fix.list.spawn-asleep"
+    },
+    {
+      "stateId": "state.spawn_asleep",
+      "viewId": "view.rain",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.spawn_asleep",
+      "viewId": "view.spend",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.spawn_asleep",
+      "viewId": "view.timeline",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.spawn_asleep",
+      "viewId": "view.swarm",
+      "disposition": "environment-gap"
+    },
+    {
+      "stateId": "state.spawn_silent",
+      "viewId": "view.list",
+      "disposition": "rendered",
+      "fixtureId": "fix.list.spawn-silent"
+    },
+    {
+      "stateId": "state.spawn_silent",
+      "viewId": "view.rain",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.spawn_silent",
+      "viewId": "view.spend",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.spawn_silent",
+      "viewId": "view.timeline",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.spawn_silent",
+      "viewId": "view.swarm",
+      "disposition": "environment-gap"
+    },
+    {
+      "stateId": "state.spawn_incompatible",
+      "viewId": "view.list",
+      "disposition": "rendered",
+      "fixtureId": "fix.list.spawn-incompatible"
+    },
+    {
+      "stateId": "state.spawn_incompatible",
+      "viewId": "view.rain",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.spawn_incompatible",
+      "viewId": "view.spend",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.spawn_incompatible",
+      "viewId": "view.timeline",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.spawn_incompatible",
+      "viewId": "view.swarm",
+      "disposition": "environment-gap"
+    },
+    {
+      "stateId": "state.spawn_reading",
+      "viewId": "view.list",
+      "disposition": "rendered",
+      "fixtureId": "fix.list.spawn-reading"
+    },
+    {
+      "stateId": "state.spawn_reading",
+      "viewId": "view.rain",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.spawn_reading",
+      "viewId": "view.spend",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.spawn_reading",
+      "viewId": "view.timeline",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.spawn_reading",
+      "viewId": "view.swarm",
+      "disposition": "environment-gap"
+    },
+    {
+      "stateId": "state.cost_complete",
+      "viewId": "view.list",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.cost_complete",
+      "viewId": "view.rain",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.cost_complete",
+      "viewId": "view.spend",
+      "disposition": "rendered",
+      "fixtureId": "fix.spend.cost-complete"
+    },
+    {
+      "stateId": "state.cost_complete",
+      "viewId": "view.timeline",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.cost_complete",
+      "viewId": "view.swarm",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.cost_partial",
+      "viewId": "view.list",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.cost_partial",
+      "viewId": "view.rain",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.cost_partial",
+      "viewId": "view.spend",
+      "disposition": "rendered",
+      "fixtureId": "fix.spend.cost-partial"
+    },
+    {
+      "stateId": "state.cost_partial",
+      "viewId": "view.timeline",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.cost_partial",
+      "viewId": "view.swarm",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.cost_unavailable",
+      "viewId": "view.list",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.cost_unavailable",
+      "viewId": "view.rain",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.cost_unavailable",
+      "viewId": "view.spend",
+      "disposition": "rendered",
+      "fixtureId": "fix.spend.cost-unavailable"
+    },
+    {
+      "stateId": "state.cost_unavailable",
+      "viewId": "view.timeline",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.cost_unavailable",
+      "viewId": "view.swarm",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.cost_missing",
+      "viewId": "view.list",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.cost_missing",
+      "viewId": "view.rain",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.cost_missing",
+      "viewId": "view.spend",
+      "disposition": "rendered",
+      "fixtureId": "fix.spend.cost-missing"
+    },
+    {
+      "stateId": "state.cost_missing",
+      "viewId": "view.timeline",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.cost_missing",
+      "viewId": "view.swarm",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.spend_before",
+      "viewId": "view.list",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.spend_before",
+      "viewId": "view.rain",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.spend_before",
+      "viewId": "view.spend",
+      "disposition": "rendered",
+      "fixtureId": "fix.spend.before"
+    },
+    {
+      "stateId": "state.spend_before",
+      "viewId": "view.timeline",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.spend_before",
+      "viewId": "view.swarm",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.unread",
+      "viewId": "view.list",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.unread",
+      "viewId": "view.rain",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.unread",
+      "viewId": "view.spend",
+      "disposition": "rendered",
+      "fixtureId": "fix.spend.unread"
+    },
+    {
+      "stateId": "state.unread",
+      "viewId": "view.timeline",
+      "disposition": "rendered",
+      "fixtureId": "fix.timeline.unread"
+    },
+    {
+      "stateId": "state.unread",
+      "viewId": "view.swarm",
+      "disposition": "environment-gap"
+    },
+    {
+      "stateId": "state.past_worked",
+      "viewId": "view.list",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.past_worked",
+      "viewId": "view.rain",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.past_worked",
+      "viewId": "view.spend",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.past_worked",
+      "viewId": "view.timeline",
+      "disposition": "rendered",
+      "fixtureId": "fix.timeline.past-worked"
+    },
+    {
+      "stateId": "state.past_worked",
+      "viewId": "view.swarm",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.past_quiet",
+      "viewId": "view.list",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.past_quiet",
+      "viewId": "view.rain",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.past_quiet",
+      "viewId": "view.spend",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.past_quiet",
+      "viewId": "view.timeline",
+      "disposition": "rendered",
+      "fixtureId": "fix.timeline.past-quiet"
+    },
+    {
+      "stateId": "state.past_quiet",
+      "viewId": "view.swarm",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.past_unrecorded",
+      "viewId": "view.list",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.past_unrecorded",
+      "viewId": "view.rain",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.past_unrecorded",
+      "viewId": "view.spend",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.past_unrecorded",
+      "viewId": "view.timeline",
+      "disposition": "rendered",
+      "fixtureId": "fix.timeline.past-unrecorded"
+    },
+    {
+      "stateId": "state.past_unrecorded",
+      "viewId": "view.swarm",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.past_bounds",
+      "viewId": "view.list",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.past_bounds",
+      "viewId": "view.rain",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.past_bounds",
+      "viewId": "view.spend",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.past_bounds",
+      "viewId": "view.timeline",
+      "disposition": "rendered",
+      "fixtureId": "fix.timeline.past-bounds"
+    },
+    {
+      "stateId": "state.past_bounds",
+      "viewId": "view.swarm",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.wait_multiple",
+      "viewId": "view.list",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.wait_multiple",
+      "viewId": "view.rain",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.wait_multiple",
+      "viewId": "view.spend",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.wait_multiple",
+      "viewId": "view.timeline",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.wait_multiple",
+      "viewId": "view.swarm",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.working_with_blockers",
+      "viewId": "view.list",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.working_with_blockers",
+      "viewId": "view.rain",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.working_with_blockers",
+      "viewId": "view.spend",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.working_with_blockers",
+      "viewId": "view.timeline",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.working_with_blockers",
+      "viewId": "view.swarm",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.activity_starting",
+      "viewId": "view.list",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.activity_starting",
+      "viewId": "view.rain",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.activity_starting",
+      "viewId": "view.spend",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.activity_starting",
+      "viewId": "view.timeline",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.activity_starting",
+      "viewId": "view.swarm",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.activity_responding",
+      "viewId": "view.list",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.activity_responding",
+      "viewId": "view.rain",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.activity_responding",
+      "viewId": "view.spend",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.activity_responding",
+      "viewId": "view.timeline",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.activity_responding",
+      "viewId": "view.swarm",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.activity_reasoning",
+      "viewId": "view.list",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.activity_reasoning",
+      "viewId": "view.rain",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.activity_reasoning",
+      "viewId": "view.spend",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.activity_reasoning",
+      "viewId": "view.timeline",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.activity_reasoning",
+      "viewId": "view.swarm",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.activity_tool",
+      "viewId": "view.list",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.activity_tool",
+      "viewId": "view.rain",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.activity_tool",
+      "viewId": "view.spend",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.activity_tool",
+      "viewId": "view.timeline",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.activity_tool",
+      "viewId": "view.swarm",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.activity_delegating",
+      "viewId": "view.list",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.activity_delegating",
+      "viewId": "view.rain",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.activity_delegating",
+      "viewId": "view.spend",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.activity_delegating",
+      "viewId": "view.timeline",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.activity_delegating",
+      "viewId": "view.swarm",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.activity_compacting",
+      "viewId": "view.list",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.activity_compacting",
+      "viewId": "view.rain",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.activity_compacting",
+      "viewId": "view.spend",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.activity_compacting",
+      "viewId": "view.timeline",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.activity_compacting",
+      "viewId": "view.swarm",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.activity_other",
+      "viewId": "view.list",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.activity_other",
+      "viewId": "view.rain",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.activity_other",
+      "viewId": "view.spend",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.activity_other",
+      "viewId": "view.timeline",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.activity_other",
+      "viewId": "view.swarm",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.failed_retained",
+      "viewId": "view.list",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.failed_retained",
+      "viewId": "view.rain",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.failed_retained",
+      "viewId": "view.spend",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.failed_retained",
+      "viewId": "view.timeline",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.failed_retained",
+      "viewId": "view.swarm",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.dead_hidden",
+      "viewId": "view.list",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.dead_hidden",
+      "viewId": "view.rain",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.dead_hidden",
+      "viewId": "view.spend",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.dead_hidden",
+      "viewId": "view.timeline",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.dead_hidden",
+      "viewId": "view.swarm",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.terminal_empty",
+      "viewId": "view.list",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.terminal_empty",
+      "viewId": "view.rain",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.terminal_empty",
+      "viewId": "view.spend",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.terminal_empty",
+      "viewId": "view.timeline",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.terminal_empty",
+      "viewId": "view.swarm",
+      "disposition": "environment-gap"
+    },
+    {
+      "stateId": "state.terminal_opening",
+      "viewId": "view.list",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.terminal_opening",
+      "viewId": "view.rain",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.terminal_opening",
+      "viewId": "view.spend",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.terminal_opening",
+      "viewId": "view.timeline",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.terminal_opening",
+      "viewId": "view.swarm",
+      "disposition": "environment-gap"
+    },
+    {
+      "stateId": "state.attachable",
+      "viewId": "view.list",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.attachable",
+      "viewId": "view.rain",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.attachable",
+      "viewId": "view.spend",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.attachable",
+      "viewId": "view.timeline",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.attachable",
+      "viewId": "view.swarm",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.reply_streaming",
+      "viewId": "view.list",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.reply_streaming",
+      "viewId": "view.rain",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.reply_streaming",
+      "viewId": "view.spend",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.reply_streaming",
+      "viewId": "view.timeline",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.reply_streaming",
+      "viewId": "view.swarm",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.reply_final",
+      "viewId": "view.list",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.reply_final",
+      "viewId": "view.rain",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.reply_final",
+      "viewId": "view.spend",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.reply_final",
+      "viewId": "view.timeline",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.reply_final",
+      "viewId": "view.swarm",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.timeline_unborn",
+      "viewId": "view.list",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.timeline_unborn",
+      "viewId": "view.rain",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.timeline_unborn",
+      "viewId": "view.spend",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.timeline_unborn",
+      "viewId": "view.timeline",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.timeline_unborn",
+      "viewId": "view.swarm",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.timeline_unrecorded",
+      "viewId": "view.list",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.timeline_unrecorded",
+      "viewId": "view.rain",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.timeline_unrecorded",
+      "viewId": "view.spend",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.timeline_unrecorded",
+      "viewId": "view.timeline",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.timeline_unrecorded",
+      "viewId": "view.swarm",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.timeline_past",
+      "viewId": "view.list",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.timeline_past",
+      "viewId": "view.rain",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.timeline_past",
+      "viewId": "view.spend",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.timeline_past",
+      "viewId": "view.timeline",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.timeline_past",
+      "viewId": "view.swarm",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.timeline_ended",
+      "viewId": "view.list",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.timeline_ended",
+      "viewId": "view.rain",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.timeline_ended",
+      "viewId": "view.spend",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.timeline_ended",
+      "viewId": "view.timeline",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.timeline_ended",
+      "viewId": "view.swarm",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.timeline_span",
+      "viewId": "view.list",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.timeline_span",
+      "viewId": "view.rain",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.timeline_span",
+      "viewId": "view.spend",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.timeline_span",
+      "viewId": "view.timeline",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.timeline_span",
+      "viewId": "view.swarm",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.spend_unknown",
+      "viewId": "view.list",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.spend_unknown",
+      "viewId": "view.rain",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.spend_unknown",
+      "viewId": "view.spend",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.spend_unknown",
+      "viewId": "view.timeline",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.spend_unknown",
+      "viewId": "view.swarm",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.feed_no_door",
+      "viewId": "view.list",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.feed_no_door",
+      "viewId": "view.rain",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.feed_no_door",
+      "viewId": "view.spend",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.feed_no_door",
+      "viewId": "view.timeline",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.feed_no_door",
+      "viewId": "view.swarm",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.feed_connecting",
+      "viewId": "view.list",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.feed_connecting",
+      "viewId": "view.rain",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.feed_connecting",
+      "viewId": "view.spend",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.feed_connecting",
+      "viewId": "view.timeline",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.feed_connecting",
+      "viewId": "view.swarm",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.feed_live",
+      "viewId": "view.list",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.feed_live",
+      "viewId": "view.rain",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.feed_live",
+      "viewId": "view.spend",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.feed_live",
+      "viewId": "view.timeline",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.feed_live",
+      "viewId": "view.swarm",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.feed_unavailable",
+      "viewId": "view.list",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.feed_unavailable",
+      "viewId": "view.rain",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.feed_unavailable",
+      "viewId": "view.spend",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.feed_unavailable",
+      "viewId": "view.timeline",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.feed_unavailable",
+      "viewId": "view.swarm",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.tier_managed",
+      "viewId": "view.list",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.tier_managed",
+      "viewId": "view.rain",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.tier_managed",
+      "viewId": "view.spend",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.tier_managed",
+      "viewId": "view.timeline",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.tier_managed",
+      "viewId": "view.swarm",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.tier_ingested",
+      "viewId": "view.list",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.tier_ingested",
+      "viewId": "view.rain",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.tier_ingested",
+      "viewId": "view.spend",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.tier_ingested",
+      "viewId": "view.timeline",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.tier_ingested",
+      "viewId": "view.swarm",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.tier_remote",
+      "viewId": "view.list",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.tier_remote",
+      "viewId": "view.rain",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.tier_remote",
+      "viewId": "view.spend",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.tier_remote",
+      "viewId": "view.timeline",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.tier_remote",
+      "viewId": "view.swarm",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.device_live",
+      "viewId": "view.list",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.device_live",
+      "viewId": "view.rain",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.device_live",
+      "viewId": "view.spend",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.device_live",
+      "viewId": "view.timeline",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.device_live",
+      "viewId": "view.swarm",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.device_stale",
+      "viewId": "view.list",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.device_stale",
+      "viewId": "view.rain",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.device_stale",
+      "viewId": "view.spend",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.device_stale",
+      "viewId": "view.timeline",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.device_stale",
+      "viewId": "view.swarm",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.device_asleep",
+      "viewId": "view.list",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.device_asleep",
+      "viewId": "view.rain",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.device_asleep",
+      "viewId": "view.spend",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.device_asleep",
+      "viewId": "view.timeline",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.device_asleep",
+      "viewId": "view.swarm",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.device_incompatible",
+      "viewId": "view.list",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.device_incompatible",
+      "viewId": "view.rain",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.device_incompatible",
+      "viewId": "view.spend",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.device_incompatible",
+      "viewId": "view.timeline",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.device_incompatible",
+      "viewId": "view.swarm",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.context_hot",
+      "viewId": "view.list",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.context_hot",
+      "viewId": "view.rain",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.context_hot",
+      "viewId": "view.spend",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.context_hot",
+      "viewId": "view.timeline",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.context_hot",
+      "viewId": "view.swarm",
+      "disposition": "environment-gap"
+    },
+    {
+      "stateId": "state.effort_configured",
+      "viewId": "view.list",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.effort_configured",
+      "viewId": "view.rain",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.effort_configured",
+      "viewId": "view.spend",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.effort_configured",
+      "viewId": "view.timeline",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.effort_configured",
+      "viewId": "view.swarm",
+      "disposition": "environment-gap"
+    },
+    {
+      "stateId": "state.effort_observed",
+      "viewId": "view.list",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.effort_observed",
+      "viewId": "view.rain",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.effort_observed",
+      "viewId": "view.spend",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.effort_observed",
+      "viewId": "view.timeline",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.effort_observed",
+      "viewId": "view.swarm",
+      "disposition": "environment-gap"
+    },
+    {
+      "stateId": "state.effort_absent",
+      "viewId": "view.list",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.effort_absent",
+      "viewId": "view.rain",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.effort_absent",
+      "viewId": "view.spend",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.effort_absent",
+      "viewId": "view.timeline",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.effort_absent",
+      "viewId": "view.swarm",
+      "disposition": "environment-gap"
+    },
+    {
+      "stateId": "state.burn_flames_0",
+      "viewId": "view.list",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.burn_flames_0",
+      "viewId": "view.rain",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.burn_flames_0",
+      "viewId": "view.spend",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.burn_flames_0",
+      "viewId": "view.timeline",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.burn_flames_0",
+      "viewId": "view.swarm",
+      "disposition": "environment-gap"
+    },
+    {
+      "stateId": "state.burn_flames_1",
+      "viewId": "view.list",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.burn_flames_1",
+      "viewId": "view.rain",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.burn_flames_1",
+      "viewId": "view.spend",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.burn_flames_1",
+      "viewId": "view.timeline",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.burn_flames_1",
+      "viewId": "view.swarm",
+      "disposition": "environment-gap"
+    },
+    {
+      "stateId": "state.burn_flames_2",
+      "viewId": "view.list",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.burn_flames_2",
+      "viewId": "view.rain",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.burn_flames_2",
+      "viewId": "view.spend",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.burn_flames_2",
+      "viewId": "view.timeline",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.burn_flames_2",
+      "viewId": "view.swarm",
+      "disposition": "environment-gap"
+    },
+    {
+      "stateId": "state.burn_flames_3",
+      "viewId": "view.list",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.burn_flames_3",
+      "viewId": "view.rain",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.burn_flames_3",
+      "viewId": "view.spend",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.burn_flames_3",
+      "viewId": "view.timeline",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.burn_flames_3",
+      "viewId": "view.swarm",
+      "disposition": "environment-gap"
+    },
+    {
+      "stateId": "state.burn_flames_4",
+      "viewId": "view.list",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.burn_flames_4",
+      "viewId": "view.rain",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.burn_flames_4",
+      "viewId": "view.spend",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.burn_flames_4",
+      "viewId": "view.timeline",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.burn_flames_4",
+      "viewId": "view.swarm",
+      "disposition": "environment-gap"
+    },
+    {
+      "stateId": "state.burn_unpriced",
+      "viewId": "view.list",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.burn_unpriced",
+      "viewId": "view.rain",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.burn_unpriced",
+      "viewId": "view.spend",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.burn_unpriced",
+      "viewId": "view.timeline",
+      "disposition": "not-applicable"
+    },
+    {
+      "stateId": "state.burn_unpriced",
+      "viewId": "view.swarm",
+      "disposition": "environment-gap"
+    }
+  ],
+  "swarmBodyPaint": null
 }

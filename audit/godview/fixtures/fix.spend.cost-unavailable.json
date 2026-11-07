@@ -29,5 +29,5 @@
     "symbol": "SpendView",
     "lineStart": 255
   },
-  "notes": "cost.coverage unavailable. Spend names the agent apart and does not meter it. adapterIds list the ten audit adapters as classification context only. They are not a claim that any adapter emitted this row. Mounted from Puppeteer source 748d015 via MonitorViewHost. Not shipped package 0.3.3."
+  "notes": "cost.coverage unavailable. Spend names the agent apart and does not meter it. adapterIds list the ten audit adapters as classification context only. They are not a claim that any adapter emitted this row. Mounted from Puppeteer source 748d015 via MonitorViewHost. Not shipped package 0.3.3. Synthetic view of an explicit unavailable cost object. The normal backend omits field.cost instead, which is state.cost_missing. Not a normal adapter emission."
 }
