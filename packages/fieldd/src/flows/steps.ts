@@ -139,7 +139,10 @@ export interface FlowStepRun {
   /** CP-4a2b slice 13 (Q8 (a)) — whether the run has ended, or its ending is set (a Stop, D7's set-aside, J1's flood),
    * read after each await of a start, before the reservation and before `sent`: a start in flight at an end then
    * starts nothing more, and is answered "‹label› failed.", which nothing hears. An agent its spawn started past it
-   * keeps its count (it did start), and the end finds it by its origin and ends it. Slice 14's `boundStep` reads it too */
+   * keeps its count (it did start), and the end finds it by its origin and ends it. Slice 14's `boundStep` reads it too.
+   * *Fold 1 (2026-11-07; the green skeptic's #2): "finds it by its origin" alone held only while `sessions.ofRun` had
+   * listed it. The refusal now names that agent (`landed`), so the run keeps it among its orphans, and the end, which
+   * waits for the start, ends it though that read lags.* */
   gone(): boolean;
 }
 
@@ -152,9 +155,10 @@ export type FlowStepWrite = (
 ) => void;
 
 /** How a step's start went: refused, in the script's words, or working in its session; a handed session's `unhand`
- * lets the step listener go (9b). */
+ * lets the step listener go (9b). A refusal past a spawn that landed after its run's end names that agent (`landed`,
+ * slice 13's fold 1), so the run keeps it among its orphans and its end ends it. */
 export type FlowStepStarted =
-  | { readonly ok: false; readonly refused: string }
+  | { readonly ok: false; readonly refused: string; readonly landed?: string | undefined }
   | {
       readonly working: string;
       readonly form?: FlowForm | undefined;
@@ -404,8 +408,9 @@ export async function startStep(
     return { ok: false, refused: `VibeField couldn't start ${labelWords(label)}: ${why}` };
   }
   // slice 13 (Q8 (a)): an agent that lands past its run's end is queued nothing and its session never written; it
-  // keeps its count, and the end, which waited for this start, finds it by its origin and ends it
-  if (run.gone()) return { ok: false, refused: stepFailed(label) };
+  // keeps its count, and its refusal names it (`landed`, fold 1: the green skeptic's #2), so the run keeps it among
+  // its orphans and the end, which waited for this start, ends it whether or not `sessions.ofRun` lists it yet
+  if (run.gone()) return { ok: false, refused: stepFailed(label), landed: runtimeRunId };
   try {
     return { ...sent(ports, write, call, runtimeRunId, "prompt", prompt, from), form };
   } catch (error) {

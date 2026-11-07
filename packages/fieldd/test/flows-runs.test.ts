@@ -2141,6 +2141,31 @@ describe("CP-4a2b — a step's answer: heard once, bounded whole, checked agains
     expect({ queueRefused, writeRefused }).toEqual({ queueRefused: each, writeRefused: each });
   });
 
+  it("R42b-2 (slice 13's fold 1; the green skeptic's #1): an orphan whose agent exited before its run's end, as the same `sessions.ofRun` read lists it, is neither ended nor counted in `ended`", async () => {
+    // red at the unfixed green: #agentsOf keeps an `ofRun` row only when it lives, yet adds every orphan unread, so
+    // the end asks `agents.end` of the exited agent and counts it (`ended: 1`)
+    const h = await harness();
+    h.approved("review", REVIEW_CATCHES);
+    // R14f's road: the queue refuses the step's line, its agent started; that agent then exits on its own
+    vi.spyOn(h.runs.ports.inputs, "enqueue").mockImplementationOnce((runtimeRunId) => {
+      h.exit(runtimeRunId);
+      throw new Error("the input queue refused it");
+    });
+    const run = startedRun(await h.start({ flow: "review" })).run;
+    const done = await settled(h.runs, run, "done");
+    expect({
+      state: done.state,
+      listed: h.runs.ports.sessions.ofRun(run),
+      ends: h.ends,
+      ended: h.records.runRecord(run)?.ended,
+    }).toEqual({
+      state: "done",
+      listed: [{ runtimeRunId: "rt-step1", call: 1, live: false }],
+      ends: [],
+      ended: undefined,
+    });
+  });
+
   it("R14g (F2 review T2): a record that can't say a queued line was queued is logged, never thrown: the step works on, and its agent's answer settles it", async () => {
     const h = await harness();
     h.approved("review", ANSWERED);
@@ -2471,6 +2496,76 @@ describe("CP-4a2b — a step handed a session: heard from the hand, let go at th
     await h.runs.close();
     expect(h.hands.map((hand) => hand.gone)).toEqual([true]);
     expect(h.records.runRecord(run)?.state).toBe("running");
+  });
+
+  it("R19h-6 (slice 13's fold 1; the green skeptic's #6): a hand whose let-go throws is said in fieldd's log and never skips the end: a Stop of a run whose handed step works ends it `stopped`, its `end` kept, and answers; and fieldd's own stop lets the hand go and resolves", async () => {
+    // red at the unfixed green: #letGo calls each unhand() uncaught, so the throw leaves #finish past its
+    // `#live.delete` and skips #closeEnd: the host's end is "not kept" in fieldd's log, the record stays `stopping`, no
+    // `end` is journaled, and the Stop never answers; and close() rejects with the throw
+    /** The harness's hand, its let-go throwing the first time it is called, as a listener that throws would. */
+    const letGoThrows = (h: Harness) => {
+      const { stepEnds } = h.runs.ports;
+      const hand = stepEnds.hand.bind(stepEnds);
+      vi.spyOn(stepEnds, "hand").mockImplementation((runtimeRunId, step) => {
+        const unhand = hand(runtimeRunId, step);
+        if (unhand === undefined) return undefined;
+        let thrown = false;
+        return () => {
+          unhand();
+          if (thrown) return;
+          thrown = true;
+          throw new Error("the step listener could not let go");
+        };
+      });
+    };
+    /** "not kept", once fieldd's log says a host's end of `h`'s runs was not kept: what a throw out of #finish reads as. */
+    const notKept = (h: Harness) =>
+      new Promise<string>((resolve) => {
+        const logger = h.runs.ports.logger;
+        if (logger === undefined) return;
+        const error = logger.error.bind(logger);
+        vi.spyOn(logger, "error").mockImplementation((...args) => {
+          error(...args);
+          if (args[0] === "fieldd.flows.run.ended") resolve("not kept");
+        });
+      });
+    const unhandWarns = (h: Harness) =>
+      h.warned.filter((said) => said.event === "fieldd.flows.step.unhand").length;
+    // the Stop's road: the end's own #letGo meets the throw
+    const h = await harness({ sessions: { "run-yours": HANDED_YOURS } });
+    h.approved("handed", handedTo());
+    letGoThrows(h);
+    const lost = notKept(h);
+    const run = startedRun(await h.start({ flow: "handed" })).run;
+    await waitFor(() => expect(h.enqueued).toHaveLength(1));
+    const stopped = await Promise.race([h.runs.stop(run).then((answer) => answer.run.state), lost]);
+    const stopLeg = {
+      stopped,
+      record: h.records.runRecord(run)?.state,
+      hands: h.hands.map((hand) => hand.gone),
+      ends: h.kinds(run).filter((kind) => kind === "end").length,
+      warned: unhandWarns(h),
+    };
+    // fieldd's own stop: close()'s #letGo meets it
+    const c = await harness({ sessions: { "run-yours": HANDED_YOURS } });
+    c.approved("handed", handedTo());
+    letGoThrows(c);
+    const left = startedRun(await c.start({ flow: "handed" })).run;
+    await waitFor(() => expect(c.enqueued).toHaveLength(1));
+    const closed = await c.runs.close().then(
+      () => "closed",
+      (error: unknown) => (error instanceof Error ? error.message : String(error)),
+    );
+    const closeLeg = {
+      closed,
+      record: c.records.runRecord(left)?.state,
+      hands: c.hands.map((hand) => hand.gone),
+      warned: unhandWarns(c),
+    };
+    expect({ stopLeg, closeLeg }).toEqual({
+      stopLeg: { stopped: "stopped", record: "stopped", hands: [true], ends: 1, warned: 1 },
+      closeLeg: { closed: "closed", record: "running", hands: [true], warned: 1 },
+    });
   });
 });
 
@@ -3576,6 +3671,38 @@ describe("CP-4a2b — a run's agents, RUN_AGENTS_MAX started, counted until its 
       release = resolve;
     });
     const h = await harness({ spawnHeld: held });
+    h.approved("review", ANSWERED);
+    const run = startedRun(await h.start({ flow: "review" })).run;
+    await waitFor(() => expect(h.spawned).toHaveLength(1));
+    const stopping = h.runs.stop(run);
+    release();
+    const stopped = (await stopping).run;
+    const record = h.records.runRecord(run);
+    expect({
+      state: stopped.state,
+      enqueued: h.enqueued.length,
+      ends: h.ends,
+      ended: record?.ended,
+      steps: record?.steps.map((step) => [step.call, step.state, step.session]),
+      open: record?.open,
+    }).toEqual({
+      state: "stopped",
+      enqueued: 0,
+      ends: ["rt-step1"],
+      ended: 1,
+      steps: [[1, "ended", undefined]],
+      open: [],
+    });
+  });
+
+  it("R42d-2 (slice 13's fold 1; the green skeptic's #2): R42d's road with a `sessions.ofRun` that has not yet listed the agent that landed past the end: the start hands that agent back to the run's orphans, so the end ends it and counts it all the same", async () => {
+    // red at the unfixed green: startStep's second gone() drops the landed agent's id, so the tail finds it only if
+    // `ofRun` lists it; here it does not, and that agent is never ended (`ends: []`) and never counted
+    let release: () => void = () => {};
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const h = await harness({ spawnHeld: held, ofRunOmits: ["rt-step1"] });
     h.approved("review", ANSWERED);
     const run = startedRun(await h.start({ flow: "review" })).run;
     await waitFor(() => expect(h.spawned).toHaveLength(1));
@@ -5329,6 +5456,40 @@ describe("CP-4a2b — the host's life: parked and woken, D2's lookup at a wake, 
       gateLeg: { stopped: "done", state: "stopped", open: 0, sibling: "ended" },
       repairLeg: { stopped: "done", state: "stopped", open: 0 },
       noRecordLeg: { acted: "done", items: true },
+    });
+  });
+
+  it("R40g-2 (slice 13's fold 1; the green skeptic's #3): past fieldd's own stop, the Stop of a forged run's `flow-lost` item (its run no record keeps) acts on nothing and is refused retryably, so the item waits for the next life", async () => {
+    // red at the unfixed green: #stopAct's no-record road reads no #closing, so on a fieldd that is stopping it
+    // withdraws the run's lines, ends its items and answers `done`
+    const h = await harness();
+    await h.runs.close();
+    const gone = "fr-0000000000000000";
+    const acted = await h.runs.acts
+      .answer({
+        id: "ny-item9aaaaaa" as NeedsItemId,
+        kind: "flow-lost",
+        run: { run: gone, flow: "review", call: 1 },
+        choice: 1,
+        stop: true,
+        act: NEEDS_CHOICE_WORDS.stopRun,
+      })
+      .then(
+        (answer): unknown => answer.outcome,
+        (error: unknown) =>
+          error instanceof RpcCallError
+            ? { kind: error.kind, retryable: error.retryable, details: error.details }
+            : String(error),
+      );
+    expect({ acted, withdrawn: h.withdrawn, items: h.itemsEnded, ends: h.ends }).toEqual({
+      acted: {
+        kind: "UNAVAILABLE",
+        retryable: true,
+        details: { service: RECORD_STORES.SERVICE_FLOWS, state: "stopping" },
+      },
+      withdrawn: [],
+      items: [],
+      ends: [],
     });
   });
 

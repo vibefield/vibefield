@@ -302,7 +302,9 @@ interface LiveRun {
    * slice 13's R42 to end in this fieldd's life (after a restart it is the person's to end).
    * *Corrected 2026-11-07 (slice 13's green; S10): "after a restart it is the person's to end" no longer holds. Its
    * origin names the run, so its run's end ends it by `sessions.ofRun`, after a restart too (#finishStop); this map is
-   * read beside that port (AA3), so an end ends it though the port's read lags.* */
+   * read beside that port (AA3), so an end ends it though the port's read lags.*
+   * *Fold 1 (2026-11-07; the green skeptic's #2): a step's agent that landed past its run's end is kept here too, from
+   * its start's refusal (`landed`, #launched), so the end's tail, which waits for that start, ends it.* */
   readonly orphans: Map<number, string>;
   /** D2 in one life: the steps whose start is in flight, by call. One made again while it starts is never started
    * twice: its start answers the call, once, when it settles (#answer) */
@@ -400,8 +402,8 @@ interface Replacing {
   readonly releases?: number | undefined;
 }
 
-/** Slice 13 (Q1, Q6) — a run whose end has begun and is not closed: a Stop's leave, D7's, or #finish's tail. A Stop
- * reads it first and waits for `done`, which #closeEnd settles (and close(), Q17 (a)). */
+/** Slice 13 (Q1, Q6) — a run whose end has begun and is not closed: a Stop's leave, D7's once a Stop waits on it, or
+ * #finish's tail. A Stop reads it first and waits for `done`, which #closeEnd settles (and close(), Q17 (a)). */
 interface Ending {
   readonly done: Promise<void>;
   readonly settle: () => void;
@@ -605,6 +607,15 @@ const hostless = (): RpcCallError =>
     state: FLOW_HOST.STATE_UNCONFIGURED,
   });
 
+/** Slice 13's fold 1 (the green skeptic's #3) — an act the runs refuse while fieldd stops (#stopAct's no-record road):
+ * UNAVAILABLE {flows, stopping}, retryable, so its item waits on for the next life. fieldd's own refusal, in the shape
+ * the stopping services refuse in (made-apps, artifacts, the mesh board); no §9 sentence names it. */
+const closingRefused = (): RpcCallError =>
+  new RpcCallError("UNAVAILABLE", "VibeField's flows are stopping", true, {
+    service: RECORD_STORES.SERVICE_FLOWS,
+    state: "stopping",
+  });
+
 /** A call no flow makes (only a host that is not VibeField's sends one), refused in replay.ts's own form (D9). */
 const noSuchCall = (what: string): string =>
   `VibeField can't send this ${oneLineWords(what, 32)}: a flow's calls are agent() and ask()`;
@@ -684,8 +695,8 @@ export class FlowRuns {
   readonly #unbegun = new Map<FlowRunId, string>();
   /** D1, CL-K-d (R29): the runs whose host waits for one of HOSTS_LIVE_MAX, in the order they asked */
   readonly #hostQueue: FlowRunId[] = [];
-  /** Slice 13 (Q1 (a)) — the runs whose end has begun and is not closed (a Stop's leave, D7's, #finish's tail), each
-   * settled by #closeEnd: a Stop reads this first, and waits */
+  /** Slice 13 (Q1 (a)) — the runs whose end has begun and is not closed (a Stop's leave, D7's, once a Stop waits on
+   * it, #finish's tail), each settled by #closeEnd: a Stop reads this first, and waits */
   readonly #ends = new Map<FlowRunId, Ending>();
 
   constructor(readonly ports: FlowRunPorts) {
@@ -760,8 +771,8 @@ export class FlowRuns {
   /** CP-4a2b slice 13 (Q1 (a); M-d's seam, `stop(run): Promise<FlowsStopResult>`) — a person's Stop of a run,
    * answered once the run's end leaves it (about 25 s at the worst, by the read: the host's grace, then the ends; K6),
    * as its record then reads. In order:
-   * 1. an end begun and not closed (`#ends`: a Stop's leave, D7's, #finish's tail) is waited for, and answered as it
-   *    leaves the run: a second Stop takes no end of its own, nor a Stop in an end's tail;
+   * 1. an end begun and not closed (`#ends`: a Stop's leave, D7's, once a Stop waits on it, #finish's tail) is waited
+   *    for, and answered as it leaves the run: a second Stop takes no end of its own, nor a Stop in an end's tail;
    * 2. a run no record keeps is NOT_FOUND, in noSuchRun's words; one that has ended, or was found never begun, is
    *    answered as it is, writing nothing (BB6: judged by #isLive, never by `record.state` alone; R44);
    * 3. N1: a LiveRun whose ending is already set (D7's set-aside, later J1's flood) writes no `stopping` and takes no
@@ -934,12 +945,16 @@ export class FlowRuns {
   /** Q4 (a) — the agents an end ends: each session the run's steps started, by its origin (`sessions.ofRun`, one
    * port with slice 14), that lives; with the agents its failed starts left (`live.orphans`, AA3), for a read that
    * lags. Never a session it was handed: its origin is not this run's (K8). Deduped: `ended` counts sessions. A read
-   * that throws is said in fieldd's log, and the end goes on (Q6). */
+   * that throws is said in fieldd's log, and the end goes on (Q6).
+   * *Fold 1 (2026-11-07; the green skeptic's #1): an orphan the same read lists as exited is gone already, so it is
+   * neither ended nor counted, as an exited `ofRun` row is not. An orphan the read omits (it lags), or every orphan when
+   * the read throws, is ended and counted as it stands: so one that exited unseen counts one too many, Q5's race.* */
   #agentsOf(run: FlowRunId, orphans: ReadonlyMap<number, string> | undefined): string[] {
     const agents = new Set<string>();
+    const exited = new Set<string>();
     try {
       for (const session of this.ports.sessions.ofRun(run))
-        if (session.live) agents.add(session.runtimeRunId);
+        (session.live ? agents : exited).add(session.runtimeRunId);
     } catch (error) {
       this.#logger.warn(
         "fieldd.flows.run.agents",
@@ -947,7 +962,7 @@ export class FlowRuns {
         { run, error: messageOf(error) },
       );
     }
-    for (const orphan of orphans?.values() ?? []) agents.add(orphan);
+    for (const orphan of orphans?.values() ?? []) if (!exited.has(orphan)) agents.add(orphan);
     return [...agents];
   }
 
@@ -978,7 +993,10 @@ export class FlowRuns {
    * - A kept `end` line: the record alone takes its state, `ended` and `host` from it (D4's reason for the record), its
    *   open steps ended as the end's write would have, and `calls` from the journal; no second `end`, nothing ended,
    *   no tell. N5: a line that names the host fieldd ended takes §9's sentence for it as `log`; leftTwice's words and
-   *   D7's, which no `end` line holds, are lost on this road.
+   *   D7's, which no `end` line holds, are lost on this road. Its items and lines are let go BEFORE the record write
+   *   (fold 1, the green skeptic's #5): a write the disk refuses is refused retryably, but leaves the record in its
+   *   state before the end with its items already ended, so only the door's Stop (or the boot) writes it, never an
+   *   item; its lines, which an ended run must never deliver, are withdrawn either way.
    * - No `end` line: `stopping`, unless the record reads it (refused as Stop's turn refuses), then #finish, its
    *   head and its answers from the journal, which ends the agents its steps started, by their origin, then #closeEnd,
    *   `calls` from its journal (Q7: this road closes ZZ3's window for each run it ends).
@@ -1009,6 +1027,7 @@ export class FlowRuns {
     const calls = read.lines.filter((line) => line.kind === "call").length;
     const kept = read.lines.find((line) => line.kind === "end");
     if (kept?.kind === "end") {
+      // before the write (the doc's kept-`end` road, fold 1's #5): a refused write leaves these items ended
       this.#letGoOf(run);
       const host = kept.host;
       const named = (FLOW_HOST_ENDINGS as readonly string[]).includes(host ?? "")
@@ -1055,13 +1074,15 @@ export class FlowRuns {
    * Slice 13 (Q17 (a)): every Stop waiting on an end is settled here, and answers the run as its record reads: a Stop
    * in its leave reads `stopping` (durable short of a power loss, item 231), which the boot finishes (D4). N2, stated:
    * a Stop that waits on ANOTHER ending's leave (N1) answers `running`, since no end is written at #closing; that run
-   * replays, and ends as its next life does. An end's tail past this leaves at its next await (#tail). */
+   * replays, and ends as its next life does. And a Stop past close() on a run whose non-Stop end is still in its tail
+   * (no `#ends` entry, no LiveRun) writes `stopping` over the record's pre-end state, so the boot then finishes it
+   * `stopped` (fold 1, the green skeptic's #9). An end's tail past this leaves at its next await (#tail). */
   async close(): Promise<void> {
     this.#closing = true;
     this.#offTurns();
     this.#listeners.clear();
-    for (const live of this.#live.values()) {
-      this.#letGo(live);
+    for (const [run, live] of this.#live) {
+      this.#letGo(run, live);
       clearTimeout(live.idle);
     }
     for (const run of [...this.#ends.keys()]) this.#endClosed(run);
@@ -1293,7 +1314,7 @@ export class FlowRuns {
       );
       const live = this.#live.get(run);
       this.#live.delete(run);
-      if (live !== undefined) this.#letGo(live);
+      if (live !== undefined) this.#letGo(run, live);
       this.#unbegin(run, begun.name);
       return undefined;
     }
@@ -1819,6 +1840,9 @@ export class FlowRuns {
       if (record === undefined) throw new Error(`no record of ${run}`);
       const started = await this.#startStep(run, live, record, number, args);
       if ("refused" in started) {
+        // fold 1 (the green skeptic's #2): an agent that landed past its run's end is kept among the run's orphans
+        // before anything else, so the end's tail, which waits for this start, ends it though `sessions.ofRun` lags
+        if (started.landed !== undefined) live.orphans.set(number, started.landed);
         if (live.waiting.has(number)) this.#answer(run, live, number, "agent", started);
         return;
       }
@@ -2051,9 +2075,22 @@ export class FlowRuns {
     this.#lagging(run, entry, args);
   }
 
-  /** Every handed session of a run let go (9b): at its end, and at fieldd's own stop. */
-  #letGo(live: LiveRun): void {
-    for (const unhand of live.hands.values()) unhand();
+  /** Every handed session of a run let go (9b): at its end, and at fieldd's own stop.
+   * *Fold 1 (2026-11-07; the green skeptic's #6): each let-go is caught and said in fieldd's log, so a throw never
+   * leaves #finish past its `#live.delete` with #closeEnd skipped (its Stop then waiting on to close()), nor close()
+   * before it has settled its Stops and stopped its hosts.* */
+  #letGo(run: FlowRunId, live: LiveRun): void {
+    for (const [call, unhand] of live.hands) {
+      try {
+        unhand();
+      } catch (error) {
+        this.#logger.warn(
+          "fieldd.flows.step.unhand",
+          "A flow step's handed session could not be let go",
+          { run, call, error: messageOf(error) },
+        );
+      }
+    }
     live.hands.clear();
   }
 
@@ -2124,10 +2161,14 @@ export class FlowRuns {
   /** Slice 13 (Q9) — Stop the run, through any of its items: the run's Stop, awaited, answered `done`; a retryable
    * refusal (its `stopping` refused) is thrown, so the item waits on (queue.ts:868). A run no record keeps (a forged
    * run's item, whose one act is Stop, s14 Q12) is `done` too, never noSuchRun: its items ended, and the agents its
-   * steps started, by their origin, ended. Re-entrance, read and safe: the Stop's turn ends this item while the queue
-   * answers it, and the queue's own answer then stands over it (#stand), its siblings `ended`. */
+   * steps started, by their origin, ended; past fieldd's own stop it acts on nothing and is refused retryably
+   * (closingRefused, fold 1). Re-entrance, read and safe: the Stop's turn ends this item while the queue answers it, and
+   * the queue's own answer then stands over it (#stand), its siblings `ended`. */
   async #stopAct(run: FlowRunId): Promise<FlowItemActed> {
     if (this.ports.records.runRecord(run) === undefined) {
+      // fold 1 (the green skeptic's #3): past fieldd's own stop it acts on nothing, as stop() does past close() (Q17
+      // (a)), and is refused retryably, so the item waits on for the next life, as a refused `stopping` does
+      if (this.#closing) throw closingRefused();
       this.#letGoOf(run);
       await this.#endAgents(run, this.#agentsOf(run, undefined));
       return { outcome: "done" };
@@ -2307,7 +2348,8 @@ export class FlowRuns {
     // D7: a run set aside at D1's park ends when its host has left, lost, in its words. Slice 13 (Q18 (a)): so does
     // any ending fieldd set (a Stop's, later J1's flood), read FIRST, over whatever end the script chose meanwhile:
     // the supervisor chooses once (supervisor.ts:574), so a `done`, `threw` or `ended` chosen in the instant before
-    // reads as that ending. The host leaves under its grace for `done` and `threw`, and at once for a kill
+    // reads as that ending. The host leaves under its grace for `done`, `threw`, `fatal` and `memory`, and at once
+    // for the kills, `protocol`, `flood` and `unanswered` (K17; fold 1, the green skeptic's #7)
     if (live?.ending !== undefined) {
       this.#finish(run, live.ending);
       return;
@@ -2401,7 +2443,7 @@ export class FlowRuns {
     const live = this.#live.get(run);
     this.#live.delete(run);
     if (live !== undefined) {
-      this.#letGo(live);
+      this.#letGo(run, live);
       clearTimeout(live.idle);
       live.holds.clear();
     }
