@@ -40,7 +40,8 @@ import { RpcCallError } from "../native-link";
 //    it and omits the pull HOLDS it (`#hold`, race#0 (b), VF-PM 2026-11-06): the stream is subscribed once more, and
 //    that snapshot, built after the answer, judges the pull; with none, it ends FAILED_TIMEOUT at W3-4's idle bound.
 //    While no stream stands, nothing carries a pull's end, so EVERY accepted pull is held the same way, and the
-//    plain subscribe is retried inside that bound (W3-21, VF-PM 2026-11-06).
+//    plain subscribe is retried while one is (W3-21, VF-PM 2026-11-06); a reconnect, whose replay NativeLink may have
+//    been refused, holds every accepted pull and asks the stream once more.
 //    Only names matching that rule are read; a `*.truffle-tmp` beside them is the floor's.
 //  - `file-transfer-unsupported` is a fact of the floor's boot (mgmt.ts `MESH_FILE_TRANSFER`): cached for that boot,
 //    asked again at a reconnect, as `FloorEgress` keeps `egress-unsupported` (egress.ts:143-158).
@@ -137,7 +138,8 @@ export interface DrivePullsOptions {
    * test shortens it. */
   heldBoundMs?: number;
   /** The plain subscribe's retries while no stream stands and a pull is held (`DrivePulls.#follow`), in ms, each
-   * counted from the refusal before it. Default: `retryDelays(heldBoundMs)`. A test shortens them. */
+   * counted from the refusal before it, the last repeated while a pull is held. Default: `retryDelays(heldBoundMs)`.
+   * A test shortens them. */
   retryDelaysMs?: readonly number[];
   logger?: Logger;
 }
@@ -194,10 +196,15 @@ const HELD_PULL_BOUND_MS = 60_000;
 
 /** The plain subscribe's retries while no stream stands and a pull is held (`DrivePulls.#follow`, W3-21, VF-PM
  * 2026-11-06), each counted from the refusal before it: 1/30, 1/15 and 2/15 of the held bound, so 2 s, 4 s and 8 s
- * at 60 s. A series is the attempt that opens it and these three. Each attempt waits at most fieldd's request
- * deadline (native-link.ts:1212-1213, NATIVE_SUPERVISION.REQUEST_DEADLINE_MS, 10 s, contracts mgmt.ts:355), so a
- * series' last attempt leaves at most 14 s + 3 × 10 s = 44 s after its first and is answered, or read TIMEOUT, by
- * 54 s: inside the bound of a pull held as the series opened. */
+ * at 60 s, then the last again while any pull is held. The holds bound the series, never a count: a refusal comes at
+ * once (the floor's full mesh queue, field-native `mgmt/mod.rs:139-141`) or at fieldd's request deadline
+ * (native-link.ts:1212-1213, NATIVE_SUPERVISION.REQUEST_DEADLINE_MS, 10 s, contracts mgmt.ts:355), and either way
+ * the series asks until the last held pull ends, at its bound or by the snapshot an attempt brings. Every pull a
+ * series serves was held by the time it opened (a later hold opens a series of its own, `#follow`), so it ends
+ * within one bound of its opener, and the n-th retry leaves at least the first n delays after it: at most 9
+ * attempts inside a 60 s bound (at 0 s, then at 2, 6, 14, 22, 30, 38, 46 and 54 s at the earliest), one in flight
+ * at a time. An attempt answered after a pull's bound settles nothing of that pull, and forgets its row if it
+ * ended (`#hold`). */
 function retryDelays(boundMs: number): number[] {
   return [boundMs / 30, boundMs / 15, (boundMs * 2) / 15];
 }
@@ -379,10 +386,18 @@ export class DrivePulls {
   }
 
   /** The mgmt link reconnected (NativeLink's "connected"): the floor may be a new boot, so its unsupported answer is
-   * asked again. NativeLink has replayed the stream itself (native-link.ts:1105-1128), and the roots are declared
-   * again: facade state is rebuilt, never persisted. */
+   * asked again, and the roots are declared again: facade state is rebuilt, never persisted. NativeLink says so once
+   * its replay of the stream has run (native-link.ts:494-501), answered or refused: a refused replay keeps the entry
+   * `#subscription` names, silent until the next reconnect (:1112-1126), and this side is not told which. So every
+   * accepted pull is held (`#holdAll`, W3-21's form) and the stream is asked once more (`#arm`): an answered replay's
+   * snapshot, queued before this, releases what it lists, and the new subscribe's, built after every held pull's
+   * answer, judges them all; refused, each ends at its bound, or the plain subscribe's series follows one the floor
+   * may have run (`#doSubscribe`). A replay the floor ran and fieldd read TIMEOUT leaves the floor a stream no entry
+   * routes, which the new subscribe replaces (W3-20). It costs one subscribe per reconnect while a pull is
+   * accepted. */
   async connected(): Promise<void> {
     this.#unsupportedBoot = null;
+    this.#holdAll();
     await this.#arm();
   }
 
@@ -428,7 +443,9 @@ export class DrivePulls {
       );
     }
     const params = asked.data;
-    if (this.#running.has(params.digest)) {
+    const blocker = this.#running.get(params.digest);
+    if (blocker !== undefined) {
+      if (this.#foreign.has(blocker)) this.#askForForeign();
       throw new RpcCallError(
         "CONFLICT",
         "a pull of this digest is running",
@@ -438,6 +455,7 @@ export class DrivePulls {
       );
     }
     if (this.#running.size >= DRIVE_LIMITS.PULLS_IN_FLIGHT) {
+      if (this.#foreign.size > 0) this.#askForForeign();
       // its golden, `error-data.file-transfer-exhausted.json` (W3-15, VF-PM 2026-11-06): retryable true and no
       // details, because a pull may be asked again once a running one ends; drive-pulls.test.ts holds this to it
       throw new RpcCallError(
@@ -591,8 +609,8 @@ export class DrivePulls {
   /** EVERY held pull, each marked asked: the subscribe being made serves them all. Every one was held after its
    * answer was read (`#hold` needs its fence, `#accept`), and the subscribe request leaves after this returns
    * (NativeLink writes it in the same synchronous run, native-link.ts:1274-1284, `rawRequest`'s write at :1269), so
-   * the floor's one FIFO mesh worker (field-native `mgmt/mod.rs:703-704`) builds that snapshot after each pull's row
-   * went in. */
+   * the floor builds that snapshot after each pull's row went in: every `native.mesh.*` enters one queue
+   * (field-native `mgmt/mod.rs:703-704`), which one worker drains in order, a request at a time (:227-258). */
   #serve(): ReadonlySet<OwnPull> {
     const serves = new Set<OwnPull>();
     for (const own of this.#own.values()) {
@@ -615,8 +633,8 @@ export class DrivePulls {
     return false;
   }
 
-  /** W3-21 (VF-PM 2026-11-06): the stream is gone, so every accepted pull is held (`#hold`); one held already keeps
-   * its bound. */
+  /** W3-21 (VF-PM 2026-11-06): the stream is gone, or a reconnect may have lost it (`connected`), so every accepted
+   * pull is held (`#hold`); one held already keeps its bound. */
   #holdAll(): void {
     for (const own of this.#own.values()) if (own.fence !== null) this.#hold(own);
   }
@@ -626,11 +644,15 @@ export class DrivePulls {
    * that subscribe's end asks again.
    *  - A stream stands: ONE re-subscribe for every hold no subscribe has left for (race#0 (b)).
    *  - None stands (W3-21, VF-PM 2026-11-06): a hold no subscribe has left for opens a series at once. Otherwise the
-   *    plain subscribe is retried `#retryDelaysMs[n]` after the series' n-th refusal; a spent series asks nothing
-   *    more, and each held pull ends at its bound (`#hold`). With no pull held nothing is asked: the next node-up or
-   *    reconnect (`#arm`), or the next pull accepted (`#accept`), asks again.
-   * So a series is at most 1 + `#retryDelaysMs.length` attempts, and opens only at a hold (the stream going,
-   * `#doSubscribe`; a pull accepted with none, `#accept`; one held while a subscribe was in flight) or a re-arm. */
+   *    plain subscribe is retried `#retryDelaysMs[n]` after the series' n-th refusal, and past the list after its
+   *    last delay, while any pull is held; each held pull ends at its bound (`#hold`) or by the snapshot an attempt
+   *    brings. With no pull held nothing is asked, and the bound that ends the last hold clears the timer: the next
+   *    node-up or reconnect (`#arm`), the next pull accepted (`#accept`), or a pull a foreign row refuses
+   *    (`#askForForeign`), asks again.
+   * So one attempt is in flight at most and one timer is set at most, and a series opens only at a hold (the stream
+   * going, `#doSubscribe`; a pull accepted with none, `#accept`; one held while a subscribe was in flight; every
+   * accepted pull at a reconnect, `connected`) or a re-arm, and ends within one bound of its opener
+   * (`retryDelays`). */
   #follow(): void {
     if (this.#stopped || this.unsupported() || this.#subscribing !== null) return;
     if (this.#subscription !== null) {
@@ -648,7 +670,8 @@ export class DrivePulls {
       return;
     }
     if (this.#retry !== null) return;
-    const delay = this.#retryDelaysMs[this.#retries];
+    // past the list, its last delay again: the holds bound the series, never a count (`retryDelays`)
+    const delay = this.#retryDelaysMs[this.#retries] ?? this.#retryDelaysMs.at(-1);
     if (delay === undefined) return;
     this.#retries += 1;
     const timer = setTimeout(() => {
@@ -663,6 +686,17 @@ export class DrivePulls {
     if (this.#retry === null) return;
     clearTimeout(this.#retry);
     this.#retry = null;
+  }
+
+  /** A pull refused here (CONFLICT, RESOURCE_EXHAUSTED) by a row this side does not track (`#foreign`) while no
+   * stream stands asks for the stream once. Nothing else would: a held bound that ends a pull with no stream leaves
+   * its row foreign (`#hold`), only a snapshot that omits the row or its `failed` forgets it (`#onSnapshot`,
+   * `#onDelta`), and the series asks only while a pull is held (`#follow`). The ask shares one in flight
+   * (`#subscribe`), holds nothing, so a refused one opens no series, and its snapshot forgets every such row whose
+   * pull has ended (the floor ends one no byte reaches at its idle bound, W3-4). Over a standing stream it asks
+   * nothing: `#doSubscribe` makes none there unless a hold is owed one. */
+  #askForForeign(): void {
+    if (this.#subscription === null) void this.#subscribe();
   }
 
   async #declare(): Promise<readonly DriveRootState[]> {
@@ -763,11 +797,14 @@ export class DrivePulls {
    *  - null (a subscribe refused at `start`, at a node-up or reconnect, or the plain one after a refused
    *    re-subscribe, `#doSubscribe`): nothing carries an end, so EVERY accepted pull is held, here as it is
    *    accepted and by `#holdAll` as the stream goes, and a hold is released only while a stream stands
-   *    (`#onSnapshot`). The plain subscribe is retried inside the bound (`#follow`), and its snapshot, built after
-   *    every held pull's answer, judges them all; with none, each ends FAILED_TIMEOUT at its bound.
-   * One silence lies outside `#subscription`'s states, and this side is not told of it: a replay NativeLink was
-   * refused (native-link.ts:1112-1126) keeps the entry `#subscription` names and leaves its stream silent until the
-   * next reconnect, so a pull not held then waits for that reconnect. */
+   *    (`#onSnapshot`). The plain subscribe is retried while any pull is held (`#follow`), and its snapshot, built
+   *    after every held pull's answer, judges them all; with none, each ends FAILED_TIMEOUT at its bound.
+   * Two silences lie outside those states, and this side is told of neither. While NativeLink is disconnected,
+   * `#subscription` stays set and its entry hears nothing (a close or a redial clears the routes,
+   * native-link.ts:982-983, :1040-1041), so a pull not held waits for the redial; and a replay NativeLink was
+   * refused keeps that entry silent until the next reconnect (:1112-1126). NativeLink says "connected" once the
+   * replay has run, answered or refused (:494-501), and `connected` then holds every accepted pull and asks the
+   * stream once more: the first silence ends at the redial, and the second is closed as it begins. */
   #accept(own: OwnPull): void {
     this.#fencesSet += 1;
     own.fence = this.#fencesSet;
@@ -938,9 +975,13 @@ export class DrivePulls {
    * the old stream had not forwarded when it went quiet (W3-20) are lost with it, and the new snapshot omits the
    * pull, which the lands rule reads FAILED_IO. An end the new stream forwards after its snapshot keeps its word
    * (`#onSnapshot`'s `endsLater`).
-   * W3-21 (VF-PM 2026-11-06) holds EVERY accepted pull the same way while no stream stands (`#accept`, `#holdAll`),
-   * with the same bound; there the plain subscribe is retried for them (`#follow`). Only a pull this side tracks is
-   * held, so a hold never outlives its pull's settle; a new hold has had no subscribe yet (`asked`). */
+   * W3-21 (VF-PM 2026-11-06) holds EVERY accepted pull the same way while no stream stands (`#accept`, `#holdAll`)
+   * and at a reconnect (`connected`), with the same bound; with no stream the plain subscribe is retried for them
+   * (`#follow`). An end the floor sends while no stream stands (a `failed` NODE_DOWN at a teardown, W3-2, or any
+   * other word) is lost with its word: the retry's snapshot omits the pull, and the lands rule settles it. A bound
+   * that ends a pull with no stream leaves its row with nothing to clear it, so a pull that row refuses asks for the
+   * stream (`#askForForeign`). Only a pull this side tracks is held, so a hold never outlives its pull's settle; a
+   * new hold has had no subscribe yet (`asked`). */
   #hold(own: OwnPull): void {
     if (own.held !== null || this.#own.get(own.transferId) !== own) return;
     const timer = setTimeout(() => {
@@ -948,6 +989,8 @@ export class DrivePulls {
       this.#untrack(own);
       this.#foreign.set(own.transferId, own.digest);
       this.#running.set(own.digest, own.transferId);
+      // the series asks only while a pull is held (`#follow`): the last hold's end clears its timer
+      if (!this.#holding()) this.#clearRetry();
       const word = MESH_FILE_TRANSFER.FAILED_TIMEOUT;
       const message = "no snapshot built after the pull's answer came within the bound";
       own.reject(new DrivePullFailed(word, message, own.transferId));
