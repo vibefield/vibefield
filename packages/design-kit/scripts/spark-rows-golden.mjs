@@ -119,7 +119,8 @@ export function mulberry32(seed) {
 }
 
 /** The engine in a realm of its own, as the window loads it: one IIFE that sets `window.Sparklings`. Its realm's
- * `Math.random` is the case's dealer. */
+ * `Math.random` is the case's dealer: `deal` deals a fresh one, and `handRandom` hands it one that is already dealing
+ * (IOS-12f: the hatch's two faces, each with its own, as the phone's are). */
 export function loadEngine() {
   const context = vm.createContext({ window: {} });
   vm.runInContext(readFileSync(ENGINE, "utf8"), context, { filename: ENGINE });
@@ -128,6 +129,9 @@ export function loadEngine() {
     engine: context.window.Sparklings,
     deal(seed) {
       realmMath.random = mulberry32(seed);
+    },
+    handRandom(random) {
+      realmMath.random = random;
     },
   };
 }

@@ -127,6 +127,9 @@ const OTHER_ORIGINS = new Map([
     "spark-stills.manifest.json",
     join(root, "packages/design-kit/fixtures/spark-stills.manifest.json"),
   ],
+  // IOS-12f (f5) — the hatch's rows (spark-hatch-golden.mjs): New spark's sky as the star engine lays it out, and
+  // the face born where its star lands, which the phone's StarSpark and SparkBuddy are held to
+  ["spark-hatch.golden.json", join(root, "packages/design-kit/fixtures/spark-hatch.golden.json")],
   [
     "phone-fold.golden.json",
     join(root, "packages/field-app/test/fixtures/phone-godview/phone-fold.golden.json"),
@@ -385,6 +388,7 @@ const requiredMirrors = [
       "spark-flat-star.golden.json",
       "spark-rows.golden.json",
       "spark-stills.manifest.json",
+      "spark-hatch.golden.json",
     ],
     ["Tests/FieldDesignTests"],
   ],
