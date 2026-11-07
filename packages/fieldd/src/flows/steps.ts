@@ -136,6 +136,11 @@ export interface FlowStepRun {
   /** the spark whose thinksUnder a step that names no Agent Profile takes (A2): the one whose own start the run is, or
    * whose thread it was started from (F8, Q3); none for yours. That default is its one reader: `ran` names a starter */
   readonly spark?: string | undefined;
+  /** CP-4a2b slice 13 (Q8 (a)) — whether the run has ended, or its ending is set (a Stop, D7's set-aside, J1's flood),
+   * read after each await of a start, before the reservation and before `sent`: a start in flight at an end then
+   * starts nothing more, and is answered "‹label› failed.", which nothing hears. An agent its spawn started past it
+   * keeps its count (it did start), and the end finds it by its origin and ends it. Slice 14's `boundStep` reads it too */
+  gone(): boolean;
 }
 
 /** The run's record of its open step `call`, written through the runs (the one writer of a run's record). `run`
@@ -353,6 +358,8 @@ export async function startStep(
   }
   if (model !== undefined) {
     const models = await ports.agents.models(agent, { cwd, profileSet });
+    // slice 13 (Q8 (a)): a run that ended while its models were read reserves nothing
+    if (run.gone()) return { ok: false, refused: stepFailed(label) };
     if (models === undefined || !models.includes(model))
       return didntStart(
         label,
@@ -396,6 +403,9 @@ export async function startStep(
     const why = oneLineWords(error instanceof Error ? error.message : String(error), FLOW_LOG_MAX);
     return { ok: false, refused: `VibeField couldn't start ${labelWords(label)}: ${why}` };
   }
+  // slice 13 (Q8 (a)): an agent that lands past its run's end is queued nothing and its session never written; it
+  // keeps its count, and the end, which waited for this start, finds it by its origin and ends it
+  if (run.gone()) return { ok: false, refused: stepFailed(label) };
   try {
     return { ...sent(ports, write, call, runtimeRunId, "prompt", prompt, from), form };
   } catch (error) {

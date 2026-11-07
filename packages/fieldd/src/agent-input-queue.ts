@@ -126,6 +126,10 @@ export class AgentInputQueues {
   readonly #queues = new Map<string, QueuedInput[]>();
   /** runs with a delivery in flight */
   readonly #busy = new Set<string>();
+  /** CP-4a2b slice 13 (F7; Q10) — the heads in flight when their flow run's lines were withdrawn, by input id: a
+   * receipt that rejects one drops it, never puts it back to be delivered after the run's end; every receipt clears
+   * its id */
+  readonly #withdrawnInFlight = new Set<string>();
   /** heads whose stamp the disk did not take, said once each */
   readonly #unstamped = new Set<string>();
   readonly #logger: Logger;
@@ -297,8 +301,18 @@ export class AgentInputQueues {
     }
     // the run ended meanwhile (D2): forget left this head to its receipt, and keeps nothing
     const forgotten = this.#queues.get(runtimeRunId) !== queue;
+    // F7: a flow run's head withdrawn while it was in flight is its receipt's; that receipt is its last word
+    const withdrawn = this.#withdrawnInFlight.delete(head.id);
     if (receipt.status === "rejected") {
       if (forgotten) {
+        this.opts.onOutcome?.(runtimeRunId, head, "dropped", receipt.reason);
+        return;
+      }
+      if (withdrawn) {
+        // F7: its run has ended, so it leaves the queue, dropped, never put back; what leads now waits for the next
+        // poke, as behind any rejected receipt
+        queue.shift();
+        this.#keep(runtimeRunId);
         this.opts.onOutcome?.(runtimeRunId, head, "dropped", receipt.reason);
         return;
       }
@@ -336,10 +350,16 @@ export class AgentInputQueues {
    * steps (`fieldd` with `flow` naming the run). Nothing is told, since the run is their sender. A stamped line is never
    * withdrawn: in flight it is its receipt's (D2), and one a restart broke into is said uncertain at its run's first
    * poke (item 158). Each queue is changed in place, so a delivery in flight settles its own head once, and kept; a
-   * session that is idle moves on to its new head. Returns what was withdrawn, by session, oldest first. */
+   * session that is idle moves on to its new head. Returns what was withdrawn, by session, oldest first.
+   * *Corrected 2026-11-07 (slice 13's green; Q10, F7): not a Stop's alone. The runs withdraw at EVERY end of a run
+   * (9b F6), and earlier in a Stop's turn. A head of the run's in flight then stays its receipt's, and is marked: a
+   * receipt that rejects it drops it (`dropped`), never puts it back to be delivered after the end (F7).* */
   withdraw(run: string): { readonly runtimeRunId: string; readonly input: QueuedInput }[] {
     const withdrawn: { runtimeRunId: string; input: QueuedInput }[] = [];
     for (const [runtimeRunId, queue] of this.#queues) {
+      const head = queue[0];
+      if (head?.sending !== undefined && this.#busy.has(runtimeRunId) && isRunsLine(head, run))
+        this.#withdrawnInFlight.add(head.id);
       let stays = 0;
       for (const input of queue) {
         if (input.sending === undefined && isRunsLine(input, run))

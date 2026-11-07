@@ -154,6 +154,6 @@ export const factSetAside = (spark: string, flow: string, run: string): string =
   `${sparksRun(spark, flow, run)} was set aside`;
 
 /** CP-4a2b slice 13 (Q15; W1, §9's Proposed line of 2026-11-07, ruled 2026-11-07) — a run a spark started that a Stop
- * ended `stopped`. *Red-b's stub: declared in §9's words and called by nothing; END_FACTS names it at the green.* */
+ * ended `stopped` (END_FACTS' `stopped`). Who stopped it is not said: the record keeps no stopper (CP-4b's). */
 export const factStopped = (spark: string, flow: string, run: string): string =>
   `${sparksRun(spark, flow, run)} was stopped`;

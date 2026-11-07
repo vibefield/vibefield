@@ -6360,6 +6360,9 @@ describe("CP-4a2b — the host's life: parked and woken, D2's lookup at a wake, 
     // (HOST_CALLS_WAITING_MAX) lowered by one, so the write at 256 throws and `full` reads empty. It reds in about the
     // green's time, not WAIT_MS (measured 2026-11-07: 2,244 ms, the green 2,191 ms): the run still ends `flood`, and
     // the record's `calls` stays 255, ZZ3's window on an ended run
+    // *Corrected 2026-11-07 (slice 13's green; N7, K11): "#finish keeps `open`, ZZ2's phantom, slice 13's" no longer
+    // holds. Every end now moves its open steps to `ended` in its own write (Q7), so `lost` below reads an empty `open`
+    // and pins nothing; `full` keeps this row's pin, and R42's flood class asserts the open steps read `ended`.*
     const write = h.records.writeRunRecord.bind(h.records);
     const full: { open: number; lost: number; widths: string[] }[] = [];
     vi.spyOn(h.records, "writeRunRecord").mockImplementation((at, fields) => {

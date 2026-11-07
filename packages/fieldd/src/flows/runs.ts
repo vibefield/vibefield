@@ -1,9 +1,11 @@
 import { randomBytes } from "node:crypto";
 import {
   FLOW_HOST,
+  FLOW_HOST_ENDINGS,
   FLOW_LIMITS,
   FLOW_LOG_MAX,
   FLOW_RUN_STEPS_MAX,
+  type FlowHostEnding,
   type FlowInput,
   type FlowJournalHead,
   type FlowRunId,
@@ -133,8 +135,15 @@ import * as words from "./words";
 //   tells nothing, nor your answer to it), and when it ends, once its `end` line is kept: done, failed or set aside.
 //   A fact is built from the spark's name, ‹flow› and the run's id alone. A spark `sparkOf` no longer finds is told
 //   nothing, and a Run you start in a spark's thread is yours, and tells it nothing (T3b).
-// Built later in M-r2: Stop (13) and boot (14): its wake, a session read by its origin once the runtime
-// has re-attached, and a step lost to a Quit (`flow-lost`, Resume the step).
+// - Stop and the end (slice 13; D4, D19): a person's Stop (`stop`, on any of a run's items too) writes `stopping`
+//   first, withdraws the run's lines, ends its items and pauses a handed turn its own line began, then ends its host;
+//   and EVERY end of a run, in D4's order (#finish), ends the agents its steps started, by their origin
+//   (`sessions.ofRun`) and its orphans, never a session it was handed, then journals one `end` with `ended` and moves
+//   its open steps to `ended` (#closeEnd), its items ended and its lines withdrawn. One ending at a time (`live.ending`,
+//   set by #endWith alone): the first set stands. A run this fieldd no longer drives is finished by its Stop, from its
+//   journal (#finishStop).
+// Built later in M-r2: boot (14): its wake, a session read by its origin once the runtime has re-attached, and a step
+// lost to a Quit (`flow-lost`, Resume the step).
 
 /** A spark as a run's start reads it at its act (G2): its name, and its Agent Profiles now. */
 export interface FlowRunSpark {
@@ -153,7 +162,7 @@ export interface FlowRunSession {
 /** fieldd's own interface to the runs (R32): what daemon.ts builds them from. Slice 7's part. Slice 13's six ports
  * (`needs.onFlowRunEnded`, `inputs.withdraw`, `agents.end`, `agents.pause`, `sessions.ofRun`, `began`) are
  * intersected here, as `stepEnds` is (N9), so FlowStepPorts does not widen for ports only the runs call; slice 15
- * binds them. *Red-a (slice 13): declared, with no caller yet.* */
+ * binds them. Each is called at a run's end or its Stop, each call caught and logged, so no port refuses an end (Q6). */
 export interface FlowRunPorts {
   /** the person's library: a run's flow is read here against its approval */
   readonly library: Pick<FlowLibrary, "read">;
@@ -177,7 +186,10 @@ export interface FlowRunPorts {
   /** the runtime's spawn, for a step's agent (slice 8; steps.ts `startStep` is its one road) */
   readonly agents: FlowStepPorts["agents"] & {
     /** slice 13 (Q5 (b)): a session the run started, ended: `endRun` as built, so a resolve is "taken, or already
-     * gone" and counts, and a rejection is "could not ask" and does not */
+     * gone" and counts, and a rejection is "could not ask" and does not. Its costs, stated (ruled
+     * 2026-11-07, §H 2): an agent that exits in the instant of its end counts one too many, a race (`ofRun` reads
+     * `live` first); and `endRun` reads the runtime's `managed` sessions alone (agent-runtime.ts:2179–2180), so a
+     * resolve counts `ended` over a `pending` session that still works. Slice 14 carries that leg (K9) */
     end(runtimeRunId: string): Promise<void>;
     /** slice 13 (Q11 (a′), D19): a handed session's working turn the run began, paused at Stop alone:
      * AgentRuntimeService.pause, NEVER `interrupt`, which escalates to an end (ruled 2026-11-07) */
@@ -253,9 +265,12 @@ export interface FlowRunView {
   readonly scope: readonly string[];
 }
 
+/** The states a run ends in (ENDED_STATES' four): every one a word a spark is told (END_FACTS). */
+type EndState = Extract<FlowRunState, "done" | "stopped" | "failed" | "lost">;
+
 /** A run's end as its journal's `end` line and its record say it. */
 interface RunEnd {
-  readonly state: FlowRunState;
+  readonly state: EndState;
   readonly threw?: string;
   readonly host?: string;
   /** fieldd's own words for the end, on its record in place of the run's latest log line (a host that left twice) */
@@ -284,11 +299,17 @@ interface LiveRun {
   /** each open step's handed session, by its call: how to let the step listener go (9b) */
   readonly hands: Map<number, () => void>;
   /** 1c review Y1 — each step's agent left running when its line was never queued, by its call: its session, for
-   * slice 13's R42 to end in this fieldd's life (after a restart it is the person's to end) */
+   * slice 13's R42 to end in this fieldd's life (after a restart it is the person's to end).
+   * *Corrected 2026-11-07 (slice 13's green; S10): "after a restart it is the person's to end" no longer holds. Its
+   * origin names the run, so its run's end ends it by `sessions.ofRun`, after a restart too (#finishStop); this map is
+   * read beside that port (AA3), so an end ends it though the port's read lags.* */
   readonly orphans: Map<number, string>;
   /** D2 in one life: the steps whose start is in flight, by call. One made again while it starts is never started
    * twice: its start answers the call, once, when it settles (#answer) */
   readonly starting: Set<number>;
+  /** slice 13 (Q8 (a)) — each start in flight, while it settles: an end waits for them before it reads the agents
+   * its steps started, so one that lands past the end is found and ended (#finish's tail) */
+  readonly starts: Set<Promise<void>>;
   /** D1: the host's calls out, made and not yet answered (each host its own count) */
   calls?: HostCalls | undefined;
   /** D1: the timer that parks a host with a call out and no frame for HOST_IDLE_MS; losing it loses nothing */
@@ -306,8 +327,11 @@ interface LiveRun {
   /** D22 — the host generation's replay, current while its host is up: the runs hand an answer to it, read at the
    * hand-on; none while the run is parked or waits for a host */
   replay?: FlowReplay | undefined;
-  /** D7 — the words its run is set aside in, while its host, stopped at D1's park, leaves */
-  aside?: string | undefined;
+  /** D7, slice 13 (Q2 (a), N3) — the end fieldd chose for its run while its host leaves: D7's set-aside (`lost`, in
+   * its words) or a person's Stop (`stopped`), later J1's flood. Set by #endWith alone, which keeps one already set,
+   * so the first set stands (N1); the host's end then ends the run as it says, whatever end its script chose
+   * (#hostEnded reads it first, Q18 (a)), and nothing is journaled, answered or parked in that leave */
+  ending?: RunEnd | undefined;
   /** Q3 (a), VV1 — every hold of the run, of any kind, by the call it holds at, in raise order (a hold raised again
    * keeps its place): the run's `held` is the first still open, projected by the one writer (#replace) */
   readonly holds: Map<number, Hold>;
@@ -363,13 +387,53 @@ interface Raising {
  * disk (`refused`); or nothing, for a run no longer driven or set aside (`undriven`). */
 type Wrote = "kept" | "had" | "refused" | "undriven";
 
-/** What a run's record write reads beside its `whole` (#replace): the LiveRun whose answers it settles and whose holds
- * it projects, the driven run's when none is named (#finish names the one it no longer drives); and the call whose
- * hold this write releases (#releasing, Q3 (d)). */
+/** Slice 13 (Q7) — what a record write settles and projects (#replace): the calls the journal answers, the agents
+ * failed starts left (Y1), and the holds. A LiveRun's, or, for a run no LiveRun drives, one built from its journal
+ * (#finishStop: its answers, no orphan and no hold). */
+type Settles = Pick<LiveRun, "answered" | "orphans" | "holds">;
+
+/** What a run's record write reads beside its `whole` (#replace): what it settles and projects, the driven run's
+ * LiveRun when none is named (#finish names the one it no longer drives, #finishStop its journal's); and the call
+ * whose hold this write releases (#releasing, Q3 (d)). */
 interface Replacing {
-  readonly live?: LiveRun | undefined;
+  readonly live?: Settles | undefined;
   readonly releases?: number | undefined;
 }
+
+/** Slice 13 (Q1, Q6) — a run whose end has begun and is not closed: a Stop's leave, D7's, or #finish's tail. A Stop
+ * reads it first and waits for `done`, which #closeEnd settles (and close(), Q17 (a)). */
+interface Ending {
+  readonly done: Promise<void>;
+  readonly settle: () => void;
+}
+
+/** Slice 13 — a run's end as #closeEnd writes it: the end, the run's head (who is told), what its write settles and
+ * projects, its log, and (#finishStop's) `calls` from its journal. */
+interface Closing {
+  readonly run: FlowRunId;
+  readonly end: RunEnd;
+  readonly head: RunHead | undefined;
+  readonly settles: Settles | undefined;
+  readonly log: string | undefined;
+  readonly calls?: number | undefined;
+}
+
+/** Slice 13 (Q12 (b)) — what #finishStop hands #finish for a run no LiveRun drives: the head and the answers its
+ * journal holds, and the call lines it counts. */
+interface Unlived {
+  readonly head: RunHead;
+  readonly settles: Settles;
+  readonly calls: number;
+}
+
+/** A port's call as a promise, its throw a rejection, so an end awaits it whole and nothing refuses that end (Q6). */
+const asked = <T>(call: () => Promise<T>): Promise<T> => {
+  try {
+    return call();
+  } catch (error) {
+    return Promise.reject(error);
+  }
+};
 
 /** An answer's settle on its record (D18): `failed` for a refusal, `cut` for a text cut to fit. */
 interface Answered {
@@ -404,15 +468,45 @@ function settleStep(
     state: answered.failed ? "failed" : "answered",
     ...(answered.cut ? { cut: true as const } : {}),
   };
-  const steps = [...start.steps, settled];
+  return movedOut(start, [settled]);
+}
+
+/** Open steps moved to `steps` (D18), as they now read: the latest FLOW_RUN_STEPS_MAX shown, `earlier` counting the
+ * rest. settleStep's fold and endSteps' one. */
+function movedOut(start: FlowRunStart, moved: readonly FlowRunRecordStep[]): FlowRunStart {
+  const calls = new Set(moved.map((step) => step.call));
+  const steps = [...start.steps, ...moved];
   const shown = steps.slice(-FLOW_RUN_STEPS_MAX);
   const earlier = (start.earlier ?? 0) + steps.length - shown.length;
   return {
     ...start,
-    open: start.open.filter((open) => open.call !== call),
+    open: start.open.filter((open) => !calls.has(open.call)),
     steps: shown,
     ...(earlier > 0 ? { earlier } : {}),
   };
+}
+
+/** Slice 13 (Q7, ZZ2 (i)) — a run's open steps at its end, in the end's own write: each moved to `steps`, `ended`
+ * (a step with no agent, or handed a session, counts none in `ended`, which counts sessions), but two. A step its
+ * journal answers (`answered`) is skipped, so the write's settle reads it answered, never ended (XX4: #replace settles
+ * after `whole`); and one whose agent's end the floor refused (`refused`, by its session) stays open in its true state,
+ * uncounted (Q5 (b), the review's reading: the interim `working` is the honest one). */
+function endSteps(
+  start: FlowRunStart,
+  answered: ReadonlyMap<number, Answered> | undefined,
+  refused: ReadonlySet<string>,
+): FlowRunStart {
+  const ending = start.open.filter(
+    (step) =>
+      answered?.has(step.call) !== true &&
+      (step.session === undefined || !refused.has(step.session)),
+  );
+  return ending.length === 0
+    ? start
+    : movedOut(
+        start,
+        ending.map((step) => ({ ...step, state: "ended" })),
+      );
 }
 
 /** A host's calls out (D1's wait is at least one, and no frame but pongs). */
@@ -469,7 +563,7 @@ const codeOf = (error: unknown): string | undefined => {
 /** Q3 (c), VV1, EE3 — a write's `held`, projected from its run's holds: the first, in raise order, whose call the
  * journal has not answered and that this write does not release (`releases`); none when there is none. Written by
  * the one writer (#replace) alone. */
-function withHeld(start: FlowRunStart, live: LiveRun, releases: number | undefined): FlowRunStart {
+function withHeld(start: FlowRunStart, live: Settles, releases: number | undefined): FlowRunStart {
   const { held: _held, ...rest } = start;
   for (const [call, hold] of live.holds)
     if (call !== releases && !live.answered.has(call))
@@ -482,11 +576,14 @@ function withHeld(start: FlowRunStart, live: LiveRun, releases: number | undefin
 type SparkFact = (spark: string, flow: string, run: string) => string;
 
 /** Q9 (b) — the fact a run's end tells the spark that started it, by the end's state: none yet for `stopped`, whose
- * words are slice 13's (its Stop); a run's other states are no end. */
-const END_FACTS: Readonly<Partial<Record<FlowRunState, SparkFact>>> = {
+ * words are slice 13's (its Stop); a run's other states are no end.
+ * *Corrected 2026-11-07 (slice 13's green; K21, W1): "none yet for `stopped`" no longer holds. A Stop's end tells
+ * `factStopped`, §9's Proposed line (W1, ruled 2026-11-07), so every end has its words, keyed by EndState.* */
+const END_FACTS: Readonly<Record<EndState, SparkFact>> = {
   done: words.factDone,
   failed: words.factFailed,
   lost: words.factSetAside,
+  stopped: words.factStopped,
 };
 
 /** A run whose record `#begin` kept: its id, its mark's name, and its summary as `#begin` wrote it, the door's answer
@@ -587,6 +684,9 @@ export class FlowRuns {
   readonly #unbegun = new Map<FlowRunId, string>();
   /** D1, CL-K-d (R29): the runs whose host waits for one of HOSTS_LIVE_MAX, in the order they asked */
   readonly #hostQueue: FlowRunId[] = [];
+  /** Slice 13 (Q1 (a)) — the runs whose end has begun and is not closed (a Stop's leave, D7's, #finish's tail), each
+   * settled by #closeEnd: a Stop reads this first, and waits */
+  readonly #ends = new Map<FlowRunId, Ending>();
 
   constructor(readonly ports: FlowRunPorts) {
     this.#logger = ports.logger ?? createNoopLogger();
@@ -657,14 +757,292 @@ export class FlowRuns {
     };
   }
 
-  /** CP-4a2b slice 13 (Q1; M-d's seam, `stop(run): Promise<FlowsStopResult>`) — a person's Stop of a run.
-   * *Red-a's stub (slice 13): it answers the run as its record stands, and acts on nothing; Stop's turn, `#ends`,
-   * `#finishStop` and the end's agents are the green's.* A run no record keeps is NOT_FOUND, in noSuchRun's words. */
+  /** CP-4a2b slice 13 (Q1 (a); M-d's seam, `stop(run): Promise<FlowsStopResult>`) — a person's Stop of a run,
+   * answered once the run's end leaves it (about 25 s at the worst, by the read: the host's grace, then the ends; K6),
+   * as its record then reads. In order:
+   * 1. an end begun and not closed (`#ends`: a Stop's leave, D7's, #finish's tail) is waited for, and answered as it
+   *    leaves the run: a second Stop takes no end of its own, nor a Stop in an end's tail;
+   * 2. a run no record keeps is NOT_FOUND, in noSuchRun's words; one that has ended, or was found never begun, is
+   *    answered as it is, writing nothing (BB6: judged by #isLive, never by `record.state` alone; R44);
+   * 3. N1: a LiveRun whose ending is already set (D7's set-aside, later J1's flood) writes no `stopping` and takes no
+   *    end of its own: the Stop waits, and answers the run as that end leaves it (`lost` for D7);
+   * 4. Q17 (a): past fieldd's own stop, a Stop writes `stopping` alone and acts on nothing; the boot finishes it (D4);
+   * 5. a run no LiveRun drives (a fresh FlowRuns', or one whose `end` the disk refused, BB6) is #finishStop's;
+   * 6. else Stop's turn (Q3, D4), one synchronous turn: `stopping` first, a refusal acting on nothing (UNAVAILABLE, in
+   *    the store's words, retryable, as #gateAnswered refuses); then its ending, through the one setter (#endWith: the
+   *    idle cleared, the replay dropped); then its lines withdrawn, its items ended and a handed turn its own line began
+   *    paused (D19), before the ends, since an idle session takes a waiting line at the first await; then the host
+   *    stopped, or, with none, #finish at once.
+   * Q18 (a): a script's end chosen in the instant before the Stop reads `stopped` (`stopping` was kept and told, and you
+   * asked); a script's `threw` words are lost in that window, inside one grace. */
   async stop(run: string): Promise<FlowsStopResult> {
+    const id = run as FlowRunId;
+    const ending = this.#ends.get(id);
+    if (ending !== undefined) {
+      await ending.done;
+      return this.#stopped(id);
+    }
+    const record = this.ports.records.runRecord(id);
+    if (record === undefined)
+      throw new RpcCallError("NOT_FOUND", words.noSuchRun(run), false, { run });
+    if (!this.#isLive(record)) return { run: this.#summaryOf(record) };
+    const live = this.#live.get(id);
+    if (live?.ending !== undefined) {
+      // N2: past close() nothing settles this wait, so the run is answered as its record reads, as close() answers one
+      if (!this.#closing) await this.#endOf(id).done;
+      return this.#stopped(id);
+    }
+    if (this.#closing) {
+      this.#stopping(id, record);
+      return this.#stopped(id);
+    }
+    if (live === undefined) return this.#finishStop(id, record);
+    this.#stopping(id, record);
+    const end = this.#endOf(id);
+    this.#endWith(id, live, { state: "stopped" }, () => {
+      this.#letGoOf(id);
+      this.#pause(id, live, record);
+    });
+    await end.done;
+    return this.#stopped(id);
+  }
+
+  /** A Stop's answer: the run as its record reads now. */
+  #stopped(run: FlowRunId): FlowsStopResult {
     const record = this.ports.records.runRecord(run);
     if (record === undefined)
       throw new RpcCallError("NOT_FOUND", words.noSuchRun(run), false, { run });
     return { run: this.#summaryOf(record) };
+  }
+
+  /** D4's first step (Q3): the record's `stopping`, unless it reads so already. A write that throws acts on nothing:
+   * said in fieldd's log, and refused retryably in the store's words, so the item waits on and a second Stop works. */
+  #stopping(run: FlowRunId, record: FlowRunRecord): void {
+    if (record.state === "stopping") return;
+    try {
+      this.#rewrite(run, { state: "stopping" });
+    } catch (error) {
+      this.#logger.warn(
+        "fieldd.flows.run.stop",
+        "A flow run's Stop could not be kept in its record; nothing was stopped",
+        { run, error: messageOf(error) },
+      );
+      throw recordsUnreadable(RECORD_STORES.SERVICE_FLOWS, UNREADABLE_WORDS.flows, true);
+    }
+  }
+
+  /** A run's end begun, waited on by its Stops: the one standing, or a new one. */
+  #endOf(run: FlowRunId): Ending {
+    const standing = this.#ends.get(run);
+    if (standing !== undefined) return standing;
+    let settle: () => void = () => {};
+    const done = new Promise<void>((resolve) => {
+      settle = resolve;
+    });
+    const ending: Ending = { done, settle };
+    this.#ends.set(run, ending);
+    return ending;
+  }
+
+  /** A run's end closed (#closeEnd), or left at fieldd's own stop: every Stop waiting on it answers. */
+  #endClosed(run: FlowRunId, ending?: Ending): void {
+    const standing = this.#ends.get(run);
+    if (standing !== undefined && (ending === undefined || standing === ending))
+      this.#ends.delete(run);
+    ending?.settle();
+    standing?.settle();
+  }
+
+  /** Slice 13 (N3) — THE ONE SETTER of a run's ending (a Stop's, D7's set-aside, later J1's flood): one already set is
+   * kept, so the first set stands (N1). Else the ending is set, D1's idle cleared (so no park fires in the leave, and
+   * `#rest` never writes `waiting` over `stopping`: `#park` reads no ending, and needs none past this clear) and the
+   * host's replay dropped (it hears nothing more, D22); then `first`, a Stop's own step before its ends (Q3 step 3:
+   * its lines, its items, its pause); then the host is stopped, and the run ends once it has left (#hostEnded), or,
+   * with no host, it ends at once (#finish). */
+  #endWith(run: FlowRunId, live: LiveRun, ending: RunEnd, first?: () => void): void {
+    if (live.ending !== undefined) return;
+    live.ending = ending;
+    clearTimeout(live.idle);
+    live.idle = undefined;
+    live.replay = undefined;
+    first?.();
+    const host = live.host;
+    if (host !== undefined) void host.stop();
+    else this.#finish(run, ending);
+  }
+
+  /** Q9, Q10 — a run's items ended (an answer after is refused `ended`) and its lines still waiting withdrawn, from
+   * every session's queue: at every end (#finish), and earlier in Stop's turn. Each is idempotent, and each throw is
+   * said in fieldd's log, so nothing refuses an end (Q6). */
+  #letGoOf(run: FlowRunId): void {
+    try {
+      this.ports.inputs.withdraw(run);
+    } catch (error) {
+      this.#logger.warn(
+        "fieldd.flows.run.withdraw",
+        "A flow run's waiting lines could not be withdrawn at its end",
+        { run, error: messageOf(error) },
+      );
+    }
+    try {
+      this.ports.needs.onFlowRunEnded(run);
+    } catch (error) {
+      this.#logger.warn(
+        "fieldd.flows.run.items",
+        "A flow run's items could not be ended at its end",
+        { run, error: messageOf(error) },
+      );
+    }
+  }
+
+  /** D19, Q11 (a′) — at Stop alone, in its turn, before #finish lets the hands go: a handed session whose working (or
+   * repairing) turn this run's own line began (`began`) is paused, once (`agents.pause`, NEVER `interrupt`, which
+   * escalates to an end; a flow never ends a person's own session, ruled 2026-11-07). Never a session the run started,
+   * which its end ends, and never your own turn, which no line of the run began. A pause refused is said in fieldd's
+   * log and never holds the Stop. A non-Stop end pauses nothing (K31). The window, stated and OWED: a run's line in
+   * flight at the Stop lands after this read, and its turn runs on, unpaused and unheard. */
+  #pause(run: FlowRunId, live: LiveRun, record: FlowRunRecord): void {
+    const started = new Set(this.#agentsOf(run, live.orphans));
+    const paused = new Set<string>();
+    for (const step of record.open) {
+      const session = step.session;
+      if (step.handed !== true || session === undefined) continue;
+      if (step.state !== "working" && step.state !== "repairing") continue;
+      if (started.has(session) || paused.has(session)) continue;
+      let began = false;
+      try {
+        began = this.ports.began(session, { run, call: step.call });
+      } catch (error) {
+        this.#logger.warn("fieldd.flows.step.pause", "A handed turn's start could not be read", {
+          run,
+          call: step.call,
+          error: messageOf(error),
+        });
+      }
+      if (!began) continue;
+      paused.add(session);
+      void asked(() => this.ports.agents.pause(session)).catch((error: unknown) => {
+        this.#logger.warn(
+          "fieldd.flows.step.pause",
+          "A handed turn the Stopped run began could not be paused",
+          { run, call: step.call, session, error: messageOf(error) },
+        );
+      });
+    }
+  }
+
+  /** Q4 (a) — the agents an end ends: each session the run's steps started, by its origin (`sessions.ofRun`, one
+   * port with slice 14), that lives; with the agents its failed starts left (`live.orphans`, AA3), for a read that
+   * lags. Never a session it was handed: its origin is not this run's (K8). Deduped: `ended` counts sessions. A read
+   * that throws is said in fieldd's log, and the end goes on (Q6). */
+  #agentsOf(run: FlowRunId, orphans: ReadonlyMap<number, string> | undefined): string[] {
+    const agents = new Set<string>();
+    try {
+      for (const session of this.ports.sessions.ofRun(run))
+        if (session.live) agents.add(session.runtimeRunId);
+    } catch (error) {
+      this.#logger.warn(
+        "fieldd.flows.run.agents",
+        "A flow run's agents could not be read at its end",
+        { run, error: messageOf(error) },
+      );
+    }
+    for (const orphan of orphans?.values() ?? []) agents.add(orphan);
+    return [...agents];
+  }
+
+  /** Q5 (b) — each agent ended, at once (`Promise.allSettled`): the sessions whose end the floor refused, each said
+   * in fieldd's log (`fieldd.flows.step.end`), uncounted. */
+  async #endAgents(run: FlowRunId, agents: readonly string[]): Promise<ReadonlySet<string>> {
+    const settled = await Promise.allSettled(
+      agents.map((agent) => asked(() => this.ports.agents.end(agent))),
+    );
+    const refused = new Set<string>();
+    settled.forEach((result, i) => {
+      const agent = agents[i];
+      if (result.status === "fulfilled" || agent === undefined) return;
+      refused.add(agent);
+      this.#logger.warn(
+        "fieldd.flows.step.end",
+        "A flow run's agent could not be ended at its end; its step stays as it stands",
+        { run, runtimeRunId: agent, error: messageOf(result.reason) },
+      );
+    });
+    return refused;
+  }
+
+  /** Slice 13 (Q12 (b), Q14 (b)) — the Stop of a run no LiveRun drives, read from its journal: a fresh FlowRuns' (the
+   * boot's half of D4; slice 14 hands each `stopping` run here), and in one life a run whose end the disk refused (BB6).
+   * - A journal that does not read `kept` is slice 14's forged road: until then it is answered as its record stands,
+   *   and said in fieldd's log.
+   * - A kept `end` line: the record alone takes its state, `ended` and `host` from it (D4's reason for the record), its
+   *   open steps ended as the end's write would have, and `calls` from the journal; no second `end`, nothing ended,
+   *   no tell. N5: a line that names the host fieldd ended takes §9's sentence for it as `log`; leftTwice's words and
+   *   D7's, which no `end` line holds, are lost on this road.
+   * - No `end` line: `stopping`, unless the record reads it (refused as Stop's turn refuses), then #finish, its
+   *   head and its answers from the journal, which ends the agents its steps started, by their origin, then #closeEnd,
+   *   `calls` from its journal (Q7: this road closes ZZ3's window for each run it ends).
+   * Items and lines are withdrawn on both roads (a kill may have come first). Never a `flowItem`, never a wake.
+   * BB6's window, stated: #finish deletes the LiveRun before its `end` append, so a refused `end` line loses an ending
+   * set first (D7's `lost`, later J1's `flood`), and this Stop ends the run `stopped`. Only a disk refusal reaches it,
+   * and such a run holds its bound until a Stop or the boot: `#unkept`, which would free it sooner, is OWED. */
+  async #finishStop(run: FlowRunId, record: FlowRunRecord): Promise<FlowsStopResult> {
+    const read = this.ports.records.readRun(run);
+    if (read.kind !== "kept") {
+      this.#logger.warn(
+        "fieldd.flows.run.stop",
+        "A flow run's journal reads as none VibeField keeps; its Stop answers it as it stands",
+        { run, read: read.kind },
+      );
+      return { run: this.#summaryOf(record) };
+    }
+    const head = headOf(read.head);
+    const settles: Settles = {
+      answered: new Map(
+        read.lines.flatMap((line) =>
+          line.kind === "answer" ? [[line.call, answeredOf(line)] as const] : [],
+        ),
+      ),
+      orphans: new Map(),
+      holds: new Map(),
+    };
+    const calls = read.lines.filter((line) => line.kind === "call").length;
+    const kept = read.lines.find((line) => line.kind === "end");
+    if (kept?.kind === "end") {
+      this.#letGoOf(run);
+      const host = kept.host;
+      const named = (FLOW_HOST_ENDINGS as readonly string[]).includes(host ?? "")
+        ? (host as FlowHostEnding)
+        : undefined;
+      try {
+        this.#replace(
+          run,
+          (start) => ({
+            ...endSteps(start, settles.answered, new Set()),
+            state: kept.state,
+            calls,
+            endedAt: this.#now().toISOString(),
+            ...(host !== undefined ? { host } : {}),
+            ...(kept.ended !== undefined && kept.ended > 0 ? { ended: kept.ended } : {}),
+            ...(named !== undefined ? { log: words.hostEnded(head.name, named) } : {}),
+          }),
+          { live: settles },
+        );
+      } catch (error) {
+        this.#logger.warn(
+          "fieldd.flows.run.stop",
+          "A flow run's kept end could not be written in its record; its next Stop writes it",
+          { run, error: messageOf(error) },
+        );
+        throw recordsUnreadable(RECORD_STORES.SERVICE_FLOWS, UNREADABLE_WORDS.flows, true);
+      }
+      return this.#stopped(run);
+    }
+    this.#stopping(run, record);
+    const end = this.#endOf(run);
+    this.#finish(run, { state: "stopped" }, { head, settles, calls });
+    await end.done;
+    return this.#stopped(run);
   }
 
   /** The runs' side of their items (the needs queue's FlowItemActs, bound in slice 15), an answer handed on once. */
@@ -673,7 +1051,11 @@ export class FlowRuns {
     start: async (start) => this.#acted(start),
   };
 
-  /** fieldd's own stop: every host stopped, each run left as its journal and record say, for the next boot. */
+  /** fieldd's own stop: every host stopped, each run left as its journal and record say, for the next boot.
+   * Slice 13 (Q17 (a)): every Stop waiting on an end is settled here, and answers the run as its record reads: a Stop
+   * in its leave reads `stopping` (durable short of a power loss, item 231), which the boot finishes (D4). N2, stated:
+   * a Stop that waits on ANOTHER ending's leave (N1) answers `running`, since no end is written at #closing; that run
+   * replays, and ends as its next life does. An end's tail past this leaves at its next await (#tail). */
   async close(): Promise<void> {
     this.#closing = true;
     this.#offTurns();
@@ -682,6 +1064,7 @@ export class FlowRuns {
       this.#letGo(live);
       clearTimeout(live.idle);
     }
+    for (const run of [...this.#ends.keys()]) this.#endClosed(run);
     await Promise.all([...this.#live.values()].map((live) => live.host?.stop()));
   }
 
@@ -853,6 +1236,7 @@ export class FlowRuns {
       hands: new Map(),
       orphans: new Map(),
       starting: new Set(),
+      starts: new Set(),
       lines: 0,
       answered: new Map(),
       holds: new Map(),
@@ -1109,7 +1493,7 @@ export class FlowRuns {
   /** D1 — a frame heard from the host `calls` counts for, or an answer it was sent: its idle starts again. A host with
    * a call out and no frame but pongs for HOST_IDLE_MS is parked; one with none out is never parked by its idle. */
   #heard(run: FlowRunId, live: LiveRun, calls: HostCalls): void {
-    if (live.calls !== calls || live.parking === true || live.aside !== undefined) return;
+    if (live.calls !== calls || live.parking === true || live.ending !== undefined) return;
     clearTimeout(live.idle);
     live.idle =
       calls.out > 0
@@ -1129,7 +1513,7 @@ export class FlowRuns {
     live.idle = undefined;
     const stuck = live.replay?.stuck();
     if (stuck !== undefined) {
-      this.#aside(run, live, host, stuck);
+      this.#aside(run, live, stuck);
       return;
     }
     live.parking = true;
@@ -1151,18 +1535,17 @@ export class FlowRuns {
    * script asked instead; else it didn't ask again what it asked before), said in fieldd's log at warn
    * (`fieldd.flows.run.aside`) and kept on its record at its end, as leftTwice's are. Its host is stopped, and the run
    * ends when it has left (`#hostEnded`), so it holds its place among HOSTS_LIVE_MAX until then; nothing is journaled
-   * for it in that leave (`#answer`), and it is never carried on by a spawn. */
-  #aside(run: FlowRunId, live: LiveRun, host: FlowHostRun, stuck: FlowReplayStuck): void {
+   * for it in that leave (`#answer`), and it is never carried on by a spawn. Slice 13 (N3): its ending is set through
+   * the one setter (#endWith), as a Stop's is. */
+  #aside(run: FlowRunId, live: LiveRun, stuck: FlowReplayStuck): void {
     const name = this.#nameOf(run);
     const log = stuck === "new" ? words.asideNew(name) : words.asideUnmatched(name);
-    live.aside = log;
-    live.replay = undefined;
+    this.#endWith(run, live, { state: "lost", log });
     this.#logger.warn(
       "fieldd.flows.run.aside",
       "A flow run's script, run again, can't match its journal; the run is set aside",
       { run, stuck, log },
     );
-    void host.stop();
   }
 
   /** A run's mark's name, as its record keeps it; its id where the record can't be read (a timer's road never
@@ -1352,7 +1735,7 @@ export class FlowRuns {
       } else if (!live.starting.has(number)) {
         if (step?.session !== undefined) this.#bind(run, live, step, call.args);
         else if (step === undefined) this.#entered(run, live, record, number, call.args);
-        else void this.#launch(run, live, number, call.args);
+        else this.#launch(run, live, number, call.args);
       }
     } catch (error) {
       // F2 review T5's road: a lookup the store refused settles the step failed
@@ -1411,11 +1794,18 @@ export class FlowRuns {
       ],
     }));
     if (waits) live.slotted.push({ call: number, args });
-    else void this.#launch(run, live, number, args);
+    else this.#launch(run, live, number, args);
+  }
+
+  /** A step's start, kept among its run's starts in flight while it settles (Q8 (a)), so an end waits for it. */
+  #launch(run: FlowRunId, live: LiveRun, number: number, args: readonly unknown[]): void {
+    const start = this.#launched(run, live, number, args);
+    live.starts.add(start);
+    void start.finally(() => live.starts.delete(start));
   }
 
   /** A step's agent started (or its session handed the line) by `startStep`; its refusal is its answer. */
-  async #launch(
+  async #launched(
     run: FlowRunId,
     live: LiveRun,
     number: number,
@@ -1458,12 +1848,14 @@ export class FlowRuns {
   }
 
   /** A step's start that threw, in fieldd's log (F2 review T2): one past its spawn names the agent it leaves running,
-   * which slice 13's R42 ends; any other came before any spawn or line. */
+   * which slice 13's R42 ends; any other came before any spawn or line.
+   * *Corrected 2026-11-07 (slice 13's green; S10): the warn said its agent is "the person's to end after a restart".
+   * Its origin names its run, so its run's end ends it, after a restart too (#finishStop's `sessions.ofRun`).* */
   #startThrew(run: FlowRunId, call: number, error: unknown): void {
     if (error instanceof FlowStepOrphaned)
       this.#logger.warn(
         "fieldd.flows.step.orphan",
-        "A flow step's agent started, and its line was not queued; the step failed, and its agent is left running, kept for its run's end in this fieldd's life, and the person's to end after a restart",
+        "A flow step's agent started, and its line was not queued; the step failed, and its agent is left running until its run's end ends it",
         { run, call, runtimeRunId: error.runtimeRunId, error: messageOf(error.cause) },
       );
     else
@@ -1493,6 +1885,9 @@ export class FlowRuns {
         folder: live.folder,
         // F8 (Q3): a spark's own run, or a Run from its thread, gives a step that names no profile its thinksUnder
         ...(record.starter.spark !== undefined ? { spark: record.starter.spark } : {}),
+        // slice 13 (Q8 (a)): the run no longer driven, or its ending set (a Stop, D7's set-aside, J1's flood), read
+        // after each await of the start, so a start in flight at an end reserves nothing more and queues nothing
+        gone: () => this.#live.get(run) !== live || live.ending !== undefined,
       },
       this.#stepWrite(run),
       number,
@@ -1511,7 +1906,7 @@ export class FlowRuns {
     // T4c: the call leaves the line once the write that starts it lands; a write that throws keeps it in line
     this.#stepWrite(run)(next.call, (step) => ({ ...step, state: "starting" }));
     live.slotted.shift();
-    void this.#launch(run, live, next.call, next.args);
+    this.#launch(run, live, next.call, next.args);
   }
 
   /** A step's turn ended (CP4-S2's road): its answer, once (D22), to the call its host waits on. A failed turn is
@@ -1521,7 +1916,7 @@ export class FlowRuns {
   #turnEnded(end: FlowStepTurnEnd): void {
     const run = end.run as FlowRunId;
     const live = this.#live.get(run);
-    if (live === undefined || live.aside !== undefined || !live.waiting.has(end.call)) return;
+    if (live === undefined || live.ending !== undefined || !live.waiting.has(end.call)) return;
     const record = this.ports.records.runRecord(run);
     const step = record?.open.find((open) => open.call === end.call);
     if (record === undefined || step?.session !== end.runtimeRunId) return;
@@ -1570,7 +1965,8 @@ export class FlowRuns {
    *   journal (D18), said in fieldd's log, and the next record write settles it (XX4, `#replace`). The line's own
    *   consequences, the slot it frees and D1's wake, never wait on that write (T4c). A line the disk
    *   refuses is not kept, so the script hears JOURNAL_REFUSED and a restart asks the step again.
-   * - A run no longer driven, or set aside (D7), journals nothing: no answer lands past its decided end.
+   * - A run no longer driven, or whose ending is set (D7's set-aside, a Stop: `live.ending`), journals nothing: no
+   *   answer lands past its decided end.
    * - Q2, Q3 (slice 11a): it answers what it did (`Wrote`). A line the disk refuses for an answer you can give again
    *   (`again`: a gate's, its item standing open) is no JOURNAL_REFUSED: it is handed to no replay, and its call is put
    *   back among those waiting, so the script never hears a refusal a later life would answer otherwise (D21).
@@ -1585,7 +1981,7 @@ export class FlowRuns {
     said: FlowHostAnswer,
     { again = false }: { readonly again?: boolean } = {},
   ): Wrote {
-    if (this.#live.get(run) !== live || live.aside !== undefined) return "undriven";
+    if (this.#live.get(run) !== live || live.ending !== undefined) return "undriven";
     live.waiting.delete(call);
     live.forms.delete(call);
     live.misses.delete(call);
@@ -1699,10 +2095,12 @@ export class FlowRuns {
    * A step holds while its record says `holding`, or while the run's holds keep its repair (MED-2, Q8's second F-a
    * half): a repair whose hold write failed after its item was minted is still `repairing` on its record, and its Ask
    * once more acts on it, releasing it as any other. An answer handed on again, its step holding neither way, was acted
-   * on, and is answered as done. A lost step is slice 14's; Stop the run is 13's. */
+   * on, and is answered as done. A lost step is slice 14's. Slice 13 (Q9): Stop the run, on an item of ANY kind, is
+   * read ahead of the kind, and is the run's Stop (#stopAct). */
   async #answered(answer: FlowItemAnswer): Promise<FlowItemActed> {
-    if (answer.stop || (answer.kind !== "flow-repair" && answer.kind !== "flow-gate"))
-      throw new Error(`CP-4a2b: a run's ${answer.stop ? "Stop" : answer.kind} is a later slice's`);
+    if (answer.stop) return this.#stopAct(answer.run.run as FlowRunId);
+    if (answer.kind !== "flow-repair" && answer.kind !== "flow-gate")
+      throw new Error(`CP-4a2b: a run's ${answer.kind} is a later slice's`);
     const run = answer.run.run as FlowRunId;
     const live = this.#live.get(run);
     if (answer.kind === "flow-gate") return this.#gateAnswered(run, live, answer);
@@ -1723,6 +2121,21 @@ export class FlowRuns {
     return { outcome: "done" };
   }
 
+  /** Slice 13 (Q9) — Stop the run, through any of its items: the run's Stop, awaited, answered `done`; a retryable
+   * refusal (its `stopping` refused) is thrown, so the item waits on (queue.ts:868). A run no record keeps (a forged
+   * run's item, whose one act is Stop, s14 Q12) is `done` too, never noSuchRun: its items ended, and the agents its
+   * steps started, by their origin, ended. Re-entrance, read and safe: the Stop's turn ends this item while the queue
+   * answers it, and the queue's own answer then stands over it (#stand), its siblings `ended`. */
+  async #stopAct(run: FlowRunId): Promise<FlowItemActed> {
+    if (this.ports.records.runRecord(run) === undefined) {
+      this.#letGoOf(run);
+      await this.#endAgents(run, this.#agentsOf(run, undefined));
+      return { outcome: "done" };
+    }
+    await this.stop(run);
+    return { outcome: "done" };
+  }
+
   /** Q1, Q2 (slice 11a) — your answer to a gate: its act's own words, byte for byte, journaled by the one writer as the
    * ask's answer, so the script's `await ask()` resolves to them (R33), and every later wake hears them from the
    * journal, never raising the gate again (R36). Its hold is released in that answer's own record write (#replace). A
@@ -1732,7 +2145,9 @@ export class FlowRuns {
   #gateAnswered(run: FlowRunId, live: LiveRun | undefined, answer: FlowItemAnswer): FlowItemActed {
     if (live === undefined || answer.run.call === undefined)
       return { outcome: "failed", reason: words.noSuchRun(run) };
-    if (live.aside !== undefined) return { outcome: "failed", reason: live.aside };
+    // D7's set-aside in its own words; a Stop's ending has none, and is unreached here: its turn ended every item first
+    if (live.ending !== undefined)
+      return { outcome: "failed", reason: live.ending.log ?? words.noSuchRun(run) };
     const said: FlowHostAnswer = { ok: true, value: answer.act };
     switch (this.#answer(run, live, answer.run.call, "ask", said, { again: true })) {
       case "kept":
@@ -1889,9 +2304,12 @@ export class FlowRuns {
     end: FlowHostEnd,
     calls: HostCalls | undefined,
   ): void {
-    // D7: a run set aside at D1's park ends when its host has left, lost, in its words
-    if (live?.aside !== undefined) {
-      this.#finish(run, { state: "lost", log: live.aside });
+    // D7: a run set aside at D1's park ends when its host has left, lost, in its words. Slice 13 (Q18 (a)): so does
+    // any ending fieldd set (a Stop's, later J1's flood), read FIRST, over whatever end the script chose meanwhile:
+    // the supervisor chooses once (supervisor.ts:574), so a `done`, `threw` or `ended` chosen in the instant before
+    // reads as that ending. The host leaves under its grace for `done` and `threw`, and at once for a kill
+    if (live?.ending !== undefined) {
+      this.#finish(run, live.ending);
       return;
     }
     if (live?.parking === true) {
@@ -1916,7 +2334,13 @@ export class FlowRuns {
         this.#finish(run, { state: "stopped" });
         return;
       case "ended":
-        this.#finish(run, { state: "failed", host: end.why });
+        // slice 13 (Q13, R43): §9's sentence for why fieldd ended it, said once on its record, in place of the
+        // script's latest line, its flow named as its head names it (K14)
+        this.#finish(run, {
+          state: "failed",
+          host: end.why,
+          log: words.hostEnded(live?.head.name ?? run, end.why),
+        });
         return;
       case "left":
         this.#left(run, live, calls);
@@ -1959,17 +2383,93 @@ export class FlowRuns {
    * the spark that started the run is told (`#tell`, slice 11b; Q9 (b)), after the record's write, whether or not that
    * write lands: the journal is the truth. An `end` line the disk refuses tells nothing. The tell reads the run's head
    * from the LiveRun the end took (MED-1), never its record, so a kept line tells though its record then reads as none
-   * or can't be read; an end of a run this fieldd no longer drives (no LiveRun) tells nothing. */
-  #finish(run: FlowRunId, end: RunEnd): void {
+   * or can't be read; an end of a run this fieldd no longer drives (no LiveRun) tells nothing.
+   * *Corrected 2026-11-07 (slice 13's green; S11): "an end of a run this fieldd no longer drives tells nothing" no
+   * longer holds. #finishStop ends such a run through here, handing the head its journal holds, and its end tells.*
+   * Slice 13 (Q6 (a)): THE ONE END, in D4's order at EVERY end (a Stop, done, failed, lost), never two orders:
+   * - its synchronous part: the run no longer driven, its hands let go, its idle cleared, off #hostQueue, its holds
+   *   cleared (so the end's write projects no `held`, Q7), its items ended and its lines withdrawn (Q9, Q10);
+   * - then the agents its steps started, ended (#tail), once the starts in flight have settled (Q8 (a)); then the
+   *   `end` line with `ended`, the record, the tell (#closeEnd). With no start in flight and no agent to end, #closeEnd
+   *   runs at once, so an end with none (R6i's, R6j's) reads as it always did.
+   * No port refuses an end: each call is caught and logged. The windows, stated: a non-Stop end killed after its
+   * agents ended and before its `end` line reads at the boot as a run whose sessions exited (s14's R13 raises
+   * `flow-lost` there), and a spawn that never answers holds the tail, the record in its state before the end (a
+   * Stop's `stopping`) until it settles, or fieldd's own stop. `calls` is not counted again here (N10): ZZ3's window
+   * stands on a run's last call (#journaled). */
+  #finish(run: FlowRunId, end: RunEnd, unlived?: Unlived): void {
     const live = this.#live.get(run);
     this.#live.delete(run);
     if (live !== undefined) {
       this.#letGo(live);
       clearTimeout(live.idle);
+      live.holds.clear();
     }
     const queued = this.#hostQueue.indexOf(run);
     if (queued >= 0) this.#hostQueue.splice(queued, 1);
-    const log = end.log ?? live?.log;
+    this.#letGoOf(run);
+    const closing: Closing = {
+      run,
+      end,
+      head: live?.head ?? unlived?.head,
+      settles: live ?? unlived?.settles,
+      log: end.log ?? live?.log,
+      calls: unlived?.calls,
+    };
+    const starts = [...(live?.starts ?? [])];
+    if (starts.length === 0) {
+      const agents = this.#agentsOf(run, live?.orphans);
+      if (agents.length === 0) {
+        this.#closeEnd(closing, 0, new Set());
+        return;
+      }
+      void this.#tail(closing, starts, agents, live?.orphans);
+      return;
+    }
+    void this.#tail(closing, starts, undefined, live?.orphans);
+  }
+
+  /** Slice 13 (Q6, Q8 (a)) — an end's tail: its run among `#ends`, so a Stop waits for it; the starts in flight
+   * settled, then the agents its steps started read (by origin, a landed agent among them) and ended at once; then
+   * #closeEnd. After each await it reads `#closing`, and leaves at fieldd's own stop (Q17): a Stop's run stays
+   * `stopping` for the boot, any other its state before the end, and replays. Waiting there would let a hung end hang
+   * fieldd's stop. */
+  async #tail(
+    closing: Closing,
+    starts: readonly Promise<void>[],
+    read: readonly string[] | undefined,
+    orphans: ReadonlyMap<number, string> | undefined,
+  ): Promise<void> {
+    const { run } = closing;
+    const ending = this.#endOf(run);
+    try {
+      if (starts.length > 0) await Promise.allSettled(starts);
+      if (!this.#closing) {
+        const agents = read ?? this.#agentsOf(run, orphans);
+        const refused = await this.#endAgents(run, agents);
+        if (!this.#closing) {
+          this.#closeEnd(closing, agents.length - refused.size, refused);
+          return;
+        }
+      }
+      this.#endClosed(run, ending);
+    } catch (error) {
+      this.#logger.error("fieldd.flows.run.end", "A flow run's end did not close", {
+        run,
+        state: closing.end.state,
+        error: messageOf(error),
+      });
+      this.#endClosed(run, ending);
+    }
+  }
+
+  /** Slice 13 (Q6) — an end closed, the `end` line's one site: the line, with `ended` (the agents its end took, only
+   * when above 0), then the record (D18) in the end's own write: its open steps `ended` but those its journal answers
+   * and those whose end was refused (endSteps, Q7), its `held` dropped, `ended` again, and `calls` from the journal on
+   * #finishStop's road. Once the line is kept the spark that started the run is told, whether or not the record's
+   * write lands: the journal is the truth. Then every Stop waiting on the end answers. */
+  #closeEnd(closing: Closing, ended: number, refused: ReadonlySet<string>): void {
+    const { run, end, head, settles, log, calls } = closing;
     let kept = false;
     try {
       this.ports.records.appendRun(run, {
@@ -1977,19 +2477,22 @@ export class FlowRuns {
         state: end.state,
         ...(end.host !== undefined ? { host: end.host } : {}),
         ...(end.threw !== undefined ? { threw: end.threw } : {}),
+        ...(ended > 0 ? { ended } : {}),
       });
       kept = true;
       // XX4: the run it no longer drives still settles, in this last write, a step its journal answers
       this.#replace(
         run,
         (start) => ({
-          ...start,
+          ...endSteps(start, settles?.answered, refused),
           state: end.state,
           endedAt: this.#now().toISOString(),
           ...(log !== undefined ? { log } : {}),
           ...(end.host !== undefined ? { host: end.host } : {}),
+          ...(ended > 0 ? { ended } : {}),
+          ...(calls !== undefined ? { calls } : {}),
         }),
-        { live },
+        { live: settles },
       );
     } catch (error) {
       this.#logger.error("fieldd.flows.run.end", "A flow run's end was not kept", {
@@ -2001,7 +2504,8 @@ export class FlowRuns {
       // tell's, never thrown out of the end in place of the end's own failure
       this.#told();
     }
-    if (kept && live !== undefined) this.#tell(run, end.state, END_FACTS[end.state], live.head);
+    if (kept && head !== undefined) this.#tell(run, end.state, END_FACTS[end.state], head);
+    this.#endClosed(run);
   }
 
   /** Slice 11b (Q9, Q10) — a fact for the spark that started `run` (its starter `by: "spark"`, the spark named),
@@ -2011,25 +2515,14 @@ export class FlowRuns {
    * tells no one (T3b). A spark `sparkOf` no longer finds is told nothing, and an end with no words yet (`stopped`,
    * slice 13's) tells nothing: each is said in fieldd's log (`fieldd.flows.run.fact`). It never throws: a fact is told
    * past what the run kept (an item minted, an `end` line), which nothing may then refuse, so one that can't be told
-   * is said in that log and lost. */
-  #tell(
-    run: FlowRunId,
-    what: "asking" | FlowRunState,
-    fact: SparkFact | undefined,
-    head: RunHead,
-  ): void {
+   * is said in that log and lost.
+   * *Corrected 2026-11-07 (slice 13's green; K21): "an end with no words yet (`stopped`, slice 13's) tells nothing"
+   * no longer holds. Every end has its words (END_FACTS, `factStopped` among them, W1), so that branch is gone.* */
+  #tell(run: FlowRunId, what: "asking" | FlowRunState, fact: SparkFact, head: RunHead): void {
     if (head.starter.by !== "spark") return;
     const { spark } = head.starter;
     if (spark === undefined) return;
     try {
-      if (fact === undefined) {
-        this.#logger.warn("fieldd.flows.run.fact", "A flow run's end tells its spark nothing yet", {
-          run,
-          spark,
-          what,
-        });
-        return;
-      }
       const known = this.ports.sparkOf(spark);
       if (known === undefined) {
         this.#logger.warn(
@@ -2074,7 +2567,9 @@ export class FlowRuns {
    * `held` names the first still open, released only by its own item's act (`releases`, #releasing) or its call's
    * answer (`live.answered`), and is written HERE alone, after the settle, projected from the holds (`withHeld`); with
    * no LiveRun it stays as the record has it. UU2 (Q4): a held run whose host is up reads `running` until D1's idle
-   * parks it, then `holding`: the rest words are the park's. */
+   * parks it, then `holding`: the rest words are the park's.
+   * *Added 2026-11-07 (slice 13's green; Q7): with no LiveRun, #finishStop names what its journal holds (`Settles`:
+   * its answers, no orphan, no hold), so its end's write settles a step its journal answers and drops `held`.* */
   #replace(
     run: FlowRunId,
     whole: (start: FlowRunStart, record: FlowRunRecord) => FlowRunStart,
