@@ -737,7 +737,8 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   // an asleep laptop, the phone's clipped page, two holders folded), the
   // shelf's pings, the peer door's ask and frames, and `index.artifacts`' ask
   // and answer over rosetta's library page, transcribed from the pin's
-  // protocol-29 wire golden (revision and digest in its `//` note).
+  // protocol-30 wire golden, and the protocol-29 one before it (revision and
+  // digest in each one's `//` note).
   "index-catalog-app": IndexCatalogApp,
   "index-apps-params": IndexAppsParams,
   "index-apps": IndexAppsResult,

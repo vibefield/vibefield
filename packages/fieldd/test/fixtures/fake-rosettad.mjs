@@ -125,7 +125,7 @@
 // `status` answers every ask with it, e.g. 404 for a daemon without the
 // route). A window that holds no time is the route's own 400.
 //
-// MA-3a — rosetta's LIBRARY as the pin has it (0.1.3, protocol 29; rosetta
+// MA-3a — rosetta's LIBRARY as the pin has it (0.1.4, protocol 30; rosetta
 // crates/store/src/html_artifacts.rs `list`, crates/server/src/http/artifacts.rs):
 // `GET /api/artifacts?q&agent&project&artifact_id&cursor&limit`, bearer-only
 // (a grant is `wrong-route`: `grantRoute` admits no list), scripted by
@@ -145,17 +145,21 @@
 // `agent` (rosetta's kind) and `project` filter; the order is `sort_at DESC, id
 // DESC` with `sort_at = published_at ?? 0`; `limit` is 50 when absent and
 // clamped to 1..100 (a limit that is not a number is axum's 400). The cursor is
-// the server's own JSON, `{epoch, revision, query, at, id}`: one that is not a
-// cursor, or was minted for another ask, is the 400 `bad_request` "invalid
-// artifact filter or cursor"; one minted under another `revision` is the 410
-// `cursor_expired` — how a test moves the library under a walk is to rewrite
-// the file with the next revision. The bounds are rosetta's (q ≤ 512, each
-// filter ≤ 256, the cursor ≤ 4,096; else 400). Each list is a request-log line.
+// the server's own JSON, `{epoch, revision, query, at, id}` (0.1.4's also says
+// whether the page was read behind the admission barrier, `hidden`; the fake
+// has no barrier): one that is not a cursor, or was minted for another ask, is
+// the 400 `bad_request` "invalid artifact filter or cursor"; one minted under
+// another `revision` is the 410 `cursor_expired` — how a test moves the library
+// under a walk is to rewrite the file with the next revision. The bounds are
+// rosetta's (q ≤ 512, each filter ≤ 256, the cursor ≤ 4,096; else 400). Each
+// list is a request-log line.
 // `/api/sessions/{sid}/artifacts/{publication}/content` answers the scripted
 // bytes as INERT octets with rosetta's headers (octet-stream, attachment,
 // nosniff, `sandbox; default-src 'none'`, no-store), and rosetta's 404 for a
 // publication that is not that session's or has no bytes. It is matched BEFORE
 // the `/api/sessions/` prefix, which would read the rest of the path as an id.
+// 0.1.4's export door (RO-32) is not scripted: fieldd asks it nothing before
+// MA-3f wires its exporter.
 //
 // Item 65 — FAKE_ROSETTAD_LATE_STDERR_MS: the last words reach stderr AFTER this process has exited. A refusal
 // (crash-on-start), the old binary's flag error and the schema mismatch are then written by a grandchild that holds

@@ -387,7 +387,8 @@ const CANT_BE_KEPT = muted("can't be kept", false, {
   detail: null,
 });
 
-/** C4, MA-4's witness: at rosetta 0.1.3 no desktop can write an app out (‹for James›, §9). */
+/** C4, MA-4's witness: at rosetta 0.1.3 no desktop can write an app out (‹for James›, §9).
+ * *2026-11-07:* rosetta 0.1.4 has the door (RO-32); none writes one out until MA-3f calls it. */
 function unbuiltState(desktop: string): MadeAppState {
   return muted("not written out yet", false, {
     title: `${desktop} can't write this app out yet`,

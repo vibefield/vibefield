@@ -190,6 +190,9 @@ export type MadeAppRefusalState = MadeAppOpenRefusal["state"];
 const REFUSALS: Record<MadeAppRefusalState, { retryable: boolean; message: string }> = {
   [MADE_APP_OPEN.STATE_EXPORT_UNBUILT]: {
     retryable: false,
+    // *2026-11-07 (the EL8 to rosetta 0.1.4):* the history daemon has the door (RO-32);
+    // "no export door yet" stays true of this desktop until MA-3f calls it, and the words are
+    // MA-3f's to change.
     message: "this desktop's history has no export door yet, so it cannot serve a made app",
   },
   [MADE_APP_OPEN.STATE_NOT_KEPT]: {

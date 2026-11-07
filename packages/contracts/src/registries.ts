@@ -645,6 +645,8 @@ export const MADE_APP_LIMITS = {
  * and the states a reader branches on (`MadeAppOpenRefusal`, artifacts.ts). Each is a contract string, never a
  * sentence, and names the desktop it is about (`device`) when the open was forwarded there.
  * STATE_EXPORT_UNBUILT: the app's desktop runs a rosetta with no export door (0.1.3; RO-A1 is RO-32, in 0.1.4).
+ *   *Corrected 2026-11-07 (the EL8 to rosetta 0.1.4):* the pinned rosetta has the door; until MA-3f calls it, this
+ *   state also means a desktop whose fieldd does not call it yet.
  *   Retryable false: nothing a retry changes until that desktop's rosetta moves.
  * STATE_NOT_KEPT: rosetta keeps no verified bytes for the presentation (its availability is `not_captured`, `missing`
  *   or `changed_during_read`). Retryable false.

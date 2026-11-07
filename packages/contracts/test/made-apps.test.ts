@@ -112,7 +112,7 @@ describe("no path ever reaches a made app's row or door (MA §4.2, EL2)", () => 
   });
 
   it("reads rosetta's page as the mirror; only a projection without the paths is an entry", () => {
-    const page = IndexArtifactPageResponse.parse(fixture("index-artifacts-response.rosetta-29"));
+    const page = IndexArtifactPageResponse.parse(fixture("index-artifacts-response.rosetta-30"));
     const wire = page.entries[0]!;
     const publication = wire.publication;
     // the golden carries both paths and the asset's URL; the mirror keeps them, unread
@@ -130,6 +130,8 @@ describe("no path ever reaches a made app's row or door (MA §4.2, EL2)", () => 
       hostedUrl: publication.url ?? undefined,
       nativeId: publication.native_id ?? undefined,
       version: publication.version ?? undefined,
+      description: publication.description ?? undefined,
+      droppedFiles: publication.dropped_files ?? undefined,
       publishedAt: publication.published_at ?? undefined,
       capturedAt: wire.captured_at ?? undefined,
       availability: wire.availability,
@@ -144,6 +146,9 @@ describe("no path ever reaches a made app's row or door (MA §4.2, EL2)", () => 
     const door = IndexArtifactEntry.parse(projected);
     expect(door.recovered).toBe(true);
     expect(door.hostedUrl).toBe("https://claude.ai/code/artifact/review");
+    // the publish request's two facts (protocol 30: RO-33, RO-34a), as the library wrote them
+    expect(door.description).toBe("Two checkout flows to compare");
+    expect(door.droppedFiles).toBe(2);
     expect(JSON.stringify(door)).not.toMatch(/\/tmp\/|\/archive\/|\/api\/assets\//);
     // the same valid projection with one of rosetta's path keys spread back in is refused, so
     // the refusal can only be that key's
@@ -288,6 +293,27 @@ describe("what a reader cannot read: a fact costs itself, an identity or a join 
       ["projectKey", "a b"],
     ] as const) {
       expect(parses(IndexArtifactEntry, { ...entry, [key]: value }), key).toBe(false);
+    }
+  });
+
+  it("carries Versions' entry's description and dropped files, and costs it an over-long description or a negative count, never the entry", () => {
+    const entry = (fixture("index-artifacts.valid") as { entries: object[] }).entries[0]!;
+    const unsaid = IndexArtifactEntry.parse(entry);
+    expect(unsaid.description, "a fieldd before rosetta 0.1.4 sends neither").toBeUndefined();
+    expect(unsaid.droppedFiles).toBeUndefined();
+    const told = { description: "A checkout flow, for review.", droppedFiles: 2 };
+    expect(IndexArtifactEntry.parse({ ...entry, ...told })).toMatchObject(told);
+    const atBound = "d".repeat(MADE_APP_LIMITS.DESCRIPTION_CHARS);
+    expect(IndexArtifactEntry.parse({ ...entry, description: atBound }).description).toBe(atBound);
+    expect(IndexArtifactEntry.parse({ ...entry, droppedFiles: 0 }).droppedFiles).toBe(0);
+    for (const [key, value, kept] of [
+      ["description", `${atBound}d`, "droppedFiles"],
+      ["droppedFiles", -1, "description"],
+    ] as const) {
+      const read = IndexArtifactEntry.parse({ ...entry, ...told, [key]: value });
+      expect(read[key], key).toBeUndefined();
+      expect(read[kept], `${key}: the other fact is kept`).toBe(told[kept]);
+      expect(read.presentationId, `${key}: the entry is kept`).toBe(unsaid.presentationId);
     }
   });
 });

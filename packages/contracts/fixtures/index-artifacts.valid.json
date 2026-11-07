@@ -1,5 +1,5 @@
 {
-  "//": "MA-1a — `index.artifacts`' answer: rosetta's entries in VibeField's vocabulary, newest first. No path for ANY caller: the publication's path and the recovered-from path never leave fieldd (the second presentation's bytes were recovered from another file, so `recovered` says it), and the asset's daemon-relative URL is not carried. The agent leaves as its kind and the catalog's provider, and the project is joined at this door.",
+  "//": "MA-1a — `index.artifacts`' answer: rosetta's entries in VibeField's vocabulary, newest first. No path for ANY caller: the publication's path and the recovered-from path never leave fieldd (the second presentation's bytes were recovered from another file, so `recovered` says it), and the asset's daemon-relative URL is not carried. The second presentation carries its publish request's description and a count of none dropped (rosetta 0.1.4); the first carries neither, which is unknown. The agent leaves as its kind and the catalog's provider, and the project is joined at this door.",
   "entries": [
     {
       "device": "01J9ZK3M5Q8XR2V7N4B6C1D0EF",
@@ -38,6 +38,8 @@
       "hostedUrl": "https://claude.ai/code/artifact/review",
       "nativeId": "review",
       "version": "1",
+      "description": "The first checkout flow, before the review.",
+      "droppedFiles": 0,
       "publishedAt": 1793750400000,
       "availability": "missing",
       "recovered": true,

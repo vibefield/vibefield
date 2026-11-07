@@ -615,12 +615,17 @@ export function artifactParamsOf(request: ArtifactListRequest): Record<string, u
  * The publication's columns as the contract carries them (an absent one is
  * the honest null; `source_offset` — a raw-record coordinate the room never
  * reads and fieldd never carries — is 0); `path`, `recovered_from` and
- * `asset` null (above). The project is the PJ key fieldd joined the entry to
- * (`projectKey`; the room's project ids are PJ keys, `projectRowOf`), named as
- * the listing names it (`projectNames`, the key → the room's row name); a key
- * the listing does not hold is unnamed, and rosetta's own project name is
- * never used (History lists VibeField's projects, PJ-4). The agent is the
- * room's runtime kind (`runtimeKindOf(provider)`), as every session row is
+ * `asset` null (above). The publish request's `description` and
+ * `dropped_files` (rosetta 0.1.4) are fieldd's `description` and
+ * `droppedFiles`, and an absent one is rosetta's own null: of the description
+ * "none written" or "unknown", of the dropped files "unknown". fieldd leaves
+ * out a fact rosetta said null, and a description it cannot carry (empty, or
+ * past the contract's bound). The project is the PJ key fieldd joined the
+ * entry to (`projectKey`; the room's project ids are PJ keys, `projectRowOf`),
+ * named as the listing names it (`projectNames`, the key → the room's row
+ * name); a key the listing does not hold is unnamed, and rosetta's own project
+ * name is never used (History lists VibeField's projects, PJ-4). The agent is
+ * the room's runtime kind (`runtimeKindOf(provider)`), as every session row is
  * filed, so the room's agent filter and its card agree. An availability this
  * build cannot read (`unknown`) is not offered as a local copy:
  * `not_captured`. */
@@ -643,6 +648,8 @@ export function artifactEntryOf(
       version: entry.version ?? null,
       published_at: entry.publishedAt ?? null,
       source_offset: 0,
+      description: entry.description ?? null,
+      dropped_files: entry.droppedFiles ?? null,
     },
     availability: ROOM_AVAILABILITIES.has(entry.availability)
       ? (entry.availability as HtmlArtifactAvailability)

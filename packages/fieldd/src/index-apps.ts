@@ -734,7 +734,11 @@ export class IndexApps extends EventEmitter {
     return rows;
   }
 
-  /** One entry's row, built member by member from what the contract declares (never a spread of rosetta's entry). */
+  /** One entry's row, built member by member from what the contract declares (never a spread of rosetta's entry).
+   * OWED TO MA-3f: rosetta 0.1.4's `description` and `dropped_files` are not read onto the row yet, so every row
+   * carries neither while `index.artifacts` carries both. When they are, the description keeps the door's rule (an
+   * empty one, or one longer than MADE_APP_LIMITS.DESCRIPTION_CHARS, costs the field) and is checked before the row
+   * is built, as `nativeId` is: the row is returned as built, not as parsed. */
   #rowOf(entry: IndexArtifactEntryRow, device: string): IndexCatalogApp | undefined {
     const at = entry.publication;
     const kind = AgentKind.safeParse(entry.agent).success ? entry.agent : undefined;

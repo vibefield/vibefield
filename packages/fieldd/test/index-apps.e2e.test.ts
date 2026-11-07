@@ -25,7 +25,11 @@
 //   · the apps table's peer door admits a peer daemon alone, and only once the table speaks;
 //   · `index.artifacts {projectKey}` narrows a desktop's library by the fold's own rule (an app
 //     from a session rosetta files under no project is kept), and a project on another
-//     desktop's library is refused at the home, in words.
+//     desktop's library is refused at the home, in words;
+//   · `index.artifacts` carries the publish request's description and dropped files (rosetta
+//     0.1.4) as the library wrote them; rosetta's nulls, and an entry that leaves both keys out
+//     (a tolerant reader), carry neither; a description past the contract's bound costs that
+//     fact, never the entry.
 // Every row boots daemons: they run on the mini (a9), never under the MacBook's HOLD. Each
 // wait is BOUNDED and asserted on (`settle`), so a red row fails on its assertion.
 import { spawn } from "node:child_process";
@@ -41,6 +45,7 @@ import {
   IndexAppsResult,
   IndexArtifactsResult,
   IndexSessionsResult,
+  MADE_APP_LIMITS,
   MADE_APP_OPEN,
   MadeAppOpenRefusal,
   madeAppFoldKey,
@@ -110,6 +115,8 @@ const appEntry = (
     version: null,
     published_at: publishedAt,
     source_offset: 4_096,
+    description: null,
+    dropped_files: null,
   },
   availability: "captured",
   captured_at: publishedAt - 100,
@@ -1045,6 +1052,70 @@ describe("MA-3e — the made apps across two real daemons", () => {
     if (!refused.ok) {
       expect(refused.error.data?.kind).toBe("PRECONDITION_FAILED");
       expect(refused.error.data?.details).toEqual({ principal: "peer-fieldd" });
+    }
+  }, 120_000);
+
+  it("index.artifacts carries the publish request's description and dropped files as A's library wrote them (rosetta 0.1.4); an entry that says neither — rosetta's nulls, or both keys left out (a tolerant reader) — carries neither, and a description past the contract's bound costs that fact, never the entry", async () => {
+    const DESCRIBED = "A checkout flow in three steps, for the design review.";
+    const LONG = "d".repeat(MADE_APP_LIMITS.DESCRIPTION_CHARS + 1);
+    /** a presentation with its request's two facts, as a 0.1.4 library keeps them */
+    const told = (
+      name: string,
+      publishedAt: number,
+      description: string,
+      dropped: number,
+    ): ArtifactEntry => {
+      const entry = appEntry(name, "a1", publishedAt);
+      return {
+        ...entry,
+        publication: { ...entry.publication, description, dropped_files: dropped },
+      };
+    };
+    /** an entry that leaves both keys out (rosetta 0.1.4 writes both; the reader is tolerant) */
+    const bare = (entry: ArtifactEntry): ArtifactEntry => {
+      const {
+        description: _description,
+        dropped_files: _dropped,
+        ...publication
+      } = entry.publication;
+      return { ...entry, publication } as ArtifactEntry;
+    };
+    const script: DeskScript = {
+      sessions: [sessionRow("a1", "p-app-a", 9_000)],
+      projects: [{ id: "p-app-a", name: "app", root_paths: ["/work/p-app-a"], git_repo: null }],
+      library: {
+        entries: [
+          told("described", 5_000, DESCRIBED, 2),
+          told("long", 4_800, LONG, 0),
+          appEntry("unsaid", "a1", 4_500),
+          bare(appEntry("bare", "a1", 4_000)),
+        ],
+      },
+    };
+    const preA = await prepareDesk("a", script, B_NAME);
+    const A: Desk = { ...preA, daemon: await bootDaemon(preA, sidecar(new Map(), "node-a", [])) };
+    const spoken = await settle(() => A.daemon.indexApps.ready, 30_000);
+    expect(spoken, "A's apps table has spoken (its first walk landed)").toBe(true);
+
+    const win = await windowOn(A);
+    const page = IndexArtifactsResult.parse(await win.call("index.artifacts", {}));
+    expect(
+      page.entries.map((entry) => entry.appId),
+      "every presentation is an entry, newest first",
+    ).toEqual([appIdOf("described"), appIdOf("long"), appIdOf("unsaid"), appIdOf("bare")]);
+    const [described, long, unsaid, keyless] = page.entries;
+    expect(described, "the request's two facts, as the library wrote them").toMatchObject({
+      description: DESCRIBED,
+      droppedFiles: 2,
+    });
+    expect(long, "a description past the bound is left out").not.toHaveProperty("description");
+    expect(long?.droppedFiles, "and the entry keeps its count: none dropped").toBe(0);
+    for (const [name, entry] of [
+      ["rosetta's nulls", unsaid],
+      ["both keys left out", keyless],
+    ] as const) {
+      expect(entry, `${name}: no description`).not.toHaveProperty("description");
+      expect(entry, `${name}: no dropped files`).not.toHaveProperty("droppedFiles");
     }
   }, 120_000);
 });

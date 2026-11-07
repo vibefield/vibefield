@@ -164,6 +164,8 @@ const libraryEntry = (i: number): ArtifactEntry => ({
     version: null,
     published_at: 5_000 + i,
     source_offset: 4_096,
+    description: null,
+    dropped_files: null,
   },
   availability: "captured",
   captured_at: 4_000 + i,

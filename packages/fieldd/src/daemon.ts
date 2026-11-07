@@ -577,8 +577,9 @@ export interface FielddConfig {
   };
   /** MA-3e test seams: the made-app service (made-app-service.ts). `exporter` stands in for
    * RO-A1's export (default: this rosetta's, which at 0.1.3 has no export door and answers
-   * `export-unbuilt`); `openWaitMs` is the open's bounded wait for its listener's URL
-   * (MADE_APP_LIMITS.OPEN_WAIT_MS). */
+   * `export-unbuilt`; *2026-11-07:* rosetta 0.1.4 has the door, RO-32, and the default still
+   * answers `export-unbuilt` until MA-3f calls it); `openWaitMs` is the open's bounded wait
+   * for its listener's URL (MADE_APP_LIMITS.OPEN_WAIT_MS). */
   madeApps?: {
     exporter?: MadeAppExporter;
     openWaitMs?: number;
@@ -3911,6 +3912,10 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           ? { nativeId: at.native_id }
           : {}),
         ...(typeof at.version === "string" && at.version !== "" ? { version: at.version } : {}),
+        ...(typeof at.description === "string" && at.description !== ""
+          ? { description: at.description }
+          : {}),
+        ...(typeof at.dropped_files === "number" ? { droppedFiles: at.dropped_files } : {}),
         ...(typeof at.published_at === "number" ? { publishedAt: at.published_at } : {}),
         ...(typeof entry.captured_at === "number" ? { capturedAt: entry.captured_at } : {}),
         availability: entry.availability,
@@ -7701,6 +7706,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // beside the doors. Its change pings are its own: an app's move regroups no
     // project (fieldd Q13).
     // `exportReady` is left out: at rosetta 0.1.3 no desktop exports (3f).
+    // *2026-11-07:* rosetta 0.1.4 has the door (RO-32); no desktop exports until 3f calls it.
     const { searchTimeoutMs: _searchOnly, ...historyCadences } = config.indexMesh ?? {};
     // a peer's replicated sessions moved: the join's index of their cwds is
     // rebuilt at the next join, never per row
@@ -8140,6 +8146,8 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     //  - the export: RO-A1's door is rosetta 0.1.4's (EL8 #1, slice 3f). This
     //    rosetta (0.1.3) has none, so every open answers `export-unbuilt`, its
     //    honest state (C9); `config.madeApps.exporter` is the test seam.
+    //    *2026-11-07:* the pinned rosetta is 0.1.4 and has the door; every open
+    //    still answers `export-unbuilt` until 3f calls it.
     //  - its own MagicDNS name: the host the floor reported for this desktop's
     //    product serve, which exists exactly while the desktop is linked (and a
     //    made serve needs a link). A listener's URL is answered only on it.

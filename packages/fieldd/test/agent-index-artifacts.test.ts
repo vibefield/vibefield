@@ -36,7 +36,7 @@ import type { RosettadSupervisor } from "../src/rosettad-supervisor";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const FAKE = join(HERE, "fixtures", "fake-rosettad.mjs");
-const GOLDEN = join(HERE, "../../contracts/fixtures/index-artifacts-response.rosetta-29.json");
+const GOLDEN = join(HERE, "../../contracts/fixtures/index-artifacts-response.rosetta-30.json");
 const ORIGIN = "http://127.0.0.1:65011";
 
 /** rosetta's generated page is what the contracts' mirror reads, field for field. */
@@ -109,6 +109,8 @@ const entry = (
       version: null,
       published_at: 1_000 + version,
       source_offset: 4_096,
+      description: null,
+      dropped_files: null,
       ...over.publication,
     },
     availability: "captured",
@@ -229,8 +231,8 @@ describe("IndexService.artifacts — the library reader (MA-3a)", () => {
     ).toEqual({ limit: "100" });
   });
 
-  it("parses rosetta's own page (the protocol-29 golden) and hands it back in rosetta's spelling", async () => {
-    expect(existsSync(GOLDEN), "the contracts' rosetta-29 golden is present").toBe(true);
+  it("parses rosetta's own page (the protocol-30 golden) and hands it back in rosetta's spelling", async () => {
+    expect(existsSync(GOLDEN), "the contracts' rosetta-30 golden is present").toBe(true);
     const golden = JSON.parse(readFileSync(GOLDEN, "utf8")) as ArtifactPage & { "//"?: string };
     const { index } = service(JSON.stringify(golden));
     const answered = await index.artifacts({ limit: 100 });
@@ -242,6 +244,10 @@ describe("IndexService.artifacts — the library reader (MA-3a)", () => {
     expect(first?.publication.artifact_id).toBe(golden.entries[0]?.publication.artifact_id);
     expect(first?.agent, "the agent arrives as rosetta's kind").toBe("claude-code");
     expect(first?.presentations).toBe(2);
+    expect(first?.publication.description, "the publish request's own description (RO-33)").toBe(
+      "Two checkout flows to compare",
+    );
+    expect(first?.publication.dropped_files, "the files it did not keep (RO-34a)").toBe(2);
     // the witness is a compile-time one; this keeps it referenced
     expect(mirrorReadsRosetta(page([entry("a")])).entries).toHaveLength(1);
   });

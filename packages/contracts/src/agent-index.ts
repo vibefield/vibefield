@@ -1153,7 +1153,13 @@ export const IndexArtifactAssetRow = z
 export type IndexArtifactAssetRow = z.infer<typeof IndexArtifactAssetRow>;
 
 /** rosetta `HtmlArtifactPublication`, narrowed. Its `path` (an absolute path on its desktop) is not declared: fieldd
- * never reads it. Every locator is nullish, as rosetta sends it, and `published_at` is nullable there (H6). */
+ * never reads it. Every locator is nullish, as rosetta sends it, and `published_at` is nullable there (H6).
+ * `description` and `dropped_files` are protocol 30's (rosetta 0.1.4; RO-33 and RO-34a): the publish request's own
+ * description, at most rosetta's 4,096 bytes, and how many members of its `files` map the library did not keep beside
+ * the page. rosetta writes both keys, each null when it has none to say; both are nullish here as a tolerant reader,
+ * as every locator is. Like any member of this row, a mistyped one (a description that is not a string, a count that
+ * is not a non-negative integer) refuses the page; a description past the door's bound costs only itself, at the door
+ * (`IndexArtifactEntry`). */
 export const IndexArtifactPublicationRow = z
   .object({
     id: z.string().min(1),
@@ -1166,11 +1172,13 @@ export const IndexArtifactPublicationRow = z
     native_id: z.string().nullish(),
     version: z.string().nullish(),
     published_at: z.number().finite().nullish(),
+    description: z.string().nullish(),
+    dropped_files: z.number().int().nonnegative().nullish(),
   })
   .passthrough();
 export type IndexArtifactPublicationRow = z.infer<typeof IndexArtifactPublicationRow>;
 
-/** rosetta `ArtifactEntry` (protocol 29), as fieldd READS it. `availability` stays an open string here and is folded by
+/** rosetta `ArtifactEntry` (protocol 30), as fieldd READS it. `availability` stays an open string here and is folded by
  * `MadeAppAvailability` in the projection. `recovered_from` is read for one bit (`recovered`) and never carried.
  * `agent` is rosetta's KIND, mapped to the catalog's provider where the seam is crossed (R23b). `project_id` and
  * `project_name` come through the ROOT session. */
@@ -1436,12 +1444,18 @@ export type IndexArtifactsParams = z.infer<typeof IndexArtifactsParams>;
  *  - presentationId, appId: rosetta's `publication.id` and `artifact_id`.
  *  - title, filename: as on the catalog row (the producer clips the title and falls back to the filename).
  *  - hostedUrl, nativeId, version: the tool's record (`version` is rosetta's open string).
+ *  - description, droppedFiles: rosetta 0.1.4's (RO-A2 is RO-33, RO-A3a is RO-34a; the lead's ruling on L19). Absent
+ *    is unknown (or, for the description, none was written); `droppedFiles > 0` is a page served without its files
+ *    ("page only"). The description is the agent's own free text (EL7): a reader shows it as text, never as markup.
  *  - recovered: the page's bytes were recovered from a file other than the one the tool wrote.
  *  - mediaType, byteLen, digest: from rosetta's asset, when it kept one.
  *  - versions: rosetta's `presentations`, the app's count.
  * What a reader cannot read: the identities (device, presentationId, appId, sessionId, timelineId, filename) and the
  * project joins (projectId, projectKey; absent is "no project") are strict, so a bad one refuses the entry. Every
- * other optional fact costs that fact, never the entry, as on the catalog row. */
+ * other optional fact (hostedUrl, nativeId, version, description, droppedFiles, the two times, the asset's three,
+ * kind, provider, sessionTitle, projectName) costs that fact, never the entry, as on the catalog row. So does a
+ * description longer than MADE_APP_LIMITS.DESCRIPTION_CHARS: rosetta bounds its own in bytes (4,096), so a
+ * description rosetta keeps can be one this door does not carry. */
 export const IndexArtifactEntry = z
   .object({
     device: z.string().min(1),
@@ -1454,6 +1468,8 @@ export const IndexArtifactEntry = z
     hostedUrl: MadeAppHostedUrl.optional().catch(undefined),
     nativeId: z.string().min(1).max(MADE_APP_LIMITS.NATIVE_ID_CHARS).optional().catch(undefined),
     version: z.string().min(1).max(256).optional().catch(undefined),
+    description: z.string().max(MADE_APP_LIMITS.DESCRIPTION_CHARS).optional().catch(undefined),
+    droppedFiles: z.number().int().nonnegative().optional().catch(undefined),
     publishedAt: z.number().finite().optional().catch(undefined),
     capturedAt: z.number().finite().optional().catch(undefined),
     availability: MadeAppAvailability,

@@ -233,14 +233,14 @@ const PIN_EXPECTATIONS = [
   // to the line's end like ice's row, so a prerelease never passes for the release.
   {
     file: "pnpm-workspace.yaml",
-    re: /"@vibefield\/rosetta-protocol":\s*0\.1\.3\s*$/m,
-    label: '"@vibefield/rosetta-protocol": 0.1.3',
+    re: /"@vibefield\/rosetta-protocol":\s*0\.1\.4\s*$/m,
+    label: '"@vibefield/rosetta-protocol": 0.1.4',
     package: "@vibefield/rosetta-protocol",
   },
   {
     file: "pnpm-workspace.yaml",
-    re: /"@vibefield\/rosetta-room":\s*0\.1\.3\s*$/m,
-    label: '"@vibefield/rosetta-room": 0.1.3',
+    re: /"@vibefield\/rosetta-room":\s*0\.1\.4\s*$/m,
+    label: '"@vibefield/rosetta-room": 0.1.4',
     package: "@vibefield/rosetta-room",
   },
   // RD-5's exit for puppeteer's npm plane (2026-10-26, 0.2.3): the seven rows are exact `@vibefield/puppeteer-*`,

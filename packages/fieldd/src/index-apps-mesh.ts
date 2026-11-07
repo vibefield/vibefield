@@ -299,6 +299,7 @@ export class AppsMesh extends EventEmitter {
     this.#retryMaxMs = opts.retryMaxMs ?? INDEX_MESH.REPLICA_RETRY_MAX_MS;
     this.#changesMinIntervalMs = opts.changesMinIntervalMs ?? INDEX_MESH.CHANGES_MIN_INTERVAL_MS;
     // rosetta 0.1.3 has no export door (RO-A1): until 3e/3f say otherwise, no desktop exports
+    // *2026-11-07:* rosetta 0.1.4 has it (RO-32); still no desktop exports until 3f calls it.
     this.#exportReady = opts.exportReady ?? (() => false);
   }
 

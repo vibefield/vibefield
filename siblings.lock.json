@@ -21,7 +21,7 @@
     "rosetta": {
       "path": "../rosetta-pin",
       "repository": "https://github.com/vibefield/rosetta.git",
-      "sha": "8e8f49688e4b4d610643df2472b43e26ea87f46d",
+      "sha": "a8ab1f13fa707f84024072ee961fa82cd5d6bdb0",
       "packages": {
         "@vibefield/rosetta-protocol": "clients/ts",
         "@vibefield/rosetta-room": "clients/room"
@@ -31,7 +31,7 @@
         "profile": "release"
       },
       "release": {
-        "npm": "0.1.3"
+        "npm": "0.1.4"
       }
     },
     "truffle": {

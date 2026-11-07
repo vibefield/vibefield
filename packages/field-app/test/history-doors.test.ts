@@ -1449,7 +1449,8 @@ describe("the asset source (AR-8c, AR-D40 (a))", () => {
 
 /** `index.artifacts`' answer (EL9: the contract's own fixture): this
  * desktop's library — an app's newest presentation, kept, and its older one,
- * recovered from another file and missing. */
+ * recovered from another file and missing, whose publish request's
+ * description and dropped files (none) rosetta 0.1.4 recorded. */
 const LIBRARY = IndexArtifactsResult.parse(fixture("index-artifacts.valid.json"));
 const KEPT = LIBRARY.entries[0]!;
 const OLDER = LIBRARY.entries[1]!;
@@ -1511,6 +1512,8 @@ describe("MA-4b — the room's library: index.artifacts as rosetta's ArtifactPag
         version: "2",
         published_at: 1793836800000,
         source_offset: 0,
+        description: null,
+        dropped_files: null,
       },
       availability: "captured",
       captured_at: 1793836805000,
@@ -1531,6 +1534,24 @@ describe("MA-4b — the room's library: index.artifacts as rosetta's ArtifactPag
     expect(older.captured_at).toBeNull();
     expect(older.asset).toBeNull();
     expect(older.publication.path).toBeNull();
+  });
+
+  it("carries the publish request's description and dropped files (rosetta 0.1.4) as fieldd answered them, and rosetta's own null for each fieldd did not send", () => {
+    const older = artifactEntryOf(OLDER, names);
+    expect(older.publication.description, "the contract's fixture, as the request said it").toBe(
+      "The first checkout flow, before the review.",
+    );
+    expect(older.publication.dropped_files, "none dropped is a count, never unknown").toBe(0);
+    const told = IndexArtifactsResult.parse({
+      entries: [{ ...KEPT, description: "A checkout flow, for review.", droppedFiles: 2 }],
+      canonicalReady: true,
+    }).entries[0]!;
+    const mapped = artifactEntryOf(told, names);
+    expect(mapped.publication.description).toBe("A checkout flow, for review.");
+    expect(mapped.publication.dropped_files).toBe(2);
+    const unsaid = artifactEntryOf(KEPT, names);
+    expect(unsaid.publication.description, "no description: rosetta's null").toBeNull();
+    expect(unsaid.publication.dropped_files, "an unknown count: rosetta's null").toBeNull();
   });
 
   it("before any listing a project is its key, unnamed — never rosetta's own name; no catalog row is the room's unknown; an availability this build cannot read is no local copy", () => {
