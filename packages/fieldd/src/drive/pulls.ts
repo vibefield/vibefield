@@ -402,8 +402,9 @@ export class DrivePulls {
   /** the plain subscribe's next attempt while no stream stands (`#follow`, `#askForForeign`): set only while none is
    * in flight */
   #retry: ReturnType<typeof setTimeout> | null = null;
-  /** the next ask for a row in `#unconfirmed` while a stream stands (`#confirmLater`): set only while none is in
-   * flight, and cleared as the last such row goes (`#confirmed`) and at `stop` */
+  /** the next ask for a row in `#unconfirmed` while a stream stands (`#confirmLater`): armed only while no subscribe
+   * is in flight, and cleared as the last such row goes (`#confirmed`) and at `stop`. One that fires while a subscribe
+   * is in flight asks nothing: that flight left after the refusal that armed it, so its snapshot judges the row. */
   #confirm: ReturnType<typeof setTimeout> | null = null;
   /** the attempts of the series under way (`#follow`): back to 0 at a re-arm (`#arm`), as what is owed opens a series
    * (`#follow`), and as a subscription is made (`#doSubscribe`). Only a timer set while no stream stands counts it up
@@ -845,6 +846,9 @@ export class DrivePulls {
     if (this.#subscription === null || this.#subscribing !== null || this.#confirm !== null) return;
     const timer = setTimeout(() => {
       this.#confirm = null;
+      // a flight now left after the refusal that armed this: its snapshot judges the row, and refused unrun, the
+      // next refusal arms the timer again
+      if (this.#subscribing !== null) return;
       this.#rowUnconfirmed = true;
       this.#follow();
     }, this.#retryDelaysMs[0]);

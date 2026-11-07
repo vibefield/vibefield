@@ -436,6 +436,26 @@ describe("DR-3b — the drive's lane relay", () => {
     }
   });
 
+  it("renews at a node-up after a reconnect whose replay and re-subscribe were both refused, and only that once", async () => {
+    const { control, bytes, events, relay } = harness();
+    await relay.start();
+    // the replay meets a full queue, and so does the reconnect's own subscribe: the stream kept is the replay's entry,
+    // with no route
+    control.replayRefused();
+    control.refuseNextSubscribe = new Error("mesh queue full");
+    await relay.connected();
+    expect(events.map((e) => e.event)).toEqual(["fieldd.drive.lanes_unheard"]);
+    expect(control.subscribes).toBe(2);
+    control.lanes = [inboundRow(IN, "peer-a")];
+    await relay.nodeUp();
+    expect(control.subscribes, "subscribes after the node-up").toBe(3);
+    expect(control.disposed, "the dead entry, let go").toBe(1);
+    expect(bytes.claimed(IN), "the lane, claimed from the snapshot").toBe(true);
+    // answered, nothing is owed: the next node-up keeps the stream
+    await relay.nodeUp();
+    expect(control.subscribes, "subscribes after a second node-up").toBe(3);
+  });
+
   it("waits out a subscribe in flight at a reconnect, then makes its own: that one left on the old connection", async () => {
     const { control, relay } = harness();
     const held = gate();

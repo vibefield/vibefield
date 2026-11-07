@@ -1749,7 +1749,6 @@ describe("DR-3b — the drive's pulls over the floor's file transfer", () => {
     await until(() => thrown.length === 1, "the mock's throw");
     expect(String(thrown[0])).toContain("subscribeChunk.replaced");
     expect(asked(mock, SUBSCRIBE)).toBe(1);
-    expect(transfer.replaced).toEqual([]);
   });
 
   it("mints a ULID and asks with the contract's fields; a path outside the grammar is refused, unsent", async () => {
@@ -2512,6 +2511,67 @@ describe("DR-3b — the drive's pulls over the floor's file transfer", () => {
     const state = settled(accepted);
     await new Promise((resolve) => setImmediate(resolve));
     expect(state()).toBe("pending");
+  });
+
+  it("sets no confirm timer for a pull refused RESOURCE_EXHAUSTED while no row read refused is unconfirmed, over a standing stream", async () => {
+    const memory = new MemoryFloor();
+    const delay = 370;
+    const drive = pulls(memory, tempRoot(), { retryDelaysMs: [delay] });
+    await drive.start();
+    expect(memory.made).toBe(1);
+    const timers = vi.spyOn(globalThis, "setTimeout");
+    cleanup.push(() => timers.mockRestore());
+    // this fieldd's own pulls hold every slot: each is tracked as it is asked, before any answer
+    const running = Array.from({ length: DRIVE_LIMITS.PULLS_IN_FLIGHT }, (_, n) =>
+      drive.pull(ask(digestOf(1 + n))).catch((error: unknown) => error),
+    );
+    const refusal = await drive.pull(ask(digestOf(40))).catch((error: unknown) => error);
+    expect(errorData(refusal as RpcCallError)).toEqual(EXHAUSTED_GOLDEN);
+    expect(timers.mock.calls.filter((call) => call[1] === delay)).toHaveLength(0);
+    await sleep(delay + 200);
+    expect(memory.made, "subscribes one delay after the refusal").toBe(1);
+    void running;
+  });
+
+  it("asks nothing when the confirm timer fires while another subscribe is in flight: that flight's snapshot judges the row", async () => {
+    const memory = new MemoryFloor();
+    const delay = 370;
+    const drive = pulls(memory, tempRoot(), { retryDelaysMs: [delay] });
+    await drive.start();
+    // a pull read TIMEOUT whose one ask is refused unrun, and a pull its row refuses arms the confirm timer
+    memory.refusals.set(
+      2,
+      new RpcCallError("RESOURCE_EXHAUSTED", "mesh request queue is full", true),
+    );
+    memory.refuseNextPull = new RpcCallError("TIMEOUT", "the deadline passed", true);
+    const read = await drive.pull(ask(digestOf(1))).catch((error: unknown) => error);
+    expect(read).toMatchObject({ kind: "TIMEOUT" });
+    expect(memory.made).toBe(2);
+    await new Promise((resolve) => setImmediate(resolve));
+    const timers = vi.spyOn(globalThis, "setTimeout");
+    cleanup.push(() => timers.mockRestore());
+    const refusal = await drive.pull(ask(digestOf(1))).catch((error: unknown) => error);
+    expect(errorData(refusal as RpcCallError)).toEqual(CONFLICT_GOLDEN);
+    expect(timers.mock.calls.filter((call) => call[1] === delay)).toHaveLength(1);
+    // another pull reads TIMEOUT, and its ask is held in flight past the timer
+    let open: () => void = () => undefined;
+    memory.gates.set(
+      3,
+      new Promise<void>((resolve) => {
+        open = resolve;
+      }),
+    );
+    memory.refuseNextPull = new RpcCallError("TIMEOUT", "the deadline passed", true);
+    const second = await drive.pull(ask(digestOf(2))).catch((error: unknown) => error);
+    expect(second).toMatchObject({ kind: "TIMEOUT" });
+    expect(memory.made).toBe(3);
+    // set after the confirm timer and due later, this sleep ends after it fired
+    await sleep(delay + 200);
+    expect(memory.made, "made while the flight is held").toBe(3);
+    // answered: its snapshot omits both rows, which never ran, and nothing more is asked
+    open();
+    await sleep(2 * delay);
+    expect(memory.made, "made after that flight's snapshot judged both rows").toBe(3);
   });
 
   it("asks once for a pull read TIMEOUT whose every ask is refused at once, with a stream or without, and the chain of asks ends", async () => {

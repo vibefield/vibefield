@@ -97,8 +97,10 @@ export class DriveHolders {
    * which tells the floor nothing) only once that one is answered (`#doSubscribe`), so a subscribe refused here leaves
    * the store heard as it was, the live store when the node was not built anew, and the next node-up or reconnect
    * asks again. The cost: a stream let go keeps its forwarder writing to the connection until it closes, every change
-   * of the drive store it opened (the old store, when the node was built anew), and fieldd drops those lines. At most
-   * one stays per answered re-subscribe, because `native.mesh.store.subscribe` adds one per call. */
+   * of the drive store it opened (the old store, when the node was built anew), and fieldd drops those lines; so does
+   * a subscribe the floor ran that read TIMEOUT here, the replay included, because no route is made for an answer read
+   * late. `native.mesh.store.subscribe` adds a forwarder per call it runs, so beyond the one fieldd routes, one stays
+   * per other subscribe the floor ran on this connection. */
   async nodeUp(): Promise<void> {
     await this.#subscribing;
     await this.#subscribe(true);
