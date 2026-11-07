@@ -203,6 +203,9 @@ describe("11m's line of evidence (SMOKE_CHAT_SEND)", () => {
     evidence.waitedMs.ready = 640;
     evidence.waitedMs.given = 220;
     evidence.waitedMs.delivered = 480;
+    evidence.waitedMs.replied = 730;
+    expect(evidence.reply).toBeNull();
+    evidence.reply = "The stub answered sp1d-abc";
     expect(evidence.jump).toBeNull();
     evidence.jump = {
       floor: "pty-polaris",
@@ -228,7 +231,8 @@ describe("11m's line of evidence (SMOKE_CHAT_SEND)", () => {
         heard: { "keydown@draft": 8, "keypress@draft": 8, "input@draft": 8 },
       },
       play: evidence.play,
-      waitedMs: { ready: 640, given: 220, delivered: 480 },
+      waitedMs: { ready: 640, given: 220, delivered: 480, replied: 730 },
+      reply: "The stub answered sp1d-abc",
       jump: {
         floor: "pty-polaris",
         before: { panes: 3, active: "s-split", showing: 0 },

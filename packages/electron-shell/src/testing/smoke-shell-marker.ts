@@ -190,9 +190,16 @@ export interface ChatSendEvidence {
   };
   /** what the lab door answered the card played onto the composer */
   play: CardPlaySeen | null;
-  /** how long the waits took: the spark heard ("Ready"), and from Send's press until the stub was given the line and
-   * until the bubble said "Delivered" */
-  readonly waitedMs: { ready: number | null; given: number | null; delivered: number | null };
+  /** how long the waits took: the spark heard ("Ready"), and from Send's press until the stub was given the line,
+   * until the bubble said "Delivered" and until the agent's reply was drawn */
+  readonly waitedMs: {
+    ready: number | null;
+    given: number | null;
+    delivered: number | null;
+    replied: number | null;
+  };
+  /** item 227: the reply row's words as Chat drew them, once the stub ended the line's turn */
+  reply: string | null;
   /** TH-2 — the head's Jump to: the spark's own floor session (fieldd's `agent.list`), the deck as the split left it
    * and as Jump to left it (its panes, the active pane's session, how many panes show the spark's), and the line's
    * note */
@@ -215,7 +222,8 @@ export function newChatSendEvidence(lines: string, nonce: string): ChatSendEvide
     create: null,
     typing: { focus: null, caret: null, draft: null, heard: null },
     play: null,
-    waitedMs: { ready: null, given: null, delivered: null },
+    waitedMs: { ready: null, given: null, delivered: null, replied: null },
+    reply: null,
     jump: null,
   };
 }
@@ -237,6 +245,7 @@ export function chatSendEvidenceLine(evidence: ChatSendEvidence, cause: unknown)
     typing: evidence.typing,
     play: evidence.play,
     waitedMs: evidence.waitedMs,
+    reply: evidence.reply,
     jump: evidence.jump,
   })}`;
 }

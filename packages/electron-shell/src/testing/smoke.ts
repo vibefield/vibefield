@@ -221,8 +221,10 @@ import {
   readTypedAgentLines,
   type StagedTypedAgent,
   startupFilesRead,
+  TYPED_AGENT_ANSWERED,
   TYPED_AGENT_REFUSED_ARGUMENT,
   type TypedAgentCall,
+  typedAgentAnswer,
 } from "./typed-agent";
 
 // MV-0 — the Godview perf lab rides the same bundle, for the same reason.
@@ -10585,7 +10587,10 @@ export async function runSmokeGodview(opts: {
     //      one nearest the composer, and Esc folds it with the text kept; Send stands
     //      your bubble in the flow at once and says nothing on the line, the stub is
     //      given the line with no key pressed for it, and the record's `you` line takes
-    //      the bubble's place, its receipt "Delivered". A card from the hand let go on
+    //      the bubble's place, its receipt "Delivered". The stub then ends the line's
+    //      turn, its words on the display-only hook and on the Stop hook as a run with
+    //      live hooks gives them, and they are drawn as the spark's one reply, read
+    //      from the flow's reply row (item 227). A card from the hand let go on
     //      the composer becomes a chip in its draft, the card still in the hand. Then the
     //      head's Jump to (TH-2): the deck split so the spark is not in its focused pane,
     //      Jump to pressed in Chat, the window moves to Godview, the line says "Jumped to
@@ -10605,7 +10610,7 @@ export async function runSmokeGodview(opts: {
     } else {
       const lines = stubLines;
       const chatThread: Record<string, string> = {};
-      const nonce = `sp1d${Math.random().toString(36).slice(2, 10)}`;
+      const nonce = `${TYPED_AGENT_ANSWERED}${Math.random().toString(36).slice(2, 10)}`;
       const evidence = newChatSendEvidence(lines, nonce);
       type ThreadFacts = {
         view: string;
@@ -10621,6 +10626,9 @@ export async function runSmokeGodview(opts: {
         /** your bubbles in the flow that carry this rung's nonce, and the last one's receipt */
         bubbles: number;
         receipt: string | null;
+        /** the agent's reply rows in the flow that carry this rung's nonce, and the last one's words (item 227) */
+        replies: number;
+        reply: string | null;
         /** the head's Jump to: ready, waiting while it runs, or absent (null) */
         jump: "ready" | "busy" | null;
         text: string | null;
@@ -10645,6 +10653,12 @@ export async function runSmokeGodview(opts: {
                 (row.textContent ?? "").includes(${JSON.stringify(nonce)}),
               );
         const last = yours.length === 0 ? null : yours[yours.length - 1];
+        const replies =
+          flow === null
+            ? []
+            : [...flow.querySelectorAll('[data-row="reply"] .vf-chat-reply-text')].filter((row) =>
+                (row.textContent ?? "").includes(${JSON.stringify(nonce)}),
+              );
         const jump =
           thread === null ? null : thread.querySelector('.vf-chat-thread-acts button[data-act="jump"]');
         const input = document.querySelector(".vf-chat-input");
@@ -10666,6 +10680,8 @@ export async function runSmokeGodview(opts: {
           hello: flow !== null && flow.querySelector('[data-row="hello"]') !== null,
           bubbles: yours.length,
           receipt: last?.querySelector(".vf-chat-receipt")?.textContent ?? null,
+          replies: replies.length,
+          reply: replies.length === 0 ? null : replies[replies.length - 1].textContent,
           jump: jump === null ? null : jump.disabled ? "busy" : "ready",
           text: input === null ? null : input.textContent,
           at: at === null ? null : at.getAttribute("data-at"),
@@ -10955,10 +10971,23 @@ export async function runSmokeGodview(opts: {
         if (noteAfter !== null && noteAfter !== noteBefore) {
           throw new Error(`Send said ${JSON.stringify(noteAfter)} on the line`);
         }
+        // item 227: the stub gave its words in two copies, and Chat draws them as the spark's one reply. The row is
+        // what the person reads, so the rung reads the row, never the record it was drawn from
+        const replied = await untilThread(
+          "the agent's reply drawn in the flow",
+          (facts) => facts.replies === 1,
+          15_000,
+        );
+        evidence.waitedMs.replied = Date.now() - sentFrom;
+        evidence.reply = replied.reply;
+        if (replied.reply?.startsWith(typedAgentAnswer("")) !== true) {
+          throw new Error(`the reply drawn was ${JSON.stringify(replied.reply)}`);
+        }
         chatThread["Send"] =
           `your bubble stood at once (${standing.receipt ?? "no receipt yet"}); ${name}'s agent was given ` +
           `"${given.line}" (pid ${given.pid}) after ${evidence.waitedMs.given}ms with no key pressed for it; ` +
-          `the record's line took the bubble's place, Delivered, after ${evidence.waitedMs.delivered}ms`;
+          `the record's line took the bubble's place, Delivered, after ${evidence.waitedMs.delivered}ms; ` +
+          `the reply was drawn after ${evidence.waitedMs.replied}ms`;
         // 5. A card from the hand let go on the composer: a chip in the draft, the card kept
         const handBefore = (await threadFacts()).cards;
         const dealt = (await win.webContents.executeJavaScript(
@@ -10997,6 +11026,9 @@ export async function runSmokeGodview(opts: {
           (facts) => facts.cards === before.cards,
           3_000,
         );
+        // item 227: read again once the steps above have passed: a second copy drawn late would show by now
+        const settled = await threadFacts();
+        if (settled.replies !== 1) throw new Error(`the flow drew ${settled.replies} replies`);
         const emptied = (await win.webContents.executeJavaScript(
           "globalThis.__vfCards.clear()",
           true,

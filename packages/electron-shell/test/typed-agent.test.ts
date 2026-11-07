@@ -25,9 +25,11 @@ import {
   stageFirstRun,
   stageTypedAgent,
   startupFilesRead,
+  TYPED_AGENT_ANSWERED,
   TYPED_AGENT_ID,
   TYPED_AGENT_MODELS,
   TYPED_AGENT_PROFILE_ROOT,
+  typedAgentAnswer,
 } from "../src/testing/typed-agent";
 
 // AR-7 — the godview smoke's typed-agent fixture, its PURE and on-disk halves:
@@ -540,6 +542,91 @@ describe("the stub — the smoke's own stand-in, run as the program it is", () =
         expect(text).not.toContain("127.0.0.1");
         expect(text).not.toContain("Bearer");
       }
+    } finally {
+      await new Promise((closed) => bridge.close(closed));
+    }
+  });
+
+  // Item 227: 11m reads the agent's reply, and fieldd hears it at the turn's end. So a line that carries 11m's mark
+  // gives its words to MessageDisplay and ends its turn through the Stop hook, as the agent's does (adapter-claude
+  // normalization/wire.ts holds MessageDisplay to these three fields; turn.ts reads `last_assistant_message`). No
+  // other line is answered: a turn ended for every line would move every rung.
+  it("displays a line's answer and ends its turn through the Stop hook when it carries 11m's mark, and no other line's", async () => {
+    const staged = stageTypedAgent({
+      vibefieldRoot: root(),
+      source: {},
+      ownerHome: "/Users/owner",
+    });
+    const lines = staged.lines;
+    if (lines === undefined) throw new Error("the godview smoke's stub records no lines");
+    const heard: Record<string, unknown>[] = [];
+    const bridge = createServer((request, response) => {
+      let text = "";
+      request.setEncoding("utf8");
+      request.on("data", (chunk: string) => {
+        text += chunk;
+      });
+      request.on("end", () => {
+        heard.push(JSON.parse(text) as Record<string, unknown>);
+        response.writeHead(200, { "content-type": "application/json" });
+        response.end("{}");
+      });
+    });
+    await new Promise<void>((listening) => bridge.listen(0, "127.0.0.1", listening));
+    try {
+      const { port } = bridge.address() as AddressInfo;
+      const handler = { type: "http", url: `http://127.0.0.1:${port}/hooks`, timeout: 5 };
+      const settings = join(dirname(staged.calls), "settings.json");
+      writeFileSync(
+        settings,
+        JSON.stringify({
+          hooks: {
+            UserPromptSubmit: [{ hooks: [handler] }],
+            MessageDisplay: [{ hooks: [handler] }],
+            Stop: [{ hooks: [handler] }],
+          },
+        }),
+      );
+      const child = spawn(staged.stub, ["--session-id", "s-5", "--settings", settings], {
+        cwd: staged.work,
+        stdio: ["pipe", "pipe", "ignore"],
+      });
+      const left = exited(child);
+      let said = "";
+      await new Promise<void>((ready) =>
+        child.stdout?.on("data", (chunk: Buffer) => {
+          said += chunk.toString("utf8");
+          if (said.includes("Type exit to leave")) ready();
+        }),
+      );
+      const marked = `${TYPED_AGENT_ANSWERED}abc`;
+      child.stdin?.write("pasted words 11m\n");
+      child.stdin?.write(`${marked}\n`);
+      child.stdin?.write("exit\n");
+      expect(await left).toBe(0);
+      expect(heard.map((body) => body["hook_event_name"])).toEqual([
+        "UserPromptSubmit",
+        "UserPromptSubmit",
+        "MessageDisplay",
+        "Stop",
+      ]);
+      expect(heard[2]).toEqual({
+        session_id: "s-5",
+        cwd: realpathSync(staged.work),
+        hook_event_name: "MessageDisplay",
+        message_id: "stub-answer",
+        delta: typedAgentAnswer(marked),
+        final: true,
+      });
+      expect(heard[3]).toEqual({
+        session_id: "s-5",
+        cwd: realpathSync(staged.work),
+        hook_event_name: "Stop",
+        stop_hook_active: false,
+        last_assistant_message: typedAgentAnswer(marked),
+      });
+      const record = readTypedAgentLines(lines);
+      expect(record.map((entry) => entry.answered)).toEqual([undefined, [200], undefined]);
     } finally {
       await new Promise((closed) => bridge.close(closed));
     }

@@ -22,7 +22,8 @@ import {
   sparkTranscriptLineOf,
 } from "@vibefield/contracts";
 import type { LogFields, Logger } from "@vibefield/logging";
-import { afterEach, describe, expect, it } from "vitest";
+import { createAgentRuntime } from "@vibefield/puppeteer-runtime";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { RpcCallError } from "../src/native-link";
 import { RecordSigner, UNREADABLE_WORDS } from "../src/signed-record";
 import {
@@ -128,6 +129,67 @@ const unreadable = () => ({
   message: UNREADABLE_WORDS.transcripts,
   details: { service: SPARK_TRANSCRIPT_SERVICE.SERVICE, state: RECORD_STORES.STATE_UNREADABLE },
 });
+
+/** Item 227 — a run through puppeteer's OWN runtime: the binding names its observation level, and `send` hands the
+ * runtime what an adapter publishes. What `agent.on` then hears is the runtime's own gate (the transcript's copy of a
+ * message is withheld from a run whose hooks are live), never this file's model of it. */
+async function liveRun(first: "native-hooks" | "native-log") {
+  let level: string = first;
+  const root = mkdtempSync(join(tmpdir(), "vf-transcript-run-"));
+  dirs.push(root);
+  const adapter = new Set<(candidate: unknown) => void>();
+  const runtime = createAgentRuntime({
+    host: {
+      spawnTerminal: async () => {
+        throw new Error("this binding spawns nothing");
+      },
+      automateTerminal: async () => ({ accepted: true }),
+    },
+    defaultCwd: root,
+    providers: [
+      {
+        descriptor: { id: "live", label: "Live" },
+        createSession: async () => ({
+          sessionId: "native-vela",
+          runtimeSessionId: "pty-vela",
+          observationLevel: () => level,
+          events: {
+            onCandidate: (listener: (candidate: unknown) => void) => {
+              adapter.add(listener);
+              return () => adapter.delete(listener);
+            },
+          },
+          services: { prompt: { submit: async () => ({ status: "confirmed" }) } },
+          dispose: async () => undefined,
+        }),
+      },
+    ],
+  } as unknown as Parameters<typeof createAgentRuntime>[0]);
+  const created = await runtime.createSession({ agent: "live", cwd: root });
+  if ("error" in created) throw new Error(`the run was refused: ${JSON.stringify(created)}`);
+  const agent = runtime.agent(created.terminalSessionId) as unknown as TranscriptAgent;
+  const send = (source: string, event: { type: string } & Record<string, unknown>) => {
+    for (const listener of adapter)
+      listener({
+        type: event.type,
+        sessionId: "native-vela",
+        timestamp: AT,
+        monotonicTime: performance.now(),
+        source,
+        confidence: "authoritative",
+        event,
+      });
+  };
+  return {
+    agent,
+    send,
+    /** the level a run moves to at its first hook */
+    hooked: () => {
+      level = "native-hooks";
+    },
+    dispose: () => runtime.dispose(),
+  };
+}
 
 /** A run as puppeteer's Agent hands it to the recorder: its `.on` surface, and its monitor's evidence. */
 function fakeAgent(lastEvidenceAt?: string) {
@@ -417,6 +479,206 @@ describe("the recorder (TH-1; a spark's own run's events, and VibeField's own fa
     expect(JSON.stringify(lines[1])).not.toContain("Bash");
     expect(lines[2]).toMatchObject({ messageId: "m-1", text: "Half done, all green." });
     expect(lines[3]).toMatchObject({ edge: "end", turn: "t-1" });
+  });
+
+  it("writes a live run's reply from its turn's end when neither copy of the message can be kept: the transcript's withheld at native-hooks, the hook's display-only (item 227)", async () => {
+    const h = harness();
+    const recorder = new SparkTranscriptRecorder(h.open());
+    const run = await liveRun("native-hooks");
+    try {
+      recorder.entered({ agent: run.agent, spark: VELA, runtimeRunId: RUN, begun: "spawn" });
+      const message = { type: "conversation:assistant-message", text: "Hello there.", final: true };
+      run.send("native-hook", { type: "turn:started", turnId: "t-1" });
+      run.send("native-hook", { ...message, messageId: "m-1", turnId: "t-1", displayOnly: true });
+      run.send("native-hook", {
+        type: "turn:completed",
+        turnId: "t-1",
+        lastAssistantMessage: "Hello there.",
+      });
+      run.send("native-transcript", {
+        ...message,
+        messageId: "m-1",
+        turnId: "t-file",
+        displayOnly: false,
+      });
+      const lines = h.raw(VELA, RUN).slice(1);
+      expect(lines.map((line) => line["kind"])).toEqual(["turn", "reply", "turn"]);
+      expect(lines[1]).toMatchObject({ text: "Hello there.", turn: "t-1" });
+      expect(lines[1]?.["messageId"]).not.toMatch(/^seq-/);
+      expect(lines[2]).toMatchObject({ edge: "end", turn: "t-1" });
+    } finally {
+      await run.dispose();
+    }
+  });
+
+  it("writes a run's reply once when its turn's end repeats what it already heard (item 227)", async () => {
+    const h = harness();
+    const recorder = new SparkTranscriptRecorder(h.open());
+    const run = await liveRun("native-log");
+    try {
+      recorder.entered({ agent: run.agent, spark: VELA, runtimeRunId: RUN, begun: "spawn" });
+      run.send("native-hook", { type: "turn:started", turnId: "t-1" });
+      run.send("native-transcript", {
+        type: "conversation:assistant-message",
+        messageId: "m-1",
+        turnId: "t-1",
+        text: "Hello there.",
+        final: true,
+        displayOnly: false,
+      });
+      run.send("native-hook", {
+        type: "turn:completed",
+        turnId: "t-1",
+        lastAssistantMessage: "Hello there.",
+      });
+      const lines = h.raw(VELA, RUN).slice(1);
+      expect(lines.map((line) => line["kind"])).toEqual(["turn", "reply", "turn"]);
+      expect(lines[1]).toMatchObject({ messageId: "m-1", text: "Hello there." });
+    } finally {
+      await run.dispose();
+    }
+  });
+
+  it("keeps a turn's last words when a re-attached run's narration was heard first, the run's level moving under it (item 227)", async () => {
+    const h = harness();
+    const recorder = new SparkTranscriptRecorder(h.open());
+    const run = await liveRun("native-log");
+    try {
+      recorder.entered({ agent: run.agent, spark: VELA, runtimeRunId: RUN, begun: "reattach" });
+      const message = { type: "conversation:assistant-message", final: true, displayOnly: false };
+      run.send("native-transcript", { ...message, messageId: "m-1", text: "Let me look." });
+      run.hooked();
+      run.send("native-transcript", { ...message, messageId: "m-2", text: "The answer." });
+      run.send("native-hook", {
+        type: "turn:completed",
+        turnId: "t-1",
+        lastAssistantMessage: "The answer.",
+      });
+      const lines = h.raw(VELA, RUN).slice(1);
+      expect(lines.map((line) => line["kind"])).toEqual(["reply", "reply", "turn"]);
+      expect(lines.map((line) => line["text"]).slice(0, 2)).toEqual([
+        "Let me look.",
+        "The answer.",
+      ]);
+    } finally {
+      await run.dispose();
+    }
+  });
+
+  it("writes both ends of a turn a Stop hook of the person's held open: the first words are not its last (item 227)", () => {
+    const h = harness();
+    const recorder = new SparkTranscriptRecorder(h.open());
+    const run = fakeAgent();
+    recorder.entered({ agent: run.agent, spark: VELA, runtimeRunId: RUN, begun: "spawn" });
+    run.emit("turn:started", { turnId: "t-1" });
+    run.emit("turn:completed", { turnId: "t-1", lastAssistantMessage: "First words." });
+    run.emit("turn:completed", { turnId: "t-1", lastAssistantMessage: "The real end." });
+    const lines = h.raw(VELA, RUN).slice(1);
+    expect(lines.map((line) => line["kind"])).toEqual(["turn", "reply", "turn", "reply", "turn"]);
+    expect(lines[3]).toMatchObject({ text: "The real end." });
+  });
+
+  it("writes an end with no live start: the turn before it says nothing of this one (item 227)", () => {
+    const h = harness();
+    const recorder = new SparkTranscriptRecorder(h.open());
+    const run = fakeAgent();
+    recorder.entered({ agent: run.agent, spark: VELA, runtimeRunId: RUN, begun: "spawn" });
+    run.emit("turn:started", { turnId: "t-1" });
+    run.emit("conversation:assistant-message", { messageId: "m-1", text: "One." });
+    run.emit("turn:completed", { turnId: "t-1", lastAssistantMessage: "One." });
+    run.emit("turn:completed", { turnId: "t-2", lastAssistantMessage: "Two.\n" });
+    const replies = h.raw(VELA, RUN).filter((line) => line["kind"] === "reply");
+    expect(replies.map((line) => line["text"])).toEqual(["One.", "Two.\n"]);
+  });
+
+  it("adds no second reply for an end whose words equal the reply's, their ends trimmed either way (item 227)", () => {
+    const h = harness();
+    const recorder = new SparkTranscriptRecorder(h.open());
+    const run = fakeAgent();
+    recorder.entered({ agent: run.agent, spark: VELA, runtimeRunId: RUN, begun: "spawn" });
+    run.emit("turn:started", { turnId: "t-1" });
+    run.emit("conversation:assistant-message", { messageId: "m-1", text: "  Hello there.\n" });
+    run.emit("turn:completed", { turnId: "t-1", lastAssistantMessage: "Hello there." });
+    run.emit("turn:started", { turnId: "t-2" });
+    run.emit("conversation:assistant-message", { messageId: "m-2", text: "Goodbye." });
+    run.emit("turn:completed", { turnId: "t-2", lastAssistantMessage: "\n Goodbye.  " });
+    const replies = h.raw(VELA, RUN).filter((line) => line["kind"] === "reply");
+    expect(replies.map((line) => line["text"])).toEqual(["  Hello there.\n", "Goodbye."]);
+  });
+
+  it("writes the end's words when the reply heard before them was not kept (item 227)", () => {
+    const h = harness();
+    const store = h.open();
+    const recorder = new SparkTranscriptRecorder(store);
+    const run = fakeAgent();
+    recorder.entered({ agent: run.agent, spark: VELA, runtimeRunId: RUN, begun: "spawn" });
+    run.emit("turn:started", { turnId: "t-1" });
+    const refused = vi.spyOn(store, "append").mockReturnValueOnce(undefined);
+    run.emit("conversation:assistant-message", { messageId: "m-1", text: "Hello." });
+    refused.mockRestore();
+    run.emit("turn:completed", { turnId: "t-1", lastAssistantMessage: "Hello." });
+    const lines = h.raw(VELA, RUN).slice(1);
+    expect(lines.map((line) => line["kind"])).toEqual(["turn", "reply", "turn"]);
+    expect(lines[1]?.["messageId"]).toMatch(/^seq-/);
+  });
+
+  it("asks each turn for its own reply, even in the last turn's words (item 227)", () => {
+    const h = harness();
+    const recorder = new SparkTranscriptRecorder(h.open());
+    const run = fakeAgent();
+    recorder.entered({ agent: run.agent, spark: VELA, runtimeRunId: RUN, begun: "spawn" });
+    run.emit("turn:started", { turnId: "t-1" });
+    run.emit("conversation:assistant-message", { messageId: "m-1", text: "Done." });
+    run.emit("turn:completed", { turnId: "t-1", lastAssistantMessage: "Done." });
+    run.emit("turn:started", { turnId: "t-2" });
+    run.emit("turn:completed", { turnId: "t-2", lastAssistantMessage: "Done." });
+    const lines = h.raw(VELA, RUN).slice(1);
+    expect(lines.map((line) => line["kind"])).toEqual([
+      "turn",
+      "reply",
+      "turn",
+      "turn",
+      "reply",
+      "turn",
+    ]);
+    expect(lines[4]).toMatchObject({ text: "Done.", turn: "t-2" });
+    expect(lines[4]?.["messageId"]).toMatch(/^seq-/);
+  });
+
+  it("writes a turn's end words after the tools it flushed, and none for an end with no words, a failed turn, a subagent's or a replay (item 227)", () => {
+    const h = harness();
+    const recorder = new SparkTranscriptRecorder(h.open());
+    const run = fakeAgent();
+    recorder.entered({ agent: run.agent, spark: VELA, runtimeRunId: RUN, begun: "spawn" });
+    run.emit("turn:started", { turnId: "t-1" });
+    run.emit("tool:requested", {
+      toolCallId: "c-1",
+      tool: "mcp",
+      presentation: { kind: "mcp", title: "Using a tool" },
+    });
+    run.emit("turn:completed", { turnId: "t-1", lastAssistantMessage: "Done." });
+    expect(
+      h
+        .raw(VELA, RUN)
+        .slice(1)
+        .map((line) => line["kind"]),
+    ).toEqual(["turn", "tool", "reply", "turn"]);
+    const after = h.raw(VELA, RUN).length;
+    run.emit("turn:started", { turnId: "t-2" });
+    run.emit("turn:completed", { turnId: "t-2", lastAssistantMessage: " \n " });
+    run.emit("turn:started", { turnId: "t-3" });
+    run.emit("turn:completed", { turnId: "t-3" });
+    run.emit("turn:started", { turnId: "t-4" });
+    run.emit("turn:failed", { turnId: "t-4" });
+    run.emit("turn:started", { turnId: "t-5" });
+    run.emit("turn:completed", { lastAssistantMessage: "Theirs." }, { agentId: "sub-1" });
+    run.emit("turn:completed", { lastAssistantMessage: "Old." }, { replay: true });
+    expect(
+      h
+        .raw(VELA, RUN)
+        .slice(after)
+        .filter((line) => line["kind"] === "reply"),
+    ).toEqual([]);
   });
 
   it("binds a prompt to the input fieldd pasted, and writes a prompt nothing of fieldd's pasted as yours via the terminal", () => {

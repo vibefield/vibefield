@@ -27,7 +27,10 @@ import {
 //     its environment's NAMES — never a value) and, run as a managed session,
 //     waits at its prompt until `exit` or the end of its input, telling each
 //     prompt to the UserPromptSubmit hook its `--settings` name, as the agent
-//     does (item 185: puppeteer confirms a paste-and-submit by that hook alone);
+//     does (item 185: puppeteer confirms a paste-and-submit by that hook alone),
+//     and ending the turn of a line that carries 11m's mark: its words to the
+//     MessageDisplay hook, then to the Stop hook, the one the agent's reply is
+//     drawn from (item 227);
 //   · the MACHINE RECORD naming the stub as that agent's ACTIVE install — the
 //     choice Settings → Agents records (`machine/agents/distribution.json`,
 //     AR-D16), so the launch recipe, the launch's probe and the gateway's
@@ -62,6 +65,13 @@ import {
  * a thread), and its adapter refuses an argument for a session it cannot
  * observe (`TYPED_AGENT_REFUSED_ARGUMENT`). */
 export const TYPED_AGENT_ID = "claude";
+
+/** What 11m's sent line carries, and the only line the stub answers (item 227): a turn the stub ended for every line
+ * would move every rung that gives it one, so an answer stays on 11m's own path. */
+export const TYPED_AGENT_ANSWERED = "sp1d";
+
+/** The words the stub ends an answered line's turn with, as its Stop hook's `last_assistant_message`. */
+export const typedAgentAnswer = (line: string): string => `The stub answered ${line}`;
 
 /** An argument that agent's adapter refuses for an interactive session (its
  * grammar: the session would fire no hook, so it could not be observed). */
@@ -148,6 +158,10 @@ export interface StubRecords {
   /** where a managed session records each line it is given, one JSON line
    * each (`readTypedAgentLines`): the witness that a sent line reached it */
   readonly lines?: string;
+  /** a line carrying this is answered: `typedAgentAnswer`'s words go to the
+   * MessageDisplay hook, and the turn it started ends with them on the Stop
+   * hook (item 227) */
+  readonly answers?: string;
 }
 
 /** The stub, as a Node program: `#!/usr/bin/env node`, so a shell, the
@@ -171,7 +185,7 @@ export function typedAgentStubSource(
       : `
     appendFileSync(
       ${JSON.stringify(records.lines)},
-      JSON.stringify({ pid: process.pid, cwd: process.cwd(), line, ...told }) + "\\n",
+      JSON.stringify({ pid: process.pid, cwd: process.cwd(), line, ...told, ...answered }) + "\\n",
     );`;
   const notASession =
     atATerminal === "stands"
@@ -189,7 +203,8 @@ export function typedAgentStubSource(
 // It records every run of itself — its arguments, its folder and the NAMES of
 // its environment, never a value — and, run as a managed session, waits at its
 // prompt until \`exit\` or the end of its input, telling each prompt to the
-// UserPromptSubmit hook its settings name before it takes the line.
+// UserPromptSubmit hook its settings name before it takes the line, and ending
+// the turn of a line it answers through the MessageDisplay and Stop hooks.
 const { appendFileSync, readFileSync } = require("node:fs");
 const { isatty } = require("node:tty");
 const argv = process.argv.slice(2);
@@ -243,10 +258,11 @@ ${notASession}
     return value === undefined || value.startsWith("-") ? undefined : value;
   };
   const sessionId = valueOf("--session-id") ?? valueOf("--resume");
-  // The UserPromptSubmit http hooks the session's settings name, read as the
+  const answers = ${records.answers === undefined ? "undefined" : JSON.stringify(records.answers)};
+  // An event's http hooks as the session's settings name them, read as the
   // agent reads \`--settings\`: a file, or the JSON itself. Settings that cannot
   // be read say so on every line's record, by the failure's code alone.
-  const prompted = (() => {
+  const hooksOf = (event) => {
     const settings = valueOf("--settings");
     if (settings === undefined) return { hooks: [] };
     let parsed;
@@ -256,14 +272,17 @@ ${notASession}
       return { hooks: [], unread: String(error?.code ?? error?.name ?? "unread") };
     }
     const hooks = [];
-    const groups = parsed?.hooks?.UserPromptSubmit;
+    const groups = parsed?.hooks?.[event];
     for (const group of Array.isArray(groups) ? groups : []) {
       for (const hook of Array.isArray(group?.hooks) ? group.hooks : []) {
         if (hook?.type === "http" && typeof hook.url === "string") hooks.push(hook);
       }
     }
     return { hooks };
-  })();
+  };
+  const prompted = hooksOf("UserPromptSubmit");
+  const displayed = hooksOf("MessageDisplay");
+  const stopped = hooksOf("Stop");
   // A hook's headers as the agent sends them: \`$VAR\` and \`\${VAR}\` resolved
   // from the environment for a variable its \`allowedEnvVars\` lists, and empty
   // for any other.
@@ -278,29 +297,29 @@ ${notASession}
     }
     return headers;
   };
-  // What the agent does as it takes a prompt: each hook POSTed the prompt,
-  // verbatim, and its answer awaited. What is kept of a hook is its status,
-  // or the code it failed on: never its URL, a header or a token (EL7).
-  const tell = async (prompt) => {
-    if (prompted.unread !== undefined) return { settings: prompted.unread };
-    if (prompted.hooks.length === 0) return {};
+  // What the agent does at a hook's event: each hook POSTed the event's
+  // fields, and its answer awaited. What is kept of a hook is its status, or
+  // the code it failed on: never its URL, a header or a token (EL7).
+  const tell = async (named, event, fields) => {
+    if (named.unread !== undefined) return { settings: named.unread };
+    if (named.hooks.length === 0) return {};
     const body = JSON.stringify({
       session_id: sessionId,
       cwd: process.cwd(),
-      hook_event_name: "UserPromptSubmit",
-      prompt,
+      hook_event_name: event,
+      ...fields,
     });
     const hooks = await Promise.all(
-      prompted.hooks.map(async (hook) => {
+      named.hooks.map(async (hook) => {
         try {
-          const answer = await fetch(hook.url, {
+          const response = await fetch(hook.url, {
             method: "POST",
             headers: headersOf(hook),
             body,
             signal: AbortSignal.timeout((typeof hook.timeout === "number" ? hook.timeout : 60) * 1000),
           });
-          await answer.arrayBuffer();
-          return answer.status;
+          await response.arrayBuffer();
+          return response.status;
         } catch (error) {
           return String(error?.cause?.code ?? error?.name ?? "failed");
         }
@@ -308,11 +327,25 @@ ${notASession}
     );
     return { hooks };
   };
+  // A line answered: its turn runs a moment, as the agent's does, its words
+  // are displayed, and it ends with them on the Stop hook. The agent gives
+  // them twice, and the rung's one reply must refuse the display's copy. Only
+  // a line carrying the mark is answered (item 227).
+  const answer = async (line) => {
+    await new Promise((done) => setTimeout(done, 200));
+    const words = ${JSON.stringify(typedAgentAnswer(""))} + line;
+    await tell(displayed, "MessageDisplay", { message_id: "stub-answer", delta: words, final: true });
+    const told = await tell(stopped, "Stop", { stop_hook_active: false, last_assistant_message: words });
+    return { answered: told.hooks ?? [] };
+  };
   // One line taken: told first (a prompt; \`exit\` is the stub's way out), then
-  // recorded. Lines are taken in the order they came.
+  // answered if it is one to answer, then recorded. Lines are taken in the
+  // order they came.
   const take = async (typed) => {
     const line = typed.trim();
-    const told = line === "" || line === "exit" ? {} : await tell(typed);${recordLine}
+    const prompt = line !== "" && line !== "exit";
+    const told = prompt ? await tell(prompted, "UserPromptSubmit", { prompt: typed }) : {};
+    const answered = prompt && answers !== undefined && line.includes(answers) ? await answer(line) : {};${recordLine}
     if (line === "exit") process.exit(0);
   };
   let taken = Promise.resolve();
@@ -379,6 +412,9 @@ export interface TypedAgentLine {
   /** the code the session's `--settings` could not be read on (e.g. `ENOENT`), when they could not: no hook was
    * told the line */
   settings?: string;
+  /** item 227: each Stop http hook's status, or the code it failed on, for a line the stub answered. Absent for any
+   * other line. */
+  answered?: (number | string)[];
 }
 
 /** Every line the stub's sessions were given so far, oldest first. A line still being written is left for the
@@ -637,8 +673,9 @@ export function stageTypedAgent(opts: StagePersonOptions): StagedTypedAgent {
     dir: "typed-agent",
     atATerminal: "refuses",
     standsFor: (entry) => entry.id === TYPED_AGENT_ID,
-    // 11m (SP-1d): This Mac signed in, so a spark hatches; each line its session is given, recorded
-    records: { signedIn: true, lines: true },
+    // 11m (SP-1d): This Mac signed in, so a spark hatches; each line its session is given, recorded, and its own
+    // line answered (item 227)
+    records: { signedIn: true, lines: true, answers: TYPED_AGENT_ANSWERED },
   });
 }
 
@@ -665,7 +702,7 @@ function stagePerson(
     /** whether the machine record names the stub for this launchable row */
     standsFor: (entry: (typeof AGENT_CATALOG)[number]) => boolean;
     /** what the stub does beyond its probes (`StubRecords`): none unless named */
-    records?: { signedIn: boolean; lines: boolean };
+    records?: { signedIn: boolean; lines: boolean; answers?: string };
   },
 ): StagedTypedAgent {
   const row = AGENT_CATALOG.find((entry) => entry.id === TYPED_AGENT_ID);
@@ -696,6 +733,7 @@ function stagePerson(
     typedAgentStubSource(calls, shape.atATerminal, {
       ...(shape.records?.signedIn === true ? { signedIn: true } : {}),
       ...(lines === undefined ? {} : { lines }),
+      ...(shape.records?.answers === undefined ? {} : { answers: shape.records.answers }),
     }),
   );
   chmodSync(stub, 0o755);
