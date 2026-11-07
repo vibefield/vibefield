@@ -134,6 +134,9 @@ enum NewSpark {
     UInt32(clamping: Int64((random * 4_294_967_296).rounded(.down)))
   }
 
+  /// IOS-12f's f6b — the draw that deals `seed`, `dealSeed`'s inverse. The red's skeleton: it draws 0.
+  static func draw(dealing seed: UInt32) -> Double { 0 }
+
   /// The agents the sheet lists: the ones the catalog lets be a spark first, then the installed ones it does not let
   /// yet, disabled with why; one not installed is not listed. Each keeps `agent.providers`' order inside its kind.
   static func sparkAgents(_ providers: [AgentProviderSummary]) -> [SparkAgent] {

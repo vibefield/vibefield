@@ -381,6 +381,20 @@ struct NewSparkSheetTests {
     #expect(seen == 1)
   }
 
+  /// IOS-12f's f6b — the stills' seed (`-vf-new-spark-seed=<n>`) is handed to the sheet as the draw that deals it:
+  /// `draw(dealing:)` is `dealSeed`'s inverse across the engine's 32-bit range, and the sheet deals the face it names.
+  @Test("a given seed is dealt: the stills' draw deals the face it names, at both ends of the range and at 4211")
+  @MainActor
+  func givenSeed() {
+    for seed: UInt32 in [0, 1, 4211, 2_846_113_027, .max] {
+      let dealt = NewSpark.dealSeed(NewSpark.draw(dealing: seed))
+      #expect(dealt == seed, "seed \(seed)")
+    }
+    let sheet = NewSparkSheet(taken: [], random: { NewSpark.draw(dealing: 4211) })
+    let seed = sheet.seed
+    #expect(seed == 4211)
+  }
+
   @Test("§9: Runs on studio, your home; the home away in its three facts; Create and its name")
   func words() {
     #expect(NewSparkWords.runsOn("studio") == "Runs on studio, your home")
