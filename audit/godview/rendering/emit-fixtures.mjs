@@ -11,7 +11,7 @@ import {
   SHIPPED_TAG_COMMIT,
   assertCoverage,
 } from "./inputs.mjs";
-import { matrix } from "./matrix.mjs";
+import { matrix, matrixSummary } from "./matrix.mjs";
 
 assertCoverage();
 const root = join(import.meta.dirname, "..", "fixtures");
@@ -50,11 +50,14 @@ const integration = {
     };
   }),
   holes: HOLES,
-  matrix: matrix().map(({ stateId, viewId, disposition, fixtureId }) => ({
-    stateId,
-    viewId,
-    disposition,
-    ...(fixtureId ? { fixtureId } : {}),
+  matrixSummary: matrixSummary(),
+  matrix: matrix().map((cell) => ({
+    stateId: cell.stateId,
+    viewId: cell.viewId,
+    disposition: cell.disposition,
+    ...(cell.fixtureId ? { fixtureId: cell.fixtureId } : {}),
+    ...(cell.exercise ? { exercise: cell.exercise } : {}),
+    evidence: cell.evidence,
   })),
 };
 writeFileSync(join(import.meta.dirname, "integration.json"), `${JSON.stringify(integration, null, 2)}\n`);

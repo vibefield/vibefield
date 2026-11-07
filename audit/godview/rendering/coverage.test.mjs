@@ -3,7 +3,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import test from "node:test";
 import { ENTRIES, HOLES, MODEL_STATE_IDS, PINS, assertCoverage } from "./inputs.mjs";
-import { VIEWS, assertMatrix, matrix } from "./matrix.mjs";
+import { VIEWS, assertMatrix, matrix, matrixSummary } from "./matrix.mjs";
 
 const fixtureDir = join(import.meta.dirname, "..", "fixtures");
 
@@ -30,6 +30,13 @@ test("state by view matrix covers every contract pair", () => {
     }
     if (cell.disposition === "not-applicable") {
       assert.equal(cell.fixtureId, undefined);
+      assert.match(cell.evidence, /^Outside this view:/);
+    }
+    if (cell.disposition === "covered-by") {
+      assert.match(cell.evidence, /^Same branch as /);
+    }
+    if (cell.disposition === "coverage-gap") {
+      assert.match(cell.evidence, /^Unverified:/);
     }
   }
 });
@@ -67,6 +74,28 @@ test("statuses are rendered on every view that paints them without WebGPU", () =
     const swarm = cells.find((item) => item.stateId === stateId && item.viewId === "view.swarm");
     assert.equal(swarm.disposition, "environment-gap");
   }
+});
+
+test("subtype cells are not dismissed as not-applicable", () => {
+  const cells = matrix();
+  for (const stateId of ["state.blocked_permission", "state.blocked_question", "state.blocked_failure", "state.unread"]) {
+    for (const viewId of ["view.list", "view.rain"]) {
+      const cell = cells.find((item) => item.stateId === stateId && item.viewId === viewId);
+      assert.notEqual(cell.disposition, "not-applicable", `${stateId} ${viewId}`);
+      assert.equal(cell.disposition, "rendered", `${stateId} ${viewId}`);
+    }
+  }
+});
+
+test("the previous 302 not-applicable count is not treated as validated", () => {
+  const summary = matrixSummary(matrix());
+  assert.equal(summary.cells, 82 * 5);
+  assert.equal(summary.priorClaim.notApplicable, 302);
+  assert.equal(summary.priorClaim.validated, false);
+  assert.ok(summary.notApplicable < 302);
+  const total =
+    summary.rendered + summary.coveredBy + summary.coverageGap + summary.notApplicable + summary.environmentGap;
+  assert.equal(total, 410);
 });
 
 test("hole reasons stay source-backed and swarm gaps point at the diagnostic", () => {

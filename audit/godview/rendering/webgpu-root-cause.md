@@ -1,6 +1,6 @@
 # Swarm WebGPU root cause
 
-Pinned source `748d015a7e393112e0a91dad80111fdf5abe6583`, unmodified. Chrome `156.0.8078.47`. Matrix counts stay **73 rendered / 302 not-applicable / 35 environment-gap**. No swarm body was drawn.
+Pinned source `748d015a7e393112e0a91dad80111fdf5abe6583`, unmodified. Chrome `156.0.8078.47`. No swarm body was drawn. The 73 / 302 / 35 figures were the matrix at the time of this note. They are not a validated not-applicable count. The matrix correction is separate (`matrix-correction.md`).
 
 The trace is `swarm-lifecycle.json`. The instrumentation in `src/swarm-repro.ts` records adapter, device, destroy, lost, and uncaptured-error events and then calls the original functions. `createSwarmRenderer` and `AgentSwarm` are the pinned sources.
 

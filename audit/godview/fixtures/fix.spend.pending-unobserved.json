@@ -1,0 +1,33 @@
+{
+  "fixtureId": "fix.spend.pending-unobserved",
+  "origin": "synthetic",
+  "syntheticLabel": "Synthetic AgentView input for a view predicate. Not a captured adapter session.",
+  "pins": {
+    "vibefield": "433505fd0f224f4cda540d642661b13848c0ef82",
+    "puppeteer": "748d015a7e393112e0a91dad80111fdf5abe6583"
+  },
+  "viewId": "view.spend",
+  "lifecycleStates": [
+    "state.pending_unobserved"
+  ],
+  "adapterIds": [
+    "adapter.acp",
+    "adapter.antigravity",
+    "adapter.claude",
+    "adapter.codex",
+    "adapter.copilot",
+    "adapter.grok",
+    "adapter.hermes",
+    "adapter.kimi",
+    "adapter.opencode",
+    "adapter.pi"
+  ],
+  "component": {
+    "repo": "puppeteer",
+    "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+    "path": "packages/views/src/views/spend/SpendView.tsx",
+    "symbol": "SpendView",
+    "lineStart": 255
+  },
+  "notes": "Pending. detailLine says unobserved · resumes when idle. adapterIds list the ten audit adapters as classification context only. They are not a claim that any adapter emitted this row. Mounted from Puppeteer source 748d015 via MonitorViewHost. Not shipped package 0.3.3."
+}

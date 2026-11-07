@@ -217,7 +217,6 @@
       "requiresBodyPaint": false,
       "interact": null,
       "renderStatus": "rendered",
-      "paint": "dom",
       "screenshot": "audit/godview/rendering/screenshots/fix.list.receded.png"
     },
     {
@@ -746,7 +745,6 @@
       "requiresBodyPaint": false,
       "interact": null,
       "renderStatus": "rendered",
-      "paint": "canvas",
       "screenshot": "audit/godview/rendering/screenshots/fix.timeline.receded.png"
     },
     {
@@ -831,7 +829,6 @@
       "requiresBodyPaint": false,
       "interact": null,
       "renderStatus": "rendered",
-      "paint": "canvas",
       "screenshot": "audit/godview/rendering/screenshots/fix.rain.receded.png"
     },
     {
@@ -905,17 +902,399 @@
       "interact": null,
       "renderStatus": "rendered",
       "screenshot": "audit/godview/rendering/screenshots/fix.rain.branch-named.png"
+    },
+    {
+      "fixtureId": "fix.list.unread",
+      "viewId": "view.list",
+      "lifecycleStates": [
+        "state.unread"
+      ],
+      "file": "audit/godview/fixtures/fix.list.unread.json",
+      "requiresBodyPaint": false,
+      "interact": null,
+      "renderStatus": "rendered",
+      "paint": "dom",
+      "screenshot": "audit/godview/rendering/screenshots/fix.list.unread.png"
+    },
+    {
+      "fixtureId": "fix.list.context-hot",
+      "viewId": "view.list",
+      "lifecycleStates": [
+        "state.context_hot"
+      ],
+      "file": "audit/godview/fixtures/fix.list.context-hot.json",
+      "requiresBodyPaint": false,
+      "interact": null,
+      "renderStatus": "rendered",
+      "paint": "dom",
+      "screenshot": "audit/godview/rendering/screenshots/fix.list.context-hot.png"
+    },
+    {
+      "fixtureId": "fix.list.reply-streaming",
+      "viewId": "view.list",
+      "lifecycleStates": [
+        "state.reply_streaming"
+      ],
+      "file": "audit/godview/fixtures/fix.list.reply-streaming.json",
+      "requiresBodyPaint": false,
+      "interact": null,
+      "renderStatus": "rendered",
+      "paint": "dom",
+      "screenshot": "audit/godview/rendering/screenshots/fix.list.reply-streaming.png"
+    },
+    {
+      "fixtureId": "fix.list.reply-final",
+      "viewId": "view.list",
+      "lifecycleStates": [
+        "state.reply_final"
+      ],
+      "file": "audit/godview/fixtures/fix.list.reply-final.json",
+      "requiresBodyPaint": false,
+      "interact": null,
+      "renderStatus": "rendered",
+      "paint": "dom",
+      "screenshot": "audit/godview/rendering/screenshots/fix.list.reply-final.png"
+    },
+    {
+      "fixtureId": "fix.list.working-with-blockers",
+      "viewId": "view.list",
+      "lifecycleStates": [
+        "state.working_with_blockers"
+      ],
+      "file": "audit/godview/fixtures/fix.list.working-with-blockers.json",
+      "requiresBodyPaint": false,
+      "interact": null,
+      "renderStatus": "rendered",
+      "paint": "dom",
+      "screenshot": "audit/godview/rendering/screenshots/fix.list.working-with-blockers.png"
+    },
+    {
+      "fixtureId": "fix.list.wait-multiple",
+      "viewId": "view.list",
+      "lifecycleStates": [
+        "state.wait_multiple"
+      ],
+      "file": "audit/godview/fixtures/fix.list.wait-multiple.json",
+      "requiresBodyPaint": false,
+      "interact": null,
+      "renderStatus": "rendered",
+      "paint": "dom",
+      "screenshot": "audit/godview/rendering/screenshots/fix.list.wait-multiple.png"
+    },
+    {
+      "fixtureId": "fix.rain.unread",
+      "viewId": "view.rain",
+      "lifecycleStates": [
+        "state.unread"
+      ],
+      "file": "audit/godview/fixtures/fix.rain.unread.json",
+      "requiresBodyPaint": false,
+      "interact": null,
+      "renderStatus": "rendered",
+      "paint": "canvas",
+      "screenshot": "audit/godview/rendering/screenshots/fix.rain.unread.png"
+    },
+    {
+      "fixtureId": "fix.rain.blocked-permission",
+      "viewId": "view.rain",
+      "lifecycleStates": [
+        "state.blocked_permission"
+      ],
+      "file": "audit/godview/fixtures/fix.rain.blocked-permission.json",
+      "requiresBodyPaint": false,
+      "interact": null,
+      "renderStatus": "rendered",
+      "paint": "canvas",
+      "screenshot": "audit/godview/rendering/screenshots/fix.rain.blocked-permission.png"
+    },
+    {
+      "fixtureId": "fix.rain.blocked-question",
+      "viewId": "view.rain",
+      "lifecycleStates": [
+        "state.blocked_question"
+      ],
+      "file": "audit/godview/fixtures/fix.rain.blocked-question.json",
+      "requiresBodyPaint": false,
+      "interact": null,
+      "renderStatus": "rendered",
+      "paint": "canvas",
+      "screenshot": "audit/godview/rendering/screenshots/fix.rain.blocked-question.png"
+    },
+    {
+      "fixtureId": "fix.rain.blocked-failure",
+      "viewId": "view.rain",
+      "lifecycleStates": [
+        "state.blocked_failure"
+      ],
+      "file": "audit/godview/fixtures/fix.rain.blocked-failure.json",
+      "requiresBodyPaint": false,
+      "interact": null,
+      "renderStatus": "rendered",
+      "paint": "canvas",
+      "screenshot": "audit/godview/rendering/screenshots/fix.rain.blocked-failure.png"
+    },
+    {
+      "fixtureId": "fix.rain.blocked-unknown-kind",
+      "viewId": "view.rain",
+      "lifecycleStates": [
+        "state.blocked_unknown_kind"
+      ],
+      "file": "audit/godview/fixtures/fix.rain.blocked-unknown-kind.json",
+      "requiresBodyPaint": false,
+      "interact": null,
+      "renderStatus": "rendered",
+      "paint": "canvas",
+      "screenshot": "audit/godview/rendering/screenshots/fix.rain.blocked-unknown-kind.png"
+    },
+    {
+      "fixtureId": "fix.rain.stale",
+      "viewId": "view.rain",
+      "lifecycleStates": [
+        "state.stale"
+      ],
+      "file": "audit/godview/fixtures/fix.rain.stale.json",
+      "requiresBodyPaint": false,
+      "interact": null,
+      "renderStatus": "rendered",
+      "paint": "canvas",
+      "screenshot": "audit/godview/rendering/screenshots/fix.rain.stale.png"
+    },
+    {
+      "fixtureId": "fix.rain.starting-unobserved",
+      "viewId": "view.rain",
+      "lifecycleStates": [
+        "state.starting_unobserved"
+      ],
+      "file": "audit/godview/fixtures/fix.rain.starting-unobserved.json",
+      "requiresBodyPaint": false,
+      "interact": null,
+      "renderStatus": "rendered",
+      "paint": "canvas",
+      "screenshot": "audit/godview/rendering/screenshots/fix.rain.starting-unobserved.png"
+    },
+    {
+      "fixtureId": "fix.rain.pending-unobserved",
+      "viewId": "view.rain",
+      "lifecycleStates": [
+        "state.pending_unobserved"
+      ],
+      "file": "audit/godview/fixtures/fix.rain.pending-unobserved.json",
+      "requiresBodyPaint": false,
+      "interact": null,
+      "renderStatus": "rendered",
+      "paint": "canvas",
+      "screenshot": "audit/godview/rendering/screenshots/fix.rain.pending-unobserved.png"
+    },
+    {
+      "fixtureId": "fix.rain.branch-none",
+      "viewId": "view.rain",
+      "lifecycleStates": [
+        "state.branch_none"
+      ],
+      "file": "audit/godview/fixtures/fix.rain.branch-none.json",
+      "requiresBodyPaint": false,
+      "interact": null,
+      "renderStatus": "rendered",
+      "paint": "canvas",
+      "screenshot": "audit/godview/rendering/screenshots/fix.rain.branch-none.png"
+    },
+    {
+      "fixtureId": "fix.rain.context-hot",
+      "viewId": "view.rain",
+      "lifecycleStates": [
+        "state.context_hot"
+      ],
+      "file": "audit/godview/fixtures/fix.rain.context-hot.json",
+      "requiresBodyPaint": false,
+      "interact": null,
+      "renderStatus": "rendered",
+      "paint": "canvas",
+      "screenshot": "audit/godview/rendering/screenshots/fix.rain.context-hot.png"
+    },
+    {
+      "fixtureId": "fix.spend.active",
+      "viewId": "view.spend",
+      "lifecycleStates": [
+        "state.active"
+      ],
+      "file": "audit/godview/fixtures/fix.spend.active.json",
+      "requiresBodyPaint": false,
+      "interact": null,
+      "renderStatus": "rendered",
+      "paint": "canvas",
+      "screenshot": "audit/godview/rendering/screenshots/fix.spend.active.png"
+    },
+    {
+      "fixtureId": "fix.spend.stale",
+      "viewId": "view.spend",
+      "lifecycleStates": [
+        "state.stale"
+      ],
+      "file": "audit/godview/fixtures/fix.spend.stale.json",
+      "requiresBodyPaint": false,
+      "interact": null,
+      "renderStatus": "rendered",
+      "paint": "canvas",
+      "screenshot": "audit/godview/rendering/screenshots/fix.spend.stale.png"
+    },
+    {
+      "fixtureId": "fix.spend.blocked-unknown-kind",
+      "viewId": "view.spend",
+      "lifecycleStates": [
+        "state.blocked_unknown_kind"
+      ],
+      "file": "audit/godview/fixtures/fix.spend.blocked-unknown-kind.json",
+      "requiresBodyPaint": false,
+      "interact": null,
+      "renderStatus": "rendered",
+      "paint": "canvas",
+      "screenshot": "audit/godview/rendering/screenshots/fix.spend.blocked-unknown-kind.png"
+    },
+    {
+      "fixtureId": "fix.spend.starting-unobserved",
+      "viewId": "view.spend",
+      "lifecycleStates": [
+        "state.starting_unobserved"
+      ],
+      "file": "audit/godview/fixtures/fix.spend.starting-unobserved.json",
+      "requiresBodyPaint": false,
+      "interact": null,
+      "renderStatus": "rendered",
+      "paint": "canvas",
+      "screenshot": "audit/godview/rendering/screenshots/fix.spend.starting-unobserved.png"
+    },
+    {
+      "fixtureId": "fix.spend.pending-unobserved",
+      "viewId": "view.spend",
+      "lifecycleStates": [
+        "state.pending_unobserved"
+      ],
+      "file": "audit/godview/fixtures/fix.spend.pending-unobserved.json",
+      "requiresBodyPaint": false,
+      "interact": null,
+      "renderStatus": "rendered",
+      "paint": "canvas",
+      "screenshot": "audit/godview/rendering/screenshots/fix.spend.pending-unobserved.png"
+    },
+    {
+      "fixtureId": "fix.spend.branch-none",
+      "viewId": "view.spend",
+      "lifecycleStates": [
+        "state.branch_none"
+      ],
+      "file": "audit/godview/fixtures/fix.spend.branch-none.json",
+      "requiresBodyPaint": false,
+      "interact": null,
+      "renderStatus": "rendered",
+      "paint": "canvas",
+      "screenshot": "audit/godview/rendering/screenshots/fix.spend.branch-none.png"
+    },
+    {
+      "fixtureId": "fix.spend.receded",
+      "viewId": "view.spend",
+      "lifecycleStates": [
+        "state.receded"
+      ],
+      "file": "audit/godview/fixtures/fix.spend.receded.json",
+      "requiresBodyPaint": false,
+      "interact": null,
+      "renderStatus": "rendered",
+      "paint": "canvas",
+      "screenshot": "audit/godview/rendering/screenshots/fix.spend.receded.png"
+    },
+    {
+      "fixtureId": "fix.spend.context-hot",
+      "viewId": "view.spend",
+      "lifecycleStates": [
+        "state.context_hot"
+      ],
+      "file": "audit/godview/fixtures/fix.spend.context-hot.json",
+      "requiresBodyPaint": false,
+      "interact": null,
+      "renderStatus": "rendered",
+      "paint": "canvas",
+      "screenshot": "audit/godview/rendering/screenshots/fix.spend.context-hot.png"
+    },
+    {
+      "fixtureId": "fix.timeline.stale",
+      "viewId": "view.timeline",
+      "lifecycleStates": [
+        "state.stale"
+      ],
+      "file": "audit/godview/fixtures/fix.timeline.stale.json",
+      "requiresBodyPaint": false,
+      "interact": null,
+      "renderStatus": "rendered",
+      "paint": "canvas",
+      "screenshot": "audit/godview/rendering/screenshots/fix.timeline.stale.png"
+    },
+    {
+      "fixtureId": "fix.timeline.starting-unobserved",
+      "viewId": "view.timeline",
+      "lifecycleStates": [
+        "state.starting_unobserved"
+      ],
+      "file": "audit/godview/fixtures/fix.timeline.starting-unobserved.json",
+      "requiresBodyPaint": false,
+      "interact": null,
+      "renderStatus": "rendered",
+      "paint": "canvas",
+      "screenshot": "audit/godview/rendering/screenshots/fix.timeline.starting-unobserved.png"
+    },
+    {
+      "fixtureId": "fix.timeline.pending-unobserved",
+      "viewId": "view.timeline",
+      "lifecycleStates": [
+        "state.pending_unobserved"
+      ],
+      "file": "audit/godview/fixtures/fix.timeline.pending-unobserved.json",
+      "requiresBodyPaint": false,
+      "interact": null,
+      "renderStatus": "rendered",
+      "paint": "canvas",
+      "screenshot": "audit/godview/rendering/screenshots/fix.timeline.pending-unobserved.png"
+    },
+    {
+      "fixtureId": "fix.timeline.branch-none",
+      "viewId": "view.timeline",
+      "lifecycleStates": [
+        "state.branch_none"
+      ],
+      "file": "audit/godview/fixtures/fix.timeline.branch-none.json",
+      "requiresBodyPaint": false,
+      "interact": null,
+      "renderStatus": "rendered",
+      "paint": "canvas",
+      "screenshot": "audit/godview/rendering/screenshots/fix.timeline.branch-none.png"
+    },
+    {
+      "fixtureId": "fix.timeline.blocked-unknown-kind",
+      "viewId": "view.timeline",
+      "lifecycleStates": [
+        "state.blocked_unknown_kind"
+      ],
+      "file": "audit/godview/fixtures/fix.timeline.blocked-unknown-kind.json",
+      "requiresBodyPaint": false,
+      "interact": null,
+      "renderStatus": "rendered",
+      "paint": "canvas",
+      "screenshot": "audit/godview/rendering/screenshots/fix.timeline.blocked-unknown-kind.png"
+    },
+    {
+      "fixtureId": "fix.timeline.context-hot",
+      "viewId": "view.timeline",
+      "lifecycleStates": [
+        "state.context_hot"
+      ],
+      "file": "audit/godview/fixtures/fix.timeline.context-hot.json",
+      "requiresBodyPaint": false,
+      "interact": null,
+      "renderStatus": "rendered",
+      "paint": "canvas",
+      "screenshot": "audit/godview/rendering/screenshots/fix.timeline.context-hot.png"
     }
   ],
   "holes": [
-    {
-      "stateId": "state.wait_multiple",
-      "reason": "No view reads wait.count. The five views' field lists and a search of packages/views/src at 748d015 find no wait.count read."
-    },
-    {
-      "stateId": "state.working_with_blockers",
-      "reason": "bubble-model.ts draws a wait only when appearance is blocked (line 536). detailLine uses the wait only when status is blocked. A working row with a wait paints as working."
-    },
     {
       "stateId": "state.activity_starting",
       "reason": "AgentSwarm.tsx reads activity.kind only to keep a terminal clock across kind unknown. It does not paint a distinct branch per activity kind."
@@ -963,14 +1342,6 @@
     {
       "stateId": "state.attachable",
       "reason": "None of the five views read attachable. It is not in their contract field lists."
-    },
-    {
-      "stateId": "state.reply_streaming",
-      "reason": "No view reads reply.final. detailLine uses reply.text and does not branch on final, so streaming and final are not separate paint."
-    },
-    {
-      "stateId": "state.reply_final",
-      "reason": "Same as state.reply_streaming. reply.final is not read."
     },
     {
       "stateId": "state.timeline_unborn",
@@ -1041,10 +1412,6 @@
       "reason": "Same as state.device_live. Standing is not a view field."
     },
     {
-      "stateId": "state.context_hot",
-      "reason": "swarm context ring is hot at floor(usedPercent) >= 80. bubble-model.ts. AgentSwarm from Puppeteer 748d015 mounted in this host and reported WEBGPU UNAVAILABLE, so the body was not painted. See audit/godview/rendering/screenshots/environment-swarm.png."
-    },
-    {
       "stateId": "state.effort_configured",
       "reason": "effort.intent configured is the italic model line. AgentSwarm from Puppeteer 748d015 mounted in this host and reported WEBGPU UNAVAILABLE, so the body was not painted. See audit/godview/rendering/screenshots/environment-swarm.png."
     },
@@ -1081,2129 +1448,2626 @@
       "reason": "coverage unavailable. The burn ladder is drawn unpriced. AgentSwarm from Puppeteer 748d015 mounted in this host and reported WEBGPU UNAVAILABLE, so the body was not painted. See audit/godview/rendering/screenshots/environment-swarm.png."
     }
   ],
+  "matrixSummary": {
+    "priorClaim": {
+      "rendered": 73,
+      "notApplicable": 302,
+      "environmentGap": 35,
+      "validated": false,
+      "note": "d21cde9a reported 302 not-applicable cells. That figure is not a validated judgment that those scenarios are outside the views. Fifty-nine used a boilerplate 'no read' sentence. This matrix replaces that classification. The denominator stays 82 states × 5 views."
+    },
+    "cells": 410,
+    "rendered": 103,
+    "coveredBy": 21,
+    "coverageGap": 77,
+    "notApplicable": 150,
+    "environmentGap": 59
+  },
   "matrix": [
     {
       "stateId": "state.idle",
       "viewId": "view.list",
       "disposition": "rendered",
-      "fixtureId": "fix.list.idle"
+      "fixtureId": "fix.list.idle",
+      "evidence": "status === idle. List row class is-idle."
     },
     {
       "stateId": "state.idle",
       "viewId": "view.rain",
       "disposition": "rendered",
-      "fixtureId": "fix.rain.idle"
+      "fixtureId": "fix.rain.idle",
+      "evidence": "RainView at 748d015 hides the column head when status is idle."
     },
     {
       "stateId": "state.idle",
       "viewId": "view.spend",
       "disposition": "rendered",
-      "fixtureId": "fix.spend.idle"
+      "fixtureId": "fix.spend.idle",
+      "evidence": "Spend state word idle. Terminals are omitted; this is an agent with no price."
     },
     {
       "stateId": "state.idle",
       "viewId": "view.timeline",
       "disposition": "rendered",
-      "fixtureId": "fix.timeline.idle"
+      "fixtureId": "fix.timeline.idle",
+      "evidence": "Timeline lane for an idle agent."
     },
     {
       "stateId": "state.idle",
       "viewId": "view.swarm",
-      "disposition": "environment-gap"
+      "disposition": "environment-gap",
+      "evidence": "AgentSwarm / bubble-model.ts draws this on the WebGPU canvas. This host's GPU process exits before requestAdapter returns, so the body was not painted. See webgpu-diagnostic.json. The swarm diagnosis is separate from the matrix reclassification."
     },
     {
       "stateId": "state.working",
       "viewId": "view.list",
       "disposition": "rendered",
-      "fixtureId": "fix.list.working"
+      "fixtureId": "fix.list.working",
+      "evidence": "status === working. List row class is-working."
     },
     {
       "stateId": "state.working",
       "viewId": "view.rain",
       "disposition": "rendered",
-      "fixtureId": "fix.rain.working"
+      "fixtureId": "fix.rain.working",
+      "evidence": "RainView draws the working head. This file differs from shipped 0.3.3."
     },
     {
       "stateId": "state.working",
       "viewId": "view.spend",
       "disposition": "rendered",
-      "fixtureId": "fix.spend.working"
+      "fixtureId": "fix.spend.working",
+      "evidence": "Spend state word working."
     },
     {
       "stateId": "state.working",
       "viewId": "view.timeline",
       "disposition": "rendered",
-      "fixtureId": "fix.timeline.working"
+      "fixtureId": "fix.timeline.working",
+      "evidence": "Timeline lane painted as working."
     },
     {
       "stateId": "state.working",
       "viewId": "view.swarm",
-      "disposition": "environment-gap"
+      "disposition": "environment-gap",
+      "evidence": "AgentSwarm / bubble-model.ts draws this on the WebGPU canvas. This host's GPU process exits before requestAdapter returns, so the body was not painted. See webgpu-diagnostic.json. The swarm diagnosis is separate from the matrix reclassification."
     },
     {
       "stateId": "state.blocked",
       "viewId": "view.list",
       "disposition": "rendered",
-      "fixtureId": "fix.list.blocked"
+      "fixtureId": "fix.list.blocked",
+      "evidence": "status === blocked and no wait object. detailLine says blocked."
     },
     {
       "stateId": "state.blocked",
       "viewId": "view.rain",
       "disposition": "rendered",
-      "fixtureId": "fix.rain.blocked"
+      "fixtureId": "fix.rain.blocked",
+      "evidence": "RainView draws the blocked head at the blocked speed."
     },
     {
       "stateId": "state.blocked",
       "viewId": "view.spend",
       "disposition": "rendered",
-      "fixtureId": "fix.spend.blocked"
+      "fixtureId": "fix.spend.blocked",
+      "evidence": "Spend state word blocked, with no wait object."
     },
     {
       "stateId": "state.blocked",
       "viewId": "view.timeline",
       "disposition": "rendered",
-      "fixtureId": "fix.timeline.blocked"
+      "fixtureId": "fix.timeline.blocked",
+      "evidence": "Timeline lane painted blocked."
     },
     {
       "stateId": "state.blocked",
       "viewId": "view.swarm",
-      "disposition": "environment-gap"
+      "disposition": "environment-gap",
+      "evidence": "AgentSwarm / bubble-model.ts draws this on the WebGPU canvas. This host's GPU process exits before requestAdapter returns, so the body was not painted. See webgpu-diagnostic.json. The swarm diagnosis is separate from the matrix reclassification."
     },
     {
       "stateId": "state.blocked_permission",
       "viewId": "view.list",
       "disposition": "rendered",
-      "fixtureId": "fix.list.blocked-permission"
+      "fixtureId": "fix.list.blocked-permission",
+      "evidence": "blocked and wait.kind permission. List line is permission · Bash."
     },
     {
       "stateId": "state.blocked_permission",
       "viewId": "view.rain",
-      "disposition": "not-applicable"
+      "disposition": "rendered",
+      "fixtureId": "fix.rain.blocked-permission",
+      "evidence": "Blocked column. The aria label and tooltip use detailLine, which prints permission · Bash. The head speed is the blocked speed."
     },
     {
       "stateId": "state.blocked_permission",
       "viewId": "view.spend",
       "disposition": "rendered",
-      "fixtureId": "fix.spend.blocked-permission"
+      "fixtureId": "fix.spend.blocked-permission",
+      "evidence": "Spend blocked glyph and the permission word."
     },
     {
       "stateId": "state.blocked_permission",
       "viewId": "view.timeline",
       "disposition": "rendered",
-      "fixtureId": "fix.timeline.blocked-permission"
+      "fixtureId": "fix.timeline.blocked-permission",
+      "evidence": "Blocked lane whose wait words name the permission."
     },
     {
       "stateId": "state.blocked_permission",
       "viewId": "view.swarm",
-      "disposition": "environment-gap"
+      "disposition": "environment-gap",
+      "evidence": "AgentSwarm / bubble-model.ts draws this on the WebGPU canvas. This host's GPU process exits before requestAdapter returns, so the body was not painted. See webgpu-diagnostic.json. The swarm diagnosis is separate from the matrix reclassification."
     },
     {
       "stateId": "state.blocked_question",
       "viewId": "view.list",
       "disposition": "rendered",
-      "fixtureId": "fix.list.blocked-question"
+      "fixtureId": "fix.list.blocked-question",
+      "evidence": "blocked and wait.kind question. List detailLine prints the kind, not the header. The header is a swarm body line."
     },
     {
       "stateId": "state.blocked_question",
       "viewId": "view.rain",
-      "disposition": "not-applicable"
+      "disposition": "rendered",
+      "fixtureId": "fix.rain.blocked-question",
+      "evidence": "Blocked column. detailLine prints the question kind. The head speed is the blocked speed."
     },
     {
       "stateId": "state.blocked_question",
       "viewId": "view.spend",
       "disposition": "rendered",
-      "fixtureId": "fix.spend.blocked-question"
+      "fixtureId": "fix.spend.blocked-question",
+      "evidence": "Spend blocked glyph. spend-words names a question."
     },
     {
       "stateId": "state.blocked_question",
       "viewId": "view.timeline",
       "disposition": "rendered",
-      "fixtureId": "fix.timeline.blocked-question"
+      "fixtureId": "fix.timeline.blocked-question",
+      "evidence": "Blocked lane whose wait words name the question."
     },
     {
       "stateId": "state.blocked_question",
       "viewId": "view.swarm",
-      "disposition": "environment-gap"
+      "disposition": "environment-gap",
+      "evidence": "AgentSwarm / bubble-model.ts draws this on the WebGPU canvas. This host's GPU process exits before requestAdapter returns, so the body was not painted. See webgpu-diagnostic.json. The swarm diagnosis is separate from the matrix reclassification."
     },
     {
       "stateId": "state.blocked_failure",
       "viewId": "view.list",
       "disposition": "rendered",
-      "fixtureId": "fix.list.blocked-failure"
+      "fixtureId": "fix.list.blocked-failure",
+      "evidence": "blocked and wait.kind failure. List detailLine prints the kind, not the code. The code is a swarm body line."
     },
     {
       "stateId": "state.blocked_failure",
       "viewId": "view.rain",
-      "disposition": "not-applicable"
+      "disposition": "rendered",
+      "fixtureId": "fix.rain.blocked-failure",
+      "evidence": "Blocked column. detailLine prints the failure kind. The head speed is the blocked speed."
     },
     {
       "stateId": "state.blocked_failure",
       "viewId": "view.spend",
       "disposition": "rendered",
-      "fixtureId": "fix.spend.blocked-failure"
+      "fixtureId": "fix.spend.blocked-failure",
+      "evidence": "Spend blocked glyph. spend-words names a failure."
     },
     {
       "stateId": "state.blocked_failure",
       "viewId": "view.timeline",
       "disposition": "rendered",
-      "fixtureId": "fix.timeline.blocked-failure"
+      "fixtureId": "fix.timeline.blocked-failure",
+      "evidence": "Blocked lane whose wait words name the failure."
     },
     {
       "stateId": "state.blocked_failure",
       "viewId": "view.swarm",
-      "disposition": "environment-gap"
+      "disposition": "environment-gap",
+      "evidence": "AgentSwarm / bubble-model.ts draws this on the WebGPU canvas. This host's GPU process exits before requestAdapter returns, so the body was not painted. See webgpu-diagnostic.json. The swarm diagnosis is separate from the matrix reclassification."
     },
     {
-      "stateId": "state.blocked_unknown_kind",
+      "stateId": "state.working_with_blockers",
       "viewId": "view.list",
       "disposition": "rendered",
-      "fixtureId": "fix.list.blocked-unknown-kind"
+      "fixtureId": "fix.list.working-with-blockers",
+      "evidence": "status working with a wait object. detailLine uses the wait only when status is blocked, so the line is the status word."
     },
     {
-      "stateId": "state.blocked_unknown_kind",
+      "stateId": "state.working_with_blockers",
       "viewId": "view.rain",
-      "disposition": "not-applicable"
+      "disposition": "coverage-gap",
+      "evidence": "Unverified: The list fixture mounts this input. Rain, spend, and timeline can show the same row, and no fixture for this view mounts it."
     },
     {
-      "stateId": "state.blocked_unknown_kind",
+      "stateId": "state.working_with_blockers",
       "viewId": "view.spend",
-      "disposition": "not-applicable"
+      "disposition": "coverage-gap",
+      "evidence": "Unverified: The list fixture mounts this input. Rain, spend, and timeline can show the same row, and no fixture for this view mounts it."
     },
     {
-      "stateId": "state.blocked_unknown_kind",
+      "stateId": "state.working_with_blockers",
       "viewId": "view.timeline",
-      "disposition": "not-applicable"
+      "disposition": "coverage-gap",
+      "evidence": "Unverified: The list fixture mounts this input. Rain, spend, and timeline can show the same row, and no fixture for this view mounts it."
     },
     {
-      "stateId": "state.blocked_unknown_kind",
+      "stateId": "state.working_with_blockers",
       "viewId": "view.swarm",
-      "disposition": "not-applicable"
+      "disposition": "environment-gap",
+      "evidence": "AgentSwarm / bubble-model.ts draws this on the WebGPU canvas. This host's GPU process exits before requestAdapter returns, so the body was not painted. See webgpu-diagnostic.json. The swarm diagnosis is separate from the matrix reclassification."
+    },
+    {
+      "stateId": "state.wait_multiple",
+      "viewId": "view.list",
+      "disposition": "rendered",
+      "fixtureId": "fix.list.wait-multiple",
+      "evidence": "wait.count is 3. The list wait line prints the kind and does not print the count."
+    },
+    {
+      "stateId": "state.wait_multiple",
+      "viewId": "view.rain",
+      "disposition": "coverage-gap",
+      "evidence": "Unverified: The list fixture mounts this input. Rain, spend, and timeline can show the same row, and no fixture for this view mounts it."
+    },
+    {
+      "stateId": "state.wait_multiple",
+      "viewId": "view.spend",
+      "disposition": "coverage-gap",
+      "evidence": "Unverified: The list fixture mounts this input. Rain, spend, and timeline can show the same row, and no fixture for this view mounts it."
+    },
+    {
+      "stateId": "state.wait_multiple",
+      "viewId": "view.timeline",
+      "disposition": "coverage-gap",
+      "evidence": "Unverified: The list fixture mounts this input. Rain, spend, and timeline can show the same row, and no fixture for this view mounts it."
+    },
+    {
+      "stateId": "state.wait_multiple",
+      "viewId": "view.swarm",
+      "disposition": "environment-gap",
+      "evidence": "AgentSwarm / bubble-model.ts draws this on the WebGPU canvas. This host's GPU process exits before requestAdapter returns, so the body was not painted. See webgpu-diagnostic.json. The swarm diagnosis is separate from the matrix reclassification."
+    },
+    {
+      "stateId": "state.activity_starting",
+      "viewId": "view.list",
+      "disposition": "coverage-gap",
+      "evidence": "Unverified: The row can carry activity.kind. No mounted fixture sets it. List, rain, spend, and timeline do not draw a per-kind branch; that is not the same as the scenario being out of scope."
+    },
+    {
+      "stateId": "state.activity_starting",
+      "viewId": "view.rain",
+      "disposition": "coverage-gap",
+      "evidence": "Unverified: The row can carry activity.kind. No mounted fixture sets it. List, rain, spend, and timeline do not draw a per-kind branch; that is not the same as the scenario being out of scope."
+    },
+    {
+      "stateId": "state.activity_starting",
+      "viewId": "view.spend",
+      "disposition": "coverage-gap",
+      "evidence": "Unverified: The row can carry activity.kind. No mounted fixture sets it. List, rain, spend, and timeline do not draw a per-kind branch; that is not the same as the scenario being out of scope."
+    },
+    {
+      "stateId": "state.activity_starting",
+      "viewId": "view.timeline",
+      "disposition": "coverage-gap",
+      "evidence": "Unverified: The row can carry activity.kind. No mounted fixture sets it. List, rain, spend, and timeline do not draw a per-kind branch; that is not the same as the scenario being out of scope."
+    },
+    {
+      "stateId": "state.activity_starting",
+      "viewId": "view.swarm",
+      "disposition": "environment-gap",
+      "evidence": "AgentSwarm / bubble-model.ts draws this on the WebGPU canvas. This host's GPU process exits before requestAdapter returns, so the body was not painted. See webgpu-diagnostic.json. The swarm diagnosis is separate from the matrix reclassification."
+    },
+    {
+      "stateId": "state.activity_responding",
+      "viewId": "view.list",
+      "disposition": "coverage-gap",
+      "evidence": "Unverified: The row can carry activity.kind. No mounted fixture sets it. List, rain, spend, and timeline do not draw a per-kind branch; that is not the same as the scenario being out of scope."
+    },
+    {
+      "stateId": "state.activity_responding",
+      "viewId": "view.rain",
+      "disposition": "coverage-gap",
+      "evidence": "Unverified: The row can carry activity.kind. No mounted fixture sets it. List, rain, spend, and timeline do not draw a per-kind branch; that is not the same as the scenario being out of scope."
+    },
+    {
+      "stateId": "state.activity_responding",
+      "viewId": "view.spend",
+      "disposition": "coverage-gap",
+      "evidence": "Unverified: The row can carry activity.kind. No mounted fixture sets it. List, rain, spend, and timeline do not draw a per-kind branch; that is not the same as the scenario being out of scope."
+    },
+    {
+      "stateId": "state.activity_responding",
+      "viewId": "view.timeline",
+      "disposition": "coverage-gap",
+      "evidence": "Unverified: The row can carry activity.kind. No mounted fixture sets it. List, rain, spend, and timeline do not draw a per-kind branch; that is not the same as the scenario being out of scope."
+    },
+    {
+      "stateId": "state.activity_responding",
+      "viewId": "view.swarm",
+      "disposition": "environment-gap",
+      "evidence": "AgentSwarm / bubble-model.ts draws this on the WebGPU canvas. This host's GPU process exits before requestAdapter returns, so the body was not painted. See webgpu-diagnostic.json. The swarm diagnosis is separate from the matrix reclassification."
+    },
+    {
+      "stateId": "state.activity_reasoning",
+      "viewId": "view.list",
+      "disposition": "coverage-gap",
+      "evidence": "Unverified: The row can carry activity.kind. No mounted fixture sets it. List, rain, spend, and timeline do not draw a per-kind branch; that is not the same as the scenario being out of scope."
+    },
+    {
+      "stateId": "state.activity_reasoning",
+      "viewId": "view.rain",
+      "disposition": "coverage-gap",
+      "evidence": "Unverified: The row can carry activity.kind. No mounted fixture sets it. List, rain, spend, and timeline do not draw a per-kind branch; that is not the same as the scenario being out of scope."
+    },
+    {
+      "stateId": "state.activity_reasoning",
+      "viewId": "view.spend",
+      "disposition": "coverage-gap",
+      "evidence": "Unverified: The row can carry activity.kind. No mounted fixture sets it. List, rain, spend, and timeline do not draw a per-kind branch; that is not the same as the scenario being out of scope."
+    },
+    {
+      "stateId": "state.activity_reasoning",
+      "viewId": "view.timeline",
+      "disposition": "coverage-gap",
+      "evidence": "Unverified: The row can carry activity.kind. No mounted fixture sets it. List, rain, spend, and timeline do not draw a per-kind branch; that is not the same as the scenario being out of scope."
+    },
+    {
+      "stateId": "state.activity_reasoning",
+      "viewId": "view.swarm",
+      "disposition": "environment-gap",
+      "evidence": "AgentSwarm / bubble-model.ts draws this on the WebGPU canvas. This host's GPU process exits before requestAdapter returns, so the body was not painted. See webgpu-diagnostic.json. The swarm diagnosis is separate from the matrix reclassification."
+    },
+    {
+      "stateId": "state.activity_tool",
+      "viewId": "view.list",
+      "disposition": "coverage-gap",
+      "evidence": "Unverified: The row can carry activity.kind. No mounted fixture sets it. List, rain, spend, and timeline do not draw a per-kind branch; that is not the same as the scenario being out of scope."
+    },
+    {
+      "stateId": "state.activity_tool",
+      "viewId": "view.rain",
+      "disposition": "coverage-gap",
+      "evidence": "Unverified: The row can carry activity.kind. No mounted fixture sets it. List, rain, spend, and timeline do not draw a per-kind branch; that is not the same as the scenario being out of scope."
+    },
+    {
+      "stateId": "state.activity_tool",
+      "viewId": "view.spend",
+      "disposition": "coverage-gap",
+      "evidence": "Unverified: The row can carry activity.kind. No mounted fixture sets it. List, rain, spend, and timeline do not draw a per-kind branch; that is not the same as the scenario being out of scope."
+    },
+    {
+      "stateId": "state.activity_tool",
+      "viewId": "view.timeline",
+      "disposition": "coverage-gap",
+      "evidence": "Unverified: The row can carry activity.kind. No mounted fixture sets it. List, rain, spend, and timeline do not draw a per-kind branch; that is not the same as the scenario being out of scope."
+    },
+    {
+      "stateId": "state.activity_tool",
+      "viewId": "view.swarm",
+      "disposition": "environment-gap",
+      "evidence": "AgentSwarm / bubble-model.ts draws this on the WebGPU canvas. This host's GPU process exits before requestAdapter returns, so the body was not painted. See webgpu-diagnostic.json. The swarm diagnosis is separate from the matrix reclassification."
+    },
+    {
+      "stateId": "state.activity_delegating",
+      "viewId": "view.list",
+      "disposition": "coverage-gap",
+      "evidence": "Unverified: The row can carry activity.kind. No mounted fixture sets it. List, rain, spend, and timeline do not draw a per-kind branch; that is not the same as the scenario being out of scope."
+    },
+    {
+      "stateId": "state.activity_delegating",
+      "viewId": "view.rain",
+      "disposition": "coverage-gap",
+      "evidence": "Unverified: The row can carry activity.kind. No mounted fixture sets it. List, rain, spend, and timeline do not draw a per-kind branch; that is not the same as the scenario being out of scope."
+    },
+    {
+      "stateId": "state.activity_delegating",
+      "viewId": "view.spend",
+      "disposition": "coverage-gap",
+      "evidence": "Unverified: The row can carry activity.kind. No mounted fixture sets it. List, rain, spend, and timeline do not draw a per-kind branch; that is not the same as the scenario being out of scope."
+    },
+    {
+      "stateId": "state.activity_delegating",
+      "viewId": "view.timeline",
+      "disposition": "coverage-gap",
+      "evidence": "Unverified: The row can carry activity.kind. No mounted fixture sets it. List, rain, spend, and timeline do not draw a per-kind branch; that is not the same as the scenario being out of scope."
+    },
+    {
+      "stateId": "state.activity_delegating",
+      "viewId": "view.swarm",
+      "disposition": "environment-gap",
+      "evidence": "AgentSwarm / bubble-model.ts draws this on the WebGPU canvas. This host's GPU process exits before requestAdapter returns, so the body was not painted. See webgpu-diagnostic.json. The swarm diagnosis is separate from the matrix reclassification."
+    },
+    {
+      "stateId": "state.activity_compacting",
+      "viewId": "view.list",
+      "disposition": "coverage-gap",
+      "evidence": "Unverified: The row can carry activity.kind. No mounted fixture sets it. List, rain, spend, and timeline do not draw a per-kind branch; that is not the same as the scenario being out of scope."
+    },
+    {
+      "stateId": "state.activity_compacting",
+      "viewId": "view.rain",
+      "disposition": "coverage-gap",
+      "evidence": "Unverified: The row can carry activity.kind. No mounted fixture sets it. List, rain, spend, and timeline do not draw a per-kind branch; that is not the same as the scenario being out of scope."
+    },
+    {
+      "stateId": "state.activity_compacting",
+      "viewId": "view.spend",
+      "disposition": "coverage-gap",
+      "evidence": "Unverified: The row can carry activity.kind. No mounted fixture sets it. List, rain, spend, and timeline do not draw a per-kind branch; that is not the same as the scenario being out of scope."
+    },
+    {
+      "stateId": "state.activity_compacting",
+      "viewId": "view.timeline",
+      "disposition": "coverage-gap",
+      "evidence": "Unverified: The row can carry activity.kind. No mounted fixture sets it. List, rain, spend, and timeline do not draw a per-kind branch; that is not the same as the scenario being out of scope."
+    },
+    {
+      "stateId": "state.activity_compacting",
+      "viewId": "view.swarm",
+      "disposition": "environment-gap",
+      "evidence": "AgentSwarm / bubble-model.ts draws this on the WebGPU canvas. This host's GPU process exits before requestAdapter returns, so the body was not painted. See webgpu-diagnostic.json. The swarm diagnosis is separate from the matrix reclassification."
+    },
+    {
+      "stateId": "state.activity_other",
+      "viewId": "view.list",
+      "disposition": "coverage-gap",
+      "evidence": "Unverified: The row can carry activity.kind. No mounted fixture sets it. List, rain, spend, and timeline do not draw a per-kind branch; that is not the same as the scenario being out of scope."
+    },
+    {
+      "stateId": "state.activity_other",
+      "viewId": "view.rain",
+      "disposition": "coverage-gap",
+      "evidence": "Unverified: The row can carry activity.kind. No mounted fixture sets it. List, rain, spend, and timeline do not draw a per-kind branch; that is not the same as the scenario being out of scope."
+    },
+    {
+      "stateId": "state.activity_other",
+      "viewId": "view.spend",
+      "disposition": "coverage-gap",
+      "evidence": "Unverified: The row can carry activity.kind. No mounted fixture sets it. List, rain, spend, and timeline do not draw a per-kind branch; that is not the same as the scenario being out of scope."
+    },
+    {
+      "stateId": "state.activity_other",
+      "viewId": "view.timeline",
+      "disposition": "coverage-gap",
+      "evidence": "Unverified: The row can carry activity.kind. No mounted fixture sets it. List, rain, spend, and timeline do not draw a per-kind branch; that is not the same as the scenario being out of scope."
+    },
+    {
+      "stateId": "state.activity_other",
+      "viewId": "view.swarm",
+      "disposition": "environment-gap",
+      "evidence": "AgentSwarm / bubble-model.ts draws this on the WebGPU canvas. This host's GPU process exits before requestAdapter returns, so the body was not painted. See webgpu-diagnostic.json. The swarm diagnosis is separate from the matrix reclassification."
     },
     {
       "stateId": "state.starting_unobserved",
       "viewId": "view.list",
       "disposition": "rendered",
-      "fixtureId": "fix.list.starting-unobserved"
+      "fixtureId": "fix.list.starting-unobserved",
+      "evidence": "agent, not observed, not pending. detailLine says starting."
     },
     {
       "stateId": "state.starting_unobserved",
       "viewId": "view.rain",
-      "disposition": "not-applicable"
+      "disposition": "rendered",
+      "fixtureId": "fix.rain.starting-unobserved",
+      "evidence": "Working column, not observed. detailLine says starting. The head is the working head."
     },
     {
       "stateId": "state.starting_unobserved",
       "viewId": "view.spend",
-      "disposition": "not-applicable"
+      "disposition": "rendered",
+      "fixtureId": "fix.spend.starting-unobserved",
+      "evidence": "Not observed. detailLine says starting, and taskOf keeps that line."
     },
     {
       "stateId": "state.starting_unobserved",
       "viewId": "view.timeline",
-      "disposition": "not-applicable"
+      "disposition": "rendered",
+      "fixtureId": "fix.timeline.starting-unobserved",
+      "evidence": "Not observed. laneStatus follows status, so the lane is working. detail words are not the list's starting line."
     },
     {
       "stateId": "state.starting_unobserved",
       "viewId": "view.swarm",
-      "disposition": "environment-gap"
+      "disposition": "environment-gap",
+      "evidence": "AgentSwarm / bubble-model.ts draws this on the WebGPU canvas. This host's GPU process exits before requestAdapter returns, so the body was not painted. See webgpu-diagnostic.json. The swarm diagnosis is separate from the matrix reclassification."
     },
     {
       "stateId": "state.pending_unobserved",
       "viewId": "view.list",
       "disposition": "rendered",
-      "fixtureId": "fix.list.pending-unobserved"
+      "fixtureId": "fix.list.pending-unobserved",
+      "evidence": "pending and not observed. detailLine says unobserved · resumes when idle."
     },
     {
       "stateId": "state.pending_unobserved",
       "viewId": "view.rain",
-      "disposition": "not-applicable"
+      "disposition": "rendered",
+      "fixtureId": "fix.rain.pending-unobserved",
+      "evidence": "Idle column, pending. detailLine says unobserved · resumes when idle. The idle head stays hidden."
     },
     {
       "stateId": "state.pending_unobserved",
       "viewId": "view.spend",
-      "disposition": "not-applicable"
+      "disposition": "rendered",
+      "fixtureId": "fix.spend.pending-unobserved",
+      "evidence": "Pending. detailLine says unobserved · resumes when idle."
     },
     {
       "stateId": "state.pending_unobserved",
       "viewId": "view.timeline",
-      "disposition": "not-applicable"
+      "disposition": "rendered",
+      "fixtureId": "fix.timeline.pending-unobserved",
+      "evidence": "Pending and idle. laneStatus is idle. The pending line is not a timeline status."
     },
     {
       "stateId": "state.pending_unobserved",
       "viewId": "view.swarm",
-      "disposition": "environment-gap"
+      "disposition": "environment-gap",
+      "evidence": "AgentSwarm / bubble-model.ts draws this on the WebGPU canvas. This host's GPU process exits before requestAdapter returns, so the body was not painted. See webgpu-diagnostic.json. The swarm diagnosis is separate from the matrix reclassification."
     },
     {
       "stateId": "state.stale",
       "viewId": "view.list",
       "disposition": "rendered",
-      "fixtureId": "fix.list.stale"
+      "fixtureId": "fix.list.stale",
+      "evidence": "stale true. List row class is-stale. This is the row flag, not VibeField peer standing."
     },
     {
       "stateId": "state.stale",
       "viewId": "view.rain",
-      "disposition": "not-applicable"
+      "disposition": "rendered",
+      "fixtureId": "fix.rain.stale",
+      "evidence": "stale true on an idle column. RainView does not read stale. The mounted input is stale, not the fresh default."
     },
     {
       "stateId": "state.stale",
       "viewId": "view.spend",
-      "disposition": "not-applicable"
+      "disposition": "rendered",
+      "fixtureId": "fix.spend.stale",
+      "evidence": "stale true. SpendView does not read stale. The mounted row is stale rather than the fixture default."
     },
     {
       "stateId": "state.stale",
       "viewId": "view.timeline",
-      "disposition": "not-applicable"
+      "disposition": "rendered",
+      "fixtureId": "fix.timeline.stale",
+      "evidence": "stale true. TimelineView does not add an is-stale class. The mounted lane is the stale row."
     },
     {
       "stateId": "state.stale",
       "viewId": "view.swarm",
-      "disposition": "environment-gap"
+      "disposition": "environment-gap",
+      "evidence": "AgentSwarm / bubble-model.ts draws this on the WebGPU canvas. This host's GPU process exits before requestAdapter returns, so the body was not painted. See webgpu-diagnostic.json. The swarm diagnosis is separate from the matrix reclassification."
     },
     {
       "stateId": "state.fresh",
       "viewId": "view.list",
       "disposition": "rendered",
-      "fixtureId": "fix.list.fresh"
+      "fixtureId": "fix.list.fresh",
+      "evidence": "stale false. List row has no is-stale class."
     },
     {
       "stateId": "state.fresh",
       "viewId": "view.rain",
-      "disposition": "not-applicable"
+      "disposition": "covered-by",
+      "fixtureId": "fix.rain.idle",
+      "exercise": "stale-false",
+      "evidence": "Same branch as fix.rain.idle. agentViewFixture sets stale false unless the partial overrides it. This idle fixture does not. The view paints no separate fresh mark, so the idle screenshot is that branch."
     },
     {
       "stateId": "state.fresh",
       "viewId": "view.spend",
-      "disposition": "not-applicable"
+      "disposition": "covered-by",
+      "fixtureId": "fix.spend.idle",
+      "exercise": "stale-false",
+      "evidence": "Same branch as fix.spend.idle. agentViewFixture sets stale false unless the partial overrides it. This idle fixture does not. The view paints no separate fresh mark, so the idle screenshot is that branch."
     },
     {
       "stateId": "state.fresh",
       "viewId": "view.timeline",
-      "disposition": "not-applicable"
+      "disposition": "covered-by",
+      "fixtureId": "fix.timeline.idle",
+      "exercise": "stale-false",
+      "evidence": "Same branch as fix.timeline.idle. agentViewFixture sets stale false unless the partial overrides it. This idle fixture does not. The view paints no separate fresh mark, so the idle screenshot is that branch."
     },
     {
       "stateId": "state.fresh",
       "viewId": "view.swarm",
-      "disposition": "environment-gap"
-    },
-    {
-      "stateId": "state.terminal_running",
-      "viewId": "view.list",
-      "disposition": "rendered",
-      "fixtureId": "fix.list.terminal-running"
-    },
-    {
-      "stateId": "state.terminal_running",
-      "viewId": "view.rain",
-      "disposition": "rendered",
-      "fixtureId": "fix.rain.terminal-running"
-    },
-    {
-      "stateId": "state.terminal_running",
-      "viewId": "view.spend",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.terminal_running",
-      "viewId": "view.timeline",
-      "disposition": "rendered",
-      "fixtureId": "fix.timeline.terminal-running"
-    },
-    {
-      "stateId": "state.terminal_running",
-      "viewId": "view.swarm",
-      "disposition": "environment-gap"
-    },
-    {
-      "stateId": "state.terminal_quiet",
-      "viewId": "view.list",
-      "disposition": "rendered",
-      "fixtureId": "fix.list.terminal-quiet"
-    },
-    {
-      "stateId": "state.terminal_quiet",
-      "viewId": "view.rain",
-      "disposition": "rendered",
-      "fixtureId": "fix.rain.terminal-quiet"
-    },
-    {
-      "stateId": "state.terminal_quiet",
-      "viewId": "view.spend",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.terminal_quiet",
-      "viewId": "view.timeline",
-      "disposition": "rendered",
-      "fixtureId": "fix.timeline.terminal-quiet"
-    },
-    {
-      "stateId": "state.terminal_quiet",
-      "viewId": "view.swarm",
-      "disposition": "environment-gap"
-    },
-    {
-      "stateId": "state.remote",
-      "viewId": "view.list",
-      "disposition": "rendered",
-      "fixtureId": "fix.list.remote"
-    },
-    {
-      "stateId": "state.remote",
-      "viewId": "view.rain",
-      "disposition": "rendered",
-      "fixtureId": "fix.rain.remote"
-    },
-    {
-      "stateId": "state.remote",
-      "viewId": "view.spend",
-      "disposition": "rendered",
-      "fixtureId": "fix.spend.remote"
-    },
-    {
-      "stateId": "state.remote",
-      "viewId": "view.timeline",
-      "disposition": "rendered",
-      "fixtureId": "fix.timeline.remote"
-    },
-    {
-      "stateId": "state.remote",
-      "viewId": "view.swarm",
-      "disposition": "environment-gap"
-    },
-    {
-      "stateId": "state.active",
-      "viewId": "view.list",
-      "disposition": "rendered",
-      "fixtureId": "fix.list.active"
-    },
-    {
-      "stateId": "state.active",
-      "viewId": "view.rain",
-      "disposition": "rendered",
-      "fixtureId": "fix.rain.active"
-    },
-    {
-      "stateId": "state.active",
-      "viewId": "view.spend",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.active",
-      "viewId": "view.timeline",
-      "disposition": "rendered",
-      "fixtureId": "fix.timeline.active"
-    },
-    {
-      "stateId": "state.active",
-      "viewId": "view.swarm",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.receded",
-      "viewId": "view.list",
-      "disposition": "rendered",
-      "fixtureId": "fix.list.receded"
-    },
-    {
-      "stateId": "state.receded",
-      "viewId": "view.rain",
-      "disposition": "rendered",
-      "fixtureId": "fix.rain.receded"
-    },
-    {
-      "stateId": "state.receded",
-      "viewId": "view.spend",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.receded",
-      "viewId": "view.timeline",
-      "disposition": "rendered",
-      "fixtureId": "fix.timeline.receded"
-    },
-    {
-      "stateId": "state.receded",
-      "viewId": "view.swarm",
-      "disposition": "environment-gap"
-    },
-    {
-      "stateId": "state.attached",
-      "viewId": "view.list",
-      "disposition": "rendered",
-      "fixtureId": "fix.list.attached"
-    },
-    {
-      "stateId": "state.attached",
-      "viewId": "view.rain",
-      "disposition": "rendered",
-      "fixtureId": "fix.rain.attached"
-    },
-    {
-      "stateId": "state.attached",
-      "viewId": "view.spend",
-      "disposition": "rendered",
-      "fixtureId": "fix.spend.attached"
-    },
-    {
-      "stateId": "state.attached",
-      "viewId": "view.timeline",
-      "disposition": "rendered",
-      "fixtureId": "fix.timeline.attached"
-    },
-    {
-      "stateId": "state.attached",
-      "viewId": "view.swarm",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.detached",
-      "viewId": "view.list",
-      "disposition": "rendered",
-      "fixtureId": "fix.list.detached"
-    },
-    {
-      "stateId": "state.detached",
-      "viewId": "view.rain",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.detached",
-      "viewId": "view.spend",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.detached",
-      "viewId": "view.timeline",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.detached",
-      "viewId": "view.swarm",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.context_missing",
-      "viewId": "view.list",
-      "disposition": "rendered",
-      "fixtureId": "fix.list.context-missing"
-    },
-    {
-      "stateId": "state.context_missing",
-      "viewId": "view.rain",
-      "disposition": "rendered",
-      "fixtureId": "fix.rain.context-missing"
-    },
-    {
-      "stateId": "state.context_missing",
-      "viewId": "view.spend",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.context_missing",
-      "viewId": "view.timeline",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.context_missing",
-      "viewId": "view.swarm",
-      "disposition": "environment-gap"
-    },
-    {
-      "stateId": "state.branch_unknown",
-      "viewId": "view.list",
-      "disposition": "rendered",
-      "fixtureId": "fix.list.branch-unknown"
-    },
-    {
-      "stateId": "state.branch_unknown",
-      "viewId": "view.rain",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.branch_unknown",
-      "viewId": "view.spend",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.branch_unknown",
-      "viewId": "view.timeline",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.branch_unknown",
-      "viewId": "view.swarm",
-      "disposition": "environment-gap"
-    },
-    {
-      "stateId": "state.branch_none",
-      "viewId": "view.list",
-      "disposition": "rendered",
-      "fixtureId": "fix.list.branch-none"
-    },
-    {
-      "stateId": "state.branch_none",
-      "viewId": "view.rain",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.branch_none",
-      "viewId": "view.spend",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.branch_none",
-      "viewId": "view.timeline",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.branch_none",
-      "viewId": "view.swarm",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.branch_named",
-      "viewId": "view.list",
-      "disposition": "rendered",
-      "fixtureId": "fix.list.branch-named"
-    },
-    {
-      "stateId": "state.branch_named",
-      "viewId": "view.rain",
-      "disposition": "rendered",
-      "fixtureId": "fix.rain.branch-named"
-    },
-    {
-      "stateId": "state.branch_named",
-      "viewId": "view.spend",
-      "disposition": "rendered",
-      "fixtureId": "fix.spend.branch-named"
-    },
-    {
-      "stateId": "state.branch_named",
-      "viewId": "view.timeline",
-      "disposition": "rendered",
-      "fixtureId": "fix.timeline.branch-named"
-    },
-    {
-      "stateId": "state.branch_named",
-      "viewId": "view.swarm",
-      "disposition": "environment-gap"
-    },
-    {
-      "stateId": "state.reply_missing",
-      "viewId": "view.list",
-      "disposition": "rendered",
-      "fixtureId": "fix.list.reply-missing"
-    },
-    {
-      "stateId": "state.reply_missing",
-      "viewId": "view.rain",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.reply_missing",
-      "viewId": "view.spend",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.reply_missing",
-      "viewId": "view.timeline",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.reply_missing",
-      "viewId": "view.swarm",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.model_missing",
-      "viewId": "view.list",
-      "disposition": "rendered",
-      "fixtureId": "fix.list.model-missing"
-    },
-    {
-      "stateId": "state.model_missing",
-      "viewId": "view.rain",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.model_missing",
-      "viewId": "view.spend",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.model_missing",
-      "viewId": "view.timeline",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.model_missing",
-      "viewId": "view.swarm",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.spawn_ready",
-      "viewId": "view.list",
-      "disposition": "rendered",
-      "fixtureId": "fix.list.spawn-ready"
-    },
-    {
-      "stateId": "state.spawn_ready",
-      "viewId": "view.rain",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.spawn_ready",
-      "viewId": "view.spend",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.spawn_ready",
-      "viewId": "view.timeline",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.spawn_ready",
-      "viewId": "view.swarm",
-      "disposition": "environment-gap"
-    },
-    {
-      "stateId": "state.spawn_asleep",
-      "viewId": "view.list",
-      "disposition": "rendered",
-      "fixtureId": "fix.list.spawn-asleep"
-    },
-    {
-      "stateId": "state.spawn_asleep",
-      "viewId": "view.rain",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.spawn_asleep",
-      "viewId": "view.spend",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.spawn_asleep",
-      "viewId": "view.timeline",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.spawn_asleep",
-      "viewId": "view.swarm",
-      "disposition": "environment-gap"
-    },
-    {
-      "stateId": "state.spawn_silent",
-      "viewId": "view.list",
-      "disposition": "rendered",
-      "fixtureId": "fix.list.spawn-silent"
-    },
-    {
-      "stateId": "state.spawn_silent",
-      "viewId": "view.rain",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.spawn_silent",
-      "viewId": "view.spend",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.spawn_silent",
-      "viewId": "view.timeline",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.spawn_silent",
-      "viewId": "view.swarm",
-      "disposition": "environment-gap"
-    },
-    {
-      "stateId": "state.spawn_incompatible",
-      "viewId": "view.list",
-      "disposition": "rendered",
-      "fixtureId": "fix.list.spawn-incompatible"
-    },
-    {
-      "stateId": "state.spawn_incompatible",
-      "viewId": "view.rain",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.spawn_incompatible",
-      "viewId": "view.spend",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.spawn_incompatible",
-      "viewId": "view.timeline",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.spawn_incompatible",
-      "viewId": "view.swarm",
-      "disposition": "environment-gap"
-    },
-    {
-      "stateId": "state.spawn_reading",
-      "viewId": "view.list",
-      "disposition": "rendered",
-      "fixtureId": "fix.list.spawn-reading"
-    },
-    {
-      "stateId": "state.spawn_reading",
-      "viewId": "view.rain",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.spawn_reading",
-      "viewId": "view.spend",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.spawn_reading",
-      "viewId": "view.timeline",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.spawn_reading",
-      "viewId": "view.swarm",
-      "disposition": "environment-gap"
-    },
-    {
-      "stateId": "state.cost_complete",
-      "viewId": "view.list",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.cost_complete",
-      "viewId": "view.rain",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.cost_complete",
-      "viewId": "view.spend",
-      "disposition": "rendered",
-      "fixtureId": "fix.spend.cost-complete"
-    },
-    {
-      "stateId": "state.cost_complete",
-      "viewId": "view.timeline",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.cost_complete",
-      "viewId": "view.swarm",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.cost_partial",
-      "viewId": "view.list",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.cost_partial",
-      "viewId": "view.rain",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.cost_partial",
-      "viewId": "view.spend",
-      "disposition": "rendered",
-      "fixtureId": "fix.spend.cost-partial"
-    },
-    {
-      "stateId": "state.cost_partial",
-      "viewId": "view.timeline",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.cost_partial",
-      "viewId": "view.swarm",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.cost_unavailable",
-      "viewId": "view.list",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.cost_unavailable",
-      "viewId": "view.rain",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.cost_unavailable",
-      "viewId": "view.spend",
-      "disposition": "rendered",
-      "fixtureId": "fix.spend.cost-unavailable"
-    },
-    {
-      "stateId": "state.cost_unavailable",
-      "viewId": "view.timeline",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.cost_unavailable",
-      "viewId": "view.swarm",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.cost_missing",
-      "viewId": "view.list",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.cost_missing",
-      "viewId": "view.rain",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.cost_missing",
-      "viewId": "view.spend",
-      "disposition": "rendered",
-      "fixtureId": "fix.spend.cost-missing"
-    },
-    {
-      "stateId": "state.cost_missing",
-      "viewId": "view.timeline",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.cost_missing",
-      "viewId": "view.swarm",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.spend_before",
-      "viewId": "view.list",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.spend_before",
-      "viewId": "view.rain",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.spend_before",
-      "viewId": "view.spend",
-      "disposition": "rendered",
-      "fixtureId": "fix.spend.before"
-    },
-    {
-      "stateId": "state.spend_before",
-      "viewId": "view.timeline",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.spend_before",
-      "viewId": "view.swarm",
-      "disposition": "not-applicable"
+      "disposition": "environment-gap",
+      "evidence": "AgentSwarm / bubble-model.ts draws this on the WebGPU canvas. This host's GPU process exits before requestAdapter returns, so the body was not painted. See webgpu-diagnostic.json. The swarm diagnosis is separate from the matrix reclassification."
     },
     {
       "stateId": "state.unread",
       "viewId": "view.list",
-      "disposition": "not-applicable"
+      "disposition": "rendered",
+      "fixtureId": "fix.list.unread",
+      "evidence": "Idle agent with unread true and a reply. AgentList has no unread class. detailLine prints the reply text. The input is mounted; unread is not inferred from a row whose default unread is false."
     },
     {
       "stateId": "state.unread",
       "viewId": "view.rain",
-      "disposition": "not-applicable"
+      "disposition": "rendered",
+      "fixtureId": "fix.rain.unread",
+      "evidence": "Idle column with unread true. statusPresentation keys status only. The tooltip's detailLine prints the reply."
     },
     {
       "stateId": "state.unread",
       "viewId": "view.spend",
       "disposition": "rendered",
-      "fixtureId": "fix.spend.unread"
+      "fixtureId": "fix.spend.unread",
+      "evidence": "Idle and unread. Spend calls the state unseen."
     },
     {
       "stateId": "state.unread",
       "viewId": "view.timeline",
       "disposition": "rendered",
-      "fixtureId": "fix.timeline.unread"
+      "fixtureId": "fix.timeline.unread",
+      "evidence": "idle agent with unread. Timeline state word is reply unseen. The list has no unread class."
     },
     {
       "stateId": "state.unread",
       "viewId": "view.swarm",
-      "disposition": "environment-gap"
+      "disposition": "environment-gap",
+      "evidence": "AgentSwarm / bubble-model.ts draws this on the WebGPU canvas. This host's GPU process exits before requestAdapter returns, so the body was not painted. See webgpu-diagnostic.json. The swarm diagnosis is separate from the matrix reclassification."
+    },
+    {
+      "stateId": "state.failed_retained",
+      "viewId": "view.list",
+      "disposition": "coverage-gap",
+      "evidence": "Unverified: Retention is the host's keepsFailure. A row that still reaches the view would paint as its status. No fixture mounts alive false."
+    },
+    {
+      "stateId": "state.failed_retained",
+      "viewId": "view.rain",
+      "disposition": "coverage-gap",
+      "evidence": "Unverified: Retention is the host's keepsFailure. A row that still reaches the view would paint as its status. No fixture mounts alive false."
+    },
+    {
+      "stateId": "state.failed_retained",
+      "viewId": "view.spend",
+      "disposition": "coverage-gap",
+      "evidence": "Unverified: Retention is the host's keepsFailure. A row that still reaches the view would paint as its status. No fixture mounts alive false."
+    },
+    {
+      "stateId": "state.failed_retained",
+      "viewId": "view.timeline",
+      "disposition": "coverage-gap",
+      "evidence": "Unverified: Retention is the host's keepsFailure. A row that still reaches the view would paint as its status. No fixture mounts alive false."
+    },
+    {
+      "stateId": "state.failed_retained",
+      "viewId": "view.swarm",
+      "disposition": "environment-gap",
+      "evidence": "AgentSwarm / bubble-model.ts draws this on the WebGPU canvas. This host's GPU process exits before requestAdapter returns, so the body was not painted. See webgpu-diagnostic.json. The swarm diagnosis is separate from the matrix reclassification."
+    },
+    {
+      "stateId": "state.dead_hidden",
+      "viewId": "view.list",
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: A dead-hidden row is removed by VibeField useMonitorAgents before a view is given its model. The view has no dead-hidden paint because the row is not in the model."
+    },
+    {
+      "stateId": "state.dead_hidden",
+      "viewId": "view.rain",
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: A dead-hidden row is removed by VibeField useMonitorAgents before a view is given its model. The view has no dead-hidden paint because the row is not in the model."
+    },
+    {
+      "stateId": "state.dead_hidden",
+      "viewId": "view.spend",
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: A dead-hidden row is removed by VibeField useMonitorAgents before a view is given its model. The view has no dead-hidden paint because the row is not in the model."
+    },
+    {
+      "stateId": "state.dead_hidden",
+      "viewId": "view.timeline",
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: A dead-hidden row is removed by VibeField useMonitorAgents before a view is given its model. The view has no dead-hidden paint because the row is not in the model."
+    },
+    {
+      "stateId": "state.dead_hidden",
+      "viewId": "view.swarm",
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: A dead-hidden row is removed by VibeField useMonitorAgents before a view is given its model. The view has no dead-hidden paint because the row is not in the model."
+    },
+    {
+      "stateId": "state.terminal_running",
+      "viewId": "view.list",
+      "disposition": "rendered",
+      "fixtureId": "fix.list.terminal-running",
+      "evidence": "kind terminal and status working."
+    },
+    {
+      "stateId": "state.terminal_running",
+      "viewId": "view.rain",
+      "disposition": "rendered",
+      "fixtureId": "fix.rain.terminal-running",
+      "evidence": "Local terminal column spells terminal, working head on."
+    },
+    {
+      "stateId": "state.terminal_running",
+      "viewId": "view.spend",
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: spendMeters skips kind terminal (spend-series.ts). A terminal is not a spend row. Running and quiet terminals are outside the spend meter."
+    },
+    {
+      "stateId": "state.terminal_running",
+      "viewId": "view.timeline",
+      "disposition": "rendered",
+      "fixtureId": "fix.timeline.terminal-running",
+      "evidence": "Terminal lane, running."
+    },
+    {
+      "stateId": "state.terminal_running",
+      "viewId": "view.swarm",
+      "disposition": "environment-gap",
+      "evidence": "AgentSwarm / bubble-model.ts draws this on the WebGPU canvas. This host's GPU process exits before requestAdapter returns, so the body was not painted. See webgpu-diagnostic.json. The swarm diagnosis is separate from the matrix reclassification."
+    },
+    {
+      "stateId": "state.terminal_quiet",
+      "viewId": "view.list",
+      "disposition": "rendered",
+      "fixtureId": "fix.list.terminal-quiet",
+      "evidence": "kind terminal and status idle. List says quiet, not the swarm word empty."
+    },
+    {
+      "stateId": "state.terminal_quiet",
+      "viewId": "view.rain",
+      "disposition": "rendered",
+      "fixtureId": "fix.rain.terminal-quiet",
+      "evidence": "Local terminal column, idle, head hidden."
+    },
+    {
+      "stateId": "state.terminal_quiet",
+      "viewId": "view.spend",
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: spendMeters skips kind terminal (spend-series.ts). A terminal is not a spend row. Running and quiet terminals are outside the spend meter."
+    },
+    {
+      "stateId": "state.terminal_quiet",
+      "viewId": "view.timeline",
+      "disposition": "rendered",
+      "fixtureId": "fix.timeline.terminal-quiet",
+      "evidence": "Terminal lane, quiet."
+    },
+    {
+      "stateId": "state.terminal_quiet",
+      "viewId": "view.swarm",
+      "disposition": "environment-gap",
+      "evidence": "AgentSwarm / bubble-model.ts draws this on the WebGPU canvas. This host's GPU process exits before requestAdapter returns, so the body was not painted. See webgpu-diagnostic.json. The swarm diagnosis is separate from the matrix reclassification."
+    },
+    {
+      "stateId": "state.terminal_empty",
+      "viewId": "view.list",
+      "disposition": "coverage-gap",
+      "evidence": "Unverified: empty is a quiet terminal with nothing opening. The rendered quiet fixtures set detail to quiet, so they do not exercise an empty terminal. List, rain, and timeline would still show the row."
+    },
+    {
+      "stateId": "state.terminal_empty",
+      "viewId": "view.rain",
+      "disposition": "coverage-gap",
+      "evidence": "Unverified: empty is a quiet terminal with nothing opening. The rendered quiet fixtures set detail to quiet, so they do not exercise an empty terminal. List, rain, and timeline would still show the row."
+    },
+    {
+      "stateId": "state.terminal_empty",
+      "viewId": "view.spend",
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: spendMeters skips terminals, so an empty terminal is not a spend row."
+    },
+    {
+      "stateId": "state.terminal_empty",
+      "viewId": "view.timeline",
+      "disposition": "coverage-gap",
+      "evidence": "Unverified: empty is a quiet terminal with nothing opening. The rendered quiet fixtures set detail to quiet, so they do not exercise an empty terminal. List, rain, and timeline would still show the row."
+    },
+    {
+      "stateId": "state.terminal_empty",
+      "viewId": "view.swarm",
+      "disposition": "environment-gap",
+      "evidence": "AgentSwarm / bubble-model.ts draws this on the WebGPU canvas. This host's GPU process exits before requestAdapter returns, so the body was not painted. See webgpu-diagnostic.json. The swarm diagnosis is separate from the matrix reclassification."
+    },
+    {
+      "stateId": "state.terminal_opening",
+      "viewId": "view.list",
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: opening is a swarm-local word. It is not an AgentView field, and MonitorViewHost cannot pass it to list, rain, spend, or timeline."
+    },
+    {
+      "stateId": "state.terminal_opening",
+      "viewId": "view.rain",
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: opening is a swarm-local word. It is not an AgentView field, and MonitorViewHost cannot pass it to list, rain, spend, or timeline."
+    },
+    {
+      "stateId": "state.terminal_opening",
+      "viewId": "view.spend",
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: opening is a swarm-local word. It is not an AgentView field, and MonitorViewHost cannot pass it to list, rain, spend, or timeline."
+    },
+    {
+      "stateId": "state.terminal_opening",
+      "viewId": "view.timeline",
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: opening is a swarm-local word. It is not an AgentView field, and MonitorViewHost cannot pass it to list, rain, spend, or timeline."
+    },
+    {
+      "stateId": "state.terminal_opening",
+      "viewId": "view.swarm",
+      "disposition": "environment-gap",
+      "evidence": "AgentSwarm / bubble-model.ts draws this on the WebGPU canvas. This host's GPU process exits before requestAdapter returns, so the body was not painted. See webgpu-diagnostic.json. The swarm diagnosis is separate from the matrix reclassification."
+    },
+    {
+      "stateId": "state.remote",
+      "viewId": "view.list",
+      "disposition": "rendered",
+      "fixtureId": "fix.list.remote",
+      "evidence": "device.self false. List row class is-remote and the detail leads with the desktop name."
+    },
+    {
+      "stateId": "state.remote",
+      "viewId": "view.rain",
+      "disposition": "rendered",
+      "fixtureId": "fix.rain.remote",
+      "evidence": "A remote terminal's column leads with the desktop name."
+    },
+    {
+      "stateId": "state.remote",
+      "viewId": "view.spend",
+      "disposition": "rendered",
+      "fixtureId": "fix.spend.remote",
+      "evidence": "Peer mark beside the name. A peer's series is not drawn; the total still is."
+    },
+    {
+      "stateId": "state.remote",
+      "viewId": "view.timeline",
+      "disposition": "rendered",
+      "fixtureId": "fix.timeline.remote",
+      "evidence": "Peer mark on the timeline name."
+    },
+    {
+      "stateId": "state.remote",
+      "viewId": "view.swarm",
+      "disposition": "environment-gap",
+      "evidence": "AgentSwarm / bubble-model.ts draws this on the WebGPU canvas. This host's GPU process exits before requestAdapter returns, so the body was not painted. See webgpu-diagnostic.json. The swarm diagnosis is separate from the matrix reclassification."
+    },
+    {
+      "stateId": "state.active",
+      "viewId": "view.list",
+      "disposition": "rendered",
+      "fixtureId": "fix.list.active",
+      "evidence": "active true. List row class is-active."
+    },
+    {
+      "stateId": "state.active",
+      "viewId": "view.rain",
+      "disposition": "rendered",
+      "fixtureId": "fix.rain.active",
+      "evidence": "Active column uses the active head colour."
+    },
+    {
+      "stateId": "state.active",
+      "viewId": "view.spend",
+      "disposition": "rendered",
+      "fixtureId": "fix.spend.active",
+      "evidence": "active true. SpendView adds is-active on the row."
+    },
+    {
+      "stateId": "state.active",
+      "viewId": "view.timeline",
+      "disposition": "rendered",
+      "fixtureId": "fix.timeline.active",
+      "evidence": "Timeline name takes is-active."
+    },
+    {
+      "stateId": "state.active",
+      "viewId": "view.swarm",
+      "disposition": "environment-gap",
+      "evidence": "AgentSwarm / bubble-model.ts draws this on the WebGPU canvas. This host's GPU process exits before requestAdapter returns, so the body was not painted. See webgpu-diagnostic.json. The swarm diagnosis is separate from the matrix reclassification."
+    },
+    {
+      "stateId": "state.receded",
+      "viewId": "view.list",
+      "disposition": "rendered",
+      "fixtureId": "fix.list.receded",
+      "evidence": "One row receded beside one shown row, so the list uses the 0.22 weight rather than the all-receded weight."
+    },
+    {
+      "stateId": "state.receded",
+      "viewId": "view.rain",
+      "disposition": "rendered",
+      "fixtureId": "fix.rain.receded",
+      "evidence": "Receded column beside a shown column, at the 0.22 weight."
+    },
+    {
+      "stateId": "state.receded",
+      "viewId": "view.spend",
+      "disposition": "rendered",
+      "fixtureId": "fix.spend.receded",
+      "evidence": "One receded agent beside a shown agent. SpendView does not read receded; both rows are still named."
+    },
+    {
+      "stateId": "state.receded",
+      "viewId": "view.timeline",
+      "disposition": "rendered",
+      "fixtureId": "fix.timeline.receded",
+      "evidence": "Timeline name and head take is-receded beside a shown lane."
+    },
+    {
+      "stateId": "state.receded",
+      "viewId": "view.swarm",
+      "disposition": "environment-gap",
+      "evidence": "AgentSwarm / bubble-model.ts draws this on the WebGPU canvas. This host's GPU process exits before requestAdapter returns, so the body was not painted. See webgpu-diagnostic.json. The swarm diagnosis is separate from the matrix reclassification."
+    },
+    {
+      "stateId": "state.attached",
+      "viewId": "view.list",
+      "disposition": "rendered",
+      "fixtureId": "fix.list.attached",
+      "evidence": "attachment present. List row class is-linked."
+    },
+    {
+      "stateId": "state.attached",
+      "viewId": "view.rain",
+      "disposition": "rendered",
+      "fixtureId": "fix.rain.attached",
+      "evidence": "Attachment paints the column tint and a mirror."
+    },
+    {
+      "stateId": "state.attached",
+      "viewId": "view.spend",
+      "disposition": "rendered",
+      "fixtureId": "fix.spend.attached",
+      "evidence": "Attachment is named in the row's accessible label."
+    },
+    {
+      "stateId": "state.attached",
+      "viewId": "view.timeline",
+      "disposition": "rendered",
+      "fixtureId": "fix.timeline.attached",
+      "evidence": "Timeline name shows the pane mark."
+    },
+    {
+      "stateId": "state.attached",
+      "viewId": "view.swarm",
+      "disposition": "environment-gap",
+      "evidence": "AgentSwarm / bubble-model.ts draws this on the WebGPU canvas. This host's GPU process exits before requestAdapter returns, so the body was not painted. See webgpu-diagnostic.json. The swarm diagnosis is separate from the matrix reclassification."
+    },
+    {
+      "stateId": "state.attachable",
+      "viewId": "view.list",
+      "disposition": "covered-by",
+      "fixtureId": "fix.list.idle",
+      "exercise": "attachable-true",
+      "evidence": "Same branch as fix.list.idle. agentViewFixture sets attachable true. The idle screenshot mounted that value. None of these views add a class from attachable, so the idle paint is the branch."
+    },
+    {
+      "stateId": "state.attachable",
+      "viewId": "view.rain",
+      "disposition": "covered-by",
+      "fixtureId": "fix.rain.idle",
+      "exercise": "attachable-true",
+      "evidence": "Same branch as fix.rain.idle. agentViewFixture sets attachable true. The idle screenshot mounted that value. None of these views add a class from attachable, so the idle paint is the branch."
+    },
+    {
+      "stateId": "state.attachable",
+      "viewId": "view.spend",
+      "disposition": "covered-by",
+      "fixtureId": "fix.spend.idle",
+      "exercise": "attachable-true",
+      "evidence": "Same branch as fix.spend.idle. agentViewFixture sets attachable true. The idle screenshot mounted that value. None of these views add a class from attachable, so the idle paint is the branch."
+    },
+    {
+      "stateId": "state.attachable",
+      "viewId": "view.timeline",
+      "disposition": "covered-by",
+      "fixtureId": "fix.timeline.idle",
+      "exercise": "attachable-true",
+      "evidence": "Same branch as fix.timeline.idle. agentViewFixture sets attachable true. The idle screenshot mounted that value. None of these views add a class from attachable, so the idle paint is the branch."
+    },
+    {
+      "stateId": "state.attachable",
+      "viewId": "view.swarm",
+      "disposition": "environment-gap",
+      "evidence": "AgentSwarm / bubble-model.ts draws this on the WebGPU canvas. This host's GPU process exits before requestAdapter returns, so the body was not painted. See webgpu-diagnostic.json. The swarm diagnosis is separate from the matrix reclassification."
+    },
+    {
+      "stateId": "state.detached",
+      "viewId": "view.list",
+      "disposition": "rendered",
+      "fixtureId": "fix.list.detached",
+      "evidence": "attachment absent. List row has no is-linked class."
+    },
+    {
+      "stateId": "state.detached",
+      "viewId": "view.rain",
+      "disposition": "covered-by",
+      "fixtureId": "fix.rain.working",
+      "exercise": "attachment-absent",
+      "evidence": "Same branch as fix.rain.working. The mounted row has no attachment. Rain tints a column only when attachment is set, spend adds is-mounted only then, and the timeline pane mark is the attached fixture. This screenshot is the absent branch."
+    },
+    {
+      "stateId": "state.detached",
+      "viewId": "view.spend",
+      "disposition": "covered-by",
+      "fixtureId": "fix.spend.working",
+      "exercise": "attachment-absent",
+      "evidence": "Same branch as fix.spend.working. The mounted row has no attachment. Rain tints a column only when attachment is set, spend adds is-mounted only then, and the timeline pane mark is the attached fixture. This screenshot is the absent branch."
+    },
+    {
+      "stateId": "state.detached",
+      "viewId": "view.timeline",
+      "disposition": "covered-by",
+      "fixtureId": "fix.timeline.working",
+      "exercise": "attachment-absent",
+      "evidence": "Same branch as fix.timeline.working. The mounted row has no attachment. Rain tints a column only when attachment is set, spend adds is-mounted only then, and the timeline pane mark is the attached fixture. This screenshot is the absent branch."
+    },
+    {
+      "stateId": "state.detached",
+      "viewId": "view.swarm",
+      "disposition": "environment-gap",
+      "evidence": "AgentSwarm / bubble-model.ts draws this on the WebGPU canvas. This host's GPU process exits before requestAdapter returns, so the body was not painted. See webgpu-diagnostic.json. The swarm diagnosis is separate from the matrix reclassification."
+    },
+    {
+      "stateId": "state.cost_complete",
+      "viewId": "view.list",
+      "disposition": "coverage-gap",
+      "evidence": "Unverified: A row can carry this cost object in the view. No mounted list, rain, or timeline fixture includes that coverage. The list's contract test says the list does not print cost; the cost input itself was not exercised."
+    },
+    {
+      "stateId": "state.cost_complete",
+      "viewId": "view.rain",
+      "disposition": "coverage-gap",
+      "evidence": "Unverified: A row can carry this cost object in the view. No mounted list, rain, or timeline fixture includes that coverage. The list's contract test says the list does not print cost; the cost input itself was not exercised."
+    },
+    {
+      "stateId": "state.cost_complete",
+      "viewId": "view.spend",
+      "disposition": "rendered",
+      "fixtureId": "fix.spend.cost-complete",
+      "evidence": "cost.coverage complete. Spend meters the total."
+    },
+    {
+      "stateId": "state.cost_complete",
+      "viewId": "view.timeline",
+      "disposition": "coverage-gap",
+      "evidence": "Unverified: A row can carry this cost object in the view. No mounted list, rain, or timeline fixture includes that coverage. The list's contract test says the list does not print cost; the cost input itself was not exercised."
+    },
+    {
+      "stateId": "state.cost_complete",
+      "viewId": "view.swarm",
+      "disposition": "environment-gap",
+      "evidence": "AgentSwarm / bubble-model.ts draws this on the WebGPU canvas. This host's GPU process exits before requestAdapter returns, so the body was not painted. See webgpu-diagnostic.json. The swarm diagnosis is separate from the matrix reclassification."
+    },
+    {
+      "stateId": "state.cost_partial",
+      "viewId": "view.list",
+      "disposition": "coverage-gap",
+      "evidence": "Unverified: A row can carry this cost object in the view. No mounted list, rain, or timeline fixture includes that coverage. The list's contract test says the list does not print cost; the cost input itself was not exercised."
+    },
+    {
+      "stateId": "state.cost_partial",
+      "viewId": "view.rain",
+      "disposition": "coverage-gap",
+      "evidence": "Unverified: A row can carry this cost object in the view. No mounted list, rain, or timeline fixture includes that coverage. The list's contract test says the list does not print cost; the cost input itself was not exercised."
+    },
+    {
+      "stateId": "state.cost_partial",
+      "viewId": "view.spend",
+      "disposition": "rendered",
+      "fixtureId": "fix.spend.cost-partial",
+      "evidence": "cost.coverage partial. Spend marks the total partial."
+    },
+    {
+      "stateId": "state.cost_partial",
+      "viewId": "view.timeline",
+      "disposition": "coverage-gap",
+      "evidence": "Unverified: A row can carry this cost object in the view. No mounted list, rain, or timeline fixture includes that coverage. The list's contract test says the list does not print cost; the cost input itself was not exercised."
+    },
+    {
+      "stateId": "state.cost_partial",
+      "viewId": "view.swarm",
+      "disposition": "environment-gap",
+      "evidence": "AgentSwarm / bubble-model.ts draws this on the WebGPU canvas. This host's GPU process exits before requestAdapter returns, so the body was not painted. See webgpu-diagnostic.json. The swarm diagnosis is separate from the matrix reclassification."
+    },
+    {
+      "stateId": "state.cost_unavailable",
+      "viewId": "view.list",
+      "disposition": "coverage-gap",
+      "evidence": "Unverified: A row can carry this cost object in the view. No mounted list, rain, or timeline fixture includes that coverage. The list's contract test says the list does not print cost; the cost input itself was not exercised."
+    },
+    {
+      "stateId": "state.cost_unavailable",
+      "viewId": "view.rain",
+      "disposition": "coverage-gap",
+      "evidence": "Unverified: A row can carry this cost object in the view. No mounted list, rain, or timeline fixture includes that coverage. The list's contract test says the list does not print cost; the cost input itself was not exercised."
+    },
+    {
+      "stateId": "state.cost_unavailable",
+      "viewId": "view.spend",
+      "disposition": "rendered",
+      "fixtureId": "fix.spend.cost-unavailable",
+      "evidence": "cost.coverage unavailable. Spend names the agent apart and does not meter it."
+    },
+    {
+      "stateId": "state.cost_unavailable",
+      "viewId": "view.timeline",
+      "disposition": "coverage-gap",
+      "evidence": "Unverified: A row can carry this cost object in the view. No mounted list, rain, or timeline fixture includes that coverage. The list's contract test says the list does not print cost; the cost input itself was not exercised."
+    },
+    {
+      "stateId": "state.cost_unavailable",
+      "viewId": "view.swarm",
+      "disposition": "environment-gap",
+      "evidence": "AgentSwarm / bubble-model.ts draws this on the WebGPU canvas. This host's GPU process exits before requestAdapter returns, so the body was not painted. See webgpu-diagnostic.json. The swarm diagnosis is separate from the matrix reclassification."
+    },
+    {
+      "stateId": "state.cost_missing",
+      "viewId": "view.list",
+      "disposition": "coverage-gap",
+      "evidence": "Unverified: A row can carry this cost object in the view. No mounted list, rain, or timeline fixture includes that coverage. The list's contract test says the list does not print cost; the cost input itself was not exercised."
+    },
+    {
+      "stateId": "state.cost_missing",
+      "viewId": "view.rain",
+      "disposition": "coverage-gap",
+      "evidence": "Unverified: A row can carry this cost object in the view. No mounted list, rain, or timeline fixture includes that coverage. The list's contract test says the list does not print cost; the cost input itself was not exercised."
+    },
+    {
+      "stateId": "state.cost_missing",
+      "viewId": "view.spend",
+      "disposition": "rendered",
+      "fixtureId": "fix.spend.cost-missing",
+      "evidence": "cost absent. Spend names the agent apart."
+    },
+    {
+      "stateId": "state.cost_missing",
+      "viewId": "view.timeline",
+      "disposition": "coverage-gap",
+      "evidence": "Unverified: A row can carry this cost object in the view. No mounted list, rain, or timeline fixture includes that coverage. The list's contract test says the list does not print cost; the cost input itself was not exercised."
+    },
+    {
+      "stateId": "state.cost_missing",
+      "viewId": "view.swarm",
+      "disposition": "environment-gap",
+      "evidence": "AgentSwarm / bubble-model.ts draws this on the WebGPU canvas. This host's GPU process exits before requestAdapter returns, so the body was not painted. See webgpu-diagnostic.json. The swarm diagnosis is separate from the matrix reclassification."
+    },
+    {
+      "stateId": "state.context_missing",
+      "viewId": "view.list",
+      "disposition": "rendered",
+      "fixtureId": "fix.list.context-missing",
+      "evidence": "context absent. List percent cell is the missing mark."
+    },
+    {
+      "stateId": "state.context_missing",
+      "viewId": "view.rain",
+      "disposition": "rendered",
+      "fixtureId": "fix.rain.context-missing",
+      "evidence": "No context percent. rainTailLength uses the mid-scale default instead of a measured share."
+    },
+    {
+      "stateId": "state.context_missing",
+      "viewId": "view.spend",
+      "disposition": "covered-by",
+      "fixtureId": "fix.spend.idle",
+      "exercise": "context-absent",
+      "evidence": "Same branch as fix.spend.idle. The mounted row has no context. Spend and the timeline lane do not print a percent. The idle screenshot is that input."
+    },
+    {
+      "stateId": "state.context_missing",
+      "viewId": "view.timeline",
+      "disposition": "covered-by",
+      "fixtureId": "fix.timeline.idle",
+      "exercise": "context-absent",
+      "evidence": "Same branch as fix.timeline.idle. The mounted row has no context. Spend and the timeline lane do not print a percent. The idle screenshot is that input."
+    },
+    {
+      "stateId": "state.context_missing",
+      "viewId": "view.swarm",
+      "disposition": "environment-gap",
+      "evidence": "AgentSwarm / bubble-model.ts draws this on the WebGPU canvas. This host's GPU process exits before requestAdapter returns, so the body was not painted. See webgpu-diagnostic.json. The swarm diagnosis is separate from the matrix reclassification."
+    },
+    {
+      "stateId": "state.context_hot",
+      "viewId": "view.list",
+      "disposition": "rendered",
+      "fixtureId": "fix.list.context-hot",
+      "evidence": "context.usedPercent 80. The list percent cell prints 80. Hot is not a list threshold."
+    },
+    {
+      "stateId": "state.context_hot",
+      "viewId": "view.rain",
+      "disposition": "rendered",
+      "fixtureId": "fix.rain.context-hot",
+      "evidence": "usedPercent 80. rainTailLength grows with the percent. Rain has no hot threshold."
+    },
+    {
+      "stateId": "state.context_hot",
+      "viewId": "view.spend",
+      "disposition": "rendered",
+      "fixtureId": "fix.spend.context-hot",
+      "evidence": "usedPercent 80. SpendView does not read context. The row is the working row with that input mounted."
+    },
+    {
+      "stateId": "state.context_hot",
+      "viewId": "view.timeline",
+      "disposition": "rendered",
+      "fixtureId": "fix.timeline.context-hot",
+      "evidence": "usedPercent 80. The timeline lane does not read context. The working lane is that input."
+    },
+    {
+      "stateId": "state.context_hot",
+      "viewId": "view.swarm",
+      "disposition": "environment-gap",
+      "evidence": "AgentSwarm / bubble-model.ts draws this on the WebGPU canvas. This host's GPU process exits before requestAdapter returns, so the body was not painted. See webgpu-diagnostic.json. The swarm diagnosis is separate from the matrix reclassification."
+    },
+    {
+      "stateId": "state.effort_configured",
+      "viewId": "view.list",
+      "disposition": "coverage-gap",
+      "evidence": "Unverified: An agent with this effort can sit in the view. Only bubble-model.ts effortLines paints effort. No list, rain, spend, or timeline fixture mounts an effort object, so the shared row branch is not exercised."
+    },
+    {
+      "stateId": "state.effort_configured",
+      "viewId": "view.rain",
+      "disposition": "coverage-gap",
+      "evidence": "Unverified: An agent with this effort can sit in the view. Only bubble-model.ts effortLines paints effort. No list, rain, spend, or timeline fixture mounts an effort object, so the shared row branch is not exercised."
+    },
+    {
+      "stateId": "state.effort_configured",
+      "viewId": "view.spend",
+      "disposition": "coverage-gap",
+      "evidence": "Unverified: An agent with this effort can sit in the view. Only bubble-model.ts effortLines paints effort. No list, rain, spend, or timeline fixture mounts an effort object, so the shared row branch is not exercised."
+    },
+    {
+      "stateId": "state.effort_configured",
+      "viewId": "view.timeline",
+      "disposition": "coverage-gap",
+      "evidence": "Unverified: An agent with this effort can sit in the view. Only bubble-model.ts effortLines paints effort. No list, rain, spend, or timeline fixture mounts an effort object, so the shared row branch is not exercised."
+    },
+    {
+      "stateId": "state.effort_configured",
+      "viewId": "view.swarm",
+      "disposition": "environment-gap",
+      "evidence": "AgentSwarm / bubble-model.ts draws this on the WebGPU canvas. This host's GPU process exits before requestAdapter returns, so the body was not painted. See webgpu-diagnostic.json. The swarm diagnosis is separate from the matrix reclassification."
+    },
+    {
+      "stateId": "state.effort_observed",
+      "viewId": "view.list",
+      "disposition": "coverage-gap",
+      "evidence": "Unverified: An agent with this effort can sit in the view. Only bubble-model.ts effortLines paints effort. No list, rain, spend, or timeline fixture mounts an effort object, so the shared row branch is not exercised."
+    },
+    {
+      "stateId": "state.effort_observed",
+      "viewId": "view.rain",
+      "disposition": "coverage-gap",
+      "evidence": "Unverified: An agent with this effort can sit in the view. Only bubble-model.ts effortLines paints effort. No list, rain, spend, or timeline fixture mounts an effort object, so the shared row branch is not exercised."
+    },
+    {
+      "stateId": "state.effort_observed",
+      "viewId": "view.spend",
+      "disposition": "coverage-gap",
+      "evidence": "Unverified: An agent with this effort can sit in the view. Only bubble-model.ts effortLines paints effort. No list, rain, spend, or timeline fixture mounts an effort object, so the shared row branch is not exercised."
+    },
+    {
+      "stateId": "state.effort_observed",
+      "viewId": "view.timeline",
+      "disposition": "coverage-gap",
+      "evidence": "Unverified: An agent with this effort can sit in the view. Only bubble-model.ts effortLines paints effort. No list, rain, spend, or timeline fixture mounts an effort object, so the shared row branch is not exercised."
+    },
+    {
+      "stateId": "state.effort_observed",
+      "viewId": "view.swarm",
+      "disposition": "environment-gap",
+      "evidence": "AgentSwarm / bubble-model.ts draws this on the WebGPU canvas. This host's GPU process exits before requestAdapter returns, so the body was not painted. See webgpu-diagnostic.json. The swarm diagnosis is separate from the matrix reclassification."
     },
     {
       "stateId": "state.past_worked",
       "viewId": "view.list",
-      "disposition": "not-applicable"
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: A past span is the timeline's history lane. List, rain, spend, and swarm paint the live row and have no history surface."
     },
     {
       "stateId": "state.past_worked",
       "viewId": "view.rain",
-      "disposition": "not-applicable"
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: A past span is the timeline's history lane. List, rain, spend, and swarm paint the live row and have no history surface."
     },
     {
       "stateId": "state.past_worked",
       "viewId": "view.spend",
-      "disposition": "not-applicable"
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: A past span is the timeline's history lane. List, rain, spend, and swarm paint the live row and have no history surface."
     },
     {
       "stateId": "state.past_worked",
       "viewId": "view.timeline",
       "disposition": "rendered",
-      "fixtureId": "fix.timeline.past-worked"
+      "fixtureId": "fix.timeline.past-worked",
+      "evidence": "history span kind worked on the live lane."
     },
     {
       "stateId": "state.past_worked",
       "viewId": "view.swarm",
-      "disposition": "not-applicable"
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: A past span is the timeline's history lane. List, rain, spend, and swarm paint the live row and have no history surface."
     },
     {
       "stateId": "state.past_quiet",
       "viewId": "view.list",
-      "disposition": "not-applicable"
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: A past span is the timeline's history lane. List, rain, spend, and swarm paint the live row and have no history surface."
     },
     {
       "stateId": "state.past_quiet",
       "viewId": "view.rain",
-      "disposition": "not-applicable"
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: A past span is the timeline's history lane. List, rain, spend, and swarm paint the live row and have no history surface."
     },
     {
       "stateId": "state.past_quiet",
       "viewId": "view.spend",
-      "disposition": "not-applicable"
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: A past span is the timeline's history lane. List, rain, spend, and swarm paint the live row and have no history surface."
     },
     {
       "stateId": "state.past_quiet",
       "viewId": "view.timeline",
       "disposition": "rendered",
-      "fixtureId": "fix.timeline.past-quiet"
+      "fixtureId": "fix.timeline.past-quiet",
+      "evidence": "history span kind quiet on the live lane."
     },
     {
       "stateId": "state.past_quiet",
       "viewId": "view.swarm",
-      "disposition": "not-applicable"
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: A past span is the timeline's history lane. List, rain, spend, and swarm paint the live row and have no history surface."
     },
     {
       "stateId": "state.past_unrecorded",
       "viewId": "view.list",
-      "disposition": "not-applicable"
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: A past span is the timeline's history lane. List, rain, spend, and swarm paint the live row and have no history surface."
     },
     {
       "stateId": "state.past_unrecorded",
       "viewId": "view.rain",
-      "disposition": "not-applicable"
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: A past span is the timeline's history lane. List, rain, spend, and swarm paint the live row and have no history surface."
     },
     {
       "stateId": "state.past_unrecorded",
       "viewId": "view.spend",
-      "disposition": "not-applicable"
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: A past span is the timeline's history lane. List, rain, spend, and swarm paint the live row and have no history surface."
     },
     {
       "stateId": "state.past_unrecorded",
       "viewId": "view.timeline",
       "disposition": "rendered",
-      "fixtureId": "fix.timeline.past-unrecorded"
+      "fixtureId": "fix.timeline.past-unrecorded",
+      "evidence": "history span kind unrecorded on the live lane."
     },
     {
       "stateId": "state.past_unrecorded",
       "viewId": "view.swarm",
-      "disposition": "not-applicable"
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: A past span is the timeline's history lane. List, rain, spend, and swarm paint the live row and have no history surface."
     },
     {
       "stateId": "state.past_bounds",
       "viewId": "view.list",
-      "disposition": "not-applicable"
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: A past span is the timeline's history lane. List, rain, spend, and swarm paint the live row and have no history surface."
     },
     {
       "stateId": "state.past_bounds",
       "viewId": "view.rain",
-      "disposition": "not-applicable"
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: A past span is the timeline's history lane. List, rain, spend, and swarm paint the live row and have no history surface."
     },
     {
       "stateId": "state.past_bounds",
       "viewId": "view.spend",
-      "disposition": "not-applicable"
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: A past span is the timeline's history lane. List, rain, spend, and swarm paint the live row and have no history surface."
     },
     {
       "stateId": "state.past_bounds",
       "viewId": "view.timeline",
       "disposition": "rendered",
-      "fixtureId": "fix.timeline.past-bounds"
+      "fixtureId": "fix.timeline.past-bounds",
+      "evidence": "ended lane span kind bounds."
     },
     {
       "stateId": "state.past_bounds",
       "viewId": "view.swarm",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.wait_multiple",
-      "viewId": "view.list",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.wait_multiple",
-      "viewId": "view.rain",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.wait_multiple",
-      "viewId": "view.spend",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.wait_multiple",
-      "viewId": "view.timeline",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.wait_multiple",
-      "viewId": "view.swarm",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.working_with_blockers",
-      "viewId": "view.list",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.working_with_blockers",
-      "viewId": "view.rain",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.working_with_blockers",
-      "viewId": "view.spend",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.working_with_blockers",
-      "viewId": "view.timeline",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.working_with_blockers",
-      "viewId": "view.swarm",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.activity_starting",
-      "viewId": "view.list",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.activity_starting",
-      "viewId": "view.rain",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.activity_starting",
-      "viewId": "view.spend",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.activity_starting",
-      "viewId": "view.timeline",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.activity_starting",
-      "viewId": "view.swarm",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.activity_responding",
-      "viewId": "view.list",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.activity_responding",
-      "viewId": "view.rain",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.activity_responding",
-      "viewId": "view.spend",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.activity_responding",
-      "viewId": "view.timeline",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.activity_responding",
-      "viewId": "view.swarm",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.activity_reasoning",
-      "viewId": "view.list",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.activity_reasoning",
-      "viewId": "view.rain",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.activity_reasoning",
-      "viewId": "view.spend",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.activity_reasoning",
-      "viewId": "view.timeline",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.activity_reasoning",
-      "viewId": "view.swarm",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.activity_tool",
-      "viewId": "view.list",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.activity_tool",
-      "viewId": "view.rain",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.activity_tool",
-      "viewId": "view.spend",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.activity_tool",
-      "viewId": "view.timeline",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.activity_tool",
-      "viewId": "view.swarm",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.activity_delegating",
-      "viewId": "view.list",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.activity_delegating",
-      "viewId": "view.rain",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.activity_delegating",
-      "viewId": "view.spend",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.activity_delegating",
-      "viewId": "view.timeline",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.activity_delegating",
-      "viewId": "view.swarm",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.activity_compacting",
-      "viewId": "view.list",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.activity_compacting",
-      "viewId": "view.rain",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.activity_compacting",
-      "viewId": "view.spend",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.activity_compacting",
-      "viewId": "view.timeline",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.activity_compacting",
-      "viewId": "view.swarm",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.activity_other",
-      "viewId": "view.list",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.activity_other",
-      "viewId": "view.rain",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.activity_other",
-      "viewId": "view.spend",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.activity_other",
-      "viewId": "view.timeline",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.activity_other",
-      "viewId": "view.swarm",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.failed_retained",
-      "viewId": "view.list",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.failed_retained",
-      "viewId": "view.rain",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.failed_retained",
-      "viewId": "view.spend",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.failed_retained",
-      "viewId": "view.timeline",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.failed_retained",
-      "viewId": "view.swarm",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.dead_hidden",
-      "viewId": "view.list",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.dead_hidden",
-      "viewId": "view.rain",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.dead_hidden",
-      "viewId": "view.spend",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.dead_hidden",
-      "viewId": "view.timeline",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.dead_hidden",
-      "viewId": "view.swarm",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.terminal_empty",
-      "viewId": "view.list",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.terminal_empty",
-      "viewId": "view.rain",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.terminal_empty",
-      "viewId": "view.spend",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.terminal_empty",
-      "viewId": "view.timeline",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.terminal_empty",
-      "viewId": "view.swarm",
-      "disposition": "environment-gap"
-    },
-    {
-      "stateId": "state.terminal_opening",
-      "viewId": "view.list",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.terminal_opening",
-      "viewId": "view.rain",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.terminal_opening",
-      "viewId": "view.spend",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.terminal_opening",
-      "viewId": "view.timeline",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.terminal_opening",
-      "viewId": "view.swarm",
-      "disposition": "environment-gap"
-    },
-    {
-      "stateId": "state.attachable",
-      "viewId": "view.list",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.attachable",
-      "viewId": "view.rain",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.attachable",
-      "viewId": "view.spend",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.attachable",
-      "viewId": "view.timeline",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.attachable",
-      "viewId": "view.swarm",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.reply_streaming",
-      "viewId": "view.list",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.reply_streaming",
-      "viewId": "view.rain",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.reply_streaming",
-      "viewId": "view.spend",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.reply_streaming",
-      "viewId": "view.timeline",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.reply_streaming",
-      "viewId": "view.swarm",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.reply_final",
-      "viewId": "view.list",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.reply_final",
-      "viewId": "view.rain",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.reply_final",
-      "viewId": "view.spend",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.reply_final",
-      "viewId": "view.timeline",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.reply_final",
-      "viewId": "view.swarm",
-      "disposition": "not-applicable"
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: A past span is the timeline's history lane. List, rain, spend, and swarm paint the live row and have no history surface."
     },
     {
       "stateId": "state.timeline_unborn",
       "viewId": "view.list",
-      "disposition": "not-applicable"
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: unborn, unrecorded, past, ended, and span are TimelineView's scrub cursor. The other views have no scrub cursor."
     },
     {
       "stateId": "state.timeline_unborn",
       "viewId": "view.rain",
-      "disposition": "not-applicable"
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: unborn, unrecorded, past, ended, and span are TimelineView's scrub cursor. The other views have no scrub cursor."
     },
     {
       "stateId": "state.timeline_unborn",
       "viewId": "view.spend",
-      "disposition": "not-applicable"
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: unborn, unrecorded, past, ended, and span are TimelineView's scrub cursor. The other views have no scrub cursor."
     },
     {
       "stateId": "state.timeline_unborn",
       "viewId": "view.timeline",
-      "disposition": "not-applicable"
+      "disposition": "coverage-gap",
+      "evidence": "Unverified: TimelineView can show this cursor moment while scrubbing. The harness has no control that sets moment.kind, so the cursor was not exercised."
     },
     {
       "stateId": "state.timeline_unborn",
       "viewId": "view.swarm",
-      "disposition": "not-applicable"
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: unborn, unrecorded, past, ended, and span are TimelineView's scrub cursor. The other views have no scrub cursor."
     },
     {
       "stateId": "state.timeline_unrecorded",
       "viewId": "view.list",
-      "disposition": "not-applicable"
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: unborn, unrecorded, past, ended, and span are TimelineView's scrub cursor. The other views have no scrub cursor."
     },
     {
       "stateId": "state.timeline_unrecorded",
       "viewId": "view.rain",
-      "disposition": "not-applicable"
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: unborn, unrecorded, past, ended, and span are TimelineView's scrub cursor. The other views have no scrub cursor."
     },
     {
       "stateId": "state.timeline_unrecorded",
       "viewId": "view.spend",
-      "disposition": "not-applicable"
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: unborn, unrecorded, past, ended, and span are TimelineView's scrub cursor. The other views have no scrub cursor."
     },
     {
       "stateId": "state.timeline_unrecorded",
       "viewId": "view.timeline",
-      "disposition": "not-applicable"
+      "disposition": "coverage-gap",
+      "evidence": "Unverified: TimelineView can show this cursor moment while scrubbing. The harness has no control that sets moment.kind, so the cursor was not exercised."
     },
     {
       "stateId": "state.timeline_unrecorded",
       "viewId": "view.swarm",
-      "disposition": "not-applicable"
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: unborn, unrecorded, past, ended, and span are TimelineView's scrub cursor. The other views have no scrub cursor."
     },
     {
       "stateId": "state.timeline_past",
       "viewId": "view.list",
-      "disposition": "not-applicable"
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: unborn, unrecorded, past, ended, and span are TimelineView's scrub cursor. The other views have no scrub cursor."
     },
     {
       "stateId": "state.timeline_past",
       "viewId": "view.rain",
-      "disposition": "not-applicable"
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: unborn, unrecorded, past, ended, and span are TimelineView's scrub cursor. The other views have no scrub cursor."
     },
     {
       "stateId": "state.timeline_past",
       "viewId": "view.spend",
-      "disposition": "not-applicable"
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: unborn, unrecorded, past, ended, and span are TimelineView's scrub cursor. The other views have no scrub cursor."
     },
     {
       "stateId": "state.timeline_past",
       "viewId": "view.timeline",
-      "disposition": "not-applicable"
+      "disposition": "coverage-gap",
+      "evidence": "Unverified: TimelineView can show this cursor moment while scrubbing. The harness has no control that sets moment.kind, so the cursor was not exercised."
     },
     {
       "stateId": "state.timeline_past",
       "viewId": "view.swarm",
-      "disposition": "not-applicable"
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: unborn, unrecorded, past, ended, and span are TimelineView's scrub cursor. The other views have no scrub cursor."
     },
     {
       "stateId": "state.timeline_ended",
       "viewId": "view.list",
-      "disposition": "not-applicable"
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: unborn, unrecorded, past, ended, and span are TimelineView's scrub cursor. The other views have no scrub cursor."
     },
     {
       "stateId": "state.timeline_ended",
       "viewId": "view.rain",
-      "disposition": "not-applicable"
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: unborn, unrecorded, past, ended, and span are TimelineView's scrub cursor. The other views have no scrub cursor."
     },
     {
       "stateId": "state.timeline_ended",
       "viewId": "view.spend",
-      "disposition": "not-applicable"
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: unborn, unrecorded, past, ended, and span are TimelineView's scrub cursor. The other views have no scrub cursor."
     },
     {
       "stateId": "state.timeline_ended",
       "viewId": "view.timeline",
-      "disposition": "not-applicable"
+      "disposition": "coverage-gap",
+      "evidence": "Unverified: TimelineView can show this cursor moment while scrubbing. The harness has no control that sets moment.kind, so the cursor was not exercised."
     },
     {
       "stateId": "state.timeline_ended",
       "viewId": "view.swarm",
-      "disposition": "not-applicable"
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: unborn, unrecorded, past, ended, and span are TimelineView's scrub cursor. The other views have no scrub cursor."
     },
     {
       "stateId": "state.timeline_span",
       "viewId": "view.list",
-      "disposition": "not-applicable"
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: unborn, unrecorded, past, ended, and span are TimelineView's scrub cursor. The other views have no scrub cursor."
     },
     {
       "stateId": "state.timeline_span",
       "viewId": "view.rain",
-      "disposition": "not-applicable"
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: unborn, unrecorded, past, ended, and span are TimelineView's scrub cursor. The other views have no scrub cursor."
     },
     {
       "stateId": "state.timeline_span",
       "viewId": "view.spend",
-      "disposition": "not-applicable"
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: unborn, unrecorded, past, ended, and span are TimelineView's scrub cursor. The other views have no scrub cursor."
     },
     {
       "stateId": "state.timeline_span",
       "viewId": "view.timeline",
-      "disposition": "not-applicable"
+      "disposition": "coverage-gap",
+      "evidence": "Unverified: TimelineView can show this cursor moment while scrubbing. The harness has no control that sets moment.kind, so the cursor was not exercised."
     },
     {
       "stateId": "state.timeline_span",
       "viewId": "view.swarm",
-      "disposition": "not-applicable"
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: unborn, unrecorded, past, ended, and span are TimelineView's scrub cursor. The other views have no scrub cursor."
+    },
+    {
+      "stateId": "state.spend_before",
+      "viewId": "view.list",
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: spend_before is spendStateAt for a row whose birth is still in the future. The other views have no spend time cursor."
+    },
+    {
+      "stateId": "state.spend_before",
+      "viewId": "view.rain",
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: spend_before is spendStateAt for a row whose birth is still in the future. The other views have no spend time cursor."
+    },
+    {
+      "stateId": "state.spend_before",
+      "viewId": "view.spend",
+      "disposition": "rendered",
+      "fixtureId": "fix.spend.before",
+      "evidence": "createdAt is after the frozen now. spendStateAt at now is before."
+    },
+    {
+      "stateId": "state.spend_before",
+      "viewId": "view.timeline",
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: spend_before is spendStateAt for a row whose birth is still in the future. The other views have no spend time cursor."
+    },
+    {
+      "stateId": "state.spend_before",
+      "viewId": "view.swarm",
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: spend_before is spendStateAt for a row whose birth is still in the future. The other views have no spend time cursor."
     },
     {
       "stateId": "state.spend_unknown",
       "viewId": "view.list",
-      "disposition": "not-applicable"
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: spend_unknown is spendStateAt for a scrubbed time before statusSince. The other views have no spend scrub."
     },
     {
       "stateId": "state.spend_unknown",
       "viewId": "view.rain",
-      "disposition": "not-applicable"
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: spend_unknown is spendStateAt for a scrubbed time before statusSince. The other views have no spend scrub."
     },
     {
       "stateId": "state.spend_unknown",
       "viewId": "view.spend",
-      "disposition": "not-applicable"
+      "disposition": "coverage-gap",
+      "evidence": "Unverified: SpendView can show unknown when the scrub is before statusSince. The harness does not drive that scrub, so the branch was not exercised."
     },
     {
       "stateId": "state.spend_unknown",
       "viewId": "view.timeline",
-      "disposition": "not-applicable"
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: spend_unknown is spendStateAt for a scrubbed time before statusSince. The other views have no spend scrub."
     },
     {
       "stateId": "state.spend_unknown",
       "viewId": "view.swarm",
-      "disposition": "not-applicable"
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: spend_unknown is spendStateAt for a scrubbed time before statusSince. The other views have no spend scrub."
+    },
+    {
+      "stateId": "state.spawn_ready",
+      "viewId": "view.list",
+      "disposition": "rendered",
+      "fixtureId": "fix.list.spawn-ready",
+      "evidence": "spawn device state ready. The list menu opens on the real + TERMINAL control."
+    },
+    {
+      "stateId": "state.spawn_ready",
+      "viewId": "view.rain",
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: The spawn menu is ListSpawnMenu and the swarm bloom. Rain, spend, and timeline have no spawn surface."
+    },
+    {
+      "stateId": "state.spawn_ready",
+      "viewId": "view.spend",
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: The spawn menu is ListSpawnMenu and the swarm bloom. Rain, spend, and timeline have no spawn surface."
+    },
+    {
+      "stateId": "state.spawn_ready",
+      "viewId": "view.timeline",
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: The spawn menu is ListSpawnMenu and the swarm bloom. Rain, spend, and timeline have no spawn surface."
+    },
+    {
+      "stateId": "state.spawn_ready",
+      "viewId": "view.swarm",
+      "disposition": "environment-gap",
+      "evidence": "AgentSwarm / bubble-model.ts draws this on the WebGPU canvas. This host's GPU process exits before requestAdapter returns, so the body was not painted. See webgpu-diagnostic.json. The swarm diagnosis is separate from the matrix reclassification."
+    },
+    {
+      "stateId": "state.spawn_asleep",
+      "viewId": "view.list",
+      "disposition": "rendered",
+      "fixtureId": "fix.list.spawn-asleep",
+      "evidence": "spawn device state asleep."
+    },
+    {
+      "stateId": "state.spawn_asleep",
+      "viewId": "view.rain",
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: The spawn menu is ListSpawnMenu and the swarm bloom. Rain, spend, and timeline have no spawn surface."
+    },
+    {
+      "stateId": "state.spawn_asleep",
+      "viewId": "view.spend",
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: The spawn menu is ListSpawnMenu and the swarm bloom. Rain, spend, and timeline have no spawn surface."
+    },
+    {
+      "stateId": "state.spawn_asleep",
+      "viewId": "view.timeline",
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: The spawn menu is ListSpawnMenu and the swarm bloom. Rain, spend, and timeline have no spawn surface."
+    },
+    {
+      "stateId": "state.spawn_asleep",
+      "viewId": "view.swarm",
+      "disposition": "environment-gap",
+      "evidence": "AgentSwarm / bubble-model.ts draws this on the WebGPU canvas. This host's GPU process exits before requestAdapter returns, so the body was not painted. See webgpu-diagnostic.json. The swarm diagnosis is separate from the matrix reclassification."
+    },
+    {
+      "stateId": "state.spawn_silent",
+      "viewId": "view.list",
+      "disposition": "rendered",
+      "fixtureId": "fix.list.spawn-silent",
+      "evidence": "spawn device state silent."
+    },
+    {
+      "stateId": "state.spawn_silent",
+      "viewId": "view.rain",
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: The spawn menu is ListSpawnMenu and the swarm bloom. Rain, spend, and timeline have no spawn surface."
+    },
+    {
+      "stateId": "state.spawn_silent",
+      "viewId": "view.spend",
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: The spawn menu is ListSpawnMenu and the swarm bloom. Rain, spend, and timeline have no spawn surface."
+    },
+    {
+      "stateId": "state.spawn_silent",
+      "viewId": "view.timeline",
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: The spawn menu is ListSpawnMenu and the swarm bloom. Rain, spend, and timeline have no spawn surface."
+    },
+    {
+      "stateId": "state.spawn_silent",
+      "viewId": "view.swarm",
+      "disposition": "environment-gap",
+      "evidence": "AgentSwarm / bubble-model.ts draws this on the WebGPU canvas. This host's GPU process exits before requestAdapter returns, so the body was not painted. See webgpu-diagnostic.json. The swarm diagnosis is separate from the matrix reclassification."
+    },
+    {
+      "stateId": "state.spawn_incompatible",
+      "viewId": "view.list",
+      "disposition": "rendered",
+      "fixtureId": "fix.list.spawn-incompatible",
+      "evidence": "spawn device state incompatible."
+    },
+    {
+      "stateId": "state.spawn_incompatible",
+      "viewId": "view.rain",
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: The spawn menu is ListSpawnMenu and the swarm bloom. Rain, spend, and timeline have no spawn surface."
+    },
+    {
+      "stateId": "state.spawn_incompatible",
+      "viewId": "view.spend",
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: The spawn menu is ListSpawnMenu and the swarm bloom. Rain, spend, and timeline have no spawn surface."
+    },
+    {
+      "stateId": "state.spawn_incompatible",
+      "viewId": "view.timeline",
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: The spawn menu is ListSpawnMenu and the swarm bloom. Rain, spend, and timeline have no spawn surface."
+    },
+    {
+      "stateId": "state.spawn_incompatible",
+      "viewId": "view.swarm",
+      "disposition": "environment-gap",
+      "evidence": "AgentSwarm / bubble-model.ts draws this on the WebGPU canvas. This host's GPU process exits before requestAdapter returns, so the body was not painted. See webgpu-diagnostic.json. The swarm diagnosis is separate from the matrix reclassification."
+    },
+    {
+      "stateId": "state.spawn_reading",
+      "viewId": "view.list",
+      "disposition": "rendered",
+      "fixtureId": "fix.list.spawn-reading",
+      "evidence": "spawn device state reading."
+    },
+    {
+      "stateId": "state.spawn_reading",
+      "viewId": "view.rain",
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: The spawn menu is ListSpawnMenu and the swarm bloom. Rain, spend, and timeline have no spawn surface."
+    },
+    {
+      "stateId": "state.spawn_reading",
+      "viewId": "view.spend",
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: The spawn menu is ListSpawnMenu and the swarm bloom. Rain, spend, and timeline have no spawn surface."
+    },
+    {
+      "stateId": "state.spawn_reading",
+      "viewId": "view.timeline",
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: The spawn menu is ListSpawnMenu and the swarm bloom. Rain, spend, and timeline have no spawn surface."
+    },
+    {
+      "stateId": "state.spawn_reading",
+      "viewId": "view.swarm",
+      "disposition": "environment-gap",
+      "evidence": "AgentSwarm / bubble-model.ts draws this on the WebGPU canvas. This host's GPU process exits before requestAdapter returns, so the body was not painted. See webgpu-diagnostic.json. The swarm diagnosis is separate from the matrix reclassification."
     },
     {
       "stateId": "state.feed_no_door",
       "viewId": "view.list",
-      "disposition": "not-applicable"
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: MonitorFeedState is the host's door chrome. These five views take agent rows, not the feed door."
     },
     {
       "stateId": "state.feed_no_door",
       "viewId": "view.rain",
-      "disposition": "not-applicable"
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: MonitorFeedState is the host's door chrome. These five views take agent rows, not the feed door."
     },
     {
       "stateId": "state.feed_no_door",
       "viewId": "view.spend",
-      "disposition": "not-applicable"
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: MonitorFeedState is the host's door chrome. These five views take agent rows, not the feed door."
     },
     {
       "stateId": "state.feed_no_door",
       "viewId": "view.timeline",
-      "disposition": "not-applicable"
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: MonitorFeedState is the host's door chrome. These five views take agent rows, not the feed door."
     },
     {
       "stateId": "state.feed_no_door",
       "viewId": "view.swarm",
-      "disposition": "not-applicable"
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: MonitorFeedState is the host's door chrome. These five views take agent rows, not the feed door."
     },
     {
       "stateId": "state.feed_connecting",
       "viewId": "view.list",
-      "disposition": "not-applicable"
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: MonitorFeedState is the host's door chrome. These five views take agent rows, not the feed door."
     },
     {
       "stateId": "state.feed_connecting",
       "viewId": "view.rain",
-      "disposition": "not-applicable"
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: MonitorFeedState is the host's door chrome. These five views take agent rows, not the feed door."
     },
     {
       "stateId": "state.feed_connecting",
       "viewId": "view.spend",
-      "disposition": "not-applicable"
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: MonitorFeedState is the host's door chrome. These five views take agent rows, not the feed door."
     },
     {
       "stateId": "state.feed_connecting",
       "viewId": "view.timeline",
-      "disposition": "not-applicable"
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: MonitorFeedState is the host's door chrome. These five views take agent rows, not the feed door."
     },
     {
       "stateId": "state.feed_connecting",
       "viewId": "view.swarm",
-      "disposition": "not-applicable"
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: MonitorFeedState is the host's door chrome. These five views take agent rows, not the feed door."
     },
     {
       "stateId": "state.feed_live",
       "viewId": "view.list",
-      "disposition": "not-applicable"
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: MonitorFeedState is the host's door chrome. These five views take agent rows, not the feed door."
     },
     {
       "stateId": "state.feed_live",
       "viewId": "view.rain",
-      "disposition": "not-applicable"
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: MonitorFeedState is the host's door chrome. These five views take agent rows, not the feed door."
     },
     {
       "stateId": "state.feed_live",
       "viewId": "view.spend",
-      "disposition": "not-applicable"
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: MonitorFeedState is the host's door chrome. These five views take agent rows, not the feed door."
     },
     {
       "stateId": "state.feed_live",
       "viewId": "view.timeline",
-      "disposition": "not-applicable"
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: MonitorFeedState is the host's door chrome. These five views take agent rows, not the feed door."
     },
     {
       "stateId": "state.feed_live",
       "viewId": "view.swarm",
-      "disposition": "not-applicable"
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: MonitorFeedState is the host's door chrome. These five views take agent rows, not the feed door."
     },
     {
       "stateId": "state.feed_unavailable",
       "viewId": "view.list",
-      "disposition": "not-applicable"
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: MonitorFeedState is the host's door chrome. These five views take agent rows, not the feed door."
     },
     {
       "stateId": "state.feed_unavailable",
       "viewId": "view.rain",
-      "disposition": "not-applicable"
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: MonitorFeedState is the host's door chrome. These five views take agent rows, not the feed door."
     },
     {
       "stateId": "state.feed_unavailable",
       "viewId": "view.spend",
-      "disposition": "not-applicable"
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: MonitorFeedState is the host's door chrome. These five views take agent rows, not the feed door."
     },
     {
       "stateId": "state.feed_unavailable",
       "viewId": "view.timeline",
-      "disposition": "not-applicable"
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: MonitorFeedState is the host's door chrome. These five views take agent rows, not the feed door."
     },
     {
       "stateId": "state.feed_unavailable",
       "viewId": "view.swarm",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.tier_managed",
-      "viewId": "view.list",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.tier_managed",
-      "viewId": "view.rain",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.tier_managed",
-      "viewId": "view.spend",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.tier_managed",
-      "viewId": "view.timeline",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.tier_managed",
-      "viewId": "view.swarm",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.tier_ingested",
-      "viewId": "view.list",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.tier_ingested",
-      "viewId": "view.rain",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.tier_ingested",
-      "viewId": "view.spend",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.tier_ingested",
-      "viewId": "view.timeline",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.tier_ingested",
-      "viewId": "view.swarm",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.tier_remote",
-      "viewId": "view.list",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.tier_remote",
-      "viewId": "view.rain",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.tier_remote",
-      "viewId": "view.spend",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.tier_remote",
-      "viewId": "view.timeline",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.tier_remote",
-      "viewId": "view.swarm",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.device_live",
-      "viewId": "view.list",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.device_live",
-      "viewId": "view.rain",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.device_live",
-      "viewId": "view.spend",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.device_live",
-      "viewId": "view.timeline",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.device_live",
-      "viewId": "view.swarm",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.device_stale",
-      "viewId": "view.list",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.device_stale",
-      "viewId": "view.rain",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.device_stale",
-      "viewId": "view.spend",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.device_stale",
-      "viewId": "view.timeline",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.device_stale",
-      "viewId": "view.swarm",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.device_asleep",
-      "viewId": "view.list",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.device_asleep",
-      "viewId": "view.rain",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.device_asleep",
-      "viewId": "view.spend",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.device_asleep",
-      "viewId": "view.timeline",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.device_asleep",
-      "viewId": "view.swarm",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.device_incompatible",
-      "viewId": "view.list",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.device_incompatible",
-      "viewId": "view.rain",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.device_incompatible",
-      "viewId": "view.spend",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.device_incompatible",
-      "viewId": "view.timeline",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.device_incompatible",
-      "viewId": "view.swarm",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.context_hot",
-      "viewId": "view.list",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.context_hot",
-      "viewId": "view.rain",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.context_hot",
-      "viewId": "view.spend",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.context_hot",
-      "viewId": "view.timeline",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.context_hot",
-      "viewId": "view.swarm",
-      "disposition": "environment-gap"
-    },
-    {
-      "stateId": "state.effort_configured",
-      "viewId": "view.list",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.effort_configured",
-      "viewId": "view.rain",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.effort_configured",
-      "viewId": "view.spend",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.effort_configured",
-      "viewId": "view.timeline",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.effort_configured",
-      "viewId": "view.swarm",
-      "disposition": "environment-gap"
-    },
-    {
-      "stateId": "state.effort_observed",
-      "viewId": "view.list",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.effort_observed",
-      "viewId": "view.rain",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.effort_observed",
-      "viewId": "view.spend",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.effort_observed",
-      "viewId": "view.timeline",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.effort_observed",
-      "viewId": "view.swarm",
-      "disposition": "environment-gap"
-    },
-    {
-      "stateId": "state.effort_absent",
-      "viewId": "view.list",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.effort_absent",
-      "viewId": "view.rain",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.effort_absent",
-      "viewId": "view.spend",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.effort_absent",
-      "viewId": "view.timeline",
-      "disposition": "not-applicable"
-    },
-    {
-      "stateId": "state.effort_absent",
-      "viewId": "view.swarm",
-      "disposition": "environment-gap"
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: MonitorFeedState is the host's door chrome. These five views take agent rows, not the feed door."
     },
     {
       "stateId": "state.burn_flames_0",
       "viewId": "view.list",
-      "disposition": "not-applicable"
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: This state is one rung of the swarm flame ladder in bubble-model.ts burnFlames. List, rain, spend, and timeline have no flame ladder. Spend's own rate is state.cost_* and the working row, not this rung."
     },
     {
       "stateId": "state.burn_flames_0",
       "viewId": "view.rain",
-      "disposition": "not-applicable"
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: This state is one rung of the swarm flame ladder in bubble-model.ts burnFlames. List, rain, spend, and timeline have no flame ladder. Spend's own rate is state.cost_* and the working row, not this rung."
     },
     {
       "stateId": "state.burn_flames_0",
       "viewId": "view.spend",
-      "disposition": "not-applicable"
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: This state is one rung of the swarm flame ladder in bubble-model.ts burnFlames. List, rain, spend, and timeline have no flame ladder. Spend's own rate is state.cost_* and the working row, not this rung."
     },
     {
       "stateId": "state.burn_flames_0",
       "viewId": "view.timeline",
-      "disposition": "not-applicable"
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: This state is one rung of the swarm flame ladder in bubble-model.ts burnFlames. List, rain, spend, and timeline have no flame ladder. Spend's own rate is state.cost_* and the working row, not this rung."
     },
     {
       "stateId": "state.burn_flames_0",
       "viewId": "view.swarm",
-      "disposition": "environment-gap"
+      "disposition": "environment-gap",
+      "evidence": "AgentSwarm / bubble-model.ts draws this on the WebGPU canvas. This host's GPU process exits before requestAdapter returns, so the body was not painted. See webgpu-diagnostic.json. The swarm diagnosis is separate from the matrix reclassification."
     },
     {
       "stateId": "state.burn_flames_1",
       "viewId": "view.list",
-      "disposition": "not-applicable"
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: This state is one rung of the swarm flame ladder in bubble-model.ts burnFlames. List, rain, spend, and timeline have no flame ladder. Spend's own rate is state.cost_* and the working row, not this rung."
     },
     {
       "stateId": "state.burn_flames_1",
       "viewId": "view.rain",
-      "disposition": "not-applicable"
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: This state is one rung of the swarm flame ladder in bubble-model.ts burnFlames. List, rain, spend, and timeline have no flame ladder. Spend's own rate is state.cost_* and the working row, not this rung."
     },
     {
       "stateId": "state.burn_flames_1",
       "viewId": "view.spend",
-      "disposition": "not-applicable"
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: This state is one rung of the swarm flame ladder in bubble-model.ts burnFlames. List, rain, spend, and timeline have no flame ladder. Spend's own rate is state.cost_* and the working row, not this rung."
     },
     {
       "stateId": "state.burn_flames_1",
       "viewId": "view.timeline",
-      "disposition": "not-applicable"
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: This state is one rung of the swarm flame ladder in bubble-model.ts burnFlames. List, rain, spend, and timeline have no flame ladder. Spend's own rate is state.cost_* and the working row, not this rung."
     },
     {
       "stateId": "state.burn_flames_1",
       "viewId": "view.swarm",
-      "disposition": "environment-gap"
+      "disposition": "environment-gap",
+      "evidence": "AgentSwarm / bubble-model.ts draws this on the WebGPU canvas. This host's GPU process exits before requestAdapter returns, so the body was not painted. See webgpu-diagnostic.json. The swarm diagnosis is separate from the matrix reclassification."
     },
     {
       "stateId": "state.burn_flames_2",
       "viewId": "view.list",
-      "disposition": "not-applicable"
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: This state is one rung of the swarm flame ladder in bubble-model.ts burnFlames. List, rain, spend, and timeline have no flame ladder. Spend's own rate is state.cost_* and the working row, not this rung."
     },
     {
       "stateId": "state.burn_flames_2",
       "viewId": "view.rain",
-      "disposition": "not-applicable"
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: This state is one rung of the swarm flame ladder in bubble-model.ts burnFlames. List, rain, spend, and timeline have no flame ladder. Spend's own rate is state.cost_* and the working row, not this rung."
     },
     {
       "stateId": "state.burn_flames_2",
       "viewId": "view.spend",
-      "disposition": "not-applicable"
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: This state is one rung of the swarm flame ladder in bubble-model.ts burnFlames. List, rain, spend, and timeline have no flame ladder. Spend's own rate is state.cost_* and the working row, not this rung."
     },
     {
       "stateId": "state.burn_flames_2",
       "viewId": "view.timeline",
-      "disposition": "not-applicable"
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: This state is one rung of the swarm flame ladder in bubble-model.ts burnFlames. List, rain, spend, and timeline have no flame ladder. Spend's own rate is state.cost_* and the working row, not this rung."
     },
     {
       "stateId": "state.burn_flames_2",
       "viewId": "view.swarm",
-      "disposition": "environment-gap"
+      "disposition": "environment-gap",
+      "evidence": "AgentSwarm / bubble-model.ts draws this on the WebGPU canvas. This host's GPU process exits before requestAdapter returns, so the body was not painted. See webgpu-diagnostic.json. The swarm diagnosis is separate from the matrix reclassification."
     },
     {
       "stateId": "state.burn_flames_3",
       "viewId": "view.list",
-      "disposition": "not-applicable"
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: This state is one rung of the swarm flame ladder in bubble-model.ts burnFlames. List, rain, spend, and timeline have no flame ladder. Spend's own rate is state.cost_* and the working row, not this rung."
     },
     {
       "stateId": "state.burn_flames_3",
       "viewId": "view.rain",
-      "disposition": "not-applicable"
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: This state is one rung of the swarm flame ladder in bubble-model.ts burnFlames. List, rain, spend, and timeline have no flame ladder. Spend's own rate is state.cost_* and the working row, not this rung."
     },
     {
       "stateId": "state.burn_flames_3",
       "viewId": "view.spend",
-      "disposition": "not-applicable"
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: This state is one rung of the swarm flame ladder in bubble-model.ts burnFlames. List, rain, spend, and timeline have no flame ladder. Spend's own rate is state.cost_* and the working row, not this rung."
     },
     {
       "stateId": "state.burn_flames_3",
       "viewId": "view.timeline",
-      "disposition": "not-applicable"
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: This state is one rung of the swarm flame ladder in bubble-model.ts burnFlames. List, rain, spend, and timeline have no flame ladder. Spend's own rate is state.cost_* and the working row, not this rung."
     },
     {
       "stateId": "state.burn_flames_3",
       "viewId": "view.swarm",
-      "disposition": "environment-gap"
+      "disposition": "environment-gap",
+      "evidence": "AgentSwarm / bubble-model.ts draws this on the WebGPU canvas. This host's GPU process exits before requestAdapter returns, so the body was not painted. See webgpu-diagnostic.json. The swarm diagnosis is separate from the matrix reclassification."
     },
     {
       "stateId": "state.burn_flames_4",
       "viewId": "view.list",
-      "disposition": "not-applicable"
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: This state is one rung of the swarm flame ladder in bubble-model.ts burnFlames. List, rain, spend, and timeline have no flame ladder. Spend's own rate is state.cost_* and the working row, not this rung."
     },
     {
       "stateId": "state.burn_flames_4",
       "viewId": "view.rain",
-      "disposition": "not-applicable"
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: This state is one rung of the swarm flame ladder in bubble-model.ts burnFlames. List, rain, spend, and timeline have no flame ladder. Spend's own rate is state.cost_* and the working row, not this rung."
     },
     {
       "stateId": "state.burn_flames_4",
       "viewId": "view.spend",
-      "disposition": "not-applicable"
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: This state is one rung of the swarm flame ladder in bubble-model.ts burnFlames. List, rain, spend, and timeline have no flame ladder. Spend's own rate is state.cost_* and the working row, not this rung."
     },
     {
       "stateId": "state.burn_flames_4",
       "viewId": "view.timeline",
-      "disposition": "not-applicable"
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: This state is one rung of the swarm flame ladder in bubble-model.ts burnFlames. List, rain, spend, and timeline have no flame ladder. Spend's own rate is state.cost_* and the working row, not this rung."
     },
     {
       "stateId": "state.burn_flames_4",
       "viewId": "view.swarm",
-      "disposition": "environment-gap"
+      "disposition": "environment-gap",
+      "evidence": "AgentSwarm / bubble-model.ts draws this on the WebGPU canvas. This host's GPU process exits before requestAdapter returns, so the body was not painted. See webgpu-diagnostic.json. The swarm diagnosis is separate from the matrix reclassification."
     },
     {
       "stateId": "state.burn_unpriced",
       "viewId": "view.list",
-      "disposition": "not-applicable"
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: This state is one rung of the swarm flame ladder in bubble-model.ts burnFlames. List, rain, spend, and timeline have no flame ladder. Spend's own rate is state.cost_* and the working row, not this rung."
     },
     {
       "stateId": "state.burn_unpriced",
       "viewId": "view.rain",
-      "disposition": "not-applicable"
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: This state is one rung of the swarm flame ladder in bubble-model.ts burnFlames. List, rain, spend, and timeline have no flame ladder. Spend's own rate is state.cost_* and the working row, not this rung."
     },
     {
       "stateId": "state.burn_unpriced",
       "viewId": "view.spend",
-      "disposition": "not-applicable"
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: This state is one rung of the swarm flame ladder in bubble-model.ts burnFlames. List, rain, spend, and timeline have no flame ladder. Spend's own rate is state.cost_* and the working row, not this rung."
     },
     {
       "stateId": "state.burn_unpriced",
       "viewId": "view.timeline",
-      "disposition": "not-applicable"
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: This state is one rung of the swarm flame ladder in bubble-model.ts burnFlames. List, rain, spend, and timeline have no flame ladder. Spend's own rate is state.cost_* and the working row, not this rung."
     },
     {
       "stateId": "state.burn_unpriced",
       "viewId": "view.swarm",
-      "disposition": "environment-gap"
+      "disposition": "environment-gap",
+      "evidence": "AgentSwarm / bubble-model.ts draws this on the WebGPU canvas. This host's GPU process exits before requestAdapter returns, so the body was not painted. See webgpu-diagnostic.json. The swarm diagnosis is separate from the matrix reclassification."
+    },
+    {
+      "stateId": "state.branch_unknown",
+      "viewId": "view.list",
+      "disposition": "rendered",
+      "fixtureId": "fix.list.branch-unknown",
+      "evidence": "project.branch absent. List prints no branch small."
+    },
+    {
+      "stateId": "state.branch_unknown",
+      "viewId": "view.rain",
+      "disposition": "covered-by",
+      "fixtureId": "fix.rain.working",
+      "exercise": "branch-absent",
+      "evidence": "Same branch as fix.rain.working. The mounted project has no branch key. rainDataString, modelOf, and laneSubLine drop a falsy branch. This is the absent branch, not the null branch."
+    },
+    {
+      "stateId": "state.branch_unknown",
+      "viewId": "view.spend",
+      "disposition": "covered-by",
+      "fixtureId": "fix.spend.idle",
+      "exercise": "branch-absent",
+      "evidence": "Same branch as fix.spend.idle. The mounted project has no branch key. rainDataString, modelOf, and laneSubLine drop a falsy branch. This is the absent branch, not the null branch."
+    },
+    {
+      "stateId": "state.branch_unknown",
+      "viewId": "view.timeline",
+      "disposition": "covered-by",
+      "fixtureId": "fix.timeline.idle",
+      "exercise": "branch-absent",
+      "evidence": "Same branch as fix.timeline.idle. The mounted project has no branch key. rainDataString, modelOf, and laneSubLine drop a falsy branch. This is the absent branch, not the null branch."
+    },
+    {
+      "stateId": "state.branch_unknown",
+      "viewId": "view.swarm",
+      "disposition": "environment-gap",
+      "evidence": "AgentSwarm / bubble-model.ts draws this on the WebGPU canvas. This host's GPU process exits before requestAdapter returns, so the body was not painted. See webgpu-diagnostic.json. The swarm diagnosis is separate from the matrix reclassification."
+    },
+    {
+      "stateId": "state.branch_none",
+      "viewId": "view.list",
+      "disposition": "rendered",
+      "fixtureId": "fix.list.branch-none",
+      "evidence": "project.branch null. List treats it as falsy and prints no branch small."
+    },
+    {
+      "stateId": "state.branch_none",
+      "viewId": "view.rain",
+      "disposition": "rendered",
+      "fixtureId": "fix.rain.branch-none",
+      "evidence": "project.branch null. rainDataString drops a falsy branch."
+    },
+    {
+      "stateId": "state.branch_none",
+      "viewId": "view.spend",
+      "disposition": "rendered",
+      "fixtureId": "fix.spend.branch-none",
+      "evidence": "project.branch null. modelOf drops a falsy branch."
+    },
+    {
+      "stateId": "state.branch_none",
+      "viewId": "view.timeline",
+      "disposition": "rendered",
+      "fixtureId": "fix.timeline.branch-none",
+      "evidence": "project.branch null. laneSubLine drops a falsy branch and keeps the model."
+    },
+    {
+      "stateId": "state.branch_none",
+      "viewId": "view.swarm",
+      "disposition": "environment-gap",
+      "evidence": "AgentSwarm / bubble-model.ts draws this on the WebGPU canvas. This host's GPU process exits before requestAdapter returns, so the body was not painted. See webgpu-diagnostic.json. The swarm diagnosis is separate from the matrix reclassification."
+    },
+    {
+      "stateId": "state.branch_named",
+      "viewId": "view.list",
+      "disposition": "rendered",
+      "fixtureId": "fix.list.branch-named",
+      "evidence": "project.branch is a string. List prints it."
+    },
+    {
+      "stateId": "state.branch_named",
+      "viewId": "view.rain",
+      "disposition": "rendered",
+      "fixtureId": "fix.rain.branch-named",
+      "evidence": "The falling glyphs include the branch."
+    },
+    {
+      "stateId": "state.branch_named",
+      "viewId": "view.spend",
+      "disposition": "rendered",
+      "fixtureId": "fix.spend.branch-named",
+      "evidence": "No task line, so the model line keeps the branch."
+    },
+    {
+      "stateId": "state.branch_named",
+      "viewId": "view.timeline",
+      "disposition": "rendered",
+      "fixtureId": "fix.timeline.branch-named",
+      "evidence": "Name line joins the model and the branch."
+    },
+    {
+      "stateId": "state.branch_named",
+      "viewId": "view.swarm",
+      "disposition": "environment-gap",
+      "evidence": "AgentSwarm / bubble-model.ts draws this on the WebGPU canvas. This host's GPU process exits before requestAdapter returns, so the body was not painted. See webgpu-diagnostic.json. The swarm diagnosis is separate from the matrix reclassification."
+    },
+    {
+      "stateId": "state.reply_streaming",
+      "viewId": "view.list",
+      "disposition": "rendered",
+      "fixtureId": "fix.list.reply-streaming",
+      "evidence": "reply.final false. detailLine prints the text and does not branch on final."
+    },
+    {
+      "stateId": "state.reply_streaming",
+      "viewId": "view.rain",
+      "disposition": "coverage-gap",
+      "evidence": "Unverified: The list fixtures mount reply.final false and true. detailLine prints the text and ignores final. Rain, spend, and timeline were not mounted with that reply."
+    },
+    {
+      "stateId": "state.reply_streaming",
+      "viewId": "view.spend",
+      "disposition": "coverage-gap",
+      "evidence": "Unverified: The list fixtures mount reply.final false and true. detailLine prints the text and ignores final. Rain, spend, and timeline were not mounted with that reply."
+    },
+    {
+      "stateId": "state.reply_streaming",
+      "viewId": "view.timeline",
+      "disposition": "coverage-gap",
+      "evidence": "Unverified: The list fixtures mount reply.final false and true. detailLine prints the text and ignores final. Rain, spend, and timeline were not mounted with that reply."
+    },
+    {
+      "stateId": "state.reply_streaming",
+      "viewId": "view.swarm",
+      "disposition": "environment-gap",
+      "evidence": "AgentSwarm / bubble-model.ts draws this on the WebGPU canvas. This host's GPU process exits before requestAdapter returns, so the body was not painted. See webgpu-diagnostic.json. The swarm diagnosis is separate from the matrix reclassification."
+    },
+    {
+      "stateId": "state.reply_final",
+      "viewId": "view.list",
+      "disposition": "rendered",
+      "fixtureId": "fix.list.reply-final",
+      "evidence": "reply.final true. detailLine prints the text and does not branch on final."
+    },
+    {
+      "stateId": "state.reply_final",
+      "viewId": "view.rain",
+      "disposition": "coverage-gap",
+      "evidence": "Unverified: The list fixtures mount reply.final false and true. detailLine prints the text and ignores final. Rain, spend, and timeline were not mounted with that reply."
+    },
+    {
+      "stateId": "state.reply_final",
+      "viewId": "view.spend",
+      "disposition": "coverage-gap",
+      "evidence": "Unverified: The list fixtures mount reply.final false and true. detailLine prints the text and ignores final. Rain, spend, and timeline were not mounted with that reply."
+    },
+    {
+      "stateId": "state.reply_final",
+      "viewId": "view.timeline",
+      "disposition": "coverage-gap",
+      "evidence": "Unverified: The list fixtures mount reply.final false and true. detailLine prints the text and ignores final. Rain, spend, and timeline were not mounted with that reply."
+    },
+    {
+      "stateId": "state.reply_final",
+      "viewId": "view.swarm",
+      "disposition": "environment-gap",
+      "evidence": "AgentSwarm / bubble-model.ts draws this on the WebGPU canvas. This host's GPU process exits before requestAdapter returns, so the body was not painted. See webgpu-diagnostic.json. The swarm diagnosis is separate from the matrix reclassification."
+    },
+    {
+      "stateId": "state.reply_missing",
+      "viewId": "view.list",
+      "disposition": "rendered",
+      "fixtureId": "fix.list.reply-missing",
+      "evidence": "reply absent. A non-blocked observed agent falls back to the status word."
+    },
+    {
+      "stateId": "state.reply_missing",
+      "viewId": "view.rain",
+      "disposition": "covered-by",
+      "fixtureId": "fix.rain.idle",
+      "exercise": "reply-absent",
+      "evidence": "Same branch as fix.rain.idle. The mounted row has no reply. detailLine falls back to the status word. The idle screenshot is that branch."
+    },
+    {
+      "stateId": "state.reply_missing",
+      "viewId": "view.spend",
+      "disposition": "covered-by",
+      "fixtureId": "fix.spend.idle",
+      "exercise": "reply-absent",
+      "evidence": "Same branch as fix.spend.idle. The mounted row has no reply. detailLine falls back to the status word. The idle screenshot is that branch."
+    },
+    {
+      "stateId": "state.reply_missing",
+      "viewId": "view.timeline",
+      "disposition": "covered-by",
+      "fixtureId": "fix.timeline.idle",
+      "exercise": "reply-absent",
+      "evidence": "Same branch as fix.timeline.idle. The mounted row has no reply. detailLine falls back to the status word. The idle screenshot is that branch."
+    },
+    {
+      "stateId": "state.reply_missing",
+      "viewId": "view.swarm",
+      "disposition": "environment-gap",
+      "evidence": "AgentSwarm / bubble-model.ts draws this on the WebGPU canvas. This host's GPU process exits before requestAdapter returns, so the body was not painted. See webgpu-diagnostic.json. The swarm diagnosis is separate from the matrix reclassification."
+    },
+    {
+      "stateId": "state.tier_managed",
+      "viewId": "view.list",
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: Tier is a host classification. It is not a field on the AgentView these views mount."
+    },
+    {
+      "stateId": "state.tier_managed",
+      "viewId": "view.rain",
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: Tier is a host classification. It is not a field on the AgentView these views mount."
+    },
+    {
+      "stateId": "state.tier_managed",
+      "viewId": "view.spend",
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: Tier is a host classification. It is not a field on the AgentView these views mount."
+    },
+    {
+      "stateId": "state.tier_managed",
+      "viewId": "view.timeline",
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: Tier is a host classification. It is not a field on the AgentView these views mount."
+    },
+    {
+      "stateId": "state.tier_managed",
+      "viewId": "view.swarm",
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: Tier is a host classification. It is not a field on the AgentView these views mount."
+    },
+    {
+      "stateId": "state.tier_ingested",
+      "viewId": "view.list",
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: Tier is a host classification. It is not a field on the AgentView these views mount."
+    },
+    {
+      "stateId": "state.tier_ingested",
+      "viewId": "view.rain",
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: Tier is a host classification. It is not a field on the AgentView these views mount."
+    },
+    {
+      "stateId": "state.tier_ingested",
+      "viewId": "view.spend",
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: Tier is a host classification. It is not a field on the AgentView these views mount."
+    },
+    {
+      "stateId": "state.tier_ingested",
+      "viewId": "view.timeline",
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: Tier is a host classification. It is not a field on the AgentView these views mount."
+    },
+    {
+      "stateId": "state.tier_ingested",
+      "viewId": "view.swarm",
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: Tier is a host classification. It is not a field on the AgentView these views mount."
+    },
+    {
+      "stateId": "state.tier_remote",
+      "viewId": "view.list",
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: Tier is a host classification. It is not a field on the AgentView these views mount."
+    },
+    {
+      "stateId": "state.tier_remote",
+      "viewId": "view.rain",
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: Tier is a host classification. It is not a field on the AgentView these views mount."
+    },
+    {
+      "stateId": "state.tier_remote",
+      "viewId": "view.spend",
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: Tier is a host classification. It is not a field on the AgentView these views mount."
+    },
+    {
+      "stateId": "state.tier_remote",
+      "viewId": "view.timeline",
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: Tier is a host classification. It is not a field on the AgentView these views mount."
+    },
+    {
+      "stateId": "state.tier_remote",
+      "viewId": "view.swarm",
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: Tier is a host classification. It is not a field on the AgentView these views mount."
+    },
+    {
+      "stateId": "state.model_missing",
+      "viewId": "view.list",
+      "disposition": "rendered",
+      "fixtureId": "fix.list.model-missing",
+      "evidence": "model absent. modelWord falls back to the provider label."
+    },
+    {
+      "stateId": "state.model_missing",
+      "viewId": "view.rain",
+      "disposition": "covered-by",
+      "fixtureId": "fix.rain.working",
+      "exercise": "model-absent",
+      "evidence": "Same branch as fix.rain.working. The mounted row has no model. modelWord falls back to the provider label. The screenshot is that fallback."
+    },
+    {
+      "stateId": "state.model_missing",
+      "viewId": "view.spend",
+      "disposition": "covered-by",
+      "fixtureId": "fix.spend.idle",
+      "exercise": "model-absent",
+      "evidence": "Same branch as fix.spend.idle. The mounted row has no model. modelWord falls back to the provider label. The screenshot is that fallback."
+    },
+    {
+      "stateId": "state.model_missing",
+      "viewId": "view.timeline",
+      "disposition": "covered-by",
+      "fixtureId": "fix.timeline.idle",
+      "exercise": "model-absent",
+      "evidence": "Same branch as fix.timeline.idle. The mounted row has no model. modelWord falls back to the provider label. The screenshot is that fallback."
+    },
+    {
+      "stateId": "state.model_missing",
+      "viewId": "view.swarm",
+      "disposition": "environment-gap",
+      "evidence": "AgentSwarm / bubble-model.ts draws this on the WebGPU canvas. This host's GPU process exits before requestAdapter returns, so the body was not painted. See webgpu-diagnostic.json. The swarm diagnosis is separate from the matrix reclassification."
+    },
+    {
+      "stateId": "state.effort_absent",
+      "viewId": "view.list",
+      "disposition": "coverage-gap",
+      "evidence": "Unverified: An agent with this effort can sit in the view. Only bubble-model.ts effortLines paints effort. No list, rain, spend, or timeline fixture mounts an effort object, so the shared row branch is not exercised."
+    },
+    {
+      "stateId": "state.effort_absent",
+      "viewId": "view.rain",
+      "disposition": "coverage-gap",
+      "evidence": "Unverified: An agent with this effort can sit in the view. Only bubble-model.ts effortLines paints effort. No list, rain, spend, or timeline fixture mounts an effort object, so the shared row branch is not exercised."
+    },
+    {
+      "stateId": "state.effort_absent",
+      "viewId": "view.spend",
+      "disposition": "coverage-gap",
+      "evidence": "Unverified: An agent with this effort can sit in the view. Only bubble-model.ts effortLines paints effort. No list, rain, spend, or timeline fixture mounts an effort object, so the shared row branch is not exercised."
+    },
+    {
+      "stateId": "state.effort_absent",
+      "viewId": "view.timeline",
+      "disposition": "coverage-gap",
+      "evidence": "Unverified: An agent with this effort can sit in the view. Only bubble-model.ts effortLines paints effort. No list, rain, spend, or timeline fixture mounts an effort object, so the shared row branch is not exercised."
+    },
+    {
+      "stateId": "state.effort_absent",
+      "viewId": "view.swarm",
+      "disposition": "environment-gap",
+      "evidence": "AgentSwarm / bubble-model.ts draws this on the WebGPU canvas. This host's GPU process exits before requestAdapter returns, so the body was not painted. See webgpu-diagnostic.json. The swarm diagnosis is separate from the matrix reclassification."
+    },
+    {
+      "stateId": "state.blocked_unknown_kind",
+      "viewId": "view.list",
+      "disposition": "rendered",
+      "fixtureId": "fix.list.blocked-unknown-kind",
+      "evidence": "blocked and a wait kind outside permission/question/failure. The list prints the kind as itself."
+    },
+    {
+      "stateId": "state.blocked_unknown_kind",
+      "viewId": "view.rain",
+      "disposition": "rendered",
+      "fixtureId": "fix.rain.blocked-unknown-kind",
+      "evidence": "Blocked column whose wait.kind is quota. detailLine prints quota. The head speed is the blocked speed."
+    },
+    {
+      "stateId": "state.blocked_unknown_kind",
+      "viewId": "view.spend",
+      "disposition": "rendered",
+      "fixtureId": "fix.spend.blocked-unknown-kind",
+      "evidence": "Wait kind quota. spend glyphOf maps any other kind to the permission glyph."
+    },
+    {
+      "stateId": "state.blocked_unknown_kind",
+      "viewId": "view.timeline",
+      "disposition": "rendered",
+      "fixtureId": "fix.timeline.blocked-unknown-kind",
+      "evidence": "Blocked lane whose wait.kind is quota. laneFor copies that kind. It is not limited to permission, question, and failure."
+    },
+    {
+      "stateId": "state.blocked_unknown_kind",
+      "viewId": "view.swarm",
+      "disposition": "environment-gap",
+      "evidence": "AgentSwarm / bubble-model.ts draws this on the WebGPU canvas. This host's GPU process exits before requestAdapter returns, so the body was not painted. See webgpu-diagnostic.json. The swarm diagnosis is separate from the matrix reclassification."
+    },
+    {
+      "stateId": "state.device_live",
+      "viewId": "view.list",
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: Desktop standing is applied by the host's window-rows overlay before a view sees a row. This harness mounts the view directly. The row flag the views can paint is state.stale, which is a different cell."
+    },
+    {
+      "stateId": "state.device_live",
+      "viewId": "view.rain",
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: Desktop standing is applied by the host's window-rows overlay before a view sees a row. This harness mounts the view directly. The row flag the views can paint is state.stale, which is a different cell."
+    },
+    {
+      "stateId": "state.device_live",
+      "viewId": "view.spend",
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: Desktop standing is applied by the host's window-rows overlay before a view sees a row. This harness mounts the view directly. The row flag the views can paint is state.stale, which is a different cell."
+    },
+    {
+      "stateId": "state.device_live",
+      "viewId": "view.timeline",
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: Desktop standing is applied by the host's window-rows overlay before a view sees a row. This harness mounts the view directly. The row flag the views can paint is state.stale, which is a different cell."
+    },
+    {
+      "stateId": "state.device_live",
+      "viewId": "view.swarm",
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: Desktop standing is applied by the host's window-rows overlay before a view sees a row. This harness mounts the view directly. The row flag the views can paint is state.stale, which is a different cell."
+    },
+    {
+      "stateId": "state.device_stale",
+      "viewId": "view.list",
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: Desktop standing is applied by the host's window-rows overlay before a view sees a row. This harness mounts the view directly. The row flag the views can paint is state.stale, which is a different cell."
+    },
+    {
+      "stateId": "state.device_stale",
+      "viewId": "view.rain",
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: Desktop standing is applied by the host's window-rows overlay before a view sees a row. This harness mounts the view directly. The row flag the views can paint is state.stale, which is a different cell."
+    },
+    {
+      "stateId": "state.device_stale",
+      "viewId": "view.spend",
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: Desktop standing is applied by the host's window-rows overlay before a view sees a row. This harness mounts the view directly. The row flag the views can paint is state.stale, which is a different cell."
+    },
+    {
+      "stateId": "state.device_stale",
+      "viewId": "view.timeline",
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: Desktop standing is applied by the host's window-rows overlay before a view sees a row. This harness mounts the view directly. The row flag the views can paint is state.stale, which is a different cell."
+    },
+    {
+      "stateId": "state.device_stale",
+      "viewId": "view.swarm",
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: Desktop standing is applied by the host's window-rows overlay before a view sees a row. This harness mounts the view directly. The row flag the views can paint is state.stale, which is a different cell."
+    },
+    {
+      "stateId": "state.device_asleep",
+      "viewId": "view.list",
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: Desktop standing is applied by the host's window-rows overlay before a view sees a row. This harness mounts the view directly. The row flag the views can paint is state.stale, which is a different cell."
+    },
+    {
+      "stateId": "state.device_asleep",
+      "viewId": "view.rain",
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: Desktop standing is applied by the host's window-rows overlay before a view sees a row. This harness mounts the view directly. The row flag the views can paint is state.stale, which is a different cell."
+    },
+    {
+      "stateId": "state.device_asleep",
+      "viewId": "view.spend",
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: Desktop standing is applied by the host's window-rows overlay before a view sees a row. This harness mounts the view directly. The row flag the views can paint is state.stale, which is a different cell."
+    },
+    {
+      "stateId": "state.device_asleep",
+      "viewId": "view.timeline",
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: Desktop standing is applied by the host's window-rows overlay before a view sees a row. This harness mounts the view directly. The row flag the views can paint is state.stale, which is a different cell."
+    },
+    {
+      "stateId": "state.device_asleep",
+      "viewId": "view.swarm",
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: Desktop standing is applied by the host's window-rows overlay before a view sees a row. This harness mounts the view directly. The row flag the views can paint is state.stale, which is a different cell."
+    },
+    {
+      "stateId": "state.device_incompatible",
+      "viewId": "view.list",
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: Desktop standing is applied by the host's window-rows overlay before a view sees a row. This harness mounts the view directly. The row flag the views can paint is state.stale, which is a different cell."
+    },
+    {
+      "stateId": "state.device_incompatible",
+      "viewId": "view.rain",
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: Desktop standing is applied by the host's window-rows overlay before a view sees a row. This harness mounts the view directly. The row flag the views can paint is state.stale, which is a different cell."
+    },
+    {
+      "stateId": "state.device_incompatible",
+      "viewId": "view.spend",
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: Desktop standing is applied by the host's window-rows overlay before a view sees a row. This harness mounts the view directly. The row flag the views can paint is state.stale, which is a different cell."
+    },
+    {
+      "stateId": "state.device_incompatible",
+      "viewId": "view.timeline",
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: Desktop standing is applied by the host's window-rows overlay before a view sees a row. This harness mounts the view directly. The row flag the views can paint is state.stale, which is a different cell."
+    },
+    {
+      "stateId": "state.device_incompatible",
+      "viewId": "view.swarm",
+      "disposition": "not-applicable",
+      "evidence": "Outside this view: Desktop standing is applied by the host's window-rows overlay before a view sees a row. This harness mounts the view directly. The row flag the views can paint is state.stale, which is a different cell."
     }
   ],
   "swarmBodyPaint": null
