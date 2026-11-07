@@ -41044,3 +41044,83 @@ VF-PM accepted D1–D5 and the two EL8s (D6) at 23:05Z, and D4 corrected to (B')
   the home's connection (`#conn-N`), not the phone; 7c-1 keys it by the phone's roster device.
 - RO-38, rosetta's `clients/swift` (its PR is James's, by hand), then the EL8 to its release, then 7b-2, the kit's
   direct History read (W1 on the old mini).
+
+## SP-7b's 7c — the phone's terminal asks for another desktop ride its home: the owner keys the phone behind its home by its roster device, so a renewal after a reconnect holds, and the kit asks its ticket, renewal and Resume of its home with `device`
+(2026-11-07; one stack of five commits, fd's, in `/Volumes/SamsungRed/lanes/item190`, on main `60461c59c`: 7c-1
+`098e527b0` (red) and `5be088ead`, then 7c-2 `7d25395be` (red), `e0d04e6a6` and `c8c580fcb`
+(History's Resume, a note). 7c-1 was cut on `5d58c8731` as `3890b02a7` → `ad913a5d9` (branch `sp7c-1`), and 7c-2 on
+`14ac3b7d5` as `27c50b1a3` → `8d608bc00` → `5fb4dd77d` (branch `sp7c-2`). Both were re-cut together on `b833d4116` as
+`ddf4358d8` → `5aa88ca0d` (branch `sp7c-mint`), the tip the run read, and then onto `60461c59c`
+(`lanes/sp7b/mints/sp7c-land2/recut-proof.txt`: range-diff `=`, both patch-ids equal, the tree equal to the merge-tree).
+M208 is `c8c580fcb`, landed 2026-11-07T08:46:53Z, run 208.)
+The 7c READ in the SP-7b plan (`lanes/sp7/SP-7b-plan.md`, 23:16Z) found the gap. VF-PM ruled D-c1 (a) and D-c2 (a) at
+23:17Z, and History's Resume (b) at 23:43Z (DECISIONS "SP-7b").
+
+**What.** The phone asked a terminal ticket, its renewal and Resume for another desktop of that desktop's own door.
+- The home already carried all three: DS-4's `forwardVia` has since 2026-09-30, and F1b's approval rides it. The kit
+  did not use it. FW-R6 retires a second road for one ask.
+- The owner keyed a forward by the connection behind it (`peer-fieldd:<home>#conn-N`). So a phone that reconnected
+  to its home was a new client, and its next renewal was refused CONFLICT ("expected grant generation 1 but the
+  current one is 0").
+- The phone behind its home had no holder face.
+
+**The fix, 7c-1 (fieldd), D-c1 (a).**
+- `098e527b0` (red), test-only: `terminal-grants.test.ts` 34 → 37 rows, `terminal-forwarded-ticket.e2e.test.ts`
+  2 → 3 on TWO real daemons (`bootPair({ phone: true })`; `phoneOn`, F1b's harness). Each new row fails on an
+  assertion at main: the key on `#conn-1`, the two renewals on the CONFLICT above, the face on `undefined`.
+- `5be088ead`, the key and the face:
+  - `forwardedWindowKey` becomes `forwardedClientKey`. A forward that names the phone's roster device
+    (`onBehalfOf.clientDeviceId`, F1b) is keyed `peer-fieldd:<home>#phone:<device>`: one connection set on a cell
+    and one attach ledger for the phone, whichever connection to its home carries it. A relay names the home
+    (`#<home>/phone:<device>`). The device is percent-encoded, and the `:` never appears in an encoded window, so
+    no window aliases it. A window's key is unchanged.
+  - `holderFaceFor` draws the phone behind its home as THIS roster's row for that device, `ios`. It is
+    restrict-only, as F1b ruled: a row that hosts documents, an unlisted device and a nameless row say nothing.
+    `phoneFaceOf` is the one rule the direct phone and the phone behind its home share.
+  - The same key reaches the index grant's `cid` and the spark transcript holder (`transcripts/tickets.ts`).
+  - `spark-transcript-ticket.test.ts`'s SP-7a row asserted `#conn-7`. It moves with the fix, since it is on main,
+    and its title ("keyed by the connection behind the forward") gets a dated correction at the row.
+  - Dated corrections at their sources: `clientIdFor`'s DS-4c comment and F1b's "None is drawn".
+
+**The fix, 7c-2 (the kit), D-c2 (a).**
+- `7d25395be` (red), test-only: `FieldLinkHomeTests.swift`'s `FieldLinkOwnerDoorTests`, 20 → 21 tests in the
+  file. The three asks for another desktop are expected on the home's door with `{device}`, and the owner's door
+  answers too, so the old road fails an `#expect`, never a timeout. Two rows fail at main.
+- `e0d04e6a6`, `FieldLink.homeAsk`, the one road for the three: `device` is added for another desktop's session
+  or run, and the home forwards the ask whole. The owner still mints, CASes and resumes, and its answer or its honest
+  refusal comes back unread. There is no owner-door fallback. With no home, each keeps its refusal: the terminal's
+  `no_door`, retryable, and Resume's own.
+  - `ownerDoor` carries Files alone.
+  - Dated corrections at their sources: the ticket's DS-8 paragraph (loopback endpoints, stale since DS-4), the
+    renewal's and Resume's door, `approveFreeway`'s note, `ownerDoor`'s header, PhoneBudget's and HomeScreen's.
+- `c8c580fcb`, History's Resume ((b), 23:43Z): `workspaceCall`'s `agent.resume` (PJ-7) stays on History's open
+  reading door, which costs no extra socket. It moves when FW-R6's last half retires `openHistoryDoor`. A dated note
+  at `workspaceMethods`; comment only.
+- 7c-2 lands with 7c-1 or after it: without 7c-1, a renewal through the home after a reconnect is refused CONFLICT.
+
+**The lights.**
+- a9's rows on the old mini (06:51Z, as briefed), 7c-1 at `ad913a5d9`: red-b `4 failed, 36 passed` (40), the four named;
+  tip-b `40 passed`; tsc 0; biome 0 over 5 files, no warning; the lane's 7 rows ×3 all exit 0
+  (`lanes/sp7/a9-sp7c1-results`, SUMS-a9 b03a563d).
+- 7c-2 at `5fb4dd77d`: kit-red RED AS EXPECTED, 2 red rows on their own `#expect`, 9 green, no crash; kit GREEN, 2
+  suites, 11 rows; FieldMeshTests GREEN whole (`lanes/sp7/a9-sp7c2-results`, SUMS-a9 3de9cc16).
+- Run 208, a9's, on the old mini: GREEN at `5aa88ca0d` on `b833d4116`, armed at 1-min load 4.58, verify 0 at 08:38:02Z:
+  vitest 14,038 passed, 0 failed, 21 skipped over 961 files, node 474, cargo 606/0 over 37 binaries, biome 3,484 files
+  and 73 warnings. Against run 203 only `terminal-grants` 34 → 37 and `terminal-forwarded-ticket.e2e` 2 → 3 moved,
+  missing [] and extra [] (`lanes/ts6/logs/mini/run208`). The kit is outside verify; its proof is 7c-2's rows above.
+- The land is a re-cut whose base move carried code: 7b-1 (M207) and the EL8 to rosetta 0.1.4. It shares no file with
+  either, and one seam with 7b-1: `index-serve.ts:428` sets `cid` from `clientIdFor`, which `terminal-grants.ts:122`
+  defines. So an index grant's `cid` changes value at this land: a forward naming `clientDeviceId` keys
+  `peer-fieldd:<home>#phone:<device>` where it keyed `#conn-N`, as 7b-1's Owed said. `index-open-ticket.test.ts`'s phone
+  rows match `^peer-fieldd:dev-b#`, so they hold by reading. Neither run 207 nor run 208 read 7b-1 and 7c together:
+  main's next verify (push 117's) is the first that does.
+- The kit's Swift at `c8c580fcb` is identical to `5fb4dd77d`, so 7c-2's rows are rows run on an earlier cut of the same
+  Swift.
+- 7b-1's entry names run 206: its log is on the mini, `~/vf-lanes/verify/logs/run206/verify.log`, not the SSD.
+- No test ran on the MacBook (the HOLD). The code was held to biome's width and Swift's syntax by hand.
+
+**Owed.**
+- The next verify of main that includes `c8c580fcb`: the first to run this stack with 7b-1 and rosetta 0.1.4.
+- RO-38, rosetta's `clients/swift` (its PR is James's, by hand), then the EL8 to its release, then 7b-2, the kit's
+  direct History read (W1 on the old mini).
+- History's Resume moves to the home with FW-R6's last half.
