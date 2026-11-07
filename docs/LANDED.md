@@ -40925,3 +40925,48 @@ door yet: every open that reaches it still answers `export-unbuilt`.
   stay until the re-read follows it.
 - James: the GitHub release's daemon archives are still a draft. This host builds rosettad from `../rosetta-pin`, so
   nothing here waits on them (RD-D7).
+
+## LP's privacy manifest — the phone declares what its embedded Tailscale client sends, so label B and the manifest agree (track LP)
+
+(2026-11-07; one commit on main `8c03c4c5a`: `aa1f10bbb`, landed 07:27:26Z; branch `lp/privacy-manifest`, cut by the
+LAUNCH lead (vibe-field-2a, was vibe-field-05) with git plumbing, so James's checkout was never touched. It landed
+under a light witness, a9's build row on the old mini, with no verify run of its own; the next verify of main that
+includes it is the first to cover it.)
+Cut on James's two picks on the board, 2026-11-07: `privacy-label-build-6` B at 07:11:25Z, and
+`tailscale-log-upload-build-6` "ship on + declare" at 07:11:40Z. VF-PM ordered the branch at 07:08Z and audited the
+re-cut at 07:25Z.
+
+**What is real.**
+- **The manifest.** `NSPrivacyCollectedDataTypes` in `PrivacyInfo.xcprivacy` goes from empty to three entries: Email
+  Address, Device ID and Other Diagnostic Data. Each is linked to the user, not used for tracking, for App
+  Functionality. `NSPrivacyTracking` stays false, and the three required-reason entries do not move.
+- **Why B.** The embedded TailscaleKit sends the account's email and the device's identity to Tailscale at sign-in,
+  and its log upload ships on in build 6. Apple counts what third-party code in the app collects, so the empty array
+  would have under-declared.
+- **The keys** were read on Apple's own reference pages (NSPrivacyCollectedDataType and
+  NSPrivacyCollectedDataTypePurposes, 2026-11-07 07:12Z). All four values are listed there.
+
+**What is stubbed or left.**
+- Tailscale's log upload stays on in build 6. Turning it off stays a truffle Swift option, with no lane. If a lane
+  turns it off later, the third entry drops; the other two stand either way.
+- App Store Connect's App Privacy answers are James's paste (`lanes/launch/asc/privacy-labels.md`, option B).
+
+**Validation.**
+- No Swift compiled on this MacBook (the load HOLD); `plutil -lint` passed here. Pin-class: none. VF-PM's
+  native-digest path list reads 0 over the commit, so it is clear of the rule that holds native lands until the tag.
+- **The build row** on the old mini (a9), at `e5c8a7451`, before the re-cut, ran at 07:22:25Z. The commit body's
+  "GREEN 07:24Z" was the report's time, not the row's:
+  - The App build (Debug, the generic iOS Simulator, no signing, no simulator boot) succeeded in 47 s. It ran
+    incrementally on `ios/derived`, since no `kit-*` folder was left on the host.
+  - The built app's `PrivacyInfo.xcprivacy` is byte-equal to the packet's copy and reads the three entries, with the
+    three required-reason entries unchanged.
+  - `check-ios-fixtures` gave rc 0 (374 copies, 93 values).
+  - The load is informational for a build row: 2.12 at the start, 12.16 at the build's end.
+  - Logs `lanes/launch/a9-privacy-manifest-results/` (SUMS-a9 `114156ed`, `step4-build.log` `333cc27c…`).
+- **The re-cut** onto `8c03c4c5a` (EL8-rosetta) leaves the file unchanged. `git merge-tree` gives the re-cut's tree
+  `5932d36d8`; patch-id is equal in both forms (show `75d9fcde…`, `-U0` `1fa58902…`). The one message change is the
+  Validation bullet.
+
+**Owed.**
+- James's paste of App Privacy option B, read against the privacy policy's Tailscale paragraph before submission.
+- The next verify of main that includes `aa1f10bbb`.

@@ -1085,7 +1085,8 @@ its rulings (`draft/rv/james-asks.md`, `draft/rv/lead-rulings.md`); the review `
        06:18Z). About reading the acknowledgements' full texts, Privacy Policy and Support on About and on the welcome
        (where a signed-out person reaches them), and About's non-affiliation line: LANDED 2026-11-06 (M165
        `7a7f22623`, LANDED "IOS-13a"). Owed: item 184, the font rows' version and names (James's eye);
-     - Tailscale's log upload turned off on iOS (a truffle Swift option);
+     - Tailscale's log upload ships on in build 6, declared (James, 2026-11-07 07:11Z; it was owed off): the
+       privacy manifest LANDED (`aa1f10bbb`, LANDED "LP's privacy manifest"). Off stays a truffle Swift option;
      - iPad: one window in v1: LANDED (M144). Its words in Settings and the way in ("this iPad", `DeviceWord`):
        LANDED (M165, LANDED "IOS-13a"). The lock's and the other surfaces' words: LANDED 2026-11-06 (M172
        `fad2d5433`, LANDED "LP-4's word pass"). Owed: a pass on 11- and 13-inch iPads;
@@ -1096,8 +1097,8 @@ its rulings (`draft/rv/james-asks.md`, `draft/rv/lead-rulings.md`); the review `
      - the Mac's add-phone door naming the App Store.
    - **Phase 4, the gate and the cut** (target 7 Nov, was 19 Nov):
      - The gate: phase 1 done; A, B and D done; C measured, and fixed or said in the notes; the scope frozen; James on a
-       signed nightly every day for five days (RL6); and one person who isn't James installs from vibefield.dev on a
-       clean Mac and gets an agent running.
+       signed nightly with its checks green (James shortened RL6's five days, 2026-11-07 00:07Z); and one person
+       who isn't James installs from vibefield.dev on a clean Mac and gets an agent running.
      - Owed before the cut: measure the order of `releases.atom` and of the sign job's "previous" pick on a scratch
        repository (`draft/launch/policy-only-release.md` §4.3). If they follow commit dates, F1 (carry by publish
        order) and F2 (tag on a fresh cut commit) land first, on James's call.
@@ -1112,8 +1113,9 @@ its rulings (`draft/rv/james-asks.md`, `draft/rv/lead-rulings.md`); the review `
      - a yank drill on the beta channel through the policy-only path (LP-D19);
      - iPhone and iPad 0.9.0 submitted by 8 Nov (was 24 Nov) with manual release (LP-D10), released the same hour
        as the Mac stable.
-   - The exit: seven days on the newest beta with no open crash, data-loss, security or update-failure bug; a
-     beta-to-beta update witnessed; clean installs passing on every supported macOS; and App Review's approval.
+   - The exit: one day on the newest beta (James shortened the seven days, 2026-11-07 00:07Z) with no open crash,
+     data-loss, security or update-failure bug; a beta-to-beta update witnessed; clean installs passing on every
+     supported macOS; and App Review's approval.
    - Main moves to 0.10.0 the same day.
    - Before 1 Feb 2027: a Developer ID certificate under G2, in CI, with its swap drill.
    - 1.0 adds Linux (RL3 (a); no Linux leg exists) and, on James's call, Windows (RM-4; the 10-26 production-readiness
