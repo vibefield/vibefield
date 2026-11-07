@@ -14,6 +14,10 @@ class FakeControl implements PresenceLaneControl {
   order: string[] = [];
   lanes: LaneInfo[] = [];
   gate: Promise<void> | null = null;
+  /** item 206's boot half: what a subscribe waits on, what it fails with, and how many were asked */
+  subscribeGate: Promise<void> | null = null;
+  subscribeRefusal: Error | null = null;
+  subscribes = 0;
   #emit: ((payload: unknown, kind: "snapshot" | "delta") => void) | null = null;
 
   async open(req: {
@@ -35,6 +39,9 @@ class FakeControl implements PresenceLaneControl {
   async subscribe(
     onEvent: (payload: unknown, kind: "snapshot" | "delta") => void,
   ): Promise<{ lanes: LaneInfo[] }> {
+    this.subscribes += 1;
+    await this.subscribeGate;
+    if (this.subscribeRefusal !== null) throw this.subscribeRefusal;
     this.#emit = onEvent;
     return { lanes: this.lanes };
   }
@@ -292,5 +299,61 @@ describe("item 206's boot half — a doc lane attaches to presence only once it 
     await until(() => control.opened.length === 1, "the room's lane");
     expect(router.state().rooms).toBe(1);
     await room.close();
+  });
+});
+
+// Item 206's boot half: the same two ends as doc sync's, for the router the daemon starts second.
+describe("item 206's boot half — a start that is stopped, and one that fails", () => {
+  it("R20: a stop() during start() ends it: a lane in the table that answers is left alone", async () => {
+    const { router, control } = harness();
+    control.lanes = [
+      {
+        laneId: MESHDATA_INBOUND_LANE_ID_BASE,
+        inbound: true,
+        class: "lossy",
+        protocol: "presence",
+        peer: "peer-a",
+        docId: "doc-a",
+      },
+    ];
+    let release!: () => void;
+    control.subscribeGate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const starting = router.start();
+    await router.stop();
+    release();
+    await starting;
+    expect(control.closed).toEqual([]);
+  });
+
+  it("R21: a failed subscribe leaves the router startable, so the start can run again", async () => {
+    const { router, control } = harness();
+    control.subscribeRefusal = new Error("not connected");
+    await expect(router.start()).rejects.toThrow("not connected");
+    control.subscribeRefusal = null;
+    await router.start();
+    expect(control.subscribes).toBe(2);
+  });
+
+  it("R25: no room exists until the lane table has answered, so a start that fails leaves none behind", async () => {
+    const { router, control } = harness();
+    control.subscribeRefusal = new Error("not connected");
+    await expect(router.start()).rejects.toThrow("not connected");
+    expect(() => router.attach("doc-a", () => {})).toThrow("not started");
+    control.subscribeRefusal = null;
+    let release!: () => void;
+    control.subscribeGate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const starting = router.start();
+    expect(() => router.attach("doc-a", () => {})).toThrow("not started");
+    release();
+    await starting;
+    const room = router.attach("doc-a", () => {});
+    expect(router.state().rooms).toBe(1);
+    await room.close();
+    await router.stop();
+    expect(() => router.attach("doc-b", () => {})).toThrow("not started");
   });
 });

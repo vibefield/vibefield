@@ -57,6 +57,10 @@ class FakeControl implements LaneControl {
   closed: number[] = [];
   lanes: LaneInfo[] = [];
   refuse = false;
+  /** item 206's boot half: what a subscribe waits on, what it fails with, and how many were asked */
+  subscribeGate: Promise<void> | null = null;
+  subscribeRefusal: Error | null = null;
+  subscribes = 0;
   #emit: ((payload: unknown, kind: "snapshot" | "delta") => void) | null = null;
 
   async open(req: {
@@ -75,6 +79,9 @@ class FakeControl implements LaneControl {
   async subscribe(
     onEvent: (payload: unknown, kind: "snapshot" | "delta") => void,
   ): Promise<{ lanes: LaneInfo[] }> {
+    this.subscribes += 1;
+    await this.subscribeGate;
+    if (this.subscribeRefusal !== null) throw this.subscribeRefusal;
     this.#emit = onEvent;
     return { lanes: this.lanes };
   }
@@ -1359,5 +1366,57 @@ describe("DS-5 — system documents and eager replication, at the service seam",
       () => control.opened.some((o) => o.docId === docId && o.peer === "peer-a"),
       "eager replication on attach",
     );
+  });
+});
+
+// Item 206's boot half: the daemon starts this service late, so a shutdown can land inside the start, and a floor going
+// away can fail it. The start runs again then, and `stop()` cannot prepare that: it lets go of what the boot attached.
+describe("item 206's boot half — a start that is stopped, and one that fails", () => {
+  it("R18: a stop() during start() ends it: the lane table that answers is not claimed", async () => {
+    const { docs, control, bytes, sync } = harness();
+    const docId = await seeded(docs);
+    control.lanes = [
+      {
+        laneId: MESHDATA_INBOUND_LANE_ID_BASE,
+        peer: "p",
+        protocol: "doc-sync",
+        docId,
+        inbound: true,
+      },
+    ];
+    let release!: () => void;
+    control.subscribeGate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const starting = sync.start();
+    sync.stop();
+    release();
+    await starting;
+    expect(bytes.claimed(MESHDATA_INBOUND_LANE_ID_BASE)).toBe(false);
+  });
+
+  it("R19: a failed subscribe leaves the service startable, so the start can run again", async () => {
+    const { control, sync } = harness();
+    control.subscribeRefusal = new Error("not connected");
+    await expect(sync.start()).rejects.toThrow("not connected");
+    control.subscribeRefusal = null;
+    await sync.start();
+    expect(control.subscribes).toBe(2);
+  });
+
+  it("R24: after a stop() the lane table's stream claims nothing, as presence's does not", async () => {
+    const { docs, control, bytes, sync } = harness();
+    const docId = await seeded(docs);
+    await sync.start();
+    sync.stop();
+    control.announce({
+      kind: "peerOpened",
+      laneId: MESHDATA_INBOUND_LANE_ID_BASE,
+      peer: "p",
+      protocol: "doc-sync",
+      docId,
+      inbound: true,
+    });
+    expect(bytes.claimed(MESHDATA_INBOUND_LANE_ID_BASE)).toBe(false);
   });
 });

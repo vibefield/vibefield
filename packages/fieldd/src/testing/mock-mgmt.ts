@@ -68,6 +68,12 @@ export class MockMgmtServer {
   supersedeAfterSubscribe = false;
   /** when set, every native.mesh.* call answers UNAVAILABLE (node not up) */
   meshUnavailable = false;
+  /** Item 206's boot half — decides each `native.mesh.lane.subscribe` before it is answered: "hold" keeps the answer
+   * until `releaseLaneSubscribes()` (a floor that dies, or is slow, between the ask and the answer), "refuse" answers a
+   * refusal that is not retryable. Here and not in `rejectedSubscriptions` or `silentMethods`: the mesh facade is
+   * dispatched ahead of the first, and the second swallows the ask before `meshCalls` records it. */
+  laneSubscribeGate: (() => "hold" | "refuse" | undefined) | null = null;
+  private readonly heldLaneSubscribes: Array<() => void> = [];
   /** DS-1 — the floor's EGRESS, answered ahead of every mesh gate (as the real
    * floor's `mgmt/mesh_egress.rs` is). `"unsupported"` — the default — refuses
    * every verb `egress-unsupported`; `"mesh-down"` refuses the acts that need a
@@ -802,9 +808,24 @@ export class MockMgmtServer {
         // `{}` answer below failed doc sync's start for want of a subId — which
         // no suite noticed, because a suite needs a meshdata bridge as well to
         // get that far (the landing review's B1 witness binds one).
-        const subId = `s${this.nextSub++}`;
-        this.issued.push({ sock, subId, method: msg.method });
-        reply({ result: { subId, snapshot: { lanes: [] } } });
+        const gate = this.laneSubscribeGate?.();
+        if (gate === "refuse") {
+          reply({
+            error: {
+              code: -32601,
+              message: "subscription rejected",
+              data: { kind: "NOT_FOUND", retryable: false },
+            },
+          });
+          return;
+        }
+        const answer = (): void => {
+          const subId = `s${this.nextSub++}`;
+          this.issued.push({ sock, subId, method: msg.method });
+          reply({ result: { subId, snapshot: { lanes: [] } } });
+        };
+        if (gate === "hold") this.heldLaneSubscribes.push(answer);
+        else answer();
         return;
       }
       case "native.mesh.store.open": {
@@ -1215,6 +1236,11 @@ export class MockMgmtServer {
 
   killClients(): void {
     for (const s of this.sockets) s.destroy();
+  }
+
+  /** Item 206's boot half — answers what `laneSubscribeGate` held. */
+  releaseLaneSubscribes(): void {
+    for (const answer of this.heldLaneSubscribes.splice(0)) answer();
   }
 
   async stop(): Promise<void> {

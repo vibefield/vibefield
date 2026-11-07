@@ -18,11 +18,13 @@ import {
   LANE_FRAME,
   type LaneFrame,
 } from "@vibefield/contracts";
+import type { Logger } from "@vibefield/logging";
 import { afterEach, describe, expect, it } from "vitest";
 import { WebSocket } from "ws";
-import { DocLane } from "../src/doc-lane";
+import { DocLane, type DocLaneOptions } from "../src/doc-lane";
 import { DocumentService } from "../src/doc-service";
 import { liftIce1 } from "../src/ice1-envelope";
+import { PresenceRoomRouter } from "../src/presence-room";
 import { Renderer } from "./loro-renderer";
 
 const cleanup: Array<() => void | Promise<void>> = [];
@@ -57,10 +59,12 @@ class Probe {
   }
 }
 
-async function stack(): Promise<{ docs: DocumentService; port: number }> {
+async function stack(
+  extra: Pick<DocLaneOptions, "rooms" | "logger"> = {},
+): Promise<{ docs: DocumentService; port: number }> {
   const dataDir = mkdtempSync(join(tmpdir(), "vf-push-"));
   const docs = new DocumentService({ dataDir });
-  const lane = new DocLane({ dataPort: 0, docs });
+  const lane = new DocLane({ dataPort: 0, docs, ...extra });
   const port = await lane.listen();
   cleanup.push(() => rmSync(dataDir, { recursive: true, force: true }));
   cleanup.push(() => lane.close());
@@ -320,5 +324,39 @@ describe("DS-5 — the open window is pushed what a peer merged", () => {
     await probe.until((f) => f.some((x) => x.kind === LANE_FRAME.DOC_PUSH), "the push after proof");
     window.apply(probe.pushes()[0] as Uint8Array);
     expect(window.board()).toMatchObject({ early: "unpushed", late: "pushed", mine: "saved" });
+  });
+});
+
+// Item 206's boot half: the daemon starts presence late, so a window can open a document first. `attach` throws on a
+// router that has not started, and the lane's catch is the whole of what stands between that and a failed attach.
+describe("item 206's boot half — a document opens while presence has not started", () => {
+  it("R22: attach throws on the unstarted router; the document opens without its room and the warn says so", async () => {
+    const warned: string[] = [];
+    const logger: Logger = {
+      child: () => logger,
+      trace: () => {},
+      debug: () => {},
+      info: () => {},
+      warn: (event) => {
+        warned.push(event);
+      },
+      error: () => {},
+      fatal: () => {},
+      isLevelEnabled: () => true,
+    };
+    const rooms = new PresenceRoomRouter({
+      control: {
+        open: async () => {},
+        close: async () => {},
+        subscribe: async () => ({ lanes: [] }),
+      },
+      bytes: { send: () => true, flush: async () => {}, onLane: () => {}, offLane: () => {} },
+      peers: async () => [],
+      allocateLaneId: () => 1,
+    });
+    const { docs, port } = await stack({ rooms, logger });
+    const { docId } = await seeded(docs);
+    await attach(port, docs, docId);
+    expect(warned).toContain("fieldd.doclane.presence_attach_failed");
   });
 });

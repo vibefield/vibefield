@@ -95,8 +95,8 @@ function link(opts: Omit<MeshLaneLinkOptions, "bootId">): MeshLaneLink {
 
 /** A bridge that speaks the frame protocol and lets the test push inbound
  * DATA whenever it likes — including BEFORE the consumer subscribes. Item 206's
- * boot half: `late` binds no endpoint until `listen()`, as a floor whose mesh
- * comes on after fieldd booted. */
+ * boot half: `late` binds no endpoint until `listen()`, as a floor whose bridge
+ * failed to bind or has not come back. */
 async function fakeBridge(opts: { late?: boolean } = {}): Promise<{
   socketPath: string;
   pairingFile: string;
@@ -110,6 +110,8 @@ async function fakeBridge(opts: { late?: boolean } = {}): Promise<{
   dropAtAccept: (n: number) => void;
   /** every connection that reached the bridge, the dropped ones included */
   accepted: () => number;
+  /** whether the last connection is still open at this end */
+  clientOpen: () => boolean;
   /** bind the endpoint now (a `late` bridge's; a no-op for one already listening) */
   listen: () => Promise<void>;
 }> {
@@ -192,6 +194,7 @@ async function fakeBridge(opts: { late?: boolean } = {}): Promise<{
       toDrop = n;
     },
     accepted: () => accepts,
+    clientOpen: () => client !== null && !client.destroyed,
     listen,
   };
 }
@@ -452,16 +455,13 @@ describe("item 206's boot half — a first dial that fails is not terminal", () 
       (error: unknown) => String(error),
     );
     expect(first).not.toBe("connected");
-    expect(typeof (l as { dialLater?: unknown }).dialLater, "the link has dialLater()").toBe(
-      "function",
-    );
     const delays: number[] = [];
     let ups = 0;
     l.on("reconnecting", (delay: number) => delays.push(delay));
     l.on("connected", () => {
       ups += 1;
     });
-    (l as unknown as { dialLater: () => void }).dialLater();
+    l.dialLater();
     // the 500 ms dial meets no bridge and arms 1000; the bridge listens, and the 1000 ms dial is served
     const armed = await until(() => delays.length >= 2, 3_000);
     await bridge.listen();
@@ -473,6 +473,39 @@ describe("item 206's boot half — a first dial that fails is not terminal", () 
       delays: [500, 1_000],
     });
   }, 20_000);
+
+  it("R16: a close() while the socket opens ends the dial: no `connected` on a closed link", async () => {
+    const bridge = await fakeBridge();
+    const l = link({ socketPath: bridge.socketPath, pairingFile: bridge.pairingFile });
+    let ups = 0;
+    l.on("connected", () => {
+      ups += 1;
+    });
+    const dial = l.connect().then(
+      () => "connected",
+      (error: unknown) => String(error),
+    );
+    l.close();
+    expect({ settled: await dial, ups, connected: l.connected }).toEqual({
+      settled: "Error: meshdata link closed",
+      ups: 0,
+      connected: false,
+    });
+    // and the dial's socket went with it
+    expect(await until(() => bridge.accepted() === 1 && !bridge.clientOpen(), 2_000)).toBe(true);
+  });
+
+  it("R17: a pairing file that cannot be read fails the dial before any socket opens", async () => {
+    const bridge = await fakeBridge();
+    const l = link({ socketPath: bridge.socketPath, pairingFile: `${bridge.pairingFile}.absent` });
+    const first = await l.connect().then(
+      () => "connected",
+      (error: unknown) => String(error),
+    );
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(first).not.toBe("connected");
+    expect(bridge.accepted()).toBe(0);
+  });
 });
 
 describe("inbound lanes — the ordering hazard", () => {
