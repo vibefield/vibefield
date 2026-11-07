@@ -187,6 +187,43 @@ struct ChatFeedTests {
     #expect(name == "Vela")
   }
 
+  /// IOS-12f — `-vf-mock`'s door: New spark's reads parse the contracts' own copies (EL9, the kit's side), and a spark
+  /// it hatches is the home's, never worked, listed after the merge's own, with an empty record.
+  @Test("under -vf-mock, New spark reads the contracts' own answers, and a spark it makes is listed on the home")
+  func newSparkUnderTheMock() async throws {
+    let feed = ChatFeed()
+    let door = ChatFixtureDoor()
+    feed.attach(door, home: ChatFixtureDoor.home)
+    await settle { feed.reading.heard }
+    let providers = try await feed.providers()
+    let sets = try await feed.profileSets()
+    let picker = try await feed.models(provider: "claude", profileSet: "work")
+    let made = try await feed.hatch(
+      SparkHatchParams(name: "Polaris", seed: 7, agent: "claude", profiles: ["work"], thinksUnder: "work"))
+    await settle { feed.reading.sparks.contains { $0.id == made.id } }
+
+    let agents = providers.map { "\($0.id) \($0.spark == true)" }
+    #expect(agents == ["claude true", "pi false"])
+    let profiles = sets.map { $0.id }
+    #expect(profiles == ["native", "work", "side", "new-profile"])
+    let models = picker.catalog?.models.map { $0.id }
+    #expect(models == ["default", "opus", "sonnet", "haiku"])
+    await #expect(throws: FieldProductError.self) { _ = try await feed.models(provider: "pi", profileSet: "work") }
+
+    #expect(made.name == "Polaris")
+    #expect(made.seed == 7)
+    #expect(made.device == ChatFixtureDoor.home)
+    #expect(made.turned == .never)
+    let live = made.session?.live
+    #expect(live == true)
+    let listed = feed.reading.sparks.map { $0.name }
+    #expect(listed == ["Vela", "Kiwi", "Polaris"])
+    let reader = door.reader(spark: made.id, device: made.device, whole: true, held: .reading)
+    let record = (reader as? ChatFixtureReader)?.reading
+    let empty = SparkTranscriptReading.of(runs: [], raw: [:], dropped: 0, whole: true)
+    #expect(record == empty)
+  }
+
   @Test("PC-L4: with no door the list stands as the home last said; a desktop that did not answer keeps its sparks")
   func lastWord() async throws {
     let feed = ChatFeed()
