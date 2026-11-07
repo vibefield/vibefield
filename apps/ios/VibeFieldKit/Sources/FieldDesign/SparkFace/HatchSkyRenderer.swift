@@ -18,6 +18,8 @@ import Metal
 public final class HatchSkyRenderer: @unchecked Sendable {
   public let device: any MTLDevice
   let queue: any MTLCommandQueue
+  /// FieldDesign's default library, kept for the hin probe (`hin`, f5h).
+  let library: any MTLLibrary
   let ground: any MTLRenderPipelineState
   let trail: any MTLRenderPipelineState
   let body: any MTLRenderPipelineState
@@ -47,6 +49,7 @@ public final class HatchSkyRenderer: @unchecked Sendable {
   public init(device: any MTLDevice) throws {
     self.device = device
     let library = try device.makeDefaultLibrary(bundle: .module)
+    self.library = library
     func function(_ name: String) throws -> any MTLFunction {
       guard let function = library.makeFunction(name: name) else {
         throw SparkStarError.unavailable("HatchSky.metal's \(name) in FieldDesign's library")
@@ -319,5 +322,40 @@ public final class HatchSkyRenderer: @unchecked Sendable {
         decode: nil, shouldInterpolate: false, intent: .defaultIntent)
     else { throw SparkStarError.unavailable("a frame's picture") }
     return image
+  }
+}
+
+extension HatchSkyRenderer {
+  /// IOS-12f's f5h — `hin` as this GPU and its compiler compute it, for each ask's (a, k1, b, k2)
+  /// (`hatch_sky_hin_probe`, which nothing draws). HatchSkyHinTests holds each answer, bit for bit, to the engine's
+  /// form.
+  func hin(_ asks: [SIMD4<Float>]) throws -> [Float] {
+    guard !asks.isEmpty else { return [] }
+    guard let function = library.makeFunction(name: "hatch_sky_hin_probe") else {
+      throw SparkStarError.unavailable("HatchSky.metal's hatch_sky_hin_probe in FieldDesign's library")
+    }
+    let pipeline = try device.makeComputePipelineState(function: function)
+    var count = UInt32(asks.count)
+    var zero: UInt32 = 0
+    guard
+      let ask = device.makeBuffer(
+        bytes: asks, length: MemoryLayout<SIMD4<Float>>.stride * asks.count, options: .storageModeShared),
+      let answer = device.makeBuffer(length: MemoryLayout<Float>.stride * asks.count, options: .storageModeShared),
+      let buffer = queue.makeCommandBuffer(), let encoder = buffer.makeComputeCommandEncoder()
+    else { throw SparkStarError.unavailable("a compute pass for hatch_sky_hin_probe") }
+    encoder.setComputePipelineState(pipeline)
+    encoder.setBuffer(ask, offset: 0, index: 0)
+    encoder.setBuffer(answer, offset: 0, index: 1)
+    encoder.setBytes(&count, length: MemoryLayout<UInt32>.stride, index: 2)
+    encoder.setBytes(&zero, length: MemoryLayout<UInt32>.stride, index: 3)
+    let width = pipeline.threadExecutionWidth
+    encoder.dispatchThreadgroups(
+      MTLSize(width: (asks.count + width - 1) / width, height: 1, depth: 1),
+      threadsPerThreadgroup: MTLSize(width: width, height: 1, depth: 1))
+    encoder.endEncoding()
+    buffer.commit()
+    buffer.waitUntilCompleted()
+    let answers = answer.contents().bindMemory(to: Float.self, capacity: asks.count)
+    return Array(UnsafeBufferPointer(start: answers, count: asks.count))
   }
 }

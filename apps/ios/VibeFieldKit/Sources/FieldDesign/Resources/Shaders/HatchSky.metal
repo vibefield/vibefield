@@ -35,6 +35,8 @@
 //   echo, orbs and glint, and its debug and outline views. Each sits behind a layer bit the hatch never sets; under
 //   BURST alone the body draws the shadow pocket, the shock ring, the rays and needles, and the flash;
 // - `spring` and `ramp5`, which only those read.
+// One kernel here is not the engine's: `hatch_sky_hin_probe` (IOS-12f's f5h, VF-PM's ruling 17:38:20Z), at the foot,
+// runs `hin` on the GPU for HatchSkyHinTests, which hold it bit for bit to the engine's form. Nothing draws it.
 // A newer engine is a design event (§2.10): both goldens move, and this file follows them.
 
 #pragma clang diagnostic ignored "-Wunused-variable"
@@ -478,4 +480,17 @@ fragment float4 hatch_sky_part_fragment(PartOut in [[stage_in]], constant Sky &s
   float4 c = in.vCol * gclamp(a, 0., 1.);
   c.rgb = hueRot(c.rgb, in.vHue);
   return float4(c.rgb, uNight > .5 ? 0. : c.a);
+}
+
+// ---------------------------------------------------------------- f5h's probe (IOS-12f; not the engine's)
+
+/// `hin` as this GPU and its compiler compute it, for each ask's (a, k1, b, k2). Nothing draws it: HatchSkyHinTests
+/// dispatches it (`HatchSkyRenderer.hin`) and holds each answer, bit for bit, to the engine's form.
+kernel void hatch_sky_hin_probe(
+  device const float4 *ask [[buffer(0)]], device float *answer [[buffer(1)]], constant uint &count [[buffer(2)]],
+  constant uint &zero [[buffer(3)]], uint i [[thread_position_in_grid]]
+) {
+  if (i >= count) return;
+  float4 q = ask[i];
+  answer[i] = hin(q.x, q.y, q.z, q.w, zero);
 }
