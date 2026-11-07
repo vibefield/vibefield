@@ -138,12 +138,14 @@ function tempRoot(): string {
 
 /** A floor in memory, for an order NativeLink's I/O never gives: every answer comes in a microtask. A subscribe is
  * answered `{transfers: []}`, once `gates`' promise for its number (from 1) resolves, if one is set, or refused with
- * `refusals`' error for its number; a pull is answered with its id, once `releaseAnswer()` is called if
- * `holdNextAnswer` was set when it was asked. `emit` speaks on the stream of the subscribe made last. */
+ * `refusals`' error for its number, or with `refuseRest` while it is set and `refusals` names none; a pull is
+ * answered with its id, once `releaseAnswer()` is called if `holdNextAnswer` was set when it was asked. `emit`
+ * speaks on the stream of the subscribe made last. */
 class MemoryFloor implements DrivePullsFloor {
   made = 0;
   readonly gates = new Map<number, Promise<void>>();
   readonly refusals = new Map<number, Error>();
+  refuseRest: Error | null = null;
   holdNextAnswer = false;
   releaseAnswer: () => void = () => undefined;
   emit: (payload: unknown, kind: "snapshot" | "delta") => void = () => undefined;
@@ -169,8 +171,8 @@ class MemoryFloor implements DrivePullsFloor {
     this.emit = onEvent;
     const gate = this.gates.get(made);
     if (gate !== undefined) await gate;
-    const refusal = this.refusals.get(made);
-    if (refusal !== undefined) throw refusal;
+    const refusal = this.refusals.get(made) ?? this.refuseRest;
+    if (refusal !== null) throw refusal;
     return { snapshot: { transfers: [] }, dispose: () => undefined };
   }
 }
@@ -335,7 +337,7 @@ describe("DR-3b — the drive's pulls over the floor's file transfer", () => {
     expect(errorData(exhausted)).toEqual(EXHAUSTED_GOLDEN);
   });
 
-  it("leaves a pull running while the stream's replay still lists it, and settles it on its delta", async () => {
+  it("leaves a pull running while the stream's replay and the reconnect's subscribe still list it, and settles it on its delta", async () => {
     const transfer = mockFileTransfer();
     const { mock, link, root, landsDir } = await floor(transfer);
     const drive = pulls(link, root);
@@ -347,10 +349,11 @@ describe("DR-3b — the drive's pulls over the floor's file transfer", () => {
     await until(() => transfer.running.size === 1, "the pull reached the floor");
     await roundTrip(link);
     const id = idOf(transfer, digest);
-    // the link drops and comes back: NativeLink replays the stream, and its snapshot still lists the pull
+    // the link drops and comes back: NativeLink replays the stream, and its snapshot still lists the pull; the
+    // reconnect lets that stream go and subscribes anew (`connected`), and that snapshot lists it too
     mock.killClients();
-    await until(() => asked(mock, SUBSCRIBE) === 2, "the stream's replay", 6_000);
-    await sleep(50);
+    await until(() => asked(mock, SUBSCRIBE) === 3, "the reconnect's own subscribe", 6_000);
+    await roundTrip(link);
     expect(state()).toBe("pending");
     mock.pushFileTransferDelta(completed(id, digest));
     await expect(landed).resolves.toEqual({ path: join(landsDir, `${digest}.${id}`) });
@@ -714,7 +717,8 @@ describe("DR-3b — the drive's pulls over the floor's file transfer", () => {
     await sleep(2 * last);
     expect(asked(mock, SUBSCRIBE)).toBe(subscribes);
     // each bound left its row foreign, and with no stream nothing else would clear one: a pull such a row refuses
-    // asks for the stream once, and that snapshot forgets every row the floor ended (here, at its own idle bound)
+    // asks for the stream once, at the series' next delay, and that snapshot forgets every row the floor ended
+    // (here, at its own idle bound)
     transfer.running.clear();
     transfer.refuseSubscribes = 0;
     const conflict = await drive.pull(ask(digestOf(1))).catch((error: unknown) => error);
@@ -762,7 +766,7 @@ describe("DR-3b — the drive's pulls over the floor's file transfer", () => {
     expect(asked(mock, SUBSCRIBE)).toBe(3);
   });
 
-  it("holds every accepted pull at a reconnect and asks the stream once more, so a refused replay leaves none waiting", async () => {
+  it("lets the stream go at a reconnect, holds every accepted pull and subscribes anew, so a refused replay leaves none waiting", async () => {
     const transfer = mockFileTransfer();
     const { mock, link, root, landsDir } = await floor(transfer);
     const id = idFor(1);
@@ -778,16 +782,110 @@ describe("DR-3b — the drive's pulls over the floor's file transfer", () => {
     const path = join(landsDir, `${digest}.${id}`);
     writeFileSync(path, "object bytes");
     transfer.running.delete(id);
-    // NativeLink replays the stream into a full mesh queue: refused, and its entry kept, silent until the next
+    // NativeLink replays the stream into a full mesh queue: refused, and its entry kept with no route until the next
     // reconnect (native-link.ts:1112-1126); it says "connected" once that replay has run (:494-501)
     transfer.refuseSubscribes = 1;
     mock.killClients();
-    // `connected()` holds the pull and asks the stream once more: that snapshot, built after its answer, omits it,
-    // and the lands rule settles it, long before the held bound (60 s here)
+    // `connected()` lets that entry go, holds the pull and subscribes anew: that snapshot, built after its answer,
+    // omits it, and the lands rule settles it, long before the held bound (60 s here)
     await until(() => state() !== "pending", "the pull, settled after the refused replay", 8_000);
     await expect(landed).resolves.toEqual({ path });
-    // at the start, the replay (refused), and the one the reconnect asked
+    // at the start, the replay (refused), and the one the reconnect made
     expect(asked(mock, SUBSCRIBE)).toBe(3);
+  });
+
+  it("lets the stream go at a reconnect whose replay is refused with no pull accepted, so a pull accepted after it settles on its end", async () => {
+    const transfer = mockFileTransfer();
+    const { mock, link, root, landsDir } = await floor(transfer);
+    const id = idFor(1);
+    const bound = 3_000;
+    const drive = pulls(link, root, { mintId: () => id, heldBoundMs: bound });
+    let reconnects = 0;
+    link.on("connected", () => {
+      void drive.connected().then(() => {
+        reconnects += 1;
+      });
+    });
+    await drive.start();
+    // no pull is accepted, and NativeLink replays the stream into a full mesh queue: refused, its entry kept with no
+    // route until the next reconnect (native-link.ts:1112-1126); it says "connected" once that replay has run
+    transfer.refuseSubscribes = 1;
+    mock.killClients();
+    await until(() => reconnects === 1, "the reconnect, handed to the pulls", 8_000);
+    // a pull accepted from here ends at the floor, its file in place, and its end goes on the stream the floor holds
+    // for this connection: the one the reconnect made, which `#subscription` names
+    const digest = digestOf(1);
+    const landed = drive.pull(ask(digest));
+    const state = settled(landed);
+    await until(() => transfer.running.size === 1, "the pull runs");
+    await roundTrip(link);
+    const path = join(landsDir, `${digest}.${id}`);
+    writeFileSync(path, "object bytes");
+    mock.pushFileTransferDelta(completed(id, digest));
+    await until(
+      () => state() !== "pending",
+      "the pull, settled after a refused replay",
+      bound + 2_000,
+    );
+    await expect(landed).resolves.toEqual({ path });
+    // at the start, the replay (refused), and the one the reconnect made
+    expect(asked(mock, SUBSCRIBE)).toBe(3);
+  });
+
+  it("holds a pull accepted at a reconnect whose replay and own subscribe are both refused, and a pull accepted later asks the stream, whose snapshot settles both", async () => {
+    const transfer = mockFileTransfer();
+    const { mock, link, root, landsDir } = await floor(transfer);
+    let minted = 0;
+    const bound = 4_000;
+    const drive = pulls(link, root, {
+      mintId: () => {
+        minted += 1;
+        return idFor(minted);
+      },
+      heldBoundMs: bound,
+      // past the bound: no retry of the series is made within this row, so only the later pull's own ask can serve
+      retryDelaysMs: [30_000],
+    });
+    let reconnects = 0;
+    link.on("connected", () => {
+      void drive.connected().then(() => {
+        reconnects += 1;
+      });
+    });
+    await drive.start();
+    const first = digestOf(1);
+    const landed = drive.pull(ask(first));
+    const state = settled(landed);
+    await until(() => transfer.running.size === 1, "the first pull runs");
+    await roundTrip(link);
+    // it ends at the floor, its file in place, and the link drops before its delta is sent
+    const path = join(landsDir, `${first}.${idFor(1)}`);
+    writeFileSync(path, "object bytes");
+    transfer.running.delete(idFor(1));
+    // the replay and the reconnect's own subscribe both meet a full mesh queue: refused, never run
+    transfer.refuseSubscribes = 2;
+    mock.killClients();
+    await until(() => reconnects === 1, "the reconnect, handed to the pulls", 8_000);
+    expect(asked(mock, SUBSCRIBE)).toBe(3);
+    expect(state()).toBe("pending");
+    // a later pull is accepted with no stream: held as it is accepted, and it asks the stream at once; that
+    // snapshot, built after both answers, omits the first pull, which the lands rule settles, long before its bound
+    const later = digestOf(2);
+    const second = drive.pull(ask(later));
+    // handled before anything can settle it, so an early rejection is never unhandled
+    second.catch(() => undefined);
+    await until(
+      () => state() !== "pending",
+      "the first pull, settled by the later one's ask",
+      bound + 2_000,
+    );
+    await expect(landed).resolves.toEqual({ path });
+    expect(asked(mock, SUBSCRIBE)).toBe(4);
+    // and the later pull runs on that stream: its end reaches it as a delta
+    const secondId = idOf(transfer, later);
+    await roundTrip(link);
+    mock.pushFileTransferDelta(completed(secondId, later));
+    await expect(second).resolves.toEqual({ path: join(landsDir, `${later}.${secondId}`) });
   });
 
   it("clears the series' timer at a node-up, which asks at once and opens the series again, and at a stop, which asks nothing more", async () => {
@@ -828,6 +926,101 @@ describe("DR-3b — the drive's pulls over the floor's file transfer", () => {
     expect(await held).toMatchObject({ kind: "UNAVAILABLE", retryable: true });
     await sleep(first + 300);
     expect(asked(mock, SUBSCRIBE)).toBe(3);
+  });
+
+  it("opens a second series at the list's first delay once a subscribe was answered after the first series", async () => {
+    const transfer = mockFileTransfer();
+    // the start's subscribe, the pull's own ask and the series' first retry meet a full mesh queue
+    transfer.refuseSubscribes = 3;
+    // the link's own deadline, short, so fieldd's TIMEOUT comes within the row
+    const { mock, link, root } = await floor(transfer, 1_000);
+    let minted = 0;
+    const delays = [130, 370, 910];
+    const drive = pulls(link, root, {
+      mintId: () => {
+        minted += 1;
+        return idFor(minted);
+      },
+      heldBoundMs: 6_000,
+      retryDelaysMs: delays,
+    });
+    await drive.start();
+    const timers = vi.spyOn(globalThis, "setTimeout");
+    cleanup.push(() => timers.mockRestore());
+    /** every series delay set, in order */
+    const series = () =>
+      timers.mock.calls.map((call) => call[1]).filter((delay) => delays.some((d) => d === delay));
+    // the first series: a pull accepted with no stream is held and asks at once; refused, the series retries at the
+    // list's first delay, then its second, which is answered, and an answered subscribe resets the series' count
+    const running = drive.pull(ask(digestOf(1)));
+    // handled before anything can settle it, so an early rejection is never unhandled
+    running.catch(() => undefined);
+    await until(
+      () => asked(mock, SUBSCRIBE) === 4,
+      "the first series, answered at its second retry",
+    );
+    await roundTrip(link);
+    expect(series()).toEqual([delays[0], delays[1]]);
+    // the second: a second pull is held (race#0 (b)), the floor RUNS its re-subscribe past fieldd's deadline, which
+    // sets the stream aside (W3-20), and refuses the plain subscribe that follows: the series opens again at the
+    // list's FIRST delay, never at the third the first series' count would give
+    transfer.subscribeUnanswered = true;
+    transfer.snapshotAfterAnswer = true;
+    const held = drive.pull(ask(digestOf(2))).catch((error: unknown) => error);
+    await until(() => transfer.replaced.length === 1, "the re-subscribe, run");
+    transfer.refuseSubscribes = 1;
+    await until(() => asked(mock, SUBSCRIBE) === 7, "the second series' first retry");
+    expect(series()).toEqual([delays[0], delays[1], delays[0]]);
+    // that retry is answered: its snapshot, built after both answers, omits the second pull (the lands rule)
+    expect(await held).toMatchObject({ reason: MESH_FILE_TRANSFER.FAILED_IO });
+  });
+
+  it("asks for the stream at the series' pace however fast a caller refused by rows it does not track retries, and nothing once the caller stops", async () => {
+    const memory = new MemoryFloor();
+    // the floor runs the re-subscribe past fieldd's deadline (TIMEOUT), and from there refuses every subscribe, its
+    // mesh queue full: no stream stands
+    memory.refusals.set(2, new RpcCallError("TIMEOUT", "the deadline passed", true));
+    memory.refuseRest = new RpcCallError("RESOURCE_EXHAUSTED", "mesh request queue is full", true);
+    const spacing = 200;
+    const drive = pulls(memory, tempRoot(), { heldBoundMs: 500, retryDelaysMs: [spacing] });
+    await drive.start();
+    // a snapshot the pull cannot be ordered against omits it and lists pulls a previous fieldd started; the pull is
+    // held, its re-subscribe reads TIMEOUT, the stream is set aside, and the held bound leaves the pull a row this
+    // fieldd does not track too: every one of DRIVE_LIMITS.PULLS_IN_FLIGHT slots is such a row
+    const rows = Array.from({ length: DRIVE_LIMITS.PULLS_IN_FLIGHT - 1 }, (_, n) => ({
+      transferId: idFor(51 + n),
+      peer: "peer-b",
+      root: ROOT,
+      digest: digestOf(51 + n),
+      bytes: 0,
+    }));
+    const ended = drive.pull(ask(digestOf(1))).catch((error: unknown) => error);
+    memory.emit({ transfers: rows }, "snapshot");
+    expect(await ended).toMatchObject({ reason: MESH_FILE_TRANSFER.FAILED_TIMEOUT });
+    // a caller retries RESOURCE_EXHAUSTED (retryable true) as fast as it is refused, for a second
+    const before = memory.made;
+    const began = Date.now();
+    const refusals: unknown[] = [];
+    while (Date.now() - began < 1_000) {
+      refusals.push(await drive.pull(ask(digestOf(9))).catch((error: unknown) => error));
+      await sleep(2);
+    }
+    // the ask the last refusal set, made
+    await sleep(2 * spacing);
+    const asks = memory.made - before;
+    const allowed = Math.floor((Date.now() - began) / spacing) + 1;
+    // refused far faster than the asks may come: one ask per refusal would break the bound below
+    expect(refusals.length).toBeGreaterThan(2 * allowed);
+    for (const refusal of refusals) {
+      expect(errorData(refusal as RpcCallError)).toEqual(EXHAUSTED_GOLDEN);
+    }
+    // asked, at the series' pace: each ask waits a delay of the list after the refusal that set it, and none is set
+    // while one is due or in flight, whatever the caller's rate
+    expect(asks).toBeGreaterThanOrEqual(1);
+    expect(asks).toBeLessThanOrEqual(allowed);
+    // the caller stopped: nothing more is asked
+    await sleep(2 * spacing);
+    expect(memory.made - before).toBe(asks);
   });
 
   it("settles a held pull with the stop's own refusal, and the stop clears its bound's timer", async () => {
