@@ -31,6 +31,12 @@ struct ChatFeedTests {
       switch method {
       case "compose.sparks.list": return sparks ?? .null
       case "needs.list": return needs ?? .null
+      // IOS-12f — New spark's asks: the home lists no agent and no profile, an agent's picker has no catalog, and the
+      // hatch answers the merged list's first spark
+      case "agent.providers": return .object(["providers": .array([])])
+      case "agents.profileSets.list": return .object(["sets": .array([])])
+      case "agent.models": return .object(["provider": params?["provider"] ?? .null, "refreshing": .bool(false)])
+      case "compose.sparks.hatch": return .object(["spark": sparks?["sparks"]?.arrayValue?.first ?? .null])
       default: return .object(["spark": .object([:])])
       }
     }
@@ -138,6 +144,47 @@ struct ChatFeedTests {
     #expect(openParams == .object(["spark": .string("sp-9q2wloft1"), "device": .string("dev-01HQ9S7XZ2")]))
     await settle { door.count("compose.sparks.list") >= 2 }
     #expect(door.count("compose.sparks.list") >= 2)
+  }
+
+  /// IOS-12f (f2; VF-PM 2026-11-07 13:11:45Z, (a): zero door changes) — New spark rides Chat's door, the home's own
+  /// client, beside the say and Wake: the home's agents, its Agent Profiles and an agent's models under a profile, then
+  /// the hatch with the sheet's params (the contracts' own fixture) and no device, since the home answers it itself.
+  @Test("New spark asks the home on Chat's door: its agents, its profiles, an agent's models, and the hatch, no device")
+  func newSparkRidesChatsDoor() async throws {
+    let feed = ChatFeed()
+    let door = Door()
+    feed.attach(door, home: "dev-01HQ9S7UD1")
+    await settle { feed.reading.heard }
+    let params = SparkHatchParams(
+      name: "Vela", seed: 2_846_113_027, agent: "claude",
+      modelSelection: AgentModelSelection(modelId: "claude-opus-5-5", controls: ["effort": "high"]),
+      profiles: ["work", "native"], thinksUnder: "work")
+    var made: SparkSummary?
+    do {
+      _ = try await feed.providers()
+      _ = try await feed.profileSets()
+      _ = try await feed.models(provider: "claude", profileSet: "work")
+      made = try await feed.hatch(params)
+    } catch {
+      Issue.record("New spark's ask was refused: \(error)")
+    }
+    let lists: Set<String> = ["compose.sparks.list", "needs.list", "agent.catalog"]
+    let asked = door.calls.map { $0.method }.filter { !lists.contains($0) }
+    #expect(asked == ["agent.providers", "agents.profileSets.list", "agent.models", "compose.sparks.hatch"])
+    let providers = door.calls.first { $0.method == "agent.providers" }?.params
+    let sets = door.calls.first { $0.method == "agents.profileSets.list" }?.params
+    let models = door.calls.first { $0.method == "agent.models" }?.params
+    let hatch = door.calls.first { $0.method == "compose.sparks.hatch" }?.params
+    let wantHatch = try HomeFixture.json("compose-sparks-hatch-params.valid")
+    let wantModels = AgentModelsParams(provider: "claude", profileSet: "work").json
+    #expect(providers == .object([:]))
+    #expect(sets == .object([:]))
+    #expect(models == wantModels)
+    #expect(hatch == wantHatch)
+    let device = hatch?["device"]
+    #expect(device == nil)
+    let name = made?.name
+    #expect(name == "Vela")
   }
 
   @Test("PC-L4: with no door the list stands as the home last said; a desktop that did not answer keeps its sparks")

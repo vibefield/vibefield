@@ -165,6 +165,25 @@ final class ChatFeed {
     return try SparkSayResult(json: try await door.call(SparkSay.method, params: params.json))
   }
 
+  // MARK: IOS-12f — New spark, on the home (VF-PM 2026-11-07 13:11:45Z: zero door changes, the sheet rides Chat's door)
+  // SKELETON (f2): the four asks are f3's; the row in ChatFeedTests is red until then.
+
+  /// The home's agents, for the sheet's menu (`agent.providers`).
+  func providers() async throws -> [AgentProviderSummary] { [] }
+
+  /// The home's Agent Profiles (`agents.profileSets.list`).
+  func profileSets() async throws -> [AgentProfileSet] { [] }
+
+  /// An agent's own picker under one of the home's profiles (`agent.models`).
+  func models(provider: String, profileSet: String) async throws -> AgentModelsResult {
+    throw FieldProductError(kind: "UNAVAILABLE", message: "New spark's reads are f3's", retryable: false)
+  }
+
+  /// Make the spark on the home (`compose.sparks.hatch`, `local`: no device, nothing forwarded).
+  func hatch(_ params: SparkHatchParams) async throws -> SparkSummary {
+    throw FieldProductError(kind: "UNAVAILABLE", message: "New spark's hatch is f3's", retryable: false)
+  }
+
   // MARK: IOS-12d — what waits on you
 
   /// Answer an item by its act's place (`needs.answer`, carried to the item's desktop). One answer at a time to an
