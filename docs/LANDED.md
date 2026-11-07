@@ -42270,3 +42270,57 @@ each (a). M-f1 carries A of the plan; B (@'s list on the phone and the handle in
   `isEnabled` and WorkspaceSheets' call-site opacity retires in the same commit, with its own kit rows and the away
   pair re-shot. A call-site opacity on Create alone is refused as the ad-hoc copy.
 - **M-f2** (f7a–f7), the IOS session's: B's DESIGN.md text, the at-rows goldens, @'s red rows and @'s list.
+
+## Item 243 — the packaged witness counts a credential-shaped name only when the runner holds it: a runtime's own per-run token is not the runner's credential (test-only; desk-gates row 34's first run)
+(2026-11-07; one commit on branch `lp/item243-packaged-credential`, cut by the LAUNCH lead (vibe-field-2a) with git
+plumbing over main `8e3662a0d`, so no checkout was touched: `9d208725d`. The packet is
+`lanes/launch/packaged-agent-credential/`. Landed with this entry by the fixer's land-stack, on VF-PM's GO.)
+Filed 2026-11-07 21:57Z by VF-PM, who numbered it and gave the GO on the LAUNCH lead's read of the red. Test-only:
+one test file; no product file, no gate script, no workflow, no lock. No DECISIONS row moves.
+
+**The red.** Nightly 42411304919, `nightly-20261107.2` at `bf33b76ef`, James's dispatch at 20:29:38Z (its plan read
+MAIN_GREEN true on push 120's verify `42407037224`).
+- The run's verify was green (20:30:21Z → 21:13:39Z). James approved the build's release-signing gate; the build ran
+  from 21:21:26Z.
+- Item 240's step was green: "Electron's binary" succeeded. In "Package, signed (J4)" the stage passed,
+  electron-builder signed, notarization succeeded, and the History package verifier passed (3 rows, the Developer
+  ID signature checked).
+- Then `verify-agents-package.mjs` (desk-gates row 34), its first run anywhere, went red at 21:53:18Z:
+  `packaged-typed-agent.test.ts:477`, 1 failed and 2 passed. Converge, sign, attest and publish were skipped.
+  Nothing was published, and the tag stands.
+
+**The finding: a filter broader than its comment** (no product defect).
+- :477 asserted that no name in the agent's environment matches `CREDENTIAL` (:152, which includes `TOKEN`).
+- It received exactly two names, verbatim in the log: `PUPPETEER_HOOK_TOKEN` and
+  `PUPPETEER_STATUSLINE_TOKEN_ENV_VAR`. Both are the runtime's own, set for the run it manages (puppeteer 0.3.3,
+  `puppeteer-adapter-claude`: `dist/driver.js:41`, the per-run token the agent's hooks call back with; and
+  `dist/launch/prepare.js:328`, which holds that variable's name).
+- What the comment states held: no APPLE_, CSC_ or other runner name reached the agent, though the step's
+  environment holds the signing and notarizing credentials; `leakedVariables` (:476) passed.
+- Row 34 had never run: it needs `FIELDD_TEST_AGENTS_PACKAGE`, and AR-7j's run 128 skipped its three rows. AR-7j's
+  Owed named this run ("the first signed package"). The puppeteer pin is unchanged since AR-7j (0.3.3).
+
+**What landed.** One commit, `9d208725d`: `packages/fieldd/test/packaged-typed-agent.test.ts`, +6 −2, at :475 and :477.
+- `CREDENTIAL` is unchanged. A name counts when it matches AND `Object.hasOwn(process.env, name)`: the runner's own
+  process holds it. The pair is spawned on the person's environment, so a runner credential that reached the agent
+  is one the runner holds.
+- The comment says so: a runtime's own per-run token is not the runner's credential, and the first signed run
+  read two.
+- Vendor-free (AR-L1): the change adds no runtime literal. The optional second line, naming the runtime's own
+  variables, would need one, so it was left out.
+
+**Validation.** This Mac, through the HOLD door (swap 0.00M at every read, every start at a 1-min load under 8, nice
+19), in a scratch worktree at `9d208725d` whose node_modules link to the main checkout at `8e3662a0d` (equal but for
+this file; tsc's file list read the worktree's test and the checkout's contracts). Logs in
+`lanes/launch/packaged-agent-credential/logs/`:
+- biome check of the file: 1 file, no fixes, rc 0 (21:59:12Z).
+- fieldd `tsc --noEmit`: rc 0, 0 errors (21:58:46Z → 21:58:58Z, 3.76 → 3.80).
+- The row's skip path, without `FIELDD_TEST_AGENTS_PACKAGE`: 1 file skipped, 3 tests skipped, rc 0 (21:59:21Z). It
+  ran under a config without fieldd's globalSetup, which runs a cargo build on the shared target.
+- The predicate, by hand: of `PATH`, `HOME`, `RUNTIME_HOOK_TOKEN` and `APPLE_DUMMY_FOR_243` with only the last in
+  the environment, the old filter kept two and the new one keeps `APPLE_DUMMY_FOR_243` alone.
+- Not run: the row itself, which needs a packaged pair. Its witness is the next release build.
+
+**Owed.**
+- Row 34 on the next release build, green, and the steps after it in "Package, signed": they have not run on CI
+  since LP-1, TD-4 and LP-6b landed.
