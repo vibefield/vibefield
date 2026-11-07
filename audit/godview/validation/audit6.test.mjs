@@ -39,7 +39,7 @@ test("pinned source inventory matches the model contract counts", () => {
   assert.equal(index.partial.provenanceComplete, false);
   assert.equal(index.partial.firstHalfCommit, "68dde825266e63ba63a1b07f7fcfd1e85f868b1f");
   assert.equal(index.partial.candidateStatus, "static-not-live");
-  assert.equal(index.partial.secondHalfCommit, "4d86127a767f382fbfe5ec7969b2c9572b47b9b3");
+  assert.equal(index.partial.secondHalfCommit, "d29658187de7a765837d01c20b456b74c857185f");
   assert.equal(index.partial.accountTraceCommit, "08b5d849177685662b43e0e3a4e6bd7d32ac2cdf");
   assert.equal(index.partial.delivery, "incomplete");
   assert.equal(index.partial.blockers.first.directNoYes, 0);
@@ -62,8 +62,14 @@ test("pinned source inventory matches the model contract counts", () => {
     "adapter.pi": "never-ledger",
   });
   assert.equal(index.partial.blockers.costReview.independentSignoff, "pending");
-  assert.ok(index.partial.blockers.accountHostPending.includes("adapter.grok"));
-  assert.equal(index.partial.blockers.accountHostPending.includes("adapter.claude"), false);
+  assert.deepEqual(index.partial.blockers.accountHostPending, []);
+  assert.deepEqual(index.partial.blockers.accountVibefieldOnly.sort(), [
+    "adapter.grok",
+    "adapter.hermes",
+    "adapter.kimi",
+    "adapter.opencode",
+    "adapter.pi",
+  ]);
   assert.equal(index.sharedMap.adapterSpecificUiResolved, false);
   assert.equal(index.sharedMap.uiResolutionMeaning, "shared-anchor-bookkeeping");
   assert.equal(index.sharedMap.uiResolutionCounts.resolvedUnknown, 265);
@@ -428,9 +434,12 @@ test("ACP cost stops at omission and status names the decision path", () => {
   assert.equal(grokAccount.reading.success, false);
   assert.equal(grokAccount.reading.falseFullSuccess, false);
   assert.equal(grokAccount.reading.provesRuntimeUnreachable, false);
-  assert.match(grokAccount.reading.readerNote, /VibeField host omits/);
-  assert.match(grokAccount.reading.readerNote, /Puppeteer Godview host/);
-  assert.match(grokAccount.reading.readerNote, /not accepted/);
+  assert.equal(grokAccount.reading.channels.uiReachable, "no");
+  assert.equal(grokAccount.reading.channels.sourceScope, "host-supplied");
+  assert.match(grokAccount.reading.readerNote, /VibeField host only/);
+  assert.match(grokAccount.reading.readerNote, /not a global adapter impossibility/);
+  assert.match(grokAccount.reading.readerNote, /non-empty/);
+  assert.match(grokAccount.reading.readerNote, /monitor-host.ts:62,79/);
   const profile = buildCell({
     model: audit.model,
     traces: audit.traces,

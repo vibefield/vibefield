@@ -154,10 +154,13 @@ export function readField(envelope) {
     "Reader presence, adapter emission, runtime fallback, and the selected state's painted value stay separate.";
   if (accountField) {
     adapterPathReader = "host-scoped";
+    const vibefieldOnly = /VibeField host only/i.test(notes);
     const hostYes = accountHostConflict(envelope);
-    readerNote = hostYes
-      ? "Envelope uiReachable is yes while the note says a VibeField row never fills account. Host scope is pending the owner's correction. This yes is not accepted. No adapter emits account. The VibeField host omits it. The Puppeteer Godview host can set a profile label when a profiles service exists, and omits it for ACP. accountUsage feeds the usage column, not field.account."
-      : "No adapter emits account. derive copies host.account. The VibeField host omits it for all 10 adapters. The Puppeteer Godview host can set a profile label for adapters with a profiles service, and omits it for ACP. Envelope uiReachable follows the VibeField consumer and is not a global impossibility. accountUsage feeds the usage column, not field.account. Static source-read, not a live sample.";
+    readerNote = vibefieldOnly
+      ? "uiReachable no is the VibeField host only. sourceScope is host-supplied. hostRunFromSummary never sets account, so that host does not supply the value. This is not a global adapter impossibility. The audit target is Puppeteer source. Under the Puppeteer Godview host, monitor-host.ts:62,79 sets account from accountLabel(profileId) only when profileId is set and the label is non-empty. accountUsage feeds the usage column, not field.account."
+      : hostYes
+        ? "Envelope uiReachable is yes while the note says a VibeField row never fills account. Host scope is pending the owner's correction. This yes is not accepted. No adapter emits account. The VibeField host omits it. The Puppeteer Godview host can set a profile label when a profiles service exists, and omits it for ACP. accountUsage feeds the usage column, not field.account."
+        : "No adapter emits account. derive copies host.account. The VibeField host omits it for all 10 adapters. The Puppeteer Godview host can set a profile label for adapters with a profiles service, and omits it for ACP. Envelope uiReachable follows the VibeField consumer and is not a global impossibility. accountUsage feeds the usage column, not field.account. Static source-read, not a live sample.";
   } else if (profileField) {
     adapterPathReader = "host-then-native";
     readerNote =
@@ -420,6 +423,14 @@ export function semanticBlockers(traces) {
     },
     accountHostPending: rows
       .filter((trace) => accountHostConflict(trace.envelope))
+      .map((trace) => trace.adapterId),
+    accountVibefieldOnly: rows
+      .filter(
+        (trace) =>
+          trace.fieldId === "field.account" &&
+          trace.envelope?.classification?.uiReachable === "no" &&
+          /VibeField host only/i.test(envelopeNotes(trace.envelope)),
+      )
       .map((trace) => trace.adapterId),
     delivery: "incomplete",
     candidateStatus: "static-not-live",

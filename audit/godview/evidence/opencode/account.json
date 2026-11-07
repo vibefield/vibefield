@@ -59,7 +59,7 @@
     {
       "order": 2,
       "name": "monitorHostRun",
-      "effect": "Separate Puppeteer Godview host, not VibeField: account is the profile label when profileId is set.",
+      "effect": "Puppeteer Godview host only. account is accountLabel(profileId) when profileId is set and the label is non-empty. Otherwise the field stays absent. The VibeField host never calls this.",
       "source": {
         "repo": "puppeteer",
         "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
@@ -182,7 +182,7 @@
     "views": [
       "view.list"
     ],
-    "notes": "Views listed are confirmed readers in the five shipping monitor views."
+    "notes": "sourceScope=host-supplied. sourceRef=packages/monitor/src/backend/derive.ts:273 host.account copy. staticPresence=host-dependent. Envelope classification.uiReachable=no is the VibeField host only. hostRunFromSummary (packages/fieldd/src/agent-monitor.ts:223-266) copies profileId and profileSet and never account, so the value is never supplied. AgentList.tsx:151 and :185 read agent.account when it is present, and that reader does not make the value reachable under this host. This is not a global absence. Under the Puppeteer Godview host, monitorHostRun (apps/godview/src/main/monitor-host.ts:62,79) sets account from accountLabel(profileId) only when profileId is set and that label is non-empty. A profiles service (providers.ts:317) can supply that profile. A run with no profile leaves the field absent. accountUsage (no accountUsage service) feeds the usage column (packages/views/src/usage/account-usage.ts:63-82), not field.account. GV2 trace 08b5d849177685662b43e0e3a4e6bd7d32ac2cdf."
   },
   "absence": {
     "onMissing": "record-absent",
@@ -196,11 +196,11 @@
   "classification": {
     "modelSupported": "yes",
     "adapterEmittable": "no",
-    "uiReachable": "yes"
+    "uiReachable": "no"
   },
   "verification": {
     "status": "source-read",
     "owner": "GV-AUDIT4",
-    "notes": "Account trace audit/godview/contracts/account-trace.md at 08b5d849177685662b43e0e3a4e6bd7d32ac2cdf. No adapter emits field.account. derive.ts:273 copies host.account only. Under the VibeField host, hostRunFromSummary (agent-monitor.ts:223-266) copies profileId and profileSet and never account, so the field is unreachable and always absent. The Puppeteer Godview host is separate: monitorHostRun (apps/godview/src/main/monitor-host.ts:62,79) sets account from the profile label when profileId is set. This adapter has a profiles service (providers.ts:317). Its accountUsage service (no accountUsage service) feeds the usage column (views/src/usage/account-usage.ts:63-82), not field.account. List still reads agent.account at AgentList.tsx:151 and :185, but a VibeField row never fills it. Audit pin is puppeteer 748d015, newer than the 0.3.3 package vibefield ships (tag v0.3.3, commit 52d09c8e). This record does not compare 0.3.3 behavior. A transform effect ending in [post-0.3.3] cites a puppeteer file whose text differs from 52d09c8e."
+    "notes": "sourceScope=host-supplied. sourceRef=packages/monitor/src/backend/derive.ts:273 host.account copy. staticPresence=host-dependent. Envelope classification.uiReachable=no is the VibeField host only. hostRunFromSummary (packages/fieldd/src/agent-monitor.ts:223-266) copies profileId and profileSet and never account, so the value is never supplied. AgentList.tsx:151 and :185 read agent.account when it is present, and that reader does not make the value reachable under this host. This is not a global absence. Under the Puppeteer Godview host, monitorHostRun (apps/godview/src/main/monitor-host.ts:62,79) sets account from accountLabel(profileId) only when profileId is set and that label is non-empty. A profiles service (providers.ts:317) can supply that profile. A run with no profile leaves the field absent. accountUsage (no accountUsage service) feeds the usage column (packages/views/src/usage/account-usage.ts:63-82), not field.account. GV2 trace 08b5d849177685662b43e0e3a4e6bd7d32ac2cdf. Audit pin is puppeteer 748d015, newer than the 0.3.3 package vibefield ships (tag v0.3.3, commit 52d09c8e). This record does not compare 0.3.3 behavior. A transform effect ending in [post-0.3.3] cites a puppeteer file whose text differs from 52d09c8e."
   }
 }

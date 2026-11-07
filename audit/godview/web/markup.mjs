@@ -167,7 +167,7 @@ export function renderShell(index, cell) {
         Object.entries(index.partial?.blockers?.costReview?.second?.branches ?? {})
           .map(([id, branch]) => `${id} ${branch}`)
           .join("; ") || "none",
-      )}. Second-half account host scope still pending: ${escapeHtml((index.partial?.blockers?.accountHostPending ?? []).join(", ") || "none")}. Independent signoff is pending.</p>
+      )}. Account uiReachable no scoped to the VibeField host: ${escapeHtml((index.partial?.blockers?.accountVibefieldOnly ?? []).join(", ") || "none")}. That no is not a global impossibility. The Puppeteer Godview host can still set account when profileId has a nonempty label. Independent signoff is pending.</p>
       <p>Render denominator ${escapeHtml(String(index.rendering?.counts ? Object.values(index.rendering.counts).reduce((sum, value) => sum + value, 0) : "—"))}. Actual renders: ${escapeHtml(String(index.rendering?.bodyRendered ?? "—"))}. Exercised same-view covered-by: ${escapeHtml(String(index.rendering?.coveredBy ?? "—"))}. Covered-by does not add body coverage. Coverage gaps: ${escapeHtml(String(index.rendering?.coverageGap ?? "—"))}. Not-applicable: ${escapeHtml(String(index.rendering?.counts?.["not-applicable"] ?? "—"))}, proof ${escapeHtml(String(index.rendering?.notApplicableProof ?? "—"))}. Prior 302 not-applicable claim validated: no. Environment gaps: ${escapeHtml(String(index.rendering?.counts?.["environment-gap"] ?? "—"))}. Swarm body painted: no. Environment versus source cause is under investigation.</p>
       ${(index.sharedMap?.openEnvelopeIssues ?? []).map((issue) => `<p>${escapeHtml(issue)}</p>`).join("")}
       ${cell.graphOrder ? `<p>${escapeHtml(cell.graphOrder.note)}</p>` : ""}

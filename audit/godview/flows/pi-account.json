@@ -31,7 +31,7 @@
     {
       "id": "godview",
       "layer": "adapter",
-      "label": "Puppeteer Godview host sets account from the profile label",
+      "label": "Puppeteer Godview host sets account from the profile label only when a profile exists",
       "source": {
         "repo": "puppeteer",
         "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
@@ -70,7 +70,7 @@
     {
       "id": "absent",
       "layer": "absence",
-      "label": "Under the VibeField host field.account is always absent"
+      "label": "Under the VibeField host uiReachable is no and field.account is always absent"
     }
   ],
   "edges": [
