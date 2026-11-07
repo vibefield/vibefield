@@ -40978,3 +40978,69 @@ re-cut at 07:25Z.
 **Owed.**
 - James's paste of App Privacy option B, read against the privacy policy's Tailscale paragraph before submission.
 - The next verify of main that includes `aa1f10bbb`.
+
+## SP-7b's 7b-1 — the phone holds a History ticket by both roads: at its home the owner mints this person's phone its index serve's tailnet set, and through its home the home carries the phone's ask and hands the owner's answer back untouched
+(2026-11-07; two commits, `89ba28b41` (red) and `41331646e`, on main `2334fe3b8`, fd's, in
+`/Volumes/SamsungRed/lanes/item190`. They were cut on `5d58c8731` as `90d2917f1` → `fc7a731db` (branch `sp7b-1`; the
+first pair, `sp7b-1-r0`, has the same tree, and its messages counted the 5 skipped rows as passing), re-cut on
+`b833d4116` as `9cd36802b` → `d3e1c96dc` (branch `sp7b-1-mint`), the tip the run read, and then onto `2334fe3b8`
+(`lanes/sp7b/mints/sp7b1-land/recut-proof.txt`: range-diff `=`, both patch-ids equal, the tree equal to the merge-tree).
+M207 is `41331646e`, landed 2026-11-07T08:37:39Z, run 207.)
+James ruled `sp7b-swift-rosetta-reader` (b) on the board at 22:56Z ("all leans"): the phone reads History bodies
+from rosettad by grant, through a rosetta-owned Swift client. The plan is `lanes/sp7/SP-7b-plan.md` v0.1 (23:02Z).
+VF-PM accepted D1–D5 and the two EL8s (D6) at 23:05Z, and D4 corrected to (B') at 23:07Z (DECISIONS "SP-7b").
+
+**What.** SP-7b moves the phone's History read off the desktop daemon and onto rosettad's own socket (SP-D5 (a)).
+7b-1 is its desktop half, the ticket.
+- Before, `index.openTicket` answered a `tailnet` caller UNAVAILABLE `direct-plane-unbuilt`, at its home and
+  through it, because the home refused to carry the phone's ask.
+- After, the phone holds the ticket by both roads. The kit's reader (7b-2) comes after rosetta's Swift client (RO-38)
+  and its EL8.
+
+**The fix.**
+- `89ba28b41` (red), test-only: `index-forward.test.ts` 10 → 12 rows and `index-open-ticket.test.ts` 28 → 30.
+  - The home's half: the ask goes whole, envelope and all, and the owner's tailnet set comes back as the owner
+    answered it, with no route asked for or held. An answer that is no ticket of the owner's is INCOMPATIBLE, and
+    doors only the owner can dial are `doors_not_published`, as for a window.
+  - The owner's half: the minter alone; one daemon, whose grant opens the session on rosettad's listener with an
+    audited mint; and two daemons, the phone asking its home B for A's session. A `tailnet` caller who is not this
+    person is FORBIDDEN_SCOPE.
+  - Each row fails on an assertion at the red: the phone's ask is read as an outcome.
+- `41331646e`, the fix:
+  - the owner (`index-serve.ts`): `check` admits a self `tailnet` principal, and `#endpointsFor` gives it the live
+    serve's TAILNET set (`doors_not_published` with none). The grant is `read` alone, keyed by the phone's own login
+    and node;
+  - the home (`index-forward.ts`): `refuseCarry` carries a self `tailnet` principal's ask. Its answer is read first
+    by `ownersTicket`, the check `adopt` now shares, and then passes back as the owner answered it. The phone's node
+    dials the owner's serve itself;
+  - D4 (B'): `direct-plane-unbuilt` stays in the contract as an older owner's answer, since desktops run different
+    builds. fieldd stops answering it, and dated notes say so at `INDEX_TICKET`, `IndexTicketUnavailableDetails`,
+    the METHODS comment, the renderer's `ticketRefusalWords` and the fixture's contract row. Comments only, so no
+    `pnpm gen` churn.
+
+**The lights.**
+- a9's rows on the old mini at `fc7a731db` (06:51Z, as briefed): red-b `7 failed, 30 passed, 5 skipped` (42); tip-b
+  `37 passed, 5 skipped`; tsc 0; biome 0 over 9 files, no warning; lane ×3 index-forward 12, index-open-ticket 25 + 5
+  skipped, agent-index-history 12, history-doors 57. `FIELDD_ROSETTAD_BIN` named no rosettad for these rows, so the 5
+  stayed skipped (`lanes/sp7/a9-sp7b1-results`, SUMS-a9 5050db67).
+- Run 207, a9's, on the old mini: GREEN at `d3e1c96dc` on `b833d4116`, armed at 1-min load 2.31, verify 0 at 08:30:44Z:
+  vitest 14,038 passed, 0 failed, 21 skipped over 961 files, node 474, cargo 606/0 over 37 binaries, biome 3,484 files
+  and 73 warnings. Against run 203 only `index-forward` 10 → 12 and `index-open-ticket` 28 → 30 moved, missing [] and
+  extra [] (`lanes/ts6/logs/mini/run207`). Run 206 before it was the host's red, not this tip's: a9's filler had rebuilt
+  mille's addon with the lane's path, so the build census stopped it before vitest or cargo ran.
+- The land is a re-cut whose base move carried code: the EL8 to rosetta 0.1.4 (`8c03c4c5a`), beside the phone's privacy
+  manifest and docs. It shares two files with this stack, `agent-index.ts` and `registries.ts`, and this stack's hunks
+  in both are comment-only. Run 207 did not read that base; main's next verify is the first that does.
+- What moved, the fixer's labels: the three contracts files and `session-port.ts` are comment-only, so no wire shape
+  moved. The behaviour move is the fieldd door, and it is security-relevant: a self `tailnet` principal now gets a read
+  grant, any other tailnet caller is refused FORBIDDEN_SCOPE, and this build no longer answers `direct-plane-unbuilt`,
+  which stays in the pair for an older owner.
+- No test ran on the MacBook (the HOLD). The code was held to biome's width by hand.
+
+**Owed.**
+- The next verify of main that includes `41331646e`: the first to cover 7b-1's code with the EL8 to rosetta 0.1.4.
+- 7c, the phone's terminal asks through its home: 7c-1 (fieldd's key for the phone behind its home) and 7c-2 (the
+  kit), one stack on its own mint. Until 7c-1 lands, the index grant's `cid` for the phone behind its home names
+  the home's connection (`#conn-N`), not the phone; 7c-1 keys it by the phone's roster device.
+- RO-38, rosetta's `clients/swift` (its PR is James's, by hand), then the EL8 to its release, then 7b-2, the kit's
+  direct History read (W1 on the old mini).
