@@ -1784,7 +1784,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   - **Reduced motion:** no falling star and no flight; the face fades in, and the sheet appears and leaves by opacity
     alone.
   - **On the phone** (IOS-12f, 2026-11-07; VF-PM's ruling on its Q2): the same sheet at touch pitch, in the system's
-    sheet at its large detent. One rule read twice: §8 "The phone's Chat" holds its numbers.
+    sheet at its large detent. One rule read twice: §8 "The phone's Chat" holds its numbers, and its one
+    difference, a keyboard that waits until the name is pressed.
 - **Chat's thread — the spark's conversation, drawn** (TH-1, track CO; the thread's round ruled by James on the CO
   round's page, `Druyc3Ua6BWycRe1SzzeCz`, 2026-11-02 and 2026-11-04, every mark at its lean but TH-Q3 (b), and by
   VF-PM 2026-11-04 05:01Z and 23:22Z, TH0-Q1…Q15; the plan `step0-th.md`). The thread is the spark's own conversation,
@@ -6436,8 +6437,10 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       is the flat star on that ground, never a blank.
     - **The name:** centred 16 under the sky, 30 semibold at −0.02em, 46 tall, at most the sheet's width less ↻ and
       16 at each side. It opens holding a suggested star name, the first one no spark on the home holds. The
-      keyboard does not rise as the sheet opens, since it would cover the agent and the foot. Pressing the name
-      raises it with the name selected, so typing replaces it. A name is 1–32 characters (`SparkName`).
+      keyboard does not rise as the sheet opens. That is the phone's one difference from the Mac's sheet, whose
+      name takes the keyboard at open (VF-PM 12:48:21Z): at touch pitch the keys would cover the agent and the
+      foot. Pressing the name raises them with the name selected, so typing replaces it. A name is 1–32
+      characters (`SparkName`).
     - **↻ Another face** (NS-D2 B): 44 round beside the name, in the fill, `reset` 18. It deals a new seed and the
       hatch plays again; the name stays. Pressed, it turns −60° on the pop curve.
     - **The agent:** one pill under the name, 44 tall, corners 22, in the fill: the agent's mark at 20, then its
