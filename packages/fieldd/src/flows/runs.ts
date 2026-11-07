@@ -421,6 +421,15 @@ interface Closing {
   readonly calls?: number | undefined;
 }
 
+/** Slice 13's fold 3 (the fold 2 skeptic's #2) — the agents an end ends, as its ONE read finds them (#agentsOf), each
+ * with its call (`agentOf`): the run's orphans, and every live `sessions.ofRun` row by its `call`. It travels from
+ * that read to #closeEnd, so endSteps finds the agent of a step whose session was never written on every road, a run
+ * no LiveRun drives among them. Never a handed session: `ofRun` reads by origin. */
+interface EndAgents {
+  readonly agents: readonly string[];
+  readonly agentOf: ReadonlyMap<number, string>;
+}
+
 /** Slice 13 (Q12 (b)) — what #finishStop hands #finish for a run no LiveRun drives: the head and the answers its
  * journal holds, and the call lines it counts. */
 interface Unlived {
@@ -494,18 +503,22 @@ function movedOut(start: FlowRunStart, moved: readonly FlowRunRecordStep[]): Flo
  * journal answers (`answered`) is skipped, so the write's settle reads it answered, never ended (XX4: #replace settles
  * after `whole`); and one whose agent's end the floor refused (`refused`) stays open in its true state, uncounted
  * (Q5 (b), the review's reading: the interim `working` is the honest one). A step's agent is its session, or, for a step
- * whose session was never written, the run's orphan by its call (`orphans`): an agent that landed past the end (Q8
- * (a), fold 1's `landed`).
+ * whose session was never written, the agent of its call in the end's one read (`agentOf`, EndAgents): an agent that
+ * landed past the end (Q8 (a), fold 1's `landed`), one a failed start left (Y1), or any live row of that read
+ * (`sessions.ofRun`, by its `call`). A handed session is never in it.
  * *Fold 2 (2026-11-07; the fold skeptic's #1): it matched a step's session alone, so a landed agent whose end the floor
- * refused left its step `ended` while it worked on; the run's orphan is matched now, as R40f has it for a session.* */
+ * refused left its step `ended` while it worked on; the run's orphan is matched now, as R40f has it for a session.*
+ * *Fold 3 (2026-11-07; the fold 2 skeptic's #2): it matched the run's orphans alone, and a run no LiveRun drives has
+ * none (#finishStop's no-`end` road, which slice 14's boot reaches), so there it matched by session alone again; the
+ * end's one read now names each agent's call.* */
 function endSteps(
   start: FlowRunStart,
   answered: ReadonlyMap<number, Answered> | undefined,
   refused: ReadonlySet<string>,
-  orphans: ReadonlyMap<number, string> | undefined,
+  agentOf: ReadonlyMap<number, string>,
 ): FlowRunStart {
   const ending = start.open.filter((step) => {
-    const agent = step.session ?? orphans?.get(step.call);
+    const agent = step.session ?? agentOf.get(step.call);
     return answered?.has(step.call) !== true && (agent === undefined || !refused.has(agent));
   });
   return ending.length === 0
@@ -922,7 +935,7 @@ export class FlowRuns {
    * log and never holds the Stop. A non-Stop end pauses nothing (K31). The window, stated and OWED: a run's line in
    * flight at the Stop lands after this read, and its turn runs on, unpaused and unheard. */
   #pause(run: FlowRunId, live: LiveRun, record: FlowRunRecord): void {
-    const started = new Set(this.#agentsOf(run, live.orphans));
+    const started = new Set(this.#agentsOf(run, live.orphans).agents);
     const paused = new Set<string>();
     for (const step of record.open) {
       const session = step.session;
@@ -958,13 +971,19 @@ export class FlowRuns {
    * *Fold 1 (2026-11-07; the green skeptic's #1): an orphan the same read lists as exited is gone already, so it is
    * neither ended nor counted, as an exited `ofRun` row is not. An orphan the read omits (it lags), or every orphan when
    * the read throws, is ended and counted as it stands: so one that exited unseen counts one too many, the read's lag
-   * (AA3).* */
-  #agentsOf(run: FlowRunId, orphans: ReadonlyMap<number, string> | undefined): string[] {
+   * (AA3).*
+   * *Fold 3 (2026-11-07; the fold 2 skeptic's #2): the same one read also names each agent's call (EndAgents'
+   * `agentOf`): each live row's `call`, and each orphan's own, which stands over a row of its call. An exited agent is
+   * in neither list: it is never ended, so never refused. No end reads `ofRun` twice.* */
+  #agentsOf(run: FlowRunId, orphans: ReadonlyMap<number, string> | undefined): EndAgents {
     const agents = new Set<string>();
     const exited = new Set<string>();
+    const agentOf = new Map<number, string>();
     try {
-      for (const session of this.ports.sessions.ofRun(run))
+      for (const session of this.ports.sessions.ofRun(run)) {
         (session.live ? agents : exited).add(session.runtimeRunId);
+        if (session.live) agentOf.set(session.call, session.runtimeRunId);
+      }
     } catch (error) {
       this.#logger.warn(
         "fieldd.flows.run.agents",
@@ -972,8 +991,12 @@ export class FlowRuns {
         { run, error: messageOf(error) },
       );
     }
-    for (const orphan of orphans?.values() ?? []) if (!exited.has(orphan)) agents.add(orphan);
-    return [...agents];
+    for (const [call, orphan] of orphans ?? []) {
+      if (exited.has(orphan)) continue;
+      agents.add(orphan);
+      agentOf.set(call, orphan);
+    }
+    return { agents: [...agents], agentOf };
   }
 
   /** Q5 (b) — each agent ended, at once (`Promise.allSettled`): the sessions whose end the floor refused, each said
@@ -1047,7 +1070,7 @@ export class FlowRuns {
         this.#replace(
           run,
           (start) => ({
-            ...endSteps(start, settles.answered, new Set(), settles.orphans),
+            ...endSteps(start, settles.answered, new Set(), new Map()),
             state: kept.state,
             calls,
             endedAt: this.#now().toISOString(),
@@ -2087,7 +2110,9 @@ export class FlowRuns {
     this.#lagging(run, entry, args);
   }
 
-  /** Every handed session of a run let go (9b): at its end, and at fieldd's own stop.
+  /** Every handed session of a run let go (9b), each through #unhand. Its three callers: #finish, at the run's end;
+   * #woken's unkept road, for a run whose record or journal reads as none VibeField keeps; and close(), at fieldd's own
+   * stop.
    * *Fold 1 (2026-11-07; the green skeptic's #6): each let-go is caught and said in fieldd's log, so a throw never
    * leaves #finish past its `#live.delete` with #closeEnd skipped (its Stop then waiting on to close()), nor close()
    * before it has settled its Stops and stopped its hosts.* */
@@ -2096,12 +2121,16 @@ export class FlowRuns {
     live.hands.clear();
   }
 
-  /** THE ONE LET-GO of a handed session (9b), caught: a throw is said in fieldd's log (`fieldd.flows.step.unhand`)
-   * and never thrown into the road that let it go. Its three: #letGo, at an end and at fieldd's own stop; #answer, at
-   * the step's answer, so the answer is journaled and the turn end that answered it returns; and #launched, for a start
-   * that settles on a step its run no longer waits on, inside that start's `try`, so a let-go that throws is never a
-   * start that threw.
-   * *Fold 2 (2026-11-07; the builder's #14): #answer's and #launched's let-gos were uncaught.* */
+  /** A handed session's let-go (9b), caught: a throw is said in fieldd's log (`fieldd.flows.step.unhand`) and never
+   * thrown into the road that let it go. Every let-go in the runs goes through it: #letGo's (#finish, #woken's unkept
+   * road, close()); #answer's, at the step's answer, so the answer is journaled and the turn end that answered it
+   * returns; and #launched's, for a start that settles on a step its run no longer waits on, inside that start's `try`,
+   * so a let-go that throws is never a start that threw. The one let-go outside the runs, startStep's for a handed start
+   * whose send threw, is caught in steps.ts and said as the same event, and that start rethrows the send's error.
+   * *Fold 2 (2026-11-07; the builder's #14): #answer's and #launched's let-gos were uncaught.*
+   * *Fold 3 (2026-11-07; the fold 2 skeptic's #1): this said it was "THE ONE LET-GO", with three users, while startStep's
+   * own let-go was a fourth, uncaught; and it placed #letGo at an end and at fieldd's own stop, leaving out #woken's
+   * unkept road.* */
   #unhand(run: FlowRunId, call: number, unhand: () => void): void {
     try {
       unhand();
@@ -2190,7 +2219,7 @@ export class FlowRuns {
       // (a)), and is refused retryably, so the item waits on for the next life, as a refused `stopping` does
       if (this.#closing) throw closingRefused();
       this.#letGoOf(run);
-      await this.#endAgents(run, this.#agentsOf(run, undefined));
+      await this.#endAgents(run, this.#agentsOf(run, undefined).agents);
       return { outcome: "done" };
     }
     await this.stop(run);
@@ -2480,12 +2509,12 @@ export class FlowRuns {
     };
     const starts = [...(live?.starts ?? [])];
     if (starts.length === 0) {
-      const agents = this.#agentsOf(run, live?.orphans);
-      if (agents.length === 0) {
-        this.#closeEnd(closing, 0, new Set());
+      const read = this.#agentsOf(run, live?.orphans);
+      if (read.agents.length === 0) {
+        this.#closeEnd(closing, 0, new Set(), read.agentOf);
         return;
       }
-      void this.#tail(closing, starts, agents, live?.orphans);
+      void this.#tail(closing, starts, read, live?.orphans);
       return;
     }
     void this.#tail(closing, starts, undefined, live?.orphans);
@@ -2495,11 +2524,12 @@ export class FlowRuns {
    * settled, then the agents its steps started read (by origin, a landed agent among them) and ended at once; then
    * #closeEnd. After each await it reads `#closing`, and leaves at fieldd's own stop (Q17): a Stop's run stays
    * `stopping` for the boot, any other its state before the end, and replays. Waiting there would let a hung end hang
-   * fieldd's stop. */
+   * fieldd's stop. The agents are read once, here or in #finish (`read`), and each one's call goes on to #closeEnd with
+   * them (EndAgents, fold 3). */
   async #tail(
     closing: Closing,
     starts: readonly Promise<void>[],
-    read: readonly string[] | undefined,
+    read: EndAgents | undefined,
     orphans: ReadonlyMap<number, string> | undefined,
   ): Promise<void> {
     const { run } = closing;
@@ -2507,10 +2537,10 @@ export class FlowRuns {
     try {
       if (starts.length > 0) await Promise.allSettled(starts);
       if (!this.#closing) {
-        const agents = read ?? this.#agentsOf(run, orphans);
+        const { agents, agentOf } = read ?? this.#agentsOf(run, orphans);
         const refused = await this.#endAgents(run, agents);
         if (!this.#closing) {
-          this.#closeEnd(closing, agents.length - refused.size, refused);
+          this.#closeEnd(closing, agents.length - refused.size, refused, agentOf);
           return;
         }
       }
@@ -2527,10 +2557,16 @@ export class FlowRuns {
 
   /** Slice 13 (Q6) — an end closed, the `end` line's one site: the line, with `ended` (the agents its end took, only
    * when above 0), then the record (D18) in the end's own write: its open steps `ended` but those its journal answers
-   * and those whose end was refused (endSteps, Q7), its `held` dropped, `ended` again, and `calls` from the journal on
-   * #finishStop's road. Once the line is kept the spark that started the run is told, whether or not the record's
-   * write lands: the journal is the truth. Then every Stop waiting on the end answers. */
-  #closeEnd(closing: Closing, ended: number, refused: ReadonlySet<string>): void {
+   * and those whose agent's end was refused, each step's agent its session or its call's in the end's one read
+   * (`agentOf`; endSteps, Q7), its `held` dropped, `ended` again, and `calls` from the journal on #finishStop's road.
+   * Once the line is kept the spark that started the run is told, whether or not the record's write lands: the journal
+   * is the truth. Then every Stop waiting on the end answers. */
+  #closeEnd(
+    closing: Closing,
+    ended: number,
+    refused: ReadonlySet<string>,
+    agentOf: ReadonlyMap<number, string>,
+  ): void {
     const { run, end, head, settles, log, calls } = closing;
     let kept = false;
     try {
@@ -2546,7 +2582,7 @@ export class FlowRuns {
       this.#replace(
         run,
         (start) => ({
-          ...endSteps(start, settles?.answered, refused, settles?.orphans),
+          ...endSteps(start, settles?.answered, refused, agentOf),
           state: end.state,
           endedAt: this.#now().toISOString(),
           ...(log !== undefined ? { log } : {}),

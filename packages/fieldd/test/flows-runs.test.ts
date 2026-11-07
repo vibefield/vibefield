@@ -2408,6 +2408,10 @@ const letGoThrows = (h: Harness) => {
 /** How many times fieldd's log said a handed session could not be let go (slice 13's fold 1). */
 const unhandWarns = (h: Harness) =>
   h.warned.filter((said) => said.event === "fieldd.flows.step.unhand").length;
+/** Slice 13's fold 3 (the fold 2 skeptic's #6) — what each of those warns named: its run and call, and the let-go's
+ * own words, so a let-go said of the wrong step goes red. */
+const unhandSaid = (h: Harness) =>
+  h.warned.filter((said) => said.event === "fieldd.flows.step.unhand").map((said) => said.fields);
 
 describe("CP-4a2b — a step handed a session: heard from the hand, let go at the answer (§13a slice 9b)", () => {
   it("R19h (9b): the runs hand the step listener your session before the step's line is queued; its turn's end answers, and the hand is let go at the answer", async () => {
@@ -2600,6 +2604,8 @@ describe("CP-4a2b — a step handed a session: heard from the hand, let go at th
     }).toEqual({ turn: "returned", kinds: ["head", "call", "answer"], hands: [true], warned: 1 });
     expect((await settled(h.runs, run, "done")).log).toBe("looks good");
     expect(unhandWarns(h)).toBe(1);
+    // fold 3 (the fold 2 skeptic's #6): the warn names the step whose hand it let go
+    expect(unhandSaid(h)).toEqual([{ run, call: 1, error: "the step listener could not let go" }]);
   });
 
   it("R19h-8 (slice 13's fold 2; the builder's #14): a handed start that settles on a step its run no longer waits on lets the hand go through the one caught let-go: a let-go that throws is said once as a let-go, never as a start that threw, and lands no \"‹label› failed.\"", async () => {
@@ -2637,6 +2643,45 @@ describe("CP-4a2b — a step handed a session: heard from the hand, let go at th
       unhand: unhandWarns(h),
       threw: h.warned.filter((said) => said.event === "fieldd.flows.step.start").length,
     }).toEqual({ log: "looks good", refusals: [], hands: [true], unhand: 1, threw: 0 });
+    // fold 3 (the fold 2 skeptic's #6): the warn names the step whose hand it let go
+    expect(unhandSaid(h)).toEqual([{ run, call: 1, error: "the step listener could not let go" }]);
+  });
+
+  it("R19h-9 (slice 13's fold 3; the fold 2 skeptic's #1): a handed start whose send throws, and whose own let-go throws too, is said once as a let-go, and its failed start keeps the send's cause in fieldd's log", async () => {
+    // red at fold 2: startStep's handed road let go uncaught when `sent` threw (steps.ts's `unhand(); throw error;`),
+    // so the let-go's error replaced the send's: `fieldd.flows.step.start` named the let-go, and no
+    // `fieldd.flows.step.unhand` was said
+    const h = await harness({ sessions: { "run-yours": HANDED_YOURS } });
+    h.approved(
+      "handed",
+      [
+        'export const meta = { name: "Handed" };',
+        "export default async function () {",
+        '  try { await agent("Review this", { in: "run-yours", label: "Yours" }); }',
+        "  catch (e) { log(e.message); }",
+        "}",
+        "",
+      ].join("\n"),
+    );
+    letGoThrows(h);
+    vi.spyOn(h.runs.ports.inputs, "enqueue").mockImplementation(() => {
+      throw new Error("the queue refused the line");
+    });
+    const run = startedRun(await h.start({ flow: "handed" })).run;
+    const log = (await settled(h.runs, run, "done")).log;
+    expect({
+      log,
+      hands: h.hands.map((hand) => hand.gone),
+      start: h.warned
+        .filter((said) => said.event === "fieldd.flows.step.start")
+        .map((said) => said.fields),
+      unhand: unhandSaid(h),
+    }).toEqual({
+      log: "Yours failed.",
+      hands: [true],
+      start: [{ run, call: 1, error: "the queue refused the line" }],
+      unhand: [{ run, call: 1, error: "the step listener could not let go" }],
+    });
   });
 });
 
@@ -3824,6 +3869,43 @@ describe("CP-4a2b — a run's agents, RUN_AGENTS_MAX started, counted until its 
     }).toEqual({
       state: "stopped",
       enqueued: 0,
+      ends: ["rt-step1"],
+      ended: undefined,
+      steps: [],
+      open: [[1, "starting", undefined]],
+      warned: 1,
+    });
+  });
+
+  it("R42d-4 (slice 13's fold 3; the fold 2 skeptic's #2): the Stop of a run no LiveRun drives (#finishStop's no-`end` road, which slice 14's boot reaches), its open step with no session and `sessions.ofRun` listing that step's agent live by its call, whose end the floor refuses: the step stays open in its true state, `starting`, never `ended`, and `ended` counts none", async () => {
+    // red at fold 2: endSteps matched a step's session or the run's orphans, and a run no LiveRun drives has no
+    // orphans, so the step read `ended` while its agent worked on
+    // the road: the run's one spawn is in flight when fieldd stops (never settled here), so its record keeps the step
+    // `starting` with no session; the runs fieldd starts again then take its Stop (R41's road), and their one read of
+    // the run's agents, forged as R40g-2's is, lists the agent its spawn started, by its origin's call
+    const h = await harness({ spawnHeld: new Promise<never>(() => {}), endRejects: "rt-step1" });
+    h.approved("review", ANSWERED);
+    const run = startedRun(await h.start({ flow: "review" })).run;
+    await waitFor(() => expect(h.spawned).toHaveLength(1));
+    await h.runs.close();
+    const fresh = new FlowRuns(h.runs.ports);
+    opened.push(fresh);
+    vi.spyOn(h.runs.ports.sessions, "ofRun").mockReturnValue([
+      { runtimeRunId: "rt-step1", call: 1, live: true },
+    ]);
+    const stopped = (await fresh.stop(run)).run;
+    const record = h.records.runRecord(run);
+    expect({
+      state: stopped.state,
+      kinds: h.kinds(run),
+      ends: h.ends,
+      ended: record?.ended,
+      steps: record?.steps.map((step) => [step.call, step.state, step.session]),
+      open: record?.open.map((step) => [step.call, step.state, step.session]),
+      warned: h.warned.filter(({ event }) => event === "fieldd.flows.step.end").length,
+    }).toEqual({
+      state: "stopped",
+      kinds: ["head", "call", "end"],
       ends: ["rt-step1"],
       ended: undefined,
       steps: [],

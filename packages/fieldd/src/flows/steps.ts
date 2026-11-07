@@ -320,7 +320,17 @@ export async function startStep(
     try {
       return { ...sent(ports, write, call, handed, "in", prompt, from), form, unhand };
     } catch (error) {
-      unhand();
+      // slice 13's fold 3 (the fold 2 skeptic's #1): its let-go is caught and said as the runs' own let-go is (#unhand,
+      // the same event and words), and the send's error is rethrown, so the failed start's log keeps the send's cause
+      try {
+        unhand();
+      } catch (letGo) {
+        ports.logger?.warn(
+          "fieldd.flows.step.unhand",
+          "A flow step's handed session could not be let go",
+          { run: run.run, call, error: letGo instanceof Error ? letGo.message : String(letGo) },
+        );
+      }
       throw error;
     }
   }
