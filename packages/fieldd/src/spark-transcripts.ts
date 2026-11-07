@@ -424,6 +424,8 @@ interface Recording {
   readonly pending: { body: ToolBody; ours: boolean }[];
   /** calls fieldd served before their tool was asked for (none in practice): the next MCP tool's */
   credits: number;
+  /** the last reply kept since the run's last turn started, trimmed: a turn's end saying the same adds none (item 227) */
+  said: string | undefined;
 }
 
 export class SparkTranscriptRecorder {
@@ -440,7 +442,8 @@ export class SparkTranscriptRecorder {
   entered(run: SparkRunEntered): void {
     const { agent, spark, runtimeRunId, begun } = run;
     if (this.#runs.has(runtimeRunId)) return;
-    this.#runs.set(runtimeRunId, { spark, prompts: [], pending: [], credits: 0 });
+    const state: Recording = { spark, prompts: [], pending: [], credits: 0, said: undefined };
+    this.#runs.set(runtimeRunId, state);
     const held = this.store.read(spark, runtimeRunId);
     const lines = "lines" in held ? held.lines : [];
     if (!("unavailable" in held)) {
@@ -457,20 +460,24 @@ export class SparkTranscriptRecorder {
           this.store.append(spark, runtimeRunId, { kind: "gap", since: last.at });
       }
     }
+    const reply = (messageId: string, turn: string | undefined, text: string) => {
+      const kept = this.store.append(spark, runtimeRunId, { kind: "reply", messageId, turn, text });
+      if (kept !== undefined) state.said = text.trim();
+    };
     agent.on("conversation:assistant-message", (envelope) => {
       if (!ownLive(envelope)) return;
       const message = envelope.event;
       if (message.displayOnly === true || message.final === false || message.text.trim() === "")
         return;
-      this.store.append(spark, runtimeRunId, {
-        kind: "reply",
-        messageId: message.messageId ?? envelope.eventId ?? `seq-${envelope.sequence}`,
-        turn: message.turnId ?? envelope.turnId,
-        text: message.text,
-      });
+      reply(
+        message.messageId ?? envelope.eventId ?? `seq-${envelope.sequence}`,
+        message.turnId ?? envelope.turnId,
+        message.text,
+      );
     });
     agent.on("turn:started", (envelope) => {
       if (!ownLive(envelope)) return;
+      state.said = undefined;
       const prompt = envelope.event.prompt;
       if (prompt !== undefined && prompt.trim() !== "" && !this.#pasted(runtimeRunId, prompt))
         this.store.append(spark, runtimeRunId, { kind: "you", via: "terminal", text: prompt });
@@ -480,12 +487,28 @@ export class SparkTranscriptRecorder {
         turn: envelope.event.turnId ?? envelope.turnId,
       });
     });
-    const ended = (edge: "end" | "failed", turn: string | undefined) => {
+    const ended = (
+      edge: "end" | "failed",
+      turn: string | undefined,
+      words?: { readonly messageId: string; readonly text: string },
+    ) => {
       this.#flush(runtimeRunId);
+      const text = words?.text.trim();
+      if (words !== undefined && text !== "" && text !== state.said)
+        reply(words.messageId, turn, words.text);
       this.store.append(spark, runtimeRunId, { kind: "turn", edge, turn });
     };
+    // Item 227: a turn's end carries its last words, and for a run whose hooks are live they are the only copy heard.
+    // Puppeteer withholds the transcript's copy of a message from such a run, and the hook's copy is display-only.
     agent.on("turn:completed", (envelope) => {
-      if (ownLive(envelope)) ended("end", envelope.event.turnId ?? envelope.turnId);
+      if (!ownLive(envelope)) return;
+      const text = envelope.event.lastAssistantMessage;
+      const messageId = envelope.eventId ?? `seq-${envelope.sequence}`;
+      ended(
+        "end",
+        envelope.event.turnId ?? envelope.turnId,
+        text === undefined ? undefined : { messageId, text },
+      );
     });
     agent.on("turn:failed", (envelope) => {
       if (ownLive(envelope)) ended("failed", envelope.event.turnId ?? envelope.turnId);
