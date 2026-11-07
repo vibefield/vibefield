@@ -699,28 +699,30 @@ the shakes and the falling star (M6).
 **The hatch.** The sheet's sky: a star falls at an angle, lands, bursts, and the face is born where it
 hit; Create flies the face to its row in Chat. *When it plays is NS-D3, not yet ruled: its lean, "on open,
 and when the name settles", lost its second trigger when NS-D2 ruled B, and the reading put to James is
-"on open, and on each reroll".* Reduced motion: no falling star; the face fades in where it lands.
-*Erratum note 2026-11-07 (IOS-12f's f5; VF-PM's word 14:19:25Z): the engine does not fade the face in. Under reduced
-motion `hatch.tsx` deals no star and calls `birth` at once (:214–216), so the face is born with hello and grows from
-the birth's springs (sparks.js :975). This sentence awaits James's word (Q4 of the board ask `ios12f-new-spark-words`).*
-*Ruled 2026-10-30 (James, the Sparks page v8, 18:41–18:48Z): NS-D3 A, read as put, "on open, and on each reroll".
-Built at SP-1c: the sky is James's star engine (`star-spark/engine.js` at `025b495`, vendored byte for byte as the kit's
-`spark-face/vendor/star-spark.js` with its first user, the sheet; a test holds its SHA-256 as it does the face's).*
-*Amended 2026-11-07 (IOS-12f, its Q6 and Q7; VF-PM's rulings 12:35:44Z):* on the phone the hatch plays in New
-spark's sky (§8 "The phone's Chat"), free at 120. The kit transcribes the engine's trail, body and burst into Metal
-(`SparkHatch.metal`), as IOS-12e transcribed the face. The engine draws them as pure functions of the row and the
-time, so goldens the vendored engine deals hold any moment, as 12e's hold the face: the kit matches the engine's
-rows within 1e-4, and its Metal frames match the engine's own WebGL2 frames within 12e's bound (per channel ≤ 6/255
-on ≥ 99.5% of a frame's pixels, mean ≤ 1/255), which VF-PM rules for good on the hatch's first report. Created, the
-face flies from the sky to its row in Chat's list as the sheet folds, 660 ms on the island curve, as the Mac's kit
-flies it. Reduced motion: no falling star and no flight; the face fades in. *Erratum note 2026-11-07 (IOS-12f's f5;
-VF-PM's word 14:19:25Z): as on the Mac (above), the engine births the face at once with hello and grows it; it does
-not fade. The phone follows the engine (VF-PM's Q3 ruling on the f5 plan, 13:58:40Z), and this sentence awaits James's
-word (Q4 of `ios12f-new-spark-words`).* *Corrected 2026-11-07 (IOS-12f's f5a; VF-PM's ruling 13:58:40Z): this said
-"the kit matches its rows within 1e-4 and its stills by eye (12e's bound)", which misquotes 12e. 12e holds the face by
-its rows within 1e-4 and by the engine's own WebGL2 pixels within its Q2 bound (ruled 2026-11-06 07:51Z, the stills
-above), and "stills by eye" is 12e's own name for a shader with no gate, its plan's Q1 (c). The misquote was 12f's
-plan's Q6, which kept the rows and took "by eye" from that (c), dropping the pixels; f0 copied it here.*
+"on open, and on each reroll".* Reduced motion: no falling star; the face is born where it lands. *Erratum note
+2026-11-07 (IOS-12f's f5; VF-PM's word 14:19:25Z): the engine does not fade the face in. Under reduced motion
+`hatch.tsx` deals no star and calls `birth` at once (:214–216), so the face is born with hello and grows from the
+birth's springs (sparks.js :975). Ruled 2026-11-07 (James, 14:32:49Z, Q4 (a) of `ios12f-new-spark-words`): the sentence
+follows the engine. It said "the face fades in where it lands".* *Ruled 2026-10-30 (James, the Sparks page v8,
+18:41–18:48Z): NS-D3 A, read as put, "on open, and on each reroll". Built at SP-1c: the sky is James's star engine
+(`star-spark/engine.js` at `025b495`, vendored byte for byte as the kit's `spark-face/vendor/star-spark.js` with its
+first user, the sheet; a test holds its SHA-256 as it does the face's).* *Amended 2026-11-07 (IOS-12f, its Q6 and Q7;
+VF-PM's rulings 12:35:44Z):* on the phone the hatch plays in New spark's sky (§8 "The phone's Chat"), free at 120. The
+kit transcribes the engine's trail, body and burst into Metal (`HatchSky.metal`), as IOS-12e transcribed the face. The
+engine draws them as pure functions of the row and the time, so goldens the vendored engine deals hold any moment, as
+12e's hold the face: the kit matches the engine's rows within 1e-4, and its Metal frames match the engine's own WebGL2
+frames within 12e's bound (per channel ≤ 6/255 on ≥ 99.5% of a frame's pixels, mean ≤ 1/255), which VF-PM rules for good
+on the hatch's first report. Created, the face flies from the sky to its row in Chat's list as the sheet folds, 660 ms
+on the island curve, as the Mac's kit flies it. Reduced motion: no falling star and no flight; the face is born where it
+lands. *Erratum note 2026-11-07 (IOS-12f's f5; VF-PM's word 14:19:25Z): as on the Mac (above), the engine births the
+face at once with hello and grows it; it does not fade. The phone follows the engine (VF-PM's Q3 ruling on the f5 plan,
+13:58:40Z). Ruled 2026-11-07 (James, 14:32:49Z, Q4 (a) of `ios12f-new-spark-words`): the sentence follows the engine. It
+said "the face fades in".* *Corrected 2026-11-07 (IOS-12f's f5a; VF-PM's ruling 13:58:40Z): this said "the kit matches
+its rows within 1e-4 and its stills by eye (12e's bound)", which misquotes 12e. 12e holds the face by its rows within
+1e-4 and by the engine's own WebGL2 pixels within its Q2 bound (ruled 2026-11-06 07:51Z, the stills above), and "stills
+by eye" is 12e's own name for a shader with no gate, its plan's Q1 (c). The misquote was 12f's plan's Q6, which kept the
+rows and took "by eye" from that (c), dropping the pixels; f0 copied it here.* *Corrected 2026-11-07 (IOS-12f's f6c):
+this named the shader `SparkHatch.metal`, renamed `HatchSky.metal` at `915fcd5a5`.*
 
 **Where it lives in code.** The engine is vendored from James's `research/spark`
 (`agent-sparks/sparks.js` at `025b495`, and `star-spark.js` beside it), byte for byte: a newer version
@@ -6497,8 +6499,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       opens the new spark's thread, where its hello waits with its three starters. *Added 2026-11-07 (IOS-12f's f6;
       VF-PM's Q3 ruling 17:10:10Z): the row's own face waits, unseen, while the face flies to it, and is the row's
       once it lands. The phone draws one face, never two; the Mac draws both for the 660 ms.*
-    - **Reduced motion:** no falling star and no flight. The face fades in on the sky, and once it is made, the
-      row's face fades in.
+    - **Reduced motion:** no falling star and no flight. The face is born on the sky, as the engine births it (§2.10),
+      and once it is made, the row's face fades in. *Corrected 2026-11-07 (IOS-12f's f6c; James's Q4 (a), 14:32:49Z):
+      this said "the face fades in on the sky".*
 - **The phone's Apps** (track MA, ruled 2026-11-05 from the design page *Apps in a Pocket*: MA-D7…D9 and MA-D11…D13
   A, MA-D10 B, James; MA-D1…D6 carried A under his "all ruled"; the laws MA-L1…L10). Nothing is drawn yet: MA-6
   draws the door, the cues and the shelf, and MA-5 the open app on SP-4's web view. Until MA-5 a hosted app opens its
