@@ -1,0 +1,13 @@
+{
+  "fixtureId": "fix.timeline.moment-span",
+  "source": "TimelineView head dataset and readout, written from readoutAt(stateAt(lane, head))",
+  "pageNow": 1767268800000,
+  "headMs": 1767268800000,
+  "sinceMs": 1767267000000,
+  "valueText": "Now, 12:00",
+  "tone": "working",
+  "recorded": null,
+  "readout": "30:00working",
+  "headAtOrAfterSince": true,
+  "branch": "span"
+}

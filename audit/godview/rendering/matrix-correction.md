@@ -8,13 +8,15 @@ Current counts are `matrixSummary` in `integration.json`:
 
 | Cell | Count |
 | --- | --- |
-| rendered | 247 |
-| covered-by | 23 |
+| rendered | 248 |
+| covered-by | 22 |
 | coverage gap | 0 |
 | not-applicable | 73 |
 | environment gap | 67 |
 
-Every DOM scenario that can be mounted has a fixture and a screenshot, including effort, activity, cost, reply final versus streaming, flame-rung costs, and tier. A paint that matches another row is still that fixture's screenshot. `covered-by` is only a same-view fixture whose mounted row was checked by the test.
+`state.timeline_span` is `fix.timeline.moment-span`. The shot records the pinned TimelineView's live head time and the readout that view writes from `stateAt`. The head is at or after `sinceMs`, the readout says working, and it is not the unborn, unrecorded, or past wording. A check that the working fixture merely has no history is not accepted.
+
+`state.timeline_ended` remains `covered-by` `fix.timeline.past-bounds` because that fixture's history contains the ended lane. That alias does not measure `stateAt` on a scrub. It is not a claim that every moment branch was proven the same way.
 
 Not-applicable is only a scenario that cannot be mounted: the feed door, desktop standing, a row omitted before the view, `opening` (not an AgentView field), the timeline scrub head on a view that has none, and the spend scrub on a view that has none.
 
