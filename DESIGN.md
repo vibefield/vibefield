@@ -6312,7 +6312,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     *Corrected 2026-11-06 (IOS-12d, its Q3; TH-1's ER-C8):* this said "in the thread it stays as said". Since TH-1
     the Mac's card says what you said for 2.4 s and leaves, and the flow's own line ("You answered Vela: Yes") takes
     its place. One Chat, two sizes (PC-L1), so the phone's thread does the same.
-    *Amended 2026-11-06 (IOS-12d; VF-PM's rulings on its Q1–Q10, 19:12Z; its words are §9's, for James's eye):*
+    *Amended 2026-11-06 (IOS-12d; VF-PM's rulings on its Q1–Q10, 19:12Z; its words are §9's,
+    ruled (a) by James 2026-11-06 22:56Z):*
     - **What the group holds** (Q7): every open item with a spark, from every self desktop, oldest asked first as the
       home's merge sorts it. An item whose spark the list does not hold still stands, named as fieldd names its
       asker, because the need is real. An item with no spark is a run you started, counted on Field's badge and never
@@ -6379,11 +6380,12 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       Mac draws a crew's card since then (§8 "Chat's crew card"); the phone's waits on PC.
     - Its pane is one tap away in ⋯, never inside the thread.
     - **What waits on you** (IOS-12d, 2026-11-06): the Mac's needs-you card (§8 "Chat's thread") at touch pitch,
-      held at the foot between the flow and the composer, as wide as the composer and 12 above it. The flow gives
-      way to it. One card at a time: its own run's ask first, then the oldest (CO-Q12 (b)), with "1 of 3" at its
-      right. Its rows are the group's card's, but its eyebrow is the Mac's: the word Chat's row says for the item,
-      then " · " and the asker when it is not the thread's spark. Answered, it says what you said for 2.4 s and
-      leaves, and the flow's line says the answer.
+      held at the foot between the flow and the composer, as wide as the composer and 12 above it. The flow gives way to
+      it; scrolled up, it passes under the opaque card, as under the composer (2026-11-07, IOS-12d's d4d, VF-PM 06:51Z
+      and 07:05Z). One card at a time: its own run's ask first, then the oldest (CO-Q12 (b)), with "1 of 3" at its
+      right. Its rows are the group's card's, but its eyebrow is the Mac's: the word Chat's row says for the item, then
+      " · " and the asker when it is not the thread's spark. Answered, it says what you said for 2.4 s and leaves, and
+      the flow's line says the answer.
     *Corrected 2026-11-06 (IOS-12c, M-c2; PC-L1):* this said "An act is one line per vibefield tool call" and "A fact
     is a wake ("VibeField: …"), drawn centred at 12 and never as your words". Neither is the Mac's thread since TH-1:
     VibeField's own tools leave the tools' count, and a wake is one of VibeField's own acts, a quiet line in the
@@ -7173,7 +7175,8 @@ is a false claim; for James's eye.)* Needs you says who asks ("‹name› asks",
 asks"), an agent's own ask says **Answer in its pane**,
 and an answer says "You said ‹choice›". The note says "‹name› needs you". New spark says "Runs on ‹desktop›, your
 home" and **Create ‹name›**, and refuses with "‹name› is taken" or "‹profile› has no ‹agent› sign-in".
-*Amended 2026-11-06 (IOS-12d; VF-PM's rulings 19:12Z; every line here for James's eye, filed as one board ask):*
+*Amended 2026-11-06 (IOS-12d; VF-PM's rulings 19:12Z; every line here ruled (a) by James 2026-11-06 22:56Z, on the
+board ask ios12d-chat-words):*
 - **Who asks** (Q2) is the spark for its own items, else the asking run as fieldd names it, until the phone has @'s
   handles (IOS-12f): "Vela asks", "Claude Code in research asks". "research·3 asks" is the handle's form.
 - **Answer in its pane** (Q5) with no pane on the board says where the act stood: "Couldn't open its pane: it isn't

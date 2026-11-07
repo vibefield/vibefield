@@ -41294,3 +41294,128 @@ START the floor answered no. It stays unread. Item 224 is filed, with no lane. I
 **Met since.** SP-7b's 7b-1 (`41331646e`) and 7c (`c8c580fcb`) each owed the next verify of main that includes it.
 Push 117's verify `42357208632`, at `c8c580fcb` and green at 09:30:56Z, was the first to contain both, with rosetta
 0.1.4, so it meets both owed lines together.
+
+## IOS-12d's M-d — what waits on you, on the phone: Needs you heads Chat, the Mac's card stands at a thread's foot, and an answer goes through the home (track IOS)
+
+(2026-11-07; twelve commits on main `781cfb7d0`, `96cba98cc` → `ef9457363`, tree `71bf60db405b`, IOS's, in
+`/Volumes/SamsungRed/lanes/ios12b/vibe-field`. Minted at `1b9179c86` on `60461c59c` (branch
+`rehearsal/12d-on-60461c59c`), where run209 ran, then re-cut twice in the M196 pattern: onto `6e4cb7b68` as
+`f4bc4eeca`, where kit-rc ran, and onto `781cfb7d0` as `ef9457363` (branch `ios/12d-land`). M209 is verified at
+`1b9179c86` (run209: vitest 14,046/0/21) and landed as `ef9457363`, a fast-forward of main by the fixer, landed
+2026-11-07T12:18:49Z.)
+James ruled the words "all leans" 2026-11-06 22:56Z: ios12d-chat-words (a), every §9 line kept. VF-PM ruled Q1–Q10 at
+19:12Z, d4d whole at 06:51Z, the read of the stills of record at 08:33Z, the land on then-main with kit-rc at 08:52Z,
+and its re-cut onto r4 at 12:07Z.
+
+**What is real.**
+- **Needs you heads Chat** (PC-D4 A): every open item with a spark, from every self desktop, one card each in the
+  order the home's merge sorts them, under "Needs you" and its count. An item whose spark the list does not hold still
+  stands, named as fieldd names its asker. An item with no spark stays on Field's badge alone (PC-D5).
+- **The card is the Mac's, ported** (d2, d3, d4): its words are the Mac's card's fold, held to three goldens the Mac's
+  own card writes. "‹who› asks" says who; the first act is inverted; the ring is 1.5 in `--vf-orange` at 75% while it
+  waits on you and the separator's hairline once it does not.
+- **An answer is one `needs.answer {item, choice, device}` through the home,** forwarded to its item's desktop and
+  answered there once (d1: the row between two real daemons).
+- **The thread's card** stands at the foot, between the flow and the composer: its own run's ask first, then the oldest,
+  with "1 of N". Its eyebrow is the Mac's. A flow scrolled up passes under it, and it is opaque at night (d4d).
+- **Answer in its pane** asks the field for the run's pane. A run on the board with no session card says it cannot open,
+  where the act stood (d4b, Q5).
+- **A sleeping desktop's card stays,** its acts withheld, "‹name› is asleep · answer when it wakes" (Q8; PC-L4). Its
+  item is carried from the last reading, and the group and the spark's row both still count it.
+- **An answer that comes back off screen** and did not go as asked is said on the note over the bar for 2.4 s (d5, Q4).
+
+**What is stubbed or left.**
+- @ handles in the eyebrow wait for 12f: until then ‹who› is fieldd's name for a run.
+- Flow items stand as the Mac's card draws them until CP-4b (Q9).
+- Answer in its pane opening the pane is not stilled (no OS input); ChatNeedsTests' pane rows hold the lookup and the
+  miss.
+
+**Validation.**
+- **The mint at `1b9179c86`, run209 (M209),** a9's on the old mini (Xcode 27.2, 27B52; the iPhone 17 simulator, shut
+  down before and after). Logs: `lanes/ts6/logs/mini/run209` (SUMS-a9 `713020f9`) and
+  `lanes/ios12/12d/mint/a9-results-1b9179c86` (SUMS-a9 `cfbde1c9`).
+  - M0: FieldHome BUILD SUCCEEDED in 58 s, then TEST BUILD SUCCEEDED in 66 s.
+  - M1: TEST EXECUTE SUCCEEDED in 88 s, 0 issues, 0 crash lines. "Test run with N tests": FieldHomeTests 484,
+    FieldHistoryTests 86, FieldMeshTests 325, FieldDesignTests 49, FieldSwarmTests 44, FieldAgentsTests 106 and
+    FieldProductTests 306. `m-d-mint/m-d-mint.out:62` sums them, `the Test run lines' sum: 1400 (expected 1400)`, the
+    count from syntax exactly.
+  - M2: check-ios-fixtures 388 copies and 93 pins, exit 0; `siblings render --prod --check` exit 0.
+  - `pnpm verify` exit 0 at 09:06:14Z, the tree clean after: typecheck 29 projects; vitest 14,046 passed, 0 failed,
+    21 skipped, over 962 files; node:test 474 of 474; cargo 606 passed, 0 failed, over 37 binaries; biome 3,486 files,
+    73 warnings. Vitest has 8 rows more than run207: 12d's four (ds2-forwarding 4 → 5, needs-card-goldens' 3) and
+    EL8-rosetta's four.
+- **kit-rc at `f4bc4eeca` on `6e4cb7b68`,** the seven targets on the merged tree, a9's on the old mini (Xcode 27.2,
+  27B52; armed 11:59:43Z at a 1-min load of 5.25, the simulator shut down before and after). Logs:
+  `lanes/ios12/12d/land/a9-results-kitrc-f4bc4eeca` (SUMS-a9 `b6ca1a1d`).
+  - As filed in its `kit-rc/kit-rc.out`: `(build-for-testing) ** TEST BUILD SUCCEEDED ** exit 0 in 72s`, then
+    `M1 kit: ** TEST EXECUTE SUCCEEDED ** exit 0 in 89s; issues 0; crash lines 0`.
+  - Its `kit-rc/m1/kit-test.log` says "Test run with N tests" for FieldMeshTests 326, FieldProductTests 306,
+    FieldSwarmTests 44, FieldHomeTests 484, FieldHistoryTests 86, FieldDesignTests 49 and FieldAgentsTests 106, each ✔.
+    `kit-rc.out:76` sums them: `the Test run lines' sum: 1401 (expected 1401)`, the count from syntax exactly;
+    Mesh's +1 is 7c's.
+  - Warnings: the twelve diagnostic heads expected and no other. The copy's "outside the brief's twelve" line reads
+    20: Swift's indented second copies of four of them and 16 `appintentsmetadataprocessor` log lines, no finding.
+    Its count was fixed 13 s after the row armed; a9 keeps the fix for the next kit row.
+  - Its verdict carries to the land: the Kit's tree is `bb166053fe16` at `f4bc4eeca` and at `ef9457363`, equal at 12
+    of 12 commits, and no `apps/ios` path differs between them.
+- **kit3 at T3 `94364217b`** (old mini, `lanes/ios12/12d/kit3/a9-results-94364217b`, SUMS-a9 `a887dcbe`). Its verdicts
+  carry to the mint because the Kit's tree is `fa088609455e` at T3 and at `1b9179c86`, equal at 12 of 12 commits:
+  - mut-items `26e033591` (`carry` removed from the queue): d4d's row alone, red on `cards.count == 1`.
+  - mut-sparks `3ae895980` (`carry` removed from the sparks): red on `vela?.needsYou == true`. The two mutants stand
+    in for a red stage on a row for working code, and neither lands (VF-PM 06:51Z).
+  - kit: 8 suites, 77 rows, 0 warnings in 12d's new files and 0 in the others it touched.
+  - stills: 38 of 38. **All 38 read by name, 19 light and 19 dark, clean**
+    (`lanes/ios12/12d/kit3/read-38-94364217b.md`).
+- **kit2's two reds carry as run:** 19 new rows red on their own assertions at `4a9e55e2a`, and `paneOpens()` red on
+  `noPane == nil` at `5cfcde586`.
+- **The re-cuts.** The land's is `lanes/ios12/12d/recut/recut-proof-781cfb7d0.txt`, its packet
+  `lanes/ios12/12d/land2/SHA256SUMS-12d-land-ef9457363` (`d292a168`). The two it rests on carry the verdicts: the
+  mint's onto `60461c59c` (`lanes/ios12/12d/recut/recut-proof-60461c59c.txt`) and kit-rc's onto `6e4cb7b68` (VF-PM
+  08:52Z; `lanes/ios12/12d/recut/recut-proof-6e4cb7b68.txt`). The land's was VF-PM's at 12:07Z. Each range-diff is 12 of
+  12 `=`. The patch-ids are equal
+  in both forms (`git diff` `e1ccaec9…`, `-U0` `7431b582…`), and `git merge-tree` gives the tip's tree. Each cut less
+  the one before is main's own delta, by patch-id in both forms: `1b9179c86..f4bc4eeca` is `60461c59c..6e4cb7b68`
+  (`0974a3b1…`, `fa24c7cf…`), and `f4bc4eeca..ef9457363` is `6e4cb7b68..781cfb7d0` (`24b22aa9…`, `87e6bbc5…`).
+  Pin-class: none.
+- **M-d × 7c** (`c8c580fcb`, SP-7b's 7c, with its records `6e4cb7b68`). They share HomeScreen.swift: 7c +2 −1, M-d +52
+  −5, 2,520 lines apart, no overlap. 7c moves the Kit (FieldLink.swift +54 −21, FieldLinkHomeTests.swift +85 −39,
+  PhoneBudget.swift +3 −1), so kit3's and M1's verdicts stop at `1b9179c86`. The Swift is covered by kit-rc at
+  `f4bc4eeca`, on the same Kit `bb166053fe16` over 7c.
+- **M-d × r4** (`298893037`, item 206's boot half, with its records `781cfb7d0`): no file shared, no `apps/ios` path.
+- **Vitest is untested together** with both: 12d's ds2-forwarding row beside 7c's terminal-grants rows and r4's fieldd
+  rows. Main's next verify covers it first.
+- **Outside the Kit** (`git diff --numstat 781cfb7d0 ef9457363`: 38 files, 23 new, +7819 −68):
+  - DESIGN.md +50 −1 (d0, §8 and §9);
+  - fieldd's `ds2-forwarding.e2e.test.ts` +117 −2 (d1, test only);
+  - field-app's `needs-card-goldens.test.ts` +474 −0 and its three goldens (d2);
+  - `scripts/check-ios-fixtures.mjs` +35 −0 (d3: the goldens' origin and mirror, eight sparks fixtures, FieldHome's
+    three demo-door copies);
+  - biome.jsonc's one ignore of the goldens, +4 −0, `eef413f46`: d2's rider, a commit of its own.
+  - The last two are RELEASE-ADJACENT. Pin-class: none.
+
+**Found.**
+- **The phone read a spark's items by 12b's rule, before TH-1** (PC-L1 drift). Its own run's ask is its item now (d4).
+- **Biome would have reddened verify at the mint.** biome.jsonc's includes are "**", d2's three goldens were not
+  excluded, and biome collapses the short arrays `JSON.stringify(…, null, 2)` writes: 3 errors, measured 19:53:26Z.
+  d2's lights ran biome on two TS files only. The rider is the fix, and it is RELEASE-ADJACENT.
+- **The stills found six things the rows could not.** S1: the pressed act greyed by `.disabled`, against §8. S2, S3:
+  composition hid needs-failed's line and the gate's fourth card. S4: the demo door served a sleeping desktop's item
+  fresh, so no away card was ever stilled. S5: d4c's fix of S4 was half a fix, since the door put Vela's item on mini
+  while she lived on studio. S6: the thread's card was see-through at night: `ChromePalette.fill` is 8% white, so
+  paper goes under it.
+- **S6 stood unseen because the first read was thin.** IOS opened 12 of `81be8567f`'s 34 stills, one of them dark, and
+  called dark green. It told VF-PM 11; the transcript says 12. Corrected at the source. kit2's and kit3's reads opened
+  all 38.
+- **The frozen kit script never ran as it stands.** a9 generates a host copy, and the header said a9 adapts L, LANE,
+  DD and U alone. The copy also replaces the mutex, SHOT, the release and `arm()`'s rules. Asked by VF-PM 07:05Z;
+  kit3's header now names all of it, comments only.
+- **"Only main's four standing warnings" counted the lines that name a file.** build-for-testing also prints eight
+  from `#expect`'s macro expansion, the same at kit3's T3 and at the mint: seven of `drawnAsset(for:)` in
+  AgentGlyphTests.swift (standing, LANDED "PG-5") and one of `circle` in AppBarTests.swift:25. Neither file is 12d's.
+
+**Owed.**
+- **A known stale pair:** ChatNeeds.swift's `paneMissing` and `away` doc comments still say their words await James's
+  eye, ruled (a) 22:56Z. They are folded on the next `apps/ios` touch of that file (12f or the next IOS slice), since
+  moving them now would void kit3 (VF-PM 22:59Z).
+- The device witness on the road: James's run, as 12c's.
+- 12f: New spark on the phone, and @'s handles in the eyebrow.
