@@ -230,6 +230,8 @@ public enum ChromePalette {
   public static let inkFaint = dynamic(light: 0x1C1C1E, lightAlpha: 0.30, dark: 0xFFFFFF, darkAlpha: 0.32)
   /// `--vf-hairline-strong`: the rules between turns.
   public static let ruleStrong = dynamic(light: 0x000000, lightAlpha: 0.10, dark: 0xFFFFFF, darkAlpha: 0.14)
+  /// IOS-12f — `--vf-spark-night`: the New spark sheet's sky, night in both themes, one value (§8 "The phone's Chat").
+  public static let sparkNight = solid(0x060716)
   // RETIRED 2026-11-06 (SE-2): `markWash`, the select hue's wash under search's page's marks. A match is marked as the
   // Peek marks it now, on the ink at 11% (`searchMark`).
 

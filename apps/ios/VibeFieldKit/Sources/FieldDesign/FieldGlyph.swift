@@ -45,6 +45,10 @@ public enum FieldGlyphName: String, CaseIterable, Sendable {
   case chevron
   case panes
   case duplicate
+  /// IOS-12f — New spark (DESIGN.md §8 "The phone's Chat", §13's drawings): its door beside Chat's title (`sparkle`,
+  /// the Mac's create) and ↻ Another face (`reset`).
+  case sparkle
+  case reset
 
   var assetName: String { "glyph-\(rawValue)" }
 }

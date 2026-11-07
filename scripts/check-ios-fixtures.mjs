@@ -885,7 +885,8 @@ const OS_MARKS_IOS = join(
 
 // IOS-12b — §2.5's hues on the phone's chrome (DESIGN.md §2.5; the bar's cyan
 // dot, §8 "The phone's Chat", PC-D5 A): each state colour `ChromePalette`
-// names is tokens.css's own, read from both files and compared.
+// names is tokens.css's own, read from both files and compared. IOS-12f adds
+// the one other solid the phone copies, New spark's sky (`--vf-spark-night`).
 {
   const TOKENS = "packages/design-kit/src/tokens.css";
   const PALETTE_SWIFT = "apps/ios/VibeFieldKit/Sources/FieldDesign/ChromePalette.swift";
@@ -903,6 +904,7 @@ const OS_MARKS_IOS = join(
     ["green", "green"],
     ["red", "red"],
     ["info", "cyan"],
+    ["sparkNight", "spark-night"],
   ]) {
     checked += 1;
     const hex = (pattern, text) => pattern.exec(text)?.[1]?.toLowerCase() ?? null;
