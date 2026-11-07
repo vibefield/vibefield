@@ -9,7 +9,8 @@ import SwiftUI
 // pill pulls down the system's menu; "Runs on studio, your home" is said, not asked; the profiles' chips stand once
 // the home has more than Default; Cancel and Create stand at the foot. Every ask is the home's, on Chat's door (VF-PM
 // 13:11:45Z), and every word is §9's. The sky is the hatch (FieldDesign's `HatchSkyView`, f5): a star falls at an
-// angle and the face is born where it lands; ↻ deals again.
+// angle and the face is born where it lands; ↻ deals again. Created (f6), the face flies from the sky to its row in
+// Chat's list as the sheet folds, and then Chat opens its thread (`NewSparkLanding`).
 
 /// The sheet's controller (the Mac's `NewSparkSheet.tsx`): what it read as it opened, what the person chose, the
 /// picker of the agent it thinks with, and the refusal said where it asked. Its choices are `NewSpark`'s.
@@ -196,21 +197,104 @@ final class NewSparkLanding {
     let open: @MainActor (String) -> Void
   }
 
+  /// The row awaited: the spark, the landing that waits on it, and its wait's end.
+  private struct Awaited {
+    let spark: String
+    let resume: CheckedContinuation<CGRect?, Never>
+    let timer: Task<Void, Never>
+  }
+
+  /// The flight window, or nil where nothing can fly (`SparkFlightWindow.make`).
   let flying: (any SparkFlying)?
   let rowWait: Duration
   let fadeWait: Duration
+  private var faces: [String: Face] = [:]
+  /// Each row's face box in the window's space, as it last said.
+  @ObservationIgnored private var boxes: [String: CGRect] = [:]
+  @ObservationIgnored private var awaited: Awaited?
 
+  /// `rowWait` is the Mac's ROW_WAIT_MS, and `fadeWait` the row's fade, plainEase(0.32).
   init(flying: (any SparkFlying)?, rowWait: Duration = .milliseconds(1_500), fadeWait: Duration = .milliseconds(320)) {
     self.flying = flying
     self.rowWait = rowWait
     self.fadeWait = fadeWait
   }
 
-  // the red's skeleton: nothing waits, nothing flies, nothing lands
-  func face(of spark: String) -> Face? { nil }
-  func row(_ spark: String, box: CGRect) {}
-  func create(_ sheet: NewSparkSheet, on feed: ChatFeed, reducedMotion: Bool, cut: SIMD3<Double>, steps: Steps) async {}
-  func land(_ made: SparkSummary, reducedMotion: Bool, cut: SIMD3<Double>, steps: Steps) async {}
+  /// The row's own face while its spark lands; nil for every other row, and once it has landed.
+  func face(of spark: String) -> Face? { faces[spark] }
+
+  /// A row's face says where it is, at each change of its box: the landing that awaits it goes on.
+  func row(_ spark: String, box: CGRect) {
+    boxes[spark] = box
+    guard let awaited, awaited.spark == spark else { return }
+    self.awaited = nil
+    awaited.timer.cancel()
+    awaited.resume.resume(returning: box)
+  }
+
+  /// Create pressed: the hatch with what the sheet holds (`NewSparkSheet.create`); made, the spark lands. Refused,
+  /// the refusal stands where the sheet asked, and nothing flies.
+  func create(_ sheet: NewSparkSheet, on feed: ChatFeed, reducedMotion: Bool, cut: SIMD3<Double>, steps: Steps) async {
+    guard let made = await sheet.create(on: feed) else { return }
+    await land(made, reducedMotion: reducedMotion, cut: cut, steps: steps)
+  }
+
+  /// Made: the row's face waits and its row is awaited; then the face flies to it as the sheet folds, or nothing
+  /// flies. Returns once the face is in flight, or once the thread is open. `cut` is the ground behind the row.
+  func land(_ made: SparkSummary, reducedMotion: Bool, cut: SIMD3<Double>, steps: Steps) async {
+    let spark = made.id
+    faces[spark] = .waits
+    guard let box = await box(of: spark) else {
+      faces[spark] = nil
+      steps.fold()
+      steps.open(spark)
+      return
+    }
+    if !reducedMotion, let flying, let from = steps.hero(),
+      flying.fly(
+        seed: made.seed, from: from, cut: cut, to: { [weak self] in self?.boxes[spark] ?? box },
+        landed: { [weak self] in self?.landed(spark, open: steps.open) })
+    {
+      // the fold runs under the flight, from its tick
+      steps.fold()
+      return
+    }
+    steps.fold()
+    withAnimation(FieldMotion.plainEase(0.32)) { faces[spark] = .fades }
+    try? await Task.sleep(for: fadeWait)
+    faces[spark] = nil
+    steps.open(spark)
+  }
+
+  /// Landed: the face is the row's, and its thread opens.
+  private func landed(_ spark: String, open: @MainActor (String) -> Void) {
+    faces[spark] = nil
+    open(spark)
+  }
+
+  /// The row's face box once it says it, or nil past the wait.
+  private func box(of spark: String) async -> CGRect? {
+    if let box = boxes[spark] { return box }
+    let wait = rowWait
+    return await withCheckedContinuation { resume in
+      // a landing still awaiting its row waits no more: one sheet makes one spark at a time
+      if let before = awaited {
+        before.timer.cancel()
+        before.resume.resume(returning: nil)
+      }
+      let timer = Task { [weak self] in
+        guard (try? await Task.sleep(for: wait)) != nil else { return }
+        self?.expire(spark)
+      }
+      awaited = Awaited(spark: spark, resume: resume, timer: timer)
+    }
+  }
+
+  private func expire(_ spark: String) {
+    guard let awaited, awaited.spark == spark else { return }
+    self.awaited = nil
+    awaited.resume.resume(returning: nil)
+  }
 }
 
 /// The agent menu's sections (§8): each agent its own, the chosen one holding its rows under its head.
@@ -244,10 +328,18 @@ struct NewSparkSheetView: View {
   let away: ChatAway?
   /// The person's live sessions on the home; nil until the board is read.
   let sessions: [RunProfileFacts]?
+  /// IOS-12f's f6 — Create's order, and where Chat opens the thread once the spark has landed.
+  let landing: NewSparkLanding
+  let onOpen: @MainActor (String) -> Void
   @State private var sheet: NewSparkSheet
+  @State private var hero = HatchSkyHero()
   @State private var nameSelection: TextSelection?
   @FocusState private var naming: Bool
   @Environment(\.dismiss) private var dismiss
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  /// The ground behind the new row's face, its cut ring's (`sparkGround`, the paper).
+  @Environment(\.sparkGround) private var ground
+  @Environment(\.self) private var environment
   #if DEBUG
     @State private var pressedForStills = false
   #endif
@@ -260,12 +352,15 @@ struct NewSparkSheetView: View {
   static let touch: CGFloat = 44
 
   init(
-    feed: ChatFeed, taken: [String], homeName: String, away: ChatAway?, sessions: [RunProfileFacts]?
+    feed: ChatFeed, taken: [String], homeName: String, away: ChatAway?, sessions: [RunProfileFacts]?,
+    landing: NewSparkLanding, onOpen: @escaping @MainActor (String) -> Void
   ) {
     self.feed = feed
     self.homeName = homeName
     self.away = away
     self.sessions = sessions
+    self.landing = landing
+    self.onOpen = onOpen
     _sheet = State(initialValue: NewSparkSheet(taken: taken))
   }
 
@@ -328,7 +423,7 @@ struct NewSparkSheetView: View {
 
   private var sky: some View {
     // the hatch: the night, the star that falls, and the face born where it lands (the flat star where Metal fails)
-    HatchSkyView(seed: sheet.seed, faceSize: Self.face)
+    HatchSkyView(seed: sheet.seed, faceSize: Self.face, hero: hero)
       .frame(height: Self.skyHeight)
       .clipShape(RoundedRectangle(cornerRadius: Self.skyCorners, style: .continuous))
       .padding([.top, .horizontal], Self.skyInset)
@@ -541,12 +636,15 @@ struct NewSparkSheetView: View {
     .background(ChromePalette.paper)
   }
 
-  /// Create pressed: made, the sheet folds and Chat's list holds its row; refused, the refusal stands where it asked.
+  /// Create pressed: made, the face flies to its row as the sheet folds, then Chat opens its thread; refused, the
+  /// refusal stands where it asked (`NewSparkLanding`).
   private func create() {
     naming = false
+    let resolved = ground.resolve(in: environment)
+    let cut = SIMD3(Double(resolved.red), Double(resolved.green), Double(resolved.blue))
+    let steps = NewSparkLanding.Steps(hero: { hero.take() }, fold: { dismiss() }, open: onOpen)
     Task {
-      guard await sheet.create(on: feed) != nil else { return }
-      dismiss()
+      await landing.create(sheet, on: feed, reducedMotion: reduceMotion, cut: cut, steps: steps)
     }
   }
 }

@@ -84,7 +84,9 @@ public struct SparkBuddy: Sendable {
   let body: SparkBody
   let eyes: SparkEyes
   let palette: Int
-  let framed: Bool
+  /// On its disc. A face in flight puts the disc on halfway (IOS-12f's f6, `fly`); props stay as it was made with
+  /// them, as the engine's `propsOn` is set once.
+  private(set) var framed: Bool
   /// Props (thought dots, Zzz, hearts) are drawn on a free face only (`props ?? !frame`).
   let propsOn: Bool
   let seedF: Double
@@ -185,8 +187,17 @@ public struct SparkBuddy: Sendable {
     faceScale = Self.faceScale(size: size)
   }
 
-  /// IOS-12f's f6 — a frame of its flight (hatch.tsx :304–316). The red's skeleton: it does nothing yet.
-  public mutating func fly(_ pose: SparkFlight.Pose) {}
+  /// IOS-12f's f6 — a frame of its flight (hatch.tsx :304–316): the face where its flight has it, and once the flight
+  /// is past 0.45 of the way, the disc it wears in its row, with its eyes at 1.12. The disc is put on once and kept.
+  public mutating func fly(_ pose: SparkFlight.Pose) {
+    x = pose.x
+    y = pose.y
+    R = pose.R
+    if pose.framed && !framed {
+      framed = true
+      faceScale = SparkFlight.discFaceScale
+    }
+  }
 
   /// `sparkFaceScale`: at 32 and below a face's eyes are drawn 1.25× larger, and up to 48 1.12×.
   public static func faceScale(size: Double) -> Double { size <= 32 ? 1.25 : size <= 48 ? 1.12 : 1 }

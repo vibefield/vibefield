@@ -172,8 +172,14 @@ public enum HatchSky {
       return Dealt(deal: deal, ticket: tickets, slot: slot)
     }
 
-    /// `fly`'s first step (hatch.tsx :257–266, IOS-12f's f6). The red's skeleton: no hero leaves yet.
-    public mutating func takeHero() -> SparkFlight.Start? { nil }
+    /// `fly`'s first step (hatch.tsx :257–266, IOS-12f's f6): the hero leaves the face engine, and its place and its
+    /// star's radius in the sky go with it. Nil with no hero: none dealt, or it has flown.
+    public mutating func takeHero() -> SparkFlight.Start? {
+      guard let hero, let index = faces.firstIndex(where: { $0.ticket == hero }) else { return nil }
+      let buddy = faces.remove(at: index).buddy
+      self.hero = nil
+      return SparkFlight.Start(x: buddy.x, y: buddy.y, R: buddy.R)
+    }
 
     /// The star engine's `add`: the first empty slot, else the slot whose star landed first; its rows written once.
     mutating func add(_ star: StarSpark.Star) -> Int {

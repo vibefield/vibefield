@@ -6494,7 +6494,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       "Runs on studio, your home", and the name stays as typed.
     - **Created** (Q7): the face flies from the sky to its row's face in Chat's list as the sheet folds, 660 ms on
       the island curve, as the Mac's does (§2.10). The row stands at the top of Sparks, newest first. Then Chat
-      opens the new spark's thread, where its hello waits with its three starters.
+      opens the new spark's thread, where its hello waits with its three starters. *Added 2026-11-07 (IOS-12f's f6;
+      VF-PM's Q3 ruling 17:10:10Z): the row's own face waits, unseen, while the face flies to it, and is the row's
+      once it lands. The phone draws one face, never two; the Mac draws both for the 660 ms.*
     - **Reduced motion:** no falling star and no flight. The face fades in on the sky, and once it is made, the
       row's face fades in.
 - **The phone's Apps** (track MA, ruled 2026-11-05 from the design page *Apps in a Pocket*: MA-D7…D9 and MA-D11…D13

@@ -255,6 +255,9 @@
     /// `-vf-new-spark-create` presses Create once its reads are in (no OS input on the stills' host).
     static var openNewSpark: Bool { ProcessInfo.processInfo.arguments.contains("-vf-open-new-spark") }
     static var pressCreate: Bool { ProcessInfo.processInfo.arguments.contains("-vf-new-spark-create") }
+    /// IOS-12f's f6 — the stills' row after the flight: `-vf-new-spark-hold` holds Chat's list once the face has
+    /// landed, its thread unopened (no OS input on the stills' host).
+    static var holdLanding: Bool { ProcessInfo.processInfo.arguments.contains("-vf-new-spark-hold") }
 
     /// The queue's case: `-vf-needs-case=<cards|agents|away>`, else the merged list alone.
     static var needsCase: String? { flag("-vf-needs-case=") }

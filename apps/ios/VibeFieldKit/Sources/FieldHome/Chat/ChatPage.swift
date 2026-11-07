@@ -9,6 +9,7 @@ import SwiftUI
 // its menu offers Open its pane while its own run is live, and Wake while it sleeps. IOS-12d (PC-D4 A, Q7): Needs you
 // heads the list while anything waits, one card per spark's item of the home's merged queue, answered in place.
 // IOS-12f (PC-D8 A, Q1): New spark's door, `sparkle` at the title's right, opens its sheet (`NewSparkSheetView`).
+// Created (f6), the face flies to the new row, whose own face waits for it, and then the row's thread opens.
 
 /// Chat's words (§9 "Chat on the phone"), pure.
 enum ChatWords {
@@ -146,6 +147,10 @@ struct ChatPage: View {
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   /// IOS-12f — the New spark sheet stands.
   @State private var newSpark = false
+  /// IOS-12f's f6 — Create's order: the flight to the new row, and its row's face meanwhile.
+  @State private var landing = NewSparkLanding(flying: SparkFlightWindow.make())
+  /// A new spark's thread to open, once the list holds its spark.
+  @State private var opening: String?
   #if DEBUG
     /// The stills' thread has been opened once (`ChatFixtureDoor.openThread`); back then stays back.
     @State private var openedForStills = false
@@ -198,8 +203,13 @@ struct ChatPage: View {
     .sheet(isPresented: $newSpark) {
       NewSparkSheetView(
         feed: feed, taken: feed.reading.sparks.map(\.name), homeName: homeName,
-        away: feed.reading.connected ? nil : away.first, sessions: sessions)
+        away: feed.reading.connected ? nil : away.first, sessions: sessions, landing: landing,
+        onOpen: { open(made: $0) })
     }
+    // the new spark's thread opens once the list holds it: at once when its face lands on its row, or once the list
+    // reads it where no row stood within the wait. Both read the page as it stands now, never as the sheet's press did
+    .onChange(of: opening) { openListed() }
+    .onChange(of: entries.map(\.spark.id)) { openListed() }
     #if DEBUG
       // IOS-12f — the stills' sheet, once the list is heard (no OS input on the stills' host)
       .onChange(of: heard, initial: true) { _, heard in
@@ -267,8 +277,9 @@ struct ChatPage: View {
             VStack(spacing: 0) {
               ForEach(Array(entries.enumerated()), id: \.element.id) { index, entry in
                 ChatRow(
-                  entry: entry, mark: ledger.mark(of: entry), now: now, separated: index > 0, onWake: onWake,
-                  onOpen: { thread = entry.spark.id }, onOpenPane: onOpenPane)
+                  entry: entry, mark: ledger.mark(of: entry), now: now, separated: index > 0,
+                  landing: landing.face(of: entry.spark.id), onFaceBox: { landing.row(entry.spark.id, box: $0) },
+                  onWake: onWake, onOpen: { thread = entry.spark.id }, onOpenPane: onOpenPane)
               }
             }
           }
@@ -317,6 +328,22 @@ struct ChatPage: View {
     }
   }
 
+  /// IOS-12f's f6 — the new spark's thread, asked for once its face has landed (or where nothing flew).
+  private func open(made spark: String) {
+    #if DEBUG
+      // the stills' row after the flight: the list holds, the thread unopened (`ChatFixtureDoor.holdLanding`)
+      if ChatFixtureDoor.holdLanding { return }
+    #endif
+    opening = spark
+  }
+
+  /// The asked thread, once the list holds its spark.
+  private func openListed() {
+    guard let opening, entries.contains(where: { $0.spark.id == opening }) else { return }
+    self.opening = nil
+    thread = opening
+  }
+
   /// Answer in its pane (Q5): the asking run's session card on Field, found at the press; else the card says so.
   private func openPane(of item: NeedsItem) -> Bool {
     guard let run = feed.pane(of: item, opens: paneOpens) else { return false }
@@ -353,11 +380,15 @@ struct ChatPage: View {
 /// A spark's row (DESIGN.md §8): 76 tall, 16 from the sides, its face at 48 on its disc; the name 17 semibold and its
 /// time 15 tertiary; its status's word 15 tertiary, in the attention ink when it needs you (S-4); its dot 10, orange
 /// for a need until its thread is opened, else cyan while unread (PC-L5); its separator from the words' edge.
+/// IOS-12f's f6 — a new spark's row: its face waits, unseen, while the face flies to it, or fades in where nothing
+/// flies; it says where its face is, in the window's space, at each change of its box.
 struct ChatRow: View {
   let entry: SparkEntry
   let mark: ThreadMark?
   let now: Int64
   let separated: Bool
+  var landing: NewSparkLanding.Face?
+  var onFaceBox: (CGRect) -> Void = { _ in }
   let onWake: (SparkSummary) -> Void
   /// IOS-12c — pressed: its thread
   let onOpen: () -> Void
@@ -375,9 +406,19 @@ struct ChatRow: View {
   var body: some View {
     let time = SparkEntries.activityWords(at: entry.activityAt, now: now)
     HStack(spacing: Self.gap) {
-      SparkFaceView(
-        seed: entry.spark.seed, status: entry.status.rawValue, size: Self.face,
-        live: Self.atWork.contains(entry.status))
+      Group {
+        if landing == .waits {
+          Color.clear
+        } else {
+          SparkFaceView(
+            seed: entry.spark.seed, status: entry.status.rawValue, size: Self.face,
+            live: Self.atWork.contains(entry.status)
+          )
+          .transition(.opacity)
+        }
+      }
+      .frame(width: Self.face, height: Self.face)
+      .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { onFaceBox($0) }
       VStack(alignment: .leading, spacing: 2) {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
           Text(entry.spark.name)

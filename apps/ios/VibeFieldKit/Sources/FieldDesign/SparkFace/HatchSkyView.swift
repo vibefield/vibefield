@@ -20,20 +20,35 @@ import os
 // - where Metal cannot build the sky or the star, the flat star stands on the sky's colour: never a blank (§2.10);
 // - DEBUG's `-vf-spark-time=<seconds>` holds the clock: each deal is at 0 with Mulberry32 of the face's seed, stepped
 //   at 60 frames a second to that time and drawn once, so a still is the same every run.
+// Created (f6), the face leaves the sky for its flight: `HatchSkyHero` hands the sheet its place in the window.
+
+/// IOS-12f's f6 — the sky's hero, for its flight: the sheet holds one, and Create takes the face out of the sky.
+@MainActor
+public final class HatchSkyHero {
+  weak var layer: HatchSkyLayer?
+
+  public init() {}
+
+  /// `fly`'s first step: the face leaves the sky, and where it stood goes with it, in the window's space. Nil where the
+  /// sky has no face to give: the flat star, or none dealt.
+  public func take() -> SparkFlight.Start? { layer?.takeHero() }
+}
 
 /// New spark's sky (§8): the night, the star that falls, and the face born where it lands.
 public struct HatchSkyView: View {
   let seed: UInt32
   let faceSize: CGFloat
+  let hero: HatchSkyHero?
   /// Made once the view appears, never per re-render: it owns two Metal views.
   @State private var holder: HatchSkyHolder?
   @State private var flat = false
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @Environment(\.scenePhase) private var phase
 
-  public init(seed: UInt32, faceSize: CGFloat = CGFloat(HatchSky.faceSize)) {
+  public init(seed: UInt32, faceSize: CGFloat = CGFloat(HatchSky.faceSize), hero: HatchSkyHero? = nil) {
     self.seed = seed
     self.faceSize = faceSize
+    self.hero = hero
   }
 
   public var body: some View {
@@ -58,6 +73,7 @@ public struct HatchSkyView: View {
       holder?.reducedMotion = reduceMotion
       holder?.active = phase == .active
       holder?.deal(seed)
+      hero?.layer = holder?.layer
     }
     .onChange(of: seed) { holder?.deal(seed) }
     .onChange(of: reduceMotion) { holder?.reducedMotion = reduceMotion }
@@ -223,6 +239,15 @@ final class HatchSkyLayer: UIView, MTKViewDelegate {
     }
     live.deal(seed: seed, draws: .system(), sky: bounds.size, size: faceSize, reducedMotion: reducedMotion)
     run()
+  }
+
+  /// The hero leaves the sky for its flight (`HatchSky.Live.takeHero`): its place in the window, its star's radius. Nil
+  /// out of a window, or with no hero.
+  func takeHero() -> SparkFlight.Start? {
+    guard window != nil, let hero = live.takeHero() else { return nil }
+    let point = convert(CGPoint(x: hero.x, y: hero.y), to: nil)
+    if held != nil { drawBoth() }
+    return SparkFlight.Start(x: Double(point.x), y: Double(point.y), R: hero.R)
   }
 
   /// Runs while the sky is in a window, the app is active and the clock is not held.
