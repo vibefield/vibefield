@@ -37,6 +37,11 @@ public enum ChromePalette {
   /// Tertiary: a fan key's subtitle, a row's summary. `.pk small` / `.srow .sum`.
   public static let inkTertiary = dynamic(
     light: 0x000000, lightAlpha: 0.50, dark: 0xFFFFFF, darkAlpha: 0.55)
+  /// t4: the words of a pill that is off (DESIGN.md §7 "Off", item 241; §2.4's t4, black at 50% by day and white at
+  /// 38% by night), 3.2–3.9:1 on the quiet fill. Never a word that must be read. Not `inkFaint` below, the History
+  /// ramp's last step at 30% and 32% (item 242).
+  public static let inkT4 = dynamic(
+    light: 0x000000, lightAlpha: 0.50, dark: 0xFFFFFF, darkAlpha: 0.38)
   /// The placeholder, and the one step below tertiary. `.field .ph`.
   public static let placeholder = dynamic(
     light: 0x000000, lightAlpha: 0.40, dark: 0xFFFFFF, darkAlpha: 0.42)

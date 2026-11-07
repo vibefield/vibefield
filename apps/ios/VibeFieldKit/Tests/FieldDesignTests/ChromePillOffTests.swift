@@ -72,13 +72,20 @@ struct ChromePillOffTests {
   }
 
   static func draw(_ kind: ChromePillStyle.Kind, off: Bool, _ scheme: ColorScheme) throws -> Picture {
-    let pill = Button("Create Polaris") {}
-      .buttonStyle(ChromePillStyle(kind, wide: true))
-      .disabled(off)
+    try picture(
+      Button("Create Polaris") {}
+        .buttonStyle(ChromePillStyle(kind, wide: true))
+        .disabled(off), scheme)
+  }
+
+  /// A button on the sheet's paper at 2×, in one look.
+  static func picture(_ button: some View, _ scheme: ColorScheme) throws -> Picture {
+    let view =
+      button
       .frame(width: size.width, height: size.height)
       .background(ChromePalette.paper)
       .environment(\.colorScheme, scheme)
-    let renderer = ImageRenderer(content: pill)
+    let renderer = ImageRenderer(content: view)
     renderer.scale = scale
     let image = try #require(renderer.cgImage)
     return Picture(bytes: try SparkStarStillTests.pixels(image), width: image.width)
@@ -159,6 +166,45 @@ struct ChromePillOffTests {
         let words = Self.words(picture, from: fill)
         let faint = Self.faint(scheme).over(quiet)
         #expect(words.distance(faint) <= 10, "\(kind) \(scheme): the words \(words), t4 on the quiet fill \(faint)")
+      }
+    }
+  }
+
+  @Test("the kit's t4 is DESIGN.md's: black at 50% by day, white at 38% by night")
+  func theT4Ink() {
+    for scheme in Self.schemes {
+      let ink = Self.colour(ChromePalette.inkT4, scheme)
+      let want = Self.faint(scheme)
+      #expect(ink.distance(want) < 0.5 && abs(ink.a - want.a) < 0.002, "\(scheme): \(ink) at \(ink.a)")
+    }
+  }
+
+  @Test("a capsule drawn by hand wears the same Off: live its own look, off the quiet look it is given, words in t4")
+  func theCapsule() throws {
+    for scheme in Self.schemes {
+      let paper = Self.colour(ChromePalette.paper, scheme)
+      let quiet = Self.colour(ChromePalette.keyFill, scheme).over(paper)
+      for off in [false, true] {
+        let drawn = try Self.picture(
+          Button {
+          } label: {
+            Text("Allow").font(ChromeType.sans(15, .medium)).padding(.horizontal, 16)
+              .frame(width: Self.size.width, height: Self.size.height)
+          }
+          .buttonStyle(ChromeCapsuleStyle(live: .primary, off: .quiet))
+          .disabled(off), scheme)
+        let fill = Self.fill(drawn)
+        let words = Self.words(drawn, from: fill)
+        if off {
+          #expect(fill.distance(quiet) <= 3, "off \(scheme): the fill \(fill), the quiet fill \(quiet)")
+          let faint = Self.faint(scheme).over(quiet)
+          #expect(words.distance(faint) <= 10, "off \(scheme): the words \(words), \(faint)")
+        } else {
+          let solid = Self.colour(ChromePalette.keyOnFill, scheme)
+          #expect(fill.distance(solid) <= 3, "live \(scheme): the fill \(fill), \(solid)")
+          let onInk = Self.colour(ChromePalette.keyOnInk, scheme)
+          #expect(words.distance(onInk) <= 10, "live \(scheme): the words \(words), \(onInk)")
+        }
       }
     }
   }

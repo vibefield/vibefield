@@ -164,8 +164,8 @@ struct ChatNeedsCardView: View {
             act(word(each), primary: each.primary) {
               if answers { onAct(each.choice) }
             }
-            // §8: while its answer runs the pressed act keeps its look and says "…"; the others dim as the kit's
-            // disabled buttons do, and none answers (d4c, S1: `.disabled` on the pressed act greyed it)
+            // §8: while its answer runs the pressed act keeps its look and says "…"; the others are off, in the
+            // kit's one Off look (item 241), and none answers (d4c, S1: `.disabled` on the pressed act greyed it)
             .disabled(!answers && !pressed)
             .allowsHitTesting(answers)
           }
@@ -193,18 +193,19 @@ struct ChatNeedsCardView: View {
     Button(action: press) {
       Text(word)
         .font(ChromeType.sans(15, .medium))
-        .foregroundStyle(primary ? ChromePalette.keyOnInk : ChromePalette.ink)
         .lineLimit(1)
         .fixedSize()
         .padding(.horizontal, 16)
         .frame(height: Self.capsule)
-        .background(Capsule().fill(primary ? ChromePalette.keyOnFill : ChromePalette.menuSurface))
-        .overlay {
-          if !primary { Capsule().strokeBorder(ChromePalette.cardHairline, lineWidth: 1) }
-        }
     }
-    .buttonStyle(.plain)
+    // DESIGN.md §7 "Off" (item 241): off, an act takes the card's quiet act with its words in t4, the pill's own Off
+    // look; `.plain` dimmed it in SwiftUI's own way, a third look
+    .buttonStyle(ChromeCapsuleStyle(live: primary ? .primary : Self.quietAct, off: Self.quietAct))
   }
+
+  /// The card's quiet act: the menu's surface and the card's hairline, on the card's pale fill.
+  static let quietAct = ChromePillLook(
+    fill: ChromePalette.menuSurface, ink: ChromePalette.ink, hairline: ChromePalette.cardHairline, hairlineWidth: 1)
 
   /// Words that show six lines at most, then scroll within themselves, so nothing you answer is hidden from you.
   private func scrolled(

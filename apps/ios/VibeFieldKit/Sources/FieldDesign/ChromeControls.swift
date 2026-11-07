@@ -37,6 +37,11 @@ public struct ChromeEyebrow: View {
 /// WI-2 (DESIGN.md §8 "The phone's way in") — `wide`: the way in's acts, 50 pt
 /// tall and the full width of their glass, so the primary stands in one place
 /// on every step. One size more, never a third weight.
+///
+/// Item 241 (DESIGN.md §7 "Off") — a pill that is off draws as the quiet one
+/// with its words in t4, from the enabled state its view is given; a call
+/// site never fades it. A pill whose word says its own press runs
+/// ("Starting…") stays enabled with its hits off, so it keeps its look.
 public struct ChromePillStyle: ButtonStyle {
   public enum Kind: Sendable {
     case primary
@@ -59,26 +64,84 @@ public struct ChromePillStyle: ButtonStyle {
   public func makeBody(configuration: Configuration) -> some View {
     configuration.label
       .font(ChromeType.sans(size, .semibold))
-      .foregroundStyle(kind == .primary ? ChromePalette.keyOnInk : ChromePalette.ink)
       .lineLimit(1)
       .padding(.horizontal, 18)
       .frame(maxWidth: wide ? .infinity : nil)
       .frame(height: wide ? Self.wideHeight : 44)
       .contentShape(Capsule())
+      .modifier(
+        ChromePillPaint(live: kind == .primary ? .primary : .quiet, off: .quiet, pressed: configuration.isPressed))
+  }
+}
+
+/// One look of a pill: its fill, its words' ink and its hairline.
+public struct ChromePillLook: Sendable {
+  public let fill: Color
+  public let ink: Color
+  public let hairline: Color?
+  public let hairlineWidth: CGFloat
+
+  public init(fill: Color, ink: Color, hairline: Color? = nil, hairlineWidth: CGFloat = 0.5) {
+    self.fill = fill
+    self.ink = ink
+    self.hairline = hairline
+    self.hairlineWidth = hairlineWidth
+  }
+
+  /// The primary: the solid inversion.
+  public static let primary = ChromePillLook(fill: ChromePalette.keyOnFill, ink: ChromePalette.keyOnInk)
+  /// The quiet pill: the card's own glass and its hairline.
+  public static let quiet = ChromePillLook(
+    fill: ChromePalette.keyFill, ink: ChromePalette.ink, hairline: ChromePalette.keyHairline)
+}
+
+/// DESIGN.md §7 "Off" (item 241, ruled 2026-11-07): the kit's one Off look, for a capsule drawn by hand where the
+/// pill's own size does not fit (the Needs card's acts). Live it wears `live`; while its button is off it wears
+/// `off`, the quiet look beside it, with its words in t4; pressed, the kit's pressed fill lies over it, as the pill's.
+public struct ChromeCapsuleStyle: ButtonStyle {
+  private let live: ChromePillLook
+  private let off: ChromePillLook
+
+  public init(live: ChromePillLook, off: ChromePillLook) {
+    self.live = live
+    self.off = off
+  }
+
+  public func makeBody(configuration: Configuration) -> some View {
+    configuration.label
+      .contentShape(Capsule())
+      .modifier(ChromePillPaint(live: live, off: off, pressed: configuration.isPressed))
+  }
+}
+
+/// How every pill in the kit is painted, from whether its button is enabled (DESIGN.md §4, §7 "Off"). A pill that
+/// is off gives up its own look for the quiet one, so a primary loses its inversion, and its words wear t4 at full
+/// opacity (`ChromePalette.inkT4`, 3.2–3.9:1 on the quiet fill); it is never the live pill faded. A modifier,
+/// because a style is no view and only a view reads `isEnabled` (`ChromeSwitch`'s reason).
+struct ChromePillPaint: ViewModifier {
+  let live: ChromePillLook
+  let off: ChromePillLook
+  let pressed: Bool
+  @Environment(\.isEnabled) private var isEnabled
+
+  func body(content: Content) -> some View {
+    let look = isEnabled ? live : off
+    content
+      .foregroundStyle(isEnabled ? live.ink : ChromePalette.inkT4)
       .background {
-        if kind == .primary {
-          Capsule().fill(ChromePalette.keyOnFill)
-        } else {
-          Capsule()
-            .fill(ChromePalette.keyFill)
-            .overlay { Capsule().strokeBorder(ChromePalette.keyHairline, lineWidth: 0.5) }
-        }
+        Capsule()
+          .fill(look.fill)
+          .overlay {
+            if let hairline = look.hairline {
+              Capsule().strokeBorder(hairline, lineWidth: look.hairlineWidth)
+            }
+          }
       }
       .overlay {
         Capsule()
           .fill(ChromePalette.keyPressedFill)
-          .opacity(configuration.isPressed ? 1 : 0)
+          .opacity(pressed ? 1 : 0)
       }
-      .animation(FieldMotion.ease(0.08), value: configuration.isPressed)
+      .animation(FieldMotion.ease(0.08), value: pressed)
   }
 }

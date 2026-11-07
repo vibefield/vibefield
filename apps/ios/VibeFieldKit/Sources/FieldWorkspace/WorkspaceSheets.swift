@@ -87,6 +87,8 @@ public struct CreateSessionSheet: View {
             .foregroundStyle(ChromePalette.inkSecondary)
         }
         Button {
+          // "Starting…" keeps its look while it runs (item 241), so it is enabled then; a second press asks nothing
+          guard !model.spawning else { return }
           Task {
             // DESIGN.md §8: success or warning at the birth
             let born = await model.spawn()
@@ -103,8 +105,10 @@ public struct CreateSessionSheet: View {
           }
         }
         .buttonStyle(ChromePillStyle(.primary))
-        .opacity(model.canSpawn || model.spawning ? 1 : 0.4)
-        .disabled(!model.canSpawn)
+        // DESIGN.md §7 "Off" (item 241): the pill draws off itself. "Starting…" says its own press runs, so it keeps
+        // its look with its hits off
+        .disabled(!model.canSpawn && !model.spawning)
+        .allowsHitTesting(model.canSpawn)
         .listRowBackground(Color.clear)
         .listRowInsets(EdgeInsets())
       }
