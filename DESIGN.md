@@ -703,6 +703,12 @@ and when the name settles", lost its second trigger when NS-D2 ruled B, and the 
 *Ruled 2026-10-30 (James, the Sparks page v8, 18:41–18:48Z): NS-D3 A, read as put, "on open, and on each reroll".
 Built at SP-1c: the sky is James's star engine (`star-spark/engine.js` at `025b495`, vendored byte for byte as the kit's
 `spark-face/vendor/star-spark.js` with its first user, the sheet; a test holds its SHA-256 as it does the face's).*
+*Amended 2026-11-07 (IOS-12f, its Q6 and Q7; VF-PM's rulings 12:35:44Z):* on the phone the hatch plays in New
+spark's sky (§8 "The phone's Chat"), free at 120. The kit transcribes the engine's trail, body and burst into Metal
+(`SparkHatch.metal`), as IOS-12e transcribed the face. The engine draws them as pure functions of the row and the
+time, so a golden the vendored engine deals holds any moment: the kit matches its rows within 1e-4 and its stills by
+eye (12e's bound). Created, the face flies from the sky to its row in Chat's list as the sheet folds, 660 ms on the
+island curve, as the Mac's kit flies it. Reduced motion: no falling star and no flight; the face fades in.
 
 **Where it lives in code.** The engine is vendored from James's `research/spark`
 (`agent-sparks/sparks.js` at `025b495`, and `star-spark.js` beside it), byte for byte: a newer version
@@ -1777,6 +1783,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     Created, the face flies to its row in Chat (§2.10), the sheet folds, and Chat chooses the new spark.
   - **Reduced motion:** no falling star and no flight; the face fades in, and the sheet appears and leaves by opacity
     alone.
+  - **On the phone** (IOS-12f, 2026-11-07; VF-PM's ruling on its Q2): the same sheet at touch pitch, in the system's
+    sheet at its large detent. One rule read twice: §8 "The phone's Chat" holds its numbers.
 - **Chat's thread — the spark's conversation, drawn** (TH-1, track CO; the thread's round ruled by James on the CO
   round's page, `Druyc3Ua6BWycRe1SzzeCz`, 2026-11-02 and 2026-11-04, every mark at its lean but TH-Q3 (b), and by
   VF-PM 2026-11-04 05:01Z and 23:22Z, TH0-Q1…Q15; the plan `step0-th.md`). The thread is the spark's own conversation,
@@ -6413,6 +6421,65 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       answers, the line goes and Send returns, with the draft as typed.
   - **New spark** (PC-D8 A): the sheet at touch pitch makes the spark on your home desktop, said and not asked; its
     sky is the hatch, free, at 120 (§2.10).
+    *Amended 2026-11-07 (IOS-12f; VF-PM's rulings on its Q1–Q10, 12:35:44Z; its words are §9's, for James's eye):*
+    the Mac's sheet (§8 "The New spark sheet") at touch pitch, one rule read twice. The desk draws it 540 wide in
+    the window's middle; the phone draws it in the system's sheet (Q2).
+    - **Its door** (Q1): `sparkle` 22 on a 44 button at the right of Chat's large title, named New spark, as the
+      Mac's create stands in Chat's line. The bar keeps its three tabs. Cancel, or the sheet pulled down, folds the
+      sheet, and nothing is made.
+    - **The sheet** (Q2): the system's sheet at its large detent, on the paper, with the 40 corners of the phone's
+      other sheets. The sky is inset 10 from the sheet's edges, as the Mac's padding is, and what stands under it
+      is 16 from the sides.
+    - **The sky:** 300 tall at the top, corners 30, so it is concentric with the sheet. It is night in both themes,
+      on `--vf-spark-night`. The hatch (§2.10) plays there on open and on each reroll (NS-D3 A): a star falls at an
+      angle, lands and bursts, and the face is born where it hit, free at 120. Where Metal can't draw it, the face
+      is the flat star on that ground, never a blank.
+    - **The name:** centred 16 under the sky, 30 semibold at −0.02em, 46 tall, at most the sheet's width less ↻ and
+      16 at each side. It opens holding a suggested star name, the first one no spark on the home holds. The
+      keyboard does not rise as the sheet opens, since it would cover the agent and the foot. Pressing the name
+      raises it with the name selected, so typing replaces it. A name is 1–32 characters (`SparkName`).
+    - **↻ Another face** (NS-D2 B): 44 round beside the name, in the fill, `reset` 18. It deals a new seed and the
+      hatch plays again; the name stays. Pressed, it turns −60° on the pop curve.
+    - **The agent:** one pill under the name, 44 tall, corners 22, in the fill: the agent's mark at 20, then its
+      name, 15 medium. Untouched, the spark thinks at its agent's own model and effort. A model chosen in the menu
+      is said beside the agent ("Claude Code · Opus 5.5 · high"). Once the home has more than its Default profile,
+      the profile it thinks under follows a hairline. The phone calls the wire's This Mac **Default**, as its
+      launch sheet does (PJ-7).
+    - **The agent menu** (Q3) is the kind the thread's ⋯ opens (IOS-12c): the system's menu, pulled down from the
+      pill. Each agent is a section, headed by its label and, once the home has more than Default, the profile it
+      thinks under. Its rows are **Its own model**, then its models as `agent.models` lists them, the chosen one
+      ticked. Effort is the section's last row, its values side by side (the system menu's palette), under a model
+      that has one. The agents the catalog lets be a spark come first. After them come the ones installed on the
+      home that it does not let yet, disabled, with why as their second line ("can't take VibeField's tools yet").
+      Both are read from the home's `agent.providers[]` (`offers.spark` and `available`), as the Mac's sheet reads
+      them.
+    - **Runs on studio** (Q5): one line under the agent, 13 tertiary: "Runs on studio, your home". The phone has no
+      This Mac to choose: a spark lives on the desktop that hatched it (PC-L2), and a phone's sparks on its home.
+    - **Its profiles** (Q4; NS-D5), once the home has more than Default: a row of chips under that line, 32 tall,
+      corners 16, 14 medium, wrapping. A checked chip takes the fill and a 1.5 inset ring. Default comes checked.
+      The one it thinks under is always checked and can't be unchecked. Under them, 13 tertiary, what the spark
+      will reach: "Sees 3 sessions · starts Claude Code and Codex".
+    - **The foot:** Cancel (quiet) and **Create Polaris** (primary), capsules 48 tall and 8 apart, side by side
+      across the sheet less 16 at each side, 16 above the safe area; while the name is typed, it stands over the
+      keys. Create waits on a name. It also waits, disabled, on the agent and the profile the sheet reads as it
+      opens, and while its hatch runs.
+    - **A read that fails** is said at the foot, 13 in the attention ink, centred, never a Create left waiting in
+      silence: "VibeField can't list its agents right now", or "VibeField can't list your Agent Profiles right
+      now".
+    - **Create** calls `compose.sparks.hatch` on the home, which answers it itself, with nothing forwarded
+      (`local`). A refusal is said where the sheet asked, 13 in the attention ink, centred under its place: under
+      the name ("Vela is taken"), under the agent ("Work has no Claude Code sign-in"), under the profiles ("That
+      profile is gone"), and anything else under the foot, in fieldd's words.
+    - **Its home away** (PC-L4): the sheet still opens, since the name and the face are the phone's to deal. The
+      agent, its menu and the profiles are the home's, so they are not drawn, and a line in the pill's place says
+      why (§9): "studio is asleep · New spark waits for it". Create is disabled. Nothing is held to be made later:
+      a spark nobody pressed Create for is not yours. When the home answers, the reads begin, the line becomes
+      "Runs on studio, your home", and the name stays as typed.
+    - **Created** (Q7): the face flies from the sky to its row's face in Chat's list as the sheet folds, 660 ms on
+      the island curve, as the Mac's does (§2.10). The row stands at the top of Sparks, newest first. Then Chat
+      opens the new spark's thread, where its hello waits with its three starters.
+    - **Reduced motion:** no falling star and no flight. The face fades in on the sky, and once it is made, the
+      row's face fades in.
 - **The phone's Apps** (track MA, ruled 2026-11-05 from the design page *Apps in a Pocket*: MA-D7…D9 and MA-D11…D13
   A, MA-D10 B, James; MA-D1…D6 carried A under his "all ruled"; the laws MA-L1…L10). Nothing is drawn yet: MA-6
   draws the door, the cues and the shelf, and MA-5 the open app on SP-4's web view. Until MA-5 a hosted app opens its
@@ -7186,6 +7253,14 @@ board ask ios12d-chat-words):*
 - **The note, for an answer that returns off screen** (Q4), in the card's words: "You said Allow one more ·
   Couldn't start the agent: ‹reason›", "You said Yes · Vela hears it when it wakes: ‹fieldd's words›", and
   "Couldn't answer: ‹fieldd's words›".
+*Amended 2026-11-07 (IOS-12f; VF-PM's rulings 12:35:44Z; every line here for James's eye, filed as one board ask):*
+- **New spark** says the Mac's sheet's words (§8 "The New spark sheet"): **Another face**, **Its own model**,
+  "can't take VibeField's tools yet", the reach ("Sees 3 sessions · starts Claude Code and Codex") and the two
+  failed reads. A profile that is gone is "That profile is gone", the Mac's model's words (`refusalOf`), written
+  here for the first time. Its chips and pill call This Mac **Default**, as the launch sheet does (PJ-7).
+- **Its home away** (Q5), in the line under the name, with Create disabled: "‹desktop› is asleep · New spark waits
+  for it", "‹desktop› isn't answering · New spark waits for it", and "‹desktop› runs a build this phone can't
+  read · New spark waits for it".
 
 **Apps** (track MA, ruled 2026-11-05 from the page *Apps in a Pocket*: MA-D13 (a), Apps everywhere; the words are
 `draft/thinking-mini-apps.md` §5.8 and §5.9; where each word stands is §8 "The phone's Apps" and "Artifacts — the
