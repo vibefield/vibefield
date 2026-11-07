@@ -4,7 +4,7 @@
 // to MSL: the night ground, the trail, the body's burst, the particles, the bloom's two passes and the composite.
 //
 // It reads each star's 32 vec4 rows (StarSpark.rows, the engine's `_write`) from a 32×N RGBA32F texture, one row of
-// texels per star, and SparkHatchRenderer draws a frame as `SparkEngine.render(t)` draws one (:634). Held to the
+// texels per star, and HatchSkyRenderer draws a frame as `SparkEngine.render(t)` draws one (:634). Held to the
 // engine's own pixels by the hatch's frames golden (`spark-hatch-frames/*.png`, SparkHatchFramesTests), within 12e's
 // bound, which VF-PM rules for good on the first report.
 //
@@ -43,7 +43,7 @@
 #include <metal_stdlib>
 using namespace metal;
 
-namespace spark_hatch {
+namespace hatch_sky {
 
 constant float PI = 3.14159265359, TAU = 6.28318530718;
 
@@ -131,13 +131,13 @@ struct PartOut {
   float vHue [[flat]];
 };
 
-}  // namespace spark_hatch
+}  // namespace hatch_sky
 
-using namespace spark_hatch;
+using namespace hatch_sky;
 
 // ---------------------------------------------------------------- full-screen passes (FULL_VS, :442)
 
-vertex FullOut spark_hatch_full_vertex(uint vertexID [[vertex_id]]) {
+vertex FullOut hatch_sky_full_vertex(uint vertexID [[vertex_id]]) {
   float2 p = float2(float((vertexID << 1) & 2), float(vertexID & 2));
   FullOut out;
   out.position = float4(p * 2. - 1., 0., 1.);
@@ -145,7 +145,7 @@ vertex FullOut spark_hatch_full_vertex(uint vertexID [[vertex_id]]) {
 }
 
 /// BG_FS (:445), its night branch: the gradient, the drifting nebula and two layers of twinkling stars.
-fragment float4 spark_hatch_ground_fragment(FullOut in [[stage_in]], constant Sky &sky [[buffer(0)]]) {
+fragment float4 hatch_sky_ground_fragment(FullOut in [[stage_in]], constant Sky &sky [[buffer(0)]]) {
   float uTime = sky.a.z, uDpr = sky.a.w;
   float2 uResPx = sky.b.zw;
   float2 fc = glFrag(in.position, uResPx.y);
@@ -172,7 +172,7 @@ fragment float4 spark_hatch_ground_fragment(FullOut in [[stage_in]], constant Sk
 }
 
 /// DOWN_FS (:477): a 2×2 box down, kept above `uThresh` when it has one.
-fragment float4 spark_hatch_down_fragment(
+fragment float4 hatch_sky_down_fragment(
   FullOut in [[stage_in]], texture2d<float> uSrc [[texture(0)]], sampler smp [[sampler(0)]],
   constant Pass &pass [[buffer(0)]]
 ) {
@@ -187,7 +187,7 @@ fragment float4 spark_hatch_down_fragment(
 }
 
 /// BLUR_FS (:490): four taps `uOff + .5` texels out on the diagonals.
-fragment float4 spark_hatch_blur_fragment(
+fragment float4 hatch_sky_blur_fragment(
   FullOut in [[stage_in]], texture2d<float> uSrc [[texture(0)]], sampler smp [[sampler(0)]],
   constant Pass &pass [[buffer(0)]]
 ) {
@@ -199,7 +199,7 @@ fragment float4 spark_hatch_blur_fragment(
 }
 
 /// COMP_FS (:500): the scene, the bloom over it with a tanh shoulder at .72, the grain and the dither.
-fragment float4 spark_hatch_comp_fragment(
+fragment float4 hatch_sky_comp_fragment(
   FullOut in [[stage_in]], texture2d<float> uScene [[texture(0)]], texture2d<float> uBloom [[texture(1)]],
   sampler smp [[sampler(0)]], constant Pass &pass [[buffer(0)]]
 ) {
@@ -222,7 +222,7 @@ fragment float4 spark_hatch_comp_fragment(
 
 // ---------------------------------------------------------------- the trail (TRAIL_VS :304, TRAIL_FS :317)
 
-vertex TrailOut spark_hatch_trail_vertex(
+vertex TrailOut hatch_sky_trail_vertex(
   uint vertexID [[vertex_id]], uint instanceID [[instance_id]], texture2d<float, access::read> uData [[texture(0)]],
   constant Sky &sky [[buffer(0)]]
 ) {
@@ -241,7 +241,7 @@ vertex TrailOut spark_hatch_trail_vertex(
   return out;
 }
 
-fragment float4 spark_hatch_trail_fragment(
+fragment float4 hatch_sky_trail_fragment(
   TrailOut in [[stage_in]], texture2d<float, access::read> uData [[texture(0)]], constant Sky &sky [[buffer(0)]],
   constant float4 *uPal [[buffer(1)]], constant float4 *uConf [[buffer(2)]]
 ) {
@@ -299,7 +299,7 @@ fragment float4 spark_hatch_trail_fragment(
 
 // ---------------------------------------------------------------- the body (BODY_VS :99, BODY_FS :110), its burst
 
-vertex BodyOut spark_hatch_body_vertex(
+vertex BodyOut hatch_sky_body_vertex(
   uint vertexID [[vertex_id]], uint instanceID [[instance_id]], texture2d<float, access::read> uData [[texture(0)]],
   constant Sky &sky [[buffer(0)]]
 ) {
@@ -316,7 +316,7 @@ vertex BodyOut spark_hatch_body_vertex(
   return out;
 }
 
-fragment float4 spark_hatch_body_fragment(
+fragment float4 hatch_sky_body_fragment(
   BodyOut in [[stage_in]], texture2d<float, access::read> uData [[texture(0)]], constant Sky &sky [[buffer(0)]],
   constant float4 *uPal [[buffer(1)]], constant float4 *uConf [[buffer(2)]]
 ) {
@@ -389,7 +389,7 @@ fragment float4 spark_hatch_body_fragment(
 
 // ---------------------------------------------------------------- the particles (PART_VS :371, PART_FS :427)
 
-vertex PartOut spark_hatch_part_vertex(
+vertex PartOut hatch_sky_part_vertex(
   uint vertexID [[vertex_id]], uint instanceID [[instance_id]], texture2d<float, access::read> uData [[texture(0)]],
   constant Sky &sky [[buffer(0)]], constant float4 *uPal [[buffer(1)]], constant float4 *uConf [[buffer(2)]]
 ) {
@@ -450,7 +450,7 @@ vertex PartOut spark_hatch_part_vertex(
   return out;
 }
 
-fragment float4 spark_hatch_part_fragment(PartOut in [[stage_in]], constant Sky &sky [[buffer(0)]]) {
+fragment float4 hatch_sky_part_fragment(PartOut in [[stage_in]], constant Sky &sky [[buffer(0)]]) {
   float uNight = sky.b.x;
   float2 vL = in.vL;
   float3 vShape = in.vShape;

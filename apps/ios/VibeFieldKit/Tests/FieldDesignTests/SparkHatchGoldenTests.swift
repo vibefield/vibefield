@@ -10,7 +10,7 @@ import Testing
 /// 128 float32 rows (the star engine's own `add` and `_write`) and the rows of the face born where the star lands
 /// (the face engine's `birth` and `write`), sampled on the hatch's clock; a reroll; and reduced motion.
 ///
-/// The phone's `SparkHatch` (the deal and the clock), `StarSpark` (the star's DNA and rows) and `SparkBuddy` (the
+/// The phone's `HatchSky` (the deal and the clock), `StarSpark` (the star's DNA and rows) and `SparkBuddy` (the
 /// face's birth, hold, queue and fade) are those transcribed. The geometry is held within 1e-9, the words and the
 /// integers exactly, and the rows within 1e-4 of each float's size, as 12e's rows are (SparkBuddyGoldenTests.misses).
 ///
@@ -131,8 +131,8 @@ struct SparkHatchGoldenTests {
     return try JSONDecoder().decode(Golden.self, from: Data(contentsOf: url))
   }
 
-  static func draws(_ draws: [Double]) -> SparkHatch.Draws {
-    SparkHatch.Draws(side: draws[0], spread: draws[1], star: draws[2])
+  static func draws(_ draws: [Double]) -> HatchSky.Draws {
+    HatchSky.Draws(side: draws[0], spread: draws[1], star: draws[2])
   }
 
   /// The golden's clock over a sky: frame n at n / fps, every frame up to `until`.
@@ -140,7 +140,7 @@ struct SparkHatchGoldenTests {
     let fps: Int
     private(set) var frame = 0
 
-    mutating func run(_ sky: inout SparkHatch.Sky, to until: Double) {
+    mutating func run(_ sky: inout HatchSky.Live, to until: Double) {
       let target = Int((until * Double(fps)).rounded())
       while frame < target {
         frame += 1
@@ -184,20 +184,20 @@ struct SparkHatchGoldenTests {
     #expect(golden.engines.values.allSatisfy { $0.sha256.count == 64 })
     #expect(golden.fps == 60)
     #expect(golden.sky.width == 382 && golden.sky.height == 300)
-    #expect(golden.sky.landAt == SparkHatch.landAt)
-    #expect(golden.sky.size == SparkHatch.faceSize)
-    #expect(golden.options.bloom == SparkHatch.bloom)
-    #expect(golden.options.night == SparkHatch.night && golden.night == SparkHatch.night)
-    #expect(golden.options.max == SparkHatch.maxStars)
-    #expect(golden.options.dprCap == SparkHatch.dprCap)
-    #expect(golden.options.bloomStr == SparkHatch.bloomStrength)
-    #expect(golden.options.grain == SparkHatch.grain)
-    #expect(golden.faces["max"] == SparkHatch.maxFaces)
-    #expect(golden.hello.map(\.name) == SparkHatch.hello.map { $0.0 })
-    #expect(golden.hello.map(\.hold) == SparkHatch.hello.map { $0.1 ?? -1 })
-    #expect(golden.deathAfter == SparkHatch.deathAfter)
-    #expect(golden.mask == SparkHatch.mask)
-    #expect(golden.burstMode == SparkHatch.burstMode)
+    #expect(golden.sky.landAt == HatchSky.landAt)
+    #expect(golden.sky.size == HatchSky.faceSize)
+    #expect(golden.options.bloom == HatchSky.bloom)
+    #expect(golden.options.night == HatchSky.night && golden.night == HatchSky.night)
+    #expect(golden.options.max == HatchSky.maxStars)
+    #expect(golden.options.dprCap == HatchSky.dprCap)
+    #expect(golden.options.bloomStr == HatchSky.bloomStrength)
+    #expect(golden.options.grain == HatchSky.grain)
+    #expect(golden.faces["max"] == HatchSky.maxFaces)
+    #expect(golden.hello.map(\.name) == HatchSky.hello.map { $0.0 })
+    #expect(golden.hello.map(\.hold) == HatchSky.hello.map { $0.1 ?? -1 })
+    #expect(golden.deathAfter == HatchSky.deathAfter)
+    #expect(golden.mask == HatchSky.mask)
+    #expect(golden.burstMode == HatchSky.burstMode)
     #expect(golden.deals.map(\.id) == ["a", "b", "c"])
     #expect(StarSpark.floats == 128)
     let rows = golden.deals.map(\.rows) + golden.reroll.stars.map(\.rows)
@@ -234,7 +234,7 @@ struct SparkHatchGoldenTests {
   func deals() throws {
     let golden = try Self.golden()
     for want in golden.deals {
-      let deal = SparkHatch.deal(
+      let deal = HatchSky.deal(
         seed: want.seed, draws: Self.draws(want.draws), at: 0, sky: golden.skySize, reducedMotion: false)
       #expect(deal.centre == want.centre.simd, "\(want.id)")
       #expect(Self.near(deal.face.R, want.R), "\(want.id): R \(deal.face.R), not \(want.R)")
@@ -258,7 +258,7 @@ struct SparkHatchGoldenTests {
   func faces() throws {
     let golden = try Self.golden()
     for want in golden.deals {
-      var sky = SparkHatch.Sky()
+      var sky = HatchSky.Live()
       var clock = Clock(fps: golden.fps)
       let dealt = sky.deal(seed: want.seed, draws: Self.draws(want.draws), sky: golden.skySize, reducedMotion: false)
       #expect(dealt.slot == 0, "\(want.id)")
@@ -279,7 +279,7 @@ struct SparkHatchGoldenTests {
     let reroll = golden.reroll
     let open = try golden.deal(reroll.open)
     let next = try golden.deal(reroll.next)
-    var sky = SparkHatch.Sky()
+    var sky = HatchSky.Live()
     var clock = Clock(fps: golden.fps)
     let one = sky.deal(seed: open.seed, draws: Self.draws(open.draws), sky: golden.skySize, reducedMotion: false)
     clock.run(&sky, to: reroll.at)
@@ -314,7 +314,7 @@ struct SparkHatchGoldenTests {
     let golden = try Self.golden()
     #expect(golden.reduced.star == nil)
     let want = try golden.deal(golden.reduced.deal)
-    var sky = SparkHatch.Sky()
+    var sky = HatchSky.Live()
     var clock = Clock(fps: golden.fps)
     let dealt = sky.deal(seed: want.seed, draws: Self.draws(want.draws), sky: golden.skySize, reducedMotion: true)
     #expect(dealt.deal.star == nil && dealt.deal.fall == nil && dealt.slot == nil)
@@ -331,8 +331,8 @@ struct SparkHatchGoldenTests {
   func slots() throws {
     let golden = try Self.golden()
     let want = try golden.deal("a")
-    var sky = SparkHatch.Sky()
-    for index in 0..<SparkHatch.maxStars {
+    var sky = HatchSky.Live()
+    for index in 0..<HatchSky.maxStars {
       let dealt = sky.deal(
         seed: want.seed, draws: Self.draws(want.draws), sky: golden.skySize, reducedMotion: false)
       #expect(dealt.slot == index)
@@ -340,11 +340,11 @@ struct SparkHatchGoldenTests {
     // every star landed at the same time, so the first slot is the one that landed first
     let full = sky.deal(seed: want.seed, draws: Self.draws(want.draws), sky: golden.skySize, reducedMotion: false)
     #expect(full.slot == 0)
-    #expect(sky.faces.count == SparkHatch.maxFaces)
+    #expect(sky.faces.count == HatchSky.maxFaces)
     let death = try #require(full.deal.star).tDeath
-    #expect(!SparkHatch.collected(tDeath: death, at: death + SparkHatch.collectAfter))
-    #expect(SparkHatch.collected(tDeath: death, at: death + SparkHatch.collectAfter + 1e-6))
-    #expect(!SparkHatch.collected(tDeath: 0, at: 99))
+    #expect(!HatchSky.collected(tDeath: death, at: death + HatchSky.collectAfter))
+    #expect(HatchSky.collected(tDeath: death, at: death + HatchSky.collectAfter + 1e-6))
+    #expect(!HatchSky.collected(tDeath: 0, at: 99))
     sky.frame(at: death + 1.5)
     #expect(sky.used == 0 && sky.starRows.allSatisfy { $0 == 0 })
   }

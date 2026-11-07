@@ -11,7 +11,7 @@ import Testing
 /// spark-hatch-frames-golden.mjs` drew them on the host its manifest names, and `spark-hatch-frames.manifest.json`
 /// names each one's case and sha256. All are copied in byte for byte (`pnpm check:ios-fixtures`).
 ///
-/// `SparkHatchRenderer` draws the same moment through `SparkHatch.metal`, offscreen, as the engine's `render(t)` draws
+/// `HatchSkyRenderer` draws the same moment through `HatchSky.metal`, offscreen, as the engine's `render(t)` draws
 /// it: the night ground, the deal's star from the rows golden's own rows, the bloom and the composite. The rows are
 /// held by SparkHatchGoldenTests, so what is measured here is the shader alone. Each frame must be the engine's within
 /// 12e's bound, which VF-PM rules for good on the first report (DESIGN.md §2.10):
@@ -86,7 +86,7 @@ struct SparkHatchFramesTests {
   func manifestHoldsTheFrames() throws {
     let manifest = try Self.manifest()
     let golden = try SparkHatchGoldenTests.golden()
-    #expect(manifest.scale == SparkHatch.dprCap)
+    #expect(manifest.scale == HatchSky.dprCap)
     #expect(manifest.engine.sha256 == golden.engines["star"]?.sha256)
     // the frames were drawn from this bundle's rows golden, byte for byte
     let rows = try Data(contentsOf: SparkStarStillTests.fixture("spark-hatch.golden.json"))
@@ -106,17 +106,17 @@ struct SparkHatchFramesTests {
         #expect(entry.grain == 0, "\(entry.id)")
         #expect(entry.width == golden.sky.width && entry.height == golden.sky.height, "\(entry.id)")
       } else {
-        #expect(entry.grain == SparkHatch.grain, "\(entry.id)")
+        #expect(entry.grain == HatchSky.grain, "\(entry.id)")
       }
     }
     #expect(bytes == manifest.bytes)
   }
 
-  @Test("each frame SparkHatch.metal draws is the engine's picture, within the bound")
+  @Test("each frame HatchSky.metal draws is the engine's picture, within the bound")
   func framesAreTheEnginesPictures() throws {
     let manifest = try Self.manifest()
     let golden = try SparkHatchGoldenTests.golden()
-    let renderer = try SparkHatchRenderer.system.get()
+    let renderer = try HatchSkyRenderer.system.get()
     let report = ProcessInfo.processInfo.environment["VF_SPARK_HATCH_REPORT"].map { URL(fileURLWithPath: $0) }
     if let report { try FileManager.default.createDirectory(at: report, withIntermediateDirectories: true) }
     var measures: [SparkStarStillTests.Measure] = []
@@ -125,7 +125,7 @@ struct SparkHatchFramesTests {
       var rows: [Float] = []
       if let id = entry.deal {
         let deal = try golden.deal(id)
-        if !SparkHatch.collected(tDeath: deal.star.tDeath, at: entry.t) { rows = deal.rows.map(Float.init) }
+        if !HatchSky.collected(tDeath: deal.star.tDeath, at: entry.t) { rows = deal.rows.map(Float.init) }
       }
       let drawn = try renderer.frame(
         rows: rows, stars: rows.isEmpty ? 0 : 1, size: CGSize(width: entry.width, height: entry.height),

@@ -2,7 +2,7 @@ import CoreGraphics
 import Foundation
 import Metal
 
-// IOS-12f's f5 (PC-D8 A; DESIGN.md §2.10, amended 2026-11-07) — THE HATCH'S METAL: `SparkHatch.metal`'s programs from
+// IOS-12f's f5 (PC-D8 A; DESIGN.md §2.10, amended 2026-11-07) — THE HATCH'S METAL: `HatchSky.metal`'s programs from
 // FieldDesign's default library, and the star engine's one frame (`SparkEngine.render(t)`, star-spark.js :634):
 // - the engine's four targets in half floats (`resize`, :569: the scene, a half and two quarters, RGBA16F as the
 //   frames' host drew them, LINEAR and CLAMP_TO_EDGE);
@@ -15,7 +15,7 @@ import Metal
 /// The hatch's Metal on one device. Nothing changes after it is built, and Metal's device, pipelines and buffers may
 /// be used from any thread, so one renderer serves the frames golden (any thread) and the sheet's sky (the main
 /// thread).
-public final class SparkHatchRenderer: @unchecked Sendable {
+public final class HatchSkyRenderer: @unchecked Sendable {
   public let device: any MTLDevice
   let queue: any MTLCommandQueue
   let ground: any MTLRenderPipelineState
@@ -30,9 +30,9 @@ public final class SparkHatchRenderer: @unchecked Sendable {
   let confetti: any MTLBuffer
 
   /// The system's GPU, built once; the error where Metal cannot build the sky (the sheet then draws the flat star).
-  public static let system = Result<SparkHatchRenderer, any Error> {
+  public static let system = Result<HatchSkyRenderer, any Error> {
     guard let device = MTLCreateSystemDefaultDevice() else { throw SparkStarError.unavailable("a Metal device") }
-    return try SparkHatchRenderer(device: device)
+    return try HatchSkyRenderer(device: device)
   }
 
   /// The engine's targets: RGBA16F, which it takes when EXT_color_buffer_float is there (the frames' host had it).
@@ -49,7 +49,7 @@ public final class SparkHatchRenderer: @unchecked Sendable {
     let library = try device.makeDefaultLibrary(bundle: .module)
     func function(_ name: String) throws -> any MTLFunction {
       guard let function = library.makeFunction(name: name) else {
-        throw SparkStarError.unavailable("SparkHatch.metal's \(name) in FieldDesign's library")
+        throw SparkStarError.unavailable("HatchSky.metal's \(name) in FieldDesign's library")
       }
       return function
     }
@@ -72,18 +72,18 @@ public final class SparkHatchRenderer: @unchecked Sendable {
       }
       return try device.makeRenderPipelineState(descriptor: descriptor)
     }
-    let full = "spark_hatch_full_vertex"
-    ground = try pipeline(full, "spark_hatch_ground_fragment", format: Self.sceneFormat, blended: false)
+    let full = "hatch_sky_full_vertex"
+    ground = try pipeline(full, "hatch_sky_ground_fragment", format: Self.sceneFormat, blended: false)
     trail = try pipeline(
-      "spark_hatch_trail_vertex", "spark_hatch_trail_fragment", format: Self.sceneFormat, blended: true)
-    body = try pipeline("spark_hatch_body_vertex", "spark_hatch_body_fragment", format: Self.sceneFormat, blended: true)
+      "hatch_sky_trail_vertex", "hatch_sky_trail_fragment", format: Self.sceneFormat, blended: true)
+    body = try pipeline("hatch_sky_body_vertex", "hatch_sky_body_fragment", format: Self.sceneFormat, blended: true)
     parts = try pipeline(
-      "spark_hatch_part_vertex", "spark_hatch_part_fragment", format: Self.sceneFormat, blended: true)
-    down = try pipeline(full, "spark_hatch_down_fragment", format: Self.sceneFormat, blended: false)
-    blur = try pipeline(full, "spark_hatch_blur_fragment", format: Self.sceneFormat, blended: false)
+      "hatch_sky_part_vertex", "hatch_sky_part_fragment", format: Self.sceneFormat, blended: true)
+    down = try pipeline(full, "hatch_sky_down_fragment", format: Self.sceneFormat, blended: false)
+    blur = try pipeline(full, "hatch_sky_blur_fragment", format: Self.sceneFormat, blended: false)
     var composites: [MTLPixelFormat: any MTLRenderPipelineState] = [:]
     for format in [Self.frameFormat, Self.layerFormat] {
-      composites[format] = try pipeline(full, "spark_hatch_comp_fragment", format: format, blended: false)
+      composites[format] = try pipeline(full, "hatch_sky_comp_fragment", format: format, blended: false)
     }
     self.composites = composites
     let filtering = MTLSamplerDescriptor()
@@ -193,7 +193,7 @@ public final class SparkHatchRenderer: @unchecked Sendable {
     guard let composite = composites[format] else { throw SparkStarError.unavailable("a composite for \(format)") }
     let width = targets.scene.width
     let height = targets.scene.height
-    let night: Float = SparkHatch.night ? 1 : 0
+    let night: Float = HatchSky.night ? 1 : 0
     // a = (uRes, uTime, uDpr), b = (uNight, uP, uResPx)
     let sky: [SIMD4<Float>] = [
       SIMD4(Float(view.width), Float(view.height), Float(time), Float(scale)),
@@ -229,7 +229,7 @@ public final class SparkHatchRenderer: @unchecked Sendable {
     }
     scene.endEncoding()
     // the bloom: down above 0.6 to the half, down to a quarter, four blurs between the quarters
-    let bloom = SparkHatch.bloom && SparkHatch.night
+    let bloom = HatchSky.bloom && HatchSky.night
     var bloomed = targets.scene
     if bloom {
       func texel(_ texture: any MTLTexture, halved: Bool) -> SIMD2<Float> {
@@ -263,7 +263,7 @@ public final class SparkHatchRenderer: @unchecked Sendable {
     }
     let uniforms: [SIMD4<Float>] = [
       SIMD4(
-        Float(1 / Double(width)), Float(1 / Double(height)), 0, bloom ? Float(SparkHatch.bloomStrength) : 0),
+        Float(1 / Double(width)), Float(1 / Double(height)), 0, bloom ? Float(HatchSky.bloomStrength) : 0),
       SIMD4(night, Float(time), Float(grain), Float(height)),
     ]
     encoder.setRenderPipelineState(composite)

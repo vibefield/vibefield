@@ -14,7 +14,7 @@ import Foundation
 //   face's seed (`Draws.seeded`), so a still is the same every run;
 // - the star's pixel ratio keeps the engine's own cap of 2.
 
-public enum SparkHatch {
+public enum HatchSky {
   /// Where the star lands, as a share of the sky's height (hatch.tsx :48).
   public static let landAt = 0.5
   /// The star dies this long after it lands (:236).
@@ -125,9 +125,9 @@ public enum SparkHatch {
       fall: Fall(angle: angle, direction: direction, distance: distance, from: from, flight: flight), star: star)
   }
 
-  /// The sky as the hatch runs it: the star engine's slots and the face engine's faces, on the hatch's one clock.
-  /// A deal happens at the clock's time, between frames; `frame(at:)` is one frame of both engines.
-  public struct Sky: Sendable {
+  /// The sky as the hatch runs it (hatch.tsx's `Live`, :155): the star engine's slots and the face engine's faces, on
+  /// the hatch's one clock. A deal happens at the clock's time, between frames; `frame(at:)` is one frame of both.
+  public struct Live: Sendable {
     /// A face in the face engine, by the ticket its deal was given.
     public struct Face: Sendable {
       public let ticket: Int
@@ -161,7 +161,7 @@ public enum SparkHatch {
       if let hero, let index = faces.firstIndex(where: { $0.ticket == hero }) {
         faces[index].buddy.leave(at: t)
       }
-      let deal = SparkHatch.deal(
+      let deal = HatchSky.deal(
         seed: seed, draws: draws, at: t, sky: sky, size: size, reducedMotion: reducedMotion)
       tickets += 1
       // the face engine's `add`: past its max, its oldest face goes
@@ -199,7 +199,7 @@ public enum SparkHatch {
     public mutating func frame(at t: Double) {
       self.t = t
       for (index, held) in slots.enumerated() {
-        if let held, SparkHatch.collected(tDeath: held.tDeath, at: t) {
+        if let held, HatchSky.collected(tDeath: held.tDeath, at: t) {
           slots[index] = nil
           starRows.replaceSubrange(
             (index * StarSpark.floats)..<((index + 1) * StarSpark.floats),
