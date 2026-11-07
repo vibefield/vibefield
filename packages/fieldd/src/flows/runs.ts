@@ -1779,14 +1779,18 @@ export class FlowRuns {
 
   /** A line the run's journal took, as its record follows it (D18's cadence): a call counts (D10), and an agent's
    * call opens its step, `starting` (D5 step 2); an answer settles its step, `failed` for a refusal. A call's `args`
-   * are its own, as its host sent them. The record alone: an answer's slot and wake are `#lagging`'s, after it. */
+   * are its own, as its host sent them. The record alone: an answer's slot and wake are `#lagging`'s, after it.
+   * ZZ3 (slice 12, C2 (b)): `calls` is the call line's own number, which is the journal's count (replay takes a number
+   * only once its line is kept, Q3 (a)), never the record's count plus one: a record write the disk refused would
+   * leave that one short for good, where the next call line's write sets it right. The window that stays: a run's
+   * last call whose write is refused reads one short until its next wake, or for good on an ended run. */
   #journaled(run: FlowRunId, entry: FlowJournalEntry, args?: readonly unknown[]): void {
     // F9 (slices 7–9 review): a step handed a session by `in:` is no spawn, so it never waits for a slot; that is
     // decided here, at its call line, so no "waiting" reaches its record and it is never put in line
     const hands = args !== undefined && handedOf(args) !== undefined;
     if (entry.kind === "call")
       this.#rewriteWith(run, (record) => ({
-        calls: record.calls + 1,
+        calls: entry.call,
         ...(entry.what === "agent"
           ? {
               open: [

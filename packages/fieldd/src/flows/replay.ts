@@ -33,7 +33,12 @@ import {
 //   runs' `call` returns. A new call is held, never journaled, while calls the journal holds are not made again (D7);
 //   `stuck` says so, for the runs to set the run aside at D1's park.
 // - A log line the journal holds is not said again; the next is journaled, then heard.
-// - A journal that does not take a call line (the disk refused it) hands nothing on: the script's call is refused.
+// - A journal that does not take a call line (the disk refused it) hands nothing on: the script's call is refused, and
+//   its number is not spent (slice 12, Q3 (a)), so a call's number is the journal's count, as `FlowCallNumber` says.
+// - A replay keeps no answer it has released (slice 12, F3): of its options, only the journal's appender and the runs
+//   (`prior` is read once, by the constructor), and of D21's one queue, only the lines not yet released, each released
+//   line let go behind a head index (`QUEUE_COMPACT_AT`). Its journal's call keys (`#journaled`) stay for its host's
+//   life.
 // - `call` never throws at fieldd's pipe (bth's review P1/P3): arguments nested past FLOW_LIMITS.ARGS_DEPTH_MAX, or
 //   that no canonical JSON keys, are refused to the script, and so is a call its journal did not take. An answer
 //   nested past it is refused and journaled as that refusal (`flowAnswerLine`), so the journal's read (journal.ts)
@@ -45,7 +50,8 @@ export function flowCallKey(what: string, args: readonly unknown[]): FlowCallKey
 }
 
 export interface FlowReplayOptions {
-  /** the run's journal as it stood when this host started (FlowRecords.readRun's `kept` lines) */
+  /** the run's journal as it stood when this host started (FlowRecords.readRun's `kept` lines): read once, by the
+   * replay's constructor, and never kept (F3) */
   readonly prior: readonly FlowJournalKnownLine[];
   /** append a line to the run's journal: throws when the disk does not take it (nothing is then handed on). A call's
    * line comes with the call's own arguments, which the runs read its `in:` from (F9) */
@@ -147,6 +153,12 @@ type Queued =
   | { readonly kind: "call"; readonly call: number }
   | { readonly kind: "answer"; readonly call: number; readonly answer: FlowHostAnswer };
 
+/** F3 (slice 12) — D21's queue lets a released line go by setting its slot undefined and moving a head index past it,
+ * never by `shift()`, which on a large queue can move every line behind it at each release, so a long journal's wake
+ * would be quadratic. The released slots are spliced off only once the head is at least this far in and at least half
+ * the queue, so each splice is paid for by the lines it drops. */
+const QUEUE_COMPACT_AT = 1024;
+
 /** D7 — a new call made while calls the journal holds are not made again: held, never journaled while it is. */
 interface Held {
   readonly what: string;
@@ -158,12 +170,16 @@ interface Held {
 
 /** The handler a run's host is given: its journal's answers in journal order, the runs for what is new. */
 export class FlowReplay implements FlowCallHandler {
-  readonly #opts: FlowReplayOptions;
+  /** F3 (slice 12): the two of its options a replay keeps for its host's life; `prior` is not one */
+  readonly #append: FlowReplayOptions["append"];
+  readonly #inner: FlowCallStarter;
   /** the journal's calls by `<key>#<n>`, to their numbers */
   readonly #journaled = new Map<string, number>();
-  /** D21's one queue, and how much of it is released */
-  readonly #queue: Queued[] = [];
-  #released = 0;
+  /** D21's one queue: a line released is let go, its slot set undefined, and `#head` moves past it, so only its
+   * unreleased tail is referenced; the released slots are spliced off at `QUEUE_COMPACT_AT` (F3) */
+  readonly #queue: (Queued | undefined)[] = [];
+  /** where D21's queue's unreleased tail starts (F3) */
+  #head = 0;
   /** the calls whose answer is in the queue: the journal's, and each the runs handed on since (D22) */
   readonly #answered = new Set<number>();
   /** the journal's calls this host's script has not made again */
@@ -179,7 +195,8 @@ export class FlowReplay implements FlowCallHandler {
   #nextCall: number;
 
   constructor(opts: FlowReplayOptions) {
-    this.#opts = opts;
+    this.#append = opts.append;
+    this.#inner = opts.inner;
     let last = 0;
     let logs = 0;
     for (const line of opts.prior) {
@@ -253,12 +270,12 @@ export class FlowReplay implements FlowCallHandler {
     this.#logs += 1;
     if (this.#logs <= this.#priorLogs || text.length === 0) return;
     try {
-      this.#opts.append({ kind: "log", text });
+      this.#append({ kind: "log", text });
     } catch {
       // a log line the journal cannot keep is not said either: the run's record is the journal's
       return;
     }
-    this.#opts.inner.log(text);
+    this.#inner.log(text);
   }
 
   /** D22, D21 — a call's answer as the runs journaled it, handed to this host's replay: queued at the end of D21's one
@@ -280,17 +297,17 @@ export class FlowReplay implements FlowCallHandler {
   }
 
   /** F3 (slice 12) — how many lines of D21's one queue this replay keeps, a read for a row as `stuck` is D1's park's:
-   * every line its journal held and every answer handed on since, released or not. It counts D21's queue, never D7's
-   * held new calls (`#held`). */
+   * the lines it still references (a released line's slot is undefined), so its unreleased tail alone. It counts D21's
+   * queue, never D7's held new calls (`#held`). An O(n) read, for rows; never on a hot path. */
   held(): number {
-    return this.#queue.length;
+    return this.#queue.reduce<number>((kept, line) => (line === undefined ? kept : kept + 1), 0);
   }
 
-  /** D21 — the queue released as far as it goes: up to a call line not yet made again, each answer to its waiter. Once
-   * every call the journal holds is made again, D7's held calls go on (`#unhold`). */
+  /** D21 — the queue released as far as it goes: up to a call line not yet made again, each answer to its waiter, and
+   * each line released let go, its slot set undefined and the head moved past it (F3). Once every call the journal
+   * holds is made again, D7's held calls go on (`#unhold`). */
   #release(): void {
-    while (this.#released < this.#queue.length) {
-      const line = this.#queue[this.#released] as Queued;
+    for (let line = this.#queue[this.#head]; line !== undefined; line = this.#queue[this.#head]) {
       if (line.kind === "call") {
         if (this.#unmade.has(line.call)) break;
       } else {
@@ -298,18 +315,26 @@ export class FlowReplay implements FlowCallHandler {
         this.#waiting.delete(line.call);
         waiter?.resolve(line.answer);
       }
-      this.#released += 1;
+      this.#queue[this.#head] = undefined;
+      this.#head += 1;
+    }
+    if (this.#head >= QUEUE_COMPACT_AT && this.#head * 2 >= this.#queue.length) {
+      this.#queue.splice(0, this.#head);
+      this.#head = 0;
     }
     if (this.#unmade.size === 0) this.#unhold();
   }
 
   /** D7 — the held new calls, in the order they were made, each journaled BEFORE it is handed on (its waiter set
-   * first, XX2); one its journal does not take is refused to the script, and nothing is handed on. */
+   * first, XX2); one its journal does not take is refused to the script, and nothing is handed on.
+   * Q3 (a) (slice 12) — a call takes its number only once its line is kept, so a call's number stays the journal's
+   * count. F21: the number is safe to use again within one life, since `appendRun` drops a refused line's leftover
+   * bytes before the next append, so a reused number never doubles a line. */
   #unhold(): void {
     for (let held = this.#held.shift(); held !== undefined; held = this.#held.shift()) {
-      const number = this.#nextCall++;
+      const number = this.#nextCall;
       try {
-        this.#opts.append(
+        this.#append(
           {
             kind: "call",
             call: number,
@@ -324,6 +349,7 @@ export class FlowReplay implements FlowCallHandler {
         held.waiter.resolve({ ok: false, refused: JOURNAL_REFUSED });
         continue;
       }
+      this.#nextCall = number + 1;
       this.#waiting.set(number, held.waiter);
       this.#handOn({ what: held.what, args: held.args, call: number });
     }
@@ -333,7 +359,7 @@ export class FlowReplay implements FlowCallHandler {
    * throws as it is called refuses the script's call, in fieldd's words, through the supervisor. */
   #handOn(call: FlowHostCall & { readonly call: number }): void {
     try {
-      this.#opts.inner.call(call);
+      this.#inner.call(call);
     } catch (error) {
       const waiter = this.#waiting.get(call.call);
       this.#waiting.delete(call.call);
