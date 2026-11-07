@@ -11,8 +11,10 @@ import Foundation
 // The engine draws its phases, blinks and glances from `Math.random`. On the phone a face draws them from Mulberry32
 // on its own seed (§2.10's amendment), in the engine's order: a reordered draw is a different face.
 //
-// Not here, because a spark's face never uses them: a cast character, a pointer to watch, the queue and holds of
-// `play` and `poke`, a mouth, `motionScale`, and the hatch's `birth` and `leave` (IOS-12f transcribes those).
+// Not here, because a spark's face never uses them: a cast character, a pointer to watch, `play` and `poke`, a mouth
+// and `motionScale`. IOS-12f's f5 added what New spark's sky asks of a face (hatch.tsx :199–238): `birth` (:975) with
+// its sequence's holds and queue, `leave` (:981), and the alpha, the fade and the death that `update` (:1044) and
+// `write` (:1099, :1101) read. A face no hatch touches is never born late and never leaves, so its rows are 12e's.
 
 public struct SparkBuddy: Sendable {
   /// One face's rows: 32 vec4s.
@@ -135,6 +137,17 @@ public struct SparkBuddy: Sendable {
   var emoStart = 0.0
   var emotion: String?
   var rec = SparkRecipes.calm
+  /// When the status held now gives way (`until`): to the queue's next, or to the rest.
+  var until = Double.infinity
+  var queue: [(String, Double?)] = []
+  /// The hatch's: when the face is born (it is not drawn before), when its eyes open, and when it began to leave.
+  var bornAt: Double?
+  var wakeAt: Double?
+  var fade: Double?
+  /// How much of the face is drawn: 0 before its birth, falling to 0 as it leaves.
+  public private(set) var alpha = 1.0
+  /// Gone: it has left, and the engine draws it no more.
+  public private(set) var dead = false
 
   /// `new Buddy(sparkBuddyOptions(engine, { seed, status, framed }, cut))`: the seed's DNA, the glow, mouthless, at
   /// rest in `status`. `random` deals every draw the engine takes from `Math.random`, in its order.
@@ -177,9 +190,13 @@ public struct SparkBuddy: Sendable {
 
   // MARK: - The state machine
 
-  /// `feel(name)`: chase a status's pose. A status the recipes do not hold is ignored, as the engine ignores it.
-  public mutating func feel(_ status: String) {
-    guard let recipe = SparkRecipes.recipe(status, mouth: false), status != emotion else { return }
+  /// `feel(name, hold)`: chase a status's pose, for `hold` seconds when one is given (then the queue's next, or the
+  /// rest). A status the recipes do not hold is ignored, as the engine ignores it; the one held now keeps its pose and
+  /// takes the new hold.
+  public mutating func feel(_ status: String, hold: Double? = nil) {
+    guard let recipe = SparkRecipes.recipe(status, mouth: false) else { return }
+    until = hold.map { t + $0 } ?? .infinity
+    guard status != emotion else { return }
     emotion = status
     emoStart = t
     rec = recipe
@@ -189,6 +206,26 @@ public struct SparkBuddy: Sendable {
     applyDiscrete()
     let gap = blinkGap()
     nextBlink = min(nextBlink, t + gap)
+  }
+
+  /// `birth(at, seq)`: the face is born at `at`, small and ungrown, its eyes shut for the first 0.55 s, and it plays
+  /// `sequence` (each status for its hold) before its rest. Before `at` it is not drawn.
+  public mutating func birth(at: Double, sequence: [(String, Double?)]) {
+    t = at
+    bornAt = at
+    wakeAt = at + 0.55
+    st[Key.grow.rawValue] = 0
+    vel[Key.grow.rawValue] = 0
+    st[Key.scale.rawValue] = 0.55
+    vel[Key.scale.rawValue] = 0
+    queue = Array(sequence.dropFirst())
+    emotion = nil
+    if let first = sequence.first { feel(first.0, hold: first.1) }
+  }
+
+  /// `leave(at)`: from `at` the face fades and shrinks over 0.45 s, then it is gone.
+  public mutating func leave(at: Double) {
+    fade = at
   }
 
   mutating func applyDiscrete() {
@@ -346,9 +383,31 @@ public struct SparkBuddy: Sendable {
   /// `update(t, dt)`: one step of the face's clock.
   public mutating func update(t: Double, dt: Double) {
     self.t = t
+    if let bornAt, t < bornAt {
+      alpha = 0
+      if let fade, t > fade { dead = true }
+      return
+    }
+    alpha = 1
+    if let fade {
+      let f = Self.clamp((t - fade) / 0.45, 0, 1)
+      alpha = 1 - f
+      st[Key.scale.rawValue] = 1 - 0.6 * f
+      if f >= 1 { dead = true }
+    }
+    if t > until {
+      if queue.isEmpty {
+        feel(rest)
+      } else {
+        let next = queue.removeFirst()
+        feel(next.0, hold: next.1)
+      }
+    }
     let dt = min(dt, 1.0 / 30)
     let target = targets()
     for k in 0..<Self.springs.count {
+      // a face that is leaving shrinks on its fade, not on its spring
+      if fade != nil && k == Key.scale.rawValue { continue }
       let w = Self.springs[k].omega
       let z = Self.springs[k].zeta
       let a = w * w * (target[k] - st[k]) - 2 * z * w * vel[k]
@@ -359,7 +418,11 @@ public struct SparkBuddy: Sendable {
     swapWhenGone(\.acc, \.accWant, .accAmt)
     swapWhenGone(\.badge, \.badgeWant, .badgeAmt)
     swapWhenGone(\.ring, \.ringWant, .ringAmt)
-    if t > nextBlink {
+    if let wakeAt, t < wakeAt {
+      // just born: the eyes held shut, a slow blink that opens as `wakeAt` passes
+      blinkT0 = t - blinkDur * 0.45
+      blinkDur = 0.3
+    } else if t > nextBlink {
       blinkNow(emotion == "sleepy" ? 0.5 : 0.16)
       let gap = blinkGap()
       let quick = random.next() < 0.2
@@ -449,9 +512,9 @@ public struct SparkBuddy: Sendable {
     }
     let reach = Self.frameH * 1.32
     let S = framed ? max(2.25, abs(Self.frameC.0) + reach, abs(Self.frameC.1) + reach) : 2.25
-    set(0, x, y, R, seedF)
+    set(0, x, y, alpha > 0 ? R : 0, seedF)
     set(1, 2, Double(palette), framed ? 1 : 0, S)
-    set(2, Self.frameC.0, Self.frameC.1, Self.frameH, 1)
+    set(2, Self.frameC.0, Self.frameC.1, Self.frameH, alpha)
     set(3, mv.x, mv.y - (1 - sy) * 0.85, mv.rot, max(0.01, k(.scale) * mv.scale))
     set(4, sx, sy, mv.lift, grow)
     set(5, Double(body.n), body.core, body.k, body.tip)

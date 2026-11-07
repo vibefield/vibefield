@@ -1,10 +1,18 @@
 import CoreGraphics
 import Foundation
 
-// IOS-12f's f5e (red) — NEW SPARK'S SKY, A SKELETON: the API SparkHatchGoldenTests is written against. The hatch's
-// numbers are named (hatch.tsx's and the star engine's options); the deal places the face and drops no star, and the
-// sky's clock does not step. f5f transcribes the hatch's deal (`packages/design-kit/src/spark-face/hatch.tsx`
-// :199–238) and the two engines' clocks into it.
+// IOS-12f's f5 (PC-D8 A; DESIGN.md §2.10, amended 2026-11-07) — NEW SPARK'S SKY, ITS ARITHMETIC: the hatch's deal
+// (`packages/design-kit/src/spark-face/hatch.tsx` :199–238) and the two engines' clocks under it, transcribed. A deal
+// puts a face on the sky's centre and, unless motion is reduced, drops a star on it from above at an angle; the face is
+// born where the star lands, with hello. A reroll's face before leaves as the next star begins to fall. Held to the
+// hatch's rows golden (`spark-hatch.golden.json`, SparkHatchGoldenTests): each deal's geometry, its star's rows and its
+// face's rows on the golden's clock.
+//
+// What the phone does differently is said (VF-PM's Q3 ruling, 2026-11-07 13:58:40Z):
+// - no pointer is watched: the face is made with `watch: true`, and the phone has no pointer, as the golden has none;
+// - the deal's three draws are the system's random, except under `-vf-spark-time`, where they are Mulberry32 of the
+//   face's seed (`Draws.seeded`), so a still is the same every run;
+// - the star's pixel ratio keeps the engine's own cap of 2.
 
 public enum SparkHatch {
   /// Where the star lands, as a share of the sky's height (hatch.tsx :48).
@@ -35,12 +43,12 @@ public enum SparkHatch {
 
   /// `starPaletteOf(facePalette)` (star.ts :63): the face's palette where the star engine has it, else the nearest.
   public static func starPalette(of facePalette: Int) -> Int {
-    0
+    facePalette < 12 ? facePalette : facePalette == 12 ? 7 : 10
   }
 
   /// Whether the engine has collected a star by `t` (`gc`): a star with a death, past it by `collectAfter`.
   public static func collected(tDeath: Double, at t: Double) -> Bool {
-    false
+    tDeath != 0 && t > tDeath + collectAfter
   }
 
   /// A deal's three `Math.random` calls, in the hatch's order: the side it falls from (:219), the angle's spread
@@ -98,7 +106,23 @@ public enum SparkHatch {
     var face = SparkBuddy(
       seed: seed, status: "ready", framed: false, cut: SIMD3(0, 0, 0), random: Mulberry32(seed: seed))
     face.place(centreX: centre.x, centreY: centre.y, size: size, framed: false)
-    return Deal(seed: seed, centre: centre, face: face, fall: nil, star: nil)
+    if reducedMotion {
+      face.birth(at: t, sequence: hello)
+      return Deal(seed: seed, centre: centre, face: face, fall: nil, star: nil)
+    }
+    let angle = (draws.side < 0.5 ? -1.0 : 1.0) * (0.3 + draws.spread * 0.2)
+    let direction = SIMD2(sin(angle), cos(angle))
+    let distance = (centre.y + face.R * 3 + 30) / direction.y
+    let from = SIMD2(centre.x - direction.x * distance, centre.y - direction.y * distance)
+    let flight = SparkBuddy.clamp(0.42 + distance / 1500, 0.55, 1.05)
+    face.birth(at: t + flight, sequence: hello)
+    let star = StarSpark.Star(
+      x: centre.x, y: centre.y, R: face.R * 0.9, seed: 1 + UInt32(floor(draws.star * 999_998)),
+      palette: starPalette(of: SparkEngine.agentDNA(seed).palette), mask: mask, burstMode: burstMode, from: from,
+      tStart: t, tImpact: t + flight, tDeath: t + flight + deathAfter)
+    return Deal(
+      seed: seed, centre: centre, face: face,
+      fall: Fall(angle: angle, direction: direction, distance: distance, from: from, flight: flight), star: star)
   }
 
   /// The sky as the hatch runs it: the star engine's slots and the face engine's faces, on the hatch's one clock.
@@ -134,12 +158,37 @@ public enum SparkHatch {
     public mutating func deal(
       seed: UInt32, draws: Draws, sky: CGSize, size: Double = faceSize, reducedMotion: Bool
     ) -> Dealt {
+      if let hero, let index = faces.firstIndex(where: { $0.ticket == hero }) {
+        faces[index].buddy.leave(at: t)
+      }
       let deal = SparkHatch.deal(
         seed: seed, draws: draws, at: t, sky: sky, size: size, reducedMotion: reducedMotion)
       tickets += 1
+      // the face engine's `add`: past its max, its oldest face goes
+      if faces.count >= maxFaces { faces.removeFirst() }
       faces.append(Face(ticket: tickets, buddy: deal.face))
       hero = tickets
-      return Dealt(deal: deal, ticket: tickets, slot: nil)
+      let slot = deal.star.map { add($0) }
+      return Dealt(deal: deal, ticket: tickets, slot: slot)
+    }
+
+    /// The star engine's `add`: the first empty slot, else the slot whose star landed first; its rows written once.
+    mutating func add(_ star: StarSpark.Star) -> Int {
+      var slot = slots.firstIndex(where: { $0 == nil })
+      if slot == nil {
+        var landed = Double.infinity
+        for (index, held) in slots.enumerated() {
+          if let held, held.tImpact < landed {
+            landed = held.tImpact
+            slot = index
+          }
+        }
+      }
+      let index = slot ?? 0
+      slots[index] = star
+      starRows.replaceSubrange(
+        (index * StarSpark.floats)..<((index + 1) * StarSpark.floats), with: StarSpark.rows(star))
+      return index
     }
 
     /// The slots the engine draws (`used`): through the last that holds a star.
@@ -149,6 +198,18 @@ public enum SparkHatch {
     /// every face, dt clamp(t − the last frame's, 0, 0.05) and 0 at the first, then drops the dead.
     public mutating func frame(at t: Double) {
       self.t = t
+      for (index, held) in slots.enumerated() {
+        if let held, SparkHatch.collected(tDeath: held.tDeath, at: t) {
+          slots[index] = nil
+          starRows.replaceSubrange(
+            (index * StarSpark.floats)..<((index + 1) * StarSpark.floats),
+            with: repeatElement(0, count: StarSpark.floats))
+        }
+      }
+      let dt = last.map { min(max(t - $0, 0), 0.05) } ?? 0
+      last = t
+      for index in faces.indices { faces[index].buddy.update(t: t, dt: dt) }
+      faces.removeAll { $0.buddy.dead }
     }
 
     /// A face's rows after the last frame, as `write` lays them; nil once it has left the engine.
