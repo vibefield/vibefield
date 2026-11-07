@@ -223,7 +223,7 @@
     "views": [
       "view.swarm"
     ],
-    "notes": "Views listed are confirmed consumers. An unlisted view is unknown, not a proof it ignores the field."
+    "notes": "Views listed are confirmed readers in the five shipping monitor views."
   },
   "absence": {
     "onMissing": "record-absent",

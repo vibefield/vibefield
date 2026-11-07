@@ -196,21 +196,8 @@
     }
   ],
   "merge": {
-    "strategy": "none",
-    "defaults": [
-      {
-        "when": "this adapter's traced producers do not supply the row field",
-        "presence": "absent",
-        "source": {
-          "repo": "puppeteer",
-          "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
-          "path": "packages/monitor/src/backend/derive.ts",
-          "lineStart": 240,
-          "lineEnd": 286,
-          "symbol": "deriveAgentRow"
-        }
-      }
-    ]
+    "strategy": "unknown",
+    "defaults": []
   },
   "transport": {
     "channel": "model-port",
@@ -225,32 +212,29 @@
     "symbol": "bubbleModel"
   },
   "applicability": {
-    "states": [
-      "state.cost_missing",
-      "state.burn_unpriced"
-    ],
+    "states": "model-axes",
     "views": [
       "view.swarm"
     ],
-    "notes": "Views listed are confirmed consumers. An unlisted view is unknown, not a proof it ignores the field."
+    "notes": "Views listed are confirmed readers in the five shipping monitor views."
   },
   "absence": {
-    "onMissing": "record-absent",
+    "onMissing": "record-unknown",
     "onStale": "keep-and-mark-stale",
     "zeroPolicy": "unknown-unsupported-and-absent-are-not-zero"
   },
   "observation": {
-    "presence": "absent",
+    "presence": "unknown",
     "synthetic": false
   },
   "classification": {
     "modelSupported": "yes",
-    "adapterEmittable": "no",
+    "adapterEmittable": "unknown",
     "uiReachable": "yes"
   },
   "verification": {
     "status": "source-read",
     "owner": "GV-AUDIT4",
-    "notes": "Declared usage=degraded. Usage requires direct ACP response/turn notifications. Journal records are excluded. signals.json and subagent progress are context occupancy, never billed burn. A subagent child\u2019s response and turn usage, forwarded under the child sessionId, is attributed to the actor subagent_spawned names for that child_session_id. Frames a child sends before its subagent_spawned are not projected; its later turn_completed still reconciles the turn total. Captured live response_completed carries no signature or eventId; a response is identified by its session, the running native prompt (queue/changed runningPromptId or the turn\u2019s _meta.promptId), and its ordinal within that prompt, and turn_completed reconciles the turn total. A response whose native prompt is unknown, signed or not (the 1.0.0 live shape), is not counted on its own; its turn_completed carries the whole turn total. A turn total Grok flags usageIsIncomplete is not reconciled; its response contributions stand. Turns cancelled mid-turn (session/cancel) carry no turn_completed usage; only responses completed before the cancel count. Mismatch: the usage family is not unsupported, but usage claims set token counts only. buildUsageCostLedger sums costUsd and skips observations without it, so the row cost object stays absent. Audit pin is puppeteer 748d015, newer than the 0.3.3 package vibefield ships (tag v0.3.3, commit 52d09c8e). This record does not compare 0.3.3 behavior. A transform effect ending in [post-0.3.3] cites a puppeteer file whose text differs from 52d09c8e."
+    "notes": "Declared usage=degraded. Usage requires direct ACP response/turn notifications. Journal records are excluded. signals.json and subagent progress are context occupancy, never billed burn. A subagent child\u2019s response and turn usage, forwarded under the child sessionId, is attributed to the actor subagent_spawned names for that child_session_id. Frames a child sends before its subagent_spawned are not projected; its later turn_completed still reconciles the turn total. Captured live response_completed carries no signature or eventId; a response is identified by its session, the running native prompt (queue/changed runningPromptId or the turn\u2019s _meta.promptId), and its ordinal within that prompt, and turn_completed reconciles the turn total. A response whose native prompt is unknown, signed or not (the 1.0.0 live shape), is not counted on its own; its turn_completed carries the whole turn total. A turn total Grok flags usageIsIncomplete is not reconciled; its response contributions stand. Turns cancelled mid-turn (session/cancel) carry no turn_completed usage; only responses completed before the cancel count. Pending the shared usage-to-cost trace (ledger, rate, usage-index, projector, price table), which this slice does not follow. This adapter's usage claim does not itself set costUsd. state.cost_unavailable is not ruled out when tokens are present without costUsd. Cost and burn states are not closed here. Audit pin is puppeteer 748d015, newer than the 0.3.3 package vibefield ships (tag v0.3.3, commit 52d09c8e). This record does not compare 0.3.3 behavior. A transform effect ending in [post-0.3.3] cites a puppeteer file whose text differs from 52d09c8e."
   }
 }

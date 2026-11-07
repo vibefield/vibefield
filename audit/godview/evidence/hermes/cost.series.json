@@ -196,21 +196,8 @@
     }
   ],
   "merge": {
-    "strategy": "none",
-    "defaults": [
-      {
-        "when": "this adapter's traced producers do not supply the row field",
-        "presence": "absent",
-        "source": {
-          "repo": "puppeteer",
-          "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
-          "path": "packages/monitor/src/backend/derive.ts",
-          "lineStart": 240,
-          "lineEnd": 286,
-          "symbol": "deriveAgentRow"
-        }
-      }
-    ]
+    "strategy": "unknown",
+    "defaults": []
   },
   "transport": {
     "channel": "model-port",
@@ -225,32 +212,29 @@
     "symbol": "meterOf"
   },
   "applicability": {
-    "states": [
-      "state.cost_missing",
-      "state.burn_unpriced"
-    ],
+    "states": "model-axes",
     "views": [
       "view.spend"
     ],
-    "notes": "Views listed are confirmed consumers. An unlisted view is unknown, not a proof it ignores the field."
+    "notes": "Views listed are confirmed readers in the five shipping monitor views."
   },
   "absence": {
-    "onMissing": "record-absent",
+    "onMissing": "record-unknown",
     "onStale": "keep-and-mark-stale",
     "zeroPolicy": "unknown-unsupported-and-absent-are-not-zero"
   },
   "observation": {
-    "presence": "absent",
+    "presence": "unknown",
     "synthetic": false
   },
   "classification": {
     "modelSupported": "yes",
-    "adapterEmittable": "no",
+    "adapterEmittable": "unknown",
     "uiReachable": "yes"
   },
   "verification": {
     "status": "source-read",
     "owner": "GV-AUDIT4",
-    "notes": "Declared usage=degraded. Root burn rate is derived from cumulative gateway samples at response/session-info boundaries, not token streaming. Subagent totals arrive only on subagent.complete, so a live per-subagent burn rate is usually unavailable. Root samples are session aggregates; per-child samples are kept out of the root aggregate timeline. Mismatch: the usage family is not unsupported, but usage claims set token counts only. buildUsageCostLedger sums costUsd and skips observations without it, so the row cost object stays absent. Audit pin is puppeteer 748d015, newer than the 0.3.3 package vibefield ships (tag v0.3.3, commit 52d09c8e). This record does not compare 0.3.3 behavior. A transform effect ending in [post-0.3.3] cites a puppeteer file whose text differs from 52d09c8e."
+    "notes": "Declared usage=degraded. Root burn rate is derived from cumulative gateway samples at response/session-info boundaries, not token streaming. Subagent totals arrive only on subagent.complete, so a live per-subagent burn rate is usually unavailable. Root samples are session aggregates; per-child samples are kept out of the root aggregate timeline. Pending the shared usage-to-cost trace (ledger, rate, usage-index, projector, price table), which this slice does not follow. This adapter's usage claim does not itself set costUsd. state.cost_unavailable is not ruled out when tokens are present without costUsd. Cost and burn states are not closed here. Audit pin is puppeteer 748d015, newer than the 0.3.3 package vibefield ships (tag v0.3.3, commit 52d09c8e). This record does not compare 0.3.3 behavior. A transform effect ending in [post-0.3.3] cites a puppeteer file whose text differs from 52d09c8e."
   }
 }

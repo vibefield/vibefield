@@ -211,7 +211,7 @@
       "state.activity_other"
     ],
     "views": "all-monitor-views",
-    "notes": "Views listed are confirmed consumers. An unlisted view is unknown, not a proof it ignores the field. No builtin consumer was proven for this field."
+    "notes": "No reader in list, rain, swarm, spend, timeline, or the shared toolkit words. See verification notes. No builtin consumer was proven for this field."
   },
   "absence": {
     "onMissing": "omit-field",
@@ -225,11 +225,11 @@
   "classification": {
     "modelSupported": "yes",
     "adapterEmittable": "yes",
-    "uiReachable": "unknown"
+    "uiReachable": "no"
   },
   "verification": {
     "status": "source-read",
     "owner": "GV-AUDIT4",
-    "notes": "Declared status=supported. Structured question choices are exact-source-backed but not pinned-runtime verified. Audit pin is puppeteer 748d015, newer than the 0.3.3 package vibefield ships (tag v0.3.3, commit 52d09c8e). This record does not compare 0.3.3 behavior. A transform effect ending in [post-0.3.3] cites a puppeteer file whose text differs from 52d09c8e."
+    "notes": "Declared status=supported. Structured question choices are exact-source-backed but not pinned-runtime verified. No shipping monitor view or toolkit word reads activity.since. Audit pin is puppeteer 748d015, newer than the 0.3.3 package vibefield ships (tag v0.3.3, commit 52d09c8e). This record does not compare 0.3.3 behavior. A transform effect ending in [post-0.3.3] cites a puppeteer file whose text differs from 52d09c8e."
   }
 }

@@ -14,6 +14,14 @@
       "lineStart": 240,
       "lineEnd": 286,
       "symbol": "deriveAgentRow"
+    },
+    {
+      "repo": "puppeteer",
+      "sha": "748d015a7e393112e0a91dad80111fdf5abe6583",
+      "path": "packages/views/src/views/swarm/bloom/model.ts",
+      "lineStart": 372,
+      "lineEnd": 381,
+      "symbol": "agent.device.id"
     }
   ],
   "producer": {
@@ -124,14 +132,18 @@
     "contract": "MonitorAgentRow"
   },
   "renderer": {
-    "viewIds": [],
-    "component": "none-proven",
-    "symbol": "none-proven"
+    "viewIds": [
+      "view.swarm"
+    ],
+    "component": "agent.device.id",
+    "symbol": "agent.device.id"
   },
   "applicability": {
     "states": "model-axes",
-    "views": "all-monitor-views",
-    "notes": "Views listed are confirmed consumers. An unlisted view is unknown, not a proof it ignores the field. No builtin consumer was proven for this field."
+    "views": [
+      "view.swarm"
+    ],
+    "notes": "Views listed are confirmed readers in the five shipping monitor views."
   },
   "absence": {
     "onMissing": "omit-field",
@@ -145,7 +157,7 @@
   "classification": {
     "modelSupported": "yes",
     "adapterEmittable": "no",
-    "uiReachable": "unknown"
+    "uiReachable": "yes"
   },
   "verification": {
     "status": "source-read",
