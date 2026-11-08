@@ -33,6 +33,7 @@ import {
   type LineViewDoor,
   newTerminalNote,
   refusalClaimed,
+  sayLineCreateOver,
   useGodviewLineDoor,
   useHistoryLineDoor,
   useHistorySaid,
@@ -355,6 +356,7 @@ export function Composer({
       snapshotOn={capturing}
       note={note}
       onCreate={create}
+      onCreateOver={sayLineCreateOver}
       onSnapshot={snapshot}
     />
   );

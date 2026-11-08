@@ -14,13 +14,27 @@ import "./chat-starter.css";
 export function ChatStarter({
   starter,
   onPress,
+  onHold,
 }: {
   starter: Starter;
   /** pressed: the hello sends it as Send sends; the night opens the sheet carrying it */
   onPress?: (() => void) | undefined;
+  /** ES-3a — the pointer or the keyboard's focus came to it or left it (the night leans while one holds a job) */
+  onHold?: ((by: "pointer" | "focus", held: boolean) => void) | undefined;
 }): ReactElement {
   return (
-    <UiButton className="vf-chat-starter" onClick={() => onPress?.()}>
+    <UiButton
+      className="vf-chat-starter"
+      onClick={() => onPress?.()}
+      {...(onHold === undefined
+        ? {}
+        : {
+            onPointerEnter: () => onHold("pointer", true),
+            onPointerLeave: () => onHold("pointer", false),
+            onFocus: () => onHold("focus", true),
+            onBlur: () => onHold("focus", false),
+          })}
+    >
       <FieldGlyph name={starter.glyph} size={14} />
       <span>{starter.words}</span>
     </UiButton>

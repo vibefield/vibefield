@@ -1,6 +1,6 @@
 import type { FrameView } from "@vibefield/contracts";
 import { FieldGlyph } from "@vibefield/design-kit/glyphs";
-import type { ReactElement, ReactNode, Ref } from "react";
+import { type ReactElement, type ReactNode, type Ref, useRef } from "react";
 import { ariaKeys, type CreateAct, createActOf, SNAPSHOT, snapshotKey } from "./line-model";
 import type { ViewKeys } from "./views";
 import "./composer.css";
@@ -56,6 +56,9 @@ export interface ComposerLineViewProps {
   readonly lineRef?: Ref<HTMLDivElement>;
   /** The create was pressed — `keyboard`: by its keys (Enter or Space on it), not the pointer. */
   readonly onCreate?: (keyboard: boolean) => void;
+  /** Track ES (ES-3a) — whether the create is over: the pointer on it or the keyboard's focus, the two one over, said
+   * as it changes (the line's controller says it to the frame, `sayLineCreateOver`) */
+  readonly onCreateOver?: ((over: boolean) => void) | undefined;
   /** The snapshot was pressed. */
   readonly onSnapshot?: () => void;
 }
@@ -96,8 +99,19 @@ export function ComposerLineView({
   note = null,
   lineRef,
   onCreate,
+  onCreateOver,
   onSnapshot,
 }: ComposerLineViewProps): ReactElement {
+  // ES-3a — the create's over: the pointer and the keyboard's focus held apart, said as one, once per change
+  const holding = useRef({ pointer: false, focus: false, over: false });
+  const hold = (by: "pointer" | "focus", held: boolean): void => {
+    const now = holding.current;
+    now[by] = held;
+    const over = now.pointer || now.focus;
+    if (over === now.over) return;
+    now.over = over;
+    onCreateOver?.(over);
+  };
   const act = createActOf(view, keys, createProject);
   const open = (view === "canvas" && objectsOpen) || (view === "assistant" && sheetOpen);
   // open, the create offers to close what it opened: the board on Canvas, the sheet in Chat
@@ -140,6 +154,10 @@ export function ComposerLineView({
           // a click with no pointer behind it (detail 0) is the create's keys: Enter or Space on it
           if (waits === null && !held) onCreate?.(event.detail === 0);
         }}
+        onPointerEnter={() => hold("pointer", true)}
+        onPointerLeave={() => hold("pointer", false)}
+        onFocus={() => hold("focus", true)}
+        onBlur={() => hold("focus", false)}
       >
         {CREATE_GLYPHS.map((glyph) => (
           <span

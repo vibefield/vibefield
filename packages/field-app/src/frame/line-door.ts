@@ -429,6 +429,26 @@ export function hearLineSays(hear: (text: string) => void): () => void {
   };
 }
 
+// ── THE CREATE'S OVER (track ES, ES-3a; DESIGN.md §6, the lean) ────────────
+// Whether the line's create is under the pointer or the keyboard's focus — over, or not, and nothing more. The line
+// says it; Chat's empty night hears it while Chat is the view, and leans toward the sheet the create opens. The
+// direction is the frame's: Chat listens, and never reaches into the line.
+
+const createOverHearers = new Set<(over: boolean) => void>();
+
+/** The line's side: say whether its create is over (the pointer on it, or the keyboard's focus). */
+export function sayLineCreateOver(over: boolean): void {
+  for (const hear of createOverHearers) hear(over);
+}
+
+/** Hear whether the line's create is over; the answer stops hearing. */
+export function hearLineCreateOver(hear: (over: boolean) => void): () => void {
+  createOverHearers.add(hear);
+  return () => {
+    createOverHearers.delete(hear);
+  };
+}
+
 // ── WHAT A TERMINAL COULD NOT TAKE (D6) ─────────────────────────────────────
 // A paste (⌘V in a pane) or typed text that the terminal refused because it is
 // larger than the link to it carries (`terminal/routed/encode-input.ts`). The
