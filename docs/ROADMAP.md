@@ -404,6 +404,9 @@ phone"; DECISIONS PC
   - **Item 241's 241b, the Mac's Off pill** (`75dcbf8d3` → `493ad96b0`, M225, run 225, an ff of `f65af29a9`;
     LANDED "Item 241 (241b)"): design-kit's `.vf-ui-button:disabled` draws §7's Off from the button's own
     `disabled`, the quiet fill with its words in t4; `UiButton`'s `running` keeps a running pill's look.
+    Its gate:landing (LANDED, the entry's Owed): the Mac stills green, 19 of 19; row 32 red on the Mac, by the lane's
+    target link and then by the gate's environment (item 253) and the "ChatGPT Pro" pair (item 254), the rest that run's
+    own.
   - **Item 244 CLOSED** (VF-PM 08:03Z): the stills' one-base rule names the tab bar's glass, at most T = 2
     levels (measured on the old mini over 12 launches), and the Field badge, never judged until item 251;
     LANDED "Item 241 (241b)", Found.
@@ -420,7 +423,8 @@ phone"; DECISIONS PC
     (CH-D1, both platforms).
   - the flight's device read on James's phone: whether a row's `.global` box follows the presenting view's
     scale while a large sheet folds (M-f1);
-  - 241b's gate:landing: the Mac stills and row 32, landing-only;
+  - 241b's row 32 on the old mini (the ts6 form, with rosettad), the witness of record: owed on the console
+    unlock, a9's row placed 11:21Z;
   - item 242 (the phone kit's `inkFaint` retires, its 40 uses sorted by §2.4's test: 29 words to t3, 10
     marks and an off control's words to t4; VF-PM 11-08 06:10Z), cut on 241b's tip, its kit row R owed;
   - item 248 (the phone's t3, black at 50% by day, reads 3.98:1, under §2.4's floor): a kit-wide ink

@@ -42862,6 +42862,46 @@ half owed (LANDED "Item 241 (241a)"). VF-PM's GO 2026-11-08 04:12Z; rulings 04:2
 **Owed.**
 - gate:landing after the land: the Mac stills (`pnpm still`) and row 32, landing-only; a re-bless, if any, said
   there.
+  > **gate:landing (2026-11-08): the Mac stills GREEN at `042ca0f2e`; row 32 RED on the Mac at both runs, neither
+  > 241b's; row 32 on the old mini, the witness of record, OWED on the console unlock** (VF-PM 11:06:10Z, 11:26:35Z). On
+  > the Mac each row ran alone through the HOLD door, nice 19, in the ios12b lane at `042ca0f2e`, 241b with its records
+  > (HOLD :1276–1297; `lanes/ios12/241/land241b/gate-042ca0f2e/`, its summary.txt `92d4b66c`).
+  > - **The stills, GREEN, no re-bless.** `cargo build -p field-native` exited 0 at 10:43:21Z (5 min 19 s), then
+  >   `pnpm still` (`gate-landing.mjs --only still`) exited 0 at 10:44:51Z in 90 s: 19 of 19 held to their goldens
+  >   (`logs/01-still.log`, sha256 `45d8a31c`).
+  > - **Row 32's first run, red by host state** (10:44:51Z → 10:45:11Z, exit 1, each walk over in 0–2 s). Each walk's
+  >   kept HOME holds the same boot fatal, `desktop.lifecycle.fatal` "field-native bin missing (build it: cargo build -p
+  >   field-native)" at the lane's `target/debug/field-native` (the four `desktop.ndjson`, copied to
+  >   `lanes/ios12/241/land241b/witness/first-red-homes/`, SHA256SUMS-evidence `034e36c0`). The lane's `target` linked
+  >   to `rust/ios12b`, which cargo never fills: `~/.cargo/config.toml` sets one target-dir for every checkout. VF-PM
+  >   ruled the relink at that source (10:48:02Z): the old link moved aside and kept
+  >   (`lanes/ios12b/target.ios12b-link.aside`), `target` linked to `/Volumes/SamsungRed/rust/target`, no env added.
+  > - **Row 32 re-run, red** (10:52:11Z → 10:57:26Z, exit 1; field-native `5e69f5db` before and after;
+  >   `rerun-row32/logs/01-smoke_first-run.log`, sha256 `91e83508`). All four walks red: day 67 s, night 64 s, no-webgpu
+  >   62 s, catalog 112 s. None of its failures is a kit pill drawn Off (ruling (iii) above). Each is read against DR's
+  >   control, row 32 on this Mac in the main checkout at `e60d8add6` (11:19:10Z → 11:24:21Z, red, exit 1 in 311 s,
+  >   every walk code 2: day 65 s, night 64 s, no-webgpu 61 s, catalog 111 s;
+  >   `lanes/dr/gate/gate-e60d8add6/logs/01-smoke_first-run.log`, sha256 `bf12c842`):
+  >   - History, REPRODUCED on the day, night and no-webgpu walks: "History shows 0 rows, not the typed agent's one" and
+  >     "Bring in history: no press reached it within 30000ms (absent)". It is the gate's environment: the gate hands
+  >     fieldd no `FIELDD_ROSETTAD_BIN`, a smoke build has no other rosettad (resources.ts:258, bin.ts:86), and no
+  >     teardown of either run finds one. Item 253 is the gate's fix: its fieldd-booting rows take `siblings.mjs bin`.
+  >   - "ChatGPT Pro" at 1:1 on 04 profiles (ready), by day ([255,255,255] → [255,255,255]) and by night ([28,28,30] →
+  >     [28,28,30]), REPRODUCED with the same values at both mains: item 254.
+  >   - The rest, NOT REPRODUCED, so this lane run's own, its cause unread and not measured. No item. They are the live
+  >     field's three ("the glass is not the field's (data-glass)", "the page's own logo is not hidden", and "its two
+  >     captures with the field's glass differ by 0.2 (at most 0.1)"; the control reads the logo's glass "field" on both
+  >     live walks, the re-run on one), and 12 words at 1:1 to 1.2:1, 3 on day 01 welcome and 9 on day 02 field (fresh).
+  > - **Row 32 was never green on this Mac.** ICE 0.17.0's gate here at main `68cca9b8b` (2026-11-03) was red on History
+  >   as here and on 16 of the catalog's Text-ramp chips at 1:1, a class of its own then (copied to
+  >   `lanes/ios12/241/land241b/witness/mac-ice-0.17.0/`, its row 32 log `789ea99e`). Every green is the old mini's,
+  >   through `lanes/ts6/ts6-mini.sh`, whose :210 exports `FIELDD_ROSETTAD_BIN`. The last, run72b at M72 `96e99edff`,
+  >   2026-11-01 03:43:45Z (`lanes/ts6/logs/mini/run72b/smoke:first-run.log`, sha256 `15c3cd5e`): its fieldd logs show
+  >   rosettad ready and the history catalog following the index.
+  > - **The witness of record, row 32 on the old mini at main `e60d8add6`** (a9, in ts6-mini.sh's row form as run72b's,
+  >   rosettad from `siblings.mjs bin`, behind the watcher's gate of an unlocked console idle 150 s or more,
+  >   `lanes/ts6/OWED-ROWS.md`:17): OWED on the console unlock, a9's row placed at 11:21Z (VF-PM 11:26:35Z). Its verdict
+  >   follows in a second dated block.
 - Item 242 (the phone kit's faint words, sorted by §2.4: 29 to t3, 11 to t4), cut on this tip, its kit row R on the
   old mini, its stills judged by 244's rule; item 248 (the phone's t3 under §2.4's floor by day, James's eye on 56%);
   item 251 (the mock fleet's seed door for the stills, so the Field badge is judged at max 0).
