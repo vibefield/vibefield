@@ -40,6 +40,7 @@ import {
   type LogoSeen,
   listFits,
   measureMark,
+  PAGE_WORDS,
   parseGpuBusy,
   parseWalk,
   passedOver,
@@ -868,6 +869,227 @@ describe('FG-O2\'s judge: every word on the glass at 4.5:1 (DESIGN.md §8 "Its w
       "the splash's stage line could not be cut from 01-splash.png",
       'on 11-connect.png "Not now" could not be cut from its still',
     ]);
+  });
+});
+
+describe("FG-O2's judge: a word under its list's pinned head (item 254)", () => {
+  // The judge's finder of words (PAGE_WORDS' wordsIn) run on a page of boxes: the few calls it makes of the DOM,
+  // faked. A box computes every property the finder reads, at its initial value unless set (one it reads that the
+  // fake does not compute is a red, never an undefined), and takes the box it is given; a text's lines take theirs.
+  type Css = Readonly<Record<string, string>>;
+  interface Rect {
+    readonly x: number;
+    readonly y: number;
+    readonly width: number;
+    readonly height: number;
+  }
+  const INITIAL: Css = {
+    visibility: "visible",
+    color: "rgb(28, 28, 30)",
+    opacity: "1",
+    display: "block",
+    position: "static",
+    zIndex: "auto",
+    overflowX: "visible",
+    overflowY: "visible",
+    textOverflow: "clip",
+    backgroundColor: "rgba(0, 0, 0, 0)",
+    maskImage: "none",
+    webkitMaskImage: "none",
+    transform: "none",
+    translate: "none",
+    rotate: "none",
+    scale: "none",
+    filter: "none",
+    backdropFilter: "none",
+    perspective: "none",
+    clipPath: "none",
+    isolation: "auto",
+    mixBlendMode: "normal",
+    contain: "none",
+    containerType: "normal",
+    willChange: "auto",
+  };
+  const client = ({ x, y, width, height }: Rect) => ({
+    x,
+    y,
+    width,
+    height,
+    left: x,
+    top: y,
+    right: x + width,
+    bottom: y + height,
+  });
+  class PageText {
+    parentElement: PageBox | null = null;
+    constructor(
+      readonly data: string,
+      readonly lines: readonly Rect[],
+    ) {}
+  }
+  class PageBox {
+    parentElement: PageBox | null = null;
+    readonly style: Css;
+    constructor(
+      css: Css,
+      readonly rect: Rect,
+      readonly kids: ReadonlyArray<PageBox | PageText>,
+    ) {
+      this.style = { ...INITIAL, ...css };
+      for (const kid of kids) kid.parentElement = this;
+    }
+    getBoundingClientRect() {
+      return client(this.rect);
+    }
+    getAnimations(): readonly unknown[] {
+      return [];
+    }
+    closest(): null {
+      return null;
+    }
+    contains(other: PageBox | PageText): boolean {
+      for (let at: PageBox | PageText | null = other; at !== null; at = at.parentElement)
+        if (at === this) return true;
+      return false;
+    }
+    querySelectorAll(selector: string): PageBox[] {
+      if (selector !== "*") throw new Error(`the fake page selects only "*", never ${selector}`);
+      return inOrder(this).filter((at): at is PageBox => at instanceof PageBox && at !== this);
+    }
+    compareDocumentPosition(other: PageBox): number {
+      const order = inOrder(rootOf(this));
+      return (
+        (order.indexOf(other) > order.indexOf(this) ? 4 : 2) |
+        (this.contains(other) ? 16 : 0) |
+        (other.contains(this) ? 8 : 0)
+      );
+    }
+  }
+  /** A box and everything in it, in tree order; and the page a box stands in. */
+  const inOrder = (at: PageBox): Array<PageBox | PageText> => [
+    at,
+    ...at.kids.flatMap((kid) => (kid instanceof PageBox ? inOrder(kid) : [kid])),
+  ];
+  const rootOf = (at: PageBox): PageBox =>
+    at.parentElement === null ? at : rootOf(at.parentElement);
+  const wordsIn = new Function(
+    "document",
+    "NodeFilter",
+    "Node",
+    "getComputedStyle",
+    `${PAGE_WORDS}\n  return wordsIn;`,
+  )(
+    {
+      createTreeWalker: (scope: PageBox) => {
+        const texts = inOrder(scope).filter((at): at is PageText => at instanceof PageText);
+        let next = 0;
+        return { nextNode: () => texts[next++] ?? null };
+      },
+      createRange: () => {
+        let lines: readonly Rect[] = [];
+        return {
+          selectNodeContents: (text: PageText) => {
+            lines = text.lines;
+          },
+          getClientRects: () => lines.map(client),
+        };
+      },
+    },
+    { SHOW_TEXT: 4 },
+    {
+      DOCUMENT_POSITION_PRECEDING: 2,
+      DOCUMENT_POSITION_FOLLOWING: 4,
+      DOCUMENT_POSITION_CONTAINS: 8,
+      DOCUMENT_POSITION_CONTAINED_BY: 16,
+    },
+    (at: PageBox) =>
+      new Proxy(at.style, {
+        get: (style, name) => {
+          if (typeof name !== "string") return undefined;
+          if (!(name in style)) throw new Error(`the fake page computes no ${name}`);
+          return style[name];
+        },
+      }),
+  ) as (scope: PageBox) => WordSeen[];
+
+  // The profiles pane's card on the glass as 586438a91 pins it (field-app's setup/profiles-pane.css): its head stuck
+  // to the top of the list that scrolls (position: sticky, z-index 1, on --vf-chrome-solid, #ffffff by day), over
+  // the card's rows as they scroll under it. The list 400 × 300; the head 40 tall at its top, its name on it; the
+  // row's plan, one line, where the row stands.
+  const NAME: Rect = { x: 12, y: 12, width: 60, height: 16 };
+  /** the plan's line wholly under the head (0 to 40), and with its top 8 under it */
+  const UNDER: Rect = { x: 300, y: 10, width: 80, height: 16 };
+  const HALF: Rect = { x: 300, y: 32, width: 80, height: 16 };
+  const pane = (plan: Rect, { head = {}, row = {} }: { head?: Css; row?: Css } = {}): PageBox =>
+    new PageBox({}, { x: 0, y: 0, width: 400, height: 300 }, [
+      new PageBox(
+        { overflowX: "auto", overflowY: "auto" },
+        { x: 0, y: 0, width: 400, height: 300 },
+        [
+          new PageBox({}, { x: 0, y: -20, width: 400, height: 220 }, [
+            new PageBox(
+              {
+                position: "sticky",
+                zIndex: "1",
+                display: "flex",
+                backgroundColor: "rgb(255, 255, 255)",
+                ...head,
+              },
+              { x: 0, y: 0, width: 400, height: 40 },
+              [new PageText("This Mac", [NAME])],
+            ),
+            new PageBox(row, { x: 0, y: plan.y - 6, width: 400, height: plan.height + 12 }, [
+              new PageText("ChatGPT Pro", [plan]),
+            ]),
+          ]),
+        ],
+      ),
+    ]);
+  const planOn = (scope: PageBox): WordSeen | undefined =>
+    wordsIn(scope).find((word) => word.text === "ChatGPT Pro");
+
+  it("(i) drops a line wholly under an opaque head its list pins over it: at the head's z-index 1, or with none, as a pinned box paints over the list's in-flow rows", () => {
+    expect(wordsIn(pane(UNDER)).map((word) => word.text)).toEqual(["This Mac"]);
+    expect(wordsIn(pane(UNDER, { head: { zIndex: "auto" } })).map((word) => word.text)).toEqual([
+      "This Mac",
+    ]);
+  });
+
+  it("(ii) cuts a line partly under it to the part the head leaves, and says the word stands under its list's pinned head", () => {
+    const half = planOn(pane(HALF));
+    expect(half?.cut).toBe("head");
+    expect(half?.lines).toEqual([{ x: 300, y: 40, width: 80, height: 8 }]);
+    expect([half?.y, half?.height]).toEqual([40, 8]);
+    expect(half === undefined ? undefined : passedOver(half, null)).toBe(
+      "under its list's pinned head",
+    );
+  });
+
+  it("(iii) never clips a word by its own head: the pinned box's own words are on the still, whole", () => {
+    const name = wordsIn(pane(UNDER)).find((word) => word.text === "This Mac");
+    expect(name?.cut).toBeNull();
+    expect(name?.lines).toEqual([NAME]);
+  });
+
+  it("(iv) never clips under a translucent head, its background's alpha under 1 or the box less than opaque: the word shows through it and is measured as it shows", () => {
+    for (const head of [{ backgroundColor: "rgba(255, 255, 255, 0.6)" }, { opacity: "0.6" }]) {
+      const shown = planOn(pane(UNDER, { head }));
+      expect(shown?.cut).toBeNull();
+      expect(shown?.lines).toEqual([UNDER]);
+      expect(shown === undefined ? undefined : passedOver(shown, null)).toBeNull();
+    }
+  });
+
+  it("(v) reads the stacking, never assumes it: a row that paints over the head — its z-index over the head's, or on the head's layer and after it in tree order — is on the still, whole", () => {
+    const over: ReadonlyArray<readonly [Css, Css]> = [
+      [{}, { position: "relative", zIndex: "2" }],
+      [{ zIndex: "auto" }, { position: "relative" }],
+    ];
+    for (const [head, row] of over) {
+      const shown = planOn(pane(UNDER, { head, row }));
+      expect(shown?.cut).toBeNull();
+      expect(shown?.lines).toEqual([UNDER]);
+    }
   });
 });
 
