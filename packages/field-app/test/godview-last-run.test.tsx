@@ -352,11 +352,17 @@ describe("LR — the curtain", () => {
   });
 
   it("says when the picture was taken: a clock today, the day otherwise", () => {
-    const now = new Date("2026-10-15T22:00:00.000Z");
+    // Item 250 (2026-11-08): the instants are LOCAL wall-clock times, so "today" and "yesterday"
+    // are the host's own days by construction, as `eyebrow`'s `toDateString` reads them. They were
+    // UTC literals (now 10-15T22:00Z, the picture 20:39Z), which hold only where the host's offset
+    // on 10-15 lies outside [+02:00, +03:21) (derived, not run). vf-m2's Europe/Amsterdam, at
+    // +02:00 then, read "yesterday 10:39 PM" where a clock was asked (run 221).
+    const local = (day: number) => new Date(2026, 9, day, 20, 39, 12).toISOString();
+    const now = new Date(2026, 9, 15, 22, 0);
     const at = (asOf: string) => eyebrow({ ...question, asOf }, now);
-    expect(at("2026-10-15T20:39:12.000Z")).toMatch(/^Last run · \d/u);
-    expect(at("2026-10-14T20:39:12.000Z")).toMatch(/^Last run · yesterday /u);
-    expect(at("2026-10-01T20:39:12.000Z")).toMatch(/^Last run · \D+ \d+ \d/u);
+    expect(at(local(15))).toMatch(/^Last run · \d/u);
+    expect(at(local(14))).toMatch(/^Last run · yesterday /u);
+    expect(at(local(1))).toMatch(/^Last run · \D+ \d+ \d/u);
     expect(eyebrow({ ...question, asOf: undefined }, now)).toBe("Last run");
   });
 
