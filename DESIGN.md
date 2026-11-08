@@ -1834,6 +1834,13 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     (`compose.sparks.say`), once, and only after the hatch: its receipts are Send's ("Waking Vela…", then
     "Delivered"), and a send not taken is said as Send's is, in the line's note (§8 "Chat's composer").
     *Corrected 2026-11-08 (ES-2): this said a refusal is said "in the thread"; Send's never is.*
+    - **Drawn** (ES-2): 14 under the agent, centred, its label 6 over the starter. The starter stands still, in the
+      hello's own look (§8 "Chat's thread", a starter: 34 tall, corners 17, solid chrome ringed by the strong
+      hairline, its glyph and its words), then 2, then its ×: 24 round, `close` 13 in t3, 5 from the starter's end.
+      Under the pointer only the × takes the foreground at 5%: the starter is not a press here, so it neither takes
+      the fill nor rises.
+    - **The opening's alone:** the night's New spark, ⌘N and the line's ✦ open the sheet with no job, and the job
+      leaves with the sheet whenever it folds (Cancel, Esc, the scrim, or another surface).
   - **The sheet:** 540 wide, padding 10, corners 40, in the Sheet tier (§5: the chrome at 90% over a 64 blur, saturate
     1.2), ringed by the strong hairline, with the search popup's shadow (§5), over the backdrop dim. The view behind it
     recedes to `scale(0.98)`. It rises in 560 ms on the island curve, from 16 below at 0.97, and leaves in 240 ms on the
