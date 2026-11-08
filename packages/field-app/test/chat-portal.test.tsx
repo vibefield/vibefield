@@ -63,6 +63,8 @@ function portOf() {
 
 let root: Root | null = null;
 let host: HTMLDivElement | null = null;
+/** Where React's root stands: never the sheet's container, which its first commit would clear of the night. */
+let mount: HTMLDivElement | null = null;
 const nights: { close(): void }[] = [];
 const boxes: HTMLElement[] = [];
 afterEach(async () => {
@@ -70,6 +72,8 @@ afterEach(async () => {
   root = null;
   host?.remove();
   host = null;
+  mount?.remove();
+  mount = null;
   for (const night of nights.splice(0)) night.close();
   for (const box of boxes.splice(0)) box.remove();
 });
@@ -98,7 +102,9 @@ function aNight(within: HTMLElement): HTMLElement {
 
 async function open(): Promise<void> {
   const at = host ?? aHost();
-  root = createRoot(at);
+  mount = document.createElement("div");
+  document.body.appendChild(mount);
+  root = createRoot(mount);
   await act(async () =>
     root?.render(<NewSparkSheet open port={portOf()} onClose={() => undefined} container={at} />),
   );
