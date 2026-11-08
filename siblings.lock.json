@@ -21,7 +21,7 @@
     "rosetta": {
       "path": "../rosetta-pin",
       "repository": "https://github.com/vibefield/rosetta.git",
-      "sha": "a8ab1f13fa707f84024072ee961fa82cd5d6bdb0",
+      "sha": "811e554c64e60509ef624660f0709fd33717cc2c",
       "packages": {
         "@vibefield/rosetta-protocol": "clients/ts",
         "@vibefield/rosetta-room": "clients/room"
@@ -30,8 +30,13 @@
         "crate": "rosettad",
         "profile": "release"
       },
+      "swift": {
+        "manifest": "apps/ios/VibeFieldKit/Package.swift",
+        "link": "apps/ios/VibeFieldKit/.window/rosetta"
+      },
       "release": {
-        "npm": "0.1.4"
+        "npm": "0.1.5",
+        "swift": "0.1.5"
       }
     },
     "truffle": {

@@ -6,6 +6,10 @@
       "version": "0.14.0",
       "revision": "86d816ee7920e6ffd0c8cfce24272e8802ceec76"
     },
+    "rosetta": {
+      "version": "0.1.5",
+      "revision": "811e554c64e60509ef624660f0709fd33717cc2c"
+    },
     "truffle": {
       "version": "0.7.26",
       "revision": "101889f676d32989e2c32295c3b608ccd5972c02"

@@ -40,6 +40,19 @@ let ghostteaDependency: Package.Dependency =
     .package(path: ".window/ghosttea")
   }
 
+// SP-7b D6, the EL8 to rosetta 0.1.5 (2026-11-08): rosetta's Swift client (`RosettaClient`, `clients/swift`, the
+// root manifest RO-39 added) as the same kind of rendered line, written from siblings.lock.json's rosetta
+// `release.swift`, never by hand. Its tag is the revision rosettad is built from and the npm rows were
+// published from (RD-5a: rosettad and its clients never name two revisions); `pnpm siblings use rosetta` renders
+// it nil, and the path package is `../rosetta-pin` through `.window/rosetta`.
+let rosettaRelease: Version? = "0.1.5"
+let rosettaDependency: Package.Dependency =
+  if let release = rosettaRelease {
+    .package(url: "https://github.com/vibefield/rosetta.git", exact: release)
+  } else {
+    .package(path: ".window/rosetta")
+  }
+
 let package = Package(
   name: "VibeFieldKit",
   platforms: [
@@ -182,6 +195,8 @@ let package = Package(
     // (`ts1.104.1-go1.27.2`, checksum `f8a61a74…`), so the kit downloads a new
     // xcframework, which only a run on a phone exercises.
     truffleDependency,
+    // rosetta's Swift client, for FieldHistory's direct History read (SP-7b's 7b-2).
+    rosettaDependency,
   ],
   targets: [
     // Design tokens and shared chrome — the godview monochrome language.
@@ -324,7 +339,13 @@ let package = Package(
     // keeps the word "copy" true). Still no mesh and no Ghosttea product.
     .target(
       name: "FieldHistory",
-      dependencies: ["FieldDesign", "FieldAgents", "FieldProduct"],
+      dependencies: [
+        "FieldDesign",
+        "FieldAgents",
+        "FieldProduct",
+        // SP-7b D6 — the session read by grant, over the netstack the composition injects (7b-2)
+        .product(name: "RosettaClient", package: "rosetta"),
+      ],
       resources: [.copy("Fixtures")]
     ),
     // The home screen: the field's composition, bubble chrome, session card —

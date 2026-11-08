@@ -148,7 +148,7 @@ struct HistoryFoldTests {
     let later = try IndexTimelineRow(
       json: .object([
         "timelineId": .string("t5"), "sessionId": .string("s1"), "ordinal": .int(10), "kind": .string("user"),
-        "at": .int(3_800_000 + 79 * 60_000), "group": .object(["id": .string("turn-2"), "kind": .string("human_turn")]),
+        "at": .int(Int64(3_800_000 + 79 * 60_000)), "group": .object(["id": .string("turn-2"), "kind": .string("human_turn")]),
         "text": .string("And then?"),
       ]))
     rows.append(later)
