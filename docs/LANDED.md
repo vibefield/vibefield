@@ -40996,6 +40996,8 @@ VF-PM accepted D1–D5 and the two EL8s (D6) at 23:05Z, and D4 corrected to (B')
   through it, because the home refused to carry the phone's ask.
 - After, the phone holds the ticket by both roads. The kit's reader (7b-2) comes after rosetta's Swift client (RO-38)
   and its EL8.
+  > **Errata (2026-11-08):** rosetta's `clients/swift` is RO-39 (VF-PM, 09:11Z). "RO-38" was
+  > PR #46's own subject; RO-38 is the Dependabot chore's row.
 
 **The fix.**
 - `89ba28b41` (red), test-only: `index-forward.test.ts` 10 → 12 rows and `index-open-ticket.test.ts` 28 → 30.
@@ -41044,6 +41046,8 @@ VF-PM accepted D1–D5 and the two EL8s (D6) at 23:05Z, and D4 corrected to (B')
   the home's connection (`#conn-N`), not the phone; 7c-1 keys it by the phone's roster device.
 - RO-38, rosetta's `clients/swift` (its PR is James's, by hand), then the EL8 to its release, then 7b-2, the kit's
   direct History read (W1 on the old mini).
+  > **Errata (2026-11-08):** rosetta's `clients/swift` is RO-39 (VF-PM, 09:11Z). "RO-38" was
+  > PR #46's own subject; RO-38 is the Dependabot chore's row.
 
 ## SP-7b's 7c — the phone's terminal asks for another desktop ride its home: the owner keys the phone behind its home by its roster device, so a renewal after a reconnect holds, and the kit asks its ticket, renewal and Resume of its home with `device`
 (2026-11-07; one stack of five commits, fd's, in `/Volumes/SamsungRed/lanes/item190`, on main `60461c59c`: 7c-1
@@ -41123,6 +41127,8 @@ The 7c READ in the SP-7b plan (`lanes/sp7/SP-7b-plan.md`, 23:16Z) found the gap.
 - The next verify of main that includes `c8c580fcb`: the first to run this stack with 7b-1 and rosetta 0.1.4.
 - RO-38, rosetta's `clients/swift` (its PR is James's, by hand), then the EL8 to its release, then 7b-2, the kit's
   direct History read (W1 on the old mini).
+  > **Errata (2026-11-08):** rosetta's `clients/swift` is RO-39 (VF-PM, 09:11Z). "RO-38" was
+  > PR #46's own subject; RO-38 is the Dependabot chore's row.
 - History's Resume moves to the home with FW-R6's last half.
 
 ## Item 206's boot half — a boot whose first dial of the MeshData lane link fails dials again on the back-off: doc sync and presence start once the link has said HELLO_OK and mgmt is up, and a START is terminal only when the floor answers no
@@ -42621,3 +42627,137 @@ M221: host-class (`lanes/vf-m2/run221-a9-results`, SUMS `5415d2b0`).
   fixer's read, 08:44Z). A dated note now stands at that line.
 
 **Owed.** 7b-2a's replay onto this main, run223. Nothing else of 249 or 250.
+
+## SP-7b's 7b-2a — the phone's History ticket carries `rest`, the index serve's own http(s) origin beside its socket, and the projection's golden pairs are written for the kit's Swift port (track SP; contracts, fieldd and the agent-plane pages; one release-adjacent file, `biome.jsonc`'s ignore row for the generated golden)
+(2026-11-08; four commits, fd's (vibe-field-aa), in `/Volumes/SamsungRed/lanes/item190`, on main `8755022c5`:
+`12f21a263` (red) → `6d39ee3b7` → `c633fd2bc` (docs) → `c435f1e6e` (the golden), branch `sp7b-2a-r5`. They were cut
+on `c1e2a03c7` as `27ff8154a` → `bae107b11` → `9cf287971` → `7739a6a82` (branch `sp7b-2a`; packet r2,
+`lanes/sp7b/sp7b-2a/r2/`, SUMS `8dfb7f69`) and replayed in proof form: each commit's tree equals
+`git merge-tree --write-tree 8755022c5 <the original>`. Two replays in between, onto `05df1fe85` and onto
+`1967d9fa0`, were parked unrun (`lanes/co-plan/released/sp7b2a-run223-on-*`). M223 is `c435f1e6e`, landed at
+09:07:41Z by the fixer, a fast-forward of main, on VF-PM's GO.)
+- VF-PM cut 7b-2a at 05:35Z with D-2a, D-2b and D-2c at the leans (a) of the 7b-2 delta
+  (`lanes/sp7/SP-7b-2-delta.md`; DECISIONS "SP-7b"). VF-PM ruled at 05:43Z that the two-daemon row is 7b-1's own,
+  which gains the assertion, and at 06:08Z that the agent-plane pages go in this slice.
+- 17 files, +5,619 −16. Against the 249 stack and its records: 0 shared paths.
+- **The class:** contracts (source, tests and two contract fixtures), fieldd (source, tests and the pairs' golden), the
+  three `docs/agent-plane/*.html` pages, and one release-adjacent file, `biome.jsonc`'s ignore row for the generated
+  golden. No generated file moves; the pin class, `.github`, `scripts/check-*`, `apps/ios` and every `.rs` file are
+  untouched.
+
+**What.** The phone's ticket names a socket, and rosetta's Swift client (`RosettaClient`) reads its pages over HTTP at
+an origin. The tailnet set gave only the socket, so the kit would have had to guess the origin from it.
+- **contracts:** `RemoteIndexEndpointSet` gains `restUrl`, optional on read: a tailnet `http://` or `https://` origin
+  with no path, query or fragment, never loopback (`remoteDoorUrl("https?", "")`). It is the instance's own member
+  (`.extend`) beside the template's required `session` leg, because an owner before this build answers the socket
+  alone. `remoteIndexEndpointsFor` composes it from the serve's own base (`{path: "", transport: "http"}`): rosetta's
+  pages live at the root of the listener the socket dials, and the grant opens them.
+- **fieldd:** `index-forward.ts`'s `ownersTicket` reads the owner's set through `onIndexServe`.
+  - The socket must be on `PORTS.INDEX_SERVE`, as before. A `rest` leg, when there is one, must be that socket's own
+    origin: the paired scheme, the same host and port.
+  - Anything else is `doors_not_published`, naming the owner. An owner before this build is passed back untouched.
+  - The minter needs no change: it mints through `indexEndpointsFrom`, so the phone at its home and a peer's forward
+    each get the origin. No new route: the same serve, at the same root.
+- **The pairs (D-2c (a)):** `index-timeline-pairs.test.ts` is the one writer of
+  `test/fixtures/index-timeline-pairs.golden.json`, under `VF_WRITE_GOLDENS=1`, as IOS-12's goldens are.
+  - `cases`: 55, every branch `projectTimelineRow` reads (each body kind, each notice and tool family it names, both
+    bounds and the surrogate cut, the tolerances), with the two rows of rosetta's page golden.
+  - `steps`: one live session as rosetta's client hands it: `open` (4 entries → 4 rows), `tool_updated` (1 → 4),
+    `usage` (1 → 4), then `message` (2 → 5), with the whole table's projection after each.
+  - Three rows: the golden is byte for byte what the projection writes; every entry is one the reader admits, and each
+    tool row draws its line but the one meant to be refused; re-projecting only a step's upserts lands on the whole
+    table's rows.
+  - The bytes (135,822, sha256 `b082d992b7021eba1d505e92a556a6675e1a972a2eade411c1f07f45af8bc396`) are a9's `gen`
+    row at `bae107b11` on the old mini (06:15:51Z), committed as written. fd read them row by row before committing
+    (PG-3a0's rule: no golden over a defect).
+- **The pages:**
+  - `docs/agent-plane/api.html` owns `index.openTicket` (+34 −1). It gains 7b-1's note (BUILT at `41331646e`) and
+    7b-2a's (BUILT, cited by its symbols), and the catalogue row's update.
+  - `system.html` (+5) and `architecture.html` (+1 −1) carry the same claim's correction and AR-8's row note.
+
+**The lights.**
+- **a9's rows on the old mini** (`lanes/sp7b/sp7b-2a-a9-results`, SHA256SUMS-a9-sp7b2a `70093e5e` at the rows and
+  `d47b8b1b`, 82 files, with the witness):
+  - red at `27ff8154a` (06:15Z): contracts `Tests 3 failed | 30 passed (33)`; fieldd
+    `Tests 9 failed | 42 passed | 5 skipped (56)`. That is the 12 named rows, each on an `AssertionError`.
+  - `gen` at `bae107b11`: `3 passed`, the golden written.
+  - The tip at `bae107b11`: contracts `748 passed (748)` over 3 files; fieldd `51 passed | 5 skipped (56)`; both
+    tsc 0; biome 0 over 13 files.
+- **The witness** (06:18:53Z → 06:21:22Z), 15 runs:
+  - the red ×3 at `27ff8154a`, each `9 failed | 42 passed | 5 skipped`;
+  - the lane ×3 at `bae107b11`, all green: index-serve 10, index-open-ticket `25 passed | 5 skipped` with the
+    two-daemon row, index-forward 13, and contracts 33;
+  - in every run `/private/tmp births: 0`. The run's own TMPDIR held only node's `node-compile-cache`, and no
+    field-native or cell was born.
+- **run220**, the first mint (at `7739a6a82`, on vf-m2), was red at the bundle stage. That was the host's, so no M220
+  (LANDED "Items 249 and 250").
+- **M223, run223 on vf-m2** (a9's): `c435f1e6e`, tree `0b50365b213b`, on main `8755022c5`. Armed 08:58:50Z, verify exit
+  0 at its own end 09:04:30Z, 5 min 40 s (`lanes/vf-m2/run223-a9-results`, SHA256SUMS-a9-run223 `ac848841`, 17/17).
+  - **The toolchain at the arm** was still Xcode 26.3, so the SDK split stood: the default 27.2, `--sdk macosx` 26.2.
+    Items 249 and 250 carried it.
+  - **V:** `FIELDD_ROSETTAD_BIN` set; `SDKROOT` and `TZ` unset.
+  - **fieldd:** `267 passed | 5 skipped (272)` files and `3762 passed | 15 skipped (3777)` tests.
+    `index-timeline-pairs.test.ts` is new (3), and `index-forward.test.ts` went 12 → 13.
+  - **contracts:** 62 files, 1949 tests (`remote-endpoints.test.ts` 20 → 21). **biome:** "Checked 3505 files", no
+    fixes, 73 warnings and 21 infos.
+  - **The rest as M222:**
+    - electron-shell `2746 passed | 2 skipped`; field-app 316 files and 4401 tests;
+    - dev-runner `pass 474`, `fail 0`; cargo `ok 37, FAILED 0`;
+    - ios fixtures 418, pins 93, icons 51; typecheck and test on 29 projects; census OK;
+    - the tree clean after; stubs 0.
+  - Every expected line matched: missing [] and extra [].
+  - The test stage started at a 1-min load of 4.85, with swap 0.
+  - The native-provenance line: one crate compiled under V's `CARGO_PROFILE_DEV_DEBUG=0`. Not a finding.
+  - run223 left one /private/tmp birth on vf-m2 (`/private/tmp/.tmpt1bCBn`, born 09:02:48Z, KEPT; run222 had 0),
+    attributed by a9 to item 200's class (field-native's lib tests;
+    `lanes/vf-m2/run223-a9-results/birth-attribution.md`, `b40daa53`, its SUMS `1ebffd25`), not the slice's; item
+    200's step (i) stands (Found).
+- No test ran on the MacBook (the HOLD). The code was held to biome's width by hand.
+
+**Found.**
+- **Item 247** (VF-PM 06:08Z; contracts-only; OWED, its own slice): a tool whose `attachments` holds one unreadable
+  item is refused whole by `IndexTimelineToolRow`, whose array is strict on its items. A body's attachments drop only
+  that item. The pairs leave the case out.
+- **run223's birth is item 200's class, recurring after item 196 landed** (a9, read-only; nothing deleted):
+  - `/private/tmp/.tmpt1bCBn` holds `native/run/`: `termcell.1.crumb`, `termcell.2.crumb` and four sockets, all born
+    09:02:48Z, with no process holding them. Both crumbs read `failed printing to stderr: Broken pipe (os error 32)`
+    at std's `stdio.rs:1168`. That is a floor's Agent and Interactive cells panicking on EPIPE once their floor was
+    gone, the shape of item 196's attribution root.
+  - The name is `tempfile`'s default. No Node site in the repo can make it: every mkdtemp names its prefix.
+  - The birth falls in the window of field-native's lib test binary, [09:02:41.4Z, 09:02:49.7Z]: cargo's one
+    `Compiling` line, its 15.40 s build and the binary's 3.32 s run.
+  - Five lib tests boot a floor in a `.tmp` root, and all five await `shutdown()`: `services/mesh.rs:1681`, `:1722`
+    and `:1760`, and `mgmt/mesh_egress.rs:341`'s `state()`, used at `:354` and `:399`. Which one made it is unproven,
+    because the crumb names only std's `print_to`.
+  - Not 7b-2a's: the slice touches no `packages/field-native` path, field-native's tree is identical to M222's, and
+    the same binary left 0 births in run222. The class is intermittent, as item 196's attribution measured it.
+  - The follow-up is item 200's own step (i): the panic hook's crumb carries a backtrace. `cell.rs` has no
+    `force_capture` at `c435f1e6e`.
+
+**Errata, at their sources.**
+- **The 7b-2 delta's D-2c** keyed the projection's cache by `timeline_id + revision`. rosetta's `TimelineEntry` has no
+  revision. It was corrected at its source (06:05Z): the cache keys on `timeline_id`, and an entry unequal to the one
+  cached is re-projected.
+- **The delta's two-daemon row:** fd's 05:38Z note said 7b-1 had no two-daemon e2e for the index ticket. The note was
+  false and was withdrawn at 05:43Z. The row is `index-open-ticket.test.ts`'s "SP-7b — a transcript on A, by ticket,
+  for the phone whose home is B". The search went by harness names, not by the idea.
+- **The delta's slice 1** said `check-ios-fixtures` gains the pairs' mirror in 7b-2a. The mirror moved to 7b-2b, with
+  the kit (the golden commit's body); ios fixtures read 418 at M223. A dated correction now stands at that line.
+- **`docs/agent-plane/api.html`** had carried no SP-7b note since 7b-1 landed, and said "the phone still hears
+  `direct-plane-unbuilt`". This slice corrected it, with `system.html`'s same claim.
+- **The vf-m2 mint brief** (`lanes/sp7b/mints/sp7b2a-mint-vfm2`) said a V naming `FIELDD_ROSETTAD_BIN` would read
+  fieldd 3767 passed and 10 skipped. Run 219's V was set already (`lanes/ts6/ts6-mini.sh:210-211`, a9's read), so the
+  line is 3762 and 15 (3777). It was corrected at the brief (06:30Z; SUMS `7f62b8ba`).
+- **VF-PM's land GO** said release-adjacent 0. `biome.jsonc` is release-adjacent by the fixer's ERE, as counted in
+  241a's and 243's GOs, so the count is 1 (VF-PM, 09:08Z).
+- **"RO-38" for rosetta's `clients/swift`** was PR #46's own subject. RO-38 is the Dependabot chore's row, and VF-PM
+  numbered #46 **RO-39** at 09:11Z. Dated `Errata` blocks stand under the three LANDED lines that said it (7b-1's
+  entry twice, 7c's once), and a dated note in DECISIONS "SP-7b"; ROADMAP's row is rewritten in place.
+
+**Owed.**
+- **7b-2b,** the kit's direct History read through `RosettaClient`, behind the EL8 to rosetta 0.1.5 (RO-39's
+  release). It reads `restUrl`, ports the projection held to these pairs, and adds the kit's mirror to
+  `pnpm check:ios-fixtures`.
+- **W1 on the old mini:** D-2b's bytes and time to first row, and whether a WebSocket rides the netstack (F-5).
+- Item 247.
+- Item 200's step (i), the crumb's backtrace, with run223's recurrence on vf-m2 as its newest case.
