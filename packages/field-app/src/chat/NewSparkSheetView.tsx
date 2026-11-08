@@ -44,6 +44,8 @@ export interface SheetPortal {
   readonly onDrawn: () => void;
   /** the window could not draw (no WebGL2): the sheet rises as it always has */
   readonly onFailed: () => void;
+  /** ES-3d — a phase's motion has finished (its own animations, or its own time where nothing animates) */
+  readonly onMoved: (motion: PortalPhase) => void;
 }
 
 export interface NewSparkSheetViewProps {
@@ -236,7 +238,10 @@ export function NewSparkSheetView({
     const glass = glassRef.current;
     const now = grown.current ?? places;
     if (motion === undefined || places === null || now === null || !pane || !glass) return;
-    return movePortal(motion, { window: pane, glass }, now, reduced);
+    const moving = movePortal(motion, { window: pane, glass }, now, reduced);
+    // ES-3d: what follows the phase follows its motion's own finish
+    void moving.finished.then(() => handed.current?.onMoved(motion));
+    return moving.stop;
   }, [motion, places, reduced]);
   return (
     <div

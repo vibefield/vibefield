@@ -37,7 +37,7 @@ import {
   startsOf,
   suggestName,
 } from "./new-spark";
-import { PORTAL_MS } from "./portal";
+import { PORTAL_MS, type PortalPhase } from "./portal";
 import { chooseSpark, refreshSparks, usePersonSessions, useSparksReading } from "./sparks-feed";
 import type { Starter } from "./thread-items";
 
@@ -237,14 +237,19 @@ function Sheet({
     onLeaveFor(LEAVE_MS);
   }, [handBack, onLeaveFor]);
   const phase = portal?.phase;
-  useEffect(() => {
-    if (phase !== "closing") return;
-    const closed = window.setTimeout(
-      () => setPortal((held) => (held?.phase === "closing" ? { ...held, phase: "open" } : held)),
-      reduced ? PORTAL_MS.reducedOut * 2 : PORTAL_MS.close,
-    );
-    return () => window.clearTimeout(closed);
-  }, [phase, reduced]);
+  // ES-3d: a phase's motion has finished (its own animations, or its own time where nothing animates): the close
+  // opens; the fold, the window open again, hands the night back at the window's own moment (§6, the portal)
+  const onMoved = useCallback(
+    (motion: PortalPhase) => {
+      if (motion === "closing")
+        setPortal((held) => (held?.phase === "closing" ? { ...held, phase: "open" } : held));
+      else if (motion === "folding" && phaseAt.current === "folding") {
+        handBack();
+        setPortal((held) => (held?.phase === "folding" ? { ...held, phase: "folded" } : held));
+      }
+    },
+    [handBack],
+  );
   // Cancel, Esc or the dim open the window back; Create takes the sheet and its window away as one. Folded before the
   // window drew, the night never stepped aside, and carries on
   useLayoutEffect(() => {
@@ -255,19 +260,11 @@ function Sheet({
         held === null ? held : { ...held, phase: hatched.current ? "leaving" : "folding" },
       );
   }, [handBack, open]);
-  // the fold: the face shrinks back into the night, and at the window's moment the night takes it back
+  // the fold: the face shrinks back into the night as the window opens again; the night is handed back once it has
+  // (`onMoved`)
   useEffect(() => {
-    if (phase !== "folding") return;
-    if (!reduced) hatch.current?.leave();
-    const back = window.setTimeout(
-      () => {
-        handBack();
-        setPortal((held) => (held?.phase === "folding" ? { ...held, phase: "folded" } : held));
-      },
-      reduced ? PORTAL_MS.reducedBack : PORTAL_MS.back,
-    );
-    return () => window.clearTimeout(back);
-  }, [handBack, phase, reduced]);
+    if (phase === "folding" && !reduced) hatch.current?.leave();
+  }, [phase, reduced]);
 
   // the keyboard goes back where it was as the sheet leaves
   const before = useRef<Element | null>(document.activeElement);
@@ -437,7 +434,7 @@ function Sheet({
       hatchRef={hatch}
       {...(portal === null
         ? {}
-        : { portal: { ...portal, reduced, onDrawn, onFailed } satisfies SheetPortal })}
+        : { portal: { ...portal, reduced, onDrawn, onFailed, onMoved } satisfies SheetPortal })}
       {...(job === null ? {} : { job })}
       jobLeaving={jobLeaving}
       onDropJob={() => setJobLeaving(true)}

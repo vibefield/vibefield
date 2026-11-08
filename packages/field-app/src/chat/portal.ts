@@ -125,14 +125,38 @@ export function startClipOf(places: PortalPlaces): string {
   return clip === "" || clip === "none" ? insetOf(places.panel, places.panel, PANEL_RADIUS) : clip;
 }
 
-/** Run one phase's motion on the parts; the answer stops it where it has reached (its styles kept, so the next phase
- * moves on from there: a Cancel mid-close opens back from wherever the edge had come to). */
+/** A phase's motion as it runs (ES-3d): finished once its own animations have, and stopped where it has come to. */
+export interface PortalMotion {
+  /** resolves once the phase's animations have finished, or, where nothing animates, once the phase's own time has
+   * passed; never once it is stopped */
+  readonly finished: Promise<void>;
+  /** stop it where it has come to: its styles kept, so the next phase moves on from there */
+  stop(): void;
+}
+
+/** A phase's own time: its motion's length, and the bound where nothing animates (no Web Animations, tests). */
+export function phaseMsOf(phase: PortalPhase, reduced: boolean): number {
+  switch (phase) {
+    case "closing":
+      return reduced ? PORTAL_MS.reducedOut * 2 : PORTAL_MS.close;
+    case "folding":
+      return reduced ? PORTAL_MS.reducedBack : PORTAL_MS.back;
+    case "leaving":
+      return reduced ? PORTAL_MS.reducedBack : PORTAL_MS.leave;
+    default:
+      return 0;
+  }
+}
+
+/** Run one phase's motion on the parts. A Cancel mid-close opens back from wherever the edge had come to. ES-3d: what
+ * follows a phase follows its motion's own finish, never a clock beside it (§6: the night comes back "once Cancel, Esc
+ * or the dim has opened it again"), for the motion rides frames and a clock does not. */
 export function movePortal(
   phase: PortalPhase,
   parts: PortalParts,
   places: PortalPlaces,
   reduced: boolean,
-): () => void {
+): PortalMotion {
   const running: Animation[] = [];
   const run = (element: HTMLElement, frames: Keyframe[], options: KeyframeAnimationOptions) => {
     if (typeof element.animate !== "function") return;
@@ -214,15 +238,33 @@ export function movePortal(
       break;
     }
   }
-  return () => {
-    for (const animation of running) {
-      // keep where it had come to; a part no longer drawn keeps nothing
-      try {
-        animation.commitStyles();
-      } catch {
-        // not drawn: nothing to keep
-      }
-      animation.cancel();
+  let stopped = false;
+  let bound = 0;
+  const finished = new Promise<void>((done) => {
+    const end = (): void => {
+      if (!stopped) done();
+    };
+    if (running.length === 0) {
+      bound = window.setTimeout(end, phaseMsOf(phase, reduced));
+      return;
     }
+    // a stopped animation's finish rejects (it was cancelled): nothing follows it
+    Promise.all(running.map((animation) => animation.finished)).then(end, () => undefined);
+  });
+  return {
+    finished,
+    stop: () => {
+      stopped = true;
+      window.clearTimeout(bound);
+      for (const animation of running) {
+        // keep where it had come to; a part no longer drawn keeps nothing
+        try {
+          animation.commitStyles();
+        } catch {
+          // not drawn: nothing to keep
+        }
+        animation.cancel();
+      }
+    },
   };
 }
