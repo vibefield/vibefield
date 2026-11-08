@@ -143,7 +143,8 @@ struct FaceHoldTests {
     #expect(abs(FaceHold.labelRadius(spot, letters: 4, reached: false) - expected) < 1e-9)
     #expect(abs(FaceHold.labelRadius(spot, letters: 4, reached: true) - (expected + 5)) < 1e-9)
     let long = FaceHold.labelRadius(spot, letters: 12, reached: false)
-    #expect(abs(long - (160 + 33 + 34.2 * abs(cos(a)) + 12 * abs(sin(a)))) < 1e-9)
+    let expectedLong = 160 + 33 + 34.2 * abs(cos(a)) + 12 * abs(sin(a))
+    #expect(abs(long - expectedLong) < 1e-9)
   }
 
   @Test("a bud says a model's own week by its group's word, \"104% · FABLE\", never the raw \"FABLE ONLY\"")
