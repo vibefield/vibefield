@@ -10346,8 +10346,18 @@ with "…", as ‹label› is above:
 - **A host that broke its pipe's bounds** (a message past 64 KiB, or one that is not JSON; reachable only when the
   host itself is not VibeField's, CP-4a2a's `protocol`): "VibeField ended ‹flow›: it sent something VibeField can't
   read."
-- **A run that sent more than a flow may** (more calls waiting at once, or more log lines in its life, than
-  `FLOW_LIMITS` allows, CP-4a2a's `flood`): "VibeField ended ‹flow›: it sent more than a flow may."
+- **A run that sent more than a flow may** (more calls waiting at once, more log lines in its life, or a longer journal
+  than `FLOW_LIMITS` allows, CP-4a2a's `flood`): "VibeField ended ‹flow›: it sent more than a flow may."
+  *Proposed 2026-11-08 (CP-4a2b J1, a journal's byte bound; James 01:47:12Z, board `co-j1-flood-words`: "(a) 32 MiB
+  and §9's flood words as they stand"):*
+  - "or a longer journal" is J1's (`FLOW_LIMITS.JOURNAL_MAX_BYTES`, 32 MiB), and the sentence stays word for word.
+  - *The window (ruled 2026-11-08, (iv)):* §9's line below, that a host fieldd ended is never started again for that run,
+    has one window. A VibeField stop inside J1's leave (from its flood to its host's exit, up to the shutdown grace)
+    drops the ending, and the next life starts that run's host once more; it floods again at its first new line.
+    `memory`'s identical window, at its source: supervisor.ts:468–469 (its end under `shutdown`), :582–583 (the
+    grace) and runs.ts:2386 (`#ended` returns on `#closing`), @45e3a3648.
+  - *The addition (1) of 2026-11-08:* a long-lived flow rolls its journal — a continue-as-new, a snapshot of the
+    script's state and a fresh journal segment — rather than ending `flood`; Proposed, not 0.9.
 - **A host this copy cannot start** (its file is not beside fieldd): "VibeField can't run flows: this copy of
   VibeField is missing the file it runs them with. Reinstall VibeField." It is the agents' sentence for the same loss
   (`roles.ts`, `agentShimUnavailable`), and a development run that has no host says so in fieldd's log alone.
@@ -10462,10 +10472,14 @@ a name that is, or starts with, "VibeField" shows the flow's slug instead, so a 
 - *Proposed 2026-11-07 (CP-4a2b slice 12, the cap out; James 08:28:07Z, C; ruled 2026-11-07, V4; open until James reads
   them, as the rest are):* **A run's waits and its ceilings** (J3). A run that waits has no process: its host is set
   down after a short idle, and started again from its journal when it can go on. Its calls are counted, not capped:
-  within these ceilings, a script that loops runs until you stop it. The flow API's own ceilings, said once: "a flow
-  may wait on 256 calls at once, and say 10,000 log lines in its life". *Corrected 2026-11-07 (the same):* this bullet
-  was "The cap and its hold" (CP4-Q8 part 2; J3, J7): a run's 40 calls, its hold at the 41st and its Allow. James
-  ruled there is no call cap.
+  within these ceilings, a script that loops runs until you stop it, or until its journal reaches 32 MiB. The flow
+  API's own ceilings, said once: "a flow may wait on 256 calls at once, say 10,000 log lines in its life, and keep
+  32 MiB in its journal". *Corrected 2026-11-07 (the same):* this bullet was "The cap and its hold" (CP4-Q8 part 2;
+  J3, J7): a run's 40 calls, its hold at the 41st and its Allow. James ruled there is no call cap.
+  *Proposed 2026-11-08 (CP-4a2b J1, a journal's byte bound; James 01:47:12Z, board `co-j1-flood-words`: "(a) 32 MiB
+  and §9's flood words as they stand"):* the journal's bound, "or until its journal reaches 32 MiB" and "keep 32 MiB in
+  its journal", is J1's (`FLOW_LIMITS.JOURNAL_MAX_BYTES`); a run that reaches it ends `flood`, in the sentence of
+  "When a run's script cannot go on" above.
 - **A run's card's states** (CP-4b draws them): **Waiting for an agent slot**; **Answering again** (above); a line
   VibeField can't tell arrived, **Sent — not confirmed**; **Ended its ‹n› agents** (CP4-Q10 (a)); **Stopped by you ·
   ‹time›** (§8); and an answer cut short, **Answered · cut short**, whose detail says "Its answer was longer than a
