@@ -12,6 +12,7 @@ import {
   CHAT_ACT,
   CHAT_CHOSEN,
   CHAT_COMPOSER,
+  CHAT_JOBS,
   CHAT_JUMPING,
   CHAT_NIGHT,
   CHAT_PAUSE,
@@ -100,9 +101,11 @@ export function ChatPreview({
   const act = CHAT_ACT[state];
   const pause = CHAT_PAUSE[state];
   const night = CHAT_NIGHT[state];
+  const jobs = CHAT_JOBS[state];
   const empty = (
     <ChatEmptyView
       {...(night === undefined ? {} : { agents: night })}
+      {...(jobs === undefined ? {} : { jobs: jobs.starters, held: jobs.state === "reading" })}
       {...(onNewSpark === undefined ? {} : { onNewSpark })}
     />
   );

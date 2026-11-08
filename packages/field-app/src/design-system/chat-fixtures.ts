@@ -29,6 +29,7 @@ import { type ModelsReading, modelWords } from "../chat/new-spark";
 import type { NightAgents } from "../chat/night-agents";
 import { type SparkEntry, sparkEntriesOf } from "../chat/spark-status";
 import type { SparksReading } from "../chat/sparks-feed";
+import { type StartersReading, startersOf } from "../chat/starters";
 import { ThreadLedger, type ThreadMark, threadMarksOf } from "../chat/thread-marks";
 import type { PendingSay } from "../chat/transcript-items";
 import { type TranscriptReading, transcriptReadingOf } from "../chat/transcript-port";
@@ -281,6 +282,7 @@ export const CHAT_STATES = [
   "empty",
   "empty-off",
   "empty-short",
+  "empty-filled",
   "opening",
   "unavailable",
 ] as const;
@@ -326,6 +328,7 @@ export const CHAT_STATE_LABEL: Record<ChatState, string> = {
   empty: "The night",
   "empty-off": "The night, no agent",
   "empty-short": "The night, short",
+  "empty-filled": "The night, another Mac's jobs",
   opening: "Opening",
   unavailable: "Unavailable",
 };
@@ -401,6 +404,7 @@ export function chatReadingOf(state: ChatState): SparksReading {
     case "empty":
     case "empty-off":
     case "empty-short":
+    case "empty-filled":
       return { state: "ready", entries: [] };
     case "opening":
       return { state: "opening" };
@@ -504,6 +508,7 @@ export const CHAT_CHOSEN: Record<ChatState, string | null> = {
   empty: null,
   "empty-off": null,
   "empty-short": null,
+  "empty-filled": null,
   opening: null,
   unavailable: null,
 };
@@ -516,6 +521,41 @@ export const CHAT_NIGHT: Partial<Record<ChatState, NightAgents>> = {
     here: 0,
     elsewhere: AGENT_CATALOG.filter((row) => row.offers.spark).map((row) => row.label),
   },
+  "empty-filled": { state: "read", here: 1, elsewhere: [] },
+};
+
+/** ES-4 — another Mac than James's (the ES page's filled plate): Claude Code and Codex here, no Grok; three Codex runs
+ * in billing-api, the third worked in last, and a Claude Code run in web. */
+const ANOTHER_MAC_AGENTS = AGENT_CATALOG.filter((entry) =>
+  ["claude", "codex"].includes(entry.id),
+).map((entry) => ({
+  id: entry.id,
+  label: entry.label,
+  available: true,
+  resumable: true,
+  personas: [],
+  offers: { spawn: true, spark: entry.offers.spark },
+}));
+const codexAt = (id: string, started: number, worked: number): AgentFieldRow =>
+  row({
+    runtimeRunId: id,
+    kind: "codex",
+    label: "Codex",
+    createdAt: minutesAgo(started),
+    lastActivityAt: minutesAgo(worked),
+    project: { name: "billing-api" },
+  });
+const ANOTHER_MAC_ROWS: readonly AgentFieldRow[] = [
+  codexAt("run-billing-1", 90, 40),
+  codexAt("run-billing-2", 80, 30),
+  codexAt("run-billing-3", 70, 2),
+  row({ runtimeRunId: "run-web-1", lastActivityAt: minutesAgo(20), project: { name: "web" } }),
+];
+
+/** ES-4 — the jobs a plate's night offers, as the product fills them (`startersOf`) from the plate's own Mac; the
+ * ruled starters where a plate names none. */
+export const CHAT_JOBS: Partial<Record<ChatState, StartersReading>> = {
+  "empty-filled": startersOf({ agents: ANOTHER_MAC_AGENTS, rows: ANOTHER_MAC_ROWS }),
 };
 
 /** The plates whose thread an act holds (DESIGN.md §8 "Chat's thread"): Send's, over the draft it carries; a

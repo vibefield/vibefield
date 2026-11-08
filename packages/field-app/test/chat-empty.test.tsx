@@ -322,4 +322,17 @@ describe("the catalog's night (docs/UI_SYSTEM.md: the plate mounts the shipping 
     act(() => root?.render(<ChatPreview key="short" state="empty-short" />));
     expect($(".vf-chat-empty")).not.toBeNull();
   });
+
+  it("draws another Mac's night, its jobs filled by the product's own reading of the plate's Mac (ES-4)", () => {
+    mount(<ChatPreview state="empty-filled" />);
+    const jobs = [
+      ...(host?.querySelectorAll<HTMLElement>(".vf-chat-empty .vf-chat-starter") ?? []),
+    ];
+    expect(jobs.map((job) => words(job))).toEqual([
+      "Spawn 4 Claude Code agents to research a topic each",
+      "Keep track of my agents in billing-api",
+      "Have Claude Code review codex·3's work until it's clean",
+    ]);
+    expect(jobs.every((job) => job.dataset.held === undefined)).toBe(true);
+  });
 });

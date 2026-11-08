@@ -986,6 +986,7 @@ describe("the catalog's composer plates (docs/UI_SYSTEM.md: the shipping view on
     "empty",
     "empty-off",
     "empty-short",
+    "empty-filled",
     "opening",
     "unavailable",
   ];
