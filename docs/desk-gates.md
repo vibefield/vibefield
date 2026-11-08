@@ -32,6 +32,21 @@ cutover of `desk/landing` needs, what each proves, where it runs, and its verdic
   with its freshness when it is not fresh. Every other row runs with the variable removed, so no row runs on the
   launching shell's value; a differing one is named `shellRosettadIgnored`. With no build, those rows are
   `RED (rosettad not built — pnpm siblings:build)` and not run, and the rest run.
+  **A window row wants the display AWAKE (item 255, 2026-11-08).** Ten rows show a window: `smoke:canvas`,
+  `smoke:canvas:no-webgpu`, `smoke:kind-faults`, `smoke:plugin`, `smoke:plugin-restart`, `smoke:godview`,
+  `smoke:godview:no-record`, `smoke:terminal-direct`, `smoke:first-run` and `smoke:studio`. Their smokes keep the GPU
+  (`show: gpu` or `show: true` in `smoke.ts`), and Studio waits for its window's native show
+  (`physical-acceptance.ts:41`). `still`, `smoke`, `smoke:canvas:no-gpu`, `smoke:terminal-door` and `smoke:bundled`
+  show none. On a sleeping display such a row can go red on the host, not the code. DR's gate at `e60d8add6` ran on a
+  display asleep since about 08:48Z, and `smoke:studio` went red on that show wait. So the gate's operator reads the
+  display before arming these rows (`CGDisplayIsAsleep`, a read), and a window row's red on a sleeping display is HOST
+  STATE, owed a re-run awake. The 10-29 rosetta release landing re-ran the eight rows that sleep had cut
+  (`landing-awake`). Waking the display is the operator's hand, never the script's.
+  **`smoke:studio` builds in the checkout it runs from (item 256, 2026-11-08).** Its dev runner builds field-native
+  from that checkout into the SHARED cargo target, and writes the generated outputs into the checkout, so it is a
+  cargo row and a gen row. At `e60d8add6` that took 5 m 55 s: the shared binary moved `5e69f5db` → `01e9dd5f` at
+  11:31:46Z, and the six outputs were byte-equal. A SCOPE line for a gate that includes it names cargo and gen, and
+  anyone reading the shared target after that row has the gate checkout's build.
 
 ## The list
 
