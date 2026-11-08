@@ -12,6 +12,8 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+// Item 259's rule is read through the module, so a missing export is an assertion's red, never a link error.
+import * as notices from "../../../scripts/third-party-notices.mjs";
 import {
   bundleModulePaths,
   cfgMatches,
@@ -940,6 +942,93 @@ test("a Go binary's embedded build info: its toolchain and every module, a repla
   assert.equal(goBuildInfo(Buffer.from("no build info at all")), null);
 });
 
+// Item 259 (2026-11-08) — a sibling the kit links as a Swift package takes the desktop's sibling rule on its
+// checkout: the owner's own with no licence file (listed so the inventory is whole; the phone's page draws no own
+// part), a licensed row with one, and no row while the kit's manifest takes none of its products.
+test("item 259: a sibling the kit links is the owner's own with no licence file, licensed with one, absent unlinked", (t) => {
+  assert.equal(
+    typeof notices.iosSiblingRows,
+    "function",
+    "the iOS path applies the sibling rule (item 259)",
+  );
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "vf-notices-ios-sibling-")));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const checkouts = join(root, "checkouts");
+  mkdirSync(join(checkouts, "rosetta"), { recursive: true });
+  writeFileSync(join(checkouts, "rosetta", "Package.swift"), "// swift-tools-version: 6.0\n");
+  const pins = {
+    rosetta: { version: "0.1.5", revision: "811e554c64e60509ef624660f0709fd33717cc2c" },
+  };
+  const takes = '        .product(name: "RosettaClient", package: "rosetta"),\n';
+  assert.deepEqual(notices.iosSiblingRows({ kitManifest: takes, checkouts, pins }), [
+    {
+      ecosystem: "swift",
+      name: "rosetta",
+      version: "0.1.5",
+      own: true,
+      note: "agent history's Swift client (RosettaClient); the owner's own, UNLICENSED",
+    },
+  ]);
+  writeFileSync(join(checkouts, "rosetta", "LICENSE"), mit("Rosetta"));
+  assert.deepEqual(notices.iosSiblingRows({ kitManifest: takes, checkouts, pins }), [
+    {
+      ecosystem: "swift",
+      name: "rosetta",
+      version: "0.1.5",
+      licence: null,
+      texts: [{ file: "LICENSE", body: mit("Rosetta") }],
+      role: "agent history",
+    },
+  ]);
+  const unlinked = '        .product(name: "Truffle", package: "truffle"),\n';
+  assert.deepEqual(notices.iosSiblingRows({ kitManifest: unlinked, checkouts, pins }), []);
+});
+
+// Item 259 — the desktop's cargo sibling (rosettad's crates), held as it reads today, before and after the rule moves
+// into the one `siblingRow` the iOS path shares: the owner's own with no licence, a licensed crate with one.
+test("the desktop's cargo sibling: the owner's own with no licence, a licensed crate with a licence file", (t) => {
+  const root = tree(t);
+  const sibling = {
+    name: "rosetta",
+    ownNote: "agent history (rosettad and its crates); the owner's own, UNLICENSED",
+  };
+  const read = () => {
+    const ledger = createLedger();
+    notices.collectCargo(ledger, {
+      lockFile: join(root, "Cargo.lock"),
+      workspaceRoot: root,
+      roots: ["root-crate"],
+      target: hostTarget("darwin", "arm64"),
+      registryDirs: [join(root, "registry/index")],
+      role: "rosettad (agent history)",
+      sibling,
+    });
+    const c = [...ledger.components.values()].find((x) => x.name === "rosetta");
+    return c && { ...c, texts: c.texts.map((id) => [...ledger.texts.get(id).files]) };
+  };
+  assert.deepEqual(read(), {
+    ecosystem: "crate",
+    name: "rosetta",
+    version: "",
+    licence: null,
+    texts: [],
+    roles: [],
+    own: true,
+    note: sibling.ownNote,
+  });
+  writeFileSync(join(root, "LICENSE"), mit("Rosetta"));
+  assert.deepEqual(read(), {
+    ecosystem: "crate",
+    name: "rosetta",
+    version: "",
+    licence: null,
+    texts: [["LICENSE"]],
+    roles: ["rosettad (agent history)"],
+    own: false,
+    note: null,
+  });
+});
+
 test("the committed records are the pins' own: the iOS acknowledgements and the sidecar's Go record", () => {
   // The iOS build runs no Node, so its acknowledgements are committed; this holds them to Package.resolved's pins
   // (regenerate with `node scripts/third-party-notices.mjs --ios --checkouts <DerivedData>/SourcePackages/checkouts`).
@@ -975,6 +1064,13 @@ test("the committed records are the pins' own: the iOS acknowledgements and the 
   assert.ok(
     doc.components.some((c) => c.licence === "OFL-1.1"),
     "the terminal's fonts",
+  );
+  // item 259: VibeField's own rides the record, so its inventory is whole (the phone's page draws no own part)
+  const rosetta = doc.components.find((c) => c.ecosystem === "swift" && c.name === "rosetta");
+  assert.deepEqual(
+    rosetta && { version: rosetta.version, own: rosetta.own, texts: rosetta.texts },
+    { version: doc.pins.rosetta.version, own: true, texts: [] },
+    "the record lists rosetta's Swift client as VibeField's own",
   );
   // what Ghostty VT's library carries rides with it (measured for its commit), and a C library is never a Rust crate
   const ghosttyVt = doc.components.find((c) => c.name === "Ghostty VT");
