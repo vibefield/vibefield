@@ -227,6 +227,36 @@
   box-shadow: 0 0 0 1px var(--vf-hairline);
 }
 
+/* Its first job (track ES, ES-2; DESIGN.md §8 "The New spark sheet", Its first job, Drawn): 14 under the agent,
+   centred, its label 6 over the starter held still (16 + 6 + 34). × drops it: the row folds away and the sheet settles
+   to its height over 240ms on the island curve. */
+.vf-new-spark-job {
+  margin-block-start: 14px;
+  max-block-size: 56px;
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  overflow: hidden;
+  transition:
+    max-block-size 240ms var(--vf-ease-island),
+    margin-block-start 240ms var(--vf-ease-island),
+    opacity 240ms var(--vf-ease-island);
+}
+
+.vf-new-spark-job[data-leaving="true"] {
+  max-block-size: 0;
+  margin-block-start: 0;
+  opacity: 0;
+}
+
+.vf-new-spark-job-label {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 16px;
+  color: var(--vf-text-tertiary);
+}
+
 .vf-new-spark-profiles {
   margin-block-start: 12px;
   display: grid;
@@ -350,5 +380,10 @@
   .vf-new-spark-another:active {
     transform: none;
     transition: background 160ms ease;
+  }
+
+  /* reduced motion (M6): a dropped first job fades over 120ms, and the sheet takes its height at once */
+  .vf-new-spark-job {
+    transition: opacity 120ms ease;
   }
 }

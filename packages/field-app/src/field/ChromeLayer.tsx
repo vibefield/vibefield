@@ -19,6 +19,7 @@ import { useSyncQuestion } from "../account/sync-question";
 import { isSwitchCovering, useSwitchState } from "../boot/switch";
 import { ChatView } from "../chat/ChatView";
 import { crewsDoorOver } from "../chat/crews-port";
+import { useFirstJob } from "../chat/first-job";
 import { NewSparkSheet } from "../chat/NewSparkSheet";
 import { newSparkPortOver } from "../chat/new-spark";
 import { sparksPortOver, startSparksFeed } from "../chat/sparks-feed";
@@ -195,6 +196,9 @@ export function ChromeLayer({
   const openProfile = useCallback((profile: string) => openSettings({ profile }), [openSettings]);
   // track ES — the night's Open Agents settings, while no agent here can be a spark: Settings → Agents
   const openAgents = useCallback(() => openSettings("agents"), [openSettings]);
+  // ES-2 — the first job a starter on Chat's night hands the frame as it opens the sheet, for that opening alone
+  const firstJob = useFirstJob(surface);
+  const carryFirstJob = firstJob.carry;
   // Chat's view in the cover, handed the window's one Settings owner for the night's Open Agents settings, and the
   // sheet's own door for the night's agents (track ES)
   const chatView = useCallback(
@@ -210,9 +214,20 @@ export function ChromeLayer({
         agents={newSparkPort}
         keys={keys}
         onOpenAgents={openAgents}
+        onFirstJob={carryFirstJob}
       />
     ),
-    [crews, fieldd, keys, newSparkPort, onSurfaceChange, openAgents, surface, transcripts],
+    [
+      carryFirstJob,
+      crews,
+      fieldd,
+      keys,
+      newSparkPort,
+      onSurfaceChange,
+      openAgents,
+      surface,
+      transcripts,
+    ],
   );
 
   // Opening it is asking the owner (which folds Settings and every other
@@ -537,7 +552,12 @@ export function ChromeLayer({
       {/* THE NEW SPARK SHEET (SP-1c; DESIGN.md §8 "The New spark sheet"): Chat's create, ⌘N or the line's
           sparkle, one of the frame's open surfaces. Drawn outside the field like the Peek, which goes out of reach
           and recedes under it (`field.tsx`); over the cover and the line, under a carried card and the palette. */}
-      <NewSparkSheet open={surface === "new-spark"} port={newSparkPort} onClose={closeNewSpark} />
+      <NewSparkSheet
+        open={surface === "new-spark"}
+        port={newSparkPort}
+        onClose={closeNewSpark}
+        job={firstJob.job}
+      />
 
       {/* THE SELECTION BAR (DK-11; DESIGN.md §8 "The selection bar", "The
           bar grown"): object chrome on the desk's selection — over the desk

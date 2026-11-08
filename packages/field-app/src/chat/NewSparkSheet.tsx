@@ -29,6 +29,7 @@ import {
   suggestName,
 } from "./new-spark";
 import { chooseSpark, refreshSparks, usePersonSessions, useSparksReading } from "./sparks-feed";
+import type { Starter } from "./thread-items";
 
 // THE NEW SPARK SHEET, THE CONTROLLER (SP-1c; DESIGN.md §8 "The New spark sheet"). It reads what the sheet offers —
 // the agents that can be a spark (`agent.providers[].offers.spark`, CP-5a), the Agent Profiles, an agent's picker
@@ -36,12 +37,18 @@ import { chooseSpark, refreshSparks, usePersonSessions, useSparksReading } from 
 // the spark's face flies from the sky to its row in Chat, Chat chooses it, and the sheet folds. A refusal is said
 // under what it is about (`refusalOf`), and the sheet stays. Like the Peek it is drawn outside the field, which is out
 // of reach and recedes while it stands (`field.tsx`), and it stays for its leave.
+// ES-2 (track ES; ES-D2 A): an opening from Chat's empty night may carry a first job (`job`, the frame's hold,
+// `first-job.ts`). It stands under the agent, × drops it as the sheet settles, and Create hands it to Chat with its
+// choice, only after the hatch (`chooseSpark`), for Chat to send as Send sends.
 
 /** How long Create waits for the new spark's row to draw before the face flies (the list re-reads its records). */
 const ROW_WAIT_MS = 1_500;
 
 /** Its leave (DESIGN.md §8): 240 ms on the retract curve, `new-spark-sheet.css`. */
 const LEAVE_MS = 240;
+
+/** A dropped first job's fold, as the sheet settles to its height (DESIGN.md §8): 240 ms, `new-spark-sheet.css`. */
+const JOB_SETTLE_MS = 240;
 
 export function NewSparkSheet({
   open,
@@ -50,6 +57,7 @@ export function NewSparkSheet({
   container,
   takeFocus = true,
   bindKeys = true,
+  job = null,
 }: {
   /** the frame's surface is `new-spark` */
   open: boolean;
@@ -62,6 +70,8 @@ export function NewSparkSheet({
   takeFocus?: boolean | undefined;
   /** Esc folds it (the product's; a catalog plate binds no keys) */
   bindKeys?: boolean | undefined;
+  /** ES-2 — the first job this opening carries from Chat's empty night (the frame's hold); null, none */
+  job?: Starter | null | undefined;
 }): ReactElement | null {
   // each opening is a sheet of its own (a name and a face dealt, the hatch again); a folded one stays for its leave
   const [was, setWas] = useState(open);
@@ -88,6 +98,7 @@ export function NewSparkSheet({
       onClose={onClose}
       takeFocus={takeFocus}
       bindKeys={bindKeys}
+      carried={job}
     />,
     target,
   );
@@ -99,12 +110,14 @@ function Sheet({
   onClose,
   takeFocus,
   bindKeys,
+  carried,
 }: {
   open: boolean;
   port: NewSparkPort;
   onClose: () => void;
   takeFocus: boolean;
   bindKeys: boolean;
+  carried: Starter | null;
 }): ReactElement {
   const reading = useSparksReading();
   const taken = useMemo(
@@ -125,6 +138,17 @@ function Sheet({
   const [creating, setCreating] = useState(false);
   const [refusal, setRefusal] = useState<SheetRefusal | null>(null);
   const hatch = useRef<SparkHatchHandle>(null);
+  // ES-2 — the opening's first job, as it opened: × folds it away, and the sheet settles before it goes
+  const [job, setJob] = useState<Starter | null>(carried);
+  const [jobLeaving, setJobLeaving] = useState(false);
+  useEffect(() => {
+    if (!jobLeaving) return;
+    const gone = window.setTimeout(() => {
+      setJob(null);
+      setJobLeaving(false);
+    }, JOB_SETTLE_MS);
+    return () => window.clearTimeout(gone);
+  }, [jobLeaving]);
   // a sheet already folded (by a view change, say, or the palette) never folds whatever opened after it
   const standing = useRef(open);
   standing.current = open;
@@ -242,13 +266,28 @@ function Sheet({
       );
       return;
     }
-    // its row: the list reads the records again, Chat chooses it, and the face flies there
+    // its row: the list reads the records again, Chat chooses it (with the first job it carries, which Chat sends
+    // once its row is read), and the face flies there
     refreshSparks();
-    chooseSpark(spark.id);
+    chooseSpark(spark.id, job === null || jobLeaving ? undefined : job.words);
     const row = await rowOf(spark.id);
     if (row !== null && standing.current) await hatch.current?.fly(row);
     if (standing.current) onClose();
-  }, [agent, agentId, creating, name, onClose, port, seed, seen, selection, sets, thinksUnder]);
+  }, [
+    agent,
+    agentId,
+    creating,
+    job,
+    jobLeaving,
+    name,
+    onClose,
+    port,
+    seed,
+    seen,
+    selection,
+    sets,
+    thinksUnder,
+  ]);
 
   return (
     <NewSparkSheetView
@@ -275,6 +314,9 @@ function Sheet({
       creating={creating}
       ready={agentId !== undefined && thinksUnder !== undefined}
       hatchRef={hatch}
+      {...(job === null ? {} : { job })}
+      jobLeaving={jobLeaving}
+      onDropJob={() => setJobLeaving(true)}
       onName={(next) => {
         setName(next);
         if (refusal?.at === "name") setRefusal(null);

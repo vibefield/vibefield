@@ -46,7 +46,8 @@ function NewSparkLivePlate(): ReactElement {
   );
 }
 
-/** One of the sheet's still states, over Chat receded. */
+/** One of the sheet's still states, over Chat receded: over the night for its first job, which comes from there alone
+ * (ES-2), over the list for the rest. */
 export function NewSparkPreview({
   state,
 }: {
@@ -55,7 +56,7 @@ export function NewSparkPreview({
   return (
     <div className="vf-ds-new-spark-plate" data-state={state}>
       <div className="vf-ds-new-spark-view" data-peek-recede="true">
-        <ChatPreview state="list" />
+        <ChatPreview state={state === "job" ? "empty" : "list"} />
       </div>
       <NewSparkSheetView {...newSparkPlateOf(state)} />
     </div>

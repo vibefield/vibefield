@@ -41,6 +41,7 @@ import {
   type SparkSayer,
   showThread,
   sparkEntryNow,
+  takeFirstJob,
   useBoardRows,
   useChooseRequest,
   useNeedsAnswerer,
@@ -51,7 +52,7 @@ import {
   useThreadMarks,
 } from "./sparks-feed";
 import { ThreadFlowView } from "./ThreadFlowView";
-import { footItemsOf } from "./thread-items";
+import { footItemsOf, type Starter } from "./thread-items";
 import { sayRequestId, sendNote, sendToThread, type ThreadSendOutcome } from "./thread-send";
 import { saidRequestsOf, transcriptItemsOf } from "./transcript-items";
 import {
@@ -82,7 +83,9 @@ import {
 // them so. What it chose, which threads an act holds, and what its cards answer, are this view's alone.
 // Since track ES, with no spark the panel is the night (`ChatEmptyView`): it reads which agents here can be a spark
 // while the night stands (`useNightAgents`), and its New spark and first jobs open the New spark sheet, the line's
-// create; Open Agents settings is the window's (`onOpenAgents`).
+// create; Open Agents settings is the window's (`onOpenAgents`). ES-2: a first job is handed to the frame as the sheet
+// opens (`onFirstJob`, the frame's hold), and a hatched spark's job, handed back with its choice, is sent here once as
+// Send sends, as soon as its row is read.
 // *Amended 2026-11-05 (TH-1, the pane leaves Chat):* it mounted the shown spark's own pane while it was awake
 // (`SparkPane`), stood the hello over it while the thread was quiet (`threadItemsOf`), and kept which threads' hello
 // had left. They are in git.
@@ -103,6 +106,7 @@ export function ChatView({
   agents,
   keys = "mac",
   onOpenAgents,
+  onFirstJob,
 }: {
   /** Chat is the view showing: the rows' times are said again while it is, and the thread on screen is read */
   active: boolean;
@@ -126,6 +130,8 @@ export function ChatView({
   keys?: ViewKeys | undefined;
   /** track ES — Open Agents settings, pressed on the night while no agent here can be a spark: Settings → Agents */
   onOpenAgents?: (() => void) | undefined;
+  /** ES-2 — the job the night hands the frame as it opens the New spark sheet (a first job), or none (New spark) */
+  onFirstJob?: ((job: Starter | null) => void) | undefined;
 }): ReactElement {
   const reading = useSparksReading();
   // track ES — the night before the first spark (DESIGN.md §8 "Chat's list", Empty: the night): which agents here can
@@ -314,6 +320,16 @@ export function ChatView({
     [sendTo],
   );
 
+  // ES-2 — a hatch's first job (DESIGN.md §8 "The New spark sheet", Its first job): the sheet hands it with its choice,
+  // only after the hatch; it is sent here as Send sends, once (`takeFirstJob`), as soon as the spark's row is read
+  useEffect(() => {
+    if (request === null || reading.state !== "ready" || open === null || sayer === null) return;
+    for (const entry of reading.entries) {
+      const job = takeFirstJob(entry.spark.id);
+      if (job !== null) void start(entry, open, sayer, job);
+    }
+  }, [open, reading, request, sayer, start]);
+
   const shown = shownOf(reading.state === "ready" ? reading.entries : [], chosen);
   // Chat opens on the newest spark and keeps it until another is chosen (DESIGN.md §8 "Chat's list", the thread it
   // shows): a spark whose activity is newer moves up the list, and never takes the thread.
@@ -497,14 +513,20 @@ export function ChatView({
       />
     );
   const footItems = footItemsOf(needs.card);
-  // the night's acts: New spark and a first job open the line's create, the New spark sheet (ES-2 carries the job)
+  // the night's acts: New spark and a first job open the line's create, the New spark sheet, a job carried (ES-2)
   const empty = night ? (
     <ChatEmptyView
       agents={nightAgents}
       keys={keys}
       active={active}
-      onNewSpark={() => onSurfaceChange("new-spark")}
-      onJob={() => onSurfaceChange("new-spark")}
+      onNewSpark={() => {
+        onFirstJob?.(null);
+        onSurfaceChange("new-spark");
+      }}
+      onJob={(job) => {
+        onFirstJob?.(job);
+        onSurfaceChange("new-spark");
+      }}
       onAgents={onOpenAgents}
     />
   ) : undefined;

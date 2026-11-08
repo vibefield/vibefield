@@ -19,6 +19,7 @@ import {
   sparkAgentsOf,
   startsOf,
 } from "../chat/new-spark";
+import { STARTERS } from "../chat/thread-items";
 import { FIXTURE_NOW } from "./chat-fixtures";
 import { FIXTURE_NATIVE, FIXTURE_WORK } from "./profiles-fixtures";
 import { FIXTURE_HATCHED } from "./spark-fixtures";
@@ -31,7 +32,7 @@ import { FIXTURE_HATCHED } from "./spark-fixtures";
 // door cannot name, one declares none), so they are listed disabled; and the fourth is not installed here, so the menu
 // leaves it out.
 
-export const NEW_SPARK_STATES = ["live", "menu", "profiles", "taken"] as const;
+export const NEW_SPARK_STATES = ["live", "menu", "profiles", "taken", "job"] as const;
 export type NewSparkState = (typeof NEW_SPARK_STATES)[number];
 
 export const NEW_SPARK_STATE_LABEL: Record<NewSparkState, string> = {
@@ -39,6 +40,7 @@ export const NEW_SPARK_STATE_LABEL: Record<NewSparkState, string> = {
   menu: "Agent menu",
   profiles: "Profiles",
   taken: "Name taken",
+  job: "Its first job",
 };
 
 /** The face the still plates are dealt, so a plate draws the same star every time. */
@@ -198,6 +200,12 @@ export function newSparkPlateOf(state: Exclude<NewSparkState, "live">): NewSpark
         reach: reachOf(3, startsOf(sets, chosen, FIXTURE_NATIVE.id, agents)),
       },
     };
+  }
+  // ES-2 — from Chat's empty night, carrying the hello's first starter as its first job (DESIGN.md §8 "The New spark
+  // sheet", Its first job)
+  if (state === "job") {
+    const [first] = STARTERS;
+    return first === undefined ? base : { ...base, job: first };
   }
   const taken = Object.assign(new Error("Vela is taken"), { details: { reason: "name-taken" } });
   return { ...base, name: "Vela", refusal: refusalOf(taken, { name: "Vela" }) };

@@ -544,10 +544,23 @@ export function startSparksFeed(port: SparksPort): () => void {
  * same spark asked again is chosen again. */
 let chooseRequest: { readonly spark: SparkId; readonly seq: number } | null = null;
 const choosers = new Set<() => void>();
+/** Track ES (ES-2) — the first job a hatch carried, by its spark, until Chat takes it to send: once, as Send sends. */
+const firstJobs = new Map<SparkId, string>();
 
-export function chooseSpark(spark: SparkId): void {
+/** `firstJob`: the job the sheet carried from Chat's empty night (DESIGN.md §8 "The New spark sheet", Its first job),
+ * handed over only after the hatch. */
+export function chooseSpark(spark: SparkId, firstJob?: string): void {
+  if (firstJob !== undefined) firstJobs.set(spark, firstJob);
   chooseRequest = { spark, seq: (chooseRequest?.seq ?? 0) + 1 };
   for (const listener of choosers) listener();
+}
+
+/** The first job a hatch carried for `spark`, taken once: null when there is none, or it was taken. */
+export function takeFirstJob(spark: SparkId): string | null {
+  const job = firstJobs.get(spark);
+  if (job === undefined) return null;
+  firstJobs.delete(spark);
+  return job;
 }
 
 export function useChooseRequest(): { readonly spark: SparkId; readonly seq: number } | null {

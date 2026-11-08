@@ -3,13 +3,16 @@ import { UiButton } from "@vibefield/design-kit/primitives";
 import { SparkHatch, type SparkHatchHandle } from "@vibefield/design-kit/spark-face";
 import { AgentIcon } from "@vibefield/puppeteer-view-sdk/react";
 import { type ReactElement, type Ref, useEffect, useRef } from "react";
+import { StillStarter } from "./ChatStarter";
 import type { AgentMenuRow, EffortChoice, ProfileChip, SheetRefusal } from "./new-spark";
+import type { Starter } from "./thread-items";
 import "./new-spark-sheet.css";
 
 // THE NEW SPARK SHEET, THE VIEW (SP-1c; DESIGN.md §8 "The New spark sheet"; the Sparks page's `ns-polaris`, `ns-brain`,
 // `ns-profiles`) — controller-free, so the catalog mounts this exact markup on fixtures. The sky with its hatch; the
 // name with ↻, which deals another face (NS-D2 B); the agent pill and its menu; its profiles once there is more than
-// This Mac (NS-D5); Cancel and Create; each refusal under what it is about.
+// This Mac (NS-D5); Cancel and Create; each refusal under what it is about. ES-2: under the agent, the first job a
+// starter on Chat's empty night carried, still, with its × (§8 "The New spark sheet", Its first job).
 
 export interface NewSparkSheetViewProps {
   /** false while it leaves (240 ms on the retract curve), its controls out of reach */
@@ -35,6 +38,12 @@ export interface NewSparkSheetViewProps {
    * Until then Create waits, disabled (item 149: an enabled Create pressed before them hatched nothing, in silence) */
   ready?: boolean | undefined;
   hatchRef?: Ref<SparkHatchHandle> | undefined;
+  /** ES-2 — the first job this opening carries from Chat's empty night; absent, none */
+  job?: Starter | undefined;
+  /** ES-2 — its × was pressed: the row folds away as the sheet settles to its height (240ms, island) */
+  jobLeaving?: boolean | undefined;
+  /** ES-2 — the first job's ×, "Remove its first job" */
+  onDropJob?: (() => void) | undefined;
   onName?: (name: string) => void;
   onReroll?: () => void;
   onMenu?: (open: boolean) => void;
@@ -63,6 +72,9 @@ export function NewSparkSheetView({
   creating,
   ready = true,
   hatchRef,
+  job,
+  jobLeaving = false,
+  onDropJob,
   onName,
   onReroll,
   onMenu,
@@ -148,6 +160,15 @@ export function NewSparkSheetView({
             <FieldGlyph name="chevron" size={12} />
           </button>
           {said("agent")}
+          {job === undefined ? null : (
+            <div className="vf-new-spark-job" {...(jobLeaving ? { "data-leaving": "true" } : {})}>
+              <p className="vf-new-spark-job-label">Its first job</p>
+              <StillStarter
+                starter={job}
+                remove={{ label: "Remove its first job", onPress: () => onDropJob?.() }}
+              />
+            </div>
+          )}
           {menuOpen ? (
             <div className="vf-new-spark-menu" role="menu">
               {menu.map((row, index) => menuRow(row, index, onAgent, onModel))}

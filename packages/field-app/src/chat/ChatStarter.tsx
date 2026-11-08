@@ -8,6 +8,8 @@ import "./chat-starter.css";
 // job a spark can start on: the kit's button with its glyph and its words. The hello's (the thread's first row,
 // `ThreadFlowView`) and the empty night's (`ChatEmptyView`) are this one button, one behaviour for one look; on the
 // night it wears night glass (`chat-empty.css`). Controller-free: what a press does is its holder's.
+// *ES-2 (2026-11-08):* the New spark sheet carries one as its first job, still (`StillStarter`): the same look, never
+// a press, its × at its end (§8 "The New spark sheet", Its first job, Drawn).
 
 export function ChatStarter({
   starter,
@@ -22,5 +24,32 @@ export function ChatStarter({
       <FieldGlyph name={starter.glyph} size={14} />
       <span>{starter.words}</span>
     </UiButton>
+  );
+}
+
+/** A starter held still, as the sheet carries its first job: the starter's own look, never a press, with its × at its
+ * end, named by its holder. */
+export function StillStarter({
+  starter,
+  remove,
+}: {
+  starter: Starter;
+  /** its ×: what it is named, and what a press of it does */
+  remove: { readonly label: string; readonly onPress: () => void };
+}): ReactElement {
+  return (
+    <span className="vf-chat-starter" data-still="true">
+      <FieldGlyph name={starter.glyph} size={14} />
+      <span>{starter.words}</span>
+      <button
+        type="button"
+        className="vf-chat-starter-remove"
+        aria-label={remove.label}
+        title={remove.label}
+        onClick={remove.onPress}
+      >
+        <FieldGlyph name="close" size={13} />
+      </button>
+    </span>
   );
 }

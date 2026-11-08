@@ -2,8 +2,12 @@
    (`UiButton`), 34 tall, corners 17, padded 0 14 0 11, on solid chrome ringed by the strong hairline; its glyph 14 in
    secondary ink, then 8, then its words in 13/500 primary. Under the pointer it takes the fill and rises 1, in 180ms on
    the lift curve. The hello's and the empty night's are this one button; on the night it wears night glass
-   (`chat-empty.css`). Moved here from `thread-flow.css` word for word (2026-11-08). */
+   (`chat-empty.css`). Moved here from `thread-flow.css` word for word (2026-11-08). ES-2: a starter held still (the
+   sheet's first job, `StillStarter`) wears the same look without the kit's button, so the look names both. */
+.vf-chat-starter[data-still],
 .vf-ui-button.vf-chat-starter {
+  display: inline-flex;
+  align-items: center;
   height: 34px;
   padding: 0 14px 0 11px;
   border-radius: 17px;
@@ -29,6 +33,43 @@
 .vf-chat-starter .vf-glyph {
   flex: none;
   color: var(--vf-text-secondary);
+}
+
+/* Held still (ES-2; DESIGN.md §8 "The New spark sheet", Its first job, Drawn): never a press, so it neither takes the
+   fill nor rises; 5 from its end, its ×. */
+.vf-chat-starter[data-still] {
+  padding-right: 5px;
+  cursor: default;
+}
+
+/* Its ×: 24 round, 2 after the words, `close` 13 in t3; under the pointer the foreground at 5%. */
+.vf-chat-starter-remove {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  margin-left: 2px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: var(--vf-text-tertiary);
+  background: transparent;
+  cursor: pointer;
+  transition: background-color 160ms ease;
+}
+
+.vf-chat-starter-remove:hover {
+  background: color-mix(in srgb, var(--vf-foreground) 5%, transparent);
+}
+
+.vf-chat-starter-remove:focus-visible {
+  outline: 2px solid var(--vf-select);
+  outline-offset: 1px;
+}
+
+.vf-chat-starter-remove .vf-glyph {
+  color: inherit;
 }
 
 @media (prefers-reduced-motion: reduce) {
