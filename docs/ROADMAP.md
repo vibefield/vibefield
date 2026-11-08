@@ -405,8 +405,8 @@ phone"; DECISIONS PC
     LANDED "Item 241 (241b)"): design-kit's `.vf-ui-button:disabled` draws §7's Off from the button's own
     `disabled`, the quiet fill with its words in t4; `UiButton`'s `running` keeps a running pill's look.
     Its gate:landing (LANDED, the entry's Owed): the Mac stills green, 19 of 19; row 32 red on the Mac, by the lane's
-    target link and then by the gate's environment (item 253) and the "ChatGPT Pro" pair (item 254), the rest that run's
-    own.
+    target link and then by the gate's environment (item 253, LANDED M232 `ef22fb3b7`, the Mac's witness owed) and
+    the "ChatGPT Pro" pair (item 254), the rest that run's own.
   - **Item 244 CLOSED** (VF-PM 08:03Z): the stills' one-base rule names the tab bar's glass, at most T = 2
     levels (measured on the old mini over 12 launches), and the Field badge, never judged until item 251;
     LANDED "Item 241 (241b)", Found.
@@ -548,8 +548,9 @@ page *The Drive*, KB33dCAP, where it moved 11-06 05:45Z from LB8rzJYV; sources `
   - James's rulings before DR-1 (B) wires a caller: DR-L3's re-check at the view (`dr-l3-blake3-recheck`, lean (a):
     R-1's verified placement until DR-2), and the serve policy's `'unsafe-eval'` (`dr-serve-csp-unsafe-eval`).
   - Rosetta's EL8's `gate:landing`. DR-3a's and DR-3b's ran on 2026-11-08 at `e60d8add6`, 12 of 14 green (LANDED
-    "DR-3a", its Owed): row 10's red is items 253 and 254; row 13's is item 255, host state, so `smoke:studio` is
-    owed again, alone, on an awake display.
+    "DR-3a", its Owed): row 10's red is items 253 and 254 (253 LANDED M232 `ef22fb3b7`, LANDED "Item 253"; the
+    Mac's witness owed); row 13's is item 255, host state, so `smoke:studio` is owed again, alone, on an awake
+    display.
   - From DR-3b: item 237 (NativeLink's dead replay tells no one, the relay's one uncured order, carried) and item 238
     (fold 4 F1's shape claimed in DeviceService and DocHoldersService, a read first).
   - Item 220, DR-1 (B)'s decision before it calls the export: fieldd's `MadeAppExport` moves to the answer rosetta

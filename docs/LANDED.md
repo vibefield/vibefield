@@ -43314,3 +43314,92 @@ copy, and one new file, the overlay's link.
   `FieldProduct.JSONValue` or `RosettaClient.JSONValue`, since both are public.
 - Item 253 re-cuts onto this landed main.
 - RD-D7: this host still builds rosettad from `../rosetta-pin`; the published daemon archives wait on their adoption.
+
+## Item 253 — the landing gate hands the rows that boot an agent index the lock's rosettad, and removes the variable from every other row: RED and not run with no build, `smoke:godview` in both configurations, and first-run's red names the index's state (2026-11-08; with items 255 and 256's desk-gates lines)
+(2026-11-08; three commits, fd's (vibe-field-aa), in `/Volumes/SamsungRed/lanes/item190`: red `a5877e743` (tree
+`523c5ff84fe0`) → green `a13c78e77` (tree `1aabbdd3044c`) → docs `ef22fb3b7` (tree `a0e3b4d375af`), on main
+`2440e6dcd`. Cut on `e60d8add6` (red `4f56d877a`, green `4a1f5c8bf`, docs `f6945eb2a`) and replayed in proof form three
+times as main moved (`8897de277`, `14d9414c4`, `2440e6dcd`). Minted as M232 (run232); landed `ef22fb3b7`
+(2026-11-08T17:15:14Z), a fast-forward of main `2440e6dcd`.)
+IOS found it reading 241b's row-32 reds; VF-PM numbered it at 11:06:10Z and ruled fd's d0 (`lanes/item253/d0.md`,
+`3482b506`) at 11:12:33Z, every lean.
+- 8 files, +350 −23: `scripts/gate-landing.mjs` 84 10 and `scripts/siblings.mjs` 19 8 (`scripts/`; `siblings.mjs` is
+  the lock's ONE reader), `packages/electron-shell/src/testing/smoke-first-run.ts` 24 1 and `smoke.ts` 11 0 (test-only
+  code), three tests (`gate-landing.test.mjs` 121 0, `siblings-window.test.mjs` 33 0, `smoke-first-run.test.ts` 33 0),
+  and `docs/desk-gates.md` 25 4. 29 hunks at -U0.
+
+**What.** `smoke:first-run` (desk-gates row 32) had never been green under `pnpm gate:landing` on this Mac. fieldd
+takes rosettad only from `FIELDD_ROSETTAD_BIN` (`packages/fieldd/src/bin.ts:86`); in a smoke build the shell's own path
+is null (`resources.ts:258`), and only the dev runner and the mini's `ts6-mini.sh:210` set the variable. The gate never
+did, so the walk's History asserted no row. Its last green was run72b on the old mini (2026-11-01, `96e99edff`), in the
+ts6 form.
+- `siblings.mjs` gains one export, `builtRosettad(root)`: `{ path, freshness }` or `{ why }` in `bin`'s own words,
+  asking `rosettadState`, the rule preflight, the stager and wall R23 ask. `printBin` becomes its CLI form; `bin`'s
+  stdout and its two stderr sentences are unchanged. No lock row, render or pin path moves.
+- `gate-landing.mjs` resolves it once. A pure `gateEnv` sets `FIELDD_ROSETTAD_BIN` for the rows that boot an agent
+  index (`test` under `--with-stages`, `smoke:godview`, `smoke:first-run`) and REMOVES it from every other row: the
+  inverse of the dev runner's shell-wins law (`electron-stack.mjs:10–33`), said in a comment. With no build those rows
+  are RED and not run, and the rest run. The first line names the build and its freshness, or why there is none, and
+  a shell value it ignored (`shellRosettadIgnored`). A stale build is said, never refused.
+- A new landing row, `smoke:godview:no-record` (row 35): `smoke:godview` with the variable removed. Godview's History
+  rungs "said, not failed" without rosettad were a second silent gap; the gate now runs both configurations.
+- First-run's red with no row names the agent index's state from `system.health` (`the agent index is <phase>`), so
+  an unconfigured index says so.
+- `docs/desk-gates.md`: the bullet, rows 23 and 32, row 35 and the order line (the green), and two lines VF-PM gave at
+  11:43Z (the docs commit): a window row wants the display awake (item 255), and `smoke:studio` is a cargo row and a gen
+  row in the checkout it runs from (item 256).
+
+**The proof.**
+- The first cut's rows (VF-PM's word 11:18:31Z; `lanes/item253/rows/`, SHA256SUMS `9cce410a`), through
+  `door.lock`, node v26.5.0, biome 2.5.4's native binary, nice 19, 11:32:47–11:39:27Z, each in the commit's frozen
+  `git archive` tree. Red: `gate-landing.test.mjs` "pass 11", "fail 6", and `siblings-window.test.mjs` "pass 23",
+  "fail 1", every fail an `AssertionError`; biome on the three tests clean. Green: 17 of 17 and 24 of 24; biome on
+  the seven code files "Checked 7 files … No fixes applied."; `--list` 15 rows.
+- The re-cuts (`recut-253.py`, `recut-253-r2.py`, `recut-253-r3.py`, each with a `--dry` first): every tree equal to
+  its merge over the old base and over its own original parent, patch-id, author and message unchanged, and
+  range-diff `=` ×3.
+  - Onto `8897de277` (`41bceec5c`, `382eaccea`, `5e9424dc6`): held, never minted.
+  - Onto `14d9414c4` (`51dcae7a8`, `b561d79a6`, `fa7d8f956`; packet SHA256SUMS `64bdc4ad`): the 8 files byte-equal.
+    Its rows ran in the lane itself (the walls read git's listing, item 252), 16:31:59–16:32:25Z, all exit 0.
+    run232 was GO'd on it at 16:37:36Z and held at 16:40:53Z (below).
+  - Onto `2440e6dcd` (r3; packet SHA256SUMS `13d02f5b`): item 254 changes two of the eight files,
+    `smoke-first-run.ts` and its test, in regions far from 253's. Those two are MERGED: their blobs equal the
+    whole-stack merge-tree's, and 253's -U0 lines in each are its own, line for line. The other six are byte-equal.
+    A `--peek --dry` preview against 254's cut ran at 16:40Z, before its land.
+- The rows at r3 (16:56:14–16:56:30Z, `rows-r3/`): RE-RUN where a row reads the two merged files: biome on the seven
+  code files "Checked 7 files in 184ms. No fixes applied.", `check:retired` clean, and `check:walls`' four commands
+  ("self-test: all passed" ×2, "total: 0 across 0 file(s)", "266 of 1125 test files make a temp root; all remove").
+  CARRIED from `fa7d8f956`'s, whose inputs are only the two scripts and the two dev-runner tests: 17 of 17, 24 of 24,
+  `sib-load` (68 exports; absent 0 of the 28, 3 and 4 names preflight, `check-single-copy` and
+  `check-agent-catalog` import)
+  and `--list`.
+- The mint, run232 at `ef22fb3b7` on vf-m2 (armed 17:05:29Z, at a 1-min load of 1.19; exit at 17:11:14Z, after 5 min
+  45 s; `lanes/vf-m2/run232-a9-results/`, SHA256SUMS-a9-run232 `65d277c5`): verify exit 0.
+  - Against run231 (`2440e6dcd`, SHA256SUMS-a9-run231 `b15ba1bd`), every count line and single is equal but two.
+    electron-shell read "Tests 2752 passed | 2 skipped (2754)"; run231 read 2751, and the +1 is
+    `smoke-first-run.test.ts`'s. dev-runner read "tests 480", "pass 480", "fail 0"; run231 read 474.
+  - The mint-stage reads (above): "preflight OK (1 warning(s))", R23's known `acp` line, and "check-single-copy: ok".
+  - `siblings.mjs bin`, read before the arm at this tip, printed run231's path, size and mtime: 253's `printBin`
+    leaves `bin`'s answer as it was.
+  - `dist/testing/smoke.cjs` read 2,998,627 B in the census; run231 read 2,997,882. No birth was KEPT. The 1-min load
+    peaked at 34.07, and `listener_accept_pressure` passed.
+
+**Found.**
+- **The rule's gap** (VF-PM 16:31:00Z). The 15:58:14Z rule runs every `verify` `check:*` whose inputs a bundle
+  touches. `siblings.mjs` is imported by `preflight` (with R23's `check-agent-catalog.mjs`) and by `check:deps`
+  (`check-single-copy.mjs`), and no lane can host either before the freeze: they need an install at main's lock and
+  the siblings beside it. RULED: such a check is a MINT-STAGE READ named in the brief with that reason, and a red
+  there is a finding under the mint's number, never a re-run. The light `sib-load` row stands beside it.
+- **A full mint, not a targeted row** (VF-PM 16:40:53Z). The r3 tip carries two files merged with 254's. A targeted
+  vitest and tsc beside carried rows would land a tree no verify ran on, so the verdict of record is a verify on the
+  exact sha that lands, and the `14d9414c4` cut's run232 was held for it.
+- **254's records and 253's row 32.** HG's records for item 254 (`23731d17e`, held) edit the same desk-gates row 32
+  line. VF-PM ruled at 16:57:51Z that 253 lands first and HG's records re-cut onto it, folding their clause by hand.
+  The packet's `desk-gates-hunks.txt` names the line: 253's change to row 32 is one insertion at char 124.
+
+**Owed.**
+- The witness on this Mac (its GPU, an awake display, and no `pnpm dev` from the main checkout):
+  `pnpm gate:landing --only smoke:first-run`, then `--only smoke:godview,smoke:godview:no-record`. Its first line names
+  the Mac's rosettad, `/Volumes/SamsungRed/rust-target/rosetta-pin/release/rosettad`, rebuilt at the EL8's land
+  (16:19:27Z). Paid in a later dated LANDED entry.
+- Item 255: `smoke:studio` again, alone, on an awake display.
