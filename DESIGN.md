@@ -6368,6 +6368,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   - **Acknowledgements** lists every part the app links, grouped by what it is for. Each row shows its name, version
     and licence, and opens the part's full licence texts. With no acknowledgements in the build, it says so (§9)
     above the short list.
+    *Amended 2026-11-08 (item 259, page (a), ruled by VF-PM):* the parts it lists are the ones others made.
+    VibeField's own, `own: true` in the generator's record (rosetta's Swift client), rides the record so its inventory
+    is whole, and is not drawn, as the desktop's notices count only third-party components.
     - The groups are the roles as the generator names them, said as sentences: the terminal, the private network,
       the terminal's fonts, the agents' marks and the desktops' OS marks first, then the rest by name.
     - A row is the part's name, its version under it in mono, and its licence as the value.
