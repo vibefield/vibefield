@@ -61,6 +61,21 @@ const signingIdentifiers = {
   fixture: "com.jamesyong.vibefield.live-surface-capture-fixture",
 };
 
+// Item 249 (2026-11-08): the SDK is named, one lookup handed to the compiler, as in
+// build-screenshot-helper.mjs. A bare `xcrun clang++` builds against xcrun's DEFAULT SDK, which
+// need not be the selected Xcode's (vf-m2, run 220: the Command Line Tools' 27.2 under Xcode
+// 26.3's ld, which cannot read its `.tbd` stubs). It is looked up before the plists' scratch
+// directory exists, so a failed lookup leaves nothing behind.
+function capture(label, command, args) {
+  const result = spawnSync(command, args, { cwd: desktopRoot, encoding: "utf8" });
+  if (result.error) throw result.error;
+  if (result.status !== 0) {
+    throw new Error(`${label} failed with status ${result.status}: ${result.stderr?.trim()}`);
+  }
+  return result.stdout.trim();
+}
+const sdk = capture("macOS SDK lookup", "xcrun", ["--sdk", "macosx", "--show-sdk-path"]);
+
 // LSF-4 (2026-10-26; the first signed nightly, run 40272843651): a nested Mach-O with no Info.plist signs as its FILE
 // NAME under any signer that does not name it, and electron-builder's re-sign of nested code names none. The release
 // gate then read `live-surface-capture-helper` where its policy wants the reverse-DNS id. So each artifact carries its
@@ -81,6 +96,8 @@ function embeddedIdentity(name, identifier) {
 
 const common = [
   "clang++",
+  "-isysroot",
+  sdk,
   "-std=c++20",
   "-fobjc-arc",
   "-fblocks",

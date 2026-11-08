@@ -33,9 +33,24 @@ function run(args) {
   if (result.status !== 0)
     throw new Error(`sound player build failed: ${args[0]} (${result.status})`);
 }
+// Item 249 (2026-11-08): the SDK is named, one lookup handed to the compiler, as in
+// build-haptics.mjs and build-screenshot-helper.mjs. A bare `xcrun clang++` builds against
+// xcrun's DEFAULT SDK, which need not be the selected Xcode's (vf-m2, run 220: the Command Line
+// Tools' 27.2 under Xcode 26.3's ld, which cannot read its `.tbd` stubs).
+function capture(label, command, args) {
+  const result = spawnSync(command, args, { encoding: "utf8" });
+  if (result.error) throw result.error;
+  if (result.status !== 0) {
+    throw new Error(`${label} failed with status ${result.status}: ${result.stderr?.trim()}`);
+  }
+  return result.stdout.trim();
+}
 try {
+  const sdk = capture("macOS SDK lookup", "xcrun", ["--sdk", "macosx", "--show-sdk-path"]);
   run([
     "clang++",
+    "-isysroot",
+    sdk,
     "-std=c++20",
     "-fobjc-arc",
     "-O2",

@@ -28,9 +28,25 @@ function run(args) {
   if (result.error) throw result.error;
   if (result.status !== 0) throw new Error(`haptic build failed: ${args[0]} (${result.status})`);
 }
+// Item 249 (2026-11-08): the SDK is named, as build-screenshot-helper.mjs names it: one
+// lookup, handed to the compiler. A bare `xcrun clang++` builds against xcrun's DEFAULT SDK,
+// which need not be the selected Xcode's. On vf-m2 (Xcode 26.3 selected, Command Line Tools
+// 27.2 installed) it was the CLT's 27.2, whose `.tbd` stubs Xcode 26.3's ld cannot read, and
+// verify went red at this build (run 220).
+function capture(label, command, args) {
+  const result = spawnSync(command, args, { encoding: "utf8" });
+  if (result.error) throw result.error;
+  if (result.status !== 0) {
+    throw new Error(`${label} failed with status ${result.status}: ${result.stderr?.trim()}`);
+  }
+  return result.stdout.trim();
+}
 try {
+  const sdk = capture("macOS SDK lookup", "xcrun", ["--sdk", "macosx", "--show-sdk-path"]);
   run([
     "clang++",
+    "-isysroot",
+    sdk,
     "-std=c++20",
     "-fobjc-arc",
     "-O2",
