@@ -44105,3 +44105,181 @@ one headless SwiftShader Chrome, pids in HOLD and proven gone.
   `starters.ts`'s allow-list row retires.
 - The kit's K at a tree that holds T's kit tree `95e76bdcd9f1`: HG's run239 carries it.
 - gate:landing after the land: the stills and the smokes, landing-only; a re-bless, if any, said there.
+
+## Item 263 — `smoke:godview`'s History rung reads the view's own room, and the card behind glass while the room waits for consent: never the sample's frame, never a blank (2026-11-08)
+
+(2026-11-08; two commits, HG's (vibe-field-7c), in `/Volumes/SamsungRed/lanes/hg/vibe-field`, branch
+`hg/i263-264-4bb2ec7b9`: red `b07ea239a` (tree `d894f47d1a47`) → green `f2eb8f913` (tree `d5a0cdd2d920`), on main
+`4bb2ec7b9`, with item 264's pair above them.
+- **The cut.** On main `4db42a816`: red `32cadda7d` → green `3973deb45`. Re-cut onto `4bb2ec7b9` by one cherry-pick
+  of the four, in order (patch-ids `7298b92c083c` and `149432b8e162` held; range-diff `=`).
+- **The mint and the land.** Minted with item 264 as M239 (run 239, vf-m2, a9: V + K); landed `9d2b8d03d`
+  (2026-11-08T22:32:15Z) by the fixer, a fast-forward of main `4bb2ec7b9`.)
+
+**Why.** fd's item 253 Mac witness at main `351bea4ce` (20:00:20Z) read `smoke:godview` red (LANDED "Item 253", its
+Owed block): "Error: History's room in the cover did not happen within 30000ms
+({"surface":"host","columns":false,"projects":0,"words":""})". VF-PM filed it for HG at 20:03:24Z. Its cause, read
+from the code and confirmed at 20:12:28Z, is HG-2 (M235 `3264c54f1`). While the index waits for consent, the view's
+room holds only `HistoryConsentMarker`, a hidden span, and the card stands in the view's own layer over the frosted
+sample (HG-D1). So a read of the room's frame alone finds no words.
+
+**What moved.** 3 files, +218 −16 over `4bb2ec7b9`, 2 of them added; test-only code in `packages/electron-shell`.
+- `src/testing/history-rung.ts` 51 0 (new), `src/testing/smoke.ts` 4 16 and `test/history-rung.test.ts` 163 0 (new).
+- No product code, no DESIGN.md, no lock and no manifest. Pin-class, release-class and release-adjacent read 0
+  (`lanes/hg/i263-264-run239/pinclass.txt`).
+
+**What is real.**
+- The rung's read and its verdict live in `testing/history-rung.ts` (`HISTORY_ROOM`, `HISTORY_FACE`,
+  `historyFaceShows`). `smoke.ts`'s rung reads them, and a test reads them over a hand-rolled page: no DOM library,
+  since adding one is pin-class.
+- **The room narrows to the view's own,** `.vf-history > .vf-history-room .ah-frame`. The sample behind the glass is
+  a second rosetta room, inert, with an `.ah-frame` of its own, so `.vf-history .ah-frame` took it too: a read that
+  took it would pass on the demo's columns, never the person's.
+- **The card's words.** While the room's slot holds HG-2's marker, the face adds `card`, the words of
+  `.vf-history > .vf-history-glass .vf-history-glass-card` (null otherwise). The verdict's `history` record carries it.
+- **The verdict:** a host surface with its columns, its own words or the card's words. "Never a blank" is kept: the
+  marker with an empty card is red.
+- The other readers of `.vf-history .ah-frame` stay as they are, as a reading (VF-PM 20:12:28Z): `jump-rungs.ts:86`,
+  `history-project-rungs.ts:34`, `timeline-past-rungs.ts:60` and `smoke-covers.ts:538` run with consent granted, so
+  no glass layer stands.
+
+**The proof.**
+- **The rows** (this Mac, each alone through `door.lock`, nice 19):
+  - At the red: biome (1 fixed, then clean); tsc for electron-shell, both configs, exit 0; vitest `history-rung`
+    2 failed | 3 passed (the room before its past, and the glass standing first); smoke-chat-thread 5/5;
+    smoke-window 3/3.
+  - At the green: the same, with `history-rung` 5/5. A run at 20:18:54–20:19:22Z read the red file, and its HOLD note
+    voids it.
+- **The witnesses** (Electron, the hg lane, VF-PM's GO 20:12:28Z as amended 20:16Z; FIELDD_NATIVE_BIN and
+  FIELDD_ROSETTAD_BIN the rows' named env):
+  - `smoke:godview` at `3973deb45`, 20:47:03Z → 20:49:17Z: GREEN. Its record reads
+    `{"surface":"host","columns":false,…,"card":"Bring in your past sessions.…","kept":true}`, and `historySession`
+    opened with 200.
+  - **Of record,** with item 264's pair at `7e14528ee`, 21:44:08Z → 21:46:25Z: `SMOKE_GODVIEW {"ok":true,…}`, the same
+    card read (`lanes/hg/i263-264/witness-7e14528ee/`, its SUMS file's sha256 `a5f8552d`).
+  - At the tip `9d2b8d03d` it is not run again: the rung reads History, which ES's T4 does not touch (VF-PM
+    22:10:11Z).
+- **The mint of record, M239** (run 239, vf-m2, a9; armed 22:16:20Z, done 22:28:13Z; its verdict `m2-hg239.done`, "V
+  GREEN / S GREEN / G GREEN-BUT-167"; `lanes/vf-m2/run239-a9-results/`, its SHA256SUMS-a9-run239 file's sha256
+  `3000c449`).
+  - V GREEN: `pnpm verify` exit 0 at `9d2b8d03d`, 22:16:20Z → 22:22:07Z (its verify.log's sha256 `083dc647`), its count
+    lines and singles SET-equal to `run239-expected` (its SHA256SUMS file's sha256 `aa492b51`). electron-shell read
+    "Test Files 181 passed (181)" and "Tests 2770 passed | 2 skipped (2772)", `history-rung.test.ts` new among them;
+    biome "Checked 3530 files"; check-test-temp-roots "266 of 1130".
+  - The kit's rows rode the same run, for ES's carry (LANDED "Item 264").
+
+**Owed.** The landing gate's `smoke:godview` rows on the merged main, landing-only.
+
+## Item 264 — `smoke:first-run`'s catalog walk captures a still document: each theme's first capture waits for the document to rest a whole second, every capture is bracketed from where its geometry was read, and a capture the document moved during is walked again once, after a rest, and named (2026-11-08)
+
+(2026-11-08; two commits, HG's (vibe-field-7c), in `/Volumes/SamsungRed/lanes/hg/vibe-field`, branch
+`hg/i263-264-4bb2ec7b9`: red `9a50f0bd9` (tree `41c6eecc9803`) → green `9d2b8d03d` (tree `ca7f02b59a46`), above item
+263's pair on main `4bb2ec7b9`.
+- **The cuts.** On main `4db42a816`, above 263's `3973deb45`:
+  - first red `dd509b6cf` → green `08453bce4`, sent at 21:24Z and read by fd;
+  - then the ONE re-cut with (b) and fd's F1 to F4, red `94590cae6` → green `7e14528ee`;
+  - re-cut onto `4bb2ec7b9` by one cherry-pick of the four, in order (patch-ids `687693d914e3` and `2dbd8c5d6d3d` held;
+    range-diff `=`).
+  - Never sent, each superseded the same hour: reds `9c7c934e4`, `2027d7099`, `fd64646e1`, `a8af94168` and green
+    `c517ad650`.
+- **The mint and the land.** Minted with item 263 as M239 (run 239, vf-m2, a9: V + K); landed `9d2b8d03d`
+  (2026-11-08T22:32:15Z) by the fixer, a fast-forward of main `4bb2ec7b9`.)
+
+**Why.** fd's item 253 Mac witness at main `351bea4ce` read `smoke:first-run`'s catalog walk red at its very first
+capture, the day ramp's, with 0 shots: "… the walk stopped: UnknownVizError" (LANDED "Item 253", its Owed block). Row
+1 in the hg lane (20:23:35Z, at `3973deb45`) read red another way: the welcome frame's still held History's Peek plate.
+- **The mechanism**, measured in rows 2 to 3d (Electron; scratch instruments, each reverted) and accepted (VF-PM
+  20:47Z). The catalog animates every scroll (`html { scroll-behavior: smooth }`). Three of its views keep themselves
+  in view as they mount: Godview's last-run focus (`.vf-last-run-act`), and the Peek row's
+  `scrollIntoView({block:"nearest"})` in Godview and in History. Their moves land about 20 to 25 ms before the walk's
+  first centring, so rows 2 and 3a passed by that margin: luck.
+- HG-2's `openAt` shifts that race; it does not start it (the attribution corrected at this item's source).
+
+**What moved.** 2 files, +559 −37 over `4bb2ec7b9`: `src/testing/smoke-catalog.ts` 227 36 and
+`test/smoke-catalog.test.ts` 332 1, in `packages/electron-shell`. Test-harness code; no product change; DESIGN.md
+untouched; HG-2's sample keeps opening. Pin-class, release-class and release-adjacent read 0.
+
+**What is real: the stillness law** (VF-PM's rulings (1) and (2′) at 20:48Z, with (b) at 21:23Z and fd's F1 to F4 at
+21:31:34Z).
+- **(1) The wait.** Before each theme's first capture, the walk waits until the document has rested a whole
+  `CATALOG.stillMs` (1,000 ms), read by the page half's new `scrollTop()` every `CATALOG.stillPollMs` (100 ms) and
+  bounded by `CATALOG.readyMs`. A document never at rest stops the walk, red, with its last five positions.
+- **The margin line.** Each theme's wait says what it read:
+  `CATALOG_STILL <theme> {waitedMs, restedMs, top, moves}`. The first capture follows by the ramp's settle, so the
+  margin is at least 1,150 ms, where it was 20 to 25 ms.
+- **(2′) with (b), the bracket.** The walk's ONE `webContents.capturePage(` stands in `capture`, with a `scrollTop()`
+  just after it. Its first read is where the geometry it captures was read:
+  - a face's settled read carries `top`, read with the frame's box in one turn, so its 150 ms settle and its words
+    read stand inside;
+  - the ramp's is a `scrollTop()` just before its capture, which follows its geometry read.
+- **The re-walk.** A capture the document moved during is walked again once: first a rest by the same wait (F2), then
+  the whole attempt (show, settle, read, capture; the ramp by `showRamp`). It is named in the facts' `recaptured`.
+  A second move is red: "on <face> the catalog's document moved during the capture (a → b), twice".
+- **F1, no failure dropped.** `captureFailures` holds `{at, before, after, error}`, the error's first line.
+  - A twice red quotes the face's last error.
+  - A failure on a still document stands, and stops the walk.
+  - On a still walk the list reads [], so a witness proves an UnknownVizError was the race by an entry with before
+    ≠ after.
+- **F4, words only.** The ramp is held to the window as each face is, and its red names the rect. Whether an off-view
+  rect was what threw at `351bea4ce` is UNPROVEN.
+- **A still failure's throw moves to the caller,** after its in-view and cover checks. That restores the faces'
+  order, which `08453bce4` had lost: a face's still failure stopped the walk before its in-view line.
+- The verdict record carries `recaptured` and `captureFailures` beside `unsettled`, both empty on a clean run.
+
+**The proof.**
+- **The red** (`94590cae6`, over `3973deb45`'s source). Thirteen tests are red and the file's nine old ones green:
+  - `stillSince` over row 3c's MEASURED scroll events;
+  - `movedDuring`'s lines;
+  - the source-held checks;
+  - the walk itself (`catalogRows`) over a page held in the test, with no Electron and on fake timers, in nine rows.
+    VF-PM accepted it as part of the red: it is the only proof of the re-walk, which a clean witness never takes.
+  - Its rows: biome, the walls, the catalog gate, tsc 0, `smoke-catalog` 13 failed | 9 passed, smoke-first-run 56/56.
+- **Seen red once more,** over scratch sources (the 400 ms row alone):
+  - S1, over `08453bce4`'s source: 6 failed | 16 passed. S1b read "expected [] to deeply equal [ 'day 01 welcome' ]".
+  - S2, over the green minus F2's wait: 1 failed | 21 passed. S2b read "expected [ +0, 56149.5, 65825.5, 77013.5,
+    …(1) ] to deeply equal [ +0, 56149.5, 77013.5, 77013.5, …(1) ]". It is never "twice": my 21:34Z table's erratum,
+    corrected at 21:39Z.
+- **The green** (`7e14528ee`): `smoke-catalog` 22/22, smoke-first-run 56/56, the walls and the catalog gate's two pass
+  lines, tsc 0. On the tip `9d2b8d03d`: "check-import-boundaries: clean" and "266 of 1130 test files make a temp root".
+- **The witnesses** (Electron, the hg lane, the rows' two named env vars):
+  - A reading at `08453bce4` (21:22Z): GREEN, 115 s.
+  - **Of record,** at `7e14528ee`, 21:42:05Z → 21:44:08Z: GREEN, 115 s.
+    `CATALOG_STILL day {"waitedMs":3249,"restedMs":1029,"top":109719.5,"moves":14}` and
+    `night {"waitedMs":1044,"restedMs":1044,"top":81062,"moves":0}`; `recaptured: []`, `captureFailures: []`; 122
+    shots (`lanes/hg/i263-264/witness-7e14528ee/`, its SUMS file's sha256 `a5f8552d`).
+  - **At the tip** `9d2b8d03d`, where ES's T4 moved the catalog's chat previews (VF-PM 22:10:11Z): 22:11:18Z →
+    22:13:20Z, GREEN, 114 s. Day `{2961, 1025, 109719.5, 14}`, night `{1079, 1079, 81062, 0}`; both lists []; 122
+    shots (`lanes/hg/i263-264-run239/witness-9d2b8d03d/`, its SUMS file's sha256 `dc2a96ad`).
+- **fd's read-only review**, as the gate's owner:
+  - of `08453bce4`: 5 checks passed and 4 findings, F1 to F4, all taken into the one re-cut;
+  - of `7e14528ee`: 7 checks, 0 findings and 2 nits (below).
+- **The mint of record, M239** (run 239, vf-m2, a9; armed 22:16:20Z, done 22:28:13Z; its verdict `m2-hg239.done`, "V
+  GREEN / S GREEN / G GREEN-BUT-167"; `lanes/vf-m2/run239-a9-results/`, its SHA256SUMS-a9-run239 file's sha256
+  `3000c449`).
+  - V GREEN: `pnpm verify` exit 0 at `9d2b8d03d`, 22:16:20Z → 22:22:07Z (its verify.log's sha256 `083dc647`), its count
+    lines and singles SET-equal to `run239-expected` (its SHA256SUMS file's sha256 `aa492b51`). electron-shell read
+    "Tests 2770 passed | 2 skipped (2772)", `smoke-catalog.test.ts` 22 of them. The bundle assert was run 238's line,
+    and "census assert OK — no §7.3 violation".
+  - K, at the kit's tree `95e76bdcd9f1`, paying ES's carry (T4's two Fixtures): S "** TEST BUILD SUCCEEDED **" on Xcode
+    26.3 (17C529) in 94 s, 16 bundles, its warnings run 236's four; X one xctestrun, its 16 BlueprintNames; P "✔ Test
+    run with 29 tests in 4 suites passed" under the beta (27.3); G GREEN-BUT-167 (exit 65; 15 runs ✔ and
+    FieldTerminalTests 177/35 ✘, item 167's; 2165 tests in 342 suites), its run lines byte for byte run 236's
+    (G-runlines' sha256 `ecf266d6`, G-failruns' `64d5c02e`).
+
+**Found.**
+- **The three movers:** Godview's last-run focus, and the Peek rows' `scrollIntoView` in Godview and in History. VF-PM
+  filed them as item 265 for their owners. They are the catalog's own behaviour, which the walk now waits out; they
+  are not this item's.
+- **Reading (a), the early-ready limit,** left as a reading (VF-PM 21:23Z).
+  - Row 3c's document rests at 0 for 1,926 ms before Godview's Peek moves it: its `scrollIntoView` is called at
+    1,169, and its first scroll event comes at 1,926.
+  - A wait begun before 926 ms into such a load passes before the movers. The bracket and the re-walk then guard, as
+    the red's 400 ms row shows.
+
+**Nits, held** (VF-PM 21:44Z; fd concurs), for the next touch of `smoke-catalog.ts`:
+- **N1.** The twice line quotes the face's last error from either attempt, so when only the first threw it reads as
+  the second failing. `captureFailures` carries which. fd's wording, "; a capture of it failed: X", fits either.
+- **N2.** The ramp's bracket opens with its own `scrollTop()`, one IPC turn after `ramp()`'s geometry. `ramp()`
+  returning `top`, as `face()` does, would make the two symmetric. The gap is milliseconds.
+
+**Owed.** The landing gate's row 32 (`smoke:first-run`) on the merged main, landing-only.

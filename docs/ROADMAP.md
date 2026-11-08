@@ -405,8 +405,9 @@ phone"; DECISIONS PC
     LANDED "Item 241 (241b)"): design-kit's `.vf-ui-button:disabled` draws §7's Off from the button's own
     `disabled`, the quiet fill with its words in t4; `UiButton`'s `running` keeps a running pill's look.
     Its gate:landing (LANDED, the entry's Owed): the Mac stills green, 19 of 19; row 32 red on the Mac, by the lane's
-    target link and then by the gate's environment (item 253, LANDED M232 `ef22fb3b7`, the Mac's witness owed) and
-    the "ChatGPT Pro" pair (item 254), the rest that run's own.
+    target link and then by the gate's environment (item 253, LANDED M232 `ef22fb3b7`; the Mac's witness paid
+    GREEN-BUT-263/264 at main `351bea4ce` (recorded `4db42a816`), the BUT settled by items 263 + 264, M239 `9d2b8d03d`)
+    and the "ChatGPT Pro" pair (item 254), the rest that run's own.
   - **Item 244 CLOSED** (VF-PM 08:03Z): the stills' one-base rule names the tab bar's glass, at most T = 2
     levels (measured on the old mini over 12 launches), and the Field badge, never judged until item 251;
     LANDED "Item 241 (241b)", Found.
@@ -548,9 +549,9 @@ page *The Drive*, KB33dCAP, where it moved 11-06 05:45Z from LB8rzJYV; sources `
   - James's rulings before DR-1 (B) wires a caller: DR-L3's re-check at the view (`dr-l3-blake3-recheck`, lean (a):
     R-1's verified placement until DR-2), and the serve policy's `'unsafe-eval'` (`dr-serve-csp-unsafe-eval`).
   - Rosetta's EL8's `gate:landing`. DR-3a's and DR-3b's ran on 2026-11-08 at `e60d8add6`, 12 of 14 green (LANDED
-    "DR-3a", its Owed): row 10's red is items 253 and 254 (253 LANDED M232 `ef22fb3b7`, LANDED "Item 253"; the
-    Mac's witness owed); row 13's is item 255, host state, so `smoke:studio` is owed again, alone, on an awake
-    display.
+    "DR-3a", its Owed): row 10's red is items 253 and 254 (253 LANDED M232 `ef22fb3b7`, LANDED "Item 253"; the Mac's
+    witness paid GREEN-BUT-263/264 at main `351bea4ce` (recorded `4db42a816`), the BUT settled by items 263 + 264, M239
+    `9d2b8d03d`); row 13's is item 255, host state, so `smoke:studio` is owed again, alone, on an awake display.
   - From DR-3b: item 237 (NativeLink's dead replay tells no one, the relay's one uncured order, carried) and item 238
     (fold 4 F1's shape claimed in DeviceService and DocHoldersService, a read first).
   - Item 220, DR-1 (B)'s decision before it calls the export: fieldd's `MadeAppExport` moves to the answer rosetta
@@ -948,6 +949,10 @@ its rulings (`draft/rv/james-asks.md`, `draft/rv/lead-rulings.md`); the review `
   History before its past is the room behind glass, the room itself frosted behind the History pane in the Setup
   Assistant's glass. Its act says "Bringing in…" through the kit's `running`, and a census with nothing to bring in
   says "Your history starts here." with Look again.
+- Landed 11-08: **items 263 + 264**, HG-2's two smoke reds (`b07ea239a` → `9d2b8d03d`, M239, run 239, an ff of
+  `4bb2ec7b9`; LANDED "Item 263" and "Item 264"): `smoke:godview`'s History rung reads the view's own room and, while it
+  waits, the card behind glass; the catalog walk captures a still document (the wait, the bracket and one re-walk). Item
+  265, the catalog's three mount-time movers, is filed for their owners.
 - Next: **HG-3**, rosetta's `waitMark` (RO-40; James opens its PR, `lanes/hg/open-hg3-pr.sh`), then rosetta-room
   0.1.6 and its EL8; then **HG-4**, History's holds in the living mark (`hg/hold`), re-based with the same act.
 - Ruled with it: a slice that adds a lazy import or a new module to field-app runs the census assert as a door row
@@ -1535,7 +1540,7 @@ Petition status lives in `draft/petitions/README.md`. Still open or owed there:
 | LSF — live surfaces foundation | COMPLETE; LSF-4 landed 10-26 | `specs/live-surfaces-foundation.md` | consumed by PT; §18 Windows rows with WIN |
 | CO — the compose plane | ACTIVE; CP-0, SP-1a, CP-1a…1c, CP-1d, MT-0, CP-2, SP-1b, SP-1c, SP-1d, CP-3 (`ce6577783`, run 88), TU-1 (`57569bca3`, mint M96), the handle (`045f10ec7`, mint M100), items 158 and 159 with CO-1b (`9b3164ccf`, mint M129), CP-5a (`fc70097e3`, mint M140), CP-4a1 (`1a3ca5f24`, mint M143), SP-1e2's fieldd half (`068cab410`, mint M146), TH-1/TH-2 (`d5c6995fb`, mint M147), SP-1e2's card (`320d4b882`, mint M156), CP-4a2a (`c07039551`, mint M159), CP-4a2b's M-h (`aebd6a80b`, mint M163) and M-r1 (`c92b33692`, mint M168) landed | `compose-plane/thinking-roled-agents.md` §15–§17, `compose-plane/v2/`, `thinking-tool-plane.md`; the CO round (Druyc3Ua); DESIGN.md §2.10 | SP-1e4 · CP-4a2b…4f · CP-5b…d |
 | ES — Chat's empty state | ACTIVE since 11-08 (ES-D1…D7 ruled at the leans); ES-1 + ES-2 landed 11-08 (M226 `6b8a4b09f`), ES-3 + ES-4 landed 11-08 (M238 `2c34727a3`) | DESIGN.md §2.4/§2.10/§3/§5/§6/§8/§9 (the ES page `1GdkfmnTxynAp6wHTbAa3a`) | ES-5 (the IOS lane); ES-Q1 (James, §9); the starter's role in the catalog row (ES's follow-up) |
-| HG — History's first view and its waits | ACTIVE since 11-08 (HG-D1…D6, HG-W1…W5 and HG-L1 ruled at the leans); HG-1 + HG-2 landed 11-08 (M235 `3264c54f1`) | DESIGN.md §5/§6/§8/§9 (the HG pages `U12DeYQrZB4YRjycrR4wuR` and `9ByDzaNGQaijgSHW6GrZUb`) | HG-3 (rosetta's `waitMark`, RO-40) → rosetta-room 0.1.6's EL8 → HG-4, History's holds in the living mark |
+| HG — History's first view and its waits | ACTIVE since 11-08 (HG-D1…D6, HG-W1…W5 and HG-L1 ruled at the leans); HG-1 + HG-2 landed 11-08 (M235 `3264c54f1`); items 263 + 264 landed 11-08 (M239 `9d2b8d03d`) | DESIGN.md §5/§6/§8/§9 (the HG pages `U12DeYQrZB4YRjycrR4wuR` and `9ByDzaNGQaijgSHW6GrZUb`) | HG-3 (rosetta's `waitMark`, RO-40) → rosetta-room 0.1.6's EL8 → HG-4, History's holds in the living mark |
 | A — shell and spine | COMPLETE | design-03, `specs/electron-shell-refactor.md` | Settings on demand (Q20, §3 item 6) |
 
 **Retired and superseded tracks**
