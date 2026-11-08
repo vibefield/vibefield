@@ -66,10 +66,78 @@
   border-top: 1px solid var(--vf-hairline);
 }
 
-/* LATE, as the veil's words are (§8): invisible for 120ms, then a 180ms plain
-   `ease` fade — a room already loaded never flashes them. */
-.vf-history-face[data-late] {
+/* History's first open is the hold (HG-W1; DESIGN.md §8 "History" — "Its
+   first open"), FG-4b's in History's box: rows `1fr | the mark | 1fr`, the
+   living mark at the centre of the face's box (the room's own box, from the head
+   band's hairline down to the reserve), and its words 26 under it. The line is
+   400, 14px/1.4, t2, over its sub's 17 (12px/1.4, t3), in tabular figures. The
+   room's own hold (rosetta-room's `waitMark`, R10) stands on the same rows in
+   the same box, so when the room takes the face's place the mark never moves.
+   LATE, as the veil's words are (§6): nothing for 120ms, then the words over
+   180ms `ease` and the mark over 400ms with them, so a room already loaded
+   never flashes it. */
+.vf-history-hold {
+  display: grid;
+  padding: 0 24px;
+  grid-template-rows: minmax(0, 1fr) auto minmax(0, 1fr);
+  justify-items: center;
+  text-align: center;
+}
+
+.vf-history-hold-mark {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  grid-row: 2;
+  animation: vf-history-late 400ms ease 120ms both;
+}
+
+.vf-history-hold-words {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 26px;
+  grid-row: 3;
   animation: vf-history-late 180ms ease 120ms both;
+}
+
+.vf-history-hold-line {
+  margin: 0;
+  color: var(--vf-text-secondary);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 400;
+  line-height: 1.4;
+}
+
+.vf-history-hold-sub {
+  min-height: 17px;
+  margin: 4px 0 0;
+  color: var(--vf-text-tertiary);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.4;
+}
+
+/* History's mark (HG-W4, `history-mark.tsx`): the living mark on the theme's
+   ground, `light` (black ink) by day and `dark` (white ink) by night, the app
+   icon's two (§12). Both are drawn and the theme's class shows one. */
+.vf-history-mark {
+  display: inline-flex;
+}
+
+.vf-history-mark-dark {
+  display: none;
+}
+
+.dark .vf-history-mark-dark {
+  display: block;
+}
+
+.dark .vf-history-mark-light {
+  display: none;
 }
 
 @keyframes vf-history-late {

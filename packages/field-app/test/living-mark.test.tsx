@@ -178,8 +178,16 @@ describe("the living mark, drawn as SVG", () => {
       root?.render(createElement(LivingMark, { ground: "light", resting: true }));
     });
     expect(container.querySelector("img")?.getAttribute("src")).toBe(LIVING_MARK_REST_URL.light);
-    expect(LIVING_MARK_REST_URL.light).toMatch(/living-mark-light-rest\.svg$/u);
-    expect(LIVING_MARK_REST_URL.dark).toMatch(/living-mark-dark-rest\.svg$/u);
+    // a still is under the bundler's 4 KB inline limit, so it can arrive as a data URL (the renderer's CSP admits
+    // `data:` images); either way the URL holds its ground's still
+    const holds = (url: string, ground: "dark" | "light"): boolean => {
+      const inline = "data:image/svg+xml;base64,";
+      return url.startsWith(inline)
+        ? Buffer.from(url.slice(inline.length), "base64").toString("utf8") === still(ground)
+        : url.endsWith(`living-mark-${ground}-rest.svg`);
+    };
+    expect(holds(LIVING_MARK_REST_URL.light, "light")).toBe(true);
+    expect(holds(LIVING_MARK_REST_URL.dark, "dark")).toBe(true);
     await act(async () => {
       root?.render(createElement(LivingMark, { ground: "light", resting: false }));
     });

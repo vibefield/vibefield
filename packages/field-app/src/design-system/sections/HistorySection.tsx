@@ -103,7 +103,7 @@ export function HistorySection(): ReactElement {
         </div>
       </Specimen>
       <Specimen
-        title="Opening History — the room's chunk on its way (late: 120ms, then a fade)"
+        title="Opening History — the hold while the room's chunk is on its way: the living mark, its line under it, late 120ms (HG-W1)"
         source="history/HistoryOpening.tsx"
         bleed
       >
