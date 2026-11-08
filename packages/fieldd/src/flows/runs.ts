@@ -132,9 +132,13 @@ import * as words from "./words";
 // - The spark's facts (slice 11b; Q9, Q10): a run a spark started (its starter `by: "spark"`, the spark named) tells
 //   that spark, through the `waker` port, in DESIGN.md §9's words ("What VibeField tells a spark", words.ts), when it
 //   holds on you, once for each hold the needs queue MINTED (a gate or a step's second miss; a hold re-bound at a wake
-//   tells nothing, nor your answer to it), and when it ends, once its `end` line is kept: done, failed or set aside.
+//   tells nothing, nor your answer to it), and when it ends, once its `end` line is kept (#finish's
+//   #closeEnd, whether or not the record's write lands), in the words END_FACTS keys by the end's
+//   state: done, failed, set aside, or stopped (W1's "was stopped", `words.factStopped`).
 //   A fact is built from the spark's name, ‹flow› and the run's id alone. A spark `sparkOf` no longer finds is told
 //   nothing, and a Run you start in a spark's thread is yours, and tells it nothing (T3b).
+//   *Words (2026-11-07; ruled 2026-11-07, orders §K): it said "done, failed or set aside", and a
+//   Stop's end tells its spark too. #finishStop's kept-`end` road appends none: it tells nothing.*
 // - Stop and the end (slice 13; D4, D19): a person's Stop (`stop`, on any of a run's items too) writes `stopping`
 //   first, withdraws the run's lines, ends its items and pauses a handed turn its own line began, then ends its host;
 //   and EVERY end of a run, in D4's order (#finish), ends the agents its steps started, by their origin
@@ -423,8 +427,12 @@ interface Closing {
 
 /** Slice 13's fold 3 (the fold 2 skeptic's #2) — the agents an end ends, as its ONE read finds them (#agentsOf), each
  * with its call (`agentOf`): the run's orphans, and every live `sessions.ofRun` row by its `call`. It travels from
- * that read to #closeEnd, so endSteps finds the agent of a step whose session was never written on every road, a run
- * no LiveRun drives among them. Never a handed session: `ofRun` reads by origin. */
+ * that read to #closeEnd, so endSteps finds the agent of a step whose session was never written at
+ * a LiveRun's end and on #finishStop's no-`end` road (a run no LiveRun drives). #finishStop's
+ * kept-`end` road reads no agents and matches nothing: it hands endSteps an empty `agentOf` and an
+ * empty `refused`. Never a handed session: `ofRun` reads by origin.
+ * *Words (2026-11-07; ruled 2026-11-07, orders §K): it named every road, and it covers these two; the
+ * kept-`end` road's gap is the fold 3 skeptic's LOW #1 (#finishStop's doc).* */
 interface EndAgents {
   readonly agents: readonly string[];
   readonly agentOf: ReadonlyMap<number, string>;
@@ -1024,12 +1032,17 @@ export class FlowRuns {
    * - A journal that does not read `kept` is slice 14's forged road: until then it is answered as its record stands,
    *   and said in fieldd's log.
    * - A kept `end` line: the record alone takes its state, `ended` and `host` from it (D4's reason for the record), its
-   *   open steps ended as the end's write would have, and `calls` from the journal; no second `end`, nothing ended,
+   *   open steps ended, every one its journal does not answer, a refused agent's step among them
+   *   (the `end` names no refusal), and `calls` from the journal; no second `end`, nothing ended,
    *   no tell. N5: a line that names the host fieldd ended takes §9's sentence for it as `log`; leftTwice's words and
    *   D7's, which no `end` line holds, are lost on this road. Its items and lines are let go BEFORE the record write
    *   (fold 1, the green skeptic's #5): a write the disk refuses is refused retryably, but leaves the record in its
    *   state before the end with its items already ended, so only the door's Stop (or the boot) writes it, never an
    *   item; its lines, which an ended run must never deliver, are withdrawn either way.
+   *   *Words (2026-11-07; ruled 2026-11-07, orders §K): it said its open steps were ended "as the
+   *   end's write would have". They are not: the end's own write keeps a refused agent's step open
+   *   (endSteps' `refused`), and this road has no refusal to match. Slice 14 rules it (the fold 3
+   *   skeptic's LOW #1).*
    * - No `end` line: `stopping`, unless the record reads it (refused as Stop's turn refuses), then #finish, its
    *   head and its answers from the journal, which ends the agents its steps started, by their origin, then #closeEnd,
    *   `calls` from its journal (Q7: this road closes ZZ3's window for each run it ends).
