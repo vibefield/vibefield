@@ -43491,3 +43491,89 @@ The fix:
 - Row 32's witness: item 253's rosettad and this fix, on the old mini, by a9 (VF-PM). On the Mac, item 253's fix is
   in main at `ef22fb3b7` and row 32's next `gate:landing` there is OWED, in a later dated entry.
 - `gate:landing` at this landing: OWED, with row 32's witness above.
+
+## Item 257 — the kit's tests build on vf-m2's Xcode 26.3: three test literals take shapes Swift 6.2.4 types in time, no value under test moves, and the EL8's row 6 is paid there (2026-11-08)
+
+(2026-11-08; three commits, IOS's, in `/Volumes/SamsungRed/lanes/ios12b/vibe-field`: `c71f81e5b` → `1d4f38998` →
+`b3a5930b2` (tree `c90fef673509`), on main `f1670584e`.
+- **The cuts.** The first cut was four commits on `8897de277` (`0d05c778e`, `f795fe15f`, `56d20b126`, `5e3205fe2`;
+  patch-id `840f4a53`). `56d20b126` was the EL8's T3 hunk at `HistoryFoldTests.swift:151`, byte for byte. It dropped
+  as empty at the re-cut onto `68b80fb95` (`192b34a4e`, "patch contents already upstream").
+- **The re-cuts** were in proof form as main moved:
+  - onto `14d9414c4` (`7c43629c7`; mint r1 `lanes/ios12/257/mint/`, `d79d555e`), superseded unminted as items 254 and
+    253 landed;
+  - onto `f1670584e` (mint r2 `lanes/ios12/257/mint-r2/`, SHA256SUMS `cc73de30`).
+- **The proof form.** Each tree equals its merge-tree, and each patch-id is the first cut's (`40cb6cf6`, `6e75671b`,
+  `94b02870`). The whole diff's is `42f1fc81`.
+- **The mint and the land.** Minted as M233 (run233); landed `b3a5930b2` (2026-11-08T17:56:17Z), a fast-forward of main
+  `f1670584e`.)
+
+**Why.** vf-m2 runs Xcode 26.3 (17C529, Swift 6.2.4), and its S, `build-for-testing` over the kit's 16 test bundles,
+was red at main. The old mini's Xcode 27.2 builds the same lines.
+- Every kit source compiled on 26.3. The reds were test expressions alone: two typed differently, and two too dense
+  to type-check in reasonable time.
+- a9's S2 (`-IDEBuildingContinueBuildingAfterErrors=YES`) named each one.
+
+**What.** 3 files, +8 −3, all under `apps/ios/VibeFieldKit/Tests/`. Nothing under `Sources/` moves, every assertion and
+tolerance stands, and no pin-class path is touched.
+- **`FieldFreewayTests/WebSocketCodecTests.swift:94`.** Inside the `#expect`'s array literal, 26.3 typed `0x80 | 125`
+  `Int`. It is now `[0x82, UInt8(0x80 | 125)]`.
+- **`FieldSwarmTests/FieldSwarmTests.swift:180`.** One `#expect(close(…))` over three dense literal sums "is unable to
+  type-check this expression in reasonable time". The channels are now three typed `let`s over a shared `inkShare`,
+  and the `#expect` reads them.
+- **`FieldHomeTests/FaceHoldTests.swift:146`.** The same time-out, in the inline sum. The sum moves unchanged into its
+  own `let expectedLong`, :141's shape, and the `#expect` reads `abs(long - expectedLong)`. The values are bit-equal:
+  the same Double operations in the same order.
+- **`FieldHistoryTests/HistoryFoldTests.swift:151`.** `.int(3_800_000 + 79 * 60_000)` was typed `Int` where `.int`
+  takes `Int64`. The EL8's T3 made it `.int(Int64(…))`, so 257 carries no hunk there.
+- **What 26.3 compiled as written,** and so stands: `out.append(0x80 | 126)`, `.int(1 << 20)`, and
+  `SIMD2<Double>(800 - 54, 54)` inside a `#expect`.
+
+**The proof.**
+- **S on 26.3 at the first cut `5e3205fe2`:** green twice on vf-m2 (it2's 91 s and it3w's 94 s), 16 of 16 test
+  bundles linked.
+- **it4x** (vf-m2, 16:26–16:30Z; `lanes/vf-m2/257-it4x-a9-results/`, `36e3a69e`): G of it3w's 26.3-built products
+  under Xcode-beta 27.3's runner (`test-without-building -xctestrun`), 2164 tests in 342 suites. It was GREEN-BUT-167,
+  as VF-PM ruled at 16:36:13Z.
+- **The mint, M233** (run233, vf-m2, at `b3a5930b2`; a9, `lanes/vf-m2/run233-a9-results/`, SHA256SUMS-a9-run233
+  `416d709c`):
+  - **V:** `pnpm verify` exited 0 in 5 min 44 s (17:39:34–17:45:18Z). Its lines are set-equal to run232's, in Nx's
+    order: count lines and singles both missing [] / extra []. Nothing was KEPT.
+  - **S:** `build-for-testing` on Xcode 26.3 (17C529) in 93 s: `** TEST BUILD SUCCEEDED **`, 0 errors, 16 of 16
+    linked, and RosettaClient compiled (29 steps). It resolved GhostteaKit 0.14.0, rosetta 0.1.5 and Truffle 0.7.26.
+  - **G:** over S's own xctestrun (`4280072573…`, its origin read), under Xcode-beta 27.3's runner. 2164 tests in 342
+    suites ran, and the 16 (tests, suites) pairs equal `count_tests.py`'s. 15 runs passed. FieldTerminalTests
+    (177 in 35) carried item 167's one issue alone (`TerminalSurfaceKeyboardTests.swift:31:27`,
+    `UIApplication.shared.connectedScenes.first → nil`). 257's four tests passed by name.
+  - **The verdict:** GREEN-BUT-167, "kit green but item 167, main's own, control red by construction at f1670584e".
+    FieldTerminalTests' inputs are main's byte for byte: the test file is blob `e46bf3c5` since `0c4590d7a`, and
+    FieldTerminal and FieldRoutedTerminal are untouched.
+- **The EL8's row 6, paid on vf-m2** (VF-PM's ruling 2, 16:36:13Z):
+  - what is paid: the kit S over 16 bundles, and FieldHistory's G ("✔ Test run with 86 tests in 9 suites passed");
+  - where: "at main f1670584e + 257's three test files, kit 50280ffbd8d4, run233 416d709c". `Sources/` and
+    FieldHistoryTests are byte for byte main's.
+  - The witness at the EL8's exact kit tree `36b8f5dc447a` cannot exist on 26.3, by this item's finding. It stays
+    the old mini's line, and it does not block.
+
+**Found.**
+- **Item 260: vf-m2's simulator test service.**
+  - **The symptom:** under Xcode 26.3's own runner, `test-without-building` never connects. "DTServiceHubClient failed
+    to bless service hub" comes about 5 s in, and xcodebuild gives up by itself: after about 346 s for one bundle, and
+    5365 s for 16.
+  - **probe-b:** the same host, device and session connect under Xcode-beta 27.3's runner, with Developer mode
+    disabled. So (a), 26.3's test service on macOS 27.2 with CoreSimulator 1207, is favored, and (b), Developer mode,
+    is out as the sole cause.
+  - **Until James's hand closes it,** the kit's tests on vf-m2 build with 26.3 and run under the beta's runner. The
+    iOS README says so.
+- **Item 167, re-sighted.** It was briefly filed as item 261, which is retired into it. A package-hosted kit run has
+  no window scene on any runner or host.
+- **Two build facts (probe-a3):** `-only-testing` does not narrow `build-for-testing` (49 targets were built), and the
+  beta's own build needs its Metal Toolchain, which is James's hand.
+- **S's four warnings are main's,** none in 257's files: `FreewayDesktopLink.swift:211`, `SwarmMetalView.swift:58`,
+  `RoutedTerminalFrameSinkTests.swift:285` and `WorkspaceTests.swift:111`.
+
+**Owed.**
+- **The old mini** (Xcode 27.2), on James's console unlock, not blocking: its `mini-it2m`, the comparison, and then
+  row 6 at the EL8's exact kit tree.
+- **Item 260's close,** James's hand: a 27.x Xcode for tests, the 27.2 release, or the split as standing.
+- **`gate:landing` at this landing:** OWED, as at today's other landings, paid in a later dated LANDED entry.

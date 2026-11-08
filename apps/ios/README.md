@@ -92,6 +92,10 @@ Probe a new host with `xcrun metal --version` before arming a kit run there; the
 that machine, its owner's to make. *(TS-7a's spike found it on the Mac mini's Xcode 27.1, 2026-10-29 — the
 class of desk-gates row 30's 2026-10-23 finding: a host prerequisite nobody probed.)*
 
+**Host Xcodes (item 257, 2026-11-08).** The kit's tests build on Xcode 26.3 and pass under Xcode 27.3's test
+runner on vf-m2, all but item 167's one test, which needs a window scene no package-hosted run has; 26.3's own
+runner does not connect there (item 260). *(The witness: M233, `b3a5930b2`; LANDED "Item 257".)*
+
 This machine's `xcode-select` points at CommandLineTools, so every invocation
 passes `DEVELOPER_DIR` (the Ghosttea convention). Since IOS-3 the tree also
 links `GhostteaTerminal`, which ships a Metal build-tool plugin — SwiftPM asks
