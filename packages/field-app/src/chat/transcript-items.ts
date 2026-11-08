@@ -7,6 +7,7 @@ import {
 } from "@vibefield/contracts";
 import type { SparkStatus } from "@vibefield/design-kit/spark-face";
 import type { SparkEntry } from "./spark-status";
+import type { StartersReading } from "./starters";
 import { helloWords, STARTERS, type Starter, sparkIsNew } from "./thread-items";
 import type { TranscriptReading } from "./transcript-port";
 
@@ -56,6 +57,8 @@ export type FlowItem =
       readonly face: { readonly seed: number; readonly status: SparkStatus };
       readonly words: string;
       readonly starters: readonly Starter[];
+      /** ES-4 — this Mac's agents and board are being read: the starters hold their places, wordless */
+      readonly held: boolean;
     }
   | {
       readonly kind: "you";
@@ -99,6 +102,8 @@ export interface FlowInputs {
   /** the window's clock, epoch ms, for the day lines */
   readonly now: number;
   readonly locale?: string | undefined;
+  /** ES-4 — the hello's starters, filled from this Mac (`starters.ts`); absent, the ruled ones */
+  readonly starters?: StartersReading | undefined;
 }
 
 // ── the words (§9 "Chat's words") ──
@@ -253,6 +258,7 @@ export function transcriptItemsOf({
   earlier = false,
   now,
   locale,
+  starters,
 }: FlowInputs): Flow {
   if (reading.state === "reading") return { state: "reading" };
   if (reading.state === "unreadable") return { state: "unreadable", reason: reading.reason };
@@ -328,7 +334,8 @@ export function transcriptItemsOf({
       key: "hello",
       face: { seed: entry.spark.face.seed, status: entry.status },
       words: helloWords(name),
-      starters: STARTERS,
+      starters: starters?.starters ?? STARTERS,
+      held: starters?.state === "reading",
     });
   }
   items.push(...withDays(receipted(latest, entry, lines), latestSince, now, locale));

@@ -35,6 +35,16 @@
   color: var(--vf-text-secondary);
 }
 
+/* Filled from this Mac (ES-4; DESIGN.md §8 "Chat's list", the jobs; §9 the hello): while its agents and board are read
+   a starter holds its place, wordless, and its words come in over 420ms on the island curve once they are read. */
+.vf-chat-starter > span {
+  transition: opacity 420ms var(--vf-ease-island);
+}
+
+.vf-chat-starter[data-held="true"] > span {
+  opacity: 0;
+}
+
 /* Held still (ES-2; DESIGN.md §8 "The New spark sheet", Its first job, Drawn): never a press, so it neither takes the
    fill nor rises; 5 from its end, its ×. */
 .vf-chat-starter[data-still] {

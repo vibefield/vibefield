@@ -12,8 +12,15 @@ import { canBeSpark, type NewSparkPort } from "./new-spark";
 /** What the night knows of this device's agents. */
 export type NightAgents =
   | { readonly state: "reading" }
-  /** `here`: the agents installed here that can be a spark; `elsewhere`: the ones that can and are not here, named */
-  | { readonly state: "read"; readonly here: number; readonly elsewhere: readonly string[] }
+  /** `here`: the agents installed here that can be a spark; `elsewhere`: the ones that can and are not here, named;
+   * `providers`: the agents as read, which fill the starters (ES-4; absent on a still plate, whose starters keep their
+   * ruled words) */
+  | {
+      readonly state: "read";
+      readonly here: number;
+      readonly elsewhere: readonly string[];
+      readonly providers?: readonly AgentProviderSummary[] | undefined;
+    }
   | { readonly state: "unread" };
 
 /** The night's door: `agent.providers`, the sheet's own read. */
@@ -33,6 +40,16 @@ export function nightAgentsOf(providers: readonly AgentProviderSummary[]): Night
   if (here === 0 && elsewhere.length === 0)
     return { state: "read", here, elsewhere: catalogSparkLabels() };
   return { state: "read", here, elsewhere };
+}
+
+/** The agents the night read, for the starters (ES-4): null while they are read, "failed" where they could not be (or
+ * a still plate carries none). */
+export function nightProviders(
+  agents: NightAgents,
+): readonly AgentProviderSummary[] | null | "failed" {
+  if (agents.state === "reading") return null;
+  if (agents.state === "unread") return "failed";
+  return agents.providers ?? "failed";
 }
 
 /** Off (§7): the agents were read and none here can be a spark — the names of the ones that can, for the sentence;
@@ -67,7 +84,10 @@ export function useNightAgents(door: NightAgentsDoor | undefined, standing: bool
     const read = (): void => {
       void door.providers().then(
         (providers) => {
-          if (live) setAgents(nightAgentsOf(providers));
+          if (!live) return;
+          // the reading keeps the agents it read, for the starters (ES-4)
+          const reading = nightAgentsOf(providers);
+          setAgents(reading.state === "read" ? { ...reading, providers } : reading);
         },
         () => {
           if (live) setAgents(UNREAD);

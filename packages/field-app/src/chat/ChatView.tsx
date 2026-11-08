@@ -25,7 +25,7 @@ import { crewCardsOf, crewsOfFlow } from "./crew-card";
 import { CREWS_READING, type CrewsDoor, type CrewsReading, useSparkCrews } from "./crews-port";
 import { NO_PAUSE, type PauseAct, pauseTurn, type SparkPauser, turnOf } from "./head-act";
 import { useNeedsCard } from "./needs-card-stand";
-import { type NightAgentsDoor, useNightAgents } from "./night-agents";
+import { type NightAgentsDoor, nightProviders, useNightAgents } from "./night-agents";
 import {
   letGoPendingSays,
   settlePendingSay,
@@ -51,8 +51,9 @@ import {
   useSparksReading,
   useThreadMarks,
 } from "./sparks-feed";
+import { startersOf } from "./starters";
 import { ThreadFlowView } from "./ThreadFlowView";
-import { footItemsOf, type Starter } from "./thread-items";
+import { footItemsOf, type Starter, sparkIsNew } from "./thread-items";
 import { sayRequestId, sendNote, sendToThread, type ThreadSendOutcome } from "./thread-send";
 import { saidRequestsOf, transcriptItemsOf } from "./transcript-items";
 import {
@@ -137,7 +138,6 @@ export function ChatView({
   // track ES — the night before the first spark (DESIGN.md §8 "Chat's list", Empty: the night): which agents here can
   // be a spark, read only while it stands
   const night = reading.state === "ready" && reading.entries.length === 0;
-  const nightAgents = useNightAgents(agents, active && night);
   // the Agent Profiles, read once for every thread's @ (on Chat's first show, and again as @ opens)
   const profiles = useProfileSets(port, active);
   const [chosen, setChosen] = useState<SparkId | null>(null);
@@ -354,6 +354,15 @@ export function ChatView({
   const reduced = useReducedMotion();
   const [draftKeyboard, setDraftKeyboard] = useState(0);
   const rows = useBoardRows();
+  // track ES — this Mac's agents, read while the night stands or a new spark's hello does (DESIGN.md §8 "Chat's list",
+  // Empty: the night; §9 the hello): which can be a spark (the night's Off), and, with the board's runs, the starters'
+  // words (ES-4, `starters.ts`), one reading for both
+  const hello = shown !== undefined && sparkIsNew(shown);
+  const nightAgents = useNightAgents(agents, active && (night || hello));
+  const starters = useMemo(
+    () => startersOf({ agents: nightProviders(nightAgents), rows }),
+    [nightAgents, rows],
+  );
   const shownSpark = shown?.spark;
   const handles = useMemo(
     () =>
@@ -417,6 +426,7 @@ export function ChatView({
           pending,
           earlier: drawn.state === "ready" && drawn.whole,
           now,
+          starters,
         });
 
   // SP-1e2 — each crew's card under its act line (DESIGN.md §8 "Chat's crew card"): the shown spark's crews, read on
@@ -517,6 +527,8 @@ export function ChatView({
   const empty = night ? (
     <ChatEmptyView
       agents={nightAgents}
+      jobs={starters.starters}
+      held={starters.state === "reading"}
       keys={keys}
       active={active}
       onNewSpark={() => {

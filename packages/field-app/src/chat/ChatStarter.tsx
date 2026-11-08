@@ -13,10 +13,13 @@ import "./chat-starter.css";
 
 export function ChatStarter({
   starter,
+  held = false,
   onPress,
   onHold,
 }: {
   starter: Starter;
+  /** ES-4 — this Mac's agents and board are being read: it holds its place, wordless, and a press does nothing */
+  held?: boolean | undefined;
   /** pressed: the hello sends it as Send sends; the night opens the sheet carrying it */
   onPress?: (() => void) | undefined;
   /** ES-3a — the pointer or the keyboard's focus came to it or left it (the night leans while one holds a job) */
@@ -25,7 +28,10 @@ export function ChatStarter({
   return (
     <UiButton
       className="vf-chat-starter"
-      onClick={() => onPress?.()}
+      {...(held ? { "data-held": "true", "aria-busy": true } : {})}
+      onClick={() => {
+        if (!held) onPress?.();
+      }}
       {...(onHold === undefined
         ? {}
         : {

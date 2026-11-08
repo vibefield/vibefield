@@ -25,8 +25,10 @@ import "./chat-empty.css";
 export interface ChatEmptyViewProps {
   /** what the night knows of this device's agents (`useNightAgents`); absent, they are being read, and it is live */
   agents?: NightAgents;
-  /** the first jobs it offers: the hello's starters (ES-4 fills their words from this Mac) */
+  /** the first jobs it offers: the hello's starters, filled from this Mac (ES-4, `starters.ts`) */
   jobs?: readonly Starter[];
+  /** ES-4 — this Mac's agents and board are being read: the jobs hold their places in night glass, wordless */
+  held?: boolean | undefined;
   /** the window's keys: New spark's printed key, ⌘N on a Mac and Ctrl+N elsewhere (the line's own spelling) */
   keys?: ViewKeys;
   /** Chat is the view showing: the night moves under §6's rest rule; hidden, it holds still */
@@ -101,6 +103,7 @@ function useLean(active: boolean): {
 export function ChatEmptyView({
   agents = READING,
   jobs = STARTERS,
+  held = false,
   keys = "mac",
   active = true,
   onNewSpark,
@@ -149,6 +152,7 @@ export function ChatEmptyView({
                 <ChatStarter
                   key={job.glyph}
                   starter={job}
+                  held={held}
                   onPress={() => onJob?.(job)}
                   onHold={(by, held) => hold(`job:${index}:${by}`, held)}
                 />

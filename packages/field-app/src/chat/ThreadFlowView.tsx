@@ -145,6 +145,7 @@ export function ThreadFlowView({
                   <ChatStarter
                     key={starter.glyph}
                     starter={starter}
+                    held={item.held}
                     onPress={() => {
                       if (!sending) onStarter?.(starter.words);
                     }}
