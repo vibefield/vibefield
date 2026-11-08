@@ -43019,3 +43019,298 @@ addition.
 - James's eye on the built app: §6's rest rule for the night, §8 "Chat's list" Empty: the night, and a first job
   carried into the sheet and sent once.
 - gate:landing after the land: the stills and the smokes, landing-only; a re-bless, if any, said there.
+
+## Item 252 — the walls read the files git lists: `check-import-boundaries` and `check-test-temp-roots` walk git's listing, so an ignored tree such as the kit's `.build/` is never read (2026-11-08; the EL8 bundle's first two commits)
+(2026-11-08; two commits, fd's (vibe-field-aa), in `/Volumes/SamsungRed/lanes/item190`, under the EL8 to rosetta 0.1.5:
+red `6b68e2f9b` (tree `bbedfad888c3`) → green `a0a6445cb` (tree `4471e30ad01c`), on main `8897de277`. Cut on
+`f65af29a9` (r1, red `3d7e5707d`, green `c47160cb5`) and replayed in proof form four times as main moved
+(`042ca0f2e`, `e60d8add6`, `8897de277`): each tree equal to its merge over the old base and over its own original
+parent, patch-id, author and message unchanged, range-diff `=`, and the three scripts' blobs r1's. Then the green
+`02bcdac70` was amended by `biome format --write` alone (13:35Z, whitespace only; below). Minted with the EL8 as
+M230 (run230); landed `68b80fb95` (2026-11-08T16:16:25Z), a fast-forward of main `8897de277`.)
+VF-PM numbered item 252 at 09:50Z and ruled at 09:54Z: red → green, the EL8 bundle's first two commits, one mint.
+- 3 files, +179 −47: `scripts/check-import-boundaries.mjs` 68 24, `scripts/check-test-temp-roots.mjs` 46 23 and a
+  new `scripts/repo-files.mjs` 65 0. The first two are pin-class by the ERE; `repo-files.mjs` is a new `scripts/` file.
+
+**What.** The EL8 gives FieldHistory rosetta's Swift client, and SwiftPM checks a package out under the kit's ignored
+`.build/checkouts/`. The two tree walks read it: run224's preflight (241b's verify on vf-m2, after the EL8's r3 rows
+had resolved the kit there) read 134 enforced wall violations (R22 113, R24 21), every one under
+`apps/ios/VibeFieldKit/.build/checkouts/rosetta/` (VF-PM, 09:50Z).
+- `repoFiles()` (`scripts/repo-files.mjs`) lists the files git tracks plus the untracked ones that are not ignored
+  (`git ls-files --cached --others --exclude-standard -z`), and both scans read that list; `SKIP_DIRS` still filters
+  it, so the change only narrows what is read.
+- The red's self-tests plant a file under an ignored `.build/` inside a git fixture root and require it unread, beside
+  one untracked file that is not ignored and must be read.
+
+**The proof.**
+- The Mac rows at r1 (VF-PM's word 10:05Z; `lanes/sp7b/item252-rows/`, SHA256SUMS `fab02d44`): eight rows through
+  `door.lock`, node v26.5.0, nice 19, 10:12:00–10:12:24Z. Red: the boundaries self-test exit 1 on "an ignored tree is
+  never read (read: R22, R24)" alone, and temp-roots' on "11 test files read (10), 9 make one (8)". Green: both
+  self-tests "all passed"; `--enforce` "total: 0" and "266 of 1120 test files make a temp root; all remove" over the
+  lane, the same output as main `f65af29a9`'s scripts over its own tree. They ran no biome: the self-tests,
+  `--enforce` and the temp-roots scan. They hold for every replay: the scripts' bytes are r1's but for the format
+  below, and the self-tests read only their temp roots and the packages' manifests.
+- The live witness, vf-m2, r7b's row 7 (13:12Z; `lanes/vf-m2/el8-r7b-rows-a9-results/`, SHA256SUMS-a9 `655102c6`): the
+  walls ran inside `pnpm preflight`, piped (`scripts/preflight.mjs:829`, :846), at `08f63a3cc` with the kit's
+  `.build/checkouts/rosetta` standing (a directory, at `811e554c64e6`); preflight exit 0, "preflight OK (1
+  warning(s))". A failure of either is a problem and any problem exits 1 (:967), so exit 0 is the witness; preflight
+  prints neither's own line. run224's preflight read 134 there.
+- The format (13:34–13:35Z, three rows through `door.lock`, biome 2.5.4's native binary, nice 19; the EL8 packet's
+  `door/`): at `02bcdac70`'s checkout, `biome format --write` "Formatted 1 file in 44ms. Fixed 1 file."; `biome check`
+  exit 0, "Checked 1 file in 112ms. No fixes applied."; the boundaries self-test exit 0, "self-test: all passed". The
+  amend `a0a6445cb` moves that one file (10 2); with every space, tab and newline removed its blob equals the old one
+  (`green-fmt-proof.txt`).
+- run227 at `e3d3c69be` (the first cut) read `check:walls` "check-import-boundaries: clean" and "266 of 1125 test files
+  make a temp root" with `.build/checkouts/rosetta` standing, then biome red (below).
+- run228 at `2e075036c` (the second cut) read the same two lines and biome "Checked 3518 files" with no error line,
+  then red at `pnpm test` on the EL8's iOS record (item 258, the EL8's entry).
+- run229 at `d02a7ef88` (the third cut) read the same two lines, then red at `check:ios-fixtures` on the record's
+  trimmed copy (item 258's second half, the EL8's entry).
+- The mint, run230 at `68b80fb95` (verify exit 0): "check-import-boundaries: clean" and "check-test-temp-roots:
+  clean — 266 of 1125 test files make a temp root" with `.build/checkouts/rosetta` standing, and biome "Checked 3518
+  files … No fixes applied." with no error line: run226's 3517 and `scripts/repo-files.mjs`.
+
+**Found.**
+- **The class sweep** (09:55:32Z, then a message; now `lanes/sp7b/item252/class-sweep.md`): of every repo walker, only
+  these two read an ignored directory. Its dated erratum (10:23:31Z): biome's `useIgnoreFile` holds for the ignored
+  `.build/`, not for a link biome follows. That second class has one exposed reader, biome, and the EL8's
+  `biome.jsonc` row closes it (below).
+- **No biome row covered 252's scripts; run227 found the format diff.** run227, the EL8's first mint (`pnpm verify`
+  at `e3d3c69be`, armed 13:26:48Z at load 1.75, exit 1 at 13:27:51Z; `lanes/vf-m2/run227-a9-results/`,
+  SHA256SUMS-a9-run227 `6a71048e`), read red at biome alone, "Found 1 error.": the formatter's diff at
+  `check-import-boundaries.mjs` lines 869 and 871, both from `02bcdac70` (a9's reads A–D, `a9-biome-read/`,
+  `14c8ca61`). The r1 rows (above) never ran biome, and no later row did. The green was re-cut by the format alone
+  (above) and the EL8 re-cut on it. The rule since (VF-PM 13:33Z): one door row, `biome check` over every
+  biome-visible file the bundle touches, quoted in the brief. Its first use is this bundle's: the format's three rows
+  (above) and the bundle row (the EL8's proof, below), VF-PM's verify 13:42Z.
+
+## EL8 — Rosetta 0.1.5: the npm rows, the lock, the pin and PIN_EXPECTATIONS move together, and the kit pins rosetta's Swift client — `RosettaClient` at the same release, FieldHistory's product with no import yet (track SP; SP-7b D6, D-E1 (a)) (2026-11-08)
+(2026-11-08; ONE commit, fd's (vibe-field-aa), in `/Volumes/SamsungRed/lanes/item190`: `68b80fb95` (tree
+`4f7210264c13`), on item 252's green `a0a6445cb`, on main `8897de277`; branch `el8/rosetta-0.1.5-one-r4`. It is
+`squash-el8.py`'s fold of three transports, r8's T1 `6cc08d5be`, T3 `973759976` and T2 `a1930dcde` (recut-r8.py: r7's
+onto the formatted green, each tree equal to both merge-trees, patch-ids equal, range-diff `= ! = = =`), and a9's three
+regenerated files (`a9-regen/`, SUMS `7bc3b965`), with a9's regenerated iOS record amended in (`amend-el8-r3.py`) and
+its trimmed copy's `pins` (`amend-el8-r4.py`), item 258's two halves. Packet
+`lanes/sp7b/el8-rosetta-swift/one-68b80fb95/`, SHA256SUMS `396f6544`, bundle `7e39c913`. Three cuts came before it,
+each red at its mint:
+- `e3d3c69be` (its packet now `lanes/co-plan/released/fd-el8-one-e3d3c69be-20261108T134307Z/`, `530ae4c3`) at
+  run227, on 252's format. It differs from the second by that one file and the message's mint line (`el8-U0.diff`
+  byte-equal, patch-id `5e336a8db1ad` on both).
+- `2e075036c` (its packet now `lanes/co-plan/released/fd-el8-one-2e075036c-20261108T154954Z/`, `7c747bee`) at
+  run228, on the record (item 258). It differs from the third by the record alone and the message's three edits; the
+  third's diff without the record is its own, byte for byte.
+- `d02a7ef88` (its packet now `lanes/co-plan/released/fd-el8-one-d02a7ef88-20261108T160352Z/`, `7d7c37a5`) at
+  run229, on the record's trimmed copy (item 258's second half). It differs from this one by the copy alone and the
+  message's four edits; this commit's diff without the copy is its own, byte for byte.
+Verified run230, M230, a9's, on vf-m2; landed `68b80fb95` (2026-11-08T16:16:25Z), a fast-forward of main
+`8897de277`: main's tree `4f7210264c13`, the kit's `36b8f5dc447a`.)
+SP-7b D6's second EL8 (VF-PM 11-06: rosetta 0.1.4 was DR's, the `clients/swift` release is SP-7's; RD-5a's recipe, one
+commit), and the first with a Swift plane for rosetta. Nothing imports `RosettaClient` yet: 7b-2 does (D-E1 (a)).
+
+**What landed.** 12 files, +102 −32: no Rust, no product source, one test line, one regenerated record and its test
+copy, and one new file, the overlay's link.
+- **The release.** rosetta 0.1.5 is `811e554c64e60509ef624660f0709fd33717cc2c` (tags `v0.1.5` and `npm-v0.1.5`, both
+  annotated), 2 commits past `a8ab1f13f`: #46 (RO-39, squashed `62038a01ae`), `clients/swift` and the root
+  `Package.swift` (package `rosetta`, product `RosettaClient`, `.iOS(.v18)`, `.macOS(.v15)`) with `ci.yml`'s Swift job;
+  #47 (`811e554c64`), the version bump. npm has `@vibefield/rosetta-protocol` and `-room` at 0.1.5, their provenance
+  naming `811e554c64`; `read-release.sh 0.1.5` read READY at 07:53:50Z. No `PROTOCOL_VERSION` line moved, and nothing
+  under `crates/` or a client's source, so the contracts' fixtures stay.
+- **The pin class, one event:**
+  - `siblings.lock.json` rosetta: `sha` `a8ab1f13f` → `811e554c6`; a `swift` {manifest, link} before `release`, as
+    truffle's and ghosttea's are; `release` {npm 0.1.5, swift 0.1.5};
+  - `apps/ios/VibeFieldKit/Package.swift`: `let rosettaRelease: Version? = "0.1.5"` and `rosettaDependency` after
+    ghosttea's, in `applySwiftRelease`'s shape, its row in `dependencies:`, and FieldHistory's
+    `.product(name: "RosettaClient", package: "rosetta")`;
+  - `apps/ios/VibeFieldKit/.window/rosetta`: the overlay's link → `../../../../../rosetta-pin`, as `.window/ghosttea`;
+  - `scripts/preflight.mjs` PIN_EXPECTATIONS: the two npm rows 0.1.4 → 0.1.5 and a new `let rosettaRelease` row
+    with `overlay: "rosetta"`;
+  - `pnpm-workspace.yaml`: the two rows 0.1.4 → 0.1.5; `minimumReleaseAgeExclude` gains the 0.1.5 rows and drops
+    0.1.4's after the one install that regenerated the lock (the ICE rule);
+  - `pnpm-lock.yaml` (15 15; its 64 changed leaves all under the two rosetta packages, four 0.1.5 keys, no 0.1.4 key)
+    and the two `Package.resolved` (10 1 each, gaining the pin at 0.1.5 / `811e554c64`), all regenerated on vf-m2;
+  - `apps/ios/App/Resources/acknowledgements.json` (4 0, one hunk): its `pins` gains rosetta's, 0.1.5 at
+    `811e554c64`, regenerated by its own script on vf-m2 (item 258, below). The iOS build runs no Node, so the record
+    is committed; regenerating it is the EL8's own step from now on, beside the lock and the two `Package.resolved`;
+  - `apps/ios/VibeFieldKit/Tests/FieldSettingsTests/Fixtures/acknowledgements-l5.lane.json` (4 0, one hunk), the
+    record's trimmed copy that FieldSettingsTests reads (IOS-13a): its `pins` refreshed from the record, and nothing
+    else. `scripts/check-ios-fixtures.mjs` holds the two equal; no kit code reads the copy's `pins`
+    (`Acknowledgements.swift:70` names the key and decodes none of it; IOS's read, 15:58Z).
+- **Release-adjacent:** `biome.jsonc` (+7), `"!**/rosetta-pin"` after ghosttea's row. biome FOLLOWS links, and
+  `.window/rosetta`'s target is present wherever rosettad is built (RD-D7), so without the row the mint's biome would
+  have read rosetta's repository and `pnpm format` would rewrite `../rosetta-pin`. fd's finding before any witness
+  (10:23:31Z); VF-PM ruled 10:24:08Z.
+- **The kit's one test line:** `HistoryFoldTests.swift:151` reads `"at": .int(Int64(3_800_000 + 79 * 60_000))`, the
+  `Int64` made explicit (T3, folded). The red was read on vf-m2's Xcode 26.3, where main's own kit tests fail the
+  same way (item 257, below); whether the old mini's toolchain needs it under 0.1.5 is unread. `Int64(_:)` states the
+  type the kit's own `FieldProduct.JSONValue.int(Int64)` takes (`Sources/FieldProduct/JSONValue.swift:15`), so it is
+  sound either way; the value, 8,540,000, and every assertion are unchanged.
+
+**The proof.** a9's rows on vf-m2 (Mac16,10, macOS 27.2, Xcode 26.3 17C529, Swift 6.2.4), each under its own runner:
+- **r3** (09:34:57Z, a9's runner `m2-224`, archived on vf-m2 as `logs/m2-el8-run224`; the verify number run224 went
+  to 241b at 09:44Z; `lanes/vf-m2/el8-r3-rows-a9-results/`, SHA256SUMS-a9 `e9d1d2f5`): row 1 the ONE install that
+  rewrote the lock (15 15, sha256 `2f78e50a429a…`, 64 leaves naming rosetta, 0 outside); row 2 a frozen install,
+  the lock unmoved; row 3 `pnpm siblings:pin rosetta` exit 0, rosettad built at REV (cargo 50.98 s), R23 passed (the
+  known `acp` warning), the consumers typechecked on 29 projects, and the lock's rewrite with the same parsed values
+  dropped. Row 4 red: SwiftPM resolved rosetta at 0.1.5 and then failed to download the two binary artifacts from
+  GitHub's release assets (truffle's TailscaleKit, ghosttea's GhostteaAppleNative); rows 5–7 owed.
+- **r6** (10:50:46Z; `el8-r6-rows-a9-results/`, `f54ab7dd`): r3's kept lock restored at T2 and held by a frozen
+  install (the base's lock blob `fd080527d365` unchanged from r3's base to `8897de277`); row 3 again exit 0 in 56 s,
+  rosettad fresh (0.19 s). Row 4 owed: the asset URLs answered 503.
+- **r6b** (11:00:12Z; `el8-r6-rows-a9-results/r6b/`, SHA256SUMS-a9 `9442c969`): the asset wait read 503/0/107 for 37
+  minutes and both 200 at 11:47:31Z. Row 4 `swift package resolve` exit 0 (the kit's `Package.resolved` 10 1, sha256
+  `a899ec06…`); row 5 `xcodebuild -resolvePackageDependencies` exit 0 (the app workspace's, 10 1). Row 6 red (below).
+- **r7** (13:02:13Z, on r6t3's stack with T3; `el8-r7-rows-a9-results/`, `36d57bab`) and the **control** at main
+  `e60d8add6` (13:08:33Z, a scratch clone with fresh derived and package dirs; `ctl-e60d8add6-a9-results/`,
+  `20224eb9`): row 6 red on each (below). VF-PM ruled HOST class at 13:11Z.
+- **r7b** (13:12:17Z; `el8-r7b-rows-a9-results/`, `655102c6`): row 7, `pnpm siblings render --prod --check` exit 0
+  ("the committed rows are the lock's (15 npm, 0 cargo + 6 released on the registry, 3 swift)") and `pnpm preflight`
+  exit 0 ("preflight OK (1 warning(s))", R23's `acp`), with `.build/checkouts/rosetta` standing: item 252's live
+  witness (above). The regen: the three files at the kept lane's bytes, `a9-regen/` SHA256SUMS `7bc3b965`, byte for
+  byte r6b's; `siblings.lock.json` moved by no row. The lane was restored to `e60d8add6`, porcelain 0.
+- **run227** (`pnpm verify` at the first cut `e3d3c69be`, 13:26:48–13:27:51Z; `run227-a9-results/`, `6a71048e`):
+  red at biome alone, "Found 1 error." (item 252's format, above). Every stage before it read as expected: "preflight
+  OK (1 warning(s))", the walls' rule lines 31 (0 nonzero), "check-import-boundaries: clean" and "266 of 1125" with
+  `.build/checkouts/rosetta` standing, typecheck on 29 projects, biome "Checked 3518 files". No stage after it ran.
+- **The Mac's bundle row** (13:38:45Z, through `door.lock`, biome 2.5.4, nice 19; the packet's
+  `door/bundle-check.log`): `biome check` over the bundle's eight biome-visible paths at `2e075036c`, exit 0, "Checked
+  6 files in 20ms. No fixes applied." (`files.ignoreUnknown` skips the two YAML files).
+- **run228** (`pnpm verify` at the second cut `2e075036c`, 13:45:28–13:49:24Z, load 5.09 at the test stage's start
+  and 37.56 at its peak, swap 0; `run228-a9-results/`, SHA256SUMS-a9-run228 `10d9a405`): red at `pnpm test` alone.
+  dev-runner's node:test read "474 tests, 473 passed, 1 failed": `third-party-notices.test.mjs:943` at :951,
+  `rosetta`: undefined (item 258, below). Every line before it read as expected: run227's, then biome "Checked 3518
+  files … No fixes applied.", 73 warnings, 21 infos and no error line, and the 56 vitest lines, run226's. Cargo never
+  ran. One birth KEPT, `/private/tmp/vf-seam-6g8BAW` (vf-seam ×1), disclosed as a reading, unattributed.
+- **The record** (a9's m2-ack-regen, 15:42:23–15:42:26Z, on VF-PM's 13:53Z GO; `el8-ack-regen-a9-results/`,
+  SHA256SUMS-a9-ack-regen `347275ed`): at `2e075036c`, from the kit's checkouts at the three pins (ghosttea
+  `86d816ee7920`, rosetta `811e554c64e6`, truffle `101889f676d3`), `node scripts/third-party-notices.mjs --ios` exit 0,
+  "143 components, 116 distinct licence texts, 2 skipped, 0 errors, 0 gaps". Its file equals fd's oracle byte for byte
+  (sha256 `04362261`: the committed record with `pins` re-rendered from `Package.resolved`), so nothing else moved.
+- **The Mac's rows at `d02a7ef88`** (15:46:24–25Z, through `door.lock`, nice 19; the packet's `door/`):
+  - biome 2.5.4 over the same eight paths and the record, 9 named: exit 0, "Checked 6 files in 91ms. No fixes
+    applied." a9's read of the record alone on vf-m2: exit 1, "No files were processed in the specified paths", the
+    path "provided but ignored";
+  - `node --test tooling/dev-runner/test/third-party-notices.test.mjs`, node v26.5.0: exit 0, 21 tests, 21 pass,
+    0 fail, the committed-records test among them.
+- **run229** (`pnpm verify` at the third cut `d02a7ef88`, armed 15:55:42Z at load 1.29, swap 0;
+  `run229-a9-results/`, SHA256SUMS-a9-run229 `aeed5eca`): red at `check:ios-fixtures` alone, 5 s in, "ios fixtures: 1
+  of 418 copies are stale": the record's trimmed copy, "its pins is not the committed file's" (item 258, below). Every
+  stage before it read as expected: "preflight OK (1 warning(s))", the walls' 31 rule lines (0 nonzero),
+  "check-import-boundaries: clean", "266 of 1125", check-single-copy ok, "check-retired-names: clean". No stage after
+  it ran, and no birth was kept.
+- **The copy** (`refresh-mirror-pins.py`, at `d02a7ef88`): the copy's `"pins"` block, asserted byte-equal to the
+  record's before its regeneration, replaced with the record's. The result parses, its `pins` are the record's, every
+  other key is unchanged, and the 8 parts and 11 texts it keeps are the record's, entry for entry (OpenSSL's added
+  `homepage` aside): sha256 `3c389354`, 4 0, one hunk.
+- **The Mac's rows at `68b80fb95`** (16:00:47–16:00:55Z, eight through `door.lock`, nice 19, the highest START load
+  7.27; the packet's `door/`), each `verify` `check:*` script whose inputs the bundle touches, by VF-PM's rule:
+  - biome over the eight paths, the record and the copy, 10 named: exit 0, "Checked 6 files in 68ms. No fixes
+    applied."; the notices test: exit 0, 21 tests, 21 pass, 0 fail;
+  - `check:ios-fixtures`: exit 0, "ios fixtures: 418 copies identical to packages/contracts/fixtures", ios pins 93;
+  - `check:retired`: exit 0, "check-retired-names: clean — no retired name in code";
+  - `check:walls`' four commands, each exit 0: "self-test: all passed"; "total: 0 across 0 file(s)" and
+    "check-import-boundaries: clean"; "self-test: all passed"; "266 of 1125 test files make a temp root; all remove".
+  - `check:deps` and `preflight` do not run in that lane (no install, no siblings beside it); run229 read both green on
+    vf-m2 at `d02a7ef88`, and neither reads the copy.
+- **run230, the mint** (`pnpm verify` at `68b80fb95`, 16:05:43–16:11:16Z, 5 min 33 s, armed at load 1.52, free
+  92,682 MiB, swap 0; `lanes/vf-m2/run230-a9-results/`, SHA256SUMS-a9-run230 `88130930`, 19 files): exit 0.
+  - The count lines and singles read "missing [] / extra []" against the brief's three baselines: run229's up to the
+    gate, run228's through vitest, run226's after dev-runner.
+  - "preflight OK (1 warning(s))", R23's `acp`; the walls' 31 rule lines (0 nonzero); "check-import-boundaries: clean"
+    and "266 of 1125" with `.build/checkouts/rosetta` standing; check-single-copy ok; "check-retired-names: clean".
+  - "ios fixtures: 418 copies identical to packages/contracts/fixtures" and ios pins 93 (run229: "1 of 418 copies are
+    stale").
+  - icons 51; typecheck on 29 projects; biome "Checked 3518 files in 1790ms. No fixes applied.", 73 warnings, 21
+    infos, no error line.
+  - The 56 vitest lines: field-app 321 files / 4463 tests; fieldd 267 + 5 (272) files, 3762 + 15 (3777) tests;
+    electron-shell 180 files, 2746 + 2 tests.
+  - dev-runner "tests 474", "pass 474", "fail 0" (run228: 473 and 1).
+  - Then "Successfully ran target test for 29 projects"; cargo `test result: ok` ×37, FAILED 0; bundle assert OK
+    (953.2 KB raw / 251.8 KB gz); census OK; the tree clean after verify.
+  - No birth KEPT in `/private/tmp`. The test stage started at 16:06:54Z at load 3.21; the 1-min load peaked at 32.32
+    with no item-217 red. One `Compiling` line, field-native alone.
+- **The Mac's rows after the land, PAID** (VF-PM's GO 16:16:55Z; fd's, in the main checkout at `68b80fb95`, each one
+  row under `door.lock`, nice 19, with HOLD START/END; the script
+  `lanes/sp7b/el8-rosetta-swift/pin-rows/fd-door-pin.py`, its logs in `pin-rows/logs/`). Each row refused unless the
+  checkout was on `main` at the landed sha with porcelain 0.
+  - `../rosetta-pin` (16:17:39Z, 1.1 s): `git fetch` ("a8ab1f1..811e554  main -> origin/main", the tags `v0.1.5` and
+    `npm-v0.1.5`), then `checkout --detach`: from "HEAD a8ab1f13fa707f84024072ee961fa82cd5d6bdb0, porcelain 0" to "HEAD
+    811e554c64e60509ef624660f0709fd33717cc2c, porcelain 0".
+  - The install (16:17:51Z, 2.6 s): `ELECTRON_SKIP_BINARY_DOWNLOAD=1 pnpm install --frozen-lockfile`, "Lockfile is up
+    to date, resolution step is skipped", "Packages: +2 -2", "Done in 2.3s using pnpm v11.13.1", the checkout's
+    porcelain 0 after. The row's own exit was 3, its read-back's error: it read the root `node_modules/@vibefield/`,
+    and the root depends on neither package. A light read after: `node_modules/.pnpm` holds
+    `@vibefield+rosetta-protocol@0.1.5` and `@vibefield+rosetta-room@0.1.5` alone; fieldd resolves rosetta-protocol
+    0.1.5, and field-app resolves both at 0.1.5. The as-run script is `pin-rows/fd-door-pin.row2-run.py`, the fixed one
+    `fd-door-pin.py` beside it; the install was not re-run.
+  - rosettad (16:18Z–16:19:27Z, 68.4 s): `pnpm siblings:build` exit 0, cargo's "Finished `release` profile … in
+    1m 04s", `/Volumes/SamsungRed/rust-target/rosetta-pin/release/rosettad`, 45,063,568 B, mtime
+    16:19:27Z. The release build took the 1-min load from 3.89 at START to 87.33 at END under nice 19, and the door kept
+    the next rows shut for about 3 minutes, as designed, until it read 9.36. `pnpm siblings` after (16:22:21Z): "rosetta
+    npm exact 0.1.5 ×2 + rosettad built from the checkout + swift exact 0.1.5 @ 811e554", rosetta "at pin
+    811e554c64e6 · clean".
+  - `pnpm preflight` (16:22:22Z, 5.1 s): exit 0, "preflight OK (5 warning(s))", HOST class: R23's "`acp` could offer
+    `spawn`", as at run230, and four "every plane is released, so nothing builds from …, but it is at …, not the
+    release's revision" notes for James's own working checkouts on this Mac (puppeteer `7ca6aab9fda7` against the pin
+    `52d09c8e8495`, truffle-rfc025 `0b83a2ceac54` against `101889f676d3`, ghosttea-0.11.2 `139014b4bd18` against
+    `86d816ee7920`, infinite-canvas-engine `54b02b8e238d` against `5714ca307c6f`). They are his, and nothing moves
+    them; vf-m2's lane reads 1 because its checkouts are dedicated at the pins. Not a red, and not this EL8's.
+- **Row 6 is OWED.** The EL8's Swift proof (the kit's `build-for-testing` and FieldHistory's tests at the new pin) is
+  not yet given: it runs on the old mini after James's unlock, under a9's mini brief, or on vf-m2 once item 257
+  lands.
+
+**Found.**
+- **The EL8's third kit pin outran the committed iOS acknowledgements record (item 258, VF-PM 13:53:13Z).**
+  `apps/ios/App/Resources/acknowledgements.json` pinned ghosttea 0.14.0 and truffle 0.7.26 alone, and dev-runner's
+  `third-party-notices.test.mjs:943` holds every `Package.resolved` pin to the record's `pins`; run228 read it red.
+  The script renders `pins` from every pin (`scripts/third-party-notices.mjs:2586`), so the fix is the record's own
+  regeneration, with no script change. It needs SwiftPM checkouts at all three pins, and only vf-m2's verify lane had
+  them (the Mac's `.build/checkouts` has no rosetta, and no Swift runs on the Mac). Why no earlier row caught it: no
+  row ran dev-runner's node:test. Of the suites that read this bundle's files, dev-runner's (siblings-shape,
+  siblings-pin, third-party-notices, gate-landing, build-paths, electron-stack, siblings-javascript) is the one no row
+  had run; run228 ran its 474 tests, and only :943 failed.
+  Its second half (run229): the record's trimmed copy, FieldSettingsTests' fixture, is held to the record by
+  `scripts/check-ios-fixtures.mjs:530–618` (IOS-13a: its schema, `pins` and `tailscaleKit`, and every part and text it
+  keeps). No script writes the copy, so its `pins` were refreshed from the record's (VF-PM 15:58:14Z). Why no earlier
+  row caught it: no row ran `check:ios-fixtures`. The rule since, in VF-PM's words (15:58:14Z): "the pre-freeze door
+  rows include every `verify` `check:*` script whose INPUTS the bundle touches (`check:ios-fixtures` here); name them
+  in the brief." Its first use is the Mac's rows at `68b80fb95` (above).
+- **The commit's own message says "run224" for two runs.** Its Proved line names r3's rows "run224": they were a9's
+  runner `m2-224` (archive `logs/m2-el8-run224`), and the verify number run224 went to 241b at 09:44Z. The same
+  message's "At run224 the old walk read 134" is that verify run224, 241b's, whose preflight read the 134; that is the
+  reading of record. The double name is a9's runner naming and VF-PM's renumbering, not the squash's. VF-PM kept the
+  message (13:23Z), while run227 was minting on it; the re-cut onto 252's formatted green carries it unchanged.
+- **vf-m2's Xcode 26.3 cannot build the kit's tests at main (item 257; HOST class, VF-PM 13:11Z).** Three
+  `build-for-testing` runs each stopped at their first failing file, each on a literal's type:
+  - r6b (11:49:37Z, at `6fb8b1b54`, log `c23e2408`): `HistoryFoldTests.swift:151:30` "cannot convert value of type
+    'Int' to expected argument type 'Int64'";
+  - r7 (13:03Z, at `08f63a3cc`, with T3, log `b91669c6`): `FieldSwarmTests.swift:180` "the compiler is unable to
+    type-check this expression in reasonable time" (the expansion buffer's `179_4` counts from 0); RosettaClient is not
+    in that test's graph (`Package.swift`: FieldSwarmTests → FieldSwarm → FieldDesign, SwarmPhysics, FieldAgents);
+  - the control (13:09Z, at main `e60d8add6`, log `50fd20fa`): `WebSocketCodecTests.swift:94:51`, an `Int` for a
+    `UInt8`, in a file unchanged since 10-17.
+  The kit's builds of record ran on the old mini's Xcode 27.2. **Correction, at its source:** a relayed line (VF-PM,
+  12:59Z) said T3's literal "compiled at `13d7f058c` on the same Xcode without the dependency"; 13d7f058c's kit G′ and S
+  ran on the old mini (`lanes/ios12/241/kit/a9-results-k241a2-13d7f058c`), not on vf-m2.
+- **GitHub's release assets failed from vf-m2 for 2 h 10 min** (r3's row 4 at 09:37Z; 503 at r6b's reads of 11:25Z and
+  11:37Z; both 200 at 11:47:31Z). SwiftPM fetches a binary target's zip at every fresh resolve, so rows 4 and 5 waited
+  on it; the wait's gate (both URLs 200 by a plain HEAD) is now in a9's runners.
+- **The squash stopped once at its own commit** (13:15Z): `squash-el8.py` commits from the lane, and its message path
+  was given relative. Nothing was committed and no ref was written; the lane was put back by the script's own `--dry`
+  path after the staged state was proven (the seven hand files equal to the transports' blobs, the three to
+  `a9-regen/`'s), and the re-run with an absolute path was the first cut `e3d3c69be`. The second squash was given
+  absolute paths from the start.
+
+**Owed.**
+- Item 259: whether the iOS record lists rosetta as the owner's own component, as the desktop ledger does
+  (`scripts/third-party-notices.mjs:44`, its sibling row at :2103–2112). fd's read, after the land; any page change
+  (an own row draws an empty `licence` on the phone's Acknowledgements page) is IOS's and DESIGN.md's.
+- Row 6, the Swift proof (the kit's S over its 16 bundles and FieldHistory's G), at the kit's tree `36b8f5dc447a`:
+  OWED, paid by the old mini on James's unlock after mini-it2m, or by vf-m2 by item 257's route (S on Xcode 26.3, G
+  under the beta via `-xctestrun`). Item 257 is IOS's slice: the kit's test literals that vf-m2's Xcode 26.3 rejects,
+  cut on main.
+- `gate:landing` at this landing, on this Mac (its GPU, an awake display, and no `pnpm dev` from the main checkout):
+  OWED, paid in a later dated LANDED entry, as DR-3a's and DR-3b's owed gate was (`8897de277`).
+- 7b-2, the kit slice that imports `RosettaClient`; a file importing both `FieldProduct` and `RosettaClient` names
+  `FieldProduct.JSONValue` or `RosettaClient.JSONValue`, since both are public.
+- Item 253 re-cuts onto this landed main.
+- RD-D7: this host still builds rosettad from `../rosetta-pin`; the published daemon archives wait on their adoption.
