@@ -19,7 +19,8 @@ public struct AcknowledgementsDoc: Equatable, Sendable {
     /// The generator's note on the part, when it sets one (schema 1's optional `note`). Kept; DESIGN.md does not draw
     /// it yet.
     public var note: String? = nil
-    /// VibeField's own component, not a third party's (schema 1's optional `own: true`). Kept; not drawn yet.
+    /// VibeField's own component, not a third party's (schema 1's optional `own: true`). Kept, and not drawn: the page
+    /// lists the parts others made (DESIGN.md §8, item 259).
     public var own: Bool = false
     public var id: String { "\(ecosystem)/\(name)" }
   }
@@ -124,7 +125,7 @@ public enum Acknowledgements {
   ]
 
   public static func groups(_ doc: AcknowledgementsDoc) -> [Group] {
-    let byRole = Dictionary(grouping: doc.parts) { $0.roles.first ?? "" }
+    let byRole = Dictionary(grouping: doc.parts.filter { !$0.own }) { $0.roles.first ?? "" }
     let rest = byRole.keys
       .filter { !$0.isEmpty && !leadingRoles.contains($0) }
       .sorted { $0.lowercased() < $1.lowercased() }
