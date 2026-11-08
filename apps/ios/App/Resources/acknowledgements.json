@@ -1560,6 +1560,15 @@
     },
     {
       "ecosystem": "swift",
+      "name": "rosetta",
+      "version": "0.1.5",
+      "licence": "",
+      "note": "agent history's Swift client (RosettaClient); the owner's own, UNLICENSED",
+      "own": true,
+      "texts": []
+    },
+    {
+      "ecosystem": "swift",
       "name": "TailscaleKit",
       "version": "d1dc45d039edb7759ecbee6ba2aea0c4bca884b8",
       "licence": "BSD-3-Clause",

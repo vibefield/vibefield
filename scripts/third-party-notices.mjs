@@ -1102,6 +1102,24 @@ function workspaceMembers(workspaceRoot) {
 }
 
 /**
+ * A sibling the product carries, as the ledger lists it: the owner's own when it declares no licence and carries no
+ * licence file (listed so the inventory is whole, its `ownNote` said), else a licensed row with its texts and role.
+ * ONE rule for the desktop's cargo sibling (rosettad's crates, `collectCargo`) and the kit's Swift one (item 259,
+ * `iosSiblingRows`).
+ */
+export function siblingRow({ ecosystem, name, version, licence, texts, role, ownNote }) {
+  if (!licence && texts.length === 0)
+    return {
+      ecosystem,
+      name,
+      version,
+      own: true,
+      note: ownNote ?? "the owner's own, not licensed separately",
+    };
+  return { ecosystem, name, version, licence, texts, role };
+}
+
+/**
  * A Cargo.lock graph into the ledger: walked from `roots` over the normal and build edges whose
  * target condition holds, a workspace member's dev edges never followed. A registry crate whose
  * extracted source is absent was not built on this host and is skipped; a ROOT's direct dependency
@@ -1262,27 +1280,18 @@ export function collectCargo(
         });
     }
   }
-  if (sibling && siblingSeen) {
-    const lic = root?.workspace?.license ?? null;
-    const texts = licenceFiles(workspaceRoot);
-    if (!lic && texts.length === 0)
-      ledger.add({
+  if (sibling && siblingSeen)
+    ledger.add(
+      siblingRow({
         ecosystem: "crate",
         name: sibling.name,
         version: root?.workspace?.version ?? "",
-        own: true,
-        note: sibling.ownNote ?? "the owner's own, not licensed separately",
-      });
-    else
-      ledger.add({
-        ecosystem: "crate",
-        name: sibling.name,
-        version: root?.workspace?.version ?? "",
-        licence: lic,
-        texts,
+        licence: root?.workspace?.license ?? null,
+        texts: licenceFiles(workspaceRoot),
         role,
-      });
-  }
+        ownNote: sibling.ownNote,
+      }),
+    );
   return { crates, skipped };
 }
 
@@ -2428,11 +2437,52 @@ function gitHead(dir) {
   return null;
 }
 
+/** The products of `pkg` the kit's Package.swift takes, by name (`.product(name: "X", package: "pkg")`). */
+export function kitProducts(kitManifest, pkg) {
+  return [
+    ...kitManifest.matchAll(
+      new RegExp(`\\.product\\(name: "([A-Za-z0-9_]+)", package: "${pkg}"\\)`, "g"),
+    ),
+  ].map((m) => m[1]);
+}
+
+/**
+ * The owner's siblings the kit may link as Swift packages (item 259, 2026-11-08): each takes `siblingRow` on its
+ * SwiftPM checkout while the kit's manifest takes one of its products. rosetta's Swift client (SP-7b D6) declares no
+ * licence, so it is listed as VibeField's own; the phone's page draws no own part (`Acknowledgements.groups`, DESIGN.md
+ * §8).
+ */
+export const IOS_SIBLINGS = [
+  {
+    package: "rosetta",
+    role: "agent history",
+    ownNote: "agent history's Swift client (RosettaClient); the owner's own, UNLICENSED",
+  },
+];
+
+/** The ledger rows of the siblings the kit links (`IOS_SIBLINGS`), each at its Package.resolved pin. */
+export function iosSiblingRows({ kitManifest, checkouts, pins, siblings = IOS_SIBLINGS }) {
+  return siblings
+    .filter((s) => kitProducts(kitManifest, s.package).length > 0)
+    .map((s) =>
+      siblingRow({
+        ecosystem: "swift",
+        name: s.package,
+        version: pins[s.package]?.version ?? "",
+        licence: null,
+        texts: licenceFiles(join(checkouts, s.package)),
+        role: s.role,
+        ownNote: s.ownNote,
+      }),
+    );
+}
+
 /**
  * The iOS acknowledgements. Reads the kit's Package.resolved pins and the SwiftPM checkouts at those
  * pins (refused on a mismatch); ghosttea's own reviewed iOS notices for the terminal, its Rust crates
  * and its fonts, filtered to the ghosttea targets the kit's products reach; truffle and TailscaleKit;
- * TailscaleKit's Go modules from its binary's build info; and the hand-kept art rows.
+ * TailscaleKit's Go modules from its binary's build info; the owner's siblings the kit links (`iosSiblingRows`);
+ * and the hand-kept art rows.
  */
 export function iosAcknowledgements({
   repoRoot,
@@ -2458,12 +2508,7 @@ export function iosAcknowledgements({
       );
   }
   const kitManifest = readFileSync(join(kit, "Package.swift"), "utf8");
-  const products = (pkg) =>
-    [
-      ...kitManifest.matchAll(
-        new RegExp(`\\.product\\(name: "([A-Za-z0-9_]+)", package: "${pkg}"\\)`, "g"),
-      ),
-    ].map((m) => m[1]);
+  const products = (pkg) => kitProducts(kitManifest, pkg);
 
   // ghosttea: its own reviewed notices for what its iOS build links.
   const ghosttea = join(checkouts, "ghosttea");
@@ -2579,6 +2624,8 @@ export function iosAcknowledgements({
     ledger.gaps.push(
       "TailscaleKit's binary is not under --artifacts (SourcePackages/artifacts) — its Go modules are not listed",
     );
+
+  for (const row of iosSiblingRows({ kitManifest, checkouts, pins })) ledger.add(row);
 
   addVendored(ledger, IOS_VENDORED, repoRoot);
   checkRequired(ledger, REQUIRED_IOS);
