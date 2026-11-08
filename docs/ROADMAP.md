@@ -934,6 +934,21 @@ its rulings (`draft/rv/james-asks.md`, `draft/rv/lead-rulings.md`); the review `
   this Mac), on `es/night` (`e3df03ff5`), re-cut onto main after these records, with its open question ES-Q1.
 - Owed: ES-5, the phone's night (the IOS lane); James's eye on the built night; gate:landing, landing-only.
 
+**HG — History's first view and its waits, "The Room Behind Glass" and "The Mark Holds"** · vibe-field-7c (lane
+`lanes/hg`, branch `hg/glass-r5`) · law DESIGN.md §5/§6/§8/§9 (the HG pages `U12DeYQrZB4YRjycrR4wuR` and
+`9ByDzaNGQaijgSHW6GrZUb`)
+- Ruled 11-08 (James, in words; the pages keep no picks): page 1 "good" (05:56:00Z), page 2 "good, go with your lean
+  and start implementation" (06:35:59Z), every mark at its lean (DECISIONS "HG-D1…HG-D6 · HG-W1…HG-W5 · HG-L1").
+- Landed 11-08: **HG-1 + HG-2** (`121c1d0e4` → `3264c54f1`, M235, run 235, an ff of `75969189e`; LANDED "HG-1 + HG-2"):
+  History before its past is the room behind glass, the room itself frosted behind the History pane in the Setup
+  Assistant's glass. Its act says "Bringing in…" through the kit's `running`, and a census with nothing to bring in
+  says "Your history starts here." with Look again.
+- Next: **HG-3**, rosetta's `waitMark` (RO-40; James opens its PR, `lanes/hg/open-hg3-pr.sh`), then rosetta-room
+  0.1.6 and its EL8; then **HG-4**, History's holds in the living mark (`hg/hold`), re-based with the same act.
+- Ruled with it: a slice that adds a lazy import or a new module to field-app runs the census assert as a door row
+  (the LANDED entry's second finding).
+- Owed: James's eye on the built room; gate:landing, landing-only.
+
 **Release rails — WP12 · TD · BP · FW packaging · RD** · prod-builder (resting) · law `specs/build-wp12-updater.md`,
 `specs/trust-and-distribution.md`, the three `specs/electron-*.md` + `electron-packaging-implementation-plan.md`,
 `specs/build-wp8-bundled-plugins.md`, `draft/thinking-browser-profile.md` (BP), `draft/thinking-release-deps.md` (RD),
@@ -1513,6 +1528,7 @@ Petition status lives in `draft/petitions/README.md`. Still open or owed there:
 | LSF — live surfaces foundation | COMPLETE; LSF-4 landed 10-26 | `specs/live-surfaces-foundation.md` | consumed by PT; §18 Windows rows with WIN |
 | CO — the compose plane | ACTIVE; CP-0, SP-1a, CP-1a…1c, CP-1d, MT-0, CP-2, SP-1b, SP-1c, SP-1d, CP-3 (`ce6577783`, run 88), TU-1 (`57569bca3`, mint M96), the handle (`045f10ec7`, mint M100), items 158 and 159 with CO-1b (`9b3164ccf`, mint M129), CP-5a (`fc70097e3`, mint M140), CP-4a1 (`1a3ca5f24`, mint M143), SP-1e2's fieldd half (`068cab410`, mint M146), TH-1/TH-2 (`d5c6995fb`, mint M147), SP-1e2's card (`320d4b882`, mint M156), CP-4a2a (`c07039551`, mint M159), CP-4a2b's M-h (`aebd6a80b`, mint M163) and M-r1 (`c92b33692`, mint M168) landed | `compose-plane/thinking-roled-agents.md` §15–§17, `compose-plane/v2/`, `thinking-tool-plane.md`; the CO round (Druyc3Ua); DESIGN.md §2.10 | SP-1e4 · CP-4a2b…4f · CP-5b…d |
 | ES — Chat's empty state | ACTIVE since 11-08 (ES-D1…D7 ruled at the leans); ES-1 + ES-2 landed 11-08 (M226 `6b8a4b09f`) | DESIGN.md §2.4/§2.10/§3/§5/§6/§8/§9 (the ES page `1GdkfmnTxynAp6wHTbAa3a`) | bundle 2: ES-3a…3e + ES-4 (the lean, the portal, the starters filled from this Mac); ES-5 (the IOS lane) |
+| HG — History's first view and its waits | ACTIVE since 11-08 (HG-D1…D6, HG-W1…W5 and HG-L1 ruled at the leans); HG-1 + HG-2 landed 11-08 (M235 `3264c54f1`) | DESIGN.md §5/§6/§8/§9 (the HG pages `U12DeYQrZB4YRjycrR4wuR` and `9ByDzaNGQaijgSHW6GrZUb`) | HG-3 (rosetta's `waitMark`, RO-40) → rosetta-room 0.1.6's EL8 → HG-4, History's holds in the living mark |
 | A — shell and spine | COMPLETE | design-03, `specs/electron-shell-refactor.md` | Settings on demand (Q20, §3 item 6) |
 
 **Retired and superseded tracks**

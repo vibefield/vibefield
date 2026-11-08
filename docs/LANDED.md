@@ -43577,3 +43577,167 @@ tolerance stands, and no pin-class path is touched.
   row 6 at the EL8's exact kit tree.
 - **Item 260's close,** James's hand: a 27.x Xcode for tests, the 27.2 release, or the split as standing.
 - **`gate:landing` at this landing:** OWED, as at today's other landings, paid in a later dated LANDED entry.
+
+## HG-1 + HG-2 — History before its past is the room behind glass: the room itself frosted behind the History pane in the Setup Assistant's glass, its act's press named "Bringing in…", and a census with nothing to bring in says where history starts
+
+(2026-11-08; three commits on branch `hg/glass-r5` in the hg lane, `lanes/hg/vibe-field`, cut by HG (vibe-field-7c)
+on main `c1e2a03c7` and re-cut in proof form onto main `75969189e`: `121c1d0e4` (HG-1, the doc: DESIGN.md and the
+DECISIONS row), `987cca00e` (HG-2 red) and `3264c54f1` (HG-2 green, T, tree `cea0518da3c5`).
+- **The cuts.**
+  - r1, on `c1e2a03c7`: `4e157d9b9`, `fc9de53f5` and `0ebb5879d`.
+  - r2, on `f1670584e`: `c424f8bdc`, `5964d5e25` and `49f4ba30b`, whose rows read the semantic merge red under
+    Found. Its green was adapted to item 241b as `0a9ccba14` (VF-PM's ruling (a), 17:45:41Z).
+  - r3, on `b3a5930b2`, was superseded unminted when item 257's records landed.
+  - r4, on `75969189e` (green `88db1b3fe`), was minted red by run 234 at the census, the second finding under Found;
+    M234 was burned with it.
+  - r5, on the same main, is this landing: r4 with its green amended by the census's baseline alone.
+- **The proof form.** r4's (`lanes/hg/hg2-r4/recut-proof-r4-on-75969189e.txt`): each r4 tree equals
+  `git merge-tree --write-tree --merge-base b3a5930b2 75969189e` of its r3 commit; the patch-ids, messages, authors
+  and author dates are r3's, and the range-diff reads `=` three times. Against r1, HG-1 reads `!` by context alone
+  (DECISIONS' table end, and DESIGN.md's first hunk beside ES's "Night glass" row), the red `=`, and the green `!` on
+  its message and the two adapted files alone.
+- **r5's** (`lanes/hg/hg2-r5/recut-proof-r5-on-75969189e.txt`): HG-1 and the red are r4's own commits, and the
+  range-diff reads `=`, `=`, `!`. `git diff --stat 88db1b3fe 3264c54f1` lists the census's manifest alone (+58 −42),
+  its blob the file `--update` wrote. The green's message is r4's plus one census section, with r4's author and date.
+- **The mint and the land.** Minted as M235 (run 235, vf-m2, a9; M234 burned at r4); landed `3264c54f1`
+  (2026-11-08T18:57:13Z) by the fixer, a fast-forward of main `75969189e`.)
+
+**Why.** James asked on 2026-11-08 (02:20:53Z) for History's first view: "the empty view/first view of the history
+room is pretty dull … give user a glance or peek of what a history ui really looks for real, as a mock up, but we can
+keep it dimmed or blured a bit so just give user a taste of it but not full reveal it until user really select the
+agent and ingest for real". Two pages answered, and he ruled both in words, every mark at its lean (the pages keep no
+picks; DECISIONS "HG-D1…HG-D6 · HG-W1…HG-W5 · HG-L1"):
+- *The Room Behind Glass* (`U12DeYQrZB4YRjycrR4wuR`, HG-D1…D6): "good" at 05:56:00.763Z, the same prompt asking that
+  History's loading states take the logo's style;
+- *The Mark Holds* (`9ByDzaNGQaijgSHW6GrZUb`, HG-W1…W5 and HG-L1): "good, go with your lean and start
+  implementation" at 06:35:59.291Z.
+VF-PM's rulings: the lane 06:39Z, the slices' order 06:48Z, the re-cut and its rows 17:29:34Z, the adaptation (a)
+17:45:41Z, r4's freeze 18:04:39Z, run 234's finding 18:16:26Z, its causes 18:28:27Z and the census's fix (A) 18:32:09Z.
+
+**What moved.** 24 files, +2048 −784 over `75969189e`, 5 of them added.
+- The design doc, DESIGN.md: +78 −0, every addition an insertion. §5 History's sample; §6 History's motions and
+  HG-L1; §8 "The living mark, drawn as SVG", and "History": before its past, and its waits and its first open,
+  amended; §9 the words. docs/DECISIONS.md: the HG row.
+- design-kit: the sample's three tokens in `tokens.css`.
+- field-app: the view's own layer, the sample, its data and its sheet (`HistoryGlass.tsx`, `HistorySample.tsx`,
+  `history-sample.ts` and `history-glass.css`, all new under `history/`); the card and its controller; the words;
+  the catalog's consent plate. `history-sample.ts` is the projects plate's fixture fieldd, MOVED out of
+  `design-system/history-fixtures.ts` (−674 there, +682 here): one fieldd for the plate and the sample.
+- Tests: `history-glass.test.tsx` (new, 15), history-consent +4 and off-pill +1 (the probe); design-system,
+  ui-system-boundaries and history-doors amended.
+- The census's baseline, `apps/desktop/packaging/package-manifest.json` (+58 −42): the range's one release-adjacent
+  file, by VF-PM's ruling (A). Its four entries, 31 bytes rows and totals are the second finding's, under Found.
+- No release-class file is in the range. Pin-class, `.github`, `scripts/`, `plugins/`, contracts, Fixtures and
+  biome.jsonc read 0 (`lanes/hg/hg2-r5/pinclass-r5.txt`).
+
+**What is real.**
+- **HG-1**, the doc first (`121c1d0e4`): the law for both pages (HG-D1…D6, HG-W1…W5, HG-L1), and the DECISIONS row
+  with James's two times and where they were read. The waits' half is law alone until HG-4.
+- **HG-2**, the consent view (HG-D1…D6), over its red (`987cca00e`):
+  - While the index waits for consent, History stands the view's own layer (`HistoryGlass`): the sample and the
+    card's frame, the room's own slot holding only a marker.
+  - The sample is the room itself, `<HistoryRoom` over the sample's ports and the shipping host inputs, every act a
+    no-op. It is inert and aria-hidden, keeps no preferences, asks fieldd nothing and opens at the demo's chosen
+    session, under one filter on its own layer (7px, saturate 0.9, 62% by day and 56% by night), never a backdrop
+    filter.
+  - The card is the History pane in the Setup Assistant's glass, 496 wide, padded 32 32 26, centred in the room's
+    box. Its act says "Bringing in…" while it runs, through the kit's `running` (§7's running press, item 241's
+    241b), and the sample line stands under it.
+  - A census with nothing to bring in says "Your history starts here." with Look again. In History the unavailable
+    note is its first sentence alone.
+  - The room develops once each showing (from a 24px blur over 640 ms; the card 160 ms behind, .985 → 1 over
+    560 ms), and the sample leaves at once (the card 240 ms, the sample 480 ms `ease`). Reduced motion fades each
+    once over 120 ms.
+  - The catalog's consent plate, "History before its past", mounts the shipping card over the census fixture.
+- The room's chunk is the view, the layer, the sample and its data, and only HistoryRoomView imports the layer, so
+  the bundle split holds (ui-system-boundaries).
+- The census's baseline carries the four chunks the sample's imports split out (the second finding), so verify's
+  census reads OK.
+- **The green's message, read whole.** Its HistoryConsent.tsx bullet is r1's ("`disabled` + `data-running`"). Its
+  last section, the adaptation to 241b, supersedes it, and the code passes `running`.
+
+**Found.**
+- **The semantic merge red with item 241b**, HG-2's own finding (VF-PM's guard 5; no item of its own).
+  - **The cause.** 241b (`3063c980b`) gave the kit's `UiButton` its own `running`, and the kit writes
+    `data-running={running ? "" : undefined}` after `{...props}`. HG-2's green, cut at `c1e2a03c7` before 241b,
+    passed `data-running` through the spread, so on main the kit's attribute overrode it, and "Bringing in…" drew
+    §7's Off.
+  - **How it showed.** In the rows alone: history-consent.test.tsx:469 was red at r2's `49f4ba30b`, while
+    `git merge-tree`, tsc and biome all passed. The class is a kit primitive writing an attribute after its spread,
+    which overrides what a caller passes through it; neither a merge nor a type check can see it.
+  - **The fix,** ruled (a) by VF-PM at 17:45:41Z with five guards. The act passes the kit's `running`, with
+    `disabled` for its label alone (the kit ORs in running). off-pill.test.tsx's scan, 241b's, reads a pill's words
+    through a words table its file imports: `NAME.key` as the literal `key: "…"` of `export const NAME`, only by a
+    relative import, and as no words otherwise. Its probe holds the reading, and four mutations are each red in the
+    scan's own words.
+- **The census's four chunks,** HG-2's own finding too (VF-PM, 18:16:26Z; no item of its own).
+  - **How it showed.** Run 234 at r4 (`88db1b3fe`; `lanes/vf-m2/run234-a9-results/`) read verify's census assert red,
+    "0 missing / 4 unexpected / 0 miscounted": `FieldGlyph-`, `forwarded-call-`, `link-` and `os-marks-[hash].js`.
+    No door row had read the census.
+  - **The cause,** read from two `--sourcemap` builds into scratch, at r4 and at main (VF-PM accepted it at
+    18:28:27Z). HistorySample imports the shipping host inputs (HG-D2): `historyHostInputs` from host-inputs.tsx and
+    `hostModelOf` from host-model.ts, and history-sample.ts takes `catalogPortOver` from doors.ts. Rolldown (Vite
+    8.1.5) groups modules by the entries that reach them. It moved 19 modules out of the lazy `workspace` chunk into
+    the shared `history-room-view` chunk (20,050 → 86,572 bytes), and four modules that gained the lazy room as a
+    reacher left their chunks for their own:
+    - FieldGlyph.tsx with glyphs/data.ts, out of `primitives`;
+    - account/link.ts (the §7.1 link snapshot's words) with fieldd-client's client.ts, out of `profiles-words`;
+    - godview/os-marks.tsx with monitor/devices.ts, out of `renderer`;
+    - forwarded-call.ts, out of the lazy ProfilesView chunk, so it was never in the initial bundle.
+    About 36 KB moved and nothing was added; the same code loads at startup.
+  - **The fix,** ruled (A) by VF-PM at 18:32:09Z: the census's `--update`, byte for byte what it wrote in the lane
+    after the census's whole input was built as verify builds it. It adds the four entries. It moves 31 rows' bytes,
+    which a census of main's own build (`--json`, no write) classes as HG's alone 9, main's and HG's 8, and main's own
+    drift since the 11-05 baseline 14. It moves the totals (files 106 → 110). CP-4a2a's `d2bdbb6bc` and TH-1's
+    `d5c6995fb` are its precedent. A props seam that kept the host inputs out of the lazy room was declined: it
+    reshapes the sample, and doors.ts would move all the same.
+  - **The lesson, ruled:** a slice that adds a lazy import or a new module to field-app touches the renderer's chunk
+    graph, so the census assert is one of its door rows. On this Mac the census's whole input builds in 13 s.
+
+**The witnesses.**
+- The MacBook, before the mint, each row alone through the HOLD door at nice 19, swap 0 (`lanes/hg/hg2-r4/rows/`,
+  with HOLD's 116 lines):
+  - r1, at `c1e2a03c7`: the red's rows (07:02–07:58Z) and the green's (08:08–08:51Z), in their commits' messages.
+  - The install, 17:36:42–45Z under co-plan/INSTALL: `pnpm install --frozen-lockfile` at `f1670584e`'s lock
+    (rosetta 0.1.5), exit 0, with no lock edit.
+  - At r2's `49f4ba30b`, 48 rows (17:37:43–17:43:07Z): biome on 20 files; check:walls ×4 ("266 of 1126");
+    check:retired; tsc for field-app, exit 0; and 41 vitest files (39 of field-app, sound's design-md and
+    electron-shell's smoke-first-run), all green but the one red under Found.
+  - At the adapted `0a9ccba14`, 7 rows (17:50:41–17:52:37Z), all green: biome on its 2 files; history-consent 15/15,
+    off-pill 25/25, text-ramp 12/12, ui-system-boundaries 49/49 and design-system 8/8; tsc for field-app, exit 0.
+  - They carry to r4. `git diff --stat 0a9ccba14 88db1b3fe` lists the six files main moved over `f1670584e` (three
+    kit test files under `apps/ios/VibeFieldKit/Tests/` and three Markdown files), byte-identical to main's own
+    `f1670584e..75969189e`, with no lock path; no HG row reads them.
+  - **The census** (`lanes/hg/hg2-r5/census/` and `rows/`), each row building its whole input as verify builds it,
+    every tool direct: run 234's red reproduced at r4, byte for byte (18:22:50–18:23:03Z); the `--update`
+    (18:29:01–09Z); main's census `--json` (18:30:41–49Z). At r5's tip (18:33:47–56Z): "census assert OK — no §7.3
+    violation"; dev-runner's package-census.test.mjs, 8 of 8; biome on the manifest.
+- **Run 234 at r4 on vf-m2, red** (a9; `lanes/vf-m2/run234-a9-results/`, SHA256SUMS-a9-run234 `73ba123b`): verify
+  exited 1 at the census assert (18:13:06–18:14:20Z), before the tests, so its count lines were never read. Every
+  line before it was as briefed: biome "Checked 3523 files", "266 of 1126" and the bundle assert OK.
+- **Run 235 at T on vf-m2, green** (a9): verify exited 0, V from 18:42:57Z to its own end at 18:48:41Z, 5 min 44 s,
+  with rosettad run233's build. The packet was `lanes/hg/hg2-r5` (SUMS `be72997c`: brief `96df53d1`, bundle
+  `6cf7b992`); the results are `lanes/vf-m2/run235-a9-results` (SHA256SUMS-a9-run235 `a98657d7`, 31 of 31 OK here).
+  - Against M233's lines (run233, SHA256SUMS-a9-run233 `416d709c`): of the 56 count lines, only field-app's two
+    move, to 322 files and 4483 tests (+1 and +20: history-glass 15, history-consent +4, off-pill +1).
+  - The test temp roots read "266 of 1126" and biome "Checked 3523 files" (73 warnings and 21 infos, M233's own).
+    fieldd reads 3762 passed | 15 skipped, electron-shell 2752 | 2, contracts 1949; cargo ok 37, FAILED 0;
+    dev-runner 480 of 480.
+  - bundle:assert reads OK, run 234's line byte for byte: initial 954.4 KB raw / 252.5 KB gz (M233's 953.2 /
+    251.8), History lazy, its chunk 795.4 KB raw / 250.7 KB gz (M233's 774.7 / 242.8) and its sheet 187.9 / 31.2 KB.
+  - The census reads "no drift" and "census assert OK — no §7.3 violation", its total 110 files and 44,562,160
+    bytes. mille's `.node` reads 5,450,016 bytes on vf-m2 as in the lane, so the brief's caveat did not bite.
+  - The host: the tree was clean and stubs 0. Two /private/tmp births were KEPT, `.tmpVZViIk` and `.tmpHUP9Du`,
+    each born 18:46:58Z in the cargo test stage and holding only an empty `native/run`: field-native tests'
+    tempdirs, a finding against run 233's and run 234's none, left in place (HG touches no Rust).
+  - At the arm the range patch-id read `0e08cd4f8b04`, EQUAL; pin-class and release-class read 0, and
+    release-adjacent the manifest alone.
+
+**Owed.**
+- HG-3, rosetta's `waitMark` (`196b19c0d` on `feat/room-wait-mark`, in `lanes/hg/rosetta`; RO-40): James opens its
+  PR with `lanes/hg/open-hg3-pr.sh`. Then rosetta-room 0.1.6, and VibeField's EL8 to it.
+- HG-4, History's holds in the living mark (HG-W1…W5, HG-L1), on `hg/hold` (`6b654ab03`, `7c4fae5e3` and
+  `85e520ab0`): re-based onto main after these records, taking the same `running` act. It lands with its bind, after
+  that EL8.
+- James's eye on the built room: the frost, the develop and the leave, "Bringing in…", and the empty census.
+- gate:landing after the land: the stills and the smokes, landing-only; a re-bless, if any, said there.
