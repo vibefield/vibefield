@@ -206,6 +206,19 @@ black/50 and captions `neutral-500` by day, and white/40 for tertiary by night. 
 both themes from 2026-08-05 (`250e383d6`): its t3 at 2.7–2.9:1 and its t4 at 1.9:1 by day, 3.9–4.2:1 and 2.5–2.6:1 by
 night, under the bar since.
 
+**On the night, the night's ink** (track ES; the ES page *The night that becomes the window*
+(`1GdkfmnTxynAp6wHTbAa3a`), its anatomy's "On the night", under ES-D1 A — the night ends at Chat's panel — ruled by
+James 2026-11-08 04:31:19Z with every ES mark at its lean). What stands on the hatch's night (§2.10)
+— Chat's empty panel (§8 "Chat's list") and, after ES-5, the phone's empty page — wears the ramp of the night in both
+themes: `#F5F5F7` at 85, 70, 54 and 38%, the night theme's four tiers, by day as by night. The kit's primary there is its
+night look, the foreground's fill under the inverse ink, and a control that is off wears §7's Off in that ramp. The night
+is darker than any chrome ground of the night theme, so each tier holds its floor on it. Measured on the night as the
+engine drew it on the ES page (a software-GL frame, star-free patches): at its lightest, the teal foot (`rgb(10 41 57)`
+to `rgb(12 42 61)`), t3 reads 5.0:1 and t4 3.2:1; where the words stand (`rgb(5 15 35)` to `rgb(10 23 46)`), t3 reads
+5.5–5.6:1 and t4 3.3:1. Behind the words a hush of the night (§5, night glass) keeps every star from crossing them.
+`tokens.css` projects the rule as one scope, `.vf-on-night`, which re-declares the night theme's values for what
+stands inside it; nothing on the night names a colour of its own.
+
 ### 2.5 State & system color (the only color chrome may use)
 
 iOS system palette, one meaning each — never decorative:
@@ -724,6 +737,14 @@ by eye" is 12e's own name for a shader with no gate, its plan's Q1 (c). The misq
 rows and took "by eye" from that (c), dropping the pixels; f0 copied it here.* *Corrected 2026-11-07 (IOS-12f's f6c):
 this named the shader `SparkHatch.metal`, renamed `HatchSky.metal` at `915fcd5a5`.*
 
+*Amended 2026-11-08 (track ES; ES-D3 A and ES-D7 A, ruled by James on the ES page, 04:27:25Z):* **the night before the
+first spark.** While Chat holds no spark, the hatch's night is Chat's empty panel (§8 "Chat's list"), drawn by the same
+engine edge to edge, and it is one night from the empty view to the sheet: New spark closes it onto the sheet's sky
+(§6, the portal) and the star falls into the closing window, landing at its centre, as the window settles. Nothing in
+it is drawn twice and no clock restarts, so no star twinkles out of step at the hand-off. At rest it is the engine's own
+night under §6's rest rule (live while you are here, still 20 s after the last pointer), never a loop. Once a spark is in
+the list the sheet's sky is its own again, as above. On the phone the same, at ES-5.
+
 **Where it lives in code.** The engine is vendored from James's `research/spark`
 (`agent-sparks/sparks.js` at `025b495`, and `star-spark.js` beside it), byte for byte: a newer version
 is copied over the file, never edited in place, and a change to `agentDNA` changes every spark's face,
@@ -770,6 +791,7 @@ text belongs to Ghosttea's renderer, not CSS.
 | **Body** | 12–14px · regular · 1.45 line height | Chat's draft (14, §8; the line's until HN-2), notes, prose, settings; a spark's status word in Chat's rows and its thread's head (12, §8 "Chat's list") |
 | **Title** | 12–15px · semibold | row titles; in Chat (§8 "Chat's list"), a spark's name in its row (14), the list's head and the thread's head (15) |
 | **Data numeral** | 28–34px · **light** · `tabular-nums` · `leading-none` | the hero number — no desktop surface draws one today |
+| **Headline** (track ES, ES-D6 A, 2026-11-08) | 40px · **light** · 46 line height · −0.02em, in the night's t1 (§2.4) | the night's alone: Chat's empty panel, "Make your first spark" (§8 "Chat's list"); on the phone 30 light (§8 "The phone's Chat", ES-5) |
 | **Data small** | 12px · medium · `tabular-nums` | times, counts, sizes |
 | **Caption** | 9–10px · 40% opacity | sub-labels, the fields' time captions (10px, §8); *the clipboard's day captions and its notch's count (9px mono) left with the left tray at HN-1, recorded here at HN-8 (2026-10-30)* |
 
@@ -849,6 +871,7 @@ exception again.
 | Sheet | surface `/90` + `backdrop-blur-3xl` | the pill's sheet — its Fields shelf (the fields explorer) and its Artifacts shelf — grown from the head's pill (FR-3) or, under a cover, the package circle (HN-8, §8 "The head"); the open tray left at DK-13 |
 | Overlay chip | surface `/90–95` + `backdrop-blur-xl` | no wearer today: the put-back affordance and the HUD's toasts retired (DK-13, DK-17); the peers' chips wear the line's glass and the status line solid chrome (§8) |
 | Backdrop dim | `black/10` light · `black/40` dark | behind open sheets; canvas recedes to `scale(0.98)` |
+| Night glass (track ES, 2026-11-08; the ES page's anatomy, under ES-D1 A) | white at 7% (`--vf-night-glass`; 12% under the pointer, `--vf-night-glass-hover`) over a 16 blur (`--vf-night-glass-blur`), ringed inset by white at 14% (`--vf-night-glass-ring`); the same in both themes, for it stands on the night (§2.4) | the starters on the hatch's night (§8 "Chat's list", empty; the phone's empty page after ES-5). Behind the night's words a hush, the night at 58% (`--vf-night-hush`), so no star crosses a word |
 | Search scrim (GV-D8; K7, 2026-10-08) | `black/16` light · `black/46` dark, over a backdrop blur of 18 and `saturate(0.9)` | behind the Peek (§8 "Search"): the window blurred and dimmed, the view and the frame receding to `scale(0.98)` under it. Darker than the backdrop dim so it reads as dimmed (One Frame §23); the backdrop dim stays the sheets' until James rules otherwise (docket PK1). *Since TS-D22 A (2026-10-29):* the phone wears its dim alone, with no blur, under a door that stands over a live field, between the field and the bar (§9). *Retired 2026-11-02 (WI-1, §9's amendment of that day):* no page stands over the field, so the phone wears no scrim, and its Swift copy (`ChromePalette.searchScrim`) and that copy's check went with it. *Returned 2026-11-06 (SE-D3 A, ruled by James on the page The Bands Meter):* the phone's search is a glass sheet over the live field (§8 "The phone's search"), so the phone wears the dim again, alone with no blur, at these two values, fading in 240ms; a tap on it closes search. Its Swift copy comes back as `ChromePalette.searchScrim`, held to `--vf-search-scrim` by its check (SE-2) |
 | Setup Assistant (as built since UA-3w; written down 2026-10-29, track FG; on the field, built at FG-3a as the browser's layers, and since FG-3b drawn by the field's own pass over the live field) | `--vf-wizard-surface` (white 75% by day, `rgb(28 28 30)` 55% by night) over a blur of `--vf-wizard-blur` (32px) and a saturation of `--vf-wizard-saturate` (1.12), the island radius (32). On the field (FG): a 1px edge, `--vf-wizard-edge` (white 60% by day, 12% by night) with a top light, `--vf-wizard-edge-light` (white 75%, 8%); the field's shadow, `--vf-shadow-wizard-field` (`0 40px 120px` and `0 12px 32px` in the field's ground at 55% and 28%); and a grain at `--vf-wizard-grain` (3%), so the blur never bands. Its logo (FG-4b): `--vf-wizard-logo-filter`, `invert(1) hue-rotate(180deg)` by day and `none` by night, so the mark is white on smoke and inverted on milk with its colours kept. Its words (FG-O2's judge, and its fix after row 32 at run59b, 2026-10-31): the ramp stops at the glass's own t2, `--vf-wizard-text` (`rgb(28 28 30)` 80% by day, the ramp's t2 by night), t2, t3 and t4 re-projected to it there (`--vf-text-secondary`, `--vf-text-tertiary`, `--vf-text-faint`); a state word takes its glass ink (§2.5), `--vf-ink-healthy` and `--vf-ink-attention` re-projected to `--vf-wizard-ink-healthy` (`#104C1F` by day) and `--vf-wizard-ink-attention` (`#683400` by day), the inks themselves by night; and a quiet button's words stand at t1 on its fill; its panes' words go with its own, so every word on it reads at 4.5:1 (§8) | the Setup Assistant's glass (§8): on the field its frost lets the tunnel's rings through softly (FG-D15 C; by day through a 75% milk since FG-O2's judge, 2026-10-31, at a little over half the strength 55% let through). Over the live field the field draws this recipe itself, in its own frame and from these tokens (FG-D24); over the field's still the backdrop filter draws it |
 
@@ -1215,6 +1238,28 @@ than a pixel. It stops when the row's state changes, and stands still under redu
   demand loop; ICE retired both with its planes at design-015 D5b.)
 - **M6 — Respect `prefers-reduced-motion`**: morphs become fades, springs become ease-out,
   durations halve. Non-negotiable quality floor.
+
+**The night, at rest, under the pointer, and through the portal** (track ES; ES-D3 A, ES-D5 A and ES-D7 A, ruled by
+James on the ES page *The night that becomes the window*, 2026-11-08 04:27:25–04:27:26Z; §8 "Chat's list", empty):
+- **At rest** (ES-D7 A): Chat's empty night is the engine's own — its stars twinkle and its haze drifts — while you are
+  here, and it keeps the desk's ambient rule (M5): still 20 s after the last pointer, easing out over 2 s, woken by the
+  pointer. Still, it draws no frame. It is the field's idle, not a loop, so the loop law above does not bind it.
+  Reduced motion draws it once.
+- **The lean** (the ES page's film, frame 2, and its motion table; no mark of its own): under the pointer, or the
+  keyboard's focus, New spark, a starter or the line's ✦ draws the
+  night's edge in 6 from every side, its corners from 22 to 16 so the band stays even: 240ms on the island curve, and
+  back in 240ms on the retract curve once nothing holds it for 90ms. It is the portal's first move, shown before it is
+  made. Reduced motion: nothing moves.
+- **The portal** (ES-D3 A; M1): New spark closes the night's edge from the panel's rect (corners 22) onto the sheet's
+  sky (520 × 300, corners 30), 600ms on the island curve, while every star inside stays where it is. As it closes, the
+  words fade and recede to 0.98 in 180ms on the retract curve; Chat's own panel comes back around it under the backdrop
+  dim, receding to 0.98 (M5; ES-D5 A); the sheet's glass grows from clear around the window, and its name, agent and
+  foot come in from 45% (330ms on the island curve, 270ms in); the hatch's star falls into the closing window and bursts
+  at its centre (§2.10). Cancel, Esc or the dim open it back in 240ms on the retract curve, the face shrinking back
+  into the night (the engine's leave, 450ms) and the words returning 300ms in (240ms, island). Create: the sheet and
+  its window leave as one, down 16 at 0.97 in 240ms on the retract curve, and the face flies to its row (§2.10).
+  Reduced motion (M6): the night fades out in 150ms and the sheet fades in with its window in 150ms; Cancel is the same
+  backwards at 120ms each; no star falls and no face flies.
 
 **The departure: a body leaving the field** (Godview's swarm; Q12, James ruled B on 2026-10-27: "a short exit, so a
 body leaving reads as leaving"). It applies when a body's row leaves the field: a shell closed or reaped, a session that
@@ -1731,9 +1776,38 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     - *Amended 2026-11-05 (TH-1, the pane leaves Chat):* the line left with the pane. Asleep is the status word under
       the name, "Waking…" is Wake's while its wake runs, a wake's refusal is said in the status's place (§8 "Chat's
       thread", what the head says of an act), and a send's wake is its bubble's receipt, "Waking Vela…".
+  - **Empty: the night** (track ES; ES-D1…D7 A, ruled by James on the ES page *The night that becomes the window*,
+    `1GdkfmnTxynAp6wHTbAa3a`: D2–D7 at 04:27:25–04:27:26Z and D1 at 04:31:19Z on 2026-11-08, then "All ruled with
+    leans, now please start implementation", 04:32Z). §8's bar for an empty screen is an invitation to the next act, and
+    "No sparks yet" named a lack. With no spark, Chat's whole panel is the hatch's night (§2.10), edge to edge at its
+    corners 22 (ES-D1 A: the night ends at the panel; the desk, the head and the line stay the window's). What it says
+    stands on the night in the night's ink (§2.4), one column centred 16 below the panel's middle:
+    - **The headline,** "Make your first spark" (ES-D6 A), in §3's Headline: 40 light at −0.02em, t1.
+    - **The sentence,** the phone's ruled line (§9), "A spark is an agent VibeField starts to run your other agents.",
+      14 at 1.45 in t2, 12 under, at most 480 wide.
+    - **New spark,** 26 under: the kit's primary in its night look, 40 tall, `sparkle` 16, the words and ⌘N printed on
+      it in the inverse ink at 62%. It is the line's create, the same door. When no agent here can be a spark (the
+      catalog's `offers.spark`, read from `agent.providers`), it is Off (§7) from the kit's own button, the sentence
+      under it says which agents can — "A spark thinks with Claude Code, which isn't on this Mac yet." — **Open Agents
+      settings** (quiet) opens Settings → Agents, and no job is offered.
+    - **The jobs,** "Or give it a first job" (12 medium, t3, 30 under), then the hello's three starters (§9) in night
+      glass (§5): 34 tall, corners 17, 8 apart, centred, coming in from 8 below 26ms apart. A starter opens the sheet
+      carrying itself as its first job (ES-D2 A; §8 "The New spark sheet"). Their words are filled from this Mac — the
+      agents it has, its busiest project, a live session's handle — and a slot with nothing to fill keeps its ruled word
+      (ES-D4 A); while the three are read they hold their places in night glass, wordless, and their words come in over
+      420ms. On James's Mac the filling gives the ruled words back: they were written from it.
+    - **Behind the words,** a hush of the night (§5) so no star crosses them. There is no list column until the first
+      spark: the column arrives with its first row as the face lands in it.
+    - **Under the pointer,** New spark, a starter or the line's ✦ leans the night in, and New spark closes it into the
+      sheet's sky (§6, the lean and the portal; ES-D3 A, ES-D5 A). **At rest** it keeps §6's rest rule (ES-D7 A).
+    - **A short panel** (under 440 tall): the label and the jobs step aside; the night, the words and New spark stay.
+    - **Without WebGL2** the night is its ground, `--vf-spark-night`, as the sheet's sky is; under reduced motion the
+      night is drawn once.
   - **Empty, opening, unavailable:** "No sparks yet"; "Opening Chat…" while the list is first read; "Chat can't read
     your sparks", with fieldd's words under it, when it cannot be read. Each is secondary, centred in the panel, and
-    never a blank. *Amended 2026-11-01 (SP-1d):* "first read" is the window's feed's. A fieldd restart replaces the
+    never a blank. *Amended 2026-11-08 (track ES):* empty is the night (above), and "No sparks yet" retires on the Mac;
+    opening and unavailable stand as they are, on Chat's own panel: until the list is read, the night would be a
+    promise. *Amended 2026-11-01 (SP-1d):* "first read" is the window's feed's. A fieldd restart replaces the
     window's document (main's boot fence, `FielddDaemonBootFence` → `requestAllReplacements`), so Chat's feed starts
     again: the list reads "Opening Chat…" again, and the new feed asks for the board afresh. A connection drop while
     the same fieldd stays up starts no new feed: the window's client reconnects, the board's subscription comes back
@@ -1749,6 +1823,17 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   before NS-D2 ruled B, so on them ↻ deals a name where the sheet's deals a face).
   - **Its door:** Chat's line create, New spark (⌘N), opens it. It is one of the frame's open surfaces (`new-spark`,
     §10), so opening it folds the rest, and Esc, Cancel or the scrim folds it.
+  - **From the night** (track ES; ES-D3 A, ES-D5 A, ruled by James on the ES page, 2026-11-08 04:27:25Z): while Chat
+    is shown and holds no spark, the sheet opens from Chat's empty night (§8 "Chat's list") — from the night's New
+    spark, a starter, ⌘N or the line's ✦ — through §6's portal: the night closes onto the sheet's sky while the sheet's
+    glass forms around it, and Chat's own panel comes back around them under the dim (ES-D5 A). The sky is that night
+    (§2.10), so the hatch's star falls into the window as it closes. Otherwise the sheet rises as below.
+  - **Its first job** (track ES; ES-D2 A): a starter opens the sheet carrying itself, under the agent: "Its first job"
+    (12 medium, t3), then the starter, its × named "Remove its first job"; × drops it and the sheet settles to its
+    height (240ms, island). Create hatches the spark, Chat chooses it, and then the job is sent as Send sends it
+    (`compose.sparks.say`), once, and only after the hatch: its receipts are Send's ("Waking Vela…", then
+    "Delivered"), and a send not taken is said as Send's is, in the line's note (§8 "Chat's composer").
+    *Corrected 2026-11-08 (ES-2): this said a refusal is said "in the thread"; Send's never is.*
   - **The sheet:** 540 wide, padding 10, corners 40, in the Sheet tier (§5: the chrome at 90% over a 64 blur, saturate
     1.2), ringed by the strong hairline, with the search popup's shadow (§5), over the backdrop dim. The view behind it
     recedes to `scale(0.98)`. It rises in 560 ms on the island curve, from 16 below at 0.97, and leaves in 240 ms on the
@@ -6326,6 +6411,15 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     Asking you, Needs your OK, Stuck and Rate limited (S-4). Its dot is 10: orange until you open the thread, even
     after the need ends, else cyan while unread (PC-L5). Held, it opens a context menu: **Open its pane** · **Wake**
     or **Put to sleep** · **Its profile**.
+  - **Empty: the night** (track ES; ES-D1…D7 A, ruled by James 2026-11-08; one Chat, two sizes). With no spark the
+    page is the hatch's night, full bleed under the large title: the status bar, "Chat" and its ✦ wear the night's ink
+    (§2.4), and the bar's glass floats on it in its night look. Its words are the Mac's (§8 "Chat's list"; §9): "Make
+    your first spark" 30 light (§3's Headline at touch pitch), the sentence 15 in t2, **New spark** as a wide pill 50
+    tall in the night look's fill (no key printed), "Or give it a first job" 13 in t3, and the hello's starters in night
+    glass (§5) at touch pitch, capsules 48 tall and 10 apart that wrap as the hello's do. New spark closes the night onto
+    the sheet's sky as the system sheet rises under it — §6's portal at touch pitch, the night riding the window the face
+    already flies in (`HatchSkyHero`) and handing its canvas to the sheet's `HatchSkyView`. *Not drawn yet: ES-5, in the
+    IOS lane.*
   - **Needs you** heads the list while anything waits (PC-D4 A; CP-D12, one queue). One card stands for each item of
     CP-3's queue that is a spark's, on a pale fill with a 1.5 orange ring while it waits, its choices as 36 capsules
     with the first inverted. VibeField's own items are answered on the card, and the record says you did. An agent's
@@ -7245,9 +7339,10 @@ the message: the refusal's kind, whether it may be asked again, and its details 
 **Chat on the phone** (track IOS, ruled 2026-11-04, PC-D1…D8; where each word stands is §8 "The phone's Chat").
 ‹name› is a spark's and ‹desktop› the field's name for a desktop. The tab is **Chat**. The list's subtitle counts
 what is true: "4 sparks on studio · 2 need you". Its groups are **Needs you** and **Sparks**; empty, it says "No
-sparks yet." · "A spark is an agent VibeField starts to run your other agents." The draft's placeholder is "Message
-‹name›…". A send's receipt (PC-D3 A; CP2-D2) is **Queued**, "Queued · ‹name› is busy; it lands when it’s done",
-"Queued · it lands after you answer ‹name›", **Delivered** or "Waking ‹name›…". Not sent, it says why: "Not
+sparks yet." · "A spark is an agent VibeField starts to run your other agents." *(Amended 2026-11-08, track ES, ES-D6
+A: empty, the page will say the Mac's words, "Chat's words" below; "No sparks yet." retires there at ES-5.)* The
+draft's placeholder is "Message ‹name›…". A send's receipt (PC-D3 A; CP2-D2) is **Queued**, "Queued · ‹name› is
+busy; it lands when it’s done", "Queued · it lands after you answer ‹name›", **Delivered** or "Waking ‹name›…". Not sent, it says why: "Not
 delivered: ‹name›’s session ended", or, when the send is uncertain and is never resent, "‹name› may not have it: look
 in its pane". Every state is in words (PC-L4). A spark asleep: "‹name› is asleep · a message wakes it", with
 **Wake**. Its desktop asleep: "‹desktop› is asleep. These are as it last said; your words wait here until it
@@ -7511,6 +7606,12 @@ field gives them, and “q” what was typed.
 - The hello and its starters: "Hi, I'm Vela. I can start agents for you, keep track of the ones you run, and carry
   work between them. What first?" · "Spawn 4 Grok agents to research a topic each" · "Keep track of my agents in
   vibe-field" · "Have Codex review claude·2's work until it's clean".
+- Empty, the night (track ES; ES-D6 A and ES-D4 A, ruled by James 2026-11-08; §8 "Chat's list"): "Make your first
+  spark" · "A spark is an agent VibeField starts to run your other agents." · **New spark** · "Or give it a first
+  job", then the hello's starters, filled from this Mac. With no agent here that can be a spark: "A spark thinks with
+  Claude Code, which isn't on this Mac yet." (with two, "Claude Code or Codex, which aren't on this Mac yet.") ·
+  **Open Agents settings**. The sheet carrying a job (ES-D2 A): "Its first job" · "Remove its first job" (the ×'s
+  name). "No sparks yet" retires on the Mac.
 - The thread (TH-1): "Reading Vela's conversation…" · "Couldn't read Vela's conversation: …" · "Earlier
   conversations (3)" · "A new conversation · Nov 3" · its day lines, "Today" · "Yesterday" · "Mon, Nov 2" · and
   "Thinking…".
