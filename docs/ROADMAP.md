@@ -912,6 +912,12 @@ its rulings (`draft/rv/james-asks.md`, `draft/rv/lead-rulings.md`); the review `
 - Next: **nightly-20261028**, the first carrying `field-freeway-host` (FW packaging `f47987f18`…`a91fcf351`), and
   round 3, the host's live witness in a package. Then the first-beta list (§3 item 7).
 - prod-builder's review of `4758b9837` (install.ts's census while the inventory is stale) is owed.
+- Landed 11-08: **items 249 and 250** (`458de3e5b` → `05df1fe85`, 3 commits, M222, run222 on vf-m2; LANDED
+  "Items 249 and 250"):
+  - every macOS compile or link names its SDK: one `xcrun --sdk macosx` lookup, handed on as `-isysroot` or `-sdk`,
+    at six sites;
+  - the Last run row reads the host's own days.
+  - vf-m2's first verifies, run220 and run221, were host findings: Xcode 26.3's ld against the CLT 27.2 default SDK.
 
 **EL8 — the pins** · vibe-field-5c (template lane `hl-el8-0724`) · law DECISIONS TB, the manifests
 - Landed: ghosttea 0.13.7 + truffle 0.7.23 (`5ba36785b`); truffle 0.7.24, the split (`af3f3078f`, DECISIONS TB (a)).

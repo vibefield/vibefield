@@ -42529,3 +42529,95 @@ prerelease, IMMUTABLE, 18 assets.
 - ROADMAP's lines that owe "the first signed nightly" (LP-1's W rows, LP-5's packaged notices, LP-6b's remapped
   witnesses) stand as written until the milestone's rewrite; this entry is their data. No row here read the
   packaged app's `legal/`: the stage wrote it.
+
+## Items 249 and 250 — every macOS compile or link names its SDK, and the Last run row reads the host's own days (vf-m2's first verifies; release-adjacent and test-only)
+(2026-11-08; three commits on branch `item249` off main `c1e2a03c7`, cut by fd (vibe-field-aa) in the item190 lane:
+`458de3e5b` → `f8ef3b424` → `05df1fe85`. The packet is `lanes/item249/`: SUMS `7b876ce5` at r1, and `6121b10e` after
+the 08:46Z grandparent note. Landed at 08:44:11Z by the fixer's land-stack, a fast-forward of main to `05df1fe85`, on
+VF-PM's GO after M222.)
+- VF-PM numbered item 249 at 06:40Z (prod-builder's area, cut by fd, who held the read) and item 250 at 07:04Z.
+- No DECISIONS row moves: no rule flipped.
+
+**The red that found it: run220, vf-m2's first `pnpm verify`.** It was 7b-2a's mint at `7739a6a82`: done 06:33:49Z,
+verify 1 after 1 min 43 s. No M220: a host finding (`lanes/vf-m2/run220-a9-results`, SUMS-a9-run220 `f41baab8`).
+- The bundle stage's first step, `build-haptics.mjs`, failed to link:
+  `ld: multiple errors: tapi error: malformed file` …
+  `MacOSX27.2.sdk/usr/lib/libobjc.A.tbd:4:54: error: unknown architecture` (`arm64e.x1-macos`).
+  It said the same of libSystem, libc++, AppKit and Foundation. No test stage ran.
+- **vf-m2's toolchain** (a9's `toolchain.txt`): macOS 27.2; Xcode 26.3 (17C529) selected, clang 17.0.0, ld-1230.1;
+  the Command Line Tools 27.2 installed (their SDK at 2026-11-07T07:35:43Z); `SDKROOT` and `DEVELOPER_DIR` unset.
+  - `xcrun --show-sdk-path` names the CLT's `MacOSX.sdk` (27.2). `xcrun --sdk macosx --show-sdk-path` names
+    Xcode's `MacOSX26.2.sdk`.
+  - So a compile that names no SDK runs Xcode 26.3's ld over the CLT 27.2 stubs, which it cannot read.
+  - Why xcrun's default goes to the CLT's SDK was not read.
+- **a9's probes** (`lanes/vf-m2/sdk-probe-1`, 06:45:23Z, SUMS `92996815`):
+  - clang++ with `SDKROOT` unset: exit 1, the tapi red. With `SDKROOT` set to Xcode's 26.2: exit 0.
+  - rustc 1.99.1, unset and set: exit 0, sdk 26.2. rustc asks for the macosx SDK itself.
+  - The lane's field-native was linked on vf-m2 at 11-07T09:25:16Z, after the CLT 27.2 install.
+
+**The second red: run221, 249's first commit `458de3e5b`.** 06:50:51Z → 06:55:04Z, verify 1 after 4 min 13 s. No
+M221: host-class (`lanes/vf-m2/run221-a9-results`, SUMS `5415d2b0`).
+- 249's own proof held: both "built for arm64" lines printed, and both `.node` files read `minos 12.3 / sdk 26.2`.
+- **dev-runner:** `tests 474` … `fail 1`, at ":629 on this Mac: a dylib named by its target path…". It was the same
+  tapi error at a bare `cc`: 249's class, at a fourth site.
+- **field-app:** `Tests 1 failed | 4400 passed (4401)`, in `godview-last-run.test.tsx`'s "says when the picture was
+  taken…": "expected 'Last run · yesterday 10:39 PM' to match /^Last run · \d/u". That became item 250.
+- **Not red:** electron-shell read `2745 passed | 3 skipped`. `executable-arch.test.ts:99` skips by design without a
+  `target/release/field-native`. VF-PM ruled that the row runs, so a9 built the release binary before run222.
+- Cargo's tests were not reached.
+
+**What landed.**
+- **249, `458de3e5b`** (3 files +48 −0). `apps/desktop/packaging/build-haptics.mjs`, `build-sound-player.mjs` and
+  `build-live-surface-capture.mjs` take `build-screenshot-helper.mjs`'s `capture()` verbatim. Each hands one
+  `xcrun --sdk macosx --show-sdk-path` to `clang++` as `-isysroot`, with a dated note at the lookup.
+- **249b, `f8ef3b424`** (3 files +34 −5): the class closes.
+  - The sweep's rule: any compile or link that names no SDK. That is a spawn of cc, c++, clang, clang++, gcc, ld,
+    swiftc or swift, on one line or across lines, in js/mjs/cjs/ts/tsx/sh/json/yml/rs.
+  - Its three sites:
+    - `tooling/dev-runner/test/build-paths.test.mjs`: `cc` takes `-isysroot` (in verify);
+    - `tooling/terminal-perf/bin/terminal-perf.ts`: `swiftc` becomes `xcrun swiftc -sdk`, with its soft failure
+      kept;
+    - `apps/ios/scripts/splash-stills.mjs`: `xcrun swiftc -sdk` (outside biome, `apps/ios/biome.jsonc`).
+  - Safe, and named so no one re-sweeps them:
+    - the screenshot helper's build and test (`:78`, `:69`);
+    - rustc (probe 3a);
+    - the one `build.rs` (the Windows screenshot crate);
+    - `terminal-perf-lab.ts:902`'s `"cc"`, a Chrome trace category.
+  - terminal-perf and the splash stills are labs that no row runs, so they are proved by reading.
+- **250, `05df1fe85`** (1 file +10 −4, test-only).
+  - The row builds `now` and its three pictures from local wall-clock times (`new Date(2026, 9, …)`).
+  - `eyebrow` (`LastRunCurtain.tsx`) compares LOCAL days and takes no zone, so the component is unchanged.
+  - The UTC literals held only where the host's offset on 10-15 lies outside [+02:00, +03:21). That band is derived,
+    not run. vf-m2's Europe/Amsterdam was +02:00 then.
+  - No `TZ` is pinned in the file or in V.
+
+**Validation: M222, run222 on vf-m2.** `05df1fe85`, tree `23ae27bf3915` (= merge-tree). Armed 08:35:05Z, exit 0 at
+08:40:35Z, 5 min 30 s (`lanes/vf-m2/run222-a9-results`, SHA256SUMS-a9-run222 `585d542a`, 42/42).
+- **The toolchain at the arm** (08:35:04Z): still Xcode 26.3, so the split stood (the default 27.2, `--sdk macosx`
+  26.2). James's Xcode switch was not done.
+- **V:** `FIELDD_ROSETTAD_BIN` set; `SDKROOT` and `TZ` unset.
+  - test on 29 projects; cargo `ok 37, FAILED 0`, its first run on vf-m2;
+  - dev-runner `pass 474`, `fail 0`; field-app 316 files and 4401 tests; electron-shell `2746 passed | 2 skipped`;
+  - fieldd `266 passed | 5 skipped (271)` files and `3758 passed | 15 skipped (3773)` tests;
+  - biome 3504 files, no fixes; census OK; ios fixtures 418, pins 93, icons 51;
+  - the tree clean after; births 0.
+- **The proof rows:**
+  - 249: both `.node` files read `minos 12.3 / sdk 26.2`. The capture build, run after the green V, read `sdk 26.2`
+    for its helper and its adapter, and its outputs were moved aside.
+  - 249b: "on this Mac: a dylib named by its target path leaves with @rpath, a valid ad hoc signature and no builder
+    path" passed (`✔`).
+  - 250: the one file under each `TZ` (Europe/Amsterdam, America/Los_Angeles, Asia/Kolkata, Pacific/Kiritimati,
+    Pacific/Pago_Pago) read `Tests 19 passed (19)`. At `458de3e5b` under Amsterdam it read 1 failed and 18 passed,
+    on run221's assertion. `458de3e5b` is 250's GRANDPARENT: its parent, `f8ef3b424`, touches no `packages/field-app`
+    path, so in substance the red there is the red at the parent.
+- The test stage's 1-min load peaked at 39.34; item 217's line is about 40.
+
+**Errata, at their sources.**
+- fd's first sweep for 249 went by NAME (`xcrun`, `clang++`), not by the idea, and missed the dev-runner test's bare
+  `cc`. run221 found it, and 249b's body names it (`f8ef3b424`).
+- VF-PM's 06:47Z "biome 3505" was run220's tree, where 7b-2a's tip adds a file. Main reads 3504. VF-PM corrected it at
+  its own source (07:05Z).
+- fd's run222 brief (`lanes/item249/PACKET.md`) called `458de3e5b` "250's parent". It is the grandparent (the
+  fixer's read, 08:44Z). A dated note now stands at that line.
+
+**Owed.** 7b-2a's replay onto this main, run223. Nothing else of 249 or 250.
