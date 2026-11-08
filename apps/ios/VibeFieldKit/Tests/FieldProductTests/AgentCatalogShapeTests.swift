@@ -39,7 +39,8 @@ import Testing
     #expect(claude.mark == nil)  // absent — the id is the mark key
     #expect(claude.phone == true)
     #expect(claude.canSpawn)
-    #expect(claude.unknownFields == ["admitted", "decision", "layoutRoot", "seams"])
+    // ES-4 (role, 2026-11-08): `starter`, the hello's ruled starter the row's agent is, unread until ES-5
+    #expect(claude.unknownFields == ["admitted", "decision", "layoutRoot", "seams", "starter"])
 
     // AC-D7: the protocol agent keeps itself off the phone. Its `mark` is
     // absent too since the review (it equalled the id, the contract's own

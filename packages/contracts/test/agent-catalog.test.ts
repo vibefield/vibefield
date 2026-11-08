@@ -17,6 +17,7 @@ import {
   isOffered,
   isVisible,
   kindForCatalogId,
+  starterAgent,
   visibleCatalog,
 } from "../src";
 import { METHODS } from "../src/methods";
@@ -122,6 +123,10 @@ describe("the agent catalog (AC-1)", () => {
     expect(visibleCatalog("phone").some((r) => r.id === "acp")).toBe(false);
     expect(visibleCatalog("desktop").some((r) => r.id === "acp")).toBe(true);
     expect(visibleCatalog().every((r) => r.status !== "declined")).toBe(true);
+    // ES-4 (role): the rows the hello's ruled starters name
+    expect(starterAgent("crew")?.id).toBe("grok");
+    expect(starterAgent("handle")?.id).toBe("claude");
+    expect(starterAgent("reviewer")?.id).toBe("codex");
   });
 
   it("the two generated projections equal the table (regenerate: pnpm --filter @vibefield/contracts gen:schema)", () => {
@@ -256,6 +261,7 @@ describe("the agent catalog (AC-1)", () => {
     expect(readers.isVisible("y")).toBe(false);
     expect(readers.visible().map((r) => r.id)).toEqual(["x"]);
     expect(readers.entry("claude")).toBeUndefined();
+    expect(readers.starterAgent("crew")).toBeUndefined();
     expect(AGENT_CATALOG_READERS.table).toBe(AGENT_CATALOG);
   });
 

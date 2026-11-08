@@ -1,5 +1,5 @@
 import type { AgentFieldRow, AgentProviderSummary } from "@vibefield/contracts";
-import { AGENT_CATALOG } from "@vibefield/contracts";
+import { AGENT_CATALOG, starterAgent } from "@vibefield/contracts";
 import type { BoardRows } from "./sparks-feed";
 import { STARTERS, type Starter } from "./thread-items";
 
@@ -12,6 +12,8 @@ import { STARTERS, type Starter } from "./thread-items";
 //   live runs. The reviewer is an agent this Mac has, the ruled one first, another than the run's own where there is one.
 // - A slot with nothing to fill keeps its ruled word: a sample, which the person edits before sending (ES-D4 A). Read,
 //   no agent slot names an agent this Mac lacks. The night's jobs and the hello take the one reading.
+// - The ruled agents are the catalog's role rows (`starterAgent`; ES-4 role, VF-PM 2026-11-08 23:41Z): which agent a
+//   ruled word names is the table's to say, never this file's (AR-L1), and R23b holds it to no agent id literal.
 
 /** The starters as this Mac fills them: held in their places, wordless, while a read is out; then read. */
 export type StartersReading =
@@ -25,12 +27,19 @@ export interface StarterSources {
   readonly rows: BoardRows;
 }
 
-/** Each slot's ruled word (NS-D4's starters as ruled, §9), and the agents the ruled words name. */
+/** The agents the ruled words name, as the catalog's role rows say, and each slot's ruled word (NS-D4's starters as
+ * ruled, §9): the crew's and the reviewer's labels, and the handle's run as its agent's second (`claude·2`). */
+const ruledCrew = starterAgent("crew");
+const ruledReviewer = starterAgent("reviewer");
+const ruledRunAgent = starterAgent("handle")?.seams.puppeteer?.provider;
 const RULED = {
-  crew: { id: "grok", word: "Grok" },
+  crew: { id: ruledCrew?.id, word: ruledCrew?.label },
   folder: "vibe-field",
-  handle: { agent: "claude", word: "claude·2" },
-  reviewer: { id: "codex", word: "Codex" },
+  handle: {
+    agent: ruledRunAgent,
+    word: ruledRunAgent === undefined ? undefined : `${ruledRunAgent}·2`,
+  },
+  reviewer: { id: ruledReviewer?.id, word: ruledReviewer?.label },
 } as const;
 
 const crewWords = (agent: string): string => `Spawn 4 ${agent} agents to research a topic each`;
@@ -75,7 +84,7 @@ export function startersOf({ agents, rows }: StarterSources): StartersReading {
   const runAgent = last?.kind ?? RULED.handle.agent;
   const handle = last === undefined ? RULED.handle.word : handleOf(last, live);
 
-  let reviewer: string = RULED.reviewer.word;
+  let reviewer: string | undefined = RULED.reviewer.word;
   if (here !== null && here.length > 0) {
     const ruled = here.find((agent) => agent.id === RULED.reviewer.id);
     const other = here.find((agent) => agent.id !== runAgent);
@@ -83,13 +92,23 @@ export function startersOf({ agents, rows }: StarterSources): StartersReading {
     reviewer = pick?.label ?? RULED.reviewer.word;
   }
 
+  // a role no catalog row holds (the table's own test holds each to one row) keeps the hello's whole ruled sentence
   const [spawn, track, review] = STARTERS;
   return {
     state: "read",
     starters: [
-      { glyph: spawn?.glyph ?? "agents", words: crewWords(crew) },
+      {
+        glyph: spawn?.glyph ?? "agents",
+        words: crew === undefined ? (spawn?.words ?? "") : crewWords(crew),
+      },
       { glyph: track?.glyph ?? "panes", words: folderWords(folder) },
-      { glyph: review?.glyph ?? "duplicate", words: reviewWords(reviewer, handle) },
+      {
+        glyph: review?.glyph ?? "duplicate",
+        words:
+          reviewer === undefined || handle === undefined
+            ? (review?.words ?? "")
+            : reviewWords(reviewer, handle),
+      },
     ],
   };
 }

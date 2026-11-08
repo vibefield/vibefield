@@ -139,6 +139,12 @@ export const AgentTaskRoot = z
   .max(256)
   .regex(/^~(\/[^/]+)+$/, "a task root is `~/segment(/segment)*`, `*` for one whole segment");
 
+/** ES-4 (role; VF-PM 2026-11-08 23:41Z, shape A) — the hello's ruled starters,
+ * by DESIGN.md §8 "Filled from this Mac"'s slot names: the crew a starter
+ * spawns, the handle's run it names, and the reviewer it asks. */
+export const AgentStarterRole = z.enum(["crew", "handle", "reviewer"]);
+export type AgentStarterRole = z.infer<typeof AgentStarterRole>;
+
 /** One row of the catalog — STRICT (an unknown key in the table is a typo; the
  * wire form below is the tolerant one). */
 export const AgentCatalogEntry = z
@@ -161,6 +167,12 @@ export const AgentCatalogEntry = z
     /** presentation key for the mark atlases; defaults to `id`; never selects
      * behaviour (the atlases' own rule) */
     mark: z.string().min(1).max(64).optional(),
+    /** ES-4 (role) — the hello's ruled starter whose agent this row is (NS-D4,
+     * §9; ES-D4 A): the ruled words name it, and which agent they name is the
+     * table's to say, never product code's (AR-L1: the role is ours, the id
+     * puppeteer's). Absent: none. Presentation's choice, never a capability;
+     * each role is held by exactly one offered row (the table's own test). */
+    starter: AgentStarterRole.optional(),
     /** the decision trail: the date the row was written or last changed status,
      * and the reference a reader can follow (a slate id, a LANDED section) */
     admitted: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
@@ -233,6 +245,7 @@ export const AGENT_CATALOG = [
     decision:
       "AC-D6 — supported: spawn, re-attach and the real-daemon history join witnessed here; spark claimed 2026-11-04 (CP-5a), its hand witness owed",
     surfaces: { desktop: true, phone: true },
+    starter: "handle",
   },
   {
     // 2026-09-22 AC-D6: `supported` — spawn rows since AR-3 and the scripted
@@ -257,6 +270,7 @@ export const AGENT_CATALOG = [
       "AC-D6 — supported: spawn witnessed here, the join on the scripted daemon; real-daemon join owed",
     surfaces: { desktop: true, phone: true },
     taskRoots: ["~/Documents/Codex/*/*"],
+    starter: "reviewer",
   },
   {
     // 2026-09-22 AC-D6: `preview` — both pins implement it (launch, usage,
@@ -279,6 +293,7 @@ export const AGENT_CATALOG = [
     admitted: "2026-09-22",
     decision: "AC-D6 — preview until a live spawn and history join are witnessed here",
     surfaces: { desktop: true, phone: true },
+    starter: "crew",
   },
   {
     // 2026-09-22 AC-D6: `preview`. The two siblings spell it differently
@@ -484,6 +499,9 @@ export interface AgentCatalogReaders {
   /** PJ-D21 — every row's task roots, whatever its status (a folder an agent
    * made is a task folder whether or not the agent is offered today) */
   taskRoots(): string[];
+  /** ES-4 (role) — the row a ruled starter names, or undefined (no row holds
+   * the role in this table) */
+  starterAgent(role: AgentStarterRole): AgentCatalogEntry | undefined;
 }
 
 export function createAgentCatalogReaders(
@@ -511,6 +529,7 @@ export function createAgentCatalogReaders(
         (row) => shown.includes(row.status) && (surface === undefined || row.surfaces[surface]),
       ),
     taskRoots: () => [...new Set(table.flatMap((row) => row.taskRoots ?? []))],
+    starterAgent: (role) => table.find((row) => row.starter === role),
   };
 }
 
@@ -551,6 +570,12 @@ export function isVisible(id: string): boolean {
  * `surface` applies the row's own visibility (a protocol agent is desktop-only). */
 export function visibleCatalog(surface?: AgentSurface): AgentCatalogEntry[] {
   return AGENT_CATALOG_READERS.visible(surface);
+}
+
+/** ES-4 (role) — the row a ruled starter names: the agent the hello's ruled
+ * words name for that slot, or undefined. Product code asks this, never an id. */
+export function starterAgent(role: AgentStarterRole): AgentCatalogEntry | undefined {
+  return AGENT_CATALOG_READERS.starterAgent(role);
 }
 
 // ── the `agent.catalog` door ──

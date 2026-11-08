@@ -24,6 +24,7 @@
         "invoke": true,
         "spark": true
       },
+      "starter": "handle",
       "admitted": "2026-09-22",
       "decision": "AC-D6 — supported: spawn, re-attach and the real-daemon history join witnessed here; spark claimed 2026-11-04 (CP-5a), its hand witness owed",
       "surfaces": {
@@ -55,6 +56,7 @@
         "invoke": true,
         "spark": false
       },
+      "starter": "reviewer",
       "admitted": "2026-09-22",
       "decision": "AC-D6 — supported: spawn witnessed here, the join on the scripted daemon; real-daemon join owed",
       "surfaces": {
@@ -89,6 +91,7 @@
         "invoke": true,
         "spark": false
       },
+      "starter": "crew",
       "admitted": "2026-09-22",
       "decision": "AC-D6 — preview until a live spawn and history join are witnessed here",
       "surfaces": {
