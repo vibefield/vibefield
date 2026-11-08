@@ -16,6 +16,14 @@
 // on its three faces in both; and DESIGN.md §2.4's ramp (item 127) in pixels, the catalog's "Text ramp" chips (each
 // tier on each chrome ground of the theme) held to their floors, 4.5:1 for a word that is read, 3:1 for t4's marks.
 // Every face's still is kept (JPEG) in `VF_SMOKE_SHOT_DIR`, named by its face (`catalogShot`).
+//
+// A still document (item 264): the catalog animates every scroll (`html { scroll-behavior: smooth }`), and three of its
+// views keep themselves in view as they mount, so each theme's first capture waits until the document has rested a
+// whole `CATALOG.stillMs`, and every capture is bracketed by the document's position: from a face's settled read (its
+// settle inside the bracket) or from just before the ramp's capture, to just after it. A face (or the ramp) the
+// document moved during is walked again once, after the document rests again, and named in the facts' `recaptured`;
+// a second move is red. Every capture that failed is kept in the facts' `captureFailures`, and one that failed on a
+// still document stops the walk. Each theme's wait says what it read, its margin line (`CATALOG_STILL`).
 
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -49,6 +57,10 @@ export const CATALOG = {
   swapMs: 120,
   /** a face settled (or the theme turned), its capture waits this long for the compositor's frames */
   settleMs: 150,
+  /** the document at rest this long before each theme's first capture (item 264) */
+  stillMs: 1_000,
+  /** the document's position read this often while the walk waits for it to rest */
+  stillPollMs: 100,
   /** the kept stills, for the eye */
   jpegQuality: 82,
 } as const;
@@ -90,6 +102,44 @@ export function catalogShot(n: number, at: string): string {
     .replace(/[^a-z0-9]+/gu, "-")
     .replace(/^-|-$/gu, "");
   return `${String(n).padStart(3, "0")}-${name}.jpg`;
+}
+
+/** The document's position as the walk read it (`scrollTop()`, CSS px), `at` ms into its wait. */
+export interface ScrollReading {
+  readonly at: number;
+  readonly top: number | null;
+}
+
+/** Since when the document has rested, once it has rested `quietMs` or more by the last reading: the first reading of
+ * the run at the last one's position. A position the page could not read never rests. */
+export function stillSince(readings: readonly ScrollReading[], quietMs: number): number | null {
+  const last = readings.at(-1);
+  if (last === undefined || last.top === null) return null;
+  let since = last.at;
+  for (let i = readings.length - 1; i >= 0; i--) {
+    const reading = readings[i];
+    if (reading === undefined || reading.top !== last.top) break;
+    since = reading.at;
+  }
+  return last.at - since >= quietMs ? since : null;
+}
+
+/** Whether the document held through a capture, read on its either side; a position the page could not read never
+ * held. */
+const held = (before: number | null, after: number | null): boolean =>
+  before !== null && before === after;
+
+/** A move during a capture in the walk's words, or null when the document held; `times` 2 is the capture walked
+ * again. */
+export function movedDuring(
+  at: string,
+  before: number | null,
+  after: number | null,
+  times: 1 | 2 = 1,
+): string | null {
+  if (held(before, after)) return null;
+  const twice = times === 2 ? ", twice" : "";
+  return `on ${at} the catalog's document moved during the capture (${before} → ${after})${twice}`;
 }
 
 /** The words of a face read off the frame's own capture (`capturePage` over `frame`): every box moved from the
@@ -259,6 +309,8 @@ ${PAGE_WORDS}
       framesOf().length > 0 &&
       document.querySelector("[data-ds-text-ramp]") !== null,
     dark: () => document.documentElement.classList.contains("dark"),
+    /** the document's position (item 264): the document is the catalog's scroller, and it animates every scroll */
+    scrollTop: () => document.scrollingElement?.scrollTop ?? null,
     turn: () => {
       const toggle = document.querySelector(".vf-ds-theme-toggle");
       toggle?.click();
@@ -301,6 +353,8 @@ ${PAGE_WORDS}
       return {
         view: { width: innerWidth, height: innerHeight },
         box: box(production),
+        // the document's position, read with the frame's box: a face's capture is bracketed from here (item 264)
+        top: document.scrollingElement?.scrollTop ?? null,
         fit: shell.getBoundingClientRect().width / shell.offsetWidth,
         standing: root?.getAttribute("data-face") ?? null,
         settled,
@@ -350,6 +404,8 @@ ${PAGE_WORDS}
 /** The frame as the page reads it (`face(n)`). */
 interface FrameRead extends Pick<InksSeen, "view" | "words"> {
   readonly box: Box;
+  /** the document's position, read with the box (item 264) */
+  readonly top: number | null;
   readonly fit: number;
   readonly standing: string | null;
   readonly settled: boolean;
@@ -357,6 +413,32 @@ interface FrameRead extends Pick<InksSeen, "view" | "words"> {
   readonly covered: readonly string[];
   readonly alert: string | null;
 }
+
+/** A capture and the document's position on its either side (item 264): `image` is null where the capture failed,
+ * and `failure` is what it threw (null where it did not). */
+interface Captured {
+  readonly image: NativeImage | null;
+  readonly before: number | null;
+  readonly after: number | null;
+  readonly failure: unknown;
+}
+
+/** A capture that failed, as the walk's facts keep it (item 264): where, the document's position on its either side,
+ * and the first line of what it threw. */
+interface CaptureFailure {
+  readonly at: string;
+  readonly before: number | null;
+  readonly after: number | null;
+  readonly error: string;
+}
+
+/** The first line of what a failure threw. */
+const failureOf = (failure: unknown): string =>
+  (failure instanceof Error ? failure.message : String(failure)).split("\n")[0] ?? "";
+
+/** Whether a box stands whole in the window. */
+const standsWhole = (b: Box, view: { readonly width: number; readonly height: number }): boolean =>
+  b.y >= 0 && b.x >= 0 && b.y + b.height <= view.height && b.x + b.width <= view.width;
 
 /** What the walk needs: its window, made on `CATALOG_PARTITION` over the design build with the catalog loaded. */
 export interface CatalogDriver {
@@ -418,7 +500,86 @@ export async function catalogRows(
   const cuts: InkCut[] = [];
   const readings: RampReading[] = [];
   const unsettled: string[] = [];
+  const recaptured: string[] = [];
+  const captureFailures: CaptureFailure[] = [];
   let lowestFit: number | null = null;
+  // one capture, bracketed by the document's position (item 264): from `since`, the position its caller read with the
+  // geometry it captures (a face's settled read, so the settle stands inside), or else from just before it, to just
+  // after it. A capture the document moved during is not of what the walk read, and one that failed while it moved is
+  // the same move; what a failure threw is kept, never dropped
+  const capture = async (rect: Box, since?: number | null): Promise<Captured> => {
+    const before = since === undefined ? await page<number>("scrollTop()") : since;
+    let image: NativeImage | null = null;
+    let failure: unknown = null;
+    try {
+      image = await d.win.webContents.capturePage(rect);
+    } catch (e) {
+      failure = e;
+    }
+    const after = await page<number>("scrollTop()");
+    return { image, before, after, failure };
+  };
+  // the document at rest a whole `CATALOG.stillMs` before a theme's first capture (item 264); a document never at rest
+  // within `CATALOG.readyMs` stops the walk, its last positions said. What it read is the walk's margin line: how long
+  // it waited, how long the document had rested when it ended, where, and how often it moved meanwhile
+  const untilStill = async (
+    theme: CatalogTheme,
+  ): Promise<{ waitedMs: number; restedMs: number; top: number | null; moves: number }> => {
+    const start = Date.now();
+    const seen: ScrollReading[] = [];
+    for (;;) {
+      const reading = { at: Date.now() - start, top: await page<number>("scrollTop()") };
+      seen.push(reading);
+      const since = stillSince(seen, CATALOG.stillMs);
+      if (since !== null) {
+        const moves = seen.filter((r, i) => i > 0 && r.top !== seen[i - 1]?.top).length;
+        return { waitedMs: reading.at, restedMs: reading.at - since, top: reading.top, moves };
+      }
+      if (Date.now() - start > CATALOG.readyMs) {
+        const last = seen.slice(-5).map((reading) => String(reading.top));
+        throw new Error(
+          `by ${theme} the catalog's document never stood still for ${CATALOG.stillMs}ms within ${CATALOG.readyMs}ms (its last positions: ${last.join(", ")})`,
+        );
+      }
+      await sleep(CATALOG.stillPollMs);
+    }
+  };
+  // a capture walked again, once, when the document moved during it (item 264): first the document comes to rest again
+  // (fd's F2, so a mover still going cannot hit the second capture too), then the attempt re-runs whole (centred,
+  // settled, read, captured), named in `recaptured`. A move during the second is the walk's problem to say, quoting
+  // the last thing a capture of this face threw. Every capture that failed is kept in `captureFailures` (fd's F1); the
+  // caller lets one that failed on a still document stand
+  const steady = async <T extends { readonly shot: Captured | null }>(
+    theme: CatalogTheme,
+    at: string,
+    attempt: () => Promise<T>,
+  ): Promise<T & { readonly moved: string | null }> => {
+    const threw: string[] = [];
+    const take = async (): Promise<T> => {
+      const taken = await attempt();
+      const shot = taken.shot;
+      if (shot !== null && shot.image === null) {
+        const error = failureOf(shot.failure);
+        threw.push(error);
+        captureFailures.push({ at, before: shot.before, after: shot.after, error });
+      }
+      return taken;
+    };
+    const first = await take();
+    if (first.shot === null || held(first.shot.before, first.shot.after))
+      return { ...first, moved: null };
+    recaptured.push(at);
+    await untilStill(theme);
+    const again = await take();
+    const moved =
+      again.shot === null ? null : movedDuring(at, again.shot.before, again.shot.after, 2);
+    if (moved === null) return { ...again, moved: null };
+    const last = threw.at(-1);
+    return {
+      ...again,
+      moved: last === undefined ? moved : `${moved}; the capture failed: ${last}`,
+    };
+  };
 
   mkdirSync(d.shotDir, { recursive: true });
   try {
@@ -439,37 +600,47 @@ export async function catalogRows(
       choices: readonly string[],
     ): Promise<void> => {
       const at = catalogAt({ theme, ...frame, choices });
-      await page<boolean>(`show(${n})`);
-      await sleep(CATALOG.swapMs);
-      let read: FrameRead | null = null;
-      try {
-        read = await until(`${at} settled`, CATALOG.faceMs, async () => {
-          const seen = await page<FrameRead>(`face(${n})`);
-          return seen?.settled === true ? seen : null;
-        });
-      } catch {
-        // judged as it stands, and said: a face that never settles may have words still moving
-        unsettled.push(at);
-        read = await page<FrameRead>(`face(${n})`);
-      }
-      if (read === null) {
+      const walked = await steady(theme, at, async () => {
+        await page<boolean>(`show(${n})`);
+        await sleep(CATALOG.swapMs);
+        let read: FrameRead | null = null;
+        let settled = true;
+        try {
+          read = await until(`${at} settled`, CATALOG.faceMs, async () => {
+            const seen = await page<FrameRead>(`face(${n})`);
+            return seen?.settled === true ? seen : null;
+          });
+        } catch {
+          settled = false;
+          read = await page<FrameRead>(`face(${n})`);
+        }
+        if (read === null) return { read, settled, before: null, rect: null, shot: null };
+        await sleep(CATALOG.settleMs);
+        const before = await page<FrameRead>(`face(${n})`);
+        const rect = rounded(read.box);
+        return { read, settled, before, rect, shot: await capture(rect, read.top) };
+      });
+      // judged as it stands, and said: a face that never settles may have words still moving
+      if (!walked.settled) unsettled.push(at);
+      if (walked.read === null || walked.rect === null || walked.shot === null) {
         problems.push(`on ${at} the frame could not be read`);
         return;
       }
-      await sleep(CATALOG.settleMs);
-      const before = await page<FrameRead>(`face(${n})`);
-      const rect = rounded(read.box);
-      const inView =
-        rect.y >= 0 &&
-        rect.x >= 0 &&
-        rect.y + rect.height <= read.view.height &&
-        rect.x + rect.width <= read.view.width;
-      if (!inView) problems.push(`on ${at} the frame does not stand whole in the window`);
+      const { read, before, rect, shot, moved } = walked;
+      if (!standsWhole(rect, read.view))
+        problems.push(`on ${at} the frame does not stand whole in the window`);
       if (read.covered.length > 0)
         problems.push(`on ${at} the catalog's ${read.covered.join(", ")} stands over the frame`);
-      const bitmap = keep(at, await d.win.webContents.capturePage(rect));
-      const after = await page<FrameRead>(`face(${n})`);
-      if (after !== null) cuts.push(...catalogCuts(at, bitmap, rect, after, before));
+      if (moved !== null) problems.push(moved);
+      // a capture that failed on a still document stands: the walk stops on it, its frame's problems said first
+      if (shot.image === null && moved === null) throw shot.failure;
+      if (shot.image !== null) {
+        const bitmap = keep(at, shot.image);
+        const after = await page<FrameRead>(`face(${n})`);
+        // a capture the document moved during is not of the words read, so nothing is cut from it
+        if (after !== null && moved === null)
+          cuts.push(...catalogCuts(at, bitmap, rect, after, before));
+      }
       const fit = Number.isFinite(read.fit) ? Math.round(read.fit * 10_000) / 10_000 : null;
       if (fit !== null) lowestFit = lowestFit === null ? fit : Math.min(lowestFit, fit);
       faces.push({ at, theme, ...frame, choices, fit, alert: read.alert });
@@ -506,22 +677,40 @@ export async function catalogRows(
       );
       await sleep(CATALOG.settleMs);
       d.say(`CATALOG_THEME ${theme}`);
+      const still = await untilStill(theme);
+      d.say(`CATALOG_STILL ${theme} ${JSON.stringify(still)}`);
 
       // DESIGN.md §2.4's ramp, in pixels
-      const shown = await page<boolean>("showRamp()");
-      await sleep(CATALOG.settleMs);
-      const seen = await page<RampSeen>("ramp()");
-      if (shown !== true || seen === null)
+      const ramp = await steady(theme, `${theme} text ramp`, async () => {
+        const shown = await page<boolean>("showRamp()");
+        await sleep(CATALOG.settleMs);
+        const seen = await page<RampSeen>("ramp()");
+        if (shown !== true || seen === null) return { seen: null, rect: null, shot: null };
+        const rect = rounded(seen.box);
+        return { seen, rect, shot: await capture(rect) };
+      });
+      if (ramp.seen === null || ramp.rect === null || ramp.shot === null)
         problems.push(`by ${theme} the catalog's Text ramp did not stand`);
       else {
-        const rect = rounded(seen.box);
-        const bitmap = keep(`${theme} text ramp`, await d.win.webContents.capturePage(rect));
-        const read = rampReadings(theme, bitmap, { ...seen, box: rect });
-        if (read.length !== 16)
+        // held to the window as each face is (fd's F4), and said before a failure can stop the walk
+        if (!standsWhole(ramp.rect, ramp.seen.view))
           problems.push(
-            `by ${theme} the Text ramp showed ${read.length} chips, not 16 (four tiers on four grounds)`,
+            `by ${theme} the Text ramp does not stand whole in the window: its rect ${JSON.stringify(ramp.rect)} in ${ramp.seen.view.width} × ${ramp.seen.view.height}`,
           );
-        readings.push(...read);
+        if (ramp.moved !== null) problems.push(ramp.moved);
+        if (ramp.shot.image === null && ramp.moved === null) throw ramp.shot.failure;
+        if (ramp.shot.image !== null) {
+          const bitmap = keep(`${theme} text ramp`, ramp.shot.image);
+          // a capture the document moved during is not of the chips read, so nothing is read from it
+          if (ramp.moved === null) {
+            const read = rampReadings(theme, bitmap, { ...ramp.seen, box: ramp.rect });
+            if (read.length !== 16)
+              problems.push(
+                `by ${theme} the Text ramp showed ${read.length} chips, not 16 (four tiers on four grounds)`,
+              );
+            readings.push(...read);
+          }
+        }
       }
 
       for (const [n, frame] of frames.entries()) await walkControls(theme, n, frame, 0, []);
@@ -538,6 +727,8 @@ export async function catalogRows(
   };
   facts["lowestFit"] = lowestFit;
   facts["unsettled"] = unsettled;
+  facts["recaptured"] = recaptured;
+  facts["captureFailures"] = captureFailures;
   facts["errors"] = faces.filter((f) => f.alert !== null).map((f) => [f.at, f.alert]);
   facts["ramp"] = readings.map((r) => [`${r.theme} ${r.tier} ${r.ground}`, r.ratio, r.floor]);
   facts["contrast"] = contrast;
