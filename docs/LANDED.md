@@ -44283,3 +44283,101 @@ untouched; HG-2's sample keeps opening. Pin-class, release-class and release-adj
   returning `top`, as `face()` does, would make the two symmetric. The gap is milliseconds.
 
 **Owed.** The landing gate's row 32 (`smoke:first-run`) on the merged main, landing-only.
+
+## NR S0 + S1 + S2 — a refused native subscription tells its owner, and the owner asks again: NativeLink's `onReplayFailed`, MeshStream, and the five gated consumers re-arm (items 262 and 238, on item 237's root) (2026-11-08)
+
+(2026-11-08; three commits, DR's (vibe-field-cd), in `/Volumes/SamsungRed/lanes/ma/1/vibe-field`, branch
+`nr/bundle-on-6c0d8006c`: doc `39356ee5a` (tree `2e7215e020e7`) → red `f9ede423b` (tree `14d84a181792`) → green
+`33162a078` (tree `fdff419755c9`), on main `6c0d8006c`.
+- **The cut.** On `351bea4ce`: S0 `37e7d23c2` (20:02:23Z) → S1 `4a88c1e2b` (20:17:44Z) → S2 `a5db3bd1f` (21:01:52Z),
+  each its commit's time by the lane's reflog. Re-cut onto `6c0d8006c` at 23:02:01Z (the reflog) by one cherry-pick
+  of the three, in order (`lanes/dr/nr/recut-nr-6c0d8006c.out`). Every tree equals
+  `git merge-tree --write-tree --merge-base 351bea4ce 6c0d8006c <commit>`'s, and the -U0 patch-ids, the invariant
+  (VF-PM 22:09Z), are held: `1f9b22474c3e`, `128acb9dcfc3`, `4710b53666c8`. The plain ids of S0 and S2 moved by
+  context alone (`dc42d8799836` → `6bbd77255fbc`, `eac54a916fe9` → `2eb4842f23af`): ES's records `4bb2ec7b9`
+  rewrote ES's DECISIONS row, two lines above NR's, inside the hunk's 3-line context. range-diff reads `!` `=` `!`
+  on that context alone.
+- **The mint and the land.** Minted as M240 (run 240, vf-m2, a9: V alone); landed `33162a078`
+  (2026-11-08T23:29:01Z) by the fixer, a fast-forward of three onto main `6c0d8006c`.)
+
+**Why.** Track NR ("native re-arm") was opened by VF-PM at 2026-11-08 19:53Z: ONE lane on item 237's root, with items
+238 and 262 as its first consumers. NativeLink told nobody when a native subscription was refused.
+- A boot subscribe the floor's node gate refused was never asked again. The read (Q3, 19:53–19:55Z): it was refused on
+  every fresh start read, 8 of 8 (six dev-root boots, two kept smoke homes). On the two linked lives the node came
+  3.494 s and 2.146 s after the refusal, and nothing re-subscribed. So DocHoldersService never heard the docs store
+  (item 262): `acknowledgements` read null and `homesOf` was blind for the whole fieldd life.
+- A replay refused after a floor restart stayed in NativeLink with no route, and DeviceService's streams froze
+  (item 238).
+
+**What moved.** 19 files, +1460 −48 over `6c0d8006c`, 5 of them added (59 hunks at -U0).
+- **S0, the doc and the golden:** `packages/contracts/fixtures/error-data.mesh-not-up.json` (UNAVAILABLE, retryable,
+  `MeshNotUpDetails` naming `mesh-gateway`, state `starting`) and `test/mesh-gate-refusal.test.ts`, held on the Rust
+  side by `tests/fixture_parity.rs` (one roundtrip line) and `tests/mesh_bridge.rs`
+  (`a_mesh_subscribe_without_a_node_answers_the_gates_golden`); the DECISIONS row, PROPOSED.
+- **S1, the red rows:** `packages/fieldd/src/testing/mock-mgmt.ts` shuts the mock floor's node gate as
+  `mgmt/mesh.rs` does (additive; the defaults move nothing), and `test/native-rearm-matrix.test.ts` holds R1 (262), R2
+  (238) and R4, red as listed.
+- **S2, the cure:**
+  - `native-link.ts`: `subscribe(…, {onReplayFailed})` makes a subscription OWNED. A refused owned replay is ended and
+    its owner told AFTER `emit("connected")`. Only `rawRequest`'s rejection is a refusal. Unowned replays are kept
+    (Q1: NO). The pass iterates a snapshot and skips an entry disposed mid-pass (the mid-pass hazard, the note's §3.3).
+  - `mesh-stream.ts` (new): ONE native mesh subscription that asks again by what refused it. The node gate asks once
+    now if the floor's health reads the node up, else at the next moment; TIMEOUT, a full mesh queue and a held
+    floor's door are paced at 500 ms × 2ⁿ ≤ 10 s; any other retryable waits for the next moment; a final refusal
+    stops the stream, and its owner hears it.
+  - `mesh-client.ts`: `nodeReadsUp()`, `onRearm(fn)`, and `{onReplayFailed}` through `subscribePeers` and
+    `subscribeStoreManaged`.
+  - **The five owners** (VF-PM 20:15Z; the note's §6.1, 15 sites and 19 consumer rows): DocHoldersService takes
+    MeshStream whole; DeviceService's peers and DEVICES legs and the artifacts catalog let go of their latch and ask
+    once through their own chains; the serve stream lets go of its latch and MeshClient's own reconcile asks.
+- No field-native src, Cargo.toml, Cargo.lock, toolchain, lock, manifest, Swift, plugin or renderer file moved.
+
+**A named behaviour change.** DocHoldersService publishes its slice again at every re-arm and on every replayed
+snapshot, because a node built anew holds none of it. Its witness is the NR row in `library-doc-holders.test.ts`.
+
+**The rules and the rulings.**
+- Q4, as amended twice (VF-PM 20:33Z, and 20:47Z for the S2 review's a1): TIMEOUT, a full mesh queue and a held
+  floor's door are paced; every other retryable waits for the next moment; a non-retryable RESOURCE_EXHAUSTED is
+  final. The door is never sent, and a held floor can recover with no redial and no turn of its node, so a wait for
+  the next moment would leave the stream dead.
+- Q5: S0–S2 land as one bundle (doc and golden, `(red)`, `(green)`), and S3 rides the integration lane after
+  EL8-TRUFFLE with its own entry.
+
+**Seen red.** S1's matrix, 4 failed and 2 passed, its red lines exactly as listed before the run
+(`lanes/dr/nr/s1-rows/`). S2's tests over S1's src (row 6s, `lanes/dr/nr/s2-rows-b/`): 10 red and 9 green, as listed.
+Six mutations of S2's src (5a, 6a, 6b, 6c, 8a, 8b), each red exactly where listed, in scratch copies under
+`lanes/dr/nr/s2-mut/`; S2's message quotes every line.
+
+**The review.** Three read-only agents (`lanes/dr/nr/s2-review.md`): 22 findings, all counted. 19 taken, 2 answered by
+Q4's amendment, and 1 declined with its reason (c4: R4a's `order` row already holds the told-after-the-pass law). The
+one bug, a1, was a re-arm lost behind the door gate; ruled PACED.
+
+**The Mac's rows,** each alone through the door, none of record: S0, S1 and S2 as their messages name them, and the
+two wall rows on S2 `a5db3bd1f` (21:35:55–59Z) and again on S2′ `33162a078` (23:02:46–50Z,
+`lanes/dr/nr/r23-rows-s2p/`). On S2′, R23b read 1548 product sources, 19 lexed, 16 allow-list entries each n of n;
+"check-agent-catalog: pass — no agent id literal outside the catalog and the allow-list [--literals]".
+
+**The mint of record, M240** (run 240, a9, vf-m2; `lanes/vf-m2/run240-a9-results/`, SHA256SUMS-a9-run240
+`6c5cb25d`, `run240/verify.log` `5d39fe7e`): `pnpm verify` at `33162a078`, its HEAD by a9's record, V GREEN (armed
+23:15:31Z; exit 0 at 23:21:28Z, 5 min 57 s; the verdict line `verdict/m2-nr240.done`, 23:21:35Z). Against run239 the
+set compare read missing [] / extra [], by a9's runner and by DR's sorted diffs of the count lines and the singles:
+- contracts "Test Files 63 passed (63)", "Tests 1952 passed (1952)"; fieldd "Test Files 269 passed | 5 skipped (274)",
+  "Tests 3785 passed | 15 skipped (3800)";
+- cargo `test result: ok` ×37, with `tests/mesh_bridge.rs` "32 passed" (31 at run239) and `tests/fixture_parity.rs`
+  "20 passed", unmoved;
+- "Checked 3535 files"; "check-test-temp-roots: clean — 267 of 1133 test files make a temp root";
+- every other line run239's, the bundle assert's included.
+- Births: `vf-nr-` 2 and `vf-nr-link-` 1 seen, none kept. KEPT 2, a finding that is not this bundle's (VF-PM
+  23:25:36Z): "births still present after verify's end (= KEPT …): 2: … named: /private/tmp/.tmpeiRSZZ
+  /private/tmp/.tmp1okmTZ" (`lw/summary.txt:148`). By a9's send-back they are Rust tempfile dirs born 23:19:46Z in
+  the cargo tests, holding termcell crumbs and sockets whose crumbs read std's `stdio.rs:1168:9` "Broken pipe": item
+  200's class, as in run235 (`.tmpVZViIk`, `.tmpHUP9Du`), with no live holder, left in place. NR's one new Rust test
+  awaits `daemon.shutdown()` (`mesh_bridge.rs:658`), as its siblings do.
+
+**Not this entry.**
+- **S3**, DriveHolders and DriveLaneRelay on MeshStream (their workarounds retire, and R3 flips): with the integration
+  lane after EL8-TRUFFLE, with its own entry.
+- **Named, not owned (NR follow-ups):** a node built anew leaves a store subscription on the old store with no refused
+  replay (`drive/holders.ts`); egress's route table (§6.1's row 9) keeps the old boot's bound routes until the next
+  reconnect; Q2's readout of streams waiting to re-arm.
+- gate:landing after the land: landing-only, as VF-PM places it.

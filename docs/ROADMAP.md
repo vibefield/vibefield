@@ -552,8 +552,9 @@ page *The Drive*, KB33dCAP, where it moved 11-06 05:45Z from LB8rzJYV; sources `
     "DR-3a", its Owed): row 10's red is items 253 and 254 (253 LANDED M232 `ef22fb3b7`, LANDED "Item 253"; the Mac's
     witness paid GREEN-BUT-263/264 at main `351bea4ce` (recorded `4db42a816`), the BUT settled by items 263 + 264, M239
     `9d2b8d03d`); row 13's is item 255, host state, so `smoke:studio` is owed again, alone, on an awake display.
-  - From DR-3b: item 237 (NativeLink's dead replay tells no one, the relay's one uncured order, carried) and item 238
-    (fold 4 F1's shape claimed in DeviceService and DocHoldersService, a read first).
+  - From DR-3b: items 237 and 238, their root landed by NR S0–S2 (M240 `33162a078`, LANDED "NR S0 + S1 + S2"): a
+    refused native subscription tells its owner, and the five gated consumers ask again. NR's S3 brings
+    DriveHolders and DriveLaneRelay onto MeshStream, with the integration lane after EL8-TRUFFLE.
   - Item 220, DR-1 (B)'s decision before it calls the export: fieldd's `MadeAppExport` moves to the answer rosetta
     shipped, and `artifact.open`'s `reach` is decided against `environment.hosts` (LANDED "EL8 — Rosetta 0.1.4", Found).
   - The reviews' nits: DR-1b's 5, 7 and 9 ride DR-1 (B). DR-2a's 8–11 landed in DR-3a's C1.
@@ -1541,6 +1542,7 @@ Petition status lives in `draft/petitions/README.md`. Still open or owed there:
 | CO — the compose plane | ACTIVE; CP-0, SP-1a, CP-1a…1c, CP-1d, MT-0, CP-2, SP-1b, SP-1c, SP-1d, CP-3 (`ce6577783`, run 88), TU-1 (`57569bca3`, mint M96), the handle (`045f10ec7`, mint M100), items 158 and 159 with CO-1b (`9b3164ccf`, mint M129), CP-5a (`fc70097e3`, mint M140), CP-4a1 (`1a3ca5f24`, mint M143), SP-1e2's fieldd half (`068cab410`, mint M146), TH-1/TH-2 (`d5c6995fb`, mint M147), SP-1e2's card (`320d4b882`, mint M156), CP-4a2a (`c07039551`, mint M159), CP-4a2b's M-h (`aebd6a80b`, mint M163) and M-r1 (`c92b33692`, mint M168) landed | `compose-plane/thinking-roled-agents.md` §15–§17, `compose-plane/v2/`, `thinking-tool-plane.md`; the CO round (Druyc3Ua); DESIGN.md §2.10 | SP-1e4 · CP-4a2b…4f · CP-5b…d |
 | ES — Chat's empty state | ACTIVE since 11-08 (ES-D1…D7 ruled at the leans); ES-1 + ES-2 landed 11-08 (M226 `6b8a4b09f`), ES-3 + ES-4 landed 11-08 (M238 `2c34727a3`) | DESIGN.md §2.4/§2.10/§3/§5/§6/§8/§9 (the ES page `1GdkfmnTxynAp6wHTbAa3a`) | ES-5 (the IOS lane); ES-Q1 (James, §9); the starter's role in the catalog row (ES's follow-up) |
 | HG — History's first view and its waits | ACTIVE since 11-08 (HG-D1…D6, HG-W1…W5 and HG-L1 ruled at the leans); HG-1 + HG-2 landed 11-08 (M235 `3264c54f1`); items 263 + 264 landed 11-08 (M239 `9d2b8d03d`) | DESIGN.md §5/§6/§8/§9 (the HG pages `U12DeYQrZB4YRjycrR4wuR` and `9ByDzaNGQaijgSHW6GrZUb`) | HG-3 (rosetta's `waitMark`, RO-40) → rosetta-room 0.1.6's EL8 → HG-4, History's holds in the living mark |
+| NR — native re-arm | ACTIVE since 11-08 (opened by VF-PM 19:53Z, Q1–Q5 answered); S0–S2 landed 11-08 (M240 `33162a078`) | `draft/thinking-native-replay-rearm.md`; DECISIONS NR | S3 with the integration lane after EL8-TRUFFLE; the named follow-ups (LANDED "NR S0 + S1 + S2", Not this entry) |
 | A — shell and spine | COMPLETE | design-03, `specs/electron-shell-refactor.md` | Settings on demand (Q20, §3 item 6) |
 
 **Retired and superseded tracks**
