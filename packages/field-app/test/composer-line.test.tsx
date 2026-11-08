@@ -21,6 +21,7 @@ import type { FrameSurface } from "../src/frame/frame-surface";
 import {
   claimingRefusals,
   type HistoryLineDoor,
+  hearLineCreateOver,
   type LineViewDoor,
   resetHistoryLineDoorForTest,
   runChosenSession,
@@ -623,6 +624,45 @@ describe("what a terminal could not take (D6)", () => {
     act(() => root?.unmount());
     root = null;
     expect(hearRefusal).toBeNull();
+  });
+});
+
+describe("the create's over, which Chat's night hears (track ES, ES-3a; DESIGN.md §6, the lean)", () => {
+  it("says whether the create is under the pointer or the keyboard's focus — over, or not, and nothing more", () => {
+    const heard: boolean[] = [];
+    const stop = hearLineCreateOver((over) => heard.push(over));
+    try {
+      mount("assistant");
+      act(() => {
+        create().dispatchEvent(
+          new PointerEvent("pointerover", { bubbles: true, relatedTarget: null }),
+        );
+      });
+      act(() => {
+        create().dispatchEvent(
+          new PointerEvent("pointerout", { bubbles: true, relatedTarget: document.body }),
+        );
+      });
+      act(() => create().focus());
+      act(() => create().blur());
+      expect(heard).toEqual([true, false, true, false]);
+      // the pointer and the keyboard's focus at once are one over: the create stays over until both have gone
+      act(() => create().focus());
+      act(() => {
+        create().dispatchEvent(
+          new PointerEvent("pointerover", { bubbles: true, relatedTarget: null }),
+        );
+      });
+      act(() => create().blur());
+      act(() => {
+        create().dispatchEvent(
+          new PointerEvent("pointerout", { bubbles: true, relatedTarget: document.body }),
+        );
+      });
+      expect(heard).toEqual([true, false, true, false, true, false]);
+    } finally {
+      stop();
+    }
   });
 });
 

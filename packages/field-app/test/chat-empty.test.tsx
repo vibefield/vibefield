@@ -4,13 +4,14 @@ import { fileURLToPath } from "node:url";
 import { AGENT_CATALOG, type AgentProviderSummary } from "@vibefield/contracts";
 import { act, type ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { ChatEmptyView } from "../src/chat/ChatEmptyView";
 import { ChatPanelView } from "../src/chat/ChatPanelView";
 import { nightAgentsOf, offWords } from "../src/chat/night-agents";
 import { STARTERS } from "../src/chat/thread-items";
 import { ChatPreview } from "../src/design-system/ChatPreview";
 import { settingsOpening } from "../src/field/shell-presentation";
+import { sayLineCreateOver } from "../src/frame/line-door";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -219,6 +220,91 @@ describe('Chat, empty: the night (DESIGN.md §8 "Chat\'s list"; track ES)', () =
     const css = read("../src/chat/chat-empty.css");
     expect(css).toMatch(
       /@container [a-z-]+ \(max-height: 439px\) \{\s*\.vf-chat-empty-or,\s*\.vf-chat-empty-jobs \{\s*display: none;/u,
+    );
+  });
+});
+
+describe("the lean (track ES, ES-3a; DESIGN.md §6, the lean: the portal's first move, shown before it is made)", () => {
+  const night = (): HTMLElement | null => $(".vf-chat-empty");
+  const leaning = (): boolean => night()?.dataset.lean === "true";
+  const over = (element: Element | null | undefined) =>
+    act(() => {
+      element?.dispatchEvent(
+        new PointerEvent("pointerover", { bubbles: true, relatedTarget: null }),
+      );
+    });
+  const out = (element: Element | null | undefined) =>
+    act(() => {
+      element?.dispatchEvent(
+        new PointerEvent("pointerout", { bubbles: true, relatedTarget: document.body }),
+      );
+    });
+  const wait = (ms: number) => act(() => vi.advanceTimersByTime(ms));
+
+  it("leans the night under the pointer or the keyboard's focus on New spark or a job, and lets it go once nothing holds it for 90ms", () => {
+    vi.useFakeTimers();
+    try {
+      mount(<ChatEmptyView />);
+      expect(leaning()).toBe(false);
+      over(button(".vf-chat-empty-new"));
+      expect(leaning()).toBe(true);
+      out(button(".vf-chat-empty-new"));
+      wait(89);
+      expect(leaning()).toBe(true);
+      wait(1);
+      expect(leaning()).toBe(false);
+      // from New spark to a job within the 90ms, it never lets go between them
+      over(button(".vf-chat-empty-new"));
+      out(button(".vf-chat-empty-new"));
+      wait(50);
+      over(starters()[1]);
+      wait(100);
+      expect(leaning()).toBe(true);
+      out(starters()[1]);
+      wait(90);
+      expect(leaning()).toBe(false);
+      // the keyboard's focus holds it as the pointer does
+      act(() => starters()[0]?.focus());
+      expect(leaning()).toBe(true);
+      act(() => starters()[0]?.blur());
+      wait(90);
+      expect(leaning()).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("leans for the line's ✦ while Chat is the view (the frame says, the night hears), and not while Chat is not", () => {
+    vi.useFakeTimers();
+    try {
+      mount(<ChatEmptyView active />);
+      act(() => sayLineCreateOver(true));
+      expect(leaning()).toBe(true);
+      act(() => sayLineCreateOver(false));
+      wait(90);
+      expect(leaning()).toBe(false);
+      act(() => root?.render(<ChatEmptyView active={false} />));
+      act(() => sayLineCreateOver(true));
+      expect(leaning()).toBe(false);
+      act(() => sayLineCreateOver(false));
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("moves the night alone by §6's numbers: its edge in 6, corners 22 to 16, in on the island curve, back on the retract curve, and nothing under reduced motion", () => {
+    const css = read("../src/chat/chat-empty.css");
+    const rest = css.match(/^\.vf-chat-empty \.vf-spark-night \{([^}]*)\}/mu)?.[1] ?? "";
+    expect(rest).toMatch(/clip-path: inset\(0 round 22px\);/u);
+    expect(rest).toMatch(/clip-path 240ms cubic-bezier\(0\.4, 0, 1, 1\)/u);
+    const lean =
+      css.match(/^\.vf-chat-empty\[data-lean="true"\] \.vf-spark-night \{([^}]*)\}/mu)?.[1] ?? "";
+    expect(lean).toMatch(/clip-path: inset\(6px round 16px\);/u);
+    expect(lean).toMatch(/clip-path 240ms var\(--vf-ease-island\)/u);
+    // reduced motion (M6): nothing moves
+    const reduced = css.slice(css.indexOf("@media (prefers-reduced-motion: reduce)"));
+    expect(reduced).toMatch(
+      /\.vf-chat-empty\[data-lean="true"\] \.vf-spark-night \{\s*clip-path: inset\(0 round 22px\);/u,
     );
   });
 });
