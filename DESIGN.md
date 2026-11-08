@@ -874,6 +874,7 @@ exception again.
 | Night glass (track ES, 2026-11-08; the ES page's anatomy, under ES-D1 A) | white at 7% (`--vf-night-glass`; 12% under the pointer, `--vf-night-glass-hover`) over a 16 blur (`--vf-night-glass-blur`), ringed inset by white at 14% (`--vf-night-glass-ring`); the same in both themes, for it stands on the night (§2.4) | the starters on the hatch's night (§8 "Chat's list", empty; the phone's empty page after ES-5). Behind the night's words a hush, the night at 58% (`--vf-night-hush`), so no star crosses a word |
 | Search scrim (GV-D8; K7, 2026-10-08) | `black/16` light · `black/46` dark, over a backdrop blur of 18 and `saturate(0.9)` | behind the Peek (§8 "Search"): the window blurred and dimmed, the view and the frame receding to `scale(0.98)` under it. Darker than the backdrop dim so it reads as dimmed (One Frame §23); the backdrop dim stays the sheets' until James rules otherwise (docket PK1). *Since TS-D22 A (2026-10-29):* the phone wears its dim alone, with no blur, under a door that stands over a live field, between the field and the bar (§9). *Retired 2026-11-02 (WI-1, §9's amendment of that day):* no page stands over the field, so the phone wears no scrim, and its Swift copy (`ChromePalette.searchScrim`) and that copy's check went with it. *Returned 2026-11-06 (SE-D3 A, ruled by James on the page The Bands Meter):* the phone's search is a glass sheet over the live field (§8 "The phone's search"), so the phone wears the dim again, alone with no blur, at these two values, fading in 240ms; a tap on it closes search. Its Swift copy comes back as `ChromePalette.searchScrim`, held to `--vf-search-scrim` by its check (SE-2) |
 | Setup Assistant (as built since UA-3w; written down 2026-10-29, track FG; on the field, built at FG-3a as the browser's layers, and since FG-3b drawn by the field's own pass over the live field) | `--vf-wizard-surface` (white 75% by day, `rgb(28 28 30)` 55% by night) over a blur of `--vf-wizard-blur` (32px) and a saturation of `--vf-wizard-saturate` (1.12), the island radius (32). On the field (FG): a 1px edge, `--vf-wizard-edge` (white 60% by day, 12% by night) with a top light, `--vf-wizard-edge-light` (white 75%, 8%); the field's shadow, `--vf-shadow-wizard-field` (`0 40px 120px` and `0 12px 32px` in the field's ground at 55% and 28%); and a grain at `--vf-wizard-grain` (3%), so the blur never bands. Its logo (FG-4b): `--vf-wizard-logo-filter`, `invert(1) hue-rotate(180deg)` by day and `none` by night, so the mark is white on smoke and inverted on milk with its colours kept. Its words (FG-O2's judge, and its fix after row 32 at run59b, 2026-10-31): the ramp stops at the glass's own t2, `--vf-wizard-text` (`rgb(28 28 30)` 80% by day, the ramp's t2 by night), t2, t3 and t4 re-projected to it there (`--vf-text-secondary`, `--vf-text-tertiary`, `--vf-text-faint`); a state word takes its glass ink (§2.5), `--vf-ink-healthy` and `--vf-ink-attention` re-projected to `--vf-wizard-ink-healthy` (`#104C1F` by day) and `--vf-wizard-ink-attention` (`#683400` by day), the inks themselves by night; and a quiet button's words stand at t1 on its fill; its panes' words go with its own, so every word on it reads at 4.5:1 (§8) | the Setup Assistant's glass (§8): on the field its frost lets the tunnel's rings through softly (FG-D15 C; by day through a 75% milk since FG-O2's judge, 2026-10-31, at a little over half the strength 55% let through). Over the live field the field draws this recipe itself, in its own frame and from these tokens (FG-D24); over the field's still the backdrop filter draws it |
+| History's sample (track HG, HG-D2 ruled by James 2026-11-08, frost; built at HG-2) | the room itself under ONE filter on its own layer, never a backdrop filter: a blur of `--vf-history-sample-blur` (7px) at a saturation of `--vf-history-sample-saturate` (0.9), the layer at `--vf-history-sample-opacity` (62% by day, 56% by night) over the cover's glass. Frost, never haze (at 3px and 72% the transcript half-reads) and never a skeleton (it loads nothing); drawn once, and again only on a resize or a theme change | behind History's consent card while the index waits for consent (§8 "History", before its past) |
 
 **Menus are solid, floating controls are glass** (One Frame FR-7, FC-D14 ruled 2026-10-01): a menu
 is rows to be read, so it is `--vf-chrome-solid` — opaque — ringed by `--vf-hairline-strong`, with
@@ -1180,6 +1181,22 @@ the logo and one line (FG-L5), and the product's loads often answer in milliseco
 that answers before the pane it follows has faded out (120ms) shows no hold at all, and a hold that has begun to show
 stands at least **800ms** — the logo's 400 in, then a beat to read the line — before its words and the logo leave. The
 frame keeps the floor: the leaving hold stays whole until it is met, then fades as any pane does.
+*Amended 2026-11-08 (track HG; HG-D5, HG-D6, HG-W1 and HG-L1 ruled by James; §8 "History"):* History's motions before
+its past and while it waits. **The room develops** (HG-D5), once each time History shows while the index waits for
+consent: the sample comes into focus from a 24px blur at nothing to its frost (§5, History's sample) over **640ms on
+the island curve**, stopping short of sharp, while the card forms **160ms** behind it, `.985 → 1` with its opacity over
+560ms on the island curve, as the Setup Assistant's glass forms; ⌘3 out and back develops it again, a resize or a theme
+change does not. **The sample leaves at once** (HG-D6): when the room stops waiting the card goes in **240ms on the
+retract curve** (to `.985`) and the sample fades over **480ms `ease`**, uncovering the room's own import, which never
+waits for them. Reduced motion: each is one 120ms `ease` fade. **The mark means working** (HG-L1): a living mark that
+stands for a wait (§8 "The living mark, drawn as SVG") moves only while that work moves. A wait whose work has stopped
+answering (its updates paused) shows the mark at rest, the icon's pose, beside its words, and the mark moves again when
+the work does; reduced motion stands every mark at rest. **History's holds** (HG-W1) move as FG-4b's: late as the
+veil's words are (nothing for 120ms, then the words over 180ms `ease` and the mark in over 400ms with them), a new line
+crossfading in place (140ms out, then 240ms in) while a new sub under the same line only counts, the mark out over
+280ms when the hold leaves, never travelling, scaling or taking a second place. A hold that has begun to show stands at
+least 800ms (the floor above), and a hold the room takes over while it shows is carried, never faded out and shown
+again.
 
 *(Godview round 3, built 2026-10-12; its status is §8 the deck's.)*
 **The terminals rise and fall** (Godview's deck, §8; One Frame §22 "Shared mechanics" and §23 —
@@ -4562,6 +4579,12 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   the field's own mark pass on one clock (14 moments of a whole twist, at 2× and 4×) it differs by a mean of about 1
   of 255 over its box. Its motion is the renderer's main thread's, as any SVG motion is, so a long task freezes it
   where the field, in its worker, never stops; ~20 KB a ground.
+  *Amended 2026-11-08 (track HG, HG-W4; its first surfaces, ruled by James):* it stands in History, in three places and
+  nowhere else there: the view's hold (99 wide, its own size), a conversation's hold in the transcript's column (99),
+  and the import card's head (40 wide, where IMPORTING HISTORY stood; §8 "History"). At most two show in History at
+  once, the card's and a conversation's. It moves only while its work does (HG-L1, §6): a paused wait's mark stands at
+  its rest, the reduced-motion pose, from a still the generator writes beside each ground, so a host swaps the file
+  rather than reaching into one. Its other surfaces wait for their own rulings.
 - **The phone's splash** (2026-11-01; `apps/ios/VibeFieldKit/Sources/FieldSplash`): the phone's first face
   is the field too, in its own design — vibefield-splash's **iPhone splash** (`splash/look-iphone.json`, tuned
   apart in the studio's iPhone window). By night (the window's Appearance, Settings › Appearance; Auto follows
@@ -5633,6 +5656,47 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     stand as rosetta draws them, and VibeField feeds them every field they read (each project's
     progress, the search build's stage, the daemon's clock). A percentage names its step, never an
     invented whole, and the only sign outside History is the views track's arc (§6).
+    *Amended 2026-11-08 (track HG; HG-W1…HG-W5 ruled by James 06:35:59Z, "good, go with your lean and start
+    implementation", on the page The Mark Holds, `9ByDzaNGQaijgSHW6GrZUb`):* the room's import keeps its shape, its
+    steps and its place, and wears VibeField's mark. A host input, **`waitMark`** (HG-W5), hands the room the living
+    mark (§8 "The living mark, drawn as SVG") for each place it waits, and the room draws its waits with it, as it takes
+    the connecting title and the consent slot; without one, rosetta's own app keeps its meters. **The view's waits are
+    one hold** (HG-W1): reaching the index ("Opening History…") and the cold start's first step stand the mark at the
+    centre of the room's box with one line 26 under it, in the Setup Assistant's words (`history-line.ts`: "Finding
+    your history…", then "Discovering conversations…" over its files checked), so the first run and History say one
+    thing; the step's eyebrow, its count of steps, the connection and the timer move under Agent details once projects
+    arrive. **The import card keeps its place** (HG-W2) at the head of the first column, never over a project you can
+    open (the room's own law, `ingest.css`: "Progress describes its named step and never covers available content"):
+    the mark, 40 wide, where IMPORTING HISTORY stood, the step beside it, then the step's title and its count; the
+    detail, the bytes, the connection and the timer fold under Agent details. **Progress is a colourless hairline**
+    (HG-W3): 2px, the ramp's t2 over the strong hairline, shown only while the step knows its fraction (a step that
+    does not shows no bar: the mark is the sign of working), never a sweep and never `--vf-select`. The card's bar is
+    selection blue today (`ingest.css`), against the room's own word for its meter ("The room's colourless meter",
+    `Meter.tsx`). **The mark stands in three places** (HG-W4): the view's hold, a conversation's hold in the
+    transcript's column, and the import card; the rows keep their own ink on real figures and the frosted charts their
+    words. A paused import's mark stands at rest (HG-L1, §6). *Status 2026-11-08: ruled, to be built: upstream first,
+    in rosetta's room (HG-3, released in rosetta-room 0.1.6), then VibeField's EL8 to it and HG-4; until then the import
+    stands as rosetta 0.1.4 draws it.*
+  - **Before its past, the room behind glass** (track HG; HG-D1…HG-D6 ruled by James 2026-11-08 05:56:00Z, "good", on
+    the page The Room Behind Glass, `U12DeYQrZB4YRjycrR4wuR`, every mark at its lean): while the index waits for
+    consent the view is the room seen through glass, never a list on an empty view. **The sample** (HG-D2, frost):
+    behind the card stands the room itself, the package's demo (`@vibefield/rosetta-room/fixtures`) through the
+    shipping by-project adapter over a data-only fixture fieldd, so it is History as it ships and lays itself out at
+    the window's size and theme; under §5's frost it is inert, hidden from assistive tech, keeps no preferences, asks
+    fieldd nothing, and opens at the demo's chosen session with every motion inside it stopped. Never a still (it
+    would go stale at rosetta's next release), never a skeleton (it loads nothing), and no lens and no shimmer (FG-D15
+    C kept the frost without the lens; §6 keeps loops for a wait on a fact). Its projects bear VibeField's own names
+    (vibe-field, rosetta, …), real-shaped as §9 asks, and none reads under the frost. **The card** (HG-D1, HG-D3): the
+    History pane itself, its rows, its switches and its act, in the Setup Assistant's glass (§5), 496 wide, padded 32
+    32 26 and centred in the room's box, where the room's cold start stands next. **The sample line** (HG-D4): one
+    line under the act, 12px in t3, "The room behind this card is a sample. Yours takes its place." **The press**
+    (HG-D6): Bring in history says **"Bringing in…"** while `index.enroll` restarts the service with the set (§7's
+    running press: its look kept, its hits off), and when the room stops waiting the sample leaves at once (§6). A
+    census with nothing to bring in says so with a way on, never a dead end: **"Your history starts here."** over
+    "When you work with an agent on this Mac, its sessions appear here, by project, ready to pick up again." and a
+    quiet **Look again**, its sample line the short "The room behind this card is a sample." The census's other
+    states (looking, unavailable, a refusal, nine agents) stand as the pane draws them, on the glass; in History the
+    unavailable note says only "History isn't available right now." (§9). The develop and the leave are §6's.
   - **It lists your projects** (PJ-4, H1–H6 ruled (a) 2026-10-09; "we map, the room draws"): the
     room's projects are fieldd's (`project.list`: places grouped by evidence, PJ-L1), each session
     filed under the key fieldd joined it to, and what the room draws beyond its own rows is
@@ -5762,6 +5826,13 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     Retry). *Amended 2026-10-27 (AO-6a; §9 "The agents' words", the page's rewrite): it says
     **"Opening History…"** and nothing under it. "rosetta's room is loading." named the machinery,
     which is never on screen.*
+    *Amended 2026-11-08 (track HG, HG-W1; built at HG-4 together with the room's own hold, never alone, so History's
+    open stays one state):* the face is the hold (FG-4b's, §8 "The Setup Assistant's glass") in History's box: the
+    living mark at its centre (rows `1fr | the mark | 1fr`), on the theme's ground (`light` by day, `dark` by night),
+    and "Opening History…" 26 under it (400, 14px/1.4, t2) over its sub's 17 (12px/1.4, t3), in tabular figures; the
+    kit's empty state and the `history` glyph leave it. It is late as before, and its motions are §6's. The room that
+    takes its place carries the same hold while it reaches the index and through the cold start's first step (above),
+    so the mark never moves and only the words change. A room that could not open is unchanged: its words and Retry.
   - **Its search is the Peek** (§8 "Search — the Peek"; built 2026-10-08, P1). The search interim
     (ruled by James 2026-10-04) retired with its landing, as AR-D41 said it would: the room's strip
     no longer holds its launcher pill and the room's own sheet is never drawn — VibeField passes the
@@ -7473,6 +7544,13 @@ Inside History the room's own words stand as rosetta wrote them, and the Setup A
   `ao-states-diff.mjs`; VF-PM 2026-10-27).
 - One row stands by decision. An agent that never says who keeps Settings' "Doesn't say who is signed in" over the
   page's "Signed in · doesn't say which account": VibeField cannot know it is signed in.
+
+*Ruled 2026-11-08 (track HG; §8 "History", before its past):* History waiting for consent says **"Bringing in…"** on
+its pressed act and, under the act, "The room behind this card is a sample. Yours takes its place."; with nothing to
+bring in, **"Your history starts here."** over "When you work with an agent on this Mac, its sessions appear here, by
+project, ready to pick up again." and **Look again**. In History the unavailable note is its first sentence alone,
+"History isn't available right now.", for the second ("You can bring sessions in later from History.") is the Setup
+Assistant's to say. History's waits say the Setup Assistant's words (`history-line.ts`), which are the room's own.
 
 **The meters' words** (track UM, ruled 2026-11-06 from the page *The Bands Meter*; where each word stands is §8 "The
 Bands circle", "Godview's profiles column", "The moments", "The phone's corner" and "The phone's profile token").
