@@ -42865,3 +42865,80 @@ half owed (LANDED "Item 241 (241a)"). VF-PM's GO 2026-11-08 04:12Z; rulings 04:2
 - Item 242 (the phone kit's faint words, sorted by §2.4: 29 to t3, 11 to t4), cut on this tip, its kit row R on the
   old mini, its stills judged by 244's rule; item 248 (the phone's t3 under §2.4's floor by day, James's eye on 56%);
   item 251 (the mock fleet's seed door for the stills, so the Field badge is judged at max 0).
+
+## ES-1 + ES-2 — Chat's empty panel is the hatch's night: its words on the night's ink, New spark (Off from the kit's own button where no agent here can be a spark), and three first jobs that open the New spark sheet carrying themselves (track ES)
+
+(2026-11-08; six commits on branch `es/night` in the es lane, cut by ES (vibe-field-b4) on main `c1e2a03c7` (push
+124) and replayed onto main `042ca0f2e` by `git replay` from the corrected series over `c1e2a03c7`: T's tree EQUAL
+to `git merge-tree` of `042ca0f2e` and the series, the full-index patch-id `518584cb`
+(`lanes/es/mint/es12-6b8a4b09f-on-042ca0f2e`): `14ce7b7a8` (ES-1 doc, DESIGN.md), `06b0bb7c4` (ES-1 red),
+`35ea531f9` (ES-1 green), `5e53de3da` (ES-2 doc), `7c8223669` (ES-2 red) and `6b8a4b09f` (ES-2 green, T, tree
+`295fef7cb`). Witnessed on the Mac, each row alone through the HOLD door, and minted by run 226 at T on vf-m2.
+Landed 10:38:54Z by the fixer as `6b8a4b09f` (M226), a fast-forward of main `042ca0f2e`.)
+James asked on 2026-11-08 for a designed empty state for Chat that invites the first spark, then for an immersive
+round two: "the entire screen is the night sky … the window is like a portal and shrink to the small window inside
+the create spark popup". The ES page (`1GdkfmnTxynAp6wHTbAa3a`, *Your First Spark*, round two *The night that becomes
+the window*) carried seven marks, and he ruled every one at its lean: ES-D2…D7 (a) at 04:27:25.233–04:27:26.849Z
+and ES-D1 (a) at 04:31:19.810Z (the page's `decisions` records), then "All ruled with leans, now please start
+implementation" (04:32:54Z; DECISIONS "ES"). VF-PM's rulings: the correction 06:40Z, one bundle 06:52Z, the freeze
+10:18Z.
+
+**What moved.** 36 files, +2082 −103 over `042ca0f2e`, 11 of them added.
+- The design doc, DESIGN.md: +112 −4 in 11 hunks (§2.4, §2.10, §3, §5, §6, §8's "Chat's list", "The New spark
+  sheet" and "The phone's Chat", and §9's "Chat on the phone" and "Chat's words").
+- design-kit: the night (`spark-face/night.tsx`), its CSS, and the night's tokens in `tokens.css`.
+- field-app: Chat's empty view, the night's agents, the starter, the first job, the sheet's job and the catalog's
+  plates. The two `*-fixtures.ts` are the catalog's adapters (UI_SYSTEM's), not fixtures of record.
+- No release-class or release-adjacent file is in the range. Pin-class, `.github`, `scripts/`, `docs/`, `plugins/`,
+  contracts and `PUPPETEER_` read 0.
+
+**What is real.**
+- **ES-1**, DESIGN.md first, the round's doc whole: §2.4 the night's ink; §2.10 the night before the first spark; §3
+  the Headline row; §5 night glass; §6 the night at rest, its lean and its portal (the lean and the portal are built
+  at ES-3); §8 "Chat's list" Empty: the night, and "The New spark sheet" From the night and Its first job; §9 the
+  words. tokens.css gains `--vf-night-*` and `.vf-on-night`.
+  - The kit's `SparkNight` (`spark-face/night.tsx`) is the hatch's night alone at the panel's size, its bloom on, no
+    star dealt. It keeps §6's rest rule: live while you are here, still 20 s after the last pointer, easing out over
+    2 s. Reduced motion draws it once, it draws no frame out of sight, and without WebGL2 it is its ground.
+  - `ChatEmptyView` carries "Make your first spark", the sentence, New spark (the line's create, ⌘N printed on it)
+    and "Or give it a first job" with the hello's three starters in night glass (`ChatStarter`). A hush stands behind
+    the words, and a short panel drops the jobs.
+  - `night-agents.ts`: New spark is Off, from the kit's own button, where no agent here can be a spark (the catalog's
+    `offers.spark`, read from `agent.providers`). The sentence under it says which agents can, Open Agents settings
+    opens Settings → Agents, and no job is offered.
+  - The catalog's plates "The night", "The night, no agent" and "The night, short" mount the shipping view.
+- **ES-2** (§8 "The New spark sheet", Its first job): a starter opens the sheet carrying itself (`first-job.ts`,
+  `useFirstJob`), and the sheet draws it still under the agent with its × ("Remove its first job"). Create hands it
+  to Chat with its choice (`chooseSpark(spark.id, job)`), and Chat sends it once, as Send sends, once the hatched
+  spark's row is read. The catalog's "Its first job" plate shows it.
+
+**Corrected before landing** (VF-PM 06:40Z). ES-2 found that ES-1's clause said a refusal is said "in the thread",
+and Send's never is. At the replay ES-1's doc carries the corrected clause ("a send not taken is said as Send's is,
+in the line's note") with its dated words, which name where the error was found, and ES-2's doc holds only its own
+addition.
+
+**The witnesses.**
+- The MacBook, before the mint: 72 rows, each alone through the HOLD door at main `042ca0f2e` and at T (10:16–10:23Z;
+  `es12-rows-summary.txt` in the packet). tsc read 0 errors in design-kit, field-app and electron-shell; check:walls
+  and check:retired were clean; biome checked 3517 files. field-app's 33 files read +4 files and +38 tests
+  (chat-empty 11, spark-night 4, night-tokens 4 and chat-first-job 8; chat-view 41 → 46, chat-composer 71 → 73 and
+  chat-thread-items 22 → 26), the other 29 unchanged.
+- **Run 226 at T on vf-m2, green** (a9): verify exited 0, V from 10:30:02Z to its own end at 10:35:43Z, 5 min 41 s,
+  at Xcode 26.3, with rosettad the `a8ab1f13f` build. The packet was `lanes/es/mint/es12-6b8a4b09f-on-042ca0f2e`
+  (SUMS `4ec3b1a6`: brief `9df551db`, bundle `897e46a1`); the results are `lanes/vf-m2/run226-a9-results`
+  (SHA256SUMS-a9-run226 `25f86ecc`, 16 of 16 OK here).
+  - Against M225's lines: of the 56 count lines, only field-app moves, to 321 files and 4463 tests.
+  - The test temp roots read "266 of 1125" and biome "Checked 3517 files" (73 warnings and 21 infos, M225's own).
+    fieldd reads 3762 passed | 15 skipped, electron-shell 2746 | 2, contracts 1949; cargo ok 37, FAILED 0;
+    dev-runner 474 of 474; the census OK. bundle:assert reads initial 953.2 KB raw / 251.8 KB gz (M225's 952.5 /
+    251.7), its shape M225's.
+  - The tree was clean and stubs 0. One /private/tmp birth was KEPT, `.tmp8Jdsdf` (it holds `native`): a reading,
+    item 200's class, unattributed for this run. At the arm the patch-id read `518584cb` EQUAL and every guard 0.
+
+**Owed.**
+- The second bundle, ES-3a…3e and ES-4 (the lean; the portal, its hand-off and its motion; the starters filled from
+  this Mac), on `es/night` (`e3df03ff5`), re-cut onto main after these records, with its open question ES-Q1.
+- ES-5, the phone's night (the IOS lane).
+- James's eye on the built app: §6's rest rule for the night, §8 "Chat's list" Empty: the night, and a first job
+  carried into the sheet and sent once.
+- gate:landing after the land: the stills and the smokes, landing-only; a re-bless, if any, said there.

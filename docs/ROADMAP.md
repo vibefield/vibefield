@@ -915,6 +915,18 @@ its rulings (`draft/rv/james-asks.md`, `draft/rv/lead-rulings.md`); the review `
     spark's brief and allowance (PU-O). Only CP-5c's Codex claim commit waits for step 7's profile card (CP5-Q2 (d),
     §12 Q11).
 
+**ES — Chat's empty state, "The night that becomes the window"** · vibe-field-b4 (lane `lanes/es`, branch
+`es/night`) · law DESIGN.md §2.4/§2.10/§3/§5/§6/§8/§9 (the ES page `1GdkfmnTxynAp6wHTbAa3a`, *Your First Spark*)
+- Ruled 11-08 (James, on the page): ES-D1…D7, all seven at their leans, then "All ruled with leans, now please start
+  implementation" (04:32:54Z; DECISIONS "ES").
+- Landed 11-08: **ES-1 + ES-2** (`14ce7b7a8` → `6b8a4b09f`, M226, run 226, an ff of `042ca0f2e`; LANDED
+  "ES-1 + ES-2"): Chat's empty panel is the hatch's night, its words on the night's ink, and New spark is Off from the
+  kit's own button where no agent here can be a spark; a first job opens the sheet carrying itself and is sent once,
+  as Send sends.
+- Next: **bundle 2**, ES-3a…3e and ES-4 (the lean; the portal, its hand-off and its motion; the starters filled from
+  this Mac), on `es/night` (`e3df03ff5`), re-cut onto main after these records, with its open question ES-Q1.
+- Owed: ES-5, the phone's night (the IOS lane); James's eye on the built night; gate:landing, landing-only.
+
 **Release rails — WP12 · TD · BP · FW packaging · RD** · prod-builder (resting) · law `specs/build-wp12-updater.md`,
 `specs/trust-and-distribution.md`, the three `specs/electron-*.md` + `electron-packaging-implementation-plan.md`,
 `specs/build-wp8-bundled-plugins.md`, `draft/thinking-browser-profile.md` (BP), `draft/thinking-release-deps.md` (RD),
@@ -1493,6 +1505,7 @@ Petition status lives in `draft/petitions/README.md`. Still open or owed there:
 | WIN — Windows port | PARKED since 08-24 (`c16e618f4`) | `thinking-windows-port.md`, `docs/WINDOWS_PORT_STATUS.md` | a Windows leg on the rails |
 | LSF — live surfaces foundation | COMPLETE; LSF-4 landed 10-26 | `specs/live-surfaces-foundation.md` | consumed by PT; §18 Windows rows with WIN |
 | CO — the compose plane | ACTIVE; CP-0, SP-1a, CP-1a…1c, CP-1d, MT-0, CP-2, SP-1b, SP-1c, SP-1d, CP-3 (`ce6577783`, run 88), TU-1 (`57569bca3`, mint M96), the handle (`045f10ec7`, mint M100), items 158 and 159 with CO-1b (`9b3164ccf`, mint M129), CP-5a (`fc70097e3`, mint M140), CP-4a1 (`1a3ca5f24`, mint M143), SP-1e2's fieldd half (`068cab410`, mint M146), TH-1/TH-2 (`d5c6995fb`, mint M147), SP-1e2's card (`320d4b882`, mint M156), CP-4a2a (`c07039551`, mint M159), CP-4a2b's M-h (`aebd6a80b`, mint M163) and M-r1 (`c92b33692`, mint M168) landed | `compose-plane/thinking-roled-agents.md` §15–§17, `compose-plane/v2/`, `thinking-tool-plane.md`; the CO round (Druyc3Ua); DESIGN.md §2.10 | SP-1e4 · CP-4a2b…4f · CP-5b…d |
+| ES — Chat's empty state | ACTIVE since 11-08 (ES-D1…D7 ruled at the leans); ES-1 + ES-2 landed 11-08 (M226 `6b8a4b09f`) | DESIGN.md §2.4/§2.10/§3/§5/§6/§8/§9 (the ES page `1GdkfmnTxynAp6wHTbAa3a`) | bundle 2: ES-3a…3e + ES-4 (the lean, the portal, the starters filled from this Mac); ES-5 (the IOS lane) |
 | A — shell and spine | COMPLETE | design-03, `specs/electron-shell-refactor.md` | Settings on demand (Q20, §3 item 6) |
 
 **Retired and superseded tracks**
