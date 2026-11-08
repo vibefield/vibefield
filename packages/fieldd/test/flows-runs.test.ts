@@ -7240,4 +7240,276 @@ describe("CP-4a2b — the host's life: parked and woken, D2's lookup at a wake, 
       repairs: 0,
     });
   });
+
+  // CP-4a2b J1's cut fold (Q11, ruled 2026-11-08 (1); ruled 2026-11-08 (a), (b); the mutant pass's
+  // Findings 1 and 2): past fieldd's own stop (close(), `#closing` set), every refusal of your gate
+  // act says closingRefused's "the flow service is stopping", retryable UNAVAILABLE {flows,
+  // stopping}, never the store's words, and its item waits on for the next life: a plain disk
+  // refusal (JB7), and a full one `#full` did not end (JB7b). And JB8: an ending set inside an
+  // answer's own turn starts no slotted step (F9's wake road, `#unslot`'s return, the re-read's Q8)
+
+  /** closingRefused's refusal, as a row past close() reads it (R40g-2's read, with its words). */
+  const STOPPING = {
+    kind: "UNAVAILABLE",
+    message: "the flow service is stopping",
+    retryable: true,
+    details: { service: RECORD_STORES.SERVICE_FLOWS, state: "stopping" },
+  };
+  /** Your act on `flow`'s gate (call 1), choosing `act`: its outcome, or its refusal as a value (an
+   * RpcCallError's kind, words, retryable and details), so a row reds on what it reads, never on a
+   * rejection. */
+  const gateActed = (h: Harness, run: string, flow: string, act: string) =>
+    h.runs.acts
+      .answer({
+        id: h.raisedAs[0]?.id ?? ("ny-item1aaaaaa" as NeedsItemId),
+        kind: "flow-gate",
+        run: { run, flow, call: 1 },
+        choice: 0,
+        stop: false,
+        act,
+      })
+      .then(
+        (answer): unknown => answer,
+        (error: unknown) =>
+          error instanceof RpcCallError
+            ? {
+                kind: error.kind,
+                message: error.message,
+                retryable: error.retryable,
+                details: error.details,
+              }
+            : String(error),
+      );
+
+  it("JB7 (J1; Q11, ruled 2026-11-08 (1)): past fieldd's own stop, your gate act whose answer the disk refuses (a plain refusal, not a full journal) is refused in closingRefused's words, retryable UNAVAILABLE {flows, stopping}, never the store's, and nothing is written", async () => {
+    // red at the cut (3961d54c6): `#gateAnswered`'s `refused` road reads no `#closing`, so the act
+    // is refused in the store's words (UNREADABLE_WORDS.flows, its state `records-unreadable`).
+    // The road: #answered → #gateAnswered → #answer with `again` → the store refuses →
+    // `refused` → closingRefused (runs.ts:2339@b3a6c6435); the act is no Stop, so #stopAct's own
+    // (:2308@b3a6c6435) is never reached. Kills: closingRefused dropped there (m30)
+    const h = await harness({ hostIdleMs: IDLE_MS });
+    h.approved("gate", GATE);
+    const run = startedRun(await h.start({ flow: "gate" })).run;
+    // held on your gate and parked: its LiveRun stays in this fieldd, and close() has no host to
+    // wait on
+    await within(PARK_MS, () => left(h, 0) && stateOf(h, run) === "holding");
+    const before = h.kinds(run);
+    await h.runs.close();
+    // the disk refuses your answer's line, in the harness's way (R14d, R6c): the store's own
+    // refusal, never full
+    const refused: string[] = [];
+    const append = h.records.appendRun.bind(h.records);
+    vi.spyOn(h.records, "appendRun").mockImplementation((at, entry) => {
+      if (entry.kind !== "answer") return append(at, entry);
+      refused.push(entry.kind);
+      throw recordsUnreadable(RECORD_STORES.SERVICE_FLOWS, UNREADABLE_WORDS.flows, true);
+    });
+    const acted = await gateActed(h, run, "gate", " Push");
+    expect({
+      refused,
+      acted,
+      state: stateOf(h, run),
+      journal: { before, after: h.kinds(run) },
+    }).toEqual({
+      refused: ["answer"],
+      acted: STOPPING,
+      state: "holding",
+      journal: { before: ["head", "call"], after: ["head", "call"] },
+    });
+  });
+
+  it("JB7b (J1; Q11, ruled 2026-11-08 (a)): past fieldd's own stop, your gate act whose answer would cross is refused retryably in closingRefused's words: the run is not ended (no `flood`, no `end` line, its state as before), and fieldd's log never says its journal full", async () => {
+    // red at the cut: no bound is read, so your answer is kept and the act is done. Kills
+    // (the mutant pass's Finding 1): `#full` without its `#closing` return (m28: the run ends
+    // `flood` in fieldd's stop, and the act answers §9's flood sentence); `"full"` returned whether
+    // or not `#full` ended the run (m29: the act answers `failed` while the run lives on); and
+    // closingRefused dropped from the `refused` road (m30: the store's words)
+    // JB5b's calibration: a first run of the same flow, at the default bound, parked on its gate;
+    // its journal's bytes
+    const first = await harness({ hostIdleMs: IDLE_MS });
+    first.approved("gate", GATE);
+    const calibrated = startedRun(await first.start({ flow: "gate" })).run;
+    await within(PARK_MS, () => left(first, 0) && stateOf(first, calibrated) === "holding");
+    const parked = bytesBeforeEnd(first, calibrated);
+    // 10 bytes past the parked journal: your answer's line crosses it; nothing before it does
+    const h = await harness({ hostIdleMs: IDLE_MS, journalMaxBytes: parked + 10 });
+    h.approved("gate", GATE);
+    const run = startedRun(await h.start({ flow: "gate" })).run;
+    await within(PARK_MS, () => left(h, 0) && stateOf(h, run) === "holding");
+    const twin = bytesBeforeEnd(h, run) - parked;
+    const before = h.kinds(run);
+    await h.runs.close();
+    // the store's refusal of your answer's line, read where it refused it (JB4's spy): full, by
+    // `instanceof`
+    const refused: string[] = [];
+    const append = h.records.appendRun.bind(h.records);
+    vi.spyOn(h.records, "appendRun").mockImplementation((at, entry) => {
+      try {
+        return append(at, entry);
+      } catch (error) {
+        refused.push(`${entry.kind} ${error instanceof FlowJournalFull ? "full" : "refused"}`);
+        throw error;
+      }
+    });
+    const acted = await gateActed(h, run, "gate", " Push");
+    // with no host up, a run #full ended would end at once (#endWith's #finish): read once it had
+    // time to
+    await within(IDLE_MS, () => over(h, run));
+    const record = h.records.runRecord(run);
+    expect({
+      twin,
+      refused,
+      acted,
+      state: stateOf(h, run),
+      host: record?.host,
+      lines: endLinesOf(h, run),
+      journal: { before, after: h.kinds(run) },
+      said: floodsSaid(h, run),
+      hosts: h.hosts.length,
+    }).toEqual({
+      twin: 0,
+      refused: ["answer full"],
+      acted: STOPPING,
+      state: "holding",
+      host: undefined,
+      lines: [],
+      journal: { before: ["head", "call"], after: ["head", "call"] },
+      said: { full: 0, host: 0 },
+      hosts: 1,
+    });
+  });
+
+  /** JB8's flow: a gate, then LIVE_STEPS_MAX − 1 steps, then S, N and E at once, each refusal
+   * caught. In its first life the disk refuses S's and N's call lines (the row's spy), so E takes
+   * the last slot as call 9. */
+  const SLOT_WAKE = [
+    'export const meta = { name: "Slots" };',
+    "export default async function () {",
+    '  const gate = ask("Go on?", ["Go", "Hold"]);',
+    "  const parts = [];",
+    `  for (let i = 1; i < ${FLOW_LIMITS.LIVE_STEPS_MAX}; i += 1)`,
+    '    parts.push(agent("look at part " + i, { agent: "claude", label: "Part " + i, profile: "work", cwd: "/work/app" }));',
+    `  const s = agent("look at s", ${stepAt("S")}).catch(() => "refused");`,
+    `  const n = agent("look at n", ${stepAt("N")}).catch(() => "refused");`,
+    `  const e = agent("look at e", ${stepAt("E")}).catch(() => "refused");`,
+    "  await Promise.all([gate, ...parts, s, n, e]);",
+    '  return "done";',
+    "}",
+    "",
+  ].join("\n");
+  /** S's call line, as its host would journal it: kept while the run is parked, with no record
+   * entry (R13e's road). */
+  const slotS = (call: number) => ({
+    kind: "call" as const,
+    call,
+    what: "agent",
+    key: flowCallKey("agent", [
+      "look at s",
+      { agent: "claude", label: "S", profile: "work", cwd: "/work/app" },
+    ]),
+    n: 1,
+    label: "S",
+    agent: "claude",
+  });
+  /** SLOT_WAKE's run in `h` to its wake (F9's road, the re-read's Q8): its first life journals the
+   * gate, the parts and E (S's and N's call lines refused by the disk, each logged in `refused`),
+   * all LIVE_STEPS_MAX slots taken, parked holding; then S's line is kept with no entry, E's
+   * session exits, and your gate act wakes it. Each state S's entry takes on the record's `open`,
+   * in order, is kept in `states`. */
+  const slotWake = async (h: Harness, refused: string[], states: string[]) => {
+    let firstLife = true;
+    const write = h.records.writeRunRecord.bind(h.records);
+    vi.spyOn(h.records, "writeRunRecord").mockImplementation((at, fields) => {
+      const s = fields.open.find((step) => step.call === FLOW_LIMITS.LIVE_STEPS_MAX + 2);
+      if (s !== undefined && states.at(-1) !== s.state) states.push(s.state);
+      return write(at, fields);
+    });
+    const append = h.records.appendRun.bind(h.records);
+    vi.spyOn(h.records, "appendRun").mockImplementation((at, entry) => {
+      if (firstLife && entry.kind === "call" && (entry.label === "S" || entry.label === "N")) {
+        refused.push(`${entry.label} refused`);
+        throw new Error("EIO: i/o error, write");
+      }
+      try {
+        return append(at, entry);
+      } catch (error) {
+        refused.push(`${entry.kind} ${error instanceof FlowJournalFull ? "full" : "refused"}`);
+        throw error;
+      }
+    });
+    h.approved("slots", SLOT_WAKE);
+    const run = startedRun(await h.start({ flow: "slots" })).run;
+    await waitFor(() => expect(h.spawned).toHaveLength(FLOW_LIMITS.LIVE_STEPS_MAX));
+    await within(PARK_MS, () => left(h, 0) && stateOf(h, run) === "holding");
+    const parked = { state: stateOf(h, run), left: left(h, 0), kinds: h.kinds(run) };
+    firstLife = false;
+    h.records.appendRun(run, slotS(FLOW_LIMITS.LIVE_STEPS_MAX + 2));
+    h.exit(sessionOf(h, run, FLOW_LIMITS.LIVE_STEPS_MAX + 1));
+    const acted = await gateActed(h, run, "slots", "Go");
+    return { run, parked, acted };
+  };
+  /** SLOT_WAKE's journal through E's answer at the wake: head, 10 calls, your answer, E's. */
+  const THROUGH_E = 1 + (FLOW_LIMITS.LIVE_STEPS_MAX + 2) + 2;
+
+  it("JB8 (J1; F9, the re-read's Q8; ruled 2026-11-08 (b)): an ending set inside an answer's own turn starts no slotted step: at a wake, E's session exited, so #bind answers E made again at once; that answer releases N, held, whose call line crosses, so the run ends `flood` in E's turn, and S, waiting for the slot E's answer freed, is never started", async () => {
+    // red at the cut: no bound is read, so N's line is kept and the run goes on: S starts in the
+    // slot E freed (its entry `waiting`, `starting`, then `working`; `spawned` gains call 10; the
+    // record's `agents` reads 9), and the run never ends `flood`. Kills (the mutant pass's
+    // Finding 2): `#unslot` without its return on `live.ending` (m27): E's answer settles its step,
+    // a slot frees, and #unslot starts S for a run that is leaving: its entry written `starting`,
+    // one more of the run's `agents` reserved and its agent spawned (`spawned` gains call 10), and
+    // the end's tail ends that agent too (`ended` 8, by read). The road, by read at b3a6c6435: S,
+    // made again, is entered `waiting` (#entered: every slot taken);
+    // N, new, is held (D7: E's line not yet made again); E, made again last, is handed on
+    // (replay.ts's call), and #bind answers it (runs.ts's #bind); #answer keeps E's line, and its
+    // `replay.answered` drains N (#unhold): N's line refused full, #full ends the run; #lagging's
+    // #unslot then reads the ending (its first line). No src hook: the run's own roads, its store
+    // and its sessions are the harness's
+    // the calibration, as JB4's: a first run at the default bound, its journal's bytes through E's
+    // answer
+    const first = await harness({ hostIdleMs: IDLE_MS });
+    const twin = await slotWake(first, [], []);
+    await within(PARK_MS, () => first.kinds(twin.run).length > THROUGH_E);
+    const through = linesThrough(first, twin.run, THROUGH_E);
+    const h = await harness({ hostIdleMs: IDLE_MS, journalMaxBytes: through.bytes + 10 });
+    const refused: string[] = [];
+    const states: string[] = [];
+    const woken = await slotWake(h, refused, states);
+    await within(PARK_MS, () => over(h, woken.run));
+    const record = h.records.runRecord(woken.run);
+    expect({
+      next: through.next,
+      twin: linesThrough(h, woken.run, THROUGH_E).bytes - through.bytes,
+      parked: woken.parked,
+      acted: woken.acted,
+      refused,
+      state: record?.state,
+      host: record?.host,
+      spawned: h.spawned.map(({ origin }) => origin.call),
+      agents: record?.agents,
+      ended: record?.ended,
+      states,
+      said: floodsSaid(h, woken.run),
+      hosts: h.hosts.length,
+    }).toEqual({
+      next: "call",
+      twin: 0,
+      parked: {
+        state: "holding",
+        left: true,
+        kinds: ["head", ...Array<string>(FLOW_LIMITS.LIVE_STEPS_MAX + 1).fill("call")],
+      },
+      acted: { outcome: "done" },
+      refused: ["S refused", "N refused", "call full"],
+      state: "failed",
+      host: "flood",
+      spawned: Array.from({ length: FLOW_LIMITS.LIVE_STEPS_MAX }, (_, i) => i + 2),
+      agents: FLOW_LIMITS.LIVE_STEPS_MAX,
+      // the flood's end takes the parts' agents alone: E's exited, and S's never started
+      ended: FLOW_LIMITS.LIVE_STEPS_MAX - 1,
+      states: ["waiting"],
+      said: { full: 1, host: 0 },
+      hosts: 2,
+    });
+  });
 });

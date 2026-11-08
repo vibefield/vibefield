@@ -652,7 +652,9 @@ const hostless = (): RpcCallError =>
  * *Fold 2 (2026-11-07; ruled 2026-11-07, the builder's #3): it is the house's shape (made-app-service.ts's `stopping()`,
  * "the made app service is stopping"; agent-runtime.ts's adopt, "the agent service is stopping"): fieldd's own
  * retryable UNAVAILABLE, never a §9 sentence. A surface that ever shows it to a person says §9's words there, not this
- * string.* */
+ * string.*
+ * *J1 (Q11; ruled 2026-11-08 (1)): #gateAnswered's refused road answers it too past close(), a
+ * plain disk refusal or a full one #full did not end.* */
 const closingRefused = (): RpcCallError =>
   new RpcCallError("UNAVAILABLE", "the flow service is stopping", true, {
     service: RECORD_STORES.SERVICE_FLOWS,

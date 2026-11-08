@@ -607,8 +607,9 @@ export const AGENT_STOP = {
  *    once an item ends `flood` at its 10,001st line. Whether a held run refuses its calls fast, or DESIGN.md says the
  *    ceiling, is CP-4a2b's. *Ruled 2026-11-05 (N2 re-ruled, J3 = Q-A3 = 13a's D1): neither refuses fast.
  *    DESIGN.md §9 says both ceilings ("When a run can't go on, or waits").* *Corrected 2026-11-07 (ruling
- *    C): there is no call cap, and N2's park at its hold went with it. No row here bounds a script that loops one
- *    call at a time: a Stop ends it, or JOURNAL_MAX_BYTES does (J1).* *Proposed 2026-11-08 (CP-4a2b J1, a journal's
+ *    C): there is no call cap, and N2's park at its hold went with it. No row here bounds a script
+ *    that loops one call at a time by its calls: a Stop ends it, or JOURNAL_MAX_BYTES does (J1).*
+ *    *Proposed 2026-11-08 (CP-4a2b J1, a journal's
  *    byte bound; board `co-journal-byte-bound` (a), 2026-11-07):* "or JOURNAL_MAX_BYTES does" is
  *    J1's (its bullet below).
  * CP-4a2b (13a's D3 and D12, Q-A7; J4 (a); each as provisional):
@@ -639,8 +640,9 @@ export const AGENT_STOP = {
  * stand"):*
  *  - JOURNAL_MAX_BYTES: a run's journal's bytes, as the store counts them from its own file. The store refuses the
  *    line that would take a journal past it and writes nothing of it; the runs then end the run `flood`
- *    (FLOW_HOST_ENDINGS) in DESIGN.md §9's words, and nobody is asked anything (no hold, no card, no Allow). An `end`
- *    line is never refused, so a journal never passes JOURNAL_MAX_BYTES plus its end lines (one, once slice 14's
+ *    (FLOW_HOST_ENDINGS) in DESIGN.md §9's words, and nobody is asked anything (no hold, no card,
+ *    no Allow). The bound never refuses an `end` line, so a journal never passes JOURNAL_MAX_BYTES
+ *    plus its end lines (one, once slice 14's
  *    settle lands). Why 32 MiB: it holds one full-width fan-out at full answers (about 16.1–16.6 MiB) with about
  *    15.4–15.9 MiB to spare (est.), and it bounds the read a parked loop's wake makes of its whole journal at every
  *    turn (about 3.3 s near 32 MiB, est.; its measurement is owed). PROVISIONAL and raise-only: it starts low and is

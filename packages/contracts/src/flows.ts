@@ -585,10 +585,17 @@ export type FlowJournalKind = (typeof FLOW_JOURNAL_KINDS)[number];
  * heap, passed HOST_RSS_MB; bth's re-read N1 and second re-read R2) or `protocol` (its pipe carried a frame past its
  * bound, or one that is not JSON: the child no longer holds its own bounds; bth's review P2, ruled 2026-11-05 11:46Z)
  * or `flood` (more calls waiting at once than FLOW_LIMITS.HOST_CALLS_WAITING_MAX, or more log lines than
- * HOST_LOG_LINES_MAX; a review's P1; or, J1's, a journal past FLOW_LIMITS.JOURNAL_MAX_BYTES, which the runs end). A
- * run whose host fieldd ended is never started again; a new run starts from the top. *Proposed 2026-11-08 (CP-4a2b J1,
+ * HOST_LOG_LINES_MAX; a review's P1; or, J1's, a journal whose next line would pass
+ * FLOW_LIMITS.JOURNAL_MAX_BYTES, which the runs end). A run whose host fieldd ended is never
+ * started again; a new run starts from the top. *Proposed 2026-11-08 (CP-4a2b J1,
  * a journal's byte bound; board `co-journal-byte-bound` (a), 2026-11-07):* `flood`'s journal is J1's,
- * and the four words stay four: no wire word moves. */
+ * and the four words stay four: no wire word moves. *The window (J1's cut fold; ruled 2026-11-08 (iv),
+ * in DESIGN.md §9's Proposed words), of "never started again" above:* that line has a window; a
+ * VibeField stop inside J1's leave (from its flood to its host's exit, up to the shutdown grace)
+ * drops the ending, and the next life starts the run's host once slice 14's boot wakes it; it
+ * floods again at the first line that would cross. `memory`'s identical window, at its source:
+ * supervisor.ts's end under `shutdown` and its grace, and runs.ts's `#ended` return on
+ * `#closing`. */
 export const FLOW_HOST_ENDINGS = ["unanswered", "memory", "protocol", "flood"] as const;
 export type FlowHostEnding = (typeof FLOW_HOST_ENDINGS)[number];
 
