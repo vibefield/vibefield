@@ -432,3 +432,107 @@ describe("History's consent slot (AO-3, AO-D9)", () => {
     expect(refused).not.toHaveBeenCalled();
   });
 });
+
+// HG-2 (track HG; HG-D3, HG-D4, HG-D6 ruled by James 2026-11-08; DESIGN.md §8 "History" — before its past; §9): the
+// card behind glass — the History pane in the Setup Assistant's glass, a line under its act saying the room behind it
+// is a sample, an act that names its press, and a census with nothing to bring in that is never a dead end.
+describe("History's card behind glass (HG-2)", () => {
+  const mountCard = async (client: FielddClient): Promise<void> => {
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+    await act(async () => {
+      root?.render(createElement(FielddProvider, { client }, createElement(HistoryConsent)));
+    });
+    await answered();
+  };
+  const card = (): Element | null => container?.querySelector("section.vf-history-consent") ?? null;
+
+  it("says Bringing in… on its act while the act runs — its look kept, its hits off — and asks the index once", async () => {
+    const client = fieldd();
+    let land: (value: unknown) => void = () => undefined;
+    const request = client.request as unknown as ReturnType<typeof vi.fn>;
+    const answer = request.getMockImplementation();
+    request.mockImplementation(async (method: string, params: unknown) =>
+      method === "index.enroll"
+        ? await new Promise((resolve) => {
+            land = resolve;
+          })
+        : answer?.(method, params),
+    );
+    await mountCard(client);
+    await act(async () => button("Bring in history").click());
+    const pressed = button("Bringing in…");
+    // §7's running press: the kit's own primary, held off without its Off (the kit's `data-running`)
+    expect(pressed.getAttribute("data-variant")).toBe("primary");
+    expect(pressed.disabled).toBe(true);
+    expect(pressed.hasAttribute("data-running")).toBe(true);
+    // the switches rest while it runs
+    for (const toggle of switches()) expect(toggle.disabled).toBe(true);
+    await act(async () => pressed.click());
+    expect(request.mock.calls.filter(([method]) => method === "index.enroll")).toHaveLength(1);
+    await act(async () => {
+      land({ changed: true });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+  });
+
+  it("says under its act that the room behind it is a sample, and that yours takes its place", async () => {
+    await mountCard(fieldd());
+    const line = card()?.querySelector(".vf-history-consent-sample");
+    expect(line?.textContent).toBe("The room behind this card is a sample. Yours takes its place.");
+    // the card's last word, under the act
+    expect(card()?.lastElementChild).toBe(line);
+    expect(card()?.querySelector(".vf-history-consent-acts + .vf-history-consent-sample")).toBe(
+      line,
+    );
+  });
+
+  it("with nothing to bring in, says your history starts here and offers Look again, which asks afresh — never a dead end", async () => {
+    const client = fieldd({ discoveries: [] });
+    await mountCard(client);
+    expect(card()?.querySelector("h2")?.textContent).toBe("Your history starts here.");
+    expect(card()?.querySelector(".vf-history-consent-voice")?.textContent).toBe(
+      "When you work with an agent on this Mac, its sessions appear here, by project, ready to pick up again.",
+    );
+    const labels = Array.from(card()?.querySelectorAll("button") ?? [], (b) => b.textContent);
+    expect(labels).toEqual(["Look again"]);
+    expect(card()?.querySelector(".vf-history-consent-sample")?.textContent).toBe(
+      "The room behind this card is a sample.",
+    );
+    const request = client.request as unknown as ReturnType<typeof vi.fn>;
+    const asks = (): number =>
+      request.mock.calls.filter(([method]) => method === "index.discoveries").length;
+    const before = asks();
+    await act(async () => button("Look again").click());
+    await answered();
+    expect(asks()).toBeGreaterThan(before);
+  });
+
+  it("says only that History isn't available right now — the later is the Setup Assistant's to say", async () => {
+    // the census gives up after its bounded while: the clock jumps past it at the first refusal
+    let offset = 0;
+    const realNow = Date.now.bind(Date);
+    const clock = vi.spyOn(Date, "now").mockImplementation(() => realNow() + offset);
+    try {
+      const client = fieldd();
+      (client.request as unknown as ReturnType<typeof vi.fn>).mockImplementation(
+        async (method: string) => {
+          if (method === "agent.catalog") return CATALOG;
+          if (method === "index.discoveries") {
+            offset = 20_000;
+            throw new Error("the agent index is starting");
+          }
+          return { ok: true };
+        },
+      );
+      await mountCard(client);
+      expect(card()?.querySelector(".vf-history-consent-note")?.textContent).toBe(
+        "History isn't available right now.",
+      );
+      expect(card()?.textContent).not.toContain("later from History");
+    } finally {
+      clock.mockRestore();
+    }
+  });
+});

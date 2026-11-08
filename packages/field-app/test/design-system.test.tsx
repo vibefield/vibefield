@@ -634,6 +634,16 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
     );
     // PJ-4 — History by project's plate (its rows: history-projects-plate.test.tsx)
     expect(history("projects")?.querySelector(".vf-history .ah-frame")).not.toBeNull();
+    // HG-2 — History before its past: the shipping card in the Setup Assistant's glass over the sample room, the
+    // room's own slot holding the marker (the layer's rules: history-glass.test.tsx)
+    expect(
+      history("consent")?.querySelector(
+        ".vf-history-glass .vf-history-glass-card .vf-history-consent",
+      ),
+    ).not.toBeNull();
+    expect(
+      history("consent")?.querySelector(".vf-history-glass .vf-history-sample[inert]"),
+    ).not.toBeNull();
     // HN-7 — Resume's plates draw it where it lives now: the palette's History row, after New
     // terminal (the line's create there, the project shown in its tooltip)
     for (const state of ["chosen", "running"]) {

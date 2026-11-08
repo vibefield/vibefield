@@ -127,6 +127,16 @@ describe("UI system ownership boundaries", () => {
     // erased and costs nothing, while `import { type X }` is NOT (under
     // verbatimModuleSyntax it stays a bare import of the module). The catalog
     // mounts the view directly — it is its own build.
+    // HG-2 (HG-D2, 2026-11-08): History's sample IS the room, so the modules
+    // that draw it are the chunk's too — the glass layer, the sample and the
+    // sample's data. They may import the package because nothing outside the
+    // chunk imports THEM statically: they ride the view's one dynamic import.
+    const chunk = new Set([
+      "history/HistoryRoomView.tsx",
+      "history/HistoryGlass.tsx",
+      "history/HistorySample.tsx",
+      "history/history-sample.ts",
+    ]);
     const offenders: string[] = [];
     const walk = (relativeDir: string): void => {
       for (const entry of readdirSync(join(PACKAGE_ROOT, "src", relativeDir), {
@@ -135,10 +145,14 @@ describe("UI system ownership boundaries", () => {
         const relativePath = relativeDir === "" ? entry.name : `${relativeDir}/${entry.name}`;
         if (entry.isDirectory()) {
           if (relativePath !== "design-system") walk(relativePath);
-        } else if (/\.tsx?$/.test(entry.name) && relativePath !== "history/HistoryRoomView.tsx") {
+        } else if (/\.tsx?$/.test(entry.name) && !chunk.has(relativePath)) {
           const text = source(relativePath);
-          if (/^import\s+(?!type\s)[^;]*?from\s+"[^"]*\/HistoryRoomView"/m.test(text)) {
-            offenders.push(`${relativePath}: imports HistoryRoomView statically`);
+          if (
+            /^import\s+(?!type\s)[^;]*?from\s+"[^"]*\/(?:HistoryRoomView|HistoryGlass|HistorySample|history-sample)"/m.test(
+              text,
+            )
+          ) {
+            offenders.push(`${relativePath}: imports the room's chunk statically`);
           }
           if (
             /^import\s+(?!type\s)[^;]*?from\s+"@vibefield\/rosetta-room(?:\/[^"]*)?"/m.test(text) ||
@@ -153,6 +167,19 @@ describe("UI system ownership boundaries", () => {
     expect(offenders).toEqual([]);
     expect(source("history/room-chunk.tsx")).toContain('import("./HistoryRoomView")');
     expect(source("history/HistoryView.tsx")).toMatch(/<HistoryRoomMount\s/u);
+    // the chunk's own chain: the view → the layer → the sample → its data (the package's demo)
+    expect(source("history/HistoryRoomView.tsx")).toMatch(
+      /^import \{[^}]*\} from "\.\/HistoryGlass";$/mu,
+    );
+    expect(source("history/HistoryGlass.tsx")).toMatch(
+      /^import \{ HistorySample \} from "\.\/HistorySample";$/mu,
+    );
+    expect(source("history/HistorySample.tsx")).toMatch(
+      /^import \{[^}]*\} from "\.\/history-sample";$/mu,
+    );
+    expect(source("history/history-sample.ts")).toContain(
+      'from "@vibefield/rosetta-room/fixtures"',
+    );
   });
 
   it("does not let catalog CSS own production component selectors", () => {
@@ -554,6 +581,15 @@ describe("UI system ownership boundaries", () => {
     const view = source("history/HistoryRoomView.tsx");
     expect(view).toMatch(/<HistoryRoom\s/u);
     expect(view).not.toMatch(/className="(?:ah-|tr-)/);
+    // HG-2 (HG-D2, 2026-11-08): History's sample is the room itself — the package's own component over the
+    // product's sample data, never a replica — and that data is the projects plate's too: one fixture fieldd, in
+    // the room's chunk, never a second copy here. The consent plate mounts the shipping card over a fixture census.
+    const sample = source("history/HistorySample.tsx");
+    expect(sample).toMatch(/<HistoryRoom\s/u);
+    expect(sample).not.toMatch(/className="(?:ah-|tr-)/);
+    expect(fixtures).toContain('from "../history/history-sample"');
+    expect(fixtures).not.toContain("function historyProjectsClient");
+    expect(preview).toMatch(/<HistoryConsentCard\s/u);
   });
 
   it("keeps the Peek's fixture an ADAPTER — the shipping controller over a port drawn from the room's demo, never its markup (2026-10-08)", () => {
