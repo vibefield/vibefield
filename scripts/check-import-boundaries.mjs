@@ -12,11 +12,11 @@
 //
 // Node >=22 ESM, builtins only — no new dependencies (spec: textual first version
 // is allowed; upgrade to real TS/ESM parsing only if textual checks get ambiguous).
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, posix, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
-import { git } from "./repo-files.mjs";
+import { git, repoFiles } from "./repo-files.mjs";
 
 // This script's own home, so manifest-derived rules (R5) read the REAL packages
 // no matter which tree is being scanned — the self-test scans a temp fixture dir.
@@ -26,8 +26,9 @@ const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const SOURCE_EXT = /\.(?:ts|tsx|mts|mjs)$/;
 const TS_ONLY = /\.tsx?$/;
 
-// Directories never worth walking: dependencies, build outputs, VCS, the design
-// corpus (spec: ignore draft/), and the Rust/pnpm caches.
+// Directories never read: dependencies, build outputs, VCS, the design corpus
+// (spec: ignore draft/), and the Rust/pnpm caches. Since item 252 they filter
+// git's listing (collectFiles), so nothing is read that the tree walk skipped.
 const SKIP_DIRS = new Set([
   ".cache",
   ".git",
@@ -859,25 +860,30 @@ const ENFORCE_BY_ID = new Map(RULES.map((r) => [r.id, r.enforce]));
 
 // --- source walking & import extraction --------------------------------------
 
+// Item 252 (2026-11-08): the files git lists (`repo-files.mjs`), never a walk of
+// the tree. A walk read every ignored tree SKIP_DIRS did not name: run224's
+// preflight read 134 violations (R22 113, R24 21) in SwiftPM's checkout of
+// rosetta under `apps/ios/VibeFieldKit/.build/checkouts/`. SKIP_DIRS and the
+// name filters still apply, so the change only narrows what is read.
 function collectFiles(root) {
-  const out = [];
-  const walk = (absDir) => {
-    for (const entry of readdirSync(absDir, { withFileTypes: true })) {
-      if (entry.isDirectory()) {
-        if (!SKIP_DIRS.has(entry.name)) walk(join(absDir, entry.name));
-      } else if (entry.isFile()) {
-        const name = entry.name;
-        if (/\.d\.[cm]?ts$/.test(name)) continue; // ambient types are not product source
-        const abs = join(absDir, name);
-        // The checker embeds every forbidden pattern as rule/fixture data, so it
-        // must never lint itself (otherwise R5's fixture string self-reports).
-        if (abs === import.meta.filename) continue;
-        if (SOURCE_EXT.test(name)) out.push(abs);
-      }
-    }
-  };
-  walk(root);
-  return out;
+  const self = relative(root, import.meta.filename)
+    .split(sep)
+    .join("/");
+  return repoFiles(root).filter((rel) => {
+    if (
+      rel
+        .split("/")
+        .slice(0, -1)
+        .some((dir) => SKIP_DIRS.has(dir))
+    )
+      return false;
+    const name = basename(rel);
+    if (/\.d\.[cm]?ts$/.test(name)) return false; // ambient types are not product source
+    // The checker embeds every forbidden pattern as rule/fixture data, so it
+    // must never lint itself (otherwise R5's fixture string self-reports).
+    if (rel === self) return false;
+    return SOURCE_EXT.test(name);
+  });
 }
 
 // Textual import extraction (spec allows a textual first version). Line-based;
@@ -956,8 +962,8 @@ function stripCommentTails(line) {
 
 function runCheck(root) {
   const violations = [];
-  for (const abs of collectFiles(root)) {
-    const rel = relative(root, abs).split(sep).join("/");
+  for (const rel of collectFiles(root)) {
+    const abs = join(root, rel);
     const applicable = RULES.filter((r) => r.applies(rel));
     if (applicable.length === 0) continue;
 

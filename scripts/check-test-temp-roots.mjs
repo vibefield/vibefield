@@ -17,11 +17,12 @@
 // Usage: node scripts/check-test-temp-roots.mjs [--root <dir>] [--self-test]
 //   exit 0 when every test file that makes a root removes one; exit 1 with each `file:line` that
 //   makes a root in a file that removes none. --self-test runs the rule on fixtures in a temp dir
-//   (removed after) and exits 1 on any miss.
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+//   (removed after) and exits 1 on any miss. `--root` names a git work tree: the files read are the
+//   ones git lists there (item 252).
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join, relative, resolve, sep } from "node:path";
-import { git } from "./repo-files.mjs";
+import { dirname, join, resolve } from "node:path";
+import { git, repoFiles } from "./repo-files.mjs";
 
 // The import walls' skips (check-import-boundaries.mjs), and the state a checkout keeps for its
 // machine alone (`.nx`, `.vibefield`).
@@ -50,21 +51,17 @@ const UNDER_PROVIDED_ROOT = /\bmkdtemp(?:Sync)?\s*\(\s*join\(\s*inject\(/;
 const REMOVES = /\b(?:rm|rmSync|rmdir|rmdirSync|removeTempRoot|removeWhenTestEnds)\s*\(/;
 const COMMENT_LINE = /^\s*(?:\/\/|\/\*|\*)/;
 
-/** The test-side source files under `root`, as `/`-separated paths relative to it, sorted. */
+/** The test-side source files under `root`, as `/`-separated paths relative to it, sorted.
+ * Item 252 (2026-11-08): they are the files git lists (`repo-files.mjs`), never a walk of the
+ * tree, which read every ignored tree SKIP_DIRS did not name (SwiftPM's checkouts under the kit's
+ * `.build/`). SKIP_DIRS still filters git's paths, so nothing is read that the walk skipped. */
 function testSideFiles(root) {
-  const out = [];
-  const walk = (absDir) => {
-    for (const entry of readdirSync(absDir, { withFileTypes: true })) {
-      if (entry.isDirectory()) {
-        if (!SKIP_DIRS.has(entry.name)) walk(join(absDir, entry.name));
-      } else if (entry.isFile() && SOURCE.test(entry.name) && !DECLARATION.test(entry.name)) {
-        const rel = relative(root, join(absDir, entry.name)).split(sep).join("/");
-        if (TEST_SIDE.test(rel)) out.push(rel);
-      }
-    }
-  };
-  walk(root);
-  return out.sort();
+  return repoFiles(root).filter((rel) => {
+    const parts = rel.split("/");
+    const name = parts.pop();
+    if (parts.some((dir) => SKIP_DIRS.has(dir))) return false;
+    return SOURCE.test(name) && !DECLARATION.test(name) && TEST_SIDE.test(rel);
+  });
 }
 
 /** The test-side files read, how many make a temp root, and each line that makes one in a file that
@@ -221,7 +218,7 @@ const at = args.indexOf("--root");
 const root = resolve(at >= 0 ? (args[at + 1] ?? ".") : join(import.meta.dirname, ".."));
 const { read, makers, misses } = findUnremovedRoots(root);
 if (read === 0) {
-  console.error(`check-test-temp-roots: FAIL — no test file under ${root}: the walk read nothing`);
+  console.error(`check-test-temp-roots: FAIL — no test file under ${root}: git listed none`);
   process.exit(1);
 }
 if (misses.length > 0) {
