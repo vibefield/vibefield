@@ -1849,6 +1849,27 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       agents it has, its busiest project, a live session's handle — and a slot with nothing to fill keeps its ruled word
       (ES-D4 A); while the three are read they hold their places in night glass, wordless, and their words come in over
       420ms. On James's Mac the filling gives the ruled words back: they were written from it.
+      - **Filled from this Mac** (ES-4; ES-D4 A; VF-PM 2026-11-08 09:30Z and 09:33Z). Two reads fill them: the agents
+        this Mac has (`agent.providers`, each one `available`), and the field board's runs (a run's folder by its name,
+        never its path; `alive`; a spark's own run, `spark`). Each starter keeps its words and fills its slots:
+        - **The crew** ("Spawn 4 Grok agents to research a topic each"): an agent this Mac has that can be started
+          (`offers.spawn`). The ruled one where the Mac has it, else the catalog's first that can.
+        - **The project** ("Keep track of my agents in vibe-field"): the busiest folder on the board, the name most
+          live runs that are no spark's own stand in. Ties go to the one worked in last.
+        - **The handle and the reviewer** ("Have Codex review claude·2's work until it's clean"):
+          - The handle is the live run, no spark's own, worked in last. It is named by its agent and its place among
+            that agent's live runs by their start (`claude`, `claude·2`), as the page's fixtures name a run; @ names a
+            run by its folder (§8 "Chat's composer").
+          - The reviewer is an agent this Mac has that can be started: the ruled one where the Mac has it, another
+            than the run's own where the Mac has one, else the catalog's first.
+        - Read, no agent slot names an agent this Mac lacks. A slot with nothing to fill it keeps its ruled word (ES-D4
+          A): a sample, which the person edits before sending. Where a read cannot be had, the slots it fills keep
+          their ruled words too.
+        - The hello's starters take the same rule (ES-D4 A's cost; §8 "Chat's thread", the hello).
+        - **ES-Q1** (open, 2026-11-08; James's wording to change; VF-PM carries it with the ES-3/4 round): a slot with
+          nothing to fill keeps "vibe-field" or "claude·2", a folder or a run this Mac may not have. A bare form would
+          drop the slot instead ("Keep track of my agents"; "Have Codex review my agents' work until it's clean"):
+          honest and never blank, but new words on ruled starters. Until James rules, the ruled word stands.
     - **Behind the words,** a hush of the night (§5) so no star crosses them. There is no list column until the first
       spark: the column arrives with its first row as the face lands in it.
     - **Under the pointer,** New spark, a starter or the line's ✦ leans the night in, and New spark closes it into the
@@ -2098,6 +2119,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       Chat's other words have them. The third names a session as the page's fixtures do, "claude·2", a handle @ does
       not draw (@ names a session by its project, §8 "Chat's composer"). It is kept as ruled: words the spark reads,
       not a session @ chose.
+      *Amended 2026-11-08 (track ES, ES-4; ES-D4 A):* the starters are filled from this Mac by the empty night's rule
+      (§8 "Chat's list", the jobs, "Filled from this Mac"), the third's run by its agent's handle as above. While the
+      agents or the board are read they hold their places, wordless, and their words come in over 420ms.
     - **A starter** is 34 tall, corners 17, padded 0 14 0 11, on solid chrome ringed by the strong hairline, as wide as
       its words. Its glyph is 14 in secondary ink, then 8, then its words in 13/500 primary ink. Under the pointer it
       takes `--vf-fill` and rises 1, in 180ms on `--vf-ease-lift`. Pressed, it is sent as Send sends (§8 "Chat's
