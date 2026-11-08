@@ -37,7 +37,7 @@ import {
   startsOf,
   suggestName,
 } from "./new-spark";
-import { PORTAL_MS, type PortalPhase } from "./portal";
+import { PORTAL_BOUND_MS, type PortalPhase } from "./portal";
 import { chooseSpark, refreshSparks, usePersonSessions, useSparksReading } from "./sparks-feed";
 import type { Starter } from "./thread-items";
 
@@ -107,6 +107,8 @@ export function NewSparkSheet({
     const gone = window.setTimeout(() => setLeaving(false), leaveMs);
     return () => window.clearTimeout(gone);
   }, [leaving, leaveMs]);
+  // ES-3e: through the portal the sheet says when it may go, sooner than its bound
+  const gone = useCallback(() => setLeaving(false), []);
   if (!open && !leaving) return null;
   const target = container === undefined ? document.body : container;
   if (target === null) return null;
@@ -121,6 +123,7 @@ export function NewSparkSheet({
       carried={job}
       container={target}
       onLeaveFor={setLeaveMs}
+      onGone={gone}
     />,
     target,
   );
@@ -143,6 +146,7 @@ function Sheet({
   carried,
   container,
   onLeaveFor,
+  onGone,
 }: {
   open: boolean;
   port: NewSparkPort;
@@ -152,8 +156,10 @@ function Sheet({
   carried: Starter | null;
   /** where it is drawn: the night it may borrow stands inside it */
   container: HTMLElement;
-  /** how long its leave stands, once it folds */
+  /** how long its leave stands, once it folds: through the portal, the bound its own word ends sooner */
   onLeaveFor: (ms: number) => void;
+  /** ES-3e — through the portal it may go now: the fold has handed the night back and the face has left */
+  onGone: () => void;
 }): ReactElement {
   const reading = useSparksReading();
   const taken = useMemo(
@@ -217,7 +223,9 @@ function Sheet({
     lent.current = lend;
     given.current = false;
     setPortal({ from: lend.rect, clip: lend.clip, t: lend.t, phase: "drawing" });
-    onLeaveFor(still.current ? LEAVE_MS : PORTAL_MS.faceLeave);
+    // ES-3e: through the portal the sheet leaves once the fold has (`onGone`); the bound ends a wait whose frames
+    // never come
+    onLeaveFor(PORTAL_BOUND_MS);
     // gone before its fold handed the night back (another opening, the view gone): it is handed back now
     return handBack;
   }, [container, handBack, onLeaveFor]);
@@ -254,17 +262,32 @@ function Sheet({
   // window drew, the night never stepped aside, and carries on
   useLayoutEffect(() => {
     if (open) return;
-    if (phaseAt.current === "drawing") handBack();
-    else if (phaseAt.current === "closing" || phaseAt.current === "open")
+    if (phaseAt.current === "drawing") {
+      // folded before the window drew: nothing of it showed, and nothing is left to wait for
+      handBack();
+      onLeaveFor(LEAVE_MS);
+    } else if (phaseAt.current === "closing" || phaseAt.current === "open")
       setPortal((held) =>
         held === null ? held : { ...held, phase: hatched.current ? "leaving" : "folding" },
       );
-  }, [handBack, open]);
+  }, [handBack, onLeaveFor, open]);
   // the fold: the face shrinks back into the night as the window opens again; the night is handed back once it has
-  // (`onMoved`)
+  // (`onMoved`). ES-3e: once the night is back and the face has left (its 450 on the hatch's own clock), the sheet goes
+  const faceGone = useRef<Promise<void>>(Promise.resolve());
   useEffect(() => {
-    if (phase === "folding" && !reduced) hatch.current?.leave();
+    if (phase !== "folding") return;
+    faceGone.current = reduced ? Promise.resolve() : (hatch.current?.leave() ?? Promise.resolve());
   }, [phase, reduced]);
+  useEffect(() => {
+    if (phase !== "folded") return;
+    let live = true;
+    void faceGone.current.then(() => {
+      if (live) onGone();
+    });
+    return () => {
+      live = false;
+    };
+  }, [onGone, phase]);
 
   // the keyboard goes back where it was as the sheet leaves
   const before = useRef<Element | null>(document.activeElement);

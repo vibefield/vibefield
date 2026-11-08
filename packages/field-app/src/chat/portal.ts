@@ -35,6 +35,13 @@ export const PORTAL_MS = {
   nightOut: 180,
 } as const;
 
+/** ES-3e (§6, the portal, "The sheet leaves once the fold has"): the longest the sheet waits, through the portal, for
+ * the fold to hand the night back and the face's leave to run, where frames never come. The longest phase (the close,
+ * 600ms) under about three times starved frames, and a margin: 2,000ms. Slower than that (ES-3d's proof measured a
+ * 600ms close at 3.7s on SwiftShader) the bound ends the wait, and the unmount hands the night back as the window
+ * stands. */
+export const PORTAL_BOUND_MS = 2_000;
+
 /** The panel's corners, and the sky's (§8 "The New spark sheet"). */
 export const PANEL_RADIUS = 22;
 export const SKY_RADIUS = 30;

@@ -38,8 +38,9 @@ export interface SparkHatchHandle {
   /** ES-3b — the hatch's own clock now, in seconds: the moment its lent sky is handed back to the night at; null while
    * nothing draws */
   now(): number | null;
-  /** ES-3b — the face shrinks back into the night (the face engine's leave, 0.45 s): Cancel through the portal */
-  leave(): void;
+  /** ES-3b — the face shrinks back into the night (the face engine's leave, `FACE_LEAVE_S` on the hatch's own clock):
+   * Cancel through the portal. ES-3e: resolves once it has run, or at once where no face stands or nothing draws */
+  leave(): Promise<void>;
 }
 
 /** ES-3b — a sky lent to the hatch: the sheet's window, the night's own canvas, panel-sized at the panel's place, and a
@@ -71,6 +72,8 @@ export interface SparkHatchProps {
 const LAND_AT = 0.5;
 /** How long a flight to a row takes, seconds (the island curve's flow). */
 const FLY_S = 0.66;
+/** How long the face engine's own leave takes (its `leave(at)`: it fades and shrinks), seconds on the hatch's clock. */
+const FACE_LEAVE_S = 0.45;
 
 /** A place on the window, as a client rect gives it. */
 interface PlaceRect {
@@ -173,7 +176,7 @@ export function SparkHatch({
     () => ({
       fly: (target) => live.current?.fly(target) ?? Promise.resolve(),
       now: () => live.current?.now() ?? null,
-      leave: () => live.current?.leave(),
+      leave: () => live.current?.leave() ?? Promise.resolve(),
     }),
     [],
   );
@@ -216,6 +219,8 @@ class Live {
   #last = 0;
   #drawn = false;
   #hero: Hero | null = null;
+  /** faces leaving, each said done once this clock has run past its end (ES-3e) */
+  #leaving: { readonly until: number; readonly done: () => void }[] = [];
   #flight: {
     readonly overlay: HTMLCanvasElement;
     readonly engine: SparkEngine;
@@ -265,11 +270,15 @@ class Live {
     return this.#clock;
   }
 
-  /** The face shrinks back into the night (the face engine's leave). */
-  leave(): void {
-    if (this.#hero === null) return;
+  /** The face shrinks back into the night (the face engine's leave); resolves once the leave has run on this clock. */
+  leave(): Promise<void> {
+    if (this.#hero === null) return Promise.resolve();
     this.#hero.buddy.leave(this.#clock);
     this.#hero = null;
+    const until = this.#clock + FACE_LEAVE_S;
+    return new Promise((done) => {
+      this.#leaving.push({ until, done });
+    });
   }
 
   deal(seed: number): void {
@@ -350,6 +359,8 @@ class Live {
   close(): void {
     cancelAnimationFrame(this.#frame);
     this.#frame = 0;
+    // nothing more is drawn: every face leaving is gone with it
+    for (const leaving of this.#leaving.splice(0)) leaving.done();
     this.sky.clear();
     this.faces.clear();
     if (this.#flight !== null) {
@@ -370,6 +381,11 @@ class Live {
     if (!this.#drawn) {
       this.#drawn = true;
       this.onDrawn?.();
+    }
+    if (this.#leaving.length > 0) {
+      const left = this.#leaving.filter((leaving) => t >= leaving.until);
+      this.#leaving = this.#leaving.filter((leaving) => t < leaving.until);
+      for (const leaving of left) leaving.done();
     }
     const flight = this.#flight;
     if (flight !== null) {
