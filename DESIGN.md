@@ -1291,9 +1291,21 @@ James on the ES page *The night that becomes the window*, 2026-11-08 04:27:25–
     it, never inside the glass: under it, the glass's blur would cloud the window and hide the face, and inside it,
     the glass's backdrop-filter would hold a fixed canvas to the glass's own box. Only the window is over the glass,
     so the name, the agent and the foot stand clear of it once it has closed.
-  - **The night gives way only once the window has drawn.** Chat's night steps aside after the window's first frame,
-    and takes the window back at the window's own moment once Cancel, Esc or the dim has opened it again, so neither
-    hand-off shows a blank or moves a star.
+  - **The night gives way only once the window has drawn, and is whole** (ES-3c). Until the window's first frame
+    nothing of the sheet shows, its dim included, so a slow first frame leaves the night as it was. Drawn, the window
+    comes in over the night in 180ms on the retract curve as the words leave, so their fade shows through it. Whole,
+    it has Chat's night fade out under it in 180ms on the same curve, and the panel comes back around the closing
+    window under the dim. The night takes the window back at the window's own moment once Cancel, Esc or the dim
+    has opened it again, so neither hand-off shows a blank or moves a star.
+    *Corrected 2026-11-08 (ES-3c, at its source):* this said Chat's night steps aside after the window's first
+    frame. ES-3b's proof (`lanes/es/proof/es3b-0852Z`: the catalog's "From the night" plate in headless Chrome, real
+    WebGL2 on SwiftShader) showed what that did:
+    - Drawn whole over the panel at once, the window hid the words outright, for they stand inside the sky's place,
+      so their 180ms fade never showed.
+    - The dim, begun with the sheet, darkened the night through the wait for the window's first frame (2406ms cold,
+      1396ms warm there) before the undimmed window replaced it.
+    - The sheet's form, first drawn before the portal was known, stayed on the night through that wait under its own
+      delayed fade.
   - **Where no night can be lent** (Chat is not the view, it holds a spark, or there is no WebGL2), the sheet rises as
     the sheet below does.
 
