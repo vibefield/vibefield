@@ -9041,7 +9041,8 @@ describe("CP-4a2b — the host's life: parked and woken, D2's lookup at a wake, 
 
     it("S14-31 (slice 14, Q31 = slice 15's Q28; timed, against the map's untimed: the run reaches its host): a step's spawn refused while fieldd's stop flag reads set journals no answer: the step stays `starting`, its agent given back", async () => {
       // red-a: #launched journals the refusal as the step's answer
-      // Kills: Q31's guard dropped; the guard placed above the orphan keep (s15r :684)
+      // Kills: Q31's guard dropped (its flag half). Not the guard placed above the orphan keep: nothing lands here, so
+      // nothing is kept (red-a's check #1); S14-31c kills it
       const h = await harness({ spawnRefuses: "the agent service is stopping" });
       h.approved("review", ANSWERED);
       h.setStopping(true);
@@ -9069,6 +9070,67 @@ describe("CP-4a2b — the host's life: parked and woken, D2's lookup at a wake, 
       await within(PARK_MS, () => h.spawned.length === 1);
       await h.runs.close();
       refuse("the agent service is stopping");
+      await within(HOLD_IDLE_MS, () => answersOf(h, run).length > 0);
+      expect(answersOf(h, run)).toEqual([]);
+    });
+
+    it("S14-31c (i) (slice 14, Q31, red-a's check #1; timed, against the map's untimed: each run reaches its host): with fieldd's stop flag set, a start whose agent LANDS and then throws (FlowStepOrphaned, the catch) journals no answer, and the run's end ends that agent by its orphan keep alone; one that lands past a Stop and answers `refused` with `landed` is ended the same", async () => {
+      // red-a: the catch journals stepFailed as the step's answer. The `landed` road is green here: its run's ending
+      // is set, so #answer journals nothing (runs.ts:2110@d9482dbd8), and the keep ends its agent
+      // Kills: the guard on the refusal branch alone (the catch journals); the guard above the keep, on either road
+      // (nothing keeps the agent and `sessions.ofRun` omits it, so `ends` is empty)
+      // the catch: the agent lands, then its line is refused (R14f's road), so the start throws FlowStepOrphaned
+      const thrown = await harness({ ofRunOmits: ["rt-step1"] });
+      thrown.approved("review", ANSWERED);
+      thrown.setStopping(true);
+      vi.spyOn(thrown.runs.ports.inputs, "enqueue").mockImplementationOnce(() => {
+        throw new Error("the input queue refused it");
+      });
+      const run = startedRun(await thrown.start({ flow: "review" })).run;
+      await within(PARK_MS, () => thrown.spawned.length === 1);
+      await within(HOLD_IDLE_MS, () => answersOf(thrown, run).length > 0);
+      await thrown.runs.stop(run);
+      // `refused` with `landed`: the agent lands past a Stop, its run gone (R42d-2's road)
+      let release: () => void = () => {};
+      const held = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      const landed = await harness({ spawnHeld: held, ofRunOmits: ["rt-step1"] });
+      landed.approved("review", ANSWERED);
+      landed.setStopping(true);
+      const late = startedRun(await landed.start({ flow: "review" })).run;
+      await within(PARK_MS, () => landed.spawned.length === 1);
+      const stopping = landed.runs.stop(late);
+      release();
+      await stopping;
+      expect({
+        thrown: { answers: answersOf(thrown, run).length, ends: thrown.ends },
+        landed: { answers: answersOf(landed, late).length, ends: landed.ends },
+      }).toEqual({
+        thrown: { answers: 0, ends: ["rt-step1"] },
+        landed: { answers: 0, ends: ["rt-step1"] },
+      });
+    });
+
+    it("S14-31c (ii) (slice 14, Q31, red-a's check #1; timed, against the map's untimed): a start held in flight across close(), whose agent then LANDS and throws (FlowStepOrphaned, the catch), journals no answer", async () => {
+      // red-a: the catch journals stepFailed past close(), as S14-31b's refusal branch journals its words
+      // Kills: the guard on the refusal branch alone; the catch's guard reading the flag alone (its `#closing` half
+      // dropped). Named, not here: the keep's half, since past close() no end ends an agent in this life (#tail leaves
+      // at `#closing`, runs.ts:2635@d9482dbd8; stop() writes `stopping` alone, :853–856); and the `landed` road,
+      // since a spawn that lands past close() is never refused `landed` (gone() reads no `#closing`, :2008)
+      let release: () => void = () => {};
+      const held = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      const h = await harness({ spawnHeld: held });
+      h.approved("review", ANSWERED);
+      const run = startedRun(await h.start({ flow: "review" })).run;
+      await within(PARK_MS, () => h.spawned.length === 1);
+      vi.spyOn(h.runs.ports.inputs, "enqueue").mockImplementationOnce(() => {
+        throw new Error("the input queue refused it");
+      });
+      await h.runs.close();
+      release();
       await within(HOLD_IDLE_MS, () => answersOf(h, run).length > 0);
       expect(answersOf(h, run)).toEqual([]);
     });
@@ -9166,6 +9228,79 @@ describe("CP-4a2b — the host's life: parked and woken, D2's lookup at a wake, 
       await stopping;
       await within(HOLD_IDLE_MS, () => h.ends.length > 1);
       expect([...h.ends].sort()).toEqual(["rt-kept1", "rt-succ2"]);
+    });
+
+    /** Q34's asker rows (S14-34c–e; red-a's check #9): a FAN of two, booted, step 1's session not idle at the bind, so
+     * its unheard line waits on `sessionIdle`, and step 2's idle, so the bind asks it at once (R45's road). Step 2's
+     * line is each row's control: the witness that both steps were bound, red at red-a, since nothing wakes. Step 1's
+     * "asked nothing" is an absence, which the mutant pass carries at the green. */
+    const unheardAtBoot = async (h: Harness) => {
+      h.approved("fan", fanOut(2));
+      const run = startedRun(await h.start({ flow: "fan" })).run;
+      await waitFor(() => expect(h.enqueued).toHaveLength(2));
+      const [first = "", second = ""] = [1, 2].map((call) => sessionOf(h, run, call));
+      h.sessionRows.set(first, { live: true, onPermission: false });
+      h.sessionRows.set(second, { live: true, idle: true, onPermission: false });
+      await booted(h);
+      await within(PARK_MS, () => linesOf(h, second, "unheard").length > 0);
+      return { run, first, second };
+    };
+
+    it("S14-34c (slice 14, Q34's `live.ending` arm on the unheard asker; its red at red-a is its control, step 2 asked at the bind): a booted step whose session goes idle in a Stop's leave is asked nothing", async () => {
+      // red-a: nothing wakes, so step 2 is never asked at its bind
+      // Kills: the asker's `live.ending !== undefined` arm dropped. In the leave the LiveRun is still the run's and
+      // fieldd is not closing, so that arm alone guards: the line goes into an ending run, past its withdraw (C4's (1))
+      const h = await harness();
+      const { run, first, second } = await unheardAtBoot(h);
+      const stopping = h.runs.stop(run);
+      idleNow(h.runs, first);
+      await stopping;
+      expect({
+        control: linesOf(h, second, "unheard").length,
+        unheard: linesOf(h, first, "unheard").length,
+      }).toEqual({ control: 1, unheard: 0 });
+    });
+
+    it("S14-34d (slice 14, Q34's `#closing` arm on the unheard asker; its red at red-a is its control, step 2 asked at the bind): a booted step whose session goes idle past close() is asked nothing", async () => {
+      // red-a: nothing wakes, so step 2 is never asked at its bind
+      // Kills: the asker's `this.#closing` arm dropped. close() leaves the LiveRun in `#live` and sets no ending
+      // (runs.ts:1173–1183@d9482dbd8), so that arm alone guards: a line goes out that no turn-end listener hears
+      // (C4's (3))
+      const h = await harness();
+      const { first, second } = await unheardAtBoot(h);
+      await h.runs.close();
+      idleNow(h.runs, first);
+      expect({
+        control: linesOf(h, second, "unheard").length,
+        unheard: linesOf(h, first, "unheard").length,
+      }).toEqual({ control: 1, unheard: 0 });
+    });
+
+    it("S14-34e (slice 14, Q34's `this.#live.get(run) !== live` arm on the unheard asker; its red at red-a is its control, step 2 asked at the bind): a booted step whose session goes idle in the tail of an end its script chose, with no ending set, is asked nothing", async () => {
+      // red-a: nothing wakes, so step 2 is never asked at its bind, and no end begins
+      // Kills: the asker's `this.#live.get(run) !== live` arm dropped, on a green whose asker reaches a LiveRun past
+      // #finish's `#live.delete`: a script's `threw` sets no `live.ending` (runs.ts:2515–2517@d9482dbd8) and fieldd
+      // is not closing, so that arm alone guards. On an asker that walks the LiveRuns `#live` holds in its own turn
+      // (this row's reading of D433–436: it "returns at once while no run has `unheard`"), that arm cannot read true,
+      // and this row kills nothing (the fold's report names it)
+      let release: () => void = () => {};
+      const held = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      const h = await harness({ endHeld: held });
+      const { run, first, second } = await unheardAtBoot(h);
+      // step 2's turn fails: its refusal rejects the FAN's Promise.all, so the script throws and the run ends `failed`
+      // by its own end, its ending never set; the tail then holds at the agents' ends
+      h.endTurn({ run, call: 2, runtimeRunId: second, turn: "boot-failed", outcome: "failed" });
+      await within(PARK_MS, () => h.ends.length > 0);
+      idleNow(h.runs, first);
+      const read = {
+        control: linesOf(h, second, "unheard").length,
+        tail: h.ends.length > 0,
+        unheard: linesOf(h, first, "unheard").length,
+      };
+      release();
+      expect(read).toEqual({ control: 1, tail: true, unheard: 0 });
     });
 
     it("S14-35 (slice 14, Q35, §G 11): a Stop between restore() and settled() is refused retryably as fieldd's own UNAVAILABLE, writing no `end` and ending no agent", async () => {
