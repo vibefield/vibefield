@@ -29,7 +29,12 @@ import type { ComposerPort } from "../src/chat/ChatComposer";
 import { ChatView } from "../src/chat/ChatView";
 import { NEEDS_IDLE, needsNamesOf } from "../src/chat/needs-card";
 import { pendingSaysNow, resetPendingSaysForTest } from "../src/chat/pending-says";
-import { type SparksPort, startSparksFeed } from "../src/chat/sparks-feed";
+import {
+  chooseSpark,
+  type SparksPort,
+  startSparksFeed,
+  takeFirstJob,
+} from "../src/chat/sparks-feed";
 import { ThreadItemsView } from "../src/chat/ThreadItemsView";
 import { helloWords, STARTERS, type ThreadItem } from "../src/chat/thread-items";
 import type { ThreadSendDeps, ThreadSendOutcome } from "../src/chat/thread-send";
@@ -404,6 +409,59 @@ describe('the hello and its starters (DESIGN.md §8 "Chat\'s thread"; NS-D4; TH-
     expect(words($('.vf-chat-thread-acts button[data-act="wake"]'))).toBe("Wake");
     expect(helloSays()).toBe(helloWords("Vela"));
     expect(starters()).toHaveLength(3);
+  });
+});
+
+describe('a hatched spark\'s first job (track ES, ES-2; ES-D2 A; DESIGN.md §8 "The New spark sheet", Its first job)', () => {
+  // the sheet hands Chat the job with its choice, after the hatch (`chat-first-job.test.tsx`); Chat sends it as Send
+  // sends, once, as soon as the spark's row is read
+  it("sends the job its hatch carries once, as Send sends it, when the spark's row is read — its bubble in the hello's place", async () => {
+    await mountChat();
+    await act(async () => chooseSpark(VELA.id, STARTERS[2]?.words));
+    await settle();
+    expect(road.sent).toEqual([{ text: STARTERS[2]?.words, stills: [] }]);
+    expect(said).toEqual([]);
+    expect(hello()).toBeNull();
+    expect(words($('.vf-chat-flow [data-row="you"]'))).toContain(STARTERS[2]?.words ?? "");
+    // never twice: the spark chosen again and the board moving send nothing more
+    await act(async () => chooseSpark(VELA.id));
+    await act(async () =>
+      pushFrame?.({ since: 1, revision: 2, upserts: [own({ revision: 2 })], removed: [] }, "delta"),
+    );
+    await settle();
+    expect(road.sent).toHaveLength(1);
+  });
+
+  it("waits for the row of a spark the list does not hold yet, and sends nothing into another thread", async () => {
+    await mountChat();
+    await act(async () => chooseSpark("sp-vega0001", STARTERS[0]?.words));
+    await settle();
+    expect(road.sent).toEqual([]);
+    expect(said).toEqual([]);
+    // still the hatch's to send once Vega's row is read; this window's list never reads it
+    expect(takeFirstJob("sp-vega0001")).toBe(STARTERS[0]?.words);
+  });
+
+  it("says a first job that is not taken as Send's is, in the line's note, and sends it no second time", async () => {
+    road.outcome = () => Promise.resolve({ state: "failed", reason: "fieldd isn't running" });
+    await mountChat();
+    await act(async () => chooseSpark(VELA.id, STARTERS[1]?.words));
+    await settle();
+    expect(road.sent).toEqual([{ text: STARTERS[1]?.words, stills: [] }]);
+    expect(said).toEqual(["Couldn't send to Vela: fieldd isn't running"]);
+    // a send refused leaves no bubble: the hello and its starters stand, and the job is not sent again
+    expect(hello()).not.toBeNull();
+    await act(async () => chooseSpark(VELA.id));
+    await settle();
+    expect(road.sent).toHaveLength(1);
+  });
+
+  it("sends nothing for a hatch that carried no job", async () => {
+    await mountChat();
+    await act(async () => chooseSpark(VELA.id));
+    await settle();
+    expect(road.sent).toEqual([]);
+    expect(hello()).not.toBeNull();
   });
 });
 

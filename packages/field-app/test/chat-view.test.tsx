@@ -41,7 +41,7 @@ import {
   sparksPortOver,
   startSparksFeed,
 } from "../src/chat/sparks-feed";
-import { sparkIsNew } from "../src/chat/thread-items";
+import { STARTERS, type Starter, sparkIsNew } from "../src/chat/thread-items";
 import { THREAD_MARK_WORDS, type ThreadMark } from "../src/chat/thread-marks";
 import { ChatPreview } from "../src/design-system/ChatPreview";
 import type { ChatState } from "../src/design-system/chat-fixtures";
@@ -189,6 +189,7 @@ function Chat({
   runs = BOARD_RUNS,
   onSurface,
   onOpenAgents,
+  onFirstJob,
 }: {
   active?: boolean;
   port?: ComposerPort & Pick<NewSparkPort, "providers">;
@@ -199,6 +200,8 @@ function Chat({
   onSurface?: (next: FrameSurface | null) => void;
   /** track ES — Open Agents settings, on the night with no agent that can be a spark */
   onOpenAgents?: () => void;
+  /** track ES (ES-2) — the job the night hands the frame as it opens the sheet, or none */
+  onFirstJob?: (job: Starter | null) => void;
 }): ReactElement {
   const [surface, setSurface] = useState<FrameSurface | null>(null);
   return (
@@ -215,6 +218,7 @@ function Chat({
       runs={runs}
       agents={port}
       {...(onOpenAgents === undefined ? {} : { onOpenAgents })}
+      {...(onFirstJob === undefined ? {} : { onFirstJob })}
     />
   );
 }
@@ -1644,6 +1648,21 @@ describe('Chat, empty: the night, live (track ES; DESIGN.md §8 "Chat\'s list", 
     await settle();
     expect($(".vf-chat-empty")).toBeNull();
     expect(rows().map((r) => r.dataset.spark)).toEqual(["sp-vela0001"]);
+  });
+
+  it("hands the frame a first job as it opens the sheet, and New spark none (ES-2; ES-D2 A: the sheet carries it)", async () => {
+    const { door } = scripted([]);
+    stop = startSparksFeed(door);
+    const carried: (Starter | null)[] = [];
+    const surfaces: (FrameSurface | null)[] = [];
+    mount(
+      <Chat onSurface={(next) => surfaces.push(next)} onFirstJob={(job) => carried.push(job)} />,
+    );
+    await settle();
+    act(() => ($(".vf-chat-empty-new") as HTMLButtonElement | null)?.click());
+    act(() => host?.querySelectorAll<HTMLElement>(".vf-chat-empty .vf-chat-starter")[2]?.click());
+    expect(carried).toEqual([null, STARTERS[2]]);
+    expect(surfaces).toEqual(["new-spark", "new-spark"]);
   });
 
   it("is Off when no agent here can be a spark, its sentence naming the one that can, and Open Agents settings asks the window's Settings for Agents", async () => {
