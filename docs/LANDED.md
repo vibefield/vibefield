@@ -43427,6 +43427,38 @@ ts6 form.
   `pnpm gate:landing --only smoke:first-run`, then `--only smoke:godview,smoke:godview:no-record`. Its first line names
   the Mac's rosettad, `/Volumes/SamsungRed/rust-target/rosetta-pin/release/rosettad`, rebuilt at the EL8's land
   (16:19:27Z). Paid in a later dated LANDED entry.
+  > **The Mac witness (2026-11-08 20:00:20Z) at main `351bea4ce` reads GREEN-BUT-263/264** (VF-PM's GO 19:54:30Z, the
+  > reading ruled 20:03:24Z). fd ran the three rows in the main checkout, each alone through the HOLD door, nice 19, by
+  > `gate-landing.mjs --only` (HOLD :1917–1924, SCOPE 19:55Z → SCOPE DONE 20:00Z; `lanes/item253/mac-witness/`, its
+  > SHA256SUMS-fd-witness-351bea4ce `a6206ca8`).
+  >
+  > | Row | Verdict (the gate's line) | START → END | rosettad |
+  > |---|---|---|---|
+  > | `smoke:first-run` (row 32) | RED, exit 1, 102 s | 19:55:33Z → 19:57:15Z | handed |
+  > | `smoke:godview` | RED, exit 2, 68 s | 19:57:15Z → 19:58:24Z | handed |
+  > | `smoke:godview:no-record` | GREEN, exit 0, 115 s | 19:58:25Z → 20:00:20Z | removed |
+  >
+  > - Read before each START and after each END: the main display awake (CGDisplayIsAsleep false, HID idle 1902 s to
+  >   2191 s, held by `caffeinate -d` for this run alone on VF-PM's word); field-native `d56e774f` (the shared target,
+  >   11:30:31 PST) on every read; rosettad `a521b1d8`, the lock's release build (08:19:27 PST); no dev runner; the
+  >   checkout clean after.
+  > - **The two reds, their judges' lines verbatim:**
+  >   - `smoke:first-run`, its catalog walk alone (4 s, 0 shots; day 31 s, night 30 s and no-webgpu 24 s green): "by day
+  >     the catalog showed 0 frames, not 13 · by day the wizard's error line never stood on 02 field (error) · by day
+  >     the wizard's error line never stood on A4 setting-up-write-failed · by day the wizard's error line never stood
+  >     on A5 setting-up-desk-failed · by night the catalog showed 0 frames, not 13 · by night the wizard's error line
+  >     never stood on 02 field (error) · by night the wizard's error line never stood on A4 setting-up-write-failed ·
+  >     by night the wizard's error line never stood on A5 setting-up-desk-failed · the walk stopped: UnknownVizError".
+  >     Item 264.
+  >   - `smoke:godview`: "Error: History's room in the cover did not happen within 30000ms
+  >     ({"surface":"host","columns":false,"projects":0,"words":""})". Item 263.
+  >   - Both are code since HG-2's land `3264c54f1`, filed for HG at 20:04Z.
+  > - **This item's point, witnessed:** the gate handed the lock's rosettad to rows 1 and 2 (each verdict names it, and
+  >   rosettad stood in all five of their daemon censuses), and row 2's room read `surface: host` with it. It removed
+  >   the variable from row 3, whose History said "History isn't answering" and "The agent index is unconfigured: no
+  >   rosettad binary was configured (FIELDD_ROSETTAD_BIN)". Row 1's three live walks show History's row, which was red
+  >   on this Mac at `e60d8add6`.
+  > - **The Owed line above** is PAID by this block, GREEN-BUT-263/264.
 - Item 255: `smoke:studio` again, alone, on an awake display.
 
 ## Item 254 — the first-run judge reads the heads a word's list pins: a line wholly under an opaque sticky box that paints over it is not on the still, and one partly under is cut and said "under its list's pinned head" (2026-11-08)
@@ -43515,6 +43547,20 @@ The fix:
 **Owed.**
 - Row 32's witness: item 253's rosettad and this fix, on the old mini, by a9 (VF-PM). On the Mac, item 253's fix is
   in main at `ef22fb3b7` and row 32's next `gate:landing` there is OWED, in a later dated entry.
+  > **The Mac's row 32 (2026-11-08 19:57:15Z) at main `351bea4ce`, with item 253's fix, reads GREEN-BUT-264** (VF-PM
+  > 20:03:24Z). It is the first row of item 253's Mac witness (LANDED "Item 253", its dated block;
+  > `lanes/item253/mac-witness/gate-351bea4ce/logs/01-smoke_first-run.log`, sha256 `d0fb866d`): RED, exit 1, 102 s,
+  > 19:55:33Z → 19:57:15Z, the display awake, field-native `d56e774f`, rosettad `a521b1d8` handed.
+  > - **This item's point, witnessed:** the day (31 s), night (30 s) and no-webgpu (24 s) walks are green, and the log
+  >   holds 0 "ChatGPT Pro" lines. The 1:1 pair that the Mac and the old mini read at `e60d8add6` is gone.
+  > - **The one red,** the catalog walk alone (4 s, 0 shots), its judge's line verbatim: "by day the catalog showed 0
+  >   frames, not 13 · by day the wizard's error line never stood on 02 field (error) · by day the wizard's error line
+  >   never stood on A4 setting-up-write-failed · by day the wizard's error line never stood on A5
+  >   setting-up-desk-failed · by night the catalog showed 0 frames, not 13 · by night the wizard's error line never
+  >   stood on 02 field (error) · by night the wizard's error line never stood on A4 setting-up-write-failed · by night
+  >   the wizard's error line never stood on A5 setting-up-desk-failed · the walk stopped: UnknownVizError". It is item
+  >   264, code since HG-2's land `3264c54f1`, filed for HG at 20:04Z.
+  > - **The Owed line's Mac half above** is PAID by this block, GREEN-BUT-264.
 - `gate:landing` at this landing: OWED, with row 32's witness above.
 
 ## Item 257 — the kit's tests build on vf-m2's Xcode 26.3: three test literals take shapes Swift 6.2.4 types in time, no value under test moves, and the EL8's row 6 is paid there (2026-11-08)
