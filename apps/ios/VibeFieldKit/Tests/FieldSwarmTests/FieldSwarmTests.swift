@@ -177,7 +177,11 @@ private func catalogGolden() throws -> [CatalogMarkRow] {
 
   @Test func aLightThemeDarkensTheStateInksTowardItsOwnAndADarkThemeLeavesThem() {
     // 45% of the way to the ink on light: the words carry; the dark theme's hues already do.
-    #expect(close(lightTheme.stateInk.orange, 0.55 + 0.45 * 0x11 / 255, 0.55 * 0x9f / 255 + 0.45 * 0x11 / 255, 0.55 * 0x0a / 255 + 0.45 * 0x11 / 255))
+    let inkShare: Double = 0.45 * Double(0x11) / 255
+    let r: Double = 0.55 + inkShare
+    let g: Double = 0.55 * Double(0x9f) / 255 + inkShare
+    let b: Double = 0.55 * Double(0x0a) / 255 + inkShare
+    #expect(close(lightTheme.stateInk.orange, r, g, b))
     #expect(lightTheme.stateInk.orange.luminance < lightTheme.orange.luminance)
     #expect(darkTheme.stateInk.orange == darkTheme.orange)
     #expect(darkTheme.stateInk.blue == darkTheme.blue)
