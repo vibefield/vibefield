@@ -32,11 +32,12 @@ import { FIXTURE_HATCHED } from "./spark-fixtures";
 // door cannot name, one declares none), so they are listed disabled; and the fourth is not installed here, so the menu
 // leaves it out.
 
-export const NEW_SPARK_STATES = ["live", "menu", "profiles", "taken", "job"] as const;
+export const NEW_SPARK_STATES = ["live", "night", "menu", "profiles", "taken", "job"] as const;
 export type NewSparkState = (typeof NEW_SPARK_STATES)[number];
 
 export const NEW_SPARK_STATE_LABEL: Record<NewSparkState, string> = {
   live: "Live",
+  night: "From the night",
   menu: "Agent menu",
   profiles: "Profiles",
   taken: "Name taken",
@@ -163,7 +164,9 @@ export function newSparkFixturePort({
 }
 
 /** A still plate: the shipping view's props, made by the product's own readings of the fixtures. */
-export function newSparkPlateOf(state: Exclude<NewSparkState, "live">): NewSparkSheetViewProps {
+export function newSparkPlateOf(
+  state: Exclude<NewSparkState, "live" | "night">,
+): NewSparkSheetViewProps {
   const agents = sparkAgentsOf(PROVIDERS);
   const thinker = agents[0];
   const base: NewSparkSheetViewProps = {

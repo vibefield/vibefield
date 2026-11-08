@@ -85,12 +85,22 @@
   block-size: 100%;
 }
 
+/* Lent to the sheet's window (ES-3b; §6, the portal), the night steps aside once the window has drawn it. */
+.vf-spark-night[data-lent="true"] {
+  visibility: hidden;
+}
+
 /* The hatch (DESIGN.md §2.10 "The hatch", §8 "The New spark sheet"): the sky's two canvases, one over the other, on the
    night's ground; without WebGL2 the flat star stands at its centre. */
 .vf-spark-hatch {
   position: relative;
   overflow: hidden;
   background: var(--vf-spark-night);
+}
+
+/* Its sky lent (ES-3b): the window over it is the sky, so its own place is clear. */
+.vf-spark-hatch[data-sky="lent"] {
+  background: transparent;
 }
 
 .vf-spark-hatch-sky,

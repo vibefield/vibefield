@@ -29,6 +29,25 @@
   transition: clip-path 240ms var(--vf-ease-island);
 }
 
+/* Through the portal (ES-3b; §6, the portal): while the night is lent to the sheet's window, the words and the hush
+   fade and recede to 0.98 in 180ms on the retract curve; handed back, they return 300ms into the return (the window's
+   240ms, then 60) over 240ms on the island curve. */
+.vf-chat-empty-column,
+.vf-chat-empty-hush {
+  transition:
+    opacity 240ms var(--vf-ease-island) 60ms,
+    transform 240ms var(--vf-ease-island) 60ms;
+}
+
+.vf-chat-empty:has(.vf-spark-night[data-lent="true"]) .vf-chat-empty-column,
+.vf-chat-empty:has(.vf-spark-night[data-lent="true"]) .vf-chat-empty-hush {
+  opacity: 0;
+  transform: scale(0.98);
+  transition:
+    opacity 180ms cubic-bezier(0.4, 0, 1, 1),
+    transform 180ms cubic-bezier(0.4, 0, 1, 1);
+}
+
 /* Behind the words a hush of the night (§5), so no star crosses them: an ellipse 620 by 340 on the column's centre,
    gone by 72% of its reach. */
 .vf-chat-empty-hush {
@@ -162,6 +181,27 @@
   /* reduced motion (M6): the lean moves nothing */
   .vf-chat-empty[data-lean="true"] .vf-spark-night {
     clip-path: inset(0 round 22px);
+  }
+
+  /* reduced motion (M6; §6, the portal): lent, the night and the words fade out in 150ms where they stand; handed
+     back, they fade in over 120ms */
+  .vf-chat-empty .vf-spark-night,
+  .vf-chat-empty-column,
+  .vf-chat-empty-hush {
+    transition: opacity 120ms ease;
+  }
+
+  .vf-chat-empty .vf-spark-night[data-lent="true"] {
+    opacity: 0;
+    transition:
+      opacity 150ms ease,
+      visibility 0s linear 150ms;
+  }
+
+  .vf-chat-empty:has(.vf-spark-night[data-lent="true"]) .vf-chat-empty-column,
+  .vf-chat-empty:has(.vf-spark-night[data-lent="true"]) .vf-chat-empty-hush {
+    transform: none;
+    transition: opacity 150ms ease;
   }
 
   /* reduced motion (M6): the jobs fade in over 120ms where they stand */

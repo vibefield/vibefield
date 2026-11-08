@@ -8,14 +8,25 @@ export {
   sparkFaceScale,
 } from "./engine";
 export { type FlatStarShape, flatStar } from "./flat-star";
-export { SparkHatch, type SparkHatchHandle, type SparkHatchProps } from "./hatch";
 export {
+  SparkHatch,
+  type SparkHatchHandle,
+  type SparkHatchProps,
+  type SparkHatchSky,
+  skyPointOf,
+} from "./hatch";
+export {
+  lendNight,
   NIGHT_EASE_OUT_S,
   NIGHT_REST_AFTER_S,
+  type NightEngine,
+  type NightHandle,
+  type NightLend,
   nightRestRate,
   nightRestTarget,
   SparkNight,
   type SparkNightProps,
+  startNight,
 } from "./night";
 export {
   SparkFace,

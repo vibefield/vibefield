@@ -46,12 +46,35 @@ function NewSparkLivePlate(): ReactElement {
   );
 }
 
+/** ES-3b — the live sheet opened from the shipping night's New spark, as Chat opens it: through the portal where the
+ * window can draw (a window with WebGL2), and risen as before where it cannot. */
+export function NewSparkNightPlate(): ReactElement {
+  const [plate, setPlate] = useState<HTMLDivElement | null>(null);
+  const [open, setOpen] = useState(false);
+  const [port] = useState(() => newSparkFixturePort());
+  return (
+    <div ref={setPlate} className="vf-ds-new-spark-plate" data-state="night">
+      <div className="vf-ds-new-spark-view" data-peek-recede={open ? "true" : "false"}>
+        <ChatPreview state="empty" onNewSpark={() => setOpen(true)} />
+      </div>
+      <NewSparkSheet
+        open={open}
+        port={port}
+        onClose={() => setOpen(false)}
+        container={plate}
+        takeFocus={false}
+        bindKeys={false}
+      />
+    </div>
+  );
+}
+
 /** One of the sheet's still states, over Chat receded: over the night for its first job, which comes from there alone
  * (ES-2), over the list for the rest. */
 export function NewSparkPreview({
   state,
 }: {
-  state: Exclude<NewSparkState, "live">;
+  state: Exclude<NewSparkState, "live" | "night">;
 }): ReactElement {
   return (
     <div className="vf-ds-new-spark-plate" data-state={state}>
@@ -81,6 +104,8 @@ export function NewSparkSpecimen(): ReactElement {
       </div>
       {state === "live" ? (
         <NewSparkLivePlate key="live" />
+      ) : state === "night" ? (
+        <NewSparkNightPlate key="night" />
       ) : (
         <NewSparkPreview key={state} state={state} />
       )}

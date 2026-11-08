@@ -78,22 +78,29 @@ const settle = (ms = 0) => act(async () => new Promise((done) => setTimeout(done
 const $ = <T extends Element = HTMLElement>(selector: string): T | null =>
   document.querySelector<T>(selector);
 
-/** A night standing in Chat's panel, over a stand-in engine (the kit's core, `startNight`). */
-function aNight(): HTMLElement {
+/** Where the sheet is drawn (the product's body, a plate in the catalog): the night it borrows stands inside it. */
+function aHost(): HTMLDivElement {
+  host = document.createElement("div");
+  document.body.appendChild(host);
+  return host;
+}
+
+/** A night standing in Chat's panel, over a stand-in engine (the kit's core, `startNight`), inside the sheet's own
+ * container (a sheet borrows only the night in its own: the catalog's plates each hold theirs). */
+function aNight(within: HTMLElement): HTMLElement {
   const box = document.createElement("div");
   box.className = "vf-spark-night";
-  document.body.appendChild(box);
+  within.appendChild(box);
   boxes.push(box);
   nights.push(startNight({ render: () => undefined, clear: () => undefined }, box, true));
   return box;
 }
 
 async function open(): Promise<void> {
-  host = document.createElement("div");
-  document.body.appendChild(host);
-  root = createRoot(host);
+  const at = host ?? aHost();
+  root = createRoot(at);
   await act(async () =>
-    root?.render(<NewSparkSheet open port={portOf()} onClose={() => undefined} container={host} />),
+    root?.render(<NewSparkSheet open port={portOf()} onClose={() => undefined} container={at} />),
   );
   await settle();
 }
@@ -142,7 +149,7 @@ describe("the portal's window (DESIGN.md §6, the portal; \"The window is the ni
   });
 
   it("hands the night back untouched where the window cannot draw (no WebGL2), and rises as before", async () => {
-    const box = aNight();
+    const box = aNight(aHost());
     await open();
     // the night never stepped aside: the window never drew
     expect(box.dataset.lent).toBeUndefined();

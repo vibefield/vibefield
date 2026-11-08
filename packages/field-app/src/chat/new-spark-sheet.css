@@ -25,13 +25,18 @@
   inline-size: 540px;
   max-inline-size: calc(100% - 32px);
   padding: 10px;
+  animation: vf-new-spark-in 560ms var(--vf-ease-island) both;
+}
+
+/* the Sheet tier (§5): the sheet's own glass, and the glass the portal grows around its window (ES-3b) */
+.vf-new-spark-sheet,
+.vf-new-spark-glass {
   border-radius: 40px;
   background: color-mix(in srgb, var(--vf-chrome-solid) 90%, transparent);
   backdrop-filter: blur(64px) saturate(1.2);
   box-shadow:
     0 0 0 1px var(--vf-hairline-strong),
     var(--vf-shadow-search);
-  animation: vf-new-spark-in 560ms var(--vf-ease-island) both;
 }
 
 .vf-new-spark-sky {
@@ -385,5 +390,93 @@
   /* reduced motion (M6): a dropped first job fades over 120ms, and the sheet takes its height at once */
   .vf-new-spark-job {
     transition: opacity 120ms ease;
+  }
+}
+
+/* THE PORTAL (ES-3b; §6, the portal, "The window is the night's own canvas, lent"). Opened from Chat's empty night the
+   sheet does not rise: its glass grows from clear around the window where it stands (`portal.ts` moves it), and the
+   sheet's own box is clear, so the window over its sky is the sky. */
+.vf-new-spark-glass {
+  position: absolute;
+  pointer-events: none;
+}
+
+/* The window: the night's own canvas, lent, panel-sized at the panel's place, over the glass and clipped to the sky's
+   place, the hatch's face drawn in it. Nothing in it takes the pointer. */
+.vf-new-spark-window {
+  position: absolute;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.vf-new-spark-window-sky,
+.vf-new-spark-window-face {
+  position: absolute;
+  display: block;
+}
+
+.vf-new-spark-window-sky {
+  inset: 0;
+  inline-size: 100%;
+  block-size: 100%;
+}
+
+.vf-new-spark[data-portal] .vf-new-spark-sheet {
+  background: transparent;
+  backdrop-filter: none;
+  box-shadow: none;
+  animation: none;
+}
+
+/* until the window has drawn nothing of the sheet shows: the night is still the panel's */
+.vf-new-spark[data-portal="drawing"] .vf-new-spark-glass {
+  visibility: hidden;
+}
+
+/* its name, agent and foot come in from 45% of the close: 330ms on the island curve, 270ms in */
+.vf-new-spark[data-portal] .vf-new-spark-sheet > :not(.vf-new-spark-sky) {
+  transition: opacity 330ms var(--vf-ease-island) 270ms;
+}
+
+.vf-new-spark[data-portal="drawing"] .vf-new-spark-sheet > :not(.vf-new-spark-sky),
+.vf-new-spark[data-portal="folding"] .vf-new-spark-sheet > :not(.vf-new-spark-sky),
+.vf-new-spark[data-portal="folded"] .vf-new-spark-sheet > :not(.vf-new-spark-sky) {
+  opacity: 0;
+}
+
+/* Cancel, Esc or the dim: they go first, as the window opens back */
+.vf-new-spark[data-portal="folding"] .vf-new-spark-sheet > :not(.vf-new-spark-sky),
+.vf-new-spark[data-portal="folded"] .vf-new-spark-sheet > :not(.vf-new-spark-sky) {
+  transition: opacity 120ms ease;
+}
+
+/* folded: the night is Chat's again, drawn there at the window's moment, and the face ends its leave over it */
+.vf-new-spark[data-portal="folded"] .vf-new-spark-window-sky {
+  visibility: hidden;
+}
+
+/* folded before the window drew: nothing of it shows, and the night carries on */
+.vf-new-spark[data-open="false"][data-portal="drawing"] .vf-new-spark-window {
+  visibility: hidden;
+}
+
+/* Create: the sheet leaves with its window as one (`portal.ts` takes the window and the glass), down 16 at 0.97 */
+.vf-new-spark[data-portal="leaving"] .vf-new-spark-sheet {
+  animation: vf-new-spark-out 240ms cubic-bezier(0.4, 0, 1, 1) both;
+}
+
+/* M6: the sheet fades in with its window once the night has faded out, and Cancel is the same backwards */
+@media (prefers-reduced-motion: reduce) {
+  .vf-new-spark[data-portal] .vf-new-spark-sheet > :not(.vf-new-spark-sky) {
+    transition: opacity 150ms ease 150ms;
+  }
+
+  .vf-new-spark[data-portal="folding"] .vf-new-spark-sheet > :not(.vf-new-spark-sky),
+  .vf-new-spark[data-portal="folded"] .vf-new-spark-sheet > :not(.vf-new-spark-sky) {
+    transition: opacity 120ms ease;
+  }
+
+  .vf-new-spark[data-portal="leaving"] .vf-new-spark-sheet {
+    animation: vf-new-spark-fade-out 120ms ease both;
   }
 }

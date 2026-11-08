@@ -1,10 +1,22 @@
 import { FieldGlyph } from "@vibefield/design-kit/glyphs";
 import { UiButton } from "@vibefield/design-kit/primitives";
-import { SparkHatch, type SparkHatchHandle } from "@vibefield/design-kit/spark-face";
+import {
+  SparkHatch,
+  type SparkHatchHandle,
+  type SparkHatchSky,
+} from "@vibefield/design-kit/spark-face";
 import { AgentIcon } from "@vibefield/puppeteer-view-sdk/react";
-import { type ReactElement, type Ref, useEffect, useRef } from "react";
+import { type ReactElement, type Ref, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { StillStarter } from "./ChatStarter";
 import type { AgentMenuRow, EffortChoice, ProfileChip, SheetRefusal } from "./new-spark";
+import {
+  type Box,
+  boxOf,
+  movePortal,
+  type PortalPhase,
+  type PortalPlaces,
+  placeGlass,
+} from "./portal";
 import type { Starter } from "./thread-items";
 import "./new-spark-sheet.css";
 
@@ -12,7 +24,27 @@ import "./new-spark-sheet.css";
 // `ns-profiles`) — controller-free, so the catalog mounts this exact markup on fixtures. The sky with its hatch; the
 // name with ↻, which deals another face (NS-D2 B); the agent pill and its menu; its profiles once there is more than
 // This Mac (NS-D5); Cancel and Create; each refusal under what it is about. ES-2: under the agent, the first job a
-// starter on Chat's empty night carried, still, with its × (§8 "The New spark sheet", Its first job).
+// starter on Chat's empty night carried, still, with its × (§8 "The New spark sheet", Its first job). ES-3b (§6, the
+// portal): opened from Chat's empty night, it draws the window — the night's own canvas, lent, panel-sized at the
+// night's place, over the glass, the hatch drawing its sky and its face there — and the glass that grows around it;
+// the phase's motion is `portal.ts`'s.
+
+/** ES-3b — the portal, as the controller hands it: the night lent, and where the portal stands. */
+export interface SheetPortal {
+  /** the night's place (its client rect): the window stands there and the glass grows from there */
+  readonly from: DOMRectReadOnly;
+  /** the night's edge as it stood (at rest, or leaning) */
+  readonly clip: string;
+  /** the night's own moment: the window's first frame is drawn at it */
+  readonly t: number;
+  readonly phase: PortalPhase | "folded";
+  /** reduced motion (M6): fades in place of the close */
+  readonly reduced: boolean;
+  /** the window's first frame is drawn: the night may step aside */
+  readonly onDrawn: () => void;
+  /** the window could not draw (no WebGL2): the sheet rises as it always has */
+  readonly onFailed: () => void;
+}
 
 export interface NewSparkSheetViewProps {
   /** false while it leaves (240 ms on the retract curve), its controls out of reach */
@@ -38,6 +70,8 @@ export interface NewSparkSheetViewProps {
    * Until then Create waits, disabled (item 149: an enabled Create pressed before them hatched nothing, in silence) */
   ready?: boolean | undefined;
   hatchRef?: Ref<SparkHatchHandle> | undefined;
+  /** ES-3b — opened through the portal: the night lent, and where the portal stands; absent, the sheet rises */
+  portal?: SheetPortal | undefined;
   /** ES-2 — the first job this opening carries from Chat's empty night; absent, none */
   job?: Starter | undefined;
   /** ES-2 — its × was pressed: the row folds away as the sheet settles to its height (240ms, island) */
@@ -72,6 +106,7 @@ export function NewSparkSheetView({
   creating,
   ready = true,
   hatchRef,
+  portal,
   job,
   jobLeaving = false,
   onDropJob,
@@ -98,8 +133,118 @@ export function NewSparkSheetView({
     nameRef.current?.focus();
     nameRef.current?.select();
   }, [focusName]);
+  // ES-3b — the portal's parts and places, measured once the sheet stands where it will (before its first frame)
+  const layerRef = useRef<HTMLDivElement>(null);
+  const sheetRef = useRef<HTMLElement>(null);
+  const windowRef = useRef<HTMLDivElement>(null);
+  const glassRef = useRef<HTMLDivElement>(null);
+  const skyRef = useRef<HTMLCanvasElement>(null);
+  const faceRef = useRef<HTMLCanvasElement>(null);
+  const [places, setPlaces] = useState<PortalPlaces | null>(null);
+  // the places as the sheet has grown since it opened (its reads come in after): the glass and the leave follow them
+  const grown = useRef<PortalPlaces | null>(null);
+  const [lentSky, setLentSky] = useState<SparkHatchSky | undefined>(undefined);
+  const lent = portal !== undefined;
+  const handed = useRef(portal);
+  handed.current = portal;
+  useLayoutEffect(() => {
+    const given = handed.current;
+    const layer = layerRef.current;
+    const sheet = sheetRef.current;
+    const slot = sheet?.querySelector(".vf-new-spark-sky");
+    const pane = windowRef.current;
+    const glass = glassRef.current;
+    const face = faceRef.current;
+    const sky = skyRef.current;
+    if (
+      !lent ||
+      given === undefined ||
+      !layer ||
+      !sheet ||
+      !slot ||
+      !pane ||
+      !glass ||
+      !face ||
+      !sky
+    ) {
+      grown.current = null;
+      setPlaces(null);
+      setLentSky(undefined);
+      return;
+    }
+    const local = (rect: DOMRectReadOnly): Box => {
+      const origin = layer.getBoundingClientRect();
+      return boxOf({
+        left: rect.left - origin.left,
+        top: rect.top - origin.top,
+        width: rect.width,
+        height: rect.height,
+      });
+    };
+    // the sheet stands where it opened for the portal's life, so its sky never moves under the window: what its reads
+    // add (its profiles, a refusal) grows it downward
+    const at = local(sheet.getBoundingClientRect());
+    Object.assign(sheet.style, { position: "absolute", left: `${at.x}px`, top: `${at.y}px` });
+    const panel = local(given.from);
+    const skyPlace = local(slot.getBoundingClientRect());
+    Object.assign(pane.style, {
+      left: `${panel.x}px`,
+      top: `${panel.y}px`,
+      width: `${panel.w}px`,
+      height: `${panel.h}px`,
+    });
+    Object.assign(face.style, {
+      left: `${skyPlace.x - panel.x}px`,
+      top: `${skyPlace.y - panel.y}px`,
+      width: `${skyPlace.w}px`,
+      height: `${skyPlace.h}px`,
+    });
+    const placed: PortalPlaces = { panel, sky: skyPlace, sheet: at, clip: given.clip };
+    grown.current = placed;
+    setPlaces(placed);
+    setLentSky({
+      canvas: sky,
+      face,
+      t: given.t,
+      onDrawn: () => handed.current?.onDrawn(),
+      onFailed: () => handed.current?.onFailed(),
+    });
+    // as it grows, the glass grown around the window follows it
+    const growth =
+      typeof ResizeObserver === "function"
+        ? new ResizeObserver(() => {
+            const held = grown.current;
+            if (held === null) return;
+            const now = local(sheet.getBoundingClientRect());
+            grown.current = { ...held, sheet: now };
+            const phase = handed.current?.phase;
+            if (phase === "closing" || phase === "open") placeGlass(glass, now);
+          })
+        : null;
+    growth?.observe(sheet);
+    return () => {
+      growth?.disconnect();
+      for (const property of ["position", "left", "top"]) sheet.style.removeProperty(property);
+    };
+  }, [lent]);
+  const phase = portal?.phase;
+  const reduced = portal?.reduced ?? false;
+  // folded is the fold run on (the night handed back under it): its motion is the fold's, never run again
+  const motion = phase === "folded" ? "folding" : phase;
+  useLayoutEffect(() => {
+    const pane = windowRef.current;
+    const glass = glassRef.current;
+    const now = grown.current ?? places;
+    if (motion === undefined || places === null || now === null || !pane || !glass) return;
+    return movePortal(motion, { window: pane, glass }, now, reduced);
+  }, [motion, places, reduced]);
   return (
-    <div className="vf-new-spark" data-open={open ? "true" : "false"}>
+    <div
+      ref={layerRef}
+      className="vf-new-spark"
+      data-open={open ? "true" : "false"}
+      {...(phase === undefined ? {} : { "data-portal": phase })}
+    >
       <button
         type="button"
         className="vf-new-spark-scrim"
@@ -107,13 +252,21 @@ export function NewSparkSheetView({
         tabIndex={-1}
         onClick={onCancel}
       />
+      {lent ? <div ref={glassRef} className="vf-new-spark-glass" aria-hidden="true" /> : null}
       <section
+        ref={sheetRef}
         className="vf-new-spark-sheet"
         role="dialog"
         aria-modal="true"
         aria-label="New spark"
       >
-        <SparkHatch className="vf-new-spark-sky" seed={seed} play={play} ref={hatchRef} />
+        <SparkHatch
+          className="vf-new-spark-sky"
+          seed={seed}
+          play={play}
+          ref={hatchRef}
+          {...(lent && lentSky !== undefined ? { sky: lentSky } : {})}
+        />
         <div className="vf-new-spark-form">
           <div className="vf-new-spark-namerow">
             <span aria-hidden="true" />
@@ -228,6 +381,12 @@ export function NewSparkSheetView({
           </UiButton>
         </div>
       </section>
+      {lent ? (
+        <div ref={windowRef} className="vf-new-spark-window" aria-hidden="true">
+          <canvas ref={skyRef} className="vf-new-spark-window-sky" />
+          <canvas ref={faceRef} className="vf-new-spark-window-face" />
+        </div>
+      ) : null}
     </div>
   );
 }

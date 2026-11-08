@@ -4,10 +4,19 @@ import type {
   AgentProfileSet,
   SparkSummary,
 } from "@vibefield/contracts";
-import type { SparkHatchHandle } from "@vibefield/design-kit/spark-face";
-import { type ReactElement, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { lendNight, type NightLend, type SparkHatchHandle } from "@vibefield/design-kit/spark-face";
+import {
+  type ReactElement,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { createPortal } from "react-dom";
-import { NewSparkSheetView } from "./NewSparkSheetView";
+import { useReducedMotion } from "../field/desk/bar/bar-motion";
+import { NewSparkSheetView, type SheetPortal } from "./NewSparkSheetView";
 import {
   agentLine,
   agentMenuOf,
@@ -28,6 +37,7 @@ import {
   startsOf,
   suggestName,
 } from "./new-spark";
+import { PORTAL_MS } from "./portal";
 import { chooseSpark, refreshSparks, usePersonSessions, useSparksReading } from "./sparks-feed";
 import type { Starter } from "./thread-items";
 
@@ -40,6 +50,11 @@ import type { Starter } from "./thread-items";
 // ES-2 (track ES; ES-D2 A): an opening from Chat's empty night may carry a first job (`job`, the frame's hold,
 // `first-job.ts`). It stands under the agent, × drops it as the sheet settles, and Create hands it to Chat with its
 // choice, only after the hatch (`chooseSpark`), for Chat to send as Send sends.
+// ES-3b (track ES; ES-D3 A, ES-D5 A; DESIGN.md §6, the portal): opened while Chat's empty night stands in its own
+// container, the sheet borrows that night (`lendNight`) as its sky's window. The window draws its first frame at the
+// night's moment, the night steps aside, and the edge closes onto the sky; Cancel, Esc or the dim open it back and hand
+// the night back at the window's moment; Create takes the sheet and its window away as one. Where no night can be lent,
+// or the window cannot draw, it rises as it always has.
 
 /** How long Create waits for the new spark's row to draw before the face flies (the list re-reads its records). */
 const ROW_WAIT_MS = 1_500;
@@ -77,16 +92,21 @@ export function NewSparkSheet({
   const [was, setWas] = useState(open);
   const [opening, setOpening] = useState(0);
   const [leaving, setLeaving] = useState(false);
+  // how long its leave stands: its own 240ms, or, through the portal, the face's leave back into the night
+  const [leaveMs, setLeaveMs] = useState(LEAVE_MS);
   if (open !== was) {
     setWas(open);
     setLeaving(!open);
-    if (open) setOpening(opening + 1);
+    if (open) {
+      setOpening(opening + 1);
+      setLeaveMs(LEAVE_MS);
+    }
   }
   useEffect(() => {
     if (!leaving) return;
-    const gone = window.setTimeout(() => setLeaving(false), LEAVE_MS);
+    const gone = window.setTimeout(() => setLeaving(false), leaveMs);
     return () => window.clearTimeout(gone);
-  }, [leaving]);
+  }, [leaving, leaveMs]);
   if (!open && !leaving) return null;
   const target = container === undefined ? document.body : container;
   if (target === null) return null;
@@ -99,9 +119,19 @@ export function NewSparkSheet({
       takeFocus={takeFocus}
       bindKeys={bindKeys}
       carried={job}
+      container={target}
+      onLeaveFor={setLeaveMs}
     />,
     target,
   );
+}
+
+/** The portal as the sheet holds it: where the night it borrowed stood, and where the portal is. */
+interface PortalHeld {
+  readonly from: DOMRectReadOnly;
+  readonly clip: string;
+  readonly t: number;
+  readonly phase: SheetPortal["phase"];
 }
 
 function Sheet({
@@ -111,6 +141,8 @@ function Sheet({
   takeFocus,
   bindKeys,
   carried,
+  container,
+  onLeaveFor,
 }: {
   open: boolean;
   port: NewSparkPort;
@@ -118,6 +150,10 @@ function Sheet({
   takeFocus: boolean;
   bindKeys: boolean;
   carried: Starter | null;
+  /** where it is drawn: the night it may borrow stands inside it */
+  container: HTMLElement;
+  /** how long its leave stands, once it folds */
+  onLeaveFor: (ms: number) => void;
 }): ReactElement {
   const reading = useSparksReading();
   const taken = useMemo(
@@ -152,6 +188,87 @@ function Sheet({
   // a sheet already folded (by a view change, say, or the palette) never folds whatever opened after it
   const standing = useRef(open);
   standing.current = open;
+  // ES-3b — the portal: the night borrowed as it opened, and where the portal is
+  const reduced = useReducedMotion();
+  const still = useRef(reduced);
+  still.current = reduced;
+  const [portal, setPortal] = useState<PortalHeld | null>(null);
+  const phaseAt = useRef<SheetPortal["phase"] | null>(null);
+  phaseAt.current = portal?.phase ?? null;
+  const lent = useRef<NightLend | null>(null);
+  const given = useRef(false);
+  const drawnAt = useRef(0);
+  const hatched = useRef(false);
+  // the night handed back: drawn at the window's moment where it had stepped aside, carrying on where it had not
+  const handBack = useCallback(() => {
+    const lend = lent.current;
+    if (lend === null) return;
+    lent.current = null;
+    if (!given.current) {
+      lend.cancel();
+      return;
+    }
+    lend.takeBack(hatch.current?.now() ?? lend.t + (performance.now() - drawnAt.current) / 1000);
+  }, []);
+  // borrowed as it opens, before its first frame, from the night standing in its own container (§6, the portal)
+  useLayoutEffect(() => {
+    const lend = lendNight(container);
+    if (lend === null) return;
+    lent.current = lend;
+    given.current = false;
+    setPortal({ from: lend.rect, clip: lend.clip, t: lend.t, phase: "drawing" });
+    onLeaveFor(still.current ? LEAVE_MS : PORTAL_MS.faceLeave);
+    // gone before its fold handed the night back (another opening, the view gone): it is handed back now
+    return handBack;
+  }, [container, handBack, onLeaveFor]);
+  // the window has drawn its first frame: the night steps aside, and the edge closes onto the sky
+  const onDrawn = useCallback(() => {
+    const lend = lent.current;
+    if (lend === null || !standing.current || phaseAt.current !== "drawing") return;
+    lend.give();
+    given.current = true;
+    drawnAt.current = performance.now();
+    setPortal((held) => (held === null ? held : { ...held, phase: "closing" }));
+  }, []);
+  // the window cannot draw (no WebGL2): the night carries on, and the sheet rises as it always has
+  const onFailed = useCallback(() => {
+    handBack();
+    setPortal(null);
+    onLeaveFor(LEAVE_MS);
+  }, [handBack, onLeaveFor]);
+  const phase = portal?.phase;
+  useEffect(() => {
+    if (phase !== "closing") return;
+    const closed = window.setTimeout(
+      () => setPortal((held) => (held?.phase === "closing" ? { ...held, phase: "open" } : held)),
+      reduced ? PORTAL_MS.reducedOut * 2 : PORTAL_MS.close,
+    );
+    return () => window.clearTimeout(closed);
+  }, [phase, reduced]);
+  // Cancel, Esc or the dim open the window back; Create takes the sheet and its window away as one. Folded before the
+  // window drew, the night never stepped aside, and carries on
+  useLayoutEffect(() => {
+    if (open) return;
+    if (phaseAt.current === "drawing") handBack();
+    else if (phaseAt.current === "closing" || phaseAt.current === "open")
+      setPortal((held) =>
+        held === null ? held : { ...held, phase: hatched.current ? "leaving" : "folding" },
+      );
+  }, [handBack, open]);
+  // the fold: the face shrinks back into the night, and at the window's moment the night takes it back
+  useEffect(() => {
+    if (phase !== "folding") return;
+    if (!reduced) hatch.current?.leave();
+    const back = window.setTimeout(
+      () => {
+        handBack();
+        setPortal((held) => (held?.phase === "folding" ? { ...held, phase: "folded" } : held));
+      },
+      reduced ? PORTAL_MS.reducedBack : PORTAL_MS.back,
+    );
+    return () => window.clearTimeout(back);
+  }, [handBack, phase, reduced]);
+
   // the keyboard goes back where it was as the sheet leaves
   const before = useRef<Element | null>(document.activeElement);
   useEffect(() => {
@@ -266,6 +383,9 @@ function Sheet({
       );
       return;
     }
+    // hatched: through the portal it now leaves with its window, never folding the night back (Chat holds a spark)
+    hatched.current = true;
+    onLeaveFor(LEAVE_MS);
     // its row: the list reads the records again, Chat chooses it (with the first job it carries, which Chat sends
     // once its row is read), and the face flies there
     refreshSparks();
@@ -281,6 +401,7 @@ function Sheet({
     jobLeaving,
     name,
     onClose,
+    onLeaveFor,
     port,
     seed,
     seen,
@@ -314,6 +435,9 @@ function Sheet({
       creating={creating}
       ready={agentId !== undefined && thinksUnder !== undefined}
       hatchRef={hatch}
+      {...(portal === null
+        ? {}
+        : { portal: { ...portal, reduced, onDrawn, onFailed } satisfies SheetPortal })}
       {...(job === null ? {} : { job })}
       jobLeaving={jobLeaving}
       onDropJob={() => setJobLeaving(true)}

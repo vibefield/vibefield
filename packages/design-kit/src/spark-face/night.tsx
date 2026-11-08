@@ -47,7 +47,7 @@ const reducedMotion = (): boolean =>
 export function SparkNight({ active = true, className }: SparkNightProps): ReactElement {
   const box = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
-  const rest = useRef<NightRest | null>(null);
+  const rest = useRef<NightHandle | null>(null);
   // whether its view is shown, for the engine as it opens: it loads after the first render
   const shown = useRef(active);
   const [state, setState] = useState<NightState>("loading");
@@ -58,7 +58,7 @@ export function SparkNight({ active = true, className }: SparkNightProps): React
     loadStarSpark().then(
       (star) => {
         if (!open || canvas.current === null || box.current === null) return;
-        rest.current = NightRest.open(star, canvas.current, box.current, shown.current);
+        rest.current = openNight(star, canvas.current, box.current, shown.current);
         setState(rest.current === null ? "ground" : "live");
       },
       () => {
@@ -85,9 +85,75 @@ export function SparkNight({ active = true, className }: SparkNightProps): React
   );
 }
 
+/** What a night draws with: James's star engine (`StarSparkEngine`), or a stand-in. */
+export interface NightEngine {
+  render(seconds: number): void;
+  clear(): void;
+}
+
+/** A night's core, standing on its box: shown or not as its view is, closed with it. */
+export interface NightHandle {
+  show(shown: boolean): void;
+  close(): void;
+}
+
+/** The night lent to the sheet's window (ES-3b; DESIGN.md §6, the portal: "The window is the night's own canvas,
+ * lent"). While it is lent the night is still, so the window's first frame is it, star for star. */
+export interface NightLend {
+  /** the night's own moment, its clock in seconds: the window draws its first frame at it */
+  readonly t: number;
+  /** where the night stands in the window (its box's client rect) */
+  readonly rect: DOMRectReadOnly;
+  /** its edge as it stands: at rest, or leaning as the pointer left it (its computed `clip-path`) */
+  readonly clip: string;
+  /** the window has drawn: the night steps aside (`data-lent`) */
+  give(): void;
+  /** the window is open again at its moment `t`: the night takes it back, drawn at once at that moment */
+  takeBack(t: number): void;
+  /** the window could not draw: the night carries on as it was */
+  cancel(): void;
+}
+
+/** The night's core over `engine` on `box`, standing for SparkNight (James's star engine) and for a stand-in. */
+export function startNight(engine: NightEngine, box: HTMLElement, shown = true): NightHandle {
+  return new NightRest(engine, box, shown);
+}
+
+/** The night standing now that a window may borrow: shown, in sight, not lent already, and inside `within` when it is
+ * named (the sheet's own container: the product's body, a catalog plate); null when there is none (Chat is not the
+ * view, it holds a spark, or the window has no WebGL2). Lent, it is still until it is handed back. */
+export function lendNight(within?: Node): NightLend | null {
+  for (const night of standing) {
+    if (within !== undefined && !within.contains(night.box)) continue;
+    const lend = night.lend();
+    if (lend !== null) return lend;
+  }
+  return null;
+}
+
+/** The engine on its canvas, or null where the window has no WebGL2. */
+function openNight(
+  star: StarSpark,
+  canvas: HTMLCanvasElement,
+  box: HTMLElement,
+  shown: boolean,
+): NightHandle | null {
+  let engine: StarSparkEngine;
+  try {
+    engine = new star(canvas, { bloom: true, bloomStr: 0.45, max: 8, night: true });
+  } catch {
+    return null;
+  }
+  return startNight(engine, box, shown);
+}
+
+/** Every night standing now, for `lendNight`. */
+const standing = new Set<NightRest>();
+
 /** The night's engine and its one clock, drawn by the rest rule: frames only while its clock runs, its box is in sight
- * and its view is shown, and once more whenever it resizes. */
-class NightRest {
+ * and its view is shown, and once more whenever it resizes. Lent to a window, it is still and draws nothing until it
+ * is handed back. */
+class NightRest implements NightHandle {
   #frame = 0;
   #last = 0;
   /** the night's own clock, in seconds: any moment of it (the engine's twinkle and haze read it) */
@@ -97,12 +163,14 @@ class NightRest {
   #inSight = true;
   #shown: boolean;
   #dirty = true;
+  #lent = false;
+  #closed = false;
   readonly #sight: IntersectionObserver | null;
   readonly #size: ResizeObserver | null;
 
-  private constructor(
-    private readonly engine: StarSparkEngine,
-    box: HTMLElement,
+  constructor(
+    private readonly engine: NightEngine,
+    readonly box: HTMLElement,
     shown: boolean,
   ) {
     this.#shown = shown;
@@ -126,25 +194,8 @@ class NightRest {
           })
         : null;
     this.#size?.observe(box);
+    standing.add(this);
     this.#kick();
-  }
-
-  /** The engine on its canvas, or null where the window has no WebGL2; `shown`, whether its view is shown now. */
-  static open(
-    star: StarSpark,
-    canvas: HTMLCanvasElement,
-    box: HTMLElement,
-    shown: boolean,
-  ): NightRest | null {
-    try {
-      return new NightRest(
-        new star(canvas, { bloom: true, bloomStr: 0.45, max: 8, night: true }),
-        box,
-        shown,
-      );
-    } catch {
-      return null;
-    }
   }
 
   show(shown: boolean): void {
@@ -153,6 +204,8 @@ class NightRest {
   }
 
   close(): void {
+    this.#closed = true;
+    standing.delete(this);
     cancelAnimationFrame(this.#frame);
     this.#frame = 0;
     for (const kind of ["pointermove", "pointerdown", "wheel", "keydown"] as const)
@@ -162,19 +215,57 @@ class NightRest {
     this.engine.clear();
   }
 
+  /** Lend the night to a window, if it can be: shown, in sight, and not lent already. A lend outlived by its night
+   * (Chat chose the spark just made, and its night went) does nothing. */
+  lend(): NightLend | null {
+    if (this.#closed || this.#lent || !this.#shown || !this.#inSight) return null;
+    this.#lent = true;
+    cancelAnimationFrame(this.#frame);
+    this.#frame = 0;
+    const box = this.box;
+    const clip = typeof getComputedStyle === "function" ? getComputedStyle(box).clipPath : "";
+    let open = true;
+    const end = (): boolean => {
+      if (!open) return false;
+      open = false;
+      this.#lent = false;
+      delete box.dataset.lent;
+      return true;
+    };
+    return {
+      t: this.#t,
+      rect: box.getBoundingClientRect(),
+      clip,
+      give: () => {
+        if (open && !this.#closed) box.dataset.lent = "true";
+      },
+      takeBack: (t) => {
+        if (!end() || this.#closed) return;
+        this.#t = t;
+        this.engine.render(t);
+        this.#dirty = false;
+        this.#wake();
+      },
+      cancel: () => {
+        if (end() && !this.#closed) this.#wake();
+      },
+    };
+  }
+
   readonly #wake = (): void => {
     this.#lastPointer = performance.now();
     this.#kick();
   };
 
   #kick(): void {
-    if (this.#frame !== 0 || !this.#inSight || !this.#shown) return;
+    if (this.#frame !== 0 || this.#lent || !this.#inSight || !this.#shown) return;
     this.#last = performance.now();
     this.#frame = requestAnimationFrame(this.#draw);
   }
 
   readonly #draw = (now: number): void => {
     this.#frame = 0;
+    if (this.#lent) return;
     const dt = Math.min(0.05, Math.max(0, (now - this.#last) / 1000));
     this.#last = now;
     const target = nightRestTarget((now - this.#lastPointer) / 1000, reducedMotion());

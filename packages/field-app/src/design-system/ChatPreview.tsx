@@ -53,9 +53,12 @@ import {
 export function ChatPreview({
   state = "list",
   locale,
+  onNewSpark,
 }: {
   state?: ChatState;
   locale?: string;
+  /** ES-3b — the night's New spark, where a plate opens the live sheet from it; elsewhere it opens nothing */
+  onNewSpark?: () => void;
 }): ReactElement {
   const [chosen, setChosen] = useState<SparkId | null>(CHAT_CHOSEN[state]);
   const reading = chatReadingOf(state);
@@ -97,7 +100,12 @@ export function ChatPreview({
   const act = CHAT_ACT[state];
   const pause = CHAT_PAUSE[state];
   const night = CHAT_NIGHT[state];
-  const empty = <ChatEmptyView {...(night === undefined ? {} : { agents: night })} />;
+  const empty = (
+    <ChatEmptyView
+      {...(night === undefined ? {} : { agents: night })}
+      {...(onNewSpark === undefined ? {} : { onNewSpark })}
+    />
+  );
   return (
     <ChatPanelView
       reading={reading}

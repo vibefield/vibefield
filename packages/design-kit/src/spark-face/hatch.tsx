@@ -25,12 +25,33 @@ import { surfaceBehind } from "./surface";
 // born at the impact). A new `play` deals it again; the face before leaves first. Without WebGL2 it is the flat star on
 // the night's ground, never a blank. With reduced motion no star falls and the face is simply born. `fly` carries the
 // face out of the sky to a framed slot (a row in Chat) across the window, and then the face is that slot's.
+// ES-3b (§6, the portal): opened from Chat's empty night the hatch's sky is LENT (`sky`) — the sheet's window, the
+// night's own canvas, panel-sized at the panel's place, and a face canvas at the hatch's own place over it. It draws on
+// them from the night's own moment, so its first frame is that night, and says so (`onDrawn`); its star lands at the
+// hatch's place's centre in the sky canvas's own pixels (`skyPointOf`).
 
 /** The hatch, as its sheet holds it. */
 export interface SparkHatchHandle {
   /** The face leaves the sky for `target` (a framed face's box), on the island curve, and lands there. Resolves when it
    * has landed, or at once where nothing can fly (no WebGL2, reduced motion, no face yet). */
   fly(target: HTMLElement): Promise<void>;
+  /** ES-3b — the hatch's own clock now, in seconds: the moment its lent sky is handed back to the night at; null while
+   * nothing draws */
+  now(): number | null;
+  /** ES-3b — the face shrinks back into the night (the face engine's leave, 0.45 s): Cancel through the portal */
+  leave(): void;
+}
+
+/** ES-3b — a sky lent to the hatch: the sheet's window, the night's own canvas, panel-sized at the panel's place, and a
+ * face canvas at the hatch's own place over it. The hatch draws on them from the night's moment `t`. */
+export interface SparkHatchSky {
+  readonly canvas: HTMLCanvasElement;
+  readonly face: HTMLCanvasElement;
+  readonly t: number;
+  /** the first frame is drawn: the night may step aside */
+  readonly onDrawn?: (() => void) | undefined;
+  /** the engines could not open on it (no WebGL2): the sheet rises as it always has */
+  readonly onFailed?: (() => void) | undefined;
 }
 
 export interface SparkHatchProps {
@@ -41,6 +62,8 @@ export interface SparkHatchProps {
   /** the face's box in px: 104, free (§2.10's table) */
   size?: number | undefined;
   className?: string | undefined;
+  /** ES-3b — the sky lent to it (the sheet's window); absent, its own two canvases in its own place */
+  sky?: SparkHatchSky | undefined;
   ref?: Ref<SparkHatchHandle> | undefined;
 }
 
@@ -48,6 +71,27 @@ export interface SparkHatchProps {
 const LAND_AT = 0.5;
 /** How long a flight to a row takes, seconds (the island curve's flow). */
 const FLY_S = 0.66;
+
+/** A place on the window, as a client rect gives it. */
+interface PlaceRect {
+  readonly left: number;
+  readonly top: number;
+  readonly width: number;
+  readonly height: number;
+}
+
+/** Where a star lands on a sky canvas: the face's place's centre (its middle across, `LAND_AT` down), in the sky
+ * canvas's own CSS pixels — the face's own place where the sky is the hatch's own, and the window's spot over the
+ * hatch's place where the sky is lent (ES-3b). */
+export function skyPointOf(
+  face: PlaceRect,
+  sky: PlaceRect,
+): { readonly x: number; readonly y: number } {
+  return {
+    x: face.left - sky.left + face.width / 2,
+    y: face.top - sky.top + face.height * LAND_AT,
+  };
+}
 
 interface Engines {
   readonly face: Sparklings;
@@ -66,6 +110,7 @@ export function SparkHatch({
   play,
   size = 104,
   className,
+  sky,
   ref,
 }: SparkHatchProps): ReactElement {
   const root = useRef<HTMLDivElement>(null);
@@ -92,13 +137,21 @@ export function SparkHatch({
     };
   }, []);
 
-  // the two canvases' engines, for the hatch's life; opened, they play the face dealt (the sheet's open)
+  // the two canvases' engines, for the hatch's life (its own, or the lent sky's); opened, they play the face dealt. A
+  // lent sky they cannot draw on is said at once, so the sheet rises as it always has
   useEffect(() => {
-    if (typeof engines !== "object" || !skyCanvas.current || !faceCanvas.current || !root.current)
+    if (engines === "flat" && sky !== undefined) {
+      sky.onFailed?.();
       return;
-    const made = Live.open(engines, root.current, skyCanvas.current, faceCanvas.current, size);
+    }
+    if (typeof engines !== "object") return;
+    const skyAt = sky?.canvas ?? skyCanvas.current;
+    const faceAt = sky?.face ?? faceCanvas.current;
+    if (!skyAt || !faceAt) return;
+    const made = Live.open(engines, skyAt, faceAt, size, sky?.t ?? 0, sky?.onDrawn);
     if (made === null) {
-      setEngines("flat");
+      if (sky === undefined) setEngines("flat");
+      else sky.onFailed?.();
       return;
     }
     live.current = made;
@@ -107,7 +160,7 @@ export function SparkHatch({
       made.close();
       live.current = null;
     };
-  }, [engines, size]);
+  }, [engines, size, sky]);
 
   // on each reroll (and on open, once the engines are up): the star falls and the face is born
   useEffect(() => {
@@ -117,7 +170,11 @@ export function SparkHatch({
 
   useImperativeHandle(
     ref,
-    () => ({ fly: (target) => live.current?.fly(target) ?? Promise.resolve() }),
+    () => ({
+      fly: (target) => live.current?.fly(target) ?? Promise.resolve(),
+      now: () => live.current?.now() ?? null,
+      leave: () => live.current?.leave(),
+    }),
     [],
   );
 
@@ -127,9 +184,10 @@ export function SparkHatch({
       ref={root}
       className={classes}
       data-hatch={typeof engines === "object" ? "live" : engines}
+      {...(sky === undefined ? {} : { "data-sky": "lent" })}
       aria-hidden="true"
     >
-      {engines === "flat" ? (
+      {sky !== undefined ? null : engines === "flat" ? (
         <span className="vf-spark-hatch-still">
           <SparkFace seed={seed} status="hello" size={size} framed={false} />
         </span>
@@ -154,8 +212,9 @@ interface Hero {
 /** The hatch's two engines and its one clock: drawn every frame while the hatch is mounted. */
 class Live {
   #frame = 0;
-  #clock = 0;
+  #clock: number;
   #last = 0;
+  #drawn = false;
   #hero: Hero | null = null;
   #flight: {
     readonly overlay: HTMLCanvasElement;
@@ -170,36 +229,56 @@ class Live {
 
   private constructor(
     private readonly engines: Engines,
-    private readonly root: HTMLElement,
+    private readonly skyCanvas: HTMLCanvasElement,
+    private readonly faceCanvas: HTMLCanvasElement,
     private readonly sky: StarSparkEngine,
     private readonly faces: SparkEngine,
     private readonly size: number,
+    clock: number,
+    private readonly onDrawn: (() => void) | undefined,
   ) {
+    this.#clock = clock;
     this.#last = performance.now();
     this.#frame = requestAnimationFrame(this.#draw);
   }
 
-  /** Both engines on their canvases, or null where the window has no WebGL2. */
+  /** Both engines on their canvases, or null where the window has no WebGL2. `clock`: its first moment (a lent sky's,
+   * the night's own); `onDrawn`: said once its first frame is drawn. */
   static open(
     engines: Engines,
-    root: HTMLElement,
     skyCanvas: HTMLCanvasElement,
     faceCanvas: HTMLCanvasElement,
     size: number,
+    clock: number,
+    onDrawn?: () => void,
   ): Live | null {
     try {
       const sky = new engines.star(skyCanvas, { bloom: true, bloomStr: 0.45, max: 8, night: true });
       const faces = new engines.face.Engine(faceCanvas, { max: 6 });
-      return new Live(engines, root, sky, faces, size);
+      return new Live(engines, skyCanvas, faceCanvas, sky, faces, size, clock, onDrawn);
     } catch {
       return null;
     }
   }
 
+  now(): number {
+    return this.#clock;
+  }
+
+  /** The face shrinks back into the night (the face engine's leave). */
+  leave(): void {
+    if (this.#hero === null) return;
+    this.#hero.buddy.leave(this.#clock);
+    this.#hero = null;
+  }
+
   deal(seed: number): void {
     const t = this.#clock;
-    const box = this.root.getBoundingClientRect();
-    const centre = { x: box.width / 2, y: box.height * LAND_AT };
+    const face = this.faceCanvas.getBoundingClientRect();
+    const centre = { x: face.width / 2, y: face.height * LAND_AT };
+    // the star's landing, in the sky canvas's own pixels: the face's centre where the sky is the hatch's own, the
+    // window's spot over the hatch's place where it is lent
+    const landing = skyPointOf(face, this.skyCanvas.getBoundingClientRect());
     if (this.#hero !== null) this.#hero.buddy.leave(t);
     const options = sparkBuddyOptions(
       this.engines.face,
@@ -219,12 +298,12 @@ class Live {
     const angle = (Math.random() < 0.5 ? -1 : 1) * (0.3 + Math.random() * 0.2);
     const direction = { x: Math.sin(angle), y: Math.cos(angle) };
     const distance = (centre.y + buddy.R * 3 + 30) / direction.y;
-    const from = { x: centre.x - direction.x * distance, y: centre.y - direction.y * distance };
+    const from = { x: landing.x - direction.x * distance, y: landing.y - direction.y * distance };
     const flight = clamp(0.42 + distance / 1500, 0.55, 1.05);
     buddy.birth(t + flight, [["hello", 2.4]]);
     this.sky.add({
-      x: centre.x,
-      y: centre.y,
+      x: landing.x,
+      y: landing.y,
       R: buddy.R * 0.9,
       seed: 1 + Math.floor(Math.random() * 999_998),
       palette: starPaletteOf(this.engines.face.agentDNA(seed).palette),
@@ -254,7 +333,7 @@ class Live {
         done();
         return;
       }
-      const sky = this.root.getBoundingClientRect();
+      const sky = this.faceCanvas.getBoundingClientRect();
       const from = { x: sky.left + hero.buddy.x, y: sky.top + hero.buddy.y, R: hero.buddy.R };
       const options = sparkBuddyOptions(
         this.engines.face,
@@ -281,12 +360,17 @@ class Live {
   }
 
   readonly #draw = (now: number): void => {
-    this.#clock += clamp((now - this.#last) / 1000, 0, 0.05);
+    // the first frame is drawn at its first moment exactly (a lent sky's is the night's own: star for star)
+    if (this.#drawn) this.#clock += clamp((now - this.#last) / 1000, 0, 0.05);
     this.#last = now;
     const t = this.#clock;
     this.sky.render(t);
     this.faces.resize();
     this.faces.render(t);
+    if (!this.#drawn) {
+      this.#drawn = true;
+      this.onDrawn?.();
+    }
     const flight = this.#flight;
     if (flight !== null) {
       flight.engine.resize();
