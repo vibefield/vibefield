@@ -133,6 +133,10 @@ fn error_fixtures() {
     // ErrorData is the envelope both planes share, so its twin reads both.
     roundtrip::<ErrorData>("error-data.native-unresponsive.json", true);
     roundtrip::<ErrorData>("error-data.terminal-unresponsive.json", true);
+    // NR S0 — the node gate's answer to a mesh subscribe, the refusal fieldd's
+    // owners of a native subscription re-arm on (`tests/mesh_bridge.rs` holds
+    // the floor's own answer to the same golden).
+    roundtrip::<ErrorData>("error-data.mesh-not-up.json", true);
     // IL-D2 (a) — fieldd writes this one too: a door that acts on the
     // inventory while the cells it would act in are stale.
     roundtrip::<ErrorData>("error-data.terminal-inventory-stale.json", true);

@@ -1,0 +1,10 @@
+{
+  "kind": "UNAVAILABLE",
+  "retryable": true,
+  "details": {
+    "service": "mesh-gateway",
+    "state": "starting",
+    "mode": "linked",
+    "machineName": "truffle-vibefield-jamess-macbook-pro"
+  }
+}

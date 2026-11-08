@@ -618,6 +618,46 @@ async fn lane_open_without_a_mesh_node_is_honestly_unavailable() {
     daemon.shutdown().await;
 }
 
+/// NR S0 (items 237's root, 238 and 262) — a mesh SUBSCRIBE with no node
+/// answers the contract's golden (`error-data.mesh-not-up.json`): the refusal
+/// fieldd's owners of a native subscription re-arm on, met at every fresh pair
+/// start (the boot subscribe of the holders slice, read 8 of 8 on 2026-11-08).
+/// Its code, kind, retryable and unit are compared; the unit's `state` and
+/// the posture facts are the floor's live reading (tests boot with the mesh
+/// disabled), so they are parsed as `MeshNotUpDetails`, not compared.
+#[tokio::test]
+async fn a_mesh_subscribe_without_a_node_answers_the_gates_golden() {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../contracts/fixtures/error-data.mesh-not-up.json");
+    let golden: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&path).expect("the golden"))
+            .expect("the golden is JSON");
+    let (_dir, daemon) = boot().await;
+    let mut c = MgmtClient::connect(&daemon).await;
+    c.hello(&daemon).await;
+    for (method, params) in [
+        (
+            "native.mesh.store.subscribe",
+            json!({"storeId": field_native::registries::stores::DOCS}),
+        ),
+        ("native.mesh.peers.subscribe", json!({})),
+    ] {
+        let resp = c.call(method, params).await;
+        assert_eq!(resp["error"]["code"], -32006, "{method}: {resp}");
+        let data = &resp["error"]["data"];
+        assert_eq!(data["kind"], golden["kind"], "{method}: {resp}");
+        assert_eq!(data["retryable"], golden["retryable"], "{method}: {resp}");
+        assert_eq!(
+            data["details"]["service"], golden["details"]["service"],
+            "{method}: {resp}"
+        );
+        let _: field_native::contracts::MeshNotUpDetails =
+            serde_json::from_value(data["details"].clone())
+                .unwrap_or_else(|e| panic!("{method}: {e}: {resp}"));
+    }
+    daemon.shutdown().await;
+}
+
 #[tokio::test]
 async fn lane_close_works_with_the_mesh_down_because_that_is_when_it_is_needed() {
     let (_dir, daemon) = boot().await;
