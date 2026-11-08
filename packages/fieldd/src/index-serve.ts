@@ -46,6 +46,9 @@ import { clientIdFor, isSelfTailnetPrincipal } from "./terminal-grants";
 // ephemeral loopback port, nothing stripped (`kind: "port"`), so a client
 // dials rosetta's own routes at the root — `RemoteIndexEndpointSet`'s one leg,
 // `/ws/sessions/<id>` — and the asset paths a timeline names stay dialable.
+// *SP-7b's 7b-2a (2026-11-08): two legs now — beside the socket, `rest`, this
+// serve's own origin, under which the phone's `RosettaClient` reads the
+// session's pages. Same serve, same root: no new route.*
 //
 // BEHIND A FLAG THAT IS OFF (`FielddConfig.indexDirectPlane`), and the reason
 // is EL7, not caution for its own sake. The PINNED rosettad verifies no

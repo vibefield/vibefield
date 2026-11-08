@@ -9,7 +9,11 @@ import { z } from "zod";
 // two MAC'd envelopes `TerminalOpenTicket` carries BESIDE its set
 // (`transportGrant`, `attachGrant` — TP-D21: authority is the grant in the
 // first frame). rosettad's direct plane is the second: one leg, `session`, and
-// one string grant rosetta verifies at the upgrade (RO-10).
+// one string grant rosetta verifies at the upgrade (RO-10). *SP-7b's 7b-2a
+// (2026-11-08): "one leg" held until the phone's `RosettaClient` needed the
+// listener's origin. rosettad's set carries `rest` beside `session` now, an
+// http leg OPTIONAL on read, so it is the instance's own member (`.extend`)
+// rather than a template leg, which is always required.*
 //
 // So the template generalizes the URLs and leaves the grants to each door's
 // ticket, because the doors verify differently — a cell reads a JSON envelope

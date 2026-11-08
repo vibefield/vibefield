@@ -2029,6 +2029,17 @@ export type IndexActivityResponse = z.infer<typeof IndexActivityResponse>;
 // that carries `files` also opens the session's recorded-file read; fieldd
 // mints that scope for the desktop window alone, so a tailnet holder's grant
 // still reads no file.*
+//
+// *SP-7b's 7b-2a (2026-11-08; D-2a (a) of `SP-7b-2-delta.md`, VF-PM 05:35Z):
+// the phone's leg is added. Both sentences above that keep the tailnet set to
+// one leg ("an HTTP leg is DS-7's to add", "the phone's (SP-7) is its own to
+// add") held until a reader needed one: the kit's `RosettaClient` takes the
+// listener's http(s) ORIGIN as its base, reads the session's pages under it
+// (`/api/sessions/{id}/timeline`, which the grant opens) and derives the socket
+// from it. So the tailnet set gains `rest`, the index serve's own origin with
+// no path, as the loopback set has always carried one. It is OPTIONAL on read:
+// an owner before this build answers the socket alone, and the phone then keeps
+// to the door's pages and says so. Every set this build composes carries it.*
 
 /** rosetta's session socket route, before the session id. */
 export const REMOTE_INDEX_SESSION_PATH_PREFIX = "/ws/sessions/" as const;
@@ -2041,15 +2052,26 @@ export function remoteIndexSessionPath(sessionId: string): string {
   return `${REMOTE_INDEX_SESSION_PATH_PREFIX}${encodeURIComponent(sessionId)}`;
 }
 
-/** SP-3 — rosettad's remote endpoint set: ONE leg, `session`, a tailnet
+/** SP-3 — rosettad's remote endpoint set: the `session` leg, a tailnet
  * `ws://`/`wss://` URL at `/ws/sessions/<id>`, no query, no fragment (the grant
  * rides `Authorization: Rosetta-Grant` or the `rosetta.grant.<grant>`
- * subprotocol, never the URL — rosetta AUTH.md §3). */
+ * subprotocol, never the URL — rosetta AUTH.md §3). *SP-7b's 7b-2a
+ * (2026-11-08): this said ONE leg. Beside it now, `rest`: the index serve's
+ * tailnet `http://`/`https://` origin, no path, the base a `RosettaClient`
+ * takes — the loopback set's `rest`, on the tailnet. It is optional on read (an
+ * owner before this build answers without it), so it is this instance's own
+ * member beside the template's required leg; the template's reader holds it as
+ * it holds every `*Url` member, and the composer always fills it.* */
 export const RemoteIndexEndpointSet = remoteEndpointSet(
   ["session"],
   remoteDoorUrl("wss?", String.raw`\/ws\/sessions\/[^/?#\s]+`),
   "a tailnet ws:// rosetta session URL without query/fragment",
-);
+).extend({
+  restUrl: z
+    .string()
+    .regex(remoteDoorUrl("https?", ""), "the index serve's tailnet http(s) origin, no path")
+    .optional(),
+});
 export type RemoteIndexEndpointSet = z.infer<typeof RemoteIndexEndpointSet>;
 
 /** Compose one session's set from the index serve's own base URL (truffle's
@@ -2062,6 +2084,8 @@ export function remoteIndexEndpointsFor(
   if (sessionId.length === 0 || !isWellFormedText(sessionId)) return undefined;
   return composeRemoteEndpoints(RemoteIndexEndpointSet, serveBaseUrl, {
     session: remoteIndexSessionPath(sessionId),
+    // SP-7b's 7b-2a: the serve's own origin — rosetta's pages live at the root of the listener
+    rest: { path: "", transport: "http" },
   });
 }
 
@@ -2196,12 +2220,15 @@ export type IndexTicketRoadDetails = z.infer<typeof IndexTicketRoadDetails>;
  * the owner ANSWERS the tailnet set, unamended, to another desktop's daemon
  * forwarding for its window; that daemon hands its window the loopback set
  * over an egress route (the section's header says how). The phone's (SP-7)
- * may still amend it.*
+ * may still amend it.* *SP-7b's 7b-2a (2026-11-08): amended — the tailnet set
+ * gains `rest`, the serve's origin, optional on read; the golden carries it.*
  *
  *  - `device`: the desktop whose rosettad holds the session — the cache key's
  *    first part (`{device, session, stamp}`, thinking-sync-planes §5.4).
  *  - `endpoints`: `IndexTicketEndpointSet` — the loopback pair for a window,
- *    the tailnet `session` leg for a caller across the tailnet.
+ *    the tailnet `session` leg for a caller across the tailnet, and beside it
+ *    the serve's `rest` origin (*7b-2a, 2026-11-08*; absent from an older
+ *    owner).
  *  - `grant`: rosetta's RO-10 grant, OPAQUE to a client —
  *    `base64url(JCS {cid, exp, scope, sid, v}) "." base64url(HMAC-SHA256)`,
  *    exact `sid`, `scope` by who asked (rosetta AUTH.md §5; at most 4,096

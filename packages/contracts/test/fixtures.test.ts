@@ -902,7 +902,8 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   // satisfies: the cell's pair rides `tp-remote-open-ticket` above (its
   // instance is `RemoteCellEndpointSet`), rosettad's one-leg set is
   // `remote-endpoint-set.rosetta` (its instance `RemoteIndexEndpointSet` —
-  // remote-endpoints.test.ts parses it with both).
+  // remote-endpoints.test.ts parses it with both). *SP-7b's 7b-2a (2026-11-08):
+  // not one leg now — the golden carries `rest`, the serve's origin, beside it.*
   "remote-endpoint-set": RemoteEndpointSet,
   "tp-create-open": TerminalCreateOpenResult,
   "tp-renew-attach-params": TerminalRenewAttachParams,

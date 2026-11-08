@@ -77,6 +77,19 @@ function roadRefusal(device: string, state: string, message: string): RpcCallErr
   });
 }
 
+/** Whether an owner's tailnet set is on its index serve: the socket on
+ * `PORTS.INDEX_SERVE`, and the `rest` leg (SP-7b's 7b-2a), when it has one,
+ * that socket's own origin — the serve's, never another door. An owner before
+ * 7b-2a answers the socket alone, which is on it. */
+function onIndexServe(set: RemoteIndexEndpointSet): boolean {
+  const socket = new URL(set.sessionUrl);
+  if (socket.port !== String(INDEX)) return false;
+  if (set.restUrl === undefined) return true;
+  const rest = new URL(set.restUrl);
+  const scheme = socket.protocol === "wss:" ? "https:" : "http:";
+  return rest.protocol === scheme && rest.host === socket.host;
+}
+
 /** Whether this daemon carries `ctx`'s ask to another desktop: only a
  * principal it would mint an index ticket for itself — a window, the shell,
  * this person's phone (SP-7b) — refused otherwise in the minter's own words
@@ -167,7 +180,9 @@ export class IndexTicketForwarding {
 
   /** The owner's answer read as its own ticket over its index serve's tailnet
    * set — else INCOMPATIBLE, or `doors_not_published` naming it. Read before
-   * anything is held, for a window and for the phone alike (SP-7b). */
+   * anything is held, for a window and for the phone alike (SP-7b). *7b-2a
+   * (2026-11-08): the set's `rest` leg is held to the serve too
+   * (`onIndexServe`).* */
   private ownersTicket(device: string, answer: unknown): IndexOpenTicket {
     const parsed = IndexOpenTicket.safeParse(answer);
     if (!parsed.success || parsed.data.device !== device)
@@ -178,7 +193,7 @@ export class IndexTicketForwarding {
         { service: INDEX_TICKET.SERVICE, device },
       );
     const remote = RemoteIndexEndpointSet.safeParse(parsed.data.endpoints);
-    if (!remote.success || new URL(remote.data.sessionUrl).port !== String(INDEX))
+    if (!remote.success || !onIndexServe(remote.data))
       throw roadRefusal(
         device,
         INDEX_TICKET.STATE_DOORS_NOT_PUBLISHED,
