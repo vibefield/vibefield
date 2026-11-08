@@ -10,7 +10,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { NewSparkSheet } from "../src/chat/NewSparkSheet";
 import type { NewSparkPort } from "../src/chat/new-spark";
-import { insetOf, PORTAL_MS } from "../src/chat/portal";
+import { insetOf, movePortal, PORTAL_MS, type PortalPlaces } from "../src/chat/portal";
 import { NewSparkNightPlate } from "../src/design-system/NewSparkPreview";
 import { FIXTURE_NATIVE } from "../src/design-system/profiles-fixtures";
 
@@ -126,6 +126,8 @@ describe("the portal's window (DESIGN.md §6, the portal; \"The window is the ni
       leave: 240,
       reducedOut: 150,
       reducedBack: 120,
+      windowIn: 180,
+      nightOut: 180,
     });
     const design = read("../../../DESIGN.md").replace(/\s+/gu, " ");
     for (const said of [
@@ -138,6 +140,9 @@ describe("the portal's window (DESIGN.md §6, the portal; \"The window is the ni
       "down 16 at 0.97 in 240ms on the retract curve",
       "the night fades out in 150ms",
       "backwards at 120ms each",
+      // ES-3c: the window comes in over the night as the words leave, and the night goes under it once it is whole
+      "comes in over the night in 180ms on the retract curve as the words leave",
+      "fade out under it in 180ms on the same curve",
     ])
       expect(design, said).toContain(said);
   });
@@ -207,5 +212,85 @@ describe("the catalog's night plate (docs/UI_SYSTEM.md: the plate mounts the shi
     await act(async () => $<HTMLButtonElement>(".vf-chat-empty-new")?.click());
     await settle();
     expect($(".vf-new-spark")).not.toBeNull();
+  });
+});
+
+// THE HAND-OFF (track ES, ES-3c; DESIGN.md §6, the portal, "The night gives way only once the window has drawn, and is
+// whole", corrected at its source 2026-11-08 by ES-3b's proof, lanes/es/proof/es3b-0852Z): nothing of the sheet shows
+// before the window's first frame, its dim included; drawn, the window comes in over the night in 180ms on the retract
+// curve as the words leave, so their fade shows through it; whole, it has Chat's night fade out under it in 180ms.
+
+const RETRACT = "cubic-bezier(0.4, 0, 1, 1)";
+
+/** Where the portal moves, as `NewSparkSheetView` measures it: the panel, the sky's place, the sheet, the night's edge
+ * as it stood (leaning, the pointer on New spark). */
+const PLACES: PortalPlaces = {
+  panel: { x: 8, y: 52, w: 1164, h: 640 },
+  sky: { x: 330, y: 146, w: 520, h: 300 },
+  sheet: { x: 320, y: 136, w: 540, h: 520 },
+  clip: "inset(6px round 16px)",
+};
+
+/** A part of the portal whose own animations are recorded (the page's Web Animations are a real browser's). */
+function aPart(): HTMLElement & { animate: ReturnType<typeof vi.fn> } {
+  const part = document.createElement("div");
+  const animate = vi.fn(() => ({ cancel: vi.fn(), commitStyles: vi.fn() }) as unknown as Animation);
+  Object.assign(part, { animate });
+  return part as HTMLElement & { animate: ReturnType<typeof vi.fn> };
+}
+
+describe('the hand-off (DESIGN.md §6, the portal; "The night gives way only once the window has drawn, and is whole")', () => {
+  it("shows nothing of the sheet until the window has drawn: its form is gone at once, and its dim waits for the close", () => {
+    const css = read("../src/chat/new-spark-sheet.css");
+    const form =
+      css.match(
+        /^\.vf-new-spark\[data-portal="drawing"\] \.vf-new-spark-sheet > :not\(\.vf-new-spark-sky\) \{([^}]*)\}/mu,
+      )?.[1] ?? "";
+    expect(form).toMatch(/opacity: 0;/u);
+    // the sheet's first render knows no portal yet, so the form must leave without the close's delayed fade
+    expect(form).toMatch(/transition: none;/u);
+    const dim =
+      css.match(
+        /^\.vf-new-spark\[data-portal="drawing"\] \.vf-new-spark-scrim \{([^}]*)\}/mu,
+      )?.[1] ?? "";
+    expect(dim).toMatch(/opacity: 0;/u);
+    expect(dim).toMatch(/animation: none;/u);
+  });
+
+  it("brings the window in over the night in 180ms on the retract curve as its edge closes from the night's own", () => {
+    const parts = { window: aPart(), glass: aPart() };
+    movePortal("closing", parts, PLACES, false);
+    expect(parts.window.animate).toHaveBeenCalledWith(
+      [{ opacity: 0 }, { opacity: 1 }],
+      expect.objectContaining({ duration: PORTAL_MS.windowIn, easing: RETRACT, fill: "both" }),
+    );
+    expect(parts.window.animate).toHaveBeenCalledWith(
+      [{ clipPath: "inset(6px round 16px)", offset: 0 }],
+      expect.objectContaining({ duration: PORTAL_MS.close }),
+    );
+    // where it comes to is its own style, the sky's place in the panel
+    expect(parts.window.style.clipPath).toBe(insetOf(PLACES.sky, PLACES.panel, 30));
+  });
+
+  it("under reduced motion fades the window in after the night has faded out, and never twice", () => {
+    const parts = { window: aPart(), glass: aPart() };
+    movePortal("closing", parts, PLACES, true);
+    const fades = parts.window.animate.mock.calls.filter(([frames]) =>
+      JSON.stringify(frames).includes("opacity"),
+    );
+    expect(fades).toHaveLength(1);
+    expect(fades[0]?.[1]).toEqual(
+      expect.objectContaining({ duration: PORTAL_MS.reducedOut, delay: PORTAL_MS.reducedOut }),
+    );
+  });
+
+  it("lets Chat's night go under the window once it is whole: out in 180ms on the retract curve, 180ms in", () => {
+    const kit = read("../../design-kit/src/spark-face/spark-face.css");
+    const lent = kit.match(/^\.vf-spark-night\[data-lent="true"\] \{([^}]*)\}/mu)?.[1] ?? "";
+    expect(lent).toMatch(/visibility: hidden;/u);
+    expect(lent).toMatch(/opacity: 0;/u);
+    expect(lent).toMatch(/opacity 180ms cubic-bezier\(0\.4, 0, 1, 1\) 180ms/u);
+    // hidden only once its fade is done
+    expect(lent).toMatch(/visibility 0s linear 360ms/u);
   });
 });
