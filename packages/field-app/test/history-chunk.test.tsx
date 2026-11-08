@@ -211,11 +211,16 @@ describe("History's room, its own chunk (2026-10-04)", () => {
     // kept clear for the notches' slivers gone with the edges (DESIGN.md §10).
     expect(face.style.getPropertyValue("--vf-history-edge")).toBe("");
     expect(VIEW_CSS).toMatch(/\.vf-history-face \{[^}]*inset: var\(--vf-history-head\) 0 0;/u);
-    const words = face.querySelector<HTMLElement>(".vf-history-room > .vf-history-face[data-late]");
-    expect(words?.getAttribute("role")).toBe("status");
-    // AO-6 — the title says it all; no machinery under it (DESIGN.md §9)
-    expect(words?.querySelector(".vf-ui-empty-state__title")?.textContent).toBe("Opening History…");
-    expect(words?.querySelector(".vf-ui-empty-state__description")).toBeNull();
+    // HG-W1 — the face is the hold: the living mark at the centre of History's box, the words under it
+    const hold = face.querySelector<HTMLElement>(
+      ".vf-history-room > .vf-history-face.vf-history-hold",
+    );
+    expect(hold?.getAttribute("role")).toBe("status");
+    expect(hold?.querySelector(".vf-history-hold-mark .vf-history-mark")).not.toBeNull();
+    // AO-6 — the line says it all; no machinery under it (DESIGN.md §9)
+    expect(hold?.querySelector(".vf-history-hold-line")?.textContent).toBe("Opening History…");
+    expect(hold?.querySelector(".vf-history-hold-sub")?.textContent).toBe("");
+    expect(hold?.querySelector(".vf-ui-empty-state")).toBeNull();
     expect(historySlot()?.querySelector(".ah-frame")).toBeNull();
     // The controller is here before the room: History's door is already lent —
     // the line holds History's create, New terminal (HN-7), ready with no

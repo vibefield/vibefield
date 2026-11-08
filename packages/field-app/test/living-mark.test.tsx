@@ -4,7 +4,12 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { LIVING_MARK_SIZE, LIVING_MARK_URL, LivingMark } from "@vibefield/design-kit/living-mark";
+import {
+  LIVING_MARK_REST_URL,
+  LIVING_MARK_SIZE,
+  LIVING_MARK_URL,
+  LivingMark,
+} from "@vibefield/design-kit/living-mark";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it } from "vitest";
@@ -35,6 +40,9 @@ const BAKED = JSON.parse(
 const DIR = join(REPO_ROOT, "packages/design-kit/src/living-mark");
 const file = (ground: "dark" | "light"): string =>
   readFileSync(join(DIR, `living-mark-${ground}.svg`), "utf8");
+/** The still the generator writes beside each ground (HG-W4): the mark at rest. */
+const still = (ground: "dark" | "light"): string =>
+  readFileSync(join(DIR, `living-mark-${ground}-rest.svg`), "utf8");
 const css = (svg: string): string => svg.match(/<style>([\s\S]*)<\/style>/u)?.[1] ?? "";
 
 let root: Root | null = null;
@@ -133,6 +141,49 @@ describe("the living mark, drawn as SVG", () => {
       expect([...svg.matchAll(/url\(([^)]*)\)/gu)].map((m) => m[1])).toEqual(["#vf-lm-x"]);
       expect(Buffer.byteLength(svg)).toBeLessThan(24 * 1024);
     }
+  });
+
+  it("writes a still beside each ground: its own drawing with every motion taken out (HG-W4)", () => {
+    for (const ground of ["dark", "light"] as const) {
+      const rest = still(ground);
+      // the reduced-motion pose, which the moving file stands in by itself: its keyframes, its animations and the
+      // media query that stops them are all it leaves out
+      const moving = file(ground)
+        .replace(`For a ${ground} ground.`, `For a ${ground} ground, at rest.`)
+        .split("\n")
+        .filter(
+          (line) =>
+            !line.startsWith("@keyframes ") &&
+            !line.includes("{animation:") &&
+            !line.startsWith("@media (prefers-reduced-motion"),
+        )
+        .join("\n");
+      expect(rest).toBe(moving);
+      expect(css(rest)).not.toMatch(/animation|@keyframes/u);
+      expect(rest).not.toMatch(/<script|<image|<foreignObject|@import|href=/u);
+      expect([...rest.matchAll(/url\(([^)]*)\)/gu)].map((m) => m[1])).toEqual(["#vf-lm-x"]);
+      expect(Buffer.byteLength(rest)).toBeLessThan(Buffer.byteLength(file(ground)));
+    }
+    const swapped = still("light")
+      .replaceAll("var(--vf-mark-ink,#000)", "var(--vf-mark-ink,#fff)")
+      .replace("For a light ground, at rest.", "For a dark ground, at rest.");
+    expect(swapped).toBe(still("dark"));
+  });
+
+  it("is its ground's still while its work rests (HG-L1), and moves again when it does", async () => {
+    container = document.createElement("div");
+    document.body.append(container);
+    root = createRoot(container);
+    await act(async () => {
+      root?.render(createElement(LivingMark, { ground: "light", resting: true }));
+    });
+    expect(container.querySelector("img")?.getAttribute("src")).toBe(LIVING_MARK_REST_URL.light);
+    expect(LIVING_MARK_REST_URL.light).toMatch(/living-mark-light-rest\.svg$/u);
+    expect(LIVING_MARK_REST_URL.dark).toMatch(/living-mark-dark-rest\.svg$/u);
+    await act(async () => {
+      root?.render(createElement(LivingMark, { ground: "light", resting: false }));
+    });
+    expect(container.querySelector("img")?.getAttribute("src")).toBe(LIVING_MARK_URL.light);
   });
 
   it("is an image of its ground's file, sized by its box, named only when a label asks", async () => {
