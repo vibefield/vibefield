@@ -652,6 +652,7 @@ function Sheet(props: DevicesSectionViewProps): ReactElement | null {
             type="button"
             className={`${buttonCls} text-[var(--vf-red)]`}
             disabled={busy}
+            data-running={busy ? "" : undefined}
             onClick={props.onDisconnect}
           >
             {busy ? "Disconnecting…" : "Disconnect"}

@@ -95,6 +95,7 @@ function PluginUninstall({ plugin }: { plugin: PluginRecord }): ReactElement {
             <button
               type="button"
               disabled={busy}
+              data-running={busy ? "" : undefined}
               className={`${buttonCls}${confirm === "data" ? " vf-ui-tone-danger" : ""}`}
               onClick={() => void run(confirm === "data")}
             >
