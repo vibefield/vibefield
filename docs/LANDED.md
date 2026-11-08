@@ -43741,3 +43741,120 @@ VF-PM's rulings: the lane 06:39Z, the slices' order 06:48Z, the re-cut and its r
   that EL8.
 - James's eye on the built room: the frost, the develop and the leave, "Bringing in…", and the empty census.
 - gate:landing after the land: the stills and the smokes, landing-only; a re-bless, if any, said there.
+
+## Item 259 — the iOS record lists VibeField's own rosetta Swift client as the owner's own, by the desktop's sibling rule, and the phone's Settings page draws only the parts others made (2026-11-08)
+(2026-11-08; five commits, two authors, cut by fd (vibe-field-aa) in `/Volumes/SamsungRed/lanes/item190`: IOS's
+`add63edd4` (DESIGN.md) → `765aa9661` (red) → `de434572b` (green), then fd's `a74f2f63d` (red) → `83cf67316` (green,
+tree `9ae025216463`), on main `3264c54f1`. Cut on `75969189e` and replayed in proof form once, onto HG's land. Minted as
+M236 (run236); landed `83cf67316` (2026-11-08T19:37:19Z), a fast-forward of main `3264c54f1`.)
+The EL8's Owed named it ("whether the iOS record lists rosetta as the owner's own component, as the desktop ledger
+does"). fd's read said YES at 16:40:29Z, and VF-PM ruled it at 16:40:53Z (`lanes/sp7/SP-7b-2-delta.md`'s addendum).
+IOS picked the page's answer, (a), at 17:04Z, and VF-PM ruled it final. fd's plan (`lanes/item259/PLAN.md`) was GO'd
+at 18:05:32Z with four rulings: cut now and re-cut after HG; the regen amended into commit 5; the desktop's sibling
+witnessed; and vf-m2's order.
+- 6 files, +214 −26, 16 hunks at -U0:
+  - `DESIGN.md` 3 0 (docs; merged with HG-1's);
+  - `apps/ios/VibeFieldKit/Sources/FieldSettings/Acknowledgements.swift` 3 2 and its test `AppReviewTests.swift`
+    32 0 (the kit);
+  - `scripts/third-party-notices.mjs` 71 24 (a named `scripts/` file) and its test 96 0;
+  - `apps/ios/App/Resources/acknowledgements.json` 9 0 (generated, by a9's regen row).
+
+**What.**
+- **The rule is one function.** `siblingRow`, exported from `scripts/third-party-notices.mjs`: a sibling that declares
+  no licence and carries no licence file is the owner's own, listed with its note so the inventory is whole; any
+  other is a licensed row with its texts and role.
+  - The desktop's cargo sibling (rosettad's crates) calls it, and its two rows are held byte for byte by a
+    characterization test (VF-PM's ruling 3).
+  - `IOS_SIBLINGS` names rosetta (the role "agent history", the note "agent history's Swift client (RosettaClient);
+    the owner's own, UNLICENSED"). `iosSiblingRows` applies the rule while the kit's manifest takes a rosetta product
+    (`kitProducts`, moved out of a closure, the same expression).
+- **The record** gains one component, `swift/rosetta` 0.1.5, `own: true`, `licence` "", no texts and no `roles`,
+  after `swift/ghosttea`: 143 → 144 components, no new text, `pins` and `tailscaleKit` unchanged. The trimmed copy
+  `acknowledgements-l5.lane.json` does not move. The script's console line still says 143, because it counts
+  third-party parts alone.
+- **The page** (IOS). DESIGN.md §8 first: a dated clause under About's Acknowledgements bullet (:6371) says "the
+  parts it lists are the ones others made. VibeField's own, `own: true` in the generator's record (rosetta's Swift
+  client), rides the record so its inventory is whole, and is not drawn, as the desktop's notices count only
+  third-party components."
+  - `Acknowledgements.groups` groups `doc.parts.filter { !$0.own }` (:128). An own part is in no group, and a role
+    whose only parts are own is never a group. The record keeps every part (`doc.parts` is unchanged), and the one
+    drawing path is About's `ForEach(group.parts)` (`AboutPage.swift:134`). The `own` field's comment loses "yet".
+  - The kit's test, `ownPartsAreNotDrawn()`, reads an inline doc of four parts: ghosttea (MIT) in the leading role
+    "the terminal"; an own part in that role; an own part in a role of its own, "agent history"; and rosetta as the
+    generator writes its own row, with its note and no roles (unfiltered, it would sit last, under no head). It
+    asserts `kept == 4`, `titles == ["The terminal"]`, `drawn == ["ghosttea"]` and no empty group.
+
+**The proof.**
+- **The cut on `75969189e`.** IOS handed its three as r1 (`ios/259` = `8db77f781`, 18:08Z), then as r2
+  (`ios/259-r2` = `964e3efa9`, 18:15Z): fd read at 18:13:40Z that the generator's own row carries no `roles`, so r2's
+  red test adds rosetta as the generator writes it, field for field (`kept` 3 → 4). Only commit 2 changed; commits 1
+  and 3 kept their patch-ids. fd's two were re-stacked onto r2 in proof form (`restack-259-r2.py`: `75b92e26e`,
+  `78cbf7544`).
+- **The Mac's rows** (the door, nice 19, node v26.5.0; `lanes/item259/rows/`):
+  - at the red, "tests 23", "pass 21", "fail 2", both `AssertionError`s: the rule and the record's rosetta;
+  - at the green before the amend, 23/22/1 (the record alone). biome on the two files "No fixes applied", the walls
+    ×4 and `check:retired` clean. The characterization test passed at both.
+- **The record, regenerated.** a9's regen row ran commit 5's code on vf-m2 at 18:26:59Z
+  (`lanes/vf-m2/259-regen-a9-results/`, SHA256SUMS `07d558c9`). The kit's checkouts were at their pins (rosetta
+  `811e554c6` first), and rosetta's root held no licence file. Its output equals fd's oracle byte for byte: `cmp` 0,
+  sha256 `701bd686`. The oracle (`lanes/item259/oracle/`) is the committed record plus the one component, by the
+  generator's own ordering and `JSON.stringify(doc, null, 2)` + "\n", whose method was first proved by re-rendering
+  the committed record to its own bytes. fd amended those bytes into commit 5 (`362029590`;
+  `git diff --stat 78cbf7544 362029590` is the record alone). Then the test read 23/23, `check:ios-fixtures` 418 and
+  93, and `check:retired` clean.
+- **IOS's Swift red probe** at commit 2 before the re-cut (`27f90c1f3`, kit tree `b3c7a989c504`) on vf-m2,
+  18:33–18:35Z (a9, `lanes/vf-m2/259-probe-a9-results/`, SHA256SUMS-a9-259-probe `ab09c891`):
+  - S on Xcode 26.3 was green in 93 s, 16 of 16 linked;
+  - R, `-only-testing:FieldSettingsTests` under Xcode-beta 27.3's runner, had exactly the five `✘` lines read from
+    the code: the issues at :178 (`titles` → `["The terminal", "Agent history", ""]`) and :179 (`drawn`, the four
+    names), the test with 2 issues, the suite, and the run of 35 tests in 3 suites. Exit 65. No other test failed.
+  - VF-PM ruled it RED AS READ at 18:37:32Z, the slice's pass. The brief's two errata are in
+    `lanes/ios12/259/probe/ERRATA-probe.md`.
+- **The re-cut onto `3264c54f1`** (`recut-259.py`; `--dry --peek` previews onto HG's r4 and r5 first). Each tree
+  equals both merge-trees, the patch-ids are unchanged (`59bbbaef13c9`, `9d6160d344c7`, `fd5345664fdd`,
+  `0bf859189bc3`, `d2a7917fe822`), and `range-diff` reads `=` ×5. DESIGN.md is merged: both sides' -U0 lines survive
+  line for line (259's +3 at :6371). The other five files are byte-equal.
+- **The rows at the tip** (19:02:42–19:03:04Z), all exit 0:
+  - `third-party-notices.test.mjs` 23/23;
+  - `notices-rows.test.mjs` 10/10;
+  - `check:ios-fixtures` 418 and 93; `check:retired` clean;
+  - biome on the two files; the walls ×4 ("266 of 1126").
+- **The mint, run236** at `83cf67316` on vf-m2 (`lanes/vf-m2/run236-a9-results/`, SHA256SUMS-a9-run236 `1a0b3239`;
+  done 19:30:54Z): V GREEN, S GREEN, G GREEN-BUT-167.
+  - **V** (19:19:32–19:25:18Z, armed at a 1-min load of 1.45): verify exit 0 in 5 min 46 s. Against run235, the
+    count lines are set-equal and the singles byte-equal, the bundle assert's hashes included. dev-runner read "tests
+    482", "pass 482", "fail 0". The 33 DESIGN.md readers each read ✓, census OK with "no drift", and KEPT births 0.
+    The 1-min load peaked at 36.39.
+  - **The kit** (S 19:25:28–19:27:00Z; G from 19:28:49Z, its exit at +120 s):
+    S on Xcode 26.3 (17C529): green in 92 s, 16 of 16 linked, RosettaClient compiled (29 steps), 0 warnings in 259's two
+    kit files (the four are run233's, main's). G over S's own xctestrun (`4280072573fa…`, its origin read) under
+    Xcode-beta 27.3's runner: 2165 tests in 342 suites, GREEN-BUT-167. FieldSettingsTests read "✔ Test run with 35 tests
+    in 3 suites passed", and 259's test and `groups()` passed by name. FieldTerminalTests (177 in 35) carried item 167's
+    one issue alone, its Failing tests block one line. The control is by construction:
+    `TerminalSurfaceKeyboardTests.swift` is blob `e46bf3c5` at the tip, and 259 moves only its two FieldSettings paths
+    under the kit.
+
+**Found.**
+- **"No page change" was false** (fd's read, erratum at its source 17:02Z): the page draws every part, and an own row
+  would draw an empty licence. It became IOS's page decision, (a).
+- **`check:retired` reads the record** (18:25:51Z): its `CODE` takes `.json` and its `SKIP` keeps `apps/ios`, so a
+  generated JSON's amend does not carry it. Ruling 2's carry list was corrected at its source.
+- **A second importer of the script,** `notices-rows.test.mjs`, became a row at the tip (VF-PM 19:00:04Z, rule 8).
+  `scripts/stage-package.mjs` imports it too; no test or `verify` stage runs the stager.
+- **DESIGN.md's readers are 33,** not the plan's 25: a one-line `readFileSync` grep missed calls split across lines
+  and the tests that read through a helper. The rule is now any quoted `DESIGN.md` path in a `*.test.*` file.
+- **biome's `organizeImports`** wanted the namespace import before the named block; fixed in the red before any row
+  counted.
+- **dev-runner's count is derived exactly** where the lane cannot host the whole project: run235's 480 − 21 + 23,
+  from the changed file's own runs at main and at the tip.
+- **No kit test reads the App's record.** The kit's tests read the trimmed L5 copy, so the kit's G cannot witness the
+  record: its witnesses are V's :943 and `check:ios-fixtures` (IOS, read in `Tests/`).
+- **Two shapes of the kit's logs** (the probe's errata, E1 and E2). Swift Testing prints a failed `#expect`'s values
+  on the `↳` lines beneath the `✘` line, and xcodebuild's "Failing tests" lists a test once per issue. The probe's
+  brief had both wrong, and a9's runner printed "RED, VALUES READ". The mint's G definition carries the correction.
+
+**Owed.**
+- `gate:landing` at this landing, as at today's other landings, paid in a later dated LANDED entry.
+- The EL8's Owed line for item 259 is PAID by this entry.
+- **About on a device, drawn from the shipped record:** the next TestFlight build, by James's eye. No single row
+  witnesses the record's own row and the filter meeting on the page: the record is witnessed by V, the filter by G.
