@@ -42939,6 +42939,31 @@ half owed (LANDED "Item 241 (241a)"). VF-PM's GO 2026-11-08 04:12Z; rulings 04:2
   >   rosettad from `siblings.mjs bin`, behind the watcher's gate of an unlocked console idle 150 s or more,
   >   `lanes/ts6/OWED-ROWS.md`:17): OWED on the console unlock, a9's row placed at 11:21Z (VF-PM 11:26:35Z). Its verdict
   >   follows in a second dated block.
+  >
+  > **The witness of record (2026-11-08 19:37:52Z): row 32 on the old mini at `e60d8add6` reads GREEN-BUT-254**
+  > (VF-PM's ruling (b), 19:30:30Z: if the ONLY red is the "ChatGPT Pro" 1:1 pair, the row reads GREEN-BUT-254 and the
+  > witness for 241b stands; `lanes/ts6/OWED-ROWS.md`:1688).
+  > - **The run** (a9, `mini-r32b.sh` `c3c71c75`, through `ts6-mini.sh` `e5bcd3e5` verbatim, with rosettad from
+  >   `siblings.mjs bin`). It armed at 19:35:09Z on an unlocked console, HID idle 736 s (898 s at the end), at a 1-min
+  >   load of 1.19, and the wrapper exited 1 at 19:37:52Z in 163 s. The results are
+  >   `lanes/ts6/logs/mini/r32-e60d8add6/row-193508/` (SHA256SUMS-a9-r32-row-193508 `33660dc7`, 187 files, 187 OK).
+  > - **The walks:** day green 24 s, night green 22 s, no-webgpu green 18 s, catalog red 93 s (122 shots over 13
+  >   frames, faces 60 of 60, lowestFit 1, unsettled []). Every walk's daemons left [] and unreaped []. Two things are
+  >   KEPT on the mini: the red walk's home `/private/tmp/vf-smoke-otFFCq` and the shots
+  >   `/private/tmp/vf-first-run-shots-GPpUKO`.
+  > - **The only red, the judge's line verbatim:** "on day 04 profiles (ready) "ChatGPT Pro" reads 1:1 ([255,255,255]
+  >   → [255,255,255]) in rgba(28, 28, 30, 0.8), under 4.5:1 · on night 04 profiles (ready) "ChatGPT Pro" reads 1:1
+  >   ([28,28,30] → [28,28,30]) in rgba(245, 245, 247, 0.7), under 4.5:1". It is item 254's class, with the values the
+  >   Mac's two runs and DR's control read. Its fix (`2440e6dcd`, M231) is not in `e60d8add6`.
+  > - **What it settles for 241b:**
+  >   - No kit pill drawn Off is red here (ruling (iii) above).
+  >   - History is green on all three live walks with the lock's rosettad, so the Mac's History red was the gate's
+  >     environment (item 253, LANDED M232 `ef22fb3b7`).
+  >   - The Mac re-run's 15 others are not red here: the live field's three, and the 12 words at 1:1 to 1.2:1.
+  >   - A host fact beside them: this Mac's main display was asleep from about 08:48Z (CGDisplayIsAsleep true at
+  >     11:38Z), under both the re-run (10:52Z) and DR's control (11:19Z). The control did not reproduce the 15 on that
+  >     same display, so their cause stays unread.
+  > - **The Owed line above,** "The witness of record … OWED on the console unlock", is PAID by this block.
 - Item 242 (the phone kit's faint words, sorted by §2.4: 29 to t3, 11 to t4), cut on this tip, its kit row R on the
   old mini, its stills judged by 244's rule; item 248 (the phone's t3 under §2.4's floor by day, James's eye on 56%);
   item 251 (the mock fleet's seed door for the stills, so the Field badge is judged at max 0).
