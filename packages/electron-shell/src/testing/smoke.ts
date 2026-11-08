@@ -89,6 +89,7 @@ import {
   historyNewAgentRung,
   historyResumeAtModelRung,
 } from "./history-project-rungs";
+import { HISTORY_FACE, HISTORY_ROOM, historyFaceShows } from "./history-rung";
 import { jumpToRung, mirroredInto, showingOf } from "./jump-rungs";
 import { startLiveFixture } from "./live-fixture";
 import { LiveSurfaceFixtureRuntime } from "./live-surface-fixture-runtime";
@@ -9259,26 +9260,13 @@ export async function runSmokeGodview(opts: {
     //      index: the pair runs as a throwaway person, so an index here has
     //      found nothing of the machine owner's), never a blank — and ⌘2 out and
     //      ⌘3 back keeps the SAME room: marked before, found marked after.
-    const HISTORY_ROOM = `document.querySelector('[data-cover-view="history"] .vf-history .ah-frame')`;
+    //      The read and its verdict are testing/history-rung.ts's (item 263).
     const historyFace = await untilRendererValue(
       win,
       "History's room in the cover",
-      `(() => {
-        const room = ${HISTORY_ROOM};
-        if (!room) return "no room";
-        return JSON.stringify({
-          surface: room.getAttribute("data-ah-surface"),
-          columns: room.querySelector(".ah-cols") !== null,
-          projects: room.querySelectorAll(".ah-project-list-item").length,
-          words: (room.textContent ?? "").replace(/\\s+/g, " ").trim().slice(0, 240),
-        });
-      })()`,
+      HISTORY_FACE,
       30_000,
-      (answer) => {
-        if (answer === "no room") return false;
-        const face = JSON.parse(answer) as { surface: string; columns: boolean; words: string };
-        return face.surface === "host" && (face.columns || face.words.length > 0);
-      },
+      historyFaceShows,
     );
     await win.webContents.executeJavaScript(`(${HISTORY_ROOM}).dataset.smokeKept = "yes"`);
     pressViewKey(win, "godview");
