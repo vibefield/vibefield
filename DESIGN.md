@@ -1306,6 +1306,11 @@ James on the ES page *The night that becomes the window*, 2026-11-08 04:27:25–
       1396ms warm there) before the undimmed window replaced it.
     - The sheet's form, first drawn before the portal was known, stayed on the night through that wait under its own
       delayed fade.
+  - **The sheet leaves once the fold has** (ES-3e; VF-PM 2026-11-08 09:24Z): through the portal the sheet leaves when
+    the fold has handed the night back and the face's 450 has run on the hatch's clock; where frames never come, a
+    safety bound of 2 s ends the wait. *Added 2026-11-08 (ES-3e):* ES-3d's proof (`lanes/es/proof/es3d-0921Z`) had the
+    sheet's own 450ms leave unmount it while the fold was 40% open under starved frames, so the night came back under a
+    half-open window.
   - **Where no night can be lent** (Chat is not the view, it holds a spark, or there is no WebGL2), the sheet rises as
     the sheet below does.
 
