@@ -21,6 +21,7 @@
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve, sep } from "node:path";
+import { git } from "./repo-files.mjs";
 
 // The import walls' skips (check-import-boundaries.mjs), and the state a checkout keeps for its
 // machine alone (`.nx`, `.vibefield`).
@@ -88,8 +89,9 @@ function findUnremovedRoots(root) {
 }
 
 // --- self-test ---------------------------------------------------------------
-// Each positive must be named at its `line` (1-based, into `lines`); no clean may be named. Nine
-// fixtures are test files (product.ts and the node_modules one are never read), seven make a root.
+// Each positive must be named at its `line` (1-based, into `lines`); no clean may be named. Ten
+// fixtures are test files (product.ts, the node_modules one and IGNORED's are never read), eight
+// make a root.
 const IMPORTS = ['import { mkdtempSync } from "node:fs";', 'import { tmpdir } from "node:os";'];
 const POSITIVES = [
   {
@@ -116,6 +118,21 @@ const POSITIVES = [
     file: "packages/d/test/promises.test.mjs",
     lines: ['import { mkdtemp } from "node:fs/promises";', 'const dir = await mkdtemp("/tmp/d-");'],
     line: 2,
+  },
+  // Item 252: untracked and not ignored, it is read before it is staged.
+  {
+    file: "tooling/l/test/twin.test.ts",
+    lines: [...IMPORTS, 'const root = mkdtempSync(join(tmpdir(), "l-"));'],
+    line: 3,
+    untracked: true,
+  },
+];
+// Item 252: rosetta's own sources as `swift package resolve` checks them out under the kit's
+// ignored `.build/`. It leaks as twin.test.ts does, and it must never be read.
+const IGNORED = [
+  {
+    file: "apps/ios/VibeFieldKit/.build/checkouts/rosetta/clients/ts/test/leaks.test.ts",
+    lines: [...IMPORTS, 'const root = mkdtempSync(join(tmpdir(), "r-"));'],
   },
 ];
 const CLEANS = [
@@ -160,14 +177,23 @@ const CLEANS = [
 function selfTest() {
   const tmp = mkdtempSync(join(tmpdir(), "vf-temp-roots-"));
   try {
-    for (const { file, lines } of [...POSITIVES, ...CLEANS]) {
+    // Item 252: the fixture root is a git repository whose `.gitignore` ignores `.build/`, as the
+    // repo's does SwiftPM's. Every fixture is tracked (`add -f`) but the untracked one.
+    git(tmp, ["init", "-q"]);
+    writeFileSync(join(tmp, ".gitignore"), ".build/\n");
+    for (const { file, lines } of [...POSITIVES, ...CLEANS, ...IGNORED]) {
       const abs = join(tmp, file);
       mkdirSync(dirname(abs), { recursive: true });
       writeFileSync(abs, `${lines.join("\n")}\n`);
     }
+    const tracked = [...POSITIVES, ...CLEANS].filter((c) => !c.untracked).map((c) => c.file);
+    git(tmp, ["add", "-f", "--", ...tracked]);
     const { read, makers, misses } = findUnremovedRoots(tmp);
-    let ok = read === 9 && makers === 7;
-    console.log(`  ${ok ? "PASS" : "FAIL"}  ${read} test files read (9), ${makers} make one (7)`);
+    let ok = read === 10 && makers === 8;
+    console.log(`  ${ok ? "PASS" : "FAIL"}  ${read} test files read (10), ${makers} make one (8)`);
+    const unread = !misses.some(({ file }) => IGNORED.some((c) => c.file === file));
+    console.log(`  ${unread ? "PASS" : "FAIL"}  an ignored tree is never read`);
+    if (!unread) ok = false;
     const named = new Set(misses.map(({ file, line }) => `${file}:${line}`));
     for (const { file, line } of POSITIVES) {
       const key = `${file}:${line}`;

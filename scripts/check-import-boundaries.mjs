@@ -16,6 +16,7 @@ import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSyn
 import { tmpdir } from "node:os";
 import { dirname, join, posix, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
+import { git } from "./repo-files.mjs";
 
 // This script's own home, so manifest-derived rules (R5) read the REAL packages
 // no matter which tree is being scanned — the self-test scans a temp fixture dir.
@@ -1072,6 +1073,19 @@ function report(violations, { enforce }) {
 // --- self-test ---------------------------------------------------------------
 // Builds a throwaway repo where each rule has exactly one file that MUST trip it
 // and a set of clean files that MUST pass, then runs the real checker against it.
+// Item 252: what `swift package resolve` leaves after the EL8 to rosetta 0.1.5, rosetta's own
+// sources under the kit's ignored `.build/checkouts/`. Its body trips R22 and R24 (planted-twin.ts
+// in runSelfTest's positives), and it must never be read.
+const PLANTED =
+  'import { HistoryRoom } from "@vibefield/rosetta-room";\n' +
+  'import { FileTree } from "@vibecook/mille-ui";\n';
+const IGNORED = [
+  {
+    file: "apps/ios/VibeFieldKit/.build/checkouts/rosetta/clients/room/src/planted.ts",
+    body: PLANTED,
+  },
+];
+
 function runSelfTest() {
   const positives = [
     {
@@ -1503,6 +1517,16 @@ function runSelfTest() {
       file: "packages/fieldd/test/evaluates-a-flow.test.ts",
       body: 'import { evaluateFlow } from "../src/flows/host/compartment.ts";\nexport const e = evaluateFlow;\n',
     },
+    // Item 252: a file git lists as untracked and not ignored is read before it is staged.
+    {
+      id: "R22",
+      file: "packages/sound/src/untracked-new.ts",
+      body: 'import { HistoryRoom } from "@vibefield/rosetta-room";\n',
+      untracked: true,
+    },
+    // Item 252: the planted body (IGNORED, below), at a path git does not ignore, trips both walls.
+    { id: "R22", file: "apps/ios/VibeFieldKit/Sources/planted-twin.ts", body: PLANTED },
+    { id: "R24", file: "apps/ios/VibeFieldKit/Sources/planted-twin.ts", body: PLANTED },
   ];
   const cleans = [
     // CP-4a1: the static read takes acorn in the flow folder, the host's child takes ses there, and both take
@@ -1735,11 +1759,18 @@ function runSelfTest() {
   const tmp = mkdtempSync(join(tmpdir(), "vf-import-walls-"));
   let ok = true;
   try {
-    for (const c of [...positives, ...cleans]) {
+    // Item 252: the fixture root is a git repository, as the repo is, and its `.gitignore` ignores
+    // `.build/`, as the repo's does SwiftPM's. Every fixture is tracked (`add -f`, so no global
+    // excludes can hide one) but the untracked one; IGNORED's file sits under `.build/`.
+    git(tmp, ["init", "-q"]);
+    writeFileSync(join(tmp, ".gitignore"), ".build/\n");
+    for (const c of [...positives, ...cleans, ...IGNORED]) {
       const abs = join(tmp, c.file);
       mkdirSync(dirname(abs), { recursive: true });
       writeFileSync(abs, c.body);
     }
+    const tracked = [...positives, ...cleans].filter((c) => !c.untracked).map((c) => c.file);
+    git(tmp, ["add", "-f", "--", ...new Set(tracked)]);
 
     const found = runCheck(tmp);
     const byFile = new Map();
@@ -1760,6 +1791,13 @@ function runSelfTest() {
       console.log(`  ${clean ? "PASS" : "FAIL"}  clean ${c.file}${extra}`);
       if (!clean) ok = false;
     }
+
+    // Item 252: nothing under an ignored tree is read, so no rule names the planted file.
+    const readIgnored = found.filter((v) => IGNORED.some((c) => c.file === v.file));
+    const unread = readIgnored.length === 0;
+    const said = unread ? "" : ` (read: ${[...new Set(readIgnored.map((v) => v.id))].join(", ")})`;
+    console.log(`  ${unread ? "PASS" : "FAIL"}  an ignored tree is never read${said}`);
+    if (!unread) ok = false;
 
     // Enforce semantics: the expected table is EXPLICIT so rot stays visible
     // (the 2026-07-23 lesson: a loose "only X pending" assertion sat stale for
