@@ -42457,6 +42457,14 @@ q1 (b) 20:52:05Z, q2 (a) 20:52:09Z, q3 (a) 20:52:16Z, q4 (a) 20:52:23Z.
 - **The door still's tab-bar glass differs by up to 2 levels between launches,** over a row's spark face (63 px,
   light; `lanes/ios12/241/kit/IOS-reads-13d7f058c/crops/light-door-diff.png`). The stills' "max 0 at one base"
   holds everywhere but there. It belongs to the stills harness, not to 241a: item 244, filed by VF-PM at 23:03Z.
+  > **Errata (2026-11-08, item 244's Mac probe; IOS, on VF-PM's ruling at 06:32:31Z):** "63 px, light" was a
+  > luminance mask's count. The stills reads masked a difference through `convert("L")`, which drops a one-channel
+  > level. On every channel the light door differs in 296 px, max 2, at (63, 2373)–(246, 2553), where the read
+  > printed 63 px at (71, 2376)–(245, 2549). All of it lies inside item 244's glass cells, (60, 2340)–(300, 2580).
+  > Every max and every verdict stand. Corrected at its source, the S read's dated Errata section
+  > (`lanes/ios12/241/kit/IOS-S-read-13d7f058c.md`: `fad03e55` through that section, `d3fba61a` now with item 244's
+  > dated badge note after it; as frozen, `969d470e`), with the full table beside it
+  > (`lanes/ios12/241/kit/IOS-S-read-13d7f058c.ERRATUM-2026-11-08.md`).
 - **The kit's `inkFaint` is not §2.4's t4** (item 242, filed by VF-PM 21:40Z). It is the History ramp's last step,
   `--vf-text-faint`, at 30% by day and 32% by night, where §2.4's t4 is 50% and 38%. It inks words across History,
   Home, Settings and `ChromeList`: 40 uses in 8 files at `13d7f058c`, by
@@ -42761,3 +42769,99 @@ an origin. The tailnet set gave only the socket, so the kit would have had to gu
 - **W1 on the old mini:** D-2b's bytes and time to first row, and whether a WebSocket rides the netstack (F-5).
 - Item 247.
 - Item 200's step (i), the crumb's backtrace, with run223's recurrence on vf-m2 as its newest case.
+
+## Item 241 (241b) — a kit pill that is off draws §7's Off on the Mac: the quiet fill, no lift, its words in t4, from the button's own `disabled`; a pill whose word says its press is running passes `running` and keeps its look (track IOS)
+
+(2026-11-08; five commits on branch `mac/241b` in the ios12b lane, cut by IOS on main `c1e2a03c7` (push 124) and
+replayed onto main `f65af29a9` by `git replay`: each tree EQUAL to `git merge-tree` of its original, the full-index
+patch-id `3bc06277` unchanged (`lanes/ios12/241/land241b/T-proof-on-f65af29a9.txt`): `75dcbf8d3` (d0, DESIGN.md),
+`7827cc727` (red), `3063c980b` (green), `4b246de49` (red 2) and `493ad96b0` (green 2, T, tree `504672499`).
+Witnessed on the Mac in scratch at the first cut, each row alone through the HOLD door, and minted by run 225 at T
+on vf-m2 (James, "mints on vf-m2", 06:21:20Z). Landed 10:03:12Z by the fixer as `493ad96b0` (M225), a fast-forward
+of main `f65af29a9`.)
+Ruled with 241a (James, 2026-11-07T20:53:00Z, the Off Pill page's leans; DECISIONS "off-pill"); 241a left the Mac's
+half owed (LANDED "Item 241 (241a)"). VF-PM's GO 2026-11-08 04:12Z; rulings 04:26Z, 04:44Z and 06:10Z.
+
+**What moved.** 16 files, +469 −25 over its base, on `c1e2a03c7` and on `f65af29a9` alike; one added,
+`packages/field-app/test/off-pill.test.tsx`.
+- `packages/design-kit/src/primitives.css`: `.vf-ui-button:disabled` loses the whole-button 0.4. It keeps
+  `cursor: default; pointer-events: none`, and `.vf-ui-button:disabled:not([data-running])` (specificity 0,3,0, over
+  the variants' 0,2,0) draws §7's Off: `color: var(--vf-text-faint)`, the quiet fill
+  (`color-mix(in srgb, var(--vf-foreground) 5%, transparent)`) and `box-shadow: none`. The icon button and the switch
+  keep their 0.4.
+- `packages/design-kit/src/primitives.tsx`: `UiButton` takes `running?: boolean` (default false), renders
+  `disabled={running || props.disabled}` and `data-running` while it runs.
+- 23 `running=` call sites, each on the condition its word names: ChatPanelView 2, history's index-restart,
+  BrowserDataSection, AgentsView 6, ExtensionsView 4, ProfilesView 6, TerminalSettings, and the browser plugin's
+  ArtifactPanel 2. Two raw kit pills (`<button className={buttonCls}>`) take `data-running={busy ? "" : undefined}`:
+  DevicesSection's "Disconnecting…" and PluginsSection's "Working…". No hit changes.
+- The catalog's Controls section gains "The kit's pill", which mounts the shipping `UiButton` live, off and running
+  for quiet, primary and danger. It mounts no replica (`ui-system-boundaries.test.ts` green).
+- text-ramp.test.ts's T4_USES names the new t4 use. DESIGN.md §7's Off row says how the Mac draws it, and :2100 and
+  :2110 read "go off as the kit's disabled buttons do".
+
+**The witnesses** (`lanes/ios12/241/mac/green-logs/`, each row alone through the HOLD):
+- R: off-pill 19 failed, 5 passed (24), as predicted (`lanes/ios12/241/mac/red-off-pill.log`). R2: 1 failed, 23
+  passed (24); the source rule named the two raw pills.
+- G2: off-pill 24/24 (the cascade 20, the render 3, the source rule 1); biome 0; DevicesSection 38;
+  updates-devices 4; plugins-runtime-section 2; text-ramp 12; field-app `tsc --noEmit` whole, 0 errors;
+  design-system 8 (at R2's tree); check:walls clean, its test temp roots "266 of 1120" (06:22:51Z).
+- The test does its own cascade over the CSS text: specificity, then source order, `var()` by theme, and WCAG.
+  happy-dom 20.11.0 put a class rule over a winning `#id:disabled` fill, so its computed style was not used.
+- The counts by script (`count-raw.py`, at R2): 45 raw `<button>`/`<a>` wear the kit's class, 16 of them can be
+  off, and 2 show running words.
+- **Run 225 at T on vf-m2, green** (a9): verify exited 0, armed 09:53:19Z and ended 09:59:03Z, 5 min 44 s, at
+  Xcode 26.3, with rosettad the `a8ab1f13f` build. The packet was
+  `lanes/ios12/241/land241b/mint-493ad96b0-on-f65af29a9` (SUMS `f2ec6a94`: brief `9639d51a`, bundle `94b2c85b`); the
+  results are `lanes/vf-m2/run225-a9-results` (SHA256SUMS-a9-run225 `8e30c79a`, 16 of 16 OK here).
+  - Against M223's lines: of the 56 count lines, only field-app moves, to 317 files and 4425 tests (off-pill's 24).
+  - The test temp roots read "266 of 1121" (the walls passed inside V's chain) and biome "Checked 3506 files".
+    fieldd reads 3762 passed | 15 skipped, electron-shell 2746 | 2, contracts 1949; cargo ok 37, FAILED 0;
+    dev-runner 474 of 474; the census OK.
+  - The tree was clean and stubs 0, with 0 births. At the arm the patch-id read `3bc06277` EQUAL and every guard 0.
+  - Before V, `m2-hostfix-225.sh` put `rosetta-pin` back at the lock's `a8ab1f13f` and rebuilt rosettad, kept the
+    kit's `.build` aside, and read preflight alone at exit 0.
+
+**Recorded (VF-PM's rulings).**
+- (i) **§7 holds as written.** 93 kit pills can be off: 77 `<UiButton>` and 16 raw. They stand in 191 mounts, each
+  read through its file's imports and re-exports to the paint under it (`lanes/ios12/241/mac/pill-grounds2.out`).
+  None is under 3:1, and none is on `--vf-fill`, the one ground where t4 on the quiet fill reads 2.999:1. The
+  lowest: by day 3.122, UpdatesSection:505's Cancel on the confirm box (#f1f1f1); by night 3.091, ProfilesView:486
+  on the plan card (#272729).
+- (ii) **An SDK surface change:** `running?: boolean` reaches plugins through the R10 door, `plugin-sdk`'s `ui.ts`,
+  which re-exports `UiButton` and stays the only re-export. It is additive and tolerant, and defaults to false. A
+  plugin that never passes it sees one change: its disabled `UiButton` draws §7's Off instead of fading.
+- (iii) **Row 32's pass-over list:** the Setup Assistant's panes hold one kit button, the wizard Profiles pane's
+  SignInCard Cancel ("Cancelling…"). It becomes a running pill. It keeps its look, and row 32 still passes it over by
+  `:disabled` (`smoke-first-run.ts`:823). No kit button in row 32's walks draws Off: the catalog walk mounts the
+  13 Setup Assistant frames and the Text ramp, not Controls.
+- The ratios on the sheet's paper: 3.22:1 by day, 3.26:1 by night (`lanes/ios12/241/mac/off-mac-ratios.out`).
+
+**Found.**
+- A failed `pnpm install --offline` unlinks the old links before it fails: rosetta 0.1.3's five went, and were
+  restored by hand before VF-PM's networked frozen install (rc 0, 04:47Z).
+- The luminance mask: item 244's Mac probe found that the stills reads counted a difference through
+  `convert("L")`, which drops a one-channel level. Item 241 (241a)'s "63 px" is corrected under its line
+  (`> **Errata (2026-11-08)**`): the light door differs in 296 px, every verdict standing.
+- **Item 244, the stills' one-base criterion, CLOSED at T = 2** (VF-PM 08:03Z, its ruling (a) of 07:55Z). A still
+  read at one base holds max 0 except in two named regions:
+  - "the tab bar's glass rim over a face" (GLASS, the cells x 60–300, y 2340–2580), at most T levels;
+  - "the Field tab's badge under the mock fleet's unseeded walk" (BADGE, x 420–540, y 2340–2460), named and never
+    judged: `HomeScreen.swift`:29 builds `MockAgentField()` unseeded, and `MockAgentField.swift`:116–117 seeds it
+    from `UInt64.random`. Item 251's seed door closes this, and the badge is judged at max 0 again.
+  - T was measured over 12 launches of one build on the old mini (GO 2): `read_pairs.py` (`a92a2553`) over
+    `stills_rule.py` (`2db26959`) read "VERDICT T = 2" at 08:02:24Z. The Mac's probe (`probe_rule.py` `1134a185`)
+    read 7 of 7 and the dry run (`read-s.py` `595af817`) 20 of 20, both at 08:02:20Z. Each was one HOLD row. The
+    read of record is `lanes/ios12/244/IOS-read-244-tol-go2.md` (`167617be`).
+- **run224 at T read red at preflight, on the host and not on 241b** (a9, 09:49Z). The EL8's rows had left vf-m2's
+  `rosetta-pin` checkout at the EL8's revision `811e554c6`, against the lock's `a8ab1f13f`. The import walls read 134
+  violations, all inside the kit's SwiftPM checkout of rosetta under `apps/ios/VibeFieldKit`'s `.build`: item 252.
+  No wall, test or count of 241b's was reached, and no M224 was minted. The arm read 241b's proof EQUAL (patch-id
+  `3bc06277`), and T minted as run 225 on the same packet (VF-PM 09:50Z).
+
+**Owed.**
+- gate:landing after the land: the Mac stills (`pnpm still`) and row 32, landing-only; a re-bless, if any, said
+  there.
+- Item 242 (the phone kit's faint words, sorted by §2.4: 29 to t3, 11 to t4), cut on this tip, its kit row R on the
+  old mini, its stills judged by 244's rule; item 248 (the phone's t3 under §2.4's floor by day, James's eye on 56%);
+  item 251 (the mock fleet's seed door for the stills, so the Field badge is judged at max 0).
