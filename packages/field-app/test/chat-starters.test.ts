@@ -213,4 +213,22 @@ describe('the starters, filled from this Mac (DESIGN.md §8 "Chat\'s list", the 
       css.match(/^\.vf-chat-starter\[data-held="true"\] > span \{([^}]*)\}/mu)?.[1] ?? "";
     expect(held).toMatch(/opacity: 0;/u);
   });
+
+  // ES-4 (role; VF-PM 2026-11-08 23:41Z, shape A): the catalog's role rows are the agents the hello's ruled sentences
+  // name, so the ruled words and the roles cannot drift apart. The fill reads the roles from the table (R23b holds
+  // starters.ts to no agent id literal).
+  it("binds the hello's ruled sentences to the catalog's role rows: the crew's label, the reviewer's, the handle's run", () => {
+    const roleRow = (role: string) =>
+      AGENT_CATALOG.find((row) => (row as Record<string, unknown>).starter === role);
+    const crew = roleRow("crew");
+    const handle = roleRow("handle");
+    const reviewer = roleRow("reviewer");
+    expect(crew, "the crew's row").toBeDefined();
+    expect(handle, "the handle's row").toBeDefined();
+    expect(reviewer, "the reviewer's row").toBeDefined();
+    const [spawn, , review] = STARTERS;
+    expect(spawn?.words).toBe(`Spawn 4 ${crew?.label} agents to research a topic each`);
+    const run = `${handle?.seams.puppeteer?.provider}·2`;
+    expect(review?.words).toBe(`Have ${reviewer?.label} review ${run}'s work until it's clean`);
+  });
 });

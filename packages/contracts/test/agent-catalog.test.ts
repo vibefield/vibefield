@@ -82,6 +82,25 @@ describe("the agent catalog (AC-1)", () => {
     }
   });
 
+  // ES-4 (role; VF-PM 2026-11-08 23:41Z, shape A): the hello's ruled starters name their agents, and which agent a
+  // ruled word names is the table's to say, never product code's (AR-L1: the role is ours, the id puppeteer's).
+  it("the starter roles: each held by exactly one row offered on the desktop; the crew's and the reviewer's can be started, the handle's has a puppeteer seam", () => {
+    const roleOf = (row: object): unknown => (row as Record<string, unknown>).starter;
+    for (const role of ["crew", "handle", "reviewer"]) {
+      const held = rows.filter((row) => roleOf(row) === role);
+      expect(
+        held.map((row) => row.id),
+        `the ${role}'s row`,
+      ).toHaveLength(1);
+      const row = held[0];
+      if (row === undefined) continue;
+      expect(isOffered(row.id) && row.surfaces.desktop, `the ${role}'s row is offered`).toBe(true);
+      if (role === "handle") expect(row.seams.puppeteer, "the handle's runs").not.toBeNull();
+      else expect(isOffered(row.id, "spawn"), `the ${role}'s agent can be started`).toBe(true);
+    }
+    expect(rows.filter((row) => roleOf(row) !== undefined)).toHaveLength(3);
+  });
+
   it("the readers answer from the table and only the table", () => {
     expect(catalogEntry("claude")?.seams.rosetta?.kind).toBe("claude-code");
     expect(catalogIdForKind("claude-code")).toBe("claude");
