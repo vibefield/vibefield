@@ -413,3 +413,36 @@ test("every rosettad freshness reader asks cargo's record, and the checkout walk
     /freshness: cargoBuildFreshness\(bin\.path/,
   );
 });
+
+// Item 253 (2026-11-08) — the built rosettad, or why there is none: ONE derivation for `bin`'s CLI
+// and the landing gate, which hands it to the rows that boot an agent index, so the path and the
+// "not built" words are never spelled twice. It asks `rosettadState`, the rule preflight, the stage
+// and wall R23 ask. Read through the namespace, so a missing export is this row's first assertion.
+test("item 253: builtRosettad answers the lock's build, or why none in bin's words", async () => {
+  const siblings = await import("../../../scripts/siblings.mjs");
+  assert.equal(typeof siblings.builtRosettad, "function");
+  const bin = { name: "rosetta", dir: "/ssd/rosetta-pin", path: "/ssd/target/release/rosettad" };
+  const read = (state) => () => state;
+  const source = "/ssd/rosetta-pin/crates/agents/src/adapter.rs";
+  assert.deepEqual(siblings.builtRosettad(REPO_ROOT, read({ bin, state: "fresh" })), {
+    path: bin.path,
+    freshness: { state: "fresh" },
+  });
+  // a stale build is still the build: the gate says so, as preflight warns it, never stops on it
+  assert.deepEqual(siblings.builtRosettad(REPO_ROOT, read({ bin, state: "stale", source })), {
+    path: bin.path,
+    freshness: { state: "stale", source },
+  });
+  assert.deepEqual(siblings.builtRosettad(REPO_ROOT, read({ bin, state: "missing" })), {
+    why: "/ssd/target/release/rosettad is not built — run `pnpm siblings:build`",
+  });
+  const none = { why: "no cargo sibling (or cargo cannot resolve its target directory)" };
+  for (const state of [
+    { bin: null, state: "none" },
+    { bin: { ...bin, path: null }, state: "unresolved" },
+  ])
+    assert.deepEqual(siblings.builtRosettad(REPO_ROOT, read(state)), none, state.state);
+  // over a real lock root: a lock with no cargo sibling, and no lock at all, ask no cargo
+  assert.deepEqual(siblings.builtRosettad(fixtureRoot({ lock: { siblings: {} } })), none);
+  assert.deepEqual(siblings.builtRosettad(fixtureRoot()), none);
+});

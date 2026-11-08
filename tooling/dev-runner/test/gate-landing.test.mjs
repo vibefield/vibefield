@@ -51,6 +51,7 @@ test("the list: verify's chain stage by stage, then this host's GPU gates", () =
       "smoke:plugin-restart",
       "smoke:plugin",
       "smoke:godview",
+      "smoke:godview:no-record",
       "smoke:first-run",
       "smoke:terminal-door",
       "smoke:terminal-direct",
@@ -277,4 +278,124 @@ test("a gate past its timeout: its group is stopped, and the stop is appended to
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+// Item 253 (2026-11-08) — the gate hands fieldd the lock's rosettad. `smoke:first-run` (desk-gates
+// row 32) was never green under the gate on this Mac: fieldd takes rosettad only from
+// `FIELDD_ROSETTAD_BIN` (fieldd's bin.ts), a smoke build's shell has none of its own, and the gate
+// set none. The rows that need it get the lock's build. Every other row runs with the variable
+// REMOVED, so no row runs on the launching shell's value. The module is read through its namespace,
+// so a missing export is each row's first assertion, never a load error.
+const gateLanding = () => import("../../../scripts/gate-landing.mjs");
+const LOCK_BUILD = "/ssd/rust-target/rosetta/release/rosettad";
+const NOT_BUILT = `${LOCK_BUILD} is not built — run \`pnpm siblings:build\``;
+
+test("item 253: the rows that need rosettad: test, smoke:godview, smoke:first-run", async () => {
+  const gate = await gateLanding();
+  assert.deepEqual(
+    [...gate.STAGES, ...gate.LANDING].filter((g) => g.rosettad === true).map((g) => g.name),
+    ["test", "smoke:godview", "smoke:first-run"],
+  );
+  // M21 (ROADMAP): both configurations of the past door at every landing — the same smoke, run
+  // again with the variable removed, so its no-record rung still runs in the gate
+  assert.deepEqual(
+    gate.LANDING.find((g) => g.name === "smoke:godview:no-record"),
+    { name: "smoke:godview:no-record", run: ["pnpm", "smoke:godview"], rosettad: false },
+  );
+});
+
+test("item 253: gateEnv sets the lock's build where needed and removes it elsewhere", async () => {
+  const gate = await gateLanding();
+  assert.equal(typeof gate.gateEnv, "function");
+  const base = { PATH: "/usr/bin", FIELDD_ROSETTAD_BIN: "/shell/rosettad", NX_DAEMON: "true" };
+  const built = { path: LOCK_BUILD, freshness: { state: "fresh" } };
+  const kept = (env) => ({ path: env.PATH, cache: env.NX_SKIP_NX_CACHE, daemon: env.NX_DAEMON });
+  const first = gate.gateEnv({ name: "smoke:first-run", rosettad: true }, base, built);
+  assert.equal(first.FIELDD_ROSETTAD_BIN, LOCK_BUILD);
+  assert.deepEqual(kept(first), { path: "/usr/bin", cache: "true", daemon: "false" });
+  for (const other of [{ name: "smoke" }, { name: "smoke:godview:no-record", rosettad: false }]) {
+    const env = gate.gateEnv(other, base, built);
+    assert.equal(Object.hasOwn(env, "FIELDD_ROSETTAD_BIN"), false, other.name);
+    assert.deepEqual(kept(env), { path: "/usr/bin", cache: "true", daemon: "false" });
+  }
+  // with no build a row that needs it gets no value either: planGate keeps it from running
+  const unbuilt = gate.gateEnv({ name: "test", rosettad: true }, base, { why: NOT_BUILT });
+  assert.equal(Object.hasOwn(unbuilt, "FIELDD_ROSETTAD_BIN"), false);
+  assert.equal(base.FIELDD_ROSETTAD_BIN, "/shell/rosettad");
+});
+
+test("item 253: a child gate reads gateEnv's env, whatever this shell exports", async () => {
+  const gate = await gateLanding();
+  const dir = mkdtempSync(join(tmpdir(), "vf-gate-landing-test-"));
+  const had = Object.hasOwn(process.env, "FIELDD_ROSETTAD_BIN");
+  const previous = process.env.FIELDD_ROSETTAD_BIN;
+  process.env.FIELDD_ROSETTAD_BIN = "/shell/rosettad";
+  try {
+    const say = "process.stdout.write(process.env.FIELDD_ROSETTAD_BIN ?? '<unset>')";
+    const built = { path: LOCK_BUILD, freshness: { state: "fresh" } };
+    const read = async (row, file) => {
+      const logPath = join(dir, file);
+      const result = await gate.runGate(
+        { ...row, run: [process.execPath, "-e", say] },
+        logPath,
+        60_000,
+        built,
+      );
+      assert.equal(result.code, 0, row.name);
+      return readFileSync(logPath, "utf8");
+    };
+    assert.equal(await read({ name: "smoke:first-run", rosettad: true }, "01.log"), LOCK_BUILD);
+    assert.equal(await read({ name: "smoke" }, "02.log"), "<unset>");
+  } finally {
+    if (had) process.env.FIELDD_ROSETTAD_BIN = previous;
+    else delete process.env.FIELDD_ROSETTAD_BIN;
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("item 253: with no build a row that needs it is RED and not run; the rest run", async () => {
+  const gate = await gateLanding();
+  assert.equal(typeof gate.planGate, "function");
+  const first = { name: "smoke:first-run", rosettad: true };
+  assert.deepEqual(gate.planGate(first, { why: NOT_BUILT }), {
+    run: false,
+    verdict: "RED (rosettad not built — pnpm siblings:build)",
+    said: [`rosettad: ${NOT_BUILT}`],
+  });
+  assert.deepEqual(gate.planGate({ name: "smoke" }, { why: NOT_BUILT }), { run: true, said: [] });
+  // built: the row runs and says the build it was handed, and a build older than a source it was
+  // built from is said so, never stopped (preflight warns of it)
+  const fresh = { path: LOCK_BUILD, freshness: { state: "fresh" } };
+  assert.deepEqual(gate.planGate(first, fresh), { run: true, said: [`rosettad ${LOCK_BUILD}`] });
+  const source = "/ssd/rosetta-pin/crates/agents/src/adapter.rs";
+  const stale = { path: LOCK_BUILD, freshness: { state: "stale", source } };
+  assert.deepEqual(gate.planGate(first, stale), {
+    run: true,
+    said: [`rosettad ${LOCK_BUILD} (stale: ${source})`],
+  });
+  assert.deepEqual(gate.planGate({ name: "smoke" }, stale), { run: true, said: [] });
+});
+
+test("item 253: the first line names the build or why not, and a shell value ignored", async () => {
+  const gate = await gateLanding();
+  assert.equal(typeof gate.rosettadSaid, "function");
+  const fresh = { path: LOCK_BUILD, freshness: { state: "fresh" } };
+  assert.deepEqual(gate.rosettadSaid(fresh, {}), { rosettad: LOCK_BUILD });
+  assert.deepEqual(gate.rosettadSaid(fresh, { FIELDD_ROSETTAD_BIN: LOCK_BUILD }), {
+    rosettad: LOCK_BUILD,
+  });
+  assert.deepEqual(gate.rosettadSaid(fresh, { FIELDD_ROSETTAD_BIN: "/shell/rosettad" }), {
+    rosettad: LOCK_BUILD,
+    shellRosettadIgnored: "/shell/rosettad",
+  });
+  const stale = { path: LOCK_BUILD, freshness: { state: "stale", source: "/ssd/a.rs" } };
+  assert.deepEqual(gate.rosettadSaid(stale, {}), {
+    rosettad: LOCK_BUILD,
+    rosettadFreshness: { state: "stale", source: "/ssd/a.rs" },
+  });
+  assert.deepEqual(gate.rosettadSaid({ why: NOT_BUILT }, { FIELDD_ROSETTAD_BIN: "/shell/r" }), {
+    rosettad: null,
+    rosettadWhy: NOT_BUILT,
+    shellRosettadIgnored: "/shell/r",
+  });
 });

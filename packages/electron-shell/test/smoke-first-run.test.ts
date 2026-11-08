@@ -1705,3 +1705,36 @@ describe("the launcher (apps/desktop/packaging/run-first-run.mjs)", () => {
     },
   );
 });
+
+// Item 253 (g), 2026-11-08 — History's red with no row names the agent index's own state, in the frame every door says
+// it in (`the agent index is unconfigured: <detail>`, fieldd's rosettad-supervisor.ts), as the seeded-session rung of
+// smoke.ts says it: the red's cause in its own words. The module is read through its namespace, so the red before the
+// export is this row's assertion, never a load error.
+describe("History's count judged (judgeHistoryRows)", () => {
+  it("names the agent index's state in a red with no row (item 253 (g))", async () => {
+    const walk: Record<string, unknown> = { ...(await import("../src/testing/smoke-first-run")) };
+    expect(typeof walk["judgeHistoryRows"]).toBe("function");
+    const judge = walk["judgeHistoryRows"] as (
+      rows: number,
+      index: { readonly phase: string; readonly detail: string | null } | null,
+    ) => string | null;
+    const unconfigured = {
+      phase: "unconfigured",
+      detail: "no rosettad binary was configured (FIELDD_ROSETTAD_BIN)",
+    };
+    const none = "History shows 0 rows, not the typed agent's one";
+    expect(judge(1, null)).toBeNull();
+    expect(judge(1, unconfigured)).toBeNull();
+    expect(judge(0, unconfigured)).toBe(
+      `${none} — the agent index is unconfigured: ${unconfigured.detail}`,
+    );
+    expect(judge(0, { phase: "restarting", detail: null })).toBe(
+      `${none} — the agent index is restarting`,
+    );
+    // an index that serves, or one this walk could not read, leaves the count alone to say it
+    expect(judge(0, { phase: "ready", detail: null })).toBe(none);
+    expect(judge(0, null)).toBe(none);
+    // more rows than the typed agent's one is no index's absence
+    expect(judge(2, unconfigured)).toBe("History shows 2 rows, not the typed agent's one");
+  });
+});
