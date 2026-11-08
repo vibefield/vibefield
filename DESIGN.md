@@ -10352,10 +10352,10 @@ with "…", as ‹label› is above:
   and §9's flood words as they stand"):*
   - "or a longer journal" is J1's (`FLOW_LIMITS.JOURNAL_MAX_BYTES`, 32 MiB), and the sentence stays word for word.
   - *The window (ruled 2026-11-08, (iv)):* §9's line below, that a host fieldd ended is never started again for that run,
-    has one window. A VibeField stop inside J1's leave (from its flood to its host's exit, up to the shutdown grace)
-    drops the ending, and the next life starts that run's host once more; it floods again at its first new line.
-    `memory`'s identical window, at its source: supervisor.ts:468–469 (its end under `shutdown`), :582–583 (the
-    grace) and runs.ts:2386 (`#ended` returns on `#closing`), @45e3a3648.
+    has a window. A VibeField stop inside J1's leave (from its flood to its host's exit, up to the shutdown grace)
+    drops the ending, and the next life starts the run's host once slice 14's boot wakes it; it floods again at the
+    first line that would cross. `memory`'s identical window, at its source: supervisor.ts:468–469 (its end under
+    `shutdown`), :582–583 (the grace) and runs.ts:2386 (`#ended` returns on `#closing`), @45e3a3648.
   - *The addition (1) of 2026-11-08:* a long-lived flow rolls its journal — a continue-as-new, a snapshot of the
     script's state and a fresh journal segment — rather than ending `flood`; Proposed, not 0.9.
 - **A host this copy cannot start** (its file is not beside fieldd): "VibeField can't run flows: this copy of

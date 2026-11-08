@@ -2256,9 +2256,11 @@
               256 calls waiting at once, 10,000 log lines and a 32 MiB journal, past which the run ends; a step's answer
               kept whole up to 64 KiB. <em>Proposed 2026-11-08 (CP-4a2b J1, a journal's byte bound; James 01:47:12Z,
               board <code>co-j1-flood-words</code>: "(a) 32 MiB and §9's flood words as they stand"):</em> "a 32 MiB
-              journal" is J1's (<code>FLOW_LIMITS.JOURNAL_MAX_BYTES</code>).
+              journal", and ", or until its journal reaches 32 MiB" below, are J1's
+              (<code>FLOW_LIMITS.JOURNAL_MAX_BYTES</code>).
               <em>Proposed 2026-11-07 (CP-4a2b slice 12, the cap out; James 08:28:07Z, C; ruled 2026-11-07, V4):</em>
-              There is no call cap: within these bounds, a script that loops runs until it is stopped.
+              There is no call cap: within these bounds, a script that loops runs until it is stopped, or until its
+              journal reaches 32 MiB.
               <em>Corrected 2026-11-07 (the same):</em> this page named the call cap among the queue's items and its
               kinds, and gave 40 calls, then a hold that asks for 20 more at a time, as a bound.
               <em>CP-4a1 (2026-11-05):</em> the contracts, the library's read, the signed approvals and proposals and
