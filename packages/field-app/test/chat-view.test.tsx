@@ -1661,8 +1661,77 @@ describe('Chat, empty: the night, live (track ES; DESIGN.md §8 "Chat\'s list", 
     await settle();
     act(() => ($(".vf-chat-empty-new") as HTMLButtonElement | null)?.click());
     act(() => host?.querySelectorAll<HTMLElement>(".vf-chat-empty .vf-chat-starter")[2]?.click());
-    expect(carried).toEqual([null, STARTERS[2]]);
+    // ES-4: filled from this Mac, as the night shows it: Claude Code alone here and nothing on the board, so the
+    // reviewer is Claude Code and the run keeps its ruled word
+    expect(carried).toEqual([
+      null,
+      {
+        glyph: STARTERS[2]?.glyph,
+        words: "Have Claude Code review claude·2's work until it's clean",
+      },
+    ]);
     expect(surfaces).toEqual(["new-spark", "new-spark"]);
+  });
+
+  it('fills its jobs from this Mac: the agents it has and the board\'s runs (ES-4; §8, the jobs, "Filled from this Mac")', async () => {
+    const { door, move } = scripted([]);
+    stop = startSparksFeed(door);
+    const ids = ["claude", "codex", "grok"];
+    const here = {
+      ...PORT,
+      providers: async () =>
+        AGENT_CATALOG.filter((entry) => ids.includes(entry.id)).map(
+          (entry): AgentProviderSummary => ({
+            id: entry.id,
+            label: entry.label,
+            available: true,
+            resumable: true,
+            personas: [],
+            offers: { spawn: true, spark: entry.offers.spark },
+          }),
+        ),
+    };
+    mount(<Chat port={here} />);
+    await act(async () =>
+      move([
+        row({
+          runtimeRunId: "r-1",
+          lastActivityAt: "2026-10-31T05:10:00.000Z",
+          project: { name: "ice" },
+        }),
+        row({
+          runtimeRunId: "r-2",
+          lastActivityAt: "2026-10-31T05:20:00.000Z",
+          project: { name: "ice" },
+        }),
+      ]),
+    );
+    await settle();
+    const jobs = [
+      ...(host?.querySelectorAll<HTMLElement>(".vf-chat-empty .vf-chat-starter") ?? []),
+    ];
+    expect(jobs.map((job) => words(job))).toEqual([
+      "Spawn 4 Grok agents to research a topic each",
+      "Keep track of my agents in ice",
+      "Have Codex review claude·2's work until it's clean",
+    ]);
+    expect(jobs.every((job) => job.dataset.held === undefined)).toBe(true);
+  });
+
+  it("holds its jobs in their places, wordless, while this Mac's agents are read (ES-4)", async () => {
+    const { door } = scripted([]);
+    stop = startSparksFeed(door);
+    const waiting = {
+      ...PORT,
+      providers: () => new Promise<AgentProviderSummary[]>(() => undefined),
+    };
+    mount(<Chat port={waiting} />);
+    await settle();
+    const jobs = [
+      ...(host?.querySelectorAll<HTMLElement>(".vf-chat-empty .vf-chat-starter") ?? []),
+    ];
+    expect(jobs).toHaveLength(3);
+    expect(jobs.every((job) => job.dataset.held === "true")).toBe(true);
   });
 
   it("is Off when no agent here can be a spark, its sentence naming the one that can, and Open Agents settings asks the window's Settings for Agents", async () => {
