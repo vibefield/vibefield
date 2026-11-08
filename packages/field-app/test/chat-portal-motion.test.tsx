@@ -1,5 +1,8 @@
 // @vitest-environment happy-dom
 
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { AGENT_CATALOG, type AgentProviderSummary, type SparkSummary } from "@vibefield/contracts";
 import { type SparkHatchProps, startNight } from "@vibefield/design-kit/spark-face";
 import { act } from "react";
@@ -7,7 +10,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { NewSparkSheet } from "../src/chat/NewSparkSheet";
 import type { NewSparkPort } from "../src/chat/new-spark";
-import { PORTAL_MS } from "../src/chat/portal";
+import { PORTAL_BOUND_MS, PORTAL_MS } from "../src/chat/portal";
 import { FIXTURE_NATIVE } from "../src/design-system/profiles-fixtures";
 
 // THE PORTAL'S PHASES FOLLOW ITS MOTION (track ES, ES-3d; DESIGN.md §6, the portal: the night takes the window back
@@ -16,6 +19,9 @@ import { FIXTURE_NATIVE } from "../src/design-system/profiles-fixtures";
 // one-frame pop at the end of every Cancel. Here the hatch stands in and draws at once (happy-dom has no WebGL2), so
 // the portal engages. With the page's Web Animations recorded and finished by hand, a phase moves on only when its
 // motion has. With none (happy-dom has no `animate`), the phase's own time bounds it.
+
+/** The stand-in face's leaves, each run out by hand (ES-3e: the sheet waits on the face's 450 on the hatch's clock). */
+const face = vi.hoisted(() => ({ leaves: [] as (() => void)[] }));
 
 vi.mock("@vibefield/design-kit/spark-face", async (importOriginal) => {
   const kit = await importOriginal<typeof import("@vibefield/design-kit/spark-face")>();
@@ -27,7 +33,10 @@ vi.mock("@vibefield/design-kit/spark-face", async (importOriginal) => {
       () => ({
         fly: async () => undefined,
         now: () => (sky === undefined ? null : sky.t + 1),
-        leave: () => undefined,
+        leave: () =>
+          new Promise<void>((done) => {
+            face.leaves.push(done);
+          }),
       }),
       [sky],
     );
@@ -101,6 +110,7 @@ afterEach(async () => {
   mount = null;
   for (const night of nights.splice(0)) night.close();
   recorded.splice(0);
+  face.leaves.splice(0);
   delete (HTMLElement.prototype as { animate?: unknown }).animate;
 });
 
@@ -210,5 +220,69 @@ describe('the portal\'s phases follow its motion (DESIGN.md §6, the portal: the
       (t, at) => at > 0 && Math.abs(t - (night.drawnAt[at - 1] ?? t) - 1) < 1e-6,
     );
     expect(jumps).toHaveLength(1);
+  });
+});
+
+const HERE = dirname(fileURLToPath(import.meta.url));
+
+/** The face's leave has run on the hatch's clock, and what follows from it is drawn. */
+async function faceLeft(): Promise<void> {
+  await act(async () => {
+    for (const done of face.leaves.splice(0)) done();
+    await new Promise((done) => setTimeout(done, 0));
+  });
+}
+
+describe("the sheet leaves once the fold has (DESIGN.md §6, the portal, ES-3e)", () => {
+  it("holds 2 s as the bound where frames never come, a number the design owns", () => {
+    expect(PORTAL_BOUND_MS).toBe(2_000);
+    const design = readFileSync(join(HERE, "../../../DESIGN.md"), "utf8").replace(/\s+/gu, " ");
+    expect(design).toContain(
+      "through the portal the sheet leaves when the fold has handed the night back and the face's 450 has run on the hatch's clock; where frames never come, a safety bound of 2 s ends the wait",
+    );
+  });
+
+  it("stays until the fold has handed the night back and the face's leave has run, however long its own clock says", async () => {
+    recordAnimations();
+    host = document.createElement("div");
+    document.body.appendChild(host);
+    const night = aNight(host);
+    await settle(20);
+    const port = portOf();
+    await sheet(true, port);
+    await finishRecorded();
+    expect(layer()?.dataset.portal).toBe("open");
+    await sheet(false, port);
+    expect(layer()?.dataset.portal).toBe("folding");
+    // the sheet's old clock (the face's 450 from the press) passes: the fold has not opened, so it stays
+    await settle(PORTAL_MS.faceLeave + 100);
+    expect(layer()).not.toBeNull();
+    expect(night.box.dataset.lent).toBe("true");
+    await finishRecorded();
+    // the night is back; the face is still leaving, so the sheet stays for it
+    expect(night.box.dataset.lent).toBeUndefined();
+    expect(layer()?.dataset.portal).toBe("folded");
+    await faceLeft();
+    expect(layer()).toBeNull();
+  });
+
+  it("where frames never come, ends the wait at 2 s, and the night comes back as the window stands", async () => {
+    recordAnimations();
+    host = document.createElement("div");
+    document.body.appendChild(host);
+    const night = aNight(host);
+    await settle(20);
+    const port = portOf();
+    await sheet(true, port);
+    // no animation ever finishes: the close never opens, and Cancel folds from where it stands
+    expect(layer()?.dataset.portal).toBe("closing");
+    await sheet(false, port);
+    expect(layer()?.dataset.portal).toBe("folding");
+    await settle(PORTAL_BOUND_MS - 300);
+    expect(layer()).not.toBeNull();
+    expect(night.box.dataset.lent).toBe("true");
+    await settle(400);
+    expect(layer()).toBeNull();
+    expect(night.box.dataset.lent).toBeUndefined();
   });
 });
