@@ -28,6 +28,11 @@ export const PORTAL_MS = {
   reducedOut: 150,
   /** reduced motion: Cancel, the same backwards */
   reducedBack: 120,
+  /** ES-3c: drawn, the window comes in over the night on the retract curve as the words leave, so their fade shows
+   * through it */
+  windowIn: 180,
+  /** ES-3c: whole, it has Chat's night fade out under it on the same curve, `windowIn` in (`spark-face.css`) */
+  nightOut: 180,
 } as const;
 
 /** The panel's corners, and the sky's (§8 "The New spark sheet"). */
@@ -138,7 +143,9 @@ export function movePortal(
   const ease = island(parts.window);
   switch (phase) {
     case "drawing":
+      // nothing of the sheet shows until the window has drawn (ES-3c): it draws its first frame unseen
       parts.window.style.clipPath = reduced ? sky : startClipOf(places);
+      parts.window.style.opacity = "0";
       Object.assign(parts.glass.style, glassAt(places.panel, PANEL_RADIUS));
       break;
     case "closing":
@@ -156,6 +163,11 @@ export function movePortal(
           });
         break;
       }
+      // ES-3c: it comes in over the night as the words leave, so their fade shows through it
+      run(parts.window, [{ opacity: 0 }, { opacity: 1 }], {
+        duration: PORTAL_MS.windowIn,
+        easing: RETRACT,
+      });
       run(parts.window, [{ clipPath: startClipOf(places), offset: 0 }], {
         duration: PORTAL_MS.close,
         easing: ease,
@@ -167,6 +179,7 @@ export function movePortal(
       break;
     case "open":
       parts.window.style.clipPath = sky;
+      for (const part of [parts.window, parts.glass]) part.style.removeProperty("opacity");
       placeGlass(parts.glass, places.sheet);
       break;
     case "folding":

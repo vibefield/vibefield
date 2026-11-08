@@ -232,11 +232,13 @@ const PLACES: PortalPlaces = {
 };
 
 /** A part of the portal whose own animations are recorded (the page's Web Animations are a real browser's). */
-function aPart(): HTMLElement & { animate: ReturnType<typeof vi.fn> } {
+type Part = HTMLElement & { animate: ReturnType<typeof vi.fn> };
+function aPart(): Part {
   const part = document.createElement("div");
   const animate = vi.fn(() => ({ cancel: vi.fn(), commitStyles: vi.fn() }) as unknown as Animation);
   Object.assign(part, { animate });
-  return part as HTMLElement & { animate: ReturnType<typeof vi.fn> };
+  // the element is a real one; only its animations are recorded
+  return part as unknown as Part;
 }
 
 describe('the hand-off (DESIGN.md §6, the portal; "The night gives way only once the window has drawn, and is whole")', () => {
@@ -292,5 +294,22 @@ describe('the hand-off (DESIGN.md §6, the portal; "The night gives way only onc
     expect(lent).toMatch(/opacity 180ms cubic-bezier\(0\.4, 0, 1, 1\) 180ms/u);
     // hidden only once its fade is done
     expect(lent).toMatch(/visibility 0s linear 360ms/u);
+  });
+
+  it("keeps that fade in Chat, where the lean's own transitions on the night would hold it: the kit's, restated", () => {
+    const fadeOf = (css: string, rule: RegExp): string =>
+      ((css.match(rule)?.[1] ?? "").match(/transition:([^;]*);/u)?.[1] ?? "")
+        .replace(/\s+/gu, " ")
+        .trim();
+    const kit = fadeOf(
+      read("../../design-kit/src/spark-face/spark-face.css"),
+      /^\.vf-spark-night\[data-lent="true"\] \{([^}]*)\}/mu,
+    );
+    const chat = fadeOf(
+      read("../src/chat/chat-empty.css"),
+      /^\.vf-chat-empty \.vf-spark-night\[data-lent="true"\] \{([^}]*)\}/mu,
+    );
+    expect(kit).not.toBe("");
+    expect(chat).toBe(kit);
   });
 });

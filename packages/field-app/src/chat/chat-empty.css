@@ -29,6 +29,14 @@
   transition: clip-path 240ms var(--vf-ease-island);
 }
 
+/* Lent (ES-3c; §6, the portal): the lean's transitions above would hold the night's here, so the kit's lent fade
+   (`spark-face.css`) is restated over them — the night goes under the window once the window is whole. */
+.vf-chat-empty .vf-spark-night[data-lent="true"] {
+  transition:
+    opacity 180ms cubic-bezier(0.4, 0, 1, 1) 180ms,
+    visibility 0s linear 360ms;
+}
+
 /* Through the portal (ES-3b; §6, the portal): while the night is lent to the sheet's window, the words and the hush
    fade and recede to 0.98 in 180ms on the retract curve; handed back, they return 300ms into the return (the window's
    240ms, then 60) over 240ms on the island curve. */

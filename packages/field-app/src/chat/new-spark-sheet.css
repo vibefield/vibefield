@@ -438,7 +438,18 @@
   transition: opacity 330ms var(--vf-ease-island) 270ms;
 }
 
-.vf-new-spark[data-portal="drawing"] .vf-new-spark-sheet > :not(.vf-new-spark-sky),
+/* until the window has drawn nothing of the sheet shows (ES-3c): its first render knew no portal, so its form leaves at
+   once, never under the close's delayed fade, and its dim waits for the close */
+.vf-new-spark[data-portal="drawing"] .vf-new-spark-sheet > :not(.vf-new-spark-sky) {
+  opacity: 0;
+  transition: none;
+}
+
+.vf-new-spark[data-portal="drawing"] .vf-new-spark-scrim {
+  opacity: 0;
+  animation: none;
+}
+
 .vf-new-spark[data-portal="folding"] .vf-new-spark-sheet > :not(.vf-new-spark-sky),
 .vf-new-spark[data-portal="folded"] .vf-new-spark-sheet > :not(.vf-new-spark-sky) {
   opacity: 0;
@@ -469,6 +480,10 @@
 @media (prefers-reduced-motion: reduce) {
   .vf-new-spark[data-portal] .vf-new-spark-sheet > :not(.vf-new-spark-sky) {
     transition: opacity 150ms ease 150ms;
+  }
+
+  .vf-new-spark[data-portal="drawing"] .vf-new-spark-sheet > :not(.vf-new-spark-sky) {
+    transition: none;
   }
 
   .vf-new-spark[data-portal="folding"] .vf-new-spark-sheet > :not(.vf-new-spark-sky),

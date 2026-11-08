@@ -85,9 +85,15 @@
   block-size: 100%;
 }
 
-/* Lent to the sheet's window (ES-3b; §6, the portal), the night steps aside once the window has drawn it. */
+/* Lent to the sheet's window (ES-3b, ES-3c; §6, the portal), the night goes under the window once it is whole: it fades
+   out in 180ms on the retract curve, 180ms in (the window's own fade in), and is hidden once its fade is done. Handed
+   back, it is whole at once. */
 .vf-spark-night[data-lent="true"] {
   visibility: hidden;
+  opacity: 0;
+  transition:
+    opacity 180ms cubic-bezier(0.4, 0, 1, 1) 180ms,
+    visibility 0s linear 360ms;
 }
 
 /* The hatch (DESIGN.md §2.10 "The hatch", §8 "The New spark sheet"): the sky's two canvases, one over the other, on the
