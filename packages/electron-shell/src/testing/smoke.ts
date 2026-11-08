@@ -1735,6 +1735,17 @@ export async function runSmokeFirstRun(opts: {
       // FG-O3's read (FG-6c): printed, never judged
       processes: () => app.getAppMetrics(),
       gpuBusy: readGpuBusy,
+      // item 253 (g): History's red with no row says the agent index's state
+      agentIndex: async () => {
+        try {
+          const health = (await opts.handle.client.request("system.health")) as {
+            rosettad: { phase: string; detail: string | null };
+          };
+          return health.rosettad;
+        } catch {
+          return null;
+        }
+      },
     });
     problems.push(...walked);
     // GT-8b: the walk presses no link, so main's opener has nothing to record — anything there opened on its own

@@ -1640,6 +1640,27 @@ export interface FirstRunDriver {
    * and the GPU's busy share now (`readGpuBusy`); a walk without them reads no load */
   readonly processes?: () => readonly ProcessMetric[];
   readonly gpuBusy?: () => Promise<number | null>;
+  /** item 253 (g): the agent index's state, as fieldd's `system.health` says it (null: unread), asked
+   * only of a History with no row; a walk without it says the count alone */
+  readonly agentIndex?: () => Promise<AgentIndexSeen | null>;
+}
+
+/** The agent index's state in fieldd's health (`RosettadHealth`'s phase and its words). */
+export interface AgentIndexSeen {
+  readonly phase: string;
+  readonly detail: string | null;
+}
+
+/** History's count judged: the typed agent's one row (FG-6). A red with no row under an index that
+ * does not serve names the index's state, in the frame every door says it in (`the agent index is
+ * unconfigured: <detail>`, fieldd's `rosettadUnconfigured`) and as smoke.ts's seeded-session rung
+ * says it, so the red's cause is in its own words (item 253 (g)). */
+export function judgeHistoryRows(rows: number, index: AgentIndexSeen | null): string | null {
+  if (rows === 1) return null;
+  const count = `History shows ${rows} rows, not the typed agent's one`;
+  if (rows !== 0 || index === null || index.phase === "ready") return count;
+  const state = index.detail === null ? index.phase : `${index.phase}: ${index.detail}`;
+  return `${count} — the agent index is ${state}`;
 }
 
 /** A control the walk presses: by selector, or by its words (in `within`'s elements, buttons by default). */
@@ -1994,7 +2015,9 @@ export async function firstRunRows(
     await standing("history");
     const rows = await count('ul[aria-label="Past sessions on this Mac"] > li');
     facts["historyRows"] = rows;
-    if (rows !== 1) problems.push(`History shows ${rows} rows, not the typed agent's one`);
+    const index = rows === 0 ? ((await d.agentIndex?.()) ?? null) : null;
+    const history = judgeHistoryRows(rows, index);
+    if (history !== null) problems.push(history);
     await captureWords("history");
     await press(
       { text: "Bring in history", within: ".vf-wizard-actions button" },

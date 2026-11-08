@@ -21,6 +21,10 @@
 // VF_PERF_LOCKS=<path>[:<path>…] — a perf measurement owns this host while its lock file exists: before EACH gate the run
 //                   waits while any lock named exists, and says so (`GATE_WAIT`). The paths are the caller's — this host's,
 //                   never written here. Unset, the run is exactly as it was.
+// rosettad (item 253, 2026-11-08) — the rows that boot an agent index (`rosettad: true`: the test stage, smoke:godview,
+//                   smoke:first-run) are handed the lock's build as FIELDD_ROSETTAD_BIN (siblings.mjs `builtRosettad`,
+//                   `bin`'s answer), resolved ONCE and named on the first line; every other row runs with the variable
+//                   removed (`gateEnv`). With no build those rows are RED and not run, and the rest run (`planGate`).
 
 import { spawn, spawnSync } from "node:child_process";
 import {
@@ -35,6 +39,7 @@ import {
 import { constants, loadavg, tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+import { builtRosettad } from "./siblings.mjs";
 
 const ROOT = resolve(import.meta.dirname, "..");
 
@@ -53,7 +58,8 @@ export const STAGES = [
   { name: "fmt", run: ["cargo", "fmt", "--check"] },
   { name: "lint:rust", run: pnpm("lint:rust") },
   { name: "bundle:assert", run: pnpm("bundle:assert") },
-  { name: "test", run: pnpm("test"), main: onlyAr7b, counts: projectCounts },
+  // fieldd's real-rosettad suites run only with FIELDD_ROSETTAD_BIN set, as CI's verify sets it (item 253)
+  { name: "test", run: pnpm("test"), main: onlyAr7b, counts: projectCounts, rosettad: true },
   { name: "test:rust", run: pnpm("test:rust") },
   { name: "gen:check", run: pnpm("gen:check") },
 ];
@@ -70,10 +76,15 @@ export const LANDING = [
   // the try board as an author runs it: the kit stages the example clock ALONE in a dev root of its own, then
   // `pnpm smoke:plugin` (a bare `pnpm smoke:plugin` stages nothing and says so)
   { name: "smoke:plugin", run: pnpm("plugin", "try", "examples/plugins/desk-clock") },
-  { name: "smoke:godview", run: pnpm("smoke:godview") },
+  // item 253: its record rungs (History's session, the peek photos, history by project, the timeline's past and its
+  // open-ended rung) read rosettad, so it is handed the lock's build. A run has one configuration
+  // (`timeline-past-rungs.ts`), so the same smoke runs again without it for the no-record rung: M21's both
+  { name: "smoke:godview", run: pnpm("smoke:godview"), rosettad: true },
+  { name: "smoke:godview:no-record", run: pnpm("smoke:godview"), rosettad: false },
   // FG (desk-gates row 32): the Setup Assistant walked by its own controls to the desk — by day and by night on the
-  // live field, and with no WebGPU over its still; three launches, its stills kept outside every smoke's own folder
-  { name: "smoke:first-run", run: pnpm("smoke:first-run") },
+  // live field, and with no WebGPU over its still; three launches, its stills kept outside every smoke's own folder.
+  // History's one row is the typed agent's session in rosettad's index (item 253)
+  { name: "smoke:first-run", run: pnpm("smoke:first-run"), rosettad: true },
   { name: "smoke:terminal-door", run: pnpm("smoke:terminal-door") },
   { name: "smoke:terminal-direct", run: pnpm("smoke:terminal-direct") },
   { name: "smoke:studio", run: pnpm("smoke:studio") },
@@ -241,6 +252,52 @@ function choose() {
   return list;
 }
 
+/** Item 253 (2026-11-08) — a row's environment. A row that boots an agent index (`rosettad: true`)
+ * gets the lock's build as `FIELDD_ROSETTAD_BIN`, the one fieldd reads (fieldd's bin.ts); every
+ * other row runs with the variable REMOVED, so no row runs on the launching shell's value: the gated
+ * build is the lock's. This inverts the dev runner on purpose (tooling/dev-runner/src/
+ * electron-stack.mjs:10-33, AC-7), where the shell's explicit value wins: a person's `pnpm dev` may
+ * point fieldd at a build of their own, a landing's verdict may not. */
+export function gateEnv(gate, base, resolved) {
+  const env = { ...base, NX_SKIP_NX_CACHE: "true", NX_DAEMON: "false" };
+  delete env.FIELDD_ROSETTAD_BIN;
+  if (gate.rosettad === true && resolved?.path !== undefined)
+    env.FIELDD_ROSETTAD_BIN = resolved.path;
+  return env;
+}
+
+/** Item 253 — whether a row runs, and what it says of rosettad under its verdict. A row that needs
+ * rosettad, with no build to hand it, is RED and NOT RUN, in the why's own words: no 30-minute walk
+ * is spent on a row that cannot pass, and every other row still runs. A row that is handed the build
+ * names it, and a build older than a source cargo recorded for it is said so, never refused
+ * (preflight warns of it). */
+export function planGate(gate, resolved) {
+  if (gate.rosettad !== true) return { run: true, said: [] };
+  if (resolved.why !== undefined) {
+    return {
+      run: false,
+      verdict: "RED (rosettad not built — pnpm siblings:build)",
+      said: [`rosettad: ${resolved.why}`],
+    };
+  }
+  const { state, source } = resolved.freshness;
+  const note = state === "fresh" ? "" : ` (${state}${source === undefined ? "" : `: ${source}`})`;
+  return { run: true, said: [`rosettad ${resolved.path}${note}`] };
+}
+
+/** Item 253 — what the run's first line says of rosettad: the build it hands, with its freshness
+ * when it is not fresh, or `null` and why; and a value the launching shell exported that differs,
+ * named as ignored. */
+export function rosettadSaid(resolved, base) {
+  const said = { rosettad: resolved.path ?? null };
+  if (resolved.why !== undefined) said.rosettadWhy = resolved.why;
+  else if (resolved.freshness.state !== "fresh") said.rosettadFreshness = resolved.freshness;
+  const shell = base.FIELDD_ROSETTAD_BIN;
+  if (shell !== undefined && shell !== "" && shell !== resolved.path)
+    said.shellRosettadIgnored = shell;
+  return said;
+}
+
 /** The gate running now, its process group — what a signal to this script, or the timeout, stops. */
 let running = null;
 /** The signal a person stopped the run with: the gate running then is stopped, and none after it starts. */
@@ -253,14 +310,15 @@ let interrupted = null;
  * Tooling (5), 2026-10-26 — the gate's stdout and stderr ARE its log file, never a pipe copied into one. Nx prints at
  * most 64 KiB of a task's section when its stdout is a pipe (the cut `projectCounts` met as "NO COUNT" in DK-18's
  * final run), and writes every section whole to a file, as CI's verify step now does (tooling (4)). The file is opened
- * for append: the child writes it in order, and this run's own lines (a timeout's) are appended to the same path. */
-export function runGate(gate, logPath, timeoutMs) {
+ * for append: the child writes it in order, and this run's own lines (a timeout's) are appended to the same path.
+ * Its environment is `gateEnv`'s, with the rosettad this run resolved (item 253). */
+export function runGate(gate, logPath, timeoutMs, resolved) {
   return new Promise((done) => {
     const fd = openSync(logPath, "a");
     const t0 = Date.now();
     const child = spawn(gate.run[0], gate.run.slice(1), {
       cwd: ROOT,
-      env: { ...process.env, NX_SKIP_NX_CACHE: "true", NX_DAEMON: "false" },
+      env: gateEnv(gate, process.env, resolved),
       detached: true,
       stdio: ["ignore", fd, fd],
     });
@@ -322,8 +380,11 @@ async function main() {
     cwd: ROOT,
     encoding: "utf8",
   }).stdout.trim();
+  // item 253: rosettad resolved ONCE, before the first line names it — the lock's build, or why none
+  const rosettad = builtRosettad(ROOT);
+  const first = { sha: head, gates: list.length, logs, at: new Date().toISOString(), load: load() };
   process.stdout.write(
-    `GATE_LANDING ${JSON.stringify({ sha: head, gates: list.length, logs, at: new Date().toISOString(), load: load() })}\n`,
+    `GATE_LANDING ${JSON.stringify({ ...first, ...rosettadSaid(rosettad, process.env) })}\n`,
   );
   // the Mac kept awake for as long as this runs (macOS's own tool; elsewhere nothing to do)
   if (process.platform === "darwin")
@@ -334,13 +395,25 @@ async function main() {
   const verdicts = [];
   const locks = perfLocks();
   for (const [i, gate] of list.entries()) {
-    await waitForPerfLocks(locks, gate.name);
     const logPath = join(
       logs,
       `${String(i + 1).padStart(2, "0")}-${gate.name.replaceAll(":", "_")}.log`,
     );
+    const plan = planGate(gate, rosettad);
+    if (!plan.run) {
+      // item 253: not run — its verdict is its log, and it counts red
+      const words = [
+        `GATE ${gate.name} ${plan.verdict}, not run`,
+        ...plan.said.map((line) => `    ${line}`),
+      ];
+      appendFileSync(logPath, `${words.join("\n")}\n`);
+      verdicts.push({ gate: gate.name, verdict: plan.verdict, code: null, main: null });
+      process.stdout.write(`${words.join("\n")}\n    log ${logPath}\n`);
+      continue;
+    }
+    await waitForPerfLocks(locks, gate.name);
     const before = load();
-    const { code, ms, timedOut } = await runGate(gate, logPath, timeoutMs);
+    const { code, ms, timedOut } = await runGate(gate, logPath, timeoutMs, rosettad);
     const out = readFileSync(logPath, "utf8");
     const mains = code === 0 || timedOut || gate.main === undefined ? null : gate.main(out);
     const verdict = timedOut
@@ -354,6 +427,7 @@ async function main() {
     process.stdout.write(
       `GATE ${gate.name} ${verdict} exit=${code} ${(ms / 1000).toFixed(0)}s load ${before}→${load()}${mains === null ? "" : ` (main's: ${mains})`}\n`,
     );
+    for (const line of plan.said) process.stdout.write(`    ${line}\n`);
     // a stopped gate's own last words are no verdict (Nx, stopped, still says it "successfully ran"): its stop is
     const stopped = timedOut
       ? [`${gate.name} ran past ${timeoutMs / 60_000} min and was stopped`]

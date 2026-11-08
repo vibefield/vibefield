@@ -1465,6 +1465,21 @@ export function rosettadState(root = REPO_ROOT, platform = process.platform) {
   return { bin, ...cargoBuildFreshness(bin.path, bin.dir) };
 }
 
+/** The lock's BUILT rosettad, or why there is none (item 253, 2026-11-08): `{ path, freshness }`,
+ * freshness being `cargoBuildFreshness`'s answer (a stale build is still the build: said, never
+ * refused), or `{ why }` in `bin`'s own words. ONE derivation for `bin` and the landing gate, which
+ * hands it to the rows that boot an agent index, so the path and the "not built" words are never
+ * spelled twice. It asks `rosettadState`, the rule preflight, the stage and wall R23 ask; `read` is
+ * that rule, a parameter for the tests. */
+export function builtRosettad(root = REPO_ROOT, read = rosettadState) {
+  const { bin, ...freshness } = read(root);
+  if (freshness.state === "none" || freshness.state === "unresolved")
+    return { why: "no cargo sibling (or cargo cannot resolve its target directory)" };
+  if (freshness.state === "missing")
+    return { why: `${bin.path} is not built — run \`pnpm siblings:build\`` };
+  return { path: bin.path, freshness };
+}
+
 /** The newest mtime (ms) among a Go module's own sources — `*.go` plus
  * `go.mod`/`go.sum` — or null when the directory holds none. The question is
  * the one `cargoBuildFreshness` asks of rosettad, for the same reason: "is the
@@ -2415,16 +2430,12 @@ function build(root) {
 }
 
 function printBin(root) {
-  const bin = rosettadBinary(root);
-  if (bin === null || bin.path === null) {
-    console.error("siblings:bin: no cargo sibling (or cargo cannot resolve its target directory)");
+  const built = builtRosettad(root);
+  if (built.why !== undefined) {
+    console.error(`siblings:bin: ${built.why}`);
     return 1;
   }
-  if (!existsSync(bin.path)) {
-    console.error(`siblings:bin: ${bin.path} is not built — run \`pnpm siblings:build\``);
-    return 1;
-  }
-  console.log(bin.path);
+  console.log(built.path);
   return 0;
 }
 
