@@ -368,4 +368,40 @@ describe("CP-4a2b — a session an `in:` hands a step (§13a slice 9b)", () => {
     expect(heard.hand(YOURS, STEP)).toBeUndefined();
     expect(held()).toBe(0);
   });
+
+  it("RH1 (slice 14, Q18 (a); D869): a re-hand `inTurn` hears the turn begun before it: that turn's end is the step's, with turn ids and with none, and SH2's hand without it still hears none", () => {
+    // red-a: `hand` takes no third argument, so a turn begun before the hand is never the step's (SH2's rule)
+    // Kills: `inTurn` unread (the turn in flight dropped, so a boot's re-hand waits on R45's ask)
+    /** `hand`, with slice 14's third argument (Q18 (a)): red-a's signature has none, so it is reached through a cast */
+    const handInTurn = (events: FlowStepEvents, runtimeRunId: string) =>
+      (
+        events as unknown as {
+          hand(
+            id: string,
+            step: { readonly run: string; readonly call: number },
+            opts: { readonly inTurn: true },
+          ): (() => void) | undefined;
+        }
+      ).hand(runtimeRunId, STEP, { inTurn: true });
+    const withIds = yours();
+    withIds.emit("turn:started", { turnId: "t0" });
+    withIds.emit(
+      "conversation:assistant-message",
+      said("in flight at the restart", { turnId: "t0" }),
+    );
+    handInTurn(withIds.events, YOURS);
+    withIds.emit("turn:completed", { turnId: "t0", lastAssistantMessage: "the step's answer" });
+    const bare = yours();
+    bare.emit("turn:started", {});
+    handInTurn(bare.events, YOURS);
+    bare.emit("conversation:assistant-message", said("the step's words", { turnId: undefined }));
+    bare.emit("turn:completed", {});
+    expect({
+      withIds: withIds.heard.map((end) => [end.call, end.turn, end.text]),
+      bare: bare.heard.map((end) => [end.call, end.outcome, end.text]),
+    }).toEqual({
+      withIds: [[STEP.call, "t0", "the step's answer"]],
+      bare: [[STEP.call, "completed", "the step's words"]],
+    });
+  });
 });
