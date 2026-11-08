@@ -40774,6 +40774,13 @@ mints), and no manifest or lock.
   >   is live (to the gates doc through VF-PM).
   > - Logs: `lanes/dr/gate/gate-e60d8add6/` (summary.txt, one `.out` per row, gate-landing's `logs/`), SHA256SUMS
   >   `57ef8346…` (44 files).
+  >   *Erratum (2026-11-08, the fixer's label note at this witness's land, main → `8897de277` at 11:44:03Z by main's
+  >   reflog):* that SHA256SUMS file is not in the logs folder. It is `lanes/dr/gate/SHA256SUMS-dr-gate-e60d8add6`,
+  >   one level above it, and `57ef8346…` is its own sha256. Its 44 entries are 30 under `gate-e60d8add6/` and 14
+  >   beside it (`gate-dr3.sh`, the door's `hold-dr.sh` and its inner script v1 to v5, `stack.py` v1 and v2,
+  >   `run-e60d8add6.out`, `door-events.log`, `PAUSE.lifted-1119Z`, `ios-done-count`, `gate.pid`). They checked 44
+  >   of 44 OK at 11:45Z. At 21:12Z they check 41 of 44: `gate.pid`, `hold-dr-inner.sh` and `ios-done-count` are
+  >   the live door's own files, which later rows rewrote.
 - The relay, DR-3b (VF-RELAY): after its fold 3 (W3-21's relay half), re-stacked onto this tip by the lead, under its
   own verify (W3-18: A, then B, then the relay). It brings the relay's half of the audit's finding 1, with the
   drive-pulls row that W3-16's sentence at `NativeFileTransferSnapshot` already names (no fieldd file holds it yet),
@@ -41964,6 +41971,11 @@ fold 5 ran 62, fold 6 ran 5, fold 7 ran 2. Each was KILLED or named.
 - The six claims EL8-TRUFFLE falsifies stay as they are, and truffle corrects them at its replay (VF-PM 07:42Z):
   `drive/service.ts:24`, `testing/mock-mgmt.ts:69` and `:202`, `test/drive-fakes.ts:22` and `:259`,
   `test/drive-pulls.test.ts:3`.
+  *Erratum (2026-11-08, VF-PM's ruling at 19:43:30Z):* `:202` was the claim's line in `df508fbbf` (fold 7,
+  committed 2026-11-07 14:26:03Z). The tree that landed is fold 7 as re-cut, `0e61d7f0a` (main → it at 2026-11-07
+  17:11:00Z, by main's reflog), and it reads the claim ("as the floor at the `=0.7.24` pin answers") at
+  `testing/mock-mgmt.ts:208`. The re-cut carried main's `9e881bdef` (item 206's boot half, red), which adds six
+  lines above it. main `4db42a816` reads it at `:208` too. The other five lines read as cited in both trees.
 - The integration lane wires `DriveService` to the daemon.
 - One order stays uncured, and the relay's docs name it: a node-up that comes before a reconnect's refused
   re-subscribe (it can land during NativeLink's replays) keeps the stream it saw, so the lane table waits for the next
