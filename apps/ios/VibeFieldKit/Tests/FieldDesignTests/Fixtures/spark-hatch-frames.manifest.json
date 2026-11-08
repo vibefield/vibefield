@@ -6,7 +6,7 @@
   },
   "rows": {
     "file": "fixtures/spark-hatch.golden.json",
-    "sha256": "e47b1add6d4f03f82b71db5d73bb4fe9e35accd274cff081382ccba5ad65a984"
+    "sha256": "33f1e800caecaab21b7b451926364e3a85940969e4423700bcfc9c25ba3406bd"
   },
   "scale": 2,
   "options": {
