@@ -6,7 +6,9 @@ import { chosenSessionWaits, type HistoryLineDoor } from "../frame/line-door";
 import { ViewsTrackView } from "../frame/ViewsTrack";
 import type { ViewKeys } from "../frame/views";
 import { projectIntent } from "../history/acts";
+import { HistoryConsentCard } from "../history/HistoryConsent";
 import { HistoryRoomView } from "../history/HistoryRoomView";
+import { historySample } from "../history/history-sample";
 import {
   type HistoryHostActs,
   type HistoryHostState,
@@ -16,7 +18,13 @@ import {
 import { EMPTY_HOST_MODEL, hostModelOf } from "../history/host-model";
 import { launchActs } from "../history/launch-acts";
 import { NewAgentPastCard } from "../history/NewAgentPast";
-import { FIXTURE_HISTORY_NOW, FIXTURE_NEW_AGENT_PAST } from "./account-fixtures";
+import { HistoryConsentBody } from "../setup/HistoryConsentView";
+import { HISTORY_WORDS } from "../setup/history-words";
+import {
+  FIXTURE_HISTORY_CENSUS,
+  FIXTURE_HISTORY_NOW,
+  FIXTURE_NEW_AGENT_PAST,
+} from "./account-fixtures";
 import { CommandPalettePreview } from "./CommandPalettePreview";
 import { FIXTURE_HISTORY_PROJECT, FIXTURE_LINE_DOOR } from "./ComposerLinePreview";
 import {
@@ -24,7 +32,6 @@ import {
   FIXTURE_UNAVAILABLE_WORDS,
   type HistoryState,
   historyFixturePorts,
-  historyProjectsFixture,
 } from "./history-fixtures";
 
 // History, in the catalog (AR-8c): the SHIPPING view (`HistoryRoomView`) over
@@ -32,7 +39,10 @@ import {
 // CSS are the product's and the package's; this file stages them. Nothing is
 // kept between runs (`storage={null}`): a catalog writes no preferences. The
 // room draws no search of its own: History's search is the frame's Peek
-// (2026-10-08), staged over the same demo in `PeekPreview.tsx`.
+// (2026-10-08), staged over the same demo in `PeekPreview.tsx`. HG-2: the
+// consent plate is History before its past — the shipping card over the
+// census's fixture, in the view's own layer over the sample, which is the
+// product's (`history/history-sample.ts`, the projects plate's fieldd too).
 
 /** The view in one state, filling whatever plate holds it. */
 export function HistoryPreview({ state = "room" }: { state?: HistoryState }): ReactElement {
@@ -63,6 +73,37 @@ function HistoryStatePreview({ state }: { state: HistoryState }): ReactElement {
           />
         ) : null
       }
+      consent={state === "consent" ? <HistoryBeforeItsPastCard /> : undefined}
+    />
+  );
+}
+
+/** HG-2 — History before its past: the shipping card over the census's
+ * fixture (its agents with history on this Mac, every switch on), which the
+ * view stands in its own layer over the sample. A catalog acts on no one. */
+function HistoryBeforeItsPastCard(): ReactElement {
+  const chosen = new Set(FIXTURE_HISTORY_CENSUS.rows.map((row) => row.kind));
+  return (
+    <HistoryConsentCard
+      empty={false}
+      onLookAgain={() => undefined}
+      parts={{
+        body: (
+          <HistoryConsentBody
+            census={FIXTURE_HISTORY_CENSUS}
+            chosen={chosen}
+            now={FIXTURE_HISTORY_NOW}
+            onToggle={() => undefined}
+          />
+        ),
+        primaryLabel: HISTORY_WORDS.bringIn,
+        primaryBusy: false,
+        choosing: true,
+        looking: false,
+        error: null,
+        onPrimary: () => undefined,
+        onLater: () => undefined,
+      }}
     />
   );
 }
@@ -81,7 +122,7 @@ function HistoryStatePreview({ state }: { state: HistoryState }): ReactElement {
  * turn as the product's do (PJ-6, the shipping `launchActs`), its pickers
  * answered by the fixture fieldd: Work's read, This Mac's wanting a sign-in. */
 function HistoryProjectsPreview(): ReactElement {
-  const [fixture] = useState(() => historyProjectsFixture());
+  const [fixture] = useState(() => historySample());
   const [openAt] = useState<RoomTarget>({ sessionId: FIXTURE_CHOSEN_SESSION });
   const [listing, setListing] = useState(() => fixture.catalog.listing());
   useEffect(() => fixture.catalog.onListing(setListing), [fixture]);

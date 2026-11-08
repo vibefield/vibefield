@@ -1,13 +1,44 @@
-/* History's consent slot (track AO, AO-3; DESIGN.md §8 "History is rosetta's
-   room", amended): the History pane in the room's place while the index waits
-   for consent — a quiet column on the cover's glass, the room's measure. */
+/* History's consent card (track AO, AO-3; DESIGN.md §8 "History is rosetta's
+   room", amended; since 2026-11-08 track HG, HG-D1 and HG-D3 — §8 "History",
+   before its past, the room behind glass; §5 the Setup Assistant's tier): the
+   History pane in the Setup Assistant's glass — its milk by day and smoke by
+   night over a blur of 32 and a saturation of 1.12, the island's radius, its
+   edge with a top light — 496 wide, padded 32 32 26. The view's own layer
+   (`history-glass.css`) stands it centred in the room's box, over the sample.
+   Tokens only. */
 .vf-history-consent {
   display: flex;
-  width: min(100%, 30rem);
+  box-sizing: border-box;
+  width: min(100%, 496px);
+  max-height: 100%;
   flex-direction: column;
   gap: 12px;
-  margin: 0 auto;
-  padding: 48px 24px;
+  padding: 32px 32px 26px;
+  border-radius: var(--vf-radius-island);
+  background: var(--vf-wizard-surface);
+  backdrop-filter: blur(var(--vf-wizard-blur)) saturate(var(--vf-wizard-saturate));
+  box-shadow:
+    var(--vf-shadow-island),
+    inset 0 0 0 1px var(--vf-wizard-edge),
+    inset 0 1px 0 var(--vf-wizard-edge-light);
+}
+
+/* A list longer than the room's box allows scrolls within itself, edge-faded
+   (§4 `--vf-scroll-fade`, the face deck's rule, as on the Setup Assistant's
+   glass), so the act and the sample line never leave the card. */
+.vf-history-consent .vf-history-consent-rows {
+  flex: 0 1 auto;
+  min-height: 0;
+  margin: -4px -4px 0;
+  padding: 4px 4px var(--vf-scroll-fade);
+  overflow-y: auto;
+  scroll-padding-bottom: var(--vf-scroll-fade);
+  mask-image: linear-gradient(to bottom, black calc(100% - var(--vf-scroll-fade)), transparent);
+  scrollbar-width: none;
+}
+
+.vf-history-consent .vf-history-consent-rows::-webkit-scrollbar {
+  display: none;
 }
 
 .vf-history-consent-title {
@@ -37,4 +68,12 @@
   display: flex;
   gap: 8px;
   padding-top: 4px;
+}
+
+/* HG-D4: one line under the act, 12px in t3 — the room behind is a sample. */
+.vf-history-consent-sample {
+  margin: 2px 0 0;
+  color: var(--vf-text-tertiary);
+  font-size: 12px;
+  line-height: 18px;
 }

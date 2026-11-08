@@ -9,7 +9,8 @@ import { PeekPlate } from "../PeekPreview";
 // host owns: the room on the cover's glass, a session chosen with its Resume
 // live in the palette and the line's New terminal in the project shown (HN-7),
 // one running here with its Jump to (P3), the index not
-// answering, nothing enrolled yet, and an agent with a past offered at its
+// answering, History before its past (HG-2: the card behind glass over the
+// sample room, where "nothing enrolled yet" stood), and an agent with a past offered at its
 // head (AO-6b) — and the two faces before the room (2026-10-04, the room's own
 // chunk): opening, and a room that could not open. Its search is the frame's Peek (2026-10-08;
 // §8 "Search — the Peek"): the shipping controller over a fixture port drawn
@@ -84,11 +85,11 @@ export function HistorySection(): ReactElement {
         </div>
       </Specimen>
       <Specimen
-        title="Nothing enrolled yet — the consent line"
-        source="history/HistoryRoomView.tsx"
+        title="History before its past — the History pane in the Setup Assistant's glass, over the room itself, frosted (HG-2)"
+        source="history/HistoryGlass.tsx"
         bleed
       >
-        <div className="vf-ds-history-plate is-short" data-state="consent">
+        <div className="vf-ds-history-plate" data-state="consent">
           <HistoryPreview state="consent" />
         </div>
       </Specimen>

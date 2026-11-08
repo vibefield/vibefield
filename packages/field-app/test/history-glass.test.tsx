@@ -99,8 +99,18 @@ async function sampleDrawn(): Promise<Element> {
     () => ((sample()?.querySelectorAll(".ah-project-list-item").length ?? 0) >= 8 ? true : null),
     "the sample's projects",
   );
+  // the demo's chosen session, in its project: a row the host hands an act marks itself `.is-selected` (its
+  // `aria-current` is on the row's inner hit), so the row's class is read, as the projects plate's test reads it
+  const chosen = await until(
+    () =>
+      sample()?.querySelector(
+        ".ah-project-list-item.is-selected .ah-project-list-item__header strong",
+      ),
+    "the sample's chosen project",
+  );
+  expect(chosen.textContent).toBe("vibe-field");
   await until(
-    () => sample()?.querySelector('.ah-session-list-item[aria-current="true"]'),
+    () => sample()?.querySelector(".ah-session-list-item.is-selected"),
     "the sample's chosen session",
   );
   const found = sample();

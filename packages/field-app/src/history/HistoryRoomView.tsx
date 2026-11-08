@@ -20,6 +20,8 @@ import {
 } from "react";
 import { COVER_RESERVE_PX, HEAD_BAND_PX } from "../frame/frame-geometry";
 import { type ViewKeys, viewKeysOf } from "../frame/views";
+// HG-2: History before its past — the view's own layer over the room while it waits for consent
+import { HistoryConsentMarker, HistoryGlass } from "./HistoryGlass";
 // The room's own sheet enters HERE, with the room — one row, the package's own
 // bundle, never a copy — so it rides the room's chunk, not the first paint, and
 // lands after the kit's tokens by load order (its README's one ordering rule).
@@ -138,8 +140,13 @@ export interface HistoryRoomViewProps {
    * read anything: the History pane itself, "Bring in your past sessions.",
    * from the controller. It replaces a dead end that pointed at a Settings page
    * with no such control. Absent (a catalog with no daemon), the room's own
-   * words. */
+   * words. *HG-2 (2026-11-08; DESIGN.md §8 "History" — before its past):* it
+   * is a card now, and the view stands it in its own layer over the sample
+   * room (`HistoryGlass.tsx`) while the room's slot holds a marker. */
   consent?: ReactNode;
+  /** HG-2 — History is the view shown, so the room behind glass develops each
+   * time it shows (DESIGN.md §6); shown when absent, as the catalog's plates are. */
+  shown?: boolean;
 }
 
 export function HistoryRoomView({
@@ -153,8 +160,14 @@ export function HistoryRoomView({
   inputs,
   act = null,
   consent,
+  shown = true,
 }: HistoryRoomViewProps): ReactElement {
   const [layers, setLayers] = useState<HTMLDivElement | null>(null);
+  // HG-2: the room's consent slot holds a marker, and the view draws the card
+  // behind glass in its own layer while the marker stands (`HistoryGlass.tsx`).
+  const card = consent === undefined || consent === null || consent === false ? null : consent;
+  const [waiting, setWaiting] = useState(false);
+  const [marker] = useState(() => <HistoryConsentMarker onWaiting={setWaiting} />);
   // An object ref, not a ref callback: the room's handle type is declared in
   // the package's own React types, and an object ref is the one form both
   // installs agree on structurally. The host's, when it keeps one.
@@ -192,12 +205,17 @@ export function HistoryRoomView({
           unavailable={unavailable}
           unavailableTitle={HISTORY_UNAVAILABLE_TITLE}
           connectingTitle={HISTORY_CONNECTING_TITLE}
-          consent={consent}
+          consent={card === null ? consent : marker}
           emptyPrompt={emptyPrompt}
           onSelect={onSelect}
           {...inputs}
         />
       </div>
+      {card !== null && (
+        <HistoryGlass waiting={waiting} shown={shown}>
+          {card}
+        </HistoryGlass>
+      )}
       {act}
       <div className="vf-history-layers" ref={setLayers} />
     </div>

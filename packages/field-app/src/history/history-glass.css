@@ -1,0 +1,165 @@
+/* History before its past (track HG, HG-2; HG-D1…HG-D6 ruled by James
+   2026-11-08; DESIGN.md §8 "History" — before its past, the room behind glass;
+   §5 History's sample; §6 History's motions): the view's own layer over the
+   room while the index waits for consent — the sample, the room itself under
+   one filter, and the card centred in the room's box. Tokens only. It rides the
+   room's chunk with the sample (`HistoryGlass.tsx`). */
+
+.vf-history-glass {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+/* The sample: the room's own drawing in the room's own box (its
+   `.vf-history-room` inside), frosted by ONE filter on its own layer — never a
+   backdrop filter, so it is drawn once and again only on a resize or a theme
+   change (§5, History's sample). Inert, it takes no pointer either. */
+.vf-history-sample {
+  position: absolute;
+  inset: 0;
+  filter: blur(var(--vf-history-sample-blur)) saturate(var(--vf-history-sample-saturate));
+  opacity: var(--vf-history-sample-opacity);
+  pointer-events: none;
+}
+
+/* Every motion inside the sample is stopped: it waits on nothing, and §6 keeps
+   loops for a wait on a fact. */
+.vf-history-sample *,
+.vf-history-sample *::before,
+.vf-history-sample *::after {
+  /* biome-ignore lint/complexity/noImportantStyles: the room's own animations are scoped rules this must outrank. */
+  animation: none !important;
+  /* biome-ignore lint/complexity/noImportantStyles: as above. */
+  transition: none !important;
+}
+
+/* The card, centred in the room's box: under the head band, above the reserve,
+   a little clear of both. Only the card takes a pointer. */
+.vf-history-glass-card {
+  position: absolute;
+  inset: var(--vf-history-head) 0 var(--vf-history-reserve) 0;
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  padding: 24px;
+  pointer-events: none;
+}
+
+.vf-history-glass-card > * {
+  pointer-events: auto;
+}
+
+/* The room develops (§6, HG-D5): once each time History shows while the index
+   waits, the sample comes into focus from a 24px blur at nothing to its frost
+   over 640ms on the island curve, stopping short of sharp, and the card forms
+   160ms behind it, .985 → 1 over 560ms. Two names for one motion, so a showing
+   restarts it (`data-showing` turns from one to the other). */
+.vf-history-glass[data-showing="a"] .vf-history-sample {
+  animation: vf-history-develop-a 640ms var(--vf-ease-island) both;
+}
+
+.vf-history-glass[data-showing="b"] .vf-history-sample {
+  animation: vf-history-develop-b 640ms var(--vf-ease-island) both;
+}
+
+.vf-history-glass[data-showing="a"] .vf-history-glass-card > * {
+  animation: vf-history-form-a 560ms var(--vf-ease-island) 160ms both;
+}
+
+.vf-history-glass[data-showing="b"] .vf-history-glass-card > * {
+  animation: vf-history-form-b 560ms var(--vf-ease-island) 160ms both;
+}
+
+@keyframes vf-history-develop-a {
+  from {
+    opacity: 0;
+    filter: blur(24px) saturate(var(--vf-history-sample-saturate));
+  }
+}
+
+@keyframes vf-history-develop-b {
+  from {
+    opacity: 0;
+    filter: blur(24px) saturate(var(--vf-history-sample-saturate));
+  }
+}
+
+@keyframes vf-history-form-a {
+  from {
+    opacity: 0;
+    transform: scale(0.985);
+  }
+}
+
+@keyframes vf-history-form-b {
+  from {
+    opacity: 0;
+    transform: scale(0.985);
+  }
+}
+
+/* The sample leaves at once (§6, HG-D6): the card goes in 240ms on the retract
+   curve, the sample over 480ms, uncovering the room's own import. After the
+   develop's rules, so a leave outranks a showing. */
+.vf-history-glass[data-phase="leave"] .vf-history-glass-card > * {
+  animation: vf-history-card-out 240ms cubic-bezier(0.4, 0, 1, 1) both;
+}
+
+.vf-history-glass[data-phase="leave"] .vf-history-sample {
+  animation: vf-history-sample-out 480ms ease both;
+}
+
+@keyframes vf-history-card-out {
+  to {
+    opacity: 0;
+    transform: scale(0.985);
+  }
+}
+
+@keyframes vf-history-sample-out {
+  to {
+    opacity: 0;
+  }
+}
+
+/* Reduced motion: one 120ms `ease` fade each, no blur or scale (§6) — over the
+   room's own floor (M6, `history-room-view.css`), whose `!important`s would cut
+   every motion in the view to nothing. */
+@media (prefers-reduced-motion: reduce) {
+  .vf-history .vf-history-glass[data-showing="a"] .vf-history-sample,
+  .vf-history .vf-history-glass[data-showing="a"] .vf-history-glass-card > * {
+    /* biome-ignore lint/complexity/noImportantStyles: the floor's own `!important`s are what this must outrank. */
+    animation: vf-history-fade-a 120ms ease both !important;
+  }
+
+  .vf-history .vf-history-glass[data-showing="b"] .vf-history-sample,
+  .vf-history .vf-history-glass[data-showing="b"] .vf-history-glass-card > * {
+    /* biome-ignore lint/complexity/noImportantStyles: as above. */
+    animation: vf-history-fade-b 120ms ease both !important;
+  }
+
+  .vf-history .vf-history-glass[data-phase="leave"] .vf-history-sample,
+  .vf-history .vf-history-glass[data-phase="leave"] .vf-history-glass-card > * {
+    /* biome-ignore lint/complexity/noImportantStyles: as above. */
+    animation: vf-history-fade-out 120ms ease both !important;
+  }
+}
+
+@keyframes vf-history-fade-a {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes vf-history-fade-b {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes vf-history-fade-out {
+  to {
+    opacity: 0;
+  }
+}

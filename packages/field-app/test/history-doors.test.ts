@@ -52,11 +52,6 @@ import {
 } from "@vibefield/rosetta-protocol";
 import { createRoomDemo } from "@vibefield/rosetta-room/fixtures";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import {
-  FIXTURE_DESKTOP,
-  historyProjectsClient,
-  historyProjectsFixture,
-} from "../src/design-system/history-fixtures";
 import { assetSourceOver, blobType } from "../src/history/asset-source";
 import {
   type ArtifactReader,
@@ -79,6 +74,7 @@ import {
   threadRowOf,
   usageOf,
 } from "../src/history/doors";
+import { historySample, historySampleClient, SAMPLE_DESKTOP } from "../src/history/history-sample";
 import { isHandedToRoom, projectsHereOf } from "../src/history/host-model";
 import {
   ARTIFACT_READ_MAX_BYTES,
@@ -2088,13 +2084,13 @@ describe("MA-4b — the History plate's fixture library (the projects plate)", (
 
   it("the plate's fixture fieldd answers index.artifacts in the contract's shape: one app per demo project with a session here, under its PJ key, by its agent; one presented twice, one not kept; its filters narrow", async () => {
     const demo = createRoomDemo(NOW);
-    const door = historyProjectsClient(demo);
+    const door = historySampleClient(demo);
     const answer = IndexArtifactsResult.parse(await door.request("index.artifacts", {}));
     const projects = new Set(demo.meta.sessions.flatMap((row) => row.project_id ?? []));
     expect(answer.entries, "one app per demo project with a session").toHaveLength(projects.size);
     const sessions = new Set(demo.meta.sessions.map((row) => row.id));
     for (const entry of answer.entries) {
-      expect(entry.device, entry.title).toBe(FIXTURE_DESKTOP);
+      expect(entry.device, entry.title).toBe(SAMPLE_DESKTOP);
       expect(sessions.has(entry.sessionId), entry.sessionId).toBe(true);
       expect(entry.projectKey?.startsWith("p1:demo-"), entry.title).toBe(true);
       expect(entry.provider, entry.title).toBeDefined();
@@ -2142,7 +2138,7 @@ describe("MA-4b — the History plate's fixture library (the projects plate)", (
   });
 
   it("through the SHIPPING library port the plate's apps reach the room as rosetta's entries — no path — and each kept page reads as an HTML document", async () => {
-    const plate = historyProjectsFixture(NOW);
+    const plate = historySample(NOW);
     const library = libraryOf(plate.catalog);
     const page = await library.list(ASK);
     expect(page.entries.length, "the plate's library").toBeGreaterThanOrEqual(3);

@@ -15,7 +15,7 @@
  * - every kit button whose word says its press is running, by its source.
  * The pixels are the stills' (DESIGN.md §7's ratios, measured), which run at a landing.
  */
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { UiButton } from "@vibefield/design-kit/primitives";
@@ -361,21 +361,110 @@ const passesRunning = (open: string, kind: Kind): string | null => {
   return m[1] === undefined ? "true" : squash(m[1]);
 };
 
+/** a module's source by its path as an import names it, without its extension; null where there is none */
+type ReadModule = (path: string) => string | null;
+const readModule: ReadModule = (path) => {
+  const file = [`${path}.ts`, `${path}.tsx`, join(path, "index.ts")].find(
+    (candidate) => existsSync(candidate) && statSync(candidate).isFile(),
+  );
+  return file === undefined ? null : readFileSync(file, "utf8");
+};
+/** HG-2 over 241b (2026-11-08): a file's words-table words, so a pill whose words come from a table is held like one that
+ * writes them. `NAME.key` reads as the literal `key: "…"` in `export const NAME = { … }`, and only where the file
+ * imports `NAME` by a relative path (`import { NAME } from "./…"`). A word it cannot resolve that way stays as written,
+ * and the scan reads it as it always has: no words. */
+const tableWords = (
+  file: string,
+  text: string,
+  read: ReadModule,
+): ((local: string, key: string) => string | null) => {
+  const imported = new Map<string, { name: string; module: string }>();
+  for (const m of text.matchAll(/import\s*\{([^}]*)\}\s*from\s*"(\.{1,2}\/[^"]+)"/g))
+    for (const spec of (m[1] ?? "").split(",")) {
+      const [name, local] = spec.trim().split(/\s+as\s+/);
+      if (name !== undefined && name !== "")
+        imported.set(local ?? name, { name, module: join(dirname(file), m[2] ?? "") });
+    }
+  return (local, key) => {
+    const at = imported.get(local);
+    const source = at === undefined ? null : read(at.module);
+    if (at === undefined || source === null) return null;
+    const plain = (name: string): string => name.replace(/\$/g, "\\$");
+    const table = new RegExp(
+      `export const ${plain(at.name)}\\b[^=]*=\\s*\\{([\\s\\S]*?)\\n\\}`,
+    ).exec(source)?.[1];
+    if (table === undefined) return null;
+    return new RegExp(`(?:^|[\\s,{])${plain(key)}:\\s*"([^"\\n]*)"`).exec(table)?.[1] ?? null;
+  };
+};
+/** a button's children with each table word it can resolve written as that word: a ternary's first branch
+ * (`cond ? NAME.key :`) and a child that is the word alone (`{NAME.key}`) */
+const withTableWords = (
+  children: string,
+  word: (local: string, key: string) => string | null,
+): string =>
+  children
+    .replace(
+      /\?\s*([A-Za-z_$][\w$]*)\.([A-Za-z_$][\w$]*)\s*:/g,
+      (whole, local: string, key: string) => {
+        const w = word(local, key);
+        return w === null || /["`]/.test(w) ? whole : `? "${w}" :`;
+      },
+    )
+    .replace(
+      /\{\s*([A-Za-z_$][\w$]*)\.([A-Za-z_$][\w$]*)\s*\}/g,
+      (whole, local: string, key: string) => {
+        const w = word(local, key);
+        return w === null || /[{}<]/.test(w) ? whole : w;
+      },
+    );
+/** one file's kit buttons whose words and whose running disagree, each said as the scan says it */
+const wrongIn = (file: string, text: string, read: ReadModule = readModule): string[] => {
+  const word = tableWords(file, text, read);
+  return kitButtons(text).flatMap((button) => {
+    const says = saysRunning(withTableWords(button.children, word));
+    const passes = passesRunning(button.open, button.kind);
+    return says === passes
+      ? []
+      : [
+          `${relative(REPO, file)}:${button.line} (${button.kind}) — its words run on ${says}, it passes ${passes}`,
+        ];
+  });
+};
+
 describe("DESIGN.md §7 'Off', Q2 (a) — a pill whose word says its press is running says so to its stylesheet", () => {
   it("on the condition its words say it, and no pill passes it otherwise", () => {
     const wrong: string[] = [];
     for (const root of ["packages/field-app/src", "plugins"])
-      for (const file of sources(join(REPO, root))) {
-        const text = readFileSync(file, "utf8");
-        for (const button of kitButtons(text)) {
-          const says = saysRunning(button.children);
-          const passes = passesRunning(button.open, button.kind);
-          if (says !== passes)
-            wrong.push(
-              `${relative(REPO, file)}:${button.line} (${button.kind}) — its words run on ${says}, it passes ${passes}`,
-            );
-        }
-      }
+      for (const file of sources(join(REPO, root)))
+        wrong.push(...wrongIn(file, readFileSync(file, "utf8")));
     expect(wrong).toEqual([]);
+  });
+
+  it("reads a pill's words through a words table its file imports, and none it cannot resolve that way (the probes)", () => {
+    const file = join(REPO, "packages/field-app/src/probe/Probe.tsx");
+    const module = join(REPO, "packages/field-app/src/probe/probe-words");
+    const read: ReadModule = (path) =>
+      path === module
+        ? 'export const PROBE_WORDS = {\n  act: "Bring in",\n  acting: "Bringing in…",\n} as const;\n'
+        : null;
+    const imports = 'import { PROBE_WORDS } from "./probe-words";\n';
+    const pill = (words: string, head = imports): string =>
+      `${head}<UiButton running={busy}>{busy ? ${words} : PROBE_WORDS.act}</UiButton>\n`;
+    // held: the table holds the word, a running one, so the pill's words run on `busy`, as it passes
+    expect(wrongIn(file, pill("PROBE_WORDS.acting"), read)).toEqual([]);
+    expect(
+      wrongIn(file, `${imports}<UiButton running>{PROBE_WORDS.acting}</UiButton>\n`, read),
+    ).toEqual([]);
+    // each mutation reads red in the scan's own words: a key the table lacks, a table the file does not import, a
+    // branch that is no table word, and a table word that is no running word
+    const red =
+      "packages/field-app/src/probe/Probe.tsx:2 (kit) — its words run on null, it passes busy";
+    expect(wrongIn(file, pill("PROBE_WORDS.missing"), read)).toEqual([red]);
+    expect(wrongIn(file, pill("PROBE_WORDS.acting", ""), read)).toEqual([
+      red.replace(":2 ", ":1 "),
+    ]);
+    expect(wrongIn(file, pill("label"), read)).toEqual([red]);
+    expect(wrongIn(file, pill("PROBE_WORDS.act"), read)).toEqual([red]);
   });
 });

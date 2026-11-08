@@ -42,11 +42,15 @@ export function HistoryConsentPane({
   onDone,
   frame,
   now = Date.now(),
+  unavailable,
 }: {
   census: HistoryCensus;
   onDone: (end: HistoryPaneEnd) => void;
   frame: (parts: HistoryPaneParts) => ReactElement;
   now?: number | undefined;
+  /** the words for a census that could not answer, where the host's differ
+   * from the Setup Assistant's (History's own card: HG-2) */
+  unavailable?: string | undefined;
 }): ReactElement {
   const client = useFielddClient();
   const rows = census.kind === "found" ? census.rows : NO_ROWS;
@@ -74,6 +78,7 @@ export function HistoryConsentPane({
       chosen={chosen}
       now={now}
       disabled={busy}
+      unavailable={unavailable}
       onToggle={(kind, on) =>
         setChosen((previous) => {
           const next = new Set(previous);

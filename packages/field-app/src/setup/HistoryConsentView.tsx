@@ -84,25 +84,30 @@ export function HistoryConsentSummary({ bytes }: { bytes: number }): ReactElemen
 
 /** The pane's body for every census state: what it is doing, why it cannot
  * ask, or the rows with their switches and — while anything is on — the two
- * sentences. Controller-free, so the catalog mounts the shipping face. */
+ * sentences. Controller-free, so the catalog mounts the shipping face.
+ * `unavailable`: the words for a census that could not answer, the Setup
+ * Assistant's by default; inside History its later is History itself, so the
+ * room's card says the first sentence alone (HG-2, DESIGN.md §9). */
 export function HistoryConsentBody({
   census,
   chosen,
   onToggle,
   now,
   disabled = false,
+  unavailable = HISTORY_WORDS.unavailable,
 }: {
   census: HistoryCensus;
   chosen: ReadonlySet<string>;
   onToggle: (kind: string, on: boolean) => void;
   now: number;
   disabled?: boolean;
+  unavailable?: string | undefined;
 }): ReactElement {
   if (census.kind === "looking") {
     return <p className="vf-history-consent-note">{HISTORY_WORDS.looking}</p>;
   }
   if (census.kind === "unavailable") {
-    return <p className="vf-history-consent-note">{HISTORY_WORDS.unavailable}</p>;
+    return <p className="vf-history-consent-note">{unavailable}</p>;
   }
   const bytes = census.rows
     .filter((row) => chosen.has(row.kind))

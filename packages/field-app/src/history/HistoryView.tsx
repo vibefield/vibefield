@@ -491,6 +491,7 @@ export function HistoryView({ active }: { active: boolean }): ReactElement {
         </>
       }
       consent={<HistoryConsent onGranted={onGranted} />}
+      shown={active}
       onSelect={setSelection}
       openAt={openAt}
       keys={keys}
