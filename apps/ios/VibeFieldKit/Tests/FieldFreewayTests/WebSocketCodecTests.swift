@@ -91,7 +91,7 @@ struct WebSocketCodecTests {
   func lengths() {
     let mask: [UInt8] = [1, 2, 3, 4]
     let short = WebSocketFrames.client(.binary, payload: Data(count: 125), mask: mask)
-    #expect(Array(short.prefix(2)) == [0x82, 0x80 | 125])
+    #expect(Array(short.prefix(2)) == [0x82, UInt8(0x80 | 125)])
     let medium = WebSocketFrames.client(.binary, payload: Data(count: 256), mask: mask)
     #expect(Array(medium.prefix(4)) == [0x82, 0xfe, 0x01, 0x00])
     #expect(medium.count == 4 + 4 + 256)
