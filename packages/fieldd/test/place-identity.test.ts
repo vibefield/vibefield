@@ -45,7 +45,8 @@ function meshOf() {
   };
   const mesh = Object.assign(new EventEmitter(), {
     getSlice: async () => (state.ulid === null ? down() : { deviceId: state.ulid }),
-    subscribePeers: async () => (state.ulid === null ? down() : undefined),
+    subscribePeers: async () =>
+      state.ulid === null ? down() : { snapshot: undefined, dispose: () => undefined },
     peers: async () => (state.ulid === null ? down() : []),
     subscribeStoreManaged: async () =>
       state.ulid === null ? down() : { snapshot: { slices: {} }, dispose: () => undefined },

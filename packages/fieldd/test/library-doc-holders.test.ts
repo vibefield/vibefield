@@ -17,6 +17,7 @@ import { VersionVector } from "loro-crdt";
 import { afterEach, describe, expect, it } from "vitest";
 import { DocHoldersService, type HoldersMesh } from "../src/library-doc";
 import { type HolderAck, versionToBase64 } from "../src/loro-host";
+import { RpcCallError } from "../src/native-link";
 import { FakeHoldersStore } from "./holders-store";
 
 let dirs: string[] = [];
@@ -46,6 +47,9 @@ const meshDown: HoldersMesh = {
   subscribeStoreManaged: async () => {
     throw new Error("mesh down");
   },
+  // NR — a mesh with no node, and no moment that would bring one
+  nodeReadsUp: () => false,
+  onRearm: () => () => undefined,
 };
 
 function holding(over: Partial<DocHolding> = {}): DocHolding {
@@ -215,5 +219,71 @@ describe("DS-5d — the holders ledger", () => {
       { device: "laptop", ack: { 1: 4 }, seenAt: clock.now - DAY },
     ]);
     await later.stop();
+  });
+});
+
+describe("NR — the holders stream asks again, and publishes again (item 262)", () => {
+  it("a refused boot ask re-arms at the node's next moment and publishes the slice; a replayed snapshot publishes it again", async () => {
+    // the floor's node gate (field-native `mgmt/mesh.rs`; the golden error-data.mesh-not-up.json)
+    const gate = new RpcCallError(
+      "UNAVAILABLE",
+      "mesh node not up",
+      true,
+      { service: "mesh-gateway", state: "starting" },
+      -32006,
+    );
+    let nodeUp = false;
+    const published: unknown[] = [];
+    const moments = new Set<() => void>();
+    let hear: ((payload: unknown, kind: "snapshot" | "delta") => void) | null = null;
+    const mesh: HoldersMesh = {
+      setSlice: async (_storeId, data) => {
+        published.push(data);
+        return undefined;
+      },
+      subscribeStoreManaged: async (_storeId, onEvent) => {
+        if (!nodeUp) throw gate;
+        hear = onEvent;
+        return { snapshot: { slices: {} }, dispose: () => undefined };
+      },
+      nodeReadsUp: () => nodeUp,
+      onRearm: (fn) => {
+        moments.add(fn);
+        return () => {
+          moments.delete(fn);
+        };
+      },
+    };
+    const studio = new DocHoldersService({
+      mesh,
+      deviceId: () => "studio",
+      holdings: async () => [holding()],
+      debounceMs: 1,
+    });
+    const until = async (fn: () => boolean): Promise<boolean> => {
+      for (let i = 0; i < 200 && !fn(); i++) await new Promise((r) => setTimeout(r, 5));
+      return fn();
+    };
+
+    await expect(studio.start(), "the boot ask met the gate: not live yet").rejects.toBe(gate);
+    expect(published, "a slice not heard is not published").toHaveLength(0);
+    expect(studio.acknowledgements(DOC)).toBeNull();
+
+    // the node turns up: the stream asks again with no restart, hears the store, and publishes the slice
+    nodeUp = true;
+    for (const fn of [...moments]) fn();
+    expect(await until(() => published.length >= 1), "the re-arm publishes the slice").toBe(true);
+    expect(studio.acknowledgements(DOC), "the ledger heard the store").toEqual([]);
+
+    // a reconnect's replay answered from a floor anew: its node holds none of this slice, so it goes again
+    (hear as ((payload: unknown, kind: "snapshot" | "delta") => void) | null)?.(
+      { slices: {} },
+      "snapshot",
+    );
+    expect(
+      await until(() => published.length >= 2),
+      "a replayed snapshot publishes the slice again",
+    ).toBe(true);
+    await studio.stop();
   });
 });

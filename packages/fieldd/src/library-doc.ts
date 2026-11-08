@@ -14,6 +14,8 @@ import { createNoopLogger, type Logger } from "@vibefield/logging";
 import { LoroDoc, type LoroMap } from "loro-crdt";
 import type { SystemDocOwner } from "./doc-service";
 import { type HolderAck, versionFromBase64 } from "./loro-host";
+import { MeshStream, type MeshStreamWake } from "./mesh-stream";
+import type { NativeSubscribeOptions } from "./native-link";
 import type { GroupingIntents } from "./projects/grouping";
 import {
   applyProjectWrites,
@@ -333,12 +335,14 @@ export class LibraryDocService extends EventEmitter {
   }
 }
 
-/** The mesh store, narrowed to the two calls the holders slice makes. */
-export interface HoldersMesh {
+/** The mesh store, narrowed to the two calls the holders slice makes, and what its stream reads to ask again when the
+ * floor refuses it (NR, `MeshStreamWake`). MeshClient is all three. */
+export interface HoldersMesh extends MeshStreamWake {
   setSlice(storeId: string, data: unknown): Promise<unknown>;
   subscribeStoreManaged(
     storeId: string,
     onEvent: (payload: unknown, kind: "snapshot" | "delta") => void,
+    opts?: NativeSubscribeOptions,
   ): Promise<{ snapshot: unknown; dispose: () => void }>;
 }
 
@@ -385,7 +389,8 @@ export class DocHoldersService {
   /** deviceId → that device's holdings, from the store stream. */
   readonly #peers = new Map<string, DocHolding[]>();
   #timer: ReturnType<typeof setTimeout> | null = null;
-  #dispose: (() => void) | null = null;
+  /** NR — the store stream, which asks again when the floor refuses it (mesh-stream.ts). */
+  #stream: MeshStream | null = null;
   #stopped = false;
   #stopPromise: Promise<void> | null = null;
   /** DS-5d — every holder ever heard (present or not), by deviceId. */
@@ -411,13 +416,39 @@ export class DocHoldersService {
           });
   }
 
+  /** Hear the store and publish this desktop's slice. A refused first ask rejects (the daemon's "not live yet"). The
+   * stream then asks again by itself (NR, item 262), as it does when a reconnect's replay is refused (item 238), so
+   * `homesOf` and `acknowledgements` hear the store once the node is up, with no restart. */
   async start(): Promise<void> {
     await this.#loadLedger();
-    const subscription = await this.#opts.mesh.subscribeStoreManaged(STORES.DOCS, (payload, kind) =>
-      this.#onStoreEvent(payload, kind),
-    );
-    this.#dispose = subscription.dispose;
-    this.#onStoreEvent(subscription.snapshot, "snapshot");
+    if (this.#stopped || this.#stream !== null) return;
+    const mesh = this.#opts.mesh;
+    const stream = new MeshStream({
+      label: STORES.DOCS,
+      subscribe: (onEvent, opts) => mesh.subscribeStoreManaged(STORES.DOCS, onEvent, opts),
+      wake: mesh,
+      onEvent: (payload, kind) => {
+        this.#onStoreEvent(payload, kind);
+        // a replay's fresh snapshot may come from a floor that restarted, whose node holds none of this slice
+        if (kind === "snapshot") this.schedule();
+      },
+      onSnapshot: (snapshot, again) => {
+        this.#onStoreEvent(snapshot, "snapshot");
+        // a re-arm: the node it answered from is new to this slice (start's own ask publishes below)
+        if (again) this.schedule();
+      },
+      onStopped: (error) =>
+        this.#log.warn(
+          "fieldd.docs.holders_stream_stopped",
+          "The holders slice stopped hearing the store",
+          {
+            error: String(error),
+          },
+        ),
+      logger: this.#log,
+    });
+    this.#stream = stream;
+    await stream.start();
     await this.publish();
   }
 
@@ -500,8 +531,7 @@ export class DocHoldersService {
     this.#stopped = true;
     if (this.#timer !== null) clearTimeout(this.#timer);
     this.#timer = null;
-    this.#dispose?.();
-    this.#dispose = null;
+    this.#stream?.stop();
     // A fired timer has already cleared itself: drain that in-flight write
     // too, even when there is no new checkpoint to schedule.
     const checkpoint =

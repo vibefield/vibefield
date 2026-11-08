@@ -266,15 +266,48 @@ interface QueuedSubEvent {
   payload: unknown;
   kind: SubEventKind;
 }
+
+/** NR (`draft/thinking-native-replay-rearm.md` §3.1) — a subscription's choice for its replay, under FielddClient's
+ * name (`SubscribeOptions.onReplayFailed`, fieldd-client). */
+export interface NativeSubscribeOptions {
+  /** The floor REFUSED this subscription's replay, or the replay timed out. The subscription is ENDED on this link (no
+   * route, never replayed again), and its owner is told once, after the whole replay pass and after "connected". So a
+   * re-subscribe from the owner is sent once, and it reads the new floor's node, because the health stream has
+   * replayed by then. If health's own replay was refused, it is kept and reads the old floor's node until the next
+   * reconnect, and an owner's one bounded ask covers that reading. With no owner, a refused replay is kept and asked
+   * again at the next reconnect, as before (Q1). A refused FIRST subscribe is the caller's to catch; it never reaches
+   * this. A handler that throws on a replay the floor answered is not a refusal. */
+  onReplayFailed?: (error: RpcCallError) => void;
+}
+
 interface SubEntry {
   method: string;
   params: unknown;
   onEvent: (payload: unknown, kind: SubEventKind) => void;
+  /** NR — the owner of a refused replay (`NativeSubscribeOptions`). */
+  onReplayFailed?: (error: RpcCallError) => void;
   subId?: string;
   /** Hold deltas while a subscribe response's snapshot is being applied. */
   buffering: boolean;
   queued: QueuedSubEvent[];
   activation?: NodeJS.Immediate;
+}
+/** NR — an owned subscription whose replay the pass saw refused, ended once the pass is over. */
+interface RefusedReplay {
+  key: number;
+  sub: SubEntry;
+  error: RpcCallError;
+}
+
+/** What an owner is told: the refusal as the link raised it. Anything else a replay rejects with is an INTERNAL
+ * non-retryable refusal; the link raises only RpcCallError today. */
+function asRpcCallError(error: unknown): RpcCallError {
+  if (error instanceof RpcCallError) return error;
+  return new RpcCallError(
+    "INTERNAL",
+    error instanceof Error ? error.message : String(error),
+    false,
+  );
 }
 interface Pending {
   resolve: (v: unknown) => void;
@@ -491,7 +524,7 @@ export class NativeLink extends EventEmitter {
     });
     try {
       await this.hello();
-      await this.replaySubscriptions();
+      const refused = await this.replaySubscriptions();
       this.assertOpen();
       this.connected = true;
       this.attempts = 0;
@@ -499,6 +532,9 @@ export class NativeLink extends EventEmitter {
       // at the floor; it has nothing left to witness
       this.dropWitness();
       this.emit("connected");
+      // NR — the owned refused replays end, and their owners hear it, only now: after the pass, so an owner's
+      // re-subscribe is not met by the same pass, and after "connected", so it runs on a link that reads connected.
+      this.endRefusedReplays(refused);
       // TC-D15 — armed AFTER the dial, at the same instant the daemon arms its
       // own observed subscription (`native.on("connected", …)`), and for the
       // same two reasons. It must not be able to fail a dial: the hello ack has
@@ -1102,13 +1138,20 @@ export class NativeLink extends EventEmitter {
     this.emit("late-reply", late);
   }
 
-  private async replaySubscriptions(): Promise<void> {
-    for (const [key, sub] of this.subs) {
+  /** Replays every standing subscription, and returns the OWNED ones whose replay was refused, for the dial to end once
+   * the pass is over (NR, `endRefusedReplays`). */
+  private async replaySubscriptions(): Promise<RefusedReplay[]> {
+    const refused: RefusedReplay[] = [];
+    // NR — over the entries that stood when the pass began. A subscribe made DURING the pass sends its own request: an
+    // owner woken by a replayed snapshot, such as the health stream's saying the node is up. Visited here as well (a
+    // Map's iterator visits entries added while it runs), that subscribe was sent twice. An entry disposed during the
+    // pass is skipped.
+    for (const [key, sub] of [...this.subs]) {
+      if (this.subs.get(key) !== sub) continue;
       this.prepareSubscription(sub);
+      let res: { snapshot: unknown };
       try {
-        const res = (await this.rawRequest(sub.method, sub.params, key)) as { snapshot: unknown };
-        sub.onEvent(res.snapshot, "snapshot"); // P5: reconnect = fresh snapshot
-        this.activateSubscription(sub);
+        res = (await this.rawRequest(sub.method, sub.params, key)) as { snapshot: unknown };
       } catch (e) {
         // C3 review finding: one refused replay must never fail the whole dial
         // (a serve.subscribe replayed while the mesh node is down answers
@@ -1118,10 +1161,55 @@ export class NativeLink extends EventEmitter {
         // down anyway). Transport-dead errors still abort: with no socket the
         // remaining replays can't succeed either.
         if (this.closed || this.superseded || this.sock === null) throw e;
+        const owned = sub.onReplayFailed !== undefined;
         this.logger.warn(
           "fieldd.native_link.subscription_replay_refused",
-          "A native subscription replay was refused and retained for the next reconnect",
-          { method: sub.method, error: e },
+          owned
+            ? "A native subscription replay was refused; it ends, and its owner is told"
+            : "A native subscription replay was refused and retained for the next reconnect",
+          { method: sub.method, owned, error: e },
+        );
+        if (owned) refused.push({ key, sub, error: asRpcCallError(e) });
+        continue;
+      }
+      // NR — the floor ANSWERED. A handler that throws on its fresh snapshot, or on a delta queued behind it, is the
+      // owner's fault and not a refusal: it must not end an owned subscription the floor holds, nor tell its owner a
+      // refusal no floor made. Each is logged, and the stream goes live as answered.
+      try {
+        sub.onEvent(res.snapshot, "snapshot"); // P5: reconnect = fresh snapshot
+      } catch (thrown) {
+        this.logger.warn(
+          "fieldd.native_link.replay_handler_threw",
+          "A native subscription's handler threw on its replayed snapshot",
+          { method: sub.method, error: thrown },
+        );
+      }
+      try {
+        this.activateSubscription(sub);
+      } catch (thrown) {
+        this.logger.warn(
+          "fieldd.native_link.replay_handler_threw",
+          "A native subscription's handler threw on a delta held behind its replayed snapshot",
+          { method: sub.method, error: thrown },
+        );
+      }
+    }
+    return refused;
+  }
+
+  /** NR — end each owned refused replay that still stands (its owner may have disposed it during the pass), then tell
+   * its owner once. A throwing owner is logged, and the others are still told. */
+  private endRefusedReplays(refused: RefusedReplay[]): void {
+    const ended = refused.filter(({ key, sub }) => this.subs.get(key) === sub);
+    for (const { key, sub } of ended) this.removeSubscription(key, sub);
+    for (const { sub, error } of ended) {
+      try {
+        sub.onReplayFailed?.(error);
+      } catch (thrown) {
+        this.logger.warn(
+          "fieldd.native_link.replay_owner_threw",
+          "The owner of a refused native subscription replay threw when told",
+          { method: sub.method, error: thrown },
         );
       }
     }
@@ -1270,15 +1358,24 @@ export class NativeLink extends EventEmitter {
     });
   }
 
-  /** Snapshot-then-delta subscription; survives reconnects (fresh snapshot each time). */
+  /** Snapshot-then-delta subscription; survives reconnects (fresh snapshot each time). A refused replay is kept for the
+   * next reconnect, unless the subscription has an owner for it (`NativeSubscribeOptions.onReplayFailed`, NR). */
   async subscribe(
     method: string,
     params: unknown,
     onEvent: (payload: unknown, kind: SubEventKind) => void,
+    opts: NativeSubscribeOptions = {},
   ): Promise<{ snapshot: unknown; dispose: () => void }> {
     this.refuseAtTheDoor(method);
     const key = this.nextSubKey++;
-    const entry: SubEntry = { method, params, onEvent, buffering: true, queued: [] };
+    const entry: SubEntry = {
+      method,
+      params,
+      onEvent,
+      buffering: true,
+      queued: [],
+      ...(opts.onReplayFailed !== undefined ? { onReplayFailed: opts.onReplayFailed } : {}),
+    };
     this.subs.set(key, entry);
     try {
       const res = (await this.rawRequest(method, params, key)) as { snapshot: unknown };

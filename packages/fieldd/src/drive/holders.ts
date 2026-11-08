@@ -27,8 +27,9 @@ import { createNoopLogger, type Logger } from "@vibefield/logging";
 // Nothing is published or withdrawn while the node is not linked (`linked`): a capture has no account to scope a
 // slice to, and the floor refuses `store.set` in one (MESH_CAPTURING, the belt; this is the suspenders).
 
-/** The mesh store, narrowed to the two calls the slice makes: MeshClient's `setSlice` and `subscribeStoreManaged`
- * (mesh-client.ts:492, :515), as `HoldersMesh` narrows them for the docs slice (library-doc.ts:337-343). */
+/** The mesh store, narrowed to the two calls the slice makes: MeshClient's `setSlice` and `subscribeStoreManaged`, as
+ * `HoldersMesh` narrows them for the docs slice (library-doc.ts). `HoldersMesh` also carries MeshStream's wake (NR);
+ * this slice takes it at S3. */
 export interface DriveHoldersMesh {
   setSlice(storeId: string, data: unknown): Promise<unknown>;
   subscribeStoreManaged(

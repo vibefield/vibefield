@@ -5733,6 +5733,10 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       if (change.adopted.length > 0) docSync?.replicate(change.adopted, { regreet: true });
     });
     if (MESH_BUS_CARRIES_CONTENT) {
+      // "not live YET": a refused first ask is logged here. Since NR (item 262), the holders' stream asks again itself
+      // on any refusal it re-arms on: the node gate, once the node is up or the link connects; a TIMEOUT or a full queue,
+      // on its pace. So a boot whose node is late hears the store with no restart. A refusal that is not retryable
+      // stops the stream (`fieldd.docs.holders_stream_stopped`).
       void holders.start().catch((error) =>
         logger.info("fieldd.docs.holders_unavailable", "The holders slice is not live yet", {
           error: String(error),
@@ -8177,7 +8181,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         bootId,
         currentDeviceId: () => devices.currentDeviceId(),
         devices: () => devices.list(),
-        subscribe: async (cb) => await mesh.subscribeStoreManaged(STORES.ARTIFACTS, cb),
+        subscribe: async (cb, opts) => await mesh.subscribeStoreManaged(STORES.ARTIFACTS, cb, opts),
         publish: async (slice) => {
           await mesh.setSlice(STORES.ARTIFACTS, slice);
         },

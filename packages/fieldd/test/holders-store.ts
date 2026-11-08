@@ -26,6 +26,9 @@ export class FakeHoldersStore {
         const slices = Object.fromEntries([...this.slices].map(([id, data]) => [id, { data }]));
         return { snapshot: { slices }, dispose: () => this.#handlers.delete(deviceId) };
       },
+      // NR — an in-memory store answers every ask, so its stream never waits on a node
+      nodeReadsUp: () => true,
+      onRearm: () => () => undefined,
     };
   }
 

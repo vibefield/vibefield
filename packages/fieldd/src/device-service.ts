@@ -238,6 +238,8 @@ export class DeviceService extends EventEmitter {
    * and the peer list was only ever read to fuse liveness onto a slice that had
    * already arrived. */
   private peersSubscribed = false;
+  /** NR — the peer stream's own end (`subscribePeers` returns it since NR). */
+  private peersOff: (() => void) | null = null;
   private lastRosterSig = "";
   /** UA-P-4 — device ids already warned about, so the drop is logged once per
    * device rather than once per roster projection. Cleared per device when the
@@ -336,7 +338,24 @@ export class DeviceService extends EventEmitter {
     this.disposed = true;
     this.storeOff?.();
     this.storeOff = null;
+    this.peersOff?.();
+    this.peersOff = null;
     this.removeAllListeners();
+  }
+
+  /** NR (rows 6 and 8a of the note's §6.1) — the floor refused this leg's replay, and NativeLink ended it, so the leg
+   * reads unsubscribed again and the next pass subscribes it anew. Its latch used to read "subscribed" over a stream
+   * with no route until the next reconnect (item 238). One pass is asked now, for a node that came up while the
+   * replay ran. Refused, that pass waits for the next mesh event, as a first subscribe always has. */
+  private replayRefused(leg: "peers" | "store"): void {
+    if (leg === "peers") {
+      this.peersSubscribed = false;
+      this.peersOff = null;
+    } else {
+      this.storeSubscribed = false;
+      this.storeOff = null;
+    }
+    if (!this.disposed) void this.sync();
   }
 
   // ---- internals ----
@@ -358,8 +377,15 @@ export class DeviceService extends EventEmitter {
       // rather than claims by them. The roster derives from it, so it must wake
       // on it. Not behind the bus switch for exactly that reason.
       if (!this.peersSubscribed) {
-        await this.opts.mesh.subscribePeers(() => void this.sync());
-        this.peersSubscribed = true; // NativeLink replays across reconnects (P5)
+        const peers = await this.opts.mesh.subscribePeers(() => void this.sync(), {
+          onReplayFailed: () => this.replayRefused("peers"),
+        });
+        if (this.disposed) {
+          peers.dispose();
+          return;
+        }
+        this.peersOff = peers.dispose;
+        this.peersSubscribed = true; // NativeLink replays across reconnects (P5), and tells us of a refused one (NR)
       }
       // UA-P-4 — THE REGISTRY FIRST, THEN THE STORE. The order is load-bearing
       // now that slices are fused against the self-peer set: subscribing first
@@ -378,13 +404,14 @@ export class DeviceService extends EventEmitter {
         const subscription = await this.opts.mesh.subscribeStoreManaged(
           STORES.DEVICES,
           (payload, kind) => this.onStoreEvent(payload, kind),
+          { onReplayFailed: () => this.replayRefused("store") },
         );
         if (this.disposed) {
           subscription.dispose();
           return;
         }
         this.storeOff = subscription.dispose;
-        this.storeSubscribed = true; // NativeLink replays across reconnects (P5)
+        this.storeSubscribed = true; // NativeLink replays across reconnects (P5), and tells us of a refused one (NR)
         this.applyStoreSnapshot(subscription.snapshot);
       }
       if (MESH_BUS_CARRIES_CONTENT) await this.publish();

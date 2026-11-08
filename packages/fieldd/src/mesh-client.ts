@@ -10,7 +10,7 @@ import {
   ServeConfig,
   ServeStatus,
 } from "@vibefield/contracts";
-import type { NativeLink } from "./native-link";
+import type { NativeLink, NativeSubscribeOptions } from "./native-link";
 import { RpcCallError } from "./native-link";
 
 // MeshClient (design-02 §3.4, C2/C3): fieldd's face of the mesh facade.
@@ -147,6 +147,23 @@ export class MeshClient extends EventEmitter {
     if (!up || was === true) return;
     void this.reconcile();
     this.emit("node-up");
+  }
+
+  /** NR (`MeshStreamWake`, mesh-stream.ts) — the floor's health last said the node is up. That is its own word, never
+   * inferred from a call that answered. Before the first report it reads not up. */
+  nodeReadsUp(): boolean {
+    return this.nodeUp === true;
+  }
+
+  /** NR (`MeshStreamWake`) — `fn` at each moment a refused native stream asks again: this link connected (a floor
+   * anew, or the same one re-dialed), or the node turned up. Returns its off. */
+  onRearm(fn: () => void): () => void {
+    this.link.on("connected", fn);
+    this.on("node-up", fn);
+    return () => {
+      this.link.off("connected", fn);
+      this.off("node-up", fn);
+    };
   }
 
   /** Replace the desired serve set and reconcile now. */
@@ -387,6 +404,16 @@ export class MeshClient extends EventEmitter {
         "native.mesh.serve.subscribe",
         {},
         (payload, kind) => this.onServeEvent(payload, kind),
+        {
+          // NR (row 5 of the note's §6.1) — a refused replay ENDS the stream on the link, so the latch is let go.
+          // Otherwise the next good reconcile, a node-up's included, finds it set and never asks. Nothing is asked
+          // here. The owner is told right after "connected", and this client's own "connected" listener has queued a
+          // reconcile on the chain, which runs after this and asks whenever the node answers. A direct ask outside
+          // the chain could race that reconcile into a second subscription (the S2 review).
+          onReplayFailed: () => {
+            this.serveSubscribed = false;
+          },
+        },
       );
       this.serveSubscribed = true;
       this.applyServeSnapshot(snapshot);
@@ -478,11 +505,12 @@ export class MeshClient extends EventEmitter {
     return r.peers;
   }
 
+  /** NR — with its `dispose`, so its owner can end it, and with the owner's replay option (`NativeSubscribeOptions`). */
   async subscribePeers(
     onEvent: (payload: unknown, kind: "snapshot" | "delta") => void,
-  ): Promise<unknown> {
-    const { snapshot } = await this.link.subscribe("native.mesh.peers.subscribe", {}, onEvent);
-    return snapshot;
+    opts: NativeSubscribeOptions = {},
+  ): Promise<{ snapshot: unknown; dispose: () => void }> {
+    return await this.link.subscribe("native.mesh.peers.subscribe", {}, onEvent, opts);
   }
 
   async openStore(storeId: string): Promise<unknown> {
@@ -512,11 +540,13 @@ export class MeshClient extends EventEmitter {
     return snapshot;
   }
 
+  /** NR — with the owner's replay option (`NativeSubscribeOptions`). */
   async subscribeStoreManaged(
     storeId: string,
     onEvent: (payload: unknown, kind: "snapshot" | "delta") => void,
+    opts: NativeSubscribeOptions = {},
   ): Promise<{ snapshot: unknown; dispose: () => void }> {
-    return await this.link.subscribe("native.mesh.store.subscribe", { storeId }, onEvent);
+    return await this.link.subscribe("native.mesh.store.subscribe", { storeId }, onEvent, opts);
   }
 
   // ---- DS-1 egress (design-02 §2.4's egress bullet; shapes in contracts mgmt.ts) ----

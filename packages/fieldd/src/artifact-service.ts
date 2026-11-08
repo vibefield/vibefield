@@ -51,7 +51,7 @@ import { createNoopLogger, durableRenameSync, type Logger } from "@vibefield/log
 import { canonicalTailnetDnsName } from "./device-service";
 import { MESH_BUS_CARRIES_CONTENT } from "./mesh-bus";
 import type { ObservedServe, ServeSpec, ServeState } from "./mesh-client";
-import { RpcCallError } from "./native-link";
+import { type NativeSubscribeOptions, RpcCallError } from "./native-link";
 import { serveAllowGlob } from "./terminal-serve";
 
 // ArtifactService (AH-1; artifact-hub §4/§5) owns source-local, durable serving
@@ -80,8 +80,10 @@ export interface ArtifactCatalogBridge {
   bootId: string;
   currentDeviceId(): string;
   devices(): DeviceInfo[];
+  /** NR — `opts` carries the service's owner of a refused replay down to NativeLink. */
   subscribe(
     cb: (payload: unknown, kind: "snapshot" | "delta") => void,
+    opts?: NativeSubscribeOptions,
   ): Promise<{ snapshot: unknown; dispose: () => void }>;
   publish(slice: ArtifactCatalogSlice): Promise<void>;
   onMeshWake(cb: () => void): () => void;
@@ -1216,22 +1218,34 @@ export class ArtifactService {
     }
     if (!this.#catalogSubscribed) {
       try {
-        const subscription = await catalog.subscribe((payload, kind) => {
-          if (this.#disposed) return;
-          void this.#enqueue(async () => {
+        const subscription = await catalog.subscribe(
+          (payload, kind) => {
             if (this.#disposed) return;
-            this.#onCatalogEvent(payload, kind);
-            if (kind === "snapshot") {
-              // NativeLink replay means the native store may have restarted or
-              // missed our previous best-effort write. Republish whole truth.
-              this.#lastPublishedCatalogSig = "";
-              this.#catalogDirty = true;
-            }
-            this.#refreshLocalCatalog(this.statuses());
-            this.#emitCatalog();
-            await this.#publishCatalogIfNeeded();
-          });
-        });
+            void this.#enqueue(async () => {
+              if (this.#disposed) return;
+              this.#onCatalogEvent(payload, kind);
+              if (kind === "snapshot") {
+                // NativeLink replay means the native store may have restarted or
+                // missed our previous best-effort write. Republish whole truth.
+                this.#lastPublishedCatalogSig = "";
+                this.#catalogDirty = true;
+              }
+              this.#refreshLocalCatalog(this.statuses());
+              this.#emitCatalog();
+              await this.#publishCatalogIfNeeded();
+            });
+          },
+          {
+            // NR (row 8b of the note's §6.1) — a refused replay ENDS the catalog's stream on the link. So the latch is
+            // let go, or the next mesh wake finds it set and never asks again. One sync is asked now, for a node that
+            // came up while the pass ran. Refused, that sync is deferred as a first subscribe is, to the next wake.
+            onReplayFailed: () => {
+              this.#catalogSubscribed = false;
+              this.#catalogStoreOff = null;
+              this.#scheduleCatalogSync();
+            },
+          },
+        );
         if (this.#disposed) {
           subscription.dispose();
           return;
