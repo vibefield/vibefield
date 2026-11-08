@@ -42468,3 +42468,64 @@ q1 (b) 20:52:05Z, q2 (a) 20:52:09Z, q3 (a) 20:52:16Z, q4 (a) 20:52:23Z.
   fill (a press is OS input).
 - The Needs acts drawn as a second pill (their own size and fill), and whether they move onto `ChromePillStyle`:
   a question, not 241's.
+
+## LP — the first signed nightly through the launch rails is published: `nightly-20261107.3`, every job green, desk-gates row 34 green on CI (records only; items 240 and 243 witnessed)
+
+(2026-11-08; records only, one docs commit over main `12996a6a0`, cut by the LAUNCH lead (vibe-field-2a) with git
+plumbing, so no checkout was touched; ordered by VF-PM at 01:07Z. The run's eight job logs are in
+`lanes/launch/records-nightly3/logs/`; the build's, `build-42427029598.log`, is sha256 `dfd888317b0f2468…`.)
+It is the first nightly to publish since `nightly-20261104`, and the first published through LP-1, TD-4, LP-6b and
+LP-5 (`nightly-20261107.1` and `.2` were built through them and went red). It witnesses items 240 and 243.
+
+**The run.** 42427029598, James's dispatch at 23:50:12Z on `a08b28f5d` (push 123, whose verify `42421460092` went
+green at 23:15:12Z (its job's completed_at; read 23:15:21Z)).
+- plan (23:50:16Z → 23:50:33Z): MAIN_GREEN true; `nightly-20261107.3`, version `0.1.0-nightly.20261107.3`,
+  prerelease, not the latest, skip false, after `nightly-20261107.2`.
+- tag (23:50:35Z → 23:50:52Z): `tag: nightly-20261107.3 at a08b28f5d… (create)`.
+- verify (23:50:55Z → 00:32:37Z): green.
+- build (James's click; 00:33:29Z → 01:00:37Z): green; what it read is below.
+- sign (James's click; 01:03:46Z → 01:04:32Z): `release-sign: signed 6 documents`, `channels.json version 29`.
+  release-verify read latest-mac.yml and release-manifest.json as the newest nightly release; the manifest touches
+  shell, fieldd and field-native.
+- converge (01:04:35Z → 01:05:40Z): release-verify again. The zip's app is valid on disk and satisfies its
+  Designated Requirement. The DMG read back: Developer ID (9F79X9D26S), notarized, stapled, accepted.
+- attest (01:05:42Z → 01:05:55Z): "Attestation created for 2 subjects", signed by the Public Good Sigstore instance.
+- publish (01:05:57Z → 01:06:29Z): created as a draft with `--verify-tag`, the local and remote asset lists equal
+  (`diff -u`), then the un-draft.
+
+**The build, read on CI for the first time since LP-1, TD-4 and LP-6b landed.**
+- Item 240's step, "Electron's binary", green (00:34:18Z → 00:34:20Z). The stage wrote `legal/`: Electron's and
+  Node's licences, Chromium's, and THIRD_PARTY_NOTICES.txt (645 components, 335 distinct licence texts).
+- In "Package, signed (J4)": the app notarized (00:49:48Z). The History package verifier passed (packaged-history 2,
+  index-open-ticket 30, history-witness 3), the Developer ID signature checked.
+- **Row 34, green** (00:58:32Z): `packaged-typed-agent.test.ts`, 3 rows passed; "Agents package verified (Developer
+  ID signature checked)". The role adds 140 ms at the median of 20 interleaved runs (role 144.9 ms, bare 4.4 ms).
+  After a relaunch the packaged fieldd was ready in 351.7 ms and published its gateway in 455.3 ms, within the
+  launcher's 8,000 ms wait.
+- WP8-plugins-package ok: release-keyed, identityRevision 6, 2 root keys; the index names 3 plugins for app
+  `0.1.0-nightly.20261107.3`; packaged-plugins passed 3 of 3 against the packaged SEA.
+- LSF-4-release ok, team 9F79X9D26S. host-links: 27 Mach-O files and 1 wasm module, no host link, no builder path.
+- The DMG: signed with a secure timestamp; notarized (submission `f8a20057-e822-4a50-83e3-2d2fdadf2a33`, Accepted
+  01:00:13Z); stapled. latest-mac.yml names it by its stapled bytes (211,723,783), and its blockmap is dropped.
+- After the package: BP-1b's host-library row, the update config, the asar allowlist and the planes' hashes, green.
+- **Steps 14–16 are skipped by design.** "Stage, release-keyed", "Package, UNSIGNED" and the unsigned checks are the
+  path for a build without the Apple credentials: each is `if: vars.VIBEFIELD_MAC_SIGNING != 'true'`
+  (`release.yml:263`, `:273` and `:282` at `a08b28f5d`). "Package, signed" (`:246`, `== 'true'`) stages for itself.
+
+**The release:** https://github.com/vibefield/vibefield/releases/tag/nightly-20261107.3, published 01:06:25Z: a
+prerelease, IMMUTABLE, 18 assets.
+- The DMG, `VibeField-0.1.0-nightly.20261107.3-arm64.dmg`: 211,723,783 bytes, the stapled size latest-mac.yml names.
+- The zip, 203,790,757 bytes, and its blockmap, 212,730.
+- latest-mac.yml, channels.json, release-manifest.json, trust-root.json and the nightly, beta and stable update
+  policies, each with its `.sig`; and SHA256SUMS.
+
+**What it closes.**
+- Item 240 (`bf33b76ef`): its step green on 42411304919, and again here, through to publish.
+- Item 243 (`9d208725d`): row 34 green on the first signed run since the fix. Its Owed is met: row 34 green, and the
+  steps after it in "Package, signed" ran on CI. desk-gates row 34 says so, its "Not yet green" corrected there.
+
+**Owed.**
+- The W rows on this release, which take James's hand.
+- ROADMAP's lines that owe "the first signed nightly" (LP-1's W rows, LP-5's packaged notices, LP-6b's remapped
+  witnesses) stand as written until the milestone's rewrite; this entry is their data. No row here read the
+  packaged app's `legal/`: the stage wrote it.
