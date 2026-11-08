@@ -292,9 +292,9 @@ const sources = (dir: string): string[] =>
     return entry.name.endsWith(".tsx") ? [path] : [];
   });
 
-/** each `<UiButton …>…</UiButton>` in a file: its line, its opening tag and its children */
-const kitButtons = (text: string): { line: number; open: string; children: string }[] =>
-  [...text.matchAll(/<UiButton\b/g)].map((m) => {
+/** each `<tag …>…</tag>` in a file: its line, its opening tag and its children */
+const elements = (text: string, tag: string): { line: number; open: string; children: string }[] =>
+  [...text.matchAll(new RegExp(`<${tag}\\b`, "g"))].map((m) => {
     const start = m.index ?? 0;
     let at = start + m[0].length;
     let depth = 0;
@@ -309,10 +309,35 @@ const kitButtons = (text: string): { line: number; open: string; children: strin
       else if (c === ">" && depth === 0) break;
     }
     const open = text.slice(start, at + 1);
-    const close = text.indexOf("</UiButton>", at);
+    const close = text.indexOf(`</${tag}>`, at);
     const children = open.endsWith("/>") || close < 0 ? "" : text.slice(at + 1, close);
     return { line: text.slice(0, start).split("\n").length, open, children };
   });
+
+type Kind = "kit" | "raw";
+/** a file's kit buttons: every `<UiButton>`, and every `<button>` or `<a>` that wears the kit's class itself — by
+ * `uiButtonClass`, by "vf-ui-button", or by settings-ui's `buttonCls` (which is `uiButtonClass`) where the file
+ * imports it from there */
+const kitButtons = (
+  text: string,
+): { line: number; open: string; children: string; kind: Kind }[] => {
+  const viaSettings = /import\s*\{[^}]*\bbuttonCls\b[^}]*\}\s*from\s*"[^"]*settings-ui"/.test(text);
+  const wears = (open: string): boolean => {
+    const cls = /\sclassName=(\{(?:[^{}]|\{[^{}]*\})*\}|"[^"]*")/.exec(open)?.[1] ?? "";
+    return (
+      /\buiButtonClass\b|vf-ui-button(?![\w-])/.test(cls) ||
+      (viaSettings && /\bbuttonCls\b/.test(cls))
+    );
+  };
+  return [
+    ...elements(text, "UiButton").map((b) => ({ ...b, kind: "kit" as const })),
+    ...["button", "a"].flatMap((tag) =>
+      elements(text, tag)
+        .filter((b) => wears(b.open))
+        .map((b) => ({ ...b, kind: "raw" as const })),
+    ),
+  ];
+};
 
 const squash = (code: string): string => code.replace(/\s+/g, " ").trim();
 /** the condition under which a button's own words say its press is running: `true` for a word that always does, the
@@ -324,14 +349,19 @@ const saysRunning = (children: string): string | null => {
     if (RUNNING_WORD.test(m[2] ?? "")) return squash(m[1] ?? "");
   return null;
 };
-/** the condition a button passes as `running`: `true` for the bare prop, its expression, or null */
-const passesRunning = (open: string): string | null => {
+/** the condition a button passes as running, or null: a `UiButton`'s `running` (`true` for the bare prop), a raw kit
+ * button's `data-running={cond ? "" : undefined}` */
+const passesRunning = (open: string, kind: Kind): string | null => {
+  if (kind === "raw") {
+    const m = /\sdata-running=\{\s*([\s\S]+?)\s*\?\s*""\s*:\s*undefined\s*\}/.exec(open);
+    return m === null ? null : squash(m[1] ?? "");
+  }
   const m = /\srunning(?:=\{((?:[^{}]|\{[^{}]*\})*)\})?(?=[\s/>])/.exec(open);
   if (m === null) return null;
   return m[1] === undefined ? "true" : squash(m[1]);
 };
 
-describe("DESIGN.md §7 'Off', Q2 (a) — a pill whose word says its press is running passes `running`", () => {
+describe("DESIGN.md §7 'Off', Q2 (a) — a pill whose word says its press is running says so to its stylesheet", () => {
   it("on the condition its words say it, and no pill passes it otherwise", () => {
     const wrong: string[] = [];
     for (const root of ["packages/field-app/src", "plugins"])
@@ -339,10 +369,10 @@ describe("DESIGN.md §7 'Off', Q2 (a) — a pill whose word says its press is ru
         const text = readFileSync(file, "utf8");
         for (const button of kitButtons(text)) {
           const says = saysRunning(button.children);
-          const passes = passesRunning(button.open);
+          const passes = passesRunning(button.open, button.kind);
           if (says !== passes)
             wrong.push(
-              `${relative(REPO, file)}:${button.line} — its words run on ${says}, it passes ${passes}`,
+              `${relative(REPO, file)}:${button.line} (${button.kind}) — its words run on ${says}, it passes ${passes}`,
             );
         }
       }
