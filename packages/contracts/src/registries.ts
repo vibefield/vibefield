@@ -645,9 +645,22 @@ export const AGENT_STOP = {
  *    plus its end lines (one, once slice 14's
  *    settle lands). Why 32 MiB: it holds one full-width fan-out at full answers (about 16.1–16.6 MiB) with about
  *    15.4–15.9 MiB to spare (est.), and it bounds the read a parked loop's wake makes of its whole journal at every
- *    turn (about 3.3 s near 32 MiB, est.; its measurement is owed). PROVISIONAL and raise-only: it starts low and is
+ *    turn (about 3.3 s near 32 MiB, est.; its measurement is owed). *Measured 2026-11-08 (Q33 (a), the older test Mac, a
+ *    builder's read, warm cache; cold boot not measured):* a near-full small-line journal's wake holds fieldd 3.04 s
+ *    in all (a lower bound), its longest block 1.78 s; one turn reading eight takes 13.5 s, so restore() reads within
+ *    RESTORE_READ_MAX_BYTES and settled() wakes the rest. PROVISIONAL and raise-only: it starts low and is
  *    raised once measured. A lowered number would lose nothing, since the check is at the append alone: a journal
  *    kept past it still reads whole, and its live run ends `flood` at its next line.
+ * CP-4a2b slice 14, the boot's read budget (Q33 (b); ruled 2026-11-08, §G 10 / §I 10, (a): the TOTAL budget).
+ * *Proposed 2026-11-08:*
+ *  - RESTORE_READ_MAX_BYTES: the journal bytes `restore()` reads IN ALL before `api.listen()`. Each adopted run's size
+ *    is read first (one size read each); whole reads only for the journals whose sizes keep the running total within
+ *    it, in adoption order; a journal that would cross it waits for `settled()`, and the walk goes on. A run past it
+ *    is adopted by `settled()` alone, one wake per macrotask (Q33 (c)). By design a near-full journal (about 32 MiB,
+ *    JOURNAL_MAX_BYTES) never rides `restore()`. Why 12 MiB: the 5 s line (a quarter of fieldd-supervisor's 20 s
+ *    READINESS_DEADLINE_MS) for a host four times slower is 1,250 ms on the older test Mac, and at the slowest rate Q33 (a)
+ *    measured there, a near-full journal's wake (M2 wake 2, 10.33 MiB/s, warm cache, cold boot not measured), that is
+ *    12.91 MiB, floored to a whole MiB. PROVISIONAL.
  * Over the whole block (ruled 2026-11-06): A bound a stored field is held to (SCRIPT_MAX_BYTES, a kept
  * version's bytes; RESULT_MAX_BYTES, a journal answer's `value`, by flowJournalLineOf; ARGS_DEPTH_MAX, a kept journal
  * line's depth (+4); HOST_CALLS_WAITING_MAX, a run record's `open`; STEP_LINES_MAX, a record step's `lines`;
@@ -674,6 +687,7 @@ export const FLOW_LIMITS = {
   FOLDER_CHARS: 4_096,
   RUN_AGENTS_MAX: 16,
   JOURNAL_MAX_BYTES: 33_554_432,
+  RESTORE_READ_MAX_BYTES: 12_582_912,
 } as const;
 
 /** CP-4a2a (DESIGN.md §9 "When a run's script cannot go on") — the flow host's honest refusal. SERVICE is

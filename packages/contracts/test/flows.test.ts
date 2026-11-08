@@ -131,7 +131,7 @@ describe("CP-4a1 — the library and fieldd's records on disk (CP4-Q18 (a))", ()
     expect(FLOW_FILE_SUFFIX).toBe(".flow.js");
   });
 
-  it("F4: a run's bounds, provisional until measured, and no call cap (CP4-S7, CP4-Q17 (a); the C ruling, 2026-11-07); its journal's byte bound (J1; board (a), 2026-11-07)", () => {
+  it("F4: a run's bounds, provisional until measured, and no call cap (CP4-S7, CP4-Q17 (a); the C ruling, 2026-11-07); its journal's byte bound (J1; board (a), 2026-11-07); the boot's read budget (slice 14, Q33 (b))", () => {
     expect(FLOW_LIMITS).toEqual({
       SCRIPT_MAX_BYTES: 65_536,
       RESULT_MAX_BYTES: 65_536,
@@ -164,6 +164,9 @@ describe("CP-4a1 — the library and fieldd's records on disk (CP4-Q18 (a))", ()
       // J1 (board `co-journal-byte-bound` (a), 2026-11-07; ruled 2026-11-07): a run's journal's bytes,
       // 32 MiB, past which the runs end the run `flood`; PROVISIONAL, raise-only
       JOURNAL_MAX_BYTES: 33_554_432,
+      // slice 14, Q33 (b) (ruled 2026-11-08, (a) the TOTAL budget): the journal bytes restore() reads in all
+      // before api.listen(), 12 MiB; PROVISIONAL
+      RESTORE_READ_MAX_BYTES: 12_582_912,
     });
   });
 
@@ -626,6 +629,37 @@ describe("CP-4a2b — a run's record, its states and its bounds (13b.3's C6, C9,
     expect(counts(FLOW_LIMITS.RUN_AGENTS_MAX + 1)).toBe(false);
     expect(counts(-1)).toBe(false);
     expect(counts(1.5)).toBe(false);
+  });
+
+  it("C6d (slice 14, Q11 (a)): a held step keeps its latest miss in fieldd's check words, at most 120 characters; a record kept before it parses, its steps with none", () => {
+    expect(Object.keys(FlowRunRecordStep.shape)).toContain("miss");
+    const kept = FlowRunRecord.parse(fixture("flow-run-record.miss"));
+    expect(kept.open).toMatchObject([
+      {
+        call: 41,
+        state: "holding",
+        miss: "the answer at field 2 of 3 is a string where the form takes a number",
+      },
+    ]);
+    expect(kept.held?.kind).toBe("flow-repair");
+    for (const name of [
+      "flow-run-record.valid",
+      "flow-run-record.agents",
+      "flow-run-record.forged-tail",
+    ]) {
+      const before = FlowRunRecord.parse(fixture(name));
+      expect(
+        [...before.open, ...before.steps].some((step) => step.miss !== undefined),
+        name,
+      ).toBe(false);
+    }
+    const missAs = (miss: unknown) =>
+      FlowRunRecord.safeParse({ ...record(), open: [{ call: 41, state: "holding", miss }] })
+        .success;
+    expect(missAs("x".repeat(120))).toBe(true);
+    expect(missAs("x".repeat(121))).toBe(false);
+    expect(missAs("")).toBe(false);
+    expect(missAs(7)).toBe(false);
   });
 
   it("C9: the six bounds the runs add are positive whole numbers", () => {

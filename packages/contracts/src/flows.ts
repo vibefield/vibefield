@@ -390,7 +390,12 @@ export type RunSummary = z.infer<typeof RunSummary>;
  * OPEN), and each line VibeField sent it, recorded BEFORE it is queued (D5): which line (`prompt`, `in`, `repair`,
  * `resume`, `unheard`), its `n`, and what is known of its sending (`sending`, `queued`, `uncertain`, OPEN). `cut`
  * when its answer was cut short (the journal's answer's `cut`), so RunSummary's step `cut` is projected from the record
- * alone (C4; added 2026-11-06 on bsp's finding, VF-PM's (b), 22:49Z: v2.7's verbatim block had none). */
+ * alone (C4; added 2026-11-06 on a finding, ruled (b) the same day: v2.7's verbatim block had none).
+ * *Proposed 2026-11-08 (CP-4a2b slice 14, Q11 (a); ruled 2026-11-08 (2), CONTRACTS SOURCE):* `miss`, the step's latest
+ * miss, kept on the record so that Ask once more after a restart sends the repair line again: DESIGN.md §9's
+ * ‹fieldd's check›, fieldd's own words for the first place the answer missed its form (JSON types and places alone,
+ * never the agent's text, MT-L6), cut at 120 characters (fieldd's FORM_WORDS_MAX). Optional (the tolerant reader): a
+ * record kept before it parses, its steps with none. */
 export const FlowRunRecordStep = z
   .object({
     call: FlowCallNumber,
@@ -414,6 +419,7 @@ export const FlowRunRecordStep = z
       )
       .max(FLOW_LIMITS.STEP_LINES_MAX)
       .optional(),
+    miss: z.string().min(1).max(120).optional(), // its latest miss, fieldd's check words (Q11 (a))
   })
   .passthrough();
 export type FlowRunRecordStep = z.infer<typeof FlowRunRecordStep>;
