@@ -43403,3 +43403,91 @@ ts6 form.
   the Mac's rosettad, `/Volumes/SamsungRed/rust-target/rosetta-pin/release/rosettad`, rebuilt at the EL8's land
   (16:19:27Z). Paid in a later dated LANDED entry.
 - Item 255: `smoke:studio` again, alone, on an awake display.
+
+## Item 254 — the first-run judge reads the heads a word's list pins: a line wholly under an opaque sticky box that paints over it is not on the still, and one partly under is cut and said "under its list's pinned head" (2026-11-08)
+
+(2026-11-08; two commits, HG's (vibe-field-7c), in `/Volumes/SamsungRed/lanes/hg/vibe-field`: red `c9d6fc3f7` (tree
+`83b90973f995`) → green `2440e6dcd` (tree `3cfeb657132b`), on main `14d9414c4`.
+- **The cuts.** It was cut on `e60d8add6` (r1: red `f468180ac`, green `fb6d0e641`, frozen 12:56Z, `lanes/hg/item254/`,
+  SHA256SUMS `c9e37106`) and replayed in proof form as main moved. r2, on `68b80fb95` (`20c1481c3`), was superseded
+  unminted when the EL8's records landed. r3, on `14d9414c4`, is `lanes/hg/item254-r3/`, SHA256SUMS `b4ced02e`.
+- **The proof form.** Each tree equals its merge over `e60d8add6`, and each patch-id and author is r1's. The
+  range-diff reads `=` on the red and `!` on the green's message alone: its landing-order clause was corrected at the
+  re-cut to "behind the EL8 and its records, before item 253" (VF-PM's ruling, 16:30:31Z).
+- **The mint and the land.** Minted as M231 (run231); landed `2440e6dcd` (2026-11-08T16:54:29Z), a fast-forward of main
+  `14d9414c4`.)
+
+VF-PM ruled item 254 a TEST red at 11:34Z: cut red → green in lane hg, `packages/electron-shell` only, within three
+bounds.
+- 2 files, +335 −13: `packages/electron-shell/src/testing/smoke-first-run.ts` 112 13 and its test 223 0. There is no
+  pin-class path, no release-class or release-adjacent one, and no new import edge.
+
+**What.**
+- **The product's change.** 586438a91 (James, PR #15, 2026-11-03) pinned the profiles pane's card head on the glass:
+  "Keep profile headings visible with rounded scroll clipping". In `setup/profiles-pane.css` the head is
+  `position: sticky; z-index: 1`, on `--vf-chrome-solid`. The commit recorded the red that followed as its own
+  follow-up: "The catalog walk still reports contrast failures on its first day Welcome capture and the ChatGPT Pro
+  label in day/night ready-profile fixtures."
+- **Why the judge went red.** In "(ready)" the grown card scrolls into view (`ProfilesPaneView.tsx:163–165`), carrying
+  This Mac's first rows under the head. The judge's finder (`PAGE_WORDS`' `wordsIn`, unchanged since `96e99edff`)
+  clipped a line only by the boxes around it that cut what overflows them. So it read the covered "ChatGPT Pro" as
+  shown, and cut its ink from the head's own ground: 1:1 by day and by night (row 32's catalog walk, at `042ca0f2e` and
+  at `e60d8add6`).
+- **What stands.** The product's choice stands, and nothing is drawn faint.
+
+The fix:
+- **A head** is a `position: sticky` box inside the word's nearest scroller (the first `overflow-y: auto|scroll` box
+  around it) that is none of the word's ancestors. Each scroller's heads are read once a read, each with the box it
+  shows in.
+- **When a head covers a word.** It covers when it is opaque and paints over the word.
+  - Opaque means its computed background alpha is whole, times its opacity and that of every box from it to the box it
+    shares with the word. A translucent head shows the word through it, and the word is measured as it shows.
+  - "Paints over" is CSS's painting order, read from the computed styles (`layerOf`). From the shared box down, the
+    outermost box making a stacking context paints at its z-index (0 with none). Failing one, a positioned box paints
+    at 0, and in-flow content paints under every positioned box. On one layer, the later box in tree order paints
+    over.
+- **What a head leaves.** A line wholly under a head is dropped. A line partly under keeps the larger band the head
+  leaves, and the word's `cut` reads `"head"`. passedOver says "under its list's pinned head", from one table beside
+  "cut off at its list's edge" and "cut off by its box": different facts, said apart, since the next reader bisects by
+  them.
+- **The two readings** within the bounds were ACCEPTED as the rule (VF-PM, 12:57Z): a tie goes to tree order, and the
+  head's opacity multiplies its alpha.
+- **Not modelled**, and said so in the green's message:
+  - a head's rounded corners count as covered;
+  - a background image over a transparent colour counts as translucent;
+  - a head in a nested scroller is clipped by that scroller first.
+
+**The proof.**
+- **The red** (r1; the Mac's door, nice 19, 11:47:08–11:48:00Z):
+  - biome, then vitest `test/smoke-first-run.test.ts`: 2 failed | 53 passed (55), on (i) and (ii) alone; tsc exit 0;
+  - the rows run `wordsIn` on a fake page of the card as 586438a91 pins it: (i) wholly under is dropped, at z-index 1
+    and with none; (ii) partly under is cut `"head"`; (iii) the head's own words are whole; (iv) a translucent head,
+    by alpha or by opacity, does not clip; (v) the stacking is read, not assumed.
+- **The green** (at r2's tip `20c1481c3`, 16:25:50–16:26:23Z; the rows VF-PM's rule names):
+  - biome on the two files: "No fixes applied";
+  - `check:walls`' four commands clean ("266 of 1125 test files make a temp root"); `check:retired` clean;
+  - `smoke-first-run.test.ts` 55/55, `smoke-catalog.test.ts` 9/9, and tsc exit 0;
+  - they carry to r3 by VF-PM's ruling: `git diff --stat 20c1481c3 2440e6dcd` is the records commit's three docs and
+    nothing else.
+- **The mint**, M231 (run231, vf-m2): `pnpm verify` at `2440e6dcd`.
+  - It exited 0, GREEN, in 5 min 48 s (16:44:25–16:50:13Z). Every line was as the brief's expected set, missing [] /
+    extra [] (a9; `lanes/vf-m2/run231-a9-results/`, SHA256SUMS-a9-run231 `b15ba1bd`). Nothing was KEPT in /private/tmp.
+  - Its lines are run230's but electron-shell's "Tests 2751 passed | 2 skipped (2753)" (run230 read 2746 | 2
+    (2748)): the red's five rows.
+
+**Found.**
+- `docs/desk-gates.md` row 32's contrast clause named five classes a word is passed over for, and no pinned head. This
+  records commit corrects it at its source, dated: a word partly under its list's pinned head is passed over and said
+  so, and one wholly under it is not on the still.
+- The Welcome 1.2:1 from IOS's rerun at `042ca0f2e` is separate, with no item (586438a91's line names a first-day
+  Welcome capture too). DR's control at `e60d8add6` does not reproduce it.
+- run231's 1-min load peaked at 42.76 (16:47:21Z), past item 217's line of about 40, and `listener_accept_pressure`
+  passed: a reading, not a verdict.
+- fd's guard sampler saw `run-first-run.mjs` at 11:47:30Z and 12:53:03Z. Those were this item's vitest rows, whose
+  launcher rows spawn it with a `#!node` stand-in for Electron (`test/fake-electron.ts`). No Electron ran (fd,
+  13:03:59Z).
+
+**Owed.**
+- Row 32's witness: item 253's rosettad and this fix, on the old mini, by a9 (VF-PM). On the Mac, item 253's fix is
+  in main at `ef22fb3b7` and row 32's next `gate:landing` there is OWED, in a later dated entry.
+- `gate:landing` at this landing: OWED, with row 32's witness above.
