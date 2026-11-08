@@ -328,6 +328,18 @@ const R23B_ALLOW = [
     count: 1,
     why: "Settings → Terminal's miniature (GT-7d): one sample agent pane drawn from a fixed frame — fixture data, never compared",
   },
+  // ES-4 (track ES, 2026-11-08; VF-PM's ruling on run237's red, 21:33Z): the hello's ruled starters, a LIVE AR-L1
+  // exception made explicit, and the night plate's fixture adapter.
+  {
+    file: "packages/field-app/src/chat/starters.ts",
+    count: 3,
+    why: "the hello's ruled starters (NS-D4, §9; ES-D4 A; DESIGN.md §8 \"Filled from this Mac\"): `RULED` names the agents the ruled words name, the crew's Grok, the handle's claude·2 and the review's Codex, kept where this Mac has them — a LIVE AR-L1 exception made explicit (ES-4); retire it when the catalog row carries the starter's role (a contracts change with the kit's six mirrors: ES's follow-up)",
+  },
+  {
+    file: "packages/field-app/src/design-system/chat-fixtures.ts",
+    count: 3,
+    why: "the design catalog's fixture adapter (docs/UI_SYSTEM.md; ES-4's plate \"The night, another Mac's jobs\"): another Mac's agents, Claude Code and Codex, and its Codex runs fed to the shipping night through `startersOf` — fixture data, never compared to a live row",
+  },
   {
     file: "packages/electron-shell/src/testing/typed-agent.ts",
     count: 1,
