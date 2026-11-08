@@ -275,11 +275,21 @@ if (!has("no-build")) {
 function buildSwiftHelpers(): void {
   const binDir = join(labRoot, "bin");
   mkdirSync(binDir, { recursive: true });
+  // Item 249 (2026-11-08, 249b): the SDK is named, as build-screenshot-helper.mjs names it: one
+  // lookup, handed to swiftc as `-sdk`. A bare `swiftc` builds against xcrun's DEFAULT SDK, which
+  // need not be the selected Xcode's (vf-m2, run 220: the Command Line Tools' 27.2 under Xcode
+  // 26.3). A failed lookup means no macOS toolchain, as unfatal here as a missing `swiftc`.
+  const lookup = spawnSync("xcrun", ["--sdk", "macosx", "--show-sdk-path"], { encoding: "utf8" });
+  if (lookup.status !== 0) {
+    const why = lookup.stderr ?? "";
+    process.stdout.write(`\n(no macOS SDK — the native control will be unavailable)\n${why}\n`);
+    return;
+  }
+  const sdk = lookup.stdout.trim();
   for (const name of ["inject-keys", "list-windows"]) {
     const source = join(repoRoot, "tooling", "terminal-perf", "fixture", `${name}.swift`);
-    const result = spawnSync("swiftc", ["-O", "-o", join(binDir, name), source], {
-      encoding: "utf8",
-    });
+    const args = ["swiftc", "-sdk", sdk, "-O", "-o", join(binDir, name), source];
+    const result = spawnSync("xcrun", args, { encoding: "utf8" });
     if (result.status !== 0) {
       process.stdout.write(
         `\n(the ${name} helper did not build — the native control will be unavailable)\n` +

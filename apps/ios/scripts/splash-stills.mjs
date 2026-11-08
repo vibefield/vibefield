@@ -26,7 +26,11 @@ try {
   const run = (cmd, args) => execFileSync(cmd, args, { encoding: "utf8", stdio: ["ignore", "pipe", "inherit"] });
   run("xcrun", ["-sdk", "macosx", "metal", "-c", join(SPLASH, "SplashShaders.metal"), "-o", join(work, "splash.air")]);
   run("xcrun", ["-sdk", "macosx", "metallib", join(work, "splash.air"), "-o", join(work, "splash.metallib")]);
-  run("xcrun", ["swiftc", "-O", "-parse-as-library", join(HERE, "splash-stills.swift"), join(SPLASH, "SplashRuntime.swift"), join(SPLASH, "SplashBake.swift"), "-o", join(work, "splash-stills")]);
+  // Item 249 (2026-11-08, 249b): swiftc's SDK is named, as build-screenshot-helper.mjs names it: one lookup, handed
+  // to swiftc as `-sdk`. A bare `xcrun swiftc` builds against xcrun's DEFAULT SDK, which need not be the selected
+  // Xcode's (vf-m2, run 220: the Command Line Tools' 27.2 under Xcode 26.3). The two Metal lines above name theirs.
+  const sdk = run("xcrun", ["--sdk", "macosx", "--show-sdk-path"]).trim();
+  run("xcrun", ["swiftc", "-sdk", sdk, "-O", "-parse-as-library", join(HERE, "splash-stills.swift"), join(SPLASH, "SplashRuntime.swift"), join(SPLASH, "SplashBake.swift"), "-o", join(work, "splash-stills")]);
   process.stdout.write(run(join(work, "splash-stills"), [join(work, "splash.metallib"), join(work, "stills")]));
 
   mkdirSync(SET, { recursive: true });

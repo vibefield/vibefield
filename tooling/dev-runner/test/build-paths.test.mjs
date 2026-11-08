@@ -629,6 +629,13 @@ test("mille's install name: install_name_tool -id, THEN an ad hoc signature; a f
 test("on this Mac: a dylib named by its target path leaves with @rpath, a valid ad hoc signature and no builder path", (t) => {
   if (process.platform !== "darwin") return t.skip("install_name_tool and codesign are macOS's");
   if (spawnSync("cc", ["--version"]).status !== 0) return t.skip("no C compiler to make a dylib");
+  // Item 249 (2026-11-08, 249b): the SDK is named, as build-screenshot-helper.mjs names it: one
+  // lookup, handed to cc as `-isysroot`. A bare `cc` links against xcrun's DEFAULT SDK, which need
+  // not be the selected Xcode's: on vf-m2 this row went red at the link (run 221, the Command Line
+  // Tools' 27.2 under Xcode 26.3's ld, which cannot read its `.tbd` stubs).
+  const sdk = spawnSync("xcrun", ["--sdk", "macosx", "--show-sdk-path"], { encoding: "utf8" });
+  assert.equal(sdk.status, 0, sdk.stderr);
+  const sysroot = sdk.stdout.trim();
   const dir = mkdtempSync(join(tmpdir(), "vf-install-name-"));
   try {
     writeFileSync(join(dir, "x.c"), "int mille_probe(void) { return 42; }\n");
@@ -644,7 +651,15 @@ test("on this Mac: a dylib named by its target path leaves with @rpath, a valid 
     );
     const cc = spawnSync(
       "cc",
-      ["-dynamiclib", "-o", node, join(dir, "x.c"), `-Wl,-install_name,${built}`],
+      [
+        "-isysroot",
+        sysroot,
+        "-dynamiclib",
+        "-o",
+        node,
+        join(dir, "x.c"),
+        `-Wl,-install_name,${built}`,
+      ],
       {
         encoding: "utf8",
       },
