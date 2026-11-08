@@ -464,18 +464,27 @@ export interface ListSeen extends Box {
 }
 
 /** One lettered text of the band or the standing pane (FG-O2's judge): one text node, the box each of its lines takes
- * (clipped to what the boxes around it let show) and their extent; what it says; how much of it shows; whether it
- * stands in a control that is off, and under a box still moving (an animation or a transition running on it or
- * around it); whether a box around it cut it off, its list or another (an ellipsis's cut excepted: it ends a line as
- * the line is drawn); its colour as computed; and the list it scrolls in. */
+ * (clipped to what the boxes around it let show, and to what a head its list pins over it leaves) and their extent;
+ * what it says; how much of it shows; whether it stands in a control that is off, and under a box still moving (an
+ * animation or a transition running on it or around it); whether a box around it cut it off, its list or another (an
+ * ellipsis's cut excepted: it ends a line as the line is drawn), or a head its list pins over it covers part of it
+ * (item 254: a sticky box that paints over it, opaque); its colour as computed; and the list it scrolls in. */
 export interface WordSeen extends WordsSeen {
   readonly lines: readonly Box[];
   readonly off: boolean;
   readonly fading: boolean;
-  readonly cut: "list" | "box" | null;
+  readonly cut: "list" | "box" | "head" | null;
   readonly color: string;
   readonly list: ListSeen | null;
 }
+
+/** What the judge says of a word cut off, by what cut it: its list's edge, a box around it, or its list's pinned head
+ * over it — three facts, said apart, as the next reader bisects by them. */
+const CUT_SAID: Readonly<Record<NonNullable<WordSeen["cut"]>, string>> = {
+  list: "cut off at its list's edge",
+  box: "cut off by its box",
+  head: "under its list's pinned head",
+};
 
 /** FG-O2's read of the page (`inks()`): the window's size, whether the wizard has come, the field under the splash
  * (its state, and its canvas's opacity while the live field fades in over its still), the splash's stage line (null
@@ -530,14 +539,13 @@ export type InkCut =
 /** FG-O2's judge: why a word is passed over rather than held at the bar, or null when it is held. A word is held as it
  * stands, dimmed or not: one in a control that is off is passed over (an inactive control's words carry no contrast
  * need, WCAG 2's 1.4.3); one shown less than whole only for a moment, still fading, shows less than its ink; one cut
- * off shows part of it, and one in a masked list's foot stands under its fade on purpose; and a word the read on the
- * capture's other side (`before`) did not hold as it holds now changed under the capture, so its pixels may show
- * another. */
+ * off, or partly under its list's pinned head, shows part of it, and one in a masked list's foot stands under its fade
+ * on purpose; and a word the read on the capture's other side (`before`) did not hold as it holds now changed under
+ * the capture, so its pixels may show another. */
 export function passedOver(word: WordSeen, before: readonly WordSeen[] | null): string | null {
   if (word.off) return `in a control that is off (${word.shown})`;
   if (word.fading && word.shown < 0.999) return `fading (${word.shown})`;
-  if (word.cut !== null)
-    return word.cut === "list" ? "cut off at its list's edge" : "cut off by its box";
+  if (word.cut !== null) return CUT_SAID[word.cut];
   const list = word.list;
   const slack = FIRST_RUN.slackPx;
   if (
@@ -798,15 +806,77 @@ export const PAGE_WORDS = String.raw`  const opacity = (el) => Number.parseFloat
     const r = el.getBoundingClientRect();
     return { x: r.x, y: r.y, width: r.width, height: r.height };
   };
+  // a colour's alpha as the page computes it: rgba()'s fourth, a colour function's after its slash, else whole
+  const alphaOf = (color) => {
+    const a = (/^rgba?\((?:[^,]*,){3}\s*([\d.]+%?)\s*\)$/.exec(color) ?? /\/\s*([\d.]+%?)\s*\)$/.exec(color))?.[1];
+    if (a === undefined) return 1;
+    return a.endsWith("%") ? Number.parseFloat(a) / 100 : Number(a);
+  };
+  // item 254: where a box paints in the context it shares with another, by CSS's painting order (CSS 2's Appendix E),
+  // read from the box they share down to it: the outermost box on the way that makes a stacking context paints at its
+  // z-index, or at 0 with none; failing one, a positioned box paints at 0, and in-flow content under every positioned
+  // box (-0.5). Two boxes on one layer paint in tree order. A box makes a stacking context positioned with a z-index,
+  // as a flex or grid item with one, fixed or sticky, or by the properties CSS has added since (and will-change naming
+  // one of them).
+  const APART = ["transform", "translate", "rotate", "scale", "filter", "backdropFilter", "perspective", "clipPath"];
+  const WILL_APART = /transform|translate|rotate|scale|opacity|filter|perspective|clip-path|mask|isolation|blend|contain/;
+  const ownContext = (s) =>
+    s.position === "fixed" ||
+    s.position === "sticky" ||
+    Number.parseFloat(s.opacity) < 1 ||
+    s.isolation === "isolate" ||
+    s.mixBlendMode !== "normal" ||
+    /size/.test(s.containerType) ||
+    /paint|layout|strict|content/.test(s.contain) ||
+    WILL_APART.test(s.willChange) ||
+    (s.maskImage || s.webkitMaskImage) !== "none" ||
+    APART.some((name) => s[name] !== "none");
+  const layerOf = (el, shared) => {
+    const way = [];
+    for (let at = el; at !== shared; at = at.parentElement) way.unshift(at);
+    let layer = -0.5;
+    for (const at of way) {
+      const s = getComputedStyle(at);
+      const placed = s.position !== "static";
+      const item = /flex|grid/.test(getComputedStyle(at.parentElement).display);
+      if (s.zIndex !== "auto" && (placed || item)) return Number(s.zIndex);
+      if (ownContext(s)) return 0;
+      if (placed) layer = 0;
+    }
+    return layer;
+  };
+  // the boxes a list pins (position: sticky), each with the box it shows in: clipped, as a word's line is, by every box
+  // around it that cuts what overflows it, up to its list
+  const pinnedIn = (list) => {
+    const pins = [];
+    for (const at of list.querySelectorAll("*")) {
+      if (getComputedStyle(at).position !== "sticky") continue;
+      const b = box(at);
+      let [x0, y0, x1, y1] = [b.x, b.y, b.x + b.width, b.y + b.height];
+      for (let up = at.parentElement; up !== null && list.contains(up); up = up.parentElement) {
+        const s = getComputedStyle(up);
+        if (s.overflowX === "visible" && s.overflowY === "visible") continue;
+        const c = box(up);
+        [x0, y0] = [Math.max(x0, c.x), Math.max(y0, c.y)];
+        [x1, y1] = [Math.min(x1, c.x + c.width), Math.min(y1, c.y + c.height)];
+      }
+      pins.push({ at, x0, y0, x1, y1 });
+    }
+    return pins;
+  };
   // FG-O2's judge: every lettered text in a scope, one text node at a time. Each of its lines is the box a range over
   // the node gives it (never its element's box), clipped by every box around it that cuts what overflows it; a box that
   // cuts a line short says the word was cut off, its list (a scroller) or another, but an ellipsis's cut, which ends a
-  // line as the line is drawn. A text not one line of which shows past the slack is not on the still. Its list is the
-  // scroller nearest it, with whether it wears its fade (a mask).
+  // line as the line is drawn. Its list is the scroller nearest it, with whether it wears its fade (a mask). A head its
+  // list pins over it (item 254: a sticky box in that list, not around the word, painting over it, and opaque: its
+  // background's alpha whole, and every box from it to the one it shares with the word) leaves of each line only what
+  // it does not cover, and says the word stands under its list's pinned head; a translucent one shows the word through
+  // it, measured as it shows. A text not one line of which shows past the slack is not on the still.
   const lettered = /\p{L}/u;
   const wordsIn = (scope) => {
     if (scope === null || scope === undefined) return [];
     const slack = ${FIRST_RUN.slackPx};
+    const pinned = new Map();
     const words = [];
     const walker = document.createTreeWalker(scope, NodeFilter.SHOW_TEXT);
     for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
@@ -826,13 +896,32 @@ export const PAGE_WORDS = String.raw`  const opacity = (el) => Number.parseFloat
         fading = at.getAnimations().some((animation) => animation.playState === "running");
       const clips = [];
       let list = null;
+      let scroller = null;
       for (let at = el; at !== null; at = at.parentElement) {
         const s = at === el ? style : getComputedStyle(at);
         if (s.overflowX === "visible" && s.overflowY === "visible") continue;
         const scrolls = /(auto|scroll)/.test(s.overflowY);
         clips.push({ ...box(at), scrolls, ellipsis: s.textOverflow === "ellipsis" });
-        if (scrolls && list === null)
+        if (scrolls && list === null) {
           list = { ...box(at), masked: (s.maskImage || s.webkitMaskImage || "none") !== "none" };
+          scroller = at;
+        }
+      }
+      // the heads its list pins over it: none around it, each opaque and painting over it
+      const heads = [];
+      if (scroller !== null) {
+        if (!pinned.has(scroller)) pinned.set(scroller, pinnedIn(scroller));
+        for (const pin of pinned.get(scroller)) {
+          if (pin.at.contains(el)) continue;
+          let shared = pin.at.parentElement;
+          while (!shared.contains(el)) shared = shared.parentElement;
+          let whole = alphaOf(getComputedStyle(pin.at).backgroundColor);
+          for (let at = pin.at; at !== shared; at = at.parentElement) whole *= opacity(at);
+          if (whole < 1) continue;
+          const [over, under] = [layerOf(pin.at, shared), layerOf(el, shared)];
+          const after = (el.compareDocumentPosition(pin.at) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
+          if (over > under || (over === under && after)) heads.push(pin);
+        }
       }
       const range = document.createRange();
       range.selectNodeContents(node);
@@ -847,6 +936,16 @@ export const PAGE_WORDS = String.raw`  const opacity = (el) => Number.parseFloat
           const short = cy1 - cy0 < y1 - y0 - slack || (cx1 - cx0 < x1 - x0 - slack && !c.ellipsis);
           if (short && cut === null) cut = c.scrolls ? "list" : "box";
           [x0, y0, x1, y1] = [cx0, cy0, cx1, cy1];
+        }
+        // what a head leaves of the line: the larger band it does not cover where it spans the line across (or down),
+        // none where it covers the line whole, and the line as it stands where it covers a corner of it; cut each way
+        for (const h of heads) {
+          const [ox0, oy0] = [Math.max(x0, h.x0), Math.max(y0, h.y0)];
+          const [ox1, oy1] = [Math.min(x1, h.x1), Math.min(y1, h.y1)];
+          if (ox1 - ox0 <= slack || oy1 - oy0 <= slack) continue;
+          if (cut === null) cut = "head";
+          if (ox0 - x0 <= slack && x1 - ox1 <= slack) [y0, y1] = oy0 - y0 >= y1 - oy1 ? [y0, oy0] : [oy1, y1];
+          else if (oy0 - y0 <= slack && y1 - oy1 <= slack) [x0, x1] = ox0 - x0 >= x1 - ox1 ? [x0, ox0] : [ox1, x1];
         }
         if (x1 - x0 > slack && y1 - y0 > slack) lines.push({ x: x0, y: y0, width: x1 - x0, height: y1 - y0 });
       }

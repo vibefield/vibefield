@@ -679,6 +679,7 @@ describe('FG-O2\'s judge: every word on the glass at 4.5:1 (DESIGN.md §8 "Its w
     expect(passedOver({ ...label, fading: true }, null)).toBeNull();
     expect(passedOver({ ...label, cut: "list" }, null)).toBe("cut off at its list's edge");
     expect(passedOver({ ...label, cut: "box" }, null)).toBe("cut off by its box");
+    expect(passedOver({ ...label, cut: "head" }, null)).toBe("under its list's pinned head");
     // a list 100 tall whose foot fades over its last 20: a word ending in that foot stands under the fade; one ending
     // above it, or in a list that wears no fade, is held
     const list = { x: 0, y: 0, width: 60, height: 100, masked: true };
