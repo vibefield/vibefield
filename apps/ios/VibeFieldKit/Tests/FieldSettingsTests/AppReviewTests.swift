@@ -148,6 +148,38 @@ struct AppReviewTests {
     #expect(ghostteaDeps == ["anyhow", "OpenSSL"])
   }
 
+  @Test("VibeField's own parts (`own: true`) ride the record and are in no group; no group is left empty")
+  func ownPartsAreNotDrawn() {
+    // Three own parts: one in a leading role, one in a role of its own, and rosetta as the generator writes its own
+    // row, with its note and no roles, so unfiltered it would sit last under no head.
+    let json = #"""
+      {"schema": 1, "components": [
+        {"ecosystem": "swift", "name": "ghosttea", "version": "0.14.0", "licence": "MIT", "texts": [],
+         "roles": ["the terminal"]},
+        {"ecosystem": "swift", "name": "ours, in the terminal", "version": "0.1.0", "licence": "", "texts": [],
+         "roles": ["the terminal"], "own": true},
+        {"ecosystem": "swift", "name": "ours, in a role of its own", "version": "0.1.0", "licence": "", "texts": [],
+         "roles": ["agent history"], "own": true},
+        {"ecosystem": "swift", "name": "rosetta", "version": "0.1.5", "licence": "",
+         "note": "agent history's Swift client (RosettaClient); the owner's own, UNLICENSED", "own": true, "texts": []}
+      ], "texts": []}
+      """#
+    let state = Acknowledgements.parse(Data(json.utf8))
+    guard case .bundled(let doc) = state else {
+      Issue.record("reads as \(state)")
+      return
+    }
+    let kept = doc.parts.count
+    let groups = Acknowledgements.groups(doc)
+    let titles = groups.map { $0.title }
+    let drawn = groups.flatMap { $0.parts.map { $0.name } }
+    let empty = groups.filter { $0.parts.isEmpty }.map { $0.title }
+    #expect(kept == 4)
+    #expect(titles == ["The terminal"])
+    #expect(drawn == ["ghosttea"])
+    #expect(empty.isEmpty)
+  }
+
   @Test("a row: the name, its version under it, its licence as the value; no version, no line")
   func rows() throws {
     let doc = try fixture()
