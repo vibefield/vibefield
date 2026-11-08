@@ -128,7 +128,7 @@ export function AgentsShelfView({
         />
         {unavailable?.retry !== false && (
           <div className="vf-agents-retry">
-            <UiButton onClick={onRescan} disabled={rescanning}>
+            <UiButton onClick={onRescan} running={rescanning}>
               {rescanning ? "Trying…" : "Try again"}
             </UiButton>
           </div>
@@ -163,7 +163,7 @@ export function AgentsShelfView({
           title="No coding agents on this Mac yet"
           description="VibeField looks on your PATH and in each agent's usual install folder. Install one, and it appears here."
           actions={
-            <UiButton onClick={onRescan} disabled={rescanning}>
+            <UiButton onClick={onRescan} running={rescanning}>
               {rescanning ? "Looking…" : "Look again"}
             </UiButton>
           }
@@ -189,7 +189,7 @@ export function AgentsShelfView({
         title="Installed"
         description={checking ? "Checking for updates…" : shelfCheckedLine(items, now)}
         action={
-          <UiButton onClick={onCheck} disabled={checking}>
+          <UiButton onClick={onCheck} running={checking}>
             {checking ? "Checking…" : "Check for updates"}
           </UiButton>
         }
@@ -228,7 +228,7 @@ function AgentShelfRow({
   const factId = `vf-agents-fact-${item.provider}`;
   let action: ReactNode = null;
   if (item.updating) {
-    action = <UiButton disabled>Updating…</UiButton>;
+    action = <UiButton running>Updating…</UiButton>;
   } else if (canUpdate(item, machineScope)) {
     action = (
       <UiButton onClick={() => onUpdate(item.provider)} aria-label={`Update ${item.label}`}>
@@ -520,12 +520,12 @@ function HeroAction({
   // its version is read back, there is nothing to stop yet.
   if (item.operation?.state === "running") {
     return (
-      <UiButton onClick={onStop} disabled={stopping} aria-label={`Stop updating ${item.label}`}>
+      <UiButton onClick={onStop} running={stopping} aria-label={`Stop updating ${item.label}`}>
         {stopping ? "Stopping…" : "Stop"}
       </UiButton>
     );
   }
-  if (item.updating) return <UiButton disabled>Updating…</UiButton>;
+  if (item.updating) return <UiButton running>Updating…</UiButton>;
   if (canUpdate(item, machineScope) && item.available !== undefined) {
     return (
       <UiButton variant="primary" onClick={onUpdate}>

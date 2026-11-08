@@ -93,7 +93,7 @@ export function BrowserDataSectionView({
       >
         {asking ? (
           <div className="flex items-center gap-2">
-            <UiButton variant="danger" disabled={clearing} onClick={onConfirm}>
+            <UiButton variant="danger" running={clearing} onClick={onConfirm}>
               {clearing ? "Clearing…" : "Clear and sign out"}
             </UiButton>
             <UiButton disabled={clearing} onClick={onCancel}>

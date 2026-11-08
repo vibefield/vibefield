@@ -20,10 +20,14 @@ export type UiButtonVariant = "quiet" | "primary" | "danger";
 
 export function UiButton({
   variant = "quiet",
+  running = false,
   className = "",
   ...props
 }: ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: UiButtonVariant;
+  /** DESIGN.md §7 "Off", Q2 (a): the pill's own press is running and its word says so ("Saving…"). It is
+   * `disabled`, so its hits are off, and it keeps its look (`data-running`); a pill only `disabled` is off. */
+  running?: boolean;
   /** React 19 hands `ref` to a function component as a prop; it reaches the
    * button with the rest, so a caller can move focus to it (a menu's trigger
    * on close, a confirm's act when it arms). */
@@ -35,6 +39,8 @@ export function UiButton({
       type={props.type ?? "button"}
       className={`${uiButtonClass} ${className}`.trim()}
       data-variant={variant}
+      disabled={running || props.disabled}
+      data-running={running ? "" : undefined}
     />
   );
 }

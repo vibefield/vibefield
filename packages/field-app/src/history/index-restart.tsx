@@ -56,7 +56,7 @@ export function HistoryIndexRestart({ client }: { client: IndexRestartClient }):
   const restarting = state.state === "restarting";
   return (
     <div className="vf-history-index-act" data-state={state.state}>
-      <UiButton variant="primary" disabled={restarting} onClick={() => void restart()}>
+      <UiButton variant="primary" running={restarting} onClick={() => void restart()}>
         {restarting ? "Restarting the index…" : "Restart the index"}
       </UiButton>
       {"words" in state ? (

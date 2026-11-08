@@ -364,6 +364,7 @@ function SaveBar({
         <UiButton
           variant="primary"
           disabled={device.checking || blocking > 0 || includes || save.kind === "saving"}
+          running={save.kind === "saving"}
           onClick={onSave}
         >
           {save.kind === "saving" ? "Saving…" : "Save"}

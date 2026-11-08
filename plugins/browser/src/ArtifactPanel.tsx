@@ -629,7 +629,7 @@ function ProxyForm({
         />
       </label>
       <TailnetFact />
-      <UiButton type="submit" variant="primary" disabled={!valid || pending}>
+      <UiButton type="submit" variant="primary" disabled={!valid || pending} running={pending}>
         {pending ? "Publishing…" : "Publish proxy"}
       </UiButton>
     </form>
@@ -699,7 +699,12 @@ function FolderForm({
         </span>
       </label>
       <TailnetFact />
-      <UiButton type="submit" variant="primary" disabled={title.trim().length === 0 || pending}>
+      <UiButton
+        type="submit"
+        variant="primary"
+        disabled={title.trim().length === 0 || pending}
+        running={pending}
+      >
         {pending ? "Publishing…" : "Publish folder"}
       </UiButton>
     </form>

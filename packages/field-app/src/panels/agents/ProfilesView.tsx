@@ -927,7 +927,7 @@ export function ConfirmRow({
             <UiButton
               ref={act}
               variant={danger ? "danger" : "quiet"}
-              disabled={busy}
+              running={busy}
               onClick={onConfirm}
             >
               {busy ? "Working…" : confirm}
@@ -1048,7 +1048,7 @@ export function ProfilePageView({
           <p className="vf-agents-hero-fact">{page.facts}</p>
         </div>
         {rows.length > 0 && onRefreshUsage !== undefined && (
-          <UiButton disabled={refreshingUsage} aria-busy={refreshingUsage} onClick={onRefreshUsage}>
+          <UiButton running={refreshingUsage} aria-busy={refreshingUsage} onClick={onRefreshUsage}>
             {refreshingUsage ? "Refreshing…" : "Refresh usage"}
           </UiButton>
         )}
@@ -1541,7 +1541,7 @@ export function ProfileAgentPageView({
           <div className="vf-agents-row-actions">
             {onRefreshUsage !== undefined && (
               <UiButton
-                disabled={refreshingUsage}
+                running={refreshingUsage}
                 aria-busy={refreshingUsage}
                 onClick={onRefreshUsage}
               >
@@ -1607,7 +1607,7 @@ export function ProfileAgentPageView({
         action={
           onRefreshUsage !== undefined && (
             <UiButton
-              disabled={refreshingUsage}
+              running={refreshingUsage}
               aria-busy={refreshingUsage}
               onClick={onRefreshUsage}
             >
@@ -1800,7 +1800,7 @@ export function NewProfileView({
         <UiButton onClick={onCancel} disabled={busy}>
           Cancel
         </UiButton>
-        <UiButton type="submit" variant="primary" disabled={!ready || busy}>
+        <UiButton type="submit" variant="primary" disabled={!ready || busy} running={busy}>
           {busy ? "Creating…" : "Create profile"}
         </UiButton>
       </div>
@@ -1867,7 +1867,7 @@ export function SignInCard({
       </div>
       <div className="vf-profiles-signin-row">
         <span className={labelCls}>{note}</span>
-        <UiButton ref={cancel} onClick={onCancel} disabled={cancelling}>
+        <UiButton ref={cancel} onClick={onCancel} running={cancelling}>
           {cancelling ? "Cancelling…" : "Cancel"}
         </UiButton>
       </div>

@@ -294,6 +294,7 @@ function ThreadColumn({
                 className="vf-chat-thread-act"
                 data-act="pause"
                 disabled={head.pause !== "ready"}
+                running={head.pause === "pausing"}
                 {...(head.pause === "pausing" ? { "aria-busy": true } : {})}
                 onClick={() => onPause?.(entry)}
               >
@@ -319,6 +320,7 @@ function ThreadColumn({
                 className="vf-chat-thread-act"
                 data-act="wake"
                 disabled={act.state === "busy" || sending}
+                running={act.state === "busy"}
                 onClick={() => onWake?.(entry)}
               >
                 <FieldGlyph name="resume" size={14} />

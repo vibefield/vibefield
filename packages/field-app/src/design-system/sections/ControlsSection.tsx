@@ -1,5 +1,6 @@
 import { SegmentedControl as UiSegmentedControl } from "@vibefield/design-kit";
 import { UserFaceView } from "@vibefield/design-kit/face";
+import { UiButton } from "@vibefield/design-kit/primitives";
 import { type ReactElement, type ReactNode, useState } from "react";
 import { FacePicker } from "../../account/FacePicker";
 import { faceKey } from "../../account/faces";
@@ -160,6 +161,36 @@ export function ControlsSection(): ReactElement {
           </div>
         </Specimen>
       </div>
+
+      <Specimen title="The kit's pill" source="design-kit/primitives.tsx · DESIGN.md §7 Off">
+        {/* the shipping UiButton, live, off and running: off takes the quiet fill with its words in t4; a pill whose
+            word says its own press runs keeps its look, with its hits off (item 241, 241b) */}
+        <div className="vf-ds-control-stack">
+          <ControlRow label="Quiet">
+            <UiButton>Look again</UiButton>
+            <UiButton disabled>Look again</UiButton>
+            <UiButton running>Looking…</UiButton>
+          </ControlRow>
+          <ControlRow label="Primary">
+            <UiButton variant="primary">Save</UiButton>
+            <UiButton variant="primary" disabled>
+              Save
+            </UiButton>
+            <UiButton variant="primary" running>
+              Saving…
+            </UiButton>
+          </ControlRow>
+          <ControlRow label="Danger">
+            <UiButton variant="danger">Clear and sign out</UiButton>
+            <UiButton variant="danger" disabled>
+              Clear and sign out
+            </UiButton>
+            <UiButton variant="danger" running>
+              Clearing…
+            </UiButton>
+          </ControlRow>
+        </div>
+      </Specimen>
 
       <Specimen title="Pills & links" source="settings-ui.tsx">
         <div className="vf-ds-pill-layout">

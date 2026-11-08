@@ -471,7 +471,7 @@ function ReadAgain({
   onRefresh?: (() => void) | undefined;
 }): ReactElement | null {
   return onRefresh === undefined ? null : (
-    <UiButton disabled={reading} aria-busy={reading} onClick={onRefresh}>
+    <UiButton running={reading} aria-busy={reading} onClick={onRefresh}>
       {reading ? "Reading…" : "Read again"}
     </UiButton>
   );
@@ -607,7 +607,7 @@ function ServerSignInCard({
       <div className="vf-profiles-signin-row">
         <span className={labelCls}>{note}</span>
         {onCancel !== undefined && (
-          <UiButton ref={cancel} onClick={onCancel} disabled={cancelling}>
+          <UiButton ref={cancel} onClick={onCancel} running={cancelling}>
             {cancelling ? "Cancelling…" : "Cancel"}
           </UiButton>
         )}
@@ -2868,7 +2868,7 @@ export function AddServerView({
         <UiButton onClick={onCancel} disabled={adding}>
           Cancel
         </UiButton>
-        <UiButton type="submit" variant="primary" disabled={!ready}>
+        <UiButton type="submit" variant="primary" disabled={!ready} running={adding}>
           {adding ? "Adding…" : "Add server"}
         </UiButton>
       </div>
@@ -3060,7 +3060,7 @@ export function AddSkillView({
         <UiButton onClick={onCancel} disabled={adding}>
           Cancel
         </UiButton>
-        <UiButton type="submit" variant="primary" disabled={!ready}>
+        <UiButton type="submit" variant="primary" disabled={!ready} running={adding}>
           {adding ? "Adding…" : "Add skill"}
         </UiButton>
       </div>

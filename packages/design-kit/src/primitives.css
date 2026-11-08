@@ -107,12 +107,26 @@
   outline-offset: 2px;
 }
 
-.vf-ui-button:disabled,
 .vf-ui-icon-button:disabled,
 .vf-ui-switch:disabled {
   cursor: default;
   opacity: 0.4;
   pointer-events: none;
+}
+
+/* DESIGN.md §7 "Off" (item 241, 241b): a pill that is off gives up its own look for the quiet pill's, the quiet fill
+   and no lift, so a primary loses its inversion and its shadow; its words wear t4 at full opacity, never the whole
+   pill faded. A pill whose word says its own press is running (UiButton's `running`, `data-running`) keeps its look.
+   Either way its hits are off. */
+.vf-ui-button:disabled {
+  cursor: default;
+  pointer-events: none;
+}
+
+.vf-ui-button:disabled:not([data-running]) {
+  color: var(--vf-text-faint);
+  background: color-mix(in srgb, var(--vf-foreground) 5%, transparent);
+  box-shadow: none;
 }
 
 .vf-ui-button[data-variant="primary"] {
