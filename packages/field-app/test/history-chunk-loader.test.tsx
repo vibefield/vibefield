@@ -182,7 +182,8 @@ describe("History's room chunk — a room that cannot open", () => {
       30_000,
     );
     expect(frame.getAttribute("data-ah-surface")).toBe("host");
-    expect(host?.querySelector("[data-face]")).toBeNull();
+    // VibeField's faces have gone (the room's own hold may stand in its place while it reaches the index, HG-W1)
+    expect(host?.querySelector(".vf-history[data-face]")).toBeNull();
     expect(calls).toBe(2);
   }, 60_000);
 });

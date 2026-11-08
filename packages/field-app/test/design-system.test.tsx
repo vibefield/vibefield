@@ -65,6 +65,19 @@ afterEach(() => {
   container = null;
 }, PAGE_BUDGET_MS);
 
+/** Wait, in act's turns, until `read` answers: what a plate draws once its room's hold has left (HG-W1). */
+async function until<T>(read: () => T | null | undefined, label: string, ms = 5_000): Promise<T> {
+  const deadline = Date.now() + ms;
+  for (;;) {
+    const value = read();
+    if (value !== null && value !== undefined) return value;
+    if (Date.now() > deadline) throw new Error(`until: ${label}`);
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    });
+  }
+}
+
 function button(label: string): HTMLButtonElement {
   const match = Array.from(container?.querySelectorAll("button") ?? []).find(
     (candidate) =>
@@ -81,7 +94,7 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
     // under a loaded gate (2026-10-08: red in most loaded gates since 10-07).
   }, PAGE_BUDGET_MS);
 
-  it("renders the complete single-page inventory", () => {
+  it("renders the complete single-page inventory", async () => {
     const links = container!.querySelectorAll<HTMLAnchorElement>(".vf-ds-sidebar nav a");
     expect(links.length).toBeGreaterThanOrEqual(12);
     for (const link of links) {
@@ -547,9 +560,13 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
     const history = (state: string): Element | null =>
       container?.querySelector(`.vf-ds-history-plate[data-state="${state}"]`) ?? null;
     expect(container?.querySelector(".vf-ds-history-plate .ah-launcher")).toBeNull();
-    expect(history("room")?.querySelector(".ah-col--measure")?.textContent).toContain(
-      "Pick a session, or search with ⌘F.",
+    // HG-W1: the room plate's room stands its hold while the fixture index answers (its floor once it has shown), then
+    // draws its columns
+    const measure = await until(
+      () => history("room")?.querySelector(".ah-col--measure"),
+      "the room plate's transcript column, past the room's hold",
     );
+    expect(measure.textContent).toContain("Pick a session, or search with ⌘F.");
     // PJ-4 — History by project's plate (its rows: history-projects-plate.test.tsx)
     expect(history("projects")?.querySelector(".vf-history .ah-frame")).not.toBeNull();
     // HG-2 — History before its past: the shipping card in the Setup Assistant's glass over the sample room, the

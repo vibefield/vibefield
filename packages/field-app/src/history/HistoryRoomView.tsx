@@ -22,6 +22,8 @@ import { COVER_RESERVE_PX, HEAD_BAND_PX } from "../frame/frame-geometry";
 import { type ViewKeys, viewKeysOf } from "../frame/views";
 // HG-2: History before its past — the view's own layer over the room while it waits for consent
 import { HistoryConsentMarker, HistoryGlass } from "./HistoryGlass";
+// HG-W1, HG-W4: the room's waits in VibeField's mark
+import { carriesOpening, historyWaitMark } from "./history-mark";
 // The room's own sheet enters HERE, with the room — one row, the package's own
 // bundle, never a copy — so it rides the room's chunk, not the first paint, and
 // lands after the kit's tokens by load order (its README's one ordering rule).
@@ -147,6 +149,11 @@ export interface HistoryRoomViewProps {
   /** HG-2 — History is the view shown, so the room behind glass develops each
    * time it shows (DESIGN.md §6); shown when absent, as the catalog's plates are. */
   shown?: boolean;
+  /** HG-W1 — when VibeField's own opening hold began to stand (`room-chunk.tsx`
+   * keeps it from `HistoryOpeningState`), read once as the room mounts: the
+   * room's first hold carries it when it had begun to show. Absent, or null,
+   * the room's first hold is late. */
+  opening?: { readonly current: number | null } | undefined;
 }
 
 export function HistoryRoomView({
@@ -161,8 +168,14 @@ export function HistoryRoomView({
   act = null,
   consent,
   shown = true,
+  opening,
 }: HistoryRoomViewProps): ReactElement {
   const [layers, setLayers] = useState<HTMLDivElement | null>(null);
+  // HG-W1, HG-W4 (DESIGN.md §8 "History"): the room's waits wear the living mark (`waitMark`, R10), and its first
+  // hold carries the opening's when that had begun to show, so the mark stands on and only the words change
+  const [waitMark] = useState(() =>
+    historyWaitMark(carriesOpening(opening?.current ?? null, performance.now())),
+  );
   // HG-2: the room's consent slot holds a marker, and the view draws the card
   // behind glass in its own layer while the marker stands (`HistoryGlass.tsx`).
   const card = consent === undefined || consent === null || consent === false ? null : consent;
@@ -209,6 +222,7 @@ export function HistoryRoomView({
           emptyPrompt={emptyPrompt}
           onSelect={onSelect}
           {...inputs}
+          waitMark={waitMark}
         />
       </div>
       {card !== null && (

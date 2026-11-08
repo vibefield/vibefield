@@ -32,6 +32,7 @@ import {
 import { ViewFrame } from "../src/frame/ViewFrame";
 import { resetActiveViewForTest } from "../src/frame/view-state";
 import { HistoryView } from "../src/history/HistoryView";
+import { HISTORY_HOLD_LATE_MS } from "../src/history/history-mark";
 import { openHistoryAt, resetHistoryOpenAtForTest } from "../src/history/open-at";
 import { type FieldHost, setHost } from "../src/host";
 import { type RendererLogger, setRendererLogger } from "../src/logging";
@@ -236,6 +237,10 @@ describe("History's room, its own chunk (2026-10-04)", () => {
     const chosen = (fixture("index-sessions.keyed.json").rows as Array<{ sessionId: string }>)[0];
     act(() => openHistoryAt({ sessionId: chosen?.sessionId ?? "", timelineId: null }));
 
+    // HG-W1: the opening has begun to show (its late passed), so the room's first hold will carry it.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, HISTORY_HOLD_LATE_MS + 30));
+    });
     // The chunk lands: the room takes the face's place, on the same glass.
     room.open();
     const frame = await until(
@@ -248,7 +253,16 @@ describe("History's room, its own chunk (2026-10-04)", () => {
     expect(frame.style.getPropertyValue("--ah-inset-top")).toBe("52px");
     expect(frame.style.getPropertyValue("--ah-inset-left")).toBe("");
     expect(frame.style.getPropertyValue("--ah-inset-right")).toBe("");
-    expect(historySlot()?.querySelector("[data-face]")).toBeNull();
+    // VibeField's own face has gone, and the room's first hold carries it (HG-W1): the mark stands on at once and only
+    // the words are the room's, until its index answers and the hold leaves after its floor.
+    expect(historySlot()?.querySelector(".vf-history[data-face]")).toBeNull();
+    expect(
+      historySlot()?.querySelector(".ah-hold[data-carried] .ah-hold__mark .vf-history-mark"),
+    ).not.toBeNull();
+    await until(
+      () => (historySlot()?.querySelector(".ah-hold") ? null : true),
+      "the room's hold leaving once its index answers",
+    );
     expect(historySlot()?.textContent).not.toContain("Opening History");
 
     // …and opens where the Peek asked: the session is the room's choice, its

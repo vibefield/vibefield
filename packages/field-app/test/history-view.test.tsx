@@ -1387,6 +1387,11 @@ describe("the room's disconnected face in VibeField's words (rosetta 0.1.3, RO-2
     });
   const titleOf = (face: string) =>
     historySlot()?.querySelector(`.ah-frame [data-face="${face}"] strong`)?.textContent;
+  // HG-W1 (rosetta-room 0.1.6's `waitMark`): reaching the index is the room's hold in VibeField's mark, its title the
+  // hold's line under the mark; a feed that has closed keeps the room's own face
+  const holdLineOf = (face: string) =>
+    historySlot()?.querySelector(`.ah-frame .ah-hold[data-face="${face}"] .ah-hold__line`)
+      ?.textContent;
 
   it("titles an index that is still being reached as History's open, and one that cannot answer as History, never the daemon", async () => {
     // fieldd answers nothing yet: the room is reaching the index
@@ -1400,9 +1405,15 @@ describe("the room's disconnected face in VibeField's words (rosetta 0.1.3, RO-2
     );
     mount(reaching);
     to("history");
-    expect(await until(() => titleOf("connecting"), "the connecting face")).toBe(
+    expect(await until(() => holdLineOf("connecting"), "the connecting hold")).toBe(
       "Opening History…",
     );
+    expect(
+      historySlot()?.querySelector(
+        '.ah-hold[data-face="connecting"] .ah-hold__mark .vf-history-mark',
+      ),
+    ).not.toBeNull();
+    expect(historySlot()?.querySelector('.ah-frame [data-face="connecting"].ah-empty')).toBeNull();
     act(() => root?.unmount());
     host?.remove();
 

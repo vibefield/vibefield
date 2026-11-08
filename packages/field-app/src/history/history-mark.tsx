@@ -1,27 +1,17 @@
 import { LIVING_MARK_SIZE, LivingMark } from "@vibefield/design-kit/living-mark";
-import type { ReactElement, ReactNode } from "react";
+// the room's types only, which ride no chunk: this module is the canvas's, with History's first open
+import type { RoomWaitMark, RoomWaitPlace } from "@vibefield/rosetta-room";
+import type { ReactElement } from "react";
 
 // HISTORY'S MARK (track HG: HG-W1, HG-W4 and HG-L1; DESIGN.md §8 "History" and "The living mark, drawn as SVG"; §6).
 // The kit's living mark in History's three places: the view's hold, a conversation's hold in the transcript's
 // column, and the import card's head. It stands on the theme's ground and at rest while its work is paused. History's
 // first open wears it (`HistoryOpening.tsx`), and the room's waits wear it through rosetta-room's `waitMark` host
-// input (R10), which rides rosetta-room 0.1.6. Until that EL8 the input's two types are named here, and the room is
-// handed `historyWaitMark` at the EL8, never before: the opening hold and the room's own land together, so History's
-// open stays one state.
-
-/** rosetta-room's `RoomWaitPlace` (R10): where the room waits with a host's mark. Named here until 0.1.6's EL8. */
-export type HistoryWaitPlace = "view" | "column" | "card";
-
-/** rosetta-room's `RoomWaitMark` (R10), as VibeField hands it: the mark for a place, at rest while the work it stands
- * for is paused, and whether VibeField's own hold already stands where the room's first one comes. Named here until
- * 0.1.6's EL8. */
-export interface HistoryWaitMark {
-  readonly mark: (place: HistoryWaitPlace, state: { readonly resting: boolean }) => ReactNode;
-  readonly carried?: boolean | undefined;
-}
+// input (R10, `RoomWaitMark`, rosetta-room 0.1.6), which `HistoryRoomView` hands the room. The opening hold and the
+// room's own land together, so History's open stays one state.
 
 /** The mark's width in each place (HG-W4): its own in a hold, 40 where IMPORTING HISTORY stood. */
-export const HISTORY_MARK_WIDTH: Readonly<Record<HistoryWaitPlace, number>> = {
+export const HISTORY_MARK_WIDTH: Readonly<Record<RoomWaitPlace, number>> = {
   view: LIVING_MARK_SIZE.width,
   column: LIVING_MARK_SIZE.width,
   card: 40,
@@ -63,7 +53,7 @@ export function HistoryMark({
 
 /** What the room's waits wear (R10): the mark in each place, at rest while its work is paused, and `carried` when
  * History's own opening hold stood where the room's first one comes (`carriesOpening`). */
-export function historyWaitMark(carried: boolean): HistoryWaitMark {
+export function historyWaitMark(carried: boolean): RoomWaitMark {
   return {
     mark: (place, { resting }) => (
       <HistoryMark width={HISTORY_MARK_WIDTH[place]} resting={resting} />

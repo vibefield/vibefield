@@ -8,6 +8,7 @@ import {
   type ReactNode,
   Suspense,
   useCallback,
+  useRef,
   useState,
 } from "react";
 import { getRendererLogger } from "../logging";
@@ -137,10 +138,16 @@ export function HistoryRoomMount({
   // function), so the initializer and the retry's updater each make one.
   const [Room, setRoom] = useState<LazyRoom>(() => lazyRoom(loader));
   const retry = useCallback(() => setRoom(() => lazyRoom(loader)), [loader]);
+  // HG-W1: when the opening hold last began to stand, so the room's first hold carries it once it had begun to show
+  // (`carriesOpening`); null while it never stood (a room already loaded is late as ever)
+  const opening = useRef<number | null>(null);
+  const onShow = useCallback((at: number) => {
+    opening.current = at;
+  }, []);
   return (
     <HistoryRoomBoundary onRetry={retry}>
-      <Suspense fallback={<HistoryOpeningState />}>
-        <Room {...room} />
+      <Suspense fallback={<HistoryOpeningState onShow={onShow} />}>
+        <Room {...room} opening={opening} />
       </Suspense>
     </HistoryRoomBoundary>
   );
