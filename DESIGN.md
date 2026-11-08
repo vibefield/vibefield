@@ -1263,10 +1263,14 @@ James on the ES page *The night that becomes the window*, 2026-11-08 04:27:25–
   pointer. Still, it draws no frame. It is the field's idle, not a loop, so the loop law above does not bind it.
   Reduced motion draws it once.
 - **The lean** (the ES page's film, frame 2, and its motion table; no mark of its own): under the pointer, or the
-  keyboard's focus, New spark, a starter or the line's ✦ draws the
-  night's edge in 6 from every side, its corners from 22 to 16 so the band stays even: 240ms on the island curve, and
-  back in 240ms on the retract curve once nothing holds it for 90ms. It is the portal's first move, shown before it is
-  made. Reduced motion: nothing moves.
+  keyboard's focus, New spark, a starter or the line's ✦ draws the night's edge in 6 from every side, its corners from
+  22 to 16 so the band stays even: 240ms on the island curve, and back in 240ms on the retract curve once nothing holds
+  it for 90ms. It is the portal's first move, shown before it is made. Reduced motion: nothing moves.
+  - Only the night moves (ES-3a): the hush, the words, New spark and the jobs stand where they are, and the band shows
+    the panel's own chrome.
+  - **The line's ✦ says it from the frame** (ES-3a; VF-PM 2026-11-08 06:52Z): the line's create tells whether it is
+    under the pointer or the keyboard's focus — over, or not, and nothing more — and Chat's night hears it while Chat
+    is the view. The frame says; Chat listens and never reaches into the line.
 - **The portal** (ES-D3 A; M1): New spark closes the night's edge from the panel's rect (corners 22) onto the sheet's
   sky (520 × 300, corners 30), 600ms on the island curve, while every star inside stays where it is. As it closes, the
   words fade and recede to 0.98 in 180ms on the retract curve; Chat's own panel comes back around it under the backdrop
