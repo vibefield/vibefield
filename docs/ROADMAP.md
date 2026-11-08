@@ -547,7 +547,9 @@ page *The Drive*, KB33dCAP, where it moved 11-06 05:45Z from LB8rzJYV; sources `
   - James's marks DR-D14 and D15. T-2 waits on D15, which reopens D12.
   - James's rulings before DR-1 (B) wires a caller: DR-L3's re-check at the view (`dr-l3-blake3-recheck`, lean (a):
     R-1's verified placement until DR-2), and the serve policy's `'unsafe-eval'` (`dr-serve-csp-unsafe-eval`).
-  - DR-3a's and DR-3b's `gate:landing` (W3-10 (b)), and rosetta's EL8's.
+  - Rosetta's EL8's `gate:landing`. DR-3a's and DR-3b's ran on 2026-11-08 at `e60d8add6`, 12 of 14 green (LANDED
+    "DR-3a", its Owed): row 10's red is items 253 and 254; row 13's is item 255, host state, so `smoke:studio` is
+    owed again, alone, on an awake display.
   - From DR-3b: item 237 (NativeLink's dead replay tells no one, the relay's one uncured order, carried) and item 238
     (fold 4 F1's shape claimed in DeviceService and DocHoldersService, a read first).
   - Item 220, DR-1 (B)'s decision before it calls the export: fieldd's `MadeAppExport` moves to the answer rosetta

@@ -40742,6 +40742,38 @@ mints), and no manifest or lock.
 
 **Owed.**
 - `gate:landing` at this landing (W3-10 (b), VF-PM's word).
+  > **Paid (2026-11-08, 10:49:20Z → 11:33:13Z; the DR lead on this Mac, on VF-PM's word of 10:43:39Z):** DR-3a's
+  > and DR-3b's `gate:landing` at once, at main `e60d8add6` in the main checkout: `6b8a4b09f` plus ES-1 and ES-2's
+  > docs-only records, with both landings its ancestors. Each of gate-landing.mjs's 14 landing gates ran by its own
+  > `--only`, each its own row through the HOLD's door, at nice 19 (`lanes/dr/gate/gate-dr3.sh`).
+  > - 12 of 14 green by their own verdict lines: `still` 167 s, `smoke` 13 s, `smoke:canvas` 887 s,
+  >   `smoke:canvas:no-gpu` 7 s, `smoke:canvas:no-webgpu` 4 s, `smoke:kind-faults` 57 s, `smoke:plugin-restart` 51 s,
+  >   `smoke:plugin` 34 s, `smoke:godview` 113 s, `smoke:terminal-door` 14 s, `smoke:terminal-direct` 18 s,
+  >   `smoke:bundled` 23 s.
+  > - Row 10, `smoke:first-run`, RED (exit 1, 311 s, 11:19:10Z → 11:24:21Z) on two classes that are not DR's. In the
+  >   day, night and no-webgpu walks, History shows 0 rows, and `FIELDD_ROSETTAD_BIN` was absent from the row's env
+  >   (its `ROW_ENV` line): item 253. The catalog walk read the "ChatGPT Pro" pair on 04 profiles at 1:1: item 254,
+  >   a test red (VF-PM, ruled 11:34Z). The row was the control for IOS 241b's red, and it did not red IOS's other
+  >   classes (the live field's glass, logo and frame, and the welcome and field texts).
+  > - Row 13, `smoke:studio`, RED (exit 2, 423 s, 11:25:40Z → 11:32:43Z): "Studio's native show notification timed
+  >   out after 45000ms". Item 255, HOST STATE, not a verdict on Studio. The Mac's main display was asleep, read by
+  >   VF-PM at 11:38Z: `CGDisplayIsAsleep(CGMainDisplayID())` true, HIDIdleTime 13,793 s, `pmset` displaysleep 60.
+  >   That wait is for the window to become visible (`physical-acceptance.ts:38–43`, `studioWasShown()`). Not proven
+  >   causal: the row is owed again, alone, on an awake display, which is James's to wake.
+  > - Item 256: `smoke:studio` is a cargo row and a gen row in the checkout it runs from. Its dev runner rewrote the
+  >   generated outputs there, byte-equal (porcelain 0), and built field-native from the main checkout into the shared
+  >   target in 5m 55s: the binary went from `5e69f5db…` (IOS's 10:43:21Z build at `042ca0f2e`) to `01e9dd5f…` at
+  >   11:31:46Z. Rows 2 to 12 read `5e69f5db…` before START and after END (row 1 during its run), row 13 began on
+  >   it, and row 14, `smoke:bundled`, ran on `01e9dd5f…`. No Rust moved to `e60d8add6`; no other cargo ran.
+  > - From row 4 on, each row's env (its `ROW_ENV` line) held no `CLAUDE*` key. From row 10 on, `STACK` read 0
+  >   field-native and 0 Electron that were not the gate's at START and END. Its gate root read `([])` inside the
+  >   door at rows 10 to 12, a defect of the lead's probe (fixed at 11:25Z); the count is unaffected.
+  > - Rows 10 to 14 waited from 11:17Z to 11:19:10Z on the lead's pause while a report of James's dev stack was
+  >   read; it was not up (VF-PM 11:18:01Z). Found then: a smoke run from the main checkout rewrites
+  >   `packages/fieldd/dist`, which a dev fieldd starts its workers from, so the door refuses a row while his runner
+  >   is live (to the gates doc through VF-PM).
+  > - Logs: `lanes/dr/gate/gate-e60d8add6/` (summary.txt, one `.out` per row, gate-landing's `logs/`), SHA256SUMS
+  >   `57ef8346…` (44 files).
 - The relay, DR-3b (VF-RELAY): after its fold 3 (W3-21's relay half), re-stacked onto this tip by the lead, under its
   own verify (W3-18: A, then B, then the relay). It brings the relay's half of the audit's finding 1, with the
   drive-pulls row that W3-16's sentence at `NativeFileTransferSnapshot` already names (no fieldd file holds it yet),
@@ -41942,6 +41974,11 @@ fold 5 ran 62, fold 6 ran 5, fold 7 ran 2. Each was KILLED or named.
 - C5-1's likelihood rests on whether a floor's boot can stall its mgmt queue through both the replay and the
   re-subscribe. That was not read in field-native.
 - The rows have run in the full graph only once, at this verify. Every mutant ran on the MacBook only.
+- `gate:landing` (W3-10 (b)): owed at this landing, and missing from this list (the lead's omission, read on
+  2026-11-08; ROADMAP's Owed carried it).
+  > **Paid (2026-11-08):** with DR-3a's, at main `e60d8add6`: 12 of 14 green. The two reds are not DR's: row 10's
+  > items 253 and 254, and row 13's item 255 (host state; `smoke:studio` is owed again, alone, on an awake display).
+  > The witness is under DR-3a's Owed line (LANDED "DR-3a").
 
 ## Item 240 — release.yml's build job fetches Electron's binary before it packages: the stager reads Electron's licences out of its dist/ (track LP, release-class)
 (2026-11-07; one commit on branch `lp/release-electron-binary`, cut by the LAUNCH lead (vibe-field-2a) with git
