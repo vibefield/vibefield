@@ -2,6 +2,7 @@ import type { SparkId } from "@vibefield/contracts";
 import { SegmentedControl } from "@vibefield/design-kit/primitives";
 import { type ReactElement, useState } from "react";
 import { ChatComposerView } from "../chat/ChatComposerView";
+import { ChatEmptyView } from "../chat/ChatEmptyView";
 import { ChatPanelView, shownOf } from "../chat/ChatPanelView";
 import { waitingCardOf } from "../chat/needs-card";
 import { ThreadFlowView } from "../chat/ThreadFlowView";
@@ -12,6 +13,7 @@ import {
   CHAT_CHOSEN,
   CHAT_COMPOSER,
   CHAT_JUMPING,
+  CHAT_NIGHT,
   CHAT_PAUSE,
   CHAT_SENDING,
   CHAT_STATE_LABEL,
@@ -41,6 +43,8 @@ import {
 // is the shipping head's on the plate's reading — Jump to, Wake, and Pause current turn while Juno works — answering
 // nothing here, as Wake and Send answer nothing; a plate's Jump to under way (`CHAT_JUMPING`) and its own Pause
 // (`CHAT_PAUSE`) are handed to the panel as Chat's controller hands them. The markup and the CSS are the product's.
+// Track ES: the empty plates are the shipping night (`ChatEmptyView`) on the plate's agents (`CHAT_NIGHT`) — live, Off,
+// and a short panel, where the jobs step aside — whose acts open nothing here.
 // *Amended 2026-11-05 (TH-1, the pane leaves Chat):* the pane's place showed the shipping `SparkPaneView`'s words on
 // the plates with no conversation (`CHAT_PANE`: finding, off the floor, no answer, no terminals), and the hello stood
 // over it (`threadItemsOf`). They are in git.
@@ -92,6 +96,8 @@ export function ChatPreview({
   );
   const act = CHAT_ACT[state];
   const pause = CHAT_PAUSE[state];
+  const night = CHAT_NIGHT[state];
+  const empty = <ChatEmptyView {...(night === undefined ? {} : { agents: night })} />;
   return (
     <ChatPanelView
       reading={reading}
@@ -107,6 +113,7 @@ export function ChatPreview({
       sending={sending}
       {...(composer === undefined ? {} : { composer })}
       {...(locale === undefined ? {} : { locale })}
+      empty={empty}
     />
   );
 }

@@ -26,6 +26,7 @@ import {
 import type { PauseAct } from "../chat/head-act";
 import { type NeedsAct, type NeedsCard, needsCardOf } from "../chat/needs-card";
 import { type ModelsReading, modelWords } from "../chat/new-spark";
+import type { NightAgents } from "../chat/night-agents";
 import { type SparkEntry, sparkEntriesOf } from "../chat/spark-status";
 import type { SparksReading } from "../chat/sparks-feed";
 import { ThreadLedger, type ThreadMark, threadMarksOf } from "../chat/thread-marks";
@@ -278,6 +279,8 @@ export const CHAT_STATES = [
   "thread-asks",
   "thread-hello-asks",
   "empty",
+  "empty-off",
+  "empty-short",
   "opening",
   "unavailable",
 ] as const;
@@ -320,7 +323,9 @@ export const CHAT_STATE_LABEL: Record<ChatState, string> = {
   "thread-hello": "Hello, drawn",
   "thread-asks": "Its own ask, at the foot",
   "thread-hello-asks": "Hello, and an ask",
-  empty: "No sparks",
+  empty: "The night",
+  "empty-off": "The night, no agent",
+  "empty-short": "The night, short",
   opening: "Opening",
   unavailable: "Unavailable",
 };
@@ -394,6 +399,8 @@ export function chatReadingOf(state: ChatState): SparksReading {
         }),
       };
     case "empty":
+    case "empty-off":
+    case "empty-short":
       return { state: "ready", entries: [] };
     case "opening":
       return { state: "opening" };
@@ -495,8 +502,20 @@ export const CHAT_CHOSEN: Record<ChatState, string | null> = {
   "thread-asks": "sp-vela0001",
   "thread-hello-asks": HATCHED.id,
   empty: null,
+  "empty-off": null,
+  "empty-short": null,
   opening: null,
   unavailable: null,
+};
+
+/** Track ES — what the night knows of the agents on its plates: none here that can be a spark on the Off plate (the
+ * catalog's spark rows, not installed), still being read elsewhere, as Chat first shows it. */
+export const CHAT_NIGHT: Partial<Record<ChatState, NightAgents>> = {
+  "empty-off": {
+    state: "read",
+    here: 0,
+    elsewhere: AGENT_CATALOG.filter((row) => row.offers.spark).map((row) => row.label),
+  },
 };
 
 /** The plates whose thread an act holds (DESIGN.md §8 "Chat's thread"): Send's, over the draft it carries; a

@@ -10,6 +10,7 @@ import {
 import { ChromeBoundary } from "@vibefield/puppeteer-views";
 import type { CSSProperties, ReactElement, ReactNode, Ref } from "react";
 import { COVER_RESERVE_PX, HEAD_BAND_PX } from "../frame/frame-geometry";
+import { ChatEmptyView } from "./ChatEmptyView";
 import { headActOf, NO_PAUSE, type PauseAct } from "./head-act";
 import { activityWords, type SparkEntry } from "./spark-status";
 import { SPARKS_UNREADABLE, type SparksReading } from "./sparks-feed";
@@ -30,6 +31,8 @@ import "./chat.css";
 // *Amended 2026-11-05 (TH-1, the pane leaves Chat):* the column was the head, the spark's own pane (`SparkPane`,
 // handed in) or, asleep or not started, one honest line under the head, then the foot, whose items stood over the
 // pane's bottom rows. The pane, its place's words and the line left Chat with TH-1; they are in git.
+// *Amended 2026-11-08 (track ES):* with no spark the panel is the night (`ChatEmptyView`, handed in), never "No sparks
+// yet"; there is no list column until the first spark.
 
 /** What the chosen spark's act is doing: at rest, under way, or refused in fieldd's words. */
 export type ChatAct =
@@ -76,6 +79,9 @@ export interface ChatPanelViewProps {
   composer?: ReactNode;
   /** the locale the times are said in; the window's own when absent */
   locale?: string;
+  /** track ES — what stands in the panel while the list holds no spark: the night (the product's `ChatEmptyView`, its
+   * agents read and its acts; the catalog's on fixtures); absent, the night with its defaults */
+  empty?: ReactNode;
 }
 
 /** The statuses a face moves through while the spark works: "live while it works" (§2.10's table). */
@@ -116,6 +122,7 @@ export function ChatPanelView({
   cardRef,
   composer,
   locale,
+  empty,
 }: ChatPanelViewProps): ReactElement {
   const place = {
     "--vf-chat-head": `${HEAD_BAND_PX}px`,
@@ -143,13 +150,7 @@ export function ChatPanelView({
       );
     }
     const entries = reading.entries;
-    if (entries.length === 0) {
-      return (
-        <div className="vf-chat-panel-state">
-          <EmptyState title="No sparks yet" />
-        </div>
-      );
-    }
+    if (entries.length === 0) return <>{empty ?? <ChatEmptyView />}</>;
     const shown = shownOf(entries, chosen);
     const marked = marks ?? threadMarksOf(entries, NO_LATCHES);
     return (

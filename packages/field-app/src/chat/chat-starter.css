@@ -1,0 +1,41 @@
+/* A starter (NS-D4; DESIGN.md §8 "Chat's thread", the hello and three starters; track ES, ES-D2 A): the kit's button
+   (`UiButton`), 34 tall, corners 17, padded 0 14 0 11, on solid chrome ringed by the strong hairline; its glyph 14 in
+   secondary ink, then 8, then its words in 13/500 primary. Under the pointer it takes the fill and rises 1, in 180ms on
+   the lift curve. The hello's and the empty night's are this one button; on the night it wears night glass
+   (`chat-empty.css`). Moved here from `thread-flow.css` word for word (2026-11-08). */
+.vf-ui-button.vf-chat-starter {
+  height: 34px;
+  padding: 0 14px 0 11px;
+  border-radius: 17px;
+  gap: 8px;
+  color: var(--vf-text-primary);
+  background: var(--vf-chrome-solid);
+  box-shadow: 0 0 0 1px var(--vf-hairline-strong);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  transition:
+    background-color 180ms var(--vf-ease-lift),
+    transform 180ms var(--vf-ease-lift);
+}
+
+.vf-ui-button.vf-chat-starter:hover:not(:disabled) {
+  color: var(--vf-text-primary);
+  background: var(--vf-fill);
+  transform: translateY(-1px);
+}
+
+.vf-chat-starter .vf-glyph {
+  flex: none;
+  color: var(--vf-text-secondary);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* reduced motion (M6): a starter's rise is half as long, on ease-out */
+  .vf-ui-button.vf-chat-starter {
+    transition:
+      background-color 90ms ease-out,
+      transform 90ms ease-out;
+  }
+}

@@ -23,7 +23,7 @@
     var(--vf-shadow-island);
 }
 
-/* Opening, unavailable, or no sparks yet: the words, centred in the panel. */
+/* Opening or unavailable: the words, centred in the panel (empty is the night: `chat-empty.css`, track ES). */
 .vf-chat-panel-state {
   grid-column: 1 / -1;
   display: grid;

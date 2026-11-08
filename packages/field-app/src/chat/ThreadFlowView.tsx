@@ -1,6 +1,5 @@
 import type { ComposeSayChip } from "@vibefield/contracts";
 import { FieldGlyph, type GlyphName } from "@vibefield/design-kit/glyphs";
-import { UiButton } from "@vibefield/design-kit/primitives";
 import { SparkFace, type SparkStatus } from "@vibefield/design-kit/spark-face";
 import {
   type ReactElement,
@@ -10,6 +9,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { ChatStarter } from "./ChatStarter";
 import { CrewCardView } from "./CrewCardView";
 import type { CrewCard } from "./crew-card";
 import { chipWordsOf, FLOW_WORDS, type Flow, type FlowItem } from "./transcript-items";
@@ -142,16 +142,13 @@ export function ThreadFlowView({
               <p className="vf-chat-reply-text">{item.words}</p>
               <div className="vf-chat-starters" {...(sending ? { "aria-busy": true } : {})}>
                 {item.starters.map((starter) => (
-                  <UiButton
+                  <ChatStarter
                     key={starter.glyph}
-                    className="vf-chat-starter"
-                    onClick={() => {
+                    starter={starter}
+                    onPress={() => {
                       if (!sending) onStarter?.(starter.words);
                     }}
-                  >
-                    <FieldGlyph name={starter.glyph} size={14} />
-                    <span>{starter.words}</span>
-                  </UiButton>
+                  />
                 ))}
               </div>
             </div>

@@ -1452,6 +1452,12 @@
   background: var(--vf-canvas-bg);
 }
 
+/* Track ES — the night in a short panel: a plate 520 tall leaves the panel 380, under the 440 where the label and the
+   jobs step aside (DESIGN.md §8 "Chat's list", Empty: the night). */
+.vf-ds-chat-plate[data-state="empty-short"] {
+  height: 520px;
+}
+
 /* The needs-you card on fixtures (CP-3): each still plate a box as wide as Chat's composer (a narrow thread's half
    of it) on the canvas's ground, the card's own rules the product's; the live plate a stage with the thread's foot
    at its bottom, where the product's thread items (`.vf-chat-items`) stand the card over it. */

@@ -9,7 +9,9 @@ export interface ShellPresentationState {
    * notice's click (TS-5); `new-profile` is the limit moment's Add a profile…
    * (AO-6b): Agent Profiles on its New profile… form; `updates` is Settings →
    * Updates (AU-3), where the update rows open; `whats-new` is the Me row's
-   * What's new (AU-6, LC-7): Settings → Updates, at the release's notes. */
+   * What's new (AU-6, LC-7): Settings → Updates, at the release's notes;
+   * `agents` is Chat's night's Open Agents settings (track ES): Settings →
+   * Agents, while no agent here can be a spark. */
   readonly target:
     | "general"
     | "diagnostics"
@@ -18,6 +20,7 @@ export interface ShellPresentationState {
     | "new-profile"
     | "updates"
     | "whats-new"
+    | "agents"
     /** UM-3 (ruling 9) — Godview's profiles column: a popover's Sign in and
      * Agent Profiles… open Agent Profiles on that profile's page */
     | { readonly profile: string };
@@ -72,7 +75,8 @@ export function settingsOpening(target: ShellPresentationState["target"]): {
   profiles?: ProfilesRoute;
   atNotes?: boolean;
 } {
-  if (target === "account" || target === "devices" || target === "updates") return { page: target };
+  if (target === "account" || target === "devices" || target === "updates" || target === "agents")
+    return { page: target };
   if (typeof target === "object") {
     return { page: "profiles", profiles: { kind: "profile", set: target.profile } };
   }

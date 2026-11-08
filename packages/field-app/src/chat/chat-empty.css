@@ -1,0 +1,162 @@
+/* Chat, empty: the night (track ES; DESIGN.md §8 "Chat's list", Empty: the night; §2.4 the night's ink; §3 Headline;
+   §5 night glass). Tokens only: the night's ink is `.vf-on-night`'s scope (tokens.css), its glass and its hush are
+   §5's, the night itself the kit's (`.vf-spark-night`). */
+
+/* The panel's whole width and height, edge to edge at its corners: the night ends at the panel (ES-D1 A). It is the
+   container a short panel is measured by. */
+.vf-chat-empty {
+  position: relative;
+  grid-column: 1 / -1;
+  min-height: 0;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  container: vf-chat-empty / size;
+  color: var(--vf-text-primary);
+}
+
+/* Behind the words a hush of the night (§5), so no star crosses them: an ellipse 620 by 340 on the column's centre,
+   gone by 72% of its reach. */
+.vf-chat-empty-hush {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(
+    620px 340px at 50% calc(50% + 16px),
+    var(--vf-night-hush),
+    transparent 72%
+  );
+}
+
+/* One column, centred 16 below the panel's middle. */
+.vf-chat-empty-column {
+  position: relative;
+  margin-top: 32px;
+  padding: 0 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.vf-chat-empty-title {
+  margin: 0;
+  font-size: 40px;
+  font-weight: 300;
+  line-height: 46px;
+  letter-spacing: -0.02em;
+  color: var(--vf-text-primary);
+}
+
+.vf-chat-empty-sentence {
+  margin: 12px 0 0;
+  max-width: 480px;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--vf-text-secondary);
+}
+
+/* New spark, 26 under: the kit's primary in its night look (the night's foreground, its words in the inverse ink),
+   its glyph 16, then 8, its words, then its key at 62%. Glyph-led, it is 3 nearer the glyph's side, as a starter is. */
+.vf-ui-button.vf-chat-empty-new {
+  margin-top: 26px;
+  gap: 8px;
+  padding: 0 18px 0 15px;
+}
+
+.vf-chat-empty-key {
+  margin-left: 3px;
+  font: inherit;
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  opacity: 0.62;
+}
+
+/* Off (§7, the kit's own): the sentence naming the agents that can, 12 under, and Open Agents settings, 12 under it. */
+.vf-chat-empty-why {
+  margin: 12px 0 0;
+  max-width: 360px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--vf-text-secondary);
+}
+
+.vf-ui-button.vf-chat-empty-agents {
+  margin-top: 12px;
+}
+
+/* The jobs: their label 30 under New spark, then the starters 12 under it, one under another, 8 apart, centred. */
+.vf-chat-empty-or {
+  margin: 30px 0 12px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 16px;
+  color: var(--vf-text-tertiary);
+}
+
+.vf-chat-empty-jobs {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+/* A starter on the night wears night glass (§5): white at 7% over a 16 blur, ringed inset by white at 14%; 12% under
+   the pointer. They come in from 8 below over 420ms on the island curve, 26ms apart; held only before they start, so
+   the starter's own rise under the pointer stands after. */
+.vf-chat-empty .vf-ui-button.vf-chat-starter {
+  background: var(--vf-night-glass);
+  box-shadow: inset 0 0 0 1px var(--vf-night-glass-ring);
+  -webkit-backdrop-filter: blur(var(--vf-night-glass-blur));
+  backdrop-filter: blur(var(--vf-night-glass-blur));
+  animation: vf-chat-empty-job-in 420ms var(--vf-ease-island) backwards;
+}
+
+.vf-chat-empty .vf-ui-button.vf-chat-starter:nth-child(2) {
+  animation-delay: 26ms;
+}
+
+.vf-chat-empty .vf-ui-button.vf-chat-starter:nth-child(3) {
+  animation-delay: 52ms;
+}
+
+.vf-chat-empty .vf-ui-button.vf-chat-starter:hover:not(:disabled) {
+  background: var(--vf-night-glass-hover);
+}
+
+@keyframes vf-chat-empty-job-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* A short panel, under 440 tall: the label and the jobs step aside; the night, the words and New spark stay. */
+@container vf-chat-empty (max-height: 439px) {
+  .vf-chat-empty-or,
+  .vf-chat-empty-jobs {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* reduced motion (M6): the jobs fade in over 120ms where they stand */
+  .vf-chat-empty .vf-ui-button.vf-chat-starter {
+    animation: vf-chat-empty-job-fade 120ms ease backwards;
+  }
+
+  @keyframes vf-chat-empty-job-fade {
+    from {
+      opacity: 0;
+    }
+
+    to {
+      opacity: 1;
+    }
+  }
+}

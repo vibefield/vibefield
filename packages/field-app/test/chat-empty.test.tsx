@@ -135,8 +135,10 @@ describe('Chat, empty: the night (DESIGN.md §8 "Chat\'s list"; track ES)', () =
       />,
     );
     const create = button(".vf-chat-empty-new");
-    // item 241's rule: the view hands the kit's button `disabled` and draws no Off of its own
+    // item 241's rule: the view hands the kit's button `disabled` and draws no Off of its own; 241b's kit draws Off on
+    // `:disabled:not([data-running])` (G2), and the night's New spark never runs — it opens the sheet
     expect(create?.disabled).toBe(true);
+    expect(create?.hasAttribute("data-running")).toBe(false);
     expect(create?.getAttribute("style")).toBeNull();
     expect(words($(".vf-chat-empty-why"))).toBe(
       "A spark thinks with Claude Code, which isn't on this Mac yet.",

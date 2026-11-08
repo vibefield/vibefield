@@ -165,20 +165,6 @@ export function ChromeLayer({
   const transcripts = useMemo(() => transcriptDoorOver(fieldd), [fieldd]);
   // SP-1e2 — the shown spark's crews, for its crew cards (`compose.sparks.crews.subscribe`, the same client)
   const crews = useMemo(() => crewsDoorOver(fieldd), [fieldd]);
-  const chatView = useCallback(
-    (active: boolean) => (
-      <ChatView
-        active={active}
-        surface={surface}
-        onSurfaceChange={onSurfaceChange}
-        port={newSparkPort}
-        transcripts={transcripts}
-        crews={crews}
-        runs={fieldd}
-      />
-    ),
-    [crews, fieldd, newSparkPort, onSurfaceChange, surface, transcripts],
-  );
   const closeNewSpark = useCallback(
     () => onSurfaceChange(foldSurface(surface, "new-spark")),
     [onSurfaceChange, surface],
@@ -207,6 +193,27 @@ export function ChromeLayer({
   // UM-3 (ruling 9) — the profiles column's Sign in and Agent Profiles…: that
   // profile's page, handed to the cover while Settings is closed, as above
   const openProfile = useCallback((profile: string) => openSettings({ profile }), [openSettings]);
+  // track ES — the night's Open Agents settings, while no agent here can be a spark: Settings → Agents
+  const openAgents = useCallback(() => openSettings("agents"), [openSettings]);
+  // Chat's view in the cover, handed the window's one Settings owner for the night's Open Agents settings, and the
+  // sheet's own door for the night's agents (track ES)
+  const chatView = useCallback(
+    (active: boolean) => (
+      <ChatView
+        active={active}
+        surface={surface}
+        onSurfaceChange={onSurfaceChange}
+        port={newSparkPort}
+        transcripts={transcripts}
+        crews={crews}
+        runs={fieldd}
+        agents={newSparkPort}
+        keys={keys}
+        onOpenAgents={openAgents}
+      />
+    ),
+    [crews, fieldd, keys, newSparkPort, onSurfaceChange, openAgents, surface, transcripts],
+  );
 
   // Opening it is asking the owner (which folds Settings and every other
   // surface); a fold of its own leaves the others alone.

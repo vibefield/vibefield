@@ -88,8 +88,9 @@ export function sparkAgentsOf(providers: readonly AgentProviderSummary[]): Spark
 /** Whether the catalog lets the agent be a spark here: `offers.spark`, fieldd's word on the claim for this device (the
  * hatch's own verdict, CP-5a). A row with no key comes from a daemon older than the claim, whose own hatch reads the
  * facts alone, so the sheet reads them too: all three briefing fields, and a process the door can name (CP-1d). This
- * fallback retires once no older daemon can be adopted. */
-function canBeSpark(provider: AgentProviderSummary): boolean {
+ * fallback retires once no older daemon can be adopted. The sheet's and the empty night's one reading (track ES,
+ * `night-agents.ts`). */
+export function canBeSpark(provider: AgentProviderSummary): boolean {
   const claim = provider.offers?.spark;
   if (typeof claim === "boolean") return claim;
   const briefing = provider.briefing;

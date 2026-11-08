@@ -101,6 +101,13 @@
   --vf-search-scrim: rgb(0 0 0 / 16%);
   /* §8 the New spark sheet's sky (SP-1c): night in both themes, under the star engine's own night where it draws */
   --vf-spark-night: #060716;
+  /* §5 night glass (track ES, 2026-11-08): what stands on the hatch's night — the starters on Chat's empty night —
+     wears it, the same in both themes, for the night is the night by day too; behind the night's words, its hush */
+  --vf-night-glass: rgb(255 255 255 / 7%);
+  --vf-night-glass-hover: rgb(255 255 255 / 12%);
+  --vf-night-glass-ring: rgb(255 255 255 / 14%);
+  --vf-night-glass-blur: 16px;
+  --vf-night-hush: color-mix(in srgb, var(--vf-spark-night) 58%, transparent);
 
   /* §2.5 State & system color */
   --vf-green: #30d158;
@@ -495,4 +502,22 @@
   --vf-coin-inset: rgb(0 0 0 / 42%);
   --vf-coin-shadow: rgb(0 0 0 / 50%);
   --vf-coin-shadow-contact: rgb(0 0 0 / 30%);
+}
+
+/* §2.4 "On the night, the night's ink" (track ES, 2026-11-08): what stands on the hatch's night — Chat's empty panel —
+   reads in the night theme's own ink, by day as by night. These are `.dark`'s values for the words and the fills a
+   control on the night draws with, equal BY DESIGN: night-tokens.test.ts fails when either moves alone. */
+.vf-on-night {
+  color-scheme: dark;
+  --vf-fill: #2c2c2e;
+  --vf-fill-hover: #2c2c2e;
+  --vf-foreground: #f5f5f7;
+  --vf-foreground-inverse: #1c1c1e;
+  --vf-text-primary: rgb(245 245 247 / 85%);
+  --vf-text-secondary: rgb(245 245 247 / 70%);
+  --vf-text-tertiary: rgb(245 245 247 / 54%);
+  --vf-text-faint: rgb(245 245 247 / 38%);
+  --vf-hairline: rgb(255 255 255 / 10%);
+  --vf-hairline-strong: rgb(255 255 255 / 15%);
+  --vf-chrome-solid: #1c1c1e;
 }

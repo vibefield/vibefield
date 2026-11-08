@@ -14,15 +14,18 @@ import type { FrameSurface } from "../frame/frame-surface";
 import { jumpNote, sayOnLine } from "../frame/line-door";
 import { sayStatus } from "../frame/status-line";
 import { requestView } from "../frame/view-state";
+import type { ViewKeys } from "../frame/views";
 import { stillKept } from "../host";
 import { NO_HANDLES, sessionHandlesOf } from "./at-rows";
 import { ChatComposer, type ComposerPort } from "./ChatComposer";
+import { ChatEmptyView } from "./ChatEmptyView";
 import { type ChatAct, ChatPanelView, shownOf } from "./ChatPanelView";
 import type { DraftMessage, DraftPart } from "./composer-draft";
 import { crewCardsOf, crewsOfFlow } from "./crew-card";
 import { CREWS_READING, type CrewsDoor, type CrewsReading, useSparkCrews } from "./crews-port";
 import { NO_PAUSE, type PauseAct, pauseTurn, type SparkPauser, turnOf } from "./head-act";
 import { useNeedsCard } from "./needs-card-stand";
+import { type NightAgentsDoor, useNightAgents } from "./night-agents";
 import {
   letGoPendingSays,
   settlePendingSay,
@@ -77,6 +80,9 @@ import {
 // for every thread (`useProfileSets`: on its first show, and again as @ opens) and hands the reading to the composer's
 // @; with the board's rows it numbers the shown thread's sessions as @ does (`sessionHandlesOf`), and its card names
 // them so. What it chose, which threads an act holds, and what its cards answer, are this view's alone.
+// Since track ES, with no spark the panel is the night (`ChatEmptyView`): it reads which agents here can be a spark
+// while the night stands (`useNightAgents`), and its New spark and first jobs open the New spark sheet, the line's
+// create; Open Agents settings is the window's (`onOpenAgents`).
 // *Amended 2026-11-05 (TH-1, the pane leaves Chat):* it mounted the shown spark's own pane while it was awake
 // (`SparkPane`), stood the hello over it while the thread was quiet (`threadItemsOf`), and kept which threads' hello
 // had left. They are in git.
@@ -94,6 +100,9 @@ export function ChatView({
   transcripts,
   crews,
   runs,
+  agents,
+  keys = "mac",
+  onOpenAgents,
 }: {
   /** Chat is the view showing: the rows' times are said again while it is, and the thread on screen is read */
   active: boolean;
@@ -110,8 +119,19 @@ export function ChatView({
   /** item 187 — the window's door to fieldd's runs (`agent.list`, whole for this desktop's windows): where a run's
    * terminal is, read once at the press by Jump to, the card's Show and a crew member's reveal (`reveal-run.ts`) */
   runs: KeyedCallClient;
+  /** track ES — the night's door (`agent.providers`): which agents here can be a spark, read while Chat is the view
+   * and holds no spark; absent, the night is live and its agents unread */
+  agents?: NightAgentsDoor | undefined;
+  /** the window's keys: New spark's key as the night prints it (⌘N on a Mac, Ctrl+N elsewhere) */
+  keys?: ViewKeys | undefined;
+  /** track ES — Open Agents settings, pressed on the night while no agent here can be a spark: Settings → Agents */
+  onOpenAgents?: (() => void) | undefined;
 }): ReactElement {
   const reading = useSparksReading();
+  // track ES — the night before the first spark (DESIGN.md §8 "Chat's list", Empty: the night): which agents here can
+  // be a spark, read only while it stands
+  const night = reading.state === "ready" && reading.entries.length === 0;
+  const nightAgents = useNightAgents(agents, active && night);
   // the Agent Profiles, read once for every thread's @ (on Chat's first show, and again as @ opens)
   const profiles = useProfileSets(port, active);
   const [chosen, setChosen] = useState<SparkId | null>(null);
@@ -477,6 +497,17 @@ export function ChatView({
       />
     );
   const footItems = footItemsOf(needs.card);
+  // the night's acts: New spark and a first job open the line's create, the New spark sheet (ES-2 carries the job)
+  const empty = night ? (
+    <ChatEmptyView
+      agents={nightAgents}
+      keys={keys}
+      active={active}
+      onNewSpark={() => onSurfaceChange("new-spark")}
+      onJob={() => onSurfaceChange("new-spark")}
+      onAgents={onOpenAgents}
+    />
+  ) : undefined;
   return (
     <ChatPanelView
       reading={reading}
@@ -497,6 +528,7 @@ export function ChatView({
       onShowAsk={showAsk}
       cardRef={needs.cardRef}
       {...(composer === undefined ? {} : { composer })}
+      {...(empty === undefined ? {} : { empty })}
     />
   );
 }
