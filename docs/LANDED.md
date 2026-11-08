@@ -43941,3 +43941,167 @@ witnessed; and vf-m2's order.
 - The EL8's Owed line for item 259 is PAID by this entry.
 - **About on a device, drawn from the shipped record:** the next TestFlight build, by James's eye. No single row
   witnesses the record's own row and the filter meeting on the page: the record is witnessed by V, the filter by G.
+
+## ES-3 + ES-4 — Chat's night leans toward New spark and closes onto the sheet's sky like a portal, lent to the sheet's window and handed back at its own moment; the starters are filled from this Mac; the hatch's goldens made again for it (track ES)
+
+(2026-11-08; twenty-one commits cut by ES (vibe-field-b4). Nineteen were on branch `es/night` in the es lane, folded
+and replayed onto main `e60d8add6`; the twentieth, the hatch's goldens, was cut on that cut's tip from a9's returned
+bytes. The twenty were replayed once onto main `4db42a816` by `git replay`, and the twenty-first, the gate's
+allow-list, was cut on their tip after run237's red. T's tree `bd19160b2` is EQUAL to `git merge-tree` of `4db42a816`
+and the chain, and the full-index patch-id is `d6b4332a` (`lanes/es/mint/es34-2c34727a3-on-4db42a816`):
+- ES-3a `121569672` (doc, DESIGN.md), `ca995c922` (red) and `a8c18ae6d` (green);
+- ES-3b `879e909b2`, `573875937` and `02240b57e`;
+- ES-3c `2b803d6fa`, `a4226c8fa` and `8cb0a9640`;
+- ES-3d `9d3f7cb1a` (red) and `c0c077b34` (green);
+- ES-3e `766c251fc`, `4a1de44e0` and `2ba9e21c1`;
+- ES-4 `15cc764f9` (doc), `3ff5dd183` and `ef72d9859`, its fix `980f5ceb1` and its plate `c0f7569eb`;
+- ES-3 (goldens) `f00b80dee`;
+- ES-4 (wall) `2c34727a3`, T, tree `bd19160b2`.
+
+Witnessed on the Mac, each row alone through the HOLD door, and minted by run 238 at T on vf-m2. Landed
+21:56:34Z by the fixer as `2c34727a3` (M238), a fast-forward of main `4db42a816`.)
+
+Ruled as ES-1's entry gives it, at 04:27Z on the page: ES-D3 (a) "The window closes on a still night", ES-D4 (a)
+"Filled from this Mac, the ruled words as the fallback" and ES-D5 (a) "Chat's own panel, under the dim". The lean has
+no mark of its own: the page draws it as its state "Under the pointer" and gives its curve in its Motion section.
+VF-PM gave each slice its label and words: ES-3a's seam at 06:52Z, the window lent at 07:55Z, ES-3c at 09:00Z, ES-3d
+at 09:13Z, ES-3e and its 2 s bound at 09:24Z, ES-4's GO at 09:30Z and its (A) at 09:33Z, the hatch's goldens at
+13:22Z and 13:26Z, the re-cut at 21:01Z, and #21, the gate's own door, at 21:33Z.
+
+**What moved.** 40 files, +2700 −87 over `4db42a816`, 5 of them added.
+- The design doc, DESIGN.md: +64 −4 in 4 hunks. §6 gains the lean and the portal: the window lent, its layer, the
+  hand-off, and the sheet leaving once the fold has. §8 "Chat's list" gains the jobs "Filled from this Mac", with
+  ES-Q1, and §8 "Chat's thread" amends the hello.
+- design-kit: the night lends itself (`spark-face/night.tsx`'s `lendNight`), and the hatch draws a lent sky from its
+  first moment and leaves on its own clock (`spark-face/hatch.tsx`'s `leave()`, now a promise), with `index.ts` and
+  `spark-face.css`. #20's two goldens are in `fixtures/`.
+- field-app:
+  - the portal (`chat/portal.ts`) and the starters (`chat/starters.ts`), both added;
+  - Chat's empty view, the sheet and its view, the starter, the night's agents and the thread's items;
+  - the line's ✦ says over from the frame (`frame/line-door.ts`, `ComposerLine.tsx`);
+  - the catalog's two plates. The two `*-fixtures.ts` are the catalog's adapters (UI_SYSTEM's), not fixtures of
+    record.
+- The kit: #20's two copies in `Tests/FieldDesignTests/Fixtures/`, byte for byte. No Swift moves.
+- The gate: R23b's allow-list (`scripts/check-agent-catalog.mjs`, +12) gains #21's two rows.
+- By class (`es34-records-audit-inputs.txt` in the packet):
+  - pin-class 0, net and in any commit;
+  - `^scripts/` 1, #21's gate allow-list, neither pin-class nor release-adjacent;
+  - `.github`, `docs/`, contracts, plugin-sdk, `.rs`, fieldd, electron-shell, `plugins/`, `draft/`, release-adjacent
+    and `PUPPETEER_`: 0 each;
+  - `fixtures/` 2, `^apps/` 2 and goldens 2, all four of them #20's.
+
+**What is real.**
+- **ES-3a, the lean** (§6): under the pointer or the keyboard's focus on New spark, a job or the line's ✦, the night's
+  edge draws in 6 from every side, its corners from 22 to 16, in 240ms on the island curve. It goes back in 240ms on
+  the retract curve once nothing has held it for 90ms. Only the night moves. The line says over from the frame
+  (`sayLineCreateOver` / `hearLineCreateOver`), and Chat only listens.
+- **ES-3b, the portal** (§6):
+  - The kit's `lendNight(within)` lends the night standing in the sheet's own container.
+  - The sheet's window is a canvas the panel's size, at the panel's place. The hatch draws it from the night's own
+    moment, because the engine places its stars in CSS pixels from its canvas's bottom-left corner, so a smaller sky
+    would move every star.
+  - The window stands in the sheet's own layer over the glass, clipped to the sky's place.
+  - Cancel, Esc or the dim opens the window back, and the night takes it back at the window's own moment. With no
+    night, or no WebGL2, the sheet rises as before.
+  - `chat/portal.ts` holds §6's numbers, the clip, and the phases on Web Animations. The catalog's "From the night"
+    plate shows it.
+- **ES-3c, the hand-off** (§6, corrected at its source and dated): nothing of the sheet shows before the window's first
+  frame, its dim included. The window comes in over 180ms on the retract curve as the words leave, and the night fades
+  out under it once it is whole.
+- **ES-3d**: each phase follows its own motion's finish (`movePortal`'s `finished`, and `stop` keeps where it has come
+  to). The phase's own time bounds only what does not animate.
+- **ES-3e** (§6, dated): through the portal the sheet leaves once the fold has handed the night back and the face's
+  450 has run on the hatch's clock (the kit's `leave()`). `PORTAL_BOUND_MS`, 2,000, ends a wait whose frames never
+  come.
+- **ES-4** (§8 "Chat's list", the jobs, "Filled from this Mac"; §8 "Chat's thread", the hello, amended):
+  - `startersOf` fills the slots from this Mac's agents and the board: the crew, the busiest folder, the live run worked
+    in last (named by its agent and place, `claude·2`) and its reviewer. A slot with nothing to fill keeps its ruled
+    word (ES-Q1).
+  - One reading serves the night and the hello, and the starters hold their places, wordless, while it is read.
+  - Its fix keeps the hello's held state the window's, never the fold's, so the flow's goldens the phone's port is held
+    to stand byte for byte.
+  - The catalog's "The night, another Mac's jobs" plate shows it.
+- **ES-3 (goldens), #20.** The hatch's rows golden was made again by its script for hatch.tsx's ES-3b and ES-3e edits.
+  One line moved, the hatch pin `6c94831a` → `06b538c5`, and every row is byte for byte.
+  - Its frames were redrawn on their own host, the old mini (es34g). The 19 PNGs are byte for byte, and the manifest's
+    rows pin alone moved, `e47b1add` → `33f1e800`.
+  - The kit's two copies moved with them. Made again, never re-blessed: no DESIGN.md number or look moves.
+- **ES-4 (wall), #21.** R23b's allow-list names ES-4's two literal tables, each with its exact count:
+  `chat/starters.ts`, 3, the agents the hello's ruled words name, a LIVE AR-L1 exception made explicit until the
+  catalog row carries the starter's role; and `design-system/chat-fixtures.ts`, 3, the night plate's fixture adapter.
+
+**Corrected before landing** (VF-PM 2026-11-08 10:04Z): ES-4's doc (`15cc764f9` here) placed the hello at §9 "Chat's
+thread". That subsection is §8's, where the doc's own amendment of the hello stands. At the first replay ES-4's doc
+carries §8. Main never carried the slip, so no dated line marks it.
+
+**Found at the freeze** (ES's own, 2026-11-08 11:50Z, read 13:22Z): `spark-face-goldens.test.ts` read 1 of 4 failed at
+the first cut's tip, `775c5b88f`. The rows golden pins hatch.tsx's sha256, and ES-3b and ES-3e moved hatch.tsx. ES's
+slice rows at ES-3b and ES-3e had run `spark-face.test.tsx`, not `spark-face-goldens.test.ts`. The fix is one commit
+at the tip, #20, not a fold: a fold means two re-makes and two GPU redraws (VF-PM 13:26Z). It was cut from a9's
+returned bytes, never from the Mac's.
+
+**Found at the mint** (run237, 2026-11-08 21:31Z): SLOT RED at verify's first stage, preflight's R23b. There were six
+agent id literals, three in ES-4 green's `RULED` and three in its plate's other Mac
+(`lanes/vf-m2/run237-a9-results/run237/verify.log`, sha256 `98368da3`, lines 42–48). ES's own miss: the Mac's rows had
+not run preflight's stage-1 walls, and they do from this bundle on (VF-PM 21:33Z). The fix is #21, the gate's own
+door, one commit on the tip. No product source moves, so the rows on T3's trees stand. M237 is burned.
+
+**Proofs.** These are the builder's read, never a verdict of record: VF-PM's bounded rows, each with its own Vite and
+one headless SwiftShader Chrome, pids in HOLD and proven gone.
+- `lanes/es/proof/es3b-0852Z`: three faults, which became ES-3c.
+- `lanes/es/proof/es3c-0909Z-retry`: the per-frame sampler shows the hand-off as §6 says.
+- `lanes/es/proof/es3d-0921Z`: the phases follow their motion, but the sheet's own leave clock cut the fold, which
+  became ES-3e.
+- `lanes/es/proof/es3e-0928Z`: the night comes back with the window at rest, and the sheet outlives it.
+
+**The witnesses.**
+- **The MacBook, before the mint.** One install row came first (21:03:44–46Z; the EL8's lock `2f78e50a` unmoved).
+  Then 71 rows ran at T3, whose package and kit trees T holds, each alone through the HOLD door (21:05:31–21:16:32Z;
+  `es34-rows-t3-summary.txt` in the packet):
+  - tsc read 0 errors in design-kit, field-app and electron-shell;
+  - check:walls was clean, "266 of 1129"; check:deps read one copy each; check:retired was clean;
+  - ios fixtures read 418 and pins 93; biome checked 3528 files (73 warnings, 21 infos);
+  - the hatch's two `--check`s exited 0.
+  - field-app's 58 files read 1279 → 1320 tests against M236's (+41): chat-empty 11 → 15, spark-night 4 → 9,
+    chat-view 46 → 48, chat-composer 73 → 74, thread-flow 16 → 17, transcript-items 17 → 18 and composer-line
+    40 → 41, and the added chat-portal 12, chat-portal-motion 5 and chat-starters 9. The other 48 were unchanged.
+- **The wall rows**, each a light row through the HOLD door. At T3 the R23 and R23b row read run237's six FAIL lines
+  (21:36:45Z). At T (21:38:18–20Z) it passed: "check-agent-catalog: pass — 10 catalog row(s) honoured by both pins,
+  1 warning(s) [--enforce]" and "check-agent-catalog: pass — no agent id literal outside the catalog and the
+  allow-list [--literals]". check-import-boundaries was clean.
+- **es34g on the old mini** (a9, 20:42:56–20:44:58Z). The packet was `lanes/es/mint/es34g-1e5e42e1f-on-e60d8add6`
+  (SUMS `6a3339b5`), and its results are in `a9-results` there (SUMS `464a2c5a`).
+  - Rows 1–7 ran as predicted: the cases were byte-equal to the expected; the draw made 19 frames, 9,338,476 bytes;
+    `--check` exited 0; the manifest alone moved, byte-equal to the prediction `bc3f1750`; the kit's copy and
+    check:ios-fixtures exited 0.
+  - Row K, the kit's FieldDesignTests at Xcode 27.2: "✔ Test run with 71 tests in 18 suites passed after 10.938
+    seconds", with both SparkHatchFramesTests passed by name. It ran on S `1e5e42e1f`'s kit WITH THE REDRAWN
+    MANIFEST in the working tree: the two Fixtures at T's bytes (the golden's sha256 `33f1e800`, the manifest's
+    `bc3f1750`). S's own commit holds the old manifest (sha256 `d4deb81a`, blob `ffefb8c2`), so K witnesses the
+    bytes, never es34g's commit.
+- **The kit, carried, not run.** T is a Swift land: the kit's tree moves by the two Fixtures alone, to `95e76bdcd9f1`
+  from main's `759253316230`, which M236 witnessed. Its witness is es34g's K on those bytes, above. A K at a tree that
+  holds `95e76bdcd9f1` is OWED, and HG's run239 carries it (VF-PM 21:46Z).
+- **Run 238 at T on vf-m2, green** (a9): verify exited 0, V from 21:45:24Z to its own end at
+  21:51:13Z, 5 min 49 s, at Xcode 26.3, with rosettad the `811e554c6` build. The packet was
+  `lanes/es/mint/es34-2c34727a3-on-4db42a816` (SUMS `ccb2ae54`: brief `71f24fe5`, bundle `039e2657`); the results are
+  `lanes/vf-m2/run238-a9-results` (SHA256SUMS-a9-run238 `648b35ab`, 20 of 20 OK here).
+  - Against M236's lines: of the 56 count lines, only field-app moves, to 325 files and 4524 tests.
+  - The test temp roots read "266 of 1129" and biome "Checked 3528 files" (73 warnings and 21 infos, M236's own).
+    fieldd reads 3762 passed | 15 skipped, electron-shell 2752 | 2, contracts 1949; dev-runner 482 of 482; the census
+    OK. bundle:assert reads initial 954.4 KB raw / 252.6 KB gz (M236's 954.4 / 252.5), its shape M236's. DESIGN.md's
+    readers read 33 of 33.
+  - Preflight read "preflight OK (1 warning(s))", the standing `acp` WARN. A green preflight does not echo the
+    checker, so the two pass lines quoted above are the Mac's wall rows', not verify's (a9's reading).
+  - The tree was clean and stubs 0, with no birth KEPT. At the arm the range's patch-id read `d6b4332a` and the
+    twenty's `0f314dc0`, each EQUAL to the brief's.
+
+**Owed.**
+- ES-Q1, James's wording on a slot with nothing to fill (ROADMAP §9).
+- James's eye on the built app: the lean under the pointer; the portal on a real GPU (the close, the hand-off,
+  Cancel's fold back into the night, and Create); the starters filled from his own board.
+- ES-5, the phone's night (the IOS lane).
+- ES's follow-up: the catalog row carries the starter's role, a contracts change with the kit's six mirrors, and
+  `starters.ts`'s allow-list row retires.
+- The kit's K at a tree that holds T's kit tree `95e76bdcd9f1`: HG's run239 carries it.
+- gate:landing after the land: the stills and the smokes, landing-only; a re-bless, if any, said there.
