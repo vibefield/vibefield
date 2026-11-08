@@ -2,6 +2,7 @@ import { type ChildProcess, spawn as spawnChild } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { Duplex } from "node:stream";
 import {
   type AgentInputSender,
   ErrorData,
@@ -19,10 +20,10 @@ import {
 import type { LogFields, Logger } from "@vibefield/logging";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { FlowStepEvents, type FlowStepTurnEnd } from "../src/flow-step-events";
-import { type FlowJournalEntry, RUNS_DIR } from "../src/flows/journal";
+import { type FlowJournalEntry, JOURNAL_SUFFIX, RUNS_DIR } from "../src/flows/journal";
 import type { FlowsHostLaunch } from "../src/flows/launch";
 import { FlowLibrary } from "../src/flows/library";
-import { FlowRecords, flowHashOf } from "../src/flows/records";
+import { FlowJournalFull, FlowRecords, flowHashOf } from "../src/flows/records";
 import { FlowReplay, flowCallKey } from "../src/flows/replay";
 import {
   type FlowRunSpark,
@@ -120,6 +121,28 @@ interface Host {
   readonly child: ChildProcess;
   readonly at: number;
   leftAt?: number;
+  /** J1 (F3) — the ids of the call frames its child sent on fd 3, as it sent them, when the row counts them
+   * (`frames`); none else */
+  readonly calls: number[];
+}
+
+/** J1 (F3) — each call frame `child` sends fieldd on its fd 3 (protocol.ts: one JSON message a line), its id pushed to
+ * `calls`. A second listener beside the supervisor's own reader, attached before it (the supervisor attaches its own
+ * in the same turn as its spawn, supervisor.ts), so a frame is counted before fieldd hears it. */
+function countCalls(child: ChildProcess, calls: number[]): void {
+  let rest = "";
+  (child.stdio[3] as Duplex | null | undefined)?.on("data", (chunk: Buffer) => {
+    const lines = `${rest}${chunk.toString("utf8")}`.split("\n");
+    rest = lines.pop() ?? "";
+    for (const line of lines) {
+      try {
+        const frame = JSON.parse(line) as { readonly t?: unknown; readonly id?: unknown };
+        if (frame.t === "call" && typeof frame.id === "number") calls.push(frame.id);
+      } catch {
+        // a line that is no frame is fieldd's to refuse (`protocol`), not this count's
+      }
+    }
+  });
 }
 /** A session an `in:` handed a step, as the runs told the step listener (9b): how many lines were queued at the hand,
  * and whether the runs let it go. */
@@ -206,6 +229,10 @@ async function harness(
     readonly ofRunOmits?: readonly string[];
     /** slice 13 (R40, D19): the sessions whose working turn a run's own line began (`began` answers true) */
     readonly beganIn?: readonly string[];
+    /** J1: the store's bound on a journal's bytes, lowered (FlowRecordsOptions.journalMaxBytes); its default else */
+    readonly journalMaxBytes?: number;
+    /** J1 (F3): each host's call frames counted as its child sends them (`Host.calls`) */
+    readonly frames?: boolean;
   } = {},
 ) {
   const root = mkdtempSync(join(tmpdir(), "vf-flow-runs-"));
@@ -215,6 +242,7 @@ async function harness(
   const records = new FlowRecords({
     dir: join(root, "fieldd", "flows"),
     keyPath: join(root, "fieldd", "flows.key"),
+    journalMaxBytes: opts.journalMaxBytes,
   });
   const library = new FlowLibrary({ dir: libraryDir, records });
   const raised: FlowChangedRaise[] = [];
@@ -389,7 +417,8 @@ async function harness(
       ...(opts.timings !== undefined ? { timings: opts.timings } : {}),
       spawn: (command, args, options) => {
         const child = spawnChild(command, args, options);
-        const host: Host = { child, at: Date.now() };
+        const host: Host = { child, at: Date.now(), calls: [] };
+        if (opts.frames === true) countCalls(child, host.calls);
         child.once("exit", () => {
           host.leftAt = Date.now();
         });
@@ -6840,5 +6869,328 @@ describe("CP-4a2b — the host's life: parked and woken, D2's lookup at a wake, 
     ]);
     await h.runs.stop(run);
     expect(h.paused).toEqual([]);
+  });
+
+  // CP-4a2b (J1; board `co-journal-byte-bound` (a), 2026-11-07: "byte bound → flood", nobody asked
+  // anything; ruled 2026-11-07, seam B): a run whose journal's next line would pass its bound ends through slice 13's
+  // `live.ending`, `failed` with `host: "flood"`, its record's `log` §9's sentence (F2), said by the runs as
+  // `fieldd.flows.run.full`, never the supervisor's `fieldd.flows.host.flood` (Q14). The first ending set stands
+  // (F8, as narrowed 2026-11-08): a Stop in J1's leave takes no end of its own, and answers the flood (`stop()`'s read).
+  // J1's red: the harness lowers the store's `journalMaxBytes`, which the red reads nowhere, so no line is refused and
+  // each row below reds on a value, never a timeout; JB6 is green there
+
+  /** JB3's flow: 100 log lines in a bounded loop, then done; under HOST_LOG_LINES_MAX, so the supervisor never floods
+   * it (Q14). */
+  const LOGS = [
+    'export const meta = { name: "Logs" };',
+    "export default async function () {",
+    '  for (let i = 1; i <= 100; i += 1) log("line " + i);',
+    '  return "done";',
+    "}",
+    "",
+  ].join("\n");
+  /** JB4's flow: a silent loop of 200 steps, each refusal caught, then done; bounded, so a mutant reds on a value. */
+  const LOOPS = [
+    'export const meta = { name: "Loops" };',
+    "export default async function () {",
+    "  for (let i = 1; i <= 200; i += 1) {",
+    `    try { await agent("look again", ${stepAt("Loop")}); } catch (e) {}`,
+    "  }",
+    '  return "done";',
+    "}",
+    "",
+  ].join("\n");
+  /** The bytes `run`'s journal holds before its `end` line: its file's lines, but the `end` it ends with. */
+  const bytesBeforeEnd = (h: Harness, run: string): number =>
+    readFileSync(join(h.root, "fieldd", "flows", RUNS_DIR, `${run}${JOURNAL_SUFFIX}`), "utf8")
+      .split("\n")
+      .filter((line) => line !== "" && (JSON.parse(line) as { kind?: unknown }).kind !== "end")
+      .reduce((bytes, line) => bytes + Buffer.byteLength(line, "utf8") + 1, 0);
+  /** Q14 — how often fieldd's log said `run`'s journal was full (the runs' `fieldd.flows.run.full`), and how often the
+   * supervisor said a host flooded (`fieldd.flows.host.flood`): J1's flood is the runs', never the host's. */
+  const floodsSaid = (h: Harness, run: string) => {
+    const full = ({ event, fields }: (typeof h.warned)[number]) =>
+      event === "fieldd.flows.run.full" && fields?.["run"] === run;
+    return {
+      full: h.warned.filter(full).length,
+      host: h.warned.filter(({ event }) => event === "fieldd.flows.host.flood").length,
+    };
+  };
+  /** A step's turn end that misses its form, in the session its record names. */
+  const missOf = (h: Harness, run: string, call: number, turn: string, text: string) =>
+    h.endTurn({
+      run,
+      call,
+      runtimeRunId: sessionOf(h, run, call),
+      turn,
+      outcome: "completed",
+      text,
+    });
+  /** The person's Ask once more on HELD_TWO's step A, held on its repair (its first item). */
+  const askHeldOnceMore = (h: Harness, run: string) =>
+    h.runs.acts.answer({
+      id: h.raisedAs[0]?.id ?? ("ny-item1aaaaaa" as NeedsItemId),
+      kind: "flow-repair",
+      run: { run, flow: "held", call: 1, label: "A" },
+      choice: 0,
+      stop: false,
+      act: NEEDS_CHOICE_WORDS.askOnceMore,
+    });
+
+  it("JB3 (J1; F2, Q14): the log road: a run whose log lines reach its journal's bound ends `flood`, its record's `log` §9's sentence, said once by the runs and never by the host; its journal holds at most the bound before its one `end` line", async () => {
+    // red: no bound is read, so the script logs its 100 lines and returns: `done`, no `host`, its latest line its
+    // `log`. Kills: `#appended`'s catch dropped, which leaves `replay.log` to swallow the refusal (replay.ts:269–279);
+    // and F2's `log` left off `#full`'s ending, so the record keeps the script's latest line
+    const max = 4_096;
+    const h = await harness({ journalMaxBytes: max });
+    h.approved("logs", LOGS);
+    const run = startedRun(await h.start({ flow: "logs" })).run;
+    await within(WAIT_MS, () => endedOf(h, run));
+    const record = h.records.runRecord(run);
+    expect({
+      state: record?.state,
+      host: record?.host,
+      log: record?.log,
+      lines: endLinesOf(h, run),
+      past: Math.max(0, bytesBeforeEnd(h, run) - max),
+      hosts: h.hosts.length,
+      said: floodsSaid(h, run),
+    }).toEqual({
+      state: "failed",
+      host: "flood",
+      log: words.hostEnded("Logs", "flood"),
+      lines: [{ state: "failed", host: "flood" }],
+      past: 0,
+      hosts: 1,
+      said: { full: 1, host: 0 },
+    });
+  });
+
+  it("JB4 (J1; F3, Q14): the call and answer roads: a silent refused loop ends `flood`, no agent is asked for a call its journal refused, and its host's child sends no call after the refused line", async () => {
+    // red: no bound is read, so the loop runs its 200 turns and returns `done`; no line is refused, so `after` reads
+    // none. Kills: the catch rethrowing without ending, so the script hears JOURNAL_REFUSED, catches it and loops on;
+    // and (F3) `#full` without `host.stop()` (or bypassing `#endWith`): `#chosen` unset, the supervisor answers the
+    // refused call, and the child sends up to 200 − k calls more, each refused by the ending guard, for ever with an
+    // unbounded loop
+    const max = 8_192;
+    const h = await harness({
+      spawnRefuses: "the floor is full",
+      journalMaxBytes: max,
+      frames: true,
+    });
+    // the first line the store refused, and how many call frames host 0's child had sent then (its count runs first)
+    const refusal: { sent?: number; kind?: string; full?: boolean } = {};
+    const append = h.records.appendRun.bind(h.records);
+    vi.spyOn(h.records, "appendRun").mockImplementation((at, entry) => {
+      try {
+        return append(at, entry);
+      } catch (error) {
+        if (refusal.sent === undefined) {
+          refusal.sent = h.hosts[0]?.calls.length ?? 0;
+          refusal.kind = entry.kind;
+          refusal.full = error instanceof FlowJournalFull;
+        }
+        throw error;
+      }
+    });
+    h.approved("loops", LOOPS);
+    const run = startedRun(await h.start({ flow: "loops" })).run;
+    await within(WAIT_MS, () => endedOf(h, run) && left(h, 0));
+    const record = h.records.runRecord(run);
+    const calls = h.kinds(run).filter((kind) => kind === "call").length;
+    const sent = h.hosts[0]?.calls.length ?? 0;
+    expect({
+      state: record?.state,
+      host: record?.host,
+      lines: endLinesOf(h, run),
+      past: Math.max(0, bytesBeforeEnd(h, run) - max),
+      unasked: calls - h.spawned.length,
+      refused: refusal.full === true && ["call", "answer"].includes(refusal.kind ?? ""),
+      after: refusal.sent === undefined ? "no line refused" : sent - refusal.sent,
+      hosts: h.hosts.length,
+      said: floodsSaid(h, run),
+    }).toEqual({
+      state: "failed",
+      host: "flood",
+      lines: [{ state: "failed", host: "flood" }],
+      past: 0,
+      unasked: 0,
+      refused: true,
+      after: 0,
+      hosts: 1,
+      said: { full: 1, host: 0 },
+    });
+  });
+
+  it("JB5 (J1; F6, Q4, Q15): with no host up, an answer that would cross ends the run: no host is started for it, its crossed step reads `ended`, and its agent is ended once", async () => {
+    // red: no bound is read, so the 40 KiB answer is kept and wakes the run (a 2nd host), which ends `done`. Kills
+    // (Q15, D320 as corrected): `#full` sets `live.ending` itself, and stops only a host that is up, so with none up
+    // the run waits on for ever; `#endWith`'s own line (runs.ts:912) is shared with R40b
+    const h = await harness({ hostIdleMs: IDLE_MS, journalMaxBytes: 32_768 });
+    h.approved("review", ANSWERED);
+    const run = startedRun(await h.start({ flow: "review" })).run;
+    await waitFor(() => expect(h.enqueued).toHaveLength(1));
+    // F6: the answer is delivered only once the parked host has LEFT, never at `waiting` alone: #park writes `waiting`
+    // before its `host.stop()`, and a host still leaving is up, so a mutant that stops only a host would pass here too
+    expect(await parkedAt(h, run)).toEqual(PARKED);
+    answerStep(h, run, 1, "x".repeat(40 * 1024));
+    // Q15 (D318 as corrected): the step's agent lives, so the end waits on its ending (#endAgents): any end, read
+    await within(PARK_MS, () => over(h, run));
+    const record = h.records.runRecord(run);
+    expect({
+      state: record?.state,
+      host: record?.host,
+      hosts: h.hosts.length,
+      lines: endLinesOf(h, run),
+      ended: record?.ended,
+      ends: h.ends,
+      steps: stepsOf(h, run),
+    }).toEqual({
+      state: "failed",
+      host: "flood",
+      hosts: 1,
+      lines: [{ state: "failed", ended: 1, host: "flood" }],
+      ended: 1,
+      ends: ["rt-step1"],
+      steps: [[1, "ended"]],
+    });
+  });
+
+  it("JB5b (J1; §B, Q13): the gate's leg: your act whose answer would cross ends the run `flood`, and the act answers `failed` in §9's flood sentence, never the store's retryable refusal", async () => {
+    // red: no bound is read, so your answer is kept, the act is done and the run wakes and ends `done`. Kills: a
+    // `"full"` read as `"refused"` (the retryable "can't read the flows it keeps", runs.ts:2259–2260, false here: the
+    // disk did answer), and any other words for it than §9's flood sentence (Q13's one helper)
+    // the calibration: a first run of the same flow, at the default bound, parked on its gate; its journal's bytes
+    const first = await harness({ hostIdleMs: IDLE_MS });
+    first.approved("gate", GATE);
+    const calibrated = startedRun(await first.start({ flow: "gate" })).run;
+    await within(PARK_MS, () => left(first, 0) && stateOf(first, calibrated) === "holding");
+    const parked = bytesBeforeEnd(first, calibrated);
+    // 10 bytes past the parked journal: the act's answer line (about 200 B, est.) crosses it; nothing before it does
+    const h = await harness({ hostIdleMs: IDLE_MS, journalMaxBytes: parked + 10 });
+    h.approved("gate", GATE);
+    const run = startedRun(await h.start({ flow: "gate" })).run;
+    await within(PARK_MS, () => left(h, 0) && stateOf(h, run) === "holding");
+    const twin = bytesBeforeEnd(h, run) - parked;
+    const acted = await h.runs.acts.answer({
+      id: h.raisedAs[0]?.id ?? ("ny-item1aaaaaa" as NeedsItemId),
+      kind: "flow-gate",
+      run: { run, flow: "gate", call: 1 },
+      choice: 0,
+      stop: false,
+      act: " Push",
+    });
+    await within(PARK_MS, () => over(h, run));
+    const record = h.records.runRecord(run);
+    expect({
+      twin,
+      acted,
+      state: record?.state,
+      host: record?.host,
+      hosts: h.hosts.length,
+    }).toEqual({
+      twin: 0,
+      acted: { outcome: "failed", reason: words.hostEnded("Gate", "flood") },
+      state: "failed",
+      host: "flood",
+      hosts: 1,
+    });
+  });
+
+  it("JB6 (J1; F12, a pin, green at the red): a run under its bound is untouched: JB3's flow at 1 MiB ends done, its 100 lines kept, nothing said of a full journal", async () => {
+    // the pin's mutation: a check that refuses under the bound (an inverted comparison, a small constant), so JB3's
+    // flow ends `flood` here too. JB3–JB5 kill "the option ignored"
+    const h = await harness({ journalMaxBytes: 1_048_576 });
+    h.approved("logs", LOGS);
+    const run = startedRun(await h.start({ flow: "logs" })).run;
+    await within(WAIT_MS, () => endedOf(h, run));
+    const record = h.records.runRecord(run);
+    expect({
+      state: record?.state,
+      host: record?.host,
+      log: record?.log,
+      logs: h.kinds(run).filter((kind) => kind === "log").length,
+      lines: endLinesOf(h, run),
+      said: floodsSaid(h, run),
+    }).toEqual({
+      state: "done",
+      host: undefined,
+      log: "line 100",
+      logs: 100,
+      lines: [{ state: "done" }],
+      said: { full: 0, host: 0 },
+    });
+  });
+
+  it("Q9's J1 leg (J1; ruled 2026-11-08 (i), #10): in J1's leave, a step held on its repair is answered `failed` in §9's flood sentence by its Ask once more, and no repair line is sent into the session of a run that is leaving", async () => {
+    // red: no bound is read, so B's answer is kept, no ending is set, and the Ask once more sends A's repair line
+    // again and answers `done`. At the base, `#answered`'s repair road reads no ending (runs.ts:2203–2220): the fix
+    // reads `live.ending` right after `live`, for both kinds (Q9's hoist)
+    const max = 8_192;
+    const h = await harness({ timings: { stopGraceMs: KILL_GRACE_MS }, journalMaxBytes: max });
+    h.approved("held", HELD_TWO);
+    const run = startedRun(await h.start({ flow: "held" })).run;
+    await waitFor(() => expect(h.enqueued).toHaveLength(2));
+    // step A misses its form twice with its host up: held on its repair
+    missOf(h, run, 1, "t1", "no json here");
+    await within(PARK_MS, () => h.enqueued.length === 3);
+    missOf(h, run, 1, "t2", "still none");
+    await within(PARK_MS, () => h.items.length === 1);
+    // the calibration: what the journal holds before B's answer, which B's answer line alone passes the bound beside
+    const before = bytesBeforeEnd(h, run);
+    const text = "b".repeat(16 * 1024);
+    // R31's way: the host can't hear its shutdown, so its leave lasts its grace (KILL_GRACE_MS)
+    h.hosts[0]?.child.kill("SIGSTOP");
+    answerStep(h, run, 2, text);
+    const sent = h.enqueued.length;
+    const acted = await askHeldOnceMore(h, run);
+    expect({
+      fits: before <= max,
+      crosses: before + text.length > max,
+      acted,
+      repairs: h.enqueued.length - sent,
+    }).toEqual({
+      fits: true,
+      crosses: true,
+      acted: { outcome: "failed", reason: words.hostEnded("Held", "flood") },
+      repairs: 0,
+    });
+  });
+
+  it("Q9's D7 leg (J1; ruled 2026-11-08 (i), C13): in D7's leave, a step held on its repair is answered `failed` in the set-aside's own words by its Ask once more, and no second repair line is sent", async () => {
+    // red: at the base, `#answered`'s repair road reads no ending, so the Ask once more in the set-aside's leave sends
+    // A's repair line again into a session whose run is leaving and answers `done`. Q9's hoist changes D7 too (C13):
+    // the act answers in the set-aside's words, exactly these, `words.asideUnmatched("Held")` (DESIGN.md §9)
+    const said = "VibeField set Held aside: run again, its script didn't ask what it asked before.";
+    const h = await harness({ hostIdleMs: IDLE_MS, timings: { stopGraceMs: KILL_GRACE_MS } });
+    h.approved("held", HELD_TWO);
+    const run = startedRun(await h.start({ flow: "held" })).run;
+    await waitFor(() => expect(h.enqueued).toHaveLength(2));
+    expect(await parkedAt(h, run)).toEqual(PARKED);
+    // A misses its form twice while its run is parked (TT1's road 4): the hold set, the run at rest holding
+    missOf(h, run, 1, "t1", "no json here");
+    await within(PARK_MS, () => h.enqueued.length === 3);
+    missOf(h, run, 1, "t2", "still none");
+    await within(PARK_MS, () => h.items.length === 1);
+    // asideInItsLeave's form (N1's road, P12's): a call line its script never makes, kept while it waits; B's answer
+    // wakes it, its woken host is frozen once it has made its call again, and D7 sets it aside at the idle, so the
+    // set-aside's leave lasts its grace
+    h.records.appendRun(run, unmade(3));
+    const made = vi.spyOn(FlowReplay.prototype, "call");
+    try {
+      answerStep(h, run, 2, "b");
+      await within(PARK_MS, () => made.mock.calls.length > 0);
+    } finally {
+      made.mockRestore();
+    }
+    h.hosts[1]?.child.kill("SIGSTOP");
+    await within(PARK_MS, () => toldAside(h, run) !== undefined);
+    const sent = h.enqueued.length;
+    const acted = await askHeldOnceMore(h, run);
+    expect({ told: toldAside(h, run), acted, repairs: h.enqueued.length - sent }).toEqual({
+      told: said,
+      acted: { outcome: "failed", reason: said },
+      repairs: 0,
+    });
   });
 });

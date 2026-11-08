@@ -22,9 +22,15 @@ import {
 } from "@vibefield/contracts";
 import type { LogFields, Logger } from "@vibefield/logging";
 import { afterEach, describe, expect, it } from "vitest";
-import { JOURNAL_SUFFIX, RUNS_DIR } from "../src/flows/journal";
+import { type FlowJournalEntry, JOURNAL_SUFFIX, RUNS_DIR } from "../src/flows/journal";
 import { FlowLibrary } from "../src/flows/library";
-import { FlowRecords, flowHashOf, RUN_RECORDS_DIR } from "../src/flows/records";
+import {
+  FlowJournalFull,
+  FlowRecords,
+  type FlowRecordsOptions,
+  flowHashOf,
+  RUN_RECORDS_DIR,
+} from "../src/flows/records";
 import type { RpcCallError } from "../src/native-link";
 import { RecordSigner, UNREADABLE_WORDS } from "../src/signed-record";
 import { beganRun, RUN_START } from "./flows-run-records";
@@ -73,7 +79,10 @@ function harness() {
   const keyPath = join(root, "fieldd", "flows.key");
   const library = join(root, "flows");
   const events: Seen[] = [];
-  const records = () => new FlowRecords({ dir, keyPath, logger: capture(events), now: () => AT });
+  /** a store over the harness's folder, each call a NEW one (a restart); J1 (F11): `opts` over the harness's own, a
+   * lowered `journalMaxBytes` or a twin's `dir` */
+  const records = (opts: Partial<FlowRecordsOptions> = {}) =>
+    new FlowRecords({ dir, keyPath, logger: capture(events), now: () => AT, ...opts });
   const lib = (over = records()) =>
     new FlowLibrary({ dir: library, records: over, logger: capture(events) });
   const approvalFile = (flow: string) => join(dir, "approvals", `${flow}.json`);
@@ -788,5 +797,167 @@ describe("CP-4a2b — a run's record, its journal's anchor (D18)", () => {
       message: UNREADABLE_WORDS.flows,
     });
     expect(readFileSync(recordOf(newer), "utf8")).toBe(held);
+  });
+});
+
+// CP-4a2b (J1; board `co-journal-byte-bound` (a), 2026-11-07, "byte bound → flood"; ruled 2026-11-07) — a
+// run's journal's byte bound, at the store: `appendRun` refuses a line that would take the journal past it, before
+// anything is written (FlowJournalFull), reading the journal's size from its own `tail.bytes`, the file's whole lines,
+// so a new store reads it from the file; an `end` line is exempt by its own kind, so a journal never passes the bound
+// plus its end lines (F7). The runs end a run whose line was refused `flood` (flows-runs.test.ts, JB3–JB6). J1's red:
+// no row names FLOW_LIMITS.JOURNAL_MAX_BYTES (the cut adds it); JB0 holds the ruled number as F4's literal does.
+
+/** J1 (F4's literal, ruled 2026-11-07) — the bound the store holds a journal to by default: 32 MiB. */
+const JOURNAL_MAX = 33_554_432;
+
+describe("CP-4a2b (J1) — a journal's byte bound, at the store", () => {
+  const journalIn = (dir: string) => join(dir, RUNS_DIR, `${RUN}${JOURNAL_SUFFIX}`);
+  const sizeOf = (file: string) => statSync(file).size;
+  /** What `store` did with `entry` on RUN's journal: kept it, refused it as a full journal, or threw otherwise. */
+  const appended = (store: FlowRecords, entry: FlowJournalEntry): string => {
+    try {
+      store.appendRun(RUN, entry);
+      return "kept";
+    } catch (error) {
+      if (error instanceof FlowJournalFull) return "refused";
+      return `threw: ${error instanceof Error ? error.message : String(error)}`;
+    }
+  };
+  /** RUN's journal's tail, as a store that reads it from its file reads it. */
+  const tailIn = (store: FlowRecords) => {
+    const read = store.readRun(RUN);
+    return read.kind === "kept" ? { ...read.tail, last: read.lines.at(-1)?.kind } : read.kind;
+  };
+
+  it("JB0 (J1; F5, bounded as its correction of 2026-11-08 says): at the store's DEFAULT, 64 KiB answer lines are kept to at most 33,554,432 bytes, and the first line refused would have passed them", () => {
+    // red: no bound is read, so no line is refused, and the loop stops at its own bound (never a timeout, D333).
+    // Kills a mutant default: Infinity, 64 MiB, or none read
+    const h = harness();
+    // the store at its default: no `journalMaxBytes`, and no fsync (its own seam), so ~32 MiB are written in a stretch
+    const records = h.records({ sync: () => {} });
+    beganRun(records, HEAD);
+    const file = journalIn(h.dir);
+    // RESULT_MAX_BYTES of JSON with its quotes, the largest value a journal's answer keeps; one call throughout, so a
+    // line's bytes change only with its seq's digits (the store keeps lines, never judges what a run's lines mean)
+    const answer = {
+      kind: "answer",
+      call: 1,
+      value: "x".repeat(FLOW_LIMITS.RESULT_MAX_BYTES - 2),
+    } as const;
+    let kept = sizeOf(file);
+    let line = 0;
+    let appends = 0;
+    // ceil(33,554,432 / line) + 2 appends, the first line's bytes read from the file (Q18: about 514, est.)
+    let bound = 1;
+    let refused: unknown;
+    while (appends < bound && refused === undefined) {
+      appends += 1;
+      try {
+        records.appendRun(RUN, answer);
+      } catch (error) {
+        refused = error;
+        break;
+      }
+      line = sizeOf(file) - kept;
+      kept += line;
+      if (appends === 1) bound = Math.ceil(JOURNAL_MAX / line) + 2;
+    }
+    // the refused line is the last kept one's bytes, and one more for each digit its seq (appends + 1) gains
+    const refusedLine = line + String(appends + 1).length - String(appends).length;
+    expect({
+      refused: refused instanceof FlowJournalFull,
+      written: sizeOf(file) - kept,
+      past: Math.max(0, sizeOf(file) - JOURNAL_MAX),
+      wouldPass: sizeOf(file) + refusedLine > JOURNAL_MAX,
+    }).toEqual({ refused: true, written: 0, past: 0, wouldPass: true });
+  });
+
+  it("JB1 (J1; F11, Q5): a line that would take a journal past its bound is refused and nothing is written; one that lands it on its bound exactly is kept; an `end` line is kept past it; and a line of two-byte characters is held to its bytes", () => {
+    // red: no bound is read, so every line is kept. Kills: the check dropped; `>=` for `>` (the exact leg); slack
+    // past the bound (the one-byte leg); `text.length` for its bytes (the é leg). The end leg is a pin, green at the
+    // red (Q5): it kills the not-exempt mutant at the green, whose runs-level result is a flood whose `end` is
+    // refused, its record live with no LiveRun and its Stop meeting the same refusal for ever
+    const h = harness();
+    // F11's calibration: twin journals, the same run id and key file under the harness's fixed `now`, at the default
+    // bound, so each line's bytes are the ones the bounded stores' own lines take
+    const twinDir = join(h.root, "twin");
+    const twin = h.records({ dir: twinDir });
+    beganRun(twin, HEAD);
+    twin.appendRun(RUN, CALL_1);
+    const called = sizeOf(journalIn(twinDir));
+    twin.appendRun(RUN, ANSWER_1);
+    const answered = sizeOf(journalIn(twinDir));
+    // é is 2 bytes in UTF-8 and 1 character: its line's bytes pass its characters by 64
+    const wide = { kind: "answer", call: 1, value: "é".repeat(64) } as const;
+    const wideDir = join(h.root, "twin-wide");
+    const wideTwin = h.records({ dir: wideDir });
+    beganRun(wideTwin, HEAD);
+    wideTwin.appendRun(RUN, CALL_1);
+    wideTwin.appendRun(RUN, wide);
+    const wideBytes = sizeOf(journalIn(wideDir)) - called;
+    const wideChars = wideBytes - 64;
+
+    // on its bound exactly, then one line past it, then the `end` line
+    const file = journalIn(h.dir);
+    const exact = h.records({ journalMaxBytes: answered });
+    beganRun(exact, HEAD);
+    const toBound = [appended(exact, CALL_1), appended(exact, ANSWER_1), sizeOf(file)];
+    const before = tailIn(h.records());
+    const past = appended(exact, { kind: "log", text: "one more" });
+    const refused = { said: past, bytes: sizeOf(file), tail: tailIn(h.records()) };
+    const end = appended(exact, { kind: "end", state: "failed", host: "flood" });
+    const endLine = `${readFileSync(file, "utf8").split("\n").filter(Boolean).at(-1)}\n`;
+    const ended = {
+      said: end,
+      grew: sizeOf(file) - refused.bytes,
+      line: Buffer.byteLength(endLine, "utf8"),
+      tail: tailIn(h.records()),
+    };
+
+    // one byte short of the answer's landing: refused
+    const shortDir = join(h.root, "short");
+    const short = h.records({ dir: shortDir, journalMaxBytes: answered - 1 });
+    beganRun(short, HEAD);
+    const shortFile = journalIn(shortDir);
+    const oneByte = [appended(short, CALL_1), appended(short, ANSWER_1), sizeOf(shortFile)];
+
+    // the bound between the wide line's characters and its bytes: its bytes pass it
+    const charsDir = join(h.root, "chars");
+    const chars = h.records({ dir: charsDir, journalMaxBytes: called + wideChars + 32 });
+    beganRun(chars, HEAD);
+    const twoByte = [appended(chars, CALL_1), appended(chars, wide), sizeOf(journalIn(charsDir))];
+
+    expect({ toBound, refused, ended, oneByte, twoByte }).toEqual({
+      toBound: ["kept", "kept", answered],
+      refused: { said: "refused", bytes: answered, tail: before },
+      ended: {
+        said: "kept",
+        grew: ended.line,
+        line: ended.line,
+        tail: { seq: 4, mac: expect.any(String), last: "end" },
+      },
+      oneByte: ["kept", "refused", called],
+      twoByte: ["kept", "refused", called],
+    });
+  });
+
+  it("JB2 (J1): across a restart, a NEW store reads the journal's bytes from its file and refuses the same line: no store hands its size over", () => {
+    // red: no bound is read, so the line is kept. Kills: a byte count kept apart from the file, which a new store
+    // starts at 0. The restart case at the store, where the only state lives (FlowRuns keeps no byte count)
+    const h = harness();
+    const twinDir = join(h.root, "twin");
+    const twin = h.records({ dir: twinDir });
+    beganRun(twin, HEAD);
+    twin.appendRun(RUN, CALL_1);
+    // store A leaves the journal 10 bytes short of its bound; ANSWER_1's line is far longer than 10 bytes
+    const bound = sizeOf(journalIn(twinDir)) + 10;
+    const file = journalIn(h.dir);
+    const first = h.records({ journalMaxBytes: bound });
+    beganRun(first, HEAD);
+    const before = [appended(first, CALL_1), sizeOf(file) - bound];
+    // a restart: a NEW store over the same folder, its tails cold, store A's size never handed over
+    const next = h.records({ journalMaxBytes: bound });
+    const after = [appended(next, ANSWER_1), sizeOf(file) - bound];
+    expect({ before, after }).toEqual({ before: ["kept", -10], after: ["refused", -10] });
   });
 });

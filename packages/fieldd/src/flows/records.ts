@@ -108,6 +108,30 @@ export interface FlowRecordsOptions {
   readonly readFile?: ((path: string) => string) | undefined;
   /** CP-4a2b (D13) — a journal's fsync, a seam for a row that counts them (tests) */
   readonly sync?: ((fd: number) => void) | undefined;
+  /** CP-4a2b (J1; board `co-journal-byte-bound` (a), 2026-11-07) — a run's journal's bound, its
+   * bytes: FLOW_LIMITS.JOURNAL_MAX_BYTES by default; tests lower it, as the host's `heapMb` is lowered.
+   * *J1's red (2026-11-08): declared and unread, so the red compiles (F3's precedent); the green reads it.* */
+  readonly journalMaxBytes?: number | undefined;
+}
+
+/** CP-4a2b (J1) — a line `appendRun` refused because it would take its run's journal past its bound
+ * (`journalMaxBytes`): nothing was written. The runs read it by `instanceof`, as they read FlowStepOrphaned, and end
+ * the run `flood`. `bytes` is where the journal's whole lines end, `line` the refused line's bytes, `max` the bound.
+ * *J1's red (2026-11-08): exported and never thrown, so the red compiles (F3's precedent); the green throws it.* */
+export class FlowJournalFull extends Error {
+  readonly run: string;
+  readonly bytes: number;
+  readonly line: number;
+  readonly max: number;
+
+  constructor(run: string, bytes: number, line: number, max: number) {
+    super(`the journal under ${run} holds ${bytes} bytes; ${line} more would pass ${max}`);
+    this.name = "FlowJournalFull";
+    this.run = run;
+    this.bytes = bytes;
+    this.line = line;
+    this.max = max;
+  }
 }
 
 /** CP-4a2b (D18) — the runs' records' folder in the flows store: `run-records/<run>.json`, one signed record per run

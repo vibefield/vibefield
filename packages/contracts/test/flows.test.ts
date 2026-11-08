@@ -131,7 +131,7 @@ describe("CP-4a1 — the library and fieldd's records on disk (CP4-Q18 (a))", ()
     expect(FLOW_FILE_SUFFIX).toBe(".flow.js");
   });
 
-  it("F4: a run's bounds, provisional until measured, and no call cap (CP4-S7, CP4-Q17 (a); the C ruling, 2026-11-07)", () => {
+  it("F4: a run's bounds, provisional until measured, and no call cap (CP4-S7, CP4-Q17 (a); the C ruling, 2026-11-07); its journal's byte bound (J1; board (a), 2026-11-07)", () => {
     expect(FLOW_LIMITS).toEqual({
       SCRIPT_MAX_BYTES: 65_536,
       RESULT_MAX_BYTES: 65_536,
@@ -161,6 +161,9 @@ describe("CP-4a1 — the library and fieldd's records on disk (CP4-Q18 (a))", ()
       FOLDER_CHARS: 4_096,
       // the slices 7–9 review's F4 (Q1 (b), ruled 2026-11-06; LL1): the agents a run's steps started; 8 × 16 PTYs at most
       RUN_AGENTS_MAX: 16,
+      // J1 (board `co-journal-byte-bound` (a), 2026-11-07; ruled 2026-11-07): a run's journal's bytes,
+      // 32 MiB, past which the runs end the run `flood`; PROVISIONAL, raise-only
+      JOURNAL_MAX_BYTES: 33_554_432,
     });
   });
 
