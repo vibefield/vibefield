@@ -1,3 +1,4 @@
 {
-  "sessionUrl": "ws://studio-mbp.tail9f2c.ts.net:9424/ws/sessions/s1"
+  "sessionUrl": "ws://studio-mbp.tail9f2c.ts.net:9424/ws/sessions/s1",
+  "restUrl": "http://studio-mbp.tail9f2c.ts.net:9424"
 }

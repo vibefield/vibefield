@@ -99,8 +99,10 @@ describe("SP-3 — rosettad's serve, from the readings", () => {
       url: "http://desk.tail1234.ts.net:9424",
       ...over,
     });
+    // SP-7b's 7b-2a: the socket and, beside it, the same serve's origin the session's pages read at
     expect(indexEndpointsFrom([live()], ORIGIN, "s1")).toEqual({
       sessionUrl: "ws://desk.tail1234.ts.net:9424/ws/sessions/s1",
+      restUrl: "http://desk.tail1234.ts.net:9424",
     });
     // the node has not taken it yet, or reported it failed
     expect(indexEndpointsFrom([live({ status: "pending" })], ORIGIN, "s1")).toBeUndefined();
@@ -227,7 +229,10 @@ describe("SP-3 — daemon.ts drives rosettad's serve behind `indexDirectPlane`",
     );
     expect(
       indexEndpointsFrom(daemon.mesh.serves(), daemon.rosettad?.state().origin ?? null, "s1"),
-    ).toEqual({ sessionUrl: `ws://mock.ts.net:${PORTS.INDEX_SERVE}/ws/sessions/s1` });
+    ).toEqual({
+      sessionUrl: `ws://mock.ts.net:${PORTS.INDEX_SERVE}/ws/sessions/s1`,
+      restUrl: `http://mock.ts.net:${PORTS.INDEX_SERVE}`,
+    });
   }, 30_000);
 
   it("flag on: a rosettad restart withdraws the serve and re-aims it at the new generation", async () => {

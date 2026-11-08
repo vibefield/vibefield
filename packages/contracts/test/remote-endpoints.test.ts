@@ -209,13 +209,16 @@ describe("an HTTP leg beside the WebSocket ones — SP-D9's `put` (ruled 2026-10
   });
 });
 
-describe("rosettad's direct plane — the template's second instance (one leg)", () => {
+describe("rosettad's direct plane — the template's second instance (the socket, and its origin)", () => {
+  // Corrected 2026-11-08 (SP-7b's 7b-2a, D-2a (a)): this said "(one leg)". The set gained `rest`,
+  // the serve's http(s) origin, which the phone's RosettaClient reads the session's pages at.
   const golden = fixture("remote-endpoint-set.rosetta.json");
 
   it("parses its golden with its own reader and with the template's", () => {
     expect(RemoteIndexEndpointSet.parse(golden)).toEqual(golden);
     expect(RemoteEndpointSet.safeParse(golden).success).toBe(true);
-    expect(Object.keys(RemoteIndexEndpointSet.shape)).toEqual(["sessionUrl"]);
+    // SP-7b's 7b-2a (D-2a (a)): the `rest` leg beside the socket, the serve's own origin
+    expect(Object.keys(RemoteIndexEndpointSet.shape)).toEqual(["sessionUrl", "restUrl"]);
   });
 
   it("dials rosetta's own session socket at the ROOT of the index listener", () => {
@@ -227,7 +230,33 @@ describe("rosettad's direct plane — the template's second instance (one leg)",
     expect(remoteIndexEndpointsFor("http://studio-mbp.tail9f2c.ts.net:9424", "s1")).toEqual(golden);
     expect(remoteIndexEndpointsFor("https://studio-mbp.tail9f2c.ts.net/", "s1")).toEqual({
       sessionUrl: "wss://studio-mbp.tail9f2c.ts.net/ws/sessions/s1",
+      restUrl: "https://studio-mbp.tail9f2c.ts.net",
     });
+  });
+
+  it("SP-7b's 7b-2a: the `rest` leg is the serve's http(s) origin, no path, and an older owner's set without it still parses", () => {
+    // RosettaClient (rosetta's clients/swift) takes the origin as its base: the session's pages are
+    // rosetta's own REST routes at the root of the same listener the socket dials, and the grant
+    // opens them (GRANT_SESSION_ROUTES)
+    const socket = { sessionUrl: "ws://desk.ts.net:9424/ws/sessions/s1" };
+    const older = RemoteIndexEndpointSet.safeParse(socket);
+    expect(older.success, "an owner before this build").toBe(true);
+    expect(
+      RemoteIndexEndpointSet.safeParse({ ...socket, restUrl: "https://desk.ts.net" }).success,
+    ).toBe(true);
+    for (const restUrl of [
+      "http://desk.ts.net:9424/",
+      "http://desk.ts.net:9424/api/sessions/s1",
+      "http://desk.ts.net:9424?grant=g",
+      "http://desk.ts.net:9424#g",
+      "ws://desk.ts.net:9424",
+      "http://127.0.0.1:9424",
+      "http://localhost:9424",
+      "http://[::1]:9424",
+      "",
+    ]) {
+      expect(RemoteIndexEndpointSet.safeParse({ ...socket, restUrl }).success, restUrl).toBe(false);
+    }
   });
 
   it("percent-encodes the session id — rosetta's ids are any text (its own grant vectors)", () => {

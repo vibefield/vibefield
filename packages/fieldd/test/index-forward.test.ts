@@ -340,9 +340,39 @@ describe("SP-7b — the phone's ask, carried from its home; the owner's answer p
     expect(seen).toEqual([{ params: { sessionId: "s1" }, envelope }]);
     expect(RemoteIndexEndpointSet.parse((ticket as IndexOpenTicket).endpoints)).toEqual({
       sessionUrl: `ws://desk-a.tail1234.ts.net:${INDEX}/ws/sessions/s1`,
+      restUrl: `http://desk-a.tail1234.ts.net:${INDEX}`,
     });
     expect(routes.asked).toEqual([]);
     expect(forwarding.holders()).toEqual([]);
+  });
+
+  it("SP-7b's 7b-2a: an owner whose `rest` leg is off its index serve is doors_not_published, as a socket off it is; one with none passes", async () => {
+    const { forwarding, routes } = over();
+    routes.route(OWNER, INDEX, LISTEN);
+    const socket = `ws://desk-a.tail1234.ts.net:${INDEX}/ws/sessions/s1`;
+    const off = ownerTicket("s1", {
+      endpoints: { sessionUrl: socket, restUrl: "http://desk-a.tail1234.ts.net:9422" },
+    });
+    const ask = forwarding.forwardVia(owner(off));
+    let refused: unknown;
+    try {
+      await ask(OWNER, "index.openTicket", { sessionId: "s1" }, PHONE);
+    } catch (error) {
+      refused = error;
+    }
+    expect(refused, "a rest leg off the index serve").toBeInstanceOf(RpcCallError);
+    expect((refused as RpcCallError).retryable).toBe(true);
+    expect(IndexTicketRoadDetails.parse((refused as RpcCallError).details)).toEqual({
+      service: "index",
+      state: INDEX_TICKET.STATE_DOORS_NOT_PUBLISHED,
+      device: OWNER,
+    });
+    // an owner before this build answers the socket alone: the phone is handed what it answered
+    const older = ownerTicket("s1", { endpoints: { sessionUrl: socket } });
+    const ticket = await outcomeOf(() =>
+      forwarding.forwardVia(owner(older))(OWNER, "index.openTicket", { sessionId: "s1" }, PHONE),
+    );
+    expect(ticket).toEqual(older);
   });
 
   it("an answer that is no ticket of the owner's is INCOMPATIBLE, and doors only the owner can dial or off its index serve are doors_not_published naming it — as for a window", async () => {

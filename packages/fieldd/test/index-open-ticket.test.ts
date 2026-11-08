@@ -633,6 +633,12 @@ describe("AR-8b — the honest refusals", () => {
     expect(new URL(RemoteIndexEndpointSet.parse(ticket.endpoints).sessionUrl).port).toBe(
       String(PORTS.INDEX_SERVE),
     );
+    // SP-7b's 7b-2a: and the same serve's origin, which the phone's RosettaClient reads the
+    // session's pages at
+    const set = RemoteIndexEndpointSet.parse(ticket.endpoints);
+    const socket = new URL(set.sessionUrl);
+    const restOrigin = `${socket.protocol === "wss:" ? "https:" : "http:"}//${socket.host}`;
+    expect(set["restUrl"]).toBe(restOrigin);
     expect(IndexEndpointSet.safeParse(ticket.endpoints).success).toBe(false);
     // a read grant for exactly that session, keyed by the phone's own login
     const verdict = verifyGrant(keys.at(-1) as Buffer, ticket.grant, Date.now());
@@ -854,6 +860,7 @@ describe("AR-8b — IndexTicketMinter, the rule alone", () => {
     const ticket = minter.mint(forward, ask);
     expect(RemoteIndexEndpointSet.parse(ticket.endpoints)).toEqual({
       sessionUrl: "ws://desk-a.tail1234.ts.net:9424/ws/sessions/s1",
+      restUrl: "http://desk-a.tail1234.ts.net:9424",
     });
     expect(IndexEndpointSet.safeParse(ticket.endpoints).success).toBe(false);
     expect(ticket.device).toBe("dev-a");
@@ -921,6 +928,7 @@ describe("AR-8b — IndexTicketMinter, the rule alone", () => {
     const ticket = minter.mint(phoneOf(), asked as IndexTicketAsk);
     expect(RemoteIndexEndpointSet.parse(ticket.endpoints)).toEqual({
       sessionUrl: "ws://desk-a.tail1234.ts.net:9424/ws/sessions/s1",
+      restUrl: "http://desk-a.tail1234.ts.net:9424",
     });
     expect(IndexEndpointSet.safeParse(ticket.endpoints).success).toBe(false);
     expect(ticket.device).toBe("dev-a");
@@ -1277,6 +1285,12 @@ describe("SP-7b — a transcript on A, by ticket, for the phone whose home is B"
     const aOrigin = A.daemon.rosettad?.state().origin ?? null;
     expect(ticket.endpoints).toEqual(indexEndpointsFrom(A.daemon.mesh.serves(), aOrigin, "s1"));
     expect(IndexEndpointSet.safeParse(ticket.endpoints).success).toBe(false);
+    // SP-7b's 7b-2a: and A's serve's origin beside the socket, carried through B untouched,
+    // which the phone's RosettaClient reads the session's pages at
+    const set = RemoteIndexEndpointSet.parse(ticket.endpoints);
+    const socket = new URL(set.sessionUrl);
+    const restOrigin = `${socket.protocol === "wss:" ? "https:" : "http:"}//${socket.host}`;
+    expect(set["restUrl"]).toBe(restOrigin);
     // A's grant, read-only, keyed by the phone behind B's forward (not B alone)
     const verdict = verifyGrant(A.keys.at(-1) as Buffer, ticket.grant, Date.now());
     expect(verdict.ok).toBe(true);
