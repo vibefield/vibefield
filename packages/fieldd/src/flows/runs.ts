@@ -46,7 +46,7 @@ import { type FlowForm, matchAnswer } from "./form-check";
 import { checkGate } from "./gate-check";
 import type { FlowJournalEntry } from "./journal";
 import type { FlowLibrary } from "./library";
-import type { FlowRecords, FlowRunStart } from "./records";
+import { FlowJournalFull, type FlowRecords, type FlowRunStart } from "./records";
 import {
   type FlowCallStarter,
   FlowReplay,
@@ -335,7 +335,8 @@ interface LiveRun {
    * hand-on; none while the run is parked or waits for a host */
   replay?: FlowReplay | undefined;
   /** D7, slice 13 (Q2 (a), N3) — the end fieldd chose for its run while its host leaves: D7's set-aside (`lost`, in
-   * its words) or a person's Stop (`stopped`), later J1's flood. Set by #endWith alone, which keeps one already set,
+   * its words), a person's Stop (`stopped`) or J1's flood (#full). *Words (2026-11-08; J1's green, Q17): it said
+   * "later J1's flood".* Set by #endWith alone, which keeps one already set,
    * so the first set stands (N1); the host's end then ends the run as it says, whatever end its script chose
    * (#hostEnded reads it first, Q18 (a)), and nothing is journaled, answered or parked in that leave */
   ending?: RunEnd | undefined;
@@ -391,8 +392,21 @@ interface Raising {
 }
 
 /** What the one writer did with an answer (Q2): journaled (`kept`); journaled already (`had`, P14); refused by the
- * disk (`refused`); or nothing, for a run no longer driven or set aside (`undriven`). */
-type Wrote = "kept" | "had" | "refused" | "undriven";
+ * disk (`refused`); or nothing, for a run no longer driven or set aside (`undriven`).
+ * CP-4a2b J1 (orders §B JB5b, Q13; Proposed 2026-11-08): refused as a full journal, its run ended `flood` by that
+ * refusal (`full`, #full): the disk did answer, so it is never the retryable `refused`. A full refusal #full did not
+ * end the run by (past close(), Q11) is `refused`. */
+type Wrote = "kept" | "had" | "refused" | "undriven" | "full";
+
+/** CP-4a2b J1 (F2, Q13, Q16 under the board's (a), 2026-11-08; Proposed) — THE ONE BUILDER of a full journal's
+ * end: `failed`, `host: "flood"`, its record's `log` §9's flood sentence for the run's flow as its head names it, as
+ * the supervisor's flood end says it (#hostEnded's `ended`). #full sets it as the run's ending, and an act whose answer
+ * was the line refused (`full`) answers in its words. */
+const floodEnd = (head: RunHead): RunEnd & { readonly log: string } => ({
+  state: "failed",
+  host: "flood",
+  log: words.hostEnded(head.name, "flood"),
+});
 
 /** Slice 13 (Q7) — what a record write settles and projects (#replace): the calls the journal answers, the agents
  * failed starts left (Y1), and the holds. A LiveRun's, or, for a run no LiveRun drives, one built from its journal
@@ -805,8 +819,9 @@ export class FlowRuns {
    *    tail;
    * 2. a run no record keeps is NOT_FOUND, in noSuchRun's words; one that has ended, or was found never begun, is
    *    answered as it is, writing nothing (BB6: judged by #isLive, never by `record.state` alone; R44);
-   * 3. N1: a LiveRun whose ending is already set (D7's set-aside, later J1's flood) writes no `stopping` and takes no
-   *    end of its own: the Stop waits, and answers the run as that end leaves it (`lost` for D7);
+   * 3. N1: a LiveRun whose ending is already set (D7's set-aside, J1's flood) writes no `stopping` and takes no
+   *    end of its own: the Stop waits, and answers the run as that end leaves it (`lost` for D7; `failed`, `host:
+   *    "flood"` for J1's, F8's second half). *Words (2026-11-08; J1's green, Q17): it said "later J1's flood".*
    * 4. Q17 (a): past fieldd's own stop, a Stop writes `stopping` alone and acts on nothing; the boot finishes it (D4);
    * 5. a run no LiveRun drives (a fresh FlowRuns', or one whose `end` the disk refused, BB6) is #finishStop's;
    * 6. else Stop's turn (Q3, D4), one synchronous turn: `stopping` first, a refusal acting on nothing (UNAVAILABLE, in
@@ -894,8 +909,9 @@ export class FlowRuns {
     standing?.settle();
   }
 
-  /** Slice 13 (N3) — THE ONE SETTER of a run's ending (a Stop's, D7's set-aside, later J1's flood): one already set is
-   * kept, so the first set stands (N1). Else the ending is set, D1's idle cleared (so no park fires in the leave, and
+  /** Slice 13 (N3) — THE ONE SETTER of a run's ending (a Stop's, D7's set-aside, J1's flood: #full): one already set is
+   * kept, so the first set stands (N1). *Words (2026-11-08; J1's green, Q17): it said "later J1's flood".*
+   * Else the ending is set, D1's idle cleared (so no park fires in the leave, and
    * `#rest` never writes `waiting` over `stopping`: `#park` reads no ending, and needs none past this clear) and the
    * host's replay dropped (it hears nothing more, D22); then `first`, a Stop's own step before its ends (Q3 step 3:
    * its lines, its items, its pause); then the host is stopped, and the run ends once it has left (#hostEnded), or,
@@ -910,6 +926,34 @@ export class FlowRuns {
     const host = live.host;
     if (host !== undefined) void host.stop();
     else this.#finish(run, ending);
+  }
+
+  /** CP-4a2b J1 (board `co-journal-byte-bound` (a), 2026-11-07: "byte bound → flood", nobody asked
+   * anything; ruled 2026-11-07, seam B; orders §C, §D, §F; Proposed 2026-11-08) — a run whose journal refused its next
+   * line as full (FlowJournalFull, read by `instanceof` alone: F10) ends `flood`, through the one setter (#endWith: the
+   * idle cleared, the replay dropped, the host stopped, or with none #finish at once), its ending floodEnd's, so its
+   * record's `log` is §9's flood sentence (F2). Said once in fieldd's log as the runs' `fieldd.flows.run.full`,
+   * never the supervisor's `fieldd.flows.host.flood` (Q14). True when it ended the run; false, doing nothing, for a
+   * LiveRun no longer the run's, an ending already set (Q1, F10: at most once), or past fieldd's own stop (Q11), where
+   * the caller takes today's road: an act's item waits on, the refused line is not kept, and once slice 14's boot
+   * wakes the run it floods again at the first line that would cross (the red skeptic's #4's words).
+   * - F8 (as narrowed 2026-11-08): an ending set already stands, between the endings the runs set (`live.ending`). A
+   *   supervisor's own end (`memory`, or a kill kind before its exit is heard) never reaches `live.ending`, so a line
+   *   that crosses first floods over it; the window is the child's exit latency, not measured.
+   * - K31 (Q12, ruled 2026-11-08 (iii)): a flood end pauses nothing and withdraws its lines only at its end (#finish), so a
+   *   handed turn its line began, or a line delivered in its leave, runs on.
+   * - Q21: it is the first ending set inside the supervisor's own frame handling (a call's #unhold, a log line), and
+   *   `host.stop()` chooses the end in that turn, so the refused call is answered nothing, and no frame is heard
+   *   after. */
+  #full(run: FlowRunId, live: LiveRun, full: FlowJournalFull): boolean {
+    if (this.#closing || this.#live.get(run) !== live || live.ending !== undefined) return false;
+    this.#logger.warn(
+      "fieldd.flows.run.full",
+      "A flow run's journal would pass its bound; the run ends as a flood",
+      { run, bytes: full.bytes, max: full.max },
+    );
+    this.#endWith(run, live, floodEnd(live.head));
+    return true;
   }
 
   /** Q9, Q10 — a run's items ended (an answer after is refused `ended`) and its lines still waiting withdrawn, from
@@ -1048,7 +1092,8 @@ export class FlowRuns {
    *   `calls` from its journal (Q7: this road closes ZZ3's window for each run it ends).
    * Items and lines are withdrawn on both roads (a kill may have come first). Never a `flowItem`, never a wake.
    * BB6's window, stated: #finish deletes the LiveRun before its `end` append, so a refused `end` line loses an ending
-   * set first (D7's `lost`, later J1's `flood`), and this Stop ends the run `stopped`. Only a disk refusal reaches it,
+   * set first (D7's `lost`, J1's `flood`), and this Stop ends the run `stopped`. *Words (2026-11-08; J1's green,
+   * Q17): it said "later J1's `flood`".* Only a disk refusal reaches it (J1's bound never refuses an `end`, Q5),
    * and such a run holds its bound until a Stop or the boot: `#unkept`, which would free it sooner, is OWED. */
   async #finishStop(run: FlowRunId, record: FlowRunRecord): Promise<FlowsStopResult> {
     const read = this.ports.records.readRun(run);
@@ -1967,8 +2012,12 @@ export class FlowRuns {
   }
 
   /** A slot freed (CP4-S7): the first step waiting for one, in call order, starts. Only a spawned step waits, so the
-   * one slot an answer frees is a spawn's (F9). */
+   * one slot an answer frees is a spawn's (F9).
+   * CP-4a2b J1 (orders §C F9, re-read Q8; Proposed 2026-11-08): a run whose ending is set starts no slotted step, so an
+   * ending set inside an answer's own turn (J1's flood, a held call refused at its re-entrant hand-on) reserves and
+   * spawns nothing; J1 does not lean on s13 Q8 (a)'s `gone()` for it. */
   #unslot(run: FlowRunId, live: LiveRun): void {
+    if (live.ending !== undefined) return;
     const record = this.ports.records.runRecord(run);
     if (record === undefined) return;
     if (slotsTaken(record.open) >= FLOW_LIMITS.LIVE_STEPS_MAX) return;
@@ -2043,7 +2092,11 @@ export class FlowRuns {
    *   back among those waiting, so the script never hears a refusal a later life would answer otherwise (D21).
    * - A kept line releases its call's hold, if it held one. The record write that follows the line (`#lagging`)
    *   projects `held` past it, since #replace skips a call the journal answers; a write that lags leaves that to the
-   *   next (T4). The hold's entry then leaves the run's holds, whether or not that write landed. */
+   *   next (T4). The hold's entry then leaves the run's holds, whether or not that write landed.
+   * - CP-4a2b J1 (orders §C F10, §B JB5b; re-read Q11, Q13; Proposed 2026-11-08): a line refused as a full journal
+   *   ends its run `flood` (#full), and is `full`: nothing hears JOURNAL_REFUSED (the replay is dropped), and a gate's
+   *   call is never put back among those waiting. A full refusal #full did not end the run by (past close()) takes
+   *   today's road, as every other refusal does. */
   #answer(
     run: FlowRunId,
     live: LiveRun,
@@ -2070,6 +2123,7 @@ export class FlowRuns {
         "A flow step's answer was not kept in its journal",
         { run, call, error: messageOf(error) },
       );
+      if (error instanceof FlowJournalFull && this.#full(run, live, error)) return "full";
       if (again) live.waiting.add(call);
       else live.replay?.answered(call, { ok: false, refused: JOURNAL_REFUSED });
       return "refused";
@@ -2111,14 +2165,27 @@ export class FlowRuns {
   }
 
   /** A call or log line a host's replay journals (D22: never an answer, which is `#answer`'s), its record following
-   * it; a line the disk refuses throws, and the replay refuses the call (nothing landed). */
+   * it; a line the disk refuses throws, and the replay refuses the call (nothing landed).
+   * CP-4a2b J1 (draft §2's one guard; orders §D; re-read Q1, Q10; Proposed 2026-11-08): once its run's ending is set,
+   * it refuses every line with a plain Error before the store is asked (never a FlowJournalFull, so #full is never
+   * reached from here twice), so a smaller held call behind a refused one in #unhold's one loop is never kept nor
+   * handed on: J1 adds no road to K19's class. A line refused as a full journal ends the run `flood` (#full), and is
+   * ALWAYS rethrown, never swallowed, so a refused call line is never read as kept (replay hands nothing on) and a
+   * refused log line is said nowhere (replay.log). */
   #appended(
     run: FlowRunId,
     live: LiveRun,
     entry: FlowJournalEntry,
     args: readonly unknown[] | undefined,
   ): void {
-    this.ports.records.appendRun(run, entry);
+    if (live.ending !== undefined)
+      throw new Error(`${run} is ending: its journal keeps no ${entry.kind} line`);
+    try {
+      this.ports.records.appendRun(run, entry);
+    } catch (error) {
+      if (error instanceof FlowJournalFull) this.#full(run, live, error);
+      throw error;
+    }
     live.lines += 1;
     this.#lagging(run, entry, args);
   }
@@ -2195,13 +2262,21 @@ export class FlowRuns {
    * half): a repair whose hold write failed after its item was minted is still `repairing` on its record, and its Ask
    * once more acts on it, releasing it as any other. An answer handed on again, its step holding neither way, was acted
    * on, and is answered as done. A lost step is slice 14's. Slice 13 (Q9): Stop the run, on an item of ANY kind, is
-   * read ahead of the kind, and is the run's Stop (#stopAct). */
+   * read ahead of the kind, and is the run's Stop (#stopAct).
+   * CP-4a2b J1 (Q9, #10; ruled 2026-11-08 (i); Proposed 2026-11-08): a run whose ending is set answers an act of either
+   * kind `failed`, in its ending's words, read right after `live` (one read for both kinds, and for slice 14's
+   * `flow-lost`; it was #gateAnswered's alone): J1's flood in §9's flood sentence, D7's set-aside in its own words (the
+   * D7 leave's Ask once more answers "VibeField set ‹flow› aside: …", C13), a Stop's, which has none, in noSuchRun's
+   * (unreached: its turn ended every item first). So no repair line is sent into a session whose run is leaving. It
+   * sits after `answer.stop`, so a Stop on any item still reaches #stopAct. */
   async #answered(answer: FlowItemAnswer): Promise<FlowItemActed> {
     if (answer.stop) return this.#stopAct(answer.run.run as FlowRunId);
     if (answer.kind !== "flow-repair" && answer.kind !== "flow-gate")
       throw new Error(`CP-4a2b: a run's ${answer.kind} is a later slice's`);
     const run = answer.run.run as FlowRunId;
     const live = this.#live.get(run);
+    if (live?.ending !== undefined)
+      return { outcome: "failed", reason: live.ending.log ?? words.noSuchRun(run) };
     if (answer.kind === "flow-gate") return this.#gateAnswered(run, live, answer);
     const record = this.ports.records.runRecord(run);
     const step = record?.open.find((open) => open.call === answer.run.call);
@@ -2244,19 +2319,24 @@ export class FlowRuns {
    * journal, never raising the gate again (R36). Its hold is released in that answer's own record write (#replace). A
    * run this fieldd does not drive fails in noSuchRun's words, and one set aside (D7) in its own; an answer its journal
    * holds already (P14) is done, writing nothing; one the disk refuses hands nothing on, and is refused in the store's
-   * words, retryably, so its item waits on and your next answer journals cleanly. */
+   * words, retryably, so its item waits on and your next answer journals cleanly.
+   * CP-4a2b J1 (Q9's hoist; orders §B JB5b, Q11, Q13; ruled 2026-11-08 (i), (ii); Proposed 2026-11-08): a run whose
+   * ending is set is answered by #answered, before this (its own read moved there). An answer that was the line a
+   * full journal refused (`full`) ended the run `flood`, and the act answers `failed` in §9's flood sentence
+   * (floodEnd's, the one builder), never the retryable refusal: the disk did answer. Past fieldd's own stop a refusal
+   * says closingRefused's "the flow service is stopping", never the store's words, and its item waits on. */
   #gateAnswered(run: FlowRunId, live: LiveRun | undefined, answer: FlowItemAnswer): FlowItemActed {
     if (live === undefined || answer.run.call === undefined)
       return { outcome: "failed", reason: words.noSuchRun(run) };
-    // D7's set-aside in its own words; a Stop's ending has none, and is unreached here: its turn ended every item first
-    if (live.ending !== undefined)
-      return { outcome: "failed", reason: live.ending.log ?? words.noSuchRun(run) };
     const said: FlowHostAnswer = { ok: true, value: answer.act };
     switch (this.#answer(run, live, answer.run.call, "ask", said, { again: true })) {
       case "kept":
       case "had":
         return { outcome: "done" };
+      case "full":
+        return { outcome: "failed", reason: floodEnd(live.head).log };
       case "refused":
+        if (this.#closing) throw closingRefused();
         throw recordsUnreadable(RECORD_STORES.SERVICE_FLOWS, UNREADABLE_WORDS.flows, true);
       case "undriven":
         return { outcome: "failed", reason: words.noSuchRun(run) };
@@ -2408,10 +2488,11 @@ export class FlowRuns {
     calls: HostCalls | undefined,
   ): void {
     // D7: a run set aside at D1's park ends when its host has left, lost, in its words. Slice 13 (Q18 (a)): so does
-    // any ending fieldd set (a Stop's, later J1's flood), read FIRST, over whatever end the script chose meanwhile:
+    // any ending fieldd set (a Stop's, J1's flood), read FIRST, over whatever end the script chose meanwhile:
     // the supervisor chooses once (supervisor.ts:574), so a `done`, `threw` or `ended` chosen in the instant before
     // reads as that ending. The host leaves under its grace for `done`, `threw`, `fatal` and `memory`, and at once
-    // for the kills, `protocol`, `flood` and `unanswered` (K17; fold 1, the green skeptic's #7)
+    // for the kills, `protocol`, `flood` and `unanswered` (K17; fold 1, the green skeptic's #7). *Words (2026-11-08;
+    // J1's green, Q17): it said "later J1's flood". J1's flood is the runs' (#full), its host stopped under its grace.*
     if (live?.ending !== undefined) {
       this.#finish(run, live.ending);
       return;

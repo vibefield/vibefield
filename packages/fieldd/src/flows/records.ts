@@ -110,14 +110,16 @@ export interface FlowRecordsOptions {
   readonly sync?: ((fd: number) => void) | undefined;
   /** CP-4a2b (J1; board `co-journal-byte-bound` (a), 2026-11-07) — a run's journal's bound, its
    * bytes: FLOW_LIMITS.JOURNAL_MAX_BYTES by default; tests lower it, as the host's `heapMb` is lowered.
-   * *J1's red (2026-11-08): declared and unread, so the red compiles (F3's precedent); the green reads it.* */
+   * *J1's green (2026-11-08; orders §D, Proposed): read once, at the store's making; `appendRun` holds every line but
+   * an `end` to it. It was declared and unread at J1's red.* */
   readonly journalMaxBytes?: number | undefined;
 }
 
 /** CP-4a2b (J1) — a line `appendRun` refused because it would take its run's journal past its bound
  * (`journalMaxBytes`): nothing was written. The runs read it by `instanceof`, as they read FlowStepOrphaned, and end
  * the run `flood`. `bytes` is where the journal's whole lines end, `line` the refused line's bytes, `max` the bound.
- * *J1's red (2026-11-08): exported and never thrown, so the red compiles (F3's precedent); the green throws it.* */
+ * *J1's green (2026-11-08; orders §D, Proposed): `appendRun` throws it, before its open. It was exported and never
+ * thrown at J1's red.* */
 export class FlowJournalFull extends Error {
   readonly run: string;
   readonly bytes: number;
@@ -192,11 +194,14 @@ export class FlowRecords {
    * here, no fsync covered it.* */
   readonly #synced = new Map<string, JournalTail>();
   readonly #sync: (fd: number) => void;
+  /** CP-4a2b (J1) — the bound every journal's lines but its `end` are held to, its bytes (`journalMaxBytes`) */
+  readonly #journalMax: number;
 
   constructor(private readonly opts: FlowRecordsOptions) {
     this.#logger = opts.logger ?? createNoopLogger();
     this.#now = opts.now ?? (() => new Date());
     this.#sync = opts.sync ?? fsyncSync;
+    this.#journalMax = opts.journalMaxBytes ?? FLOW_LIMITS.JOURNAL_MAX_BYTES;
     this.#guard = new StoreGuard({
       store: "flows",
       format: FLOW_RECORD_FORMAT,
@@ -374,7 +379,12 @@ export class FlowRecords {
    * cannot be read or a newer VibeField's holds it, and when the line is not one contracts' journal reads.
    * The line starts where the journal's whole lines end: a piece past them (a line the disk never finished, before a
    * crash) is dropped first, never glued to; a journal shorter than this store left it is refused, and the next read
-   * sets it aside (bth's review P3). */
+   * sets it aside (a review's P3).
+   * CP-4a2b (J1; board `co-journal-byte-bound` (a), 2026-11-07; ruled 2026-11-07; orders §D, Proposed) —
+   * a line that would take the journal past its bound (`journalMaxBytes`) is refused before anything is written
+   * (FlowJournalFull), the journal's size read from this store's own `tail.bytes`, where its whole lines end, which a
+   * new store reads from the file (#tailOf). An `end` line is exempt by its own kind (Q5), never by a caller's flag, so
+   * no end road can be refused, and a journal never passes the bound plus its end lines (F7). */
   appendRun(run: FlowRunId, entry: FlowJournalEntry): FlowJournalKnownLine {
     const tail = this.#tailOf(run);
     this.#guard.writable(this.#key(RUNS_DIR, run));
@@ -389,6 +399,10 @@ export class FlowRecords {
       throw new TypeError(`a ${entry.kind} line this journal cannot keep`);
     const mac = this.#signer.sign(journalMacInput(run, tail.mac, known));
     const text = `${JSON.stringify({ ...known, mac })}\n`;
+    const bytes = Buffer.byteLength(text, "utf8");
+    // J1: its bytes, never its characters (a two-byte character counts twice); the bound itself is kept (`>`)
+    if (known.kind !== "end" && tail.bytes + bytes > this.#journalMax)
+      throw new FlowJournalFull(run, tail.bytes, bytes, this.#journalMax);
     const fd = openSync(this.#journalPath(run), "a", 0o600);
     try {
       const size = fstatSync(fd).size;
@@ -411,7 +425,7 @@ export class FlowRecords {
     this.#tails.set(run, {
       seq: known.seq,
       mac,
-      bytes: tail.bytes + Buffer.byteLength(text, "utf8"),
+      bytes: tail.bytes + bytes,
     });
     if (known.kind !== "log") this.#synced.set(run, { seq: known.seq, mac });
     return known;
