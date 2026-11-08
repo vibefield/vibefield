@@ -1281,6 +1281,21 @@ James on the ES page *The night that becomes the window*, 2026-11-08 04:27:25–
   its window leave as one, down 16 at 0.97 in 240ms on the retract curve, and the face flies to its row (§2.10).
   Reduced motion (M6): the night fades out in 150ms and the sheet fades in with its window in 150ms; Cancel is the same
   backwards at 120ms each; no star falls and no face flies.
+  - **The window is the night's own canvas, lent** (ES-3b; VF-PM 2026-11-08 07:55Z). Opened from the night, the sheet's
+    sky is a canvas the panel's size, standing at the panel's place and drawn from the night's own moment (its clock),
+    so its first frame is the panel's night, star for star. Its edge then closes onto the sky's place in the sheet and
+    stays there for the sheet's life: the hatch's star falls into it, and a reroll plays there. *Why:* the engine
+    places its stars in CSS pixels from its canvas's bottom-left corner, and its gradient and haze by fractions of
+    the canvas, so a smaller sky would move every star.
+  - **It stands in the sheet's own layer, over the glass,** clipped to the sky's place, with the hatch's face drawn in
+    it, never inside the glass: under it, the glass's blur would cloud the window and hide the face, and inside it,
+    the glass's backdrop-filter would hold a fixed canvas to the glass's own box. Only the window is over the glass,
+    so the name, the agent and the foot stand clear of it once it has closed.
+  - **The night gives way only once the window has drawn.** Chat's night steps aside after the window's first frame,
+    and takes the window back at the window's own moment once Cancel, Esc or the dim has opened it again, so neither
+    hand-off shows a blank or moves a star.
+  - **Where no night can be lent** (Chat is not the view, it holds a spark, or there is no WebGL2), the sheet rises as
+    the sheet below does.
 
 **The departure: a body leaving the field** (Godview's swarm; Q12, James ruled B on 2026-10-27: "a short exit, so a
 body leaving reads as leaving"). It applies when a body's row leaves the field: a shell closed or reaped, a session that
