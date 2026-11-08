@@ -847,7 +847,8 @@ describe("CP-4a2b (J1) — a journal's byte bound, at the store", () => {
     let kept = sizeOf(file);
     let line = 0;
     let appends = 0;
-    // ceil(33,554,432 / line) + 2 appends, the first line's bytes read from the file (Q18: about 514, est.)
+    // ceil(33,554,432 / line) + 2 appends, the first line's bytes read from the file (Q18, as corrected 2026-11-08 by the
+    // red skeptic's #10: 513 at 65,717 B, ceil(33,554,432 / 65,717) + 2 = 511 + 2, arithmetic)
     let bound = 1;
     let refused: unknown;
     while (appends < bound && refused === undefined) {
@@ -913,6 +914,9 @@ describe("CP-4a2b (J1) — a journal's byte bound, at the store", () => {
       line: Buffer.byteLength(endLine, "utf8"),
       tail: tailIn(h.records()),
     };
+    // the red skeptic's #5 (§H): the `end` line's seq is the one after the tail the past line left, so the end leg is a
+    // true pin, green at the red (the past line kept, as seq 4) and at the green (refused, the tail still seq 3)
+    const endSeq = typeof refused.tail === "string" ? 0 : refused.tail.seq + 1;
 
     // one byte short of the answer's landing: refused
     const shortDir = join(h.root, "short");
@@ -934,10 +938,43 @@ describe("CP-4a2b (J1) — a journal's byte bound, at the store", () => {
         said: "kept",
         grew: ended.line,
         line: ended.line,
-        tail: { seq: 4, mac: expect.any(String), last: "end" },
+        tail: { seq: endSeq, mac: expect.any(String), last: "end" },
       },
       oneByte: ["kept", "refused", called],
       twoByte: ["kept", "refused", called],
+    });
+  });
+
+  it("JB1b (J1; the red skeptic's #2, orders §H): a CALL line that would take a journal past its bound is refused and nothing is written: the store exempts an `end` line alone, never a call", () => {
+    // red: no bound is read, so the call line is kept past the bound. Kills: a store that exempts `call` as well as
+    // `end` (a check that lists the kinds it holds, say), whose runs-level result is a call line kept past the bound
+    // and handed on (JB4's `kind` and `past`). The swallowing catch in `#appended`, the call road's other wrong green,
+    // is JB4's to kill: the store refuses here either way
+    const h = harness();
+    // F11's calibration: a twin journal, the same run id and key file under the harness's fixed `now`, at the default
+    // bound: its bytes once its first step is answered, and once its second step's call line is kept
+    const CALL_2 = { kind: "call", call: 2, what: "agent", key: "b".repeat(64), n: 1 } as const;
+    const twinDir = join(h.root, "twin");
+    const twin = h.records({ dir: twinDir });
+    beganRun(twin, HEAD);
+    twin.appendRun(RUN, CALL_1);
+    twin.appendRun(RUN, ANSWER_1);
+    const answered = sizeOf(journalIn(twinDir));
+    twin.appendRun(RUN, CALL_2);
+    const called = sizeOf(journalIn(twinDir));
+
+    // one byte short of the second call line's landing: every line before it fits, and it does not
+    const file = journalIn(h.dir);
+    const store = h.records({ journalMaxBytes: called - 1 });
+    beganRun(store, HEAD);
+    const before = [appended(store, CALL_1), appended(store, ANSWER_1), sizeOf(file)];
+    const tail = tailIn(h.records());
+    const said = appended(store, CALL_2);
+    expect({ before, said, bytes: sizeOf(file), tail: tailIn(h.records()) }).toEqual({
+      before: ["kept", "kept", answered],
+      said: "refused",
+      bytes: answered,
+      tail,
     });
   });
 

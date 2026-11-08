@@ -6906,6 +6906,19 @@ describe("CP-4a2b — the host's life: parked and woken, D2's lookup at a wake, 
       .split("\n")
       .filter((line) => line !== "" && (JSON.parse(line) as { kind?: unknown }).kind !== "end")
       .reduce((bytes, line) => bytes + Buffer.byteLength(line, "utf8") + 1, 0);
+  /** The red skeptic's #2 (orders §H) — `run`'s journal's first `count` lines as its file holds them: their bytes, and
+   * the kind of the line after them, for JB4's twin calibration. */
+  const linesThrough = (h: Harness, run: string, count: number) => {
+    const file = join(h.root, "fieldd", "flows", RUNS_DIR, `${run}${JOURNAL_SUFFIX}`);
+    const lines = readFileSync(file, "utf8").split("\n").filter(Boolean);
+    const kept = lines.slice(0, count);
+    return {
+      bytes: kept.reduce((sum, line) => sum + Buffer.byteLength(line, "utf8") + 1, 0),
+      next: (JSON.parse(lines[count] ?? "{}") as { kind?: unknown }).kind,
+    };
+  };
+  /** JB4's twin calibration: the turns its bounded run keeps, each a call line and its refused answer. */
+  const LOOP_TURNS = 15;
   /** Q14 — how often fieldd's log said `run`'s journal was full (the runs' `fieldd.flows.run.full`), and how often the
    * supervisor said a host flooded (`fieldd.flows.host.flood`): J1's flood is the runs', never the host's. */
   const floodsSaid = (h: Harness, run: string) => {
@@ -6971,8 +6984,20 @@ describe("CP-4a2b — the host's life: parked and woken, D2's lookup at a wake, 
     // none. Kills: the catch rethrowing without ending, so the script hears JOURNAL_REFUSED, catches it and loops on;
     // and (F3) `#full` without `host.stop()` (or bypassing `#endWith`): `#chosen` unset, the supervisor answers the
     // refused call, and the child sends up to 200 − k calls more, each refused by the ending guard, for ever with an
-    // unbounded loop
-    const max = 8_192;
+    // unbounded loop.
+    // The red skeptic's #2 (orders §H): the line that crosses is a CALL line, so the call road is pinned too. Kills:
+    // a swallowing catch in `#appended` (it ends the run and returns), so replay reads the refused line as kept and
+    // hands its call on, and its spawn is asked (`unasked` -1); and a store that exempts `call` as well as `end`, so
+    // the call line is kept past the bound and its answer is the line refused (`kind` "answer", `past` above 0)
+    // the calibration, as JB5b's: a first run of the same flow at the default bound, its journal's bytes through its
+    // first LOOP_TURNS turns; 10 bytes past them, call LOOP_TURNS + 1's line (about 277 B, est.) crosses, nothing
+    // before it does
+    const first = await harness({ spawnRefuses: "the floor is full" });
+    first.approved("loops", LOOPS);
+    const calibrated = startedRun(await first.start({ flow: "loops" })).run;
+    await within(WAIT_MS, () => endedOf(first, calibrated) && left(first, 0));
+    const through = linesThrough(first, calibrated, 1 + 2 * LOOP_TURNS);
+    const max = through.bytes + 10;
     const h = await harness({
       spawnRefuses: "the floor is full",
       journalMaxBytes: max,
@@ -7000,22 +7025,30 @@ describe("CP-4a2b — the host's life: parked and woken, D2's lookup at a wake, 
     const calls = h.kinds(run).filter((kind) => kind === "call").length;
     const sent = h.hosts[0]?.calls.length ?? 0;
     expect({
+      next: through.next,
+      twin: linesThrough(h, run, 1 + 2 * LOOP_TURNS).bytes - through.bytes,
       state: record?.state,
       host: record?.host,
       lines: endLinesOf(h, run),
       past: Math.max(0, bytesBeforeEnd(h, run) - max),
       unasked: calls - h.spawned.length,
       refused: refusal.full === true && ["call", "answer"].includes(refusal.kind ?? ""),
+      // the refused line's own kind, read where the store refused it (the spy's `refusal`, orders §H #2): no field of
+      // `fieldd.flows.run.full` names it (the draft's `{run, bytes, max}`), and no refused line is recorded
+      kind: refusal.kind ?? "no line refused",
       after: refusal.sent === undefined ? "no line refused" : sent - refusal.sent,
       hosts: h.hosts.length,
       said: floodsSaid(h, run),
     }).toEqual({
+      next: "call",
+      twin: 0,
       state: "failed",
       host: "flood",
       lines: [{ state: "failed", host: "flood" }],
       past: 0,
       unasked: 0,
       refused: true,
+      kind: "call",
       after: 0,
       hosts: 1,
       said: { full: 1, host: 0 },
@@ -7142,16 +7175,30 @@ describe("CP-4a2b — the host's life: parked and woken, D2's lookup at a wake, 
     // R31's way: the host can't hear its shutdown, so its leave lasts its grace (KILL_GRACE_MS)
     h.hosts[0]?.child.kill("SIGSTOP");
     answerStep(h, run, 2, text);
+    // the red skeptic's #6 (orders §H): ONE act on a step NOT held, B's, whose answer was the line that crossed (its
+    // step still open at the green): it answers the ending's words too, so the read is pinned ahead of heldOnYou and
+    // #repair. Kills an ending read placed after `heldOnYou`, or just before `#repair` (B is not held: `done`). Red:
+    // B's answer is kept and settles its step, so `#answered` finds no open step and answers noSuchRun's words
+    const unheld = await h.runs.acts.answer({
+      id: "ny-unheldb0000" as NeedsItemId,
+      kind: "flow-repair",
+      run: { run, flow: "held", call: 2, label: "B" },
+      choice: 0,
+      stop: false,
+      act: NEEDS_CHOICE_WORDS.askOnceMore,
+    });
     const sent = h.enqueued.length;
     const acted = await askHeldOnceMore(h, run);
     expect({
       fits: before <= max,
       crosses: before + text.length > max,
+      unheld,
       acted,
       repairs: h.enqueued.length - sent,
     }).toEqual({
       fits: true,
       crosses: true,
+      unheld: { outcome: "failed", reason: words.hostEnded("Held", "flood") },
       acted: { outcome: "failed", reason: words.hostEnded("Held", "flood") },
       repairs: 0,
     });
