@@ -608,7 +608,9 @@ export const AGENT_STOP = {
  *    ceiling, is CP-4a2b's. *Ruled 2026-11-05 (N2 re-ruled, J3 = Q-A3 = 13a's D1): neither refuses fast.
  *    DESIGN.md §9 says both ceilings ("When a run can't go on, or waits").* *Corrected 2026-11-07 (ruling
  *    C): there is no call cap, and N2's park at its hold went with it. No row here bounds a script that loops one
- *    call at a time: a Stop ends it.*
+ *    call at a time: a Stop ends it, or JOURNAL_MAX_BYTES does (J1).* *Proposed 2026-11-08 (CP-4a2b J1, a journal's
+ *    byte bound; board `co-journal-byte-bound` (a), 2026-11-07):* "or JOURNAL_MAX_BYTES does" is
+ *    J1's (its bullet below).
  * CP-4a2b (13a's D3 and D12, Q-A7; J4 (a); each as provisional):
  *  - RUNS_LIVE_MAX, RUNS_PER_SPARK_MAX: the runs alive on one desktop at once, and a spark's own share of them. One
  *    more is refused at its start, in DESIGN.md §9's words, and nothing is started;
@@ -632,6 +634,18 @@ export const AGENT_STOP = {
  *    refused at its spawn, in DESIGN.md §9's words ("A step's call refused"), never made to wait: LIVE_STEPS_MAX's
  *    slots are another bound. The PTYs it allows at most: RUNS_LIVE_MAX 8 × 16 = 128 step PTYs, a ceiling against
  *    macOS's 511 (`kern.tty.ptmx_max`), which the floor's own PTYs share (its terminals, the sparks' sessions).
+ * CP-4a2b J1, a journal's byte bound (board `co-journal-byte-bound` (a), 2026-11-07; ruled 2026-11-07).
+ * *Proposed 2026-11-08 (board `co-j1-flood-words`, 2026-11-08: "(a) 32 MiB and §9's flood words as they
+ * stand"):*
+ *  - JOURNAL_MAX_BYTES: a run's journal's bytes, as the store counts them from its own file. The store refuses the
+ *    line that would take a journal past it and writes nothing of it; the runs then end the run `flood`
+ *    (FLOW_HOST_ENDINGS) in DESIGN.md §9's words, and nobody is asked anything (no hold, no card, no Allow). An `end`
+ *    line is never refused, so a journal never passes JOURNAL_MAX_BYTES plus its end lines (one, once slice 14's
+ *    settle lands). Why 32 MiB: it holds one full-width fan-out at full answers (about 16.1–16.6 MiB) with about
+ *    15.4–15.9 MiB to spare (est.), and it bounds the read a parked loop's wake makes of its whole journal at every
+ *    turn (about 3.3 s near 32 MiB, est.; its measurement is owed). PROVISIONAL and raise-only: it starts low and is
+ *    raised once measured. A lowered number would lose nothing, since the check is at the append alone: a journal
+ *    kept past it still reads whole, and its live run ends `flood` at its next line.
  * Over the whole block (ruled 2026-11-06): A bound a stored field is held to (SCRIPT_MAX_BYTES, a kept
  * version's bytes; RESULT_MAX_BYTES, a journal answer's `value`, by flowJournalLineOf; ARGS_DEPTH_MAX, a kept journal
  * line's depth (+4); HOST_CALLS_WAITING_MAX, a run record's `open`; STEP_LINES_MAX, a record step's `lines`;
@@ -657,6 +671,7 @@ export const FLOW_LIMITS = {
   STEP_LINES_MAX: 16,
   FOLDER_CHARS: 4_096,
   RUN_AGENTS_MAX: 16,
+  JOURNAL_MAX_BYTES: 33_554_432,
 } as const;
 
 /** CP-4a2a (DESIGN.md §9 "When a run's script cannot go on") — the flow host's honest refusal. SERVICE is
