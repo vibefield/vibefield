@@ -981,7 +981,14 @@ describe("the catalog's composer plates (docs/UI_SYSTEM.md: the shipping view on
   }
   const box = (): HTMLElement | null =>
     host?.querySelector<HTMLElement>(".vf-chat-composer") ?? null;
-  const threadless: readonly ChatState[] = ["empty", "opening", "unavailable"];
+  // track ES: the night's three plates (live, Off, short) show no thread
+  const threadless: readonly ChatState[] = [
+    "empty",
+    "empty-off",
+    "empty-short",
+    "opening",
+    "unavailable",
+  ];
 
   // A row per state (item 183): one `it` that rendered every plate crossed vitest's 5 s bound
   // on a loaded runner; each plate alone sits well under it, and a red names its state.

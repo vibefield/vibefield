@@ -14,12 +14,14 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import type {
-  AgentFieldRow,
-  AgentInterruptResult,
-  ComposeSparksSayParams,
-  NeedsItem,
-  SparkSummary,
+import {
+  AGENT_CATALOG,
+  type AgentFieldRow,
+  type AgentInterruptResult,
+  type AgentProviderSummary,
+  type ComposeSparksSayParams,
+  type NeedsItem,
+  type SparkSummary,
 } from "@vibefield/contracts";
 import type { FielddClient } from "@vibefield/fieldd-client";
 import { act, type ReactElement, useState } from "react";
@@ -30,6 +32,7 @@ import { type ChatAct, ChatPanelView, type ChatPanelViewProps } from "../src/cha
 import { ChatView } from "../src/chat/ChatView";
 import type { CrewsDoor } from "../src/chat/crews-port";
 import { STILL_RUNNING } from "../src/chat/head-act";
+import type { NewSparkPort } from "../src/chat/new-spark";
 import { pendingSaysNow, resetPendingSaysForTest, standPendingSay } from "../src/chat/pending-says";
 import { sparkEntriesOf } from "../src/chat/spark-status";
 import {
@@ -145,12 +148,30 @@ const NEEDS_LIST: unknown = JSON.parse(
   ),
 );
 
-/** What @'s rows would read of fieldd: nothing to offer here (the composer's own suite reads the rows). */
-const PORT: ComposerPort = {
+/** Track ES — the agents fieldd offers (`agent.providers`), read while Chat is empty: one here that can be a spark. */
+const SPARK_ROW = AGENT_CATALOG.find((row) => row.offers.spark);
+const SPARKING_HERE: AgentProviderSummary[] =
+  SPARK_ROW === undefined
+    ? []
+    : [
+        {
+          id: SPARK_ROW.id,
+          label: SPARK_ROW.label,
+          available: true,
+          resumable: true,
+          personas: [],
+          offers: { spawn: true, spark: true },
+        },
+      ];
+
+/** What @'s rows would read of fieldd: nothing to offer here (the composer's own suite reads the rows); and what the
+ * night reads, the sheet's own `agent.providers` (track ES), which the frame hands Chat as the night's door. */
+const PORT: ComposerPort & Pick<NewSparkPort, "providers"> = {
   profileSets: async () => [],
   models: async () => {
     throw new Error("no picker here");
   },
+  providers: async () => SPARKING_HERE,
 };
 
 /** Item 187 — the board rows `scripted`'s feed holds now, which fieldd's `agent.list` answers by default as a desktop
@@ -166,23 +187,34 @@ function Chat({
   transcripts = NO_TRANSCRIPTS,
   crews,
   runs = BOARD_RUNS,
+  onSurface,
+  onOpenAgents,
 }: {
   active?: boolean;
-  port?: ComposerPort;
+  port?: ComposerPort & Pick<NewSparkPort, "providers">;
   transcripts?: ScriptedTranscripts["door"];
   crews?: CrewsDoor;
   runs?: KeyedCallClient;
+  /** what the frame's open surface became, each time (track ES: New spark and a first job open the sheet) */
+  onSurface?: (next: FrameSurface | null) => void;
+  /** track ES — Open Agents settings, on the night with no agent that can be a spark */
+  onOpenAgents?: () => void;
 }): ReactElement {
   const [surface, setSurface] = useState<FrameSurface | null>(null);
   return (
     <ChatView
       active={active}
       surface={surface}
-      onSurfaceChange={setSurface}
+      onSurfaceChange={(next) => {
+        onSurface?.(next);
+        setSurface(next);
+      }}
       port={port}
       transcripts={transcripts}
       {...(crews === undefined ? {} : { crews })}
       runs={runs}
+      agents={port}
+      {...(onOpenAgents === undefined ? {} : { onOpenAgents })}
     />
   );
 }
@@ -712,7 +744,7 @@ describe('the panel (DESIGN.md §8 "Chat\'s list")', () => {
     expect(css).not.toMatch(/\.vf-chat-pane(?![a-z-])/u);
   });
 
-  it("says each of its other states in words — opening, unavailable, no sparks yet — never a blank", () => {
+  it("says each of its other states in words — opening, unavailable, and with no spark the night — never a blank", () => {
     mount(<ChatPanelView reading={{ state: "opening" }} chosen={null} now={NOW} />);
     expect(words($(".vf-chat-panel-state"))).toBe("Opening Chat…");
     act(() =>
@@ -728,7 +760,10 @@ describe('the panel (DESIGN.md §8 "Chat\'s list")', () => {
       "Chat can't read your sparks fieldd is not answering",
     );
     act(() => root?.render(<ChatPanelView reading={ready([], [])} chosen={null} now={NOW} />));
-    expect(words($(".vf-chat-panel-state"))).toBe("No sparks yet");
+    // track ES (ES-D1…D7 A, 2026-11-08): with no spark the panel is the night, its own words (`chat-empty.test.tsx`);
+    // "No sparks yet" retired on the Mac (DESIGN.md §8 "Chat's list", amended)
+    expect($(".vf-chat-panel-state")).toBeNull();
+    expect(words($(".vf-chat-empty-title"))).toBe("Make your first spark");
     expect(rows()).toEqual([]);
   });
 });
@@ -1289,7 +1324,7 @@ describe("Chat, live (the feed and its acts)", () => {
     const LYRA = spark("sp-lyra0001", "Lyra");
     const { door } = scripted([{ ...VELA, updatedAt: "2026-10-31T05:10:00.000Z" }, LYRA]);
     let reads = 0;
-    const counted: ComposerPort = {
+    const counted: ComposerPort & Pick<NewSparkPort, "providers"> = {
       ...PORT,
       profileSets: async () => {
         reads += 1;
@@ -1550,7 +1585,12 @@ describe("Chat's words are DESIGN.md's (§8 \"Chat's list\", \"Chat's thread\")"
     const here = dirname(fileURLToPath(import.meta.url));
     const design = readFileSync(join(here, "../../../DESIGN.md"), "utf8").replace(/\s+/g, " ");
     for (const said of [
-      "No sparks yet",
+      // the night (track ES, 2026-11-08; "No sparks yet" retired on the Mac)
+      "Make your first spark",
+      "A spark is an agent VibeField starts to run your other agents.",
+      "Or give it a first job",
+      "A spark thinks with Claude Code, which isn't on this Mac yet.",
+      "Open Agents settings",
       "Opening Chat…",
       "Chat can't read your sparks",
       "Vela needs you",
@@ -1570,5 +1610,101 @@ describe("Chat's words are DESIGN.md's (§8 \"Chat's list\", \"Chat's thread\")"
     ]) {
       expect(design, said).toContain(said);
     }
+  });
+});
+
+describe('Chat, empty: the night, live (track ES; DESIGN.md §8 "Chat\'s list", Empty: the night)', () => {
+  it("stands the night while the feed holds no spark, reads which agents can be a spark only then, opens the sheet from New spark and from a first job, and gives way to the list when a spark comes", async () => {
+    const { port, door, move } = scripted([]);
+    stop = startSparksFeed(door);
+    let reads = 0;
+    const surfaces: (FrameSurface | null)[] = [];
+    const counted = {
+      ...PORT,
+      providers: async () => {
+        reads += 1;
+        return SPARKING_HERE;
+      },
+    };
+    mount(<Chat port={counted} onSurface={(next) => surfaces.push(next)} />);
+    await settle();
+    expect($(".vf-chat-empty")).not.toBeNull();
+    expect(reads).toBe(1);
+    const create = $(".vf-chat-empty-new") as HTMLButtonElement | null;
+    expect(create?.disabled).toBe(false);
+    act(() => create?.click());
+    // a first job opens the same sheet (ES-D2 A: from ES-2 the sheet carries it)
+    act(() => host?.querySelector<HTMLElement>(".vf-chat-empty .vf-chat-starter")?.click());
+    expect(surfaces).toEqual(["new-spark", "new-spark"]);
+    // the first spark: its record is read, and the list stands where the night was
+    port.listed = [VELA];
+    await act(async () =>
+      move([row({ runtimeRunId: "run-Vela", spark: "sp-vela0001", status: "working" })]),
+    );
+    await settle();
+    expect($(".vf-chat-empty")).toBeNull();
+    expect(rows().map((r) => r.dataset.spark)).toEqual(["sp-vela0001"]);
+  });
+
+  it("is Off when no agent here can be a spark, its sentence naming the one that can, and Open Agents settings asks the window's Settings for Agents", async () => {
+    const { door } = scripted([]);
+    stop = startSparksFeed(door);
+    const asked: string[] = [];
+    const none = {
+      ...PORT,
+      providers: async () => SPARKING_HERE.map((agent) => ({ ...agent, available: false })),
+    };
+    mount(<Chat port={none} onOpenAgents={() => asked.push("agents")} />);
+    await settle();
+    expect(($(".vf-chat-empty-new") as HTMLButtonElement | null)?.disabled).toBe(true);
+    expect(words($(".vf-chat-empty-why"))).toBe(
+      `A spark thinks with ${SPARK_ROW?.label}, which isn't on this Mac yet.`,
+    );
+    act(() => $(".vf-chat-empty-agents")?.click());
+    expect(asked).toEqual(["agents"]);
+  });
+
+  it("reads the agents again as the window takes focus back while it is Off: one installed meanwhile turns New spark on, and a live night reads nothing more", async () => {
+    const { door } = scripted([]);
+    stop = startSparksFeed(door);
+    let installed = false;
+    let reads = 0;
+    const later = {
+      ...PORT,
+      providers: async () => {
+        reads += 1;
+        return SPARKING_HERE.map((agent) => ({ ...agent, available: installed }));
+      },
+    };
+    mount(<Chat port={later} />);
+    await settle();
+    expect(($(".vf-chat-empty-new") as HTMLButtonElement | null)?.disabled).toBe(true);
+    // Open Agents settings, then a terminal: the agent is installed while the window is away
+    installed = true;
+    await act(async () => window.dispatchEvent(new Event("focus")));
+    await settle();
+    expect(reads).toBe(2);
+    expect(($(".vf-chat-empty-new") as HTMLButtonElement | null)?.disabled).toBe(false);
+    expect($(".vf-chat-empty-why")).toBeNull();
+    await act(async () => window.dispatchEvent(new Event("focus")));
+    await settle();
+    expect(reads).toBe(2);
+  });
+
+  it("never reads the agents while Chat holds a spark", async () => {
+    const { door } = scripted([VELA]);
+    stop = startSparksFeed(door);
+    let reads = 0;
+    const counted = {
+      ...PORT,
+      providers: async () => {
+        reads += 1;
+        return SPARKING_HERE;
+      },
+    };
+    mount(<Chat port={counted} />);
+    await settle();
+    expect($(".vf-chat-empty")).toBeNull();
+    expect(reads).toBe(0);
   });
 });

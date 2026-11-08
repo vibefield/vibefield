@@ -216,6 +216,8 @@ describe("UI system ownership boundaries", () => {
     expect(preview).toMatch(/<ThreadFlowView\s/u);
     expect(preview).toContain("transcriptItemsOf(");
     expect(fixtures).toContain("transcriptReadingOf(");
+    // track ES: the empty plates mount the shipping night, handed the panel as the product hands it — never a drawn sky
+    expect(preview).toMatch(/<ChatEmptyView\s/u);
     for (const file of [preview, fixtures]) {
       expect(file).not.toMatch(/className="vf-chat/);
       expect(file).not.toContain("<style");
@@ -1268,6 +1270,9 @@ describe("UI system ownership boundaries", () => {
       "chat/ThreadFlowView.tsx",
       // CP-3 — the needs-you card
       "chat/NeedsCardView.tsx",
+      // track ES — the night, and the one starter it shares with the hello
+      "chat/ChatEmptyView.tsx",
+      "chat/ChatStarter.tsx",
       // SP-1e2 — the crew card
       "chat/CrewCardView.tsx",
       // SP-1d — Chat's composer
@@ -1320,6 +1325,9 @@ describe("UI system ownership boundaries", () => {
       "field/desk/pegboard/pegboard.css",
       "field/desk/peers/peers.css",
       "chat/chat.css",
+      // track ES: the night (`ChatEmptyView`) and the one starter it shares with the hello (`ChatStarter`)
+      "chat/chat-empty.css",
+      "chat/chat-starter.css",
       "chat/thread-flow.css",
       "chat/chat-composer.css",
       "chat/new-spark-sheet.css",
