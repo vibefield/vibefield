@@ -33,6 +33,8 @@ export interface ThreadFlowViewProps {
   onStarter?: ((words: string) => void) | undefined;
   /** a send into the thread runs: the starters wait */
   sending?: boolean | undefined;
+  /** ES-4 — this Mac's agents and board are being read: the hello's starters hold their places, wordless */
+  startersHeld?: boolean | undefined;
   /** "Earlier conversations" pressed */
   onEarlier?: (() => void) | undefined;
   /** the tool lines that open drawn opened (their keys): a catalog plate's */
@@ -60,6 +62,7 @@ export function ThreadFlowView({
   face,
   onStarter,
   sending = false,
+  startersHeld = false,
   onEarlier,
   opened,
   crews,
@@ -145,7 +148,7 @@ export function ThreadFlowView({
                   <ChatStarter
                     key={starter.glyph}
                     starter={starter}
-                    held={item.held}
+                    held={startersHeld}
                     onPress={() => {
                       if (!sending) onStarter?.(starter.words);
                     }}

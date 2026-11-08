@@ -7,7 +7,6 @@ import {
 } from "@vibefield/contracts";
 import type { SparkStatus } from "@vibefield/design-kit/spark-face";
 import type { SparkEntry } from "./spark-status";
-import type { StartersReading } from "./starters";
 import { helloWords, STARTERS, type Starter, sparkIsNew } from "./thread-items";
 import type { TranscriptReading } from "./transcript-port";
 
@@ -57,8 +56,6 @@ export type FlowItem =
       readonly face: { readonly seed: number; readonly status: SparkStatus };
       readonly words: string;
       readonly starters: readonly Starter[];
-      /** ES-4 — this Mac's agents and board are being read: the starters hold their places, wordless */
-      readonly held: boolean;
     }
   | {
       readonly kind: "you";
@@ -102,8 +99,10 @@ export interface FlowInputs {
   /** the window's clock, epoch ms, for the day lines */
   readonly now: number;
   readonly locale?: string | undefined;
-  /** ES-4 — the hello's starters, filled from this Mac (`starters.ts`); absent, the ruled ones */
-  readonly starters?: StartersReading | undefined;
+  /** ES-4 — the hello's starters, filled from this Mac (`starters.ts`); absent, the ruled ones. The fold carries their
+   * words alone: whether this Mac is still reading them is the window's (`ThreadFlowView`'s `startersHeld`), never
+   * the fold's, which the phone's port is held to byte for byte (IOS-12c's goldens) */
+  readonly starters?: readonly Starter[] | undefined;
 }
 
 // ── the words (§9 "Chat's words") ──
@@ -334,8 +333,7 @@ export function transcriptItemsOf({
       key: "hello",
       face: { seed: entry.spark.face.seed, status: entry.status },
       words: helloWords(name),
-      starters: starters?.starters ?? STARTERS,
-      held: starters?.state === "reading",
+      starters: starters ?? STARTERS,
     });
   }
   items.push(...withDays(receipted(latest, entry, lines), latestSince, now, locale));

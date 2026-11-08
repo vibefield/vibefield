@@ -426,7 +426,7 @@ export function ChatView({
           pending,
           earlier: drawn.state === "ready" && drawn.whole,
           now,
-          starters,
+          starters: starters.starters,
         });
 
   // SP-1e2 — each crew's card under its act line (DESIGN.md §8 "Chat's crew card"): the shown spark's crews, read on
@@ -496,6 +496,7 @@ export function ChatView({
           ? {}
           : { onStarter: (words: string) => void start(shown, open, sayer, words) })}
         sending={heldThreads.has(shown.spark.id)}
+        startersHeld={starters.state === "reading"}
         onEarlier={() => setWhole((asked) => new Set(asked).add(shown.spark.id))}
         crews={cards}
         onCrewRow={(runtimeRunId) => void revealMember(runtimeRunId)}

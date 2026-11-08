@@ -215,16 +215,16 @@ describe("the hello, the first row (TH-Q36 (a), CO-Q2 (b))", () => {
   const fresh = entryOf({ spark: { turnedAt: null }, row: { turnedAt: null } });
   const empty = transcriptReadingOf([LATEST], linesOf("run"));
 
-  it("offers the starters filled from this Mac, held wordless while they are read (ES-4; §9, the hello, as amended)", () => {
+  it("offers the starters filled from this Mac, their words alone: whether they are still read is the window's (ES-4; §9, the hello, as amended)", () => {
     const filled = [
       { glyph: "agents", words: "Spawn 4 Claude Code agents to research a topic each" },
       { glyph: "panes", words: "Keep track of my agents in billing-api" },
       { glyph: "duplicate", words: "Have Claude Code review codex·3's work until it's clean" },
     ] as const;
-    const read = itemsOf(empty, fresh, { starters: { state: "read", starters: filled } });
-    expect(read[0]).toMatchObject({ kind: "hello", starters: filled, held: false });
-    const held = itemsOf(empty, fresh, { starters: { state: "reading", starters: filled } });
-    expect(held[0]).toMatchObject({ kind: "hello", held: true });
+    const read = itemsOf(empty, fresh, { starters: filled });
+    expect(read[0]).toMatchObject({ kind: "hello", starters: filled });
+    // the fold carries no reading state: the phone's port is held to it byte for byte (IOS-12c's goldens)
+    expect(read[0]).not.toHaveProperty("held");
   });
 
   it("stands while the spark is new and its conversation holds no words, a card at the foot or not", () => {

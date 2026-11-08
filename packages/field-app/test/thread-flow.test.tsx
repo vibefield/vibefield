@@ -181,6 +181,31 @@ describe("the needs-you card at the foot (TH-1; TH-Q26 (a), TH-Q29 (a))", () => 
     expect($(".vf-chat-flow .vf-needs-card")).toBeNull();
   });
 
+  it("holds the hello's starters in their places, wordless, while this Mac's agents and board are read (ES-4)", async () => {
+    const hello = {
+      state: "ready",
+      items: [
+        {
+          kind: "hello",
+          key: "hello",
+          face: { seed: 1, status: "ready" },
+          words: "Hi, I'm Vela.",
+          starters: [{ glyph: "agents", words: "Spawn 4 Grok agents to research a topic each" }],
+        },
+      ],
+    } as const;
+    const heldOf = (): (string | undefined)[] =>
+      [...document.querySelectorAll<HTMLElement>('[data-row="hello"] .vf-chat-starter')].map(
+        (starter) => starter.dataset.held,
+      );
+    await mount(
+      <ThreadFlowView name="Vela" face={{ seed: 1, status: "ready" }} flow={hello} startersHeld />,
+    );
+    expect(heldOf()).toEqual(["true"]);
+    await mount(<ThreadFlowView name="Vela" face={{ seed: 1, status: "ready" }} flow={hello} />);
+    expect(heldOf()).toEqual([undefined]);
+  });
+
   it("keeps the hello first in the flow while an ask stands at the foot (CO-Q2 (b))", async () => {
     await plate("thread-hello-asks");
     expect(rows()).toEqual(["hello"]);
