@@ -230,6 +230,13 @@ export class MockMgmtServer {
   meshHealthLag = 0;
   meshStaleAnswers = 0;
   private meshStaleLeft = 0;
+  /** NR S1 — the floor's node gate with no node yet, modelled only for a suite that sets it. `false` is a floor whose
+   * node is still behind fieldd: a fresh pair start's bring-up, 3.494 s and 2.146 s on two linked dev lives
+   * (`draft/thinking-native-replay-rearm.md`, Q3), or a node that never comes up. Every `native.mesh.*` call but
+   * `start` and `stop` then answers the gate's UNAVAILABLE -32006, `meshNodeState` as the unit's state, until a row
+   * sets it back to `true`. The egress and file-transfer facades answer first, on their own terms. */
+  meshNodeUp = true;
+  meshNodeState = "starting";
   /** TS-1 — the interactive sign-in a CAPTURE posture waits on, modelled only
    * for a suite that sets it. With no `login` the node is not up yet:
    * `native.mesh.self` answers UNAVAILABLE `starting` with `authUrl` (and the
@@ -379,6 +386,9 @@ export class MockMgmtServer {
    * above. UA-P-0a needs it: a desktop with no account declares NO serve, so
    * "the reconcile ran" can no longer be inferred from a serve appearing. */
   readonly meshCalls: string[] = [];
+  /** NR S1 — the store id of every `native.mesh.store.subscribe` ASKED of this floor, in order, answered or refused:
+   * "was the docs store asked again after the node came up?" wants the ask, as `meshCalls` does. */
+  readonly storeSubscribeAsks: string[] = [];
   /** UA-P-0f — every `native.mesh.lane.open` this floor was asked for, in
    * order. The outbound half of "documents sync only within one account" is a
    * decision about WHICH PEERS get a lane, so the witness is the list of lanes
@@ -712,6 +722,9 @@ export class MockMgmtServer {
     // answer. (`subscriptionRequests` never sees these — the mesh facade is
     // dispatched ahead of the generic `*.subscribe` recorder.)
     this.meshCalls.push(msg.method);
+    if (msg.method === "native.mesh.store.subscribe") {
+      this.storeSubscribeAsks.push(String(msg.params?.["storeId"]));
+    }
     if (msg.method.startsWith("native.mesh.egress.")) {
       this.onEgress(sock, msg);
       return;
@@ -743,6 +756,15 @@ export class MockMgmtServer {
         },
       });
     if (msg.method === "native.mesh.start") this.meshStarts.push({ ...(msg.params ?? {}) });
+    // NR S1 — the node gate (`meshNodeUp`), as the real floor's sits after start and stop (`mgmt/mesh.rs`).
+    if (
+      !this.meshNodeUp &&
+      msg.method !== "native.mesh.start" &&
+      msg.method !== "native.mesh.stop"
+    ) {
+      notUp(this.meshNodeState);
+      return;
+    }
     if (this.meshPosture !== undefined) {
       const p = msg.params ?? {};
       if (msg.method === "native.mesh.start") {
