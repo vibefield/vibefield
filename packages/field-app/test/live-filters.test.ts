@@ -115,6 +115,15 @@ describe("the view's filters as search carries them (`live-filters.ts`, SE-D1)",
     });
   });
 
+  it("carries a chosen plan only while one stands (UM-5a), and it narrows no count", () => {
+    expect(liveFiltersOf(input())).not.toHaveProperty("plan");
+    const plan = { key: "native/plan:anthropic", label: "Claude Max", provider: "claude" };
+    const filters = liveFiltersOf(input({ plan }));
+    expect(filters.plan).toEqual(plan);
+    expect(filters.sessions).toBe(6);
+    expect(filters.profiles.map((entry) => entry.sessions)).toEqual([1, 2]);
+  });
+
   it("offers no desktop with one desktop, and This Mac alone, counted, while it is not connected (TS-4)", () => {
     const mine = AGENTS.filter((row) => row.device.self);
     const one = liveFiltersOf(input({ devices: [HERE_CHOICE], agents: mine }));

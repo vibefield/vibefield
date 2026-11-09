@@ -76,7 +76,11 @@ import {
   resetGodviewDeckDoorForTest,
 } from "../src/frame/deck-door";
 import { getGodviewFindDoor, resetGodviewFindDoorForTest } from "../src/frame/find-door";
-import { GODVIEW_FILTERS_STORAGE_KEY } from "../src/godview/filter-state";
+import {
+  GODVIEW_FILTERS_STORAGE_KEY,
+  storedGodviewFilters,
+  storeGodviewFilters,
+} from "../src/godview/filter-state";
 import { GodviewMonitor } from "../src/godview/GodviewMonitor";
 import { useMonitorAccountFacts } from "../src/godview/monitor/account-facts";
 import { usagePortOver } from "../src/godview/monitor/doors";
@@ -2546,6 +2550,20 @@ function closeGodview(): void {
 }
 
 describe("the filters kept for the run (docket N4 (a))", () => {
+  it("keeps a plan alone (UM-5a: with one profile it is the only filter there is), and an entry from before it reads none", () => {
+    const key = "native/plan:anthropic";
+    storeGodviewFilters({ desk: null, profile: null, plan: key });
+    expect(keptFilters()).toEqual({ desk: null, profile: null, plan: key });
+    expect(storedGodviewFilters()).toEqual({ desk: null, profile: null, plan: key });
+    storeGodviewFilters({ desk: null, profile: null, plan: null });
+    expect(sessionStorage.getItem(GODVIEW_FILTERS_STORAGE_KEY)).toBeNull();
+    sessionStorage.setItem(
+      GODVIEW_FILTERS_STORAGE_KEY,
+      JSON.stringify({ desk: "studio", profile: "work" }),
+    );
+    expect(storedGodviewFilters()).toEqual({ desk: "studio", profile: "work", plan: null });
+  });
+
   it("finds the chosen desktop and profile again when Godview opens after a close, and keeps nothing once both are cleared", async () => {
     const door = filterDoor();
     await mountMonitor("list", door);

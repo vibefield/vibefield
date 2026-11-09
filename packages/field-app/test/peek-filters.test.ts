@@ -76,6 +76,9 @@ const LIVE: LiveFilters = {
   sessions: 7,
 };
 
+/** UM-5a — a plan chosen (its filter stands whether or not a profile does). */
+const PLAN = { key: "native/plan:anthropic", label: "Claude Max", provider: AGENT_ID };
+
 /** TS-4 — this Mac not connected: This Mac alone, and the ghost row. */
 const UNCONNECTED: LiveFilters = {
   ...LIVE,
@@ -125,6 +128,24 @@ describe("the field's tokens (SE-D1)", () => {
     expect(peekFieldTokens({ ...both, scope: "everything" })).toEqual([]);
   });
 
+  it("Live now's plan token comes after the profile's, its agent's mark and its title; Everything shows none (UM-5a)", () => {
+    expect(words(peekFieldTokens(state({ live: { ...LIVE, plan: PLAN } })))).toEqual([
+      ["plan", "Claude Max", "agent"],
+    ]);
+    const all = peekFieldTokens(
+      state({ live: { ...LIVE, desk: "studio", profile: "work", plan: PLAN } }),
+    );
+    expect(words(all)).toEqual([
+      ["desk", "studio", "os"],
+      ["profile", "Work", "profile"],
+      ["plan", "Claude Max", "agent"],
+    ]);
+    expect(all[2]?.mark).toEqual({ kind: "agent", id: AGENT_ID });
+    expect(peekFieldTokens(state({ scope: "everything", live: { ...LIVE, plan: PLAN } }))).toEqual(
+      [],
+    );
+  });
+
   it("Everything's are the project's, what was said — only when it is not every kind — and the agent's, in that order", () => {
     const all = state({
       scope: "everything",
@@ -165,11 +186,20 @@ describe("the field's tokens (SE-D1)", () => {
     const live = peekFieldTokens(state({ live: { ...LIVE, desk: "studio", profile: "work" } }));
     expect(backspaceTakes(live, at0)?.filter).toBe("profile");
     expect(backspaceTakes(live.slice(0, 1), at0)?.filter).toBe("desk");
+    // UM-5a: the plan's before the profile's
+    const planned = peekFieldTokens(state({ live: { ...LIVE, profile: "work", plan: PLAN } }));
+    expect(backspaceTakes(planned, at0)?.filter).toBe("plan");
+    expect(backspaceTakes(planned.slice(0, 1), at0)?.filter).toBe("profile");
     // ⌫ is the words' anywhere else, and with a selection; with no token it takes nothing
     expect(backspaceTakes(live, { start: 3, end: 3 })).toBeNull();
     expect(backspaceTakes(live, { start: 0, end: 4 })).toBeNull();
     expect(backspaceTakes(live, { start: null, end: null })).toBeNull();
     expect(backspaceTakes([], at0)).toBeNull();
+  });
+
+  it("a plan token's × sets the plan back to every (UM-5a)", () => {
+    const [token] = peekFieldTokens(state({ live: { ...LIVE, plan: PLAN } }));
+    expect(token && clearPick(token)).toEqual({ filter: "plan", value: null });
   });
 
   it("a token's × sets its one filter back to every — what was said back to every kind", () => {
@@ -262,6 +292,11 @@ describe("+ Filter's menu (SE-D1)", () => {
       group.eyebrow,
       group.rows.map((row) => [row.label, row.note, row.on, row.quiet]),
     ]);
+
+  it("offers no plan row: a plan is chosen on its meter (UM-5a)", () => {
+    const menu = filterMenu(state({ live: { ...LIVE, plan: PLAN } }));
+    expect(menu.map((group) => group.eyebrow)).toEqual(["Profiles", "Desktops"]);
+  });
 
   it("Live now's: Profiles, then Desktops — each with what it holds, every session's count whatever the other filter, the one standing in the ready fill", () => {
     const groups = filterMenu(state({ live: { ...LIVE, desk: "studio" } }));
@@ -441,5 +476,17 @@ describe("a live run's words (SE-D1, UM-D28)", () => {
     expect(everythingLensWords(LIVE)).toBe("");
     expect(everythingLensWords({ ...LIVE, desk: "studio" })).toBe("");
     expect(everythingLensWords(null)).toBe("");
+  });
+
+  it("…and through every plan, in three forms (UM-5a; ‹for James›)", () => {
+    expect(everythingLensWords({ ...LIVE, plan: PLAN })).toBe(
+      " · every plan; Claude Max comes back on Live now",
+    );
+    expect(everythingLensWords({ ...LIVE, profile: "work", plan: PLAN })).toBe(
+      " · every profile; Work and Claude Max come back on Live now",
+    );
+    expect(everythingLensWords({ ...LIVE, profile: "work" })).toBe(
+      " · every profile; Work comes back on Live now",
+    );
   });
 });

@@ -163,6 +163,9 @@ describe("the find door (`find-door.ts`)", () => {
       desk: desks[1],
       profile: profiles[1],
     });
+    // UM-5a: a plan alone is a filter, and it stands on the token by name
+    const plan = { key: "native/plan:anthropic", label: "Claude Max", provider: "claude" };
+    expect(filterToken({ ...none, plan })).toEqual({ desk: null, profile: null, plan });
     // a choice the lists no longer hold names nothing (it fell back to all)
     expect(
       filterToken({ desks: [], desk: "gone", profiles: [], profile: "gone", sessions: 0 }),
