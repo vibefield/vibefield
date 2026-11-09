@@ -544,6 +544,74 @@ describe("the popover (DESIGN.md §8 'Godview's profiles column')", () => {
     expect(chooseButton(rowOf(needPage, need?.key ?? ""))).toBeNull();
   });
 
+  /** Work with its first plan's reading down: a row that needs you (Retry) beside rows that can be chosen. */
+  function retryingWork(): {
+    circle: ColumnCircle;
+    need: PlanMeter;
+    other: { key: string; union: string; title: string };
+  } {
+    const meters = metersOf(
+      FIXTURE_WORK,
+      withNamer(FIXTURE_WORK, (entry) => ({ ...entry, state: "unavailable", metrics: [] })),
+    );
+    const circle = { set: FIXTURE_WORK, meters };
+    const need = meters.entries.find((entry) => entry.kind === "needs-you");
+    const [other] = readingRows(circle);
+    if (need === undefined || other === undefined) throw new Error("fixture: no need or no reading");
+    return { circle, need, other };
+  }
+
+  it("a chosen plan that turns to need you draws no press, and the foot stops offering the click it cannot take (UM-5a)", () => {
+    const { circle, need } = retryingWork();
+    const page = mount(
+      <ProfilePopoverView
+        {...popover(circle, { chosenPlanFamily: [`${circle.set.id}/${need.key}`] })}
+      />,
+    );
+    const row = rowOf(page, need.key);
+    expect(row.hasAttribute("data-pressed")).toBe(false);
+    expect(row.querySelector("[aria-pressed]")).toBeNull();
+    // the filter stands, so the rows that can be chosen stay dim and can move it; nothing there can be clicked again
+    expect(page.querySelector(".vf-profiles-pop-lens")?.textContent).toBe(
+      "Click a plan to show only its sessions",
+    );
+  });
+
+  it("a row that needs you keeps its full ink while another plan is chosen: it holds an act (UM-5a)", () => {
+    const { circle, need, other } = retryingWork();
+    const page = mount(
+      <ProfilePopoverView {...popover(circle, { chosenPlanFamily: [other.union] })} />,
+    );
+    expect(rowOf(page, need.key).hasAttribute("data-dim")).toBe(false);
+    expect(rowOf(page, other.key).hasAttribute("data-pressed")).toBe(true);
+  });
+
+  it("with one profile and no plan that can be chosen the foot offers none, and Agent Profiles… stands (UM-5a)", () => {
+    const { circle } = retryingWork();
+    const needsOnly: ColumnCircle = {
+      set: circle.set,
+      meters: {
+        ...circle.meters,
+        entries: circle.meters.entries.filter((entry) => entry.kind === "needs-you"),
+      },
+    };
+    const allNeed = mount(<ProfilePopoverView {...popover(needsOnly)} />);
+    expect(allNeed.querySelector(".vf-profiles-pop-lens")).toBeNull();
+    expect(allNeed.querySelector(".vf-profiles-pop-foot button")?.textContent).toBe(
+      "Agent Profiles…",
+    );
+    const unreadable: ColumnCircle = {
+      set: FIXTURE_NATIVE,
+      meters: metersOf(FIXTURE_NATIVE, READINGS, { usage: "unavailable" }),
+    };
+    expect(unreadable.meters.entries.every((entry) => entry.kind === "no-meter")).toBe(true);
+    const none = mount(<ProfilePopoverView {...popover(unreadable)} />);
+    expect(none.querySelector(".vf-profiles-pop-lens")).toBeNull();
+    // with several profiles the lens's words stand: the circle can always be clicked
+    const lens = mount(<ProfilePopoverView {...popover(unreadable, { lens: true })} />);
+    expect(lens.querySelector(".vf-profiles-pop-lens")?.textContent).toContain("Click it to show");
+  });
+
   it("twins: a family's row draws pressed in the other profile's popover, and its click clears (UM-5a)", () => {
     const circle = thisMac();
     const [first] = readingRows(circle);
@@ -785,9 +853,10 @@ describe("the popover (DESIGN.md §8 'Godview's profiles column')", () => {
     expect(alone.querySelector(".vf-profiles-pop-lens")?.textContent).toBe(
       "Click a plan to show only its sessions",
     );
+    const reading = thisMac().meters.entries.find((entry) => entry.kind === "reading");
     const showing = mount(
       <ProfilePopoverView
-        {...popover(thisMac(), { chosenPlanFamily: ["native/plan:x"] })}
+        {...popover(thisMac(), { chosenPlanFamily: [`native/${reading?.key}`] })}
       />,
     );
     expect(showing.querySelector(".vf-profiles-pop-lens")?.textContent).toBe(
