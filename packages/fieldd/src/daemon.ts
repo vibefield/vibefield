@@ -2420,6 +2420,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
             catalog: createAgentCatalogReaders(config.agentCatalog ?? AGENT_CATALOG),
             terminals: () => terminalsRef,
             fold: agents,
+            runBriefing: (provider) => briefings.forRun(provider),
             // the install the runtime itself launches, read for the agents
             // that are given a launcher and no other
             executables: (providers) => agents.distribution.launchExecutables(providers),

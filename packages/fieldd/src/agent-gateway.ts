@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { basename, delimiter, dirname, isAbsolute, join, resolve, sep } from "node:path";
 import { type AgentCatalogReaders, LAYOUT, type TerminalInfo } from "@vibefield/contracts";
 import { createNoopLogger, type Logger } from "@vibefield/logging";
-import type { AgentLaunchProvider } from "@vibefield/puppeteer-core";
+import type { AgentLaunchProvider, AgentRunBriefing } from "@vibefield/puppeteer-core";
 import { type AgentRuntime, prewarmTerminalAgents } from "@vibefield/puppeteer-runtime";
 import {
   type AdoptedSpawnThroughSession,
@@ -38,6 +38,7 @@ import {
   writeTerminals,
   ZSH_INTEGRATION,
 } from "@vibefield/puppeteer-runtime/spawn-through";
+import { briefingWithheld, withTypedBriefing } from "./agent-door-launch";
 import type { AgentAdoption, SystemAudit } from "./agent-runtime";
 import { SPAWNED_BY_SHELL } from "./agent-typed-run";
 import type { AuditMutation, AuditMutationOutcome } from "./audit-service";
@@ -685,6 +686,8 @@ export interface AgentGatewayOptions {
   terminals: () => GatewayTerminals | null;
   /** the fold's entry points (`AgentRuntimeService`) */
   fold: AgentAdoption;
+  /** PU-J — a typed launch's briefing (`AgentBriefings.forRun`); absent, it carries none */
+  runBriefing?: ((provider: string) => Promise<AgentRunBriefing>) | undefined;
   /** provider id → the absolute executable its managed launch runs on this
    * device (the ACTIVE install's — the path the providers were composed with,
    * so a recipe never re-enters a launcher). Asked only for the agents that
@@ -1551,6 +1554,38 @@ export class AgentGatewayService {
     return answer;
   }
 
+  /** PU-J — a typed launch, briefed as a plain run is, under `withhold`: what the agent cannot honour goes unbriefed and
+   * the person's own command is never failed for it. What was withheld is the log's, once, and never the pane's. */
+  private async briefedInvocation(
+    options: Parameters<AgentRuntime["prepareInvocation"]>[0],
+  ): Promise<PreparedInvocation> {
+    const answer = await this.opts.runtime.prepareInvocation(
+      withTypedBriefing(options, await this.typedBriefing(options.providerId)),
+    );
+    const withheld = briefingWithheld(answer);
+    if (withheld.length > 0)
+      this.logger.info(
+        "fieldd.agents.typed_briefing_withheld",
+        "A typed launch went ahead without part of its briefing",
+        { provider: options.providerId, withheld: withheld.join(", ") },
+      );
+    return answer;
+  }
+
+  /** `forRun`'s briefing, or none: nothing about the door may stand in a person's own launch. */
+  private async typedBriefing(provider: string): Promise<AgentRunBriefing> {
+    try {
+      return (await this.opts.runBriefing?.(provider)) ?? {};
+    } catch (error) {
+      this.logger.warn(
+        "fieldd.agents.typed_briefing_unavailable",
+        "A typed launch's briefing could not be read; it goes ahead with none",
+        { provider, reason: error instanceof Error ? error.message : String(error) },
+      );
+      return {};
+    }
+  }
+
   /** puppeteer's launch doors as this host lends them to the kit: the agents
    * offered NOW — the launchers' own table, held to the catalog's word at this
    * moment, so a row that stopped offering `invoke` since the launchers were
@@ -1566,7 +1601,7 @@ export class AgentGatewayService {
       classifyInvocation: (invocation) => runtime.classifyInvocation(invocation),
       prepareInvocation: async (options) =>
         (await this.profileRefusal(progress, options.providerId)) ??
-        (await runtime.prepareInvocation(options)),
+        (await this.briefedInvocation(options)),
       adoptPrepared: (preparationId, options) => runtime.adoptPrepared(preparationId, options),
       cancelPrepared: (preparationId) => runtime.cancelPrepared(preparationId),
     };

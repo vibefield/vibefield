@@ -140,3 +140,29 @@ export class RunHelperRoots {
     });
   }
 }
+
+// PU-J — A TYPED LAUNCH GETS THE DOOR A SPAWNED ONE GETS. puppeteer's `prepareInvocation` takes a briefing and
+// `briefingRefusal: "withhold"`, and answers a receipt `briefing: {applied, withheld}`. A person's own command must never
+// fail for a host's addition, so a typed launch always withholds. The installed pin does not declare these and forwards
+// only the fields it names, so on it the briefing goes nowhere: harmless, and typed here and nowhere else.
+
+/** A typed launch's options with the briefing under `withhold`, or as they were when there is nothing to carry. */
+export function withTypedBriefing<T extends object>(options: T, briefing: AgentRunBriefing): T {
+  if (!carriesDoor(briefing)) return options;
+  const briefed: T & AgentRunBriefing & { briefingRefusal: "withhold" } = {
+    ...options,
+    ...briefing,
+    briefingRefusal: "withhold",
+  };
+  return briefed;
+}
+
+/** What a typed launch's receipt says it went ahead without, each as `field (code)`; none on a pin with no receipt. */
+export function briefingWithheld(answer: unknown): readonly string[] {
+  const withheld = (answer as { briefing?: { withheld?: unknown } } | null | undefined)?.briefing
+    ?.withheld;
+  if (!Array.isArray(withheld)) return [];
+  return withheld.flatMap((entry: { field?: unknown; code?: unknown }) =>
+    typeof entry?.field === "string" ? [`${entry.field} (${String(entry.code)})`] : [],
+  );
+}
