@@ -10,6 +10,7 @@ import { SCREENSHOT_LIMITS, SCREENSHOT_STILL } from "@vibefield/contracts";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   createHandFileDoor,
+  createHandKeptDoor,
   createHandPictureDoor,
   HandPictures,
   isPng,
@@ -151,5 +152,28 @@ describe("a file made at the play", () => {
     });
     await expect(failing(1, { name: "a", text: "x" })).resolves.toBeNull();
     expect(refused).toEqual(["unregistered-sender", "write-failed"]);
+  });
+});
+
+describe("whether the hand still keeps a file (a draft's path at send)", () => {
+  it("is yes for one it wrote, no once twelve more have pushed it out or it is gone from the disk", async () => {
+    const pictures = new HandPictures({ parent: parent(), limit: 1 });
+    const first = await pictures.write(PNG);
+    await expect(pictures.kept(first)).resolves.toBe(true);
+    await expect(pictures.kept("/etc/passwd")).resolves.toBe(false);
+    const second = await pictures.write(PNG);
+    await expect(pictures.kept(first)).resolves.toBe(false);
+    rmSync(second);
+    await expect(pictures.kept(second)).resolves.toBe(false);
+  });
+
+  it("answers a registered window only", async () => {
+    const take = createHandKeptDoor<number>({
+      owns: (sender) => sender === 1,
+      kept: async () => true,
+    });
+    await expect(take(1, { path: "/h/1.png" })).resolves.toBe(true);
+    await expect(take(2, { path: "/h/1.png" })).rejects.toThrow("unregistered sender");
+    await expect(take(1, { path: "" })).rejects.toThrow();
   });
 });

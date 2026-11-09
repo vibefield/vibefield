@@ -15,6 +15,7 @@ import {
   type DraftPart,
   draftAfterSend,
   draftBlank,
+  draftCarried,
   draftPlaceholder,
   draftSendable,
   draftStills,
@@ -234,5 +235,34 @@ describe('what a send leaves (DESIGN.md §8 "Chat\'s composer", Send)', () => {
     expect(draftAfterSend(sent, chosen)).toBe(chosen);
     const cut = [text("start ")];
     expect(draftAfterSend(sent, cut)).toBe(cut);
+  });
+});
+
+describe("what a draft carries beyond its words (OB-L1, OB-D10 A)", () => {
+  it("is nothing for a draft of words, or of cards that need neither", () => {
+    expect(draftCarried([text("hello"), chipPart(cardChip(termCard, "pnpm test"))])).toBeNull();
+  });
+
+  it("names the Live chips' objects, a stack's too, and the files written at the play", () => {
+    const live: Card = {
+      ...termCard,
+      faces: [
+        {
+          id: "live",
+          type: "ref",
+          label: "Live",
+          ref: "vf:obj/7hk2qx4m",
+          kindName: "Note",
+          title: "Q3",
+          still: { src: "", width: 1, height: 1 },
+          more: ["vf:obj/aaaaaaaa"],
+        },
+      ],
+    };
+    const written: CardChip = { ...cardChip(termCard, "/h/1.png"), file: "/h/1.png" };
+    expect(draftCarried([chipPart(cardChip(live, "words")), chipPart(written)])).toEqual({
+      refs: ["vf:obj/7hk2qx4m", "vf:obj/aaaaaaaa"],
+      files: ["/h/1.png"],
+    });
   });
 });

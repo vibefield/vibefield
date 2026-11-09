@@ -18,6 +18,7 @@ import { FielddRpcError } from "@vibefield/fieldd-client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { type DraftPart, draftMessage } from "../src/chat/composer-draft";
 import {
+  handToSpark,
   type SayAsk,
   sayRequestId,
   sendNote,
@@ -25,6 +26,7 @@ import {
   type ThreadSendDeps,
   type ThreadSendOutcome,
 } from "../src/chat/thread-send";
+import { HAND_OVER_WORDS } from "../src/frame/cards/hand-over";
 
 afterEach(() => {
   vi.useRealTimers();
@@ -265,5 +267,87 @@ describe("what a send carries (TH-Q25 (a))", () => {
     expect(message.text).toBe("Look at\nline one\nline two\nplease");
     expect(message.chips).toEqual([{ start: 8, length: 17, kind: "card" }]);
     expect(composeChipsFit(message.text, message.chips)).toBe(true);
+  });
+});
+
+describe("what a send carries beyond its words (OB-L1, OB-D10 A)", () => {
+  const REFS = { refs: ["vf:obj/7hk2qx4m", "vf:obj/aaaaaaaa"], files: [] } as never;
+
+  it("grants each Live chip after the wake, so a spark with no session yet has one to be handed to", async () => {
+    const handed: string[] = [];
+    const out = deps({
+      needsWake: true,
+      hand: async (ref) => {
+        out.steps.push(`hand:${ref}`);
+        handed.push(ref);
+        return { handed: true };
+      },
+    });
+    const { deps: made, steps } = out;
+    const outcome = await sendToThread(made, MESSAGE, [], "say-abcdefgh07", REFS);
+    expect(outcome.state).toBe("queued");
+    expect(steps).toEqual([
+      "sending:say-abcdefgh07",
+      "wake",
+      "hand:vf:obj/7hk2qx4m",
+      "hand:vf:obj/aaaaaaaa",
+      "say",
+    ]);
+    expect(handed).toHaveLength(2);
+  });
+
+  it("reads the spark's run only when it grants, and says so when it has none", async () => {
+    const asked: Array<[string, string]> = [];
+    let reads = 0;
+    const hand = handToSpark(
+      async () => {
+        reads += 1;
+        return "run-new";
+      },
+      async (ref, run) => {
+        asked.push([ref, run]);
+        return { handed: true };
+      },
+    );
+    expect(reads, "nothing read before the wake").toBe(0);
+    await expect(hand("vf:obj/7hk2qx4m" as never)).resolves.toEqual({ handed: true });
+    expect(asked).toEqual([["vf:obj/7hk2qx4m", "run-new"]]);
+    const none = handToSpark(
+      async () => undefined,
+      async () => ({ handed: true }),
+    );
+    await expect(none("vf:obj/7hk2qx4m" as never)).resolves.toEqual({
+      handed: false,
+      reason: HAND_OVER_WORDS.noRun,
+    });
+  });
+
+  it("stops at a refused grant, says why, and queues nothing", async () => {
+    const { deps: made, steps } = deps({
+      hand: async () => ({ handed: false, reason: "That object has closed" }),
+    });
+    const outcome = await sendToThread(made, MESSAGE, [], "say-abcdefgh08", REFS);
+    expect(outcome).toEqual({ state: "not-handed", reason: "That object has closed" });
+    expect(steps).not.toContain("say");
+    expect(sendNote(outcome, "Vela")).toBe("That object has closed");
+  });
+
+  it("refuses a picture's file the hand no longer keeps, before anything moves", async () => {
+    const asked: string[] = [];
+    const { deps: made, steps } = deps({
+      needsWake: true,
+      handFileKept: async (path) => {
+        asked.push(path);
+        return false;
+      },
+    });
+    const outcome = await sendToThread(made, MESSAGE, [], "say-abcdefgh09", {
+      refs: [],
+      files: ["/h/vibefield-hand-1.png"],
+    });
+    expect(outcome).toEqual({ state: "file-gone" });
+    expect(asked).toEqual(["/h/vibefield-hand-1.png"]);
+    expect(steps, "no bubble, no wake").toEqual([]);
+    expect(sendNote(outcome, "Vela")).toBe("Not sent — that picture's file is no longer kept");
   });
 });

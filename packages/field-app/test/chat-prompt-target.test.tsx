@@ -29,7 +29,6 @@ import { type CardTarget, CardTargets, cardTargets } from "../src/frame/cards/ca
 import { type Card, namedTextCardOf, pictureCardOf } from "../src/frame/cards/cards-model";
 import { waitingCardOf } from "../src/frame/cards/cards-outside";
 import { cardsStore } from "../src/frame/cards/cards-store";
-import { resetHandOverForTest, setHandOverDoor } from "../src/frame/cards/hand-over";
 import type { FrameSurface } from "../src/frame/frame-surface";
 import { hearLineSays } from "../src/frame/line-door";
 
@@ -237,7 +236,7 @@ describe('the composer as a place for cards (DESIGN.md §8 "Chat\'s composer", a
     );
   });
 
-  it("lets a Live face land as a chip, and sending it grants the spark first: a refused grant stops the send (OB-L1)", async () => {
+  it("lets a Live face land as a chip, and a send carries what is to be granted (OB-L1)", async () => {
     const targets = new CardTargets();
     const send = await mount(targets);
     const refCard: Card = {
@@ -258,11 +257,6 @@ describe('the composer as a place for cards (DESIGN.md §8 "Chat\'s composer", a
         },
       ],
     };
-    const asked: Array<[string, string]> = [];
-    const off = setHandOverDoor(async (ref, run) => {
-      asked.push([ref, run]);
-      return { handed: false, reason: "That object has closed" };
-    });
     await act(async () => only(targets).play(refCard, "ref", POINT));
     expect(editor().querySelectorAll('[data-chip="card"]')).toHaveLength(1);
     act(() => {
@@ -271,18 +265,8 @@ describe('the composer as a place for cards (DESIGN.md §8 "Chat\'s composer", a
       );
     });
     await act(async () => undefined);
-    expect(asked).toEqual([["vf:obj/7hk2qx4m", "run-vela"]]);
-    expect(send).not.toHaveBeenCalled();
-    off();
-    setHandOverDoor(async () => ({ handed: true }));
-    act(() => {
-      editor().dispatchEvent(
-        new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }),
-      );
-    });
-    await act(async () => undefined);
-    expect(send).toHaveBeenCalledTimes(1);
-    resetHandOverForTest();
+    // the composer names what is to be granted; the send grants it after any wake (`thread-send.ts`)
+    expect(send.mock.calls[0]?.[2]).toEqual({ refs: ["vf:obj/7hk2qx4m"], files: [] });
   });
 
   it("never takes an @ being typed as its place: the card lands at the caret, and the @ and its query stay", async () => {

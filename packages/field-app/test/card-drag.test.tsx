@@ -58,7 +58,11 @@ import {
 } from "../src/frame/cards/cards-model";
 import { CardStore } from "../src/frame/cards/cards-store";
 import { OUTCOME_WORDS, TARGET_WORDS } from "../src/frame/cards/cards-words";
-import { resetHandOverForTest, setHandOverDoor } from "../src/frame/cards/hand-over";
+import {
+  resetHandOverForTest,
+  setHandOverDoor,
+  setTakeBackDoor,
+} from "../src/frame/cards/hand-over";
 import { hearLineSays, type LineViewDoor, refusalClaimed } from "../src/frame/line-door";
 import { ViewsTrackView } from "../src/frame/ViewsTrack";
 import { resetActiveViewForTest, subscribeActiveView } from "../src/frame/view-state";
@@ -1535,6 +1539,101 @@ describe("a pane plays the chosen face (OB-1b, §4.4)", () => {
     });
     expect(asked).toEqual(["vf:obj/7hk2qx4m", "vf:obj/aaaaaaaa"]);
     expect(door.pasted).toEqual([]);
+  });
+
+  /** The grant's two doors, recording. */
+  const grants = (refuse?: string) => {
+    const handed: string[] = [];
+    const taken: Array<[string, string]> = [];
+    setHandOverDoor(async (ref) => {
+      if (ref === refuse) return { handed: false, reason: "Not that one" };
+      handed.push(ref);
+      return { handed: true };
+    });
+    setTakeBackDoor(async (ref, run) => {
+      taken.push([ref, run]);
+    });
+    return { handed, taken };
+  };
+  const STACK: Card = { ...MAP, faces: [{ ...LIVE, more: ["vf:obj/aaaaaaaa"] }, OUTLINE] };
+
+  it("grants nothing while the pane's input is not open", async () => {
+    const root = onePane();
+    const door = { ...agentDoor(), whenInputOpen: async () => false };
+    const { handed } = grants();
+    const target = paneCardTarget({ root: () => root, door: () => door });
+    await expect(target.play(MAP, "ref", { x: 300, y: 300 })).resolves.toEqual({
+      ok: false,
+      note: OUTCOME_WORDS.notTaking("vibe-field"),
+    });
+    expect(handed).toEqual([]);
+  });
+
+  it("grants nothing and pastes nothing when the pane shows another run by the time its input opens", async () => {
+    const root = onePane();
+    const first = agentDoor();
+    const onRunTwo = {
+      ...first,
+      panes: first.panes.map((pane) => ({ ...pane, run: "run-2" })),
+    };
+    let door = first;
+    door = {
+      ...first,
+      whenInputOpen: async () => {
+        door = onRunTwo;
+        return true;
+      },
+    };
+    const { handed } = grants();
+    const target = paneCardTarget({ root: () => root, door: () => door });
+    await expect(target.play(MAP, "ref", { x: 300, y: 300 })).resolves.toEqual({
+      ok: false,
+      note: OUTCOME_WORDS.paneMoved,
+    });
+    expect(handed).toEqual([]);
+    expect(first.pasted).toEqual([]);
+  });
+
+  it("takes back what it granted when a later ref of the stack is refused", async () => {
+    const root = onePane();
+    const door = agentDoor();
+    const { handed, taken } = grants("vf:obj/aaaaaaaa");
+    const target = paneCardTarget({ root: () => root, door: () => door });
+    await expect(target.play(STACK, "ref", { x: 300, y: 300 })).resolves.toEqual({
+      ok: false,
+      note: "Not that one",
+      stand: "read",
+    });
+    expect(handed).toEqual(["vf:obj/7hk2qx4m"]);
+    expect(taken).toEqual([["vf:obj/7hk2qx4m", "run-1"]]);
+    expect(door.pasted).toEqual([]);
+  });
+
+  it("takes the grant back when the pane moved during it, or its paste was not taken", async () => {
+    const root = onePane();
+    const first = agentDoor();
+    let door: typeof first = first;
+    const { taken } = grants();
+    setHandOverDoor(async () => {
+      door = { ...first, panes: first.panes.map((pane) => ({ ...pane, run: "run-2" })) };
+      return { handed: true };
+    });
+    const moved = paneCardTarget({ root: () => root, door: () => door });
+    await expect(moved.play(MAP, "ref", { x: 300, y: 300 })).resolves.toEqual({
+      ok: false,
+      note: OUTCOME_WORDS.paneMoved,
+    });
+    expect(taken).toEqual([["vf:obj/7hk2qx4m", "run-1"]]);
+
+    taken.length = 0;
+    setHandOverDoor(async () => ({ handed: true }));
+    const closed = { ...first, pasteInto: () => false };
+    const notTaken = paneCardTarget({ root: () => root, door: () => closed });
+    await expect(notTaken.play(MAP, "ref", { x: 300, y: 300 })).resolves.toEqual({
+      ok: false,
+      note: OUTCOME_WORDS.notTaking("vibe-field"),
+    });
+    expect(taken).toEqual([["vf:obj/7hk2qx4m", "run-1"]]);
   });
 
   it("pastes nothing when fieldd does not hand it over, and says why", async () => {

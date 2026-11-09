@@ -105,6 +105,18 @@ describe("kindFacesOf: a card's faces, from the kind's agent half", () => {
     });
   });
 
+  it("offers no Live for a selection only partly named: a Live speaks for every object or none", () => {
+    const faces = kindFacesOf(inputs({ objects: [NOTE, NOTE], refs: [REF], title: "2 objects" }));
+    expect(faces.map((face) => face.type)).toEqual(["image"]);
+  });
+
+  it("reads a face from the object as its kind declares it, at the press too", () => {
+    const faces = kindFacesOf(inputs({ readNow: () => ({ text: "as declared" }) }));
+    expect((faces[1] as TextFace).text).toBe("as declared");
+    const gone = kindFacesOf(inputs({ readNow: () => null }));
+    expect(gone.map((face) => face.type)).toEqual(["ref", "image"]);
+  });
+
   it("leaves out an empty text face, and one whose handler throws", () => {
     const empty: CopiedObject = { ...NOTE, props: { text: "" } };
     expect(kindFacesOf(inputs({ objects: [empty] })).map((face) => face.type)).toEqual([
@@ -133,12 +145,13 @@ describe("kindFacesOf: a card's faces, from the kind's agent half", () => {
 
   it("waits for the play with words over the budget, reading them fresh then, and null once it is gone", () => {
     const long = "x".repeat(OBJECT_LIMITS.TOOL_BYTES + 1);
-    let now: Readonly<Record<string, unknown>> | null = { text: "fresh words" };
+    let now: Readonly<Record<string, unknown>> | null = { text: long };
     const faces = kindFacesOf(
       inputs({ objects: [{ ...NOTE, props: { text: long } }], readNow: () => now }),
     );
     const text = faces[1] as TextFace;
     expect(text.text).toBe("");
+    now = { text: "fresh words" };
     expect(text.atPlay?.()).toBe("fresh words");
     now = null;
     expect(text.atPlay?.()).toBeNull();

@@ -28,6 +28,7 @@ import {
   captureRect,
   copySelection,
   insetBox,
+  propsNow,
 } from "../src/field/desk/copy/copy-to-hand";
 import { createDeskBlobStore } from "../src/field/desk/desk-blobs";
 import { deskObjects, type MountedDesk } from "../src/field/desk/desk-door";
@@ -593,6 +594,46 @@ describe("THE DESK'S COPY — the act (copy-to-hand.ts)", () => {
     calls = [];
     expect(copySelection(desk, "bar", seams())).toBe(false);
     expect(store.snapshot().cards).toEqual([]);
+  });
+});
+
+describe("what a face reads (copy-to-hand.ts)", () => {
+  it("hands a kind's handlers its props as declared: a `json` prop parsed, as `AgentReadApi` promises", () => {
+    const group = Symbol("group");
+    const engine = {
+      docs: {
+        current: () => ({ store: { resolve: (key: string) => (key === "k" ? 7 : undefined) } }),
+      },
+      world: {
+        get: (_e: unknown, component: unknown) =>
+          component === group ? { list: "[1,2]", name: "plain" } : { id: "x.kind" },
+      },
+      catalog: {
+        widget: () => ({
+          groups: [
+            { component: group, fields: { list: { kind: "json" }, name: { kind: "string" } } },
+          ],
+        }),
+      },
+    } as unknown as CanvasEngine;
+    expect(propsNow(engine, { key: "k" })).toEqual({ list: [1, 2], name: "plain" });
+    expect(propsNow(engine, { key: "absent" })).toBeNull();
+    expect(propsNow(engine, {})).toBeNull();
+  });
+
+  it("says gone rather than throw when a cell will not parse", () => {
+    const group = Symbol("group");
+    const engine = {
+      docs: { current: () => ({ store: { resolve: () => 7 } }) },
+      world: {
+        get: (_e: unknown, component: unknown) =>
+          component === group ? { list: "{not json" } : { id: "x.kind" },
+      },
+      catalog: {
+        widget: () => ({ groups: [{ component: group, fields: { list: { kind: "json" } } }] }),
+      },
+    } as unknown as CanvasEngine;
+    expect(propsNow(engine, { key: "k" })).toBeNull();
   });
 });
 
