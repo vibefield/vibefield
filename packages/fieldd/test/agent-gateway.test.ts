@@ -41,7 +41,7 @@ import {
   type TerminalInfo,
 } from "@vibefield/contracts";
 import type { Logger } from "@vibefield/logging";
-import type { AgentInstallation, BoundIngress } from "@vibefield/puppeteer-core";
+import type { AgentInstallation, AgentRunBriefing, BoundIngress } from "@vibefield/puppeteer-core";
 import {
   type AgentProvider,
   type AgentRuntime,
@@ -805,6 +805,8 @@ interface UnitOptions {
   /** SB-2 — the runtime keeps an Agent Profile registry in the row's own root
    * (never the machine owner's): a row that makes sets and sign-ins */
   registry?: boolean;
+  /** PU-J — a typed launch's briefing, as the daemon lends `forRun` */
+  runBriefing?: (provider: string) => Promise<AgentRunBriefing>;
 }
 
 async function unit(options: UnitOptions = {}): Promise<Unit> {
@@ -893,6 +895,7 @@ async function unit(options: UnitOptions = {}): Promise<Unit> {
     },
     audit,
     logger: capturingLogger(logged),
+    ...(options.runBriefing !== undefined ? { runBriefing: options.runBriefing } : {}),
   });
   cleanup.push(async () => {
     await gateway.stop();
@@ -2747,6 +2750,113 @@ describe("a launch at the gateway — the real kit, puppeteer's real runtime, a 
     },
     PROCESS_BUDGET_MS,
   );
+
+  // PU-J — a typed agent gets the door a spawned one gets. The pin ignores the fields; puppeteer's line withholds what a
+  // launch cannot honour and says so in a receipt, so a person's own `--mcp-config` never fails their launch.
+  describe("a typed launch's briefing (PU-J)", () => {
+    const BRIEFING: AgentRunBriefing = {
+      mcpServers: { vibefield: { command: "/floor/field-native", args: ["door"] } },
+      allowTools: ["vibefield/history_search"],
+    };
+    /** The real doors, each launch's options kept, and the answer given `receipt`. */
+    const capture = (box: Unit, receipt?: object) => {
+      const seen: object[] = [];
+      const real = box.runtime.prepareInvocation;
+      box.runtime.prepareInvocation = async (options) => {
+        seen.push(options);
+        const answer = await real(options);
+        return (receipt === undefined ? answer : { ...answer, briefing: receipt }) as typeof answer;
+      };
+      return seen;
+    };
+    const unbriefed = (seen: object) => {
+      for (const key of ["mcpServers", "allowTools", "instructions", "briefingRefusal"])
+        expect(seen, key).not.toHaveProperty(key);
+    };
+
+    it(
+      "carries the plain run's briefing under withhold, and the launch goes ahead",
+      async () => {
+        const asked: string[] = [];
+        const box = await unit({
+          runBriefing: async (provider) => {
+            asked.push(provider);
+            return BRIEFING;
+          },
+        });
+        onePane(box);
+        await box.gateway.start();
+        const seen = capture(box);
+        expect((await box.launch(600))?.action).toBe("exec");
+        expect(asked).toEqual([TYPED_PROVIDER]);
+        expect(seen[0]).toMatchObject({ ...BRIEFING, briefingRefusal: "withhold" });
+      },
+      PROCESS_BUDGET_MS,
+    );
+
+    it.each([
+      ["an agent the door cannot name", async () => ({})],
+      [
+        "a briefing that throws",
+        async () => {
+          throw new Error("the floor is down");
+        },
+      ],
+    ])(
+      "launches as typed for %s, naming no withhold",
+      async (_label, runBriefing) => {
+        const box = await unit({ runBriefing });
+        onePane(box);
+        await box.gateway.start();
+        const seen = capture(box);
+        expect((await box.launch(600))?.action).toBe("exec");
+        expect(seen).toHaveLength(1);
+        unbriefed(seen[0] as object);
+      },
+      PROCESS_BUDGET_MS,
+    );
+
+    it(
+      "logs what the receipt withheld once, and the person's pane hears nothing of it",
+      async () => {
+        const box = await unit({ runBriefing: async () => BRIEFING });
+        onePane(box);
+        await box.gateway.start();
+        capture(box, {
+          applied: ["allowTools"],
+          withheld: [{ field: "mcpServers", code: "USER_MCP_CONFIG" }],
+        });
+        const answer = await box.launch(600);
+        expect(answer?.action).toBe("exec");
+        const lines = box.logged.filter(
+          (entry) => entry.event === "fieldd.agents.typed_briefing_withheld",
+        );
+        expect(lines).toHaveLength(1);
+        expect(lines[0]?.attrs).toMatchObject({
+          provider: TYPED_PROVIDER,
+          withheld: "mcpServers (USER_MCP_CONFIG)",
+        });
+        expect(JSON.stringify(answer)).not.toContain("USER_MCP_CONFIG");
+        expect(box.logged.map((entry) => entry.level)).not.toContain("error");
+      },
+      PROCESS_BUDGET_MS,
+    );
+
+    it(
+      "says nothing of a receipt that withheld nothing, or a pin that gives none",
+      async () => {
+        const box = await unit({ runBriefing: async () => BRIEFING });
+        onePane(box);
+        await box.gateway.start();
+        capture(box, { applied: ["mcpServers", "allowTools"], withheld: [] });
+        expect((await box.launch(600))?.action).toBe("exec");
+        expect(box.logged.map((entry) => entry.event)).not.toContain(
+          "fieldd.agents.typed_briefing_withheld",
+        );
+      },
+      PROCESS_BUDGET_MS,
+    );
+  });
 
   it(
     "the handler never throws: a door that throws is answered with a coded decline — a refusal in our pane — and the raw message stays in the log",
