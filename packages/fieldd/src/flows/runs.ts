@@ -806,7 +806,8 @@ function startOf(record: FlowRunRecord): FlowRunStart {
 }
 
 /** A step held on you (Q8; MED-2, R22h, R22i): its record says `holding`, or its run keeps the hold of its repair
- * whose write the record refused, the step still `repairing` there. The one rule #turnEnded and #answered ask. */
+ * whose write the record refused, the step still `repairing` there. The one rule #turnEnded, #answered and #resumed
+ * ask. */
 const heldOnYou = (live: LiveRun, step: FlowRunRecordStep): boolean =>
   step.state === "holding" || live.holds.get(step.call)?.kind === "flow-repair";
 
@@ -2717,7 +2718,11 @@ export class FlowRuns {
    * new agent (AR-4b), and then one line: an unsent one first (Q10: the prompt it still lacks); else, for a step read
    * `lost`, §9's resumed line (W2), waiting as `unsent` for a call not made again, whose form is not known (Q8's one
    * case); else the unheard asker (Q9), a replacement starting idle. Said in fieldd's log, never thrown into the
-   * listener's. */
+   * listener's.
+   * *Corrected 2026-11-09 (slice 14's fold, P4; the skeptic's #4, MEDIUM; CP4-Q7 (a)): a step held on you (`heldOnYou`)
+   * is bound and asked nothing, neither an unsent line nor the unheard asker. `#boundTo` keeps its `flow-repair` hold
+   * and item; it was released, and the successor told "did not hear your answer" of two answers VibeField heard and
+   * held. The person's Ask once more is what speaks to the successor (`step.session`).* */
   #resumed({ run: runId, call, runtimeRunId }: FlowStepResumed): void {
     const run = runId as FlowRunId;
     const live = this.#live.get(run);
@@ -2736,6 +2741,7 @@ export class FlowRuns {
       const step = this.ports.records.runRecord(run)?.open.find((open) => open.call === call);
       if (step === undefined || step.session === runtimeRunId) return;
       const bound = this.#boundTo(run, live, step, runtimeRunId);
+      if (heldOnYou(live, bound)) return;
       const args = live.made.get(call);
       if (args !== undefined && this.#queueUnsent(run, live, bound, args)) return;
       if (step.state === "lost") this.#sendResumed(run, live, bound);
@@ -2751,7 +2757,11 @@ export class FlowRuns {
   }
 
   /** Slice 14 (Q8, Q17) — a step's record moved onto its successor: its session, `working`, its hold released in the
-   * same write (F5), and that hold's item ended, unless its act is in flight (the queue then writes it). */
+   * same write (F5), and that hold's item ended, unless its act is in flight (the queue then writes it).
+   * *Corrected 2026-11-09 (slice 14's fold, P4; the skeptic's #4, MEDIUM; CP4-Q7 (a)): that is a `flow-lost` hold's
+   * road, and a step with none. A `flow-repair` hold is the person's, and a new session does not answer it: the session
+   * alone moves, the step keeps its state and its item. It released every hold, so the card went and the step read
+   * `working`.* */
   #boundTo(
     run: FlowRunId,
     live: LiveRun,
@@ -2759,6 +2769,10 @@ export class FlowRuns {
     session: string,
   ): FlowRunRecordStep {
     const hold = live.holds.get(step.call);
+    if (hold?.kind === "flow-repair") {
+      this.#stepWrite(run)(step.call, (kept) => ({ ...kept, session }));
+      return { ...step, session };
+    }
     const write = hold !== undefined ? this.#releasing(run) : this.#stepWrite(run);
     write(step.call, (kept) => ({ ...kept, session, state: "working" }));
     if (hold !== undefined && !live.acting.has(step.call)) this.#endItem(run, hold.item);

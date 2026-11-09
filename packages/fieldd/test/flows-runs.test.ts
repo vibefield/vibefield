@@ -8793,6 +8793,56 @@ describe("CP-4a2b — the host's life: parked and woken, D2's lookup at a wake, 
       }).toEqual({ session: "rt-succ1", items: 0, reads: 1 });
     });
 
+    /** R13l (iii) and (iii-b) (the fold's P4): what a step held on its repair reads once a successor is bound. */
+    const heldRead = (h: Harness, run: string) => ({
+      session: sessionOf(h, run, 1),
+      steps: stepsOf(h, run),
+      held: h.records.runRecord(run)?.held?.kind,
+      ended: h.itemsEndedById,
+    });
+
+    it("R13l (iii) (slice 14's fold, P4, the skeptic's #4; CP4-Q7 (a), F5): a step `holding` on its repair, `pending` across a boot and replaced: the replacement is its session, its item stands, it reads `holding`, and it is asked nothing; Ask once more then goes to the replacement", async () => {
+      // 852b04096: `#boundTo` released the hold, ended its item and wrote `working`, so `#resumed` told the replacement
+      // VibeField "did not hear your answer", where it had heard two and held them on the person
+      // Kills: `#boundTo` releasing a `flow-repair` hold (the item ended, the step `working`, the unheard line)
+      const h = await harness({ frames: true });
+      const run = await heldOnRepair(h);
+      h.sessionRows.set("rt-step1", { live: false, pending: true, onPermission: false });
+      await booted(h);
+      await within(PARK_MS, () => (h.hosts[1]?.calls.length ?? 0) > 0);
+      h.sessionRows.set("rt-repl1", { live: true, idle: true, onPermission: false });
+      h.resumed({ run, call: 1, runtimeRunId: "rt-repl1" });
+      await within(PARK_MS, () => sessionOf(h, run, 1) === "rt-repl1");
+      await within(HOLD_IDLE_MS, () => linesOf(h, "rt-repl1", "unheard").length > 0);
+      expect({ ...heldRead(h, run), unheard: linesOf(h, "rt-repl1", "unheard").length }).toEqual({
+        session: "rt-repl1",
+        steps: [[1, "holding"]],
+        held: "flow-repair",
+        ended: [],
+        unheard: 0,
+      });
+      expect(await askOnceMore(h, run)).toEqual({ outcome: "done" });
+      expect(linesOf(h, "rt-repl1", "repair")).toHaveLength(1);
+    });
+
+    it("R13l (iii-b) (slice 14's fold, P4, the skeptic's #4; CP4-Q7 (a), Q22): a step `holding` on its repair whose session is gone, with a successor `ofRun` lists: the successor is its session, its item stands, and it reads `holding`", async () => {
+      // 852b04096: `#bind`'s successor road goes through `#boundTo` too: the item ended, the step `working`
+      // Kills: `#boundTo` releasing a `flow-repair` hold, on `#bind`'s road
+      const h = await harness();
+      const run = await heldOnRepair(h);
+      h.exit("rt-step1");
+      h.ofRunRows.set(run, [{ runtimeRunId: "rt-succ1", call: 1, live: true }]);
+      h.sessionRows.set("rt-succ1", { live: true, onPermission: false });
+      await booted(h);
+      await within(PARK_MS, () => sessionOf(h, run, 1) === "rt-succ1");
+      expect(heldRead(h, run)).toEqual({
+        session: "rt-succ1",
+        steps: [[1, "holding"]],
+        held: "flow-repair",
+        ended: [],
+      });
+    });
+
     /** R13l (iv) and (v) (the fold's P1): FORMED's run across a boot, its session `pending`, and the boot's re-make
      * reached (`frames`: host 1's call frame heard): told before it, a resume or a turn end finds the call unmade. */
     const formedPending = async (h: Harness) => {
