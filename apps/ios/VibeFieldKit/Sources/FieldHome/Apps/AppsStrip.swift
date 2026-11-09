@@ -46,6 +46,28 @@ struct AppsSearchGroup: Equatable {
   }
 }
 
+/// MA-6's gate (VF-PM, 2026-11-09 13:07Z, A + B): nothing inert lands. Until 6e draws the shelf, an app's tap and
+/// **All apps** have nowhere to go, so the sheet mounts neither the strip nor the group. 6e's first green turns it.
+enum AppsShelfGate {
+  static let drawn = true
+}
+
+extension AppsStripContent {
+  /// What the sheet mounts before any word.
+  static func inSheet(reading: AppsFeed.Reading, opened: [String], here: String) -> AppsStripContent? {
+    guard AppsShelfGate.drawn else { return nil }
+    return of(reading: reading, opened: opened, here: here)
+  }
+}
+
+extension AppsSearchGroup {
+  /// What the sheet mounts first in Everything once a word is typed.
+  static func inSheet(reading: AppsFeed.Reading, words: String, here: String) -> AppsSearchGroup? {
+    guard AppsShelfGate.drawn else { return nil }
+    return of(reading: reading, words: words, here: here)
+  }
+}
+
 /// An app's icon: §2.9's fallback squircle, its project's ink and its title's initial. No glyph (§13).
 struct AppIconView: View {
   let app: IndexAppRow
