@@ -8670,6 +8670,29 @@ describe("CP-4a2b — the host's life: parked and woken, D2's lookup at a wake, 
       });
     });
 
+    it("S14-5b (slice 14's fold, P9; Q5, §H (c); m17): a close() landing between two owed Stops' hand-overs: the first is handed over and the second never is, so it still reads `stopping`, with no `end` line", async () => {
+      // Kills: `#paced` no longer reading `#closing` (m17): the walk goes on past close(), and the second run's Stop is
+      // finished in a stopping daemon
+      const h = await harness();
+      const base = Date.UTC(2026, 10, 7, 12, 0);
+      const [first = "", second = ""] = ["fr-boot0001f", "fr-boot0002f"].map((run, i) =>
+        seededRun(h, run, { at: new Date(base + i * 60_000), fields: { state: "stopping" } }),
+      );
+      await h.reopen();
+      restored(h.runs);
+      const settling = settledBoot(h.runs);
+      // settled()'s first macrotask runs first, so the first hand-over is done, and its second `#paced` still waits
+      const closing = new Promise<void>((resolve, reject) => {
+        setImmediate(() => void h.runs.close().then(resolve, reject));
+      });
+      await Promise.all([settling, closing]);
+      expect({
+        first: endLinesOf(h, first),
+        second: endLinesOf(h, second),
+        state: h.records.runRecord(second)?.state,
+      }).toEqual({ first: [{ state: "stopped" }], second: [], state: "stopping" });
+    });
+
     it("R13g (slice 14, Q6 item 1): a step re-bound at the boot holds its form: its answer is checked and journaled with the form's fields", async () => {
       // red-a: nothing wakes, so the answer is never heard
       // Kills: `#bind` setting no form (the answer journaled `{text}` alone: `said.verdict` undefined)
