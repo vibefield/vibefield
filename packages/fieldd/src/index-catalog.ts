@@ -603,6 +603,11 @@ export class IndexCatalog extends EventEmitter {
   #queueMutation(raw: unknown): void {
     if (typeof raw !== "object" || raw === null) return;
     const type = (raw as { type?: unknown }).type;
+    if (type === "artifacts_changed") {
+      // MA-3f (RO-35): the library moved. Carried as a signal, with no row of its own to fold.
+      this.emit("library-changed");
+      return;
+    }
     if (type === "session") {
       const parsed = IndexSessionRow.safeParse(raw);
       if (!parsed.success) {

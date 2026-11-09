@@ -117,7 +117,10 @@ export interface IndexAppsCatalog {
   /** the device the rows carry, read at every stamp */
   device(): string;
   on(event: "changed", listener: (change: IndexCatalogChange) => void): unknown;
+  /** MA-3f (RO-35): rosetta's `artifacts_changed` on `/ws/meta`, the library itself moving */
+  on(event: "library-changed", listener: () => void): unknown;
   off(event: "changed", listener: (change: IndexCatalogChange) => void): unknown;
+  off(event: "library-changed", listener: () => void): unknown;
 }
 
 /** The library reader (`IndexService.artifacts`, injected by the daemon, 3e). It throws `RpcCallError`s: a
@@ -428,6 +431,7 @@ export class IndexApps extends EventEmitter {
     if (this.#started || this.#disposed) return;
     this.#started = true;
     this.#opts.catalog.on("changed", this.#onCatalog);
+    this.#opts.catalog.on("library-changed", this.#onLibrary);
     if (this.#opts.catalog.ready) this.#walkNow();
   }
 
@@ -435,6 +439,7 @@ export class IndexApps extends EventEmitter {
     if (this.#disposed) return;
     this.#disposed = true;
     this.#opts.catalog.off("changed", this.#onCatalog);
+    this.#opts.catalog.off("library-changed", this.#onLibrary);
     if (this.#walkTimer !== null) clearTimeout(this.#walkTimer);
     if (this.#rereadTimer !== null) clearTimeout(this.#rereadTimer);
     this.#walkTimer = null;
@@ -460,6 +465,16 @@ export class IndexApps extends EventEmitter {
     // a child's thread can reach the catalog after its app was read: every held row takes its root again (one frame)
     if (change.tables.includes("threads")) this.#commit([], false);
     if (change.tables.includes("sessions")) this.#scheduleReread();
+  };
+
+  /** MA-3f (RO-35) — rosetta says the library moved: what a `sessions` change owes, by the same delay and floor. */
+  readonly #onLibrary = (): void => {
+    if (this.#disposed) return;
+    if (!this.#ready) {
+      if (this.#walkAsked) this.#rereadOwed = true;
+      return;
+    }
+    this.#scheduleReread();
   };
 
   // ── the reads ──
