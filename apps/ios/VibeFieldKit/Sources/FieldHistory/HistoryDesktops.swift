@@ -83,7 +83,8 @@ public final class HistoryDesktops {
   /// replays first, then the ledger reads). A reader already over a door for
   /// this desktop stands; one replaying the cache is replaced.
   public func attach(
-    deviceId: String, name: String, isHome: Bool, door: any HistoryDoor, ownsDoor: Bool
+    deviceId: String, name: String, isHome: Bool, door: any HistoryDoor, ownsDoor: Bool,
+    direct: HistoryDirectPlane? = nil
   ) {
     if let existing = reader(for: deviceId), !existing.isReplaying, existing.isHome == isHome {
       return
@@ -91,7 +92,7 @@ public final class HistoryDesktops {
     reader(for: deviceId)?.close()
     let reader = HistoryDesktopReader(
       deviceId: deviceId, name: name, isHome: isHome, door: door, ownsDoor: ownsDoor, cache: cache,
-      agentLabel: agentLabel, now: now)
+      agentLabel: agentLabel, now: now, direct: direct)
     replace(reader)
     reader.start()
   }

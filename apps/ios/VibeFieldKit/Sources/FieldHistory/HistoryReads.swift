@@ -22,6 +22,10 @@ import os
 // as it was read, stamped (`readAt`), with the standing `asleep` — figures
 // dim, green withheld — and the cache replays the last read while the
 // desktop cannot answer. Nothing here guesses; nothing is blank.
+//
+// SP-7b's 7b-2b: with a plane given, a session's pages and tail come directly from rosetta (`HistoryDirectRead`) and
+// land in the same `rows`, so everything above them is unchanged. A session the plane cannot serve reads through the
+// door as before, and says why in `failure`. The header, the lists and search stay on the door.
 
 /// The numbers the phone's reads hold to, each with its reason.
 public enum HistoryReads {
@@ -174,6 +178,14 @@ public final class HistoryDesktopReader: Identifiable {
   /// ordinal it reads down to
   @ObservationIgnored private var fillNumbers: [String: Int] = [:]
   @ObservationIgnored private var fillTargets: [String: Double] = [:]
+  /// SP-7b's 7b-2b — the composition's road to this desktop's sessions; nil reads everything through the door
+  @ObservationIgnored private let directPlane: HistoryDirectPlane?
+  /// the one direct read, opening or live; at most one, as there is one tail
+  @ObservationIgnored private var directRead: (session: String, read: HistoryDirectRead)?
+  /// sessions the door reads until the app next comes back: a road that failed once is not retried per page
+  @ObservationIgnored private var directDeclined: Set<String> = []
+  /// this desktop's daemon does not serve the direct read: nothing a retry changes
+  @ObservationIgnored private var directOff = false
 
   public init(
     deviceId: String, name: String, isHome: Bool = false, door: (any HistoryDoor)?, ownsDoor: Bool = false,
@@ -189,6 +201,7 @@ public final class HistoryDesktopReader: Identifiable {
     self.cache = cache
     self.agentLabel = agentLabel
     self.now = now
+    self.directPlane = direct
     self.log = log
     corpus = .empty(desktop: name, deviceId: deviceId)
     standing = door == nil ? .asleep : .connected
@@ -226,6 +239,7 @@ public final class HistoryDesktopReader: Identifiable {
   public func resume() {
     guard paused else { return }
     paused = false
+    directDeclined.removeAll()
     if let session = tailWanted { openTail(session) }
   }
 
@@ -317,6 +331,10 @@ public final class HistoryDesktopReader: Identifiable {
       do {
         let header = try await door.call("index.session", params: .object(["sessionId": .string(sessionId)]))
           .decode(IndexSessionResult.self).session
+        // SP-7b's 7b-2b — the direct read fills the rows; only if it declines does the door read a page
+        headers[sessionId] = header
+        if await openDirect(sessionId) { return }
+        headers[sessionId] = nil
         let page = try await door.call(
           "index.timeline",
           params: .object(["sessionId": .string(sessionId), "limit": .int(Int64(HistoryReads.pageRows))])
@@ -339,6 +357,10 @@ public final class HistoryDesktopReader: Identifiable {
 
   private func readOlder(_ sessionId: String) {
     guard let door, !closed, let cursor = cursors[sessionId], tasks["older/\(sessionId)"] == nil else { return }
+    if let direct = directRead, direct.session == sessionId {
+      readOlderDirectly(sessionId, cursor: cursor, through: direct.read)
+      return
+    }
     tasks["older/\(sessionId)"] = Task { [weak self] in
       guard let self else { return }
       defer { tasks["older/\(sessionId)"] = nil }
@@ -382,11 +404,14 @@ public final class HistoryDesktopReader: Identifiable {
   // MARK: The tail
 
   private func openTail(_ sessionId: String) {
-    guard let door, !closed, !paused, tail?.session != sessionId, tasks["tail/\(sessionId)"] == nil else { return }
+    guard let door, !closed, !paused, tail?.session != sessionId, directRead?.session != sessionId,
+      tasks["tail/\(sessionId)"] == nil
+    else { return }
     closeTail()
     tasks["tail/\(sessionId)"] = Task { [weak self] in
       guard let self else { return }
       defer { tasks["tail/\(sessionId)"] = nil }
+      if await openDirect(sessionId) { return }
       do {
         let handle = try await door.tail(
           "index.session.subscribe",
@@ -413,6 +438,8 @@ public final class HistoryDesktopReader: Identifiable {
       liveSince[tail.session] = nil
       self.tail = nil
     }
+    directRead?.read.close()
+    directRead = nil
   }
 
   private func tailSnapshot(_ sessionId: String, _ payload: JSONValue) {
@@ -443,6 +470,83 @@ public final class HistoryDesktopReader: Identifiable {
     rows[sessionId] = held
     if appended > 0 { arrivals[sessionId, default: 0] += appended }
     rebuildDocument(sessionId)
+  }
+
+  // MARK: The direct read (SP-7b's 7b-2b)
+
+  /// Reads `sessionId` directly when this desktop's road allows it. False: the door reads it, and `failure` says why.
+  private func openDirect(_ sessionId: String) async -> Bool {
+    guard let directPlane, !directOff, !directDeclined.contains(sessionId), !closed, !paused else { return false }
+    closeTail()
+    let sink = HistoryDirectRead.Sink(
+      page: { [weak self] cursor, watermark in self?.directPage(sessionId, cursor: cursor, watermark: watermark) },
+      rows: { [weak self] rows in self?.directRows(sessionId, rows) },
+      lost: { [weak self] reason in self?.directLost(sessionId, reason) })
+    let read = HistoryDirectRead(sessionId: sessionId, plane: directPlane, sink: sink, log: log)
+    directRead = (sessionId, read)
+    switch await read.open() {
+    case .closed:
+      return true
+    case .live:
+      guard directRead?.read === read, !closed, !paused, tailWanted == sessionId else {
+        read.close()
+        if directRead?.read === read { directRead = nil }
+        return true
+      }
+      tail = (sessionId, HistoryTailHandle { read.close() })
+      liveSince[sessionId] = FieldHistoryModel.clock(Int64(now().timeIntervalSince1970 * 1000))
+      rebuildDocument(sessionId)
+      return true
+    case .door(let reason):
+      if directRead?.read === read { directRead = nil }
+      declineDirect(sessionId, reason)
+      return false
+    }
+  }
+
+  private func declineDirect(_ sessionId: String, _ reason: HistoryDirectFallback) {
+    directDeclined.insert(sessionId)
+    if reason.endsThePlane { directOff = true }
+    failure = reason.said
+    log("history[\(deviceId)] \(sessionId): \(reason.said)")
+  }
+
+  private func directPage(_ sessionId: String, cursor: String?, watermark: String) {
+    cursors[sessionId] = cursor
+    watermarks[sessionId] = watermark
+  }
+
+  /// The subscription's whole visible list: what it shows is what is held.
+  private func directRows(_ sessionId: String, _ visible: [IndexTimelineRow]) {
+    let before = (rows[sessionId] ?? [:]).values.map(\.ordinal).max() ?? -1
+    var held: [String: IndexTimelineRow] = [:]
+    for row in visible { held[row.timelineId] = row }
+    rows[sessionId] = held
+    let appended = visible.filter { $0.ordinal > before }.count
+    if appended > 0, before >= 0 { arrivals[sessionId, default: 0] += appended }
+    rebuildDocument(sessionId)
+  }
+
+  private func readOlderDirectly(_ sessionId: String, cursor: String, through read: HistoryDirectRead) {
+    tasks["older/\(sessionId)"] = Task { [weak self] in
+      let revealed = await read.older(cursor: cursor)
+      guard let self else { return }
+      tasks["older/\(sessionId)"] = nil
+      // the revealed rows landed before the page's cursor was the document's
+      if revealed { rebuildDocument(sessionId) }
+    }
+  }
+
+  /// A live direct read gave up: its cursors are rosetta's, so the door starts the session again from the head.
+  private func directLost(_ sessionId: String, _ reason: HistoryDirectFallback) {
+    guard directRead?.session == sessionId else { return }
+    directRead = nil
+    if tail?.session == sessionId {
+      tail = nil
+      liveSince[sessionId] = nil
+    }
+    declineDirect(sessionId, reason)
+    reopen(sessionId)
   }
 
   // MARK: The hole (item 109)

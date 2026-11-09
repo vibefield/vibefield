@@ -795,8 +795,22 @@ public final class FieldLink {
       refusal: Self.noTerminalDoor)
   }
 
-  /// The RED's stub: asks nothing.
-  public func openIndexTicket(on deviceId: String, sessionId: String) async throws -> JSONValue { .null }
+  /// SP-7b's 7b-2b — a ticket to read one session directly, asked of the HOME as the terminal's is (`homeAsk`'s rule):
+  /// `{device}` added for another desktop's session, which the home carries whole to its owner, who mints it. The
+  /// answer comes back unread: what a ticket means belongs to the reader that dials with it. No home: the index's
+  /// `no_door`, which a reader answers with the door's pages.
+  public func openIndexTicket(on deviceId: String, sessionId: String) async throws -> JSONValue {
+    guard let home, let homeClient else { throw Self.noIndexDoor }
+    let device: String? = deviceId == home ? nil : deviceId
+    return try await homeClient.call(
+      "index.openTicket", params: IndexOpenTicket.params(sessionId: sessionId, device: device))
+  }
+
+  private static let noIndexDoor = FieldProductError(
+    kind: "UNAVAILABLE", message: "no connection to this desktop", retryable: true,
+    details: .object([
+      "service": .string("index"), "state": .string("no_door"),
+    ]))
 
   /// PG-3f (design v2 §4.1) — what the open card shows, by the body it follows: its VISUAL id (`FieldBubble.id`). nil:
   /// the card is closed. The link resolves the row under it at every refold and reports that row's MODEL id to its
