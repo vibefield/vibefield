@@ -136,13 +136,14 @@ export class DeskObjects {
       if (state === "ended") return { handed: false, reason: ENDED_AGENT };
     }
     const holder = this.holder(run);
+    const already = this.registry.grantOf(ref, holder) !== undefined;
     if (this.kind(record.kind)?.concurrency === "one") {
       for (const left of this.registry.moveTo(ref, holder)) this.#releaseHolder(ref, left);
       this.presence.moveHolder(ref, run);
     } else {
       this.registry.grant(ref, holder, "handed");
     }
-    return { handed: true };
+    return already ? { handed: true, already: true } : { handed: true };
   }
 
   /** The person takes an object back: the grant ends, and the agent's next call answers `not-handed`. `run` is a run, or

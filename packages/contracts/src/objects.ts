@@ -385,7 +385,13 @@ export const ObjectsRefResult = z.object({ ref: ObjectRef }).passthrough();
 /** OB-L1 — the grant: only VibeField's own window may call this, on the person's play. */
 export const ObjectsHandParams = z.object({ ref: ObjectRef, run: z.string().min(1) }).passthrough();
 export const ObjectsHandResult = z.discriminatedUnion("handed", [
-  z.object({ handed: z.literal(true) }).passthrough(),
+  z
+    .object({
+      handed: z.literal(true),
+      /** the holder held it before this hand: a later play that fails has no grant of its own to take back */
+      already: z.literal(true).optional(),
+    })
+    .passthrough(),
   z.object({ handed: z.literal(false), reason: z.string().min(1) }).passthrough(),
 ]);
 export type ObjectsHandResult = z.infer<typeof ObjectsHandResult>;
