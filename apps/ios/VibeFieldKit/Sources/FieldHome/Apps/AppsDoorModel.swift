@@ -4,7 +4,7 @@ import Foundation
 import Observation
 
 // MA-6d — the door's one standing state, between the values in AppsDoor.swift and HomeScreen's views: the account's
-// ledger, the drop, the pull's depth and the first peek. RED: every answer below is a stub.
+// ledger, the drop, the pull's depth and the first peek.
 
 @MainActor
 @Observable
@@ -26,40 +26,100 @@ final class AppsDoorModel {
   }
 
   /// The account the ledger is read for; the same account again changes nothing.
-  func adopt(account: String?) {}
+  func adopt(account: String?) {
+    guard account != self.account else { return }
+    self.account = account
+    cues = account.flatMap { store?.load(account: $0) } ?? AppsCues()
+    drops = AppsDrops()
+    peeking = false
+  }
 
   /// One reading of the feed. Only a live reading is news; `blocked` keeps the drop away, `calm` is no sheet standing.
-  func land(_ reading: AppsFeed.Reading, account: String?, blocked: Bool, calm: Bool) {}
+  func land(_ reading: AppsFeed.Reading, account: String?, blocked: Bool, calm: Bool) {
+    adopt(account: account)
+    guard self.account != nil, reading.phase == .live else { return }
+    let before = cues
+    let news = cues.read(reading.apps.map(\.foldKey))
+    let arrivals = news.compactMap { key in
+      reading.apps.first { $0.foldKey == key }.map { AppsDrops.Arrival(foldKey: key, title: $0.title) }
+    }
+    drops.arrive(arrivals, at: clock(), blocked: blocked)
+    if cues != before { save() }
+    tryPeek(calm: calm)
+  }
 
   /// The first peek, when it is due and nothing stands in its way.
-  func tryPeek(calm: Bool) {}
+  func tryPeek(calm: Bool) {
+    guard calm, account != nil, cues.takePeek() else { return }
+    save()
+    peeking = true
+  }
 
-  func peekDone() {}
+  func peekDone() {
+    peeking = false
+  }
 
-  func moved(to drag: CGFloat) {}
+  func moved(to drag: CGFloat) {
+    let next = max(0, drag)
+    if AppsPull.ticks(from: self.drag, to: next) { haptic() }
+    self.drag = next
+  }
 
   /// Lets go: whether the shelf opens. The pull is back at rest either way.
-  func released() -> Bool { false }
+  func released() -> Bool {
+    let opens = AppsPull.opens(releasedAt: drag)
+    drag = 0
+    return opens
+  }
 
-  func seen(_ foldKeys: [String]) {}
+  func seen(_ foldKeys: [String]) {
+    let before = cues
+    cues.seen(foldKeys)
+    if cues != before { save() }
+  }
 
-  func expire() {}
+  func expire() {
+    drops.expire(at: clock())
+  }
 
-  func dismissDrop() {}
+  func dismissDrop() {
+    drops.dismiss()
+  }
 
   /// Sign-out: this account's ledger goes from the phone.
-  func signedOut() {}
+  func signedOut() {
+    if let account { store?.clear(account: account) }
+    account = nil
+    cues = AppsCues()
+    drops = AppsDrops()
+    peeking = false
+  }
+
+  private func save() {
+    guard let account else { return }
+    store?.save(cues, account: account)
+  }
 }
 
 extension AppsPull {
   /// Whether a drag on Field has gone far enough, either way, for `fieldBegins` to say yes or no, once.
-  static func fieldDecides(_ translation: CGSize) -> Bool { false }
+  static func fieldDecides(_ translation: CGSize) -> Bool {
+    translation.height >= startTravel || abs(translation.width) >= startTravel
+  }
 
   /// Whether a touch is on one of the Stories row's circles.
-  static func onCircle(start: CGPoint, count: Int, width: CGFloat, safeTop: CGFloat) -> Bool { false }
+  static func onCircle(start: CGPoint, count: Int, width: CGFloat, safeTop: CGFloat) -> Bool {
+    let top = GodviewStories.top(safeTop: safeTop)
+    guard start.y >= top, start.y <= top + GodviewStories.circle else { return false }
+    return GodviewStories.circleMinX(count: count, width: width).contains {
+      start.x >= $0 && start.x <= $0 + GodviewStories.circle
+    }
+  }
 }
 
 extension AppsDrop {
   /// Its top from the screen's: 4 under the island's foot, 52 on the page's frame (DESIGN.md §8).
-  static func top(safeTop: CGFloat) -> CGFloat { 0 }
+  static func top(safeTop: CGFloat) -> CGFloat {
+    min(max(safeTop, 0), GodviewStories.islandFoot) + underIsland
+  }
 }
