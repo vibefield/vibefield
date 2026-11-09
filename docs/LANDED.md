@@ -4237,6 +4237,31 @@ re-ran green solo, and the whole gate re-ran green); the godview ladder ok:true/
 core v0.18 (the lifecycle verb §5.4 + the ordering law), rollout §15 S3f row + landing entry;
 petition G24 → LANDED upstream 0.11.1 + CONSUMED.
 
+> **Correction (2026-11-09, ROADMAP Q21; ec, on VF-PM's ruling at 02:27:07Z):** finding (4)'s "a deliberate OWN kill
+> never gets an event-driven face" is struck as worded. The same claim, at
+> `draft/specs/terminal-pipeline-v3-rollout.md:153-156`, carries this correction too. Every line below was read at
+> `c27ab9b2d`, or in the pinned packages' `dist`.
+> - **Kept, narrowed:** ghosttea's `runtime.terminate` still drops the local registration in both transports before an
+>   event can apply. That is so at 0.14.0 (ghosttea-react `dist/runtime.js:3060-3073`, then `:2993-3039`; a later
+>   `exited` is dropped at `:774-778` and `:595-599`). The limit is that method's alone.
+> - **The premise is gone:** row 10, `ownKillLocalFace` and the kill chip row 10 drove were withdrawn at GT-6a
+>   (`7517e911a`). Nothing in `packages/field-app/src` or `packages/electron-shell/src` calls `runtime.terminate`. Only
+>   ghosttea's own `dist/workspace/Workspace.js:450,485,559` do, each discarding a session whose pane went away during
+>   its birth.
+> - **A person's kill today:** the deck's Stop and End run end the session through `terminal.terminate`
+>   (`packages/field-app/src/godview/GodviewDeck.tsx:1848-1856` and `:1972-1974`,
+>   `packages/field-app/src/terminal/pool/terminal-pool.ts:1293-1303`), and the session stays registered. The pane
+>   goes to a fresh shell on the accepted receipt (`GodviewDeck.tsx:1859`, `:1594`; puppeteer-views 0.3.3
+>   `dist/deck/completed-agent-panes.js:13-15`). It does not wait for an event.
+> - **Item 59 (`eebb518b0`) does not bear on it:** four files, all in `packages/fieldd`, about the run's record and not
+>   the pane's face.
+> - **An open witness, not a claim:** no test drives a renderer's Stop followed by a real `exited` on the pane. That an
+>   `exited` landing first is applied (`packages/field-app/src/terminal/routed/host.ts:519-531`) is read from the code.
+>   Row 9 (`packages/electron-shell/src/testing/smoke.ts:8690-8713`) starts from the fieldd client, and its wait also
+>   accepts the pane being gone.
+> - **Stale, unchanged (a later slice):** `smoke.ts:8689`, `:8706` and `:9548` still name the withdrawn row 10, and
+>   `packages/field-app/test/godview.test.tsx:191-198` still says there is no other surface for ending a session.
+
 ## EL8 — ice 0.10.0: the magnet grid consumed at the pin
 
 2026-08-25. Upstream cut the same day (ICE design-010/M17): the dot grid's

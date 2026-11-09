@@ -1115,8 +1115,7 @@ its rulings (`draft/rv/james-asks.md`, `draft/rv/lead-rulings.md`); the review `
      in PG-0.
    - Q20: "Settings on demand" (replaces ESR's follow-on): SettingsPanel (`packages/field-app/src/panels/SettingsPanel.tsx`)
      becomes a lazy chunk, measured before and after.
-   - Q21: TP-S3f's stated limit (a deliberate own kill never gets an event-driven face), verified after item 59
-     (`eebb518b0`), then kept or struck at its source.
+   - Q21: verified and struck as worded 2026-11-09 (LANDED, TP-S3f's correction).
 7. **The first beta, `v0.9.0-beta.1`** (release rails; RL6 betas `v0.9.0-beta.N`). The plan is the page *VibeField 0.9
    Launch* (2rsVWUF9); James ruled its calls, LP-D1…D20, at the leans on 2026-11-05 at 01:04Z (DECISIONS LP). The target
    is 7 Nov: every launch date lands by 9 Nov (James, 2026-11-06 23:39Z; it was 19 Nov). Wave 1 builds code-only, off
