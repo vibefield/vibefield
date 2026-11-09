@@ -300,7 +300,12 @@ describe('the hello and its starters (DESIGN.md §8 "Chat\'s thread"; NS-D4; TH-
     const face = row?.querySelector(".vf-spark-face");
     expect(face?.getAttribute("data-framed")).toBe("true");
     // the starters are the design kit's buttons, each its glyph and its words, in the page's order
-    expect(starters().map((button) => words(button))).toEqual(STARTERS.map((s) => s.words));
+    // (ES-Q1: this board has no folder to name and no run but Vela's own, so those two read bare)
+    expect(starters().map((button) => words(button))).toEqual([
+      "Spawn 4 Grok agents to research a topic each",
+      "Keep track of my agents",
+      "Have Codex review my agents' work until it's clean",
+    ]);
     expect(starters().every((button) => button.classList.contains("vf-ui-button"))).toBe(true);
     expect(
       starters().map((button) => button.querySelector(".vf-glyph")?.getAttribute("data-glyph")),
