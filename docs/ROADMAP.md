@@ -487,11 +487,13 @@ DESIGN.md §2.9, §8 "The phone's Apps" and §9 "Apps"; DECISIONS MA
   is `intent-unbuilt` until 3h.
 - Landed 11-06: **MA-4, the desk** (`a16205d5c` → `2cccfb168`, stacked as M166, run 166; LANDED "MA-4"), in 0.9 by
   James's "MA-4 in" (00:30Z): From your agents under Live on the Apps shelf, History's `artifacts` port (dormant
-  until RO-37), and the screen's word Apps. Every open is still `export-unbuilt`.
-- Next: **MA-3f, serving, is the Drive's DR-1** (the DR track, below). James ruled DR-D1 (b) on 11-06, so the copy
-  is rosetta 0.1.4's export by digest (R-1, amending RO-32; released 11-06, its EL8 landed 11-07), served under
-  VibeField's headers (DR-1a, LANDED 11-06) · MA-3h, Keep and Hide, now intents in the
-  drive's document (DR-2) · **MA-6, the phone's shelf**, unblocked: IOS-13a and UM's M-phone, ahead of it, both
+  until RO-37), and the screen's word Apps. Every open was still `export-unbuilt`, until MA-3f (11-09).
+- Landed 11-09: **MA-3f, serving** (`9ce93fa71` → `0d82b611b`, M268, run 270; LANDED "MA-3f"), in 0.9 by James's word
+  (04:36:57Z): an open on the app's own desktop, or forwarded to it, exports the page by digest, builds its view and
+  serves it under the app's policy. The two-device witness is owed, on the nightly carrying this native move.
+- Next: MA-3h, Keep and Hide, now intents in the
+  drive's document (DR-2) · **MA-6, the phone's shelf**, the next to land (its mint replays onto
+  M268, so it is M269 if green), unblocked: IOS-13a and UM's M-phone, ahead of it, both
   landed 11-06 (M-phone M198). SE-2's sheet, in which MA-D7's strip now stands (DESIGN.md §8 "The phone's Apps" as
   amended at UM-0), names its two slots and fills neither: `appsStrip` above the switch before any word, and
   `appsGroup` first in Everything once a word is typed (`PhoneSearchSheet.swift`) ·
@@ -551,15 +553,13 @@ page *The Drive*, KB33dCAP, where it moved 11-06 05:45Z from LB8rzJYV; sources `
     `truffle-named-pull` default feature and the `#[ignore]` probe, the first live named pull.
   - The integration lane after EL8-TRUFFLE: the daemon constructs `DriveService` and wires NativeLink's
     "reconnecting" and "connected" and MeshClient's "node-up" to it (`w3-plan.md` §5.8).
-  - DR-1 (B), the open wired now R-1's and T-1's EL8s have landed (T-1's live witness owed): the two roots made and
-    named, the view's caller, and
-    `ServeConfig.headers`.
-  - Then DR-2 (the drive in the files worker, at mille's release), DR-3 (the sync, over T-3), DR-4 (one address,
+  - DR-2 (the drive in the files worker, at mille's release), DR-3 (the sync, over T-3), DR-4 (one address,
     T-2) and DR-5 (a folder or a build published as a version).
 - Owed:
   - James's marks DR-D14 and D15. T-2 waits on D15, which reopens D12.
-  - James's rulings before DR-1 (B) wires a caller: DR-L3's re-check at the view (`dr-l3-blake3-recheck`, lean (a):
-    R-1's verified placement until DR-2), and the serve policy's `'unsafe-eval'` (`dr-serve-csp-unsafe-eval`).
+  - Decided before DR-1 (B) wired a caller, on the board: DR-L3's re-check at the view, `dr-l3-blake3-recheck` [b],
+    `@noble/hashes` in fieldd now (James, 2026-11-06 23:29:30Z), and `dr-serve-csp-unsafe-eval` [1], rosetta's shell CSP
+    kept (23:28:39Z). Both are in M268.
   - Rosetta's EL8's `gate:landing`. DR-3a's and DR-3b's ran on 2026-11-08 at `e60d8add6`, 12 of 14 green (LANDED
     "DR-3a", its Owed): row 10's red is items 253 and 254 (253 LANDED M232 `ef22fb3b7`, LANDED "Item 253"; the Mac's
     witness paid GREEN-BUT-263/264 at main `351bea4ce` (recorded `4db42a816`), the BUT settled by items 263 + 264, M239
@@ -567,15 +567,13 @@ page *The Drive*, KB33dCAP, where it moved 11-06 05:45Z from LB8rzJYV; sources `
   - From DR-3b: items 237 and 238, their root landed by NR S0–S2 (M240 `33162a078`, LANDED "NR S0 + S1 + S2"): a
     refused native subscription tells its owner, and the five gated consumers ask again. NR's S3 brings
     DriveHolders and DriveLaneRelay onto MeshStream, with the integration lane after EL8-TRUFFLE.
-  - Item 220, DR-1 (B)'s decision before it calls the export: fieldd's `MadeAppExport` moves to the answer rosetta
-    shipped, and `artifact.open`'s `reach` is decided against `environment.hosts` (LANDED "EL8 — Rosetta 0.1.4", Found).
-  - The reviews' nits: DR-1b's 5, 7 and 9 ride DR-1 (B). DR-2a's 8–11 landed in DR-3a's C1.
+  - The two-device witness of MA-3f, R1's class (LANDED "MA-3f", Owed).
+  - Item 268's removal of the four orphan `lane-*.json` schema files, after MA-3f (LANDED "MA-3f", Found).
   - The drive's disk budget (the record's §10, risk 5).
   - Findings for James: rosetta-main's seven stripped ts-rs outputs, and the heatmap's daylight saving (a protocol
     change).
   - The draft slot: the record's v0.3 errata and the four loro pins; design-01 §5.2's opened verbs and DR-L1's note on
-    pulls, each with DR-2a's sha; RO-32…RO-35 in the petitions' README, shipped in 0.1.4; `thinking-mini-apps.md`'s
-    export answer (item 220).
+    pulls, each with DR-2a's sha; RO-32…RO-35 in the petitions' README, shipped in 0.1.4.
 
 **UM + SE — the profile meters and one search** · vibe-field-e0, the UM lead (vibe-field-88 until the 11-06
 account switch, then vibe-field-b7 until the second; lanes `lanes/um1` (M-U1), `lanes/um1-ud8` (M-desk's stack),
@@ -1561,8 +1559,8 @@ Petition status lives in `draft/petitions/README.md`. Still open or owed there:
 | DK — the desk migration | COMPLETE; landed 10-09 | `thinking-desk-migration.md`, `thinking-the-desk.md`, ICE design-015…018, `docs/desk-gates.md` | James's parked build rulings |
 | GT — Godview terminal | PARKED; the deck's ladder done (GT-0…GT-8) | `specs/godview-terminal.md` | G29; GT-D22; row 13b |
 | TP / TC — terminal pipeline and custody | PARKED; TC RATIFIED 10-28 (Q6) | `specs/terminal-pipeline-v3*.md`, `specs/terminal-custody.md`, `thinking-terminal-mesh-cells.md`, `thinking-floor-wedge.md`, `thinking-inventory-latency.md` | D6's cell half |
-| MA — Apps (was AH — Artifact Hub) | ACTIVE since 11-05 (MA-D1…D13 ruled; MA-4 in 0.9, James 11-06); MA-0a + MA-1a (M152), MA-3 (M157, M162) and MA-4 (M166) landed; AH-1…3 landed, AH-4 unledgered; Live apps are field-app's since FL-2 (M267), `plugins/browser` gone | `thinking-mini-apps.md`, `specs/artifact-hub.md`, design-06 §5; DESIGN.md §2.9/§8/§9/§13 | MA-3f serving, which is the Drive's DR-1 (DR-D1 ruled (b): rosetta 0.1.4's export), then MA-3h; MA-6 the phone's shelf (unblocked: UM's M-phone landed 11-06, its sheet naming the strip's slots) |
-| DR — the Drive | ACTIVE since 11-06 (DR-D1…D13 ruled; D14, D15 open); DR-1a, DR-2a, DR-1b, DR-3a (W3's VF-FLOOR), the EL8s to rosetta and truffle and DR-3b (W3's VF-RELAY) landed (M183, M188, M190, M203, M205, M217, M249); wave 1's sibling PRs merged and released 11-06 | `thinking-drive.md` v0.3 (page sources `draft/drive/page/`); `thinking-mini-apps.md` | D14, D15 and DR-L3 (James); the EL8 to mille and the substrate slice; DR-1 (B) |
+| MA — Apps (was AH — Artifact Hub) | ACTIVE since 11-05 (MA-D1…D13 ruled; MA-4 in 0.9, James 11-06); MA-0a + MA-1a (M152), MA-3 (M157, M162), MA-4 (M166) and MA-3f (M268) landed; AH-1…3 landed, AH-4 unledgered; Live apps are field-app's since FL-2 (M267), `plugins/browser` gone | `thinking-mini-apps.md`, `specs/artifact-hub.md`, design-06 §5; DESIGN.md §2.9/§8/§9/§13 | MA-3h; MA-6 the phone's shelf (unblocked: UM's M-phone landed 11-06, its sheet naming the strip's slots) |
+| DR — the Drive | ACTIVE since 11-06 (DR-D1…D13 ruled; D14, D15 open); DR-1a, DR-2a, DR-1b, DR-3a (W3's VF-FLOOR), the EL8s to rosetta and truffle, DR-3b (W3's VF-RELAY) and DR-1 (B) as MA-3f landed (M183, M188, M190, M203, M205, M217, M249, M268); wave 1's sibling PRs merged and released 11-06 | `thinking-drive.md` v0.3 (page sources `draft/drive/page/`); `thinking-mini-apps.md` | D14 and D15 (James); the EL8 to mille and the substrate slice; DR-2…DR-5 |
 | RV — the review fixes (Godview, terminal, puppeteer) | ACTIVE since 11-06; items 191 (RV #2 half A, M192), 192 (RV #6, M193), 201 (RV #17, #43, #49, #48, #50, M194), 203's VF-W1 (RV #1's pin-free half, M196), 211 (RV #97, #96, #93, #116, #95, #47, M199), 212 (RV #30, #29, #67, M201) and 216 (item 192's census row, M204) landed; W1–W2 building, the sibling lanes local | `draft/rv/` (plan.md, james-asks.md, lead-rulings.md); `lanes/rv/review/` | puppeteer R1 → EL8-1 with item 203; ghosttea 0.15.0 → EL8-g |
 | UM + SE — profile meters and one search | ACTIVE since 11-06 (UM-D21…D28 and SE-D1…D5 ruled on the page; UM-D16 E, D19 A; D3, D4, D8, D12…D15 at the leans); UM-0…UM-2 landed 11-06 (M-U1 `c9493b957`, run180, M180); UM-3 and SE-1 landed 11-06 (M-desk `ed8099c1e`, run187, M187); UM-4 and SE-2 landed 11-06 (M-phone `d6d76d079`, run198, M198) | `thinking-profile-meters.md`; `lanes/um/PLAN.md` §4; DESIGN.md §2.7/§5/§8/§9/§13; `docs/agent-plane/usage-meters.md` | UM-5 (UM-D14, the plan filter) in wave 2 |
 | PLUG — shipped core | COMPLETE: P0–P7, P8b–d (P8c via WP8), PRC-4/5; later publishing/validation work is separate | `specs/plugin-architecture.md`, `thinking-p8-loadable-artifact.md` | existing product gates; no blanket 24-hour prerequisite |

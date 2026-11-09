@@ -41008,6 +41008,8 @@ door yet: every open that reaches it still answers `export-unbuilt`.
   answer, and `artifact.open`'s `reach` is decided against `environment.hosts`. `hosts` also feeds the capture's
   `allowHosts`, so that moves too, with the shell-hosts wording in `artifacts.ts`, `registries.ts` and
   `made-app-service.ts`. fieldd must also start rosettad with `--export-root`, which it does not yet.
+  *Corrected 2026-11-09 (VF-PM 06:07:04Z; MA-3f, M268):* this list left out `packages/contracts/src/shell.ts`, whose
+  `allowHosts` comment said the same; MA-3f corrected it with the others. The item is closed by M268.
 - Five code comments still say rosetta 0.1.3 of the export as the present and cannot ride a docs commit:
   `made-app-service.ts:9` and `:270`, `index-apps-mesh.ts:109`, `made-apps.ts:38` and `design-system.tsx:20`. They go
   with item 220's port. `doors.ts:531` and `:545` name 0.1.3's room and entry the same way, and 0.1.4 leaves both as
@@ -45505,3 +45507,79 @@ M260, M264 and M266 landed first, each commit a three-way over its new parent, t
 29, one plugin), `smoke:canvas` (row 17, four staged and FL-1's whiteboard rows). `draft/specs/artifact-hub.md`
 (:99–:100, :311–:320): a dated correction at the source, commit-draft, James's hand. The 29 raw `rgb()` colours in
 `live-apps.css` ride as they were: tokenising them is its own slice.
+
+## MA-3f (= DR-1 (B)) — a made app opens for real: rosetta exports the page, the files worker builds its view, and the serve carries the app's policy (tracks MA and DR)
+
+**MA-3f (seven commits `9ce93fa71` → `0d82b611b`, M268, 2026-11-09 13:55:16Z).** James, typed to VF-PM 04:36:57Z: "3f is
+in 0.9". It rode beside FL-2 by his word of 04:54:43Z ("i want it to be fully refactored now, land with the artifact hub
+work"). FL-2 landed first, as M267, and this stack was re-cut over it.
+
+**What changed.**
+- `artifact.open` no longer answers `export-unbuilt` on this build. On the app's own desktop, or forwarded to it, it
+  calls rosetta's export door (RO-32, by digest) into the non-served `drive/import/<appId>/<digest>`. The files worker
+  builds the view into `artifacts/made/<appId>/<digest>`, hashing with `@noble/hashes` blake3 as it copies (DR-L3;
+  James's board mark `dr-l3-blake3-recheck`, [b], 2026-11-06 23:29:30Z). A page that is not the digest named is
+  `mismatch`, with no view, no temp, and the previous view whole. fieldd's control process opens no file in either
+  folder (EL2, DR-L4).
+- The app's policy is set on every response of its serve (DR-D11 (a)): `ServeConfig.headers` in contracts,
+  `build_serve_config` on field-native's folder arm, truffle's `ProxyConfig.headers`. Headers are in the serve id, so a
+  policy change is a serve change (DR-L7), and no headers is the id every older row pins. The shell CSP stays rosetta's
+  (James's mark `dr-serve-csp-unsafe-eval`, [1], 2026-11-06 23:28:39Z).
+- The record keeps `network` and `viewVersion`, so a restart spells the same serve with no export. A record with no
+  policy is not served; it is exported again.
+- `rosettaMadeAppExporter` is the seam over `IndexService.exportArtifact`: 404 is the page not kept, any other refusal
+  is logged and worded by the service. `prepareMadeAppRoots` makes both roots before `RosettadSupervisor` starts, which
+  passes `--export-root` on `serve` alone.
+- `exportReady` is wired (F10): without it every row answered `openable: false`.
+- The port window (F9): AH and the made apps read each other's reservations after their waits, and a picked port is held
+  until commit or failure, in both directions. AH gains a public `reservedPorts()`.
+- `index-apps` carries rosetta's `description` and `dropped_files`, so "page only" is true from the first served page.
+  The stack's last pair is RO-35: `artifacts_changed` on `/ws/meta` re-reads the library.
+- Item 220 closes here: `MadeAppExport` moved to the answer rosetta shipped, and `reach` and `allowHosts` are the union
+  of the export's `environment.hosts`. DR-1b's nits 5, 7 and 9 landed with it. The agent-plane pages say the export door
+  has a caller, each with a dated line.
+- Not in this land: a two-device serve over a real tailnet (below). `MADE_APP_VIEW.VERSION` stays 1 (DR-D14 is open).
+  `members` is empty until RO-34b, so a multi-file publish serves its page alone, and says so.
+
+**Verified** (vf-m2, run 270, `lanes/vf-m2/run270-a9-results/`, `SHA256SUMS-a9-run270` `49fba5af5e3d24f4`, 27 of 27 OK
+by `shasum -c` at 13:52Z): V GREEN at `0d82b611b` on `37b28a933`, `pnpm verify` exit 0, 5 min 51 s, against run 268's
+lines with this stack's moves. Count lines missing [] / extra []: contracts 64/1962 (+4), fieldd 270 + 5 skipped (275)
+and 3815 + 15 skipped (3830) (+24), sum 14,532 passed, 21 skipped. The nine touched test files each read their predicted
+count. Singles missing [] / extra []: "Checked 3543 files" (+1), "268 of 1142", 28 projects, ios fixtures 430, pins 101.
+Cargo by binary missing [] / extra []: `src/lib.rs` 364 (+4). `gen:check` clean, "census assert OK — no §7.3 violation",
+`bundle:assert` OK at 955.8 KB raw / 254.4 KB gz. field-native rebuilt. `listener_accept_pressure` 1 passed on the mini
+(run 270); 3 of 4 red on the loaded Mac lane with 217's signature, cause unsettled. KEPT births on the mini: one, item
+200's shape, unproven (`/private/tmp/.tmpNHVFe8`, born in V's window, left on the host).
+
+**The lock and the gen.** Run 262 (vf-m2, `lanes/vf-m2/run262-a9-results/`, `SHA256SUMS-a9-run262` `e43146e2b1522ac7`)
+read the non-frozen install and `pnpm gen` before FL-2 landed. FL-2 shares six paths with this stack, the lock among
+them, so both were re-run as new rows on the merged tree (the Mac lane, under `co-plan/INSTALL`, over `74ae0287c`, whose
+tree differs from `37b28a933`'s in `docs/` alone): lock numstat `3 0`, the importer row alone; 46 schema files at
+`26 0`, `bundle.json` among them; `contracts.rs` `300 0`. `registries.rs`, `docs/plugin-authoring`,
+`ghostty-keys.generated.ts` and fieldd's ICE1 probe fixtures did not move. The lock and the gen were folded by plumbing,
+never by hand; 48 of 48 blobs reconstruct from the pre-gen tip and the two patches.
+
+**The re-cut.** Five source files were three-way merged over M267, with no conflict: `fixtures.test.ts`, `artifacts.ts`,
+`registries.ts`, `design-system.tsx` and `daemon.ts`. Each ran as a new row on the merged tree.
+
+**Found, by Mac rows before V, none of them of record.**
+- The stack's Rust did not compile: two test files built `ServeConfigInput` without the new `headers` (E0063). VF-PM's
+  placed row (`cargo clippy` and `cargo test` before V, the lane's own target) found it. Named in green 1.
+- Wall R13 (`--enforce`): a helper built a logger event name from a template. Four static literals now.
+- Biome: two fixture JSON files unformatted, because my own earlier row excluded the fixtures folder. rustfmt: one line
+  in `mesh.rs`.
+- Fifteen mutation rows, in a scratch copy, each restored. Two did not turn red at first, each a finding about the test:
+  `--export-root` on `rebuild`, and headers on AH's serves. `upgradeRig` now hands an export root, so the exact-args row
+  holds the first; AH's canonical-bytes row holds the second. Both then went red.
+- Seven new rows did not fail at their own red commit; each is named in the brief with why. Most hold beside a sibling
+  row that does; two new mutations hold the rest.
+- Item 268, found along the way: `lane-close-request.json`, `lane-closed.json`, `lane-open-request.json` and
+  `lane-peer-opened.json` under `contracts/gen/jsonschema/` are orphans since `mesh-lane-*` replaced them. `gen:check`
+  cannot see them because it diffs against the index. Their removal is its own chore commit.
+
+**Owed.**
+- `gate:landing` at this land, on James's word.
+- The two-device witness, R1's class and the v0.9.0 tag's precondition: on the signed nightly carrying this native move,
+  two linked desktops and a real agent page with its CDN loads, opened on A and served to B, with `curl -sI` over the
+  tailnet reading the CSP and fixed headers on `/` and `/.vibefield/preview/`; item 192's pair rides it.
+- Item 268's removal, after this land.
