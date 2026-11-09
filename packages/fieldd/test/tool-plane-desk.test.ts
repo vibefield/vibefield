@@ -120,17 +120,19 @@ describe("the desk room through the plane (OB-3b)", () => {
     expect(JSON.stringify(line)).not.toContain("shopping");
   });
 
-  it("answers not-handed as the model's own tool result, with the instruction", async () => {
+  it("answers not-handed as the words of the model's own tool result, with the instruction", async () => {
     const { h, plane, call } = harness();
     await plane.ensureStarted();
     const ref = h.refOf("k1", "desk.note");
     const refused = await call(2, "object_open", { ref });
     expect(refused?.isError).toBe(true);
-    expect(refused?.structuredContent).toEqual({ fact: "not-handed" });
+    // a validating client refuses structuredContent that misses the row's outputSchema, so a refusal carries none
+    expect(refused?.structuredContent).toBeUndefined();
+    expect(refused?.content?.[0]?.text).toMatch(/^not-handed: /);
     expect(refused?.content?.[0]?.text).toContain("Ask the user to hand it to you");
   });
 
-  it("carries a bad input's path and expected shape to the model, and no other detail", async () => {
+  it("says a bad input's path and expected shape to the model in the words it reads", async () => {
     const { h, plane, call } = harness();
     await plane.ensureStarted();
     const ref = h.refOf("k1", "desk.note");
@@ -141,19 +143,24 @@ describe("the desk room through the plane (OB-3b)", () => {
       tool: "write_text",
       input: { text: 7 },
     });
-    expect(refused?.structuredContent).toMatchObject({
-      fact: "bad-input",
-      path: "text",
-      expected: { type: "string" },
-    });
-    expect(Object.keys(refused?.structuredContent ?? {}).sort()).toEqual([
-      "expected",
-      "fact",
-      "path",
-    ]);
+    expect(refused?.structuredContent).toBeUndefined();
+    expect(refused?.content?.[0]?.text).toMatch(/^bad-input: input\.text: /);
+    expect(refused?.content?.[0]?.text).toContain('"type":"string"');
   });
 
-  it("carries UNAVAILABLE's service and state to the model when no window holds the board", async () => {
+  it("names the path and the shape when the outer input is what's wrong", async () => {
+    const { plane, call } = harness();
+    await plane.ensureStarted();
+    const refused = await call(30, "object_open", { ref: "not-a-ref" });
+    expect(refused?.isError).toBe(true);
+    const text = refused?.content?.[0]?.text ?? "";
+    expect(text).toMatch(/^bad-input: ref: must look like vf:obj\//);
+    expect(text).toContain('"pattern"');
+    const wrongType = await call(31, "object_open", { ref: 7 });
+    expect(wrongType?.content?.[0]?.text).toContain('"type":"string"');
+  });
+
+  it("says UNAVAILABLE's service and state to the model when no window holds the board", async () => {
     const { h, plane, call } = harness();
     await plane.ensureStarted();
     const ref = h.refOf("k1", "desk.note");
@@ -166,11 +173,8 @@ describe("the desk room through the plane (OB-3b)", () => {
     );
     const closed = h.desk.registry.refFor("doc-closed", "k2");
     const refused = await call(4, "object_open", { ref: closed });
-    expect(refused?.structuredContent).toEqual({
-      fact: "unavailable",
-      service: "desk",
-      state: "no-window",
-    });
+    expect(refused?.structuredContent).toBeUndefined();
+    expect(refused?.content?.[0]?.text).toMatch(/^unavailable \(desk: no-window\): /);
   });
 
   it("tells a caller the desk's rules in one short paragraph, inside Claude Code's 4,096 characters", () => {

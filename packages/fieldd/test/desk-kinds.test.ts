@@ -1,7 +1,7 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { DESK_KINDS, type PluginRecord } from "@vibefield/contracts";
+import { DESK_KINDS, OBJECT_LIMITS, type PluginRecord } from "@vibefield/contracts";
 import { afterEach, describe, expect, it } from "vitest";
 import { deskKinds, pluginDeskKinds } from "../src/objects/kinds";
 
@@ -79,11 +79,25 @@ describe("the kinds a desk knows (OB-L2)", () => {
     expect(deskKinds([map as never]).at(-1)?.kind).toBe("a.map");
   });
 
-  it("lets a kind with no agent half be placed, and gives it no tools", () => {
+  it("gives a kind with no agent half no tools, and an agent no way to place it: no gesture opens a plugin's kind", () => {
     const [plain] = pluginDeskKinds([record("com.a", true, [object("a.plain")])], () => undefined);
-    expect(plain).toMatchObject({ kind: "a.plain", placeable: true, concurrency: "many" });
+    expect(plain).toMatchObject({ kind: "a.plain", placeable: false, concurrency: "many" });
     expect(plain?.tools).toEqual([]);
     expect(plain?.guide).toBeUndefined();
+  });
+
+  it("names the plugin a guide came from, and reads no more of it than the bound in bytes", () => {
+    const root = mkdtempSync(join(tmpdir(), "vf-kinds-"));
+    roots.push(root);
+    mkdirSync(join(root, "assets", "agent"), { recursive: true });
+    writeFileSync(join(root, "assets", "agent", "guide.md"), "é".repeat(OBJECT_LIMITS.GUIDE_BYTES));
+    const [map] = pluginDeskKinds(
+      [{ ...record("com.a", true, [object("a.map", agentHalf)]), title: "Mind Maps" }],
+      () => root,
+    );
+    expect(map?.guideFrom).toBe("Mind Maps");
+    expect(Buffer.byteLength(map?.guide ?? "")).toBeLessThanOrEqual(OBJECT_LIMITS.GUIDE_BYTES);
+    expect(map?.guide?.endsWith("\uFFFD")).toBe(false);
   });
 
   it("goes without a guide the plugin no longer ships, and skips a disabled plugin", () => {

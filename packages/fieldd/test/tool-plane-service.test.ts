@@ -260,6 +260,10 @@ function harness(
 const names = (answer: { result: { tools: { name: string }[] } }) =>
   answer.result.tools.map((t) => t.name);
 
+/** The fact a refusal leads with: an isError result carries no structuredContent, so a validating client keeps it. */
+const factOf = (answer: { result: { content: { text: string }[] } }) =>
+  /^[a-z-]+/.exec(answer.result.content[0]?.text ?? "")?.[0];
+
 describe("the tool plane in fieldd (MT-0)", () => {
   it("lists each caller its audience's rows, and an unnamed caller nothing with one plain line", async () => {
     const h = harness();
@@ -367,7 +371,7 @@ describe("the tool plane in fieldd (MT-0)", () => {
     await h.settle();
     expect(h.answers(1002)[0].result).toMatchObject({
       isError: true,
-      structuredContent: { fact: "forbidden" },
+      content: [{ text: expect.stringMatching(/^forbidden: /) }],
     });
     expect(h.audited).toEqual([
       {
@@ -387,11 +391,7 @@ describe("the tool plane in fieldd (MT-0)", () => {
     h.call(1001, 6, "flow_run", { flow: "f" });
     h.call(1001, 7, "agent_read");
     await h.settle();
-    expect(h.answers(1001).map((a) => a.result.structuredContent.fact)).toEqual([
-      "unknown-tool",
-      "unknown-tool",
-      "bad-input",
-    ]);
+    expect(h.answers(1001).map(factOf)).toEqual(["unknown-tool", "unknown-tool", "bad-input"]);
     for (const a of h.answers(1001)) expect(a.result.isError).toBe(true);
     expect(h.audited).toEqual([]);
   });
@@ -414,7 +414,7 @@ describe("the tool plane in fieldd (MT-0)", () => {
     await h.settle();
     expect(h.answers(1001)[1].result).toMatchObject({
       isError: true,
-      structuredContent: { fact: "not-found" },
+      content: [{ text: expect.stringMatching(/^not-found: /) }],
     });
   });
 
@@ -484,7 +484,7 @@ describe("a run's helper root at the door (OB-3d)", () => {
     h.call(1102, 2, "projects_list");
     await h.settle();
     expect(h.answers(1102)[1].result.isError).toBe(true);
-    expect(h.answers(1102)[1].result.structuredContent).toEqual({ fact: "unavailable" });
+    expect(factOf(h.answers(1102)[1])).toBe("unavailable");
     expect(h.audited, "nothing is served before the record verifies").toEqual([]);
 
     entered = true;
@@ -511,7 +511,7 @@ describe("a run's helper root at the door (OB-3d)", () => {
     h.call(1106, 2, "projects_list");
     await h.settle();
     expect(h.answers(1106)[1].result.isError).toBe(true);
-    expect(h.answers(1106)[1].result.structuredContent).toEqual({ fact: "unavailable" });
+    expect(factOf(h.answers(1106)[1])).toBe("unavailable");
     expect(h.audited.map((a) => a.action)).not.toContain("tools.projects_list");
 
     h.ask(1106, { ...LIST, id: 3 });
@@ -520,7 +520,7 @@ describe("a run's helper root at the door (OB-3d)", () => {
     expect(h.answers(1106)[2].result.ttlMs).toBe(0);
     h.call(1106, 4, "projects_list");
     await h.settle();
-    expect(h.answers(1106)[3].result.structuredContent).toEqual({ fact: "unavailable" });
+    expect(factOf(h.answers(1106)[3])).toBe("unavailable");
   });
 
   it("answers unavailable while a run's record is unreadable, and serves a retried call once it verifies", async () => {
@@ -532,7 +532,7 @@ describe("a run's helper root at the door (OB-3d)", () => {
     await h.plane.ensureStarted();
     h.call(1107, 1, "projects_list");
     await h.settle();
-    expect(h.answers(1107)[0].result.structuredContent).toEqual({ fact: "unavailable" });
+    expect(factOf(h.answers(1107)[0])).toBe("unavailable");
     expect(h.plane.doors().get("c-unread-root")).toEqual({
       kind: "root",
       rootId: "attempt-7",
@@ -556,8 +556,8 @@ describe("a run's helper root at the door (OB-3d)", () => {
     h.call(1005, 1, "projects_list"); // a pane with no run
     h.call(1006, 1, "projects_list"); // a caller outside every pane and root
     await h.settle();
-    expect(h.answers(1005)[0].result.structuredContent).toEqual({ fact: "forbidden" });
-    expect(h.answers(1006)[0].result.structuredContent).toEqual({ fact: "forbidden" });
+    expect(factOf(h.answers(1005)[0])).toBe("forbidden");
+    expect(factOf(h.answers(1006)[0])).toBe("forbidden");
   });
 
   it("names a spark's birth nothing while it enters: no helper agent is offered as a spark", async () => {
@@ -696,7 +696,7 @@ describe("the you room (CP-3; MT-D11, CP3-D2 A, CP3-D5 A)", () => {
     // a choice that is VibeField's own is the schema's refusal, before any line
     h.call(1001, 21, "ask_user", { question: "?", choices: ["Not now"] });
     await h.settle();
-    expect(h.answers(1001)[1].result.structuredContent).toEqual({ fact: "bad-input" });
+    expect(factOf(h.answers(1001)[1])).toBe("bad-input");
     expect(h.audited).toHaveLength(1);
   });
 
@@ -708,7 +708,7 @@ describe("the you room (CP-3; MT-D11, CP3-D2 A, CP3-D5 A)", () => {
     h.call(1001, 24, "notify", { text: "done" });
     await h.settle();
     expect(h.answers(1002)[0].result.structuredContent).toEqual({ sent: true });
-    expect(h.answers(1002)[1].result.structuredContent).toEqual({ fact: "forbidden" });
+    expect(factOf(h.answers(1002)[1])).toBe("forbidden");
     // each lane answers in its own order; across lanes either may be first
     expect(h.notices).toHaveLength(2);
     expect(h.notices).toEqual(
@@ -753,7 +753,8 @@ describe("the you room (CP-3; MT-D11, CP3-D2 A, CP3-D5 A)", () => {
     await h.settle();
     const facts = h.answers(1002).map((a) => a.result.structuredContent);
     expect(facts.slice(0, 6)).toEqual(Array.from({ length: 6 }, () => ({ sent: true })));
-    expect(facts[6]).toEqual({ fact: "limit" });
+    expect(facts[6]).toBeUndefined();
+    expect(factOf(h.answers(1002)[6])).toBe("limit");
     expect(h.notices).toHaveLength(6);
   });
 });

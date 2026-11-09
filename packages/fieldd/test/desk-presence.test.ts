@@ -310,21 +310,30 @@ describe("the agent's own undo (OB-D11 A)", () => {
     expect(statesOn(h, manual.object.ref)).toBeUndefined();
   });
 
-  it("keeps UNDO_KEPT changes per board, the oldest falling off, and stops offering what fell", async () => {
+  it("keeps UNDO_KEPT changes per agent per object, the oldest falling off, and stops offering what fell", async () => {
     const h = world();
-    const { verbs } = room(h);
+    let n = 0;
+    const { verbs } = room(h, (intent) => {
+      if (intent.op === "act") {
+        n += 1;
+        return { ok: true, value: {}, inverse: {}, changed: `Change ${n}` };
+      }
+      return ordinaryWindow(intent);
+    });
     const ref = handed(h);
     const other = handed(h, "k2");
     await verbs.object_act(A, {
-      doing: "First",
+      doing: "Other",
       ref: other,
       tool: "write_text",
       input: { text: "a" },
     });
-    for (let i = 0; i < OBJECT_LIMITS.UNDO_KEPT; i += 1)
+    for (let i = 0; i <= OBJECT_LIMITS.UNDO_KEPT; i += 1)
       await verbs.object_act(A, { doing: `${i}`, ref, tool: "write_text", input: { text: "a" } });
-    expect(statesOn(h, other)?.[0]?.lastChange).toBeUndefined();
-    await expect(h.desk.undoAgent(other, "run-a")).resolves.toMatchObject({ undone: false });
+    expect(statesOn(h, other)?.[0]?.lastChange).toEqual({ label: "Change 1" });
+    for (let i = 0; i < OBJECT_LIMITS.UNDO_KEPT; i += 1) await h.desk.undoAgent(ref, "run-a");
+    await expect(h.desk.undoAgent(ref, "run-a")).resolves.toMatchObject({ undone: false });
+    await expect(h.desk.undoAgent(other, "run-a")).resolves.toMatchObject({ undone: true });
   });
 });
 
