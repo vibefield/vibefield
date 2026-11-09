@@ -1089,6 +1089,18 @@ export const METHODS: MethodDef[] = [
     idempotent: true,
     locality: "local",
   }),
+  // FL-2a — open a LIVE app in the browser: a desktop window's ask of its own desktop, by a row of
+  // that desktop's catalog (`ArtifactRevealParams`). The window never holds `shell.open`, and this
+  // door takes no URL, so it opens nothing the catalog does not hold. `local`: the D36 wall refuses a
+  // peer daemon. The phone's preset holds `apps.use`, and the handler refuses it, since the phone
+  // opens a URL itself. Not idempotent: each press opens a tab.
+  defineMethod({
+    surface: "product",
+    method: "artifact.reveal",
+    scope: "apps.use",
+    idempotent: false,
+    locality: "local",
+  }),
 
   // C4 — DeviceService (design-04 D31, P1-lite: roster only; PeerLink/D32 and
   // heartbeats deferred). workspace.read sits in the C3 tailnet preset, so

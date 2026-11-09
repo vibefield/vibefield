@@ -492,6 +492,25 @@ export const ArtifactOpenResult = z
   .passthrough();
 export type ArtifactOpenResult = z.infer<typeof ArtifactOpenResult>;
 
+/** `artifact.reveal` (FL-2a): a desktop window asks its own desktop to open a LIVE app in the browser. The window never
+ * holds `shell.open` (the lead's ruling on L4, C1 and C2), so it names a row of this desktop's catalog by the key
+ * `artifact.subscribe` gave it, and the desktop opens that row's URL. No URL crosses this door, so it opens nothing the
+ * catalog does not hold. `artifact.open` is the made apps' door and takes a made app's id. The key is
+ * `<owner device>:<artifact id>`: an owner and a ULID, no longer. */
+export const ArtifactRevealParams = z
+  .object({
+    artifactKey: z
+      .string()
+      .min(1)
+      .max(MESH_CONTROL_LIMITS.OWNER_CHARS + 1 + 26),
+  })
+  .passthrough();
+export type ArtifactRevealParams = z.infer<typeof ArtifactRevealParams>;
+
+/** What `artifact.reveal` answers once the shell has opened the URL, as `shell.openExternal` does. */
+export const ArtifactRevealResult = z.object({ opened: z.literal(true) }).passthrough();
+export type ArtifactRevealResult = z.infer<typeof ArtifactRevealResult>;
+
 /** `artifact.open`'s refusal words (`MADE_APP_OPEN`, registries.ts), as a reader recognizes them in an UNAVAILABLE's
  * details. `device` names the desktop the refusal is about when the open was forwarded there. */
 export const MADE_APP_OPEN_REFUSAL_STATES = [

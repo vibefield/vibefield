@@ -1808,6 +1808,8 @@ export const SCOPES = [
   // peer DAEMON holds it only because PEER_FIELDD_SCOPES is DERIVED from the preset: it carries a forwarded open
   // (DS-L7), and `artifact.mark` is `local`, so the D36 wall refuses it to a peer. The reads (`index.apps.*`,
   // `index.artifacts`) are the history's content and ride `index.search`, not this.
+  // FL-2a: `artifact.reveal` (a window opening a Live app by its catalog key) rides it too, for the
+  // same reasons: never plugin-eligible, and the phone's preset holds it only to be refused at the door.
   "apps.use",
 ] as const;
 export type Scope = (typeof SCOPES)[number];

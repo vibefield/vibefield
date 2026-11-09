@@ -54,6 +54,8 @@ import {
   ArtifactPublishParams,
   ArtifactPublishV2Params,
   ArtifactRefreshPreviewParams,
+  ArtifactRevealParams,
+  type ArtifactRevealResult,
   ArtifactUnpublishParams,
   ArtifactUpdateParams,
   appVersionOfBuildId,
@@ -8612,20 +8614,21 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // the standard writes `https://host:port/`: only the root's slash differs,
     // never the host or the port, so it is the same URL and nothing is
     // rewritten (C16). The answer keeps the listener's own spelling.
+    const openServed = async (url: string): Promise<void> => {
+      const href = ShellLinkUrl.safeParse(new URL(url).href);
+      if (!href.success)
+        throw new RpcCallError(
+          "INTERNAL",
+          "the served URL has no spelling the browser can be handed",
+          false,
+        );
+      await api.openLink({ url: href.data });
+    };
     const revealMade = async (ctx: CallerContext, appId: string, url: string): Promise<void> => {
       await audit.required(
         ctx,
         { action: "artifact.made.reveal", target: { kind: "made-app", id: appId } },
-        async () => {
-          const href = ShellLinkUrl.safeParse(new URL(url).href);
-          if (!href.success)
-            throw new RpcCallError(
-              "INTERNAL",
-              "the served URL has no spelling the browser can be handed",
-              false,
-            );
-          await api.openLink({ url: href.data });
-        },
+        () => openServed(url),
         () => ({ outcome: "succeeded" }),
       );
     };
@@ -8652,6 +8655,40 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       if (reveal === true && revealsFor(ctx) && answer.url !== undefined)
         await revealMade(ctx, appId, answer.url);
       return answer;
+    });
+    // FL-2a — open a LIVE app (DESIGN.md §8 "Artifacts"). The panel is the window's since FL-2 and
+    // the window never holds `shell.open` (above), so it names a row of this desktop's catalog and
+    // this desktop opens that row's URL through its shell: no caller's URL reaches the browser. A
+    // refusal opens nothing and audits nothing, and the record never holds the URL.
+    api.register("artifact.reveal", async (ctx, params): Promise<ArtifactRevealResult> => {
+      admitApps(ctx, "artifact.reveal", false);
+      const parsed = ArtifactRevealParams.safeParse(params ?? {});
+      if (!parsed.success)
+        throw new RpcCallError("PRECONDITION_FAILED", "expected { artifactKey }", false);
+      if (!revealsFor(ctx))
+        throw new RpcCallError(
+          "PRECONDITION_FAILED",
+          "reveal is a desktop window's ask of its own desktop; the phone opens the URL itself",
+          false,
+          { method: "artifact.reveal" },
+        );
+      const row = artifacts
+        .artifacts()
+        .find((artifact) => artifact.artifactKey === parsed.data.artifactKey);
+      if (row === undefined)
+        throw new RpcCallError("NOT_FOUND", "that app no longer exists", false);
+      const { artifactId, url } = row;
+      if (url === undefined)
+        throw new RpcCallError("PRECONDITION_FAILED", "that app has no URL to open", false);
+      return await audit.required(
+        ctx,
+        { action: "artifact.live.reveal", target: { kind: "artifact", id: artifactId } },
+        async (): Promise<ArtifactRevealResult> => {
+          await openServed(url);
+          return { opened: true };
+        },
+        () => ({ outcome: "succeeded" }),
+      );
     });
     // Until slice 3h the home has no intent document to write a keep or a hide
     // to, so the mark says so in its own word (MADE_APP_OPEN.STATE_INTENT_UNBUILT,
