@@ -26,6 +26,14 @@ function bindPanel(pluginId: string): void {
   disposeEntries.push(() => disposable.dispose());
 }
 
+describe("the retired side-panel slot (FL-2c)", () => {
+  it("is refused as an unknown slot, as any slot the spine does not draw", () => {
+    expect(() =>
+      register("vibefield.panel", "vibefield.panel.artifacts", "hud.side-panel", () => null),
+    ).toThrow(/unknown slot hud\.side-panel/);
+  });
+});
+
 describe("the side-panel slot's one v1 contribution", () => {
   it("refuses a second side-panel contribution until the first unbinds", () => {
     bindPanel("vibefield.first-panel");
