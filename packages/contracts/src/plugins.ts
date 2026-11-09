@@ -922,11 +922,9 @@ export const SurfaceContribution = z
   .object({
     id: z.string().max(PLUGIN_LIMITS.ID_MAX * 2),
     title: z.string().min(1).max(PLUGIN_LIMITS.TITLE_MAX),
-    slot: z.enum(["hud.attention", "hud.panel", "hud.side-panel", "godview.row", "godview.lens"]),
-    /** Only side-panel contributions receive a chrome toggle. The host
-     * resolves this sanitized plugin-relative asset; omission gets the
-     * stage's neutral fallback glyph. */
-    icon: RelativeAssetPath.optional(),
+    // `hud.side-panel` retired with the one plugin that filled it (FL-2, 2026-11-09), and with it
+    // the contribution's `icon`, which only that slot's toggle ever read.
+    slot: z.enum(["hud.attention", "hud.panel", "godview.row", "godview.lens"]),
     order: z.number().optional(),
   })
   .passthrough();

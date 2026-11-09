@@ -195,7 +195,6 @@ interface Activation {
       slot: string;
       order: number;
       title: string;
-      icon?: string;
     }
   >;
   readonly scope: ActivationScope;
@@ -308,7 +307,6 @@ function buildActivation(
       {
         slot: s.slot,
         title: s.title,
-        ...(s.icon !== undefined ? { icon: s.icon } : {}),
         order: s.order ?? 0,
       },
     ]),
@@ -356,7 +354,6 @@ function buildActivation(
       slot: string;
       order: number;
       title: string;
-      icon?: string;
     }
   >();
   let stagedCommands: commandRegistry.CommandBindingCandidate | undefined;
@@ -571,7 +568,6 @@ function buildActivation(
                   slot: decl.slot,
                   order: decl.order,
                   title: decl.title,
-                  ...(decl.icon === undefined ? {} : { icon: decl.icon }),
                 });
                 try {
                   stagedSurfaces?.bind({
@@ -580,7 +576,6 @@ function buildActivation(
                     slot: decl.slot,
                     order: decl.order,
                     title: decl.title,
-                    ...(decl.icon === undefined ? {} : { icon: decl.icon }),
                   });
                 } catch (error) {
                   surfaceBindings.delete(surfaceId);
@@ -712,7 +707,6 @@ function buildActivation(
           component: binding.component,
           order: binding.order,
           title: binding.title,
-          ...(binding.icon === undefined ? {} : { icon: binding.icon }),
         })),
       );
     } catch (error) {

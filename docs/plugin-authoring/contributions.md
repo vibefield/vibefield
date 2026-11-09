@@ -146,15 +146,14 @@ binds a handler with `ctx.commands.register(id, handler)`.
 ## Surfaces
 
 A surface is a React component the spine mounts in a named slot. The SLOT is
-manifest truth — a component cannot choose where it appears — and only a side
-panel is given a `requestClose()`. Bind with `ctx.surfaces.register(id, Component)`.
+manifest truth — a component cannot choose where it appears. Bind with
+`ctx.surfaces.register(id, Component)`.
 
 | field | type | required | rules |
 | --- | --- | --- | --- |
 | `id` | string | yes | at most 128 characters |
 | `title` | string | yes | at least 1 character; at most 80 characters |
-| `slot` | `hud.attention` \| `hud.panel` \| `hud.side-panel` \| `godview.row` \| `godview.lens` | yes | — |
-| `icon` | string | no | asset paths are ./-relative POSIX, no .., no schemes |
+| `slot` | `hud.attention` \| `hud.panel` \| `godview.row` \| `godview.lens` | yes | — |
 | `order` | number | no | — |
 
 ```json
@@ -162,7 +161,7 @@ panel is given a `requestClose()`. Bind with `ctx.surfaces.register(id, Componen
   {
     "id": "com.example.tools.panel",
     "title": "Tools",
-    "slot": "hud.side-panel",
+    "slot": "hud.panel",
     "order": 10
   }
 ]

@@ -104,7 +104,7 @@ ctx.commands?.register("com.example.tools.tidy", (args, invocation) => {
 });
 
 ctx.surfaces?.register("com.example.tools.panel", ToolsPanel);
-// ToolsPanel receives { slot, windowId } — and requestClose() on a side panel
+// ToolsPanel receives { slot, windowId }
 ```
 
 Both refuse an id the manifest does not declare, and both refuse a double-bind.

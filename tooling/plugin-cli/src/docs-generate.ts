@@ -600,8 +600,8 @@ function contributionsDoc(): string {
     ]),
     kindSection("Surfaces", SurfaceContribution, surfaceSlice, [
       "A surface is a React component the spine mounts in a named slot. The SLOT is",
-      "manifest truth — a component cannot choose where it appears — and only a side",
-      "panel is given a `requestClose()`. Bind with `ctx.surfaces.register(id, Component)`.",
+      "manifest truth — a component cannot choose where it appears. Bind with",
+      "`ctx.surfaces.register(id, Component)`.",
     ]),
     kindSection("Settings", SettingsContribution, settingsSlice, [
       "Declared keys only. Each property carries a title, a scope (`user` syncs,",
@@ -1421,7 +1421,7 @@ function contextDoc(): string {
           "});",
           "",
           'ctx.surfaces?.register("com.example.tools.panel", ToolsPanel);',
-          "// ToolsPanel receives { slot, windowId } — and requestClose() on a side panel",
+          "// ToolsPanel receives { slot, windowId }",
         ].join("\n"),
       ),
       "",

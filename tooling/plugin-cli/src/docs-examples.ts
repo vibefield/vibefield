@@ -118,7 +118,7 @@ export function commandsAndSurfacesExample(): ExampleManifest {
           {
             id: "com.example.tools.panel",
             title: "Tools",
-            slot: "hud.side-panel",
+            slot: "hud.panel",
             order: 10,
           },
         ],

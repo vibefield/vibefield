@@ -198,7 +198,7 @@ describe("coverage of what an author has to know", () => {
       "dev-link",
       "manifestHash",
       "onStartup",
-      "hud.side-panel",
+      "hud.panel",
       "x.<pluginId>",
       // DK-0f — the object door: the key, the placement key, the export name, the
       // host's refusal on this build, and what a kind must answer

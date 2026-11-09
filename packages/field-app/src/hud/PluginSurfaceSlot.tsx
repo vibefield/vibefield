@@ -49,10 +49,8 @@ export class SurfaceErrorBoundary extends Component<
   }
 }
 
-/** The enabled subset is shared by ordinary fixed hosts and the side-panel
- * controller, whose toggle must disappear on disable/unbind in the same
- * render as its content. */
-export function useVisiblePluginSurfaces(slot: LiveSurfaceSlot): readonly SurfaceEntry[] {
+/** The surfaces of `slot` whose plugins are on. */
+function useVisiblePluginSurfaces(slot: LiveSurfaceSlot): readonly SurfaceEntry[] {
   const surfaces = useSyncExternalStore(subscribeSurfaces, getSurfacesSnapshot);
   const snapshot = usePluginRegistrySnapshot();
   const disabled =
@@ -65,37 +63,21 @@ export function useVisiblePluginSurfaces(slot: LiveSurfaceSlot): readonly Surfac
 export function PluginSurfaceHost({
   slot,
   windowId,
-  requestClose,
-  surfaceId,
 }: {
   slot: LiveSurfaceSlot;
   windowId: string;
-  requestClose?: () => void;
-  surfaceId?: string;
 }): ReactElement | null {
-  const visible = useVisiblePluginSurfaces(slot);
-  const shown =
-    surfaceId === undefined
-      ? visible
-      : visible.filter((surface) => surface.surfaceId === surfaceId);
+  const shown = useVisiblePluginSurfaces(slot);
   if (shown.length === 0) return null;
 
   return (
     <div className="vf-plugin-surface-stack">
       {shown.map((s) => {
         const Surface = s.component;
-        const props =
-          slot === "hud.side-panel"
-            ? ({
-                slot,
-                windowId,
-                requestClose: requestClose ?? (() => undefined),
-              } as const)
-            : ({ slot, windowId } as const);
         return (
           <SurfaceErrorBoundary key={s.seq} surfaceId={s.surfaceId}>
             <PluginStyleBoundary pluginId={s.pluginId}>
-              <Surface {...props} />
+              <Surface slot={slot} windowId={windowId} />
             </PluginStyleBoundary>
           </SurfaceErrorBoundary>
         );

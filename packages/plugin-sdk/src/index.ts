@@ -404,17 +404,11 @@ export interface RendererCommandAPI {
 }
 
 /** §8.4/§13.2 — the props the spine supplies to a bound surface component.
- * The slot is manifest truth. Only a side panel may ask its host stage to
- * close; open state and the top-right toggle remain spine truth. */
+ * The slot is manifest truth. */
 export type PluginSurfaceProps =
   | {
       slot: "hud.attention" | "hud.panel";
       windowId: string;
-    }
-  | {
-      slot: "hud.side-panel";
-      windowId: string;
-      requestClose(): void;
     }
   | {
       slot: "godview.row" | "godview.lens";

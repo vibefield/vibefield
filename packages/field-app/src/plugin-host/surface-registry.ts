@@ -11,15 +11,15 @@ import type { ComponentType } from "react";
 // surface must appear and disappear honestly, never linger (P5: no optimistic
 // state). The manifest-DECLARED check is the harness's (it holds the manifest,
 // like commands.register); THIS module owns SLOT POLICY:
-//  - hud.attention, hud.panel, and hud.side-panel are LIVE slots;
+//  - hud.attention and hud.panel are LIVE slots;
 //  - godview.row and godview.lens are REFUSED honestly at bind time — the
 //    declaration is forward-compatible (a manifest may carry it), but binding
 //    is not yet (Godview lands later; §8.4 "no silent fake").
 
 /** The live host-facing slots this slice renders. Godview slots are declarable
  * but not bindable (refused below). */
-export type LiveSurfaceSlot = "hud.attention" | "hud.panel" | "hud.side-panel";
-const LIVE_SLOTS = new Set<string>(["hud.attention", "hud.panel", "hud.side-panel"]);
+export type LiveSurfaceSlot = "hud.attention" | "hud.panel";
+const LIVE_SLOTS = new Set<string>(["hud.attention", "hud.panel"]);
 const FORWARD_SLOTS = new Set<string>(["godview.row", "godview.lens"]);
 
 export interface SurfaceEntry {
@@ -27,7 +27,6 @@ export interface SurfaceEntry {
   pluginId: string;
   slot: LiveSurfaceSlot;
   title: string;
-  icon?: string;
   component: ComponentType<PluginSurfaceProps>;
   order: number;
   /** registration sequence — the stable tiebreaker when orders collide */
@@ -40,7 +39,6 @@ export interface StagedSurfaceBinding {
   component: ComponentType<PluginSurfaceProps>;
   order?: number;
   title?: string;
-  icon?: string;
 }
 
 export interface SurfaceBindingCandidate extends Disposable {
@@ -77,11 +75,8 @@ export function register(
   component: ComponentType<PluginSurfaceProps>,
   order = 0,
   title = surfaceId,
-  icon?: string,
 ): Disposable {
-  const candidate = stageBindings(pluginId, [
-    { surfaceId, slot, component, order, title, ...(icon === undefined ? {} : { icon }) },
-  ]);
+  const candidate = stageBindings(pluginId, [{ surfaceId, slot, component, order, title }]);
   candidate.commit();
   return candidate;
 }
@@ -112,19 +107,11 @@ export function stageBindings(
       throw new Error(`surface ${surfaceId} is bound twice in this candidate (§13.2)`);
     if (entries.has(surfaceId) || reservations.has(surfaceId))
       throw new Error(`surface ${surfaceId} already bound in this entry (§13.2)`);
-    if (
-      slot === "hud.side-panel" &&
-      ([...entries.values()].some((entry) => entry.slot === slot) ||
-        [...reservations.values()].some((reservation) => reservation.slot === slot))
-    ) {
-      throw new Error("hud.side-panel already has its one v1 contribution (§8.4/A7)");
-    }
     const entry: SurfaceEntry = {
       surfaceId,
       pluginId,
       slot: slot as LiveSurfaceSlot,
       title: row.title ?? surfaceId,
-      ...(row.icon === undefined ? {} : { icon: row.icon }),
       component: row.component,
       order: row.order ?? 0,
       seq: seqCounter++,
