@@ -48,6 +48,10 @@ export interface ProfilesColumnViewProps {
   canOpen: boolean;
   /** the usage door can read a sign-in again: a popover's Retry */
   canRetry: boolean;
+  /** UM-5a — the chosen plan and its twins (union keys), or null: the popover's rows draw pressed, the others dim */
+  chosenPlanFamily: readonly string[] | null;
+  /** UM-5a — choose a plan by its union key (a row or an arc), or null to clear */
+  onChoosePlan: (key: string | null) => void;
   /** the limit moment (UM-D23), beside the add while it is due; it says nothing when it is not */
   moment?: ReactNode;
   /** the stage's cards layer (§8 "Where the cards stand"), over the terminals; absent, the cards stand in place */
@@ -122,6 +126,8 @@ export function ProfilesColumnView({
   canAdd,
   canOpen,
   canRetry,
+  chosenPlanFamily,
+  onChoosePlan,
   moment,
   cardLayer,
   columnRef,
@@ -181,6 +187,8 @@ export function ProfilesColumnView({
                   read={read}
                   canOpen={canOpen}
                   canRetry={canRetry}
+                  chosenPlanFamily={chosenPlanFamily}
+                  onChoosePlan={onChoosePlan}
                   onClose={onClose}
                   onFocusPlan={onFocusPlan}
                   onOpenProfile={onOpenProfile}

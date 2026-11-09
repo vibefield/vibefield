@@ -94,6 +94,10 @@ export interface ProfilesColumnProps {
   /** the stage's profile filter (the lens) */
   chosen: string | null;
   onChoose: (setId: string | null) => void;
+  /** UM-5a — the chosen plan and its twins (union keys), or null (the stage's plan filter) */
+  chosenPlanFamily: readonly string[] | null;
+  /** UM-5a — choose a plan by its union key (a popover's row or arc), or null to clear */
+  onChoosePlan: (key: string | null) => void;
   /** Settings → Agent Profiles on New profile… (the add); absent while Settings is open */
   openNewProfile?: (() => void) | undefined;
   /** Settings → Agent Profiles on one profile's page (Sign in, Agent Profiles…) */
@@ -115,6 +119,8 @@ function ProfilesColumnController({
   port,
   chosen,
   onChoose,
+  chosenPlanFamily,
+  onChoosePlan,
   openNewProfile,
   openProfile,
   moment,
@@ -250,6 +256,8 @@ function ProfilesColumnController({
       canAdd={openNewProfile !== undefined}
       canOpen={openProfile !== undefined}
       canRetry={port?.refresh !== undefined}
+      chosenPlanFamily={chosenPlanFamily}
+      onChoosePlan={onChoosePlan}
       moment={
         moment === undefined ? undefined : (
           <ColumnAddPresses.Provider value={addPresses}>{moment}</ColumnAddPresses.Provider>

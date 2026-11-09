@@ -139,6 +139,8 @@ function Plate({ plate, theme }: { plate: ColumnPlate; theme: GodviewTheme }): R
         canAdd
         canOpen
         canRetry
+        chosenPlanFamily={null}
+        onChoosePlan={NOTHING}
         moment={
           // the shipping card over the shipping rule's fixture
           plate.limit === true && FIXTURE_LIMIT_MOMENT !== null ? (

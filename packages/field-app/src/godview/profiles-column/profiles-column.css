@@ -456,6 +456,7 @@
 
 /* one row per plan: its mark (16), its title, the right words at its end, and Settings' C1 line at 196 × 12 */
 .vf-profiles-pop-row {
+  position: relative;
   display: grid;
   grid-template-columns: 22px minmax(0, 1fr) auto;
   gap: 3px 8px;
@@ -466,6 +467,36 @@
 
 .vf-profiles-pop-row[data-focus] {
   background: color-mix(in srgb, var(--vf-foreground) 5%, transparent);
+}
+
+/* UM-5a: a chosen plan's row: the ready fill and a 1.5 inset ring in the ink, a checked chip's; the others at 50% */
+.vf-profiles-pop-row[data-pressed] {
+  background: color-mix(in srgb, var(--vf-foreground) 8%, transparent);
+  box-shadow: inset 0 0 0 1.5px var(--vf-foreground);
+}
+
+.vf-profiles-pop-row[data-dim] {
+  opacity: 0.5;
+}
+
+/* the row's control, stretched over it: no chrome but the focus ring, and the row's content takes no pointer */
+.vf-profiles-pop-row-choose {
+  position: absolute;
+  inset: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.vf-profiles-pop-row-choose:focus-visible {
+  outline: 2px solid var(--vf-select);
+  outline-offset: 2px;
+}
+
+.vf-profiles-pop-row:has(> .vf-profiles-pop-row-choose) > :not(.vf-profiles-pop-row-choose) {
+  pointer-events: none;
 }
 
 .vf-profiles-pop-row-mark {
@@ -661,6 +692,11 @@
 
 .vf-bands-hit {
   pointer-events: stroke;
+}
+
+/* UM-5a: an arc that chooses its plan (a plan that needs you does not) */
+.vf-bands-hit[data-choosable] {
+  cursor: pointer;
 }
 
 /* a first read breathes on §6's breath: its ink from 35% to all of it — the circle's one loop */

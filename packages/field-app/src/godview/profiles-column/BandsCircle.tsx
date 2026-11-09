@@ -63,6 +63,11 @@ export interface BandsCircleProps {
   labelled?: boolean;
   /** the open size's per-plan pointer (`hit`): the plan the pointer is on, then null as it leaves */
   onFocusPlan?: ((key: string | null) => void) | undefined;
+  /** UM-5a — which plans' arcs choose (`hit` only; a plan that needs you does not, §8 "Godview's profiles column") */
+  choosable?: ReadonlySet<string> | undefined;
+  /** UM-5a — a click on a choosable arc: the plan's key. Pointer only: the circle is one image to VoiceOver, and the
+   * row's button is the keyboard's and VoiceOver's door to the same act. */
+  onChoosePlan?: ((key: string) => void) | undefined;
 }
 
 const fixed = (value: number): number => Math.round(value * 100) / 100;
@@ -131,6 +136,8 @@ export function BandsCircle({
   profile,
   labelled = false,
   onFocusPlan,
+  choosable,
+  onChoosePlan,
 }: BandsCircleProps): ReactElement {
   const { size, centre } = geometry;
   const c = size / 2;
@@ -269,6 +276,10 @@ export function BandsCircle({
               d={arcPath(c, { r: plan.hit.r, from: plan.hit.from, to: plan.hit.to })}
               strokeWidth={fixed(plan.hit.width)}
               style={{ fill: "none", stroke: "transparent" }}
+              {...(choosable?.has(plan.key) === true ? { "data-choosable": "" } : {})}
+              onClick={() => {
+                if (choosable?.has(plan.key) === true) onChoosePlan?.(plan.key);
+              }}
               onPointerOver={() => onFocusPlan?.(plan.key)}
               onPointerOut={() => onFocusPlan?.(null)}
             />

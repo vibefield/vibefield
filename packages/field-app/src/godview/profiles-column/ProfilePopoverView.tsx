@@ -13,7 +13,7 @@ import type { ColumnCircle } from "./ProfilesColumnView";
 // plan in the circle's order (UM-D15), each its agent's mark, the plan as Agent Profiles names it, the right words
 // (the forecast while it runs ahead, UM-D4, else the reset) and Settings' own C1 line for its tightest window
 // (UM-D13) — the shipping `UsageTimeline`, never a copy (UM-D3: one meter everywhere). Controller-free: what it opens,
-// reads again or closes is handed back. Wave 1 (UM-D14's interim, ruling 23): a plan's row takes no click.
+// reads again or closes is handed back. A plan's row and its arc filter the field (UM-D14; UM-5a).
 
 /** The popover's open size (§8: "the circle at 212 in a 212 column"). */
 export const POPOVER_CIRCLE = 212;
@@ -52,6 +52,10 @@ export interface ProfilePopoverViewProps {
   canOpen: boolean;
   /** the usage door can read a sign-in again: Retry */
   canRetry: boolean;
+  /** UM-5a — the chosen plan and its twins (union keys, `‹set›/‹key›`), or null: its rows draw pressed, the others dim */
+  chosenPlanFamily: readonly string[] | null;
+  /** UM-5a — choose a plan by its union key, or null to clear */
+  onChoosePlan: (key: string | null) => void;
   onClose: () => void;
   onFocusPlan: (key: string | null) => void;
   /** Settings → Agent Profiles on this profile's page (Sign in, Agent Profiles…) */
@@ -126,25 +130,46 @@ function PlanRow({
   focused,
   onFocusPlan,
   acts,
+  pressed,
+  dim,
+  onToggle,
 }: {
   entry: Exclude<PlanMeter, { kind: "no-meter" }>;
   setId: string;
   focused: boolean;
   onFocusPlan: (key: string | null) => void;
   acts: RowActs;
+  /** this row's plan is the chosen one, or its twin */
+  pressed: boolean;
+  /** another plan is chosen */
+  dim: boolean;
+  onToggle: () => void;
 }): ReactElement {
   const right = entry.right;
+  const choosable = entry.kind !== "needs-you";
   return (
-    // pointing at a row only lights its arc, as pointing at the arc does; nothing is chosen (wave 1)
+    // pointing at a row lights its arc, as pointing at the arc does; a click chooses it (UM-D14), through a button
+    // stretched over the row so the row keeps its C1 line's list
     <div
       className="vf-profiles-pop-row"
       data-plan={entry.key}
       data-kind={entry.kind}
       {...(focused ? { "data-focus": "" } : {})}
       {...(entry.kind === "reading" && entry.stale ? { "data-stale": "" } : {})}
+      {...(pressed ? { "data-pressed": "" } : {})}
+      {...(dim ? { "data-dim": "" } : {})}
       onPointerEnter={() => onFocusPlan(entry.key)}
       onPointerLeave={() => onFocusPlan(null)}
     >
+      {choosable ? (
+        <button
+          type="button"
+          className="vf-profiles-pop-row-choose"
+          aria-pressed={pressed}
+          aria-label={`Show only ${entry.title}'s sessions`}
+          onClick={onToggle}
+        />
+      ) : null}
       <span className="vf-profiles-pop-row-mark" aria-hidden="true">
         <AgentIcon providerId={entry.provider} />
       </span>
@@ -175,11 +200,18 @@ function PlanRow({
   );
 }
 
-/** The lens's words at the popover's foot (§9 "The popover"), with several profiles; wave 1 says none with one. */
+/** The lens's words at the popover's foot (§9 "The popover"), with several profiles. */
 function lensWords(label: string, chosen: boolean): string {
   return chosen
     ? `Showing only ${label}'s sessions · click it again for all`
     : `Click it to show only ${label}'s sessions`;
+}
+
+/** The foot with one profile, which has no lens (§9): the plan filter's words (UM-D14). */
+function planWords(chosen: boolean): string {
+  return chosen
+    ? "Showing one plan's sessions · click it again for all"
+    : "Click a plan to show only its sessions";
 }
 
 export function ProfilePopoverView({
@@ -191,12 +223,18 @@ export function ProfilePopoverView({
   read,
   canOpen,
   canRetry,
+  chosenPlanFamily,
+  onChoosePlan,
   onClose,
   onFocusPlan,
   onOpenProfile,
   onRetry,
 }: ProfilePopoverViewProps): ReactElement {
   const { set, meters } = circle;
+  // a row hands back its union key (`meters.ts`'s `${set.id}/${entry.key}`); focus and the arcs stay on the bare key
+  const unionKey = (key: string): string => `${set.id}/${key}`;
+  const isPressed = (key: string): boolean => chosenPlanFamily?.includes(unionKey(key)) === true;
+  const toggle = (key: string): void => onChoosePlan(isPressed(key) ? null : unionKey(key));
   const acts: RowActs = { canOpen, canRetry, onOpenProfile, onRetry };
   const geometry = bandsGeometry(POPOVER_CIRCLE, meters.entries, {
     hit: true,
@@ -212,6 +250,7 @@ export function ProfilePopoverView({
   // unavailable"), never a line per agent; an agent that meters nothing says so on a line of its own
   const unread = none.filter((entry) => entry.why === "unavailable");
   const quiet = none.filter((entry) => entry.why !== "unavailable");
+  const choosable = new Set(rows.filter((row) => row.kind !== "needs-you").map((row) => row.key));
   return (
     <div id={id} className="vf-profiles-pop" role="dialog" aria-label={set.label}>
       <div className="vf-profiles-pop-head">
@@ -230,7 +269,13 @@ export function ProfilePopoverView({
       </div>
       <div className="vf-profiles-pop-body">
         <div className="vf-profiles-pop-circle">
-          <BandsCircle geometry={geometry} labelled onFocusPlan={onFocusPlan} />
+          <BandsCircle
+            geometry={geometry}
+            labelled
+            onFocusPlan={onFocusPlan}
+            choosable={choosable}
+            onChoosePlan={toggle}
+          />
           <BandsKey />
         </div>
         <div className="vf-profiles-pop-rows">
@@ -242,6 +287,9 @@ export function ProfilePopoverView({
               focused={focus === entry.key}
               onFocusPlan={onFocusPlan}
               acts={acts}
+              pressed={isPressed(entry.key)}
+              dim={chosenPlanFamily !== null && !isPressed(entry.key) && choosable.has(entry.key)}
+              onToggle={() => toggle(entry.key)}
             />
           ))}
           {unread.length > 0 ? <p className="vf-profiles-pop-none">{bandsLabel(unread)}</p> : null}
@@ -256,7 +304,9 @@ export function ProfilePopoverView({
         </div>
       </div>
       <div className="vf-profiles-pop-foot">
-        {lens ? <span className="vf-profiles-pop-lens">{lensWords(set.label, chosen)}</span> : null}
+        <span className="vf-profiles-pop-lens">
+          {lens ? lensWords(set.label, chosen) : planWords(chosenPlanFamily !== null)}
+        </span>
         <button
           type="button"
           className="vf-profiles-pop-open"

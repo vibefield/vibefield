@@ -1058,6 +1058,8 @@ export function GodviewMonitor({
               port={usagePort}
               chosen={chosenId ?? null}
               onChoose={chooseProfile}
+              chosenPlanFamily={plan?.family ?? null}
+              onChoosePlan={choosePlan}
               openNewProfile={openNewProfile}
               openProfile={openProfile}
               moment={columnMoment}
