@@ -7840,6 +7840,77 @@ export async function runSmokeGodview(opts: {
         `the profiles column is not on the stage (marker: ${profilesFacts.profileCircles} circles, DOM: ${profilesColumnMounted})`,
       );
     }
+    // 1b-bis. THE CARDS LAYER (UM-R6; DESIGN.md §8 "Where the cards stand" and
+    //     "The reach"). What a CSS row cannot prove: a card in the layer stands
+    //     over the terminals in a real window, and its bridge takes the pointer.
+    //     The card is opened by a page-dispatched pointerover (no OS input); the
+    //     rects are read live, so a window too short to overlap the two says so
+    //     by name rather than passing vacuously.
+    const cardRung = (await win.webContents.executeJavaScript(`(async () => {
+      const item = document.querySelector(".vf-profiles-item[data-profile]");
+      if (!item) return { error: "no profile item on the column" };
+      item.dispatchEvent(new PointerEvent("pointerover", { bubbles: true }));
+      const until = performance.now() + 3000;
+      let stand = null;
+      while (performance.now() < until) {
+        stand = document.querySelector(".vf-monitor-cards .vf-profiles-stand");
+        if (stand) break;
+        await new Promise((resolve) => requestAnimationFrame(resolve));
+      }
+      if (!stand) return { error: "no stand in .vf-monitor-cards after the pointerover" };
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+      const deck = document.querySelector(".vf-godview-terminal-deck");
+      if (!deck) return { error: "no terminal deck to stand over" };
+      const s = stand.getBoundingClientRect();
+      const d = deck.getBoundingClientRect();
+      const box = (r) => ({ left: r.left, top: r.top, right: r.right, bottom: r.bottom });
+      const overlap = {
+        left: Math.max(s.left, d.left),
+        top: Math.max(s.top, d.top),
+        right: Math.min(s.right, d.right),
+        bottom: Math.min(s.bottom, d.bottom),
+      };
+      const rects = { stand: box(s), deck: box(d) };
+      if (overlap.right <= overlap.left || overlap.bottom <= overlap.top) {
+        return { ...rects, error: "the card and the deck do not overlap in this window" };
+      }
+      const centre = {
+        x: (overlap.left + overlap.right) / 2,
+        y: (overlap.top + overlap.bottom) / 2,
+      };
+      const inStand = (x, y) => document.elementFromPoint(x, y)?.closest(".vf-profiles-stand") === stand;
+      const bridgeInStand = inStand(s.left - 11, s.top + s.height / 2);
+      const centreInStand = inStand(centre.x, centre.y);
+      document.querySelector(".vf-profiles-stand .vf-profiles-pop-close")?.click();
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+      const closed = document.querySelector(".vf-monitor-cards .vf-profiles-stand") === null;
+      const deckAfter = document.elementFromPoint(centre.x, centre.y)?.closest(".vf-godview-terminal-deck") === deck;
+      return { ...rects, centre, bridgeInStand, centreInStand, closed, deckAfter };
+    })()`)) as {
+      error?: string;
+      stand?: { left: number; top: number; right: number; bottom: number };
+      deck?: { left: number; top: number; right: number; bottom: number };
+      centre?: { x: number; y: number };
+      bridgeInStand?: boolean;
+      centreInStand?: boolean;
+      closed?: boolean;
+      deckAfter?: boolean;
+    };
+    verdict["cardsLayer"] = cardRung;
+    if (cardRung.error !== undefined) {
+      throw new Error(`the cards layer: ${cardRung.error} (${JSON.stringify(cardRung)})`);
+    }
+    if (
+      !cardRung.bridgeInStand ||
+      !cardRung.centreInStand ||
+      !cardRung.closed ||
+      !cardRung.deckAfter
+    ) {
+      throw new Error(
+        `the cards layer: a card does not stand over the terminals (${JSON.stringify(cardRung)})`,
+      );
+    }
     // 1c. THE PANE FRAME (GT-6, record §07). The frame is the views package's
     //     (PU-14) and is tested upstream and in the field-app fixture; what
     //     only a real deck can answer is whether it reaches the pane at all —
