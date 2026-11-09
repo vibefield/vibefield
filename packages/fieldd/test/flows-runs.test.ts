@@ -9897,6 +9897,23 @@ describe("CP-4a2b — the host's life: parked and woken, D2's lookup at a wake, 
       });
     });
 
+    it("S14-34g (slice 14's fold, P10; Q34, o:302–303; m40): a step's successor told long after its run ended is the person's, and nothing ends it", async () => {
+      // Kills: `#resumed` ending a successor of a run long ended, its condition on `#ends` and a set ending dropped (m40)
+      const h = await harness();
+      h.approved("review", ANSWERED);
+      const run = startedRun(await h.start({ flow: "review" })).run;
+      await waitFor(() => expect(h.enqueued).toHaveLength(1));
+      answerStep(h, run, 1, "all clean");
+      await within(PARK_MS, () => endedOf(h, run));
+      const before = h.ends.length;
+      h.resumed({ run, call: 1, runtimeRunId: "rt-person" });
+      await new Promise((resolve) => setImmediate(resolve));
+      expect({ state: stateOf(h, run), ends: h.ends.slice(before) }).toEqual({
+        state: "done",
+        ends: [],
+      });
+    });
+
     it("S14-35 (slice 14, Q35, §G 11): a Stop between restore() and settled() is refused retryably as fieldd's own UNAVAILABLE, writing no `end` and ending no agent", async () => {
       // red-a: the Stop of a run no LiveRun drives is #finishStop's: it ends the run at once
       // Kills: Q35's `#booting` refusal dropped
