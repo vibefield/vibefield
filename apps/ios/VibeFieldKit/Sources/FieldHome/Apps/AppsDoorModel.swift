@@ -78,8 +78,12 @@ final class AppsDoorModel {
     if cues != before { save() }
   }
 
-  /// An app opened on this phone. RED: a stub.
-  func opened(_ foldKey: String) {}
+  /// An app opened on this phone: the account's ledger, on the phone.
+  func opened(_ foldKey: String) {
+    let before = cues
+    cues.open(foldKey)
+    if cues != before { save() }
+  }
 
   func expire() {
     drops.expire(at: clock())
