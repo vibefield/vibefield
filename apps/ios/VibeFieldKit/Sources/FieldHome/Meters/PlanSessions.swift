@@ -94,8 +94,8 @@ enum PlanSessions {
       let bare = String(key.dropFirst(set.id.count + 1))
       let meters = MeterModel.planMeters(set, rows: [], now: Date(timeIntervalSince1970: 0), options: options)
       guard let entry = meters.entries.first(where: { $0.key == bare }) else { continue }
-      let family = family(sets, key: key)
-      return Choice(key: key, label: entry.title, provider: entry.provider, family: family, runs: runs(sets, key: key))
+      return Choice(
+        key: key, label: entry.title, provider: entry.provider, family: family(sets, key: key), runs: runs(sets, key: key))
     }
     return nil
   }
@@ -103,6 +103,11 @@ enum PlanSessions {
   /// Whether a plan or its twin is in a profile: what a lens keeps, and what choosing a plan under a lens keeps.
   static func isIn(_ sets: [AgentProfileSet], key: String, setId: String) -> Bool {
     family(sets, key: key).contains { $0.hasPrefix("\(setId)/") }
+  }
+
+  /// `runs` as what `recedes` reads.
+  static func runSet(_ runs: String) -> Set<String> {
+    Set(runs.split(separator: "\n").map(String.init))
   }
 
   /// What is chosen on the field, as what recedes reads it: the profile and the plan's runs. A bare string is a lens on

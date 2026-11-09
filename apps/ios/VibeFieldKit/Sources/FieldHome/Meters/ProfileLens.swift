@@ -20,6 +20,9 @@ struct ProfileLens: Equatable, Sendable {
   private(set) var profile: String?
   /// The desktop search keeps to (a device id); nil keeps to none.
   private(set) var desk: String?
+  /// UM-5b (UM-D14) — the plan a meter chose (`‹set›/plan:‹id›`, `‹set›/agent:‹profileId›`, `PlanSessions`), or nil. It
+  /// is not the lens: one profile has no lens, and this is held with one profile too.
+  private(set) var plan: String?
 
   /// Where a hold on the face was let go (§8 "The phone's corner": the reach).
   enum Release: Equatable, Sendable {
@@ -42,6 +45,7 @@ struct ProfileLens: Equatable, Sendable {
   mutating func adopt(_ sets: [AgentProfileSet]) {
     profiles = sets
     if chosen == nil || !offersProfiles { profile = nil }
+    if let plan, !PlanSessions.stands(sets, key: plan) { self.plan = nil }
   }
 
   /// Shows one profile (`id`), or every profile (nil): the token's menu, its ×, the page's Profiles rows and the
@@ -53,6 +57,30 @@ struct ProfileLens: Equatable, Sendable {
     }
     guard offersProfiles, profiles.contains(where: { $0.id == id }) else { return }
     profile = id
+    if let plan, !PlanSessions.isIn(profiles, key: plan, setId: id) { self.plan = nil }
+  }
+
+  /// UM-5b — shows one plan's sessions (`key`), or every plan's (nil). A key the home does not hold changes nothing;
+  /// choosing a plan lets go of a lens it is not in (‹for James›), so the field never says a false "No sessions".
+  mutating func showPlan(_ key: String?) {
+    guard let key else {
+      plan = nil
+      return
+    }
+    guard PlanSessions.stands(profiles, key: key) else { return }
+    plan = key
+    if let profile, !PlanSessions.isIn(profiles, key: key, setId: profile) { self.profile = nil }
+  }
+
+  /// The chosen plan as the token, the page and search say it, or nil while none stands.
+  func chosenPlan(options: MetersOptions) -> PlanSessions.Choice? {
+    plan.flatMap { PlanSessions.choice(profiles, key: $0, options: options) }
+  }
+
+  /// What the field recedes by: the chosen profile and the chosen plan's runs (`GodviewRecede`, `GodviewStageInput.lens`).
+  var recedeLens: PlanSessions.Lens {
+    PlanSessions.Lens(
+      profile: chosen?.id, planRuns: plan.map { PlanSessions.runSet(PlanSessions.runs(profiles, key: $0)) })
   }
 
   /// The hold's let-go (§8 "The phone's corner"): on the hub every profile, on a bud that profile, on open ground

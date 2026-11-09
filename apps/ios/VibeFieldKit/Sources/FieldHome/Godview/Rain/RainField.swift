@@ -64,7 +64,7 @@ final class RainField {
 
   /// The agents effect (:79-83): the window's drawn rows, the open card's row lit (J-S4), the rest receded under the
   /// phone's lens (SE-2), then a reconcile.
-  func show(rows: [RemoteFieldRow], activeId: String?, lens: String? = nil) {
+  func show(rows: [RemoteFieldRow], activeId: String?, lens: PlanSessions.Lens = .none) {
     self.rows = rows
     agents = rows.map { RainAgent(row: $0, activeId: activeId, lens: lens) }
     sync()

@@ -134,8 +134,9 @@ struct GodviewStageInput {
   /// so a view lane's input needs no new argument. The swarm takes the same lens through its own arm, which HS
   /// builds (`GodviewRecede.swarm`, a recede weight in FieldSwarm's stage); Spend draws spend, not rows to recede.
   /// *(Corrected 2026-11-06, SE-2n: this said "NOT YET the swarm (the S2 review's finding 2, owed): its bodies carry
-  /// no recede weight in FieldSwarm's renderer, so under a lens the swarm still draws every body".)*
-  var lens: String? = nil
+  /// no recede weight in FieldSwarm's renderer, so under a lens the swarm still draws every body".)* UM-5b: a chosen
+  /// plan recedes by the same value (`ProfileLens.recedeLens`, `PlanSessions.Lens`).
+  var lens: PlanSessions.Lens = .none
   /// A row tapped: the card on its body.
   var onOpen: @MainActor (RemoteFieldRow) -> Void
 

@@ -191,6 +191,8 @@ public struct HomeScreen: View {
     @State private var mockProfiles: [AgentProfileSet] = []
     /// `-vf-mock-lens=<profile>`: the lens the mock's door asks for, held until the home's profiles name it.
     @State private var mockLens: String?
+    /// `-vf-mock-plan=<key>` (UM-5b): the plan the mock's door asks for, held the same way.
+    @State private var mockPlan: String?
   #endif
   /// The home indicator's inset, read with the keyboard ignored: the bar
   /// rests where iOS 26 rests its own (`AppBar.bottomGap`), and rides the
@@ -493,7 +495,7 @@ public struct HomeScreen: View {
         // Q4 (a): the bloom opens the launch sheet on that desktop and profile
         beginCreate(fieldContext(desktop: choice.desktop, profileSet: choice.profile))
       },
-      recede: GodviewRecede.swarm(bubbles, lens: lens.chosen?.id)
+      recede: GodviewRecede.swarm(bubbles, lens: lens.recedeLens)
     ) {
       chrome
     }
@@ -520,7 +522,7 @@ public struct HomeScreen: View {
       skin: GodviewSkin(scheme: colorScheme),
       isStill: godviewStill,
       dissolves: godviewDissolves,
-      lens: lens.chosen?.id,
+      lens: lens.recedeLens,
       onOpen: { row in
         if let bubble = bubbles.first(where: { $0.id == row.visualId }) { openCard(on: bubble) }
       })
@@ -911,6 +913,10 @@ public struct HomeScreen: View {
           if let id = mockLens, sets.contains(where: { $0.id == id }) {
             lens.show(id)
             mockLens = nil
+          }
+          if let key = mockPlan, PlanSessions.stands(sets, key: key) {
+            lens.showPlan(key)
+            mockPlan = nil
           }
         #endif
       }
@@ -1543,7 +1549,16 @@ public struct HomeScreen: View {
         return (corpus: reader.corpus, groups: groups)
       },
       latest: historyDesktops.projects.corpus, agentLabel: PhoneSearchWorld.agentLabel(link?.catalog ?? .empty),
-      feed: searchFeed, asked: searchAsked(live))
+      feed: searchFeed, asked: searchAsked(live), plan: searchPlan)
+  }
+
+  /// UM-5b — the plan the lens holds, as search names it: the meters' title, the catalog's mark and its twins' keys.
+  private var searchPlan: PhoneSearch.Plan? {
+    let reading = meters.reading
+    guard let choice = lens.chosenPlan(options: reading.options) else { return nil }
+    return PhoneSearch.Plan(
+      key: choice.key, label: choice.label, mark: MeterCatalog(rows: reading.catalog).mark(choice.provider),
+      family: choice.family)
   }
 
   /// SE-2i — Live now's world as it stands: the home's live board, or why none answers yet. The mock's rows are its
@@ -2294,8 +2309,11 @@ public struct HomeScreen: View {
           lens.adopt(mockProfiles)
           let doors = PhoneSearchWorld.Doors.read(ProcessInfo.processInfo.arguments)
           lens.show(doors.lens)
+          // UM-5b — `-vf-mock-plan=<key>`: a plan chosen for the stills
+          lens.showPlan(doors.plan)
           // held too: the profiles' onChange shows it again once they stand, whichever call lands last
           mockLens = doors.lens
+          mockPlan = doors.plan
           if let words = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("-vf-mock-search=") }) {
             searchQuery = String(words.dropFirst("-vf-mock-search=".count))
           }

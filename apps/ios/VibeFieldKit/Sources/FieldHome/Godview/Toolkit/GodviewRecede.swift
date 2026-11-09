@@ -12,11 +12,10 @@ enum GodviewRecede {
   static let receded = 0.22
 
   /// SE-2 (SE-P6; DESIGN.md §8 "The phone's profile token") — a row receded by the phone's lens, the desktop's profile
-  /// filter's rule (`useMonitorAgents.ts` :550-555, `!(row.device.self && row.profileSet === chosenProfile)`): under a
-  /// lens, everything but the home's own rows under the chosen profile; with none, nothing.
-  static func byLens(isSelf: Bool, profileSet: String?, lens: String?) -> Bool {
-    guard let lens else { return false }
-    return !(isSelf && profileSet == lens)
+  /// filter's rule (`useMonitorAgents.ts`, `runRecedes`): under a lens, everything but the home's own rows under the
+  /// chosen profile, and under a plan (UM-5b) everything but the home's runs on it; with none, nothing.
+  static func byLens(isSelf: Bool, profileSet: String?, provider: String? = nil, lens: PlanSessions.Lens) -> Bool {
+    PlanSessions.recedes(lens, isSelf: isSelf, profileSet: profileSet, provider: provider)
   }
   /// `RECEDED_EMPTY_OPACITY`: every row receded.
   static let recededEmpty = 0.07
@@ -53,8 +52,14 @@ enum GodviewRecede {
   /// `recededEmpty` while every body does; with none, nothing recedes, and a body receded before comes back. A body
   /// carries the home's profile only on the home's own rows (`FieldBubble.profileSet`), so its profile decides alone.
   /// Each frame's step is `approach`, the toolkit's pace.
-  static func swarm(_ bubbles: [FieldBubble], lens: String?) -> SwarmRecede {
-    let flags = bubbles.map { byLens(isSelf: $0.profileSet != nil, profileSet: $0.profileSet, lens: lens) }
+  static func swarm(_ bubbles: [FieldBubble], lens: PlanSessions.Lens) -> SwarmRecede {
+    let flags = bubbles.map { bubble in
+      // a body carries the home's profile on the home's rows alone, and an agent facet only on an agent: a peer's
+      // body and a terminal recede under a plan (`FieldBubble.agent`, UM-5b)
+      byLens(
+        isSelf: bubble.profileSet != nil, profileSet: bubble.profileSet, provider: bubble.agent?.provider.rawValue,
+        lens: lens)
+    }
     let all = every(flags)
     var targets: [String: Double] = [:]
     for (bubble, recedes) in zip(bubbles, flags) where recedes {

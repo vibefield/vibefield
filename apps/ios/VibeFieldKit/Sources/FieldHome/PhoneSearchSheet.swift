@@ -361,6 +361,10 @@ struct SearchLeadGlyph: View {
         .accessibilityHidden(true)
     case .desk(let platform):
       DeviceMark(platform: platform, size: size)
+    case .agent(let mark):
+      AgentGlyph(mark: mark, letterSize: size * 0.72)
+        .frame(width: size, height: size)
+        .accessibilityHidden(true)
     case .said:
       Image(systemName: "bubble.left")
         .font(.system(size: size, weight: .regular))

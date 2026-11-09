@@ -59,7 +59,7 @@ extension RainAgent {
   /// phone's (SE-2, `GodviewStageInput.lens`): under it the column recedes unless it is the home's under the chosen
   /// profile; with none, nothing recedes.
   init(
-    row: RemoteFieldRow, activeId: String? = nil, lens: String? = nil,
+    row: RemoteFieldRow, activeId: String? = nil, lens: PlanSessions.Lens = .none,
     lightsOpenCard: Bool = RainAgent.lightsOpenCard
   ) {
     let monitor = row.row.monitor
@@ -74,6 +74,7 @@ extension RainAgent {
     usedPercent = monitor.kind == .agent ? monitor.context?.usedPercent : nil
     detail = MonitorWords.detailLine(monitor, isSelf: row.isSelf)
     lit = lightsOpenCard && activeId == monitor.id
-    receded = GodviewRecede.byLens(isSelf: row.isSelf, profileSet: monitor.profileSet, lens: lens)
+    receded = GodviewRecede.byLens(
+      isSelf: row.isSelf, profileSet: monitor.profileSet, provider: monitor.provider?.id, lens: lens)
   }
 }

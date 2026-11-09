@@ -68,7 +68,7 @@ final class RainMetalView: MTKView {
 
   /// The rows, the lit one, the lens (SE-2) and whether the loop runs: the loop runs only while the field is on screen
   /// and neither Reduce Motion nor a still holds it; stopped, a change paints one still; off screen, nothing draws.
-  func apply(rows: [RemoteFieldRow], activeId: String?, lens: String? = nil, isActive: Bool, moving: Bool) {
+  func apply(rows: [RemoteFieldRow], activeId: String?, lens: PlanSessions.Lens = .none, isActive: Bool, moving: Bool) {
     field.show(rows: rows, activeId: activeId, lens: lens)
     refreshAccessibility()
     let running = isActive && moving
@@ -247,8 +247,8 @@ struct RainFrameMeter {
 struct RainSurface: UIViewRepresentable {
   let rows: [RemoteFieldRow]
   let activeId: String?
-  /// The phone's lens (SE-2): the chosen profile's id, or nil.
-  let lens: String?
+  /// The phone's lens (SE-2) and plan (UM-5b): what the rows recede by.
+  let lens: PlanSessions.Lens
   let isActive: Bool
   let moving: Bool
   let onOpen: @MainActor (RemoteFieldRow) -> Void

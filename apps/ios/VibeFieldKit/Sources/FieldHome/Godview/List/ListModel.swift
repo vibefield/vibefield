@@ -125,13 +125,14 @@ struct ListModel: Equatable {
   /// The window's drawn rows, joined as the phone's host joins them; under the phone's lens (SE-2) a row recedes
   /// unless it is the home's under the chosen profile (`GodviewRecede.byLens`).
   static func inputs(
-    rows: [RemoteFieldRow], activeId: String?, fieldIsLive: Bool, lens: String? = nil
+    rows: [RemoteFieldRow], activeId: String?, fieldIsLive: Bool, lens: PlanSessions.Lens = .none
   ) -> [ListRowInput] {
     rows.map { row in
       ListRowInput(
         monitor: row.row.monitor, isSelf: row.isSelf, stale: row.stale || !fieldIsLive,
         active: lightsOpenCard && activeId != nil && row.id == activeId,
-        receded: GodviewRecede.byLens(isSelf: row.isSelf, profileSet: row.row.monitor.profileSet, lens: lens))
+        receded: GodviewRecede.byLens(
+          isSelf: row.isSelf, profileSet: row.row.monitor.profileSet, provider: row.row.monitor.provider?.id, lens: lens))
     }
   }
 

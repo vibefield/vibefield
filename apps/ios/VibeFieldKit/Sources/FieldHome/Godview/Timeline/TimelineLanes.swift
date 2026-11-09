@@ -49,11 +49,12 @@ struct TimelineRow: Equatable, Sendable {
 
   /// A drawn row with the host's joins; under the phone's lens (SE-2, `GodviewStageInput.lens`) it recedes unless it
   /// is the home's under the chosen profile.
-  init(_ row: RemoteFieldRow, unread: Bool, colour: SwarmColor?, active: Bool, lens: String? = nil) {
+  init(_ row: RemoteFieldRow, unread: Bool, colour: SwarmColor?, active: Bool, lens: PlanSessions.Lens = .none) {
     let monitor = row.row.monitor
     self.init(
       monitor: monitor, isSelf: row.isSelf, unread: unread, colour: colour, active: active,
-      receded: GodviewRecede.byLens(isSelf: row.isSelf, profileSet: monitor.profileSet, lens: lens))
+      receded: GodviewRecede.byLens(
+        isSelf: row.isSelf, profileSet: monitor.profileSet, provider: monitor.provider?.id, lens: lens))
   }
 }
 

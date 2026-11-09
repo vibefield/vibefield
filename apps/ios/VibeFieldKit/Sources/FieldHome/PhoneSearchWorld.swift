@@ -22,7 +22,9 @@ enum PhoneSearchWorld {
   /// the home says it — a peer's desktop is its pill's, never its title's; the folder when it says none), its folder,
   /// its agent ("shell" for a bare terminal), its state, the home's profile only on the home's runs (the lens is
   /// self-only), where it runs, and its conversation's native id (the live ask's join).
-  static func session(_ row: RemoteFieldRow, desks: [PhoneSearch.Desk]) -> PhoneSearch.LiveSession {
+  static func session(
+    _ row: RemoteFieldRow, desks: [PhoneSearch.Desk], sets: [AgentProfileSet] = []
+  ) -> PhoneSearch.LiveSession {
     let monitor = row.row.monitor
     let line = MonitorWords.detailLine(monitor, isSelf: true)
     let terminal = monitor.kind == .terminal
@@ -34,7 +36,9 @@ enum PhoneSearchWorld {
       agent: terminal ? "shell" : label.isEmpty ? nil : label, state: terminal ? .shell : Self.state(monitor.status),
       profileSet: row.isSelf ? monitor.profileSet : nil, device: row.device, deviceName: monitor.device.name,
       platform: named?.platform ?? Self.platform(monitor.device.os), isHome: row.isSelf,
-      nativeSessionId: row.board.nativeSessionId)
+      nativeSessionId: row.board.nativeSessionId,
+      planKey: row.isSelf
+        ? PlanSessions.planKey(sets, profileSet: monitor.profileSet, provider: monitor.provider?.id) : nil)
   }
 
   /// An agent's state as its dot and its word say it.
@@ -86,7 +90,7 @@ enum PhoneSearchWorld {
     rows: [RemoteFieldRow], desks: [PhoneSearch.Desk], lens: ProfileLens, lines: [String: [HistoryHit]]
   ) -> PhoneSearch.Live {
     PhoneSearch.Live(
-      sessions: rows.map { session($0, desks: desks) }, desks: desks,
+      sessions: rows.map { session($0, desks: desks, sets: lens.profiles) }, desks: desks,
       profiles: lens.offersProfiles ? lens.profiles : [], lines: lines)
   }
 
@@ -181,24 +185,27 @@ enum PhoneSearchWorld {
   static func content(
     _ state: SearchState, query: String, lens: ProfileLens, live: PhoneSearch.Live,
     answers: [(corpus: HistoryCorpus, groups: [HistoryHitGroup])], latest: HistoryCorpus?,
-    agentLabel: (String) -> String, feed: PhoneSearch.Feed, asked: PhoneSearch.Asked
+    agentLabel: (String) -> String, feed: PhoneSearch.Feed, asked: PhoneSearch.Asked,
+    plan: PhoneSearch.Plan? = nil
   ) -> SearchSheetContent {
     let terms = PhoneSearch.words(query)
     switch state.scope {
     case .live:
       let profile = lens.chosen?.id
       let desk = lens.desk
-      let rows = PhoneSearch.liveRows(live, query: query, profile: profile, desk: desk)
+      let planKeys = plan.map { Set($0.family + [$0.key]) }
+      let rows = PhoneSearch.liveRows(live, query: query, profile: profile, desk: desk, plan: planKeys)
       let deskName = desk.flatMap { id in live.desks.first { $0.id == id }?.name }
       return SearchSheetContent(
-        scope: .live, terms: terms, tokens: PhoneSearch.liveTokens(live, profile: profile, desk: desk),
+        scope: .live, terms: terms, tokens: PhoneSearch.liveTokens(live, profile: profile, desk: desk, plan: plan),
         chips: PhoneSearch.liveChips(live, profile: profile, desk: desk),
         offer: PhoneSearch.liveOffer(live, query: query, profile: profile, desk: desk), rows: .live(rows),
         empty: rows.isEmpty
           ? PhoneSearch.liveEmpty(
             query: query, profile: lens.chosen?.label, desk: deskName ?? desk, feed: feed, asked: asked) : nil,
         foot: PhoneSearch.liveFoot(
-          rows, total: live.sessions.count, query: query, narrowed: profile != nil || desk != nil, feed: feed,
+          rows, total: live.sessions.count, query: query, narrowed: profile != nil || desk != nil || plan != nil,
+          feed: feed,
           asked: asked),
         profiles: live.profiles)
     case .everything:
@@ -215,7 +222,7 @@ enum PhoneSearchWorld {
         empty: rows.isEmpty ? PhoneSearch.pastEmpty(query: query, asked: asked) : nil,
         foot: PhoneSearch.pastFoot(
           rows: rows.count, query: query, project: state.project, kind: state.kind, lens: lens.chosen?.label,
-          asked: asked),
+          plan: plan?.label, asked: asked),
         profiles: [])
     }
   }
@@ -225,6 +232,7 @@ enum PhoneSearchWorld {
   static func apply(_ filter: PhoneSearch.Filter, label: String, state: inout SearchState, lens: inout ProfileLens) {
     switch filter {
     case .profile(let id): lens.show(id)
+    case .plan(let key): lens.showPlan(key)
     case .desk(let id): lens.keep(desk: id)
     case .kind(let kind): state.kind = kind
     case .project(let key): state.project = PhoneSearch.Project(key: key, name: label)
@@ -235,6 +243,7 @@ enum PhoneSearchWorld {
   static func remove(_ filter: PhoneSearch.Filter, state: inout SearchState, lens: inout ProfileLens) {
     switch filter {
     case .profile: lens.show(nil)
+    case .plan: lens.showPlan(nil)
     case .desk: lens.keep(desk: nil)
     case .kind: state.kind = .any
     case .project: state.project = nil
@@ -246,6 +255,7 @@ enum PhoneSearchWorld {
     switch act {
     case .clearFilters:
       lens.show(nil)
+      lens.showPlan(nil)
       lens.keep(desk: nil)
     case .searchEverything:
       state.scope = .everything
@@ -259,6 +269,7 @@ enum PhoneSearchWorld {
     var lens: String?
     var scope: PhoneSearch.Scope?
     var desk: String?
+    var plan: String? = nil
 
     static func read(_ arguments: [String]) -> Doors {
       func value(_ prefix: String) -> String? {
@@ -270,7 +281,8 @@ enum PhoneSearchWorld {
         scope: value("-vf-mock-search-scope=").flatMap { word in
           PhoneSearch.Scope.allCases.first { $0.rawValue == word }
         },
-        desk: filter.flatMap { $0.hasPrefix("desk:") ? String($0.dropFirst("desk:".count)) : nil })
+        desk: filter.flatMap { $0.hasPrefix("desk:") ? String($0.dropFirst("desk:".count)) : nil },
+        plan: value("-vf-mock-plan="))
     }
   }
 }

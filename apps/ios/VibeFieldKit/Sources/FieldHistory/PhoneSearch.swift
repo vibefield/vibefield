@@ -106,10 +106,14 @@ public enum PhoneSearch {
     public let isHome: Bool
     /// The agent's own id for the conversation: the join to its matched lines.
     public let nativeSessionId: String?
+    /// UM-5b — the plan its run spends, as the meters key it: the home's runs only (`PlanSessions`); nil for a peer's
+    /// or a terminal's.
+    public let planKey: String?
 
     public init(
       id: String, title: String, folder: String?, agent: String?, state: LiveState, profileSet: String?,
-      device: String, deviceName: String, platform: String?, isHome: Bool, nativeSessionId: String?
+      device: String, deviceName: String, platform: String?, isHome: Bool, nativeSessionId: String?,
+      planKey: String? = nil
     ) {
       self.id = id
       self.title = title
@@ -122,6 +126,7 @@ public enum PhoneSearch {
       self.platform = platform
       self.isHome = isHome
       self.nativeSessionId = nativeSessionId
+      self.planKey = planKey
     }
   }
 
@@ -189,9 +194,26 @@ public enum PhoneSearch {
     }
   }
 
-  /// One filter: a profile (the lens), a desktop, who said it, or a project.
+  /// UM-5b — a plan as search names it: its key, its words, its agent's mark, and the keys its filter keeps (its
+  /// twins' too).
+  public struct Plan: Equatable, Sendable {
+    public let key: String
+    public let label: String
+    public let mark: String
+    public let family: [String]
+
+    public init(key: String, label: String, mark: String, family: [String] = []) {
+      self.key = key
+      self.label = label
+      self.mark = mark
+      self.family = family
+    }
+  }
+
+  /// One filter: a profile (the lens), a plan (UM-5b), a desktop, who said it, or a project.
   public enum Filter: Equatable, Sendable, Hashable {
     case profile(String)
+    case plan(String)
     case desk(String)
     case kind(FieldHistoryModel.SearchKind)
     case project(String)
@@ -204,6 +226,8 @@ public enum PhoneSearch {
     case profile(glyph: String?, native: Bool, filled: Bool)
     /// a desktop's OS mark (`platform`)
     case desk(platform: String?)
+    /// a plan's agent's mark (UM-5b, the catalog's `mark` word)
+    case agent(String)
     /// who said it (§13's `message`)
     case said
     /// a project (§13's `folder`)
@@ -326,6 +350,18 @@ public enum PhoneSearch {
     return words.allSatisfy { lower.contains($0) }
   }
 
+  /// A plan's or a profile's sessions in words (UM-5b, the drawing's `sessWords`): "3 sessions · 1 working · 1 waiting
+  /// for you", "No sessions".
+  public static func sessWords(_ sessions: [LiveSession]) -> String {
+    guard !sessions.isEmpty else { return "No sessions" }
+    let working = sessions.filter { $0.state == .working }.count
+    let waiting = sessions.filter { $0.state == .blocked }.count
+    var words = [plural(sessions.count, "session")]
+    if working > 0 { words.append("\(working) working") }
+    if waiting > 0 { words.append("\(waiting) waiting for you") }
+    return words.joined(separator: " · ")
+  }
+
   /// `count` and its noun, made plural past one ("1 session", "2 sessions").
   public static func plural(_ count: Int, _ noun: String) -> String { "\(count) \(noun)\(count == 1 ? "" : "s")" }
 
@@ -349,11 +385,14 @@ public enum PhoneSearch {
   /// The rows, filtered by the lens's profile and desktop: without words every session, waiting first; with words
   /// the sessions whose facts (title, folder, agent) or matched lines hold every word, the most lines first, then
   /// waiting → working → idle → a shell, the field's order breaking the rest (`peekLiveRows`, a stable sort).
-  public static func liveRows(_ live: Live, query: String, profile: String?, desk: String?) -> [LiveRow] {
+  public static func liveRows(
+    _ live: Live, query: String, profile: String?, desk: String?, plan: Set<String>? = nil
+  ) -> [LiveRow] {
     let terms = words(query)
     var rows: [(row: LiveRow, index: Int)] = []
     for (index, session) in live.sessions.enumerated() {
       if let profile, !(session.isHome && session.profileSet == profile) { continue }
+      if let plan, !(session.planKey.map { plan.contains($0) } ?? false) { continue }
       if let desk, session.device != desk { continue }
       let lines: [HistoryHit] = terms.isEmpty ? [] : session.nativeSessionId.flatMap { live.lines[$0] } ?? []
       if !terms.isEmpty {
@@ -399,11 +438,14 @@ public enum PhoneSearch {
     return [profiles, desks].filter { !$0.isEmpty }
   }
 
-  /// Live now's tokens: the profile, then the desktop.
-  public static func liveTokens(_ live: Live, profile: String?, desk: String?) -> [Token] {
+  /// Live now's tokens: the profile, the plan (UM-5b, its agent's mark and title), then the desktop.
+  public static func liveTokens(_ live: Live, profile: String?, desk: String?, plan: Plan? = nil) -> [Token] {
     var tokens: [Token] = []
     if let set = Self.profile(profile, in: live) {
       tokens.append(Token(filter: .profile(set.id), lead: lead(set), label: set.label))
+    }
+    if let plan {
+      tokens.append(Token(filter: .plan(plan.key), lead: .agent(plan.mark), label: plan.label))
     }
     if let found = live.desks.first(where: { $0.id == desk }) {
       tokens.append(Token(filter: .desk(found.id), lead: .desk(platform: found.platform), label: found.name))
@@ -586,7 +628,8 @@ public enum PhoneSearch {
   /// is: what is still unanswered (`unanswered`), then each desktop that could not be asked, " · ‹desktop› is asleep"
   /// (History's search said "‹desktop› is asleep" for one; the list keeps what the cache matched).
   public static func pastFoot(
-    rows: Int, query: String, project: Project?, kind: FieldHistoryModel.SearchKind, lens: String?, asked: Asked
+    rows: Int, query: String, project: Project?, kind: FieldHistoryModel.SearchKind, lens: String?, plan: String? = nil,
+    asked: Asked
   ) -> String {
     let typed = !words(query).isEmpty
     var foot = typed ? "\(plural(rows, "session")) matched" : "Your latest sessions"
@@ -600,7 +643,13 @@ public enum PhoneSearch {
       foot += unanswered(asked)
       for desk in asked.asleep { foot += " · \(desk) is asleep" }
     }
-    if let lens { foot += " · every profile; \(lens) comes back on Field" }
+    if let lens, let plan {
+      foot += " · every profile; \(lens) and \(plan) come back on Field"
+    } else if let plan {
+      foot += " · every plan; \(plan) comes back on Field"
+    } else if let lens {
+      foot += " · every profile; \(lens) comes back on Field"
+    }
     return foot
   }
 
