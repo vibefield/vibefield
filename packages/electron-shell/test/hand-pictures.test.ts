@@ -8,7 +8,13 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { SCREENSHOT_LIMITS, SCREENSHOT_STILL } from "@vibefield/contracts";
 import { afterEach, describe, expect, it } from "vitest";
-import { createHandPictureDoor, HandPictures, isPng } from "../src/main/hand-pictures";
+import {
+  createHandFileDoor,
+  createHandPictureDoor,
+  HandPictures,
+  isPng,
+  safeHandName,
+} from "../src/main/hand-pictures";
 
 const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3]);
 
@@ -103,5 +109,47 @@ describe("the door", () => {
   it("recognises a PNG by its magic", () => {
     expect(isPng(PNG)).toBe(true);
     expect(isPng(new Uint8Array(4))).toBe(false);
+  });
+});
+
+describe("a file made at the play", () => {
+  it("writes the words under the object's own name, in the same folder and the same twelve", async () => {
+    const pictures = new HandPictures({ parent: parent(), limit: 2 });
+    const first = await pictures.writeFile("Q3 plan.opml", "<opml/>");
+    expect(first.endsWith("-Q3 plan.opml")).toBe(true);
+    expect(readFileSync(first, "utf8")).toBe("<opml/>");
+    expect(statSync(first).mode & 0o777).toBe(0o600);
+    await pictures.write(PNG);
+    await pictures.write(PNG);
+    expect(existsSync(first)).toBe(false);
+  });
+
+  it("makes a name that cannot leave the folder", () => {
+    expect(safeHandName("../../etc/passwd")).toBe("passwd");
+    expect(safeHandName("a\\b\u0000c.txt")).toBe("bc.txt");
+    expect(safeHandName("...")).toBe("file");
+    expect(safeHandName("")).toBe("file");
+    expect(safeHandName(".hidden")).toBe("hidden");
+  });
+
+  it("takes words from a window this shell registered, and answers null when the disk would not", async () => {
+    const refused: string[] = [];
+    const take = createHandFileDoor<number>({
+      owns: (sender) => sender === 1,
+      write: async (name) => `/h/${name}`,
+      onRefused: (reason) => refused.push(reason),
+    });
+    await expect(take(1, { name: "a.opml", text: "x" })).resolves.toBe("/h/a.opml");
+    await expect(take(2, { name: "a.opml", text: "x" })).rejects.toThrow("unregistered sender");
+    await expect(take(1, { name: "", text: "x" })).rejects.toThrow();
+    const failing = createHandFileDoor<number>({
+      owns: () => true,
+      write: async () => {
+        throw new Error("ENOSPC");
+      },
+      onRefused: (reason) => refused.push(reason),
+    });
+    await expect(failing(1, { name: "a", text: "x" })).resolves.toBeNull();
+    expect(refused).toEqual(["unregistered-sender", "write-failed"]);
   });
 });

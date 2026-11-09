@@ -536,6 +536,15 @@ describe("MV-3d — the chrome's facts ride the window's own run rows (M35, M42)
     expect(localFactsOf(odd).mirror).not.toHaveProperty("contextSource");
   });
 
+  it("OB — a run whose door is off says so on the window's cut, and nowhere else", () => {
+    const off: AgentSessionSummary = { ...summary({ runtimeRunId: "run-d" }), door: "off" };
+    expect(localFactsOf(off).door).toBe("off");
+    const cut = AgentModelDeskRow.parse({ ...projectDeskRow(off), revision: 1 });
+    expect(cut.local?.door).toBe("off");
+    expect(localFactsOf(summary({ runtimeRunId: "run-n" }))).not.toHaveProperty("door");
+    expect(JSON.stringify(projectFieldRow(off))).not.toContain('"door"');
+  });
+
   it("Q08 — the run's stop key rides the window's cut for the frame's title; a stop that presses no key says none, and no peer or phone row carries it", () => {
     const keyed: AgentSessionSummary = { ...summary({ runtimeRunId: "run-k" }), stopKey: "escape" };
     expect(localFactsOf(keyed).stopKey).toBe("escape");

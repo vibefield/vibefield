@@ -12,6 +12,7 @@ import {
   faceOf,
   landing,
   needsPictureFile,
+  noteAgentNameable,
   noteRunNameable,
   refWords,
   resetRunNameCacheForTest,
@@ -262,6 +263,26 @@ describe("the ref's words (§4.4)", () => {
     expect(refWords({ ...LIVE, more: ["vf:obj/aaaaaaaa"] })).toBe(
       "2 desk objects (vf:obj/7hk2qx4m, vf:obj/aaaaaaaa): call object_open on each",
     );
+  });
+});
+
+describe("which runs the door can name (the real signal)", () => {
+  it("lets a run's own word beat its agent's, and clears back to the agent's", () => {
+    resetRunNameCacheForTest();
+    noteAgentNameable("codex", true);
+    expect(doorCanNameRun("run-1", "codex")).toBe(true);
+    noteRunNameable("run-1", false);
+    expect(doorCanNameRun("run-1", "codex")).toBe(false);
+    noteRunNameable("run-1", null);
+    expect(doorCanNameRun("run-1", "codex")).toBe(true);
+    resetRunNameCacheForTest();
+  });
+
+  it("lets a file that will be made at the play land", () => {
+    const { path: _p, ...noPath } = OPML;
+    const later: FileFace = { ...noPath, atPlay: () => "<opml/>" };
+    expect(landing(later, AGENT).lands).toBe(true);
+    expect(landing(noPath as FileFace, AGENT).lands).toBe(false);
   });
 });
 

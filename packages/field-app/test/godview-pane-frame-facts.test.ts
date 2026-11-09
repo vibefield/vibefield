@@ -19,8 +19,15 @@
  */
 
 import { describe, expect, it } from "vitest";
+import {
+  doorCanNameRun,
+  noteAgentNameable,
+  resetRunNameCacheForTest,
+} from "../src/frame/cards/card-landing";
+import type { ChromeRun } from "../src/godview/monitor/chrome-facts";
 import type { AgentSessionSummary } from "../src/godview/monitor/facet-types";
 import {
+  noteDoorsOfRuns,
   paneFrameAgentFacts,
   paneFrameAgents,
   paneFrameFactsKey,
@@ -283,6 +290,20 @@ describe("the pane frame's facts", () => {
     // the agent's own control presses no key (or a daemon from before Q08):
     // the frame is handed none, and its title names none
     expect(factsOf(row)).not.toHaveProperty("stopKey");
+  });
+});
+
+describe("a run whose door is off (OB)", () => {
+  it("tells the landing table, and clears when the run's door comes back", () => {
+    resetRunNameCacheForTest();
+    noteAgentNameable("claude", true);
+    const row = (door?: string) =>
+      ({ runtimeRunId: "run-1", ...(door === undefined ? {} : { local: { door } }) }) as ChromeRun;
+    noteDoorsOfRuns(new Map([["pty-1", row("off")]]));
+    expect(doorCanNameRun("run-1", "claude")).toBe(false);
+    noteDoorsOfRuns(new Map([["pty-1", row()]]));
+    expect(doorCanNameRun("run-1", "claude")).toBe(true);
+    resetRunNameCacheForTest();
   });
 });
 

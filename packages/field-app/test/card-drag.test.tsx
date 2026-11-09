@@ -8,6 +8,7 @@
  */
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { Position, Size, Viewport } from "@vibecook/ice";
 import { NOTE_TYPE, PHOTO_TYPE, printRect } from "@vibecook/ice/desk/objects";
 import type { FrameView, FrameViewState } from "@vibefield/contracts";
 import { act, type ReactElement } from "react";
@@ -1067,13 +1068,28 @@ function deskOf(
   const spawned: Array<{ type: string; at: Record<string, unknown> }> = [];
   const selected: unknown[][] = [];
   const arrived: unknown[] = [];
-  const session = { readOnly: options.readOnly ?? false };
+  const session = {
+    readOnly: options.readOnly ?? false,
+    store: { resolve: (key: string) => (key === "k1" ? 77 : undefined) },
+  };
+  const panned: Array<[number, number]> = [];
   // the pegboard's anchor as the desk reads it at each ask: a case may change it mid-play
   const tray = { open: options.open ?? false, held: options.held ?? false };
   const desk = {
     engine: {
       // the view's top-left is world (100, 50), at 2 screen px a world unit
-      world: { getResource: () => ({ x: 100, y: 50, zoom: 2, gesturing: false }) },
+      world: {
+        getResource: (resource: unknown) =>
+          resource === Viewport
+            ? { w: 1180, h: 780 }
+            : { x: 100, y: 50, zoom: 2, gesturing: false },
+        get: (_entity: unknown, component: unknown) =>
+          component === Position
+            ? { x: 500, y: 300 }
+            : component === Size
+              ? { w: 200, h: 100 }
+              : undefined,
+      },
       docs: { current: () => session },
       catalog: {
         widget: (type: string) =>
@@ -1087,6 +1103,9 @@ function deskOf(
         setSelection: (ids: readonly unknown[]) => {
           selected.push([...ids]);
         },
+        panTo: (x: number, y: number) => {
+          panned.push([x, y]);
+        },
       },
     },
     handle: {
@@ -1098,8 +1117,9 @@ function deskOf(
     generation: 0,
     mount: 0,
     theme: "light",
+    docId: "doc-1",
   } as unknown as MountedDesk;
-  return { desk, spawned, selected, arrived, tray };
+  return { desk, spawned, selected, arrived, tray, panned };
 }
 
 describe("the desk takes a card (HN-D7)", () => {
@@ -1493,6 +1513,30 @@ describe("a pane plays the chosen face (OB-1b, §4.4)", () => {
     ]);
   });
 
+  it("hands over every object of a stack before a word goes in, and pastes nothing if any is refused", async () => {
+    const root = onePane();
+    const door = agentDoor();
+    const asked: string[] = [];
+    setHandOverDoor(async (ref) => {
+      asked.push(ref);
+      return ref === "vf:obj/aaaaaaaa"
+        ? { handed: false, reason: "Not that one" }
+        : { handed: true };
+    });
+    const stack: Card = {
+      ...MAP,
+      faces: [{ ...LIVE, more: ["vf:obj/aaaaaaaa"] }, OUTLINE],
+    };
+    const target = paneCardTarget({ root: () => root, door: () => door });
+    await expect(target.play(stack, "ref", { x: 300, y: 300 })).resolves.toEqual({
+      ok: false,
+      note: "Not that one",
+      stand: "read",
+    });
+    expect(asked).toEqual(["vf:obj/7hk2qx4m", "vf:obj/aaaaaaaa"]);
+    expect(door.pasted).toEqual([]);
+  });
+
   it("pastes nothing when fieldd does not hand it over, and says why", async () => {
     const root = onePane();
     const door = agentDoor();
@@ -1584,12 +1628,49 @@ describe("the desk plays the chosen face (OB-1b, §4.4)", () => {
     expect(spawned).toEqual([]);
   });
 
-  it("says a ref is on the desk already", async () => {
-    const { desk } = deskOf();
-    const target = deskCardTarget(desk, { host: {} });
+  it("takes the camera to a ref's object and selects it, through `objects.resolve`", async () => {
+    const { desk, panned, selected } = deskOf();
+    const resolve = vi.fn(async () => ({ docId: "doc-1", key: "k1" }));
+    const target = deskCardTarget(desk, { host: {}, resolve });
     await expect(target.play(MAP, "ref", { x: 400, y: 300 })).resolves.toEqual({
       ok: true,
       note: OUTCOME_WORDS.onTheDesk,
+    });
+    expect(resolve).toHaveBeenCalledWith("vf:obj/7hk2qx4m");
+    // object (500, 300) 200 × 100, centre (600, 350); the view 1180 × 780 at zoom 2 shows 590 × 390
+    expect(panned).toEqual([[305, 155]]);
+    expect(selected).toEqual([[77]]);
+  });
+
+  it("says so when the ref's object is gone, on another board, or fieldd cannot find it; the camera stays", async () => {
+    const { desk, panned } = deskOf();
+    const play = (resolve: () => Promise<{ docId: string; key: string } | null>) =>
+      deskCardTarget(desk, { host: {}, resolve }).play(MAP, "ref", { x: 400, y: 300 });
+    await expect(play(async () => null)).resolves.toEqual({
+      ok: false,
+      note: OUTCOME_WORDS.objectGone,
+    });
+    await expect(play(async () => ({ docId: "doc-2", key: "k1" }))).resolves.toEqual({
+      ok: false,
+      note: OUTCOME_WORDS.onAnotherBoard,
+    });
+    await expect(play(async () => ({ docId: "doc-1", key: "absent" }))).resolves.toEqual({
+      ok: false,
+      note: OUTCOME_WORDS.objectGone,
+    });
+    expect(panned).toEqual([]);
+  });
+
+  it("places words made at the play as a note, and says gone when they cannot be", async () => {
+    const { desk, spawned } = deskOf();
+    const target = deskCardTarget(desk, { host: {} });
+    const later: Card = { ...MAP, faces: [{ ...OUTLINE, text: "", atPlay: () => "fresh words" }] };
+    await target.play(later, "outline", { x: 400, y: 300 });
+    expect(spawned[0]?.at["props"]).toEqual({ text: "fresh words" });
+    const gone: Card = { ...MAP, faces: [{ ...OUTLINE, text: "", atPlay: () => null }] };
+    await expect(target.play(gone, "outline", { x: 400, y: 300 })).resolves.toEqual({
+      ok: false,
+      note: OUTCOME_WORDS.faceGone,
     });
   });
 

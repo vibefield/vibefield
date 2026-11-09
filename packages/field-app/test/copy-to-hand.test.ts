@@ -295,6 +295,52 @@ describe("THE DESK'S COPY — the act (copy-to-hand.ts)", () => {
     expect(ce.ops.setSelection).not.toHaveBeenCalled();
   });
 
+  it("names the object at Make a card: Live first, its still the Picture's own capture, and the kind's word on the held bar", async () => {
+    write(noteE, WRITING);
+    ce.ops.setSelection([noteE]);
+    const docDesk: MountedDesk = { ...desk, docId: "doc-1" };
+    const asked: unknown[] = [];
+    const refFor = async (params: unknown) => {
+      asked.push(params);
+      return "vf:obj/7hk2qx4m" as const;
+    };
+    expect(copySelection(docDesk, "bar", { ...seams(), refFor })).toBe(true);
+    expect(clipboard, "the clipboard never waits for fieldd").toEqual([WRITING]);
+    await flush();
+    expect(asked).toEqual([
+      { docId: "doc-1", key: ce.docs.current()?.store.keyOf(noteE), kind: "desk.note" },
+    ]);
+    const [card] = store.snapshot().cards;
+    expect(card?.about).toBe("Note");
+    expect(card?.faces.map((face) => [face.id, face.type])).toEqual([
+      ["live", "ref"],
+      ["words", "text"],
+      ["picture", "image"],
+    ]);
+    const [live, , picture] = card?.faces ?? [];
+    if (live?.type !== "ref" || picture?.type !== "image") throw new Error("no faces");
+    expect(live.still.src).toBe(picture.src);
+    expect(lastCopy()?.card?.kind).toBe("text");
+  });
+
+  it("still deals the card when fieldd cannot be reached: no Live, honestly", async () => {
+    write(noteE, WRITING);
+    ce.ops.setSelection([noteE]);
+    const docDesk: MountedDesk = { ...desk, docId: "doc-1" };
+    expect(copySelection(docDesk, "bar", { ...seams(), refFor: async () => null })).toBe(true);
+    await flush();
+    expect(store.snapshot().cards[0]?.faces.map((face) => face.type)).toEqual(["text", "image"]);
+  });
+
+  it("asks no ref of a kind with no agent half: Picture only", async () => {
+    const docDesk: MountedDesk = { ...desk, docId: "doc-1" };
+    const refFor = vi.fn(async () => "vf:obj/7hk2qx4m" as const);
+    expect(copySelection(docDesk, "bar", { ...seams(), refFor })).toBe(true);
+    await flush();
+    expect(refFor).not.toHaveBeenCalled();
+    expect(store.snapshot().cards[0]?.faces.map((face) => face.type)).toEqual(["image"]);
+  });
+
   it("deals anything else as a PICTURE card titled by its name, its still the objects' own box WITHOUT the marks — the selection never touched", async () => {
     expect(copySelection(desk, "bar", seams())).toBe(true);
     expect(store.snapshot().cards).toEqual([]);
