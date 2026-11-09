@@ -1,7 +1,7 @@
 import type { ChipType, ObjectRef } from "@vibefield/contracts";
 import { catalogEntry } from "@vibefield/contracts";
 import type { Card, Face, ImageFace, RefFace } from "./cards-model";
-import { OUTSIDE_WORDS, TARGET_WORDS } from "./cards-words";
+import { OUTSIDE_WORDS, PLACE_WORDS, TARGET_WORDS } from "./cards-words";
 
 // WHERE A FACE LANDS (OB-1b; `draft/thinking-objects-at-work.md` §4.3, §4.4, OB-D12): the one authority for what each
 // face does at each destination, what choosing it says, and why one that cannot land stands faint. The bloom's view and
@@ -29,15 +29,17 @@ export type Destination =
     };
 
 export type Landing =
-  | { readonly lands: true; readonly verb: string }
+  | { readonly lands: true; readonly verb: string; readonly noun: string }
   | { readonly lands: false; readonly reason: string };
 
 export interface Bud {
   readonly face: string;
   readonly type: ChipType;
   readonly label: string;
-  /** verb and noun: "Hand over the live map" · "Paste its outline" */
+  /** what choosing does, at 40%: "Hand over" · "Paste" (DESIGN.md §8); empty when it cannot land */
   readonly verb: string;
+  /** what it does it to, at full ink: "the live map" · "its outline"; empty when it cannot land */
+  readonly noun: string;
   readonly lands: boolean;
   /** only when it cannot land: faint and dashed with these words */
   readonly reason?: string;
@@ -63,8 +65,13 @@ export const LANDING_WORDS = {
   deskNoSession: "The desk can't hold an agent yet",
   /** a link on a desk that holds no browser pane */
   deskNoPage: "The desk can't open a page yet",
-  openPage: "Open a browser pane at it",
-  goToObject: "Go to it",
+  open: "Open",
+  aPane: "a browser pane at it",
+  goTo: "Go to",
+  it: "it",
+  hand: "Hand over",
+  add: "Add",
+  paste: "Paste",
 } as const;
 
 /** How a face's word is said in a sentence: an acronym stands, the rest in lower case. PURE. */
@@ -119,33 +126,34 @@ export function landing(face: Face, to: Destination): Landing {
     }
     return {
       lands: true,
-      verb: to.at === "chat" ? `Add the ${liveNoun(face)}` : `Hand over the ${liveNoun(face)}`,
+      verb: to.at === "chat" ? LANDING_WORDS.add : LANDING_WORDS.hand,
+      noun: `the ${liveNoun(face)}`,
     };
   }
   const noun = asWords(face);
   if (noun === null) return { lands: false, reason: missingReason(face) };
-  return { lands: true, verb: `${to.at === "chat" ? "Add" : "Paste"} ${noun}` };
+  return { lands: true, verb: to.at === "chat" ? LANDING_WORDS.add : LANDING_WORDS.paste, noun };
 }
 
 function ontoDesk(face: Face, to: Extract<Destination, { at: "desk" }>): Landing {
   switch (face.type) {
     case "text":
-      return { lands: true, verb: TARGET_WORDS.deskNote };
+      return { lands: true, verb: PLACE_WORDS.desk, noun: PLACE_WORDS.note };
     case "image":
       // a print is made from pixels: its own, or a snapshot's through the still door
       return face.bytes === undefined && (face.path === undefined || to.stills === false)
         ? { lands: false, reason: TARGET_WORDS.deskNoPicture }
-        : { lands: true, verb: TARGET_WORDS.deskPrint };
+        : { lands: true, verb: PLACE_WORDS.desk, noun: PLACE_WORDS.print };
     case "file":
       return { lands: false, reason: LANDING_WORDS.deskNoFile };
     case "link":
       return to.browser === true
-        ? { lands: true, verb: LANDING_WORDS.openPage }
+        ? { lands: true, verb: LANDING_WORDS.open, noun: LANDING_WORDS.aPane }
         : { lands: false, reason: LANDING_WORDS.deskNoPage };
     case "session":
       return { lands: false, reason: LANDING_WORDS.deskNoSession };
     case "ref":
-      return { lands: true, verb: LANDING_WORDS.goToObject };
+      return { lands: true, verb: LANDING_WORDS.goTo, noun: LANDING_WORDS.it };
   }
 }
 
@@ -164,16 +172,19 @@ function whereOf(to: Destination): string {
 }
 
 /** A card of one face has no choice to name: the place's own sentence says it (DESIGN.md §8 "The hand"). PURE. */
-function soleVerb(face: Face, to: Destination): string {
+function soleWords(face: Face, to: Destination): { readonly verb: string; readonly noun: string } {
   switch (to.at) {
     case "agent-pane":
-      return TARGET_WORDS.pane(to.handle);
+      return { verb: PLACE_WORDS.pane, noun: to.handle };
     case "shell-pane":
-      return TARGET_WORDS.pane(to.name);
+      return { verb: PLACE_WORDS.pane, noun: to.name };
     case "chat":
-      return TARGET_WORDS.prompt(to.handle);
+      return { verb: PLACE_WORDS.prompt, noun: to.handle };
     case "desk":
-      return face.type === "image" ? TARGET_WORDS.deskPrint : TARGET_WORDS.deskNote;
+      return {
+        verb: PLACE_WORDS.desk,
+        noun: face.type === "image" ? PLACE_WORDS.print : PLACE_WORDS.note,
+      };
   }
 }
 
@@ -183,10 +194,11 @@ export function bloomOf(card: Card, to: Destination): BloomModel {
   const buds = card.faces.map((face): Bud => {
     const base = { face: face.id, type: face.type, label: face.label };
     // a card from another app says what it holds only once it is let go (HN-D2)
-    if (card.waiting === true) return { ...base, lands: true, verb: soleVerb(face, to) };
+    if (card.waiting === true) return { ...base, lands: true, ...soleWords(face, to) };
     const said = landing(face, to);
-    if (!said.lands) return { ...base, lands: false, verb: "", reason: said.reason };
-    return { ...base, lands: true, verb: lone ? soleVerb(face, to) : said.verb };
+    if (!said.lands) return { ...base, lands: false, verb: "", noun: "", reason: said.reason };
+    const { verb, noun } = lone ? soleWords(face, to) : said;
+    return { ...base, lands: true, verb, noun };
   });
   const fits = buds.filter((bud) => bud.lands);
   return {
@@ -204,7 +216,8 @@ export function dragLabelOf(
 ): { readonly ok: boolean; readonly label: string } {
   const fits = model.buds.filter((bud) => bud.lands);
   if (fits.length === 0) return { ok: false, label: model.buds[0]?.reason ?? "" };
-  if (fits.length === 1) return { ok: true, label: fits[0]?.verb ?? "" };
+  const [one] = fits;
+  if (fits.length === 1 && one !== undefined) return { ok: true, label: `${one.verb} ${one.noun}` };
   return { ok: true, label: `Let go: ${fits.length} ways into ${name}` };
 }
 

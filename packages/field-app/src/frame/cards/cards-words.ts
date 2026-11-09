@@ -99,12 +99,21 @@ export const ABOUT_WORDS = {
   session: "Agent session",
 } as const;
 
+/** A place's own sentence in its halves, verb and noun (§8 sets them apart on a bud): the carried card's label joins them. */
+export const PLACE_WORDS = {
+  pane: "Paste into",
+  prompt: "Add to your message to",
+  desk: "Place as",
+  note: "a note",
+  print: "a print",
+} as const;
+
 /** What a carried card's target says under the pointer, before it is let go. */
 export const TARGET_WORDS = {
-  pane: (name: string) => `Paste into ${name}`,
-  prompt: (name: string) => `Add to your message to ${name}`,
-  deskNote: "Place as a note",
-  deskPrint: "Place as a print",
+  pane: (name: string) => `${PLACE_WORDS.pane} ${name}`,
+  prompt: (name: string) => `${PLACE_WORDS.prompt} ${name}`,
+  deskNote: `${PLACE_WORDS.desk} ${PLACE_WORDS.note}`,
+  deskPrint: `${PLACE_WORDS.desk} ${PLACE_WORDS.print}`,
   hand: "Into your hand",
   opening: (view: FrameView) => `Opening ${viewName(view)}`,
   /** HN-L5: a picture plays into a pane as its file's path, as a Finder drop

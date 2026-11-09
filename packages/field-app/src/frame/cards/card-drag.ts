@@ -70,7 +70,8 @@ export interface CarriedCard {
   } | null;
   /** spring-loading (HN-D6): the view under the card, and how far its clock has run */
   readonly opening: { readonly view: FrameView; readonly progress: number } | null;
-  readonly phase: "carry" | "play" | "home";
+  /** `hub`: let go on a place that offers more than one face, it stands where it landed while the bloom asks (§4.3) */
+  readonly phase: "carry" | "hub" | "play" | "home";
   /** Each drag's own number: a new drag's motion starts fresh. */
   readonly drag: number;
   /** Degrees the card leans with the pointer's speed (±10, the page's); 0 once it is let go. */
@@ -369,7 +370,7 @@ export function fieldTakesDrop(x: number, y: number, card: Card): boolean {
 }
 
 function moveTo(drag: LiveDrag, x: number, y: number): void {
-  if (drag.phase !== "carry" || drag.bloom !== null) return;
+  if (drag.phase !== "carry") return;
   const now = Date.now();
   const speed = (x - drag.lastX) / Math.max(8, now - drag.lastT);
   drag.speed = drag.speed * 0.72 + speed * 0.28;
@@ -539,7 +540,7 @@ export function moveCardDrag(x: number, y: number): void {
  * refuses before the play or in it. Resolves once the outcome is said. */
 export async function endCardDrag(x: number, y: number, filled?: Card): Promise<CardLetGo> {
   const drag = live;
-  if (drag === null || drag.phase !== "carry" || drag.bloom !== null) return "none";
+  if (drag === null || drag.phase !== "carry") return "none";
   if (filled !== undefined) drag.card = filled;
   moveTo(drag, x, y);
   const { target, answer } = drag;
@@ -623,7 +624,7 @@ function bloomFor(
 ): Promise<CardLetGo> {
   drag.detach();
   stopSpring(drag);
-  drag.answer = null;
+  drag.phase = "hub";
   publish(snapshot(drag));
   return new Promise((resolve) => {
     let shown: { close(): void } | null = null;
@@ -657,9 +658,8 @@ function bloomFor(
 
 /** Esc, a lost pointer, the window's blur: home at once, nothing played. */
 export function cancelCardDrag(): void {
-  if (live === null || live.phase !== "carry") return;
-  if (live.bloom !== null) live.bloom.close();
-  else turnHome(live);
+  if (live?.phase === "hub") live.bloom?.close();
+  else if (live?.phase === "carry") turnHome(live);
 }
 
 export function subscribeCarriedCard(fn: () => void): () => void {
