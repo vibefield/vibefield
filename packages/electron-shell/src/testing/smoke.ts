@@ -5288,8 +5288,12 @@ function unobservedRefusal(error: unknown): string | null {
   return state;
 }
 
-const listTerminals = async (handle: FielddHandle): Promise<TerminalListResult["terminals"]> =>
-  TerminalListResult.parse(await handle.client.request("terminal.list", {})).terminals;
+const listTerminals = async (
+  handle: FielddHandle,
+  timeoutMs?: number,
+): Promise<TerminalListResult["terminals"]> =>
+  TerminalListResult.parse(await handle.client.request("terminal.list", {}, { timeoutMs }))
+    .terminals;
 
 /** `terminal.list`, retried through an honest refusal. Every read of the floor
  * in this harness goes through here or through `untilFloor`, which does the
@@ -5302,7 +5306,7 @@ async function listTerminalsWhenObserved(
   const deadline = Date.now() + timeoutMs;
   for (;;) {
     try {
-      return await listTerminals(handle);
+      return await listTerminals(handle, Math.max(1, deadline - Date.now()));
     } catch (error) {
       if (unobservedRefusal(error) === null || Date.now() >= deadline) throw error;
       await sleep(150);
@@ -5329,9 +5333,16 @@ async function untilFloor(
   let last: TerminalListResult["terminals"] = [];
   let refusals = 0;
   let lastRefusal = "";
+  // The cd row's harness note (the squeeze gate of 2026-10-19): each round is bounded by what is left of the deadline, so a
+  // floor that stops answering is said at the deadline, and the rounds' own times say a slow floor from a parked one.
+  let answered = 0;
+  let slowestMs = 0;
   while (Date.now() < deadline) {
+    const asked = Date.now();
     try {
-      last = await listTerminals(handle);
+      last = await listTerminals(handle, Math.max(1, deadline - asked));
+      answered += 1;
+      slowestMs = Math.max(slowestMs, Date.now() - asked);
     } catch (error) {
       // An unarmed inventory is fieldd declining to guess, which is the whole
       // point of the refusal — so it is a reason to ask again, never a failure.
@@ -5339,6 +5350,7 @@ async function untilFloor(
       if (state === null) throw error;
       refusals += 1;
       lastRefusal = state;
+      slowestMs = Math.max(slowestMs, Date.now() - asked);
       await sleep(150);
       continue;
     }
@@ -5348,7 +5360,7 @@ async function untilFloor(
   const refused =
     refusals > 0 ? `; ${refusals} refusal(s), last UNAVAILABLE {state:"${lastRefusal}"}` : "";
   throw new Error(
-    `the floor never ${what} within ${timeoutMs}ms (saw ${last.length} terminals${refused})`,
+    `the floor never ${what} within ${timeoutMs}ms (saw ${last.length} terminals; ${answered} round(s) answered, slowest ${slowestMs}ms${refused})`,
   );
 }
 
@@ -8655,12 +8667,18 @@ export async function runSmokeGodview(opts: {
         // The marker DID land (typeLineUntilMarker throws otherwise), so a shell
         // ran the cd — say which sessions the floor sees and what they announce,
         // so a mismatch names its suspect instead of just its timeout.
-        const now = await listTerminalsWhenObserved(opts.handle);
+        const now = await listTerminalsWhenObserved(opts.handle, 5_000).catch(
+          (error: unknown) => `unanswered: ${String(error)}`,
+        );
+        const listed =
+          typeof now === "string"
+            ? now
+            : JSON.stringify(
+                now.map((t) => ({ id: t.sessionId, cwd: t.cwd ?? null, exited: t.exited })),
+              );
         const facts = deck.current();
         throw new Error(
-          `${failure instanceof Error ? failure.message : String(failure)} [terminals=${JSON.stringify(
-            now.map((t) => ({ id: t.sessionId, cwd: t.cwd ?? null, exited: t.exited })),
-          )} deckPanes=${JSON.stringify(facts?.sessionIds ?? [])} active=${facts?.activeSessionId ?? "?"} restored=${JSON.stringify(restored.sessionIds)}]`,
+          `${failure instanceof Error ? failure.message : String(failure)} [terminals=${listed} deckPanes=${JSON.stringify(facts?.sessionIds ?? [])} active=${facts?.activeSessionId ?? "?"} restored=${JSON.stringify(restored.sessionIds)}]`,
         );
       });
       const doomed = inWorkdir(withCwd)!;
