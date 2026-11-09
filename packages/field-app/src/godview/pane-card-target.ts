@@ -158,7 +158,8 @@ export function paneCardTarget(deps: PaneCardTargetDeps): CardTarget {
             await takeBackGranted();
             return { ok: false, note: handed.reason, stand: "read" };
           }
-          granted.push({ ref, run });
+          // a grant the run already held is not this play's to end
+          if (handed["already"] !== true) granted.push({ ref, run });
         }
         if (!showsRun(run)) {
           await takeBackGranted();
