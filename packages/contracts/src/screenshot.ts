@@ -319,4 +319,10 @@ export const HandFileWriteRequest = z
   })
   .passthrough();
 export type HandFileWriteRequest = z.infer<typeof HandFileWriteRequest>;
+
+/** Whether the hand's folder still keeps a file main wrote there. */
+export const HandFileKeptRequest = z
+  .object({ path: z.string().min(1).max(SCREENSHOT_LIMITS.MAX_PATH_CHARS) })
+  .passthrough();
+export type HandFileKeptRequest = z.infer<typeof HandFileKeptRequest>;
 export type ScreenshotStillKeptRequest = z.infer<typeof ScreenshotStillKeptRequest>;

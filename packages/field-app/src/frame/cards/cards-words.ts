@@ -146,6 +146,8 @@ export const OUTCOME_WORDS = {
   pasteGone: "Not pasted — that snapshot is no longer kept",
   /** the desk refused the object (the reason is in the log) */
   notPlaced: "Not placed — the desk could not take it",
+  /** the pane let go on shows another run by the time it can take the words: nothing is granted to the wrong one (OB-L1) */
+  paneMoved: "Not handed over — that pane now shows another session",
   /** a face made at the play whose object has gone since the card was made */
   faceGone: "Not pasted — that object is no longer on the desk",
   /** main could not write a file face to the hand's folder */

@@ -354,6 +354,8 @@ export interface FieldHost {
   readonly writeHandPicture?: (png: Uint8Array<ArrayBuffer>) => Promise<string | null>;
   /** A card's file face written to the hand's folder at the play, under a safe form of its name; null when main could not. */
   readonly writeHandFile?: (name: string, text: string) => Promise<string | null>;
+  /** Whether main still keeps a file it wrote to the hand's folder: a draft's path is checked before it is sent. */
+  readonly handFileKept?: (path: string) => Promise<boolean>;
   /** HN-6 — a file another app handed over (a paste's, a drop's) as its path on disk, which a
    * pane is given for it (HN-L5); null for one not on disk. The preload's own read, no IPC.
    * Optional like its neighbours: a harness without the shell (the catalog) has no paths, and a
@@ -397,4 +399,12 @@ export function stillKept(
 ): Promise<boolean> {
   const kept = host?.screenshotStillKept;
   return kept === undefined ? Promise.resolve(true) : kept(path);
+}
+
+/** Whether a file written to the hand's folder is still kept; a host with no such door has none to lose. */
+export function handFileKept(
+  path: string,
+  host: Pick<FieldHost, "handFileKept"> | null = peekHost(),
+): Promise<boolean> {
+  return host?.handFileKept?.(path) ?? Promise.resolve(true);
 }

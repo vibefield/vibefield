@@ -1397,11 +1397,13 @@ export const RECORD_STORES = {
 /** OB-3b, OB-4 — fieldd's own bounds on the desk room (the wire's are `OBJECT_LIMITS`). RELEASED_SHOWN_MS: how long a
  * released agent stays on an object's presence, so the desk can show it leaving. PENDING_INTENTS: intents one board may
  * have unanswered at once; a further call answers the fact `limit`, never a queue that acts later. ENDED_RUNS_KEPT:
- * ended runs whose grants and places fieldd remembers, in memory, in case a resume names a successor. TS-only. */
+ * ended runs whose grants and places fieldd remembers, in memory, in case a resume names a successor.
+ * UNDO_BOARD_CEILING: every agent's kept changes on one board together. TS-only. */
 export const OBJECT_ROOM = {
   RELEASED_SHOWN_MS: 4_000,
   PENDING_INTENTS: 64,
   ENDED_RUNS_KEPT: 256,
+  UNDO_BOARD_CEILING: 1_000,
 } as const;
 
 /** DS-D15 / DS-2 — forwarded mutations (`forwarding.ts`). The owner journals
@@ -2752,6 +2754,9 @@ export const IPC_CHANNELS = {
   /** renderer → main invoke: HandFileWriteRequest → string | null — a card's file face (an export a kind produces at the play)
    * written to the hand's folder under a safe form of its name, in the same twelve, its path answered. A registered window only. */
   handFileWrite: "vibefield:screenshot:hand-file-write",
+  /** renderer → main invoke: HandFileKeptRequest → boolean — whether main still keeps a file it wrote to the hand's folder: a
+   * draft's path is checked before it is sent, as a snapshot's is (OB-D10 A). A registered window only. */
+  handFileKept: "vibefield:screenshot:hand-file-kept",
   /** renderer → main invoke: RendererReplaceRequest → RendererReplaceResult — the
    * window's renderer REPLACED at its own asking (DK-9, the runtime with kinds: a
    * plugin update whose kinds this realm defined otherwise — ICE's catalog cannot

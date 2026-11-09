@@ -1,8 +1,9 @@
 import { rmSync } from "node:fs";
-import { mkdtemp, unlink, writeFile } from "node:fs/promises";
+import { lstat, mkdtemp, unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  HandFileKeptRequest,
   HandFileWriteRequest,
   HandPictureWriteRequest,
   SCREENSHOT_LIMITS,
@@ -80,6 +81,16 @@ export class HandPictures {
     return path;
   }
 
+  /** Whether this path is one the hand still keeps and is still a file on the disk. Only a path it wrote can be yes. */
+  async kept(path: string): Promise<boolean> {
+    if (!this.#kept.includes(path)) return false;
+    try {
+      return (await lstat(path)).isFile();
+    } catch {
+      return false;
+    }
+  }
+
   /** The app is quitting: the folder and everything in it goes. */
   disposeSync(): void {
     if (this.#path === null) return;
@@ -137,5 +148,16 @@ export function createHandFileDoor<Sender>(options: {
       options.onRefused?.("write-failed");
       return null;
     }
+  };
+}
+
+/** Whether a file written at the play is still kept: a registered window only, and only a path this run wrote. */
+export function createHandKeptDoor<Sender>(options: {
+  readonly owns: (sender: Sender) => boolean;
+  readonly kept: (path: string) => Promise<boolean>;
+}): (sender: Sender, raw: unknown) => Promise<boolean> {
+  return async (sender, raw) => {
+    if (!options.owns(sender)) throw new Error("hand file refused: unregistered sender");
+    return options.kept(HandFileKeptRequest.parse(raw).path);
   };
 }

@@ -15,6 +15,7 @@ import {
   type FrameZoomAct,
   GodviewDeckSetRequest,
   type GodviewDeckState,
+  HandFileKeptRequest,
   HandFileWriteRequest,
   HandPictureWriteRequest,
   IPC_CHANNELS,
@@ -668,6 +669,15 @@ contextBridge.exposeInMainWorld("vibefield", {
       );
       if (answer === null || typeof answer === "string") return answer;
       throw new Error("hand file: main answered something other than a path");
+    },
+    /** Whether main still keeps a file it wrote to the hand's folder. A boolean and nothing else, checked here like every answer. */
+    handFileKept: async (path: string): Promise<boolean> => {
+      const answer: unknown = await ipcRenderer.invoke(
+        IPC_CHANNELS.handFileKept,
+        HandFileKeptRequest.parse({ path }),
+      );
+      if (typeof answer === "boolean") return answer;
+      throw new Error("hand file: main answered something other than kept or not");
     },
     capture: async (): Promise<ScreenshotCaptureResult> =>
       ScreenshotCaptureResultSchema.parse(

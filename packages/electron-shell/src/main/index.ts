@@ -92,6 +92,7 @@ import {
   registerClipboardWriteImage,
   registerDeckSet,
   registerHandFile,
+  registerHandKept,
   registerHandPicture,
   registerRendererReplace,
   registerScreenshotCapture,
@@ -2122,6 +2123,7 @@ async function main(
     (name, text) => handPictures.writeFile(name, text),
     logger.child({ component: "ipc.screenshot" }),
   );
+  registerHandKept(registry, (path) => handPictures.kept(path));
   app.once("will-quit", () => handPictures.disposeSync());
   // A global capture can finish with every product window closed. Keep the
   // latest result for the next field, without revealing it before the freeze.

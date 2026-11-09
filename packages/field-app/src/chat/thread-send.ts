@@ -1,7 +1,13 @@
-import { COMPOSE_TEXT_MAX, type ComposeSparksSayResult } from "@vibefield/contracts";
+import {
+  COMPOSE_TEXT_MAX,
+  type ComposeSparksSayResult,
+  type ObjectRef,
+  type ObjectsHandResult,
+} from "@vibefield/contracts";
+import { HAND_OVER_WORDS } from "../frame/cards/hand-over";
 import { getRendererLogger } from "../logging";
 import { askAgain } from "../reconnect";
-import type { DraftMessage } from "./composer-draft";
+import type { DraftMessage, SendCarried } from "./composer-draft";
 
 // SEND, QUEUED (TH-1; DESIGN.md §8 "Chat's composer": Send, a message wakes it, each send once, when the send is not
 // taken). Send queues the message to the spark's input as yours through `compose.sparks.say` (IOS-12a's door), its
@@ -23,6 +29,10 @@ export type ThreadSendOutcome =
   | { readonly state: "too-large" }
   /** main no longer keeps a still a card's path names */
   | { readonly state: "still-gone" }
+  /** a picture or file written at the play that the hand no longer keeps (OB-D10 A) */
+  | { readonly state: "file-gone" }
+  /** fieldd would not hand a Live chip's object to the spark, in its own words (OB-L1) */
+  | { readonly state: "not-handed"; readonly reason: string }
   /** fieldd refused the wake, in its own words */
   | { readonly state: "wake-refused"; readonly reason: string }
   /** fieldd refused the say, or a step threw, in its own words: a send that breaks is never a blank */
@@ -46,6 +56,10 @@ export interface ThreadSendDeps {
   say(ask: SayAsk): Promise<ComposeSparksSayResult>;
   /** main still keeps this snapshot's still (`screenshotStillKept`; a host with no still door keeps none to lose) */
   stillKept(path: string): Promise<boolean>;
+  /** main still keeps this file written at the play (absent: nothing to lose) */
+  handFileKept?(path: string): Promise<boolean>;
+  /** grant the spark this object: called after any wake, so a spark with no session yet has one (OB-L1) */
+  hand?(ref: ObjectRef): Promise<ObjectsHandResult>;
   /** the message passed the window's own checks and goes to fieldd now: the controller stands its bubble */
   sending?(requestId: string): void;
 }
@@ -59,6 +73,21 @@ export function sayRequestId(): string {
   return `say-${Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("")}`;
 }
 
+const NOTHING_CARRIED: SendCarried = { refs: [], files: [] };
+
+/** The grant to a spark, its run read only when it is needed: after the wake, a spark with no session has one. */
+export function handToSpark(
+  runNow: () => Promise<string | undefined>,
+  handOver: (ref: ObjectRef, run: string) => Promise<ObjectsHandResult>,
+): (ref: ObjectRef) => Promise<ObjectsHandResult> {
+  return async (ref) => {
+    const run = await runNow();
+    return run === undefined
+      ? { handed: false, reason: HAND_OVER_WORDS.noRun }
+      : handOver(ref, run);
+  };
+}
+
 /** Send `message` to the thread's spark. `stills`: the snapshot stills its cards name (`draftStills`). Never rejects:
  * a step that throws is the send's outcome, in its own words. */
 export async function sendToThread(
@@ -66,9 +95,10 @@ export async function sendToThread(
   message: DraftMessage,
   stills: readonly string[],
   requestId: string = sayRequestId(),
+  carried: SendCarried = NOTHING_CARRIED,
 ): Promise<ThreadSendOutcome> {
   try {
-    return await sendSteps(deps, message, stills, requestId);
+    return await sendSteps(deps, message, stills, requestId, carried);
   } catch (error) {
     getRendererLogger()
       .child({ component: "chat" })
@@ -82,10 +112,16 @@ async function sendSteps(
   message: DraftMessage,
   stills: readonly string[],
   requestId: string,
+  carried: SendCarried,
 ): Promise<ThreadSendOutcome> {
   if (message.text.length > COMPOSE_TEXT_MAX) return { state: "too-large" };
   for (const still of stills) {
     if (!(await deps.stillKept(still))) return { state: "still-gone" };
+  }
+  for (const file of carried.files) {
+    if (deps.handFileKept !== undefined && !(await deps.handFileKept(file))) {
+      return { state: "file-gone" };
+    }
   }
   deps.sending?.(requestId);
   if (deps.needsWake) {
@@ -94,6 +130,12 @@ async function sendSteps(
     } catch (error) {
       return { state: "wake-refused", reason: reasonOf(error) };
     }
+  }
+  // the grants, once the spark has a session to hold them (§4.3, OB-L1): a refused one stops the send
+  for (const ref of carried.refs) {
+    const handed: ObjectsHandResult = await (deps.hand?.(ref) ??
+      Promise.resolve({ handed: false as const, reason: HAND_OVER_WORDS.noDoor }));
+    if (!handed.handed) return { state: "not-handed", reason: handed.reason };
   }
   const ask: SayAsk = { text: message.text, chips: message.chips, requestId };
   try {
@@ -119,6 +161,10 @@ export function sendNote(outcome: ThreadSendOutcome, name: string): string | nul
       return "Not sent — a message holds 32,000 characters at most";
     case "still-gone":
       return "Not sent — that snapshot is no longer kept";
+    case "file-gone":
+      return "Not sent — that picture's file is no longer kept";
+    case "not-handed":
+      return outcome.reason;
     case "wake-refused":
       return `Couldn't wake ${name}: ${outcome.reason}`;
     case "failed":

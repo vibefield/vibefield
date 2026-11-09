@@ -43,7 +43,7 @@ import {
   createClipboardImageDoor,
 } from "./clipboard-door";
 import type { FielddEnsure } from "./fieldd-handle-coordinator";
-import { createHandFileDoor, createHandPictureDoor } from "./hand-pictures";
+import { createHandFileDoor, createHandKeptDoor, createHandPictureDoor } from "./hand-pictures";
 import { shellIdentity } from "./login-shell";
 import { createScreenshotDoor } from "./screenshot-door";
 import { createScreenshotPreviewDoor } from "./screenshot-preview";
@@ -577,6 +577,15 @@ export function registerHandPicture(
     },
   });
   ipcMain.handle(IPC_CHANNELS.handPictureWrite, (event, raw: unknown) => door(event.sender, raw));
+}
+
+/** Whether the hand still keeps a file it wrote (policy in hand-pictures.ts). */
+export function registerHandKept(
+  registry: WindowRegistry,
+  kept: (path: string) => Promise<boolean>,
+): void {
+  const door = createHandKeptDoor({ owns: (sender: WebContents) => registry.owns(sender), kept });
+  ipcMain.handle(IPC_CHANNELS.handFileKept, (event, raw: unknown) => door(event.sender, raw));
 }
 
 /** A card's file face written to the hand's folder at the play (policy in hand-pictures.ts). */

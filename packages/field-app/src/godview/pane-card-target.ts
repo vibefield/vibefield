@@ -1,4 +1,4 @@
-import { catalogEntry } from "@vibefield/contracts";
+import { catalogEntry, type ObjectRef } from "@vibefield/contracts";
 import { GHOSTTEA_PANE_SELECTOR } from "@vibefield/puppeteer-views";
 import {
   bloomOf,
@@ -12,7 +12,7 @@ import { type CardTarget, TARGET_LAYER } from "../frame/cards/card-targets";
 import { paneTextOf, stillOf } from "../frame/cards/card-text";
 import { OUTCOME_WORDS } from "../frame/cards/cards-words";
 import { readyFace } from "../frame/cards/face-ready";
-import { handOver } from "../frame/cards/hand-over";
+import { handOver, takeBack } from "../frame/cards/hand-over";
 import {
   claimingRefusals,
   getGodviewLineDoor,
@@ -135,15 +135,35 @@ export function paneCardTarget(deps: PaneCardTargetDeps): CardTarget {
       if (still !== null && !(await stillKept(still, deps.host))) {
         return { ok: false, note: OUTCOME_WORDS.pasteGone };
       }
-      // playing Live is the grant (OB-L1): fieldd is asked first, for every object named, and the words go in only if handed
-      if (written.type === "ref" && destination.at === "agent-pane") {
-        for (const ref of [written.ref, ...(written.more ?? [])]) {
-          const handed = await handOver(ref, destination.run);
-          if (!handed.handed) return { ok: false, note: handed.reason, stand: "read" };
-        }
-      }
       if (!(await door.whenInputOpen(pane.paneId, PANE_INPUT_WAIT_MS))) {
         return { ok: false, note: OUTCOME_WORDS.notTaking(pane.name) };
+      }
+      // playing Live is the grant (OB-L1): only once the pane can take the words, and only to the run it shows NOW. Every object
+      // named is asked for, and whatever this play granted is taken back if the words cannot follow it
+      const granted: { readonly ref: ObjectRef; readonly run: string }[] = [];
+      const takeBackGranted = async (): Promise<void> => {
+        await Promise.all(granted.map(({ ref, run }) => takeBack(ref, run)));
+      };
+      const showsRun = (run: string): boolean => {
+        const now = paneUnder(at);
+        const there = now === null ? null : paneDestination(now.pane);
+        return there?.at === "agent-pane" && there.run === run;
+      };
+      if (written.type === "ref" && destination.at === "agent-pane") {
+        const { run } = destination;
+        if (!showsRun(run)) return { ok: false, note: OUTCOME_WORDS.paneMoved };
+        for (const ref of [written.ref, ...(written.more ?? [])]) {
+          const handed = await handOver(ref, run);
+          if (!handed.handed) {
+            await takeBackGranted();
+            return { ok: false, note: handed.reason, stand: "read" };
+          }
+          granted.push({ ref, run });
+        }
+        if (!showsRun(run)) {
+          await takeBackGranted();
+          return { ok: false, note: OUTCOME_WORDS.paneMoved };
+        }
       }
       // D6 — a paste too large for the pane's terminal is refused INSIDE the call, so whatever is
       // refused while it runs is this paste's, whichever session the pane shows by now (it may
@@ -160,11 +180,12 @@ export function paneCardTarget(deps: PaneCardTargetDeps): CardTarget {
         stop();
       }
       if (heard.refusal !== null) {
+        await takeBackGranted();
         return { ok: false, note: inputRefusalNote(heard.refusal, pane.name), stand: "read" };
       }
-      return took
-        ? { ok: true, note: OUTCOME_WORDS.pasted(pane.name) }
-        : { ok: false, note: OUTCOME_WORDS.notTaking(pane.name) };
+      if (took) return { ok: true, note: OUTCOME_WORDS.pasted(pane.name) };
+      await takeBackGranted();
+      return { ok: false, note: OUTCOME_WORDS.notTaking(pane.name) };
     },
   };
 }

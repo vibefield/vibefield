@@ -17,6 +17,7 @@ import { type CopyDeps, type CopyHost, copyToHand } from "../../../frame/cards/c
 import { type RefAsk, refFor } from "../../../frame/cards/hand-over";
 import { sayOnLine } from "../../../frame/line-door";
 import { typeDefinition } from "../../../plugin-host/build-widget";
+import { declaredProps } from "../agent/applier";
 import { agentHalfOf } from "../agent-kinds";
 import { heldNow, type MountedDesk, plainWords } from "../desk-door";
 import { encodePng, type PngEncoder } from "../desk-stills";
@@ -80,6 +81,22 @@ export function objectProps(engine: CanvasEngine, entity: Entity): Record<string
   for (const group of widget?.groups ?? [])
     Object.assign(props, (engine.world.get(entity, group.component) as object | undefined) ?? {});
   return props;
+}
+
+/** An object's props as its kind declares them, read now (`AgentReadApi`'s promise: a `json` prop parsed); null once it has gone
+ * or a cell will not parse. */
+export function propsNow(
+  engine: CanvasEngine,
+  object: { readonly key?: string },
+): Readonly<Record<string, unknown>> | null {
+  if (object.key === undefined) return null;
+  const entity = engine.docs.current()?.store.resolve(object.key as never) as Entity | undefined;
+  if (entity === undefined) return null;
+  try {
+    return declaredProps(engine, entity);
+  } catch {
+    return null;
+  }
 }
 
 /** What a kind offers an agent: a built-in's declaration or its plugin's, and its handlers. Absent without both. */
@@ -243,13 +260,9 @@ export function copySelection(desk: MountedDesk, from: CopyFrom, seams: CopySeam
     names.filter((name): name is ObjectRef => name !== null),
   );
   /** An object's props as they are at the play; null once it has gone. */
-  const readNow = (object: CopiedObject): Readonly<Record<string, unknown>> | null => {
-    const entity =
-      object.key === undefined
-        ? undefined
-        : (engine.docs.current()?.store.resolve(object.key as never) as Entity | undefined);
-    return entity === undefined ? null : objectProps(engine, entity);
-  };
+  const readNow = (object: CopiedObject): Readonly<Record<string, unknown>> | null =>
+    // a board with no keys has only what the press read
+    object.key === undefined ? object.props : propsNow(engine, object);
   /** The card with every face its kind offers; a Live first says the kind's word on the held bar. */
   const withFaces = (card: Card, faces: readonly Face[]): Card => {
     const [first, ...rest] = faces;

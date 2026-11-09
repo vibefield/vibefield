@@ -43,10 +43,13 @@ export const REF_WAIT_MS = 1_500;
 
 type RefDoor = (ask: RefAsk) => Promise<ObjectRef | null>;
 type ResolveDoor = (ref: ObjectRef) => Promise<RefPlace | null>;
+/** Ends a grant. Never rejects: a take-back that fails leaves a grant the person can still end by hand. */
+export type TakeBackDoor = (ref: ObjectRef, run: string) => Promise<void>;
 
 let handDoor: HandOverDoor | null = null;
 let refDoor: RefDoor | null = null;
 let resolveDoor: ResolveDoor | null = null;
+let takeBackDoor: TakeBackDoor | null = null;
 
 /** Install the grant's door (the window's own, or a test's). Returns the undo. */
 export function setHandOverDoor(next: HandOverDoor): () => void {
@@ -60,6 +63,19 @@ export function setHandOverDoor(next: HandOverDoor): () => void {
 export function handOver(ref: ObjectRef, run: string): Promise<ObjectsHandResult> {
   if (handDoor === null) return Promise.resolve({ handed: false, reason: HAND_OVER_WORDS.noDoor });
   return handDoor(ref, run);
+}
+
+/** Install the take-back's door (the window's own, or a test's). Returns the undo. */
+export function setTakeBackDoor(next: TakeBackDoor): () => void {
+  takeBackDoor = next;
+  return () => {
+    if (takeBackDoor === next) takeBackDoor = null;
+  };
+}
+
+/** End the grant this play made when its words could not follow it. */
+export function takeBack(ref: ObjectRef, run: string): Promise<void> {
+  return takeBackDoor === null ? Promise.resolve() : takeBackDoor(ref, run);
 }
 
 /** The name of an object on a board; null when there is no door, or fieldd did not say in time. */
@@ -109,7 +125,15 @@ export function installObjectsDoor(client: Pick<FielddClient, "request">): () =>
       return null;
     }
   };
+  const back: TakeBackDoor = async (ref, run) => {
+    try {
+      await client.request("objects.takeBack", { ref, run });
+    } catch {
+      // the grant stands, and the person's own take-back still ends it (OB-4)
+    }
+  };
   handDoor = hand;
+  takeBackDoor = back;
   refDoor = named;
   resolveDoor = found;
   void (async () => {
@@ -125,6 +149,7 @@ export function installObjectsDoor(client: Pick<FielddClient, "request">): () =>
   })();
   return () => {
     if (handDoor === hand) handDoor = null;
+    if (takeBackDoor === back) takeBackDoor = null;
     if (refDoor === named) refDoor = null;
     if (resolveDoor === found) resolveDoor = null;
   };
@@ -133,6 +158,7 @@ export function installObjectsDoor(client: Pick<FielddClient, "request">): () =>
 /** Test seam: no doors. */
 export function resetHandOverForTest(): void {
   handDoor = null;
+  takeBackDoor = null;
   refDoor = null;
   resolveDoor = null;
 }

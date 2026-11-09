@@ -140,7 +140,8 @@ function handledFace(
       atPlay: readerAtPlay(object, handler, asked.readNow),
     };
   }
-  const given = run(handler, object.props);
+  const props = asked.readNow(object);
+  const given = props === null ? null : run(handler, props);
   if (given === null || given.trim() === "") return null;
   if (face.type === "link") return { ...base, type: "link", url: given, title: asked.title };
   if (face.type !== "text") return null;
@@ -161,7 +162,8 @@ function handledFace(
 function liveFace(asked: FacesAsked, face?: ObjectAgentFace): RefFace | null {
   const [ref, ...more] = asked.refs;
   const { picture, objects } = asked;
-  if (ref === undefined || picture === null) return null;
+  // a Live speaks for every object it stands for, or none: a partly named selection has no honest one
+  if (ref === undefined || picture === null || asked.refs.length !== objects.length) return null;
   return {
     id: face?.id ?? "live",
     type: "ref",

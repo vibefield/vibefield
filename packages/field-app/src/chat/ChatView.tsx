@@ -10,17 +10,18 @@ import {
 } from "react";
 import { useReducedMotion } from "../field/desk/bar/bar-motion";
 import type { KeyedCallClient } from "../forwarded-call";
+import { handOver } from "../frame/cards/hand-over";
 import type { FrameSurface } from "../frame/frame-surface";
 import { jumpNote, sayOnLine } from "../frame/line-door";
 import { sayStatus } from "../frame/status-line";
 import { requestView } from "../frame/view-state";
 import type { ViewKeys } from "../frame/views";
-import { stillKept } from "../host";
+import { handFileKept, stillKept } from "../host";
 import { NO_HANDLES, sessionHandlesOf } from "./at-rows";
 import { ChatComposer, type ComposerPort } from "./ChatComposer";
 import { ChatEmptyView } from "./ChatEmptyView";
 import { type ChatAct, ChatPanelView, shownOf } from "./ChatPanelView";
-import type { DraftMessage, DraftPart } from "./composer-draft";
+import type { DraftMessage, DraftPart, SendCarried } from "./composer-draft";
 import { crewCardsOf, crewsOfFlow } from "./crew-card";
 import { CREWS_READING, type CrewsDoor, type CrewsReading, useSparkCrews } from "./crews-port";
 import { NO_PAUSE, type PauseAct, pauseTurn, type SparkPauser, turnOf } from "./head-act";
@@ -50,11 +51,18 @@ import {
   useSparkSayer,
   useSparksReading,
   useThreadMarks,
+  whenSparkEntry,
 } from "./sparks-feed";
 import { startersOf } from "./starters";
 import { ThreadFlowView } from "./ThreadFlowView";
 import { footItemsOf, type Starter, sparkIsNew } from "./thread-items";
-import { sayRequestId, sendNote, sendToThread, type ThreadSendOutcome } from "./thread-send";
+import {
+  handToSpark,
+  sayRequestId,
+  sendNote,
+  sendToThread,
+  type ThreadSendOutcome,
+} from "./thread-send";
 import { saidRequestsOf, transcriptItemsOf } from "./transcript-items";
 import {
   READING,
@@ -62,6 +70,9 @@ import {
   type TranscriptReading,
   useSparkTranscript,
 } from "./transcript-port";
+
+/** How long a send waits for a spark just woken to show a session before it says it has none (OB-L1). */
+const HAND_RUN_WAIT_MS = 5_000;
 
 // CHAT, THE CONTROLLER (SP-1b, SP-1d, TH-1; DESIGN.md §8 "Chat's list", "Chat's thread", "Chat's composer"). It draws
 // the window's one feed (`sparks-feed.ts`, which the frame's host starts for the window's life, so Chat's cell hears a
@@ -212,6 +223,7 @@ export function ChatView({
       async (
         message: DraftMessage,
         stills: readonly string[],
+        carried?: SendCarried,
       ): Promise<ThreadSendOutcome | null> => {
         const spark = entry.spark.id;
         if (heldNow.current.has(spark)) return null;
@@ -235,6 +247,16 @@ export function ChatView({
               say: ({ chips, ...ask }) =>
                 sayer({ spark, ...ask, ...(chips.length > 0 ? { chips: [...chips] } : {}) }),
               stillKept,
+              handFileKept: (path) => handFileKept(path),
+              // read after any wake: a spark that had no session has one by now (§4.3, OB-L1)
+              hand: handToSpark(async () => {
+                const now = await whenSparkEntry(
+                  spark,
+                  (current) => current.ownRuns.length > 0,
+                  HAND_RUN_WAIT_MS,
+                );
+                return now?.spark.session?.runtimeRunId ?? now?.ownRuns[0];
+              }, handOver),
               sending: () =>
                 standPendingSay(spark, {
                   requestId,
@@ -247,6 +269,7 @@ export function ChatView({
             message,
             stills,
             requestId,
+            carried,
           );
         } finally {
           holdThread(spark, false);

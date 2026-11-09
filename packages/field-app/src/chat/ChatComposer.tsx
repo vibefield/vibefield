@@ -1,4 +1,4 @@
-import type { AgentModelSelection, ObjectsHandResult } from "@vibefield/contracts";
+import type { AgentModelSelection } from "@vibefield/contracts";
 import {
   type ClipboardEvent,
   type DragEvent,
@@ -25,7 +25,6 @@ import { paneTextOf } from "../frame/cards/card-text";
 import type { Card } from "../frame/cards/cards-model";
 import { OUTCOME_WORDS } from "../frame/cards/cards-words";
 import { readyFace } from "../frame/cards/face-ready";
-import { HAND_OVER_WORDS, handOver } from "../frame/cards/hand-over";
 import { type FrameSurface, foldSurface } from "../frame/frame-surface";
 import { sayOnLine } from "../frame/line-door";
 import { agentChipMenuOf, menuRowId, modelsOf } from "./agent-chip-menu";
@@ -39,12 +38,13 @@ import {
   type DraftPart,
   draftAfterSend,
   draftBlank,
+  draftCarried,
   draftMessage,
-  draftRefs,
   draftSendable,
   draftStills,
   insertChipAt,
   normalizeDraft,
+  type SendCarried,
   spliceDraft,
 } from "./composer-draft";
 import {
@@ -102,7 +102,11 @@ export interface ChatComposerProps {
   port: Pick<ComposerPort, "models">;
   /** Send, queued to the thread's spark as yours (`thread-send.ts`, over Chat's world; TH-1): null while another act
    * holds the thread, which turns the press away (Chat's one guard), so nothing is said and the draft stays */
-  send: (message: DraftMessage, stills: readonly string[]) => Promise<ThreadSendOutcome | null>;
+  send: (
+    message: DraftMessage,
+    stills: readonly string[],
+    carried?: SendCarried,
+  ) => Promise<ThreadSendOutcome | null>;
   /** another act holds this thread — a send into it, Send's or a starter's, or a wake (Chat's one at a time per
    * thread): Send waits, busy, as for its own */
   threadSending?: boolean | undefined;
@@ -478,20 +482,10 @@ export function ChatComposer({
     setBusy(true);
     let outcome: ThreadSendOutcome | null;
     try {
-      // the Live chips' grants go first (§4.3, OB-L1): a refused one stops the send, and says why
-      const refs = draftRefs(sent);
-      const run = entry.ownRuns[0];
-      for (const ref of refs) {
-        const handed: ObjectsHandResult =
-          run === undefined
-            ? { handed: false, reason: HAND_OVER_WORDS.noRun }
-            : await handOver(ref, run);
-        if (!handed.handed) {
-          say(handed.reason);
-          return;
-        }
-      }
-      outcome = await send(draftMessage(sent), draftStills(sent));
+      const message = draftMessage(sent);
+      const stills = draftStills(sent);
+      const carried = draftCarried(sent);
+      outcome = await (carried === null ? send(message, stills) : send(message, stills, carried));
     } finally {
       sending.current = false;
       if (live.current) setBusy(false);
@@ -506,7 +500,7 @@ export function ChatComposer({
     // meanwhile stays (changed within what was sent, it stays whole). The editor standing follows.
     if (live.current) park(partsRef.current);
     onParkRef.current((now) => draftAfterSend(sent, now));
-  }, [entry.ownRuns, park, parts, name, say, send, threadSending]);
+  }, [park, parts, name, say, send, threadSending]);
 
   const onKeyDown = useCallback(
     (event: KeyboardEvent<HTMLDivElement>) => {
@@ -658,14 +652,17 @@ export function ChatComposer({
   nameRef.current = name;
   const entryRef = useRef(entry);
   entryRef.current = entry;
-  const playRef = useRef<(card: Card, face: string, text: string) => void>(() => undefined);
-  playRef.current = (card, face, text) =>
+  const playRef = useRef<(card: Card, face: string, text: string, file?: string) => void>(
+    () => undefined,
+  );
+  playRef.current = (card, face, text, file) =>
     placeChip({
       id: nextChipId(),
       kind: "card",
       card,
       text,
       ...(face === card.faces[0].id ? {} : { face }),
+      ...(file === undefined ? {} : { file }),
     });
   useEffect(() => {
     if (!active) return;
@@ -703,7 +700,12 @@ export function ChatComposer({
         if (!ready.ok) return { ok: false, note: ready.note };
         const text = paneTextOf(card, ready.face);
         if (text === null) return { ok: false, note: OUTCOME_WORDS.pictureNotWritten };
-        playRef.current(card, faceId, text);
+        // a path written for this play, which the hand keeps twelve of: the send asks it is still there (OB-D10 A)
+        const made =
+          ready.face !== chosen && (ready.face.type === "image" || ready.face.type === "file")
+            ? ready.face.path
+            : undefined;
+        playRef.current(card, faceId, text, made);
         return { ok: true, note: OUTCOME_WORDS.added(nameRef.current) };
       },
     });

@@ -176,6 +176,7 @@ declare global {
         stillKept(name: string): Promise<boolean>;
         writeHandPicture(png: Uint8Array<ArrayBuffer>): Promise<string | null>;
         writeHandFile(name: string, text: string): Promise<string | null>;
+        handFileKept(path: string): Promise<boolean>;
         capture(): Promise<ScreenshotCaptureResult>;
         /** SNAP-3 — the result of a capture MAIN ran (the View menu's item);
          * the latest is retained until the renderer subscribes. */

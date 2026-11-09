@@ -60,6 +60,8 @@ export interface CardChip {
   readonly text: string;
   /** the face played (`card-landing.ts`, §4.3), when it is not the card's first; absent, its first */
   readonly face?: string;
+  /** the path written for this chip at the play (OB-D10 A), which a send checks is still kept */
+  readonly file?: string;
 }
 
 export type DraftChip = AgentChip | SessionChip | CardChip;
@@ -205,14 +207,25 @@ export function draftStills(parts: readonly DraftPart[]): string[] {
   });
 }
 
-/** The desk objects a draft's Live chips name: sending the draft is the person's grant of each (§4.3, OB-L1). */
-export function draftRefs(parts: readonly DraftPart[]): readonly ObjectRef[] {
-  return parts.flatMap((part) => {
-    if (part.kind !== "chip" || part.chip.kind !== "card") return [];
-    const { card, face } = part.chip;
+/** What a send carries beyond its words: the desk objects its Live chips name, sending being the person's grant of each (§4.3,
+ * OB-L1), and the files written for its chips at the play, which must still be kept when it goes (OB-D10 A). */
+export interface SendCarried {
+  readonly refs: readonly ObjectRef[];
+  readonly files: readonly string[];
+}
+
+/** What this draft carries beyond its words; null when it is its words alone. */
+export function draftCarried(parts: readonly DraftPart[]): SendCarried | null {
+  const refs: ObjectRef[] = [];
+  const files: string[] = [];
+  for (const part of parts) {
+    if (part.kind !== "chip" || part.chip.kind !== "card") continue;
+    const { card, face, file } = part.chip;
     const chosen = face === undefined ? card.faces[0] : faceOf(card, face);
-    return chosen.type === "ref" ? [chosen.ref, ...(chosen.more ?? [])] : [];
-  });
+    if (chosen.type === "ref") refs.push(chosen.ref, ...(chosen.more ?? []));
+    if (file !== undefined) files.push(file);
+  }
+  return refs.length === 0 && files.length === 0 ? null : { refs, files };
 }
 
 /** What a draft keeps once `sent` was queued from it (DESIGN.md §8 "Chat's composer", Send: what was typed or added

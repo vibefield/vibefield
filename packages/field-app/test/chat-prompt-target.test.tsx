@@ -266,7 +266,10 @@ describe('the composer as a place for cards (DESIGN.md §8 "Chat\'s composer", a
     });
     await act(async () => undefined);
     // the composer names what is to be granted; the send grants it after any wake (`thread-send.ts`)
-    expect(send.mock.calls[0]?.[2]).toEqual({ refs: ["vf:obj/7hk2qx4m"], files: [] });
+    expect((send.mock.calls[0] as readonly unknown[] | undefined)?.[2]).toEqual({
+      refs: ["vf:obj/7hk2qx4m"],
+      files: [],
+    });
   });
 
   it("never takes an @ being typed as its place: the card lands at the caret, and the @ and its query stay", async () => {
