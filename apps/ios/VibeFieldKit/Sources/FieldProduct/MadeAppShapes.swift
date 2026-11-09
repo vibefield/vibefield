@@ -188,7 +188,14 @@ public struct IndexAppsResult: Sendable, Equatable {
   public let unknownFields: [String]
 
   public init(json: JSONValue) throws {
-    throw WireDecodeError(shape: "IndexAppsResult", reason: "unbuilt (MA-6a red)")
+    var object = try WireObject(shape: "IndexAppsResult", value: json)
+    var dropped: [String] = []
+    rows = try object.rows("rows", IndexAppRow.init(json:), dropped: &dropped)
+    cursor = object.string("cursor")
+    sources = object.optionalRows("sources", IndexAppsSource.init(json:), dropped: &dropped)
+    clipped = object.bool("clipped") == true
+    droppedRows = dropped
+    unknownFields = object.unknownFields
   }
 }
 
@@ -200,17 +207,25 @@ public struct MadeAppRefusal: Sendable, Equatable {
     case exportUnbuilt = "export-unbuilt"
     case notKept = "not-kept"
     case tooLarge = "too-large"
-    case unsupported
+    case unsupported = "unsupported"
     case reading = "library-reading"
     case exportFailed = "export-failed"
     case notLinked = "not-linked"
   }
+
+  /// `MADE_APP_OPEN.SERVICE`
+  public static let service = "apps"
 
   public let state: State
   /// The desktop the refusal is about, when it was carried there.
   public let device: String?
 
   public init?(details: JSONValue?) {
-    return nil
+    guard details?["service"]?.stringValue == Self.service,
+      let word = details?["state"]?.stringValue,
+      let state = State(rawValue: word)
+    else { return nil }
+    self.state = state
+    device = details?["device"]?.stringValue
   }
 }

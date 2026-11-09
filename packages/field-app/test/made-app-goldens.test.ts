@@ -59,7 +59,9 @@ function holds(file: string, golden: unknown): void {
 /** One of the contracts' `index.apps.list` fixtures, parsed as the desk parses a page. */
 const page = (name: string) =>
   IndexAppsResult.parse(
-    JSON.parse(readFileSync(join(here, "../../contracts/fixtures", `index-apps.${name}.json`), "utf8")),
+    JSON.parse(
+      readFileSync(join(here, "../../contracts/fixtures", `index-apps.${name}.json`), "utf8"),
+    ),
   );
 
 interface Case {
@@ -92,7 +94,11 @@ function cases(): Case[] {
   });
   return [
     { name: "one desktop, the newest", app: at(valid.rows, 0), sources: valid.sources },
-    { name: "one desktop, no preview, no hosted link", app: at(valid.rows, 1), sources: valid.sources },
+    {
+      name: "one desktop, no preview, no hosted link",
+      app: at(valid.rows, 1),
+      sources: valid.sources,
+    },
     { name: "the mesh, an awake desktop's", app: at(mesh.rows, 0), sources: mesh.sources },
     { name: "the mesh, an asleep desktop's", app: at(mesh.rows, 1), sources: mesh.sources },
     { name: "the phone's page", app: at(tailnet.rows, 0), sources: tailnet.sources },
@@ -119,7 +125,10 @@ function cases(): Case[] {
       app: base,
       sources: [{ ...source, previewsBase: undefined }],
     },
-    onBase("an agent the catalog does not name", { provider: "not-a-catalog-row", kind: undefined }),
+    onBase("an agent the catalog does not name", {
+      provider: "not-a-catalog-row",
+      kind: undefined,
+    }),
     onBase("no agent named", { provider: undefined, kind: undefined }),
   ];
 }

@@ -76,6 +76,18 @@ try {
 } catch {
   // said with the problems, below
 }
+// MA-6a (VF-PM 2026-11-09 04:46Z) — one app's facts, written by field-app's own reading
+// (packages/field-app/test/made-app-goldens.test.ts, `VF_WRITE_GOLDENS=1`), which the kit's MadeAppFacts is held to
+// (FieldHomeTests). Read from their folder, as the flow's are.
+const MADE_APPS = join(root, "packages/field-app/test/fixtures/made-apps");
+let madeAppGoldens = [];
+try {
+  madeAppGoldens = readdirSync(MADE_APPS)
+    .filter((name) => name.endsWith(".golden.json"))
+    .sort();
+} catch {
+  // said with the problems, below
+}
 // IOS-12d (Q1 (a), VF-PM 2026-11-06 19:12Z) — the needs-you card's goldens, written by field-app's own card
 // (packages/field-app/test/needs-card-goldens.test.ts, `VF_WRITE_GOLDENS=1`), which the kit's NeedsCards is held to
 // (FieldProductTests). Read from their folder, as the flow's are.
@@ -182,6 +194,7 @@ const OTHER_ORIGINS = new Map([
   ],
   ...phoneViewGoldens.map((name) => [name, join(PHONE_GODVIEW, name)]),
   ...chatFlowGoldens.map((name) => [name, join(CHAT_FLOW, name)]),
+  ...madeAppGoldens.map((name) => [name, join(MADE_APPS, name)]),
   ...needsCardGoldens.map((name) => [name, join(NEEDS_CARD, name)]),
   ...newSparkGoldens.map((name) => [name, join(NEW_SPARK, name)]),
   ...atRowsGoldens.map((name) => [name, join(AT_ROWS, name)]),
@@ -439,6 +452,21 @@ const requiredMirrors = [
   ["chat", sayFixtures, ["Tests/FieldProductTests"]],
   // and the two merged lists Chat's demo door answers under `-vf-mock` (ChatFixtureDoor, DEBUG)
   ["sparks", ["compose-sparks-list.merged.json", "needs-list.merged.json"], ["Sources/FieldHome"]],
+  // MA-6a (absorbing MA-1b) — the apps doors' pages and refusals, read by the kit's `IndexAppsResult`, and one app's
+  // facts (in their own folder), which the kit's MadeAppFacts is held to
+  [
+    "apps",
+    [
+      "index-apps.valid.json",
+      "index-apps.tailnet.json",
+      "index-apps.mesh.json",
+      "error-data.apps-export-unbuilt.json",
+      "error-data.apps-not-kept.json",
+      "error-data.apps-reading.json",
+    ],
+    ["Tests/FieldProductTests"],
+  ],
+  ["made-apps", madeAppGoldens.map((name) => `made-apps/${name}`), ["Tests/FieldHomeTests"]],
   // IOS-12d — the needs-you card's goldens (in their own folder), and the items and the catalog Chat's demo door
   // answers its cards with under `-vf-mock` (ChatFixtureDoor's `-vf-needs-case=`)
   ["needs-card", needsCardGoldens.map((name) => `needs-card/${name}`), ["Tests/FieldProductTests"]],
@@ -509,6 +537,11 @@ const requiredMirrors = [
 if (chatFlowGoldens.length === 0) {
   problems.push(
     `the phone's Chat goldens are missing: ${relative(root, CHAT_FLOW)} holds no *.golden.json`,
+  );
+}
+if (madeAppGoldens.length === 0) {
+  problems.push(
+    `one app's facts golden is missing: ${relative(root, MADE_APPS)} holds no *.golden.json`,
   );
 }
 if (needsCardGoldens.length === 0) {
@@ -1372,6 +1405,55 @@ pins.push(
   ].map(([key, swift]) =>
     freewayPin("FREEWAY_APPROVAL", key, swift, { indent: 4, value: '"[a-z-]+"' }),
   ),
+);
+
+// MA-6a — the root-URL rule's three bounds (`ArtifactRootURL`, from ARTIFACT_LIMITS) and the apps refusal's service
+// and words (`MadeAppRefusal`, from MADE_APP_OPEN), each read from its own block of the contracts.
+const MADE_APP_SWIFT = "apps/ios/VibeFieldKit/Sources/FieldProduct/MadeAppShapes.swift";
+pins.push(
+  ...[
+    ["URL_CHARS", "maxChars"],
+    ["LISTEN_PORT_MIN", "portMin"],
+    ["LISTEN_PORT_MAX", "portMax"],
+  ].map(([key, swift]) => ({
+    name: `ARTIFACT_LIMITS.${key}`,
+    origin: {
+      file: "packages/contracts/src/artifacts.ts",
+      pattern: new RegExp(
+        `export const ARTIFACT_LIMITS = \\{(?:(?!\\n\\} as const;)[\\s\\S])*?\\n {2}${key}: (${NUMBER}),\\n`,
+      ),
+      label: `ARTIFACT_LIMITS.${key}`,
+    },
+    copy: {
+      file: MADE_APP_SWIFT,
+      pattern: new RegExp(`^ {2}public static let ${swift} = (${NUMBER})$`, "m"),
+      label: `ArtifactRootURL.${swift}`,
+    },
+  })),
+  ...[
+    ["SERVICE", "public static let service"],
+    ["STATE_EXPORT_UNBUILT", "case exportUnbuilt"],
+    ["STATE_NOT_KEPT", "case notKept"],
+    ["STATE_TOO_LARGE", "case tooLarge"],
+    ["STATE_UNSUPPORTED", "case unsupported"],
+    ["STATE_READING", "case reading"],
+    ["STATE_EXPORT_FAILED", "case exportFailed"],
+    ["STATE_NOT_LINKED", "case notLinked"],
+  ].map(([key, swift]) => ({
+    name: `MADE_APP_OPEN.${key}`,
+    origin: {
+      file: REGISTRIES,
+      pattern: new RegExp(
+        `export const MADE_APP_OPEN = \\{(?:(?!\\n\\} as const;)[\\s\\S])*?\\n {2}${key}: "([a-z-]+)",\\n`,
+      ),
+      label: `MADE_APP_OPEN.${key}`,
+    },
+    copy: {
+      file: MADE_APP_SWIFT,
+      pattern: new RegExp(`^ +${swift} = "([a-z-]+)"$`, "m"),
+      label: `MadeAppRefusal: ${swift}`,
+    },
+  })),
 );
 
 // SP-7a — the transcript reader's numbers (`SparkTranscriptLimits`, SparkTranscriptWire.swift), each read from
