@@ -114,6 +114,40 @@ struct LensRecedeTests {
     #expect(homeProfiles > 0)
   }
 
+  /// UM-5b — a plan's filter recedes by the same predicate as the lens: the home's rows whose run is on the plan stand,
+  /// every other row, a peer's or a terminal's too, recedes — the list's rows, the rain's columns and the timeline's
+  /// lanes alike.
+  @Test("a plan's filter: the home's runs on it stand, a peer's and a terminal's recede, on every view (UM-5b)")
+  func planRecedes() throws {
+    let rows = try HomeFixture.witnessRows()
+    let onPlan = rows.first { $0.isSelf && $0.row.monitor.kind == .agent }?.row.monitor
+    let provider = try #require(onPlan?.provider?.id)
+    let plan = PlanSessions.Lens(planRuns: ["\(onPlan?.profileSet ?? "")\u{0}\(provider)"])
+    let list = ListModel.inputs(rows: rows, activeId: nil, fieldIsLive: true, lens: plan)
+    var standing = 0
+    for (row, input) in zip(rows, list) {
+      let monitor = row.row.monitor
+      let expected = PlanSessions.recedes(plan, isSelf: row.isSelf, profileSet: monitor.profileSet, provider: monitor.provider?.id)
+      #expect(input.receded == expected)
+      if !row.isSelf {
+        #expect(input.receded)
+      }
+      if monitor.kind == .terminal {
+        #expect(input.receded)
+      }
+      if !input.receded { standing += 1 }
+      let agent = RainAgent(row: row, lens: plan)
+      #expect(agent.receded == expected)
+      let lane = TimelineRow(row, unread: false, colour: nil, active: false, lens: plan)
+      #expect(lane.receded == expected)
+    }
+    #expect(standing > 0)
+    let catalog = AgentCatalog(entries: [])
+    let bubbles = rows.map { fieldBubble(from: $0, fieldIsLive: true, catalog: catalog, suppressUnread: false) }
+    let swarm = GodviewRecede.swarm(bubbles, lens: plan)
+    #expect(swarm.targets.count < bubbles.count)
+  }
+
   /// SE-2n (the S2 review's finding 2, its owed half) — the swarm's bodies recede by the lens, as the list's rows do:
   /// a body the rule recedes settles at the toolkit's weight, the faintest while every body recedes, and steps there
   /// at the toolkit's pace; with no lens nothing recedes, and a receded body comes back at the same pace.

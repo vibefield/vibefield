@@ -30,6 +30,37 @@ struct PhoneSearchWorldTests {
     return lens
   }
 
+  /// UM-5b — a session carries the plan its run spends: only the home's, read by the join.
+  @Test("a drawn row carries its run's plan key, the home's only, from the sets (UM-5b)")
+  func sessionPlanKey() throws {
+    let rows = try HomeFixture.witnessRows()
+    let desks = PhoneSearchWorld.desks(rows: rows)
+    let sets = try ProfileLensTests.planned()
+    let sessions = rows.map { PhoneSearchWorld.session($0, desks: desks, sets: sets) }
+    for (row, session) in zip(rows, sessions) {
+      let monitor = row.row.monitor
+      let expected = row.isSelf ? PlanSessions.planKey(sets, profileSet: monitor.profileSet, provider: monitor.provider?.id) : nil
+      #expect(session.planKey == expected)
+    }
+    // the plain form, no sets, knows none
+    let plain = rows.map { PhoneSearchWorld.session($0, desks: desks) }
+    let none = plain.allSatisfy { $0.planKey == nil }
+    #expect(none)
+  }
+
+  @Test("a plan's chip or token is the lens's: applied and removed through the lens (UM-5b)")
+  func planApplies() throws {
+    var state = SearchState()
+    var lens = ProfileLensTests.lens(try ProfileLensTests.planned())
+    PhoneSearchWorld.apply(.plan("work/plan:openai"), label: "OpenAI", state: &state, lens: &lens)
+    #expect(lens.plan == "work/plan:openai")
+    PhoneSearchWorld.remove(.plan("work/plan:openai"), state: &state, lens: &lens)
+    #expect(lens.plan == nil)
+    lens.showPlan("work/plan:openai")
+    PhoneSearchWorld.act(.clearFilters, state: &state, lens: &lens)
+    #expect(lens.plan == nil)
+  }
+
   /// PG-3a's witness: Studio (the home, seven rows), Loft (three, through the home) and Attic (one, asleep).
   @Test("a drawn row as search reads it: its body's id, its facts, its state, the home's profile only on the home's")
   func witnessSessions() throws {

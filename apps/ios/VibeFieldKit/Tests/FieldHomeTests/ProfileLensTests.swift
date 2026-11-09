@@ -31,6 +31,70 @@ struct ProfileLensTests {
     return lens
   }
 
+  /// UM-5b — the three with plans: This Mac's and Work's Anthropic are one account (twins), Work's OpenAI is its own.
+  static func planned() throws -> [AgentProfileSet] {
+    [
+      try PlanSessionsTests.set(
+        "native", personas: [PlanSessionsTests.persona("n-claude", "claude")],
+        plans: [PlanSessionsTests.plan("anthropic", holders: ["n-claude"], alsoIn: ["work"], email: "kim@example.com")]),
+      try PlanSessionsTests.set(
+        "work",
+        personas: [PlanSessionsTests.persona("w-claude", "claude"), PlanSessionsTests.persona("w-codex", "codex")],
+        plans: [
+          PlanSessionsTests.plan("anthropic", holders: ["w-claude"], alsoIn: ["native"], email: "kim@example.com"),
+          PlanSessionsTests.plan("openai", holders: ["w-codex"]),
+        ]),
+    ]
+  }
+
+  @Test("a plan's filter is set and cleared, with one profile too, and holds no profile's gate (UM-5b)")
+  func showPlan() throws {
+    var lens = Self.lens(try Self.planned())
+    lens.showPlan("work/plan:openai")
+    #expect(lens.plan == "work/plan:openai")
+    lens.showPlan(nil)
+    #expect(lens.plan == nil)
+    // a key the home does not hold changes nothing
+    lens.showPlan("work/plan:gone")
+    #expect(lens.plan == nil)
+
+    let one = [try PlanSessionsTests.set("native", personas: [PlanSessionsTests.persona("n", "claude")], plans: [PlanSessionsTests.plan("x", holders: ["n"])])]
+    var single = Self.lens(one)
+    #expect(!single.offersProfiles)
+    single.showPlan("native/plan:x")
+    #expect(single.plan == "native/plan:x")
+    // adopt keeps it: the filter is not the lens
+    single.adopt(one)
+    #expect(single.plan == "native/plan:x")
+  }
+
+  @Test("the home's plans read again: a key it no longer holds lets the filter go (UM-5b)")
+  func adoptDropsGonePlan() throws {
+    let planned = try Self.planned()
+    var lens = Self.lens(planned)
+    lens.showPlan("work/plan:openai")
+    lens.adopt(planned.filter { $0.id == "native" })
+    #expect(lens.plan == nil)
+  }
+
+  @Test("a lens drops a plan not in it; a plan it holds (or its twin) stays, and choosing a plan drops a lens it is not in (UM-5b)")
+  func lensAndPlan() throws {
+    var lens = Self.lens(try Self.planned())
+    lens.showPlan("work/plan:openai")
+    lens.show("native")
+    #expect(lens.plan == nil)
+    lens.showPlan("work/plan:anthropic")
+    lens.show("native")
+    #expect(lens.plan == "work/plan:anthropic")
+    lens.show("work")
+    lens.showPlan("native/plan:anthropic")
+    #expect(lens.profile == "work")
+    lens.show("native")
+    lens.showPlan("work/plan:openai")
+    #expect(lens.profile == nil)
+    #expect(lens.plan == "work/plan:openai")
+  }
+
   @Test("set: a profile the home holds is chosen, and the lens says which")
   func setShows() throws {
     var lens = Self.lens(try Self.three())

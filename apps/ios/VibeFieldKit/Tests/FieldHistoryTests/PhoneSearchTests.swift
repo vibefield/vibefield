@@ -37,11 +37,12 @@ struct PhoneSearchTests {
   static func session(
     _ id: String, _ state: PhoneSearch.LiveState, profile: String? = "work",
     on desk: PhoneSearch.Desk = PhoneSearchTests.studio, title: String = "Ready.", folder: String? = "vibe-field",
-    agent: String? = "Agent", native: String? = nil
+    agent: String? = "Agent", native: String? = nil, planKey: String? = nil
   ) -> PhoneSearch.LiveSession {
     PhoneSearch.LiveSession(
       id: id, title: title, folder: folder, agent: agent, state: state, profileSet: desk.isHome ? profile : nil,
-      device: desk.id, deviceName: desk.name, platform: desk.platform, isHome: desk.isHome, nativeSessionId: native)
+      device: desk.id, deviceName: desk.name, platform: desk.platform, isHome: desk.isHome, nativeSessionId: native,
+      planKey: planKey)
   }
 
   /// Eight live sessions: six on the home (four under Work, two under This Mac, one a shell), two on the loft.
@@ -466,6 +467,31 @@ struct PhoneSearchTests {
     #expect(
       PhoneSearch.pastFoot(rows: 0, query: "", project: billing, kind: .any, lens: "Work", asked: .settled)
         == "Your latest sessions in billing-api · every profile; Work comes back on Field")
+  }
+
+  /// UM-5b — the plan's clause on Everything's foot, in its two forms (‹for James›, §9).
+  @Test("Everything's foot says a plan comes back on Field, alone and with a profile (UM-5b)")
+  func pastFootPlan() {
+    let plan = PhoneSearch.pastFoot(rows: 3, query: "", project: nil, kind: .any, lens: nil, plan: "Claude Max", asked: .settled)
+    #expect(plan == "Your latest sessions · every plan; Claude Max comes back on Field")
+    let both = PhoneSearch.pastFoot(rows: 3, query: "", project: nil, kind: .any, lens: "Work", plan: "Claude Max", asked: .settled)
+    #expect(both == "Your latest sessions · every profile; Work and Claude Max come back on Field")
+  }
+
+  @Test("a plan keeps the runs on its family, in Live now; its token comes after the profile's (UM-5b)")
+  func liveRowsPlan() throws {
+    var live = try Self.field()
+    live.sessions[0] = Self.session("on", .working, planKey: "work/plan:one")
+    live.sessions[1] = Self.session("off", .idle, planKey: "work/plan:two")
+    let rows = PhoneSearch.liveRows(live, query: "", profile: nil, desk: nil, plan: Set(["work/plan:one"]))
+    let ids = rows.map { $0.session.id }
+    #expect(ids == ["on"])
+    let plan = PhoneSearch.Plan(key: "work/plan:one", label: "Claude Max", mark: "anthropic")
+    let tokens = PhoneSearch.liveTokens(live, profile: "work", desk: nil, plan: plan)
+    let filters = tokens.map { $0.filter }
+    #expect(filters == [.profile("work"), .plan("work/plan:one")])
+    let lead = tokens.last?.lead
+    #expect(lead == .agent("anthropic"))
   }
 
   /// SE-2i (the S2 review's finding 4) — with words, Everything's foot says what was answered as Live now's does:
