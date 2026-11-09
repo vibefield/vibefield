@@ -115,7 +115,7 @@ describe("choosing by direction", () => {
 
 describe("the words", () => {
   it("are 6.6% of the window's longer side, between 22 and 72", () => {
-    expect(sayPx({ width: 1180, height: 780 })).toBeCloseTo(77.88 > 72 ? 72 : 77.88, 5);
+    expect(sayPx({ width: 1180, height: 780 })).toBe(72);
     expect(sayPx({ width: 600, height: 400 })).toBeCloseTo(39.6, 5);
     expect(sayPx({ width: 200, height: 120 })).toBe(22);
   });

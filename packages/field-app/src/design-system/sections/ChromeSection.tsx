@@ -26,6 +26,7 @@ const UPDATE_GROUP_OPTIONS: readonly { id: UpdateCornerGroup; label: string }[] 
   { id: "acts", label: "Restart · Download" },
 ];
 
+import { CardBloomPlate } from "../CardBloomPreview";
 import {
   CARD_FIXTURES,
   CARDS_STATES,
@@ -430,6 +431,7 @@ export function ChromeSection({
         <CardFacesPlate cards={WAITING_FIXTURES} />
         <CardFacesPlate cards={COPY_FIXTURES} />
         <CardFacesPlate cards={FROM_FIXTURES} />
+        <CardBloomPlate />
         <p className="vf-ds-stage-caption">
           One stock, six faces (HN-D1), twice their size: text, a file, an agent (the one dark card,
           its project's dot before its project), a terminal's output, a message and a picture — the

@@ -1,16 +1,55 @@
-import type { BloomModel } from "../card-landing";
-import type { Card } from "../cards-model";
+import { createRoot } from "react-dom/client";
+import { type BloomPoint, CARD_BLOOM } from "./bloom-geometry";
+import type { BloomModel } from "./bloom-model";
+import { CardBloomView } from "./CardBloomView";
 
 /**
- * The drop's bloom (OB-1b's stub; ow-design replaces this file). The card stays carried where it landed; `choose` is
- * called with the face chosen, or null to put the card back, and at most once. `close()` takes the bloom down with
- * nothing chosen and never calls `choose`: the drag calls it for a view change, a closed pane, or a new drag.
+ * THE CARD'S BLOOM, OPENED (lanes/ob-build/SEAM.md: the drop's own call). The window's size is read once, as it opens.
+ * `choose` answers once, with a face or null for nothing; `close()` folds it with no answer, for a change of view or a
+ * place that has gone. Either way the buds go back along their spokes before it leaves the page.
  */
 export function openBloom(
-  _card: Card,
-  _model: BloomModel,
-  _at: { readonly x: number; readonly y: number },
-  _choose: (face: string | null) => void,
+  card: { readonly title: string },
+  model: BloomModel,
+  at: BloomPoint,
+  choose: (face: string | null) => void,
 ): { close(): void } {
-  return { close: () => undefined };
+  const host = document.createElement("div");
+  document.body.append(host);
+  const root = createRoot(host);
+  const field = { width: window.innerWidth, height: window.innerHeight };
+  let done = false;
+
+  const draw = (closing: boolean): void => {
+    root.render(
+      <CardBloomView
+        model={model}
+        at={at}
+        field={field}
+        title={card.title}
+        closing={closing}
+        choose={(face) => {
+          if (done) return;
+          leave();
+          choose(face);
+        }}
+      />,
+    );
+  };
+
+  const leave = (): void => {
+    done = true;
+    draw(true);
+    window.setTimeout(() => {
+      root.unmount();
+      host.remove();
+    }, CARD_BLOOM.retract + 20);
+  };
+
+  draw(false);
+  return {
+    close() {
+      if (!done) leave();
+    },
+  };
 }

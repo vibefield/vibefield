@@ -1,0 +1,210 @@
+/* THE CARD'S BLOOM (OB-D2, OB-D12 A; DESIGN.md §8 "The hand"): above the hand, under the carried card (66), which stands as
+   its hub. Always on the quiet dark veil, so its inks are the same in both themes. */
+
+.vf-card-bloom {
+  position: fixed;
+  z-index: 65;
+  inset: 0;
+  color: var(--vf-bloom-ink);
+}
+
+.vf-card-bloom[data-still] {
+  position: absolute;
+  pointer-events: none;
+}
+
+.vf-card-bloom-veil {
+  position: absolute;
+  inset: 0;
+  background: var(--vf-bloom-veil);
+  animation: vf-card-bloom-fade 240ms ease both;
+}
+
+.vf-card-bloom-clear {
+  position: absolute;
+  width: 400px;
+  height: 400px;
+  margin: -200px 0 0 -200px;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--vf-bloom-ground) 0 46%, transparent 70%);
+  animation: vf-card-bloom-fade 200ms ease both;
+}
+
+.vf-card-bloom-spoke {
+  position: absolute;
+  height: 1.25px;
+  margin-top: -0.6px;
+  transform-origin: 0 50%;
+  background: color-mix(in srgb, var(--vf-bloom-ink) 22%, transparent);
+  animation: vf-card-bloom-fade 280ms ease both;
+}
+
+/* out centre-first on the pop curve (280ms, 26ms apart), hot on the lift curve */
+.vf-card-bloom-bud {
+  position: absolute;
+  display: grid;
+  width: 48px;
+  height: 48px;
+  margin: -24px 0 0 -24px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  color: var(--vf-bloom-ink);
+  background: var(--vf-bloom-bud);
+  box-shadow: inset 0 0 0 1.25px color-mix(in srgb, var(--vf-bloom-ink) 22%, transparent);
+  place-items: center;
+  transition:
+    transform 180ms var(--vf-ease-lift),
+    background 120ms ease,
+    color 120ms ease;
+  animation: vf-card-bloom-pop 280ms var(--vf-ease-pop) calc(var(--k) * 26ms) both;
+}
+
+.vf-card-bloom-bud[data-on] {
+  color: var(--vf-bloom-bud);
+  background: var(--vf-bloom-ink);
+  transform: scale(1.16);
+}
+
+.vf-card-bloom-bud[data-faint] {
+  color: color-mix(in srgb, var(--vf-bloom-ink) 45%, transparent);
+  background: transparent;
+  box-shadow: none;
+  outline: 1.25px dashed color-mix(in srgb, var(--vf-bloom-ink) 40%, transparent);
+  outline-offset: -1.25px;
+}
+
+.vf-card-bloom-bud[data-faint][data-on] {
+  color: color-mix(in srgb, var(--vf-bloom-ink) 60%, transparent);
+  background: color-mix(in srgb, var(--vf-bloom-ink) 6%, transparent);
+  transform: none;
+}
+
+/* the name, its reason under it when it can't land; 140ms behind its bud */
+.vf-card-bloom-label {
+  position: absolute;
+  display: grid;
+  gap: 2px;
+  color: color-mix(in srgb, var(--vf-bloom-ink) 78%, transparent);
+  white-space: nowrap;
+  text-shadow:
+    0 0 6px var(--vf-bloom-ground),
+    0 0 2px var(--vf-bloom-ground);
+  animation: vf-card-bloom-fade 200ms ease calc(140ms + var(--k) * 26ms) both;
+}
+
+.vf-card-bloom-label[data-side="top"] {
+  text-align: center;
+  transform: translate(-50%, -100%);
+}
+
+.vf-card-bloom-label[data-side="left"] {
+  text-align: right;
+  transform: translate(-100%, -50%);
+}
+
+.vf-card-bloom-label[data-side="right"] {
+  text-align: left;
+  transform: translate(0, -50%);
+}
+
+.vf-card-bloom-label[data-on] {
+  color: var(--vf-bloom-ink);
+}
+
+.vf-card-bloom-label b {
+  font: 700 9.5px / 1.1 var(--vf-font-mono);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.vf-card-bloom-label span {
+  max-width: 118px;
+  font: 800 7.5px / 1.1 var(--vf-font-mono);
+  letter-spacing: 0.06em;
+  white-space: normal;
+  opacity: 0.72;
+  text-transform: uppercase;
+}
+
+.vf-card-bloom-words {
+  position: absolute;
+  white-space: nowrap;
+  text-align: center;
+  transform: translateX(-50%);
+}
+
+.vf-card-bloom-say {
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.04em;
+  text-shadow:
+    0 0 24px var(--vf-bloom-ground),
+    0 0 4px var(--vf-bloom-ground);
+  animation: vf-card-bloom-slate 150ms ease both;
+}
+
+.vf-card-bloom-verb {
+  color: color-mix(in srgb, var(--vf-bloom-ink) 40%, transparent);
+}
+
+.vf-card-bloom-where {
+  margin-top: 8px;
+  color: color-mix(in srgb, var(--vf-bloom-ink) 60%, transparent);
+  font: 500 13px / 1 var(--vf-font-mono);
+}
+
+/* leaving: back along their spokes on the retract curve (180ms), their labels with them */
+.vf-card-bloom[data-closing] :is(.vf-card-bloom-bud, .vf-card-bloom-label) {
+  opacity: 0;
+  animation: none;
+  transform: translate(var(--dx), var(--dy)) scale(0.4);
+  transition:
+    transform 180ms cubic-bezier(0.4, 0, 1, 1),
+    opacity 180ms ease;
+}
+
+.vf-card-bloom[data-closing]
+  :is(.vf-card-bloom-veil, .vf-card-bloom-clear, .vf-card-bloom-spoke, .vf-card-bloom-words) {
+  opacity: 0;
+  animation: none;
+  transition: opacity 120ms ease;
+}
+
+@keyframes vf-card-bloom-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes vf-card-bloom-pop {
+  from {
+    opacity: 0;
+    transform: translate(var(--dx), var(--dy)) scale(0.4);
+  }
+}
+
+@keyframes vf-card-bloom-slate {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vf-card-bloom
+    :is(.vf-card-bloom-bud, .vf-card-bloom-label, .vf-card-bloom-spoke, .vf-card-bloom-say) {
+    animation: vf-card-bloom-fade 90ms ease both;
+  }
+
+  .vf-card-bloom-bud,
+  .vf-card-bloom-bud[data-on] {
+    transform: none;
+    transition: none;
+  }
+
+  .vf-card-bloom[data-closing] :is(.vf-card-bloom-bud, .vf-card-bloom-label) {
+    transform: none;
+    transition: opacity 90ms ease;
+  }
+}

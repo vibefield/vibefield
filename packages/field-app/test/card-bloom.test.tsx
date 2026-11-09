@@ -1,4 +1,4 @@
-// @vitest-environment jsdom
+// @vitest-environment happy-dom
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -178,6 +178,21 @@ describe("the card's bloom", () => {
     if (b === undefined) throw new Error("no bud");
     pointAt("pointermove", b.x, b.y);
     expect(on(el)?.dataset.face).toBe("live");
+  });
+
+  it("listens to nothing as a catalog plate", () => {
+    host = document.createElement("div");
+    document.body.append(host);
+    root = createRoot(host);
+    const choose = vi.fn();
+    act(() =>
+      root?.render(
+        createElement(CardBloomView, { model: MODEL, at: AT, field: FIELD, choose, still: true }),
+      ),
+    );
+    key("Escape");
+    expect(choose).not.toHaveBeenCalled();
+    expect(host.querySelector(".vf-card-bloom")?.hasAttribute("data-still")).toBe(true);
   });
 
   it("stands each bud on its ring", () => {
