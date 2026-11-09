@@ -246,6 +246,42 @@ struct AgentProfilesPageTests {
     #expect(shared.sessions == "2 sessions · 2 working")
   }
 
+  /// UM-5b (the review's F8) — the twin's row says Showing while its plan is the one chosen, under a lens on the other
+  /// profile too (`family`, not the key); a plan with no meter has no sessions line and no act, even live.
+  @Test("Showing stands on a twin's row under a lens on the other profile")
+  func showingOnATwin() throws {
+    let reading = try Self.reading()
+    var lens = Self.lens(reading, "work")
+    let shown = Self.words(reading, lens: "work")
+    let found = Self.row(shown, Self.isReading)
+    let plan = try #require(found)
+    lens.showPlan("native/\(plan.key)")
+    let live = Self.field([])
+    let words = AgentProfilesWords(reading: reading, lens: lens, home: "studio", now: Self.now, live: live)
+    let row = words.plans.first { $0.key == plan.key }
+    let said = try #require(row)
+    #expect(said.show == .showing)
+  }
+
+  @Test("a plan with no meter draws no sessions line and no act, even while the field is live")
+  func noMeterNoAct() throws {
+    var reading = try Self.reading(sets: "agents-profile-sets.valid")
+    reading.usage = .batch(try AgentAccountUsageBatch(json: try HomeFixture.json("agent-usage.valid")))
+    let shown = Self.words(reading, lens: "work")
+    let found = shown.plans.first { row in
+      if case .none = row.body { return true }
+      return false
+    }
+    let none = try #require(found)
+    let live = Self.field([Self.run("a", key: "work/\(none.key)", profile: "work")])
+    let words = AgentProfilesWords(
+      reading: reading, lens: Self.lens(reading, "work"), home: "studio", now: Self.now, live: live)
+    let row = words.plans.first { $0.key == none.key }
+    let said = try #require(row)
+    #expect(said.sessions == nil)
+    #expect(said.show == nil)
+  }
+
   @Test("a plan that needs you says its sessions and draws no Show; with no live field nothing is said")
   func needsNoShow() throws {
     let reading = try Self.reading()

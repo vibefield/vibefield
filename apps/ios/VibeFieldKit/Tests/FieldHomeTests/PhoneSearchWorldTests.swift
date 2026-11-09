@@ -138,6 +138,18 @@ struct PhoneSearchWorldTests {
     let alone = PhoneSearchWorld.live(rows: rows, desks: desks, lens: one, lines: [:])
     #expect(alone.profiles.isEmpty)
 
+    // UM-5b: the world's join reads the lens's sets, so a home run says the plan it spends
+    let onPlan = rows.first { $0.isSelf && $0.row.monitor.kind == .agent }?.row.monitor
+    let provider = try #require(onPlan?.provider?.id)
+    let sets = [
+      try PlanSessionsTests.set(
+        "native", personas: [PlanSessionsTests.persona("p", provider)],
+        plans: [PlanSessionsTests.plan("one", holders: ["p"])])
+    ]
+    let planned = PhoneSearchWorld.live(rows: rows, desks: desks, lens: ProfileLensTests.lens(sets), lines: [:])
+    let keyed = planned.sessions.filter { $0.planKey == "native/plan:one" }.count
+    #expect(keyed > 0)
+
     // the live ask: each desktop's runs that have a conversation, by its native id
     let runs = PhoneSearchWorld.runs(live)
     let asked = live.sessions.filter { $0.nativeSessionId != nil }

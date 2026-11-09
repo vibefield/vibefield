@@ -145,6 +145,15 @@ struct LensRecedeTests {
     let catalog = AgentCatalog(entries: [])
     let bubbles = rows.map { fieldBubble(from: $0, fieldIsLive: true, catalog: catalog, suppressUnread: false) }
     let swarm = GodviewRecede.swarm(bubbles, lens: plan)
+    // per body: a constant, or a swarm that ignores the plan, cannot pass (the upper bound alone let either through)
+    for (row, bubble) in zip(rows, bubbles) {
+      let monitor = row.row.monitor
+      let recedes = PlanSessions.recedes(
+        plan, isSelf: row.isSelf, profileSet: monitor.profileSet, provider: monitor.provider?.id)
+      let expected: Double? = recedes ? GodviewRecede.receded : nil
+      #expect(swarm.targets[bubble.id] == expected)
+    }
+    #expect(swarm.targets.count == rows.count - standing)
     #expect(swarm.targets.count < bubbles.count)
   }
 

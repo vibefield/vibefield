@@ -60,6 +60,14 @@ struct PlanSessionsTests {
     #expect(runs == "")
   }
 
+  @Test("a key-only sign-in on no plan joins its own meter row: nothing else names it (the desktop's own row)")
+  func keyOnly() throws {
+    let holds = JSONValue.array([Self.holding(key: true)])
+    let sets = [try Self.set("s", personas: [Self.persona("p", "claude", holds: holds)])]
+    let key = PlanSessions.planKey(sets, profileSet: "s", provider: "claude")
+    #expect(key == "s/agent:p")
+  }
+
   @Test("no holds at all (an older daemon, the tolerant reader): the plan whose holders has it, then its own row")
   func noHolds() throws {
     let sets = [

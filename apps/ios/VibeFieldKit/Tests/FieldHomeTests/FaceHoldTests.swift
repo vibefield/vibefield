@@ -69,6 +69,21 @@ struct FaceHoldTests {
     #expect(usage == FaceHold.Words(verb: nil, rest: "Usage", line: "3 read · none need you"))
   }
 
+  /// UM-5b (the review's F10; §9 "The page", corrected 2026-11-09) — the sessions word beats the unread line: a live
+  /// field's hold counts what runs, whatever the home's usage says.
+  @Test("while the field is live the line says sessions, even while the home's usage is not read")
+  func sessionsBeatTheUnreadLine() throws {
+    let refused = try AgentProfilesPageTests.reading(.notShared)
+    let live = try ProfileLensTokenTests.field()
+    let all = FaceHold.words(refused, reach: .hub, home: "studio", now: Self.now, live: live)
+    #expect(all.line == "8 sessions · every profile")
+    let work = FaceHold.words(refused, reach: .bud("work"), home: "studio", now: Self.now, live: live)
+    #expect(work.line == "3 sessions · 2 working")
+    let first = try AgentProfilesPageTests.reading(.waiting)
+    let asking = FaceHold.words(first, reach: .hub, home: "studio", now: Self.now, live: live)
+    #expect(asking.line == "8 sessions · every profile")
+  }
+
   @Test("the words follow the reach: Usage with one profile; Show all, Show ‹profile› and Cancel with several")
   func words() throws {
     var one = try AgentProfilesPageTests.reading()
