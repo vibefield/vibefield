@@ -44,6 +44,13 @@
     scale 160ms ease;
 }
 
+/* let go where it offers more than one face: it settles as the bloom's hub, on the island curve */
+.vf-cards-carried[data-phase="hub"] .vf-cards-carried-card {
+  transition:
+    transform 240ms var(--vf-ease-island),
+    scale 240ms var(--vf-ease-island);
+}
+
 /* let go on a place that took it: it shrinks into the point, accelerating (the retract, §6) */
 .vf-cards-carried[data-phase="play"] .vf-cards-carried-card {
   transition:

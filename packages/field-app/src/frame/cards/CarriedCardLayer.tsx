@@ -1,6 +1,7 @@
 import { type CSSProperties, type ReactElement, useEffect } from "react";
 import { useReducedMotion } from "../../field/desk/bar/bar-motion";
 import { followDeskCardTarget } from "../../field/desk/desk-card-target";
+import { CARD_BLOOM } from "./bloom/bloom-geometry";
 import { CardFace } from "./CardFace";
 import {
   CARRIED_LAYER_CLASS,
@@ -61,6 +62,14 @@ export function carriedTransforms(carried: CarriedCard): {
       anchor: `translate3d(${home.left + PIVOT_X * s}px, ${home.top + PIVOT_Y * s}px, 0)`,
       card: `rotate(${home.rotate ?? 0}deg) translate(${-PIVOT_X}px, ${-PIVOT_Y}px)`,
       scale: s,
+    };
+  }
+  // the bloom's hub: straight, centred on the point it was let go, while its faces choose
+  if (carried.phase === "hub") {
+    return {
+      anchor: `translate3d(${carried.x}px, ${carried.y}px, 0)`,
+      card: `rotate(0deg) translate(${-CARD_W / 2}px, ${-CARD_H / 2}px)`,
+      scale: CARD_BLOOM.hubScale,
     };
   }
   const lifted = carried.ducked ? DUCK_SCALE : LIFT_SCALE;
