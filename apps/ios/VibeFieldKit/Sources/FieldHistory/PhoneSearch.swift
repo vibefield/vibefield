@@ -498,21 +498,24 @@ public enum PhoneSearch {
     return asked.asking ? " · searching" : " · the words were not searched"
   }
 
-  /// Live now's empty list (§9 "The phone's empty lists"): a filter and no words, with Clear the filters; words, with
-  /// Search everything; else nothing runs. Never a claim nobody answered (§8 "Search — the Peek"): nothing while what
-  /// runs is asked or the home sleeps (the foot says which), the refusal's short sentence (`peek-live.ts` `liveNone`),
-  /// and no "holds every word" until the words are answered.
-  public static func liveEmpty(query: String, profile: String?, desk: String?, feed: Feed, asked: Asked) -> Empty? {
+  /// Live now's empty list (§9 "The phone's empty lists"): a filter (a profile, a desktop, a plan) and no words, with
+  /// Clear the filters; words, with Search everything; else nothing runs. Never a claim nobody answered (§8 "Search —
+  /// the Peek"): nothing while what runs is asked or the home sleeps (the foot says which), the refusal's short
+  /// sentence (`peek-live.ts` `liveNone`), and no "holds every word" until the words are answered.
+  public static func liveEmpty(
+    query: String, profile: String?, desk: String?, plan: String? = nil, feed: Feed, asked: Asked
+  ) -> Empty? {
     switch feed {
     case .live: break
     case .asking, .asleep: return nil
     case .refused: return Empty(sentence: "What runs could not be read.", act: nil)
     }
     let words = query.trimmingCharacters(in: .whitespaces)
-    if words.isEmpty, profile != nil || desk != nil {
+    if words.isEmpty, profile != nil || desk != nil || plan != nil {
       let under = profile.map { " in \($0)" } ?? ""
+      let spending = plan.map { " on \($0)" } ?? ""
       let on = desk.map { "on \($0)" } ?? "right now"
-      return Empty(sentence: "No live session\(under) runs \(on).", act: .clearFilters)
+      return Empty(sentence: "No live session\(under)\(spending) runs \(on).", act: .clearFilters)
     }
     if !words.isEmpty {
       guard asked.answered else { return nil }

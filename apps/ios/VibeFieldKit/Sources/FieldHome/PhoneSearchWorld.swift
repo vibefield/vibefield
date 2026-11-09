@@ -202,7 +202,8 @@ enum PhoneSearchWorld {
         offer: PhoneSearch.liveOffer(live, query: query, profile: profile, desk: desk), rows: .live(rows),
         empty: rows.isEmpty
           ? PhoneSearch.liveEmpty(
-            query: query, profile: lens.chosen?.label, desk: deskName ?? desk, feed: feed, asked: asked) : nil,
+            query: query, profile: lens.chosen?.label, desk: deskName ?? desk, plan: plan?.label, feed: feed,
+            asked: asked) : nil,
         foot: PhoneSearch.liveFoot(
           rows, total: live.sessions.count, query: query, narrowed: profile != nil || desk != nil || plan != nil,
           feed: feed,

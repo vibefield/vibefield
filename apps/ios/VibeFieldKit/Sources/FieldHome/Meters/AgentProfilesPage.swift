@@ -117,7 +117,7 @@ struct AgentProfilesWords: Equatable {
       // the key the filter holds: under a lens a row's key is its own profile's, every plan's is already whole
       let key = chosen.map { "\($0.id)/\(entry.key)" } ?? entry.key
       let family = PlanSessions.family(reading.profiles, key: key)
-      let runs = entry.kind == .noMeter ? nil : live.map { Self.runs($0, keys: Set(family)) }
+      let runs = entry.kind == .noMeter ? nil : live.map { Self.runs($0, keys: Set(family), profile: chosen?.id) }
       return PlanRow(
         key: entry.key, provider: entry.provider, title: entry.title,
         glyph: crowded.contains(entry.provider) ? entry.profiles.first : nil,
@@ -127,11 +127,15 @@ struct AgentProfilesWords: Equatable {
     }
   }
 
-  /// UM-5b — the field's runs that spend one of `keys` (a plan and its twins).
-  private static func runs(_ live: PhoneSearch.Live, keys: Set<String>) -> [PhoneSearch.LiveSession] {
+  /// UM-5b — the field's runs that spend one of `keys` (a plan and its twins); under a lens only those in its profile,
+  /// which is what the filter would keep (lens AND plan: `PlanSessions.recedes`, `PhoneSearch.liveRows`), so a row
+  /// promises no session the field would recede (DESIGN.md §8 "The phone's corner", 2026-11-09).
+  private static func runs(
+    _ live: PhoneSearch.Live, keys: Set<String>, profile: String?
+  ) -> [PhoneSearch.LiveSession] {
     live.sessions.filter { session in
-      guard let key = session.planKey else { return false }
-      return keys.contains(key)
+      guard let key = session.planKey, keys.contains(key) else { return false }
+      return profile == nil || session.profileSet == profile
     }
   }
 
