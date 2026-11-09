@@ -132,6 +132,8 @@ function column(over: Partial<ProfilesColumnViewProps> = {}): ProfilesColumnView
     canAdd: true,
     canOpen: true,
     canRetry: true,
+    chosenPlanFamily: null,
+    onChoosePlan: vi.fn(),
     onPoint: vi.fn(),
     onCircle: vi.fn(),
     onClose: vi.fn(),
@@ -419,6 +421,8 @@ describe("the popover (DESIGN.md §8 'Godview's profiles column')", () => {
       read: "Read a minute ago",
       canOpen: true,
       canRetry: true,
+      chosenPlanFamily: null,
+      onChoosePlan: vi.fn(),
       onClose: vi.fn(),
       onFocusPlan: vi.fn(),
       onOpenProfile: vi.fn(),
@@ -479,13 +483,104 @@ describe("the popover (DESIGN.md §8 'Godview's profiles column')", () => {
     );
   });
 
-  it("wave 1: a plan's row takes no click — not a button, never pressed", () => {
-    const page = mount(<ProfilePopoverView {...popover(thisMac())} />);
-    expect(page.querySelectorAll(".vf-profiles-pop-row").length).toBeGreaterThan(0);
-    for (const row of page.querySelectorAll(".vf-profiles-pop-row")) {
-      expect(row.tagName).not.toBe("BUTTON");
-      expect(row.hasAttribute("aria-pressed")).toBe(false);
-    }
+  /** The reading rows of a circle, with the bare and the union key of each. */
+  function readingRows(circle: ColumnCircle): { key: string; union: string; title: string }[] {
+    return circle.meters.entries
+      .filter((entry) => entry.kind === "reading")
+      .map((entry) => ({
+        key: entry.key,
+        union: `${circle.set.id}/${entry.key}`,
+        title: entry.title,
+      }));
+  }
+  const rowOf = (page: HTMLElement, key: string): HTMLElement =>
+    page.querySelector<HTMLElement>(`.vf-profiles-pop-row[data-plan="${key}"]`) as HTMLElement;
+  const chooseButton = (row: HTMLElement | null): HTMLButtonElement | null =>
+    row?.querySelector<HTMLButtonElement>("button.vf-profiles-pop-row-choose") ?? null;
+
+  it("a plan's row is a toggle: a pressable button stretched over it, handing back ‹set›/‹key›; the others dim; a need row has none (UM-5a)", () => {
+    const circle = thisMac();
+    const [first, second] = readingRows(circle);
+    expect(first).toBeDefined();
+    expect(second).toBeDefined();
+    if (first === undefined || second === undefined) return;
+    const props = popover(circle);
+    const page = mount(<ProfilePopoverView {...props} />);
+    const row = rowOf(page, first.key);
+    // still a list's row: the C1 line and its [role=listitem] are found inside a div
+    expect(row.tagName).toBe("DIV");
+    expect(row.querySelector('[role="listitem"]')).not.toBeNull();
+    const button = chooseButton(row);
+    expect(button?.getAttribute("aria-pressed")).toBe("false");
+    expect(button?.getAttribute("aria-label")).toBe(`Show only ${first.title}'s sessions`);
+    expect(row.firstElementChild).toBe(button);
+    act(() => button?.click());
+    expect(props.onChoosePlan).toHaveBeenCalledWith(first.union);
+
+    const chosen = mount(
+      <ProfilePopoverView {...popover(circle, { chosenPlanFamily: [first.union] })} />,
+    );
+    const on = rowOf(chosen, first.key);
+    expect(on.hasAttribute("data-pressed")).toBe(true);
+    expect(on.hasAttribute("data-dim")).toBe(false);
+    expect(chooseButton(on)?.getAttribute("aria-pressed")).toBe("true");
+    const other = rowOf(chosen, second.key);
+    expect(other.hasAttribute("data-dim")).toBe(true);
+    expect(other.hasAttribute("data-pressed")).toBe(false);
+    // the numbers are the design's: the ready fill and a 1.5 inset ring, the others at 50%
+    expect(CSS).toMatch(
+      /\.vf-profiles-pop-row\[data-pressed\] \{[^}]*color-mix\(in srgb, var\(--vf-foreground\) 8%, transparent\);[^}]*inset 0 0 0 1\.5px var\(--vf-foreground\);/u,
+    );
+    expect(CSS).toMatch(/\.vf-profiles-pop-row\[data-dim\] \{[^}]*opacity: 0\.5;/u);
+
+    const retrying = metersOf(
+      FIXTURE_WORK,
+      withNamer(FIXTURE_WORK, (entry) => ({ ...entry, state: "unavailable", metrics: [] })),
+    );
+    const need = retrying.entries.find((entry) => entry.kind === "needs-you");
+    const needPage = mount(
+      <ProfilePopoverView {...popover({ set: FIXTURE_WORK, meters: retrying })} />,
+    );
+    expect(chooseButton(rowOf(needPage, need?.key ?? ""))).toBeNull();
+  });
+
+  it("twins: a family's row draws pressed in the other profile's popover, and its click clears (UM-5a)", () => {
+    const circle = thisMac();
+    const [first] = readingRows(circle);
+    if (first === undefined) throw new Error("no reading row");
+    const props = popover(circle, {
+      chosenPlanFamily: [first.union, "work/plan:anthropic"],
+    });
+    const page = mount(<ProfilePopoverView {...props} />);
+    const button = chooseButton(rowOf(page, first.key));
+    expect(button?.getAttribute("aria-pressed")).toBe("true");
+    act(() => button?.click());
+    expect(props.onChoosePlan).toHaveBeenCalledWith(null);
+  });
+
+  it("an arc in the open circle chooses as its row does; a need arc chooses nothing, and the popover stays (UM-5a)", () => {
+    const circle = thisMac();
+    const [first] = readingRows(circle);
+    if (first === undefined) throw new Error("no reading row");
+    const props = popover(circle);
+    const page = mount(<ProfilePopoverView {...props} />);
+    const arc = page.querySelector(`path[data-hit="${first.key}"]`);
+    expect(arc?.hasAttribute("data-choosable")).toBe(true);
+    act(() => arc?.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+    expect(props.onChoosePlan).toHaveBeenCalledWith(first.union);
+    expect(props.onClose).not.toHaveBeenCalled();
+
+    const retrying = metersOf(
+      FIXTURE_WORK,
+      withNamer(FIXTURE_WORK, (entry) => ({ ...entry, state: "unavailable", metrics: [] })),
+    );
+    const need = retrying.entries.find((entry) => entry.kind === "needs-you");
+    const needProps = popover({ set: FIXTURE_WORK, meters: retrying });
+    const needPage = mount(<ProfilePopoverView {...needProps} />);
+    const needArc = needPage.querySelector(`path[data-hit="${need?.key}"]`);
+    expect(needArc?.hasAttribute("data-choosable")).toBe(false);
+    act(() => needArc?.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+    expect(needProps.onChoosePlan).not.toHaveBeenCalled();
   });
 
   it("says what a plan needs with its act: Sign in opens the profile's page, Retry reads that sign-in again", () => {
@@ -676,7 +771,7 @@ describe("the popover (DESIGN.md §8 'Godview's profiles column')", () => {
     ).toBe(true);
   });
 
-  it("feet: with several profiles the lens's words, with one only Agent Profiles… (wave 1); it opens that profile", () => {
+  it("feet: with several profiles the lens's words, with one the plan's words; Agent Profiles… opens that profile", () => {
     const unchosen = mount(<ProfilePopoverView {...popover(work(), { lens: true })} />);
     expect(unchosen.querySelector(".vf-profiles-pop-lens")?.textContent).toBe(
       "Click it to show only Work's sessions",
@@ -687,9 +782,19 @@ describe("the popover (DESIGN.md §8 'Godview's profiles column')", () => {
     );
     const props = popover(thisMac());
     const alone = mount(<ProfilePopoverView {...props} />);
-    expect(alone.querySelector(".vf-profiles-pop-lens")).toBeNull();
+    expect(alone.querySelector(".vf-profiles-pop-lens")?.textContent).toBe(
+      "Click a plan to show only its sessions",
+    );
+    const showing = mount(
+      <ProfilePopoverView
+        {...popover(thisMac(), { chosenPlanFamily: ["native/plan:x"] })}
+      />,
+    );
+    expect(showing.querySelector(".vf-profiles-pop-lens")?.textContent).toBe(
+      "Showing one plan's sessions · click it again for all",
+    );
     const open = alone.querySelector<HTMLButtonElement>(".vf-profiles-pop-foot button");
-    expect(alone.querySelector(".vf-profiles-pop-foot")?.textContent).toBe("Agent Profiles…");
+    expect(open?.textContent).toBe("Agent Profiles…");
     act(() => open?.click());
     expect(props.onOpenProfile).toHaveBeenCalledWith("native");
   });
