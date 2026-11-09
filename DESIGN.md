@@ -3422,13 +3422,18 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       profile too: the filter is not the lens, and one profile has no lens. It is a toggle, and a click on a pressed
       row shows every session again. *Built 2026-11-09, UM-5a.* *(Corrected the same day, UM-5a: this said "That is
       the next wave's, after the desktop's and the phone's slices land (UM-5); until then a row takes no click.")*
-      A row that needs you is not pressable and keeps its act (Sign in, Retry); a reading and a first read are.
+      A row that needs you is not pressable and keeps its act (Sign in, Retry); a reading and a first read are. It
+      draws no press either, even while its plan is the one chosen, since a sign-in can lapse under the filter: the
+      filter stands, another plan's row can move it, and the × on search clears it (2026-11-09, UM-5a's review; ‹for
+      James›, and the drawing's need row draws no press).
       - **Its control** is a button stretched over the row, first in it, with no chrome but the file's focus ring
         (2 solid `--vf-select`), so the row keeps its C1 line's list and the pointer's light on its arc. It is
         `aria-pressed`, and said "Show only ‹plan›'s sessions" (‹for James›, 2026-11-09).
       - **Pressed:** the ready fill (the ink at 8%) and a 1.5 inset ring in the ink, a checked chip's, so it adds no
-        fill of its own (the drawing's 9% is not a step). **Every other row draws at 50%** while a plan is chosen, the
-        one new number, an opacity recipe with no token (2026-11-09, UM-5a; ‹for James›).
+        fill of its own (the drawing's 9% is not a step). **Every other row that can be chosen draws at 50%** while a
+        plan is chosen, the one new number, an opacity recipe with no token (2026-11-09, UM-5a; ‹for James›). A row
+        that needs you keeps its full ink, since it holds an act. *(Corrected 2026-11-09, UM-5a's review: this said
+        "Every other row draws at 50%"; the drawing's need row takes no dim, and neither did the code.)*
       - **The arc** in the open circle chooses as its row does, and a plan that needs you chooses nothing there. It
         is pointer only: the circle is one image to VoiceOver, and the row's button is the keyboard's and VoiceOver's
         door to the same act.
@@ -3440,9 +3445,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
         "No sessions". A session recedes unless the lens, the plan and the desktop all keep it. Under a plan a
         peer's session and a terminal recede too: they spend no plan of this home's.
     - **The foot**, over a hairline, at 11/400 in the tertiary ink: the lens's words with several profiles, the
-      plan's words with one (§9 "The meters' words"), and **Agent Profiles…** at its end (600, the secondary ink,
-      the primary under the pointer, *added 2026-11-09, UM-R's review*), which opens Settings → Agent Profiles on that
-      profile's page.
+      plan's words with one (§9 "The meters' words"; none while no row there can be chosen, 2026-11-09, UM-5a's
+      review), and **Agent Profiles…** at its end (600, the secondary ink, the primary under the pointer, *added
+      2026-11-09, UM-R's review*), which opens Settings → Agent Profiles on that profile's page.
     - *Wave 1 (2026-11-06, UM-D14's interim, the lead's ruling 23; ‹for James›) ended on the desktop 2026-11-09, at
       UM-5a:* the one-profile popover's foot said only **Agent Profiles…**, and a plan's row took no click.
       **Partner lighting** (a plan lighting the bodies that spend it, and a body its plan) stays owed: UM-5 brought
@@ -6611,7 +6616,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       C1 line, and "Runs out in ~35m at this pace" while it would (UM-D4). While the field is live a plan's row adds
       its sessions line ("3 sessions · 1 working · 1 waiting for you", or "no sessions"); a plan with sessions draws
       **Show**, **Showing** while it is the one chosen, for everyone, with one profile too (UM-D14, built 2026-11-09,
-      UM-5b), and either closes the page. A plan that needs you says where it is fixed, "Not signed in · sign in on
+      UM-5b), and either closes the page. Under a lens a plan's row counts only the sessions in that profile, and draws
+      **Show** only on those, so a twin's run under another profile never promises a session the filter would recede
+      (2026-11-09, UM-5b's review). A plan that needs you says where it is fixed, "Not signed in · sign in on
       studio" or "Couldn't read · retry", and the
       phone draws no act for either: it signs in on no desktop, and a phone's refresh spends no call (UM-D8). An
       agent with no meter is a line of its own, "Codex shows no meter";
@@ -7047,9 +7054,11 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     corners 15, padded 0 4 0 9, on the ink at 9%, at 14/600; its glyph 13, 5 before its name; and its ×, a 20 round
     holding `xmark` at 8 in the tertiary ink (§13), that removes it. A second token stands 2 closer to the first. A
     token pops in from 0.7 on the bar's spring (`AppBar.motion`; the drawing's 260ms curve is not one of §6's, so §6
-    gains none). Live now's tokens read the profile, then the desktop; Everything's, what was said, then the project.
-    The phone has no Backspace removal (the software keyboard reports no Backspace on an empty field); the × is the
-    way.
+    gains none). Live now's tokens read the profile, the plan, then the desktop; Everything's, what was said, then the
+    project. The phone has no Backspace removal (the software keyboard reports no Backspace on an empty field); the ×
+    is the way. *(Corrected 2026-11-09, UM-5b's review: this said "the profile, then the desktop". A plan chosen
+    stands between them as a token too: its agent's mark at the token's 13 and its title, and its × clears only the
+    plan; ‹for James›, never drawn.)*
   - **The placeholder** is **Search** (§9 "Apps": MA-D7's word, since typed words find apps too), and there is none
     once two tokens stand. The drawing's "Search sessions" before a token is not taken.
   - **A typed name offers its filter** at the list's top, when the last word typed has 2 letters or more:
@@ -7062,9 +7071,11 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       keeps the keyboard.
   - **Its words** are §9 "Search's words": the foot's sentences, and each empty list with its one way out.
   - **One lens** (SE-D2 on the phone): the profile chosen on Field rides into the field as Live now's token, and
-    the token above search (below), the sheet's profile token and Field's lens are one state. Only the profile
-    outlives the sheet: a desktop's token clears when search closes (the lead's ruling 21; ‹for James›, since the
-    drawing keeps it and recedes Field by it).
+    the token above search (below), the sheet's profile token and Field's lens are one state. The profile and a plan
+    chosen outlive the sheet: a desktop's token clears when search closes (the lead's ruling 21; ‹for James›, since the
+    drawing keeps it and recedes Field by it). *(Corrected 2026-11-09, UM-5b's review: this said "Only the profile
+    outlives the sheet". A plan is the lens's state too (UM-D14), held on Field by the token above search, so it stands
+    when search closes; that it extends ruling 21's survivor is ‹for James›.)*
   - **With one profile** nothing in it names a profile: no chip, no pill, no offer and no token (UM-D12).
   - MA-D8's cyan dot stays on the search circle (§8 "The phone's Apps"), never on the field or the sheet, and the
     drop is not shown while the sheet is open.
@@ -7790,7 +7801,9 @@ here.
   "Inside, the next five hours; outside, the week; a hairline, a model's own week"). Its foot, with several
   profiles: "Click it to show only ‹profile›'s sessions", or "Showing only ‹profile›'s sessions · click it again for
   all". With one profile (UM-D14's plan filter): "Click a plan to show only its sessions", and "Showing one plan's
-  sessions · click it again for all". Then **Agent Profiles…**. *(Corrected 2026-11-09, UM-5a: this said that until
+  sessions · click it again for all" while a row in it draws pressed; with no row there that can be chosen, neither
+  (the words would invite a click nothing takes; 2026-11-09, UM-5a's review, ‹for James›, wave 1's own silence
+  extended). Then **Agent Profiles…**. *(Corrected 2026-11-09, UM-5a: this said that until
   UM-5 the one-profile foot says only **Agent Profiles…**.)* A plan's row is said "Show only ‹plan›'s sessions"
   (‹for James›, 2026-11-09). *(Added 2026-11-06, UM-3's
   review; ‹for James›: the head's other ages as built, "Read just now", "Read 5 minutes ago", "Read an hour ago",
@@ -7826,9 +7839,12 @@ here.
   profiles** ("3 profiles · 5 plans") and each profile's line ("default · the agents' own sign-ins · 2 plans");
   **Plans**, **Every plan** or **Plans in ‹profile›**; and its foot, "Manage profiles in Settings → Agent Profiles.
   New profiles are made on a desktop." *Since UM-5b (2026-11-09)* each plan adds its sessions as the hold says them,
-  or "no sessions", with **Show** and **Showing** while the field is live and it has sessions (‹for James›). A
-  home that does not share usage yet says "‹home› doesn't share usage yet" on the page and the hold (the lead's
-  words; never a blank), and the Me menu row's word then is ‹for James›.
+  or "no sessions", with **Show** and **Showing** while the field is live and it has sessions (‹for James›); VoiceOver
+  says them "Show ‹plan›" and "Showing ‹plan›", the latter selected (‹for James›, 2026-11-09, UM-5b's review: the
+  desktop's same act says "Show only ‹plan›'s sessions", and the drawing's label is "Show its sessions on the Field").
+  A home that does not share usage yet says "‹home› doesn't share usage yet" on the page and the hold (the lead's
+  words; never a blank), and the Me menu row's word then is ‹for James›. *(Corrected 2026-11-09, UM-5b's review: the
+  hold says it only while the field is not live; a live field's line says sessions, §8 "The words follow the reach".)*
 - **The token** is said "Showing only ‹profile›", its × "Show every profile"; a plan's form (‹for James›, 2026-11-09,
   UM-5b) "Showing only ‹plan›", its × "Show every plan", and its hint "Opens Agent Profiles". Its menu says **Agent Profiles…**,
   **Show**, each profile with its sessions ("1 session", "4 sessions"), and **Every profile**. *(Added 2026-11-06,
@@ -7872,7 +7888,8 @@ field gives them, and “q” what was typed.
   project is chosen and, with words and a kind, ", in your prompts" or ", in their replies".
 - **The phone's empty lists.** Live now with a filter on and no words: "No live session in ‹profile› runs on
   ‹desktop›." ("No live session in ‹profile› runs right now.", "No live session runs on ‹desktop›."), with **Clear
-  the filters**. With words: "No live session holds every word of “q”.", with **Search everything**. With nothing at
+  the filters**; a plan chosen joins the sentence after the profile, "No live session on ‹plan› runs right now." and
+  "No live session in ‹profile› on ‹plan› runs on ‹desktop›." (2026-11-09, UM-5b's review; ‹for James›). With words: "No live session holds every word of “q”.", with **Search everything**. With nothing at
   all: "Nothing runs right now." Everything: "Nothing in your past holds every word of “q”. Try fewer words." Before
   a word, with no desktop's sessions on the phone yet: ‹for James›.
   *(Added 2026-11-06, as SE-2i built them; ‹for James›: the phone says what was answered in the Peek's own words,

@@ -97,6 +97,7 @@ struct ProfileLens: Equatable, Sendable {
   /// Keeps search to one desktop (`id`), or to none (nil).
   mutating func keep(desk id: String?) { desk = id }
 
-  /// Search closed: only the profile outlives it (the lead's ruling 21) — the desktop's token clears.
+  /// Search closed: the profile and a plan chosen outlive it (the lead's ruling 21, the plan's part ‹for James›) — the
+  /// desktop's token clears. *(Corrected 2026-11-09, UM-5b's review: this said only the profile outlives it.)*
   mutating func searchClosed() { desk = nil }
 }

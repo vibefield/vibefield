@@ -145,8 +145,8 @@ export function clearPick(token: PeekFieldToken): PeekPick {
 
 /** ⌫ with the caret at the field's start and nothing selected takes the last
  * token back — the tokens' own order from its end: in Everything the agent's,
- * then what was said, then the project's; in Live now the profile's, then the
- * desktop's. Null while ⌫ is the words'. */
+ * then what was said, then the project's; in Live now the plan's (UM-5a), then
+ * the profile's, then the desktop's. Null while ⌫ is the words'. */
 export function backspaceTakes(
   tokens: readonly PeekFieldToken[],
   caret: { readonly start: number | null; readonly end: number | null },

@@ -40005,7 +40005,9 @@ sheet names the two slots MA-D7's Apps strip fills.
 - **MA-6's Apps strip:** the sheet's `appsStrip` and `appsGroup` stand empty (MA-D7, as amended); MA-6 fills them.
 - **Wave 1 of the lens** (UM-D14 is UM-5's): a plan takes no tap, and the page has no Show and no sessions line. The
   hold's line under Show all and Show ‹profile› counts the plans' reads where sessions are ruled, since the phone's
-  rows carry no run's profile until UM-5 (DESIGN.md §8 and §9, ‹for James›).
+  rows carry no run's profile until UM-5 (DESIGN.md §8 and §9, ‹for James›). *(Corrected 2026-11-09, UM-5b's review:
+  the phone's rows had carried a run's profile since SE-2, `monitor.profileSet`; the line counted reads because the
+  design waited on it, and no row lacked it. DESIGN.md §8 and §9 and `FaceHold.swift` carry the same correction.)*
 - **The glyph and plan-title tables are hand copies** of puppeteer-view-sdk's and puppeteer-views' 0.3.3, held by
   review alone across an EL8; their generator is owed (DESIGN.md §13). "rocket" draws as `paperplane`.
 - **Every profile wears `person` on the phone** (the token's menu, the page's All profiles), where §8 and the drawing

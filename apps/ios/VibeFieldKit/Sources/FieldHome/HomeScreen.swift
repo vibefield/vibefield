@@ -1696,8 +1696,9 @@ public struct HomeScreen: View {
     }
   }
 
-  /// Search closes: only the profile outlives it (the lead's ruling 21) — the desktop's token, the kind and the
-  /// project clear. Its ask goes with the sheet (the sheet's task is cancelled), so nothing is out.
+  /// Search closes: the profile and a plan chosen outlive it (the lead's ruling 21, the plan's part ‹for James›) — the
+  /// desktop's token, the kind and the project clear. Its ask goes with the sheet (the sheet's task is cancelled), so
+  /// nothing is out. *(Corrected 2026-11-09, UM-5b's review: this said only the profile outlives it.)*
   private func closeSearch() {
     searchFocused = false
     searchOpen = false
