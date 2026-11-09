@@ -20,7 +20,13 @@ cutover of `desk/landing` needs, what each proves, where it runs, and its verdic
   `--from <gate>` run a part, `--list` prints the list, `--logs <dir>` keeps the logs there (default: a fresh directory under
   the OS temp, named on the first line). The Mac is kept awake while it runs (`caffeinate -w`). Run it on a quiet machine:
   other sessions' Electron and vitest load the timing rows, and a timing row red under load is re-run at a quiet moment before
-  it is called (the K-H rule). **One row is read by its signature, never its load (VF-PM, 2026-11-07, item 217):**
+  it is called (the K-H rule). **The desk rows arm on a 1-min load < 10, an unlocked screen AND an unattended Mac (2026-11-09,
+  owed from the squeeze gate of 2026-10-19):** a person at the Mac is a third hazard, beside the load and the lock. That
+  gate's four reds after James unlocked the Mac all passed alone with it unattended (LANDED, that gate): the rows that drive a
+  window by injected input are the ones it bites, and DK-18's click-through keeps a person's pointer from most of a run, not
+  all of it (the correction in `smoke-window.ts`). "Unattended" is a read, never a guess: `ioreg -c IOHIDSystem`'s
+  `HIDIdleTime` is the time since the last keyboard or pointer input, and an end read shorter than the row's own seconds says
+  input landed during it. A mini with no one at it has no such hazard. **One row is read by its signature, never its load (VF-PM, 2026-11-07, item 217):**
   a red of `listener_accept_pressure.rs` that reads the door "served not within", the door's `accept_recovered 0`,
   and mgmt and meshdata served is NO VERDICT, with one rerun; any other red of that row is a real red at any load.
   `VF_PERF_LOCKS=<path>[:<path>…]` names lock files a perf measurement holds while it owns the
