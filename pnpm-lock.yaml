@@ -502,6 +502,9 @@ importers:
 
   packages/fieldd:
     dependencies:
+      '@noble/hashes':
+        specifier: 2.2.0
+        version: 2.2.0
       '@vibecook/ghosttea-client':
         specifier: 0.14.0
         version: 0.14.0

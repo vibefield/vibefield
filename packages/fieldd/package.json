@@ -22,6 +22,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@noble/hashes": "2.2.0",
     "@vibefield/rosetta-protocol": "*",
     "@vibecook/ghosttea-client": "*",
     "@vibecook/mille": "*",
