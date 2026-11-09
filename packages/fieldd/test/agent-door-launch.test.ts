@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 import {
   birthWithDoor,
   carriesDoor,
+  doorRefusalCode,
   type HelperRootFloor,
   RunHelperRoots,
   refusedTheDoor,
@@ -173,6 +174,26 @@ describe("a run's helper process, named to the floor (OB-3d)", () => {
 });
 
 describe("a birth whose executable takes no door (item 124)", () => {
+  // OB-3d review: a person with their own `[mcp_servers.vibefield]` is refused at Codex's preflight, and every spawn or
+  // resume of theirs would otherwise fail. A door must never fail a person's launch.
+  it("treats a person's own conflicting server as a refused door: the birth goes ahead without it", async () => {
+    const CONFLICT = {
+      ...REFUSED,
+      error: { ...REFUSED.error, refusal: { code: "CONFLICTING_LAUNCH_FIELD" } },
+    };
+    expect(refusedTheDoor(CONFLICT)).toBe(true);
+    expect(doorRefusalCode(CONFLICT)).toBe("CONFLICTING_LAUNCH_FIELD");
+    expect(doorRefusalCode(REFUSED)).toBe(UNSUPPORTED_LAUNCH_FIELD);
+    const { briefed, launch } = launcher(CONFLICT, BORN);
+    const birth = await birthWithDoor(DOOR, launch, refusedTheDoor, (_refusal, again) => again());
+    expect(birth).toEqual({ born: BORN, withheld: true });
+    expect(briefed).toEqual([DOOR, {}]);
+    // anything else an adapter refuses stays the launch's own
+    const other = { ...REFUSED, error: { ...REFUSED.error, refusal: { code: "NOT_INSTALLED" } } };
+    expect(refusedTheDoor(other)).toBe(false);
+    expect(doorRefusalCode(other)).toBeUndefined();
+  });
+
   it("is made once more with no briefing, its refusal heard and the second attempt wrapped", async () => {
     const { briefed, launch } = launcher(REFUSED, BORN);
     const heard: unknown[] = [];

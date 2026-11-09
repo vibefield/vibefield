@@ -482,6 +482,8 @@ function scriptedProvider(
     launchRefusal?: { code: string; message: string };
     /** OB-3d — the adapter names this process as the run's helper, awaited, before anything launches */
     helperProcess?: boolean;
+    /** OB-3d review — a launch carrying the door is refused with this code, as a person's own config refuses it */
+    refuseDoor?: string;
   } = {},
 ): AgentProvider {
   let counter = 0;
@@ -510,6 +512,8 @@ function scriptedProvider(
       if (extra.launchRefusal !== undefined)
         throw new AgentLaunchRefusedError(extra.launchRefusal.code, extra.launchRefusal.message);
       extra.beforeBirth?.();
+      if (extra.refuseDoor !== undefined && options.mcpServers !== undefined)
+        throw new AgentLaunchRefusedError(extra.refuseDoor, "the person's own config names this server");
       const n = ++counter;
       // AR-S2 — the account a spawn was bound to, as the runtime resolved it
       extra.seen?.push(options.profile);
@@ -679,6 +683,7 @@ interface SetupConfig {
   exerciseDoor?: boolean;
   doorCalls?: readonly DoorCall[];
   helperProcess?: boolean;
+  refuseDoor?: string;
   /** AR-S4d — the keychain fieldd keeps server values in (default: a map; never the machine's) */
   secretStore?: SecretStore;
   realAgent?: boolean;
@@ -845,6 +850,7 @@ async function setup(config: SetupConfig): Promise<Box> {
             ...(config.exerciseDoor === undefined ? {} : { exerciseDoor: config.exerciseDoor }),
             ...(config.doorCalls === undefined ? {} : { doorCalls: config.doorCalls }),
             ...(config.helperProcess === undefined ? {} : { helperProcess: config.helperProcess }),
+            ...(config.refuseDoor === undefined ? {} : { refuseDoor: config.refuseDoor }),
             seen,
             ...(config.extensions === true ? { signInMark: join(root, "scripted-signed-in") } : {}),
             models,
@@ -1719,7 +1725,8 @@ describe("managed sessions over the REAL floor (field-native)", () => {
     );
     // MT-L2: a call is held to its row again, so a spark's row answers a plain run as the fact `forbidden`.
     expect(plainProof.called.isError).toBe(true);
-    expect(plainProof.called.structuredContent?.fact).toBe("forbidden");
+    expect(plainProof.called.structuredContent).toBeUndefined();
+    expect(plainProof.called.content?.[0]?.text).toMatch(/^forbidden: /);
     await win.call("terminal.terminate", { sessionId: ordinary.terminal.sessionId });
   }, 90_000);
 
@@ -1981,6 +1988,41 @@ describe("managed sessions over the REAL floor (field-native)", () => {
     );
     await poll(async () => probe().catch(() => undefined), 10_000, "the floor forgetting the root");
     await daemon.native.request("native.door.roots.clear", { rootId: "probe" });
+  }, 60_000);
+
+  // OB-3d review — a root answers only for an attempt fieldd itself named to the floor: the attempt's id is on the record,
+  // so a root set by anything else could otherwise name a run that has no helper.
+  it("OB-3d — a run with no helper is named by no root, even under its own attempt's id", async () => {
+    const box = await setup({ floor: "real" });
+    const win = await window(box.daemon, DECK, "ob3d-none");
+    const spawned = (await born(win, "agent.spawn", {
+      provider: "scripted",
+      cwd: box.envOut,
+    })) as AgentSpawnResult;
+    const runId = spawned.session.runtimeRunId;
+    await joinedRow(win, runId);
+    const attempt = readRecord(box.dataDir, runId).creationRequestId as string;
+    expect(attempt.length).toBeGreaterThan(0);
+    expect(box.daemon.agents.runForRoot(attempt)).toBeUndefined();
+    await box.daemon.agents.endRun(runId);
+  }, 60_000);
+
+  // OB-3d review — a person's own `[mcp_servers.vibefield]`: the refusal is the launch field's, and the run goes ahead
+  it("OB-3d — a launch the person's own config refuses for the door starts without it", async () => {
+    const box = await setup({
+      floor: "real",
+      briefing: { mcpServers: true, allowTools: true, instructions: false, mcpServerProcess: "terminal" },
+      refuseDoor: "CONFLICTING_LAUNCH_FIELD",
+    });
+    const win = await window(box.daemon, DECK, "ob3d-conflict");
+    const spawned = (await born(win, "agent.spawn", {
+      provider: "scripted",
+      cwd: box.envOut,
+    })) as AgentSpawnResult;
+    const runId = spawned.session.runtimeRunId;
+    const row = await joinedRow(win, runId);
+    expect(row.door).toBe("off");
+    await box.daemon.agents.endRun(runId);
   }, 60_000);
 
   // CP-2 — the talk room's two ports on the real floor. The queue's idle gate is agent-input-queue.test.ts's: the

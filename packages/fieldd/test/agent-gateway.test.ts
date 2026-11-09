@@ -647,6 +647,7 @@ class FoldStub implements AgentAdoption {
   withdrawn: Array<{ runtimeRunId: string; reason: string }> = [];
   refuses: Error | undefined;
   identities = 0;
+  abandoned: string[] = [];
 
   identity(): ReturnType<AgentAdoption["identity"]> {
     this.identities += 1;
@@ -654,6 +655,7 @@ class FoldStub implements AgentAdoption {
     let bound: BoundIngress | undefined;
     return {
       creationRequestId,
+      abandon: () => void this.abandoned.push(creationRequestId),
       ingress: {
         onBound: (b) => {
           bound = b;
@@ -2838,6 +2840,89 @@ describe("a launch at the gateway — the real kit, puppeteer's real runtime, a 
         });
         expect(JSON.stringify(answer)).not.toContain("USER_MCP_CONFIG");
         expect(box.logged.map((entry) => entry.level)).not.toContain("error");
+      },
+      PROCESS_BUDGET_MS,
+    );
+
+    // OB-3d review: a server's failure can end the launch itself (Grok's `session/new`), past what `withhold` can catch.
+    /** The doors, each launch's options kept, the first `failures` answered with `error`. */
+    const failing = (box: Unit, error: object, failures = 1) => {
+      const seen: Array<{ creationRequestId?: string }> = [];
+      const real = box.runtime.prepareInvocation;
+      box.runtime.prepareInvocation = async (options) => {
+        seen.push(options);
+        return seen.length <= failures
+          ? ({ error } as Awaited<ReturnType<typeof real>>)
+          : real(options);
+      };
+      return seen;
+    };
+    const CREATE_FAILED = {
+      code: "AGENT_SESSION_CREATE_FAILED",
+      message: "agent session preparation failed: mcp server did not start",
+    };
+
+    it.each([
+      ["a session the servers could not start", CREATE_FAILED],
+      [
+        "a refusal the adapter made",
+        { code: "AGENT_LAUNCH_REFUSED", message: "refused", refusal: { code: "X" } },
+      ],
+    ])(
+      "launches again with no briefing and a new identity after %s",
+      async (_label, error) => {
+        const box = await unit({ runBriefing: async () => BRIEFING });
+        onePane(box);
+        await box.gateway.start();
+        const seen = failing(box, error);
+        const answer = await box.launch(600);
+        expect(answer?.action).toBe("exec");
+        expect(seen).toHaveLength(2);
+        expect(seen[0]).toMatchObject({ ...BRIEFING, briefingRefusal: "withhold" });
+        unbriefed(seen[1] as object);
+        expect(seen[1]?.creationRequestId).not.toBe(seen[0]?.creationRequestId);
+        expect(box.fold.identities).toBe(2);
+        expect(box.fold.abandoned).toEqual([seen[0]?.creationRequestId]);
+        expect(box.fold.adopted[0]?.launched.creationRequestId).toBe(seen[1]?.creationRequestId);
+        expect(
+          box.logged.filter((entry) => entry.event === "fieldd.agents.typed_briefing_retried"),
+        ).toHaveLength(1);
+        expect(JSON.stringify(answer)).not.toContain("mcp server");
+      },
+      PROCESS_BUDGET_MS,
+    );
+
+    it(
+      "asks once when the launch was not refused for anything a briefing could cause, or carried none",
+      async () => {
+        const invalid = await unit({ runBriefing: async () => BRIEFING });
+        onePane(invalid);
+        await invalid.gateway.start();
+        const asked = failing(invalid, { code: "INVALID_NATIVE_INVOCATION", message: "no" });
+        await invalid.launch(600);
+        expect(asked).toHaveLength(1);
+
+        const plain = await unit({ runBriefing: async () => ({}) });
+        onePane(plain);
+        await plain.gateway.start();
+        const once = failing(plain, CREATE_FAILED);
+        await plain.launch(600);
+        expect(once).toHaveLength(1);
+      },
+      PROCESS_BUDGET_MS,
+    );
+
+    it(
+      "retries once only: a second failure is the launch's own, and both attempts are given up",
+      async () => {
+        const box = await unit({ runBriefing: async () => BRIEFING });
+        onePane(box);
+        await box.gateway.start();
+        const seen = failing(box, CREATE_FAILED, 2);
+        const answer = await box.launch(600);
+        expect(answer?.action).not.toBe("exec");
+        expect(seen).toHaveLength(2);
+        expect(box.fold.abandoned).toEqual(seen.map((each) => each.creationRequestId));
       },
       PROCESS_BUDGET_MS,
     );
