@@ -337,13 +337,14 @@
       }
     }
 
-    /// The stills' chips: `-vf-chat-chips` stands an agent's and a session's in the draft, as taken from @.
+    /// The stills' chips: `-vf-chat-chips` stands an agent's and a session's in the draft, as taken from @. The agent's
+    /// is the first staged, whose picker the contracts' `agent-models.valid` is, so its menu's still shows models.
     static var draftParts: [ChatDraftPart]? {
-      guard ProcessInfo.processInfo.arguments.contains("-vf-chat-chips"), let run = stagedAtBoard().last else {
-        return nil
-      }
+      let staged = stagedAtBoard()
+      guard ProcessInfo.processInfo.arguments.contains("-vf-chat-chips"), let first = staged.first, let run = staged.last
+      else { return nil }
       let agent = ChatAgentChip(
-        id: "agent:\(run.agent):native", agent: run.agent, label: run.label,
+        id: "agent:\(first.agent):native", agent: first.agent, label: first.label,
         profile: ChatAtProfile(id: "native", name: "This Mac"), named: true)
       let session = ChatSessionChip(
         id: "session:\(run.run)", session: run.run, agent: run.agent, label: run.label,

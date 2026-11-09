@@ -22,8 +22,7 @@ struct ChatAtView: View {
   let onModel: (String?) -> Void
   let onEffort: (String) -> Void
 
-  /// Read from `alignmentGuide`'s Sendable closure on the composer, so it holds no actor.
-  nonisolated static let foot: CGFloat = 8
+  static let foot: CGFloat = 8
   static let agentRow: CGFloat = 48
   static let sessionRow: CGFloat = 56
   static let rowCorner: CGFloat = 12

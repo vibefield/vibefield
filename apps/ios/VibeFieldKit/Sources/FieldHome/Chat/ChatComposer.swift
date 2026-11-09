@@ -37,6 +37,10 @@ struct ChatComposer: View {
   static let sideTyping: CGFloat = 10
   static let footTyping: CGFloat = 8
   static let send: CGFloat = 36
+  static let fieldInset: CGFloat = 11
+
+  /// The field's own box: the draft with its inset above and below, never under the field's height.
+  private var fieldBox: CGFloat { max(fieldHeight + Self.fieldInset * 2, Self.height) }
 
   private var sendable: Bool {
     away == nil && ChatDraft.sendable(parts, pending: pending)
@@ -62,7 +66,7 @@ struct ChatComposer: View {
           onReturn: { send() }, onChip: onChip
         )
         .frame(height: fieldHeight)
-        .padding(.vertical, 11)
+        .padding(.vertical, Self.fieldInset)
         .padding(.leading, 18)
         .padding(.trailing, sendable ? 4 : 18)
         .frame(minHeight: Self.height)
@@ -90,10 +94,11 @@ struct ChatComposer: View {
         RoundedRectangle(cornerRadius: Self.height / 2, style: .continuous)
           .strokeBorder(ChromePalette.cardHairline, lineWidth: 1)
       )
-      .overlay(alignment: .top) {
+      // @'s box is set from the field's foot, over the field's own box and its gap, so it rises above the field
+      .overlay(alignment: .bottom) {
         if let at {
           at
-            .alignmentGuide(.top) { $0[.bottom] + ChatAtView.foot }
+            .padding(.bottom, fieldBox + ChatAtView.foot)
             .transition(
               reduceMotion
                 ? .opacity
