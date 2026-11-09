@@ -45661,3 +45661,84 @@ sites; the gate's three rows hold what `inSheet` answers.
   `artifact.subscribe` yet; `packages/contracts/src/methods.ts:1042`'s sentence is corrected at its source in this
   entry's commit.
 - `gate:landing` at this land, on James's word. The stack moves no code a desktop smoke runs.
+
+## ES-Q1 + ES-5a to 5d — the phone's empty Chat is the night, and a starter with nothing to name reads bare (track ES)
+
+**ES-Q1 and ES-5a through 5d (fifteen commits `a8b91ea47` → `e6de35f09`, M270, an ff of `535db8a9f`, 2026-11-09
+16:51:49Z).** James, 2026-11-09 07:53Z, typed to ES: ES-5 "ASAP, build in parallel if possible"; ES-Q1 "go bare form".
+VF-PM's rulings: 07:55:24Z (ES takes 5a to 5d), 08:27:37Z (`workedMs`), 08:58:50Z (Off and the rest rule), 09:14:13Z
+(one land unit, so no landed main shows the starters held wordless), 14:59Z (the re-cut's second merge).
+
+**What changed.**
+- ES-Q1: a starter with no project or run to name reads bare: "Keep track of my agents" and "Have Codex review my
+  agents' work until it's clean". DESIGN.md §8 and §9 first, then `starters.ts`. The crew, the run's agent and the
+  reviewer keep their ruled words. `STARTERS`, the ruled samples, does not change.
+- 5a: the starters' golden, 17 cases written by the Mac's own model (`chat-starters-goldens.test.ts`), and the kit's
+  copy of it. `ChatStarters` is the phone's port, held to the golden; `AgentCatalogShapes` reads the catalog's role
+  rows. `workedMs` is `activity?.since ?? statusSince`: the remote row's nearest to last evidence, not equal to it.
+- 5b: the night's ink and night glass, eleven `ChromePalette` values, each held to tokens.css by `check-ios-fixtures`.
+- 5c: with no spark, the phone's Chat is the night: the Mac's words on the hatch's sky, the rest rule's clock
+  (`NightRest`), the law for when it stands (`nightStands`, only once the home has answered and every desktop has), the
+  starters filled from the home's live runs, and the bar set dark from `HomeScreen.swift`. Off's sentence names the home
+  and is interim, for James's eye. `AppBar.swift` does not change.
+- 5d: a starter opens the sheet carrying itself as "Its first job", and the job is sent once, after the hatch, through
+  M-f2's `send(_:away:words:)` from `ChatThreadView.swift`. `ChatThread.swift` does not change.
+- `-vf-chat-empty`, `-vf-chat-off` and `-vf-new-spark-job` draw the stills. Under `-vf-mock` the night reads an empty
+  board, inside `#if DEBUG`, so a release build never takes it.
+- `biome.jsonc` leaves the golden to its writer, as it does every golden. No dependency, manifest or lockfile moved.
+- Petition status: none moved. This stack asks no sibling anything new.
+
+**Verified** (vf-m2, built on Xcode 26.3, tested under the beta).
+- run 274 (`lanes/vf-m2/es5-vk2-a9-results/`, `SHA256SUMS-a9-es5-vk2` `465523f84bab6493`), at `e6de35f09` on
+  `535db8a9f`, on VF-PM's GO of 16:24:20Z: S GREEN, exit 0, 96 s, errors 0, 16 of 16 linked.
+- V: GREEN, `pnpm verify` exit 0 at 16:35:34Z, all 37 cargo binaries and `gen:check` read. Against run 272, count lines
+  missing [] / extra [] with the named moves: field-app 335 files (334) and 4556 tests (4553), ios fixtures 454 (442),
+  `Checked 3545` (3544), `268 of 1144` (1143). Unmoved: ios pins 112, contracts 1962, fieldd 3815 | 15 (3830), 73
+  warnings, 21 infos.
+- K: GREEN-BUT-167 (P PASS at +10 s, G exit 65): 2343 tests in 362 suites, passed 2339, skipped 3, failed 1 (item 167),
+  FieldDesignTests 78 in 19, FieldHomeTests 609 in 75, FieldProductTests 333 in 55; the four new suites 4 of 4, the 14
+  named 14 of 14.
+- Stills: 6 of 6, for James's eye (`night`, `night-off`, `job-sheet`, light and dark). The host's simulator drew the
+  night, so the plain-ground finding did not arise.
+- On the Mac (no row compiled Swift; none is a verdict of record), at the re-cut: `check-ios-fixtures`, `swiftc -parse`
+  on the 20 Swift files, field-app's readers by import of `starters.ts`, `ChatView` and the chat fixtures (28 files, 747
+  tests), the DESIGN.md readers but fieldd's four (left to V's row, their setup runs cargo), field-app tsc, biome on the
+  slice's Mac-side files, the catalog with `--enforce --literals`, import boundaries and temp roots. All exit 0 at the
+  end; the one red on the way is in Found.
+- Not run: a phone. No row here is a device row. R, the reds' predictions in commits 4, 8 and 11, was not run.
+
+**Found.**
+- **The first compile named the wrong type at six sites, fixed by the rider `e6de35f09`, found by run 273's S** (results
+  `lanes/vf-m2/es5-vk-a9-results`, SUMS `d4a95803ab473e39`, 45 of 45). `starters` is declared on `ChatFlowWords`; the
+  slice said `ChatFlows`. The slice had been written on the Mac with no compiler. The rider also split `ChatPage.body`,
+  whose type-check had timed out, and made `nightStands` `nonisolated`. Run 273's V, GREEN at +347 s, held for
+  `1aecdf08a`'s tree alone and did not carry. Not a defect in main.
+- **In the packet, found and fixed before the mint; not a defect in main:** `chat-thread-items.test.tsx:303` still
+  expected the hello's sample words on a board with nothing to fill, and read red against ES-Q1, 1 of 643. The re-cut's
+  row of field-app's DESIGN.md readers found it: the slice's earlier Mac rows had run only `chat-view` and
+  `chat-starters`. It would have been red at V. The rider, commit 14, writes the expectation out; `STARTERS`, the golden
+  and the Swift did not move, and no count moved. The readers by import became the slice's row of record.
+- **Correction, 2026-11-09, to the body of `1aecdf08a`:** its clause "is still the words a slot holds while a read is
+  out" is loose. By the model's rule the starters stand wordless during a read (`StartersReading` in `starters.ts`). No
+  code, test or brief line depends on the clause, and a commit body cannot be corrected after it lands.
+- **Read in run 274's stills:** `light-night` and `dark-night` are byte-identical (`4f77904aee131c67`), and that is the
+  law: DESIGN.md §2.4 has what stands on the night wear its ramp in both themes, and `HomeScreen.swift` sets the bar
+  dark over it. The two job sheets draw different sparks because the sheet deals a new face at each opening
+  (`NewSpark.dealSeed(random())`).
+- **Named, not from this slice:** the Field tab's badge read 1, 2 and 3 across the launches: `TabMark.field(waiting:)`
+  over `-vf-mock`'s board, whose `MockAgentField()` seeds itself at random, so expected variance. And a boxed "?" stands
+  in the account slot at the bar's bottom left, which on the night reads like a missing image. **Its source is not
+  traced, and it is not fixed:** for James's eye.
+- The first packet (`b949903fb` on `d61181cf9`) was verified and never shipped: M269 landed first. The re-cut met two
+  additive conflicts with ma-6, `biome.jsonc`'s ignore rows and `check-ios-fixtures`'s origins, both kept as VF-PM
+  ruled. `DESIGN.md`, `ChromePalette.swift` and `HomeScreen.swift` merged on their own, and `HomeScreen.swift`'s hunks
+  are disjoint from ma-6's.
+
+**Owed.**
+- James's eye on a device: the night, its motion and the interim Off sentence. Never stilled: the rest rule's easing, a
+  touch waking the night and a pressed starter (no OS input), and the first job actually sent, which `ChatFirstJobTests`
+  holds only at its hand-over.
+- 5e, the portal on the phone: a spike that needs a device and James.
+- `CLAUDE.md`'s "six mirrors" erratum (`54f0d6f70`), on James's word in the fixer's session, then re-cut onto main.
+- A `lastActivityAt` on the phone's monitor row is a contracts widening, if `workedMs` is ever to equal last evidence.
+- `gate:landing` at this land, on James's word. The stack moves one field-app source, `starters.ts`, and no desk code.

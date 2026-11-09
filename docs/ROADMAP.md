@@ -498,7 +498,7 @@ DESIGN.md §2.9, §8 "The phone's Apps" and §9 "Apps"; DECISIONS MA
 - Next: MA-3h, Keep and Hide, now intents in the
   drive's document (DR-2) · **MA-6's rest**: the door's model and its wiring (the pull from
   every tab, the first peek, the drop, the dot), then 6e, the shelf, the folder and the zoom, whose first green turns
-  the gate; ES is next to land, ahead of it ·
+  the gate ·
   **MA-5, the phone's host** after SP-4 and its probes P1/P2 (cp-landing's queue).
 - Owed: the 10 words marked ‹for James› in DESIGN.md §8 and §9, and §9's interim words for Live (MA-4);
   MA-6's interim words and James's device rows (LANDED "MA-6 (6a–6d + the gate)", Owed);
@@ -963,9 +963,13 @@ its rulings (`draft/rv/james-asks.md`, `draft/rv/lead-rulings.md`); the review `
 - Landed 11-09: **ES-6** (`828d3075a` → `f3cbbc469`, M260, run 260, in the field-app chain, an ff of `68f489ac2`;
   LANDED "UM-3's plate, Q20, Q5 and ES-6"): `smoke:chat-night`, desk-gates row 36, judges Chat's empty night on the
   real GPU: it stands, the lean, the close, Cancel's fold, the hand-off. James ranked it first (03:04:05Z).
-- Next, each gated on James: ES-5, the phone's night and its starters from the role rows (the IOS lane's, once he
-  ranks it), and ES-Q1, his wording on a slot with nothing to fill (§9).
-- Owed: James's eye on the built night, its lean and its portal on a real GPU, and the starters on his own board;
+- Landed 11-09: **ES-Q1 + ES-5a to 5d** (`a8b91ea47` → `e6de35f09`, M270, run 274, an ff of `535db8a9f`; LANDED
+  "ES-Q1 + ES-5a to 5d"): a starter with nothing to name reads bare (James, 07:53Z), and the phone's empty Chat is the
+  night, its starters filled by the Mac's rule and held to its golden, a starter carried into the sheet as a first job
+  and sent once, after the hatch.
+- Next: 5e, the portal on the phone, a spike that needs a device and James.
+- Owed: James's eye on the phone's night, its motion and its interim Off sentence, on a device (LANDED "ES-Q1 + ES-5a to
+  5d"); James's eye on the built night, its lean and its portal on a real GPU, and the starters on his own board;
   CLAUDE.md's "six mirrors" erratum, on James's word (LANDED "ES-4 (role)"); gate:landing, landing-only;
   `smoke:chat-night`'s first real window (row 36, a Mac landing row, on James's word).
 
@@ -1580,7 +1584,7 @@ Petition status lives in `draft/petitions/README.md`. Still open or owed there:
 | WIN — Windows port | PARKED since 08-24 (`c16e618f4`) | `thinking-windows-port.md`, `docs/WINDOWS_PORT_STATUS.md` | a Windows leg on the rails |
 | LSF — live surfaces foundation | COMPLETE; LSF-4 landed 10-26 | `specs/live-surfaces-foundation.md` | consumed by PT; §18 Windows rows with WIN |
 | CO — the compose plane | ACTIVE; CP-0, SP-1a, CP-1a…1c, CP-1d, MT-0, CP-2, SP-1b, SP-1c, SP-1d, CP-3 (`ce6577783`, run 88), TU-1 (`57569bca3`, mint M96), the handle (`045f10ec7`, mint M100), items 158 and 159 with CO-1b (`9b3164ccf`, mint M129), CP-5a (`fc70097e3`, mint M140), CP-4a1 (`1a3ca5f24`, mint M143), SP-1e2's fieldd half (`068cab410`, mint M146), TH-1/TH-2 (`d5c6995fb`, mint M147), SP-1e2's card (`320d4b882`, mint M156), CP-4a2a (`c07039551`, mint M159), CP-4a2b's M-h (`aebd6a80b`, mint M163) and M-r1 (`c92b33692`, mint M168) landed | `compose-plane/thinking-roled-agents.md` §15–§17, `compose-plane/v2/`, `thinking-tool-plane.md`; the CO round (Druyc3Ua); DESIGN.md §2.10 | SP-1e4 · CP-4a2b…4f · CP-5b…d |
-| ES — Chat's empty state | ACTIVE since 11-08 (ES-D1…D7 ruled at the leans); ES-1 + ES-2 landed 11-08 (M226 `6b8a4b09f`), ES-3 + ES-4 landed 11-08 (M238 `2c34727a3`), ES-4 (role) landed 11-09 (M241 `7d7019a23`), ES-6 landed 11-09 (M260 `f3cbbc469`) | DESIGN.md §2.4/§2.10/§3/§5/§6/§8/§9 (the ES page `1GdkfmnTxynAp6wHTbAa3a`) | ES-5 (the IOS lane); ES-Q1 (James, §9); ES-6's first real window (row 36) |
+| ES — Chat's empty state | ACTIVE since 11-08 (ES-D1…D7 ruled at the leans); ES-1 + ES-2 landed 11-08 (M226 `6b8a4b09f`), ES-3 + ES-4 landed 11-08 (M238 `2c34727a3`), ES-4 (role) landed 11-09 (M241 `7d7019a23`), ES-6 landed 11-09 (M260 `f3cbbc469`), ES-Q1 + ES-5a to 5d landed 11-09 (M270 `e6de35f09`) | DESIGN.md §2.4/§2.10/§3/§5/§6/§8/§9 (the ES page `1GdkfmnTxynAp6wHTbAa3a`) | 5e (a device and James); ES-6's first real window (row 36) |
 | HG — History's first view and its waits | ACTIVE since 11-08 (HG-D1…D6, HG-W1…W5 and HG-L1 ruled at the leans); HG-1 + HG-2 landed 11-08 (M235 `3264c54f1`); items 263 + 264 landed 11-08 (M239 `9d2b8d03d`); item 267 landed 11-09 (M242 `519132f1a`) | DESIGN.md §5/§6/§8/§9 (the HG pages `U12DeYQrZB4YRjycrR4wuR` and `9ByDzaNGQaijgSHW6GrZUb`) | HG-3 (rosetta's `waitMark`, RO-40) → rosetta-room 0.1.6's EL8 → HG-4, History's holds in the living mark |
 | NR — native re-arm | ACTIVE since 11-08 (opened by VF-PM 19:53Z, Q1–Q5 answered); S0–S2 landed 11-08 (M240 `33162a078`) | `draft/thinking-native-replay-rearm.md`; DECISIONS NR | S3 with the integration lane after EL8-TRUFFLE; the named follow-ups (LANDED "NR S0 + S1 + S2", Not this entry) |
 | A — shell and spine | COMPLETE | design-03, `specs/electron-shell-refactor.md` | — |
@@ -1631,7 +1635,6 @@ D-1 and D-10, he ruled A the same morning (DECISIONS' compact row). What stays o
    so a titled session @ offers reads its handle, its folder else its agent's label, on the needs-you card as in @.
    A title would need the board's row to carry one, and @'s rule first: a slice of its own. Lean: as built.
 6. **ES-Q1, a slot with nothing to fill** (DESIGN.md §8 "Chat's list", the jobs, "Filled from this Mac"; track ES):
-   a starter's slot this Mac cannot fill keeps its ruled word, "vibe-field" or "claude·2", a folder or a run this Mac
-   may not have. A bare form would drop the slot instead ("Keep track of my agents"; "Have Codex review my agents'
-   work until it's clean"): honest and never blank, but new words on ruled starters. Lean: the ruled word, as built
-   (ES-D4 (a)'s fallback). VF-PM carries it.
+   RULED by James 2026-11-09 07:53Z, "go bare form": a project or a run this Mac cannot name drops out ("Keep track of
+   my agents"; "Have Codex review my agents' work until it's clean"). Landed as M270 (`e6de35f09`; LANDED "ES-Q1 + ES-5a
+   to 5d").
