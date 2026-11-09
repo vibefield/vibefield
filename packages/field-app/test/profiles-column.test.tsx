@@ -22,6 +22,7 @@ import {
   type ProfilesColumnProps,
 } from "../src/godview/profiles-column/ProfilesColumn";
 import {
+  ADD_TARGET,
   type ColumnCircle,
   ProfilesColumnView,
   type ProfilesColumnViewProps,
@@ -362,6 +363,26 @@ describe("the profiles column (UM-D21, UM-D19, UM-D22): said as DESIGN.md §9 sa
     expect(CSS).toMatch(
       /\.vf-godview:has\(\.vf-profiles-add-item > \.vf-profiles-moment > \*\)\s+\.vf-profiles-stand\[data-card="add"\] \{\s*display: none;/u,
     );
+  });
+
+  it("pointing at the limit card is not pointing at the add (UM-R4)", () => {
+    const props = column({ moment: <p data-moment="">limit</p> });
+    const page = mount(<ProfilesColumnView {...props} />);
+    const slot = page.querySelector(".vf-profiles-add-item > .vf-profiles-moment");
+    expect(slot).not.toBeNull();
+    act(() => {
+      slot
+        ?.querySelector("[data-moment]")
+        ?.dispatchEvent(new PointerEvent("pointerover", { bubbles: true }));
+    });
+    expect(props.onPoint).not.toHaveBeenCalledWith(ADD_TARGET);
+    // the add itself still is
+    act(() => {
+      page
+        .querySelector(".vf-profiles-add")
+        ?.dispatchEvent(new PointerEvent("pointerover", { bubbles: true }));
+    });
+    expect(props.onPoint).toHaveBeenLastCalledWith(ADD_TARGET);
   });
 
   it("opens the popover of the profile it is told, and only that one", () => {

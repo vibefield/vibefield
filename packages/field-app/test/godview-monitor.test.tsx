@@ -523,7 +523,9 @@ describe("the monitor stage", () => {
   /** The stage a view is handed once the monitor has measured its chrome: the
    * stage at the window's top, 8 in (the cover's edge), the usage column and a
    * speaking claims strip at the head's reserve. */
-  async function measuredStage(): Promise<StageGeometry | undefined> {
+  async function measuredStage(
+    fed: { moment?: { left: number; top: number; width: number; height: number } } = {},
+  ): Promise<StageGeometry | undefined> {
     const fire = driveObservers();
     const recording = createRecordingView("obstacle-probe");
     const entry: MonitorViewEntry = {
@@ -562,6 +564,11 @@ describe("the monitor stage", () => {
     stage!.getBoundingClientRect = () => box(8, 0, 900, 396);
     chrome!.getBoundingClientRect = () => box(21.5, 56.25, 46, 334);
     claims!.getBoundingClientRect = () => box(80, 56, 300, 9.5);
+    const moment = host.querySelector<HTMLElement>(".vf-profiles-moment");
+    if (moment && fed.moment) {
+      const { left, top, width, height } = fed.moment;
+      moment.getBoundingClientRect = () => box(left, top, width, height);
+    }
     act(() => {
       for (const publish of fire) publish();
     });
@@ -602,6 +609,13 @@ describe("the monitor stage", () => {
   // when the row resolves (`@vitest/runner` 3.2.7, chunk-hooks.js:1880–1886).
   // One settle alone takes 116–136 ms. 15 s is more than twice the worst.
   const SWARM_SETTLE_BUDGET_MS = 15_000;
+
+  it("hands the swarm the limit card's rectangle as an obstacle (UM-R4, §8 'The moments')", async () => {
+    const stage = await measuredStage({ moment: { left: 85, top: 110, width: 284, height: 90 } });
+    expect(stage?.obstacles).toHaveLength(4);
+    // the fed rect moves by the stage's 8 in, as the others do
+    expect(stage?.obstacles.at(-1)).toEqual({ x: 77, y: 110, width: 284, height: 90 });
+  });
 
   it("keeps the swarm's bodies below the head's reserve: on the stage as handed, every body settles under y 56, where without the reserve the same crowd stands in it (GV-D1)", {
     timeout: SWARM_SETTLE_BUDGET_MS,
