@@ -1,8 +1,10 @@
 import {
   Active,
+  BoardRoot,
   Camera,
   type CanvasEngine,
   ChildOf,
+  currentNavFrame,
   defineQuery,
   type Entity,
   guardedTransaction,
@@ -59,6 +61,9 @@ import { currentDesk, type MountedDesk, plainWords, subscribeDesk } from "../des
 // waits for the desk to come back, and the answer says so (`onScreen: false`).
 
 const log = () => getRendererLogger().child({ component: "desk.agent" });
+
+/** The space, in world units, between a mat and an object placed beside it. */
+const PLACE_GAP = 24;
 
 const objects = defineQuery([Position, Size, PrefabId, Not(Specimen)]);
 
@@ -180,7 +185,8 @@ export function declaredProps(engine: CanvasEngine, e: Entity): Record<string, u
 }
 
 function isOnScreen(engine: CanvasEngine, e: Entity, onCanvas: () => boolean): boolean {
-  if (!onCanvas()) return false;
+  // in a frame the person is not in (a mat they are not inside, the board while they are): not on the screen
+  if (!onCanvas() || !engine.world.hasTag(e, Active)) return false;
   const at = engine.world.get(e, Position);
   const size = engine.world.get(e, Size);
   const camera = engine.world.getResource(Camera);
@@ -192,17 +198,36 @@ function isOnScreen(engine: CanvasEngine, e: Entity, onCanvas: () => boolean): b
   return at.x + size.w > camera.x && at.x < right && at.y + size.h > camera.y && at.y < bottom;
 }
 
-/** Where an object an agent places lands: the middle of the view, each one a little down and across from the last, so a
- * run placing several does not stack them exactly. */
+/** Where an object an agent places lands on the board: the middle of the view, or, while the person is inside a mat (whose
+ * camera says nothing of the board), beside the object on the board they went in through. Each lands a little down and
+ * across from the last, so a run placing several does not stack them exactly. */
 function spotFor(
   engine: CanvasEngine,
   size: { readonly w: number; readonly h: number },
   nth: number,
 ): { x: number; y: number } {
-  const camera = engine.world.getResource(Camera);
-  const view = engine.world.getResource(Viewport);
-  const zoom = camera?.zoom ?? 1;
+  const { world } = engine;
   const cascade = (nth % 8) * 24;
+  const frame = currentNavFrame(world);
+  if (frame !== undefined) {
+    const board = world.getResource(BoardRoot)?.root;
+    let top = frame;
+    for (
+      let up = world.getRelation(top, ChildOf);
+      up !== undefined && up !== board;
+      up = world.getRelation(top, ChildOf)
+    )
+      top = up;
+    const at = world.get(top, Position);
+    const across = world.get(top, Size);
+    return {
+      x: (at?.x ?? 0) + (across?.w ?? 0) + PLACE_GAP + cascade,
+      y: (at?.y ?? 0) + cascade,
+    };
+  }
+  const camera = world.getResource(Camera);
+  const view = world.getResource(Viewport);
+  const zoom = camera?.zoom ?? 1;
   return {
     x: (camera?.x ?? 0) + ((view?.w ?? 0) / zoom - size.w) / 2 + cascade,
     y: (camera?.y ?? 0) + ((view?.h ?? 0) / zoom - size.h) / 2 + cascade,
@@ -308,6 +333,8 @@ export function createDeskApplier(desk: MountedDesk, deps: ApplierDeps = {}): De
     }
     const size = widget.defaultSize;
     const spot = spotFor(engine, size, placed);
+    // always the board: "on the user's desk", never inside a mat the person happens to be in
+    const board = world.getResource(BoardRoot)?.root;
     let e: Entity;
     try {
       e = engine.ops.spawnWidget(intent.kind, {
@@ -315,6 +342,7 @@ export function createDeskApplier(desk: MountedDesk, deps: ApplierDeps = {}): De
         y: spot.y,
         w: size.w,
         h: size.h,
+        ...(board === undefined ? {} : { parent: board }),
         props,
         undoable: false,
       });
