@@ -45899,3 +45899,74 @@ blank with a gesture. James ruled MA-D7…D9 and D11…D13 A and MA-D10 B on the
 - James's to reverse: the ten-page walk, and the re-walk on every ping (LANDED "MA-6 (6a–6d + the gate)").
 - Named follow-ups: Keep, Hide and Versions at 3h, and live apps on the phone.
 - `gate:landing` at this land, on James's word. The stack moves no code a desktop smoke runs.
+
+## UM-5 — choose a plan and the field shows only its sessions, on the desk and the phone (M273)
+
+(2026-11-09; twenty-five commits, `f3a7cb587` to `2082837d3`, on main `d44b4c003`, cut by the UM lead (vibe-field-fb)
+and landed by the fixer. Minted as run 280, a9, vf-m2; the packet is `lanes/um/um5-d44b4c003/`, the re-cuts
+`lanes/um/um5-recut-9873b1ef8/` and `lanes/um/um5-recut-d44b4c003/`.) UM-D14's plan filter, wave 2, on James's word of
+2026-11-09: "unblock and work on them in parallel".
+
+**What landed, the desk.**
+- `packages/field-app/src/usage/plan-sessions.ts` is the one join, pure and clock-free: the run's Agent Profile set
+  and its agent name the persona, and the sign-in it runs on decides its plan. A key beside a held plan spends none.
+- A plan's row and its arc in the column choose it, for everyone and with one profile too. The chosen plan rides the
+  find door as a token after the profile's; the stage and the Timeline's ended lanes recede by one predicate,
+  `runRecedes`.
+- A plan two profiles share is one filter (the twin), and choosing a plan clears a lens it is not in, so the stage
+  never says a false "No sessions". A row that needs you draws no press, and the foot offers no click nothing takes.
+
+**What landed, the phone.** `PlanSessions.swift` holds the desktop's join, held to it by `BandsParityTests`. The lens
+holds a plan: every view recedes by it, Live now keeps to it and says so when it is empty, the token gains a plan's
+form, Agent Profiles says the sessions and Show or Showing, and the hold says the sessions while the field is live.
+
+**The golden.** `usage-bands.golden.json` was re-blessed by its writer for the join's new section, +28 −2, and its one
+kit mirror with it, byte-identical (`packages/field-app/test/fixtures/usage/`,
+`apps/ios/VibeFieldKit/Tests/FieldHomeTests/Fixtures/`).
+
+**What it does not do.** No contract, fieldd, puppeteer, pin or Rust path moved, and no EL8. Partner lighting, a plan
+lighting the bodies that spend it, stays out.
+
+**Validation of record** (run 280, `lanes/vf-m2/um5-sk-a9-results`, SUMS `8b7f2dc75ec2a3cc`, 47 of 47 OK by
+`shasum -c` at 23:10:11Z; runner `0c48209c182ebee8`).
+- S, the Swift's first compile: exit 0, 16 of 16 linked, 0 errors, 0 warnings in the stack's Swift, +97 s. Every Swift
+  line in the range had only been read and parsed before it.
+- V: `pnpm verify` exit 0 at 20:17:04Z, +351 s. Four moves over run 278's, none else: field-app
+  `Test Files 336 passed (336)`, `Tests 4647 passed (4647)` (+41), `Checked 3549 files` (+2),
+  `268 of 1145 test files`. Unmoved: `ios fixtures: 454`, `ios pins: 112`, 73 warnings, 21 infos, contracts 1962,
+  fieldd 3815 and 15 skipped. KEPT births 0.
+- K: GREEN-BUT-167, +120 s. 2421 tests in 369 suites, passed 2417, skipped 3, failed 1: item 167, as run 278's. The
+  new suite's line once, and the 28 new tests' names 28 of 28, each once.
+- A read beside V: the bundle's figures are unmoved at 956.0 KB raw / 254.5 KB gz, and one chunk hash moved,
+  `SettingsPanel-D3Um8mik.js` to `SettingsPanel-wRNJ6Lpc.js`. History's `DawHtyCH` is unchanged.
+- The stills (run 281, `lanes/vf-m2/um5-stills-a9-results`): 14 of 14 shot, SUMS `e0b6623a5e495f6d`, 43 of 43 OK by
+  `shasum -c` at 23:10:11Z. Each look's sha16, light then dark: off `28764fb8128c5ba1` `ac25a6d325240faa`; field
+  `18c921a0955afacb` `66f0a60897c73156`; live `d677cc260bb7d813` `3714ee92d596dbbe`; empty `5cd2be7f16670867`
+  `da1c895df9ee1b73`; everything `c77a67114652cdf7` `131394b24e2dfff1`; page `048b484113d884c3` `6c107fc009a03032`;
+  hold `624d9003d191f4c1` `2a30c42a4c50dee9`. James's to look at, no verdict read.
+  - A mock artifact: two fixtures, one with profiles and one without. Under `native/plan:anthropic` the field's
+    scripted bodies, which carry no profile, all recede, while Live now over PG-3a's witness rows lists 4 of 11. A
+    device witness over real rows is what resolves it.
+  - On `live` the foot's 4 is the plan's count and the This Mac chip's 7 is that device's live count.
+  - `side/plan:anthropic` reads empty under the mock's fleet, PG-3a's `native` rows.
+
+**The cut.** From `e00392432` on UM-R's first cut, by plumbing, onto M272 `9873b1ef8`: range-diff `=` for 24 and `!`
+for #14, then one hop onto its records `d44b4c003`, `=` for 25. Patch-ids unchanged, the range's
+`d4ab0617b979c9d24a14152d69b3ff2f3ba98b8f`, messages byte-equal. Main had not moved since the seal, so the land is a
+fast-forward with no re-cut (VF-PM 23:08Z).
+
+**The one merge.** #14, UM-5b's filter, met MA-6e's rider in `HomeScreen.swift`: the rider moved a `#if DEBUG` block
+up into `tabs`, and UM-5b adds four `mockPlan` lines inside it. They stand after the `mockLens` `if`, at the block's
+new indent (VF-PM 19:20:19Z, the resolved blob `810df2d728ef`). Tree equal to merge-tree cannot hold for that commit;
+`PROOF-recut.txt` carries the three stages and the conflict.
+
+**Owed.**
+- `pnpm gate:landing` with `smoke:godview` at this land, on James's typed word and the Mac's swap draining (or his
+  word on that), display awake.
+- The device witness (P6): the plan filter over real rows on James's phone, which run 281's `field` and `live` stills
+  cannot give.
+- An R row at the Swift red shas: their compile-reds are unmeasured, for vf-m2's disk, until James names kit dirs to
+  reap.
+- The desk witness on a real Godview with two plans and a real pointer, into the portaled card's plan row too.
+- James's calls: the ‹for James› marks in `DESIGN.md` §8 and §9, and his picks page
+  `https://claude.ai/artifact/3j2GazGj9nCidGpZxqztoR`.

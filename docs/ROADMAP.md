@@ -612,12 +612,17 @@ profiles column", "Search — the Peek", the phone's corner, search sheet and to
 - Landed 11-09: **UM-R, the column's cards** (`1506cb785` → `a2a1b68db`, M271, run 277; LANDED "UM-R"), James's two
   defects: the cards stand above the terminals and a pointer can reach them. V is green; the window rows and his eye
   are owed, and only they prove the defects gone.
-- Next: **UM-5**, UM-D14's plan filter on the desk and the phone, in wave 2: a plan's click and tap, the page's Show
-  and sessions line, and the hold's sessions where its line counts reads.
+- Landed 11-09: **UM-5, the plan filter** (`f3a7cb587` → `2082837d3`, 25 commits, M273, runs 280 and 281; LANDED
+  "UM-5"): choose a plan and the field shows only its sessions, on the desk and the phone. V is green and the kit
+  is green but for item 167 (K GREEN-BUT-167); the stills are James's and the device witness over real rows is owed.
+- Next: puppeteer 0.4.0's EL8 (dd's lane: item 171's fix, and PU-S's glyph on the bump), then **PU-R's consumer**,
+  the bloom's buds wear their fuel, on VF-PM's placement, its DESIGN.md text first.
 - Owed:
   - UM-R's window rows: `smoke:godview` with UM-R6's rung (written, never run), `smoke:godview:no-record`,
     `smoke:first-run` and `pnpm gate:landing`, on James's typed word and the Mac's swap draining (or his word on
     that), one invocation per row, display awake; then his eye on a card over live terminals;
+  - UM-5's: `pnpm gate:landing` with `smoke:godview` on James's typed word; the R rows at its Swift red shas, until
+    James names kit dirs to reap; the two-plan desk witness; the device witness of the plan filter over real rows;
   - to James: the ‹for James› marks in DESIGN.md §8, §9 and §13 (the lead's rulings 1, 2, 5, 19, 22 and 24; UM-D14's
     wave-1 interim; the self-only lens; the desk token clearing on close; the model's words; §9's marks; the page's
     age width, the honest words and the spoken hints; Every profile's `person`; LANDED "UM-0…UM-2", "UM-3 and SE-1"
@@ -626,7 +631,7 @@ profiles column", "Search — the Peek", the phone's corner, search sheet and to
   - M-desk's: the catalog stills (the popover's 12-tall line, the limit card's hover, Settings' rows);
   - M-phone's: the stills no row took (the token's menu, search over History, the page three hours on, a stale body
     receded, PJ-7's bloom bud);
-  - the petitions PU-R and PU-S (his to file; one puppeteer release and one EL8, behind item 171);
+  - the petitions PU-R and PU-S (his to file; both shipped in puppeteer 0.4.0 on 11-09, with item 171's fix);
   - SLOT 18's riders: the record, seven at-source corrections, the petitions and the page's hold words.
 
 **RV — the review fixes (Godview's agent monitor, the terminal stack and puppeteer, for Claude Code, Codex and Grok)**
