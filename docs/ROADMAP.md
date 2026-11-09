@@ -606,9 +606,15 @@ profiles column", "Search — the Peek", the phone's corner, search sheet and to
   generator"): the phone's glyph and plan-title tables are held to the pinned packages by one generated golden,
   mirrored into the kit; the tables themselves stay hand copies. And in M260, M-desk's Settings catalog plate
   (LANDED "UM-3's plate, Q20, Q5 and ES-6").
+- Landed 11-09: **UM-R, the column's cards** (`1506cb785` → `a2a1b68db`, M271, run 277; LANDED "UM-R"), James's two
+  defects: the cards stand above the terminals and a pointer can reach them. V is green; the window rows and his eye
+  are owed, and only they prove the defects gone.
 - Next: **UM-5**, UM-D14's plan filter on the desk and the phone, in wave 2: a plan's click and tap, the page's Show
   and sessions line, and the hold's sessions where its line counts reads.
 - Owed:
+  - UM-R's window rows: `smoke:godview` with UM-R6's rung (written, never run), `smoke:godview:no-record`,
+    `smoke:first-run` and `pnpm gate:landing`, on James's typed word and the Mac's swap draining (or his word on
+    that), one invocation per row, display awake; then his eye on a card over live terminals;
   - to James: the ‹for James› marks in DESIGN.md §8, §9 and §13 (the lead's rulings 1, 2, 5, 19, 22 and 24; UM-D14's
     wave-1 interim; the self-only lens; the desk token clearing on close; the model's words; §9's marks; the page's
     age width, the honest words and the spoken hints; Every profile's `person`; LANDED "UM-0…UM-2", "UM-3 and SE-1"

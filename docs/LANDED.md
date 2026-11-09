@@ -45742,3 +45742,76 @@ VF-PM's rulings: 07:55:24Z (ES takes 5a to 5d), 08:27:37Z (`workedMs`), 08:58:50
 - `CLAUDE.md`'s "six mirrors" erratum (`54f0d6f70`), on James's word in the fixer's session, then re-cut onto main.
 - A `lastActivityAt` on the phone's monitor row is a contracts widening, if `workedMs` is ever to equal last evidence.
 - `gate:landing` at this land, on James's word. The stack moves one field-app source, `starters.ts`, and no desk code.
+
+## UM-R — the column's cards stand above the terminals and a pointer can reach them (M271)
+
+(2026-11-09; twenty commits, `1506cb785` to `a2a1b68db`, on main `3ce5dc66e`, cut by the UM lead (vibe-field-fb) and
+landed by the fixer. Minted as M271: run 277, a9, vf-m2; the packet is `lanes/um/ui-refine-3ce5dc66e/`.) James typed
+it on 2026-11-09: "once mouse leave the circle, card just disappear, which is disfuncationing. and the card should
+z-index higher than the terminal pane so it will not get blocked by it, etc. refine these details".
+
+**What landed.**
+- **The cards left the masked stage.** They sat inside it, and the deck is a later sibling at z 10, so no z-index on a
+  card could win. A new `.vf-monitor-cards` layer at z 13 stands outside the stage, and each card is a
+  `.vf-profiles-stand` portaled into it and placed by measure (`CardStand.tsx`). It stands over the deck, its veil and
+  its readout.
+- **The pointer can cross.** `useColumnPointer.ts` is one hover for a circle and its card: a 120 ms dwell to open and
+  a 320 ms grace to close, over a 22-wide bridge in the gap. Cards stand 16 from the pill.
+- **Closing is one act.** `closeCard` serves Esc, ×, the chosen circle, the lone unpin, Settings and maximize, and
+  only a deliberate close hands the keyboard home. Tab enters the card; a circle says `aria-expanded` and
+  `aria-controls`.
+- **The limit card** has its own hover zone, `.vf-profiles-add-zone`, and publishes its own rectangle to the swarm. It
+  stays in the stage, so a raised deck can still cover that one card: `DESIGN.md` §8's open mark, on James's list.
+- **The details.** The card's and the strip's acts draw §7's Off, not a whole-pill fade, and so do the Last Run
+  curtain's held answers. Truncations, focus rings, hover steps and the motion-off lists follow. No card opens behind
+  full-window terminals.
+- `DESIGN.md` §8 moved first, its corrections dated. It marks two calls for James: the peek over a pinned card, and
+  the 6 against round 4's 10.
+
+**What it does not do.** No contract, fieldd, plugin, kit, pin or golden moved. `smoke.ts` gains UM-R6's rung for
+`smoke:godview`, typechecked and never yet run.
+
+**Validation of record** (run 277, `lanes/vf-m2/um-r-v-a9-results`, SUMS `1b269adb54b6902a`, 31 of 31 files; runner
+`51f7f605cf99e814`).
+- V: `pnpm verify` exit 0 at 18:35:27Z, +351 s, at `a2a1b68db`. Count lines and singles compared as sets against run
+  274's: two moves, as predicted, none else. field-app `Tests 4606 passed (4606)` (+50, no new file),
+  `Checked 3547 files` (+2: `CardStand.tsx`, `useColumnPointer.ts`). Unmoved: 335 files, `ios fixtures: 454`,
+  `ios pins: 112`, 268 of 1144, 73 warnings, 21 infos, contracts 1962, fieldd 3815 and 15 skipped.
+- The +50, by file, measured at the base and at the tip on the Mac: `profiles-column` 34 → 76, `godview-monitor` 107 →
+  113, `godview-last-run` 19 → 20, `limit-moment` 28 → 29, `text-ramp` 12 → 12.
+- A read beside V, accepted by VF-PM (18:39Z): the bundle's initial figures moved 955.8 / 254.4 KB gz to 956.0 /
+  254.5; the History and Settings chunks and their hashes unchanged (a9's README).
+- Two KEPT births on vf-m2, each one file, left in `/private/tmp` and not removed: `/private/tmp/vf-seam-wtp1qa`
+  (`custody-admission.v1.json`, item 270's shape) and `/private/tmp/.tmp7vPCa5` (`native/run/termcell.2.crumb`).
+- **Neither of James's defects is proved gone by this.** happy-dom draws no card and crosses no gap. The proof is the
+  window row below.
+- The tests' bite: each step's red is quoted in its commit; two mutant batches through the door, 19 and 4 rows red,
+  are recorded in UM-R9's green.
+
+**The cut.** From `47e093a1c` on `d61181cf9` onto M270 `e6de35f09`, then one docs-only hop to `3ce5dc66e`, by
+plumbing. Both: range-diff `=` for all twenty, every patch-id unchanged, the range's full-index patch-id
+`15e92fe5e1e0845b55d85750236735282d4c061a`, trees equal to merge-tree, messages byte-equal. `DESIGN.md` and `smoke.ts`
+merged three-way with no conflict, their closest hunks 217 and 2337 lines apart
+(`lanes/um/ui-refine-3ce5dc66e/PROOF-recut.txt`).
+
+**Findings along the way.**
+- The first gate for full-window terminals sat on the card's `open` and unmounted it before `closeCard` could hand
+  focus home. A review's own row caught it; the gate now sits at the doors (UM-R9).
+- Two red Mac rows of the host's, not the slice's, in electron-shell's readers: the lane has no Electron binary
+  (`smoke-catalog`) and no built sound addon (`sound-player`). Neither file is in the range, and both passed in V.
+- On James's puppeteer checkout: the lane prep of 2026-11-09, 12:41Z to 12:44Z, took three symlinked lane paths for
+  clones. It switched that checkout's branch three times and refreshed its `node_modules`, and restored it at 12:48Z.
+  No edit, commit or push. The work moved to real worktrees.
+- On the door: an agent of this lead's held `door.lock` from 16:34:43Z to 16:44:42Z by running `install.sh`, which
+  enters the door itself, inside `wf-row.sh`, and got out by signalling its own `lockf`. VF-PM's ruling: report and
+  wait.
+
+**Owed.**
+- The window rows, each on James's typed word and on the Mac's swap draining under its gate or his word on that, one
+  invocation per row from the main checkout, display awake: `smoke:godview` with UM-R6's rung,
+  `smoke:godview:no-record`, `smoke:first-run` and `pnpm gate:landing`.
+- James's eye: a real pointer crossing, a card over live terminals, and whether a promoted WebGPU canvas flickers
+  under one.
+- Any still golden holding the column's plates: the catalog's cards moved 6 right.
+- His calls, on the page `https://claude.ai/artifact/3j2GazGj9nCidGpZxqztoR`: keyboard focus, a pinned card's tell,
+  the limit card under a raised deck, many profiles.
