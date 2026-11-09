@@ -1,10 +1,11 @@
 // OB-2 — `vibefield-plugin check` on a kind's agent half: its schemas compile, its guide is on disk within the manual's
 // limit, and the object rows hold the manifest and the binding to each other.
-import { OBJECT_LIMITS } from "@vibefield/contracts";
+import { AGENT_TOOL_SCHEMA_AJV, DESK_KINDS, OBJECT_LIMITS } from "@vibefield/contracts";
+import { Ajv } from "ajv";
 import { describe, expect, it } from "vitest";
 import { checkPlugin } from "../src/check";
 import { REFUSAL_CATALOG } from "../src/refusals";
-import { FIXTURE_ID, makePlugin, objectRendererModule } from "./fixtures";
+import { baseManifest, FIXTURE_ID, makePlugin, objectRendererModule } from "./fixtures";
 
 const CLOCK = `${FIXTURE_ID}.clock`;
 const GUIDE = "./assets/agent/guide.md";
@@ -59,6 +60,75 @@ describe("check: the agent half", () => {
     expect(verdicts.find((v) => v.code === "schema-invalid")?.pointer).toBe(
       "/contributes/objects/0/agent/tools/0/input",
     );
+  });
+
+  describe("refuses what the desk room would refuse at every call", () => {
+    const refusalFor = async (tools: unknown[]) => {
+      const verdicts = await checkPlugin({ dir: plugin({ tools }), skipActivation: true });
+      return { codes: codes(verdicts), row: verdicts.find((v) => v.code === "schema-invalid") };
+    };
+
+    it("a format nothing here can check", async () => {
+      const { codes: said, row } = await refusalFor([
+        tool({ type: "object", properties: { mail: { type: "string", format: "email" } } }),
+      ]);
+      expect(said).toEqual(["schema-invalid"]);
+      expect(row?.pointer).toBe("/contributes/objects/0/agent/tools/0/input");
+      expect(row?.detail).toContain("format");
+    });
+
+    it("a keyword nothing here knows", async () => {
+      const { codes: said, row } = await refusalFor([tool({ type: "object", nonsense: true })]);
+      expect(said).toEqual(["schema-invalid"]);
+      expect(row?.detail).toContain("nonsense");
+    });
+
+    it("in an output too", async () => {
+      const { codes: said, row } = await refusalFor([
+        { ...tool({ type: "object" }), output: { type: "object", nonsense: true } },
+      ]);
+      expect(said).toEqual(["schema-invalid"]);
+      expect(row?.pointer).toBe("/contributes/objects/0/agent/tools/0/output");
+    });
+
+    it("but not two tools that share an $id", async () => {
+      const shared = { $id: "https://example.test/input", type: "object" };
+      const { codes: said } = await refusalFor([
+        tool(shared),
+        { ...tool(shared), name: "set_minutes" },
+      ]);
+      expect(said).toEqual([]);
+    });
+
+    it("and leaves a settings schema as it was", async () => {
+      const verdicts = await checkPlugin({
+        dir: makePlugin({
+          manifest: {
+            contributes: {
+              ...(baseManifest()["contributes"] as object),
+              settings: {
+                properties: {
+                  mail: {
+                    title: "Mail",
+                    scope: "user",
+                    schema: { type: "string", format: "email" },
+                  },
+                },
+              },
+            },
+          },
+        }),
+        skipActivation: true,
+      });
+      expect(codes(verdicts)).not.toContain("schema-invalid");
+    });
+  });
+
+  it("the built-in kinds' tools all compile under the room's own rule", () => {
+    const ajv = new Ajv({ ...AGENT_TOOL_SCHEMA_AJV });
+    expect(AGENT_TOOL_SCHEMA_AJV).toMatchObject({ strictSchema: true });
+    for (const kind of DESK_KINDS)
+      for (const tool of kind.agent.tools) expect(() => ajv.compile(tool.input)).not.toThrow();
   });
 
   it("finds the guide on disk", async () => {
