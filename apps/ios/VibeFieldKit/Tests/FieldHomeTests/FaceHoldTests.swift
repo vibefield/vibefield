@@ -1,3 +1,4 @@
+import FieldHistory
 import FieldProduct
 import Foundation
 import Testing
@@ -42,6 +43,30 @@ struct FaceHoldTests {
     #expect(FaceHold.reach(CGPoint(x: work.x, y: work.y - 10), face: face, profiles: ids) == .bud("work"))
     #expect(FaceHold.reach(CGPoint(x: face.x, y: face.y + 45), face: face, profiles: ids) == .hub)
     #expect(FaceHold.reach(CGPoint(x: face.x, y: face.y + 100), face: face, profiles: ids) == .open)
+  }
+
+  /// UM-5b (§8 "The words follow the reach") — while the field is live the line says sessions; while it is not, the
+  /// plans' reads stand (`words`, below). With one profile it is the page's "Usage" over its reads, unchanged.
+  @Test("while the field is live the hub and a bud say sessions; No sessions on a bud that has none")
+  func sessionWords() throws {
+    let several = try AgentProfilesPageTests.reading()
+    let live = try ProfileLensTokenTests.field()
+    let all = FaceHold.words(several, reach: .hub, home: "studio", now: Self.now, live: live)
+    #expect(all == FaceHold.Words(verb: "Show", rest: "all", line: "8 sessions · every profile"))
+    let work = FaceHold.words(several, reach: .bud("work"), home: "studio", now: Self.now, live: live)
+    #expect(work == FaceHold.Words(verb: "Show", rest: "Work", line: "3 sessions · 2 working"))
+    let empty = PhoneSearch.Live(sessions: [], desks: [], profiles: [])
+    let none = FaceHold.words(several, reach: .bud("work"), home: "studio", now: Self.now, live: empty)
+    #expect(none.line == "No sessions")
+    // Cancel says what it always said
+    let open = FaceHold.words(several, reach: .open, home: "studio", now: Self.now, live: live)
+    #expect(open.rest == "Cancel")
+    #expect(open.line == "let go here to leave the field as it is")
+
+    var one = several
+    one.sets = one.sets.filter { $0.kind == "native" }
+    let usage = FaceHold.words(one, reach: .hub, home: "studio", now: Self.now, live: live)
+    #expect(usage == FaceHold.Words(verb: nil, rest: "Usage", line: "3 read · none need you"))
   }
 
   @Test("the words follow the reach: Usage with one profile; Show all, Show ‹profile› and Cancel with several")

@@ -150,6 +150,53 @@ struct ProfileLensTokenTests {
     #expect(LensToken.pageWord == "Agent Profiles…")
   }
 
+  /// UM-5b (§8 "A plan chosen", ‹for James›) — the token also stands for a plan, for everyone, with one profile too:
+  /// the plan's agent's mark and title, its name opens the page where **Showing** stands, and its × clears the plan
+  /// alone. With a lens and a plan both it names the plan, and the × brings back the profile's form.
+  @Test("a plan's form: its mark and title, the name opens the page, the × clears only the plan")
+  func planForm() throws {
+    let options = MetersOptions(catalog: MeterCatalog(rows: []))
+    var lens = ProfileLensTests.lens(try ProfileLensTests.planned())
+    lens.show("work")
+    let profileForm = try #require(LensToken.form(lens, options: options))
+    #expect(profileForm.spoken == "Showing only Work")
+    #expect(profileForm.clearWords == "Show every profile")
+    #expect(profileForm.nameOpens == .menu)
+    #expect(profileForm.clears == .profile)
+
+    lens.showPlan("work/plan:openai")
+    let chosen = lens.chosenPlan(options: options)
+    let choice = try #require(chosen)
+    let planForm = try #require(LensToken.form(lens, options: options))
+    #expect(planForm.lead == .agent("codex"))
+    #expect(planForm.label == choice.label)
+    #expect(planForm.spoken == "Showing only \(choice.label)")
+    #expect(planForm.clearWords == "Show every plan")
+    #expect(planForm.nameOpens == .page)
+    #expect(planForm.clears == .plan)
+
+    // the × takes the plan and leaves the lens: the profile's form again
+    lens.showPlan(nil)
+    let back = try #require(LensToken.form(lens, options: options))
+    #expect(back.clears == .profile)
+    #expect(lens.profile == "work")
+
+    var none = ProfileLensTests.lens(try ProfileLensTests.planned())
+    none.show(nil)
+    #expect(LensToken.form(none, options: options) == nil)
+  }
+
+  @Test("a plan's token stands with one profile too, where no lens can")
+  func planShowsWithOneProfile() throws {
+    let planned = try ProfileLensTests.planned()
+    var lens = ProfileLensTests.lens(planned.filter { $0.id == "work" })
+    lens.show("work")
+    #expect(!LensToken.shows(lens, onField: true, searchOpen: false, faceHeld: false, menuOpen: false, pageOpen: false))
+    lens.showPlan("work/plan:openai")
+    #expect(LensToken.shows(lens, onField: true, searchOpen: false, faceHeld: false, menuOpen: false, pageOpen: false))
+    #expect(!LensToken.shows(lens, onField: true, searchOpen: true, faceHeld: false, menuOpen: false, pageOpen: false))
+  }
+
   /// SE-P5b (§8 "The phone's profile token": **Agent Profiles…**, its glyph a Bands circle at 26 of every plan) — the
   /// token's menu leads its page row with the Me menu's own row (UM-D25 A, `AgentProfilesMenuRow`): one value, so the
   /// two menus draw one circle. Its act folding the menu and opening the page is HomeScreen's wiring, which no row

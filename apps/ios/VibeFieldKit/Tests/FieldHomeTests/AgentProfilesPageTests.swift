@@ -1,3 +1,4 @@
+import FieldHistory
 import FieldProduct
 import Foundation
 import Testing
@@ -10,7 +11,8 @@ import Testing
 /// Plans under the lens's head, a need's words with no act, and — wave 1, UM-D14's interim — no Show and no sessions
 /// line. The home is the meters fixture's (This Mac, Work, Side and a draft) over the budget batch, read at its stamp.
 /// Since the U3 review: the home's honest empty is a first read, only an agent that never meters "shows no meter",
-/// and a reset a day or more off is said by its day.
+/// and a reset a day or more off is said by its day. *(Corrected 2026-11-09, UM-5b: wave 1 ended. "No Show and no
+/// sessions line" now holds only while the field is not live; the live rows are at the end of the suite's page rows.)*
 ///
 /// No key path and no `try` inside an #expect/#require argument: hoisted into a `let` first (T10f's kit trap).
 @Suite("the Me menu's row and the Agent Profiles page say what the home's meters say")
@@ -129,6 +131,104 @@ struct AgentProfilesPageTests {
     #expect(bodies.last == .needs("Not signed in · sign in on studio"))
     let glyphs = work.plans.map(\.glyph)
     #expect(glyphs.allSatisfy { $0 == nil })
+  }
+
+  /// UM-5b — a run on a plan, and the field as the page reads it.
+  static func run(
+    _ id: String, key: String?, state: PhoneSearch.LiveState = .working
+  ) -> PhoneSearch.LiveSession {
+    PhoneSearch.LiveSession(
+      id: id, title: id, folder: nil, agent: nil, state: state, profileSet: nil, device: "dev-1", deviceName: "studio",
+      platform: "darwin", isHome: true, nativeSessionId: nil, planKey: key)
+  }
+
+  static func field(_ sessions: [PhoneSearch.LiveSession]) -> PhoneSearch.Live {
+    PhoneSearch.Live(sessions: sessions, desks: [], profiles: [])
+  }
+
+  /// A row of the page's Plans by what its body is.
+  static func row(
+    _ words: AgentProfilesWords, _ matches: (AgentProfilesWords.PlanRow.Body) -> Bool
+  ) -> AgentProfilesWords.PlanRow? {
+    words.plans.first { matches($0.body) }
+  }
+
+  static func isReading(_ body: AgentProfilesWords.PlanRow.Body) -> Bool {
+    if case .reading = body { return true }
+    return false
+  }
+
+  static func isNeed(_ body: AgentProfilesWords.PlanRow.Body) -> Bool {
+    if case .needs = body { return true }
+    return false
+  }
+
+  @Test("while the field is live a plan says its sessions and draws Show; none says no sessions and draws none")
+  func sessionsAndShow() throws {
+    let reading = try Self.reading()
+    let lens = Self.lens(reading)
+    let at = AgentProfilesWords(reading: reading, lens: lens, home: "studio", now: Self.now, live: Self.field([]))
+    let found = Self.row(at, Self.isReading)
+    let plan = try #require(found)
+    #expect(plan.sessions == "no sessions")
+    #expect(plan.show == nil)
+
+    let live = Self.field([
+      Self.run("a", key: plan.key), Self.run("b", key: plan.key, state: .blocked), Self.run("c", key: nil),
+    ])
+    let words = AgentProfilesWords(reading: reading, lens: lens, home: "studio", now: Self.now, live: live)
+    let row = words.plans.first { $0.key == plan.key }
+    let said = try #require(row)
+    #expect(said.sessions == "2 sessions · 1 working · 1 waiting for you")
+    #expect(said.show == .show(plan.key))
+  }
+
+  @Test("the plan shown says Showing, with one profile too")
+  func showing() throws {
+    var reading = try Self.reading()
+    reading.sets = reading.sets.filter { $0.kind == "native" }
+    var lens = Self.lens(reading)
+    let every = Self.words(reading)
+    let found = Self.row(every, Self.isReading)
+    let plan = try #require(found)
+    lens.showPlan(plan.key)
+    let live = Self.field([Self.run("a", key: plan.key)])
+    let words = AgentProfilesWords(reading: reading, lens: lens, home: "studio", now: Self.now, live: live)
+    let row = words.plans.first { $0.key == plan.key }
+    let said = try #require(row)
+    #expect(said.show == .showing)
+  }
+
+  @Test("under a lens Show carries the plan's whole key")
+  func showUnderALens() throws {
+    let reading = try Self.reading()
+    let lens = Self.lens(reading, "work")
+    let shown = Self.words(reading, lens: "work")
+    let found = Self.row(shown, Self.isReading)
+    let plan = try #require(found)
+    let key = "work/\(plan.key)"
+    let live = Self.field([Self.run("a", key: key)])
+    let words = AgentProfilesWords(reading: reading, lens: lens, home: "studio", now: Self.now, live: live)
+    let row = words.plans.first { $0.key == plan.key }
+    let said = try #require(row)
+    #expect(said.show == .show(key))
+  }
+
+  @Test("a plan that needs you says its sessions and draws no Show; with no live field nothing is said")
+  func needsNoShow() throws {
+    let reading = try Self.reading()
+    let lens = Self.lens(reading)
+    let every = Self.words(reading)
+    let found = Self.row(every, Self.isNeed)
+    let need = try #require(found)
+    #expect(need.sessions == nil)
+    #expect(need.show == nil)
+    let live = Self.field([Self.run("a", key: need.key)])
+    let words = AgentProfilesWords(reading: reading, lens: lens, home: "studio", now: Self.now, live: live)
+    let row = words.plans.first { $0.key == need.key }
+    let said = try #require(row)
+    #expect(said.sessions == "1 session · 1 working")
+    #expect(said.show == nil)
   }
 
   @Test("every plan at once: a kept reading says its age, and the crowded agents wear their profile's glyph")
