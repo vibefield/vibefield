@@ -948,6 +948,48 @@ describe("the reach (UM-R2): the pointer can cross to its card", () => {
     expect(bridge).toContain("width: 22px;");
     expect(bridge).toMatch(/top: 0;[^}]*bottom: 0;/u);
   });
+
+  it("opens no card while the terminals fill the window: not by the pointer, not by a press; the lens still chooses (§8 'Pinned')", () => {
+    // the review: `covered` closed a card only as it turned true, and maximize only fades the stage, so a circle behind
+    // the deck was still reachable, and the card it opened stood in the z 13 layer over the full-window terminals
+    const onChoose = vi.fn();
+    const target = cardLayer();
+    const page = mount(
+      <ProfilesColumn
+        {...controller({ cardLayer: target, covered: true, onChoose, openNewProfile: vi.fn() })}
+      />,
+    );
+    const work = page.querySelector<HTMLElement>('.vf-profiles-item[data-profile="work"]');
+    over(work);
+    expect(target.querySelector(".vf-profiles-stand")).toBeNull();
+    over(page.querySelector(".vf-profiles-add-zone"));
+    expect(target.querySelector(".vf-profiles-stand")).toBeNull();
+    act(() => work?.querySelector<HTMLButtonElement>(".vf-profiles-circle")?.click());
+    expect(onChoose).toHaveBeenCalledWith("work");
+    expect(target.querySelector(".vf-profiles-stand")).toBeNull();
+    expect(monitorHoldsKeys()).toBe(false);
+  });
+
+  it("while the limit card stands, pointing at the add holds no hidden card, and the next circle opens at once (§8 'The add')", () => {
+    // the review: a `display: none` stand still matched `:has(.vf-monitor-cards > *)` and read as "showing", so the
+    // deck re-composited with no card on screen and the next circle waited a dwell with nothing to replace
+    const target = cardLayer();
+    const page = mount(
+      <ProfilesColumn
+        {...controller({
+          cardLayer: target,
+          openNewProfile: vi.fn(),
+          moment: <p data-moment="">limit</p>,
+        })}
+      />,
+    );
+    const zone = page.querySelector(".vf-profiles-add-zone");
+    over(zone);
+    expect(target.children).toHaveLength(0);
+    out(zone);
+    over(page.querySelector('.vf-profiles-item[data-profile="work"]'));
+    expect(target.querySelector('.vf-profiles-stand[data-profile="work"]')).not.toBeNull();
+  });
 });
 
 /* ── closing is one act (UM-R3; DESIGN.md §8 "Pinned") ─────────────────────── */
