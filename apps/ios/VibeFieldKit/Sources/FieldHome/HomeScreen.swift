@@ -1318,15 +1318,15 @@ public struct HomeScreen: View {
       onLive: openLiveRow, onPast: openPastRow,
       onAct: { act in PhoneSearchWorld.act(act, state: &search, lens: &lens) },
       // MA-6's seams (MA-D7): the Apps strip and Everything's Apps group. An icon's open and All apps arrive with the
-      // shelf (6e).
+      // shelf (6e); until then both slots stand empty (`AppsShelfGate`).
       appsStrip: {
-        if let strip = AppsStripContent.of(reading: apps.reading, opened: [], here: Self.appsHere) {
+        if let strip = AppsStripContent.inSheet(reading: apps.reading, opened: [], here: Self.appsHere) {
           AppsStripView(content: strip, onOpen: { _ in }, onAll: {})
         }
       },
       appsGroup: {
         let words = searchQuery.trimmingCharacters(in: .whitespaces)
-        if let group = AppsSearchGroup.of(reading: apps.reading, words: words, here: Self.appsHere) {
+        if let group = AppsSearchGroup.inSheet(reading: apps.reading, words: words, here: Self.appsHere) {
           AppsSearchGroupView(group: group, terms: content.terms, onOpen: { _ in })
         }
       }
