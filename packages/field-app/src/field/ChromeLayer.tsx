@@ -52,6 +52,7 @@ import { CommandPalette } from "../hud/CommandPalette";
 import { LoadingVeil } from "../hud/LoadingVeil";
 import { PluginSurfaceHost } from "../hud/PluginSurfaceSlot";
 import { SettingsPanelMount } from "../panels";
+import { deskAgentDoorOver, followDeskAgent } from "./desk/agent/applier";
 import { SelectionBar } from "./desk/bar/SelectionBar";
 import { useBoardFacts } from "./desk/pegboard/board-door";
 import { Pegboard } from "./desk/pegboard/Pegboard";
@@ -159,6 +160,8 @@ export function ChromeLayer({
   // An agent's notify on the status line (CP-3, CP3-D5 A): heard over the same client for the window's life, in every
   // window, whatever main says outside the app (`frame/needs-notices.ts`).
   useEffect(() => startNeedsNotices(needsNoticesPortOver(fieldd)), [fieldd]);
+  // An agent's work on the desk (OB-3c): the window that has the board carries out what fieldd asks of it.
+  useEffect(() => followDeskAgent(deskAgentDoorOver(fieldd)), [fieldd]);
   // Chat's create (SP-1c): the New spark sheet asks fieldd through the same client — and so do @'s rows in Chat's
   // composer (SP-1d), whose list is one of the frame's open surfaces (`at`), so Chat is handed the one owner's value.
   const newSparkPort = useMemo(() => newSparkPortOver(fieldd), [fieldd]);

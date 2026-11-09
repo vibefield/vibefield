@@ -22,13 +22,22 @@ describe("the built-in kinds' agent halves", () => {
       expect(half).toBeDefined();
       const tools = kind.agent.tools;
       expect(Object.keys(half?.read ?? {}).sort()).toEqual(
-        tools.filter((tool) => tool.readOnly).map((tool) => tool.name).sort(),
+        tools
+          .filter((tool) => tool.readOnly)
+          .map((tool) => tool.name)
+          .sort(),
       );
       expect(Object.keys(half?.act ?? {}).sort()).toEqual(
-        tools.filter((tool) => !tool.readOnly).map((tool) => tool.name).sort(),
+        tools
+          .filter((tool) => !tool.readOnly)
+          .map((tool) => tool.name)
+          .sort(),
       );
       expect(Object.keys(half?.faces ?? {}).sort()).toEqual(
-        kind.agent.faces.filter(agentFaceHasHandler).map((face) => face.id).sort(),
+        kind.agent.faces
+          .filter(agentFaceHasHandler)
+          .map((face) => face.id)
+          .sort(),
       );
     },
   );

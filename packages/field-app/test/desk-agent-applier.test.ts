@@ -19,8 +19,10 @@ type Ok = Extract<ObjectIntentAnswer, { ok: true }>;
 
 const BASE = { run: "run-1", handle: "claude·2" };
 let serial = 0;
-const intent = (rest: Record<string, unknown>): ObjectIntent =>
-  ({ intent: `i${(serial += 1)}`, ...BASE, ...rest }) as ObjectIntent;
+const intent = (rest: Record<string, unknown>): ObjectIntent => {
+  serial += 1;
+  return { intent: `i${serial}`, ...BASE, ...rest } as ObjectIntent;
+};
 
 function mount() {
   const ce = createFieldEngine(buildRegistry());
@@ -118,8 +120,9 @@ describe("acting", () => {
     expect(answer.changed).toBe("Rewrote the note");
     expect(answer.inverse).toEqual({
       op: "props",
-      after: { text: "new", seeds: "" },
-      before: { text: "old", seeds: "" },
+      // only what changed: a note whose seeds were already empty keeps them out of its undo
+      after: { text: "new" },
+      before: { text: "old" },
     });
     const text = () => ok({ op: "read", key: placed.key, tool: "read_text", input: {} }).value;
     expect(text()).toEqual({ text: "new" });
@@ -202,7 +205,9 @@ describe("acting", () => {
     const answer = applier.apply(intent({ ...WRITE, key, input: { text: "x" } }));
     expect(answer).toMatchObject({ ok: false, fact: "failed", text: "not today" });
     const reader = createDeskApplier(desk);
-    expect((reader.apply(intent({ op: "read", key, tool: "read_text", input: {} })) as Ok).value).toEqual({
+    expect(
+      (reader.apply(intent({ op: "read", key, tool: "read_text", input: {} })) as Ok).value,
+    ).toEqual({
       text: "kept",
     });
   });
@@ -240,7 +245,9 @@ describe("undoing an agent's change", () => {
     const session = ce.docs.current();
     if (session === undefined) throw new Error("no document");
     setWidgetProps(session.store, ce.world, changed.entity, { text: "the person's now" });
-    expect(factOf({ op: "undo", key: changed.key, inverse: changed.answer.inverse })).toBe("conflict");
+    expect(factOf({ op: "undo", key: changed.key, inverse: changed.answer.inverse })).toBe(
+      "conflict",
+    );
   });
 
   it("brings a removed object back under a new key, as fieldd then remaps", () => {
