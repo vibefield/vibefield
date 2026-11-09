@@ -760,8 +760,16 @@ describe("the cards layer (UM-R1): a card stands above the terminals, in the col
     const box = (left: number, top: number, width: number, height: number): DOMRect =>
       ({ left, top, width, height, right: left + width, bottom: top + height }) as DOMRect;
 
-    function placed(layerBox: DOMRect, standHeight: number): CSSStyleDeclaration | undefined {
+    function placed(
+      layerBox: DOMRect,
+      standHeight: number,
+      layout?: { width: number; height: number },
+    ): CSSStyleDeclaration | undefined {
       const target = cardLayer();
+      if (layout) {
+        vi.spyOn(target, "clientWidth", "get").mockReturnValue(layout.width);
+        vi.spyOn(target, "clientHeight", "get").mockReturnValue(layout.height);
+      }
       vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function (
         this: Element,
       ) {
@@ -791,6 +799,53 @@ describe("the cards layer (UM-R1): a card stands above the terminals, in the col
       const style = placed(box(0, 64, 1000, 200), 590);
       expect(style?.top).toBe("0px");
       expect(style?.maxHeight).toBe("200px");
+      // §8 "held at the room's height and scrolls": the card takes the stand's bounds, and scrolls
+      const card = /\n\.vf-profiles-pop,\n\.vf-profiles-addcard \{[^}]*\}/u.exec(CSS)?.[0] ?? "";
+      expect(card).toContain("max-width: inherit;");
+      expect(card).toContain("max-height: inherit;");
+      expect(card).toContain("overflow-y: auto;");
+    });
+
+    it("stands in the layer's own pixels while the cover scales the stage (the monitor's clientWidth || rect)", () => {
+      // the layer's box drawn at twice its layout: every screen distance is halved into the layer's pixels
+      const style = placed(box(0, 64, 2000, 1200), 300, { width: 1000, height: 600 });
+      expect(style?.left).toBe("49px");
+      expect(style?.top).toBe("22px");
+      expect(style?.maxWidth).toBe("935px");
+      expect(style?.maxHeight).toBe("600px");
+    });
+
+    it("places again when the room moves: a ResizeObserver over the layer and the stand", () => {
+      const observers: { fire: () => void; targets: Element[] }[] = [];
+      vi.stubGlobal(
+        "ResizeObserver",
+        class {
+          private readonly entry: { fire: () => void; targets: Element[] };
+          constructor(callback: () => void) {
+            this.entry = { fire: callback, targets: [] };
+            observers.push(this.entry);
+          }
+          observe(target: Element): void {
+            this.entry.targets.push(target);
+          }
+          unobserve(): void {}
+          disconnect(): void {}
+        },
+      );
+      try {
+        const room = box(0, 64, 1000, 600);
+        expect(placed(room, 590)?.top).toBe("10px");
+        const target = layer as HTMLElement;
+        const stand = target.querySelector<HTMLElement>(".vf-profiles-stand");
+        const placing = observers.find((each) => each.targets.includes(target));
+        expect(placing?.targets).toContain(stand);
+        Object.assign(room, { height: 500, bottom: 564 });
+        act(() => placing?.fire());
+        expect(stand?.style.top).toBe("0px");
+        expect(stand?.style.maxHeight).toBe("500px");
+      } finally {
+        vi.unstubAllGlobals();
+      }
     });
   });
 
@@ -823,6 +878,21 @@ describe("the cards layer (UM-R1): a card stands above the terminals, in the col
     expect(document.activeElement).toBe(circle);
   });
 
+  it("Tab from a circle whose card is not the open one walks on as the DOM does", () => {
+    const target = cardLayer();
+    const page = mount(<ProfilesColumnView {...cards({ cardLayer: target })} />);
+    const other = page.querySelector<HTMLButtonElement>(
+      '[data-profile="native"] .vf-profiles-circle',
+    );
+    other?.focus();
+    const tab = new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true });
+    act(() => {
+      other?.dispatchEvent(tab);
+    });
+    expect(tab.defaultPrevented).toBe(false);
+    expect(document.activeElement).toBe(other);
+  });
+
   it("a press inside a pinned card leaves it pinned", () => {
     const target = cardLayer();
     const page = mount(<ProfilesColumn {...controller({ cardLayer: target })} />);
@@ -846,6 +916,11 @@ describe("the cards layer (UM-R1): a card stands above the terminals, in the col
       /inset: calc\(var\(--vf-godview-head-reserve\) \+ 8px\) 0 var\(--vf-godview-panes-foot\) 0;/u,
     );
     expect(CSS).toMatch(/\n\.vf-profiles-stand \{[^}]*pointer-events: auto;/u);
+    // a portaled card stands outside the column, so the layer carries the column's sans and the Bands circle's inks
+    const inks = /\n\.vf-monitor-cards,\n\.vf-profiles-column \{[^}]*\}/u.exec(CSS)?.[0] ?? "";
+    expect(inks).toContain("font-family: var(--vf-font-sans);");
+    expect(inks).toContain("--vf-bands-ink: var(--vf-foreground);");
+    expect(inks).toContain("--vf-bands-attention: var(--vf-monitor-ink-attention);");
     for (const theme of ["light", "dark"]) {
       expect(CSS).toContain(`\n.vf-godview.theme-${theme} .vf-monitor-cards`);
     }
@@ -947,6 +1022,92 @@ describe("the reach (UM-R2): the pointer can cross to its card", () => {
     expect(bridge).toContain("right: 100%;");
     expect(bridge).toContain("width: 22px;");
     expect(bridge).toMatch(/top: 0;[^}]*bottom: 0;/u);
+    // a ::before with no content generates no box, so no bridge
+    expect(bridge).toContain('content: "";');
+  });
+
+  it("the real crossing is no leave: out of the circle onto its stand, and between the card's own controls", () => {
+    // what a browser fires: out and over carry each other's node, so React's enter/leave walks the portal, where the
+    // bare `out`s above read as a leave of the whole tree. An item that listened for out would arm the grace here.
+    const { item, stand, target } = setup();
+    const cross = (from: Element | null | undefined, to: Element | null | undefined): void => {
+      act(() => {
+        from?.dispatchEvent(
+          new PointerEvent("pointerout", { bubbles: true, relatedTarget: to ?? null }),
+        );
+        to?.dispatchEvent(
+          new PointerEvent("pointerover", { bubbles: true, relatedTarget: from ?? null }),
+        );
+      });
+    };
+    over(item("work"));
+    cross(item("work"), stand("work"));
+    wait(1000);
+    expect(stand("work")).not.toBeNull();
+    cross(target.querySelector(".vf-profiles-pop"), target.querySelector(".vf-profiles-pop-close"));
+    wait(1000);
+    expect(stand("work")).not.toBeNull();
+  });
+
+  it("a close cancels the armed dwell: no card opens after the person closed it", () => {
+    const { item, target } = setup();
+    over(item("work"));
+    act(() => item("work")?.querySelector<HTMLButtonElement>(".vf-profiles-circle")?.click());
+    out(item("work"));
+    over(item("native"));
+    act(() => {
+      window.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }),
+      );
+    });
+    wait(1000);
+    expect(target.querySelector(".vf-profiles-pop")).toBeNull();
+  });
+
+  it("a pinned card counts as showing: another circle waits the dwell before it peeks (§8 'The reach')", () => {
+    const { item, stand } = setup();
+    act(() => item("work")?.querySelector<HTMLButtonElement>(".vf-profiles-circle")?.click());
+    over(item("native"));
+    wait(119);
+    expect(stand("work")).not.toBeNull();
+    expect(stand("native")).toBeNull();
+    wait(1);
+    expect(stand("native")).not.toBeNull();
+  });
+
+  it("the add's card counts as showing and can be reached: its stand holds the pointer, and a circle waits the dwell", () => {
+    const target = cardLayer();
+    const page = mount(
+      <ProfilesColumn {...controller({ cardLayer: target, openNewProfile: vi.fn() })} />,
+    );
+    const zone = page.querySelector(".vf-profiles-add-zone");
+    const add = (): Element | null => target.querySelector('.vf-profiles-stand[data-card="add"]');
+    const work = (): Element | null =>
+      target.querySelector('.vf-profiles-stand[data-profile="work"]');
+    over(zone);
+    expect(add()).not.toBeNull();
+    out(zone);
+    wait(100);
+    over(add());
+    wait(1000);
+    expect(add()).not.toBeNull();
+    out(add());
+    over(page.querySelector('.vf-profiles-item[data-profile="work"]'));
+    wait(119);
+    expect(add()).not.toBeNull();
+    expect(work()).toBeNull();
+    wait(1);
+    expect(work()).not.toBeNull();
+    expect(add()).toBeNull();
+  });
+
+  it("with no add to open, pointing at it shows nothing: the next circle opens at once", () => {
+    const target = cardLayer();
+    const page = mount(<ProfilesColumn {...controller({ cardLayer: target })} />);
+    over(page.querySelector(".vf-profiles-add-zone"));
+    expect(target.querySelector(".vf-profiles-stand")).toBeNull();
+    over(page.querySelector('.vf-profiles-item[data-profile="work"]'));
+    expect(target.querySelector('.vf-profiles-stand[data-profile="work"]')).not.toBeNull();
   });
 
   it("opens no card while the terminals fill the window: not by the pointer, not by a press; the lens still chooses (§8 'Pinned')", () => {
@@ -1079,6 +1240,47 @@ describe("closing is one act (UM-R3): the pin, the pointer's hold and the keyboa
     expect(monitorHoldsKeys()).toBe(false);
   });
 
+  it("× is one close: the pointer lets go, the pin drops, the keyboard goes home, the keys are released", () => {
+    const target = cardLayer();
+    const page = mount(<ProfilesColumn {...controller({ cardLayer: target })} />);
+    over(itemOf(page, "work"));
+    click(circleOf(page, "work"));
+    const close = target.querySelector<HTMLButtonElement>(".vf-profiles-pop-close");
+    close?.focus();
+    click(close);
+    expect(target.querySelector(".vf-profiles-pop")).toBeNull();
+    expect(document.activeElement).toBe(circleOf(page, "work"));
+    expect(monitorHoldsKeys()).toBe(false);
+  });
+
+  it("Settings opening some other way is the same close: the pointer lets go and the keyboard goes home", () => {
+    const target = cardLayer();
+    const props = controller({ cardLayer: target, openProfile: vi.fn() });
+    const page = mount(<ProfilesColumn {...props} />);
+    over(itemOf(page, "work"));
+    click(circleOf(page, "work"));
+    target.querySelector<HTMLButtonElement>(".vf-profiles-pop-close")?.focus();
+    act(() => root?.render(<ProfilesColumn {...props} openProfile={undefined} />));
+    expect(target.querySelector(".vf-profiles-pop")).toBeNull();
+    expect(document.activeElement).toBe(circleOf(page, "work"));
+  });
+
+  it("leaves the keyboard where it is when the card does not hold it", () => {
+    const target = cardLayer();
+    const page = mount(<ProfilesColumn {...controller({ cardLayer: target })} />);
+    const elsewhere = document.createElement("button");
+    document.body.appendChild(elsewhere);
+    try {
+      elsewhere.focus();
+      click(circleOf(page, "work"));
+      esc();
+      expect(target.querySelector(".vf-profiles-pop")).toBeNull();
+      expect(document.activeElement).toBe(elsewhere);
+    } finally {
+      elsewhere.remove();
+    }
+  });
+
   it("grace expiry and a dwell swap do not hand focus to the circle (the pointer's, not a deliberate act)", () => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
     try {
@@ -1147,6 +1349,38 @@ describe("the card's details (UM-R5): §7 'Off', the truncations, the rings, the
     expect(off).not.toContain("opacity: 0.4");
     expect(off).toContain("color: var(--vf-text-faint);");
     expect(off).toContain("background: color-mix(in srgb, var(--vf-foreground) 5%, transparent);");
+  });
+
+  it("stands the off rule after the primary, at equal specificity, so an off primary loses its inversion (§7 'Off')", () => {
+    const primary = CSS.indexOf('\n.vf-profiles-limit-act[data-variant="primary"] {');
+    const off = CSS.indexOf("\n.vf-profiles-limit-act:disabled {");
+    expect(primary).toBeGreaterThan(-1);
+    expect(off).toBeGreaterThan(primary);
+  });
+
+  it("steps ×, a row's act and Agent Profiles… under the pointer, as §8 records", () => {
+    const close = block(".vf-profiles-pop-close:hover");
+    expect(close).toContain(
+      "background: color-mix(in srgb, var(--vf-foreground) 14%, transparent);",
+    );
+    expect(close).toContain("color: var(--vf-text-primary);");
+    expect(block(".vf-profiles-pop-row-act:hover:not(:disabled)")).toContain(
+      "background: color-mix(in srgb, var(--vf-foreground) 14%, transparent);",
+    );
+    expect(block(".vf-profiles-pop-open:hover:not(:disabled)")).toContain(
+      "color: var(--vf-text-primary);",
+    );
+  });
+
+  it("holds the tag, the age and Agent Profiles… on one line, and the limit card 16 right of the pill", () => {
+    for (const unbroken of [
+      ".vf-profiles-pop-tag",
+      ".vf-profiles-pop-age",
+      ".vf-profiles-pop-open",
+    ]) {
+      expect(block(unbroken), unbroken).toContain("white-space: nowrap;");
+    }
+    expect(block(".vf-profiles-moment")).toContain("left: calc(100% + 22px);");
   });
 
   it("truncates the popover's name and its foot rather than wrapping them", () => {

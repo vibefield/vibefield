@@ -454,14 +454,24 @@ describe("the monitor stage", () => {
   // laid out. That is the honest shape for this claim anyway: what is under
   // test is the arithmetic and the wiring, and a layout engine would only be
   // deciding the inputs.
+  const observed: Element[] = [];
+  const unobserved: Element[] = [];
+  let fired: Array<() => void> = [];
   function driveObservers(): Array<() => void> {
+    observed.length = 0;
+    unobserved.length = 0;
     const fire: Array<() => void> = [];
+    fired = fire;
     class DrivenResizeObserver {
       constructor(private readonly callback: ResizeObserverCallback) {
         fire.push(() => this.callback([], this as unknown as ResizeObserver));
       }
-      observe(): void {}
-      unobserve(): void {}
+      observe(target: Element): void {
+        observed.push(target);
+      }
+      unobserve(target: Element): void {
+        unobserved.push(target);
+      }
       disconnect(): void {}
     }
     vi.stubGlobal("ResizeObserver", DrivenResizeObserver);
@@ -615,6 +625,22 @@ describe("the monitor stage", () => {
     expect(stage?.obstacles).toHaveLength(4);
     // the fed rect moves by the stage's 8 in, as the others do
     expect(stage?.obstacles.at(-1)).toEqual({ x: 77, y: 110, width: 284, height: 90 });
+  });
+
+  it("observes the limit card's slot and finds it again at each publish: a card arriving later and a boundary's remount are measured (UM-R4)", async () => {
+    await measuredStage({ moment: { left: 85, top: 110, width: 284, height: 90 } });
+    const chrome = container?.querySelector<HTMLElement>(".vf-monitor-chrome");
+    const slot = chrome?.querySelector<HTMLElement>(".vf-profiles-moment");
+    expect(slot).toBeTruthy();
+    expect(observed).toContain(slot);
+    // a Retry on the Profiles boundary remounts the slot: the next publish lets the old node go and observes the new
+    const remounted = document.createElement("div");
+    vi.spyOn(chrome as HTMLElement, "querySelector").mockReturnValue(remounted);
+    act(() => {
+      for (const publish of fired) publish();
+    });
+    expect(observed).toContain(remounted);
+    expect(unobserved).toContain(slot);
   });
 
   it("keeps the swarm's bodies below the head's reserve: on the stage as handed, every body settles under y 56, where without the reserve the same crowd stands in it (GV-D1)", {
@@ -1809,11 +1835,14 @@ describe("the monitor stage", () => {
     await settle();
     expect(claims?.querySelector("[data-moment]")).toBeNull();
     expect(statuses()).toEqual([]);
+    expect(container?.querySelector(".vf-monitor-cards")?.hasAttribute("inert")).toBe(false);
     // AO-6b3 — under the Last Run curtain it waits: the curtain is the window's one question
     await act(async () => root?.render(stage(<p data-moment="">Another subscription?</p>, true)));
     await settle();
     expect(claims?.querySelector("[data-moment]")).toBeNull();
     expect(statuses()).toEqual([]);
+    // …and the cards layer stills with the stage: a card stands outside the stage's own `inert` (UM-R1)
+    expect(container?.querySelector(".vf-monitor-cards")?.hasAttribute("inert")).toBe(true);
   });
 
   it("lends the moment the stage's own account facts: the profile filter's sets and the usage rows, through their one subscription each (AO-6b3; UM-3)", async () => {
@@ -2066,6 +2095,23 @@ describe("the monitor stage", () => {
     expect(host.querySelector(".vf-profiles-pop")).toBeNull();
     expect(monitorHoldsKeys()).toBe(false);
     await act(async () => publishGodviewDeck("up"));
+  });
+
+  it("the terminals maximizing hands the keyboard home and lets go of the pointer: the card stays closed when they come down (§8 'Pinned')", async () => {
+    const host = await mountMonitor("list", tabDoor());
+    const item = host.querySelector<HTMLElement>('.vf-profiles-item[data-profile="work"]');
+    const circle = item?.querySelector<HTMLButtonElement>(".vf-profiles-circle");
+    act(() => {
+      item?.dispatchEvent(new PointerEvent("pointerover", { bubbles: true }));
+    });
+    await act(async () => circle?.click());
+    host.querySelector<HTMLButtonElement>(".vf-profiles-pop-close")?.focus();
+    await act(async () => publishGodviewDeck("maximized"));
+    expect(host.querySelector(".vf-profiles-pop")).toBeNull();
+    expect(document.activeElement).toBe(circle);
+    await act(async () => publishGodviewDeck("up"));
+    await settle();
+    expect(host.querySelector(".vf-profiles-pop")).toBeNull();
   });
 
   it("a click on the chosen circle closes the card under the pointer (UM-R3, §8 'Pinned')", async () => {
