@@ -42,7 +42,20 @@ import {
 } from "@vibecook/ice/desk";
 import { DEFAULT_GRID, lampOf, MatUniforms } from "@vibecook/ice/desk/kit";
 import type { JsonShape, ObjectContribution, PropSpec } from "@vibefield/contracts";
-import { PLUGIN_LIMITS, TRAY_ACCESSORIES } from "@vibefield/contracts";
+import {
+  agentFaceHasHandler,
+  OBJECT_LIMITS,
+  PLUGIN_LIMITS,
+  TRAY_ACCESSORIES,
+} from "@vibefield/contracts";
+import {
+  type AgentActInverse,
+  type AgentHalf,
+  type AgentToolInput,
+  agentActStillHolds,
+  agentReadApi,
+  recordAgentAct,
+} from "./desk";
 import { type GpuProblem, holdGpuConstants, type RecordingGpu, recordingGpu } from "./kind-gpu";
 
 // --- the vocabulary -------------------------------------------------------------------------------
@@ -61,6 +74,15 @@ export type KindRefusalCode =
   | "object-provides-no-desk-object"
   | "object-tool-invalid"
   | "object-tool-inert"
+  // the agent half (OB-2): the manifest's `agent` block against the binding's `agent`
+  | "object-agent-undeclared"
+  | "object-agent-unbound"
+  | "object-agent-summary-missing"
+  | "object-agent-tool-unbound"
+  | "object-agent-tool-undeclared"
+  | "object-agent-tool-misbound"
+  | "object-agent-face-unbound"
+  | "object-agent-face-undeclared"
   // the program
   | "object-create-failed"
   | "object-kit-piece-unknown"
@@ -74,7 +96,8 @@ export type KindRefusalCode =
   | "state-spawn-failed"
   | "state-hit-missed"
   | "state-render-failed"
-  | "state-draw-ill-formed";
+  | "state-draw-ill-formed"
+  | "state-agent-failed";
 
 /** The harness's honest absences: never a pass, never a refusal. */
 export type KindNoteCode = "object-wgsl-not-compiled" | "object-create-not-run-here";
@@ -127,6 +150,22 @@ export const KIND_EXPECTED: Readonly<Record<KindRefusalCode | KindNoteCode, stri
     'each of `open.tools` a HeldToolDef as ICE defines it: an id unique within the tools, a label, `kind: "action"` with its op `run(api)` or `kind: "mode"`, and a glyph that is a name of the bar\'s set or `{ path }` (SVG path data in the bar\'s 24-unit box)',
   "object-tool-inert":
     'give the tool its kind — `kind: "action"` runs `run(api)` once when chosen, `kind: "mode"` makes it the active tool; a tool with no kind is DECLARED ONLY: the bar shows it dim and nothing ever runs it',
+  "object-agent-undeclared":
+    "declare what the binding's `agent` offers: `contributes.objects[].agent` in the manifest, or drop the handlers",
+  "object-agent-unbound":
+    "give the binding its `agent` (`AgentHalf` from @vibefield/plugin-sdk/desk), with a handler for each tool the manifest declares",
+  "object-agent-summary-missing":
+    "an `agent.summary(api)` that says what the object holds now: small, bounded, JSON",
+  "object-agent-tool-unbound":
+    "bind the tool: under `agent.read` when the manifest marks it `readOnly`, under `agent.act` when it does not",
+  "object-agent-tool-undeclared":
+    "declare the tool in the manifest's `agent.tools`, or remove the handler",
+  "object-agent-tool-misbound":
+    "a `readOnly` tool is bound under `agent.read`; an acting one under `agent.act`, which alone has a way to write",
+  "object-agent-face-unbound":
+    "bind the face under `agent.faces` by its id: a text, file or link face answers its own content",
+  "object-agent-face-undeclared":
+    "declare the face in the manifest's `agent.faces`, or remove the handler",
   "object-create-failed":
     "a create that resolves a KindPass (spawn · prepare · drawRange · dispose) from the device, format and mat it is handed",
   "object-kit-piece-unknown":
@@ -147,6 +186,8 @@ export const KIND_EXPECTED: Readonly<Record<KindRefusalCode | KindNoteCode, stri
     "a hit that answers a part (`content`) somewhere in the object's own box — what is picked is what is drawn",
   "state-render-failed":
     "a pass whose prepare answers how many of the records it was handed will draw (0 … n) and whose drawRange draws them, neither throwing",
+  "state-agent-failed":
+    "agent handlers that answer every declared state without throwing, in JSON within their limits, setting only declared props to valid values; a tool that needs a real input takes one from `agentInputs`",
   "state-draw-ill-formed":
     "set the pipeline your create made, and a bind group of its layout at every index, before each draw",
   "object-wgsl-not-compiled":
@@ -263,6 +304,107 @@ function toolProblems(kind: ObjectKind, type: string, at: string): KindVerdict[]
   return out;
 }
 
+/** The manifest's `agent` block against the binding's `agent`: both directions, as `check` holds commands and surfaces. */
+function agentProblems(binding: unknown, row: ObjectContribution, at: string): KindVerdict[] {
+  const subject = "declaration";
+  const pointer = `${at}/agent`;
+  const bound = (binding as { readonly agent?: unknown }).agent;
+  const declared = row.agent;
+  if (declared === undefined)
+    return bound === undefined
+      ? []
+      : [
+          refused(
+            "object-agent-undeclared",
+            subject,
+            `${row.type}'s binding has an \`agent\` the manifest does not declare`,
+            { pointer },
+          ),
+        ];
+  if (typeof bound !== "object" || bound === null)
+    return [
+      refused(
+        "object-agent-unbound",
+        subject,
+        `${row.type} declares an agent half its binding does not carry`,
+        { pointer },
+      ),
+    ];
+  const half = bound as {
+    readonly summary?: unknown;
+    readonly faces?: Readonly<Record<string, unknown>>;
+    readonly read?: Readonly<Record<string, unknown>>;
+    readonly act?: Readonly<Record<string, unknown>>;
+  };
+  const out: KindVerdict[] = [];
+  if (typeof half.summary !== "function")
+    out.push(
+      refused("object-agent-summary-missing", subject, `${row.type}'s agent has no summary`, {
+        pointer,
+      }),
+    );
+  const read = new Set(Object.keys(half.read ?? {}));
+  const act = new Set(Object.keys(half.act ?? {}));
+  const tools = new Set(declared.tools.map((tool) => tool.name));
+  for (const [index, tool] of declared.tools.entries()) {
+    const toolPointer = `${pointer}/tools/${index}`;
+    const home = tool.readOnly ? read : act;
+    const other = tool.readOnly ? act : read;
+    if (other.has(tool.name))
+      out.push(
+        refused(
+          "object-agent-tool-misbound",
+          subject,
+          `${row.type}'s tool ${tool.name} is ${tool.readOnly ? "readOnly but bound under act" : "an acting tool but bound under read"}`,
+          { pointer: toolPointer },
+        ),
+      );
+    else if (!home.has(tool.name))
+      out.push(
+        refused(
+          "object-agent-tool-unbound",
+          subject,
+          `${row.type}'s tool ${tool.name} has no handler`,
+          { pointer: toolPointer },
+        ),
+      );
+  }
+  for (const name of new Set([...read, ...act]))
+    if (!tools.has(name))
+      out.push(
+        refused(
+          "object-agent-tool-undeclared",
+          subject,
+          `${row.type}'s agent has a handler for ${name}, which the manifest does not declare`,
+          { pointer },
+        ),
+      );
+  const faces = new Set(
+    declared.faces
+      .filter(agentFaceHasHandler)
+      .flatMap((face) => (face.id === undefined ? [] : [face.id])),
+  );
+  const faceHandlers = new Set(Object.keys(half.faces ?? {}));
+  for (const id of faces)
+    if (!faceHandlers.has(id))
+      out.push(
+        refused("object-agent-face-unbound", subject, `${row.type}'s face ${id} has no handler`, {
+          pointer,
+        }),
+      );
+  for (const id of faceHandlers)
+    if (!faces.has(id))
+      out.push(
+        refused(
+          "object-agent-face-undeclared",
+          subject,
+          `${row.type}'s agent has a handler for the face ${id}, which the manifest does not declare`,
+          { pointer },
+        ),
+      );
+  return out;
+}
+
 /** The kind a binding holds when it is a desk kind, else undefined. */
 export function kindOfBinding(binding: unknown): ObjectKind | undefined {
   if (typeof binding !== "object" || binding === null) return undefined;
@@ -364,6 +506,7 @@ export function checkKindDeclaration(
       ),
     );
   out.push(...toolProblems(kind, row.type, at));
+  out.push(...agentProblems(binding, row, at));
   if (out.length > 0) return out;
   const hang = row.tray?.hang;
   const hangs =
@@ -604,6 +747,8 @@ export interface KindConformanceInput {
   readonly palette?: Partial<Record<ThemeName, Palette>> | undefined;
   /** how long its `create` may run on the recording device before its states are driven without it (2000 ms) */
   readonly createBudgetMs?: number | undefined;
+  /** the input a tool is driven with; absent: one made from the tool's declared schema */
+  readonly agentInputs?: Readonly<Record<string, AgentToolInput>> | undefined;
 }
 
 /** The desk's palette roles (DESIGN.md §2 — `--vf-canvas-bg`, `--vf-select`), as ICE's own palette names them. */
@@ -903,8 +1048,12 @@ export async function runKindConformance(input: KindConformanceInput): Promise<K
     const made = await makePass(kind, gpu, input.createBudgetMs ?? CREATE_BUDGET_MS);
     verdicts.push(...made.verdicts);
     const desk = deskFor(kind, made.drawable, input.palette);
-    for (const [index, [fixture, props]] of fixtures.entries())
+    const half = (input.binding as { readonly agent?: AgentHalf }).agent;
+    for (const [index, [fixture, props]] of fixtures.entries()) {
       verdicts.push(...driveFixture(kind, desk, gpu, plan, row.size, fixture, props, index + 1));
+      if (half !== undefined && row.agent !== undefined)
+        verdicts.push(...driveAgentHalf(half, row, fixture, props, input.agentInputs));
+    }
 
     // dispose — the inside's pass, the pass, and the kind's state on the desk
     const disposals: string[] = [];
@@ -930,6 +1079,171 @@ export async function runKindConformance(input: KindConformanceInput): Promise<K
   } finally {
     release();
   }
+}
+
+// --- the agent half, driven in memory (OB-2; §5.3) ---------------------------------------------------
+
+/** One object's agent half over a state's props, with no document: what `runKindConformance` drives and a kind's own tests
+ * can hold. Acts land on these props, as the desk's would. */
+export interface AgentToolHarness {
+  props(): Readonly<Record<string, unknown>>;
+  summary(): unknown;
+  face(id: string): string;
+  read(tool: string, input?: AgentToolInput): unknown;
+  act(
+    tool: string,
+    input?: AgentToolInput,
+  ): {
+    readonly value: unknown;
+    readonly changed: string | undefined;
+    readonly inverse: AgentActInverse | undefined;
+  };
+  /** Apply an act's inverse; false, changing nothing, when the object no longer holds what it set. */
+  undo(inverse: AgentActInverse): boolean;
+}
+
+export function agentToolHarness(
+  half: AgentHalf,
+  row: ObjectContribution,
+  initial: Readonly<Record<string, unknown>>,
+): AgentToolHarness {
+  let props: Record<string, unknown> = structuredClone({ ...defaultProps(row), ...initial });
+  const handlerOf = <T>(
+    group: Readonly<Record<string, T>> | undefined,
+    where: string,
+    name: string,
+  ): T => {
+    const handler = group?.[name];
+    if (handler === undefined) throw new Error(`no ${where} handler named ${name}`);
+    return handler;
+  };
+  return {
+    props: () => structuredClone(props),
+    summary: () => half.summary(agentReadApi(props)),
+    face: (id) => handlerOf(half.faces, "face", id)(agentReadApi(props)),
+    read: (tool, input = {}) => handlerOf(half.read, "read", tool)(agentReadApi(props), input),
+    act(tool, input = {}) {
+      const recording = recordAgentAct(props);
+      const answer = handlerOf(half.act, "act", tool)(recording.api, input);
+      const inverse = recording.inverse();
+      if (inverse !== undefined) {
+        const bad = validateStateProps({ type: row.type, props: row.props }, tool, inverse.after);
+        if (bad !== null) throw new Error(bad.detail);
+        props = { ...props, ...structuredClone(inverse.after) };
+      }
+      return { value: answer?.value, changed: answer?.changed, inverse };
+    },
+    undo(inverse) {
+      if (!agentActStillHolds(props, inverse)) return false;
+      props = { ...props, ...structuredClone(inverse.before) };
+      return true;
+    },
+  };
+}
+
+const isSchemaObject = (v: unknown): v is Readonly<Record<string, unknown>> => isPlainObject(v);
+
+/** The least input a schema admits: what a tool is driven with when no `agentInputs` names one. */
+function sampleOf(schema: unknown): unknown {
+  if (!isSchemaObject(schema)) return {};
+  if ("const" in schema) return schema["const"];
+  if ("default" in schema) return schema["default"];
+  const options = schema["enum"];
+  if (Array.isArray(options) && options.length > 0) return options[0];
+  switch (schema["type"]) {
+    case "string":
+      return "x".repeat(typeof schema["minLength"] === "number" ? schema["minLength"] : 1);
+    case "number":
+    case "integer":
+      return typeof schema["minimum"] === "number" ? schema["minimum"] : 1;
+    case "boolean":
+      return true;
+    case "array":
+      return [];
+    default: {
+      const properties = isSchemaObject(schema["properties"]) ? schema["properties"] : {};
+      const required = Array.isArray(schema["required"]) ? schema["required"] : [];
+      return Object.fromEntries(
+        required.flatMap((name) =>
+          typeof name === "string" ? [[name, sampleOf(properties[name])]] : [],
+        ),
+      );
+    }
+  }
+}
+
+const jsonBytes = (value: unknown): number =>
+  new TextEncoder().encode(JSON.stringify(value) ?? "").byteLength;
+
+/** One fixture driven through the summary, every face and every tool, each on a fresh object. */
+function driveAgentHalf(
+  half: AgentHalf,
+  row: ObjectContribution,
+  fixture: string,
+  props: Readonly<Record<string, unknown>>,
+  inputs: Readonly<Record<string, AgentToolInput>> | undefined,
+): KindVerdict[] {
+  const agent = row.agent;
+  if (agent === undefined) return [];
+  const problems: string[] = [];
+  const drive = (what: string, limit: number, run: (h: AgentToolHarness) => unknown): void => {
+    try {
+      const value = run(agentToolHarness(half, row, props));
+      if (value !== undefined) {
+        if (jsonBytes(value) > limit)
+          problems.push(`${what} answered more than the ${limit} bytes it may`);
+        else if (!sameJsonRoundTrip(value)) problems.push(`${what} answered something not JSON`);
+      }
+    } catch (error) {
+      problems.push(`${what} threw: ${messageOf(error)}`);
+    }
+  };
+  drive("summary", OBJECT_LIMITS.NOW_BYTES, (h) => h.summary());
+  for (const face of agent.faces)
+    if (agentFaceHasHandler(face) && face.id !== undefined) {
+      const id = face.id;
+      drive(`face ${id}`, OBJECT_LIMITS.TOOL_BYTES, (h) => {
+        const content = h.face(id);
+        if (typeof content !== "string") throw new Error("a face answers a string");
+        return content;
+      });
+    }
+  for (const tool of agent.tools) {
+    const input = (inputs?.[tool.name] ?? sampleOf(tool.input)) as AgentToolInput;
+    drive(`tool ${tool.name}`, OBJECT_LIMITS.TOOL_BYTES, (h) =>
+      tool.readOnly ? h.read(tool.name, input) : h.act(tool.name, input).value,
+    );
+  }
+  if (problems.length > 0)
+    return [
+      refused(
+        "state-agent-failed",
+        fixture,
+        `${row.type}'s agent half at ${fixture}: ${problems.join("; ")}`,
+      ),
+    ];
+  return [
+    passed(
+      fixture,
+      `its agent half answered its summary, ${agent.faces.filter(agentFaceHasHandler).length} face(s) and ${agent.tools.length} tool(s)`,
+    ),
+  ];
+}
+
+/** Whether a value survives JSON unchanged: an `undefined` or a function nested inside it does not. */
+function sameJsonRoundTrip(value: unknown): boolean {
+  const text = JSON.stringify(value);
+  if (text === undefined) return false;
+  return JSON.stringify(JSON.parse(text)) === text && !hasNonJson(value);
+}
+
+function hasNonJson(value: unknown): boolean {
+  if (typeof value === "function" || typeof value === "symbol" || typeof value === "bigint")
+    return true;
+  if (typeof value === "number") return !Number.isFinite(value);
+  if (value === undefined) return true;
+  if (typeof value !== "object" || value === null) return false;
+  return Object.values(value).some(hasNonJson);
 }
 
 /** What one run keeps across a kind's fixtures, as one desk keeps it: the looks, the kind's state, a mini mat's inside. */

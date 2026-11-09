@@ -10,6 +10,7 @@ export * from "./agent-session";
 export * from "./agent-usage";
 export * from "./artifacts";
 export * from "./compose";
+export * from "./desk-kinds";
 export * from "./devices";
 export * from "./doclane";
 export * from "./docs";

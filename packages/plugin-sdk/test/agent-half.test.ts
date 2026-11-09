@@ -22,11 +22,7 @@ import { discKind, discRow } from "./fixtures/disc-kind";
 const AGENT: NonNullable<ObjectContribution["agent"]> = {
   summary: "A disc.",
   concurrency: "many",
-  faces: [
-    { type: "ref" },
-    { type: "text", id: "words", label: "Its words" },
-    { type: "image" },
-  ],
+  faces: [{ type: "ref" }, { type: "text", id: "words", label: "Its words" }, { type: "image" }],
   tools: [
     {
       name: "color_of",
@@ -103,7 +99,9 @@ describe("the handler's API", () => {
 
 describe("check: the manifest's agent block against the binding's agent", () => {
   const verdictsFor = (agent: unknown, row = rowWithAgent()) =>
-    refusalsOf(checkKindDeclaration({ kind: discKind({}), ...(agent === undefined ? {} : { agent }) }, row));
+    refusalsOf(
+      checkKindDeclaration({ kind: discKind({}), ...(agent === undefined ? {} : { agent }) }, row),
+    );
 
   it("passes a kind whose tools and faces are bound both ways", () => {
     expect(verdictsFor(HALF)).toEqual([]);
@@ -120,9 +118,9 @@ describe("check: the manifest's agent block against the binding's agent", () => 
 
   it("names a tool with no handler, and a handler with no tool", () => {
     expect(verdictsFor({ ...HALF, read: {} })).toEqual(["object-agent-tool-unbound"]);
-    expect(
-      verdictsFor({ ...HALF, read: { ...HALF.read, extra: () => null } }),
-    ).toEqual(["object-agent-tool-undeclared"]);
+    expect(verdictsFor({ ...HALF, read: { ...HALF.read, extra: () => null } })).toEqual([
+      "object-agent-tool-undeclared",
+    ]);
   });
 
   it("refuses a readOnly tool bound under act, which is the only side that can write", () => {
@@ -165,7 +163,12 @@ describe("the in-memory tool harness", () => {
   it("refuses a write to a prop the manifest does not declare", () => {
     const half: AgentHalf = {
       ...HALF,
-      act: { paint: (api) => (api.setProps({ nonsense: 1 }), undefined) },
+      act: {
+        paint: (api) => {
+          api.setProps({ nonsense: 1 });
+          return undefined;
+        },
+      },
     };
     expect(() => agentToolHarness(half, rowWithAgent(), {}).act("paint", { color: "x" })).toThrow(
       /nonsense is not a declared prop/,
@@ -186,9 +189,7 @@ describe("runKindConformance drives the agent half over each fixture", () => {
     const report = await conform(HALF, { default: {}, red: { color: "red" } });
     expect(refusalsOf(report.verdicts)).toEqual([]);
     expect(report.verdicts.map((v) => v.detail)).toEqual(
-      expect.arrayContaining([
-        "its agent half answered its summary, 1 face(s) and 2 tool(s)",
-      ]),
+      expect.arrayContaining(["its agent half answered its summary, 1 face(s) and 2 tool(s)"]),
     );
   });
 

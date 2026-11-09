@@ -51,15 +51,12 @@ describe("the comment pad's kind, judged by the kind-conformance harness WITH th
     expect(r.plan.modes).toEqual(["idle", "selected", "held", "contained"]);
     expect(r.plan.fixtures).toEqual(["default", "written", "long", "pink"]);
     expect(r.states).toBe(4 * (4 * r.plan.zooms.length + 1));
-    // its declaration, its program (READ: the not-compiled note), each fixture driven, its dispose
+    // its declaration, its program (READ: the not-compiled note), each fixture driven and its agent half answered
     expect(r.verdicts.map((v) => v.code)).toEqual([
       "ok",
       "ok",
       "object-wgsl-not-compiled",
-      "ok",
-      "ok",
-      "ok",
-      "ok",
+      ...Array(8).fill("ok"),
     ]);
   });
 

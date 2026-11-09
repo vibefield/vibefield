@@ -58,6 +58,36 @@ export const deskClockManifest: PluginManifestV1 = {
           order: 0,
           hang: { w: 110, h: 110, accessory: "hook", pegs: [[0, -0.5]] },
         },
+        // what an agent can do with a clock (OB-2): a kit author's model for a plugin's agent half
+        agent: {
+          summary: "An analogue desk clock: its dial's settings, never the time.",
+          concurrency: "many",
+          faces: [
+            { type: "ref", id: "live", label: "Live" },
+            { type: "image", id: "picture", label: "Picture" },
+          ],
+          guide: "./assets/agent/guide.md",
+          tools: [
+            {
+              name: "read_settings",
+              readOnly: true,
+              description:
+                "Read this clock's settings: its dial, its 24-hour ring, its seconds hand and its zone.",
+              input: { type: "object", properties: {}, additionalProperties: false },
+            },
+            {
+              name: "set_seconds",
+              readOnly: false,
+              description: "Show or hide this clock's seconds hand. The user can undo it.",
+              input: {
+                type: "object",
+                properties: { on: { type: "boolean" } },
+                required: ["on"],
+                additionalProperties: false,
+              },
+            },
+          ],
+        },
         binding: { kind: "clock" },
       },
     ],

@@ -699,6 +699,8 @@ export {
 // declared state driven through resolve / record / hit / frame / chip / the
 // opening / prepare / drawRange, then dispose. `{ states, verdicts }`.
 export {
+  type AgentToolHarness,
+  agentToolHarness,
   checkKindDeclaration,
   checkKindProgram,
   DESK_ZOOMS,

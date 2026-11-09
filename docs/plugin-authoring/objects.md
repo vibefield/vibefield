@@ -44,6 +44,7 @@ One entry per kind under `contributes.objects`:
 | `groups` | `object mapping name → string[]` | no | at least 1 item(s); defaults to `{}` |
 | `behaviors` | `{ id: string, data?: object mapping name → recursive shape }[]` | no | at most 16 item(s) |
 | `tray` | { category: string, label: string, order?: number, hang: object, props?: object mapping name → one of string, number, boolean, take?: one of `"face"`, object mapping name → one of string, number, boolean, local?: boolean } | no | — |
+| `agent` | { summary: string, concurrency: `many` \| `one`, faces: object[], guide?: string, tools: object[] } | no | — |
 | `binding` | { kind: string } | yes | — |
 
 - `type` is the durable name, `<pluginId>` or `<pluginId>.<name>`.
@@ -138,6 +139,40 @@ The old canvas face's view fields are RETIRED on an object and refused by name:
         "style": "classic"
       },
       "take": "face"
+    },
+    "agent": {
+      "summary": "An analogue desk clock.",
+      "concurrency": "many",
+      "faces": [
+        {
+          "type": "ref",
+          "label": "Live"
+        },
+        {
+          "type": "image",
+          "label": "Picture"
+        }
+      ],
+      "guide": "./assets/agent/guide.md",
+      "tools": [
+        {
+          "name": "set_seconds",
+          "readOnly": false,
+          "description": "Show or hide the clock's seconds hand.",
+          "input": {
+            "type": "object",
+            "properties": {
+              "on": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "on"
+            ],
+            "additionalProperties": false
+          }
+        }
+      ]
     },
     "binding": {
       "kind": "clock"
@@ -255,6 +290,8 @@ export interface ObjectBinding<G = unknown, R = unknown, L = unknown> {
   readonly host?: ObjectHost;
   /** Selection-menu acts, one undo step each. */
   readonly menu?: readonly MenuActionDef[];
+  /** What an agent can do with it: the handlers of the manifest's `agent` block (§5.3). Absent: agents can place it, no more. */
+  readonly agent?: AgentHalf;
 }
 ```
 
@@ -292,6 +329,76 @@ draws a run; `dispose()`. Optional: `records()`/`dropped()` (counters the host
 reports), `idle(ms)`/`idleAt(ms)` (let device targets go when nothing drew),
 `drawOver`, `endHold`, `tune`/`setLaw`, `cardResources`/`cardSlot`.
 
+## The agent half — what an agent can do with it
+
+A kind can be worked by an agent the way it is worked by a person. It declares its
+faces and its tools ONCE (`contributes.objects[].agent`) and binds their handlers
+beside its menu (`ObjectBinding.agent`). An agent learns them when it takes the
+object, by placing one or from the person's hand; its own list of tools never grows.
+
+```ts
+/** What a kind's agent handler reads an object through. A host-built view: no `world`, no entity, and no write of any kind,
+ * so a read handler has nothing to write with (§5.3). The same words run wherever the object's document is. */
+export interface AgentReadApi {
+  /** The object's durable props as they stand now, each as the manifest declares it. A copy: changing it changes nothing. */
+  props(): Readonly<Record<string, unknown>>;
+}
+
+/** What an act handler writes through. Every `setProps` of one act is ONE change the person can undo; a handler that throws
+ * writes nothing. `props()` sees what this act has set so far. */
+export interface AgentActApi extends AgentReadApi {
+  /** Set some of the object's props. Checked against the declared props when the act ends. */
+  setProps(patch: Readonly<Record<string, unknown>>): void;
+}
+
+export type AgentToolInput = Readonly<Record<string, unknown>>;
+
+/** An act's answer. `value` goes to the agent; `changed` is what the person's undo will say (absent: the agent's own words
+ * for the act). */
+export interface AgentActAnswer {
+  readonly value?: unknown;
+  readonly changed?: string;
+}
+
+/**
+ * A kind's AGENT HALF (§5.3): its handlers, beside its menu. The tools and faces themselves are declared once, in the
+ * manifest's `contributes.objects[].agent`; `vibefield-plugin check` holds the two to each other.
+ */
+export interface AgentHalf {
+  /** What `object_open` shows of the object now: small, bounded, JSON. */
+  readonly summary: (api: AgentReadApi) => unknown;
+  /** A text, file or link face's content, by the face's id: its words, its file's body, or its address. */
+  readonly faces?: Readonly<Record<string, (api: AgentReadApi) => string>>;
+  /** The handlers of the tools the manifest marks `readOnly`, by name. */
+  readonly read?: Readonly<Record<string, (api: AgentReadApi, input: AgentToolInput) => unknown>>;
+  /** The handlers of the acting tools, by name. Each runs as one transaction. */
+  readonly act?: Readonly<
+    Record<string, (api: AgentActApi, input: AgentToolInput) => AgentActAnswer | undefined>
+  >;
+}
+```
+
+| field | what it is |
+| --- | --- |
+| `summary` | what the kind is for, one line, in the model's voice |
+| `concurrency` | `many`: every agent may act, each act its own change · `one`: one holder at a time (a kind with one input, a page or a phone) |
+| `faces` | what a card of the object carries, in the order it offers them. Exactly one `ref`, first; at most one `image`; a `text`, `file` or `link` face has an `id` and a `label` and a handler under `agent.faces` |
+| `guide` | the manual's prose, a Markdown file under `assets/` (the folder the bundle ships), at most 6000 bytes |
+| `tools` | at most 24: a `name`, `readOnly`, `description`, an `input` JSON Schema and optionally an `output` and `destructive` |
+
+**The API is the wall.** A read handler is handed `AgentReadApi`: the object's props and
+nothing to write with. An act handler is handed `AgentActApi`, which adds `setProps`.
+However many times an act calls it, the act is ONE change the person can undo, marked
+with the agent's name; a handler that throws writes nothing. The act never touches the
+person's own undo: ⌘Z skips an agent's change, and the desk keeps a separate undo for it.
+
+`check` holds the manifest and the binding to each other, both ways: every tool has a
+handler and every handler a declaration, a `readOnly` tool is bound under `read`, every
+schema compiles under ajv, the guide is on disk within its limit. The playground drives
+each tool over your states with no document, on the in-memory harness
+(`agentToolHarness`, from `@vibefield/plugin-sdk/testing`), which your own tests can
+hold too.
+
 ## The worked example — ICE's desk clock as a plugin
 
 `examples/plugins/desk-clock` is ICE's worked third-party kind, ported to a VibeField plugin through
@@ -304,6 +411,52 @@ Its manifest row — the durable half (`src/manifest.ts`, emitted to `vibefield.
 
 ```json
 {
+  "agent": {
+    "concurrency": "many",
+    "faces": [
+      {
+        "id": "live",
+        "label": "Live",
+        "type": "ref"
+      },
+      {
+        "id": "picture",
+        "label": "Picture",
+        "type": "image"
+      }
+    ],
+    "guide": "./assets/agent/guide.md",
+    "summary": "An analogue desk clock: its dial's settings, never the time.",
+    "tools": [
+      {
+        "description": "Read this clock's settings: its dial, its 24-hour ring, its seconds hand and its zone.",
+        "input": {
+          "additionalProperties": false,
+          "properties": {},
+          "type": "object"
+        },
+        "name": "read_settings",
+        "readOnly": true
+      },
+      {
+        "description": "Show or hide this clock's seconds hand. The user can undo it.",
+        "input": {
+          "additionalProperties": false,
+          "properties": {
+            "on": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "on"
+          ],
+          "type": "object"
+        },
+        "name": "set_seconds",
+        "readOnly": false
+      }
+    ]
+  },
   "binding": {
     "kind": "clock"
   },
@@ -394,6 +547,7 @@ export const clock: ObjectBinding<ClockGeometry, ClockInstance, ClockLook> = {
       },
     },
   ],
+  agent: clockAgent,
 };
 ```
 

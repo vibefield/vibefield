@@ -27,7 +27,13 @@ const objectRow = (agent: Record<string, unknown>) => ({
     label: "Clock",
     hang: { w: 110, h: 110, accessory: "hook", pegs: [[0, -0.5]] },
   },
-  agent: { summary: "A clock.", concurrency: "many", faces: [{ type: "ref" }], tools: [], ...agent },
+  agent: {
+    summary: "A clock.",
+    concurrency: "many",
+    faces: [{ type: "ref" }],
+    tools: [],
+    ...agent,
+  },
   binding: { kind: "clock" },
 });
 
@@ -97,7 +103,11 @@ describe("check: the agent half", () => {
   });
 
   it("catalogs every code it can say", () => {
-    for (const code of ["agent-guide-missing", "agent-guide-too-large", "object-agent-tool-unbound"])
+    for (const code of [
+      "agent-guide-missing",
+      "agent-guide-too-large",
+      "object-agent-tool-unbound",
+    ])
       expect(REFUSAL_CATALOG).toHaveProperty(code);
   });
 });

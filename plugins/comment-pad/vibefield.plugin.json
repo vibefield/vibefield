@@ -6,6 +6,78 @@
   "contributes": {
     "objects": [
       {
+        "agent": {
+          "concurrency": "many",
+          "faces": [
+            {
+              "id": "live",
+              "label": "Live",
+              "type": "ref"
+            },
+            {
+              "format": "plain",
+              "id": "words",
+              "label": "Its words",
+              "type": "text"
+            }
+          ],
+          "guide": "./assets/agent/guide.md",
+          "summary": "A pad of comments, one to a line.",
+          "tools": [
+            {
+              "description": "Read every comment on this pad, one to a line.",
+              "input": {
+                "additionalProperties": false,
+                "properties": {},
+                "type": "object"
+              },
+              "name": "read_text",
+              "output": {
+                "properties": {
+                  "text": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "text"
+                ],
+                "type": "object"
+              },
+              "readOnly": true
+            },
+            {
+              "description": "Add one comment at the foot of this pad, on a line of its own. The user can undo it.",
+              "input": {
+                "additionalProperties": false,
+                "properties": {
+                  "text": {
+                    "maxLength": 2000,
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "text"
+                ],
+                "type": "object"
+              },
+              "name": "add_comment",
+              "output": {
+                "properties": {
+                  "comments": {
+                    "minimum": 1,
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "comments"
+                ],
+                "type": "object"
+              },
+              "readOnly": false
+            }
+          ]
+        },
         "binding": {
           "kind": "commentPad"
         },

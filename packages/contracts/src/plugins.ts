@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { SemverString } from "./envelope";
+import { ChipType, OBJECT_LIMITS, ObjectConcurrency, ObjectReadInput } from "./objects";
 import { SCOPES, type Scope } from "./registries";
 
 // Plugin manifest contracts (plugin-architecture spec §7/§8, slice P0 — PA-3:
@@ -861,6 +862,114 @@ export const OBJECT_RETIRED_FIELDS: Readonly<Record<string, string>> = {
   maxSize: "maxSize never had engine support and is dropped on an object",
 };
 
+// --- a kind's agent half (OB-2; draft/thinking-objects-at-work.md §5.3, OB-L2) -------------------------------------
+
+/** A tool's name, the one the desk's room checks a call against. */
+const AgentToolName = ObjectReadInput.shape.tool;
+
+/** How a text face is written (OB-D1). */
+const AgentTextFormat = z.enum(["plain", "markdown", "code"]);
+
+/** One face a kind offers, in the order it offers them (§4.2): what a card of the object carries. */
+export const ObjectAgentFace = z
+  .object({
+    type: ChipType,
+    /** the binding's handler for this face, and the card's name for it; `ref` and `image` need none */
+    id: z.string().regex(ID_SEGMENT_RE).max(PLUGIN_LIMITS.ID_MAX).optional(),
+    /** the word on its bud: "Live" · "Its words" · "Picture" */
+    label: z.string().min(1).max(PLUGIN_LIMITS.TITLE_MAX).optional(),
+    format: AgentTextFormat.optional(),
+    language: z.string().min(1).max(PLUGIN_LIMITS.ID_MAX).optional(),
+    mime: z
+      .string()
+      .min(1)
+      .max(PLUGIN_LIMITS.ID_MAX * 2)
+      .optional(),
+  })
+  .passthrough();
+export type ObjectAgentFace = z.infer<typeof ObjectAgentFace>;
+
+/** One tool a kind gives an agent. `readOnly` decides which door it runs through: `object_read` or `object_act`. */
+export const ObjectAgentTool = z
+  .object({
+    name: AgentToolName,
+    readOnly: z.boolean(),
+    destructive: z.boolean().optional(),
+    description: z.string().min(1).max(PLUGIN_LIMITS.TEXT_MAX),
+    input: JsonSchemaObject,
+    output: JsonSchemaObject.optional(),
+  })
+  .passthrough();
+export type ObjectAgentTool = z.infer<typeof ObjectAgentTool>;
+
+/** The most faces a kind offers (the mind map, the longest in §4.2, has four). */
+const AGENT_FACES_MAX = 8;
+
+/** A guide ships in the bundle only under `assets/` (`pack.ts`'s BUNDLE_DIRS: `dist` and `assets`). */
+export const AGENT_GUIDE_DIR = "./assets/";
+
+export const ObjectAgentHalf = z
+  .object({
+    /** what the kind is for, in the model's voice: `canvas_kinds` prints it */
+    summary: z.string().min(1).max(PLUGIN_LIMITS.TEXT_MAX),
+    concurrency: ObjectConcurrency,
+    faces: z.array(ObjectAgentFace).min(1).max(AGENT_FACES_MAX),
+    /** a Markdown file under `assets/`, at most `OBJECT_LIMITS.GUIDE_BYTES`: the manual's prose */
+    guide: RelativeAssetPath.optional(),
+    tools: z.array(ObjectAgentTool).max(OBJECT_LIMITS.TOOLS_PER_KIND),
+  })
+  .passthrough();
+export type ObjectAgentHalf = z.infer<typeof ObjectAgentHalf>;
+
+/** The faces a binding must answer for itself: the capture door makes `image`, and `ref` is the object's own name. */
+export const agentFaceHasHandler = (face: Pick<ObjectAgentFace, "type">): boolean =>
+  face.type === "text" || face.type === "file" || face.type === "link";
+
+/** Why one agent half's declaration cannot stand, each with where to look; none: it is coherent. Shared by the manifest's
+ * law and by a test over the built-in kinds, which have no manifest (`desk-kinds.ts`). */
+export function agentHalfProblems(half: {
+  readonly faces: readonly ObjectAgentFace[];
+  readonly tools: readonly ObjectAgentTool[];
+}): readonly { readonly message: string; readonly path: readonly (string | number)[] }[] {
+  const out: { message: string; path: (string | number)[] }[] = [];
+  const faces = half.faces;
+  const refs = faces.filter((face) => face.type === "ref").length;
+  if (faces[0]?.type !== "ref" || refs !== 1)
+    out.push({
+      message: "a kind's agent half offers exactly one ref face, first: the object itself",
+      path: ["faces"],
+    });
+  if (faces.filter((face) => face.type === "image").length > 1)
+    out.push({ message: "a kind has one picture: at most one image face", path: ["faces"] });
+  const seen = new Set<string>();
+  for (const [index, face] of faces.entries()) {
+    const path = ["faces", index];
+    if (face.type === "session")
+      out.push({ message: "a session is an agent's card, never a kind's face", path });
+    if (agentFaceHasHandler(face) && (face.id === undefined || face.label === undefined))
+      out.push({ message: `a ${face.type} face needs an id and a label`, path });
+    if (face.id !== undefined) {
+      if (seen.has(face.id)) out.push({ message: `duplicate face id ${face.id}`, path });
+      seen.add(face.id);
+    }
+    if (face.format !== undefined && face.type !== "text")
+      out.push({ message: "only a text face has a format", path });
+    if (face.language !== undefined && face.format !== "code")
+      out.push({ message: "only a code face has a language", path });
+    if (face.mime !== undefined && face.type !== "file")
+      out.push({ message: "only a file face has a mime type", path });
+  }
+  const names = new Set<string>();
+  for (const [index, tool] of half.tools.entries()) {
+    const path = ["tools", index];
+    if (names.has(tool.name)) out.push({ message: `duplicate tool name ${tool.name}`, path });
+    names.add(tool.name);
+    if (tool.readOnly && tool.destructive === true)
+      out.push({ message: `read-only tool ${tool.name} cannot be destructive`, path });
+  }
+  return out;
+}
+
 export const ObjectContribution = z
   .object({
     type: z.string().max(PLUGIN_LIMITS.ID_MAX * 2),
@@ -886,6 +995,8 @@ export const ObjectContribution = z
     behaviors: z.array(WidgetBehaviorAttachment).max(PLUGIN_LIMITS.WIDGET_BEHAVIORS_MAX).optional(),
 
     tray: TrayEntryContribution.optional(),
+    /** what an agent can do with it (§5.3); absent: agents can place and name it, nothing more */
+    agent: ObjectAgentHalf.optional(),
     binding: ObjectBindingRef,
   })
   .passthrough();
@@ -1352,6 +1463,17 @@ export const PluginManifestV1: z.ZodEffects<typeof PluginManifestV1Shape> =
       if (flags !== undefined)
         for (const [field, why] of Object.entries(INTERACTION_RETIRED_FIELDS))
           if (Object.hasOwn(flags, field)) issue(why, [...path, "interaction", field]);
+      // OB-2 — the agent half's own law, and a guide that can ship: `pack.ts` bundles only `dist` and `assets`
+      if (o.agent !== undefined) {
+        for (const problem of agentHalfProblems(o.agent))
+          issue(problem.message, [...path, "agent", ...problem.path]);
+        if (o.agent.guide !== undefined && !o.agent.guide.startsWith(AGENT_GUIDE_DIR))
+          issue(`an agent guide must live under ${AGENT_GUIDE_DIR}: only that folder ships`, [
+            ...path,
+            "agent",
+            "guide",
+          ]);
+      }
       // the tray entry's face and take name declared props, each a value of
       // its prop's kind (ICE validates the same at defineObject; saying it here
       // keeps a bad specimen out of the manifest, not the mount)

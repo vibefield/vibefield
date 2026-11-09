@@ -15,6 +15,8 @@ and `plugin-build` answer in their own words (`--help`).
 | --- | --- | --- | --- |
 | `activation-failed` | activation | activate(ctx) threw or rejected | activate must complete within its deadline and register only declared ids |
 | `activation-leak` | activation | deactivation left a timer or handle running (§24.2 leak row) | clear every timer/listener in the disposable activate returns (or ctx.track it) |
+| `agent-guide-missing` | artifact | the agent half names a guide that is not on disk | write it under `assets/`, the folder the bundle ships |
+| `agent-guide-too-large` | artifact | the agent guide is over the limit a manual can carry | `shorten it: the manual's prose is at most 6000 bytes (OBJECT_LIMITS.GUIDE_BYTES)` |
 | `artifact-hash-mismatch` | registry | `the artifact's sha256 is not what the index pins (PLUGIN_ARTIFACT_MISMATCH)` | re-pack and re-pin: the index pins the bytes, and a mismatch is never installed |
 | `artifact-missing` | artifact | the manifest declares an entry module that is not on disk | run `plugin-build`, or fix entries.<renderer\|service> to name what it builds |
 | `artifact-unmappable-specifier` | artifact | the bundle imports a bare specifier the host import map cannot bind (§11.6) | `import only HOST_SINGLETON_MODULE_SPECIFIERS, or let the plugin bundle it in` |
@@ -38,6 +40,14 @@ and `plugin-build` answer in their own words (`--help`).
 | `manifest-unreadable` | manifest | vibefield.plugin.json is not parseable JSON, or exceeds the manifest byte limit | emit it with plugin-build's emitManifest rather than hand-editing |
 | `module-shape-invalid` | activation | the renderer entry's default export has no activate(ctx) function | export default defineRendererPlugin({ activate(ctx) { … } }) |
 | `module-unloadable` | activation | the built renderer entry exists but throws while being imported | module top-level must not perform product work (§10.1) — do it in activate(ctx) |
+| `object-agent-face-unbound` | activation | a declared text, file or link face has no handler | bind it under `agent.faces` by its id |
+| `object-agent-face-undeclared` | activation | a face handler has no declared face | declare the face in the manifest's `agent.faces`, or remove the handler |
+| `object-agent-summary-missing` | activation | the agent half has no `summary`: nothing can say what the object holds now | add `summary(api)`, returning small bounded JSON |
+| `object-agent-tool-misbound` | activation | a tool is bound on the wrong side: a readOnly tool under `act`, or an acting tool under `read` | a readOnly tool is bound under `agent.read`; only `agent.act` has a way to write |
+| `object-agent-tool-unbound` | activation | a declared tool has no handler | bind it under `agent.read` if it is readOnly, else under `agent.act` |
+| `object-agent-tool-undeclared` | activation | a handler has no declared tool | declare it in the manifest's `agent.tools`, or remove the handler |
+| `object-agent-unbound` | activation | the manifest declares an agent half the binding does not carry | add `agent` to the ObjectBinding, with a handler for each declared tool |
+| `object-agent-undeclared` | activation | the binding carries an `agent` half the manifest does not declare | declare it under `contributes.objects[].agent`, or drop the handlers (objects.md, The agent half) |
 | `object-bind-group-mismatch` | activation | a bind group does not fill its layout exactly — a binding left empty, filled twice, not in the layout, or given the wrong resource | fill every binding of the layout exactly once, each with the resource it asks for (a buffer made for that use, a texture view, a sampler) |
 | `object-create-failed` | activation | the kind's create threw, or resolved no KindPass, on a recording device that answers every call as WebGPU does short of compiling | a create that resolves a KindPass (spawn · prepare · drawRange · dispose) from the device, format and mat it is handed |
 | `object-dispose-failed` | activation | the kind's pass threw when it was disposed | a dispose that lets go of what the pass made, and never throws |
@@ -105,6 +115,7 @@ state code, and what passes:
 
 | code | what passes |
 | --- | --- |
+| `state-agent-failed` | agent handlers that answer every declared state without throwing, in JSON within their limits, setting only declared props to valid values; a tool that needs a real input takes one from `agentInputs` |
 | `state-draw-ill-formed` | set the pipeline your create made, and a bind group of its layout at every index, before each draw |
 | `state-hit-missed` | a hit that answers a part (`content`) somewhere in the object's own box — what is picked is what is drawn |
 | `state-invalid` | props the row declares, each of its declared kind |

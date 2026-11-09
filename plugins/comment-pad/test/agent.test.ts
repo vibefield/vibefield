@@ -1,9 +1,13 @@
 // OB-2 — a plugin's agent half, witnessed: the comment pad's tools run over its declared states with no desk.
-import { agentToolHarness, runKindConformance } from "@vibefield/plugin-sdk/testing";
+import {
+  agentToolHarness,
+  productPalette,
+  runKindConformance,
+} from "@vibefield/plugin-sdk/testing";
 import { describe, expect, it } from "vitest";
+import states from "../playground/states";
 import { commentPadManifest } from "../src/manifest";
 import { commentPad, commentPadAgent } from "../src/object";
-import states from "../playground/states";
 
 const row = commentPadManifest.contributes?.objects?.[0];
 if (row === undefined) throw new Error("no object row");
@@ -11,7 +15,12 @@ const pads = (states as Record<string, Record<string, Record<string, unknown>>>)
 
 describe("the comment pad's agent half", () => {
   it("passes conformance over every playground state", async () => {
-    const report = await runKindConformance({ binding: commentPad, row, states: pads });
+    const report = await runKindConformance({
+      binding: commentPad,
+      row,
+      states: pads,
+      palette: productPalette,
+    });
     expect(report.verdicts.filter((v) => v.status === "refused")).toEqual([]);
     expect(report.verdicts.filter((v) => v.detail.includes("agent half"))).toHaveLength(
       Object.keys(pads ?? {}).length,

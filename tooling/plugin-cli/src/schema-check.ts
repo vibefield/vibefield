@@ -60,6 +60,23 @@ export function collectDeclaredSchemas(manifest: PluginManifestV1): DeclaredSche
     });
   });
 
+  (c.objects ?? []).forEach((object, oi) => {
+    object.agent?.tools.forEach((tool, ti) => {
+      const base = ["contributes", "objects", oi, "agent", "tools", ti];
+      out.push({
+        path: [...base, "input"],
+        schema: tool.input,
+        label: `${object.type} tool ${tool.name} input`,
+      });
+      if (tool.output !== undefined)
+        out.push({
+          path: [...base, "output"],
+          schema: tool.output,
+          label: `${object.type} tool ${tool.name} output`,
+        });
+    });
+  });
+
   return out;
 }
 

@@ -501,6 +501,119 @@ export interface SimulatorDevices {
 /** The key the host lends a simulator kind this Mac's devices under (`KindHost.use(SIMULATOR_DEVICES)`). */
 export const SIMULATOR_DEVICES = serviceKey<SimulatorDevices>("vibefield.simulator.devices");
 
+// docs:begin agent-half
+/** What a kind's agent handler reads an object through. A host-built view: no `world`, no entity, and no write of any kind,
+ * so a read handler has nothing to write with (§5.3). The same words run wherever the object's document is. */
+export interface AgentReadApi {
+  /** The object's durable props as they stand now, each as the manifest declares it. A copy: changing it changes nothing. */
+  props(): Readonly<Record<string, unknown>>;
+}
+
+/** What an act handler writes through. Every `setProps` of one act is ONE change the person can undo; a handler that throws
+ * writes nothing. `props()` sees what this act has set so far. */
+export interface AgentActApi extends AgentReadApi {
+  /** Set some of the object's props. Checked against the declared props when the act ends. */
+  setProps(patch: Readonly<Record<string, unknown>>): void;
+}
+
+export type AgentToolInput = Readonly<Record<string, unknown>>;
+
+/** An act's answer. `value` goes to the agent; `changed` is what the person's undo will say (absent: the agent's own words
+ * for the act). */
+export interface AgentActAnswer {
+  readonly value?: unknown;
+  readonly changed?: string;
+}
+
+/**
+ * A kind's AGENT HALF (§5.3): its handlers, beside its menu. The tools and faces themselves are declared once, in the
+ * manifest's `contributes.objects[].agent`; `vibefield-plugin check` holds the two to each other.
+ */
+export interface AgentHalf {
+  /** What `object_open` shows of the object now: small, bounded, JSON. */
+  readonly summary: (api: AgentReadApi) => unknown;
+  /** A text, file or link face's content, by the face's id: its words, its file's body, or its address. */
+  readonly faces?: Readonly<Record<string, (api: AgentReadApi) => string>>;
+  /** The handlers of the tools the manifest marks `readOnly`, by name. */
+  readonly read?: Readonly<Record<string, (api: AgentReadApi, input: AgentToolInput) => unknown>>;
+  /** The handlers of the acting tools, by name. Each runs as one transaction. */
+  readonly act?: Readonly<
+    Record<string, (api: AgentActApi, input: AgentToolInput) => AgentActAnswer | undefined>
+  >;
+}
+// docs:end agent-half
+
+/** What an act recorded: the values it set and what those props held before. */
+export interface AgentActInverse {
+  readonly after: Readonly<Record<string, unknown>>;
+  readonly before: Readonly<Record<string, unknown>>;
+}
+
+/** One act being recorded: its API, and (when it ends) the one change it made, or undefined when it changed nothing. */
+export interface AgentActRecording {
+  readonly api: AgentActApi;
+  inverse(): AgentActInverse | undefined;
+}
+
+/** JSON equality, whatever order an object's keys were written in. */
+export function sameAgentValue(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (typeof a !== "object" || typeof b !== "object" || a === null || b === null) return false;
+  if (Array.isArray(a) !== Array.isArray(b)) return false;
+  const keysA = Object.keys(a);
+  const keysB = Object.keys(b);
+  if (keysA.length !== keysB.length) return false;
+  const left = a as Record<string, unknown>;
+  const right = b as Record<string, unknown>;
+  return keysA.every((key) => key in right && sameAgentValue(left[key], right[key]));
+}
+
+const agentPropsCopy = (props: Readonly<Record<string, unknown>>): Record<string, unknown> =>
+  structuredClone({ ...props });
+
+/** The read API over a set of props (the host's, and the kit's harness). */
+export function agentReadApi(props: Readonly<Record<string, unknown>>): AgentReadApi {
+  return { props: () => agentPropsCopy(props) };
+}
+
+/**
+ * The act API over a set of props, recording as it goes (the host's, and the kit's harness; one implementation, so they
+ * cannot disagree). It writes nothing: the host commits `inverse().after` as one transaction once the handler returns,
+ * and keeps `inverse()` so the agent's change can be undone apart from the person's own.
+ */
+export function recordAgentAct(props: Readonly<Record<string, unknown>>): AgentActRecording {
+  const set: Record<string, unknown> = {};
+  const before: Record<string, unknown> = {};
+  return {
+    api: {
+      props: () => agentPropsCopy({ ...props, ...set }),
+      setProps(patch) {
+        for (const [name, value] of Object.entries(patch)) {
+          if (value === undefined) continue;
+          if (!(name in before)) before[name] = props[name];
+          set[name] = structuredClone(value);
+        }
+      },
+    },
+    inverse() {
+      const changed = Object.keys(set).filter((name) => !sameAgentValue(set[name], before[name]));
+      if (changed.length === 0) return undefined;
+      return {
+        after: Object.fromEntries(changed.map((name) => [name, set[name]])),
+        before: Object.fromEntries(changed.map((name) => [name, before[name]])),
+      };
+    },
+  };
+}
+
+/** Whether an object still holds what an act set: the only state its undo may apply to. */
+export function agentActStillHolds(
+  props: Readonly<Record<string, unknown>>,
+  inverse: Pick<AgentActInverse, "after">,
+): boolean {
+  return Object.entries(inverse.after).every(([name, value]) => sameAgentValue(props[name], value));
+}
+
 // docs:begin object-binding
 /**
  * An OBJECT's code half (spec §12.8; DK-0f's contract): the value of the renderer module's NAMED
@@ -525,5 +638,7 @@ export interface ObjectBinding<G = unknown, R = unknown, L = unknown> {
   readonly host?: ObjectHost;
   /** Selection-menu acts, one undo step each. */
   readonly menu?: readonly MenuActionDef[];
+  /** What an agent can do with it: the handlers of the manifest's `agent` block (§5.3). Absent: agents can place it, no more. */
+  readonly agent?: AgentHalf;
 }
 // docs:end object-binding

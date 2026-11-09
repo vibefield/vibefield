@@ -1,0 +1,1 @@
+A comment pad holds lines of plain text, one comment to a line. `read_text` gives you every line, and `add_comment` adds a line at the foot of the pad. It cannot change or remove a line that is already there; that is the user's. Add one comment at a time, and keep each to a single line.

@@ -23,8 +23,8 @@ const withAgent = (patch: Record<string, unknown>) => {
   return validatePluginManifest(manifest);
 };
 
-const messages = (result: ReturnType<typeof validatePluginManifest>): string[] =>
-  result.ok ? [] : result.issues.map((issue) => issue.message);
+const messages = (result: ReturnType<typeof validatePluginManifest>): readonly string[] =>
+  result.ok ? [] : result.issueDetails.map((issue) => issue.message);
 
 describe("the manifest's agent block", () => {
   it("takes the fixture's kind: a ref first, a guide under assets, one acting tool", () => {

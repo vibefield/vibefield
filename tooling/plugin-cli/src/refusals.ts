@@ -231,6 +231,68 @@ export const REFUSAL_CATALOG = {
     guidance:
       'give it `kind: "action"` (its op runs once when chosen) or `kind: "mode"` (the active tool)',
   },
+  "object-agent-undeclared": {
+    check: "activation",
+    level: "refuse",
+    meaning: "the binding carries an `agent` half the manifest does not declare",
+    guidance:
+      "declare it under `contributes.objects[].agent`, or drop the handlers (objects.md, The agent half)",
+  },
+  "object-agent-unbound": {
+    check: "activation",
+    level: "refuse",
+    meaning: "the manifest declares an agent half the binding does not carry",
+    guidance: "add `agent` to the ObjectBinding, with a handler for each declared tool",
+  },
+  "object-agent-summary-missing": {
+    check: "activation",
+    level: "refuse",
+    meaning: "the agent half has no `summary`: nothing can say what the object holds now",
+    guidance: "add `summary(api)`, returning small bounded JSON",
+  },
+  "object-agent-tool-unbound": {
+    check: "activation",
+    level: "refuse",
+    meaning: "a declared tool has no handler",
+    guidance: "bind it under `agent.read` if it is readOnly, else under `agent.act`",
+  },
+  "object-agent-tool-undeclared": {
+    check: "activation",
+    level: "refuse",
+    meaning: "a handler has no declared tool",
+    guidance: "declare it in the manifest's `agent.tools`, or remove the handler",
+  },
+  "object-agent-tool-misbound": {
+    check: "activation",
+    level: "refuse",
+    meaning:
+      "a tool is bound on the wrong side: a readOnly tool under `act`, or an acting tool under `read`",
+    guidance: "a readOnly tool is bound under `agent.read`; only `agent.act` has a way to write",
+  },
+  "object-agent-face-unbound": {
+    check: "activation",
+    level: "refuse",
+    meaning: "a declared text, file or link face has no handler",
+    guidance: "bind it under `agent.faces` by its id",
+  },
+  "object-agent-face-undeclared": {
+    check: "activation",
+    level: "refuse",
+    meaning: "a face handler has no declared face",
+    guidance: "declare the face in the manifest's `agent.faces`, or remove the handler",
+  },
+  "agent-guide-missing": {
+    check: "artifact",
+    level: "refuse",
+    meaning: "the agent half names a guide that is not on disk",
+    guidance: "write it under `assets/`, the folder the bundle ships",
+  },
+  "agent-guide-too-large": {
+    check: "artifact",
+    level: "refuse",
+    meaning: "the agent guide is over the limit a manual can carry",
+    guidance: "shorten it: the manual's prose is at most 6000 bytes (OBJECT_LIMITS.GUIDE_BYTES)",
+  },
   "object-create-failed": {
     check: "activation",
     level: "refuse",

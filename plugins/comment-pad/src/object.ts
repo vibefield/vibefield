@@ -6,7 +6,13 @@
 // TEXT PART the desk routes a tap to and lends its one editor (body.ts). Static, never registered from
 // `activate`: the desk creates every kind's pass together at its mount, so the host reads this export by name.
 
-import type { KindDriverHost, ObjectBinding, ObjectDomHost } from "@vibefield/plugin-sdk/desk";
+import type {
+  AgentHalf,
+  AgentReadApi,
+  KindDriverHost,
+  ObjectBinding,
+  ObjectDomHost,
+} from "@vibefield/plugin-sdk/desk";
 import { createPadSheet, type PadDriver } from "./body";
 import { commentPadKind } from "./kind";
 import type { PadGeometry, PadInstance } from "./layout";
@@ -23,6 +29,38 @@ export function padDriver(h: KindDriverHost): PadDriver {
   };
 }
 
+/** The most a pad's `text` holds (the manifest's own `maxLength`). */
+const PAD_TEXT_MAX = 20_000;
+
+/** The words an agent's read returns of a pad's writing: all of them. */
+const padText = (api: AgentReadApi): string => {
+  const text = api.props()["text"];
+  return typeof text === "string" ? text : "";
+};
+
+const commentsOf = (text: string): number => (text === "" ? 0 : text.split("\n").length);
+
+/** What an agent can do with a pad (OB-2): read its comments and add one. It writes only `text`: the seeds it leaves are the
+ * lines already there, each still in its own hand, and a new line draws from the pad's `seed`. */
+export const commentPadAgent: AgentHalf = {
+  summary: (api) => {
+    const text = padText(api);
+    return { comments: commentsOf(text), text: text.slice(0, 2_000) };
+  },
+  faces: { words: padText },
+  read: { read_text: (api) => ({ text: padText(api) }) },
+  act: {
+    add_comment: (api, input) => {
+      const line = String(input["text"]).replaceAll("\n", " ");
+      const was = padText(api);
+      const text = was === "" ? line : `${was}\n${line}`;
+      if (text.length > PAD_TEXT_MAX) throw new Error("this pad is full");
+      api.setProps({ text });
+      return { value: { comments: commentsOf(text) }, changed: "Added a comment" };
+    },
+  },
+};
+
 // docs:begin binding
 /** THE BINDING — the pad's kind, its driver and its sheet (the text part the desk's one editor is lent to). */
 export const commentPad: ObjectBinding<PadGeometry, PadInstance, PadLook> = {
@@ -34,5 +72,6 @@ export const commentPad: ObjectBinding<PadGeometry, PadInstance, PadLook> = {
       return sheet === undefined ? [] : [sheet];
     },
   },
+  agent: commentPadAgent,
 };
 // docs:end binding

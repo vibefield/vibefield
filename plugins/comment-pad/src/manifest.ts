@@ -49,6 +49,46 @@ export const commentPadManifest: PluginManifestV1 = {
           seed: { kind: "number", default: 0 },
         },
         groups: { ink: ["text", "seeds"] },
+        // what an agent can do with a pad (OB-2): one of this kind's two witnesses for a plugin's agent half
+        agent: {
+          summary: "A pad of comments, one to a line.",
+          concurrency: "many",
+          faces: [
+            { type: "ref", id: "live", label: "Live" },
+            { type: "text", id: "words", label: "Its words", format: "plain" },
+          ],
+          guide: "./assets/agent/guide.md",
+          tools: [
+            {
+              name: "read_text",
+              readOnly: true,
+              description: "Read every comment on this pad, one to a line.",
+              input: { type: "object", properties: {}, additionalProperties: false },
+              output: {
+                type: "object",
+                properties: { text: { type: "string" } },
+                required: ["text"],
+              },
+            },
+            {
+              name: "add_comment",
+              readOnly: false,
+              description:
+                "Add one comment at the foot of this pad, on a line of its own. The user can undo it.",
+              input: {
+                type: "object",
+                properties: { text: { type: "string", minLength: 1, maxLength: 2000 } },
+                required: ["text"],
+                additionalProperties: false,
+              },
+              output: {
+                type: "object",
+                properties: { comments: { type: "integer", minimum: 1 } },
+                required: ["comments"],
+              },
+            },
+          ],
+        },
         binding: { kind: "commentPad" },
       },
     ],

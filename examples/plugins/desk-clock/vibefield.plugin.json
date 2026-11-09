@@ -6,6 +6,52 @@
   "contributes": {
     "objects": [
       {
+        "agent": {
+          "concurrency": "many",
+          "faces": [
+            {
+              "id": "live",
+              "label": "Live",
+              "type": "ref"
+            },
+            {
+              "id": "picture",
+              "label": "Picture",
+              "type": "image"
+            }
+          ],
+          "guide": "./assets/agent/guide.md",
+          "summary": "An analogue desk clock: its dial's settings, never the time.",
+          "tools": [
+            {
+              "description": "Read this clock's settings: its dial, its 24-hour ring, its seconds hand and its zone.",
+              "input": {
+                "additionalProperties": false,
+                "properties": {},
+                "type": "object"
+              },
+              "name": "read_settings",
+              "readOnly": true
+            },
+            {
+              "description": "Show or hide this clock's seconds hand. The user can undo it.",
+              "input": {
+                "additionalProperties": false,
+                "properties": {
+                  "on": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "on"
+                ],
+                "type": "object"
+              },
+              "name": "set_seconds",
+              "readOnly": false
+            }
+          ]
+        },
         "binding": {
           "kind": "clock"
         },
