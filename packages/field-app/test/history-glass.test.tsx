@@ -64,6 +64,18 @@ async function wait(ms: number): Promise<void> {
   });
 }
 
+/** A made load (item 267): the runner's one thread busy for `ms`, no timer, microtask or poll running meanwhile,
+ * as on a loaded runner. CI's looked at the leave ~90ms after it committed (verify 42536110838 read 390 of 480). */
+function busy(ms: number): void {
+  const end = performance.now() + ms;
+  while (performance.now() < end) {
+    // busy: nothing else runs
+  }
+}
+
+/** The leave's made load: a fifth of a second, so a length read from the row's own looks comes in near 300. */
+const LOAD_MS = 200;
+
 /** The demo's room behind an index that waits for consent until `grant()`: the catalog's consent state (an empty
  * topology, the ingest phase that says why), then the demo's own status. */
 function consentPorts(): { ports: RoomPorts; grant: () => void } {
@@ -254,6 +266,8 @@ describe("History's motions before its past (HG-2; HG-D5, HG-D6; DESIGN.md §6)"
     await until(glass, "the layer");
     grant();
     await act(async () => room.current?.refreshStatus());
+    // the act committed the leave and armed its 480ms timer: the runner is busy before the row looks (item 267)
+    busy(LOAD_MS);
     const leaving = await until(
       () => host?.querySelector('.vf-history-glass[data-phase="leave"]'),
       "the leave",
