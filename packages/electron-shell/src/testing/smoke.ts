@@ -150,6 +150,7 @@ import {
   catalogBuildRefusal,
   catalogRows,
 } from "./smoke-catalog";
+import { chatNightRows } from "./smoke-chat-night";
 import { coverRows } from "./smoke-covers";
 import { removeSmokeRoot, SMOKE_RUN_ENV, stopRunDaemons } from "./smoke-daemons";
 import { deskCopyRows } from "./smoke-desk-copy";
@@ -7490,6 +7491,8 @@ export async function runSmokeGodview(opts: {
   beforeExit: () => Promise<void>;
   /** Short, gated G22/G23 proof selected by --terminal-direct-proof. */
   terminalDirectProof?: boolean;
+  /** ES-6: Chat's night on the GPU alone, selected by --chat-night (`smoke:chat-night`). */
+  chatNight?: boolean;
   /** GT-8b: what main's OS opener was handed — a harness records instead of
    * opening (main's `harnessShellOpens`). The link row reads it. */
   shellOpens?: { readonly opened: readonly string[]; readonly revealed: readonly string[] };
@@ -7550,6 +7553,22 @@ export async function runSmokeGodview(opts: {
     canvas.catch(() => undefined);
     await loadRenderer(win, "smoke-godview", opts.viteUrl);
     await canvas;
+    // ES-6: the run keeps the GPU (`keepsGpu`), so the GPU-less desk card below would not stand; its rows run alone
+    if (opts.chatNight === true) {
+      win.focus();
+      win.webContents.focus();
+      const problems = await chatNightRows({
+        win,
+        shotDir: process.env["VF_SMOKE_SHOT_DIR"] || scratch,
+        say: (line) => console.log(line),
+        pressChat: () => pressViewKey(win, "assistant"),
+        pressNewSparkKey: () => pressProductChord(win, "n"),
+      });
+      verdict["chatNight"] = { problems };
+      verdict["ok"] = problems.length === 0;
+      await finish();
+      return;
+    }
     // DK-3: this smoke runs GPU-less, so the Canvas view's desk cannot draw — it must say so in
     // its card (DESIGN.md §8 "When the desk can't draw"), not crash and not go blank.
     const deskCard = await expectDeskUnavailableCard(win);

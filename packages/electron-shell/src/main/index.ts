@@ -127,6 +127,7 @@ import { LiveSurfaceWindowHost } from "./live-surfaces/window-host";
 import { ElectronLocalDiagnostics } from "./local-diagnostics";
 import { createElectronLogging, type ElectronLogging } from "./logging";
 import {
+  CHAT_NIGHT_FLAG,
   hasQuitGate,
   isSmokeLike,
   keepsFramesWhenCovered,
@@ -2245,6 +2246,7 @@ async function main(
       viteUrl: VITE_URL,
       beforeExit: closeEvidence,
       terminalDirectProof: process.argv.includes("--terminal-direct-proof"),
+      chatNight: process.argv.includes(CHAT_NIGHT_FLAG),
       ...(harnessShellOpens === null ? {} : { shellOpens: harnessShellOpens }),
       ...(harnessCopies === null ? {} : { copies: harnessCopies }),
       ...(typedAgent !== undefined ? { typedAgent } : {}),

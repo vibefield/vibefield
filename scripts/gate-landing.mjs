@@ -81,6 +81,8 @@ export const LANDING = [
   // (`timeline-past-rungs.ts`), so the same smoke runs again without it for the no-record rung: M21's both
   { name: "smoke:godview", run: pnpm("smoke:godview"), rosettad: true },
   { name: "smoke:godview:no-record", run: pnpm("smoke:godview"), rosettad: false },
+  // ES-6: Chat's night on this host's GPU, on the build the row above just made
+  { name: "smoke:chat-night", run: pnpm("smoke:chat-night") },
   // FG (desk-gates row 32): the Setup Assistant walked by its own controls to the desk — by day and by night on the
   // live field, and with no WebGPU over its still; three launches, its stills kept outside every smoke's own folder.
   // History's one row is the typed agent's session in rosettad's index (item 253)

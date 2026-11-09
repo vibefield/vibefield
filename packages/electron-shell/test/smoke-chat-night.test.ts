@@ -430,7 +430,7 @@ describe("the wiring, in the source", () => {
     const night = gate.indexOf('name: "smoke:chat-night"');
     expect(noRecord).toBeGreaterThan(0);
     expect(night).toBeGreaterThan(noRecord);
-    expect(gate.slice(noRecord, night)).not.toMatch(/name: "smoke:/);
+    expect(gate.slice(noRecord + 1, night)).not.toMatch(/name: "smoke:/);
   });
 
   it("has its row in desk-gates", () => {

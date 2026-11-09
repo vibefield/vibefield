@@ -86,6 +86,10 @@ export function smokeSimctlDeveloperDir(
   return isSmokeLike(mode) ? env["VF_SMOKE_SIMCTL_DEVELOPER_DIR"] : undefined;
 }
 
+/** ES-6 (desk-gates, `smoke:chat-night`) — Godview's launcher run for Chat's night alone: it stages the typed agent, so
+ * New spark is live, and it keeps the GPU the launcher otherwise drops, for the night and its portal are what it witnesses. */
+export const CHAT_NIGHT_FLAG = "--chat-night";
+
 /** Whether the mode keeps hardware acceleration. Main disables it for every other
  * smoke-like mode: a smoke must run over ssh and on a GPU-less runner, where Chromium's
  * GPU init fails outright. The labs measure the GPU path itself (MV-0: the Godview perf lab
@@ -100,12 +104,17 @@ export function keepsGpu(mode: ShellMode, argv: readonly string[]): boolean {
   if (mode === "live-surfaces-lab" || mode === "terminal-perf-lab" || mode === "godview-perf-lab") {
     return true;
   }
-  return drawsTheField(mode) && !argv.includes("--disable-gpu");
+  return (drawsTheField(mode) || drawsChatsNight(mode, argv)) && !argv.includes("--disable-gpu");
 }
 
 /** The smokes that draw the field — the desk's two and the Setup Assistant's glass on it. */
 function drawsTheField(mode: ShellMode): boolean {
   return mode === "smoke-canvas" || mode === "smoke-plugin-restart" || mode === "smoke-first-run";
+}
+
+/** ES-6 — Godview's launcher under `--chat-night`. */
+function drawsChatsNight(mode: ShellMode, argv: readonly string[]): boolean {
+  return mode === "smoke-godview" && argv.includes(CHAT_NIGHT_FLAG);
 }
 
 /**
@@ -124,7 +133,7 @@ function drawsTheField(mode: ShellMode): boolean {
  */
 export function keepsFramesWhenCovered(mode: ShellMode, argv: readonly string[]): boolean {
   if (mode === "terminal-perf-lab") return true;
-  return drawsTheField(mode) && !argv.includes("--disable-gpu");
+  return (drawsTheField(mode) || drawsChatsNight(mode, argv)) && !argv.includes("--disable-gpu");
 }
 
 /** AL-3 (ESR §7.3 as amended 2026-10-27; `quit-gate.ts`) — the modes in which a

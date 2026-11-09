@@ -20,8 +20,8 @@ import { leftByRun, leftNames, SMOKE_RUN_ENV } from "../apps/desktop/packaging/s
 import { assertLabProfileProof, withLabProfile } from "./godview-lab-arms.mjs";
 
 const args = process.argv.slice(2);
-if (args.some((arg) => arg !== "--terminal-direct-proof")) {
-  throw new Error("Usage: node scripts/smoke-godview.mjs [--terminal-direct-proof]");
+if (args.some((arg) => arg !== "--terminal-direct-proof" && arg !== "--chat-night")) {
+  throw new Error("Usage: node scripts/smoke-godview.mjs [--terminal-direct-proof | --chat-night]");
 }
 const root = fileURLToPath(new URL("..", import.meta.url));
 const desktop = join(root, "apps", "desktop");
