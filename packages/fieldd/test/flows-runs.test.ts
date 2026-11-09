@@ -9914,6 +9914,20 @@ describe("CP-4a2b — the host's life: parked and woken, D2's lookup at a wake, 
       });
     });
 
+    it("S14-34h (slice 14's fold, P11; Q34; m41): a step's successor told in D7's leave, its run's ending set by no Stop and no `#ends` row kept, is sent no line and is ended", async () => {
+      // Kills: `#resumed`'s end reading `#ends` alone, a set ending's half dropped (m41): the successor of a run set aside
+      // works on, and nothing ends it
+      const h = await harness({ hostIdleMs: IDLE_MS, timings: { stopGraceMs: KILL_GRACE_MS } });
+      const run = await asideInItsLeave(h);
+      h.resumed({ run, call: 1, runtimeRunId: "rt-succ" });
+      await within(PARK_MS + KILL_GRACE_MS, () => endedOf(h, run));
+      expect({
+        state: stateOf(h, run),
+        lines: h.enqueued.filter(({ runtimeRunId }) => runtimeRunId === "rt-succ").length,
+        successor: h.ends.filter((session) => session === "rt-succ"),
+      }).toEqual({ state: "lost", lines: 0, successor: ["rt-succ"] });
+    });
+
     it("S14-35 (slice 14, Q35, §G 11): a Stop between restore() and settled() is refused retryably as fieldd's own UNAVAILABLE, writing no `end` and ending no agent", async () => {
       // red-a: the Stop of a run no LiveRun drives is #finishStop's: it ends the run at once
       // Kills: Q35's `#booting` refusal dropped
