@@ -415,7 +415,18 @@ interface RefusalFacts {
  * enumerates the kit's list. The first three and the three that mean "ran as
  * typed" are never printed today — the kit words its gateway's own refusals
  * itself, and never refuses what is not a session in a terminal of ours — and
- * are written so the table is whole. */
+ * are written so the table is whole.
+ * *Corrected 2026-11-09 (EL8, puppeteer 0.4.0 (#73, c9745a5d)): "never printed
+ * today" is false for `request-too-large`. The shim now cuts its request to the
+ * gateway's bounds and marks a cut one `bounded`, and the kit refuses a bounded
+ * session placed in a pane of ours with that code (prepare.ts:218), through
+ * `refusal`: its sentence here is what the person reads (agent-gateway.test.ts,
+ * "a BOUNDED session in one of our panes is REFUSED"). The gateway's own
+ * `request-too-large`, for a request over its bytes, is still the kit's
+ * sentence. It was already false for `handler-failed`, found at this EL8's
+ * review and not by #73: fieldd's own `declined()` words a placed launch that
+ * failed in the host with it (agent-gateway.test.ts, "the handler never
+ * throws").* */
 const REFUSAL_WORDS: Record<SpawnThroughDeclineCode, (facts: RefusalFacts) => string> = {
   unauthenticated: ({ command }) =>
     `${command} was not started: this pane's launcher is out of date. Open a new pane and run ${command} again.`,
@@ -1005,7 +1016,18 @@ export class AgentGatewayService {
     // home seconds later, and a shell born integrated finds a newly written
     // `bin/<name>` at its next lookup (the precmd hook keeps the shim
     // directory at PATH's head, and zsh searches PATH afresh for a name not
-    // yet in its command hash). Written only where this start could write a
+    // yet in its command hash).
+    // *Corrected 2026-11-09 (EL8, puppeteer 0.4.0 (#73, c9745a5d)): "at its
+    // next lookup" and "zsh searches PATH afresh" were false. zsh remembers
+    // where it found each name (HASH_CMDS) and, with HASH_DIRS, how far down
+    // PATH it has read, and only a PATH assignment or `rehash` clears either:
+    // a launcher written after a shell's birth was not found by a name the
+    // shell had already run, nor past a directory its search had already read.
+    // The kit's precmd hook now runs `rehash` when the set of launchers
+    // changes (shell-integration.ts), so a shell born integrated finds a newly
+    // written `bin/<name>` at its next prompt — a shell born with that hook: a
+    // pane born before this EL8 keeps the hook it was born with for its life.*
+    // Written only where this start could write a
     // home at all: a bundled shim and an agent that passes the catalog and
     // its adapter (the install read is exactly what is deferred), or a former
     // boot's home, which is kept true either way. The hand-over is once

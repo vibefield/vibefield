@@ -387,6 +387,13 @@ describe.skipIf(ZSH === undefined)(
           expect(box.daemon.agentGateway?.state().names).toEqual([TYPED_COMMAND]);
           // the pane born in the window finds it at its next lookup, and typed, the name is a
           // managed run in that pane
+          // *Corrected 2026-11-09 (EL8, puppeteer 0.4.0 (#73, c9745a5d)): "at its next lookup" is
+          // this row's case, not the rule. zsh remembers where it found each name and how far down
+          // PATH it has read (HASH_CMDS, HASH_DIRS), so a launcher written after a shell's birth is
+          // not found by a name the shell had already run, nor past a directory its search had
+          // already read, until the kit's precmd hook runs `rehash` once the launchers change — at
+          // the next prompt, and none comes between the landing and this line. This pane's search
+          // had found the name nowhere (the `command -v` above).*
           await type(box, during, TYPED_COMMAND);
           const row = await adopted(box, during);
           expect(row).toMatchObject({

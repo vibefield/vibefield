@@ -50,6 +50,7 @@ import {
   createFileProfileStore,
 } from "@vibefield/puppeteer-runtime";
 import {
+  boundSpawnThroughLaunch,
   boundSpawnThroughText,
   MAX_REFUSAL_MESSAGE_LENGTH,
   materializeShims,
@@ -1678,7 +1679,7 @@ describe("a shell born integrated — the gateway answers the shell lane's seam 
   );
 
   it(
-    "A2 — is handed the answer as soon as the INTEGRATION is written, ahead of the launchers: a shell born while the launchers are still being written is born integrated, and finds the launcher at its next lookup",
+    "A2 — is handed the answer as soon as the INTEGRATION is written, ahead of the launchers: a shell born while the launchers are still being written is born integrated, pointed at the launchers' directory before any launcher stands in it",
     async () => {
       const box = await unit({ slowHomeMs: 800 });
       onePane(box);
@@ -2214,6 +2215,35 @@ describe("a launch at the gateway — the real kit, puppeteer's real runtime, a 
   const adoptions = (box: Unit): Ledgered[] =>
     box.ledger.filter((entry) => entry.mutation.action === "agent.session.adopt");
 
+  /** An argument longer than a managed launch carries (core's
+   * AGENT_NATIVE_INVOCATION_LIMITS: 8,192 code units an argument): a prompt pasted whole. */
+  const LONG = "the person's long prompt, ".repeat(400);
+
+  /** A launch as the shim sends one since puppeteer 0.4.0 (#73): held to the gateway's bounds by
+   * the kit's own cut, which marks a request it had to cut `bounded` — so the row's request is
+   * the shim's, never a mark set by hand. */
+  const boundedLaunch = async (
+    box: Unit,
+    pid: number,
+    argv: string[],
+    interactive = true,
+  ): Promise<SpawnThroughResponse | undefined> => {
+    const cut = boundSpawnThroughLaunch({
+      type: "launch",
+      providerId: TYPED_PROVIDER,
+      cwd: box.work,
+      argv,
+      environment: {},
+      pid,
+      parentPid: 1,
+      command: TYPED_COMMAND,
+      interactive,
+    });
+    expect(cut.bounded).toBe(true);
+    const token = (await readRendezvous(box.home))?.token;
+    return box.send({ ...cut, token });
+  };
+
   it(
     "a session typed in one of our panes is ADOPTED: the run enters the fold with its process, its physical cwd and the identity a spawn is given, inside the audited act — and the answer is the adapter's recipe",
     async () => {
@@ -2317,6 +2347,43 @@ describe("a launch at the gateway — the real kit, puppeteer's real runtime, a 
       expect(counted.every((entry) => entry.level === "debug")).toBe(true);
       expect(counted[1]?.attrs).toEqual({ code: "passthrough", provider: TYPED_PROVIDER });
       expect(JSON.stringify(box.logged)).not.toContain("say hi");
+    },
+    PROCESS_BUDGET_MS,
+  );
+
+  it(
+    "a BOUNDED one-shot runs as typed (puppeteer 0.4.0, #73): a launch the shim cut to the gateway's bounds that is no session placed in a pane of ours — a print run, a run whose output is not a terminal, a session typed outside our panes — is answered fallback, so the shim runs what was typed, whole, and leaves NOTHING — no row, no preparation, nothing in the ledger — but a count by code",
+    async () => {
+      const box = await unit();
+      onePane(box);
+      box.table.set(700, proc(700, 1));
+      await box.gateway.start();
+      expect(await boundedLaunch(box, 600, ["-p", LONG])).toEqual({
+        action: "fallback",
+        code: "passthrough",
+        reason: "a print run is not a session",
+      });
+      expect(await boundedLaunch(box, 600, [LONG], false)).toEqual({
+        action: "fallback",
+        code: "not-interactive",
+        reason: "its input or output is not a terminal: a one-shot run",
+      });
+      expect(await boundedLaunch(box, 700, ["--resume", LONG])).toEqual({
+        action: "fallback",
+        code: "outside-host-terminals",
+        reason: "not in a terminal this host owns",
+      });
+      expect(box.fold.identities).toBe(0);
+      expect(box.fold.adopted).toEqual([]);
+      expect(box.script.preparing.count).toBe(0);
+      expect(box.script.prepared).toEqual([]);
+      expect(box.ledger).toEqual([]);
+      expect(Object.fromEntries(box.gateway.counts())).toEqual({
+        passthrough: 1,
+        "not-interactive": 1,
+        "outside-host-terminals": 1,
+      });
+      expect(JSON.stringify(box.logged)).not.toContain(LONG.slice(0, 64));
     },
     PROCESS_BUDGET_MS,
   );
@@ -2428,6 +2495,45 @@ describe("a launch at the gateway — the real kit, puppeteer's real runtime, a 
         },
       ]);
       expect(JSON.stringify([box.ledger, box.logged])).not.toContain("--bogus");
+    },
+    PROCESS_BUDGET_MS,
+  );
+
+  it(
+    "a BOUNDED session in one of our panes is REFUSED in VibeField's request-too-large sentence (puppeteer 0.4.0, #73): what the shim cut is not what was typed, so nothing is prepared from it — the refusal is placed, it is in the ledger by its code, without the argument, and the pane is free",
+    async () => {
+      const box = await unit();
+      onePane(box);
+      await box.gateway.start();
+      // `--resume <id>` is a session the scripted agent carries: prepared from the cut, it
+      // would resume a conversation nobody named
+      const answer = await boundedLaunch(box, 600, ["--resume", LONG]);
+      expect(answer).toEqual({
+        action: "refuse",
+        code: "request-too-large",
+        reason: "its arguments are longer than a managed launch carries",
+        message: `${TYPED_COMMAND} was not started: its arguments are too long to carry into a managed session. Put the text in a file and name the file instead.`,
+        placed: true,
+      });
+      expect(box.fold.identities).toBe(0);
+      expect(box.fold.adopted).toEqual([]);
+      expect(box.script.preparing.count).toBe(0);
+      expect(box.script.prepared).toEqual([]);
+      expect(box.ledger).toEqual([
+        {
+          mutation: {
+            action: "agent.session.adopt_refused",
+            target: { kind: "agent-session", id: "pending" },
+            reasonCode: "REQUEST_TOO_LARGE",
+            attrs: { provider: TYPED_PROVIDER, code: "request-too-large", sessionId: "s1" },
+          },
+          outcome: { outcome: "denied", reasonCode: "REQUEST_TOO_LARGE" },
+        },
+      ]);
+      expect(JSON.stringify([box.ledger, box.logged])).not.toContain(LONG.slice(0, 64));
+      // nothing holds the pane: the session typed short is adopted there
+      expect(await box.launch(600)).toMatchObject({ action: "exec" });
+      expect(box.fold.adopted.length).toBe(1);
     },
     PROCESS_BUDGET_MS,
   );
@@ -2672,20 +2778,46 @@ describe("a launch at the gateway — the real kit, puppeteer's real runtime, a 
   );
 
   it(
-    "a wrong bearer gets the kit's own answer — the same for a request of the wrong shape — and nothing of it reaches the fold or the ledger",
+    "a wrong bearer gets the kit's own answer — `unauthenticated`, unplaced, in whatever shape it is sent — and nothing of it reaches the fold or the ledger",
     async () => {
       const box = await unit();
       onePane(box);
       await box.gateway.start();
-      const wrong = await box.launch(600, { token: "f".repeat(64) });
+      const stranger = "f".repeat(64);
+      const wrong = await box.launch(600, { token: stranger });
       expect(wrong).toMatchObject({
         action: "refuse",
         code: "unauthenticated",
         placed: false,
       });
+      // the bearer is read first, and alone: a caller without it learns nothing of the shape
+      expect(await box.send({ type: "launch", token: stranger, surprise: true })).toEqual(wrong);
+      expect(box.fold.identities).toBe(0);
+      expect(box.fold.adopted).toEqual([]);
+      expect(box.ledger).toEqual([]);
+      expect(box.kit.hosts).toEqual([]);
+    },
+    PROCESS_BUDGET_MS,
+  );
+
+  it(
+    "the bearer's holder in a shape the gateway cannot read — a shim of another version — gets the kit's own `invalid-request`, unplaced, in the kit's sentence, and never `unauthenticated` (puppeteer 0.4.0, #73) — and nothing of it reaches the fold or the ledger",
+    async () => {
+      const box = await unit();
+      onePane(box);
+      await box.gateway.start();
       const bearer = (await readRendezvous(box.home))?.token;
-      expect(await box.send({ type: "launch", token: bearer, surprise: true })).toEqual(wrong);
-      expect(await box.send({ type: "launch", token: bearer, pid: -1 })).toEqual(wrong);
+      const reason = "spawn-through request could not be read";
+      const unread = {
+        action: "refuse",
+        code: "invalid-request",
+        reason,
+        message: boundSpawnThroughText(spawnThroughRefusalMessage({ reason })),
+        placed: false,
+        kitSentence: true,
+      };
+      expect(await box.send({ type: "launch", token: bearer, surprise: true })).toEqual(unread);
+      expect(await box.send({ type: "launch", token: bearer, pid: -1 })).toEqual(unread);
       expect(box.fold.identities).toBe(0);
       expect(box.fold.adopted).toEqual([]);
       expect(box.ledger).toEqual([]);

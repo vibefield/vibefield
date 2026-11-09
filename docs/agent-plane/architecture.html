@@ -1692,10 +1692,20 @@
                         the run's id; the run adopted into the fold as <code>spawnedBy: user-shell</code>),
                         <code>fallback</code> (run exactly as typed: a version query, a one-shot run, a launch outside
                         our terminals — fieldd keeps nothing), or <code>refuse</code> (one sentence under VibeField's
-                        name, a code, <code>placed</code>). Strict from the first landing: in a pane VibeField owns an
-                        interactive session runs managed or not at all; nothing else is ever refused. In a pane born under an
-                        Agent Profile, a typed agent that profile has no sign-in for is refused too, before anything is
-                        prepared (SB-D7; the profile binding row). The shim reads
+                        name, a code, <code>placed</code>). Since puppeteer 0.4.0 (#73, c9745a5d) the shim cuts its
+                        request to the gateway's bounds (core's AGENT_NATIVE_INVOCATION_LIMITS and the gateway's
+                        request bytes) and marks a cut one <code>bounded</code>. Strict from the first landing, and
+                        what is refused is one list: in a pane VibeField owns, an interactive session that cannot run
+                        managed; in a pane born under an Agent Profile, a typed agent that profile has no sign-in for,
+                        before anything is prepared (SB-D7; the profile binding row); a <code>bounded</code> session
+                        in our pane, before anything is prepared, in VibeField's request-too-large sentence, while a
+                        bounded one-shot runs as typed, whole; and, at the gateway itself, a wrong bearer
+                        (<code>unauthenticated</code>) or a request under the bearer the gateway cannot read (a shim
+                        of another version, <code>invalid-request</code>), unplaced, in the kit's sentence. Nothing
+                        else is ever refused. <em>Corrected 2026-11-09 (EL8, puppeteer 0.4.0, #73, c9745a5d): this
+                        said "an interactive session runs managed or not at all; nothing else is ever refused", but
+                        the profile refusal beside it was already a second, and #73 adds the bounded session and the
+                        unreadable request.</em> The shim reads
                         three files every time (<code>gateway.json</code>, <code>launch-providers.json</code>,
                         <code>terminals.json</code>), so our shells outlive fieldd: away, it waits 8 s and refuses in
                         our panes, falls through elsewhere; back, the waiting launch is adopted. A multiplexer's server
@@ -1707,7 +1717,7 @@
                     </td>
                     <td>
                       <span class="badge tone-built">Built</span>
-                      <p>AR-7 <code>8d8f8ce9</code>; puppeteer <code>2a81fc1</code> (PU-17 the kit, PU-9a the grammars). The seam's owner is puppeteer's <code>docs/guides/spawn-through-hosts.md</code>.</p>
+                      <p>AR-7 <code>8d8f8ce9</code>; puppeteer <code>2a81fc1</code> (PU-17 the kit, PU-9a the grammars); the bounded request since puppeteer 0.4.0 (#73, <code>c9745a5d</code>; fieldd's rows in <code>agent-gateway.test.ts</code>). The seam's owner is puppeteer's <code>docs/guides/spawn-through-hosts.md</code>.</p>
                     </td>
                   </tr>
                   <tr>
