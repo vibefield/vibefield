@@ -1,5 +1,5 @@
 import type { ChipType, ObjectRef } from "@vibefield/contracts";
-import { catalogEntry } from "@vibefield/contracts";
+import { catalogEntry, doorCanName } from "@vibefield/contracts";
 import type { Card, Face, ImageFace, RefFace } from "./cards-model";
 import { OUTSIDE_WORDS, PLACE_WORDS, TARGET_WORDS } from "./cards-words";
 
@@ -247,8 +247,7 @@ export function needsPictureFile(face: Face): face is ImageFace {
 const namedAgents = new Map<string, boolean>();
 const namedRuns = new Map<string, boolean>();
 
-/** Whether the door can name the process that runs an agent's MCP servers: a pane's own, or a helper of the run's own (fieldd's
- * `doorCanName`, agent-briefing.ts, is the same rule). PURE. */
+/** Whether the door can name this agent's runs, from what it declares: it takes MCP servers, in a process the door can name. PURE. */
 export function agentDoorCanName(
   briefing:
     | {
@@ -257,8 +256,7 @@ export function agentDoorCanName(
       }
     | undefined,
 ): boolean {
-  const process = briefing?.mcpServerProcess;
-  return briefing?.mcpServers === true && (process === "terminal" || process === "run-helper");
+  return briefing?.mcpServers === true && doorCanName(briefing.mcpServerProcess);
 }
 
 /** What fieldd declared of an agent (`agent.providers`). */

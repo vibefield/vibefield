@@ -1,10 +1,11 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import type {
-  AgentCatalogReaders,
-  NativeDoorInfoResult,
-  SparkId,
-  SparkRecord,
+import {
+  type AgentCatalogReaders,
+  doorCanName,
+  type NativeDoorInfoResult,
+  type SparkId,
+  type SparkRecord,
 } from "@vibefield/contracts";
 import { SERVED_TOOLS } from "@vibefield/contracts/tools";
 import {
@@ -157,13 +158,6 @@ export function sparkFactsRefusal(
   // is not evidence that its process belongs to this run. No vendor branches.
   if (!doorCanName(capability.mcpServerProcess)) return "spark-door-identity-unsupported";
   return undefined;
-}
-
-/** Whether the door can name the process that runs an agent's MCP servers: a pane's own, or a helper of the run's own
- * that puppeteer names to the host before anything can start a server (OB-3d). Compared as a string: the installed
- * puppeteer-core's enum does not have `run-helper` yet, and against that union the comparison does not compile. */
-function doorCanName(process: string | undefined): boolean {
-  return process === "terminal" || process === "run-helper";
 }
 
 /** CP-5a — the hatch's verdict on an agent, a reason or none: the catalog's claim first (`spark-not-offered`, and then

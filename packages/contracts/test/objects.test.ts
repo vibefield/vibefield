@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { SERVED_TOOLS } from "../gen/tools";
 import {
   CHIP_TYPES,
+  doorCanName,
   ObjectActInput,
   ObjectIntent,
   ObjectIntentAnswer,
@@ -112,5 +113,14 @@ describe("the window's door (CP-D13)", () => {
   it("says why a hand was refused", () => {
     expect(ObjectsHandResult.safeParse({ handed: false }).success).toBe(false);
     expect(ObjectsHandResult.safeParse({ handed: false, reason: "no-run" }).success).toBe(true);
+  });
+});
+
+describe("doorCanName", () => {
+  it("names a pane's own process or a run's own helper, and nothing else", () => {
+    expect(doorCanName("terminal")).toBe(true);
+    expect(doorCanName("run-helper")).toBe(true);
+    expect(doorCanName("shared-leader")).toBe(false);
+    expect(doorCanName(undefined)).toBe(false);
   });
 });

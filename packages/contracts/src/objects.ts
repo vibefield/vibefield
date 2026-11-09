@@ -15,6 +15,13 @@ export const OBJECT_REF_PATTERN = /^vf:obj\/[a-z0-9]{8}$/;
 export const ObjectRef = z.string().regex(OBJECT_REF_PATTERN);
 export type ObjectRef = z.infer<typeof ObjectRef>;
 
+/** Whether the door can name the process that runs an agent's MCP servers: a pane's own, or a helper of the run's own that
+ * puppeteer names to the host before anything can start a server (OB-3d). A string, not puppeteer-core's enum: the installed
+ * one does not have `run-helper` yet. The one authority: fieldd's briefing and the window's landing table both read it. */
+export function doorCanName(process: string | undefined): boolean {
+  return process === "terminal" || process === "run-helper";
+}
+
 export const OBJECT_LIMITS = {
   /** A manual's whole answer. MCP clients warn near 10K tokens; at about 3 characters a token this is 8K. */
   MANUAL_BYTES: 24_000,
