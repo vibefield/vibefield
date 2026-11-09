@@ -130,6 +130,35 @@ struct BandsParityTests {
     }
   }
 
+  @Test("UM-5b — which plan a run spends, and each plan's family and runs, as the desktop's join says them")
+  func planSessionsRecords() throws {
+    let golden = try Self.golden()
+    let records = try #require(golden["planSessions"]?.arrayValue)
+    #expect(!records.isEmpty)
+    for record in records {
+      let file = try #require(record["sets"]?.stringValue)
+      let sets = try AgentProfileSetsResult(json: try Self.input(file)).sets
+      let runs = try #require(record["runs"]?.arrayValue)
+      for run in runs {
+        let profileSet = try #require(run["profileSet"]?.stringValue)
+        let provider = try #require(run["provider"]?.stringValue)
+        let ours = PlanSessions.planKey(sets, profileSet: profileSet, provider: provider)
+        let theirs = run["key"]?.stringValue
+        #expect(ours == theirs, "\(file): \(profileSet) · \(provider)")
+      }
+      let plans = try #require(record["plans"]?.arrayValue)
+      for plan in plans {
+        let key = try #require(plan["key"]?.stringValue)
+        let family = (plan["family"]?.arrayValue ?? []).compactMap { $0.stringValue }
+        let ourFamily = PlanSessions.family(sets, key: key)
+        #expect(ourFamily == family, "\(file): \(key)")
+        let runs = plan["runs"]?.stringValue
+        let ourRuns = PlanSessions.runs(sets, key: key)
+        #expect(ourRuns == runs, "\(file): \(key)")
+      }
+    }
+  }
+
   @Test("UM-D4's forecast over the golden's fixed vector")
   func forecasts() throws {
     let golden = try Self.golden()

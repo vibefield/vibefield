@@ -89,6 +89,11 @@ import Testing
     let nativeIds = native.personas.map(\.profileId)
     #expect(nativeIds == ["claude:native-default", "codex:native-default", "grok:native-default"])
     let first = try #require(native.personas.first)
+    // UM-5b — the holdings the plan filter joins by: the one it runs on, on the plan it names
+    let held = try #require(first.holds?.first)
+    #expect(held.runsOn)
+    #expect(!held.key)
+    #expect(held.planId == "anthropic")
     #expect(first.provider == "claude")
     #expect(first.identity?.loggedIn == true)
     #expect(first.identity?.email == "kim@example.com")
@@ -130,6 +135,7 @@ import Testing
     #expect(ids == ["0b7e2c4d-9a1f-4e58-8c1d-3f2a6b9e7d10"])
     #expect(set.personas.first?.identity == nil)
     #expect(set.personas.first?.signingIn == false)
+    #expect(set.personas.first?.holds == nil)
   }
 
   @Test func aSpawnCarriesTheProfileAndTheSelectionOpaqueAndRoundTrips() throws {
