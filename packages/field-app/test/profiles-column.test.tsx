@@ -14,6 +14,7 @@ import {
   FIXTURE_PROFILES_NOW,
   FIXTURE_WORK,
 } from "../src/design-system/profiles-fixtures";
+import { monitorHoldsKeys } from "../src/godview/monitor/launcher-keys";
 import { BandsCircle, BandsKey } from "../src/godview/profiles-column/BandsCircle";
 import { ProfilePopoverView, readWords } from "../src/godview/profiles-column/ProfilePopoverView";
 import {
@@ -925,6 +926,112 @@ describe("the reach (UM-R2): the pointer can cross to its card", () => {
     expect(bridge).toContain("right: 100%;");
     expect(bridge).toContain("width: 22px;");
     expect(bridge).toMatch(/top: 0;[^}]*bottom: 0;/u);
+  });
+});
+
+/* ── closing is one act (UM-R3; DESIGN.md §8 "Pinned") ─────────────────────── */
+
+describe("closing is one act (UM-R3): the pin, the pointer's hold and the keyboard go together", () => {
+  const over = (node: Element | null | undefined): void => {
+    act(() => {
+      node?.dispatchEvent(new PointerEvent("pointerover", { bubbles: true }));
+    });
+  };
+  const click = (node: HTMLElement | null | undefined): void => {
+    act(() => node?.click());
+  };
+  const esc = (): void => {
+    act(() => {
+      window.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }),
+      );
+    });
+  };
+  const circleOf = (page: HTMLElement, id: string): HTMLButtonElement | null =>
+    page.querySelector<HTMLButtonElement>(`[data-profile="${id}"] .vf-profiles-circle`);
+  const itemOf = (page: HTMLElement, id: string): HTMLElement | null =>
+    page.querySelector<HTMLElement>(`.vf-profiles-item[data-profile="${id}"]`);
+
+  it("one profile: a second click closes the card under the pointer and releases the keys", () => {
+    const target = cardLayer();
+    const page = mount(
+      <ProfilesColumn {...controller({ sets: [FIXTURE_NATIVE], cardLayer: target })} />,
+    );
+    over(itemOf(page, "native"));
+    click(circleOf(page, "native"));
+    expect(target.querySelector(".vf-profiles-pop")).not.toBeNull();
+    expect(monitorHoldsKeys()).toBe(true);
+    click(circleOf(page, "native"));
+    expect(target.querySelector(".vf-profiles-pop")).toBeNull();
+    expect(monitorHoldsKeys()).toBe(false);
+  });
+
+  it("Esc closes the card under the pointer and releases the keys", () => {
+    const target = cardLayer();
+    const page = mount(<ProfilesColumn {...controller({ cardLayer: target })} />);
+    over(itemOf(page, "work"));
+    click(circleOf(page, "work"));
+    expect(target.querySelector(".vf-profiles-pop")).not.toBeNull();
+    esc();
+    expect(target.querySelector(".vf-profiles-pop")).toBeNull();
+    expect(monitorHoldsKeys()).toBe(false);
+  });
+
+  it("the card leaving hands the keyboard to its circle", () => {
+    const target = cardLayer();
+    const page = mount(<ProfilesColumn {...controller({ cardLayer: target })} />);
+    click(circleOf(page, "work"));
+    const close = target.querySelector<HTMLButtonElement>(".vf-profiles-pop-close");
+    close?.focus();
+    expect(document.activeElement).toBe(close);
+    esc();
+    expect(document.activeElement).toBe(circleOf(page, "work"));
+  });
+
+  it("closes before Settings: Agent Profiles… hands focus home, then opens", () => {
+    const target = cardLayer();
+    let focused: Element | null = null;
+    const openProfile = vi.fn(() => {
+      focused = document.activeElement;
+    });
+    const page = mount(<ProfilesColumn {...controller({ cardLayer: target, openProfile })} />);
+    click(circleOf(page, "work"));
+    const open = target.querySelector<HTMLButtonElement>(".vf-profiles-pop-open");
+    open?.focus();
+    click(open);
+    expect(openProfile).toHaveBeenCalledWith("work");
+    expect(focused).toBe(circleOf(page, "work"));
+    expect(target.querySelector(".vf-profiles-pop")).toBeNull();
+    expect(monitorHoldsKeys()).toBe(false);
+  });
+
+  it("drops the pin when Settings opens", () => {
+    const target = cardLayer();
+    const props = controller({ cardLayer: target, openProfile: vi.fn() });
+    const page = mount(<ProfilesColumn {...props} />);
+    click(circleOf(page, "work"));
+    expect(monitorHoldsKeys()).toBe(true);
+    act(() => root?.render(<ProfilesColumn {...props} openProfile={undefined} />));
+    expect(target.querySelector(".vf-profiles-pop")).toBeNull();
+    expect(monitorHoldsKeys()).toBe(false);
+  });
+
+  it("shows no add card while the add is disabled", () => {
+    const page = mount(<ProfilesColumnView {...column({ addOpen: true, canAdd: false })} />);
+    expect(page.querySelector(".vf-profiles-addcard")).toBeNull();
+  });
+
+  it("says whether a circle's popover is open, and which (§8 'Said')", () => {
+    const circles = [thisMac(), work()];
+    const page = mount(<ProfilesColumnView {...column({ circles, lens: true, open: "work" })} />);
+    const shut = circleOf(page, "native");
+    const open = circleOf(page, "work");
+    expect(shut?.getAttribute("aria-expanded")).toBe("false");
+    expect(shut?.hasAttribute("aria-controls")).toBe(false);
+    expect(open?.getAttribute("aria-expanded")).toBe("true");
+    const controls = open?.getAttribute("aria-controls");
+    expect(controls).toBeTruthy();
+    expect(page.querySelector(`[id="${controls}"][role="dialog"]`)).not.toBeNull();
   });
 });
 

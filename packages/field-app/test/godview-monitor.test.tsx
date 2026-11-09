@@ -2054,6 +2054,22 @@ describe("the monitor stage", () => {
     await act(async () => publishGodviewDeck("up"));
   });
 
+  it("a click on the chosen circle closes the card under the pointer (UM-R3, §8 'Pinned')", async () => {
+    const host = await mountMonitor("list", tabDoor());
+    const item = host.querySelector<HTMLElement>('.vf-profiles-item[data-profile="work"]');
+    // the pointer is on the circle; the existing lens row's bare clicks leave `pointed` null
+    act(() => {
+      item?.dispatchEvent(new PointerEvent("pointerover", { bubbles: true }));
+    });
+    await act(async () => item?.querySelector<HTMLButtonElement>(".vf-profiles-circle")?.click());
+    await settle();
+    expect(host.querySelector('[data-profile="work"] .vf-profiles-pop')).not.toBeNull();
+    await act(async () => item?.querySelector<HTMLButtonElement>(".vf-profiles-circle")?.click());
+    await settle();
+    expect(host.querySelector(".vf-profiles-pop")).toBeNull();
+    expect(chosenTab()).toBe("all");
+  });
+
   it("chooses the view with the head's circles; there is no theme switch (FC-D7)", async () => {
     const selected: string[] = [];
     const view = monitorViewFor("swarm");
