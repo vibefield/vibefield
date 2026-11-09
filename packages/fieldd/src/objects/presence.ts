@@ -87,6 +87,27 @@ export class ObjectPresenceBoard {
       .map(({ handle, state }) => ({ handle, state }));
   }
 
+  /** The objects a run is on now and has not released. */
+  onObjects(run: string): ObjectRef[] {
+    return [...this.#boards]
+      .filter(([, board]) => {
+        const row = board.rows.get(run);
+        return row !== undefined && row.real !== "released";
+      })
+      .map(([ref]) => ref);
+  }
+
+  /** Take a run off an object at once, with no leaving to show: its successor stands there now. */
+  forget(ref: ObjectRef, run: string): void {
+    const board = this.#boards.get(ref);
+    const row = board?.rows.get(run);
+    if (board === undefined || row === undefined) return;
+    if (row.leaving !== undefined) clearTimeout(row.leaving);
+    board.rows.delete(run);
+    this.#tidy(ref, board);
+    this.#changed();
+  }
+
   /** Every run on an object now, released or not. */
   runsOn(ref: ObjectRef): string[] {
     return [...(this.#boards.get(ref)?.rows.keys() ?? [])];

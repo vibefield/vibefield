@@ -99,16 +99,13 @@ export class ObjectsRegistry {
   }
 
   /** Give `holder` this object. What it placed stays placed: a later hand never weakens that. */
-  grant(ref: ObjectRef, holder: string, how: ObjectYours): void {
+  grant(ref: ObjectRef, holder: string, how: ObjectYours, at: number = this.#now()): void {
     const record = this.#required(ref);
     const held = record.grants.find((g) => g.holder === holder);
     if (held !== undefined && (held.how === "placed" || held.how === how)) return;
     this.#keep({
       ...record,
-      grants: [
-        ...record.grants.filter((g) => g.holder !== holder),
-        { holder, how, at: this.#now() },
-      ],
+      grants: [...record.grants.filter((g) => g.holder !== holder), { holder, how, at }],
     });
   }
 

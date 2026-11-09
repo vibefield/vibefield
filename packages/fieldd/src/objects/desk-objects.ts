@@ -6,7 +6,7 @@ import type {
   ObjectsHandResult,
   ObjectYours,
 } from "@vibefield/contracts";
-import { IntentUndoValue } from "@vibefield/contracts";
+import { IntentUndoValue, OBJECT_ROOM } from "@vibefield/contracts";
 import { RpcCallError } from "../native-link";
 import { DeskIntents, type DeskIntentsOptions } from "./intents";
 import { type DeskKind, deskKinds } from "./kinds";
@@ -48,11 +48,18 @@ const NO_SUCH_AGENT = "VibeField doesn't know that agent.";
 const ENDED_AGENT = "That agent has ended. Start it again, or hand this to another.";
 const NO_SUCH_OBJECT = "VibeField doesn't know that object.";
 
+interface EndedRun {
+  readonly on: readonly ObjectRef[];
+  readonly grants: readonly { ref: ObjectRef; how: ObjectYours; at: number }[];
+}
+
 export class DeskObjects {
   readonly registry: ObjectsRegistry;
   readonly intents: DeskIntents;
   readonly presence: ObjectPresenceBoard;
   readonly undo = new AgentUndoShelf();
+  /** what each ended run had, until a resume names its successor: fieldd's memory, bounded, never a claim */
+  readonly #ended = new Map<string, EndedRun>();
 
   constructor(private readonly opts: DeskObjectsOptions) {
     this.registry = new ObjectsRegistry({
@@ -200,19 +207,61 @@ export class DeskObjects {
     if (ref !== undefined) this.presence.hold(ref, held);
   }
 
-  /** A run has left for good. A plain run's grants end with it, so nothing goes on claiming an object for it; a spark's
-   * are the spark's, and wait for its next run. */
+  /** A run has left for good. A plain run's grants end with it, so nothing goes on claiming an object for it (a spark's
+   * are the spark's, and wait for its next run). What it had is remembered, in fieldd's memory only, because the runtime
+   * tells a run's end before a resume's successor exists: `runReplaced` hands it on. */
   runEnded(run: string): void {
+    const on = this.presence.onObjects(run);
     this.presence.runEnded(run);
-    if (this.opts.sparkOf(run) !== undefined) return;
-    for (const record of this.registry.all()) this.registry.revoke(record.ref, run);
+    const grants: EndedRun["grants"][number][] = [];
+    for (const record of this.registry.all()) {
+      const grant = this.registry.grantOf(record.ref, run);
+      if (grant === undefined) continue;
+      this.registry.revoke(record.ref, run);
+      grants.push({ ref: record.ref, how: grant.how, at: grant.at });
+    }
+    if (on.length === 0 && grants.length === 0) return;
+    this.#ended.set(run, { on, grants });
+    for (const oldest of this.#ended.keys()) {
+      if (this.#ended.size <= OBJECT_ROOM.ENDED_RUNS_KEPT) break;
+      this.#ended.delete(oldest);
+    }
+  }
+
+  /** A resume continued a session in a new run: the grants, the place on each object and the undo offer go with it. A run
+   * whose end named no successor has already lost them. A `one` kind handed to someone meanwhile stays with them. */
+  runReplaced(old: string, next: string): void {
+    const ended = this.#ended.get(old);
+    this.#ended.delete(old);
+    const holder = this.holder(next);
+    this.undo.rekey(old, holder);
+    for (const { ref, how, at } of ended?.grants ?? []) {
+      const record = this.registry.get(ref);
+      if (record === undefined) continue;
+      const taken = record.grants.some((grant) => grant.holder !== holder);
+      if (taken && this.kind(record.kind)?.concurrency === "one") continue;
+      this.registry.grant(ref, holder, how, at);
+    }
+    for (const ref of ended?.on ?? []) {
+      this.presence.forget(ref, old);
+      if (this.grantOf(ref, next) === undefined) continue;
+      this.presence.opened(ref, this.who(next));
+      this.offerOn(ref, next);
+    }
   }
 
   /** Keep what an act's undo needs, and say on the desk what it would undo. */
-  keepChange(docId: string, change: KeptChange): void {
-    const fell = this.undo.keep(docId, change);
-    if (fell !== undefined) this.#refreshLastChange(docId, fell.ref, fell.run);
-    this.presence.setLastChange(change.ref, change.run, change.label);
+  keepChange(docId: string, change: Omit<KeptChange, "holder"> & { run: string }): void {
+    const { run, ...kept } = change;
+    const fell = this.undo.keep(docId, { ...kept, holder: this.holder(run) });
+    if (fell !== undefined) this.#refreshOffer(docId, fell.ref, fell.holder);
+    this.presence.setLastChange(change.ref, run, change.label);
+  }
+
+  /** Say on this run's row what its holder's undo would undo: a spark's next run comes to the offer its last one left. */
+  offerOn(ref: ObjectRef, run: string): void {
+    const record = this.registry.get(ref);
+    if (record !== undefined) this.#refreshOffer(record.docId, ref, this.holder(run));
   }
 
   /** OB-D11 — undo the run's newest change to this object. A `conflict` or `gone` can never come good, so that change
@@ -223,7 +272,8 @@ export class DeskObjects {
   ): Promise<{ undone: true; changed?: string } | { undone: false; reason: string }> {
     const record = this.registry.get(ref);
     if (record === undefined) return { undone: false, reason: NO_SUCH_OBJECT };
-    const change = this.undo.newest(record.docId, ref, run);
+    const holder = this.holder(run);
+    const change = this.undo.newest(record.docId, ref, holder);
     if (change === undefined)
       return { undone: false, reason: "That agent has no change left to undo here." };
     const { handle } = this.who(run);
@@ -241,7 +291,7 @@ export class DeskObjects {
         this.undo.remap(record.docId, ref, moved.data.key);
       }
       this.undo.forget(record.docId, change);
-      this.#refreshLastChange(record.docId, ref, run);
+      this.#refreshOffer(record.docId, ref, holder);
       if (change.op === "place") this.presence.drop(ref);
       return { undone: true, changed: change.label };
     } catch (err) {
@@ -249,13 +299,15 @@ export class DeskObjects {
       const fact = (err.details as { fact?: unknown } | undefined)?.fact;
       if (fact === "conflict" || fact === "gone") {
         this.undo.forget(record.docId, change);
-        this.#refreshLastChange(record.docId, ref, run);
+        this.#refreshOffer(record.docId, ref, holder);
       }
       return { undone: false, reason: err.message };
     }
   }
 
-  #refreshLastChange(docId: string, ref: ObjectRef, run: string): void {
-    this.presence.setLastChange(ref, run, this.undo.newest(docId, ref, run)?.label);
+  #refreshOffer(docId: string, ref: ObjectRef, holder: string): void {
+    const label = this.undo.newest(docId, ref, holder)?.label;
+    for (const run of this.presence.runsOn(ref))
+      if (this.holder(run) === holder) this.presence.setLastChange(ref, run, label);
   }
 }

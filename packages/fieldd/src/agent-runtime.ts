@@ -808,6 +808,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     (runtimeRunId: string, mirror: AgentMonitorMirror | undefined) => void
   >();
   private readonly runEndedListeners = new Set<(runtimeRunId: string) => void>();
+  private readonly runReplacedListeners = new Set<(old: string, next: string) => void>();
   /** TU-1 (Q1) — the sparks service hears each time a spark's own session is known to have worked */
   private readonly sparkTurnedListeners = new Set<(spark: SparkId, at: string) => void>();
   /** TH-1, CP-4a2b — each run as it enters (`onRunEntered`): a spark's transcript, a flow's steps */
@@ -1932,6 +1933,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     // pending path's own stamp), while a later boot would re-list the dead
     // pane beside the run that replaced it.
     this.supersede(record, entry.info.runtimeRunId);
+    this.replaced(record.runtimeRunId, entry.info.runtimeRunId);
     this.dropExited(record.runtimeRunId, "a resume continued the conversation");
     // The ticket FIRST: the successor exists and is answerable before anything
     // is destroyed, so a birth that failed above leaves the dead pane and its
@@ -2303,6 +2305,13 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
 
   /** CP-2, item 201 — a run ended, managed or held: its PTY's exit, a held run's withdrawal or supersession, or its
    * replacement (`ended`). Never a fieldd stop, which runs outlive. */
+  /** OB-3a — a resume continued a session in a new run: heard once the record names its successor. The old run's end
+   * came first (`onRunEnded`), and a resume that fails tells nothing here. */
+  onRunReplaced(listener: (old: string, next: string) => void): () => void {
+    this.runReplacedListeners.add(listener);
+    return () => this.runReplacedListeners.delete(listener);
+  }
+
   onRunEnded(listener: (runtimeRunId: string) => void): () => void {
     this.runEndedListeners.add(listener);
     return () => this.runEndedListeners.delete(listener);
@@ -4675,6 +4684,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
           updatedAt: this.now().toISOString(),
         });
       }
+      this.replaced(record.runtimeRunId, next.info.runtimeRunId);
       this.logger.info(
         "fieldd.agents.session_resumed",
         "A pending managed session was resumed into a new run",
@@ -4999,6 +5009,23 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
           runtimeRunId,
           reason: (err as Error).message,
         });
+      }
+    }
+  }
+
+  private replaced(old: string, next: string): void {
+    for (const listener of this.runReplacedListeners) {
+      try {
+        listener(old, next);
+      } catch (err) {
+        this.logger.warn(
+          "fieldd.agents.replaced_listener_failed",
+          "A run's replaced listener threw",
+          {
+            runtimeRunId: old,
+            reason: (err as Error).message,
+          },
+        );
       }
     }
   }

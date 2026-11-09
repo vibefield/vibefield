@@ -3850,11 +3850,16 @@ describe("MF-1f/MF-1g — an agent pane outlives its run, and the fold keeps its
     const win = await window(box.daemon, [...DECK, "agent.control"], "g3");
     const { runId, paneId } = await endedRun(box, win);
 
+    // OB-3a — the successor is named to those keeping something per run
+    const heard: [string, string][] = [];
+    box.daemon.agents.onRunReplaced((old, next) => heard.push([old, next]));
+
     // Before MF-1f this refused `terminal-alive`: the husk read as a running
     // session, so the verb on the exited card could not be used at all.
     const resumed = (await born(win, "agent.resume", { runtimeRunId: runId })) as AgentSpawnResult;
     const nextId = resumed.session.runtimeRunId;
     expect(nextId).not.toBe(runId);
+    expect(heard).toEqual([[runId, nextId]]);
     // AR-4's hand-over shape, which is what the deck's resume verb reads: the
     // successor's row NAMES the pane it replaces (GodviewDeck mounts the new
     // ticket into the pane the verb was pressed in)
@@ -5782,6 +5787,10 @@ describe("stable ingress — a managed session outlives fieldd (AR-4)", () => {
     expect(first.sessions).toHaveLength(1);
     writeFileSync(join(spark.folder, "CLAUDE.md"), "Ready for the pending replacement.");
 
+    // OB-3a — the successor is named to those keeping something per run
+    const heard: [string, string][] = [];
+    second.daemon.agents.onRunReplaced((old, next) => heard.push([old, next]));
+
     // ── the replacement by hand ──
     // The claim is an ORDER: the old PTY has EXITED, by the floor's word, before the new run is born (agent-runtime.ts,
     // item 201), and an end state cannot tell it from the reverse. It is read at the birth itself, from the daemon's
@@ -5822,6 +5831,7 @@ describe("stable ingress — a managed session outlives fieldd (AR-4)", () => {
       replaced: ptyId,
       replacedBy: resumed.session.runtimeRunId,
     });
+    expect(heard).toEqual([[runId, resumed.session.runtimeRunId]]);
     const fresh = readRecord(first.dataDir, resumed.session.runtimeRunId);
     expect(fresh.replaced).toBe(ptyId);
     expect(fresh.exited).toBeUndefined();

@@ -9,7 +9,8 @@ export interface KeptChange {
   /** which act made it: undoing a place takes the object away */
   readonly op: "place" | "remove" | "act";
   readonly ref: ObjectRef;
-  readonly run: string;
+  /** whose change it is: a spark's stays the spark's across a wake */
+  holder: string;
   key: string;
   readonly inverse: unknown;
   readonly label: string;
@@ -26,9 +27,15 @@ export class AgentUndoShelf {
     return kept.length > OBJECT_LIMITS.UNDO_KEPT ? kept.pop() : undefined;
   }
 
-  /** The newest change this run made to this object. */
-  newest(docId: string, ref: ObjectRef, run: string): KeptChange | undefined {
-    return this.#perDoc.get(docId)?.find((c) => c.ref === ref && c.run === run);
+  /** The newest change this holder made to this object. */
+  newest(docId: string, ref: ObjectRef, holder: string): KeptChange | undefined {
+    return this.#perDoc.get(docId)?.find((c) => c.ref === ref && c.holder === holder);
+  }
+
+  /** A resume continued a plain run in a new one: what it changed is the new run's to have undone. */
+  rekey(from: string, to: string): void {
+    for (const kept of this.#perDoc.values())
+      for (const change of kept) if (change.holder === from) change.holder = to;
   }
 
   forget(docId: string, change: KeptChange): void {

@@ -360,6 +360,10 @@ import {
   NativeSupervisor,
   UNKNOWN_FLOOR_CENSUS,
 } from "./native-supervisor";
+import { DeskObjects } from "./objects/desk-objects";
+import { registerObjectDoors } from "./objects/doors";
+import { type DeskKind, deskKinds, pluginDeskKinds } from "./objects/kinds";
+import { ObjectsStore } from "./objects/store";
 import { PeerLink } from "./peer-link";
 import { PluginCatalogService } from "./plugin-catalog";
 import { CommunityHold, communityGate } from "./plugin-community-hold";
@@ -390,10 +394,6 @@ import { ProcessService, spawnMcpStdio } from "./process-service";
 import { ProductApi } from "./product-api";
 import { ProfileDraftsStore } from "./profile-drafts";
 import { createProjectIdentityStore } from "./project-identity";
-import { DeskObjects } from "./objects/desk-objects";
-import { registerObjectDoors } from "./objects/doors";
-import { type DeskKind, deskKinds, pluginDeskKinds } from "./objects/kinds";
-import { ObjectsStore } from "./objects/store";
 import { atFloor, wholeValueDoor } from "./projection";
 import { KeyJournal } from "./projects/key-journal";
 import { PlaceScanner } from "./projects/place-scanner";
@@ -3730,6 +3730,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     });
     deskObjects.boot();
     agents.onRunEnded((runtimeRunId) => deskObjects.runEnded(runtimeRunId));
+    agents.onRunReplaced((old, next) => deskObjects.runReplaced(old, next));
     // what ended while fieldd was down holds nothing now, judged once the re-attach has settled
     needs.joinSettle("objects", () => deskObjects.reconcile());
     toolPlane = new ToolPlaneService({

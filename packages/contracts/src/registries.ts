@@ -1396,10 +1396,12 @@ export const RECORD_STORES = {
 
 /** OB-3b, OB-4 — fieldd's own bounds on the desk room (the wire's are `OBJECT_LIMITS`). RELEASED_SHOWN_MS: how long a
  * released agent stays on an object's presence, so the desk can show it leaving. PENDING_INTENTS: intents one board may
- * have unanswered at once; a further call answers the fact `limit`, never a queue that acts later. TS-only. */
+ * have unanswered at once; a further call answers the fact `limit`, never a queue that acts later. ENDED_RUNS_KEPT:
+ * ended runs whose grants and places fieldd remembers, in memory, in case a resume names a successor. TS-only. */
 export const OBJECT_ROOM = {
   RELEASED_SHOWN_MS: 4_000,
   PENDING_INTENTS: 64,
+  ENDED_RUNS_KEPT: 256,
 } as const;
 
 /** DS-D15 / DS-2 — forwarded mutations (`forwarding.ts`). The owner journals

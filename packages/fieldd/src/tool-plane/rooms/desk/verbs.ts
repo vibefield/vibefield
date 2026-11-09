@@ -245,6 +245,7 @@ export function createDeskVerbs(deps: DeskDeps): DeskVerbs {
     work: () => Promise<T>,
   ): Promise<T> => {
     presence.begin(ref, agent, state);
+    objects.offerOn(ref, agent.run);
     try {
       const out = await work();
       presence.settle(ref, agent, "open");
@@ -405,6 +406,7 @@ export function createDeskVerbs(deps: DeskDeps): DeskVerbs {
       const value = parseValue(IntentOpenValue, answered.value);
       registry.setKind(input.ref, value.kind);
       presence.opened(input.ref, agent);
+      objects.offerOn(input.ref, run);
       return manualOf({
         ref: input.ref,
         kindId: value.kind,
