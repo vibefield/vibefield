@@ -65,7 +65,7 @@ const LazyDiagnosticsSection = lazy(() =>
   })),
 );
 
-interface SettingsPanelProps {
+export interface SettingsPanelProps {
   engine: CanvasEngine;
   stressWidgetType?: string;
   platform?: ShellPlatform;

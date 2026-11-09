@@ -50,7 +50,7 @@ import { getHost } from "../host";
 import { CommandPalette } from "../hud/CommandPalette";
 import { LoadingVeil } from "../hud/LoadingVeil";
 import { PluginSurfaceHost } from "../hud/PluginSurfaceSlot";
-import { SettingsPanel } from "../panels";
+import { SettingsPanelMount } from "../panels";
 import { SelectionBar } from "./desk/bar/SelectionBar";
 import { useBoardFacts } from "./desk/pegboard/board-door";
 import { Pegboard } from "./desk/pegboard/Pegboard";
@@ -489,7 +489,7 @@ export function ChromeLayer({
       </div>
 
       {showSettings && (
-        <SettingsPanel
+        <SettingsPanelMount
           engine={ce}
           stressWidgetType="desk.note"
           platform={getHost().platform ?? "other"}

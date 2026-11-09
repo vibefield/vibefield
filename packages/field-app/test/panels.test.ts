@@ -20,7 +20,7 @@ import { act, createElement, type ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { type FieldHost, setHost } from "../src/host";
-import { SettingsPanel } from "../src/panels";
+import { SettingsPanel } from "../src/panels/SettingsPanel";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
