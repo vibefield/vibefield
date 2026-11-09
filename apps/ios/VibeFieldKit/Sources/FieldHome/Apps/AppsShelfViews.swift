@@ -508,7 +508,7 @@ struct AppsAppScreen: View {
 }
 
 /// About this app (§9). Its link to the session in History arrives with MA-5's open.
-private struct AppsAboutSheet: View {
+struct AppsAboutSheet: View {
   let about: AppsAbout
 
   private static let titleSize: CGFloat = 20

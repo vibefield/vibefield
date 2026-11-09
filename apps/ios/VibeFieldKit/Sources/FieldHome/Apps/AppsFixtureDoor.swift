@@ -14,6 +14,8 @@
     }
 
     static let argument = "-vf-mock-apps="
+    /// The stills' door to the open shelf (MA-6e; VF-PM's Q4).
+    static let openArgument = "-vf-apps-open"
 
     let state: State
 

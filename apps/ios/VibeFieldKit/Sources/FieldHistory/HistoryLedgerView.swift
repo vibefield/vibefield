@@ -45,6 +45,7 @@ public struct HistoryLedgerView: View {
         }
       }
       .foldsBar(router)
+      .readsTopPull()
       .background(ChromePalette.paper.ignoresSafeArea())
       .navigationTitle("History")
       .navigationDestination(for: HistoryRouter.Route.self) { route in

@@ -129,6 +129,19 @@ public struct HomeScreen: View {
   @State private var apps = AppsFeed()
   /// The word for the home when the roster names none (interim, ‹for James›).
   private static let appsHere = "Your desktop"
+  /// MA-6d — the door to the apps: the account's ledger, the drop, the pull and the first peek.
+  @State private var appsDoor = AppsDoorModel(store: HomeScreen.appsCuesStore)
+  /// A drag on Field: undecided (nil), the door's (true) or the swarm's (false), said once.
+  @State private var appsFieldDrag: Bool?
+  @State private var appsWidth: CGFloat = 402
+  @State private var appsHeight: CGFloat = 874
+  /// MA-6e — the previews this phone holds, by digest.
+  @State private var appsPreviews = AppsPreviews(directory: HomeScreen.appsPreviewsDirectory)
+  /// Set once the node's session exists: an icon is its fallback until then.
+  @State private var appsPreviewsArmed = false
+  /// The app whose About stands (a long press).
+  @State private var appsAboutApp: IndexAppRow?
+  @Namespace private var appsZoom
   @State private var agentProfilesOpen = false
   /// UM-4 (UM-D24 A) — the held face's standing (a let-go or a hold taken away closes it), and where the corner's
   /// face stands in the window.
@@ -892,11 +905,23 @@ public struct HomeScreen: View {
       historyTab.page(visible: selectedTab == .history)
       chatTab.page(visible: selectedTab == .chat)
     }
+    .modifier(AppsPullFollow(door: appsDoor, onField: selectedTab == .field))
+    .modifier(AppsRecededCard(open: appsDoor.shelfOpen, screen: appsHeight, onBack: { closeAppsShelf() }))
+    .background { appsShelfLayer }
     .background { chatHooks }
     .background { metersHooks }
-    .overlay { bar }
+    .background { appsHooks }
+    .overlay(alignment: .top) { appsPour }
+    .overlay { barWhileNoShelf }
     .overlay { faceHoldOverlay }
     .overlay(alignment: .bottom) { chatNoteOverlay }
+    .overlay(alignment: .top) { appsDropOverlay }
+    .environment(\.appsIconSource, appsIconSource)
+    .fullScreenCover(isPresented: appsZoomShows) { appsZoomScreen }
+    .sheet(item: $appsAboutApp) { app in
+      AppsAboutSheet(about: appsAbout(app))
+        .presentationDetents([.medium])
+    }
     .background {
       GeometryReader { geo in
         Color.clear
@@ -947,6 +972,7 @@ public struct HomeScreen: View {
   private var fieldTab: some View {
     stage
       .ignoresSafeArea(.container, edges: [.top, .bottom])
+      .simultaneousGesture(appsFieldPull, including: appsCalm ? .all : .subviews)
   }
 
   private var historyTab: some View {
@@ -954,6 +980,7 @@ public struct HomeScreen: View {
       historyDesktops.need(need)
     }
     .environment(\.historyActs, historyActs)
+    .environment(\.topPull, appsTopPull)
     .safeAreaInset(edge: .bottom, spacing: 0) {
       Color.clear.frame(height: AppBar.clearance(homeInset: homeInset, stepper: history.stepperShowing || slotProject != nil || slotSession != nil))
     }
@@ -972,6 +999,7 @@ public struct HomeScreen: View {
       paneOpens: { key in bubbles.contains { $0.runKey == key } },
       nightRuns: chatNightRuns
     )
+    .environment(\.topPull, appsTopPull)
     .safeAreaInset(edge: .bottom, spacing: 0) {
       // a thread's composer takes the bar's place: no clearance under it
       Color.clear.frame(height: chatThread == nil ? AppBar.clearance(homeInset: homeInset, stepper: false) : 0)
@@ -1198,6 +1226,222 @@ public struct HomeScreen: View {
     apps.attach(client, home: home)
   }
 
+  // MARK: - MA-6d: the door to the apps
+
+  /// Nothing of the mock's account reaches the disk: its ledger is a value, as its sign-out is.
+  private static var appsCuesStore: AppsCuesStore? {
+    #if DEBUG
+      if ProcessInfo.processInfo.arguments.contains(MockAccount.argument) { return nil }
+    #endif
+    return AppsCuesStore(defaults: .standard)
+  }
+
+  private var appsAccount: String? {
+    #if DEBUG
+      if let mock { return mock.login }
+    #endif
+    return accountLogin
+  }
+
+  /// No sheet, menu or pushed screen stands: what the pull on Field and the first peek wait for.
+  private var appsCalm: Bool {
+    !searchOpen && !accountMenuOpen && selection == nil && !settingsSheetOpen && !agentProfilesOpen
+      && createSheet == nil && chatThread == nil && history.path.isEmpty
+      && !appsDoor.shelfOpen && appsDoor.zoomKey == nil
+  }
+
+  private var appsRecent: [IndexAppRow] {
+    AppsStripContent.of(reading: apps.reading, opened: appsDoor.cues.opened, here: Self.appsHere)?.recent ?? []
+  }
+
+  /// The door's readings, its two timers and the screen's width for the Stories row's circles.
+  private var appsHooks: some View {
+    GeometryReader { geo in
+      Color.clear
+        .onChange(of: geo.size.width, initial: true) { _, width in appsWidth = width }
+        .onChange(of: geo.size.height, initial: true) { _, height in appsHeight = height }
+    }
+    .onAppear { appsDoor.haptic = { InputHaptics.arm() } }
+    .onChange(of: appsAccount, initial: true) { _, account in appsDoor.adopt(account: account) }
+    .onChange(of: apps.reading, initial: true) { _, reading in
+      appsDoor.land(
+        reading, account: appsAccount, blocked: searchOpen || accountMenuOpen || appsDoor.zoomKey != nil, calm: appsCalm)
+    }
+    .onChange(of: appsCalm) { _, calm in appsDoor.tryPeek(calm: calm) }
+    .task(id: apps.reading.home) { await armAppsPreviews() }
+    .task { openShelfForStills() }
+    .task(id: appsDoor.peeking) {
+      guard appsDoor.peeking else { return }
+      try? await Task.sleep(for: .seconds(AppsPeek.lasts))
+      guard !Task.isCancelled else { return }
+      appsDoor.peekDone()
+    }
+    .task(id: appsDoor.drops.showing?.until) {
+      guard let until = appsDoor.drops.showing?.until else { return }
+      let wait = until.timeIntervalSinceNow
+      if wait > 0 { try? await Task.sleep(for: .seconds(wait)) }
+      guard !Task.isCancelled else { return }
+      appsDoor.expire()
+    }
+  }
+
+  private var appsPour: some View {
+    AppsPourLayer(door: appsDoor, recent: appsRecent, safeTop: safeTop)
+  }
+
+  /// The drop: never over the search sheet or the account menu, and it stands clear of the bar.
+  private var appsDropOverlay: some View {
+    ZStack(alignment: .top) {
+      if let drop = appsDoor.drops.showing, !searchOpen, !accountMenuOpen, appsDoor.zoomKey == nil {
+        AppsDropView(
+          drop: drop,
+          app: drop.foldKey.flatMap { key in apps.reading.apps.first { $0.foldKey == key } },
+          zoom: appsZoom,
+          // One app zooms open; a burst has no one app, so it opens the shelf.
+          onOpen: {
+            if let key = drop.foldKey { appsDoor.zoom(key) } else { openAppsShelf() }
+            appsDoor.dismissDrop()
+          },
+          onAway: { appsDoor.dismissDrop() }
+        )
+        .padding(.top, AppsDrop.top(safeTop: safeTop))
+        .transition(AppsDropView.transition(reduced: reduceMotion))
+      }
+    }
+    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+    .ignoresSafeArea(.container, edges: .top)
+  }
+
+  /// History's and Chat's root lists, overscrolled past their tops.
+  private var appsTopPull: TopPull {
+    let calm = appsCalm
+    return TopPull(
+      moved: { depth in if calm { appsDoor.moved(to: depth) } },
+      released: { finishAppsPull() })
+  }
+
+  /// Field's pull: decided once, then the finger's. Every other touch stays the swarm's and the circles'.
+  private var appsFieldPull: some Gesture {
+    DragGesture(minimumDistance: 1, coordinateSpace: .global)
+      .onChanged { value in
+        if appsFieldDrag == nil, AppsPull.fieldDecides(value.translation) {
+          let onCircle = AppsPull.onCircle(
+            start: value.startLocation, count: GodviewViewChoice.shown.count, width: appsWidth, safeTop: safeTop)
+          appsFieldDrag = AppsPull.fieldBegins(
+            start: value.startLocation, translation: value.translation, safeTop: safeTop,
+            reserve: GodviewStories.reserve(safeTop: safeTop), onCircle: onCircle)
+        }
+        if appsFieldDrag == true { appsDoor.moved(to: value.translation.height) }
+      }
+      .onEnded { _ in
+        if appsFieldDrag == true { finishAppsPull() }
+        appsFieldDrag = nil
+      }
+  }
+
+  /// Short of the commit everything springs back on the bar's spring; at it, the shelf opens.
+  private func finishAppsPull() {
+    withAnimation(reduceMotion ? nil : AppBar.motion) {
+      if appsDoor.released() { appsDoor.openShelf(showing: apps.reading.apps.map(\.foldKey)) }
+    }
+  }
+
+  private func openAppsShelf() {
+    withAnimation(reduceMotion ? nil : AppBar.motion) {
+      appsDoor.openShelf(showing: apps.reading.apps.map(\.foldKey))
+    }
+  }
+
+  private func closeAppsShelf() {
+    withAnimation(reduceMotion ? nil : AppBar.motion) { appsDoor.closeShelf() }
+  }
+
+  private func openApp(_ app: IndexAppRow) {
+    appsDoor.zoom(app.foldKey)
+  }
+
+  /// §8: open, the bar steps aside.
+  private var barWhileNoShelf: some View {
+    bar
+      .opacity(appsDoor.shelfOpen ? 0 : 1)
+      .allowsHitTesting(!appsDoor.shelfOpen)
+  }
+
+  /// Behind the tab, whose card recedes off it.
+  @ViewBuilder private var appsShelfLayer: some View {
+    if appsDoor.shelfOpen {
+      AppsShelfView(
+        reading: apps.reading, door: appsDoor, here: Self.appsHere, zoom: appsZoom, safeTop: safeTop,
+        onOpen: { openApp($0) }, onAbout: { appsAboutApp = $0 })
+    }
+  }
+
+  private var appsIconSource: AppsIconSource? {
+    appsPreviewsArmed ? AppsIconSource(previews: appsPreviews, sources: apps.reading.sources) : nil
+  }
+
+  private var appsZoomApp: IndexAppRow? {
+    appsDoor.zoomKey.flatMap { key in apps.reading.apps.first { $0.foldKey == key } }
+  }
+
+  private var appsZoomShows: Binding<Bool> {
+    Binding(get: { appsDoor.zoomKey != nil }, set: { if !$0 { appsDoor.unzoom() } })
+  }
+
+  private func appsAbout(_ app: IndexAppRow) -> AppsAbout {
+    AppsAbout.of(
+      app, agent: app.provider.flatMap { (link?.catalog ?? .empty).entry(for: AgentProvider(rawValue: $0))?.label },
+      sources: apps.reading.sources,
+      projects: apps.reading.projects, here: Self.appsHere)
+  }
+
+  /// The app's honest screen, before MA-5 (VF-PM's Q1): it zooms out of the icon it was opened from.
+  @ViewBuilder private var appsZoomScreen: some View {
+    if let app = appsZoomApp {
+      let sources = apps.reading.sources
+      AppsAppScreen(
+        app: app, honest: AppsHonest.of(app, sources: sources, here: Self.appsHere), about: appsAbout(app),
+        desktop: MadeAppFacts.desktop(MadeAppFacts.source(of: app, in: sources), here: Self.appsHere),
+        onClose: { appsDoor.unzoom() }
+      )
+      .environment(\.appsIconSource, appsIconSource)
+      .appsZoomDestination(sourceID: app.appKey, in: appsZoom, reduced: reduceMotion)
+    }
+  }
+
+  /// The previews come over the tailnet, through the one session that routes (VF-PM's Q5); a real fetch is owed on a
+  /// device (P6).
+  private func armAppsPreviews() async {
+    guard let make = await mesh.urlSessionProvider, let session = try? await make(.ephemeral) else {
+      appsPreviews.fetch = nil
+      appsPreviewsArmed = false
+      return
+    }
+    appsPreviews.fetch = { url in
+      let (data, response) = try await session.data(from: url)
+      guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw URLError(.badServerResponse) }
+      return data
+    }
+    appsPreviewsArmed = true
+  }
+
+  /// `-vf-apps-open` — the stills' door to the shelf, under `-vf-mock` alone (VF-PM's Q4).
+  private func openShelfForStills() {
+    #if DEBUG
+      if mock != nil, ProcessInfo.processInfo.arguments.contains(AppsFixtureDoor.openArgument) {
+        appsDoor.openShelf(showing: apps.reading.apps.map(\.foldKey))
+      }
+    #endif
+  }
+
+  private static var appsPreviewsDirectory: URL? {
+    #if DEBUG
+      if ProcessInfo.processInfo.arguments.contains(MockAccount.argument) { return nil }
+    #endif
+    return FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first?
+      .appendingPathComponent("vibefield-app-previews", isDirectory: true)
+  }
+
   /// The home's name in the meters' words (§9: "Read a minute ago, from studio").
   private var metersHomeName: String {
     #if DEBUG
@@ -1334,17 +1578,21 @@ public struct HomeScreen: View {
       },
       onLive: openLiveRow, onPast: openPastRow,
       onAct: { act in PhoneSearchWorld.act(act, state: &search, lens: &lens) },
-      // MA-6's seams (MA-D7): the Apps strip and Everything's Apps group. An icon's open and All apps arrive with the
-      // shelf (6e); until then both slots stand empty (`AppsShelfGate`).
+      // MA-6's seams (MA-D7): the Apps strip and Everything's Apps group, each of whose taps goes to the zoom or the shelf.
       appsStrip: {
-        if let strip = AppsStripContent.inSheet(reading: apps.reading, opened: [], here: Self.appsHere) {
-          AppsStripView(content: strip, onOpen: { _ in }, onAll: {})
+        if let strip = AppsStripContent.inSheet(reading: apps.reading, opened: appsDoor.cues.opened, here: Self.appsHere) {
+          AppsStripView(
+            content: strip, zoom: appsZoom, onOpen: { openApp($0) },
+            onAll: {
+              closeSearch()
+              openAppsShelf()
+            })
         }
       },
       appsGroup: {
         let words = searchQuery.trimmingCharacters(in: .whitespaces)
         if let group = AppsSearchGroup.inSheet(reading: apps.reading, words: words, here: Self.appsHere) {
-          AppsSearchGroupView(group: group, terms: content.terms, onOpen: { _ in })
+          AppsSearchGroupView(group: group, zoom: appsZoom, terms: content.terms, onOpen: { openApp($0) })
         }
       }
     )
@@ -1730,12 +1978,18 @@ public struct HomeScreen: View {
         .font(.system(size: AppBar.searchGlyph, weight: .medium))
         .foregroundStyle(ChromePalette.ink)
         .frame(width: AppBar.height, height: AppBar.height)
+        .appsDotRing(appsDoor.cues.dot)
         .contentShape(Circle())
     }
     .buttonStyle(.plain)
     .liquidGlassCircle()
     .glassID("search", in: barGlass)
+    // MA-6d — it rides the circle, never the morph into the search field
+    .overlay(alignment: .topTrailing) {
+      if appsDoor.cues.dot { AppsDotMark() }
+    }
     .accessibilityLabel("Search")
+    .accessibilityValue(appsDoor.cues.dot ? "a new app" : "")
   }
 
   /// The capsule, folded to the standing tab's glyph at the left — where the
@@ -3411,6 +3665,8 @@ public struct HomeScreen: View {
       // sign-out is the standing moving.
       if let mock {
         mock.signOut()
+        appsDoor.signedOut()
+        appsPreviews.signedOut()
         setAccountMenu(open: false)
         return
       }
@@ -3427,6 +3683,8 @@ public struct HomeScreen: View {
     // with the account, beside the mesh's own sweep — the one place every
     // sign-out passes, the welcome's "Another account?" included.
     historyDesktops.signedOut()
+    appsDoor.signedOut()
+    appsPreviews.signedOut()
     mesh.signOut()
     assembly.projects = .empty
     refold()

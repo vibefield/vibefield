@@ -1,4 +1,5 @@
 import FieldDesign
+import FieldHistory
 import FieldProduct
 import SwiftUI
 
@@ -341,6 +342,7 @@ struct ChatPage: View {
       }
       .padding(.bottom, 24)
     }
+    .readsTopPull()
   }
 
   /// IOS-12d (PC-D4 A; Q7) — Needs you heads the list while anything waits: one card per spark's item, oldest asked

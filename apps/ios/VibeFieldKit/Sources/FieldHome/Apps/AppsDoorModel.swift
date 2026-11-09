@@ -167,11 +167,25 @@ extension AppsPull {
 }
 
 /// What an empty Chat's night feeds the pull: it has no list to overscroll (ES-5c stands it in the list's place), so a
-/// drag of its own is decided once, as Field's is. RED: a stub.
+/// drag of its own is decided once, as Field's is: 12 of travel, and more than twice as far down as across.
 struct AppsNightDrag {
-  mutating func changed(_ translation: CGSize) -> CGFloat? { nil }
+  /// Undecided (nil), the door's (true) or the night's own (false), said once.
+  private var decided: Bool?
 
-  mutating func ended() -> Bool { false }
+  /// The depth to feed the pull, while the drag is the door's.
+  mutating func changed(_ translation: CGSize) -> CGFloat? {
+    if decided == nil, AppsPull.fieldDecides(translation) {
+      decided =
+        translation.height >= AppsPull.startTravel && translation.height > AppsPull.startRatio * abs(translation.width)
+    }
+    return decided == true ? translation.height : nil
+  }
+
+  /// Whether the drag that ended was the door's: then the pull lets go.
+  mutating func ended() -> Bool {
+    defer { decided = nil }
+    return decided == true
+  }
 }
 
 extension AppsDrop {

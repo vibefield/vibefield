@@ -48,9 +48,9 @@ struct AppsSearchGroup: Equatable {
 }
 
 /// MA-6's gate (VF-PM, 2026-11-09 13:07Z, A + B): nothing inert lands. Until 6e draws the shelf, an app's tap and
-/// **All apps** have nowhere to go, so the sheet mounts neither the strip nor the group. 6e's first green turns it.
+/// **All apps** had nowhere to go, so the sheet mounted neither the strip nor the group. The shelf is drawn now.
 enum AppsShelfGate {
-  static let drawn = false
+  static let drawn = true
 }
 
 extension AppsStripContent {
@@ -103,7 +103,7 @@ struct AppIconView: View {
         }
       }
       .frame(width: side, height: side)
-      .task(id: digest) { await want() }
+      .task(id: "\(digest ?? "")|\(source == nil ? 0 : 1)") { await want() }
       .onChange(of: held, initial: true) { _, bytes in image = bytes.flatMap(UIImage.init(data:)) }
       .accessibilityHidden(true)
   }
@@ -133,6 +133,7 @@ struct AppIconView: View {
 /// The strip above the switch: the page's section head over Recent's four across.
 struct AppsStripView: View {
   let content: AppsStripContent
+  let zoom: Namespace.ID
   let onOpen: (IndexAppRow) -> Void
   let onAll: () -> Void
 
@@ -175,6 +176,7 @@ struct AppsStripView: View {
       VStack(spacing: Self.nameGap) {
         AppIconView(app: app, side: AppsShelfChrome.icon)
           .opacity(content.away.contains(app.appKey) ? AppIcon.awayOpacity : 1)
+          .matchedTransitionSource(id: app.appKey, in: zoom)
         Text(app.title)
           .font(ChromeType.sans(AppsShelfChrome.nameSize, .semibold))
           .foregroundStyle(ChromePalette.inkSecondary)
@@ -192,6 +194,7 @@ struct AppsStripView: View {
 /// Everything's **Apps** group, first among its results, in the sheet's own rows.
 struct AppsSearchGroupView: View {
   let group: AppsSearchGroup
+  let zoom: Namespace.ID
   let terms: [String]
   let onOpen: (IndexAppRow) -> Void
 
@@ -216,6 +219,7 @@ struct AppsSearchGroupView: View {
   private func label(_ row: AppsSearchGroup.Row) -> some View {
     HStack(spacing: SearchSheet.rowParts) {
       AppIconView(app: row.app, side: SearchSheet.offerDisc)
+        .matchedTransitionSource(id: row.app.appKey, in: zoom)
         .opacity(row.away ? AppIcon.awayOpacity : 1)
       VStack(alignment: .leading, spacing: SearchSheet.rowStack) {
         Text(SearchSheet.marked(row.app.title, terms: terms, size: 16, weight: .semibold, ink: ChromePalette.ink))
