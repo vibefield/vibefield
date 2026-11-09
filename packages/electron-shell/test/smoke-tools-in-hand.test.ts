@@ -115,11 +115,45 @@ describe("the travel's timing, from the browser's own transition events (R13)", 
 });
 
 describe("the way back (§8: back over it 200 ms after it lands)", () => {
-  it("the fade-in 200 ms after the landing — a frame either way — passes; none, or late, is said", () => {
-    expect(judgeReturn(44371.3, 44587.5)).toEqual([]);
-    expect(judgeReturn(1000, 1000)).toEqual(["the bar came back 0 ms after the landing, not 200"]);
-    expect(judgeReturn(null, null)).toEqual(["the object never landed"]);
-    expect(judgeReturn(1000, null)).toEqual(["the bar never came back over the object"]);
+  const frames = Array.from({ length: 60 }, (_, i) => 1000 + (i * 1000) / 120);
+  const timer = (at: number, fired: number | null, ms = 200) => ({ at, ms, fired });
+
+  it("the fade-in that follows a 200 ms timer set at the landing passes, however late the host ran it", () => {
+    expect(judgeReturn(1000, 1216.7, frames, [timer(1004, 1208)])).toEqual([]);
+    // Item 45's own red: 242 ms at load 61, the timer late and the fade-in right behind it
+    expect(judgeReturn(1000, 1242, frames, [timer(1004, 1234)])).toEqual([]);
+  });
+
+  it("never early, never unscheduled, never another length", () => {
+    expect(judgeReturn(1000, 1000, frames, [timer(1004, 1204)])).toEqual([
+      "the bar came back 0 ms after the landing, not 200",
+    ]);
+    expect(judgeReturn(1000, 1216, frames, [])[0]).toMatch(/no 200 ms return was scheduled/);
+    expect(judgeReturn(1000, 1416, frames, [timer(1004, 1404, 400)])[0]).toMatch(
+      /no 200 ms return was scheduled/,
+    );
+  });
+
+  it("a timer set long after the landing, or a fade-in far from its timer, is said in frames", () => {
+    expect(judgeReturn(1000, 1316, frames, [timer(1100, 1300)])[0]).toMatch(
+      /no 200 ms return was scheduled/,
+    );
+    expect(judgeReturn(1000, 1300, frames, [timer(1004, 1204)])).toEqual([
+      "the bar came back 11 frames after its timer fired, not within 4",
+    ]);
+    expect(judgeReturn(1000, 1205, frames, [timer(1004, 1290)])).toEqual([
+      "the bar came back 85 ms before its timer fired",
+    ]);
+    expect(judgeReturn(1000, 1216, frames, [timer(1004, null)])).toEqual([
+      "the bar's return timer never fired",
+    ]);
+  });
+
+  it("no landing, or no return, is said", () => {
+    expect(judgeReturn(null, null, frames, [])).toEqual(["the object never landed"]);
+    expect(judgeReturn(1000, null, frames, [])).toEqual([
+      "the bar never came back over the object",
+    ]);
   });
 });
 

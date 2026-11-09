@@ -239,13 +239,60 @@ export function judgeTravel(t: TravelTiming): string[] {
   return problems;
 }
 
-/** The way back: the bar's fade-in began 200 ms after the object landed. */
-export function judgeReturn(landedAt: number | null, backAt: number | null): string[] {
+/** A timer the page set for the way back's length, read off the page's own `setTimeout` (the recorder's). */
+export interface ReturnTimerSeen {
+  readonly at: number;
+  readonly ms: number;
+  readonly fired: number | null;
+}
+
+/**
+ * The frames one link of the way back may take: the landing's commit to its effect setting the timer, and the timer's
+ * firing to the fade-in's start (React's commit, the next frame's style, the transition's start event). In frames, so
+ * the bound follows the host's own frame clock and a loaded run cannot move it.
+ */
+const RETURN_LINK_FRAMES = 4;
+
+/** The frames the page drew strictly between two moments. */
+const framesBetween = (frames: readonly number[], from: number, to: number): number =>
+  frames.filter((t) => t > from && t < to).length;
+
+/**
+ * The way back: the bar's fade-in follows a 200 ms timer set at the landing.
+ *
+ * Item 45: this judged the landing-to-fade-in gap by the wall clock with 40 ms of slack, and the host's own lateness used
+ * that slack up (217–242 ms at 120 Hz, 250 at 60, the same product each time; LANDED, the squeeze gate of 2026-10-19). What
+ * the product promises is the timer's length, so the length is judged exactly and the two links around it in frames. It
+ * still never comes back early, and a return nobody scheduled, or scheduled for another length, is red at any load.
+ */
+export function judgeReturn(
+  landedAt: number | null,
+  backAt: number | null,
+  frames: readonly number[],
+  timers: readonly ReturnTimerSeen[],
+): string[] {
   if (landedAt === null) return ["the object never landed"];
   if (backAt === null) return ["the bar never came back over the object"];
-  return near(backAt - landedAt, HAND_PLACE.backMs, SLACK_MS)
+  const after = backAt - landedAt;
+  if (after < HAND_PLACE.backMs - SLACK_MS)
+    return [`the bar came back ${after.toFixed(0)} ms after the landing, not 200`];
+  const timer = timers.find(
+    (t) =>
+      t.ms === HAND_PLACE.backMs &&
+      t.at >= landedAt - SLACK_MS &&
+      framesBetween(frames, landedAt, t.at) <= RETURN_LINK_FRAMES,
+  );
+  if (timer === undefined)
+    return [
+      `no ${HAND_PLACE.backMs} ms return was scheduled at the landing (${JSON.stringify(timers)})`,
+    ];
+  if (timer.fired === null) return ["the bar's return timer never fired"];
+  if (backAt < timer.fired - SLACK_MS)
+    return [`the bar came back ${(timer.fired - backAt).toFixed(0)} ms before its timer fired`];
+  const links = framesBetween(frames, timer.fired, backAt);
+  return links <= RETURN_LINK_FRAMES
     ? []
-    : [`the bar came back ${(backAt - landedAt).toFixed(0)} ms after the landing, not 200`];
+    : [`the bar came back ${links} frames after its timer fired, not within ${RETURN_LINK_FRAMES}`];
 }
 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
@@ -282,7 +329,7 @@ const READ_HAND = `(() => {
 /** Arm the page's recorder on the one element: every transition it and its rows run, and each frame's hand state. */
 const ARM_RECORDER = `(() => {
   const bar = document.querySelector("[data-selection-bar]");
-  const rec = { transitions: [], frames: [], on: true };
+  const rec = { transitions: [], frames: [], timers: [], on: true };
   globalThis.__vfDk12Rec?.stop?.();
   const where = (el) => el === bar ? "bar" : el?.getAttribute?.("data-face-row") ?? "other";
   const started = (e) => { if (e.target === bar || e.target.parentElement === bar) rec.transitions.push({ on: where(e.target), property: e.propertyName, start: e.timeStamp, end: null, elapsed: null, ended: null }); };
@@ -293,18 +340,25 @@ const ARM_RECORDER = `(() => {
   bar.addEventListener("transitionstart", started);
   bar.addEventListener("transitionend", ended);
   bar.addEventListener("transitioncancel", ended);
+  const setTimeoutBefore = globalThis.setTimeout;
+  globalThis.setTimeout = (fn, ms, ...rest) => {
+    if (ms !== ${HAND_PLACE.backMs}) return setTimeoutBefore(fn, ms, ...rest);
+    const timer = { at: performance.now(), ms, fired: null };
+    rec.timers.push(timer);
+    return setTimeoutBefore((...args) => { timer.fired = performance.now(); fn(...args); }, ms, ...rest);
+  };
   const step = (t) => {
     const a = globalThis.__vfDesk?.anchor();
     rec.frames.push({ t, held: a?.held === undefined ? "none" : a.held.landing ? "landing" : "held", shown: bar.getAttribute("data-shown") === "true" });
     if (rec.on && rec.frames.length < 2400) requestAnimationFrame(step);
   };
   requestAnimationFrame(step);
-  rec.stop = () => { rec.on = false; bar.removeEventListener("transitionstart", started); bar.removeEventListener("transitionend", ended); bar.removeEventListener("transitioncancel", ended); };
+  rec.stop = () => { rec.on = false; globalThis.setTimeout = setTimeoutBefore; bar.removeEventListener("transitionstart", started); bar.removeEventListener("transitionend", ended); bar.removeEventListener("transitioncancel", ended); };
   globalThis.__vfDk12Rec = rec;
   return true;
 })()`;
 
-const READ_RECORDER = `(() => { const r = globalThis.__vfDk12Rec; return r === undefined ? null : { transitions: r.transitions, frames: r.frames }; })()`;
+const READ_RECORDER = `(() => { const r = globalThis.__vfDk12Rec; return r === undefined ? null : { transitions: r.transitions, frames: r.frames, timers: r.timers }; })()`;
 
 /** The transform transition the one element declares now (its length and curve), if it is running one. */
 const DECLARED_TRAVEL = `(() => {
@@ -660,6 +714,7 @@ export async function toolsInHandRows(d: HandRowsDriver): Promise<string[]> {
     const back = await js<{
       transitions: TransitionSeen[];
       frames: { t: number; held: string; shown: boolean }[];
+      timers: ReturnTimerSeen[];
     } | null>(READ_RECORDER);
     const frames = back?.frames ?? [];
     const flew = frames.findIndex((f) => f.held === "landing");
@@ -674,12 +729,19 @@ export async function toolsInHandRows(d: HandRowsDriver): Promise<string[]> {
     );
     if (flew < 0) problems.push(row("Done put it down with no flight home"));
     if (!hiddenWhileFlying) problems.push(row("the bar showed while the object flew home"));
-    problems.push(...judgeReturn(landed?.t ?? null, fadeIn?.start ?? null).map(row));
+    problems.push(
+      ...judgeReturn(
+        landed?.t ?? null,
+        fadeIn?.start ?? null,
+        frames.map((f) => f.t),
+        back?.timers ?? [],
+      ).map(row),
+    );
     const barBack = await js<{ cells: string[] } | null>(
       `(() => { const b = document.querySelector("[data-selection-bar]"); return b === null ? null : { cells: [...b.querySelectorAll('[data-face-row="selection"] [data-act]')].map((e) => e.getAttribute("data-act")) }; })()`,
     );
     say(
-      `SMOKE_CANVAS_HAND_BACK ${JSON.stringify({ specimen: s.name, hiddenWhileFlying, landedAt: landed?.t ?? null, fadeInAt: fadeIn?.start ?? null, backMs: landed !== undefined && fadeIn !== undefined ? fadeIn.start - landed.t : null, bar: barBack?.cells ?? null })}`,
+      `SMOKE_CANVAS_HAND_BACK ${JSON.stringify({ specimen: s.name, hiddenWhileFlying, landedAt: landed?.t ?? null, fadeInAt: fadeIn?.start ?? null, backMs: landed !== undefined && fadeIn !== undefined ? fadeIn.start - landed.t : null, timers: back?.timers ?? null, bar: barBack?.cells ?? null })}`,
     );
     await js("globalThis.__vfDk12Rec?.stop?.()");
   }
