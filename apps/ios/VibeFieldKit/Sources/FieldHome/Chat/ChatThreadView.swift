@@ -27,6 +27,8 @@ struct ChatThreadView: View {
   @State private var opened: Set<String> = []
   @State private var scroll = ScrollPosition(edge: .bottom)
   @State private var column: CGFloat = 0
+  /// IOS-12f's M-f2 — the page above the composer: how tall @'s box may stand.
+  @State private var atRoom: CGFloat = 0
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
   /// Nonisolated: the column's width is reckoned from it in `onGeometryChange`'s Sendable transform (the 11-06 rule).
@@ -61,14 +63,47 @@ struct ChatThreadView: View {
 
   private var name: String { entry.spark.name }
 
+  /// IOS-12f's M-f2 — @'s box, while an agent's menu or an @ stands.
+  private func atSurface(_ place: ChatAtPlace?) -> ChatAtView? {
+    let content: ChatAtContent
+    if let menu = model.menu {
+      content = .menu(rows: model.menuRows(menu), effort: model.menuEffort(menu))
+    } else if let place {
+      content = .list(model.atList(place, entry: entry))
+    } else {
+      return nil
+    }
+    return ChatAtView(
+      content: content, room: max(atRoom - ChatAtView.foot, 0),
+      onAgent: { row in
+        guard let place else { return }
+        Task { await model.take(row, at: place) }
+      },
+      onSession: { row in
+        guard let place else { return }
+        model.take(row, at: place)
+      },
+      onModel: { model.chooseModel($0) },
+      onEffort: { model.chooseEffort($0) })
+  }
+
   var body: some View {
     TimelineView(.periodic(from: .now, by: 60)) { context in
       let now = Int64((context.date.timeIntervalSince1970 * 1000).rounded())
       page(model.flow(entry, now: now))
     }
+    // a tap outside @'s box folds it and keeps what was typed; the flow takes its touches again once it has
+    .overlay {
+      if model.menu != nil || model.atPlace(of: entry.spark) != nil {
+        Color.clear.contentShape(Rectangle()).onTapGesture { model.foldAt() }
+      }
+    }
+    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { atRoom = $0 }
     .background(ChromePalette.paper.ignoresSafeArea())
     .safeAreaInset(edge: .bottom, spacing: 0) {
-      let card = ChatNeeds.thread(entry, answering: feed.answering, reduced: reduceMotion)
+      let card = ChatNeeds.thread(
+        entry, answering: feed.answering, reduced: reduceMotion, handles: model.handles(entry))
+      let place = model.atPlace(of: entry.spark)
       VStack(spacing: 12) {
         if let card {
           ChatNeedsCardView(
@@ -85,7 +120,9 @@ struct ChatThreadView: View {
           .transition(reduceMotion ? .opacity : .opacity.combined(with: .offset(y: 8)))
         }
         ChatComposer(
-          draft: $model.draft, name: name, away: away, busy: model.busy, note: model.sendNote,
+          parts: $model.parts, caret: $model.caret, name: name, away: away, busy: model.busy, note: model.sendNote,
+          pending: place.map { "@\($0.query)" }, at: atSurface(place),
+          onChip: { offset in Task { await model.openMenu(at: offset) } },
           onSend: { Task { await model.send(entry, away: away) } })
       }
       .animation(reduceMotion ? .easeInOut(duration: 0.12) : .easeOut(duration: 0.24), value: card?.id)
@@ -95,12 +132,26 @@ struct ChatThreadView: View {
     .onAppear {
       model.open(device: entry.spark.device)
       #if DEBUG
-        // the stills under `-vf-mock`: a held draft stands as typed
-        if let words = ChatFixtureDoor.draft, model.draft.isEmpty { model.draft = words }
+        // the stills under `-vf-mock`: a held draft stands as typed, the caret at its end, so an @ in it opens the list
+        if let words = ChatFixtureDoor.draft, model.parts.isEmpty {
+          model.draft = words
+          model.caret = words.utf16.count
+        }
+        if let parts = ChatFixtureDoor.draftParts, model.parts.isEmpty { model.parts = parts }
+        if ChatFixtureDoor.openAgentMenu { Task { await model.openMenu(at: ChatFixtureDoor.agentChipOffset) } }
       #endif
     }
+    .task { await model.readSets(on: entry.spark) }
     .onDisappear { model.close() }
-    .onChange(of: feed.doorTurn) { model.redial(device: entry.spark.device) }
+    .onChange(of: model.atOffset) { _, offset in
+      model.atMoved()
+      if offset != nil { Task { await model.readSets(on: entry.spark) } }
+    }
+    .onChange(of: model.parts) { model.partsMoved() }
+    .onChange(of: feed.doorTurn) {
+      model.redial(device: entry.spark.device)
+      Task { await model.readSets(on: entry.spark) }
+    }
     .onChange(of: model.reading) { model.settleRecord() }
   }
 

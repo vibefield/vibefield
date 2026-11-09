@@ -62,6 +62,8 @@ struct ChatThreadTests {
             "state": .string(state), "queued": .bool(true),
           ])
         }
+      case "agents.profileSets.list": return ChatFixtureDoor.fixture("agents-profile-sets.meters") ?? .null
+      case "agent.models": return ChatFixtureDoor.fixture("agent-models.valid") ?? .null
       default:
         return .null
       }
@@ -308,9 +310,12 @@ struct ChatThreadTests {
     #expect(outcome == .tooLarge)
     #expect(!stood)
     #expect(ChatThreadWords.sendNote(.tooLarge, name: "Vela") == "Not sent — a message holds 32,000 characters at most")
-    #expect(ChatSend.draftAfter(sent: "Look", now: "Look again") == " again")
-    #expect(ChatSend.draftAfter(sent: "Look", now: "Look") == "")
-    #expect(ChatSend.draftAfter(sent: "Look", now: "Lo0k") == "Lo0k")
+    // re-read at IOS-12f's M-f2 (the 02:24:16Z ruling): the draft is parts now, and what stays has its leading space
+    // trimmed, as the Mac's `draftAfterSend` has always had it
+    let sent: [ChatDraftPart] = [.text("Look")]
+    #expect(ChatDraft.after(sent: sent, now: [ChatDraftPart.text("Look again")]) == [ChatDraftPart.text("again")])
+    #expect(ChatDraft.after(sent: sent, now: [ChatDraftPart.text("Look")]).isEmpty)
+    #expect(ChatDraft.after(sent: sent, now: [ChatDraftPart.text("Lo0k")]) == [ChatDraftPart.text("Lo0k")])
   }
 
   @Test("Q7: while its desktop is away nothing is said; the draft waits under its line, and goes as typed after")
@@ -453,5 +458,149 @@ struct ChatThreadTests {
   func bubbleLabel() {
     #expect(ChatThreadWords.bubble("Look at it", receipt: ChatReceipt("Delivered")) == "Look at it, Delivered")
     #expect(ChatThreadWords.bubble("Look at it", receipt: nil) == "Look at it")
+  }
+
+  // MARK: - IOS-12f's M-f2: the draft and @
+
+  static let sessionChip = ChatDraftChip.session(
+    ChatSessionChip(
+      id: "session:run-1", session: "run-1", agent: "agent-a", label: "Agent A", handle: "vibe-field",
+      project: "vibe-field"))
+
+  @Test("M-f2: a send carries its chips as spans of its words, the bubble holds them, and they leave the draft")
+  func sendCarriesChips() async throws {
+    let door = Door()
+    let feed = await heard(door)
+    let vela = try entry(Self.vela, in: entries(feed))
+    let thread = ChatThread(spark: Self.vela, feed: feed, requestId: { "say-test-00000001" })
+    var standing: [ChatPendingSay] = []
+    door.atSay = { standing = feed.sends.of(Self.vela) }
+    thread.parts = [.text("Ask "), .chip(Self.sessionChip), .text(" what changed")]
+    let message = ChatDraft.message(thread.parts)
+    let outcome = await thread.send(vela, away: nil)
+    guard case .queued(_)? = outcome else {
+      Issue.record("the send was not queued: \(String(describing: outcome))")
+      return
+    }
+    let params = door.calls.first { $0.method == SparkSay.method }?.params
+    let text = params?["text"]?.stringValue
+    #expect(text == message.text)
+    let spans = params?["chips"]?.arrayValue ?? []
+    #expect(spans.count == 1)
+    let stood = standing.first?.chips
+    #expect(stood == message.chips)
+    #expect(thread.parts.isEmpty)
+  }
+
+  @Test("M-f2 Q2: @ opens for a spark on the home, and on another desktop it types as an @")
+  func atOnTheHomeAlone() async throws {
+    let door = Door()
+    let feed = await heard(door)
+    let listed = try entries(feed)
+    let vela = try entry(Self.vela, in: listed)
+    let kiwi = try entry(Self.kiwi, in: listed)
+    let thread = ChatThread(spark: Self.vela, feed: feed)
+    thread.draft = "ask @co"
+    thread.caret = 7
+    let here = thread.atPlace(of: vela.spark)
+    #expect(here == ChatAtPlace(index: 0, at: 4, query: "co", offset: 4))
+    let there = thread.atPlace(of: kiwi.spark)
+    #expect(there == nil)
+    thread.caret = 2
+    let off = thread.atPlace(of: vela.spark)
+    #expect(off == nil)
+  }
+
+  @Test("M-f2: a session taken stands where the @ was, the caret past it and its space")
+  func takeSession() async throws {
+    let door = Door()
+    let feed = await heard(door)
+    let vela = try entry(Self.vela, in: entries(feed))
+    let thread = ChatThread(spark: Self.vela, feed: feed)
+    thread.draft = "ask @ve now"
+    thread.caret = 7
+    let place = try #require(thread.atPlace(of: vela.spark))
+    let row = ChatAtSessionRow(
+      id: "session:run-1", session: "run-1", agent: "agent-a", label: "Agent A", handle: "vibe-field",
+      project: "vibe-field", word: .working)
+    thread.take(row, at: place)
+    #expect(thread.parts == [ChatDraftPart.text("ask "), .chip(Self.sessionChip), .text(" now")])
+    #expect(thread.caret == 6)
+    let after = thread.atPlace(of: vela.spark)
+    #expect(after == nil)
+  }
+
+  @Test("M-f2: a tap outside folds the list and keeps the words, until the caret stands on another @")
+  func foldHolds() async throws {
+    let door = Door()
+    let feed = await heard(door)
+    let vela = try entry(Self.vela, in: entries(feed))
+    let thread = ChatThread(spark: Self.vela, feed: feed)
+    thread.draft = "@"
+    thread.caret = 1
+    thread.foldAt()
+    thread.atMoved()
+    let folded = thread.atPlace(of: vela.spark)
+    #expect(folded == nil)
+    #expect(thread.draft == "@")
+    thread.draft = "x @"
+    thread.caret = 3
+    thread.atMoved()
+    let open = thread.atPlace(of: vela.spark)
+    #expect(open == ChatAtPlace(index: 0, at: 2, query: "", offset: 2))
+  }
+
+  @Test("M-f2 Q4: an agent taken opens its menu, a model chosen is its chip's, and the chip gone folds the menu")
+  func agentMenu() async throws {
+    let door = Door()
+    let feed = await heard(door)
+    let vela = try entry(Self.vela, in: entries(feed))
+    let thread = ChatThread(spark: Self.vela, feed: feed)
+    thread.draft = "@"
+    thread.caret = 1
+    let place = try #require(thread.atPlace(of: vela.spark))
+    let row = ChatAtAgentRow(
+      id: "agent:agent-a:native", agent: "agent-a", label: "Agent A",
+      profile: ChatAtProfile(id: "native", name: "This Mac"), pill: "This Mac")
+    await thread.take(row, at: place)
+    let menu = try #require(thread.menu)
+    #expect(menu.offset == 0)
+    var modelId: String?
+    for each in thread.menuRows(menu) {
+      if case .model(let id?, _, _) = each {
+        modelId = id
+        break
+      }
+    }
+    let id = try #require(modelId)
+    thread.chooseModel(id)
+    let chosen = try #require(thread.menu)
+    let selected = chosen.chip.model?.selection?.modelId
+    #expect(selected == id)
+    let first = thread.parts.first
+    #expect(first == ChatDraftPart.chip(.agent(chosen.chip)))
+    thread.partsMoved()
+    #expect(thread.menu == chosen)
+    thread.parts = []
+    thread.partsMoved()
+    #expect(thread.menu == nil)
+  }
+
+  @Test("M-f2 Q3: @ reads the runs of the spark's own desktop, and says it is reading until the board is live")
+  func atBoard() async throws {
+    let door = Door()
+    let feed = await heard(door)
+    let vela = try entry(Self.vela, in: entries(feed))
+    guard case .reading = feed.atBoard(of: vela.spark) else {
+      Issue.record("the board was read before it was live")
+      return
+    }
+    let row = try ChatFeedTests.row(spark: nil)
+    feed.board([row], live: true)
+    guard case .read(let runs) = feed.atBoard(of: vela.spark) else {
+      Issue.record("the live board was not read")
+      return
+    }
+    #expect(runs.count == (row.device == vela.spark.device ? 1 : 0))
   }
 }

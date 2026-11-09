@@ -4,24 +4,33 @@ import SwiftUI
 // IOS-12c (PC-D3 A; DESIGN.md §8 "The phone's Chat" → the composer, with its dated notes of 2026-11-06) — THE THREAD'S
 // COMPOSER, in the bar's place (in a thread the bar steps aside, as Messages does): the field, 48 tall, 16 from the
 // sides and 21 from the foot, over the keys 10 and 8; the draft 17 regular on one line, "Message ‹name›…", growing to
-// five; and Send (inverted) once there are words. Return sends (the line break it types is the press): no pane stands
-// in front of you, so nothing waits for a second Return. Words alone until IOS-12f (@ with it); no drawn mic and no +
-// yet (they come together, after the 0.9 build). The field is prose: the system's own autocorrection and punctuation,
-// unlike the terminal's composer. While the spark's desktop is away the draft waits under its line and Send is not
-// offered (Q7).
+// five; and Send (inverted) once there are words. Return sends: no pane stands in front of you, so nothing waits for a
+// second Return. No drawn mic and no + yet (they come together, after the 0.9 build). While the spark's desktop is away
+// the draft waits under its line and Send is not offered (Q7).
+// IOS-12f's M-f2: the draft holds words and chips (`ChatDraftField`, where the field's prose traits and Return now
+// live), and @'s box stands over the field, its foot 8 above it.
 
 struct ChatComposer: View {
-  @Binding var draft: String
+  @Binding var parts: [ChatDraftPart]
+  @Binding var caret: Int?
   let name: String
   let away: ChatAway?
   /// A send or a wake holds the thread: Send waits.
   let busy: Bool
   /// The last send not taken, in its words, until the next send.
   let note: String?
+  /// The @ still being typed, as typed: a mention in progress is not a message.
+  let pending: String?
+  /// @'s box, while an @ or an agent's menu stands.
+  let at: ChatAtView?
+  /// A chip was tapped, at its place in the draft.
+  let onChip: (Int) -> Void
   let onSend: () -> Void
 
-  @FocusState private var typing: Bool
+  @State private var typing = false
+  @State private var fieldHeight = ChatDraftField.oneLine
   @State private var homeInset: CGFloat = 0
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
   static let height: CGFloat = 48
   static let side: CGFloat = 16
@@ -30,7 +39,7 @@ struct ChatComposer: View {
   static let send: CGFloat = 36
 
   private var sendable: Bool {
-    !draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && away == nil
+    away == nil && ChatDraft.sendable(parts, pending: pending)
   }
 
   var body: some View {
@@ -48,24 +57,15 @@ struct ChatComposer: View {
           .padding(.horizontal, 16)
       }
       HStack(alignment: .bottom, spacing: 8) {
-        TextField("Message \(name)…", text: $draft, axis: .vertical)
-          .font(ChromeType.sans(17))
-          .foregroundStyle(ChromePalette.ink)
-          .lineLimit(1...5)
-          .focused($typing)
-          .submitLabel(.send)
-          .onSubmit(send)
-          // Return sends: a field that grows types a line break for it, so ONE break typed at a time is the press (a
-          // paste keeps its breaks), and the break leaves the draft
-          .onChange(of: draft) { old, new in
-            guard let at = Self.typedBreak(old, new) else { return }
-            draft.remove(at: at)
-            send()
-          }
-          .padding(.vertical, 13)
-          .padding(.leading, 18)
-          .padding(.trailing, sendable ? 4 : 18)
-          .frame(minHeight: Self.height)
+        ChatDraftField(
+          parts: $parts, caret: $caret, height: $fieldHeight, typing: $typing, placeholder: "Message \(name)…",
+          onReturn: { send() }, onChip: onChip
+        )
+        .frame(height: fieldHeight)
+        .padding(.vertical, 11)
+        .padding(.leading, 18)
+        .padding(.trailing, sendable ? 4 : 18)
+        .frame(minHeight: Self.height)
         if sendable {
           Button(action: send) {
             FieldGlyph(.arrow, size: 18)
@@ -90,6 +90,17 @@ struct ChatComposer: View {
         RoundedRectangle(cornerRadius: Self.height / 2, style: .continuous)
           .strokeBorder(ChromePalette.cardHairline, lineWidth: 1)
       )
+      .overlay(alignment: .top) {
+        if let at {
+          at
+            .alignmentGuide(.top) { $0[.bottom] + ChatAtView.foot }
+            .transition(
+              reduceMotion
+                ? .opacity
+                : .opacity.combined(with: .offset(y: 6)).combined(with: .scale(scale: 0.97, anchor: .bottom)))
+        }
+      }
+      .animation(reduceMotion ? .easeInOut(duration: 0.12) : .easeOut(duration: 0.24), value: at != nil)
       .animation(.easeOut(duration: 0.2), value: sendable)
     }
     .padding(.horizontal, typing ? Self.sideTyping : Self.side)
@@ -105,18 +116,5 @@ struct ChatComposer: View {
   private func send() {
     guard sendable, !busy else { return }
     onSend()
-  }
-
-  /// Where Return typed its one line break into `new`, or nil: `new` is `old` with a single "\n" put in.
-  static func typedBreak(_ old: String, _ new: String) -> String.Index? {
-    guard new.count == old.count + 1 else { return nil }
-    var o = old.startIndex
-    var n = new.startIndex
-    while o < old.endIndex, old[o] == new[n] {
-      o = old.index(after: o)
-      n = new.index(after: n)
-    }
-    guard new[n] == "\n", new[new.index(after: n)...] == old[o...] else { return nil }
-    return n
   }
 }

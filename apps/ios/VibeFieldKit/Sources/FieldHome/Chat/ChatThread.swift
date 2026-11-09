@@ -127,13 +127,12 @@ enum ChatSend {
   static func reason(_ error: any Error) -> String {
     (error as? FieldProductError)?.message ?? "\(error)"
   }
+}
 
-  /// What is left in the draft once `sent` is queued (`draftAfterSend`): what it carried leaves, and what was typed
-  /// after it meanwhile stays. A draft changed within what was sent stays whole.
-  static func draftAfter(sent: String, now: String) -> String {
-    guard now.hasPrefix(sent) else { return now }
-    return String(now.dropFirst(sent.count))
-  }
+/// IOS-12f's M-f2 — an agent's menu in @'s box: the chip it chooses for, and where that chip stands in the draft.
+struct ChatAgentMenu: Equatable, Sendable {
+  let offset: Int
+  let chip: ChatAgentChip
 }
 
 // MARK: - The words
@@ -280,8 +279,20 @@ final class ChatThread {
   private(set) var headNote: String?
   /// What the composer says of the last send not taken, until the next send.
   private(set) var sendNote: String?
-  var draft = ""
+  /// IOS-12f's M-f2 — the draft: its runs of words and the chips set into them (`ChatDraft`). The field draws these.
+  var parts: [ChatDraftPart] = []
+  /// Where the caret stands, counted as `ChatDraft` counts it; nil while the field holds none.
+  var caret: Int?
+  /// IOS-12f's M-f2 — the home's Agent Profiles, as @ last read them (each @ reads them again).
+  private(set) var sets: ChatAtReading<[AgentProfileSet]> = .reading
+  /// An agent's menu, standing in @'s box.
+  private(set) var menu: ChatAgentMenu?
+  /// Each agent's picker under a profile, as read (`agent.models`).
+  private(set) var pickers: [String: ModelsReading] = [:]
+  /// The @ a tap outside folded, by its place in the draft, until the caret moves off it.
+  private var folded: Int?
 
+  @ObservationIgnored private var setsAsk = 0
   @ObservationIgnored private let feed: ChatFeed
   @ObservationIgnored private let requestId: () -> String
   @ObservationIgnored private let clock: () -> Date
@@ -357,7 +368,10 @@ final class ChatThread {
   /// and Send is not offered), or with no words. Answers what it came to, or nil.
   @discardableResult
   func send(_ entry: SparkEntry, away: ChatAway?, words: String? = nil) async -> ChatSendOutcome? {
-    let text = words ?? draft
+    let sent = parts
+    let message = words.map { ChatDraftMessage(text: $0, chips: []) } ?? ChatDraft.message(sent)
+    let text = message.text
+    let chips = message.chips
     guard !busy, away == nil, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
     busy = true
     sendNote = nil
@@ -371,17 +385,19 @@ final class ChatThread {
       needsWake: needsWake,
       wake: { try await feed.wake(spark) },
       say: { text, id in
-        try await feed.say(SparkSayParams(spark: spark.id, text: text, requestId: id, device: spark.device))
+        try await feed.say(
+          SparkSayParams(
+            spark: spark.id, text: text, requestId: id, device: spark.device, chips: chips.isEmpty ? nil : chips))
       },
       sending: { id in
-        let say = ChatPendingSay(requestId: id, text: text, chips: [], at: at, state: needsWake ? "waking" : nil)
+        let say = ChatPendingSay(requestId: id, text: text, chips: chips, at: at, state: needsWake ? "waking" : nil)
         feed.stand(spark.id, say)
       })
     let outcome = await ChatSend.send(deps, text: text, requestId: id)
     busy = false
     if case .queued(let receipt) = outcome {
       feed.settle(spark.id, id, state: receipt.state)
-      if words == nil { draft = ChatSend.draftAfter(sent: text, now: draft) }
+      if words == nil { parts = ChatDraft.after(sent: sent, now: parts) }
     } else {
       feed.settle(spark.id, id, state: nil)
     }
@@ -403,6 +419,168 @@ final class ChatThread {
     }
     waking = false
     busy = false
+  }
+
+  // MARK: IOS-12f's M-f2 — the draft and @ (DESIGN.md §8 "The phone's Chat")
+
+  /// The draft's words alone.
+  var draft: String {
+    get { ChatDraft.typed(parts) }
+    set { parts = ChatDraft.normalized([.text(newValue)]) }
+  }
+
+  /// Where the @ being typed stands in the draft, wherever the spark lives: the place the list follows.
+  var atOffset: Int? { ChatDraft.place(parts, caret: caret)?.offset }
+
+  /// The @ @'s list answers, or nil: only for a spark on the home (Q2: elsewhere an @ types as an @), and not one a
+  /// tap outside folded.
+  func atPlace(of spark: SparkSummary) -> ChatAtPlace? {
+    guard feed.isHome(spark), let place = ChatDraft.place(parts, caret: caret), place.offset != folded else {
+      return nil
+    }
+    return place
+  }
+
+  /// The caret moved on or off an @: a tap's fold holds only for the @ it folded.
+  func atMoved() {
+    if folded != atOffset { folded = nil }
+  }
+
+  /// A tap outside: the list or the menu folds, and what was typed stays.
+  func foldAt() {
+    menu = nil
+    folded = atOffset
+  }
+
+  /// The home's Agent Profiles, read again. What was read stands while they are asked for.
+  func readSets(on spark: SparkSummary) async {
+    guard feed.isHome(spark) else { return }
+    feed.wantLabels()
+    setsAsk += 1
+    let ask = setsAsk
+    if case .failed = sets { sets = .reading }
+    do {
+      let read = try await feed.profileSets()
+      if ask == setsAsk { sets = .read(read) }
+    } catch {
+      if ask == setsAsk { sets = .failed }
+    }
+  }
+
+  static func atSpark(_ entry: SparkEntry) -> ChatAtSpark {
+    ChatAtSpark(
+      id: entry.spark.id, name: entry.spark.name, profiles: entry.spark.profiles, run: entry.run?.runtimeRunId)
+  }
+
+  /// @'s list for this @.
+  func atList(_ place: ChatAtPlace, entry: SparkEntry) -> ChatAtList {
+    ChatAt.list(
+      spark: Self.atSpark(entry), query: place.query, sets: sets, board: feed.atBoard(of: entry.spark),
+      labels: feed.labels)
+  }
+
+  /// The handles @ gives this spark's sessions, for the card that waits on you (empty until they are read).
+  func handles(_ entry: SparkEntry) -> [String: String] {
+    ChatAt.handles(spark: Self.atSpark(entry), board: feed.atBoard(of: entry.spark), sets: sets)
+  }
+
+  /// An agent's row taken: its chip stands where the @ was, and the list turns into its menu.
+  func take(_ row: ChatAtAgentRow, at place: ChatAtPlace) async {
+    let chip = ChatAgentChip(
+      id: row.id, agent: row.agent, label: row.label, profile: row.profile, named: row.pill != nil)
+    set(.agent(chip), at: place)
+    menu = ChatAgentMenu(offset: place.offset, chip: chip)
+    await readPicker(chip)
+  }
+
+  /// A session's row taken: its chip stands where the @ was, and the list folds with the caret past it.
+  func take(_ row: ChatAtSessionRow, at place: ChatAtPlace) {
+    set(
+      .session(
+        ChatSessionChip(
+          id: row.id, session: row.session, agent: row.agent, label: row.label, handle: row.handle,
+          project: row.project)),
+      at: place)
+  }
+
+  private func set(_ chip: ChatDraftChip, at place: ChatAtPlace) {
+    let end = place.at + 1 + place.query.utf16.count
+    parts = ChatDraft.splice(parts, index: place.index, start: place.at, end: end, chip: chip)
+    caret = place.offset + 2
+  }
+
+  /// A tap on an agent's chip opens its menu again. A session's chip has none.
+  func openMenu(at offset: Int) async {
+    guard case .agent(let chip)? = ChatDraft.chip(parts, at: offset)?.chip else { return }
+    menu = ChatAgentMenu(offset: offset, chip: chip)
+    await readPicker(chip)
+  }
+
+  /// The draft moved: the menu stands only while its chip does.
+  func partsMoved() {
+    guard let menu else { return }
+    if case .agent(let chip)? = ChatDraft.chip(parts, at: menu.offset)?.chip, chip == menu.chip { return }
+    self.menu = nil
+  }
+
+  private static func pickerKey(_ chip: ChatAgentChip) -> String { "\(chip.agent)\u{1F}\(chip.profile.id)" }
+
+  /// The agent's picker, read once per agent and profile; a read that failed is asked again the next time.
+  private func readPicker(_ chip: ChatAgentChip) async {
+    let key = Self.pickerKey(chip)
+    if case .failed? = pickers[key] { pickers[key] = nil }
+    guard pickers[key] == nil else { return }
+    pickers[key] = .reading
+    do {
+      pickers[key] = .read(try await feed.models(provider: chip.agent, profileSet: chip.profile.id))
+    } catch {
+      pickers[key] = .failed(NewSparkSheet.words(error))
+    }
+  }
+
+  private func model(_ id: String?, of chip: ChatAgentChip) -> AgentModelChoice? {
+    guard case .read(let answer)? = pickers[Self.pickerKey(chip)] else { return nil }
+    return answer.catalog?.models.first { $0.id == id }
+  }
+
+  /// The menu's rows: New spark's menu for the one agent.
+  func menuRows(_ menu: ChatAgentMenu) -> [AgentMenuRow] {
+    let chip = menu.chip
+    return NewSpark.menu(
+      [SparkAgent(id: chip.agent, label: chip.label, takes: true, why: nil)], chosen: chip.agent,
+      picker: pickers[Self.pickerKey(chip)], selection: chip.model?.selection,
+      under: chip.named ? chip.profile.name : nil)
+  }
+
+  /// Effort, under a chosen model that has one.
+  func menuEffort(_ menu: ChatAgentMenu) -> EffortChoice? {
+    let selection = menu.chip.model?.selection
+    return NewSpark.effort(model(selection?.modelId, of: menu.chip), selection)
+  }
+
+  /// A model of the picker, or nil for the agent's own.
+  func chooseModel(_ id: String?) {
+    choose(id.map { AgentModelSelection(modelId: $0) })
+  }
+
+  func chooseEffort(_ value: String) {
+    guard let chip = menu?.chip, let selection = chip.model?.selection,
+      let control = model(selection.modelId, of: chip)?.effort
+    else { return }
+    var controls = selection.controls
+    controls[control.id] = value
+    choose(AgentModelSelection(modelId: selection.modelId, controls: controls, custom: selection.custom))
+  }
+
+  /// The chip takes the choice, in the draft and in the menu together.
+  private func choose(_ selection: AgentModelSelection?) {
+    guard let menu, let found = ChatDraft.chip(parts, at: menu.offset) else { return }
+    var chip = menu.chip
+    chip.model = selection.map {
+      ChatChipModel(words: NewSpark.modelWords(model($0.modelId, of: chip), $0), selection: $0)
+    }
+    self.menu = ChatAgentMenu(offset: menu.offset, chip: chip)
+    parts[found.index] = .chip(.agent(chip))
   }
 
   /// An ISO-8601 instant with milliseconds, as the record writes one.

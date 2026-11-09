@@ -316,6 +316,49 @@
       return ProcessInfo.processInfo.arguments.first { $0.hasPrefix(flag) }.map { String($0.dropFirst(flag.count)) }
     }
 
+    /// IOS-12f's M-f2 — @'s sessions for the stills: one for each agent the first profile signs in, out of the
+    /// contracts' own copies, so no agent is named here. The first shares its project with the second (a numbered
+    /// handle), and the three say the three words.
+    static func stagedAtBoard() -> [ChatAtRun] {
+      guard
+        let sets = fixture("agents-profile-sets.meters").flatMap({ try? AgentProfileSetsResult(json: $0).sets }),
+        let set = sets.first,
+        let catalog = fixture("agent-catalog.valid").flatMap({ try? AgentCatalogResult(json: $0).catalog })
+      else { return [] }
+      let labels = Dictionary(catalog.map { ($0.id, $0.label) }, uniquingKeysWith: { first, _ in first })
+      let providers = set.personas.filter { $0.identity?.loggedIn == true }.map { $0.provider }
+      let staged = [("vibe-field", "blocked"), ("vibe-field", "working"), ("rosetta", "idle")]
+      return Array(zip(providers, staged)).enumerated().map { index, row in
+        ChatAtRun(
+          run: "run-at-\(index + 1)", agent: row.0, label: labels[row.0] ?? row.0, project: row.1.0, status: row.1.1,
+          blockers: 0, alive: true, spark: nil, originBy: nil, originSpark: nil,
+          profile: RunProfileFacts(profileSet: set.id), createdAt: Double(index), stateChangedAt: Double(index),
+          lastActivityAt: nil)
+      }
+    }
+
+    /// The stills' chips: `-vf-chat-chips` stands an agent's and a session's in the draft, as taken from @.
+    static var draftParts: [ChatDraftPart]? {
+      guard ProcessInfo.processInfo.arguments.contains("-vf-chat-chips"), let run = stagedAtBoard().last else {
+        return nil
+      }
+      let agent = ChatAgentChip(
+        id: "agent:\(run.agent):native", agent: run.agent, label: run.label,
+        profile: ChatAtProfile(id: "native", name: "This Mac"), named: true)
+      let session = ChatSessionChip(
+        id: "session:\(run.run)", session: run.run, agent: run.agent, label: run.label,
+        handle: run.project ?? run.label, project: run.project)
+      return [
+        .text("Ask "), .chip(.agent(agent)), .text(" to review what "), .chip(.session(session)), .text(" did "),
+      ]
+    }
+
+    /// Where `draftParts`'s agent's chip stands, counted as the caret moves.
+    static let agentChipOffset = 4
+
+    /// The stills' agent's menu: `-vf-chat-at-menu` opens it on `-vf-chat-chips`'s agent, as a tap on its chip would.
+    static var openAgentMenu: Bool { ProcessInfo.processInfo.arguments.contains("-vf-chat-at-menu") }
+
     /// The stills' facts of their case's spark: under `-vf-chat-case=`, the golden's `facts`, what its spark was when
     /// the Mac's fold drew the case (new, awake, blocked, waiting, working, turnedAt), with the mock spark's name, seed
     /// and status kept, so the head and the flow's faces agree. The mock list's Vela has worked and its session is

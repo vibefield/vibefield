@@ -107,10 +107,19 @@ final class ChatFeed {
   @ObservationIgnored private var needsAgain = false
   @ObservationIgnored private var needsInFlight = false
   @ObservationIgnored private var watches: [String: any ChatWatch] = [:]
-  /// The board's rows, as last handed over: Answer in its pane finds the asking run among them at the press.
-  @ObservationIgnored private var rows: [AgentRemoteRow] = []
+  /// The board's rows, as last handed over: Answer in its pane finds the asking run among them at the press, and @
+  /// (IOS-12f's M-f2) reads the sessions it offers from them.
+  private var rows: [AgentRemoteRow] = []
+  /// The home's board is live, so its rows say what is running (until then @ says it is reading).
+  private var boardLive = false
   @ObservationIgnored private var labelsAsked = false
+  /// @ names its agents by the catalog's labels, with or without an item that waits.
+  @ObservationIgnored private var labelsWanted = false
   @ObservationIgnored private var offScreenSaid = 0
+  #if DEBUG
+    /// The stills' sessions for @ under `-vf-mock`, which has no board.
+    @ObservationIgnored var stagedAtBoard: [ChatAtRun]?
+  #endif
 
   /// The home's door, handed over when it changes (nil: none, the last word stands).
   func attach(_ door: (any ChatDoor)?, home: String?) {
@@ -131,9 +140,32 @@ final class ChatFeed {
     watchNeeds(device: nil)
   }
 
-  /// The board moved: ask the list again when a spark's live run appeared or left.
-  func board(_ rows: [AgentRemoteRow]) {
+  /// IOS-12f's M-f2 — the spark lives on the home, whose Agent Profiles the phone reads (Q2).
+  func isHome(_ spark: SparkSummary) -> Bool {
+    spark.device == nil || spark.device == home
+  }
+
+  /// IOS-12f's M-f2 — what @ reads of the board for a spark (Q3): the agent runs of its own desktop, once the board is
+  /// live. The phone's board is the row list or nothing, so it has no failed reading.
+  func atBoard(of spark: SparkSummary) -> ChatAtReading<[ChatAtRun]> {
+    #if DEBUG
+      if let stagedAtBoard { return .read(stagedAtBoard) }
+    #endif
+    guard boardLive else { return .reading }
+    let device = spark.device ?? home
+    return .read(rows.filter { !$0.isTerminal && $0.device == device }.map(ChatAtRun.init(remote:)))
+  }
+
+  /// IOS-12f's M-f2 — @ names its agents by the catalog's labels: ask for them, once per door.
+  func wantLabels() {
+    labelsWanted = true
+    askLabels()
+  }
+
+  /// The board moved: ask the list again when a spark's live run appeared or left. `live`: the home's field answers.
+  func board(_ rows: [AgentRemoteRow], live: Bool = true) {
     self.rows = rows
+    boardLive = live
     let key = Self.liveSparkKey(rows)
     guard key != sparkKey else { return }
     sparkKey = key
@@ -315,7 +347,7 @@ final class ChatFeed {
 
   /// The catalog's labels, asked once per door when a card first names an agent.
   private func askLabels() {
-    guard let door, !labelsAsked, reading.items.contains(where: { $0.agent != nil }) else { return }
+    guard let door, !labelsAsked, labelsWanted || reading.items.contains(where: { $0.agent != nil }) else { return }
     labelsAsked = true
     Task { @MainActor [weak self] in
       guard let answer = try? await door.call("agent.catalog", params: AgentCatalogParams.phone.json),

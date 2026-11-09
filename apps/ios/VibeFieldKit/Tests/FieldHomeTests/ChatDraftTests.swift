@@ -1,5 +1,6 @@
 import FieldProduct
 import Foundation
+import SwiftUI
 import Testing
 
 @testable import FieldHome
@@ -83,5 +84,76 @@ struct ChatDraftGoldenTests {
         profile: ChatAtProfile(
           id: chip["profile"]?["id"]?.stringValue ?? "", name: chip["profile"]?["name"]?.stringValue ?? ""),
         named: chip["named"]?.boolValue ?? false, model: model))
+  }
+}
+
+/// IOS-12f's M-f2 — the draft edited as the Mac's is (`composer-draft.ts`: `spliceDraft`, `draftOffset`,
+/// `draftAfterSend`), one rule read twice.
+@Suite("IOS-12f's M-f2 — the draft edited as the Mac's is")
+struct ChatDraftEditingTests {
+  static let chip = ChatDraftChip.session(
+    ChatSessionChip(
+      id: "session:run-1", session: "run-1", agent: "agent-a", label: "Agent A", handle: "vibe-field", project: nil))
+  static let other = ChatDraftChip.session(
+    ChatSessionChip(
+      id: "session:run-2", session: "run-2", agent: "agent-a", label: "Agent A", handle: "rosetta", project: nil))
+
+  @Test("a chip is set where the text was, with a space after it unless one follows")
+  func splice() {
+    let parts: [ChatDraftPart] = [.text("ask @ve")]
+    let spliced = ChatDraft.splice(parts, index: 0, start: 4, end: 7, chip: Self.chip)
+    #expect(spliced == [ChatDraftPart.text("ask "), .chip(Self.chip), .text(" ")])
+    let spaced: [ChatDraftPart] = [.text("ask @ve now")]
+    let kept = ChatDraft.splice(spaced, index: 0, start: 4, end: 7, chip: Self.chip)
+    #expect(kept == [ChatDraftPart.text("ask "), .chip(Self.chip), .text(" now")])
+    let taken = ChatDraft.splice(spaced, index: 0, start: 4, end: 7)
+    #expect(taken == [ChatDraftPart.text("ask  now")])
+  }
+
+  @Test("the caret counts a chip as one; the @ is read in the run the caret stands in")
+  func places() {
+    let parts: [ChatDraftPart] = [.text("a "), .chip(Self.chip), .text(" @co")]
+    #expect(ChatDraft.length(parts) == 7)
+    let found = ChatDraft.place(parts, caret: 7)
+    #expect(found == ChatAtPlace(index: 2, at: 1, query: "co", offset: 4))
+    let before = ChatDraft.place(parts, caret: 2)
+    #expect(before == nil)
+    let none = ChatDraft.place(parts, caret: nil)
+    #expect(none == nil)
+    let chip = ChatDraft.chip(parts, at: 2)
+    #expect(chip?.index == 1)
+    let word = ChatDraft.chip(parts, at: 1)
+    #expect(word?.index == nil)
+  }
+
+  @Test("after a send, what was typed since stays and a draft changed within what was sent stays whole")
+  func afterSend() {
+    let sent: [ChatDraftPart] = [.text("ask "), .chip(Self.chip)]
+    let typed: [ChatDraftPart] = [.text("ask "), .chip(Self.chip), .text("  more")]
+    #expect(ChatDraft.after(sent: sent, now: typed) == [ChatDraftPart.text("more")])
+    #expect(ChatDraft.after(sent: sent, now: sent).isEmpty)
+    let changed: [ChatDraftPart] = [.text("ask "), .chip(Self.other)]
+    #expect(ChatDraft.after(sent: sent, now: changed) == changed)
+    #expect(ChatDraft.after(sent: [], now: typed) == typed)
+  }
+}
+
+/// The field draws the parts and reads them back, each chip one character (Q1 (a)).
+@Suite("IOS-12f's M-f2 — the field draws the parts and reads them back")
+@MainActor
+struct ChatDraftFieldTests {
+  @Test("parts drawn and read back are the same parts, a chip one character")
+  func roundTrip() {
+    let parts: [ChatDraftPart] = [.text("Ask "), .chip(ChatDraftEditingTests.chip), .text(" now")]
+    let text = ChatDraftField.attributed(parts, look: ChatDraftLook(scheme: .light, scale: 2, width: 300))
+    #expect(text.length == ChatDraft.length(parts))
+    let back = ChatDraftField.parts(of: text)
+    #expect(back == parts)
+  }
+
+  @Test("a stray object mark is no part")
+  func stray() {
+    let back = ChatDraftField.parts(of: NSAttributedString(string: "a\u{FFFC}b"))
+    #expect(back == [ChatDraftPart.text("ab")])
   }
 }

@@ -6,8 +6,8 @@ import Foundation
 // (`packages/field-app/test/needs-card-goldens.test.ts`, copied to `Tests/FieldProductTests/Fixtures/needs-card/`).
 // Pure: what the card reads of a spark (its id and name, the runs that are its own session, its open items) and an
 // item in, the card's facts and words out. Every act travels by its place among the item's acts, never by its word,
-// so a rewording is no wire change. The phone has no @ handles until IOS-12f, so a session is named as fieldd names a
-// run; the handles' road is kept for then.
+// so a rewording is no wire change. A thread's card names a session by @'s handle (IOS-12f's M-f2, `ChatAt.handles`); a
+// card with no @ beside it (Chat's group) names one as fieldd names a run.
 
 /// What the card is doing: waiting on you, its answer running (the act pressed, by its place), refused in fieldd's
 /// words, or answered here (the act pressed).

@@ -1008,11 +1008,14 @@ public struct HomeScreen: View {
   private var chatHooks: some View {
     Color.clear
       .onChange(of: linkHome, initial: true) { syncChatDoor() }
-      .onChange(of: link?.fieldIsLive) { syncChatDoor() }
+      .onChange(of: link?.fieldIsLive) { _, live in
+        syncChatDoor()
+        chat.board((link?.rows ?? []).map(\.board), live: live == true)
+      }
       #if DEBUG
         .onChange(of: mockActive) { syncChatDoor() }
       #endif
-      .onChange(of: link?.rows) { _, rows in chat.board((rows ?? []).map(\.board)) }
+      .onChange(of: link?.rows) { _, rows in chat.board((rows ?? []).map(\.board), live: link?.fieldIsLive == true) }
       .onChange(of: chatEntries) { _, entries in
         chatLedger.read(entries)
         noteIfNew(entries)
@@ -1115,6 +1118,7 @@ public struct HomeScreen: View {
     #if DEBUG
       if mockActive {
         chat.attach(ChatFixtureDoor.shared, home: ChatFixtureDoor.home)
+        chat.stagedAtBoard = ChatFixtureDoor.stagedAtBoard()
         // `-vf-mock-chat-away`: the home answers once and then sleeps, so the page stands as it last said
         if ProcessInfo.processInfo.arguments.contains("-vf-mock-chat-away") {
           Task {

@@ -195,3 +195,110 @@ enum ChatDraft {
     return !trim(String(decoding: units.dropLast(tail.count), as: UTF16.self)).isEmpty
   }
 }
+
+/// Where the @ being typed stands in the draft.
+struct ChatAtPlace: Equatable, Sendable {
+  /// The run of text it stands in.
+  let index: Int
+  /// The @ in that run, in UTF-16 units.
+  let at: Int
+  let query: String
+  /// The @ in the whole draft, counted as the caret moves.
+  let offset: Int
+}
+
+extension ChatDraft {
+  private static func dropUnits(_ text: String, _ count: Int) -> String {
+    String(decoding: Array(text.utf16).dropFirst(count), as: UTF16.self)
+  }
+
+  /// The draft's words alone, its chips left out.
+  static func typed(_ parts: [ChatDraftPart]) -> String {
+    parts.reduce(into: "") { out, part in
+      if case .text(let text) = part { out += text }
+    }
+  }
+
+  /// `parts` with the units from `start` to `end` of the run at `index` taken out and, when `chip` is given, the chip
+  /// set in their place with a space after it, since a chip never splits a word (`spliceDraft`).
+  static func splice(
+    _ parts: [ChatDraftPart], index: Int, start: Int, end: Int, chip: ChatDraftChip? = nil
+  ) -> [ChatDraftPart] {
+    guard parts.indices.contains(index), case .text(let text) = parts[index] else { return parts }
+    let units = Array(text.utf16)
+    let before = String(decoding: units[..<start], as: UTF16.self)
+    let after = String(decoding: units[end...], as: UTF16.self)
+    var middle: [ChatDraftPart] = []
+    if let chip {
+      middle = [.chip(chip), .text(after.utf16.first == 0x20 ? "" : " ")]
+    }
+    var out = Array(parts[..<index])
+    out.append(.text(before))
+    out.append(contentsOf: middle)
+    out.append(.text(after))
+    out.append(contentsOf: parts[(index + 1)...])
+    return normalized(out)
+  }
+
+  /// How long the draft is, counted as the caret moves: one per UTF-16 unit, one per chip (`draftOffset`).
+  static func length(_ parts: [ChatDraftPart]) -> Int {
+    parts.reduce(0) { sum, part in
+      if case .text(let text) = part { return sum + text.utf16.count }
+      return sum + 1
+    }
+  }
+
+  /// The chip at a place in the draft, counted as the caret moves.
+  static func chip(_ parts: [ChatDraftPart], at offset: Int) -> (index: Int, chip: ChatDraftChip)? {
+    var at = 0
+    for (index, part) in parts.enumerated() {
+      switch part {
+      case .chip(let chip):
+        if at == offset { return (index, chip) }
+        at += 1
+      case .text(let text):
+        at += text.utf16.count
+      }
+    }
+    return nil
+  }
+
+  /// The @ being typed before the caret, or nil: the caret stands in a run of text, and the run reads an @ up to it.
+  static func place(_ parts: [ChatDraftPart], caret: Int?) -> ChatAtPlace? {
+    guard let caret else { return nil }
+    var start = 0
+    for (index, part) in parts.enumerated() {
+      guard case .text(let text) = part else {
+        start += 1
+        continue
+      }
+      let units = Array(text.utf16)
+      if caret >= start, caret <= start + units.count {
+        let before = String(decoding: units[..<(caret - start)], as: UTF16.self)
+        guard let found = queryBefore(before) else { return nil }
+        return ChatAtPlace(index: index, at: found.at, query: found.query, offset: start + found.at)
+      }
+      start += units.count
+    }
+    return nil
+  }
+
+  /// What a draft keeps once `sent` was queued from it (`draftAfterSend`): when it still begins with every part sent,
+  /// what follows them stays, its leading space trimmed; a draft changed within what was sent stays whole, so no word
+  /// is lost.
+  static func after(sent: [ChatDraftPart], now: [ChatDraftPart]) -> [ChatDraftPart] {
+    guard let end = sent.last else { return now }
+    let last = sent.count - 1
+    guard last < now.count, Array(sent[..<last]) == Array(now[..<last]) else { return now }
+    var rest: [ChatDraftPart]
+    if case .text(let ended) = end, case .text(let text) = now[last], text.utf16.starts(with: ended.utf16) {
+      rest = [ChatDraftPart.text(dropUnits(text, ended.utf16.count))] + Array(now[(last + 1)...])
+    } else if end == now[last] {
+      rest = Array(now[(last + 1)...])
+    } else {
+      return now
+    }
+    if case .text(let first)? = rest.first { rest[0] = .text(dropUnits(first, leadLength(first))) }
+    return normalized(rest)
+  }
+}

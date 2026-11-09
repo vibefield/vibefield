@@ -71,23 +71,27 @@ enum ChatNeeds {
   }
 
   /// The card a thread stands (the Mac's `wantedOf`): the one this phone answers, while it holds or its item still
-  /// waits; else what waits first (its own run's ask, then the oldest).
-  static func thread(_ entry: SparkEntry, answering: [String: ChatAnswering], reduced: Bool) -> NeedsCard? {
+  /// waits; else what waits first (its own run's ask, then the oldest). `handles`: the sessions @ offers in this thread
+  /// (IOS-12f's M-f2), by run; the card names one by its handle.
+  static func thread(
+    _ entry: SparkEntry, answering: [String: ChatAnswering], reduced: Bool, handles: [String: String] = [:]
+  ) -> NeedsCard? {
     let reading = NeedsReading(entry)
     let mine = answering.values.filter { $0.spark == entry.spark.id }.sorted { $0.item.asked < $1.item.asked }
     for held in mine {
       let waits = entry.items.contains { $0.id == held.item.id }
       if !waits && !held.holds { continue }
-      return card(reading, item: held.item, waiting: entry.items, held: held, reduced: reduced)
+      return card(reading, item: held.item, waiting: entry.items, held: held, reduced: reduced, handles: handles)
     }
-    return NeedsCards.waiting(reading, reduced: reduced)
+    return NeedsCards.waiting(reading, reduced: reduced, handles: handles)
   }
 
   /// One card: an answer said draws the item fieldd handed back; else the item as the queue says it now.
   private static func card(
-    _ reading: NeedsReading, item: NeedsItem, waiting: [NeedsItem], held: ChatAnswering?, reduced: Bool
+    _ reading: NeedsReading, item: NeedsItem, waiting: [NeedsItem], held: ChatAnswering?, reduced: Bool,
+    handles: [String: String] = [:]
   ) -> NeedsCard {
-    guard let held else { return NeedsCards.card(reading, item: item, reduced: reduced) }
+    guard let held else { return NeedsCards.card(reading, item: item, reduced: reduced, handles: handles) }
     let now = waiting.first { $0.id == item.id }
     let drawn: NeedsItem
     if case .said = held.act {
@@ -95,7 +99,7 @@ enum ChatNeeds {
     } else {
       drawn = now ?? held.item
     }
-    return NeedsCards.card(reading, item: drawn, act: held.act, reduced: reduced)
+    return NeedsCards.card(reading, item: drawn, act: held.act, reduced: reduced, handles: handles)
   }
 
   /// The desktop line a card stands under while its desktop is away (Q8; PC-L4), or nil while it answers. With no
@@ -113,14 +117,14 @@ enum ChatNeedsWords {
   static let group = "Needs you"
   /// The pane's act (§9), where the Mac says Show.
   static let answerInPane = "Answer in its pane"
-  /// Answer in its pane with no pane on the board (Q5; for James's eye).
+  /// Answer in its pane with no pane on the board (Q5; ruled (a) by James 2026-11-06 22:56Z).
   static let paneMissing = "Couldn't open its pane: it isn't on your field"
 
   /// The group's eyebrow (Q2): who asks.
   static func asks(_ card: NeedsCard) -> String { "\(card.names.from) asks" }
 
-  /// A card whose desktop is away (Q8; the asleep line is §9's, the other two for James's eye). The device is named as
-  /// its platform names it (`DeviceWord`).
+  /// A card whose desktop is away (Q8; the three lines ruled (a) by James 2026-11-06 22:56Z, §9). The device is named
+  /// as its platform names it (`DeviceWord`).
   static func away(_ desktop: String, _ standing: ChatAway.Standing, device: DeviceWord) -> String {
     switch standing {
     case .asleep: "\(desktop) is asleep · answer when it wakes"
