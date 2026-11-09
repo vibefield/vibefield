@@ -10600,8 +10600,8 @@ field gives them, and “q” what was typed.
 **What VibeField keeps, when it cannot read it** (track CO, items 172 and 177; 2026-11-05). VibeField keeps eight kinds
 of record in signed files of its own: a spark's record, what waits on you (CP-3), the words that wait for a session,
 each spark's kept record, a flow's records (CP-4a1: the version of a flow you approved, and a spark's proposed flow),
-each spark's transcript (TH-1), and the record of each session it manages (AR-3). Reading one comes out one of four
-ways, and only the first is served:
+each spark's transcript (TH-1), the record of each session it manages (AR-3), and the desk's objects with who may work
+each (OB-3). Reading one comes out one of four ways, and only the first is served:
 - **It is a record VibeField wrote:** served.
 - **It is not one** (it does not parse, is unsigned or edited, names another spark, item, session, flow or proposal
   than its file, is open to other users, or is a folder): set aside beside itself for a person to look at, never
