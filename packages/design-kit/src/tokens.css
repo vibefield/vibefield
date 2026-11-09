@@ -230,6 +230,7 @@
   --vf-card-dark-cut: rgb(255 255 255 / 9%);
   --vf-card-dim: 1;
   --vf-card-shade: 1;
+  --vf-paper-card-shadow: 0 0 0 0.5px rgb(58 46 22 / 22%), -1px 1.5px 3px rgb(0 0 0 / 28%);
 
   /* §2.7 Godview instrument palette — exact values from the Chopsticks
      Godview reference. Both modes live here because Godview owns a local theme

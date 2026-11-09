@@ -1570,7 +1570,7 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   lone Publish… tile, so one Publish… is on screen.
   Above the tiles the header stays the Hub's: “Artifacts” and its quiet count ("4 shared"). It keeps
   its words and its acts — open, Copy URL, and for the owner Refresh preview, Rename and Remove —
-  its copy a copy like any other since FL-2: a card dealt into the hand, and the row says "Copied" (§8 "Copy"). In the
+  its copy a copy like any other since FL-2: a card dealt into the hand, and the row says "Copied" (§8 "Make a card"). In the
   shelf it draws no close of its own ("Close panel" was the side panel's and the drawer's): Escape,
   the dim and the button that is on close the sheet, and Escape gives the keyboard back to the
   button that opened it. **The shelf is never blank:** the panel says what it is doing in its own
@@ -1765,7 +1765,7 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   **Where the typing went** (LN-D3; HN-2, 2026-10-29): the rule, the draft and @'s list, the mic and
   send left the line, and with them the interim send (thinking-four-views §11: a draft aimed at a
   pane was pasted there, else copied, "Copied — no agent takes a message from here yet") and the
-  desk's Send to…, which drafted into it (§8 "Copy" replaced it). In Godview you type into the pane
+  desk's Send to…, which drafted into it (§8 "Make a card" replaced it). In Godview you type into the pane
   itself; a capture, a selection or another app's words reach a pane as a card (§8 "The hand");
   Chat's input is its own composer at the foot of the open thread, which holds the line's draft
   canon (§8 "Chat's composer"). *History:* `[views] create │ draft mic send`, 880 × 52, centred and
@@ -2791,7 +2791,7 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     on the way (§6), while the hand opens room for it; with nowhere to leave from it rises into its
     place. A snapshot — the line's, ⌃⌘A, the View menu's Take Screenshot — deals a picture card from
     the region it kept (the still is main's; its ring keeps twelve, as the hand does); the desk's
-    **Copy** (§8) deals a picture of the selection, or a text card for one note. ⌘C in a pane, Copy in
+    **Make a card** (§8) deals a picture of the selection, or a text card for one note. ⌘C in a pane, Copy in
     History and in Chat's thread, and another app's copy brought in — ⌘V with no caret anywhere, or a
     drag let go away from a pane and the prompt — deal as their doors arrive (*as built*, below).
     *(SP-1d: Chat's thread at first light is its pane, whose ⌘C waits on G30 with every pane's. Chat's
@@ -2801,7 +2801,7 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     stays out. Every other copy VibeField makes deals the same way, as a text card — Settings' (a
     sign-in link, a device's name, the exact version, a diagnostics record) from the button pressed,
     and the copies History's room makes through its workspace port — and what a card holds goes on the system
-    clipboard too — its words, its picture, or both in one write (§8 "Copy"). **A program's write
+    clipboard too — its words, its picture, or both in one write (§8 "Make a card"). **A program's write
     is not a copy**: a terminal's OSC 52 reaches the system clipboard through the same door and
     deals no card — the hand holds what you copied (HN-L1). **Brought in**
     (HN-6): ⌘V with no caret deals one card for each thing the clipboard holds — its words, its
@@ -4198,11 +4198,12 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     the line's glass (§5) with its hairline and the island shadow; cells **32** × 32, corners 16,
     their glyphs **16** in secondary ink (primary under the pointer); the rule 1 × 18 in the strong
     hairline, 5 clear each side.
-  - **Order** — **Copy** · rule · the kind's acts · Duplicate (`duplicate`) · Tape it down
-    (`tape`) · More (`ellipsis`) · rule · Delete (`trash`). *Copy* is the bar's one word (HN-D3,
-    2026-10-29; it was Send to…, `agents`, "Send 2 to…"): `clipboard` 16 and "Copy" at 13/500 in
+  - **Order** — **Make a card** · rule · the kind's acts · Duplicate (`duplicate`) · Tape it down
+    (`tape`) · More (`ellipsis`) · rule · Delete (`trash`). *Make a card* is the bar's one word
+    (CS-D11 A and CS-D12 E, ruled by James 2026-11-09; it was Copy, `clipboard`, HN-D3, and before
+    that Send to…, `agents`): the paper card (§13) and "Make a card" at 13/500 in
     primary ink, resting on the ready fill (the foreground at 8%), a 32-tall pill padded 0 12 0 10,
-    gap 7; with several selected it still says Copy — the card it deals names how many.
+    gap 7; with several selected it still says Make a card — the card it deals names how many.
     **The kind's acts** are those every selected object's type declares (the anchor's `menu`, ICE
     K8a), each a 32 cell wearing its glyph by §13's table (R2) — a `{ path, fill? }` drawing
     through the bar's one path renderer, a name the set lacks as `missing`, said once — and an act
@@ -4211,7 +4212,7 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     `locked`: every selected object taped): no Duplicate, and the tape act becomes **Lift the
     tape**, wearing `lift` — an ACTION whose name changes, never a toggle and never `aria-pressed`
     (R10).
-  - **States** — hover the ready fill (8%) · press the foreground at 14% and scale 0.95 · Copy,
+  - **States** — hover the ready fill (8%) · press the foreground at 14% and scale 0.95 · Make a card,
     which rests on the ready fill, steps to 14% under the pointer and 0.97 pressed (R25) · More,
     its menu open, shown on — the inverted solid · Delete arms only while hovered:
     `--vf-ink-danger` on `--vf-red` at 12% · focus a 2px `--vf-select` ring, offset 2.
@@ -4220,10 +4221,10 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     (FR-5): "Duplicate  ⌘D", "Tape it down  ⇧⌘L", "Delete  ⌫" — the desk's keymap (DK-D24);
     ⇧⌘L is the DESK's act, ICE's default keymap's (`keymap.ts:172`), not a kind's, so it is printed
     (R23, reversed 13:40Z). A kind's act prints none on this build — its declared keys are ICE's
-    demo's (R1, DK-D24); Copy says the frame's ⌘C ("Copy  ⌘C", HN-D3) and More has none.
+    demo's (R1, DK-D24); Make a card says the frame's ⌘C ("Make a card  ⌘C", HN-D3) and More has none.
   - **Motion** — away for a gesture (a drag, a marquee, a pan, a pinch) and while a note is being
     written (the anchor's `gesturing`, `editing`): out in 90ms, back 200ms after it ends, in over
-    180ms (ICE's, as built). Copy's card leaves from the selection while the bar stays (HN-3; Send
+    180ms (ICE's, as built). The card leaves from the selection while the bar stays (HN-3; Send
     to… stepped it aside while its chip flew). Deselected, it fades out over 120ms `ease-out` (R8).
     Reduced motion (M6) halves every duration, fades only (R8).
   - **A missing face** selected (below): the bar names the type where the kind's acts would stand.
@@ -4246,10 +4247,10 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   upward the list reads bottom-up, nearest first. **The order, nearest first:** the kind's acts
   (`ops.runMenuAction`; no keys, R1) · **Open** (↩) — only when exactly one object is selected and
   its type opens (`engine.catalog.widget(type).openable`), running `ops.open`; a container (the mini
-  mat) has no row, ⏎ enters it (R4) · Copy (⌘C) | Duplicate (⌘D; not while taped) · Bring to front ·
+  mat) has no row, ⏎ enters it (R4) · Make a card (⌘C) | Duplicate (⌘D; not while taped) · Bring to front ·
   Send to back (`ops.reorder`) · **Clean up** (two or more selected: `ops.arrange` tidies them into
   reading-order rows, one undo step — DK-D29) | Tape it down, or Lift the tape (⇧⌘L, R23) | Delete
-  (⌫, armed red under the pointer). Copy's ⌘C is the frame's, not the engine's — ICE has no copy op
+  (⌫, armed red under the pointer). Make a card's ⌘C is the frame's, not the engine's — ICE has no copy op
   (HN-D3); Bring to front, Send to back and Clean up print no key — DK-D24 binds none.
   **The eyebrow** names what it acts on,
   at the far end, in the mat's print: mono 10, capitals, 0.08em, tertiary, padded 8 10 5 — NOTE · 2
@@ -4277,7 +4278,7 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   the window — the field, then what you hold; object chrome, not the head's (FR-1). The held
   object's **reading fit keeps 116** above it (the bar's foot, 104, + 12) **and 100** below (the
   line's 88 + 12): I20's `deskLayer({ hold: { top: 116, band: 100, travelMs: 560 } })` — ICE's own
-  56 / 72 are its demo's. **Order:** Copy · rule · the kind's tools · the readout · rule · Done.
+  56 / 72 are its demo's. **Order:** Make a card · rule · the kind's tools · the readout · rule · Done.
   **The tools** are the anchor's slots (`HeldAnchor.tools`; each `HeldSlot` an `id`, a `label`, a
   `kind`, a `hint`, a `glyph`, a `swatch`), **in their declared order, never regrouped** (R13), a 6
   gap where the run changes between pages, inks and tools; each runs through `ops.useHeldTool(id)`.
@@ -4427,9 +4428,13 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   ICE `0.15.0-desk.6`, petition I37):* the walk, the scroll and the lay moved onto ICE's doors and the
   ring onto `focused.rect`; ICE's scroll does not keep the focused hang out of the content's fade under
   the header, as DK-13's own did.
-- **Copy** (Cards in Hand: HN-D3 ruled by James 2026-10-29 — it replaced **Send to…**, MC-D5, which
-  only drafted into the line; DK-D26's still; built at HN-3): the selection bar's one word, on the
-  bar, in its grown menu and in hand, and the desk's **⌘C**. It **only copies**: the selection becomes
+- **Make a card** (CS-D11 A and CS-D12 E, ruled by James 2026-11-09 on *The Card Button*, on OB-D3; it
+  was **Copy**, HN-D3, ruled 2026-10-29, which replaced **Send to…**, MC-D5, which only drafted into
+  the line; DK-D26's still; built at HN-3): the selection bar's one word, on the bar, in its grown
+  menu and in hand, and the desk's **⌘C**, the same act. Copy promised a duplicate and Send a
+  destination, and neither happens: the object stays where it is, and the card has no destination
+  until it is dropped. The word is the desk's alone: a pane's, History's and Settings' Copy still
+  say Copy, because each of those is one. It **only makes a card**: the selection becomes
   one card dealt into the hand (§8 "The hand") — one note's words as a text card; anything else, or
   several, as a picture card of the selection through the capture door, of the anchor's box WITHOUT
   the brackets' 6 / 10 outset (`handle.capture({ rect, marks: false })`, ICE I23, I40), drawn
@@ -4440,7 +4445,7 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   through the clipboard's picture door with the selection's words beside it on the same item, so a
   paste into words takes the words and a paste into a picture takes the picture (HN-5; LC-19: two
   writes would clobber each other). The selection is **never cleared or put back**: no
-  selection write during Copy, and nothing a peer could see blink. ⌘C copies only on Canvas, with a
+  selection write while the card is made, and nothing a peer could see blink. ⌘C makes a card only on Canvas, with a
   selection, outside any field — a note being written copies its own text — and never under a cover.
   **A copy the clipboard refuses deals nothing** — the card is dealt only once its contents are on
   the clipboard — and the note says why, in Copy's voice: "Not copied — the clipboard did not take
@@ -4470,8 +4475,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   why, in one of five words (R12, R24): **"plugin off"** (its plugin disabled) · **"plugin gone"**
   (uninstalled) · **"can't draw here"** (never registered) · **"reload to draw it"** (registered after
   the mount, I25) · **"can't draw"** (its kind faulted) — "Note · plugin off" — 13/500 in secondary
-  ink, a label and not a control; the grown menu's eyebrow says the same in capitals, and Copy's
-  card carries the type's name. It is said once, in the status line (R12, above), never painted onto the
+  ink, a label and not a control; the grown menu's eyebrow says the same in capitals, and the
+  card it makes carries the type's name. It is said once, in the status line (R12, above), never painted onto the
   object as an alarm. *Amended 2026-11-11 (item 282, IS-282-7 A): the third and fourth words were "no kind"
   and "remount to draw it".*
 - **The covers over the desk** (DK-D25 ruled 2026-10-02 — "frozen desk should be still and consume
@@ -9458,7 +9463,7 @@ VibeField and open it again." (§8 "The status line").
   project it shows), a product chord taken on the capture phase in those two views so a focused pane
   never sees it (ghostty's new_tab). **⇧⌘V** raises the hand in
   every view (§8 "The hand"), a product chord taken on the capture phase; **⌘C** on Canvas is the
-  desk's Copy while something is selected and no field holds the caret (§8 "Copy") — the desk's
+  desk's Make a card while something is selected and no field holds the caret (§8 "Make a card") — the desk's
   chord, never the product's: a pane never sees the desk's ⌘C (the cover hides the desk's bar), so
   Settings → Terminal → Keyboard says Ghostty's ⌘C runs in the deck. @ is never a
   shortcut: it is typed in Chat's composer (§8). **Search's key** (§8 "Search — the Peek",
@@ -9598,15 +9603,24 @@ Every functional icon the chrome draws — the line's create and the views track
 pill and its chevron and package, the package circle, the 40px round buttons, the Settings rail, the
 agent rows, the plugins' toolbars (and the edge trays, until HN-8), the phone's composer and keypad, the swarm's
 marks, the desk's bar, the tools in hand and the wrapper around Godview's terminals — is one of
-**65 named glyphs** in one **24-unit box**,
+**68 named glyphs** in one **24-unit box**,
 optical centre at 12,12, live area 2 to 22, drawn in `currentColor` and nothing else. The host says
 the size and the colour, the way it says them for text (§2.4); a glyph never carries state (§2.5,
 I-5) and never a colour of its own. Two constructions, one set:
 
 | Construction | Glyphs | Law |
 |---|---|---|
-| **Instrument** (55) | everything not listed as Hardware | one 2-unit stroke, round caps and joins, 3-unit corners; solid dots only where a mark ends in one (the question and the failure) |
+| **Instrument** (58) | everything not listed as Hardware | one 2-unit stroke, round caps and joins, 3-unit corners; solid dots only where a mark ends in one (the question and the failure) |
 | **Hardware** (10) | close · check · search · rename (pencil) · return · backspace · more (ellipsis) · arrow · general (sliders) · keyboard | one solid silhouette as a single `evenodd` path — bodies and their holes, no masks, no filters — so the same geometry is a template asset on iOS |
+
+**One thing on the chrome is not a glyph: the paper card** (CS-D12 E, ruled by James 2026-11-09, *The
+Card Button*). Make a card (§8) wears the thing it makes: a card **13.5 × 19**, corners 2.4, in the
+hand's own stock and ink (`--vf-card-stock`, `--vf-card-stock-ink`), its cut edge and its shadow
+`--vf-paper-card-shadow`, turned **−7°**, with `type-ref` at 9 printed on it. Under the pointer it
+turns to −11° and rises 1.5, in 180ms on the pop curve; reduced motion (M6), no turn and no rise. It
+is the only paper on the glass, and the one exception to this section's law: a small component of
+the bar (`PaperCard`), not a name in the set, in the card's inks and not `currentColor`, drawn
+nowhere else, and it carries no state.
 
 **Sizes** are the host's, by CSS: 12 (captions) · 13–16 (row controls; the pill's package at 15) ·
 18 (the Settings rail, the line's snapshot, the package circle and its sheet's row, the Me menu) ·
@@ -9621,8 +9635,8 @@ outward · link · return · backspace · ellipsis · start · resume · jump ·
 pen · eraser · today · minimize · maximize · restore · sparkle; navigation: chevron · arrow; places and objects:
 gear · person · sliders · canvas · agents · profiles · plugin · mesh · terminal · pulse · code · sun ·
 moon · clipboard · package · capture · panes · history · sidepanel · bug · globe · folder · keyboard ·
-mic · scantext · snippets · prompt · sound; signals: message · key · question · exclaim · flame · missing · importing;
-Studio only: document · layers. *Corrected 2026-10-31 (SP-1d, at its source):* `sparkle` stood here,
+mic · scantext · snippets · prompt · sound · document · type-text · type-image · type-ref; signals: message · key · question · exclaim · flame · missing · importing;
+Studio only: layers. *Corrected 2026-10-31 (SP-1d, at its source):* `sparkle` stood here,
 Studio only, after SP-1c gave it to New spark, Chat's create (§8 "The line"). It is an action, and the
 catalog's callout still wears it. **`history`** (2026-10-03, One Frame §13) is the views
 track's History cell (§10): a clock turning back, the dial at `globe`'s radius opened where its arrow
@@ -9644,11 +9658,15 @@ create is a bare plus). Their Hardware records are the page's T4 column, drawn a
 among the 64. The needs-you card (§8 "Chat's thread") needs none of its own either: its answered line
 wears `check`, and `exclaim` when the act was not done. Nor does the crew card (§8 "Chat's crew card", SP-1e2): its
 act line wears `agents`, its foot's Open in Godview `panes`, and Done and All done `check`, all among the 64; its
-Working mark is a ring, never a glyph. **The hand's indexes** (Cards in Hand, HN-D1,
-2026-10-29): a card prints its kind's glyph twice, as a playing card prints its rank — `snippets` (text) ·
-`capture` (a picture; the line's snapshot wears it too) · `code` (a file) · `agents` (an agent) ·
-`terminal` · `message` — in the card's index ink, never a colour of its own (§5). `clipboard` is the
-selection bar's Copy (HN-D3), its notch having left with the clipboard's tray (HN-1).
+Working mark is a ring, never a glyph. **The six types** (CS-D10 A, ruled by James 2026-11-09, on OB-D1 A; they replace
+the hand's six indexes, HN-D1): one glyph says a card's type — `type-text` (ragged lines: words, not a menu) · `type-image` (a
+picture in its frame) · `document` (a file) · `link` · `agents` (a session) · `type-ref` (a ◇ with its heart, the mark a design
+tool gives a live instance: the object itself) — in the card's ink, never a colour of its own (§5). It heads the card's name,
+marks each of its faces along its foot, and is what the bloom's buds wear. `type-text`, `type-image` and `type-ref` are
+Instrument drawings, the desktop's alone and not among the phone's picks; they made the set 68, so every "the 65" above was
+true when it was written. `document` left Studio only with them. `snippets`, `capture`, `code`, `terminal` and `message` keep
+their other wearers. `clipboard` left the selection bar with CS-D12 and is the phone's Clipboard history (its notch had left
+with the clipboard's tray, HN-1).
 **The update** (track AU, AU-D7 ruled A 2026-10-29) needs no glyph of its own either: a download is `arrow` turned
 180 (down), the restart and Settings → Updates' rail are `reset`, an update that has installed is `check`. The dot
 beside the face is not a glyph: it is the badge slot's state (§2.8 I-5, §2.5). The status item's update image — the
