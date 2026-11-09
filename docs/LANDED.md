@@ -44104,6 +44104,11 @@ one headless SwiftShader Chrome, pids in HOLD and proven gone.
 - ES's follow-up: the catalog row carries the starter's role, a contracts change with the kit's six mirrors, and
   `starters.ts`'s allow-list row retires.
 - The kit's K at a tree that holds T's kit tree `95e76bdcd9f1`: HG's run239 carries it.
+- **Paid (2026-11-08, run239, 22:28:13Z):** the K, by HG's run239 (M239) at kit tree `95e76bdcd9f1`, T's kit
+  exactly (VF-PM 22:29:53Z; read at source by ES, 22:31Z). S read "** TEST BUILD SUCCEEDED **" under Xcode 26.3. G
+  read GREEN-BUT-167: FieldDesignTests "✔ Test run with 71 tests in 18 suites passed after 5.388 seconds", its span
+  naming SparkFlatStarTests, a FieldDesign suite. Its one failing run, 177 tests in 35 suites, is item 167's set,
+  SET-equal to run236's (`lanes/vf-m2/run239-a9-results`, SHA256SUMS-a9-run239 `3000c449`, 30 of 30 OK).
 - gate:landing after the land: the stills and the smokes, landing-only; a re-bless, if any, said there.
 
 ## Item 263 — `smoke:godview`'s History rung reads the view's own room, and the card behind glass while the room waits for consent: never the sample's frame, never a blank (2026-11-08)
@@ -44380,4 +44385,101 @@ set compare read missing [] / extra [], by a9's runner and by DR's sorted diffs 
 - **Named, not owned (NR follow-ups):** a node built anew leaves a store subscription on the old store with no refused
   replay (`drive/holders.ts`); egress's route table (§6.1's row 9) keeps the old boot's bound routes until the next
   reconnect; Q2's readout of streams waiting to re-arm.
+- gate:landing after the land: landing-only, as VF-PM places it.
+
+## ES-4 (role), the catalog-role follow-up — the catalog row carries the hello's ruled starter: `starter` on grok's row (the crew), claude's (the handle's run) and codex's (the reviewer); the starters name no agent, and R23b's allow-list retires `starters.ts`'s row (2026-11-09)
+
+(2026-11-08; two commits cut by ES (vibe-field-b4) on branch `es/catalog-role` in the es lane, on main `70eb8a3cf`:
+red `13753ff01` (tree `0e488262d98a`) → green `7d7019a23` (tree `a872a08aac78`). T's tree is EQUAL to
+`git merge-tree --write-tree` of `70eb8a3cf` and T, and the full-index patch-id is `08f44f8ac97a`
+(`lanes/es/mint/es4-role-7d7019a23-on-70eb8a3cf`). Witnessed on the Mac, each row alone through the HOLD door, and
+minted by run 241 at T on vf-m2, V and K. Landed 2026-11-09 at 00:39:19Z by the fixer as `7d7019a23` (M241), a
+fast-forward of main `70eb8a3cf`.)
+
+Ruled by VF-PM at 23:41:03Z: shape A of `lanes/es/records/es-catalog-role-proposal.md` (sha256 `430033fa`); shape B
+was declined. The follow-up was named at 21:33Z, when #21 put `starters.ts` on R23b's allow-list as a LIVE AR-L1
+exception, to retire when the catalog row carries the starter's role. VF-PM read the two-commit cut at 00:05:31Z.
+
+**What moved.** 15 files, +128 −17 over `70eb8a3cf`; none is added, deleted or renamed.
+- contracts (`packages/contracts`):
+  - `AgentStarterRole`, the enum `crew`, `handle` and `reviewer`: DESIGN.md §8 "Filled from this Mac"'s slot names;
+  - `starter` on the STRICT row beside `mark`, its doc naming the rule; the wire form carries it as any key;
+  - the rows: grok `crew`, claude `handle`, codex `reviewer`;
+  - `starterAgent(role)` on the readers' factory, and the named reader over THE table;
+  - `gen:schema`'s projection and fixture, three rows one key longer each. The projection's source pin moved
+    `7156987431c5` → `2a329e20cd07`, the new `agent-catalog.ts`'s sha256. No other generated file moved.
+- field-app: `starters.ts`'s `RULED` reads the role rows. The crew and the reviewer give their ids and labels, and
+  the handle's run is its puppeteer provider at the sample's place (`claude·2`). A role no row holds keeps the hello's
+  whole ruled sentence.
+- the kit: the SEVEN mirrors of the fixture, each byte-equal to it (sha256 `e8933136`), and one Swift line. At
+  `AgentCatalogShapeTests.swift:43` claude's unread set gains `"starter"`, named and never refused until ES-5 reads
+  it. The kit's tree moved `95e76bdcd9f1` → `97327bf8d9c6`.
+- the gate: `R23B_ALLOW` (`scripts/check-agent-catalog.mjs`) loses `starters.ts`'s row, 16 rows → 15.
+  `chat-fixtures.ts` stays at 3, its comment re-dated.
+- By class, from the audit: pin-class 0 and release-adjacent 0; `^scripts/` 1; contracts 4; field-app 2; `^apps/` 8
+  (`/Fixtures/` 7 and `.swift` 1); `fixtures/` 1, contracts' own; goldens 0; Markdown 0; fieldd, electron-shell,
+  design-kit and `docs/` 0.
+
+**What is real.** The starters read the same words as before on this Mac and on another: the crew is Grok, the handle
+`claude·2` and the reviewer Codex. Which agent a ruled word names is now the table's to say (AR-L1), and the table's
+own test holds each role to exactly one row offered on the desktop. The crew's and the reviewer's rows can be
+started, and the handle's has a puppeteer seam. No product file names an agent id for the starters. The phone names
+`starter` unread.
+
+**Found at the cut.**
+- **The kit has seven mirrors of the catalog fixture, not six.** IOS-12d `c585c2da9` (2026-11-06) added
+  `Sources/FieldHome/Fixtures`, the catalog `ChatFixtureDoor` answers `agent.catalog` from (its `chat` row in
+  `scripts/check-ios-fixtures.mjs`). The proposal and VF-PM's GO said six; check:ios-fixtures names seven, and all
+  seven moved.
+- CLAUDE.md's AC paragraph still says "the kit's six mirrors" (`CLAUDE.md:318`). Its erratum is owed at its source,
+  on James's own word, never on a peer's (below).
+- fieldd's door test built field-native fresh into the lane's own target, about 83 s, by `nativeBuildEnv`'s
+  `CARGO_TARGET_DIR`. The shared target was not touched.
+
+**The witnesses.**
+- **The red on the Mac** (`13753ff01`). Both new tests failed for the right reason, and nothing else failed:
+  - contracts' "the starter roles": "AssertionError: the crew's row: expected [] to have a length of 1 but got +0";
+  - field-app's binding: "AssertionError: the crew's row: expected undefined to be defined".
+- **The green on the Mac**, each row alone through the HOLD door, 23:52:53Z–23:57:24Z. To 23:54:43Z the rows read the
+  green's tree before its commit, so the door's lines name HEAD, the red: "at `13753ff01`".
+  - biome on the changed files: "Checked 5 files in 84ms. No fixes applied.";
+  - tsc `--noEmit`: 0 errors in contracts, field-app, fieldd and electron-shell;
+  - the catalog wall with `--enforce`, the lock's rosettad and `--literals` (HOLD 23:53:44–45Z), exit 0:
+    "check-agent-catalog: pass — 10 catalog row(s) honoured by both pins, 1 warning(s) [--enforce]" and
+    "check-agent-catalog: pass — no agent id literal outside the catalog and the allow-list [--literals]". Its
+    allow-list reads 15 rows with no `starters.ts`: the green's. A green preflight prints no checker line, so these
+    two pass lines are the Mac's wall rows', never V's;
+  - "check-import-boundaries: clean"; "ios fixtures: 418 copies identical …"; "ios pins: 93 contract values
+    identical …";
+  - contracts: `agent-catalog.test.ts` 16 of 16; the suite "Test Files 63 passed (63)", "Tests 1953 passed (1953)";
+  - field-app, ten files alone, all passed: chat-starters 10, thread-items 14, ui-system-boundaries 49,
+    chat-first-job 8, chat-empty 15, chat-thread-items 26, chat-composer 74, chat-view 48, thread-flow 17 and
+    design-system 8;
+  - on the committed tree: `pnpm gen:check` exit 0, and fieldd's `agent.catalog` doors ("Tests 7 passed | 34 skipped
+    (41)").
+- **Run 241 at T on vf-m2, green** (a9; armed 00:20:29Z on VF-PM's 00:19:42Z word; the verdict
+  `verdict/m2-es241.done`, 00:32:27Z). V: verify exited 0, 00:20:34Z → 00:26:21Z, 5 min 47 s (`run241/verify.log`,
+  sha256 `c82485dc`). Against run240's lines
+  the count lines read missing [] and extra [], with the brief's two moves: contracts "Tests 1953 passed (1953)" and
+  field-app "Tests 4525 passed (4525)", their files 63 and 325. The singles, cargo's 37 results and the census read
+  run240's own, and preflight "preflight OK (1 warning(s))" at `7d7019a23`, which prints no checker line: the walls'
+  witness in V.
+  - Per file: "✓ test/agent-catalog.test.ts (16 tests)" and "✓ test/chat-starters.test.ts (10 tests)".
+  - The bundle assert, a reading: "initial 954.6 KB raw / 252.6 KB gz", 954.4 at run240, its gz unmoved.
+  - K at kit tree `97327bf8d9c6`. S read "** TEST BUILD SUCCEEDED **" under Xcode 26.3 (93 s) and P passed under the
+    beta. G read GREEN-BUT-167, 2165 tests in 342 suites (120 s): its 16 runs are run239's by count, FieldProductTests
+    "✔ Test run with 306 tests in 52 suites passed", and FieldTerminalTests' item 167 alone failed. Inside it,
+    `AgentCatalogShapeTests`'s `aRowReadsWhatAPhoneDrawsAndNamesTheRest()` passed once. One run's whole seconds
+    moved, FieldMeshTests' 11 → 10.
+  - The results are `lanes/vf-m2/run241-a9-results`. Their sums, SHA256SUMS-a9-run241-r2 `9e15eb42`, read 31 of 31
+    OK. It is the first sums, `539fcd35`, without that file's first line, which named the sums file itself at the
+    empty file's sha256 (ES's read at 00:35Z; a9's erratum at 00:36Z).
+
+**Owed.**
+- CLAUDE.md's "six mirrors" (`CLAUDE.md:318`): one docs-only commit on James's own word. It is drafted whole at
+  `lanes/es/records/claude-md-erratum-seven-mirrors.md` (sha256 `e344af08`); the draft's `:319` adds
+  `Sources/FieldHome`, which `CLAUDE.md:319` today omits.
+- ES-5, the phone's starters from the role rows (the IOS lane). It drops `"starter"` from the unread set.
+- ES-Q1, James's wording on a slot with nothing to fill (ROADMAP §9), and James's eye on the built app.
+- ES-6, `smoke:chat-night`, a candidate for James to rank.
 - gate:landing after the land: landing-only, as VF-PM places it.
