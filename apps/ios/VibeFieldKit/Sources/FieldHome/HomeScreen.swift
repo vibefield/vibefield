@@ -900,6 +900,30 @@ public struct HomeScreen: View {
   /// bar is ours. Search stands over whichever page stands (SE-2: the scrim
   /// and the sheet are the bar's).
   private var tabs: some View {
+    tabsMeasured
+      .onChange(of: selectedTab) { history.barMinimized = false }
+      // SE-2 — the lens keys on the home's profiles: read again whenever the home's answer moves
+      .onChange(of: homeProfiles, initial: true) { _, sets in
+        lens.adopt(sets)
+        #if DEBUG
+          // the mock's lens door stands once its profiles do: the first call can carry the profiles read before the
+          // mock set its own, and adopting those lets a lens chosen at launch go (M-phone's pre-light stills)
+          if let id = mockLens, sets.contains(where: { $0.id == id }) {
+            lens.show(id)
+            mockLens = nil
+          }
+        #endif
+      }
+      // SE-2 — the token's menu goes with the token: a lens let go, a page or the Me menu opened, the face held
+      .onChange(of: lensTokenShows) { _, shows in
+        if !shows { lensMenuOpen = false }
+      }
+      // Every push and pop opens the bar again, the way the system's does.
+      .onChange(of: history.path) { history.barMinimized = false }
+  }
+
+  /// The pages, the pull's follow and the card they recede to, over the shelf.
+  private var tabPages: some View {
     ZStack {
       fieldTab.page(visible: selectedTab == .field)
       historyTab.page(visible: selectedTab == .history)
@@ -908,62 +932,52 @@ public struct HomeScreen: View {
     .modifier(AppsPullFollow(door: appsDoor, onField: selectedTab == .field))
     .modifier(AppsRecededCard(open: appsDoor.shelfOpen, screen: appsHeight, onBack: { closeAppsShelf() }))
     .background { appsShelfLayer }
-    .background { chatHooks }
-    .background { metersHooks }
-    .background { appsHooks }
-    .overlay(alignment: .top) { appsPour }
-    .overlay { barWhileNoShelf }
-    .overlay { faceHoldOverlay }
-    .overlay(alignment: .bottom) { chatNoteOverlay }
-    .overlay(alignment: .top) { appsDropOverlay }
-    .environment(\.appsIconSource, appsIconSource)
-    .fullScreenCover(isPresented: appsZoomShows) { appsZoomScreen }
-    .sheet(item: $appsAboutApp) { app in
-      AppsAboutSheet(about: appsAbout(app))
-        .presentationDetents([.medium])
-    }
-    .background {
-      GeometryReader { geo in
-        Color.clear
-          .onAppear {
-            homeInset = geo.safeAreaInsets.bottom
-            safeTop = geo.safeAreaInsets.top
-            screenHeight = geo.size.height + geo.safeAreaInsets.top + geo.safeAreaInsets.bottom
-          }
-          .onChange(of: geo.safeAreaInsets.bottom) { _, inset in homeInset = inset }
-          .onChange(of: geo.safeAreaInsets.top) { _, inset in safeTop = inset }
-          .onChange(of: geo.size.height + geo.safeAreaInsets.top + geo.safeAreaInsets.bottom) { _, height in
-            screenHeight = height
-          }
+  }
+
+  /// One chain over the pages timed the compiler out (run276), so it stands as three.
+  private var tabsChrome: some View {
+    tabPages
+      .background { chatHooks }
+      .background { metersHooks }
+      .background { appsHooks }
+      .overlay(alignment: .top) { appsPour }
+      .overlay { barWhileNoShelf }
+      .overlay { faceHoldOverlay }
+      .overlay(alignment: .bottom) { chatNoteOverlay }
+      .overlay(alignment: .top) { appsDropOverlay }
+      .environment(\.appsIconSource, appsIconSource)
+      .fullScreenCover(isPresented: appsZoomShows) { appsZoomScreen }
+      .sheet(item: $appsAboutApp) { app in
+        AppsAboutSheet(about: appsAbout(app))
+          .presentationDetents([.medium])
       }
-      .ignoresSafeArea(.keyboard)
-    }
-    .background {
-      GeometryReader { geo in
-        Color.clear
-          .onAppear { keyboardInset = geo.safeAreaInsets.bottom }
-          .onChange(of: geo.safeAreaInsets.bottom) { _, inset in keyboardInset = inset }
-      }
-    }
-    .onChange(of: selectedTab) { history.barMinimized = false }
-    // SE-2 — the lens keys on the home's profiles: read again whenever the home's answer moves
-    .onChange(of: homeProfiles, initial: true) { _, sets in
-      lens.adopt(sets)
-      #if DEBUG
-        // the mock's lens door stands once its profiles do: the first call can carry the profiles read before the
-        // mock set its own, and adopting those lets a lens chosen at launch go (M-phone's pre-light stills)
-        if let id = mockLens, sets.contains(where: { $0.id == id }) {
-          lens.show(id)
-          mockLens = nil
+  }
+
+  private var tabsMeasured: some View {
+    tabsChrome
+      .background {
+        GeometryReader { geo in
+          Color.clear
+            .onAppear {
+              homeInset = geo.safeAreaInsets.bottom
+              safeTop = geo.safeAreaInsets.top
+              screenHeight = geo.size.height + geo.safeAreaInsets.top + geo.safeAreaInsets.bottom
+            }
+            .onChange(of: geo.safeAreaInsets.bottom) { _, inset in homeInset = inset }
+            .onChange(of: geo.safeAreaInsets.top) { _, inset in safeTop = inset }
+            .onChange(of: geo.size.height + geo.safeAreaInsets.top + geo.safeAreaInsets.bottom) { _, height in
+              screenHeight = height
+            }
         }
-      #endif
-    }
-    // SE-2 — the token's menu goes with the token: a lens let go, a page or the Me menu opened, the face held
-    .onChange(of: lensTokenShows) { _, shows in
-      if !shows { lensMenuOpen = false }
-    }
-    // Every push and pop opens the bar again, the way the system's does.
-    .onChange(of: history.path) { history.barMinimized = false }
+        .ignoresSafeArea(.keyboard)
+      }
+      .background {
+        GeometryReader { geo in
+          Color.clear
+            .onAppear { keyboardInset = geo.safeAreaInsets.bottom }
+            .onChange(of: geo.safeAreaInsets.bottom) { _, inset in keyboardInset = inset }
+        }
+      }
   }
 
   /// The field, under the bar's glass to the screen's edge. PG-4t — and under
