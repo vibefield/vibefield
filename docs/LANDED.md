@@ -31651,6 +31651,8 @@ design-kit, two in electron-shell, one each in field-app, DESIGN.md, DECISIONS, 
   > "IOS-12e"). The note's live face and 12f wait on M-phone.
   > *Answered in part 2026-11-06:* IOS-12c's thread, M-c2, landed (`eda440d58`, M191, run 191; LANDED
   > "IOS-12c's M-c2"): 12c is whole. 12d (needs you) and 12f remain.
+  > *Answered 2026-11-09:* IOS-12d's M-d landed (`ef9457363`, M209; LANDED "IOS-12d's M-d"), and 12f is whole: M-f1
+  > (`27c75681f`, M218; LANDED "IOS-12f's M-f1") and M-f2 (`d9fe8e6c2`, M266; LANDED "IOS-12f's M-f2").
 - Item 169 (filed). cp3 §5's line at the draft queue, on VF-PM's word. The two-desktop run (James).
 
 ## SD-1 — the sound identity's law and its code: DESIGN.md §14 Sound, and `@vibefield/sound` beside contracts (2026-11-05; `8b22e7b01` → `1ebe7b461`, 3 commits on main `f599761bc`, lane `sd/1-sound-law` in `/Volumes/SamsungRed/lanes/sd1/vibe-field`, stacked as M126 `1ebe7b461`, run 126)
@@ -31999,6 +32001,8 @@ packet says so.
   > rule). The Xcode 27.3 beta printed them. The fix rode IOS-12e's mint, whose kit build covers it.
   > *Answered in part 2026-11-06:* IOS-12c's thread, M-c2, landed (`eda440d58`, M191, run 191; LANDED
   > "IOS-12c's M-c2"): 12c is whole. 12d (needs you) and 12f remain.
+  > *Answered 2026-11-09:* IOS-12d's M-d landed (`ef9457363`, M209; LANDED "IOS-12d's M-d"), and 12f is whole: M-f1
+  > (`27c75681f`, M218; LANDED "IOS-12f's M-f1") and M-f2 (`d9fe8e6c2`, M266; LANDED "IOS-12f's M-f2").
 
 ## AR-7j — agents typed into a pane are managed in the packaged app: fieldd's own executable runs every launcher in one closed role (2026-11-05; `66037db65` → `45c3680a3`, 5 commits on main `dbb8c76ad`, lane `lp/ar7j` in `/Volumes/SamsungRed/lanes/lp-ar7j/vibe-field`, minted as M128 `45c3680a3`, run 128)
 
@@ -37417,6 +37421,8 @@ It answers in part IOS-12a's and IOS-12b's Owed ("12c the thread"), each noted i
   > *Answered 2026-11-06:* M-c2 landed (`eda440d58`, M191, run 191; LANDED "IOS-12c's M-c2"), re-cut once
   > in the proof form onto VF-VIEW's mint (`dd74abc85`). M-phone folds onto it at its own mint (UM).
 - 12d (needs you) on 12c; 12f after 12e and M-phone.
+  > *Answered 2026-11-09:* IOS-12d's M-d landed (`ef9457363`, M209; LANDED "IOS-12d's M-d"), and 12f is whole: M-f1
+  > (`27c75681f`, M218; LANDED "IOS-12f's M-f1") and M-f2 (`d9fe8e6c2`, M266; LANDED "IOS-12f's M-f2").
 
 Two inserts into older entries: IOS-12a's and IOS-12b's Owed.
 
@@ -38310,6 +38316,8 @@ IOS-12b's Owed ("12e the star in Metal"), each noted in its entry.
   > *Answered 2026-11-06:* M-c2 landed (`eda440d58`, M191, run 191; LANDED "IOS-12c's M-c2"), its head's one live face
   > on a one-face stage of its own (every face in the flow a still).
 - The note's live face after M-phone; 12f (New spark, the hatch) after M-phone.
+  > *Answered in part 2026-11-09:* 12f is whole: M-f1 (`27c75681f`, M218; LANDED "IOS-12f's M-f1") and M-f2
+  > (`d9fe8e6c2`, M266; LANDED "IOS-12f's M-f2"). This does not answer the note's live face.
 
 Three inserts into older entries: IOS-12a's Owed; IOS-12b's Owed, with a dated line on its face slot; and M-c1's
 Owed.
@@ -39245,6 +39253,8 @@ Owed ("12c the thread"), M-c1's and IOS-12e's ("M-c2, the thread"), each noted i
   read as holding (IOS, 17:30Z); its mint's kit builds them.
 - 12d (needs you) on 12c; 12f (New spark, the hatch, @'s list) after M-phone; the drawn mic with its usage strings'
   amendment after the 0.9 build (Q5).
+  > *Answered in part 2026-11-09:* 12d (`ef9457363`, M209) and 12f (M-f1 `27c75681f`, M218; M-f2 `d9fe8e6c2`, M266)
+  > landed. The drawn mic with its usage strings' amendment stands.
 - For James's eye: §9's draft lines for a desktop that does not answer and one that needs an update.
 
 Four inserts into older entries: IOS-12a's, IOS-12b's, M-c1's and IOS-12e's Owed.
@@ -41504,6 +41514,9 @@ and its re-cut onto r4 at 12:07Z.
   moving them now would void kit3 (VF-PM 22:59Z).
 - The device witness on the road: James's run, as 12c's.
 - 12f: New spark on the phone, and @'s handles in the eyebrow.
+  > *Corrected 2026-11-09:* this Owed said ChatNeeds.swift's stale pair still stood and 12f was still to come. M-f2
+  > folded the pair, M-f1 (`27c75681f`, M218; LANDED "IOS-12f's M-f1") landed New spark, and M-f2
+  > (`d9fe8e6c2`, M266; LANDED "IOS-12f's M-f2") landed @'s handles in the eyebrow.
 
 ## Item 227 — a Claude spark's reply reaches Chat: a turn's end writes the reply when no copy of the message could be kept, unless the turn's last reply already says it (track CO, TH-1)
 (2026-11-07; two commits on lane `co/item227`, ec's (vibe-field-ec), built in
@@ -42365,6 +42378,8 @@ each (a). M-f1 carries A of the plan; B (@'s list on the phone and the handle in
   `isEnabled` and WorkspaceSheets' call-site opacity retires in the same commit, with its own kit rows and the away
   pair re-shot. A call-site opacity on Create alone is refused as the ad-hoc copy.
 - **M-f2** (f7a–f7), the IOS session's: B's DESIGN.md text, the at-rows goldens, @'s red rows and @'s list.
+  > *Corrected 2026-11-09:* this listed M-f2 as still owed. It landed (`d9fe8e6c2`, M266; LANDED "IOS-12f's M-f2"):
+  > B's DESIGN.md text, the at-rows goldens, @'s red rows and @'s list.
 
 ## Item 243 — the packaged witness counts a credential-shaped name only when the runner holds it: a runtime's own per-run token is not the runner's credential (test-only; desk-gates row 34's first run)
 (2026-11-07; one commit on branch `lp/item243-packaged-credential`, cut by the LAUNCH lead (vibe-field-2a) with git
@@ -45308,3 +45323,105 @@ resolved: `scripts/check-ios-fixtures.mjs` with SP-7b's, and `DESIGN.md` with Q5
 - gate:landing, landing-only, after the mint. The slice touches none of its code.
 
 One insert into an older entry: M-phone's Owed, the generator, answered.
+
+## IOS-12f's M-f2 — @ on the phone: the Mac's list at touch pitch, a chip in the sentence, and a session named by its handle in the list and the card (track IOS)
+
+(2026-11-09; `33b8015f2` → `d9fe8e6c2`, 8 commits on main `3ae9472ae`, lane `ios/12f-mf2` in
+`/Volumes/SamsungRed/lanes/ios12b/vibe-field`, the IOS session's; minted as M266, run 266, at `d9fe8e6c2`, and landed
+10:41:38Z by the fixer as d9fe8e6c2. The tip is a proof-form re-cut of the lane by `git rebase --empty=drop --onto`, on
+the branch `ios/12f-mf2-on-3ae9472ae`, local and never pushed:
+- its tree is `git merge-tree`'s of `3ae9472ae` and the lane's tip `6cd9d87d9`;
+- range-diff reads 8 `=`, and each commit's `--stable` `--full-index` patch-id is the lane commit's.
+
+The whole diff's patch-id is `bcdbbf2348a618accb5802a2ab38e6b4e8cd5d7c` on each base. The lane's shas are main's as
+follows: f7a `22094bd52` = `33b8015f2`; the rider `c1e04d797` = `b9473a876`; f7b `775ff14ec` = `2661f20f5`; the red
+`bd7db3675` = `5c05e9c40`; the model `7e078bcc7` = `a938e33b4`; the field and wiring `ca5065e22` = `f8f8528ba`;
+`a153fed52` = `91c67d7c1`; the overlay's fix `6cd9d87d9` = `d9fe8e6c2`.)
+
+**The rulings.** Plan: `lanes/ios12/12f/plan-mf2.md`, ruled by VF-PM at every lean, 2026-11-09 02:24:16Z, at sha16
+`52afa3f08fae3b67` (its text before the RULED block it now carries; the file today is `f19cff645391931d`):
+- Q1 (a): inline, a `UITextView` `ChatDraftField` behind `UIViewRepresentable`, chips as `NSTextAttachment`, the pure
+  `ChatDraft` port the truth the goldens hold.
+- Q2 (a): @ opens only for a spark on the home. Elsewhere @ types as @, with no claimed failure.
+- Q3 (a): sessions are placed as New spark's reach is, the retired-sign-in residual named beside the reach line's.
+- Q4 (a): an agent's menu is the New spark sheet's own, with no arrow walk.
+- `SparkSummary` keeps `profiles`, with no wire move.
+- Stills on vf-m2, under the beta simulator, by name, for James's eye, with no golden.
+
+**The two leans, for James's eye, not in DESIGN.md until his word** (VF-PM 03:11:42Z): @'s list height is capped by the
+page above the composer, and a chip is capped at the field's width, truncating.
+
+**What it rests on.** PC-L1 (one Chat), plan-12f's Q8 A, DESIGN.md §8 "The phone's Chat". The Mac's own code:
+`field-app/src/chat/at-rows.ts` and `composer-draft.ts`, whose models write the goldens. 12c's composer, 12d's card and
+12f's M-f1.
+
+**What is real.**
+- **DESIGN.md first** (f7a): one amendment under §8's composer. It ends 12c's Q4, "Words alone until IOS-12f".
+- **The goldens** (f7b): `at-rows-goldens.test.ts` writes two goldens from the Mac's own models, 13 list cases, 12
+  queries, 6 chips and 14 messages, copied byte for byte to the kit and held by `check-ios-fixtures.mjs`.
+- **The port:** `ChatAt` (the rows and the handles, one rule read twice) and `ChatDraft` (parts, `splice`, `length`,
+  `chip(at:)`, `place`, `after`, `message`, `sendable`).
+- **The field:** `ChatDraftField`, a chip one character in the sentence, Backspace taking it whole, Return sends, growth
+  to five lines.
+- **The list:** `ChatAtView`, from the composer up, as wide as the field, a tap for a row, the nearest drawn hot.
+- **The handle in the card:** `NeedsCards.names(of:handles:)`, one rule read twice with @'s.
+- **C, the stale pair:** `ChatNeeds.swift`'s `paneMissing` and `away` comments are folded.
+- **A send carries its chips:** `ChatDraft.message`'s spans go into `SparkSayParams` and the bubble holds them. 12c's
+  `chips: []` ends.
+
+**Departures, each named.** 12c's composer tests were re-read against the new field, as the ruling names (VF-PM
+03:11:42Z): `typedBreak` had no test and retires; `ChatSend.draftAfter` retires for `ChatDraft.after`, and its assertion
+moves with it.
+
+**What is stubbed or left.** A card played on the composer (the hand is the Mac's); the drawn mic and +, which wait on
+the usage strings; @ for a spark on another desktop (Q2); the keyboard's arrow walk (Q4).
+
+**Validation.**
+- **The first compile, run250** at `ca5065e22`: S GREEN, 0 errors, 16 of 16 test bundles linked. Its one slice warning
+  was fixed.
+- **The kit rows, run252** at `a153fed52` on `c27ab9b2d`: R at the red failed by the goldens' prediction, 82 `✘` lines
+  and 66 + 1 issues, every per-test count as predicted. G was GREEN-BUT-167, the first run of the slice's 19 tests, and
+  all 19 passed. Its stills found Found 1.
+- **K3, run 257** at `63fa44b32`, an earlier cut of these eight: S GREEN, P PASS, G GREEN-BUT-167,
+  `passed 2238, skipped 3, failed 1 (of 2242)`, stills 14 of 14. Results `lanes/vf-m2/12f-k3-a9-results/`, SHA256SUMS
+  `742f783349baeb3d`. R is carried from run252 on the equal patch-id, `0f58d31948fd`.
+- **The Mac's rows at the tip,** through the door, each alone (HOLD 09:57:19Z to 10:04:02Z;
+  `lanes/ios12/12f/mf2/vfm2-vk/logs/`): `check-ios-fixtures.mjs`, 430 copies and 101 pins; vitest on
+  `at-rows-goldens.test.ts` and `chat-at-rows.test.ts`, 19 tests; biome on the three changed files; `check:walls`'s
+  four, `267 of 1141` temp roots.
+- **V and K, M266, run 266** at `d9fe8e6c2` on main `3ae9472ae` (results `lanes/vf-m2/12f-mf2-vk-a9-results/`,
+  SHA256SUMS `ed4ef31af151e0f0`, 52 OK as VF-PM read it at 10:40:10Z; runner `443fd66f9cec1a96`).
+  - V: `12F M-f2 V: GREEN at +348 s`, `pnpm verify` exit 0, with `Test Files 331 passed (331)`,
+    `Tests 4552 passed (4552)`, `ios fixtures: 430 copies identical`, `ios pins: 101 contract values identical`,
+    `Checked 3547 files` and `267 of 1141 test files`, each as expected against run264's lines.
+  - K: `12F M-f2 K: GREEN-BUT-167 at +120 s`. S on Xcode 26.3 built 16 of 16 with 0 warnings in the 17 files, P passed,
+    and G under the beta read `passed 2239, skipped 3, failed 1 (of 2243)`, FieldHomeTests 528 in 66. Its one red is
+    item 167's, `scrollingKeepsTheKeyboardDownAndExplicitFocusStillWorks()` at
+    `TerminalSurfaceKeyboardTests.swift:31:27`.
+  - Carried: the stills from run 257, the kit's `Sources` tree unchanged (`92c8c8fff264`); R on the equal patch-id,
+    `0f58d31948fd`.
+
+**Found.**
+1. **@'s box stood on the composer.** run252's `at-none`, `at-list` and `at-menu` put the box's top on the field's top,
+   hiding the field and running off the screen. At `ca5065e22`, `ChatComposer.swift:96`'s
+   `.alignmentGuide(.top) { $0[.bottom] + ChatAtView.foot }` under `.overlay(alignment: .top)` had no effect on screen,
+   and the cause is unread. The fix (`d9fe8e6c2`) is `.overlay(alignment: .bottom)` with bottom padding of the field's
+   own box plus the gap. K3's stills show the box above the field. No test could see this; the pre-mint stills did.
+2. **Three of the row's own expectations were wrong, each corrected at its source**
+   (`lanes/ios12/12f/mf2/vfm2-k/ERRATA-a9-brief-12f-k252.md`, `vfm2-k3/ERRATA-a9-brief-12f-k3.md`): main carries three
+   skips across the whole kit, not one; "Nothing is deleted, committed or stopped by the runner" missed the stills'
+   `kill` of the row's own console child; `at-menu` shows no Effort until a model is chosen.
+3. **R's `Failing tests` block read 66 lines against 67.** `chips()` has 6 issues, and its golden's cases 1 and 6 expect
+   the same label. That `xcodebuild` lists identical issues once fits this case and is UNPROVEN.
+
+**Owed.**
+- On a device, James's phone: a tap on a row of the risen box, and the field with the keyboard up. Neither can be
+  stilled with no OS input.
+- Effort's row on the phone: unstilled until a model-chosen fixture exists (VF-PM 08:30:40Z).
+- A chip wider than the field: no fixture.
+- For James's eye: the 14 stills, and the two leans above.
+- Why the alignment guide had no effect: unread.
+- `draft/thinking-ios-app.md`'s Status line, for the draft queue, on VF-PM's word.
+
+Seven inserts into older entries: IOS-12a's, IOS-12b's, M-c1's, IOS-12e's and M-c2's Owed, and corrections at IOS-12d's
+M-d and IOS-12f's M-f1 Owed.
