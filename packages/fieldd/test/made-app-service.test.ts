@@ -26,12 +26,15 @@ import {
   MADE_APP_PORT_DOMAIN,
   MADE_APP_PREVIEWS_PORT_DOMAIN,
   MADE_APP_REGISTRY_FILE,
+  MADE_APP_VIEW,
   MadeAppRegistry,
   type MadeAppServeRecord,
   madeAppFoldKey,
+  madeAppServeHeaders,
   type ShellWebContentsCaptureArtifactPreviewParams,
   type ShellWebContentsCaptureArtifactPreviewResult,
 } from "@vibefield/contracts";
+import { createNoopLogger } from "@vibefield/logging";
 import { afterEach, describe, expect, it } from "vitest";
 import { type ArtifactServeBridge, canonicalJson } from "../src/artifact-service";
 import {
@@ -47,15 +50,19 @@ import {
   MadeAppService,
   type MadeAppServiceOptions,
   type MadeAppTimers,
+  type MadeAppViewBuilder,
   madeAppPortCandidate,
   madeAppPreviewsPortCandidate,
   madeAppRefusal,
   madeAppServeId,
   madePreviewsServeId,
+  prepareMadeAppRoots,
+  rosettaMadeAppExporter,
 } from "../src/made-app-service";
 import type { ObservedServe, ServeSpec, ServeState } from "../src/mesh-client";
 import { RpcCallError } from "../src/native-link";
 import { serveAllowGlob } from "../src/terminal-serve";
+import type { BuildMadeViewArgs } from "../src/workspace/protocol";
 import { TEST_LOGIN } from "./link-fixture";
 
 const FIXTURES = join(import.meta.dirname, "../../contracts/fixtures");
@@ -297,6 +304,9 @@ class FakeRows implements MadeAppRows {
 class FakeExporter implements MadeAppExporter {
   calls: MadeAppExportRequest[] = [];
   hosts: string[] = [...HOSTS];
+  variables: Record<string, string> = { "--color-text-primary": "#111" };
+  /** the page's path inside `into`, as rosetta names it */
+  path = "index.html";
   failWith: unknown = null;
   /** rosetta's digest per publication; by default, the name of the folder it was asked to write */
   digests = new Map<string, string>();
@@ -307,11 +317,27 @@ class FakeExporter implements MadeAppExporter {
     mkdirSync(request.into, { recursive: true });
     writeFileSync(join(request.into, "index.html"), "<!doctype html><title>made</title>");
     return {
-      written: true,
-      digest: this.digests.get(request.publicationId) ?? basename(request.into),
-      shellVersion: "rosetta-shell-1",
-      hosts: [...this.hosts],
+      page: {
+        path: this.path,
+        blake3: this.digests.get(request.publicationId) ?? basename(request.into),
+        bytes: 34,
+      },
+      environment: { hosts: { "script-src": [...this.hosts] }, variables: { ...this.variables } },
     };
+  }
+}
+
+/** The files worker's view: it records what it was asked and writes the served folder. */
+class FakeView implements MadeAppViewBuilder {
+  calls: BuildMadeViewArgs[] = [];
+  failWith: unknown = null;
+
+  async build(args: BuildMadeViewArgs): Promise<unknown> {
+    this.calls.push(structuredClone(args));
+    if (this.failWith !== null) throw this.failWith;
+    mkdirSync(args.folder, { recursive: true });
+    writeFileSync(join(args.folder, MADE_APP_VIEW.FILE), "<!doctype html><title>view</title>");
+    return { bytes: 34 };
   }
 }
 
@@ -401,6 +427,7 @@ interface Parts {
   bridge: FakeBridge;
   rows: FakeRows;
   exporter: FakeExporter;
+  view: FakeView;
   intents: FakeIntents;
   timers: FakeTimers;
   clock: { now: number };
@@ -422,6 +449,7 @@ function parts(over: Partial<Parts> = {}): Parts {
     bridge: new FakeBridge(),
     rows: new FakeRows(),
     exporter: new FakeExporter(),
+    view: new FakeView(),
     intents: new FakeIntents(),
     timers: new FakeTimers(),
     clock: { now: T0 },
@@ -442,6 +470,7 @@ function baseOptions(p: Parts): MadeAppServiceOptions {
     bridge: p.bridge,
     rows: p.rows,
     exporter: p.exporter,
+    view: p.view,
     intents: p.intents,
     linkedLogin: () => p.login,
     selfDnsName: () => p.dns,
@@ -510,6 +539,16 @@ function recordOf(p: Parts, appId: string): MadeAppServeRecord | undefined {
 const previewIdOf = (p: Parts, appId: string) => recordOf(p, appId)?.previewId ?? "<no preview id>";
 const madeFolder = (p: Parts, row: IndexCatalogApp, digest = digestOf(row)) =>
   join(p.dataDir, "artifacts", "made", row.appId, digest);
+/** Where rosetta's export places the page: below `--export-root`, never served. */
+const exportFolder = (p: Parts, row: IndexCatalogApp, digest = digestOf(row)) =>
+  join(p.dataDir, "drive", "import", row.appId, digest);
+
+/** The headers a policy's hosts compose, by the contract's own composer. */
+function headersFor(hosts: Record<string, string[]>): Array<{ name: string; value: string }> {
+  const answer = madeAppServeHeaders({ source: "captured", hosts });
+  if (!answer.ok) throw new Error(`no headers: ${answer.refused}`);
+  return answer.headers;
+}
 const capturedFile = (p: Parts, previewId: string) =>
   join(p.dataDir, "artifacts", "previews", previewId, "thumbnail.jpg");
 const linkedFile = (p: Parts, previewId: string) =>
@@ -687,8 +726,8 @@ describe("MadeAppService (MA-3b unit)", () => {
     await svc.start();
     const outcome = await opened(svc, row.appId);
     const folder = madeFolder(p, row);
-    expect(p.exporter.calls, "the exporter is asked once, into the app's digest folder").toEqual([
-      { sessionId: row.sessionId, publicationId: row.presentationId, into: folder },
+    expect(p.exporter.calls, "the exporter is asked once, into the non-served export").toEqual([
+      { sessionId: row.sessionId, publicationId: row.presentationId, into: exportFolder(p, row) },
     ]);
     const port = appPort(row);
     expect(outcome, "the open answers its listener's URL and the shell's valid hosts").toEqual(
@@ -714,12 +753,21 @@ describe("MadeAppService (MA-3b unit)", () => {
     );
     const previewDir = join(p.dataDir, "artifacts", "previews", previewId);
     const allow = [glob(TEST_LOGIN)];
+    const headers = headersFor({ script: HOSTS });
     expect(appSpecOf(p.bridge, row.appId)).toEqual({
-      serveId: madeAppServeId({ appId: row.appId, listenPort: port, allow, previewDir, folder }),
+      serveId: madeAppServeId({
+        appId: row.appId,
+        listenPort: port,
+        allow,
+        previewDir,
+        folder,
+        headers,
+      }),
       name: `made-app:${row.appId}`,
       listenPort: port,
       target: { kind: "dir", path: folder },
       previewDir,
+      headers,
       allow,
       tls: true,
     });
@@ -755,7 +803,7 @@ describe("MadeAppService (MA-3b unit)", () => {
     );
   });
 
-  it("passes rosetta 0.1.3's export-unbuilt through, words any other export failure export-failed, and reserves nothing", async () => {
+  it("passes an exporter's own refusal through, words any other export failure export-failed, and reserves nothing", async () => {
     const p = parts();
     const row = p.rows.add(appRow(1));
     const svc = made(p);
@@ -1427,7 +1475,7 @@ describe("MadeAppService (MA-3b unit)", () => {
     expect(p.exporter.calls.at(-1)).toEqual({
       sessionId: v2.sessionId,
       publicationId: v2.presentationId,
-      into: madeFolder(p, v2),
+      into: exportFolder(p, v2),
     });
     const spec = appSpecOf(p.bridge, v2.appId);
     expect({ path: spec?.target, port: spec?.listenPort }).toEqual({
@@ -1477,7 +1525,11 @@ describe("MadeAppService (MA-3b unit)", () => {
     expect(await opened(svc, newest.appId, older.presentationId)).toEqual(serving(appPort(newest)));
     const olderFolder = join(p.dataDir, "artifacts", "made", newest.appId, hex("page-1-1"));
     expect(p.exporter.calls).toEqual([
-      { sessionId: older.sessionId, publicationId: older.presentationId, into: olderFolder },
+      {
+        sessionId: older.sessionId,
+        publicationId: older.presentationId,
+        into: join(p.dataDir, "drive", "import", newest.appId, hex("page-1-1")),
+      },
     ]);
     expect(appSpecOf(p.bridge, newest.appId)?.target).toEqual({ kind: "dir", path: olderFolder });
     expect(recordOf(p, newest.appId)?.exportedPresentationId).toBe(older.presentationId);
@@ -1492,6 +1544,212 @@ describe("MadeAppService (MA-3b unit)", () => {
     expect(appSpecOf(p.bridge, newest.appId)?.target).toEqual({
       kind: "dir",
       path: madeFolder(p, newest),
+    });
+  });
+
+  it("MA-3f: places the page apart, builds the view where it is served, from rosetta's digest and environment", async () => {
+    const p = parts();
+    const row = p.rows.add(appRow(1));
+    const svc = made(p);
+    await svc.start();
+    expect(await opened(svc, row.appId)).toEqual(serving(appPort(row)));
+    const into = exportFolder(p, row);
+    expect(p.view.calls).toEqual([
+      {
+        source: join(into, MADE_APP_VIEW.FILE),
+        folder: madeFolder(p, row),
+        theme: { colorScheme: "light", variables: [["--color-text-primary", "#111"]] },
+        blake3: digestOf(row),
+      },
+    ]);
+    expect(recordOf(p, row.appId)).toMatchObject({
+      network: { script: HOSTS },
+      viewVersion: MADE_APP_VIEW.VERSION,
+      reach: HOSTS,
+    });
+    expect(existsSync(into), "the export is kept beside the view").toBe(true);
+  });
+
+  it("MA-3f: a restart spells the same serve from the record, with no export", async () => {
+    const p = parts();
+    const row = p.rows.add(appRow(1));
+    const first = made(p);
+    await first.start();
+    await opened(first, row.appId);
+    const before = appSpecOf(p.bridge, row.appId);
+    await first.dispose();
+    const second = made(p);
+    await second.start();
+    expect(appSpecOf(p.bridge, row.appId)).toEqual(before);
+    expect(p.exporter.calls, "the record held all it needed").toHaveLength(1);
+  });
+
+  it("MA-3f: a new page's policy is a new serve, and the old one is removed before it is declared", async () => {
+    const p = parts();
+    const v1 = p.rows.add(appRow(1));
+    const svc = made(p);
+    await svc.start();
+    await opened(svc, v1.appId);
+    const oldId = appSpecOf(p.bridge, v1.appId)?.serveId ?? "";
+    const v2 = p.rows.add(
+      appRow(1, { presentationId: hex("presentation-1-2"), digest: hex("page-1-2"), versions: 2 }),
+    );
+    p.exporter.hosts = ["esm.sh"];
+    await opened(svc, v2.appId);
+    const spec = appSpecOf(p.bridge, v2.appId);
+    expect(spec?.headers).toEqual(headersFor({ script: ["esm.sh"] }));
+    expect(spec?.serveId).not.toBe(oldId);
+    expect(p.bridge.removedAt(oldId)).toBeLessThan(p.bridge.firstDeclaredAt(spec?.serveId ?? ""));
+    // both roots keep the current digest alone
+    expect(existsSync(exportFolder(p, v1)), "the old export goes").toBe(false);
+    expect(existsSync(madeFolder(p, v1)), "the old view goes").toBe(false);
+    expect(existsSync(exportFolder(p, v2))).toBe(true);
+  });
+
+  it("MA-3f: a view built at another version, or a record with no policy, is exported again", async () => {
+    const p = parts();
+    const row = p.rows.add(appRow(1));
+    const svc = made(p);
+    await svc.start();
+    await opened(svc, row.appId);
+    await svc.dispose();
+    const file = MadeAppRegistry.parse(JSON.parse(readFileSync(registryPath(p), "utf8")));
+    const app = file.apps[0]!;
+    const { viewVersion: _old, ...stale } = app;
+    writeFileSync(registryPath(p), JSON.stringify({ ...file, apps: [stale] }));
+    const next = made(p);
+    await next.start();
+    await opened(next, row.appId);
+    expect(p.exporter.calls, "the second open exports again").toHaveLength(2);
+  });
+
+  it("MA-3f: an answer for another path, or a view that cannot be built, is export-failed and leaves nothing", async () => {
+    const p = parts();
+    const row = p.rows.add(appRow(1));
+    const svc = made(p);
+    await svc.start();
+    p.exporter.path = "../index.html";
+    expect(await opened(svc, row.appId)).toEqual(refused("export-failed", true));
+    expect(p.view.calls, "no view of a page at another path").toEqual([]);
+    p.exporter.path = "index.html";
+    p.view.failWith = new Error("mismatch");
+    expect(await opened(svc, row.appId)).toEqual(refused("export-failed", true));
+    expect(existsSync(exportFolder(p, row))).toBe(false);
+    expect(existsSync(madeFolder(p, row))).toBe(false);
+    expect(recordOf(p, row.appId), "no record, so no port").toBeUndefined();
+  });
+
+  it("MA-3f: serves no app it cannot give its policy to", async () => {
+    const p = parts();
+    const row = p.rows.add(appRow(1));
+    const svc = made(p);
+    await svc.start();
+    await opened(svc, row.appId);
+    await svc.dispose();
+    const file = MadeAppRegistry.parse(JSON.parse(readFileSync(registryPath(p), "utf8")));
+    const { network: _policy, ...bare } = file.apps[0]!;
+    writeFileSync(registryPath(p), JSON.stringify({ ...file, apps: [bare] }));
+    const next = made(p);
+    await next.start();
+    expect(appSpecOf(p.bridge, row.appId), "no headers, no listener").toBeUndefined();
+  });
+
+  it("MA-3f: rosetta's 404 is the page not kept; every other status is left for the service to word, and logged", async () => {
+    const logged: unknown[] = [];
+    const logger = { ...createNoopLogger(), info: (...line: unknown[]) => logged.push(line) };
+    let onStatus: ((status: number) => RpcCallError | undefined) | undefined;
+    const exporter = rosettaMadeAppExporter(
+      {
+        exportArtifact: async (_session, _publication, _request, given) => {
+          onStatus = given;
+          return { page: { path: "index.html", blake3: "x", bytes: 1 }, environment: {} };
+        },
+      },
+      logger as unknown as Parameters<typeof rosettaMadeAppExporter>[1],
+    );
+    await exporter.export({ sessionId: "s", publicationId: "p", into: "/x" });
+    const refusal = onStatus?.(404);
+    expect(refusal?.details).toMatchObject({ service: "apps", state: "not-kept" });
+    expect(logged, "a page not kept is no failure to log").toEqual([]);
+    for (const status of [400, 409, 503]) expect(onStatus?.(status), `${status}`).toBeUndefined();
+    expect(logged).toHaveLength(3);
+  });
+
+  it("MA-3f: makes both roots before rosettad needs them, and a folder it cannot make costs the opens alone", () => {
+    const dataDir = mkdtempSync(join(tmpdir(), "vf-ma3f-"));
+    cleanup.push(() => rmSync(dataDir, { recursive: true, force: true }));
+    const logger = createNoopLogger();
+    const roots = prepareMadeAppRoots(dataDir, logger);
+    expect(roots).toEqual({
+      sourceRoot: join(dataDir, "drive", "import"),
+      servedRoot: join(dataDir, "artifacts", "made"),
+    });
+    expect(statSync(join(dataDir, "drive", "import")).mode & 0o777).toBe(0o700);
+    const blocked = join(dataDir, "a-file");
+    writeFileSync(blocked, "");
+    expect(prepareMadeAppRoots(blocked, logger)).toBeUndefined();
+  });
+
+  describe("MA-3f: one reservation set, closed in both directions", () => {
+    /** A bridge whose `observed` waits for `release`, so a row can act inside the probe's wait. */
+    function heldObserved(p: Parts): () => void {
+      let release = (): void => undefined;
+      const gate = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      const real = p.bridge.observed.bind(p.bridge);
+      p.bridge.observed = async () => {
+        await gate;
+        return await real();
+      };
+      return release;
+    }
+
+    it("reads AH's set after the probe's wait, so a port AH took meanwhile is skipped", async () => {
+      const p = parts();
+      const row = p.rows.add(appRow(1));
+      const ah = new Set<number>();
+      const svc = made(p, { otherReservedPorts: () => new Set(ah) });
+      await svc.start();
+      const release = heldObserved(p);
+      const opening = opened(svc, row.appId);
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      ah.add(candidateOf(MADE_APP_PORT_DOMAIN, row.appId));
+      release();
+      await opening;
+      expect(recordOf(p, row.appId)?.listenPort).toBe(
+        probed(candidateOf(MADE_APP_PORT_DOMAIN, row.appId)),
+      );
+    });
+
+    it("holds a port it picked until its commit, so AH cannot be handed it in between", async () => {
+      const p = parts();
+      const row = p.rows.add(appRow(1));
+      const seen: boolean[] = [];
+      const port = candidateOf(MADE_APP_PORT_DOMAIN, row.appId);
+      const svc: MadeAppService = made(p, {
+        writeRegistry: (path, body) => {
+          seen.push(svc.reservedPorts().has(port));
+          writeFileSync(path, body);
+        },
+      });
+      mkdirSync(join(p.dataDir, "registries"), { recursive: true });
+      await svc.start();
+      await opened(svc, row.appId);
+      expect(seen.at(-1), "the port is held while the record is written").toBe(true);
+    });
+
+    it("frees a picked port when its commit fails", async () => {
+      const p = parts();
+      const row = p.rows.add(appRow(1));
+      const svc = made(p, {
+        writeRegistry: () => {
+          throw Object.assign(new Error("disk full"), { code: "ENOSPC" });
+        },
+      });
+      await svc.start();
+      await opened(svc, row.appId);
+      expect(svc.reservedPorts().has(candidateOf(MADE_APP_PORT_DOMAIN, row.appId))).toBe(false);
     });
   });
 
@@ -1726,6 +1984,7 @@ describe("MadeAppService (MA-3b unit)", () => {
       allow: [glob("someone@else.example")],
       previewDir: twoPreviewDir,
       folder: madeFolder(p, two),
+      headers: headersFor({ script: HOSTS }),
     });
     r.bridge.native.set(sameId, liveServe(sameId, appPort(two)));
     r.login = "someone@else.example";

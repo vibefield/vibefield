@@ -12,7 +12,7 @@
 // The witnesses (the plan's MA-3, part 1):
 //   · an app A's agent made is a row in B's mesh fold within 5 s of A's library holding it,
 //     and B's shelf hears a ping; when A sleeps, B keeps A's apps and says A is asleep (DS-L8);
-//   · B's open on A answers A's honest `export-unbuilt` (rosetta 0.1.3 has no export door),
+//   · B's open on A reaches A's rosetta export door and answers A's serve (MA-3f),
 //     audited on A as `artifact.made.open` with `onBehalfOf` recorded, never as authority;
 //   · EL2: the page's bytes never ride B↔A — what the two daemons' peer sockets carry while A's
 //     app replicates and B lists, opens and reads it stays under the size its row declares, and
@@ -47,7 +47,6 @@ import {
   IndexSessionsResult,
   MADE_APP_LIMITS,
   MADE_APP_OPEN,
-  MadeAppOpenRefusal,
   madeAppFoldKey,
   type PlaceFacts,
   type Scope,
@@ -61,7 +60,7 @@ import type { ArtifactEntry } from "@vibefield/rosetta-protocol";
 import { afterEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
 import { bootstrap, type FielddConfig, type FielddDaemon, verifyAuditSegment } from "../src/index";
-import type { MadeAppExporter } from "../src/made-app-service";
+import type { MadeAppExporter, MadeAppViewBuilder } from "../src/made-app-service";
 import { MockMgmtServer } from "../src/testing/mock-mgmt";
 import { productPathSecret, TEST_LOGIN, writeLinkFixture } from "./link-fixture";
 import { nativeEndpoint } from "./native-harness";
@@ -200,16 +199,29 @@ const SCRIPT_B: DeskScript = {
   library: { entries: [appEntry("bee", "b1", 4_000)] },
 };
 
-/** RO-A1's export as a 0.1.4 rosetta would answer it (the test seam `madeApps.exporter`): the
- * page written into its digest folder, the digest the library names, the shell's hosts. */
+/** rosetta's export as its door answers it (the test seam `madeApps.exporter`): the page placed in
+ * its export folder, the digest the library names, the environment's hosts. */
 const servingExporter = (hosts: string[]): MadeAppExporter => ({
   export: async ({ publicationId, into }) => {
     mkdirSync(into, { recursive: true });
     writeFileSync(join(into, "index.html"), "<!doctype html><title>made</title>");
     const name = ["one", "two", "bee"].find((n) => presentationOf(n) === publicationId) ?? "";
-    return { written: true, digest: digestOf(name), shellVersion: "test-shell", hosts };
+    return {
+      page: { path: "index.html", blake3: digestOf(name), bytes: 34 },
+      environment: { hosts: { "script-src": hosts }, variables: {} },
+    };
   },
 });
+
+/** The files worker's view (the test seam `madeApps.view`): these rows' digests are not the bytes'
+ * blake3, and the real worker is held to that in workspace-made-view.test.ts. */
+const madeView: MadeAppViewBuilder = {
+  build: async ({ folder }) => {
+    mkdirSync(folder, { recursive: true });
+    writeFileSync(join(folder, "index.html"), "<!doctype html><title>view</title>");
+    return { bytes: 34 };
+  },
+};
 
 // ── the desks ───────────────────────────────────────────────────────────────
 
@@ -570,8 +582,8 @@ describe("MA-3e — the made apps across two real daemons", () => {
       availability: "captured",
       versions: 1,
     });
-    // rosetta 0.1.3 has no export door: an app is listed, and not yet openable
-    expect(page.rows.map((row) => row.openable)).toEqual([false, false, false]);
+    // MA-3f: every desktop here exports, so every app it lists can be opened
+    expect(page.rows.map((row) => row.openable)).toEqual([true, true, true]);
     expect(page.sources.find((source) => source.device === "dev-a")).toMatchObject({
       self: false,
       state: "live",
@@ -609,23 +621,24 @@ describe("MA-3e — the made apps across two real daemons", () => {
     });
   }, 120_000);
 
-  it("B's artifact.open {device: A} answers A's honest export-unbuilt, audited on A as the act of B's window; artifact.mark is the home's and says intent-unbuilt until slice 3h", async () => {
-    const { A, B } = await bootPair({ a: SCRIPT_A, b: SCRIPT_B });
+  it("B's artifact.open {device: A} reaches A's rosetta export door and answers A's serve, audited on A as the act of B's window; artifact.mark is the home's and says intent-unbuilt until slice 3h", async () => {
+    const { A, B } = await bootPair(
+      { a: SCRIPT_A, b: SCRIPT_B },
+      { aMadeApps: { view: madeView } },
+    );
     await reachable(A, B);
     const appId = appIdOf("one");
     const win = await windowOn(B);
 
     const answer = await win.attempt("artifact.open", { appId, device: "dev-a" });
-    expect(answer.ok, "the open is refused: A's rosetta has no export door yet").toBe(false);
-    if (!answer.ok) {
-      expect(answer.error.data?.kind).toBe("UNAVAILABLE");
-      expect(answer.error.data?.retryable).toBe(false);
-      expect(MadeAppOpenRefusal.parse(answer.error.data?.details)).toEqual({
-        service: MADE_APP_OPEN.SERVICE,
-        state: MADE_APP_OPEN.STATE_EXPORT_UNBUILT,
-        device: "dev-a",
-      });
-    }
+    expect(answer.ok, "A's rosetta exported the page and A serves it").toBe(true);
+    // the door was asked, once, on A's own rosetta and never on B's
+    const exportsOf = (desk: Desk) =>
+      readFileSync(desk.files.requests, "utf8")
+        .split("\n")
+        .filter((line) => line.endsWith("/export"));
+    expect(exportsOf(A)).toHaveLength(1);
+    expect(exportsOf(B)).toEqual([]);
     // A audited the act, its attempt before its effect, as B's daemon carrying B's window:
     // recorded, never authority (DS-L7)
     const opens = (await auditRecords(A.daemon)).filter(
@@ -633,7 +646,7 @@ describe("MA-3e — the made apps across two real daemons", () => {
     );
     expect(opens.map((record) => [record.phase, record.outcome ?? null])).toEqual([
       ["attempt", null],
-      ["outcome", "failed"],
+      ["outcome", "succeeded"],
     ]);
     for (const record of opens) {
       expect(record.target).toEqual({ kind: "made-app", id: appId });
@@ -642,21 +655,14 @@ describe("MA-3e — the made apps across two real daemons", () => {
         onBehalfOf: { clientKind: "renderer", deviceId: "dev-b" },
       });
     }
-    expect(opens.at(-1)?.reasonCode).toBe("UNAVAILABLE");
     // B carried the call WHOLE: it audited no open of its own
     expect(
       (await auditRecords(B.daemon)).filter((record) => record.action === "artifact.made.open"),
     ).toEqual([]);
-    // A's own window meets the same honest word, naming A
+    // A's own window serves the same app, and the page is already there: no second export
     const local = await (await windowOn(A)).attempt("artifact.open", { appId });
-    expect(local.ok, "A's own open is refused the same way").toBe(false);
-    if (!local.ok) {
-      expect(local.error.data?.details).toEqual({
-        service: MADE_APP_OPEN.SERVICE,
-        state: MADE_APP_OPEN.STATE_EXPORT_UNBUILT,
-        device: "dev-a",
-      });
-    }
+    expect(local.ok, "A's own open answers").toBe(true);
+    expect(exportsOf(A)).toHaveLength(1);
 
     // keep is the person's intent, the home's to write (slice 3h): until then, said in words
     const foldKey = madeAppFoldKey({ device: "dev-a", appId, kind: "claude-code" });
@@ -740,7 +746,7 @@ describe("MA-3e — the made apps across two real daemons", () => {
   it("C16: a URL A's listener reported, whose host is not A's MagicDNS name as B's roster knows it, is stripped at B — never rewritten — and B reveals nothing; A's own window has it revealed by A's own shell", async () => {
     const { A, B } = await bootPair(
       { a: SCRIPT_A, b: SCRIPT_B },
-      { aMadeApps: { exporter: servingExporter(["cdn.example.com"]) } },
+      { aMadeApps: { exporter: servingExporter(["cdn.example.com"]), view: madeView } },
     );
     await reachable(A, B);
     const appId = appIdOf("one");
@@ -824,7 +830,7 @@ describe("MA-3e — the made apps across two real daemons", () => {
   it("C16: a URL on A's own MagicDNS name passes B's check, and B — the answering home — reveals it through its own shell, never A", async () => {
     const { A, B } = await bootPair(
       { a: SCRIPT_A, b: SCRIPT_B },
-      { aNameOnB: MOCK_HOST, aMadeApps: { exporter: servingExporter([]) } },
+      { aNameOnB: MOCK_HOST, aMadeApps: { exporter: servingExporter([]), view: madeView } },
     );
     await reachable(A, B);
     const appId = appIdOf("one");

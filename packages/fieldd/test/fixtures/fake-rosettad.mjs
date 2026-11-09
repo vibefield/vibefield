@@ -158,8 +158,11 @@
 // nosniff, `sandbox; default-src 'none'`, no-store), and rosetta's 404 for a
 // publication that is not that session's or has no bytes. It is matched BEFORE
 // the `/api/sessions/` prefix, which would read the rest of the path as an id.
-// 0.1.4's export door (RO-32) is not scripted: fieldd asks it nothing before
-// MA-3f wires its exporter.
+// MA-3f — the export door (RO-32, by digest): `POST …/{publication}/export {into}`
+// places the scripted bytes as `<into>/index.html` when `into` is below
+// `--export-root`, and answers rosetta's shape with the library's digest and a
+// fixed environment. No `--export-root` is rosetta's 503, an `into` outside it a
+// 400, and a publication with no asset a 404.
 //
 // Item 65 — FAKE_ROSETTAD_LATE_STDERR_MS: the last words reach stderr AFTER this process has exited. A refusal
 // (crash-on-start), the old binary's flag error and the schema mismatch are then written by a grandchild that holds
@@ -755,6 +758,52 @@ const apiError = (res, status, code, message) => {
   res.end(JSON.stringify({ error: { code, message } }));
 };
 const ARTIFACT_CONTENT = /^\/api\/sessions\/([^/?]+)\/artifacts\/([^/?]+)\/content(?:\?.*)?$/;
+const ARTIFACT_EXPORT = /^\/api\/sessions\/([^/?]+)\/artifacts\/([^/?]+)\/export$/;
+const exportRoot = flag("--export-root");
+/** MA-3f — rosetta's export door, as far as fieldd's exporter reads it (the header). */
+const answerExport = (res, sessionId, publicationId, body) => {
+  if (exportRoot === undefined) {
+    apiError(res, 503, "not_ready", "this daemon has no export root");
+    return;
+  }
+  let into;
+  try {
+    into = JSON.parse(body).into;
+  } catch {
+    apiError(res, 400, "bad_request", "expected a JSON {into}");
+    return;
+  }
+  if (typeof into !== "string" || !into.startsWith(`${exportRoot}/`)) {
+    apiError(res, 400, "bad_request", "the export directory must be inside the root");
+    return;
+  }
+  const script = artifactScript();
+  const entry = script.entries.find(
+    (candidate) =>
+      candidate.publication.session_id === sessionId && candidate.publication.id === publicationId,
+  );
+  if (entry?.asset === undefined || entry.asset === null) {
+    apiError(res, 404, "not_found", "no captured artifact content");
+    return;
+  }
+  const bytes = script.content[publicationId] ?? "<!doctype html><title>exported</title>";
+  mkdirSync(into, { recursive: true, mode: 0o700 });
+  writeFileSync(`${into}/index.html`, bytes);
+  res.setHeader("x-rosetta-protocol-version", String(protocol));
+  res.setHeader("content-type", "application/json");
+  res.end(
+    JSON.stringify({
+      page: { path: "index.html", blake3: entry.asset.digest, bytes: bytes.length },
+      members: [],
+      captured_at: null,
+      method: "copy",
+      environment: {
+        hosts: { "script-src": ["cdn.jsdelivr.net"] },
+        variables: { "--color-text-primary": "#111" },
+      },
+    }),
+  );
+};
 
 const logRequest = (url) => {
   const log = process.env.FAKE_ROSETTAD_REQUEST_LOG;
@@ -1103,6 +1152,25 @@ if (mode === "silent") {
         before = decoded.before;
       }
       json(res, timelinePage(id, limit, before));
+      return;
+    }
+    const exportRoute =
+      req.method === "POST" && req.url !== undefined ? ARTIFACT_EXPORT.exec(req.url) : null;
+    if (exportRoute !== null) {
+      logRequest(req.url);
+      let body = "";
+      req.setEncoding("utf8");
+      req.on("data", (chunk) => {
+        body += chunk;
+      });
+      req.on("end", () =>
+        answerExport(
+          res,
+          decodeURIComponent(exportRoute[1]),
+          decodeURIComponent(exportRoute[2]),
+          body,
+        ),
+      );
       return;
     }
     // MA-3a — one presentation's bytes, as inert octets: BEFORE the session

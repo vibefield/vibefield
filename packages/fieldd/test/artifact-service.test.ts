@@ -411,6 +411,9 @@ describe("ArtifactService (AH-1 unit)", () => {
     });
     expect(spec.serveId).toMatch(new RegExp(`^artifact-${A}-[a-z2-7]{16}$`));
     expect(spec.previewDir).toBe(join(dataDir, "artifacts", "previews", A));
+    expect(spec, "MA-3f: a policy's headers are a made app's serve alone").not.toHaveProperty(
+      "headers",
+    );
 
     const persisted = intentFile(dataDir);
     expect(persisted.v).toBe(2);
@@ -871,6 +874,78 @@ describe("ArtifactService (AH-1 unit)", () => {
     await exhausted.start();
     await expect(exhausted.publish(proxy(B))).rejects.toMatchObject({
       kind: "RESOURCE_EXHAUSTED",
+    });
+  });
+
+  describe("MA-3f: one reservation set, closed in both directions", () => {
+    const portOf = (bridge: FakeBridge, id: string) =>
+      bridge.last().find((spec) => spec.name === `artifact:${id}`)?.listenPort;
+
+    it("answers its committed intents, an absent one included, to a made app's allocation", async () => {
+      const bridge = new FakeBridge();
+      const svc = service(makeDataDir(), bridge);
+      await svc.start();
+      await svc.publish(proxy(A));
+      const port = portOf(bridge, A) as number;
+      expect(svc.reservedPorts().has(port)).toBe(true);
+      bridge.failRemoveCount = 1;
+      expect(await svc.unpublish({ artifactId: A })).toEqual({ removed: true });
+      expect(svc.statuses()[0]).toMatchObject({ status: "removing" });
+      expect(
+        svc.reservedPorts().has(port),
+        "an absent intent still retiring its serve keeps its port",
+      ).toBe(true);
+    });
+
+    it("reads a made app's set after the probe's wait, so a port it took meanwhile is skipped", async () => {
+      const bridge = new FakeBridge();
+      let release = (): void => undefined;
+      const gate = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      const real = bridge.observed.bind(bridge);
+      bridge.observed = async () => {
+        await gate;
+        return await real();
+      };
+      const made = new Set<number>();
+      const svc = new ArtifactService({
+        dataDir: makeDataDir(),
+        bridge,
+        maintenanceMs: false,
+        linkedLogin: () => TEST_LOGIN,
+        meshBus: true,
+        probe: async () => true,
+        otherReservedPorts: () => new Set(made),
+      });
+      cleanup.push(() => svc.dispose());
+      await svc.start();
+      const publishing = svc.publish(proxy(A));
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      made.add(artifactPortCandidate(A));
+      release();
+      await publishing;
+      expect(portOf(bridge, A)).not.toBe(artifactPortCandidate(A));
+    });
+
+    it("holds a port it picked until its commit, and frees it when the commit fails", async () => {
+      const bridge = new FakeBridge();
+      const seen: boolean[] = [];
+      let fail = false;
+      const dir = makeDataDir();
+      const svc: ArtifactService = service(dir, bridge, {
+        writeIntent: (path, body) => {
+          seen.push(svc.reservedPorts().has(artifactPortCandidate(A)));
+          if (fail) throw Object.assign(new Error("disk full"), { code: "ENOSPC" });
+          mkdirSync(dirname(path), { recursive: true });
+          writeFileSync(path, body);
+        },
+      });
+      await svc.start();
+      fail = true;
+      await expect(svc.publish(proxy(A))).rejects.toBeDefined();
+      expect(seen.at(-1), "held while the intent is written").toBe(true);
+      expect(svc.reservedPorts().has(artifactPortCandidate(A)), "freed by the failure").toBe(false);
     });
   });
 

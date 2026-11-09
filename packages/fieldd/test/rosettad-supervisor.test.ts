@@ -553,6 +553,28 @@ const statusWith = async (
 // daemon reads once and fieldd removes the moment it is ready, the pair held in
 // memory beside the origin and never in the state; a daemon that does not
 // enforce access, or does not know the flags, is the wrong binary.
+describe("RosettadSupervisor — MA-3f's export root", () => {
+  const flagOf = (args: readonly string[]) =>
+    args.flatMap((arg, at) => (arg === "--export-root" ? [args[at + 1]] : []));
+
+  it("names it on `serve`, and names nothing when fieldd could not make the folder", async () => {
+    const handed: Handed[] = [];
+    const { sup } = rig("ok", {
+      spawnProcess: handingSpawner("ok", handed),
+      exportRoot: "/users/u/drive/import",
+    });
+    await sup.start();
+    expect(flagOf((handed[0] as Handed).args)).toEqual(["/users/u/drive/import"]);
+    await sup.stop();
+
+    const bare: Handed[] = [];
+    const { sup: without } = rig("ok", { spawnProcess: handingSpawner("ok", bare) });
+    await without.start();
+    expect(flagOf((bare[0] as Handed).args)).toEqual([]);
+    await without.stop();
+  });
+});
+
 describe("RosettadSupervisor — every generation behind a credential (AR-8b)", () => {
   it("hands each start a fresh bearer and grant key: owner-only files and the three flags, gone once ready; credentials() pairs with the origin", async () => {
     const handed: Handed[] = [];
@@ -748,10 +770,14 @@ describe("RosettadSupervisor — a projection of another schema is rebuilt, not 
       FAKE_ROSETTAD_REBUILD_LOG: log,
       ...options.env,
     };
+    // MA-3f: `--export-root` is serve's alone; the exact rebuild args below hold that.
+    const exportRoot = join(root, "drive-import");
+    mkdirSync(exportRoot, { recursive: true });
     const r = rig("ok", {
       root,
       home,
       enrollFile,
+      exportRoot,
       spawnProcess: fakeSpawner("ok", env),
       ...(options.timings !== undefined ? { timings: options.timings } : {}),
     });

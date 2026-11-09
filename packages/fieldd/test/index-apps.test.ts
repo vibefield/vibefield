@@ -453,6 +453,25 @@ describe("IndexApps — the walk (MA-3a, L13)", () => {
     expect(apps.table.has(id("a"))).toBe(true);
   });
 
+  it("MA-3f: carries rosetta's description and dropped files, so page only is true from the first served page", async () => {
+    const told = app("told", 30);
+    told.publication.description = "A checkout flow.";
+    told.publication.dropped_files = 2;
+    const long = app("long", 20);
+    long.publication.description = "d".repeat(MADE_APP_LIMITS.DESCRIPTION_CHARS + 1);
+    long.publication.dropped_files = 0;
+    const { apps, catalog } = appsOver(library([told, long, app("plain", 10)]));
+    catalog.land();
+    await advance(0);
+    expect(apps.table.get(id("told"))).toMatchObject({
+      description: "A checkout flow.",
+      droppedFiles: 2,
+    });
+    expect(apps.table.get(id("long"))?.description, "too long costs the field").toBeUndefined();
+    expect(apps.table.get(id("long"))?.droppedFiles, "none dropped is said").toBe(0);
+    expect(apps.table.get(id("plain"))?.droppedFiles, "unknown stays absent").toBeUndefined();
+  });
+
   it("re-reads the newest REREAD_PAGE REREAD_DELAY_MS after a sessions change, at most once per REREAD_MIN_INTERVAL_MS, and only upserts", async () => {
     const lib = library([app("a", 20), app("b", 10)]);
     const { apps, catalog } = appsOver(lib);
