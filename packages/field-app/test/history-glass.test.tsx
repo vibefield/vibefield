@@ -105,6 +105,32 @@ const sample = (): Element | null => glass()?.querySelector(".vf-history-sample"
 const nameOf = (row: Element): string | null | undefined =>
   row.querySelector(".ah-project-list-item__header strong")?.textContent;
 
+/** The leave's length from the DOM's own times (item 267): a MutationObserver over the host stamps the layer's flip
+ * to its leave and the layer's removal as each change is handed to it, so a row's `until` only waits for the length
+ * and a late look cannot move it. */
+function leaveLength(): () => number | null {
+  const target = host;
+  if (target === null) throw new Error("no host to watch");
+  let flipped: number | null = null;
+  let length: number | null = null;
+  const observer = new MutationObserver(() => {
+    const at = performance.now();
+    const layer = glass();
+    if (flipped === null && layer?.getAttribute("data-phase") === "leave") flipped = at;
+    if (flipped !== null && layer === null) {
+      length = at - flipped;
+      observer.disconnect();
+    }
+  });
+  observer.observe(target, {
+    subtree: true,
+    childList: true,
+    attributes: true,
+    attributeFilter: ["data-phase"],
+  });
+  return () => length;
+}
+
 /** The sample, once its room has drawn the demo's projects and opened at its chosen session. */
 async function sampleDrawn(): Promise<Element> {
   await until(
@@ -264,6 +290,7 @@ describe("History's motions before its past (HG-2; HG-D5, HG-D6; DESIGN.md §6)"
     const room = createRef<HistoryRoomHandle>();
     await mount(view(ports, { roomRef: room }));
     await until(glass, "the layer");
+    const length = leaveLength();
     grant();
     await act(async () => room.current?.refreshStatus());
     // the act committed the leave and armed its 480ms timer: the runner is busy before the row looks (item 267)
@@ -273,13 +300,11 @@ describe("History's motions before its past (HG-2; HG-D5, HG-D6; DESIGN.md §6)"
       "the leave",
       4_000,
     );
-    const left = Date.now();
     // the card leaves with its words, never cut away mid-fade
     expect(leaving.querySelector(".hg-card-probe")).not.toBeNull();
     expect(leaving.querySelector(".vf-history-sample")).not.toBeNull();
-    await until(() => (glass() === null ? true : null), "the layer gone", 4_000);
-    // the sample's 480ms fade is the leave's length
-    expect(Date.now() - left).toBeGreaterThanOrEqual(400);
+    // the sample's 480ms fade is the leave's length, timed by the DOM however late the row looks
+    expect(await until(length, "the layer gone", 4_000)).toBeGreaterThanOrEqual(400);
   }, 20_000);
 
   it("leaves in one 120ms fade under reduced motion", async () => {
@@ -300,6 +325,7 @@ describe("History's motions before its past (HG-2; HG-D5, HG-D6; DESIGN.md §6)"
     const room = createRef<HistoryRoomHandle>();
     await mount(view(ports, { roomRef: room }));
     await until(glass, "the layer");
+    const length = leaveLength();
     grant();
     await act(async () => room.current?.refreshStatus());
     await until(
@@ -307,9 +333,8 @@ describe("History's motions before its past (HG-2; HG-D5, HG-D6; DESIGN.md §6)"
       "the leave",
       4_000,
     );
-    const left = Date.now();
-    await until(() => (glass() === null ? true : null), "the layer gone", 4_000);
-    expect(Date.now() - left).toBeLessThan(400);
+    // one 120ms fade, timed by the DOM however late the row looks
+    expect(await until(length, "the layer gone", 4_000)).toBeLessThan(400);
   }, 20_000);
 });
 
