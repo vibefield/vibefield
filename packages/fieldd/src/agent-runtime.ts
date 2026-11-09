@@ -95,6 +95,7 @@ import {
 } from "./agent-distribution";
 import {
   birthWithDoor,
+  doorRefusalCode,
   type HelperRootFloor,
   RunHelperRoots,
   refusedTheDoor,
@@ -426,6 +427,8 @@ export interface AgentAdoption {
     creationRequestId: string;
     ingress: HostIngress;
     launched(): LaunchedIdentity;
+    /** OB-3d — this attempt has no run: the floor forgets its helper */
+    abandon(): void;
   };
   /** the adopted run enters the fold: its record written and signed, its row
    * published, its process watched. Throws when it cannot — the caller undoes
@@ -2472,11 +2475,15 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
   runForRoot(
     rootId: string,
   ): ReturnType<AgentRuntimeService["runForTerminal"]> | ReturnType<RunHelperRoots["birth"]> {
+    // only an attempt this fieldd named to the floor: every run's attempt id is on its record, so a root set by anything
+    // else must not name a run that has no helper
+    const birth = this.helperRoots.birth(rootId);
+    if (birth === undefined) return undefined;
     for (const [runtimeRunId, entry] of this.managed)
       if (entry.creationRequestId === rootId) return this.doorRun(runtimeRunId);
     for (const [runtimeRunId, entry] of this.pending)
       if (entry.record.creationRequestId === rootId) return this.doorRun(runtimeRunId);
-    return this.helperRoots.birth(rootId);
+    return birth;
   }
 
   /** What a run's record says for the door, either way the door reached it. */
@@ -3011,6 +3018,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     creationRequestId: string;
     ingress: HostIngress;
     launched(): LaunchedIdentity;
+    abandon(): void;
   } {
     const creationRequestId = randomUUID();
     let bound: BoundIngress | undefined;
@@ -3041,6 +3049,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
         ...(bound !== undefined ? { ingress: bound } : {}),
         ...(attach !== undefined ? { attach } : {}),
       }),
+      abandon: () => this.helperRoots.end(creationRequestId),
     };
   }
 
@@ -3589,7 +3598,11 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
           {
             action: "tools.door.withheld",
             target: { kind: "agent-session", id: failure?.runtimeRunId ?? context.provider },
-            attrs: { provider: context.provider, ...spark, refusal: UNSUPPORTED_LAUNCH_FIELD },
+            attrs: {
+              provider: context.provider,
+              ...spark,
+              refusal: doorRefusalCode(refused.result) ?? UNSUPPORTED_LAUNCH_FIELD,
+            },
           },
           again,
           (attempt) =>

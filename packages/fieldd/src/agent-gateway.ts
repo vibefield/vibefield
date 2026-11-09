@@ -38,7 +38,12 @@ import {
   writeTerminals,
   ZSH_INTEGRATION,
 } from "@vibefield/puppeteer-runtime/spawn-through";
-import { briefingWithheld, withTypedBriefing } from "./agent-door-launch";
+import {
+  briefedLaunchFailed,
+  briefingWithheld,
+  carriesDoor,
+  withTypedBriefing,
+} from "./agent-door-launch";
 import type { AgentAdoption, SystemAudit } from "./agent-runtime";
 import { SPAWNED_BY_SHELL } from "./agent-typed-run";
 import type { AuditMutation, AuditMutationOutcome } from "./audit-service";
@@ -773,6 +778,8 @@ interface LaunchProgress {
   adoptionUndone: boolean;
   /** SB-D7 — the pane's profile refused the agent: the set, and why */
   profileRefusal?: { profileSet: string; reason: ProfileRefusalReason } | undefined;
+  /** the attempt this launch is on: a briefed launch that fails is given a new one */
+  identity?: ReturnType<AgentAdoption["identity"]> | undefined;
 }
 
 /** SB-D7 — why a pane's Agent Profile refused a typed agent, as the ledger
@@ -1499,7 +1506,6 @@ export class AgentGatewayService {
     const progress: LaunchProgress = { adoptionUndone: false };
     let answer: SpawnThroughResponse;
     try {
-      let identity: ReturnType<AgentAdoption["identity"]> | undefined;
       const host: SpawnThroughHost = {
         runtime: this.launchDoors(progress),
         strict: AGENT_GATEWAY_STRICT,
@@ -1524,11 +1530,15 @@ export class AgentGatewayService {
         // restores against, and the ingress the adapter binds. Asked for once
         // per launch, and only for a session already placed in a pane of ours.
         launchOptions: () => {
-          identity = this.opts.fold.identity();
-          return { creationRequestId: identity.creationRequestId, ingress: identity.ingress };
+          progress.identity = this.opts.fold.identity();
+          return {
+            creationRequestId: progress.identity.creationRequestId,
+            ingress: progress.identity.ingress,
+          };
         },
         refusal: (refused) => this.words(refused),
-        onAdopted: (adopted) => this.adopted(request, adopted, progress, identity?.launched()),
+        onAdopted: (adopted) =>
+          this.adopted(request, adopted, progress, progress.identity?.launched()),
       };
       answer = await this.kit.prepareSpawnThroughLaunch(request, host);
     } catch (error) {
@@ -1555,13 +1565,34 @@ export class AgentGatewayService {
   }
 
   /** PU-J — a typed launch, briefed as a plain run is, under `withhold`: what the agent cannot honour goes unbriefed and
-   * the person's own command is never failed for it. What was withheld is the log's, once, and never the pane's. */
+   * the person's own command is never failed for it. What was withheld is the log's, once, and never the pane's.
+   * OB-3d review — a server's failure can end the launch past `withhold` (Grok's `session/new`), so a briefed launch that
+   * fails for what a briefing could cause is made once more with none, under a new identity: the same creation request
+   * with a changed briefing would conflict. */
   private async briefedInvocation(
     options: Parameters<AgentRuntime["prepareInvocation"]>[0],
+    progress: LaunchProgress,
   ): Promise<PreparedInvocation> {
-    const answer = await this.opts.runtime.prepareInvocation(
-      withTypedBriefing(options, await this.typedBriefing(options.providerId)),
-    );
+    const briefing = await this.typedBriefing(options.providerId);
+    let answer = await this.opts.runtime.prepareInvocation(withTypedBriefing(options, briefing));
+    const failure = carriesDoor(briefing) ? briefedLaunchFailed(answer) : undefined;
+    if (failure !== undefined) {
+      this.logger.warn(
+        "fieldd.agents.typed_briefing_retried",
+        "A briefed typed launch failed; it is made once more with no briefing",
+        { provider: options.providerId, code: failure },
+      );
+      progress.identity?.abandon();
+      const fresh = progress.identity === undefined ? undefined : this.opts.fold.identity();
+      progress.identity = fresh;
+      answer = await this.opts.runtime.prepareInvocation({
+        ...options,
+        ...(fresh === undefined
+          ? {}
+          : { creationRequestId: fresh.creationRequestId, ingress: fresh.ingress }),
+      });
+    }
+    if ("error" in answer) progress.identity?.abandon();
     const withheld = briefingWithheld(answer);
     if (withheld.length > 0)
       this.logger.info(
@@ -1601,7 +1632,7 @@ export class AgentGatewayService {
       classifyInvocation: (invocation) => runtime.classifyInvocation(invocation),
       prepareInvocation: async (options) =>
         (await this.profileRefusal(progress, options.providerId)) ??
-        (await this.briefedInvocation(options)),
+        (await this.briefedInvocation(options, progress)),
       adoptPrepared: (preparationId, options) => runtime.adoptPrepared(preparationId, options),
       cancelPrepared: (preparationId) => runtime.cancelPrepared(preparationId),
     };

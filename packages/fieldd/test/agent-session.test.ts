@@ -513,7 +513,10 @@ function scriptedProvider(
         throw new AgentLaunchRefusedError(extra.launchRefusal.code, extra.launchRefusal.message);
       extra.beforeBirth?.();
       if (extra.refuseDoor !== undefined && options.mcpServers !== undefined)
-        throw new AgentLaunchRefusedError(extra.refuseDoor, "the person's own config names this server");
+        throw new AgentLaunchRefusedError(
+          extra.refuseDoor,
+          "the person's own config names this server",
+        );
       const n = ++counter;
       // AR-S2 — the account a spawn was bound to, as the runtime resolved it
       extra.seen?.push(options.profile);
@@ -2011,7 +2014,12 @@ describe("managed sessions over the REAL floor (field-native)", () => {
   it("OB-3d — a launch the person's own config refuses for the door starts without it", async () => {
     const box = await setup({
       floor: "real",
-      briefing: { mcpServers: true, allowTools: true, instructions: false, mcpServerProcess: "terminal" },
+      briefing: {
+        mcpServers: true,
+        allowTools: true,
+        instructions: false,
+        mcpServerProcess: "terminal",
+      },
       refuseDoor: "CONFLICTING_LAUNCH_FIELD",
     });
     const win = await window(box.daemon, DECK, "ob3d-conflict");

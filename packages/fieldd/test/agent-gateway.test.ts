@@ -2847,7 +2847,7 @@ describe("a launch at the gateway — the real kit, puppeteer's real runtime, a 
     // OB-3d review: a server's failure can end the launch itself (Grok's `session/new`), past what `withhold` can catch.
     /** The doors, each launch's options kept, the first `failures` answered with `error`. */
     const failing = (box: Unit, error: object, failures = 1) => {
-      const seen: Array<{ creationRequestId?: string }> = [];
+      const seen: Array<{ creationRequestId?: string | undefined }> = [];
       const real = box.runtime.prepareInvocation;
       box.runtime.prepareInvocation = async (options) => {
         seen.push(options);

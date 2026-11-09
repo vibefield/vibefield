@@ -21,17 +21,32 @@ import {
 
 /** puppeteer's refusal code for a launch field the executable does not advertise (puppeteer-core's launch service). */
 export const UNSUPPORTED_LAUNCH_FIELD = "UNSUPPORTED_LAUNCH_FIELD";
+/** OB-3d review — and for one a person's own config already names (`[mcp_servers.vibefield]`, at Codex's preflight). A door
+ * must never fail a person's launch, so it is the same refusal: the birth goes ahead without the door. */
+export const CONFLICTING_LAUNCH_FIELD = "CONFLICTING_LAUNCH_FIELD";
+
+const DOOR_REFUSALS: ReadonlySet<unknown> = new Set([
+  UNSUPPORTED_LAUNCH_FIELD,
+  CONFLICTING_LAUNCH_FIELD,
+]);
 
 /** A briefing that carries any field an executable could refuse. */
 export function carriesDoor(briefing: AgentRunBriefing): boolean {
   return AGENT_BRIEFING_FIELDS.some((field) => briefing[field] !== undefined);
 }
 
-/** A spawn's or resume's failure that is that refusal, read by its codes and never by its words. */
-export function refusedTheDoor(result: unknown): boolean {
-  if (typeof result !== "object" || result === null) return false;
+/** A spawn's or resume's failure that is one of those refusals: its code, read by its codes and never by its words. */
+export function doorRefusalCode(result: unknown): string | undefined {
+  if (typeof result !== "object" || result === null) return undefined;
   const error = (result as { error?: { code?: unknown; refusal?: { code?: unknown } } }).error;
-  return error?.code === "AGENT_LAUNCH_REFUSED" && error.refusal?.code === UNSUPPORTED_LAUNCH_FIELD;
+  const code = error?.refusal?.code;
+  return error?.code === "AGENT_LAUNCH_REFUSED" && DOOR_REFUSALS.has(code)
+    ? (code as string)
+    : undefined;
+}
+
+export function refusedTheDoor(result: unknown): boolean {
+  return doorRefusalCode(result) !== undefined;
 }
 
 export interface DoorBirth<T> {
@@ -155,6 +170,16 @@ export function withTypedBriefing<T extends object>(options: T, briefing: AgentR
     briefingRefusal: "withhold",
   };
   return briefed;
+}
+
+/** OB-3d review — the failure of a briefed typed launch that the briefing could have caused, by its code: the adapter
+ * refused, or the session did not start (a server's failure at Grok's `session/new` ends the launch past `withhold`).
+ * Anything refused before the adapter ran is the launch's own. */
+export function briefedLaunchFailed(answer: unknown): string | undefined {
+  const code = (answer as { error?: { code?: unknown } } | null | undefined)?.error?.code;
+  return code === "AGENT_SESSION_CREATE_FAILED" || code === "AGENT_LAUNCH_REFUSED"
+    ? code
+    : undefined;
 }
 
 /** What a typed launch's receipt says it went ahead without, each as `field (code)`; none on a pin with no receipt. */
