@@ -100,6 +100,18 @@ try {
 } catch {
   // said with the problems, below
 }
+// IOS-12f's M-f2 (f7b) — @'s goldens, written by field-app's own models
+// (packages/field-app/test/at-rows-goldens.test.ts, `VF_WRITE_GOLDENS=1`), which the kit's ChatAt and ChatDraft are held to
+// (FieldHomeTests). Read from their folder, as the card's are.
+const AT_ROWS = join(root, "packages/field-app/test/fixtures/at-rows");
+let atRowsGoldens = [];
+try {
+  atRowsGoldens = readdirSync(AT_ROWS)
+    .filter((name) => name.endsWith(".golden.json"))
+    .sort();
+} catch {
+  // said with the problems, below
+}
 // Goldens whose origin is another package than the contracts — a design
 // decision both apps compute, not a wire shape — compared byte for byte all
 // the same. PJ-7: the project ink's table (DESIGN.md §2.9), which the design
@@ -172,6 +184,7 @@ const OTHER_ORIGINS = new Map([
   ...chatFlowGoldens.map((name) => [name, join(CHAT_FLOW, name)]),
   ...needsCardGoldens.map((name) => [name, join(NEEDS_CARD, name)]),
   ...newSparkGoldens.map((name) => [name, join(NEW_SPARK, name)]),
+  ...atRowsGoldens.map((name) => [name, join(AT_ROWS, name)]),
 ]);
 // Goldens VENDORED from a sibling project outside this workspace, so there is no origin here to
 // compare with: each is pinned by its sha256 beside the files it tests, and the vendoring script's
@@ -431,6 +444,8 @@ const requiredMirrors = [
   ["needs-card", needsCardGoldens.map((name) => `needs-card/${name}`), ["Tests/FieldProductTests"]],
   // IOS-12f (f1) — the New spark sheet's goldens (in their own folder), which the kit's NewSpark is held to
   ["new-spark", newSparkGoldens.map((name) => `new-spark/${name}`), ["Tests/FieldHomeTests"]],
+  // IOS-12f's M-f2 (f7b) — @'s goldens (in their own folder), which the kit's ChatAt and ChatDraft are held to
+  ["at-rows", atRowsGoldens.map((name) => `at-rows/${name}`), ["Tests/FieldHomeTests"]],
   [
     "chat",
     ["needs-item.held-spawn.json", "needs-item.agent-ask.json", "agent-catalog.valid.json"],
@@ -505,6 +520,9 @@ if (newSparkGoldens.length === 0) {
   problems.push(
     `the New spark sheet's goldens are missing: ${relative(root, NEW_SPARK)} holds no *.golden.json`,
   );
+}
+if (atRowsGoldens.length === 0) {
+  problems.push(`@'s goldens are missing: ${relative(root, AT_ROWS)} holds no *.golden.json`);
 }
 for (const [set, fixtures, folders] of requiredMirrors) {
   for (const folder of folders) {
