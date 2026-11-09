@@ -37,6 +37,8 @@ export function readWords(meters: ProfileMeters, now: Date): string {
 }
 
 export interface ProfilePopoverViewProps {
+  /** names it for its circle's `aria-controls` */
+  id?: string | undefined;
   circle: ColumnCircle;
   /** several profiles: the column is the lens, and the foot says so */
   lens: boolean;
@@ -181,6 +183,7 @@ function lensWords(label: string, chosen: boolean): string {
 }
 
 export function ProfilePopoverView({
+  id,
   circle,
   lens,
   chosen,
@@ -210,7 +213,7 @@ export function ProfilePopoverView({
   const unread = none.filter((entry) => entry.why === "unavailable");
   const quiet = none.filter((entry) => entry.why !== "unavailable");
   return (
-    <div className="vf-profiles-pop" role="dialog" aria-label={set.label}>
+    <div id={id} className="vf-profiles-pop" role="dialog" aria-label={set.label}>
       <div className="vf-profiles-pop-head">
         <ProfileGlyph glyph={set.glyph} kind={set.kind} filled={set.default} size={15} />
         <b className="vf-profiles-pop-name">{set.label}</b>

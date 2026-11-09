@@ -1016,6 +1016,42 @@ describe("closing is one act (UM-R3): the pin, the pointer's hold and the keyboa
     expect(monitorHoldsKeys()).toBe(false);
   });
 
+  it("grace expiry and a dwell swap do not hand focus to the circle (the pointer's, not a deliberate act)", () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    try {
+      const target = cardLayer();
+      const page = mount(<ProfilesColumn {...controller({ cardLayer: target })} />);
+      const out = (node: Element | null | undefined): void => {
+        act(() => {
+          node?.dispatchEvent(new PointerEvent("pointerout", { bubbles: true }));
+        });
+      };
+      const wait = (ms: number): void => {
+        act(() => {
+          vi.advanceTimersByTime(ms);
+        });
+      };
+      // a grace: the card leaves, and the circle does not take the keys
+      over(itemOf(page, "work"));
+      target.querySelector<HTMLButtonElement>(".vf-profiles-pop-close")?.focus();
+      out(itemOf(page, "work"));
+      wait(320);
+      expect(target.querySelector(".vf-profiles-pop")).toBeNull();
+      expect(document.activeElement).not.toBe(circleOf(page, "work"));
+      // a dwell: the card is swapped, and the circle it stood for does not take the keys
+      over(itemOf(page, "native"));
+      target.querySelector<HTMLButtonElement>(".vf-profiles-pop-close")?.focus();
+      out(itemOf(page, "native"));
+      over(itemOf(page, "work"));
+      wait(120);
+      expect(target.querySelector('.vf-profiles-stand[data-profile="work"]')).not.toBeNull();
+      expect(target.querySelector('.vf-profiles-stand[data-profile="native"]')).toBeNull();
+      expect(document.activeElement).not.toBe(circleOf(page, "native"));
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("shows no add card while the add is disabled", () => {
     const page = mount(<ProfilesColumnView {...column({ addOpen: true, canAdd: false })} />);
     expect(page.querySelector(".vf-profiles-addcard")).toBeNull();

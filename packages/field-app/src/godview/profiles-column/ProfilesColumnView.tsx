@@ -1,6 +1,6 @@
 import type { AgentProfileSet } from "@vibefield/contracts";
 import { FieldGlyph } from "@vibefield/design-kit/glyphs";
-import type { KeyboardEvent, ReactElement, ReactNode } from "react";
+import { type KeyboardEvent, type ReactElement, type ReactNode, type Ref, useId } from "react";
 import { PROFILES_WORDS } from "../../setup/profiles-words";
 import { bandsGeometry, bandsLabel } from "../../usage/bands";
 import type { ProfileMeters } from "../../usage/meters";
@@ -52,6 +52,8 @@ export interface ProfilesColumnViewProps {
   moment?: ReactNode;
   /** the stage's cards layer (§8 "Where the cards stand"), over the terminals; absent, the cards stand in place */
   cardLayer?: HTMLElement | null | undefined;
+  /** the column's own element: the controller finds a circle through it to hand the keyboard home */
+  columnRef?: Ref<HTMLDivElement> | undefined;
   /** the pointer came onto a circle (its profile's id) or the add (`ADD_TARGET`), or left them (null) */
   onPoint: (target: string | null) => void;
   onCircle: (setId: string) => void;
@@ -122,6 +124,7 @@ export function ProfilesColumnView({
   canRetry,
   moment,
   cardLayer,
+  columnRef,
   onPoint,
   onCircle,
   onClose,
@@ -130,9 +133,10 @@ export function ProfilesColumnView({
   onOpenProfile,
   onRetry,
 }: ProfilesColumnViewProps): ReactElement {
+  const popoverId = useId();
   return (
     // biome-ignore lint/a11y/useSemanticElements: a column of buttons — the profiles and the add — not a fieldset of form inputs
-    <div className="vf-profiles-column" role="group" aria-label="Agent profiles">
+    <div ref={columnRef} className="vf-profiles-column" role="group" aria-label="Agent profiles">
       {circles.map((circle) => {
         const id = circle.set.id;
         const isChosen = lens && chosen === id;
@@ -153,6 +157,8 @@ export function ProfilesColumnView({
               className="vf-profiles-circle"
               aria-label={circleWords(circle, lens, isChosen)}
               {...(lens ? { "aria-pressed": isChosen } : {})}
+              aria-expanded={isOpen}
+              {...(isOpen ? { "aria-controls": popoverId } : {})}
               {...(isOpen ? { "data-open": "" } : {})}
               onClick={() => onCircle(id)}
             >
@@ -167,6 +173,7 @@ export function ProfilesColumnView({
             {isOpen ? (
               <CardStand layer={cardLayer} profile={id}>
                 <ProfilePopoverView
+                  id={popoverId}
                   circle={circle}
                   lens={lens}
                   chosen={isChosen}
@@ -199,7 +206,7 @@ export function ProfilesColumnView({
         >
           <FieldGlyph name="plus" size={17} />
         </button>
-        {addOpen ? (
+        {addOpen && canAdd ? (
           <CardStand layer={cardLayer} card="add">
             <div className="vf-profiles-addcard" role="tooltip">
               <b>{PROFILES_WORDS.add}</b>

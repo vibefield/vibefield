@@ -8,8 +8,10 @@ import {
   memo,
   type ReactElement,
   type ReactNode,
+  useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import { hasCircle, planMeters } from "../../usage/meters";
@@ -42,6 +44,20 @@ const THIS_MAC: AgentProfileSet = {
  * it: a press while the limit card shows does what its Add a profile… does, so the card retires
  * (`LimitMoment.tsx`). */
 export const ColumnAddPresses = createContext(0);
+
+/** The keyboard home when a deliberate act closes the card (§8 "Pinned"): if the card holds it, to that profile's circle.
+ * The timers never call this: a grace or a dwell is the pointer's, and the circle is a live toggle. Found by the items'
+ * own `dataset`, as `CSS.escape` is not ours to lean on under happy-dom. */
+function handFocusHome(column: HTMLElement | null): void {
+  const id = document.activeElement?.closest<HTMLElement>(".vf-profiles-stand")?.dataset.profile;
+  if (!column || id === undefined) return;
+  for (const item of column.querySelectorAll<HTMLElement>(".vf-profiles-item")) {
+    if (item.dataset.profile === id) {
+      item.querySelector<HTMLElement>(".vf-profiles-circle")?.focus();
+      return;
+    }
+  }
+}
 
 /** How often the column's words read the clock again: a reset and a forecast move by the minute. */
 const CLOCK_MS = 60_000;
@@ -143,8 +159,17 @@ function ProfilesColumnController({
   const open =
     circles.find((circle) => circle.set.id === (pointedProfile ?? pinned))?.set.id ?? null;
   // §8 "The reach": the pointer's own hold, its grace and its dwell; the card shows as it always did from `pointed`
-  const showing = pointed === ADD_TARGET ? ADD_TARGET : open;
+  const showing = pointed === ADD_TARGET && openNewProfile !== undefined ? ADD_TARGET : open;
   const { point, clear } = useColumnPointer(showing, setPointed);
+  // §8 "Pinned": CLOSING IS ONE ACT, wherever it comes from — the keyboard home if the card holds it, then the pin and
+  // the pointer's hold. No new enter fires while the pointer sits still, so the card stays closed until it leaves and
+  // returns.
+  const columnRef = useRef<HTMLDivElement>(null);
+  const closeCard = useCallback((): void => {
+    handFocusHome(columnRef.current);
+    setPinned(null);
+    clear();
+  }, [clear]);
   // a plan is pointed at inside one popover: another popover starts with none
   useEffect(() => {
     if (open === null) setFocus(null);
@@ -161,7 +186,7 @@ function ProfilesColumnController({
       if (event.key !== "Escape") return;
       event.preventDefault();
       event.stopPropagation();
-      setPinned(null);
+      closeCard();
     };
     const onPointer = (event: PointerEvent): void => {
       const target = event.target;
@@ -178,13 +203,20 @@ function ProfilesColumnController({
       window.removeEventListener("keydown", onKey, true);
       document.removeEventListener("pointerdown", onPointer, true);
     };
-  }, [pinned]);
+  }, [pinned, closeCard]);
+  // Settings opened some other way: a card does not float over it. Keyed to that flip alone, so a pin made while
+  // Settings is open stands (`godview-monitor`'s Agent Profiles… disabled row).
+  const settingsWas = useRef(openProfile !== undefined);
+  useEffect(() => {
+    const could = settingsWas.current;
+    settingsWas.current = openProfile !== undefined;
+    if (could && openProfile === undefined) closeCard();
+  }, [openProfile, closeCard]);
   // GV-D11's other half: the terminals fill the window, so no card floats over them (`covered`, the deck's own door)
   useEffect(() => {
     if (!covered) return;
-    setPinned(null);
-    clear();
-  }, [covered, clear]);
+    closeCard();
+  }, [covered, closeCard]);
   const openCircle = circles.find((circle) => circle.set.id === open);
   return (
     <ProfilesColumnView
@@ -197,6 +229,7 @@ function ProfilesColumnController({
       read={openCircle === undefined ? "" : readWords(openCircle.meters, clock)}
       addOpen={pointed === ADD_TARGET}
       cardLayer={cardLayer}
+      columnRef={columnRef}
       canAdd={openNewProfile !== undefined}
       canOpen={openProfile !== undefined}
       canRetry={port?.refresh !== undefined}
@@ -208,25 +241,29 @@ function ProfilesColumnController({
       onPoint={point}
       onCircle={(setId) => {
         if (!lens) {
-          setPinned((held) => (held === setId ? null : setId));
+          if (pinned === setId) closeCard();
+          else setPinned(setId);
           return;
         }
         // the lens: a click shows only its sessions and pins its popover; on the chosen one, all again, closed
         const clears = chosen === setId;
         onChoose(clears ? null : setId);
-        setPinned(clears ? null : setId);
+        if (clears) closeCard();
+        else setPinned(setId);
       }}
-      onClose={() => {
-        setPinned(null);
-        clear();
-      }}
+      onClose={closeCard}
       onFocusPlan={setFocus}
       onAdd={() => {
         if (openNewProfile === undefined) return;
+        // Settings-bound: the keyboard home, the card closed, then Settings
+        closeCard();
         openNewProfile();
         setAddPresses((presses) => presses + 1);
       }}
-      onOpenProfile={(setId) => openProfile?.(setId)}
+      onOpenProfile={(setId) => {
+        closeCard();
+        openProfile?.(setId);
+      }}
       onRetry={(profileIds) => {
         port?.refresh?.(profileIds).catch(() => undefined);
       }}
