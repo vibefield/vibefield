@@ -46,6 +46,10 @@ import { currentDesk, type MountedDesk, plainWords, subscribeDesk } from "../des
 // with. Acts run over a recording API and commit as ONE transaction `{ undoable: false, meta: { run, intent } }`, so ⌘Z
 // skips an agent's change (OB-D11 A) and the answer carries its inverse for fieldd to keep.
 //
+// PROVENANCE. An act, a remove, and the undo of an act or a place commit with `meta: { run, intent }`. A place and a remove's
+// undo go through ICE's `ops.spawnWidget`, which takes `undoable` and drops `meta`, so those two commits carry none in the
+// document. They are still `undoable: false`, and fieldd's audit and undo shelf name the run.
+//
 // THE COVER. Other views freeze the desk (`cover-still.ts`): the loop parks, and with it the frame's `world.sync()`. A
 // value write lands in the world at once, so an act on an existing object needs nothing here. A spawn does not: strata
 // mints its handle and writes the document at the commit, but the object's structure reaches the world only at a sync, so
@@ -111,6 +115,8 @@ export interface ApplierDeps {
   readonly handOn?: (e: Entity) => boolean;
   /** whether Canvas is the view (undefined: the window's) */
   readonly onCanvas?: () => boolean;
+  /** the clock an intent's deadline is read against (undefined: the window's) */
+  readonly now?: () => number;
 }
 
 type Fact = ObjectFact | "bad-input" | "failed";
@@ -123,6 +129,12 @@ const WORDS = {
   readOnly: "This board is read-only in this window.",
   noPrint: "A print is made from a picture. The user has to place it.",
   holds: "That object holds things the user put there. The user has to remove it.",
+  noContainer: "What that object lay in is no longer on the desk, so it was not put back.",
+  late: "That request came too late, so nothing was changed.",
+  noTitle: (name: string): string =>
+    `A ${name} has no title. Leave out \`title\`, and put what it should say in \`props\`.`,
+  twoTitles: (prop: string): string =>
+    `\`title\` and \`props.${prop}\` name it differently. Give one.`,
   off: (label: string): string => `The desk cannot draw this kind right now (${label}).`,
   tooBig: "That answer is larger than an agent can be told.",
   summaryTooBig: "This object's summary is too large to show here. Use its read tools.",
@@ -211,6 +223,7 @@ export function createDeskApplier(desk: MountedDesk, deps: ApplierDeps = {}): De
   const handOn = deps.handOn ?? ((e: Entity) => heldEntity(world) === e || mayDiverge(e));
   const words = desk.words ?? plainWords;
   const onCanvas = deps.onCanvas ?? (() => getActiveView() === "canvas");
+  const now = deps.now ?? Date.now;
   let placed = 0;
 
   const typeOf = (e: Entity): string | undefined => {
@@ -285,6 +298,14 @@ export function createDeskApplier(desk: MountedDesk, deps: ApplierDeps = {}): De
     if (said.state !== null) return refused(intent, "needs-you", WORDS.off(said.label));
     if (deskKind(intent.kind)?.placeable === false)
       return refused(intent, "needs-you", WORDS.noPrint);
+    const props: Record<string, unknown> = { ...intent.props };
+    if (intent.title !== undefined) {
+      const titleProp = deskKind(intent.kind)?.titleProp;
+      if (titleProp === undefined) return refused(intent, "bad-input", WORDS.noTitle(said.title));
+      if (props[titleProp] !== undefined && props[titleProp] !== intent.title)
+        return refused(intent, "bad-input", WORDS.twoTitles(titleProp));
+      props[titleProp] = intent.title;
+    }
     const size = widget.defaultSize;
     const spot = spotFor(engine, size, placed);
     let e: Entity;
@@ -294,7 +315,7 @@ export function createDeskApplier(desk: MountedDesk, deps: ApplierDeps = {}): De
         y: spot.y,
         w: size.w,
         h: size.h,
-        props: intent.props ?? {},
+        props,
         undoable: false,
       });
     } catch (cause) {
@@ -309,7 +330,11 @@ export function createDeskApplier(desk: MountedDesk, deps: ApplierDeps = {}): De
     const key = session.store.keyOf(e) as string | undefined;
     if (key === undefined || typeOf(e) === undefined)
       return refused(intent, "failed", "The object did not reach the desk.");
-    const value: IntentPlaceValue = { key, ...opened(intent.kind, e) };
+    const value: IntentPlaceValue = {
+      key,
+      ...opened(intent.kind, e),
+      ...(intent.title === undefined ? {} : { title: intent.title }),
+    };
     return answered(intent, value, {
       inverse: { op: "place", after: declaredProps(engine, e) },
       changed: `Placed a ${words(intent.kind).title}`,
@@ -329,9 +354,13 @@ export function createDeskApplier(desk: MountedDesk, deps: ApplierDeps = {}): De
     const size = world.get(e, Size);
     if (type === undefined || at === undefined || size === undefined)
       return refused(intent, "gone", WORDS.gone);
+    const container = world.getRelation(e, ChildOf);
+    const parent =
+      container === undefined ? undefined : (session.store.keyOf(container) as string | undefined);
     const inverse: DeskInverse = {
       op: "remove",
       type,
+      ...(parent === undefined ? {} : { parent }),
       rect: { x: at.x, y: at.y, w: size.w, h: size.h },
       props: declaredProps(engine, e),
     };
@@ -391,6 +420,10 @@ export function createDeskApplier(desk: MountedDesk, deps: ApplierDeps = {}): De
       return refused(intent, "needs-you", WORDS.readOnly);
 
     if (inverse.op === "remove") {
+      // it goes back where it lay, never where the person happens to be looking
+      const parent = inverse.parent === undefined ? undefined : resolve(inverse.parent);
+      if (inverse.parent !== undefined && parent === undefined)
+        return refused(intent, "conflict", WORDS.noContainer);
       // the object is gone; it comes back under a new key, and fieldd moves its ref there
       let e: Entity;
       try {
@@ -399,6 +432,7 @@ export function createDeskApplier(desk: MountedDesk, deps: ApplierDeps = {}): De
           y: inverse.rect.y,
           w: inverse.rect.w,
           h: inverse.rect.h,
+          ...(parent === undefined ? {} : { parent }),
           props: inverse.props,
           undoable: false,
         });
@@ -455,6 +489,10 @@ export function createDeskApplier(desk: MountedDesk, deps: ApplierDeps = {}): De
   return {
     handOn,
     apply(intent) {
+      // fieldd has stopped waiting: a change made now would land with no answer to carry its undo
+      const deadline = intent["expiresAt"];
+      if (typeof deadline === "number" && now() >= deadline)
+        return refused(intent, "failed", WORDS.late);
       try {
         return dispatch(intent);
       } catch (cause) {

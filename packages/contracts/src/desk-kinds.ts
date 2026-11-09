@@ -26,6 +26,8 @@ export interface DeskKind {
   readonly version: number;
   /** false: an agent cannot make one, only be handed it */
   readonly placeable: boolean;
+  /** the prop `canvas_place`'s `title` is kept in; absent: the kind has nowhere to keep one, and a title is refused */
+  readonly titleProp?: string;
   readonly agent: DeskKindAgent;
 }
 
@@ -139,6 +141,7 @@ export const DESK_KINDS: readonly DeskKind[] = [
     title: "Mini mat",
     version: 1,
     placeable: true,
+    titleProp: "name",
     agent: {
       summary: "A small mat with a desk of its own inside, for keeping objects together.",
       concurrency: "many",
@@ -162,6 +165,8 @@ export const DeskInverse = z.discriminatedUnion("op", [
   z.object({
     op: z.literal("remove"),
     type: z.string().min(1),
+    /** the durable key of what it lay in: the board, or a mat */
+    parent: z.string().min(1).optional(),
     rect: z.object({ x: z.number(), y: z.number(), w: z.number(), h: z.number() }),
     props: z.record(z.unknown()),
   }),
