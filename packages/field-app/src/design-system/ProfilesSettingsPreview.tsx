@@ -45,6 +45,7 @@ import {
   FIXTURE_INSTALL_PANE_OUTPUT,
   FIXTURE_NATIVE,
   FIXTURE_PROFILES_CONTEXT,
+  FIXTURE_PROFILES_CONTEXT_READ_BEFORE_RESET,
   FIXTURE_PROFILES_NOW,
   FIXTURE_SERVER_SIGN_IN_OUTPUT,
   FIXTURE_SIGN_IN_OUTPUT,
@@ -197,7 +198,9 @@ export function ProfilesSettingsPreview({
     () =>
       state === "loading usage"
         ? { ...FIXTURE_PROFILES_CONTEXT, usage: [] }
-        : FIXTURE_PROFILES_CONTEXT,
+        : state === "read before reset"
+          ? FIXTURE_PROFILES_CONTEXT_READ_BEFORE_RESET
+          : FIXTURE_PROFILES_CONTEXT,
     [state],
   );
   // "agent": a vendor agent in Work (one subscription); "sign-ins": OpenCode,

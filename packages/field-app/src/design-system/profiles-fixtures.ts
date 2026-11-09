@@ -501,6 +501,24 @@ export const FIXTURE_PROFILES_CONTEXT: ProfilesContext = {
   },
 };
 
+/** UM-3 — Work's Claude read three hours ago: its five hours, spent, reset ten minutes ago; its week still runs. */
+export const FIXTURE_PROFILES_CONTEXT_READ_BEFORE_RESET: ProfilesContext = {
+  ...FIXTURE_PROFILES_CONTEXT,
+  usage: USAGE.map((entry) =>
+    entry.profileId === "work-claude"
+      ? {
+          ...entry,
+          fetchedAt: inHours(-3),
+          metrics: entry.metrics.map((metric) =>
+            metric.id === "5h"
+              ? { ...metric, usedPercent: 100, resetsAt: inHours(-1 / 6) }
+              : metric,
+          ),
+        }
+      : entry,
+  ),
+};
+
 /** What the catalog's sign-in terminal (Grok, into Work) shows while the
  * vendor's login waits on a browser — the record's still, not Grok's words. */
 export const FIXTURE_SIGN_IN_OUTPUT = [
