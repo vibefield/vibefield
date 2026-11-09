@@ -226,8 +226,8 @@ jobs:
       # field-native's release build is NOT a step here: `package:stage` runs THE one entry, `build:native-release`
       # (apps/desktop/packaging/build-native-release.mjs: --locked; no C harfbuzz since ghosttea 0.13.5), on the signed path and the unsigned
       # path alike (BP-1b, 2026-10-26; a second site is the drift the host-links gate would catch).
-      - name: Stamp the nightly's version (D6 — this checkout only, never committed)
-        if: needs.plan.outputs.channel == 'nightly'
+      - name: Stamp the prerelease's version (D6 as amended, item 266 — a nightly or a beta; this checkout only)
+        if: needs.plan.outputs.channel != 'stable'
         env:
           VERSION: ${{ needs.plan.outputs.version }}
         run: node scripts/release-plan.mjs stamp --version "$VERSION"
