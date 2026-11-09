@@ -40316,6 +40316,9 @@ witness's mirror (in `1a97eade5`). The "Re-cut" bullets cite `db181a008`, main b
 - **The generator** for the phone's glyph and plan-title tables: one VibeField-origin fixture written from the pinned
   packages, mirrored and named in `scripts/check-ios-fixtures.mjs`, which `ProfileGlyphSymbolsTests` and
   `MeterModelTests` read (DESIGN.md §13's dated note).
+  > *Answered 2026-11-09:* the generator landed (`72952b2c0`, red `f4bb97e8d`; run 264, M264; LANDED "UM-4's owed
+  > generator"). The golden is written from the pinned packages, mirrored and named as this asked, and the two tests
+  > read it. The phone's two tables stay hand copies, held by those rows.
 - **To James:**
   - the board ask `um-stack-words`, W1–W8, the words standing as built in the interim: W1–W4 (08:27Z, M-desk's) and
     this stack's W5–W8 (10:14Z). W5: a bud whose one plan is signing in says "NO METER" as built, or "SIGNING IN". W6:
@@ -45235,3 +45238,73 @@ the figures are equal.
 - **ES:** James's eye on how the night's motion feels stays as ROADMAP's ES block has it.
 
 One insert into an older entry: M-desk's Owed, the Settings plate, answered.
+
+## UM-4's owed generator (M264) — the phone's glyph and plan-title tables are held to the pinned packages by one generated golden, mirrored into the kit, which ProfileGlyphSymbolsTests and MeterModelTests read
+
+(2026-11-09; two commits on main `e8e6a240e`: `f4bb97e8d` the red and `72952b2c0` the green, cut by the UM lead
+(vibe-field-fb) and landed by the fixer at 10:00:46Z. Minted as M264: run 264, a9, vf-m2, at `c6ddc0c9c` on
+`2a164e8cb`; the packet is `lanes/um/phone-tables-2a164e8cb/`.) It pays M-phone's Owed (LANDED "UM-4 and SE-2", where
+the tables are hand copies "held by review alone across an EL8") and DESIGN.md §13's dated note ("caught by review
+alone").
+
+**What landed.**
+- `packages/field-app/perf/lib/presentation-tables-golden.ts` reads the two tables at the pin, and
+  `perf/presentation-tables.generate.perf.ts` is the one writer, as `usage-bands.generate.perf.ts` is for its golden.
+- `test/fixtures/usage/presentation-tables.golden.json`: 451 bytes, eleven glyphs and ten products. It carries no
+  version, so a pin that moves neither table moves no byte. `test/presentation-tables.test.ts` (5 tests) holds it byte
+  for byte.
+- Two kit mirrors, in FieldDesignTests' and FieldHomeTests' `Fixtures`, named in `scripts/check-ios-fixtures.mjs`
+  (`OTHER_ORIGINS` and two required rows).
+- `ProfileGlyphSymbolsTests` reads the fixture instead of its hand-copied vocabulary. `MeterModelTests` gains
+  `planProductsAreThePins`, `PlanTitles.products` against the fixture. DESIGN.md §13 gets a dated note.
+
+**How the table is read.** `PROFILE_GLYPHS` is exported. `SERVICE_PRODUCTS` is not: only `serviceProduct(service)` is,
+one company at a time. So the generator parses `const SERVICE_PRODUCTS = { … };` from the pinned package's
+`dist/icons/ServiceMark.js`, and holds every row to the exported `serviceProduct()`. A missing table, an unreadable
+row, an empty table and a disagreement each throw: an EL8 that reshapes that file stops here, loudly, rather than
+writing a shorter table. The parse reads a built file, and it is this slice's one seam on a package's private shape.
+
+**What it does not do.** The phone's two tables stay hand copies (`ProfileGlyphSymbols.symbols`,
+`PlanTitles.products`). This slice holds them; it generates no Swift. No product source moved on either plane: no
+field-app `src/`, no kit `Sources/`, no contracts, no manifest, no Rust. An EL8 that moves either table now fails
+field-app's row until the golden is re-blessed, and the kit's once it is.
+
+**Validation of record** (run 264: `lanes/vf-m2/run264-a9-results/`, SHA256SUMS-a9-run264 `168f33672d96e426`, 50 OK as
+VF-PM read it at 09:55:24Z; the runner `d3364b7672245792`; the land's tree differs from the mint's by docs only).
+- V: `pnpm verify` exit 0, 5 min 49 s, at `c6ddc0c9c`. Against run 260: field-app 330 files and 4550 tests (+1, +5),
+  Checked 3546 (+3), temp roots 267 of 1140 (denominator +1), "ios fixtures: 428 copies identical" (+2), "ios pins:
+  101". Every other count line and single unmoved. It is the first V of `scripts/check-ios-fixtures.mjs` as merged
+  with SP-7b's.
+- The kit, built on Xcode 26.3 (17C529) with the rows under Xcode-beta 27.3 (item 260's split). K1, FieldDesignTests:
+  ran 71, all pass. K2, FieldHomeTests: ran 509, the base's 508 + 1, all pass.
+- The kit's rows are written green as guards, for the golden equals the hand tables today, so two mutations prove
+  them, neither committed, each restored with porcelain 0 before and after, and each byte-equal in the built products:
+  - W1, `"gamepad"` removed from FieldDesignTests' copy: the vocabulary row RED by name,
+    `ProfileGlyphSymbolsTests.swift:29:5`, `Expectation failed: tokens == pinned.sorted()`.
+  - W2, `"Claude"` → `"Claude X"` in FieldHomeTests' copy: `planProductsAreThePins` RED by name,
+    `MeterModelTests.swift:99:5`, `Expectation failed: products == pinned`.
+- The red, on the Mac through the door: "Tests 1 failed | 4 passed (5)", the first row at
+  `existsSync(PRESENTATION_TABLES_GOLDEN)`; the green, "Tests 5 passed (5)". The generator's first write said
+  "presentation-tables.golden.json: WRITTEN (451 bytes)", and at M249's pins "unchanged (451 bytes)".
+
+**The cut.** Five plumbing re-cuts from the first cut `80945a30b` and a last replay onto `e8e6a240e` so the land could
+fast-forward (`lanes/um/phone-tables-e8e6a240e-r2/`, messages byte-equal to the first cut's), each range-diff "=",
+each tree equal to merge-tree, and every patch-id unchanged; the range's full-index patch-id is
+`dc1b38d25689574c045009669e0e5b7fd798061e` throughout, and the landed commits carry the same plain and -U0 patch-ids.
+The last re-cut's proofs are `lanes/um/phone-tables-recut-2a164e8cb/`. Two shared files merged clean, nothing
+resolved: `scripts/check-ios-fixtures.mjs` with SP-7b's, and `DESIGN.md` with Q5's.
+
+**Findings along the way.**
+- run 256's V was green at `9a6c8b8cb` on `92c9ab38d`, every delta as named, but main had moved at placement and
+  edited a file this range also moves (VF-PM, 07:38:04Z). So it is the witness of that tip only: a file shared between
+  a mint's range and main's advance means the merged file ran in no V.
+- run 261, armed on the `68f489ac2` cut, was held by a9 under the brief's own re-cut line when M260 landed, and never
+  started. No K row ran before run 264.
+- The first cut's lane had a 7-error field-app tsc from its own rosetta-protocol 0.1.3 against the base's 0.1.5, none
+  in this slice's files, and the green commit's body still says so. After the frozen install at M249's lock it was
+  exit 0.
+
+**Owed.**
+- gate:landing, landing-only, after the mint. The slice touches none of its code.
+
+One insert into an older entry: M-phone's Owed, the generator, answered.

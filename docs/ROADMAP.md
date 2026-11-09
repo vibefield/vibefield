@@ -594,6 +594,10 @@ profiles column", "Search — the Peek", the phone's corner, search sheet and to
   held to the golden; the Me menu's Agent Profiles row and its page; the held face; search a glass sheet over the
   field, Live now first; the profile token above search, its lens receding the rest of Field's list, rain, timeline
   and swarm. MA-6 is unblocked: the sheet names the two slots MA-D7's strip fills.
+- Landed 11-09: **M-phone's owed generator** (`f4bb97e8d` → `72952b2c0`, M264, run 264; LANDED "UM-4's owed
+  generator"): the phone's glyph and plan-title tables are held to the pinned packages by one generated golden,
+  mirrored into the kit; the tables themselves stay hand copies. And in M260, M-desk's Settings catalog plate
+  (LANDED "UM-3's plate, Q20, Q5 and ES-6").
 - Next: **UM-5**, UM-D14's plan filter on the desk and the phone, in wave 2: a plan's click and tap, the page's Show
   and sessions line, and the hold's sessions where its line counts reads.
 - Owed:
@@ -603,8 +607,8 @@ profiles column", "Search — the Peek", the phone's corner, search sheet and to
     and "UM-4 and SE-2", Owed), the board ask `um-stack-words` (W1–W8; the words stand as built in the interim) and
     UM/SE's place in 0.9 (lean: in);
   - M-desk's: the catalog stills (the popover's 12-tall line, the limit card's hover, Settings' rows);
-  - M-phone's: the generator for the phone's glyph and plan-title tables (DESIGN.md §13), and the stills no row took
-    (the token's menu, search over History, the page three hours on, a stale body receded, PJ-7's bloom bud);
+  - M-phone's: the stills no row took (the token's menu, search over History, the page three hours on, a stale body
+    receded, PJ-7's bloom bud);
   - the petitions PU-R and PU-S (his to file; one puppeteer release and one EL8, behind item 171);
   - SLOT 18's riders: the record, seven at-source corrections, the petitions and the page's hold words.
 
