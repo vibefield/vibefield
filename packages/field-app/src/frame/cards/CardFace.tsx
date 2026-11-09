@@ -81,7 +81,7 @@ export function CardFace({
             onRemove?.();
           }}
         >
-          <FieldGlyph name="close" size={9} />
+          <FieldGlyph name="close" size={13} />
         </button>
       )}
     </div>

@@ -262,8 +262,9 @@ describe("one stock, six faces (HN-D1)", () => {
     expect(onRemove).toHaveBeenCalledTimes(1);
     expect(onPress).not.toHaveBeenCalled();
     expect(rule(".vf-card-x:hover")).toContain("background: var(--vf-red);");
-    expect(rule(".vf-card-x:hover")).toContain("color: var(--vf-state-on-solid);");
-    expect(rule(".vf-card-x")).toContain("background: color-mix(in srgb, var(--card-ink) 8%");
+    // CS-D7 B: the × is white at rest on the chip's dark stock, so the red needs no ink of its own
+    expect(rule(".vf-card-x")).toContain("color: var(--vf-state-on-solid);");
+    expect(rule(".vf-card-x")).toContain("background: var(--vf-card-dark-stock);");
   });
 
   it("says only its kind while a drag from another app is on its way (HN-D2)", () => {

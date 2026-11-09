@@ -447,35 +447,63 @@
   -webkit-line-clamp: unset;
 }
 
-/* the × of a card reached for: inside its top right, across from the index, in the card's own
-   ink, red under the pointer (HN-D4: the one way a card leaves) */
+/* the chip of a card reached for (CS-D7 B): 30 round on its top right corner, half off the card, 44 to hit, red under the
+   pointer. Its outer half is still the card, so the reach holds while the pointer is on it. */
 .vf-card-x {
   position: absolute;
   z-index: 3;
-  top: 5px;
-  right: 5px;
+  top: -15px;
+  right: -15px;
   display: grid;
-  width: 18px;
-  height: 18px;
+  width: 30px;
+  height: 30px;
   place-items: center;
   padding: 0;
   border: 0;
   border-radius: 50%;
-  background: color-mix(in srgb, var(--card-ink) 8%, transparent);
-  color: var(--card-ink-2);
+  background: var(--vf-card-dark-stock);
+  box-shadow: var(--vf-card-chip-shadow);
+  color: var(--vf-state-on-solid);
   cursor: pointer;
-  animation: vf-card-x-in 140ms ease both;
+  animation: vf-card-x-in 280ms var(--vf-ease-pop) both;
   transition:
     background-color 120ms ease,
-    color 120ms ease;
+    transform 180ms var(--vf-ease-lift);
+}
+
+/* 44 to hit */
+.vf-card-x::before {
+  position: absolute;
+  inset: -7px;
+  border-radius: 50%;
+  content: "";
 }
 
 .vf-card-x:hover {
   background: var(--vf-red);
-  color: var(--vf-state-on-solid);
+  transform: scale(1.12);
 }
 
 @keyframes vf-card-x-in {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vf-card-x {
+    animation-name: vf-card-x-fade;
+    animation-duration: 90ms;
+    transition: background-color 120ms ease;
+  }
+
+  .vf-card-x:hover {
+    transform: none;
+  }
+}
+
+@keyframes vf-card-x-fade {
   from {
     opacity: 0;
   }
