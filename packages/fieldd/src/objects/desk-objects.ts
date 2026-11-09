@@ -68,6 +68,7 @@ export class DeskObjects {
     });
     this.intents = new DeskIntents(opts.intents);
     this.presence = new ObjectPresenceBoard({
+      keyOf: (run) => this.holder(run),
       locate: (ref) => {
         const record = this.registry.get(ref);
         return record && { docId: record.docId, key: record.key };
@@ -150,6 +151,17 @@ export class DeskObjects {
     const holder = this.holder(run);
     this.registry.revoke(ref, holder);
     this.#releaseHolder(ref, holder);
+    this.presence.dropLease(ref, holder);
+  }
+
+  /** Whether this run's process is still here to be answered. */
+  runLive(run: string): boolean {
+    return this.opts.runState(run) === "live";
+  }
+
+  /** Whether a grant to this run would have anyone to serve: a live run, or a spark, which outlasts its runs. */
+  runStands(run: string): boolean {
+    return this.opts.sparkOf(run) !== undefined || this.runLive(run);
   }
 
   /** §11 — every grant still standing, or one object's, with whose it is: it outlives the app, so it can be forgotten. */
@@ -253,8 +265,8 @@ export class DeskObjects {
   /** Keep what an act's undo needs, and say on the desk what it would undo. */
   keepChange(docId: string, change: Omit<KeptChange, "holder"> & { run: string }): void {
     const { run, ...kept } = change;
-    const fell = this.undo.keep(docId, { ...kept, holder: this.holder(run) });
-    if (fell !== undefined) this.#refreshOffer(docId, fell.ref, fell.holder);
+    for (const fell of this.undo.keep(docId, { ...kept, holder: this.holder(run) }))
+      this.#refreshOffer(docId, fell.ref, fell.holder);
     this.presence.setLastChange(change.ref, run, change.label);
   }
 
@@ -276,6 +288,8 @@ export class DeskObjects {
     const change = this.undo.newest(record.docId, ref, holder);
     if (change === undefined)
       return { undone: false, reason: "That agent has no change left to undo here." };
+    if (change.undoing) return { undone: false, reason: "That change is already being undone." };
+    change.undoing = true;
     const { handle } = this.who(run);
     try {
       const answered = await this.intents.ask(record.docId, {
@@ -302,6 +316,8 @@ export class DeskObjects {
         this.#refreshOffer(record.docId, ref, holder);
       }
       return { undone: false, reason: err.message };
+    } finally {
+      change.undoing = false;
     }
   }
 

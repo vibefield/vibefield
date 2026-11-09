@@ -57,6 +57,7 @@ export interface DeskIntentsOptions {
   readonly answerMs?: number;
   /** a new intent's id (tests) */
   readonly mintId?: () => string;
+  readonly now?: () => number;
 }
 
 export class DeskIntents {
@@ -65,10 +66,12 @@ export class DeskIntents {
   readonly #pending = new Map<string, Pending>();
   readonly #answerMs: number;
   readonly #mintId: () => string;
+  readonly #now: () => number;
 
   constructor(opts: DeskIntentsOptions = {}) {
     this.#answerMs = opts.answerMs ?? OBJECT_LIMITS.INTENT_ANSWER_MS;
     this.#mintId = opts.mintId ?? (() => `in-${randomBytes(8).toString("hex")}`);
+    this.#now = opts.now ?? Date.now;
   }
 
   /** The board `canvas_place` and `canvas_list` mean: the most recently subscribed one. */
@@ -110,7 +113,11 @@ export class DeskIntents {
           { fact: "limit" },
         ),
       );
-    const intent = ObjectIntent.parse({ ...ask, intent: this.#mintId() });
+    const intent = ObjectIntent.parse({
+      ...ask,
+      intent: this.#mintId(),
+      expiresAt: this.#now() + this.#answerMs,
+    });
     return new Promise<IntentAnswered>((resolve, reject) => {
       const timer = setTimeout(() => {
         if (this.#pending.delete(intent.intent)) reject(noAnswer());

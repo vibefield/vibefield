@@ -93,7 +93,9 @@ describe("the window's door (CP-D13)", () => {
       tool: "edit",
       input: {},
     };
-    expect(ObjectIntent.safeParse({ ...act, doing: "Rename the root" }).success).toBe(true);
+    expect(
+      ObjectIntent.safeParse({ ...act, doing: "Rename the root", expiresAt: 1_000 }).success,
+    ).toBe(true);
     expect(ObjectIntent.safeParse(act).success).toBe(false);
   });
 

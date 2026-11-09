@@ -40,6 +40,8 @@ interface Board {
 export interface PresenceOptions {
   /** where an object stands, for the frame */
   locate(ref: ObjectRef): { docId: string; key: string } | undefined;
+  /** who a run's lease belongs to: a spark's stays the spark's across its runs */
+  keyOf?(run: string): string;
   readonly now?: () => number;
   readonly releasedShownMs?: number;
 }
@@ -72,8 +74,10 @@ export class ObjectPresenceBoard {
         docId: at.docId,
         key: at.key,
         agents: [...board.rows.values()].map(atWork),
-        ...(board.holder !== undefined ? { holder: board.holder } : {}),
-        ...(board.waiters.length > 0 ? { waiters: [...board.waiters] } : {}),
+        ...(board.holder !== undefined ? { holder: this.#runOf(board, board.holder) } : {}),
+        ...(board.waiters.length > 0
+          ? { waiters: board.waiters.map((key) => this.#runOf(board, key)) }
+          : {}),
       });
     }
     return { objects };
@@ -123,8 +127,10 @@ export class ObjectPresenceBoard {
     this.#set(ref, agent, state);
   }
 
-  /** An operation's answer arrived. */
+  /** An operation's answer arrived. A row that has left since it began stays left: a late answer revives nothing. */
   settle(ref: ObjectRef, agent: AtWorkAgent, state: "open" | "failed" | "needs-you"): void {
+    const row = this.#boards.get(ref)?.rows.get(agent.run);
+    if (row === undefined || row.real === "released") return;
     this.#set(ref, agent, state);
   }
 
@@ -132,7 +138,7 @@ export class ObjectPresenceBoard {
   released(ref: ObjectRef, run: string): void {
     const board = this.#boards.get(ref);
     if (board === undefined) return;
-    this.#dropLease(board, run);
+    this.#dropLease(board, this.#keyOf(run));
     const row = board.rows.get(run);
     if (row !== undefined && row.real !== "released") {
       row.real = "released";
@@ -183,30 +189,42 @@ export class ObjectPresenceBoard {
   /** OB-D9 — a `one` kind's lease. True when `run` is (now) the holder; false when another holds it and `run` waits. */
   claim(ref: ObjectRef, run: string): boolean {
     const board = this.#board(ref);
-    if (board.holder !== undefined && board.holder !== run) {
-      if (!board.waiters.includes(run)) {
-        board.waiters.push(run);
+    const key = this.#keyOf(run);
+    if (board.holder !== undefined && board.holder !== key) {
+      if (!board.waiters.includes(key)) {
+        board.waiters.push(key);
         this.#changed();
       }
       return false;
     }
-    if (board.holder === run) return true;
-    board.holder = run;
-    removeFrom(board.waiters, run);
+    if (board.holder === key) return true;
+    board.holder = key;
+    removeFrom(board.waiters, key);
     this.#changed();
     return true;
   }
 
   /** The holder, to reach a `busy` caller's words. */
   holderOf(ref: ObjectRef): string | undefined {
-    return this.#boards.get(ref)?.holder;
+    const board = this.#boards.get(ref);
+    return board?.holder === undefined ? undefined : this.#runOf(board, board.holder);
   }
 
   /** OB-D9 — handing a `one` kind moves it. */
   moveHolder(ref: ObjectRef, run: string): void {
     const board = this.#board(ref);
-    board.holder = run;
-    removeFrom(board.waiters, run);
+    const key = this.#keyOf(run);
+    board.holder = key;
+    removeFrom(board.waiters, key);
+    this.#changed();
+  }
+
+  /** A holder's lease ends with no row to end it through: the person took the object back. */
+  dropLease(ref: ObjectRef, key: string): void {
+    const board = this.#boards.get(ref);
+    if (board === undefined) return;
+    this.#dropLease(board, key);
+    this.#tidy(ref, board);
     this.#changed();
   }
 
@@ -243,9 +261,23 @@ export class ObjectPresenceBoard {
     this.#changed();
   }
 
-  #dropLease(board: Board, run: string): void {
-    if (board.holder === run) delete board.holder;
-    removeFrom(board.waiters, run);
+  /** A holder that lets go leaves nobody waiting: they ask again, and the first to act holds it. */
+  #dropLease(board: Board, key: string): void {
+    if (board.holder === key) {
+      delete board.holder;
+      board.waiters.length = 0;
+      return;
+    }
+    removeFrom(board.waiters, key);
+  }
+
+  #keyOf(run: string): string {
+    return this.opts.keyOf?.(run) ?? run;
+  }
+
+  /** The run the desk shows for a lease: the newest of the holder's on this object. */
+  #runOf(board: Board, key: string): string {
+    return [...board.rows.keys()].filter((run) => this.#keyOf(run) === key).at(-1) ?? key;
   }
 
   #board(ref: ObjectRef): Board {

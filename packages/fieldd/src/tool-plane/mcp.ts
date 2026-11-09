@@ -197,7 +197,11 @@ export class McpConnection {
         }
         return done({
           content: [{ type: "text", text: result.text }],
-          ...(result.structured !== undefined ? { structuredContent: result.structured } : {}),
+          // a validating client checks structuredContent against the row's outputSchema even on an error, so a refusal
+          // carries none: its words are the answer
+          ...(result.structured !== undefined && !result.isError
+            ? { structuredContent: result.structured }
+            : {}),
           ...(result.isError ? { isError: true } : {}),
         });
       }

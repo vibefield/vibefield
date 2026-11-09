@@ -225,26 +225,31 @@ const ctxFor = (caller: DoorCaller): CallerContext => ({
 const plainReason = (caller: DoorCaller): string =>
   caller.kind === "run" || caller.kind === "root" ? (caller.unsettled ?? caller.kind) : caller.kind;
 
-/** A refusal the model reads as the tool's own answer, with a fact it can act on (the study's §8). */
-const refusal = (
-  fact: string,
-  text: string,
-  more: Readonly<Record<string, unknown>> = {},
-): McpCallResult => ({
+/** A refusal the model reads as the tool's own answer: the fact first, so it can act on it (the study's §8). In the words
+ * alone: a validating client refuses structuredContent that misses the row's outputSchema, on an error too. */
+const refusal = (fact: string, text: string): McpCallResult => ({
   isError: true,
-  structured: { ...more, fact },
-  text,
+  text: `${fact}: ${text}`,
 });
 
-/** What a room's refusal may tell the model beyond its fact: where a bad input went wrong and what fits there, or which
- * service is out (OB-3b's `bad-input`, MT §8; `UNAVAILABLE {service, state}`). Nothing else in a room's details leaves. */
-const refusalDetails = (err: RpcCallError): Record<string, unknown> => {
-  const details = (err.details ?? {}) as Record<string, unknown>;
-  return Object.fromEntries(
-    ["service", "state", "path", "expected", "tools"]
-      .filter((key) => details[key] !== undefined)
-      .map((key) => [key, details[key]]),
-  );
+/** Past this, the shape a bad input should have had is not worth reading. */
+const EXPECTED_CHARS = 600;
+
+/** The JSON Schema a parse failure's path points at in a row's own input: what fits there. */
+const expectedAt = (name: string, path: readonly (string | number)[]): string => {
+  let at = SERVED_TOOLS.find((t) => t.name === name)?.inputSchema as
+    | Record<string, unknown>
+    | undefined;
+  for (const part of path) {
+    if (at === undefined) return "";
+    const next: unknown =
+      typeof part === "number"
+        ? at.items
+        : (at.properties as Record<string, unknown> | undefined)?.[part];
+    at = next as Record<string, unknown> | undefined;
+  }
+  const shape = at === undefined ? undefined : JSON.stringify(at);
+  return shape === undefined || shape.length > EXPECTED_CHARS ? "" : ` Expected ${shape}.`;
 };
 
 /** A room's refusal (an RpcCallError a verb threw), as its fact. */
@@ -268,6 +273,12 @@ const FACTS = new Set([
   // OB-3b — the desk room's (§5.2), said by the room or by the window that holds the board
   ...OBJECT_FACTS,
 ]);
+/** UNAVAILABLE's service and state, beside its fact: which thing is out, and how. */
+const outOf = (err: RpcCallError): string => {
+  const { service, state } = (err.details ?? {}) as { service?: unknown; state?: unknown };
+  return typeof service === "string" && typeof state === "string" ? ` (${service}: ${state})` : "";
+};
+
 const factOf = (err: RpcCallError): string => {
   const named = (err.details as { fact?: unknown } | undefined)?.fact;
   return typeof named === "string" && FACTS.has(named) ? named : (FACT_OF[err.kind] ?? "failed");
@@ -435,7 +446,7 @@ export class ToolPlaneService {
       const issue = parsed.error.issues[0];
       return refusal(
         "bad-input",
-        `${issue?.path.join(".") || "input"}: ${issue?.message ?? "not what this tool takes"}`,
+        `${issue?.path.join(".") || "input"}: ${issue?.message ?? "not what this tool takes"}.${expectedAt(name, issue?.path ?? [])}`,
       );
     }
     // Listed a row, so a spark or a settled run: a caller with profiles.
@@ -472,8 +483,7 @@ export class ToolPlaneService {
       );
       return { structured: out, text: JSON.stringify(out) };
     } catch (err) {
-      if (err instanceof RpcCallError)
-        return refusal(factOf(err), err.message, refusalDetails(err));
+      if (err instanceof RpcCallError) return refusal(factOf(err) + outOf(err), err.message);
       throw err;
     }
   }

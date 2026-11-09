@@ -13,7 +13,16 @@ const refuse = (fact: string, text: string, more: Record<string, unknown> = {}):
 /** Expected shapes past this length are named by their keyword instead: the refusal is for reading. */
 const EXPECTED_CHARS = 600;
 
-const ajv = new Ajv({ allErrors: false, strict: false, verbose: true });
+// `strictSchema`: a keyword or a `format` Ajv has no checker for is an error when the schema compiles, never quietly
+// unchecked, so nothing a kind's schema says it would refuse reaches the window. `addUsedSchema: false`: tools may share
+// an $id, and a rebuilt list compiles the same one again.
+const ajv = new Ajv({
+  allErrors: false,
+  strict: false,
+  strictSchema: true,
+  verbose: true,
+  addUsedSchema: false,
+});
 const compiled = new WeakMap<DeskKindTool, ValidateFunction>();
 
 const compile = (tool: DeskKindTool): ValidateFunction => {

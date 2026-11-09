@@ -31,8 +31,17 @@ export interface DeskKind {
   readonly concurrency: ObjectConcurrency;
   readonly tools: readonly DeskKindTool[];
   readonly guide?: string;
+  /** whose words the guide is, for a plugin's kind (MT-L6) */
+  readonly guideFrom?: string | undefined;
   readonly version: number;
 }
+
+/** At most `max` bytes of `text`, ending on a whole character. */
+export const cutBytes = (text: string, max: number): string =>
+  Buffer.from(text, "utf8")
+    .subarray(0, Math.max(0, max))
+    .toString("utf8")
+    .replace(/\uFFFD+$/, "");
 
 const builtIn = (kind: BuiltInKind): DeskKind => ({
   kind: kind.type,
@@ -50,23 +59,28 @@ const BUILT_INS: readonly DeskKind[] = DESK_KINDS.map(builtIn);
 const readGuide = (root: string | undefined, guide: string | undefined): string | undefined => {
   if (root === undefined || guide === undefined) return undefined;
   try {
-    return readFileSync(join(root, guide), "utf8").slice(0, OBJECT_LIMITS.GUIDE_BYTES);
+    return cutBytes(readFileSync(join(root, guide), "utf8"), OBJECT_LIMITS.GUIDE_BYTES);
   } catch {
     // a guide its plugin no longer ships: the manual goes without it
     return undefined;
   }
 };
 
-const fromPlugin = (object: ObjectContribution, root: string | undefined): DeskKind => {
+const fromPlugin = (
+  object: ObjectContribution,
+  root: string | undefined,
+  plugin: string,
+): DeskKind => {
   const guide = readGuide(root, object.agent?.guide);
   return {
     kind: object.type,
     title: object.title,
-    placeable: true,
+    // no agent half, no declaration of what an agent would be placing: only the person's hand makes one
+    placeable: object.agent !== undefined,
     concurrency: object.agent?.concurrency ?? "many",
     tools: object.agent?.tools ?? [],
     ...(object.agent !== undefined ? { summary: object.agent.summary } : {}),
-    ...(guide !== undefined ? { guide } : {}),
+    ...(guide !== undefined ? { guide, guideFrom: plugin } : {}),
     version: object.schemaVersion,
   };
 };
@@ -78,7 +92,9 @@ export const pluginDeskKinds = (
 ): readonly DeskKind[] =>
   records.flatMap((record) =>
     record.enabled
-      ? record.contributions.objects.map((object) => fromPlugin(object, rootPath(record.id)))
+      ? record.contributions.objects.map((object) =>
+          fromPlugin(object, rootPath(record.id), record.title),
+        )
       : [],
   );
 

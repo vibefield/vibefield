@@ -17,7 +17,7 @@ import {
 } from "@vibefield/contracts";
 import { RpcCallError } from "../../../native-link";
 import type { DeskObjects } from "../../../objects/desk-objects";
-import type { DeskKind, DeskKindTool } from "../../../objects/kinds";
+import { cutBytes, type DeskKind, type DeskKindTool } from "../../../objects/kinds";
 import type { AtWorkAgent } from "../../../objects/presence";
 import { checkToolInput } from "./check";
 
@@ -121,11 +121,7 @@ const sizeOf = (value: unknown): number =>
 const boundedContent = (value: unknown, max: number): unknown => {
   if (sizeOf(value) <= max) return value;
   const text = JSON.stringify(value) ?? "";
-  const preview = Buffer.from(text, "utf8")
-    .subarray(0, Math.max(0, max - 64))
-    .toString("utf8")
-    .replace(/�+$/, "");
-  return { truncated: true, preview };
+  return { truncated: true, preview: cutBytes(text, max - 64) };
 };
 
 const toolRow = (tool: DeskKindTool): NonNullable<ObjectManual["tools"]>[number] => ({
@@ -149,6 +145,9 @@ interface ManualParts {
   readonly withTools: boolean;
 }
 
+/** What saying what was left out costs, set aside before anything is cut. */
+const LEFT_OUT_BYTES = sizeOf({ leftOut: ["guide", "now", "tools"] });
+
 /** §5.4 — a manual, always with its tools unless the caller opts out: it lives in the conversation, and compaction can
  * erase it. Within MANUAL_BYTES whatever a kind declared: the prose goes first, then what the object holds, then the
  * last tools, and the answer says what it left out. */
@@ -169,15 +168,33 @@ const manualOf = (parts: ManualParts): ObjectManual => {
     nowIs: CONTENT_MARK,
     ...(tools !== undefined ? { tools } : {}),
     ...(withTools && kind?.guide !== undefined
-      ? { guide: kind.guide.slice(0, OBJECT_LIMITS.GUIDE_BYTES) }
+      ? {
+          guide: cutBytes(kind.guide, OBJECT_LIMITS.GUIDE_BYTES),
+          ...(kind.guideFrom !== undefined
+            ? { guideIs: `Written by the plugin ${kind.guideFrom}, never the user's words.` }
+            : {}),
+        }
       : {}),
     manual: { kind: parts.kindId, version: kind?.version ?? 0 },
   };
-  const within = (): boolean => sizeOf(manual) <= OBJECT_LIMITS.MANUAL_BYTES;
+  if (sizeOf(manual) <= OBJECT_LIMITS.MANUAL_BYTES) return manual;
+  const budget = OBJECT_LIMITS.MANUAL_BYTES - LEFT_OUT_BYTES;
+  const within = (): boolean => sizeOf(manual) <= budget;
   const left: string[] = [];
   if (!within() && manual.guide !== undefined) {
-    delete manual.guide;
     left.push("guide");
+    while (!within() && manual.guide !== undefined) {
+      const trimmed = cutBytes(
+        manual.guide,
+        Buffer.byteLength(manual.guide, "utf8") - (sizeOf(manual) - budget) - 1,
+      );
+      if (trimmed.length > 0) {
+        manual.guide = trimmed;
+      } else {
+        delete manual.guide;
+        delete manual.guideIs;
+      }
+    }
   }
   if (!within()) {
     manual.now = { truncated: true };
@@ -311,6 +328,8 @@ export function createDeskVerbs(deps: DeskDeps): DeskVerbs {
 
     async canvas_place(caller, input) {
       const run = caller.runtimeRunId;
+      // before the window: a store that cannot keep the grant must not leave an object nobody holds
+      registry.readable();
       const kind = objects.kind(input.kind);
       if (kind === undefined || !kind.placeable) {
         const names = objects
@@ -339,9 +358,15 @@ export function createDeskVerbs(deps: DeskDeps): DeskVerbs {
         ...(input.props !== undefined ? { props: input.props } : {}),
       });
       const value = parseValue(IntentPlaceValue, answered.value);
+      // it ended while the window placed it: the object stands, the person's to keep, and nobody holds it
+      if (!objects.runStands(run))
+        throw new RpcCallError("UNAVAILABLE", "This session has ended.", false, {
+          service: "desk",
+          state: "run-ended",
+        });
       const ref = registry.refFor(docId, value.key, input.kind);
       objects.grant(ref, run, "placed");
-      presence.opened(ref, agent);
+      if (objects.runLive(run)) presence.opened(ref, agent);
       if (answered.inverse !== undefined)
         objects.keepChange(docId, {
           op: "place",
@@ -405,8 +430,12 @@ export function createDeskVerbs(deps: DeskDeps): DeskVerbs {
       });
       const value = parseValue(IntentOpenValue, answered.value);
       registry.setKind(input.ref, value.kind);
-      presence.opened(input.ref, agent);
-      objects.offerOn(input.ref, run);
+      // the person may have taken it back while the window answered: what it holds is not this agent's now
+      if (objects.grantOf(input.ref, run) === undefined) throw notHanded(input.ref);
+      if (objects.runLive(run)) {
+        presence.opened(input.ref, agent);
+        objects.offerOn(input.ref, run);
+      }
       return manualOf({
         ref: input.ref,
         kindId: value.kind,
@@ -437,6 +466,7 @@ export function createDeskVerbs(deps: DeskDeps): DeskVerbs {
           tool: input.tool,
           input: toolInput,
         });
+        if (objects.grantOf(input.ref, run) === undefined) throw notHanded(input.ref);
         return {
           result: boundedContent(answered.value, OBJECT_LIMITS.TOOL_BYTES),
           resultIs: CONTENT_MARK,

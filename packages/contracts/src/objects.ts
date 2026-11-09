@@ -12,7 +12,9 @@ export const ChipType = z.enum(CHIP_TYPES);
 
 /** OB-L1 — a desk object's address on this desktop. Knowing it grants nothing: only the person's play does. */
 export const OBJECT_REF_PATTERN = /^vf:obj\/[a-z0-9]{8}$/;
-export const ObjectRef = z.string().regex(OBJECT_REF_PATTERN);
+export const ObjectRef = z
+  .string()
+  .regex(OBJECT_REF_PATTERN, "must look like vf:obj/ and eight lowercase letters or digits");
 export type ObjectRef = z.infer<typeof ObjectRef>;
 
 /** Whether the door can name the process that runs an agent's MCP servers: a pane's own, or a helper of the run's own that
@@ -40,7 +42,7 @@ export const OBJECT_LIMITS = {
   TITLE_CHARS: 200,
   /** How long fieldd waits for the window to answer one intent. */
   INTENT_ANSWER_MS: 15_000,
-  /** An agent's changes kept for its separate undo, per board (OB-D11 A). */
+  /** An agent's changes kept for its separate undo, per agent per object (OB-D11 A); a board has a ceiling of its own. */
   UNDO_KEPT: 100,
 } as const;
 
@@ -79,7 +81,9 @@ export const ObjectConcurrency = z.enum(["many", "one"]);
 export type ObjectConcurrency = z.infer<typeof ObjectConcurrency>;
 
 const Title = z.string().max(OBJECT_LIMITS.TITLE_CHARS);
-const ToolName = z.string().regex(/^[a-z][a-z0-9_]{0,31}$/);
+const ToolName = z
+  .string()
+  .regex(/^[a-z][a-z0-9_]{0,31}$/, "must be a tool's name, as object_open lists them");
 const KindId = z.string().min(1).max(128);
 /** A tool's input, as its kind's manual declares it; fieldd checks it against the kind's schema before the window sees it. */
 const ToolInput = z.record(z.unknown());
@@ -232,6 +236,9 @@ const IntentBase = {
   /** whose act this is: the run, and the name the desk shows */
   run: z.string().min(1),
   handle: z.string().min(1),
+  /** ms since the epoch. Past it fieldd has told the caller it does not know what happened, so the window refuses: an
+   * act it applied then would be one nobody could undo. */
+  expiresAt: z.number().int().min(0),
 };
 
 /** One thing fieldd asks the window holding a board to do. Only the window knows the board's meaning and whether the
