@@ -160,6 +160,11 @@ import {
   NativeDoorInfoResult,
   NativeDoorOpen,
   NativeDoorPane,
+  NativeDoorRoot,
+  NativeDoorRootsClearParams,
+  NativeDoorRootsClearResult,
+  NativeDoorRootsSetParams,
+  NativeDoorRootsSetResult,
   NativeDoorSnapshot,
   NativeDoorSubscribeResult,
   NativeFileTransferDelta,
@@ -271,6 +276,7 @@ const BASE_SHARED = {
   // snapshot embeds in turn.
   NativeDoorCaller,
   NativeDoorPane,
+  NativeDoorRoot,
   NativeDoorOpen,
   NativeDoorClosed,
   NativeDoorSnapshot,
@@ -278,6 +284,10 @@ const BASE_SHARED = {
   NativeDoorCloseParams,
   NativeDoorCloseResult,
   NativeDoorInfoResult,
+  NativeDoorRootsSetParams,
+  NativeDoorRootsSetResult,
+  NativeDoorRootsClearParams,
+  NativeDoorRootsClearResult,
   // DS-1 — egress. The three constrained strings are embedded by several
   // shapes each (the loopback address by the proxy answer, the bound route and
   // the table row), so every one is named for the usual typify reason; the

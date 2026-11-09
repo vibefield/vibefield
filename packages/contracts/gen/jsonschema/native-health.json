@@ -1157,6 +1157,24 @@
       ],
       "additionalProperties": true
     },
+    "NativeDoorRoot": {
+      "type": "object",
+      "properties": {
+        "rootId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "depth": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "rootId",
+        "depth"
+      ],
+      "additionalProperties": true
+    },
     "NativeDoorOpen": {
       "type": "object",
       "properties": {
@@ -1177,6 +1195,9 @@
         },
         "pane": {
           "$ref": "#/definitions/NativeDoorPane"
+        },
+        "root": {
+          "$ref": "#/definitions/NativeDoorRoot"
         }
       },
       "required": [
@@ -1290,6 +1311,62 @@
         "endpoint",
         "command",
         "args"
+      ],
+      "additionalProperties": true
+    },
+    "NativeDoorRootsSetParams": {
+      "type": "object",
+      "properties": {
+        "rootId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "pid": {
+          "type": "integer",
+          "exclusiveMinimum": 0
+        }
+      },
+      "required": [
+        "rootId",
+        "pid"
+      ],
+      "additionalProperties": true
+    },
+    "NativeDoorRootsSetResult": {
+      "type": "object",
+      "properties": {
+        "startedAtMs": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "startedAtMs"
+      ],
+      "additionalProperties": true
+    },
+    "NativeDoorRootsClearParams": {
+      "type": "object",
+      "properties": {
+        "rootId": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "rootId"
+      ],
+      "additionalProperties": true
+    },
+    "NativeDoorRootsClearResult": {
+      "type": "object",
+      "properties": {
+        "cleared": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "cleared"
       ],
       "additionalProperties": true
     },

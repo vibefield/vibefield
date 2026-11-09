@@ -1070,9 +1070,23 @@ export const NativeDoorPane = z
   .passthrough();
 export type NativeDoorPane = z.infer<typeof NativeDoorPane>;
 
+/** OB-3d — the helper root that holds a caller no pane holds: the first process up its parent chain that fieldd named
+ * to the floor (`native.door.roots.set`) and whose start still matches, at NATIVE_DOOR.START_RESOLUTION_MS. A run whose
+ * agent runs its MCP servers from a helper outside the terminal (Codex's app-server, a Grok leader of its own) has no
+ * pane to be walked to. `rootId` is fieldd's, one per launch attempt; `depth` is the links walked (0 when the caller is
+ * the helper). */
+export const NativeDoorRoot = z
+  .object({
+    rootId: z.string().min(1),
+    depth: z.number().int().nonnegative(),
+  })
+  .passthrough();
+export type NativeDoorRoot = z.infer<typeof NativeDoorRoot>;
+
 /** An open door, as a `.delta` says it and as a `.snapshot` lists it. `connId` is the floor's, unique for the floor's
- * boot (a door outlives fieldd, so it outlives fieldd's ids too). `pane` is ABSENT for a caller outside every pane,
- * whose door still opens: fieldd answers it with no tools. */
+ * boot (a door outlives fieldd, so it outlives fieldd's ids too). `pane` and `root` are both ABSENT for a caller outside
+ * every pane and every helper root, whose door still opens: fieldd answers it with no tools. A pane match wins, so a row
+ * carries at most one of the two. */
 export const NativeDoorOpen = z
   .object({
     connId: z.string().min(1),
@@ -1080,6 +1094,7 @@ export const NativeDoorOpen = z
     state: z.literal("open"),
     caller: NativeDoorCaller,
     pane: NativeDoorPane.optional(),
+    root: NativeDoorRoot.optional(),
   })
   .passthrough();
 export type NativeDoorOpen = z.infer<typeof NativeDoorOpen>;
@@ -1160,6 +1175,46 @@ export const NativeDoorInfoResult = z
   })
   .passthrough();
 export type NativeDoorInfoResult = z.infer<typeof NativeDoorInfoResult>;
+
+// OB-3d — HELPER ROOTS (`draft/thinking-objects-at-work.md`; the build plan's decision 1). A door's caller is fixed at
+// accept, and a helper can open its door before any pane exists, so fieldd names the helper's pid to the floor BEFORE
+// the helper's first MCP-bearing request. Management channel only (EL7): nothing a caller does at the door reaches this.
+
+/** `native.door.roots.set` — this process is the root of `rootId`'s helper tree. The floor reads the pid's start from
+ * the kernel itself, and a walk matches pid AND start, so a reused pid is never the root. A second set of one `rootId`
+ * replaces it (a helper reborn). Refused `PRECONDITION_FAILED` with `details.reason`: `pid-unreadable` (no such process,
+ * or the kernel will not say) or `pid-held` (another root holds that pid). */
+export const NativeDoorRootsSetParams = z
+  .object({
+    rootId: z.string().min(1),
+    pid: z.number().int().positive(),
+  })
+  .passthrough();
+export type NativeDoorRootsSetParams = z.infer<typeof NativeDoorRootsSetParams>;
+
+/** The start the floor read and will match, in ms since the epoch (compare through `sameStartSecond`). */
+export const NativeDoorRootsSetResult = z
+  .object({
+    startedAtMs: z.number().int().nonnegative(),
+  })
+  .passthrough();
+export type NativeDoorRootsSetResult = z.infer<typeof NativeDoorRootsSetResult>;
+
+/** `native.door.roots.clear` — forget a root. Idempotent: a root already gone answers `cleared: false`. The floor also
+ * drops a root on its own once its process is gone. */
+export const NativeDoorRootsClearParams = z
+  .object({
+    rootId: z.string().min(1),
+  })
+  .passthrough();
+export type NativeDoorRootsClearParams = z.infer<typeof NativeDoorRootsClearParams>;
+
+export const NativeDoorRootsClearResult = z
+  .object({
+    cleared: z.boolean(),
+  })
+  .passthrough();
+export type NativeDoorRootsClearResult = z.infer<typeof NativeDoorRootsClearResult>;
 
 /** The ONE rule for comparing a door caller's `startedAtMs` with another reading of the same process's start (CP-1a):
  * the same whole second (NATIVE_DOOR.START_RESOLUTION_MS). The floor reads the kernel's microseconds; `ps -o lstart=`

@@ -798,6 +798,24 @@ export const METHODS: MethodDef[] = [
     idempotent: true,
     locality: "local",
   }),
+  // OB-3d — HELPER ROOTS: fieldd names a run's helper process to the floor (mgmt.ts `NativeDoorRoots*`). Management
+  // channel only (EL7): nothing a caller does at the door reaches these.
+  defineMethod({
+    surface: "mgmt",
+    method: "native.door.roots.set",
+    scope: null,
+    // one rootId and pid answers the same start again; another pid under that id replaces it (a helper reborn)
+    idempotent: true,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "mgmt",
+    method: "native.door.roots.clear",
+    scope: null,
+    // a root already gone answers `cleared: false`, never an error
+    idempotent: true,
+    locality: "local",
+  }),
 
   // DS-1 — EGRESS (design-02 §2.4's egress bullet; shapes in mgmt.ts). The
   // mirror image of `serve`: a desktop reaches a peer THROUGH its own node, so

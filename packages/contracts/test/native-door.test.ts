@@ -11,6 +11,10 @@ import {
   NATIVE_DOOR_CLOSE_REASONS,
   NativeDoorClosed,
   NativeDoorOpen,
+  NativeDoorRootsClearParams,
+  NativeDoorRootsClearResult,
+  NativeDoorRootsSetParams,
+  NativeDoorRootsSetResult,
   NativeDoorSnapshot,
   sameStartSecond,
 } from "../src/mgmt";
@@ -31,6 +35,32 @@ describe("CP-1a — the floor's door", () => {
     const outside = NativeDoorOpen.parse(fixture("native-door-open.outside.json"));
     expect(outside.pane).toBeUndefined();
     expect("pane" in (fixture("native-door-open.outside.json") as object)).toBe(false);
+  });
+
+  it("names a helper root beside a pane, a row carrying at most one (OB-3d)", () => {
+    const open = NativeDoorOpen.parse(fixture("native-door-open.root.json"));
+    expect(open.root).toEqual({ rootId: "4bd1c7e2-6f0a-4c3e-9a55-1f2e3d4c5b6a", depth: 1 });
+    expect(open.pane).toBeUndefined();
+    expect(NativeDoorOpen.parse(fixture("native-door-open.valid.json")).root).toBeUndefined();
+  });
+
+  it("names a helper's process to the floor, and answers the start the floor read (OB-3d)", () => {
+    expect(
+      NativeDoorRootsSetParams.parse(fixture("native-door-roots-set-params.valid.json")),
+    ).toEqual({ rootId: "4bd1c7e2-6f0a-4c3e-9a55-1f2e3d4c5b6a", pid: 51790 });
+    expect(
+      NativeDoorRootsSetResult.parse(fixture("native-door-roots-set-result.valid.json"))
+        .startedAtMs,
+    ).toBe(1792431660120);
+    expect(NativeDoorRootsSetParams.safeParse({ rootId: "", pid: 7 }).success).toBe(false);
+    expect(NativeDoorRootsSetParams.safeParse({ rootId: "a", pid: 0 }).success).toBe(false);
+    expect(
+      NativeDoorRootsClearParams.parse(fixture("native-door-roots-clear-params.valid.json")).rootId,
+    ).toBe("4bd1c7e2-6f0a-4c3e-9a55-1f2e3d4c5b6a");
+    expect(
+      NativeDoorRootsClearResult.parse(fixture("native-door-roots-clear-result.valid.json"))
+        .cleared,
+    ).toBe(true);
   });
 
   it("keeps a door lane's id below 2^53, so it crosses JSON-RPC to fieldd intact", () => {
@@ -69,7 +99,7 @@ describe("CP-1a — the floor's door", () => {
     expect(sameStartSecond(1792431663000, 1792431662999)).toBe(false);
   });
 
-  it("is a door under the run dir's name budget, with an `mcp` lane and three mgmt verbs", () => {
+  it("is a door under the run dir's name budget, with an `mcp` lane and five mgmt verbs", () => {
     expect(SOCKETS.DOOR).toBe("door.sock");
     expect(SOCKETS.DOOR.length).toBeLessThanOrEqual(14);
     expect(MeshLaneProtocol.options).toContain("mcp");
@@ -78,6 +108,8 @@ describe("CP-1a — the floor's door", () => {
       ["native.door.subscribe", "mgmt", "local", true],
       ["native.door.close", "mgmt", "local", false],
       ["native.door.info", "mgmt", "local", false],
+      ["native.door.roots.set", "mgmt", "local", false],
+      ["native.door.roots.clear", "mgmt", "local", false],
     ]);
   });
 
