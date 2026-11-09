@@ -10,8 +10,9 @@ import { STARTERS, type Starter } from "./thread-items";
 // - The project is the busiest folder on the board (by its name, never its path).
 // - The handle is the live run, no spark's own, worked in last, named by its agent and its place among that agent's
 //   live runs. The reviewer is an agent this Mac has, the ruled one first, another than the run's own where there is one.
-// - A slot with nothing to fill keeps its ruled word: a sample, which the person edits before sending (ES-D4 A). Read,
-//   no agent slot names an agent this Mac lacks. The night's jobs and the hello take the one reading.
+// - An agent slot with nothing to fill keeps its ruled word: a sample, which the person edits before sending (ES-D4 A).
+//   Read, no agent slot names an agent this Mac lacks. A project or a run with nothing to fill drops out and the starter
+//   reads bare (ES-Q1, James 2026-11-09). The night's jobs and the hello take the one reading.
 // - The ruled agents are the catalog's role rows (`starterAgent`; ES-4 role, VF-PM 2026-11-08 23:41Z): which agent a
 //   ruled word names is the table's to say, never this file's (AR-L1), and R23b holds it to no agent id literal.
 
@@ -27,25 +28,22 @@ export interface StarterSources {
   readonly rows: BoardRows;
 }
 
-/** The agents the ruled words name, as the catalog's role rows say, and each slot's ruled word (NS-D4's starters as
- * ruled, §9): the crew's and the reviewer's labels, and the handle's run as its agent's second (`claude·2`). */
+/** The agents the ruled words name, as the catalog's role rows say (NS-D4's starters as ruled, §9): the crew's and the
+ * reviewer's labels, each its slot's ruled word, and the handle's agent, which the reviewer still steps aside for where
+ * no run is named. */
 const ruledCrew = starterAgent("crew");
 const ruledReviewer = starterAgent("reviewer");
-const ruledRunAgent = starterAgent("handle")?.seams.puppeteer?.provider;
 const RULED = {
   crew: { id: ruledCrew?.id, word: ruledCrew?.label },
-  folder: "vibe-field",
-  handle: {
-    agent: ruledRunAgent,
-    word: ruledRunAgent === undefined ? undefined : `${ruledRunAgent}·2`,
-  },
+  runAgent: starterAgent("handle")?.seams.puppeteer?.provider,
   reviewer: { id: ruledReviewer?.id, word: ruledReviewer?.label },
 } as const;
 
 const crewWords = (agent: string): string => `Spawn 4 ${agent} agents to research a topic each`;
-const folderWords = (folder: string): string => `Keep track of my agents in ${folder}`;
-const reviewWords = (reviewer: string, run: string): string =>
-  `Have ${reviewer} review ${run}'s work until it's clean`;
+const folderWords = (folder: string | undefined): string =>
+  folder === undefined ? "Keep track of my agents" : `Keep track of my agents in ${folder}`;
+const reviewWords = (reviewer: string, run: string | undefined): string =>
+  `Have ${reviewer} review ${run === undefined ? "my agents'" : `${run}'s`} work until it's clean`;
 
 const catalogPlace = (id: string): number => {
   const at = AGENT_CATALOG.findIndex((entry) => entry.id === id);
@@ -76,13 +74,13 @@ export function startersOf({ agents, rows }: StarterSources): StartersReading {
       ? RULED.crew.word
       : ((here.find((agent) => agent.id === RULED.crew.id) ?? here[0])?.label ?? RULED.crew.word);
 
-  const folder = busiestFolder(live) ?? RULED.folder;
+  const folder = busiestFolder(live);
 
   const last = [...live].sort(
     (a, b) => workedAt(b) - workedAt(a) || b.runtimeRunId.localeCompare(a.runtimeRunId),
   )[0];
-  const runAgent = last?.kind ?? RULED.handle.agent;
-  const handle = last === undefined ? RULED.handle.word : handleOf(last, live);
+  const runAgent = last?.kind ?? RULED.runAgent;
+  const handle = last === undefined ? undefined : handleOf(last, live);
 
   let reviewer: string | undefined = RULED.reviewer.word;
   if (here !== null && here.length > 0) {
@@ -104,10 +102,7 @@ export function startersOf({ agents, rows }: StarterSources): StartersReading {
       { glyph: track?.glyph ?? "panes", words: folderWords(folder) },
       {
         glyph: review?.glyph ?? "duplicate",
-        words:
-          reviewer === undefined || handle === undefined
-            ? (review?.words ?? "")
-            : reviewWords(reviewer, handle),
+        words: reviewer === undefined ? (review?.words ?? "") : reviewWords(reviewer, handle),
       },
     ],
   };
