@@ -34,6 +34,8 @@ export type ProfilesFixtureState =
   | "draft"
   | "loading usage"
   | "refreshing usage"
+  /** UM-3 — a window read before its reset says the reading's age where its reset stood, unlit */
+  | "read before reset"
   | "empty"
   | "signing in"
   | "agent"
@@ -75,6 +77,7 @@ export const PROFILES_FIXTURE_STATES: readonly ProfilesFixtureState[] = [
   "draft",
   "loading usage",
   "refreshing usage",
+  "read before reset",
   "empty",
   "signing in",
   "agent",
