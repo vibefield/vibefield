@@ -58,6 +58,12 @@ const MARKERS = [
 const HISTORY_CHUNK = "HistoryRoomView";
 const HISTORY_CODE = /rosettad is not answering/;
 const HISTORY_SHEET = /\.ah-frame\b[^{}]*\{/;
+// Settings on demand (Q20; James, 2026-10-28, the housekeeping page; it replaces
+// ESR's follow-on): the panel is its OWN lazy chunk, named for its module. One
+// sentence only the panel says finds it wherever it lands (a string the minifier
+// keeps). It finds the panel's code; a sheet its modules import moves with them.
+const SETTINGS_CHUNK = "SettingsPanel";
+const SETTINGS_CODE = /Settings history limit reached/;
 for (const name of readdirSync(assetsDir)) {
   const path = join(assetsDir, name);
   if (!statSync(path).isFile()) continue;
@@ -71,6 +77,7 @@ for (const name of readdirSync(assetsDir)) {
     ? HISTORY_SHEET.test(buf.toString("utf8"))
     : HISTORY_CODE.test(text);
   if (history) markers.push("history-room");
+  if (SETTINGS_CODE.test(text)) markers.push("settings-panel");
   chunks.set(name, {
     raw: buf.length,
     gzip: gzipSync(buf).length,
@@ -210,6 +217,29 @@ if (args.includes("--assert")) {
       `no lazy ${HISTORY_CHUNK} sheet carries the room's rules — its sheet rides elsewhere`,
     );
   }
+  // Settings on demand (Q20): the panel in ONE lazy chunk named for its module,
+  // never in the initial graph, never riding another chunk, reached only by a
+  // dynamic import. The window pays for it the first time someone opens it.
+  const isSettings = (name) => name.startsWith(`${SETTINGS_CHUNK}-`);
+  for (const [name, c] of chunks) {
+    if (c.markers.includes("settings-panel")) {
+      if (initial.has(name)) problems.push(`${name}: the Settings panel in the initial graph`);
+      else if (!isSettings(name)) {
+        problems.push(
+          `${name}: the Settings panel rides another chunk (${SETTINGS_CHUNK}'s alone)`,
+        );
+      }
+    }
+    for (const dep of c.staticImports) {
+      if (isSettings(dep)) problems.push(`${name}: imports ${dep} statically — Settings not lazy`);
+    }
+  }
+  const settingsCode = [...chunks].find(
+    ([name, c]) => isSettings(name) && !initial.has(name) && c.markers.includes("settings-panel"),
+  );
+  if (settingsCode === undefined) {
+    problems.push(`no lazy ${SETTINGS_CHUNK} chunk carries the panel — the split did not happen`);
+  }
   for (const rel of ["main/index.cjs", "main/sound-worker.cjs", "preload/index.cjs"]) {
     if (!shellFiles[rel]) {
       problems.push(`${rel}: shell bundle missing under ${distDir} (stale report path?)`);
@@ -241,8 +271,9 @@ if (args.includes("--assert")) {
   }
   const [codeName, code] = historyCode;
   const [sheetName, sheet] = historySheet;
+  const [settingsName, settings] = settingsCode;
   console.log(
-    `\nbundle assert OK — initial ${kb(initRaw)} raw / ${kb(initGzip)} gz, world lazy, History lazy (${codeName} ${kb(code.raw)} raw / ${kb(code.gzip)} gz + ${sheetName} ${kb(sheet.raw)} raw / ${kb(sheet.gzip)} gz)`,
+    `\nbundle assert OK — initial ${kb(initRaw)} raw / ${kb(initGzip)} gz, world lazy, History lazy (${codeName} ${kb(code.raw)} raw / ${kb(code.gzip)} gz + ${sheetName} ${kb(sheet.raw)} raw / ${kb(sheet.gzip)} gz), Settings lazy (${settingsName} ${kb(settings.raw)} raw / ${kb(settings.gzip)} gz)`,
   );
 }
 

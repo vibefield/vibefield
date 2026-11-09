@@ -119,6 +119,36 @@ describe("UI system ownership boundaries", () => {
     expect(catalogManifest).toContain('@import "./styles/tweaks.css";');
   });
 
+  it("keeps Settings behind its chunk's one dynamic import — nothing in the product imports the panel statically (Q20, 2026-10-28)", () => {
+    // Settings on demand: `panels/settings-chunk.tsx` reaches `SettingsPanel` by
+    // ONE dynamic import, and `pnpm bundle:assert` holds the build. An import or a
+    // re-export of it anywhere in the product, the panels barrel above all, puts it
+    // back in the window's first load. `import type` is erased and costs nothing.
+    // The catalog mounts `SettingsDialog`, never the panel, and is its own build.
+    const offenders: string[] = [];
+    const walk = (relativeDir: string): void => {
+      for (const entry of readdirSync(join(PACKAGE_ROOT, "src", relativeDir), {
+        withFileTypes: true,
+      })) {
+        const relativePath = relativeDir === "" ? entry.name : `${relativeDir}/${entry.name}`;
+        if (entry.isDirectory()) {
+          if (relativePath !== "design-system") walk(relativePath);
+        } else if (
+          /\.tsx?$/.test(entry.name) &&
+          /^(?:import|export)\s+(?!type\s)[^;]*?from\s+"[^"]*\/SettingsPanel"/m.test(
+            source(relativePath),
+          )
+        ) {
+          offenders.push(`${relativePath}: reaches the Settings panel statically`);
+        }
+      }
+    };
+    walk("");
+    expect(offenders).toEqual([]);
+    expect(source("panels/settings-chunk.tsx")).toContain('import("./SettingsPanel")');
+    expect(source("field/ChromeLayer.tsx")).toMatch(/<SettingsPanelMount\s/u);
+  });
+
   it("keeps History's room behind its chunk's one dynamic import — nothing in the product imports it statically (2026-10-04)", () => {
     // The room's chunk (`history/room-chunk.tsx`) reaches `HistoryRoomView` —
     // and through it everything under `@vibefield/rosetta-room`, its sheet included — by
