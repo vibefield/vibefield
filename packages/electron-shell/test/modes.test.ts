@@ -103,6 +103,12 @@ describe("isSmokeLike", () => {
 });
 
 describe("keepsGpu", () => {
+  it("for Godview's launcher under --chat-night alone (ES-6: the row exists to witness the GPU)", () => {
+    expect(keepsGpu("smoke-godview", ["--chat-night"])).toBe(true);
+    expect(keepsGpu("smoke-godview", ["--chat-night", "--disable-gpu"])).toBe(false);
+    expect(keepsGpu("smoke", ["--chat-night"])).toBe(false);
+  });
+
   // DK-5: the desk-drawing smokes keep the GPU unless run GPU-less on purpose; every other
   // smoke-like mode drops it (ssh, GPU-less runners); the labs measure it; the app keeps it.
   const kept = new Set<ShellMode>([
@@ -132,6 +138,11 @@ describe("keepsGpu", () => {
 });
 
 describe("keepsFramesWhenCovered", () => {
+  it("for Godview's launcher under --chat-night alone (ES-6: its rows want the frames while covered)", () => {
+    expect(keepsFramesWhenCovered("smoke-godview", ["--chat-night"])).toBe(true);
+    expect(keepsFramesWhenCovered("smoke-godview", ["--chat-night", "--disable-gpu"])).toBe(false);
+  });
+
   // TP-S0c, grown at DK-9: the frame-counting labs keep a covered window's frames — the terminal perf lab and
   // the GPU-on desk smokes (their idle, stillness and frame-rate rows); production backgrounds a covered window.
   const kept = new Set<ShellMode>([
