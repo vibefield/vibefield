@@ -45583,3 +45583,81 @@ never by hand; 48 of 48 blobs reconstruct from the pre-gen tip and the two patch
   two linked desktops and a real agent page with its CDN loads, opened on A and served to B, with `curl -sI` over the
   tailnet reading the CSP and fixed headers on `/` and `/.vibefield/preview/`; item 192's pair rides it.
 - Item 268's removal, after this land.
+
+## MA-6 (6a–6d + the gate) — the phone's Apps as a model and the door's values, behind a shut gate (track MA)
+
+**MA-6, 6a through 6d and the gate (eleven commits `3148f426b` → `c88ad0908`, M269, 2026-11-09 14:55:03Z).** James ruled
+MA-D7…D9 and D11…D13 A and MA-D10 B on the page (2026-11-05). VF-PM ruled this land's shape at 13:07Z (A + B): 6a
+through 6d's values land now behind a gate, and the door's model, its wiring and 6e follow, red first. A control that
+does nothing is a blank with a label (MA-L10), so nothing that cannot yet go anywhere is drawn.
+
+**Nothing draws yet.** `AppsShelfGate.drawn` is false, so the search sheet's two Apps slots stand empty, as they did
+before this land. `AppsFeed` does attach: the phone reads the door and shows none of it. 6e's first green turns that one
+value. The strip and the group are built and tested; only their mounting waits. No test reaches `HomeScreen`'s two call
+sites; the gate's three rows hold what `inSheet` answers.
+
+**What changed.**
+- 6a: `IndexAppsResult`, `MadeAppRefusal` and the row and source readers read the `index.apps.*` doors. `AppsShelf`
+  stands Recent (the newest four, with an `opened` input that heads them; the per-account ledger that fills it comes
+  with 6e), Kept (empty until `artifact.mark`'s handler lands, 3h, DR-2), the project folders, the no-project group and
+  the foot. The door folds already, so the phone does not; the foot counts the fold's apps, because `sources[].rows`
+  counts each desktop's rows before the fold. `MadeAppFacts` is field-app's reading of one app, held by a generated
+  golden of 30 cases (`made-app-goldens.test.ts`). **MA-1b never landed as a slice; 6a absorbed it.**
+- 6b: `AppIcon` (§2.9's fallback paint, the 22.5% corner, the initial, the preview's crop), `AppsShelfChrome` and
+  `AppsGlassRow` at DESIGN.md's numbers. `ChromePalette.appFallbackTile` is `0x232326`, held to tokens.css's
+  `--vf-app-fallback-tile` by check-ios-fixtures. DESIGN.md and tokens.css did not move.
+- 6c: `AppsFeed` walks `index.apps.list {scope: "mesh"}`, re-reads on each ping of `index.apps.subscribe`, joins project
+  names from `project.list`, and says every state: a library still reading, Off where no home answers, unavailable. The
+  strip (absent at zero apps) and Everything's Apps group. `-vf-mock-apps=` drives the real reads over the contracts'
+  own fixtures, and defaults to `empty`.
+- 6d: the door as values, `Sources/FieldHome/Apps/AppsDoor.swift`, at §8's numbers: `AppsPull`, `AppsPeek`, `AppsCues`
+  and its store, `AppsDrop`, `AppsDrops`, `AppsDot`. The first reading is no news. A glimpse in the sheet's Recent row
+  is not seen. No gesture, view or `HomeScreen` line moved for these values.
+- The gate: the red's three rows, then `drawn = false` and `HomeScreen`'s two slots on `inSheet`. Everything's Apps
+  group is under it as well as the strip, because its rows' taps are just as inert.
+- check-ios-fixtures: the phone's copies of the contract fixtures and the golden, `ARTIFACT_LIMITS`' three bounds and
+  `MADE_APP_OPEN`'s service and seven words. `biome.jsonc` leaves the made-apps golden to its writer.
+- VF-PM's rulings of 04:46Z: the phone asks `artifact.open` nothing before MA-5; the stack is made apps only.
+- Petition status: none moved. This stack asks rosetta and truffle nothing new.
+
+**Verified** (vf-m2, built on Xcode 26.3, tested under the beta). Each red was read before its green, by name:
+- run251 (6a's 17 red, `342d19a5295c7c96`) · run254 (6b's 9 red, 6a's 17 green, `0492ef38acdf0390`) · run259 (6c's 17
+  red, 6b's 9 green, `293da7440695fa72`) · run269 (6d's 23 red, 6c's 17 green, 66 ran, `e4d65e2e83f417b4`).
+- run271 (`lanes/vf-m2/ma6-mint-a9-results/`, `SHA256SUMS` `c61bfd6792b19e21`, 62 files), at `c88ad0908` on `db2ca832c`:
+  R at `c9abcd505`, the gate's 3 red by name. K GREEN-BUT-167: 2312 tests in 358 suites, passed 2308, skipped 3, failed
+  1 (item 167), FieldHomeTests 591 in 73, FieldProductTests 327 in 54, the 8 new suites 8 of 8. 6d's green and the
+  gate's green have their first read here. V SLOT RED on one cargo row (Found).
+- run272 (`lanes/vf-m2/run272-a9-results/`, `SHA256SUMS-a9-run272` `e0b5b1a43f92380f`, 36 files), V alone at the same
+  tip on VF-PM's GO: `pnpm verify` exit 0, 5 min 50 s, all 37 cargo binaries and `gen:check` read. Against run 270,
+  count lines missing [] / extra [] with six named moves: field-app 334 files (333) and 4553 tests (4552), ios fixtures
+  442 (430), ios pins 112 (101), `Checked 3544` (3543), `268 of 1143` (1142). Contracts 1962, fieldd 3815 | 15 (3830);
+  sum 14,533 / 21. 73 warnings, 21 infos, bundle OK and equal to run 270's, census OK.
+- Not run: a phone. No row here is a device row.
+
+**Found.**
+- **Item 269:** `listener_accept_pressure` pass, red, pass on the mini (runs 270, 271, 272) on identical Rust; the mgmt
+  leg: connect succeeded, the ping call failed fast, `accept_recovered 0` at ~1.2 s; 272's pass clears nothing. The row
+  prints the floor's log only on a fail. This stack moves no path under `packages/field-native`.
+- **Item 270:** run 272's two KEPT births on vf-m2, `/private/tmp/vf-seam-W5bBcV` and `/private/tmp/vf-seam-WkN2WK`,
+  each only `custody-admission.v1.json`: `terminal-seam.test.ts` removes its root before it SIGKILLs its floors
+  (:41–:56, :60–:61). Owner: the terminal seam's track. Run 271's two: `/private/tmp/vflaszc8bu` (item 269's row root)
+  and `/private/tmp/vf-conv-B-V36ak6`.
+- `biome check .` at the mint's Mac row read one error, the generated golden's format, because 6a's own biome row had
+  covered only two files. The rider is the last commit.
+- run263 was owed: two `mutating` calls inside `#expect` do not compile. Hoisted to `let`s.
+- `AppsFeedTests` took 54.9 s under its red and 0.345 s under its green.
+
+**Owed.**
+- The door's model with its 19 rows, the wiring (the pull from every tab, the first peek, the drop, the dot) and 6e (the
+  shelf, the folder, the zoom, the previews, the gate's turn), red first, onto a fresh branch over this main.
+- James's device rows (P6): a real pull, and a real preview fetch when 6e lands.
+- The words ‹for James›, none on screen until 6e: "Your desktop" for a home the roster does not name; "All apps" in the
+  secondary ink, because the phone has no token for the page's selection blue (a DESIGN.md line comes first); "3 new
+  apps".
+- James's to reverse: the phone's walk stops at ten pages (a thousand apps over a radio, against the desk's 41 per
+  desktop) and says so, and every ping re-walks.
+- A difference from the desk, to say again at 6e: the phone has no Keep or Hide until MA-3h (DR-2); the desk's are
+  MA-4's buttons with refusal words. Live apps on the phone are a named follow-up, so the kit does not read
+  `artifact.subscribe` yet; `packages/contracts/src/methods.ts:1042`'s sentence is corrected at its source in this
+  entry's commit.
+- `gate:landing` at this land, on James's word. The stack moves no code a desktop smoke runs.

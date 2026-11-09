@@ -1043,6 +1043,10 @@ export const METHODS: MethodDef[] = [
   // when MA-1b mirrors `ArtifactView` and the phone's shelf shows live apps
   // beside made ones (the plan's L10). It still carries only the two LIVE
   // kinds: a made app never rides this stream (H2).*
+  // *Corrected 2026-11-09 (MA-6, M269; VF-PM's Q4, 04:46Z): the kit does not
+  // read it from MA-6. MA-1b never landed; 6a absorbed its readers, which are
+  // `index.apps.*` alone, and the phone's shelf is made apps only. Live apps
+  // on the phone are a named follow-up, and the kit reads it from there.*
   defineMethod({
     surface: "product",
     method: "artifact.subscribe",

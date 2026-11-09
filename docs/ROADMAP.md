@@ -491,14 +491,17 @@ DESIGN.md §2.9, §8 "The phone's Apps" and §9 "Apps"; DECISIONS MA
 - Landed 11-09: **MA-3f, serving** (`9ce93fa71` → `0d82b611b`, M268, run 270; LANDED "MA-3f"), in 0.9 by James's word
   (04:36:57Z): an open on the app's own desktop, or forwarded to it, exports the page by digest, builds its view and
   serves it under the app's policy. The two-device witness is owed, on the nightly carrying this native move.
+- Landed 11-09: **MA-6's 6a–6d and the gate** (`3148f426b` → `c88ad0908`, M269, runs 271 and 272; LANDED "MA-6
+  (6a–6d + the gate)"): the phone reads `index.apps.*` and stands its shelf as a model (6a absorbed MA-1b, which never
+  landed), the ink and measures, the feed, the strip and Everything's Apps group, and the door's values. Nothing draws
+  yet: `AppsShelfGate.drawn` is false, so the sheet's two slots stand empty until 6e.
 - Next: MA-3h, Keep and Hide, now intents in the
-  drive's document (DR-2) · **MA-6, the phone's shelf**, the next to land (its mint replays onto
-  M268, so it is M269 if green), unblocked: IOS-13a and UM's M-phone, ahead of it, both
-  landed 11-06 (M-phone M198). SE-2's sheet, in which MA-D7's strip now stands (DESIGN.md §8 "The phone's Apps" as
-  amended at UM-0), names its two slots and fills neither: `appsStrip` above the switch before any word, and
-  `appsGroup` first in Everything once a word is typed (`PhoneSearchSheet.swift`) ·
+  drive's document (DR-2) · **MA-6's rest**: the door's model and its wiring (the pull from
+  every tab, the first peek, the drop, the dot), then 6e, the shelf, the folder and the zoom, whose first green turns
+  the gate; ES is next to land, ahead of it ·
   **MA-5, the phone's host** after SP-4 and its probes P1/P2 (cp-landing's queue).
 - Owed: the 10 words marked ‹for James› in DESIGN.md §8 and §9, and §9's interim words for Live (MA-4);
+  MA-6's interim words and James's device rows (LANDED "MA-6 (6a–6d + the gate)", Owed);
   MA-4's witness by eye; smoke:godview on vf-m1 (items 185, 186); carried from AH: AH-4's
   review, its LANDED entry and its physical witnesses (`cce684ce3`, on main since 08-03), AH-1's two-client
   witness, AH-3's physical closeout, and device-retirement GC with TS's "forget a device".
@@ -1559,7 +1562,7 @@ Petition status lives in `draft/petitions/README.md`. Still open or owed there:
 | DK — the desk migration | COMPLETE; landed 10-09 | `thinking-desk-migration.md`, `thinking-the-desk.md`, ICE design-015…018, `docs/desk-gates.md` | James's parked build rulings |
 | GT — Godview terminal | PARKED; the deck's ladder done (GT-0…GT-8) | `specs/godview-terminal.md` | G29; GT-D22; row 13b |
 | TP / TC — terminal pipeline and custody | PARKED; TC RATIFIED 10-28 (Q6) | `specs/terminal-pipeline-v3*.md`, `specs/terminal-custody.md`, `thinking-terminal-mesh-cells.md`, `thinking-floor-wedge.md`, `thinking-inventory-latency.md` | D6's cell half |
-| MA — Apps (was AH — Artifact Hub) | ACTIVE since 11-05 (MA-D1…D13 ruled; MA-4 in 0.9, James 11-06); MA-0a + MA-1a (M152), MA-3 (M157, M162), MA-4 (M166) and MA-3f (M268) landed; AH-1…3 landed, AH-4 unledgered; Live apps are field-app's since FL-2 (M267), `plugins/browser` gone | `thinking-mini-apps.md`, `specs/artifact-hub.md`, design-06 §5; DESIGN.md §2.9/§8/§9/§13 | MA-3h; MA-6 the phone's shelf (unblocked: UM's M-phone landed 11-06, its sheet naming the strip's slots) |
+| MA — Apps (was AH — Artifact Hub) | ACTIVE since 11-05 (MA-D1…D13 ruled; MA-4 in 0.9, James 11-06); MA-0a + MA-1a (M152), MA-3 (M157, M162), MA-4 (M166), MA-3f (M268) and MA-6's 6a–6d with the gate (M269) landed; AH-1…3 landed, AH-4 unledgered; Live apps are field-app's since FL-2 (M267), `plugins/browser` gone | `thinking-mini-apps.md`, `specs/artifact-hub.md`, design-06 §5; DESIGN.md §2.9/§8/§9/§13 | MA-3h; MA-6's door model and 6e (the shelf draws there, and the gate turns) |
 | DR — the Drive | ACTIVE since 11-06 (DR-D1…D13 ruled; D14, D15 open); DR-1a, DR-2a, DR-1b, DR-3a (W3's VF-FLOOR), the EL8s to rosetta and truffle, DR-3b (W3's VF-RELAY) and DR-1 (B) as MA-3f landed (M183, M188, M190, M203, M205, M217, M249, M268); wave 1's sibling PRs merged and released 11-06 | `thinking-drive.md` v0.3 (page sources `draft/drive/page/`); `thinking-mini-apps.md` | D14 and D15 (James); the EL8 to mille and the substrate slice; DR-2…DR-5 |
 | RV — the review fixes (Godview, terminal, puppeteer) | ACTIVE since 11-06; items 191 (RV #2 half A, M192), 192 (RV #6, M193), 201 (RV #17, #43, #49, #48, #50, M194), 203's VF-W1 (RV #1's pin-free half, M196), 211 (RV #97, #96, #93, #116, #95, #47, M199), 212 (RV #30, #29, #67, M201) and 216 (item 192's census row, M204) landed; W1–W2 building, the sibling lanes local | `draft/rv/` (plan.md, james-asks.md, lead-rulings.md); `lanes/rv/review/` | puppeteer R1 → EL8-1 with item 203; ghosttea 0.15.0 → EL8-g |
 | UM + SE — profile meters and one search | ACTIVE since 11-06 (UM-D21…D28 and SE-D1…D5 ruled on the page; UM-D16 E, D19 A; D3, D4, D8, D12…D15 at the leans); UM-0…UM-2 landed 11-06 (M-U1 `c9493b957`, run180, M180); UM-3 and SE-1 landed 11-06 (M-desk `ed8099c1e`, run187, M187); UM-4 and SE-2 landed 11-06 (M-phone `d6d76d079`, run198, M198) | `thinking-profile-meters.md`; `lanes/um/PLAN.md` §4; DESIGN.md §2.7/§5/§8/§9/§13; `docs/agent-plane/usage-meters.md` | UM-5 (UM-D14, the plan filter) in wave 2 |
