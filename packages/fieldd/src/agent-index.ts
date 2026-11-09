@@ -1817,6 +1817,27 @@ export class IndexService {
     return parsed.data;
   }
 
+  /** MA-3f (RO-32, by digest) — rosetta places one captured page in `into`, a folder below its
+   * `--export-root`, on the daemon bearer alone. The answer is returned unparsed apart from being
+   * rosetta's: the caller holds `page` to the digest it expects and reads `environment` tolerantly
+   * (`MadeAppService`). `onStatus` is the caller's, for the refusals it words itself. */
+  async exportArtifact(
+    sessionId: string,
+    publicationId: string,
+    request: { into: string },
+    onStatus?: (status: number) => RpcCallError | undefined,
+  ): Promise<{ page: { path: string; blake3: string; bytes: number }; environment: unknown }> {
+    this.requireReady();
+    const path = `/api/sessions/${encodeURIComponent(sessionId)}/artifacts/${encodeURIComponent(
+      publicationId,
+    )}/export`;
+    const body = await this.getBody(path, {
+      post: request,
+      ...(onStatus !== undefined ? { onStatus } : {}),
+    });
+    return body as { page: { path: string; blake3: string; bytes: number }; environment: unknown };
+  }
+
   /** One aggregate GET, parsed. A 503 is rosetta's "not before canonical
    * publication" (`require_canonical_aggregates`): the honest `building`,
    * retryable. A body the reader cannot vouch for is `malformed`. */
@@ -2156,6 +2177,8 @@ export class IndexService {
       /** AR-8b — a status this read answers in its own words (`index.session`'s
        * 404, an aggregate's 503) before the generic "answered <status>" */
       onStatus?: (status: number) => RpcCallError | undefined;
+      /** MA-3f — POST this JSON instead of a GET (the export door alone) */
+      post?: unknown;
     } = {},
   ): Promise<unknown> {
     const supervisor = this.opts.supervisor;
@@ -2174,10 +2197,15 @@ export class IndexService {
       typeof supervisor?.credentials === "function" ? supervisor.credentials() : null;
     let response: Response;
     try {
+      const headers = {
+        ...(credentials !== null ? { authorization: credentials.authorization } : {}),
+        ...(opts.post !== undefined ? { "content-type": "application/json" } : {}),
+      };
       response = await this.fetchFn(`${origin}${path}`, {
         signal: AbortSignal.timeout(this.timeoutMs),
         redirect: "error",
-        ...(credentials !== null ? { headers: { authorization: credentials.authorization } } : {}),
+        ...(Object.keys(headers).length > 0 ? { headers } : {}),
+        ...(opts.post !== undefined ? { method: "POST", body: JSON.stringify(opts.post) } : {}),
       });
     } catch (error) {
       this.logger.warn("fieldd.index.unreachable", "Index daemon did not answer", {

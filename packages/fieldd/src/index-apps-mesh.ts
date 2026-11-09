@@ -106,7 +106,7 @@ export interface AppsMeshOptions {
   joinProject: (device: string, rootSessionId: string) => AppProjectJoin | undefined;
   /** the merged intent (3h); absent: none */
   intents?: MadeAppIntentReader;
-  /** whether a desktop can export a page (RO-A1). Absent: no desktop can, which rosetta 0.1.3 says */
+  /** whether a desktop can export a page (RO-32; the daemon's answer since MA-3f). Absent: no desktop can */
   exportReady?: (device: string) => boolean;
   logger?: Logger;
   now?: () => number;

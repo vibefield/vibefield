@@ -735,10 +735,10 @@ export class IndexApps extends EventEmitter {
   }
 
   /** One entry's row, built member by member from what the contract declares (never a spread of rosetta's entry).
-   * OWED TO MA-3f: rosetta 0.1.4's `description` and `dropped_files` are not read onto the row yet, so every row
-   * carries neither while `index.artifacts` carries both. When they are, the description keeps the door's rule (an
-   * empty one, or one longer than MADE_APP_LIMITS.DESCRIPTION_CHARS, costs the field) and is checked before the row
-   * is built, as `nativeId` is: the row is returned as built, not as parsed. */
+   * MA-3f: rosetta's `description` and `dropped_files` are read onto the row, so "page only" is true from the first
+   * served page. The description keeps the door's rule (an empty one, or one longer than
+   * MADE_APP_LIMITS.DESCRIPTION_CHARS, costs the field) and is checked before the row is built, as `nativeId` is: the
+   * row is returned as built, not as parsed. */
   #rowOf(entry: IndexArtifactEntryRow, device: string): IndexCatalogApp | undefined {
     const at = entry.publication;
     const kind = AgentKind.safeParse(entry.agent).success ? entry.agent : undefined;
@@ -759,6 +759,13 @@ export class IndexApps extends EventEmitter {
       at.native_id.length <= MADE_APP_LIMITS.NATIVE_ID_CHARS
         ? at.native_id
         : undefined;
+    const description =
+      typeof at.description === "string" &&
+      at.description !== "" &&
+      at.description.length <= MADE_APP_LIMITS.DESCRIPTION_CHARS
+        ? at.description
+        : undefined;
+    const droppedFiles = typeof at.dropped_files === "number" ? at.dropped_files : undefined;
     const row: IndexCatalogApp = {
       device,
       appId: at.artifact_id,
@@ -779,6 +786,8 @@ export class IndexApps extends EventEmitter {
       ...(digest !== undefined ? { digest } : {}),
       ...(hostedUrl !== undefined ? { hostedUrl } : {}),
       ...(nativeId !== undefined ? { nativeId } : {}),
+      ...(description !== undefined ? { description } : {}),
+      ...(droppedFiles !== undefined ? { droppedFiles } : {}),
     };
     const checked = IndexCatalogApp.safeParse(row);
     if (!checked.success) {

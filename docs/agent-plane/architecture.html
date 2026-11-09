@@ -1908,7 +1908,7 @@
                     <td>
                       <p>
                         rosetta <code>crates/server/src/http/artifacts.rs</code> (<code>GET /api/artifacts</code>, the
-                        content route; the export, RO-32, in 0.1.4 since 2026-11-07)<br />
+                        content route; the export, RO-32, in 0.1.4 since 2026-11-07, called since MA-3f)<br />
                         <code>packages/contracts/src/agent-index.ts</code> · <code>artifacts.ts</code> (MA-1a);
                         <code>packages/fieldd/src/agent-index.ts</code> · <code>index-apps.ts</code> ·
                         <code>index-apps-mesh.ts</code> · <code>made-app-service.ts</code> (MA-3)
@@ -1922,9 +1922,10 @@
                         inside them, so a self peer will copy it on a door of its own
                         (<code>index.apps.catalog.subscribe</code>) and an older peer's refusal will cost only its apps.
                         rosetta stays the only reader of transcripts (MA-L1, AR-L1). A page will run only at its own
-                        origin: at a person's open (<code>artifact.open</code>), rosetta will write it into a folder
-                        fieldd names (RO-32), and the native plane will serve it there; fieldd will never open the file
-                        (EL2). Keep and Hide will be the person's intent, carried in the replicated settings document,
+                        origin: at a person's open (<code>artifact.open</code>), rosetta places it in a folder
+                        fieldd names (RO-32), the files worker builds the served view from it, and the native plane
+                        serves that; fieldd's control process opens neither file (EL2; <em>corrected 2026-11-09</em>,
+                        MA-3f). Keep and Hide will be the person's intent, carried in the replicated settings document,
                         never facts on the rows (MA-L2). The design: <code>draft/thinking-mini-apps.md</code>, ruled 2026-11-05.
                       </p>
                     </td>

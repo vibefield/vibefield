@@ -5,6 +5,7 @@ import type { AuditService } from "../audit-service";
 import type { BrowseFacts } from "./browse-exports";
 import { WorkspaceDoors } from "./doors";
 import { chooseFilesHostLaunch, type FilesHostLaunch, ownFilesHostFacts } from "./launch";
+import type { MadeViewRoots } from "./protocol";
 import { RootsRegistry } from "./roots";
 import { WorkspaceSessionAudit } from "./session-audit";
 import {
@@ -33,6 +34,9 @@ export interface WorkspaceServiceConfig {
   /** the directory fieldd's bundle runs from (`__dirname` of bin.cjs) */
   bundleDir?: string | undefined;
   timings?: Partial<FilesHostTimings> | undefined;
+  /** MA-3f — the made view's two roots, handed to every generation's `init` (DR-1b). Absent: a
+   * worker that refuses every view. */
+  made?: MadeViewRoots | undefined;
   /** test seam: the browse enumerator's facts */
   browse?: (() => BrowseFacts) | undefined;
   /** test seam: the roots subscription's re-read cadence */
@@ -69,6 +73,7 @@ export function createWorkspaceService(config: WorkspaceServiceConfig): Workspac
   const supervisor = new FilesHostSupervisor({
     launch: launchSpecFor(config),
     ...(config.timings !== undefined ? { timings: config.timings } : {}),
+    ...(config.made !== undefined ? { made: config.made } : {}),
     logger: config.logger.child({ component: "files_host" }),
   });
   const doors = new WorkspaceDoors({

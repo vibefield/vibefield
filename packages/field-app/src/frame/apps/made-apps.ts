@@ -35,8 +35,8 @@ import { getRendererLogger } from "../../logging";
 //   at the home and replicated (RULINGS L8, C5), never a call per holder in `devices`.
 // - VERSIONS is `index.artifacts {device, appId}`, paged, each presentation opened by its id.
 // - Every state is said in words (MA-L10): a library still reading, a desktop asleep or on another
-//   build, a page not kept or too large, and — at rosetta 0.1.3, MA-4's witness (C4) — an app its
-//   desktop cannot write out yet, with "Open in ‹host›" when it has a hosted link.
+//   build, a page not kept or too large, and — on a desktop whose build does not export yet, since
+//   MA-3f — an app its desktop cannot write out, with "Open in ‹host›" when it has a hosted link.
 // - Every answer is PARSED, never cast (tolerant reader): a page this build cannot read refuses the
 //   whole reading in words rather than drawing half of it.
 
@@ -387,8 +387,8 @@ const CANT_BE_KEPT = muted("can't be kept", false, {
   detail: null,
 });
 
-/** C4, MA-4's witness: at rosetta 0.1.3 no desktop can write an app out (‹for James›, §9).
- * *2026-11-07:* rosetta 0.1.4 has the door (RO-32); none writes one out until MA-3f calls it. */
+/** C4, MA-4's witness (‹for James›, §9). *2026-11-09 (MA-3f):* this desktop writes apps out; these
+ * words are now for one on an older build, or one whose made folders could not be made. */
 function unbuiltState(desktop: string): MadeAppState {
   return muted("not written out yet", false, {
     title: `${desktop} can't write this app out yet`,

@@ -18,7 +18,7 @@ import type { MadeAppsClient } from "./made-apps";
 // image transport (the catalog has no tailnet, so its stills are pictures it draws itself, as the
 // hand's plates draw theirs). The markup, the interaction state, the accessibility and the CSS are
 // the product's. Its states: populated, fallback icons, a library still reading, the apps a desktop
-// cannot write out yet (rosetta 0.1.3, MA-4's witness), and empty.
+// cannot write out yet (MA-4's witness; since MA-3f, one on an older build), and empty.
 
 export type MadeAppsPreviewState = "populated" | "fallback" | "reading" | "unbuilt" | "empty";
 

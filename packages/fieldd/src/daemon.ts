@@ -306,7 +306,9 @@ import {
   type MadeAppExporter,
   MadeAppService,
   type MadeAppServiceHealth,
-  madeAppRefusal,
+  type MadeAppViewBuilder,
+  prepareMadeAppRoots,
+  rosettaMadeAppExporter,
 } from "./made-app-service";
 import { McpService } from "./mcp-service";
 import {
@@ -578,12 +580,12 @@ export interface FielddConfig {
     rereadMinIntervalMs?: number;
   };
   /** MA-3e test seams: the made-app service (made-app-service.ts). `exporter` stands in for
-   * RO-A1's export (default: this rosetta's, which at 0.1.3 has no export door and answers
-   * `export-unbuilt`; *2026-11-07:* rosetta 0.1.4 has the door, RO-32, and the default still
-   * answers `export-unbuilt` until MA-3f calls it); `openWaitMs` is the open's bounded wait
-   * for its listener's URL (MADE_APP_LIMITS.OPEN_WAIT_MS). */
+   * rosetta's export (RO-32; the default calls it since MA-3f) and `view` for the files worker's
+   * build; `openWaitMs` is the open's bounded wait for its listener's URL
+   * (MADE_APP_LIMITS.OPEN_WAIT_MS). */
   madeApps?: {
     exporter?: MadeAppExporter;
+    view?: MadeAppViewBuilder;
     openWaitMs?: number;
   };
   /** AR-2 — the VibeField ROOT above this user's root: the machine scope
@@ -1052,11 +1054,16 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     path: join(config.dataDir, ...LAYOUT.AGENT_PROFILE_DRAFTS_FILE),
     logger: logger.child({ component: "profile_drafts" }),
   });
+  // MA-3f — the export root and the served root, made before rosettad's spawn: `--export-root` must
+  // name an existing directory. A folder that cannot be made costs the opens (`export-failed`, the
+  // door's 503), never the history daemon.
+  const madeRoots = prepareMadeAppRoots(config.dataDir, logger);
   const rosettad =
     config.rosettadBin === undefined || config.rosettadBin === ""
       ? null
       : new RosettadSupervisor({
           bin: config.rosettadBin,
+          exportRoot: madeRoots?.sourceRoot,
           dbPath: join(config.dataDir, ...LAYOUT.INDEX_DB),
           // fieldd's PRIVATE announce dir (EL7 — never rosetta's shared one);
           // also where the next fieldd finds an orphan of this one
@@ -1219,6 +1226,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     filesHost: config.filesHost,
     bundleDir: typeof __dirname === "string" ? __dirname : undefined,
     timings: config.filesHostTimings,
+    made: madeRoots,
     browse: config.workspace?.browse,
     rootsPollMs: config.workspace?.rootsPollMs,
     // R6 — each attachment's establish and end, beside its mint
@@ -7787,8 +7795,9 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // its ink is that project's (the fallback icon, MA-D10 (b)): `appProjectOf`,
     // beside the doors. Its change pings are its own: an app's move regroups no
     // project (fieldd Q13).
-    // `exportReady` is left out: at rosetta 0.1.3 no desktop exports (3f).
-    // *2026-11-07:* rosetta 0.1.4 has the door (RO-32); no desktop exports until 3f calls it.
+    // `exportReady` (MA-3f): this desktop exports while its two made folders exist. A peer is taken
+    // to: one on an older build answers its open `export-unbuilt`, in words, rather than greying the
+    // app on every other desktop.
     const { searchTimeoutMs: _searchOnly, ...historyCadences } = config.indexMesh ?? {};
     // a peer's replicated sessions moved: the join's index of their cwds is
     // rebuilt at the next join, never per row
@@ -7799,6 +7808,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       local: indexApps,
       roster: devices,
       link: peers,
+      exportReady: (device) => device !== devices.currentDeviceId() || madeRoots !== undefined,
       dir: join(config.dataDir, ...LAYOUT.MESH_APPS_DIR),
       joinProject: appProjectOf,
       ...historyCadences,
@@ -8225,20 +8235,18 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // takes this desktop's device id as a value (its previews port's domain,
     // the desktop each refusal names, a row-less app's fold key) — and before
     // `artifacts.start()`, so AH's first reconcile already reads its ports.
-    //  - the export: RO-A1's door is rosetta 0.1.4's (EL8 #1, slice 3f). This
-    //    rosetta (0.1.3) has none, so every open answers `export-unbuilt`, its
-    //    honest state (C9); `config.madeApps.exporter` is the test seam.
-    //    *2026-11-07:* the pinned rosetta is 0.1.4 and has the door; every open
-    //    still answers `export-unbuilt` until 3f calls it.
+    //  - the export (MA-3f): rosetta's door, RO-32 by digest. Its 404 is the
+    //    page not kept, in words; any other refusal is logged by status and
+    //    the service words it `export-failed`. `config.madeApps.exporter` and
+    //    `.view` are the test seams.
     //  - its own MagicDNS name: the host the floor reported for this desktop's
     //    product serve, which exists exactly while the desktop is linked (and a
     //    made serve needs a link). A listener's URL is answered only on it.
-    //  - AH's reservations: the ports of AH's DECLARED serves (made-app-service's
-    //    `otherReservedPorts` doc names the gap a committed-intents reader closes).
-    const unbuiltExporter: MadeAppExporter = {
-      export: async () => {
-        throw madeAppRefusal(MADE_APP_OPEN.STATE_EXPORT_UNBUILT);
-      },
+    //  - AH's reservations: `artifacts.reservedPorts()`, its committed intents
+    //    and a port it has picked and not committed (MA-3f).
+    const rosettaExporter = rosettaMadeAppExporter(index, logger);
+    const madeView: MadeAppViewBuilder = {
+      build: (args) => workspace.supervisor.request("buildMadeView", args),
     };
     const buildMadeApps = (): MadeAppService => {
       const service = new MadeAppService({
@@ -8284,7 +8292,8 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
             return undefined;
           },
         },
-        exporter: config.madeApps?.exporter ?? unbuiltExporter,
+        exporter: config.madeApps?.exporter ?? rosettaExporter,
+        view: config.madeApps?.view ?? madeView,
         linkedLogin,
         selfDnsName: () => {
           const url = mesh.serves().find((serve) => serve.name === "product")?.url;
@@ -8295,12 +8304,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
             return undefined;
           }
         },
-        otherReservedPorts: () =>
-          new Set(
-            (lastArtifactServeSpecs ?? []).flatMap((spec) =>
-              spec.listenPort !== undefined ? [spec.listenPort] : [],
-            ),
-          ),
+        otherReservedPorts: () => artifacts.reservedPorts(),
         otherLiveObjects: () => artifacts.health().count,
         capturePreviewAvailable: () => api.artifactPreviewCaptureAvailable(),
         capturePreview: async (params) =>

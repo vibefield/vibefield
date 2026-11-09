@@ -137,8 +137,8 @@ export interface ArtifactServiceOptions {
    * AH's range for life: the made apps' serves and the previews serve
    * (`MadeAppService.reservedPorts()`), closed ones included. One reservation
    * set for both, so no port is handed out twice: `#allocatePort` reads it at
-   * every allocation, beside this service's own intents and the live
-   * listeners. Absent: no other holder. */
+   * every allocation, after its wait for the live listeners, beside this
+   * service's own intents. Absent: no other holder. */
   otherReservedPorts?: () => ReadonlySet<number>;
 }
 
@@ -272,6 +272,9 @@ export class ArtifactService {
   readonly #previewRoot: string;
 
   #entries = new Map<string, LocalArtifactIntent>();
+  /** MA-3f — a port picked and not yet committed, so a made app's allocation
+   * cannot pick it in between. */
+  readonly #claimedPorts = new Set<number>();
   #legacyEntries: LegacyEntry[] | null = null;
   readonly #probes = new Map<string, ProbeState>();
   readonly #removeErrors = new Set<string>();
@@ -387,30 +390,35 @@ export class ArtifactService {
 
       const now = this.#now();
       const listenPort = existing?.listenPort ?? (await this.#allocatePort(normalized.artifactId));
-      const next: LocalArtifactIntent = LocalArtifactIntent.parse({
-        artifactId: normalized.artifactId,
-        title: normalized.title,
-        source: normalized.source,
-        listenPort,
-        allow: normalized.allow,
-        publicTls: true,
-        desired: "published",
-        retiringServeIds: existing?.retiringServeIds ?? [],
-        ...(existing?.lastPublishedUrl !== undefined
-          ? { lastPublishedUrl: existing.lastPublishedUrl }
-          : {}),
-        ...(existing?.previewRevision !== undefined
-          ? { previewRevision: existing.previewRevision }
-          : {}),
-        createdAt: existing?.createdAt ?? now,
-        updatedAt: now,
-        ...(normalized.legacyName !== undefined ? { legacyName: normalized.legacyName } : {}),
-      });
-      if (existing !== undefined) this.#retireChangedConfig(existing, next);
+      let next: LocalArtifactIntent;
+      try {
+        next = LocalArtifactIntent.parse({
+          artifactId: normalized.artifactId,
+          title: normalized.title,
+          source: normalized.source,
+          listenPort,
+          allow: normalized.allow,
+          publicTls: true,
+          desired: "published",
+          retiringServeIds: existing?.retiringServeIds ?? [],
+          ...(existing?.lastPublishedUrl !== undefined
+            ? { lastPublishedUrl: existing.lastPublishedUrl }
+            : {}),
+          ...(existing?.previewRevision !== undefined
+            ? { previewRevision: existing.previewRevision }
+            : {}),
+          createdAt: existing?.createdAt ?? now,
+          updatedAt: now,
+          ...(normalized.legacyName !== undefined ? { legacyName: normalized.legacyName } : {}),
+        });
+        if (existing !== undefined) this.#retireChangedConfig(existing, next);
 
-      const entries = new Map(this.#entries);
-      entries.set(next.artifactId, next);
-      this.#commit(entries);
+        const entries = new Map(this.#entries);
+        entries.set(next.artifactId, next);
+        this.#commit(entries);
+      } finally {
+        this.#claimedPorts.delete(listenPort);
+      }
       this.#probes.set(next.artifactId, "pending");
       await this.#probeOne(next);
       await this.#reconcile();
@@ -696,6 +704,15 @@ export class ArtifactService {
     return () => this.#catalogListeners.delete(fn);
   }
 
+  /** MA-3f — every port this service holds: each committed intent's, absent
+   * ones included, and one picked and not committed yet. The made apps read it
+   * at every allocation, so no port is handed out twice. */
+  reservedPorts(): ReadonlySet<number> {
+    const ports = new Set<number>(this.#claimedPorts);
+    for (const entry of this.#entries.values()) ports.add(entry.listenPort);
+    return ports;
+  }
+
   health(): ArtifactServiceHealth {
     const sources = { ready: 0, unavailable: 0, pending: 0 };
     for (const entry of this.#entries.values()) {
@@ -828,23 +845,29 @@ export class ArtifactService {
   }
 
   async #allocatePort(artifactId: string): Promise<number> {
-    const used = new Set<number>(this.#otherReservedPorts());
-    for (const entry of this.#entries.values()) used.add(entry.listenPort);
+    const live: number[] = [];
     try {
       for (const serve of await this.#bridge.observed()) {
-        if (Number.isInteger(serve.listenPort) && serve.listenPort > 0) used.add(serve.listenPort);
+        if (Number.isInteger(serve.listenPort) && serve.listenPort > 0) live.push(serve.listenPort);
       }
     } catch {
       // Mesh down is normal. Persisted reservations remain authoritative and a
       // later unexpected native collision is surfaced as an add error.
     }
+    // MA-3f: both reservation sets are read AFTER the wait, and the pick is held
+    // until its commit or failure (`publish` releases it), so a made app's
+    // allocation cannot hand out the same port. Nothing awaits from here to the pick.
+    const used = new Set<number>([...this.#otherReservedPorts(), ...this.reservedPorts(), ...live]);
     const first = artifactPortCandidate(artifactId);
     const width = ARTIFACT_LIMITS.LISTEN_PORT_MAX - ARTIFACT_LIMITS.LISTEN_PORT_MIN + 1;
     for (let offset = 0; offset < width; offset += 1) {
       const candidate =
         ARTIFACT_LIMITS.LISTEN_PORT_MIN +
         ((first - ARTIFACT_LIMITS.LISTEN_PORT_MIN + offset) % width);
-      if (!used.has(candidate)) return candidate;
+      if (!used.has(candidate)) {
+        this.#claimedPorts.add(candidate);
+        return candidate;
+      }
     }
     throw new RpcCallError("RESOURCE_EXHAUSTED", "no artifact listener port is available", true, {
       resource: "artifact-listen-port",

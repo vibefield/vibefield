@@ -369,6 +369,10 @@ export interface RosettadSupervisorOptions {
    * already). Filtered through `rosettadAllowOrigins` — an origin rosetta
    * would refuse at start is dropped and logged, never passed. */
   allowOrigins?: readonly string[];
+  /** MA-3f — rosettad `--export-root DIR`, an existing absolute directory: where its export door
+   * may place a captured page (`LAYOUT.DRIVE_IMPORT_DIR`). fieldd makes it before the spawn. Absent:
+   * the door answers 503, and every open is `export-failed` while the history stays up. */
+  exportRoot?: string | undefined;
   /** test seam — a fake daemon script */
   spawnProcess?: typeof nodeSpawn;
   /** test seam; production uses ROSETTAD_SUPERVISION */
@@ -1100,6 +1104,7 @@ export class RosettadSupervisor extends EventEmitter {
       "--grant-key-file",
       this.opts.grantKeyFile,
       ...this.allowOrigins.flatMap((origin) => ["--allow-origin", origin]),
+      ...(this.opts.exportRoot !== undefined ? ["--export-root", this.opts.exportRoot] : []),
     ];
     // a fresh bearer and key per start: a restart revokes every grant the
     // previous generation honoured, and both rotate together (AUTH.md §5.5)

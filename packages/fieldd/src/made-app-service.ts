@@ -5,11 +5,12 @@
 //  - the private registry `registries/field.made-apps.v1.json` (`MadeAppRegistry`, atomic 0600, an unreadable file
 //    moved aside), one `MadeAppServeRecord` per app it has served: its port for life, its preview id, the folder it
 //    serves and the serve ids being retired. Never replicated, never answered by a door.
-//  - `open`: the honest refusals (`MADE_APP_OPEN`), the export through an injected `MadeAppExporter` (RO-A1; at
-//    rosetta 0.1.3 the injected one answers `export-unbuilt`, the lead's C9) into `artifacts/made/<appId>/<digest>/`,
-//    the port by the made rule over the ONE reservation set it shares with AH, the declare, and the URL its listener
-//    reported, validated against the app's port and this desktop's MagicDNS name and stripped when it fails (C16:
-//    validate or strip, never rewrite).
+//  - `open`: the honest refusals (`MADE_APP_OPEN`), the export through an injected `MadeAppExporter` (MA-3f: rosetta's
+//    door, RO-32 by digest) into the NON-served `drive/import/<appId>/<digest>/`, the view the files worker builds from
+//    it into `artifacts/made/<appId>/<digest>/` (DR-1b), the port by the made rule over the ONE reservation set it
+//    shares with AH, the declare under the app's headers (DR-D11 (a)), and the URL its listener reported, validated
+//    against the app's port and this desktop's MagicDNS name and stripped when it fails (C16: validate or strip, never
+//    rewrite).
 //  - the idle close at MADE_APP_LIMITS.IDLE_CLOSE_MS from the last open, on one timer to the next due close; kept and
 //    hidden come from an injected intent reader (slice 3h writes the intent; until then nothing is kept or hidden),
 //    read by the fold key the app's ROW spells. A record whose row is not held while the library's table does not
@@ -60,13 +61,16 @@ import {
   MADE_APP_PREVIEW_FILE,
   MADE_APP_PREVIEWS_PORT_DOMAIN,
   MADE_APP_REGISTRY_FILE,
+  MADE_APP_VIEW,
   type MadeAppAvailability,
   MadeAppOpenRefusal,
   MadeAppPreview,
-  MadeAppReachHost,
   MadeAppRegistry,
   MadeAppServeRecord,
   madeAppFoldKey,
+  madeAppReachOf,
+  madeAppServeHeaders,
+  readMadeAppEnvironment,
   type ServeHeader,
   ShellWebContentsCaptureArtifactPreviewParams,
   type ShellWebContentsCaptureArtifactPreviewResult,
@@ -83,6 +87,7 @@ import { canonicalTailnetDnsName } from "./device-service";
 import type { ObservedServe, ServeSpec, ServeState } from "./mesh-client";
 import { RpcCallError } from "./native-link";
 import { serveAllowGlob } from "./terminal-serve";
+import type { BuildMadeViewArgs, MadeViewRoots } from "./workspace/protocol";
 
 /** Every made serve id starts here, inside AH's `artifact-` namespace (ARTIFACT_SERVE_PREFIX): MeshClient then adopts
  * a live one across a fieldd restart and never removes one as a stray (mesh-client.ts), so this service's durable
@@ -133,7 +138,7 @@ export interface MadeAppServeInput {
   allow: readonly string[];
   /** `artifacts/previews/<previewId>`: where Electron's capture writes (the `/.vibefield/preview` route). */
   previewDir: string;
-  /** `artifacts/made/<appId>/<digest>`: the runnable document rosetta's export wrote (the `/` route). */
+  /** `artifacts/made/<appId>/<digest>`: the view the files worker built from rosetta's page (the `/` route). */
   folder: string;
   /** MA-3f (DR-D11 (a)): the app's policy, set on every response of its serve. A policy change is a serve change
    * (DR-L7), so the headers are part of the config its id carries. None is the config every older row pins. */
@@ -202,10 +207,9 @@ export type MadeAppRefusalState = MadeAppOpenRefusal["state"];
 const REFUSALS: Record<MadeAppRefusalState, { retryable: boolean; message: string }> = {
   [MADE_APP_OPEN.STATE_EXPORT_UNBUILT]: {
     retryable: false,
-    // *2026-11-07 (the EL8 to rosetta 0.1.4):* the history daemon has the door (RO-32);
-    // "no export door yet" stays true of this desktop until MA-3f calls it, and the words are
-    // MA-3f's to change.
-    message: "this desktop's history has no export door yet, so it cannot serve a made app",
+    // *2026-11-09 (MA-3f):* no exporter of this build answers it. The state stays in the contract
+    // for a desktop on an older build, which still answers it to a newer home.
+    message: "that desktop's build cannot write a made app out yet",
   },
   [MADE_APP_OPEN.STATE_NOT_KEPT]: {
     retryable: false,
@@ -262,27 +266,74 @@ function availabilityRefusal(availability: MadeAppAvailability): MadeAppRefusalS
   }
 }
 
-/** RO-A1's export, as fieldd asks it: rosetta writes the runnable document of one presentation into `into` (a folder
- * under `artifacts/made/`), never fieldd. */
+/** RO-32's export, as fieldd asks it: rosetta places one presentation's own bytes as `index.html` in `into`, a folder
+ * below its `--export-root` (`drive/import/<appId>/<digest>`) that nothing serves, never fieldd. */
 export interface MadeAppExportRequest {
   sessionId: string;
   publicationId: string;
   into: string;
 }
 
-/** RO-A1's answer: whether it wrote (false: the folder already held this digest and shell), rosetta's digest of the
- * page, its shell's version and the hosts the shell loads from (MA-L9, as data). */
+/** What this service reads of rosetta's answer (`ArtifactExportResponse`): the file it placed and the environment the
+ * page was written for, hosts and theme, as data (MA-L9). `members` is empty until RO-34b, so a multi-file publish
+ * serves its page alone, which the row says (`droppedFiles`). */
 export interface MadeAppExport {
-  written: boolean;
-  digest: string;
-  shellVersion: string;
-  hosts: string[];
+  page: { path: string; blake3: string; bytes: number };
+  environment: unknown;
 }
 
-/** The export seam (the lead's C9): slice 3e injects one over `IndexService.exportArtifact`. At rosetta 0.1.3 it
- * throws `madeAppRefusal("export-unbuilt")`; any other failure it throws is worded `export-failed`. */
+/** The export seam (the lead's C9), over `IndexService.exportArtifact` in production. A refusal it throws
+ * (`madeAppRefusal`) passes through; any other failure is worded `export-failed`. */
 export interface MadeAppExporter {
   export(request: MadeAppExportRequest): Promise<MadeAppExport>;
+}
+
+/** What the exporter needs of `IndexService`. */
+export interface MadeAppExportDoor {
+  exportArtifact(
+    sessionId: string,
+    publicationId: string,
+    request: { into: string },
+    onStatus?: (status: number) => RpcCallError | undefined,
+  ): Promise<MadeAppExport>;
+}
+
+/** The exporter over rosetta's door. Its 404 is the page not kept, in words; any other refusal is logged by status and
+ * left to the service, which words it `export-failed`. */
+export function rosettaMadeAppExporter(door: MadeAppExportDoor, logger: Logger): MadeAppExporter {
+  return {
+    export: ({ sessionId, publicationId, into }) =>
+      door.exportArtifact(sessionId, publicationId, { into }, (status) => {
+        if (status === 404) return madeAppRefusal(MADE_APP_OPEN.STATE_NOT_KEPT);
+        logger.info("fieldd.made_apps.export_refused", "rosetta refused a made app's export", {
+          status,
+        });
+        return undefined;
+      }),
+  };
+}
+
+/** The files worker's view (DR-1b): the stored page between DR-1a's head and tail, written into the served folder. Its
+ * failures are worded `export-failed`. */
+export interface MadeAppViewBuilder {
+  build(args: BuildMadeViewArgs): Promise<unknown>;
+}
+
+/** The export root and the served root, made (0700) before rosettad starts, since `--export-root` must name an
+ * existing directory and the worker makes neither. A folder that cannot be made answers undefined and is logged: the
+ * opens then say `export-failed`, and the history daemon stays up. */
+export function prepareMadeAppRoots(dataDir: string, logger: Logger): MadeViewRoots | undefined {
+  const sourceRoot = join(dataDir, ...LAYOUT.DRIVE_IMPORT_DIR);
+  const servedRoot = join(dataDir, ...LAYOUT.ARTIFACT_MADE_DIR);
+  try {
+    for (const root of [sourceRoot, servedRoot]) mkdirSync(root, { recursive: true, mode: 0o700 });
+    return { sourceRoot, servedRoot };
+  } catch (error) {
+    logger.warn("fieldd.made_apps.roots_unmade", "A made app's folders could not be made", {
+      error: errorName(error),
+    });
+    return undefined;
+  }
 }
 
 /** One presentation of an app, for an open that names an older version (Versions). */
@@ -369,18 +420,16 @@ export interface MadeAppServiceOptions {
   bridge: ArtifactServeBridge;
   rows: MadeAppRows;
   exporter: MadeAppExporter;
+  view: MadeAppViewBuilder;
   /** Slice 3h's merged intent. Absent: nothing kept, nothing hidden. */
   intents?: MadeAppIntentReader;
   /** The account a serve's `allow` is derived from at every declare. null: no serve can be carried (`not-linked`). */
   linkedLogin: () => string | null;
   /** This desktop's MagicDNS name (the mesh's self identity). A listener's URL is answered only when its host is it. */
   selfDnsName: () => string | undefined;
-  /** AH's reservations, read at every allocation. AH exposes no reader of its committed intents (its one MA-3b option
-   * is the other direction), so 3e passes the ports of AH's DECLARED serves. Those lag AH's committed intents: AH
-   * commits a new intent, then awaits its retiring removals before it declares (artifact-service.ts `#reconcile`),
-   * mesh up or down, so a made probe inside that window can take AH's new port. Neither service re-allocates when the
-   * native add then fails, so such a collision lasts for life. The sound closure is a public `reservedPorts()` on AH
-   * over its committed intents, absent ones included: the lead's decision, outside 3b's one AH option. */
+  /** AH's reservations (`ArtifactService.reservedPorts()`, MA-3f: its committed intents, absent ones included, and a
+   * port it has picked and not committed yet), read at every allocation after the probe's wait. Neither service
+   * re-allocates when the native add fails, so a port handed out twice would collide for life. */
   otherReservedPorts?: () => ReadonlySet<number>;
   /** AH's objects, which share ARTIFACT_LIMITS.LOCAL_OBJECTS with open made serves. */
   otherLiveObjects?: () => number;
@@ -420,6 +469,7 @@ export class MadeAppService {
   readonly #bridge: ArtifactServeBridge;
   readonly #rows: MadeAppRows;
   readonly #exporter: MadeAppExporter;
+  readonly #view: MadeAppViewBuilder;
   readonly #intents: MadeAppIntentReader;
   readonly #linkedLogin: () => string | null;
   readonly #selfDnsName: () => string | undefined;
@@ -434,8 +484,12 @@ export class MadeAppService {
   readonly #writeRegistry: (path: string, body: string) => void;
   readonly #registryPath: string;
   readonly #madeRoot: string;
+  /** Where rosetta's export places a page (`--export-root`); nothing here is served. */
+  readonly #exportRoot: string;
   readonly #previewRoot: string;
   readonly #madePreviewsRoot: string;
+  /** F9: a port picked and not yet committed, so AH's allocation cannot pick it in between. */
+  readonly #claimedPorts = new Set<number>();
 
   #registry: Registry = { previewsListenPort: undefined, apps: new Map() };
   /** The specs last declared, and of them each app's serve id: what is on the floor, by this service's word. */
@@ -473,6 +527,7 @@ export class MadeAppService {
     this.#bridge = options.bridge;
     this.#rows = options.rows;
     this.#exporter = options.exporter;
+    this.#view = options.view;
     this.#intents = options.intents ?? NO_MADE_APP_INTENTS;
     this.#linkedLogin = options.linkedLogin;
     this.#selfDnsName = options.selfDnsName;
@@ -488,6 +543,7 @@ export class MadeAppService {
     this.#writeRegistry = options.writeRegistry ?? atomicWritePrivate;
     this.#registryPath = join(options.dataDir, ...LAYOUT.REGISTRIES_DIR, MADE_APP_REGISTRY_FILE);
     this.#madeRoot = join(options.dataDir, ...LAYOUT.ARTIFACT_MADE_DIR);
+    this.#exportRoot = join(options.dataDir, ...LAYOUT.DRIVE_IMPORT_DIR);
     this.#previewRoot = join(options.dataDir, ...LAYOUT.ARTIFACT_PREVIEWS_DIR);
     this.#madePreviewsRoot = join(options.dataDir, ...LAYOUT.ARTIFACT_MADE_PREVIEWS_DIR);
     this.#load();
@@ -546,9 +602,10 @@ export class MadeAppService {
     return this.#enqueue(() => this.#reconsider());
   }
 
-  /** Every port this service holds for life: each app's, closed ones included, and the previews serve's. */
+  /** Every port this service holds for life: each app's, closed ones included, the previews serve's, and one picked
+   * and not committed yet (F9). */
   reservedPorts(): ReadonlySet<number> {
-    const ports = new Set<number>();
+    const ports = new Set<number>(this.#claimedPorts);
     for (const record of this.#registry.apps.values()) ports.add(record.listenPort);
     if (this.#registry.previewsListenPort !== undefined) {
       ports.add(this.#registry.previewsListenPort);
@@ -659,38 +716,50 @@ export class MadeAppService {
       throw madeAppRefusal(MADE_APP_OPEN.STATE_EXPORT_FAILED, device);
     }
     const folder = this.#folder(row.appId, digest);
-    const reach =
-      existing?.exportedDigest === digest && isDirectory(folder)
-        ? (existing.reach ?? [])
-        : await this.#export(target, digest, folder);
+    const exported =
+      existing?.exportedDigest === digest &&
+      existing.viewVersion === MADE_APP_VIEW.VERSION &&
+      existing.network !== undefined &&
+      isDirectory(folder)
+        ? { reach: existing.reach ?? [], network: existing.network }
+        : await this.#export(target, digest, row.appId, folder);
 
     const evictions = this.#evictionsFor(existing);
     const now = this.#now();
     const listenPort = existing?.listenPort ?? (await this.#allocatePort(appId));
-    let next = MadeAppServeRecord.parse({
-      ...(existing ?? {}),
-      appId,
-      listenPort,
-      previewId: existing?.previewId ?? ulid(now),
-      exportedPresentationId: target.presentationId,
-      exportedDigest: digest,
-      state: "open",
-      lastOpenedAt: now,
-      retiringServeIds: existing?.retiringServeIds ?? [],
-      reach,
-      createdAt: existing?.createdAt ?? now,
-      updatedAt: now,
-    });
-    // Remove-before-add: a serve declared under another config keeps its port, so it goes first.
-    const declaredId = this.#declared.get(appId);
-    const input = this.#appInput(next, login);
-    if (declaredId !== undefined && (input === undefined || madeAppServeId(input) !== declaredId)) {
-      next = this.#retiring(next, declaredId, now);
+    try {
+      let next = MadeAppServeRecord.parse({
+        ...(existing ?? {}),
+        appId,
+        listenPort,
+        previewId: existing?.previewId ?? ulid(now),
+        exportedPresentationId: target.presentationId,
+        exportedDigest: digest,
+        state: "open",
+        lastOpenedAt: now,
+        retiringServeIds: existing?.retiringServeIds ?? [],
+        reach: exported.reach,
+        network: exported.network,
+        viewVersion: MADE_APP_VIEW.VERSION,
+        createdAt: existing?.createdAt ?? now,
+        updatedAt: now,
+      });
+      // Remove-before-add: a serve declared under another config keeps its port, so it goes first.
+      const declaredId = this.#declared.get(appId);
+      const input = this.#appInput(next, login);
+      if (
+        declaredId !== undefined &&
+        (input === undefined || madeAppServeId(input) !== declaredId)
+      ) {
+        next = this.#retiring(next, declaredId, now);
+      }
+      const apps = new Map(this.#registry.apps);
+      apps.set(appId, next);
+      for (const evicted of evictions) apps.set(evicted.appId, this.#closing(evicted, now));
+      this.#commit({ ...this.#registry, apps });
+    } finally {
+      this.#claimedPorts.delete(listenPort);
     }
-    const apps = new Map(this.#registry.apps);
-    apps.set(appId, next);
-    for (const evicted of evictions) apps.set(evicted.appId, this.#closing(evicted, now));
-    this.#commit({ ...this.#registry, apps });
     if (existing?.exportedDigest !== undefined && existing.exportedDigest !== digest) {
       this.#prune.add(appId);
     }
@@ -722,35 +791,85 @@ export class MadeAppService {
     };
   }
 
-  /** rosetta writes the page into its digest folder. Its own refusal words pass through, named for this desktop;
-   * anything else, or an answer for another digest, is `export-failed`, and the folder it was asked to write goes. */
-  async #export(target: OpenTarget, digest: string, folder: string): Promise<string[]> {
+  /** rosetta places the page in the export folder and the files worker builds the served view from it. rosetta's own
+   * refusal words pass through, named for this desktop; anything else, an answer for another digest, a policy that
+   * composes no headers or a view that cannot be built is `export-failed`, and the folders it was making go. Answers
+   * what the record keeps of the page's environment: the hosts flat, as `reach`, and by directive, as the headers'
+   * input. */
+  async #export(
+    target: OpenTarget,
+    digest: string,
+    appId: string,
+    folder: string,
+  ): Promise<{ reach: string[]; network: Record<string, string[]> }> {
+    const into = join(this.#exportRoot, appId, digest);
+    const failed = () => {
+      this.#discardFolder(into);
+      this.#discardFolder(folder);
+      return madeAppRefusal(MADE_APP_OPEN.STATE_EXPORT_FAILED, this.#deviceId);
+    };
     let answer: MadeAppExport;
     try {
-      mkdirSync(dirname(folder), { recursive: true, mode: 0o700 });
+      mkdirSync(dirname(into), { recursive: true, mode: 0o700 });
       answer = await this.#exporter.export({
         sessionId: target.sessionId,
         publicationId: target.presentationId,
-        into: folder,
+        into,
       });
     } catch (error) {
-      this.#discardFolder(folder);
       const state = refusalStateOf(error);
-      if (state !== undefined) throw madeAppRefusal(state, this.#deviceId);
+      if (state !== undefined) {
+        this.#discardFolder(into);
+        throw madeAppRefusal(state, this.#deviceId);
+      }
       this.#logger.info("fieldd.made_apps.export_failed", "A made app's export failed", {
         error: errorName(error),
       });
-      throw madeAppRefusal(MADE_APP_OPEN.STATE_EXPORT_FAILED, this.#deviceId);
+      throw failed();
     }
-    if (answer?.digest !== digest) {
-      this.#discardFolder(folder);
+    if (answer?.page?.blake3 !== digest || answer.page.path !== MADE_APP_VIEW.FILE) {
       this.#logger.info(
         "fieldd.made_apps.export_digest_mismatch",
         "A made app's export answered another page than the library names",
       );
-      throw madeAppRefusal(MADE_APP_OPEN.STATE_EXPORT_FAILED, this.#deviceId);
+      throw failed();
     }
-    return reachOf(answer.hosts);
+    const environment = readMadeAppEnvironment(answer.environment);
+    if (environment.stripped.length > 0) {
+      this.#logger.info(
+        "fieldd.made_apps.environment_stripped",
+        "A made app's environment named entries this build cannot read",
+        { stripped: environment.stripped.length },
+      );
+    }
+    const headers = madeAppServeHeaders(environment.policy);
+    if (!headers.ok) {
+      this.#logger.info(
+        "fieldd.made_apps.policy_refused",
+        "A made app's policy composed no headers",
+        {
+          refused: headers.refused,
+        },
+      );
+      throw failed();
+    }
+    try {
+      await this.#view.build({
+        source: join(into, MADE_APP_VIEW.FILE),
+        folder,
+        theme: { colorScheme: "light", variables: environment.variables },
+        blake3: digest,
+      });
+    } catch (error) {
+      this.#logger.info("fieldd.made_apps.view_failed", "A made app's view could not be built", {
+        error: errorName(error),
+      });
+      throw failed();
+    }
+    return {
+      reach: madeAppReachOf(environment.policy),
+      network: environment.policy.hosts as Record<string, string[]>,
+    };
   }
 
   /** What an open answers, outside the chain: `serving` on its listener's validated URL, waited for up to
@@ -849,21 +968,26 @@ export class MadeAppService {
   /** The made rule's linear probe over the ONE reservation set: AH's, this service's (closed apps included) and the
    * live listeners (best effort: the mesh may be down, and then the persisted reservations are the truth). */
   async #probePort(first: number): Promise<number> {
-    const used = new Set<number>(this.#otherReservedPorts());
-    for (const port of this.reservedPorts()) used.add(port);
+    const live: number[] = [];
     try {
       for (const serve of await this.#bridge.observed()) {
-        if (Number.isInteger(serve.listenPort) && serve.listenPort > 0) used.add(serve.listenPort);
+        if (Number.isInteger(serve.listenPort) && serve.listenPort > 0) live.push(serve.listenPort);
       }
     } catch {
       // Mesh down is normal; a later native collision surfaces as the add's own error.
     }
+    // F9: both reservation sets are read AFTER the wait, and the pick is held until its commit or failure (the caller
+    // releases it), so AH's allocation cannot hand out the same port in between. Nothing awaits from here to the pick.
+    const used = new Set<number>([...this.#otherReservedPorts(), ...this.reservedPorts(), ...live]);
     const width = ARTIFACT_LIMITS.LISTEN_PORT_MAX - ARTIFACT_LIMITS.LISTEN_PORT_MIN + 1;
     for (let offset = 0; offset < width; offset += 1) {
       const candidate =
         ARTIFACT_LIMITS.LISTEN_PORT_MIN +
         ((first - ARTIFACT_LIMITS.LISTEN_PORT_MIN + offset) % width);
-      if (!used.has(candidate)) return candidate;
+      if (!used.has(candidate)) {
+        this.#claimedPorts.add(candidate);
+        return candidate;
+      }
     }
     throw new RpcCallError("RESOURCE_EXHAUSTED", "no artifact listener port is available", true, {
       resource: "artifact-listen-port",
@@ -962,11 +1086,16 @@ export class MadeAppService {
         continue;
       }
       if (record.retiringServeIds.length > 0) continue;
-      const dir = join(this.#madeRoot, appId);
       try {
-        for (const name of readdirSync(dir)) {
-          if (name === record.exportedDigest) continue;
-          rmSync(join(dir, name), { recursive: true, force: true });
+        // both roots: the served views and the exports they were built from. An export's page is a hard link to
+        // rosetta's own object, so removing it unlinks a name and never the object.
+        for (const root of [this.#madeRoot, this.#exportRoot]) {
+          const dir = join(root, appId);
+          if (!isDirectory(dir)) continue;
+          for (const name of readdirSync(dir)) {
+            if (name === record.exportedDigest) continue;
+            rmSync(join(dir, name), { recursive: true, force: true });
+          }
         }
         this.#prune.delete(appId);
       } catch (error) {
@@ -1028,9 +1157,12 @@ export class MadeAppService {
     const kept = this.#registry.previewsListenPort;
     if (kept !== undefined) return kept;
     const port = await this.#probePort(madeAppPreviewsPortCandidate(this.#deviceId));
-    return this.#tryCommit({ ...this.#registry, previewsListenPort: port }, "previews port")
-      ? port
-      : undefined;
+    const committed = this.#tryCommit(
+      { ...this.#registry, previewsListenPort: port },
+      "previews port",
+    );
+    this.#claimedPorts.delete(port);
+    return committed ? port : undefined;
   }
 
   /** Keep each declared app's URL as its listener reported it (raw; checked again whenever it is answered). */
@@ -1455,12 +1587,17 @@ export class MadeAppService {
 
   #appInput(record: MadeAppServeRecord, login: string): MadeAppServeInput | undefined {
     if (record.previewId === undefined || record.exportedDigest === undefined) return undefined;
+    // the headers are composed from the record, so a restart spells the same serve. No serve without its policy.
+    if (record.network === undefined) return undefined;
+    const headers = madeAppServeHeaders({ source: "captured", hosts: record.network });
+    if (!headers.ok) return undefined;
     return {
       appId: record.appId,
       listenPort: record.listenPort,
       allow: [serveAllowGlob(login)],
       previewDir: join(this.#previewRoot, record.previewId),
       folder: this.#folder(record.appId, record.exportedDigest),
+      headers: headers.headers,
     };
   }
 
@@ -1673,19 +1810,6 @@ function refusalStateOf(error: unknown): MadeAppRefusalState | undefined {
   if (!(error instanceof RpcCallError) || error.kind !== "UNAVAILABLE") return undefined;
   const refusal = MadeAppOpenRefusal.safeParse(error.details);
   return refusal.success ? refusal.data.state : undefined;
-}
-
-/** The shell's hosts as `reach`: each a valid `MadeAppReachHost`, the rest stripped (never rewritten), deduplicated,
- * at most MADE_APP_LIMITS.REACH_HOSTS. */
-function reachOf(hosts: unknown): string[] {
-  if (!Array.isArray(hosts)) return [];
-  const reach: string[] = [];
-  for (const host of hosts) {
-    if (reach.length >= MADE_APP_LIMITS.REACH_HOSTS) break;
-    const parsed = MadeAppReachHost.safeParse(host);
-    if (parsed.success && !reach.includes(parsed.data)) reach.push(parsed.data);
-  }
-  return reach;
 }
 
 function isDirectory(path: string): boolean {
