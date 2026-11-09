@@ -575,7 +575,11 @@
    again"):* the limit moment left the strip for the profiles column's add
    (`profiles-column.css`, round 4's card), and its own number and the line
    along its foot left with it; the row is the approval line's alone (TS-4b),
-   which keeps the skin it shared. */
+   which keeps the skin it shared.
+   *Corrected 2026-11-09 (UM-R4; DESIGN.md §8 "The moments"):* the strip's
+   measure no longer speaks for the limit moment: the card stands beside the
+   add, so `GodviewMonitor` publishes its own rectangle and the swarm steers
+   around it. It still moves no view in flow and widens no strip. */
 .vf-monitor-claims:has(> .vf-monitor-moment) {
   flex-wrap: wrap;
   width: max-content;

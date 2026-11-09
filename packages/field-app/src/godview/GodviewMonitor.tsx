@@ -656,6 +656,9 @@ export function GodviewMonitor({
     if (!stage || !chrome || !claims || typeof ResizeObserver === "undefined") return;
     const root = stage.closest<HTMLElement>(".vf-godview");
     const wall = fullStage ? root?.querySelector<HTMLElement>(".vf-godview-field-wall") : null;
+    // UM-R4 — the limit card stands beside the add, outside the strip's measure; a Retry on the Profiles boundary
+    // remounts it, so it is re-found at each publish
+    let observedMoment: HTMLElement | null = null;
     const publish = (): void => {
       const stageRect = stage.getBoundingClientRect();
       const chromeRect = chrome.getBoundingClientRect();
@@ -678,6 +681,13 @@ export function GodviewMonitor({
       // strip always carries its `aria-live` acknowledgement span, empty or
       // not, so counting children would reserve a band for a silent strip.
       const claimsRect = claims.getBoundingClientRect();
+      const moment = chrome.querySelector<HTMLElement>(".vf-profiles-moment");
+      if (moment !== observedMoment) {
+        if (observedMoment) observer.unobserve(observedMoment);
+        if (moment) observer.observe(moment);
+        observedMoment = moment;
+      }
+      const momentRect = moment?.getBoundingClientRect();
       const bottom =
         claimsRect.height === 0
           ? HEAD_RESERVE
@@ -701,6 +711,7 @@ export function GodviewMonitor({
           { x: 0, y: 0, width, height: HEAD_RESERVE },
           rect(chromeRect),
           ...(claimsRect.height === 0 ? [] : [rect(claimsRect)]),
+          ...(momentRect !== undefined && momentRect.height > 0 ? [rect(momentRect)] : []),
         ],
       };
       // M176 item 1: every tick measures a fresh object; one that measures the

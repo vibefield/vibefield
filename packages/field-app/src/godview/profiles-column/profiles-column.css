@@ -69,6 +69,11 @@
   display: grid;
 }
 
+/* the add's own hover: the button and its stand, so the limit card beside it is not the add (UM-R4) */
+.vf-profiles-add-zone {
+  display: grid;
+}
+
 .vf-profiles-circle,
 .vf-profiles-add {
   flex: none;

@@ -191,33 +191,35 @@ export function ProfilesColumnView({
           </div>
         );
       })}
-      {/* the pointer on the add shows its card; the add is the control */}
-      <div
-        className="vf-profiles-item vf-profiles-add-item"
-        onPointerEnter={() => onPoint(ADD_TARGET)}
-        onPointerLeave={() => onPoint(null)}
-      >
-        <button
-          type="button"
-          className="vf-profiles-add"
-          aria-label={PROFILES_WORDS.add}
-          disabled={!canAdd}
-          onClick={onAdd}
+      <div className="vf-profiles-item vf-profiles-add-item">
+        {/* the pointer on the add shows its card; the add is the control. The limit card beside it is not the add. */}
+        <div
+          className="vf-profiles-add-zone"
+          onPointerEnter={() => onPoint(ADD_TARGET)}
+          onPointerLeave={() => onPoint(null)}
         >
-          <FieldGlyph name="plus" size={17} />
-        </button>
-        {addOpen && canAdd ? (
-          <CardStand layer={cardLayer} card="add">
-            <div className="vf-profiles-addcard" role="tooltip">
-              <b>{PROFILES_WORDS.add}</b>
-              <p>{`${PROFILES_WORDS.offer} ${PROFILES_WORDS.fact}`}</p>
-              <span className="vf-profiles-addcard-foot">
-                <FieldGlyph name="gear" size={11} />
-                Opens Settings → Agent Profiles on New profile…
-              </span>
-            </div>
-          </CardStand>
-        ) : null}
+          <button
+            type="button"
+            className="vf-profiles-add"
+            aria-label={PROFILES_WORDS.add}
+            disabled={!canAdd}
+            onClick={onAdd}
+          >
+            <FieldGlyph name="plus" size={17} />
+          </button>
+          {addOpen && canAdd ? (
+            <CardStand layer={cardLayer} card="add">
+              <div className="vf-profiles-addcard" role="tooltip">
+                <b>{PROFILES_WORDS.add}</b>
+                <p>{`${PROFILES_WORDS.offer} ${PROFILES_WORDS.fact}`}</p>
+                <span className="vf-profiles-addcard-foot">
+                  <FieldGlyph name="gear" size={11} />
+                  Opens Settings → Agent Profiles on New profile…
+                </span>
+              </div>
+            </CardStand>
+          ) : null}
+        </div>
         <div className="vf-profiles-moment">{moment}</div>
       </div>
     </div>
