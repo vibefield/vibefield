@@ -1,6 +1,7 @@
 import FieldDesign
 import FieldProduct
 import SwiftUI
+import UIKit
 
 // MA-6c — what MA-D7's two slots hold (DESIGN.md §8 "The phone's Apps", as amended by SE-D3): the strip above the switch
 // before any word, and the group first in Everything once a word is typed. An icon is its fallback until 6e's previews.
@@ -74,18 +75,42 @@ struct AppIconView: View {
   let side: CGFloat
 
   @Environment(\.colorScheme) private var scheme
+  @Environment(\.appsIconSource) private var source
+  /// Decoded once per icon: a preview's bytes arriving redraws every icon reading the store.
+  @State private var image: UIImage?
+
+  private var digest: String? { app.preview?.digest }
+  private var held: Data? { digest.flatMap { source?.previews.images[$0] } }
 
   var body: some View {
     let paint = AppIcon.paint(ink: app.ink.map { Int($0) }, dark: scheme == .dark)
-    RoundedRectangle(cornerRadius: AppIcon.corner(side: side), style: .continuous)
+    let shape = RoundedRectangle(cornerRadius: AppIcon.corner(side: side), style: .continuous)
+    shape
       .fill(Self.ground(paint.ground))
       .overlay {
         Text(MadeAppFacts.initial(title: app.title, filename: app.filename))
           .font(ChromeType.sans(AppIcon.initialSize(side: side), .semibold))
           .foregroundStyle(Self.letter(paint.letter))
       }
+      .overlay {
+        if let image {
+          Image(uiImage: image)
+            .resizable()
+            .scaledToFill()
+            .frame(width: side, height: side)
+            .clipShape(shape)
+            .overlay { shape.strokeBorder(ChromePalette.separator, lineWidth: AppIcon.hairline) }
+        }
+      }
       .frame(width: side, height: side)
+      .task(id: digest) { await want() }
+      .onChange(of: held, initial: true) { _, bytes in image = bytes.flatMap(UIImage.init(data:)) }
       .accessibilityHidden(true)
+  }
+
+  private func want() async {
+    guard let source, let digest, let url = MadeAppFacts.imageURL(app, sources: source.sources) else { return }
+    await source.previews.want(digest: digest, url: url)
   }
 
   private static func ground(_ ground: AppIcon.Ground) -> Color {

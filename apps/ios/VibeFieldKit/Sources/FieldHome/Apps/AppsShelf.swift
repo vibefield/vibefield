@@ -23,9 +23,11 @@ struct AppsShelf: Equatable {
 
     var id: String { key }
 
-    /// RED: stubs.
-    var big: [IndexAppRow] { [] }
-    var small: [IndexAppRow] { [] }
+    /// The tile's three large icons, then the cluster of the next four (§8).
+    var big: [IndexAppRow] { Array(apps.prefix(AppsShelfChrome.folderBigCount)) }
+    var small: [IndexAppRow] {
+      Array(apps.dropFirst(AppsShelfChrome.folderBigCount).prefix(AppsShelfChrome.folderSmallCount))
+    }
   }
 
   /// Recent's four across (§8: "the four Recent icons").
@@ -82,11 +84,29 @@ struct AppsShelf: Equatable {
     away = Set(newest.filter { MadeAppFacts.away(MadeAppFacts.source(of: $0, in: sources)) }.map(\.appKey))
   }
 
-  /// RED: a stub.
-  static func emptyLine(phase: AppsFeed.Phase, here: String) -> String? { nil }
+  /// The last group's head, interim, ‹for James›: §9 has no word for it.
+  static let noProjectHead = "No project"
+  /// What the shelf says when the walk stopped at the phone's bound, interim, ‹for James›.
+  static let clippedLine = "Not every app is shown here"
 
-  /// RED: a stub.
-  static func matching(_ words: String, in apps: [IndexAppRow]) -> [IndexAppRow] { [] }
+  /// What a shelf with no apps says. Off is the home's own words (§9); the waiting line and the empty one are interim,
+  /// ‹for James›. A library still reading says so per desktop (`readingLines`).
+  static func emptyLine(phase: AppsFeed.Phase, here: String) -> String? {
+    switch phase {
+    case .off: "This phone isn't connected to its home desktop"
+    case .unavailable: "Can't reach \(here)"
+    case .waiting: "Reading your apps"
+    case .live: "Your agents haven't made an app yet"
+    case .reading: nil
+    }
+  }
+
+  /// The shelf's own field: titles that hold the words. Blank words list nothing, and the shelf stands as it was.
+  static func matching(_ words: String, in apps: [IndexAppRow]) -> [IndexAppRow] {
+    let words = words.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !words.isEmpty else { return [] }
+    return apps.filter { $0.title.localizedCaseInsensitiveContains(words) }
+  }
 
   /// Newest first, the door's own order breaking a tie.
   private static func newestFirst(_ apps: [IndexAppRow]) -> [IndexAppRow] {

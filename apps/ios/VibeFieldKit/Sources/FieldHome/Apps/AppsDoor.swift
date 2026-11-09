@@ -77,9 +77,11 @@ struct AppsCues: Equatable, Codable {
   private(set) var peeked = false
   /// What this account opened on this phone, newest first. Absent from a ledger written before MA-6e.
   private var openedKeys: [String]?
+  /// Absent from a ledger written before MA-6e.
+  private var unopenedKeys: Set<String>?
 
-  /// Apps that arrived as news and have not been opened on this phone. RED: a stub.
-  var unopened: Set<String> { [] }
+  /// Apps that arrived as news and have not been opened on this phone: §8's cyan mark. The first reading is no news.
+  var unopened: Set<String> { unopenedKeys ?? [] }
 
   /// How many opens head Recent, at most (§8: "the four Recent icons").
   static let openedCap = 4
@@ -103,6 +105,7 @@ struct AppsCues: Equatable, Codable {
     known.formUnion(current)
     unseen.formUnion(news)
     unseen.formIntersection(current)
+    unopenedKeys = unopened.union(news).intersection(current)
     return news
   }
 
@@ -116,6 +119,7 @@ struct AppsCues: Equatable, Codable {
     let others = opened.filter { $0 != foldKey }
     openedKeys = Array(([foldKey] + others).prefix(Self.openedCap))
     unseen.remove(foldKey)
+    unopenedKeys = unopened.subtracting([foldKey])
   }
 
   /// Whether the first peek is due now; true once per account per phone, when the first app has reached it.

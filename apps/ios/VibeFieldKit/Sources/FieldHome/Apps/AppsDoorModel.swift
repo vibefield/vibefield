@@ -38,6 +38,9 @@ final class AppsDoorModel {
     cues = account.flatMap { store?.load(account: $0) } ?? AppsCues()
     drops = AppsDrops()
     peeking = false
+    shelfOpen = false
+    folder = nil
+    zoomKey = nil
   }
 
   /// One reading of the feed. Only a live reading is news; `blocked` keeps the drop away, `calm` is no sheet standing.
@@ -49,6 +52,7 @@ final class AppsDoorModel {
     let arrivals = news.compactMap { key in
       reading.apps.first { $0.foldKey == key }.map { AppsDrops.Arrival(foldKey: key, title: $0.title) }
     }
+    if shelfOpen { cues.seen(reading.apps.map(\.foldKey)) }
     drops.arrive(arrivals, at: clock(), blocked: blocked)
     if cues != before { save() }
     tryPeek(calm: calm)
@@ -91,18 +95,34 @@ final class AppsDoorModel {
     if cues != before { save() }
   }
 
-  /// RED: the shelf's standing below is stubs.
-  func openShelf(showing foldKeys: [String]) {}
+  /// The shelf opens, and has shown what it holds (§8: an app is seen once it has shown on the open shelf).
+  func openShelf(showing foldKeys: [String]) {
+    shelfOpen = true
+    seen(foldKeys)
+  }
 
-  func closeShelf() {}
+  func closeShelf() {
+    shelfOpen = false
+    folder = nil
+  }
 
-  func openFolder(_ key: String) {}
+  func openFolder(_ key: String) {
+    folder = key
+  }
 
-  func closeFolder() {}
+  func closeFolder() {
+    folder = nil
+  }
 
-  func zoom(_ foldKey: String) {}
+  /// An app zooms open: that is an open, for the ledger and for the dot.
+  func zoom(_ foldKey: String) {
+    zoomKey = foldKey
+    opened(foldKey)
+  }
 
-  func unzoom() {}
+  func unzoom() {
+    zoomKey = nil
+  }
 
   func expire() {
     drops.expire(at: clock())
@@ -119,6 +139,9 @@ final class AppsDoorModel {
     cues = AppsCues()
     drops = AppsDrops()
     peeking = false
+    shelfOpen = false
+    folder = nil
+    zoomKey = nil
   }
 
   private func save() {
