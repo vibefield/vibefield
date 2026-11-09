@@ -1,19 +1,19 @@
 // DK-12 — THE TOOLS IN HAND, IN THE PRODUCT (smoke:canvas; DESIGN.md §8 "Tools in hand"; R13; ICE I20, I22). Each of the
-// three specimens — ICE's notebook and whiteboard, and the example plugin's clock — is selected by a tap where the
+// two specimens — ICE's whiteboard and the example plugin's clock — is selected by a tap where the
 // desk receives it and PICKED UP by the desk's own ⏎ (ICE's keymap: `ops.open`), and the rows read back off the DOM the
 // chrome drew, off the desk's door (`window.__vfDesk`: the anchor, the object in hand and where the desk drew it, the bar's
 // counters) and off the browser's own transition events:
 //   HAND_<SPECIMEN> — the same bar under the head, its top at y 64, centred on the window; the kind's tools in their
 //              declared order with the 6 gap where the run changes (pages · inks · tools), the readout's text, Done's tip;
 //              the held object's READING FIT inside the layer's reserves (116 under the top, 100 over the foot — I20's
-//              `hold`), centred in that band; a tool USED through the bar (`ops.useHeldTool`: a page turned, a pen chosen,
+//              `hold`), centred in that band; a tool USED through the bar (`ops.useHeldTool`:
 //              the eraser taken up, an hour moved — each read back); Done puts it down — the bar hidden
 //              while the object flies home and back over it, the bar over the selection again;
 //   TRAVEL    — the travel's own timing, from `transitionstart`/`transitionend` on the one element: the transform over the
 //              anchor's 560 ms on the island curve, the rows' cross-fade over its last 120 ms, the glass's width with them;
 //              and the way back: the bar's fade-in starting 200 ms after the object landed;
 //   COUNTERS  — the bar's placements ≤ the anchor's publishes through all four (never a render per frame).
-// The stills: dk-12-hand-{notebook,whiteboard,calendar,clock}-{light,dark}.png — the window, each specimen in hand.
+// The stills: dk-12-hand-{whiteboard,clock}-{light,dark}.png — the window, each specimen in hand.
 
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -37,7 +37,7 @@ export const HAND_PLACE = {
 
 /** One specimen: its type, its tools in declared order (`+` where the run changes), and what a tool used must do. */
 export interface HandSpecimen {
-  readonly name: "notebook" | "whiteboard" | "calendar" | "clock";
+  readonly name: "whiteboard" | "calendar" | "clock";
   readonly type: string;
   readonly tools: readonly string[];
   /** The readout, as a pattern (the clock's time, the calendar's month), or null for a kind that says none. */
@@ -45,12 +45,6 @@ export interface HandSpecimen {
 }
 
 export const HAND_SPECIMENS: readonly HandSpecimen[] = [
-  {
-    name: "notebook",
-    type: "desk.notebook",
-    tools: ["turn:-1", "turn:1", "+pen:felt", "pen:ball", "pen:fountain", "pen:red", "+undo"],
-    readout: /^Page \d+$/u,
-  },
   {
     name: "whiteboard",
     type: "desk.board",
@@ -637,16 +631,7 @@ export async function toolsInHandRows(d: HandRowsDriver): Promise<string[]> {
 
     // a tool USED through the bar (ops.useHeldTool), read back
     let used: Record<string, unknown> = {};
-    if (s.name === "notebook") {
-      await pressTool("turn:1");
-      await until("the notebook's page turned", 5_000, `(${READ_HAND}).readout === "Page 2"`);
-      await pressTool("pen:felt");
-      await until("the felt pen in hand", 5_000, `(${READ_HAND}).on.includes("pen:felt")`);
-      const after = await hand();
-      used = { turned: after.readout, inHand: after.on, pressed: after.pressed["pen:felt"] };
-      if (after.pressed["pen:fountain"] !== "false")
-        problems.push(row("the fountain pen stayed pressed after the felt was taken up"));
-    } else if (s.name === "whiteboard") {
+    if (s.name === "whiteboard") {
       await pressTool("eraser");
       await until("the eraser in hand", 5_000, `(${READ_HAND}).pressed["eraser"] === "true"`);
       const after = await hand();

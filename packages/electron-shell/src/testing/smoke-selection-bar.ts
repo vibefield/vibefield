@@ -13,7 +13,7 @@
 //   TAPED    — the note taped from the bar: "Lift the tape" wearing `lift`, no Duplicate; lifted again;
 //   MENU     — More on the note: the grown menu nearest first under "NOTE", at least 244 wide, inside 94…the line's
 //              reserve, the bar's own row unmoved; Esc folds it;
-//   RIGHT    — the notebook right-clicked, unselected: selected FIRST by the desk's pick, then the same menu grown;
+//   RIGHT    — the whiteboard right-clicked, unselected: selected FIRST by the desk's pick, then the same menu grown;
 //   MISSING  — the example clock's plugin turned off: the desk remounts, the status line says "Clock · plugin off" ONCE,
 //              the clock's missing face selected names its type and word where its act stood, Duplicate offered; on
 //              again, drawn;
@@ -516,26 +516,26 @@ export async function selectionBarRows(d: BarRowsDriver): Promise<string[]> {
   );
   await deselect();
 
-  // ── RIGHT: the notebook right-clicked — selected FIRST by the desk's pick, then the same menu grown ─────────
-  const notebookAt = await point("desk.notebook");
-  await press(notebookAt, "right");
+  // ── RIGHT: the whiteboard right-clicked — selected FIRST by the desk's pick, then the same menu grown ─────────
+  const whiteboardAt = await point("desk.board");
+  await press(whiteboardAt, "right");
   const right = await settled(
-    "the notebook selected and the menu grown by a right-click",
-    `(() => { const b = ${READ_BAR}; return b !== null && b.open && b.eyebrow === "NOTEBOOK"; })()`,
+    "the whiteboard selected and the menu grown by a right-click",
+    `(() => { const b = ${READ_BAR}; return b !== null && b.open && b.eyebrow === "WHITEBOARD"; })()`,
   );
   const rightAnchor = await js<DoorAnchor>(ANCHOR);
-  const notebookBox = await js<ScreenRect | null>(BOX_OF("desk.notebook"));
+  const whiteboardBox = await js<ScreenRect | null>(BOX_OF("desk.board"));
   const inBox =
     rightAnchor.box !== null &&
-    notebookBox !== null &&
-    rightAnchor.box.x0 <= notebookBox.x0 + 12 &&
-    rightAnchor.box.x1 >= notebookBox.x1 - 12;
+    whiteboardBox !== null &&
+    rightAnchor.box.x0 <= whiteboardBox.x0 + 12 &&
+    rightAnchor.box.x1 >= whiteboardBox.x1 - 12;
   if (rightAnchor.count !== 1 || !inBox)
     problems.push(
-      `RIGHT: the right-click did not select the notebook (${JSON.stringify({ rightAnchor, notebookBox })})`,
+      `RIGHT: the right-click did not select the whiteboard (${JSON.stringify({ rightAnchor, whiteboardBox })})`,
     );
   say(
-    `SMOKE_CANVAS_BAR_RIGHT ${JSON.stringify({ at: notebookAt, count: rightAnchor.count, eyebrow: right.eyebrow, rows: right.rows })}`,
+    `SMOKE_CANVAS_BAR_RIGHT ${JSON.stringify({ at: whiteboardAt, count: rightAnchor.count, eyebrow: right.eyebrow, rows: right.rows })}`,
   );
   await key("Escape");
   await deselect();

@@ -4,14 +4,13 @@ import {
   BOARD_TYPE,
   MINIMAT_TYPE,
   NOTE_TYPE,
-  NOTEBOOK_TYPE,
   PHOTO_TYPE,
   printRect,
 } from "@vibecook/ice/desk/objects";
 
-// The first-run board uses the app's five active ICE kinds and VibeField's comment pad, in a
-// working column: note, comment pad and notebook side by side; Inbox below; whiteboard; print.
-// The calendar is retired from the product. Only the bootstrap default board is seeded;
+// The first-run board is the first launch's lineup (James, 2026-11-09): ICE's note, the mini mat Inbox, the whiteboard
+// and the print, in a working column. The calendar and the notebook are retired from the product (desk-objects.ts),
+// and the comment pad's door is the selection bar's Comment. Only the bootstrap default board is seeded;
 // user-created boards open empty. The print's bytes are stored before its object is placed.
 //
 // THE EXAMPLE CLOCK is not the product's (the orchestrator's ruling 1 at DK-8: "an example is an example"): a user's
@@ -28,10 +27,11 @@ export interface SeedObject {
 }
 
 /**
- * VIBEFIELD'S OWN KIND on the first board (DK-8, DK-D14): the COMMENT PAD (`plugins/comment-pad`), blank, in the
- * working column between the note and the notebook. Named by its TYPE, as a host names any plugin's kind (the
- * seed imports no plugin; `comment-pad-plugin.test.ts` holds the string to the plugin's), and laid only while its
- * plugin is on: every dev run and smoke stages it; a packaged build ships no plugin until WP8 and lays the six.
+ * VIBEFIELD'S OWN KIND: the COMMENT PAD (`plugins/comment-pad`), blank. A user's first board no longer carries it
+ * (the first launch's lineup, James, 2026-11-09, amending DK-D14): the selection bar's Comment is its door. It is laid
+ * as an example, where the run asks for them (`smoke:canvas`'s pad rows read it). Named by its TYPE, as a host names
+ * any plugin's kind (the seed imports no plugin; `comment-pad-plugin.test.ts` holds the string to the plugin's), and
+ * laid only while its plugin is on.
  */
 export const SEED_PAD: SeedObject = {
   type: "vibefield.comment-pad",
@@ -103,37 +103,28 @@ export function tryRow(
 }
 
 export interface SeedOptions {
-  /** Lay the example objects (the clock) — a dev build's and a smoke's; never a user's first board. */
+  /** Lay the example objects (the comment pad, the clock) — a dev build's and a smoke's; never a user's first board. */
   readonly examples?: boolean;
   /** A TRY BOARD (`?deskTry=`): lay one object of each of these types, and nothing else. */
   readonly try?: readonly string[];
 }
 
-/** The product's composition, laid at once (the print follows its picture) — and the example clock where the run asks. */
+/** The product's composition, laid at once (the print follows its picture) — and the examples where the run asks. */
 export function seedObjects(_now: Date, opts: SeedOptions = {}): readonly SeedObject[] {
   const product: SeedObject[] = [
     { type: NOTE_TYPE, cx: 100, cy: 330, props: { seed: 1 } },
-    SEED_PAD,
-    { type: NOTEBOOK_TYPE, cx: 570, cy: 330, props: { seed: 3, angle: 0.05 } },
     { type: MINIMAT_TYPE, cx: 320, cy: 750, props: { name: "Inbox" } },
     { type: BOARD_TYPE, cx: 240, cy: 1180, props: {} },
   ];
-  return opts.examples === true ? [...product, SEED_CLOCK] : product;
+  return opts.examples === true ? [...product, SEED_PAD, SEED_CLOCK] : product;
 }
 
 /** Where the print lies (its centre): the working column's foot, under the whiteboard. */
 export const SEED_PRINT_AT = { cx: 200, cy: 1520 } as const;
 
-/** The types the product's seed lays, one each — the census a first-run board holds while the product's plugins are
- * on (ICE's five active kinds and the comment pad; the example clock joins it only where the run asks for the examples). */
-export const SEED_TYPES: readonly string[] = [
-  NOTE_TYPE,
-  MINIMAT_TYPE,
-  BOARD_TYPE,
-  NOTEBOOK_TYPE,
-  PHOTO_TYPE,
-  SEED_PAD.type,
-];
+/** The types the product's seed lays, one each — the census a first-run board holds (ICE's four active kinds; the
+ * comment pad and the example clock join it only where the run asks for the examples). */
+export const SEED_TYPES: readonly string[] = [NOTE_TYPE, MINIMAT_TYPE, BOARD_TYPE, PHOTO_TYPE];
 
 /**
  * Seed a live document: the product's composition laid now (one transaction each, not undoable — the

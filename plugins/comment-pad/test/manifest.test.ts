@@ -7,7 +7,6 @@ import { CONTAINABLE, DESK_OBJECT, isObjectKind, PENS } from "@vibefield/plugin-
 import { activateWithMockHost } from "@vibefield/plugin-sdk/testing";
 import { describe, expect, it } from "vitest";
 import {
-  COMMENT_PAD_CATEGORY,
   COMMENT_PAD_TYPE,
   commentPadManifest,
   commentPadRenderer,
@@ -52,12 +51,8 @@ describe("vibefield.comment-pad", () => {
     ]);
   });
 
-  it("hangs on the pegboard under its OWN category, at its own aspect (the specimen fills its hang)", () => {
-    const tray = row?.tray;
-    expect(tray?.category).toBe(COMMENT_PAD_CATEGORY);
-    expect(["paper", "surfaces", "things"]).not.toContain(tray?.category);
-    expect(tray?.hang.accessory).toBe("hook");
-    expect((tray?.hang.w ?? 0) / PAD_SIZE.w).toBeCloseTo((tray?.hang.h ?? 0) / PAD_SIZE.h, 9);
+  it("hangs on no hook: the selection bar's Comment is its door (the first launch's lineup)", () => {
+    expect(row?.tray).toBeUndefined();
     expect(row?.size).toEqual(PAD_SIZE);
   });
 

@@ -1,6 +1,6 @@
 // @vitest-environment node
-// The product's first board: five active ICE objects and VibeField's comment pad, plus the
-// example clock a DEV/SMOKE SWITCH (ruling 1: never a user's first board): a dev build or `?deskSeedExamples=1`.
+// The product's first board: four active ICE objects, plus the comment pad and the example clock
+// a DEV/SMOKE SWITCH (ruling 1: never a user's first board): a dev build or `?deskSeedExamples=1`.
 import { defineQuery, Not, Position, PrefabId, Size, Specimen } from "@vibecook/ice";
 import { COMMENT_PAD_TYPE } from "@vibefield/plugin-comment-pad";
 import { describe, expect, it } from "vitest";
@@ -25,26 +25,26 @@ const objectsQ = defineQuery([Position, Size, PrefabId, Not(Specimen)]);
 const NOW = new Date(2026, 9, 4);
 
 describe("the product's first board (DK-8)", () => {
-  it("lays ICE's five active objects and the comment pad — the pad named by the plugin's own type — and no example", () => {
+  it("lays ICE's four active objects and no example — the pad, named by the plugin's own type, only where the run asks", () => {
     expect(SEED_PAD.type).toBe(COMMENT_PAD_TYPE);
-    expect(seedObjects(NOW).map((s) => s.type)).not.toContain(SEED_CLOCK.type);
-    expect(seedObjects(NOW, { examples: true }).map((s) => s.type)).toContain(SEED_CLOCK.type);
+    const product = seedObjects(NOW).map((s) => s.type);
+    const examples = seedObjects(NOW, { examples: true }).map((s) => s.type);
+    expect(product).not.toContain(SEED_CLOCK.type);
+    expect(product).not.toContain(COMMENT_PAD_TYPE);
+    expect(examples).toContain(SEED_CLOCK.type);
+    expect(examples).toContain(COMMENT_PAD_TYPE);
     expect([...SEED_TYPES].sort()).toEqual(
-      [
-        "desk.board",
-        "desk.minimat",
-        "desk.note",
-        "desk.notebook",
-        "desk.photo",
-        COMMENT_PAD_TYPE,
-      ].sort(),
+      ["desk.board", "desk.minimat", "desk.note", "desk.photo"].sort(),
     );
   });
 
   it("seeds only active objects and leaves the retired calendar off the canvas", async () => {
     const ce = createFieldEngine(buildRegistry());
     await seedField(ce, ce.docs.create(), createDeskBlobStore(), NOW, { examples: true });
-    expect(deskCensus(ce)).toEqual(Object.fromEntries(SEED_TYPES.map((t) => [t, 1])));
+    expect(deskCensus(ce)).toEqual({
+      ...Object.fromEntries(SEED_TYPES.map((t) => [t, 1])),
+      [COMMENT_PAD_TYPE]: 1,
+    });
     expect(ce.catalog.widget("desk.calendar")).toBeUndefined();
     expect(seedObjects(NOW).some((s) => s.type === "desk.calendar")).toBe(false);
     ce.dispose();

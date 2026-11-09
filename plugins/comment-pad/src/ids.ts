@@ -13,9 +13,6 @@ export const COMMENT_PAD_KIND = COMMENT_PAD_TYPE;
 /** The pad's TEXT PART (ICE K8a): what the desk's one editor's lease names while a pad is written. */
 export const COMMENT_PAD_PART = "comment-pad.sheet";
 
-/** The pad's own category on the pegboard — its own row of hooks, beside the desk's paper and things. */
-export const COMMENT_PAD_CATEGORY = "comments";
-
 /** The pad's size as laid, world units — portrait, an index card's proportion at the desk's note scale. */
 export const PAD_SIZE = { w: 220, h: 280 } as const;
 

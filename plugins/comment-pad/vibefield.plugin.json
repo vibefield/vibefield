@@ -73,26 +73,6 @@
           "w": 220
         },
         "title": "Comment pad",
-        "tray": {
-          "category": "comments",
-          "hang": {
-            "accessory": "hook",
-            "h": 140,
-            "pegs": [
-              [
-                0,
-                -0.5
-              ]
-            ],
-            "w": 110
-          },
-          "label": "Comment pad",
-          "local": true,
-          "order": 0,
-          "props": {
-            "text": "a comment"
-          }
-        },
         "type": "vibefield.comment-pad"
       }
     ]

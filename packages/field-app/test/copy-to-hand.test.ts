@@ -159,7 +159,7 @@ function write(entity: Entity, text: string): void {
 
 beforeEach(async () => {
   ce = createFieldEngine(buildRegistry());
-  await seedField(ce, ce.docs.create(), createDeskBlobStore());
+  await seedField(ce, ce.docs.create(), createDeskBlobStore(), undefined, { examples: true });
   noteE = deskObjects(ce, "desk.note")[0]?.entity as Entity;
   padE = deskObjects(ce, "vibefield.comment-pad")[0]?.entity as Entity;
   calls = [];

@@ -14,7 +14,7 @@
 //             6 at the view's device px, drawn WITHOUT the selection's marks by ICE's capture (`marks: false`, I40);
 //   TWO     — the clock and the note, copied from the bar grown into its MENU: ONE picture card, "2 objects", the union's
 //             10 off; the note's words on the system clipboard, beside the picture in its one write (LC-19);
-//   HAND    — the notebook IN HAND, copied from the tools in hand: a picture card "Notebook" of where the desk DRAWS it
+//   HAND    — the whiteboard IN HAND, copied from the tools in hand: a picture card "Whiteboard" of where the desk DRAWS it
 //             (`__vfDesk.held()`), the object staying in hand and the tools under the head;
 //   MISSING — the clock's plugin off, its missing face copied: a picture card titled by its type's name ("Clock");
 //             and each picture row's PNG handed to main's picture door, and taken, before its card was dealt (HN-5);
@@ -574,14 +574,14 @@ export async function deskCopyRows(d: CopyRowsDriver): Promise<string[]> {
     await deselect();
   }
 
-  // ── HAND: the notebook in hand, copied from the tools in hand — it stays in hand ─────────────────────────────
+  // ── HAND: the whiteboard in hand, copied from the tools in hand — it stays in hand ─────────────────────────────
   {
     const row = (p: string): string => `HAND: ${p}`;
-    await select("desk.notebook");
-    await barShown("the bar over the notebook", `globalThis.__vfDesk.anchor()?.count === 1`);
+    await select("desk.board");
+    await barShown("the bar over the whiteboard", `globalThis.__vfDesk.anchor()?.count === 1`);
     await key("Return");
     await until(
-      "the notebook in hand, its tools under the head",
+      "the whiteboard in hand, its tools under the head",
       10_000,
       `(() => { const h = globalThis.__vfDesk.held(); const b = document.querySelector("[data-selection-bar]"); return h !== null && h.frame?.settled === true && b?.getAttribute("data-face") === "hand" && b?.getAttribute("data-shown") === "true" && !b.hasAttribute("data-traveling"); })()`,
     );
@@ -593,9 +593,9 @@ export async function deskCopyRows(d: CopyRowsDriver): Promise<string[]> {
     const seq = await seqNow();
     const handedPictures = d.pictures?.length ?? 0;
     await pressCopy('[data-selection-bar] [data-face-row="hand"] [data-act="copy"]');
-    const record = await dealt("the notebook's card dealt", seq);
+    const record = await dealt("the whiteboard's card dealt", seq);
     problems.push(
-      ...judgeCard(record, { kind: "pict", title: "Notebook" }).map(row),
+      ...judgeCard(record, { kind: "pict", title: "Whiteboard" }).map(row),
       ...judgeStill(record, null, dpr, true).map(row),
       ...judgePictured(record, d.pictures, handedPictures).map(row),
     );
@@ -622,7 +622,7 @@ export async function deskCopyRows(d: CopyRowsDriver): Promise<string[]> {
       const r = b?.querySelector('[data-face-row="hand"]')?.getBoundingClientRect();
       return { held: globalThis.__vfDesk.held() !== null, face: b?.getAttribute("data-face") ?? null, shown: b?.getAttribute("data-shown") ?? null, top: r === undefined ? null : r.top };
     })()`);
-    if (!after.held) problems.push(row("Copy put the notebook down"));
+    if (!after.held) problems.push(row("Copy put the whiteboard down"));
     if (
       after.face !== "hand" ||
       after.shown !== "true" ||
@@ -634,7 +634,7 @@ export async function deskCopyRows(d: CopyRowsDriver): Promise<string[]> {
       );
     say(`SMOKE_CANVAS_COPY_HAND ${JSON.stringify({ copied: record, held, after })}`);
     await pressAt('[data-selection-bar] [data-face-row="hand"] [data-act="done"]');
-    await until("the notebook put down", 10_000, "globalThis.__vfDesk.held() === null");
+    await until("the whiteboard put down", 10_000, "globalThis.__vfDesk.held() === null");
     await sleep(800);
     await deselect();
   }

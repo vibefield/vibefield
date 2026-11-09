@@ -71,6 +71,8 @@ import type { FrameSurface } from "../src/frame/frame-surface";
 const VIEW = { width: 1180, height: 748 };
 /** The drawer as the desk draws it out in a 1180 × 748 view (ICE's `drawerRect`: 1120 wide, 44 % high). */
 const DRAWER_OUT = { x: 30, y: 419, w: 1120, h: 329 };
+/** The drawer's width for this test: the first launch's lineup hangs one row at the real one. */
+let drawerWidth = DRAWER_OUT.w;
 
 interface TestDoor extends DeskTrayDoor {
   /** The desk drew a frame that moved what the anchor says: its subscribers are told. */
@@ -114,6 +116,7 @@ function trayDoor(engine: CanvasEngine): TestDoor {
     const scroll = drawnScroll;
     return {
       ...DRAWER_OUT,
+      w: drawerWidth,
       y: VIEW.height - DRAWER_OUT.h * p,
       p,
       max: 2000,
@@ -304,6 +307,7 @@ beforeEach(async () => {
 });
 
 afterEach(() => {
+  drawerWidth = DRAWER_OUT.w;
   act(() => root.unmount());
   host.remove();
   unpublish();
@@ -375,21 +379,21 @@ describe("the filters (R19, P3c)", () => {
   });
 
   it("offer no category whose every kind's plugin is off (P3c), and the board shows All when its category goes", async () => {
-    // the comment pad's category is VibeField's own plugin's alone
+    // the portals category is the browser pane's plugin's alone
     act(() => root.unmount());
     unpublish();
     ce.dispose();
-    await mountDesk(new Set(["vibefield.comment-pad"]));
+    await mountDesk(new Set(["vibefield.browser-pane"]));
     root = createRoot(host);
     act(() => root.render(createElement(Harness)));
-    const pad = trayCategories(ce.world).find((c) => c.id === "comments");
-    expect(pad).toBeDefined();
+    const pane = trayCategories(ce.world).find((c) => c.id === "portals");
+    expect(pane).toBeDefined();
     act(() => {
-      setTrayCategory(ce.world, "comments");
+      setTrayCategory(ce.world, "portals");
       openTray(ce.world);
     });
     door.publish();
-    expect(filters()).not.toContain("Comments");
+    expect(filters()).not.toContain("Portals");
     expect(filters()[0]).toBe("All");
     expect(trayCategory(ce.world)).toBe("");
   });
@@ -511,6 +515,8 @@ describe("inserting by keyboard (R14) — on ICE's own doors (I37)", () => {
   });
 
   it("moves to the row below with ↓ — focused by its id, ICE scrolling the board to show it, the ring following its anchor", () => {
+    // the first launch's lineup hangs one row at the real width: a narrow drawer gives it a row below
+    drawerWidth = 260;
     raise();
     const rows = new Set(drawnNow().map((d) => d.row));
     expect(rows.size).toBeGreaterThan(1);
@@ -576,9 +582,12 @@ describe("inserting by keyboard (R14) — on ICE's own doors (I37)", () => {
     const centre = screenToWorld(VIEW.width / 2, VIEW.height / 2, camera);
     const at = ce.world.get(made, Position) as { x: number; y: number };
     const size = ce.world.get(made, Size) as { w: number; h: number };
-    expect(size).toEqual(ce.catalog.widget(type)?.defaultSize);
-    expect(at.x + size.w / 2).toBeCloseTo(centre.x, 6);
-    expect(at.y + size.h / 2).toBeCloseTo(centre.y, 6);
+    // the component's floats: a size like the pane's 698.16, and its centre, read back at float32's grain
+    const natural = ce.catalog.widget(type)?.defaultSize;
+    expect(size.w).toBeCloseTo(natural?.w ?? Number.NaN, 3);
+    expect(size.h).toBeCloseTo(natural?.h ?? Number.NaN, 3);
+    expect(at.x + size.w / 2).toBeCloseTo(centre.x, 3);
+    expect(at.y + size.h / 2).toBeCloseTo(centre.y, 3);
     act(() => {
       ce.docs.undo();
       step();

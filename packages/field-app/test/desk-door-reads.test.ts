@@ -33,7 +33,7 @@ afterEach(() => {
 describe("the desk door's reads (DK-8)", () => {
   it("reads each object of a type with its props merged across its groups — the pad's ink and its dress together", async () => {
     const ce = createFieldEngine(buildRegistry());
-    await seedField(ce, ce.docs.create(), createDeskBlobStore());
+    await seedField(ce, ce.docs.create(), createDeskBlobStore(), undefined, { examples: true });
     const pads = deskObjects(ce, COMMENT_PAD_TYPE);
     expect(pads).toHaveLength(1);
     expect(pads[0]?.props).toEqual({ text: "", seeds: "", pen: "ball", accent: "indigo", seed: 0 });
@@ -43,7 +43,7 @@ describe("the desk door's reads (DK-8)", () => {
 
   it("PT-1: reads each object's RECT beside its props — its Position and Size, what a resize writes — a kind's DESK STATE by its name, and the CAMERA; PT-2: its durable KEY and the smokes' one WRITE", async () => {
     const ce = createFieldEngine(buildRegistry());
-    await seedField(ce, ce.docs.create(), createDeskBlobStore());
+    await seedField(ce, ce.docs.create(), createDeskBlobStore(), undefined, { examples: true });
     const pad = deskObjects(ce, COMMENT_PAD_TYPE)[0];
     expect(pad?.rect.w).toBe(220);
     expect(pad?.rect.h).toBe(280);
@@ -286,7 +286,7 @@ describe("the desk door's reads (DK-8)", () => {
 
   it("DK-12: reads the object IN HAND and where the desk drew it — the held pose seam's frame — and nothing when none is held", async () => {
     const ce = createFieldEngine(buildRegistry());
-    await seedField(ce, ce.docs.create(), createDeskBlobStore());
+    await seedField(ce, ce.docs.create(), createDeskBlobStore(), undefined, { examples: true });
     ce.step(16);
     const undo = installDeskDoor(
       { engine: ce, handle: {} as never, generation: 1, mount: 0, theme: "light" },
@@ -294,13 +294,13 @@ describe("the desk door's reads (DK-8)", () => {
     );
     const door = (globalThis as { __vfDesk?: VfDeskDoor }).__vfDesk;
     expect(door?.held()).toBeNull();
-    const notebook = deskObjects(ce, "desk.notebook")[0]?.entity as Entity;
-    ce.ops.open(notebook);
+    const whiteboard = deskObjects(ce, "desk.board")[0]?.entity as Entity;
+    ce.ops.open(whiteboard);
     // before the desk has drawn it: in hand, no frame yet
-    expect(door?.held()).toEqual({ entity: notebook as number, frame: null });
+    expect(door?.held()).toEqual({ entity: whiteboard as number, frame: null });
     const drawn = { cx: 590, cy: 382, hx: 300, hy: 166, s: 1.4, settled: true };
-    ce.stack.heldPose.current = { frame: (e) => (e === notebook ? drawn : undefined) };
-    expect(door?.held()).toEqual({ entity: notebook as number, frame: drawn });
+    ce.stack.heldPose.current = { frame: (e) => (e === whiteboard ? drawn : undefined) };
+    expect(door?.held()).toEqual({ entity: whiteboard as number, frame: drawn });
     ce.ops.putDown();
     expect(door?.held()).toBeNull();
     undo();

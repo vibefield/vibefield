@@ -11,7 +11,7 @@ import * as deskClock from "@vibefield/plugin-example-desk-clock";
 import { describe, expect, it } from "vitest";
 import { createDeskBlobStore } from "../src/field/desk/desk-blobs";
 import { deskCensus } from "../src/field/desk/desk-door";
-import { SEED_CLOCK, SEED_TYPES } from "../src/field/desk/desk-seed";
+import { SEED_CLOCK, SEED_PAD, SEED_TYPES } from "../src/field/desk/desk-seed";
 import {
   buildRegistry,
   createFieldEngine,
@@ -93,11 +93,11 @@ describe("the example clock is a DEV/SMOKE switch on the first board, never the 
     });
   const product = Object.fromEntries(SEED_TYPES.map((type) => [type, 1]));
 
-  it("where the run asks for the examples: beside the product's seven, in the working column, a minute clock — the census the smoke reads", async () => {
+  it("where the run asks for the examples: beside the product's four and the comment pad, in the working column, a minute clock — the census the smoke reads", async () => {
     const ce = createFieldEngine(await devSet());
     const session = ce.docs.create();
     await seedField(ce, session, createDeskBlobStore(), undefined, { examples: true });
-    expect(deskCensus(ce)).toEqual({ ...product, [CLOCK_TYPE]: 1 });
+    expect(deskCensus(ce)).toEqual({ ...product, [SEED_PAD.type]: 1, [CLOCK_TYPE]: 1 });
     let found: { x: number; y: number; w: number; h: number; props: unknown } | undefined;
     const group = ce.catalog.widget(CLOCK_TYPE)?.groups.find((g) => g.name === "props");
     ce.world.query(objectsQ).each((batch) => {
@@ -125,7 +125,7 @@ describe("the example clock is a DEV/SMOKE switch on the first board, never the 
     ce.dispose();
   });
 
-  it("A USER'S FIRST BOARD never carries it — its plugin staged, the product's seed lays the seven and passes the clock by", async () => {
+  it("A USER'S FIRST BOARD never carries it — its plugin staged, the product's seed lays the four and passes the clock by", async () => {
     const ce = createFieldEngine(await devSet());
     const session = ce.docs.create();
     await seedField(ce, session, createDeskBlobStore());
@@ -137,7 +137,7 @@ describe("the example clock is a DEV/SMOKE switch on the first board, never the 
     const ce = createFieldEngine(buildRegistry());
     const session = ce.docs.create();
     await seedField(ce, session, createDeskBlobStore(), undefined, { examples: true });
-    expect(deskCensus(ce)).toEqual(product);
+    expect(deskCensus(ce)).toEqual({ ...product, [SEED_PAD.type]: 1 });
     ce.dispose();
   });
 });

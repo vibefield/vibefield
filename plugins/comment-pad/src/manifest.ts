@@ -1,5 +1,5 @@
 import type { PluginManifestV1 } from "@vibefield/contracts";
-import { COMMENT_PAD_CATEGORY, COMMENT_PAD_TYPE, PAD_ACCENTS, PAD_PENS, PAD_SIZE } from "./ids";
+import { COMMENT_PAD_TYPE, PAD_ACCENTS, PAD_PENS, PAD_SIZE } from "./ids";
 
 /**
  * THE COMMENT PAD (DK-8, DK-D14) — VibeField's first own object kind, built as a plugin kind exactly as a third
@@ -13,8 +13,8 @@ import { COMMENT_PAD_CATEGORY, COMMENT_PAD_TYPE, PAD_ACCENTS, PAD_PENS, PAD_SIZE
  * (DESIGN.md §2.6 — the binding strip and the rules' tint) and its `seed` (the hand of a glyph with no stored
  * seed); its size; its interaction (movable, selectable, snapping both ways, never resized); what it PROVIDES —
  * it lies on the desk (`desk.object`) and goes into a mini mat (`desk.containable`, where its chip is its paper
- * with its writing greeked); and its tray entry — a pad on a hook under its OWN category, `comments`, its
- * specimen written in the hand. The code half is the export `binding.kind` names (object.ts). Emitted to
+ * with its writing greeked). It has no tray entry since the first launch's lineup (James, 2026-11-09): the selection
+ * bar's Comment is its door. The code half is the export `binding.kind` names (object.ts). Emitted to
  * `vibefield.plugin.json` by `pnpm gen:manifest`; the imports here stay pure (ids only) so emitting needs no bundle.
  */
 export const commentPadManifest: PluginManifestV1 = {
@@ -49,16 +49,6 @@ export const commentPadManifest: PluginManifestV1 = {
           seed: { kind: "number", default: 0 },
         },
         groups: { ink: ["text", "seeds"] },
-        // on the pegboard (ICE design-017 §8): a pad on a hook under its own category, hung at its own aspect (half
-        // its size), its specimen written in the hand with the kind's desk state; one taken off is blank
-        tray: {
-          category: COMMENT_PAD_CATEGORY,
-          label: "Comment pad",
-          order: 0,
-          hang: { w: PAD_SIZE.w / 2, h: PAD_SIZE.h / 2, accessory: "hook", pegs: [[0, -0.5]] },
-          props: { text: "a comment" },
-          local: true,
-        },
         binding: { kind: "commentPad" },
       },
     ],

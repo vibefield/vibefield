@@ -1,6 +1,6 @@
 // The COMMENT PAD's code half — the `ObjectBinding` its manifest row names (`binding: { kind: "commentPad" }`). The
 // HOST makes the `defineObject` call (spec §12.2: plugin code never owns a durable schema), compiling the
-// manifest's durable half (manifest.ts — the props, the `ink` group, the size, the tray entry, what it provides)
+// manifest's durable half (manifest.ts — the props, the `ink` group, the size, what it provides)
 // with what this export carries: the kind, whole (kind.ts); its DRIVER — the hand onto the kind's state the
 // desk makes once per desk (the pad's membership and its writing); and its DOM HALF, declared — its sheet, the
 // TEXT PART the desk routes a tap to and lends its one editor (body.ts). Static, never registered from

@@ -37,7 +37,7 @@ const step = (): void => {
 
 beforeEach(async () => {
   ce = createFieldEngine(buildRegistry());
-  await seedField(ce, ce.docs.create(), createDeskBlobStore());
+  await seedField(ce, ce.docs.create(), createDeskBlobStore(), undefined, { examples: true });
 });
 
 afterEach(() => {
@@ -91,10 +91,10 @@ describe("the bar's acts (DK-11)", () => {
   });
 
   it("OPEN picks the one object up — a refusal (a type that does not open) changes nothing", () => {
-    const notebook = first("desk.notebook");
-    ce.ops.setSelection([notebook]);
+    const whiteboard = first("desk.board");
+    ce.ops.setSelection([whiteboard]);
     runBarAct(ce, "open", false);
-    expect(ce.world.hasTag(notebook, Held)).toBe(true);
+    expect(ce.world.hasTag(whiteboard, Held)).toBe(true);
     ce.ops.putDown();
     const note = first("desk.note");
     ce.ops.setSelection([note]);

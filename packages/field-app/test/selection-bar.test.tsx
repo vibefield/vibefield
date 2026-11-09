@@ -135,7 +135,7 @@ beforeEach(async () => {
   keymapHeard = [];
   window.addEventListener("keydown", keymap);
   ce = createFieldEngine(buildRegistry());
-  await seedField(ce, ce.docs.create(), createDeskBlobStore());
+  await seedField(ce, ce.docs.create(), createDeskBlobStore(), undefined, { examples: true });
   note = deskObjects(ce, "desk.note")[0]?.entity as Entity;
   pad = deskObjects(ce, "vibefield.comment-pad")[0]?.entity as Entity;
   ce.ops.setSelection([note]);
@@ -1020,9 +1020,9 @@ describe("Copy — four doors deal ONE card (HN-D3)", () => {
   it("IN HAND: the pill in hand copies the object as DRAWN — it stays in hand, the tools stay under the head", async () => {
     vi.useFakeTimers();
     mount();
-    const notebook = deskObjects(ce, "desk.notebook")[0]?.entity as Entity;
-    ce.ops.setSelection([notebook]);
-    ce.ops.open(notebook);
+    const whiteboard = deskObjects(ce, "desk.board")[0]?.entity as Entity;
+    ce.ops.setSelection([whiteboard]);
+    ce.ops.open(whiteboard);
     ce.stack.heldPose.current = {
       frame: () => ({ cx: 590, cy: 382, hx: 120, hy: 160, s: 2, settled: true }),
     } as never;
@@ -1041,7 +1041,7 @@ describe("Copy — four doors deal ONE card (HN-D3)", () => {
       fromBox: { left: 470, top: 222, width: 240, height: 320 },
       marks: false,
     });
-    expect(lastCopy()?.objects.map((o) => o.type)).toEqual(["desk.notebook"]);
+    expect(lastCopy()?.objects.map((o) => o.type)).toEqual(["desk.board"]);
     // the object stays in hand; the tools are not stepped aside
     expect(putDown).not.toHaveBeenCalled();
     expect(bar().getAttribute("data-role")).toBe("hand");

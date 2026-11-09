@@ -191,7 +191,8 @@ afterEach(async () => {
 async function mountStage(refused: boolean = false, kinds?: unknown, seeded = false) {
   const ce = createFieldEngine(buildRegistry());
   // DK-11: a board laid with the first-run seed (the six and the pad), for the rows that read its census
-  if (seeded) await seedField(ce, ce.docs.create(), createDeskBlobStore());
+  if (seeded)
+    await seedField(ce, ce.docs.create(), createDeskBlobStore(), undefined, { examples: true });
   await act(async () =>
     root.render(
       createElement(CanvasStage, {

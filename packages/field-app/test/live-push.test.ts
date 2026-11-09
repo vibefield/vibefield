@@ -229,7 +229,7 @@ async function twoTabs() {
   const a = createFieldEngine(buildRegistry());
   cleanup.push(() => a.dispose());
   const sessionA = a.docs.create();
-  await seedField(a, sessionA);
+  await seedField(a, sessionA, undefined, undefined, { examples: true });
   a.world.sync();
   manager.contentApplied(pending.generation);
   await until(() => manager.getState().phase === "ready", "the manager to be ready");
@@ -251,7 +251,10 @@ async function twoTabs() {
   for (const update of stored.updates) sessionB.applyRemote(update);
   b.world.sync();
   b.step(16); // the facade judges a board an applied record touched at its next publish
-  const seeded = Object.fromEntries(SEED_TYPES.map((type) => [type, 1]));
+  const seeded = {
+    ...Object.fromEntries(SEED_TYPES.map((type) => [type, 1])),
+    [COMMENT_PAD_TYPE]: 1,
+  };
   expect(deskCensus(a)).toEqual(seeded);
   expect(deskCensus(b)).toEqual(seeded);
   const pull = async (): Promise<void> => {
@@ -373,7 +376,7 @@ const padText = (ce: CanvasEngine, pad: Entity): string | undefined =>
 describe("the comment pad converges across two tabs through fieldd (DK-8, DK-D14)", () => {
   it("a line written on the pad in A appears in B's pad, a line written in B lands in A, and the two hold one board", async () => {
     const { manager, a, b, sessionA, sessionB, seeded, pull, send } = await twoTabs();
-    // the product's first board carries VibeField's own kind beside ICE's six — one pad, two tabs
+    // the examples' board carries VibeField's own kind beside ICE's — one pad, two tabs
     expect(seeded[COMMENT_PAD_TYPE]).toBe(1);
     const padA = only(a, COMMENT_PAD_TYPE);
     const padB = only(b, COMMENT_PAD_TYPE);

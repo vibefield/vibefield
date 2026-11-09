@@ -721,16 +721,20 @@ export async function pegboardRows(d: BoardRowsDriver): Promise<string[]> {
     `document.querySelector(".vf-line")?.getAttribute("data-view") === "canvas"`,
   );
   await sleep(600);
-  // in hand: the notebook picked up by the desk's own ⏎
-  const notebookAt = await js<{ x: number; y: number } | null>(POINT_IN("desk.notebook"));
+  // in hand: the whiteboard picked up by the desk's own ⏎
+  const whiteboardAt = await js<{ x: number; y: number } | null>(POINT_IN("desk.board"));
   let hand: Seen | null = null;
-  if (notebookAt === null)
-    problems.push("REFUSED: the notebook was not picked where the desk receives a press");
+  if (whiteboardAt === null)
+    problems.push("REFUSED: the whiteboard was not picked where the desk receives a press");
   else {
-    await press({ x: Math.round(notebookAt.x), y: Math.round(notebookAt.y) });
-    await until("the notebook selected", 5_000, "(globalThis.__vfDesk.anchor()?.count ?? 0) === 1");
+    await press({ x: Math.round(whiteboardAt.x), y: Math.round(whiteboardAt.y) });
+    await until(
+      "the whiteboard selected",
+      5_000,
+      "(globalThis.__vfDesk.anchor()?.count ?? 0) === 1",
+    );
     await key("Return");
-    await until("the notebook in hand", 10_000, "globalThis.__vfDesk.held() !== null");
+    await until("the whiteboard in hand", 10_000, "globalThis.__vfDesk.held() !== null");
     await until(
       "the create faint",
       5_000,

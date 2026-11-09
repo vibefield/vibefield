@@ -1,8 +1,8 @@
 // THE COMMENT PAD IN THE HOST (DK-8, DK-D14) — VibeField's own kind, a PLUGIN's (`plugins/comment-pad`, through
 // `@vibefield/plugin-sdk/desk` alone), compiled by the host exactly as ICE compiles a built-in: the host reads the
 // export its manifest row names (`objectBindingsFrom`), compiles the row's durable half with it through
-// `defineObject` (`buildRegistry`), and the desk's catalog finds the kind by its OBJECT, places it, hangs it under
-// its own category, and carries its DECLARED halves — its driver and its sheet (the text part the desk lends its
+// `defineObject` (`buildRegistry`), and the desk's catalog finds the kind by its OBJECT, places it, hangs it on no
+// hook, and carries its DECLARED halves — its driver and its sheet (the text part the desk lends its
 // one editor). Then the whole road a line of text takes, on a REAL engine and document: the sheet the compiled
 // object declares, its driver the one it declares, a session drafted and committed as ONE transaction through the
 // document's writer's gate — and one undo step takes the line back.
@@ -21,7 +21,7 @@ import { describe, expect, it } from "vitest";
 import { buildDevRegistry, buildRegistry, createFieldEngine } from "../src/field-engine";
 import { objectBindingsFrom } from "../src/plugin-host/build-widget";
 
-const { COMMENT_PAD_CATEGORY, COMMENT_PAD_PART, COMMENT_PAD_TYPE, commentPadManifest } = pad;
+const { COMMENT_PAD_PART, COMMENT_PAD_TYPE, commentPadManifest } = pad;
 const rows = commentPadManifest.contributes?.objects ?? [];
 
 /** The registry a dev run builds with the pad's plugin ON: the host's own reading of its module. */
@@ -48,13 +48,9 @@ describe("the host compiles VibeField's comment pad as ICE compiles a built-in (
     expect(widget?.defaultSize).toEqual({ w: 220, h: 280 });
   });
 
-  it("hangs it under its OWN category, lays it on the desk and lets it into a mini mat by what it provides", () => {
+  it("hangs it on no hook (Comment is its door), lays it on the desk and lets it into a mini mat by what it provides", () => {
     const widget = withPad().allWidgets().get(COMMENT_PAD_TYPE);
-    expect(widget?.tray).toMatchObject({
-      label: "Comment pad",
-      category: COMMENT_PAD_CATEGORY,
-      hang: { w: 110, h: 140, accessory: "hook" },
-    });
+    expect(widget?.tray).toBeUndefined();
     expect(widget?.provides).toEqual([COMMENT_PAD_TYPE, DESK_OBJECT, CONTAINABLE]);
     const ce = createFieldEngine(withPad());
     expect(ce.catalog.placementFor(ce.catalog.rootCanvas.id).has(COMMENT_PAD_TYPE)).toBe(true);
