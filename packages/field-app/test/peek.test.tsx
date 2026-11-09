@@ -1190,7 +1190,12 @@ function godviewDoor(patch: Partial<LiveFilters> = {}): {
         filters = { ...filters, profile: id };
         act(() => republish());
       },
-      setPlan: () => undefined,
+      setPlan: (key) => {
+        const { plan: _gone, ...others } = filters;
+        filters =
+          key === null ? others : { ...others, plan: { key, label: key, provider: "claude" } };
+        act(() => republish());
+      },
     };
     publishGodviewFindDoor(current);
   };
@@ -1519,6 +1524,56 @@ describe("Search — the Peek, in Godview: Live now (P2)", () => {
     expect(tokens()).toEqual([]);
     // with no token left, ⌫ is the words' again
     expect(press(input, { key: "Backspace" }).defaultPrevented).toBe(false);
+  });
+
+  it("a plan's token stands after the profile's in the field; its × and ⌫ take the plan alone, never Everything's agent (UM-5a)", async () => {
+    const plan = { key: "work/plan:anthropic", label: "Claude Max", provider: "claude" };
+    const godview = godviewDoor({ profile: "work", plan });
+    mount(fieldd());
+    to("godview");
+    const input = await openPeek();
+    expect(tokens()).toEqual(["Work", "Claude Max"]);
+    act(() => tokenClear("Claude Max")?.click());
+    expect(godview.door().filters.plan).toBeUndefined();
+    expect(godview.door().filters.profile).toBe("work");
+    expect(tokens()).toEqual(["Work"]);
+
+    godview.refilter({ plan });
+    expect(tokens()).toEqual(["Work", "Claude Max"]);
+    act(() => input.setSelectionRange(0, 0));
+    expect(press(input, { key: "Backspace" }).defaultPrevented).toBe(true);
+    expect(godview.door().filters.plan).toBeUndefined();
+    expect(godview.door().filters.profile).toBe("work");
+  });
+
+  it("the button wears a plan alone, for one profile too, after the desktop and profile with both; its × clears the plan (UM-5a)", async () => {
+    const plan = { key: "native/plan:anthropic", label: "Claude Max", provider: "claude" };
+    const godview = godviewDoor({ plan });
+    mount(fieldd());
+    to("godview");
+    const parts = (): string[] =>
+      [...(host?.querySelectorAll(".vf-peek-token-part") ?? [])].map(
+        (part) => part.textContent ?? "",
+      );
+    await until(() => host?.querySelector(".vf-peek-token-part"), "the plan on the button");
+    expect(parts()).toEqual(["Claude Max"]);
+    expect(host?.querySelector(".vf-peek-token .vf-peek-agent-mark")).not.toBeNull();
+    expect(host?.querySelector(".vf-peek-token-sep")).toBeNull();
+    expect(button()?.getAttribute("aria-label")).toBe("Search, filtered to Claude Max");
+    expect(host?.querySelector(".vf-peek-find")?.getAttribute("data-scoped")).toBe("true");
+
+    godview.refilter({ desk: "studio", profile: "work" });
+    expect(parts()).toEqual(["studio", "Work", "Claude Max"]);
+    expect(host?.querySelectorAll(".vf-peek-token-sep")).toHaveLength(2);
+    expect(button()?.getAttribute("aria-label")).toBe(
+      "Search, filtered to studio · Work · Claude Max",
+    );
+
+    act(() => host?.querySelector<HTMLButtonElement>(".vf-peek-token-clear")?.click());
+    expect(godview.door().filters.plan).toBeUndefined();
+    expect(godview.door().filters.desk).toBeNull();
+    expect(godview.door().filters.profile).toBeNull();
+    expect(host?.querySelector(".vf-peek-token")).toBeNull();
   });
 
   it("Everything looks through every profile (UM-D28): it draws no profile token, and while Godview's is on its foot says so and where it comes back", async () => {

@@ -2538,7 +2538,10 @@ const ONE_PROFILE_SET = tabSet(
   [tabPersona("n-claude", "claude"), tabPersona("n-codex", "codex")],
   {
     default: true,
-    plans: [planOf("anthropic", "anthropic", ["n-claude"]), planOf("openai", "openai", ["n-codex"])],
+    plans: [
+      planOf("anthropic", "anthropic", ["n-claude"]),
+      planOf("openai", "openai", ["n-codex"]),
+    ],
   },
 );
 const SHARED_WORK = tabSet(
@@ -2588,7 +2591,9 @@ describe("the plan filter on the stage (UM-5a, UM-D14)", () => {
       device: "studio",
       name: "Studio",
       platform: "darwin",
-      rows: [managedSummary({ runtimeRunId: "run-peer", kind: "claude", label: "Claude", cwd: "/x" })],
+      rows: [
+        managedSummary({ runtimeRunId: "run-peer", kind: "claude", label: "Claude", cwd: "/x" }),
+      ],
     });
     const host = await mountMonitor("list", door);
     const everything = latest().shownAgents;
@@ -2608,10 +2613,7 @@ describe("the plan filter on the stage (UM-5a, UM-D14)", () => {
   });
 
   it("keeps a twin's rows: a plan two profiles share is one plan", async () => {
-    const host = await mountMonitor(
-      "list",
-      tabDoor([SHARED_NATIVE, SHARED_WORK], SHARED_ROWS),
-    );
+    const host = await mountMonitor("list", tabDoor([SHARED_NATIVE, SHARED_WORK], SHARED_ROWS));
     await choosePlan("work/plan:anthropic");
     const kept = listRows(host)
       .filter((row) => !row.receded)
@@ -2622,7 +2624,10 @@ describe("the plan filter on the stage (UM-5a, UM-D14)", () => {
   });
 
   it("says so over the stage for a plan with no sessions", async () => {
-    const door = tabDoor([ONE_PROFILE_SET], [planRow("run-claude", "claude", "native", "vibe-field")]);
+    const door = tabDoor(
+      [ONE_PROFILE_SET],
+      [planRow("run-claude", "claude", "native", "vibe-field")],
+    );
     const host = await mountMonitor("list", door);
     await choosePlan("native/plan:openai");
     const label = getGodviewFindDoor()?.filters.plan?.label;
@@ -2652,6 +2657,102 @@ describe("the plan filter on the stage (UM-5a, UM-D14)", () => {
     await choosePlan("work/plan:anthropic");
     expect(chosenPlan()).toBe("work/plan:anthropic");
     expect(chosenTab()).toBe("native");
+  });
+
+  /** A usage door whose rows read every persona's plan: the column's rows and arcs exist only over a reading. */
+  const readingUsage = (personas: readonly AgentPersona[]): MonitorUsagePort => {
+    const batch = {
+      generatedAt: CHECKED_AT,
+      entries: personas.map((persona) => ({
+        provider: persona.provider,
+        label: persona.provider,
+        profileId: persona.profileId,
+        state: "available" as const,
+        fetchedAt: CHECKED_AT,
+        metrics: [
+          {
+            id: "five-hour",
+            label: "5H",
+            kind: "window" as const,
+            usedPercent: 40,
+            durationMinutes: 300,
+            resetsAt: "2099-01-01T00:00:00.000Z",
+          },
+        ],
+      })),
+    };
+    return usagePortOver({
+      request: async () => batch,
+      subscribe: async () => ({ snapshot: batch, unsubscribe: () => undefined }),
+    });
+  };
+
+  it("a plan's row and its arc in the column filter the stage; the row draws pressed and the pinned popover stays open (UM-5a)", async () => {
+    const door = tabDoor([ONE_PROFILE_SET], ONE_ROWS);
+    door.usage = readingUsage(ONE_PROFILE_SET.personas);
+    const host = await mountMonitor("list", door);
+    await settle();
+    await act(async () =>
+      host.querySelector<HTMLButtonElement>('[data-profile="native"] .vf-profiles-circle')?.click(),
+    );
+    const popRow = (key: string): HTMLElement | null =>
+      host.querySelector<HTMLElement>(`.vf-profiles-pop-row[data-plan="${key}"]`);
+    const choose = (key: string): HTMLButtonElement | null =>
+      popRow(key)?.querySelector<HTMLButtonElement>("button.vf-profiles-pop-row-choose") ?? null;
+    expect(choose("plan:anthropic")?.getAttribute("aria-pressed")).toBe("false");
+    await act(async () => {
+      // a press is heard by the column's outside-press guard before its click
+      choose("plan:anthropic")?.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+      choose("plan:anthropic")?.click();
+    });
+    expect(chosenPlan()).toBe("native/plan:anthropic");
+    expect(popRow("plan:anthropic")?.hasAttribute("data-pressed")).toBe(true);
+    expect(
+      listRows(host)
+        .filter((row) => !row.receded)
+        .map((row) => row.project),
+    ).toEqual(["vibe-field"]);
+    expect(host.querySelector(".vf-profiles-pop")).not.toBeNull();
+
+    // the open circle's arc moves the filter to its plan, and the popover still stands
+    const arc = host.querySelector('path[data-hit="plan:openai"]');
+    await act(async () => {
+      arc?.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+      arc?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(chosenPlan()).toBe("native/plan:openai");
+    expect(host.querySelector(".vf-profiles-pop")).not.toBeNull();
+
+    // a click on the pressed row shows every session again
+    await act(async () => choose("plan:openai")?.click());
+    expect(chosenPlan()).toBeUndefined();
+    expect(listRows(host).some((row) => row.receded)).toBe(false);
+  });
+
+  it("a circle's click in the column is the lens, and clears a plan that is not in it (UM-5a)", async () => {
+    const host = await mountMonitor("list", tabDoor([SHARED_NATIVE, SHARED_WORK], SHARED_ROWS));
+    await choosePlan("native/plan:openai");
+    expect(chosenPlan()).toBe("native/plan:openai");
+    await act(async () =>
+      host.querySelector<HTMLButtonElement>('[data-profile="work"] .vf-profiles-circle')?.click(),
+    );
+    await settle();
+    expect(chosenTab()).toBe("work");
+    expect(chosenPlan()).toBeUndefined();
+  });
+
+  it("with a lens and a plan both standing and no session, the note and its ring name the plan (UM-5a)", async () => {
+    const host = await mountMonitor("list", tabDoor([SHARED_NATIVE, SHARED_WORK], SHARED_ROWS));
+    await chooseProfile("native");
+    await choosePlan("native/plan:openai");
+    expect(chosenTab()).toBe("native");
+    expect(chosenPlan()).toBe("native/plan:openai");
+    const label = getGodviewFindDoor()?.filters.plan?.label;
+    expect(typeof label).toBe("string");
+    const empty = host.querySelector(".vf-monitor-profile-empty");
+    expect(empty?.textContent).toContain(`No sessions on ${label}`);
+    expect(empty?.textContent).not.toContain("No sessions on This Mac");
+    expect(empty?.querySelector("[data-profile-glyph]")).toBeNull();
   });
 
   it("names a kept key the feed no longer has nowhere: no token and no filter", async () => {
