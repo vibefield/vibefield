@@ -152,6 +152,17 @@
   pointer-events: auto;
 }
 
+/* §8 "The reach": a bridge from the item's edge (59) to the card (81), the same 22 both ways, so a level crossing never
+   leaves the hover zone */
+.vf-profiles-stand::before {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 100%;
+  width: 22px;
+  content: "";
+}
+
 .vf-profiles-pop,
 .vf-profiles-addcard {
   box-sizing: border-box;

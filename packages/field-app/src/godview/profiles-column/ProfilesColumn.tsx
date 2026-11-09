@@ -17,6 +17,7 @@ import { setMonitorHoldsKeys } from "../monitor/launcher-keys";
 import type { MonitorUsagePort } from "../monitor/remote-door";
 import { readWords } from "./ProfilePopoverView";
 import { ADD_TARGET, type ColumnCircle, ProfilesColumnView } from "./ProfilesColumnView";
+import { useColumnPointer } from "./useColumnPointer";
 
 // UM-3 (DESIGN.md §8 "Godview's profiles column") — THE COLUMN'S CONTROLLER, the stage's own chrome. It reads what
 // the stage already holds — the profile filter's sets (`agents.profileSets.subscribe`), the usage rows through the
@@ -141,6 +142,9 @@ function ProfilesColumnController({
   const pointedProfile = pointed !== null && pointed !== ADD_TARGET ? pointed : null;
   const open =
     circles.find((circle) => circle.set.id === (pointedProfile ?? pinned))?.set.id ?? null;
+  // §8 "The reach": the pointer's own hold, its grace and its dwell; the card shows as it always did from `pointed`
+  const showing = pointed === ADD_TARGET ? ADD_TARGET : open;
+  const { point, clear } = useColumnPointer(showing, setPointed);
   // a plan is pointed at inside one popover: another popover starts with none
   useEffect(() => {
     if (open === null) setFocus(null);
@@ -179,8 +183,8 @@ function ProfilesColumnController({
   useEffect(() => {
     if (!covered) return;
     setPinned(null);
-    setPointed(null);
-  }, [covered]);
+    clear();
+  }, [covered, clear]);
   const openCircle = circles.find((circle) => circle.set.id === open);
   return (
     <ProfilesColumnView
@@ -201,7 +205,7 @@ function ProfilesColumnController({
           <ColumnAddPresses.Provider value={addPresses}>{moment}</ColumnAddPresses.Provider>
         )
       }
-      onPoint={setPointed}
+      onPoint={point}
       onCircle={(setId) => {
         if (!lens) {
           setPinned((held) => (held === setId ? null : setId));
@@ -214,7 +218,7 @@ function ProfilesColumnController({
       }}
       onClose={() => {
         setPinned(null);
-        setPointed(null);
+        clear();
       }}
       onFocusPlan={setFocus}
       onAdd={() => {
