@@ -362,10 +362,9 @@ interface CanvasFacts {
  * `stagedPlugins` is the MECHANISM fact: the dev-bundled fallback can satisfy
  * a registry census on its own, so without this number a renderer that quietly
  * fell back would look exactly like one that staged correctly — the field must
- * be filled the real way. Since PT-1 the staged renderer modules are FIVE: the
- * repo's three (`plugins/browser` — its Artifacts panel — VibeField's own comment
- * pad, `plugins/comment-pad`, and the browser pane, `plugins/browser-pane`, in a dev run's `plugins/` root (no
- * packaged app carries the pane since 2026-11-09),
+ * be filled the real way. Since FL-2 the staged renderer modules are FOUR: the
+ * repo's two (VibeField's own comment pad, `plugins/comment-pad`, and the browser pane,
+ * `plugins/browser-pane`, in a dev run's `plugins/` root; no packaged app carries the pane since 2026-11-09),
  * built by build:all through field-app's dependencies) and two dev-linked examples — the behavior-conformance carrier and
  * the desk clock (DK-6: `examples/plugins/desk-clock`), built by build:all through
  * field-app's dev dependencies (the carrier since DK-8 — before that it staged
@@ -397,13 +396,15 @@ const CANVAS_CENSUS = {
   // (ICE's note and mini mat, the comment pad; widgetlab's demos go): the browser's Artifacts panel, the comment
   // pad, the behavior-conformance carrier and the example desk clock stay. PT-1: 4 → 5 — the browser pane
   // (`plugins/browser-pane`, objects-only, in a dev run's root, built through field-app's dependencies as the pad is).
-  minStagedPlugins: 5,
+  // FL-2: 5 → 4 — the browser's Artifacts panel is field-app's own (2026-11-09), and its plugin is gone.
+  minStagedPlugins: 4,
   // THE CSS CENSUS RETIRED (DK-8; the plan's retire table — "the CSS census in `smoke:canvas` and
   // `smoke:plugin-restart`", DK-5 kept it for here): it counted the scoped stylesheets of the plugins that
   // drew DOM WIDGETS (note, field-tools, widgetlab — and the browser's), 4 → 3 → 2 as the first two retired;
   // with widgetlab the last DOM widget is gone, and an object kind has no CSS (DK-6). The one plugin
   // stylesheet left is the browser's Artifacts panel — a HUD surface, whose CSS scope stays (the retire
-  // table's `plugin-style.ts` row) — and it is no longer counted here.
+  // table's `plugin-style.ts` row) — and it is no longer counted here. (FL-2, 2026-11-09: that panel moved into field-app, so no first-party
+  // plugin ships a stylesheet now; the scope stays for the ones that will.)
 } as const;
 
 /** Every way the line disagrees with the census, named — a smoke that fails
@@ -10175,33 +10176,26 @@ export async function runSmokeGodview(opts: {
     }
     verdict["headKeys"] = headKeys;
 
-    // 11k. THE HUB IN THE HEAD, UNDER GODVIEW'S COVER (HN-8, PL-D1…PL-D3;
+    // 11k. LIVE IN THE HEAD, UNDER GODVIEW'S COVER (HN-8, PL-D1…PL-D3, FL-2;
     //      DESIGN.md §8 "The head", the package circle). Under a cover the pill
     //      is the desk's and hides with it, and Apps' door is the package
     //      circle at the head's left (the terminals' title bar while they are
     //      maximized). Pressed the way a pointer presses it, it grows the pill's
     //      sheet on its Apps shelf alone: the circle steps aside, on and
     //      saying Close, and the pill's own sheet stays shut. Its first group,
-    //      Live, is never blank — it hosts the Hub's own `hud.side-panel`
-    //      contribution (the Browser plugin's Hub, named "Live", once, in this
-    //      sheet only), or says in one of its four waits why none is bound: off,
-    //      can't run, opening, or not starting, the last after the head's own
-    //      10 s. (MA-4c, MA-D13 (a): the screen's words are Apps; the inside
-    //      names — `artifacts`, `data-shelf` — stay.) The rung waits for
-    //      the shelf to settle past "Opening…", says which it found, and folds
+    //      Live, is field-app's own since FL-2: it stands, named "Live", once, in this
+    //      sheet only, past its reading and never "unavailable". (MA-4c, MA-D13 (a):
+    //      the screen's words are Apps; the inside names — `artifacts`, `data-shelf` —
+    //      stay.) The rung waits for Live to finish reading, says what it found, and folds
     //      the sheet back with the sheet's own package, where the circle stood.
     //      Added 2026-10-31: HN B3's records claimed this witness of the row and
     //      no rung gave it (LANDED "HN B3", corrected at run 38b). Before 11h,
     //      which must stay last.
     const hubInHead: Record<string, string> = {};
-    /** Live's four waits as a person reads them (`HeadView`'s words; DESIGN.md §8
-     * "Artifacts", §9 "Apps"). */
-    const HUB_WAITS = [
-      "Live apps are off",
-      "Live apps can't run",
-      "Opening live apps…",
-      "Live apps aren't starting",
-    ] as const;
+    /** Live's two passing words the rung must see it leave or never see (`LiveApps`'s;
+     * DESIGN.md §9 "Apps"). */
+    const LIVE_READING = "Loading live apps";
+    const LIVE_UNAVAILABLE = "Live apps unavailable";
     type HubBox = { x: number; y: number; w: number; h: number };
     type HubFacts = {
       view: string;
@@ -10214,8 +10208,8 @@ export async function runSmokeGodview(opts: {
       hub: boolean;
       /** Hubs (Live) in the whole page: one while bound, never one in each sheet. */
       hubs: number;
-      /** The words of the wait the shelf says, or null. */
-      wait: string | null;
+      /** The heading of Live's quiet state, or null while it shows its tiles. */
+      quiet: string | null;
     };
     /** The covered sheet, its circle and its shelf as the page shows them now. Under a cover
      * `.vf-head-sheet` is the circle's sheet alone: the pill is `.vf-head-place`. */
@@ -10233,8 +10227,10 @@ export async function runSmokeGodview(opts: {
       const circle = document.querySelector(".vf-package-circle");
       const sheet = document.querySelector(".vf-head-sheet");
       const shelf = sheet === null ? null : sheet.querySelector('[data-shelf="artifacts"]');
-      const face =
-        shelf === null ? null : shelf.querySelector(".vf-head-waits-face:not([data-leaving])");
+      const quiet =
+        shelf === null
+          ? null
+          : shelf.querySelector('[aria-label="Live"] .vf-artifact-quiet .vf-ui-empty-state__title');
       const hub =
         shelf === null ? null : shelf.querySelector('.vf-head-hub [aria-label="Live"]');
       return {
@@ -10254,13 +10250,11 @@ export async function runSmokeGodview(opts: {
         shown: shelf !== null && shelf.hasAttribute("data-shown"),
         hub: hub !== null,
         hubs: document.querySelectorAll('[aria-label="Live"]').length,
-        wait: face === null ? null : (face.textContent ?? "").trim(),
+        quiet: quiet === null ? null : (quiet.textContent ?? "").trim(),
       };
     })()`;
     const hubFacts = async (): Promise<HubFacts> =>
       (await win.webContents.executeJavaScript(HUB_FACTS)) as HubFacts;
-    const waitSaid = (facts: HubFacts): (typeof HUB_WAITS)[number] | undefined =>
-      HUB_WAITS.find((words) => facts.wait?.startsWith(words) === true);
     /** A press the way a pointer presses it, at the middle of what `selector` names: moved
      * there, down, up — a click with a count, so the circle takes it as the pointer's. */
     const pressAt = async (selector: string): Promise<{ x: number; y: number }> => {
@@ -10332,38 +10326,25 @@ export async function runSmokeGodview(opts: {
       );
     }
     const sheetBox = grown.sheet.box;
-    // The shelf settles: the Hub binds, or a wait stands. "Opening…" is a passage — the
-    // head turns it to "not starting" after its own 10 s (`HUB_START_BOUND_MS`) — so it is
-    // waited past.
+    // The shelf settles: Live finishes reading its catalog. "Loading live apps" is a passage, so
+    // it is waited past; "Live apps unavailable" is a failure, never a state this rung accepts.
     const settleBy = Date.now() + 15_000;
     let shelf = grown;
-    let said = waitSaid(shelf);
-    while (
-      !shelf.hub &&
-      (said === undefined || said === "Opening live apps…") &&
-      Date.now() < settleBy
-    ) {
+    while ((!shelf.hub || shelf.quiet === LIVE_READING) && Date.now() < settleBy) {
       await sleep(250);
       shelf = await hubFacts();
-      said = waitSaid(shelf);
     }
-    if (shelf.hub) {
-      if (shelf.hubs !== 1) {
-        throw new Error(`${shelf.hubs} Hubs (Live) in the page, not one: ${JSON.stringify(shelf)}`);
-      }
-      hubInHead["the shelf"] = 'the Hub bound: its "Live" in the shelf, once in the page';
-    } else if (said === undefined) {
-      throw new Error(
-        `the Apps shelf said nothing, neither the Hub nor a wait: ${JSON.stringify(shelf)}`,
-      );
-    } else if (said === "Opening live apps…") {
-      throw new Error(
-        `the shelf still said "${said}" after 15 s, past the head's own 10 s: ` +
-          JSON.stringify(shelf),
-      );
-    } else {
-      hubInHead["the shelf"] = `no Hub bound, and the shelf said why: "${said}"`;
+    if (!shelf.hub) throw new Error(`the Apps shelf has no Live: ${JSON.stringify(shelf)}`);
+    if (shelf.hubs !== 1) {
+      throw new Error(`${shelf.hubs} Lives in the page, not one: ${JSON.stringify(shelf)}`);
     }
+    if (shelf.quiet === LIVE_READING || shelf.quiet === LIVE_UNAVAILABLE) {
+      throw new Error(`Live did not read its catalog: ${JSON.stringify(shelf)}`);
+    }
+    hubInHead["the shelf"] =
+      shelf.quiet === null
+        ? "Live's tiles, once in the page"
+        : `Live says "${shelf.quiet}", once in the page`;
     // The sheet's own package ("Close  Esc"), where the circle stood, folds it into the circle.
     const packAt = await pressAt(".vf-head-sheet .vf-head-pack");
     await untilRenderer(

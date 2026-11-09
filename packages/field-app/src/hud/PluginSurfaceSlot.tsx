@@ -21,8 +21,8 @@ import "./PluginSurfaceSlot.css";
 // The surface's own boundary (§11.4 idiom — the widget faces' boundary it was
 // mirrored from retired with them at DK-8): a thrown surface render is
 // contained to that surface.
-class SurfaceErrorBoundary extends Component<
-  { surfaceId: string; children: ReactNode },
+export class SurfaceErrorBoundary extends Component<
+  { surfaceId: string; title?: string; children: ReactNode },
   { error: string | null }
 > {
   override state: { error: string | null } = { error: null };
@@ -32,7 +32,7 @@ class SurfaceErrorBoundary extends Component<
   override componentDidCatch(error: unknown): void {
     getRendererLogger()
       .child({ component: "plugin.host" })
-      .error("renderer.surfaces.render_failed", "A plugin surface threw during render", error, {
+      .error("renderer.surfaces.render_failed", "A surface threw during render", error, {
         surfaceId: this.props.surfaceId,
       });
   }
@@ -42,7 +42,7 @@ class SurfaceErrorBoundary extends Component<
     return (
       <UnavailableState
         compact
-        title="Surface unavailable"
+        title={this.props.title ?? "Surface unavailable"}
         description={`Renderer failed: ${this.state.error}`}
       />
     );

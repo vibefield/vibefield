@@ -1,11 +1,9 @@
 import type { ThemePreference } from "@vibefield/contracts";
 import { SegmentedControl as UiSegmentedControl, UnavailableState } from "@vibefield/design-kit";
-import {
-  ArtifactPanelPreview,
-  type ArtifactPanelPreviewState,
-} from "@vibefield/plugin-browser/design-system";
 import { type ReactElement, useState } from "react";
 import {
+  LiveAppsPreview,
+  type LiveAppsPreviewState,
   MADE_APPS_PREVIEW_STATES,
   MadeAppsPreview,
   type MadeAppsPreviewState,
@@ -217,7 +215,7 @@ export function SurfacesSection(): ReactElement {
         </Specimen>
         <Specimen
           title="Live — the Hub at the Apps shelf's width"
-          source="plugins/browser/src/ArtifactPanel.tsx · DESIGN.md §8"
+          source="frame/apps/LiveApps.tsx · DESIGN.md §8, §9"
           darkStage
         >
           <ArtifactsSpecimen />
@@ -515,10 +513,9 @@ function ProfilesSettingsSpecimen(): ReactElement {
 
 /** The Artifact Hub in every production state at the width the pill's sheet
  * gives its Artifacts shelf (HN-8, PL-D3) — the stage is a container 504 wide,
- * the shelf inside the sheet's 544, where the plugin answers with its tile
- * form. The head's plates show the shelf itself, in the sheet. */
+ * the shelf inside the sheet's 544, where it answers with its tile form. The head's plates show the shelf itself, in the sheet. */
 function ArtifactsSpecimen(): ReactElement {
-  const [state, setState] = useState<ArtifactPanelPreviewState>("empty");
+  const [state, setState] = useState<LiveAppsPreviewState>("empty");
   const options = ["empty", "populated", "loading", "unavailable"] as const;
   return (
     <div className="vf-ds-shelf-plate">
@@ -532,7 +529,7 @@ function ArtifactsSpecimen(): ReactElement {
         />
       </div>
       <div className="vf-ds-shelf-stage">
-        <ArtifactPanelPreview state={state} />
+        <LiveAppsPreview state={state} />
       </div>
     </div>
   );

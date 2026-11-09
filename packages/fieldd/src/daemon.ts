@@ -8566,7 +8566,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     });
     api.register("artifact.list", () => ({ artifacts: artifacts.artifacts() }));
     // SP-1 — whole lists (`ArtifactView[]`), the newest standing, at the
-    // stream floor: the wire the kit and the browser plugin read is unchanged.
+    // stream floor: the wire the kit and Live read is unchanged.
     api.registerSubscription("artifact.subscribe", (_ctx, _params, emit) =>
       wholeValueDoor(
         {

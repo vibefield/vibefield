@@ -9,10 +9,9 @@ import { describe, expect, it } from "vitest";
 import { buildDevRegistry, loadDevBundledPlugins } from "../src/field-engine";
 
 describe("the dev plugin set is the product's (DK-8)", () => {
-  it("is the browser, the comment pad and the browser pane — no type of the note, field-tools or widgetlab registered", async () => {
+  it("is the comment pad and the browser pane — no type of the note, field-tools or widgetlab registered", async () => {
     const set = await loadDevBundledPlugins();
     expect(set.map((p) => p.manifest.id).sort()).toEqual([
-      "vibefield.browser",
       "vibefield.browser-pane",
       "vibefield.comment-pad",
     ]);
@@ -24,10 +23,10 @@ describe("the dev plugin set is the product's (DK-8)", () => {
     expect(types).toContain("vibefield.browser-pane");
   });
 
-  it("its HUD surfaces: the browser's Artifacts side panel stays; widgetlab's status panel went with its plugin", async () => {
+  it("its HUD surfaces: none, since the Artifacts panel moved into field-app (FL-2); widgetlab's status panel went with its plugin", async () => {
     const surfaces = (await loadDevBundledPlugins()).flatMap((p) =>
       (p.manifest.contributes?.surfaces ?? []).map((s) => [s.id, s.slot]),
     );
-    expect(surfaces).toEqual([["vibefield.browser.artifacts", "hud.side-panel"]]);
+    expect(surfaces).toEqual([]);
   });
 });

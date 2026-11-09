@@ -1,9 +1,8 @@
 import { ZOOM_MAX, ZOOM_MIN } from "@vibecook/ice/desk";
 import type { DocRegistryEntry } from "@vibefield/contracts";
-import { ArtifactPanelPreview } from "@vibefield/plugin-browser/design-system";
 import { type ReactElement, useState } from "react";
 import type { DocManagerApi, DocManagerState } from "../doc-manager";
-import { MadeAppsPreview } from "../frame/apps/design-system";
+import { LiveAppsPreview, MadeAppsPreview } from "../frame/apps/design-system";
 import type { FrameSurface, SheetShelf } from "../frame/frame-surface";
 import { Head, useShownShelf } from "../frame/Head";
 import { type HeadArtifacts, type HeadDocTile, HeadView } from "../frame/HeadView";
@@ -20,10 +19,9 @@ import { CommandPalettePreview } from "./CommandPalettePreview";
 // fixture doors. What it replaces is only what a host supplies: the document
 // manager (the fields), the head's canvas door (the path, the zoom) and the
 // frame's one owner of the open surface (a local value). The markup and the
-// CSS are the product's. HN-8: the Artifacts shelf's plates hold the Hub's
-// own fixture adapter (`ArtifactPanelPreview`, the plugin's design-system
-// door), where the product hosts its contributed surface; the live head has
-// no plugin host, so its shelf says it waits, as a window's does at boot.
+// CSS are the product's. HN-8: the Artifacts shelf's plates hold Live on its
+// fixture adapter (`LiveAppsPreview`); the live head has no daemon to ask, so
+// its shelf holds neither group.
 
 const NOW = Date.now();
 const MINUTE = 60_000;
@@ -152,9 +150,7 @@ const DEEP: readonly HeadCrumb[] = [
 /** The states the page's head plates show (§05 "The head", §06 the palette
  * and the fields), plus the two the brief adds: FitPath in a narrow window,
  * and renaming in place. HN-8 adds the package with its standing dot and the
- * sheet on its Artifacts shelf — the Hub's, and with none bound each of the
- * four reasons the shelf gives (the plugin off or unable to run, the Hub
- * opening or not starting) — and the same sheet under a cover, grown from the
+ * sheet on its Artifacts shelf, and the same sheet under a cover, grown from the
  * package circle. */
 export const HEAD_STATES = [
   "top",
@@ -164,10 +160,6 @@ export const HEAD_STATES = [
   "renaming",
   "explorer",
   "artifacts",
-  "artifacts-off",
-  "artifacts-cant-run",
-  "artifacts-opening",
-  "artifacts-not-starting",
   "covered",
   "zoom",
   "palette",
@@ -183,10 +175,6 @@ export const HEAD_STATE_LABEL: Record<HeadState, string> = {
   renaming: "Renaming",
   explorer: "The fields",
   artifacts: "The apps",
-  "artifacts-off": "Live apps off",
-  "artifacts-cant-run": "Live apps can't run",
-  "artifacts-opening": "Opening live apps",
-  "artifacts-not-starting": "Live apps not starting",
   covered: "Under a cover",
   zoom: "The zoom's menu",
   palette: "The palette, ⌘K",
@@ -201,15 +189,11 @@ const FIXTURE_DOT = artifactsDotWords(["vibe-field"]);
  * agents after it, the shipping group over its fixture adapter, drawn whether a Hub is bound or not
  * (MA-4c); null for the plates that do not open it. */
 function plateArtifacts(state: HeadState): HeadArtifacts | null {
-  const made = <MadeAppsPreview state="populated" />;
-  if (state === "artifacts" || state === "covered") {
-    return { state: "hub", hub: <ArtifactPanelPreview state="populated" />, made };
-  }
-  if (state === "artifacts-off") return { state: "off", made };
-  if (state === "artifacts-cant-run") return { state: "cant-run", made };
-  if (state === "artifacts-opening") return { state: "opening", made };
-  if (state === "artifacts-not-starting") return { state: "not-starting", made };
-  return null;
+  if (state !== "artifacts" && state !== "covered") return null;
+  return {
+    live: <LiveAppsPreview state="populated" />,
+    made: <MadeAppsPreview state="populated" />,
+  };
 }
 
 /** TS-6 (TS-D13) — the question New field asks while a link owes it: the
@@ -268,8 +252,7 @@ export function HeadPlate({
 /** The live head on its real controller over fixture doors — the playground's.
  * The frame's one owner of the open surface is the caller's (it shares it with
  * the playground's Objects); keys are unbound: the catalog is not a window the
- * head owns, and no plugin host runs in it, so its Artifacts shelf waits — and
- * past 10 s says the Hub isn't starting, as a window's would. */
+ * head owns, and it has no daemon to ask, so its Apps shelf holds neither group. */
 export function HeadLive({
   surface,
   onSurfaceChange,
@@ -291,7 +274,6 @@ export function HeadLive({
       shelf={shelf}
       onSurfaceChange={onSurfaceChange}
       bindKeys={false}
-      windowId="design-system"
     />
   );
 }

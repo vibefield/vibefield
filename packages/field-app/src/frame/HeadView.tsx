@@ -1,6 +1,5 @@
 import type { DocRegistryEntry } from "@vibefield/contracts";
 import { FieldGlyph } from "@vibefield/design-kit/glyphs";
-import { EmptyState } from "@vibefield/design-kit/primitives";
 import {
   type CSSProperties,
   Fragment,
@@ -16,7 +15,7 @@ import {
   useState,
 } from "react";
 import type { SheetShelf } from "./frame-surface";
-import { ARTIFACTS, type HubWait } from "./head-artifacts";
+import { ARTIFACTS } from "./head-artifacts";
 import type { HeadCrumb } from "./head-canvas";
 import { SyncQuestionView, type SyncQuestionViewProps } from "./SyncQuestionView";
 import type { ViewKeys } from "./views";
@@ -53,15 +52,12 @@ export interface HeadDocTile {
 }
 
 /** What the sheet's Apps shelf holds (HN-8; DESIGN.md §8 "Artifacts — the Artifacts shelf's
- * contents", as amended 2026-11-05 — the `artifacts` shelf, Apps on screen): two groups in its
- * one box. LIVE first: the Hub's own surface, hosted, while one is bound; with none bound, why
- * not — its plugin off or unable to run, the Hub opening or not starting — in words, so the
- * shelf is never blank. Then FROM YOUR AGENTS (`made`, MA-4c), drawn whether a Hub is bound or
- * not; absent where no daemon is asked. */
-export type HeadArtifacts = (
-  | { readonly state: "hub"; readonly hub: ReactNode }
-  | { readonly state: HubWait }
-) & { readonly made?: ReactNode };
+ * contents", as amended 2026-11-09 — the `artifacts` shelf, Apps on screen): two groups in its
+ * one box, LIVE first and then FROM YOUR AGENTS (`made`, MA-4c). */
+export interface HeadArtifacts {
+  readonly live: ReactNode;
+  readonly made: ReactNode;
+}
 
 /** The sheet's fold back into the pill, the circle or the bar (§8: 600ms on the island curve):
  * what it holds stays through it, so it never folds away empty. */
@@ -202,86 +198,11 @@ function PackageButton({
   );
 }
 
-/** What the shelf says with no Hub bound, and under it, where there is one, what to do. */
-interface WaitWords {
-  readonly title: string;
-  readonly description?: string;
-}
-
-/** The words of each wait (DESIGN.md §8 "Artifacts"), which speak for Live alone (§9 "Apps"):
- * From your agents stands below them whether a Hub is bound or not. The headings are owed to
- * James (§9, ‹for James›); until he words them they name Live's tiles, live apps, and keep §8's
- * second lines. */
-const HUB_WAIT_WORDS: Record<HubWait, WaitWords> = {
-  off: {
-    title: "Live apps are off",
-    description: "Turn on the Browser plugin in Settings › Plugins.",
-  },
-  "cant-run": {
-    title: "Live apps can't run",
-    description: "The Browser plugin can't run in this VibeField — see Settings › Plugins.",
-  },
-  opening: { title: "Opening live apps…" },
-  "not-starting": {
-    title: "Live apps aren't starting",
-    description: "Turn the Browser plugin off and on in Settings › Plugins.",
-  },
-};
-
-/** How long the words a wait leaves stay while they fade out under the new ones (head.css: the
- * turn's 180ms `ease`). */
-const HUB_WAIT_TURN_MS = 180;
-
-/** With no Hub bound the shelf says why (DESIGN.md §8 "Artifacts"): its plugin is off or can't
- * run, the Hub is opening — said late, as History's opening words are, so a quick restart never
- * flashes it — or, still opening after 10 s, it isn't starting. That last turn is made in place:
- * the words it leaves fade out as the new ones fade in, and then go; every other change of words
- * is at once, and the Hub, binding, takes the shelf the moment it does. */
-function HubWaits({ waits }: { readonly waits: HubWait }): ReactElement {
-  const [said, setSaid] = useState(waits);
-  const [leaving, setLeaving] = useState<HubWait | null>(null);
-  if (said !== waits) {
-    setSaid(waits);
-    setLeaving(said === "opening" && waits === "not-starting" ? said : null);
-  }
-  useEffect(() => {
-    if (leaving === null) return;
-    const timer = window.setTimeout(() => setLeaving(null), HUB_WAIT_TURN_MS);
-    return () => window.clearTimeout(timer);
-  }, [leaving]);
-  const face = (wait: HubWait, left: boolean): ReactElement => {
-    const words = HUB_WAIT_WORDS[wait];
-    return (
-      <div
-        key={wait}
-        className="vf-head-waits-face"
-        {...(left ? { "data-leaving": "", "aria-hidden": true } : {})}
-      >
-        <EmptyState
-          title={words.title}
-          {...(words.description === undefined ? {} : { description: words.description })}
-        />
-      </div>
-    );
-  };
-  return (
-    <div
-      className="vf-head-waits"
-      {...(waits === "opening" ? { "data-late": "" } : {})}
-      {...(leaving === null ? {} : { "data-turning": "" })}
-      role="status"
-    >
-      {leaving === null ? null : face(leaving, true)}
-      {face(waits, false)}
-    </div>
-  );
-}
-
 /** The Apps shelf (`artifacts` inside, Apps on screen — MA-D13 (a)): its two groups in one box
  * pinned at the OPEN sheet's inner width — a container, so the Hub's own stylesheet and From
  * your agents' answer it with their tiles (PL-D3), and one the sheet's morph clips rather than
- * narrows, so neither reflows while the sheet grows or folds. Live first — the Hub's, hosted, or
- * why it is not there — then From your agents. Unlike Fields it has no fade at its foot: the
+ * narrows, so neither reflows while the sheet grows or folds. Live first, then From your agents.
+ * Unlike Fields it has no fade at its foot: the
  * Hub's buttons are never faded (§8 "The head"). */
 function ArtifactsShelf({
   shown,
@@ -301,7 +222,7 @@ function ArtifactsShelf({
       <div className="vf-head-hub">
         {artifacts === null ? null : (
           <>
-            {artifacts.state === "hub" ? artifacts.hub : <HubWaits waits={artifacts.state} />}
+            {artifacts.live}
             {artifacts.made}
           </>
         )}

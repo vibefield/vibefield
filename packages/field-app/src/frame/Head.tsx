@@ -22,9 +22,9 @@ import type { DocManagerApi } from "../doc-manager";
 import { useDocSyncStatuses } from "../doc-sync-store";
 import { useReducedMotion } from "../field/desk/bar/bar-motion";
 import { relativeTime } from "../format/relative-time";
-import { PluginSurfaceHost, useVisiblePluginSurfaces } from "../hud/PluginSurfaceSlot";
+import { SurfaceErrorBoundary } from "../hud/PluginSurfaceSlot";
 import { getRendererLogger } from "../logging";
-import { usePluginRegistrySnapshot } from "../plugin-host/plugin-registry-store";
+import { LiveApps } from "./apps/LiveApps";
 import { MadeApps } from "./apps/MadeApps";
 import { useGodviewDeckMaximized } from "./deck-door";
 import { type FrameSurface, foldSurface, type SheetShelf, sheetShelf } from "./frame-surface";
@@ -36,7 +36,7 @@ import {
   SHEET_FOLD_MS,
   useLingering,
 } from "./HeadView";
-import { useArtifactsDot, useHeadAppsClient, useHubWaits } from "./head-artifacts";
+import { useArtifactsDot, useHeadAppsClient } from "./head-artifacts";
 import type { HeadCanvas } from "./head-canvas";
 import { useFindStep } from "./Peek";
 import type { ViewKeys } from "./views";
@@ -151,9 +151,6 @@ export interface HeadProps {
    * asks it before the field is made. Absent where the head has no daemon (the
    * catalog, its own tests): New field never asks. */
   syncQuestion?: SyncQuestionDoor | undefined;
-  /** HN-8 — the window the Hub's surface is hosted for on the Artifacts shelf
-   * (the side panel's slot, as the right edge's drawer hosted it). */
-  windowId: string;
 }
 
 /** The question while it is open: the posture chosen, the fields added. */
@@ -189,7 +186,6 @@ export function Head({
   bindKeys = true,
   menuZoom,
   syncQuestion,
-  windowId,
 }: HeadProps): ReactElement {
   const state = useSyncExternalStore(manager.subscribe, manager.getState);
   const path = useSyncExternalStore(canvas.subscribePath, canvas.path, canvas.path);
@@ -202,12 +198,7 @@ export function Head({
   const zoomOpen = surface === "zoom";
   // PL-D1 — the package's standing dot, read from the catalog by the head itself.
   const packageDot = useArtifactsDot();
-  // The Hub the Artifacts shelf hosts — the side panel's one contribution — and,
-  // while none is bound, why: its plugin off or unable to run, the Hub opening,
-  // or still opening after 10 s and not starting.
-  const hub = useVisiblePluginSurfaces("hud.side-panel")[0] ?? null;
-  const waits = useHubWaits(usePluginRegistrySnapshot(), hub !== null);
-  // MA-4c — From your agents, the shelf's second group: asked over the window's own client, which
+  // The shelf's two groups, Live and From your agents: asked over the window's own client, which
   // the head's feed hands in; none where no daemon is asked (the catalog, the tests).
   const appsClient = useHeadAppsClient();
   const artifactsHeld = useLingering(shelf === "artifacts", SHEET_FOLD_MS);
@@ -496,27 +487,18 @@ export function Head({
   const currentId = state.doc?.docId ?? null;
 
   // The Apps shelf's contents while it shows, and through its fold (DESIGN.md §8 "Artifacts —
-  // the Artifacts shelf's contents", as amended 2026-11-05): Live — the Hub, hosted for this
-  // window, its own close shutting the sheet, or why there is none — then From your agents,
-  // drawn whether a Hub is bound or not, so it asks only while the shelf shows. An open shelf
-  // stays open through the Hub's restart and never folds on an unbind: Live waits in words
-  // until the Hub is back.
-  const made = appsClient === null ? null : <MadeApps client={appsClient} />;
-  const artifacts: HeadArtifacts | null = !artifactsHeld
-    ? null
-    : hub === null
-      ? { state: waits, made }
+  // the Artifacts shelf's contents", as amended 2026-11-09): Live, then From your agents, so each
+  // asks only while the shelf shows. A Live that throws is held to its own group.
+  const artifacts: HeadArtifacts | null =
+    !artifactsHeld || appsClient === null
+      ? null
       : {
-          state: "hub",
-          hub: (
-            <PluginSurfaceHost
-              slot="hud.side-panel"
-              windowId={windowId}
-              requestClose={() => fold("artifacts")}
-              surfaceId={hub.surfaceId}
-            />
+          live: (
+            <SurfaceErrorBoundary surfaceId="live-apps" title="Live apps unavailable">
+              <LiveApps client={appsClient} />
+            </SurfaceErrorBoundary>
           ),
-          made,
+          made: <MadeApps client={appsClient} />,
         };
 
   return (

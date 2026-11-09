@@ -1,13 +1,14 @@
 // @vitest-environment happy-dom
 
 import type { ArtifactView } from "@vibefield/contracts";
-import { ArtifactPanel } from "@vibefield/plugin-browser";
-import type { PluginProductClient } from "@vibefield/plugin-sdk";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { LiveApps } from "../src/frame/apps/LiveApps";
+import type { MadeAppsClient } from "../src/frame/apps/made-apps";
 import { cardsStore } from "../src/frame/cards/cards-store";
 import { type FieldHost, setHost } from "../src/host";
+import { SurfaceErrorBoundary } from "../src/hud/PluginSurfaceSlot";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -32,8 +33,8 @@ function deferred<T>() {
 
 function client(
   artifacts: ArtifactView[],
-  request: PluginProductClient["request"] = vi.fn(async () => ({})),
-): PluginProductClient {
+  request: MadeAppsClient["request"] = vi.fn(async () => ({})),
+): MadeAppsClient {
   return {
     request,
     subscribe: vi.fn(async (_method, _params, _onEvent) => ({
@@ -43,12 +44,12 @@ function client(
   };
 }
 
-async function mount(productClient: PluginProductClient): Promise<void> {
+async function mount(productClient: MadeAppsClient): Promise<void> {
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
   await act(async () => {
-    root?.render(<ArtifactPanel client={productClient} />);
+    root?.render(<LiveApps client={productClient} />);
     await Promise.resolve();
     await Promise.resolve();
   });
@@ -112,7 +113,7 @@ const ARTIFACT: ArtifactView = {
   editable: true,
 };
 
-describe("ArtifactPanel", () => {
+describe("LiveApps", () => {
   it("publishes one exact proxy request even when submit is repeated", async () => {
     const gate = deferred<unknown>();
     const request = vi.fn((method: string, _params?: unknown) =>
@@ -238,14 +239,16 @@ describe("ArtifactPanel", () => {
     expect(container?.querySelector(".vf-artifact-close")).toBeNull();
   });
 
-  it("opens the exact validated catalog URL and renders provider loss honestly", async () => {
+  it("opens the row by its key and renders provider loss honestly", async () => {
     const request = vi
       .fn()
       .mockResolvedValueOnce({ opened: true })
       .mockRejectedValueOnce({ kind: "UNAVAILABLE" });
     await mount(client([ARTIFACT], request));
     await act(async () => button("Open Vite prototype").click());
-    expect(request).toHaveBeenCalledWith("shell.openExternal", { url: ARTIFACT.url });
+    expect(request).toHaveBeenCalledWith("artifact.reveal", {
+      artifactKey: ARTIFACT.artifactKey,
+    });
     await act(async () => button("Open Vite prototype").click());
     expect(container?.textContent).toContain(
       "Desktop services are unavailable. Try again in a moment.",
@@ -293,6 +296,25 @@ describe("ArtifactPanel", () => {
 });
 
 describe("FL-2: the panel is the window's", () => {
+  it("a panel that throws is held to its own group, in Live's words", async () => {
+    function Boom(): null {
+      throw new Error("boom");
+    }
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+    await act(async () => {
+      root?.render(
+        <SurfaceErrorBoundary surfaceId="live-apps" title="Live apps unavailable">
+          <Boom />
+        </SurfaceErrorBoundary>,
+      );
+      await Promise.resolve();
+    });
+    expect(container.textContent).toContain("Live apps unavailable");
+  });
+
   afterEach(() => {
     setHost(null as unknown as FieldHost);
     Reflect.deleteProperty(navigator, "clipboard");
@@ -329,9 +351,9 @@ describe("FL-2: the panel is the window's", () => {
   });
 });
 
-describe('ArtifactPanel says Live, in Apps\' words (MA-4c; MA-D13 (a); DESIGN.md §8 "Artifacts — the Artifacts shelf\'s contents" as amended, §9 "Apps")', () => {
+describe('LiveApps says Live, in Apps\' words (MA-4c; MA-D13 (a); DESIGN.md §8 "Artifacts — the Artifacts shelf\'s contents" as amended, §9 "Apps")', () => {
   /** Mount again over another client, the last mount let go first. */
-  async function remount(productClient: PluginProductClient): Promise<void> {
+  async function remount(productClient: MadeAppsClient): Promise<void> {
     if (root !== null) act(() => root?.unmount());
     root = null;
     container?.remove();
@@ -340,7 +362,7 @@ describe('ArtifactPanel says Live, in Apps\' words (MA-4c; MA-D13 (a); DESIGN.md
   }
 
   /** A client whose catalog never answers: the panel is still reading it. */
-  function unanswered(): PluginProductClient {
+  function unanswered(): MadeAppsClient {
     return {
       request: vi.fn(async () => ({})),
       subscribe: vi.fn(() => new Promise<never>(() => undefined)),

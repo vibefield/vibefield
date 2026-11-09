@@ -112,7 +112,7 @@ describe("the switch, the veil and the explorer's tiles wear it — and the dots
       "src/field/desk/desk.css",
       "src/styles/base.css",
       "../design-kit/src/primitives.css",
-      "../../plugins/browser/src/artifact-panel.css",
+      "src/frame/apps/live-apps.css",
     ];
     const using = product.filter((file) => /--(?:vf-)?canvas-dot/u.test(read(file)));
     expect(using).toEqual([]);
@@ -123,8 +123,8 @@ describe("the switch, the veil and the explorer's tiles wear it — and the dots
     // not the mat (DESIGN.md §2.1 puts the mat where the desk stands in) — the plain ground, as the card's.
     for (const [file, selector] of [
       ["../design-kit/src/primitives.css", ".vf-ui-placeholder-face"],
-      ["../../plugins/browser/src/artifact-panel.css", ".vf-artifact-placeholder"],
-      ["../../plugins/browser/src/artifact-panel.css", ".vf-artifact-preview"],
+      ["src/frame/apps/live-apps.css", ".vf-artifact-placeholder"],
+      ["src/frame/apps/live-apps.css", ".vf-artifact-preview"],
     ] as const) {
       const rule = block(read(file), selector);
       expect(rule, selector).toContain("background-color: var(--vf-canvas-bg);");

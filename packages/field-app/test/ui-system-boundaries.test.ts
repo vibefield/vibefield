@@ -876,14 +876,14 @@ describe("UI system ownership boundaries", () => {
     expect(page).not.toMatch(/<UpdatesDevicesSection\s/u);
   });
 
-  it("keeps the Hub's plate on its plugin's own fixture door, at the shelf's width — never the Hub's markup (HN-8)", () => {
+  it("keeps Live's plate on its fixture adapter, at the shelf's width — never the Hub's markup (HN-8)", () => {
     // The catalog stands in for what a host supplies — the product client,
-    // through the plugin's `/design-system` entry — and gives the Hub the width
-    // the pill's sheet gives its Artifacts shelf, in a container, where the
-    // plugin's own stylesheet answers with its tile form (PL-D3). The drawer
-    // that held it until HN-8 left with the edges.
+    // through `frame/apps/design-system.tsx` — and gives Live the width the pill's
+    // sheet gives its Artifacts shelf, in a container, where its own stylesheet
+    // answers with its tile form (PL-D3). The drawer that held it until HN-8 left
+    // with the edges.
     const page = source("design-system/sections/SurfacesSection.tsx");
-    expect(page).toMatch(/<ArtifactPanelPreview state=\{state\} \/>/u);
+    expect(page).toMatch(/<LiveAppsPreview state=\{state\} \/>/u);
     expect(page).not.toMatch(/className="vf-(?:artifact|side-panel)/u);
     expect(page).not.toContain("useVisiblePluginSurfaces");
     expect(source("design-system/styles/scenes.css")).toMatch(
@@ -893,8 +893,7 @@ describe("UI system ownership boundaries", () => {
 
   it("keeps From your agents' plate on its own fixture adapter, at the shelf's width — the shipping MadeApps, never its markup (MA-4a)", () => {
     // The catalog stands in for what a host supplies — the client's answers, the clock and the
-    // image transport (`frame/apps/design-system.tsx`, beside the shipping group, the Hub's
-    // `/design-system` door's shape) — and stages the group where the Hub's plate stands, in the
+    // image transport (`frame/apps/design-system.tsx`, beside the shipping groups) — and stages the group where the Hub's plate stands, in the
     // 504 container the pill's sheet gives its Apps shelf. Never the group's classes, never a
     // stylesheet, never the window's client.
     const adapter = source("frame/apps/design-system.tsx");
@@ -1042,8 +1041,8 @@ describe("UI system ownership boundaries", () => {
   it("keeps cross-package catalog composition on design-system doors", () => {
     // The catalog composes another workspace package only through its stated
     // doors — the design-kit foundation, contracts types, or the package's own
-    // `/design-system` fixture-adapter entry (the plugin-browser precedent,
-    // docs/UI_SYSTEM.md §Catalog fidelity). Any other internal path would let
+    // `/design-system` fixture-adapter entry (docs/UI_SYSTEM.md
+    // §Catalog fidelity). Any other internal path would let
     // the catalog quietly grow a private copy of a package's seam, which is the
     // replica rule's failure mode arriving through the import graph.
     // The `@vibefield` npm scope is shared since RL5 (RD-5a, 2026-10-14): rosetta's
@@ -1101,7 +1100,7 @@ describe("UI system ownership boundaries", () => {
     const peek = source("design-system/PeekPreview.tsx");
     const catalog = `${peers}\n${pegboard}\n${bar}\n${history}\n${peek}\n${corner}\n${updateCorner}\n${cards}\n${page}\n${onboarding}\n${swarmBodies}\n${groundWorkbench}\n${groundPreview}\n${paneFrame}\n${paneLauncher}\n${switchScene}\n${viewFrame}\n${line}\n${head}\n${palette}`;
     for (const productionView of [
-      "ArtifactPanelPreview",
+      "LiveAppsPreview",
       "CommandPalettePreview",
       "CommandPaletteView",
       "GodviewPreview",

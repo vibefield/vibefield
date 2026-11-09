@@ -1,6 +1,6 @@
-import { ArtifactView, type PluginRegistrySnapshot } from "@vibefield/contracts";
+import { ArtifactView } from "@vibefield/contracts";
 import { useFielddClient, useSubscription } from "@vibefield/fieldd-client/react";
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 import { getRendererLogger } from "../logging";
 import type { MadeAppsClient } from "./apps/made-apps";
 
@@ -8,18 +8,14 @@ import type { MadeAppsClient } from "./apps/made-apps";
 // "Artifacts — the Artifacts shelf's contents"): what the head reads for its package and the
 // shelf it opens, beside the controller that reads it. Nothing here is drawn.
 // - THE PACKAGE'S DOT is the catalog's STANDING state, read by the head itself over the window's
-//   fieldd client (`artifact.subscribe`, on the workspace.read the window's token holds) — never
-//   through the Hub — so it stands while the sheet is shut and whether the Hub runs or not. A
-//   module store (the sync dot's pattern, `doc-sync-store.ts`): FED once inside FielddProvider
+//   fieldd client (`artifact.subscribe`, on the workspace.read the window's token holds), so it
+//   stands while the sheet is shut. A module store (the sync dot's pattern, `doc-sync-store.ts`): FED once inside FielddProvider
 //   (FieldView), READ by the pill's package and the covered views' circle, so neither subscribes
 //   twice, and a head with no daemon to ask (the catalog, the tests) reads no dot.
-// - WHY THE SHELF HAS NO HUB, in one of four states: the plugin that offers it is off, it can't
-//   run, it is opening — or, still opening after 10 s, it isn't starting.
-// - THE WINDOW'S CLIENT FOR FROM YOUR AGENTS (MA-4c; L14; §8 "Artifacts — the Artifacts shelf's
-//   contents", as amended 2026-11-05): the shelf's second group asks the window's own doors, which
-//   are no plugin's. A module store as the dot's: FED by the same feed, inside FielddProvider, and
-//   READ by the head's controller, so a head with no daemon to ask (the catalog, the tests) draws
-//   no made group.
+// - THE WINDOW'S CLIENT FOR THE SHELF (MA-4c; L14; FL-2; §8 "Artifacts — the Artifacts shelf's
+//   contents", as amended 2026-11-09): both groups, Live and From your agents, ask the window's own
+//   doors. A module store as the dot's: FED by the same feed, inside FielddProvider, and READ by the
+//   head's controller, so a head with no daemon to ask (the catalog, the tests) draws neither group.
 // - THE WORDS ARE APPS (MA-D13 (a); §9 "Apps"): "Artifact" is the code's word, never the
 //   screen's, so the names here (`ARTIFACTS`, the `artifacts` surface) stay as they are.
 
@@ -83,12 +79,12 @@ function readArtifactsDot(): string | null {
   return current;
 }
 
-// The window's client, or null — From your agents asks with it while the shelf shows.
+// The window's client, or null — the shelf's two groups ask with it while the shelf shows.
 let appsClient: MadeAppsClient | null = null;
 const appsListeners = new Set<() => void>();
 
-/** The window's client the shelf's From your agents asks with (DESIGN.md §8 "Artifacts — the
- * Artifacts shelf's contents", as amended 2026-11-05): put in by the head's feed inside
+/** The window's client the shelf's two groups ask with (DESIGN.md §8 "Artifacts — the
+ * Artifacts shelf's contents", as amended 2026-11-09): put in by the head's feed inside
  * FielddProvider, and null where no daemon is asked (the catalog, the tests). Test seam + boot
  * reset as well — the feed owns it in the running app. */
 export function setHeadAppsClient(client: MadeAppsClient | null): void {
@@ -106,13 +102,13 @@ function readHeadAppsClient(): MadeAppsClient | null {
   return appsClient;
 }
 
-/** The window's client for From your agents, or null: no made group is drawn. */
+/** The window's client for the shelf's two groups, or null: neither is drawn. */
 export function useHeadAppsClient(): MadeAppsClient | null {
   return useSyncExternalStore(subscribeHeadAppsClient, readHeadAppsClient);
 }
 
 /** Mount ONCE inside FielddProvider: streams the catalog into the store, and hands the window's
- * client to the shelf's From your agents for as long as it is mounted (MA-4c). A reconnect
+ * client to the shelf's two groups for as long as it is mounted (MA-4c, FL-2). A reconnect
  * replays a fresh snapshot (the client's P5 law), so the dot heals with it. */
 export function useArtifactCatalogFeed(): void {
   const client = useFielddClient();
@@ -132,49 +128,4 @@ export function useArtifactCatalogFeed(): void {
 /** The package's dot: the words its tooltip and name say while it stands; null while none. */
 export function useArtifactsDot(): string | null {
   return useSyncExternalStore(subscribeArtifactsDot, readArtifactsDot);
-}
-
-/** Why the Artifacts shelf holds no Hub (DESIGN.md §8 "Artifacts"): its plugin is off, it can't
- * run, it is opening, or it isn't starting. */
-export type HubWait = "off" | "cant-run" | "opening" | "not-starting";
-
-/** How long the shelf says Live is opening before it says the Hub isn't starting (§8
- * "Artifacts": still opening after 10 s). Nothing in the registry says a Hub failed, so the wait
- * itself is bounded. */
-export const HUB_START_BOUND_MS = 10_000;
-
-/** Why the Artifacts shelf holds no Hub, by the registry's `state` of the plugin that offers it —
- * the one contributing `hud.side-panel`, the Browser plugin. "opening" while it is `enabled` and
- * its Hub not yet bound, and before any registry has answered (booting, the daemon away: nothing
- * says it is off). "off" while it is `disabled`, the one state turning it on would help. Otherwise
- * — `invalid` or `incompatible`, on or off, or no plugin offering it at all — "cant-run". Should
- * two offer it, the likelier to bring a Hub speaks. */
-export function hubWaits(
-  registry: PluginRegistrySnapshot | null,
-): Exclude<HubWait, "not-starting"> {
-  if (registry === null) return "opening";
-  const offering = registry.plugins.filter((plugin) =>
-    plugin.contributions.surfaces.some((surface) => surface.slot === "hud.side-panel"),
-  );
-  if (offering.some((plugin) => plugin.state === "enabled")) return "opening";
-  if (offering.some((plugin) => plugin.state === "disabled")) return "off";
-  return "cant-run";
-}
-
-/** The shelf's wait with the start bounded: an opening that has lasted `HUB_START_BOUND_MS` with
- * no Hub bound says the Hub isn't starting. The clock runs from the moment the wait became
- * "opening", whether or not the shelf shows — a shelf opened onto a long wait says so at once —
- * and starts again with every new opening: a Hub that binds, or a plugin turned off, ends it.
- * `bound`: a Hub is bound, so nothing waits. */
-export function useHubWaits(registry: PluginRegistrySnapshot | null, bound: boolean): HubWait {
-  const waits = hubWaits(registry);
-  const opening = !bound && waits === "opening";
-  const [stalled, setStalled] = useState(false);
-  if (stalled && !opening) setStalled(false);
-  useEffect(() => {
-    if (!opening) return;
-    const timer = window.setTimeout(() => setStalled(true), HUB_START_BOUND_MS);
-    return () => window.clearTimeout(timer);
-  }, [opening]);
-  return opening && stalled ? "not-starting" : waits;
 }

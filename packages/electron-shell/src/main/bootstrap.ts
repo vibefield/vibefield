@@ -389,6 +389,11 @@ async function mint(
     // answering home opens the URL it validated through its shell's
     // `shell.openLink`, as `terminal.link.open` does (C2): the window still
     // does NOT hold shell.open.
+    // FL-2 (James, 2026-11-09): Live apps are the window's own, so the panel's two scopes move here
+    // from the plugin that held them in this same renderer: artifact.publish (Publish…, Rename,
+    // Remove, Refresh preview) and shell.dialog (Folder's native picker, the scope's only method).
+    // Neither is in a tailnet preset. Opening a Live app is `artifact.reveal`, on apps.use: the
+    // window still does NOT hold shell.open.
     scopes: [
       "doc.read",
       "doc.write",
@@ -414,6 +419,8 @@ async function mint(
       "project.read",
       "sparks.use",
       "apps.use",
+      "artifact.publish",
+      "shell.dialog",
     ],
     label: `window-${senderId}`,
     rendererParticipant,

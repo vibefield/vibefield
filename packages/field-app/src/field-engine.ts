@@ -130,13 +130,11 @@ let devBundled: readonly BundledRendererPlugin[] | null = null;
 export async function loadDevBundledPlugins(): Promise<readonly BundledRendererPlugin[]> {
   if (!import.meta.env.DEV) return [];
   if (devBundled !== null) return devBundled;
-  const [browser, commentPad, browserPane] = await Promise.all([
-    import("@vibefield/plugin-browser"),
+  const [commentPad, browserPane] = await Promise.all([
     import("@vibefield/plugin-comment-pad"),
     import("@vibefield/plugin-browser-pane"),
   ]);
   devBundled = [
-    { manifest: browser.browserManifest, mod: browser.browserRenderer },
     // DK-8 (DK-D14): VibeField's own object kind — its code half read off the package's namespace by its row's
     // binding name, exactly as the staged loader reads a built module's (`objectBindingsFrom`)
     {

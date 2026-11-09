@@ -15,7 +15,7 @@ import { describe, expect, it } from "vitest";
  * narrow form retired with the edges' drawer, and the side panel's "Close panel" with it.
  */
 const CSS = readFileSync(
-  join(dirname(fileURLToPath(import.meta.url)), "..", "src", "artifact-panel.css"),
+  join(dirname(fileURLToPath(import.meta.url)), "..", "src", "frame", "apps", "live-apps.css"),
   "utf8",
 );
 const tiles = ((): string => {

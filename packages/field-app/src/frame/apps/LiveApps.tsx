@@ -3,16 +3,15 @@ import {
   type ArtifactView,
   ArtifactView as ArtifactViewSchema,
 } from "@vibefield/contracts";
-import type { PluginProductClient } from "@vibefield/plugin-sdk";
 import {
   EmptyState,
-  FieldGlyph,
   InlineNotice,
   PlaceholderFace,
   StatusDot,
   UiButton,
   uiFieldClass,
-} from "@vibefield/plugin-sdk/ui";
+} from "@vibefield/design-kit";
+import { FieldGlyph } from "@vibefield/design-kit/glyphs";
 import {
   type FormEvent,
   type ReactElement,
@@ -22,7 +21,12 @@ import {
   useRef,
   useState,
 } from "react";
-import "./artifact-panel.css";
+import { CopyButton } from "../cards/CopyButton";
+import type { DealFrom } from "../cards/cards-store";
+import { copyWords, sheetOrigin } from "../cards/copy-door";
+import { ARTIFACTS } from "../head-artifacts";
+import type { MadeAppsClient } from "./made-apps";
+import "./live-apps.css";
 
 const CROCKFORD = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
 const THUMBNAIL_RETRY_DELAYS_MS = [500, 1_500] as const;
@@ -80,7 +84,7 @@ function friendlyError(error: unknown, action: string): string {
   }
   if (kind === "UNAVAILABLE") return "Desktop services are unavailable. Try again in a moment.";
   if (kind === "UNAUTHORIZED" || kind === "FORBIDDEN_SCOPE")
-    return `Browser does not have permission to ${action}.`;
+    return `VibeField does not have permission to ${action}.`;
   if (kind === "CONFLICT") return "That operation is already in progress. Try again shortly.";
   if (kind === "RESOURCE_EXHAUSTED") return "The app limit has been reached.";
   if (kind === "NOT_FOUND") {
@@ -122,12 +126,12 @@ type CatalogState =
   | { phase: "live"; artifacts: ArtifactView[] }
   | { phase: "error"; message: string };
 
-/** The Artifact Hub, the `hud.side-panel` contribution — hosted since HN-8 on the Artifacts shelf
- * of VibeField's pill's sheet, whose Escape, dim and button close it: it draws no close of its own
- * (VibeField DESIGN.md §8 "Artifacts — the Artifacts shelf's contents"). Since MA-4c that shelf is
- * Apps on screen and the Hub is its first group, LIVE: its header, its region and its words say
- * Live and app, never "artifact", the code's word (MA-D13 (a); §9 "Apps"). */
-export function ArtifactPanel({ client }: { client: PluginProductClient }): ReactElement {
+/** Live, the first group of the Apps shelf (DESIGN.md §8 "Artifacts — the Artifacts shelf's
+ * contents"): field-app's own since FL-2, on the window's client as From your agents is. It stands
+ * on the pill's sheet, whose Escape, dim and button close it, so it draws no close of its own. Its
+ * header, its region and its words say Live and app, never "artifact", the code's word (MA-D13 (a);
+ * §9 "Apps"). */
+export function LiveApps({ client }: { client: MadeAppsClient }): ReactElement {
   const [catalog, setCatalog] = useState<CatalogState>({ phase: "loading" });
   const [subscriptionEpoch, setSubscriptionEpoch] = useState(0);
   const [screen, setScreen] = useState<Screen>({ kind: "catalog" });
@@ -137,7 +141,7 @@ export function ArtifactPanel({ client }: { client: PluginProductClient }): Reac
   const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
   const [renaming, setRenaming] = useState<{ artifactId: string; title: string } | null>(null);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: subscriptionEpoch is the explicit user-triggered retry signal.
+  // subscriptionEpoch is the explicit user-triggered retry signal.
   useEffect(() => {
     let disposed = false;
     let unsubscribe: (() => void) | undefined;
@@ -237,7 +241,7 @@ export function ArtifactPanel({ client }: { client: PluginProductClient }): Reac
       if (!beginPending(operation)) return;
       setMutationError(null);
       try {
-        await client.request("shell.openExternal", { url: artifact.url });
+        await client.request("artifact.reveal", { artifactKey: artifact.artifactKey });
       } catch (error) {
         setMutationError(friendlyError(error, "open this app"));
       } finally {
@@ -247,16 +251,18 @@ export function ArtifactPanel({ client }: { client: PluginProductClient }): Reac
     [beginPending, client, finishPending],
   );
 
-  const copyUrl = useCallback(async (artifact: ArtifactView) => {
-    if (artifact.url === undefined) return;
-    setMutationError(null);
-    try {
-      await navigator.clipboard.writeText(artifact.url);
+  // A copy like any other (DESIGN.md §8 "Copy"; item 111): the words through the window's door, a
+  // card dealt into the hand under the sheet, and the row says how it went.
+  const copyUrl = useCallback(
+    async (artifact: ArtifactView, from: DealFrom | null): Promise<boolean> => {
+      if (artifact.url === undefined) return false;
+      setMutationError(null);
       setConfirmRemove(null);
-    } catch {
-      setMutationError("Could not copy the URL. Copy permission may be disabled.");
-    }
-  }, []);
+      const copied = await copyWords(artifact.url, sheetOrigin(ARTIFACTS), from);
+      return copied.ok;
+    },
+    [],
+  );
 
   const removeArtifact = useCallback(
     async (artifact: ArtifactView) => {
@@ -444,7 +450,7 @@ export function ArtifactPanel({ client }: { client: PluginProductClient }): Reac
             confirmRemove={confirmRemove === artifact.artifactKey}
             renaming={renaming?.artifactId === artifact.artifactId ? renaming.title : null}
             onOpen={() => void openArtifact(artifact)}
-            onCopy={() => void copyUrl(artifact)}
+            onCopy={(from) => copyUrl(artifact, from)}
             onBeginRename={() => {
               setConfirmRemove(null);
               setRenaming({ artifactId: artifact.artifactId, title: artifact.title });
@@ -730,7 +736,7 @@ function ArtifactRow({
   confirmRemove: boolean;
   renaming: string | null;
   onOpen: () => void;
-  onCopy: () => void;
+  onCopy: (from: DealFrom | null) => Promise<boolean>;
   onBeginRename: () => void;
   onRenameChange: (title: string) => void;
   onRename: (event: FormEvent) => void;
@@ -776,9 +782,13 @@ function ArtifactRow({
           •••
         </summary>
         <div>
-          <button type="button" onClick={onCopy} disabled={artifact.url === undefined || busy}>
-            Copy URL
-          </button>
+          {artifact.url === undefined || busy ? (
+            <button type="button" disabled>
+              Copy URL
+            </button>
+          ) : (
+            <CopyButton label="Copy URL" className="" copy={onCopy} />
+          )}
           {artifact.editable && (
             <button type="button" onClick={onRefresh} disabled={busy}>
               Refresh preview

@@ -417,7 +417,6 @@ export function ChromeLayer({
         onSurfaceChange={onSurfaceChange}
         menuZoom={subscribeMenuZoom}
         syncQuestion={syncQuestion}
-        windowId={FIELD_WINDOW_ID}
       />
 
       {/* SEARCH — THE PEEK (GV-D8/D9/D10, 2026-10-08; DESIGN.md §8 "Search — the

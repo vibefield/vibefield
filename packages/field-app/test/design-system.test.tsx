@@ -430,10 +430,6 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
       "renaming:mac",
       "explorer:mac",
       "artifacts:mac",
-      "artifacts-off:mac",
-      "artifacts-cant-run:mac",
-      "artifacts-opening:mac",
-      "artifacts-not-starting:mac",
       "covered:mac",
       "zoom:mac",
       "palette:mac",
@@ -472,9 +468,8 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
     expect(question?.querySelector(".vf-head-docs")?.hasAttribute("hidden")).toBe(true);
     expect(question?.querySelectorAll('input[type="checkbox"]')).toHaveLength(3);
     // HN-8 (PL-D1, PL-D2) — the package after the chevron's rule, with its standing dot in its
-    // own plate; the sheet on Artifacts holding the Hub's own adapter, and with none bound each of
-    // its four words (ruling 10); and under a cover the same sheet, grown from the package circle,
-    // on Artifacts alone
+    // own plate; the sheet on Artifacts holding Live's adapter; and under a cover the same sheet,
+    // grown from the package circle, on Artifacts alone
     const pack = headPlate("top")?.querySelector<HTMLButtonElement>(".vf-head-pack");
     expect(pack?.previousElementSibling?.className).toBe("vf-head-rule");
     expect(pack?.previousElementSibling?.previousElementSibling?.className).toBe("vf-head-chev");
@@ -497,15 +492,11 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
     expect(
       artifacts?.querySelector('[data-shelf="artifacts"] .vf-artifact-header h2')?.textContent,
     ).toBe("Live");
-    // MA-4c (§8 as amended): From your agents follows Live in the one box, whether Live shows
-    // its tiles or why it waits — the shipping group over its fixture adapter, never a copy
+    // MA-4c (§8 as amended): From your agents follows Live in the one box — the shipping group
+    // over its fixture adapter, never a copy
     for (const [plate, live] of [
       ["artifacts", "vf-artifact-panel"],
       ["covered", "vf-artifact-panel"],
-      ["artifacts-off", "vf-head-waits"],
-      ["artifacts-cant-run", "vf-head-waits"],
-      ["artifacts-opening", "vf-head-waits"],
-      ["artifacts-not-starting", "vf-head-waits"],
     ] as const) {
       // the shelf that shows: under a cover the pill's own stands shut beside the circle's sheet
       const hub = headPlate(plate)?.querySelector(
@@ -518,25 +509,6 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
       ).toEqual([live, "vf-apps"]);
       expect(groups[1]?.getAttribute("aria-label"), plate).toBe("From your agents");
     }
-    const off = headPlate("artifacts-off")?.querySelector('[data-shelf="artifacts"]');
-    expect(off?.textContent).toContain("Live apps are off");
-    expect(off?.textContent).toContain("Turn on the Browser plugin in Settings › Plugins.");
-    const cantRun = headPlate("artifacts-cant-run")?.querySelector('[data-shelf="artifacts"]');
-    expect(cantRun?.textContent).toContain("Live apps can't run");
-    expect(cantRun?.textContent).toContain(
-      "The Browser plugin can't run in this VibeField — see Settings › Plugins.",
-    );
-    expect(
-      headPlate("artifacts-opening")?.querySelector(".vf-head-waits[data-late]")?.textContent,
-    ).toBe("Opening live apps…");
-    // past the 10 s bound the plate says so at once, with nothing left to turn from
-    const stalled = headPlate("artifacts-not-starting")?.querySelector(".vf-head-waits");
-    expect(stalled?.hasAttribute("data-late")).toBe(false);
-    expect(stalled?.hasAttribute("data-turning")).toBe(false);
-    expect(stalled?.textContent).toContain("Live apps aren't starting");
-    expect(stalled?.textContent).toContain(
-      "Turn the Browser plugin off and on in Settings › Plugins.",
-    );
     const covered = headPlate("covered");
     expect(covered?.querySelector(".vf-head")?.hasAttribute("data-covered")).toBe(true);
     expect(covered?.querySelector('[data-head-place][data-open="true"]')).toBeNull();
@@ -867,16 +839,12 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
       place?.querySelector<HTMLButtonElement>('button[aria-label="Fields"]')?.click(),
     );
     expect(place?.dataset.open).toBe("true");
-    // HN-8: its package turns the same sheet to Artifacts in place — which waits here, with no
-    // plugin host in the catalog to bind the Hub, as a window's does at boot. Its words are the
-    // clock's: opening, and past 10 s from the playground's mount, not starting. This page can
-    // take longer than that to render and reach here (GitHub's runner did, item 129), so the
-    // words are read with the clock frozen, in head.test.tsx's row for the catalog's live head.
+    // HN-8: its package turns the same sheet to Apps in place. The catalog has no daemon to ask, so
+    // the shelf holds neither group (FL-2): the plates above hold them on their fixture adapters.
     await act(async () => place?.querySelector<HTMLButtonElement>(".vf-head-pack")?.click());
     expect(place?.dataset.open).toBe("true");
     const artifacts = place?.querySelector('[data-shelf="artifacts"][data-shown]');
-    expect(artifacts?.querySelector(".vf-head-waits")).not.toBeNull();
-    expect(artifacts?.querySelector("[data-vf-plugin]")).toBeNull();
+    expect(artifacts?.querySelector(".vf-head-hub")?.children).toHaveLength(0);
 
     expect(container?.querySelector(".vf-godview .vf-monitor-list")).not.toBeNull();
     // GV-D1: the head in the other theme too — the page is dark, so the frame's

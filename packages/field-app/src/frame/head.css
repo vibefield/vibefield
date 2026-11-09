@@ -376,42 +376,6 @@
   container-type: inline-size;
 }
 
-/* With no Hub bound Live is never blank (§8 "Artifacts"; §9 "Apps"): why, in
-   words, at its centre — and "Opening live apps…" LATE, as History's opening
-   words are: nothing for 120ms, then a 180ms plain `ease` fade, so a quick
-   restart never flashes them. Still opening after 10 s, the words turn to
-   "Live apps aren't starting" in place: the two stand in one cell while the
-   words it leaves fade out and the new fade in, over 180ms `ease` (at once
-   under reduced motion, below). With From your agents after them they stand
-   at their own height, the empty state's own padding, as the Hub's own quiet
-   states do in its tile form (`min-height: 0`), so the made group follows
-   Live directly; alone in the box (no made group: the catalog's live head, a
-   head with no daemon to ask) they take its whole height, at its centre. */
-.vf-head-waits {
-  display: grid;
-  place-items: center;
-}
-
-.vf-head-waits:only-child {
-  flex: 1;
-}
-
-.vf-head-waits[data-late] {
-  animation: vf-head-in 180ms ease 120ms both;
-}
-
-.vf-head-waits-face {
-  grid-area: 1 / 1;
-}
-
-.vf-head-waits[data-turning] > .vf-head-waits-face {
-  animation: vf-head-in 180ms ease both;
-}
-
-.vf-head-waits[data-turning] > .vf-head-waits-face[data-leaving] {
-  animation: vf-head-out 180ms ease both;
-}
-
 @keyframes vf-head-in {
   from {
     opacity: 0;
@@ -977,14 +941,6 @@
   .vf-head-place[data-turned] .vf-head-shelf,
   .vf-head-place[data-turned] .vf-head-shelf[data-shown] {
     transition: none;
-  }
-
-  .vf-head-waits[data-turning] > .vf-head-waits-face {
-    animation: none;
-  }
-
-  .vf-head-waits[data-turning] > .vf-head-waits-face[data-leaving] {
-    visibility: hidden;
   }
 
   .vf-head-doc-tile:hover,

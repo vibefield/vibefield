@@ -1,5 +1,6 @@
 import {
   AGENT_CATALOG,
+  type ArtifactView,
   type IndexApp,
   type IndexAppsResult,
   type IndexAppsSource,
@@ -8,11 +9,11 @@ import {
 } from "@vibefield/contracts";
 import { projectInkHex } from "@vibefield/design-kit";
 import { type ReactElement, useMemo } from "react";
+import { LiveApps } from "./LiveApps";
 import { MadeApps } from "./MadeApps";
 import type { MadeAppsClient } from "./made-apps";
 
-// THE CATALOG'S ADAPTER for From your agents (docs/UI_SYSTEM.md "Catalog fidelity"; the Hub's
-// `@vibefield/plugin-browser/design-system` is the template): the SHIPPING `MadeApps` over a fixture
+// THE CATALOG'S ADAPTER for From your agents (docs/UI_SYSTEM.md "Catalog fidelity"): the SHIPPING `MadeApps` over a fixture
 // client per state. Only what a host supplies is replaced — the client's answers, the clock, and the
 // image transport (the catalog has no tailnet, so its stills are pictures it draws itself, as the
 // hand's plates draw theirs). The markup, the interaction state, the accessibility and the CSS are
@@ -266,4 +267,79 @@ export function MadeAppsPreview({
       previewSrc={(app) => (app.preview === undefined ? undefined : fixtureStill(app))}
     />
   );
+}
+
+// LIVE's adapter, beside the group's own (FL-2; it was the plugin's `/design-system` door): the
+// SHIPPING `LiveApps` over a fixture client per state. Only the product client is replaced: the
+// markup, the interaction state, the accessibility and the CSS are the product's.
+
+export type LiveAppsPreviewState = "empty" | "loading" | "populated" | "unavailable";
+
+const LIVE_APPS_FIXTURE: readonly ArtifactView[] = [
+  {
+    artifactId: "01J3QH5XX6M8QPK7R2B4F9C1TZ",
+    artifactKey: "device-a:01J3QH5XX6M8QPK7R2B4F9C1TZ",
+    title: "VibeField docs",
+    kind: "folder",
+    originDeviceId: "device-a",
+    originDeviceName: "Studio Mac",
+    originBootId: "boot-a",
+    originOnline: true,
+    url: "https://studio-mac.example.ts.net:12000/",
+    advertisedAvailability: "active",
+    availability: "active",
+    availabilityAt: 1_722_000_000_000,
+    publishedAt: 1_722_000_000_000,
+    updatedAt: 1_722_000_000_000,
+    openable: true,
+    editable: true,
+  },
+  {
+    artifactId: "01J3QH5XX6M8QPK7R2B4F9C1TY",
+    artifactKey: "device-b:01J3QH5XX6M8QPK7R2B4F9C1TY",
+    title: "Renderer preview",
+    kind: "proxy",
+    originDeviceId: "device-b",
+    originDeviceName: "Travel Mac",
+    originBootId: "boot-b",
+    originOnline: false,
+    advertisedAvailability: "active",
+    availability: "source-unavailable",
+    availabilityAt: 1_722_000_000_000,
+    publishedAt: 1_722_000_000_000,
+    updatedAt: 1_722_000_000_000,
+    openable: false,
+    editable: false,
+  },
+];
+
+function liveAppsPreviewClient(state: LiveAppsPreviewState): MadeAppsClient {
+  return {
+    async request(): Promise<unknown> {
+      return {};
+    },
+    subscribe(_method, _params, _onEvent) {
+      if (state === "loading") return new Promise(() => undefined);
+      if (state === "unavailable") {
+        return Promise.reject(
+          Object.assign(new Error("preview unavailable"), { kind: "UNAVAILABLE" }),
+        );
+      }
+      return Promise.resolve({
+        snapshot: state === "populated" ? LIVE_APPS_FIXTURE : [],
+        unsubscribe: () => undefined,
+      });
+    },
+  };
+}
+
+/** Design-page adapter for Live. Only the product client is replaced. Its form is its host's: a
+ * stage at the Apps shelf's width, a container, draws its tiles. */
+export function LiveAppsPreview({
+  state = "empty",
+}: {
+  state?: LiveAppsPreviewState;
+}): ReactElement {
+  const client = useMemo(() => liveAppsPreviewClient(state), [state]);
+  return <LiveApps client={client} />;
 }

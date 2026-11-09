@@ -12,16 +12,11 @@
  */
 import { createCanvasEngine, NavDepth, NavFrame, PrefabId } from "@vibecook/ice";
 import { ZOOM_MAX, ZOOM_MIN } from "@vibecook/ice/desk";
-import type {
-  ArtifactAvailability,
-  ArtifactView,
-  PluginRecordState,
-  PluginRegistrySnapshot,
-} from "@vibefield/contracts";
+import type { ArtifactAvailability, ArtifactView } from "@vibefield/contracts";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { buildRegistry, createFieldEngine } from "../src/field-engine";
 import { type FrameSurface, sheetShelf } from "../src/frame/frame-surface";
-import { artifactsDotWords, hubWaits, unavailableSources } from "../src/frame/head-artifacts";
+import { artifactsDotWords, unavailableSources } from "../src/frame/head-artifacts";
 import { canvasHead, headPathEqual, readHeadPath } from "../src/frame/head-canvas";
 import { chosenSessionAct, frameActGroups } from "../src/frame/palette-acts";
 import {
@@ -369,44 +364,6 @@ describe("the package's dot (HN-8, PL-D1) — the catalog's standing state, in w
 
 /** The registry with these plugins, each in the state the registry folds it to (§9.3) and each
  * offering the side panel unless it names another slot — only the fields read here. */
-function registryOf(
-  ...plugins: ReadonlyArray<readonly [state: PluginRecordState, slot?: string]>
-): PluginRegistrySnapshot {
-  return {
-    generation: 1,
-    problems: [],
-    plugins: plugins.map(([state, slot = "hud.side-panel"], index) => ({
-      id: `vibefield.plugin-${index}`,
-      state,
-      contributions: { surfaces: [{ slot }] },
-    })),
-  } as unknown as PluginRegistrySnapshot;
-}
-
-describe('why the Apps shelf has no Hub for Live (HN-8; DESIGN.md §8 "Artifacts"; ruling 10)', () => {
-  it("is off while the plugin that offers the side panel is `disabled` — the one state that turning it on would help", () => {
-    expect(hubWaits(registryOf(["disabled"]))).toBe("off");
-  });
-
-  it("can't run while that plugin is `invalid` or `incompatible` — on or off alike — or while none offers the side panel", () => {
-    expect(hubWaits(registryOf(["invalid"]))).toBe("cant-run");
-    expect(hubWaits(registryOf(["incompatible"]))).toBe("cant-run");
-    // a plugin that is on but offers another slot brings no Hub
-    expect(hubWaits(registryOf(["enabled", "hud.panel"]))).toBe("cant-run");
-    expect(hubWaits(registryOf())).toBe("cant-run");
-  });
-
-  it("is opening while that plugin is on and its Hub not yet bound — and before any registry", () => {
-    expect(hubWaits(registryOf(["enabled"]))).toBe("opening");
-    expect(hubWaits(null)).toBe("opening");
-  });
-
-  it("lets the plugin likelier to bring a Hub speak, should two offer it", () => {
-    expect(hubWaits(registryOf(["invalid"], ["enabled"]))).toBe("opening");
-    expect(hubWaits(registryOf(["incompatible"], ["disabled"]))).toBe("off");
-  });
-});
-
 describe("the zoom's band and its readout (DK-3, ruling 5 — the desk's scale-free zoom)", () => {
   it("prints any zoom the desk allows as one number: whole from 10%, finer below, never 0%", () => {
     expect(zoomPercent(1)).toBe(100);

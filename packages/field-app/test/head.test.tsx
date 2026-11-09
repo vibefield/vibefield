@@ -29,23 +29,19 @@ import type {
   DocSyncStatus,
   FrameView,
   FrameZoomAct,
-  PluginRecordState,
 } from "@vibefield/contracts";
 import type { FielddClient } from "@vibefield/fieldd-client";
 import { FielddProvider } from "@vibefield/fieldd-client/react";
-import type { PluginSurfaceProps } from "@vibefield/plugin-sdk";
-import { act, type ReactElement, useState } from "react";
+import { act, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { SyncQuestionDoor } from "../src/account/sync-question";
-import { HeadLive } from "../src/design-system/HeadPreview";
 import type { DocManagerApi, DocManagerState } from "../src/doc-manager";
 import { resetDocSyncStatuses, setDocSyncStatuses } from "../src/doc-sync-store";
 import { publishGodviewDeck, resetGodviewDeckDoorForTest } from "../src/frame/deck-door";
 import type { FrameSurface } from "../src/frame/frame-surface";
 import { Head, useShownShelf } from "../src/frame/Head";
 import {
-  HUB_START_BOUND_MS,
   resetArtifactCatalog,
   setArtifactCatalog,
   setHeadAppsClient,
@@ -54,7 +50,6 @@ import {
 import type { HeadCanvas, HeadCrumb } from "../src/frame/head-canvas";
 import { PackageCircle } from "../src/frame/PackageCircle";
 import type { ViewKeys } from "../src/frame/views";
-import { register } from "../src/plugin-host/surface-registry";
 
 // The plugin registry as the window's feed sets it: none until a test says
 // otherwise (no daemon has answered).
@@ -205,62 +200,6 @@ function artifact(title: string, availability: ArtifactAvailability, index = 0):
   };
 }
 
-/** The registry as fieldd would say it: the Browser plugin — the one that contributes the side
- * panel, the Hub — on or off, and the state the registry folds that to (§9.3: `invalid` and
- * `incompatible` whether on or off). Only the fields the head and the surface host read. */
-function browserRegistry(
-  on: boolean,
-  state: PluginRecordState = on ? "enabled" : "disabled",
-): unknown {
-  return {
-    generation: 1,
-    problems: [],
-    plugins: [
-      {
-        id: "vibefield.browser",
-        state,
-        enabled: on,
-        contributions: {
-          surfaces: [{ id: "vibefield.browser.artifacts", title: "Apps", slot: "hud.side-panel" }],
-        },
-      },
-    ],
-  };
-}
-
-/** The Artifact Hub's stand-in: the side panel's contribution, whose button closes it, and a
- * field as its Add step has. */
-function HubSurface(props: PluginSurfaceProps): ReactElement {
-  return (
-    <div>
-      <button
-        type="button"
-        className="hub-close"
-        onClick={props.slot === "hud.side-panel" ? props.requestClose : undefined}
-      >
-        The Hub
-      </button>
-      <input className="hub-field" aria-label="Local port" />
-    </div>
-  );
-}
-
-/** Bind the Hub as the Browser plugin binds it; unbound after the test, or sooner by the
- * returned hand (a disable or a restart). */
-function bindHub(): () => void {
-  const bound = register(
-    "vibefield.browser",
-    "vibefield.browser.artifacts",
-    "hud.side-panel",
-    HubSurface,
-    100,
-    "Apps",
-  );
-  const unbind = () => bound.dispose();
-  unbinds.push(unbind);
-  return unbind;
-}
-
 /** MA-4c — the window's fieldd client as From your agents asks it (`MadeAppsClient`, structurally
  * the window's `FielddClient`): every ask and every subscription recorded, each subscription's
  * letting go too. Its answers are the doors' emptiest true ones — no apps, no sources, no
@@ -296,6 +235,18 @@ function appsDoor() {
   return { client, asked, released, methods };
 }
 
+/** Live and From your agents over the window's client, as the head's feed hands it in. */
+function giveClient(): ReturnType<typeof appsDoor> {
+  const door = appsDoor();
+  act(() => setHeadAppsClient(door.client));
+  return door;
+}
+
+/** Live in a shelf: the panel's own root, the region named "Live". */
+function liveIn(within: Element | null | undefined): HTMLElement | null {
+  return within?.querySelector<HTMLElement>(".vf-artifact-panel") ?? null;
+}
+
 /** Let the made group's first asks and their answers land (they are promises, never timers). */
 async function settle(): Promise<void> {
   await act(async () => {
@@ -309,7 +260,6 @@ let pane: HTMLElement | null = null;
 let surfaceNow: FrameSurface | null = null;
 let setSurfaceNow: ((next: FrameSurface | null) => void) | null = null;
 let setViewNow: ((view: FrameView) => void) | null = null;
-const unbinds: Array<() => void> = [];
 
 afterEach(() => {
   act(() => root?.unmount());
@@ -325,7 +275,6 @@ afterEach(() => {
   act(() => resetDocSyncStatuses());
   act(() => resetArtifactCatalog());
   act(() => setHeadAppsClient(null));
-  for (const unbind of unbinds.splice(0).reverse()) unbind();
   registry.snapshot = null;
   resetGodviewDeckDoorForTest();
   vi.useRealTimers();
@@ -379,7 +328,6 @@ function mount(
           onSurfaceChange={setSurface}
           {...(options.menuZoom !== undefined ? { menuZoom: options.menuZoom } : {})}
           {...(options.syncQuestion !== undefined ? { syncQuestion: options.syncQuestion } : {})}
-          windowId="field"
         />
       </>
     );
@@ -1435,12 +1383,13 @@ describe("the sheet's two shelves (PL-D1) — one surface, the button pressed sh
     expect(surfaceNow).toBeNull();
   });
 
-  it("shuts on Esc from a field in the Hub, and gives the keyboard back to the button that opened it", () => {
-    bindHub();
+  it("shuts on Esc from a field on the shelf, and gives the keyboard back to the button that opened it", async () => {
+    giveClient();
     mount();
     act(() => pack().focus());
     act(() => pack().click());
-    const field = shelf("artifacts")?.querySelector<HTMLInputElement>(".hub-field");
+    await settle();
+    const field = shelf("artifacts")?.querySelector<HTMLInputElement>('input[type="search"]');
     act(() => field?.focus());
     expect(document.activeElement).toBe(field);
     const viewEsc = vi.fn();
@@ -1466,7 +1415,7 @@ describe("the sheet's two shelves (PL-D1) — one surface, the button pressed sh
   });
 });
 
-describe('the Apps shelf hosts the Hub, Live, and From your agents (DESIGN.md §8 "Artifacts — the Artifacts shelf\'s contents", as amended)', () => {
+describe('the Apps shelf holds Live and From your agents (DESIGN.md §8 "Artifacts — the Artifacts shelf\'s contents", as amended)', () => {
   it("draws Live with no plugin registered: Live is the app's own, and it says no wait (FL-2)", async () => {
     const door = appsDoor();
     act(() => setHeadAppsClient(door.client));
@@ -1479,40 +1428,40 @@ describe('the Apps shelf hosts the Hub, Live, and From your agents (DESIGN.md §
     expect(door.methods()).toContain("artifact.subscribe");
   });
 
-  it("mounts the side panel's one contribution there, in its plugin's scope; the Hub's own close shuts the sheet", () => {
-    bindHub();
+  it("mounts Live only while the shelf shows: a shut sheet asks nothing", async () => {
+    const door = giveClient();
     mount();
-    // only while the shelf shows: a shut sheet holds no Hub
-    expect(host?.textContent).not.toContain("The Hub");
+    await settle();
+    expect(liveIn(host)).toBeNull();
+    expect(door.methods()).not.toContain("artifact.subscribe");
     act(() => pack().click());
-    const scope = shelf("artifacts")?.querySelector<HTMLElement>(
-      '[data-vf-plugin="vibefield.browser"]',
-    );
-    expect(scope?.querySelector(".hub-close")?.textContent).toBe("The Hub");
-    act(() => scope?.querySelector<HTMLButtonElement>(".hub-close")?.click());
-    expect(surfaceNow).toBeNull();
+    await settle();
+    expect(liveIn(shelf("artifacts"))?.getAttribute("aria-label")).toBe("Live");
+    expect(door.methods()).toContain("artifact.subscribe");
   });
 
-  it("keeps the Hub through the sheet's 600ms fold, so it never folds away empty", async () => {
+  it("keeps Live through the sheet's 600ms fold, so it never folds away empty", async () => {
     vi.useFakeTimers();
-    bindHub();
+    giveClient();
     mount({ open: "artifacts" });
+    await settle();
     act(() => pack().click());
     expect(surfaceNow).toBeNull();
-    expect(shelf("artifacts")?.textContent).toContain("The Hub");
+    expect(liveIn(shelf("artifacts"))).not.toBeNull();
     await act(async () => vi.advanceTimersByTimeAsync(599));
-    expect(shelf("artifacts")?.textContent).toContain("The Hub");
+    expect(liveIn(shelf("artifacts"))).not.toBeNull();
     await act(async () => vi.advanceTimersByTimeAsync(1));
-    expect(shelf("artifacts")?.textContent).not.toContain("The Hub");
+    expect(liveIn(shelf("artifacts"))).toBeNull();
   });
 
-  it("hosts the Hub in a container pinned at the OPEN sheet's inner width, so its tiles never reflow while the sheet grows or folds (PL-D3; ruling 1)", () => {
-    bindHub();
+  it("hosts Live in a container pinned at the OPEN sheet's inner width, so its tiles never reflow while the sheet grows or folds (PL-D3; ruling 1)", async () => {
+    giveClient();
     mount({ open: "artifacts" });
-    // the Hub stands in the shelf's one inner box, never in the shelf itself
+    await settle();
+    // Live stands in the shelf's one inner box, never in the shelf itself
     const box = shelf("artifacts")?.firstElementChild;
     expect(box?.className).toBe("vf-head-hub");
-    expect(box?.querySelector('[data-vf-plugin="vibefield.browser"]')).not.toBeNull();
+    expect(liveIn(box)).not.toBeNull();
     // the box is the container the Hub's stylesheet asks (PL-D3) — at the open sheet's width
     // (`cqw`: the window's, with no container above the head; the catalog's plate stages one)
     // less the shelf's padding at each side
@@ -1532,165 +1481,6 @@ describe('the Apps shelf hosts the Hub, Live, and From your agents (DESIGN.md §
     // the covered sheet opens to the same width, so the same box serves it
     expect(ruleIn(HEAD_CSS, '.vf-head-sheet[data-open="true"]')).toContain(
       `width: min(${open?.[1]}%, ${open?.[2]});`,
-    );
-  });
-
-  it("says the Hub is off, in words, while its plugin is off — never a blank shelf", () => {
-    registry.snapshot = browserRegistry(false);
-    // bound, but its plugin turned off: the host shows it nowhere
-    bindHub();
-    mount({ open: "artifacts" });
-    const words = shelf("artifacts")?.querySelector(".vf-head-waits");
-    expect(words?.querySelector("strong")?.textContent).toBe("Live apps are off");
-    expect(words?.textContent).toContain("Turn on the Browser plugin in Settings › Plugins.");
-    expect(words?.hasAttribute("data-late")).toBe(false);
-    expect(shelf("artifacts")?.textContent).not.toContain("The Hub");
-  });
-
-  it("says it is opening, late, while the Hub starts — its plugin on and not yet bound, or no registry yet", () => {
-    for (const snapshot of [browserRegistry(true), null]) {
-      registry.snapshot = snapshot;
-      mount({ open: "artifacts" });
-      const words = shelf("artifacts")?.querySelector(".vf-head-waits");
-      expect(words?.textContent).toBe("Opening live apps…");
-      expect(words?.hasAttribute("data-late")).toBe(true);
-      act(() => root?.unmount());
-      root = null;
-      host?.remove();
-    }
-  });
-
-  it("times those words as History's opening words: nothing for 120ms, then a 180ms `ease`", () => {
-    const history = readFileSync(join(process.cwd(), "src/history/history-room-view.css"), "utf8");
-    const timing = (css: string, selector: string): string | undefined =>
-      ruleIn(css, selector).match(/animation: [\w-]+ ([^;]+);/u)?.[1];
-    expect(timing(HEAD_CSS, ".vf-head-waits[data-late]")).toBe("180ms ease 120ms both");
-    expect(timing(HEAD_CSS, ".vf-head-waits[data-late]")).toBe(
-      timing(history, ".vf-history-face[data-late]"),
-    );
-  });
-
-  it("stays open through the Hub's restart — an unbind never folds it — and takes the Hub back", () => {
-    registry.snapshot = browserRegistry(true);
-    const unbind = bindHub();
-    mount({ open: "artifacts" });
-    expect(shelf("artifacts")?.textContent).toContain("The Hub");
-    act(() => unbind());
-    expect(surfaceNow).toBe("artifacts");
-    expect($("[data-head-place]")?.dataset.open).toBe("true");
-    expect(shelf("artifacts")?.textContent).toBe("Opening live apps…");
-    act(() => {
-      bindHub();
-    });
-    expect(shelf("artifacts")?.textContent).toContain("The Hub");
-  });
-
-  it("says the Hub can't run while its plugin is invalid or incompatible, on or off, or absent — turning it on would not help (ruling 10)", () => {
-    for (const snapshot of [
-      browserRegistry(true, "invalid"),
-      browserRegistry(false, "incompatible"),
-      { generation: 1, problems: [], plugins: [] },
-    ]) {
-      registry.snapshot = snapshot;
-      mount({ open: "artifacts" });
-      const words = shelf("artifacts")?.querySelector(".vf-head-waits");
-      expect(words?.querySelector("strong")?.textContent).toBe("Live apps can't run");
-      expect(words?.textContent).toContain(
-        "The Browser plugin can't run in this VibeField — see Settings › Plugins.",
-      );
-      // a fact, said at once: nothing is starting
-      expect(words?.hasAttribute("data-late")).toBe(false);
-      act(() => root?.unmount());
-      root = null;
-      host?.remove();
-    }
-  });
-
-  it("says the Hub isn't starting once it has been opening for 10 s, the words crossfading in place — and the Hub takes the shelf the moment it binds (ruling 10)", () => {
-    vi.useFakeTimers();
-    registry.snapshot = browserRegistry(true);
-    mount({ open: "artifacts" });
-    const words = (): HTMLElement | null | undefined =>
-      shelf("artifacts")?.querySelector<HTMLElement>(".vf-head-waits");
-    const faces = (): HTMLElement[] => [
-      ...(words()?.querySelectorAll<HTMLElement>(".vf-head-waits-face") ?? []),
-    ];
-    expect(HUB_START_BOUND_MS).toBe(10_000);
-    act(() => vi.advanceTimersByTime(HUB_START_BOUND_MS - 1));
-    expect(words()?.textContent).toBe("Opening live apps…");
-    act(() => vi.advanceTimersByTime(1));
-    // the turn: the words it leaves fade out under the new ones, in one cell, and are not read
-    expect(words()?.hasAttribute("data-turning")).toBe(true);
-    expect(faces().map((face) => face.hasAttribute("data-leaving"))).toEqual([true, false]);
-    expect(faces()[0]?.getAttribute("aria-hidden")).toBe("true");
-    expect(faces()[0]?.textContent).toBe("Opening live apps…");
-    expect(faces()[1]?.querySelector("strong")?.textContent).toBe("Live apps aren't starting");
-    expect(faces()[1]?.textContent).toContain(
-      "Turn the Browser plugin off and on in Settings › Plugins.",
-    );
-    act(() => vi.advanceTimersByTime(179));
-    expect(faces()).toHaveLength(2);
-    act(() => vi.advanceTimersByTime(1));
-    expect(faces()).toHaveLength(1);
-    expect(words()?.hasAttribute("data-turning")).toBe(false);
-    expect(words()?.hasAttribute("data-late")).toBe(false);
-    // whichever it says, the Hub takes the shelf the moment it binds
-    act(() => {
-      bindHub();
-    });
-    expect(shelf("artifacts")?.querySelector(".vf-head-waits")).toBeNull();
-    expect(shelf("artifacts")?.textContent).toContain("The Hub");
-  });
-
-  it("starts its 10 s again with every new opening: a Hub that restarts is opening again, not stalled (ruling 10)", () => {
-    vi.useFakeTimers();
-    registry.snapshot = browserRegistry(true);
-    const unbind = bindHub();
-    mount({ open: "artifacts" });
-    act(() => vi.advanceTimersByTime(HUB_START_BOUND_MS * 2));
-    expect(shelf("artifacts")?.textContent).toContain("The Hub");
-    act(() => unbind());
-    expect(shelf("artifacts")?.textContent).toBe("Opening live apps…");
-    act(() => vi.advanceTimersByTime(HUB_START_BOUND_MS - 1));
-    expect(shelf("artifacts")?.textContent).toBe("Opening live apps…");
-    act(() => vi.advanceTimersByTime(1));
-    const said = shelf("artifacts")?.querySelector(".vf-head-waits-face:not([data-leaving])");
-    expect(said?.querySelector("strong")?.textContent).toBe("Live apps aren't starting");
-  });
-
-  it("says the same in the catalog's live head, over its fixture doors with no plugin host: opening, and past 10 s not starting, as a window's would (HN-8)", () => {
-    // The catalog's playground runs this clock from its mount (HeadLive), so the page's own row
-    // cannot read the words under real time; they are read here, with the clock frozen (item 129).
-    vi.useFakeTimers();
-    // no plugin host runs in the catalog: no registry has answered, and no Hub binds
-    expect(registry.snapshot).toBeNull();
-    function Playground(): ReactElement {
-      const [surface, setSurface] = useState<FrameSurface | null>("artifacts");
-      return <HeadLive surface={surface} onSurfaceChange={setSurface} />;
-    }
-    host = document.createElement("div");
-    document.body.appendChild(host);
-    root = createRoot(host);
-    act(() => root?.render(<Playground />));
-    const words = (): HTMLElement | null | undefined =>
-      shelf("artifacts")?.querySelector<HTMLElement>(".vf-head-waits");
-    act(() => vi.advanceTimersByTime(HUB_START_BOUND_MS - 1));
-    expect(words()?.textContent).toBe("Opening live apps…");
-    act(() => vi.advanceTimersByTime(1));
-    const said = words()?.querySelector(".vf-head-waits-face:not([data-leaving])");
-    expect(said?.querySelector("strong")?.textContent).toBe("Live apps aren't starting");
-  });
-
-  it("crossfades that turn over 180ms `ease` in one cell, and makes it at once under reduced motion (ruling 10)", () => {
-    const turning = ".vf-head-waits[data-turning] > .vf-head-waits-face";
-    expect(declared(ruleIn(HEAD_CSS, ".vf-head-waits-face"), "grid-area")).toBe("1 / 1");
-    expect(declared(ruleIn(HEAD_CSS, turning), "animation")).toBe("vf-head-in 180ms ease both");
-    expect(declared(ruleIn(HEAD_CSS, `${turning}[data-leaving]`), "animation")).toBe(
-      "vf-head-out 180ms ease both",
-    );
-    expect(declared(ruleIn(REDUCED_CSS, turning), "animation")).toBe("none");
-    expect(declared(ruleIn(REDUCED_CSS, ".vf-head-waits-face[data-leaving]"), "visibility")).toBe(
-      "hidden",
     );
   });
 
@@ -1717,15 +1507,14 @@ describe('MA-4c — From your agents beside the Hub (DESIGN.md §8 "Artifacts �
     later !== undefined &&
     (earlier.compareDocumentPosition(later) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
 
-  it("stands after the Hub in the shelf's one box — Live first, then From your agents — read over the window's client, the whole mesh", async () => {
+  it("stands after Live in the shelf's one box — Live first, then From your agents — read over the window's client, the whole mesh", async () => {
     const door = appsDoor();
     act(() => setHeadAppsClient(door.client));
-    bindHub();
     mount({ open: "artifacts" });
     await settle();
     const box = shelf("artifacts")?.querySelector<HTMLElement>(".vf-head-hub");
-    const live = box?.querySelector('[data-vf-plugin="vibefield.browser"]');
-    expect(live?.textContent).toContain("The Hub");
+    const live = liveIn(box);
+    expect(live?.getAttribute("aria-label")).toBe("Live");
     const made = madeIn(box);
     expect(made?.getAttribute("aria-label"), "From your agents, in the shelf's one box").toBe(
       "From your agents",
@@ -1739,31 +1528,7 @@ describe('MA-4c — From your agents beside the Hub (DESIGN.md §8 "Artifacts �
     });
   });
 
-  it('stands whether a Hub is bound or not, under the Hub\'s words — which speak for Live alone (§9 "Apps")', async () => {
-    for (const [snapshot, heading] of [
-      [browserRegistry(false), "Live apps are off"],
-      [browserRegistry(true, "invalid"), "Live apps can't run"],
-    ] as const) {
-      const door = appsDoor();
-      act(() => setHeadAppsClient(door.client));
-      registry.snapshot = snapshot;
-      mount({ open: "artifacts" });
-      await settle();
-      const box = shelf("artifacts")?.querySelector<HTMLElement>(".vf-head-hub");
-      const made = madeIn(box);
-      expect(made?.getAttribute("aria-label"), `From your agents beside "${heading}"`).toBe(
-        "From your agents",
-      );
-      const waits = box?.querySelector(".vf-head-waits");
-      expect(follows(waits, made), "Live's words first, From your agents after them").toBe(true);
-      expect(waits?.querySelector("strong")?.textContent).toBe(heading);
-      act(() => root?.unmount());
-      root = null;
-      host?.remove();
-    }
-  });
-
-  it("is the shelf's: it asks only while the shelf shows, and lets go once the sheet's fold ends, as the Hub does", async () => {
+  it("is the shelf's: it asks only while the shelf shows, and lets go once the sheet's fold ends, as Live does", async () => {
     vi.useFakeTimers();
     const door = appsDoor();
     act(() => setHeadAppsClient(door.client));
@@ -1789,12 +1554,11 @@ describe('MA-4c — From your agents beside the Hub (DESIGN.md §8 "Artifacts �
   it("holds the same two groups in the covered sheet, grown from the package circle (PL-D2)", async () => {
     const door = appsDoor();
     act(() => setHeadAppsClient(door.client));
-    bindHub();
     mount({ view: "godview", open: "artifacts" });
     await settle();
     const covered = $('.vf-head-sheet [data-shelf="artifacts"]');
     expect(covered?.getAttribute("aria-label")).toBe("Apps");
-    const live = covered?.querySelector('[data-vf-plugin="vibefield.browser"]');
+    const live = liveIn(covered);
     const made = madeIn(covered);
     expect(made?.getAttribute("aria-label"), "From your agents in the covered sheet").toBe(
       "From your agents",
@@ -1804,12 +1568,9 @@ describe('MA-4c — From your agents beside the Hub (DESIGN.md §8 "Artifacts �
     expect(madeIn(shelf("artifacts"))).toBeNull();
   });
 
-  it("draws no made group where no daemon is asked — the catalog's live head, these tests — as the dot reads none (a PIN)", () => {
-    bindHub();
+  it("draws neither group where no daemon is asked — the catalog's live head, these tests — as the dot reads none (a PIN)", () => {
     mount({ open: "artifacts" });
-    expect(
-      shelf("artifacts")?.querySelector('[data-vf-plugin="vibefield.browser"]'),
-    ).not.toBeNull();
+    expect(liveIn(shelf("artifacts"))).toBeNull();
     expect(madeIn(shelf("artifacts"))).toBeNull();
   });
 
@@ -1893,70 +1654,17 @@ describe('MA-4c — From your agents beside the Hub (DESIGN.md §8 "Artifacts �
     }
   });
 
-  it("keeps From your agents mounted through the Hub's restart under an open shelf: one subscription, never let go, a search being typed kept (§8: the shelf stays open through it)", async () => {
-    vi.useFakeTimers();
-    const door = appsDoor();
-    act(() => setHeadAppsClient(door.client));
-    registry.snapshot = browserRegistry(true);
-    const unbind = bindHub();
-    mount({ open: "artifacts" });
-    await settle();
-    const made = madeIn(shelf("artifacts"));
-    const search = made?.querySelector<HTMLInputElement>('input[type="search"]') ?? null;
-    expect(search?.getAttribute("aria-label"), "the group's search field").toBe("Search apps");
-    act(() => {
-      if (search !== null) setInputValue(search, "clock");
-    });
-    // the Hub goes: Live says it is opening, and the made group stays where it was, the same one
-    act(() => unbind());
-    await settle();
-    expect(shelf("artifacts")?.querySelector(".vf-head-waits")?.textContent).toBe(
-      "Opening live apps…",
-    );
-    expect(madeIn(shelf("artifacts")), "the same group under Live's words, never remounted").toBe(
-      made,
-    );
-    // and it comes back
-    act(() => {
-      bindHub();
-    });
-    await settle();
-    expect(shelf("artifacts")?.textContent).toContain("The Hub");
-    expect(madeIn(shelf("artifacts")), "the same group under the Hub again").toBe(made);
-    expect(search?.value, "the search a person was typing, kept").toBe("clock");
-    expect(
-      door.methods().filter((method) => method === "index.apps.subscribe"),
-      "one subscription through the Hub's restart",
-    ).toHaveLength(1);
-    expect(door.released, "nothing let go while the shelf showed").toEqual([]);
-  });
-
-  it("stands From your agents right under Live, 24 apart, whatever Live says: Live's words at their own height beside it, and the box's whole height only alone in it", async () => {
+  it("stands From your agents right under Live, 24 apart, whatever Live says", async () => {
     expect(declared(ruleIn(HEAD_CSS, ".vf-head-hub"), "gap"), "the two groups' gap").toBe("24px");
-    expect(
-      declared(ruleIn(HEAD_CSS, ".vf-head-waits"), "flex"),
-      "the words' own height",
-    ).toBeUndefined();
-    expect(declared(ruleIn(HEAD_CSS, ".vf-head-waits:only-child"), "flex")).toBe("1");
-    const door = appsDoor();
-    act(() => setHeadAppsClient(door.client));
-    registry.snapshot = browserRegistry(true);
+    giveClient();
     mount({ open: "artifacts" });
     await settle();
-    const waits = (): Element | null | undefined =>
-      shelf("artifacts")?.querySelector(".vf-head-waits");
-    expect(waits()?.textContent).toBe("Opening live apps…");
-    // (counted, not `matches(":only-child")`: happy-dom keeps an element's first answer to a
-    // structural selector after its sibling goes, so the selector is asked once, at the end)
-    expect(waits()?.parentElement?.children.length, "Live's words and From your agents").toBe(2);
-    expect(waits()?.nextElementSibling, "From your agents right after Live's words").toBe(
+    const live = liveIn(shelf("artifacts"));
+    expect(live?.textContent).toContain("No apps yet");
+    expect(live?.parentElement?.children.length, "Live and From your agents").toBe(2);
+    expect(live?.nextElementSibling, "From your agents right after Live").toBe(
       madeIn(shelf("artifacts")),
     );
-    // with no client there is no made group, and the words take the box alone, as before MA-4c
-    act(() => setHeadAppsClient(null));
-    expect(madeIn(shelf("artifacts"))).toBeNull();
-    expect(waits()?.parentElement?.children.length, "Live's words alone in the box").toBe(1);
-    expect(waits()?.matches(".vf-head-waits:only-child")).toBe(true);
   });
 
   it("says the shelf's words as DESIGN.md §9 \"Apps\" and the head's amendment rule them (MA-D13 (a))", async () => {
@@ -2001,9 +1709,10 @@ describe('MA-4c — From your agents beside the Hub (DESIGN.md §8 "Artifacts �
 describe("under a cover — the same sheet, grown from the package circle (PL-D2)", () => {
   const circleSheet = (): HTMLElement | null => $(".vf-head-sheet");
 
-  it("holds Apps alone above the cover, its head row the circle's own, outside the canvas's head", () => {
-    bindHub();
+  it("holds Apps alone above the cover, its head row the circle's own, outside the canvas's head", async () => {
+    giveClient();
     mount({ view: "godview", open: "artifacts" });
+    await settle();
     const sheet = circleSheet();
     expect(sheet?.dataset.open).toBe("true");
     expect(sheet?.hasAttribute("inert")).toBe(false);
@@ -2015,8 +1724,9 @@ describe("under a cover — the same sheet, grown from the package circle (PL-D2
     expect(own?.title).toBe("Close  Esc");
     expect(sheet?.querySelector(".vf-head-sheet-name")?.textContent).toBe("Apps");
     expect(sheet?.querySelector('[data-shelf="fields"]')).toBeNull();
-    const hub = sheet?.querySelector('[data-shelf="artifacts"] [data-vf-plugin]');
-    expect(hub?.textContent).toContain("The Hub");
+    expect(
+      liveIn(sheet?.querySelector('[data-shelf="artifacts"]'))?.getAttribute("aria-label"),
+    ).toBe("Live");
     // its dim over the cover, outside the head too
     const dim = $(".vf-head-dim");
     expect(dim?.dataset.open).toBe("true");
@@ -2198,39 +1908,41 @@ describe("under a cover — the same sheet, grown from the package circle (PL-D2
     expect(declared(shown, "transition")).toBe("opacity 90ms ease");
   });
 
-  it("folds over its 600ms as the cover lowers, the Hub still in it — never moving the Hub to the pill (ruling 5)", () => {
+  it("folds over its 600ms as the cover lowers, Live still in it — never moving it to the pill (ruling 5)", async () => {
     vi.useFakeTimers();
-    bindHub();
+    giveClient();
     mount({ view: "godview", open: "artifacts" });
-    const hub = circleSheet()?.querySelector(".hub-close");
-    expect(hub).not.toBeNull();
+    await settle();
+    const live = liveIn(circleSheet());
+    expect(live).not.toBeNull();
     act(() => setViewNow?.("canvas"));
     // the line folds the owner a frame later
     act(() => setSurfaceNow?.(null));
     expect(circleSheet()?.dataset.open).toBe("false");
-    expect(circleSheet()?.querySelector(".hub-close")).toBe(hub);
-    expect(shelf("artifacts")?.querySelector(".hub-close")).toBeNull();
+    expect(liveIn(circleSheet())).toBe(live);
+    expect(liveIn(shelf("artifacts"))).toBeNull();
     act(() => vi.advanceTimersByTime(599));
-    expect(circleSheet()?.querySelector(".hub-close")).toBe(hub);
+    expect(liveIn(circleSheet())).toBe(live);
     act(() => vi.advanceTimersByTime(1));
     expect(circleSheet()).toBeNull();
-    expect($(".hub-close")).toBeNull();
+    expect(liveIn(document.body)).toBeNull();
   });
 
-  it("lets the pill's sheet fold as a cover rises, the Hub still on its shelf — the covered sheet never hosts it (ruling 5)", () => {
+  it("lets the pill's sheet fold as a cover rises, Live still on its shelf — the covered sheet never hosts it (ruling 5)", async () => {
     vi.useFakeTimers();
-    bindHub();
+    giveClient();
     mount({ open: "artifacts" });
-    const hub = shelf("artifacts")?.querySelector(".hub-close");
-    expect(hub).not.toBeNull();
+    await settle();
+    const live = liveIn(shelf("artifacts"));
+    expect(live).not.toBeNull();
     act(() => setViewNow?.("godview"));
     act(() => setSurfaceNow?.(null));
     expect($("[data-head-place]")?.dataset.open).toBe("false");
-    expect(shelf("artifacts")?.querySelector(".hub-close")).toBe(hub);
+    expect(liveIn(shelf("artifacts"))).toBe(live);
     expect(circleSheet()).not.toBeNull();
-    expect(circleSheet()?.querySelector(".hub-close")).toBeNull();
+    expect(liveIn(circleSheet())).toBeNull();
     act(() => vi.advanceTimersByTime(600));
-    expect($(".hub-close")).toBeNull();
+    expect(liveIn(document.body)).toBeNull();
   });
 
   it("lays its dim over the cover only while the covered sheet shows — the dim follows the sheet it dims (§10; ruling 7)", () => {

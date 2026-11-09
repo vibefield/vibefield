@@ -2,7 +2,7 @@
    2026-11-05; §2.9's one exception, "a made app's fallback icon"; §7 and M6 for the motion). The
    shelf's second group, drawn by field-app beside the hosted Hub at the shelf's width: its head
    (the heading and the "Search apps" field), its days, and each day's made tiles in the Hub's tile
-   form, kept (plugins/browser's artifact-panel.css, HN-8): three across, 16 between rows and 14
+   form, kept (live-apps.css, HN-8): three across, 16 between rows and 14
    between columns; the 16:10 well at corners 10 with the hairline ring, the strong ring under the
    pointer; the name, the fact line, and the desktop with its state; the overflow on a chip over the
    well; the tiles move as the fields' do and hold still under reduced motion. A tile whose desktop

@@ -142,7 +142,6 @@ function mount(door: LineViewDoor | null = null): void {
           shelf={shelf}
           onSurfaceChange={setSurface}
           bindKeys={false}
-          windowId="field"
         />
         <Composer
           view={view}
