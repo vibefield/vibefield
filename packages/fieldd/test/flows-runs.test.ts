@@ -8789,6 +8789,86 @@ describe("CP-4a2b — the host's life: parked and woken, D2's lookup at a wake, 
       }).toEqual({ session: "rt-succ1", items: 0, reads: 1 });
     });
 
+    /** R13l (iv) and (v) (the fold's P1): FORMED's run across a boot, its session `pending`, and the boot's re-make
+     * reached (`frames`: host 1's call frame heard): told before it, a resume or a turn end finds the call unmade. */
+    const formedPending = async (h: Harness) => {
+      h.approved("review", FORMED);
+      const run = startedRun(await h.start({ flow: "review" })).run;
+      await waitFor(() => expect(h.enqueued).toHaveLength(1));
+      h.sessionRows.set("rt-step1", { live: false, pending: true, onPermission: false });
+      await booted(h);
+      await within(PARK_MS, () => (h.hosts[1]?.calls.length ?? 0) > 0);
+      return run;
+    };
+
+    it("R13l (iv) (slice 14's fold, P1, the skeptic's #1; Q6 item 1, Q9): a FORMED step `pending` across a boot and replaced after its re-make: §9's unheard line to the replacement says `in its form`", async () => {
+      // 852b04096: `#bind`'s `pending` road kept the args and set no form, so the line read "Answer once more."
+      // Kills: the form set past `#bind`'s `pending` road (back in `#bindLive` alone)
+      const h = await harness({ frames: true });
+      const run = await formedPending(h);
+      h.sessionRows.set("rt-repl1", { live: true, idle: true, onPermission: false });
+      h.resumed({ run, call: 1, runtimeRunId: "rt-repl1" });
+      await within(PARK_MS, () => linesOf(h, "rt-repl1", "unheard").length > 0);
+      expect({
+        session: sessionOf(h, run, 1),
+        unheard: linesOf(h, "rt-repl1", "unheard").map(({ text }) => text),
+      }).toEqual({ session: "rt-repl1", unheard: [unheardWords("Diff", true)] });
+    });
+
+    it("R13l (v) (slice 14's fold, P1, the skeptic's #1; Q6 item 1, G5): a FORMED step `pending` across a boot whose session then attaches, with no bind: a turn end off its form is a miss, no answer and one repair line", async () => {
+      // 852b04096: no form was held, so `#turnEnded` journaled `{ text }` unchecked and `.verdict` read undefined for good
+      // Kills: the form set past `#bind`'s `pending` road
+      const h = await harness({ frames: true });
+      const run = await formedPending(h);
+      h.sessionRows.set("rt-step1", { live: true, onPermission: false });
+      h.endTurn({
+        run,
+        call: 1,
+        runtimeRunId: "rt-step1",
+        turn: "t-attach",
+        outcome: "completed",
+        text: "no json here",
+      });
+      await within(
+        PARK_MS,
+        () => answersOf(h, run).length > 0 || linesOf(h, "rt-step1", "repair").length > 0,
+      );
+      expect({
+        answers: answersOf(h, run).map((line) => line.value),
+        repairs: linesOf(h, "rt-step1", "repair").length,
+      }).toEqual({ answers: [], repairs: 1 });
+    });
+
+    it("R13l (vi) (slice 14's fold, P1, the skeptic's #1; Q6 items 1 and 3): a FORMED step with no session on its record whose agent `ofRun` finds `pending`: `#madeAgain` holds the form with the session it writes, and a turn end off the form is a miss, no answer and one repair line", async () => {
+      // 852b04096: `#madeAgain`'s `pending` road kept the args and set no form
+      // Kills: the form set on `#bind`'s roads alone
+      const h = await harness({ spawnHeld: new Promise<never>(() => {}) });
+      h.approved("review", FORMED);
+      const run = startedRun(await h.start({ flow: "review" })).run;
+      await waitFor(() => expect(h.spawned).toHaveLength(1));
+      h.ofRunRows.set(run, [{ runtimeRunId: "rt-landed1", call: 1, live: true }]);
+      h.sessionRows.set("rt-landed1", { live: false, pending: true, onPermission: false });
+      await booted(h);
+      await within(PARK_MS, () => sessionOf(h, run, 1) === "rt-landed1");
+      h.sessionRows.set("rt-landed1", { live: true, onPermission: false });
+      h.endTurn({
+        run,
+        call: 1,
+        runtimeRunId: "rt-landed1",
+        turn: "t-attach",
+        outcome: "completed",
+        text: "no json here",
+      });
+      await within(
+        PARK_MS,
+        () => answersOf(h, run).length > 0 || linesOf(h, "rt-landed1", "repair").length > 0,
+      );
+      expect({
+        answers: answersOf(h, run).map((line) => line.value),
+        repairs: linesOf(h, "rt-landed1", "repair").length,
+      }).toEqual({ answers: [], repairs: 1 });
+    });
+
     it("R45 (slice 14, Q9): a step found idle at the boot's bind is asked once in §9's words, from `fieldd`, and reads `repairing`; a second boot asks nothing", async () => {
       // red-a: nothing wakes, so nothing is asked
       // Kills: the bind's idle read dropped; asked again at the second boot (§9's "asked once")
@@ -9808,6 +9888,29 @@ describe("CP-4a2b — the host's life: parked and woken, D2's lookup at a wake, 
         raises: 1,
         ended: minted,
         session: "rt-god1",
+        lines: [resumedWords("Diff", true)],
+      });
+    });
+
+    it("R46e (slice 14's fold, P1, the skeptic's #1; Q8 (a), W2): a FORMED step lost at a boot's bind, its item's Resume taken: §9's resumed line says `in its form`", async () => {
+      // 852b04096: `#bind`'s lost road returned before `#bindLive` set the form, so the line read "Finish it, then answer."
+      // Kills: the form set past `#bind`'s lost road
+      const h = await harness({ needsQueue: true });
+      h.approved("review", FORMED);
+      const run = startedRun(await h.start({ flow: "review" })).run;
+      await waitFor(() => expect(h.enqueued).toHaveLength(1));
+      h.exit("rt-step1");
+      await booted(h);
+      await within(PARK_MS, () => h.items.length > 0);
+      h.resumeAs("rt-step1", "rt-resumed1", { run, call: 1 });
+      const item = lostItemOf(h, run);
+      if (item !== undefined) await needsOf(h).answer(item.id, 0, PRINCIPAL);
+      await within(HOLD_IDLE_MS, () => linesOf(h, "rt-resumed1", "resume").length > 0);
+      expect({
+        raises: raisesOf(h),
+        lines: linesOf(h, "rt-resumed1", "resume").map(({ text }) => text),
+      }).toEqual({
+        raises: [lostRaise("Review", "Diff")],
         lines: [resumedWords("Diff", true)],
       });
     });

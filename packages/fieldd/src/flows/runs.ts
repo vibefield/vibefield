@@ -2487,10 +2487,14 @@ export class FlowRuns {
    * - no row, and a replacement of THIS run's own in flight (`replacing`, §J 2's origin law: `step.handed` reads it): it
    *   waits for `begun: "resume"`, the spawn gap's law. A handed session is never kept on it;
    * - gone or exited: its successor `ofRun` names by its call, bound as `#resumed` binds; a handed session 10a's
-   *   "‹label› failed."; else `#lost`.* */
+   *   "‹label› failed."; else `#lost`.*
+   * *Corrected 2026-11-09 (slice 14's fold, P1; the skeptic's #1, HIGH): the form is held first, on every road above
+   * (`#holdForm`). It was held only on the live road, so a step re-made `pending`, `replacing`, on a successor not yet
+   * live or lost, had none: its answer was journaled unchecked, and §9's line said no `in its form`.* */
   #bind(run: FlowRunId, live: LiveRun, step: FlowRunRecordStep, args: readonly unknown[]): void {
     const session = step.session;
     if (session === undefined) return;
+    if (!this.#holdForm(run, live, step.call, args)) return;
     const row = this.ports.sessions.of(session);
     if (row?.live === true) {
       this.#bindLive(run, live, step, session, row, args);
@@ -2517,10 +2521,27 @@ export class FlowRuns {
     else this.#handedGone(run, live, step);
   }
 
-  /** Slice 14 (Q6, Q9, Q10, Q18) — a step's session lives at its re-make: its form held (item 1); a handed session handed
-   * again (item 2), `inTurn` while it is not idle and no line of the step waits, so a turn in flight is the step's; a
-   * `holding` repair with no hold raised again (item 5), the queue deduping; a line kept `sending` queued (Q10), which
-   * starts its own turn; and an idle session asked once (Q9). */
+  /** Slice 14 (Q6 item 1; the fold's P1) — a step's form read from its call's own args at its re-make, on whichever road
+   * the re-make takes, so `#turnEnded`, `#askUnheard`, `#sendResumed` and `#queueUnsent` read it. `#bind`'s head and
+   * `#madeAgain`'s `pending` road call it; `#launched` holds a started step's form itself. False for a form that no
+   * longer checks: the call is answered in §9's words, while its run waits on it, and the road stops. The step is
+   * settled, so nothing is written to a session and no card is raised; a replacement or successor that lands after is
+   * the run's by origin, and its end takes it. */
+  #holdForm(run: FlowRunId, live: LiveRun, call: number, args: readonly unknown[]): boolean {
+    const formed = formOf(args);
+    if ("refused" in formed) {
+      if (live.waiting.has(call))
+        this.#answer(run, live, call, "agent", { ok: false, refused: formed.refused });
+      return false;
+    }
+    if (formed.form !== undefined) live.forms.set(call, formed.form);
+    return true;
+  }
+
+  /** Slice 14 (Q6, Q9, Q10, Q18) — a step's session lives at its re-make (its form held already, `#bind`'s head): a handed
+   * session handed again (item 2), `inTurn` while it is not idle and no line of the step waits, so a turn in flight is
+   * the step's; a `holding` repair with no hold raised again (item 5), the queue deduping; a line kept `sending` queued
+   * (Q10), which starts its own turn; and an idle session asked once (Q9). */
   #bindLive(
     run: FlowRunId,
     live: LiveRun,
@@ -2530,13 +2551,6 @@ export class FlowRuns {
     args: readonly unknown[],
   ): void {
     const { call } = step;
-    const formed = formOf(args);
-    if ("refused" in formed) {
-      if (live.waiting.has(call))
-        this.#answer(run, live, call, "agent", { ok: false, refused: formed.refused });
-      return;
-    }
-    if (formed.form !== undefined) live.forms.set(call, formed.form);
     if (step.handed === true && !live.hands.has(call)) {
       const inTurn = row.idle !== true && !this.#waitsInQueue(run, call, session);
       const unhand = this.ports.stepEnds.hand(
@@ -2583,7 +2597,8 @@ export class FlowRuns {
 
   /** Slice 14 (Q6 item 3) — a booted step with no session on its record: its origin read once, so a spawn that landed
    * before a kill is bound, never spawned twice. Found live: the session written and the prompt sent; found `pending`:
-   * the session written and the prompt unsent, for its replacement; none: `#launch`, as a fresh start. */
+   * its form held (`#holdForm`; the fold's P1), the session written and the prompt unsent, for its replacement; none:
+   * `#launch`, as a fresh start. */
   #madeAgain(
     run: FlowRunId,
     live: LiveRun,
@@ -2599,6 +2614,7 @@ export class FlowRuns {
       this.#launch(run, live, step.call, args, found);
       return;
     }
+    if (!this.#holdForm(run, live, step.call, args)) return;
     this.#stepWrite(run)(step.call, (kept) => ({
       ...kept,
       session: found,
