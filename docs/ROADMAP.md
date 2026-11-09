@@ -26,8 +26,9 @@
   nightly takes James's two `release-signing` clicks. The app is `0.1.0` (`apps/desktop/package.json`) and stays
   `0.1.0` until the commit that cuts `v0.9.0-beta.1` (WP12-D6 as amended; James, 2026-10-28, the housekeeping page
   (Q7)): tags `nightly-YYYYMMDD[.N]` (`scripts/release-plan.mjs`), version and title `0.1.0-nightly.YYYYMMDD[.N]`. Manual dispatch can publish a numbered revision on the same UTC day (James, 2026-11-03); scheduled releases remain daily, and existing tags are never reused. 0.9.0 is
-  tagged when RL6's four goals hold (the browser pane in a packaged build · History and Godview dogfooded daily ·
-  prod-shape deps · the release rails; `draft/docket/release-docket.html`), as betas `v0.9.0-beta.N`, then stable
+  tagged when RL6's goals hold (History and Godview dogfooded daily · prod-shape deps · the release rails;
+  `draft/docket/release-docket.html`; *corrected 2026-11-09: RL6 named a fourth, the browser pane in a packaged build,
+  which fell with the pane at James's first launch's lineup, DECISIONS "FL"*), as betas `v0.9.0-beta.N`, then stable
   after a soak; 1.0.0 at P0's exits (AR-6, the signed beta, the two-account witness).
 - **Heads** (the lead, vibe-field-5c, read 2026-10-28 07:40Z). main = origin/main `a7498883f`, pushed 05:32Z. CI
   verify on `a7498883f` is GREEN (run 40638591985, 06:02:37Z). Before it: green on `9612ade48` (run 40624603346), and
@@ -760,8 +761,9 @@ its rulings (`draft/rv/james-asks.md`, `draft/rv/lead-rulings.md`); the review `
   → PT-S4 (touch through serve-sim, supervised, after its `killPortHolder` is fixed: an EL8 pin event, loopback
   only, never `--allow-exec`). The capture bake-off (PT-S-B1, prepared in `/Volumes/SamsungRed/lanes/pts/bakeoff/`)
   stays queued on the mini; its result decides whether serve-sim's stream later replaces SCK's.
-- Owed: whether the phone ships among `BUNDLED_PLUGINS` (James's, §5; PT-S2's R13 and PT-S3's P14 left it and the
-  dev bundled set (`field-engine.ts`) untouched); PT-S1's host-bound files and its two ICE candidates (§6 PORTALS).
+- Whether the phone ships among `BUNDLED_PLUGINS`: no, for 0.9 (James, 2026-11-09, DECISIONS "FL"; PT-S2's R13 and
+  PT-S3's P14 left it and the dev bundled set (`field-engine.ts`) untouched).
+  Owed: PT-S1's host-bound files and its two ICE candidates (§6 PORTALS).
 
 **CO — the compose plane (sparks and their doors)** · cp-landing (lanes `co` and `mt/mt0`; the tool plane's build too, since the MT lead's session, vibe-field-dc, ended 10-31) · law `draft/compose-plane/thinking-roled-agents.md` §15–§17 and `draft/compose-plane/v2/` (version 2, ruled 2026-10-29), `draft/thinking-tool-plane.md` (MT, ruled 2026-10-30), DESIGN.md §2.10
 - Re-entered 10-28 on James's word, with its rulings since:
@@ -1032,7 +1034,8 @@ its rulings (`draft/rv/james-asks.md`, `draft/rv/lead-rulings.md`); the review `
   (the parts alone ×N and on CI; which of the 13 bare `30_000` rows keep a named constant; the one row still past a
   second) · item 111 (the Artifact panel's Copy does nothing in the app: a plugin's web clipboard write under the empty
   grant set, item 102's class; an SDK clipboard-write door over HN B2's host copy door (landed) unless HN B3 claims
-  it) · item 112 (main decodes a clipboard PNG of up to 64 MiB with no pixel bound; an IHDR read before decoding against
+  it; *closed by FL-2, 2026-11-09: the panel is the app's now, and Copy URL deals a card*) ·
+  item 112 (main decodes a clipboard PNG of up to 64 MiB with no pixel bound; an IHDR read before decoding against
   one new contracts constant, its literal ruled alone; HN B2 is in) · item 115 (`pnpm dev`'s nx watcher outlives a
   runner that ends without `shutdown()`: a watcher host on a stdin pipe, and a SIGHUP handler; after 111 and 112) ·
   item 126 (fd's: FakeCellDoorTests' stale-route row times out under heavy load) · item 128 (row 26's
@@ -1172,7 +1175,8 @@ its rulings (`draft/rv/james-asks.md`, `draft/rv/lead-rulings.md`); the review `
    - **Phase 2, the product blockers** (5–18 Nov, parallel lanes):
      - **A** BP-D9 (a) as ruled: LANDED 2026-11-05 (BP-1c, M134 `da1a3d695`) → R4, row 31 (`smoke:profile`) on a
        signed nightly · R3 (the mini) → BP-2, downloads (BP-D2: "at the first beta") → BP-D5's row with UA's user
-       removal.
+       removal. *(Struck 2026-11-09, James, DECISIONS "FL": the pane ships in no packaged app, so R4, row 31, BP-2 and
+       BP-D5's row leave the beta's gate and return with the pane.)*
      - **B** AR-7j, typed agents managed in the packaged app (LP-D1, D2): LANDED 2026-11-05 (M128 `45c3680a3`, LANDED
        "AR-7j"). Owed: its packaged row `verify-agents-package` (desk-gates row 34) green on the first signed build,
        with the start cost measured.
@@ -1211,10 +1215,15 @@ its rulings (`draft/rv/james-asks.md`, `draft/rv/lead-rulings.md`); the review `
      - the review Mac, the review identity and the filmed video (LP-D5, D6; `draft/launch/review-mac-runbook.md`);
      - external TestFlight through Beta App Review;
      - the Mac's add-phone door naming the App Store.
+   - **The first launch's lineup** (James, 2026-11-09; DECISIONS "FL"; LANDED "FL-1"): the browser pane, the notebook
+     and the comment pad's hook are out; the note, the print, the mini mat and the whiteboard ship. Owed through the
+     betas: a desk picture card reaching an agent (`copy-to-hand.ts` sets `paste: ""`), several images dropped landing
+     as several prints (`cards-outside.ts`), the note's typing and cut-off text (an ICE release), and the first board
+     as a small moodboard (a design round, with images we own).
    - **Phase 4, the gate and the cut** (target 7 Nov, was 19 Nov):
-     - The gate: phase 1 done; A, B and D done; C measured, and fixed or said in the notes; the scope frozen; James on a
-       signed nightly with its checks green (James shortened RL6's five days, 2026-11-07 00:07Z); and one person
-       who isn't James installs from vibefield.dev on a clean Mac and gets an agent running.
+     - The gate: phase 1 done; B and D done (A struck 2026-11-09); C measured, and fixed or said in the notes; the
+       scope frozen; James on a signed nightly with its checks green (James shortened RL6's five days, 2026-11-07
+       00:07Z); and one person who isn't James installs from vibefield.dev on a clean Mac and gets an agent running.
      - Owed before the cut: measure the order of `releases.atom` and of the sign job's "previous" pick on a scratch
        repository (`draft/launch/policy-only-release.md` §4.3). If they follow commit dates, F1 (carry by publish
        order) and F2 (tag on a fresh cut commit) land first, on James's call.
@@ -1252,7 +1261,7 @@ its rulings (`draft/rv/james-asks.md`, `draft/rv/lead-rulings.md`); the review `
 | MV-8b ruling 8 | the transcript-provider migration: puppeteer 0.2.3 still ships adapter-claude's `observation/transcript/provider.ts` | its own track after MV | DECISIONS MV-8b, `docs/agent-plane/architecture.html` |
 | MV · SB | third-party views (MV-D14) · SB-4, SB-6 (after DS); SB's M4/L7/M5/L8 RULED at the built leans (Q14); SB-5 was delivered by PJ-7 (PJ-7's own Q4) | the next MV slot | `design-mv.md`, `thinking-spawn-bloom.md` |
 | Desk Phase 6 | STRING (ports on objects, ICE's wires, the Wire tool DK-D29) · OBJECT KIT (panel, controls, screens, cables, `process`) · AGENT'S EYES, now the tool plane's rooms (`thinking-tool-plane.md` §13; the `canvas_*` rows for DK-D26's MCP canvas tools; DT-5's control lane, the reserved `surface.control` scope) · UPLOAD PLANE + the mini-app bridge (SP-D9/SP-D7; UP v0.1 and MB v0.1 drafted 10-01; UP-D1…D8, MB-D1…D9 unruled; AH-D10's cross-device CAS rides it). It replaces the four dogfood packs (Q9); the microservice pack retires or becomes an OBJECT KIT `process` candidate | a thinking doc each; STRING first | `thinking-desk-migration.md`, `thinking-upload-plane.md`, `thinking-mini-app-bridge.md` |
-| Mind map pack | waits for STRING; redesign from Paper & String (MD-1…MD-15); v3's MM-D1…D14 were cut for the pre-desk canvas, MM-D14 moot (DK-D30) | STRING's thinking doc | `draft/mindmap/`, `thinking-mindmap-pack.md`, `predesign-mindmap-evidence.md` |
+| Mind map pack | the next release's headline, not 0.9 (James, 2026-11-09, DECISIONS "FL"); waits for STRING; redesign from Paper & String (MD-1…MD-15); v3's MM-D1…D14 were cut for the pre-desk canvas, MM-D14 moot (DK-D30) | STRING's thinking doc | `draft/mindmap/`, `thinking-mindmap-pack.md`, `predesign-mindmap-evidence.md` |
 | The bare mat's menu | "Paste here", "New note here": unbuilt | a desk lane | DESIGN.md §8, ICE design-015 §7 |
 | PT — PORTALS | PT-S is §2's (resumed 10-29; PT-S1 built 10-18 and 10-29, gated and looked at 10-29, LANDED 10-30 `1de84540b`; item 119's fix LANDED 10-31 `265325d09`; PT-S2 built code-only and light-green 10-30, LANDED 10-31 `e4aa3d367`; PT-S3 built code-only and light-green 10-31, LANDED 10-31 `c564de0e4`, its live run owed to James's unlock) · then PT-C, PT-T (form ruled last, PT-D10) · James's 10-14 A2, B4, the 5 s wind tail, unbuilt | PT-C, PT-T: after PT-S (PT-D11's order: the simulator, window capture, the terminal) · A2, B4, the tail: a PT lane | `thinking-portals.md`, `draft/portals-maps/`, ICE design-019 |
 | PLUG follow-ups | the KIT slice · third-party listing (P8e: TD registry + R2 process host; PA-24, §20.5, §21.8) · sideload · R2 `host:"process"` · PRC-5's power loss (§6) · PRC residual policies (§14–§15) · per-section undo/⌘Z/timeline (D29′, P7) | first-party publishing; third-party plugins; a Settings history design; runtime validation is tracked separately in §6 | `specs/plugin-architecture.md`, `thinking-p8-loadable-artifact.md` |
@@ -1274,8 +1283,8 @@ its rulings (`draft/rv/james-asks.md`, `draft/rv/lead-rulings.md`); the review `
 - NF-D3/NF-D5's long-pending read, or record them as answered by the as-built code.
 - MB-D1…D9 and UP-D1…D8 (proposal pages owed first, LANDED :7954) · SP-D4, ~~D11~~ *(struck 2026-10-31: ANSWERED
   2026-10-29 by PG-D2 (a) and PG-L4.6, as DECISIONS' SP row, design-06 and `thinking-sync-planes.md` record it)*, D12.
-- Whether the phone (`vibefield.simulator`) ships among `BUNDLED_PLUGINS` (`apps/desktop/packaging/bundled-list.mjs`;
-  PT-S1…PT-S3 left it untouched) · WIN-D6…D9 · LOG-V8. `PT-S-vs-PHONE.md` §5's seven choices are ruled (James,
+- Whether the phone (`vibefield.simulator`) ships among `BUNDLED_PLUGINS`: no, for 0.9 (James, 2026-11-09, DECISIONS
+  "FL") · WIN-D6…D9 · LOG-V8. `PT-S-vs-PHONE.md` §5's seven choices are ruled (James,
   2026-10-29 00:25Z, "Go with your leans"; its §6, the work kept) and leave the list.
 - DK's parked build rulings ((17)/(53), (48), (83), (92), (95), (97); DECISIONS DK addenda). (86) is answered by Q18
   and D22's "packaged built-ins" by WP8 (`5e7507d6c`); both leave the list.
@@ -1552,7 +1561,7 @@ Petition status lives in `draft/petitions/README.md`. Still open or owed there:
 | DK — the desk migration | COMPLETE; landed 10-09 | `thinking-desk-migration.md`, `thinking-the-desk.md`, ICE design-015…018, `docs/desk-gates.md` | James's parked build rulings |
 | GT — Godview terminal | PARKED; the deck's ladder done (GT-0…GT-8) | `specs/godview-terminal.md` | G29; GT-D22; row 13b |
 | TP / TC — terminal pipeline and custody | PARKED; TC RATIFIED 10-28 (Q6) | `specs/terminal-pipeline-v3*.md`, `specs/terminal-custody.md`, `thinking-terminal-mesh-cells.md`, `thinking-floor-wedge.md`, `thinking-inventory-latency.md` | D6's cell half |
-| MA — Apps (was AH — Artifact Hub) | ACTIVE since 11-05 (MA-D1…D13 ruled; MA-4 in 0.9, James 11-06); MA-0a + MA-1a (M152), MA-3 (M157, M162) and MA-4 (M166) landed; AH-1…3 landed, AH-4 unledgered | `thinking-mini-apps.md`, `specs/artifact-hub.md`, design-06 §5; DESIGN.md §2.9/§8/§9/§13 | MA-3f serving, which is the Drive's DR-1 (DR-D1 ruled (b): rosetta 0.1.4's export), then MA-3h; MA-6 the phone's shelf (unblocked: UM's M-phone landed 11-06, its sheet naming the strip's slots) |
+| MA — Apps (was AH — Artifact Hub) | ACTIVE since 11-05 (MA-D1…D13 ruled; MA-4 in 0.9, James 11-06); MA-0a + MA-1a (M152), MA-3 (M157, M162) and MA-4 (M166) landed; AH-1…3 landed, AH-4 unledgered; Live apps are field-app's since FL-2 (M267), `plugins/browser` gone | `thinking-mini-apps.md`, `specs/artifact-hub.md`, design-06 §5; DESIGN.md §2.9/§8/§9/§13 | MA-3f serving, which is the Drive's DR-1 (DR-D1 ruled (b): rosetta 0.1.4's export), then MA-3h; MA-6 the phone's shelf (unblocked: UM's M-phone landed 11-06, its sheet naming the strip's slots) |
 | DR — the Drive | ACTIVE since 11-06 (DR-D1…D13 ruled; D14, D15 open); DR-1a, DR-2a, DR-1b, DR-3a (W3's VF-FLOOR), the EL8s to rosetta and truffle and DR-3b (W3's VF-RELAY) landed (M183, M188, M190, M203, M205, M217, M249); wave 1's sibling PRs merged and released 11-06 | `thinking-drive.md` v0.3 (page sources `draft/drive/page/`); `thinking-mini-apps.md` | D14, D15 and DR-L3 (James); the EL8 to mille and the substrate slice; DR-1 (B) |
 | RV — the review fixes (Godview, terminal, puppeteer) | ACTIVE since 11-06; items 191 (RV #2 half A, M192), 192 (RV #6, M193), 201 (RV #17, #43, #49, #48, #50, M194), 203's VF-W1 (RV #1's pin-free half, M196), 211 (RV #97, #96, #93, #116, #95, #47, M199), 212 (RV #30, #29, #67, M201) and 216 (item 192's census row, M204) landed; W1–W2 building, the sibling lanes local | `draft/rv/` (plan.md, james-asks.md, lead-rulings.md); `lanes/rv/review/` | puppeteer R1 → EL8-1 with item 203; ghosttea 0.15.0 → EL8-g |
 | UM + SE — profile meters and one search | ACTIVE since 11-06 (UM-D21…D28 and SE-D1…D5 ruled on the page; UM-D16 E, D19 A; D3, D4, D8, D12…D15 at the leans); UM-0…UM-2 landed 11-06 (M-U1 `c9493b957`, run180, M180); UM-3 and SE-1 landed 11-06 (M-desk `ed8099c1e`, run187, M187); UM-4 and SE-2 landed 11-06 (M-phone `d6d76d079`, run198, M198) | `thinking-profile-meters.md`; `lanes/um/PLAN.md` §4; DESIGN.md §2.7/§5/§8/§9/§13; `docs/agent-plane/usage-meters.md` | UM-5 (UM-D14, the plan filter) in wave 2 |

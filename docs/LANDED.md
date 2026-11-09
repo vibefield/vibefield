@@ -45425,3 +45425,83 @@ the usage strings; @ for a spark on another desktop (Q2); the keyboard's arrow w
 
 Seven inserts into older entries: IOS-12a's, IOS-12b's, M-c1's, IOS-12e's and M-c2's Owed, and corrections at IOS-12d's
 M-d and IOS-12f's M-f1 Owed.
+
+## FL-1 — the first launch's lineup: the pane leaves the package, the notebook retires, Comment is the pad's door
+
+**FL-1 (six commits ending `797b98886`, M267, 2026-11-09).** James's word 03:06:49Z (DECISIONS "FL"). M267 lands FL-1
+and FL-2 together, a fast-forward of fourteen onto `d61181cf9`, tip `74ae0287c`, 2026-11-09T12:41:26Z. The
+verification is under FL-2 below.
+
+**What changed.**
+- The browser pane is off `BUNDLED_PLUGINS`. It stays in the repo and a dev run. Settings → General's Clear
+  browsing data stands only where a pane is. `plugins/` is the fieldd plane (`scripts/release-manifest.mjs:14`,
+  `:75`): this moves fieldd's digest and file list, never field-native's. `verify-plugins-package.mjs` prints one
+  fewer `plugin:<id>` row.
+- The notebook is retired the calendar's way: not mounted, offered or seeded; saved ones dormant and recoverable.
+- The comment pad has no tray entry and is off the first board; the selection bar's Comment is its door. Examples still
+  lay one, so `smoke:canvas`'s pad rows stand.
+- DESIGN.md first (§5's paper row, §8's hand, tools in hand and the desk's objects).
+
+**Found.**
+- The brief missed seven rows that the first vitest pass caught: four test files read the pad off the first board, and
+  `pegboard`'s ↓ needs a row below and its ⏎ held a round size. RL6 named the pane as a goal, corrected at its source.
+- **V's first red (run 267, `lanes/vf-m2/run267-a9-results/`, 2026-11-09):** `pegboard-rows.test.ts` (item 119), 2 of
+  4552, at `396d947a5`. FL-1b took the comment pad's tray entry, and the test built its hook from that manifest. The
+  file is PT-S1's, in none of this stack's paths. The product change stands; the witness moved, as its own commit after
+  FL-1b (`a9781504b`; VF-PM 11:40Z, 11:44Z), read red at FL-1b's tree first.
+- **Which hangs, measured:** item 119 now reads the Note's hook, from `FIELD_DESK_OBJECTS`, and the phone's shelf. In
+  the kernel (`layTray` at `DRAWER`, 1120, pitch 40) the launch's own hangs, the Note's hook, the Mini mat's shelf and
+  the Whiteboard's rail, all land at top 130, and equal tops cannot split a row. The phone's top is 132.52, where run 12
+  saw the bug. A mutant keying a row on the hang's top reddens the file (`[ 1, +0 ]` against `[ +0, +0 ]`).
+- **A witness withdrawn:** its first cut, tip `9b688381d`, was green in every test row and failed `tsc` field-app:
+  TS2322 at `pegboard-rows.test.ts(26,7)`, ICE's optional `TrayEntry.category` into `TrayItem`'s required one, which
+  vitest cannot see. It was re-made with `?? ""`, the reading `hungOf` makes in `Pegboard.tsx`, and every row re-ran.
+- **A new row class, dated 2026-11-09 (VF-PM 11:40Z):** the Mac's rows had been chosen by the paths a stack touches and
+  the tests that read `DESIGN.md`, and this file was neither. A stack's rows now include its **readers by import**:
+  every test that imports a package the stack changes, or names an export it changes. Here, 10 files; `live-eyes`,
+  `live-gate`, `simulator-devices` and `pegboard-rows` had never run on the Mac. The list is in
+  `lanes/lineup/mint/fl2-record-74ae0287c-on-d61181cf9/`'s brief.
+
+**Owed.** Row 31 (`smoke:profile`) parks with the pane. W11's physical apply: one look at a saved pane's missing-face
+path on James's install. A question for James: Clear browsing data hides while an install that used the pane keeps that
+data (main keeps the door, `packages/electron-shell/src/main/index.ts:1871`): clear it at the update, or leave it? The
+hero fix (a desk picture card reaching an agent), several images dropped, the note's typing and cut-off text (an ICE
+release), the first board as a moodboard.
+
+## FL-2 — Live apps are the app's own: the panel moves into field-app, the Browser plugin goes, and Live has no off
+
+**FL-2 (eight commits ending `74ae0287c`, M267, 2026-11-09).** James, typed to VF-PM 04:54:43Z: "i want it to be fully
+refactored now, land with the artifact hub work". The eighth commit, FL-2d, is the census alone.
+
+**What changed.**
+- `plugins/browser` is gone. The panel and its stylesheet moved by `git mv` to `field-app/src/frame/apps/LiveApps.tsx`
+  and `live-apps.css`. `BUNDLED_PLUGINS` goes from three to one across FL-1 and FL-2, the comment pad alone:
+  `plugins/browser-pane` stays in the repo for a dev run and ships in no package (James's lineup). The package loses
+  `plugins/browser`'s 920,855 B.
+- `hud.side-panel` retired from contracts, SDK, the registry, the harness and the authoring docs, with its
+  `requestClose` and its `icon`. `SurfaceContribution` narrows twice on purpose: the slot enum drops `hud.side-panel`,
+  `icon` goes with it, and `.passthrough()` stays.
+- The four Hub waits and the plugin's Off that hid tiles while serves ran are gone (DESIGN.md §8).
+- `artifact.reveal {artifactKey}`: `apps.use`, local, loopback windows only, a URL from fieldd's own catalog. The window
+  gains `artifact.publish` and `shell.dialog`; it still does not hold `shell.open`.
+- Copy URL deals a card (item 111 closed).
+- FL-2d is `package-manifest.json` alone, the file run 265's `--update` wrote over the merged tree, byte for byte
+  (sha256 `156923d9e2032155…`): 22/37, `plugins/browser`'s row gone, files 123 → 121. It was re-made once: the first
+  census, over the older baseline, conflicted with M260's.
+
+**Verified** (vf-m2, run 268, `lanes/vf-m2/run268-a9-results/`, `SHA256SUMS-a9-run268` `5bf6c381a518c209`, 27 of 27 OK
+by `shasum -c` at 12:44:58Z): V GREEN at `74ae0287c`, `pnpm verify` exit 0, against run 266's lines with this stack's
+moves. Count lines missing [] / extra []: contracts 64/1958, field-app 333/4552, fieldd 270 + 5 skipped (275) and 3791 +
+15 skipped (3806), plugin-browser's lines gone. Singles missing [] / extra []: "Checked 3542 files", "268 of 1142", 28
+projects, ios fixtures 430. Cargo byte-equal to the baseline, `gen:check` clean, "census assert OK — no §7.3 violation",
+`bundle:assert` initial 955.7 KB raw / 254.3 KB gz, History and Settings lazy. Run 265
+(`lanes/vf-m2/run265-a9-results/`) held the folded lock and re-wrote the census: 2 missing / 0 / 0, then no drift.
+
+**Found.** Two tests the first brief missed (`wearing-the-mat`, fieldd's real-repo canary). Row 29's "the others stay
+enabled" has no others at one plugin; the pure two-plugin test holds it. The stack was re-cut three times by plumbing as
+M260, M264 and M266 landed first, each commit a three-way over its new parent, the ruled rows re-read at each.
+
+**Owed.** The Mac's three landing rows until they run, on James's word: `smoke:godview` (rung 11k), `smoke:bundled` (row
+29, one plugin), `smoke:canvas` (row 17, four staged and FL-1's whiteboard rows). `draft/specs/artifact-hub.md`
+(:99–:100, :311–:320): a dated correction at the source, commit-draft, James's hand. The 29 raw `rgb()` colours in
+`live-apps.css` ride as they were: tokenising them is its own slice.
