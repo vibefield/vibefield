@@ -1,20 +1,27 @@
 /**
  * ITEM 119 — ONE LAID LINE IS ONE ROW (field/desk/pegboard/pegboard-model.ts `boardSpecimens`; R14): a hook and a
  * shelf the kernel's own `layTray` hangs on one line read as one row on the board, in the lay's order — the order ← →
- * walk (ICE's `tray.focus`). The hangs are the comment pad's and the phone's as their manifests declare them, laid on
- * the widest drawer at its pitch (`DRAWER`). A row keyed on the hang's top split them: the shelf's top sits 2.52 px
- * below the hook's (132.52 against 130), so smoke:canvas's KEYS row read → onto the phone where the listbox's second
- * option was the note (run 12).
+ * walk (ICE's `tray.focus`). The hangs are the Note's, read from the objects this app mounts, and the phone's as its
+ * manifest declares it, laid on the widest drawer at its pitch (`DRAWER`). A row keyed on the hang's top split a hook
+ * from a shelf: the phone's top sits 2.52 px below the hook's (132.52 against 130), so smoke:canvas's KEYS row read →
+ * onto the phone where the listbox's second option was the note (run 12, beside the comment pad's hook, which no longer
+ * hangs since the first launch's lineup). The phone is no first-launch object, and it has to be this one: the launch's
+ * own hangs, the Note, the Mini mat and the Whiteboard, all sit on the pitch at one top, and equal tops cannot split.
  */
 
 import { DRAWER } from "@vibecook/ice/desk";
 import { hangError, layTray, type TrayItem } from "@vibecook/ice/kernel";
-import { commentPadManifest } from "@vibefield/plugin-comment-pad";
 import { simulatorManifest } from "@vibefield/plugin-simulator";
 import { describe, expect, it } from "vitest";
+import { FIELD_DESK_OBJECTS } from "../src/field/desk/desk-objects";
 import { boardSpecimens, type LaidSpecimen } from "../src/field/desk/pegboard/pegboard-model";
 
-const OBJECTS = [commentPadManifest, simulatorManifest].map((m) => m.contributes?.objects?.[0]);
+// The hook is the launch's own, read from what this app mounts: the file goes red if the lineup ever drops it.
+const NOTE = FIELD_DESK_OBJECTS.find((object) => object.tray?.label === "Note");
+const OBJECTS = [
+  NOTE === undefined ? undefined : { type: NOTE.type, tray: NOTE.tray, size: NOTE.defaultSize },
+  simulatorManifest.contributes?.objects?.[0],
+];
 
 const ITEMS: TrayItem[] = OBJECTS.flatMap((o) =>
   o?.tray === undefined
@@ -22,7 +29,7 @@ const ITEMS: TrayItem[] = OBJECTS.flatMap((o) =>
     : [
         {
           type: o.type,
-          category: o.tray.category,
+          category: o.tray.category ?? "",
           hang: o.tray.hang,
           ...(o.tray.order === undefined ? {} : { order: o.tray.order }),
         },
