@@ -166,6 +166,14 @@ extension AppsPull {
   }
 }
 
+/// What an empty Chat's night feeds the pull: it has no list to overscroll (ES-5c stands it in the list's place), so a
+/// drag of its own is decided once, as Field's is. RED: a stub.
+struct AppsNightDrag {
+  mutating func changed(_ translation: CGSize) -> CGFloat? { nil }
+
+  mutating func ended() -> Bool { false }
+}
+
 extension AppsDrop {
   /// Its top from the screen's: 4 under the island's foot, 52 on the page's frame (DESIGN.md §8).
   static func top(safeTop: CGFloat) -> CGFloat {
