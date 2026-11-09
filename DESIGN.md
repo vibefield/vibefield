@@ -3381,7 +3381,11 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     terminals covered: this said "16 right of the column" and "lifted as far as it must be to stay inside the
     stage". The built card stood 10 from the pill (the 16 was measured from the 40 circle's item), and inside the
     stage no z-index could raise it over the terminals, since the stage's head mask is a stacking context the deck
-    paints over.)*
+    paints over. Added the same day, UM-R's review: the 10 was not only the build's. It is the geometry of the
+    drawing this column names, `round4.css`'s `left: calc(100% + 16px)` of the 40 item, inside the pill's padding of
+    6, so this prose and its drawing disagreed, and UM-R settled it for the prose. ‹for James: the popover, the add's
+    card and the limit card stand 6 right of what he ruled on in round 4; the drawing's 10 is the one number back
+    (`CardStand`'s `RIGHT_OF_PILL`, `.vf-profiles-stand`, `.vf-profiles-moment`)›.)*
     - **Where the cards stand.** The popover and the add's card stand in **the cards layer** (`.vf-monitor-cards`),
       a root-level sibling after the stage at **z 13**: over the deck (10), its veil (11) and its readout (12), under
       the curtain (20), the CRT layers (30) and the head. Its box is the room a card may have: from the pill's top
@@ -3393,13 +3397,15 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       level crossing never leaves the hover. Leaving arms a **320ms** grace, and entering the card or the circle
       again in it cancels it; entering another circle or the add while a card shows waits a **120ms** dwell, and
       reaching the shown card first cancels that. The first open, with nothing showing, is at once. A pinned card
-      can still be peeked over this way, as before (*added 2026-11-09, UM-R; the two numbers are the edge drawer's,
-      retired HN-8, "opened after 120ms and closed after a 320ms grace" §8 "Edge trays", the only hover contract
-      recorded*).
+      can still be peeked over this way, as before ‹for James: may another circle's hover replace a pinned card for
+      a moment? It has since UM-3, and this keeps it, the lean being to keep the peek; §8 had not said› (*added
+      2026-11-09, UM-R; the two numbers are the edge drawer's, retired HN-8, "opened after 120ms and closed after a
+      320ms grace" §8 "Edge trays", the only hover contract recorded*).
     - **The head:** the profile's glyph (15) and its name at 14/600; a **default** tag when there are several
       profiles (10/600, padded 3 6, a capsule ringed by the strong hairline, in the secondary ink); the reading's
       age at 11.5 in the tertiary ink; and × at the end, a 24 round on the ink at 6% holding `close` 11 in the
-      secondary ink.
+      secondary ink; under the pointer its fill steps to the ready fill's 14% and its ink to the primary, at once
+      (*added 2026-11-09, UM-R's review: the build's values, written down here first*).
     - **The body:** the circle at **212** in a 212 column, its arcs answering the pointer (§8 "The Bands circle"),
       with **the bands key** under it: each of its three words led by its band drawn small (16 × 11), at 10.5/500 in
       the tertiary ink. Beside it, 14 away, one row per plan in the circle's order: the agent's mark (16), the
@@ -3407,24 +3413,27 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       attention ink when hot), and Settings' C1 line for its tightest window at 196 × 12.
     - A plan that needs you says so ("not signed in", "couldn't read") with its act. **Sign in** opens Settings →
       Agent Profiles on that profile's page; **Retry** reads that profile's usage again (`agents.usage` with
-      `refresh: true` and its `profileIds`). No act is inert. An agent with no meter says so in a line of its own,
+      `refresh: true` and its `profileIds`). Both wear the ready fill, 8%, and 14% under the pointer (*added
+      2026-11-09, UM-R's review*). No act is inert. An agent with no meter says so in a line of its own,
       its mark at 12. *(Added 2026-11-06, UM-3's review, as ruling 6 draws the add: while Settings is open, Sign in
       and the foot's Agent Profiles… draw disabled, their words in t4 (§2.4 "Off"); Retry is offered only where the
       usage door can read again.)*
     - **A plan's row** shows only that plan's sessions when clicked (UM-D14, carried A). That is the next wave's,
       after the desktop's and the phone's slices land (UM-5); until then a row takes no click.
     - **The foot**, over a hairline, at 11/400 in the tertiary ink: the lens's words (§9 "The meters' words"), and
-      **Agent Profiles…** at its end (600, the secondary ink), which opens Settings → Agent Profiles on that
-      profile's page.
+      **Agent Profiles…** at its end (600, the secondary ink, the primary under the pointer, *added 2026-11-09, UM-R's
+      review*), which opens Settings → Agent Profiles on that profile's page.
     - *Wave 1, until UM-5 (2026-11-06, UM-D14's interim, the lead's ruling 23; ‹for James›):* the one-profile
       popover's foot says only **Agent Profiles…**; a plan's row takes no click and is not pressable (no
       `aria-pressed`); partner lighting (a plan lighting the bodies that spend it, and a body its plan) waits for
       UM-5, which brings the session-to-plan join.
     - **Pinned**, it holds Godview's keys, so **Esc** closes it before a pane hears it; a click outside closes it
       too. **Closing is one act**, on one profile too: Esc, ×, a click on the chosen circle, the second click on a
-      lone profile's circle, opening Settings from the column and the terminals maximizing all hand the keyboard home
-      (to the circle, if the card held it), drop the pin and let go of the pointer, so the card stays closed until the
-      pointer leaves and returns. **Tab** from the open circle enters the card, on its first control that can act;
+      lone profile's circle, Settings opening (from the column or any other way) and the terminals maximizing all hand
+      the keyboard home (to the circle, if the card held it), drop the pin and let go of the pointer, so the card stays
+      closed until the pointer leaves and returns. While the terminals fill the window no card opens at all: the
+      deck only fades the stage, so a circle behind it stays reachable, and neither a pointer nor a press on it shows
+      or pins a card (its lens still chooses) (*added 2026-11-09, UM-R's review*). **Tab** from the open circle enters the card, on its first control that can act;
       **Shift+Tab** from there returns to the circle. Forward out of the card's last control follows the window's
       order into the deck (*added 2026-11-09, UM-R: Esc, the chosen circle and the lone unpin cleared only the pin, so
       a card under the pointer stood where it was*).
@@ -3439,7 +3448,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       offer and fact at 12/1.45 in the secondary ink; and its foot, `gear` 11 and "Opens Settings → Agent Profiles
       on New profile…" at 11/500 in the tertiary ink. *(Corrected 2026-11-09, UM-R: this said "Pointing at it shows",
       and the card stood while the add was disabled, offering an act it could not take, "16 right of the column".)*
-    - While the limit moment is due, its card stands in the add's card's place (§8 "The moments").
+    - While the limit moment is due, its card stands in the add's card's place (§8 "The moments"), and pointing at
+      the add shows nothing: no hidden card is held, and a circle after it opens at once (*added 2026-11-09, UM-R's
+      review*).
   - **The stage around it.** The claims strip moves to x **79** (13 + 52 + 14), its top where it was. The swarm
     steers around the pill, as around every chrome rectangle, and a view in flow keeps its width clear through the
     stage's left inset. Its boundary is named **Profiles**, and says "Profiles unavailable" where it stood (§8 "The
@@ -3846,8 +3857,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     while the card shows does what Add a profile… does. While Settings is open both draw disabled.
     The card is a menu's solid in Godview's mode, with its ring and shadow (§2.7): 284 wide, corners 16,
     padded 12 14 13, its lines 9 apart, and a pointer at the add (a 12 square turned 45°, 6 out of the
-    card's left edge and 28 down, ringed on its two outer sides). Its acts are 26 tall, corners 13,
-    padded 0 11, at 11.5/600. It enters with the profile notice's 300ms fade, a transition never a
+    card's left edge and 28 down, ringed on its two outer sides). It stands 16 right of the pill (*added
+    2026-11-09, UM-R's review: 10 until then, round 4's drawing; ‹for James›, the popover's correction above*). Its
+    acts are 26 tall, corners 13, padded 0 11, at 11.5/600. It enters with the profile notice's 300ms fade, a transition never a
     keyframe, and none under Reduce Motion. It is said as a group, "Another subscription?". It stands
     over the stage, so it moves no view in flow and widens no strip; the swarm steers around it, as around every
     chrome rectangle (*corrected 2026-11-09, UM-R: this sentence stopped at "strip", and the swarm's bodies ran under

@@ -406,7 +406,7 @@
   cursor: pointer;
 }
 
-/* the fill's step under the pointer (§7), the ready fill's own 14%, its ink the primary; no transition */
+/* §8 "The head": under the pointer the fill steps from its 6% to the ready fill's 14%, its ink the primary, at once */
 .vf-profiles-pop-close:hover {
   background: color-mix(in srgb, var(--vf-foreground) 14%, transparent);
   color: var(--vf-text-primary);
