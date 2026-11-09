@@ -9081,6 +9081,36 @@ describe("CP-4a2b — the host's life: parked and woken, D2's lookup at a wake, 
       }).toEqual({ answers: 1, unheard: 0 });
     });
 
+    it("R45b (iii) (slice 14's fold, P12; Q9; m105): a booted step with a form whose first turn end misses its form was heard: it takes the repair line, and `sessionIdle` asks it nothing", async () => {
+      // Kills: a heard turn end leaving the call in `live.unheard` (m105), which R45b (ii) cannot see: its step is
+      // answered, so the asker's waiting gate returns anyway
+      const h = await harness();
+      h.approved("review", FORMED);
+      const run = startedRun(await h.start({ flow: "review" })).run;
+      await waitFor(() => expect(h.enqueued).toHaveLength(1));
+      await booted(h);
+      // told until the bind has it (a turn end before a woken run's bind is dropped), and never again after its repair
+      let turn = 0;
+      await within(PARK_MS, () => {
+        if (linesOf(h, "rt-step1", "repair").length > 0) return true;
+        turn += 1;
+        h.endTurn({
+          run,
+          call: 1,
+          runtimeRunId: "rt-step1",
+          turn: `boot-${turn}`,
+          outcome: "completed",
+          text: "no form here",
+        });
+        return false;
+      });
+      idleNow(h.runs, "rt-step1");
+      expect({
+        repair: linesOf(h, "rt-step1", "repair").length,
+        unheard: linesOf(h, "rt-step1", "unheard").length,
+      }).toEqual({ repair: 1, unheard: 0 });
+    });
+
     it("R45d (slice 14, Q9's gate; timed, against the map's untimed: its positive control is a bound step): of four idle steps, `sessionIdle` asks the one with nothing waiting, and never one whose line waits in its queue, one `uncertain`, or one `holding`", async () => {
       // red-a: nothing wakes and sessionIdle() is a no-op, so even the control is never asked
       // Kills: each of the gate's three conditions dropped (that step asked)
