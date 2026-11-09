@@ -37,9 +37,11 @@ function mount() {
     docId: "doc-1",
   } as MountedDesk;
   const hands = new Set<Entity>();
+  const clock = { now: 1_000 };
   const applier = createDeskApplier(desk, {
     onCanvas: () => true,
     handOn: (e) => hands.has(e),
+    now: () => clock.now,
   });
   const ok = (rest: Record<string, unknown>): Ok => {
     const answer = applier.apply(intent(rest));
@@ -56,8 +58,18 @@ function mount() {
     const store = ce.docs.current()?.store;
     return { key, answer, entity: store?.resolve(key as never) as Entity };
   };
-  return { ce, desk, applier, ok, factOf, place, hands };
+  const countOf = (kind: string): number =>
+    (ok({ op: "list" }).value as { objects: { kind: string }[] }).objects.filter(
+      (object) => object.kind === kind,
+    ).length;
+  return { ce, desk, applier, ok, factOf, place, hands, clock, countOf };
 }
+
+/** What an object lies in: the board, or a mat. */
+const parentOf = (ce: ReturnType<typeof mount>["ce"], key: string): Entity | undefined => {
+  const e = ce.docs.current()?.store.resolve(key as never) as Entity;
+  return ce.world.getRelation(e, ChildOf);
+};
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -263,10 +275,107 @@ describe("undoing an agent's change", () => {
     });
   });
 
+  describe("a removed object goes back where it lay", () => {
+    function noteInMat() {
+      const world = mount();
+      const mat = world.place({}, "desk.minimat");
+      const note = world.ce.ops.spawnWidget(NOTE_TYPE, {
+        x: 0,
+        y: 0,
+        parent: mat.entity,
+        props: { text: "inside" },
+      });
+      world.ce.world.sync();
+      const key = world.ce.docs.current()?.store.keyOf(note) as unknown as string;
+      return { ...world, mat, key };
+    }
+
+    it("into the mat it was taken from", () => {
+      const { ce, ok, mat, key } = noteInMat();
+      const removed = ok({ op: "remove", key });
+      const restored = ok({ op: "undo", key, inverse: removed.inverse }).value as { key: string };
+      expect(parentOf(ce, restored.key)).toBe(mat.entity);
+      expect(ok({ op: "read", key: restored.key, tool: "read_text", input: {} }).value).toEqual({
+        text: "inside",
+      });
+    });
+
+    it("onto the board, while the person is inside a mat", () => {
+      const { ce, ok, place } = mount();
+      const mat = place({}, "desk.minimat");
+      const { key } = place({ text: "on the board" });
+      const board = parentOf(ce, key);
+      expect(board).toBeDefined();
+      const removed = ok({ op: "remove", key });
+      ce.step(20); // the mat becomes a container at a frame
+      ce.nav.enterContainer(mat.entity, { transition: "none" });
+      ce.step(36);
+      expect(ce.nav.depth()).toBe(1);
+      const restored = ok({ op: "undo", key, inverse: removed.inverse }).value as { key: string };
+      expect(parentOf(ce, restored.key)).toBe(board);
+    });
+
+    it("or not at all when that mat has gone", () => {
+      const { ok, factOf, mat, key, countOf } = noteInMat();
+      const removed = ok({ op: "remove", key });
+      ok({ op: "remove", key: mat.key });
+      expect(factOf({ op: "undo", key, inverse: removed.inverse })).toBe("conflict");
+      expect(countOf(NOTE_TYPE)).toBe(0);
+    });
+  });
+
   it("treats an inverse it cannot read as a conflict", () => {
     const { factOf, place } = mount();
     const { key } = place();
     expect(factOf({ op: "undo", key, inverse: { op: "nonsense" } })).toBe("conflict");
+  });
+});
+
+describe("an intent past its deadline", () => {
+  it("applies nothing and says so, because fieldd has stopped waiting and could offer no undo", () => {
+    const { applier, countOf } = mount();
+    const answer = applier.apply(
+      intent({ op: "place", kind: NOTE_TYPE, props: {}, expiresAt: 1_000 }),
+    );
+    expect(answer).toMatchObject({ ok: false, fact: "failed" });
+    expect(countOf(NOTE_TYPE)).toBe(0);
+  });
+
+  it("applies one still inside its deadline, and one that names none", () => {
+    const { applier, countOf } = mount();
+    expect(
+      applier.apply(intent({ op: "place", kind: NOTE_TYPE, props: {}, expiresAt: 1_001 })).ok,
+    ).toBe(true);
+    expect(applier.apply(intent({ op: "place", kind: NOTE_TYPE, props: {} })).ok).toBe(true);
+    expect(countOf(NOTE_TYPE)).toBe(2);
+  });
+});
+
+describe("a title on a place", () => {
+  it("names a kind that has a name of its own, and the answer says it", () => {
+    const { ok } = mount();
+    const answer = ok({ op: "place", kind: "desk.minimat", title: "Q3 plan", props: {} });
+    expect(answer.value).toMatchObject({ title: "Q3 plan", now: { name: "Q3 plan" } });
+  });
+
+  it("is refused in words for a kind with nowhere to keep one, and nothing is placed", () => {
+    const { applier, countOf } = mount();
+    const answer = applier.apply(
+      intent({ op: "place", kind: NOTE_TYPE, title: "Q3 plan", props: {} }),
+    );
+    expect(answer).toMatchObject({ ok: false, fact: "bad-input" });
+    expect(answer.ok ? "" : answer.text).toContain("has no title");
+    expect(countOf(NOTE_TYPE)).toBe(0);
+  });
+
+  it("is refused when the props name it otherwise, and takes the props that agree", () => {
+    const { factOf } = mount();
+    expect(
+      factOf({ op: "place", kind: "desk.minimat", title: "One", props: { name: "Two" } }),
+    ).toBe("bad-input");
+    expect(
+      factOf({ op: "place", kind: "desk.minimat", title: "One", props: { name: "One" } }),
+    ).toBe("answered");
   });
 });
 
