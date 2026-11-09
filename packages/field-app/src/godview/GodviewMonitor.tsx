@@ -13,7 +13,7 @@ import {
   viewWantsHistory,
 } from "@vibefield/puppeteer-view-sdk/host";
 import type { MonitorEndedRow } from "@vibefield/puppeteer-view-sdk/model";
-import { ProfileGlyph } from "@vibefield/puppeteer-view-sdk/react";
+import { AgentIcon, ProfileGlyph } from "@vibefield/puppeteer-view-sdk/react";
 import {
   ChromeBoundary,
   type HistoryPort,
@@ -42,6 +42,7 @@ import {
   type LiveFindAgent,
   publishGodviewFindDoor,
 } from "../frame/find-door";
+import { planChoice, planInProfile, planRunSet, runRecedes } from "../usage/plan-sessions";
 import { type GodviewFilters, storedGodviewFilters, storeGodviewFilters } from "./filter-state";
 import { GodviewHeadView } from "./GodviewHeadView";
 import type { GodviewTheme } from "./GodviewTuningPanel";
@@ -398,7 +399,9 @@ export function GodviewMonitor({
     publishesFind ? storedGodviewFilters() : { desk: null, profile: initialProfile, plan: null },
   );
   const [profileTab, setProfileTab] = useState<string | null>(opened.profile);
-  // UM-5a (UM-D14) — the plan chosen on a meter, with one profile too; kept as chosen, read where it stands
+  // UM-5a (UM-D14; DESIGN.md §8 "Godview's profiles column") — THE PLAN FILTER, for everyone, with one profile too:
+  // it is not the lens, which one profile does not have. Kept as chosen, read where it stands (`planChoice` of a key
+  // the feed no longer has is none: no token, no filter). It reaches the stage as `runs`, a value-stable string.
   const [planTab, setPlanTab] = useState<string | null>(opened.plan);
   const profilesPort = door?.profiles;
   useEffect(() => {
@@ -415,6 +418,28 @@ export function GodviewMonitor({
   const showTabs = showsProfileTabs(profileSets);
   const chosen = useMemo(() => chosenProfile(profileSets, profileTab), [profileSets, profileTab]);
   const chosenId = chosen?.id;
+  const plan = useMemo(
+    () => (planTab === null ? undefined : planChoice(profileSets, planTab)),
+    [profileSets, planTab],
+  );
+  // A lens clears a plan not in it (the drawing's rule), and choosing a plan clears a lens it is not in (‹for James›):
+  // read at the moment of the choice, through a ref, so the door and the column keep one stable verb each.
+  const profileSetsRef = useRef(profileSets);
+  profileSetsRef.current = profileSets;
+  const chooseProfile = useCallback((id: string | null): void => {
+    setProfileTab(id);
+    if (id === null) return;
+    setPlanTab((key) =>
+      key !== null && !planInProfile(profileSetsRef.current, key, id) ? null : key,
+    );
+  }, []);
+  const choosePlan = useCallback((key: string | null): void => {
+    setPlanTab(key);
+    if (key === null) return;
+    setProfileTab((id) =>
+      id !== null && !planInProfile(profileSetsRef.current, key, id) ? null : id,
+    );
+  }, []);
 
   // DS-3 — THE DEVICE FILTER: one desktop's rows, or every desktop's (the
   // default). A desktop that leaves the board falls back to all. It is chosen
@@ -460,6 +485,7 @@ export function GodviewMonitor({
     profilesRead: profileSetsRead,
     hasProfiles: profilesPort !== undefined,
     chosenProfile: chosenId,
+    chosenPlanRuns: plan?.runs,
     device: deviceChoice,
     find: findWanted,
   });
@@ -529,12 +555,21 @@ export function GodviewMonitor({
   // (Live now's desktop token, SE-D1) NARROWS — lanes elsewhere leave before
   // the past is lent — and the chosen profile (the profiles column's ring, one
   // state with Live now's profile token, SE-D2) RECEDES, where a run whose
-  // profile is unknown recedes.
+  // profile is unknown recedes; a chosen plan (UM-5a) recedes a lane off it, the
+  // same predicate as a live row's (`runRecedes`).
   const wantsHistory = viewWantsHistory(view.view);
+  const planRuns = plan?.runs;
+  const pastPlanRuns = useMemo(
+    () => (planRuns === undefined ? undefined : planRunSet(planRuns)),
+    [planRuns],
+  );
   const pastReceded = useCallback(
     (lane: MonitorEndedRow): boolean =>
-      chosenId !== undefined && !(lane.device.self && lane.profileSet === chosenId),
-    [chosenId],
+      runRecedes(
+        { profile: chosenId, planRuns: pastPlanRuns },
+        { self: lane.device.self, profileSet: lane.profileSet, provider: lane.provider?.id },
+      ),
+    [chosenId, pastPlanRuns],
   );
   const history = useMonitorHistory({
     port: door?.pastLanes,
@@ -591,10 +626,13 @@ export function GodviewMonitor({
     () => monitorRunFacts(chrome?.runs() ?? NO_RUNS, drawnRuns),
     [chrome, markerKey, drawnRuns],
   );
-  /** A profile chosen with no sessions under it says so over the stage; with
-   * no sessions at all the view's own empty state speaks instead. */
+  /** A profile or a plan chosen with no sessions under it says so over the
+   * stage (a plan, the drawing's word, before a profile); with no sessions at
+   * all the view's own empty state speaks instead. */
   const emptyUnder =
-    chosen !== undefined && agents.length > 0 && shown.length === 0 ? chosen : undefined;
+    (chosen !== undefined || plan !== undefined) && agents.length > 0 && shown.length === 0
+      ? (plan?.label ?? chosen?.label)
+      : undefined;
 
   // MV-D19 — the view host's stage: the chrome measured below, as plain data.
   // Every view reads it (MV-4…MV-6): the list's and the timeline's band and
@@ -880,6 +918,10 @@ export function GodviewMonitor({
     desk: deviceChosen,
     tabs: showTabs ? tabs : null,
     profile: chosenId ?? null,
+    plan:
+      plan === undefined
+        ? undefined
+        : { key: plan.key, label: plan.label, provider: plan.provider },
     connect: offersConnect,
     agents: findWanted ? agents : NO_COUNTED_ROWS,
     here,
@@ -894,12 +936,22 @@ export function GodviewMonitor({
       select: (rowId) => commands.select(rowId),
       filters: liveFilters,
       setDesk: setDeviceChoice,
-      setProfile: setProfileTab,
-      setPlan: setPlanTab,
+      setProfile: chooseProfile,
+      setPlan: choosePlan,
       holdKeys,
       viewHoldsKeys: readViewHoldsKeys,
     }),
-    [readRows, subscribeRows, transcripts, commands, liveFilters, holdKeys, readViewHoldsKeys],
+    [
+      readRows,
+      subscribeRows,
+      transcripts,
+      commands,
+      liveFilters,
+      chooseProfile,
+      choosePlan,
+      holdKeys,
+      readViewHoldsKeys,
+    ],
   );
   // LR — a still stage lends the Peek nothing: its rows are a picture
   const lendsFind = publishesFind && !still;
@@ -972,14 +1024,18 @@ export function GodviewMonitor({
           <ChromeBoundary name="Profile">
             <div className="vf-monitor-profile-empty" role="status">
               <span className="vf-monitor-profile-empty-ring" aria-hidden="true">
-                <ProfileGlyph
-                  glyph={emptyUnder.glyph}
-                  kind={emptyUnder.kind}
-                  filled={emptyUnder.default}
-                  size={16}
-                />
+                {plan !== undefined ? (
+                  <AgentIcon providerId={plan.provider} />
+                ) : (
+                  <ProfileGlyph
+                    glyph={chosen?.glyph}
+                    kind={chosen?.kind}
+                    filled={chosen?.default === true}
+                    size={16}
+                  />
+                )}
               </span>
-              <b>No sessions on {emptyUnder.label}</b>
+              <b>No sessions on {emptyUnder}</b>
               <span>
                 Only its sessions show. Click it again, or the × on search, to show them all.
               </span>
@@ -1001,7 +1057,7 @@ export function GodviewMonitor({
               }
               port={usagePort}
               chosen={chosenId ?? null}
-              onChoose={setProfileTab}
+              onChoose={chooseProfile}
               openNewProfile={openNewProfile}
               openProfile={openProfile}
               moment={columnMoment}

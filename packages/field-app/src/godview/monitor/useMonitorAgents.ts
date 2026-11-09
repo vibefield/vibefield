@@ -23,6 +23,7 @@ import { thisDeviceWord } from "../../account/link";
 import { askGodviewDeckUp } from "../../frame/deck-door";
 import type { LiveFindAgent } from "../../frame/find-door";
 import { peekHost } from "../../host";
+import { planRunSet, runRecedes } from "../../usage/plan-sessions";
 import type { MonitorFloorRecord } from "./agents";
 import { NO_RUNS, useChromeKey } from "./chrome-facts";
 import { type DeviceChoice, standingChoice } from "./device-filter";
@@ -121,6 +122,9 @@ export interface UseMonitorAgentsOptions {
   /** AR-S5 — the chosen profile tab's set id; every other row of this desktop
    * recedes (it keeps its place). Undefined: All. */
   chosenProfile?: string | undefined;
+  /** UM-5a (UM-D14) — the chosen plan's runs, `planRuns`'s string (a value, so a publish that says nothing new re-diffs
+   * nothing), or undefined: rows off the plan recede, a peer's and a terminal's too. */
+  chosenPlanRuns?: string | undefined;
   /** DS-3 — the chosen desktop's id, as the chip holds it; null is every
    * desktop, and a desktop that left the board falls back to all. */
   device?: string | null;
@@ -327,6 +331,7 @@ export function useMonitorAgents({
   profilesRead = false,
   hasProfiles = false,
   chosenProfile,
+  chosenPlanRuns,
   device = null,
   find = true,
 }: UseMonitorAgentsOptions): MonitorAgentsResult {
@@ -438,8 +443,11 @@ export function useMonitorAgents({
   const narrow = useMemo(createNarrowing, []);
   const placed = narrow(agents, deviceChosen, here);
   const shown = useMemo(
-    () => (chosenProfile === undefined ? placed : placed.filter((row) => row.receded !== true)),
-    [placed, chosenProfile],
+    () =>
+      chosenProfile === undefined && chosenPlanRuns === undefined
+        ? placed
+        : placed.filter((row) => row.receded !== true),
+    [placed, chosenProfile, chosenPlanRuns],
   );
 
   // AR-S5 — the tabs and the spawn menu (SB-3), from the profiles feed and the rows
@@ -547,13 +555,15 @@ export function useMonitorAgents({
       (row.device.self && row.kind === "agent" && handoff.has(row.id)) ||
       keepsFailure(row, panesHere);
   }, [exitedKey, handoffKey, joins]);
-  const receded = useMemo(
-    () =>
-      chosenProfile === undefined
-        ? undefined
-        : (row: MonitorAgentRow): boolean => !(row.device.self && row.profileSet === chosenProfile),
-    [chosenProfile],
-  );
+  const receded = useMemo(() => {
+    if (chosenProfile === undefined && chosenPlanRuns === undefined) return undefined;
+    const planRuns = chosenPlanRuns === undefined ? undefined : planRunSet(chosenPlanRuns);
+    return (row: MonitorAgentRow): boolean =>
+      runRecedes(
+        { profile: chosenProfile, planRuns },
+        { self: row.device.self, profileSet: row.profileSet, provider: row.provider?.id },
+      );
+  }, [chosenProfile, chosenPlanRuns]);
   const kindOf = useCallback(
     (id: string): MonitorAgentRow["kind"] | undefined =>
       model.byId.get(id)?.kind ?? feed?.held(id)?.row.kind,
@@ -888,7 +898,7 @@ export function useMonitorAgents({
   );
   useLayoutEffect(() => {
     viewReplica.refresh();
-  }, [viewReplica, placed, chosenProfile, deviceChosen, transitionRevision]);
+  }, [viewReplica, placed, chosenProfile, chosenPlanRuns, deviceChosen, transitionRevision]);
 
   // The view host reads its commands through the latest props; these reach the latest window too.
   const commands = useMemo<ViewSlotCommands>(

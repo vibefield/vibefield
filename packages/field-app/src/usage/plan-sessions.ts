@@ -124,6 +124,15 @@ export function planChoice(sets: readonly AgentProfileSet[], key: string): PlanC
   return undefined;
 }
 
+/** Whether a plan (or its twin) is in a profile: what a lens keeps, and what choosing a plan under a lens keeps. */
+export function planInProfile(
+  sets: readonly AgentProfileSet[],
+  key: string,
+  setId: string,
+): boolean {
+  return planFamily(sets, key).some((member) => member.startsWith(`${setId}/`));
+}
+
 /** `planRuns` as what `runRecedes` reads; built once, inside a memo keyed on the string. */
 export function planRunSet(runs: string): ReadonlySet<string> {
   return new Set(runs === "" ? [] : runs.split("\n"));

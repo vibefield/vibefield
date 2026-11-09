@@ -2105,7 +2105,9 @@
   }
 }
 
+/* a plan's mark in the ring draws at its text's size (UM-5a), as the profile's glyph does at 16 */
 .vf-monitor-profile-empty-ring {
+  font-size: 16px;
   width: 40px;
   height: 40px;
   margin-bottom: 4px;
