@@ -684,7 +684,7 @@ describe("the reach, the press and the drag", () => {
       grab: { x: 50, y: 30 },
     });
     // home is its place at rest, straight: flights carry no rotation
-    expect(start.home()).toEqual({ left: slot.x, top: slot.y, width: 104, height: 146 });
+    expect(start.home()).toEqual({ left: slot.x, top: slot.y, width: 120, height: 168 });
     // the drag is the carried layer's now: letting go here picks nothing up
     point("pointerup", window, slot.x + 56, slot.y + 30);
     expect(store.snapshot().held).toBeNull();
@@ -879,7 +879,7 @@ describe('the reach while Chat shows (SP-1d; Q5, DESIGN.md §8 "The hand", Holdi
     press(document.body, { key: "V", metaKey: true, shiftKey: true });
     expect(el.querySelector(".vf-cards")?.hasAttribute("data-raised")).toBe(true);
     for (const id of ["a", "b", "c"]) {
-      expect(drawnTop(el, id), id).toBeCloseTo(WIN.height - 68 - 86, 1);
+      expect(drawnTop(el, id), id).toBeCloseTo(WIN.height - 68 - 108, 1);
     }
   });
 });

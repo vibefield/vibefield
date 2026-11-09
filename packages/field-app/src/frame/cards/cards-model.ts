@@ -117,18 +117,19 @@ export function addCard(cards: readonly Card[], card: Card): readonly Card[] {
 
 // ── The fan (DESIGN.md §8 "The hand", Holding them) ─────────────────────────
 
-/** Poker size and proportion. */
-export const CARD_W = 104;
-export const CARD_H = 146;
+/** Poker size and proportion (CS-D8 A: a fifth wider than HN's 104 × 146, the same 5 : 7). */
+export const CARD_W = 120;
+export const CARD_H = 168;
 /** What shows of every card at rest: their tips on y 712 of the default
  * window, level with the line's top. */
 export const CARD_PEEK = 68;
-/** How far the reach lifts a card, and the distance it reaches over. */
-export const CARD_LIFT = 86;
-export const CARD_REACH = 120;
-/** The fan tightens as it fills: never wider than this between cards, never
- * steeper than this at its ends. */
-export const FAN_MAX_PITCH = 66;
+/** How far the reach lifts a card (the height less the peek, plus 8), and the
+ * distance it reaches over (120 × pitch / 66). */
+export const CARD_LIFT = 108;
+export const CARD_REACH = 138;
+/** The fan tightens as it fills: never wider than this between cards (0.635 of
+ * a card), never steeper than this at its ends. */
+export const FAN_MAX_PITCH = 76;
 export const FAN_MAX_TILT = 6.5;
 /** The fan keeps this clear of the line's right end, and this from the
  * window's right edge. */
@@ -150,7 +151,7 @@ export interface CardReach {
   readonly lift: number;
 }
 
-/** In every view but Chat: the bottom 214, and up to 86. */
+/** In every view but Chat: the bottom 214, and up to 108. */
 export const HAND_REACH: CardReach = { band: REACH_BAND, lift: CARD_LIFT };
 
 /** While Chat shows (SP-1d; Q5): the band begins at the panel's foot — the cover's reserve,

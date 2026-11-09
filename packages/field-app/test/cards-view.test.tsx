@@ -338,10 +338,10 @@ describe("the deal (HN: Where cards come from)", () => {
     const el = mount(<CardsView {...props({ arriving, onLanded })} />);
     const dealt = slotOf(el, "e");
     expect(dealt.dataset.phase).toBe("from");
-    expect(num(dealt, "--vf-cards-x")).toBeCloseTo(200 + 260 - 52, 1);
-    expect(num(liftOf(dealt), "--vf-cards-y")).toBeCloseTo(120 + 150 - 73, 1);
+    expect(num(dealt, "--vf-cards-x")).toBeCloseTo(200 + 260 - 60, 1);
+    expect(num(liftOf(dealt), "--vf-cards-y")).toBeCloseTo(120 + 150 - 84, 1);
     expect(num(liftOf(dealt), "--vf-cards-r")).toBe(-7);
-    // min(520 / 104, 300 / 146) is past the clamp: 1.3 of its own size at most
+    // min(520 / 120, 300 / 168) is past the clamp: 1.3 of its own size at most
     expect(num(liftOf(dealt), "--vf-cards-s")).toBe(1.3);
     // the window is visible: once its start is committed, it flies — no animation frame asked
     await act(async () => {
@@ -482,9 +482,9 @@ describe("a card picked up (HN-D5)", () => {
     const layer = el.querySelector<HTMLElement>(".vf-cards-held");
     expect(layer?.dataset.phase).toBe("up");
     const centre = heldCentre(WIN);
-    expect(centre).toEqual({ x: 538, y: 325, s: 2.6 });
+    expect(centre).toEqual({ x: 530, y: 314, s: 2.4 });
     const box = layer?.querySelector<HTMLElement>(".vf-cards-heldcard");
-    expect(box?.style.transform).toBe("translate(538px, 325px) scale(2.6)");
+    expect(box?.style.transform).toBe("translate(530px, 314px) scale(2.4)");
     expect(box?.querySelector(".vf-card")?.hasAttribute("data-held")).toBe(true);
     const bar = layer?.querySelector<HTMLElement>(".vf-cards-bar");
     expect(bar?.hasAttribute("data-on")).toBe(true);
@@ -541,14 +541,14 @@ describe("a card picked up (HN-D5)", () => {
   });
 
   it("sends it home to its place after a put back, and shrinks a removed one where it stands", () => {
-    // the middle card, whose place stands level: x 538, y 712 at the default window
+    // the middle card, whose place stands level: x 556, y 712 at the default window
     const home = { card: CARDS[2] as Card, phase: "home" as const };
     const el = mount(<CardsView {...props({ held: home })} />);
     const layer = el.querySelector<HTMLElement>(".vf-cards-held");
     expect(layer?.dataset.phase).toBe("home");
-    expect(REST.slots[2]).toMatchObject({ x: 538, y: WIN.height - CARD_PEEK });
+    expect(REST.slots[2]).toMatchObject({ x: 556, y: WIN.height - CARD_PEEK });
     const box = layer?.querySelector<HTMLElement>(".vf-cards-heldcard");
-    expect(box?.style.transform).toBe("translate(538px, 712px) scale(1)");
+    expect(box?.style.transform).toBe("translate(556px, 712px) scale(1)");
     expect(layer?.querySelector(".vf-cards-bar")?.hasAttribute("data-on")).toBe(false);
     expect(layer?.querySelector(".vf-cards-bar")?.hasAttribute("inert")).toBe(true);
     // on its way home it is no longer a dialog
@@ -559,11 +559,11 @@ describe("a card picked up (HN-D5)", () => {
     const gone = { card: card("gone"), phase: "gone" as const };
     const again = mount(<CardsView {...props({ held: gone })} />);
     const shrunk = again.querySelector<HTMLElement>(".vf-cards-heldcard");
-    expect(shrunk?.style.transform).toBe("translate(538px, 325px) scale(0)");
+    expect(shrunk?.style.transform).toBe("translate(530px, 314px) scale(0)");
   });
 
   it("fits the held card in a short window's reading fit, never under its own size", () => {
-    expect(heldCentre({ width: 1180, height: 500 }).s).toBeCloseTo(284 / 146, 5);
+    expect(heldCentre({ width: 1180, height: 500 }).s).toBeCloseTo(284 / 168, 5);
     expect(heldCentre({ width: 1180, height: 300 }).s).toBe(1);
   });
 });

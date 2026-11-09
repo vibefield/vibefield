@@ -37,8 +37,8 @@
   --card-far: rgb(0 0 0 / calc((0.08 + var(--card-lp) * 0.09) * var(--vf-card-shade)));
   position: relative;
   /* poker size and proportion: cards-model's CARD_W × CARD_H */
-  width: 104px;
-  height: 146px;
+  width: 120px;
+  height: 168px;
   border-radius: 6px;
   box-shadow:
     0 0.7px 0 0.15px var(--card-edge),

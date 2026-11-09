@@ -807,8 +807,8 @@ describe("a drag from another app (HN-6, HN-D2)", () => {
     });
     // from where the carried card hung by its top edge, the second a step to the right
     expect([...store.snapshot().arriving.values()]).toEqual([
-      { left: 448, top: 288, width: 104, height: 146 },
-      { left: 462, top: 288, width: 104, height: 146 },
+      { left: 440, top: 288, width: 120, height: 168 },
+      { left: 454, top: 288, width: 120, height: 168 },
     ]);
   });
 
@@ -833,10 +833,10 @@ describe("a drag from another app (HN-6, HN-D2)", () => {
     const [card] = store.snapshot().cards;
     expect(card).toMatchObject({ kind: "text", paste: "git status", origin: DRAGGED });
     expect(store.snapshot().arriving.get(card?.id ?? "")).toEqual({
-      left: 248,
+      left: 240,
       top: 188,
-      width: 104,
-      height: 146,
+      width: 120,
+      height: 168,
     });
   });
 

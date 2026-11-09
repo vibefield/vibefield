@@ -121,7 +121,7 @@ const MESSAGE: Card = {
 
 /** Its slot in the fan, at rest, as the hand's `home()` answers it: untilted — a flight carries
  * no turn, and the fan settles the card into its tilt once it is back. */
-const HOME: CardBox = { left: 540, top: 712, width: 104, height: 146 };
+const HOME: CardBox = { left: 540, top: 712, width: 120, height: 168 };
 
 const dragOf = (card: Card, over: Partial<CardDragStart> = {}): CardDragStart => ({
   card,
@@ -649,14 +649,14 @@ describe("the one drag machine (HN-4)", () => {
       scale: 0.12,
     });
     expect(carriedTransforms({ ...carried, phase: "home", tilt: 0, home: HOME })).toEqual({
-      anchor: "translate3d(592px, 894.5px, 0)",
-      card: "rotate(0deg) translate(-52px, -182.5px)",
+      anchor: "translate3d(600px, 922px, 0)",
+      card: "rotate(0deg) translate(-60px, -210px)",
       scale: 1,
     });
     // a slot that names a turn is landed on about the fan's own pivot
     const turned = { ...HOME, rotate: -3 };
     expect(carriedTransforms({ ...carried, phase: "home", tilt: 0, home: turned }).card).toBe(
-      "rotate(-3deg) translate(-52px, -182.5px)",
+      "rotate(-3deg) translate(-60px, -210px)",
     );
   });
 

@@ -55,7 +55,7 @@ export const LEAVE_PAST = 24;
 const FADE_SETTLE_MS = 160;
 /** The held card: reading size, in the reading fit the desk keeps for a held object (DESIGN.md §8
  * "Tools in hand": 116 under the window's top, 100 over its foot). */
-export const HELD_SCALE = 2.6;
+export const HELD_SCALE = 2.4;
 const HELD_TOP = 116;
 const HELD_FOOT = 100;
 
