@@ -17,6 +17,8 @@ import {
   type AgentSessionRecord,
   NEEDS_RECORD_FORMAT,
   type NeedsRecord,
+  OBJECT_RECORD_FORMAT,
+  type ObjectRecord,
   RECORD_STORES,
   SPARK_KEPT_FILE,
   type SparkRecord,
@@ -27,6 +29,8 @@ import { AgentInputQueues } from "../src/agent-input-queue";
 import { SessionRecordStore } from "../src/agent-sessions";
 import { FlowRecords, RUN_RECORDS_DIR } from "../src/flows/records";
 import { RpcCallError } from "../src/native-link";
+import { ObjectsRegistry } from "../src/objects/registry";
+import { ObjectsStore } from "../src/objects/store";
 import {
   newerFormat,
   RecordSigner,
@@ -359,6 +363,45 @@ const needsCase: StoreCase = {
   },
 };
 
+const objectRecord = (ref: string): ObjectRecord => ({
+  format: OBJECT_RECORD_FORMAT,
+  ref,
+  docId: "doc-main",
+  key: ref.slice("vf:obj/".length),
+  grants: [],
+});
+
+const objectsCase: StoreCase = {
+  name: "the desk's objects (ObjectsStore, read once at boot)",
+  service: RECORD_STORES.SERVICE_OBJECTS,
+  retryable: false,
+  words: UNREADABLE_WORDS.objects,
+  dir: (root) => join(root, "fieldd", "objects"),
+  keyPath: (root) => join(root, "fieldd", "objects.key"),
+  seed(root, which) {
+    const id = which === 0 ? "aaaa0000" : "bbbb1111";
+    new ObjectsStore({ dir: this.dir(root), keyPath: this.keyPath(root) }).write(
+      objectRecord(`vf:obj/${id}`),
+    );
+    return { file: join(this.dir(root), `${id}.json`), key: `vf:obj/${id}` };
+  },
+  boot(root, events, readFile) {
+    const store = new ObjectsStore({
+      dir: this.dir(root),
+      keyPath: this.keyPath(root),
+      logger: capture(events),
+      readFile,
+    });
+    const registry = new ObjectsRegistry({ store });
+    return {
+      read: readOf(() => registry.boot()),
+      served: () => registry.refsOn("doc-main"),
+      refuse: () => outcome(() => registry.readable()),
+      write: (key) => outcome(() => store.write(objectRecord(key))),
+    };
+  },
+};
+
 const inputsCase: StoreCase = {
   name: "the sessions' input queues (AgentInputQueues, read once at boot)",
   service: RECORD_STORES.SERVICE_COMPOSE,
@@ -574,6 +617,7 @@ const runRecordsCase: StoreCase = {
 const CASES = [
   sparksCase,
   needsCase,
+  objectsCase,
   inputsCase,
   keptCase,
   flowsCase,
@@ -694,6 +738,7 @@ describe("item 172 — the read seam is the tests' alone", () => {
       "agent-input-queue.ts: readFile: opts.readFile,",
       "agent-sessions.ts: readFile: opts.readFile,",
       "flows/records.ts: readFile: opts.readFile,",
+      "objects/store.ts: readFile: opts.readFile,",
       "tool-plane/rooms/you/store.ts: readFile: opts.readFile,",
       "tool-plane/spark-kept.ts: readFile: opts.readFile,",
       "tool-plane/sparks.ts: readFile: opts.readFile,",

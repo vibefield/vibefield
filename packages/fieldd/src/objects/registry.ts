@@ -43,9 +43,11 @@ export class ObjectsRegistry {
     this.#mint = opts.mint ?? mintRef;
   }
 
-  /** The store's one read. Never throws (ObjectsStore.boot). */
-  boot(): void {
-    for (const record of this.opts.store.boot()) this.#hold(record);
+  /** The store's one read, and how many records it served. Never throws (ObjectsStore.boot). */
+  boot(): number {
+    const records = this.opts.store.boot();
+    for (const record of records) this.#hold(record);
+    return records.length;
   }
 
   /** Throws the store's refusal while the boot read has failed. */

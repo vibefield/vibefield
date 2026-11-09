@@ -287,7 +287,8 @@ export function createDeskVerbs(deps: DeskDeps): DeskVerbs {
       const docId = defaultDesk();
       const { handle } = objects.who(run);
       const answered = await intents.ask(docId, { op: "list", run, handle });
-      const { objects: listed } = parseValue(IntentListValue, answered.value);
+      const value = parseValue(IntentListValue, answered.value);
+      const listed = value.objects;
       const shown = listed.slice(0, OBJECT_LIMITS.LIST_OBJECTS);
       return {
         objects: shown.map((object) => {
@@ -302,7 +303,8 @@ export function createDeskVerbs(deps: DeskDeps): DeskVerbs {
             ...(grant !== undefined ? { yours: grant.how } : {}),
           };
         }),
-        ...(listed.length > shown.length ? { truncated: true } : {}),
+        // the window caps a list of its own, and says so: either cut, the agent is told it is not the whole desk
+        ...(listed.length > shown.length || value.truncated === true ? { truncated: true } : {}),
       };
     },
 
