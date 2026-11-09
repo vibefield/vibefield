@@ -1,4 +1,5 @@
 import FieldDesign
+import FieldHistory
 import FieldProduct
 import Foundation
 
@@ -8,8 +9,10 @@ import Foundation
 // words and the mono line say, each bud's label and where it stands, and what VoiceOver offers in place of a hold it
 // cannot make. `FaceHoldOverlay` draws it; the lens takes the let-go (`ProfileLens.letGo`).
 //
-// The mono line counts the meters ("3 read · none need you"), never sessions: the design's "8 sessions · every
-// profile" waits for a run's profile on the phone's rows (UM-5), so the hub and a bud say their plans' reads instead.
+// While the field is live the mono line says sessions ("8 sessions · every profile", a bud's own); while it is not,
+// the plans' reads stand ("3 read · none need you"). *(Corrected 2026-11-09, UM-5b: this said the line counts the
+// meters, never sessions, because the design waited for a run's profile on the phone's rows. The rows have carried
+// `monitor.profileSet` since SE-2.)*
 
 enum FaceHold {
   /// The spawn bloom's hold (`FieldMotion.longPressDuration`, 520 ms), and the slop before it opens.
@@ -136,7 +139,11 @@ enum FaceHold {
   /// the reach's — Show all, Show ‹profile›, or Cancel on open ground. While the home's usage is not read, the line
   /// says so in the page's words (§9 "The page": "‹home› doesn't share usage yet" on the page and the hold, "Usage
   /// unavailable", "Reading usage…"), never "none need you" over nothing read; the big words stay, so the let-go reads.
-  static func words(_ reading: MetersReading, reach: ProfileLens.Release, home: String, now: Date) -> Words {
+  /// While the field is live (`live`) several profiles' lines say sessions instead (UM-5b, §8 "The words follow the
+  /// reach"); one profile's line is its reads either way.
+  static func words(
+    _ reading: MetersReading, reach: ProfileLens.Release, home: String, now: Date, live: PhoneSearch.Live? = nil
+  ) -> Words {
     let profiles = reading.profiles
     let unread = unreadLine(reading, home: home)
     guard profiles.count > 1 else {
@@ -145,11 +152,14 @@ enum FaceHold {
     }
     switch reach {
     case .hub:
+      let sessions = live.map { "\(PhoneSearch.plural($0.sessions.count, "session")) · every profile" }
       return Words(
-        verb: "Show", rest: "all", line: unread ?? "\(reads(reading.meters(of: nil, now: now))) · every profile")
+        verb: "Show", rest: "all",
+        line: sessions ?? unread ?? "\(reads(reading.meters(of: nil, now: now))) · every profile")
     case .bud(let id):
       guard let set = profiles.first(where: { $0.id == id }) else { return cancel }
-      return Words(verb: "Show", rest: set.label, line: unread ?? reads(reading.meters(of: id, now: now)))
+      let sessions = live.map { PhoneSearch.sessWords($0.sessions(of: id)) }
+      return Words(verb: "Show", rest: set.label, line: sessions ?? unread ?? reads(reading.meters(of: id, now: now)))
     case .open:
       return cancel
     }

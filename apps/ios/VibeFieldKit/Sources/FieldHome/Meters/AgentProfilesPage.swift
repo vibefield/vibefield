@@ -1,4 +1,5 @@
 import FieldDesign
+import FieldHistory
 import FieldMesh
 import FieldProduct
 import Foundation
@@ -10,9 +11,11 @@ import SwiftUI
 // lens (`ProfileLens`), the home's name and the clock. The views below draw what it says, in Settings' materials
 // (`chromeList`, `chromeRows`, History's group heads).
 //
-// Wave 1 (UM-D14's interim, the lead's ruling 23, ‹for James›): a plan's row carries no Show or Showing and no sessions
-// line, and takes no tap. A plan that needs you says where it is fixed, with no act (a phone signs in on no desktop,
-// and its refresh spends no call, UM-D8).
+// While the field is live a plan's row says its sessions and, with some, draws Show (Showing while it is the one
+// chosen, UM-5b, UM-D14); the row itself takes no tap. *(Corrected 2026-11-09, UM-5b: this said wave 1's row carries no
+// Show or Showing and no sessions line; a run's plan has been readable since SE-2's `monitor.profileSet` and the join.)*
+// A plan that needs you says where it is fixed, with no act (a phone signs in on no desktop, and its refresh spends no
+// call, UM-D8).
 
 struct AgentProfilesWords: Equatable {
   /// One row of the page's Profiles group: All profiles (`id` nil) or a profile.
@@ -34,6 +37,12 @@ struct AgentProfilesWords: Equatable {
 
   /// One row of the page's Plans group.
   struct PlanRow: Equatable, Identifiable {
+    /// UM-5b — what a plan's button does: show it (its union key, what `ProfileLens.showPlan` holds), or say it is shown.
+    enum Show: Equatable {
+      case show(String)
+      case showing
+    }
+
     enum Body: Equatable {
       /// every window as Settings' C1 line, the kept reading's age, the reading's age said in the reset's place of each
       /// window read before its reset (`MeterWindow.passed`; nil when none was, or its time cannot be read), and the
@@ -55,6 +64,11 @@ struct AgentProfilesWords: Equatable {
     /// UM-D12 — a crowded agent's plan wears its profile's glyph (every plan in view)
     let glyph: MeterProfile?
     let body: Body
+    /// UM-5b — while the field is live: "3 sessions · 1 working · 1 waiting for you", "no sessions"; nil while it is
+    /// not, and on a plan with no meter (a line of its own).
+    let sessions: String?
+    /// nil, no act: nothing to show, or a plan that needs you
+    let show: Show?
     var id: String { key }
   }
 
@@ -68,7 +82,7 @@ struct AgentProfilesWords: Equatable {
   static let title = "Agent Profiles"
   static let foot = "Manage profiles in Settings → Agent Profiles. New profiles are made on a desktop."
 
-  init(reading: MetersReading, lens: ProfileLens, home: String, now: Date) {
+  init(reading: MetersReading, lens: ProfileLens, home: String, now: Date, live: PhoneSearch.Live? = nil) {
     let every = reading.meters(of: nil, now: now)
     let several = reading.profiles.count > 1
     let firstRead = reading.firstRead
@@ -100,11 +114,35 @@ struct AgentProfilesWords: Equatable {
     let shown = chosen == nil ? every : reading.meters(of: chosen?.id, now: now)
     let crowded = chosen == nil && several ? Self.crowded(shown.entries) : []
     plans = shown.entries.map { entry in
-      PlanRow(
+      // the key the filter holds: under a lens a row's key is its own profile's, every plan's is already whole
+      let key = chosen.map { "\($0.id)/\(entry.key)" } ?? entry.key
+      let family = PlanSessions.family(reading.profiles, key: key)
+      let runs = entry.kind == .noMeter ? nil : live.map { Self.runs($0, keys: Set(family)) }
+      return PlanRow(
         key: entry.key, provider: entry.provider, title: entry.title,
         glyph: crowded.contains(entry.provider) ? entry.profiles.first : nil,
-        body: Self.body(entry, home: home, now: now))
+        body: Self.body(entry, home: home, now: now),
+        sessions: runs.map { $0.isEmpty ? "no sessions" : PhoneSearch.sessWords($0) },
+        show: Self.show(entry, key: key, family: family, runs: runs, lens: lens))
     }
+  }
+
+  /// UM-5b — the field's runs that spend one of `keys` (a plan and its twins).
+  private static func runs(_ live: PhoneSearch.Live, keys: Set<String>) -> [PhoneSearch.LiveSession] {
+    live.sessions.filter { session in
+      guard let key = session.planKey else { return false }
+      return keys.contains(key)
+    }
+  }
+
+  /// UM-5b — a plan's act: none while the field is not live or the plan needs you, **Showing** while the plan or its
+  /// twin is the one chosen, **Show** while it has sessions.
+  private static func show(
+    _ entry: PlanMeter, key: String, family: [String], runs: [PhoneSearch.LiveSession]?, lens: ProfileLens
+  ) -> PlanRow.Show? {
+    guard let runs, entry.kind != .needsYou else { return nil }
+    if let plan = lens.plan, family.contains(plan) { return .showing }
+    return runs.isEmpty ? nil : .show(key)
   }
 
   /// The plans a circle draws: a reading, a first read, or one that needs you.
@@ -215,6 +253,8 @@ struct AgentProfilesPage: View {
   @Binding var lens: ProfileLens
   /// the home's name ("studio")
   let home: String
+  /// UM-5b — the field while it is live: a plan's sessions line and its Show (`AgentProfilesWords`); nil, neither.
+  var live: PhoneSearch.Live? = nil
 
   @State private var focus: String? = nil
   @Environment(\.dismiss) private var dismiss
@@ -234,7 +274,7 @@ struct AgentProfilesPage: View {
   private var page: some View {
     let now = feed.clock()
     let reading = feed.reading
-    let words = AgentProfilesWords(reading: reading, lens: lens, home: home, now: now)
+    let words = AgentProfilesWords(reading: reading, lens: lens, home: home, now: now, live: live)
     let mark = MeterCatalog(rows: reading.catalog).mark
     let several = reading.profiles.count > 1
     return List {
@@ -252,7 +292,13 @@ struct AgentProfilesPage: View {
       .chromeRows()
       Section {
         ForEach(words.plans) { row in
-          AgentPlanRowView(row: row, mark: mark(row.provider))
+          AgentPlanRowView(row: row, mark: mark(row.provider)) { show in
+            switch show {
+            case .show(let key): lens.showPlan(key)
+            case .showing: lens.showPlan(nil)
+            }
+            dismiss()
+          }
         }
       } header: {
         ChromeListHead(words.plansHead)
@@ -378,10 +424,12 @@ private struct AgentProfileRowLabel: View {
 
 /// A Plans row: its agent's mark (18), its title (a crowded agent's wearing its profile's glyph), and under it the
 /// kept reading's age, every window as Settings' C1 line and the forecast in the attention ink; or the first read's
-/// silhouette, or a need in words. An agent with no meter is a line of its own. Wave 1: it takes no tap.
+/// silhouette, or a need in words; while the field is live, its sessions and its **Show** or **Showing** (UM-5b). An
+/// agent with no meter is a line of its own. The row itself takes no tap; only its button does.
 private struct AgentPlanRowView: View {
   let row: AgentProfilesWords.PlanRow
   let mark: String
+  let onShow: (AgentProfilesWords.PlanRow.Show) -> Void
 
   var body: some View {
     switch row.body {
@@ -395,33 +443,65 @@ private struct AgentPlanRowView: View {
           .foregroundStyle(ChromePalette.inkTertiary)
       }
     default:
-      HStack(alignment: .top, spacing: 12) {
-        AgentGlyph(mark: mark, letterSize: 13)
-          .frame(width: 18, height: 18)
-          .accessibilityHidden(true)
-        VStack(alignment: .leading, spacing: 4) {
-          HStack(spacing: 4) {
-            if let glyph = row.glyph {
-              Image(
-                systemName: ProfileGlyphSymbols.symbol(
-                  glyph: glyph.glyph, native: glyph.kind == "native", filled: glyph.filled)
-              )
-              .font(.system(size: 12))
-              .foregroundStyle(ChromePalette.inkSecondary)
-              .accessibilityLabel(glyph.label)
+      HStack(alignment: .top, spacing: 8) {
+        HStack(alignment: .top, spacing: 12) {
+          AgentGlyph(mark: mark, letterSize: 13)
+            .frame(width: 18, height: 18)
+            .accessibilityHidden(true)
+          VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 4) {
+              if let glyph = row.glyph {
+                Image(
+                  systemName: ProfileGlyphSymbols.symbol(
+                    glyph: glyph.glyph, native: glyph.kind == "native", filled: glyph.filled)
+                )
+                .font(.system(size: 12))
+                .foregroundStyle(ChromePalette.inkSecondary)
+                .accessibilityLabel(glyph.label)
+              }
+              Text(row.title)
+                .font(ChromeListType.row)
+                .foregroundStyle(ChromePalette.ink)
+                .lineLimit(1)
             }
-            Text(row.title)
-              .font(ChromeListType.row)
-              .foregroundStyle(ChromePalette.ink)
-              .lineLimit(1)
+            .alignmentGuide(.listRowSeparatorLeading) { $0[.leading] }
+            detail
+            if let sessions = row.sessions {
+              Text(sessions)
+                .font(ChromeListType.detail)
+                .monospacedDigit()
+                .foregroundStyle(ChromePalette.inkTertiary)
+            }
           }
-          .alignmentGuide(.listRowSeparatorLeading) { $0[.leading] }
-          detail
+        }
+        .accessibilityElement(children: .combine)
+        if let show = row.show {
+          Spacer(minLength: 0)
+          showButton(show)
         }
       }
       .padding(.vertical, 4)
-      .accessibilityElement(children: .combine)
     }
+  }
+
+  /// UM-5b — **Show**, or **Showing** while it is the one chosen: the row's one act, 44 tall, which closes the page. It
+  /// stands outside the row's combined element so VoiceOver reaches it as a button.
+  private func showButton(_ show: AgentProfilesWords.PlanRow.Show) -> some View {
+    let showing = show == .showing
+    let word = showing ? "Showing" : "Show"
+    return Button {
+      onShow(show)
+    } label: {
+      Text(word)
+        .font(ChromeListType.detail)
+        .fontWeight(showing ? .semibold : .regular)
+        .foregroundStyle(showing ? ChromePalette.ink : ChromePalette.inkSecondary)
+        .frame(minWidth: 44, minHeight: 44)
+        .contentShape(Rectangle())
+    }
+    .buttonStyle(.plain)
+    .accessibilityLabel("\(word) \(row.title)")
+    .accessibilityAddTraits(showing ? .isSelected : [])
   }
 
   @ViewBuilder

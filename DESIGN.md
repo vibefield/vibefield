@@ -7830,7 +7830,7 @@ here.
   home that does not share usage yet says "‹home› doesn't share usage yet" on the page and the hold (the lead's
   words; never a blank), and the Me menu row's word then is ‹for James›.
 - **The token** is said "Showing only ‹profile›", its × "Show every profile"; a plan's form (‹for James›, 2026-11-09,
-  UM-5b) "Showing only ‹plan›", its × "Show every plan". Its menu says **Agent Profiles…**,
+  UM-5b) "Showing only ‹plan›", its × "Show every plan", and its hint "Opens Agent Profiles". Its menu says **Agent Profiles…**,
   **Show**, each profile with its sessions ("1 session", "4 sessions"), and **Every profile**. *(Added 2026-11-06,
   the M-phone stack, as SE-2d built it; ‹for James›: VoiceOver says the token's hint after its name, "Opens the
   profiles to show", and "menu open" as its value while the menu stands, as the corner's face says it.)*

@@ -579,15 +579,27 @@ public struct HomeScreen: View {
   private var lensToken: some View {
     Color.clear
       .overlay(alignment: .bottomTrailing) {
-        if let profile = lens.chosen, lensTokenShows {
+        if let form = LensToken.form(lens, options: meters.reading.options), lensTokenShows {
           ProfileLensToken(
-            profile: profile, menuOpen: lensMenuOpen,
-            onMenu: {
-              // SE-P5b — the menu's Agent Profiles… circle is a meter view: opening it reads the home's profiles again
-              if !lensMenuOpen { meters.open() }
-              lensMenuOpen.toggle()
+            form: form, menuOpen: lensMenuOpen,
+            onName: {
+              switch form.nameOpens {
+              case .menu:
+                // SE-P5b — the menu's Agent Profiles… circle is a meter view: opening it reads the home's profiles again
+                if !lensMenuOpen { meters.open() }
+                lensMenuOpen.toggle()
+              case .page:
+                // UM-5b — a plan's token opens the page its Showing stands on
+                agentProfilesOpen = true
+              }
             },
-            onClear: { lens.show(nil) }, onWidth: { width in lensTokenWidth = width }
+            onClear: {
+              switch form.clears {
+              case .profile: lens.show(nil)
+              case .plan: lens.showPlan(nil)
+              }
+            },
+            onWidth: { width in lensTokenWidth = width }
           )
           .transition(LensToken.grow(reduceMotion: reduceMotion))
         }
@@ -1472,7 +1484,7 @@ public struct HomeScreen: View {
 
   /// The Agent Profiles page (UM-D26 A), in Settings' sheet: paper, corners 40, the system's rise.
   private var agentProfilesSheet: some View {
-    AgentProfilesPage(feed: meters, lens: $lens, home: metersHomeName)
+    AgentProfilesPage(feed: meters, lens: $lens, home: metersHomeName, live: metersLive)
       .presentationDetents([.large])
       .presentationDragIndicator(.hidden)
       .presentationCornerRadius(40)
@@ -1559,6 +1571,15 @@ public struct HomeScreen: View {
     return PhoneSearch.Plan(
       key: choice.key, label: choice.label, mark: MeterCatalog(rows: reading.catalog).mark(choice.provider),
       family: choice.family)
+  }
+
+  /// UM-5b — the field while it is live, for the page's and the hold's sessions; nil while it is not, and they keep
+  /// to the plans' reads. The mock's rows are its world, so they are live.
+  private var metersLive: PhoneSearch.Live? {
+    #if DEBUG
+      if mock != nil { return searchLive }
+    #endif
+    return link?.fieldIsLive == true ? searchLive : nil
   }
 
   /// SE-2i — Live now's world as it stands: the home's live board, or why none answers yet. The mock's rows are its
@@ -1955,7 +1976,7 @@ public struct HomeScreen: View {
     if let held = faceHold.held {
       FaceHoldOverlay(
         held: held, reading: meters.reading, now: meters.clock(), home: metersHomeName, face: accountFace,
-        seed: accountSeed)
+        seed: accountSeed, live: metersLive)
         .transition(.opacity)
     }
   }

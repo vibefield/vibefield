@@ -1,4 +1,5 @@
 import FieldDesign
+import FieldHistory
 import FieldProduct
 import SwiftUI
 
@@ -40,6 +41,8 @@ struct FaceHoldOverlay: View {
   let home: String
   let face: FieldHomeModel.AccountFace
   let seed: String
+  /// UM-5b — the field while it is live: the line says its sessions (`FaceHold.words`); nil, the plans' reads.
+  var live: PhoneSearch.Live? = nil
 
   /// §6's lift (`--vf-ease-lift`, 180 ms), as the spawn bloom's buds take it.
   static let lift = FieldMotion.lift(0.18)
@@ -58,7 +61,7 @@ struct FaceHoldOverlay: View {
     ZStack(alignment: .topLeading) {
       FieldPalette.panelBackground.opacity(Self.veil)
       VStack(spacing: 18) {
-        wordsView(FaceHold.words(reading, reach: held.reach, home: home, now: now))
+        wordsView(FaceHold.words(reading, reach: held.reach, home: home, now: now, live: live))
         if let whose = circleMeters(several) {
           circleView(whose.meters, every: whose.every, mark: mark)
         }

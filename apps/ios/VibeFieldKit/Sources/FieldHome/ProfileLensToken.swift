@@ -56,6 +56,11 @@ enum LensToken {
 
   /// The × says what it does (the drawing's `aria-label`).
   static let clearWords = "Show every profile"
+  /// UM-5b — a plan's form says what it does too (§9 "The token", ‹for James›).
+  static let planClearWords = "Show every plan"
+  /// What the name does, said after it.
+  static let menuHint = "Opens the profiles to show"
+  static let pageHint = "Opens Agent Profiles"
   /// The menu's eyebrow over the profiles, and its name.
   static let eyebrow = "Show"
   static let everyWord = "Every profile"
@@ -98,12 +103,48 @@ enum LensToken {
     return profiles + [every]
   }
 
-  /// It shows on Field at rest only, while a profile is chosen: never while the face is held, while another menu or a
-  /// page is open, or while search is open (Chat's note stacks above it).
+  /// UM-5b (§8 "A plan chosen") — what the token stands for: the plan while one is chosen (its agent's mark and title),
+  /// else the profile. A plan's name opens the page, where its **Showing** stands; its × takes the plan and leaves the
+  /// lens, so with both the profile's form comes back.
+  struct Form: Equatable {
+    enum Name: Equatable {
+      case menu
+      case page
+    }
+    enum Clears: Equatable {
+      case profile
+      case plan
+    }
+
+    let lead: PhoneSearch.Lead
+    let label: String
+    let spoken: String
+    let clearWords: String
+    let hint: String
+    let nameOpens: Name
+    let clears: Clears
+  }
+
+  /// The form that stands, or nil with neither chosen.
+  static func form(_ lens: ProfileLens, options: MetersOptions) -> Form? {
+    if let plan = lens.chosenPlan(options: options) {
+      return Form(
+        lead: .agent(options.catalog.mark(plan.provider)), label: plan.label, spoken: "Showing only \(plan.label)",
+        clearWords: planClearWords, hint: pageHint, nameOpens: .page, clears: .plan)
+    }
+    return lens.chosen.map { profile in
+      Form(
+        lead: PhoneSearch.lead(profile), label: profile.label, spoken: spoken(profile), clearWords: clearWords,
+        hint: menuHint, nameOpens: .menu, clears: .profile)
+    }
+  }
+
+  /// It shows on Field at rest only, while a profile or a plan is chosen: never while the face is held, while another
+  /// menu or a page is open, or while search is open (Chat's note stacks above it).
   static func shows(
     _ lens: ProfileLens, onField: Bool, searchOpen: Bool, faceHeld: Bool, menuOpen: Bool, pageOpen: Bool
   ) -> Bool {
-    lens.chosen != nil && onField && !searchOpen && !faceHeld && !menuOpen && !pageOpen
+    (lens.chosen != nil || lens.plan != nil) && onField && !searchOpen && !faceHeld && !menuOpen && !pageOpen
   }
 
   /// The token's spoken name (the drawing's group label).
@@ -148,11 +189,12 @@ enum LensToken {
 
 /// The token: the chosen profile's name, which opens the menu, and its ×, which shows every profile — in the bar's
 /// glass, in a glass container of its own. It says how wide its glass stands (`onWidth`): the stage draws it over
-/// every view, and the swarm's chrome keeps the bodies out of a frame that wide where it stands.
+/// every view, and the swarm's chrome keeps the bodies out of a frame that wide where it stands. UM-5b: it draws the
+/// form that stands (`LensToken.form`), a plan's as well as a profile's, and what its two acts do is the form's.
 struct ProfileLensToken: View {
-  let profile: AgentProfileSet
+  let form: LensToken.Form
   let menuOpen: Bool
-  let onMenu: () -> Void
+  let onName: () -> Void
   let onClear: () -> Void
   /// The glass's width, each time it changes (the name ellipsises inside `LensToken.maxWidth`).
   let onWidth: (CGFloat) -> Void
@@ -160,10 +202,10 @@ struct ProfileLensToken: View {
   var body: some View {
     GlassGroup {
       HStack(spacing: LensToken.parts) {
-        Button(action: onMenu) {
+        Button(action: onName) {
           HStack(spacing: LensToken.nameGap) {
-            SearchLeadGlyph(lead: PhoneSearch.lead(profile), size: LensToken.nameGlyph)
-            Text(profile.label)
+            SearchLeadGlyph(lead: form.lead, size: LensToken.nameGlyph)
+            Text(form.label)
               .font(ChromeType.sans(LensToken.nameText, .semibold))
               .lineLimit(1)
           }
@@ -174,9 +216,9 @@ struct ProfileLensToken: View {
           .contentShape(RoundedRectangle(cornerRadius: LensToken.nameRadius, style: .continuous))
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(LensToken.spoken(profile))
+        .accessibilityLabel(form.spoken)
         .accessibilityValue(menuOpen ? "menu open" : "")
-        .accessibilityHint("Opens the profiles to show")
+        .accessibilityHint(form.hint)
         Button(action: onClear) {
           Image(systemName: "xmark")
             .font(.system(size: LensToken.closeGlyph, weight: .semibold))
@@ -186,7 +228,7 @@ struct ProfileLensToken: View {
             .contentShape(Circle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(LensToken.clearWords)
+        .accessibilityLabel(form.clearWords)
       }
       .padding(.leading, LensToken.leading)
       .padding(.trailing, LensToken.trailing)
