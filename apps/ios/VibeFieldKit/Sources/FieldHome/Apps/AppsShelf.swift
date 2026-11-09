@@ -22,6 +22,10 @@ struct AppsShelf: Equatable {
     let apps: [IndexAppRow]
 
     var id: String { key }
+
+    /// RED: stubs.
+    var big: [IndexAppRow] { [] }
+    var small: [IndexAppRow] { [] }
   }
 
   /// Recent's four across (§8: "the four Recent icons").
@@ -77,6 +81,12 @@ struct AppsShelf: Equatable {
     clipped = reading.clipped
     away = Set(newest.filter { MadeAppFacts.away(MadeAppFacts.source(of: $0, in: sources)) }.map(\.appKey))
   }
+
+  /// RED: a stub.
+  static func emptyLine(phase: AppsFeed.Phase, here: String) -> String? { nil }
+
+  /// RED: a stub.
+  static func matching(_ words: String, in apps: [IndexAppRow]) -> [IndexAppRow] { [] }
 
   /// Newest first, the door's own order breaking a tie.
   private static func newestFirst(_ apps: [IndexAppRow]) -> [IndexAppRow] {

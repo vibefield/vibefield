@@ -78,6 +78,9 @@ struct AppsCues: Equatable, Codable {
   /// What this account opened on this phone, newest first. Absent from a ledger written before MA-6e.
   private var openedKeys: [String]?
 
+  /// Apps that arrived as news and have not been opened on this phone. RED: a stub.
+  var unopened: Set<String> { [] }
+
   /// How many opens head Recent, at most (§8: "the four Recent icons").
   static let openedCap = 4
 

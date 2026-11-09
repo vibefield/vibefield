@@ -14,6 +14,12 @@ final class AppsDoorModel {
   /// How far the pull stands; 0 at rest.
   private(set) var drag: CGFloat = 0
   private(set) var peeking = false
+  /// Whether the shelf stands.
+  private(set) var shelfOpen = false
+  /// The project whose folder stands open in place.
+  private(set) var folder: String?
+  /// The app zoomed to, by fold key.
+  private(set) var zoomKey: String?
 
   /// nil under `-vf-mock`, whose account is a value: nothing of it reaches the disk.
   private let store: AppsCuesStore?
@@ -84,6 +90,19 @@ final class AppsDoorModel {
     cues.open(foldKey)
     if cues != before { save() }
   }
+
+  /// RED: the shelf's standing below is stubs.
+  func openShelf(showing foldKeys: [String]) {}
+
+  func closeShelf() {}
+
+  func openFolder(_ key: String) {}
+
+  func closeFolder() {}
+
+  func zoom(_ foldKey: String) {}
+
+  func unzoom() {}
 
   func expire() {
     drops.expire(at: clock())
