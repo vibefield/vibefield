@@ -8165,6 +8165,36 @@ describe("CP-4a2b — the host's life: parked and woken, D2's lookup at a wake, 
       });
     });
 
+    it("R52b (slice 14's fold, P8; Q25, G6, RR:544; m06): on R52's seed, a live run the boot adopted reads the same record bytes across a second restore(), and its one host stands", async () => {
+      // Kills: Q25's once-flag dropped (m06): the run is adopted again over the LiveRun its host runs, and its record
+      // rests `waiting` under a host that is running. Past settled() on purpose: before it, a second adoption writes the
+      // same bytes (the rest reads `waiting` both times; `#rewritten` keeps no clock) and the second wake finds the first
+      // wake's host (`#rouse`), so neither read would see it (read, not run)
+      const h = await harness();
+      const approval = h.approved("stuck", STUCK);
+      seededRun(h, RUN);
+      renameSync(journalFile(h, RUN), `${journalFile(h, RUN)}.aside`);
+      const ended = seededRun(h, "fr-boot0002a", {
+        fields: { state: "failed", endedAt: "2026-11-07T00:00:00.000Z" },
+      });
+      renameSync(journalFile(h, ended), `${journalFile(h, ended)}.aside`);
+      const live = seededRun(h, "fr-boot0003a", {
+        head: { flow: "stuck", name: "Stuck", hash: approval.hash },
+      });
+      await h.reopen();
+      restored(h.runs);
+      await settledBoot(h.runs);
+      await within(PARK_MS, () => h.hosts.length > 0);
+      const before = readFileSync(recordFile(h, live), "utf8");
+      restored(h.runs);
+      const after = readFileSync(recordFile(h, live), "utf8");
+      expect({
+        again: after === before,
+        state: h.records.runRecord(live)?.state,
+        hosts: h.hosts.length,
+      }).toEqual({ again: true, state: "running", hosts: 1 });
+    });
+
     it("R51 (slice 14, Q2 (c)(ii), (d)): a kept `end` of each state settles its run at settled(), never at restore(): no host, one `end`, the record ended in that state with its `endedAt`, and no `held`", async () => {
       // red-a: settled() settles nothing, so each record reads running, held, with no `endedAt`
       // Kills: the kept-end settle moved to restore() (C6; it reads ended before settled()); `held` kept; a 2nd `end`
