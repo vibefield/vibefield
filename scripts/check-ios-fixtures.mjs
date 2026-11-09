@@ -195,6 +195,10 @@ const OTHER_ORIGINS = new Map([
   ...phoneViewGoldens.map((name) => [name, join(PHONE_GODVIEW, name)]),
   ...chatFlowGoldens.map((name) => [name, join(CHAT_FLOW, name)]),
   ...madeAppGoldens.map((name) => [name, join(MADE_APPS, name)]),
+  [
+    "chat-starters.golden.json",
+    join(root, "packages/field-app/test/fixtures/chat-starters/chat-starters.golden.json"),
+  ],
   ...needsCardGoldens.map((name) => [name, join(NEEDS_CARD, name)]),
   ...newSparkGoldens.map((name) => [name, join(NEW_SPARK, name)]),
   ...atRowsGoldens.map((name) => [name, join(AT_ROWS, name)]),
@@ -449,6 +453,8 @@ const requiredMirrors = [
   ["sparks", sparkFixtures, ["Tests/FieldProductTests"]],
   // IOS-12c (M-c1) — the phone's Chat: the Mac fold's goldens (in their own folder), and the say door's wire
   ["chat", chatFlowGoldens.map((name) => `chat-flow/${name}`), ["Tests/FieldProductTests"]],
+  // ES-5a — the starters' golden, written by the Mac's own model, which the kit's ChatStarters is held to
+  ["chat", ["chat-starters/chat-starters.golden.json"], ["Tests/FieldProductTests"]],
   ["chat", sayFixtures, ["Tests/FieldProductTests"]],
   // and the two merged lists Chat's demo door answers under `-vf-mock` (ChatFixtureDoor, DEBUG)
   ["sparks", ["compose-sparks-list.merged.json", "needs-list.merged.json"], ["Sources/FieldHome"]],

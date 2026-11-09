@@ -10,9 +10,10 @@ import Foundation
 // `surfaces` for the surface that asked.
 //
 // Narrowed like every reader in this target: a phone reads a row's id, its
-// label, its status, its mark and whether it is a phone's to show. The seam
-// columns (`seams`, `layoutRoot`) are fieldd's business and "shown by no
-// surface"; `admitted` and `decision` have no reader on a phone yet. FS-2 reads `offers.spawn`.
+// label, its status, its mark and whether it is a phone's to show. `layoutRoot`
+// is fieldd's business and "shown by no surface"; of `seams`, ES-5a reads the
+// one provider a ruled starter's run is named by. `admitted` and `decision` have
+// no reader on a phone yet. FS-2 reads `offers.spawn`.
 // Each of them is CARRIED as an unknown field's name, never refused.
 
 /// `AgentCatalogParams` (`agent-catalog.ts`) — which surface is asking, so the
@@ -63,6 +64,10 @@ public struct AgentCatalogRow: Sendable, Equatable, Decodable, Identifiable {
   public let canResume: Bool
   /// UM-4 — the meters wait for a reading only of an agent the catalog says reports usage (`offers.usage`).
   public let offersUsage: Bool
+  /// ES-5a — which of the hello's ruled starters this row's agent is (ES-4 role): the word as sent, an OPEN grammar.
+  public let starter: String?
+  /// ES-5a — `seams.puppeteer.provider`, the name a run of this agent goes by: what a ruled starter's handle is built on.
+  public let puppeteerProvider: String?
   public let unknownFields: [String]
 
   public init(json: JSONValue) throws {
@@ -77,12 +82,22 @@ public struct AgentCatalogRow: Sendable, Equatable, Decodable, Identifiable {
     canSpawn = offers.bool("spawn") == true
     canResume = offers.bool("resume") == true
     offersUsage = offers.bool("usage") == true
+    starter = object.string("starter").flatMap { $0.isEmpty ? nil : $0 }
+    var seams = object.object("seams")
+    var puppeteer = seams.object("puppeteer")
+    puppeteerProvider = puppeteer.string("provider").flatMap { $0.isEmpty ? nil : $0 }
     unknownFields = object.unknownFields
   }
 
   public init(from decoder: any Decoder) throws {
     try self.init(json: try JSONValue(from: decoder))
   }
+}
+
+/// ES-5a — the hello's ruled starters' roles, as the contracts' `AgentStarterRole`. Which agent holds each is the
+/// catalog's to say (`starterAgent`), so no agent id is a literal here (R23b).
+public enum AgentStarterRole: String, Sendable, Equatable {
+  case crew, handle, reviewer
 }
 
 /// `AgentCatalogResult` — `agent.catalog`'s answer: the rows in the catalog's
@@ -105,5 +120,10 @@ public struct AgentCatalogResult: Sendable, Equatable, Decodable {
 
   public init(from decoder: any Decoder) throws {
     try self.init(json: try JSONValue(from: decoder))
+  }
+
+  /// ES-5a — the row whose agent the ruled starter of this role names (the contracts' `starterAgent`).
+  public func starterAgent(_ role: AgentStarterRole) -> AgentCatalogRow? {
+    catalog.first { $0.starter == role.rawValue }
   }
 }
