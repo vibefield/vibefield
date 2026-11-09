@@ -359,6 +359,21 @@ describe("the window answers (§5.5)", () => {
     expect(out.truncated).toBe(true);
   });
 
+  it("says a list is cut when the window cut it, too", async () => {
+    const h = world();
+    const { verbs } = room(h, (intent) =>
+      intent.op === "list"
+        ? {
+            ok: true,
+            value: { objects: [{ key: "k1", kind: "desk.note", title: "t" }], truncated: true },
+          }
+        : undefined,
+    );
+    const out = (await verbs.canvas_list(A, {})) as { objects: unknown[]; truncated?: boolean };
+    expect(out.objects).toHaveLength(1);
+    expect(out.truncated).toBe(true);
+  });
+
   it("runs a read and an act through the window and marks the result as the object's", async () => {
     const h = world();
     const { verbs, win } = room(h);
