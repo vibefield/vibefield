@@ -898,7 +898,7 @@ export function useMonitorAgents({
   );
   useLayoutEffect(() => {
     viewReplica.refresh();
-  }, [viewReplica, placed, chosenProfile, chosenPlanRuns, deviceChosen, transitionRevision]);
+  }, [viewReplica, placed, chosenProfile, deviceChosen, transitionRevision]);
 
   // The view host reads its commands through the latest props; these reach the latest window too.
   const commands = useMemo<ViewSlotCommands>(
