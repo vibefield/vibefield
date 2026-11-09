@@ -135,11 +135,11 @@ struct AgentProfilesPageTests {
 
   /// UM-5b — a run on a plan, and the field as the page reads it.
   static func run(
-    _ id: String, key: String?, state: PhoneSearch.LiveState = .working
+    _ id: String, key: String?, state: PhoneSearch.LiveState = .working, profile: String? = nil
   ) -> PhoneSearch.LiveSession {
     PhoneSearch.LiveSession(
-      id: id, title: id, folder: nil, agent: nil, state: state, profileSet: nil, device: "dev-1", deviceName: "studio",
-      platform: "darwin", isHome: true, nativeSessionId: nil, planKey: key)
+      id: id, title: id, folder: nil, agent: nil, state: state, profileSet: profile, device: "dev-1",
+      deviceName: "studio", platform: "darwin", isHome: true, nativeSessionId: nil, planKey: key)
   }
 
   static func field(_ sessions: [PhoneSearch.LiveSession]) -> PhoneSearch.Live {
@@ -207,11 +207,43 @@ struct AgentProfilesPageTests {
     let found = Self.row(shown, Self.isReading)
     let plan = try #require(found)
     let key = "work/\(plan.key)"
-    let live = Self.field([Self.run("a", key: key)])
+    let live = Self.field([Self.run("a", key: key, profile: "work")])
     let words = AgentProfilesWords(reading: reading, lens: lens, home: "studio", now: Self.now, live: live)
     let row = words.plans.first { $0.key == plan.key }
     let said = try #require(row)
     #expect(said.show == .show(key))
+  }
+
+  /// UM-5b (the review's finding; §8 "The phone's corner") — Show promises only what the filter would keep: under a lens a
+  /// twin's run under another profile counts on its own row, never this one. With no lens both profiles' runs count.
+  @Test("under a lens a plan's line and Show count only that profile's sessions, never a twin's under another")
+  func twinUnderALens() throws {
+    let reading = try Self.reading()
+    let lens = Self.lens(reading, "work")
+    let shown = Self.words(reading, lens: "work")
+    let found = Self.row(shown, Self.isReading)
+    let plan = try #require(found)
+    let work = "work/\(plan.key)"
+    let native = "native/\(plan.key)"
+    // only a twin's run: Work's row has none of its own, so no sessions and no Show
+    let twin = Self.field([Self.run("n", key: native, profile: "native")])
+    let none = AgentProfilesWords(reading: reading, lens: lens, home: "studio", now: Self.now, live: twin)
+    let noneRow = none.plans.first { $0.key == plan.key }
+    let empty = try #require(noneRow)
+    #expect(empty.sessions == "no sessions")
+    #expect(empty.show == nil)
+    // Work's run counts, the twin's does not; Show carries the plan's whole key
+    let both = Self.field([Self.run("n", key: native, profile: "native"), Self.run("w", key: work, profile: "work")])
+    let under = AgentProfilesWords(reading: reading, lens: lens, home: "studio", now: Self.now, live: both)
+    let underRow = under.plans.first { $0.key == plan.key }
+    let one = try #require(underRow)
+    #expect(one.sessions == "1 session · 1 working")
+    #expect(one.show == .show(work))
+    // with no lens a plan two profiles share counts both
+    let every = AgentProfilesWords(reading: reading, lens: Self.lens(reading), home: "studio", now: Self.now, live: both)
+    let everyRow = every.plans.first { $0.key == native || $0.key == work }
+    let shared = try #require(everyRow)
+    #expect(shared.sessions == "2 sessions · 2 working")
   }
 
   @Test("a plan that needs you says its sessions and draws no Show; with no live field nothing is said")

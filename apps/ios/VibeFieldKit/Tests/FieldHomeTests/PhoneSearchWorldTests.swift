@@ -185,6 +185,49 @@ struct PhoneSearchWorldTests {
     #expect(typed.terms == ["w1"])
   }
 
+  /// UM-5b (the review's finding and F5) — Live now's filter where it is composed: the plan keeps its rows, stands as a
+  /// token, narrows the foot, and an empty list says so with Clear the filters, not "Nothing runs right now."; Everything's
+  /// foot says the plan comes back on Field.
+  @Test("Live now under a plan: its rows, its token, the foot narrowed; an empty list says so; Everything's foot (UM-5b)")
+  func planContent() throws {
+    func keyed(_ session: PhoneSearch.LiveSession, _ key: String?) -> PhoneSearch.LiveSession {
+      PhoneSearch.LiveSession(
+        id: session.id, title: session.title, folder: session.folder, agent: session.agent, state: session.state,
+        profileSet: session.profileSet, device: session.device, deviceName: session.deviceName,
+        platform: session.platform, isHome: session.isHome, nativeSessionId: session.nativeSessionId, planKey: key)
+    }
+    var world = try Self.world()
+    world.sessions = world.sessions.map { keyed($0, $0.id == "w1" ? "work/plan:openai" : nil) }
+    let lens = try Self.lens(nil)
+    let plan = PhoneSearch.Plan(
+      key: "work/plan:openai", label: "ChatGPT Business", mark: "codex", family: ["work/plan:openai"])
+    let on = PhoneSearchWorld.content(
+      SearchState(), query: "", lens: lens, live: world, answers: [], latest: nil, agentLabel: { $0 }, feed: .live,
+      asked: .settled, plan: plan)
+    let rows = PhoneSearch.liveRows(world, query: "", profile: nil, desk: nil, plan: ["work/plan:openai"])
+    let ids = rows.map { $0.session.id }
+    #expect(ids == ["w1"])
+    #expect(on.rows == .live(rows))
+    let tokens = on.tokens.map { $0.label }
+    #expect(tokens == ["ChatGPT Business"])
+    #expect(on.foot == "1 of 8 live sessions, waiting first")
+    #expect(on.empty == nil)
+
+    // a plan no row spends: said so, with Clear the filters, and the foot still says none of eight
+    let gone = PhoneSearch.Plan(key: "work/plan:gone", label: "Claude Max", mark: "claude", family: ["work/plan:gone"])
+    let none = PhoneSearchWorld.content(
+      SearchState(), query: "", lens: lens, live: world, answers: [], latest: nil, agentLabel: { $0 }, feed: .live,
+      asked: .settled, plan: gone)
+    #expect(none.empty?.sentence == "No live session on Claude Max runs right now.")
+    #expect(none.empty?.act == .clearFilters)
+    #expect(none.foot == "0 of 8 live sessions, waiting first")
+
+    let past = PhoneSearchWorld.content(
+      SearchState(scope: .everything), query: "", lens: lens, live: world, answers: [], latest: .mock,
+      agentLabel: { $0 }, feed: .live, asked: .settled, plan: plan)
+    #expect(past.foot == "Your latest sessions · every plan; ChatGPT Business comes back on Field")
+  }
+
   /// SE-2l (the S2 review's finding 7; §8 "folder · agent") — Everything's rows name an agent by the catalog's label,
   /// and by its id while no desktop's catalog names it (the tolerant reader, R4). The ids are invented: no agent's.
   @Test("an agent is named by the catalog's label, by its id while no catalog names it")

@@ -288,6 +288,20 @@ struct PhoneSearchTests {
     #expect(none == PhoneSearch.Empty(sentence: "Nothing runs right now.", act: nil))
   }
 
+  /// UM-5b (the review's finding; DESIGN.md §9 "The phone's empty lists") — a plan chosen is a filter on: its empty list
+  /// says so with Clear the filters, never "Nothing runs right now." over five live sessions the filter does not keep.
+  @Test("Live now's empty list under a plan: the plan named, Clear the filters, the profile and the desktop kept in it")
+  func liveEmptyPlan() {
+    let alone = PhoneSearch.liveEmpty(query: "", profile: nil, desk: nil, plan: "Claude Max", feed: .live, asked: .settled)
+    #expect(alone == PhoneSearch.Empty(sentence: "No live session on Claude Max runs right now.", act: .clearFilters))
+    let all = PhoneSearch.liveEmpty(
+      query: " ", profile: "Work", desk: "studio", plan: "Claude Max", feed: .live, asked: .settled)
+    #expect(all?.sentence == "No live session in Work on Claude Max runs on studio.")
+    #expect(all?.act == .clearFilters)
+    let words = PhoneSearch.liveEmpty(query: "zebra", profile: nil, desk: nil, plan: "Claude Max", feed: .live, asked: .settled)
+    #expect(words?.act == .searchEverything)
+  }
+
   /// SE-2i — an empty list never claims what nobody answered: nothing while what runs is asked or the home sleeps,
   /// the refusal's own short sentence (`peek-live.ts` `liveNone`), and no "holds every word" for unanswered words.
   @Test("Live now's empty lists are honest: none while asking or asleep, the refusal, none for unanswered words")
