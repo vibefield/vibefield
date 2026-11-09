@@ -2026,6 +2026,34 @@ describe("the monitor stage", () => {
     expect(host.querySelector(".vf-monitor-claims [data-strip-moment]")).not.toBeNull();
   });
 
+  it("stands an open popover in .vf-monitor-cards, outside the stage (UM-R1, DESIGN.md §8 'Where the cards stand')", async () => {
+    const host = await mountMonitor("list", tabDoor());
+    await act(async () =>
+      host.querySelector<HTMLButtonElement>('[data-profile="work"] .vf-profiles-circle')?.click(),
+    );
+    const layer = host.querySelector(".vf-monitor-cards");
+    expect(layer).not.toBeNull();
+    // the root's sibling, after the stage
+    expect(layer?.previousElementSibling?.classList.contains("vf-godview-monitor-stage")).toBe(
+      true,
+    );
+    expect(layer?.querySelector('[data-profile="work"] .vf-profiles-pop')).not.toBeNull();
+    expect(host.querySelector(".vf-godview-monitor-stage .vf-profiles-pop")).toBeNull();
+  });
+
+  it("closes an open card when the terminals maximize: no card floats over full-window terminals (UM-R1)", async () => {
+    const host = await mountMonitor("list", tabDoor());
+    await act(async () =>
+      host.querySelector<HTMLButtonElement>('[data-profile="work"] .vf-profiles-circle')?.click(),
+    );
+    expect(host.querySelector(".vf-profiles-pop")).not.toBeNull();
+    expect(monitorHoldsKeys()).toBe(true);
+    await act(async () => publishGodviewDeck("maximized"));
+    expect(host.querySelector(".vf-profiles-pop")).toBeNull();
+    expect(monitorHoldsKeys()).toBe(false);
+    await act(async () => publishGodviewDeck("up"));
+  });
+
   it("chooses the view with the head's circles; there is no theme switch (FC-D7)", async () => {
     const selected: string[] = [];
     const view = monitorViewFor("swarm");

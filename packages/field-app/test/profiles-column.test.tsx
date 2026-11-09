@@ -17,6 +17,10 @@ import {
 import { BandsCircle, BandsKey } from "../src/godview/profiles-column/BandsCircle";
 import { ProfilePopoverView, readWords } from "../src/godview/profiles-column/ProfilePopoverView";
 import {
+  ProfilesColumn,
+  type ProfilesColumnProps,
+} from "../src/godview/profiles-column/ProfilesColumn";
+import {
   type ColumnCircle,
   ProfilesColumnView,
   type ProfilesColumnViewProps,
@@ -82,6 +86,15 @@ const HOT = READINGS.map((row) => ({
 
 let root: Root | null = null;
 let host: HTMLElement | null = null;
+let layer: HTMLElement | null = null;
+
+/** The cards layer as `GodviewMonitor` stands it: a sibling of the stage, outside the column's own DOM. */
+function cardLayer(): HTMLElement {
+  layer = document.createElement("div");
+  layer.className = "vf-monitor-cards";
+  document.body.appendChild(layer);
+  return layer;
+}
 
 function mount(element: ReactElement): HTMLElement {
   host = document.createElement("div");
@@ -96,6 +109,9 @@ afterEach(() => {
   root = null;
   host?.remove();
   host = null;
+  layer?.remove();
+  layer = null;
+  vi.restoreAllMocks();
 });
 
 const thisMac = (): ColumnCircle => ({ set: FIXTURE_NATIVE, meters: metersOf(FIXTURE_NATIVE) });
@@ -652,6 +668,168 @@ describe("the popover (DESIGN.md §8 'Godview's profiles column')", () => {
     expect(readWords(meters, new Date(newest + 60_000))).toBe("Read a minute ago");
     expect(readWords(meters, new Date(newest + 5 * 60_000))).toBe("Read 5 minutes ago");
     expect(readWords(metersOf(FIXTURE_NATIVE, []), NOW)).toBe("Reading usage…");
+  });
+});
+
+/* ── the cards layer (UM-R1; DESIGN.md §8 "Where the cards stand") ──────────── */
+
+describe("the cards layer (UM-R1): a card stands above the terminals, in the column's own hover and keys", () => {
+  const GODVIEW_CSS = readFileSync(join(HERE, "..", "src", "godview", "godview.css"), "utf8");
+  const cards = (props: Partial<ProfilesColumnViewProps>): ProfilesColumnViewProps =>
+    column({ circles: [thisMac(), work()], lens: true, open: "work", ...props });
+
+  /** The stage controller as the monitor mounts it, its clock pinned so no interval starts. */
+  function controller(over: Partial<ProfilesColumnProps> = {}): ProfilesColumnProps {
+    return {
+      sets: [FIXTURE_NATIVE, FIXTURE_WORK],
+      rows: READINGS,
+      usageUnavailable: false,
+      chosen: null,
+      onChoose: vi.fn(),
+      now: NOW,
+      ...over,
+    };
+  }
+
+  it("stands an open card in the given layer, not in the item", () => {
+    const target = cardLayer();
+    const page = mount(<ProfilesColumnView {...cards({ cardLayer: target })} />);
+    const stand = target.querySelector('.vf-profiles-stand[data-profile="work"]');
+    expect(stand).not.toBeNull();
+    expect(stand?.querySelector('.vf-profiles-pop[role="dialog"]')).not.toBeNull();
+    expect(page.querySelector(".vf-profiles-item .vf-profiles-pop")).toBeNull();
+    // the add's card stands in the same layer, said by its own mark
+    const addTarget = cardLayer();
+    mount(<ProfilesColumnView {...cards({ open: null, addOpen: true, cardLayer: addTarget })} />);
+    expect(
+      addTarget.querySelector('.vf-profiles-stand[data-card="add"] .vf-profiles-addcard'),
+    ).not.toBeNull();
+  });
+
+  it("carries the pointer across the portal: pointing at the stand is pointing at its circle", () => {
+    const target = cardLayer();
+    const props = cards({ cardLayer: target });
+    mount(<ProfilesColumnView {...props} />);
+    const stand = target.querySelector('.vf-profiles-stand[data-profile="work"]');
+    expect(stand).not.toBeNull();
+    act(() => {
+      stand?.dispatchEvent(new PointerEvent("pointerover", { bubbles: true }));
+    });
+    expect(props.onPoint).toHaveBeenLastCalledWith("work");
+  });
+
+  it("renders in place with no layer (the catalog)", () => {
+    const page = mount(<ProfilesColumnView {...cards({})} />);
+    const stand = page.querySelector('.vf-profiles-item[data-profile="work"] .vf-profiles-stand');
+    expect(stand).not.toBeNull();
+    expect(stand?.querySelector(".vf-profiles-pop")).not.toBeNull();
+    // the in-place geometry is named: the pill's padding 6 plus §8's 16, the same 16 the app draws
+    expect(CSS).toMatch(
+      /\n\.vf-profiles-stand \{[^}]*position: absolute;[^}]*left: calc\(100% \+ 22px\);[^}]*top: -6px;/u,
+    );
+    // the card itself no longer places itself
+    expect(CSS).not.toMatch(
+      /\n\.vf-profiles-pop,\n\.vf-profiles-addcard \{[^}]*position: absolute/u,
+    );
+  });
+
+  describe("places the card at the item's top less 6, 16 right of the pill, clamped to the layer", () => {
+    const box = (left: number, top: number, width: number, height: number): DOMRect =>
+      ({ left, top, width, height, right: left + width, bottom: top + height }) as DOMRect;
+
+    function placed(layerBox: DOMRect, standHeight: number): CSSStyleDeclaration | undefined {
+      const target = cardLayer();
+      vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function (
+        this: Element,
+      ) {
+        if (this === target) return layerBox;
+        if (this.classList.contains("vf-profiles-column")) return box(13, 64, 52, 200);
+        if (this.classList.contains("vf-profiles-item")) return box(19, 120, 40, 40);
+        if (this.classList.contains("vf-profiles-stand")) return box(0, 0, 566, standHeight);
+        return box(0, 0, 0, 0);
+      });
+      mount(<ProfilesColumnView {...cards({ cardLayer: target })} />);
+      return target.querySelector<HTMLElement>(".vf-profiles-stand")?.style;
+    }
+
+    it("stands at its natural top when it fits", () => {
+      const style = placed(box(0, 64, 1000, 600), 300);
+      expect(style?.left).toBe("81px");
+      expect(style?.top).toBe("50px");
+      expect(style?.maxWidth).toBe("903px");
+      expect(style?.maxHeight).toBe("600px");
+    });
+
+    it("is lifted at the layer's foot", () => {
+      expect(placed(box(0, 64, 1000, 600), 590)?.top).toBe("10px");
+    });
+
+    it("in a layer too short for it, stands at the layer's top, held at its height", () => {
+      const style = placed(box(0, 64, 1000, 200), 590);
+      expect(style?.top).toBe("0px");
+      expect(style?.maxHeight).toBe("200px");
+    });
+  });
+
+  it("Tab from the open circle enters the portaled card, Shift+Tab from its first control returns", () => {
+    const target = cardLayer();
+    const page = mount(<ProfilesColumnView {...cards({ cardLayer: target })} />);
+    const circle = page.querySelector<HTMLButtonElement>(
+      '[data-profile="work"] .vf-profiles-circle',
+    );
+    const first = target.querySelector<HTMLButtonElement>(
+      ".vf-profiles-stand button:not(:disabled)",
+    );
+    expect(first).not.toBeNull();
+    circle?.focus();
+    const forward = new KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true });
+    act(() => {
+      circle?.dispatchEvent(forward);
+    });
+    expect(forward.defaultPrevented).toBe(true);
+    expect(document.activeElement).toBe(first);
+    const back = new KeyboardEvent("keydown", {
+      key: "Tab",
+      shiftKey: true,
+      bubbles: true,
+      cancelable: true,
+    });
+    act(() => {
+      first?.dispatchEvent(back);
+    });
+    expect(document.activeElement).toBe(circle);
+  });
+
+  it("a press inside a pinned card leaves it pinned", () => {
+    const target = cardLayer();
+    const page = mount(<ProfilesColumn {...controller({ cardLayer: target })} />);
+    act(() => {
+      page.querySelector<HTMLButtonElement>('[data-profile="work"] .vf-profiles-circle')?.click();
+    });
+    const pop = target.querySelector(".vf-profiles-pop");
+    expect(pop).not.toBeNull();
+    act(() => {
+      pop?.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, composed: true }));
+    });
+    expect(target.querySelector(".vf-profiles-pop")).not.toBeNull();
+  });
+
+  it("names the layer: z 13, no pointer of its own, the stand takes the pointer, and both themes point its tokens", () => {
+    const layerRule = /\n\.vf-monitor-cards \{[^}]*\}/u.exec(CSS)?.[0] ?? "";
+    expect(layerRule).toContain("position: absolute;");
+    expect(layerRule).toContain("z-index: 13;");
+    expect(layerRule).toContain("pointer-events: none;");
+    expect(layerRule).toMatch(
+      /inset: calc\(var\(--vf-godview-head-reserve\) \+ 8px\) 0 var\(--vf-godview-panes-foot\) 0;/u,
+    );
+    expect(CSS).toMatch(/\n\.vf-profiles-stand \{[^}]*pointer-events: auto;/u);
+    for (const theme of ["light", "dark"]) {
+      expect(CSS).toContain(`\n.vf-godview.theme-${theme} .vf-monitor-cards`);
+    }
+    // the deck composites while a card stands, as for the tuning panel (a promoted WebGPU canvas)
+    expect(GODVIEW_CSS).toMatch(
+      /\.vf-godview:has\(\.vf-monitor-cards > \*\) \.vf-godview-terminal-deck \{\s*opacity: 0\.999;/u,
+    );
   });
 });
 
